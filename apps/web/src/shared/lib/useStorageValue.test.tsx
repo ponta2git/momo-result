@@ -20,10 +20,10 @@ function StorageProbe() {
 
 describe("useStorageValue", () => {
   it("treats blocked browser storage as unavailable", async () => {
-    vi.spyOn(window.localStorage, "getItem").mockImplementation(() => {
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
       throw new DOMException("blocked", "SecurityError");
     });
-    vi.spyOn(window.localStorage, "setItem").mockImplementation(() => {
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
       throw new DOMException("blocked", "SecurityError");
     });
 

@@ -60,6 +60,6 @@ describe("ReviewView", () => {
     await user.click(screen.getAllByRole("button", { name: "根拠・注意・試合後の確認" })[0]!);
     const detailDialog = await screen.findByRole("dialog");
     expect(within(detailDialog).getByText("収益だけで安全と見ない。")).toBeInTheDocument();
-    expect(within(detailDialog).getByText(/採用優先度/u)).toBeInTheDocument();
+    expect(within(detailDialog).getByText(/対象 5戦／ぶれにくさ 高め/u)).toBeInTheDocument();
   });
 });

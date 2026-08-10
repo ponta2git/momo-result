@@ -108,7 +108,7 @@ final class SeriesAnalysisPayloadValidatorSpec extends FunSuite:
       .downField("match")
       .withFocus(_.mapObject(_.add(
         "focusedItemIds",
-        Json.arr((1 to 11).map(index => Json.fromString(s"item-$index"))*),
+        Json.arr((1 to 12).map(index => Json.fromString(s"item-$index"))*),
       )))
       .top
       .getOrElse(fail("failed to expand focusedItemIds"))

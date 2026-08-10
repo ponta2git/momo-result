@@ -338,6 +338,16 @@ pub(super) fn match_context(
                     row.member_id, row.rank
                 ));
             }
+            let card_shop_kind = match (
+                row.incidents.destination > 0,
+                row.incidents.card_shop > 0,
+            ) {
+                (true, true) => "destination_with_shop",
+                (true, false) => "destination_without_shop",
+                (false, true) => "no_destination_with_shop",
+                (false, false) => "no_destination_without_shop",
+            };
+            item_ids.push(format!("card-shop:{}:{card_shop_kind}", row.member_id));
             for kind in [
                 "rank_cumulative_average",
                 "rank_cumulative_standard_deviation",

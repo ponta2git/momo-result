@@ -55,6 +55,12 @@ export function SeriesAnalysisContent({
     setDrilldown(null);
   }, [artifactId]);
 
+  useEffect(() => {
+    const sectionId = decodeURIComponent(window.location.hash.slice(1));
+    if (!sectionId) return;
+    document.getElementById(sectionId)?.scrollIntoView?.({ block: "start" });
+  }, [activeView, artifactId]);
+
   const baseQuery: SeriesAnalysisQuery = {
     artifactId,
     gameTitleId: response.artifact.gameTitleId,
@@ -65,6 +71,7 @@ export function SeriesAnalysisContent({
     (view: Parameters<typeof onViewChange>[0]) => onViewChange(view),
     [onViewChange],
   );
+  const focusedItemIds = matchContext?.match?.focusedItemIds ?? [];
 
   return (
     <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4">
@@ -88,16 +95,33 @@ export function SeriesAnalysisContent({
         >
           <AnalysisTabs activeView={activeView} onViewChange={changeView} />
           {activeView === "overview" ? (
-            <OverviewView response={response} onDrilldown={setDrilldown} />
+            <OverviewView
+              focusedItemIds={focusedItemIds}
+              response={response}
+              onDrilldown={setDrilldown}
+            />
           ) : null}
           {activeView === "drivers" ? (
-            <DriversView response={response} onDrilldown={setDrilldown} />
+            <DriversView
+              focusedItemIds={focusedItemIds}
+              response={response}
+              onDrilldown={setDrilldown}
+            />
           ) : null}
           {activeView === "flow" ? (
-            <FlowView response={response} onDrilldown={setDrilldown} onFocusMatch={onFocusMatch} />
+            <FlowView
+              focusedItemIds={focusedItemIds}
+              response={response}
+              onDrilldown={setDrilldown}
+              onFocusMatch={onFocusMatch}
+            />
           ) : null}
           {activeView === "context" ? (
-            <ContextView response={response} onDrilldown={setDrilldown} />
+            <ContextView
+              focusedItemIds={focusedItemIds}
+              response={response}
+              onDrilldown={setDrilldown}
+            />
           ) : null}
         </div>
       )}

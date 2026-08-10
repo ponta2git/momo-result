@@ -90,18 +90,18 @@ export function SeriesAnalysisScopeBar({
         <span>
           {response
             ? `最終更新 ${formatDateTime(response.artifact.publishedAt)}`
-            : "保存済み分析を読み込みます"}
+            : "分析結果を読み込みます"}
         </span>
         <Button
           className="w-full sm:w-auto"
           disabled={!canRefresh}
           icon={<RefreshCw className="size-4" />}
           pending={refreshing}
-          pendingLabel="更新中"
+          pendingLabel="再読み込み中"
           variant="secondary"
           onClick={onRefresh}
         >
-          更新
+          分析を再読み込み
         </Button>
       </div>
     </Disclosure>

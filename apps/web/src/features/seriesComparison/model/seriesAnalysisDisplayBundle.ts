@@ -27,7 +27,7 @@ export function seriesAnalysisFocusExclusionNotice(
     case "match_changed_since_artifact":
       return "選択した試合は分析後に更新されたため、強調表示を解除しました。";
     case "not_in_artifact":
-      return "選択した試合は現在の分析成果物に含まれないため、強調表示を解除しました。";
+      return "選択した試合は現在の分析結果に含まれないため、強調表示を解除しました。";
     case "not_in_scope":
       return "選択した試合は現在の比較条件に含まれないため、強調表示を解除しました。";
   }

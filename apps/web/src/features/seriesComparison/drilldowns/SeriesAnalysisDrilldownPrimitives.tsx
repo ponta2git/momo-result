@@ -27,6 +27,6 @@ export function drilldownTitle(metricId: SeriesAnalysisDrilldownMetricId): strin
     case "rankAnalysis.rankSignals":
       return "順位を読む手掛かり";
     case "rankAnalysis.unexpectedWins":
-      return "記録外の一撃";
+      return "予測より上位だった勝利";
   }
 }

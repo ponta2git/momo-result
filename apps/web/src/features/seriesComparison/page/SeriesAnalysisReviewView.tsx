@@ -8,6 +8,7 @@ import {
   formatPercent,
   playbookCategoryLabel,
   qualityLabel,
+  reviewEvidenceLabel,
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
 import type { SeriesAnalysisViewId } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
 import {
@@ -46,7 +47,7 @@ export function ReviewView({
   if (showError || !response) {
     return (
       <Notice tone="danger" title="次戦の準備を読み込めません">
-        保存済みの振り返りデータを取得できませんでした。
+        次戦に向けた振り返りデータを取得できませんでした。
       </Notice>
     );
   }
@@ -57,14 +58,6 @@ export function ReviewView({
       id={purposePanelId("review")}
       role="tabpanel"
     >
-      <div>
-        <h2 className="text-lg font-semibold" id="review-heading">
-          次戦に備える
-        </h2>
-        <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
-          次の4戦で試す行動仮説です。候補の採否と順序は保存済み成果物のまま表示しています。
-        </p>
-      </div>
       {response.commonPlaybookTopics.length > 0 ? (
         <Disclosure
           ariaLabel="卓全体で出やすい論点"
@@ -84,7 +77,9 @@ export function ReviewView({
         </Disclosure>
       ) : null}
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-base font-semibold">プレーヤー別</h3>
+        <p className="text-sm text-[var(--color-text-secondary)]">
+          次の4戦で、発動条件に気づいたときだけ試す行動仮説です。
+        </p>
         <Dialog
           description="カードに繰り返さず、ここで共通の読み方を説明します。"
           title="分類と信頼度の読み方"
@@ -219,7 +214,7 @@ function PlaybookCard({
                     className="rounded-[var(--radius-sm)] bg-[var(--color-surface-subtle)] px-3 py-2 tabular-nums"
                     key={`${evidence.metricId}:${evidence.label ?? ""}:${evidence.targetCount}:${evidence.value ?? "null"}`}
                   >
-                    {evidence.label ?? evidence.metricId}:{" "}
+                    {evidence.label ?? reviewEvidenceLabel(evidence.metricId)}:{" "}
                     {formatEvidenceValue(evidence.value, evidence.unit)}
                     <span className="ml-2 text-[var(--color-text-secondary)]">
                       対象{evidence.targetCount ?? evidence.denominator ?? card.targetCount}戦・
@@ -236,8 +231,7 @@ function PlaybookCard({
             </div>
             <PlaybookText label="試合後の検証" value={card.postMatchCheck} />
             <p className="text-xs text-[var(--color-text-secondary)] tabular-nums">
-              4人比較を反映した採用優先度: {formatDecimal(card.actionAdviceScore)}／ぶれにくさ:{" "}
-              {evidenceStrengthLabel(card.stabilityBand)}
+              対象 {card.targetCount}戦／ぶれにくさ {evidenceStrengthLabel(card.stabilityBand)}
             </p>
           </div>
         </Dialog>
@@ -245,7 +239,10 @@ function PlaybookCard({
           icon={<ChevronRight className="size-4" />}
           size="sm"
           variant="secondary"
-          onClick={() => onViewChange(card.anchorTarget.view, { replace: false })}
+          onClick={() => {
+            window.location.hash = card.anchorTarget.sectionId;
+            onViewChange(card.anchorTarget.view, { replace: false });
+          }}
         >
           {card.anchorTarget.label}
         </Button>

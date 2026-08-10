@@ -116,9 +116,7 @@ export function SeriesComparisonPage() {
           aggregate.hasError &&
           !aggregate.data ? (
             <Notice tone="danger" title="戦績データを読み込めません">
-              <p>
-                保存済み成果物を取得できませんでした。通信状態を確認して再読み込みしてください。
-              </p>
+              <p>分析結果を取得できませんでした。通信状態を確認して再読み込みしてください。</p>
               <div className="mt-3">
                 <Button size="sm" variant="secondary" onClick={page.actions.refresh}>
                   戦績データを再読み込み
@@ -129,7 +127,7 @@ export function SeriesComparisonPage() {
             <div className="grid gap-3">
               {aggregate.hasError ? (
                 <Notice tone="warning" title="最新の戦績データを取得できません">
-                  直前に取得した成果物を表示しています。
+                  直前に取得した分析結果を表示しています。
                 </Notice>
               ) : null}
               {focus.notice ? (

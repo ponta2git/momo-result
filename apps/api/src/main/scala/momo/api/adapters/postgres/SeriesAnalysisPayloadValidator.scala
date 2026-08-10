@@ -218,7 +218,7 @@ private[postgres] object SeriesAnalysisPayloadValidator:
     sourceMatchRevision.exists(revision =>
       value("sourceMatchRevision").flatMap(_.asString).contains(revision.toString)
     ) && players.size == itemCount && players.size <= 4 &&
-    focused.size >= players.size * 2 && focused.size <= players.size * 11 + 1 &&
+    focused.size >= players.size * 2 && focused.size <= players.size * 12 + 1 &&
     focusedIds.size == focused.size && focusedIds.distinct.size == focusedIds.size &&
     features.size <= 6 && players.forall(validateContextPlayer) &&
     features.forall(validateContextFeature)

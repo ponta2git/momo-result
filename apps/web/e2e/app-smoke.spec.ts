@@ -329,6 +329,23 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
       matchIndex: 1,
       matchNoInEvent: 1,
     });
+    const recentRank = aggregateFixture.recentRanks[0]?.rows[0];
+    if (recentRank) {
+      recentRank.itemId = `recent-rank:member_ponta:${matchId}`;
+      recentRank.matchId = matchId;
+    }
+    const strategyPoint = aggregateFixture.strategyScatter.points[0];
+    if (strategyPoint) {
+      strategyPoint.itemId = `strategy-point:${matchId}:member_ponta`;
+      strategyPoint.matchId = matchId;
+      strategyPoint.matchIndex = 1;
+    }
+    const trendPoint = aggregateFixture.trends[0]?.points[0];
+    if (trendPoint) {
+      trendPoint.itemId = `trend:rank_cumulative_average:member_ponta:${matchId}`;
+      trendPoint.matchId = matchId;
+      trendPoint.index = 1;
+    }
     const reviewFixture = makeSeriesAnalysisReview();
     reviewFixture.artifact = artifact;
     reviewFixture.scope = analysisScope;
@@ -338,7 +355,17 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
     matchContextFixture.scope = analysisScope;
     if (matchContextFixture.match) {
       matchContextFixture.match.matchIndex = 1;
-      matchContextFixture.match.focusedItemIds = [`match:${matchId}`];
+      matchContextFixture.match.focusedItemIds = [
+        "rank-distribution:member_ponta:1",
+        "play-order:member_ponta:1",
+        `recent-rank:member_ponta:${matchId}`,
+        `strategy-point:${matchId}:member_ponta`,
+        "revenue-rank:member_ponta:1:1",
+        "momentum:member_ponta:4:1",
+        "card-shop:member_ponta:destination_with_shop",
+        `trend:rank_cumulative_average:member_ponta:${matchId}`,
+        `match:${matchId}`,
+      ];
     }
 
     let statusPhase: "failed" | "running" = "running";
@@ -425,15 +452,19 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
     await expect(page.getByRole("heading", { exact: true, name: "戦績比較" })).toBeVisible();
     await expect(page.getByText("新しい戦績データを計算中です")).toBeVisible();
     await expect(page.getByText(/更新のデータを表示します/u)).toBeVisible();
-    const matchDialog = page.getByRole("dialog", { name: "第1戦の分析" });
-    await expect(matchDialog.getByText("この試合の注目点")).toBeVisible();
-    await expect(matchDialog.getByText("ぽんた")).toBeVisible();
-    await matchDialog.getByRole("button", { name: "ダイアログを閉じる" }).click();
-    await expect(page.getByRole("heading", { name: "期間内の荒れ" })).toBeVisible();
+    const selectedMatch = page.getByRole("region", { name: "選択中の試合" });
+    await expect(selectedMatch.getByRole("heading", { name: /第1戦/u })).toBeVisible();
+    await expect(selectedMatch.getByRole("list", { name: "この試合の注目点" })).toBeVisible();
+    await expect(selectedMatch.getByText("ぽんた")).toBeVisible();
+    await expect(page.locator('[data-focused-metric="true"]').first()).toBeVisible();
+    await expect(page.getByRole("heading", { name: "最近の試合と荒れ方" })).toBeVisible();
     await expectNoHorizontalPageOverflow(page);
 
     await page.getByRole("tab", { name: "今の差" }).click();
     await expect(page.getByRole("heading", { name: "順位と基礎比較" })).toBeVisible();
+    await expect(selectedMatch).toBeVisible();
+    await expect(page.locator('[data-focused-metric="true"]').first()).toBeVisible();
+    await expect(page).toHaveURL(new RegExp(`focusMatchId=${encodeURIComponent(matchId)}`, "u"));
     await page.getByRole("button", { name: "推移" }).first().click();
     const rankDialog = page.getByRole("dialog", { name: "平均順位の推移" });
     await expect(rankDialog.getByRole("cell", { name: "第1戦" })).toBeVisible();
@@ -441,21 +472,26 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
 
     await page.setViewportSize({ height: 900, width: 1440 });
     await page.getByRole("tab", { name: "次戦に備える" }).click();
-    await expect(page.getByRole("heading", { exact: true, name: "次戦に備える" })).toBeVisible();
+    await expect(page.getByText(/次の4戦で/u)).toBeVisible();
+    await expect(selectedMatch).toBeVisible();
     await page.getByRole("button", { name: "根拠・注意・試合後の確認" }).click();
     const evidenceDialog = page.getByRole("dialog", { name: "根拠・注意・試合後の確認" });
     await expect(evidenceDialog.getByText("データ上の理由")).toBeVisible();
-    await expect(evidenceDialog.getByText(/採用優先度/u)).toBeVisible();
+    await expect(evidenceDialog.getByText(/対象 5戦／ぶれにくさ/u)).toBeVisible();
     await evidenceDialog.getByRole("button", { name: "ダイアログを閉じる" }).click();
 
     statusPhase = "failed";
     const failedStatusResponse = page.waitForResponse((response) =>
       new URL(response.url()).pathname.endsWith("/v2/status"),
     );
-    await page.getByRole("button", { name: "更新" }).click();
+    await page.getByRole("button", { name: "分析を再読み込み" }).click();
     expect((await failedStatusResponse).ok()).toBe(true);
     await expect(page.getByText("分析データを再計算できませんでした")).toBeVisible();
     await expect(page.getByText(/更新のデータを表示しています/u)).toBeVisible();
+
+    await selectedMatch.getByRole("button", { name: "選択解除" }).click();
+    await expect(selectedMatch).toHaveCount(0);
+    await expect(page).not.toHaveURL(/focusMatchId=/u);
 
     if (desktopViewport) await page.setViewportSize(desktopViewport);
   });

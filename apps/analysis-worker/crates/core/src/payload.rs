@@ -390,7 +390,7 @@ fn validate_match_context(
         })
         .collect::<Result<BTreeSet<_>, _>>()?;
     let minimum_focused_count = players.len().saturating_mul(2);
-    let maximum_focused_count = players.len().saturating_mul(11).saturating_add(1);
+    let maximum_focused_count = players.len().saturating_mul(12).saturating_add(1);
     if players.len() > 4
         || u64::try_from(players.len())? != item_count
         || array(match_value.get("features"))?.len() > 6

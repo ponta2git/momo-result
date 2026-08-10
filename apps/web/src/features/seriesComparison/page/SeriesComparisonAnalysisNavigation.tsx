@@ -28,10 +28,11 @@ const analysisViews = [
     id: "drivers",
     label: "勝因候補",
     sections: [
-      { id: "metric-rank-signals", label: "順位の手掛かり" },
-      { id: "metric-money", label: "資産と勝ち筋" },
+      { id: "metric-money", label: "資産の残し方" },
       { id: "metric-revenue-outcome", label: "物件収益と勝ち" },
-      { id: "metric-destination-outcome", label: "目的地と勝ち" },
+      { id: "metric-destination-outcome", label: "目的地と順位" },
+      { id: "metric-strategy-scatter", label: "試合ごとの資産と収益" },
+      { id: "metric-rank-signals", label: "追加の手掛かり" },
     ],
   },
   {
@@ -161,5 +162,30 @@ export function AnalysisTabs({
         ))}
       </TabsList>
     </TabsRoot>
+  );
+}
+
+export function AnalysisTableOfContents({ view }: { view: AnalysisViewId }) {
+  const definition = analysisViews.find((item) => item.id === view);
+  if (!definition) return null;
+  return (
+    <nav
+      aria-label={`${definition.label}の目次`}
+      className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-[var(--color-border)] pb-2 text-xs"
+    >
+      <span className="font-semibold text-[var(--color-text-secondary)]">このページ</span>
+      <ol className="flex min-w-0 flex-wrap gap-x-3 gap-y-1">
+        {definition.sections.map((section) => (
+          <li key={section.id}>
+            <a
+              className="inline-flex min-h-11 items-center text-[var(--color-text-secondary)] underline decoration-[var(--color-border-strong)] underline-offset-4 hover:text-[var(--color-text-primary)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-action)]"
+              href={`#${section.id}`}
+            >
+              {section.label}
+            </a>
+          </li>
+        ))}
+      </ol>
+    </nav>
   );
 }

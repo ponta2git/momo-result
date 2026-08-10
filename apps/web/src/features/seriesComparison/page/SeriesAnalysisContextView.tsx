@@ -1,23 +1,25 @@
 import {
+  CardShopDestinationQuadrants,
+  PlayOrderMatrix,
+} from "@/features/seriesComparison/charts/SeriesAnalysisContextCharts";
+import {
   formatDecimal,
   formatManYen,
   formatPercent,
-  intensityClassName,
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
 import type { AnalysisViewProps } from "@/features/seriesComparison/page/SeriesAnalysisViewPrimitives";
 import {
   AnalysisSection,
   MetricValue,
-  TableCell,
-  TableHead,
 } from "@/features/seriesComparison/page/SeriesAnalysisViewPrimitives";
 import {
   analysisPanelId,
   analysisTabId,
+  AnalysisTableOfContents,
 } from "@/features/seriesComparison/page/SeriesComparisonAnalysisNavigation";
 import { Button } from "@/shared/ui/actions/Button";
 
-export function ContextView({ response, onDrilldown }: AnalysisViewProps) {
+export function ContextView({ focusedItemIds, response, onDrilldown }: AnalysisViewProps) {
   return (
     <div
       aria-labelledby={analysisTabId("context")}
@@ -25,83 +27,41 @@ export function ContextView({ response, onDrilldown }: AnalysisViewProps) {
       id={analysisPanelId("context")}
       role="tabpanel"
     >
-      <AnalysisSection id="metric-play-order" title="番手比較">
-        <div className="grid gap-3 md:grid-cols-2">
+      <AnalysisTableOfContents view="context" />
+      <AnalysisSection
+        description="手番ごとの平均順位と入賞率です。色は各人の中で最も良い手番との差を示し、手番そのものの有利不利を断定しません。"
+        id="metric-play-order"
+        title="番手比較"
+      >
+        <PlayOrderMatrix focusedItemIds={focusedItemIds} response={response} />
+        <div className="mt-3 flex flex-wrap gap-2">
           {response.playOrderComparison.map((entry) => (
-            <article
-              className="rounded-[var(--radius-sm)] border border-[var(--color-border)] p-3"
+            <Button
               key={entry.memberId}
+              size="sm"
+              variant="quiet"
+              onClick={() =>
+                onDrilldown({ memberId: entry.memberId, metricId: "playOrder.rankHistory" })
+              }
             >
-              <div className="flex justify-between gap-2">
-                <h3 className="font-semibold">{entry.displayName}</h3>
-                <span className="text-xs text-[var(--color-text-secondary)]">
-                  {entry.signal}・差 {formatDecimal(entry.spread)}
-                </span>
-              </div>
-              <div className="mt-3 grid grid-cols-4 gap-1">
-                {entry.cells.map((cell) => (
-                  <div
-                    className={`rounded-[var(--radius-xs)] px-1 py-2 text-center text-xs ${intensityClassName(cell.relativeIntensity)}`}
-                    key={cell.itemId}
-                  >
-                    <p>{cell.playOrder}番手</p>
-                    <p className="font-semibold tabular-nums">
-                      {formatDecimal(cell.rankAverage)}位
-                    </p>
-                    <p>{cell.targetCount}戦</p>
-                  </div>
-                ))}
-              </div>
-              <Button
-                className="mt-3"
-                size="sm"
-                variant="secondary"
-                onClick={() =>
-                  onDrilldown({ memberId: entry.memberId, metricId: "playOrder.rankHistory" })
-                }
-              >
-                番手別推移
-              </Button>
-            </article>
+              {entry.displayName}の番手別推移
+            </Button>
           ))}
         </div>
       </AnalysisSection>
-      <AnalysisSection id="metric-card-shop-destination" title="カード売り場と目的地">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[58rem] text-left text-sm">
-            <thead>
-              <tr>
-                <TableHead>プレーヤー</TableHead>
-                <TableHead>条件</TableHead>
-                <TableHead>対象</TableHead>
-                <TableHead>該当率</TableHead>
-                <TableHead>平均順位</TableHead>
-                <TableHead>勝率</TableHead>
-                <TableHead>入賞率</TableHead>
-                <TableHead>平均資産</TableHead>
-              </tr>
-            </thead>
-            <tbody>
-              {response.cardShopDestination.map((entry) =>
-                entry.quadrants.map((quadrant) => (
-                  <tr className="border-t border-[var(--color-border)]" key={quadrant.itemId}>
-                    <TableCell>{entry.displayName}</TableCell>
-                    <TableCell>{cardShopKindLabel(quadrant.kind)}</TableCell>
-                    <TableCell>{quadrant.targetCount}戦</TableCell>
-                    <TableCell>{formatPercent(quadrant.rate)}</TableCell>
-                    <TableCell>{formatDecimal(quadrant.averageRank)}位</TableCell>
-                    <TableCell>{formatPercent(quadrant.winRate)}</TableCell>
-                    <TableCell>{formatPercent(quadrant.podiumRate)}</TableCell>
-                    <TableCell>{formatManYen(quadrant.averageAssets)}</TableCell>
-                  </tr>
-                )),
-              )}
-            </tbody>
-          </table>
-        </div>
+      <AnalysisSection
+        description="目的地到着とカード売り場立ち寄りの組み合わせごとに、順位・勝率・資産を比べます。対象件数が少ない枠は参考値です。"
+        id="metric-card-shop-destination"
+        title="カード売り場と目的地"
+      >
+        <CardShopDestinationQuadrants focusedItemIds={focusedItemIds} response={response} />
       </AnalysisSection>
-      <AnalysisSection id="metric-ginji" title="スリの銀次">
-        <div className="grid gap-3 md:grid-cols-2">
+      <AnalysisSection
+        description="スリの銀次に遭遇した試合数と、その試合で残した順位・資産です。遭遇率の高さを強さとは扱いません。"
+        id="metric-ginji"
+        title="スリの銀次"
+      >
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           {response.metricsByPlayer.map((metric) => (
             <article
               className="rounded-[var(--radius-sm)] border border-[var(--color-border)] p-3"
@@ -109,13 +69,13 @@ export function ContextView({ response, onDrilldown }: AnalysisViewProps) {
             >
               <div className="flex justify-between gap-2">
                 <h3 className="font-semibold">{metric.displayName}</h3>
-                <span className="text-xs text-[var(--color-text-secondary)]">
+                <span className="text-xs text-[var(--color-text-secondary)] tabular-nums">
                   遭遇 {metric.ginji.encounterMatches}戦
                 </span>
               </div>
-              <dl className="mt-3 grid grid-cols-2 gap-2 text-sm">
+              <dl className="mt-3 grid grid-cols-2 gap-3 text-sm">
                 <MetricValue label="遭遇率" value={formatPercent(metric.ginji.encounterRate)} />
-                <MetricValue label="合計" value={`${metric.ginji.count}回`} />
+                <MetricValue label="合計回数" value={`${metric.ginji.count}回`} />
                 <MetricValue
                   label="遭遇時平均順位"
                   value={`${formatDecimal(metric.ginji.resilienceRankAverage)}位`}
@@ -131,19 +91,4 @@ export function ContextView({ response, onDrilldown }: AnalysisViewProps) {
       </AnalysisSection>
     </div>
   );
-}
-
-function cardShopKindLabel(kind: string): string {
-  switch (kind) {
-    case "destination_with_shop":
-      return "目的地あり・売り場あり";
-    case "destination_without_shop":
-      return "目的地あり・売り場なし";
-    case "no_destination_with_shop":
-      return "目的地なし・売り場あり";
-    case "no_destination_without_shop":
-      return "目的地なし・売り場なし";
-    default:
-      return kind;
-  }
 }

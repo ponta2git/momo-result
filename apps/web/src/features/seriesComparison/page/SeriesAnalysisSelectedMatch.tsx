@@ -1,7 +1,10 @@
 import { ArrowUpRight, X } from "lucide-react";
 import { useLocation } from "react-router-dom";
 
-import { formatDateTime } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
+import {
+  formatDateTime,
+  matchFeatureLabel,
+} from "@/features/seriesComparison/model/seriesAnalysisPresentation";
 import type { SeriesAnalysisMatchContextV2 } from "@/shared/api/seriesAnalysis";
 import { matchPerformanceContextFromArtifact } from "@/shared/domain/matchPerformanceContext";
 import { currentInternalLocation, withReturnTo } from "@/shared/navigation/returnTo";
@@ -62,6 +65,18 @@ export function SeriesAnalysisSelectedMatch({
           </Button>
         </div>
       </div>
+      {context.match.features.length > 0 ? (
+        <ul aria-label="この試合の注目点" className="flex flex-wrap gap-2">
+          {context.match.features.map((feature) => (
+            <li
+              className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-xs"
+              key={`${feature.priority}:${feature.featureCode}`}
+            >
+              {matchFeatureLabel(feature.featureCode)}
+            </li>
+          ))}
+        </ul>
+      ) : null}
       <MatchResultLedger ariaLabel="選択中の試合の順位と成績" contextStatus="ready" rows={rows} />
     </section>
   );

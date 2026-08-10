@@ -7,8 +7,10 @@ import {
 import { useSeriesAnalysisDrilldown } from "@/features/seriesComparison/drilldowns/useSeriesAnalysisDrilldown";
 import {
   directionLabel,
+  evidenceStrengthLabel,
   formatDateTime,
   formatDecimal,
+  formatManYen,
   formatPercent,
   qualityLabel,
   rankSignalLabel,
@@ -44,7 +46,7 @@ export function SeriesAnalysisDrilldownDialog({
   return (
     <Dialog
       className="overflow-y-auto"
-      description={query.data?.player.displayName ?? "保存済み成果物の詳細を表示します。"}
+      description={query.data?.player.displayName ?? "比較に使った試合を確認します。"}
       open={selection !== null}
       popupClassName="max-w-[64rem]"
       title={selection ? drilldownTitle(selection.metricId) : "分析の詳細"}
@@ -59,7 +61,7 @@ export function SeriesAnalysisDrilldownDialog({
         </div>
       ) : query.isError ? (
         <Notice tone="danger" title="詳細を読み込めません">
-          <p>保存済みの詳細を取得できませんでした。</p>
+          <p>比較の詳細を取得できませんでした。</p>
           <div className="mt-3">
             <Button size="sm" variant="secondary" onClick={() => void query.refetch()}>
               再読み込み
@@ -176,12 +178,14 @@ function DrilldownBody({ response }: { response: SeriesAnalysisDrilldownV2 }) {
               qualityLabel(payload.status),
               `${payload.matchCount}戦`,
               `${payload.heldEventCount}開催`,
-              `改善fold ${payload.improvedFoldCount}/${payload.method.foldCount}`,
             ]}
           />
+          <p className="text-sm leading-6 text-[var(--color-text-secondary)]">
+            同じプレーヤー内で残った候補だけを比べています。候補内の比重であり、順位への因果や次戦の結果を示す値ではありません。
+          </p>
           {payload.candidates.length === 0 ? (
             <Notice tone="info" title="採用できる手掛かりはありません">
-              モデル品質とfold支持を満たした候補だけを表示します。
+              複数の開催に分けて確認しても残る候補がありませんでした。
             </Notice>
           ) : (
             <div className="grid gap-3">
@@ -193,40 +197,16 @@ function DrilldownBody({ response }: { response: SeriesAnalysisDrilldownV2 }) {
                   <div className="flex flex-wrap items-baseline justify-between gap-2">
                     <h3 className="font-semibold">{rankSignalLabel(candidate.signal)}</h3>
                     <span className="text-xs text-[var(--color-text-secondary)]">
-                      支持 {candidate.supportCount}/{payload.method.foldCount}・安定性{" "}
-                      {candidate.stabilityBand}
+                      {candidate.supportCount}区分で支持・安定性
+                      {evidenceStrengthLabel(candidate.stabilityBand)}
                     </span>
                   </div>
-                  <p className="mt-1 text-sm">
-                    寄与度 {formatDecimal(candidate.importance)} / 候補内{" "}
+                  <p className="mt-1 text-sm tabular-nums">
+                    候補内の比重{" "}
                     {candidate.candidateSharePercent === null
                       ? "—"
                       : `${candidate.candidateSharePercent}%`}
                   </p>
-                  <div className="mt-3 overflow-x-auto">
-                    <table className="w-full min-w-[32rem] text-left text-xs">
-                      <thead>
-                        <tr>
-                          <TableHead>fold</TableHead>
-                          <TableHead>開催</TableHead>
-                          <TableHead>比較</TableHead>
-                          <TableHead>寄与度</TableHead>
-                          <TableHead>支持</TableHead>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {candidate.foldRows.map((row) => (
-                          <tr className="border-t border-[var(--color-border)]" key={row.fold}>
-                            <TableCell>{row.fold}</TableCell>
-                            <TableCell>{row.heldEventCount}</TableCell>
-                            <TableCell>{row.comparisonCount}</TableCell>
-                            <TableCell>{formatDecimal(row.importance)}</TableCell>
-                            <TableCell>{row.supported ? "あり" : "なし"}</TableCell>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
                 </article>
               ))}
             </div>
@@ -244,8 +224,8 @@ function DrilldownBody({ response }: { response: SeriesAnalysisDrilldownV2 }) {
             ]}
           />
           {payload.rows.length === 0 ? (
-            <Notice tone="info" title="記録外の一撃はありません">
-              モデル条件に該当した勝利だけを表示します。
+            <Notice tone="info" title="予測より上位だった勝利はありません">
+              この比較範囲では、確認対象になった勝利はありません。
             </Notice>
           ) : (
             <div className="overflow-x-auto">
@@ -267,7 +247,7 @@ function DrilldownBody({ response }: { response: SeriesAnalysisDrilldownV2 }) {
                       <TableCell>{formatDateTime(row.playedAt)}</TableCell>
                       <TableCell>{formatDecimal(row.expectedRank)}位</TableCell>
                       <TableCell>{row.actualRank}位</TableCell>
-                      <TableCell>{row.evidence.revenueManYen}万円</TableCell>
+                      <TableCell>{formatManYen(row.evidence.revenueManYen)}</TableCell>
                       <TableCell>{row.evidence.destinationCount}回</TableCell>
                     </tr>
                   ))}

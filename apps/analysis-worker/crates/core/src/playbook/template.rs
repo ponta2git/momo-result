@@ -22,7 +22,7 @@ pub(super) const fn template(category: Category, driver: Driver) -> Template {
             avoid: "収益トップだから安全と見て、目的地0回のまま終盤へ入ること。",
             post_match: "収益で上位だった試合について、目的地0回で終えたか、入賞できたかを振り返る。",
             view: "drivers",
-            section_id: "revenue",
+            section_id: "metric-revenue-outcome",
             anchor_label: "物件収益の根拠を見る",
         },
         Category::Destination => Template {
@@ -33,7 +33,7 @@ pub(super) const fn template(category: Category, driver: Driver) -> Template {
             avoid: "目的地を取れないまま、収益順位も下げた状態で終盤へ入ること。",
             post_match: "目的地0回だった試合で、物件収益順位を戻せたか、4位を避けられたかを振り返る。",
             view: "drivers",
-            section_id: "destination",
+            section_id: "metric-destination-outcome",
             anchor_label: "目的地の根拠を見る",
         },
         Category::Assets => Template {
@@ -44,7 +44,7 @@ pub(super) const fn template(category: Category, driver: Driver) -> Template {
             avoid: "収益下位のまま、目的地か上振れだけで巻き返そうとすること。",
             post_match: "低資産帯に入った試合で、収益順位を戻せたか、下位を避けられたかを振り返る。",
             view: "drivers",
-            section_id: "assets",
+            section_id: "metric-money",
             anchor_label: "資産分布の根拠を見る",
         },
         Category::PlayOrder => Template {
@@ -55,7 +55,7 @@ pub(super) const fn template(category: Category, driver: Driver) -> Template {
             avoid: "番手差を無視して、収益下位のまま普段通りの優先順位で進め続けること。",
             post_match: "該当番手の試合で、中盤までに収益順位を補正できたかを振り返る。",
             view: "context",
-            section_id: "play-order",
+            section_id: "metric-play-order",
             anchor_label: "番手別の根拠を見る",
         },
         Category::Ginji => Template {
@@ -66,7 +66,7 @@ pub(super) const fn template(category: Category, driver: Driver) -> Template {
             avoid: "被害前と同じ勝ち切り方に固執して、収益下位のまま終盤へ入ること。",
             post_match: "銀次被害があった試合で、収益順位を戻せたか、入賞圏を守れたかを振り返る。",
             view: "context",
-            section_id: "ginji",
+            section_id: "metric-ginji",
             anchor_label: "銀次被害の根拠を見る",
         },
         Category::Recovery => Template {
@@ -77,7 +77,7 @@ pub(super) const fn template(category: Category, driver: Driver) -> Template {
             avoid: "前戦の負けを一度に取り返そうとして、終盤の一発逆転だけを待つこと。",
             post_match: "前戦下位の次戦で、選んだ立て直し方により2位圏へ戻れたかを振り返る。",
             view: "flow",
-            section_id: "recovery",
+            section_id: "metric-momentum-switch",
             anchor_label: "推移の根拠を見る",
         },
         Category::DestinationPositive => Template {
@@ -88,7 +88,7 @@ pub(super) const fn template(category: Category, driver: Driver) -> Template {
             avoid: "目的地へ着いたことで安全と見て、収益下位のまま終盤へ入ること。",
             post_match: "目的地へ到着した試合で、その後も収益順位と入賞圏を守れたかを振り返る。",
             view: "drivers",
-            section_id: "destination",
+            section_id: "metric-destination-outcome",
             anchor_label: "目的地到着後の根拠を見る",
         },
         Category::Accident => Template {
@@ -98,8 +98,8 @@ pub(super) const fn template(category: Category, driver: Driver) -> Template {
             recommended: "勝ち切りを追い続ける前に、収益順位か目的地到着で2位圏へ戻す。",
             avoid: "事故前と同じ1位狙いに固執して、資産をさらに削る展開を続けること。",
             post_match: "事故があった試合で、収益順位または目的地を戻し、入賞圏を守れたかを振り返る。",
-            view: "context",
-            section_id: "incidents",
+            view: "flow",
+            section_id: "metric-match-digest",
             anchor_label: "事故後の根拠を見る",
         },
     }

@@ -383,6 +383,7 @@ mod tests {
         assert!(focused_ids.contains("strategy-point:match-2:member-1"));
         assert!(focused_ids.contains("revenue-rank:member-1:4:1"));
         assert!(focused_ids.contains("momentum:member-1:1:1"));
+        assert!(focused_ids.contains("card-shop:member-1:no_destination_without_shop"));
         assert!(focused_ids.contains("trend:rank_cumulative_average:member-1:match-2"));
         assert!(focused_ids.contains("match:match-2"));
     }

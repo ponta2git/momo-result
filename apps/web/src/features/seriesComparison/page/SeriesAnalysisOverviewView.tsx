@@ -1,26 +1,30 @@
 import {
+  CrownShareBars,
+  HeadToHeadMatrix,
+  PerformanceProfileQuadrant,
+  RankDistributionBars,
+} from "@/features/seriesComparison/charts/SeriesAnalysisOverviewCharts";
+import {
   formatDecimal,
   formatManYen,
   formatPercent,
-  intensityClassName,
   profileLabel,
-  qualityLabel,
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
 import type { AnalysisViewProps } from "@/features/seriesComparison/page/SeriesAnalysisViewPrimitives";
 import {
   AnalysisSection,
   memberNames,
-  playerName,
   TableCell,
   TableHead,
 } from "@/features/seriesComparison/page/SeriesAnalysisViewPrimitives";
 import {
   analysisPanelId,
   analysisTabId,
+  AnalysisTableOfContents,
 } from "@/features/seriesComparison/page/SeriesComparisonAnalysisNavigation";
 import { Button } from "@/shared/ui/actions/Button";
 
-export function OverviewView({ response, onDrilldown }: AnalysisViewProps) {
+export function OverviewView({ focusedItemIds, response, onDrilldown }: AnalysisViewProps) {
   return (
     <div
       aria-labelledby={analysisTabId("overview")}
@@ -28,10 +32,11 @@ export function OverviewView({ response, onDrilldown }: AnalysisViewProps) {
       id={analysisPanelId("overview")}
       role="tabpanel"
     >
+      <AnalysisTableOfContents view="overview" />
       <AnalysisSection
+        description={`現在の先頭は${memberNames(response.players, response.summary.leaderMemberIds)}。平均順位の最大差は${formatDecimal(response.summary.averageRankSpread)}です。`}
         id="metric-basic"
         title="順位と基礎比較"
-        description={`首位: ${memberNames(response.players, response.summary.leaderMemberIds)} / 平均順位差 ${formatDecimal(response.summary.averageRankSpread)}`}
       >
         <div className="overflow-x-auto">
           <table className="w-full min-w-[52rem] text-left text-sm">
@@ -39,12 +44,12 @@ export function OverviewView({ response, onDrilldown }: AnalysisViewProps) {
               <tr>
                 <TableHead>プレーヤー</TableHead>
                 <TableHead>平均順位</TableHead>
-                <TableHead>順位ぶれ</TableHead>
-                <TableHead>入賞</TableHead>
-                <TableHead>下位</TableHead>
+                <TableHead>順位のぶれ</TableHead>
+                <TableHead>入賞率</TableHead>
+                <TableHead>下位率</TableHead>
                 <TableHead>平均総資産</TableHead>
-                <TableHead>平均収益</TableHead>
-                <TableHead>詳細</TableHead>
+                <TableHead>平均物件収益</TableHead>
+                <TableHead>推移</TableHead>
               </tr>
             </thead>
             <tbody>
@@ -67,7 +72,7 @@ export function OverviewView({ response, onDrilldown }: AnalysisViewProps) {
                         onDrilldown({ memberId: metric.memberId, metricId: "rank.averageHistory" })
                       }
                     >
-                      推移
+                      詳細
                     </Button>
                   </TableCell>
                 </tr>
@@ -75,92 +80,35 @@ export function OverviewView({ response, onDrilldown }: AnalysisViewProps) {
             </tbody>
           </table>
         </div>
-      </AnalysisSection>
-      <AnalysisSection id="metric-rank-distribution" title="順位分布">
-        <div className="grid gap-3 md:grid-cols-2">
-          {response.rankDistribution.map((entry) => (
-            <article
-              className="rounded-[var(--radius-sm)] border border-[var(--color-border)] p-3"
-              key={entry.memberId}
-            >
-              <div className="flex justify-between gap-2">
-                <h3 className="font-semibold">{entry.displayName}</h3>
-                <span className="text-xs text-[var(--color-text-secondary)]">
-                  {entry.total}戦・{qualityLabel(entry.qualityStatus)}
-                </span>
-              </div>
-              <div className="mt-3 grid grid-cols-4 gap-2">
-                {entry.cells.map((cell) => (
-                  <div
-                    className="rounded-[var(--radius-xs)] bg-[var(--color-surface-subtle)] px-2 py-2 text-center"
-                    key={cell.itemId}
-                  >
-                    <p className="text-xs">{cell.rank}位</p>
-                    <p className="mt-1 font-semibold tabular-nums">{cell.count}</p>
-                    <p className="text-[11px] text-[var(--color-text-secondary)]">
-                      {formatPercent(cell.rate)}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </article>
-          ))}
+        <div className="mt-4">
+          <RankDistributionBars focusedItemIds={focusedItemIds} response={response} />
         </div>
       </AnalysisSection>
       <AnalysisSection
+        description="登録済み試合を反復抽出したとき、各プレーヤーが平均順位首位になる割合です。僅差なら首位は固定と見ません。"
         id="metric-crown-certainty"
         title="王座の確からしさ"
-        description={`${response.rankAnalysis.crownCertainty.successfulIterations}/${response.rankAnalysis.crownCertainty.bootstrapIterations}回の有効反復`}
       >
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-          {response.rankAnalysis.crownCertainty.shares.map((share) => (
-            <div
-              className="rounded-[var(--radius-sm)] border border-[var(--color-border)] p-3"
-              key={share.memberId}
-            >
-              <p className="text-sm font-semibold">
-                {playerName(response.players, share.memberId)}
-              </p>
-              <p className="mt-1 text-xl font-semibold tabular-nums">
-                {formatPercent(share.share)}
-              </p>
-            </div>
-          ))}
-        </div>
+        <CrownShareBars response={response} />
+        <p className="mt-3 text-xs text-[var(--color-text-secondary)] tabular-nums">
+          有効反復 {response.rankAnalysis.crownCertainty.successfulIterations}/
+          {response.rankAnalysis.crownCertainty.bootstrapIterations}回
+        </p>
       </AnalysisSection>
-      <AnalysisSection id="metric-head-to-head" title="直接対決">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[48rem] text-left text-sm">
-            <thead>
-              <tr>
-                <TableHead>本人</TableHead>
-                <TableHead>相手</TableHead>
-                <TableHead>対象</TableHead>
-                <TableHead>上回った率</TableHead>
-                <TableHead>平均順位差</TableHead>
-                <TableHead>判定</TableHead>
-              </tr>
-            </thead>
-            <tbody>
-              {response.headToHead.entries.map((entry) => (
-                <tr
-                  className={`border-t border-[var(--color-border)] ${intensityClassName(entry.relativeIntensity)}`}
-                  key={entry.itemId}
-                >
-                  <TableCell>{playerName(response.players, entry.subjectMemberId)}</TableCell>
-                  <TableCell>{playerName(response.players, entry.opponentMemberId)}</TableCell>
-                  <TableCell>{entry.matchCount}戦</TableCell>
-                  <TableCell>{formatPercent(entry.betterRankRate)}</TableCell>
-                  <TableCell>{formatDecimal(entry.averageRankDiff)}</TableCell>
-                  <TableCell>{entry.signal}</TableCell>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+      <AnalysisSection
+        description="同じ試合で相手より上位だった割合です。色の濃さは分析結果が示す差の強さです。"
+        id="metric-head-to-head"
+        title="直接対決"
+      >
+        <HeadToHeadMatrix response={response} />
       </AnalysisSection>
-      <AnalysisSection id="metric-rate" title="プレースタイルと安定性">
-        <div className="grid gap-3 md:grid-cols-2">
+      <AnalysisSection
+        description="物件収益への寄せ方と順位スコアを4人の中央値で区切ります。近い点は同程度として扱います。"
+        id="metric-rate"
+        title="プレースタイルと安定性"
+      >
+        <PerformanceProfileQuadrant response={response} />
+        <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
           {response.performanceProfiles.entries.map((entry) => (
             <article
               className="rounded-[var(--radius-sm)] border border-[var(--color-border)] p-3"
@@ -168,12 +116,11 @@ export function OverviewView({ response, onDrilldown }: AnalysisViewProps) {
             >
               <h3 className="font-semibold">{entry.displayName}</h3>
               <p className="mt-1 text-sm">
-                {profileLabel(entry.profileKind)} / {profileLabel(entry.strategyKind)}
+                {profileLabel(entry.strategyKind)}・{profileLabel(entry.profileKind)}
               </p>
-              <p className="mt-2 text-xs text-[var(--color-text-secondary)]">
-                順位ぶれ {formatDecimal(entry.rankStandardDeviation)}・順位スコア{" "}
-                {formatDecimal(entry.averageRankScore)}・収益/資産{" "}
-                {formatPercent(entry.averageRevenueAssetRate)}
+              <p className="mt-2 text-xs text-[var(--color-text-secondary)] tabular-nums">
+                順位スコア {formatDecimal(entry.averageRankScore)} / 順位のぶれ
+                {formatDecimal(entry.rankStandardDeviation)}
               </p>
             </article>
           ))}

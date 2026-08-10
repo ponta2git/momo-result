@@ -3,7 +3,7 @@ use serde_json::{Value, json};
 use crate::stats::round;
 
 use super::{
-    Candidate, Category, CommonTopic, PRIMARY_CONDITIONAL_COUNT, format_number,
+    Candidate, Category, CommonTopic, PRIMARY_CONDITIONAL_COUNT,
     template::{symptom_metric, template},
 };
 
@@ -19,11 +19,9 @@ pub(super) fn candidate_json(candidate: &Candidate) -> Value {
         "score"
     };
     let data_reason = format!(
-        "対象は{}件。条件内と本人基準の差は{}、入賞側と下位側を分けた{}の効果量は{}です。件数に応じて差を縮小して採用しています。",
+        "対象は{}件。条件内の値が本人の通常時と異なり、{}も入賞側と下位側で差が残った候補です。件数が少ない場合は、結論ではなく次戦で確かめる仮説として扱います。",
         candidate.target_count,
-        format_number(candidate.raw_symptom),
         candidate.contrast.driver.label(),
-        format_number(candidate.contrast.effect),
     );
     json!({
         "cardId": format!("playbook:{}:{}", candidate.member_id, candidate.category.code()),

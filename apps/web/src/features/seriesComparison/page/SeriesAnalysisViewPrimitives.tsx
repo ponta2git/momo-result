@@ -2,78 +2,22 @@ import { BookOpenText } from "lucide-react";
 import type { ReactNode } from "react";
 
 import type { SeriesAnalysisDrilldownSelection } from "@/features/seriesComparison/drilldowns/SeriesAnalysisDrilldownDialog";
-import { formatInteger } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
 import type {
   SeriesAnalysisPlayer,
   SeriesComparisonAggregateV2,
 } from "@/shared/api/seriesAnalysis";
 import { Disclosure } from "@/shared/ui/data/Collapsible";
 
-export function HistogramTables({ response }: { response: SeriesComparisonAggregateV2 }) {
-  return (
-    <div className="mt-4 grid gap-3 lg:grid-cols-2">
-      <HistogramTable
-        label="総資産分布"
-        histogram={response.histograms.assets}
-        players={response.players}
-      />
-      <HistogramTable
-        label="物件収益分布"
-        histogram={response.histograms.revenue}
-        players={response.players}
-      />
-    </div>
-  );
-}
-
-function HistogramTable({
-  histogram,
-  label,
-  players,
-}: {
-  histogram: SeriesComparisonAggregateV2["histograms"]["assets"];
-  label: string;
-  players: SeriesAnalysisPlayer[];
-}) {
-  return (
-    <div className="overflow-x-auto rounded-[var(--radius-sm)] border border-[var(--color-border)]">
-      <table className="w-full min-w-[28rem] text-left text-sm">
-        <caption className="px-3 py-2 text-left font-semibold">{label}</caption>
-        <thead>
-          <tr>
-            <TableHead>帯</TableHead>
-            {histogram.series.map((series) => (
-              <TableHead key={series.memberId}>{playerName(players, series.memberId)}</TableHead>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {histogram.bins.map((bin) => (
-            <tr className="border-t border-[var(--color-border)]" key={bin.index}>
-              <TableCell>{bin.label}</TableCell>
-              {histogram.series.map((series) => (
-                <TableCell key={`${bin.index}:${series.memberId}`}>
-                  {formatInteger(series.counts[bin.index])}
-                </TableCell>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
 export function MetricDefinitions({ response }: { response: SeriesComparisonAggregateV2 }) {
   return (
     <Disclosure
-      ariaLabel="指標の定義"
+      ariaLabel="指標の読み方"
       className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)]"
       panelClassName="border-t border-[var(--color-border)] p-3"
       summary={
         <span className="inline-flex items-center gap-2">
           <BookOpenText className="size-4" />
-          指標の定義
+          指標の読み方
         </span>
       }
     >
@@ -85,7 +29,8 @@ export function MetricDefinitions({ response }: { response: SeriesComparisonAggr
           >
             <dt className="text-sm font-semibold">{definition.label}</dt>
             <dd className="mt-1 text-xs text-[var(--color-text-secondary)]">
-              {definition.metricId} / {definition.unit} / {definition.preferredDirection}
+              {metricDirectionDescription(definition.preferredDirection)}
+              {metricUnitDescription(definition.unit)}
             </dd>
           </div>
         ))}
@@ -95,6 +40,7 @@ export function MetricDefinitions({ response }: { response: SeriesComparisonAggr
 }
 
 export type AnalysisViewProps = {
+  focusedItemIds: readonly string[];
   response: SeriesComparisonAggregateV2;
   onDrilldown: (selection: SeriesAnalysisDrilldownSelection) => void;
 };
@@ -148,9 +94,35 @@ export function TableCell({ children }: { children: ReactNode }) {
 }
 
 export function playerName(players: SeriesAnalysisPlayer[], memberId: string): string {
-  return players.find((player) => player.memberId === memberId)?.displayName ?? memberId;
+  return players.find((player) => player.memberId === memberId)?.displayName ?? "名前不明";
 }
 
 export function memberNames(players: SeriesAnalysisPlayer[], memberIds: string[]): string {
   return memberIds.map((memberId) => playerName(players, memberId)).join("、") || "—";
+}
+
+function metricDirectionDescription(
+  direction: SeriesComparisonAggregateV2["metricDefinitions"][number]["preferredDirection"],
+): string {
+  switch (direction) {
+    case "higher":
+      return "値が大きいほど強く表れる指標です。";
+    case "lower":
+      return "値が小さいほど良い指標です。";
+    case "contextual":
+      return "条件や他の指標と合わせて読みます。";
+  }
+}
+
+function metricUnitDescription(unit: string): string {
+  switch (unit) {
+    case "rank":
+      return " 順位は1位に近いほど上位です。";
+    case "rate":
+      return " 割合で表示します。";
+    case "man_yen":
+      return " 金額は万円単位です。";
+    default:
+      return "";
+  }
 }

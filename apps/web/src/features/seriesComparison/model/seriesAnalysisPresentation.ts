@@ -94,7 +94,28 @@ export function rankSignalLabel(signal: string): string {
     case "ginji":
       return "スリの銀次";
     default:
-      return signal;
+      return "その他の要因";
+  }
+}
+
+export function headToHeadSignalLabel(signal: string | undefined): string {
+  switch (signal) {
+    case "strong_advantage":
+      return "優勢";
+    case "slight_advantage":
+      return "やや優勢";
+    case "strong_disadvantage":
+      return "劣勢";
+    case "slight_disadvantage":
+      return "やや劣勢";
+    case "neutral":
+      return "互角";
+    case "reference":
+      return "参考";
+    case "no_target":
+      return "対象なし";
+    default:
+      return "—";
   }
 }
 
@@ -154,7 +175,47 @@ export function timelineFlagLabel(value: string): string {
     case "asset_blowout":
       return "資産差大";
     default:
-      return value;
+      return "その他の注目点";
+  }
+}
+
+export function matchFeatureLabel(code: string): string {
+  switch (code) {
+    case "close_finish":
+      return "上位が接戦";
+    case "asset_blowout":
+      return "総資産差が大きい";
+    case "revenue_top_no_win":
+      return "物件収益首位が未勝利";
+    case "ginji_storm":
+      return "スリの銀次が複数回";
+    case "negative_assets":
+      return "マイナス資産あり";
+    case "no_destination":
+      return "目的地到着なし";
+    case "destination_burst":
+      return "目的地到着が集中";
+    case "low_revenue_win":
+      return "低収益から勝利";
+    case "fourth_order_win":
+      return "4番手から勝利";
+    default:
+      return "試合上の注目点";
+  }
+}
+
+export function cardShopKindLabel(kind: string): string {
+  switch (kind) {
+    case "destination_with_shop":
+      return "目的地あり・売り場あり";
+    case "destination_without_shop":
+      return "目的地あり・売り場なし";
+    case "no_destination_with_shop":
+      return "目的地なし・売り場あり";
+    case "no_destination_without_shop":
+      return "目的地なし・売り場なし";
+    default:
+      return "条件不明";
   }
 }
 
@@ -169,12 +230,68 @@ export function profileLabel(value: string | null): string {
     case "swing_chaser":
       return "変動追走";
     case "property_focused":
-      return "物件寄り";
+      return "桃鉄型（物件重視）";
     case "card_focused":
-      return "カード寄り";
+      return "遊戯王型（カード重視）";
     case "balanced":
       return "均衡";
     default:
       return "—";
+  }
+}
+
+export function assetStyleLabel(value: string | null): string {
+  switch (value) {
+    case "asset_explosion":
+      return "高資産まで伸ばす試合が多い";
+    case "high_risk_breakthrough":
+      return "低資産と上位が同居する";
+    case "steady_accumulator":
+      return "低資産で終える試合が少ない";
+    case "balanced":
+      return "資産帯の偏りが小さい";
+    default:
+      return "傾向を判定できません";
+  }
+}
+
+export function highlightMetricLabel(metricId: string): string {
+  switch (metricId) {
+    case "rank.average":
+      return "平均順位が最上位";
+    case "assets.average":
+      return "平均総資産が最大";
+    case "revenue.average":
+      return "平均物件収益が最大";
+    case "podium.rate":
+      return "入賞率が最大";
+    default:
+      return "比較上位";
+  }
+}
+
+export function formatHighlightValue(metricId: string, value: number): string {
+  if (metricId === "assets.average" || metricId === "revenue.average") {
+    return formatManYen(value);
+  }
+  if (metricId === "podium.rate") return formatPercent(value);
+  if (metricId === "rank.average") return `${formatDecimal(value)}位`;
+  return formatDecimal(value);
+}
+
+export function reviewEvidenceLabel(metricId: string): string {
+  switch (metricId) {
+    case "revenue.topWinRate":
+      return "収益上位時の勝率";
+    case "playbook.driver.destinationCount":
+      return "目的地到着数との関係";
+    case "playbook.driver.revenueRank":
+      return "物件収益順位との関係";
+    case "playbook.driver.incidentAvoidance":
+      return "事故回避との関係";
+    case "playbook.driver.cardShop":
+      return "カード売り場との関係";
+    default:
+      return "判断材料";
   }
 }

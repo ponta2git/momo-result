@@ -706,7 +706,17 @@ export function makeSeriesAnalysisMatchContext(): SeriesAnalysisMatchContextV2 {
           tone: "neutral",
         },
       ],
-      focusedItemIds: ["recent-rank:member_ponta:match-12"],
+      focusedItemIds: [
+        "rank-distribution:member_ponta:1",
+        "play-order:member_ponta:1",
+        "recent-rank:member_ponta:match-12",
+        "strategy-point:match-12:member_ponta",
+        "revenue-rank:member_ponta:1:1",
+        "momentum:member_ponta:4:1",
+        "card-shop:member_ponta:destination_with_shop",
+        "trend:rank_cumulative_average:member_ponta:match-12",
+        "match:match-12",
+      ],
       matchIndex: 12,
       playedAt: "2026-08-08T12:00:00.000Z",
       players: [

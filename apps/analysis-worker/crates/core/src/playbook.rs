@@ -632,10 +632,6 @@ fn shrink(value: f64, target_count: usize) -> f64 {
     value * target_count / (target_count + PRIOR_WEIGHT)
 }
 
-fn format_number(value: f64) -> String {
-    format!("{:.2}", round(value, 2))
-}
-
 fn rank_score(row: &MatchPlayerRow) -> f64 {
     f64::from(5 - row.rank)
 }

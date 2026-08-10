@@ -188,6 +188,8 @@ public repository に置くため、具体的な障害位置、再現手順、en
   resource負荷を別processへ移していないか。
 - 同時実行数1をruntime台数だけで推測せず、deploy重複とlease失効後の旧processをDB fenceで拒否できるか。
 - pipeline成功、health check、機能応答、CPU / latency観測を別々の証拠として扱ったか。
+- algorithm version変更を定数とworker imageの更新だけで完了扱いせず、対応reader / worker、desired version昇格、
+  queued jobの収束、非対応deliveryの観測を別々に確認したか。
 - 性能観測ができない状態なら、配置成功までを確認済み、性能回復は未検証として報告したか。
 - rollback時は表示名ではなく、影響を受けた全実行経路を覆う差分か確認したか。
 

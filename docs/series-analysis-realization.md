@@ -584,6 +584,10 @@ publicationを加えたelapsedを保存する。worker peakは子終了時だけ
 各terminal永続化の直前にもOS高水位を再採取する。runtime / cgroup peakとは別値として扱い、両者をattemptと
 対応付ける。
 
+非対応algorithm / artifact schema versionのdeliveryは計算失敗やackへ進めず、`analysis_delivery_deferred` と
+`unsupported_version`、job側とworker側のversion組を構造化logへ残す。`queued` とpending deliveryを保持したまま
+compatible workerへ引き継げることを実service smokeで確認し、単なる `worker ready` をversion互換の証拠にしない。
+
 metrics labelへ作品ID、job ID、account IDなど高cardinality値を入れない。個別追跡は構造化logのopaque IDで行う。
 内部例外、DB / Redis接続先、secret、成果物本文をlogへ出さない。alert閾値、provider dashboard、実測値はprivateで
 管理するが、少なくともslot不整合、heartbeat喪失、最古queue待機、連続失敗、stale work不変条件違反、

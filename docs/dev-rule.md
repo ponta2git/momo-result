@@ -102,6 +102,25 @@ docker run --rm \
   momo-analysis-worker:local
 ```
 
+worker imageの更新だけでは、DBに保存されたdesired algorithm versionは変わらない。`ALGORITHM_VERSION` を更新した
+直後や、旧versionをseedしたローカルDBで新しいworkerを初めて使う場合は、workerとAPI readerのreadyを確認してから
+release昇格をdry-run、applyの順で行う。同じoperation keyを両方に使い、key内のversionと日付は対象ごとに更新する。
+
+```sh
+docker exec momo-analysis-local momo-analysis release-promote \
+  --trigger algorithm-update \
+  --operation-key local-algorithm-v3-20260810
+
+docker exec momo-analysis-local momo-analysis release-promote \
+  --trigger algorithm-update \
+  --operation-key local-algorithm-v3-20260810 \
+  --apply
+```
+
+applyは全登録作品のversion付きcampaignを作り、既存のqueued jobがあれば同じjobへ最新版を集約する。DB rowを直接
+書き換えたり、worker起動時に自動昇格したりしない。管理画面が待機中のままでworker logがready以降進まない場合は、
+DB正本のjob version、fresh worker capability、`analysis_delivery_deferred` の順に確認する。
+
 `--memory` と `--memory-swap` を同値にしてswapを許可せず、現行runtime定義と同じworker全体256MiB上限にする。
 Docker Desktop上のコンテナからホストのDB / Redisへ接続するため、専用env fileの接続先hostは
 `host.docker.internal`とする。URL値は文書、shell history、tracked fileへ書かない。
@@ -258,6 +277,7 @@ resource / endurance測定は本番同等runtimeのprivate gateであり、通�
 | ocr-worker production code | `uv run ruff format --check .`, `uv run ruff check .`, `uv run mypy`, `uv run pytest` |
 | ocr-worker external runtime | ocr-worker production gate + `uv run pytest -m integration` |
 | analysis-worker production code | `cargo fmt --all -- --check`, `cargo clippy --locked --workspace --all-targets --all-features -- -D warnings`, `cargo test --locked --workspace --all-targets --all-features`, `cargo build --locked --workspace --release` |
+| analysis-worker algorithm version | analysis-worker production gate + release DB smoke + control-plane smoke。ローカルDBは互換性dry-run後にrelease昇格 |
 | analysis-worker DB / Redis / process | analysis-worker production gate + release DB smoke + control-plane smoke + dedicated image smoke |
 | Docker/Fly/runtime config | `pnpm public:safety:check`, `docker build`, `scripts/ci/runtime-smoke.sh`, container image scan、必要なら `pnpm web:e2e:runtime` |
 | coverage対象ロジック | 各領域の coverage gate |

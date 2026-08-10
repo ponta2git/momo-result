@@ -227,7 +227,11 @@ PostgreSQL repository、Doobie query、DB table/column、migration 前提に触�
 - API coverage 対象ロジックを変更したら `docs/dev-rule.md` の `sbt apiCoverage` を実行する。
 - Redis Streams / OCR queue 契約を変えたら `docs/redis-streams-ocr-contract.md` の Required Tests を実行する。
 - 戦績分析workerを変えたらformat、Clippy、unit test、PostgreSQL / Redis integration、release buildを
-  実行する。数式または候補採用を変えたらalgorithm version判定も行う。
+  実行する。数式または候補採用を変えたらalgorithm version判定も行う。algorithm versionを進める変更では
+  release DB smokeとcontrol-plane smokeを必須にし、release fixtureのworker capability、promotion target、
+  queued jobが同じversionへ収束することを直接確認する。
+- 非対応versionのdeliveryは、実PostgreSQL / Redis / worker経路でjobがattempt未開始の `queued`、deliveryが
+  pendingのまま保たれ、`analysis_delivery_deferred` の安全な構造化logで原因を判別できることを固定する。
 - analysis-workerのClippyは `Cargo.toml` のdeny設定を正本とし、全target / 全featureで実行する。
   productionのlint抑制、`process` 外のunsafe、testを含む900行超module、PostgreSQL `Row::get` の再導入、
   pure coreからruntime / OS依存への参照はarchitecture testでも拒否する。lintや依存境界を弱めて通す変更は、

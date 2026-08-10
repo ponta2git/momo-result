@@ -173,7 +173,7 @@ jobs:
       - name: Authenticate Docker to Fly registry
         if: inputs.operation == 'deploy-disabled' || inputs.operation == 'deploy-enabled'
         env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          FLY_API_TOKEN: ${{ secrets.ANALYSIS_FLY_API_TOKEN }}
         run: flyctl auth docker
 
       - name: Push scanned analysis worker image
@@ -195,7 +195,7 @@ jobs:
       - name: Deploy analysis worker with publication disabled
         if: inputs.operation == 'deploy-disabled'
         env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          FLY_API_TOKEN: ${{ secrets.ANALYSIS_FLY_API_TOKEN }}
         run: >-
           flyctl deploy
           --config fly.analysis.toml
@@ -209,7 +209,7 @@ jobs:
         env:
           ANALYSIS_CONFIG_VERSION: series-analysis-v1-${{ github.sha }}
           ANALYSIS_WORKER_ID: worker-${{ github.run_id }}-${{ github.run_attempt }}
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          FLY_API_TOKEN: ${{ secrets.ANALYSIS_FLY_API_TOKEN }}
         run: >-
           flyctl deploy
           --config fly.analysis.toml
@@ -223,7 +223,7 @@ jobs:
       - name: Run release audit
         if: inputs.operation == 'audit'
         env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          FLY_API_TOKEN: ${{ secrets.ANALYSIS_FLY_API_TOKEN }}
           REQUIRE_CURRENT: ${{ inputs.require_current }}
           REQUIRE_QUIESCENT: ${{ inputs.require_quiescent }}
         run: |
@@ -240,7 +240,7 @@ jobs:
       - name: Dry-run initial backfill
         if: inputs.operation == 'backfill-dry-run'
         env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          FLY_API_TOKEN: ${{ secrets.ANALYSIS_FLY_API_TOKEN }}
           OPERATION_KEY: ${{ inputs.operation_key }}
         run: >-
           flyctl ssh console
@@ -253,7 +253,7 @@ jobs:
       - name: Apply initial backfill
         if: inputs.operation == 'backfill-apply'
         env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          FLY_API_TOKEN: ${{ secrets.ANALYSIS_FLY_API_TOKEN }}
           OPERATION_KEY: ${{ inputs.operation_key }}
         run: >-
           flyctl ssh console

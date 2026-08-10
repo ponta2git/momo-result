@@ -82,21 +82,29 @@ final class SeriesAnalysisPayloadValidatorSpec extends FunSuite:
     )
 
   test("rejects negative aggregate denominators even when their sum matches"):
-    val invalid = aggregate.mapObject(objectValue => objectValue
-      .add("players", Json.arr(
-        Json.obj("memberId" -> Json.fromString("member-1")),
-        Json.obj("memberId" -> Json.fromString("member-2")),
-      ))
-      .add("metricsByPlayer", Json.arr(
-        Json.obj(
-          "memberId" -> Json.fromString("member-1"),
-          "denominator" -> Json.fromLong(-1),
-        ),
-        Json.obj(
-          "memberId" -> Json.fromString("member-2"),
-          "denominator" -> Json.fromLong(1),
-        ),
-      )))
+    val invalid = aggregate.mapObject(objectValue =>
+      objectValue
+        .add(
+          "players",
+          Json.arr(
+            Json.obj("memberId" -> Json.fromString("member-1")),
+            Json.obj("memberId" -> Json.fromString("member-2")),
+          )
+        )
+        .add(
+          "metricsByPlayer",
+          Json.arr(
+            Json.obj(
+              "memberId" -> Json.fromString("member-1"),
+              "denominator" -> Json.fromLong(-1),
+            ),
+            Json.obj(
+              "memberId" -> Json.fromString("member-2"),
+              "denominator" -> Json.fromLong(1),
+            ),
+          )
+        )
+    )
 
     assertEquals(
       validate(invalid, simpleRequest(SeriesAnalysisChunkKind.Aggregate), 0, None),
@@ -108,7 +116,7 @@ final class SeriesAnalysisPayloadValidatorSpec extends FunSuite:
       .downField("match")
       .withFocus(_.mapObject(_.add(
         "focusedItemIds",
-        Json.arr((1 to 12).map(index => Json.fromString(s"item-$index"))*),
+        Json.arr((1 to 13).map(index => Json.fromString(s"item-$index"))*),
       )))
       .top
       .getOrElse(fail("failed to expand focusedItemIds"))
@@ -120,6 +128,24 @@ final class SeriesAnalysisPayloadValidatorSpec extends FunSuite:
         Some(7),
       ),
       true,
+    )
+
+    val overflow = matchContext.hcursor
+      .downField("match")
+      .withFocus(_.mapObject(_.add(
+        "focusedItemIds",
+        Json.arr((1 to 14).map(index => Json.fromString(s"item-$index"))*),
+      )))
+      .top
+      .getOrElse(fail("failed to overflow focusedItemIds"))
+    assertEquals(
+      validate(
+        overflow,
+        request(SeriesAnalysisChunkKind.MatchContext, None, None, Some("match-1")),
+        1,
+        Some(7),
+      ),
+      false,
     )
 
     val duplicated = matchContext.hcursor

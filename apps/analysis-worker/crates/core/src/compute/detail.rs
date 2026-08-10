@@ -218,19 +218,19 @@ impl AggregateItemIds {
     }
 }
 
-fn collect_item_ids(value: &Value, item_ids: &mut BTreeSet<String>) {
-    match value {
+fn collect_item_ids(node: &Value, item_ids: &mut BTreeSet<String>) {
+    match node {
         Value::Array(values) => {
-            for value in values {
-                collect_item_ids(value, item_ids);
+            for child in values {
+                collect_item_ids(child, item_ids);
             }
         }
         Value::Object(object) => {
             if let Some(item_id) = object.get("itemId").and_then(Value::as_str) {
                 item_ids.insert(String::from(item_id));
             }
-            for value in object.values() {
-                collect_item_ids(value, item_ids);
+            for child in object.values() {
+                collect_item_ids(child, item_ids);
             }
         }
         Value::Bool(_) | Value::Null | Value::Number(_) | Value::String(_) => {}
@@ -318,8 +318,9 @@ pub(super) fn match_context(
             let history = index
                 .player_history
                 .get(&(row.match_id.as_str(), row.member_id.as_str()));
-            let revenue_rank = rank_value(&revenue_ranks, row)
-                .and_then(|value| (1..=4).find(|expected| value.round() == f64::from(*expected)));
+            let revenue_rank = rank_value(&revenue_ranks, row).and_then(|rank| {
+                (1..=4).find(|expected| (rank - f64::from(*expected)).abs() < f64::EPSILON)
+            });
             let mut item_ids = vec![
                 format!("rank-distribution:{}:{}", row.member_id, row.rank),
                 format!("play-order:{}:{}", row.member_id, row.play_order),

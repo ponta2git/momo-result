@@ -936,6 +936,11 @@ type SeriesComparisonMatchContextResponse = {
 収益首位、同率、前戦、通算平均前後差を計算しない。`features` はworkerが採用・重複排除・priority順を
 最大6件まで確定し、Webがfeature codeを日本語labelへ写像する。
 
+workerは対象試合の各プレーヤーについて、同じaggregateに実在する順位分布、番手、直近順位、戦略散布図、
+物件収益順位から最終順位への転換、前戦がある場合の順位遷移、カード売り場と目的地、5種類の推移pointを
+参照し、最後に試合digestを加える。存在しないitem IDは返さず、重複も許容しない。上限はプレーヤーごとに
+12件と試合digest 1件とし、Rust staging前validationとScala reader validationで同じ境界を検証する。
+
 確定済み試合には分析入力へ影響する更新ごとに進む単調増加 `matchRevision` を持たせ、artifact contextへ
 `sourceMatchRevision` を保存する。APIは現在の試合について作品所有、現在scope所属、match revisionだけを
 軽量に読み、artifact読取可否、context chunkと同じread transaction / snapshotで次の順に判定する。
@@ -1201,10 +1206,14 @@ Webに残すもの:
 戦績比較
 ├─ 作品・シーズン・マップ
 ├─ 最終更新・計算状態
-├─ 戦績（既存の目的別tab）
-│  └─ 指標 → 根拠 → 選択試合
-└─ 振り返り
-   └─ 次回仮説 → 根拠 → drilldown
+├─ 選択中の試合（指定時だけ、結果台帳と図表上の対応）
+├─ 次戦に備える
+│  └─ 共通論点 → 4人の次回仮説 → 根拠
+└─ 分析する
+   ├─ 今の差
+   ├─ 勝因候補（観測結果 → 高度な推定候補）
+   ├─ 推移
+   └─ 条件別
 ```
 
 管理者:
@@ -1222,16 +1231,28 @@ Webに残すもの:
 ### 7.2 戦績比較page shell
 
 ```text
-戦績比較                                      [表示を再読み込み]
-[作品] [シーズン] [マップ]
+戦績比較
+[現在条件・対象試合数・読み取り目安]
+  └─ [作品] [シーズン] [マップ] [表示を再読み込み]
 最終更新 2026/08/09 14:32
 [必要な場合だけ、計算中または失敗notice / 管理者link]
-[戦績] [振り返り]
+[選択中の試合と4人成績（指定時だけ）]
+[次戦に備える] [分析する]
 ----------------------------------------------------------
 選択中artifactのpanel群
 ```
 
 - 現行の「更新」が単なるHTTP再取得ならlabelを「表示を再読み込み」へ変える。計算操作と混同させない。
+- 比較条件はdesktopで初期展開し、390px級のmobileでは要約を残して編集部を初期折りたたみにする。
+- 選択試合は一時dialogにせず目的tabより前へinline表示し、目的・分析切り口を変えてもURLの
+  `focusMatchId` と同一artifactのcontextを維持する。順位・名前・金額は試合詳細と共通の結果台帳を使う。
+- 「分析する」は「今の差」「勝因候補」「推移」「条件別」の順にし、各切り口には静かな文書内目次を置く。
+  「勝因候補」は資産、物件収益、目的地、試合別分布の観測結果を先に示し、高度な順位候補を最後に置く。
+- 総資産カードは4人で高さと読む順を揃え、「総資産の出方」「稼ぎ方の比重」「主要根拠」
+  「総資産レンジ」「物件収益額」を固定順で表示する。意味色には「強み」「注意」「根拠」「4人内最高」の
+  textを併記し、内部enumやitem IDは表示しない。
+- 累積平均順位、順位ブレ、累積入賞率、累積下位率、銀次累計はRustの5系列を重複なく各切り口へ配置する。
+  系列の凡例はグラフ外、軸と目盛りはSVG内、広い図表のoverflowは局所領域へ閉じる。
 - 成功時は最終更新日時を静かなmetadata行で常時表示し、成功badgeやtoastを常設しない。
 - 状態行とnoticeはscope selector直下に置き、tabやpanelの高さを状態ごとに変えない。
 - 計算中の長時間animation、根拠のない進捗率、全画面blocking overlayは使わない。
@@ -1471,6 +1492,11 @@ rollback契約:
 - 各endpointが要求した1 chunkだけを取得し、title manifest、他scope、他resourceをdecodeしないことをqueryと
   peak memoryの両方で固定する。
 - Webから集計helper、閾値、意味sort、統計fallbackを削除し、artifact fixtureの値をそのまま表示する。
+- `focusedItemIds` がaggregateに実在するitemだけを参照し、順位分布、番手、直近順位、散布図、収益転換、
+  順位遷移、カード売り場条件、5推移系列、試合digestの対応位置だけが「この試合」になることを固定する。
+- 4人×500戦の2,000散布点をWebで間引かず、4系列×500戦の折れ線も全pointをpathへ保持することを
+  決定論的component testで固定する。browserのtransfer、parse、main-thread、heap、操作応答は別のresource
+  gateで実測し、component testを性能合格の代用にはしない。
 - 計算状態decision table、5秒poll開始/停止、旧表示維持、失敗、timeout、status通信失敗をcomponent testで固定する。
 - 対象試合のrevisionまたは作品が変わったstale artifactからcontextを表示せず、別試合だけが変わった場合は
   stale notice付きで表示できることを固定する。

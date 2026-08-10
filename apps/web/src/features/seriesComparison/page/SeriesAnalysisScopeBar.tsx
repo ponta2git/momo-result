@@ -2,6 +2,7 @@ import { RefreshCw } from "lucide-react";
 import { useState } from "react";
 
 import type { SeriesComparisonAggregateV2 } from "@/shared/api/seriesAnalysis";
+import { useMediaQuery } from "@/shared/lib/useMediaQuery";
 import { Button } from "@/shared/ui/actions/Button";
 import { Disclosure } from "@/shared/ui/data/Collapsible";
 import { SelectField } from "@/shared/ui/forms/SelectField";
@@ -39,7 +40,11 @@ export function SeriesAnalysisScopeBar({
   seriesOptions: SelectOption[];
   seriesValue: string;
 }) {
-  const [open, setOpen] = useState(true);
+  const wideViewport = useMediaQuery("(min-width: 768px)");
+  const responsiveViewportAvailable =
+    typeof window !== "undefined" && typeof window.matchMedia === "function";
+  const [openOverride, setOpenOverride] = useState<boolean>();
+  const open = openOverride ?? (!responsiveViewportAvailable || wideViewport);
   const quality = response?.dataQuality.summary;
   const qualityText = quality
     ? quality.referenceCount === 0 && quality.noTargetCount === 0
@@ -64,7 +69,7 @@ export function SeriesAnalysisScopeBar({
         </span>
       }
       triggerClassName="border-b border-[var(--color-border)]"
-      onOpenChange={setOpen}
+      onOpenChange={setOpenOverride}
     >
       <div className="grid gap-3 md:grid-cols-3">
         <SelectField
@@ -101,7 +106,7 @@ export function SeriesAnalysisScopeBar({
           variant="secondary"
           onClick={onRefresh}
         >
-          分析を再読み込み
+          表示を再読み込み
         </Button>
       </div>
     </Disclosure>

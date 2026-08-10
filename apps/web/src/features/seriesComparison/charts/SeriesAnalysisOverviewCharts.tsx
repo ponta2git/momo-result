@@ -8,7 +8,6 @@ import {
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
 import type { SeriesComparisonAggregateV2 } from "@/shared/api/seriesAnalysis";
 import { dataVizSeriesColor } from "@/shared/ui/dataViz/playerSeries";
-import { DataVizQuadrantPlot } from "@/shared/ui/dataViz/QuadrantPlot";
 import { rankColor } from "@/shared/ui/rank/rankPresentation";
 
 type OverviewChartProps = {
@@ -178,38 +177,5 @@ export function HeadToHeadMatrix({ response }: { response: SeriesComparisonAggre
         ))}
       </div>
     </div>
-  );
-}
-
-export function PerformanceProfileQuadrant({
-  response,
-}: {
-  response: SeriesComparisonAggregateV2;
-}) {
-  return (
-    <DataVizQuadrantPlot
-      ariaLabel="物件収益比率と順位スコアの4象限"
-      cornerLabels={{
-        bottomLeft: "遊戯王型（カード重視） / 下位",
-        bottomRight: "桃鉄型（物件重視） / 下位",
-        topLeft: "遊戯王型（カード重視） / 上位",
-        topRight: "桃鉄型（物件重視） / 上位",
-      }}
-      points={response.performanceProfiles.entries.map((entry) => ({
-        label: `${entry.displayName}、物件収益比率${formatPercent(entry.averageRevenueAssetRate)}、順位スコア${formatDecimal(entry.averageRankScore)}`,
-        seriesId: entry.memberId,
-        x: entry.averageRevenueAssetRate,
-        y: entry.averageRankScore,
-      }))}
-      seriesIdentity={response.players.map((player) => ({
-        id: player.memberId,
-        label: player.displayName,
-      }))}
-      xAxisLabel="物件収益÷総資産"
-      xMidpoint={response.performanceProfiles.averageRevenueAssetRateMedian}
-      yAxisLabel="順位スコア（高いほど上位）"
-      yDomain={[1, 4]}
-      yMidpoint={response.performanceProfiles.averageRankScoreMedian}
-    />
   );
 }

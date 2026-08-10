@@ -39,8 +39,8 @@ const analysisViews = [
     id: "flow",
     label: "推移",
     sections: [
-      { id: "metric-match-digest", label: "期間内の荒れ" },
-      { id: "metric-unexpected-wins", label: "記録外の一撃" },
+      { id: "metric-match-digest", label: "最近の試合" },
+      { id: "metric-unexpected-wins", label: "予測より上位の勝利" },
       { id: "metric-recent-form", label: "直近" },
       { id: "metric-momentum-switch", label: "切り替え" },
       { id: "metric-match-no", label: "第n試合傾向" },

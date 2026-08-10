@@ -1,14 +1,16 @@
 import {
+  AssetComparisonCards,
+  StrategyProfileQuadrant,
+} from "@/features/seriesComparison/charts/SeriesAnalysisAssetCards";
+import {
   AssetRevenueHistograms,
   RevenueConversionMatrices,
   StrategyScatter,
 } from "@/features/seriesComparison/charts/SeriesAnalysisDriverCharts";
 import {
   formatHighlightValue,
-  formatManYen,
   formatPercent,
   highlightMetricLabel,
-  assetStyleLabel,
   qualityLabel,
   rankSignalLabel,
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
@@ -40,30 +42,18 @@ export function DriversView({ focusedItemIds, response, onDrilldown }: AnalysisV
         id="metric-money"
         title="資産の残し方"
       >
-        <div className="grid items-stretch gap-3 md:grid-cols-2 xl:grid-cols-4">
-          {response.assetStyleProfiles.entries.map((entry) => (
-            <article
-              className="grid content-start rounded-[var(--radius-sm)] border border-[var(--color-border)] p-3"
-              key={entry.memberId}
-            >
-              <div className="flex items-start justify-between gap-2">
-                <h3 className="font-semibold">{entry.displayName}</h3>
-                <span className="text-xs text-[var(--color-text-secondary)]">
-                  {entry.targetCount}戦
-                </span>
-              </div>
-              <p className="mt-1 text-sm">{assetStyleLabel(entry.primaryKind)}</p>
-              <dl className="mt-3 grid grid-cols-2 gap-3 text-sm">
-                <MetricValue label="資産10%点" value={formatManYen(entry.metrics.p10Assets)} />
-                <MetricValue label="中央値" value={formatManYen(entry.metrics.medianAssets)} />
-                <MetricValue label="資産90%点" value={formatManYen(entry.metrics.p90Assets)} />
-                <MetricValue label="低資産率" value={formatPercent(entry.metrics.lowAssetRate)} />
-              </dl>
-            </article>
-          ))}
-        </div>
+        <AssetComparisonCards response={response} />
         <div className="mt-5">
           <AssetRevenueHistograms response={response} />
+        </div>
+        <div className="mt-5 rounded-[var(--radius-sm)] border border-[var(--color-border)] p-3">
+          <h3 className="text-sm font-semibold">稼ぎ方の比重の根拠</h3>
+          <p className="mt-1 text-xs leading-5 text-[var(--color-text-secondary)]">
+            物件収益比率と順位スコアを4人の中央値で区切ります。近い点は同程度として扱います。
+          </p>
+          <div className="mt-3">
+            <StrategyProfileQuadrant response={response} />
+          </div>
         </div>
       </AnalysisSection>
       <AnalysisSection

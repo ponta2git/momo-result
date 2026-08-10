@@ -25,12 +25,11 @@ describe("rich series analysis views", () => {
 
     expect(
       screen.getAllByRole("heading", { level: 2 }).map((heading) => heading.textContent),
-    ).toEqual(["順位と基礎比較", "王座の確からしさ", "直接対決", "プレースタイルと安定性"]);
+    ).toEqual(["順位と基礎比較", "王座の確からしさ", "直接対決", "順位の安定性"]);
     expect(document.querySelector('[data-focused-metric="true"]')).toHaveAttribute(
       "aria-label",
       expect.stringMatching(/1位 6回 50%、この試合/u),
     );
-    expect(screen.getAllByText(/桃鉄型（物件重視）/u)).not.toHaveLength(0);
     expect(document.body).not.toHaveTextContent(/member_ponta|property_focused|rank\.average/u);
   });
 
@@ -55,6 +54,12 @@ describe("rich series analysis views", () => {
     expect(
       screen.getByRole("img", { name: /収益1位から最終1位、4戦、80%、この試合/u }),
     ).toHaveAttribute("data-focused-metric", "true");
+    expect(screen.getAllByText(/桃鉄型（物件重視）/u)).not.toHaveLength(0);
+    expect(screen.getByText("総資産の出方")).toBeInTheDocument();
+    expect(screen.getByText("稼ぎ方の比重")).toBeInTheDocument();
+    expect(screen.getByText("主要根拠")).toBeInTheDocument();
+    expect(screen.getByText("総資産レンジ")).toBeInTheDocument();
+    expect(screen.getByText("物件収益額")).toBeInTheDocument();
     expect(screen.getByText(/因果関係や次戦の結果を保証するものではありません/u)).toBeVisible();
   });
 

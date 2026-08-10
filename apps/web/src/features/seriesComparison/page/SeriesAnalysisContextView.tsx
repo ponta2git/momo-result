@@ -2,6 +2,7 @@ import {
   CardShopDestinationQuadrants,
   PlayOrderMatrix,
 } from "@/features/seriesComparison/charts/SeriesAnalysisContextCharts";
+import { GinjiCumulativeChart } from "@/features/seriesComparison/charts/SeriesAnalysisFlowCharts";
 import {
   formatDecimal,
   formatManYen,
@@ -87,6 +88,9 @@ export function ContextView({ focusedItemIds, response, onDrilldown }: AnalysisV
               </dl>
             </article>
           ))}
+        </div>
+        <div className="mt-5">
+          <GinjiCumulativeChart focusedItemIds={focusedItemIds} response={response} />
         </div>
       </AnalysisSection>
     </div>

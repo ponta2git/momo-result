@@ -240,21 +240,6 @@ export function profileLabel(value: string | null): string {
   }
 }
 
-export function assetStyleLabel(value: string | null): string {
-  switch (value) {
-    case "asset_explosion":
-      return "高資産まで伸ばす試合が多い";
-    case "high_risk_breakthrough":
-      return "低資産と上位が同居する";
-    case "steady_accumulator":
-      return "低資産で終える試合が少ない";
-    case "balanced":
-      return "資産帯の偏りが小さい";
-    default:
-      return "傾向を判定できません";
-  }
-}
-
 export function highlightMetricLabel(metricId: string): string {
   switch (metricId) {
     case "rank.average":

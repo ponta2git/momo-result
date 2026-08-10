@@ -211,20 +211,20 @@ mod tests {
     use super::*;
     use crate::model::IncidentCounts;
 
-    fn item_ids(value: &Value) -> BTreeSet<String> {
+    fn item_ids(node: &Value) -> BTreeSet<String> {
         let mut result = BTreeSet::new();
-        match value {
+        match node {
             Value::Array(values) => {
-                for value in values {
-                    result.extend(item_ids(value));
+                for child in values {
+                    result.extend(item_ids(child));
                 }
             }
             Value::Object(object) => {
                 if let Some(item_id) = object.get("itemId").and_then(Value::as_str) {
                     result.insert(String::from(item_id));
                 }
-                for value in object.values() {
-                    result.extend(item_ids(value));
+                for child in object.values() {
+                    result.extend(item_ids(child));
                 }
             }
             Value::Bool(_) | Value::Null | Value::Number(_) | Value::String(_) => {}
@@ -342,29 +342,34 @@ mod tests {
                 .collect(),
         };
         let resources = compute_all(&input);
-        let aggregate = resources
-            .iter()
-            .find(|resource| {
+        let aggregate = resources.iter().find(|resource| {
+            resource.scope == ScopeRef::Overall
+                && resource.kind == ComputedResourceKind::Aggregate
+        });
+        assert!(aggregate.is_some(), "overall aggregate missing");
+        let Some(aggregate) = aggregate else {
+            return;
+        };
+        let context = resources.iter().find(|resource| {
                 resource.scope == ScopeRef::Overall
-                    && resource.kind == ComputedResourceKind::Aggregate
-            })
-            .unwrap_or_else(|| panic!("overall aggregate missing"));
-        let context = resources
-            .iter()
-            .find(|resource| {
-                resource.scope == ScopeRef::Overall
-                    && resource.kind
-                        == ComputedResourceKind::MatchContext {
-                            match_id: String::from("match-2"),
-                        }
-            })
-            .unwrap_or_else(|| panic!("overall match context missing"));
+                && resource.kind
+                    == ComputedResourceKind::MatchContext {
+                        match_id: String::from("match-2"),
+                    }
+        });
+        assert!(context.is_some(), "overall match context missing");
+        let Some(context) = context else {
+            return;
+        };
         let aggregate_ids = item_ids(&aggregate.payload);
         let focused = context
             .payload
             .pointer("/match/focusedItemIds")
-            .and_then(Value::as_array)
-            .unwrap_or_else(|| panic!("focused item ids missing"));
+            .and_then(Value::as_array);
+        assert!(focused.is_some(), "focused item ids missing");
+        let Some(focused) = focused else {
+            return;
+        };
         let focused_ids = focused
             .iter()
             .filter_map(Value::as_str)
@@ -374,6 +379,11 @@ mod tests {
             focused.len(),
             focused_ids.len(),
             "focused IDs must be unique"
+        );
+        assert_eq!(focused.len(), 49, "four players use the complete focus bound");
+        assert!(
+            crate::payload::validate_computed(context).is_ok(),
+            "the complete focus set must pass staging validation"
         );
         assert!(
             focused_ids
@@ -402,18 +412,23 @@ mod tests {
                 .collect(),
         };
         let resources = compute_all(&input);
-        let context = resources
-            .iter()
-            .find(|resource| {
-                resource.scope == ScopeRef::Overall
-                    && matches!(resource.kind, ComputedResourceKind::MatchContext { .. })
-            })
-            .unwrap_or_else(|| panic!("overall match context missing"));
+        let context = resources.iter().find(|resource| {
+            resource.scope == ScopeRef::Overall
+                && matches!(resource.kind, ComputedResourceKind::MatchContext { .. })
+        });
+        assert!(context.is_some(), "overall match context missing");
+        let Some(context) = context else {
+            return;
+        };
         let ranks = context
             .payload
             .pointer("/match/players")
-            .and_then(Value::as_array)
-            .unwrap_or_else(|| panic!("match context players missing"))
+            .and_then(Value::as_array);
+        assert!(ranks.is_some(), "match context players missing");
+        let Some(ranks) = ranks else {
+            return;
+        };
+        let ranks = ranks
             .iter()
             .filter_map(|player| player.get("rank").and_then(Value::as_i64))
             .collect::<Vec<_>>();

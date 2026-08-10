@@ -1,14 +1,13 @@
+import { RankTrendCharts } from "@/features/seriesComparison/charts/SeriesAnalysisFlowCharts";
 import {
   CrownShareBars,
   HeadToHeadMatrix,
-  PerformanceProfileQuadrant,
   RankDistributionBars,
 } from "@/features/seriesComparison/charts/SeriesAnalysisOverviewCharts";
 import {
   formatDecimal,
   formatManYen,
   formatPercent,
-  profileLabel,
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
 import type { AnalysisViewProps } from "@/features/seriesComparison/page/SeriesAnalysisViewPrimitives";
 import {
@@ -103,28 +102,11 @@ export function OverviewView({ focusedItemIds, response, onDrilldown }: Analysis
         <HeadToHeadMatrix response={response} />
       </AnalysisSection>
       <AnalysisSection
-        description="物件収益への寄せ方と順位スコアを4人の中央値で区切ります。近い点は同程度として扱います。"
+        description="全試合を古い順に積み上げた平均順位と順位のぶれです。平均順位は1位が上になる向きで示します。"
         id="metric-rate"
-        title="プレースタイルと安定性"
+        title="順位の安定性"
       >
-        <PerformanceProfileQuadrant response={response} />
-        <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-          {response.performanceProfiles.entries.map((entry) => (
-            <article
-              className="rounded-[var(--radius-sm)] border border-[var(--color-border)] p-3"
-              key={entry.memberId}
-            >
-              <h3 className="font-semibold">{entry.displayName}</h3>
-              <p className="mt-1 text-sm">
-                {profileLabel(entry.strategyKind)}・{profileLabel(entry.profileKind)}
-              </p>
-              <p className="mt-2 text-xs text-[var(--color-text-secondary)] tabular-nums">
-                順位スコア {formatDecimal(entry.averageRankScore)} / 順位のぶれ
-                {formatDecimal(entry.rankStandardDeviation)}
-              </p>
-            </article>
-          ))}
-        </div>
+        <RankTrendCharts focusedItemIds={focusedItemIds} response={response} />
       </AnalysisSection>
     </div>
   );

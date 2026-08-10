@@ -340,9 +340,10 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
       strategyPoint.matchId = matchId;
       strategyPoint.matchIndex = 1;
     }
-    const trendPoint = aggregateFixture.trends[0]?.points[0];
-    if (trendPoint) {
-      trendPoint.itemId = `trend:rank_cumulative_average:member_ponta:${matchId}`;
+    for (const trend of aggregateFixture.trends) {
+      const trendPoint = trend.points[0];
+      if (!trendPoint) continue;
+      trendPoint.itemId = `trend:${trend.kind}:member_ponta:${matchId}`;
       trendPoint.matchId = matchId;
       trendPoint.index = 1;
     }
@@ -364,6 +365,10 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
         "momentum:member_ponta:4:1",
         "card-shop:member_ponta:destination_with_shop",
         `trend:rank_cumulative_average:member_ponta:${matchId}`,
+        `trend:rank_cumulative_standard_deviation:member_ponta:${matchId}`,
+        `trend:podium_cumulative_rate:member_ponta:${matchId}`,
+        `trend:lower_half_cumulative_rate:member_ponta:${matchId}`,
+        `trend:ginji_cumulative_count:member_ponta:${matchId}`,
         `match:${matchId}`,
       ];
     }
@@ -455,7 +460,9 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
     const selectedMatch = page.getByRole("region", { name: "選択中の試合" });
     await expect(selectedMatch.getByRole("heading", { name: /第1戦/u })).toBeVisible();
     await expect(selectedMatch.getByRole("list", { name: "この試合の注目点" })).toBeVisible();
-    await expect(selectedMatch.getByText("ぽんた")).toBeVisible();
+    await expect(
+      selectedMatch.getByRole("list", { name: "選択中の試合の順位と成績" }),
+    ).toContainText("ぽんた");
     await expect(page.locator('[data-focused-metric="true"]').first()).toBeVisible();
     await expect(page.getByRole("heading", { name: "最近の試合と荒れ方" })).toBeVisible();
     await expectNoHorizontalPageOverflow(page);
@@ -465,7 +472,7 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
     await expect(selectedMatch).toBeVisible();
     await expect(page.locator('[data-focused-metric="true"]').first()).toBeVisible();
     await expect(page).toHaveURL(new RegExp(`focusMatchId=${encodeURIComponent(matchId)}`, "u"));
-    await page.getByRole("button", { name: "推移" }).first().click();
+    await page.getByRole("button", { name: "詳細" }).first().click();
     const rankDialog = page.getByRole("dialog", { name: "平均順位の推移" });
     await expect(rankDialog.getByRole("cell", { name: "第1戦" })).toBeVisible();
     await rankDialog.getByRole("button", { name: "ダイアログを閉じる" }).click();
@@ -484,7 +491,7 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
     const failedStatusResponse = page.waitForResponse((response) =>
       new URL(response.url()).pathname.endsWith("/v2/status"),
     );
-    await page.getByRole("button", { name: "分析を再読み込み" }).click();
+    await page.getByRole("button", { name: "表示を再読み込み" }).click();
     expect((await failedStatusResponse).ok()).toBe(true);
     await expect(page.getByText("分析データを再計算できませんでした")).toBeVisible();
     await expect(page.getByText(/更新のデータを表示しています/u)).toBeVisible();

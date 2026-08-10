@@ -62,7 +62,7 @@ export function RecentRankStrips({
   );
 }
 
-export function CumulativeTrendCharts({
+export function RankTrendCharts({
   focusedItemIds,
   response,
 }: {
@@ -91,6 +91,35 @@ export function CumulativeTrendCharts({
         />
       </div>
       <div>
+        <h3 className="mb-2 text-sm font-semibold">順位のぶれ</h3>
+        <DataVizLineChart
+          ariaLabel="4人の順位のぶれの推移"
+          focusItemIds={focusedItemIds}
+          formatValue={formatDecimal}
+          minimumYStep={0.25}
+          series={trendSeries(response, "rank_cumulative_standard_deviation")}
+          seriesIdentity={seriesIdentity}
+          yAxisLabel="標準偏差"
+        />
+      </div>
+    </div>
+  );
+}
+
+export function CumulativeFormCharts({
+  focusedItemIds,
+  response,
+}: {
+  focusedItemIds: readonly string[];
+  response: SeriesComparisonAggregateV2;
+}) {
+  const seriesIdentity = response.players.map((player) => ({
+    id: player.memberId,
+    label: player.displayName,
+  }));
+  return (
+    <div className="grid gap-6">
+      <div>
         <h3 className="mb-2 text-sm font-semibold">累積入賞率</h3>
         <DataVizLineChart
           ariaLabel="4人の累積入賞率の推移"
@@ -104,7 +133,44 @@ export function CumulativeTrendCharts({
           yTicks={[0, 0.25, 0.5, 0.75, 1]}
         />
       </div>
+      <div>
+        <h3 className="mb-2 text-sm font-semibold">累積下位率</h3>
+        <DataVizLineChart
+          ariaLabel="4人の累積下位率の推移"
+          domain={[0, 1]}
+          focusItemIds={focusedItemIds}
+          formatValue={formatPercent}
+          minimumYStep={0.25}
+          series={trendSeries(response, "lower_half_cumulative_rate")}
+          seriesIdentity={seriesIdentity}
+          yAxisLabel="下位率"
+          yTicks={[0, 0.25, 0.5, 0.75, 1]}
+        />
+      </div>
     </div>
+  );
+}
+
+export function GinjiCumulativeChart({
+  focusedItemIds,
+  response,
+}: {
+  focusedItemIds: readonly string[];
+  response: SeriesComparisonAggregateV2;
+}) {
+  return (
+    <DataVizLineChart
+      ariaLabel="4人のスリの銀次累計回数の推移"
+      focusItemIds={focusedItemIds}
+      formatValue={(value) => `${formatDecimal(value)}回`}
+      minimumYStep={1}
+      series={trendSeries(response, "ginji_cumulative_count")}
+      seriesIdentity={response.players.map((player) => ({
+        id: player.memberId,
+        label: player.displayName,
+      }))}
+      yAxisLabel="累計回数"
+    />
   );
 }
 
@@ -119,7 +185,7 @@ export function MomentumMatrices({
     <div className="grid gap-3 lg:grid-cols-2">
       {response.momentumSwitch.map((entry, index) => (
         <article
-          className="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3"
+          className="min-w-0 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3"
           key={entry.memberId}
         >
           <h3

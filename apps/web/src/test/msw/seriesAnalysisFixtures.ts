@@ -73,7 +73,11 @@ export function makeSeriesAnalysisAggregate(
       entries: [
         {
           displayName: player.displayName,
-          evidence: [{ kind: "win_rate", tone: "neutral", value: 0.5 }],
+          evidence: [
+            { kind: "high_asset_rate", tone: "neutral", value: 0.25 },
+            { kind: "low_asset_rate", tone: "neutral", value: 0.08 },
+            { kind: "win_rate", tone: "neutral", value: 0.5 },
+          ],
           memberId: player.memberId,
           metrics: {
             averageRevenueAssetRate: 0.12,
@@ -490,6 +494,58 @@ export function makeSeriesAnalysisAggregate(
           },
         ],
       },
+      {
+        kind: "rank_cumulative_standard_deviation",
+        memberId: player.memberId,
+        points: [
+          {
+            index: 12,
+            itemId: "trend:rank_cumulative_standard_deviation:member_ponta:match-12",
+            matchId: "match-12",
+            playedAt: "2026-08-08T12:00:00.000Z",
+            value: 0.8,
+          },
+        ],
+      },
+      {
+        kind: "podium_cumulative_rate",
+        memberId: player.memberId,
+        points: [
+          {
+            index: 12,
+            itemId: "trend:podium_cumulative_rate:member_ponta:match-12",
+            matchId: "match-12",
+            playedAt: "2026-08-08T12:00:00.000Z",
+            value: 0.75,
+          },
+        ],
+      },
+      {
+        kind: "lower_half_cumulative_rate",
+        memberId: player.memberId,
+        points: [
+          {
+            index: 12,
+            itemId: "trend:lower_half_cumulative_rate:member_ponta:match-12",
+            matchId: "match-12",
+            playedAt: "2026-08-08T12:00:00.000Z",
+            value: 0.25,
+          },
+        ],
+      },
+      {
+        kind: "ginji_cumulative_count",
+        memberId: player.memberId,
+        points: [
+          {
+            index: 12,
+            itemId: "trend:ginji_cumulative_count:member_ponta:match-12",
+            matchId: "match-12",
+            playedAt: "2026-08-08T12:00:00.000Z",
+            value: 3,
+          },
+        ],
+      },
     ],
   };
 }
@@ -715,6 +771,10 @@ export function makeSeriesAnalysisMatchContext(): SeriesAnalysisMatchContextV2 {
         "momentum:member_ponta:4:1",
         "card-shop:member_ponta:destination_with_shop",
         "trend:rank_cumulative_average:member_ponta:match-12",
+        "trend:rank_cumulative_standard_deviation:member_ponta:match-12",
+        "trend:podium_cumulative_rate:member_ponta:match-12",
+        "trend:lower_half_cumulative_rate:member_ponta:match-12",
+        "trend:ginji_cumulative_count:member_ponta:match-12",
         "match:match-12",
       ],
       matchIndex: 12,

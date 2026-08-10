@@ -1,7 +1,7 @@
 import { Search } from "lucide-react";
 
 import {
-  CumulativeTrendCharts,
+  CumulativeFormCharts,
   MomentumMatrices,
   RecentRankStrips,
 } from "@/features/seriesComparison/charts/SeriesAnalysisFlowCharts";
@@ -141,7 +141,7 @@ export function FlowView({
       >
         <RecentRankStrips focusedItemIds={focusedItemIds} response={response} />
         <div className="mt-6">
-          <CumulativeTrendCharts focusedItemIds={focusedItemIds} response={response} />
+          <CumulativeFormCharts focusedItemIds={focusedItemIds} response={response} />
         </div>
       </AnalysisSection>
       <AnalysisSection

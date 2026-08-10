@@ -48,7 +48,7 @@ pub(super) fn median_f64(values: &[f64]) -> Option<f64> {
 #[must_use]
 #[expect(
     clippy::suboptimal_flops,
-    reason = "series-analysis-v1 checksums bind the existing interpolation operation order"
+    reason = "series-analysis checksums bind the existing interpolation operation order"
 )]
 pub(super) fn percentile_i32(values: &[i32], probability: f64) -> Option<f64> {
     let mut sorted = values.to_vec();
@@ -68,7 +68,7 @@ pub(super) fn percentile_i32(values: &[i32], probability: f64) -> Option<f64> {
 #[must_use]
 #[expect(
     clippy::suboptimal_flops,
-    reason = "series-analysis-v1 checksums bind the existing interpolation operation order"
+    reason = "series-analysis checksums bind the existing interpolation operation order"
 )]
 pub(super) fn percentile_f64(values: &[f64], probability: f64) -> Option<f64> {
     let mut sorted = values

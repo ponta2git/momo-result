@@ -201,6 +201,7 @@ jobs:
           --config fly.analysis.toml
           --image "${ANALYSIS_IMAGE_REF}"
           --env MOMO_ANALYSIS_PUBLICATION_MODE=disabled
+          --ha=false
           --yes
         timeout-minutes: 15
 
@@ -217,6 +218,7 @@ jobs:
           --env MOMO_ANALYSIS_PUBLICATION_MODE=enabled
           --env MOMO_ANALYSIS_CONFIG_VERSION="${ANALYSIS_CONFIG_VERSION}"
           --env MOMO_ANALYSIS_WORKER_ID="${ANALYSIS_WORKER_ID}"
+          --ha=false
           --yes
         timeout-minutes: 15
 

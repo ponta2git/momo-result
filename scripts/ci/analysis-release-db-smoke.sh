@@ -4,7 +4,7 @@ set -euo pipefail
 binary="${1:?analysis worker binary path is required}"
 postgres_image="${POSTGRES_IMAGE:-postgres:18-alpine}"
 operation_key="ci-release-control-plane"
-algorithm_version="${ANALYSIS_ALGORITHM_VERSION:-series-analysis-v4}"
+algorithm_version="${ANALYSIS_ALGORITHM_VERSION:-series-analysis-v1}"
 release_database_url="${RELEASE_DATABASE_URL:-${WORKER_DATABASE_URL:-${DATABASE_URL:-}}}"
 
 if [[ ! "${algorithm_version}" =~ ^series-analysis-v[0-9]+$ ]]; then

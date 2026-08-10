@@ -109,11 +109,11 @@ release昇格をdry-run、applyの順で行う。同じoperation keyを両方に
 ```sh
 docker exec momo-analysis-local momo-analysis release-promote \
   --trigger algorithm-update \
-  --operation-key local-algorithm-v4-20260810
+  --operation-key local-algorithm-v1-20260811
 
 docker exec momo-analysis-local momo-analysis release-promote \
   --trigger algorithm-update \
-  --operation-key local-algorithm-v4-20260810 \
+  --operation-key local-algorithm-v1-20260811 \
   --apply
 ```
 

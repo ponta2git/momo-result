@@ -6,9 +6,9 @@ import type { SeriesAnalysisViewId } from "@/features/seriesComparison/model/ser
 import { ContextView } from "@/features/seriesComparison/page/SeriesAnalysisContextView";
 import { DriversView } from "@/features/seriesComparison/page/SeriesAnalysisDriversView";
 import { FlowView } from "@/features/seriesComparison/page/SeriesAnalysisFlowView";
-import { SeriesAnalysisMatchContextDialog } from "@/features/seriesComparison/page/SeriesAnalysisMatchContextDialog";
 import { OverviewView } from "@/features/seriesComparison/page/SeriesAnalysisOverviewView";
 import { ReviewView } from "@/features/seriesComparison/page/SeriesAnalysisReviewView";
+import { SeriesAnalysisSelectedMatch } from "@/features/seriesComparison/page/SeriesAnalysisSelectedMatch";
 import { MetricDefinitions } from "@/features/seriesComparison/page/SeriesAnalysisViewPrimitives";
 import {
   AnalysisTabs,
@@ -18,13 +18,14 @@ import {
 } from "@/features/seriesComparison/page/SeriesComparisonAnalysisNavigation";
 import type {
   SeriesAnalysisQuery,
+  SeriesAnalysisMatchContextV2,
   SeriesComparisonAggregateV2,
   SeriesComparisonReviewV2,
 } from "@/shared/api/seriesAnalysis";
 
 export function SeriesAnalysisContent({
   activeView,
-  focusMatchId,
+  matchContext,
   onArtifactExpired,
   onClearFocusedMatch,
   onFocusMatch,
@@ -35,7 +36,7 @@ export function SeriesAnalysisContent({
   reviewLoading,
 }: {
   activeView: SeriesAnalysisViewId;
-  focusMatchId: string | undefined;
+  matchContext: SeriesAnalysisMatchContextV2 | undefined;
   onArtifactExpired: () => void;
   onClearFocusedMatch: () => void;
   onFocusMatch: (matchId: string) => void;
@@ -52,8 +53,7 @@ export function SeriesAnalysisContent({
     if (previousArtifactId.current === artifactId) return;
     previousArtifactId.current = artifactId;
     setDrilldown(null);
-    onClearFocusedMatch();
-  }, [artifactId, onClearFocusedMatch]);
+  }, [artifactId]);
 
   const baseQuery: SeriesAnalysisQuery = {
     artifactId,
@@ -68,6 +68,9 @@ export function SeriesAnalysisContent({
 
   return (
     <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4">
+      {matchContext ? (
+        <SeriesAnalysisSelectedMatch context={matchContext} onClear={onClearFocusedMatch} />
+      ) : null}
       <PurposeTabs activeView={activeView} onViewChange={changeView} />
       {activeView === "review" ? (
         <ReviewView
@@ -104,12 +107,6 @@ export function SeriesAnalysisContent({
         selection={drilldown}
         onArtifactExpired={onArtifactExpired}
         onClose={() => setDrilldown(null)}
-      />
-      <SeriesAnalysisMatchContextDialog
-        baseQuery={baseQuery}
-        matchId={focusMatchId}
-        onArtifactExpired={onArtifactExpired}
-        onClose={onClearFocusedMatch}
       />
     </div>
   );

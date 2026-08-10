@@ -10,6 +10,10 @@ import {
 } from "react";
 import { useSearchParams } from "react-router-dom";
 
+import {
+  seriesAnalysisFocusExclusionNotice,
+  seriesAnalysisScopeSignature,
+} from "@/features/seriesComparison/model/seriesAnalysisDisplayBundle";
 import { buildSeriesAnalysisFilterOptions } from "@/features/seriesComparison/model/seriesAnalysisFilterOptions";
 import {
   buildSeriesAnalysisSearchParams,
@@ -18,40 +22,29 @@ import {
   defaultSeriesAnalysisView,
   normalizeSeriesAnalysisSelection,
   parseSeriesAnalysisSearchParams,
-  seriesAnalysisQueryFromState,
 } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
 import type {
   SeriesAnalysisUrlState,
   SeriesAnalysisViewId,
 } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
-import {
-  isAnalysisArtifactExpired,
-  isAnalysisClientUpgradeRequired,
-} from "@/shared/api/problemDetails";
+import { useSeriesAnalysisDisplayBundle } from "@/features/seriesComparison/page/useSeriesAnalysisDisplayBundle";
+import { isAnalysisClientUpgradeRequired } from "@/shared/api/problemDetails";
 import {
   isInitialQueryLoading,
   shouldShowQueryError,
   shouldShowStaleShield,
 } from "@/shared/api/queryErrorState";
-import {
-  seriesAnalysisAggregateQueryOptions,
-  seriesAnalysisOptionsQueryOptions,
-  seriesAnalysisReviewQueryOptions,
-  seriesAnalysisStatusQueryOptions,
-} from "@/shared/api/queryOptions";
+import { seriesAnalysisOptionsQueryOptions } from "@/shared/api/queryOptions";
 import { sanitizeReturnTo } from "@/shared/navigation/returnTo";
-
-function scopeSignature(state: SeriesAnalysisUrlState): string {
-  return [state.gameTitleId ?? "", state.seasonMasterId ?? "", state.mapMasterId ?? ""].join("|");
-}
 
 export function useSeriesComparisonPageController() {
   const [searchParams, setSearchParams] = useSearchParams();
   const returnTo = sanitizeReturnTo(searchParams.get("returnTo"));
   const rawState = useMemo(() => parseSeriesAnalysisSearchParams(searchParams), [searchParams]);
   const [optimisticState, setOptimisticState] = useState<SeriesAnalysisUrlState | null>(null);
+  const [focusNotice, setFocusNotice] = useState<string | undefined>();
   const [, startStateTransition] = useTransition();
-  const handledExpiredArtifacts = useRef(new Set<string>());
+  const handledExcludedFocus = useRef(new Set<string>());
 
   const optionsQuery = useQuery(seriesAnalysisOptionsQueryOptions());
   const urlState = useMemo(
@@ -68,20 +61,24 @@ export function useSeriesComparisonPageController() {
     () => buildSeriesAnalysisFilterOptions(optionsQuery.data, normalizedState),
     [normalizedState, optionsQuery.data],
   );
-  const statusQuery = useQuery(seriesAnalysisStatusQueryOptions(normalizedState.gameTitleId));
-  const publishedArtifactId = statusQuery.data?.currentArtifact?.artifactId;
-  const aggregateQueryParams = useMemo(
-    () => seriesAnalysisQueryFromState(deferredState, publishedArtifactId),
-    [deferredState, publishedArtifactId],
-  );
-  const aggregateQuery = useQuery(seriesAnalysisAggregateQueryOptions(aggregateQueryParams));
-  const displayArtifactId = aggregateQuery.data?.artifact.artifactId;
-  const reviewQueryParams = useMemo(
-    () => seriesAnalysisQueryFromState(deferredState, displayArtifactId),
-    [deferredState, displayArtifactId],
-  );
-  const reviewEnabled = reviewQueryParams !== undefined && activeView === "review";
-  const reviewQuery = useQuery(seriesAnalysisReviewQueryOptions(reviewQueryParams, reviewEnabled));
+  const resources = useSeriesAnalysisDisplayBundle({
+    activeView,
+    deferredState,
+    state: normalizedState,
+  });
+  const {
+    aggregateQuery,
+    aggregateQueryParams,
+    bundleResolution,
+    candidateArtifactId,
+    displayBundle,
+    matchContextQuery,
+    matchContextQueryParams,
+    reviewArtifactMatches,
+    reviewEnabled,
+    reviewQuery,
+    statusQuery,
+  } = resources;
 
   const urlSignature = useMemo(
     () => buildSeriesAnalysisSearchParams(urlState).toString(),
@@ -105,36 +102,18 @@ export function useSeriesComparisonPageController() {
     if (optimisticState && urlSignature === normalizedSignature) setOptimisticState(null);
   }, [normalizedSignature, optimisticState, urlSignature]);
 
-  useEffect(() => {
-    const artifactId = aggregateQueryParams?.artifactId;
-    if (!artifactId || handledExpiredArtifacts.current.has(artifactId)) return;
-    const expired =
-      isAnalysisArtifactExpired(aggregateQuery.error) ||
-      isAnalysisArtifactExpired(reviewQuery.error);
-    if (!expired) return;
-    handledExpiredArtifacts.current.add(artifactId);
-    void statusQuery.refetch().then((result) => {
-      if (result.data?.currentArtifact?.artifactId === artifactId) {
-        return Promise.all([
-          aggregateQuery.refetch(),
-          ...(reviewEnabled ? [reviewQuery.refetch()] : []),
-        ]);
-      }
-      return undefined;
-    });
-  }, [aggregateQuery, aggregateQueryParams?.artifactId, reviewEnabled, reviewQuery, statusQuery]);
-
-  const activeScopeSignature = scopeSignature(normalizedState);
-  const deferredScopeSignature = scopeSignature(deferredState);
-  const scopeSettling = activeScopeSignature !== deferredScopeSignature;
-  const aggregateLoading = isInitialQueryLoading(aggregateQuery);
+  const scopeSettling =
+    seriesAnalysisScopeSignature(normalizedState) !== seriesAnalysisScopeSignature(deferredState);
+  const bundleFetching =
+    aggregateQuery.isFetching ||
+    (reviewEnabled && reviewQuery.isFetching) ||
+    (matchContextQueryParams !== undefined && matchContextQuery.isFetching);
   const aggregateShielded = shouldShowStaleShield({
-    hasVisibleData: aggregateQuery.data !== undefined,
+    hasVisibleData: displayBundle !== undefined,
     isPlaceholderData: aggregateQuery.isPlaceholderData,
-    isRefreshing: aggregateQuery.isFetching && aggregateQuery.data !== undefined,
-    isSettling: scopeSettling,
+    isRefreshing: bundleFetching && displayBundle !== undefined,
+    isSettling: scopeSettling || (bundleResolution.kind === "waiting" && bundleFetching),
   });
-  const reviewArtifactMatches = reviewQuery.data?.artifact.artifactId === displayArtifactId;
   const reviewLoading =
     reviewEnabled && (isInitialQueryLoading(reviewQuery) || !reviewArtifactMatches);
   const reviewShielded =
@@ -203,13 +182,15 @@ export function useSeriesComparisonPageController() {
     [normalizedState, updateState],
   );
   const focusMatch = useCallback(
-    (focusMatchId: string) => updateState({ ...normalizedState, focusMatchId }, { replace: false }),
+    (focusMatchId: string) => {
+      setFocusNotice(undefined);
+      updateState({ ...normalizedState, focusMatchId }, { replace: false });
+    },
     [normalizedState, updateState],
   );
-  const clearFocusedMatch = useCallback(
-    () => updateState({ ...normalizedState, focusMatchId: undefined }),
-    [normalizedState, updateState],
-  );
+  const clearFocusedMatch = useCallback(() => {
+    updateState({ ...normalizedState, focusMatchId: undefined });
+  }, [normalizedState, updateState]);
   const clearScope = useCallback(
     () =>
       updateState({
@@ -221,16 +202,28 @@ export function useSeriesComparisonPageController() {
     [normalizedState, updateState],
   );
 
+  useEffect(() => {
+    const focusMatchId = normalizedState.focusMatchId;
+    if (bundleResolution.kind !== "excluded" || !focusMatchId || !candidateArtifactId) return;
+    const key = `${candidateArtifactId}:${focusMatchId}:${bundleResolution.status}`;
+    if (handledExcludedFocus.current.has(key)) return;
+    handledExcludedFocus.current.add(key);
+    setFocusNotice(seriesAnalysisFocusExclusionNotice(bundleResolution.status));
+    clearFocusedMatch();
+  }, [bundleResolution, candidateArtifactId, clearFocusedMatch, normalizedState.focusMatchId]);
+
   const refresh = () => {
     void optionsQuery.refetch();
     void statusQuery.refetch();
     if (aggregateQueryParams) void aggregateQuery.refetch();
     if (reviewEnabled) void reviewQuery.refetch();
+    if (matchContextQueryParams) void matchContextQuery.refetch();
   };
   const clientUpgradeRequired = [
     optionsQuery.error,
     statusQuery.error,
     aggregateQuery.error,
+    matchContextQuery.error,
     reviewQuery.error,
   ].some(isAnalysisClientUpgradeRequired);
 
@@ -244,9 +237,9 @@ export function useSeriesComparisonPageController() {
     },
     aggregate: {
       canRefresh: aggregateQueryParams !== undefined,
-      data: aggregateQuery.data,
+      data: displayBundle?.aggregate,
       hasError: shouldShowQueryError(aggregateQuery),
-      loading: aggregateLoading,
+      loading: isInitialQueryLoading(aggregateQuery),
       refreshing: aggregateQuery.isFetching && aggregateQuery.data !== undefined,
       shielded: aggregateShielded,
     },
@@ -264,6 +257,17 @@ export function useSeriesComparisonPageController() {
       updateSeasonMasterId,
       updateView,
     },
+    focus: {
+      data: displayBundle?.matchContext,
+      hasError: matchContextQueryParams !== undefined && shouldShowQueryError(matchContextQuery),
+      loading: matchContextQueryParams !== undefined && isInitialQueryLoading(matchContextQuery),
+      notice: focusNotice,
+      refreshing: matchContextQuery.isFetching && matchContextQuery.data !== undefined,
+      shielded:
+        matchContextQueryParams !== undefined &&
+        bundleResolution.kind === "waiting" &&
+        matchContextQuery.isFetching,
+    },
     options: {
       hasError: shouldShowQueryError(optionsQuery),
       hasVisibleData: optionsQuery.data !== undefined,
@@ -272,7 +276,7 @@ export function useSeriesComparisonPageController() {
     },
     returnTo,
     review: {
-      data: reviewArtifactMatches ? reviewQuery.data : undefined,
+      data: displayBundle?.review,
       hasError: reviewEnabled && shouldShowQueryError(reviewQuery),
       loading: reviewLoading,
       refreshing: reviewEnabled && reviewQuery.isFetching && reviewArtifactMatches,

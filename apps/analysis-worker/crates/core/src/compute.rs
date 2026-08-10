@@ -388,6 +388,39 @@ mod tests {
     }
 
     #[test]
+    fn match_context_players_are_presented_in_result_order() {
+        let input = AnalysisInput {
+            game_title_id: String::from("title-1"),
+            input_revision: 1,
+            rows: (1..=4)
+                .map(|player| {
+                    let mut value = row(1, player);
+                    value.rank = 5 - player;
+                    value
+                })
+                .collect(),
+        };
+        let resources = compute_all(&input);
+        let context = resources
+            .iter()
+            .find(|resource| {
+                resource.scope == ScopeRef::Overall
+                    && matches!(resource.kind, ComputedResourceKind::MatchContext { .. })
+            })
+            .unwrap_or_else(|| panic!("overall match context missing"));
+        let ranks = context
+            .payload
+            .pointer("/match/players")
+            .and_then(Value::as_array)
+            .unwrap_or_else(|| panic!("match context players missing"))
+            .iter()
+            .filter_map(|player| player.get("rank").and_then(Value::as_i64))
+            .collect::<Vec<_>>();
+
+        assert_eq!(ranks, vec![1, 2, 3, 4]);
+    }
+
+    #[test]
     fn event_history_preserves_chronology_instead_of_identifier_order() {
         let mut first = row(1, 1);
         first.held_event_id = String::from("event-z");

@@ -277,7 +277,13 @@ pub(super) fn match_context(
     match_index: usize,
 ) -> Value {
     let revenue_ranks = ranks_by_match(group, |row| row.revenue_man_yen);
-    let players = group
+    let mut ordered_group = group.to_vec();
+    ordered_group.sort_by(|left, right| {
+        left.rank
+            .cmp(&right.rank)
+            .then_with(|| left.member_id.cmp(&right.member_id))
+    });
+    let players = ordered_group
         .iter()
         .map(|row| {
             let history = index
@@ -306,7 +312,7 @@ pub(super) fn match_context(
             })
         })
         .collect::<Vec<_>>();
-    let focused = group
+    let focused = ordered_group
         .iter()
         .flat_map(|row| {
             let history = index

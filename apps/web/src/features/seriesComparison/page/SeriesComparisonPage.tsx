@@ -18,7 +18,7 @@ import { StaleShield } from "@/shared/ui/motion/StaleShield";
 
 export function SeriesComparisonPage() {
   const page = useSeriesComparisonPageController();
-  const { aggregate, filters, options, review, status } = page;
+  const { aggregate, filters, focus, options, review, status } = page;
 
   if (options.loading) return <PageSkeleton />;
   if (page.clientUpgradeRequired) {
@@ -132,8 +132,20 @@ export function SeriesComparisonPage() {
                   直前に取得した成果物を表示しています。
                 </Notice>
               ) : null}
+              {focus.notice ? (
+                <Notice tone="info" title="選択試合の強調表示を解除しました">
+                  {focus.notice}
+                </Notice>
+              ) : null}
+              {focus.hasError ? (
+                <Notice tone="warning" title="選択試合の分析を取得できません">
+                  比較結果は表示したままです。更新すると、選択試合の読み込みを再試行します。
+                </Notice>
+              ) : null}
               <StaleShield
-                active={aggregate.loading || aggregate.shielded || review.shielded}
+                active={
+                  aggregate.loading || aggregate.shielded || focus.shielded || review.shielded
+                }
                 busyLabel="比較条件を更新中"
                 contentClassName="grid gap-4"
                 fallback={<ComparisonSkeleton />}
@@ -157,7 +169,7 @@ export function SeriesComparisonPage() {
                 ) : (
                   <SeriesAnalysisContent
                     activeView={filters.activeView}
-                    focusMatchId={filters.state.focusMatchId}
+                    matchContext={focus.data}
                     response={aggregate.data}
                     review={review.data}
                     reviewError={review.hasError}

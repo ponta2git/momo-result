@@ -14,8 +14,8 @@ worker_database_url="${WORKER_DATABASE_URL:-${DATABASE_URL:-}}"
 worker_redis_url="${WORKER_REDIS_URL:-${REDIS_URL:-}}"
 release_database_url="${RELEASE_DATABASE_URL:-${DATABASE_URL:-}}"
 runtime_memory_limit_bytes="268435456"
-child_memory_limit_bytes="134217728"
-parent_headroom_bytes="134217728"
+child_memory_limit_bytes="201326592"
+parent_headroom_bytes="67108864"
 temporary_limit_bytes="67108864"
 
 if [[ -z "${DATABASE_URL:-}" || -z "${REDIS_URL:-}" ]]; then

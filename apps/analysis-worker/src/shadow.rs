@@ -271,7 +271,12 @@ async fn run_once(
             let _status = child.terminate(Duration::from_secs(2)).await?;
             return Err(ShadowError::TimedOut);
         }
-        child.refresh_liveness()?;
+        if let Err(error) = child.refresh_liveness() {
+            if let Some(outcome) = child.try_wait()? {
+                break outcome;
+            }
+            return Err(error.into());
+        }
         child.sample_resident_bytes().await;
         time::sleep(Duration::from_millis(5)).await;
     };

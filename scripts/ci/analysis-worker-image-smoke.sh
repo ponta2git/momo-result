@@ -3,7 +3,7 @@ set -euo pipefail
 
 image_ref="${1:?analysis worker image reference is required}"
 runtime_memory_limit="256m"
-child_memory_limit_bytes="134217728"
+child_memory_limit_bytes="201326592"
 probe_allocation_bytes="402653184"
 maximum_unpacked_image_bytes="100663296"
 

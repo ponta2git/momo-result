@@ -1416,6 +1416,11 @@ page順序:
 `ANALYSIS_CLIENT_UPGRADE_REQUIRED` だけを返す。新artifact schemaの公開前にAPI readerをdeployし、WebとAPIの
 deploy順による空白期間を作らない。旧browser tabはreload-requiredを表示し、暗黙に旧計算へ戻さない。
 
+Rust版の初回releaseに限り、APIとWebを同じruntime imageで切り替える場合は、worker publicationをdisabledのまま
+mainを先にdeployしてよい。この例外では、reader capabilityを確認してからpublicationとinitial backfillを有効化し、
+backfill完了まではWebの明示的なno-artifact状態へ縮退する。同期分析fallbackを戻したり、reader確認前にartifactを
+公開したりして空白期間を隠さない。以後のschema rolloutはreader-firstの順序へ戻す。
+
 version rolloutは次の互換matrixをrelease gateにする。
 
 - API decoderはDBのcurrent / previous artifact schemaと、次にworkerが公開するschemaをすべてallowlistする。
@@ -1568,13 +1573,14 @@ rollback契約:
 実装完了と本番release完了は分ける。schema、DB、API、Rust worker、Web、専用runtime定義とrelease検査toolは
 実装済みである。本番releaseは、次の環境依存gateが未確定または未検証の間は可としない。
 
-- migration 0020〜0026をrelease対象DBへ適用し、reader / workerとのcompatibility auditを通すこと。
+- migration 0020〜0027をrelease対象DBへ適用し、reader / workerとのcompatibility auditを通すこと。
 - 上限fixtureから最大chunk / response / temporary storage budgetを本番同等環境で確定し、publication設定へ反映すること。
 - 本番同等runtimeの実測からhard timeoutが設定されていること。
 - 本番data shapeの上限fixtureを本番同等runtimeで100回連続実行し、最大同時API read、対象browserの
   resource / response予算を通すこと。
 - reader capabilityを確認してpublicationを有効化し、全作品backfill completenessを機械検査すること。
-- publication停止、前worker、v2 Webへのrollback rehearsalを行い、旧Scala同期分析を復活させず縮退できること。
+- publication停止後もjobと既存artifactを保持できること。初回publication後のmain障害はforward-fixを標準とし、
+  旧Scala同期分析を通常のrollback先として扱わないこと。
 
 ---
 

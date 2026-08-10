@@ -39,7 +39,7 @@
 | 試合結果 | `matches`, `match_players`, `match_incidents` | API | 確定済み試合の正本。4名、順位、プレー順、事件数を外部契約として検証する。 |
 | 下書き | `match_drafts` | API, worker | OCR/手入力の作業単位。terminal状態、OCR slot、画像保持情報を含む。 |
 | OCR | `ocr_drafts`, `ocr_jobs`, `ocr_queue_outbox` | API, worker | job状態はDBが正本。Redisは配送路。queue詳細はRedis契約文書へ寄せる。 |
-| 戦績分析 | `series_analysis_*`, `worker_execution_slots`, `matches.analysis_revision` | API, analysis worker | migration 0020〜0024が再計算intent、campaign、job / attempt、全体実行権、fence、outbox、reader / worker capability、chunk成果物、current / previousを定義する。状態はDBが正本。 |
+| 戦績分析 | `series_analysis_*`, `worker_execution_slots`, `matches.analysis_revision` | API, analysis worker | migration 0020〜0027が再計算intent、campaign、job / attempt、全体実行権、fence、outbox、reader / worker capability、chunk成果物、current / previousとfunction hardeningを定義する。状態はDBが正本。 |
 | マスタ | `game_titles`, `map_masters`, `season_masters`, `incident_masters`, `member_aliases` | API, worker | 作品/マップ/シーズン/事件/名寄せ。IDはFKとして永続化される。 |
 | 冪等性 | `idempotency_keys` | API | `(key, account_id, endpoint)` でreplay scopeを分ける。 |
 

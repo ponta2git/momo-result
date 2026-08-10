@@ -1,11 +1,11 @@
 import type { QueryClient } from "@tanstack/react-query";
 
 import { masterQueryKeys } from "@/features/masters/masterQueries";
-import { masterKeys, seriesComparisonKeys } from "@/shared/api/queryKeys";
+import { masterKeys, seriesAnalysisKeys } from "@/shared/api/queryKeys";
 
-export type MasterResourceKind = "game-titles" | "map-masters" | "season-masters";
+type MasterResourceKind = "game-titles" | "map-masters" | "season-masters";
 
-export type MasterResourceInvalidationTarget =
+type MasterResourceInvalidationTarget =
   | { authScope: string; resource: "game-titles" }
   | { authScope: string; gameTitleId: string; resource: "map-masters" }
   | { authScope: string; gameTitleId: string; resource: "season-masters" };
@@ -37,7 +37,7 @@ export async function invalidateMasterResourceCaches(
   await Promise.all([
     queryClient.invalidateQueries({ queryKey: adminResourceKey(target) }),
     queryClient.invalidateQueries({ queryKey: consumerResourceKey(target.resource) }),
-    queryClient.invalidateQueries({ queryKey: seriesComparisonKeys.all() }),
+    queryClient.invalidateQueries({ queryKey: seriesAnalysisKeys.all() }),
   ]);
 }
 

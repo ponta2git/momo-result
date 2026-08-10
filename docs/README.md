@@ -16,9 +16,10 @@
 | DB / repository | `docs/db-rule.md` | `docs/test-rule.md`, `docs/dev-rule.md` |
 | Redis / OCR queue | `docs/redis-streams-ocr-contract.md` | `docs/schemas/*.schema.json`, `docs/test-rule.md` |
 | OCR worker | `docs/architecture.md` の OCR Worker | `docs/redis-streams-ocr-contract.md`, `docs/test-rule.md` |
+| 戦績分析 worker / job / artifact / API | `docs/series-analysis-realization.md` | `docs/requirements/series-analysis-batch.md`, 指標を変える場合は `docs/requirements/series-comparison.md` と `docs/requirements/series-review-playbook.md`、必要に応じて `docs/db-rule.md`, `docs/test-rule.md` |
 | テスト / coverage / CI | `docs/test-rule.md` | `docs/test-architecture.md`, `docs/dev-rule.md` |
 | ローカル起動 / コマンド / Git | `docs/dev-rule.md` | `docs/test-rule.md` |
-| 戦績比較ページ | `docs/requirements/series-comparison.md` | 非同期計算・成果物・管理状態を触る場合は `docs/requirements/series-analysis-batch.md`、振り返り/行動プレイブックを触る場合は `docs/requirements/series-review-playbook.md`、必要に応じて `docs/architecture.md`, `docs/test-rule.md` |
+| 戦績比較ページ | `docs/requirements/series-comparison.md` | 非同期計算・成果物・API・管理状態を触る場合は `docs/requirements/series-analysis-batch.md` と `docs/series-analysis-realization.md`、振り返り/行動プレイブックを触る場合は `docs/requirements/series-review-playbook.md`、必要に応じて `docs/architecture.md`, `docs/test-rule.md` |
 | 開催一覧・開催詳細 | `docs/requirements/held-event-detail.md` | 必要に応じて `docs/requirements/base.md`, `docs/architecture.md`, `docs/test-rule.md` |
 | docs 変更 | この文書 | 変更対象の正本、`docs/post-mortem/lessons.md` |
 
@@ -36,11 +37,12 @@
 | 要求正本 | `docs/requirements/series-review-playbook.md` | 戦績比較ページ内の振り返り、行動プレイブック要求 |
 | 要求正本 | `docs/requirements/held-event-detail.md` | 開催一覧、開催詳細、試合記録・戦績比較への導線 |
 | 実装正本 | `docs/architecture.md` | API / web / OCR worker / 戦績分析workerの構造、依存方向、実装規約 |
+| 戦績分析実現正本 | `docs/series-analysis-realization.md` | 戦績分析のjob、queue、artifact、API schema、Web計算境界、IA / UX / UI、切替・検証契約 |
 | UI正本 | `docs/ui-rule.md` | Web の意味表現、余白、操作、motion、状態表示、画面遷移の一貫性 |
 | ドメイン正本 | `docs/domain-rule.md` | 用語、状態遷移、不変条件、認証主体と試合参加者の区別 |
 | DB正本 | `docs/db-rule.md` | 共有DB所有権、migration前提、consumer contract |
 | Queue正本 | `docs/redis-streams-ocr-contract.md` | Redis Streams、outbox、payload、ack / retry 契約 |
-| Schema正本 | `docs/schemas/*.schema.json` | Redis payload / OCR hints の機械可読契約 |
+| Schema正本 | `docs/schemas/*.schema.json`, `docs/schemas/fixtures/` | Redis payload、OCR hints、戦績分析artifact / queue / input dependencyの機械可読契約と共有fixture |
 | テスト正本 | `docs/test-rule.md` | 変更種別ごとのテスト選択、oracle、品質ゲート判断 |
 | テスト補助 | `docs/test-architecture.md` | テストサイズ、coverage、CI artifact、段階計画 |
 | 開発正本 | `docs/dev-rule.md` | toolchain、ローカル起動、コマンド、Git運用 |

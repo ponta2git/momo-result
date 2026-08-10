@@ -3,6 +3,7 @@ package momo.api.http
 import cats.effect.IO
 import io.circe.parser.parse
 import org.http4s.Status
+import org.typelevel.ci.CIString
 
 import momo.api.MomoCatsEffectSuite
 import momo.api.errors.AppError
@@ -27,3 +28,9 @@ final class HttpProblemResponseSpec extends MomoCatsEffectSuite:
 
   test("falls back to 500 when a ProblemDetails status cannot be converted to http4s"):
     assertEquals(HttpProblemResponse.statusFrom(999), Status.InternalServerError)
+
+  test("analysis read saturation returns a bounded Retry-After header"):
+    val response = HttpProblemResponse.fromError[IO](AppError.AnalysisReadBusy(3))
+
+    assertEquals(response.status, Status.ServiceUnavailable)
+    assertEquals(response.headers.get(CIString("Retry-After")).map(_.head.value), Some("3"))

@@ -57,6 +57,11 @@ export const loadSeriesComparisonPage = () =>
     default: module.SeriesComparisonPage,
   }));
 
+export const loadSeriesAnalysisAdminPage = () =>
+  import("@/features/seriesAnalysisAdmin/SeriesAnalysisAdminPage").then((module) => ({
+    default: module.SeriesAnalysisAdminPage,
+  }));
+
 const routePreloaders: Array<{
   matches: (pathname: string) => boolean;
   preload: () => Promise<unknown>;
@@ -77,6 +82,7 @@ const routePreloaders: Array<{
   { matches: (pathname) => pathname === "/exports", preload: loadExportPage },
   { matches: (pathname) => pathname === "/admin/masters", preload: loadMastersPage },
   { matches: (pathname) => pathname === "/admin/accounts", preload: loadAdminAccountsPage },
+  { matches: (pathname) => pathname === "/admin/analysis", preload: loadSeriesAnalysisAdminPage },
 ];
 
 function normalizePreloadPath(pathname: string): string {

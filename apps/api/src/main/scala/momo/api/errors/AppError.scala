@@ -53,6 +53,49 @@ object AppError:
     val code = "SERVICE_UNAVAILABLE"
     val title = "Service Unavailable"
 
+  final case class AnalysisArtifactExpired(
+      detail: String = "The requested analysis result is no longer available."
+  ) extends AppError:
+    val code = "ANALYSIS_ARTIFACT_EXPIRED"
+    val title = "Analysis Result Expired"
+
+  final case class AnalysisScopeNotFound(
+      detail: String = "The requested analysis scope does not exist."
+  ) extends AppError:
+    val code = "ANALYSIS_SCOPE_NOT_FOUND"
+    val title = "Analysis Scope Not Found"
+
+  final case class AnalysisScopeNotInArtifact(
+      detail: String = "The requested scope is not included in this analysis result."
+  ) extends AppError:
+    val code = "ANALYSIS_SCOPE_NOT_IN_ARTIFACT"
+    val title = "Analysis Scope Not Ready"
+
+  final case class AnalysisReadBusy(
+      retryAfterSeconds: Int,
+      detail: String = "Analysis results are temporarily busy. Retry shortly."
+  ) extends AppError:
+    val code = "ANALYSIS_READ_BUSY"
+    val title = "Analysis Read Busy"
+
+  final case class AnalysisStateUnavailable(
+      detail: String = "The analysis state is temporarily unavailable."
+  ) extends AppError:
+    val code = "ANALYSIS_STATE_UNAVAILABLE"
+    val title = "Analysis State Unavailable"
+
+  final case class AnalysisNoEligibleTitles(
+      detail: String = "There are no game titles to analyze."
+  ) extends AppError:
+    val code = "ANALYSIS_NO_ELIGIBLE_TITLES"
+    val title = "No Eligible Titles"
+
+  final case class AnalysisClientUpgradeRequired(
+      detail: String = "Reload this page to use the current analysis API."
+  ) extends AppError:
+    val code = "ANALYSIS_CLIENT_UPGRADE_REQUIRED"
+    val title = "Client Upgrade Required"
+
   final case class DependencyFailed(detail: String) extends AppError:
     val code = "DEPENDENCY_FAILED"
     val title = "Dependency Failed"

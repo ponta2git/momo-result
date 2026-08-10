@@ -102,7 +102,9 @@ export async function waitForPersistentApi(
       throw new Error(`API could not start: ${apiProcess.result.error.message}`);
     }
     if (apiProcess.result) {
-      throw new Error("API exited before becoming ready.");
+      throw new Error(
+        "API exited before becoming ready. The configured database may be missing required migrations. Run `pnpm --dir ../momo-db db:migrate` and retry; if it still fails, inspect the API log above.",
+      );
     }
     try {
       const response = await fetchImpl(`http://127.0.0.1:${port}/healthz/details`, {

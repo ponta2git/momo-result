@@ -19,6 +19,7 @@ import {
   loadMatchEditPage,
   loadOcrCapturePage,
   loadSeriesComparisonPage,
+  loadSeriesAnalysisAdminPage,
 } from "@/app/routeModules";
 
 const AdminAccountsPage = lazy(loadAdminAccountsPage);
@@ -34,6 +35,7 @@ const MatchesListPage = lazy(loadMatchesListPage);
 const MatchEditPage = lazy(loadMatchEditPage);
 const OcrCapturePage = lazy(loadOcrCapturePage);
 const SeriesComparisonPage = lazy(loadSeriesComparisonPage);
+const SeriesAnalysisAdminPage = lazy(loadSeriesAnalysisAdminPage);
 
 export const appRoutes: RouteObject[] = [
   {
@@ -98,6 +100,14 @@ export const appRoutes: RouteObject[] = [
           {
             path: "analytics/series",
             element: <SeriesComparisonPage />,
+          },
+          {
+            path: "admin/analysis",
+            element: (
+              <AdminRoute>
+                <SeriesAnalysisAdminPage />
+              </AdminRoute>
+            ),
           },
           {
             path: "admin/masters",

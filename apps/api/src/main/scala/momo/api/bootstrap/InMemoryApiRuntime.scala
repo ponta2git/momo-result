@@ -50,6 +50,7 @@ private[bootstrap] object InMemoryApiRuntime:
           ocrMaintenance = parts.ocrMaintenance,
           appSessions = parts.repositories.appSessions,
           idempotency = parts.repositories.idempotency,
+          seriesAnalysisMaintenance = None,
           now = Clock[F].realTimeInstant,
         ).evalMap { _ =>
           UseCaseWiring.assemble(
@@ -143,12 +144,9 @@ private[bootstrap] object InMemoryApiRuntime:
           matchDrafts,
         )
       )
-      seriesComparison = InMemorySeriesComparisonReadModel[F](
+      seriesAnalysis <- InMemorySeriesAnalysisRepository.create[F](
         gameTitles,
-        mapMasters,
-        seasonMasters,
-        members,
-        matches,
+        Clock[F].realTimeInstant,
       )
       incidentMasters <- InMemoryIncidentMastersRepository.create[F]
       memberAliases <- InMemoryMemberAliasesRepository.create[F]
@@ -174,7 +172,7 @@ private[bootstrap] object InMemoryApiRuntime:
         matchDrafts = matchDrafts,
         matchDraftCancellation = matchDraftCancellation,
         matchList = matchList,
-        seriesComparison = seriesComparison,
+        seriesAnalysis = seriesAnalysis,
         matchConfirmation = matchConfirmation,
         appSessions = appSessions,
         sessionAccounts = sessionAccounts,

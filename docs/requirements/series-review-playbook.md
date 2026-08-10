@@ -5,6 +5,8 @@
 既存の試合確定、OCR、CSV/TSV出力、マスタ管理、戦績比較の基礎指標は変更しない。確定済み戦績データだけを使い、プレーヤーに対して次回4戦で試す「試合中の行動仮説」を提示する。
 計算の非同期実行、成果物、状態表示、管理操作は
 `docs/requirements/series-analysis-batch.md` を正本とする。
+artifact pinning、API schema、Web計算境界の実現契約は
+`docs/series-analysis-realization.md` を正本とする。
 
 ---
 
@@ -658,7 +660,7 @@ actionAdviceScore =
 MVPでは、既存の選択肢APIと集計APIを維持しつつ、保存済み成果物を読む単一の振り返りAPIを追加する。
 
 ```text
-GET /api/analytics/series-comparison/review?gameTitleId=...&seasonMasterId=...&mapMasterId=...
+GET /api/analytics/series-comparison/v2/review?gameTitleId=...&artifactId=...&seasonMasterId=...&mapMasterId=...
 ```
 
 理由:
@@ -667,6 +669,8 @@ GET /api/analytics/series-comparison/review?gameTitleId=...&seasonMasterId=...&m
 - 詳細指標全体を過度に肥大化させず、プレイブック生成結果を独立して取得できる。
 - 指標別APIを乱立させず、振り返りビュー単位の1 APIに閉じられる。
 - 集計API、振り返りAPI、ドリルダウンAPIは同じ作品成果物versionを読み、APIごとに再計算しない。
+- `artifactId` は状態APIで解決した値を必須とし、集計、drilldown、選択試合文脈と同じ成果物へ固定する。
+- APIは指定artifact・scopeの振り返りchunkだけを読み、aggregate、他scope、作品全体を一括decodeしない。
 
 ### 9.2 レスポンスの意味単位
 
@@ -684,10 +688,16 @@ GET /api/analytics/series-comparison/review?gameTitleId=...&seasonMasterId=...&m
 - `evidence`: カードごとの判断材料。指標名、値、対象件数、信頼度を含み、カード内の理由を支える。
 - `dataQuality`: サンプル不足、対象なし、同値あり、除外理由。
 
+`playbookByPlayer` は権威あるプレーヤー順とし、各playerについて `primaryCard` と最大2件の
+`secondaryCards` を明示する。workerはcardの採否、分類順、score順、primary選択、evidence順、
+stability band、共通論点の短いheadingを確定する。Webは数値閾値、sort、正規表現によるtitle加工で
+これらを再構成しない。
+
 ### 9.3 実装境界
 
 - 推薦生成ロジックはRust分析workerに置き、作品単位の成果物へ保存する。
 - webは表示用ViewModel、詳細リンク、空状態、計算状態、エラー表示に集中する。
+- webはworkerが返したcardとevidenceの順序を維持し、信頼度band、fold支持、候補採否を再計算しない。
 - Scala APIは成果物の認証・取得・schema検証を担当し、推薦、閾値判定、スコアリングを再実装しない。
 - 推薦生成の閾値、`priorWeight`、`actionConnection`、行動テンプレートはalgorithm versionで追跡できる
   worker設定として集約し、テストで固定する。
@@ -695,6 +705,8 @@ GET /api/analytics/series-comparison/review?gameTitleId=...&seasonMasterId=...&m
   Rust実装を高精度参照値、golden fixture、性質テストのいずれかで検証する。
 - job、outbox、成果物のDB schemaを追加し、`../momo-db` のmigrationとconsumer contractで固定する。
 - API内部cacheやHTTP同期計算を成果物の代用にしない。
+- 振り返りchunkは件数・decoded byte・response byte上限を持ち、worker公開時に検証する。上限超過を
+  APIで切り詰めたりカードを再選定したりしない。
 - 行動プレイブックへ接続する補助分析は、1作品の全スコープ計算計画、計算回数、peak memory、
   処理時間を本番同等runtimeで評価する。機能テストの成功だけを性能の証拠にしない。
 
@@ -754,7 +766,8 @@ MVPでは以下を扱わない。
 - 未取得データを前提にしたカード選択、物件選択、距離判断が表示されないこと。
 - プレーヤーのマスタID、APIフィールド名、DB列名、英語の内部キーがUIに表示されないこと。
 - 既存タブへの詳細リンク。
-- 集計、振り返り、ドリルダウンAPIが同じ成果物versionを読み、API内で推薦生成を実行しないこと。
+- 集計、振り返り、ドリルダウン、選択試合文脈APIが状態APIで解決した同じartifact IDを読み、
+  API内で推薦生成を実行しないこと。
 - 定義済みの候補なし・件数不足は空のプレイブックを含む正常成果物になり、予期しない推薦生成失敗は
   作品成果物全体を失敗させて直前成功成果物を維持すること。
 - 振り返りAPIの個別HTTP取得失敗で、他タブの取得済み表示を壊さないこと。

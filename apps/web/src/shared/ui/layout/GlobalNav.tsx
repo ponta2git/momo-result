@@ -1,4 +1,5 @@
 import {
+  Activity,
   BarChart3,
   CalendarDays,
   Database,
@@ -32,6 +33,7 @@ const defaultItems: NavItem[] = [
 ];
 
 const adminItems: NavItem[] = [
+  { icon: <Activity className="size-4" />, label: "分析", to: "/admin/analysis" },
   { icon: <Database className="size-4" />, label: "設定", to: "/admin/masters" },
   { icon: <ShieldCheck className="size-4" />, label: "アカウント", to: "/admin/accounts" },
 ];

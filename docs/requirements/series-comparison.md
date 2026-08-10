@@ -3,7 +3,8 @@
 本書は、確定済みの戦績データを使い、次の対戦で試す仮説を見つけ、その根拠を個別試合までたどるための戦績比較ページの要求仕様である。
 
 `docs/requirements/base.md` のMVP後に追加する集計画面として扱う。指標計算の非同期実行、
-成果物、状態表示、管理操作は `docs/requirements/series-analysis-batch.md` を正本とする。
+成果物、状態表示、管理操作は `docs/requirements/series-analysis-batch.md`、job・artifact・API・Web境界の
+実現契約は `docs/series-analysis-realization.md` を正本とする。
 
 ---
 
@@ -15,7 +16,9 @@
 
 - 「シリーズ」は既存の「作品」(`game_titles`) と同義として扱う。
 - 初回表示は、確定済み対戦が最も新しい作品の「総合」を自動選択する。今後も集計対象は確定済み試合だけに限定する。
-- APIは単一巨大API、完全な指標別API、2系統APIを比較したうえで、初期版では「選択肢取得API + 集計API」の2系統を推奨する。
+- 初期表示の基幹payloadは、単一巨大API、完全な指標別API、分離APIを比較したうえで、「選択肢 +
+  active view成果物」に分ける。非同期状態は小さい状態API、振り返り・集計・ドリルダウン・選択試合文脈は
+  用途別APIへ分離し、全成果物APIを同じartifact IDへ固定する。
 - 最初に「次戦に備える」でプレーヤー別の行動仮説を示し、「分析する」で現在差、推移、勝因候補、条件別の根拠へ掘り下げる。
 - 画面は概要から詳細へのドリルダウンを基本とする。詳細分析では指標ブロックを縦に並べ、PCでは各指標ブロック内で4プレーヤーを横並び比較できるようにする。
 - 指標は `metricId` 付きのカタログとして定義し、説明、数式、良い方向、サンプル不足条件を持たせる。
@@ -144,14 +147,18 @@ Phase 2以降は、本書の拡張性方針に従って追加する。ただし�
 | F-18 | 保留開催回の外部評価で下位寄りと推定されたにもかかわらず実際は1位だった試合を「記録外の一撃」として表示し、根拠試合へ移動できる。 |
 | F-19 | 開催条件と番手を調整した首位の確からしさを、保留開催回単位の再標本化による比率として表示する。次戦の勝率とは表現しない。 |
 | F-20 | 高度な順位分析が件数不足、不安定、または計算不能でも集計API全体を失敗させず、指標単位で「対象なし」または「参考」を返す。 |
-| F-21 | 戦績比較、振り返り、ドリルダウンに必要なデータは、作品単位の非同期分析成果物から取得する。APIまたはwebで高負荷な分析を再実行しない。 |
-| F-22 | 試合確定・更新・削除後は対象作品、初回導入・algorithm version更新後は全作品を自動再計算する。連続変更は作品単位で最新版へ集約する。 |
+| F-21 | 戦績比較、振り返り、ドリルダウン、選択試合と試合詳細の派生分析に必要なデータは、作品単位の非同期分析成果物から取得する。APIまたはwebで集計、閾値判定、意味順、候補選定、統計fallbackを再実行しない。 |
+| F-22 | 試合確定・更新・削除後は対象作品、初回導入時は確定試合を持つ全作品、algorithm / artifact schema version更新後は全登録作品を自動再計算する。連続変更は作品単位で最新版へ集約する。 |
 | F-23 | 計算待ち・計算中で直前成功成果物がある場合はその成果物を表示し、「新しいデータを計算中」と最終成功日時を併記する。成功成果物がない場合は計算中の空状態を表示する。 |
 | F-24 | 計算失敗・タイムアウト時は失敗を明示する。直前成功成果物がある場合は成果物と最終成功日時を維持し、一度も成功していない場合は分析値を表示しない。 |
 | F-25 | 計算中は軽量な状態確認を5秒間隔で行い、成功時に成果物を自動更新し、terminal状態でpollingを停止する。 |
 | F-26 | 管理者は既定の1作品再計算と、明示的な全作品再計算を実行できる。全作品操作は作品ごとのジョブへ展開する。 |
 | F-27 | 管理者は直近3件のジョブ状態、対象作品、日時、処理時間、version、試行回数、安全な失敗コードを確認できる。 |
 | F-28 | 1作品の全スコープは原子的に公開する。仕様化されたデータ不足は正常成功とし、予期しない1スコープの失敗では作品全体を失敗させて直前成功成果物を維持する。 |
+| F-29 | 状態APIで表示可能なartifact IDを解決し、集計、振り返り、ドリルダウン、選択試合文脈を同じartifact IDから取得する。 |
+| F-30 | 対象試合の現在revisionまたは作品所属がartifactと異なる場合は、一次データを維持して古い試合文脈だけを表示しない。 |
+| F-31 | 各成果物APIは選択したresource・scopeの上限付きchunkだけを読み、作品全体や他scopeを一括decodeしない。 |
+| F-32 | artifact更新が連続しても最新の主表示だけへ原子的に切り替え、旧drilldown、異なるartifactの選択試合文脈、途中artifactを混在させない。 |
 
 ---
 
@@ -205,6 +212,10 @@ Phase 2以降は、本書の拡張性方針に従って追加する。ただし�
 - URL query の候補は `gameTitleId`、`seasonMasterId`、`mapMasterId`、`view`、`focusMatchId` とする。
 - 旧URL互換のため、画面URLの復元では `scopeKind` / `scopeId` を受け入れて新モデルへ正規化してよい。新queryと旧queryが同時に存在するURLは、新queryを優先して正規化する。
 - 無効な `seasonMasterId` または `mapMasterId` は、それぞれ未指定へ戻す。復元できない値を黙って別スコープとして解釈しない。
+- seasonとmapが個別には有効でも、その組み合わせの確定試合が0件なら有効なseason×mapスコープとしない。
+  古いURLのその組み合わせは `overall` へ正規化し、指定条件を利用できないことを表示する。
+- 画面操作で片方の条件を変更して既存のseason×map組み合わせが無効になった場合は、変更した側を維持し、
+  もう一方を未指定へ戻して理由を表示する。無効な組み合わせをAPIへ送ってから補正しない。
 - `view` は `review`、`overview`、`flow`、`drivers`、`context` のいずれかとする。無効値は `review` に戻す。
 - `view` は表示上のサブページ状態であり、集計APIの入力には含めない。タブ切り替えだけで集計データを再取得しない。
 - `focusMatchId` は試合結果から来たときに対象試合を示す表示状態であり、集計APIの入力には含めない。対象作品、シーズン、マップを変更した場合は取り除き、分析切り替えでは保持する。
@@ -213,6 +224,9 @@ Phase 2以降は、本書の拡張性方針に従って追加する。ただし�
 - 選択試合の1件データから対応位置を一意に求められる順位分布の値リスト、直近順位表、物件収益順位から最終順位への転換表、順位遷移表でも、該当行・列・セルを枠と「この試合」の文字で示す。試合粒度の根拠データがない指標や対応位置を一意に求められない指標には目印を出さない。
 - 選択中の試合に荒れ試合フラグがある場合は「期間内の荒れ試合」の該当カードも選択状態にする。フラグがない試合を荒れ試合一覧へ追加はしない。
 - `focusMatchId` が選択中スコープに含まれない場合は別の試合へ黙って置き換えず、対象外であることと解除・試合結果への導線を表示する。
+- scope候補は現在の確定試合から作る。現在候補から削除されたscopeを古いartifactだけを根拠に選択肢へ残さず、
+  URL指定は総合へ正規化して理由を表示する。現在候補へ追加済みだが表示artifactに未収録のscopeでは、
+  別scopeの値をfallback表示せず、そのscopeの計算中状態を表示する。
 
 ### 5.4 指標ブロック
 
@@ -495,6 +509,10 @@ Phase 2以降は、本書の拡張性方針に従って追加する。ただし�
 | `headToHead.averageAssetsDiff` | 直接対決平均資産差 | `対象プレーヤーの総資産 - 相手の総資産` の平均。 |
 | `matchPlayerPoints` | 試合プレーヤー点 | 対戦順、試合ID、プレーヤー、順位、総資産、物件収益、物件収益比率、総資産順位、物件収益順位を持つ試合×プレーヤー粒度の点。散布図などの可視化素材にする。 |
 | `matchPlayerPoints.revenueAssetRate` | 試合別物件収益比率 | 総資産が正の試合における `物件収益 / 総資産`。総資産が0以下の場合は対象外。 |
+
+`matchPlayerPoints` はworker内の論理粒度とする。v2 aggregateは全fieldをそのまま公開せず、散布図には
+`strategyScatter.points`、直近順位には `recentRanks`、選択試合の前後差分には `match-context` という
+用途別の事前計算済みprojectionを返す。
 | `recentForm.averageRank` | 直近平均順位 | 対象プレーヤーの直近8戦の平均順位。通常2開催日分を目安とする。対象3戦未満は参考。 |
 | `recentForm.podiumRate` | 直近入賞率 | 対象プレーヤーの直近8戦における1・2位率。対象3戦未満は参考。 |
 | `recentForm.winStreak` | 連勝 | 最新試合から逆向きに数えた連続1位数。 |
@@ -649,16 +667,23 @@ Phase 2以降は、本書の拡張性方針に従って追加する。ただし�
 
 | 案 | 内容 | メリット | デメリット | 判定 |
 |---|---|---|---|---|
-| 単一API | 選択肢、現在スコープの集計、指標定義を1つのAPIで返す。 | 初回表示のHTTPリクエストが1回で済む。同時接続数を最小化できる。 | スコープ変更のたびに変化しにくい選択肢まで再取得する。指標追加時にレスポンスが肥大化しやすく、cache粒度が粗い。 | 不採用 |
-| 2系統API | 選択肢取得APIと集計APIに分ける。 | 選択肢は長めにcacheでき、集計はスコープ単位でcacheできる。初回でも最大2リクエストで済み、同時接続数を抑えられる。指標追加時も集計DTOに閉じやすい。 | 初回表示で選択肢取得後に集計取得が必要。 | 採用 |
+| 単一API | 選択肢、現在スコープの集計、指標定義を1つのAPIで返す。 | statusを除く初回payload requestを1回にできる。 | スコープ変更のたびに変化しにくい選択肢まで再取得する。指標追加時にレスポンスが肥大化しやすく、cache粒度が粗い。 | 不採用 |
+| 基幹payload分離 | 選択肢とactive viewの成果物payloadを分ける。 | 選択肢をsession内で再利用でき、aggregate / reviewはスコープ単位で取得できる。指標追加時も成果物DTOに閉じやすい。 | 軽量statusを含め、初回に複数requestが必要。 | 採用 |
 | 指標別API | 指標ブロックごとにAPIを分ける。 | 指標追加や遅延読み込みはしやすい。重い指標だけ後から取得できる。 | 縦に並ぶ指標数だけリクエストが増え、同時接続数、ローディング状態、失敗表示、整合性管理が複雑になる。 | 初期版では不採用 |
 
-読み取りAPIは2系統を維持する。縦スクロール画面で多数の指標ブロックを出すが、指標別APIにはしない。指標追加時のメンテナンス性は、API分割ではなく `metricId` と指標カタログ、DTOの意味単位分割で担保する。APIの分割数とworker内の計算回数は独立に扱い、複数APIが同じ成果物versionを読むようにする。
+初期表示の基幹読み取りは選択肢とactive view成果物に分ける。非同期状態確認は成果物本文を含まない
+独立した軽量APIとし、review / aggregateはactive viewに応じてどちらかだけ取得する。drilldownと
+match contextは対応操作時だけ取得する。
+縦スクロール画面で多数の指標ブロックを出すが、指標別APIにはしない。指標追加時のメンテナンス性は、
+API分割ではなく `metricId` と指標カタログ、DTOの意味単位分割で担保する。APIの分割数とworker内の
+計算回数は独立に扱い、複数APIを同じartifact IDへ固定する。
 
 同時接続数への配慮:
 
-- 初回は選択肢APIを取得し、既定スコープを確定してから集計APIを取得する。
-- URL query が有効で、選択肢がcache済みの場合は、集計APIをすぐ取得してよい。
+- 初回は選択肢APIで作品・scopeを確定し、statusでartifact IDを解決してから、既定 `view=review` なら
+  review、分析viewならaggregateを取得する。基本経路は3 requestで、成果物本文を並列重複取得しない。
+- URL queryが有効で選択肢とstatusがsession cache上でfreshな場合は、active view成果物をすぐ取得してよい。
+- `focusMatchId` がある場合だけ、active view成果物と同じartifact IDのmatch contextを追加取得する。
 - 指標ブロックごとの並列fetchは行わない。
 
 ### 8.3 選択肢取得API
@@ -666,14 +691,15 @@ Phase 2以降は、本書の拡張性方針に従って追加する。ただし�
 ページ初期表示とセレクト候補のため、集計とは別に軽量な選択肢APIを用意する。
 
 ```text
-GET /api/analytics/series-comparison/options
+GET /api/analytics/series-comparison/v2/options
 ```
 
 レスポンスには以下を含める。
 
-- 対象作品候補。
+- 確定試合の有無を問わない全登録作品の候補。配列順を権威あるmaster表示順とする。
 - 作品ごとのシーズン候補。
 - 作品ごとのマップ候補。
+- 作品ごとに確定試合が実在するシーズン×マップの組み合わせ。
 - 確定済み対戦が最も新しい作品ID。
 - 各作品の確定済み対戦数。
 
@@ -682,23 +708,35 @@ GET /api/analytics/series-comparison/options
 
 ### 8.4 集計API
 
+集計の前に作品単位の軽量な状態を取得する。
+
+```text
+GET /api/analytics/series-comparison/v2/status?gameTitleId=...
+```
+
+状態APIはdesired version、表示可能な成功artifact、鮮度、計算projectionを返し、集計値やグラフ点を返さない。
+一般利用者へjob ID、要求account、attempt数、安全な失敗codeを返さない。job未作成の手動強制run予約も
+`queued` として投影する。
+`queued` / `running` の間だけ5秒間隔で取得する。
+
 推奨エンドポイント:
 
 ```text
-GET /api/analytics/series-comparison?gameTitleId=...&seasonMasterId=...&mapMasterId=...
+GET /api/analytics/series-comparison/v2/aggregate?gameTitleId=...&artifactId=...&seasonMasterId=...&mapMasterId=...
 ```
 
 - `gameTitleId` は必須。
+- `artifactId` は状態APIが返した値を必須とする。
 - `seasonMasterId` と `mapMasterId` は任意。どちらも省略した場合は総合とする。
 - `seasonMasterId` だけを指定した場合はシーズン別、`mapMasterId` だけを指定した場合はマップ別、両方を指定した場合はシーズン×マップの組み合わせで集計する。
-- 旧URL互換として `scopeKind=overall|season|map&scopeId=...` は受け入れてよいが、API入力で `seasonMasterId` / `mapMasterId` と同時指定した場合は validation error とする。
+- 旧URLの `scopeKind` / `scopeId` はWeb routeで新queryへ正規化し、v2 API入力では受け入れない。
 - 認証済みの有効アカウントだけが取得できる。
 - 無効な作品、スコープ、作品配下ではないスコープIDは `400` または `404` の Problem Details として返す。
 
 レスポンスには以下を含める。
 
 - `schemaVersion`。
-- 成果物の入力version、algorithm version、成功日時、現在の再計算状態。
+- artifact ID、入力version、algorithm version、artifact schema version、成功日時。
 - 選択スコープ情報。
 - 選択中スコープの表示名。
 - 対戦回数。
@@ -711,31 +749,47 @@ GET /api/analytics/series-comparison?gameTitleId=...&seasonMasterId=...&mapMaste
 - ハイライトと根拠指標。
 - 高度な順位分析のモデルversion、品質状態、順位シグナル、記録外の一撃の要約、王座の確からしさ。
 
+選択試合の前後差分、panel上の対応、試合詳細の派生注目点は、同じartifact IDを必須とする
+`/api/analytics/series-comparison/v2/match-context` から取得する。aggregateのraw pointをWebで再集計しない。
+artifact ID付きresponseの詳細schemaと保持対象外artifactの `410` 契約は
+`docs/series-analysis-realization.md` を正本とする。
+
 ### 8.5 API DTOの考え方
 
 レスポンスは、UIコンポーネント都合のカード構造ではなく、以下の安定した意味単位で返す。
 
 - `scope`: 集計範囲。
 - `players`: プレーヤー表示情報。
+- `summary`: 首位、2位との差、銀次合計・多発対象、品質件数など、page shell用の事前計算済み要約。
 - `metricsByPlayer`: プレーヤー別の指標値。
+- `rankDistribution`: count、rate、total、4順位の権威ある順序。
+- `recentRanks`: 対象window、時系列順、品質状態を確定した直近順位。
+- `strategyScatter`: 描画に必要な試合、プレーヤー、順位、総資産、収益比率だけを持つpoint。
+- `playOrderComparison`: 欠損を含む完全な番手cellとbest、worst、spread、cell relative intensity。
+- `revenueRankConversion`: 物件収益順位から最終順位への事前計算済み変換matrixとcell relative intensity。
 - `trends`: 時系列グラフ。
 - `histograms`: 分布グラフ。
 - `momentumSwitch`: 前戦順位から次戦順位への切り替え傾向、条件別率、順位遷移表。
 - `assetStyleProfiles`: 総資産分布から見える戦い方分類と根拠数値。
 - `cardShopDestination`: カード売り場と目的地の4象限、カード売り場あり率、売り場あり・到着なし率。
 - `rankAnalysis`: モデルversion、評価件数、モデル品質、プレーヤー別順位シグナル、記録外の一撃の要約、王座の確からしさ。
-- `highlights`: ハイライト。
+- `matchDigest`: 旗件数、権威ある直近対象、非表示件数、開催内試合番号分類。
+- `highlights`: workerが決定したハイライト候補と根拠。振り返りと重複する話題cardをWebで再生成しない。
 - `dataQuality`: サンプル不足、対象なし、同値あり、除外行数などの表示補助。
 - `metricDefinitions`: 画面説明に必要な指標カタログ。
 
 APIは表示文言そのものではなく、UIがラベルとスタイルへ写像できる機械可読の意味判定を返す。webは判定しきい値を重複保持せず、API DTOの signal を表示用ViewModelへ変換する。`dataQuality.status` は対象数や参考値の品質を表し、signal は集計値の意味づけを表すため、同じフィールドへ混ぜない。
+
+配列の意味順、候補最大件数、既定drilldown対象、意味を持つ相対強度、中央値を使う4象限境界もAPI契約とする。Webはraw値から
+再sort、再filter、再集計、欠損補完しない。chart座標、軸、tick、locale表示だけを計算してよい。
 
 - `sampleMaturity`: 対象スコープまたは条件対象数の成熟度。`early` / `mature` を返す。
 - `rankSpreadSignal`: 平均順位差の意味判定。`insufficient` / `flat` / `small` / `visible` / `large` と、算出できる場合の `spread` を返す。
 - `headToHead.entries[].headToHeadSignal`: 直接対決の意味判定。`self` / `no_target` / `reference` / `neutral` / `slight_advantage` / `strong_advantage` / `slight_disadvantage` / `strong_disadvantage` を返す。
 - `momentumSwitch` の各条件率: `momentumSwitchSignal` として `none` / `strength` / `risk` を返す。入賞後下位率は低いほど強み、下位後入賞率と4位後入賞率は高いほど強みとして判定する。
 
-`metricDefinitions` はAPIが返すか、web側の同一バージョン定数として持つ。どちらにする場合も、`metricId` と説明内容がテストで固定される必要がある。
+`metricDefinitions` の数式、閾値、品質条件、algorithm metadataは成果物から返す。日本語label、単位表記、
+helpの固定文言はwebの同一schema version定数へ置いてよい。`metricId` と対応内容をcontract testで固定する。
 
 新しい指標を追加する場合は、原則として集計APIの `metricsByPlayer`、`trends`、`histograms`、`momentumSwitch`、`highlights`、`metricDefinitions` のいずれかへ意味単位で追加する。スコープ候補が増えない限り、選択肢取得APIは変更しない。
 
@@ -758,6 +812,9 @@ APIは表示文言そのものではなく、UIがラベルとスタイルへ写
 - 分析workerは1作品の全有効スコープを1つの入力snapshotから計算し、同じ高負荷計算を通常集計、
   振り返り、ドリルダウン間で再利用する。
 - 成果物を読むSQLとjob/artifact repositoryは、実PostgreSQLを使うrepository testの対象にする。
+- APIはendpoint・artifact・scopeに対応する1 chunkだけを読み、作品manifestや他resourceを一括decodeしない。
+- aggregate、review、drilldown、match contextは件数、decoded byte、response byteの上限を持ち、上限を超える
+  成果物はworker公開時に拒否する。無言の切り詰めやHTTP経路の再集計で補わない。
 - 代表データ量、連続実行、peak memory、処理時間、timeoutの受け入れ条件は
   `docs/requirements/series-analysis-batch.md` を正本とし、機能テストとは分けて測定する。
 
@@ -773,9 +830,9 @@ APIは表示文言そのものではなく、UIがラベルとスタイルへ写
 | 鮮度 | 確定済み試合データの変更後は対象作品を再計算する。成功までは直前成功成果物を古い状態として表示し、状態pollingによって新成果物へ自動更新する。 |
 | 性能 | 画面表示に必要な値は保存済み成果物から取得する。試合詳細APIのN+1取得とHTTP経路での同期分析は禁止する。 |
 | レート制限 | 読み取りAPIとして既存の read rate limit 方針に従う。集計APIだけ無制限にしない。 |
-| レスポンスサイズ | 初期版では集計済み値とグラフ点だけを返し、不要な全試合明細を返さない。将来点数が増えた場合は直近範囲や集約粒度を検討する。 |
+| レスポンスサイズ | 集計済み値と用途別グラフ点だけを返し、不要な全試合明細を返さない。上限fixtureからresource別のdecoded / response byte上限をrelease前に固定し、超過成果物を公開しない。 |
 | 可用性 | 分析workerの停止、失敗、timeoutが、API、試合記録、OCR、出力系機能を巻き込まない。直前成功成果物がある場合は閲覧を継続できる。 |
-| キャッシュ | TanStack Query の query key は、選択肢、成果物、計算状態で責務を分ける。成果物の key は `gameTitleId`、`seasonMasterId`、`mapMasterId`、response shape version を含める。raw DTO とViewModelを同じkeyに置かない。 |
+| キャッシュ | TanStack Query の query key は、選択肢、成果物、計算状態で責務を分ける。成果物の key は `artifactId`、`gameTitleId`、`seasonMasterId`、`mapMasterId`、resource種別、response shape versionを含める。HTTP responseは表示名hydrateを考慮して `private, no-store` とし、raw DTOとViewModelを同じkeyに置かない。 |
 | エラー表示 | `query.error` / `isError` だけで致命的失敗扱いにしない。認証、`enabled`、`isFetching`、cached error、refetch success を考慮する。 |
 | アクセシビリティ | keyboard、label、focus、contrast は WCAG AA 相当を目標にする。グラフは色だけに依存しない。 |
 | レスポンシブ | PCでは4人横並び比較を必須にする。スマホでは破綻しない代替表示を用意する。 |
@@ -836,7 +893,10 @@ APIは表示文言そのものではなく、UIがラベルとスタイルへ写
 
 - 作品が未登録の場合、対象作品の選択領域に空状態を出す。
 - 選択作品に確定済み対戦がない場合、集計表ではなく空状態を出す。
-- 特定のシーズンまたはマップに対戦がない場合、そのスコープを選ぶと空状態を出す。
+- 特定のシーズンまたはマップに確定済み対戦がない場合、そのスコープを候補へ出さない。古いURLから
+  指定された場合は総合へ正規化し、指定条件を利用できないことを表示する。
+- seasonとmapがそれぞれ候補にあっても、確定試合がない組み合わせは候補にせず、古いURLは総合へ
+  正規化して理由を表示する。
 - 分母が0の指標は「対象なし」と表示する。
 - 分母が3未満の指標は「参考」と表示する。
 - 金額が負値の場合も集計対象に含める。
@@ -852,6 +912,10 @@ APIは表示文言そのものではなく、UIがラベルとスタイルへ写
 - 計算失敗またはtimeout時は失敗を明示する。成功成果物がある場合は最終成功日時とともに表示を維持し、
   一度も成功していない場合は分析値を表示しない。
 - preemptionは失敗として表示せず、計算待ちとして扱う。
+- 対象試合自身がartifact生成後に更新または別作品へ移動した場合は、古い派生注目点、前後差、panel上の
+  選択位置を表示せず、一次データを保ったまま分析更新中と示す。
+- 現在候補から消えたscopeは選択肢へ残さず、現在候補へ増えたがartifactに未収録のscopeは別scopeへ
+  fallbackせず計算中と示す。
 
 ---
 
@@ -900,10 +964,15 @@ APIは表示文言そのものではなく、UIがラベルとスタイルへ写
 - 番手別成績の得意番手、苦手番手、番手差、番手別履歴ドリルダウンの累積平均順位グラフ、推移実データ表、番手別集計表。
 - 目的地依存度の上位/下位/中立分類。
 - 切り替え力の前戦なし除外、下位後入賞率、4位後入賞率、入賞後下位率、順位遷移表、スコープ内前戦判定。
-- APIの `seasonMasterId` / `mapMasterId` validation と旧 `scopeKind` / `scopeId` 互換validation。
-- 未ログイン時の画面遷移、有効でないアカウントの表示、選択肢APIと集計APIの認証エラー。
+- v2 APIの `seasonMasterId` / `mapMasterId` validationと、Web routeでの旧 `scopeKind` / `scopeId` URL正規化。
+- 未ログイン時の画面遷移、有効でないアカウントの表示、選択肢・status・aggregate・review APIの認証エラー。
 - 初期表示とスコープ変更で、指標ブロックごとの並列fetchが発生しないこと。
-- 集計、振り返り、ドリルダウンAPIから分析engineが実行されず、同じ成果物versionを読むこと。
+- 集計、振り返り、ドリルダウン、選択試合文脈APIから分析engineが実行されず、状態APIで解決した
+  同じartifact IDを読むこと。
+- 各成果物APIが要求resource・scopeの1 chunkだけを読み、作品全体をdecodeしないこと。
+- 対象試合revision不一致で古いcontextを隠し、別試合だけの更新ではstale notice付きで維持すること。
+- artifact連続更新時のlatest-wins、旧request abort、drilldown close、context不一致時のfocus解除。
+- 現在optionsとartifact scopeの追加・削除差分で、黙示fallbackや削除済みscope選択を起こさないこと。
 - 試合確定・更新・削除と再計算intentが同じtransactionで確定すること。
 - 連続変更、再配送、worker再起動でも作品単位の最新版へ収束し、部分成果物を公開しないこと。
 - queued / running / failed / timed_outと、成功成果物あり・なしを組み合わせた表示decision table。

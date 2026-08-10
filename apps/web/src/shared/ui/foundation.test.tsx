@@ -312,6 +312,7 @@ describe("ui foundation", () => {
   it.each([
     ["/held-events/event-1", "max-w-[82rem]"],
     ["/analytics/series", "max-w-[82rem]"],
+    ["/admin/analysis", "max-w-[82rem]"],
     ["/exports", "max-w-[48rem]"],
     ["/admin/masters", "max-w-[75rem]"],
   ])("RouteSuspenseFallback matches %s page width", (pathname, widthClass) => {

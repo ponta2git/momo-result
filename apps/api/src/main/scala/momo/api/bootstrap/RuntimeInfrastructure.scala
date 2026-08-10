@@ -7,7 +7,7 @@ import dev.profunktor.redis4cats.data.RedisCodec
 import dev.profunktor.redis4cats.effect.Log.NoOp.*
 
 import momo.api.adapters.inmemory.InMemoryOcrJobQueuePublisher
-import momo.api.adapters.redis.RedisOcrJobQueuePublisher
+import momo.api.adapters.redis.{RedisOcrJobQueuePublisher, RedisSeriesAnalysisQueuePublisher}
 import momo.api.auth.{
   InMemoryOAuthProviderBackoff,
   LoginRateLimiter,
@@ -18,11 +18,16 @@ import momo.api.auth.{
 }
 import momo.api.config.AppConfig
 import momo.api.http.HttpRateLimiters
-import momo.api.ports.queue.{OcrJobQueueHealthCheck, OcrJobQueuePublisher}
+import momo.api.ports.queue.{
+  OcrJobQueueHealthCheck,
+  OcrJobQueuePublisher,
+  SeriesAnalysisQueuePublisher
+}
 
 private[bootstrap] final case class RuntimeInfrastructure[F[_]](
     queue: OcrJobQueuePublisher[F],
     queueHealth: OcrJobQueueHealthCheck[F],
+    analysisQueue: Option[SeriesAnalysisQueuePublisher[F]],
     loginRateLimiter: RateLimiter[F],
     authCallbackStateRateLimiter: RateLimiter[F],
     oauthProviderBackoff: OAuthProviderBackoff[F],
@@ -39,6 +44,9 @@ private[bootstrap] object RuntimeInfrastructure:
           RedisOcrJobQueuePublisher.fromCommands(redis.stream, commands)
         val queueHealth: OcrJobQueueHealthCheck[F] = RedisOcrJobQueuePublisher
           .healthProbeFromCommands(redis.deadLetterStream, commands)
+        val analysisQueue: Option[SeriesAnalysisQueuePublisher[F]] = Some(
+          RedisSeriesAnalysisQueuePublisher.fromCommands(redis.analysisStream, commands)
+        )
         val login: RateLimiter[F] = RedisRateLimiter
           .fromCommands(commands, "login", config.auth.rateLimitPerMinute, now)
         val authCallbackState: RateLimiter[F] = RedisRateLimiter.fromCommands(
@@ -89,6 +97,7 @@ private[bootstrap] object RuntimeInfrastructure:
         RuntimeInfrastructure(
           queue,
           queueHealth,
+          analysisQueue,
           login,
           authCallbackState,
           oauthProviderBackoff,
@@ -131,6 +140,7 @@ private[bootstrap] object RuntimeInfrastructure:
         yield RuntimeInfrastructure(
           queue,
           queueHealth,
+          None,
           login,
           authCallbackState,
           oauthProviderBackoff,

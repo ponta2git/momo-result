@@ -6,6 +6,7 @@ on:
     paths:
       - "apps/api/**"
       - "docs/schemas/**"
+      - "scripts/ci/check-api-analysis-engine-absence.sh"
       - ".github/workflows/api.yml"
 
 permissions:
@@ -63,6 +64,12 @@ jobs:
       - name: OpenAPI generation check
         timeout-minutes: 5
         run: sbt apiOpenApiCheck
+
+      - name: Verify synchronous Scala analysis is absent from the runtime artifact
+        timeout-minutes: 5
+        run: |
+          sbt stage
+          ../../scripts/ci/check-api-analysis-engine-absence.sh target/universal/stage
 
       - name: Test
         if: ${{ github.event_name != 'pull_request' }}

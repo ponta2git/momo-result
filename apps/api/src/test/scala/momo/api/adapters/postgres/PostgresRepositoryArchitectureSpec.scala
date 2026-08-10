@@ -12,12 +12,6 @@ final class PostgresRepositoryArchitectureSpec extends FunSuite:
     Paths.get("src/main/scala/momo/api/adapters/postgres/PostgresMatchListReadModel.scala")
   private val matchListSupport =
     Paths.get("src/main/scala/momo/api/adapters/postgres/PostgresMatchListSupport.scala")
-  private val seriesComparisonReadModel = Paths.get(
-    "src/main/scala/momo/api/adapters/postgres/PostgresSeriesComparisonReadModel.scala"
-  )
-  private val seriesComparisonRowSupport = Paths.get(
-    "src/main/scala/momo/api/adapters/postgres/PostgresSeriesComparisonRowSupport.scala"
-  )
   private val postgresDir = Paths.get("src/main/scala/momo/api/adapters/postgres")
 
   test("match list read-model maps DB rows through named fields"):
@@ -29,20 +23,15 @@ final class PostgresRepositoryArchitectureSpec extends FunSuite:
     assert(!supportText.contains("private type Row = ("))
     assert(!supportText.contains("row._"))
 
-  test("series comparison read-model keeps SQL row shape out of domain mapping"):
-    val text = read(seriesComparisonReadModel)
-    val supportText = read(seriesComparisonRowSupport)
-
-    assert(text.contains("extends PostgresSeriesComparisonRowSupport"))
-    assert(supportText.contains("protected final case class SeriesRow("))
-    assert(supportText.contains("protected final case class ScopeOptionRow("))
-    assert(supportText.contains("protected final case class PlayerRow("))
-    assert(!supportText.contains("private type SeriesRow = ("))
-    assert(!supportText.contains("private type ScopeOptionRow = ("))
-    assert(!supportText.contains("private type PlayerRow = ("))
-    assert(!supportText.contains("Read[("))
-    assert(!supportText.contains(".query[("))
-    assert(!supportText.contains("row._"))
+  test("synchronous Scala series analysis sources are absent"):
+    val engineRoot = Paths.get("src/main/scala/momo/api/usecases/seriescomparison")
+    assert(!Files.exists(engineRoot) || scalaFiles(engineRoot).isEmpty)
+    assert(!Files.exists(
+      Paths.get("src/main/scala/momo/api/adapters/postgres/PostgresSeriesComparisonReadModel.scala")
+    ))
+    assert(!Files.exists(
+      Paths.get("src/main/scala/momo/api/repositories/SeriesComparisonReadModel.scala")
+    ))
 
   test("Postgres repositories map shared domain aggregates through explicit row types"):
     val directDomainQueries = List(

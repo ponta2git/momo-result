@@ -4,11 +4,11 @@ import { cn } from "@/shared/ui/cn";
 import { RankBadge } from "@/shared/ui/rank/RankBadge";
 import { colorMix, rankColor } from "@/shared/ui/rank/rankPresentation";
 
-export type MatchResultLedgerRow = MatchPerformanceContextRow & {
+type MatchResultLedgerRow = MatchPerformanceContextRow & {
   displayName: string;
 };
 
-export type MatchResultLedgerContextStatus = "loading" | "ready" | "unavailable";
+type MatchResultLedgerContextStatus = "loading" | "ready" | "unavailable";
 
 export function MatchResultLedger({
   ariaLabel = "試合の順位と成績",
@@ -125,7 +125,8 @@ function formatAverageRank(value: number): string {
   return value.toFixed(2);
 }
 
-function formatOrdinal(value: number): string {
+function formatOrdinal(value: number | undefined): string {
+  if (value === undefined) return "—";
   return `${Number.isInteger(value) ? value.toFixed(0) : value.toFixed(1)}位`;
 }
 

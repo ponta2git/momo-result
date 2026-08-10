@@ -104,6 +104,7 @@ final class DbContractSpec extends IntegrationSuite:
         "created_by_member_id",
         "created_at",
         "updated_at",
+        "analysis_revision",
       )
       val missing = expected -- cols.toSet
       assert(missing.isEmpty, s"matches is missing columns: $missing (have $cols)")
@@ -153,6 +154,155 @@ final class DbContractSpec extends IntegrationSuite:
       val missing = expected -- cols.toSet
       assert(missing.isEmpty, s"match_incidents is missing columns: $missing (have $cols)")
     }
+
+  test("series analysis tables expose the revision, control, artifact, and slot boundaries"):
+    val expectedTables = Set(
+      "series_analysis_title_states",
+      "series_analysis_operation_requests",
+      "series_analysis_campaigns",
+      "series_analysis_campaign_targets",
+      "series_analysis_job_requests",
+      "series_analysis_jobs",
+      "series_analysis_job_attempts",
+      "series_analysis_worker_capabilities",
+      "series_analysis_reader_capabilities",
+      "series_analysis_queue_outbox",
+      "series_analysis_artifacts",
+      "series_analysis_scope_aggregate_artifacts",
+      "series_analysis_scope_review_artifacts",
+      "series_analysis_drilldown_artifacts",
+      "series_analysis_match_context_artifacts",
+      "worker_execution_slots",
+    )
+    sql"""
+      SELECT table_name
+      FROM information_schema.tables
+      WHERE table_schema = 'public'
+        AND (table_name LIKE 'series_analysis_%' OR table_name = 'worker_execution_slots')
+    """.query[String].to[List].transact(transactor).map: actual =>
+      assertEquals(expectedTables -- actual.toSet, Set.empty[String])
+
+  test("series analysis campaign targets persist the complete accepted version snapshot"):
+    columnsFor("series_analysis_campaign_targets").map { columns =>
+      val expected = Set(
+        "campaign_id",
+        "game_title_id",
+        "input_revision",
+        "algorithm_version",
+        "artifact_schema_version",
+        "status",
+        "job_request_id",
+        "accepted_at",
+        "updated_at",
+      )
+      val missing = expected -- columns.toSet
+      assert(missing.isEmpty, s"analysis campaign targets are missing columns: $missing")
+    }
+
+  test("analysis artifact bytes are exact and reader capabilities are indexed"):
+    val constraints = sql"""
+      SELECT conname, pg_get_constraintdef(oid)
+      FROM pg_constraint
+      WHERE conname IN (
+        'series_analysis_artifacts_bytes_check',
+        'series_analysis_scope_aggregate_artifacts_chunk_check',
+        'series_analysis_scope_review_artifacts_chunk_check',
+        'series_analysis_drilldown_artifacts_chunk_check',
+        'series_analysis_match_context_artifacts_chunk_check'
+      )
+    """.query[(String, String)].to[List].transact(transactor)
+    val indexes = sql"""
+      SELECT indexname
+      FROM pg_indexes
+      WHERE schemaname = 'public'
+        AND tablename = 'series_analysis_reader_capabilities'
+    """.query[String].to[List].transact(transactor)
+
+    (constraints, indexes).mapN: (rows, indexNames) =>
+      assertEquals(rows.map(_._1).toSet.size, 5)
+      rows.foreach: (_, definition) =>
+        assert(
+          definition.contains("decoded_bytes = encoded_bytes"),
+          s"decoded byte equality is missing: $definition",
+        )
+      assert(indexNames.contains("series_analysis_reader_capabilities_heartbeat_idx"))
+
+  test("series analysis trigger functions use a restore-safe search path"):
+    sql"""
+      SELECT p.proname
+      FROM pg_proc p
+      JOIN pg_namespace n ON n.oid = p.pronamespace
+      WHERE n.nspname = 'public'
+        AND p.proname IN (
+          'ensure_series_analysis_title_state',
+          'validate_series_analysis_artifact_pointers',
+          'prevent_series_analysis_artifact_unpublish'
+        )
+        AND EXISTS (
+          SELECT 1
+          FROM unnest(COALESCE(p.proconfig, ARRAY[]::text[])) setting
+          WHERE setting = 'search_path=pg_catalog, public'
+        )
+    """.query[String].to[Set].transact(transactor).map: functions =>
+      assertEquals(
+        functions,
+        Set(
+          "ensure_series_analysis_title_state",
+          "validate_series_analysis_artifact_pointers",
+          "prevent_series_analysis_artifact_unpublish",
+        ),
+      )
+
+  test("a game title receives an analysis title state with an empty caller search path"):
+    val program =
+      for
+        _ <- sql"SELECT set_config('search_path', '', true)".query[String].unique
+        _ <- sql"""
+        INSERT INTO public.game_titles (id, name, layout_family, display_order)
+        VALUES ('title_contract', 'Contract title', 'contract', 1)
+      """.update.run
+        state <- sql"""
+        SELECT input_revision, algorithm_version, artifact_schema_version
+        FROM public.series_analysis_title_states
+        WHERE game_title_id = 'title_contract'
+      """.query[(Long, String, Int)].unique
+      yield state
+
+    program.transact(transactor).map: state =>
+      assertEquals(state, (0L, "series-analysis-v1", 1))
+
+  test("analysis scheduling indexes enforce one active title job and deterministic claim order"):
+    sql"""
+      SELECT indexname, indexdef
+      FROM pg_indexes
+      WHERE schemaname = 'public'
+        AND indexname IN (
+          'series_analysis_jobs_active_title_unique',
+          'series_analysis_jobs_claim_idx',
+          'series_analysis_jobs_terminal_cleanup_idx'
+        )
+      ORDER BY indexname
+    """.query[(String, String)].to[List].transact(transactor).map: rows =>
+      assertEquals(
+        rows.map(_._1).toSet,
+        Set(
+          "series_analysis_jobs_active_title_unique",
+          "series_analysis_jobs_claim_idx",
+          "series_analysis_jobs_terminal_cleanup_idx",
+        )
+      )
+      val definitions = rows.map(_._2).mkString("\n")
+      assert(definitions.contains("queued"))
+      assert(definitions.contains("running"))
+      assert(definitions.contains("available_at"))
+      assert(definitions.contains("requested_at"))
+
+  test("the shared heavy-work slot is present and initially unowned"):
+    sql"""
+      SELECT slot_key, task_kind, owner, fencing_token
+      FROM worker_execution_slots
+    """.query[(String, Option[String], Option[String], Long)].unique.transact(transactor).map:
+      row => assertEquals(row, ("shared-heavy-work", None, None, 0L))
 
   test("held_events.session_id is nullable so momo-result can create events"):
     val program = sql"""

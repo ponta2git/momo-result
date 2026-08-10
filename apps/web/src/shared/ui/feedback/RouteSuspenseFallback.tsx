@@ -172,7 +172,7 @@ function routeSkeletonKind(pathname: string): RouteSkeletonKind {
   if (/^\/(?:matches|held-events)\/[^/]+$/u.test(pathname)) {
     return "detail";
   }
-  if (pathname === "/analytics/series") {
+  if (pathname === "/analytics/series" || pathname === "/admin/analysis") {
     return "comparison";
   }
   if (pathname === "/admin/masters") {

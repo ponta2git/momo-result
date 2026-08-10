@@ -1,130 +1,54 @@
-import type { SeriesComparisonResponse } from "@/shared/api/seriesComparison";
+import type { SeriesAnalysisMatchContextV2 } from "@/shared/api/seriesAnalysis";
 
-type MatchPlayerPoint = NonNullable<SeriesComparisonResponse["matchPlayerPoints"]>[number];
+type MatchPerformanceTrend = "declined" | "firstMatch" | "improved" | "unchanged" | "unavailable";
 
-export type MatchPerformanceInput = {
-  memberId: string;
-  rank: number;
-  revenueManYen: number;
-  totalAssetsManYen: number;
-};
-
-export type MatchPerformanceTrend =
-  | "declined"
-  | "firstMatch"
-  | "improved"
-  | "unchanged"
-  | "unavailable";
-
-export type MatchPerformanceContextRow = MatchPerformanceInput & {
+export type MatchPerformanceContextRow = {
   cumulativeAverageAfter?: number | undefined;
   cumulativeAverageBefore?: number | undefined;
   cumulativeAverageDelta?: number | undefined;
+  memberId: string;
+  rank: number;
   revenueAssetRate?: number | undefined;
-  revenueRank: number;
+  revenueManYen: number;
+  revenueRank?: number | undefined;
+  totalAssetsManYen: number;
   trend: MatchPerformanceTrend;
 };
 
-export type MatchPerformanceContext = {
+type MatchPerformanceContext = {
   matchIndex?: number | undefined;
   rows: MatchPerformanceContextRow[];
-  targetIncluded: boolean;
 };
 
-export function buildMatchPerformanceContext({
-  currentResults,
-  matchId,
-  matchPlayerPoints = [],
-}: {
-  currentResults: MatchPerformanceInput[];
-  matchId: string;
-  matchPlayerPoints?: MatchPlayerPoint[] | undefined;
-}): MatchPerformanceContext {
-  const targetPoints = matchPlayerPoints.filter((point) => point.matchId === matchId);
-  const matchIndex = targetPoints[0]?.matchIndex;
-
+export function matchPerformanceContextFromArtifact(
+  context: SeriesAnalysisMatchContextV2 | undefined,
+): MatchPerformanceContext | undefined {
+  if (context?.inclusion.status !== "included" || !context.match) return undefined;
   return {
-    matchIndex,
-    rows: currentResults.map((result) => {
-      const targetPoint = targetPoints.find((point) => point.memberId === result.memberId);
-      const historyBefore =
-        targetPoint === undefined
-          ? []
-          : matchPlayerPoints
-              .filter(
-                (point) =>
-                  point.memberId === result.memberId && point.matchIndex < targetPoint.matchIndex,
-              )
-              .toSorted((left, right) => left.matchIndex - right.matchIndex);
-      const cumulativeAverageBefore =
-        historyBefore.length === 0 ? undefined : average(historyBefore.map((point) => point.rank));
-      const cumulativeAverageAfter =
-        targetPoint === undefined
-          ? undefined
-          : average([...historyBefore.map((point) => point.rank), targetPoint.rank]);
-      const cumulativeAverageDelta =
-        cumulativeAverageBefore === undefined || cumulativeAverageAfter === undefined
-          ? undefined
-          : cumulativeAverageAfter - cumulativeAverageBefore;
-
-      return {
-        ...result,
-        cumulativeAverageAfter,
-        cumulativeAverageBefore,
-        cumulativeAverageDelta,
-        revenueAssetRate:
-          result.totalAssetsManYen > 0
-            ? result.revenueManYen / result.totalAssetsManYen
-            : undefined,
-        revenueRank: averageRevenueRank(result.revenueManYen, currentResults),
-        trend: performanceTrend({
-          cumulativeAverageAfter,
-          cumulativeAverageBefore,
-          cumulativeAverageDelta,
-          targetPoint,
-        }),
-      };
-    }),
-    targetIncluded: targetPoints.length > 0,
+    matchIndex: context.match.matchIndex,
+    rows: context.match.players.map((player) => ({
+      cumulativeAverageAfter: player.cumulativeAverageAfter,
+      cumulativeAverageBefore: player.cumulativeAverageBefore ?? undefined,
+      cumulativeAverageDelta: player.cumulativeAverageDelta ?? undefined,
+      memberId: player.memberId,
+      rank: player.rank,
+      revenueAssetRate: player.revenueAssetRate ?? undefined,
+      revenueManYen: player.revenueManYen,
+      revenueRank: player.revenueRank,
+      totalAssetsManYen: player.totalAssetsManYen,
+      trend: performanceTrendFromArtifact(player.cumulativeAverageDirection),
+    })),
   };
 }
 
-function average(values: number[]): number {
-  return values.reduce((total, value) => total + value, 0) / values.length;
-}
-
-function averageRevenueRank(
-  revenueManYen: number,
-  currentResults: MatchPerformanceInput[],
-): number {
-  const betterCount = currentResults.filter(
-    (result) => result.revenueManYen > revenueManYen,
-  ).length;
-  const tiedCount = currentResults.filter(
-    (result) => result.revenueManYen === revenueManYen,
-  ).length;
-  return betterCount + 1 + (tiedCount - 1) / 2;
-}
-
-function performanceTrend({
-  cumulativeAverageAfter,
-  cumulativeAverageBefore,
-  cumulativeAverageDelta,
-  targetPoint,
-}: {
-  cumulativeAverageAfter: number | undefined;
-  cumulativeAverageBefore: number | undefined;
-  cumulativeAverageDelta: number | undefined;
-  targetPoint: MatchPlayerPoint | undefined;
-}): MatchPerformanceTrend {
-  if (targetPoint === undefined || cumulativeAverageAfter === undefined) {
-    return "unavailable";
+function performanceTrendFromArtifact(
+  direction: NonNullable<
+    SeriesAnalysisMatchContextV2["match"]
+  >["players"][number]["cumulativeAverageDirection"],
+): MatchPerformanceTrend {
+  if (direction === "first_observation") return "firstMatch";
+  if (direction === "improved" || direction === "declined" || direction === "unchanged") {
+    return direction;
   }
-  if (cumulativeAverageBefore === undefined) {
-    return "firstMatch";
-  }
-  if (cumulativeAverageDelta === undefined || Math.abs(cumulativeAverageDelta) < 0.005) {
-    return "unchanged";
-  }
-  return cumulativeAverageDelta < 0 ? "improved" : "declined";
+  return "unavailable";
 }

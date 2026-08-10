@@ -14,8 +14,15 @@ object OpenApiGenerator:
   def openApi: OpenAPI = OpenAPIDocsInterpreter()
     .toOpenAPI(ApiEndpoints.all, "Momo Result API", "0.1.0")
 
-  def yaml: String = openApi.asJson.spaces2
+  def yaml: String = withoutTrailingWhitespace(openApi.asJson.spaces2)
 
   def write(path: Path): Unit =
     Option(path.getParent).foreach(parent => Files.createDirectories(parent): Unit)
     Files.writeString(path, yaml, StandardCharsets.UTF_8): Unit
+
+  private def withoutTrailingWhitespace(value: String): String = value.linesIterator
+    .map(line =>
+      val lastContentIndex = line.lastIndexWhere(character => !character.isWhitespace)
+      if lastContentIndex < 0 then "" else line.substring(0, lastContentIndex + 1)
+    )
+    .mkString("\n")

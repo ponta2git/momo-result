@@ -28,6 +28,7 @@ import momo.api.http.modules.{
   MatchDraftModule,
   MatchModule,
   OcrModule,
+  SeriesAnalysisModule,
   UploadModule
 }
 import momo.api.repositories.{IdempotencyRepository, LoginAccountsRepository}
@@ -39,7 +40,7 @@ import momo.api.usecases.masters.*
 import momo.api.usecases.matchdrafts.*
 import momo.api.usecases.matches.*
 import momo.api.usecases.ocr.*
-import momo.api.usecases.seriescomparison.*
+import momo.api.usecases.seriesanalysis.*
 
 object HttpRoutes:
   final case class AuthDependencies[F[_]](
@@ -88,10 +89,11 @@ object HttpRoutes:
   )
 
   final case class AnalyticsUseCases[F[_]](
-      getSeriesComparisonOptions: GetSeriesComparisonOptions[F],
-      getSeriesComparison: GetSeriesComparison[F],
-      getSeriesComparisonReview: GetSeriesComparisonReview[F],
-      getSeriesComparisonDrilldown: GetSeriesComparisonDrilldown[F],
+      getSeriesAnalysisOptions: GetSeriesAnalysisOptions[F],
+      getSeriesAnalysisStatus: GetSeriesAnalysisStatus[F],
+      getSeriesAnalysisChunk: GetSeriesAnalysisChunk[F],
+      getSeriesAnalysisAdminOverview: GetSeriesAnalysisAdminOverview[F],
+      requestSeriesAnalysisRecalculation: RequestSeriesAnalysisRecalculation[F],
   )
 
   final case class MasterUseCases[F[_]](
@@ -201,11 +203,17 @@ object HttpRoutes:
         deps.nowF,
         security,
       ) ::: AnalyticsModule.routes[F](
-        deps.analytics.getSeriesComparisonOptions,
-        deps.analytics.getSeriesComparison,
-        deps.analytics.getSeriesComparisonReview,
-        deps.analytics.getSeriesComparisonDrilldown,
         deps.rateLimiters.readApi,
+        security,
+      ) ::: SeriesAnalysisModule.routes[F](
+        deps.analytics.getSeriesAnalysisOptions,
+        deps.analytics.getSeriesAnalysisStatus,
+        deps.analytics.getSeriesAnalysisChunk,
+        deps.analytics.getSeriesAnalysisAdminOverview,
+        deps.analytics.requestSeriesAnalysisRecalculation,
+        deps.rateLimiters.readApi,
+        idempotencyGuard,
+        deps.nowF,
         security,
       ) ::: MasterModule.routes[F](
         deps.masters.listGameTitles,

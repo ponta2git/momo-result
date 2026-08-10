@@ -23,6 +23,7 @@ final class ConfigArchitectureSpec extends FunSuite:
       "DatabaseConfigLoader.scala",
       "RedisConfigLoader.scala",
       "ResourceLimitsConfigLoader.scala",
+      "SeriesAnalysisReadConfigLoader.scala",
     ).map(configRoot.resolve)
     val violations = checked.filter { path =>
       val text = read(path)

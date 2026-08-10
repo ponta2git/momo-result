@@ -1,0 +1,64 @@
+{
+  "manifestVersion": 1,
+  "artifactId": "artifact-contract-1",
+  "gameTitleId": "title-contract-1",
+  "inputRevision": "7",
+  "algorithmVersion": "series-analysis-v1",
+  "artifactSchemaVersion": 1,
+  "sourceInputChecksum": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "rootChecksum": "sha256:c2175820880f1a31c7b5ebfc5d71883bc72bf991dba6b07233cd8d56a5587c6d",
+  "resources": [
+    {
+      "kind": "aggregate",
+      "scope": { "kind": "overall" },
+      "itemKey": "overall",
+      "path": "aggregate-overall.json",
+      "encodedBytes": 128,
+      "decodedBytes": 128,
+      "itemCount": 4,
+      "nestingDepth": 5,
+      "checksum": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+      "kind": "review",
+      "scope": { "kind": "overall" },
+      "itemKey": "overall",
+      "path": "review-overall.json",
+      "encodedBytes": 64,
+      "decodedBytes": 64,
+      "itemCount": 0,
+      "nestingDepth": 3,
+      "checksum": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    {
+      "kind": "drilldown",
+      "scope": {
+        "kind": "season_map",
+        "seasonMasterId": "season-1",
+        "mapMasterId": "map-1"
+      },
+      "itemKey": "member-1:rank.average_history",
+      "path": "drilldown-member-1-rank-average-history.json",
+      "memberId": "member-1",
+      "metricId": "rank.average_history",
+      "encodedBytes": 96,
+      "decodedBytes": 96,
+      "itemCount": 1,
+      "nestingDepth": 4,
+      "checksum": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+    },
+    {
+      "kind": "match_context",
+      "scope": { "kind": "overall" },
+      "itemKey": "match-1",
+      "path": "match-context-match-1-overall.json",
+      "matchId": "match-1",
+      "sourceMatchRevision": "2",
+      "encodedBytes": 160,
+      "decodedBytes": 160,
+      "itemCount": 1,
+      "nestingDepth": 6,
+      "checksum": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+    }
+  ]
+}

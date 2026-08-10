@@ -34,6 +34,16 @@ object HttpOperation:
   val GetSeriesComparisonReview = "GET /api/analytics/series-comparison/review"
   val GetSeriesComparisonDrilldown = "GET /api/analytics/series-comparison/drilldown"
 
+  val GetSeriesAnalysisOptions = "GET /api/analytics/series-comparison/v2/options"
+  val GetSeriesAnalysisStatus = "GET /api/analytics/series-comparison/v2/status"
+  val GetSeriesAnalysisAggregate = "GET /api/analytics/series-comparison/v2/aggregate"
+  val GetSeriesAnalysisReview = "GET /api/analytics/series-comparison/v2/review"
+  val GetSeriesAnalysisDrilldown = "GET /api/analytics/series-comparison/v2/drilldown"
+  val GetSeriesAnalysisMatchContext = "GET /api/analytics/series-comparison/v2/match-context"
+  val GetSeriesAnalysisAdminOverview = "GET /api/admin/series-analysis/overview"
+  val RequestSeriesAnalysisTitle = "POST /api/admin/series-analysis/recalculations"
+  val RequestSeriesAnalysisAll = "POST /api/admin/series-analysis/recalculations/all"
+
   val CreateGameTitle = "POST /api/game-titles"
   val UpdateGameTitle = "PATCH /api/game-titles/:id"
   val DeleteGameTitle = "DELETE /api/game-titles/:id"

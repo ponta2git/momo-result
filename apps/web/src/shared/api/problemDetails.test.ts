@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   formatApiError,
+  isAnalysisClientUpgradeRequired,
   normalizeApiErrorResponse,
   normalizeUnknownApiError,
 } from "@/shared/api/problemDetails";
@@ -123,5 +124,24 @@ describe("problemDetails", () => {
     expect(formatApiError(error, "fallback")).toBe(
       "送信内容が大きすぎます。入力を減らすか、画像アップロードを使ってください。",
     );
+  });
+
+  it("categorizes the series-analysis client upgrade tombstone", async () => {
+    const error = await normalizeApiErrorResponse(
+      Response.json(
+        {
+          type: "about:blank",
+          title: "Client upgrade required",
+          status: 426,
+          detail: "Reload this page to continue.",
+          code: "ANALYSIS_CLIENT_UPGRADE_REQUIRED",
+        },
+        { status: 426 },
+      ),
+    );
+
+    expect(error.category).toBe("analysis_client_upgrade_required");
+    expect(isAnalysisClientUpgradeRequired(error)).toBe(true);
+    expect(isAnalysisClientUpgradeRequired(new Error("network failure"))).toBe(false);
   });
 });

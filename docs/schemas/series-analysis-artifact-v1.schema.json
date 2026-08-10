@@ -1,0 +1,189 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://momo-result.local/schemas/series-analysis-artifact-v1.schema.json",
+  "title": "Series analysis artifact manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "manifestVersion",
+    "artifactId",
+    "gameTitleId",
+    "inputRevision",
+    "algorithmVersion",
+    "artifactSchemaVersion",
+    "sourceInputChecksum",
+    "rootChecksum",
+    "resources"
+  ],
+  "properties": {
+    "manifestVersion": { "const": 1 },
+    "artifactId": { "$ref": "#/$defs/opaqueId" },
+    "gameTitleId": { "$ref": "#/$defs/opaqueId" },
+    "inputRevision": { "$ref": "#/$defs/nonNegativeDecimal" },
+    "algorithmVersion": { "$ref": "#/$defs/version" },
+    "artifactSchemaVersion": { "const": 1 },
+    "sourceInputChecksum": { "$ref": "#/$defs/checksum" },
+    "rootChecksum": { "$ref": "#/$defs/checksum" },
+    "resources": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1000000,
+      "contains": {
+        "type": "object",
+        "required": ["kind", "scope"],
+        "properties": {
+          "kind": { "const": "aggregate" },
+          "scope": {
+            "type": "object",
+            "required": ["kind"],
+            "properties": { "kind": { "const": "overall" } }
+          }
+        }
+      },
+      "items": { "$ref": "#/$defs/resource" }
+    }
+  },
+  "$defs": {
+    "opaqueId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+    },
+    "version": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[a-z0-9][a-z0-9._-]*$"
+    },
+    "nonNegativeDecimal": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]{0,18})$"
+    },
+    "checksum": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "scope": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind"],
+          "properties": { "kind": { "const": "overall" } }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "seasonMasterId"],
+          "properties": {
+            "kind": { "const": "season" },
+            "seasonMasterId": { "$ref": "#/$defs/opaqueId" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "mapMasterId"],
+          "properties": {
+            "kind": { "const": "map" },
+            "mapMasterId": { "$ref": "#/$defs/opaqueId" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "seasonMasterId", "mapMasterId"],
+          "properties": {
+            "kind": { "const": "season_map" },
+            "seasonMasterId": { "$ref": "#/$defs/opaqueId" },
+            "mapMasterId": { "$ref": "#/$defs/opaqueId" }
+          }
+        }
+      ]
+    },
+    "resource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "scope",
+        "itemKey",
+        "path",
+        "encodedBytes",
+        "decodedBytes",
+        "itemCount",
+        "nestingDepth",
+        "checksum"
+      ],
+      "properties": {
+        "kind": {
+          "enum": ["aggregate", "review", "drilldown", "match_context"]
+        },
+        "scope": { "$ref": "#/$defs/scope" },
+        "itemKey": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "path": {
+          "type": "string",
+          "minLength": 7,
+          "maxLength": 255,
+          "pattern": "^(aggregate|review|drilldown|match-context)-[A-Za-z0-9._-]+\\.json$"
+        },
+        "memberId": { "$ref": "#/$defs/opaqueId" },
+        "metricId": { "$ref": "#/$defs/opaqueId" },
+        "matchId": { "$ref": "#/$defs/opaqueId" },
+        "sourceMatchRevision": { "$ref": "#/$defs/nonNegativeDecimal" },
+        "encodedBytes": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 16777216
+        },
+        "decodedBytes": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 16777216
+        },
+        "itemCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "nestingDepth": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 64
+        },
+        "checksum": { "$ref": "#/$defs/checksum" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "kind": { "const": "drilldown" } } },
+          "then": { "required": ["memberId", "metricId"] },
+          "else": {
+            "not": {
+              "anyOf": [
+                { "required": ["memberId"] },
+                { "required": ["metricId"] }
+              ]
+            }
+          }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "match_context" } } },
+          "then": { "required": ["matchId", "sourceMatchRevision"] },
+          "else": {
+            "not": {
+              "anyOf": [
+                { "required": ["matchId"] },
+                { "required": ["sourceMatchRevision"] }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}

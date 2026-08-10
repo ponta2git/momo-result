@@ -83,6 +83,20 @@ function resolveLocalImport(sourceFile, specifier) {
 const importPattern =
   /(?:import|export)\s+(?:[^'"]*?\s+from\s+)?["']([^"']+)["']|import\(\s*["']([^"']+)["']\s*\)/gu;
 const staticImportPattern = /(?:import|export)\s+(?:[^'"]*?\s+from\s+)?["']([^"']+)["']/gu;
+const seriesAnalysisSemanticPatterns = [
+  {
+    pattern: /\.(?:reduce|reduceRight|sort|toSorted)\s*\(/u,
+    reason: "must preserve worker-provided ordering and aggregates",
+  },
+  {
+    pattern: /\bMath\.(?:abs|ceil|floor|max|min|pow|round|sqrt|trunc)\s*\(/u,
+    reason: "must not derive analytical values in the browser",
+  },
+  {
+    pattern: /\b(?:average|mean|median|percentile|quantile|standardDeviation)\s*\(/u,
+    reason: "must consume precomputed statistics from the artifact",
+  },
+];
 
 const violations = [];
 
@@ -98,6 +112,14 @@ for (const file of walk(root)) {
   const isFeatureUiComponent =
     productionSource && sourceLayer === "features" && relativePath.endsWith(".tsx");
   const isAppRouteModule = relativePath === "app/routeModules.ts";
+
+  if (productionSource && relativePath.startsWith("features/seriesComparison/")) {
+    for (const rule of seriesAnalysisSemanticPatterns) {
+      if (rule.pattern.test(source)) {
+        violations.push(relativePath + ": series analysis " + rule.reason);
+      }
+    }
+  }
 
   if (productionSource && sourceLayer === "app" && !isAppRouteModule) {
     for (const match of source.matchAll(staticImportPattern)) {

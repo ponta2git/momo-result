@@ -13,6 +13,10 @@ import momo.api.config.{AppConfig, DatabaseConfig}
 import momo.api.db.Database
 import momo.api.repositories.*
 import momo.api.usecases.ocr.*
+import momo.api.usecases.seriesanalysis.{
+  SeriesAnalysisQueueDispatcherConfig,
+  SeriesAnalysisQueueOutboxDispatcher
+}
 
 private[bootstrap] object PostgresApiRuntime:
   def resource[F[_]: Async: SecureRandom](
@@ -30,6 +34,7 @@ private[bootstrap] object PostgresApiRuntime:
     val ocrJobCreationStore: OcrJobCreationStore[F] =
       PostgresOcrJobCreationStore[F](transactor)
     val ocrQueueOutbox = PostgresOcrQueueOutboxRepository[F](transactor)
+    val analysisQueueOutbox = PostgresSeriesAnalysisQueueOutboxRepository[F](transactor)
     val heldEvents: HeldEventsRepository[F] = PostgresHeldEventsRepository[F](transactor)
     val heldEventDeletion: HeldEventDeletionRepository[F] =
       PostgresHeldEventDeletionRepository[F](transactor)
@@ -38,8 +43,6 @@ private[bootstrap] object PostgresApiRuntime:
     val matchDraftCancellation: MatchDraftCancellationRepository[F] =
       PostgresMatchDraftCancellationRepository[F](transactor)
     val matchList: MatchListReadModel[F] = PostgresMatchListReadModel[F](transactor)
-    val seriesComparison: VersionedSeriesComparisonReadModel[F] =
-      PostgresSeriesComparisonReadModel[F](transactor)
     val matchConfirmation: MatchConfirmationRepository[F] =
       PostgresMatchConfirmationRepository[F](transactor)
     val appSessions: AppSessionsRepository[F] = PostgresAppSessionsRepository[F](transactor)
@@ -74,13 +77,26 @@ private[bootstrap] object PostgresApiRuntime:
       Some(ocrAdmissionGuard.healthStatus),
     )
 
-    OcrQueueOutboxDispatcher.resource[F](
-      ocrQueueOutbox,
-      queue,
-      OcrQueueOutboxDispatcherConfig(pollInterval =
-        config.resourceLimits.ocrOutboxRecoveryInterval
+    val analysisDispatcher = infrastructure.analysisQueue.fold(Resource.unit[F]) { queue =>
+      SeriesAnalysisQueueOutboxDispatcher.resource[F](
+        analysisQueueOutbox,
+        queue,
+        SeriesAnalysisQueueDispatcherConfig(),
+      )
+    }
+    val dispatchers = (
+      OcrQueueOutboxDispatcher.resource[F](
+        ocrQueueOutbox,
+        queue,
+        OcrQueueOutboxDispatcherConfig(pollInterval =
+          config.resourceLimits.ocrOutboxRecoveryInterval
+        ),
       ),
-    ).flatMap { _ =>
+      analysisDispatcher,
+      PostgresSeriesAnalysisReaderCapability.resource[F](transactor),
+    ).tupled
+
+    dispatchers.flatMap { _ =>
       RuntimeMaintenance.resource(
         config = config,
         imageStore = imageStore,
@@ -88,10 +104,14 @@ private[bootstrap] object PostgresApiRuntime:
         ocrMaintenance = ocrMaintenance,
         appSessions = appSessions,
         idempotency = idempotency,
+        seriesAnalysisMaintenance = Some(analysisQueueOutbox),
         now = Clock[F].realTimeInstant,
       ).evalMap { _ =>
         for
-          cachedSeriesComparison <- CachedSeriesComparisonReadModel.create(seriesComparison)
+          seriesAnalysis <- PostgresSeriesAnalysisRepository.create[F](
+            transactor,
+            config.seriesAnalysisRead,
+          )
           cachedMembers <- CachedReferenceRepositories.members(members)
           cachedGameTitles <- CachedReferenceRepositories.gameTitles(gameTitles)
           cachedMapMasters <- CachedReferenceRepositories.mapMasters(mapMasters)
@@ -115,7 +135,7 @@ private[bootstrap] object PostgresApiRuntime:
               matchDrafts = matchDrafts,
               matchDraftCancellation = matchDraftCancellation,
               matchList = matchList,
-              seriesComparison = cachedSeriesComparison,
+              seriesAnalysis = seriesAnalysis,
               matchConfirmation = matchConfirmation,
               appSessions = appSessions,
               sessionAccounts = sessionAccounts,

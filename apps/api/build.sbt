@@ -40,6 +40,25 @@ lazy val apiOpenApi = taskKey[File]("Generate OpenAPI from Tapir endpoint defini
 lazy val apiOpenApiCheck = taskKey[Unit]("Check that openapi.yaml matches generated Tapir output")
 
 lazy val testcontainersDockerApiVersion = "1.40"
+lazy val nettyVersion = "4.2.15.Final"
+lazy val isMacOs =
+  sys.props.getOrElse("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("mac")
+
+lazy val macOsNettyDnsResolver: Seq[ModuleID] = {
+  val osArch = sys.props.getOrElse("os.arch", "").toLowerCase(java.util.Locale.ROOT)
+  if (!isMacOs) Seq.empty
+  else {
+    val classifier = osArch match {
+      case "aarch64" | "arm64" => "osx-aarch_64"
+      case "amd64" | "x86_64"  => "osx-x86_64"
+      case unsupported =>
+        sys.error(s"Unsupported macOS architecture for Netty DNS resolver: $unsupported")
+    }
+    Seq(
+      "io.netty" % "netty-resolver-dns-native-macos" % nettyVersion % Runtime classifier classifier
+    )
+  }
+}
 
 // Scalac options shared by Compile and Test.
 //
@@ -78,7 +97,9 @@ lazy val root = (project in file("."))
     Compile / packageDoc / publishArtifact := false,
     Compile / mainClass := Some("momo.api.Main"),
     Compile / run / fork := true,
-    Compile / run / javaOptions += "-Dcats.effect.warnOnNonMainThreadDetected=false",
+    Compile / run / javaOptions ++=
+      Seq("-Dcats.effect.warnOnNonMainThreadDetected=false") ++
+        (if (isMacOs) Seq("--enable-native-access=ALL-UNNAMED") else Seq.empty),
     Test / testOptions += Tests.Argument(TestFrameworks.MUnit, "--exclude-tags=Integration"),
     Test / testOptions += Tests.Filter(name => !name.startsWith("momo.api.integration.")),
     Test / parallelExecution := true,
@@ -155,10 +176,9 @@ lazy val root = (project in file("."))
         "org.testcontainers" % "postgresql" % testcontainersPostgresVersion % Test,
         "org.testcontainers" % "testcontainers" % testcontainersVersion % Test,
         "org.typelevel" %% "munit-cats-effect" % munitCatsEffectVersion % Test
-      )
+      ) ++ macOsNettyDnsResolver
     },
     dependencyOverrides ++= {
-      val nettyVersion = "4.2.15.Final"
       val jacksonVersion = "3.2.0"
 
       Seq(

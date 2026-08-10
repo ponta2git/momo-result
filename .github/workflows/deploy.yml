@@ -5,6 +5,7 @@ on:
     paths:
       - "apps/api/**"
       - "apps/ocr-worker/**"
+      - "apps/analysis-worker/**"
       - "apps/web/**"
       - "deploy/**"
       - "docs/schemas/**"
@@ -12,10 +13,12 @@ on:
       - "Dockerfile"
       - ".dockerignore"
       - "fly.toml"
+      - "fly.analysis.toml"
       - "package.json"
       - "mise.toml"
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
+      - "rust-toolchain.toml"
       - ".github/workflows/deploy.yml"
   push:
     branches:
@@ -53,6 +56,10 @@ jobs:
     if: github.event_name != 'pull_request'
     uses: ./.github/workflows/ocr-worker.yml
     secrets: inherit
+
+  analysis-worker:
+    if: github.event_name != 'pull_request'
+    uses: ./.github/workflows/analysis-worker.yml
 
   runtime-image:
     name: Build, scan, and package runtime image

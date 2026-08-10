@@ -93,3 +93,12 @@ test("reports the local recovery commands when the configured database is unavai
     /pnpm --dir \.\.\/momo-db db:up.*pnpm --dir \.\.\/momo-db db:migrate/u,
   );
 });
+
+test("reports migration recovery when the API exits before readiness", async () => {
+  const apiProcess = { result: { code: 1, error: undefined, signal: null } };
+
+  await assert.rejects(
+    () => waitForPersistentApi(apiProcess, {}, { timeoutMs: 100 }),
+    /pnpm --dir \.\.\/momo-db db:migrate/u,
+  );
+});

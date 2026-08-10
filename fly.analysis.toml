@@ -1,0 +1,19 @@
+app = "momo-result-analysis"
+primary_region = "nrt"
+kill_signal = "SIGTERM"
+kill_timeout = "60s"
+
+[build]
+  dockerfile = "apps/analysis-worker/Dockerfile"
+
+[processes]
+  worker = "/usr/local/bin/momo-analysis worker"
+
+[env]
+  MOMO_ANALYSIS_PUBLICATION_MODE = "disabled"
+  MOMO_ANALYSIS_RUNTIME_MEMORY_LIMIT_BYTES = "268435456"
+  MOMO_ANALYSIS_TEMPORARY_ROOT = "/var/lib/momo-analysis"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"

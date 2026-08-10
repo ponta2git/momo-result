@@ -109,7 +109,7 @@ private[bootstrap] object UseCaseWiring:
       matchDrafts: MatchDraftsRepository[F],
       matchDraftCancellation: MatchDraftCancellationRepository[F],
       matchList: MatchListReadModel[F],
-      seriesComparison: SeriesComparisonReadModel[F],
+      seriesAnalysis: SeriesAnalysisRepository[F],
       matchConfirmation: MatchConfirmationRepository[F],
       appSessions: AppSessionsRepository[F],
       sessionAccounts: SessionAccountLookup[F],

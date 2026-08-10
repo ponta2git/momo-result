@@ -83,14 +83,68 @@ object PostgresGameTitles:
         conflict(s"game_title already exists: ${title.id.value} or ${title.name}")
     }
 
-    override def delete(id: GameTitleId): ConnectionIO[Unit] = deleteDiscardedDrafts(
-      fr"game_title_id = $id"
-    ) *> sql"DELETE FROM game_titles WHERE id = $id".update.run.flatMap {
-      case 1 => ().pure[ConnectionIO]
-      case _ => notFound("game title", id.value)
-    }.exceptSomeSqlState {
+    override def delete(id: GameTitleId): ConnectionIO[Unit] = (for
+      _ <- prepareAnalysisDeletion(id)
+      _ <- deleteDiscardedDrafts(fr"game_title_id = $id")
+      deleted <- sql"DELETE FROM game_titles WHERE id = $id".update.run
+      _ <- deleted match
+        case 1 => ().pure[ConnectionIO]
+        case _ => notFound("game title", id.value)
+    yield ()).exceptSomeSqlState {
       case state if isForeignKeyViolation(state) => conflict("game title is still referenced.")
     }
+
+  private def prepareAnalysisDeletion(id: GameTitleId): ConnectionIO[Unit] =
+    for
+      now <- sql"SELECT now()".query[Instant].unique
+      _ <- sql"""
+        SELECT game_title_id
+        FROM series_analysis_title_states
+        WHERE game_title_id = $id
+        FOR UPDATE
+      """.query[GameTitleId].option
+      _ <- sql"""
+        SELECT id
+        FROM series_analysis_jobs
+        WHERE game_title_id = $id AND status IN ('queued', 'running')
+        FOR UPDATE
+      """.query[String].to[List]
+      _ <- sql"""
+        UPDATE series_analysis_job_requests
+        SET status = 'fulfilled', fulfilled_at = COALESCE(fulfilled_at, $now)
+        WHERE game_title_id = $id AND status <> 'fulfilled'
+      """.update.run
+      affectedCampaigns <- sql"""
+        UPDATE series_analysis_campaign_targets
+        SET status = 'skipped_title_deleted', updated_at = $now
+        WHERE game_title_id = $id
+          AND status NOT IN ('succeeded', 'failed', 'skipped_title_deleted')
+        RETURNING campaign_id
+      """.query[String].to[List]
+      _ <- affectedCampaigns.distinct.traverse_(campaignId =>
+        PostgresSeriesAnalysisCampaignExpansionOps.refreshCampaign(campaignId, now)
+      )
+      _ <- sql"""
+        UPDATE series_analysis_operation_requests o
+        SET status = 'terminal', finished_at = COALESCE(o.finished_at, $now)
+        WHERE o.scope = 'title'
+          AND o.game_title_id = $id
+          AND o.status <> 'terminal'
+          AND NOT EXISTS (
+            SELECT 1 FROM series_analysis_job_requests r
+            WHERE r.operation_request_id = o.id AND r.status <> 'fulfilled'
+          )
+      """.update.run
+      _ <- sql"""
+        UPDATE series_analysis_title_states
+        SET current_artifact_id = NULL,
+            previous_artifact_id = NULL,
+            pending_work = false,
+            pending_forced_run_count = 0,
+            updated_at = $now
+        WHERE game_title_id = $id
+      """.update.run
+    yield ()
 
 end PostgresGameTitles
 

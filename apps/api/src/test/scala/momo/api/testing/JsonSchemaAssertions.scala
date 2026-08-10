@@ -42,6 +42,14 @@ trait JsonSchemaAssertions extends Assertions:
 
   protected def ocrHintsSchemaPath: Path = repoPath("docs/schemas/ocr-hints-v1.schema.json")
 
+  protected def seriesAnalysisArtifactSchemaPath: Path =
+    repoPath("docs/schemas/series-analysis-artifact-v1.schema.json")
+
+  protected def seriesAnalysisQueueSchemaPath: Path =
+    repoPath("docs/schemas/series-analysis-queue-payload-v1.schema.json")
+
+  protected def repositoryFile(relativePath: String): Path = repoPath(relativePath)
+
   private def jsonSchemaErrors(
       schemaPath: Path,
       inputJson: String,

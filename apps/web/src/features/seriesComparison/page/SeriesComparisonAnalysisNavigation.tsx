@@ -1,9 +1,9 @@
-import type { SeriesComparisonViewId } from "@/features/seriesComparison/model/seriesComparisonViewModel";
-import { isSeriesComparisonViewId } from "@/features/seriesComparison/model/seriesComparisonViewModel";
+import type { SeriesAnalysisViewId } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
+import { isSeriesAnalysisViewId } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
 import { cn } from "@/shared/ui/cn";
 import { TabsList, TabsRoot, TabsTab } from "@/shared/ui/forms/Tabs";
 
-export type AnalysisViewId = Exclude<SeriesComparisonViewId, "review">;
+type AnalysisViewId = Exclude<SeriesAnalysisViewId, "review">;
 
 type AnalysisViewDefinition = {
   id: AnalysisViewId;
@@ -12,11 +12,6 @@ type AnalysisViewDefinition = {
 };
 
 type PurposeId = "analysis" | "review";
-
-export type AnalysisViewChange = (
-  view: SeriesComparisonViewId,
-  options?: { replace?: boolean },
-) => void;
 
 const analysisViews = [
   {
@@ -61,18 +56,6 @@ const analysisViews = [
   },
 ] satisfies AnalysisViewDefinition[];
 
-export function isAnalysisView(view: SeriesComparisonViewId): view is AnalysisViewId {
-  return view !== "review";
-}
-
-export function analysisViewFor(view: AnalysisViewId): AnalysisViewDefinition {
-  const definition = analysisViews.find((item) => item.id === view);
-  if (!definition) {
-    throw new Error("series comparison analysis view is not configured");
-  }
-  return definition;
-}
-
 export function purposeTabId(purpose: PurposeId): string {
   return `series-comparison-purpose-tab-${purpose}`;
 }
@@ -103,12 +86,13 @@ export function PurposeTabs({
   activeView,
   onViewChange,
 }: {
-  activeView: SeriesComparisonViewId;
-  onViewChange: (view: SeriesComparisonViewId) => void;
+  activeView: SeriesAnalysisViewId;
+  onViewChange: (view: SeriesAnalysisViewId) => void;
 }) {
   const activePurpose: PurposeId = activeView === "review" ? "review" : "analysis";
   return (
     <TabsRoot
+      className="w-full max-w-full min-w-0"
       value={activePurpose}
       onValueChange={(value) => {
         if (value === "review") {
@@ -148,13 +132,14 @@ export function AnalysisTabs({
   onViewChange,
 }: {
   activeView: AnalysisViewId;
-  onViewChange: (view: SeriesComparisonViewId) => void;
+  onViewChange: (view: SeriesAnalysisViewId) => void;
 }) {
   return (
     <TabsRoot
+      className="w-full max-w-full min-w-0"
       value={activeView}
       onValueChange={(value) => {
-        if (typeof value === "string" && isSeriesComparisonViewId(value) && value !== "review") {
+        if (typeof value === "string" && isSeriesAnalysisViewId(value) && value !== "review") {
           onViewChange(value);
         }
       }}
@@ -176,31 +161,5 @@ export function AnalysisTabs({
         ))}
       </TabsList>
     </TabsRoot>
-  );
-}
-
-export function SectionJumpLinks({ items }: { items: AnalysisViewDefinition["sections"] }) {
-  if (items.length <= 1) {
-    return null;
-  }
-  return (
-    <nav
-      aria-label="この分析の目次"
-      className="flex min-w-0 flex-wrap items-baseline gap-x-4 gap-y-2 border-l-2 border-[var(--color-border-strong)] pl-3"
-    >
-      <span className="text-xs font-semibold text-[var(--color-text-secondary)]">この分析</span>
-      <ul className="flex min-w-0 flex-wrap gap-x-4 gap-y-2">
-        {items.map((item) => (
-          <li key={item.id}>
-            <a
-              className="inline-flex min-h-11 items-center text-sm font-medium text-[var(--color-action)] underline-offset-4 hover:underline"
-              href={`#${item.id}`}
-            >
-              {item.label}
-            </a>
-          </li>
-        ))}
-      </ul>
-    </nav>
   );
 }

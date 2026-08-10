@@ -237,7 +237,7 @@ object AuthModule:
       error: AppError,
       cookies: List[CookieWithMeta],
   ): AuthEndpoints.AuthProblemResponse =
-    val (status, details) = ProblemDetails.from(error)
+    val (status, _, details) = ProblemDetails.from(error)
     (status, details, cookies)
 
   private def interactiveLoginPath(next: Option[String]): String = next match

@@ -14,6 +14,7 @@ import doobie.util.fragments
 
 import momo.api.adapters.postgres.PostgresMatchInsertOps.{insertMatchCascade, replaceMatchChildren}
 import momo.api.adapters.postgres.PostgresMeta.given
+import momo.api.adapters.postgres.PostgresSeriesAnalysisMutationOps.enqueueMatchMutation
 import momo.api.db.Database
 import momo.api.domain.ids.*
 import momo.api.domain.{MatchNoInEvent, MatchRecord}
@@ -37,13 +38,24 @@ object PostgresMatches extends PostgresMatchesReadSupport:
 
   val alg: MatchesAlg[ConnectionIO] = new MatchesAlg[ConnectionIO]:
     override def create(record: MatchRecord): ConnectionIO[Unit] =
-      insertMatchCascade(record, record.createdAt).exceptSomeSqlState {
-        case state if isUniqueViolation(state) =>
-          conflict[Unit](s"matchNoInEvent ${record.matchNoInEvent.value
-              .toString} already exists for held event ${record.heldEventId.value}.")
-      }
+      (insertMatchCascade(record, record.createdAt) *>
+        enqueueMatchMutation(List(record.gameTitleId)))
+        .exceptSomeSqlState {
+          case state if isUniqueViolation(state) =>
+            conflict[Unit](s"matchNoInEvent ${record.matchNoInEvent.value
+                .toString} already exists for held event ${record.heldEventId.value}.")
+        }
 
     override def update(record: MatchRecord, updatedAt: Instant): ConnectionIO[Unit] =
+      val previousTitle = sql"""
+        SELECT game_title_id
+        FROM matches
+        WHERE id = ${record.id}
+        FOR UPDATE
+      """.query[GameTitleId].option.flatMap {
+        case Some(value) => value.pure[ConnectionIO]
+        case None => notFound[GameTitleId]("match", record.id.value)
+      }
       val updateMatch = sql"""
         UPDATE matches
         SET held_event_id = ${record.heldEventId},
@@ -57,13 +69,17 @@ object PostgresMatches extends PostgresMatchesReadSupport:
             total_assets_draft_id = ${record.totalAssetsDraftId},
             revenue_draft_id = ${record.revenueDraftId},
             incident_log_draft_id = ${record.incidentLogDraftId},
+            analysis_revision = analysis_revision + 1,
             updated_at = $updatedAt
         WHERE id = ${record.id}
       """.update.run
-      updateMatch.flatMap {
-        case 1 => replaceMatchChildren(record)
-        case _ => notFound[Unit]("match", record.id.value)
-      }.exceptSomeSqlState {
+      (for
+        oldTitle <- previousTitle
+        affected <- updateMatch
+        _ <- if affected == 1 then replaceMatchChildren(record)
+        else notFound[Unit]("match", record.id.value)
+        _ <- enqueueMatchMutation(List(oldTitle, record.gameTitleId))
+      yield ()).exceptSomeSqlState {
         case state if isUniqueViolation(state) =>
           conflict[Unit](s"matchNoInEvent ${record.matchNoInEvent.value
               .toString} already exists for held event ${record.heldEventId.value}.")
@@ -71,8 +87,17 @@ object PostgresMatches extends PostgresMatchesReadSupport:
 
     override def delete(id: MatchId): ConnectionIO[Boolean] =
       for
+        oldTitle <- sql"""
+          SELECT game_title_id
+          FROM matches
+          WHERE id = $id
+          FOR UPDATE
+        """.query[GameTitleId].option
         _ <- sql"DELETE FROM match_drafts WHERE confirmed_match_id = $id".update.run
         deleted <- sql"DELETE FROM matches WHERE id = $id".update.run.map(_ > 0)
+        _ <- oldTitle.filter(_ => deleted).toList.traverse_(title =>
+          enqueueMatchMutation(List(title))
+        )
       yield deleted
 
     override def find(id: MatchId): ConnectionIO[Option[MatchRecord]] =

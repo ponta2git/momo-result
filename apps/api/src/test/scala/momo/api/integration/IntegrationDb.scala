@@ -138,8 +138,22 @@ object IntegrationDb:
    * `0013_login_accounts.sql`), and `incident_masters` (seeded by migration). Order respects FK
    * dependencies; using TRUNCATE ... CASCADE keeps it terse.
    */
-  def truncateAppTables(transactor: Transactor[IO]): IO[Unit] = sql"""
+  def truncateAppTables(transactor: Transactor[IO]): IO[Unit] = (sql"""
       TRUNCATE TABLE
+        series_analysis_match_context_artifacts,
+        series_analysis_drilldown_artifacts,
+        series_analysis_scope_review_artifacts,
+        series_analysis_scope_aggregate_artifacts,
+        series_analysis_artifacts,
+        series_analysis_queue_outbox,
+        series_analysis_job_attempts,
+        series_analysis_job_requests,
+        series_analysis_jobs,
+        series_analysis_campaign_targets,
+        series_analysis_campaigns,
+        series_analysis_operation_requests,
+        series_analysis_reader_capabilities,
+        series_analysis_worker_capabilities,
         match_incidents,
         match_players,
         match_drafts,
@@ -156,7 +170,19 @@ object IntegrationDb:
         idempotency_keys,
         app_sessions
       RESTART IDENTITY CASCADE
-    """.update.run.void.transact(transactor)
+    """.update.run.void *> sql"""
+      UPDATE worker_execution_slots
+      SET task_kind = NULL,
+          owner = NULL,
+          job_id = NULL,
+          attempt_id = NULL,
+          holder_preemptible = NULL,
+          lease_expires_at = NULL,
+          preempt_requested_by = NULL,
+          preempt_requested_at = NULL,
+          updated_at = now()
+      WHERE slot_key = 'shared-heavy-work'
+    """.update.run.void).transact(transactor)
 end IntegrationDb
 // scalafix:on DisableSyntax.throw
 // scalafix:on DisableSyntax.noUnsafeRunSync

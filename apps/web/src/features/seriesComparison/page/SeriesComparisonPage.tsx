@@ -1,7 +1,8 @@
 import { ArrowLeft, BarChart3 } from "lucide-react";
 
-import { SeriesComparisonContent } from "@/features/seriesComparison/page/SeriesComparisonContent";
-import { SeriesComparisonScopeBar } from "@/features/seriesComparison/page/SeriesComparisonScopeBar";
+import { SeriesAnalysisContent } from "@/features/seriesComparison/page/SeriesAnalysisContent";
+import { SeriesAnalysisScopeBar } from "@/features/seriesComparison/page/SeriesAnalysisScopeBar";
+import { SeriesAnalysisStatusFeedback } from "@/features/seriesComparison/page/SeriesAnalysisStatusFeedback";
 import {
   ComparisonSkeleton,
   PageSkeleton,
@@ -17,10 +18,23 @@ import { StaleShield } from "@/shared/ui/motion/StaleShield";
 
 export function SeriesComparisonPage() {
   const page = useSeriesComparisonPageController();
-  const { aggregate, filters, options, review } = page;
+  const { aggregate, filters, options, review, status } = page;
 
-  if (options.loading) {
-    return <PageSkeleton />;
+  if (options.loading) return <PageSkeleton />;
+  if (page.clientUpgradeRequired) {
+    return (
+      <PageFrame className="gap-4" width="wide">
+        <PageHeader title="戦績比較" />
+        <Notice tone="warning" title="画面の更新が必要です">
+          <p>戦績分析の表示方法が更新されました。画面を再読み込みしてください。</p>
+          <div className="mt-3">
+            <Button size="sm" variant="secondary" onClick={page.actions.reloadClient}>
+              画面を再読み込み
+            </Button>
+          </div>
+        </Notice>
+      </PageFrame>
+    );
   }
 
   return (
@@ -40,7 +54,6 @@ export function SeriesComparisonPage() {
         }
         title="戦績比較"
       />
-
       {options.hasError ? (
         <Notice
           tone={options.hasVisibleData ? "warning" : "danger"}
@@ -66,21 +79,19 @@ export function SeriesComparisonPage() {
           </div>
         </Notice>
       ) : null}
-
       {filters.seriesOptions.length === 0 && !options.hasError ? (
         <EmptyState
           icon={<BarChart3 className="size-5" />}
-          title="比較できる戦績がありません"
-          description="確定済みの試合が揃うと比較できます。"
-          action={<LinkButton to="/matches">試合一覧を開く</LinkButton>}
+          title="登録されている作品がありません"
+          description="設定管理で作品を登録すると、戦績分析の対象にできます。"
         />
       ) : filters.seriesOptions.length > 0 ? (
         <>
-          <SeriesComparisonScopeBar
-            canRefresh={aggregate.canRefresh}
+          <SeriesAnalysisScopeBar
+            canRefresh={aggregate.canRefresh || Boolean(filters.state.gameTitleId)}
             mapOptions={filters.mapOptions}
             mapValue={filters.state.mapMasterId ?? ""}
-            refreshing={aggregate.refreshing || review.refreshing}
+            refreshing={aggregate.refreshing || review.refreshing || status.refreshing}
             response={aggregate.data}
             scopeLabel={filters.scopeLabel}
             seasonOptions={filters.seasonOptions}
@@ -92,32 +103,33 @@ export function SeriesComparisonPage() {
             onSeasonChange={filters.updateSeasonMasterId}
             onSeriesChange={filters.updateGameTitle}
           />
-
-          {aggregate.hasError && !aggregate.data ? (
+          <SeriesAnalysisStatusFeedback
+            confirmedMatchCount={filters.confirmedMatchCount}
+            hasError={status.hasError}
+            loading={status.loading}
+            status={status.data}
+            onRefresh={page.actions.refresh}
+          />
+          {status.loading && !status.data ? <ComparisonSkeleton /> : null}
+          {!status.loading &&
+          status.data?.currentArtifact &&
+          aggregate.hasError &&
+          !aggregate.data ? (
             <Notice tone="danger" title="戦績データを読み込めません">
-              <p>通信状態を確認して、もう一度お試しください。</p>
+              <p>
+                保存済み成果物を取得できませんでした。通信状態を確認して再読み込みしてください。
+              </p>
               <div className="mt-3">
-                <Button
-                  pending={aggregate.refreshing}
-                  pendingLabel="再読み込み中"
-                  size="sm"
-                  variant="secondary"
-                  onClick={page.actions.refresh}
-                >
+                <Button size="sm" variant="secondary" onClick={page.actions.refresh}>
                   戦績データを再読み込み
                 </Button>
               </div>
             </Notice>
-          ) : (
+          ) : status.data?.currentArtifact && aggregate.data ? (
             <div className="grid gap-3">
-              {aggregate.hasError && aggregate.data ? (
+              {aggregate.hasError ? (
                 <Notice tone="warning" title="最新の戦績データを取得できません">
-                  <p>直前に取得した内容を表示しています。</p>
-                  <div className="mt-3">
-                    <Button size="sm" variant="secondary" onClick={page.actions.refresh}>
-                      最新情報を再読み込み
-                    </Button>
-                  </div>
+                  直前に取得した成果物を表示しています。
                 </Notice>
               ) : null}
               <StaleShield
@@ -125,13 +137,13 @@ export function SeriesComparisonPage() {
                 busyLabel="比較条件を更新中"
                 contentClassName="grid gap-4"
                 fallback={<ComparisonSkeleton />}
-                preserveContent={Boolean(aggregate.data) && !aggregate.loading}
+                preserveContent
               >
-                {aggregate.data && aggregate.data.matchCount === 0 ? (
+                {aggregate.data.scope.matchCount === 0 ? (
                   <EmptyState
                     action={
                       filters.state.mapMasterId || filters.state.seasonMasterId ? (
-                        <Button variant="secondary" onClick={filters.clearScope}>
+                        <Button variant="secondary" onClick={page.actions.clearScope}>
                           総合に戻す
                         </Button>
                       ) : (
@@ -142,24 +154,23 @@ export function SeriesComparisonPage() {
                     title="この範囲に確定済みの試合がありません"
                     description="総合、別シーズン、別マップを選ぶと表示できる場合があります。"
                   />
-                ) : aggregate.data ? (
-                  <SeriesComparisonContent
-                    model={{
-                      activeView: filters.activeView,
-                      focusMatchId: filters.state.focusMatchId,
-                      hasReviewError: review.hasError,
-                      onClearFocusedMatch: filters.clearFocusedMatch,
-                      onRetryReview: review.retry,
-                      onViewChange: filters.updateView,
-                      response: aggregate.data,
-                      review: review.data,
-                      reviewLoading: review.loading && !review.data,
-                    }}
+                ) : (
+                  <SeriesAnalysisContent
+                    activeView={filters.activeView}
+                    focusMatchId={filters.state.focusMatchId}
+                    response={aggregate.data}
+                    review={review.data}
+                    reviewError={review.hasError}
+                    reviewLoading={review.loading}
+                    onArtifactExpired={page.actions.refresh}
+                    onClearFocusedMatch={page.actions.clearFocusedMatch}
+                    onFocusMatch={page.actions.focusMatch}
+                    onViewChange={filters.updateView}
                   />
-                ) : null}
+                )}
               </StaleShield>
             </div>
-          )}
+          ) : null}
         </>
       ) : null}
     </PageFrame>

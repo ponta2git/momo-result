@@ -69,9 +69,16 @@ function MatchDetailReadyContent({ controller }: { controller: MatchDetailReadyC
     showConfirm,
     sort,
   } = controller;
-  const ledgerRows = (performanceContext?.rows ?? []).map((row) =>
-    Object.assign({ displayName: memberDisplayName(row.memberId) }, row),
-  );
+  const ledgerRows = (
+    performanceContext?.rows ??
+    (match.players ?? []).map((player) => ({
+      memberId: player.memberId,
+      rank: player.rank,
+      revenueManYen: player.revenueManYen,
+      totalAssetsManYen: player.totalAssetsManYen,
+      trend: "unavailable" as const,
+    }))
+  ).map((row) => Object.assign({ displayName: memberDisplayName(row.memberId) }, row));
 
   return (
     <PageFrame className="min-w-0 gap-4" width="wide">

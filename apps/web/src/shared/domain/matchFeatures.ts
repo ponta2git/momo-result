@@ -1,4 +1,4 @@
-export const matchFeatureIds = [
+const matchFeatureIds = [
   "close_finish",
   "asset_blowout",
   "revenue_top_no_win",
@@ -20,10 +20,6 @@ export type MatchFeatureDefinition = {
   label: string;
   tone: MatchFeatureTone;
 };
-
-export const maxMatchFeatureBadges = 6;
-
-export const seriesRelativeMatchFeatureIds = ["close_finish", "asset_blowout"] as const;
 
 const matchFeatureDefinitions = {
   close_finish: {
@@ -82,24 +78,6 @@ const matchFeatureDefinitions = {
   },
 } satisfies Record<MatchFeatureId, MatchFeatureDefinition>;
 
-const matchFeaturePriorities = new Map<MatchFeatureId, number>(
-  matchFeatureIds.map((id, index) => [id, index]),
-);
-
-const matchFeatureIdSet = new Set<string>(matchFeatureIds);
-
-export function isMatchFeatureId(value: string): value is MatchFeatureId {
-  return matchFeatureIdSet.has(value);
-}
-
 export function matchFeatureDefinition(id: MatchFeatureId): MatchFeatureDefinition {
   return matchFeatureDefinitions[id];
-}
-
-export function matchFeatureLabel(id: string): string {
-  return isMatchFeatureId(id) ? matchFeatureDefinition(id).label : id;
-}
-
-export function matchFeaturePriority(id: MatchFeatureId): number {
-  return matchFeaturePriorities.get(id) ?? matchFeatureIds.length;
 }

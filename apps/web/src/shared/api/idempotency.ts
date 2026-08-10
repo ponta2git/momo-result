@@ -18,6 +18,8 @@ export const idempotencyOperations = [
   "ocrCapture.cancelMatchDraft",
   "ocrCapture.createMatchDraft",
   "ocrCapture.createOcrJob",
+  "seriesAnalysis.recalculateAll",
+  "seriesAnalysis.recalculateTitle",
 ] as const;
 
 export type IdempotencyOperation = (typeof idempotencyOperations)[number];

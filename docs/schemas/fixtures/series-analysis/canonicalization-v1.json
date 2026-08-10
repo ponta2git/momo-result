@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "framing": {
+    "lengthPrefix": "unsigned_64_bit_big_endian",
+    "hash": "sha256",
+    "checksumEncoding": "sha256:lowercase_hex"
+  },
+  "canonicalJsonCases": [
+    {
+      "name": "object_order_utf8",
+      "input": "{ \"nested\": { \"x\": true }, \"b\": 2, \"a\": \"桃鉄\" }",
+      "canonical": "{\"a\":\"桃鉄\",\"b\":2,\"nested\":{\"x\":true}}",
+      "checksum": "sha256:6140c5e8265df66f97eb08778947b7abb5b4dd797645e91d6ab5c409ce576b73"
+    },
+    {
+      "name": "rfc8785_number_format",
+      "input": "{\"numbers\":[333333333.33333329,1E30,4.50,2e-3,0.000000000000000000000000001],\"literals\":[null,true,false]}",
+      "canonical": "{\"literals\":[null,true,false],\"numbers\":[333333333.3333333,1e+30,4.5,0.002,1e-27]}",
+      "checksum": "sha256:f9ef8430c38ca3edd7fb96a698d14fdf39c74c63299627162d38b59af2af5abb"
+    }
+  ],
+  "rejectedJsonCases": [
+    {
+      "name": "duplicate_key",
+      "input": "{\"value\":1,\"value\":2}",
+      "reason": "duplicate_key"
+    },
+    {
+      "name": "negative_zero",
+      "input": "{\"value\":-0.0}",
+      "reason": "negative_zero"
+    }
+  ],
+  "sourceChecksumCase": {
+    "sortRule": "row_kind_priority_then_documented_stable_ids",
+    "canonicalRecords": [
+      "{\"columns\":{\"id\":\"match-1\",\"revision\":\"1\"},\"rowKind\":\"match\"}",
+      "{\"columns\":{\"count\":2,\"incidentId\":\"ginji\",\"matchId\":\"match-1\",\"memberId\":\"ponta\"},\"rowKind\":\"incident\"}"
+    ],
+    "checksum": "sha256:eca0525816f39c40f667ae9b3b8a9d90010905afe1cfa447b91d36d2717cf7ef"
+  },
+  "rootChecksumCase": {
+    "sortRule": "resource_kind_then_scope_key_then_item_key",
+    "canonicalEntries": [
+      "{\"checksum\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"decodedBytes\":128,\"encodedBytes\":128,\"itemKey\":\"overall\",\"kind\":\"aggregate\",\"scopeKey\":\"overall\"}",
+      "{\"checksum\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"decodedBytes\":64,\"encodedBytes\":64,\"itemKey\":\"overall\",\"kind\":\"review\",\"scopeKey\":\"overall\"}"
+    ],
+    "checksum": "sha256:523d3565c60a4547df9eeb536855af333e2390a6d197b11987f4cb12d01fe1f9"
+  },
+  "semanticChecksumCase": {
+    "canonicalDomain": "{\"algorithmVersion\":\"series-analysis-v1\",\"artifactSchemaVersion\":1,\"inputRevision\":\"7\",\"payload\":{\"matchCount\":0,\"qualityStatus\":\"no_target\"},\"resourceKind\":\"aggregate\",\"scopeKey\":\"overall\",\"sourceInputChecksum\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}",
+    "checksum": "sha256:9a7be5fbfd7f62143f09a1d89aca5ca4bdb422cde9b4f899cba986d2f43a12ad"
+  }
+}

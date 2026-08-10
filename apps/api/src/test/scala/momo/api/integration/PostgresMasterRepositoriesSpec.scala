@@ -75,6 +75,28 @@ final class PostgresMasterRepositoriesSpec extends IntegrationSuite:
       assertEquals(maps, Nil)
       assertEquals(seasons, Nil)
 
+  test("display-only master mutations do not invalidate analysis input"):
+    val updateTitle = new UpdateGameTitle[IO](gameTitles)
+    val updateMap = new UpdateMapMaster[IO](mapMasters)
+    val updateSeason = new UpdateSeasonMaster[IO](seasonMasters)
+    for
+      _ <- seedScopedMasters
+      _ <- updateTitle.run(UpdateGameTitleCommand(titleId, "表示名更新", "momotetsu_2"))
+      _ <- updateMap.run(UpdateMapMasterCommand(mapId, "表示マップ更新"))
+      _ <- updateSeason.run(UpdateSeasonMasterCommand(seasonId, "表示期間更新"))
+      state <- sql"""
+        SELECT input_revision, pending_work
+        FROM series_analysis_title_states
+        WHERE game_title_id = $titleId
+      """.query[(Long, Boolean)].unique.transact(transactor)
+      intentCount <- sql"""
+        SELECT COUNT(*)::int FROM series_analysis_job_requests
+        WHERE game_title_id = $titleId
+      """.query[Int].unique.transact(transactor)
+    yield
+      assertEquals(state, (0L, false))
+      assertEquals(intentCount, 0)
+
   test("master updates report conflicts when unique names collide"):
     val otherTitleId = GameTitleId.unsafeFromString("title_other")
     val otherMapId = MapMasterId.unsafeFromString("map_other")

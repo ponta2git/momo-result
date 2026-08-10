@@ -184,6 +184,9 @@ public repository に置くため、具体的な障害位置、再現手順、en
 - 1作品の全スコープ、通常集計、振り返り、ドリルダウン間で重い計算を再利用しているか。
 - 計算中・失敗時に部分成果物を公開せず、直前成功成果物と状態を表示できるか。
 - 代表データ量、連続実行、処理時間、peak memory、timeoutの予算を本番同等runtimeで測定したか。
+- workerを軽量化した結果、APIが作品成果物全体をdecodeしたり、browserへ巨大responseを渡したりして
+  resource負荷を別processへ移していないか。
+- 同時実行数1をruntime台数だけで推測せず、deploy重複とlease失効後の旧processをDB fenceで拒否できるか。
 - pipeline成功、health check、機能応答、CPU / latency観測を別々の証拠として扱ったか。
 - 性能観測ができない状態なら、配置成功までを確認済み、性能回復は未検証として報告したか。
 - rollback時は表示名ではなく、影響を受けた全実行経路を覆う差分か確認したか。

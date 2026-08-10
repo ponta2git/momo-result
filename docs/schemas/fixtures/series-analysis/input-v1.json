@@ -1,0 +1,77 @@
+{
+  "schemaVersion": 1,
+  "fixtureId": "series-analysis-boundaries-v1",
+  "description": "Synthetic only; no production identifiers or measured provider data.",
+  "players": ["eu", "ponta", "akane", "otaka"],
+  "generator": {
+    "heldEventCount": 8,
+    "matchesPerHeldEvent": 4,
+    "heldEventId": "event-{eventIndex:02}",
+    "matchId": "match-{eventIndex:02}-{matchIndex:02}",
+    "seasonMasterId": "season-{1 + (eventIndex mod 2)}",
+    "mapMasterId": "map-{1 + (matchIndex mod 2)}",
+    "playedAt": "2026-01-{day:02}T12:{minute:02}:00.123456Z",
+    "rank": "1 + ((eventIndex + matchIndex + playerIndex) mod 4)",
+    "playOrder": "1 + ((matchIndex + playerIndex) mod 4)",
+    "totalAssetsManYen": "1000 + eventIndex*100 + matchIndex*10 + playerIndex*250",
+    "revenueManYen": "100 + eventIndex*20 + matchIndex*5 + playerIndex*40",
+    "incidentCount": "(eventIndex + matchIndex + playerIndex + incidentIndex) mod 3"
+  },
+  "boundaryOverrides": [
+    {
+      "case": "complete_timestamp_tie",
+      "matches": ["match-00-00", "match-00-01"],
+      "playedAt": "2026-01-01T12:00:00.123456Z",
+      "expectedTieBreak": ["heldEventId", "matchNoInEvent", "matchId"]
+    },
+    {
+      "case": "zero_denominator",
+      "matchId": "match-01-00",
+      "memberId": "ponta",
+      "totalAssetsManYen": 0,
+      "revenueManYen": 10,
+      "expectedRevenueAssetRate": null
+    },
+    {
+      "case": "negative_assets",
+      "matchId": "match-02-00",
+      "memberId": "eu",
+      "totalAssetsManYen": -500,
+      "expectedFeature": "negative_assets"
+    }
+  ],
+  "mutationCases": [
+    {
+      "case": "title_move",
+      "matchId": "match-03-00",
+      "beforeGameTitleId": "title-a",
+      "afterGameTitleId": "title-b",
+      "expectedAffectedGameTitleIds": ["title-a", "title-b"]
+    },
+    {
+      "case": "delete_last_match",
+      "gameTitleId": "title-empty-after-delete",
+      "expectedScopes": ["overall"],
+      "expectedMatchCount": 0,
+      "expectedQualityStatus": "no_target"
+    }
+  ],
+  "modelBoundaries": {
+    "matchCount": 32,
+    "heldEventCount": 8,
+    "covers": [
+      "same_values",
+      "sample_threshold",
+      "non_convergence",
+      "deterministic_seed",
+      "maximum_shape"
+    ]
+  },
+  "expected": {
+    "rowCount": 128,
+    "matchCount": 32,
+    "scopeCount": 9,
+    "resourceCount": 290,
+    "overallAggregateChecksum": "sha256:9f911546fcf69cb92b3add18985bc1231469ec4df6e4f5fe476609de8a365f97"
+  }
+}

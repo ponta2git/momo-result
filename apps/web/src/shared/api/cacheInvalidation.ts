@@ -1,24 +1,27 @@
 import type { QueryClient } from "@tanstack/react-query";
 
-import {
-  heldEventKeys,
-  matchKeys,
-  ocrDraftKeys,
-  seriesComparisonKeys,
-} from "@/shared/api/queryKeys";
+import { heldEventKeys, matchKeys, ocrDraftKeys, seriesAnalysisKeys } from "@/shared/api/queryKeys";
 
 async function invalidateMatchCollections(queryClient: QueryClient): Promise<void> {
   await Promise.all([
     queryClient.invalidateQueries({ queryKey: matchKeys.all() }),
     queryClient.invalidateQueries({ queryKey: matchKeys.draft.all() }),
     queryClient.invalidateQueries({ queryKey: ocrDraftKeys.all() }),
-    queryClient.invalidateQueries({ queryKey: seriesComparisonKeys.all() }),
+  ]);
+}
+
+async function invalidateAnalysisState(queryClient: QueryClient): Promise<void> {
+  await Promise.all([
+    queryClient.invalidateQueries({ queryKey: seriesAnalysisKeys.options() }),
+    queryClient.invalidateQueries({ queryKey: seriesAnalysisKeys.statusRoot() }),
+    queryClient.invalidateQueries({ queryKey: seriesAnalysisKeys.adminRoot() }),
   ]);
 }
 
 export async function invalidateAfterMatchConfirmed(queryClient: QueryClient): Promise<void> {
   await Promise.all([
     invalidateMatchCollections(queryClient),
+    invalidateAnalysisState(queryClient),
     queryClient.invalidateQueries({ queryKey: heldEventKeys.all() }),
   ]);
 }
@@ -26,6 +29,7 @@ export async function invalidateAfterMatchConfirmed(queryClient: QueryClient): P
 export async function invalidateAfterMatchDeleted(queryClient: QueryClient): Promise<void> {
   await Promise.all([
     invalidateMatchCollections(queryClient),
+    invalidateAnalysisState(queryClient),
     queryClient.invalidateQueries({ queryKey: heldEventKeys.all() }),
   ]);
 }
@@ -52,6 +56,6 @@ export async function invalidateAfterMatchUpdated(
     queryClient.invalidateQueries({ queryKey: matchKeys.detail(matchId) }),
     queryClient.invalidateQueries({ queryKey: matchKeys.all() }),
     queryClient.invalidateQueries({ queryKey: heldEventKeys.all() }),
-    queryClient.invalidateQueries({ queryKey: seriesComparisonKeys.all() }),
+    invalidateAnalysisState(queryClient),
   ]);
 }

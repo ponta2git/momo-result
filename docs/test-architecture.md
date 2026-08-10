@@ -45,7 +45,7 @@ CI の report mode は、同じテスト集合を通常実行と coverage 実行
 | web | `apps/web/vite.config.ts` | global threshold と重要ファイル別 threshold。`COVERAGE_REPORT_ONLY=1` では閾値を外す。`.tsx` と生成型は集計対象外。 |
 | api | `apps/api/build.sbt` | statement / branch threshold。CI report mode の `apiTestWithCoverageReportOnly` は `coverageFailOnMinimum := false`。PostgreSQL / Redis adapter は coverage率でなくintegration contractで保証。 |
 | ocr-worker | `apps/ocr-worker/pyproject.toml` | branch coverage 有効、`fail_under` あり。CI report command は `--cov-fail-under=0` でartifact生成を優先。 |
-| analysis-worker | 実装時にCargo coverage設定を追加 | pure calculationとjob state machineはbranchを重視する。DB / Redis / process境界はcoverage率でなくintegration contractで保証。 |
+| analysis-worker | fixture / property / state-machine testと実service smoke | 現時点はcoverage率をgateにせず、pure calculationの決定論的oracleと、DB / Redis / Linux process contractで保証する。 |
 
 丸めルール:
 
@@ -131,7 +131,7 @@ coverage report はPRを落とす主目的ではなく、推移確認とレビ�
 | web | `pnpm --filter web test:coverage:report` | `apps/web/coverage/`, `coverage-summary/web/` |
 | API | CI: `sbt apiTestWithCoverageReportOnly`; local standalone: `sbt apiCoverageReportOnly` | `scoverage-report/`, `coverage-report/`, `coverage-summary/api/` |
 | OCR worker | `uv run pytest --cov ... --cov-fail-under=0` | `coverage.xml`, `coverage.json`, `htmlcov/`, `coverage-summary/ocr-worker/` |
-| analysis worker | 実装時にCargo coverage commandを追加 | coverage report、`coverage-summary/analysis-worker/` |
+| analysis worker | 未設定。導入までは通常testと実service smokeをrelease gateにする | なし |
 
 `scripts/ci/write-coverage-summary.py` が raw 値と丸め候補値を正規化し、次を生成する。
 

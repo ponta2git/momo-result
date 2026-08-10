@@ -64,6 +64,9 @@ final class ApiRuntimeArchitectureSpec extends FunSuite:
       )
     )
     assert(runtimeInfrastructureText.contains("healthProbeFromCommands(redis.deadLetterStream"))
+    assert(runtimeInfrastructureText.contains(
+      "RedisSeriesAnalysisQueuePublisher.fromCommands(redis.analysisStream, commands)"
+    ))
     assert(runtimeInfrastructureText.contains(".fromCommands(commands, \"login\""))
     assert(runtimeInfrastructureText.contains("\"auth-callback-state\""))
     assert(runtimeInfrastructureText.contains("RedisOAuthProviderBackoff.fromCommands"))
@@ -72,6 +75,7 @@ final class ApiRuntimeArchitectureSpec extends FunSuite:
     assert(!runtimeInfrastructureText.contains("RedisOcrJobQueuePublisher.resource[F](redis)"))
     assert(!runtimeInfrastructureText.contains("RedisRateLimiter.resource[F](redis"))
     assert(!runtimeInfrastructureText.contains("RedisOAuthProviderBackoff.resource[F](redis"))
+    assert(!runtimeInfrastructureText.contains("SeriesAnalysisQueuePublisher.noop"))
 
   test("API runtime validates dev identities before constructing domain ids"):
     val apiAppText = read(apiAppFile)

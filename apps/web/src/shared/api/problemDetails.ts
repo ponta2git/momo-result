@@ -8,7 +8,11 @@ export type NormalizedApiError = {
   title: string;
   detail: string;
   code?: string;
-  category?: "idempotency_in_progress" | "idempotency_payload_mismatch" | "payload_too_large";
+  category?:
+    | "analysis_client_upgrade_required"
+    | "idempotency_in_progress"
+    | "idempotency_payload_mismatch"
+    | "payload_too_large";
   problem?: ProblemDetails;
 };
 
@@ -64,6 +68,9 @@ export async function normalizeApiErrorResponse(response: Response): Promise<Nor
 function categorizeProblem(
   problem: Pick<ProblemDetails, "code" | "detail" | "status">,
 ): NormalizedApiError["category"] {
+  if (String(problem.code) === "ANALYSIS_CLIENT_UPGRADE_REQUIRED") {
+    return "analysis_client_upgrade_required";
+  }
   if (problem.status === 413 || problem.code === "PAYLOAD_TOO_LARGE") {
     return "payload_too_large";
   }
@@ -79,6 +86,14 @@ function categorizeProblem(
       : "idempotency_in_progress";
   }
   return undefined;
+}
+
+export function isAnalysisClientUpgradeRequired(error: unknown): boolean {
+  return normalizeUnknownApiError(error).category === "analysis_client_upgrade_required";
+}
+
+export function isAnalysisArtifactExpired(error: unknown): boolean {
+  return normalizeUnknownApiError(error).code === "ANALYSIS_ARTIFACT_EXPIRED";
 }
 
 export function normalizeUnknownApiError(error: unknown): NormalizedApiError {

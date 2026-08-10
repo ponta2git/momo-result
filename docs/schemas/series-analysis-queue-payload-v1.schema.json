@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://momo-result.local/schemas/series-analysis-queue-payload-v1.schema.json",
+  "title": "Series analysis queue payload v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "jobId"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "jobId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+    }
+  }
+}

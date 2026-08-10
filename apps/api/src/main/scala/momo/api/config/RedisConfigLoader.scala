@@ -23,8 +23,12 @@ private[config] object RedisConfigLoader:
           deadLetterStream <- ConfigParsers
             .envOrDefault(env, "OCR_REDIS_DEAD_LETTER_STREAM", RedisConfig.DefaultDeadLetterStream)
             .load[F]
+          analysisStream <- ConfigParsers
+            .envOrDefault(env, "ANALYSIS_REDIS_STREAM", RedisConfig.DefaultAnalysisStream)
+            .load[F]
         yield Some(RedisConfig(
           url = safeUrl,
           stream = stream,
           deadLetterStream = deadLetterStream,
+          analysisStream = analysisStream,
         ))

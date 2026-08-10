@@ -15,7 +15,7 @@ final case class ProblemDetails(
 ) derives Codec.AsObject
 
 object ProblemDetails:
-  type ProblemResponse = (StatusCode, ProblemDetails)
+  type ProblemResponse = (StatusCode, Option[String], ProblemDetails)
 
   private val ProblemCodes = List(
     "UNAUTHORIZED",
@@ -29,6 +29,13 @@ object ProblemDetails:
     "IDEMPOTENCY_PAYLOAD_MISMATCH",
     "TOO_MANY_REQUESTS",
     "SERVICE_UNAVAILABLE",
+    "ANALYSIS_ARTIFACT_EXPIRED",
+    "ANALYSIS_SCOPE_NOT_FOUND",
+    "ANALYSIS_SCOPE_NOT_IN_ARTIFACT",
+    "ANALYSIS_READ_BUSY",
+    "ANALYSIS_STATE_UNAVAILABLE",
+    "ANALYSIS_NO_ELIGIBLE_TITLES",
+    "ANALYSIS_CLIENT_UPGRADE_REQUIRED",
     "DEPENDENCY_FAILED",
     "INTERNAL_ERROR",
   )
@@ -36,13 +43,21 @@ object ProblemDetails:
   given Schema[ProblemDetails] = Schema.derived[ProblemDetails]
     .modify(_.code)(_.validate(Validator.enumeration(ProblemCodes, v => Some(v))))
 
-  def from(error: AppError): ProblemResponse = statusOf(error) -> ProblemDetails(
-    `type` = s"https://momo-result.local/problems/${error.code.toLowerCase}",
-    title = error.title,
-    status = statusOf(error).code,
-    detail = publicDetail(error),
-    code = error.code,
+  def from(error: AppError): ProblemResponse = (
+    statusOf(error),
+    retryAfter(error),
+    ProblemDetails(
+      `type` = s"https://momo-result.local/problems/${error.code.toLowerCase}",
+      title = error.title,
+      status = statusOf(error).code,
+      detail = publicDetail(error),
+      code = error.code,
+    ),
   )
+
+  private def retryAfter(error: AppError): Option[String] = error match
+    case busy: AppError.AnalysisReadBusy => Some(busy.retryAfterSeconds.toString)
+    case _ => None
 
   private def publicDetail(error: AppError): String = error match
     case _: AppError.Internal => "Unexpected server error."
@@ -60,5 +75,12 @@ object ProblemDetails:
     case _: AppError.IdempotencyPayloadMismatch => StatusCode.Conflict
     case _: AppError.TooManyRequests => StatusCode.TooManyRequests
     case _: AppError.ServiceUnavailable => StatusCode.ServiceUnavailable
+    case _: AppError.AnalysisArtifactExpired => StatusCode.Gone
+    case _: AppError.AnalysisScopeNotFound => StatusCode.NotFound
+    case _: AppError.AnalysisScopeNotInArtifact => StatusCode.Conflict
+    case _: AppError.AnalysisReadBusy => StatusCode.ServiceUnavailable
+    case _: AppError.AnalysisStateUnavailable => StatusCode.ServiceUnavailable
+    case _: AppError.AnalysisNoEligibleTitles => StatusCode.Conflict
+    case _: AppError.AnalysisClientUpgradeRequired => StatusCode.UpgradeRequired
     case _: AppError.DependencyFailed => StatusCode.ServiceUnavailable
     case _: AppError.Internal => StatusCode.InternalServerError

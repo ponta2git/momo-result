@@ -4,7 +4,7 @@ import { heldEventHandlers } from "@/test/msw/heldEventHandlers";
 import { masterHandlers } from "@/test/msw/masterHandlers";
 import { matchHandlers } from "@/test/msw/matchHandlers";
 import { ocrHandlers } from "@/test/msw/ocrHandlers";
-import { seriesComparisonHandlers } from "@/test/msw/seriesComparisonHandlers";
+import { seriesAnalysisHandlers } from "@/test/msw/seriesAnalysisHandlers";
 
 export { resetMswStores } from "@/test/msw/fixtures";
 
@@ -15,5 +15,5 @@ export const handlers = [
   ...matchHandlers,
   ...exportHandlers,
   ...masterHandlers,
-  ...seriesComparisonHandlers,
+  ...seriesAnalysisHandlers,
 ];

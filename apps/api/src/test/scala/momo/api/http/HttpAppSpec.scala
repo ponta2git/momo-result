@@ -405,50 +405,46 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
     )
   }
 
-  app.test("series comparison endpoints are inside the authenticated read surface") { httpApp =>
+  app.test("legacy and v2 analysis endpoints are inside the authenticated read surface") {
+    httpApp =>
+      val requests = List(
+        uri"/api/analytics/series-comparison/options",
+        uri"/api/analytics/series-comparison/v2/options",
+        uri"/api/analytics/series-comparison/v2/status?gameTitleId=title_momotetsu_2",
+      )
+      requests.foldLeft(IO.unit) { (acc, uri) =>
+        acc.flatMap(_ =>
+          httpApp.run(Request[IO](Method.GET, uri)).flatMap(response =>
+            assertProblemDetailEquals(
+              response,
+              Status.Unauthorized,
+              "UNAUTHORIZED",
+              "Authentication is required.",
+            )
+          )
+        )
+      }
+  }
+
+  app.test("legacy series comparison endpoints are fixed client-upgrade tombstones") { httpApp =>
     val requests = List(
       uri"/api/analytics/series-comparison/options",
-      uri"/api/analytics/series-comparison/drilldown?gameTitleId=gt&metricId=rank.averageHistory&memberId=member_ponta",
+      uri"/api/analytics/series-comparison?gameTitleId=title_momotetsu_2",
+      uri"/api/analytics/series-comparison/review?gameTitleId=title_momotetsu_2",
+      uri"/api/analytics/series-comparison/drilldown?gameTitleId=title_momotetsu_2",
     )
-    requests.foldLeft(IO.unit) { (acc, uri) =>
-      acc.flatMap(_ =>
-        httpApp.run(Request[IO](Method.GET, uri)).flatMap(response =>
+    requests.foldLeft(IO.unit) { (result, uri) =>
+      result.flatMap(_ =>
+        httpApp.run(readGet(uri)).flatMap(response =>
           assertProblemDetailEquals(
             response,
-            Status.Unauthorized,
-            "UNAUTHORIZED",
-            "Authentication is required.",
+            Status.UpgradeRequired,
+            "ANALYSIS_CLIENT_UPGRADE_REQUIRED",
+            "Reload this page to use the current analysis API.",
           )
         )
       )
     }
-  }
-
-  app.test("GET /api/analytics/series-comparison/options is wired for authenticated users") {
-    httpApp =>
-      val request = readGet(uri"/api/analytics/series-comparison/options")
-      httpApp.run(request).flatMap { response =>
-        response.as[Json].map { body =>
-          assertEquals(response.status, Status.Ok)
-          assertEquals(jsonField[Int](body, "schemaVersion"), 1)
-          assert(body.hcursor.downField("series").focus.exists(_.isArray), body.noSpaces)
-        }
-      }
-  }
-
-  app.test("GET /api/analytics/series-comparison validates scope query at the HTTP boundary") {
-    httpApp =>
-      val request = readGet(
-        uri"/api/analytics/series-comparison?gameTitleId=title_momotetsu_2&scopeKind=season"
-      )
-      httpApp.run(request).flatMap(response =>
-        assertProblemDetailEquals(
-          response,
-          Status.UnprocessableContent,
-          "VALIDATION_FAILED",
-          "scopeId is required for season scope.",
-        )
-      )
   }
 
   app.test("security headers baseline is present on responses (non-prod)") { httpApp =>

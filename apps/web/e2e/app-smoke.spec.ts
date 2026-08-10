@@ -1,23 +1,18 @@
 import { randomUUID } from "node:crypto";
 
 import { expect, test } from "@playwright/test";
-import type {
-  APIRequestContext,
-  APIResponse,
-  Locator,
-  Page,
-  Request,
-  Route,
-} from "@playwright/test";
+import type { APIRequestContext, APIResponse, Page, Request, Route } from "@playwright/test";
 
 import { withReturnTo } from "../src/shared/navigation/returnTo";
 import {
-  makeSeriesComparisonRankAnalysisResponse,
-  makeSeriesComparisonRankSignalsDrilldownResponse,
-  makeSeriesComparisonResponse,
-  makeSeriesComparisonReviewResponse,
-  makeSeriesComparisonUnexpectedWinsDrilldownResponse,
-} from "../src/test/msw/seriesComparisonFixtures";
+  analysisArtifact,
+  makeSeriesAnalysisAggregate,
+  makeSeriesAnalysisDrilldown,
+  makeSeriesAnalysisMatchContext,
+  makeSeriesAnalysisOptions,
+  makeSeriesAnalysisReview,
+  makeSeriesAnalysisStatus,
+} from "../src/test/msw/seriesAnalysisFixtures";
 
 const devAccountId = "account_ponta";
 const devUserStorageKey = "momoresult.devUser";
@@ -265,7 +260,7 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
     await expect(page.getByRole("heading", { name: /第\d+試合の結果/u })).toBeVisible();
     await expect(page.getByText(gameTitleName, { exact: true })).toBeVisible();
     await page.setViewportSize({ height: 900, width: 1440 });
-    await expect(page.getByText("同条件内 1戦目", { exact: true })).toBeVisible();
+    await expect(page.getByText("比較データを読み込み中", { exact: true }).first()).toBeVisible();
     const resultLedger = page.getByRole("list", { name: "試合の順位と成績" });
     await expect(resultLedger).toBeVisible();
     const resultLedgerCard = resultLedger.locator("xpath=..");
@@ -297,13 +292,124 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
     await expect(page).toHaveURL(matchFromHeldEventHref);
   });
 
-  await test.step("inspect series comparison drilldowns for the confirmed match", async () => {
+  await test.step("inspect saved analysis, refresh states, and details", async () => {
     const desktopViewport = page.viewportSize();
-    await page.setViewportSize({ height: 844, width: 390 });
-    expect(
-      await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth),
-    ).toBe(false);
+    const artifact = {
+      ...analysisArtifact,
+      artifactId: `artifact-e2e-${masterIdSuffix}`,
+      gameTitleId,
+      inputRevision: "1",
+    };
+    const analysisScope = {
+      displayName: "E2Eシーズン / E2Eマップ",
+      kind: "season_map" as const,
+      mapMasterId,
+      matchCount: 1,
+      seasonMasterId,
+    };
+    const optionsFixture = makeSeriesAnalysisOptions();
+    optionsFixture.defaultGameTitleId = gameTitleId;
+    optionsFixture.titles = [
+      {
+        confirmedMatchCount: 1,
+        displayName: gameTitleName,
+        gameTitleId,
+        maps: [{ displayName: "E2Eマップ", mapMasterId }],
+        seasonMapPairs: [{ mapMasterId, seasonMasterId }],
+        seasons: [{ displayName: "E2Eシーズン", seasonMasterId }],
+      },
+    ];
+    const aggregateFixture = makeSeriesAnalysisAggregate(artifact);
+    aggregateFixture.scope = analysisScope;
+    const recentMatch = aggregateFixture.matchDigest.recent[0];
+    if (!recentMatch) throw new Error("analysis aggregate fixture requires a recent match");
+    Object.assign(recentMatch, {
+      itemId: `match:${matchId}`,
+      matchId,
+      matchIndex: 1,
+      matchNoInEvent: 1,
+    });
+    const reviewFixture = makeSeriesAnalysisReview();
+    reviewFixture.artifact = artifact;
+    reviewFixture.scope = analysisScope;
+    const matchContextFixture = makeSeriesAnalysisMatchContext();
+    matchContextFixture.artifact = artifact;
+    matchContextFixture.matchId = matchId;
+    matchContextFixture.scope = analysisScope;
+    if (matchContextFixture.match) {
+      matchContextFixture.match.matchIndex = 1;
+      matchContextFixture.match.focusedItemIds = [`match:${matchId}`];
+    }
 
+    let statusPhase: "failed" | "running" = "running";
+    const statusPattern = /\/api\/analytics\/series-comparison\/v2\/status(?:\?.*)?$/u;
+    await page.route(/\/api\/analytics\/series-comparison\/v2\/options(?:\?.*)?$/u, async (route) =>
+      route.fulfill({ json: optionsFixture }),
+    );
+    await page.route(statusPattern, async (route) => {
+      const calculation =
+        statusPhase === "running"
+          ? {
+              finishedAt: null,
+              requestedAt: "2026-08-09T01:05:00.000Z",
+              startedAt: "2026-08-09T01:05:01.000Z",
+              status: "running" as const,
+              trigger: "match_mutation" as const,
+            }
+          : {
+              finishedAt: "2026-08-09T01:06:00.000Z",
+              requestedAt: "2026-08-09T01:05:00.000Z",
+              startedAt: "2026-08-09T01:05:01.000Z",
+              status: "failed" as const,
+              trigger: "match_mutation" as const,
+            };
+      await route.fulfill({
+        json: makeSeriesAnalysisStatus({
+          artifactFreshness: "stale",
+          calculation,
+          currentArtifact: artifact,
+          desired: {
+            algorithmVersion: artifact.algorithmVersion,
+            artifactSchemaVersion: artifact.artifactSchemaVersion,
+            inputRevision: "2",
+          },
+          gameTitleId,
+        }),
+      });
+    });
+    await page.route(
+      /\/api\/analytics\/series-comparison\/v2\/aggregate(?:\?.*)?$/u,
+      async (route) => route.fulfill({ json: aggregateFixture }),
+    );
+    await page.route(/\/api\/analytics\/series-comparison\/v2\/review(?:\?.*)?$/u, async (route) =>
+      route.fulfill({ json: reviewFixture }),
+    );
+    await page.route(
+      /\/api\/analytics\/series-comparison\/v2\/drilldown(?:\?.*)?$/u,
+      async (route) => {
+        const url = new URL(route.request().url());
+        const fixture = makeSeriesAnalysisDrilldown(
+          url.searchParams.get("metricId") ?? "rank.averageHistory",
+        );
+        fixture.artifact = artifact;
+        fixture.scope = analysisScope;
+        if (fixture.payload.kind === "rank_average_history") {
+          for (const row of fixture.payload.matchRows) {
+            row.itemId = `rank-history:${matchId}`;
+            row.matchId = matchId;
+            row.matchIndex = 1;
+            row.matchNoInEvent = 1;
+          }
+        }
+        await route.fulfill({ json: fixture });
+      },
+    );
+    await page.route(
+      /\/api\/analytics\/series-comparison\/v2\/match-context(?:\?.*)?$/u,
+      async (route) => route.fulfill({ json: matchContextFixture }),
+    );
+
+    await page.setViewportSize({ height: 844, width: 390 });
     const comparisonLink = page.getByRole("link", { name: "前後の戦績を見る" });
     const comparisonHref = withReturnTo(
       `/analytics/series?gameTitleId=${encodeURIComponent(
@@ -317,424 +423,89 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
     await comparisonLink.click();
 
     await expect(page.getByRole("heading", { exact: true, name: "戦績比較" })).toBeVisible();
-    await expect(page).toHaveURL(/[?&]focusMatchId=[^&]+/u);
-    const focusedMatch = page.getByRole("region", { name: "選択中の試合" });
-    await expect(focusedMatch.getByRole("heading", { name: /1戦目/u })).toBeVisible();
-    await expect(
-      focusedMatch.getByRole("list", { name: "選択中の試合の順位と成績" }),
-    ).toBeVisible();
-    await expect(focusedMatch.getByRole("link", { name: "この試合の結果" })).toHaveAttribute(
-      "href",
-      withReturnTo(`/matches/${matchId}`, currentPagePath(page)),
-    );
-    await expect(page.getByRole("tab", { name: "分析する" })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
-    await expect(page.getByRole("tab", { name: "推移" })).toHaveAttribute("aria-selected", "true");
-    await expect(page.getByRole("columnheader", { name: /この試合/u })).toBeVisible();
-    expect(await page.locator('[data-focused-metric="true"]').count()).toBeGreaterThan(0);
-    const analysisTabsVerticalGeometry = await page
-      .getByRole("tablist", { name: "分析の切り口" })
-      .evaluate((element) => ({
-        clientHeight: element.clientHeight,
-        scrollHeight: element.scrollHeight,
-      }));
-    expect(analysisTabsVerticalGeometry.scrollHeight).toBeLessThanOrEqual(
-      analysisTabsVerticalGeometry.clientHeight + 1,
-    );
+    await expect(page.getByText("新しい戦績データを計算中です")).toBeVisible();
+    await expect(page.getByText(/更新のデータを表示します/u)).toBeVisible();
+    const matchDialog = page.getByRole("dialog", { name: "第1戦の分析" });
+    await expect(matchDialog.getByText("この試合の注目点")).toBeVisible();
+    await expect(matchDialog.getByText("ぽんた")).toBeVisible();
+    await matchDialog.getByRole("button", { name: "ダイアログを閉じる" }).click();
+    await expect(page.getByRole("heading", { name: "期間内の荒れ" })).toBeVisible();
     await expectNoHorizontalPageOverflow(page);
 
-    await page.getByRole("tab", { name: "勝因候補" }).click();
-    await expect(
-      page.getByRole("heading", { exact: true, name: "物件収益トップを勝ちにできたか" }),
-    ).toBeVisible();
-    expect(await page.locator('[data-focused-metric="true"]').count()).toBeGreaterThan(0);
-
     await page.getByRole("tab", { name: "今の差" }).click();
-    await expect(page.getByRole("heading", { exact: true, name: "順位の地力" })).toBeVisible();
-    await expect(page.locator('[data-focused-metric="true"]')).toHaveCount(4);
-
-    await page.getByRole("tab", { name: "推移" }).click();
-    if (desktopViewport) {
-      await page.setViewportSize(desktopViewport);
-    }
-
-    await test.step("verify review playbook geometry and dialogs", async () => {
-      const reviewFixture = makeSeriesComparisonReviewResponse();
-      const firstCards = reviewFixture.playbookByPlayer ?? [];
-      const secondPlayerCard = firstCards[1]?.cards?.[0];
-      const thirdPlayerCard = firstCards[2]?.cards?.[0];
-      if (!secondPlayerCard || !thirdPlayerCard) {
-        throw new Error("Review fixture must include primary cards for geometry verification.");
-      }
-      secondPlayerCard.plainReason +=
-        " 次戦では、目的地への到着だけでなく、事故後に入賞圏を維持できたかも同時に振り返ります。";
-      thirdPlayerCard.triggerCondition +=
-        " さらに終盤へ入る前に、物件収益順位が下がったままになっていないかを確認します。";
-      await page.route("**/api/analytics/series-comparison/review**", async (route) => {
-        await route.fulfill({ json: reviewFixture });
-      });
-
-      await page.setViewportSize({ height: 900, width: 1440 });
-      await page.getByRole("tab", { name: "次戦に備える" }).click();
-      const playbook = page.getByRole("region", { name: "次戦の行動仮説" });
-      await expect(playbook).toBeVisible();
-
-      const commonTopicToggle = playbook.getByRole("button", { name: "卓全体の共通論点" });
-      await expect(commonTopicToggle).toContainText("収益先行後の勝ち切り");
-      await expect(commonTopicToggle).not.toContainText("重複候補");
-      await expect(commonTopicToggle).not.toContainText("まとめて");
-
-      const primaryCards = playbook.locator("article");
-      await expect(primaryCards).toHaveCount(4);
-      const commonTopicBox = await commonTopicToggle.boundingBox();
-      const firstCardBox = await primaryCards.first().boundingBox();
-      expect(commonTopicBox).not.toBeNull();
-      expect(firstCardBox).not.toBeNull();
-      if (!commonTopicBox || !firstCardBox) {
-        throw new Error("Review playbook geometry must be measurable.");
-      }
-      expect(commonTopicBox.y).toBeLessThan(firstCardBox.y);
-
-      const primaryHeights = await primaryCards.evaluateAll((cards) =>
-        cards.map((card) => card.getBoundingClientRect().height),
-      );
-      expect(Math.max(...primaryHeights) - Math.min(...primaryHeights)).toBeLessThan(1);
-
-      await playbook.getByRole("button", { name: "分類と信頼度の読み方" }).click();
-      const guideDialog = page.getByRole("dialog", { name: "分類と信頼度の読み方" });
-      await expect(guideDialog.getByRole("heading", { exact: true, name: "分類" })).toBeVisible();
-      await expect(guideDialog.getByRole("heading", { exact: true, name: "信頼度" })).toBeVisible();
-      await guideDialog.getByRole("button", { name: "ダイアログを閉じる" }).click();
-      await expect(guideDialog).toBeHidden();
-
-      await primaryCards.first().getByRole("button", { name: "根拠・注意・試合後の確認" }).click();
-      const evidenceDialog = page.getByRole("dialog", { name: "行動仮説の根拠と確認" });
-      await expect(evidenceDialog.getByText("データ上の理由")).toBeVisible();
-      await expect(evidenceDialog.getByText("避けること")).toBeVisible();
-      await expect(evidenceDialog.getByText("試合後の検証")).toBeVisible();
-      await evidenceDialog.getByRole("button", { name: "ダイアログを閉じる" }).click();
-      await expect(evidenceDialog).toBeHidden();
-
-      const playbookXBefore = (await playbook.boundingBox())?.x;
-      const documentWidthBefore = await page.evaluate(() => document.documentElement.clientWidth);
-      await playbook.getByRole("button", { name: "ほかの仮説 1件" }).first().click();
-      await expect(primaryCards).toHaveCount(5);
-      const playbookXAfter = (await playbook.boundingBox())?.x;
-      const documentWidthAfter = await page.evaluate(() => document.documentElement.clientWidth);
-      expect(playbookXBefore).toBe(playbookXAfter);
-      expect(documentWidthBefore).toBe(documentWidthAfter);
-      expect(
-        await page.evaluate(
-          () => window.getComputedStyle(document.documentElement).scrollbarGutter,
-        ),
-      ).toBe("stable");
-    });
-
-    await page.getByRole("tab", { name: "分析する" }).click();
-    await page.getByRole("tab", { name: "今の差" }).click();
-    await expect(page.getByRole("heading", { exact: true, name: "順位の地力" })).toBeVisible();
-    const rankDrilldownResponse = page.waitForResponse((response) =>
-      isSeriesDrilldownResponse(response, "rank.averageHistory"),
-    );
-    await page.getByRole("button", { name: "履歴" }).click();
-    expect((await rankDrilldownResponse).ok()).toBe(true);
-    const rankDialog = page.getByRole("dialog", { name: /順位の地力:/u });
-    await expect(rankDialog.getByLabel("開催ごとの順位履歴")).toBeVisible();
-    await rankDialog.getByRole("button", { name: "試合ごと" }).click();
-    await expect(rankDialog.getByLabel("試合ごとの順位履歴")).toBeVisible();
-    await expect(rankDialog.getByRole("link", { name: "1戦目の試合結果を見る" })).toHaveAttribute(
-      "href",
-      withReturnTo(`/matches/${matchId}`, currentPagePath(page)),
-    );
+    await expect(page.getByRole("heading", { name: "順位と基礎比較" })).toBeVisible();
+    await page.getByRole("button", { name: "推移" }).first().click();
+    const rankDialog = page.getByRole("dialog", { name: "平均順位の推移" });
+    await expect(rankDialog.getByRole("cell", { name: "第1戦" })).toBeVisible();
     await rankDialog.getByRole("button", { name: "ダイアログを閉じる" }).click();
-    await expect(rankDialog).toBeHidden();
 
-    await test.step("verify advanced rank insights and evidence dialogs", async () => {
-      const comparisonRoutePattern = /\/api\/analytics\/series-comparison(?:\?.*)?$/u;
-      const drilldownRoutePattern = /\/api\/analytics\/series-comparison\/drilldown(?:\?.*)?$/u;
-      await page.route(comparisonRoutePattern, async (route) => {
-        await route.fulfill({ json: makeSeriesComparisonRankAnalysisResponse() });
-      });
-      await page.route(drilldownRoutePattern, async (route) => {
-        const url = new URL(route.request().url());
-        const memberId = url.searchParams.get("memberId") ?? "member_eu";
-        const metricId = url.searchParams.get("metricId");
-        if (metricId === "rankAnalysis.rankSignals") {
-          await route.fulfill({ json: makeSeriesComparisonRankSignalsDrilldownResponse(memberId) });
-          return;
-        }
-        if (metricId === "rankAnalysis.unexpectedWins") {
-          await route.fulfill({
-            json: makeSeriesComparisonUnexpectedWinsDrilldownResponse(memberId),
-          });
-          return;
-        }
-        await route.fallback();
-      });
+    await page.setViewportSize({ height: 900, width: 1440 });
+    await page.getByRole("tab", { name: "次戦に備える" }).click();
+    await expect(page.getByRole("heading", { exact: true, name: "次戦に備える" })).toBeVisible();
+    await page.getByRole("button", { name: "根拠・注意・試合後の確認" }).click();
+    const evidenceDialog = page.getByRole("dialog", { name: "根拠・注意・試合後の確認" });
+    await expect(evidenceDialog.getByText("データ上の理由")).toBeVisible();
+    await expect(evidenceDialog.getByText(/採用優先度/u)).toBeVisible();
+    await evidenceDialog.getByRole("button", { name: "ダイアログを閉じる" }).click();
 
-      const comparisonResponse = page.waitForResponse((response) => {
-        const url = new URL(response.url());
-        return url.pathname === "/api/analytics/series-comparison";
-      });
-      await page.getByRole("button", { name: "更新" }).click();
-      expect((await comparisonResponse).ok()).toBe(true);
-
-      const crownSection = page.locator("#metric-crown-certainty");
-      await expect(crownSection.getByRole("heading", { name: "王座の確からしさ" })).toBeVisible();
-      await expect(crownSection.getByRole("img", { name: "王座支持の構成比" })).toBeVisible();
-      await expect(crownSection.getByText("128/128回を比較")).toBeVisible();
-
-      await page.getByRole("tab", { name: "勝因候補" }).click();
-      const rankSignalsSection = page.locator("#metric-rank-signals");
-      await expect(
-        rankSignalsSection.getByRole("heading", { name: "順位を読む手掛かり" }),
-      ).toBeVisible();
-      await expect(rankSignalsSection.getByText("物件収益", { exact: true }).first()).toBeVisible();
-      const rankSignalsResponse = page.waitForResponse((response) =>
-        isSeriesDrilldownResponse(response, "rankAnalysis.rankSignals"),
-      );
-      await rankSignalsSection.getByRole("button", { name: "詳細" }).click();
-      expect((await rankSignalsResponse).ok()).toBe(true);
-      const rankSignalsDialog = page.getByRole("dialog", { name: /順位を読む手掛かり:/u });
-      await expect(rankSignalsDialog.getByText("20開催・40戦")).toBeVisible();
-      await expect(
-        rankSignalsDialog.getByRole("region", { name: "開催を5組に分けた別開催テスト" }),
-      ).toContainText("A〜Eは評価の段階ではなく、重ならない開催グループです");
-      await expect(rankSignalsDialog.getByText("5組中3組以上が支持")).toBeVisible();
-      await expect(
-        rankSignalsDialog.getByRole("meter", { name: "物件収益の候補内の比重 80%" }),
-      ).toBeVisible();
-      await expect(
-        rankSignalsDialog.getByRole("group", {
-          name: "マイナス駅の別開催テスト、5組中4組が支持",
-        }),
-      ).toBeVisible();
-      await rankSignalsDialog.getByText("5組の数値を見る").first().click();
-      const revenueSignalTable = rankSignalsDialog.getByRole("table", {
-        name: "物件収益の別開催テストAからEの数値",
-      });
-      await expect(
-        revenueSignalTable.getByRole("columnheader", { name: "別開催テスト" }),
-      ).toBeVisible();
-      await expect(
-        revenueSignalTable.getByRole("columnheader", { name: "確認に使った開催" }),
-      ).toBeVisible();
-      await expect(
-        revenueSignalTable.getByRole("columnheader", { name: "順位の2人組" }),
-      ).toBeVisible();
-      await expect(revenueSignalTable.getByRole("cell", { name: "開催A" })).toBeVisible();
-      await expect(
-        revenueSignalTable.getByRole("cell").filter({ hasText: /支持\s*\+0\.061/u }),
-      ).toBeVisible();
-
-      await page.setViewportSize({ height: 844, width: 390 });
-      await expect(
-        rankSignalsDialog.getByRole("region", { name: "開催を5組に分けた別開催テスト" }),
-      ).toBeVisible();
-      const mobileRankSignalsLayout = await rankSignalsDialog.evaluate((dialog) => {
-        const bounds = dialog.getBoundingClientRect();
-        return {
-          bodyScrollWidth: document.documentElement.scrollWidth,
-          dialogLeft: bounds.left,
-          dialogRight: bounds.right,
-          viewportWidth: window.innerWidth,
-        };
-      });
-      expect(mobileRankSignalsLayout.dialogLeft).toBeGreaterThanOrEqual(0);
-      expect(mobileRankSignalsLayout.dialogRight).toBeLessThanOrEqual(
-        mobileRankSignalsLayout.viewportWidth,
-      );
-      expect(mobileRankSignalsLayout.bodyScrollWidth).toBeLessThanOrEqual(
-        mobileRankSignalsLayout.viewportWidth,
-      );
-      await page.setViewportSize({ height: 900, width: 1440 });
-      await rankSignalsDialog.getByRole("button", { name: "ダイアログを閉じる" }).click();
-      await expect(rankSignalsDialog).toBeHidden();
-
-      await page.getByRole("tab", { name: "推移" }).click();
-      const unexpectedWinsSection = page.locator("#metric-unexpected-wins");
-      await expect(
-        unexpectedWinsSection.getByRole("heading", { name: "記録外の一撃" }),
-      ).toBeVisible();
-      await expect(unexpectedWinsSection.getByText("推定3.1位 → 実際1位")).toBeVisible();
-      const unexpectedWinsResponse = page.waitForResponse((response) =>
-        isSeriesDrilldownResponse(response, "rankAnalysis.unexpectedWins"),
-      );
-      await unexpectedWinsSection.getByRole("button", { name: "詳細" }).click();
-      expect((await unexpectedWinsResponse).ok()).toBe(true);
-      const unexpectedWinsDialog = page.getByRole("dialog", { name: /記録外の一撃:/u });
-      await expect(
-        unexpectedWinsDialog.getByRole("list", { name: "記録外の一撃の対戦履歴" }),
-      ).toBeVisible();
-      const unexpectedWinsDetails = unexpectedWinsDialog.getByRole("region", {
-        name: "記録外の一撃の詳細",
-      });
-      const unexpectedWinsLayout = await unexpectedWinsDetails.evaluate((details) => {
-        const history = details.querySelector("ol");
-        return {
-          detailsAlignContent: window.getComputedStyle(details).alignContent,
-          historyAlignContent: history ? window.getComputedStyle(history).alignContent : null,
-        };
-      });
-      expect(unexpectedWinsLayout).toEqual({
-        detailsAlignContent: "flex-start",
-        historyAlignContent: "flex-start",
-      });
-      const unexpectedWinLinks = unexpectedWinsDialog.getByRole("link", {
-        name: "この試合の結果",
-      });
-      const unexpectedWinsReturnTo = currentPagePath(page);
-      await expect(unexpectedWinLinks).toHaveCount(2);
-      await expect(unexpectedWinLinks.nth(0)).toHaveAttribute(
-        "href",
-        withReturnTo("/matches/match-8", unexpectedWinsReturnTo),
-      );
-      await expect(unexpectedWinLinks.nth(1)).toHaveAttribute(
-        "href",
-        withReturnTo("/matches/match-12", unexpectedWinsReturnTo),
-      );
-      await unexpectedWinsDialog.getByRole("button", { name: "ダイアログを閉じる" }).click();
-      await expect(unexpectedWinsDialog).toBeHidden();
-      await expectNoHorizontalPageOverflow(page);
-
-      await page.unroute(comparisonRoutePattern);
-      await page.unroute(drilldownRoutePattern);
-    });
-
-    await test.step("verify asset chart spacing and label bounds", async () => {
-      const comparisonFixture = makeSeriesComparisonResponse();
-      const comparisonRoutePattern = /\/api\/analytics\/series-comparison(?:\?.*)?$/u;
-      await page.route(comparisonRoutePattern, async (route) => {
-        await route.fulfill({ json: comparisonFixture });
-      });
-
-      const comparisonResponse = page.waitForResponse((response) => {
-        const url = new URL(response.url());
-        return url.pathname === "/api/analytics/series-comparison";
-      });
-      await page.getByRole("button", { name: "更新" }).click();
-      expect((await comparisonResponse).ok()).toBe(true);
-      await page.getByRole("tab", { name: "勝因候補" }).click();
-
-      const assetSection = page.locator("#metric-money");
-      await expect(assetSection.getByRole("heading", { name: "総資産と勝ち筋" })).toBeVisible();
-      await expect(assetSection.getByText("桃鉄型（物件重視）", { exact: true })).toBeVisible();
-      await expect(assetSection.getByText("遊戯王型（カード重視）", { exact: true })).toBeVisible();
-
-      const histogramCharts = assetSection.getByRole("img", { name: /のヒストグラム$/u });
-      await expect(histogramCharts).toHaveCount(8);
-      for (let index = 0; index < (await histogramCharts.count()); index += 1) {
-        expect(await svgTextOverflow(histogramCharts.nth(index))).toEqual([]);
-      }
-
-      const profileChart = assetSection.getByRole("img", {
-        name: "桃鉄型・遊戯王型と順位スコアの4象限",
-      });
-      const profileWrapper = profileChart.locator("..");
-      const profileBox = await profileChart.boundingBox();
-      const profileWrapperBox = await profileWrapper.boundingBox();
-      if (!profileBox || !profileWrapperBox) {
-        throw new Error("Strategy profile chart geometry must be measurable.");
-      }
-      expect(
-        Math.abs(
-          profileBox.x + profileBox.width / 2 - (profileWrapperBox.x + profileWrapperBox.width / 2),
-        ),
-      ).toBeLessThan(1);
-      expect(await svgTextOverflow(profileChart)).toEqual([]);
-      expect(
-        await svgTextOverflow(
-          assetSection.getByRole("img", {
-            name: "物件収益比率と総資産の散布図",
-          }),
-        ),
-      ).toEqual([]);
-
-      const firstAssetDisclosure = assetSection
-        .getByRole("button", { exact: true, name: "総資産レンジと差" })
-        .first()
-        .locator("..");
-      const firstPlayerCard = firstAssetDisclosure.locator("xpath=../../../..");
-      const playerGrid = firstPlayerCard.locator("xpath=../..");
-      const firstHistogramCard = histogramCharts.first().locator("..");
-      const disclosureBox = await firstAssetDisclosure.boundingBox();
-      const playerCardBox = await firstPlayerCard.boundingBox();
-      const playerGridBox = await playerGrid.boundingBox();
-      const histogramCardBox = await firstHistogramCard.boundingBox();
-      if (!disclosureBox || !playerCardBox || !playerGridBox || !histogramCardBox) {
-        throw new Error("Asset section spacing must be measurable.");
-      }
-      expect(
-        Math.abs(
-          playerCardBox.y + playerCardBox.height - (disclosureBox.y + disclosureBox.height) - 13,
-        ),
-      ).toBeLessThan(1);
-      expect(
-        Math.abs(histogramCardBox.y - (playerGridBox.y + playerGridBox.height) - 16),
-      ).toBeLessThan(1);
-
-      await page.unroute(comparisonRoutePattern);
-
-      const restoredComparisonResponse = page.waitForResponse((response) => {
-        const url = new URL(response.url());
-        return url.pathname === "/api/analytics/series-comparison";
-      });
-      await page.getByRole("button", { name: "更新" }).click();
-      expect((await restoredComparisonResponse).ok()).toBe(true);
-    });
-
-    await page.setViewportSize({ height: 812, width: 375 });
-    await page.getByRole("tab", { name: "条件別" }).click();
-    await expect(page.getByRole("heading", { exact: true, name: "番手別成績" })).toBeVisible();
-    const playOrderDrilldownResponse = page.waitForResponse((response) =>
-      isSeriesDrilldownResponse(response, "playOrder.rankHistory"),
+    statusPhase = "failed";
+    const failedStatusResponse = page.waitForResponse((response) =>
+      new URL(response.url()).pathname.endsWith("/v2/status"),
     );
-    await page.getByRole("button", { name: "履歴" }).click();
-    expect((await playOrderDrilldownResponse).ok()).toBe(true);
-    const playOrderDialog = page.getByRole("dialog", { name: /番手別成績:/u });
-    await expect(
-      playOrderDialog.getByRole("img", { name: "番手別累積平均順位グラフ" }),
-    ).toBeVisible();
-    const playOrderChart = playOrderDialog.getByRole("img", {
-      name: "番手別累積平均順位グラフ",
+    await page.getByRole("button", { name: "更新" }).click();
+    expect((await failedStatusResponse).ok()).toBe(true);
+    await expect(page.getByText("分析データを再計算できませんでした")).toBeVisible();
+    await expect(page.getByText(/更新のデータを表示しています/u)).toBeVisible();
+
+    if (desktopViewport) await page.setViewportSize(desktopViewport);
+  });
+
+  await test.step("run analysis administration and enforce admin access", async () => {
+    await page.goto("/admin/analysis");
+    await expect(page.getByRole("heading", { exact: true, name: "戦績分析" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "全体の実行状況" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "直近3件" })).toBeVisible();
+
+    const titleSelect = page.getByRole("combobox", { name: "対象作品" });
+    await titleSelect.selectOption(gameTitleId);
+    await expect(titleSelect).toHaveValue(gameTitleId);
+
+    const titleResponse = page.waitForResponse(
+      (response) =>
+        response.url().includes("/api/admin/series-analysis/recalculations") &&
+        !response.url().endsWith("/all") &&
+        response.request().method() === "POST",
+    );
+    await page.getByRole("button", { name: "この作品を再計算" }).click();
+    const acceptedTitleResponse = await titleResponse;
+    expect(acceptedTitleResponse.status()).toBe(202);
+    expect(acceptedTitleResponse.request().postDataJSON()).toEqual({ gameTitleId });
+
+    await page.getByRole("button", { name: "全作品を再計算" }).click();
+    const allDialog = page.getByRole("alertdialog", {
+      name: "全作品の再計算を予約しますか？",
     });
-    const playOrderTrendTable = playOrderDialog.getByLabel("番手別平均順位推移の実データ");
-    await expect(playOrderTrendTable).toBeVisible();
-    const mobileChartPanelState = await playOrderChart.evaluate((chart) => {
-      const panel = chart.parentElement;
-      if (!panel) {
-        return null;
-      }
-      const chartBounds = chart.getBoundingClientRect();
-      const panelBounds = panel.getBoundingClientRect();
-      return {
-        bottomGap: panelBounds.bottom - chartBounds.bottom,
-        overflowY: window.getComputedStyle(panel).overflowY,
-      };
+    await expect(allDialog).toContainText(/作品を対象として予約します/u);
+    const allResponse = page.waitForResponse(
+      (response) =>
+        response.url().endsWith("/api/admin/series-analysis/recalculations/all") &&
+        response.request().method() === "POST",
+    );
+    await allDialog.getByRole("button", { name: "全作品を再計算" }).click();
+    const acceptedAllResponse = await allResponse;
+    expect(acceptedAllResponse.status()).toBe(202);
+    expect(acceptedAllResponse.request().postDataJSON()).toEqual({
+      confirmation: "all_titles",
     });
-    expect(mobileChartPanelState?.overflowY).toBe("hidden");
-    expect(mobileChartPanelState?.bottomGap).toBeGreaterThanOrEqual(0);
-    const mobileScrollRegion = playOrderDialog.getByRole("region", {
-      name: "番手別履歴の内容",
-    });
-    const mobileScrollState = await mobileScrollRegion.evaluate((region) => {
-      region.scrollTop = region.scrollHeight;
-      return {
-        clientHeight: region.clientHeight,
-        scrollHeight: region.scrollHeight,
-        scrollTop: region.scrollTop,
-      };
-    });
-    expect(mobileScrollState.scrollHeight).toBeGreaterThan(mobileScrollState.clientHeight);
-    expect(mobileScrollState.scrollTop).toBeGreaterThan(0);
-    await expect(playOrderDialog.getByRole("button", { name: "番手別集計" })).toBeInViewport();
-    await expect(playOrderTrendTable).toBeInViewport();
-    await playOrderDialog.getByRole("button", { name: "番手別集計" }).click();
-    await expect(playOrderDialog.getByLabel("番手ごとの成績履歴")).toBeVisible();
-    await playOrderDialog.getByRole("button", { name: "ダイアログを閉じる" }).click();
-    await expect(playOrderDialog).toBeHidden();
+
+    await page.setViewportSize({ height: 844, width: 390 });
+    await expectNoHorizontalPageOverflow(page);
+
+    await page.route("**/api/**", continueWithE2eNonAdminAuth);
+    await page.goto("/admin/analysis");
+    await expect(page.getByText("管理者権限が必要です")).toBeVisible();
+    await expect(page.getByRole("button", { name: "この作品を再計算" })).toHaveCount(0);
+    await page.unroute("**/api/**", continueWithE2eNonAdminAuth);
     await page.setViewportSize({ height: 900, width: 1440 });
   });
 
@@ -995,10 +766,17 @@ async function continueWithE2eAuth(route: Route): Promise<void> {
   await route.continue({ headers: e2eAuthHeaders(route.request()) });
 }
 
-function e2eAuthHeaders(request: Request): Record<string, string> {
+async function continueWithE2eNonAdminAuth(route: Route): Promise<void> {
+  await route.continue({ headers: e2eAuthHeaders(route.request(), "account_eu") });
+}
+
+function e2eAuthHeaders(
+  request: Request,
+  accountId: string = devAccountId,
+): Record<string, string> {
   const headers = {
     ...request.headers(),
-    "X-Momo-Account-Id": devAccountId,
+    "X-Momo-Account-Id": accountId,
   };
   if (["DELETE", "PATCH", "POST", "PUT"].includes(request.method())) {
     headers["X-CSRF-Token"] = "dev";
@@ -1018,36 +796,6 @@ function expectGeneratedId(value: string | undefined, label: string): string {
 function isMatchListResponse(response: APIResponse): boolean {
   const url = new URL(response.url());
   return url.pathname === "/api/matches" && response.request().method() === "GET";
-}
-
-function isSeriesDrilldownResponse(response: APIResponse, metricId: string): boolean {
-  const url = new URL(response.url());
-  return (
-    url.pathname === "/api/analytics/series-comparison/drilldown" &&
-    url.searchParams.get("metricId") === metricId &&
-    response.request().method() === "GET"
-  );
-}
-
-async function svgTextOverflow(locator: Locator): Promise<string[]> {
-  return locator.evaluate((element) => {
-    const svgBounds = element.getBoundingClientRect();
-    return [...element.querySelectorAll("text")].flatMap((label) => {
-      const labelBounds = label.getBoundingClientRect();
-      const tolerance = 1;
-      const fits =
-        labelBounds.left >= svgBounds.left - tolerance &&
-        labelBounds.right <= svgBounds.right + tolerance &&
-        labelBounds.top >= svgBounds.top - tolerance &&
-        labelBounds.bottom <= svgBounds.bottom + tolerance;
-      if (fits) {
-        return [];
-      }
-      return [
-        `${label.textContent ?? "(empty)"}: svg=${svgBounds.left.toFixed(1)},${svgBounds.top.toFixed(1)},${svgBounds.right.toFixed(1)},${svgBounds.bottom.toFixed(1)} label=${labelBounds.left.toFixed(1)},${labelBounds.top.toFixed(1)},${labelBounds.right.toFixed(1)},${labelBounds.bottom.toFixed(1)}`,
-      ];
-    });
-  });
 }
 
 function currentPagePath(page: Page): string {

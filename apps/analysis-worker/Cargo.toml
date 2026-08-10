@@ -1,0 +1,105 @@
+[package]
+name = "momo-analysis"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.97"
+publish = false
+
+[workspace]
+members = ["crates/core"]
+resolver = "3"
+
+[dependencies]
+clap = { version = "4.5.48", features = ["derive", "env"] }
+futures-util = { version = "0.3.33", default-features = false, features = ["std"] }
+libc = "0.2.176"
+momo-analysis-core = { path = "crates/core" }
+redis = { version = "0.32.7", default-features = false, features = ["aio", "connection-manager", "streams", "tokio-rustls-comp"] }
+rustls = "0.23.32"
+rustls-native-certs = "0.8.1"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.145"
+sha2 = "0.11.0"
+thiserror = "2.0.17"
+tokio = { version = "1.49.0", features = ["fs", "io-util", "macros", "process", "rt", "signal", "sync", "time"] }
+tokio-postgres = { version = "0.7.15", features = ["with-serde_json-1"] }
+tokio-postgres-rustls = "0.13.0"
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3.20", features = ["env-filter", "fmt", "json"] }
+
+[dev-dependencies]
+tempfile = "3.23.0"
+
+[lints]
+workspace = true
+
+[workspace.lints.rust]
+warnings = "deny"
+unsafe_code = "deny"
+unsafe_op_in_unsafe_fn = "forbid"
+let_underscore_drop = "deny"
+rust_2018_idioms = { level = "deny", priority = -1 }
+unused_lifetimes = "deny"
+unused_qualifications = "deny"
+unreachable_pub = "deny"
+
+[workspace.lints.clippy]
+all = { level = "deny", priority = -3 }
+pedantic = { level = "deny", priority = -2 }
+nursery = { level = "deny", priority = -1 }
+
+# `unreachable_pub` deliberately requires restricted visibility for implementation modules,
+# while this nursery lint recommends plain `pub` for the same items because their private parent
+# caps effective visibility. The Rust lint protects the crate boundary more directly.
+redundant_pub_crate = "allow"
+
+# `restriction` is intentionally not enabled as a group: Clippy documents that
+# its lints are opt-in and can contradict one another. These checks are selected
+# because they prevent ambiguity, unchecked access, hidden control flow, or
+# accidental loss of diagnostic information in this worker.
+allow_attributes_without_reason = "deny"
+allow_attributes = "deny"
+as_conversions = "deny"
+as_pointer_underscore = "deny"
+as_underscore = "deny"
+clone_on_ref_ptr = "deny"
+dbg_macro = "deny"
+error_impl_error = "deny"
+exit = "deny"
+expect_used = "deny"
+fn_to_numeric_cast_any = "deny"
+get_unwrap = "deny"
+indexing_slicing = "deny"
+iter_over_hash_type = "deny"
+large_include_file = "deny"
+let_underscore_must_use = "deny"
+lossy_float_literal = "deny"
+map_err_ignore = "deny"
+mem_forget = "deny"
+missing_assert_message = "deny"
+mixed_read_write_in_expression = "deny"
+multiple_inherent_impl = "deny"
+multiple_unsafe_ops_per_block = "deny"
+negative_feature_names = "deny"
+panic = "deny"
+panic_in_result_fn = "deny"
+partial_pub_fields = "deny"
+print_stderr = "deny"
+print_stdout = "deny"
+rc_buffer = "deny"
+redundant_feature_names = "deny"
+rest_pat_in_fully_bound_structs = "deny"
+same_name_method = "deny"
+shadow_unrelated = "deny"
+string_add = "deny"
+string_slice = "deny"
+tests_outside_test_module = "deny"
+todo = "deny"
+undocumented_unsafe_blocks = "deny"
+unimplemented = "deny"
+unreachable = "deny"
+unwrap_in_result = "deny"
+unwrap_used = "deny"
+verbose_file_reads = "deny"
+wildcard_enum_match_arm = "deny"
+wildcard_dependencies = "deny"

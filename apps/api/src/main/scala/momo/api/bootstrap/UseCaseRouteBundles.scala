@@ -14,7 +14,7 @@ import momo.api.usecases.masters.*
 import momo.api.usecases.matchdrafts.*
 import momo.api.usecases.matches.*
 import momo.api.usecases.ocr.*
-import momo.api.usecases.seriescomparison.*
+import momo.api.usecases.seriesanalysis.*
 
 private[bootstrap] final case class UseCaseRouteBundles[F[_]](
     upload: HttpRoutes.UploadUseCases[F],
@@ -49,7 +49,7 @@ private[bootstrap] object UseCaseRouteBundles:
     val matchDrafts = repositories.matchDrafts
     val matchDraftCancellation = repositories.matchDraftCancellation
     val matchList = repositories.matchList
-    val seriesComparison = repositories.seriesComparison
+    val seriesAnalysis = repositories.seriesAnalysis
     val matchConfirmation = repositories.matchConfirmation
     val members = repositories.members
     val loginAccounts = repositories.loginAccounts
@@ -127,10 +127,11 @@ private[bootstrap] object UseCaseRouteBundles:
       allowedMemberIds = members.list.map(_.map(_.id).toSet),
     )
     val listMatches = ListMatches[F](matchList)
-    val getSeriesComparisonOptions = GetSeriesComparisonOptions[F](seriesComparison)
-    val getSeriesComparison = GetSeriesComparison[F](seriesComparison)
-    val getSeriesComparisonReview = GetSeriesComparisonReview[F](seriesComparison)
-    val getSeriesComparisonDrilldown = GetSeriesComparisonDrilldown[F](seriesComparison)
+    val getSeriesAnalysisOptions = GetSeriesAnalysisOptions[F](seriesAnalysis)
+    val getSeriesAnalysisStatus = GetSeriesAnalysisStatus[F](seriesAnalysis)
+    val getSeriesAnalysisChunk = GetSeriesAnalysisChunk[F](seriesAnalysis)
+    val getSeriesAnalysisAdminOverview = GetSeriesAnalysisAdminOverview[F](seriesAnalysis)
+    val requestSeriesAnalysisRecalculation = RequestSeriesAnalysisRecalculation[F](seriesAnalysis)
     val exportMatches = ExportMatches[F](
       matches,
       members,
@@ -204,10 +205,11 @@ private[bootstrap] object UseCaseRouteBundles:
       ),
       exportMatches = exportMatches,
       analytics = HttpRoutes.AnalyticsUseCases(
-        getSeriesComparisonOptions = getSeriesComparisonOptions,
-        getSeriesComparison = getSeriesComparison,
-        getSeriesComparisonReview = getSeriesComparisonReview,
-        getSeriesComparisonDrilldown = getSeriesComparisonDrilldown,
+        getSeriesAnalysisOptions = getSeriesAnalysisOptions,
+        getSeriesAnalysisStatus = getSeriesAnalysisStatus,
+        getSeriesAnalysisChunk = getSeriesAnalysisChunk,
+        getSeriesAnalysisAdminOverview = getSeriesAnalysisAdminOverview,
+        requestSeriesAnalysisRecalculation = requestSeriesAnalysisRecalculation,
       ),
       masters = HttpRoutes.MasterUseCases(
         listGameTitles = listGameTitles,

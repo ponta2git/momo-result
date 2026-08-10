@@ -15,6 +15,7 @@ import doobie.postgres.sqlstate
 
 import momo.api.adapters.postgres.PostgresMatchInsertOps.insertMatchCascade
 import momo.api.adapters.postgres.PostgresMeta.given
+import momo.api.adapters.postgres.PostgresSeriesAnalysisMutationOps.enqueueMatchMutation
 import momo.api.domain.ids.*
 import momo.api.domain.{MatchDraftStatus, MatchRecord}
 import momo.api.errors.{AppError, AppException}
@@ -62,11 +63,12 @@ final class PostgresMatchConfirmationRepository[F[_]: MonadCancelThrow](transact
     program.transact(transactor)
 
   private def insert(record: MatchRecord, updatedAt: Instant): ConnectionIO[Unit] =
-    insertMatchCascade(record, updatedAt).exceptSomeSqlState {
-      case state if isUniqueViolation(state) =>
-        conflict[Unit](s"matchNoInEvent ${record.matchNoInEvent.value
-            .toString} already exists for held event ${record.heldEventId.value}.")
-    }
+    (insertMatchCascade(record, updatedAt) *> enqueueMatchMutation(List(record.gameTitleId)))
+      .exceptSomeSqlState {
+        case state if isUniqueViolation(state) =>
+          conflict[Unit](s"matchNoInEvent ${record.matchNoInEvent.value
+              .toString} already exists for held event ${record.heldEventId.value}.")
+      }
 
   private def attachConfirmedMatch(
       expected: MatchDraftConfirmation,

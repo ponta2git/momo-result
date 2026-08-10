@@ -1,86 +1,100 @@
 import { useQuery } from "@tanstack/react-query";
-import { useCallback, useDeferredValue, useEffect, useMemo, useState, useTransition } from "react";
+import {
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
 import { useSearchParams } from "react-router-dom";
 
-import { preserveSeriesComparisonDrilldownParams } from "@/features/seriesComparison/drilldowns/useSeriesComparisonDrilldownUrlState";
+import { buildSeriesAnalysisFilterOptions } from "@/features/seriesComparison/model/seriesAnalysisFilterOptions";
 import {
-  buildSeriesComparisonSearchParams,
-  defaultSeriesComparisonView,
-  findSelectedSeries,
-  normalizeSeriesComparisonSelection,
-  parseSeriesComparisonSearchParams,
-  scopeNameForState,
-  seriesComparisonQueryFromState,
-  seriesComparisonReviewQueryFromState,
-} from "@/features/seriesComparison/model/seriesComparisonViewModel";
+  buildSeriesAnalysisSearchParams,
+  compatibleMapIds,
+  compatibleSeasonIds,
+  defaultSeriesAnalysisView,
+  normalizeSeriesAnalysisSelection,
+  parseSeriesAnalysisSearchParams,
+  seriesAnalysisQueryFromState,
+} from "@/features/seriesComparison/model/seriesAnalysisViewModel";
 import type {
-  SeriesComparisonUrlState,
-  SeriesComparisonViewId,
-} from "@/features/seriesComparison/model/seriesComparisonViewModel";
+  SeriesAnalysisUrlState,
+  SeriesAnalysisViewId,
+} from "@/features/seriesComparison/model/seriesAnalysisViewModel";
+import {
+  isAnalysisArtifactExpired,
+  isAnalysisClientUpgradeRequired,
+} from "@/shared/api/problemDetails";
 import {
   isInitialQueryLoading,
   shouldShowQueryError,
   shouldShowStaleShield,
 } from "@/shared/api/queryErrorState";
 import {
-  seriesComparisonAggregateQueryOptions,
-  seriesComparisonOptionsQueryOptions,
-  seriesComparisonReviewQueryOptions,
+  seriesAnalysisAggregateQueryOptions,
+  seriesAnalysisOptionsQueryOptions,
+  seriesAnalysisReviewQueryOptions,
+  seriesAnalysisStatusQueryOptions,
 } from "@/shared/api/queryOptions";
 import { sanitizeReturnTo } from "@/shared/navigation/returnTo";
 
-function scopeSignature(state: SeriesComparisonUrlState): string {
+function scopeSignature(state: SeriesAnalysisUrlState): string {
   return [state.gameTitleId ?? "", state.seasonMasterId ?? "", state.mapMasterId ?? ""].join("|");
 }
 
 export function useSeriesComparisonPageController() {
   const [searchParams, setSearchParams] = useSearchParams();
   const returnTo = sanitizeReturnTo(searchParams.get("returnTo"));
-  const rawState = useMemo(() => parseSeriesComparisonSearchParams(searchParams), [searchParams]);
-  const [optimisticState, setOptimisticState] = useState<SeriesComparisonUrlState | null>(null);
+  const rawState = useMemo(() => parseSeriesAnalysisSearchParams(searchParams), [searchParams]);
+  const [optimisticState, setOptimisticState] = useState<SeriesAnalysisUrlState | null>(null);
   const [, startStateTransition] = useTransition();
+  const handledExpiredArtifacts = useRef(new Set<string>());
 
-  const optionsQuery = useQuery(seriesComparisonOptionsQueryOptions());
-
+  const optionsQuery = useQuery(seriesAnalysisOptionsQueryOptions());
   const urlState = useMemo(
-    () => normalizeSeriesComparisonSelection(optionsQuery.data, rawState),
+    () => normalizeSeriesAnalysisSelection(optionsQuery.data, rawState),
     [optionsQuery.data, rawState],
   );
   const normalizedState = useMemo(
-    () => normalizeSeriesComparisonSelection(optionsQuery.data, optimisticState ?? urlState),
+    () => normalizeSeriesAnalysisSelection(optionsQuery.data, optimisticState ?? urlState),
     [optimisticState, optionsQuery.data, urlState],
   );
   const deferredState = useDeferredValue(normalizedState);
+  const activeView = normalizedState.view ?? defaultSeriesAnalysisView;
+  const filterOptions = useMemo(
+    () => buildSeriesAnalysisFilterOptions(optionsQuery.data, normalizedState),
+    [normalizedState, optionsQuery.data],
+  );
+  const statusQuery = useQuery(seriesAnalysisStatusQueryOptions(normalizedState.gameTitleId));
+  const publishedArtifactId = statusQuery.data?.currentArtifact?.artifactId;
   const aggregateQueryParams = useMemo(
-    () => seriesComparisonQueryFromState(deferredState),
-    [deferredState],
+    () => seriesAnalysisQueryFromState(deferredState, publishedArtifactId),
+    [deferredState, publishedArtifactId],
   );
+  const aggregateQuery = useQuery(seriesAnalysisAggregateQueryOptions(aggregateQueryParams));
+  const displayArtifactId = aggregateQuery.data?.artifact.artifactId;
   const reviewQueryParams = useMemo(
-    () => seriesComparisonReviewQueryFromState(deferredState),
-    [deferredState],
+    () => seriesAnalysisQueryFromState(deferredState, displayArtifactId),
+    [deferredState, displayArtifactId],
   );
-  const urlStateSignature = useMemo(
-    () => buildSeriesComparisonSearchParams(urlState).toString(),
+  const reviewEnabled = reviewQueryParams !== undefined && activeView === "review";
+  const reviewQuery = useQuery(seriesAnalysisReviewQueryOptions(reviewQueryParams, reviewEnabled));
+
+  const urlSignature = useMemo(
+    () => buildSeriesAnalysisSearchParams(urlState).toString(),
     [urlState],
   );
-  const normalizedStateSignature = useMemo(
-    () => buildSeriesComparisonSearchParams(normalizedState).toString(),
+  const normalizedSignature = useMemo(
+    () => buildSeriesAnalysisSearchParams(normalizedState).toString(),
     [normalizedState],
   );
-  const activeScopeSignature = useMemo(() => scopeSignature(normalizedState), [normalizedState]);
-  const deferredScopeSignature = useMemo(() => scopeSignature(deferredState), [deferredState]);
-  const scopeSettling = activeScopeSignature !== deferredScopeSignature;
-  const activeView = normalizedState.view ?? defaultSeriesComparisonView;
-  const reviewViewSettling = activeView !== (deferredState.view ?? defaultSeriesComparisonView);
 
   useEffect(() => {
-    if (!optionsQuery.data || optimisticState) {
-      return;
-    }
-    const next = preserveSeriesComparisonDrilldownParams(
-      searchParams,
-      buildSeriesComparisonSearchParams(urlState),
-    );
+    if (!optionsQuery.data || optimisticState) return;
+    const next = buildSeriesAnalysisSearchParams(urlState);
     if (returnTo) next.set("returnTo", returnTo);
     if (next.toString() !== searchParams.toString()) {
       setSearchParams(next, { replace: true });
@@ -88,100 +102,108 @@ export function useSeriesComparisonPageController() {
   }, [optimisticState, optionsQuery.data, returnTo, searchParams, setSearchParams, urlState]);
 
   useEffect(() => {
-    if (optimisticState && urlStateSignature === normalizedStateSignature) {
-      setOptimisticState(null);
-    }
-  }, [normalizedStateSignature, optimisticState, urlStateSignature]);
+    if (optimisticState && urlSignature === normalizedSignature) setOptimisticState(null);
+  }, [normalizedSignature, optimisticState, urlSignature]);
 
-  const aggregateQuery = useQuery(seriesComparisonAggregateQueryOptions(aggregateQueryParams));
-  const reviewEnabled =
-    reviewQueryParams !== undefined && activeView === defaultSeriesComparisonView;
-  const reviewQuery = useQuery(
-    seriesComparisonReviewQueryOptions(reviewQueryParams, reviewEnabled),
-  );
+  useEffect(() => {
+    const artifactId = aggregateQueryParams?.artifactId;
+    if (!artifactId || handledExpiredArtifacts.current.has(artifactId)) return;
+    const expired =
+      isAnalysisArtifactExpired(aggregateQuery.error) ||
+      isAnalysisArtifactExpired(reviewQuery.error);
+    if (!expired) return;
+    handledExpiredArtifacts.current.add(artifactId);
+    void statusQuery.refetch().then((result) => {
+      if (result.data?.currentArtifact?.artifactId === artifactId) {
+        return Promise.all([
+          aggregateQuery.refetch(),
+          ...(reviewEnabled ? [reviewQuery.refetch()] : []),
+        ]);
+      }
+      return undefined;
+    });
+  }, [aggregateQuery, aggregateQueryParams?.artifactId, reviewEnabled, reviewQuery, statusQuery]);
 
-  const selectedSeries = findSelectedSeries(optionsQuery.data, normalizedState.gameTitleId);
-  const scopeName = scopeNameForState(optionsQuery.data, normalizedState);
-
-  const seriesSelectOptions = useMemo(
-    () =>
-      (optionsQuery.data?.series ?? []).map((series) => ({
-        label: `${series.name} (${series.confirmedMatchCount}戦)`,
-        value: series.gameTitleId,
-      })),
-    [optionsQuery.data],
-  );
-  const seasonSelectOptions = useMemo(
-    () => [
-      { label: "全シーズン", value: "" },
-      ...(selectedSeries?.seasons ?? []).map((option) => ({
-        label: option.name,
-        value: option.id,
-      })),
-    ],
-    [selectedSeries],
-  );
-  const mapSelectOptions = useMemo(
-    () => [
-      { label: "全マップ", value: "" },
-      ...(selectedSeries?.maps ?? []).map((option) => ({
-        label: option.name,
-        value: option.id,
-      })),
-    ],
-    [selectedSeries],
-  );
+  const activeScopeSignature = scopeSignature(normalizedState);
+  const deferredScopeSignature = scopeSignature(deferredState);
+  const scopeSettling = activeScopeSignature !== deferredScopeSignature;
+  const aggregateLoading = isInitialQueryLoading(aggregateQuery);
+  const aggregateShielded = shouldShowStaleShield({
+    hasVisibleData: aggregateQuery.data !== undefined,
+    isPlaceholderData: aggregateQuery.isPlaceholderData,
+    isRefreshing: aggregateQuery.isFetching && aggregateQuery.data !== undefined,
+    isSettling: scopeSettling,
+  });
+  const reviewArtifactMatches = reviewQuery.data?.artifact.artifactId === displayArtifactId;
+  const reviewLoading =
+    reviewEnabled && (isInitialQueryLoading(reviewQuery) || !reviewArtifactMatches);
+  const reviewShielded =
+    reviewEnabled &&
+    shouldShowStaleShield({
+      hasVisibleData: reviewArtifactMatches,
+      isPlaceholderData: reviewQuery.isPlaceholderData,
+      isRefreshing: reviewQuery.isFetching && reviewArtifactMatches,
+      isSettling: scopeSettling,
+    });
 
   const updateState = useCallback(
-    (next: typeof normalizedState, options: { replace?: boolean } = {}): void => {
-      const nextState = normalizeSeriesComparisonSelection(optionsQuery.data, next);
-      setOptimisticState(nextState);
+    (next: SeriesAnalysisUrlState, options: { replace?: boolean } = {}) => {
+      const normalized = normalizeSeriesAnalysisSelection(optionsQuery.data, next);
+      setOptimisticState(normalized);
       startStateTransition(() => {
-        const nextParams = preserveSeriesComparisonDrilldownParams(
-          searchParams,
-          buildSeriesComparisonSearchParams(nextState),
-        );
-        if (returnTo) nextParams.set("returnTo", returnTo);
-        setSearchParams(nextParams, {
-          replace: options.replace ?? true,
-        });
+        const params = buildSeriesAnalysisSearchParams(normalized);
+        if (returnTo) params.set("returnTo", returnTo);
+        setSearchParams(params, { replace: options.replace ?? true });
       });
     },
-    [optionsQuery.data, returnTo, searchParams, setSearchParams, startStateTransition],
+    [optionsQuery.data, returnTo, setSearchParams],
   );
+
   const updateGameTitle = useCallback(
     (gameTitleId: string) =>
-      updateState({
-        focusMatchId: undefined,
-        gameTitleId,
-        mapMasterId: undefined,
-        seasonMasterId: undefined,
-        view: normalizedState.view ?? defaultSeriesComparisonView,
-      }),
+      updateState({ gameTitleId, view: normalizedState.view ?? defaultSeriesAnalysisView }),
     [normalizedState.view, updateState],
   );
-  const updateMapMasterId = useCallback(
-    (mapMasterId: string) =>
-      updateState({
-        ...normalizedState,
-        focusMatchId: undefined,
-        mapMasterId: mapMasterId || undefined,
-      }),
-    [normalizedState, updateState],
-  );
   const updateSeasonMasterId = useCallback(
-    (seasonMasterId: string) =>
+    (seasonMasterId: string) => {
+      const nextSeason = seasonMasterId || undefined;
+      const mapIds = compatibleMapIds(optionsQuery.data, normalizedState.gameTitleId, nextSeason);
+      const currentMap = normalizedState.mapMasterId;
       updateState({
         ...normalizedState,
         focusMatchId: undefined,
-        seasonMasterId: seasonMasterId || undefined,
-        view: normalizedState.view ?? defaultSeriesComparisonView,
-      }),
-    [normalizedState, updateState],
+        mapMasterId: currentMap && mapIds && !mapIds.has(currentMap) ? undefined : currentMap,
+        seasonMasterId: nextSeason,
+      });
+    },
+    [normalizedState, optionsQuery.data, updateState],
+  );
+  const updateMapMasterId = useCallback(
+    (mapMasterId: string) => {
+      const nextMap = mapMasterId || undefined;
+      const seasonIds = compatibleSeasonIds(
+        optionsQuery.data,
+        normalizedState.gameTitleId,
+        nextMap,
+      );
+      const currentSeason = normalizedState.seasonMasterId;
+      updateState({
+        ...normalizedState,
+        focusMatchId: undefined,
+        mapMasterId: nextMap,
+        seasonMasterId:
+          currentSeason && seasonIds && !seasonIds.has(currentSeason) ? undefined : currentSeason,
+      });
+    },
+    [normalizedState, optionsQuery.data, updateState],
   );
   const updateView = useCallback(
-    (view: SeriesComparisonViewId, options?: { replace?: boolean }) =>
+    (view: SeriesAnalysisViewId, options?: { replace?: boolean }) =>
       updateState({ ...normalizedState, view }, options),
+    [normalizedState, updateState],
+  );
+  const focusMatch = useCallback(
+    (focusMatchId: string) => updateState({ ...normalizedState, focusMatchId }, { replace: false }),
     [normalizedState, updateState],
   );
   const clearFocusedMatch = useCallback(
@@ -199,36 +221,26 @@ export function useSeriesComparisonPageController() {
     [normalizedState, updateState],
   );
 
-  const aggregateLoading = isInitialQueryLoading(aggregateQuery);
-  const aggregateShielded = shouldShowStaleShield({
-    hasVisibleData: aggregateQuery.data !== undefined,
-    isPlaceholderData: aggregateQuery.isPlaceholderData,
-    isRefreshing: aggregateQuery.isFetching && aggregateQuery.data !== undefined,
-    isSettling: scopeSettling,
-  });
-  const reviewLoading = reviewEnabled && isInitialQueryLoading(reviewQuery);
-  const reviewShielded =
-    reviewEnabled &&
-    shouldShowStaleShield({
-      hasVisibleData: reviewQuery.data !== undefined,
-      isPlaceholderData: reviewQuery.isPlaceholderData,
-      isRefreshing: reviewQuery.isFetching && reviewQuery.data !== undefined,
-      isSettling: scopeSettling || reviewViewSettling,
-    });
   const refresh = () => {
     void optionsQuery.refetch();
-    void aggregateQuery.refetch();
-    if (reviewEnabled) {
-      void reviewQuery.refetch();
-    }
+    void statusQuery.refetch();
+    if (aggregateQueryParams) void aggregateQuery.refetch();
+    if (reviewEnabled) void reviewQuery.refetch();
   };
-  const retryReview = () => {
-    void reviewQuery.refetch();
-  };
+  const clientUpgradeRequired = [
+    optionsQuery.error,
+    statusQuery.error,
+    aggregateQuery.error,
+    reviewQuery.error,
+  ].some(isAnalysisClientUpgradeRequired);
 
   return {
     actions: {
+      clearFocusedMatch,
+      clearScope,
+      focusMatch,
       refresh,
+      reloadClient: () => window.location.reload(),
     },
     aggregate: {
       canRefresh: aggregateQueryParams !== undefined,
@@ -238,14 +250,14 @@ export function useSeriesComparisonPageController() {
       refreshing: aggregateQuery.isFetching && aggregateQuery.data !== undefined,
       shielded: aggregateShielded,
     },
+    clientUpgradeRequired,
     filters: {
       activeView,
-      clearScope,
-      clearFocusedMatch,
-      mapOptions: mapSelectOptions,
-      scopeLabel: [selectedSeries?.name, scopeName].filter(Boolean).join("・"),
-      seasonOptions: seasonSelectOptions,
-      seriesOptions: seriesSelectOptions,
+      confirmedMatchCount: filterOptions.confirmedMatchCount,
+      mapOptions: filterOptions.mapOptions,
+      scopeLabel: filterOptions.scopeLabel,
+      seasonOptions: filterOptions.seasonOptions,
+      seriesOptions: filterOptions.seriesOptions,
       state: normalizedState,
       updateGameTitle,
       updateMapMasterId,
@@ -258,14 +270,19 @@ export function useSeriesComparisonPageController() {
       loading: isInitialQueryLoading(optionsQuery),
       refreshing: optionsQuery.isFetching,
     },
+    returnTo,
     review: {
-      data: reviewQuery.data,
+      data: reviewArtifactMatches ? reviewQuery.data : undefined,
       hasError: reviewEnabled && shouldShowQueryError(reviewQuery),
       loading: reviewLoading,
-      retry: retryReview,
-      refreshing: reviewEnabled && reviewQuery.isFetching && reviewQuery.data !== undefined,
+      refreshing: reviewEnabled && reviewQuery.isFetching && reviewArtifactMatches,
       shielded: reviewShielded,
     },
-    returnTo,
+    status: {
+      data: statusQuery.data,
+      hasError: shouldShowQueryError(statusQuery),
+      loading: isInitialQueryLoading(statusQuery),
+      refreshing: statusQuery.isFetching,
+    },
   };
 }

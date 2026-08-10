@@ -12,6 +12,8 @@
 
 - この文書は「どう実装するか」を扱う。
 - 業務意味論は `docs/domain-rule.md`、DB所有権は `docs/db-rule.md`、Redis/OCR queue は `docs/redis-streams-ocr-contract.md` を正とする。
+- 戦績分析のjob、artifact、API pinning、Web計算境界、管理画面の具体契約は
+  `docs/series-analysis-realization.md` を正とする。
 - テスト選択は `docs/test-rule.md`、実行コマンドは `docs/dev-rule.md` を正とする。
 
 ## 1. System Map
@@ -21,16 +23,16 @@
 | web | `apps/web` | React 19, React Router 7, TanStack Query 5, Zod, Tailwind CSS 4, Base UI | SPA、入力、確認、CSV/TSV取得 |
 | api | `apps/api` | Scala 3, Tapir, http4s, Cats Effect, Doobie | HTTP API、認証、業務usecase、DB/Redis接続 |
 | ocr-worker | `apps/ocr-worker` | Python 3.14, uv, Tesseract, Pillow | OCRジョブ処理、画像解析、OCR結果保存 |
-| analysis-worker（移行先） | `apps/analysis-worker` | Rust, Cargo | 作品単位の戦績分析、version付き成果物の原子的公開 |
+| analysis-worker | `apps/analysis-worker` | Rust, Cargo | 作品単位の戦績分析、version付き成果物の原子的公開 |
 | DB | `../momo-db` | Neon PostgreSQL, drizzle | schema / migration / seed の正本 |
 | Queue | Upstash Redis Streams | Redis Streams | OCR・戦績分析ジョブの配送。状態の正本にはしない |
 | current runtime | `Dockerfile`, `deploy/` | Fly.io, nginx, supervisord | 単一runtime imageで web / api / OCR worker を起動 |
-| analysis runtime（移行先） | 実装時に追加 | Rust process supervisor | 公開HTTPを持たず、単一実行枠で分析子プロセスを管理 |
+| analysis runtime定義 | `apps/analysis-worker/Dockerfile`, `fly.analysis.toml` | Rust parent / child process | 公開HTTPを持たず、DB上の単一実行枠で分析子processを管理 |
 
-現行本番は同一 Fly.io アプリ、同一ドメイン、単一runtime imageでweb、API、OCRを運用する。
-承認済みの移行先では、戦績分析だけをresource分離したruntimeへ移す。nginxはweb静的配信とAPI
-reverse proxyを担い、分析runtimeは公開HTTPを持たない。provider固有の配置、resource値、詳細手順、
-secret、攻撃対策の手順はpublic docsに置かない。
+公開HTTP runtimeはweb、API、OCRを運用する。戦績分析は専用imageと起動設定を持ち、公開HTTP runtimeへ
+同居させない。nginxはweb静的配信とAPI reverse proxyを担い、分析runtimeは公開HTTPを持たない。
+分析publicationは上限値がすべて設定されるまでfail closedとし、本番同等環境での測定と切替は実装完了とは
+別のrelease gateとして扱う。provider固有の配置、resource値、詳細手順、secret、攻撃対策の手順はpublic docsに置かない。
 
 ## 2. API
 
@@ -64,13 +66,16 @@ API境界の一部は `ApiEndpointsArchitectureSpec` と `ApiRuntimeArchitecture
   Redis publishをtransaction成功条件にせず、DB outboxから配送する。
 - 戦績比較の読み取りusecaseはversion付き成果物とjob状態を取得するだけにし、ScalaまたはRustの
   分析engineをHTTP request内で呼ばない。
+- 状態取得と成果物取得を分離し、集計、振り返り、drilldown、選択試合文脈は、状態取得で解決した
+  同じartifact IDへ固定する。APIごとにcurrent artifactを引き直してversionを混在させない。
 
 ### 2.3 Module Layout
 
 - `momo.api.usecases` 直下は公開 usecase facade を置く。集計、採点、文言生成などの内部実装が大きくなる場合は `momo.api.usecases.<domain>` へ package-private object として分け、HTTP / repository から直接参照しない。
-- 現行の戦績比較engine / aggregationは、Rust移行中の比較oracleとしてのみ利用できる。移行完了時は
-  endpoint / usecase / runtime compositionから到達不能にし、本番fallbackとして残さない。
-- 戦績比較endpoint DTOは `momo.api.endpoints.SeriesComparisonApiModels` のalias façadeに閉じ、
+- Scala戦績比較engine / aggregationはproduction sourceから撤去し、旧endpointには固定reload-requiredを返す
+  軽量tombstoneだけを置く。正確性oracleは共有canonical vector、合成境界fixture、手計算・高精度参照値、
+  性質testとし、同期fallbackを戻さない。
+- 戦績分析endpoint DTOは `momo.api.endpoints.SeriesAnalysisApiModels` のfaçadeに閉じ、
   保存成果物のdomain型、DB row、Tapir / Circe / Schemaを相互に漏らさない。
 - repository / adapter / endpoint model は、複数 resource や複数 runtime 責務を 1 ファイルへ詰めない。1 ファイルが概ね300行を超えたら、公開型、contract、SQL alg、facade、test double、DTO family のどれが混在しているかを確認し、同一 package 内の top-level 定義分割を優先する。行数超過は API architecture spec で warning として報告し、単独では品質ゲートを失敗させない。
 - composition root は `momo.api.bootstrap.ApiApp` に置くが、`ApiApp` は runtime 実装セットの選択に寄せる。Redis / rate limit / queue の infrastructure、maintenance、health details、usecase-to-HTTP wiring は bootstrap 配下の helper object へ分ける。
@@ -123,6 +128,9 @@ web の import 境界は `apps/web/scripts/check-architecture-imports.mjs`、mod
 - 戦績分析状態は成果物queryと分離して管理する。`queued` / `running` の間だけ5秒間隔でpollingし、
   成功時に該当成果物queryを更新し、terminal状態でpollingを停止する。
 - stale成果物を持つ計算中・失敗状態と、成果物が一度もない計算中・失敗状態を別のViewModelで扱う。
+- 戦績比較の集計、意味を持つsort/filter、閾値判定、候補選定、統計fallbackはWebへ置かない。
+  chart座標、locale表記、URL・選択状態だけをWebで組み立てる。試合詳細の派生分析も保存済み
+  match-context成果物を読み、raw matchから再計算しない。
 
 ### 3.4 Form / React
 
@@ -157,22 +165,44 @@ web の import 境界は `apps/web/scripts/check-architecture-imports.mjs`、mod
 
 ## 5. Analysis Worker
 
-- workerはRust + Cargoで管理し、`apps/analysis-worker` に置く。
-- 起動・設定・logging、job lease / queue、入力snapshot、純粋計算、成果物encoding、DB/Redis adapterを
-  module境界で分ける。純粋計算へDB row、Redis payload、HTTP DTOを渡さない。
-- 親processはdelivery受信、DB lease、timeout、signal、子process回収を担当する。1作品の計算は
-  停止可能な子processで実行し、子processから現行成果物を直接更新しない。
+- workerはRust + Cargo workspaceとして `apps/analysis-worker` に置く。`momo-analysis-core` は決定論的な
+  計算kernelとversion付き成果物契約、`momo-analysis` は起動・設定・logging、job lease / queue、入力snapshot、
+  成果物staging、DB / Redis / process adapterを所有する。依存方向はruntimeからcoreへの一方向だけとする。
+- coreはDB row、Redis client、HTTP DTO、filesystem、clock、environment、async runtimeへ依存しない。
+  queue / artifactのwire型はversion付き契約としてcoreに置けるが、transport処理はruntimeに残す。
+- runtimeでは `worker` を実行調停、`control` をDB状態遷移、`artifact` をbounded成果物境界、`database` を
+  入力adapter、`process` をOS隔離境界とする。計算結果から制御動作への変換は副作用のないdecision tableへ寄せる。
+- 親processはdelivery受信、DB上の全体実行slotとfencing token、job lease、timeout、signal、子process回収を
+  担当する。1作品の計算は停止可能な子processで実行し、子processから現行成果物を直接更新しない。
+- 同時実行数1はprocess内semaphoreやruntime台数で保証せず、deploy世代を横断するDB execution slotで
+  保証する。lease失効後の旧fencing tokenではheartbeat、terminal化、公開、slot解放を拒否する。
 - job、再計算intent、成果物、状態はDBを正本とし、Redis Streamsは配送路に限定する。
+- 全作品操作とalgorithm / schema昇格は、受理transactionで要求version付きcampaign targetだけをsnapshotする。
+  HTTPやrelease CLIで作品別jobを同期作成せず、API dispatcherが1 targetずつ短いtransactionで展開する。
+  campaign受理後に開始済みのattemptだけを共有でき、受理前からrunningのattemptには次runを予約する。
 - terminal DB writeに成功してからdeliveryをackする。lease切れ、pending delivery、重複deliveryを
   冪等に回収し、同じversionの二重公開を防ぐ。
-- 入力snapshotは作品単位で一貫させ、全有効スコープを計算してから1transactionで成果物を公開する。
+- 入力snapshotは作品単位で一貫させ、確定試合が実在するスコープを計算してから1transactionで成果物を公開する。
   timeout、異常終了、予期しない計算失敗、preemptionでは部分成果物を公開しない。
+- 子processはattempt専用directoryへ上限付きchunkだけを書き、親processがpath、件数、size、schema、checksumを
+  streaming検証する。APIも要求されたresource・scope chunkだけを読み、作品成果物全体をdecodeしない。
 - 入力version、algorithm version、artifact schema versionを別の型として扱う。文字列比較や時刻の
   偶然の大小で鮮度を決めない。
 - 対象なし、件数不足、定義済みのモデル非採用はtypedな品質状態として返す。予期しない例外を
   正常な `no_target` に変換しない。
 - 計算は同じ入力とalgorithm versionで決定論的にする。seed、入力順、浮動小数点の正規化・丸め、
   同値処理を明示する。
+- 4人・signal・係数行列など仕様上固定長の値はenum、array、const genericsで表し、要素数不整合をruntimeの
+  `Vec` / index検査へ持ち込まない。scopeや試合のような動的集合は決定順を持つcollectionと借用keyを優先する。
+- OS FFIとproductionの `unsafe` は `process` moduleへ隔離し、lifetime、所有権、RAIIで解放を保証するsafe APIを
+  workerへ公開する。productionの子process隔離契約はLinuxでのみ有効とし、他OSではjob claim前にfail closedにする。
+  DB rowはadapter境界でfallibleにdecodeし、schema driftをpanicへ変えない。
+- 純粋計算はpipeline、resource走査、集約、指標、trend、品質判定、rank、playbookへ、control planeは
+  vocabulary、capability、claim、lifecycle、completion、publication、recovery、transactionへ分割する。
+  入力は一度だけ正規化したimmutable型をchecksumと計算の双方へ渡し、失敗状態と制御動作はenumで全分岐を表す。
+- Rust moduleはtestを含め900行上限とし、coreのruntime依存禁止、productionのlint抑制禁止、`process` 外の
+  `unsafe` 禁止、fallible DB row decodeをarchitecture testで固定する。行数は設計の代用ではなく、責務混在を
+  reviewするための上限として扱う。
 - 初回からハードタイムアウトを設定可能にする。設定値がない本番起動またはjob受付はfail closedにし、
   値自体は本番同等runtimeでの実測後に確定する。
 - 将来OCRを同居させる場合も実行枠は1とする。OCRだけが分析子processをpreemptでき、分析はOCRを
@@ -180,6 +210,8 @@ web の import 境界は `apps/web/scripts/check-architecture-imports.mjs`、mod
 - 将来のOCR同居前に、ローカル絶対pathを含むOCR配送契約を、認可された共有storageの論理IDへ移す。
 - 要求、状態、保持、再試行、正確性、性能の正本は
   `docs/requirements/series-analysis-batch.md` とする。
+- job、queue、chunk成果物、原子的公開、artifact-pinned API、Web状態機械の実現契約は
+  `docs/series-analysis-realization.md` とする。
 
 ## 6. Runtime / Security / Ops
 
@@ -195,6 +227,10 @@ web の import 境界は `apps/web/scripts/check-architecture-imports.mjs`、mod
 - `/healthz` はAPIプロセスの生存確認。DB/Redis接続確認は詳細ヘルスとして分ける。公開HTTPを持たない
   分析workerはprocess生存、DB heartbeat、queue待機時間、job状態で観測する。
 - 本番ログは1行JSONにする。
+- 分析runtime imageはpackage manager、DB/Redis client、ptrace系debuggerをPATHまたは対応consoleから
+  実行可能にせず、非rootで起動する。
+  障害時のconsole調査に必要なshell、process / cgroup / filesystem、DNS / TCP / TLSのread-only診断手段だけを
+  残し、image smokeで実行可能性、特殊permission file不在、容量上限を固定する。
 
 runtime / deploy 変更では `Dockerfile`、`deploy/`、`.github/workflows/deploy.yml`、
 `scripts/ci/runtime-smoke.sh` を実装の現在状態として確認する。分析worker追加後はそのDockerfile、

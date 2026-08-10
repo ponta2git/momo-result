@@ -8,6 +8,18 @@ final case class RedisConfig(
     url: String,
     stream: String,
     deadLetterStream: String = RedisConfig.DefaultDeadLetterStream,
+    analysisStream: String = RedisConfig.DefaultAnalysisStream,
+)
+
+final case class SeriesAnalysisReadConfig(
+    maxEncodedBytes: Long,
+    maxDecodedBytes: Long,
+    maxResponseBytes: Long,
+    maxItemCount: Int,
+    maxNestingDepth: Int,
+    decodeConcurrency: Int,
+    readTimeout: FiniteDuration,
+    busyRetryAfterSeconds: Int,
 )
 
 final case class ResourceLimitsConfig(
@@ -93,6 +105,19 @@ object AuthConfig:
 
 object RedisConfig:
   val DefaultDeadLetterStream: String = "momo:ocr:jobs:dead"
+  val DefaultAnalysisStream: String = "momo:analysis:jobs"
+
+object SeriesAnalysisReadConfig:
+  val defaults: SeriesAnalysisReadConfig = SeriesAnalysisReadConfig(
+    maxEncodedBytes = 16L * 1024L * 1024L,
+    maxDecodedBytes = 16L * 1024L * 1024L,
+    maxResponseBytes = 16L * 1024L * 1024L,
+    maxItemCount = 1000000,
+    maxNestingDepth = 64,
+    decodeConcurrency = 2,
+    readTimeout = 10.seconds,
+    busyRetryAfterSeconds = 2,
+  )
 
 object ResourceLimitsConfig:
   val DefaultRequestMaxBytes: Long = 256L * 1024L

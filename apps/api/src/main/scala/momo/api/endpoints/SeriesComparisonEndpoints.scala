@@ -1,65 +1,22 @@
 package momo.api.endpoints
 
 import sttp.tapir.*
-import sttp.tapir.json.circe.*
 
 import momo.api.endpoints.ProblemDetails.ProblemResponse
 
+/** Fixed compatibility tombstones for clients that still call the removed synchronous API. */
 object SeriesComparisonEndpoints:
-  private type SecuredRead[I, O] = Endpoint[Option[String], I, ProblemResponse, O, Any]
+  private type SecuredRead = Endpoint[Option[String], Unit, ProblemResponse, Unit, Any]
 
-  val options: SecuredRead[Unit, SeriesComparisonOptionsResponse] =
-    endpoint
-      .securityIn(CommonEndpoint.accountHeader)
-      .get
-      .in("api" / "analytics" / "series-comparison" / "options")
-      .errorOut(CommonEndpoint.errorOut)
-      .out(jsonBody[SeriesComparisonOptionsResponse])
-      .tag("analytics")
+  val options: SecuredRead = tombstone("options")
+  val aggregate: SecuredRead = tombstone()
+  val review: SecuredRead = tombstone("review")
+  val drilldown: SecuredRead = tombstone("drilldown")
 
-  type AggregateInput =
-    (String, Option[String], Option[String], Option[String], Option[String])
-
-  val aggregate: SecuredRead[AggregateInput, SeriesComparisonResponse] =
-    endpoint
+  private def tombstone(suffix: String*): SecuredRead =
+    val base = endpoint
       .securityIn(CommonEndpoint.accountHeader)
       .get
       .in("api" / "analytics" / "series-comparison")
-      .in(query[String]("gameTitleId"))
-      .in(query[Option[String]]("scopeKind"))
-      .in(query[Option[String]]("scopeId"))
-      .in(query[Option[String]]("seasonMasterId"))
-      .in(query[Option[String]]("mapMasterId"))
-      .errorOut(CommonEndpoint.errorOut)
-      .out(jsonBody[SeriesComparisonResponse])
-      .tag("analytics")
-
-  type ReviewInput = (String, Option[String], Option[String])
-
-  val review: SecuredRead[ReviewInput, SeriesComparisonReviewResponse] =
-    endpoint
-      .securityIn(CommonEndpoint.accountHeader)
-      .get
-      .in("api" / "analytics" / "series-comparison" / "review")
-      .in(query[String]("gameTitleId"))
-      .in(query[Option[String]]("seasonMasterId"))
-      .in(query[Option[String]]("mapMasterId"))
-      .errorOut(CommonEndpoint.errorOut)
-      .out(jsonBody[SeriesComparisonReviewResponse])
-      .tag("analytics")
-
-  type DrilldownInput = (String, String, String, Option[String], Option[String])
-
-  val drilldown: SecuredRead[DrilldownInput, SeriesComparisonDrilldownResponse] =
-    endpoint
-      .securityIn(CommonEndpoint.accountHeader)
-      .get
-      .in("api" / "analytics" / "series-comparison" / "drilldown")
-      .in(query[String]("gameTitleId"))
-      .in(query[String]("metricId"))
-      .in(query[String]("memberId"))
-      .in(query[Option[String]]("seasonMasterId"))
-      .in(query[Option[String]]("mapMasterId"))
-      .errorOut(CommonEndpoint.errorOut)
-      .out(jsonBody[SeriesComparisonDrilldownResponse])
-      .tag("analytics")
+    val path = suffix.foldLeft(base)((current, segment) => current.in(segment))
+    path.errorOut(CommonEndpoint.errorOut).tag("analytics-legacy")

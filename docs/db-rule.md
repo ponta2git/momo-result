@@ -14,7 +14,7 @@
 - テスト選択: `docs/test-rule.md`
 - コマンド: `docs/dev-rule.md`
 - Redis/OCR queue: `docs/redis-streams-ocr-contract.md`
-- 戦績分析job / 成果物: `docs/requirements/series-analysis-batch.md`
+- 戦績分析job / 成果物: `docs/requirements/series-analysis-batch.md`, `docs/series-analysis-realization.md`
 
 ## 1. Ownership
 
@@ -39,7 +39,7 @@
 | 試合結果 | `matches`, `match_players`, `match_incidents` | API | 確定済み試合の正本。4名、順位、プレー順、事件数を外部契約として検証する。 |
 | 下書き | `match_drafts` | API, worker | OCR/手入力の作業単位。terminal状態、OCR slot、画像保持情報を含む。 |
 | OCR | `ocr_drafts`, `ocr_jobs`, `ocr_queue_outbox` | API, worker | job状態はDBが正本。Redisは配送路。queue詳細はRedis契約文書へ寄せる。 |
-| 戦績分析 | migrationで追加するjob、intent / outbox、artifact table | API, analysis worker | job・再計算intent・成果物・状態はDBが正本。物理名と制約は実装時のmigrationで固定する。 |
+| 戦績分析 | `series_analysis_*`, `worker_execution_slots`, `matches.analysis_revision` | API, analysis worker | migration 0020〜0024が再計算intent、campaign、job / attempt、全体実行権、fence、outbox、reader / worker capability、chunk成果物、current / previousを定義する。状態はDBが正本。 |
 | マスタ | `game_titles`, `map_masters`, `season_masters`, `incident_masters`, `member_aliases` | API, worker | 作品/マップ/シーズン/事件/名寄せ。IDはFKとして永続化される。 |
 | 冪等性 | `idempotency_keys` | API | `(key, account_id, endpoint)` でreplay scopeを分ける。 |
 
@@ -59,8 +59,19 @@ DBに保存してよい画像関連情報は、参照ID、内部一時path、保
 - 試合確定・確定済み試合更新・削除と、対象作品の戦績分析再計算intentは同じtransactionで確定する。
 - 戦績分析の入力versionは作品単位の単調増加revisionとして同じtransactionで進め、timestampを
   concurrency tokenの代用にしない。
+- 全登録作品に戦績分析title stateを1件持たせる。既存作品は導入migrationでbackfillし、作品master追加時は
+  同じ変更単位で初期stateを作る。read queryで欠落stateを暗黙作成しない。
+- 確定済み試合は分析入力へ影響する更新ごとの単調増加revisionを持ち、成果物の試合文脈と現在値の
+  不一致を検出できるようにする。
 - 戦績分析成果物は入力version、algorithm version、artifact schema versionを区別し、1作品の全スコープを
   原子的に公開する。job失敗やtimeoutで現行成功成果物を上書きしない。
+- 戦績分析の全体実行slotは単調増加fencing tokenを持ち、job leaseと公開transactionが同じtokenを
+  検証する。1作品のactive job制約だけを全体同時実行1の代用にしない。
+- artifactのcurrent / previous可否確認と対象chunk取得は同じstatementまたはread transactionで行い、
+  cleanupとの存在確認後削除raceを作らない。
+- 戦績分析の派生rowを追加したことで、参照されていない作品・season・map masterの既存削除経路を永久に
+  blockしない。作品削除時は未完了workを安全に閉じて派生state / artifactを削除し、過去artifactのscope参照は
+  masterへの強い削除防止FKにしない。
 - terminal戦績分析jobは終了後45日保持し、管理画面の直近3件という表示上限とは分離する。
   `queued` / `running` jobを履歴cleanupで削除しない。
 - `idempotency_keys.response_status = 0` は処理中予約を表す。
@@ -73,6 +84,8 @@ DB-backed API / worker query を触る変更では、同じ変更内で次を確
 - 新しいDB前提は `apps/api/src/test/scala/momo/api/integration/DbContractSpec.scala` に追加する。
 - 変更した repository method または worker adapter を Testcontainers PostgreSQL で実行する。
 - 同一 transaction で FK 関連 row を作成・更新する場合、statement order と保存後の linked row values を integration test で確認する。
+- lease、execution slot、artifact pointerのような競合制御は、2接続以上を使う実PostgreSQL testでlock順、
+  fencing token不一致、失効lease、cleanup競合を直接確認する。
 - 新しい table に書き込む integration test を追加したら、`IntegrationDb.truncateAppTables` など cleanup 対象も更新する。
 - integration が skip / 未実行なら、そのDB挙動は未検証として報告する。
 - API の Doobie repository は DB row shape と domain 変換を明示的に分ける。query は named row case class へ decode し、domain/application 型への変換は `fromRow` / `toItem` などの専用関数へ閉じる。
@@ -93,8 +106,9 @@ cd apps/ocr-worker
 uv run pytest -m integration
 ```
 
-analysis workerのPostgreSQL adapterを追加するときは、通常のunit testと分離したCargo integration gateを
-`docs/dev-rule.md` とCIへ同時に追加し、実PostgreSQLへmigrationを適用して実行する。
+analysis workerのPostgreSQL adapterを触るときは、通常の `cargo test` に加え、migration適用済み実PostgreSQLと
+実Redisを使う `scripts/ci/analysis-worker-control-plane-smoke.sh` を実行する。release commandとDB control planeは
+`scripts/ci/analysis-release-db-smoke.sh` でも検証する。
 
 ## 5. SQL Risk Checklist
 

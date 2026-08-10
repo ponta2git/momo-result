@@ -238,6 +238,33 @@ class AppConfigSpec extends CatsEffectSuite:
     }
   }
 
+  test("loadFromEnv reads the bounded series-analysis read timeout") {
+    load(Map("ANALYSIS_API_READ_TIMEOUT_MS" -> "2500")).map { result =>
+      assertEquals(result.map(_.seriesAnalysisRead.readTimeout.toMillis), Right(2500L))
+    }
+  }
+
+  test("loadFromEnv rejects a non-positive series-analysis read timeout") {
+    load(Map("ANALYSIS_API_READ_TIMEOUT_MS" -> "0")).map { result =>
+      assert(result.isLeft, s"expected a non-positive read timeout to fail: $result")
+    }
+  }
+
+  test("loadFromEnv rejects series-analysis limits outside the reliability envelope") {
+    val invalid = List(
+      Map("ANALYSIS_API_MAX_ENCODED_BYTES" -> "16777217"),
+      Map("ANALYSIS_API_MAX_NESTING_DEPTH" -> "65"),
+      Map("ANALYSIS_API_DECODE_CONCURRENCY" -> "3"),
+      Map("ANALYSIS_API_READ_TIMEOUT_MS" -> "30001"),
+    )
+    invalid.traverse(load).map(_.foreach(result =>
+      assert(
+        result.left.exists(_.getMessage.contains("reliability envelope")),
+        s"expected an unsafe series-analysis limit to fail: $result",
+      )
+    ))
+  }
+
   test("loadFromEnv reads image upload storage limits") {
     load(
       prodEnv ++ Map(

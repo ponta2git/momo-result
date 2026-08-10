@@ -21,7 +21,7 @@ import { createDeferred } from "@/test/deferred";
 import { makeFourPlayerResults, makeIncidents, makeMatchDetail } from "@/test/factories";
 import { makeMatchWorkspaceMasterHandoffValues } from "@/test/factories/draftReview";
 import { setupMsw } from "@/test/msw/lifecycle";
-import { makeSeriesComparisonResponse } from "@/test/msw/seriesComparisonHandlers";
+import { makeSeriesAnalysisMatchContext } from "@/test/msw/seriesAnalysisFixtures";
 import { server } from "@/test/msw/server";
 import { createTestQueryClient } from "@/test/queryClient";
 
@@ -1059,9 +1059,9 @@ describe("MatchDetailPage", () => {
     );
   });
 
-  it("shows match feature badges from the match record and same-series comparison", async () => {
+  it("shows match feature badges supplied by the pinned analysis artifact", async () => {
     setDevUser();
-    const comparisonSearches: string[] = [];
+    const contextSearches: string[] = [];
     server.use(
       http.get("/api/matches/:matchId", () =>
         HttpResponse.json(
@@ -1085,24 +1085,67 @@ describe("MatchDetailPage", () => {
           }),
         ),
       ),
-      http.get("/api/analytics/series-comparison", ({ request }) => {
-        comparisonSearches.push(new URL(request.url).search);
+      http.get("/api/analytics/series-comparison/v2/match-context", ({ request }) => {
+        contextSearches.push(new URL(request.url).search);
+        const context = makeSeriesAnalysisMatchContext();
+        if (!context.match) throw new Error("fixture must include a match");
         return HttpResponse.json({
-          ...makeSeriesComparisonResponse(),
-          matchTimeline: [
-            {
-              assetGapFirstToLast: 1100,
-              assetGapFirstToSecond: 100,
-              flags: ["close_finish"],
-              matchId: "match-1",
-              matchIndex: 1,
-              playedAt: "2026-04-04T12:34:56.000Z",
-              revenueTopMemberIds: ["member_ponta"],
-              status: "ok",
-              totalGinjiCount: 0,
-              winnerMemberId: "member_akane_mami",
-            },
-          ],
+          ...context,
+          matchId: "match-1",
+          match: {
+            ...context.match,
+            features: [
+              {
+                evidence: [],
+                featureCode: "close_finish",
+                memberIds: [],
+                priority: 1,
+                source: "series",
+                tone: "neutral",
+              },
+              {
+                evidence: [],
+                featureCode: "revenue_top_no_win",
+                memberIds: [],
+                priority: 2,
+                source: "match",
+                tone: "notice",
+              },
+              {
+                evidence: [],
+                featureCode: "ginji_storm",
+                memberIds: [],
+                priority: 3,
+                source: "match",
+                tone: "notice",
+              },
+              {
+                evidence: [],
+                featureCode: "negative_assets",
+                memberIds: [],
+                priority: 4,
+                source: "match",
+                tone: "notice",
+              },
+              {
+                evidence: [],
+                featureCode: "no_destination",
+                memberIds: [],
+                priority: 5,
+                source: "match",
+                tone: "neutral",
+              },
+              {
+                evidence: [],
+                featureCode: "low_revenue_win",
+                memberIds: [],
+                priority: 6,
+                source: "match",
+                tone: "neutral",
+              },
+            ],
+            matchIndex: 1,
+          },
         });
       }),
     );
@@ -1125,13 +1168,15 @@ describe("MatchDetailPage", () => {
     expect(screen.getByText("目的地なし決着")).toBeInTheDocument();
     expect(screen.getByText("低収益勝ち")).toBeInTheDocument();
     expect(screen.getByText("同条件内")).toBeInTheDocument();
-    const comparisonParams = new URLSearchParams(comparisonSearches.at(-1));
-    expect(comparisonParams.get("gameTitleId")).toBe("gt_momotetsu_2");
-    expect(comparisonParams.get("seasonMasterId")).toBe("season_current");
-    expect(comparisonParams.get("mapMasterId")).toBe("map_east");
+    const contextParams = new URLSearchParams(contextSearches.at(-1));
+    expect(contextParams.get("artifactId")).toBe("artifact-current");
+    expect(contextParams.get("gameTitleId")).toBe("gt_momotetsu_2");
+    expect(contextParams.get("seasonMasterId")).toBe("season_current");
+    expect(contextParams.get("mapMasterId")).toBe("map_east");
+    expect(contextParams.get("matchId")).toBe("match-1");
   });
 
-  it("keeps match-record badges visible when series comparison loading fails", async () => {
+  it("does not derive stale fallback badges when artifact context loading fails", async () => {
     setDevUser();
     server.use(
       http.get("/api/matches/:matchId", () =>
@@ -1146,7 +1191,7 @@ describe("MatchDetailPage", () => {
           }),
         ),
       ),
-      http.get("/api/analytics/series-comparison", () =>
+      http.get("/api/analytics/series-comparison/v2/match-context", () =>
         HttpResponse.json({ title: "series unavailable" }, { status: 500 }),
       ),
     );
@@ -1162,10 +1207,42 @@ describe("MatchDetailPage", () => {
     );
 
     expect(await screen.findByRole("heading", { name: /第1試合の結果/u })).toBeInTheDocument();
-    expect(await screen.findByText("物件収益ねじれ")).toBeInTheDocument();
+    expect(await screen.findByText("目立つ特徴はありません。")).toBeInTheDocument();
     expect(
-      screen.getByText("比較データを利用できないため、この試合の記録から判定"),
+      await screen.findByText("この試合を含む保存済み分析を利用できません"),
     ).toBeInTheDocument();
     expect(screen.queryByText("接戦")).not.toBeInTheDocument();
+  });
+
+  it("keeps primary match rows but hides stale analysis after a match revision mismatch", async () => {
+    setDevUser();
+    server.use(
+      http.get("/api/analytics/series-comparison/v2/match-context", () => {
+        const context = makeSeriesAnalysisMatchContext();
+        return HttpResponse.json({
+          ...context,
+          inclusion: { status: "match_changed_since_artifact" },
+          match: null,
+          matchId: "match-1",
+        });
+      }),
+    );
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/matches/match-1"]}>
+          <Routes>
+            <Route path="/matches/:matchId" element={<MatchDetailPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(
+      await screen.findByText("この試合は分析後に更新されたため、次の計算完了後に特徴を表示します"),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("list", { name: "試合の順位と成績" }).children).toHaveLength(4);
+    expect(screen.getAllByText("比較データなし")).toHaveLength(4);
+    expect(screen.queryByText("1.82 → 1.75")).not.toBeInTheDocument();
   });
 });

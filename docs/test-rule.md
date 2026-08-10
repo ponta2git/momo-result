@@ -111,17 +111,23 @@ PostgreSQL repository、Doobie query、DB table/column、migration 前提に触�
 集計API、推薦API、ドリルダウン、モデル計算など、純粋計算の追加・変更でCPUまたは応答時間が増える可能性がある場合:
 
 - 画面名や変更ファイルではなく、実際に同時実行されるAPI、job、worker、engineの経路を特定する。
-- 戦績比較、振り返り、ドリルダウンAPIで分析engineが実行されず、同じ作品成果物versionを読むことを
+- 戦績比較、振り返り、ドリルダウンAPIで分析engineが実行されず、同じartifact IDを読むことを
   architecture / usecase / HTTP testで固定する。
-- 固定4名、全有効スコープ、現在データ量の2倍かつ最低500試合/作品の決定論的fixtureを用意し、
+- 固定4名、現在データ量の2倍かつ最低500試合/作品に、season、map、実在組合せ数と件数偏りを加えた
+  決定論的fixtureを用意する。公開可能な下限fixtureは
+  `scripts/ci/analysis-worker-resource-fixture.sql` とし、現在データshapeが上回る場合はprivate fixtureを使い、
   correctness testとは別に処理時間、計算回数、peak memoryを検証する。
 - 上限fixtureを単一実行枠で100回連続実行し、OOM、runtime再起動、未解放memoryの増加傾向がないことを
   本番同等runtimeで測定する。provider固有の上限値と実測結果はprivateに残す。
 - 同じ作品成果物内で同一の高負荷計算が通常集計、振り返り、ドリルダウンごとに重複していないことを
   直接検証する。片方のunit testやresponse shape testの成功で代用しない。
+- 各APIが要求resource・scopeのbounded chunkだけを読み、作品全体をdecodeしないことをSQL、取得byte、API
+  peak memoryで固定する。同じ上限fixtureを実browserでも開き、response size、parse、heap、操作応答を測る。
 - 定義済みの対象なし・件数不足・モデル非採用は正常成果物として固定する。予期しない1スコープの
   失敗では作品成果物全体が失敗し、部分公開せず直前成功成果物を維持することを固定する。
 - runtime smoke / E2Eが機能成功だけを確認している場合、CPU回復や性能予算を検証したとは報告しない。外部メトリクスが未取得・未実行なら未検証として明記する。
+- payload byte数、manifestを含む一時総byte数、親process HWM、子process HWM、runtime / cgroup peakを
+  同じ名称へ畳み込まない。子reportと検証済みmanifestの件数・byte数が不一致なら成功測定にも公開にも含めない。
 - rollbackでは、対象commitのartifact identityだけでなく、削除対象のユーザー経路とサーバー実行経路が消えたことを直接確認できる回帰ケースを用意する。
 
 実DB実行が特に必要なSQL:
@@ -150,18 +156,39 @@ PostgreSQL repository、Doobie query、DB table/column、migration 前提に触�
   oracleにする。現行Scala値は差分検出に使えるが、より正確な値を否定する唯一のoracleにしない。
 - Scala版と意図的に異なる結果は、正確性の証拠、影響fixture、algorithm version更新を同じ変更で残す。
   意図しない丸め差、入力順による揺れ、seed非再現は不具合とする。
-- job、intent / outbox、lease、artifact repositoryは実PostgreSQLで、publish、pending、claim、ackは
+- job、intent / outbox、execution slot、fence、lease、artifact repositoryは実PostgreSQLで、publish、
+  pending、claim、ackは
   実Redisで検証する。unit doubleだけでwire動作を検証済みとしない。
 - 試合mutationと再計算intentの同一transaction、連続mutationのcoalescing、重複deliveryの冪等性、
   terminal DB write before ack、stale lease回収をintegration testで固定する。
+- deploy世代の異なる2 worker相当を同時実行し、全体slotが1件だけであること、失効fencing tokenから
+  heartbeat、terminal化、公開、slot解放ができないことをintegration testで固定する。
+- 新version非対応の旧workerがjobをclaim・terminal化・配送消失させず、durableな再配送を経て対応workerが
+  処理できることと、旧consumer drain前にversion campaignを開始できないことを固定する。
+- attempt開始後の手動request、全作品target snapshot、展開途中crash、DB commit応答喪失後のreconcileを
+  直接通し、予約消失、対象欠落、二重job、二重公開がないことを確認する。
+- 全作品操作の同一idempotency key再送と異なるkeyでの後発操作を分け、後発操作より前のattemptが誤って
+  充足扱いにならず、必要な次runだけを作品単位で共有できることを確認する。
+- Redis append後のoutbox更新失敗、重複delivery、stream消失後のqueued job再配送を実Redisで通し、
+  DB上のqueued jobが配送路から孤立しないことを確認する。
 - transient DB / queue failureの最大3回再試行と、timeout・入力契約違反・決定論的失敗の非再試行を
   decision tableで検証する。
 - 子processの正常終了、異常終了、hard timeout、親process停止を実process testで通し、部分成果物、
   zombie process、二重公開を残さないことを確認する。
+- 採用runtime上で子processのmemory hard limitを意図的に超過させ、子だけが終了し、親processが生存して
+  terminal失敗を保存できることを確認する。process単位の制限機構が利用できるという推測で代用しない。
+- 親processのgraceful終了だけでなく強制終了を通し、parent-liveness channelで旧子process groupが消えてから
+  lease回収後の新attemptが開始することを確認する。
+- 一時directoryのdisk不足、byte上限、symlink、path逸脱、manifest欠損・破損と、全終了経路・起動時の
+  限定cleanupを実file system testで確認する。
+- 対象試合revision不一致では古いmatch contextを返さず、artifactのread中cleanup競合でも整合した1 chunkを
+  返すことを実PostgreSQL / HTTP testで固定する。
 - 将来OCR preemptionを実装するときは、OCRから分析へのpreemption、逆方向の禁止、失敗回数非加算、
   最新版への再queue、commit critical sectionを実process / integration testで固定する。
 - terminal jobの終了後45日保持と管理画面の直近3件取得は別契約として検証し、表示件数をDB削除条件に
   流用せず、古い `queued` / `running` jobをcleanupしない。
+- 確定試合0件を含む全登録作品が管理画面の1作品候補になり、登録作品0件ではempty stateとなることを
+  API / component testで固定する。比較画面も同じ全登録作品を返し、season / map候補だけを確定試合から作る。
 - resource/performance gateは機能gateと分け、本番同等runtime、release build、実際のresource上限で行う。
   timeout値は通常、上限、cold start、連続実行のp50 / p95 / p99 / 最大時間を測定後に決める。
 
@@ -172,7 +199,9 @@ PostgreSQL repository、Doobie query、DB table/column、migration 前提に触�
   - web: `apps/web/vite.config.ts`
   - api: `apps/api/build.sbt`
   - ocr-worker: `apps/ocr-worker/pyproject.toml`
-  - analysis-worker: 実装時にCargo coverage設定を追加し、その設定を正本とする。
+  - analysis-worker: 現時点ではcoverage率をrelease判定へ使わない。`cargo test` のfixture / property / state-machine
+    oracleと、実PostgreSQL・Redis・Linux process smokeを正本とする。coverageを導入する場合は
+    `apps/analysis-worker` のCI設定と同時にこの記述を更新する。
 - aggregate coverage だけで重要経路を保証しない。blast radius が大きい下位モジュールは file / glob 単位または明示的な table test で固定する。
 - C2 は coverage tool の branch coverage だけでは保証しない。`&&`、`||`、三項演算子、mode discriminator、`enabled`、`isFetching`、`isError`、cached data 有無などは decision table で独立因子と期待値を示す。
 - 型耐性が重要な fixture は生成型、domain型、`satisfies` などで shape 変更を型エラーにする。
@@ -185,7 +214,7 @@ PostgreSQL repository、Doobie query、DB table/column、migration 前提に触�
 - PostgreSQL-backed spec は `IntegrationSuite`、Redis-backed spec は `RedisIntegrationSuite` へ寄せる。
 - OCR worker integration は pytest の `integration` marker を付ける。複数 adapter smoke は必要最小限にし、状態遷移・payload validation・parser分岐は unit/contract test に寄せる。
 - analysis workerのPostgreSQL / Redis integrationは通常の `cargo test` と分離し、CI上で実サービスを
-  起動する明示gateを持つ。
+  起動する `analysis-worker-control-plane-smoke.sh` を明示gateとして持つ。
 - 外部サービスを使う spec は、stream名、DB row、一時ファイル名、worker id を test / suite ごとに分離する。
 
 ## 9. Quality Gates
@@ -199,6 +228,12 @@ PostgreSQL repository、Doobie query、DB table/column、migration 前提に触�
 - Redis Streams / OCR queue 契約を変えたら `docs/redis-streams-ocr-contract.md` の Required Tests を実行する。
 - 戦績分析workerを変えたらformat、Clippy、unit test、PostgreSQL / Redis integration、release buildを
   実行する。数式または候補採用を変えたらalgorithm version判定も行う。
+- analysis-workerのClippyは `Cargo.toml` のdeny設定を正本とし、全target / 全featureで実行する。
+  productionのlint抑制、`process` 外のunsafe、testを含む900行超module、PostgreSQL `Row::get` の再導入、
+  pure coreからruntime / OS依存への参照はarchitecture testでも拒否する。lintや依存境界を弱めて通す変更は、
+  同等以上の決定論的検査がない限り認めない。
+- version付き浮動小数点式へFMA化、評価順変更、丸め変更を入れた場合は、単体精度だけでなく共有fixtureの
+  semantic checksumを確認する。checksumが変わる変更は自動修正として扱わず、algorithm version更新判断を行う。
 - DB schema 前提を変えたら `docs/db-rule.md` の Consumer Contract を満たす。
 - `docs/post-mortem/lessons.md` に該当するカードがあれば、テスト選択と最終報告に反映する。
 - 性能事故・高負荷計算の変更では、機能テストの成功と性能回復の証拠を分けて報告する。

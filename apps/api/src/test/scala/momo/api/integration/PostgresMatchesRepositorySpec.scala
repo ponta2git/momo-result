@@ -20,6 +20,9 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
   private val mapMasterId = MapMasterId.unsafeFromString("map_east")
   private val seasonMasterId = SeasonMasterId.unsafeFromString("season_2024_spring")
   private val heldEventId = HeldEventId.unsafeFromString("held_2026_04_30")
+  private val secondGameTitleId = GameTitleId.unsafeFromString("title_world_2")
+  private val secondMapMasterId = MapMasterId.unsafeFromString("map_west")
+  private val secondSeasonMasterId = SeasonMasterId.unsafeFromString("season_2025_spring")
 
   private def gameTitles = new PostgresGameTitlesRepository[IO](transactor)
   private def mapMasters = new PostgresMapMastersRepository[IO](transactor)
@@ -35,6 +38,14 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
       _ <- mapMasters.create(MapMaster(mapMasterId, gameTitleId, "東日本編", 1, now))
       _ <- seasonMasters.create(SeasonMaster(seasonMasterId, gameTitleId, "2024-spring", 1, now))
       _ <- heldEvents.create(HeldEvent(heldEventId, now))
+    yield ()
+
+  private def seedSecondTitle: IO[Unit] =
+    for
+      _ <- gameTitles.create(GameTitle(secondGameTitleId, "桃太郎電鉄ワールド2", "world", 2, now))
+      _ <- mapMasters.create(MapMaster(secondMapMasterId, secondGameTitleId, "西日本編", 1, now))
+      _ <- seasonMasters
+        .create(SeasonMaster(secondSeasonMasterId, secondGameTitleId, "2025-spring", 1, now))
     yield ()
 
   private def player(
@@ -119,6 +130,41 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
       assertEquals(ponta.incidents.destination.value, 5)
       assertEquals(ponta.incidents.plusStation.value, 2)
       assertEquals(ponta.incidents.suriNoGinji.value, 0)
+
+  test("confirmed-match mutations atomically advance title and match revisions with durable work"):
+    val rec = sampleMatch("match_analysis_intent", 1)
+    val moved = rec.copy(
+      gameTitleId = secondGameTitleId,
+      mapMasterId = secondMapMasterId,
+      seasonMasterId = secondSeasonMasterId,
+    )
+    for
+      _ <- seedPrereqs
+      _ <- seedSecondTitle
+      _ <- matches.create(rec)
+      _ <- matches.update(moved, now.plusSeconds(1))
+      matchRevision <- sql"SELECT analysis_revision FROM matches WHERE id = ${rec.id}"
+        .query[Long].unique.transact(transactor)
+      deleted <- matches.delete(rec.id)
+      titleRevisions <- sql"""
+        SELECT game_title_id, input_revision
+        FROM series_analysis_title_states
+        WHERE game_title_id IN ($gameTitleId, $secondGameTitleId)
+        ORDER BY game_title_id
+      """.query[(GameTitleId, Long)].to[List].transact(transactor)
+      counts <- sql"""
+        SELECT
+          (SELECT COUNT(*)::int FROM series_analysis_jobs WHERE status = 'queued'),
+          (SELECT COUNT(*)::int FROM series_analysis_job_requests),
+          (SELECT COUNT(*)::int FROM series_analysis_queue_outbox),
+          (SELECT COUNT(*)::int FROM matches WHERE id = ${rec.id})
+      """.query[(Int, Int, Int, Int)].unique.transact(transactor)
+    yield
+      assertEquals(deleted, true)
+      assertEquals(matchRevision, 1L)
+      assertEquals(titleRevisions.toMap.get(gameTitleId), Some(2L))
+      assertEquals(titleRevisions.toMap.get(secondGameTitleId), Some(2L))
+      assertEquals(counts, (2, 4, 4, 0))
 
   test("listByHeldEvent orders by match_no_in_event"):
     for
@@ -257,10 +303,30 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
       confirmed <- confirmations.confirm(rec, Some(snapshot), now.plusSeconds(2))
       found <- matches.find(rec.id)
       status <- draftStatus(draftId)
+      analysisIntent <- sql"""
+        SELECT s.input_revision,
+               s.pending_work,
+               j.input_revision,
+               j.status,
+               j.trigger,
+               r.status,
+               r.assigned_job_id = j.id,
+               o.status
+        FROM series_analysis_title_states s
+        JOIN series_analysis_jobs j ON j.game_title_id = s.game_title_id
+        JOIN series_analysis_job_requests r ON r.assigned_job_id = j.id
+        JOIN series_analysis_queue_outbox o ON o.job_id = j.id
+        WHERE s.game_title_id = ${rec.gameTitleId}
+      """.query[(Long, Boolean, Long, String, String, String, Boolean, String)].unique
+        .transact(transactor)
     yield
       assertEquals(confirmed, MatchConfirmationResult.Confirmed)
       assertEquals(found.map(_.id), Some(rec.id))
       assertEquals(status, (MatchDraftStatus.Confirmed, Some(rec.id)))
+      assertEquals(
+        analysisIntent,
+        (1L, true, 1L, "queued", "match_mutation", "pending", true, "pending"),
+      )
 
   test("delete removes the confirmed draft that produced the match"):
     val draftId = MatchDraftId.unsafeFromString("match-draft-delete-confirmed")

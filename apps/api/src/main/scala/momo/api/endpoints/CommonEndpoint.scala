@@ -20,7 +20,9 @@ object CommonEndpoint:
   type SecuredMutation[I, O] =
     Endpoint[(Option[String], Option[String]), I, ProblemResponse, O, Any]
 
-  val errorOut: EndpointOutput[ProblemResponse] = statusCode.and(jsonBody[ProblemDetails])
+  val errorOut: EndpointOutput[ProblemResponse] = statusCode
+    .and(header[Option[String]]("Retry-After"))
+    .and(jsonBody[ProblemDetails])
 
   /**
    * Dev/Test account shortcut header. Production ignores externally supplied account ids and

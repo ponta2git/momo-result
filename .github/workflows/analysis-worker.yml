@@ -1,0 +1,119 @@
+name: Analysis worker
+
+on:
+  workflow_call:
+  pull_request:
+    paths:
+      - "apps/analysis-worker/**"
+      - "docs/schemas/series-analysis-*.json"
+      - "rust-toolchain.toml"
+      - "fly.analysis.toml"
+      - "scripts/ci/analysis-release-db-smoke.sh"
+      - "scripts/ci/analysis-worker-control-plane-smoke.sh"
+      - "scripts/ci/analysis-worker-image-smoke.sh"
+      - ".github/workflows/analysis-worker.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  analysis-worker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_DB: momo_result
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+        ports:
+          - "5432:5432"
+        options: >-
+          --health-cmd "pg_isready -U postgres -d momo_result"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports:
+          - "6379:6379"
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/momo_result
+      REDIS_URL: redis://127.0.0.1:6379
+    defaults:
+      run:
+        working-directory: apps/analysis-worker
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Checkout momo-db migrations
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ github.repository_owner }}/momo-db
+          path: _deps/momo-db
+          token: ${{ secrets.MOMO_DB_READ_TOKEN || github.token }}
+          sparse-checkout: drizzle
+          persist-credentials: false
+
+      - name: Install Rust toolchain
+        run: rustup show active-toolchain
+
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/analysis-worker
+
+      - name: Format check
+        run: cargo fmt --all -- --check
+
+      - name: Lint check
+        run: cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+
+      - name: Test
+        run: cargo test --locked --workspace --all-targets --all-features
+
+      - name: Release build
+        run: cargo build --locked --workspace --release
+
+      - name: Apply momo-db migrations
+        run: ../../scripts/ci/apply-momo-db-migrations.sh
+
+      - name: Release control-plane smoke
+        run: ../../scripts/ci/analysis-release-db-smoke.sh target/release/momo-analysis
+
+      - name: Worker PostgreSQL and Redis control-plane smoke
+        run: ../../scripts/ci/analysis-worker-control-plane-smoke.sh target/release/momo-analysis
+
+  runtime-image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Build dedicated worker image
+        run: docker build --file apps/analysis-worker/Dockerfile --tag momo-analysis-worker:test .
+
+      - name: Smoke test worker isolation and hard limit
+        run: scripts/ci/analysis-worker-image-smoke.sh momo-analysis-worker:test
+
+      - name: Scan worker image
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: momo-analysis-worker:test
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          format: table
+          exit-code: "1"
+        env:
+          TRIVY_DISABLE_VEX_NOTICE: "true"

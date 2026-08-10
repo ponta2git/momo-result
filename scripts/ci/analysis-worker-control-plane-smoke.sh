@@ -204,6 +204,23 @@ assert_worker_log_contains() {
   fi
 }
 
+wait_for_worker_log_contains() {
+  local fragment="$1"
+  local description="$2"
+  local attempts=0
+  while (( attempts < 60 )); do
+    if grep -Fq -- "${fragment}" "${worker_log}"; then
+      return 0
+    fi
+    if [[ -n "${worker_pid}" ]] && ! worker_is_running; then
+      fail_with_worker_log "Worker exited while waiting for ${description}."
+    fi
+    attempts=$((attempts + 1))
+    sleep 1
+  done
+  fail_with_worker_log "Timed out waiting for ${description}."
+}
+
 wait_for_sql_value() {
   local expected="$1"
   local query="$2"
@@ -578,6 +595,46 @@ if grep -Eq '(postgres|redis)://[^" ]+' "${worker_log}"; then
 fi
 
 run_release_command release-audit --require-current --require-quiescent >/dev/null
+
+unsupported_job_id="ci-analysis-job-unsupported-version"
+psql_ci -c "
+  INSERT INTO series_analysis_jobs (
+    id, game_title_id, input_revision, algorithm_version,
+    artifact_schema_version, status, trigger, requested_at, available_at
+  )
+  SELECT
+    '${unsupported_job_id}', game_title_id, input_revision, 'series-analysis-v999999',
+    artifact_schema_version, 'queued', 'algorithm_update', clock_timestamp(), clock_timestamp()
+  FROM series_analysis_title_states
+  WHERE game_title_id = 'title-release-smoke-a';
+"
+publish_job "${unsupported_job_id}"
+wait_for_worker_log_contains '"event":"analysis_delivery_deferred"' \
+  "unsupported-version delivery diagnostic"
+
+deferred_log="$(grep -F "${unsupported_job_id}" "${worker_log}" \
+  | grep -Fm1 '"event":"analysis_delivery_deferred"')"
+for required_field in \
+  '"reason":"unsupported_version"' \
+  '"disposition":"leave_pending"' \
+  '"job_algorithm_version":"series-analysis-v999999"' \
+  '"supported_algorithm_version":' \
+  '"supported_artifact_schema_version":'
+do
+  if [[ "${deferred_log}" != *"${required_field}"* ]]; then
+    fail_with_worker_log "Unsupported-version diagnostic omitted ${required_field}"
+  fi
+done
+
+unsupported_shape="$(psql_ci -At -c "
+  SELECT status, attempt_count, lease_owner IS NULL
+  FROM series_analysis_jobs WHERE id = '${unsupported_job_id}';
+")"
+unsupported_pending="$(redis_ci XPENDING "${redis_stream}" "${redis_group}" | sed -n '1p')"
+if [[ "${unsupported_shape}" != "queued|0|t" || "${unsupported_pending}" != "1" ]]; then
+  fail_with_worker_log \
+    "Unsupported-version delivery was not preserved for a compatible worker: ${unsupported_shape}|${unsupported_pending}"
+fi
 
 if [[ -n "${worker_image}" ]]; then
   residue="$(docker exec "${worker_container}" find /var/lib/momo-analysis -mindepth 1 -print -quit)"

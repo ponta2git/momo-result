@@ -5,7 +5,7 @@ use momo_analysis_core::contract::ARTIFACT_SCHEMA_VERSION;
 use crate::config::WorkerRuntimeConfig;
 
 use super::{
-    ALGORITHM_VERSION, ClaimResult, ClaimedJob, ControlError,
+    ALGORITHM_VERSION, ClaimResult, ClaimedJob, ControlError, UnsupportedJobVersion,
     recovery::recover_expired_holder,
     transaction::{bounded_transaction, duration_milliseconds, stable_id},
 };
@@ -35,7 +35,10 @@ pub(crate) async fn claim_job(
         || candidate.artifact_schema_version != expected_schema
     {
         transaction.rollback().await?;
-        return Ok(ClaimResult::UnsupportedVersion);
+        return Ok(ClaimResult::UnsupportedVersion(UnsupportedJobVersion {
+            algorithm_version: candidate.algorithm_version,
+            artifact_schema_version: candidate.artifact_schema_version,
+        }));
     }
     let attempt_no = candidate
         .attempt_count

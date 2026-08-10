@@ -43,8 +43,14 @@ pub(crate) enum ClaimResult {
     Claimed(ClaimedJob),
     Busy,
     MissingOrTerminal,
-    UnsupportedVersion,
+    UnsupportedVersion(UnsupportedJobVersion),
     NotReady,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct UnsupportedJobVersion {
+    pub algorithm_version: String,
+    pub artifact_schema_version: i32,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

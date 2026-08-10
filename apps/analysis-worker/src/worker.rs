@@ -1,6 +1,6 @@
 use std::time::Instant;
 
-use momo_analysis_core::contract::QueuePayload;
+use momo_analysis_core::contract::{ARTIFACT_SCHEMA_VERSION, QueuePayload};
 use redis::{RedisError, aio::ConnectionManager};
 use thiserror::Error;
 use tokio::sync::watch;
@@ -9,8 +9,8 @@ use tracing::{Instrument, error, info, info_span, warn};
 use crate::{
     config::WorkerRuntimeConfig,
     control::{
-        AttemptFailure, ClaimResult, ControlError, SafeFailureCode, claim_job, finish_failure,
-        mark_draining, register_capability,
+        ALGORITHM_VERSION, AttemptFailure, ClaimResult, ControlError, SafeFailureCode, claim_job,
+        finish_failure, mark_draining, register_capability,
     },
     database::{self, DatabaseError},
     process::ProcessError,
@@ -285,7 +285,23 @@ async fn process_delivery(
             );
             return Ok(DeliveryDisposition::Acknowledge);
         }
-        ClaimResult::UnsupportedVersion | ClaimResult::NotReady => {
+        ClaimResult::UnsupportedVersion(version) => {
+            warn!(
+                event = "analysis_delivery_deferred",
+                phase = "claim",
+                message_id,
+                job_id = %payload.job_id,
+                disposition = "leave_pending",
+                reason = "unsupported_version",
+                job_algorithm_version = %version.algorithm_version,
+                job_artifact_schema_version = version.artifact_schema_version,
+                supported_algorithm_version = ALGORITHM_VERSION,
+                supported_artifact_schema_version = ARTIFACT_SCHEMA_VERSION,
+                "analysis delivery requires a compatible worker generation"
+            );
+            return Ok(DeliveryDisposition::LeavePending);
+        }
+        ClaimResult::NotReady => {
             return Ok(DeliveryDisposition::LeavePending);
         }
         ClaimResult::Busy => return Ok(DeliveryDisposition::LeavePending),

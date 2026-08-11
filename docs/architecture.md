@@ -175,6 +175,10 @@ web の import 境界は `apps/web/scripts/check-architecture-imports.mjs`、mod
   入力adapter、`process` をOS隔離境界とする。計算結果から制御動作への変換は副作用のないdecision tableへ寄せる。
 - 親processはdelivery受信、DB上の全体実行slotとfencing token、job lease、timeout、signal、子process回収を
   担当する。1作品の計算は停止可能な子processで実行し、子processから現行成果物を直接更新しない。
+- release imageは固定root bootstrapだけでchild cgroupを準備し、`cgroup.procs`以外のcontroller操作をworkerへ
+  委譲しない。bootstrapは全UID/GIDと補助groupを固定service identityへ恒久的に落としてからworkerをexecする。
+  高負荷childはattach/readback完了後にだけ開始し、物理memory hard limitはcgroupを正本とする。
+  `RLIMIT_AS`の回帰probeをproduction hard limitの証拠として扱わない。
 - 同時実行数1はprocess内semaphoreやruntime台数で保証せず、deploy世代を横断するDB execution slotで
   保証する。lease失効後の旧fencing tokenではheartbeat、terminal化、公開、slot解放を拒否する。
 - job、再計算intent、成果物、状態はDBを正本とし、Redis Streamsは配送路に限定する。
@@ -232,7 +236,7 @@ web の import 境界は `apps/web/scripts/check-architecture-imports.mjs`、mod
   分析workerはprocess生存、DB heartbeat、queue待機時間、job状態で観測する。
 - 本番ログは1行JSONにする。
 - 分析runtime imageはpackage manager、DB/Redis client、ptrace系debuggerをPATHまたは対応consoleから
-  実行可能にせず、非rootで起動する。
+  実行可能にしない。OCI entryは固定root bootstrapとし、workerおよび保守commandは権限降格後の非rootで実行する。
   障害時のconsole調査に必要なshell、process / cgroup / filesystem、DNS / TCP / TLSのread-only診断手段だけを
   残し、image smokeで実行可能性、特殊permission file不在、容量上限を固定する。
 

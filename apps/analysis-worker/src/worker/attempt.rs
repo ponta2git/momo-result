@@ -176,19 +176,17 @@ pub(super) async fn run_claimed_child(
     shutdown: &mut watch::Receiver<bool>,
     started: Instant,
 ) -> Result<(AnalysisChildOutcome, AttemptMetrics), AttemptInterruption> {
-    let mut child = ManagedAnalysisChild::spawn(
-        child_spec,
-        config.publication_limits.child_memory_limit.get(),
-    )
-    .map_err(|error| {
-        error!(
-            event = "analysis_child_start_failed",
-            phase = "child_spawn",
-            error_kind = error.kind(),
-            "analysis child process could not start"
-        );
-        AttemptInterruption::WorkerCrashed
-    })?;
+    let mut child = ManagedAnalysisChild::spawn(child_spec, &config.child_cgroup)
+        .await
+        .map_err(|error| {
+            error!(
+                event = "analysis_child_start_failed",
+                phase = "child_spawn",
+                error_kind = error.kind(),
+                "analysis child process could not start"
+            );
+            AttemptInterruption::WorkerCrashed
+        })?;
     if let Some(result) = refresh_child_liveness(&mut child, started, config.shutdown_grace).await?
     {
         return Ok(finalize_child_result(child_spec, result));

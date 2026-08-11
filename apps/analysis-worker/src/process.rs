@@ -1,4 +1,5 @@
 use std::{
+    ffi::OsString,
     io::{self, Read, Write},
     path::{Path, PathBuf},
     process::ExitStatus,
@@ -8,6 +9,16 @@ use std::{
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::cgroup::{CgroupError, ChildCgroup};
+
+mod allocation;
+#[cfg(target_os = "linux")]
+mod bootstrap_config;
+mod probe;
+
+pub use allocation::allocate_and_touch;
+pub use probe::{run_cgroup_hard_limit_probe, run_hard_limit_probe};
+
 pub(crate) const RESOURCE_LIMIT_HIT_EXIT_CODE: i32 = 73;
 pub(crate) const CHILD_SUPERSEDED_EXIT_CODE: i32 = 78;
 pub(crate) const CHILD_INPUT_INVALID_EXIT_CODE: i32 = 79;
@@ -15,6 +26,13 @@ pub(crate) const CHILD_ARTIFACT_TOO_LARGE_EXIT_CODE: i32 = 80;
 pub(crate) const CHILD_CALCULATION_FAILED_EXIT_CODE: i32 = 81;
 pub(crate) const CHILD_DEPENDENCY_FAILED_EXIT_CODE: i32 = 82;
 pub(crate) const CHILD_PARENT_LIVENESS_LOST_EXIT_CODE: i32 = 83;
+pub const CHILD_START_BARRIER_FAILED_EXIT_CODE: i32 = 84;
+
+const CHILD_START_MARKER: u8 = 0x4d;
+#[cfg(target_os = "linux")]
+const WORKER_UID: libc::uid_t = 10_001;
+#[cfg(target_os = "linux")]
+const WORKER_GID: libc::gid_t = 10_001;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct AnalysisChildSpec {
@@ -62,6 +80,8 @@ pub(crate) struct ManagedAnalysisChild {
     child: tokio::process::Child,
     process_id: u32,
     peak_resident_bytes: Option<u64>,
+    cgroup: ChildCgroup,
+    oom_kill_count_before: u64,
     #[cfg(unix)]
     parent_liveness: std::os::unix::net::UnixStream,
 }
@@ -113,10 +133,24 @@ pub enum ProcessError {
     MissingProcessId,
     #[error("failed to establish or refresh child liveness: {0}")]
     Liveness(io::Error),
+    #[error("failed to release the isolated child start barrier: {0}")]
+    StartBarrier(io::Error),
+    #[error("managed child cgroup failed: {kind}")]
+    Cgroup { kind: &'static str },
     #[error("child liveness timeout exceeds a supported bound")]
     LivenessTimeoutBound,
     #[error("child liveness timeout conversion exceeds a supported bound")]
     LivenessTimeoutConversion(#[from] std::num::TryFromIntError),
+    #[error("worker bootstrap command is not permitted")]
+    BootstrapCommand,
+    #[error("worker bootstrap configuration is missing or invalid")]
+    BootstrapConfiguration,
+    #[error("worker bootstrap identity transition failed: {0}")]
+    BootstrapIdentity(io::Error),
+    #[error("worker bootstrap could not execute the unprivileged command: {0}")]
+    BootstrapExec(io::Error),
+    #[error("worker process does not have the fixed unprivileged identity")]
+    InvalidWorkerIdentity,
 }
 
 impl ProcessError {
@@ -130,29 +164,42 @@ impl ProcessError {
             Self::Signal(_) => "child_signal",
             Self::MissingProcessId => "child_process_id_missing",
             Self::Liveness(_) => "child_liveness",
+            Self::StartBarrier(_) => "child_start_barrier",
+            Self::Cgroup { kind } => kind,
             Self::LivenessTimeoutBound => "child_liveness_timeout_bound",
             Self::LivenessTimeoutConversion(_) => "child_liveness_timeout_conversion",
+            Self::BootstrapCommand => "bootstrap_command",
+            Self::BootstrapConfiguration => "bootstrap_configuration",
+            Self::BootstrapIdentity(_) => "bootstrap_identity",
+            Self::BootstrapExec(_) => "bootstrap_exec",
+            Self::InvalidWorkerIdentity => "worker_identity",
         }
     }
 }
 
+impl From<CgroupError> for ProcessError {
+    fn from(error: CgroupError) -> Self {
+        Self::Cgroup { kind: error.kind() }
+    }
+}
+
 impl ManagedAnalysisChild {
-    /// Starts the calculation subprocess with an isolated environment, process group, and hard
-    /// address-space limit.
+    /// Starts the calculation subprocess, attaches it to the fixed hard-limit cgroup, verifies
+    /// membership, and only then releases its computation barrier.
     ///
     /// # Errors
     ///
     /// Returns an error when the current executable cannot be resolved or the child cannot start.
     #[cfg(target_os = "linux")]
-    pub(crate) fn spawn(
+    pub(crate) async fn spawn(
         spec: &AnalysisChildSpec,
-        memory_limit_bytes: u64,
+        cgroup: &ChildCgroup,
     ) -> Result<Self, ProcessError> {
         use std::os::fd::AsRawFd;
         use std::os::unix::net::UnixStream;
         use std::process::Stdio;
 
-        use tokio::process::Command;
+        use tokio::{io::AsyncWriteExt, process::Command};
 
         let executable = std::env::current_exe().map_err(ProcessError::CurrentExecutable)?;
         let liveness_timeout_millis = u64::try_from(spec.parent_liveness_timeout.as_millis())?;
@@ -165,6 +212,7 @@ impl ManagedAnalysisChild {
             .set_nonblocking(true)
             .map_err(ProcessError::Liveness)?;
         let child_liveness_fd = child_liveness.as_raw_fd();
+        let memory_before = cgroup.snapshot()?;
         let mut command = Command::new(executable);
         command
             .arg("child-compute")
@@ -190,22 +238,45 @@ impl ManagedAnalysisChild {
             .arg(liveness_timeout_millis.to_string())
             .env_clear()
             .env("MOMO_ANALYSIS_READ_DATABASE_URL", &spec.read_database_url)
-            .stdin(Stdio::null())
+            .stdin(Stdio::piped())
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .kill_on_drop(true)
             .process_group(0);
-        configure_memory_limit(&mut command, memory_limit_bytes);
+        configure_parent_death_signal(&mut command);
         configure_inherited_liveness(&mut command, child_liveness_fd);
         let child = command.spawn().map_err(ProcessError::Spawn)?;
         drop(child_liveness);
         let process_id = child.id().ok_or(ProcessError::MissingProcessId)?;
-        Ok(Self {
+        let mut managed = Self {
             child,
             process_id,
             peak_resident_bytes: None,
+            cgroup: cgroup.clone(),
+            oom_kill_count_before: memory_before.oom_kill_count,
             parent_liveness,
-        })
+        };
+        if let Err(error) = managed.cgroup.attach(process_id) {
+            let _cleanup_result = managed.terminate(Duration::from_secs(1)).await;
+            return Err(ProcessError::from(error));
+        }
+        let Some(mut start_barrier) = managed.child.stdin.take() else {
+            let _cleanup_result = managed.terminate(Duration::from_secs(1)).await;
+            return Err(ProcessError::StartBarrier(io::Error::new(
+                io::ErrorKind::BrokenPipe,
+                "child start barrier was unavailable",
+            )));
+        };
+        if let Err(error) = start_barrier.write_all(&[CHILD_START_MARKER]).await {
+            let _cleanup_result = managed.terminate(Duration::from_secs(1)).await;
+            return Err(ProcessError::StartBarrier(error));
+        }
+        if let Err(error) = start_barrier.shutdown().await {
+            let _cleanup_result = managed.terminate(Duration::from_secs(1)).await;
+            return Err(ProcessError::StartBarrier(error));
+        }
+        drop(start_barrier);
+        Ok(managed)
     }
 
     /// Reports that managed calculation children require the production Linux isolation contract.
@@ -214,9 +285,13 @@ impl ManagedAnalysisChild {
     ///
     /// Always returns [`ProcessError::UnsupportedPlatform`].
     #[cfg(not(target_os = "linux"))]
-    pub(crate) const fn spawn(
+    #[expect(
+        clippy::unused_async,
+        reason = "the cross-platform API remains awaitable while non-Linux runtimes fail closed"
+    )]
+    pub(crate) async fn spawn(
         _spec: &AnalysisChildSpec,
-        _memory_limit_bytes: u64,
+        _cgroup: &ChildCgroup,
     ) -> Result<Self, ProcessError> {
         Err(ProcessError::UnsupportedPlatform)
     }
@@ -267,10 +342,15 @@ impl ManagedAnalysisChild {
     ///
     /// Returns an error when the operating system cannot report child state.
     pub(crate) fn try_wait(&mut self) -> Result<Option<AnalysisChildOutcome>, ProcessError> {
-        self.child
-            .try_wait()
-            .map(|status| status.map(classify_analysis_status))
-            .map_err(ProcessError::Wait)
+        let Some(status) = self.child.try_wait().map_err(ProcessError::Wait)? else {
+            return Ok(None);
+        };
+        let memory_after = self.cgroup.snapshot()?;
+        self.cgroup.ensure_empty()?;
+        Ok(Some(classify_analysis_status(
+            status,
+            memory_after.oom_kill_count > self.oom_kill_count_before,
+        )))
     }
 
     /// Stops the child process group, gives it a bounded grace period, and always reaps it.
@@ -282,15 +362,19 @@ impl ManagedAnalysisChild {
     pub(crate) async fn terminate(&mut self, grace: Duration) -> Result<ExitStatus, ProcessError> {
         use tokio::time;
 
-        if let Some(status) = self.child.try_wait().map_err(ProcessError::Wait)? {
-            return Ok(status);
-        }
-        terminate_process_group(self.process_id, libc::SIGTERM)?;
-        if let Ok(result) = time::timeout(grace, self.child.wait()).await {
-            return result.map_err(ProcessError::Wait);
-        }
-        terminate_process_group(self.process_id, libc::SIGKILL)?;
-        self.child.wait().await.map_err(ProcessError::Wait)
+        let status = if let Some(status) = self.child.try_wait().map_err(ProcessError::Wait)? {
+            status
+        } else {
+            terminate_process_group(self.process_id, libc::SIGTERM)?;
+            if let Ok(result) = time::timeout(grace, self.child.wait()).await {
+                result.map_err(ProcessError::Wait)?
+            } else {
+                terminate_process_group(self.process_id, libc::SIGKILL)?;
+                self.child.wait().await.map_err(ProcessError::Wait)?
+            }
+        };
+        self.cgroup.ensure_empty()?;
+        Ok(status)
     }
 
     /// Reports that managed process-group termination requires Unix.
@@ -310,14 +394,112 @@ pub(crate) const fn managed_analysis_runtime_supported() -> bool {
     cfg!(target_os = "linux")
 }
 
-fn classify_analysis_status(status: ExitStatus) -> AnalysisChildOutcome {
-    #[cfg(unix)]
-    {
-        use std::os::unix::process::ExitStatusExt;
+/// Prepares the fixed child cgroup as root, permanently drops to the worker identity, and
+/// re-executes one allowlisted command without a shell.
+///
+/// # Errors
+///
+/// Returns an error when the command, cgroup, identity transition, or exec boundary is invalid.
+#[cfg(target_os = "linux")]
+pub fn bootstrap_and_exec(arguments: &[OsString]) -> Result<(), ProcessError> {
+    use std::{os::unix::process::CommandExt, process::Command};
 
-        if status.signal().is_some_and(is_resource_signal) {
-            return AnalysisChildOutcome::ResourceExhausted;
-        }
+    if !bootstrap_config::command_allowed(arguments) {
+        return Err(ProcessError::BootstrapCommand);
+    }
+    // SAFETY: geteuid has no preconditions and does not dereference pointers.
+    if unsafe { libc::geteuid() } != 0 {
+        return Err(ProcessError::BootstrapIdentity(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            "bootstrap requires effective root",
+        )));
+    }
+    let executable = std::env::current_exe().map_err(ProcessError::CurrentExecutable)?;
+    let mut command = Command::new(executable);
+    command.args(arguments);
+    if bootstrap_config::requires_child_cgroup(arguments) {
+        let child_limit = bootstrap_config::child_memory_limit()?;
+        let prepared =
+            crate::cgroup::prepare_production_child_cgroup(child_limit, WORKER_UID, WORKER_GID)?;
+        command.envs(prepared.environment());
+    }
+    drop_worker_privileges()?;
+    let error = command.exec();
+    Err(ProcessError::BootstrapExec(error))
+}
+
+/// Reports that root cgroup bootstrap is available only on Linux.
+///
+/// # Errors
+///
+/// Always returns [`ProcessError::UnsupportedPlatform`].
+#[cfg(not(target_os = "linux"))]
+pub const fn bootstrap_and_exec(_arguments: &[OsString]) -> Result<(), ProcessError> {
+    Err(ProcessError::UnsupportedPlatform)
+}
+
+#[cfg(target_os = "linux")]
+#[must_use]
+pub fn worker_identity_supported() -> bool {
+    let mut real_uid = 0;
+    let mut effective_uid = 0;
+    let mut saved_uid = 0;
+    let mut real_gid = 0;
+    let mut effective_gid = 0;
+    let mut saved_gid = 0;
+    // SAFETY: all pointers reference writable uid/gid values for the duration of the calls.
+    let uid_result = unsafe { libc::getresuid(&mut real_uid, &mut effective_uid, &mut saved_uid) };
+    // SAFETY: see the preceding safety argument.
+    let gid_result = unsafe { libc::getresgid(&mut real_gid, &mut effective_gid, &mut saved_gid) };
+    // SAFETY: a zero-length getgroups call accepts a null list and returns only the count.
+    let supplementary_group_count = unsafe { libc::getgroups(0, std::ptr::null_mut()) };
+    // SAFETY: PR_GET_NO_NEW_PRIVS has no pointer arguments and only reads process state.
+    let no_new_privileges = unsafe { libc::prctl(libc::PR_GET_NO_NEW_PRIVS, 0, 0, 0, 0) };
+
+    uid_result == 0
+        && gid_result == 0
+        && [real_uid, effective_uid, saved_uid] == [WORKER_UID; 3]
+        && [real_gid, effective_gid, saved_gid] == [WORKER_GID; 3]
+        && supplementary_group_count == 0
+        && no_new_privileges == 1
+}
+
+#[cfg(not(target_os = "linux"))]
+#[must_use]
+pub const fn worker_identity_supported() -> bool {
+    false
+}
+
+#[cfg(target_os = "linux")]
+fn drop_worker_privileges() -> Result<(), ProcessError> {
+    // SAFETY: setgroups receives a zero length and null pointer, which clears supplementary groups.
+    if unsafe { libc::setgroups(0, std::ptr::null()) } != 0 {
+        return Err(ProcessError::BootstrapIdentity(io::Error::last_os_error()));
+    }
+    // SAFETY: prctl with PR_SET_NO_NEW_PRIVS and argument 1 has no pointer arguments.
+    if unsafe { libc::prctl(libc::PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) } != 0 {
+        return Err(ProcessError::BootstrapIdentity(io::Error::last_os_error()));
+    }
+    // SAFETY: the fixed numeric IDs are valid uid/gid values and all saved IDs are replaced.
+    if unsafe { libc::setresgid(WORKER_GID, WORKER_GID, WORKER_GID) } != 0 {
+        return Err(ProcessError::BootstrapIdentity(io::Error::last_os_error()));
+    }
+    // SAFETY: the fixed numeric IDs are valid uid/gid values and all saved IDs are replaced.
+    if unsafe { libc::setresuid(WORKER_UID, WORKER_UID, WORKER_UID) } != 0 {
+        return Err(ProcessError::BootstrapIdentity(io::Error::last_os_error()));
+    }
+    if !worker_identity_supported() {
+        return Err(ProcessError::InvalidWorkerIdentity);
+    }
+    Ok(())
+}
+
+fn classify_analysis_status(
+    status: ExitStatus,
+    cgroup_oom_kill_observed: bool,
+) -> AnalysisChildOutcome {
+    if cgroup_oom_kill_observed {
+        return AnalysisChildOutcome::ResourceExhausted;
     }
     match status.code() {
         Some(0) => AnalysisChildOutcome::Succeeded,
@@ -325,10 +507,45 @@ fn classify_analysis_status(status: ExitStatus) -> AnalysisChildOutcome {
         Some(CHILD_INPUT_INVALID_EXIT_CODE) => AnalysisChildOutcome::InputInvalid,
         Some(CHILD_ARTIFACT_TOO_LARGE_EXIT_CODE) => AnalysisChildOutcome::ArtifactTooLarge,
         Some(RESOURCE_LIMIT_HIT_EXIT_CODE) => AnalysisChildOutcome::ResourceExhausted,
-        Some(CHILD_DEPENDENCY_FAILED_EXIT_CODE) => AnalysisChildOutcome::DependencyFailed,
+        Some(CHILD_DEPENDENCY_FAILED_EXIT_CODE | CHILD_START_BARRIER_FAILED_EXIT_CODE) => {
+            AnalysisChildOutcome::DependencyFailed
+        }
         Some(CHILD_PARENT_LIVENESS_LOST_EXIT_CODE) => AnalysisChildOutcome::ParentLivenessLost,
         _ => AnalysisChildOutcome::CalculationFailed,
     }
+}
+
+/// Blocks a hidden compute child until its parent has completed cgroup attachment and readback.
+///
+/// # Errors
+///
+/// Returns an error if stdin closes early, carries the wrong marker, or contains trailing bytes.
+pub fn wait_for_child_start_barrier() -> Result<(), ProcessError> {
+    let stdin = io::stdin();
+    let mut input = stdin.lock();
+    let mut marker = [0_u8; 1];
+    input
+        .read_exact(&mut marker)
+        .map_err(ProcessError::StartBarrier)?;
+    if marker != [CHILD_START_MARKER] {
+        return Err(ProcessError::StartBarrier(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "child start barrier marker was invalid",
+        )));
+    }
+    let mut trailing = [0_u8; 1];
+    if input
+        .read(&mut trailing)
+        .map_err(ProcessError::StartBarrier)?
+        != 0
+    {
+        return Err(ProcessError::StartBarrier(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "child start barrier contained trailing input",
+        )));
+    }
+    drop(input);
+    Ok(())
 }
 
 #[cfg(target_os = "linux")]
@@ -397,57 +614,6 @@ pub(crate) fn available_filesystem_bytes(_path: &Path) -> Result<u64, io::Error>
 }
 
 #[cfg(unix)]
-/// Runs a child allocation behind an operating-system address-space limit.
-///
-/// # Errors
-///
-/// Returns an error when the child cannot be spawned, signalled, or reaped.
-pub async fn run_hard_limit_probe(
-    limit_bytes: u64,
-    allocation_bytes: u64,
-    timeout: Duration,
-) -> Result<HardLimitProbeResult, ProcessError> {
-    use std::os::unix::process::ExitStatusExt;
-
-    use tokio::{process::Command, time};
-
-    let executable = std::env::current_exe().map_err(ProcessError::CurrentExecutable)?;
-    let mut command = Command::new(executable);
-    command
-        .arg("child-allocate")
-        .arg("--allocation-bytes")
-        .arg(allocation_bytes.to_string())
-        .kill_on_drop(true)
-        .process_group(0);
-    configure_memory_limit(&mut command, limit_bytes);
-
-    let mut child = command.spawn().map_err(ProcessError::Spawn)?;
-    let process_id = child.id().ok_or(ProcessError::MissingProcessId)?;
-
-    let status = if let Ok(result) = time::timeout(timeout, child.wait()).await {
-        result.map_err(ProcessError::Wait)?
-    } else {
-        terminate_process_group(process_id, libc::SIGTERM)?;
-        let status = if let Ok(result) = time::timeout(Duration::from_secs(1), child.wait()).await {
-            result.map_err(ProcessError::Wait)?
-        } else {
-            terminate_process_group(process_id, libc::SIGKILL)?;
-            child.wait().await.map_err(ProcessError::Wait)?
-        };
-        return Ok(probe_result(ProbeOutcome::TimedOut, status));
-    };
-
-    let outcome = if status.code() == Some(RESOURCE_LIMIT_HIT_EXIT_CODE)
-        || status.signal().is_some_and(is_resource_signal)
-    {
-        ProbeOutcome::ResourceLimitEnforced
-    } else {
-        ProbeOutcome::ChildCompleted
-    };
-    Ok(probe_result(outcome, status))
-}
-
-#[cfg(unix)]
 /// Spawns a child that receives a death signal if this parent disappears.
 ///
 /// # Errors
@@ -492,53 +658,21 @@ pub fn spawn_parent_death_probe() -> Result<ParentDeathProbe, ProcessError> {
     Err(ProcessError::UnsupportedPlatform)
 }
 
-#[cfg(not(unix))]
-/// Reports that the hard-limit probe is unavailable on non-Unix hosts.
-///
-/// # Errors
-///
-/// Always returns [`ProcessError::UnsupportedPlatform`].
-pub async fn run_hard_limit_probe(
-    _limit_bytes: u64,
-    _allocation_bytes: u64,
-    _timeout: Duration,
-) -> Result<HardLimitProbeResult, ProcessError> {
-    Err(ProcessError::UnsupportedPlatform)
-}
-
 #[cfg(unix)]
-fn probe_result(outcome: ProbeOutcome, status: ExitStatus) -> HardLimitProbeResult {
-    use std::os::unix::process::ExitStatusExt;
-
-    HardLimitProbeResult {
-        outcome,
-        parent_survived: true,
-        child_exit_code: status.code(),
-        child_signal: status.signal(),
+fn configure_memory_limit(command: &mut tokio::process::Command, limit_bytes: u64) {
+    // SAFETY: the closure only invokes async-signal-safe wrappers before exec.
+    unsafe {
+        command.pre_exec(move || set_address_space_limit(limit_bytes));
     }
 }
 
-#[cfg(unix)]
-const fn is_resource_signal(signal: i32) -> bool {
-    matches!(
-        signal,
-        libc::SIGABRT | libc::SIGKILL | libc::SIGSEGV | libc::SIGBUS
-    )
-}
-
-#[cfg(unix)]
-fn configure_memory_limit(command: &mut tokio::process::Command, limit_bytes: u64) {
-    #[cfg(target_os = "linux")]
+#[cfg(target_os = "linux")]
+fn configure_parent_death_signal(command: &mut tokio::process::Command) {
     // SAFETY: getpid has no preconditions and does not dereference pointers.
     let expected_parent_pid = unsafe { libc::getpid() };
-    // SAFETY: the closure only invokes async-signal-safe wrappers before exec.
+    // SAFETY: the closure invokes only the async-signal-safe prctl/getppid wrappers before exec.
     unsafe {
-        command.pre_exec(move || {
-            set_address_space_limit(limit_bytes)?;
-            #[cfg(target_os = "linux")]
-            configure_parent_death_signal_before_exec(expected_parent_pid)?;
-            Ok(())
-        });
+        command.pre_exec(move || configure_parent_death_signal_before_exec(expected_parent_pid));
     }
 }
 
@@ -691,96 +825,4 @@ fn terminate_process_group(process_id: u32, signal: i32) -> Result<(), ProcessEr
     } else {
         Err(ProcessError::Signal(error))
     }
-}
-
-#[cfg(unix)]
-#[must_use]
-pub fn allocate_and_touch(bytes: u64) -> i32 {
-    let Ok(length) = usize::try_from(bytes) else {
-        return RESOURCE_LIMIT_HIT_EXIT_CODE;
-    };
-    let Some(mapping) = AnonymousMapping::new(length) else {
-        return RESOURCE_LIMIT_HIT_EXIT_CODE;
-    };
-    // SAFETY: sysconf reads a process-global constant and has no pointer preconditions.
-    let page_size = unsafe { libc::sysconf(libc::_SC_PAGESIZE) };
-    let Ok(page_size) = usize::try_from(page_size) else {
-        return 74;
-    };
-    if page_size == 0 {
-        return 74;
-    }
-    mapping.touch_pages(page_size);
-    if mapping.release() { 0 } else { 75 }
-}
-
-#[cfg(unix)]
-struct AnonymousMapping {
-    pointer: Option<std::ptr::NonNull<libc::c_void>>,
-    length: usize,
-}
-
-#[cfg(unix)]
-impl AnonymousMapping {
-    fn new(length: usize) -> Option<Self> {
-        // SAFETY: the arguments request a private anonymous mapping and contain no borrowed
-        // pointers. A successful mapping is owned by the returned guard.
-        let pointer = unsafe {
-            libc::mmap(
-                std::ptr::null_mut(),
-                length,
-                libc::PROT_READ | libc::PROT_WRITE,
-                libc::MAP_PRIVATE | libc::MAP_ANONYMOUS,
-                -1,
-                0,
-            )
-        };
-        if pointer == libc::MAP_FAILED {
-            return None;
-        }
-        std::ptr::NonNull::new(pointer).map(|pointer| Self {
-            pointer: Some(pointer),
-            length,
-        })
-    }
-
-    fn touch_pages(&self, page_size: usize) {
-        let Some(pointer) = self.pointer else {
-            return;
-        };
-        let bytes = pointer.as_ptr().cast::<u8>();
-        for offset in (0..self.length).step_by(page_size) {
-            let address = bytes.wrapping_add(offset);
-            // SAFETY: `offset` is strictly below the owned mapping length.
-            unsafe { std::ptr::write_volatile(address, 1) };
-        }
-    }
-
-    fn release(mut self) -> bool {
-        let Some(pointer) = self.pointer.take() else {
-            return true;
-        };
-        // SAFETY: the guard owns this mapping and clears the pointer before `Drop` can run.
-        let result = unsafe { libc::munmap(pointer.as_ptr(), self.length) };
-        result == 0
-    }
-}
-
-#[cfg(unix)]
-impl Drop for AnonymousMapping {
-    fn drop(&mut self) {
-        if let Some(pointer) = self.pointer.take() {
-            // SAFETY: the guard still owns this mapping; cleanup errors cannot be reported from
-            // `Drop`, but the explicit success path uses `release` when the result matters.
-            unsafe {
-                libc::munmap(pointer.as_ptr(), self.length);
-            }
-        }
-    }
-}
-
-#[cfg(not(unix))]
-#[must_use]
-pub fn allocate_and_touch(_bytes: u64) -> i32 {
-    76
 }

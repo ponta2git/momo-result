@@ -183,7 +183,7 @@ OCRジョブのタイムアウト初期値は `OCR_TIMEOUT_SECONDS` で管理す
 - upload request 全体の上限は `UPLOAD_REQUEST_MAX_BYTES` で管理する。
 - OCR へ進んでいない未参照 upload は account 別に件数・容量上限を持つ。上限は `IMAGE_UPLOAD_UNREFERENCED_COUNT_LIMIT` と `IMAGE_UPLOAD_UNREFERENCED_BYTES_LIMIT` で管理し、超過時は `429` Problem Details で拒否する。
 - 一時ディスクの空き容量・使用率水位は `IMAGE_UPLOAD_STORAGE_MIN_FREE_BYTES` と `IMAGE_UPLOAD_STORAGE_MAX_USED_PERCENT` で管理し、超過時は `503` Problem Details で upload 受付を一時停止する。
-- OCR worker はデコード後メモリ保護のため、4K（3840x2160）を超える寸法の画像を処理しない。
+- OCR worker はデコード後メモリ保護のため、FullHD（1920x1080）を超える寸法の画像を処理しない。
 - アップロード画像はFly.io VMの一時ディスクに保存する。
 - OCR完了時点では画像を削除しない。下書き確定または下書き削除まで保持し、その後削除する。
 - OCR へ進まない未参照 upload は `IMAGE_ORPHAN_OLDER_THAN_MINUTES` より古くなった時点で orphan reaper の削除対象とする。MVP既定値は15分、reaper interval は5分とする。

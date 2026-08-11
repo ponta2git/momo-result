@@ -5,6 +5,7 @@
 //! staging, release tooling, and runtime configuration.
 
 mod artifact;
+mod cgroup;
 pub mod child;
 mod child_report;
 pub mod config;

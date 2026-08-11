@@ -108,6 +108,18 @@ pub async fn run(
         log_startup_failure("platform_contract", &error);
         return Err(error);
     }
+    if !crate::process::worker_identity_supported() {
+        let error = WorkerError::Process(ProcessError::InvalidWorkerIdentity);
+        log_startup_failure("worker_identity", &error);
+        return Err(error);
+    }
+    startup_result(
+        config
+            .child_cgroup
+            .ensure_empty()
+            .map_err(ProcessError::from),
+        "child_cgroup_validation",
+    )?;
     startup_result(
         validate_temporary_root(&config).await,
         "temporary_storage_validation",

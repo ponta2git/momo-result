@@ -1,4 +1,5 @@
 use std::{
+    ffi::OsString,
     fmt::Display,
     io::{self, Write},
     path::PathBuf,
@@ -34,6 +35,11 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Command {
+    #[command(hide = true)]
+    Bootstrap {
+        #[arg(last = true, required = true, num_args = 1..)]
+        arguments: Vec<OsString>,
+    },
     Worker,
     ReleaseDependencyProbe,
     ReleaseAudit {
@@ -80,6 +86,12 @@ enum Command {
         #[arg(long, default_value_t = 5_000)]
         timeout_ms: u64,
     },
+    ProbeCgroupLimit {
+        #[arg(long)]
+        allocation_bytes: u64,
+        #[arg(long, default_value_t = 5_000)]
+        timeout_ms: u64,
+    },
     #[command(hide = true)]
     OcrPilot {
         #[arg(long)]
@@ -95,6 +107,11 @@ enum Command {
     ProbeParentDeath,
     #[command(hide = true)]
     ChildAllocate {
+        #[arg(long)]
+        allocation_bytes: u64,
+    },
+    #[command(hide = true)]
+    ChildCgroupAllocate {
         #[arg(long)]
         allocation_bytes: u64,
     },
@@ -174,7 +191,19 @@ impl OcrPilotLayoutFamily {
 async fn main() -> ExitCode {
     let cli = Cli::parse();
     match &cli.command {
+        Command::Bootstrap { arguments } => {
+            return match momo_analysis::process::bootstrap_and_exec(arguments) {
+                Ok(()) => ExitCode::SUCCESS,
+                Err(_error) => ExitCode::FAILURE,
+            };
+        }
         Command::ChildAllocate { allocation_bytes } => {
+            return exit_code(allocate_and_touch(*allocation_bytes));
+        }
+        Command::ChildCgroupAllocate { allocation_bytes } => {
+            if momo_analysis::process::wait_for_child_start_barrier().is_err() {
+                return exit_code(momo_analysis::process::CHILD_START_BARRIER_FAILED_EXIT_CODE);
+            }
             return exit_code(allocate_and_touch(*allocation_bytes));
         }
         Command::ChildCompute {
@@ -189,6 +218,9 @@ async fn main() -> ExitCode {
             parent_liveness_fd,
             parent_liveness_timeout_ms,
         } => {
+            if momo_analysis::process::wait_for_child_start_barrier().is_err() {
+                return exit_code(momo_analysis::process::CHILD_START_BARRIER_FAILED_EXIT_CODE);
+            }
             return exit_code(
                 momo_analysis::child::execute(&momo_analysis::child::ChildComputeRequest {
                     game_title_id,
@@ -211,6 +243,7 @@ async fn main() -> ExitCode {
         | Command::ReleasePromote { .. }
         | Command::ShadowEndurance { .. }
         | Command::ProbeHardLimit { .. }
+        | Command::ProbeCgroupLimit { .. }
         | Command::OcrPilot { .. }
         | Command::ProbeParentDeath
         | Command::ChildWait { .. } => {}
@@ -278,30 +311,21 @@ async fn run(command: Command) -> Result<(), String> {
             limit_bytes,
             allocation_bytes,
             timeout_ms,
-        } => {
-            let result = run_hard_limit_probe(
-                limit_bytes,
-                allocation_bytes,
-                Duration::from_millis(timeout_ms),
-            )
-            .await
-            .map_err(|error| error.to_string())?;
-            write_json_line(&result)?;
-            if result.outcome == ProbeOutcome::ResourceLimitEnforced && result.parent_survived {
-                Ok(())
-            } else {
-                Err(format!("hard limit probe was inconclusive: {result:?}"))
-            }
-        }
+        } => run_legacy_hard_limit_probe(limit_bytes, allocation_bytes, timeout_ms).await,
+        Command::ProbeCgroupLimit {
+            allocation_bytes,
+            timeout_ms,
+        } => run_cgroup_hard_limit_probe(allocation_bytes, timeout_ms).await,
         Command::OcrPilot {
             image,
             screen_type,
             layout_family,
             tessdata_path,
         } => run_ocr_pilot(&image, screen_type, layout_family, tessdata_path).await,
-        Command::ChildAllocate { .. } | Command::ChildCompute { .. } => {
-            Err(String::from("child command dispatch failed"))
-        }
+        Command::ChildAllocate { .. }
+        | Command::ChildCgroupAllocate { .. }
+        | Command::ChildCompute { .. } => Err(String::from("child command dispatch failed")),
+        Command::Bootstrap { .. } => Err(String::from("bootstrap command dispatch failed")),
         Command::ProbeParentDeath => {
             let probe = momo_analysis::process::spawn_parent_death_probe()
                 .map_err(|error| error.to_string())?;
@@ -319,6 +343,41 @@ async fn run(command: Command) -> Result<(), String> {
             .map_err(|error| error.to_string())?;
             wait_for_shutdown().await.map_err(|error| error.to_string())
         }
+    }
+}
+
+async fn run_legacy_hard_limit_probe(
+    limit_bytes: u64,
+    allocation_bytes: u64,
+    timeout_ms: u64,
+) -> Result<(), String> {
+    let result = run_hard_limit_probe(
+        limit_bytes,
+        allocation_bytes,
+        Duration::from_millis(timeout_ms),
+    )
+    .await
+    .map_err(|error| error.to_string())?;
+    write_json_line(&result)?;
+    if result.outcome == ProbeOutcome::ResourceLimitEnforced && result.parent_survived {
+        Ok(())
+    } else {
+        Err(format!("hard limit probe was inconclusive: {result:?}"))
+    }
+}
+
+async fn run_cgroup_hard_limit_probe(allocation_bytes: u64, timeout_ms: u64) -> Result<(), String> {
+    let result = momo_analysis::process::run_cgroup_hard_limit_probe(
+        allocation_bytes,
+        Duration::from_millis(timeout_ms),
+    )
+    .await
+    .map_err(|error| error.to_string())?;
+    write_json_line(&result)?;
+    if result.outcome == ProbeOutcome::ResourceLimitEnforced && result.parent_survived {
+        Ok(())
+    } else {
+        Err(format!("cgroup hard limit probe failed: {result:?}"))
     }
 }
 
@@ -492,5 +551,12 @@ mod tests {
             .chain(["--screen-type", "auto"])
             .collect::<Vec<_>>();
         assert!(Cli::try_parse_from(auto).is_err());
+    }
+
+    #[test]
+    fn bootstrap_requires_an_escaped_command() {
+        assert!(Cli::try_parse_from(["momo-analysis", "bootstrap", "--", "worker"]).is_ok());
+        assert!(Cli::try_parse_from(["momo-analysis", "bootstrap", "worker"]).is_err());
+        assert!(Cli::try_parse_from(["momo-analysis", "bootstrap", "--"]).is_err());
     }
 }

@@ -11,6 +11,7 @@ use tokio::time;
 
 use crate::{
     artifact::validate_artifact_directory,
+    cgroup::ChildCgroup,
     child_report,
     database::{DatabaseError, connect},
     process::{
@@ -152,6 +153,8 @@ pub async fn run(request: &ShadowRequest) -> Result<ShadowReport, ShadowError> {
         return Err(ShadowError::InvalidRunCount);
     }
     validate_empty_root(&request.temporary_root)?;
+    let child_cgroup = ChildCgroup::from_environment(request.child_memory_limit_bytes)
+        .map_err(ProcessError::from)?;
     let read_database_url = env::var("MOMO_ANALYSIS_READ_DATABASE_URL")
         .ok()
         .filter(|value| !value.trim().is_empty())
@@ -167,7 +170,16 @@ pub async fn run(request: &ShadowRequest) -> Result<ShadowReport, ShadowError> {
         .try_get(0)?;
     let mut runs = Vec::with_capacity(usize::try_from(request.runs)?);
     for run_number in 1..=request.runs {
-        runs.push(run_once(request, &read_database_url, input_revision, run_number).await?);
+        runs.push(
+            run_once(
+                request,
+                &child_cgroup,
+                &read_database_url,
+                input_revision,
+                run_number,
+            )
+            .await?,
+        );
     }
     let checksums = runs
         .iter()
@@ -236,6 +248,7 @@ pub async fn run(request: &ShadowRequest) -> Result<ShadowReport, ShadowError> {
 
 async fn run_once(
     request: &ShadowRequest,
+    child_cgroup: &ChildCgroup,
     read_database_url: &str,
     input_revision: i64,
     run_number: u32,
@@ -260,7 +273,7 @@ async fn run_once(
         parent_liveness_timeout: Duration::from_secs(2),
     };
     let started = Instant::now();
-    let mut child = ManagedAnalysisChild::spawn(&spec, request.child_memory_limit_bytes)?;
+    let mut child = ManagedAnalysisChild::spawn(&spec, child_cgroup).await?;
     child.refresh_liveness()?;
     child.sample_resident_bytes().await;
     let outcome = loop {

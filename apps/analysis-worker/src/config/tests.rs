@@ -3,7 +3,7 @@ use std::{ffi::OsString, sync::Mutex};
 use super::*;
 
 static ENV_LOCK: Mutex<()> = Mutex::new(());
-const ENVIRONMENT_NAMES: [&str; 22] = [
+const ENVIRONMENT_NAMES: [&str; 25] = [
     PUBLICATION_MODE_ENV,
     "MOMO_ANALYSIS_RUNTIME_MEMORY_LIMIT_BYTES",
     "MOMO_ANALYSIS_CHILD_MEMORY_LIMIT_BYTES",
@@ -26,6 +26,9 @@ const ENVIRONMENT_NAMES: [&str; 22] = [
     "MOMO_ANALYSIS_HEARTBEAT_INTERVAL_MS",
     "MOMO_ANALYSIS_CHILD_STOP_GRACE_MS",
     "MOMO_ANALYSIS_REDIS_BLOCK_MS",
+    crate::cgroup::CGROUP_HIERARCHY_ENV,
+    crate::cgroup::CGROUP_DIRECTORY_ENV,
+    crate::cgroup::CGROUP_LIMIT_ENV,
 ];
 
 struct EnvironmentGuard(Vec<(&'static str, Option<OsString>)>);
@@ -87,7 +90,7 @@ fn valid_enabled_environment() {
     EnvironmentGuard::set("MOMO_ANALYSIS_TEMPORARY_FILE_COUNT_MAX", "10001");
 }
 
-fn valid_runtime_environment() {
+fn valid_runtime_environment() -> tempfile::TempDir {
     EnvironmentGuard::set("DATABASE_URL", "postgresql://control.invalid/momo");
     EnvironmentGuard::set(
         "MOMO_ANALYSIS_READ_DATABASE_URL",
@@ -103,6 +106,30 @@ fn valid_runtime_environment() {
     EnvironmentGuard::set("MOMO_ANALYSIS_HEARTBEAT_INTERVAL_MS", "5000");
     EnvironmentGuard::set("MOMO_ANALYSIS_CHILD_STOP_GRACE_MS", "5000");
     EnvironmentGuard::set("MOMO_ANALYSIS_REDIS_BLOCK_MS", "5000");
+    let cgroup_root = tempfile::tempdir().expect("temporary cgroup root must be created");
+    let cgroup = cgroup_root
+        .path()
+        .join(crate::cgroup::CGROUP_DIRECTORY_NAME);
+    std::fs::create_dir(&cgroup).expect("fixture cgroup must be created");
+    std::fs::write(cgroup.join("cgroup.procs"), "")
+        .expect("fixture cgroup membership must be written");
+    std::fs::write(cgroup.join("memory.limit_in_bytes"), "134217728\n")
+        .expect("fixture cgroup limit must be written");
+    std::fs::write(cgroup.join("memory.usage_in_bytes"), "0\n")
+        .expect("fixture cgroup usage must be written");
+    std::fs::write(cgroup.join("memory.max_usage_in_bytes"), "0\n")
+        .expect("fixture cgroup peak must be written");
+    std::fs::write(cgroup.join("memory.oom_control"), "oom_kill 0\n")
+        .expect("fixture cgroup events must be written");
+    EnvironmentGuard::set(crate::cgroup::CGROUP_HIERARCHY_ENV, "v1");
+    EnvironmentGuard::set(
+        crate::cgroup::CGROUP_DIRECTORY_ENV,
+        cgroup
+            .to_str()
+            .expect("temporary cgroup path must be UTF-8"),
+    );
+    EnvironmentGuard::set(crate::cgroup::CGROUP_LIMIT_ENV, "134217728");
+    cgroup_root
 }
 
 #[test]
@@ -200,7 +227,7 @@ fn runtime_accepts_only_timing_that_preserves_lease_recovery_margin() {
     let _guard = EnvironmentGuard::capture();
     clear();
     valid_enabled_environment();
-    valid_runtime_environment();
+    let _cgroup = valid_runtime_environment();
     let initial_worker = WorkerConfig::from_environment()
         .unwrap_or_else(|error| panic!("valid worker limits: {error}"));
 

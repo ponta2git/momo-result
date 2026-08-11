@@ -7,7 +7,7 @@ kill_timeout = "60s"
   dockerfile = "apps/analysis-worker/Dockerfile"
 
 [processes]
-  worker = "/usr/local/bin/momo-analysis worker"
+  worker = "/usr/local/bin/momo-analysis bootstrap -- worker"
 
 [env]
   MOMO_ANALYSIS_CALCULATION_TIMEOUT_MS = "120000"

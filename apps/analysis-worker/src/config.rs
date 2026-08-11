@@ -7,7 +7,10 @@ use std::{
 
 use thiserror::Error;
 
+use crate::cgroup::ChildCgroup;
+
 const PUBLICATION_MODE_ENV: &str = "MOMO_ANALYSIS_PUBLICATION_MODE";
+pub(crate) const CHILD_MEMORY_LIMIT_ENV: &str = "MOMO_ANALYSIS_CHILD_MEMORY_LIMIT_BYTES";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PublicationMode {
@@ -36,19 +39,20 @@ pub struct WorkerConfig {
 
 #[derive(Clone)]
 pub struct WorkerRuntimeConfig {
-    pub database_url: String,
-    pub read_database_url: String,
-    pub redis_url: String,
-    pub redis_stream: String,
-    pub redis_group: String,
-    pub worker_id: String,
-    pub temporary_root: PathBuf,
-    pub effective_config_version: String,
-    pub lease_duration: Duration,
-    pub heartbeat_interval: Duration,
-    pub shutdown_grace: Duration,
-    pub redis_block: Duration,
-    pub publication_limits: PublicationLimits,
+    pub(crate) database_url: String,
+    pub(crate) read_database_url: String,
+    pub(crate) redis_url: String,
+    pub(crate) redis_stream: String,
+    pub(crate) redis_group: String,
+    pub(crate) worker_id: String,
+    pub(crate) temporary_root: PathBuf,
+    pub(crate) effective_config_version: String,
+    pub(crate) lease_duration: Duration,
+    pub(crate) heartbeat_interval: Duration,
+    pub(crate) shutdown_grace: Duration,
+    pub(crate) redis_block: Duration,
+    pub(crate) publication_limits: PublicationLimits,
+    pub(crate) child_cgroup: ChildCgroup,
 }
 
 #[derive(Debug, Error, Eq, PartialEq)]
@@ -71,6 +75,8 @@ pub enum ConfigError {
     UnsafeRuntimeIdentifier { name: &'static str },
     #[error("analysis temporary root must be a dedicated absolute path")]
     UnsafeTemporaryRoot,
+    #[error("analysis child cgroup is unavailable: {kind}")]
+    ChildCgroup { kind: &'static str },
 }
 
 impl WorkerConfig {
@@ -98,7 +104,7 @@ impl WorkerConfig {
 
         let limits = PublicationLimits {
             runtime_memory_limit: positive("MOMO_ANALYSIS_RUNTIME_MEMORY_LIMIT_BYTES")?,
-            child_memory_limit: positive("MOMO_ANALYSIS_CHILD_MEMORY_LIMIT_BYTES")?,
+            child_memory_limit: positive(CHILD_MEMORY_LIMIT_ENV)?,
             parent_headroom: positive("MOMO_ANALYSIS_PARENT_HEADROOM_BYTES")?,
             calculation_timeout: duration_millis("MOMO_ANALYSIS_CALCULATION_TIMEOUT_MS")?,
             finalization_timeout: duration_millis("MOMO_ANALYSIS_FINALIZATION_TIMEOUT_MS")?,
@@ -182,6 +188,9 @@ impl WorkerRuntimeConfig {
         if !dedicated_absolute_path(&temporary_root) {
             return Err(ConfigError::UnsafeTemporaryRoot);
         }
+        let child_cgroup =
+            ChildCgroup::from_environment(publication_limits.child_memory_limit.get())
+                .map_err(|error| ConfigError::ChildCgroup { kind: error.kind() })?;
         Ok(Self {
             database_url: required_string("DATABASE_URL")?,
             read_database_url: required_string("MOMO_ANALYSIS_READ_DATABASE_URL")?,
@@ -196,6 +205,7 @@ impl WorkerRuntimeConfig {
             shutdown_grace,
             redis_block,
             publication_limits,
+            child_cgroup,
         })
     }
 }
@@ -243,5 +253,9 @@ fn dedicated_absolute_path(path: &Path) -> bool {
 #[expect(
     clippy::panic,
     reason = "configuration fixtures abort with context when a supposedly valid setup is rejected"
+)]
+#[expect(
+    clippy::expect_used,
+    reason = "configuration fixtures abort with precise context when test setup is invalid"
 )]
 mod tests;

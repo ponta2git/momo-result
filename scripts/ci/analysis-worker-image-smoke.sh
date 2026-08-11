@@ -3,9 +3,9 @@ set -euo pipefail
 
 image_ref="${1:?analysis worker image reference is required}"
 runtime_memory_limit="256m"
-child_memory_limit_bytes="201326592"
-probe_allocation_bytes="402653184"
-maximum_unpacked_image_bytes="100663296"
+child_memory_limit_bytes="134217728"
+probe_allocation_bytes="268435456"
+maximum_unpacked_image_bytes="150994944"
 
 unpacked_image_bytes="$(docker history --no-trunc --format '{{.Size}}' "${image_ref}" | awk '
   function multiplier(unit) {
@@ -42,8 +42,15 @@ fi
 docker run --rm --entrypoint /usr/local/bin/momo-analysis "${image_ref}" --version
 
 configured_user="$(docker inspect --format '{{.Config.User}}' "${image_ref}")"
-if [[ "${configured_user}" != "momo:momo" ]]; then
-  echo "analysis worker image must run as the registered momo service identity" >&2
+if [[ "${configured_user}" != "0:0" ]]; then
+  echo "analysis worker image must enter through the fixed root cgroup bootstrap" >&2
+  exit 1
+fi
+
+configured_command="$(docker inspect --format '{{json .Config.Cmd}}' "${image_ref}")"
+expected_command='["/usr/local/bin/momo-analysis","bootstrap","--","worker"]'
+if [[ "${configured_command}" != "${expected_command}" ]]; then
+  echo "analysis worker image must drop privileges through the fixed worker bootstrap" >&2
   exit 1
 fi
 
@@ -59,7 +66,7 @@ if [[ "${exposed_ports}" != "null" ]]; then
   exit 1
 fi
 
-docker run --rm --entrypoint sh "${image_ref}" -c '
+docker run --rm --user 10001:10001 --entrypoint sh "${image_ref}" -c '
   set -eu
 
   fail() {
@@ -174,15 +181,16 @@ if docker run --rm \
   exit 1
 fi
 
-docker run --rm --memory "${runtime_memory_limit}" --memory-swap "${runtime_memory_limit}" \
-  --entrypoint /usr/local/bin/momo-analysis \
+docker run --rm --privileged --cgroupns private \
+  --memory "${runtime_memory_limit}" --memory-swap "${runtime_memory_limit}" \
+  --env "MOMO_ANALYSIS_CHILD_MEMORY_LIMIT_BYTES=${child_memory_limit_bytes}" \
+  --env MOMO_HEAVY_CGROUP_V2_VALIDATED=true \
   "${image_ref}" \
-  probe-hard-limit \
-  --limit-bytes "${child_memory_limit_bytes}" \
+  /usr/local/bin/momo-analysis bootstrap -- probe-cgroup-limit \
   --allocation-bytes "${probe_allocation_bytes}" \
   --timeout-ms 10000
 
-docker run --rm --entrypoint sh "${image_ref}" -c '
+docker run --rm --user 10001:10001 --entrypoint sh "${image_ref}" -c '
   set -eu
   child_file=/tmp/analysis-child-pid
   /usr/local/bin/momo-analysis probe-parent-death >"${child_file}" &

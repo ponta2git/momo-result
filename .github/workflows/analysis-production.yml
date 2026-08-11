@@ -297,7 +297,7 @@ jobs:
               select(.singleStartedExactDisabledImage)
             ' > analysis-production-artifact/deployment-state.json
           flyctl ssh console --app "${ANALYSIS_APP}" --pty=false --quiet \
-            --command "/usr/local/bin/momo-analysis release-dependency-probe" \
+            --command "/usr/local/bin/momo-analysis bootstrap -- release-dependency-probe" \
             > "${RUNNER_TEMP}/dependency-probe.json"
           jq -e '
             .controlReadOnly == false and
@@ -333,7 +333,7 @@ jobs:
           REQUIRE_CURRENT: ${{ inputs.require_current }}
           REQUIRE_QUIESCENT: ${{ inputs.require_quiescent }}
         run: |
-          command="/usr/local/bin/momo-analysis release-audit"
+          command="/usr/local/bin/momo-analysis bootstrap -- release-audit"
           if [[ "${REQUIRE_CURRENT}" == "true" ]]; then
             command="${command} --require-current"
           fi
@@ -353,7 +353,7 @@ jobs:
           --app "${ANALYSIS_APP}"
           --pty=false
           --quiet
-          --command "/usr/local/bin/momo-analysis release-promote --trigger initial-backfill --operation-key ${OPERATION_KEY}"
+          --command "/usr/local/bin/momo-analysis bootstrap -- release-promote --trigger initial-backfill --operation-key ${OPERATION_KEY}"
           > "${RUNNER_TEMP}/analysis-operation.json"
 
       - name: Apply initial backfill
@@ -366,7 +366,7 @@ jobs:
           --app "${ANALYSIS_APP}"
           --pty=false
           --quiet
-          --command "/usr/local/bin/momo-analysis release-promote --trigger initial-backfill --operation-key ${OPERATION_KEY} --apply"
+          --command "/usr/local/bin/momo-analysis bootstrap -- release-promote --trigger initial-backfill --operation-key ${OPERATION_KEY} --apply"
           > "${RUNNER_TEMP}/analysis-operation.json"
 
       - name: Sanitize and show release operation report

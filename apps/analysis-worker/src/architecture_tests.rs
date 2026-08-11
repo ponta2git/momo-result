@@ -17,10 +17,10 @@ fn runtime_modules_stay_within_a_reviewable_responsibility_bound() {
 #[test]
 fn unsafe_code_stays_inside_the_operating_system_boundary() {
     for source in production_sources() {
-        if source.relative_path != "process.rs" {
+        if source.relative_path != "process.rs" && !source.relative_path.starts_with("process/") {
             assert!(
                 !contains_unsafe_code(&source.body),
-                "{} contains unsafe code outside process.rs",
+                "{} contains unsafe code outside the process module",
                 source.relative_path
             );
         }

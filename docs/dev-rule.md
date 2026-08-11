@@ -96,6 +96,8 @@ docker build \
 
 docker run --rm \
   --name momo-analysis-local \
+  --privileged \
+  --cgroupns private \
   --memory 256m \
   --memory-swap 256m \
   --add-host host.docker.internal:host-gateway \
@@ -108,11 +110,11 @@ worker imageの更新だけでは、DBに保存されたdesired algorithm versio
 release昇格をdry-run、applyの順で行う。同じoperation keyを両方に使い、key内のversionと日付は対象ごとに更新する。
 
 ```sh
-docker exec momo-analysis-local momo-analysis release-promote \
+docker exec momo-analysis-local momo-analysis bootstrap -- release-promote \
   --trigger algorithm-update \
   --operation-key local-algorithm-v1-20260811
 
-docker exec momo-analysis-local momo-analysis release-promote \
+docker exec momo-analysis-local momo-analysis bootstrap -- release-promote \
   --trigger algorithm-update \
   --operation-key local-algorithm-v1-20260811 \
   --apply
@@ -123,6 +125,9 @@ applyは全登録作品のversion付きcampaignを作り、既存のqueued job�
 DB正本のjob version、fresh worker capability、`analysis_delivery_deferred` の順に確認する。
 
 `--memory` と `--memory-swap` を同値にしてswapを許可せず、現行runtime定義と同じworker全体256MiB上限にする。
+`--privileged --cgroupns private` は専用のローカル検証コンテナ内で固定child cgroupを作るために必要であり、
+起動前に `analysis-worker-image-smoke.sh` のcgroup probeを通す。bootstrapはcgroup準備後に補助groupと
+real/effective/saved UID/GIDを固定service identityへ落とし、worker本体をrootで実行しない。
 Docker Desktop上のコンテナからホストのDB / Redisへ接続するため、専用env fileの接続先hostは
 `host.docker.internal`とする。URL値は文書、shell history、tracked fileへ書かない。
 
@@ -264,6 +269,8 @@ OCR smokeには隔離環境を指す `OCR_CONTROL_SMOKE_DATABASE_URL` と `OCR_C
 一時PostgreSQL / Redisだけで実行する。通常のローカルデータに対するE2E確認は前節の専用workerコンテナと
 管理者メニューを使う。
 resource / endurance測定は本番同等runtimeのprivate gateであり、通常CIの成功を代用証拠にしない。
+dedicated image smokeは、OCI設定上のroot bootstrap、恒久的な権限降格、cgroup attach/readback barrier、
+子だけのOOM終了、親生存、process group回収を一つのLinux runtime契約として検証する。
 
 ## 5. Change Gates
 

@@ -99,6 +99,9 @@ jobs:
     timeout-minutes: 60
     needs: scope
     if: github.event_name != 'pull_request' && needs.scope.outputs.runtime == 'true'
+    outputs:
+      artifact_digest: ${{ steps.image-upload.outputs.artifact-digest }}
+      artifact_id: ${{ steps.image-upload.outputs.artifact-id }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -129,24 +132,46 @@ jobs:
         env:
           MOMO_ORIGIN_LOCK_TOKEN: ${{ env.CI_DUMMY_ORIGIN_LOCK_TOKEN }}
 
-      - name: Record runtime image metadata
+      - name: Record runtime image identity
         run: |
           mkdir -p "${IMAGE_ARTIFACT_NAME}"
           printf "%s\n" "${IMAGE_REF}" > "${IMAGE_ARTIFACT_NAME}/image-ref.txt"
           docker image inspect "${IMAGE_REF}" --format '{{.Id}}' > "${IMAGE_ARTIFACT_NAME}/image-id.txt"
+
+      - name: Save runtime image
+        run: |
+          docker save "${IMAGE_REF}" | gzip -1 > "${IMAGE_ARTIFACT_NAME}/momo-result-image.tar.gz"
+          sha256sum "${IMAGE_ARTIFACT_NAME}/momo-result-image.tar.gz" \
+            > "${IMAGE_ARTIFACT_NAME}/image-tar.sha256"
+        timeout-minutes: 10
+
+      - name: Record runtime candidate provenance
+        run: |
+          image_id="$(sed -n '1p' "${IMAGE_ARTIFACT_NAME}/image-id.txt")"
+          tar_sha="$(cut -d ' ' -f 1 "${IMAGE_ARTIFACT_NAME}/image-tar.sha256")"
+          config_sha="$(sha256sum fly.toml | cut -d ' ' -f 1)"
           jq -n \
             --arg commit "${GITHUB_SHA}" \
+            --arg configSha256 "${config_sha}" \
+            --arg imageId "${image_id}" \
             --arg imageRef "${IMAGE_REF}" \
             --arg runId "${GITHUB_RUN_ID}" \
             --arg runAttempt "${GITHUB_RUN_ATTEMPT}" \
-            '{schemaVersion: 1, commit: $commit, imageRef: $imageRef, runId: $runId, runAttempt: $runAttempt}' \
+            --arg tarSha256 "${tar_sha}" \
+            '{
+              schemaVersion: 1,
+              commit: $commit,
+              runId: $runId,
+              runAttempt: $runAttempt,
+              imageRef: $imageRef,
+              imageId: $imageId,
+              tarSha256: $tarSha256,
+              configSha256: $configSha256
+            }' \
             > "${IMAGE_ARTIFACT_NAME}/candidate.json"
 
-      - name: Save runtime image
-        run: docker save "${IMAGE_REF}" | gzip -1 > "${IMAGE_ARTIFACT_NAME}/momo-result-image.tar.gz"
-        timeout-minutes: 10
-
       - name: Upload runtime image
+        id: image-upload
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: ${{ env.IMAGE_ARTIFACT_NAME }}
@@ -474,7 +499,9 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    needs: release-ready
+    needs:
+      - release-ready
+      - runtime-image
     if: github.event_name != 'pull_request'
     concurrency:
       group: fly-deploy-production
@@ -508,23 +535,94 @@ jobs:
         run: flyctl auth docker
 
       - name: Push smoke-tested image
+        id: registry
         run: |
           docker push "${IMAGE_REF}"
-          docker manifest inspect "${IMAGE_REF}" > "${IMAGE_ARTIFACT_NAME}/registry-manifest.json"
+          registry_ref="$(scripts/ci/resolve-pushed-runtime-image.sh "${IMAGE_REF}")"
+          registry_digest="${registry_ref#*@}"
+          docker manifest inspect "${registry_ref}" | jq -S -c . \
+            > "${IMAGE_ARTIFACT_NAME}/registry-manifest.json"
+          printf '%s\n' "${registry_ref}" > "${IMAGE_ARTIFACT_NAME}/registry-ref.txt"
+          printf 'registry_digest=%s\n' "${registry_digest}" >> "${GITHUB_OUTPUT}"
+          printf 'registry_ref=%s\n' "${registry_ref}" >> "${GITHUB_OUTPUT}"
         timeout-minutes: 10
 
       - name: Upload pushed image manifest
+        id: manifest-upload
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: runtime-image-registry-manifest-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ env.IMAGE_ARTIFACT_NAME }}/registry-manifest.json
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 30
+
+      - name: Create immutable deployment provenance
+        env:
+          MANIFEST_ARTIFACT_DIGEST: ${{ steps.manifest-upload.outputs.artifact-digest }}
+          MANIFEST_ARTIFACT_ID: ${{ steps.manifest-upload.outputs.artifact-id }}
+          REGISTRY_DIGEST: ${{ steps.registry.outputs.registry_digest }}
+          REGISTRY_REF: ${{ steps.registry.outputs.registry_ref }}
+          SOURCE_ARTIFACT_DIGEST: ${{ needs.runtime-image.outputs.artifact_digest }}
+          SOURCE_ARTIFACT_ID: ${{ needs.runtime-image.outputs.artifact_id }}
+        run: |
+          mkdir -p runtime-deployment-metadata
+          scripts/ci/validate-runtime-candidate.sh \
+            "${IMAGE_ARTIFACT_NAME}" "${GITHUB_RUN_ID}" "${GITHUB_RUN_ATTEMPT}" \
+            "${GITHUB_SHA}" "${IMAGE_REF}"
+          image_id="$(sed -n '1p' "${IMAGE_ARTIFACT_NAME}/image-id.txt")"
+          config_sha="$(jq -r '.configSha256' "${IMAGE_ARTIFACT_NAME}/candidate.json")"
+          manifest_sha="$(sha256sum "${IMAGE_ARTIFACT_NAME}/registry-manifest.json" | cut -d ' ' -f 1)"
+          jq -n \
+            --arg commit "${GITHUB_SHA}" \
+            --arg configSha256 "${config_sha}" \
+            --arg imageId "${image_id}" \
+            --arg imageRef "${IMAGE_REF}" \
+            --arg manifestArtifactDigest "${MANIFEST_ARTIFACT_DIGEST}" \
+            --arg manifestArtifactId "${MANIFEST_ARTIFACT_ID}" \
+            --arg manifestArtifactName "runtime-image-registry-manifest-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --arg manifestSha256 "${manifest_sha}" \
+            --arg registryDigest "${REGISTRY_DIGEST}" \
+            --arg registryRef "${REGISTRY_REF}" \
+            --arg runAttempt "${GITHUB_RUN_ATTEMPT}" \
+            --arg runId "${GITHUB_RUN_ID}" \
+            --arg sourceArtifactDigest "${SOURCE_ARTIFACT_DIGEST}" \
+            --arg sourceArtifactId "${SOURCE_ARTIFACT_ID}" \
+            --arg sourceArtifactName "${IMAGE_ARTIFACT_NAME}" \
+            '{
+              schemaVersion: 1,
+              commit: $commit,
+              runId: $runId,
+              runAttempt: $runAttempt,
+              imageRef: $imageRef,
+              imageId: $imageId,
+              registryDigest: $registryDigest,
+              registryRef: $registryRef,
+              configSha256: $configSha256,
+              sourceArtifactName: $sourceArtifactName,
+              sourceArtifactId: $sourceArtifactId,
+              sourceArtifactDigest: $sourceArtifactDigest,
+              manifestArtifactName: $manifestArtifactName,
+              manifestArtifactId: $manifestArtifactId,
+              manifestArtifactDigest: $manifestArtifactDigest,
+              manifestSha256: $manifestSha256
+            }' > runtime-deployment-metadata/deployment.json
+          scripts/ci/validate-runtime-deployment.sh \
+            runtime-deployment-metadata/deployment.json \
+            "${GITHUB_RUN_ID}" "${GITHUB_RUN_ATTEMPT}" "${GITHUB_SHA}" \
+            > /dev/null
+
+      - name: Upload immutable deployment provenance
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: runtime-deployment-metadata-${{ github.run_id }}-${{ github.run_attempt }}
+          path: runtime-deployment-metadata/deployment.json
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Deploy to Fly.io
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-        run: flyctl deploy --image "${IMAGE_REF}" --yes
+        run: flyctl deploy --image "${{ steps.registry.outputs.registry_ref }}" --yes
 
       - name: Verify deployed image identity
         env:
@@ -532,7 +630,7 @@ jobs:
         run: |
           mkdir -p runtime-production-evidence
           flyctl machine list --app momo-result --json |
-            jq -e --arg image "${IMAGE_REF}" '
+            jq -e --arg image "${{ steps.registry.outputs.registry_ref }}" '
               {
                 schemaVersion: 1,
                 singleStartedExactImage: (

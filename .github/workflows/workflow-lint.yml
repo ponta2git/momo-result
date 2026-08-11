@@ -27,5 +27,8 @@ jobs:
           scripts/ci/test-check-pr-ready.sh
           scripts/ci/test-validate-analysis-candidate.sh
           scripts/ci/test-load-analysis-candidate.sh
+          scripts/ci/test-load-runtime-image-artifact.sh
+          scripts/ci/test-resolve-pushed-runtime-image.sh
           scripts/ci/test-runtime-deploy-scripts.py
           scripts/ci/test-sanitize-analysis-report.sh
+          scripts/ci/test-validate-runtime-deployment.sh

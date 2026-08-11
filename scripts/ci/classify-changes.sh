@@ -87,7 +87,7 @@ while IFS= read -r -d '' path; do
       .github/workflows/analysis-production.yml)
       analysis=true
       ;;
-    .github/workflows/deploy.yml)
+    .github/workflows/deploy.yml | .github/workflows/runtime-rollback.yml)
       runtime=true
       ;;
     .github/workflows/pr.yml | .github/workflows/public-safety.yml | \

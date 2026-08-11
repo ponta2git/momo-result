@@ -15,7 +15,8 @@ import momo.api.ports.queue.{OcrJobEnqueueRequest, OcrJobQueuePublisher}
 import momo.api.repositories.{
   OcrQueueDispatchIntent,
   OcrQueueOutboxRecord,
-  OcrQueueOutboxRepository
+  OcrQueueOutboxRepository,
+  OcrQueueOutboxStatus
 }
 import momo.api.testing.{
   FailingOcrJobQueuePublisher,
@@ -94,6 +95,38 @@ final class OcrQueueOutboxDispatcherSpec extends MomoCatsEffectSuite:
         Vector("outbox-1" -> classOf[RuntimeException].getName),
       )
       assertEquals(got.map(_.nextAttemptAt), Vector(fixedNow.plusSeconds(2)))
+
+  test("stale claim fencing makes delivery and retry updates harmless"):
+    val queueError = new RuntimeException("redis://secret-host/boom")
+    for
+      deliveredRepo <- RecordingOcrQueueOutboxRepository
+        .create(call => List(rowAt(call.claimUntil)), false, true)
+      deliveredQueue <- RecordingOcrJobQueuePublisher.create
+      _ <- dispatcherAt(
+        fixedNow,
+        deliveredRepo,
+        deliveredQueue,
+        OcrQueueOutboxDispatcherConfig(),
+      ).runOnce
+      retriedRepo <- RecordingOcrQueueOutboxRepository
+        .create(call => List(rowAt(call.claimUntil)), true, false)
+      _ <- dispatcherAt(
+        fixedNow,
+        retriedRepo,
+        FailingOcrJobQueuePublisher(queueError),
+        OcrQueueOutboxDispatcherConfig(),
+      ).runOnce
+      deliveries <- deliveredRepo.deliveries
+      releases <- retriedRepo.releases
+    yield
+      assertEquals(deliveries.map(_.claimToken), Vector(claimToken))
+      assertEquals(releases.map(_.claimToken), Vector(claimToken))
+
+  test("outbox status decoding is closed over the persisted wire values"):
+    OcrQueueOutboxStatus.values.foreach { status =>
+      assertEquals(OcrQueueOutboxStatus.fromWire(status.wire), Some(status))
+    }
+    assertEquals(OcrQueueOutboxStatus.fromWire("UNKNOWN"), None)
 
   test("outbox-backed submitter claims the created outbox row and marks it delivered"):
     val outboxId = "ocr-outbox-job-1"

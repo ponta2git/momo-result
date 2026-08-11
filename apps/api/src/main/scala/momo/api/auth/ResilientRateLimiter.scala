@@ -55,8 +55,10 @@ object ResilientRateLimiter:
   ): F[ResilientRateLimiter[F]] =
     val valid = primaryTimeout.length > 0L && scope.nonEmpty &&
       scope.forall(character => character.isLetterOrDigit || character == '-')
-    if valid then Ref.of[F, Boolean](false)
-      .map(new ResilientRateLimiter(primary, localFallback, primaryTimeout, scope, _))
-    else Async[F].raiseError(new IllegalArgumentException(
+    if valid then
+      Ref.of[F, Boolean](false)
+        .map(new ResilientRateLimiter(primary, localFallback, primaryTimeout, scope, _))
+    else
+      Async[F].raiseError(new IllegalArgumentException(
         "ResilientRateLimiter requires a positive timeout and a safe non-empty scope"
       ))

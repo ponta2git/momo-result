@@ -1,13 +1,19 @@
 // @vitest-environment node
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+  createIdempotencyKey,
   createIdempotencyKeyStore,
   idempotencyFingerprint,
   runIdempotentMutation,
 } from "@/shared/api/idempotency";
 
 describe("idempotency key store", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
   it("reuses the same key for the same operation and JSON payload", () => {
     const store = createIdempotencyKeyStore();
     const first = store.begin("matchWorkspace.confirmMatch", { b: 2, a: 1 }).key;
@@ -34,6 +40,18 @@ describe("idempotency key store", () => {
       idempotencyFingerprint("ocrCapture.createUploadJob", {
         imageId: "image-1",
         hints: { aliases: ["ぽんた"] },
+      }),
+    );
+  });
+
+  it("normalizes undefined array entries without collapsing their positions", () => {
+    expect(
+      idempotencyFingerprint("ocrCapture.createUploadJob", {
+        slots: [undefined, { kind: "revenue", omitted: undefined }],
+      }),
+    ).toBe(
+      idempotencyFingerprint("ocrCapture.createUploadJob", {
+        slots: [null, { kind: "revenue" }],
       }),
     );
   });
@@ -67,5 +85,71 @@ describe("idempotency key store", () => {
     );
 
     expect(second).not.toBe(first);
+  });
+
+  it("keeps the operation key active when a mutation fails before completion", async () => {
+    const store = createIdempotencyKeyStore();
+    const payload = { matchDraftId: "draft-1", slotKind: "total_assets" };
+    const observedKeys: string[] = [];
+
+    await expect(
+      runIdempotentMutation(
+        store,
+        "ocrCapture.createUploadJob",
+        payload,
+        async ({ idempotencyKey }) => {
+          observedKeys.push(idempotencyKey);
+          throw new Error("job response was lost");
+        },
+      ),
+    ).rejects.toThrow("job response was lost");
+
+    const retriedKey = await runIdempotentMutation(
+      store,
+      "ocrCapture.createUploadJob",
+      payload,
+      async ({ idempotencyKey }) => idempotencyKey,
+    );
+
+    expect(retriedKey).toBe(observedKeys[0]);
+  });
+
+  it("resets an exact attempt, an operation, or the complete store", () => {
+    const store = createIdempotencyKeyStore();
+    const firstPayload = { matchDraftId: "draft-1" };
+    const secondPayload = { matchDraftId: "draft-2" };
+    const firstAttempt = store.begin("ocrCapture.createUploadJob", firstPayload);
+    const first = firstAttempt.key;
+    const second = store.begin("ocrCapture.createUploadJob", secondPayload).key;
+    const unrelated = store.begin("matchWorkspace.confirmMatch", firstPayload).key;
+
+    firstAttempt.reset();
+    expect(store.begin("ocrCapture.createUploadJob", firstPayload).key).not.toBe(first);
+    expect(store.begin("ocrCapture.createUploadJob", secondPayload).key).toBe(second);
+
+    store.reset("ocrCapture.createUploadJob");
+    expect(store.begin("ocrCapture.createUploadJob", secondPayload).key).not.toBe(second);
+    expect(store.begin("matchWorkspace.confirmMatch", firstPayload).key).toBe(unrelated);
+
+    store.reset();
+    expect(store.begin("matchWorkspace.confirmMatch", firstPayload).key).not.toBe(unrelated);
+  });
+
+  it("creates RFC 4122 version 4 keys when randomUUID is unavailable", () => {
+    vi.stubGlobal("crypto", {
+      getRandomValues: (bytes: Uint8Array) => {
+        bytes.fill(0xab);
+        return bytes;
+      },
+    });
+
+    expect(createIdempotencyKey()).toBe("abababab-abab-4bab-abab-abababababab");
+  });
+
+  it("retains a last-resort UUID path when Web Crypto is unavailable", () => {
+    vi.stubGlobal("crypto", undefined);
+    vi.spyOn(Math, "random").mockReturnValue(0);
+
+    expect(createIdempotencyKey()).toBe("00000000-0000-4000-8000-000000000000");
   });
 });

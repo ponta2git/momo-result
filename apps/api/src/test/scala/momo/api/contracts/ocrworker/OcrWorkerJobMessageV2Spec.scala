@@ -6,7 +6,7 @@ import io.circe.Json
 import munit.FunSuite
 
 import momo.api.domain.ids.*
-import momo.api.domain.{OcrJobHints, ScreenType}
+import momo.api.domain.{OcrJobHints, PlayerAliasHint, ScreenType}
 import momo.api.testing.JsonSchemaAssertions
 
 final class OcrWorkerJobMessageV2Spec extends FunSuite with JsonSchemaAssertions:
@@ -49,6 +49,69 @@ final class OcrWorkerJobMessageV2Spec extends FunSuite with JsonSchemaAssertions
     assertEquals(
       OcrWorkerJobMessageV2.fromJson(json.mapObject(_.add("imagePath", Json.fromString("/tmp/x")))),
       Left("unknown stream payload field(s): imagePath"),
+    )
+  }
+
+  test("serializes bounded hints and omits an absent request id") {
+    val hints = OcrJobHints(
+      gameTitle = Some("桃鉄2"),
+      layoutFamily = Some("momotetsu_2"),
+      knownPlayerAliases = List(
+        PlayerAliasHint(MemberId.unsafeFromString("member-ponta"), List("ぽんた", "PONTA"))
+      ),
+      computerPlayerAliases = List("さくま"),
+    )
+    val payload =
+      build(canonicalInput.copy(hints = hints, requestId = None)).fold(fail(_), identity)
+
+    assert(payload.fields.contains(OcrWorkerJobMessageV2.HintsKey))
+    assert(!payload.fields.contains(OcrWorkerJobMessageV2.RequestIdKey))
+    assertEquals(
+      OcrWorkerJobMessageV2.fromJson(OcrWorkerJobMessageV2.fieldsAsJson(payload)).map(_.fields),
+      Right(payload.fields),
+    )
+  }
+
+  test("rejects malformed Redis field encodings before constructing a message") {
+    val base = OcrWorkerJobMessageV2.fieldsAsJson(canonicalPayload())
+    def replace(key: String, value: Json): Json = base.mapObject(_.add(key, value))
+
+    assertEquals(
+      OcrWorkerJobMessageV2.fromJson(Json.fromString("not-an-object")),
+      Left("stream payload must be a JSON object"),
+    )
+    assertEquals(
+      OcrWorkerJobMessageV2.fromJson(base.mapObject(_.remove("jobId"))),
+      Left("field jobId must be a string"),
+    )
+    assertEquals(
+      OcrWorkerJobMessageV2.fromJson(replace("schemaVersion", Json.fromString("3"))),
+      Left("schemaVersion must be 2"),
+    )
+    assertEquals(
+      OcrWorkerJobMessageV2.fromJson(replace("byteLength", Json.fromString("3MiB"))),
+      Left("byteLength must be an integer string"),
+    )
+    assertEquals(
+      OcrWorkerJobMessageV2.fromJson(replace("attempt", Json.fromString("first"))),
+      Left("attempt must be an integer string"),
+    )
+    assertEquals(
+      OcrWorkerJobMessageV2.fromJson(replace("enqueuedAt", Json.fromString("today"))),
+      Left("enqueuedAt must be ISO-8601"),
+    )
+    assertEquals(
+      OcrWorkerJobMessageV2.fromJson(replace(OcrWorkerJobMessageV2.HintsKey, Json.fromInt(1))),
+      Left("field ocrHintsJson must be a string"),
+    )
+    assert(
+      OcrWorkerJobMessageV2
+        .fromJson(replace(OcrWorkerJobMessageV2.HintsKey, Json.fromString("{")))
+        .left.exists(_.nonEmpty)
+    )
+    assertEquals(
+      OcrWorkerJobMessageV2.fromJson(replace(OcrWorkerJobMessageV2.RequestIdKey, Json.fromInt(1))),
+      Left("field requestId must be a string"),
     )
   }
 
@@ -119,6 +182,30 @@ final class OcrWorkerJobMessageV2Spec extends FunSuite with JsonSchemaAssertions
     assert(build(canonicalInput.copy(requestId = Some("bad value"))).isLeft)
   }
 
+  test("rejects semantically invalid and oversized hint payloads") {
+    val invalid = OcrJobHints.empty.copy(gameTitle = Some(""))
+    assert(build(canonicalInput.copy(hints = invalid)).isLeft)
+
+    val wide = "桃" * OcrJobHints.MaxAliasLength
+    val oversized = OcrJobHints(
+      gameTitle = Some(wide),
+      layoutFamily = Some(wide),
+      knownPlayerAliases = List.tabulate(OcrJobHints.MaxKnownPlayerAliases) { index =>
+        PlayerAliasHint(
+          MemberId.unsafeFromString(s"member-$index-${"x" * 100}"),
+          List.fill(OcrJobHints.MaxAliasesPerPlayer)(wide),
+        )
+      },
+      computerPlayerAliases = List.fill(OcrJobHints.MaxComputerPlayerAliases)(wide),
+    )
+    assertEquals(
+      build(canonicalInput.copy(hints = oversized)),
+      Left(
+        s"ocrHintsJson must be ${OcrWorkerJobMessageV2.MaxHintsUtf8Bytes} UTF-8 bytes or shorter"
+      ),
+    )
+  }
+
   test("JSON Schema rejects v1, local-path, and provider-bearing payload shapes") {
     val baseJson = OcrWorkerJobMessageV2.fieldsAsJson(canonicalPayload())
 
@@ -139,6 +226,7 @@ final class OcrWorkerJobMessageV2Spec extends FunSuite with JsonSchemaAssertions
       mediaType: String,
       requestedScreenType: ScreenType,
       attempt: Int,
+      hints: OcrJobHints,
       requestId: Option[String],
   )
 
@@ -150,6 +238,7 @@ final class OcrWorkerJobMessageV2Spec extends FunSuite with JsonSchemaAssertions
     mediaType = "image/webp",
     requestedScreenType = ScreenType.IncidentLog,
     attempt = 1,
+    hints = OcrJobHints.empty,
     requestId = Some("req_v2-1"),
   )
 
@@ -168,6 +257,6 @@ final class OcrWorkerJobMessageV2Spec extends FunSuite with JsonSchemaAssertions
       requestedScreenType = input.requestedScreenType,
       attempt = input.attempt,
       enqueuedAt = Instant.parse("2026-08-11T00:00:00Z"),
-      hints = OcrJobHints.empty,
+      hints = input.hints,
       requestId = input.requestId,
     )

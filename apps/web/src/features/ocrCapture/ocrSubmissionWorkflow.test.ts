@@ -195,4 +195,34 @@ describe("runOcrSubmissionWorkflow", () => {
     expect(cancelDraft).toHaveBeenCalledWith("draft-created-1");
     expect(result).toEqual({ status: "failed_and_cancelled" });
   });
+
+  it("returns the orphaned draft identity when submission and cleanup both fail", async () => {
+    const cleanupError = new Error("draft cleanup unavailable");
+
+    const result = await runOcrSubmissionWorkflow({
+      cancelDraft: async () => {
+        throw cleanupError;
+      },
+      createDraft: async () => ({
+        createdAt: "2026-01-01T00:00:00.000Z",
+        matchDraftId: "draft-orphaned-1",
+        status: "ocr_running",
+        updatedAt: "2026-01-01T00:00:00.000Z",
+      }),
+      createPlayedAtIso: () => "2026-02-03T04:05:06.000Z",
+      createUploadJob: async () => {
+        throw new Error("upload failed");
+      },
+      selectedGameTitle: { id: "gt_momotetsu_2" },
+      setup: validSetup,
+      slots: [selectedSlot()],
+      updateSlot: vi.fn(),
+    });
+
+    expect(result).toEqual({
+      cleanupError,
+      matchDraftId: "draft-orphaned-1",
+      status: "failed_cleanup_failed",
+    });
+  });
 });

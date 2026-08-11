@@ -53,9 +53,40 @@ final class ResilientRateLimiterSpec extends MomoCatsEffectSuite:
       assertEquals(calls, 1)
 
   test("rejects unsafe configuration"):
-    ResilientRateLimiter.create[IO](fixed(true), fixed(true), Duration.Zero, "read api").attempt.map {
+    ResilientRateLimiter.create[IO](
+      fixed(true),
+      fixed(true),
+      Duration.Zero,
+      "read api"
+    ).attempt.map {
       result => assert(result.isLeft)
     }
+
+  test("uses one fallback decision per outage and returns to the primary after recovery"):
+    for
+      primaryAvailable <- Ref.of[IO, Boolean](false)
+      fallbackCalls <- Ref.of[IO, Int](0)
+      primary: RateLimiter[IO] = _ =>
+        primaryAvailable.get.flatMap {
+          case true => IO.pure(true)
+          case false => IO.raiseError(new RuntimeException("unavailable"))
+        }
+      limiter <- ResilientRateLimiter.create[IO](
+        primary,
+        recording(false, fallbackCalls),
+        100.millis,
+        "mutation",
+      )
+      first <- limiter.allow("account-1")
+      second <- limiter.allow("account-1")
+      _ <- primaryAvailable.set(true)
+      recovered <- limiter.allow("account-1")
+      steady <- limiter.allow("account-1")
+      calls <- fallbackCalls.get
+    yield
+      assertEquals((first, second), (false, false))
+      assertEquals((recovered, steady), (true, true))
+      assertEquals(calls, 2)
 
   private def fixed(allowed: Boolean): RateLimiter[IO] = _ => IO.pure(allowed)
 

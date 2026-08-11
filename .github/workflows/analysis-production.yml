@@ -298,12 +298,15 @@ jobs:
             ' > analysis-production-artifact/deployment-state.json
           flyctl ssh console --app "${ANALYSIS_APP}" --pty=false --quiet \
             --command "/usr/local/bin/momo-analysis release-dependency-probe" \
-            > analysis-production-artifact/dependency-probe.json
+            > "${RUNNER_TEMP}/dependency-probe.json"
           jq -e '
             .controlReadOnly == false and
             .readerReadOnly == true and
             .redisPong == true
-          ' analysis-production-artifact/dependency-probe.json
+          ' "${RUNNER_TEMP}/dependency-probe.json"
+          scripts/ci/sanitize-analysis-report.sh \
+            "${RUNNER_TEMP}/dependency-probe.json" \
+            analysis-production-artifact/dependency-probe.json
         timeout-minutes: 2
 
       - name: Deploy analysis worker with publication enabled
@@ -338,7 +341,7 @@ jobs:
             command="${command} --require-quiescent"
           fi
           flyctl ssh console --app "${ANALYSIS_APP}" --pty=false --quiet \
-            --command "${command}" > analysis-operation.json
+            --command "${command}" > "${RUNNER_TEMP}/analysis-operation.json"
 
       - name: Dry-run initial backfill
         if: inputs.operation == 'backfill-dry-run'
@@ -351,7 +354,7 @@ jobs:
           --pty=false
           --quiet
           --command "/usr/local/bin/momo-analysis release-promote --trigger initial-backfill --operation-key ${OPERATION_KEY}"
-          > analysis-operation.json
+          > "${RUNNER_TEMP}/analysis-operation.json"
 
       - name: Apply initial backfill
         if: inputs.operation == 'backfill-apply'
@@ -364,11 +367,16 @@ jobs:
           --pty=false
           --quiet
           --command "/usr/local/bin/momo-analysis release-promote --trigger initial-backfill --operation-key ${OPERATION_KEY} --apply"
-          > analysis-operation.json
+          > "${RUNNER_TEMP}/analysis-operation.json"
 
-      - name: Show release operation report
+      - name: Sanitize and show release operation report
         if: inputs.operation == 'audit' || startsWith(inputs.operation, 'backfill-')
-        run: jq . analysis-operation.json
+        run: |
+          mkdir -p analysis-production-artifact
+          scripts/ci/sanitize-analysis-report.sh \
+            "${RUNNER_TEMP}/analysis-operation.json" \
+            analysis-production-artifact/operation-report.json
+          jq . analysis-production-artifact/operation-report.json
 
       - name: Upload production operation evidence
         if: always()
@@ -377,6 +385,5 @@ jobs:
           name: analysis-production-${{ inputs.operation }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             analysis-production-artifact/
-            analysis-operation.json
           if-no-files-found: ignore
           retention-days: 7

@@ -69,3 +69,44 @@ if APP_ENV=prod \
 fi
 
 python3 -m py_compile "${repo_root}/deploy/render-nginx-conf.py"
+python3 -m py_compile \
+  "${repo_root}/deploy/postdeploy-smoke.py" \
+  "${repo_root}/deploy/release-preflight.py" \
+  "${repo_root}/scripts/ci/summarize-runtime-logs.py"
+
+fly_kill_timeout="$(sed -n 's/^kill_timeout = \([0-9][0-9]*\)$/\1/p' "${repo_root}/fly.toml")"
+ocr_timeout="$(sed -n 's/^  OCR_TIMEOUT_SECONDS = "\([0-9][0-9]*\)"$/\1/p' "${repo_root}/fly.toml")"
+redis_block_timeout="$(sed -n 's/^  OCR_REDIS_BLOCK_SECONDS = "\([0-9][0-9]*\)"$/\1/p' "${repo_root}/fly.toml")"
+worker_stop_timeout="$(awk '
+  /^\[program:ocr-worker\]$/ { in_worker = 1; next }
+  /^\[/ { in_worker = 0 }
+  in_worker && /^stopwaitsecs=/ { sub(/^stopwaitsecs=/, ""); print }
+' "${repo_root}/deploy/supervisord.conf")"
+
+for value in "${fly_kill_timeout}" "${ocr_timeout}" "${redis_block_timeout}" "${worker_stop_timeout}"; do
+  [[ "${value}" =~ ^[1-9][0-9]*$ ]] || {
+    echo "Runtime shutdown timeouts must be explicit positive integers." >&2
+    exit 1
+  }
+done
+
+if (( worker_stop_timeout < ocr_timeout + 15 )); then
+  echo "OCR supervisor stop timeout lacks an in-flight job drain margin." >&2
+  exit 1
+fi
+if (( worker_stop_timeout < redis_block_timeout + 15 )); then
+  echo "OCR supervisor stop timeout lacks an idle Redis read drain margin." >&2
+  exit 1
+fi
+if (( fly_kill_timeout < worker_stop_timeout + 10 )); then
+  echo "Fly kill timeout lacks a supervisor shutdown margin." >&2
+  exit 1
+fi
+
+grep -Fqx '[deploy]' "${repo_root}/fly.toml"
+grep -Fqx '  release_command = "/opt/momo-result/bin/release-preflight"' \
+  "${repo_root}/fly.toml"
+grep -Fq 'deploy/release-preflight.py /opt/momo-result/bin/release-preflight' \
+  "${repo_root}/Dockerfile"
+grep -Fq 'deploy/postdeploy-smoke.py /opt/momo-result/bin/postdeploy-smoke' \
+  "${repo_root}/Dockerfile"

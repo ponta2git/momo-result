@@ -193,9 +193,15 @@ COPY --from=web-builder --chown=momo:momo /workspace/apps/web/dist /srv/momo-res
 COPY --chown=momo:momo docs/schemas /opt/momo-result/docs/schemas
 COPY deploy/nginx.conf /etc/nginx/nginx.conf.template
 COPY --chown=momo:momo deploy/render-nginx-conf.py /opt/momo-result/bin/render-nginx-conf
+COPY --chown=momo:momo deploy/release-preflight.py /opt/momo-result/bin/release-preflight
+COPY --chown=momo:momo deploy/postdeploy-smoke.py /opt/momo-result/bin/postdeploy-smoke
 COPY --chown=momo:momo deploy/start-runtime.sh /opt/momo-result/bin/start-runtime
 COPY deploy/supervisord.conf /etc/supervisor/conf.d/momo-result.conf
-RUN chmod +x /opt/momo-result/bin/render-nginx-conf /opt/momo-result/bin/start-runtime
+RUN chmod +x \
+  /opt/momo-result/bin/postdeploy-smoke \
+  /opt/momo-result/bin/release-preflight \
+  /opt/momo-result/bin/render-nginx-conf \
+  /opt/momo-result/bin/start-runtime
 
 EXPOSE 8080
 USER momo

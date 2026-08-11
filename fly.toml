@@ -3,8 +3,13 @@ primary_region = "nrt"
 kill_signal = "SIGTERM"
 kill_timeout = 90
 
+[deploy]
+  release_command = "/opt/momo-result/bin/release-preflight"
+
 [env]
   DB_POOL_SIZE = "3"
+  OCR_REDIS_BLOCK_SECONDS = "5"
+  OCR_TIMEOUT_SECONDS = "30"
   REDIS_ALLOW_PLAINTEXT_IN_PROD = "true"
   IMAGE_ORPHAN_OLDER_THAN_MINUTES = "60"
   IMAGE_ORPHAN_REAPER_INTERVAL_MINUTES = "60"

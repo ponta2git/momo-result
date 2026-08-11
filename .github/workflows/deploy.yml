@@ -265,6 +265,10 @@ jobs:
           MOMO_ORIGIN_LOCK_TOKEN: ${{ env.CI_DUMMY_ORIGIN_LOCK_TOKEN }}
         timeout-minutes: 3
 
+      - name: Release DB contract preflight
+        run: docker exec momo-result-runtime /opt/momo-result/bin/release-preflight
+        timeout-minutes: 1
+
       - name: Runtime HTTP smoke
         run: scripts/ci/runtime-smoke.sh
         env:
@@ -277,16 +281,22 @@ jobs:
           PLAYWRIGHT_BASE_URL: http://127.0.0.1:8080
         timeout-minutes: 10
 
-      - name: Capture runtime container logs
-        if: failure()
-        run: docker logs momo-result-runtime > runtime-container.log 2>&1 || true
+      - name: Graceful runtime shutdown smoke
+        run: scripts/ci/runtime-shutdown-smoke.sh
+        timeout-minutes: 2
 
-      - name: Upload runtime container logs
+      - name: Capture safe runtime diagnostics
+        if: failure()
+        run: >-
+          docker logs momo-result-runtime 2>&1 |
+          scripts/ci/summarize-runtime-logs.py > runtime-container-summary.json || true
+
+      - name: Upload safe runtime diagnostics
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: runtime-container-logs
-          path: runtime-container.log
+          name: runtime-container-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
+          path: runtime-container-summary.json
           if-no-files-found: ignore
           retention-days: 7
 
@@ -398,6 +408,10 @@ jobs:
           MOMO_ORIGIN_LOCK_TOKEN: ${{ env.CI_DUMMY_ORIGIN_LOCK_TOKEN }}
         timeout-minutes: 3
 
+      - name: Release DB contract preflight
+        run: docker exec momo-result-runtime /opt/momo-result/bin/release-preflight
+        timeout-minutes: 1
+
       - name: Runtime HTTP smoke
         run: scripts/ci/runtime-smoke.sh
         env:
@@ -410,16 +424,22 @@ jobs:
           PLAYWRIGHT_BASE_URL: http://127.0.0.1:8080
         timeout-minutes: 10
 
-      - name: Capture runtime container logs
-        if: failure()
-        run: docker logs momo-result-runtime > runtime-container.log 2>&1 || true
+      - name: Graceful runtime shutdown smoke
+        run: scripts/ci/runtime-shutdown-smoke.sh
+        timeout-minutes: 2
 
-      - name: Upload runtime container logs
+      - name: Capture safe runtime diagnostics
+        if: failure()
+        run: >-
+          docker logs momo-result-runtime 2>&1 |
+          scripts/ci/summarize-runtime-logs.py > runtime-container-summary.json || true
+
+      - name: Upload safe runtime diagnostics
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: runtime-container-logs
-          path: runtime-container.log
+          name: runtime-container-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
+          path: runtime-container-summary.json
           if-no-files-found: ignore
           retention-days: 7
 
@@ -505,3 +525,52 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: flyctl deploy --image "${IMAGE_REF}" --yes
+
+      - name: Verify deployed image identity
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          mkdir -p runtime-production-evidence
+          flyctl machine list --app momo-result --json |
+            jq -e --arg image "${IMAGE_REF}" '
+              {
+                schemaVersion: 1,
+                singleStartedExactImage: (
+                  length == 1 and
+                  all(.[]; .state == "started" and .config.image == $image)
+                )
+              } |
+              select(.singleStartedExactImage)
+            ' > runtime-production-evidence/deployment-state.json
+        timeout-minutes: 2
+
+      - name: Run post-deploy dependency and process smoke
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          flyctl ssh console --app momo-result --pty=false --quiet \
+            --command "/opt/momo-result/bin/postdeploy-smoke" \
+            > runtime-production-evidence/postdeploy-smoke.json
+          jq -e '
+            .event == "runtime_postdeploy_smoke" and
+            .status == "ok" and
+            .checks == ["database", "http", "processes", "redis", "web"]
+          ' runtime-production-evidence/postdeploy-smoke.json > /dev/null
+        timeout-minutes: 2
+
+      - name: Verify public health endpoint
+        run: |
+          curl -fsS --retry 5 --retry-delay 2 --retry-all-errors \
+            https://momo-result.ponta.me/healthz |
+            jq -e '{schemaVersion: 1, status} | select(.status == "ok")' \
+              > runtime-production-evidence/public-health.json
+        timeout-minutes: 1
+
+      - name: Upload production verification evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: runtime-production-${{ github.run_id }}-${{ github.run_attempt }}
+          path: runtime-production-evidence/
+          if-no-files-found: ignore
+          retention-days: 7

@@ -47,15 +47,13 @@ export const scoreGridColumns: ScoreGridColumnDescriptor[] = [
     widthClass: "w-[14ch]",
   },
   { column: "revenueManYen", header: "収益（万円）", kind: "numeric", widthClass: "w-[14ch]" },
-  ...incidentColumns.map(
-    ([incidentKey, header]): ScoreGridColumnDescriptor => ({
-      column: `incident.${incidentKey}`,
-      header,
-      incidentKey,
-      kind: "incident",
-      widthClass: "w-[7ch]",
-    }),
-  ),
+  ...incidentColumns.map(([incidentKey, header]): ScoreGridColumnDescriptor => ({
+    column: `incident.${incidentKey}`,
+    header,
+    incidentKey,
+    kind: "incident",
+    widthClass: "w-[7ch]",
+  })),
 ];
 
 export const gridColumns = scoreGridColumns.map((column) => column.column);

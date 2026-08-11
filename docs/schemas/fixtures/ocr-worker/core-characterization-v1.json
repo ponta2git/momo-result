@@ -1,0 +1,121 @@
+{
+  "schemaVersion": 1,
+  "geometryCases": [
+    {
+      "name": "720p-ranked-row",
+      "profileRect": { "x": 0, "y": 200, "width": 1920, "height": 195 },
+      "imageSize": { "width": 1280, "height": 720 },
+      "expected": { "x": 0, "y": 133, "width": 1280, "height": 130 }
+    },
+    {
+      "name": "python-half-even-rounding",
+      "profileRect": { "x": 1, "y": 3, "width": 5, "height": 7 },
+      "imageSize": { "width": 960, "height": 540 },
+      "expected": { "x": 0, "y": 2, "width": 2, "height": 4 }
+    },
+    {
+      "name": "full-hd-incident-cell",
+      "profileRect": { "x": 1680, "y": 810, "width": 88, "height": 75 },
+      "imageSize": { "width": 1920, "height": 1080 },
+      "expected": { "x": 1680, "y": 810, "width": 88, "height": 75 }
+    }
+  ],
+  "otsuCases": [
+    {
+      "name": "two-separated-modes",
+      "width": 4,
+      "height": 2,
+      "pixels": [0, 0, 0, 50, 200, 255, 255, 255],
+      "expected": [0, 0, 0, 0, 255, 255, 255, 255]
+    },
+    {
+      "name": "empty-histogram-equivalent",
+      "width": 0,
+      "height": 0,
+      "pixels": [],
+      "expected": []
+    }
+  ],
+  "moneyCases": [
+    { "input": "3億8480万円 | 7", "expected": 38480, "revenue": false },
+    { "input": "3信8920万円", "expected": 38920, "revenue": false },
+    { "input": "2借3100万円", "expected": 23100, "revenue": false },
+    { "input": "2190万口", "expected": 2190, "revenue": false },
+    { "input": "ー1億2000万円", "expected": -12000, "revenue": false },
+    { "input": "おたかー25万円", "expected": 25, "revenue": false },
+    { "input": "いーゆー社長 -ら290万円", "expected": -5290, "revenue": false },
+    { "input": "10547059", "expected": 105470, "revenue": false },
+    { "input": "21105", "expected": 2110, "revenue": false },
+    { "input": "オータカ社長 6300万円 | オータカ社長 8300万円 | オータカ社長 8300万円", "expected": 8300, "revenue": true },
+    { "input": "オータカ社長 OF a", "expected": 0, "revenue": true },
+    { "input": "random of noise", "expected": null, "revenue": true }
+  ],
+  "countCases": [
+    { "input": "|", "expected": 1 },
+    { "input": "03", "expected": 0 },
+    { "input": "O71", "expected": 0 },
+    { "input": "noise | 12", "expected": 12 },
+    { "input": "?", "expected": null }
+  ],
+  "voteCases": [
+    {
+      "name": "literal-digit-beats-alias-majority",
+      "attempts": [
+        { "text": "oo", "count": 0, "confidence": 0.05 },
+        { "text": "oo", "count": 0, "confidence": 0.05 },
+        { "text": "3", "count": 3, "confidence": 0.0 }
+      ],
+      "expectedCount": 3,
+      "expectedConfidence": 0.0
+    },
+    {
+      "name": "digit-majority-wins",
+      "attempts": [
+        { "text": "3", "count": 3, "confidence": 0.5 },
+        { "text": "3", "count": 3, "confidence": 0.6 },
+        { "text": "4", "count": 4, "confidence": 0.9 }
+      ],
+      "expectedCount": 3,
+      "expectedConfidence": 0.6
+    }
+  ],
+  "selectionCases": [
+    {
+      "name": "plausible-fallback-beats-overread",
+      "maximumPlausibleCount": 12,
+      "primary": { "text": "13", "count": 13, "confidence": 0.9 },
+      "fallbacks": [
+        { "text": "3", "count": 3, "confidence": 0.6 },
+        { "text": "3", "count": 3, "confidence": 0.6 }
+      ],
+      "expectedCount": 3
+    },
+    {
+      "name": "common-leading-digit-recovery",
+      "maximumPlausibleCount": 12,
+      "primary": { "text": "31", "count": 31, "confidence": 0.0 },
+      "fallbacks": [{ "text": "35", "count": 35, "confidence": 0.28 }],
+      "expectedCount": 3
+    },
+    {
+      "name": "weak-seven-recovers-otsu-one",
+      "maximumPlausibleCount": 12,
+      "primary": { "text": "7", "count": 7, "confidence": 0.64 },
+      "fallbacks": [
+        { "text": "7", "count": 7, "confidence": 0.61 },
+        { "text": "1", "count": 1, "confidence": 0.44 }
+      ],
+      "expectedCount": 1
+    },
+    {
+      "name": "high-confidence-seven-is-retained",
+      "maximumPlausibleCount": 12,
+      "primary": { "text": "7", "count": 7, "confidence": 0.91 },
+      "fallbacks": [
+        { "text": "7", "count": 7, "confidence": 0.88 },
+        { "text": "1", "count": 1, "confidence": 0.44 }
+      ],
+      "expectedCount": 7
+    }
+  ]
+}

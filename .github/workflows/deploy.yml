@@ -1,26 +1,7 @@
 name: deploy
 
 on:
-  pull_request:
-    paths:
-      - "apps/api/**"
-      - "apps/ocr-worker/**"
-      - "apps/analysis-worker/**"
-      - "apps/web/**"
-      - "deploy/**"
-      - "docs/schemas/**"
-      - "scripts/ci/**"
-      - "Dockerfile"
-      - ".dockerignore"
-      - "fly.toml"
-      - "fly.analysis.toml"
-      - "package.json"
-      - "mise.toml"
-      - "pnpm-lock.yaml"
-      - "pnpm-workspace.yaml"
-      - "rust-toolchain.toml"
-      - ".github/workflows/deploy.yml"
-      - ".github/workflows/analysis-production.yml"
+  workflow_call:
   push:
     branches:
       - master

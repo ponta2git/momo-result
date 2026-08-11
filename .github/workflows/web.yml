@@ -2,15 +2,6 @@ name: web
 
 on:
   workflow_call:
-  pull_request:
-    paths:
-      - "apps/web/**"
-      - "apps/api/openapi.yaml"
-      - "package.json"
-      - "mise.toml"
-      - "pnpm-lock.yaml"
-      - "pnpm-workspace.yaml"
-      - ".github/workflows/web.yml"
 
 permissions:
   contents: read

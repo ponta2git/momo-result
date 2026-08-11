@@ -2,12 +2,6 @@ name: API
 
 on:
   workflow_call:
-  pull_request:
-    paths:
-      - "apps/api/**"
-      - "docs/schemas/**"
-      - "scripts/ci/check-api-analysis-engine-absence.sh"
-      - ".github/workflows/api.yml"
 
 permissions:
   contents: read

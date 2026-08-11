@@ -2,17 +2,6 @@ name: Analysis worker
 
 on:
   workflow_call:
-  pull_request:
-    paths:
-      - "apps/analysis-worker/**"
-      - "docs/schemas/series-analysis-*.json"
-      - "docs/schemas/fixtures/series-analysis/**"
-      - "rust-toolchain.toml"
-      - "fly.analysis.toml"
-      - "scripts/ci/analysis-release-db-smoke.sh"
-      - "scripts/ci/analysis-worker-control-plane-smoke.sh"
-      - "scripts/ci/analysis-worker-image-smoke.sh"
-      - ".github/workflows/analysis-worker.yml"
 
 permissions:
   contents: read

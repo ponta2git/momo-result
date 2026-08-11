@@ -2,12 +2,6 @@ name: workflow-lint
 
 on:
   workflow_call:
-  pull_request:
-    paths:
-      - ".github/actions/**"
-      - ".github/workflows/**"
-      - "scripts/ci/actionlint.sh"
-      - "scripts/ci/install-actionlint.sh"
 
 permissions:
   contents: read

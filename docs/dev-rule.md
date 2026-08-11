@@ -23,6 +23,7 @@
 | api | Java 25, sbt 1.12 系 |
 | ocr-worker | Python 3.14, uv |
 | analysis-worker | Rust 1.97, Cargo; local runtime は Docker/Linux |
+| deploy / ops tools | Go 1.26; zero-install診断境界だけPOSIX shell |
 | integration | Docker / Testcontainers |
 | OCR runtime | Tesseract 5+ |
 
@@ -279,6 +280,7 @@ resource / endurance測定は本番同等runtimeのprivate gateであり、通�
 | analysis-worker production code | `cargo fmt --all -- --check`, `cargo clippy --locked --workspace --all-targets --all-features -- -D warnings`, `cargo test --locked --workspace --all-targets --all-features`, `cargo build --locked --workspace --release` |
 | analysis-worker algorithm version | analysis-worker production gate + release DB smoke + control-plane smoke。ローカルDBは互換性dry-run後にrelease昇格 |
 | analysis-worker DB / Redis / process | analysis-worker production gate + release DB smoke + control-plane smoke + dedicated image smoke |
+| Go deploy / ops tool | `cd tools && go test ./... && go vet ./...`; zero-install shell collectorを含む場合は対応する`test-*.sh` |
 | Docker/Fly/runtime config | `pnpm public:safety:check`, `docker build`, `scripts/ci/runtime-smoke.sh`, container image scan、必要なら `pnpm web:e2e:runtime` |
 | coverage対象ロジック | 各領域の coverage gate |
 | docs only | `git diff --check`, `pnpm public:safety:check` |

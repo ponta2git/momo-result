@@ -21,6 +21,17 @@ jobs:
         env:
           ACTIONLINT_BIN: ${{ runner.temp }}/actionlint
         run: scripts/ci/actionlint.sh
+      - name: Set up Go tools
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          cache: false
+          go-version: 1.26.5
+      - name: Test Go and zero-install diagnostic tools
+        run: |
+          cd tools
+          go test ./...
+          go vet ./...
+          ./test-linux-memory-snapshot.sh
       - name: Test workflow policy scripts
         run: |
           scripts/ci/test-classify-changes.sh

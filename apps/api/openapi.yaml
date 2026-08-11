@@ -374,6 +374,14 @@
             "schema" : {
               "type" : "string"
             }
+          },
+          {
+            "name" : "Idempotency-Key",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
           }
         ],
         "requestBody" : {
@@ -4923,6 +4931,7 @@
             "type" : "string"
           },
           "requestedScreenType" : {
+            "description" : "Must be total_assets, revenue, or incident_log. The legacy auto value is not accepted.",
             "type" : "string"
           },
           "ocrHints" : {

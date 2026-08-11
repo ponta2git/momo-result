@@ -1,5 +1,9 @@
 package momo.api.http
 
+import java.nio.file.Files
+
+import scala.jdk.CollectionConverters.*
+
 import cats.effect.IO
 import io.circe.Json
 import org.http4s.circe.*
@@ -28,6 +32,9 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
   )
 
   private val app = ResourceFunFixture(httpAppResource("momo-api-http"))
+  private val idempotentUploadApp = ResourceFunFixture(
+    fileBackedHttpAppResource("momo-api-idempotent-upload")
+  )
   private val prodHstsApp = ResourceFunFixture(prodHttpAppResource("momo-api-prod-hsts"))
   private val prodHttpApp = ResourceFunFixture(prodHttpAppResource("momo-api-prod-http"))
   private val sessionBackedApp = ResourceFunFixture(
@@ -394,6 +401,21 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
     )
   }
 
+  app.test("new OCR requests reject the retired auto screen type before image lookup") { httpApp =>
+    val request = writePost(
+      uri"/api/ocr-jobs",
+      HttpRequestBodies.Matches.createOcrJob("missing", "auto"),
+    )
+    httpApp.run(request).flatMap(response =>
+      assertProblemDetailEquals(
+        response,
+        Status.UnprocessableContent,
+        "VALIDATION_FAILED",
+        "requestedScreenType must be total_assets, revenue, or incident_log.",
+      )
+    )
+  }
+
   app.test("protected endpoint without auth header returns 401") { httpApp =>
     httpApp.run(Request[IO](Method.GET, uri"/api/auth/me")).flatMap(response =>
       assertProblemDetailEquals(
@@ -568,6 +590,50 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
         )
       )
     )
+  }
+
+  idempotentUploadApp.test(
+    "upload replay returns one image and does not write a duplicate object"
+  ) {
+    fixture =>
+      for
+        firstRequest <- uploadPngRequestWithIdempotency("upload-replay-key")
+        firstResponse <- fixture.app.run(firstRequest)
+        firstBody <- firstResponse.as[Json]
+        secondRequest <- uploadPngRequestWithIdempotency("upload-replay-key")
+        secondResponse <- fixture.app.run(secondRequest)
+        secondBody <- secondResponse.as[Json]
+        fileCount <- IO.blocking {
+          val paths = Files.walk(fixture.imageRoot)
+          try paths.iterator().asScala.count(Files.isRegularFile(_))
+          finally paths.close()
+        }
+      yield
+        assertEquals(firstResponse.status, Status.Ok)
+        assertEquals(secondResponse.status, Status.Ok)
+        assertEquals(
+          jsonField[String](firstBody, "imageId"),
+          jsonField[String](secondBody, "imageId")
+        )
+        assertEquals(fileCount, 1)
+  }
+
+  idempotentUploadApp.test("an upload key cannot be reused for different image bytes") { fixture =>
+    for
+      firstRequest <- uploadPngRequestWithIdempotency("upload-conflict-key")
+      firstResponse <- fixture.app.run(firstRequest)
+      secondRequest <- uploadPngRequestWithIdempotency(
+        "upload-conflict-key",
+        momo.api.testing.TestImages.png(width = 2, height = 1),
+      )
+      secondResponse <- fixture.app.run(secondRequest)
+      _ <- assertProblem(
+        secondResponse,
+        Status.Conflict,
+        "IDEMPOTENCY_PAYLOAD_MISMATCH",
+        "Idempotency-Key",
+      )
+    yield assertEquals(firstResponse.status, Status.Ok)
   }
 
   app.test("upload endpoint rejects ambiguous multiple file parts") { httpApp =>

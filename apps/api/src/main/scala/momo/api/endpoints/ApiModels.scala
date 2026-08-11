@@ -66,6 +66,12 @@ final case class CreateOcrJobRequest(
     matchDraftId: Option[String] = None,
 ) derives Codec.AsObject
 
+object CreateOcrJobRequest:
+  given Schema[CreateOcrJobRequest] = Schema.derived[CreateOcrJobRequest]
+    .modify(_.requestedScreenType)(_.description(
+      "Must be total_assets, revenue, or incident_log. The legacy auto value is not accepted."
+    ))
+
 final case class CreateOcrJobResponse(jobId: String, draftId: String, status: String)
     derives Codec.AsObject
 

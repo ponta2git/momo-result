@@ -149,6 +149,7 @@ web の import 境界は `apps/web/scripts/check-architecture-imports.mjs`、mod
 - 横断 resource API は `shared/api/<resource>.ts`。feature 専用変換は feature 側に置く。
 - feature から `@/shared/api/generated` を直接参照しない。generated DTO は `shared/api/*` facade で受け、feature は用途別の型・変換を介して扱う。
 - JSON mutation retry は、同じ操作・同じ payload に同じ `Idempotency-Key` を再利用する。payload が変われば新しい key を発行する。
+- OCR intakeは画像uploadからjob作成まで同じ操作keyを再利用し、両方が成功してからkeyを完了する。upload側のfingerprintは画像内容のSHA-256、byte数、media type、file名を含め、同じkeyで別画像を受理しない。
 - 公開HTTP DTOへ内部画像path、旧OCR field名、旧dev header名を戻さない。残存検出は `apps/web/scripts/check-api-contract.mjs` へ寄せる。
 
 ## 4. OCR Worker
@@ -222,7 +223,7 @@ web の import 境界は `apps/web/scripts/check-architecture-imports.mjs`、mod
 - 本番PostgreSQL接続はCAとhostnameを検証し、接続文字列が要求するTLS channel bindingを維持する。
   接続成功のために認証要件を暗黙に弱めず、対応connectorとpublication有効化前のdependency probeで保証する。
   probeは更新用DBがread-write、分析参照用DBがread-onlyであることとRedisの疎通を検証する。
-- アップロード画像は PNG/JPEG/WebP、1枚3MBまで、OCR処理は最大4Kまで。形式、サイズ、寸法、実体を検証する。
+- アップロード画像は PNG/JPEG/WebP、1枚3MBまで、最大1920x1080。完全decode前にmagic bytesとformat headerからmedia type・寸法を検証し、上限超過やheader不整合を拒否する。
 - OCR元画像は下書き確定または下書き削除まで保持し、その後削除する。DBに画像実体、内部path、長寿命URLを保存・公開しない。
 - ログイン、OAuth callback state、画像アップロード、JSON mutation、CSV/TSV出力にはレート制限を入れる。
 - JSON mutation の retry replay は rate limit / key数上限で潰さず、新規 mutation だけ account 別 rate limit と未期限切れ `Idempotency-Key` 件数上限を適用する。上限値は `AppConfig` / env で管理する。

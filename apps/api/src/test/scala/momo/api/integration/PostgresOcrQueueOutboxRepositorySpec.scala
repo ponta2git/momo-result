@@ -1,6 +1,6 @@
 package momo.api.integration
-import java.time.Instant
 import java.nio.charset.StandardCharsets
+import java.time.Instant
 import java.util.UUID
 
 import cats.effect.IO

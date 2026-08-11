@@ -48,9 +48,6 @@ export function resolveDevUser(): string | undefined {
 }
 
 function shouldAttachIdempotencyKey(method: HttpMethod, options: ApiRequestOptions): boolean {
-  if (options.formData !== undefined) {
-    return false;
-  }
   if (options.idempotency === "none") {
     return false;
   }

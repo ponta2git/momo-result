@@ -17,7 +17,7 @@ export const idempotencyOperations = [
   "matchWorkspace.updateMatch",
   "ocrCapture.cancelMatchDraft",
   "ocrCapture.createMatchDraft",
-  "ocrCapture.createOcrJob",
+  "ocrCapture.createUploadJob",
   "seriesAnalysis.recalculateAll",
   "seriesAnalysis.recalculateTitle",
 ] as const;

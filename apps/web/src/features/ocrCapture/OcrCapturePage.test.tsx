@@ -311,6 +311,7 @@ describe("OcrCapturePage", () => {
     setDevUser();
     const createdDrafts: MatchDraftRequestBody[] = [];
     const createdJobs: OcrJobRequestBody[] = [];
+    const intakeKeys: Array<{ endpoint: "job" | "upload"; key: string | null }> = [];
 
     server.use(
       http.post("/api/match-drafts", async ({ request }) => {
@@ -322,7 +323,12 @@ describe("OcrCapturePage", () => {
           updatedAt: "2026-01-01T00:00:00.000Z",
         });
       }),
+      http.post("/api/uploads/images", ({ request }) => {
+        intakeKeys.push({ endpoint: "upload", key: request.headers.get("Idempotency-Key") });
+        return HttpResponse.json({ imageId: "image-1", mediaType: "image/png", sizeBytes: 5 });
+      }),
       http.post("/api/ocr-jobs", async ({ request }) => {
+        intakeKeys.push({ endpoint: "job", key: request.headers.get("Idempotency-Key") });
         const body = (await request.json()) as OcrJobRequestBody;
         createdJobs.push(body);
         return HttpResponse.json({
@@ -365,6 +371,9 @@ describe("OcrCapturePage", () => {
         requestedScreenType: "total_assets",
       }),
     ]);
+    expect(intakeKeys).toHaveLength(2);
+    expect(intakeKeys[0]).toEqual({ endpoint: "upload", key: expect.any(String) });
+    expect(intakeKeys[1]).toEqual({ endpoint: "job", key: intakeKeys[0]?.key });
   });
 
   it("inherits held-event context and returns to that event after starting OCR", async () => {

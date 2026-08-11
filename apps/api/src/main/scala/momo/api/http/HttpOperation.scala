@@ -11,6 +11,7 @@ object HttpOperation:
   val UpdateLoginAccount = "PATCH /api/admin/login-accounts/:id"
 
   val CreateOcrJob = "POST /api/ocr-jobs"
+  val UploadImage = "POST /api/uploads/images"
   val GetOcrJob = "GET /api/ocr-jobs/:id"
   val CancelOcrJob = "DELETE /api/ocr-jobs/:id"
   val GetOcrDraft = "GET /api/ocr-drafts/:id"

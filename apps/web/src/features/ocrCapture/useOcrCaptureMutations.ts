@@ -55,14 +55,21 @@ export function useOcrCaptureMutations(hints: Record<string, unknown>): OcrCaptu
       matchDraftId: string;
       slot: CaptureSlotState;
     }) => {
-      const upload = await uploadImage(file);
+      const attempt = idempotencyKeys.begin("ocrCapture.createUploadJob", {
+        file: {
+          lastModified: file.lastModified,
+          name: file.name,
+          size: file.size,
+          type: file.type,
+        },
+        matchDraftId,
+        slotKind: slot.kind,
+      });
+      const options = { idempotencyKey: attempt.key };
+      const upload = await uploadImage(file, options);
       const request = ocrJobRequestForSlot(matchDraftId, slot, upload.imageId, hints);
-      const job = await runIdempotentMutation(
-        idempotencyKeys,
-        "ocrCapture.createOcrJob",
-        request,
-        (options) => createOcrJob(request, options),
-      );
+      const job = await createOcrJob(request, options);
+      attempt.complete();
       return { upload, job };
     },
   });

@@ -150,11 +150,37 @@ final class LocalFsImageStoreSpec extends MomoCatsEffectSuite:
     }
   }
 
-  test("rejects images larger than 4K dimensions") {
+  test("accepts an image at the FullHD boundary") {
+    tempDirectory("momo-api-image-store").use { dir =>
+      val store = LocalFsImageStore[IO](dir)
+      val fullHd = TestImages.png(
+        width = LocalFsImageStore.MaxWidth,
+        height = LocalFsImageStore.MaxHeight,
+      )
+      store.save(accountId, Some("full-hd.png"), Some("image/png"), fullHd).map {
+        case Right(image) => assertEquals(image.sizeBytes, fullHd.length.toLong)
+        case Left(error) => fail(s"expected FullHD image to be stored, got $error")
+      }
+    }
+  }
+
+  test("rejects image header dimensions wider than FullHD") {
     tempDirectory("momo-api-image-store").use { dir =>
       val store = LocalFsImageStore[IO](dir)
       val tooWide = TestImages.png(width = LocalFsImageStore.MaxWidth + 1, height = 1)
       store.save(accountId, Some("wide.png"), Some("image/png"), tooWide).map {
+        case Left(error: AppError.PayloadTooLarge) =>
+          assert(error.detail.contains(LocalFsImageStore.MaxDimensionsLabel))
+        case other => fail(s"expected payload too large, got $other")
+      }
+    }
+  }
+
+  test("rejects image header dimensions taller than FullHD") {
+    tempDirectory("momo-api-image-store").use { dir =>
+      val store = LocalFsImageStore[IO](dir)
+      val tooTall = TestImages.webp(width = 1, height = LocalFsImageStore.MaxHeight + 1)
+      store.save(accountId, Some("tall.webp"), Some("image/webp"), tooTall).map {
         case Left(error: AppError.PayloadTooLarge) =>
           assert(error.detail.contains(LocalFsImageStore.MaxDimensionsLabel))
         case other => fail(s"expected payload too large, got $other")

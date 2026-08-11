@@ -10,12 +10,16 @@ export type OcrFailureResponse = components["schemas"]["OcrFailureResponse"];
 export type OcrJobHintsRequest = components["schemas"]["OcrJobHintsRequest"];
 export type CancelOcrJobResponse = components["schemas"]["CancelOcrJobResponse"];
 
-export async function uploadImage(file: File): Promise<UploadImageResponse> {
+export async function uploadImage(
+  file: File,
+  options: IdempotencyRequestOptions,
+): Promise<UploadImageResponse> {
   const formData = new FormData();
   formData.set("file", file);
   return apiRequest<UploadImageResponse>("/api/uploads/images", {
     method: "POST",
     formData,
+    idempotency: { key: options.idempotencyKey },
   });
 }
 

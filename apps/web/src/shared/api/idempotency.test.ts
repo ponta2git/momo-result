@@ -26,12 +26,12 @@ describe("idempotency key store", () => {
 
   it("builds stable fingerprints for nested payloads", () => {
     expect(
-      idempotencyFingerprint("ocrCapture.createOcrJob", {
+      idempotencyFingerprint("ocrCapture.createUploadJob", {
         hints: { aliases: ["ぽんた"], omitted: undefined },
         imageId: "image-1",
       }),
     ).toBe(
-      idempotencyFingerprint("ocrCapture.createOcrJob", {
+      idempotencyFingerprint("ocrCapture.createUploadJob", {
         imageId: "image-1",
         hints: { aliases: ["ぽんた"] },
       }),

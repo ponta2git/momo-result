@@ -157,7 +157,13 @@ object HttpRoutes:
 
     val endpoints: List[ServerEndpoint[Any, F]] = HealthModule
       .routes[F](deps.config, deps.healthDetails, security) :::
-      UploadModule.routes[F](deps.upload.uploadImage, deps.rateLimiters.upload, security) :::
+      UploadModule.routes[F](
+        deps.upload.uploadImage,
+        deps.rateLimiters.upload,
+        idempotencyGuard,
+        deps.nowF,
+        security,
+      ) :::
       OcrModule.routes[F](
         deps.ocr.createOcrJob,
         deps.ocr.getOcrJob,

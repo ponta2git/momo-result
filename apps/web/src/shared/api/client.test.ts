@@ -194,6 +194,21 @@ describe("apiRequest", () => {
     expect(headers.get("Idempotency-Key")).toBe("submit-key-1");
   });
 
+  it("attaches an explicit idempotency key to multipart mutations without setting Content-Type", async () => {
+    const fetchMock = installFetchMock(async () => Response.json({ ok: true }));
+
+    await apiRequest("/api/uploads/images", {
+      method: "POST",
+      formData: new FormData(),
+      idempotency: { key: "upload-key-1" },
+    });
+
+    const calls = fetchCallsOf(fetchMock);
+    const headers = requireInit(calls[0]?.[1]).headers as Headers;
+    expect(headers.get("Idempotency-Key")).toBe("upload-key-1");
+    expect(headers.has("Content-Type")).toBe(false);
+  });
+
   it("attaches caller-provided idempotency key to any JSON mutation", async () => {
     const fetchMock = installFetchMock(async () => Response.json({ ok: true }));
 

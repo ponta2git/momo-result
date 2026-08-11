@@ -264,24 +264,22 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
     }
   }
 
-  test("rejects auto screen type when attaching OCR to an existing match draft") {
+  test("rejects auto screen type for every new OCR request") {
     inMemoryQueueFixture(
       prefix = "momo-api-create-job-auto-match-draft",
       idSeed = List("job-1", "draft-1"),
       requestId = None,
       activeJobLimit = 12,
     ).use { fixture =>
-      val matchDraftId = MatchDraftId.unsafeFromString("match-draft-auto-rejected")
       for
         image <- fixture.savePng
-        _ <- fixture.matchDrafts.create(editableDraft(matchDraftId))
         usecase <- fixture.usecase
         result <- usecase.run(
           CreateOcrJobCommand(
             image.imageId,
             ScreenType.Auto,
             OcrJobHints.empty,
-            Some(matchDraftId),
+            None,
           ),
           fixture.requestId,
         )

@@ -1,7 +1,7 @@
 export const slotKinds = ["total_assets", "revenue", "incident_log"] as const;
 export type SlotKind = (typeof slotKinds)[number];
 
-export const screenTypes = ["auto", ...slotKinds] as const;
+export const screenTypes = slotKinds;
 export type ScreenType = (typeof screenTypes)[number];
 
 export const ocrJobStatuses = ["queued", "running", "succeeded", "failed", "cancelled"] as const;

@@ -21,6 +21,7 @@ trait HttpAppTestFixtures:
   this: MomoCatsEffectSuite =>
 
   protected type TestHttpApp = Http4sApp[IO]
+  protected final case class FileBackedTestHttpApp(app: TestHttpApp, imageRoot: Path)
 
   protected val DefaultAccountId = "account_ponta"
 
@@ -37,6 +38,11 @@ trait HttpAppTestFixtures:
 
   protected def wiredHttpAppResource(prefix: String): Resource[IO, TestHttpApp] =
     wiredHttpAppResourceWith(prefix, identity, _ => IO.unit)
+
+  protected def fileBackedHttpAppResource(prefix: String): Resource[IO, FileBackedTestHttpApp] =
+    tempDirectory(prefix).flatMap { dir =>
+      ApiApp.resource[IO](defaultConfig(dir, AppEnv.Test)).map(FileBackedTestHttpApp(_, dir))
+    }
 
   protected def seededWiredHttpAppResource(
       prefix: String,
@@ -115,19 +121,38 @@ trait HttpAppTestFixtures:
 
   protected def uploadPngRequest(): IO[Request[IO]] = uploadPngRequest(1)
 
+  protected def uploadPngRequestWithIdempotency(key: String): IO[Request[IO]] =
+    uploadPngRequest(1, Some(key), TestImages.png1x1)
+
+  protected def uploadPngRequestWithIdempotency(
+      key: String,
+      bytes: Array[Byte],
+  ): IO[Request[IO]] = uploadPngRequest(1, Some(key), bytes)
+
   protected def uploadPngRequest(filePartCount: Int): IO[Request[IO]] =
+    uploadPngRequest(filePartCount, None, TestImages.png1x1)
+
+  private def uploadPngRequest(
+      filePartCount: Int,
+      idempotencyKey: Option[String],
+      bytes: Array[Byte],
+  ): IO[Request[IO]] =
     val parts = Vector.tabulate(filePartCount) { index =>
       Part.fileData[IO](
         "file",
         s"source-${index + 1}.png",
-        Stream.emits(TestImages.png1x1).covary[IO],
+        Stream.emits(bytes).covary[IO],
         `Content-Type`(MediaType.image.png),
       )
     }
     for
       multiparts <- Multiparts.forSync[IO]
       multipart <- multiparts.multipart(parts)
-    yield writeRequest(Method.POST, uri = Uri.unsafeFromString("/api/uploads/images"))
+    yield writeRequest(
+      Method.POST,
+      uri = Uri.unsafeFromString("/api/uploads/images"),
+      idempotencyKey = idempotencyKey,
+    )
       .putHeaders(multipart.headers).withEntity(multipart)
 
   private def httpAppResourceWith(

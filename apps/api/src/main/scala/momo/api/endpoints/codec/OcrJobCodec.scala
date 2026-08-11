@@ -11,9 +11,9 @@ object OcrJobCodec:
   def toCreateCommand(request: CreateOcrJobRequest): Either[AppError, CreateOcrJobCommand] =
     for
       imageId <- BoundaryId.required("imageId", request.imageId)(ImageId.fromString)
-      requestedScreenType <- ScreenType.fromWire(request.requestedScreenType)
+      requestedScreenType <- ScreenType.fromExplicitWire(request.requestedScreenType)
         .toRight(AppError.ValidationFailed(
-          "requestedScreenType must be auto, total_assets, revenue, or incident_log."
+          "requestedScreenType must be total_assets, revenue, or incident_log."
         ))
       hints <- request.ocrHints.fold(Right(OcrJobHints.empty))(OcrJobHintsRequest.asDomain)
       matchDraftId <- BoundaryId

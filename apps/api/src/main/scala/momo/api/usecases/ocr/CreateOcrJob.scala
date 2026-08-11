@@ -53,7 +53,7 @@ final class CreateOcrJob[F[_]: MonadThrow](
       requestId: Option[String],
   ): F[Either[AppError, CreatedOcrJob]] = (for
     _ <- EitherT.fromEither[F](
-      validateMatchDraftScreenType(command.requestedScreenType, command.matchDraftId)
+      validateNewRequestScreenType(command.requestedScreenType)
     )
     _ <- EitherT.fromEither[F](validateOcrHints(command.ocrHints))
     _ <- EitherT(admissionGuard.ensureAvailable)
@@ -149,13 +149,10 @@ final class CreateOcrJob[F[_]: MonadThrow](
     }
 
 object CreateOcrJob:
-  private def validateMatchDraftScreenType(
-      screenType: ScreenType,
-      matchDraftId: Option[MatchDraftId],
-  ): Either[AppError, Unit] =
-    if screenType == ScreenType.Auto && matchDraftId.nonEmpty then
+  private def validateNewRequestScreenType(screenType: ScreenType): Either[AppError, Unit] =
+    if screenType == ScreenType.Auto then
       Left(AppError.ValidationFailed(
-        "requestedScreenType=auto cannot be attached to an existing match draft."
+        "requestedScreenType=auto is no longer accepted. Choose an explicit OCR screen type."
       ))
     else Right(())
 

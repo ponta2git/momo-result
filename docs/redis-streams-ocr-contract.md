@@ -89,6 +89,7 @@ Counters:
 
 Schema rules:
 
+- `auto`はv1履歴とdrain中の既存messageを読むためだけに残す。APIは新しいjob/payloadへ`auto`を書かない。
 - producer payload は閉じた契約として扱う。field 追加でも schema と両言語 contract tests を同時に更新する。
 - worker runtime 境界でも stream payload schema を適用する。
 - `ocrHintsJson` がある場合は JSON parse 後に hints schema も適用する。

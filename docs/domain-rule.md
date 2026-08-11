@@ -101,7 +101,7 @@
 ルール:
 
 - 画像なしの手入力だけでも確定できる。
-- OCR対象画面種別は `total_assets`、`revenue`、`incident_log`。`auto` は新規OCR用で、既存下書きのslotへ attach しない。
+- OCR対象画面種別は `total_assets`、`revenue`、`incident_log`。新規受付は必ずslotを明示し、legacy v1 row/payloadのdecodeを除いて`auto`を受理しない。
 - 同じOCR対象画面種別を複数取り込んだ場合は、該当slotを最新結果で上書きする。
 - `ocr_running` の投影状態は slot job の状態から決める。未完了があれば `ocr_running`、失敗があれば `ocr_failed`、警告があれば `needs_review`、それ以外は `draft_ready`。
 - 未確定下書きは作業中の間だけDBに残る。ユーザー削除時は元画像保持を閉じ、editable下書きを物理削除する。

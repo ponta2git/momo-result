@@ -7,8 +7,8 @@ import momo.api.domain.ids.ImageId
 
 private[storage] object LocalFsImageStoreSupport:
   val MaxBytes = 3 * 1024 * 1024
-  val MaxWidth = 3840
-  val MaxHeight = 2160
+  val MaxWidth = 1920
+  val MaxHeight = 1080
   val MaxDimensionsLabel = s"${MaxWidth.toString}x${MaxHeight.toString}"
 
   final case class ImageType(mediaType: String, extension: String)

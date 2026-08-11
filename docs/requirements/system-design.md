@@ -264,8 +264,7 @@ OCRジョブのタイムアウト初期値は `OCR_TIMEOUT_SECONDS` で管理す
 
 ### 11.1 CI必須チェック
 
-対象領域ごとに以下を実行する。analysis-worker行は移行実装と同じ変更で追加する必須gateであり、
-現時点のCIに存在するという意味ではない。
+対象領域ごとに以下を実行する。
 
 | 対象 | 必須チェック |
 |---|---|
@@ -276,6 +275,8 @@ OCRジョブのタイムアウト初期値は `OCR_TIMEOUT_SECONDS` で管理す
 | runtime / E2E | Docker build、runtime smoke、container image scan、Playwright E2E smoke |
 
 Playwright E2E smoke はUX確定済みのログイン後主要フローに絞る。ローカル隔離gateではVite dev serverとE2E専用API / DB / Redisを使う。deploy workflowではweb/API/OCR runtime imageを実DB/Redis付きで起動し、ビルド済みwebへPlaywrightを当てる。分析worker追加時は別途worker runtime smokeを起動し、成果物を介したE2Eと結合する。runtime経路の開発用認証ヘッダはPlaywrightのbrowser route境界で注入し、本番bundleには埋め込まない。
+
+release対象は検証前に一度だけbuildし、後続gateとdeployで同じartifactを使う。候補のcommit、設定digest、artifact digest、registry digestを相互検証し、可変tagの再解決やdeploy直前の再buildを行わない。rollbackも成功済みdeployの同じ来歴を検証し、通常deployと同じ承認・排他境界で実行する。
 
 ### 11.2 フォーマッタ・リンタ
 

@@ -291,14 +291,20 @@ resource / endurance測定は本番同等runtimeのprivate gateであり、通�
 
 | Workflow | 実行内容 |
 |---|---|
+| `.github/workflows/pr.yml` | 変更範囲の分類、対象workflowの起動、単一のfail-closed PR gate集約 |
 | `.github/workflows/public-safety.yml` | public repository safety check |
 | `.github/workflows/web.yml` | format、API型生成を含むlint、typecheck、Vitestまたはcoverage付きVitest、build |
 | `.github/workflows/api.yml` | format、lint、clean compile、OpenAPI check、testまたはcoverage付きtest、DB/Redis quality |
 | `.github/workflows/ocr-worker.yml` | ruff format/check、mypy、pytestまたはcoverage付きpytest、integration test |
 | `.github/workflows/analysis-worker.yml` | Cargo format / Clippy / test / release build、DB / Redis control-plane smoke、専用image build / scan / hard-limit smoke |
-| `.github/workflows/deploy.yml` | runtime config check、momo-db migration適用、Docker build、image scan、runtime smoke、Playwright runtime E2E smoke、Fly deploy |
+| `.github/workflows/analysis-candidate.yml` | analysis変更時の検証済み候補image作成 |
+| `.github/workflows/analysis-production.yml` | 選択したanalysis候補の来歴検証と再buildなしの昇格 |
+| `.github/workflows/deploy.yml` | runtime config check、momo-db migration適用、image build / scan / package、runtime / Playwright smoke、digest指定deploy、deploy後検証 |
+| `.github/workflows/runtime-rollback.yml` | 成功済みruntime deployの来歴検証、digest指定rollback、rollback後検証 |
 
-`deploy.yml` の production deploy 経路では、サブシステム quality gate、public safety、runtime image build / scan / smoke を可能な範囲で並列に進め、`release-ready` で合流させる。サブシステム workflow の `report_coverage` はPRレビュー補助の扱いとし、production deploy から呼ぶ場合は無効にして release gate では待たない。`report_coverage` が有効な場合、同じテスト集合の通常実行は省き、coverage付きテストをその gate とする。
+`deploy.yml` の production deploy 経路では、サブシステム quality gate、public safety、runtime image build / scan / smoke を可能な範囲で並列に進め、`release-ready` で合流させる。coverage artifactはPRレビュー補助としてPR時だけ生成し、同じテスト集合をcoverageなしで重複実行しない。
+
+runtimeとanalysisのrelease候補は、検証対象を一度だけbuildしてidentityと入力commit、設定、artifact digestを記録する。後続のsmokeとdeployは同じ候補を検証して再利用し、本番指定は可変tagではなくregistry digestを使う。cacheはcontent-addressedな高速化として利用できるが、cache hitを検証成功の根拠にせず、cold cacheでも同じgateが完走しなければならない。異なるimage系列はcache scopeを分離する。
 
 CIの詳細なtimeout、サービス、artifact path は workflow を正とする。docs へ値を写す場合は、判断に必要な粒度だけに留める。
 
@@ -306,7 +312,9 @@ CIの詳細なtimeout、サービス、artifact path は workflow を正とす�
 
 本番コードのrollbackでは、pipelineの成功とincident mitigationの完了を同じ意味で扱わない。
 
+- 自動rollbackの対象は、信頼済みbranchの成功したdeployで、commit・設定・registry manifestの改変不能な来歴を再検証できる候補に限定する。来歴が欠ける過去deployは推測で復元しない。
 - rollback対象のcommitと、実際に稼働するartifactのidentityを記録・照合する。
+- 通常deployとrollbackは同じ排他制御とproduction approval境界を使い、release preflightが失敗した候補へ切り替えない。
 - 対象機能をユーザーが触る経路と、その経路が呼ぶAPI / usecase / engineを先に列挙し、rollback差分が全経路を覆うことを確認する。
 - deploy後はprocess healthだけでなく、変更対象の代表的な画面・APIの応答とログを確認する。
 - 高負荷・性能障害では、deploy success、health check、機能応答、CPU / latencyなどの外部観測を別々の証拠として扱う。取得できない観測は未検証と報告する。

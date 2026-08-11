@@ -4,7 +4,7 @@ kill_signal = "SIGTERM"
 kill_timeout = 90
 
 [deploy]
-  release_command = "/opt/momo-result/bin/release-preflight"
+  release_command = "/opt/momo-result/bin/momo-runtime-tool preflight"
 
 [env]
   DB_POOL_SIZE = "3"

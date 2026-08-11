@@ -10,7 +10,7 @@ jobs:
   actionlint:
     name: actionlint
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -31,6 +31,8 @@ jobs:
           cd tools
           go test ./...
           go vet ./...
+          go install golang.org/x/vuln/cmd/govulncheck@v1.6.0
+          govulncheck ./...
           ./test-linux-memory-snapshot.sh
       - name: Test workflow policy scripts
         run: |

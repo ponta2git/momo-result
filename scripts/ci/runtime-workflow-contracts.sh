@@ -10,7 +10,7 @@ grep -Fq -- '--require-check publicEdge' "${deploy_workflow}"
 grep -Fq 'scripts/ci/runtime-postdeploy-contract.py' "${rollback_workflow}"
 grep -Fq 'MOMO_POSTDEPLOY_PUBLIC_EDGE=deferred' "${rollback_workflow}"
 grep -Fq 'flyctl ssh sftp put' "${rollback_workflow}"
-grep -Fq 'deploy/public_edge_probe.py' "${rollback_workflow}"
+grep -Fq 'momo-runtime-tool smoke edge' "${rollback_workflow}"
 grep -Fq -- '--machine "${{ steps.deployment-state.outputs.machine_id }}"' \
   "${rollback_workflow}"
 

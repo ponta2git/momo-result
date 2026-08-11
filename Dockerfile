@@ -3,6 +3,7 @@
 ARG NODE_IMAGE=node:24-bookworm-slim@sha256:c2d5ade763cacfb03fe9cb8e8af5d1be5041ff331921fa26a9b231ca3a4f780a
 ARG JAVA_JDK_IMAGE=eclipse-temurin:25-jdk-noble@sha256:02aba7518e48cfed96403ac9634e357a40329d6ec9418feb0b32636e43b245a1
 ARG JAVA_JRE_IMAGE=eclipse-temurin:25-jre-noble@sha256:f9bd8815e73632c22985ebb133ec49b9fc4ad5ffe0657594ac02748ad0431ab7
+ARG GO_IMAGE=golang:1.26.5-bookworm@sha256:53eeac89074db483fdf0ab3be1df32bf6e47562263d2d0d6baa7f26acb4957dd
 ARG PYTHON_IMAGE=python:3.14-slim-bookworm@sha256:a70519002c49552ea0a853de47599cf40479b001bd7a624f1112eaf44dcaccc7
 ARG UBUNTU_IMAGE=ubuntu:noble@sha256:786a8b558f7be160c6c8c4a54f9a57274f3b4fb1491cf65146521ae77ff1dc54
 
@@ -50,6 +51,16 @@ RUN --mount=type=cache,id=sbt-boot,target=/root/.sbt,sharing=locked \
   --mount=type=cache,id=coursier-cache,target=/root/.cache/coursier,sharing=locked \
   --mount=type=cache,id=ivy-cache,target=/root/.ivy2/cache,sharing=locked \
   sbt apiOpenApiCheck stage
+
+FROM ${GO_IMAGE} AS runtime-tool-builder
+WORKDIR /workspace/tools
+COPY tools/go.mod tools/go.sum ./
+RUN --mount=type=cache,id=go-mod,target=/go/pkg/mod,sharing=locked \
+  go mod download
+COPY tools/cmd/momo-runtime-tool cmd/momo-runtime-tool
+RUN --mount=type=cache,id=go-build,target=/root/.cache/go-build,sharing=locked \
+  CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' \
+    -o /out/momo-runtime-tool ./cmd/momo-runtime-tool
 
 FROM ${PYTHON_IMAGE} AS tesseract-builder
 ARG TESSERACT_VERSION=5.5.2
@@ -191,18 +202,13 @@ COPY --from=api-builder --chown=momo:momo /workspace/apps/api/target/universal/s
 COPY --from=worker-builder --chown=momo:momo /opt/momo-result/ocr-worker/.venv /opt/momo-result/ocr-worker/.venv
 COPY --from=web-builder --chown=momo:momo /workspace/apps/web/dist /srv/momo-result/web
 COPY --chown=momo:momo docs/schemas /opt/momo-result/docs/schemas
+COPY --chown=momo:momo contracts/runtime-db-contract.json /opt/momo-result/contracts/runtime-db-contract.json
 COPY deploy/nginx.conf /etc/nginx/nginx.conf.template
-COPY --chown=momo:momo deploy/render-nginx-conf.py /opt/momo-result/bin/render-nginx-conf
-COPY --chown=momo:momo deploy/release-preflight.py /opt/momo-result/bin/release-preflight
-COPY --chown=momo:momo deploy/public_edge_probe.py /opt/momo-result/bin/public_edge_probe.py
-COPY --chown=momo:momo deploy/postdeploy-smoke.py /opt/momo-result/bin/postdeploy-smoke
+COPY --from=runtime-tool-builder --chown=momo:momo /out/momo-runtime-tool /opt/momo-result/bin/momo-runtime-tool
 COPY --chown=momo:momo deploy/start-runtime.sh /opt/momo-result/bin/start-runtime
 COPY deploy/supervisord.conf /etc/supervisor/conf.d/momo-result.conf
 RUN chmod +x \
-  /opt/momo-result/bin/postdeploy-smoke \
-  /opt/momo-result/bin/public_edge_probe.py \
-  /opt/momo-result/bin/release-preflight \
-  /opt/momo-result/bin/render-nginx-conf \
+  /opt/momo-result/bin/momo-runtime-tool \
   /opt/momo-result/bin/start-runtime
 
 EXPOSE 8080

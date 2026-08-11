@@ -107,6 +107,12 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Set up Go runtime tool
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          cache: false
+          go-version: 1.26.5
+
       - name: Check runtime config
         run: scripts/ci/check-runtime-config.sh
         timeout-minutes: 2
@@ -233,6 +239,12 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Set up Go runtime tool
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          cache: false
+          go-version: 1.26.5
+
       - name: Read pinned momo-db revision
         id: momo-db
         run: |
@@ -315,7 +327,7 @@ jobs:
         timeout-minutes: 3
 
       - name: Release DB contract preflight
-        run: docker exec momo-result-runtime /opt/momo-result/bin/release-preflight
+        run: docker exec momo-result-runtime /opt/momo-result/bin/momo-runtime-tool preflight
         timeout-minutes: 1
 
       - name: Runtime HTTP smoke
@@ -458,7 +470,7 @@ jobs:
         timeout-minutes: 3
 
       - name: Release DB contract preflight
-        run: docker exec momo-result-runtime /opt/momo-result/bin/release-preflight
+        run: docker exec momo-result-runtime /opt/momo-result/bin/momo-runtime-tool preflight
         timeout-minutes: 1
 
       - name: Runtime HTTP smoke
@@ -677,7 +689,7 @@ jobs:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: |
           flyctl ssh console --app momo-result --pty=false --quiet \
-            --command "/opt/momo-result/bin/postdeploy-smoke" \
+            --command "/opt/momo-result/bin/momo-runtime-tool smoke local" \
             > runtime-production-evidence/postdeploy-smoke.json
           scripts/ci/runtime-postdeploy-contract.py \
             runtime-production-evidence/postdeploy-smoke.json \

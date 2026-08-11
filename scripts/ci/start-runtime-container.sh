@@ -34,7 +34,7 @@ docker run -d \
   "${image_ref}"
 
 for _attempt in {1..60}; do
-  if docker exec "${container_name}" /opt/momo-result/bin/postdeploy-smoke >/dev/null 2>&1; then
+  if docker exec "${container_name}" /opt/momo-result/bin/momo-runtime-tool smoke local >/dev/null 2>&1; then
     exit 0
   fi
   sleep 2

@@ -40,6 +40,10 @@ while IFS= read -r -d '' path; do
     Dockerfile | deploy/* | fly.toml)
       runtime=true
       ;;
+    contracts/runtime-db-contract.json | contracts/runtime-tool-characterization-v1.json | \
+      tools/cmd/momo-runtime-tool/*)
+      runtime=true
+      ;;
     .dockerignore)
       runtime=true
       analysis=true

@@ -161,6 +161,12 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Set up Go runtime tool
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          cache: false
+          go-version: 1.26.5
+
       - name: Download deployed registry manifest
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -247,12 +253,18 @@ jobs:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: |
           flyctl ssh console --app momo-result --pty=false --quiet \
-            --command "env MOMO_POSTDEPLOY_PUBLIC_EDGE=deferred /opt/momo-result/bin/postdeploy-smoke" \
+            --command "if [ -x /opt/momo-result/bin/momo-runtime-tool ]; then env MOMO_POSTDEPLOY_PUBLIC_EDGE=deferred /opt/momo-result/bin/momo-runtime-tool smoke local; else env MOMO_POSTDEPLOY_PUBLIC_EDGE=deferred /opt/momo-result/bin/postdeploy-smoke; fi" \
             > runtime-rollback-evidence/postdeploy-smoke.json
           scripts/ci/runtime-postdeploy-contract.py \
             runtime-rollback-evidence/postdeploy-smoke.json \
             > /dev/null
         timeout-minutes: 2
+
+      - name: Build current public edge probe
+        run: |
+          cd tools
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags='-s -w' \
+            -o "${RUNNER_TEMP}/momo-runtime-tool" ./cmd/momo-runtime-tool
 
       - name: Upload current public edge probe to restored runtime
         env:
@@ -262,8 +274,8 @@ jobs:
           --app momo-result
           --machine "${{ steps.deployment-state.outputs.machine_id }}"
           --mode 0500
-          deploy/public_edge_probe.py
-          /tmp/momo-result-public-edge-probe.py
+          "${RUNNER_TEMP}/momo-runtime-tool"
+          /tmp/momo-runtime-tool
         timeout-minutes: 1
 
       - name: Verify public edge from restored runtime
@@ -272,7 +284,7 @@ jobs:
         run: |
           flyctl ssh console --app momo-result --pty=false --quiet \
             --machine "${{ steps.deployment-state.outputs.machine_id }}" \
-            --command "/opt/momo-result/ocr-worker/.venv/bin/python /tmp/momo-result-public-edge-probe.py momo-result.ponta.me" \
+            --command "/tmp/momo-runtime-tool smoke edge momo-result.ponta.me" \
             > "${RUNNER_TEMP}/runtime-public-edge.json"
           jq -e '
             select(
@@ -296,7 +308,7 @@ jobs:
           --pty=false
           --quiet
           --machine "${{ steps.deployment-state.outputs.machine_id }}"
-          --command "rm -f /tmp/momo-result-public-edge-probe.py"
+          --command "rm -f /tmp/momo-runtime-tool"
         timeout-minutes: 1
 
       - name: Upload rollback verification evidence

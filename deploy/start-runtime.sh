@@ -14,6 +14,6 @@ do
   mkdir -p "${runtime_dir}"
 done
 
-/opt/momo-result/bin/render-nginx-conf
+/opt/momo-result/bin/momo-runtime-tool render-nginx
 nginx -t -c "${nginx_conf}"
 exec /usr/bin/supervisord -c /etc/supervisor/conf.d/momo-result.conf

@@ -10,6 +10,7 @@ mod child_report;
 pub mod config;
 mod control;
 mod database;
+mod execution_slot;
 pub mod ocr;
 #[expect(
     unsafe_code,

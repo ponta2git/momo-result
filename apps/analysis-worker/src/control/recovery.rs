@@ -1,5 +1,9 @@
 use tokio_postgres::{Row, Transaction};
 
+use crate::execution_slot::{
+    ExecutionSlotHolder, ExecutionTaskKind, clear_expired as clear_expired_slot,
+};
+
 use super::{
     AttemptOutcome, ClaimedJob, ControlError, DeliveryReason, RequestOutcome, SafeFailureCode,
     transaction::{
@@ -7,17 +11,16 @@ use super::{
     },
 };
 
-pub(super) async fn recover_expired_holder(
+pub(crate) async fn recover_expired_analysis_holder(
     transaction: &Transaction<'_>,
-    slot: &Row,
+    holder: &ExecutionSlotHolder,
 ) -> Result<(), ControlError> {
-    let job_id = slot
-        .try_get::<_, Option<String>>(1)?
-        .ok_or(ControlError::OwnerLost)?;
-    let attempt_id = slot
-        .try_get::<_, Option<String>>(2)?
-        .ok_or(ControlError::OwnerLost)?;
-    let fencing_token = slot.try_get::<_, i64>(3)?;
+    if holder.task_kind != ExecutionTaskKind::Analysis || !holder.expired {
+        return Err(ControlError::OwnerLost);
+    }
+    let job_id = &holder.job_id;
+    let attempt_id = &holder.attempt_id;
+    let fencing_token = holder.fencing_token;
     let owner_lost = AttemptOutcome::OwnerLost.wire();
     transaction
         .execute(
@@ -37,16 +40,11 @@ pub(super) async fn recover_expired_holder(
         )
         .await?;
     if let Some(job) = job {
-        recover_expired_job(transaction, &job_id, &attempt_id, fencing_token, &job).await?;
+        recover_expired_job(transaction, job_id, attempt_id, fencing_token, &job).await?;
     }
-    transaction
-        .execute(
-            "UPDATE worker_execution_slots SET task_kind = NULL, owner = NULL, job_id = NULL,\x20\
-               attempt_id = NULL, holder_preemptible = NULL, lease_expires_at = NULL,\x20\
-               updated_at = clock_timestamp() WHERE slot_key = 'shared-heavy-work'",
-            &[],
-        )
-        .await?;
+    if !clear_expired_slot(transaction, holder).await? {
+        return Err(ControlError::OwnerLost);
+    }
     Ok(())
 }
 

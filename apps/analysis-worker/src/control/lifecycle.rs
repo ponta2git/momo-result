@@ -1,6 +1,11 @@
 use tokio_postgres::{Client, Transaction};
 
-use crate::config::WorkerRuntimeConfig;
+use crate::{
+    config::WorkerRuntimeConfig,
+    execution_slot::{
+        ExecutionSlotIdentity, ExecutionTaskKind, SlotRenewal, renew_owned as renew_slot,
+    },
+};
 
 use super::{
     AttemptFailure, AttemptMetrics, AttemptOutcome, ClaimedJob, ControlError, DeliveryReason,
@@ -25,28 +30,22 @@ pub(crate) async fn heartbeat(
 ) -> Result<HeartbeatResult, ControlError> {
     let transaction = bounded_transaction(client, config.heartbeat_interval).await?;
     let lease_milliseconds = duration_milliseconds(config.lease_duration)?;
-    let slot = transaction
-        .query_opt(
-            "UPDATE worker_execution_slots SET\x20\
-               lease_expires_at = clock_timestamp() + ($1::bigint * interval '1 millisecond'),\x20\
-               updated_at = clock_timestamp()\x20\
-             WHERE slot_key = 'shared-heavy-work' AND owner = $2 AND job_id = $3\x20\
-               AND attempt_id = $4 AND fencing_token = $5\x20\
-               AND lease_expires_at > clock_timestamp()\x20\
-             RETURNING preempt_requested_by",
-            &[
-                &lease_milliseconds,
-                &config.worker_id,
-                &claim.job_id,
-                &claim.attempt_id,
-                &claim.fencing_token,
-            ],
-        )
-        .await?;
-    let Some(slot) = slot else {
+    let slot_renewal = renew_slot(
+        &transaction,
+        ExecutionSlotIdentity {
+            task_kind: ExecutionTaskKind::Analysis,
+            owner: &config.worker_id,
+            job_id: &claim.job_id,
+            attempt_id: &claim.attempt_id,
+            fencing_token: claim.fencing_token,
+        },
+        lease_milliseconds,
+    )
+    .await?;
+    if slot_renewal == SlotRenewal::OwnerLost {
         transaction.rollback().await?;
         return Ok(HeartbeatResult::OwnerLost);
-    };
+    }
     let updated = transaction
         .execute(
             "UPDATE series_analysis_jobs SET\x20\
@@ -76,7 +75,7 @@ pub(crate) async fn heartbeat(
         )
         .await?;
     transaction.commit().await?;
-    Ok(if slot.try_get::<_, Option<String>>(0)?.is_some() {
+    Ok(if slot_renewal == SlotRenewal::PreemptRequested {
         HeartbeatResult::PreemptRequested
     } else {
         HeartbeatResult::Continue

@@ -2,11 +2,17 @@ use tokio_postgres::{Client, Transaction};
 
 use momo_analysis_core::contract::ARTIFACT_SCHEMA_VERSION;
 
-use crate::config::WorkerRuntimeConfig;
+use crate::{
+    config::WorkerRuntimeConfig,
+    execution_slot::{
+        ExecutionTaskKind, NewExecutionSlotHolder, SlotAcquisition, acquire_analysis,
+        clear_stale_preemption, lock as lock_execution_slot,
+    },
+};
 
 use super::{
     ALGORITHM_VERSION, ClaimResult, ClaimedJob, ControlError, UnsupportedJobVersion,
-    recovery::recover_expired_holder,
+    recovery::recover_expired_analysis_holder,
     transaction::{bounded_transaction, duration_milliseconds, stable_id},
 };
 
@@ -23,7 +29,8 @@ pub(crate) async fn claim_job(
 ) -> Result<ClaimResult, ControlError> {
     let transaction =
         bounded_transaction(client, config.publication_limits.finalization_timeout).await?;
-    let candidate = match prepare_claim(&transaction, job_id).await? {
+    let lease_milliseconds = duration_milliseconds(config.lease_duration)?;
+    let candidate = match prepare_claim(&transaction, job_id, lease_milliseconds).await? {
         ClaimPreparation::Ready(candidate) => candidate,
         ClaimPreparation::Rejected(result) => {
             transaction.rollback().await?;
@@ -45,7 +52,6 @@ pub(crate) async fn claim_job(
         .checked_add(1)
         .ok_or(ControlError::NumericBound)?;
     let attempt_id = stable_id("analysis-attempt", &[job_id, &attempt_no.to_string()]);
-    let lease_milliseconds = duration_milliseconds(config.lease_duration)?;
     let timeout_milliseconds =
         duration_milliseconds(config.publication_limits.calculation_timeout)?;
     let fencing_token = acquire_execution_slot(
@@ -54,6 +60,7 @@ pub(crate) async fn claim_job(
         job_id,
         &attempt_id,
         lease_milliseconds,
+        candidate.slot_fencing_token,
     )
     .await?;
     let attempt = ClaimAttempt {
@@ -85,6 +92,7 @@ struct ClaimCandidate {
     algorithm_version: String,
     artifact_schema_version: i32,
     attempt_count: i32,
+    slot_fencing_token: i64,
 }
 
 enum ClaimPreparation {
@@ -95,6 +103,7 @@ enum ClaimPreparation {
 async fn prepare_claim(
     transaction: &Transaction<'_>,
     job_id: &str,
+    stale_preemption_milliseconds: i64,
 ) -> Result<ClaimPreparation, ControlError> {
     let preview = transaction
         .query_opt(
@@ -106,25 +115,16 @@ async fn prepare_claim(
         return Ok(ClaimPreparation::Rejected(ClaimResult::MissingOrTerminal));
     };
     let game_title_id = preview.try_get::<_, String>(0)?;
-    let slot = transaction
-        .query_one(
-            "SELECT owner, job_id, attempt_id, fencing_token,\x20\
-                    lease_expires_at IS NOT NULL AND lease_expires_at <= clock_timestamp(),\x20\
-                    preempt_requested_by\x20\
-             FROM worker_execution_slots\x20\
-             WHERE slot_key = 'shared-heavy-work' FOR UPDATE",
-            &[],
-        )
-        .await?;
-    let slot_owner = slot.try_get::<_, Option<String>>(0)?;
-    let slot_expired = slot.try_get::<_, bool>(4)?;
-    if slot_owner.is_some() && !slot_expired {
-        return Ok(ClaimPreparation::Rejected(ClaimResult::Busy));
+    let slot = lock_execution_slot(transaction).await?;
+    if let Some(holder) = &slot.holder {
+        if !holder.expired || holder.task_kind == ExecutionTaskKind::Ocr {
+            return Ok(ClaimPreparation::Rejected(ClaimResult::Busy));
+        }
+        recover_expired_analysis_holder(transaction, holder).await?;
     }
-    if slot_owner.is_some() {
-        recover_expired_holder(transaction, &slot).await?;
-    }
-    if slot.try_get::<_, Option<String>>(5)?.is_some() {
+    if slot.preempt_requested_by.is_some()
+        && !clear_stale_preemption(transaction, stale_preemption_milliseconds).await?
+    {
         return Ok(ClaimPreparation::Rejected(ClaimResult::Busy));
     }
     let title_exists = transaction
@@ -161,6 +161,7 @@ async fn prepare_claim(
         algorithm_version: job.try_get(1)?,
         artifact_schema_version: job.try_get(2)?,
         attempt_count: job.try_get(5)?,
+        slot_fencing_token: slot.fencing_token,
     }))
 }
 
@@ -170,19 +171,23 @@ async fn acquire_execution_slot(
     job_id: &str,
     attempt_id: &str,
     lease_milliseconds: i64,
+    expected_fencing_token: i64,
 ) -> Result<i64, ControlError> {
-    let row = transaction
-        .query_one(
-            "UPDATE worker_execution_slots SET\x20\
-               task_kind = 'analysis', owner = $1, job_id = $2, attempt_id = $3,\x20\
-               holder_preemptible = true,\x20\
-               lease_expires_at = clock_timestamp() + ($4::bigint * interval '1 millisecond'),\x20\
-               fencing_token = fencing_token + 1, updated_at = clock_timestamp()\x20\
-             WHERE slot_key = 'shared-heavy-work' RETURNING fencing_token",
-            &[&config.worker_id, &job_id, &attempt_id, &lease_milliseconds],
-        )
-        .await?;
-    Ok(row.try_get(0)?)
+    match acquire_analysis(
+        transaction,
+        expected_fencing_token,
+        NewExecutionSlotHolder {
+            owner: &config.worker_id,
+            job_id,
+            attempt_id,
+        },
+        lease_milliseconds,
+    )
+    .await?
+    {
+        SlotAcquisition::Acquired(fencing_token) => Ok(fencing_token),
+        SlotAcquisition::Busy => Err(ControlError::OwnerLost),
+    }
 }
 
 struct ClaimAttempt<'a> {

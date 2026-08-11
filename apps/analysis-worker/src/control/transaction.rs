@@ -4,7 +4,13 @@ use momo_analysis_core::{canonical, contract::ScopeRef};
 use sha2::{Digest, Sha256};
 use tokio_postgres::{Client, Transaction};
 
-use crate::config::WorkerRuntimeConfig;
+use crate::{
+    config::WorkerRuntimeConfig,
+    execution_slot::{
+        ExecutionSlotIdentity, ExecutionTaskKind, lock_owned as lock_owned_slot,
+        release_owned as release_owned_slot,
+    },
+};
 
 use super::{
     AttemptMetrics, AttemptOutcome, ClaimedJob, ControlError, DeliveryReason, RequestOutcome,
@@ -15,21 +21,14 @@ pub(super) async fn lock_owned(
     claim: &ClaimedJob,
     config: &WorkerRuntimeConfig,
 ) -> Result<(), ControlError> {
-    let slot = transaction
-        .query_opt(
-            "SELECT 1 FROM worker_execution_slots\x20\
-             WHERE slot_key = 'shared-heavy-work' AND owner = $1 AND job_id = $2\x20\
-               AND attempt_id = $3 AND fencing_token = $4 AND lease_expires_at > clock_timestamp()\x20\
-             FOR UPDATE",
-            &[
-                &config.worker_id,
-                &claim.job_id,
-                &claim.attempt_id,
-                &claim.fencing_token,
-            ],
-        )
-        .await?;
-    if slot.is_none() {
+    let identity = ExecutionSlotIdentity {
+        task_kind: ExecutionTaskKind::Analysis,
+        owner: &config.worker_id,
+        job_id: &claim.job_id,
+        attempt_id: &claim.attempt_id,
+        fencing_token: claim.fencing_token,
+    };
+    if !lock_owned_slot(transaction, identity).await? {
         return Err(ControlError::OwnerLost);
     }
     let title = transaction
@@ -256,22 +255,14 @@ pub(super) async fn release_slot(
     claim: &ClaimedJob,
     config: &WorkerRuntimeConfig,
 ) -> Result<(), ControlError> {
-    let released = transaction
-        .execute(
-            "UPDATE worker_execution_slots SET task_kind = NULL, owner = NULL, job_id = NULL,\x20\
-               attempt_id = NULL, holder_preemptible = NULL, lease_expires_at = NULL,\x20\
-               updated_at = clock_timestamp()\x20\
-             WHERE slot_key = 'shared-heavy-work' AND owner = $1 AND job_id = $2\x20\
-               AND attempt_id = $3 AND fencing_token = $4",
-            &[
-                &config.worker_id,
-                &claim.job_id,
-                &claim.attempt_id,
-                &claim.fencing_token,
-            ],
-        )
-        .await?;
-    if released != 1 {
+    let identity = ExecutionSlotIdentity {
+        task_kind: ExecutionTaskKind::Analysis,
+        owner: &config.worker_id,
+        job_id: &claim.job_id,
+        attempt_id: &claim.attempt_id,
+        fencing_token: claim.fencing_token,
+    };
+    if !release_owned_slot(transaction, identity).await? {
         return Err(ControlError::OwnerLost);
     }
     Ok(())

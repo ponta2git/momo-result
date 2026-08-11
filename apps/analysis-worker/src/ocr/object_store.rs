@@ -42,6 +42,10 @@ impl fmt::Debug for R2ObjectStoreConfig {
 }
 
 impl R2ObjectStoreConfig {
+    pub(crate) const fn operation_timeout(&self) -> Duration {
+        self.operation_timeout
+    }
+
     /// Builds a fail-closed private R2 client configuration.
     ///
     /// # Errors

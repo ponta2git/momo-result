@@ -21,6 +21,7 @@ pub(crate) use completion::publish;
 pub(crate) use lifecycle::{
     finish_failure, heartbeat, requeue_interrupted, retry_transient_failure, supersede,
 };
+pub(crate) use recovery::recover_expired_analysis_holder;
 pub(crate) use transaction::artifact_id_for_attempt;
 pub(crate) use vocabulary::{AttemptFailure, RequeueCause, SafeFailureCode};
 
@@ -154,6 +155,8 @@ pub enum ControlError {
     Database(#[from] DatabaseError),
     #[error("analysis PostgreSQL state transition failed")]
     Postgres(#[from] tokio_postgres::Error),
+    #[error("analysis shared execution-slot transition failed: {0}")]
+    ExecutionSlot(&'static str),
     #[error("analysis worker lost its fencing ownership")]
     OwnerLost,
     #[error("analysis artifact file is invalid")]
@@ -180,6 +183,7 @@ impl ControlError {
         match self {
             Self::Database(error) => error.kind(),
             Self::Postgres(_) => "postgres_state_transition",
+            Self::ExecutionSlot(kind) => kind,
             Self::OwnerLost => "fencing_owner_lost",
             Self::Artifact(_) => "artifact_validation",
             Self::Io(_) => "artifact_io",
@@ -190,6 +194,12 @@ impl ControlError {
             Self::InvalidMetadata => "artifact_metadata",
             Self::MetadataParse(_) => "artifact_metadata_parse",
         }
+    }
+}
+
+impl From<crate::execution_slot::ExecutionSlotError> for ControlError {
+    fn from(error: crate::execution_slot::ExecutionSlotError) -> Self {
+        Self::ExecutionSlot(error.kind())
     }
 }
 

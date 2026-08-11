@@ -38,6 +38,15 @@ pub enum OcrMediaType {
 }
 
 impl OcrMediaType {
+    pub(crate) fn parse_wire(value: &str) -> Option<Self> {
+        match value {
+            "image/png" => Some(Self::Png),
+            "image/jpeg" => Some(Self::Jpeg),
+            "image/webp" => Some(Self::Webp),
+            _ => None,
+        }
+    }
+
     #[must_use]
     pub const fn wire(self) -> &'static str {
         match self {
@@ -56,6 +65,15 @@ pub enum RequestedScreenType {
 }
 
 impl RequestedScreenType {
+    pub(crate) fn parse_wire(value: &str) -> Option<Self> {
+        match value {
+            "total_assets" => Some(Self::TotalAssets),
+            "revenue" => Some(Self::Revenue),
+            "incident_log" => Some(Self::IncidentLog),
+            _ => None,
+        }
+    }
+
     #[must_use]
     pub const fn wire(self) -> &'static str {
         match self {
@@ -263,20 +281,11 @@ pub fn parse_delivery(delivery: &StreamId) -> Result<OcrQueuePayload, OcrQueueCo
     if byte_length > MAXIMUM_IMAGE_BYTES {
         return Err(OcrQueueContractError::InvalidField("byteLength"));
     }
-    let media_type = match required_string(delivery, "mediaType")?.as_str() {
-        "image/png" => OcrMediaType::Png,
-        "image/jpeg" => OcrMediaType::Jpeg,
-        "image/webp" => OcrMediaType::Webp,
-        _ => return Err(OcrQueueContractError::InvalidField("mediaType")),
-    };
-    let requested_screen_type = match required_string(delivery, "requestedScreenType")?.as_str() {
-        "total_assets" => RequestedScreenType::TotalAssets,
-        "revenue" => RequestedScreenType::Revenue,
-        "incident_log" => RequestedScreenType::IncidentLog,
-        _ => {
-            return Err(OcrQueueContractError::InvalidField("requestedScreenType"));
-        }
-    };
+    let media_type = OcrMediaType::parse_wire(&required_string(delivery, "mediaType")?)
+        .ok_or(OcrQueueContractError::InvalidField("mediaType"))?;
+    let requested_screen_type =
+        RequestedScreenType::parse_wire(&required_string(delivery, "requestedScreenType")?)
+            .ok_or(OcrQueueContractError::InvalidField("requestedScreenType"))?;
     let attempt_string = required_string(delivery, "attempt")?;
     let attempt_value = positive_decimal(&attempt_string, "attempt")?;
     let attempt = u32::try_from(attempt_value)

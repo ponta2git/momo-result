@@ -8,6 +8,8 @@ final case class RedisConfig(
     url: String,
     stream: String,
     deadLetterStream: String = RedisConfig.DefaultDeadLetterStream,
+    v2Stream: String = RedisConfig.DefaultV2Stream,
+    v2DeadLetterStream: String = RedisConfig.DefaultV2DeadLetterStream,
     analysisStream: String = RedisConfig.DefaultAnalysisStream,
 )
 
@@ -105,6 +107,8 @@ object AuthConfig:
 
 object RedisConfig:
   val DefaultDeadLetterStream: String = "momo:ocr:jobs:dead"
+  val DefaultV2Stream: String = "momo:ocr:v2:jobs"
+  val DefaultV2DeadLetterStream: String = "momo:ocr:v2:jobs:dead"
   val DefaultAnalysisStream: String = "momo:analysis:jobs"
 
 object SeriesAnalysisReadConfig:

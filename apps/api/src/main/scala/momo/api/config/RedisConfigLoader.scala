@@ -23,6 +23,16 @@ private[config] object RedisConfigLoader:
           deadLetterStream <- ConfigParsers
             .envOrDefault(env, "OCR_REDIS_DEAD_LETTER_STREAM", RedisConfig.DefaultDeadLetterStream)
             .load[F]
+          v2Stream <- ConfigParsers
+            .envOrDefault(env, "OCR_REDIS_V2_STREAM", RedisConfig.DefaultV2Stream)
+            .load[F]
+          v2DeadLetterStream <- ConfigParsers
+            .envOrDefault(
+              env,
+              "OCR_REDIS_V2_DEAD_LETTER_STREAM",
+              RedisConfig.DefaultV2DeadLetterStream,
+            )
+            .load[F]
           analysisStream <- ConfigParsers
             .envOrDefault(env, "ANALYSIS_REDIS_STREAM", RedisConfig.DefaultAnalysisStream)
             .load[F]
@@ -30,5 +40,7 @@ private[config] object RedisConfigLoader:
           url = safeUrl,
           stream = stream,
           deadLetterStream = deadLetterStream,
+          v2Stream = v2Stream,
+          v2DeadLetterStream = v2DeadLetterStream,
           analysisStream = analysisStream,
         ))

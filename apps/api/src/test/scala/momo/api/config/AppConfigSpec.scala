@@ -332,6 +332,14 @@ class AppConfigSpec extends CatsEffectSuite:
         result.flatMap(_.redis.map(_.deadLetterStream).toRight(new RuntimeException())),
         Right("momo:ocr:jobs:dead"),
       )
+      assertEquals(
+        result.flatMap(_.redis.map(_.v2Stream).toRight(new RuntimeException())),
+        Right("momo:ocr:v2:jobs"),
+      )
+      assertEquals(
+        result.flatMap(_.redis.map(_.v2DeadLetterStream).toRight(new RuntimeException())),
+        Right("momo:ocr:v2:jobs:dead"),
+      )
     }
   }
 
@@ -344,11 +352,31 @@ class AppConfigSpec extends CatsEffectSuite:
     }
   }
 
+  test("loadFromEnv reads dedicated OCR v2 stream names") {
+    load(
+      prodEnv ++ Map(
+        "OCR_REDIS_V2_STREAM" -> "momo:ocr:v2:jobs:test",
+        "OCR_REDIS_V2_DEAD_LETTER_STREAM" -> "momo:ocr:v2:jobs:dead:test",
+      )
+    ).map { result =>
+      assertEquals(
+        result.flatMap(_.redis.map(_.v2Stream).toRight(new RuntimeException())),
+        Right("momo:ocr:v2:jobs:test"),
+      )
+      assertEquals(
+        result.flatMap(_.redis.map(_.v2DeadLetterStream).toRight(new RuntimeException())),
+        Right("momo:ocr:v2:jobs:dead:test"),
+      )
+    }
+  }
+
   test("loadFromEnv ignores blank OCR Redis stream overrides") {
     load(
       prodEnv ++ Map(
         "OCR_REDIS_STREAM" -> " ",
         "OCR_REDIS_DEAD_LETTER_STREAM" -> "  ",
+        "OCR_REDIS_V2_STREAM" -> " ",
+        "OCR_REDIS_V2_DEAD_LETTER_STREAM" -> "  ",
       )
     ).map { result =>
       assertEquals(
@@ -358,6 +386,14 @@ class AppConfigSpec extends CatsEffectSuite:
       assertEquals(
         result.flatMap(_.redis.map(_.deadLetterStream).toRight(new RuntimeException())),
         Right("momo:ocr:jobs:dead"),
+      )
+      assertEquals(
+        result.flatMap(_.redis.map(_.v2Stream).toRight(new RuntimeException())),
+        Right("momo:ocr:v2:jobs"),
+      )
+      assertEquals(
+        result.flatMap(_.redis.map(_.v2DeadLetterStream).toRight(new RuntimeException())),
+        Right("momo:ocr:v2:jobs:dead"),
       )
     }
   }

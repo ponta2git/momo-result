@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://momo-result.local/schemas/ocr-queue-payload-v2.schema.json",
+  "title": "OCR Redis Streams payload v2",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "jobId",
+    "draftId",
+    "sourceImageId",
+    "imageObjectKey",
+    "sha256",
+    "byteLength",
+    "mediaType",
+    "requestedScreenType",
+    "attempt",
+    "enqueuedAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "const": "2"
+    },
+    "jobId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[\\x21-\\x7e]+$"
+    },
+    "draftId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[\\x21-\\x7e]+$"
+    },
+    "sourceImageId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[\\x21-\\x7e]+$"
+    },
+    "imageObjectKey": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512,
+      "pattern": "^(?!.*(?:^|/)\\.{1,2}(?:/|$))[A-Za-z0-9][A-Za-z0-9._/-]*$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "byteLength": {
+      "type": "string",
+      "pattern": "^(?:[1-9][0-9]{0,5}|[12][0-9]{6}|30[0-9]{5}|31[0-3][0-9]{4}|314[0-4][0-9]{3}|3145[0-6][0-9]{2}|31457[01][0-9]|314572[0-8])$"
+    },
+    "mediaType": {
+      "type": "string",
+      "enum": ["image/png", "image/jpeg", "image/webp"]
+    },
+    "requestedScreenType": {
+      "type": "string",
+      "enum": ["total_assets", "revenue", "incident_log"]
+    },
+    "attempt": {
+      "type": "string",
+      "pattern": "^[1-9][0-9]*$"
+    },
+    "enqueuedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "ocrHintsJson": {
+      "type": "string",
+      "maxLength": 8192,
+      "contentMediaType": "application/json"
+    },
+    "requestId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{1,64}$"
+    }
+  },
+  "additionalProperties": false
+}

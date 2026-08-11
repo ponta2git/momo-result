@@ -1,6 +1,7 @@
 package momo.api.repositories
 
 import java.time.Instant
+import java.util.UUID
 
 import momo.api.domain.ids.OcrJobId
 import momo.api.ports.queue.OcrJobEnqueueRequest
@@ -19,6 +20,7 @@ final case class OcrQueueOutboxRecord(
     jobId: OcrJobId,
     enqueueRequest: OcrJobEnqueueRequest,
     attemptCount: Int,
+    claimToken: UUID,
     claimExpiresAt: Instant,
 )
 
@@ -63,13 +65,13 @@ trait OcrQueueOutboxRepository[F[_]]:
   def backlogSnapshot(now: Instant): F[OcrQueueBacklogSnapshot]
   def markDelivered(
       id: String,
-      claimExpiresAt: Instant,
+      claimToken: UUID,
       redisMessageId: String,
       now: Instant,
   ): F[Boolean]
   def releaseForRetry(
       id: String,
-      claimExpiresAt: Instant,
+      claimToken: UUID,
       lastError: String,
       nextAttemptAt: Instant,
       now: Instant,

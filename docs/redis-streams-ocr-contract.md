@@ -134,6 +134,7 @@ Rules:
 - `requestId` と OCR hints は API request 時点の値を保持する。
 - API の即時 publish は作成した `PENDING` 行を id 指定で claim する。
 - recovery dispatcher は due `PENDING` と expired `IN_FLIGHT` を `FOR UPDATE SKIP LOCKED` で claim する。
+- claimごとに新しいUUID `claim_token`を発行する。expired rowの再claimはtokenを必ず更新し、`DELIVERED`確定とretry releaseは同じtokenを持つclaimだけを受理する。時刻が一致しても旧claimへ実行権を戻さない。
 - `XADD` 成功後に `DELIVERED`, `redis_message_id`, `delivered_at` を記録する。
 - `XADD` 失敗時は秘密情報を含まない error class だけを `last_error` に記録し、backoff 後の `PENDING` に戻す。
 

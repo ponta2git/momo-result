@@ -1,5 +1,7 @@
 package momo.api.integration
 import java.time.Instant
+import java.nio.charset.StandardCharsets
+import java.util.UUID
 
 import cats.effect.IO
 import doobie.implicits.*
@@ -17,6 +19,9 @@ final class PostgresOcrQueueOutboxRepositorySpec extends IntegrationSuite:
 
   private val now = Instant.parse("2026-05-08T15:00:00Z")
   private val claimUntil = now.plusSeconds(60)
+
+  private def claimTokenFor(id: String): UUID = UUID
+    .nameUUIDFromBytes(id.getBytes(StandardCharsets.UTF_8))
 
   private def repo = PostgresOcrQueueOutboxRepository[IO](transactor)
 
@@ -63,14 +68,15 @@ final class PostgresOcrQueueOutboxRepositorySpec extends IntegrationSuite:
       createdAt: Instant,
   ): IO[Unit] =
     val payloadJson = OcrWorkerJobMessage.fieldsAsJson(workerMessage(jobId))
+    val claimToken = claimExpiresAt.map(_ => claimTokenFor(id))
     sql"""
       INSERT INTO ocr_queue_outbox (
         id, job_id, dedupe_key, stream_payload,
-        status, attempt_count, claim_expires_at, next_attempt_at,
+        status, attempt_count, claim_token, claim_expires_at, next_attempt_at,
         created_at, updated_at
       ) VALUES (
         $id, $jobId, ${s"ocr-job:${jobId.value}"}, $payloadJson,
-        $status, $attemptCount, $claimExpiresAt, $nextAttemptAt,
+        $status, $attemptCount, $claimToken, $claimExpiresAt, $nextAttemptAt,
         $createdAt, $createdAt
       )
     """.update.run.transact(transactor).map(_ => ())
@@ -136,6 +142,7 @@ final class PostgresOcrQueueOutboxRepositorySpec extends IntegrationSuite:
         List(expiredJobId.value, pendingJobId.value),
       )
       assertEquals(claimed.map(_.claimExpiresAt), List(claimUntil, claimUntil))
+      assertEquals(claimed.map(_.claimToken).distinct.size, 2)
       assertEquals(
         states,
         List(
@@ -188,6 +195,11 @@ final class PostgresOcrQueueOutboxRepositorySpec extends IntegrationSuite:
       assertEquals(claimed.map(_.id), Some("outbox-claim-target"))
       assertEquals(claimed.map(_.enqueueRequest.jobId.value), Some(targetJobId.value))
       assertEquals(claimed.map(_.claimExpiresAt), Some(claimUntil))
+      assert(claimed.exists(record =>
+        !record.claimToken.equals(claimTokenFor(
+          "outbox-claim-target"
+        ))
+      ))
       assertEquals(
         states,
         List(
@@ -331,16 +343,21 @@ final class PostgresOcrQueueOutboxRepositorySpec extends IntegrationSuite:
         createdAt = now.minusSeconds(60),
       )
       delivered <- repo
-        .markDelivered("outbox-delivered", claimUntil, "1700000000000-0", deliveredAt)
+        .markDelivered(
+          "outbox-delivered",
+          claimTokenFor("outbox-delivered"),
+          "1700000000000-0",
+          deliveredAt,
+        )
       row <- sql"""
-        SELECT status, claim_expires_at, delivered_at, redis_message_id
+        SELECT status, claim_token, claim_expires_at, delivered_at, redis_message_id
         FROM ocr_queue_outbox
         WHERE id = 'outbox-delivered'
-      """.query[(String, Option[Instant], Option[Instant], Option[String])].unique
+      """.query[(String, Option[UUID], Option[Instant], Option[Instant], Option[String])].unique
         .transact(transactor)
     yield
       assert(delivered)
-      assertEquals(row, ("DELIVERED", None, Some(deliveredAt), Some("1700000000000-0")))
+      assertEquals(row, ("DELIVERED", None, None, Some(deliveredAt), Some("1700000000000-0")))
 
   test("releaseForRetry increments attempts, records sanitized error class, and reschedules"):
     val jobId = OcrJobId.unsafeFromString("job-outbox-retry")
@@ -363,20 +380,26 @@ final class PostgresOcrQueueOutboxRepositorySpec extends IntegrationSuite:
       )
       released <- repo.releaseForRetry(
         id = "outbox-retry",
-        claimExpiresAt = claimUntil,
+        claimToken = claimTokenFor("outbox-retry"),
         lastError = "RuntimeException",
         nextAttemptAt = nextAttemptAt,
         now = releasedAt,
       )
       row <- sql"""
-        SELECT status, attempt_count, last_error, claim_expires_at, next_attempt_at, updated_at
+        SELECT status, attempt_count, last_error, claim_token, claim_expires_at,
+               next_attempt_at, updated_at
         FROM ocr_queue_outbox
         WHERE id = 'outbox-retry'
-      """.query[(String, Int, Option[String], Option[Instant], Instant, Instant)].unique
+      """.query[
+        (String, Int, Option[String], Option[UUID], Option[Instant], Instant, Instant)
+      ].unique
         .transact(transactor)
     yield
       assert(released)
-      assertEquals(row, ("PENDING", 2, Some("RuntimeException"), None, nextAttemptAt, releasedAt))
+      assertEquals(
+        row,
+        ("PENDING", 2, Some("RuntimeException"), None, None, nextAttemptAt, releasedAt),
+      )
 
   test("releaseForRetry ignores stale claims and does not reopen delivered rows"):
     val jobId = OcrJobId.unsafeFromString("job-outbox-stale-release")
@@ -398,10 +421,15 @@ final class PostgresOcrQueueOutboxRepositorySpec extends IntegrationSuite:
         createdAt = now.minusSeconds(60),
       )
       delivered <- repo
-        .markDelivered("outbox-stale-release", claimUntil, "1700000000001-0", deliveredAt)
+        .markDelivered(
+          "outbox-stale-release",
+          claimTokenFor("outbox-stale-release"),
+          "1700000000001-0",
+          deliveredAt,
+        )
       released <- repo.releaseForRetry(
         id = "outbox-stale-release",
-        claimExpiresAt = claimUntil,
+        claimToken = claimTokenFor("outbox-stale-release"),
         lastError = "RuntimeException",
         nextAttemptAt = now.plusSeconds(120),
         now = staleReleaseAt,
@@ -422,6 +450,52 @@ final class PostgresOcrQueueOutboxRepositorySpec extends IntegrationSuite:
         row,
         ("DELIVERED", 1, None, None, Some(deliveredAt), Some("1700000000001-0"), deliveredAt),
       )
+
+  test("reclaimed rows reject terminal writes from the stale claim token"):
+    val jobId = OcrJobId.unsafeFromString("job-outbox-token-fence")
+    val firstClaimAt = now.minusSeconds(120)
+    val firstClaimUntil = now.minusSeconds(1)
+    for
+      _ <- insertOcrRows(
+        jobId,
+        OcrDraftId.unsafeFromString("draft-outbox-token-fence"),
+        now.minusSeconds(180),
+      )
+      _ <- insertOutbox(
+        id = "outbox-token-fence",
+        jobId = jobId,
+        status = OcrQueueOutboxStatus.Pending,
+        attemptCount = 0,
+        nextAttemptAt = firstClaimAt,
+        claimExpiresAt = None,
+        createdAt = now.minusSeconds(180),
+      )
+      first <- repo.claimById("outbox-token-fence", firstClaimAt, firstClaimUntil)
+        .map(_.getOrElse(fail("first claim was not acquired")))
+      second <- repo.claimDue(limit = 1, now = now, claimUntil = claimUntil)
+        .map(_.headOption.getOrElse(fail("expired claim was not reclaimed")))
+      staleDelivered <- repo.markDelivered(
+        "outbox-token-fence",
+        first.claimToken,
+        "1700000000002-0",
+        now.plusSeconds(1),
+      )
+      currentDelivered <- repo.markDelivered(
+        "outbox-token-fence",
+        second.claimToken,
+        "1700000000003-0",
+        now.plusSeconds(2),
+      )
+      messageId <- sql"""
+        SELECT redis_message_id
+        FROM ocr_queue_outbox
+        WHERE id = 'outbox-token-fence'
+      """.query[Option[String]].unique.transact(transactor)
+    yield
+      assert(!first.claimToken.equals(second.claimToken))
+      assertEquals(staleDelivered, false)
+      assertEquals(currentDelivered, true)
+      assertEquals(messageId, Some("1700000000003-0"))
 
   test("claimDue rejects non-string stream payload fields and rolls back the claim"):
     val jobId = OcrJobId.unsafeFromString("job-outbox-invalid-payload")

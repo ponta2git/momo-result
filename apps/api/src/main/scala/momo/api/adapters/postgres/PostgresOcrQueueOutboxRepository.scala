@@ -1,6 +1,7 @@
 package momo.api.adapters.postgres
 
 import java.time.Instant
+import java.util.UUID
 
 import cats.MonadThrow
 import cats.effect.MonadCancelThrow
@@ -29,6 +30,7 @@ object PostgresOcrQueueOutbox:
       jobId: OcrJobId,
       payloadJson: Json,
       attemptCount: Int,
+      claimToken: UUID,
       claimExpiresAt: Instant,
   )
 
@@ -56,6 +58,7 @@ object PostgresOcrQueueOutbox:
           row.jobId,
           message.toEnqueueRequest,
           row.attemptCount,
+          row.claimToken,
           row.claimExpiresAt,
         ).pure[ConnectionIO]
       case Left(reason) => MonadThrow[ConnectionIO].raiseError(
@@ -101,11 +104,13 @@ final class PostgresOcrQueueOutboxRepository[F[_]: MonadCancelThrow](transactor:
       UPDATE ocr_queue_outbox q
       SET
         status = ${OcrQueueOutboxStatus.InFlight},
+        claim_token = gen_random_uuid(),
         claim_expires_at = $claimUntil,
         updated_at = $now
       FROM candidate
       WHERE q.id = candidate.id
-      RETURNING q.id, q.job_id, q.stream_payload, q.attempt_count, q.claim_expires_at
+      RETURNING q.id, q.job_id, q.stream_payload, q.attempt_count,
+                q.claim_token, q.claim_expires_at
     """.query[Row].option.flatMap(_.traverse(toRecord)).transact(transactor)
 
   override def claimDue(
@@ -126,11 +131,13 @@ final class PostgresOcrQueueOutboxRepository[F[_]: MonadCancelThrow](transactor:
       UPDATE ocr_queue_outbox q
       SET
         status = ${OcrQueueOutboxStatus.InFlight},
+        claim_token = gen_random_uuid(),
         claim_expires_at = $claimUntil,
         updated_at = $now
       FROM candidate
       WHERE q.id = candidate.id
-      RETURNING q.id, q.job_id, q.stream_payload, q.attempt_count, q.claim_expires_at
+      RETURNING q.id, q.job_id, q.stream_payload, q.attempt_count,
+                q.claim_token, q.claim_expires_at
     """.query[Row].to[List].flatMap(_.traverse(toRecord)).transact(transactor)
 
   override def backlogSnapshot(now: Instant): F[OcrQueueBacklogSnapshot] = sql"""
@@ -156,25 +163,26 @@ final class PostgresOcrQueueOutboxRepository[F[_]: MonadCancelThrow](transactor:
 
   override def markDelivered(
       id: String,
-      claimExpiresAt: Instant,
+      claimToken: UUID,
       redisMessageId: String,
       now: Instant,
   ): F[Boolean] = sql"""
       UPDATE ocr_queue_outbox
       SET
         status = ${OcrQueueOutboxStatus.Delivered},
+        claim_token = NULL,
         claim_expires_at = NULL,
         delivered_at = $now,
         redis_message_id = $redisMessageId,
         updated_at = $now
       WHERE id = $id
         AND status = ${OcrQueueOutboxStatus.InFlight}
-        AND claim_expires_at = $claimExpiresAt
+        AND claim_token = $claimToken
     """.update.run.map(_ == 1).transact(transactor)
 
   override def releaseForRetry(
       id: String,
-      claimExpiresAt: Instant,
+      claimToken: UUID,
       lastError: String,
       nextAttemptAt: Instant,
       now: Instant,
@@ -184,10 +192,11 @@ final class PostgresOcrQueueOutboxRepository[F[_]: MonadCancelThrow](transactor:
         status = ${OcrQueueOutboxStatus.Pending},
         attempt_count = attempt_count + 1,
         last_error = $lastError,
+        claim_token = NULL,
         claim_expires_at = NULL,
         next_attempt_at = $nextAttemptAt,
         updated_at = $now
       WHERE id = $id
         AND status = ${OcrQueueOutboxStatus.InFlight}
-        AND claim_expires_at = $claimExpiresAt
+        AND claim_token = $claimToken
     """.update.run.map(_ == 1).transact(transactor)

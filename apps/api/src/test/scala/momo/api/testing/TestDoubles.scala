@@ -1,5 +1,6 @@
 package momo.api.testing
 import java.time.Instant
+import java.util.UUID
 
 import scala.concurrent.duration.*
 
@@ -113,14 +114,14 @@ final case class OutboxBacklogSnapshotCall(now: Instant) derives CanEqual
 
 final case class OutboxMarkDeliveredCall(
     id: String,
-    claimExpiresAt: Instant,
+    claimToken: UUID,
     redisMessageId: String,
     now: Instant,
 ) derives CanEqual
 
 final case class OutboxReleaseForRetryCall(
     id: String,
-    claimExpiresAt: Instant,
+    claimToken: UUID,
     lastError: String,
     nextAttemptAt: Instant,
     now: Instant,
@@ -159,21 +160,21 @@ final class RecordingOcrQueueOutboxRepository private (
 
   override def markDelivered(
       id: String,
-      claimExpiresAt: Instant,
+      claimToken: UUID,
       redisMessageId: String,
       now: Instant,
   ): IO[Boolean] = deliveriesRef
-    .update(_ :+ OutboxMarkDeliveredCall(id, claimExpiresAt, redisMessageId, now))
+    .update(_ :+ OutboxMarkDeliveredCall(id, claimToken, redisMessageId, now))
     .as(markDeliveredResult)
 
   override def releaseForRetry(
       id: String,
-      claimExpiresAt: Instant,
+      claimToken: UUID,
       lastError: String,
       nextAttemptAt: Instant,
       now: Instant,
   ): IO[Boolean] = releasesRef
-    .update(_ :+ OutboxReleaseForRetryCall(id, claimExpiresAt, lastError, nextAttemptAt, now))
+    .update(_ :+ OutboxReleaseForRetryCall(id, claimToken, lastError, nextAttemptAt, now))
     .as(releaseForRetryResult)
 
   def claims: IO[Vector[OutboxClaimDueCall]] = claimsRef.get

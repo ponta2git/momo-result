@@ -1,5 +1,6 @@
 package momo.api.usecases.ocr
 import java.time.Instant
+import java.util.UUID
 
 import scala.concurrent.duration.*
 
@@ -28,6 +29,7 @@ import momo.api.testing.{
 final class OcrQueueOutboxDispatcherSpec extends MomoCatsEffectSuite:
   private given LoggerFactory[IO] = NoOpFactory[IO]
   private val fixedNow = Instant.parse("2026-05-09T00:00:00Z")
+  private val claimToken = UUID.fromString("00000000-0000-0000-0000-000000000001")
 
   private def rowAt(claimExpiresAt: Instant): OcrQueueOutboxRecord =
     rowAt(claimExpiresAt, "outbox-1")
@@ -47,6 +49,7 @@ final class OcrQueueOutboxDispatcherSpec extends MomoCatsEffectSuite:
       requestId = None,
     ),
     attemptCount = 0,
+    claimToken = claimToken,
     claimExpiresAt = claimExpiresAt,
   )
 
@@ -73,7 +76,7 @@ final class OcrQueueOutboxDispatcherSpec extends MomoCatsEffectSuite:
       assertEquals(
         gotDelivered,
         Vector(
-          OutboxMarkDeliveredCall("outbox-1", fixedNow.plusSeconds(30), "redis-job-1", fixedNow)
+          OutboxMarkDeliveredCall("outbox-1", claimToken, "redis-job-1", fixedNow)
         ),
       )
 
@@ -110,7 +113,7 @@ final class OcrQueueOutboxDispatcherSpec extends MomoCatsEffectSuite:
         gotDelivered,
         Vector(OutboxMarkDeliveredCall(
           outboxId,
-          fixedNow.plusSeconds(30),
+          claimToken,
           "redis-job-1",
           fixedNow
         )),

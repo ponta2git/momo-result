@@ -339,11 +339,19 @@ final class DbContractSpec extends IntegrationSuite:
         "draft_id",
         "image_id",
         "image_path",
+        "source_image_id",
+        "queue_schema_version",
         "requested_screen_type",
         "detected_screen_type",
         "status",
         "attempt_count",
         "worker_id",
+        "available_at",
+        "attempt_id",
+        "lease_owner",
+        "lease_token",
+        "lease_expires_at",
+        "lease_fencing_token",
         "failure_code",
         "failure_message",
         "failure_retryable",
@@ -358,6 +366,92 @@ final class DbContractSpec extends IntegrationSuite:
       assert(missing.isEmpty, s"ocr_jobs is missing columns: $missing (have $cols)")
     }
 
+  test("source_images exposes provider-neutral idempotent object metadata"):
+    val columnProgram = columnsFor("source_images")
+    val indexProgram = sql"""
+      SELECT indexname
+      FROM pg_indexes
+      WHERE schemaname = 'public'
+        AND tablename = 'source_images'
+        AND indexname IN (
+          'source_images_owner_idempotency_unique',
+          'source_images_object_key_unique',
+          'source_images_status_updated_at_idx'
+        )
+    """.query[String].to[List].transact(transactor)
+    (columnProgram, indexProgram).mapN { (cols, indexes) =>
+      val expected = Set(
+        "id",
+        "owner_account_id",
+        "object_key",
+        "idempotency_key_hash",
+        "status",
+        "media_type",
+        "byte_length",
+        "sha256_hex",
+        "width",
+        "height",
+        "storage_etag",
+        "failure_code",
+        "available_at",
+        "delete_pending_at",
+        "deleted_at",
+        "created_at",
+        "updated_at",
+      )
+      val missing = expected -- cols.toSet
+      assert(missing.isEmpty, s"source_images is missing columns: $missing (have $cols)")
+      assertEquals(
+        indexes.toSet,
+        Set(
+          "source_images_owner_idempotency_unique",
+          "source_images_object_key_unique",
+          "source_images_status_updated_at_idx",
+        ),
+      )
+    }
+
+  test("OCR v1 and v2 input rows are both accepted while incomplete v2 rows are rejected"):
+    val accountId = "account_ponta"
+    val insertSource = sql"""
+      INSERT INTO source_images (
+        id, owner_account_id, object_key, idempotency_key_hash, status,
+        media_type, byte_length, sha256_hex, width, height, available_at
+      ) VALUES (
+        'source-contract-v2', $accountId, 'source-images/contract/input.webp',
+        repeat('a', 64), 'AVAILABLE', 'image/webp', 3145728, repeat('b', 64), 1920, 1080, now()
+      )
+    """.update.run
+    val insertV1 = sql"""
+      INSERT INTO ocr_jobs (
+        id, draft_id, image_id, image_path, requested_screen_type, status,
+        attempt_count, created_at, updated_at
+      ) VALUES (
+        'job-contract-v1', 'draft-contract-v1', 'image-contract-v1',
+        '/tmp/image-contract-v1.png', 'total_assets', 'queued', 0, now(), now()
+      )
+    """.update.run
+    val insertV2 = sql"""
+      INSERT INTO ocr_jobs (
+        id, draft_id, image_id, source_image_id, queue_schema_version,
+        requested_screen_type, status, attempt_count, created_at, updated_at
+      ) VALUES (
+        'job-contract-v2', 'draft-contract-v2', 'source-contract-v2',
+        'source-contract-v2', 2, 'revenue', 'queued', 0, now(), now()
+      )
+    """.update.run
+    val insertInvalidV2 = sql"""
+      INSERT INTO ocr_jobs (
+        id, draft_id, image_id, queue_schema_version, requested_screen_type,
+        status, attempt_count, created_at, updated_at
+      ) VALUES (
+        'job-contract-v2-invalid', 'draft-contract-v2-invalid', 'image-contract-v2-invalid',
+        2, 'incident_log', 'queued', 0, now(), now()
+      )
+    """.update.run
+    (insertSource *> insertV1 *> insertV2).transact(transactor) *>
+      insertInvalidV2.transact(transactor).attempt.map(result => assert(result.isLeft))
+
   test("ocr_queue_outbox exposes the durable OCR enqueue contract"):
     columnsFor("ocr_queue_outbox").map { cols =>
       val expected = Set(
@@ -365,9 +459,11 @@ final class DbContractSpec extends IntegrationSuite:
         "job_id",
         "dedupe_key",
         "stream_payload",
+        "schema_version",
         "status",
         "attempt_count",
         "last_error",
+        "claim_token",
         "claim_expires_at",
         "next_attempt_at",
         "delivered_at",

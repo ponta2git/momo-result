@@ -38,12 +38,12 @@
 | 認証・権限 | `momo_login_accounts`, `app_sessions` | API | ログイン主体と試合参加者を分ける。無効化時はsessionを削除する。 |
 | 試合結果 | `matches`, `match_players`, `match_incidents` | API | 確定済み試合の正本。4名、順位、プレー順、事件数を外部契約として検証する。 |
 | 下書き | `match_drafts` | API, worker | OCR/手入力の作業単位。terminal状態、OCR slot、画像保持情報を含む。 |
-| OCR | `ocr_drafts`, `ocr_jobs`, `ocr_queue_outbox` | API, worker | job状態はDBが正本。Redisは配送路。queue詳細はRedis契約文書へ寄せる。 |
+| OCR | `source_images`, `ocr_drafts`, `ocr_jobs`, `ocr_queue_outbox` | API, worker | 画像実体ではなくobject keyと検証metadataを保持する。job状態はDBが正本。Redisは配送路。queue詳細はRedis契約文書へ寄せる。 |
 | 戦績分析 | `series_analysis_*`, `worker_execution_slots`, `matches.analysis_revision` | API, analysis worker | migration 0020〜0027が再計算intent、campaign、job / attempt、全体実行権、fence、outbox、reader / worker capability、chunk成果物、current / previousとfunction hardeningを定義する。状態はDBが正本。 |
 | マスタ | `game_titles`, `map_masters`, `season_masters`, `incident_masters`, `member_aliases` | API, worker | 作品/マップ/シーズン/事件/名寄せ。IDはFKとして永続化される。 |
 | 冪等性 | `idempotency_keys` | API | `(key, account_id, endpoint)` でreplay scopeを分ける。 |
 
-DBに保存してよい画像関連情報は、参照ID、内部一時path、保持期限、削除時刻などの管理情報だけ。画像実体、長寿命URL、公開URL、OCR raw text全文をDB契約として増やさない。
+DBに保存してよい画像関連情報は、参照ID、非公開のopaque object key、内部一時path、検証metadata、保持期限、削除時刻などの管理情報だけ。画像実体、bucket URL、長寿命URL、公開URL、OCR raw text全文をDB契約として増やさない。
 
 ## 3. Critical Assumptions
 
@@ -55,6 +55,7 @@ DBに保存してよい画像関連情報は、参照ID、内部一時path、保
 - `held_events.session_id` は nullable。本アプリ作成分は `session_id = NULL`、`held_date_iso` は `start_at` のJST日付から埋める。
 - `match_drafts.confirmed_match_id` は `status = confirmed` のときだけ必要。`cancelled` と非terminal状態では持たない。
 - `ocr_jobs.image_path` は内部処理用の一時pathであり、公開HTTP DTOへ出さない。
+- `source_images.object_key` は非公開object storageのopaque keyであり、bucket URL、公開URL、credentialを保存しない。`ocr_jobs.queue_schema_version = 2` は`source_image_id`を必須とし、local pathをworker間契約にしない。
 - `ocr_queue_outbox.stream_payload` は JSON Schema と Redis contract の対象であり、DB column shapeだけで互換性を判断しない。
 - 試合確定・確定済み試合更新・削除と、対象作品の戦績分析再計算intentは同じtransactionで確定する。
 - 戦績分析の入力versionは作品単位の単調増加revisionとして同じtransactionで進め、timestampを

@@ -161,6 +161,7 @@ object IntegrationDb:
         ocr_queue_outbox,
         ocr_jobs,
         ocr_drafts,
+        source_images,
         held_event_participants,
         held_events,
         member_aliases,

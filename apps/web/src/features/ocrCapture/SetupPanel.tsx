@@ -70,7 +70,7 @@ export function SetupPanel({ value, onChange, enabled, options }: SetupPanelProp
         onChange={(event) =>
           patchValue({
             matchNoInEvent: event.currentTarget.value
-              ? Number.parseInt(event.currentTarget.value, 10)
+              ? Math.trunc(Number(event.currentTarget.value))
               : undefined,
           })
         }

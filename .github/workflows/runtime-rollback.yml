@@ -219,11 +219,12 @@ jobs:
           --yes
 
       - name: Verify restored image identity
+        id: deployment-state
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: |
-          flyctl machine list --app momo-result --json |
-            jq -e --arg image "${REGISTRY_REF}" '
+          machines_json="$(flyctl machine list --app momo-result --json)"
+          jq -e --arg image "${REGISTRY_REF}" '
               {
                 schemaVersion: 1,
                 singleStartedExactImage: (
@@ -232,29 +233,70 @@ jobs:
                 )
               } |
               select(.singleStartedExactImage)
-            ' > runtime-rollback-evidence/deployment-state.json
+            ' <<<"${machines_json}" \
+            > runtime-rollback-evidence/deployment-state.json
+          machine_id="$(
+            jq -er '.[0].id | select(type == "string" and length > 0)' \
+              <<<"${machines_json}"
+          )"
+          printf 'machine_id=%s\n' "${machine_id}" >> "${GITHUB_OUTPUT}"
         timeout-minutes: 2
 
-      - name: Run rollback dependency and process smoke
+      - name: Run rollback internal dependency and process smoke
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: |
           flyctl ssh console --app momo-result --pty=false --quiet \
-            --command "/opt/momo-result/bin/postdeploy-smoke" \
+            --command "env MOMO_POSTDEPLOY_PUBLIC_EDGE=deferred /opt/momo-result/bin/postdeploy-smoke" \
             > runtime-rollback-evidence/postdeploy-smoke.json
-          jq -e '
-            .event == "runtime_postdeploy_smoke" and
-            .status == "ok" and
-            .checks == ["database", "http", "processes", "redis", "web"]
-          ' runtime-rollback-evidence/postdeploy-smoke.json > /dev/null
+          scripts/ci/runtime-postdeploy-contract.py \
+            runtime-rollback-evidence/postdeploy-smoke.json \
+            > /dev/null
         timeout-minutes: 2
 
-      - name: Verify public health endpoint
+      - name: Upload current public edge probe to restored runtime
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: >-
+          flyctl ssh sftp put
+          --app momo-result
+          --machine "${{ steps.deployment-state.outputs.machine_id }}"
+          --mode 0500
+          deploy/public_edge_probe.py
+          /tmp/momo-result-public-edge-probe.py
+        timeout-minutes: 1
+
+      - name: Verify public edge from restored runtime
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: |
-          curl -fsS --retry 5 --retry-delay 2 --retry-all-errors \
-            https://momo-result.ponta.me/healthz |
-            jq -e '{schemaVersion: 1, status} | select(.status == "ok")' \
-              > runtime-rollback-evidence/public-health.json
+          flyctl ssh console --app momo-result --pty=false --quiet \
+            --machine "${{ steps.deployment-state.outputs.machine_id }}" \
+            --command "/opt/momo-result/ocr-worker/.venv/bin/python /tmp/momo-result-public-edge-probe.py momo-result.ponta.me" \
+            > "${RUNNER_TEMP}/runtime-public-edge.json"
+          jq -e '
+            select(
+              .event == "runtime_public_edge_smoke" and
+              .schemaVersion == 1 and
+              .status == "ok"
+            ) |
+            {schemaVersion: 1, status: "ok"}
+          ' "${RUNNER_TEMP}/runtime-public-edge.json" \
+            > runtime-rollback-evidence/public-health.json
+        timeout-minutes: 1
+
+      - name: Remove temporary public edge probe
+        if: always() && steps.deployment-state.outputs.machine_id != ''
+        continue-on-error: true
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: >-
+          flyctl ssh console
+          --app momo-result
+          --pty=false
+          --quiet
+          --machine "${{ steps.deployment-state.outputs.machine_id }}"
+          --command "rm -f /tmp/momo-result-public-edge-probe.py"
         timeout-minutes: 1
 
       - name: Upload rollback verification evidence

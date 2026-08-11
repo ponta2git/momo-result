@@ -219,6 +219,7 @@ PostgreSQL repository、Doobie query、DB table/column、migration 前提に触�
 - CI actionやprovider APIの出力をrelease来歴へ取り込む境界では、公開契約のwire表現をfixtureに使い、正規化後の値がconsumer validatorを通ることをcontract testで固定する。都合のよい型・接頭辞・表現をmock側で仮定しない。
 - 直接接続したPostgreSQL testはpooler / proxyのstartup parameter互換性を保証しない。release probeでsession timeoutを使う場合は、connect引数とtransaction-local commandを観測するcontract testを置き、production互換の接続境界でread-only smokeを通す。
 - 公開edge smokeはURLだけでなく観測地点も契約に含める。edge policyが意図的に拒否するshared runnerをblocking oracleにせず、管理下のproduction互換地点から公開DNS / TLS / edgeを通す。拒否responseを成功扱いするfallbackや、CI都合のallow rule追加で代替しない。
+- postdeploy evidenceのcheckを追加・変更したら、通常deployとrollbackの全consumerを同じvalidatorで検証する。rollbackは旧世代targetのfixtureでも必須core checkを受理し、現在世代では追加checkを要求できることを固定する。workflow内へ世代固有のcheck配列を複製しない。
 
 ## 9. Quality Gates
 

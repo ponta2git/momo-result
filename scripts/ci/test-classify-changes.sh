@@ -30,6 +30,8 @@ assert_case api-source "${api_runtime}" apps/api/src/main/scala/momo/api/Main.sc
 assert_case openapi "${api_web_runtime}" apps/api/openapi.yaml
 assert_case analysis-source "${analysis_only}" apps/analysis-worker/src/main.rs
 assert_case analysis-candidate-workflow "${analysis_only}" .github/workflows/analysis-candidate.yml
+assert_case public-edge-probe "${runtime_only}" deploy/public_edge_probe.py
+assert_case runtime-postdeploy-contract "${runtime_only}" scripts/ci/runtime-postdeploy-contract.py
 assert_case runtime-rollback-workflow "${runtime_only}" .github/workflows/runtime-rollback.yml
 assert_case shared-schema "${all}" docs/schemas/series-analysis-v1.json
 assert_case orchestrator "${all}" .github/workflows/pr.yml

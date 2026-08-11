@@ -148,7 +148,7 @@ export function ScoreGridDesktopTable({
                   data-validation-path={keyToPath(rowIndex, "playOrder")}
                   value={Number.isFinite(player.playOrder) ? String(player.playOrder) : ""}
                   onChange={(event) =>
-                    onPlayOrderChange(rowIndex, Number.parseInt(event.target.value, 10))
+                    onPlayOrderChange(rowIndex, Math.trunc(Number(event.target.value)))
                   }
                   onFocus={() => {
                     onPreferImageKindChange?.("incident_log");

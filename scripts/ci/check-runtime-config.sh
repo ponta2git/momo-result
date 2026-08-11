@@ -71,7 +71,9 @@ fi
 python3 -m py_compile "${repo_root}/deploy/render-nginx-conf.py"
 python3 -m py_compile \
   "${repo_root}/deploy/postdeploy-smoke.py" \
+  "${repo_root}/deploy/public_edge_probe.py" \
   "${repo_root}/deploy/release-preflight.py" \
+  "${repo_root}/scripts/ci/runtime-postdeploy-contract.py" \
   "${repo_root}/scripts/ci/summarize-runtime-logs.py"
 
 fly_kill_timeout="$(sed -n 's/^kill_timeout = \([0-9][0-9]*\)$/\1/p' "${repo_root}/fly.toml")"
@@ -109,4 +111,6 @@ grep -Fqx '  release_command = "/opt/momo-result/bin/release-preflight"' \
 grep -Fq 'deploy/release-preflight.py /opt/momo-result/bin/release-preflight' \
   "${repo_root}/Dockerfile"
 grep -Fq 'deploy/postdeploy-smoke.py /opt/momo-result/bin/postdeploy-smoke' \
+  "${repo_root}/Dockerfile"
+grep -Fq 'deploy/public_edge_probe.py /opt/momo-result/bin/public_edge_probe.py' \
   "${repo_root}/Dockerfile"

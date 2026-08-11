@@ -8,6 +8,8 @@ import sys
 from pathlib import Path
 from urllib.request import Request, urlopen
 
+from public_edge_probe import probe_public_edge
+
 EXPECTED_PROCESSES = {
     "api": ("/opt/java/openjdk/bin/java", "/opt/momo-result/api/lib/", "momo.api.Main"),
     "nginx": ("/usr/sbin/nginx",),
@@ -15,6 +17,7 @@ EXPECTED_PROCESSES = {
 }
 SAFE_HOST = re.compile(r"^[A-Za-z0-9.-]{1,253}$")
 HTTP_OK = 200
+PUBLIC_EDGE_MODES = frozenset({"deferred", "required"})
 
 
 class HealthContractError(RuntimeError):
@@ -22,10 +25,6 @@ class HealthContractError(RuntimeError):
 
 
 class WebContractError(RuntimeError):
-    pass
-
-
-class PublicEdgeContractError(RuntimeError):
     pass
 
 
@@ -51,6 +50,15 @@ def valid_health_payload(payload: object) -> bool:
     return isinstance(payload, dict) and payload.get("status") == "ok"
 
 
+def postdeploy_checks(public_edge_mode: str) -> list[str]:
+    if public_edge_mode not in PUBLIC_EDGE_MODES:
+        raise ValueError
+    checks = ["database", "http", "processes"]
+    if public_edge_mode == "required":
+        checks.append("publicEdge")
+    return [*checks, "redis", "web"]
+
+
 def _process_command_lines() -> list[str]:
     command_lines: list[str] = []
     for proc_dir in Path("/proc").iterdir():
@@ -73,18 +81,6 @@ def _http_probe(host: str, origin_token: str) -> None:
         body = response.read(131_072)
         if response.status != HTTP_OK or b'<div id="root"></div>' not in body:
             raise WebContractError
-
-
-def _public_edge_probe(host: str) -> None:
-    headers = {
-        "Accept": "application/json",
-        "User-Agent": "momo-result-release-probe/1",
-    }
-    with urlopen(
-        Request(f"https://{host}/healthz", headers=headers), timeout=10
-    ) as response:
-        if response.status != HTTP_OK or not valid_health_payload(json.load(response)):
-            raise PublicEdgeContractError
 
 
 def _database_probe(database_url: str) -> None:
@@ -125,13 +121,21 @@ def main() -> int:
     redis_url = os.environ.get("REDIS_URL", "")
     origin_token = os.environ.get("MOMO_ORIGIN_LOCK_TOKEN", "")
     host = os.environ.get("MOMO_CANONICAL_HOST", "momo-result.ponta.me")
-    if not database_url or not redis_url or not origin_token or not SAFE_HOST.fullmatch(host):
+    public_edge_mode = os.environ.get("MOMO_POSTDEPLOY_PUBLIC_EDGE", "required")
+    if (
+        not database_url
+        or not redis_url
+        or not origin_token
+        or not SAFE_HOST.fullmatch(host)
+        or public_edge_mode not in PUBLIC_EDGE_MODES
+    ):
         _write_failure("MissingOrInvalidConfiguration")
         return 1
 
     try:
         _http_probe(host, origin_token)
-        _public_edge_probe(host)
+        if public_edge_mode == "required":
+            probe_public_edge(host)
         _database_probe(database_url)
         _redis_probe(redis_url)
         missing = missing_processes(_process_command_lines())
@@ -141,15 +145,9 @@ def main() -> int:
         _write_json(
             {
                 "event": "runtime_postdeploy_smoke",
+                "schemaVersion": 1,
                 "status": "ok",
-                "checks": [
-                    "database",
-                    "http",
-                    "processes",
-                    "publicEdge",
-                    "redis",
-                    "web",
-                ],
+                "checks": postdeploy_checks(public_edge_mode),
             },
             stream=sys.stdout,
         )

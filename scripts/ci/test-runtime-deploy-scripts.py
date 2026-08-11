@@ -2,17 +2,20 @@
 # ruff: noqa: PT009 - this standalone test intentionally uses unittest assertions.
 from __future__ import annotations
 
+import importlib
 import importlib.util
 import io
 import json
 import os
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from types import ModuleType
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "deploy"))
 
 
 def load_module(name: str, path: Path) -> ModuleType:
@@ -26,7 +29,11 @@ def load_module(name: str, path: Path) -> ModuleType:
 
 
 preflight = load_module("release_preflight", ROOT / "deploy/release-preflight.py")
+public_edge = importlib.import_module("public_edge_probe")
 postdeploy = load_module("postdeploy_smoke", ROOT / "deploy/postdeploy-smoke.py")
+postdeploy_contract = load_module(
+    "runtime_postdeploy_contract", ROOT / "scripts/ci/runtime-postdeploy-contract.py"
+)
 log_summary = load_module("runtime_log_summary", ROOT / "scripts/ci/summarize-runtime-logs.py")
 
 
@@ -61,6 +68,16 @@ class RuntimeDeployScriptTest(unittest.TestCase):
         self.assertEqual(postdeploy.missing_processes(commands[:-1]), ["ocrWorker"])
         self.assertTrue(postdeploy.valid_health_payload({"status": "ok"}))
         self.assertFalse(postdeploy.valid_health_payload({"status": "degraded"}))
+        self.assertEqual(
+            postdeploy.postdeploy_checks("deferred"),
+            ["database", "http", "processes", "redis", "web"],
+        )
+        self.assertEqual(
+            postdeploy.postdeploy_checks("required"),
+            ["database", "http", "processes", "publicEdge", "redis", "web"],
+        )
+        with self.assertRaises(ValueError):
+            postdeploy.postdeploy_checks("disabled")
 
         class FakeHttpResponse(io.BytesIO):
             def __init__(self, payload: bytes, status: int = 200) -> None:
@@ -68,11 +85,11 @@ class RuntimeDeployScriptTest(unittest.TestCase):
                 self.status = status
 
         with mock.patch.object(
-            postdeploy,
+            public_edge,
             "urlopen",
             return_value=FakeHttpResponse(b'{"status":"ok"}'),
         ) as public_request:
-            postdeploy._public_edge_probe("example.com")
+            public_edge.probe_public_edge("example.com")
         request = public_request.call_args.args[0]
         self.assertEqual(request.full_url, "https://example.com/healthz")
         self.assertEqual(request.get_header("Accept"), "application/json")
@@ -83,13 +100,84 @@ class RuntimeDeployScriptTest(unittest.TestCase):
 
         with (
             mock.patch.object(
-                postdeploy,
+                public_edge,
                 "urlopen",
                 return_value=FakeHttpResponse(b'{"status":"degraded"}'),
             ),
-            self.assertRaises(postdeploy.PublicEdgeContractError),
+            self.assertRaises(public_edge.PublicEdgeContractError),
         ):
-            postdeploy._public_edge_probe("example.com")
+            public_edge.probe_public_edge("example.com")
+
+        success_output = io.StringIO()
+        with (
+            mock.patch.object(public_edge, "probe_public_edge") as probe,
+            mock.patch.object(sys, "stdout", success_output),
+        ):
+            self.assertEqual(public_edge.main(["public-edge-probe", "example.com"]), 0)
+        probe.assert_called_once_with("example.com")
+        self.assertEqual(
+            json.loads(success_output.getvalue()),
+            {
+                "event": "runtime_public_edge_smoke",
+                "schemaVersion": 1,
+                "status": "ok",
+            },
+        )
+
+    def test_postdeploy_evidence_contract_supports_rollback_generations(self) -> None:
+        legacy_payload = {
+            "event": "runtime_postdeploy_smoke",
+            "status": "ok",
+            "checks": ["database", "http", "processes", "redis", "web"],
+        }
+        current_payload = {
+            **legacy_payload,
+            "schemaVersion": 1,
+            "checks": [
+                "database",
+                "http",
+                "processes",
+                "publicEdge",
+                "redis",
+                "web",
+            ],
+        }
+
+        postdeploy_contract.validate_postdeploy_evidence(legacy_payload)
+        postdeploy_contract.validate_postdeploy_evidence(
+            current_payload, {"publicEdge"}
+        )
+        with self.assertRaises(postdeploy_contract.PostdeployContractError):
+            postdeploy_contract.validate_postdeploy_evidence(
+                legacy_payload, {"publicEdge"}
+            )
+        with self.assertRaises(postdeploy_contract.PostdeployContractError):
+            postdeploy_contract.validate_postdeploy_evidence(
+                {**legacy_payload, "checks": ["database", "database"]}
+            )
+        with self.assertRaises(postdeploy_contract.PostdeployContractError):
+            postdeploy_contract.validate_postdeploy_evidence(
+                {**current_payload, "schemaVersion": 2}
+            )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            evidence_path = Path(temp_dir) / "postdeploy.json"
+            evidence_path.write_text(json.dumps(current_payload), encoding="utf-8")
+            success_output = io.StringIO()
+            with mock.patch.object(sys, "stdout", success_output):
+                result = postdeploy_contract.main(
+                    [
+                        "runtime-postdeploy-contract",
+                        str(evidence_path),
+                        "--require-check",
+                        "publicEdge",
+                    ]
+                )
+        self.assertEqual(result, 0)
+        self.assertEqual(
+            json.loads(success_output.getvalue()),
+            {"schemaVersion": 1, "status": "ok"},
+        )
 
     def test_database_probes_use_transaction_local_timeouts(self) -> None:
         class FakeCursor:

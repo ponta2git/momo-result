@@ -15,13 +15,8 @@ import momo.api.domain.{
   ScreenType,
   StoredImageLocation
 }
-import momo.api.ports.storage.{Sha256Hex, SourceImageObjectKey}
-import momo.api.repositories.{
-  OcrQueueOutboxStatus,
-  SourceImageFailureCode,
-  SourceImageIdempotencyHash,
-  SourceImageStatus
-}
+import momo.api.ports.storage.{Sha256Hex, SourceImageIdempotencyHash, SourceImageObjectKey}
+import momo.api.repositories.{OcrQueueOutboxStatus, SourceImageFailureCode, SourceImageStatus}
 
 /**
  * Shared database type mappings for opaque IDs, enums, and other custom types used by the

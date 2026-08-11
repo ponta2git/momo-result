@@ -54,6 +54,28 @@ object Sha256Hex:
     MessageDigest.getInstance("SHA-256").digest(bytes).map(byte => f"${byte & 0xff}%02x").mkString
   )
 
+final case class SourceImageIdempotencyHash private (value: String) derives CanEqual
+
+object SourceImageIdempotencyHash:
+  def fromString(value: String): Either[String, SourceImageIdempotencyHash] = Either.cond(
+    value.length == 64 && value.forall(character =>
+      (character >= '0' && character <= '9') || (character >= 'a' && character <= 'f')
+    ),
+    SourceImageIdempotencyHash(value),
+    "Source image idempotency hash must be 64 lowercase hexadecimal characters.",
+  )
+
+  def fromRawKey(value: String): SourceImageIdempotencyHash = digest(value)
+
+  def uniqueFor(imageId: ImageId): SourceImageIdempotencyHash = digest(
+    s"momo-source-image:${imageId.value}"
+  )
+
+  private def digest(value: String): SourceImageIdempotencyHash = SourceImageIdempotencyHash(
+    MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8))
+      .map(byte => f"${byte & 0xff}%02x").mkString
+  )
+
 final case class SourceImageObjectMetadata(
     key: SourceImageObjectKey,
     mediaType: String,

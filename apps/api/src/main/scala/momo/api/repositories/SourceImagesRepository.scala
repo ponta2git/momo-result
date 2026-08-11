@@ -1,33 +1,9 @@
 package momo.api.repositories
 
-import java.nio.charset.StandardCharsets
-import java.security.MessageDigest
 import java.time.Instant
 
 import momo.api.domain.ids.{AccountId, ImageId}
-import momo.api.ports.storage.{Sha256Hex, SourceImageObjectKey}
-
-final case class SourceImageIdempotencyHash private (value: String) derives CanEqual
-
-object SourceImageIdempotencyHash:
-  def fromString(value: String): Either[String, SourceImageIdempotencyHash] = Either.cond(
-    value.length == 64 && value.forall(character =>
-      (character >= '0' && character <= '9') || (character >= 'a' && character <= 'f')
-    ),
-    SourceImageIdempotencyHash(value),
-    "Source image idempotency hash must be 64 lowercase hexadecimal characters.",
-  )
-
-  def fromRawKey(value: String): SourceImageIdempotencyHash = digest(value)
-
-  def uniqueFor(imageId: ImageId): SourceImageIdempotencyHash = digest(
-    s"momo-source-image:${imageId.value}"
-  )
-
-  private def digest(value: String): SourceImageIdempotencyHash = SourceImageIdempotencyHash(
-    MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8))
-      .map(byte => f"${byte & 0xff}%02x").mkString
-  )
+import momo.api.ports.storage.{Sha256Hex, SourceImageIdempotencyHash, SourceImageObjectKey}
 
 enum SourceImageStatus(val wire: String) derives CanEqual:
   case Reserved extends SourceImageStatus("RESERVED")

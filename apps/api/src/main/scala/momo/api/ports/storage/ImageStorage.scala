@@ -20,6 +20,17 @@ trait ImageStorage[F[_]]:
       contentType: Option[String],
       bytes: Array[Byte],
   ): F[Either[AppError, StoredImage]]
+
+  def saveIdempotent(
+      ownerAccountId: AccountId,
+      fileName: Option[String],
+      contentType: Option[String],
+      bytes: Array[Byte],
+      idempotencyHash: SourceImageIdempotencyHash,
+  ): F[Either[AppError, StoredImage]] =
+    val _ = idempotencyHash
+    save(ownerAccountId, fileName, contentType, bytes)
+
   def find(imageId: ImageId): F[Option[StoredImage]]
 
   def readStream(image: StoredImage): Stream[F, Byte]

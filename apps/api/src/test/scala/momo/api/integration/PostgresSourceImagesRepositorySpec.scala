@@ -7,7 +7,7 @@ import cats.syntax.all.*
 
 import momo.api.adapters.postgres.PostgresSourceImagesRepository
 import momo.api.domain.ids.{AccountId, ImageId}
-import momo.api.ports.storage.{Sha256Hex, SourceImageObjectKey}
+import momo.api.ports.storage.{Sha256Hex, SourceImageIdempotencyHash, SourceImageObjectKey}
 import momo.api.repositories.*
 
 final class PostgresSourceImagesRepositorySpec extends IntegrationSuite:

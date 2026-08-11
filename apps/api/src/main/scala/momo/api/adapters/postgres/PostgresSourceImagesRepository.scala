@@ -10,7 +10,7 @@ import doobie.postgres.implicits.*
 
 import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.domain.ids.{AccountId, ImageId}
-import momo.api.ports.storage.{Sha256Hex, SourceImageObjectKey}
+import momo.api.ports.storage.{Sha256Hex, SourceImageIdempotencyHash, SourceImageObjectKey}
 import momo.api.repositories.*
 
 final class PostgresSourceImagesRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
@@ -18,7 +18,8 @@ final class PostgresSourceImagesRepository[F[_]: MonadCancelThrow](transactor: T
   import PostgresSourceImagesRepository.*
 
   override def reserve(reservation: SourceImageReservation): F[SourceImageReservationResult] =
-    val insert = (fr"""
+    val insert =
+      (fr"""
       INSERT INTO source_images (
         id, owner_account_id, object_key, idempotency_key_hash, status,
         media_type, byte_length, sha256_hex, width, height, created_at, updated_at

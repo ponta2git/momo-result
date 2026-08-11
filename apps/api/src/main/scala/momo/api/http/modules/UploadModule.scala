@@ -19,6 +19,7 @@ import momo.api.http.{
   MultipartUpload,
   SecuredEndpoint
 }
+import momo.api.ports.storage.SourceImageIdempotencyHash
 import momo.api.usecases.images.UploadImage
 
 object UploadModule:
@@ -58,8 +59,18 @@ object UploadModule:
               nowF,
               rateLimiter.allow(s"upload:${member.accountId.value}").flatMap {
                 case false => uploadRateLimited(member.accountId.value)
-                case true => uploadImage
-                    .run(member.accountId, upload.fileName, upload.contentType, upload.bytes)
+                case true =>
+                  val store = idempotencyKey match
+                    case Some(key) => uploadImage.runIdempotent(
+                        member.accountId,
+                        upload.fileName,
+                        upload.contentType,
+                        upload.bytes,
+                        SourceImageIdempotencyHash.fromRawKey(key),
+                      )
+                    case None => uploadImage
+                        .run(member.accountId, upload.fileName, upload.contentType, upload.bytes)
+                  store
                     .flatMap {
                       case Left(error) => security.toProblemF(error).map(Left(_))
                       case Right(image) =>

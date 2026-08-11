@@ -247,7 +247,7 @@ pub(crate) async fn dead_letter_and_acknowledge(
         .arg(&config.stream)
         .arg(&config.group)
         .arg(&delivery.message_id);
-    let acknowledged: usize = transaction.query_async(redis).await?;
+    let (acknowledged,): (usize,) = transaction.query_async(redis).await?;
     if acknowledged != 1 {
         return Err(OcrQueueError::DeadLetterTransaction);
     }

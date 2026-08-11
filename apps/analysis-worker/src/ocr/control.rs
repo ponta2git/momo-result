@@ -328,8 +328,8 @@ async fn acquire_candidate(
             "UPDATE ocr_jobs SET status = 'running', worker_id = $1, attempt_count = $2,\x20\
                started_at = clock_timestamp(), finished_at = NULL, duration_ms = NULL,\x20\
                failure_code = NULL, failure_message = NULL, failure_retryable = NULL,\x20\
-               failure_user_action = NULL, attempt_id = $3::uuid, lease_owner = $1,\x20\
-               lease_token = $4::uuid,\x20\
+               failure_user_action = NULL, attempt_id = $3::text::uuid, lease_owner = $1,\x20\
+               lease_token = $4::text::uuid,\x20\
                lease_expires_at = clock_timestamp() + ($5::bigint * interval '1 millisecond'),\x20\
                lease_fencing_token = $6, updated_at = clock_timestamp()\x20\
              WHERE id = $7 AND status = 'queued' AND queue_schema_version = 2\x20\
@@ -413,7 +413,7 @@ pub(crate) async fn heartbeat(
                lease_expires_at = clock_timestamp() + ($1::bigint * interval '1 millisecond'),\x20\
                updated_at = clock_timestamp()\x20\
              WHERE id = $2 AND status = 'running' AND lease_owner = $3\x20\
-               AND attempt_id = $4::uuid AND lease_token = $5::uuid\x20\
+               AND attempt_id = $4::text::uuid AND lease_token = $5::text::uuid\x20\
                AND lease_fencing_token = $6 AND lease_expires_at > clock_timestamp()",
             &[
                 &lease_milliseconds,
@@ -475,7 +475,7 @@ pub(crate) async fn finish_success(
                attempt_id = NULL, lease_owner = NULL, lease_token = NULL,\x20\
                lease_expires_at = NULL, updated_at = clock_timestamp()\x20\
              WHERE id = $3 AND status = 'running' AND lease_owner = $4\x20\
-               AND attempt_id = $5::uuid AND lease_token = $6::uuid\x20\
+               AND attempt_id = $5::text::uuid AND lease_token = $6::text::uuid\x20\
                AND lease_fencing_token = $7",
             &[
                 &detected_screen_type,
@@ -532,7 +532,8 @@ pub(crate) async fn requeue_transient(
                failure_retryable = NULL, failure_user_action = NULL, attempt_id = NULL,\x20\
                lease_owner = NULL, lease_token = NULL, lease_expires_at = NULL,\x20\
                updated_at = clock_timestamp() WHERE id = $2 AND status = 'running'\x20\
-               AND lease_owner = $3 AND attempt_id = $4::uuid AND lease_token = $5::uuid\x20\
+               AND lease_owner = $3 AND attempt_id = $4::text::uuid\x20\
+               AND lease_token = $5::text::uuid\x20\
                AND lease_fencing_token = $6",
             &[
                 &retry_delay_milliseconds,
@@ -602,7 +603,7 @@ async fn lock_owned_job(
     let job = transaction
         .query_opt(
             "SELECT 1 FROM ocr_jobs WHERE id = $1 AND status = 'running' AND lease_owner = $2\x20\
-               AND attempt_id = $3::uuid AND lease_token = $4::uuid\x20\
+               AND attempt_id = $3::text::uuid AND lease_token = $4::text::uuid\x20\
                AND lease_fencing_token = $5 AND lease_expires_at > clock_timestamp() FOR UPDATE",
             &[
                 &claim.job_id,
@@ -660,8 +661,8 @@ async fn update_owned_failure(
                failure_retryable = $3, failure_user_action = $4, finished_at = clock_timestamp(),\x20\
                duration_ms = $5, attempt_id = NULL, lease_owner = NULL, lease_token = NULL,\x20\
                lease_expires_at = NULL, updated_at = clock_timestamp() WHERE id = $6\x20\
-               AND status = 'running' AND lease_owner = $7 AND attempt_id = $8::uuid\x20\
-               AND lease_token = $9::uuid AND lease_fencing_token = $10",
+               AND status = 'running' AND lease_owner = $7 AND attempt_id = $8::text::uuid\x20\
+               AND lease_token = $9::text::uuid AND lease_fencing_token = $10",
             &[
                 &code,
                 &message,
@@ -809,5 +810,7 @@ fn valid_runtime_identifier(value: &str) -> bool {
         })
 }
 
+#[cfg(test)]
+mod integration_tests;
 #[cfg(test)]
 mod tests;

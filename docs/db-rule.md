@@ -112,6 +112,10 @@ analysis workerのPostgreSQL adapterを触るときは、通常の `cargo test` 
 実Redisを使う `scripts/ci/analysis-worker-control-plane-smoke.sh` を実行する。release commandとDB control planeは
 `scripts/ci/analysis-release-db-smoke.sh` でも検証する。
 
+Rust OCR consumerのclaim、lease、fencing、terminal write、Redis ACK / PEL / DLQを触るときは、通常の
+`cargo test` に加え、migration適用済みの隔離PostgreSQLと隔離Redisへ
+`scripts/ci/ocr-rust-control-plane-smoke.sh` を実行する。
+
 ## 5. SQL Risk Checklist
 
 次を含む変更は実PostgreSQLで検証する。

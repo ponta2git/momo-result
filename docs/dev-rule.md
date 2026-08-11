@@ -254,10 +254,12 @@ PostgreSQL / Redis / Linux process境界は通常のCargo testと分け、reposi
 ```sh
 scripts/ci/analysis-release-db-smoke.sh apps/analysis-worker/target/release/momo-analysis
 scripts/ci/analysis-worker-control-plane-smoke.sh apps/analysis-worker/target/release/momo-analysis
+scripts/ci/ocr-rust-control-plane-smoke.sh
 scripts/ci/analysis-worker-image-smoke.sh <local-image-tag>
 ```
 
-先頭2 commandはmigration適用済みPostgreSQLを必要とし、control-plane smokeはRedisも必要とする。
+先頭3 commandはmigration適用済みPostgreSQLを必要とし、control-plane smokeはRedisも必要とする。
+OCR smokeには隔離環境を指す `OCR_CONTROL_SMOKE_DATABASE_URL` と `OCR_CONTROL_SMOKE_REDIS_URL` を渡す。
 これらのsmokeはfixtureを永続化するため、普段使いのローカルDB / Redisへ向けず、CI serviceまたは明示的に隔離した
 一時PostgreSQL / Redisだけで実行する。通常のローカルデータに対するE2E確認は前節の専用workerコンテナと
 管理者メニューを使う。

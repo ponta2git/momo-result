@@ -215,6 +215,9 @@ PostgreSQL repository、Doobie query、DB table/column、migration 前提に触�
 - OCR worker integration は pytest の `integration` marker を付ける。複数 adapter smoke は必要最小限にし、状態遷移・payload validation・parser分岐は unit/contract test に寄せる。
 - analysis workerのPostgreSQL / Redis integrationは通常の `cargo test` と分離し、CI上で実サービスを
   起動する `analysis-worker-control-plane-smoke.sh` を明示gateとして持つ。
+- Rust OCR consumerのPostgreSQL / Redis integrationは通常の `cargo test` と分離し、隔離した実サービスへ
+  `ocr-rust-control-plane-smoke.sh` を明示gateとして実行する。DB terminal writeより先にRedis配送をACKしないこと、
+  旧fenceの拒否、PEL回収、bounded DLQ、分析からOCRへの一方向preemptionを外部契約として確認する。
 - 外部サービスを使う spec は、stream名、DB row、一時ファイル名、worker id を test / suite ごとに分離する。
 - CI actionやprovider APIの出力をrelease来歴へ取り込む境界では、公開契約のwire表現をfixtureに使い、正規化後の値がconsumer validatorを通ることをcontract testで固定する。都合のよい型・接頭辞・表現をmock側で仮定しない。
 - 直接接続したPostgreSQL testはpooler / proxyのstartup parameter互換性を保証しない。release probeでsession timeoutを使う場合は、connect引数とtransaction-local commandを観測するcontract testを置き、production互換の接続境界でread-only smokeを通す。

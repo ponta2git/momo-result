@@ -20,7 +20,7 @@
 | 契約 | Owner | 正本 |
 |---|---|---|
 | Redis Stream payload v1 | API produces / Python worker consumes during drain | この文書、v1 JSON Schema、Scala/Python contract tests |
-| Redis Stream payload v2 | API produces / Rust worker consumes after activation | この文書、v2 JSON Schema、Scala contract tests。Rust側testはStage Cで追加 |
+| Redis Stream payload v2 | API produces / Rust worker consumes after activation | この文書、v2 JSON Schema、Scala / Rust contract tests |
 | Durable enqueue intent | API | `ocr_queue_outbox` |
 | OCR job state | DB | `ocr_jobs` |
 | OCR draft payload | worker writes / API reads | `ocr_drafts`, worker payload model |
@@ -57,7 +57,7 @@ headroom として使う。
 Rules:
 
 - v1とv2は別streamに置く。consumerが理解できないschemaを同じstreamへ混在させない。
-- Stage Bではv2の型・schema・設定だけを導入する。API producerはv1のままであり、v2へのdual writeはしない。
+- production activationまではAPI producerをv1に保ち、v2へのdual writeはしない。v2 consumerは明示設定なしで起動しない。
 - v2 producerの有効化は、Rust consumerのcontract test、object storageの縦切り、DB lease/fenceの検証後に行う。
 - API は有効な単一versionのstreamへ `XADD` する。
 - worker は `XGROUP CREATE ... MKSTREAM` を許容する。
@@ -265,7 +265,7 @@ uv run pytest tests/unit/features/test_redis_consumer.py
 uv run pytest -m integration tests/integration/test_redis_stream_consumer.py
 ```
 
-v1 schema変更ではScala/Python双方、v2 schema変更ではScala/Rust双方のserializer出力を`docs/schemas/`のJSON Schemaで検証する。Stage B時点のv2はproducer有効化前なのでScala testを必須とし、Rust contract testはStage Cのconsumer実装と同時に追加する。Pythonへv2 testやparserを追加しない。
+v1 schema変更ではScala/Python双方、v2 schema変更ではScala/Rust双方のserializer出力を`docs/schemas/`のJSON Schemaで検証する。Pythonへv2 testやparserを追加しない。
 
 DB schema に触れた場合は `docs/db-rule.md` と `docs/test-rule.md` に従い、`momo-db` migration 適用済み Testcontainers PostgreSQL で検証する。
 

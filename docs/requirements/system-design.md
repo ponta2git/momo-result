@@ -182,13 +182,15 @@ OCRジョブのタイムアウト初期値は `OCR_TIMEOUT_SECONDS` で管理す
 - 画像ファイルは1枚3MBまでに制限する。
 - upload request 全体の上限は `UPLOAD_REQUEST_MAX_BYTES` で管理する。
 - OCR へ進んでいない未参照 upload は account 別に件数・容量上限を持つ。上限は `IMAGE_UPLOAD_UNREFERENCED_COUNT_LIMIT` と `IMAGE_UPLOAD_UNREFERENCED_BYTES_LIMIT` で管理し、超過時は `429` Problem Details で拒否する。
-- 一時ディスクの空き容量・使用率水位は `IMAGE_UPLOAD_STORAGE_MIN_FREE_BYTES` と `IMAGE_UPLOAD_STORAGE_MAX_USED_PERCENT` で管理し、超過時は `503` Problem Details で upload 受付を一時停止する。
 - OCR worker はデコード後メモリ保護のため、FullHD（1920x1080）を超える寸法の画像を処理しない。
-- アップロード画像はFly.io VMの一時ディスクに保存する。
+- アップロード画像は非公開Cloudflare R2 bucketへ保存し、DBとqueueには推測困難なopaque object keyだけを保持する。bucket URL、credential、署名付きURL、worker間のlocal pathを永続契約にしない。
 - OCR完了時点では画像を削除しない。下書き確定または下書き削除まで保持し、その後削除する。
 - OCR へ進まない未参照 upload は `IMAGE_ORPHAN_OLDER_THAN_MINUTES` より古くなった時点で orphan reaper の削除対象とする。MVP既定値は15分、reaper interval は5分とする。
-- OCR待ち中にVM再起動などで一時画像が失われた場合は、ジョブを失敗扱いにし、ユーザーに再アップロードを求める。
-- 画像はサーバーに恒久保存しない。
+- object writeとDB commitの片方だけが成功した状態、削除失敗、参照のないobjectはreconciliation対象とし、削除直前にDB参照を再検査する。
+- R2-backed uploadとobject reconciliationは同じrelease gateで有効化する。reconcilerを起動できないまま
+  R2-backed uploadだけを有効化する部分切替を許可しない。
+- OCR待ち中にobjectが存在しない、またはbytes、SHA-256、media type、寸法がDB / queue契約と一致しない場合は、ジョブを失敗扱いにし、必要に応じて再アップロードを求める。
+- 画像は下書きの保持lifecycleを超えて恒久保存しない。
 - DBには画像実体、内部ファイルパス、長寿命URLを保存・公開しない。
 - 下書きに紐づく source image は認証付きAPI経由でプレビュー・個別取得・zipダウンロードできる。
 - source image の個別取得・zipダウンロードには account 別の分間 rate limit を適用する。上限は `SOURCE_IMAGE_DOWNLOAD_RATE_LIMIT_PER_MINUTE` で管理し、既定値は60回/分とする。
@@ -354,7 +356,7 @@ MVPでは外部監視基盤を必須にせず、Fly.io logs と `/healthz/detail
 |---|---|---|
 | OCR受付数・作成拒否 | API log、`/healthz/details` | `ocr_job_accepted`, `ocr_job_create_rate_limited`, `ocr_job_create_rejected`, `OCR admission rejected`, `ocrAdmission` |
 | OCR queue/backlog/DLQ | `docs/redis-streams-ocr-contract.md` の Operations | `ocr_queue_outbox` 件数、Redis stream length、consumer group pending count、DLQ stream length |
-| 画像upload容量・一時ディスク | API log、Fly.io volume/VM metrics | `image_upload_accepted`, `image_upload_rate_limited`, `image_upload_admission rejected`, `source_image_orphan_reaper` |
+| 画像upload容量・object storage | API log、object storage metrics | `image_upload_accepted`, `image_upload_rate_limited`, `image_upload_admission rejected`, `source_image_orphan_reaper` |
 | source image download量 | API log | `source_image_downloaded`, `source_image_archive_downloaded`, `source_image_download_rate_limited`, `source_image_archive_rejected` |
 | CSV/TSV export量 | API log | `match_export_completed`, `match_export_rate_limited`, `match_export_rejected` |
 | OAuth provider / session負荷 | API log | `auth_login_completed`, `auth_login_rate_limited`, `auth_callback_rejected`, `auth_callback_state_rate_limited`, `auth_oauth_provider_backoff_active`, `auth_oauth_provider_backoff_opened` |

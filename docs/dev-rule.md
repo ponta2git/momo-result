@@ -136,7 +136,8 @@ Docker Desktop上のコンテナからホストのDB / Redisへ接続するた�
 Redis stream / group、worker ID、config version、lease / heartbeat設定を持つ。ローカル既定値は
 `scripts/ci/analysis-worker-control-plane-smoke.sh` の `worker_environment` と整合させ、worker IDとconsumer groupは
 ローカル専用の一意な値にする。Fly用設定はpublicationが既定でdisabledなので、そのままローカル実行設定として
-使わない。
+使わない。OCR v2は既定でdisabledとし、統合確認するときだけR2 credential、v2 stream / group / DLQ、worker ID、
+R2 / lease / heartbeat / OCR / Redisの全時間上限を揃えて明示的にenabledにする。`auto`はOCR modeとして使わない。
 
 API起動後に管理者メニューの手動再計算、または試合結果確定でjobを発火する。worker logの
 `analysis worker is ready`、`analysis attempt claimed`、`analysis attempt completed` と、管理画面のjob履歴、
@@ -258,19 +259,29 @@ PostgreSQL / Redis / Linux process境界は通常のCargo testと分け、reposi
 
 ```sh
 scripts/ci/analysis-release-db-smoke.sh apps/analysis-worker/target/release/momo-analysis
-scripts/ci/analysis-worker-control-plane-smoke.sh apps/analysis-worker/target/release/momo-analysis
 scripts/ci/ocr-rust-control-plane-smoke.sh
 scripts/ci/analysis-worker-image-smoke.sh <local-image-tag>
+ANALYSIS_WORKER_IMAGE=<local-image-tag> scripts/ci/analysis-worker-control-plane-smoke.sh
+scripts/ci/analysis-worker-preemption-smoke.sh <local-image-tag>
 ```
 
-先頭3 commandはmigration適用済みPostgreSQLを必要とし、control-plane smokeはRedisも必要とする。
-OCR smokeには隔離環境を指す `OCR_CONTROL_SMOKE_DATABASE_URL` と `OCR_CONTROL_SMOKE_REDIS_URL` を渡す。
-これらのsmokeはfixtureを永続化するため、普段使いのローカルDB / Redisへ向けず、CI serviceまたは明示的に隔離した
-一時PostgreSQL / Redisだけで実行する。通常のローカルデータに対するE2E確認は前節の専用workerコンテナと
-管理者メニューを使う。
+release / control-plane / OCR / preemption smokeはmigration適用済みPostgreSQLを必要とし、OCR、control-plane、
+preemption smokeはRedisも必要とする。OCR smokeには隔離環境を指す `OCR_CONTROL_SMOKE_DATABASE_URL` と
+`OCR_CONTROL_SMOKE_REDIS_URL` を渡す。cgroupを使うWorker control-planeとpreemptionはhost binaryで代用せず、
+image smokeを通した同じruntime imageで実行する。これらのsmokeはfixtureを永続化するため、普段使いのローカルDB /
+Redisへ向けず、CI serviceまたは明示的に隔離した一時PostgreSQL / Redisだけで実行する。通常のローカルデータに
+対するE2E確認は前節の専用workerコンテナと管理者メニューを使う。
 resource / endurance測定は本番同等runtimeのprivate gateであり、通常CIの成功を代用証拠にしない。
 dedicated image smokeは、OCI設定上のroot bootstrap、恒久的な権限降格、cgroup attach/readback barrier、
 子だけのOOM終了、親生存、process group回収を一つのLinux runtime契約として検証する。
+
+R2のlive contractは通常testと分け、S3互換credentialをprocess環境へ注入したうえで隔離bucketへ実行する。
+値はtracked file、文書、shell historyへ書かない。bucketを有効化しただけではcredential注入の代わりにならない。
+
+```sh
+cd apps/api
+sbt apiR2Quality
+```
 
 ## 5. Change Gates
 
@@ -284,6 +295,7 @@ dedicated image smokeは、OCI設定上のroot bootstrap、恒久的な権限降
 | api usecase / domain / codec | `sbt apiQuality`, `sbt test`; coverage対象なら `sbt apiCoverage` |
 | PostgreSQL repository / DB前提 | api gate + `sbt apiDbQuality` |
 | Redis Streams / OCR queue | api gate + `sbt apiRedisQuality` |
+| R2-backed image storage activation | api / DB gate + `sbt apiR2Quality` + object reconciler起動確認。uploadだけの部分切替は禁止 |
 | ocr-worker production code | `uv run ruff format --check .`, `uv run ruff check .`, `uv run mypy`, `uv run pytest` |
 | ocr-worker external runtime | ocr-worker production gate + `uv run pytest -m integration` |
 | analysis-worker production code | `cargo fmt --all -- --check`, `cargo clippy --locked --workspace --all-targets --all-features -- -D warnings`, `cargo test --locked --workspace --all-targets --all-features`, `cargo build --locked --workspace --release` |

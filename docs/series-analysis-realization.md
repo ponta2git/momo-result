@@ -19,7 +19,7 @@
 - APIは保存済み成果物と状態だけを読み、HTTP request内でScalaまたはRustの分析処理を呼ばない。
 - DBを入力revision、job、request、outbox、成果物、公開状態の正本とする。Redis Streamsは配送だけを担う。
 - 分析workerの実行枠は1とし、1作品の計算は停止可能な子processへ分離する。
-- 将来OCRを同居させる場合、OCRは分析を中断できるが、分析はOCRを中断できない。
+- OCR v2を同居させる場合、OCRは分析を中断できるが、分析はOCRを中断できない。
 - 確定済み試合の更新で作品がAからBへ移った場合は、AとBの両方を同じ業務transactionで再計算対象にする。
 - 手動再計算は入力が最新でも実計算する。同一versionの現行成果物とchecksumが一致すれば成果物を再利用し、
   一致しなければ決定論違反として失敗させる。
@@ -57,7 +57,7 @@
 | Webは軽い表示加工だけ | 5.5〜5.8、6章 | business sort / fallback / emphasisをworkerへ移す契約を確定 |
 | 初回からRust版、private memory上限を満たす | 4章、9.4、10章 | 構造上可能だがworker / API / browser実測までは未証明 |
 | 数値正確性必須、Scala互換は希望 | 4.2、8章、9.1 | source / semantic checksumとgolden差分gateを確定 |
-| 分析同時実行1、将来OCRだけが分析をpreempt | 3.3、11章 | DB fenceは初回必須、OCR実装自体は初回対象外 |
+| 分析同時実行1、OCRだけが分析をpreempt | 3.3、11章 | DB fenceと実process preemptionを実装。production activationは別gate |
 | 作品AからBへの移動は両作品を更新 | 2.1、5.8、9.2 | revision transactionと古いcontext抑止まで確定 |
 
 ---
@@ -234,7 +234,7 @@ canonical checksumを比較する。一致時は新しいartifactを複製せず
 | `queued` | lease取得 | `running` | なし | なし |
 | `running` | version一致・検証成功 | `succeeded` | なし | あり、またはchecksum一致で再利用 |
 | `running` | 新revisionでsupersede | `queued` | なし | なし |
-| `running` | 将来OCRがpreempt | `queued` | なし | なし |
+| `running` | OCRがpreempt | `queued` | なし | なし |
 | `running` | 一時的DB/queue障害 | `queued` または `failed` | 最大3回 | なし |
 | `running` | timeout | `timed_out` | なし | なし |
 | `running` | 決定論的計算・契約違反 | `failed` | なし | なし |
@@ -303,12 +303,12 @@ lockする。実PostgreSQLの競合testでdeadlockがないことを確認する
   `owner_lost` として閉じ、上限内なら同じjobを `queued` へ戻す。
 - terminal jobのdeliveryは状態を確認して安全にackし、再計算しない。
 - queued jobの選択は `availableAt`、要求日時、job IDの決定順とし、DB lock競合では `SKIP LOCKED` 相当で
-  二重claimを避ける。将来OCRを同居させても、同じexecution slot境界を共有する。
-- 初回releaseでは手動・自動の分析jobに優先度差を付けない。running jobがsupersede、graceful停止、将来の
+  二重claimを避ける。OCRを同居させても、同じexecution slot境界を共有する。
+- 初回releaseでは手動・自動の分析jobに優先度差を付けない。running jobがsupersede、graceful停止、OCRの
   preemptionで `queued` へ戻る場合は `availableAt` を更新して同priority列の後ろへ回し、更新が多い1作品だけで
   他作品を永久に飢餓させない。transient retryはbackoff後の時刻を `availableAt` にする。
-- execution slot APIは初回からholderの `taskKind`、`preemptible`、`preemptRequestedBy` を表せる境界にする。
-  将来OCR requestはDBへpreempt intentを置き、分析親processがheartbeatで検知して子processを止め、jobを
+- execution slot APIはholderの `taskKind`、`preemptible`、`preemptRequestedBy` を表す。
+  OCR requestはDBへpreempt intentを置き、分析親processがheartbeatで検知して子processを止め、jobを
   `queued` へ戻してslotを解放した後にOCRが取得する。OCR holderは非preemptibleとし、分析側からrequestを
   書けない。未充足のOCR preempt intentがある間は新しい分析attemptによるslot取得を拒否し、分析解放直後に
   別の分析が先取りしないようにする。公開critical section中はrequestを保持したまま短時間待たせる。
@@ -557,7 +557,7 @@ rollbackするため、途中staging rowは残らずcurrent表示にも影響し
 
 いずれかが失敗した場合はtransaction全体をrollbackする。子process、timeout、preemption、1 scopeの
 予期しない失敗からcurrent pointerを変更できない。publish pointer更新中の短いcritical sectionは
-preempt不可とし、将来OCRはその完了を待つ。
+preempt不可とし、OCRはその完了を待つ。
 
 同じversionの強制runでは先にsource input checksumを比較する。不一致なら `input_revision_violation`、入力が
 同じでsemantic checksumだけが不一致なら `non_deterministic_output` とする。両方が一致した場合はchunkの
@@ -1568,7 +1568,7 @@ rollback契約:
 | 全作品で分析同時実行1 | 実装済み | DB execution slot、lease、fenceを実装し、失効lease回収とowner lossを実service smokeで検証した。 |
 | 直前成果物を保った原子的更新 | 実装済み | current / previous制約、staging検証、fenced publish、checksum reuse、stale revision再queueを実service smokeで検証した。 |
 | Webの「当てはめるだけ」化 | 実装済み | v2 artifact型へ切り替え、旧集計helperを削除し、静的scanとartifact fixtureの直接表示testを追加した。 |
-| 将来OCRとの排他・OCR優先 | 構造上可能 | 初回は共通slot境界まで。OCR queueの論理画像ID化と実際のpreemptionは別scope。 |
+| OCRとの排他・OCR優先 | 実装済み・activation待ち | v2 object key、Rust consumer、共有slot、実process preemption、子回収を実装・統合試験済み。live object storage、独立holdout、対象runtime実測はrelease gate。 |
 
 実装完了と本番release完了は分ける。schema、DB、API、Rust worker、Web、専用runtime定義とrelease検査toolは
 実装済みである。本番releaseは、次の環境依存gateが未確定または未検証の間は可としない。
@@ -1581,15 +1581,18 @@ rollback契約:
 - reader capabilityを確認してpublicationを有効化し、全作品backfill completenessを機械検査すること。
 - publication停止後もjobと既存artifactを保持できること。初回publication後のmain障害はforward-fixを標準とし、
   旧Scala同期分析を通常のrollback先として扱わないこと。
+- OCR v2 activation前に、live object storage contract、独立accuracy holdout、対象runtimeのcgroup / FullHD resource、
+  v1 pending / PEL drainを確認し、API writerをdual-writeなしで一度だけ切り替えること。
 
 ---
 
-## 11. 初回リリース対象外
+## 11. 現時点のproduction activation対象外
 
-- OCRの別言語再実装と分析runtimeへの同居。
-- OCR画像を共有storageの論理IDで渡すqueue契約への移行。
+- OCR v2 API writerの有効化とv1 pending / PEL drain。
+- 公開HTTP imageからのPython OCR、Python runtime、supervisord除去と、その後のJVM resource tuning。
+- Rust OCRの独立blind holdoutによるrelease精度判定。
 - provider固有のautoscaling、台数、費用最適化の確定。
 - job履歴のpagination、作品filter、45日分の全履歴表示。
 - 利用者による再計算、job cancel、priority変更。
 
-これらを後から追加しても、単一実行枠、OCRだけが分析をpreemptできる規則、DB正本、原子的公開は変更しない。
+これらを有効化・追加しても、単一実行枠、OCRだけが分析をpreemptできる規則、DB正本、原子的公開は変更しない。

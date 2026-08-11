@@ -22,15 +22,16 @@
 |---|---|---|---|
 | web | `apps/web` | React 19, React Router 7, TanStack Query 5, Zod, Tailwind CSS 4, Base UI | SPA、入力、確認、CSV/TSV取得 |
 | api | `apps/api` | Scala 3, Tapir, http4s, Cats Effect, Doobie | HTTP API、認証、業務usecase、DB/Redis接続 |
-| ocr-worker | `apps/ocr-worker` | Python 3.14, uv, Tesseract, Pillow | OCRジョブ処理、画像解析、OCR結果保存 |
-| analysis-worker | `apps/analysis-worker` | Rust, Cargo | 作品単位の戦績分析、version付き成果物の原子的公開 |
+| ocr-worker v1 | `apps/ocr-worker` | Python 3.14, uv, Tesseract, Pillow | production切替までの旧queue consumer。切替後はdrainして削除する |
+| analysis / OCR v2 worker | `apps/analysis-worker` | Rust, Cargo, Tesseract | 作品単位の戦績分析、version付き成果物の原子的公開、明示有効化するOCR v2 consumer |
 | DB | `../momo-db` | Neon PostgreSQL, drizzle | schema / migration / seed の正本 |
 | Queue | Upstash Redis Streams | Redis Streams | OCR・戦績分析ジョブの配送。状態の正本にはしない |
-| current runtime | `Dockerfile`, `deploy/` | Fly.io, nginx, supervisord | 単一runtime imageで web / api / OCR worker を起動 |
-| analysis runtime定義 | `apps/analysis-worker/Dockerfile`, `fly.analysis.toml` | Rust parent / child process | 公開HTTPを持たず、DB上の単一実行枠で分析子processを管理 |
+| current runtime | `Dockerfile`, `deploy/` | Fly.io, nginx, supervisord | production切替前は単一runtime imageで web / api / OCR v1 worker を起動 |
+| analysis runtime定義 | `apps/analysis-worker/Dockerfile`, `fly.analysis.toml` | Rust parent / child process | 公開HTTPを持たず、DB上の単一実行枠で分析 / OCR子processを管理 |
 
-公開HTTP runtimeはweb、API、OCRを運用する。戦績分析は専用imageと起動設定を持ち、公開HTTP runtimeへ
-同居させない。nginxはweb静的配信とAPI reverse proxyを担い、分析runtimeは公開HTTPを持たない。
+公開HTTP runtimeはwebとAPIを運用する。切替完了までのOCR v1だけは同runtimeに残るが、成熟構成ではOCRを
+分析runtimeへ移し、Python runtimeとsupervisordを公開HTTP imageから除去する。戦績分析 / OCR v2は専用imageと
+起動設定を持ち、公開HTTP runtimeへ同居させない。nginxはweb静的配信とAPI reverse proxyを担い、分析runtimeは公開HTTPを持たない。
 分析publicationは上限値がすべて設定されるまでfail closedとし、本番同等環境での測定と切替は実装完了とは
 別のrelease gateとして扱う。provider固有の配置、resource値、詳細手順、secret、攻撃対策の手順はpublic docsに置かない。
 
@@ -154,11 +155,21 @@ web の import 境界は `apps/web/scripts/check-architecture-imports.mjs`、mod
 
 ## 4. OCR Worker
 
-- worker は Python + uv で管理する。
-- `momo_ocr/app` は起動・設定・logging、`momo_ocr/features` は機能単位、`momo_ocr/shared` は横断部品にする。
+- production writerがv1の間だけ、Python + uvのworkerを旧consumerとして維持する。Python側へv2対応や
+  rollback分岐を追加せず、v2切替後はpending / PELをdrainして削除する。
+- 旧workerでは `momo_ocr/app` を起動・設定・logging、`momo_ocr/features` を機能単位、
+  `momo_ocr/shared` を横断部品にする。
+- Rust OCR v2は `apps/analysis-worker/src/ocr` に置き、queue / DB control、R2取得・整合性検証、停止可能な
+  native OCR子process、typed outputを分離する。OCR子は分析子と同じ固定cgroupを時分割で使う。
 - OCR/画像解析に外部APIを使わない。
 - OCR対象画面種別ごとに解析器を分け、共通前処理だけ共有する。
+- 画面種別はrequestで明示し、`auto` modeを受理しない。
 - 解析器は入力画像、画面種別判定、抽出結果、信頼度、警告、失敗理由を返せるようにする。
+- v2は非公開R2 objectのopaque keyだけを配送し、取得後にbytes、SHA-256、media type、FullHD上限を
+  workerでも再検証する。URL、bucket、credential、local pathをqueue payloadへ入れない。
+- production writerがv1の間はR2-backed image storeとobject reconcilerをdormantに保つ。R2-backed uploadを
+  有効化するreleaseでは両方を同時に起動し、reconcilerの設定またはresource確保に失敗した状態でuploadを
+  受け付けない。
 - OCRジョブ状態の正本はDB。Redis Streams は配送路。
 - queue 契約は `docs/redis-streams-ocr-contract.md`、payload schema は `docs/schemas/*.schema.json` を正本にする。
 - native OCR、Redis、PostgreSQL、tessdata を要する検証は integration marker へ分離する。unit test では parser、payload validation、状態遷移、failure mapping を優先する。
@@ -210,9 +221,12 @@ web の import 境界は `apps/web/scripts/check-architecture-imports.mjs`、mod
   reviewするための上限として扱う。
 - 初回からハードタイムアウトを設定可能にする。設定値がない本番起動またはjob受付はfail closedにし、
   値自体は本番同等runtimeでの実測後に確定する。
-- 将来OCRを同居させる場合も実行枠は1とする。OCRだけが分析子processをpreemptでき、分析はOCRを
-  preemptできない。preemptされた分析は失敗回数へ加算せず最新版へ集約して再度 `queued` にする。
-- 将来のOCR同居前に、ローカル絶対pathを含むOCR配送契約を、認可された共有storageの論理IDへ移す。
+- `worker` orchestratorは分析loopと明示有効化されたOCR v2 loopを同じshutdown / failure境界で動かす。
+  OCR v2の有効化は分析publicationと完全なbounded設定を前提とし、暗黙には有効化しない。
+- 同居時も実行枠は1とする。OCRだけが分析子processをpreemptでき、分析はOCRをpreemptできない。
+  preemptされた分析は子process groupを回収し、失敗回数へ加算せず最新版へ集約して再度 `queued` にする。
+- OCR v2配送は認可された共有storageの論理ID / opaque object keyを使う。local絶対pathを含むv1配送は
+  production切替後のdrain対象であり、新しいworker間契約へ持ち込まない。
 - 要求、状態、保持、再試行、正確性、性能の正本は
   `docs/requirements/series-analysis-batch.md` とする。
 - job、queue、chunk成果物、原子的公開、artifact-pinned API、Web状態機械の実現契約は

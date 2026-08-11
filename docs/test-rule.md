@@ -183,8 +183,9 @@ PostgreSQL repository、Doobie query、DB table/column、migration 前提に触�
   限定cleanupを実file system testで確認する。
 - 対象試合revision不一致では古いmatch contextを返さず、artifactのread中cleanup競合でも整合した1 chunkを
   返すことを実PostgreSQL / HTTP testで固定する。
-- 将来OCR preemptionを実装するときは、OCRから分析へのpreemption、逆方向の禁止、失敗回数非加算、
-  最新版への再queue、commit critical sectionを実process / integration testで固定する。
+- Rust OCR同居またはexecution slotを変更するときは、OCRから分析へのpreemption、逆方向の禁止、
+  失敗回数非加算、最新版への再queue、commit critical section、子process group回収、同じcgroupでの
+  後続実行を実process / integration testで固定する。
 - terminal jobの終了後45日保持と管理画面の直近3件取得は別契約として検証し、表示件数をDB削除条件に
   流用せず、古い `queued` / `running` jobをcleanupしない。
 - 確定試合0件を含む全登録作品が管理画面の1作品候補になり、登録作品0件ではempty stateとなることを
@@ -217,7 +218,12 @@ PostgreSQL repository、Doobie query、DB table/column、migration 前提に触�
   起動する `analysis-worker-control-plane-smoke.sh` を明示gateとして持つ。
 - Rust OCR consumerのPostgreSQL / Redis integrationは通常の `cargo test` と分離し、隔離した実サービスへ
   `ocr-rust-control-plane-smoke.sh` を明示gateとして実行する。DB terminal writeより先にRedis配送をACKしないこと、
-  旧fenceの拒否、PEL回収、bounded DLQ、分析からOCRへの一方向preemptionを外部契約として確認する。
+  旧fenceの拒否、PEL回収、bounded DLQを外部契約として確認する。
+- 分析 / OCR統合は検証済みruntime imageと隔離PostgreSQL / Redisを使う
+  `analysis-worker-preemption-smoke.sh` を明示gateとし、一方向preemption、失敗回数非加算、子回収、slot解放、
+  同じcgroupでの分析復帰を実processで確認する。
+- R2 adapterは通常testから分離した `apiR2Quality` を、検証専用の隔離bucketと明示credentialで実行する。
+  put / head / get / delete、metadata / checksum、削除後のnot-foundを一つのprobeで確認し、未実行を成功扱いしない。
 - 外部サービスを使う spec は、stream名、DB row、一時ファイル名、worker id を test / suite ごとに分離する。
 - CI actionやprovider APIの出力をrelease来歴へ取り込む境界では、公開契約のwire表現をfixtureに使い、正規化後の値がconsumer validatorを通ることをcontract testで固定する。都合のよい型・接頭辞・表現をmock側で仮定しない。
 - 直接接続したPostgreSQL testはpooler / proxyのstartup parameter互換性を保証しない。release probeでsession timeoutを使う場合は、connect引数とtransaction-local commandを観測するcontract testを置き、production互換の接続境界でread-only smokeを通す。

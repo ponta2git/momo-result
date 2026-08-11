@@ -95,6 +95,12 @@ jobs:
       - name: Release control-plane smoke
         run: ../../scripts/ci/analysis-release-db-smoke.sh target/release/momo-analysis
 
+      - name: Rust OCR PostgreSQL and Redis control-plane smoke
+        env:
+          OCR_CONTROL_SMOKE_DATABASE_URL: ${{ env.DATABASE_URL }}
+          OCR_CONTROL_SMOKE_REDIS_URL: ${{ env.REDIS_URL }}
+        run: ../../scripts/ci/ocr-rust-control-plane-smoke.sh
+
   runtime-image:
     name: Build, scan, and package analysis image
     runs-on: ubuntu-latest

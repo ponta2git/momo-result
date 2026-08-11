@@ -25,7 +25,7 @@ job、artifact、API schema、Web計算境界、IA / UX / UIの具体的な実�
   provider固有の配置、台数、資源値はprivate運用要件を正本とする。
 - 1ジョブは1作品の全スコープを計算し、成功成果物は作品単位で原子的に公開する。
 - DBをジョブ、再計算intent、成果物、状態の正本とし、Redis Streamsは配送路としてのみ使う。
-- 将来OCRを同じworkerへ移す場合も同時実行枠は1とし、OCRだけが実行中の分析を中断できる。
+- OCRを同じworkerへ移す場合も同時実行枠は1とし、OCRだけが実行中の分析を中断できる。
   分析はOCRを中断できない。
 
 ---
@@ -61,7 +61,7 @@ job、artifact、API schema、Web計算境界、IA / UX / UIの具体的な実�
 | 成果物 | 戦績比較、振り返り、ドリルダウン表示に必要な事前計算済みデータ一式。 |
 | 再計算intent | DBに保存された、対象作品を少なくとも指定versionまで再計算する要求。 |
 | 有効スコープ | 総合と、確定済み試合が実在するseason、map、season×map。seasonとmapの空の直積は含めない。 |
-| preemption | 将来OCRを同居させた際、OCR優先のため実行中の分析を中断して待機状態へ戻すこと。 |
+| preemption | OCR同居時、OCR優先のため実行中の分析を中断して待機状態へ戻すこと。 |
 
 version比較は文字列の偶然の大小へ依存させない。どの入力versionとalgorithm versionから生成した
 成果物かを明示的に保存し、APIはartifact schema versionを検証してから返す。
@@ -322,12 +322,12 @@ Scala版と異なる値を採用する場合、少なくとも次のいずれか
 
 ---
 
-## 9. 将来のOCR統合制約
+## 9. OCR統合制約
 
-OCR統合は初回リリースの対象外とする。ただし初回から、計算を子プロセスとして停止できる境界と、
-部分成果物を公開しない構造を採用する。
+OCR同居runtimeの実装完了とproduction activationは分ける。activation gateを満たすまではAPI writerと旧consumerを
+切り替えないが、分析とOCRの双方を停止可能な子プロセスとし、部分成果物を公開しない構造は共通で満たす。
 
-将来同じworkerへOCRを移す場合:
+同じworkerへOCRを移す場合:
 
 - worker全体の実行スロットは1とし、分析とOCRを同時実行しない。
 - OCR deliveryが到着したら、実行中の分析子プロセスを安全に終了してOCRを開始できる。
@@ -335,11 +335,10 @@ OCR統合は初回リリースの対象外とする。ただし初回から、�
 - 中断した分析は失敗・タイムアウト・自動再試行回数に数えず、最新版へ集約して `queued` に戻す。
 - OCRが連続する場合は分析が長時間待機し得る。管理画面で待機時間とpreemption回数を観測できるようにする。
 - OCR開始前または成果物commit開始後など、中断不可能な短いcritical sectionを定義し、二重commitを防ぐ。
-- 別runtimeからOCR画像を読めるようにする前に、ローカル絶対pathを渡す現行queue契約を、
-  認可された共有storage上の論理IDへ移行する。runtime-local volumeの共有やAPIからの一時的な
-  file配信へ依存しない。
-- OCRの別言語再実装は、精度、peak memory、処理時間、保守性を測定して別途判断する。費用削減だけを
-  完了根拠にしない。
+- 別runtimeからOCR画像を読むv2 queueは、認可された共有storage上の論理ID / opaque object keyを使う。
+  runtime-local volumeの共有やAPIからの一時的なfile配信へ依存しない。
+- Rust OCRのproduction activationは、独立holdoutでの精度、FullHD peak memory、処理時間、cgroup隔離、
+  object storage実疎通を満たして判断する。費用削減だけを完了根拠にしない。
 
 ---
 
@@ -381,4 +380,4 @@ OCR統合は初回リリースの対象外とする。ただし初回から、�
   ともに表示できること。
 - 連続artifact公開時にWebが最新だけへ切り替え、旧drilldownや異なるartifactのcontextを混在させないこと。
 - provider固有の本番同等resource/performance gateと、設定済みタイムアウトによる子プロセス停止。
-- 将来OCR統合時は、OCRによる分析preemption、分析からOCRへの非preemption、再キュー、部分公開防止。
+- OCR統合時は、OCRによる分析preemption、分析からOCRへの非preemption、再キュー、部分公開防止。

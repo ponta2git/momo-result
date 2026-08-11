@@ -33,7 +33,7 @@
 | 要求正本 | `docs/requirements/base.md` | 業務要件、MVP範囲、CSV/TSV列順 |
 | 要求正本 | `docs/requirements/system-design.md` | 技術構成、非機能、運用方針の高レベル要求 |
 | 要求正本 | `docs/requirements/series-comparison.md` | 戦績比較ページの要求、指標、API方針 |
-| 要求正本 | `docs/requirements/series-analysis-batch.md` | 戦績分析の非同期ジョブ、成果物、状態表示、管理、正確性、将来OCR統合制約 |
+| 要求正本 | `docs/requirements/series-analysis-batch.md` | 戦績分析の非同期ジョブ、成果物、状態表示、管理、正確性、OCR統合制約 |
 | 要求正本 | `docs/requirements/series-review-playbook.md` | 戦績比較ページ内の振り返り、行動プレイブック要求 |
 | 要求正本 | `docs/requirements/held-event-detail.md` | 開催一覧、開催詳細、試合記録・戦績比較への導線 |
 | 実装正本 | `docs/architecture.md` | API / web / OCR worker / 戦績分析workerの構造、依存方向、実装規約 |

@@ -156,7 +156,7 @@ OCR下書き確定時は、request の `draftIds.totalAssets` / `draftIds.revenu
   予期しない1スコープの失敗は作品job全体を失敗させる。
 - `failed` / `timed_out` は直前成功成果物を変更しない。job状態と表示可能な成功成果物の有無を
   同じbooleanへ潰さない。
-- 将来OCRが分析をpreemptした場合だけ `running -> queued` を許可する。preemptionは失敗または
+- OCRが分析をpreemptした場合だけ `running -> queued` を許可する。preemptionは失敗または
   自動再試行として数えず、分析からOCRへのpreemptionは許可しない。
 - 入力versionは作品単位の単調増加revisionとする。入力version、algorithm version、artifact schema
   versionは別概念とし、変換または比較時に混同しない。

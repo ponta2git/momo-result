@@ -18,8 +18,14 @@ const STATIC_ALIASES: [(&str, &[&str]); 5] = [
             "コーツ力社長",
         ],
     ),
-    ("いーゆー社長", &["いーゆー社長", "ローゆー社長"]),
-    ("ぽんた社長", &["ぽんた社長", "ほんた社長", "ぼんた社長"]),
+    (
+        "いーゆー社長",
+        &["いーゆー社長", "ローゆー社長", "いーばゆー社長"],
+    ),
+    (
+        "ぽんた社長",
+        &["ぽんた社長", "ほんた社長", "ぼんた社長", "ばんた社長"],
+    ),
     ("さくま社長", &["さくま社長", "さくぐま社長"]),
 ];
 
@@ -128,13 +134,17 @@ pub(crate) fn normalize_name(value: &str) -> String {
     let normalized: String = value.nfkc().collect();
     let corrected = normalized
         .replace(['_', '一', '-'], "ー")
+        .replace("N011", "NO11")
+        .replace("n011", "no11")
         .replace("いローゆ", "いーゆ")
         .replace("いハーゆ", "いーゆ")
+        .replace("いーばゆ", "いーゆ")
+        .replace("いー了ゆ", "いーゆ")
         .replace("ローゆ", "いーゆ")
         .replace("ハーゆ", "いーゆ")
         .replace("バーゆ", "いーゆ")
         .replace("コーツ力", "オータカ");
-    corrected
+    let cleaned: String = corrected
         .chars()
         .filter(|character| {
             character.is_ascii_alphanumeric()
@@ -144,7 +154,8 @@ pub(crate) fn normalize_name(value: &str) -> String {
                 || *character == 'ー'
         })
         .flat_map(char::to_lowercase)
-        .collect()
+        .collect();
+    cleaned.replace("n011", "no11")
 }
 
 fn append_pair(pairs: &mut Vec<AliasPair>, candidate: AliasPair) {
@@ -164,7 +175,7 @@ fn extract_president_name(value: &str) -> Option<String> {
     let name_reversed: String = prefix
         .chars()
         .rev()
-        .take_while(|character| is_name_character(*character) || character.is_whitespace())
+        .take_while(|character| is_japanese_name_character(*character) || character.is_whitespace())
         .collect();
     let name: String = name_reversed.chars().rev().collect();
     let cleaned = name
@@ -183,9 +194,8 @@ fn extract_president_name(value: &str) -> Option<String> {
     }
 }
 
-fn is_name_character(character: char) -> bool {
-    character.is_ascii_alphanumeric()
-        || ('ぁ'..='ん').contains(&character)
+fn is_japanese_name_character(character: char) -> bool {
+    ('ぁ'..='ん').contains(&character)
         || ('ァ'..='ン').contains(&character)
         || ('一'..='龥').contains(&character)
         || character == 'ー'
@@ -226,4 +236,25 @@ fn lcs_ratio(left: &str, right: &str) -> f64 {
     let lcs = previous.last().copied().unwrap_or(0);
     let denominator = u32::try_from(left.len().saturating_add(right.len())).unwrap_or(u32::MAX);
     (2.0 * f64::from(lcs)) / f64::from(denominator)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn fallback_name_extraction_does_not_absorb_latin_ui_noise() {
+        let resolver = AliasResolver::from_hints(&OcrHints::default());
+        let identity = resolver.extract("KM ばんた社長 3億8340万円");
+        assert_eq!(identity.display_name.as_deref(), Some("ぽんた社長"));
+    }
+
+    #[test]
+    fn bounded_name_confusions_recover_known_player_order_surfaces() {
+        assert!(names_match("いーばゆー社長", "いーゆー社長"));
+        assert!(names_match("いーゆー社長", "い一了ゆ一社長"));
+        let resolver = AliasResolver::from_hints(&OcrHints::default());
+        let identity = resolver.extract("GBs N01 1社長 1億8620万円");
+        assert_eq!(identity.display_name.as_deref(), Some("NO11社長"));
+    }
 }

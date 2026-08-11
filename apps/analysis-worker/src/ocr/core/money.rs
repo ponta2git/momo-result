@@ -15,6 +15,8 @@ static PARTIAL_OKU_PATTERN: LazyLock<Option<Regex>> = LazyLock::new(|| {
 });
 static DIGIT_FALLBACK_PATTERN: LazyLock<Option<Regex>> =
     LazyLock::new(|| Regex::new(r"[0-9]{5,8}").ok());
+static MINUS_ONE_HUNDREDS_PATTERN: LazyLock<Option<Regex>> =
+    LazyLock::new(|| Regex::new(r"(?P<sign>[-−ー一–—‐])\s*[\]}]\s*(?P<rest>[0-9]{2})\s*万").ok());
 
 #[derive(Clone, Copy)]
 struct Candidate {
@@ -34,6 +36,13 @@ pub(crate) fn parse_money_man_yen(value: &str) -> Option<i64> {
 
 pub(crate) fn parse_revenue_man_yen(value: &str) -> Option<i64> {
     parse_money_man_yen(value).or_else(|| zero_revenue_alias(value).then_some(0))
+}
+
+pub(crate) fn has_unit_bearing_money_text(value: &str) -> bool {
+    let normalized = normalize_units(value).replace([',', '，'], "");
+    MONEY_PATTERN
+        .as_ref()
+        .is_some_and(|pattern| pattern.is_match(&normalized))
 }
 
 fn unit_candidates(value: &str) -> Vec<Candidate> {
@@ -173,6 +182,16 @@ fn normalize_units(value: &str) -> String {
             .replace(&format!("{sign}ら"), &format!("{sign}5"))
             .replace(&format!("{sign} ら"), &format!("{sign} 5"));
     }
+    normalized = normalized.replace("億/", "億7").replace("億／", "億7");
+    if let Some(pattern) = MINUS_ONE_HUNDREDS_PATTERN.as_ref() {
+        normalized = pattern
+            .replace_all(&normalized, |captures: &regex::Captures<'_>| {
+                let sign = captures.name("sign").map_or("", |matched| matched.as_str());
+                let rest = captures.name("rest").map_or("", |matched| matched.as_str());
+                format!("{sign}1{rest}万")
+            })
+            .into_owned();
+    }
     normalized
 }
 
@@ -246,4 +265,21 @@ fn is_name_letter(character: char) -> bool {
         || ('ぁ'..='ん').contains(&character)
         || ('ァ'..='ヴ').contains(&character)
         || ('一'..='龥').contains(&character)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ranked_early_stop_requires_unit_bearing_money_evidence() {
+        assert!(!has_unit_bearing_money_text("いーゆー社長 41841204"));
+        assert!(has_unit_bearing_money_text("いーゆー社長 4億4120万円"));
+    }
+
+    #[test]
+    fn bounded_glyph_repairs_preserve_game_money_units() {
+        assert_eq!(parse_money_man_yen("NO11社長 2億/600万円"), Some(27_600));
+        assert_eq!(parse_money_man_yen("ぽんた社長 -] 00万円"), Some(-100));
+    }
 }

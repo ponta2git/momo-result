@@ -5,7 +5,7 @@ use serde_json::json;
 
 use super::{
     AliasResolver, OcrField, OcrWarning, PlayerDraft, PlayerIdentity, RecognitionSession, Rect,
-    crop, names_match, parse_money_man_yen, parse_revenue_man_yen,
+    crop, has_unit_bearing_money_text, names_match, parse_money_man_yen, parse_revenue_man_yen,
     pipeline::{CoreOcrError, ParsedScreen},
     player_order::PlayerOrderDetection,
     preprocess::prepare_ranked_row_variants,
@@ -119,8 +119,7 @@ fn recognize_row(
         )?;
     }
     if !has_money_and_name(&snippets) {
-        let raw = image.to_luma8();
-        run_variant(&raw, &[6, 7], recognition, &mut snippets, &mut confidences)?;
+        run_color_variant(image, &[6, 7], recognition, &mut snippets, &mut confidences)?;
     }
     if !has_money_and_name(&snippets) {
         for variant in &variants {
@@ -136,6 +135,23 @@ fn recognize_row(
     })
 }
 
+fn run_color_variant(
+    image: &DynamicImage,
+    psms: &[u8],
+    recognition: &mut RecognitionSession,
+    snippets: &mut Vec<String>,
+    confidences: &mut Vec<f64>,
+) -> Result<(), CoreOcrError> {
+    for psm in psms {
+        let recognized = recognition.recognize_color(image, RecognitionLanguage::General, *psm)?;
+        append_recognition(recognized, snippets, confidences);
+        if has_money_and_name(snippets) {
+            break;
+        }
+    }
+    Ok(())
+}
+
 fn run_variant(
     image: &GrayImage,
     psms: &[u8],
@@ -145,12 +161,7 @@ fn run_variant(
 ) -> Result<(), CoreOcrError> {
     for psm in psms {
         let recognized = recognition.recognize(image, RecognitionLanguage::General, *psm)?;
-        if !recognized.text.is_empty() && !snippets.contains(&recognized.text) {
-            snippets.push(recognized.text);
-        }
-        if let Some(confidence) = recognized.confidence {
-            confidences.push(confidence);
-        }
+        append_recognition(recognized, snippets, confidences);
         if has_money_and_name(snippets) {
             break;
         }
@@ -158,12 +169,25 @@ fn run_variant(
     Ok(())
 }
 
+fn append_recognition(
+    recognized: super::RecognizedText,
+    snippets: &mut Vec<String>,
+    confidences: &mut Vec<f64>,
+) {
+    if !recognized.text.is_empty() && !snippets.contains(&recognized.text) {
+        snippets.push(recognized.text);
+    }
+    if let Some(confidence) = recognized.confidence {
+        confidences.push(confidence);
+    }
+}
+
 fn has_money_and_name(snippets: &[String]) -> bool {
     if snippets.is_empty() {
         return false;
     }
     let combined = snippets.join(" | ");
-    parse_money_man_yen(&combined).is_some() && combined.contains("社長")
+    has_unit_bearing_money_text(&combined) && combined.contains("社長")
 }
 
 fn ranked_player(

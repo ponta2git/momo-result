@@ -100,7 +100,7 @@ pub(crate) fn prepare_ranked_row_variants(image: &DynamicImage) -> Vec<GrayImage
 
 pub(crate) fn prepare_slot_name_variants(image: &DynamicImage) -> Vec<GrayImage> {
     let gray = image.to_luma8();
-    let mut variants = vec![gray.clone()];
+    let mut variants = Vec::with_capacity(3);
     for threshold in [150_u8, 170, 190] {
         let prepared = GrayImage::from_fn(gray.width(), gray.height(), |x, y| {
             Luma([if gray.get_pixel(x, y).0[0] > threshold {

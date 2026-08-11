@@ -100,10 +100,7 @@ fn recognize_slot_name(
     recognition: &mut RecognitionSession,
 ) -> Result<(Option<String>, Option<f64>), RecognitionError> {
     let variants = prepare_slot_name_variants(image);
-    let Some(raw) = variants.first() else {
-        return Ok((None, None));
-    };
-    let raw_candidates = recognize_name_variant(raw, aliases, recognition)?;
+    let raw_candidates = recognize_raw_name(image, aliases, recognition)?;
     if let Some(candidate) = raw_candidates
         .iter()
         .filter(|candidate| candidate.name.contains("社長") && candidate.score >= 0.8)
@@ -112,7 +109,7 @@ fn recognize_slot_name(
         return Ok((Some(candidate.name.clone()), candidate.confidence));
     }
     let mut candidates = raw_candidates;
-    for variant in variants.iter().skip(1) {
+    for variant in &variants {
         candidates.extend(recognize_name_variant(variant, aliases, recognition)?);
     }
     Ok(candidates
@@ -123,6 +120,19 @@ fn recognize_slot_name(
         }))
 }
 
+fn recognize_raw_name(
+    image: &DynamicImage,
+    aliases: &AliasResolver,
+    recognition: &mut RecognitionSession,
+) -> Result<Vec<NameCandidate>, RecognitionError> {
+    let mut candidates = Vec::new();
+    for psm in [6_u8, 8] {
+        let recognized = recognition.recognize_color(image, RecognitionLanguage::General, psm)?;
+        append_name_candidate(&mut candidates, aliases, &recognized);
+    }
+    Ok(candidates)
+}
+
 fn recognize_name_variant(
     image: &image::GrayImage,
     aliases: &AliasResolver,
@@ -131,20 +141,28 @@ fn recognize_name_variant(
     let mut candidates = Vec::new();
     for psm in [6_u8, 8] {
         let recognized = recognition.recognize(image, RecognitionLanguage::General, psm)?;
-        let identity = aliases.extract(&recognized.text);
-        if let Some(name) = identity.display_name {
-            let mut score = recognized.confidence.unwrap_or(0.0);
-            if name.contains("社長") {
-                score += 0.1;
-            }
-            candidates.push(NameCandidate {
-                name,
-                confidence: recognized.confidence,
-                score,
-            });
-        }
+        append_name_candidate(&mut candidates, aliases, &recognized);
     }
     Ok(candidates)
+}
+
+fn append_name_candidate(
+    candidates: &mut Vec<NameCandidate>,
+    aliases: &AliasResolver,
+    recognized: &super::RecognizedText,
+) {
+    let identity = aliases.extract(&recognized.text);
+    if let Some(name) = identity.display_name {
+        let mut score = recognized.confidence.unwrap_or(0.0);
+        if name.contains("社長") {
+            score += 0.1;
+        }
+        candidates.push(NameCandidate {
+            name,
+            confidence: recognized.confidence,
+            score,
+        });
+    }
 }
 
 fn dominant_color(image: &DynamicImage) -> (Option<&'static str>, f64) {

@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use image::GrayImage;
+use image::{DynamicImage, GrayImage};
 use tesseract::{OcrEngineMode, PageSegMode, Tesseract};
 use thiserror::Error;
 
@@ -57,15 +57,61 @@ impl RecognitionSession {
         language: RecognitionLanguage,
         psm: u8,
     ) -> Result<RecognizedText, RecognitionError> {
+        self.recognize_frame(
+            image.as_raw(),
+            image.width(),
+            image.height(),
+            1,
+            image.width(),
+            language,
+            psm,
+        )
+    }
+
+    pub(crate) fn recognize_color(
+        &mut self,
+        image: &DynamicImage,
+        language: RecognitionLanguage,
+        psm: u8,
+    ) -> Result<RecognizedText, RecognitionError> {
+        let rgb = image.to_rgb8();
+        let bytes_per_line = rgb
+            .width()
+            .checked_mul(3)
+            .ok_or(RecognitionError::Dimensions)?;
+        self.recognize_frame(
+            rgb.as_raw(),
+            rgb.width(),
+            rgb.height(),
+            3,
+            bytes_per_line,
+            language,
+            psm,
+        )
+    }
+
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the checked native frame boundary requires explicit dimensions and OCR configuration"
+    )]
+    fn recognize_frame(
+        &mut self,
+        bytes: &[u8],
+        width: u32,
+        height: u32,
+        bytes_per_pixel: i32,
+        bytes_per_line: u32,
+        language: RecognitionLanguage,
+        psm: u8,
+    ) -> Result<RecognizedText, RecognitionError> {
         let mut api = self.take_or_initialize(language)?;
         api.set_page_seg_mode(page_segmentation_mode(psm)?);
-        let width = i32::try_from(image.width()).map_err(|_error| RecognitionError::Dimensions)?;
-        let height =
-            i32::try_from(image.height()).map_err(|_error| RecognitionError::Dimensions)?;
+        let width = i32::try_from(width).map_err(|_error| RecognitionError::Dimensions)?;
+        let height = i32::try_from(height).map_err(|_error| RecognitionError::Dimensions)?;
         let bytes_per_line =
-            i32::try_from(image.width()).map_err(|_error| RecognitionError::Dimensions)?;
+            i32::try_from(bytes_per_line).map_err(|_error| RecognitionError::Dimensions)?;
         let mut api = api
-            .set_frame(image.as_raw(), width, height, 1, bytes_per_line)
+            .set_frame(bytes, width, height, bytes_per_pixel, bytes_per_line)
             .map_err(|_error| RecognitionError::RecognitionFailed)?
             .recognize()
             .map_err(|_error| RecognitionError::RecognitionFailed)?;

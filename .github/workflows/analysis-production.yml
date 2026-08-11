@@ -17,6 +17,10 @@ on:
         description: Required for initial backfill dry-run and apply
         required: false
         type: string
+      candidate_run_id:
+        description: Successful Analysis candidate run ID required for deployment
+        required: false
+        type: string
       require_current:
         description: Require current artifacts during audit
         required: false
@@ -29,12 +33,11 @@ on:
         type: boolean
 
 permissions:
+  actions: read
   contents: read
 
 env:
   ANALYSIS_APP: momo-result-analysis
-  ANALYSIS_IMAGE_ARTIFACT_NAME: analysis-worker-image
-  ANALYSIS_IMAGE_REF: registry.fly.io/momo-result-analysis:${{ github.sha }}
 
 concurrency:
   group: production-analysis-operation
@@ -47,6 +50,7 @@ jobs:
     steps:
       - name: Validate immutable operation inputs
         env:
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
           OPERATION: ${{ inputs.operation }}
           OPERATION_KEY: ${{ inputs.operation_key }}
         run: |
@@ -56,12 +60,30 @@ jobs:
           fi
           case "${OPERATION}" in
             backfill-dry-run|backfill-apply)
+              if [[ -n "${CANDIDATE_RUN_ID}" ]]; then
+                echo "candidate_run_id is only accepted for deploy operations." >&2
+                exit 1
+              fi
               if [[ ! "${OPERATION_KEY}" =~ ^[A-Za-z0-9._:-]{8,128}$ ]]; then
                 echo "A safe 8-128 character operation key is required for backfill." >&2
                 exit 1
               fi
               ;;
-            deploy-disabled|deploy-enabled|audit)
+            deploy-disabled|deploy-enabled)
+              if [[ ! "${CANDIDATE_RUN_ID}" =~ ^[1-9][0-9]*$ ]]; then
+                echo "A successful Analysis candidate run ID is required for deployment." >&2
+                exit 1
+              fi
+              if [[ -n "${OPERATION_KEY}" ]]; then
+                echo "operation_key is only accepted for backfill operations." >&2
+                exit 1
+              fi
+              ;;
+            audit)
+              if [[ -n "${CANDIDATE_RUN_ID}" ]]; then
+                echo "candidate_run_id is only accepted for deploy operations." >&2
+                exit 1
+              fi
               if [[ -n "${OPERATION_KEY}" ]]; then
                 echo "operation_key is only accepted for backfill operations." >&2
                 exit 1
@@ -73,102 +95,151 @@ jobs:
               ;;
           esac
 
-  prepare-disabled:
+  resolve-candidate:
     needs: validate
-    if: inputs.operation == 'deploy-disabled'
+    if: inputs.operation == 'deploy-disabled' || inputs.operation == 'deploy-enabled'
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 5
+    outputs:
+      candidate_sha: ${{ steps.provenance.outputs.candidate_sha }}
+      image_artifact_name: ${{ steps.provenance.outputs.image_artifact_name }}
+      image_ref: ${{ steps.provenance.outputs.image_ref }}
+      tar_sha256: ${{ steps.provenance.outputs.tar_sha256 }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
+          fetch-depth: 0
           persist-credentials: false
 
-      - name: Build exact analysis worker image
-        run: docker build --file apps/analysis-worker/Dockerfile --tag "${ANALYSIS_IMAGE_REF}" .
-        timeout-minutes: 30
-
-      - name: Smoke test exact analysis worker image
-        run: scripts/ci/analysis-worker-image-smoke.sh "${ANALYSIS_IMAGE_REF}"
-        timeout-minutes: 10
-
-      - name: Scan exact analysis worker image
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
-        with:
-          image-ref: ${{ env.ANALYSIS_IMAGE_REF }}
-          version: v0.73.0
-          severity: HIGH,CRITICAL
-          ignore-unfixed: true
-          format: table
-          exit-code: "1"
+      - name: Resolve successful candidate run
+        id: run
         env:
-          TRIVY_DISABLE_VEX_NOTICE: "true"
-
-      - name: Record exact analysis worker image metadata
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+          GH_TOKEN: ${{ github.token }}
         run: |
-          mkdir -p "${ANALYSIS_IMAGE_ARTIFACT_NAME}"
-          printf '%s\n' "${ANALYSIS_IMAGE_REF}" \
-            > "${ANALYSIS_IMAGE_ARTIFACT_NAME}/image-ref.txt"
-          docker image inspect "${ANALYSIS_IMAGE_REF}" --format '{{.Id}}' \
-            > "${ANALYSIS_IMAGE_ARTIFACT_NAME}/image-id.txt"
+          run_json="${RUNNER_TEMP}/analysis-candidate-run.json"
+          gh api \
+            "repos/${GITHUB_REPOSITORY}/actions/runs/${CANDIDATE_RUN_ID}" \
+            > "${run_json}"
+          jq -e \
+            --arg path ".github/workflows/analysis-candidate.yml" \
+            --arg repository "${GITHUB_REPOSITORY}" '
+              .name == "Analysis candidate" and
+              .path == $path and
+              (.event == "push" or .event == "workflow_dispatch") and
+              .head_branch == "master" and
+              .head_repository.full_name == $repository and
+              .conclusion == "success" and
+              (.run_attempt | type == "number" and . >= 1) and
+              (.head_sha | type == "string" and test("^[0-9a-f]{40}$"))
+            ' "${run_json}" > /dev/null || {
+              echo "The selected run is not a successful trusted Analysis candidate." >&2
+              exit 1
+            }
+          candidate_sha="$(jq -r '.head_sha' "${run_json}")"
+          run_attempt="$(jq -r '.run_attempt' "${run_json}")"
+          git merge-base --is-ancestor "${candidate_sha}" "${GITHUB_SHA}" || {
+            echo "The selected candidate is not an ancestor of current master." >&2
+            exit 1
+          }
+          printf 'candidate_sha=%s\n' "${candidate_sha}" >> "${GITHUB_OUTPUT}"
+          printf 'run_attempt=%s\n' "${run_attempt}" >> "${GITHUB_OUTPUT}"
 
-      - name: Save exact analysis worker image
-        run: >-
-          docker save "${ANALYSIS_IMAGE_REF}" |
-          gzip -1 > "${ANALYSIS_IMAGE_ARTIFACT_NAME}/analysis-worker-image.tar.gz"
-        timeout-minutes: 10
-
-      - name: Upload exact analysis worker image
-        uses: actions/upload-artifact@v7
+      - name: Download candidate provenance
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
-          name: ${{ env.ANALYSIS_IMAGE_ARTIFACT_NAME }}
-          path: ${{ env.ANALYSIS_IMAGE_ARTIFACT_NAME }}/
-          if-no-files-found: error
-          retention-days: 3
+          name: analysis-candidate-metadata-${{ inputs.candidate_run_id }}-${{ steps.run.outputs.run_attempt }}
+          path: analysis-candidate-metadata
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.candidate_run_id }}
+
+      - name: Validate candidate provenance and image artifact
+        id: provenance
+        env:
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+          CANDIDATE_SHA: ${{ steps.run.outputs.candidate_sha }}
+          GH_TOKEN: ${{ github.token }}
+          RUN_ATTEMPT: ${{ steps.run.outputs.run_attempt }}
+        run: |
+          metadata="analysis-candidate-metadata/candidate.json"
+          scripts/ci/validate-analysis-candidate.sh \
+            "${metadata}" "${CANDIDATE_RUN_ID}" "${RUN_ATTEMPT}" "${CANDIDATE_SHA}" \
+            >> "${GITHUB_OUTPUT}"
+
+          expected_config_sha="$(jq -r '.configSha256' "${metadata}")"
+          actual_config_sha="$(sha256sum fly.analysis.toml | cut -d ' ' -f 1)"
+          [[ "${actual_config_sha}" == "${expected_config_sha}" ]] || {
+            echo "fly.analysis.toml changed after candidate validation." >&2
+            exit 1
+          }
+
+          artifact_id="$(jq -r '.imageArtifactId' "${metadata}")"
+          artifact_json="${RUNNER_TEMP}/analysis-candidate-artifact.json"
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}" \
+            > "${artifact_json}"
+          jq -e \
+            --arg digest "$(jq -r '.imageArtifactDigest' "${metadata}")" \
+            --arg name "$(jq -r '.imageArtifactName' "${metadata}")" \
+            --argjson artifactId "${artifact_id}" \
+            --argjson runId "${CANDIDATE_RUN_ID}" '
+              .id == $artifactId and
+              .name == $name and
+              .digest == $digest and
+              .expired == false and
+              .workflow_run.id == $runId
+            ' "${artifact_json}" > /dev/null || {
+              echo "The selected image artifact no longer matches candidate provenance." >&2
+              exit 1
+            }
 
   operate:
     needs:
       - validate
-      - prepare-disabled
+      - resolve-candidate
     if: >-
       ${{ always() && needs.validate.result == 'success' &&
-          (inputs.operation != 'deploy-disabled' ||
-           needs.prepare-disabled.result == 'success') }}
+          ((startsWith(inputs.operation, 'deploy-') &&
+            needs.resolve-candidate.result == 'success') ||
+           (!startsWith(inputs.operation, 'deploy-') &&
+            needs.resolve-candidate.result == 'skipped')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    env:
+      ANALYSIS_IMAGE_ARTIFACT_NAME: ${{ needs.resolve-candidate.outputs.image_artifact_name }}
+      ANALYSIS_IMAGE_REF: ${{ needs.resolve-candidate.outputs.image_ref }}
     environment:
       name: production
       url: https://momo-result.ponta.me
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
 
       - name: Download scanned analysis worker image
         if: inputs.operation == 'deploy-disabled'
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
           name: ${{ env.ANALYSIS_IMAGE_ARTIFACT_NAME }}
           path: ${{ env.ANALYSIS_IMAGE_ARTIFACT_NAME }}
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.candidate_run_id }}
 
       - name: Load and verify scanned analysis worker image
         if: inputs.operation == 'deploy-disabled'
-        run: |
-          gzip -dc "${ANALYSIS_IMAGE_ARTIFACT_NAME}/analysis-worker-image.tar.gz" | docker load
-          expected_ref="$(sed -n '1p' "${ANALYSIS_IMAGE_ARTIFACT_NAME}/image-ref.txt")"
-          expected_id="$(sed -n '1p' "${ANALYSIS_IMAGE_ARTIFACT_NAME}/image-id.txt")"
-          actual_id="$(docker image inspect "${ANALYSIS_IMAGE_REF}" --format '{{.Id}}')"
-          if [[ "${expected_ref}" != "${ANALYSIS_IMAGE_REF}" ]]; then
-            echo "The prepared image reference does not match this workflow SHA." >&2
-            exit 1
-          fi
-          if [[ "${expected_id}" != "${actual_id}" ]]; then
-            echo "The loaded image ID does not match the scanned image ID." >&2
-            exit 1
-          fi
-        timeout-minutes: 10
+        env:
+          EXPECTED_TAR_SHA256: ${{ needs.resolve-candidate.outputs.tar_sha256 }}
+        run: >-
+          scripts/ci/load-analysis-candidate.sh
+          "${ANALYSIS_IMAGE_ARTIFACT_NAME}"
+          "${ANALYSIS_IMAGE_REF}"
+          "${EXPECTED_TAR_SHA256}"
 
       - name: Setup flyctl
         uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1
+        with:
+          version: 0.4.79
 
       - name: Authenticate Docker to Fly registry
         if: inputs.operation == 'deploy-disabled' || inputs.operation == 'deploy-enabled'
@@ -227,18 +298,21 @@ jobs:
             ' > analysis-production-artifact/deployment-state.json
           flyctl ssh console --app "${ANALYSIS_APP}" --pty=false --quiet \
             --command "/usr/local/bin/momo-analysis release-dependency-probe" \
-            > analysis-production-artifact/dependency-probe.json
+            > "${RUNNER_TEMP}/dependency-probe.json"
           jq -e '
             .controlReadOnly == false and
             .readerReadOnly == true and
             .redisPong == true
-          ' analysis-production-artifact/dependency-probe.json
+          ' "${RUNNER_TEMP}/dependency-probe.json"
+          scripts/ci/sanitize-analysis-report.sh \
+            "${RUNNER_TEMP}/dependency-probe.json" \
+            analysis-production-artifact/dependency-probe.json
         timeout-minutes: 2
 
       - name: Deploy analysis worker with publication enabled
         if: inputs.operation == 'deploy-enabled'
         env:
-          ANALYSIS_CONFIG_VERSION: series-analysis-v1-${{ github.sha }}
+          ANALYSIS_CONFIG_VERSION: series-analysis-v1-${{ needs.resolve-candidate.outputs.candidate_sha }}
           ANALYSIS_WORKER_ID: worker-${{ github.run_id }}-${{ github.run_attempt }}
           FLY_API_TOKEN: ${{ secrets.ANALYSIS_FLY_API_TOKEN }}
         run: >-
@@ -267,7 +341,7 @@ jobs:
             command="${command} --require-quiescent"
           fi
           flyctl ssh console --app "${ANALYSIS_APP}" --pty=false --quiet \
-            --command "${command}" > analysis-operation.json
+            --command "${command}" > "${RUNNER_TEMP}/analysis-operation.json"
 
       - name: Dry-run initial backfill
         if: inputs.operation == 'backfill-dry-run'
@@ -280,7 +354,7 @@ jobs:
           --pty=false
           --quiet
           --command "/usr/local/bin/momo-analysis release-promote --trigger initial-backfill --operation-key ${OPERATION_KEY}"
-          > analysis-operation.json
+          > "${RUNNER_TEMP}/analysis-operation.json"
 
       - name: Apply initial backfill
         if: inputs.operation == 'backfill-apply'
@@ -293,19 +367,23 @@ jobs:
           --pty=false
           --quiet
           --command "/usr/local/bin/momo-analysis release-promote --trigger initial-backfill --operation-key ${OPERATION_KEY} --apply"
-          > analysis-operation.json
+          > "${RUNNER_TEMP}/analysis-operation.json"
 
-      - name: Show release operation report
+      - name: Sanitize and show release operation report
         if: inputs.operation == 'audit' || startsWith(inputs.operation, 'backfill-')
-        run: jq . analysis-operation.json
+        run: |
+          mkdir -p analysis-production-artifact
+          scripts/ci/sanitize-analysis-report.sh \
+            "${RUNNER_TEMP}/analysis-operation.json" \
+            analysis-production-artifact/operation-report.json
+          jq . analysis-production-artifact/operation-report.json
 
       - name: Upload production operation evidence
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: analysis-production-${{ inputs.operation }}-${{ github.sha }}
+          name: analysis-production-${{ inputs.operation }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             analysis-production-artifact/
-            analysis-operation.json
           if-no-files-found: ignore
           retention-days: 7

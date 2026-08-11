@@ -48,7 +48,6 @@ expect_body_contains() {
     "${url}")"
   if [[ "${body}" != *"${expected}"* ]]; then
     echo "Expected ${url} response to contain ${expected}." >&2
-    echo "${body}" >&2
     exit 1
   fi
 }
@@ -71,7 +70,6 @@ expect_header() {
   expected_line="$(printf "%s: %s" "${header_name}" "${expected}" | tr '[:upper:]' '[:lower:]')"
   if ! printf "%s\n" "${normalized_headers}" | grep -Fxq "${expected_line}"; then
     echo "Expected ${method} ${url} to include header ${header_name}: ${expected}." >&2
-    echo "${headers}" >&2
     exit 1
   fi
 }
@@ -87,7 +85,6 @@ find_built_asset_path() {
   asset_path="$(printf "%s\n" "${body}" | grep -Eo '/assets/[^"]+' | head -n 1 || true)"
   if [[ -z "${asset_path}" ]]; then
     echo "Expected built index page to reference an /assets/ file." >&2
-    echo "${body}" >&2
     exit 1
   fi
   printf "%s" "${asset_path}"

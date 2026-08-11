@@ -1,0 +1,111 @@
+name: PR
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  classify:
+    name: Classify changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    outputs:
+      api: ${{ steps.changes.outputs.api }}
+      web: ${{ steps.changes.outputs.web }}
+      ocr: ${{ steps.changes.outputs.ocr }}
+      analysis: ${{ steps.changes.outputs.analysis }}
+      runtime: ${{ steps.changes.outputs.runtime }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Classify changed paths
+        id: changes
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          git cat-file -e "${BASE_SHA}^{commit}"
+          git cat-file -e "${HEAD_SHA}^{commit}"
+          git diff --name-only -z "${BASE_SHA}" "${HEAD_SHA}" |
+            scripts/ci/classify-changes.sh >> "${GITHUB_OUTPUT}"
+
+  public-safety:
+    name: Public repository safety
+    uses: ./.github/workflows/public-safety.yml
+
+  workflow-lint:
+    name: Workflow lint
+    uses: ./.github/workflows/workflow-lint.yml
+
+  api:
+    name: API
+    needs: classify
+    if: needs.classify.outputs.api == 'true'
+    uses: ./.github/workflows/api.yml
+
+  web:
+    name: Web
+    needs: classify
+    if: needs.classify.outputs.web == 'true'
+    uses: ./.github/workflows/web.yml
+
+  ocr:
+    name: OCR worker
+    needs: classify
+    if: needs.classify.outputs.ocr == 'true'
+    uses: ./.github/workflows/ocr-worker.yml
+
+  analysis:
+    name: Analysis worker
+    needs: classify
+    if: needs.classify.outputs.analysis == 'true'
+    uses: ./.github/workflows/analysis-worker.yml
+
+  runtime:
+    name: Runtime smoke
+    needs: classify
+    if: needs.classify.outputs.runtime == 'true'
+    uses: ./.github/workflows/deploy.yml
+
+  pr-ready:
+    name: pr-ready
+    if: always()
+    needs:
+      - classify
+      - public-safety
+      - workflow-lint
+      - api
+      - web
+      - ocr
+      - analysis
+      - runtime
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Confirm required PR gates
+        env:
+          CLASSIFY_RESULT: ${{ needs.classify.result }}
+          PUBLIC_SAFETY_RESULT: ${{ needs.public-safety.result }}
+          WORKFLOW_LINT_RESULT: ${{ needs.workflow-lint.result }}
+          API_EXPECTED: ${{ needs.classify.outputs.api }}
+          API_RESULT: ${{ needs.api.result }}
+          WEB_EXPECTED: ${{ needs.classify.outputs.web }}
+          WEB_RESULT: ${{ needs.web.result }}
+          OCR_EXPECTED: ${{ needs.classify.outputs.ocr }}
+          OCR_RESULT: ${{ needs.ocr.result }}
+          ANALYSIS_EXPECTED: ${{ needs.classify.outputs.analysis }}
+          ANALYSIS_RESULT: ${{ needs.analysis.result }}
+          RUNTIME_EXPECTED: ${{ needs.classify.outputs.runtime }}
+          RUNTIME_RESULT: ${{ needs.runtime.result }}
+        run: scripts/ci/check-pr-ready.sh

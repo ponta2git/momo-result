@@ -1,0 +1,267 @@
+name: Runtime rollback
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_run_id:
+        description: Successful deploy workflow run ID to restore
+        required: true
+        type: string
+      confirmation:
+        description: Enter rollback-<target_run_id>
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Validate rollback request
+        env:
+          CONFIRMATION: ${{ inputs.confirmation }}
+          TARGET_RUN_ID: ${{ inputs.target_run_id }}
+        run: |
+          [[ "${GITHUB_REF}" == "refs/heads/master" ]] || {
+            echo "Runtime rollback must run from master." >&2
+            exit 1
+          }
+          [[ "${TARGET_RUN_ID}" =~ ^[1-9][0-9]*$ ]] || {
+            echo "A valid target deploy run ID is required." >&2
+            exit 1
+          }
+          [[ "${CONFIRMATION}" == "rollback-${TARGET_RUN_ID}" ]] || {
+            echo "Rollback confirmation does not match the target run ID." >&2
+            exit 1
+          }
+
+  resolve-target:
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      candidate_sha: ${{ steps.provenance.outputs.candidate_sha }}
+      config_sha256: ${{ steps.provenance.outputs.config_sha256 }}
+      manifest_artifact_digest: ${{ steps.provenance.outputs.manifest_artifact_digest }}
+      manifest_artifact_id: ${{ steps.provenance.outputs.manifest_artifact_id }}
+      manifest_artifact_name: ${{ steps.provenance.outputs.manifest_artifact_name }}
+      manifest_sha256: ${{ steps.provenance.outputs.manifest_sha256 }}
+      registry_ref: ${{ steps.provenance.outputs.registry_ref }}
+      target_run_attempt: ${{ steps.run.outputs.run_attempt }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Resolve successful deployment run
+        id: run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_RUN_ID: ${{ inputs.target_run_id }}
+        run: |
+          run_json="${RUNNER_TEMP}/runtime-deploy-run.json"
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${TARGET_RUN_ID}" > "${run_json}"
+          jq -e \
+            --arg path ".github/workflows/deploy.yml" \
+            --arg repository "${GITHUB_REPOSITORY}" '
+              .name == "deploy" and
+              .path == $path and
+              (.event == "push" or .event == "workflow_dispatch") and
+              .head_branch == "master" and
+              .head_repository.full_name == $repository and
+              .conclusion == "success" and
+              (.run_attempt | type == "number" and . >= 1) and
+              (.head_sha | type == "string" and test("^[0-9a-f]{40}$"))
+            ' "${run_json}" > /dev/null || {
+              echo "The target is not a successful trusted runtime deployment." >&2
+              exit 1
+            }
+          candidate_sha="$(jq -r '.head_sha' "${run_json}")"
+          run_attempt="$(jq -r '.run_attempt' "${run_json}")"
+          git merge-base --is-ancestor "${candidate_sha}" "${GITHUB_SHA}" || {
+            echo "The rollback target is not an ancestor of current master." >&2
+            exit 1
+          }
+          printf 'candidate_sha=%s\n' "${candidate_sha}" >> "${GITHUB_OUTPUT}"
+          printf 'run_attempt=%s\n' "${run_attempt}" >> "${GITHUB_OUTPUT}"
+
+      - name: Download deployment provenance
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: runtime-deployment-metadata-${{ inputs.target_run_id }}-${{ steps.run.outputs.run_attempt }}
+          path: runtime-deployment-metadata
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.target_run_id }}
+
+      - name: Validate deployment provenance
+        id: provenance
+        env:
+          CANDIDATE_SHA: ${{ steps.run.outputs.candidate_sha }}
+          GH_TOKEN: ${{ github.token }}
+          RUN_ATTEMPT: ${{ steps.run.outputs.run_attempt }}
+          TARGET_RUN_ID: ${{ inputs.target_run_id }}
+        run: |
+          metadata="runtime-deployment-metadata/deployment.json"
+          scripts/ci/validate-runtime-deployment.sh \
+            "${metadata}" "${TARGET_RUN_ID}" "${RUN_ATTEMPT}" "${CANDIDATE_SHA}" \
+            >> "${GITHUB_OUTPUT}"
+
+          target_config="${RUNNER_TEMP}/rollback-fly.toml"
+          git show "${CANDIDATE_SHA}:fly.toml" > "${target_config}"
+          actual_config_sha="$(sha256sum "${target_config}" | cut -d ' ' -f 1)"
+          expected_config_sha="$(jq -r '.configSha256' "${metadata}")"
+          [[ "${actual_config_sha}" == "${expected_config_sha}" ]] || {
+            echo "Rollback target config does not match deployment provenance." >&2
+            exit 1
+          }
+
+          artifact_id="$(jq -r '.manifestArtifactId' "${metadata}")"
+          artifact_json="${RUNNER_TEMP}/runtime-manifest-artifact.json"
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}" \
+            > "${artifact_json}"
+          jq -e \
+            --arg digest "$(jq -r '.manifestArtifactDigest' "${metadata}")" \
+            --arg name "$(jq -r '.manifestArtifactName' "${metadata}")" \
+            --argjson artifactId "${artifact_id}" \
+            --argjson runId "${TARGET_RUN_ID}" '
+              .id == $artifactId and
+              .name == $name and
+              .digest == $digest and
+              .expired == false and
+              .workflow_run.id == $runId
+            ' "${artifact_json}" > /dev/null || {
+              echo "Rollback manifest artifact no longer matches deployment provenance." >&2
+              exit 1
+            }
+
+  rollback:
+    needs:
+      - validate
+      - resolve-target
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    concurrency:
+      group: fly-deploy-production
+      cancel-in-progress: false
+    environment:
+      name: production
+      url: https://momo-result.ponta.me
+    env:
+      REGISTRY_REF: ${{ needs.resolve-target.outputs.registry_ref }}
+      TARGET_SHA: ${{ needs.resolve-target.outputs.candidate_sha }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Download deployed registry manifest
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: ${{ needs.resolve-target.outputs.manifest_artifact_name }}
+          path: rollback-manifest
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.target_run_id }}
+
+      - name: Setup flyctl
+        uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1
+        with:
+          version: 0.4.79
+
+      - name: Restore and validate exact target config
+        env:
+          EXPECTED_CONFIG_SHA256: ${{ needs.resolve-target.outputs.config_sha256 }}
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          git show "${TARGET_SHA}:fly.toml" > "${RUNNER_TEMP}/rollback-fly.toml"
+          actual_sha="$(sha256sum "${RUNNER_TEMP}/rollback-fly.toml" | cut -d ' ' -f 1)"
+          [[ "${actual_sha}" == "${EXPECTED_CONFIG_SHA256}" ]] || exit 1
+          flyctl config validate --strict --config "${RUNNER_TEMP}/rollback-fly.toml"
+
+      - name: Authenticate Docker to Fly registry
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: flyctl auth docker
+
+      - name: Verify immutable registry image
+        env:
+          EXPECTED_MANIFEST_SHA256: ${{ needs.resolve-target.outputs.manifest_sha256 }}
+        run: |
+          mkdir -p runtime-rollback-evidence
+          [[ -f rollback-manifest/registry-manifest.json && \
+            ! -L rollback-manifest/registry-manifest.json ]] || exit 1
+          downloaded_sha="$(sha256sum rollback-manifest/registry-manifest.json | cut -d ' ' -f 1)"
+          [[ "${downloaded_sha}" == "${EXPECTED_MANIFEST_SHA256}" ]] || exit 1
+          docker manifest inspect "${REGISTRY_REF}" | jq -S -c . \
+            > "${RUNNER_TEMP}/current-registry-manifest.json"
+          current_sha="$(sha256sum "${RUNNER_TEMP}/current-registry-manifest.json" | cut -d ' ' -f 1)"
+          [[ "${current_sha}" == "${EXPECTED_MANIFEST_SHA256}" ]] || {
+            echo "Registry content no longer matches the successful deployment." >&2
+            exit 1
+          }
+          jq -n '{schemaVersion: 1, manifestVerified: true}' \
+            > runtime-rollback-evidence/registry-verification.json
+
+      - name: Deploy exact rollback target
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: >-
+          flyctl deploy
+          --config "${RUNNER_TEMP}/rollback-fly.toml"
+          --image "${REGISTRY_REF}"
+          --yes
+
+      - name: Verify restored image identity
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          flyctl machine list --app momo-result --json |
+            jq -e --arg image "${REGISTRY_REF}" '
+              {
+                schemaVersion: 1,
+                singleStartedExactImage: (
+                  length == 1 and
+                  all(.[]; .state == "started" and .config.image == $image)
+                )
+              } |
+              select(.singleStartedExactImage)
+            ' > runtime-rollback-evidence/deployment-state.json
+        timeout-minutes: 2
+
+      - name: Run rollback dependency and process smoke
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          flyctl ssh console --app momo-result --pty=false --quiet \
+            --command "/opt/momo-result/bin/postdeploy-smoke" \
+            > runtime-rollback-evidence/postdeploy-smoke.json
+          jq -e '
+            .event == "runtime_postdeploy_smoke" and
+            .status == "ok" and
+            .checks == ["database", "http", "processes", "redis", "web"]
+          ' runtime-rollback-evidence/postdeploy-smoke.json > /dev/null
+        timeout-minutes: 2
+
+      - name: Verify public health endpoint
+        run: |
+          curl -fsS --retry 5 --retry-delay 2 --retry-all-errors \
+            https://momo-result.ponta.me/healthz |
+            jq -e '{schemaVersion: 1, status} | select(.status == "ok")' \
+              > runtime-rollback-evidence/public-health.json
+        timeout-minutes: 1
+
+      - name: Upload rollback verification evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: runtime-rollback-${{ github.run_id }}-${{ github.run_attempt }}
+          path: runtime-rollback-evidence/
+          if-no-files-found: ignore
+          retention-days: 30

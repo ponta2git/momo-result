@@ -2,11 +2,6 @@ name: OCR worker
 
 on:
   workflow_call:
-  pull_request:
-    paths:
-      - "apps/ocr-worker/**"
-      - "docs/schemas/**"
-      - ".github/workflows/ocr-worker.yml"
 
 permissions:
   contents: read
@@ -20,22 +15,39 @@ jobs:
         working-directory: apps/ocr-worker
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
 
+      - name: Read pinned momo-db revision
+        id: momo-db
+        working-directory: ${{ github.workspace }}
+        run: |
+          ref="$(tr -d '\r\n' < .momo-db-ref)"
+          [[ "${ref}" =~ ^[0-9a-f]{40}$ ]] || { echo "Invalid .momo-db-ref." >&2; exit 1; }
+          echo "ref=${ref}" >> "${GITHUB_OUTPUT}"
+
       - name: Checkout momo-db migrations
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           repository: ${{ github.repository_owner }}/momo-db
-          ref: c6a657e6eb7e9024fabb0ce85aaf0f22d4148f7b
+          ref: ${{ steps.momo-db.outputs.ref }}
           path: _deps/momo-db
-          token: ${{ secrets.MOMO_DB_READ_TOKEN || github.token }}
+          token: ${{ github.token }}
           sparse-checkout: drizzle
           persist-credentials: false
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v8.1.0
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          cache-dependency-glob: |
+            apps/ocr-worker/pyproject.toml
+            apps/ocr-worker/uv.lock
+          cache-python: true
+          cache-suffix: uv-0.11.23
+          enable-cache: true
+          python-version: "3.14"
+          version: "0.11.23"
 
       - name: Install OCR test data
         run: |
@@ -89,7 +101,7 @@ jobs:
 
       - name: Upload coverage report
         if: ${{ always() && github.event_name == 'pull_request' }}
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: ocr-worker-coverage
           path: |

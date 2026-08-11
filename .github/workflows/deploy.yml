@@ -1,30 +1,10 @@
 name: deploy
 
 on:
-  pull_request:
-    paths:
-      - "apps/api/**"
-      - "apps/ocr-worker/**"
-      - "apps/analysis-worker/**"
-      - "apps/web/**"
-      - "deploy/**"
-      - "docs/schemas/**"
-      - "scripts/ci/**"
-      - "Dockerfile"
-      - ".dockerignore"
-      - "fly.toml"
-      - "fly.analysis.toml"
-      - "package.json"
-      - "mise.toml"
-      - "pnpm-lock.yaml"
-      - "pnpm-workspace.yaml"
-      - "rust-toolchain.toml"
-      - ".github/workflows/deploy.yml"
-      - ".github/workflows/analysis-production.yml"
+  workflow_call:
   push:
     branches:
       - master
-      - main
   workflow_dispatch:
 
 permissions:
@@ -32,43 +12,76 @@ permissions:
 
 env:
   CI_DUMMY_ORIGIN_LOCK_TOKEN: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
-  IMAGE_ARTIFACT_NAME: runtime-image
-  IMAGE_REF: registry.fly.io/momo-result:${{ github.sha }}
-  MOMO_DB_REF: c6a657e6eb7e9024fabb0ce85aaf0f22d4148f7b
-
-concurrency:
-  group: ${{ github.event_name == 'pull_request' && format('runtime-smoke-pr-{0}', github.event.pull_request.number) || 'fly-deploy-production' }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  IMAGE_ARTIFACT_NAME: runtime-image-${{ github.run_id }}-${{ github.run_attempt }}
+  IMAGE_REF: registry.fly.io/momo-result:${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
 
 jobs:
+  scope:
+    name: Classify runtime release
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    outputs:
+      runtime: ${{ steps.changes.outputs.runtime }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Classify release scope
+        id: changes
+        env:
+          BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+        run: |
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+            [[ "${GITHUB_REF}" == "refs/heads/master" ]] || {
+              echo "Manual runtime releases must run from master." >&2
+              exit 1
+            }
+            result=$'api=false\nweb=false\nocr=false\nanalysis=false\nruntime=true'
+          elif [[ "${BASE_SHA}" =~ ^0+$ ]]; then
+            result=$'api=true\nweb=true\nocr=true\nanalysis=true\nruntime=true'
+          else
+            git cat-file -e "${BASE_SHA}^{commit}"
+            git cat-file -e "${HEAD_SHA}^{commit}"
+            result="$(git diff --name-only -z "${BASE_SHA}" "${HEAD_SHA}" |
+              scripts/ci/classify-changes.sh)"
+          fi
+          printf '%s\n' "${result}" >> "${GITHUB_OUTPUT}"
+          if [[ "${GITHUB_EVENT_NAME}" == "pull_request" ]] &&
+            ! grep -qx 'runtime=true' <<<"${result}"; then
+            echo "The PR orchestrator called runtime validation for a non-runtime change." >&2
+            exit 1
+          fi
+
   public-safety:
-    if: github.event_name != 'pull_request'
+    needs: scope
+    if: github.event_name != 'pull_request' && needs.scope.outputs.runtime == 'true'
     uses: ./.github/workflows/public-safety.yml
 
   api:
-    if: github.event_name != 'pull_request'
+    needs: scope
+    if: github.event_name != 'pull_request' && needs.scope.outputs.runtime == 'true'
     uses: ./.github/workflows/api.yml
-    secrets: inherit
 
   web:
-    if: github.event_name != 'pull_request'
+    needs: scope
+    if: github.event_name != 'pull_request' && needs.scope.outputs.runtime == 'true'
     uses: ./.github/workflows/web.yml
 
   ocr-worker:
-    if: github.event_name != 'pull_request'
+    needs: scope
+    if: github.event_name != 'pull_request' && needs.scope.outputs.runtime == 'true'
     uses: ./.github/workflows/ocr-worker.yml
-    secrets: inherit
-
-  analysis-worker:
-    if: github.event_name != 'pull_request'
-    uses: ./.github/workflows/analysis-worker.yml
 
   dockerfile-lint:
     name: Lint Dockerfiles
+    needs: scope
+    if: needs.scope.outputs.runtime == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
 
@@ -84,9 +97,13 @@ jobs:
     name: Build, scan, and package runtime image
     runs-on: ubuntu-latest
     timeout-minutes: 60
-    if: github.event_name != 'pull_request'
+    needs: scope
+    if: github.event_name != 'pull_request' && needs.scope.outputs.runtime == 'true'
+    outputs:
+      artifact_digest: ${{ steps.image-upload.outputs.artifact-digest }}
+      artifact_id: ${{ steps.image-upload.outputs.artifact-id }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
 
@@ -94,8 +111,20 @@ jobs:
         run: scripts/ci/check-runtime-config.sh
         timeout-minutes: 2
 
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+
       - name: Build runtime image
-        run: docker build -t "${IMAGE_REF}" .
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        env:
+          DOCKER_BUILD_RECORD_UPLOAD: "false"
+          DOCKER_BUILD_SUMMARY: "false"
+        with:
+          cache-from: type=gha,scope=momo-result-runtime-v1
+          cache-to: type=gha,mode=max,scope=momo-result-runtime-v1,ignore-error=true
+          context: .
+          load: true
+          tags: ${{ env.IMAGE_REF }}
         timeout-minutes: 45
 
       - name: Scan runtime image
@@ -115,29 +144,60 @@ jobs:
         env:
           MOMO_ORIGIN_LOCK_TOKEN: ${{ env.CI_DUMMY_ORIGIN_LOCK_TOKEN }}
 
-      - name: Record runtime image metadata
+      - name: Record runtime image identity
         run: |
           mkdir -p "${IMAGE_ARTIFACT_NAME}"
           printf "%s\n" "${IMAGE_REF}" > "${IMAGE_ARTIFACT_NAME}/image-ref.txt"
           docker image inspect "${IMAGE_REF}" --format '{{.Id}}' > "${IMAGE_ARTIFACT_NAME}/image-id.txt"
 
       - name: Save runtime image
-        run: docker save "${IMAGE_REF}" | gzip -1 > "${IMAGE_ARTIFACT_NAME}/momo-result-image.tar.gz"
+        run: |
+          docker save "${IMAGE_REF}" | gzip -1 > "${IMAGE_ARTIFACT_NAME}/momo-result-image.tar.gz"
+          sha256sum "${IMAGE_ARTIFACT_NAME}/momo-result-image.tar.gz" \
+            > "${IMAGE_ARTIFACT_NAME}/image-tar.sha256"
         timeout-minutes: 10
 
+      - name: Record runtime candidate provenance
+        run: |
+          image_id="$(sed -n '1p' "${IMAGE_ARTIFACT_NAME}/image-id.txt")"
+          tar_sha="$(cut -d ' ' -f 1 "${IMAGE_ARTIFACT_NAME}/image-tar.sha256")"
+          config_sha="$(sha256sum fly.toml | cut -d ' ' -f 1)"
+          jq -n \
+            --arg commit "${GITHUB_SHA}" \
+            --arg configSha256 "${config_sha}" \
+            --arg imageId "${image_id}" \
+            --arg imageRef "${IMAGE_REF}" \
+            --arg runId "${GITHUB_RUN_ID}" \
+            --arg runAttempt "${GITHUB_RUN_ATTEMPT}" \
+            --arg tarSha256 "${tar_sha}" \
+            '{
+              schemaVersion: 1,
+              commit: $commit,
+              runId: $runId,
+              runAttempt: $runAttempt,
+              imageRef: $imageRef,
+              imageId: $imageId,
+              tarSha256: $tarSha256,
+              configSha256: $configSha256
+            }' \
+            > "${IMAGE_ARTIFACT_NAME}/candidate.json"
+
       - name: Upload runtime image
-        uses: actions/upload-artifact@v7
+        id: image-upload
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: ${{ env.IMAGE_ARTIFACT_NAME }}
           path: ${{ env.IMAGE_ARTIFACT_NAME }}/
           if-no-files-found: error
-          retention-days: 3
+          retention-days: 7
+          compression-level: 0
 
   runtime-smoke-pr:
     name: Runtime smoke and E2E (PR)
     runs-on: ubuntu-latest
     timeout-minutes: 75
-    if: github.event_name == 'pull_request'
+    needs: scope
+    if: github.event_name == 'pull_request' && needs.scope.outputs.runtime == 'true'
 
     services:
       postgres:
@@ -169,23 +229,30 @@ jobs:
       REDIS_URL: redis://127.0.0.1:6379/0
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
 
+      - name: Read pinned momo-db revision
+        id: momo-db
+        run: |
+          ref="$(tr -d '\r\n' < .momo-db-ref)"
+          [[ "${ref}" =~ ^[0-9a-f]{40}$ ]] || { echo "Invalid .momo-db-ref." >&2; exit 1; }
+          echo "ref=${ref}" >> "${GITHUB_OUTPUT}"
+
       - name: Checkout momo-db migrations
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           repository: ${{ github.repository_owner }}/momo-db
-          ref: ${{ env.MOMO_DB_REF }}
+          ref: ${{ steps.momo-db.outputs.ref }}
           path: _deps/momo-db
-          token: ${{ secrets.MOMO_DB_READ_TOKEN || github.token }}
+          token: ${{ github.token }}
           sparse-checkout: drizzle
           persist-credentials: false
 
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: 24
           cache: pnpm
@@ -206,8 +273,20 @@ jobs:
         run: scripts/ci/apply-momo-db-migrations.sh
         timeout-minutes: 5
 
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+
       - name: Build runtime image
-        run: docker build -t "${IMAGE_REF}" .
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        env:
+          DOCKER_BUILD_RECORD_UPLOAD: "false"
+          DOCKER_BUILD_SUMMARY: "false"
+        with:
+          cache-from: type=gha,scope=momo-result-runtime-v1
+          cache-to: type=gha,mode=max,scope=momo-result-runtime-v1,ignore-error=true
+          context: .
+          load: true
+          tags: ${{ env.IMAGE_REF }}
         timeout-minutes: 45
 
       - name: Scan runtime image
@@ -235,6 +314,10 @@ jobs:
           MOMO_ORIGIN_LOCK_TOKEN: ${{ env.CI_DUMMY_ORIGIN_LOCK_TOKEN }}
         timeout-minutes: 3
 
+      - name: Release DB contract preflight
+        run: docker exec momo-result-runtime /opt/momo-result/bin/release-preflight
+        timeout-minutes: 1
+
       - name: Runtime HTTP smoke
         run: scripts/ci/runtime-smoke.sh
         env:
@@ -247,22 +330,28 @@ jobs:
           PLAYWRIGHT_BASE_URL: http://127.0.0.1:8080
         timeout-minutes: 10
 
-      - name: Capture runtime container logs
-        if: failure()
-        run: docker logs momo-result-runtime > runtime-container.log 2>&1 || true
+      - name: Graceful runtime shutdown smoke
+        run: scripts/ci/runtime-shutdown-smoke.sh
+        timeout-minutes: 2
 
-      - name: Upload runtime container logs
+      - name: Capture safe runtime diagnostics
         if: failure()
-        uses: actions/upload-artifact@v7
+        run: >-
+          docker logs momo-result-runtime 2>&1 |
+          scripts/ci/summarize-runtime-logs.py > runtime-container-summary.json || true
+
+      - name: Upload safe runtime diagnostics
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: runtime-container-logs
-          path: runtime-container.log
+          name: runtime-container-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
+          path: runtime-container-summary.json
           if-no-files-found: ignore
           retention-days: 7
 
       - name: Upload Playwright report
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: playwright-report
           path: apps/web/playwright-report/
@@ -310,23 +399,30 @@ jobs:
       REDIS_URL: redis://127.0.0.1:6379/0
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
 
+      - name: Read pinned momo-db revision
+        id: momo-db
+        run: |
+          ref="$(tr -d '\r\n' < .momo-db-ref)"
+          [[ "${ref}" =~ ^[0-9a-f]{40}$ ]] || { echo "Invalid .momo-db-ref." >&2; exit 1; }
+          echo "ref=${ref}" >> "${GITHUB_OUTPUT}"
+
       - name: Checkout momo-db migrations
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           repository: ${{ github.repository_owner }}/momo-db
-          ref: ${{ env.MOMO_DB_REF }}
+          ref: ${{ steps.momo-db.outputs.ref }}
           path: _deps/momo-db
-          token: ${{ secrets.MOMO_DB_READ_TOKEN || github.token }}
+          token: ${{ github.token }}
           sparse-checkout: drizzle
           persist-credentials: false
 
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: 24
           cache: pnpm
@@ -340,7 +436,7 @@ jobs:
         timeout-minutes: 10
 
       - name: Download runtime image
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
           name: ${{ env.IMAGE_ARTIFACT_NAME }}
           path: ${{ env.IMAGE_ARTIFACT_NAME }}
@@ -361,6 +457,10 @@ jobs:
           MOMO_ORIGIN_LOCK_TOKEN: ${{ env.CI_DUMMY_ORIGIN_LOCK_TOKEN }}
         timeout-minutes: 3
 
+      - name: Release DB contract preflight
+        run: docker exec momo-result-runtime /opt/momo-result/bin/release-preflight
+        timeout-minutes: 1
+
       - name: Runtime HTTP smoke
         run: scripts/ci/runtime-smoke.sh
         env:
@@ -373,22 +473,28 @@ jobs:
           PLAYWRIGHT_BASE_URL: http://127.0.0.1:8080
         timeout-minutes: 10
 
-      - name: Capture runtime container logs
-        if: failure()
-        run: docker logs momo-result-runtime > runtime-container.log 2>&1 || true
+      - name: Graceful runtime shutdown smoke
+        run: scripts/ci/runtime-shutdown-smoke.sh
+        timeout-minutes: 2
 
-      - name: Upload runtime container logs
+      - name: Capture safe runtime diagnostics
         if: failure()
-        uses: actions/upload-artifact@v7
+        run: >-
+          docker logs momo-result-runtime 2>&1 |
+          scripts/ci/summarize-runtime-logs.py > runtime-container-summary.json || true
+
+      - name: Upload safe runtime diagnostics
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: runtime-container-logs
-          path: runtime-container.log
+          name: runtime-container-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
+          path: runtime-container-summary.json
           if-no-files-found: ignore
           retention-days: 7
 
       - name: Upload Playwright report
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: playwright-report
           path: apps/web/playwright-report/
@@ -407,7 +513,6 @@ jobs:
       - api
       - web
       - ocr-worker
-      - analysis-worker
       - dockerfile-lint
       - runtime-smoke
     if: github.event_name != 'pull_request'
@@ -418,18 +523,23 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    needs: release-ready
+    needs:
+      - release-ready
+      - runtime-image
     if: github.event_name != 'pull_request'
+    concurrency:
+      group: fly-deploy-production
+      cancel-in-progress: false
     environment:
       name: production
       url: https://momo-result.ponta.me
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
 
       - name: Download smoke-tested image
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
           name: ${{ env.IMAGE_ARTIFACT_NAME }}
           path: ${{ env.IMAGE_ARTIFACT_NAME }}
@@ -440,6 +550,8 @@ jobs:
 
       - name: Setup flyctl
         uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1
+        with:
+          version: 0.4.79
 
       - name: Authenticate Docker to Fly registry
         env:
@@ -447,20 +559,140 @@ jobs:
         run: flyctl auth docker
 
       - name: Push smoke-tested image
+        id: registry
         run: |
           docker push "${IMAGE_REF}"
-          docker manifest inspect "${IMAGE_REF}" > "${IMAGE_ARTIFACT_NAME}/registry-manifest.json"
+          registry_ref="$(scripts/ci/resolve-pushed-runtime-image.sh "${IMAGE_REF}")"
+          registry_digest="${registry_ref#*@}"
+          docker manifest inspect "${registry_ref}" | jq -S -c . \
+            > "${IMAGE_ARTIFACT_NAME}/registry-manifest.json"
+          printf '%s\n' "${registry_ref}" > "${IMAGE_ARTIFACT_NAME}/registry-ref.txt"
+          printf 'registry_digest=%s\n' "${registry_digest}" >> "${GITHUB_OUTPUT}"
+          printf 'registry_ref=%s\n' "${registry_ref}" >> "${GITHUB_OUTPUT}"
         timeout-minutes: 10
 
       - name: Upload pushed image manifest
-        uses: actions/upload-artifact@v7
+        id: manifest-upload
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: runtime-image-registry-manifest
+          name: runtime-image-registry-manifest-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ env.IMAGE_ARTIFACT_NAME }}/registry-manifest.json
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 30
+
+      - name: Create immutable deployment provenance
+        env:
+          MANIFEST_ARTIFACT_DIGEST: ${{ steps.manifest-upload.outputs.artifact-digest }}
+          MANIFEST_ARTIFACT_ID: ${{ steps.manifest-upload.outputs.artifact-id }}
+          REGISTRY_DIGEST: ${{ steps.registry.outputs.registry_digest }}
+          REGISTRY_REF: ${{ steps.registry.outputs.registry_ref }}
+          SOURCE_ARTIFACT_DIGEST: ${{ needs.runtime-image.outputs.artifact_digest }}
+          SOURCE_ARTIFACT_ID: ${{ needs.runtime-image.outputs.artifact_id }}
+        run: |
+          mkdir -p runtime-deployment-metadata
+          scripts/ci/validate-runtime-candidate.sh \
+            "${IMAGE_ARTIFACT_NAME}" "${GITHUB_RUN_ID}" "${GITHUB_RUN_ATTEMPT}" \
+            "${GITHUB_SHA}" "${IMAGE_REF}"
+          image_id="$(sed -n '1p' "${IMAGE_ARTIFACT_NAME}/image-id.txt")"
+          config_sha="$(jq -r '.configSha256' "${IMAGE_ARTIFACT_NAME}/candidate.json")"
+          manifest_sha="$(sha256sum "${IMAGE_ARTIFACT_NAME}/registry-manifest.json" | cut -d ' ' -f 1)"
+          jq -n \
+            --arg commit "${GITHUB_SHA}" \
+            --arg configSha256 "${config_sha}" \
+            --arg imageId "${image_id}" \
+            --arg imageRef "${IMAGE_REF}" \
+            --arg manifestArtifactDigest "${MANIFEST_ARTIFACT_DIGEST}" \
+            --arg manifestArtifactId "${MANIFEST_ARTIFACT_ID}" \
+            --arg manifestArtifactName "runtime-image-registry-manifest-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --arg manifestSha256 "${manifest_sha}" \
+            --arg registryDigest "${REGISTRY_DIGEST}" \
+            --arg registryRef "${REGISTRY_REF}" \
+            --arg runAttempt "${GITHUB_RUN_ATTEMPT}" \
+            --arg runId "${GITHUB_RUN_ID}" \
+            --arg sourceArtifactDigest "${SOURCE_ARTIFACT_DIGEST}" \
+            --arg sourceArtifactId "${SOURCE_ARTIFACT_ID}" \
+            --arg sourceArtifactName "${IMAGE_ARTIFACT_NAME}" \
+            '{
+              schemaVersion: 1,
+              commit: $commit,
+              runId: $runId,
+              runAttempt: $runAttempt,
+              imageRef: $imageRef,
+              imageId: $imageId,
+              registryDigest: $registryDigest,
+              registryRef: $registryRef,
+              configSha256: $configSha256,
+              sourceArtifactName: $sourceArtifactName,
+              sourceArtifactId: $sourceArtifactId,
+              sourceArtifactDigest: $sourceArtifactDigest,
+              manifestArtifactName: $manifestArtifactName,
+              manifestArtifactId: $manifestArtifactId,
+              manifestArtifactDigest: $manifestArtifactDigest,
+              manifestSha256: $manifestSha256
+            }' > runtime-deployment-metadata/deployment.json
+          scripts/ci/validate-runtime-deployment.sh \
+            runtime-deployment-metadata/deployment.json \
+            "${GITHUB_RUN_ID}" "${GITHUB_RUN_ATTEMPT}" "${GITHUB_SHA}" \
+            > /dev/null
+
+      - name: Upload immutable deployment provenance
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: runtime-deployment-metadata-${{ github.run_id }}-${{ github.run_attempt }}
+          path: runtime-deployment-metadata/deployment.json
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Deploy to Fly.io
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-        run: flyctl deploy --image "${IMAGE_REF}" --yes
+        run: flyctl deploy --image "${{ steps.registry.outputs.registry_ref }}" --yes
+
+      - name: Verify deployed image identity
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          mkdir -p runtime-production-evidence
+          flyctl machine list --app momo-result --json |
+            jq -e --arg image "${{ steps.registry.outputs.registry_ref }}" '
+              {
+                schemaVersion: 1,
+                singleStartedExactImage: (
+                  length == 1 and
+                  all(.[]; .state == "started" and .config.image == $image)
+                )
+              } |
+              select(.singleStartedExactImage)
+            ' > runtime-production-evidence/deployment-state.json
+        timeout-minutes: 2
+
+      - name: Run post-deploy dependency and process smoke
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          flyctl ssh console --app momo-result --pty=false --quiet \
+            --command "/opt/momo-result/bin/postdeploy-smoke" \
+            > runtime-production-evidence/postdeploy-smoke.json
+          jq -e '
+            .event == "runtime_postdeploy_smoke" and
+            .status == "ok" and
+            .checks == ["database", "http", "processes", "redis", "web"]
+          ' runtime-production-evidence/postdeploy-smoke.json > /dev/null
+        timeout-minutes: 2
+
+      - name: Verify public health endpoint
+        run: |
+          curl -fsS --retry 5 --retry-delay 2 --retry-all-errors \
+            https://momo-result.ponta.me/healthz |
+            jq -e '{schemaVersion: 1, status} | select(.status == "ok")' \
+              > runtime-production-evidence/public-health.json
+        timeout-minutes: 1
+
+      - name: Upload production verification evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: runtime-production-${{ github.run_id }}-${{ github.run_attempt }}
+          path: runtime-production-evidence/
+          if-no-files-found: ignore
+          retention-days: 7

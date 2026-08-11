@@ -1,6 +1,7 @@
 .git
 .github
 .agents
+_deps
 .serena
 .vscode
 **/.DS_Store

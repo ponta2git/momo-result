@@ -9,7 +9,7 @@ use std::{
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use momo_analysis::{
-    config::{PublicationMode, WorkerConfig, WorkerRuntimeConfig},
+    config::WorkerConfig,
     ocr::{
         NativeOcrEngine,
         contract::{OcrHints, RequestedScreenType},
@@ -556,31 +556,27 @@ fn exit_code(code: i32) -> ExitCode {
 
 async fn run_worker() -> Result<(), String> {
     let config = WorkerConfig::from_environment().map_err(|error| error.to_string())?;
+    let orchestrator =
+        momo_analysis::orchestrator::WorkerOrchestratorConfig::from_environment(&config)
+            .map_err(|error| error.to_string())?;
     info!(
         event = "analysis_configuration_accepted",
         publication_mode = ?config.publication_mode,
-        "analysis worker configuration accepted"
+        analysis_enabled = orchestrator.analysis_enabled(),
+        ocr_v2_enabled = orchestrator.ocr_enabled(),
+        "combined worker configuration accepted"
     );
-    if config.publication_mode == PublicationMode::Enabled {
-        let runtime =
-            WorkerRuntimeConfig::from_environment(&config).map_err(|error| error.to_string())?;
-        let (shutdown_sender, shutdown_receiver) = tokio::sync::watch::channel(false);
-        let worker = momo_analysis::worker::run(runtime, shutdown_receiver);
-        tokio::pin!(worker);
-        return tokio::select! {
-            result = &mut worker => result.map_err(|error| error.to_string()),
-            signal = wait_for_shutdown() => {
-                signal.map_err(|error| error.to_string())?;
-                if let Err(_receiver_closed) = shutdown_sender.send(true) {}
-                worker.await.map_err(|error| error.to_string())
-            }
-        };
+    let (shutdown_sender, shutdown_receiver) = tokio::sync::watch::channel(false);
+    let worker = momo_analysis::orchestrator::run(orchestrator, shutdown_receiver);
+    tokio::pin!(worker);
+    tokio::select! {
+        result = &mut worker => result.map_err(|error| error.to_string()),
+        signal = wait_for_shutdown() => {
+            signal.map_err(|error| error.to_string())?;
+            if let Err(_receiver_closed) = shutdown_sender.send(true) {}
+            worker.await.map_err(|error| error.to_string())
+        }
     }
-    wait_for_shutdown()
-        .await
-        .map_err(|error| error.to_string())?;
-    info!(event = "analysis_worker_stopped", "analysis worker stopped");
-    Ok(())
 }
 
 async fn wait_for_shutdown() -> Result<(), io::Error> {

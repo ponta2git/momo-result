@@ -243,6 +243,7 @@ impl ManagedAnalysisChild {
             .stderr(Stdio::null())
             .kill_on_drop(true)
             .process_group(0);
+        preserve_dynamic_runtime_environment(&mut command);
         configure_parent_death_signal(&mut command);
         configure_inherited_liveness(&mut command, child_liveness_fd);
         let child = command.spawn().map_err(ProcessError::Spawn)?;
@@ -546,6 +547,13 @@ pub fn wait_for_child_start_barrier() -> Result<(), ProcessError> {
     }
     drop(input);
     Ok(())
+}
+
+#[cfg(target_os = "linux")]
+pub(crate) fn preserve_dynamic_runtime_environment(command: &mut tokio::process::Command) {
+    if let Some(value) = std::env::var_os("LD_LIBRARY_PATH") {
+        command.env("LD_LIBRARY_PATH", value);
+    }
 }
 
 #[cfg(target_os = "linux")]

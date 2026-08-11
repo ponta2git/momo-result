@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-binary="${1:?analysis worker binary path is required}"
+binary="${1:-}"
 postgres_image="${POSTGRES_IMAGE:-postgres:18-alpine}"
+worker_image="${ANALYSIS_WORKER_IMAGE:-}"
 operation_key="ci-release-control-plane"
 algorithm_version="${ANALYSIS_ALGORITHM_VERSION:-series-analysis-v1}"
 release_database_url="${RELEASE_DATABASE_URL:-${WORKER_DATABASE_URL:-${DATABASE_URL:-}}}"
@@ -17,13 +18,20 @@ if [[ -z "${DATABASE_URL:-}" ]]; then
   exit 1
 fi
 
-if [[ ! -x "${binary}" ]]; then
+if [[ -z "${worker_image}" && ! -x "${binary}" ]]; then
   echo "analysis worker binary is not executable: ${binary}" >&2
   exit 1
 fi
 
 run_release_command() {
-  DATABASE_URL="${release_database_url}" "${binary}" "$@"
+  if [[ -n "${worker_image}" ]]; then
+    docker run --rm --network host --add-host host.docker.internal:host-gateway \
+      -e "DATABASE_URL=${release_database_url}" \
+      "${worker_image}" \
+      /usr/local/bin/momo-analysis bootstrap -- "$@"
+  else
+    DATABASE_URL="${release_database_url}" "${binary}" "$@"
+  fi
 }
 
 psql_ci() {

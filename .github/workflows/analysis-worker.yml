@@ -95,20 +95,61 @@ jobs:
       - name: Release control-plane smoke
         run: ../../scripts/ci/analysis-release-db-smoke.sh target/release/momo-analysis
 
-      - name: Worker PostgreSQL and Redis control-plane smoke
-        run: ../../scripts/ci/analysis-worker-control-plane-smoke.sh target/release/momo-analysis
-
   runtime-image:
     name: Build, scan, and package analysis image
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_DB: momo_result
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+        ports:
+          - "5432:5432"
+        options: >-
+          --health-cmd "pg_isready -U postgres -d momo_result"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports:
+          - "6379:6379"
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
     env:
       ANALYSIS_IMAGE_ARTIFACT_NAME: analysis-worker-image-${{ github.run_id }}-${{ github.run_attempt }}
       ANALYSIS_METADATA_ARTIFACT_NAME: analysis-candidate-metadata-${{ github.run_id }}-${{ github.run_attempt }}
       ANALYSIS_IMAGE_REF: ${{ inputs.package_image && format('registry.fly.io/momo-result-analysis:{0}-{1}-{2}', github.sha, github.run_id, github.run_attempt) || 'momo-analysis-worker:test' }}
+      DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/momo_result
+      REDIS_URL: redis://127.0.0.1:6379
+      WORKER_DATABASE_URL: postgres://postgres:postgres@host.docker.internal:5432/momo_result
+      WORKER_REDIS_URL: redis://host.docker.internal:6379
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
+
+      - name: Read pinned momo-db revision
+        id: runtime-momo-db
+        run: |
+          ref="$(tr -d '\r\n' < .momo-db-ref)"
+          [[ "${ref}" =~ ^[0-9a-f]{40}$ ]] || { echo "Invalid .momo-db-ref." >&2; exit 1; }
+          echo "ref=${ref}" >> "${GITHUB_OUTPUT}"
+
+      - name: Checkout momo-db migrations
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository_owner }}/momo-db
+          ref: ${{ steps.runtime-momo-db.outputs.ref }}
+          path: _deps/momo-db
+          token: ${{ github.token }}
+          sparse-checkout: drizzle
           persist-credentials: false
 
       - name: Setup Docker Buildx
@@ -130,6 +171,22 @@ jobs:
 
       - name: Smoke test worker isolation and hard limit
         run: scripts/ci/analysis-worker-image-smoke.sh "${ANALYSIS_IMAGE_REF}"
+
+      - name: Apply momo-db migrations
+        run: scripts/ci/apply-momo-db-migrations.sh
+
+      - name: Seed release control-plane fixtures through the runtime image
+        env:
+          ANALYSIS_WORKER_IMAGE: ${{ env.ANALYSIS_IMAGE_REF }}
+        run: scripts/ci/analysis-release-db-smoke.sh
+
+      - name: Worker PostgreSQL and Redis control-plane smoke through the runtime image
+        env:
+          ANALYSIS_WORKER_IMAGE: ${{ env.ANALYSIS_IMAGE_REF }}
+        run: scripts/ci/analysis-worker-control-plane-smoke.sh
+
+      - name: Combined analysis and OCR preemption smoke
+        run: scripts/ci/analysis-worker-preemption-smoke.sh "${ANALYSIS_IMAGE_REF}"
 
       - name: Scan worker image
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25

@@ -264,10 +264,9 @@ impl Drop for ManagedOcrAttempt {
 
 #[cfg(target_os = "linux")]
 fn preserve_native_runtime_environment(command: &mut Command) {
-    for name in ["LD_LIBRARY_PATH", "TESSDATA_PREFIX"] {
-        if let Some(value) = env::var_os(name) {
-            command.env(name, value);
-        }
+    crate::process::preserve_dynamic_runtime_environment(command);
+    if let Some(value) = env::var_os("TESSDATA_PREFIX") {
+        command.env("TESSDATA_PREFIX", value);
     }
 }
 

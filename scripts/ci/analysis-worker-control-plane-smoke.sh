@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-binary="${1:?analysis worker binary path is required}"
+binary="${1:-}"
 postgres_image="${POSTGRES_IMAGE:-postgres:18-alpine}"
 redis_image="${REDIS_IMAGE:-redis:7-alpine}"
 redis_stream="${MOMO_REDIS_ANALYSIS_STREAM:-momo:analysis:jobs}"
@@ -23,13 +23,20 @@ if [[ -z "${DATABASE_URL:-}" || -z "${REDIS_URL:-}" ]]; then
   exit 1
 fi
 
-if [[ ! -x "${binary}" ]]; then
+if [[ -z "${worker_image}" && ! -x "${binary}" ]]; then
   echo "analysis worker binary is not executable: ${binary}" >&2
   exit 1
 fi
 
 run_release_command() {
-  DATABASE_URL="${release_database_url}" "${binary}" "$@"
+  if [[ -n "${worker_image}" ]]; then
+    docker run --rm --network host --add-host host.docker.internal:host-gateway \
+      -e "DATABASE_URL=${release_database_url}" \
+      "${worker_image}" \
+      /usr/local/bin/momo-analysis bootstrap -- "$@"
+  else
+    DATABASE_URL="${release_database_url}" "${binary}" "$@"
+  fi
 }
 
 run_root="$(mktemp -d "${TMPDIR:-/tmp}/momo-analysis-control-plane.XXXXXX")"
@@ -314,6 +321,7 @@ worker_environment=(
   "MOMO_ANALYSIS_HEARTBEAT_INTERVAL_MS=1000"
   "MOMO_ANALYSIS_CHILD_STOP_GRACE_MS=1000"
   "MOMO_ANALYSIS_REDIS_BLOCK_MS=200"
+  "MOMO_OCR_V2_CONSUMER_MODE=disabled"
   "MOMO_LOG_FORMAT=json"
   "RUST_LOG=momo_analysis=info"
 )
@@ -323,10 +331,11 @@ if [[ -n "${worker_image}" ]]; then
   for value in "${worker_environment[@]}"; do
     docker_environment+=(--env "${value}")
   done
-  docker run --rm --name "${worker_container}" \
+  docker run --rm --name "${worker_container}" --privileged --cgroupns private \
     --memory 256m --memory-swap 256m \
     --add-host host.docker.internal:host-gateway \
     --tmpfs /var/lib/momo-analysis:rw,noexec,nosuid,size=${temporary_limit_bytes},uid=10001,gid=10001,mode=0700 \
+    --env MOMO_HEAVY_CGROUP_V2_VALIDATED=true \
     "${docker_environment[@]}" \
     "${worker_image}" >"${worker_log}" 2>&1 &
 else

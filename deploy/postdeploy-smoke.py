@@ -79,11 +79,11 @@ def _database_probe(database_url: str) -> None:
             database_url,
             connect_timeout=5,
             application_name="momo-result-postdeploy-smoke",
-            options="-c statement_timeout=5000",
         ) as connection,
         connection.cursor() as cursor,
     ):
         cursor.execute("SET TRANSACTION READ ONLY")
+        cursor.execute("SET LOCAL statement_timeout = 5000")
         cursor.execute("SELECT 1")
         if cursor.fetchone() != (1,):
             raise DatabaseContractError

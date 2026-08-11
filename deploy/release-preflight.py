@@ -123,6 +123,8 @@ def missing_contract(
 def _inspect_contract(connection: object) -> dict[str, list[str]]:
     with connection.cursor() as cursor:  # type: ignore[attr-defined]
         cursor.execute("SET TRANSACTION READ ONLY")
+        cursor.execute("SET LOCAL statement_timeout = 10000")
+        cursor.execute("SET LOCAL lock_timeout = 3000")
         cursor.execute(
             "SELECT table_name, column_name FROM information_schema.columns "
             "WHERE table_schema = 'public'"
@@ -165,7 +167,6 @@ def main() -> int:
             database_url,
             connect_timeout=10,
             application_name="momo-result-release-preflight",
-            options="-c statement_timeout=10000 -c lock_timeout=3000",
         ) as connection:
             missing = _inspect_contract(connection)
     except Exception as error:  # noqa: BLE001 - emit only the safe exception class at this boundary.

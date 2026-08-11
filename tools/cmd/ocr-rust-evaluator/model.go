@@ -76,12 +76,20 @@ type imageResult struct {
 	ProfileID                *string                `json:"profileId,omitempty"`
 	DurationMilliseconds     float64                `json:"durationMilliseconds"`
 	CoreDurationMilliseconds *float64               `json:"coreDurationMilliseconds,omitempty"`
+	ProcessResources         processResourceMetrics `json:"processResources"`
 	WarningCount             int                    `json:"warningCount"`
 	Failure                  *string                `json:"failure,omitempty"`
 	FieldTotal               int                    `json:"fieldTotal"`
 	FieldCorrect             int                    `json:"fieldCorrect"`
 	Outcomes                 []fieldOutcome         `json:"outcomes"`
 	PlayerOrder              playerOrderDiagnostics `json:"playerOrder"`
+}
+
+type processResourceMetrics struct {
+	WallMilliseconds      float64 `json:"wallMilliseconds"`
+	UserCPUMilliseconds   float64 `json:"userCpuMilliseconds"`
+	SystemCPUMilliseconds float64 `json:"systemCpuMilliseconds"`
+	MaximumResidentBytes  *uint64 `json:"maximumResidentBytes,omitempty"`
 }
 
 type accuracyBucket struct {
@@ -108,8 +116,20 @@ type evaluationSummary struct {
 	Accuracy      float64                   `json:"accuracy"`
 	ByScreenType  map[string]accuracyBucket `json:"byScreenType"`
 	Duration      durationSummary           `json:"durationMilliseconds"`
+	UserCPU       durationSummary           `json:"userCpuMilliseconds"`
+	SystemCPU     durationSummary           `json:"systemCpuMilliseconds"`
+	MaximumRSS    byteSummary               `json:"maximumResidentBytes"`
 	PlayerOrder   playerOrderDiagnostics    `json:"playerOrder"`
 	Failures      int                       `json:"failures"`
+}
+
+type byteSummary struct {
+	Count int    `json:"count"`
+	Min   uint64 `json:"min"`
+	Max   uint64 `json:"max"`
+	P50   uint64 `json:"p50"`
+	P95   uint64 `json:"p95"`
+	P99   uint64 `json:"p99"`
 }
 
 type pairedSummary struct {

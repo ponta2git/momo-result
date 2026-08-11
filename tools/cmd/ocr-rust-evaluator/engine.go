@@ -20,7 +20,7 @@ type engineOptions struct {
 	timeout      time.Duration
 }
 
-func runPilot(options engineOptions, image imageMetadata) (pilotEnvelope, float64, error) {
+func runPilot(options engineOptions, image imageMetadata) (pilotEnvelope, processResourceMetrics, error) {
 	arguments := []string{
 		"ocr-pilot",
 		"--image", image.Path,
@@ -41,30 +41,30 @@ func runPilot(options engineOptions, image imageMetadata) (pilotEnvelope, float6
 	command.Stderr = stderr
 	started := time.Now()
 	err := command.Run()
-	duration := float64(time.Since(started).Microseconds()) / 1000
+	resources := measuredProcessResources(command.ProcessState, time.Since(started))
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-		return pilotEnvelope{}, duration, errors.New("pilot_timeout")
+		return pilotEnvelope{}, resources, errors.New("pilot_timeout")
 	}
 	if err != nil {
-		return pilotEnvelope{}, duration, errors.New("pilot_process_failed")
+		return pilotEnvelope{}, resources, errors.New("pilot_process_failed")
 	}
 	if stdout.exceeded || stderr.exceeded {
-		return pilotEnvelope{}, duration, errors.New("pilot_output_exceeded")
+		return pilotEnvelope{}, resources, errors.New("pilot_output_exceeded")
 	}
 	decoder := json.NewDecoder(bytes.NewReader(stdout.Bytes()))
 	decoder.DisallowUnknownFields()
 	var envelope pilotEnvelope
 	if err := decoder.Decode(&envelope); err != nil {
-		return pilotEnvelope{}, duration, errors.New("pilot_output_invalid")
+		return pilotEnvelope{}, resources, errors.New("pilot_output_invalid")
 	}
 	var trailing any
 	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
-		return pilotEnvelope{}, duration, errors.New("pilot_output_trailing_data")
+		return pilotEnvelope{}, resources, errors.New("pilot_output_trailing_data")
 	}
 	if envelope.DetectedScreenType != image.ScreenType {
-		return pilotEnvelope{}, duration, fmt.Errorf("pilot_screen_mismatch")
+		return pilotEnvelope{}, resources, fmt.Errorf("pilot_screen_mismatch")
 	}
-	return envelope, duration, nil
+	return envelope, resources, nil
 }
 
 type boundedBuffer struct {

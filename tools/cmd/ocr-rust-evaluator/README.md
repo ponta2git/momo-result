@@ -8,6 +8,7 @@ The evaluator:
 
 - accepts only filename-declared `total_assets`, `revenue`, and `incident_log` screens;
 - runs one image at a time with a bounded timeout and bounded process output;
+- records per-process wall time, user/system CPU time, and peak RSS when the host exposes it;
 - counts process failures as incorrect expected fields instead of dropping their denominator;
 - writes detailed image and field evidence only to the caller-selected report path; and
 - optionally reconstructs field correctness from an existing Python evaluator report and performs

@@ -61,8 +61,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 			_, _ = fmt.Fprintln(stderr, "selected image has no answer-key match")
 			return 1
 		}
-		envelope, duration, pilotErr := runPilot(engine, image)
-		result := evaluateImage(image, expected, envelope, duration, pilotErr)
+		envelope, resources, pilotErr := runPilot(engine, image)
+		result := evaluateImage(image, expected, envelope, resources, pilotErr)
 		results = append(results, result)
 		_, _ = fmt.Fprintf(
 			stderr,
@@ -77,7 +77,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 		)
 	}
 	report := evaluationReport{
-		SchemaVersion: 1,
+		SchemaVersion: 2,
 		Summary:       summarize(results),
 		Results:       results,
 	}

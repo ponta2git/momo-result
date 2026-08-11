@@ -32,12 +32,23 @@ func TestEvaluateImageCountsTheExactScreenFields(t *testing.T) {
 	}}
 	result := evaluateImage(imageMetadata{
 		File: "sample.png", MatchNo: 1, ScreenType: "total_assets",
-	}, expected, envelope, 10, nil)
+	}, expected, envelope, processResourceMetrics{WallMilliseconds: 10}, nil)
 	if result.FieldTotal != 2 || result.FieldCorrect != 2 {
 		t.Fatalf("unexpected field score: %+v", result)
 	}
 	if result.PlayerOrder.DirectMatches != 1 {
 		t.Fatalf("unexpected order diagnostics: %+v", result.PlayerOrder)
+	}
+}
+
+func TestSummarizeBytesUsesDeterministicInterpolatedPercentiles(t *testing.T) {
+	t.Parallel()
+	summary := summarizeBytes([]uint64{100, 400, 200, 300})
+	if summary.Count != 4 || summary.Min != 100 || summary.Max != 400 {
+		t.Fatalf("unexpected byte bounds: %+v", summary)
+	}
+	if summary.P50 != 250 || summary.P95 != 385 || summary.P99 != 397 {
+		t.Fatalf("unexpected byte percentiles: %+v", summary)
 	}
 }
 

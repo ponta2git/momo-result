@@ -21,14 +21,15 @@ func evaluateImage(
 	metadata imageMetadata,
 	expected []expectedPlayer,
 	envelope pilotEnvelope,
-	duration float64,
+	resources processResourceMetrics,
 	pilotError error,
 ) imageResult {
 	result := imageResult{
 		File:                 metadata.File,
 		MatchNo:              metadata.MatchNo,
 		ScreenType:           metadata.ScreenType,
-		DurationMilliseconds: duration,
+		DurationMilliseconds: resources.WallMilliseconds,
+		ProcessResources:     resources,
 		Outcomes:             make([]fieldOutcome, 0, expectedFieldCount(metadata.ScreenType)),
 	}
 	if pilotError != nil {
@@ -214,6 +215,9 @@ func summarize(results []imageResult) evaluationSummary {
 		ByScreenType: make(map[string]accuracyBucket),
 	}
 	durations := make([]float64, 0, len(results))
+	userCPU := make([]float64, 0, len(results))
+	systemCPU := make([]float64, 0, len(results))
+	maximumRSS := make([]uint64, 0, len(results))
 	for _, result := range results {
 		summary.FieldsTotal += result.FieldTotal
 		summary.FieldsCorrect += result.FieldCorrect
@@ -230,6 +234,11 @@ func summarize(results []imageResult) evaluationSummary {
 			summary.Failures++
 		} else {
 			durations = append(durations, result.DurationMilliseconds)
+			userCPU = append(userCPU, result.ProcessResources.UserCPUMilliseconds)
+			systemCPU = append(systemCPU, result.ProcessResources.SystemCPUMilliseconds)
+			if result.ProcessResources.MaximumResidentBytes != nil {
+				maximumRSS = append(maximumRSS, *result.ProcessResources.MaximumResidentBytes)
+			}
 		}
 	}
 	if summary.FieldsTotal > 0 {
@@ -246,6 +255,9 @@ func summarize(results []imageResult) evaluationSummary {
 			float64(summary.PlayerOrder.DirectTotal)
 	}
 	summary.Duration = summarizeDurations(durations)
+	summary.UserCPU = summarizeDurations(userCPU)
+	summary.SystemCPU = summarizeDurations(systemCPU)
+	summary.MaximumRSS = summarizeBytes(maximumRSS)
 	return summary
 }
 
@@ -268,6 +280,34 @@ func summarizeDurations(values []float64) durationSummary {
 		P95:   percentile(sorted, 0.95),
 		P99:   percentile(sorted, 0.99),
 	}
+}
+
+func summarizeBytes(values []uint64) byteSummary {
+	if len(values) == 0 {
+		return byteSummary{}
+	}
+	sorted := append([]uint64(nil), values...)
+	sort.Slice(sorted, func(left, right int) bool { return sorted[left] < sorted[right] })
+	return byteSummary{
+		Count: len(sorted),
+		Min:   sorted[0],
+		Max:   sorted[len(sorted)-1],
+		P50:   bytePercentile(sorted, 0.50),
+		P95:   bytePercentile(sorted, 0.95),
+		P99:   bytePercentile(sorted, 0.99),
+	}
+}
+
+func bytePercentile(sorted []uint64, percentile float64) uint64 {
+	position := percentile * float64(len(sorted)-1)
+	lower := int(math.Floor(position))
+	upper := int(math.Ceil(position))
+	if lower == upper {
+		return sorted[lower]
+	}
+	weight := position - float64(lower)
+	interpolated := float64(sorted[lower])*(1-weight) + float64(sorted[upper])*weight
+	return uint64(math.Ceil(interpolated))
 }
 
 func percentile(sorted []float64, fraction float64) float64 {

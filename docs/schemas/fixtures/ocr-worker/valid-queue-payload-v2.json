@@ -1,0 +1,14 @@
+{
+  "attempt": "1",
+  "byteLength": "3145728",
+  "draftId": "draft-v2-1",
+  "enqueuedAt": "2026-08-11T00:00:00Z",
+  "imageObjectKey": "source-images/2026/image-v2-1.webp",
+  "jobId": "job-v2-1",
+  "mediaType": "image/webp",
+  "requestId": "req_v2-1",
+  "requestedScreenType": "incident_log",
+  "schemaVersion": "2",
+  "sha256": "abababababababababababababababababababababababababababababababab",
+  "sourceImageId": "image-v2-1"
+}

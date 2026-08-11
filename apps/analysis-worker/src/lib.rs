@@ -10,6 +10,7 @@ mod child_report;
 pub mod config;
 mod control;
 mod database;
+pub mod ocr;
 #[expect(
     unsafe_code,
     reason = "all operating-system FFI is isolated here behind checked safe APIs and documented blocks"

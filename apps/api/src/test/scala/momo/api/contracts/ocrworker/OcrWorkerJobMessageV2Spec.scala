@@ -1,8 +1,10 @@
 package momo.api.contracts.ocrworker
 
+import java.nio.file.Files
 import java.time.Instant
 
 import io.circe.Json
+import io.circe.parser.parse
 import munit.FunSuite
 
 import momo.api.domain.ids.*
@@ -10,6 +12,16 @@ import momo.api.domain.{OcrJobHints, PlayerAliasHint, ScreenType}
 import momo.api.testing.JsonSchemaAssertions
 
 final class OcrWorkerJobMessageV2Spec extends FunSuite with JsonSchemaAssertions:
+  test("Scala producer matches the shared Rust consumer fixture") {
+    val fixture = Files.readString(
+      repositoryFile("docs/schemas/fixtures/ocr-worker/valid-queue-payload-v2.json")
+    )
+    val fixtureJson = parse(fixture).fold(error => fail(error.message), identity)
+
+    assertEquals(OcrWorkerJobMessageV2.fieldsAsJson(canonicalPayload()), fixtureJson)
+    assertOcrWorkerJobMessageV2SchemaValid(fixtureJson)
+  }
+
   test("builds the exact closed Redis Streams v2 payload") {
     val payload = canonicalPayload()
 

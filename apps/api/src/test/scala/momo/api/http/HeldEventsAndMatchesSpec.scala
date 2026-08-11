@@ -7,7 +7,7 @@ import cats.effect.IO
 import io.circe.Json
 import org.http4s.circe.*
 import org.http4s.implicits.*
-import org.http4s.{Method, Status, Uri}
+import org.http4s.{Method, Request, Status, Uri}
 import org.typelevel.ci.CIString
 
 import momo.api.MomoCatsEffectSuite
@@ -390,6 +390,26 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
       assertEquals(res.status, Status.Ok)
       assertEquals(jsonField[String](body, "heldEventId"), id)
       assertEquals(jsonField[Int](body, "matchNoInEvent"), 1)
+  }
+
+  app.test("manual match recording and display work with OCR and Redis disabled") { httpApp =>
+    for
+      healthRes <- httpApp.run(Request[IO](Method.GET, uri"/healthz/details"))
+      healthBody <- healthRes.as[Json]
+      _ = assertEquals(healthRes.status, Status.Ok)
+      _ = assertEquals(jsonField[String](healthBody, "redis"), "disabled")
+      _ = assertEquals(jsonField[String](healthBody, "ocrAdmission"), "disabled")
+      heldEventId <- createEvent(httpApp)
+      createRes <- httpApp.run(writePost(uri"/api/matches", confirmBody(heldEventId)))
+      createBody <- createRes.as[Json]
+      matchId = jsonField[String](createBody, "matchId")
+      _ = assertEquals(createRes.status, Status.Ok)
+      listRes <- httpApp.run(readGet(uri"/api/matches"))
+      listBody <- listRes.as[Json]
+      items = jsonField[List[Json]](listBody, "items")
+    yield
+      assertEquals(listRes.status, Status.Ok)
+      assert(items.exists(item => jsonField[String](item, "matchId") == matchId))
   }
 
   app.test("DELETE /api/matches/:id deletes the confirmed match draft") { httpApp =>

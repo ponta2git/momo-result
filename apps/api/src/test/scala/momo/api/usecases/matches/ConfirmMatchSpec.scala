@@ -3,6 +3,7 @@ package momo.api.usecases.matches
 import java.time.Instant
 
 import cats.effect.{IO, Resource}
+import fs2.Stream
 
 import momo.api.MomoCatsEffectSuite
 import momo.api.adapters.inmemory.{
@@ -16,8 +17,9 @@ import momo.api.adapters.inmemory.{
 }
 import momo.api.adapters.storage.local.LocalFsImageStore
 import momo.api.domain.ids.*
-import momo.api.domain.{GameTitle, MatchRecord, PlayerResult}
+import momo.api.domain.{GameTitle, MatchRecord, PlayerResult, StoredImage}
 import momo.api.errors.{AppError, AppException}
+import momo.api.ports.storage.ImageStorage
 import momo.api.repositories.{
   MatchConfirmationRepository,
   MatchConfirmationResult,
@@ -49,6 +51,25 @@ final class ConfirmMatchSpec extends MomoCatsEffectSuite:
         found <- fixture.matches.find(MatchId.unsafeFromString("match-1"))
       yield
         assertEquals(result.map(_.id), Right(MatchId.unsafeFromString("match-1")))
+        assertEquals(found.map(_.matchNoInEvent.value), Some(1))
+    }
+
+  test("manual confirmation does not call unavailable object storage"):
+    Fixture.resource.use { fixture =>
+      val manualUsecase = fixture.usecaseWithRetention(
+        PurgeSourceImages[IO](fixture.matchDrafts, UnavailableImageStorage),
+        IO.pure(MatchId.unsafeFromString("manual-with-storage-down")),
+      )
+      for
+        _ <- fixture.seedPrereqs()
+        result <- manualUsecase.run(
+          command(),
+          AccountId.unsafeFromString("ponta"),
+          Some(MemberId.unsafeFromString("ponta")),
+        )
+        found <- fixture.matches.find(MatchId.unsafeFromString("manual-with-storage-down"))
+      yield
+        assertEquals(result.map(_.id), Right(MatchId.unsafeFromString("manual-with-storage-down")))
         assertEquals(found.map(_.matchNoInEvent.value), Some(1))
     }
 
@@ -186,12 +207,27 @@ final class ConfirmMatchSpec extends MomoCatsEffectSuite:
     def usecaseWith(
         confirmations: MatchConfirmationRepository[IO],
         nextId: IO[MatchId],
+    ): ConfirmMatch[IO] = buildUsecase(confirmations, retention, nextId)
+
+    def usecaseWithRetention(
+        customRetention: PurgeSourceImages[IO],
+        nextId: IO[MatchId],
+    ): ConfirmMatch[IO] = buildUsecase(
+      InMemoryMatchConfirmationRepository[IO](matches, matchDrafts),
+      customRetention,
+      nextId,
+    )
+
+    private def buildUsecase(
+        confirmations: MatchConfirmationRepository[IO],
+        customRetention: PurgeSourceImages[IO],
+        nextId: IO[MatchId],
     ): ConfirmMatch[IO] = ConfirmMatch[IO](
       heldEvents = heldEvents,
       matches = matches,
       matchDrafts = matchDrafts,
       confirmations = confirmations,
-      sourceImageRetention = retention,
+      sourceImageRetention = customRetention,
       gameTitles = gameTitles,
       mapMasters = mapMasters,
       seasonMasters = seasonMasters,
@@ -247,3 +283,21 @@ final class ConfirmMatchSpec extends MomoCatsEffectSuite:
         updatedAt: Instant,
     ): IO[MatchConfirmationResult] =
       IO.raiseError(new AppException(AppError.Conflict("confirmation conflict")))
+
+  private object UnavailableImageStorage extends ImageStorage[IO]:
+    override def save(
+        ownerAccountId: AccountId,
+        fileName: Option[String],
+        contentType: Option[String],
+        bytes: Array[Byte],
+    ): IO[Either[AppError, StoredImage]] = unavailable
+
+    override def find(imageId: ImageId): IO[Option[StoredImage]] = unavailable
+
+    override def readStream(image: StoredImage): Stream[IO, Byte] =
+      Stream.raiseError[IO](new RuntimeException("object storage unavailable"))
+
+    override def delete(imageId: ImageId): IO[Boolean] = unavailable
+
+    private def unavailable[A]: IO[A] = IO
+      .raiseError(new RuntimeException("object storage unavailable"))

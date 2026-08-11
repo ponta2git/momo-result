@@ -76,9 +76,7 @@ final class OcrWorkerJobMessageV2Spec extends FunSuite with JsonSchemaAssertions
       "source-images/../image.png",
       "source-images/image.png/",
       "source-images/画像.png",
-    ).foreach { key =>
-      assert(build(canonicalInput.copy(imageObjectKey = key)).isLeft, clues(key))
-    }
+    ).foreach(key => assert(build(canonicalInput.copy(imageObjectKey = key)).isLeft, clues(key)))
   }
 
   test("enforces verified image metadata and the exact 3 MiB boundary") {
@@ -160,16 +158,16 @@ final class OcrWorkerJobMessageV2Spec extends FunSuite with JsonSchemaAssertions
 
   private def build(input: BuildInput): Either[String, OcrWorkerJobMessageV2] =
     OcrWorkerJobMessageV2.build(
-    jobId = OcrJobId.unsafeFromString(input.jobId),
-    draftId = OcrDraftId.unsafeFromString("draft-v2-1"),
-    sourceImageId = ImageId.unsafeFromString("image-v2-1"),
-    imageObjectKey = input.imageObjectKey,
-    sha256 = input.sha256,
-    byteLength = input.byteLength,
-    mediaType = input.mediaType,
-    requestedScreenType = input.requestedScreenType,
-    attempt = input.attempt,
-    enqueuedAt = Instant.parse("2026-08-11T00:00:00Z"),
-    hints = OcrJobHints.empty,
-    requestId = input.requestId,
-  )
+      jobId = OcrJobId.unsafeFromString(input.jobId),
+      draftId = OcrDraftId.unsafeFromString("draft-v2-1"),
+      sourceImageId = ImageId.unsafeFromString("image-v2-1"),
+      imageObjectKey = input.imageObjectKey,
+      sha256 = input.sha256,
+      byteLength = input.byteLength,
+      mediaType = input.mediaType,
+      requestedScreenType = input.requestedScreenType,
+      attempt = input.attempt,
+      enqueuedAt = Instant.parse("2026-08-11T00:00:00Z"),
+      hints = OcrJobHints.empty,
+      requestId = input.requestId,
+    )

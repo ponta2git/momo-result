@@ -57,7 +57,9 @@ final class ApiRuntimeArchitectureSpec extends FunSuite:
   test("API runtime shares one Redis client across queue and rate limiters"):
     val runtimeInfrastructureText = read(runtimeInfrastructureFile)
 
-    assert(runtimeInfrastructureText.contains("Redis[F].simple(redis.url, RedisCodec.Utf8).map"))
+    assert(
+      runtimeInfrastructureText.contains("Redis[F].simple(redis.url, RedisCodec.Utf8).evalMap")
+    )
     assert(
       runtimeInfrastructureText.contains(
         "RedisOcrJobQueuePublisher.fromCommands(redis.stream, commands)"
@@ -72,6 +74,9 @@ final class ApiRuntimeArchitectureSpec extends FunSuite:
     assert(runtimeInfrastructureText.contains("RedisOAuthProviderBackoff.fromCommands"))
     assert(runtimeInfrastructureText.contains("\"ocr-job-create\""))
     assert(runtimeInfrastructureText.contains("\"ocr-job-create-global\""))
+    assert(runtimeInfrastructureText.contains("readApi <- ResilientRateLimiter.create[F]"))
+    assert(runtimeInfrastructureText.contains("mutation <- ResilientRateLimiter.create[F]"))
+    assert(!runtimeInfrastructureText.contains("ocrJobCreate <- ResilientRateLimiter"))
     assert(!runtimeInfrastructureText.contains("RedisOcrJobQueuePublisher.resource[F](redis)"))
     assert(!runtimeInfrastructureText.contains("RedisRateLimiter.resource[F](redis"))
     assert(!runtimeInfrastructureText.contains("RedisOAuthProviderBackoff.resource[F](redis"))

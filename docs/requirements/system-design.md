@@ -100,7 +100,14 @@ apps/
 - upload 以外の mutation request body には `REQUEST_MAX_BYTES` を適用する。既定値は 256 KiB とする。
 - 画像 upload request には `UPLOAD_REQUEST_MAX_BYTES` を適用し、画像実体は1枚3MBまでとする。
 
-### 4.3 認証・セッション
+### 4.3 OCR依存障害時の縮退境界
+
+- API processとDBが利用可能な限り、既存resultの表示と`matchDraftId`を持たない画像なし手入力記録は、OCR worker、queue、object storageを呼ばずに継続する。
+- 稼働中に共有Redis rate limiterが失敗または応答停止した場合、通常のread/mutationだけは短いtimeout後に同じ設定上限を持つprocess-local limiterへ縮退する。分散上限からinstance単位上限へ弱まるため、状態遷移を安全なログへ記録し、Redis復旧後は自動的に共有limiterへ戻す。
+- OCR受付、画像upload、source image取得は上記fallbackの対象にしない。必要なqueue/object storageを確認できない場合はfail-closedにする。
+- この縮退はAPI processまたはDB障害を隠さない。cold start、DB write、認証sessionの成立は別の可用性前提として扱う。
+
+### 4.4 認証・セッション
 
 - Discord OAuthでログインする。
 - OAuth後はAPIサーバーがHttpOnly Cookieのサーバーサイドセッションを管理する。

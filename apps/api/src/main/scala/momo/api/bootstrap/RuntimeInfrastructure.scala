@@ -1,5 +1,7 @@
 package momo.api.bootstrap
 
+import scala.concurrent.duration.*
+
 import cats.effect.{Async, Resource}
 import cats.syntax.all.*
 import dev.profunktor.redis4cats.Redis
@@ -14,7 +16,8 @@ import momo.api.auth.{
   OAuthProviderBackoff,
   RateLimiter,
   RedisOAuthProviderBackoff,
-  RedisRateLimiter
+  RedisRateLimiter,
+  ResilientRateLimiter
 }
 import momo.api.config.AppConfig
 import momo.api.http.HttpRateLimiters
@@ -35,11 +38,13 @@ private[bootstrap] final case class RuntimeInfrastructure[F[_]](
 )
 
 private[bootstrap] object RuntimeInfrastructure:
+  private val CoreRateLimiterFallbackAfter = 250.millis
+
   def resource[F[_]: Async](
       config: AppConfig,
       now: F[java.time.Instant],
   ): Resource[F, RuntimeInfrastructure[F]] = config.redis match
-    case Some(redis) => Redis[F].simple(redis.url, RedisCodec.Utf8).map { commands =>
+    case Some(redis) => Redis[F].simple(redis.url, RedisCodec.Utf8).evalMap { commands =>
         val queue: OcrJobQueuePublisher[F] =
           RedisOcrJobQueuePublisher.fromCommands(redis.stream, commands)
         val queueHealth: OcrJobQueueHealthCheck[F] = RedisOcrJobQueuePublisher
@@ -78,9 +83,9 @@ private[bootstrap] object RuntimeInfrastructure:
           config.resourceLimits.sourceImageDownloadRateLimitPerMinute,
           now,
         )
-        val readApi: RateLimiter[F] = RedisRateLimiter
+        val readApiPrimary: RateLimiter[F] = RedisRateLimiter
           .fromCommands(commands, "read-api", config.resourceLimits.readApiRateLimitPerMinute, now)
-        val mutation: RateLimiter[F] = RedisRateLimiter
+        val mutationPrimary: RateLimiter[F] = RedisRateLimiter
           .fromCommands(commands, "mutation", config.resourceLimits.mutationRateLimitPerMinute, now)
         val ocrJobCreate: RateLimiter[F] = RedisRateLimiter.fromCommands(
           commands,
@@ -94,7 +99,24 @@ private[bootstrap] object RuntimeInfrastructure:
           config.resourceLimits.ocrJobCreateGlobalRateLimitPerMinute,
           now,
         )
-        RuntimeInfrastructure(
+        for
+          readApiFallback <- LoginRateLimiter
+            .create[F](config.resourceLimits.readApiRateLimitPerMinute, now)
+          mutationFallback <- LoginRateLimiter
+            .create[F](config.resourceLimits.mutationRateLimitPerMinute, now)
+          readApi <- ResilientRateLimiter.create[F](
+            readApiPrimary,
+            readApiFallback,
+            CoreRateLimiterFallbackAfter,
+            "read-api",
+          )
+          mutation <- ResilientRateLimiter.create[F](
+            mutationPrimary,
+            mutationFallback,
+            CoreRateLimiterFallbackAfter,
+            "mutation",
+          )
+        yield RuntimeInfrastructure(
           queue,
           queueHealth,
           analysisQueue,

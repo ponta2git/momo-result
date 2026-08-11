@@ -54,7 +54,7 @@ def _process_command_lines() -> list[str]:
             continue
         try:
             raw = (proc_dir / "cmdline").read_bytes()
-        except FileNotFoundError, PermissionError, ProcessLookupError:
+        except (FileNotFoundError, PermissionError, ProcessLookupError):
             continue
         command_lines.append(raw.replace(b"\0", b" ").decode("utf-8", errors="replace"))
     return command_lines

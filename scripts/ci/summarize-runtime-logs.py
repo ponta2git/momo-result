@@ -17,7 +17,7 @@ def summarize(lines: Iterable[str]) -> dict[str, object]:
     for line in lines:
         try:
             value = json.loads(line)
-        except json.JSONDecodeError, TypeError:
+        except (json.JSONDecodeError, TypeError):
             unstructured += 1
             continue
         if not isinstance(value, dict):

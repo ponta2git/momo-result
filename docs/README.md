@@ -81,7 +81,7 @@
 現時点の判断:
 
 - `docs/test-rule.md` と `docs/test-architecture.md` は分けて維持する。前者は日々のテスト選択、後者はcoverage/CI設計を扱う。
-- runtime / deploy は現状 `docs/requirements/system-design.md`、`docs/architecture.md`、`docs/dev-rule.md`、`docs/test-architecture.md` で足りる。nginx / supervisord / Fly の変更が増え、判断ルールが重複し始めたら `docs/runtime-rule.md` を新設する。
+- runtime / deploy の公開可能な判断ルールは `docs/requirements/system-design.md`、`docs/architecture.md`、`docs/dev-rule.md`、`docs/test-architecture.md` で管理する。人間向けの具体的な通常release、Analysis昇格、rollback手順はgit管理外の `private/ops/runbook.md`、初回構築は `private/ops/production-deploy.md` を正とし、provider固有値をpublic docsへ複製しない。
 - `docs/requirements/future-work.md` は要求棚卸しとして維持する。具体的な実装計画や運用手順が増える場合は `private/` へ移す。
 
 ## 6. 競合時の優先順位

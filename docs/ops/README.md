@@ -2,7 +2,7 @@
 
 目的: public repository に置ける運用原則だけを残す。
 
-詳細な本番 runbook、provider dashboard 手順、攻撃対策、実測値、kill switch、secret 名以外の設定値は `private/ops/` に置く。`private/ops/` は git 管理外であり、通常の AI 作業では読まない。
+詳細な本番runbook、provider dashboard手順、攻撃対策、実測値、kill switch、secret名以外の設定値は `private/ops/` に置く。通常release、Analysis昇格、rollbackは `private/ops/runbook.md`、初回構築は `private/ops/production-deploy.md` を人間向け正本とする。`private/ops/` はgit管理外であり、通常のAI作業では読まない。
 
 ## Public Rules
 
@@ -11,8 +11,9 @@
 - DB schema / migration の正本は `../momo-db`。
 - deploy や runtime に必要な非 secret 設定は `fly.toml` と CI 設定を正とする。
 - production deploy / rollbackは同じ承認境界を通し、CIに記録したcommit・設定・artifact identityを照合できない候補を適用しない。
+- exactなworkflow入力、action、timeout、artifact名はCI設定を正とし、private runbookは人間の判断順序、承認条件、成功証拠、失敗後の状態確認を定める。
 - public docs に本番 topology、VM size、Machine 数、IP、rate limit 閾値、攻撃対策 gap、遮断 endpoint を書かない。
-- 障害調査で詳細 runbook が必要な場合は、人間が private ops 文書の参照可否を判断する。
+- 障害調査で詳細runbookが必要な場合は、人間が上記private ops文書の参照可否を判断する。
 
 ## AI Guidance
 

@@ -248,8 +248,8 @@ OCRジョブのタイムアウト初期値は `OCR_TIMEOUT_SECONDS` で管理す
 
 ### 10.3 デプロイフロー
 
-- 既定ブランチへのmergeでGitHub ActionsからFly.ioへ自動デプロイする。
-- APIとworkerで互換なartifact schema versionを確認し、DB migration、API、workerの順序を明示する。
+- 既定ブランチへのmergeではGitHub Actionsが変更範囲を分類し、runtime対象変更だけを承認付きで自動デプロイする。戦績分析は検証済みcandidate作成までを自動化し、本番publicationは手動昇格とする。
+- APIとworkerで互換なartifact schema versionを確認する。本番DB migrationは所有repoからconsumerより先に適用し、このrepoのCIでは隔離DBへの適用と本番read-only preflightを行う。
 - 本番Secretsは `fly secrets` で管理する。
 - CI SecretsはGitHub Actions secretsで管理する。
 

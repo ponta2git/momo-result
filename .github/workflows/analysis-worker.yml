@@ -182,10 +182,13 @@ jobs:
           tar_sha="$(cut -d ' ' -f 1 \
             "${ANALYSIS_IMAGE_ARTIFACT_NAME}/image-tar.sha256")"
           config_sha="$(sha256sum fly.analysis.toml | cut -d ' ' -f 1)"
+          image_artifact_digest="$(
+            scripts/ci/canonicalize-artifact-digest.sh "${IMAGE_ARTIFACT_DIGEST}"
+          )"
           jq -n \
             --arg commit "${GITHUB_SHA}" \
             --arg configSha256 "${config_sha}" \
-            --arg imageArtifactDigest "${IMAGE_ARTIFACT_DIGEST}" \
+            --arg imageArtifactDigest "${image_artifact_digest}" \
             --arg imageArtifactId "${IMAGE_ARTIFACT_ID}" \
             --arg imageArtifactName "${ANALYSIS_IMAGE_ARTIFACT_NAME}" \
             --arg imageRef "${ANALYSIS_IMAGE_REF}" \

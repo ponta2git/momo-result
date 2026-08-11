@@ -2,6 +2,7 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+canonicalizer="${repo_root}/scripts/ci/canonicalize-artifact-digest.sh"
 validator="${repo_root}/scripts/ci/validate-analysis-candidate.sh"
 test_dir="$(mktemp -d)"
 trap 'rm -rf "${test_dir}"' EXIT
@@ -10,10 +11,12 @@ readonly run_id=123456
 readonly run_attempt=2
 readonly commit=0123456789abcdef0123456789abcdef01234567
 readonly digest=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+readonly artifact_digest="$("${canonicalizer}" "${digest}")"
 
 write_valid_candidate() {
   jq -n \
     --arg commit "${commit}" \
+    --arg artifactDigest "${artifact_digest}" \
     --arg digest "${digest}" \
     --arg runAttempt "${run_attempt}" \
     --arg runId "${run_id}" '
@@ -25,7 +28,7 @@ write_valid_candidate() {
         imageRef: ("registry.fly.io/momo-result-analysis:" + $commit + "-" + $runId + "-" + $runAttempt),
         imageArtifactName: ("analysis-worker-image-" + $runId + "-" + $runAttempt),
         imageArtifactId: "987654",
-        imageArtifactDigest: ("sha256:" + $digest),
+        imageArtifactDigest: $artifactDigest,
         tarSha256: $digest,
         configSha256: $digest
       }

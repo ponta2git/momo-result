@@ -596,12 +596,18 @@ jobs:
           image_id="$(sed -n '1p' "${IMAGE_ARTIFACT_NAME}/image-id.txt")"
           config_sha="$(jq -r '.configSha256' "${IMAGE_ARTIFACT_NAME}/candidate.json")"
           manifest_sha="$(sha256sum "${IMAGE_ARTIFACT_NAME}/registry-manifest.json" | cut -d ' ' -f 1)"
+          manifest_artifact_digest="$(
+            scripts/ci/canonicalize-artifact-digest.sh "${MANIFEST_ARTIFACT_DIGEST}"
+          )"
+          source_artifact_digest="$(
+            scripts/ci/canonicalize-artifact-digest.sh "${SOURCE_ARTIFACT_DIGEST}"
+          )"
           jq -n \
             --arg commit "${GITHUB_SHA}" \
             --arg configSha256 "${config_sha}" \
             --arg imageId "${image_id}" \
             --arg imageRef "${IMAGE_REF}" \
-            --arg manifestArtifactDigest "${MANIFEST_ARTIFACT_DIGEST}" \
+            --arg manifestArtifactDigest "${manifest_artifact_digest}" \
             --arg manifestArtifactId "${MANIFEST_ARTIFACT_ID}" \
             --arg manifestArtifactName "runtime-image-registry-manifest-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
             --arg manifestSha256 "${manifest_sha}" \
@@ -609,7 +615,7 @@ jobs:
             --arg registryRef "${REGISTRY_REF}" \
             --arg runAttempt "${GITHUB_RUN_ATTEMPT}" \
             --arg runId "${GITHUB_RUN_ID}" \
-            --arg sourceArtifactDigest "${SOURCE_ARTIFACT_DIGEST}" \
+            --arg sourceArtifactDigest "${source_artifact_digest}" \
             --arg sourceArtifactId "${SOURCE_ARTIFACT_ID}" \
             --arg sourceArtifactName "${IMAGE_ARTIFACT_NAME}" \
             '{

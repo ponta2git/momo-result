@@ -1,0 +1,146 @@
+{
+  "schemaVersion": 1,
+  "preflight": [
+    {
+      "name": "complete-contract",
+      "removedColumn": null,
+      "expectedMissingCounts": {
+        "columns": 0,
+        "tables": 0,
+        "indexes": 0,
+        "functions": 0,
+        "seedMembers": 0
+      }
+    },
+    {
+      "name": "missing-required-column",
+      "removedColumn": "ocr_jobs.status",
+      "expectedMissingCounts": {
+        "columns": 1,
+        "tables": 0,
+        "indexes": 0,
+        "functions": 0,
+        "seedMembers": 0
+      }
+    }
+  ],
+  "renderNginx": [
+    {
+      "name": "production-hosts-are-normalized-and-deduplicated",
+      "appEnv": "prod",
+      "canonicalHost": "Example.COM.",
+      "extraAllowedHosts": "api.example.com,example.com",
+      "originLockToken": "0123456789abcdef0123456789abcdef",
+      "expectedStatus": "ok",
+      "expectedAllowedHosts": [
+        "example.com",
+        "api.example.com"
+      ],
+      "expectedOptionalOriginLockHosts": []
+    },
+    {
+      "name": "development-adds-local-origin-lock-exceptions",
+      "appEnv": "dev",
+      "canonicalHost": "dev.example.com",
+      "extraAllowedHosts": "",
+      "originLockToken": "",
+      "expectedStatus": "ok",
+      "expectedAllowedHosts": [
+        "dev.example.com",
+        "localhost",
+        "127.0.0.1"
+      ],
+      "expectedOptionalOriginLockHosts": [
+        "localhost",
+        "127.0.0.1"
+      ]
+    },
+    {
+      "name": "production-requires-origin-lock-token",
+      "appEnv": "prod",
+      "canonicalHost": "example.com",
+      "extraAllowedHosts": "",
+      "originLockToken": "",
+      "expectedStatus": "failed",
+      "expectedErrorClass": "InvalidConfiguration"
+    },
+    {
+      "name": "invalid-host-fails-closed",
+      "appEnv": "test",
+      "canonicalHost": "bad_host.example.com",
+      "extraAllowedHosts": "",
+      "originLockToken": "test-token",
+      "expectedStatus": "failed",
+      "expectedErrorClass": "InvalidConfiguration"
+    }
+  ],
+  "smoke": {
+    "processCases": [
+      {
+        "name": "all-runtime-processes",
+        "commandLines": [
+          "/opt/java/openjdk/bin/java -cp /opt/momo-result/api/lib/app.jar momo.api.Main",
+          "/usr/sbin/nginx -c /tmp/nginx.conf",
+          "/opt/momo-result/ocr-worker/.venv/bin/python /opt/momo-result/ocr-worker/.venv/bin/momo-ocr worker"
+        ],
+        "expectedMissing": []
+      },
+      {
+        "name": "missing-ocr-worker",
+        "commandLines": [
+          "/opt/java/openjdk/bin/java -cp /opt/momo-result/api/lib/app.jar momo.api.Main",
+          "/usr/sbin/nginx -c /tmp/nginx.conf"
+        ],
+        "expectedMissing": [
+          "ocrWorker"
+        ]
+      }
+    ],
+    "checkCases": [
+      {
+        "mode": "deferred",
+        "expectedChecks": [
+          "database",
+          "http",
+          "processes",
+          "redis",
+          "web"
+        ]
+      },
+      {
+        "mode": "required",
+        "expectedChecks": [
+          "database",
+          "http",
+          "processes",
+          "publicEdge",
+          "redis",
+          "web"
+        ]
+      }
+    ],
+    "healthPayloadCases": [
+      {
+        "name": "healthy",
+        "payload": {
+          "status": "ok"
+        },
+        "expectedValid": true
+      },
+      {
+        "name": "degraded",
+        "payload": {
+          "status": "degraded"
+        },
+        "expectedValid": false
+      },
+      {
+        "name": "non-object",
+        "payload": [
+          "ok"
+        ],
+        "expectedValid": false
+      }
+    ]
+  }
+}

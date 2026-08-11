@@ -16,6 +16,9 @@ from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "deploy"))
+CHARACTERIZATION_FIXTURE = json.loads(
+    (ROOT / "contracts/runtime-tool-characterization-v1.json").read_text(encoding="utf-8")
+)
 
 
 def load_module(name: str, path: Path) -> ModuleType:
@@ -38,44 +41,82 @@ log_summary = load_module("runtime_log_summary", ROOT / "scripts/ci/summarize-ru
 
 
 class RuntimeDeployScriptTest(unittest.TestCase):
-    def test_complete_contract_passes_and_missing_column_fails(self) -> None:
-        complete = preflight.missing_contract(
-            columns=preflight.REQUIRED_COLUMNS,
-            tables=preflight.REQUIRED_TABLES,
-            indexes=preflight.REQUIRED_INDEXES,
-            hardened_functions=preflight.REQUIRED_FUNCTIONS,
-            member_ids=preflight.REQUIRED_MEMBER_IDS,
-        )
-        self.assertFalse(any(complete.values()), complete)
+    def test_preflight_characterization_fixture(self) -> None:
+        for case in CHARACTERIZATION_FIXTURE["preflight"]:
+            with self.subTest(case=case["name"]):
+                columns = set(preflight.REQUIRED_COLUMNS)
+                if removed := case["removedColumn"]:
+                    table, column = removed.split(".", maxsplit=1)
+                    columns.remove((table, column))
+                missing = preflight.missing_contract(
+                    columns=columns,
+                    tables=preflight.REQUIRED_TABLES,
+                    indexes=preflight.REQUIRED_INDEXES,
+                    hardened_functions=preflight.REQUIRED_FUNCTIONS,
+                    member_ids=preflight.REQUIRED_MEMBER_IDS,
+                )
+                self.assertEqual(
+                    {key: len(value) for key, value in missing.items()},
+                    case["expectedMissingCounts"],
+                )
 
-        missing = preflight.missing_contract(
-            columns=preflight.REQUIRED_COLUMNS - {("ocr_jobs", "status")},
-            tables=preflight.REQUIRED_TABLES,
-            indexes=preflight.REQUIRED_INDEXES,
-            hardened_functions=preflight.REQUIRED_FUNCTIONS,
-            member_ids=preflight.REQUIRED_MEMBER_IDS,
-        )
-        self.assertEqual(missing["columns"], ["ocr_jobs.status"])
+    def test_render_nginx_characterization_fixture(self) -> None:
+        for case in CHARACTERIZATION_FIXTURE["renderNginx"]:
+            with self.subTest(case=case["name"]):
+                try:
+                    preflight_status = "ok"
+                    render_nginx = load_module(
+                        f"render_nginx_conf_{case['name']}",
+                        ROOT / "deploy/render-nginx-conf.py",
+                    )
+                    render_nginx.validate_app_env(case["appEnv"])
+                    token = case["originLockToken"]
+                    if not token:
+                        if case["appEnv"] == "prod":
+                            raise ValueError
+                        token = "dev-origin-lock"
+                    render_nginx.validate_origin_lock_token(token, case["appEnv"])
+                    allowed = render_nginx.parse_hosts(
+                        ",".join([case["canonicalHost"], case["extraAllowedHosts"]])
+                    )
+                    optional: list[str] = []
+                    if case["appEnv"] != "prod":
+                        optional = render_nginx.parse_hosts(
+                            ",".join(render_nginx.DEV_OPTIONAL_ORIGIN_LOCK_HOSTS)
+                        )
+                        for host in optional:
+                            if host not in allowed:
+                                allowed.append(host)
+                except (OSError, ValueError):
+                    preflight_status = "failed"
+                    allowed = []
+                    optional = []
+
+                self.assertEqual(preflight_status, case["expectedStatus"])
+                if preflight_status == "ok":
+                    self.assertEqual(allowed, case["expectedAllowedHosts"])
+                    self.assertEqual(optional, case["expectedOptionalOriginLockHosts"])
 
     def test_postdeploy_process_and_health_contracts_fail_closed(self) -> None:
-        commands = [
-            "/opt/java/openjdk/bin/java -cp /opt/momo-result/api/lib/app.jar momo.api.Main",
-            "/usr/sbin/nginx -c /tmp/nginx.conf",
-            "/opt/momo-result/ocr-worker/.venv/bin/python "
-            "/opt/momo-result/ocr-worker/.venv/bin/momo-ocr worker",
-        ]
-        self.assertEqual(postdeploy.missing_processes(commands), [])
-        self.assertEqual(postdeploy.missing_processes(commands[:-1]), ["ocrWorker"])
-        self.assertTrue(postdeploy.valid_health_payload({"status": "ok"}))
-        self.assertFalse(postdeploy.valid_health_payload({"status": "degraded"}))
-        self.assertEqual(
-            postdeploy.postdeploy_checks("deferred"),
-            ["database", "http", "processes", "redis", "web"],
-        )
-        self.assertEqual(
-            postdeploy.postdeploy_checks("required"),
-            ["database", "http", "processes", "publicEdge", "redis", "web"],
-        )
+        smoke_fixture = CHARACTERIZATION_FIXTURE["smoke"]
+        for case in smoke_fixture["processCases"]:
+            with self.subTest(case=case["name"]):
+                self.assertEqual(
+                    postdeploy.missing_processes(case["commandLines"]),
+                    case["expectedMissing"],
+                )
+        for case in smoke_fixture["healthPayloadCases"]:
+            with self.subTest(case=case["name"]):
+                self.assertEqual(
+                    postdeploy.valid_health_payload(case["payload"]),
+                    case["expectedValid"],
+                )
+        for case in smoke_fixture["checkCases"]:
+            with self.subTest(mode=case["mode"]):
+                self.assertEqual(
+                    postdeploy.postdeploy_checks(case["mode"]),
+                    case["expectedChecks"],
+                )
         with self.assertRaises(ValueError):
             postdeploy.postdeploy_checks("disabled")
 

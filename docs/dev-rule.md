@@ -306,6 +306,8 @@ resource / endurance測定は本番同等runtimeのprivate gateであり、通�
 
 runtimeとanalysisのrelease候補は、検証対象を一度だけbuildしてidentityと入力commit、設定、artifact digestを記録する。CI actionやprovider APIの出力は外部wire値として境界で検証・正規化してから来歴へ記録し、consumerが期待する内部表現をproducer側の推測で組み立てない。後続のsmokeとdeployは同じ候補を検証して再利用し、本番指定は可変tagではなくregistry digestを使う。cacheはcontent-addressedな高速化として利用できるが、cache hitを検証成功の根拠にせず、cold cacheでも同じgateが完走しなければならない。異なるimage系列はcache scopeを分離する。
 
+公開edgeのblocking health gateは、公開DNS / TLS / edgeを通り、かつedge policyが意図的に拒否しない管理下の観測地点から実行する。shared CI runner固有の拒否をapplication障害として扱わず、gateを通すためにedge policyを弱めたり拒否responseを成功扱いしたりしない。観測地点が異なる内部health、公開edge、独立外形監視は別々の証拠として扱う。
+
 CIの詳細なtimeout、サービス、artifact path は workflow を正とする。docs へ値を写す場合は、判断に必要な粒度だけに留める。
 
 ## 6.1 Production rollback verification

@@ -216,6 +216,7 @@ PostgreSQL repository、Doobie query、DB table/column、migration 前提に触�
 - analysis workerのPostgreSQL / Redis integrationは通常の `cargo test` と分離し、CI上で実サービスを
   起動する `analysis-worker-control-plane-smoke.sh` を明示gateとして持つ。
 - 外部サービスを使う spec は、stream名、DB row、一時ファイル名、worker id を test / suite ごとに分離する。
+- CI actionやprovider APIの出力をrelease来歴へ取り込む境界では、公開契約のwire表現をfixtureに使い、正規化後の値がconsumer validatorを通ることをcontract testで固定する。都合のよい型・接頭辞・表現をmock側で仮定しない。
 
 ## 9. Quality Gates
 

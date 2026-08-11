@@ -2,6 +2,7 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+canonicalizer="${repo_root}/scripts/ci/canonicalize-artifact-digest.sh"
 validator="${repo_root}/scripts/ci/validate-runtime-deployment.sh"
 test_dir="$(mktemp -d)"
 trap 'rm -rf "${test_dir}"' EXIT
@@ -10,10 +11,12 @@ readonly run_id=123456
 readonly run_attempt=2
 readonly commit=0123456789abcdef0123456789abcdef01234567
 readonly digest=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+readonly artifact_digest="$("${canonicalizer}" "${digest}")"
 
 write_valid_metadata() {
   jq -n \
     --arg commit "${commit}" \
+    --arg artifactDigest "${artifact_digest}" \
     --arg digest "${digest}" \
     --arg runAttempt "${run_attempt}" \
     --arg runId "${run_id}" '
@@ -29,10 +32,10 @@ write_valid_metadata() {
         configSha256: $digest,
         sourceArtifactName: ("runtime-image-" + $runId + "-" + $runAttempt),
         sourceArtifactId: "111",
-        sourceArtifactDigest: ("sha256:" + $digest),
+        sourceArtifactDigest: $artifactDigest,
         manifestArtifactName: ("runtime-image-registry-manifest-" + $runId + "-" + $runAttempt),
         manifestArtifactId: "222",
-        manifestArtifactDigest: ("sha256:" + $digest),
+        manifestArtifactDigest: $artifactDigest,
         manifestSha256: $digest
       }
     ' > "${test_dir}/deployment.json"

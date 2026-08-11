@@ -304,7 +304,7 @@ resource / endurance測定は本番同等runtimeのprivate gateであり、通�
 
 `deploy.yml` の production deploy 経路では、サブシステム quality gate、public safety、runtime image build / scan / smoke を可能な範囲で並列に進め、`release-ready` で合流させる。coverage artifactはPRレビュー補助としてPR時だけ生成し、同じテスト集合をcoverageなしで重複実行しない。
 
-runtimeとanalysisのrelease候補は、検証対象を一度だけbuildしてidentityと入力commit、設定、artifact digestを記録する。後続のsmokeとdeployは同じ候補を検証して再利用し、本番指定は可変tagではなくregistry digestを使う。cacheはcontent-addressedな高速化として利用できるが、cache hitを検証成功の根拠にせず、cold cacheでも同じgateが完走しなければならない。異なるimage系列はcache scopeを分離する。
+runtimeとanalysisのrelease候補は、検証対象を一度だけbuildしてidentityと入力commit、設定、artifact digestを記録する。CI actionやprovider APIの出力は外部wire値として境界で検証・正規化してから来歴へ記録し、consumerが期待する内部表現をproducer側の推測で組み立てない。後続のsmokeとdeployは同じ候補を検証して再利用し、本番指定は可変tagではなくregistry digestを使う。cacheはcontent-addressedな高速化として利用できるが、cache hitを検証成功の根拠にせず、cold cacheでも同じgateが完走しなければならない。異なるimage系列はcache scopeを分離する。
 
 CIの詳細なtimeout、サービス、artifact path は workflow を正とする。docs へ値を写す場合は、判断に必要な粒度だけに留める。
 

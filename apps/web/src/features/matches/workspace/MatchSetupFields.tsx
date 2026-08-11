@@ -59,7 +59,7 @@ export function MatchSetupFields({
         value={Number.isFinite(values.matchNoInEvent) ? String(values.matchNoInEvent) : ""}
         onChange={(event) =>
           actions.onPatchRoot({
-            matchNoInEvent: Number.parseInt(event.currentTarget.value.replaceAll(/\D/gu, ""), 10),
+            matchNoInEvent: Math.trunc(Number(event.currentTarget.value.replaceAll(/\D/gu, ""))),
           })
         }
       />

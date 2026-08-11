@@ -118,7 +118,7 @@ export function MobilePlayOrderSelect({
         className={cn(selectShortClass, selectCellTone({ changed, error, reviewItem, reviewed }))}
         data-validation-path={keyToPath(index, "playOrder")}
         value={Number.isFinite(playOrder) ? String(playOrder) : ""}
-        onChange={(event) => onPlayOrderChange(index, Number.parseInt(event.target.value, 10))}
+        onChange={(event) => onPlayOrderChange(index, Math.trunc(Number(event.target.value)))}
         onFocus={() => {
           onPreferImageKindChange?.("incident_log");
           onReviewCellFocus(index, "playOrder");

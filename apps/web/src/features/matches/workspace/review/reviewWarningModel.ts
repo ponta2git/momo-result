@@ -46,7 +46,7 @@ export function parseWarningTarget(fieldPath: string | null): WarningTarget | nu
   if (!playerMatch) {
     return null;
   }
-  const playerIndex = Number.parseInt(playerMatch[1] ?? "", 10);
+  const playerIndex = Math.trunc(Number(playerMatch[1] ?? ""));
   const rawField = playerMatch[2];
   if (!Number.isFinite(playerIndex) || !rawField) {
     return null;

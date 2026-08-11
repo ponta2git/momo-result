@@ -104,20 +104,22 @@ final class ObjectBackedImageStore[F[_]: Async](
       reservation: SourceImageReservation,
       bytes: Array[Byte],
   ): F[Either[AppError, StoredImage]] =
-    if !samePayload(record, reservation) then Async[F].pure(Left(
-      AppError.IdempotencyPayloadMismatch(
-        "Idempotency-Key was reused with a different image payload."
-      )
-    ))
-    else record.status match
-      case SourceImageStatus.Available => Async[F].pure(storedImage(record))
-      case SourceImageStatus.Reserved => Async[F].pure(Left(
-          AppError.IdempotencyInProgress("Image upload is already processing. Retry later.")
-        ))
-      case SourceImageStatus.Failed => reclaimFailed(record, bytes)
-      case SourceImageStatus.DeletePending | SourceImageStatus.Deleted => Async[F].pure(Left(
-          AppError.Conflict("This Idempotency-Key belongs to an image that is being deleted.")
-        ))
+    if !samePayload(record, reservation) then
+      Async[F].pure(Left(
+        AppError.IdempotencyPayloadMismatch(
+          "Idempotency-Key was reused with a different image payload."
+        )
+      ))
+    else
+      record.status match
+        case SourceImageStatus.Available => Async[F].pure(storedImage(record))
+        case SourceImageStatus.Reserved => Async[F].pure(Left(
+            AppError.IdempotencyInProgress("Image upload is already processing. Retry later.")
+          ))
+        case SourceImageStatus.Failed => reclaimFailed(record, bytes)
+        case SourceImageStatus.DeletePending | SourceImageStatus.Deleted => Async[F].pure(Left(
+            AppError.Conflict("This Idempotency-Key belongs to an image that is being deleted.")
+          ))
 
   private def reclaimFailed(
       record: SourceImageRecord,
@@ -134,7 +136,8 @@ final class ObjectBackedImageStore[F[_]: Async](
   ): F[Either[AppError, StoredImage]] = sourceImages.find(imageId).flatMap {
     case Some(record) if record.status == SourceImageStatus.Available =>
       Async[F].pure(storedImage(record))
-    case Some(record) if record.status == SourceImageStatus.Reserved => Async[F].pure(Left(
+    case Some(record) if record.status == SourceImageStatus.Reserved =>
+      Async[F].pure(Left(
         AppError.IdempotencyInProgress("Image upload is already processing. Retry later.")
       ))
     case _ => Async[F].pure(Left(StorageUnavailable))
@@ -143,11 +146,11 @@ final class ObjectBackedImageStore[F[_]: Async](
   private def uploadReserved(
       record: SourceImageRecord,
       bytes: Array[Byte],
-  ): F[Either[AppError, StoredImage]] = expectedMetadata(record) match
+  ): F[Either[AppError, StoredImage]] = SourceImageIntegrity.expected(record) match
     case None => Async[F].pure(Left(InternalContractError))
     case Some(expected) => objects
         .put(record.objectKey, expected.mediaType, bytes, expected.sha256).flatMap {
-          case Right(metadata) if sameObjectMetadata(expected, metadata) =>
+          case Right(metadata) if SourceImageIntegrity.metadataMatches(expected, metadata) =>
             completeUpload(record, metadata.etag)
           case Right(_) => failUpload(record.id, SourceImageFailureCode.ObjectIntegrityViolation)
           case Left(SourceImageObjectFailure.IntegrityViolation) =>
@@ -185,7 +188,7 @@ final class ObjectBackedImageStore[F[_]: Async](
       case Some(record) if image.location.value != record.objectKey.value =>
         Async[F].pure(Left(InternalContractError))
       case Some(record) => objects.get(record.objectKey).map {
-          case Right(sourceObject) if sameStoredObject(record, sourceObject) =>
+          case Right(sourceObject) if SourceImageIntegrity.matches(record, sourceObject) =>
             Right(sourceObject.bytes)
           case Right(_) | Left(SourceImageObjectFailure.IntegrityViolation) =>
             Left(StorageIntegrityError)
@@ -211,15 +214,6 @@ final class ObjectBackedImageStore[F[_]: Async](
     }
 
 object ObjectBackedImageStore:
-  private final case class ExpectedMetadata(
-      key: SourceImageObjectKey,
-      mediaType: String,
-      sizeBytes: Long,
-      sha256: Sha256Hex,
-      width: Int,
-      height: Int,
-  )
-
   private val StorageUnavailable = AppError.ServiceUnavailable(
     "Image storage is temporarily unavailable. Try again later."
   )
@@ -228,45 +222,17 @@ object ObjectBackedImageStore:
   )
   private val InternalContractError = AppError.Internal("Source image metadata is invalid.")
 
-  private def expectedMetadata(record: SourceImageRecord): Option[ExpectedMetadata] =
-    (
-      record.mediaType,
-      record.sizeBytes,
-      record.sha256,
-      record.width,
-      record.height,
-    ).mapN((mediaType, sizeBytes, sha256, width, height) =>
-      ExpectedMetadata(record.objectKey, mediaType, sizeBytes, sha256, width, height)
-    )
-
   private def samePayload(
       record: SourceImageRecord,
       reservation: SourceImageReservation,
   ): Boolean = record.ownerAccountId == reservation.ownerAccountId &&
     record.mediaType.contains(reservation.mediaType) &&
-    record.sizeBytes.contains(reservation.sizeBytes) && record.sha256.contains(reservation.sha256) &&
+    record.sizeBytes.contains(reservation.sizeBytes) &&
+    record.sha256.contains(reservation.sha256) &&
     record.width.contains(reservation.width) && record.height.contains(reservation.height)
 
-  private def sameObjectMetadata(
-      expected: ExpectedMetadata,
-      actual: SourceImageObjectMetadata,
-  ): Boolean = actual.key == expected.key && actual.mediaType == expected.mediaType &&
-    actual.sizeBytes == expected.sizeBytes && actual.sha256 == expected.sha256
-
-  private def sameStoredObject(
-      record: SourceImageRecord,
-      sourceObject: SourceImageObject,
-  ): Boolean = expectedMetadata(record).exists { expected =>
-    sameObjectMetadata(expected, sourceObject.metadata) &&
-    Sha256Hex.digest(sourceObject.bytes) == expected.sha256 &&
-    ImageValidation.validate(sourceObject.bytes, Some(expected.mediaType)).exists(validated =>
-      validated.dimensions.width == expected.width.toLong &&
-        validated.dimensions.height == expected.height.toLong
-    )
-  }
-
   private def storedImage(record: SourceImageRecord): Either[AppError, StoredImage] =
-    expectedMetadata(record).toRight(InternalContractError).flatMap { expected =>
+    SourceImageIntegrity.expected(record).toRight(InternalContractError).flatMap { expected =>
       StoredImageLocation.fromString(expected.key.value).leftMap(_ => InternalContractError)
         .map(location => StoredImage(record.id, location, expected.mediaType, expected.sizeBytes))
     }

@@ -75,5 +75,8 @@ trait SourceImagesRepository[F[_]]:
   def markUploadFailed(id: ImageId, failureCode: SourceImageFailureCode, now: Instant): F[Boolean]
   def retryFailed(id: ImageId, now: Instant): F[Boolean]
   def beginDelete(id: ImageId, now: Instant): F[SourceImageDeleteResult]
+  def beginDeleteUnreferenced(id: ImageId, now: Instant): F[SourceImageDeleteResult]
   def markDeleted(id: ImageId, now: Instant): F[Boolean]
   def reconciliationCandidates(olderThan: Instant, limit: Int): F[List[SourceImageRecord]]
+  def orphanCandidates(olderThan: Instant, limit: Int): F[List[SourceImageRecord]]
+  def purgeFailed(id: ImageId, olderThan: Instant): F[Boolean]

@@ -77,8 +77,24 @@ final class PostgresSourceImagesRepository[F[_]: MonadCancelThrow](transactor: T
       SET status = ${SourceImageStatus.DeletePending}, delete_pending_at = $now, updated_at = $now
       WHERE id = $id AND status = ${SourceImageStatus.Available}
     """ ++ returningAll).query[Row].option
-    val current = (selectAll ++ fr"WHERE id = $id").query[Row].option
+    beginDeleteResult(update, id).transact(transactor)
 
+  override def beginDeleteUnreferenced(
+      id: ImageId,
+      now: Instant,
+  ): F[SourceImageDeleteResult] =
+    val update = (fr"""
+      UPDATE source_images AS candidate
+      SET status = ${SourceImageStatus.DeletePending}, delete_pending_at = $now, updated_at = $now
+      WHERE candidate.id = $id AND candidate.status = ${SourceImageStatus.Available}
+    """ ++ unreferencedGuard ++ returningAll).query[Row].option
+    beginDeleteResult(update, id).transact(transactor)
+
+  private def beginDeleteResult(
+      update: ConnectionIO[Option[Row]],
+      id: ImageId,
+  ): ConnectionIO[SourceImageDeleteResult] =
+    val current = (selectAll ++ fr"WHERE id = $id").query[Row].option
     update.flatMap {
       case Some(row) => SourceImageDeleteResult.Pending(row.toRecord).pure[ConnectionIO]
       case None => current.map {
@@ -89,7 +105,7 @@ final class PostgresSourceImagesRepository[F[_]: MonadCancelThrow](transactor: T
             SourceImageDeleteResult.AlreadyDeleted
           case Some(row) => SourceImageDeleteResult.NotReady(row.status)
         }
-    }.transact(transactor)
+    }
 
   override def markDeleted(id: ImageId, now: Instant): F[Boolean] = sql"""
       UPDATE source_images
@@ -111,6 +127,26 @@ final class PostgresSourceImagesRepository[F[_]: MonadCancelThrow](transactor: T
       ORDER BY updated_at, id
       LIMIT $boundedLimit
     """).query[Row].to[List].map(_.map(_.toRecord)).transact(transactor)
+
+  override def orphanCandidates(
+      olderThan: Instant,
+      limit: Int,
+  ): F[List[SourceImageRecord]] =
+    val boundedLimit = limit.max(1).min(MaxReconciliationBatchSize)
+    (selectAllAliased ++ fr"""
+      WHERE candidate.status = ${SourceImageStatus.Available}
+        AND candidate.available_at <= $olderThan
+    """ ++ unreferencedGuard ++ fr"""
+      ORDER BY candidate.available_at, candidate.id
+      LIMIT $boundedLimit
+    """).query[Row].to[List].map(_.map(_.toRecord)).transact(transactor)
+
+  override def purgeFailed(id: ImageId, olderThan: Instant): F[Boolean] = (fr"""
+      DELETE FROM source_images AS candidate
+      WHERE candidate.id = $id
+        AND candidate.status = ${SourceImageStatus.Failed}
+        AND candidate.updated_at <= $olderThan
+    """ ++ unreferencedGuard).update.run.map(_ == 1).transact(transactor)
 
 object PostgresSourceImagesRepository:
   private val MaxReconciliationBatchSize = 1000
@@ -159,6 +195,34 @@ object PostgresSourceImagesRepository:
            media_type, byte_length::bigint, sha256_hex, width, height, storage_etag,
            failure_code, available_at, delete_pending_at, deleted_at, created_at, updated_at
     FROM source_images
+  """
+
+  private val selectAllAliased = fr"""
+    SELECT candidate.id, candidate.owner_account_id, candidate.object_key,
+           candidate.idempotency_key_hash, candidate.status, candidate.media_type,
+           candidate.byte_length::bigint, candidate.sha256_hex, candidate.width,
+           candidate.height, candidate.storage_etag, candidate.failure_code,
+           candidate.available_at, candidate.delete_pending_at, candidate.deleted_at,
+           candidate.created_at, candidate.updated_at
+    FROM source_images AS candidate
+  """
+
+  private val unreferencedGuard = fr"""
+    AND NOT EXISTS (
+      SELECT 1
+      FROM ocr_jobs
+      WHERE ocr_jobs.source_image_id = candidate.id OR ocr_jobs.image_id = candidate.id
+    )
+    AND NOT EXISTS (
+      SELECT 1
+      FROM match_drafts
+      WHERE match_drafts.source_images_deleted_at IS NULL
+        AND (
+          match_drafts.total_assets_image_id = candidate.id OR
+          match_drafts.revenue_image_id = candidate.id OR
+          match_drafts.incident_log_image_id = candidate.id
+        )
+    )
   """
 
   private val returningAll = fr"""

@@ -4,7 +4,10 @@ import java.time.Instant
 
 import cats.effect.IO
 import cats.syntax.all.*
+import doobie.implicits.*
+import doobie.postgres.implicits.*
 
+import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.adapters.postgres.PostgresSourceImagesRepository
 import momo.api.domain.ids.{AccountId, ImageId}
 import momo.api.ports.storage.{Sha256Hex, SourceImageIdempotencyHash, SourceImageObjectKey}
@@ -99,6 +102,48 @@ final class PostgresSourceImagesRepositorySpec extends IntegrationSuite:
       _ <- repository.reserve(older)
       candidates <- repository.reconciliationCandidates(now.minusSeconds(60), limit = 10)
     yield assertEquals(candidates.map(_.id), List(older.id))
+
+  test("orphan deletion rechecks references atomically before changing state"):
+    val candidate = reservation("source-referenced", "1" * 64)
+    val insertReference = sql"""
+      INSERT INTO ocr_jobs (
+        id, draft_id, image_id, source_image_id, queue_schema_version,
+        requested_screen_type, status, attempt_count, created_at, updated_at
+      ) VALUES (
+        'job-source-reference', 'draft-source-reference', ${candidate.id}, ${candidate.id}, 2,
+        'total_assets', 'queued', 0, $now, $now
+      )
+    """.update.run.transact(transactor)
+
+    for
+      _ <- repository.reserve(candidate)
+      _ <- repository.markAvailable(candidate.id, None, now)
+      _ <- insertReference
+      candidates <- repository.orphanCandidates(now.plusSeconds(1), limit = 10)
+      guarded <- repository.beginDeleteUnreferenced(candidate.id, now.plusSeconds(2))
+      _ <- sql"DELETE FROM ocr_jobs WHERE id = 'job-source-reference'".update.run
+        .transact(transactor)
+      pending <- repository.beginDeleteUnreferenced(candidate.id, now.plusSeconds(3))
+    yield
+      assertEquals(candidates, Nil)
+      assertEquals(guarded, SourceImageDeleteResult.NotReady(SourceImageStatus.Available))
+      assert(isPending(pending))
+
+  test("old unreferenced FAILED reservations can be purged after object cleanup"):
+    val candidate = reservation("source-failed-purge", "2" * 64)
+
+    for
+      _ <- repository.reserve(candidate)
+      _ <- repository.markUploadFailed(
+        candidate.id,
+        SourceImageFailureCode.ObjectMissing,
+        now.minusSeconds(120),
+      )
+      purged <- repository.purgeFailed(candidate.id, now.minusSeconds(60))
+      stored <- repository.find(candidate.id)
+    yield
+      assert(purged)
+      assertEquals(stored, None)
 
   private def reservation(id: String, idempotencyHash: String): SourceImageReservation =
     val imageId = ImageId.unsafeFromString(id)

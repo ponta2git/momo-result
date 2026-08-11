@@ -201,6 +201,25 @@ public repository に置くため、具体的な障害位置、再現手順、en
 - `docs/test-rule.md` の Performance-sensitive analytics
 - `docs/dev-rule.md` の Production rollback verification
 
+### L9 Release来歴の外部wire表現を推測しない
+
+**該当条件**
+
+- CI actionやprovider APIの出力を、artifact identity、digest、provenance、promotion条件へ取り込む。
+- producerとconsumerを別workflowに分け、mockや手書きfixtureで来歴契約を検証する。
+
+**確認**
+
+- 外部wire値を境界で検証・正規化し、内部表現を一意にしたか。
+- fixtureは公開契約の実際の型・形式を表し、都合のよい接頭辞や型を仮定していないか。
+- producerの正規化結果をconsumer validatorへ渡すcontract testがあるか。
+- 候補生成の成功だけで昇格可能と判断せず、本番変更前の来歴解決がfail-closedで完走するか。
+
+**参照先**
+
+- `docs/dev-rule.md` の CI Gates
+- `docs/test-rule.md` の External Services
+
 ## 更新ルール
 
 - 新しい教訓を追加する前に、恒久ルールとして移すべき内容がないか確認する。

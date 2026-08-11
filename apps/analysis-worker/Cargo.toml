@@ -10,8 +10,12 @@ members = ["crates/core"]
 resolver = "3"
 
 [dependencies]
+aws-sdk-s3 = { version = "1.141.0", default-features = false, features = ["default-https-client", "rt-tokio"] }
+base64 = "0.22.1"
 clap = { version = "4.5.48", features = ["derive", "env"] }
 futures-util = { version = "0.3.33", default-features = false, features = ["std"] }
+hex = "0.4.3"
+image = { version = "0.25.10", default-features = false, features = ["jpeg", "png", "webp"] }
 libc = "0.2.176"
 momo-analysis-core = { path = "crates/core" }
 openssl = "0.10.81"
@@ -26,6 +30,7 @@ tokio = { version = "1.49.0", features = ["fs", "io-util", "macros", "process", 
 tokio-postgres = { version = "0.7.15", features = ["with-serde_json-1"] }
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.20", features = ["env-filter", "fmt", "json"] }
+url = "2.5.7"
 
 [dev-dependencies]
 tempfile = "3.23.0"

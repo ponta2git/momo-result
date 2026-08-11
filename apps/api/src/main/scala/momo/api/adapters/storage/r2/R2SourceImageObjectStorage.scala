@@ -8,7 +8,10 @@ import scala.jdk.CollectionConverters.*
 import cats.effect.{Async, Resource}
 import cats.syntax.all.*
 import software.amazon.awssdk.auth.credentials.{AwsBasicCredentials, StaticCredentialsProvider}
-import software.amazon.awssdk.core.checksums.{RequestChecksumCalculation, ResponseChecksumValidation}
+import software.amazon.awssdk.core.checksums.{
+  RequestChecksumCalculation,
+  ResponseChecksumValidation
+}
 import software.amazon.awssdk.core.sync.RequestBody
 import software.amazon.awssdk.http.urlconnection.UrlConnectionHttpClient
 import software.amazon.awssdk.regions.Region
@@ -62,7 +65,8 @@ final class R2SourceImageObjectStorage[F[_]: Async] private[r2] (
   override def head(
       key: SourceImageObjectKey
   ): F[Either[SourceImageObjectFailure, SourceImageObjectMetadata]] = run {
-    val response = client.headObject(HeadObjectRequest.builder().bucket(bucket).key(key.value).build())
+    val response =
+      client.headObject(HeadObjectRequest.builder().bucket(bucket).key(key.value).build())
     metadata(
       key,
       response.contentType(),
@@ -86,7 +90,8 @@ final class R2SourceImageObjectStorage[F[_]: Async] private[r2] (
       key: SourceImageObjectKey
   ): F[Either[SourceImageObjectFailure, Unit]] = Async[F].blocking {
     try
-      val _ = client.deleteObject(DeleteObjectRequest.builder().bucket(bucket).key(key.value).build())
+      val _ =
+        client.deleteObject(DeleteObjectRequest.builder().bucket(bucket).key(key.value).build())
       Right(())
     catch
       case error: Throwable if failureFor(error) == SourceImageObjectFailure.NotFound => Right(())

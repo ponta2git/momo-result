@@ -62,7 +62,8 @@ object R2SourceImageObjectStorageConfig:
       bucket.forall(character =>
         (character >= 'a' && character <= 'z') || (character >= '0' && character <= '9') ||
           character == '-'
-      ) && bucket.headOption.exists(_.isLetterOrDigit) && bucket.lastOption.exists(_.isLetterOrDigit)
+      ) && bucket.headOption.exists(_.isLetterOrDigit) &&
+      bucket.lastOption.exists(_.isLetterOrDigit)
     val valid = endpointIsAllowed && endpoint.getPath.toString.isEmpty && region.nonEmpty &&
       bucketIsSafe && !apiCallTimeout.isNegative && !apiCallTimeout.isZero &&
       !apiCallAttemptTimeout.isNegative && !apiCallAttemptTimeout.isZero &&

@@ -15,11 +15,7 @@ import software.amazon.awssdk.services.s3.model.*
 
 import momo.api.MomoCatsEffectSuite
 import momo.api.domain.ids.ImageId
-import momo.api.ports.storage.{
-  Sha256Hex,
-  SourceImageObjectFailure,
-  SourceImageObjectKey
-}
+import momo.api.ports.storage.{Sha256Hex, SourceImageObjectFailure, SourceImageObjectKey}
 import momo.api.testing.TestImages
 
 final class R2SourceImageObjectStorageSpec extends MomoCatsEffectSuite:

@@ -15,7 +15,13 @@ import momo.api.domain.{
   ScreenType,
   StoredImageLocation
 }
-import momo.api.repositories.OcrQueueOutboxStatus
+import momo.api.ports.storage.{Sha256Hex, SourceImageObjectKey}
+import momo.api.repositories.{
+  OcrQueueOutboxStatus,
+  SourceImageFailureCode,
+  SourceImageIdempotencyHash,
+  SourceImageStatus
+}
 
 /**
  * Shared database type mappings for opaque IDs, enums, and other custom types used by the
@@ -39,6 +45,16 @@ object PostgresMeta:
 
   given Meta[StoredImageLocation] = Meta[String]
     .tiemap(StoredImageLocation.fromString)(_.value)
+
+  given Meta[SourceImageObjectKey] = Meta[String]
+    .tiemap(SourceImageObjectKey.fromString)(_.value)
+  given Meta[Sha256Hex] = Meta[String].tiemap(Sha256Hex.fromString)(_.value)
+  given Meta[SourceImageIdempotencyHash] = Meta[String]
+    .tiemap(SourceImageIdempotencyHash.fromString)(_.value)
+  given Meta[SourceImageStatus] = Meta[String]
+    .tiemap(SourceImageStatus.fromWire)(_.wire)
+  given Meta[SourceImageFailureCode] = Meta[String]
+    .tiemap(SourceImageFailureCode.fromWire)(_.wire)
 
   given Meta[MatchNoInEvent] = Meta[Int].imap(MatchNoInEvent.unsafeFromInt)(_.value)
   given Meta[PlayOrder] = Meta[Int].imap(PlayOrder.unsafeFromInt)(_.value)

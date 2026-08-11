@@ -35,7 +35,8 @@ object SourceImageObjectKey:
     value != ".." && value.forall(isSafeCharacter)
 
   private def isSafeCharacter(value: Char): Boolean =
-    (value >= 'a' && value <= 'z') || (value >= 'A' && value <= 'Z') ||
+    (value >= 'a' && value <= 'z') ||
+      (value >= 'A' && value <= 'Z') ||
       (value >= '0' && value <= '9') || value == '-' || value == '_' || value == '.'
 
 final case class Sha256Hex private (value: String) derives CanEqual

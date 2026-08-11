@@ -11,6 +11,7 @@ final class ApiTestArchitectureSpec extends FunSuite:
   private val testRoot = Paths.get("src/test/scala")
   private val integrationRoot = testRoot.resolve("momo/api/integration")
   private val redisIntegrationRoot = integrationRoot.resolve("redis")
+  private val r2IntegrationRoot = integrationRoot.resolve("r2")
   private val testingRoot = testRoot.resolve("momo/api/testing")
   private val usecaseTestingRoot = testRoot.resolve("momo/api/usecases/testing")
   private val buildFile = Paths.get("build.sbt")
@@ -29,19 +30,9 @@ final class ApiTestArchitectureSpec extends FunSuite:
   test("DB integration specs extend IntegrationSuite so they receive DB tags and cleanup"):
     val violations = scalaFiles(integrationRoot)
       .filterNot(path => path.startsWith(redisIntegrationRoot))
+      .filterNot(path => path.startsWith(r2IntegrationRoot))
       .filter(path => path.getFileName.toString.endsWith("Spec.scala")).flatMap { path =>
         if read(path).contains("extends IntegrationSuite") then None else Some(path.toString)
-      }.sorted
-
-    assertEquals(violations, Nil)
-
-  test("DB integration specs are discoverable by the apiDbQuality class pattern"):
-    val violations = scalaFiles(integrationRoot)
-      .filterNot(path => path.startsWith(redisIntegrationRoot))
-      .filter(path => path.getFileName.toString.endsWith("Spec.scala")).flatMap { path =>
-        val fileName = path.getFileName.toString
-        if fileName.startsWith("Postgres") || fileName == "DbContractSpec.scala" then None
-        else Some(path.toString)
       }.sorted
 
     assertEquals(violations, Nil)
@@ -79,9 +70,10 @@ final class ApiTestArchitectureSpec extends FunSuite:
 
     assert(text.contains("--include-tags=DbIntegration"))
     assert(text.contains("--include-tags=RedisIntegration"))
-    assert(text.contains("testOnly momo.api.integration.Postgres*"))
-    assert(text.contains("momo.api.integration.DbContractSpec"))
+    assert(text.contains("--include-tags=R2Integration"))
+    assert(text.contains("testOnly momo.api.integration.*"))
     assert(text.contains("testOnly momo.api.integration.redis.*"))
+    assert(text.contains("testOnly momo.api.integration.r2.*"))
     assert(!text.contains("--include-tags=Integration\","))
 
   test("normal API tests stay parallel while external-service gates stay isolated"):

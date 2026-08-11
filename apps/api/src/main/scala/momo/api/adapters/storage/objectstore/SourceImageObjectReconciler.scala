@@ -135,8 +135,9 @@ final class SourceImageObjectReconciler[F[_]: Async](
       failedPurgeCutoff: Instant,
   ): F[SourceImageObjectReconciliationStats] =
     if record.updatedAt.isAfter(failedPurgeCutoff) then Async[F].pure(Skipped)
-    else sourceImages.purgeFailed(record.id, failedPurgeCutoff)
-      .map(if _ then PurgedFailed else Deferred)
+    else
+      sourceImages.purgeFailed(record.id, failedPurgeCutoff)
+        .map(if _ then PurgedFailed else Deferred)
 
   private def markFailed(
       record: SourceImageRecord,

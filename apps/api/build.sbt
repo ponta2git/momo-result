@@ -28,11 +28,18 @@ addCommandAlias(
     "testOnly momo.api.integration.redis.* -- --include-tags=RedisIntegration",
 )
 addCommandAlias(
+  "apiR2Quality",
+  "set Test / fork := true; " +
+    "set Test / parallelExecution := false; " +
+    "set Test / testOptions := Seq(); " +
+    "testOnly momo.api.integration.r2.* -- --include-tags=R2Integration",
+)
+addCommandAlias(
   "apiDbQuality",
   "set Test / fork := true; " +
     "set Test / parallelExecution := false; " +
     "set Test / testOptions := Seq(); " +
-    "testOnly momo.api.integration.Postgres* momo.api.integration.DbContractSpec " +
+    "testOnly momo.api.integration.* " +
     "-- --include-tags=DbIntegration",
 )
 

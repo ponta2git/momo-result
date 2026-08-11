@@ -70,9 +70,10 @@ final class RecordingSourceImageObjectStorage private (
   def tamper(rawKey: String, bytes: Array[Byte]): IO[Unit] = SourceImageObjectKey
     .fromString(rawKey).fold(
       message => IO.raiseError(new IllegalArgumentException(message)),
-      key => ref.update(state =>
-        state.copy(objects = state.objects.updatedWith(key)(_.map(_.copy(bytes = bytes))))
-      ),
+      key =>
+        ref.update(state =>
+          state.copy(objects = state.objects.updatedWith(key)(_.map(_.copy(bytes = bytes))))
+        ),
     )
 
 object RecordingSourceImageObjectStorage:

@@ -31,7 +31,7 @@ public repository に置くため、具体的な障害位置、再現手順、en
 **該当条件**
 
 - `apps/api` の repository / Doobie query / usecase transaction / DB前提を変更する。
-- migration、table、column、FK、seed、SQLSTATE、PostgreSQL runtime error に関係する。
+- migration、table、column、FK、seed、SQLSTATE、PostgreSQL runtime error、pooler / proxy経由の接続設定に関係する。
 
 **確認**
 
@@ -40,6 +40,8 @@ public repository に置くため、具体的な障害位置、再現手順、en
 - 同一 transaction で FK 関連 row を作成・更新する場合、statement order と保存後の linked row values を integration test で確認したか。
 - DB contract、repository integration、HTTP/usecase test の責務を混同していないか。
 - DB / integration test が skip された場合、その挙動を未検証として扱ったか。
+- 直接接続したPostgreSQLの成功を、pooler / proxyのstartup parameter互換性の証拠にしていないか。
+- release probeのtimeoutを接続後transaction内へ閉じ、production互換のread-only経路で確認したか。
 
 **参照先**
 

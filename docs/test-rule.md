@@ -217,6 +217,7 @@ PostgreSQL repository、Doobie query、DB table/column、migration 前提に触�
   起動する `analysis-worker-control-plane-smoke.sh` を明示gateとして持つ。
 - 外部サービスを使う spec は、stream名、DB row、一時ファイル名、worker id を test / suite ごとに分離する。
 - CI actionやprovider APIの出力をrelease来歴へ取り込む境界では、公開契約のwire表現をfixtureに使い、正規化後の値がconsumer validatorを通ることをcontract testで固定する。都合のよい型・接頭辞・表現をmock側で仮定しない。
+- 直接接続したPostgreSQL testはpooler / proxyのstartup parameter互換性を保証しない。release probeでsession timeoutを使う場合は、connect引数とtransaction-local commandを観測するcontract testを置き、production互換の接続境界でread-only smokeを通す。
 
 ## 9. Quality Gates
 

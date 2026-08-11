@@ -33,22 +33,23 @@ final class R2SourceImageObjectStorageIntegrationSpec extends MomoCatsEffectSuit
     val key = SourceImageObjectKey.forImage(imageId, "png").fold(fail(_), identity)
 
     R2Storage.resource[IO](config).use { storage =>
-      val probe = for
-        put <- storage.put(key, "image/png", bytes, sha256).flatMap(expectRight("put"))
-        head <- storage.head(key).flatMap(expectRight("head"))
-        get <- storage.get(key).flatMap(expectRight("get"))
-        _ <- IO {
-          assertEquals(put.key, key)
-          assertEquals(put.sha256, sha256)
-          assertEquals(head.sha256, sha256)
-          assertEquals(head.sizeBytes, bytes.length.toLong)
-          assertEquals(get.metadata.sha256, sha256)
-          assertEquals(get.bytes.toList, bytes.toList)
-        }
-        _ <- storage.delete(key).flatMap(expectRight("delete"))
-        missing <- storage.head(key)
-        _ <- IO(assertEquals(missing, Left(SourceImageObjectFailure.NotFound)))
-      yield ()
+      val probe =
+        for
+          put <- storage.put(key, "image/png", bytes, sha256).flatMap(expectRight("put"))
+          head <- storage.head(key).flatMap(expectRight("head"))
+          get <- storage.get(key).flatMap(expectRight("get"))
+          _ <- IO {
+            assertEquals(put.key, key)
+            assertEquals(put.sha256, sha256)
+            assertEquals(head.sha256, sha256)
+            assertEquals(head.sizeBytes, bytes.length.toLong)
+            assertEquals(get.metadata.sha256, sha256)
+            assertEquals(get.bytes.toList, bytes.toList)
+          }
+          _ <- storage.delete(key).flatMap(expectRight("delete"))
+          missing <- storage.head(key)
+          _ <- IO(assertEquals(missing, Left(SourceImageObjectFailure.NotFound)))
+        yield ()
 
       probe.attempt.flatMap {
         case Right(_) => IO.unit

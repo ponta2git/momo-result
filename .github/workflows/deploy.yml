@@ -679,21 +679,9 @@ jobs:
           flyctl ssh console --app momo-result --pty=false --quiet \
             --command "/opt/momo-result/bin/postdeploy-smoke" \
             > runtime-production-evidence/postdeploy-smoke.json
-          jq -e '
-            select(
-              .event == "runtime_postdeploy_smoke" and
-              .status == "ok" and
-              .checks == [
-                "database",
-                "http",
-                "processes",
-                "publicEdge",
-                "redis",
-                "web"
-              ]
-            ) |
-            {schemaVersion: 1, status: "ok"}
-          ' runtime-production-evidence/postdeploy-smoke.json \
+          scripts/ci/runtime-postdeploy-contract.py \
+            runtime-production-evidence/postdeploy-smoke.json \
+            --require-check publicEdge \
             > runtime-production-evidence/public-health.json
         timeout-minutes: 2
 

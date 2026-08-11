@@ -6,14 +6,20 @@ use std::{
     time::Duration,
 };
 
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
 use momo_analysis::{
     config::{PublicationMode, WorkerConfig, WorkerRuntimeConfig},
+    ocr::{
+        NativeOcrEngine,
+        contract::{OcrHints, RequestedScreenType},
+    },
     process::{ProbeOutcome, allocate_and_touch, run_hard_limit_probe},
     release::{PromotionRequest, PromotionTrigger},
 };
 use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
+
+const MAXIMUM_OCR_PILOT_IMAGE_BYTES: u64 = 3 * 1024 * 1024;
 
 #[derive(Debug, Parser)]
 #[command(
@@ -75,6 +81,17 @@ enum Command {
         timeout_ms: u64,
     },
     #[command(hide = true)]
+    OcrPilot {
+        #[arg(long)]
+        image: PathBuf,
+        #[arg(long, value_enum)]
+        screen_type: OcrPilotScreenType,
+        #[arg(long, value_enum)]
+        layout_family: Option<OcrPilotLayoutFamily>,
+        #[arg(long)]
+        tessdata_path: Option<PathBuf>,
+    },
+    #[command(hide = true)]
     ProbeParentDeath,
     #[command(hide = true)]
     ChildAllocate {
@@ -111,6 +128,46 @@ enum Command {
         #[arg(long)]
         parent_liveness_timeout_ms: u64,
     },
+}
+
+#[derive(Clone, Copy, Debug, ValueEnum)]
+enum OcrPilotScreenType {
+    #[value(name = "total_assets")]
+    TotalAssets,
+    #[value(name = "revenue")]
+    Revenue,
+    #[value(name = "incident_log")]
+    IncidentLog,
+}
+
+impl From<OcrPilotScreenType> for RequestedScreenType {
+    fn from(value: OcrPilotScreenType) -> Self {
+        match value {
+            OcrPilotScreenType::TotalAssets => Self::TotalAssets,
+            OcrPilotScreenType::Revenue => Self::Revenue,
+            OcrPilotScreenType::IncidentLog => Self::IncidentLog,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, ValueEnum)]
+enum OcrPilotLayoutFamily {
+    #[value(name = "reiwa")]
+    Reiwa,
+    #[value(name = "world")]
+    World,
+    #[value(name = "momotetsu_2")]
+    Momotetsu2,
+}
+
+impl OcrPilotLayoutFamily {
+    const fn wire(self) -> &'static str {
+        match self {
+            Self::Reiwa => "reiwa",
+            Self::World => "world",
+            Self::Momotetsu2 => "momotetsu_2",
+        }
+    }
 }
 
 #[tokio::main(flavor = "current_thread")]
@@ -154,6 +211,7 @@ async fn main() -> ExitCode {
         | Command::ReleasePromote { .. }
         | Command::ShadowEndurance { .. }
         | Command::ProbeHardLimit { .. }
+        | Command::OcrPilot { .. }
         | Command::ProbeParentDeath
         | Command::ChildWait { .. } => {}
     }
@@ -235,6 +293,12 @@ async fn run(command: Command) -> Result<(), String> {
                 Err(format!("hard limit probe was inconclusive: {result:?}"))
             }
         }
+        Command::OcrPilot {
+            image,
+            screen_type,
+            layout_family,
+            tessdata_path,
+        } => run_ocr_pilot(&image, screen_type, layout_family, tessdata_path).await,
         Command::ChildAllocate { .. } | Command::ChildCompute { .. } => {
             Err(String::from("child command dispatch failed"))
         }
@@ -256,6 +320,41 @@ async fn run(command: Command) -> Result<(), String> {
             wait_for_shutdown().await.map_err(|error| error.to_string())
         }
     }
+}
+
+async fn run_ocr_pilot(
+    image_path: &std::path::Path,
+    screen_type: OcrPilotScreenType,
+    layout_family: Option<OcrPilotLayoutFamily>,
+    tessdata_path: Option<PathBuf>,
+) -> Result<(), String> {
+    let metadata = tokio::fs::metadata(image_path)
+        .await
+        .map_err(|_error| String::from("OCR pilot image metadata could not be read"))?;
+    if !metadata.is_file() || metadata.len() == 0 || metadata.len() > MAXIMUM_OCR_PILOT_IMAGE_BYTES
+    {
+        return Err(String::from("OCR pilot image violates the byte bound"));
+    }
+    let bytes = tokio::fs::read(image_path)
+        .await
+        .map_err(|_error| String::from("OCR pilot image could not be read"))?;
+    let hints = layout_family.map_or_else(
+        || Ok(OcrHints::default()),
+        |family| {
+            serde_json::from_value(serde_json::json!({ "layoutFamily": family.wire() }))
+                .map_err(|_error| String::from("OCR pilot hints could not be constructed"))
+        },
+    )?;
+    let output = NativeOcrEngine::new(tessdata_path)
+        .analyze_local_image_bytes(&bytes, screen_type.into(), &hints)
+        .map_err(|error| format!("OCR pilot failed: {error:?}"))?;
+    write_json_line(&serde_json::json!({
+        "detectedScreenType": output.detected_screen_type.wire(),
+        "profileId": output.profile_id,
+        "result": output.payload,
+        "warnings": output.warnings,
+        "timingsMilliseconds": output.timings_milliseconds,
+    }))
 }
 
 async fn release_audit(require_current: bool, require_quiescent: bool) -> Result<(), String> {
@@ -371,5 +470,27 @@ fn initialize_logging() {
             .with_current_span(true)
             .with_span_list(false)
             .init();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ocr_pilot_rejects_auto_and_accepts_only_explicit_screen_types() {
+        let base = ["momo-analysis", "ocr-pilot", "--image", "sample.png"];
+        for screen_type in ["total_assets", "revenue", "incident_log"] {
+            let arguments = base
+                .into_iter()
+                .chain(["--screen-type", screen_type])
+                .collect::<Vec<_>>();
+            assert!(Cli::try_parse_from(arguments).is_ok(), "{screen_type}");
+        }
+        let auto = base
+            .into_iter()
+            .chain(["--screen-type", "auto"])
+            .collect::<Vec<_>>();
+        assert!(Cli::try_parse_from(auto).is_err());
     }
 }

@@ -18,7 +18,16 @@ impl NativeOcrEngine {
         Self { tessdata_path }
     }
 
-    pub(crate) fn analyze_bytes(
+    /// Runs the in-process OCR core for a bounded local pilot image.
+    ///
+    /// This entry point performs no queue, object-store, or database side effects. Production
+    /// consumption remains controlled by [`super::worker::run_with_engine`].
+    ///
+    /// # Errors
+    ///
+    /// Returns a closed OCR failure category when decoding, layout validation, engine startup, or
+    /// parsing fails.
+    pub fn analyze_local_image_bytes(
         &self,
         bytes: &[u8],
         requested_screen_type: RequestedScreenType,
@@ -47,7 +56,7 @@ impl OcrEngine for NativeOcrEngine {
         let engine = self.clone();
         Box::pin(async move {
             tokio::task::spawn_blocking(move || {
-                engine.analyze_bytes(&bytes, requested_screen_type, &hints)
+                engine.analyze_local_image_bytes(&bytes, requested_screen_type, &hints)
             })
             .await
             .map_err(|_join_error| OcrEngineFailure::EngineUnavailable)?

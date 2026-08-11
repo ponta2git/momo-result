@@ -21,15 +21,18 @@ momo-analysis-core = { path = "crates/core" }
 openssl = "0.10.81"
 postgres-openssl = "0.5.3"
 redis = { version = "0.32.7", default-features = false, features = ["aio", "connection-manager", "streams", "tokio-rustls-comp"] }
+regex = "1.13.1"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.145"
 sha2 = "0.11.0"
 thiserror = "2.0.17"
+tesseract = "0.15.2"
 time = { version = "0.3.48", features = ["parsing"] }
 tokio = { version = "1.49.0", features = ["fs", "io-util", "macros", "process", "rt", "signal", "sync", "time"] }
 tokio-postgres = { version = "0.7.15", features = ["with-serde_json-1"] }
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.20", features = ["env-filter", "fmt", "json"] }
+unicode-normalization = "0.1.25"
 url = "2.5.7"
 
 [dev-dependencies]

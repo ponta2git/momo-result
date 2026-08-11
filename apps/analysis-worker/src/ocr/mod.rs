@@ -4,6 +4,7 @@ mod child_protocol;
 pub mod contract;
 pub(crate) mod control;
 pub(crate) mod core;
+pub mod endurance;
 mod isolated_engine;
 mod native_engine;
 pub mod object_store;

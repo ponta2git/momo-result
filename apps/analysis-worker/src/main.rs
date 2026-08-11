@@ -13,6 +13,8 @@ use momo_analysis::{
     ocr::{
         NativeOcrEngine,
         contract::{OcrHints, RequestedScreenType},
+        endurance::{OcrEnduranceRequest, OcrEnduranceThresholds},
+        object_store::R2ObjectStoreConfig,
     },
     process::{ProbeOutcome, allocate_and_touch, run_hard_limit_probe},
     release::{PromotionRequest, PromotionTrigger},
@@ -112,6 +114,8 @@ enum Command {
     },
     #[command(hide = true)]
     OcrIsolatedPilot(OcrIsolatedPilotArgs),
+    #[command(hide = true)]
+    OcrR2Endurance(OcrR2EnduranceArgs),
     #[command(hide = true)]
     ProbeParentDeath,
     #[command(hide = true)]
@@ -217,6 +221,46 @@ struct OcrIsolatedPilotArgs {
     stop_grace_ms: u64,
 }
 
+#[derive(Debug, Args)]
+struct OcrR2EnduranceArgs {
+    #[arg(long)]
+    manifest: PathBuf,
+    #[arg(long, default_value_t = 100)]
+    runs: u32,
+    #[arg(long, default_value_t = 201_326_592)]
+    child_memory_limit_bytes: u64,
+    #[arg(long, default_value_t = 536_870_912)]
+    expected_runtime_memory_limit_bytes: u64,
+    #[arg(long, default_value_t = 30_000)]
+    ocr_timeout_ms: u64,
+    #[arg(long, default_value_t = 1_000)]
+    stop_grace_ms: u64,
+    #[arg(long, default_value_t = 10_000)]
+    r2_operation_timeout_ms: u64,
+    #[arg(long, default_value_t = 5_000)]
+    r2_attempt_timeout_ms: u64,
+    #[arg(long, default_value_t = 2)]
+    r2_maximum_attempts: u32,
+    #[arg(long, default_value_t = 7_500)]
+    maximum_child_peak_basis_points: u16,
+    #[arg(long, default_value_t = 7_500)]
+    maximum_runtime_peak_basis_points: u16,
+    #[arg(long, default_value_t = 2_000)]
+    maximum_download_p99_ms: u64,
+    #[arg(long, default_value_t = 5_000)]
+    maximum_download_ms: u64,
+    #[arg(long, default_value_t = 5_000)]
+    maximum_ocr_p99_ms: u64,
+    #[arg(long, default_value_t = 10_000)]
+    maximum_ocr_ms: u64,
+    #[arg(long, default_value_t = 15_000)]
+    maximum_total_ms: u64,
+    #[arg(long)]
+    require_full_hd: bool,
+    #[arg(long)]
+    require_sub_full_hd: bool,
+}
+
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> ExitCode {
     let cli = Cli::parse();
@@ -282,6 +326,7 @@ async fn main() -> ExitCode {
         | Command::ProbeOcrChildLifecycle { .. }
         | Command::OcrPilot { .. }
         | Command::OcrIsolatedPilot(_)
+        | Command::OcrR2Endurance(_)
         | Command::ProbeParentDeath
         | Command::ChildWait { .. } => {}
     }
@@ -364,6 +409,7 @@ async fn run(command: Command) -> Result<(), String> {
             tessdata_path,
         } => run_ocr_pilot(&image, screen_type, layout_family, tessdata_path).await,
         Command::OcrIsolatedPilot(arguments) => run_isolated_ocr_pilot(arguments).await,
+        Command::OcrR2Endurance(arguments) => run_ocr_r2_endurance(arguments).await,
         Command::ChildAllocate { .. }
         | Command::ChildCgroupAllocate { .. }
         | Command::ChildOcr { .. }
@@ -465,6 +511,56 @@ async fn run_isolated_ocr_pilot(arguments: OcrIsolatedPilotArgs) -> Result<(), S
     .map_err(String::from)?
     .map_err(|error| format!("isolated OCR pilot failed: {error:?}"))?;
     write_ocr_pilot_output(&output)
+}
+
+async fn run_ocr_r2_endurance(arguments: OcrR2EnduranceArgs) -> Result<(), String> {
+    let object_store = R2ObjectStoreConfig::new(
+        &required_environment("SOURCE_IMAGE_R2_ENDPOINT")?,
+        &required_environment("SOURCE_IMAGE_R2_BUCKET")?,
+        required_environment("SOURCE_IMAGE_R2_ACCESS_KEY_ID")?,
+        required_environment("SOURCE_IMAGE_R2_SECRET_ACCESS_KEY")?,
+        Duration::from_millis(arguments.r2_operation_timeout_ms),
+        Duration::from_millis(arguments.r2_attempt_timeout_ms),
+        arguments.r2_maximum_attempts,
+    )
+    .map_err(|error| error.to_string())?;
+    let report = momo_analysis::ocr::endurance::run_r2_endurance(&OcrEnduranceRequest {
+        manifest_path: arguments.manifest,
+        runs: arguments.runs,
+        child_memory_limit_bytes: arguments.child_memory_limit_bytes,
+        expected_runtime_memory_limit_bytes: arguments.expected_runtime_memory_limit_bytes,
+        ocr_timeout: Duration::from_millis(arguments.ocr_timeout_ms),
+        stop_grace: Duration::from_millis(arguments.stop_grace_ms),
+        object_store,
+        thresholds: OcrEnduranceThresholds {
+            maximum_child_peak_basis_points: arguments.maximum_child_peak_basis_points,
+            maximum_runtime_peak_basis_points: arguments.maximum_runtime_peak_basis_points,
+            maximum_download_p99_milliseconds: arguments.maximum_download_p99_ms,
+            maximum_download_milliseconds: arguments.maximum_download_ms,
+            maximum_ocr_p99_milliseconds: arguments.maximum_ocr_p99_ms,
+            maximum_ocr_milliseconds: arguments.maximum_ocr_ms,
+            maximum_total_milliseconds: arguments.maximum_total_ms,
+        },
+        require_full_hd: arguments.require_full_hd,
+        require_sub_full_hd: arguments.require_sub_full_hd,
+    })
+    .await
+    .map_err(|error| error.to_string())?;
+    let passed = report.passed();
+    write_json_line(&report)?;
+    if passed {
+        Ok(())
+    } else {
+        Err(String::from("R2 OCR endurance gate failed"))
+    }
+}
+
+fn required_environment(name: &'static str) -> Result<String, String> {
+    match std::env::var(name) {
+        Ok(value) if !value.trim().is_empty() => Ok(value),
+        Ok(_value) => Err(format!("required environment variable {name} is missing")),
+        Err(_error) => Err(format!("required environment variable {name} is missing")),
+    }
 }
 
 async fn read_ocr_pilot_input(

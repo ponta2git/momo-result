@@ -17,6 +17,7 @@ pub(super) fn command_allowed(arguments: &[OsString]) -> bool {
             | "probe-cgroup-limit"
             | "probe-ocr-child-lifecycle"
             | "ocr-isolated-pilot"
+            | "ocr-r2-endurance"
     )
 }
 
@@ -32,6 +33,7 @@ pub(super) fn requires_child_cgroup(arguments: &[OsString]) -> bool {
                     | "probe-cgroup-limit"
                     | "probe-ocr-child-lifecycle"
                     | "ocr-isolated-pilot"
+                    | "ocr-r2-endurance"
             )
         })
 }
@@ -59,6 +61,7 @@ mod tests {
             "probe-cgroup-limit",
             "probe-ocr-child-lifecycle",
             "ocr-isolated-pilot",
+            "ocr-r2-endurance",
         ] {
             assert!(command_allowed(&[OsString::from(command)]), "{command}");
         }
@@ -81,6 +84,7 @@ mod tests {
             "probe-cgroup-limit",
             "probe-ocr-child-lifecycle",
             "ocr-isolated-pilot",
+            "ocr-r2-endurance",
         ] {
             assert!(
                 requires_child_cgroup(&[OsString::from(command)]),

@@ -49,6 +49,16 @@ pub(crate) struct CgroupMemorySnapshot {
     pub(crate) oom_kill_count: u64,
 }
 
+#[cfg(target_os = "linux")]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct RuntimeMemorySnapshot {
+    pub(crate) current_bytes: u64,
+    pub(crate) peak_bytes: u64,
+    pub(crate) limit_bytes: Option<u64>,
+    pub(crate) limit_hit_count: u64,
+    pub(crate) oom_kill_count: u64,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct ChildCgroup {
     hierarchy: CgroupHierarchy,
@@ -249,6 +259,22 @@ impl ChildCgroup {
         }
     }
 
+    /// Reads the enclosing runtime cgroup that accounts for both the orchestrator and its child.
+    ///
+    /// The v2 bootstrap inserts a delegated level between the runtime and the two managed process
+    /// groups, while v1 creates the heavy child directly below the runtime group. Deriving this
+    /// path from the already validated child directory avoids trusting another environment value.
+    #[cfg(target_os = "linux")]
+    pub(crate) fn runtime_snapshot(&self) -> Result<RuntimeMemorySnapshot, CgroupError> {
+        let runtime_directory = match self.hierarchy {
+            CgroupHierarchy::V1 => self.directory.parent(),
+            CgroupHierarchy::V2 => self.directory.parent().and_then(Path::parent),
+        }
+        .filter(|path| safe_absolute_path(path) && path.starts_with("/sys/fs/cgroup"))
+        .ok_or(CgroupError::UnsafeDirectory)?;
+        runtime_snapshot(self.hierarchy, runtime_directory)
+    }
+
     fn validate_limit(&self) -> Result<(), CgroupError> {
         let limit_path = match self.hierarchy {
             CgroupHierarchy::V1 => self.directory.join("memory.limit_in_bytes"),
@@ -272,6 +298,29 @@ impl ChildCgroup {
         expected_limit_bytes: u64,
     ) -> Result<Self, CgroupError> {
         Self::open(hierarchy, directory, expected_limit_bytes, false)
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn runtime_snapshot(
+    hierarchy: CgroupHierarchy,
+    directory: &Path,
+) -> Result<RuntimeMemorySnapshot, CgroupError> {
+    match hierarchy {
+        CgroupHierarchy::V1 => Ok(RuntimeMemorySnapshot {
+            current_bytes: read_u64(&directory.join("memory.usage_in_bytes"))?,
+            peak_bytes: read_u64(&directory.join("memory.max_usage_in_bytes"))?,
+            limit_bytes: Some(read_u64(&directory.join("memory.limit_in_bytes"))?),
+            limit_hit_count: read_u64(&directory.join("memory.failcnt"))?,
+            oom_kill_count: read_named_u64(&directory.join("memory.oom_control"), "oom_kill")?,
+        }),
+        CgroupHierarchy::V2 => Ok(RuntimeMemorySnapshot {
+            current_bytes: read_u64(&directory.join("memory.current"))?,
+            peak_bytes: read_u64(&directory.join("memory.peak"))?,
+            limit_bytes: read_optional_limit(&directory.join("memory.max"))?,
+            limit_hit_count: read_named_u64(&directory.join("memory.events"), "max")?,
+            oom_kill_count: read_named_u64(&directory.join("memory.events"), "oom_kill")?,
+        }),
     }
 }
 
@@ -537,6 +586,20 @@ fn read_u64(path: &Path) -> Result<u64, CgroupError> {
         .trim()
         .parse::<u64>()
         .map_err(|_error| CgroupError::InvalidControllerValue)
+}
+
+#[cfg(target_os = "linux")]
+fn read_optional_limit(path: &Path) -> Result<Option<u64>, CgroupError> {
+    let value = bounded_read(path)?;
+    let trimmed = value.trim();
+    if trimmed == "max" {
+        Ok(None)
+    } else {
+        trimmed
+            .parse::<u64>()
+            .map(Some)
+            .map_err(|_error| CgroupError::InvalidControllerValue)
+    }
 }
 
 fn read_named_u64(path: &Path, field: &str) -> Result<u64, CgroupError> {

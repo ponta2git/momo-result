@@ -1,0 +1,96 @@
+name: Analysis candidate
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: analysis-candidate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scope:
+    name: Classify analysis release
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    outputs:
+      analysis: ${{ steps.changes.outputs.analysis }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Classify release scope
+        id: changes
+        env:
+          BASE_SHA: ${{ github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+            [[ "${GITHUB_REF}" == "refs/heads/master" ]] || {
+              echo "Manual analysis candidates must run from master." >&2
+              exit 1
+            }
+            result=$'api=false\nweb=false\nocr=false\nanalysis=true\nruntime=false'
+          elif [[ "${BASE_SHA}" =~ ^0+$ ]]; then
+            result=$'api=true\nweb=true\nocr=true\nanalysis=true\nruntime=true'
+          else
+            git cat-file -e "${BASE_SHA}^{commit}"
+            git cat-file -e "${HEAD_SHA}^{commit}"
+            result="$(git diff --name-only -z "${BASE_SHA}" "${HEAD_SHA}" |
+              scripts/ci/classify-changes.sh)"
+          fi
+          printf '%s\n' "${result}" >> "${GITHUB_OUTPUT}"
+
+  public-safety:
+    needs: scope
+    if: needs.scope.outputs.analysis == 'true'
+    uses: ./.github/workflows/public-safety.yml
+
+  candidate:
+    needs: scope
+    if: needs.scope.outputs.analysis == 'true'
+    uses: ./.github/workflows/analysis-worker.yml
+    with:
+      package_image: true
+
+  candidate-ready:
+    name: Analysis candidate ready
+    needs:
+      - scope
+      - public-safety
+      - candidate
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Require complete candidate validation
+        env:
+          CANDIDATE_RESULT: ${{ needs.candidate.result }}
+          PUBLIC_SAFETY_RESULT: ${{ needs.public-safety.result }}
+          SCOPE_RESULT: ${{ needs.scope.result }}
+          SHOULD_BUILD: ${{ needs.scope.outputs.analysis }}
+        run: |
+          [[ "${SCOPE_RESULT}" == "success" ]] || {
+            echo "Analysis scope classification failed." >&2
+            exit 1
+          }
+          if [[ "${SHOULD_BUILD}" == "true" ]]; then
+            [[ "${PUBLIC_SAFETY_RESULT}" == "success" ]] || {
+              echo "Public safety validation did not succeed." >&2
+              exit 1
+            }
+            [[ "${CANDIDATE_RESULT}" == "success" ]] || {
+              echo "Analysis candidate validation did not succeed." >&2
+              exit 1
+            }
+          else
+            [[ "${PUBLIC_SAFETY_RESULT}" == "skipped" ]] || exit 1
+            [[ "${CANDIDATE_RESULT}" == "skipped" ]] || exit 1
+          fi

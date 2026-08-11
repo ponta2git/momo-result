@@ -21,3 +21,9 @@ jobs:
         env:
           ACTIONLINT_BIN: ${{ runner.temp }}/actionlint
         run: scripts/ci/actionlint.sh
+      - name: Test workflow policy scripts
+        run: |
+          scripts/ci/test-classify-changes.sh
+          scripts/ci/test-check-pr-ready.sh
+          scripts/ci/test-validate-analysis-candidate.sh
+          scripts/ci/test-load-analysis-candidate.sh

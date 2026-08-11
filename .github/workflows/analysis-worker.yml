@@ -2,6 +2,12 @@ name: Analysis worker
 
 on:
   workflow_call:
+    inputs:
+      package_image:
+        description: Package the verified image as an immutable release candidate
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -93,23 +99,28 @@ jobs:
         run: ../../scripts/ci/analysis-worker-control-plane-smoke.sh target/release/momo-analysis
 
   runtime-image:
+    name: Build, scan, and package analysis image
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
+    env:
+      ANALYSIS_IMAGE_ARTIFACT_NAME: analysis-worker-image-${{ github.run_id }}-${{ github.run_attempt }}
+      ANALYSIS_METADATA_ARTIFACT_NAME: analysis-candidate-metadata-${{ github.run_id }}-${{ github.run_attempt }}
+      ANALYSIS_IMAGE_REF: ${{ inputs.package_image && format('registry.fly.io/momo-result-analysis:{0}-{1}-{2}', github.sha, github.run_id, github.run_attempt) || 'momo-analysis-worker:test' }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
 
       - name: Build dedicated worker image
-        run: docker build --file apps/analysis-worker/Dockerfile --tag momo-analysis-worker:test .
+        run: docker build --file apps/analysis-worker/Dockerfile --tag "${ANALYSIS_IMAGE_REF}" .
 
       - name: Smoke test worker isolation and hard limit
-        run: scripts/ci/analysis-worker-image-smoke.sh momo-analysis-worker:test
+        run: scripts/ci/analysis-worker-image-smoke.sh "${ANALYSIS_IMAGE_REF}"
 
       - name: Scan worker image
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
         with:
-          image-ref: momo-analysis-worker:test
+          image-ref: ${{ env.ANALYSIS_IMAGE_REF }}
           version: v0.73.0
           severity: HIGH,CRITICAL
           ignore-unfixed: true
@@ -117,3 +128,74 @@ jobs:
           exit-code: "1"
         env:
           TRIVY_DISABLE_VEX_NOTICE: "true"
+
+      - name: Record verified image metadata
+        if: inputs.package_image
+        run: |
+          mkdir -p "${ANALYSIS_IMAGE_ARTIFACT_NAME}"
+          printf '%s\n' "${ANALYSIS_IMAGE_REF}" \
+            > "${ANALYSIS_IMAGE_ARTIFACT_NAME}/image-ref.txt"
+          docker image inspect "${ANALYSIS_IMAGE_REF}" --format '{{.Id}}' \
+            > "${ANALYSIS_IMAGE_ARTIFACT_NAME}/image-id.txt"
+
+      - name: Save verified image
+        if: inputs.package_image
+        run: |
+          docker save "${ANALYSIS_IMAGE_REF}" |
+            gzip -1 > "${ANALYSIS_IMAGE_ARTIFACT_NAME}/analysis-worker-image.tar.gz"
+          sha256sum "${ANALYSIS_IMAGE_ARTIFACT_NAME}/analysis-worker-image.tar.gz" \
+            > "${ANALYSIS_IMAGE_ARTIFACT_NAME}/image-tar.sha256"
+        timeout-minutes: 10
+
+      - name: Upload verified image
+        if: inputs.package_image
+        id: image-upload
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: ${{ env.ANALYSIS_IMAGE_ARTIFACT_NAME }}
+          path: ${{ env.ANALYSIS_IMAGE_ARTIFACT_NAME }}/
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
+
+      - name: Create candidate provenance
+        if: inputs.package_image
+        env:
+          IMAGE_ARTIFACT_DIGEST: ${{ steps.image-upload.outputs.artifact-digest }}
+          IMAGE_ARTIFACT_ID: ${{ steps.image-upload.outputs.artifact-id }}
+        run: |
+          mkdir -p "${ANALYSIS_METADATA_ARTIFACT_NAME}"
+          tar_sha="$(cut -d ' ' -f 1 \
+            "${ANALYSIS_IMAGE_ARTIFACT_NAME}/image-tar.sha256")"
+          config_sha="$(sha256sum fly.analysis.toml | cut -d ' ' -f 1)"
+          jq -n \
+            --arg commit "${GITHUB_SHA}" \
+            --arg configSha256 "${config_sha}" \
+            --arg imageArtifactDigest "${IMAGE_ARTIFACT_DIGEST}" \
+            --arg imageArtifactId "${IMAGE_ARTIFACT_ID}" \
+            --arg imageArtifactName "${ANALYSIS_IMAGE_ARTIFACT_NAME}" \
+            --arg imageRef "${ANALYSIS_IMAGE_REF}" \
+            --arg runAttempt "${GITHUB_RUN_ATTEMPT}" \
+            --arg runId "${GITHUB_RUN_ID}" \
+            --arg tarSha256 "${tar_sha}" \
+            '{
+              schemaVersion: 1,
+              commit: $commit,
+              runId: $runId,
+              runAttempt: $runAttempt,
+              imageRef: $imageRef,
+              imageArtifactName: $imageArtifactName,
+              imageArtifactId: $imageArtifactId,
+              imageArtifactDigest: $imageArtifactDigest,
+              tarSha256: $tarSha256,
+              configSha256: $configSha256
+            }' > "${ANALYSIS_METADATA_ARTIFACT_NAME}/candidate.json"
+
+      - name: Upload candidate provenance
+        if: inputs.package_image
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: ${{ env.ANALYSIS_METADATA_ARTIFACT_NAME }}
+          path: ${{ env.ANALYSIS_METADATA_ARTIFACT_NAME }}/candidate.json
+          if-no-files-found: error
+          retention-days: 7

@@ -28,6 +28,7 @@ assert_case actionlint-only "${none}" scripts/ci/actionlint.sh
 assert_case api-source "${api_runtime}" apps/api/src/main/scala/momo/api/Main.scala
 assert_case openapi "${api_web_runtime}" apps/api/openapi.yaml
 assert_case analysis-source "${analysis_only}" apps/analysis-worker/src/main.rs
+assert_case analysis-candidate-workflow "${analysis_only}" .github/workflows/analysis-candidate.yml
 assert_case shared-schema "${all}" docs/schemas/series-analysis-v1.json
 assert_case orchestrator "${all}" .github/workflows/pr.yml
 assert_case unknown-path "${all}" config/unknown-release-input.toml

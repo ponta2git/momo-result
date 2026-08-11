@@ -83,7 +83,8 @@ while IFS= read -r -d '' path; do
     .github/workflows/ocr-worker.yml)
       ocr=true
       ;;
-    .github/workflows/analysis-worker.yml | .github/workflows/analysis-production.yml)
+    .github/workflows/analysis-worker.yml | .github/workflows/analysis-candidate.yml | \
+      .github/workflows/analysis-production.yml)
       analysis=true
       ;;
     .github/workflows/deploy.yml)

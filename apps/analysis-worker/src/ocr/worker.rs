@@ -22,15 +22,36 @@ use super::{
     },
 };
 
-pub type OcrEngineFuture<'a> =
-    Pin<Box<dyn Future<Output = Result<OcrEngineOutput, OcrEngineFailure>> + Send + 'a>>;
+pub type OcrAttemptFuture<'a> = Pin<
+    Box<
+        dyn Future<Output = Result<Result<OcrEngineOutput, OcrEngineFailure>, &'static str>>
+            + Send
+            + 'a,
+    >,
+>;
+
+pub type OcrAttemptTerminationFuture<'a> =
+    Pin<Box<dyn Future<Output = Result<(), &'static str>> + Send + 'a>>;
+
+pub trait OcrEngineAttempt: Send {
+    /// Waits until the isolated OCR child is reaped and returns its closed domain outcome.
+    fn wait(&mut self) -> OcrAttemptFuture<'_>;
+
+    /// Stops and reaps the isolated OCR child before control-plane ownership is released.
+    fn terminate(&mut self) -> OcrAttemptTerminationFuture<'_>;
+}
 
 pub trait OcrEngine: Send + Sync {
-    fn recognize<'a>(
-        &'a self,
-        image: &'a VerifiedSourceImage,
-        payload: &'a OcrQueuePayload,
-    ) -> OcrEngineFuture<'a>;
+    /// Starts one OCR child behind the shared attach barrier.
+    ///
+    /// # Errors
+    ///
+    /// Returns an opaque runtime category when the process cannot be created safely.
+    fn start(
+        &self,
+        image: &VerifiedSourceImage,
+        payload: &OcrQueuePayload,
+    ) -> Result<Box<dyn OcrEngineAttempt>, &'static str>;
 }
 
 pub struct OcrEngineOutput {
@@ -180,6 +201,8 @@ pub enum OcrWorkerError {
     Queue(&'static str),
     #[error("OCR worker control transition failed: {0}")]
     Control(&'static str),
+    #[error("OCR isolated process boundary failed: {0}")]
+    Engine(&'static str),
 }
 
 impl From<OcrQueueError> for OcrWorkerError {
@@ -446,8 +469,11 @@ async fn process_claimed<E: OcrEngine>(
         }
         Supervised::OwnerLost => return Ok(DeliveryDisposition::LeavePending),
     };
-    let recognized = supervise(
-        engine.recognize(&image, payload),
+    let mut attempt = engine
+        .start(&image, payload)
+        .map_err(OcrWorkerError::Engine)?;
+    let recognized = supervise_ocr_attempt(
+        attempt.as_mut(),
         config.ocr_timeout,
         heartbeat_client,
         claim,
@@ -556,6 +582,83 @@ where
             }
         }
     }
+}
+
+enum OcrAttemptEvent {
+    Completed(Result<Result<OcrEngineOutput, OcrEngineFailure>, &'static str>),
+    TimedOut,
+    Shutdown,
+    OwnerLost,
+    Dependency(OcrWorkerError),
+}
+
+async fn supervise_ocr_attempt(
+    attempt: &mut dyn OcrEngineAttempt,
+    timeout: Duration,
+    heartbeat_client: &mut tokio_postgres::Client,
+    claim: &ClaimedOcrJob,
+    config: &OcrWorkerRuntimeConfig,
+    shutdown: &mut watch::Receiver<bool>,
+) -> Result<Supervised<Result<OcrEngineOutput, OcrEngineFailure>>, OcrWorkerError> {
+    let event = {
+        let waiting = attempt.wait();
+        tokio::pin!(waiting);
+        let deadline = time::sleep(timeout);
+        tokio::pin!(deadline);
+        let mut interval = time::interval(config.heartbeat_interval);
+        interval.set_missed_tick_behavior(time::MissedTickBehavior::Delay);
+        interval.tick().await;
+        loop {
+            tokio::select! {
+                output = &mut waiting => break OcrAttemptEvent::Completed(output),
+                () = &mut deadline => break OcrAttemptEvent::TimedOut,
+                result = shutdown.changed() => {
+                    if result.is_err() || *shutdown.borrow() {
+                        break OcrAttemptEvent::Shutdown;
+                    }
+                }
+                _ = interval.tick() => {
+                    match heartbeat(heartbeat_client, claim, &config.control).await {
+                        Ok(OcrHeartbeatResult::Continue) => {}
+                        Ok(OcrHeartbeatResult::OwnerLost) => {
+                            break OcrAttemptEvent::OwnerLost;
+                        }
+                        Err(error) => {
+                            break OcrAttemptEvent::Dependency(error.into());
+                        }
+                    }
+                }
+            }
+        }
+    };
+
+    match event {
+        OcrAttemptEvent::Completed(Ok(output)) => Ok(Supervised::Completed(output)),
+        OcrAttemptEvent::Completed(Err(kind)) => {
+            terminate_ocr_attempt(attempt).await?;
+            Err(OcrWorkerError::Engine(kind))
+        }
+        OcrAttemptEvent::TimedOut => {
+            terminate_ocr_attempt(attempt).await?;
+            Ok(Supervised::TimedOut)
+        }
+        OcrAttemptEvent::Shutdown => {
+            terminate_ocr_attempt(attempt).await?;
+            Ok(Supervised::Shutdown)
+        }
+        OcrAttemptEvent::OwnerLost => {
+            terminate_ocr_attempt(attempt).await?;
+            Ok(Supervised::OwnerLost)
+        }
+        OcrAttemptEvent::Dependency(error) => {
+            terminate_ocr_attempt(attempt).await?;
+            Err(error)
+        }
+    }
+}
+
+async fn terminate_ocr_attempt(attempt: &mut dyn OcrEngineAttempt) -> Result<(), OcrWorkerError> {
+    attempt.terminate().await.map_err(OcrWorkerError::Engine)
 }
 
 fn elapsed_milliseconds(started: time::Instant) -> i32 {

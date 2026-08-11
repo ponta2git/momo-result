@@ -15,6 +15,8 @@ pub(super) fn command_allowed(arguments: &[OsString]) -> bool {
             | "release-promote"
             | "shadow-endurance"
             | "probe-cgroup-limit"
+            | "probe-ocr-child-lifecycle"
+            | "ocr-isolated-pilot"
     )
 }
 
@@ -25,7 +27,11 @@ pub(super) fn requires_child_cgroup(arguments: &[OsString]) -> bool {
         .is_some_and(|command| {
             matches!(
                 command,
-                "worker" | "shadow-endurance" | "probe-cgroup-limit"
+                "worker"
+                    | "shadow-endurance"
+                    | "probe-cgroup-limit"
+                    | "probe-ocr-child-lifecycle"
+                    | "ocr-isolated-pilot"
             )
         })
 }
@@ -51,10 +57,17 @@ mod tests {
             "release-promote",
             "shadow-endurance",
             "probe-cgroup-limit",
+            "probe-ocr-child-lifecycle",
+            "ocr-isolated-pilot",
         ] {
             assert!(command_allowed(&[OsString::from(command)]), "{command}");
         }
-        for command in ["bootstrap", "child-compute", "child-cgroup-allocate"] {
+        for command in [
+            "bootstrap",
+            "child-compute",
+            "child-cgroup-allocate",
+            "child-ocr",
+        ] {
             assert!(!command_allowed(&[OsString::from(command)]), "{command}");
         }
         assert!(!command_allowed(&[]));
@@ -62,7 +75,13 @@ mod tests {
 
     #[test]
     fn only_compute_capable_commands_prepare_the_child_cgroup() {
-        for command in ["worker", "shadow-endurance", "probe-cgroup-limit"] {
+        for command in [
+            "worker",
+            "shadow-endurance",
+            "probe-cgroup-limit",
+            "probe-ocr-child-lifecycle",
+            "ocr-isolated-pilot",
+        ] {
             assert!(
                 requires_child_cgroup(&[OsString::from(command)]),
                 "{command}"

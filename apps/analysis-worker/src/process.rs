@@ -28,7 +28,7 @@ pub(crate) const CHILD_DEPENDENCY_FAILED_EXIT_CODE: i32 = 82;
 pub(crate) const CHILD_PARENT_LIVENESS_LOST_EXIT_CODE: i32 = 83;
 pub const CHILD_START_BARRIER_FAILED_EXIT_CODE: i32 = 84;
 
-const CHILD_START_MARKER: u8 = 0x4d;
+pub(crate) const CHILD_START_MARKER: u8 = 0x4d;
 #[cfg(target_os = "linux")]
 const WORKER_UID: libc::uid_t = 10_001;
 #[cfg(target_os = "linux")]
@@ -667,7 +667,7 @@ fn configure_memory_limit(command: &mut tokio::process::Command, limit_bytes: u6
 }
 
 #[cfg(target_os = "linux")]
-fn configure_parent_death_signal(command: &mut tokio::process::Command) {
+pub(crate) fn configure_parent_death_signal(command: &mut tokio::process::Command) {
     // SAFETY: getpid has no preconditions and does not dereference pointers.
     let expected_parent_pid = unsafe { libc::getpid() };
     // SAFETY: the closure invokes only the async-signal-safe prctl/getppid wrappers before exec.
@@ -807,7 +807,7 @@ fn configure_parent_death_signal_before_exec(expected_parent_pid: libc::pid_t) -
 }
 
 #[cfg(unix)]
-fn terminate_process_group(process_id: u32, signal: i32) -> Result<(), ProcessError> {
+pub(crate) fn terminate_process_group(process_id: u32, signal: i32) -> Result<(), ProcessError> {
     let process_group = i32::try_from(process_id).map_err(|conversion_error| {
         ProcessError::Signal(io::Error::new(
             io::ErrorKind::InvalidInput,

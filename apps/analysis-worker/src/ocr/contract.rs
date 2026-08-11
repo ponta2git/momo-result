@@ -1,7 +1,7 @@
 use std::str;
 
 use redis::{Value, streams::StreamId};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 
@@ -84,7 +84,7 @@ impl RequestedScreenType {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct PlayerAliasHint {
     member_id: String,
@@ -103,7 +103,7 @@ impl PlayerAliasHint {
     }
 }
 
-#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct OcrHints {
     game_title: Option<String>,
@@ -135,7 +135,7 @@ impl OcrHints {
         &self.computer_player_aliases
     }
 
-    fn validate(&self) -> bool {
+    pub(crate) fn validate(&self) -> bool {
         self.game_title.as_deref().is_none_or(valid_hint_text)
             && self.layout_family.as_deref().is_none_or(valid_hint_text)
             && self.known_player_aliases.len() <= MAXIMUM_KNOWN_PLAYERS

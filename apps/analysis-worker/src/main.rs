@@ -7,7 +7,7 @@ use std::{
     time::Duration,
 };
 
-use clap::{Parser, Subcommand, ValueEnum};
+use clap::{Args, Parser, Subcommand, ValueEnum};
 use momo_analysis::{
     config::{PublicationMode, WorkerConfig, WorkerRuntimeConfig},
     ocr::{
@@ -93,6 +93,13 @@ enum Command {
         timeout_ms: u64,
     },
     #[command(hide = true)]
+    ProbeOcrChildLifecycle {
+        #[arg(long, default_value_t = 10_000)]
+        timeout_ms: u64,
+        #[arg(long, default_value_t = 1_000)]
+        stop_grace_ms: u64,
+    },
+    #[command(hide = true)]
     OcrPilot {
         #[arg(long)]
         image: PathBuf,
@@ -104,6 +111,8 @@ enum Command {
         tessdata_path: Option<PathBuf>,
     },
     #[command(hide = true)]
+    OcrIsolatedPilot(OcrIsolatedPilotArgs),
+    #[command(hide = true)]
     ProbeParentDeath,
     #[command(hide = true)]
     ChildAllocate {
@@ -114,6 +123,11 @@ enum Command {
     ChildCgroupAllocate {
         #[arg(long)]
         allocation_bytes: u64,
+    },
+    #[command(hide = true)]
+    ChildOcr {
+        #[arg(long)]
+        tessdata_path: Option<PathBuf>,
     },
     #[command(hide = true)]
     ChildWait {
@@ -187,6 +201,22 @@ impl OcrPilotLayoutFamily {
     }
 }
 
+#[derive(Debug, Args)]
+struct OcrIsolatedPilotArgs {
+    #[arg(long)]
+    image: PathBuf,
+    #[arg(long, value_enum)]
+    screen_type: OcrPilotScreenType,
+    #[arg(long, value_enum)]
+    layout_family: Option<OcrPilotLayoutFamily>,
+    #[arg(long)]
+    tessdata_path: Option<PathBuf>,
+    #[arg(long, default_value_t = 60_000)]
+    timeout_ms: u64,
+    #[arg(long, default_value_t = 1_000)]
+    stop_grace_ms: u64,
+}
+
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> ExitCode {
     let cli = Cli::parse();
@@ -205,6 +235,11 @@ async fn main() -> ExitCode {
                 return exit_code(momo_analysis::process::CHILD_START_BARRIER_FAILED_EXIT_CODE);
             }
             return exit_code(allocate_and_touch(*allocation_bytes));
+        }
+        Command::ChildOcr { tessdata_path } => {
+            return exit_code(momo_analysis::ocr::execute_isolated_child(
+                tessdata_path.clone(),
+            ));
         }
         Command::ChildCompute {
             game_title_id,
@@ -244,7 +279,9 @@ async fn main() -> ExitCode {
         | Command::ShadowEndurance { .. }
         | Command::ProbeHardLimit { .. }
         | Command::ProbeCgroupLimit { .. }
+        | Command::ProbeOcrChildLifecycle { .. }
         | Command::OcrPilot { .. }
+        | Command::OcrIsolatedPilot(_)
         | Command::ProbeParentDeath
         | Command::ChildWait { .. } => {}
     }
@@ -316,14 +353,20 @@ async fn run(command: Command) -> Result<(), String> {
             allocation_bytes,
             timeout_ms,
         } => run_cgroup_hard_limit_probe(allocation_bytes, timeout_ms).await,
+        Command::ProbeOcrChildLifecycle {
+            timeout_ms,
+            stop_grace_ms,
+        } => run_ocr_child_lifecycle_probe(timeout_ms, stop_grace_ms).await,
         Command::OcrPilot {
             image,
             screen_type,
             layout_family,
             tessdata_path,
         } => run_ocr_pilot(&image, screen_type, layout_family, tessdata_path).await,
+        Command::OcrIsolatedPilot(arguments) => run_isolated_ocr_pilot(arguments).await,
         Command::ChildAllocate { .. }
         | Command::ChildCgroupAllocate { .. }
+        | Command::ChildOcr { .. }
         | Command::ChildCompute { .. } => Err(String::from("child command dispatch failed")),
         Command::Bootstrap { .. } => Err(String::from("bootstrap command dispatch failed")),
         Command::ProbeParentDeath => {
@@ -381,12 +424,53 @@ async fn run_cgroup_hard_limit_probe(allocation_bytes: u64, timeout_ms: u64) -> 
     }
 }
 
+async fn run_ocr_child_lifecycle_probe(timeout_ms: u64, stop_grace_ms: u64) -> Result<(), String> {
+    momo_analysis::ocr::probe_isolated_child_lifecycle(
+        Duration::from_millis(timeout_ms),
+        Duration::from_millis(stop_grace_ms),
+    )
+    .await
+    .map_err(String::from)?;
+    write_json_line(&serde_json::json!({
+        "cancelledChildReaped": true,
+        "followupChildCompleted": true,
+        "parentSurvived": true,
+    }))
+}
+
 async fn run_ocr_pilot(
     image_path: &std::path::Path,
     screen_type: OcrPilotScreenType,
     layout_family: Option<OcrPilotLayoutFamily>,
     tessdata_path: Option<PathBuf>,
 ) -> Result<(), String> {
+    let (bytes, hints) = read_ocr_pilot_input(image_path, layout_family).await?;
+    let output = NativeOcrEngine::new(tessdata_path)
+        .analyze_local_image_bytes(&bytes, screen_type.into(), &hints)
+        .map_err(|error| format!("OCR pilot failed: {error:?}"))?;
+    write_ocr_pilot_output(&output)
+}
+
+async fn run_isolated_ocr_pilot(arguments: OcrIsolatedPilotArgs) -> Result<(), String> {
+    let (bytes, hints) = read_ocr_pilot_input(&arguments.image, arguments.layout_family).await?;
+    let output = momo_analysis::ocr::analyze_isolated_local_image_bytes(
+        &bytes,
+        arguments.screen_type.into(),
+        &hints,
+        arguments.tessdata_path,
+        Duration::from_millis(arguments.timeout_ms),
+        Duration::from_millis(arguments.stop_grace_ms),
+    )
+    .await
+    .map_err(String::from)?
+    .map_err(|error| format!("isolated OCR pilot failed: {error:?}"))?;
+    write_ocr_pilot_output(&output)
+}
+
+async fn read_ocr_pilot_input(
+    image_path: &std::path::Path,
+    layout_family: Option<OcrPilotLayoutFamily>,
+) -> Result<(Vec<u8>, OcrHints), String> {
     let metadata = tokio::fs::metadata(image_path)
         .await
         .map_err(|_error| String::from("OCR pilot image metadata could not be read"))?;
@@ -404,9 +488,12 @@ async fn run_ocr_pilot(
                 .map_err(|_error| String::from("OCR pilot hints could not be constructed"))
         },
     )?;
-    let output = NativeOcrEngine::new(tessdata_path)
-        .analyze_local_image_bytes(&bytes, screen_type.into(), &hints)
-        .map_err(|error| format!("OCR pilot failed: {error:?}"))?;
+    Ok((bytes, hints))
+}
+
+fn write_ocr_pilot_output(
+    output: &momo_analysis::ocr::worker::OcrEngineOutput,
+) -> Result<(), String> {
     write_json_line(&serde_json::json!({
         "detectedScreenType": output.detected_screen_type.wire(),
         "profileId": output.profile_id,

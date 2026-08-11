@@ -100,7 +100,8 @@ docker run --rm --user 10001:10001 --entrypoint sh "${image_ref}" -c '
 
   for excluded in \
     apt apt-get apk dpkg psql redis-cli strace tcpdump gdb \
-    ash bash busybox chmod chown cp curl install ln mkdir mknod mount mv rm rmdir tar wget
+    ash bash busybox chmod chown cp curl install ln mkdir mknod mount mv rm rmdir tar wget \
+    python python3 pip pip3 uv
   do
     if command -v "${excluded}" >/dev/null 2>&1; then
       echo "unexpected runtime tool: ${excluded}" >&2
@@ -189,6 +190,15 @@ docker run --rm --privileged --cgroupns private \
   /usr/local/bin/momo-analysis bootstrap -- probe-cgroup-limit \
   --allocation-bytes "${probe_allocation_bytes}" \
   --timeout-ms 10000
+
+docker run --rm --privileged --cgroupns private \
+  --memory "${runtime_memory_limit}" --memory-swap "${runtime_memory_limit}" \
+  --env "MOMO_ANALYSIS_CHILD_MEMORY_LIMIT_BYTES=${child_memory_limit_bytes}" \
+  --env MOMO_HEAVY_CGROUP_V2_VALIDATED=true \
+  "${image_ref}" \
+  /usr/local/bin/momo-analysis bootstrap -- probe-ocr-child-lifecycle \
+  --timeout-ms 10000 \
+  --stop-grace-ms 1000
 
 docker run --rm --user 10001:10001 --entrypoint sh "${image_ref}" -c '
   set -eu

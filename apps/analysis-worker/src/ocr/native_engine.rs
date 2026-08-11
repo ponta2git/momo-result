@@ -3,8 +3,7 @@ use std::path::PathBuf;
 use super::{
     contract::{OcrHints, RequestedScreenType},
     core::{CoreOcrError, CoreOcrOutput, analyze},
-    object_store::VerifiedSourceImage,
-    worker::{OcrEngine, OcrEngineFailure, OcrEngineFuture, OcrEngineOutput},
+    worker::{OcrEngineFailure, OcrEngineOutput},
 };
 
 #[derive(Clone, Debug, Default)]
@@ -41,26 +40,6 @@ impl NativeOcrEngine {
         )
         .map(core_output)
         .map_err(engine_failure)
-    }
-}
-
-impl OcrEngine for NativeOcrEngine {
-    fn recognize<'a>(
-        &'a self,
-        image: &'a VerifiedSourceImage,
-        payload: &'a super::contract::OcrQueuePayload,
-    ) -> OcrEngineFuture<'a> {
-        let bytes = image.bytes().to_vec();
-        let requested_screen_type = payload.requested_screen_type();
-        let hints = payload.hints().clone();
-        let engine = self.clone();
-        Box::pin(async move {
-            tokio::task::spawn_blocking(move || {
-                engine.analyze_local_image_bytes(&bytes, requested_screen_type, &hints)
-            })
-            .await
-            .map_err(|_join_error| OcrEngineFailure::EngineUnavailable)?
-        })
     }
 }
 

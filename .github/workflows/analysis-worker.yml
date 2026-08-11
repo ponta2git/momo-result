@@ -47,7 +47,7 @@ jobs:
         working-directory: apps/analysis-worker
 
     steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -60,7 +60,7 @@ jobs:
           echo "ref=${ref}" >> "${GITHUB_OUTPUT}"
 
       - name: Checkout momo-db migrations
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ github.repository_owner }}/momo-db
           ref: ${{ steps.momo-db.outputs.ref }}
@@ -107,7 +107,7 @@ jobs:
       ANALYSIS_METADATA_ARTIFACT_NAME: analysis-candidate-metadata-${{ github.run_id }}-${{ github.run_attempt }}
       ANALYSIS_IMAGE_REF: ${{ inputs.package_image && format('registry.fly.io/momo-result-analysis:{0}-{1}-{2}', github.sha, github.run_id, github.run_attempt) || 'momo-analysis-worker:test' }}
     steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 

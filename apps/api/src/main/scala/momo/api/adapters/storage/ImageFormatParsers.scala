@@ -1,9 +1,9 @@
-package momo.api.adapters.storage.local
+package momo.api.adapters.storage
 
 import scala.annotation.tailrec
 
-private[local] object ImageFormatParsers:
-  import LocalFsImageStoreSupport.*
+private[storage] object ImageFormatParsers:
+  import ImageValidation.*
 
   def detect(bytes: Array[Byte]): Option[ImageType] =
     if PngParser.matchesSignature(bytes) then Some(Png)

@@ -31,10 +31,10 @@ final class ApiRuntimeArchitectureSpec extends FunSuite:
   private val ocrJobDomainFile = Paths.get("src/main/scala/momo/api/domain/OcrJob.scala")
   private val localFsImageStoreFile =
     Paths.get("src/main/scala/momo/api/adapters/storage/local/LocalFsImageStore.scala")
-  private val localFsImageStoreSupportFile =
-    Paths.get("src/main/scala/momo/api/adapters/storage/local/LocalFsImageStoreSupport.scala")
+  private val imageValidationFile =
+    Paths.get("src/main/scala/momo/api/adapters/storage/ImageValidation.scala")
   private val imageFormatParsersFile =
-    Paths.get("src/main/scala/momo/api/adapters/storage/local/ImageFormatParsers.scala")
+    Paths.get("src/main/scala/momo/api/adapters/storage/ImageFormatParsers.scala")
   private val generatedIdUsecaseFiles = List(
     Paths.get("src/main/scala/momo/api/usecases/admin/AdminLoginAccounts.scala"),
     Paths.get("src/main/scala/momo/api/usecases/heldevents/CreateHeldEvent.scala"),
@@ -134,17 +134,17 @@ final class ApiRuntimeArchitectureSpec extends FunSuite:
     ))
 
   test("image header parsing remains split by image format"):
-    val supportText = read(localFsImageStoreSupportFile)
+    val validationText = read(imageValidationFile)
     val parserText = read(imageFormatParsersFile)
 
-    assert(supportText.contains("ImageFormatParsers.detect(bytes)"))
-    assert(supportText.contains("ImageFormatParsers.dimensions(bytes, imageType)"))
+    assert(validationText.contains("ImageFormatParsers.detect(bytes)"))
+    assert(validationText.contains("ImageFormatParsers.dimensions(bytes, imageType)"))
     assert(parserText.contains("private object PngParser"))
     assert(parserText.contains("private object JpegParser"))
     assert(parserText.contains("private object WebpParser"))
-    assert(!supportText.contains("pngHasRasterPayloadAndEnd"))
-    assert(!supportText.contains("scanJpegEntropy"))
-    assert(!supportText.contains("webpLosslessDimensions"))
+    assert(!validationText.contains("pngHasRasterPayloadAndEnd"))
+    assert(!validationText.contains("scanJpegEntropy"))
+    assert(!validationText.contains("webpLosslessDimensions"))
 
   test("auth callback orchestration stays out of the HTTP module"):
     val authModuleText = read(authModuleFile)

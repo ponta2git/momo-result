@@ -6,21 +6,6 @@ import java.security.MessageDigest
 import momo.api.domain.ids.ImageId
 
 private[storage] object LocalFsImageStoreSupport:
-  val MaxBytes = 3 * 1024 * 1024
-  val MaxWidth = 1920
-  val MaxHeight = 1080
-  val MaxDimensionsLabel = s"${MaxWidth.toString}x${MaxHeight.toString}"
-
-  final case class ImageType(mediaType: String, extension: String)
-  private[adapters] final case class ImageDimensions(width: Long, height: Long):
-    def exceedsLimit: Boolean = width <= 0L || height <= 0L || width > MaxWidth.toLong ||
-      height > MaxHeight.toLong
-
-  val Png: ImageType = ImageType("image/png", "png")
-  val Jpeg: ImageType = ImageType("image/jpeg", "jpg")
-  val Webp: ImageType = ImageType("image/webp", "webp")
-  val SupportedImageTypes: List[ImageType] = List(Png, Jpeg, Webp)
-
   private[adapters] def sha256Hex(value: String): String = MessageDigest.getInstance("SHA-256")
     .digest(value.getBytes(StandardCharsets.UTF_8)).map(byte => f"${byte & 0xff}%02x").mkString
 
@@ -35,12 +20,3 @@ private[storage] object LocalFsImageStoreSupport:
     (character >= 'A' && character <= 'Z') ||
       (character >= 'a' && character <= 'z') ||
       (character >= '0' && character <= '9')
-
-  def normalizeMediaType(value: String): String = value.takeWhile(_ != ';').trim.toLowerCase
-
-  def detect(bytes: Array[Byte]): Option[ImageType] = ImageFormatParsers.detect(bytes)
-
-  private[adapters] def dimensions(
-      bytes: Array[Byte],
-      imageType: ImageType
-  ): Option[ImageDimensions] = ImageFormatParsers.dimensions(bytes, imageType)

@@ -11,6 +11,7 @@ import cats.syntax.all.*
 import fs2.Stream
 import fs2.io.file.{Files as Fs2Files, Path as Fs2Path}
 
+import momo.api.adapters.storage.ImageValidation
 import momo.api.domain.ids.*
 import momo.api.domain.{StoredImage, StoredImageLocation}
 import momo.api.errors.AppError
@@ -24,6 +25,7 @@ import momo.api.ports.storage.{
 
 final class LocalFsImageStore[F[_]: Async: Random](root: Path)
     extends ImageStorage[F], ImageStorageInspector[F], ImageOrphanCleaner[F]:
+  import ImageValidation.*
   import LocalFsImageStoreSupport.*
 
   private val rootDirectory: Path = root.toAbsolutePath.normalize()
@@ -33,11 +35,12 @@ final class LocalFsImageStore[F[_]: Async: Random](root: Path)
       fileName: Option[String],
       contentType: Option[String],
       bytes: Array[Byte],
-  ): F[Either[AppError, StoredImage]] = validate(bytes, contentType).traverse { imageType =>
+  ): F[Either[AppError, StoredImage]] = validate(bytes, contentType).traverse { validated =>
     for
       id <- ImageId.fresh[F]
       directory = accountDirectory(ownerAccountId)
       _ <- Sync[F].blocking(Files.createDirectories(directory))
+      imageType = validated.imageType
       path = directory.resolve(s"${id.value}.${imageType.extension}").toAbsolutePath.normalize()
       _ <- Sync[F]
         .blocking(Files.write(path, bytes, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE))
@@ -140,43 +143,17 @@ final class LocalFsImageStore[F[_]: Async: Random](root: Path)
         fileName.stripSuffix(s".${imageType.extension}")
     }.filter(isSafeImageFileStem).flatMap(ImageId.fromString(_).toOption)
 
-  private def validate(
-      bytes: Array[Byte],
-      contentType: Option[String],
-  ): Either[AppError, ImageType] =
-    if bytes.length > MaxBytes then
-      Left(AppError.PayloadTooLarge(s"Image must be ${MaxBytes.toString} bytes or smaller."))
-    else
-      val detected = detect(bytes)
-      detected match
-        case None =>
-          Left(AppError.UnsupportedMediaType("Only PNG, JPEG, and WebP images are supported."))
-        case Some(imageType) =>
-          val maybeDimensions = dimensions(bytes, imageType)
-          maybeDimensions match
-            case None => Left(AppError.UnsupportedMediaType("Image dimensions could not be read."))
-            case Some(imageDimensions) if imageDimensions.exceedsLimit =>
-              Left(
-                AppError
-                  .PayloadTooLarge(s"Image dimensions must be $MaxDimensionsLabel or smaller.")
-              )
-            case Some(_)
-                if contentType.exists(ct => normalizeMediaType(ct) != imageType.mediaType) =>
-              Left(AppError.UnsupportedMediaType("Content-Type does not match the image bytes."))
-            case Some(_) => Right(imageType)
-
   private def locationFor(path: Path): StoredImageLocation = StoredImageLocation
     .unsafeFromString(path.toAbsolutePath.normalize().toString)
 
   private def pathFor(location: StoredImageLocation): Path = Path.of(location.value)
 
 object LocalFsImageStore:
-  val MaxBytes: Int = LocalFsImageStoreSupport.MaxBytes
-  val MaxWidth: Int = LocalFsImageStoreSupport.MaxWidth
-  val MaxHeight: Int = LocalFsImageStoreSupport.MaxHeight
-  val MaxDimensionsLabel: String = LocalFsImageStoreSupport.MaxDimensionsLabel
+  val MaxBytes: Int = ImageValidation.MaxBytes
+  val MaxWidth: Int = ImageValidation.MaxWidth
+  val MaxHeight: Int = ImageValidation.MaxHeight
+  val MaxDimensionsLabel: String = ImageValidation.MaxDimensionsLabel
 
-  def normalizeMediaType(value: String): String = LocalFsImageStoreSupport.normalizeMediaType(value)
+  def normalizeMediaType(value: String): String = ImageValidation.normalizeMediaType(value)
 
-  def detect(bytes: Array[Byte]): Option[LocalFsImageStoreSupport.ImageType] =
-    LocalFsImageStoreSupport.detect(bytes)
+  def detect(bytes: Array[Byte]): Option[ImageValidation.ImageType] = ImageValidation.detect(bytes)

@@ -131,6 +131,7 @@ lazy val root = (project in file("."))
     libraryDependencies ++= {
       val catsEffectVersion = "3.7.0"
       val apiSpecVersion = "0.11.10"
+      val awsSdkVersion = "2.51.4"
       val circeVersion = "0.14.15"
       val cirisVersion = "3.15.0"
       val doobieVersion = "1.0.0-RC12"
@@ -150,6 +151,8 @@ lazy val root = (project in file("."))
 
       Seq(
         "org.typelevel" %% "cats-effect" % catsEffectVersion,
+        "software.amazon.awssdk" % "s3" % awsSdkVersion,
+        "software.amazon.awssdk" % "url-connection-client" % awsSdkVersion,
         "is.cir" %% "ciris" % cirisVersion,
         "org.typelevel" %% "log4cats-slf4j" % log4catsVersion,
         "org.http4s" %% "http4s-ember-server" % http4sVersion,

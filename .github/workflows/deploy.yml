@@ -34,7 +34,6 @@ env:
   CI_DUMMY_ORIGIN_LOCK_TOKEN: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
   IMAGE_ARTIFACT_NAME: runtime-image
   IMAGE_REF: registry.fly.io/momo-result:${{ github.sha }}
-  MOMO_DB_REF: c6a657e6eb7e9024fabb0ce85aaf0f22d4148f7b
 
 concurrency:
   group: ${{ github.event_name == 'pull_request' && format('runtime-smoke-pr-{0}', github.event.pull_request.number) || 'fly-deploy-production' }}
@@ -48,7 +47,6 @@ jobs:
   api:
     if: github.event_name != 'pull_request'
     uses: ./.github/workflows/api.yml
-    secrets: inherit
 
   web:
     if: github.event_name != 'pull_request'
@@ -57,7 +55,6 @@ jobs:
   ocr-worker:
     if: github.event_name != 'pull_request'
     uses: ./.github/workflows/ocr-worker.yml
-    secrets: inherit
 
   analysis-worker:
     if: github.event_name != 'pull_request'
@@ -68,7 +65,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
 
@@ -86,7 +83,7 @@ jobs:
     timeout-minutes: 60
     if: github.event_name != 'pull_request'
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
 
@@ -126,7 +123,7 @@ jobs:
         timeout-minutes: 10
 
       - name: Upload runtime image
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: ${{ env.IMAGE_ARTIFACT_NAME }}
           path: ${{ env.IMAGE_ARTIFACT_NAME }}/
@@ -169,23 +166,30 @@ jobs:
       REDIS_URL: redis://127.0.0.1:6379/0
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
 
+      - name: Read pinned momo-db revision
+        id: momo-db
+        run: |
+          ref="$(tr -d '\r\n' < .momo-db-ref)"
+          [[ "${ref}" =~ ^[0-9a-f]{40}$ ]] || { echo "Invalid .momo-db-ref." >&2; exit 1; }
+          echo "ref=${ref}" >> "${GITHUB_OUTPUT}"
+
       - name: Checkout momo-db migrations
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           repository: ${{ github.repository_owner }}/momo-db
-          ref: ${{ env.MOMO_DB_REF }}
+          ref: ${{ steps.momo-db.outputs.ref }}
           path: _deps/momo-db
-          token: ${{ secrets.MOMO_DB_READ_TOKEN || github.token }}
+          token: ${{ github.token }}
           sparse-checkout: drizzle
           persist-credentials: false
 
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: 24
           cache: pnpm
@@ -253,7 +257,7 @@ jobs:
 
       - name: Upload runtime container logs
         if: failure()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: runtime-container-logs
           path: runtime-container.log
@@ -262,7 +266,7 @@ jobs:
 
       - name: Upload Playwright report
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: playwright-report
           path: apps/web/playwright-report/
@@ -310,23 +314,30 @@ jobs:
       REDIS_URL: redis://127.0.0.1:6379/0
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
 
+      - name: Read pinned momo-db revision
+        id: momo-db
+        run: |
+          ref="$(tr -d '\r\n' < .momo-db-ref)"
+          [[ "${ref}" =~ ^[0-9a-f]{40}$ ]] || { echo "Invalid .momo-db-ref." >&2; exit 1; }
+          echo "ref=${ref}" >> "${GITHUB_OUTPUT}"
+
       - name: Checkout momo-db migrations
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           repository: ${{ github.repository_owner }}/momo-db
-          ref: ${{ env.MOMO_DB_REF }}
+          ref: ${{ steps.momo-db.outputs.ref }}
           path: _deps/momo-db
-          token: ${{ secrets.MOMO_DB_READ_TOKEN || github.token }}
+          token: ${{ github.token }}
           sparse-checkout: drizzle
           persist-credentials: false
 
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: 24
           cache: pnpm
@@ -340,7 +351,7 @@ jobs:
         timeout-minutes: 10
 
       - name: Download runtime image
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
           name: ${{ env.IMAGE_ARTIFACT_NAME }}
           path: ${{ env.IMAGE_ARTIFACT_NAME }}
@@ -379,7 +390,7 @@ jobs:
 
       - name: Upload runtime container logs
         if: failure()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: runtime-container-logs
           path: runtime-container.log
@@ -388,7 +399,7 @@ jobs:
 
       - name: Upload Playwright report
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: playwright-report
           path: apps/web/playwright-report/
@@ -424,12 +435,12 @@ jobs:
       name: production
       url: https://momo-result.ponta.me
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
 
       - name: Download smoke-tested image
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
           name: ${{ env.IMAGE_ARTIFACT_NAME }}
           path: ${{ env.IMAGE_ARTIFACT_NAME }}
@@ -440,6 +451,8 @@ jobs:
 
       - name: Setup flyctl
         uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1
+        with:
+          version: 0.4.79
 
       - name: Authenticate Docker to Fly registry
         env:
@@ -453,7 +466,7 @@ jobs:
         timeout-minutes: 10
 
       - name: Upload pushed image manifest
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: runtime-image-registry-manifest
           path: ${{ env.IMAGE_ARTIFACT_NAME }}/registry-manifest.json

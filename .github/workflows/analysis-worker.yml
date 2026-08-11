@@ -17,9 +17,6 @@ on:
 permissions:
   contents: read
 
-env:
-  MOMO_DB_REF: c6a657e6eb7e9024fabb0ce85aaf0f22d4148f7b
-
 jobs:
   analysis-worker:
     runs-on: ubuntu-latest
@@ -55,17 +52,25 @@ jobs:
         working-directory: apps/analysis-worker
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
 
+      - name: Read pinned momo-db revision
+        id: momo-db
+        working-directory: ${{ github.workspace }}
+        run: |
+          ref="$(tr -d '\r\n' < .momo-db-ref)"
+          [[ "${ref}" =~ ^[0-9a-f]{40}$ ]] || { echo "Invalid .momo-db-ref." >&2; exit 1; }
+          echo "ref=${ref}" >> "${GITHUB_OUTPUT}"
+
       - name: Checkout momo-db migrations
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           repository: ${{ github.repository_owner }}/momo-db
-          ref: ${{ env.MOMO_DB_REF }}
+          ref: ${{ steps.momo-db.outputs.ref }}
           path: _deps/momo-db
-          token: ${{ secrets.MOMO_DB_READ_TOKEN || github.token }}
+          token: ${{ github.token }}
           sparse-checkout: drizzle
           persist-credentials: false
 
@@ -73,7 +78,7 @@ jobs:
         run: rustup show active-toolchain
 
       - name: Cache Cargo
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
           workspaces: apps/analysis-worker
 
@@ -102,7 +107,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
 

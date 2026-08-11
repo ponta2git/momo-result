@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import io
 import json
 import os
 import sys
@@ -60,6 +61,35 @@ class RuntimeDeployScriptTest(unittest.TestCase):
         self.assertEqual(postdeploy.missing_processes(commands[:-1]), ["ocrWorker"])
         self.assertTrue(postdeploy.valid_health_payload({"status": "ok"}))
         self.assertFalse(postdeploy.valid_health_payload({"status": "degraded"}))
+
+        class FakeHttpResponse(io.BytesIO):
+            def __init__(self, payload: bytes, status: int = 200) -> None:
+                super().__init__(payload)
+                self.status = status
+
+        with mock.patch.object(
+            postdeploy,
+            "urlopen",
+            return_value=FakeHttpResponse(b'{"status":"ok"}'),
+        ) as public_request:
+            postdeploy._public_edge_probe("example.com")
+        request = public_request.call_args.args[0]
+        self.assertEqual(request.full_url, "https://example.com/healthz")
+        self.assertEqual(request.get_header("Accept"), "application/json")
+        self.assertEqual(
+            request.get_header("User-agent"), "momo-result-release-probe/1"
+        )
+        self.assertEqual(public_request.call_args.kwargs, {"timeout": 10})
+
+        with (
+            mock.patch.object(
+                postdeploy,
+                "urlopen",
+                return_value=FakeHttpResponse(b'{"status":"degraded"}'),
+            ),
+            self.assertRaises(postdeploy.PublicEdgeContractError),
+        ):
+            postdeploy._public_edge_probe("example.com")
 
     def test_database_probes_use_transaction_local_timeouts(self) -> None:
         class FakeCursor:

@@ -25,6 +25,10 @@ class WebContractError(RuntimeError):
     pass
 
 
+class PublicEdgeContractError(RuntimeError):
+    pass
+
+
 class DatabaseContractError(RuntimeError):
     pass
 
@@ -71,6 +75,18 @@ def _http_probe(host: str, origin_token: str) -> None:
             raise WebContractError
 
 
+def _public_edge_probe(host: str) -> None:
+    headers = {
+        "Accept": "application/json",
+        "User-Agent": "momo-result-release-probe/1",
+    }
+    with urlopen(
+        Request(f"https://{host}/healthz", headers=headers), timeout=10
+    ) as response:
+        if response.status != HTTP_OK or not valid_health_payload(json.load(response)):
+            raise PublicEdgeContractError
+
+
 def _database_probe(database_url: str) -> None:
     import psycopg  # noqa: PLC0415 - only the packaged runtime owns this dependency.
 
@@ -115,6 +131,7 @@ def main() -> int:
 
     try:
         _http_probe(host, origin_token)
+        _public_edge_probe(host)
         _database_probe(database_url)
         _redis_probe(redis_url)
         missing = missing_processes(_process_command_lines())
@@ -125,7 +142,14 @@ def main() -> int:
             {
                 "event": "runtime_postdeploy_smoke",
                 "status": "ok",
-                "checks": ["database", "http", "processes", "redis", "web"],
+                "checks": [
+                    "database",
+                    "http",
+                    "processes",
+                    "publicEdge",
+                    "redis",
+                    "web",
+                ],
             },
             stream=sys.stdout,
         )

@@ -672,7 +672,7 @@ jobs:
             ' > runtime-production-evidence/deployment-state.json
         timeout-minutes: 2
 
-      - name: Run post-deploy dependency and process smoke
+      - name: Run post-deploy dependency, process, and public edge smoke
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: |
@@ -680,19 +680,22 @@ jobs:
             --command "/opt/momo-result/bin/postdeploy-smoke" \
             > runtime-production-evidence/postdeploy-smoke.json
           jq -e '
-            .event == "runtime_postdeploy_smoke" and
-            .status == "ok" and
-            .checks == ["database", "http", "processes", "redis", "web"]
-          ' runtime-production-evidence/postdeploy-smoke.json > /dev/null
+            select(
+              .event == "runtime_postdeploy_smoke" and
+              .status == "ok" and
+              .checks == [
+                "database",
+                "http",
+                "processes",
+                "publicEdge",
+                "redis",
+                "web"
+              ]
+            ) |
+            {schemaVersion: 1, status: "ok"}
+          ' runtime-production-evidence/postdeploy-smoke.json \
+            > runtime-production-evidence/public-health.json
         timeout-minutes: 2
-
-      - name: Verify public health endpoint
-        run: |
-          curl -fsS --retry 5 --retry-delay 2 --retry-all-errors \
-            https://momo-result.ponta.me/healthz |
-            jq -e '{schemaVersion: 1, status} | select(.status == "ok")' \
-              > runtime-production-evidence/public-health.json
-        timeout-minutes: 1
 
       - name: Upload production verification evidence
         if: always()

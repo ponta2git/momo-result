@@ -119,6 +119,8 @@ fn valid_runtime_environment() -> tempfile::TempDir {
         .expect("fixture cgroup usage must be written");
     std::fs::write(cgroup.join("memory.max_usage_in_bytes"), "0\n")
         .expect("fixture cgroup peak must be written");
+    std::fs::write(cgroup.join("memory.failcnt"), "0\n")
+        .expect("fixture cgroup limit-hit counter must be written");
     std::fs::write(cgroup.join("memory.oom_control"), "oom_kill 0\n")
         .expect("fixture cgroup events must be written");
     EnvironmentGuard::set(crate::cgroup::CGROUP_HIERARCHY_ENV, "v1");

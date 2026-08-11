@@ -177,6 +177,8 @@ PostgreSQL repository、Doobie query、DB table/column、migration 前提に触�
   zombie process、二重公開を残さないことを確認する。
 - 採用runtime上で子processのmemory hard limitを意図的に超過させ、子だけが終了し、親processが生存して
   terminal失敗を保存できることを確認する。process単位の制限機構が利用できるという推測で代用しない。
+  子のsignalやOOM eventだけを合格根拠にせず、対象cgroupのlimit-hit counter増分とlimit readbackを同時に
+  確認し、runtime全体のOOMを子cgroupによる隔離成功と誤認しない。
 - 親processのgraceful終了だけでなく強制終了を通し、parent-liveness channelで旧子process groupが消えてから
   lease回収後の新attemptが開始することを確認する。
 - 一時directoryのdisk不足、byte上限、symlink、path逸脱、manifest欠損・破損と、全終了経路・起動時の

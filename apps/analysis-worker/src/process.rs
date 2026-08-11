@@ -101,6 +101,14 @@ pub struct HardLimitProbeResult {
     pub parent_survived: bool,
     pub child_exit_code: Option<i32>,
     pub child_signal: Option<i32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cgroup_limit_bytes: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cgroup_peak_bytes: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cgroup_limit_hit_count_delta: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cgroup_oom_kill_count_delta: Option<u64>,
 }
 
 pub struct ParentDeathProbe {

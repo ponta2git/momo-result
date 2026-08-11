@@ -45,6 +45,7 @@ impl CgroupHierarchy {
 pub(crate) struct CgroupMemorySnapshot {
     pub(crate) current_bytes: u64,
     pub(crate) peak_bytes: u64,
+    pub(crate) limit_hit_count: u64,
     pub(crate) oom_kill_count: u64,
 }
 
@@ -233,6 +234,7 @@ impl ChildCgroup {
             CgroupHierarchy::V1 => Ok(CgroupMemorySnapshot {
                 current_bytes: read_u64(&self.directory.join("memory.usage_in_bytes"))?,
                 peak_bytes: read_u64(&self.directory.join("memory.max_usage_in_bytes"))?,
+                limit_hit_count: read_u64(&self.directory.join("memory.failcnt"))?,
                 oom_kill_count: read_named_u64(
                     &self.directory.join("memory.oom_control"),
                     "oom_kill",
@@ -241,6 +243,7 @@ impl ChildCgroup {
             CgroupHierarchy::V2 => Ok(CgroupMemorySnapshot {
                 current_bytes: read_u64(&self.directory.join("memory.current"))?,
                 peak_bytes: read_u64(&self.directory.join("memory.peak"))?,
+                limit_hit_count: read_named_u64(&self.directory.join("memory.events"), "max")?,
                 oom_kill_count: read_named_u64(&self.directory.join("memory.events"), "oom_kill")?,
             }),
         }
@@ -592,6 +595,8 @@ mod tests {
                     .expect("v1 usage fixture must be written");
                 fs::write(directory.join("memory.max_usage_in_bytes"), "8192\n")
                     .expect("v1 peak fixture must be written");
+                fs::write(directory.join("memory.failcnt"), "1\n")
+                    .expect("v1 limit-hit fixture must be written");
                 fs::write(
                     directory.join("memory.oom_control"),
                     "oom_kill_disable 0\nunder_oom 0\noom_kill 2\n",
@@ -626,6 +631,7 @@ mod tests {
                 CgroupMemorySnapshot {
                     current_bytes: 4096,
                     peak_bytes: 8192,
+                    limit_hit_count: 1,
                     oom_kill_count: 2,
                 }
             );

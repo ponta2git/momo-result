@@ -142,14 +142,29 @@ pub async fn run_cgroup_hard_limit_probe(
     };
     let memory_after = cgroup.snapshot()?;
     cgroup.ensure_empty()?;
-    let outcome = if status.signal() == Some(libc::SIGKILL)
-        && memory_after.oom_kill_count > memory_before.oom_kill_count
-    {
+    let limit_hit_count_delta = memory_after
+        .limit_hit_count
+        .saturating_sub(memory_before.limit_hit_count);
+    let oom_kill_count_delta = memory_after
+        .oom_kill_count
+        .saturating_sub(memory_before.oom_kill_count);
+    let outcome = if cgroup_limit_was_enforced(
+        status.signal(),
+        limit_hit_count_delta,
+        oom_kill_count_delta,
+    ) {
         ProbeOutcome::ResourceLimitEnforced
     } else {
         ProbeOutcome::ChildCompleted
     };
-    Ok(probe_result(outcome, status))
+    Ok(cgroup_probe_result(
+        outcome,
+        status,
+        child_limit,
+        memory_after.peak_bytes,
+        limit_hit_count_delta,
+        oom_kill_count_delta,
+    ))
 }
 
 /// Reports that the cgroup hard-limit probe is available only on Linux.
@@ -192,7 +207,37 @@ fn probe_result(outcome: ProbeOutcome, status: ExitStatus) -> HardLimitProbeResu
         parent_survived: true,
         child_exit_code: status.code(),
         child_signal: status.signal(),
+        cgroup_limit_bytes: None,
+        cgroup_peak_bytes: None,
+        cgroup_limit_hit_count_delta: None,
+        cgroup_oom_kill_count_delta: None,
     }
+}
+
+#[cfg(target_os = "linux")]
+fn cgroup_probe_result(
+    outcome: ProbeOutcome,
+    status: ExitStatus,
+    limit_bytes: u64,
+    peak_bytes: u64,
+    limit_hit_count_delta: u64,
+    oom_kill_count_delta: u64,
+) -> HardLimitProbeResult {
+    let mut result = probe_result(outcome, status);
+    result.cgroup_limit_bytes = Some(limit_bytes);
+    result.cgroup_peak_bytes = Some(peak_bytes);
+    result.cgroup_limit_hit_count_delta = Some(limit_hit_count_delta);
+    result.cgroup_oom_kill_count_delta = Some(oom_kill_count_delta);
+    result
+}
+
+#[cfg(all(unix, any(target_os = "linux", test)))]
+fn cgroup_limit_was_enforced(
+    child_signal: Option<i32>,
+    limit_hit_count_delta: u64,
+    oom_kill_count_delta: u64,
+) -> bool {
+    child_signal == Some(libc::SIGKILL) && limit_hit_count_delta > 0 && oom_kill_count_delta > 0
 }
 
 #[cfg(unix)]
@@ -201,4 +246,18 @@ const fn is_resource_signal(signal: i32) -> bool {
         signal,
         libc::SIGABRT | libc::SIGKILL | libc::SIGSEGV | libc::SIGBUS
     )
+}
+
+#[cfg(test)]
+mod tests {
+    #[cfg(unix)]
+    use super::cgroup_limit_was_enforced;
+
+    #[cfg(unix)]
+    #[test]
+    fn cgroup_probe_rejects_a_global_oom_without_a_limit_hit() {
+        assert!(!cgroup_limit_was_enforced(Some(libc::SIGKILL), 0, 1));
+        assert!(cgroup_limit_was_enforced(Some(libc::SIGKILL), 1, 1));
+        assert!(!cgroup_limit_was_enforced(Some(libc::SIGTERM), 1, 1));
+    }
 }

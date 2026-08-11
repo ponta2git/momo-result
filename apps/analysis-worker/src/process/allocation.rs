@@ -36,7 +36,7 @@ impl AnonymousMapping {
                 std::ptr::null_mut(),
                 length,
                 libc::PROT_READ | libc::PROT_WRITE,
-                libc::MAP_PRIVATE | libc::MAP_ANONYMOUS,
+                anonymous_mapping_flags(),
                 -1,
                 0,
             )
@@ -72,6 +72,19 @@ impl AnonymousMapping {
     }
 }
 
+#[cfg(target_os = "linux")]
+const fn anonymous_mapping_flags() -> libc::c_int {
+    // The probe touches every page, so Linux must defer memory admission to physical allocation.
+    // Otherwise a small no-swap guest can reject one large mapping against its global commit
+    // budget before the child cgroup's hard limit is exercised.
+    libc::MAP_PRIVATE | libc::MAP_ANONYMOUS | libc::MAP_NORESERVE
+}
+
+#[cfg(all(unix, not(target_os = "linux")))]
+const fn anonymous_mapping_flags() -> libc::c_int {
+    libc::MAP_PRIVATE | libc::MAP_ANONYMOUS
+}
+
 #[cfg(unix)]
 impl Drop for AnonymousMapping {
     fn drop(&mut self) {
@@ -90,4 +103,13 @@ impl Drop for AnonymousMapping {
 #[must_use]
 pub const fn allocate_and_touch(_bytes: u64) -> i32 {
     76
+}
+
+#[cfg(test)]
+mod tests {
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn linux_probe_defers_admission_to_physical_page_allocation() {
+        assert_ne!(super::anonymous_mapping_flags() & libc::MAP_NORESERVE, 0);
+    }
 }

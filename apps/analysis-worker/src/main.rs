@@ -11,7 +11,6 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 use momo_analysis::{
     config::WorkerConfig,
     ocr::{
-        OcrOutput,
         contract::{OcrHints, RequestedScreenType},
         endurance::{
             LocalOcrEnduranceRequest, LocalOcrEnduranceThresholds, OcrEnduranceRequest,
@@ -22,6 +21,7 @@ use momo_analysis::{
     process::{ProbeOutcome, allocate_and_touch, run_hard_limit_probe},
     release::{PromotionRequest, PromotionTrigger},
 };
+use momo_ocr::OcrOutput;
 use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
 
@@ -322,9 +322,7 @@ async fn main() -> ExitCode {
             return exit_code(allocate_and_touch(*allocation_bytes));
         }
         Command::ChildOcr { tessdata_path } => {
-            return exit_code(momo_analysis::ocr::execute_isolated_child(
-                tessdata_path.clone(),
-            ));
+            return exit_code(momo_analysis::child::ocr::execute(tessdata_path.clone()));
         }
         Command::ChildCompute {
             game_title_id,
@@ -343,9 +341,11 @@ async fn main() -> ExitCode {
             }
             return exit_code(
                 momo_analysis::child::execute(&momo_analysis::child::ChildComputeRequest {
-                    game_title_id,
-                    input_revision: *input_revision,
-                    artifact_id,
+                    request: momo_analysis_core::child::AnalysisChildRequest {
+                        game_title_id: game_title_id.clone(),
+                        input_revision: *input_revision,
+                        artifact_id: artifact_id.clone(),
+                    },
                     output_directory,
                     maximum_chunk_bytes: *maximum_chunk_bytes,
                     maximum_chunk_count: *maximum_chunk_count,

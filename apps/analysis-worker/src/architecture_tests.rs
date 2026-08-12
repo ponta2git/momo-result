@@ -134,6 +134,39 @@ fn runtime_does_not_flatten_or_reexport_the_kernel_api() {
     );
 }
 
+#[test]
+fn native_ocr_dependencies_are_owned_by_the_ocr_capability_crate() {
+    let runtime_manifest = include_str!("../Cargo.toml");
+    let ocr_manifest = include_str!("../crates/ocr/Cargo.toml");
+    assert!(
+        !runtime_manifest.contains("tesseract ="),
+        "runtime shell must not own the Tesseract dependency"
+    );
+    assert!(
+        ocr_manifest.contains("tesseract ="),
+        "OCR capability crate must own the Tesseract dependency"
+    );
+    assert!(
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("crates/ocr/src/protocol.rs")
+            .is_file(),
+        "OCR protocol must remain next to the native capability"
+    );
+    assert!(
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("src/child/ocr.rs")
+            .is_file(),
+        "OCR stdio entry adapter must remain visible under the child process boundary"
+    );
+    for source in production_sources() {
+        assert!(
+            !source.body.contains("tesseract::"),
+            "{} reaches the native OCR implementation outside momo-ocr",
+            source.relative_path
+        );
+    }
+}
+
 struct SourceFile {
     relative_path: String,
     body: String,

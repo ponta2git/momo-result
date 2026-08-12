@@ -34,10 +34,12 @@ pub(super) fn child_spec(
         .checked_mul(2)
         .ok_or(WorkerError::DurationBound)?;
     Ok(AnalysisChildSpec {
+        request: momo_analysis_core::child::AnalysisChildRequest {
+            game_title_id: claim.game_title_id.clone(),
+            input_revision: claim.input_revision,
+            artifact_id: artifact_id_for_attempt(&claim.attempt_id),
+        },
         read_database_url: config.read_database_url.clone(),
-        game_title_id: claim.game_title_id.clone(),
-        input_revision: claim.input_revision,
-        artifact_id: artifact_id_for_attempt(&claim.attempt_id),
         output_directory: attempt_directory.to_path_buf(),
         maximum_chunk_bytes: config.publication_limits.chunk_bytes_limit.get(),
         maximum_chunk_count: config.publication_limits.chunk_count_limit.get(),
@@ -274,7 +276,7 @@ fn finalize_child_result(
 ) -> (AnalysisChildOutcome, AttemptMetrics) {
     let (outcome, mut metrics) = result;
     match child_report::take(&child_spec.output_directory) {
-        Ok(report) if report.outcome.matches(outcome) => {
+        Ok(report) if child_report::matches_process_outcome(report.outcome, outcome) => {
             metrics.input_milliseconds = Some(signed_quantity(report.input_milliseconds));
             metrics.kernel_milliseconds = Some(signed_quantity(report.calculation_milliseconds));
             metrics.encoding_milliseconds = Some(signed_quantity(report.encoding_milliseconds));
@@ -613,10 +615,12 @@ mod tests {
 
     fn test_child_spec(directory: &std::path::Path) -> AnalysisChildSpec {
         AnalysisChildSpec {
+            request: momo_analysis_core::child::AnalysisChildRequest {
+                game_title_id: String::from("title-1"),
+                input_revision: 1,
+                artifact_id: String::from("artifact-1"),
+            },
             read_database_url: String::from("postgresql://unused"),
-            game_title_id: String::from("title-1"),
-            input_revision: 1,
-            artifact_id: String::from("artifact-1"),
             output_directory: directory.to_path_buf(),
             maximum_chunk_bytes: 1_024,
             maximum_chunk_count: 10,

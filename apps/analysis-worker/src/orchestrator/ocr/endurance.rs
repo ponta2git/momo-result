@@ -537,8 +537,8 @@ async fn run_linux(
 }
 
 #[cfg(target_os = "linux")]
-const fn domain_failure_kind(failure: super::worker::OcrEngineFailure) -> &'static str {
-    use super::worker::OcrEngineFailure;
+const fn domain_failure_kind(failure: momo_ocr::OcrFailure) -> &'static str {
+    use momo_ocr::OcrFailure;
 
     match failure {
         OcrEngineFailure::InvalidImage => "invalid_image",

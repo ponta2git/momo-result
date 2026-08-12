@@ -18,9 +18,7 @@ use crate::{
 };
 
 pub struct ChildComputeRequest<'a> {
-    pub game_title_id: &'a str,
-    pub input_revision: i64,
-    pub artifact_id: &'a str,
+    pub request: momo_analysis_core::child::AnalysisChildRequest,
     pub output_directory: &'a Path,
     pub maximum_chunk_bytes: u64,
     pub maximum_chunk_count: u64,
@@ -116,15 +114,19 @@ async fn execute_inner(
             return Err(map_database_failure(&error));
         }
     };
-    let input =
-        match load_analysis_input(&mut client, request.game_title_id, request.input_revision).await
-        {
-            Ok(input) => input,
-            Err(error) => {
-                telemetry.metrics.input_milliseconds = milliseconds(input_started.elapsed());
-                return Err(map_database_failure(&error));
-            }
-        };
+    let input = match load_analysis_input(
+        &mut client,
+        &request.request.game_title_id,
+        request.request.input_revision,
+    )
+    .await
+    {
+        Ok(input) => input,
+        Err(error) => {
+            telemetry.metrics.input_milliseconds = milliseconds(input_started.elapsed());
+            return Err(map_database_failure(&error));
+        }
+    };
     telemetry.metrics.input_milliseconds = milliseconds(input_started.elapsed());
     telemetry.metrics.input_row_count =
         u64::try_from(input.rows.len()).map_err(|_error| ChildFailure::CalculationFailed)?;
@@ -147,7 +149,7 @@ async fn execute_inner(
     let artifact = build_artifact(
         &input,
         &ArtifactBuildRequest {
-            artifact_id: String::from(request.artifact_id),
+            artifact_id: request.request.artifact_id.clone(),
             algorithm_version: String::from(ALGORITHM_VERSION),
             maximum_chunk_bytes: request.maximum_chunk_bytes,
             maximum_chunk_count: request.maximum_chunk_count,

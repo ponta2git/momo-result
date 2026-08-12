@@ -260,18 +260,13 @@ async fn run_once(
     ));
     tokio::fs::create_dir(&directory).await?;
     let mut owned_directory = OwnedRunDirectory::new(directory);
-    let spec = AnalysisChildSpec {
-        read_database_url: String::from(read_database_url),
-        game_title_id: request.game_title_id.clone(),
+    let spec = shadow_child_spec(
+        request,
+        read_database_url,
         input_revision,
-        artifact_id: format!("shadow-artifact-{run_number}"),
-        output_directory: owned_directory.path().to_path_buf(),
-        maximum_chunk_bytes: request.maximum_chunk_bytes,
-        maximum_chunk_count: request.maximum_chunk_count,
-        maximum_total_bytes: request.maximum_total_bytes,
-        maximum_file_count: request.maximum_file_count,
-        parent_liveness_timeout: Duration::from_secs(2),
-    };
+        run_number,
+        owned_directory.path(),
+    );
     let started = Instant::now();
     let mut child = ManagedAnalysisChild::spawn(&spec, child_cgroup).await?;
     child.refresh_liveness()?;
@@ -299,7 +294,7 @@ async fn run_once(
     }
     let child_report =
         child_report::take(owned_directory.path()).map_err(|_error| ShadowError::ChildReport)?;
-    if !child_report.outcome.matches(outcome) {
+    if !child_report::matches_process_outcome(child_report.outcome, outcome) {
         return Err(ShadowError::ChildFailed);
     }
     let elapsed_milliseconds = u64::try_from(started.elapsed().as_millis())?;
@@ -350,6 +345,29 @@ async fn run_once(
         chunk_count,
         root_checksum,
     })
+}
+
+fn shadow_child_spec(
+    request: &ShadowRequest,
+    read_database_url: &str,
+    input_revision: i64,
+    run_number: u32,
+    output_directory: &Path,
+) -> AnalysisChildSpec {
+    AnalysisChildSpec {
+        request: momo_analysis_core::child::AnalysisChildRequest {
+            game_title_id: request.game_title_id.clone(),
+            input_revision,
+            artifact_id: format!("shadow-artifact-{run_number}"),
+        },
+        read_database_url: String::from(read_database_url),
+        output_directory: output_directory.to_path_buf(),
+        maximum_chunk_bytes: request.maximum_chunk_bytes,
+        maximum_chunk_count: request.maximum_chunk_count,
+        maximum_total_bytes: request.maximum_total_bytes,
+        maximum_file_count: request.maximum_file_count,
+        parent_liveness_timeout: Duration::from_secs(2),
+    }
 }
 
 fn validate_artifact_evidence(

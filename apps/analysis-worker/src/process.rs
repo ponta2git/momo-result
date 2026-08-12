@@ -36,10 +36,8 @@ const WORKER_GID: libc::gid_t = 10_001;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct AnalysisChildSpec {
+    pub request: momo_analysis_core::child::AnalysisChildRequest,
     pub read_database_url: String,
-    pub game_title_id: String,
-    pub input_revision: i64,
-    pub artifact_id: String,
     pub output_directory: PathBuf,
     pub maximum_chunk_bytes: u64,
     pub maximum_chunk_count: u64,
@@ -225,11 +223,11 @@ impl ManagedAnalysisChild {
         command
             .arg("child-compute")
             .arg("--game-title-id")
-            .arg(&spec.game_title_id)
+            .arg(&spec.request.game_title_id)
             .arg("--input-revision")
-            .arg(spec.input_revision.to_string())
+            .arg(spec.request.input_revision.to_string())
             .arg("--artifact-id")
-            .arg(&spec.artifact_id)
+            .arg(&spec.request.artifact_id)
             .arg("--output-directory")
             .arg(&spec.output_directory)
             .arg("--maximum-chunk-bytes")

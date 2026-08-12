@@ -1,9 +1,11 @@
 use std::{path::PathBuf, time::Duration};
 
-use super::{
-    contract::{OcrHints, RequestedScreenType},
-    worker::{OcrEngineFailure, OcrEngineOutput},
-};
+use super::contract::{OcrHints, RequestedScreenType};
+
+use momo_ocr::{OcrFailure as OcrEngineFailure, OcrOutput as OcrEngineOutput};
+
+#[cfg(target_os = "linux")]
+use super::worker::OcrProcessFailure;
 
 #[cfg(target_os = "linux")]
 use super::{
@@ -152,29 +154,44 @@ impl OcrEngineAttempt for ManagedOcrAttempt {
 impl ManagedOcrAttempt {
     async fn wait_inner(
         &mut self,
-    ) -> Result<Result<OcrEngineOutput, OcrEngineFailure>, &'static str> {
+    ) -> Result<Result<OcrEngineOutput, OcrEngineFailure>, OcrProcessFailure> {
         if let Some(kind) = self.start_error.take() {
-            self.terminate_inner().await?;
-            return Err(kind);
+            self.terminate_inner()
+                .await
+                .map_err(OcrProcessFailure::Runtime)?;
+            return Err(OcrProcessFailure::Runtime(kind));
         }
         let status = match self.child.as_mut() {
-            Some(child) => child.wait().await.map_err(|_error| "ocr_child_wait")?,
-            None => return Err("ocr_child_state"),
+            Some(child) => child
+                .wait()
+                .await
+                .map_err(|_error| OcrProcessFailure::Runtime("ocr_child_wait"))?,
+            None => return Err(OcrProcessFailure::Runtime("ocr_child_state")),
         };
         drop(self.child.take());
-        let memory_after = self.cgroup.snapshot().map_err(|error| error.kind())?;
-        self.cgroup.ensure_empty().map_err(|error| error.kind())?;
+        let memory_after = self
+            .cgroup
+            .snapshot()
+            .map_err(|error| OcrProcessFailure::Runtime(error.kind()))?;
+        self.cgroup
+            .ensure_empty()
+            .map_err(|error| OcrProcessFailure::Runtime(error.kind()))?;
         if memory_after.oom_kill_count > self.oom_kill_count_before {
             self.abort_io_tasks().await;
-            return Ok(Err(OcrEngineFailure::EngineUnavailable));
+            return Err(OcrProcessFailure::ResourceExhausted);
         }
         if !status.success() {
             self.abort_io_tasks().await;
-            return Err("ocr_child_exit");
+            return Err(OcrProcessFailure::Runtime("ocr_child_exit"));
         }
-        self.finish_writer().await?;
-        let response = self.finish_reader().await?;
-        momo_ocr::protocol::decode_response(&response)
+        self.finish_writer()
+            .await
+            .map_err(OcrProcessFailure::Runtime)?;
+        let response = self
+            .finish_reader()
+            .await
+            .map_err(OcrProcessFailure::Runtime)?;
+        momo_ocr::protocol::decode_response(&response).map_err(OcrProcessFailure::Runtime)
     }
 
     async fn terminate_inner(&mut self) -> Result<(), &'static str> {
@@ -335,7 +352,7 @@ pub async fn probe_isolated_child_lifecycle(
             &OcrHints::default(),
         )?;
         let result = match time::timeout(timeout, completed.wait_inner()).await {
-            Ok(result) => result?,
+            Ok(result) => result.map_err(process_failure_kind)?,
             Err(_elapsed) => {
                 completed.terminate_inner().await?;
                 return Err("ocr_child_probe_timeout");
@@ -378,7 +395,7 @@ pub async fn analyze_isolated_local_image_bytes(
         let engine = IsolatedNativeOcrEngine::new(cgroup, tessdata_path, stop_grace);
         let mut attempt = engine.start_raw(image, requested_screen_type, hints)?;
         match time::timeout(timeout, attempt.wait_inner()).await {
-            Ok(result) => result,
+            Ok(result) => result.map_err(process_failure_kind),
             Err(_elapsed) => {
                 attempt.terminate_inner().await?;
                 Err("ocr_child_pilot_timeout")
@@ -396,6 +413,14 @@ pub async fn analyze_isolated_local_image_bytes(
             stop_grace,
         ));
         Err("ocr_child_platform")
+    }
+}
+
+#[cfg(target_os = "linux")]
+const fn process_failure_kind(failure: OcrProcessFailure) -> &'static str {
+    match failure {
+        OcrProcessFailure::Runtime(kind) => kind,
+        OcrProcessFailure::ResourceExhausted => "ocr_child_resource_exhausted",
     }
 }
 

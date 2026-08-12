@@ -23,7 +23,7 @@ use super::{
 
 pub type OcrAttemptFuture<'a> = Pin<
     Box<
-        dyn Future<Output = Result<Result<OcrEngineOutput, OcrEngineFailure>, &'static str>>
+        dyn Future<Output = Result<Result<OcrEngineOutput, OcrEngineFailure>, OcrProcessFailure>>
             + Send
             + 'a,
     >,
@@ -32,7 +32,15 @@ pub type OcrAttemptFuture<'a> = Pin<
 pub type OcrAttemptTerminationFuture<'a> =
     Pin<Box<dyn Future<Output = Result<(), &'static str>> + Send + 'a>>;
 
-pub(crate) use momo_ocr::{OcrFailure as OcrEngineFailure, OcrOutput as OcrEngineOutput};
+pub use momo_ocr::{OcrFailure, OcrOutput};
+use momo_ocr::{OcrFailure as OcrEngineFailure, OcrOutput as OcrEngineOutput};
+
+/// Failure observed by the parent supervisor rather than returned by OCR domain logic.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum OcrProcessFailure {
+    Runtime(&'static str),
+    ResourceExhausted,
+}
 
 pub trait OcrEngineAttempt: Send {
     /// Waits until the isolated OCR child is reaped and returns its closed domain outcome.
@@ -215,6 +223,14 @@ enum ClaimDecision {
 
 enum Supervised<T> {
     Completed(T),
+    TimedOut,
+    Shutdown,
+    OwnerLost,
+}
+
+enum OcrSupervised<T> {
+    Completed(T),
+    ResourceExhausted,
     TimedOut,
     Shutdown,
     OwnerLost,
@@ -461,17 +477,27 @@ async fn process_claimed<E: OcrEngine>(
         shutdown,
     )
     .await?;
+    finish_recognized(control_client, claim, config, started, recognized).await
+}
+
+async fn finish_recognized(
+    control_client: &mut tokio_postgres::Client,
+    claim: &ClaimedOcrJob,
+    config: &OcrWorkerRuntimeConfig,
+    started: time::Instant,
+    recognized: OcrSupervised<Result<OcrEngineOutput, OcrEngineFailure>>,
+) -> Result<DeliveryDisposition, OcrWorkerError> {
     match recognized {
-        Supervised::Completed(Ok(output)) => {
+        OcrSupervised::Completed(Ok(output)) => {
             let completion = draft_completion(output, elapsed_milliseconds(started));
             finish_success(control_client, claim, &config.control, &completion).await?;
             Ok(DeliveryDisposition::Acknowledge)
         }
-        Supervised::Completed(Err(failure)) if failure_retryable(failure) => {
+        OcrSupervised::Completed(Err(failure)) if failure_retryable(failure) => {
             requeue_transient(control_client, claim, &config.control).await?;
             Ok(DeliveryDisposition::LeavePending)
         }
-        Supervised::Completed(Err(failure)) => {
+        OcrSupervised::Completed(Err(failure)) => {
             finish_terminal_failure(
                 control_client,
                 claim,
@@ -481,7 +507,10 @@ async fn process_claimed<E: OcrEngine>(
             )
             .await
         }
-        Supervised::TimedOut => {
+        OcrSupervised::ResourceExhausted => {
+            handle_resource_exhausted(control_client, claim, config).await
+        }
+        OcrSupervised::TimedOut => {
             finish_terminal_failure(
                 control_client,
                 claim,
@@ -491,12 +520,25 @@ async fn process_claimed<E: OcrEngine>(
             )
             .await
         }
-        Supervised::Shutdown => {
+        OcrSupervised::Shutdown => {
             requeue_transient(control_client, claim, &config.control).await?;
             Ok(DeliveryDisposition::Stop)
         }
-        Supervised::OwnerLost => Ok(DeliveryDisposition::LeavePending),
+        OcrSupervised::OwnerLost => Ok(DeliveryDisposition::LeavePending),
     }
+}
+
+async fn handle_resource_exhausted(
+    control_client: &mut tokio_postgres::Client,
+    claim: &ClaimedOcrJob,
+    config: &OcrWorkerRuntimeConfig,
+) -> Result<DeliveryDisposition, OcrWorkerError> {
+    warn!(
+        event = "ocr_child_resource_exhausted",
+        "OCR child exceeded the cgroup memory budget; retrying through the existing unavailable policy"
+    );
+    requeue_transient(control_client, claim, &config.control).await?;
+    Ok(DeliveryDisposition::LeavePending)
 }
 
 fn draft_completion(output: OcrEngineOutput, duration_milliseconds: i32) -> OcrDraftCompletion {
@@ -565,7 +607,7 @@ where
 }
 
 enum OcrAttemptEvent {
-    Completed(Result<Result<OcrEngineOutput, OcrEngineFailure>, &'static str>),
+    Completed(Result<Result<OcrEngineOutput, OcrEngineFailure>, OcrProcessFailure>),
     TimedOut,
     Shutdown,
     OwnerLost,
@@ -579,7 +621,7 @@ async fn supervise_ocr_attempt(
     claim: &ClaimedOcrJob,
     config: &OcrWorkerRuntimeConfig,
     shutdown: &mut watch::Receiver<bool>,
-) -> Result<Supervised<Result<OcrEngineOutput, OcrEngineFailure>>, OcrWorkerError> {
+) -> Result<OcrSupervised<Result<OcrEngineOutput, OcrEngineFailure>>, OcrWorkerError> {
     let event = {
         let waiting = attempt.wait();
         tokio::pin!(waiting);
@@ -613,22 +655,26 @@ async fn supervise_ocr_attempt(
     };
 
     match event {
-        OcrAttemptEvent::Completed(Ok(output)) => Ok(Supervised::Completed(output)),
-        OcrAttemptEvent::Completed(Err(kind)) => {
+        OcrAttemptEvent::Completed(Ok(output)) => Ok(OcrSupervised::Completed(output)),
+        OcrAttemptEvent::Completed(Err(OcrProcessFailure::ResourceExhausted)) => {
+            terminate_ocr_attempt(attempt).await?;
+            Ok(OcrSupervised::ResourceExhausted)
+        }
+        OcrAttemptEvent::Completed(Err(OcrProcessFailure::Runtime(kind))) => {
             terminate_ocr_attempt(attempt).await?;
             Err(OcrWorkerError::Engine(kind))
         }
         OcrAttemptEvent::TimedOut => {
             terminate_ocr_attempt(attempt).await?;
-            Ok(Supervised::TimedOut)
+            Ok(OcrSupervised::TimedOut)
         }
         OcrAttemptEvent::Shutdown => {
             terminate_ocr_attempt(attempt).await?;
-            Ok(Supervised::Shutdown)
+            Ok(OcrSupervised::Shutdown)
         }
         OcrAttemptEvent::OwnerLost => {
             terminate_ocr_attempt(attempt).await?;
-            Ok(Supervised::OwnerLost)
+            Ok(OcrSupervised::OwnerLost)
         }
         OcrAttemptEvent::Dependency(error) => {
             terminate_ocr_attempt(attempt).await?;

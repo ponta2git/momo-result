@@ -7,6 +7,7 @@
 //! worker infrastructure.
 
 pub mod canonical;
+pub mod child;
 pub mod compute;
 pub mod contract;
 pub mod model;

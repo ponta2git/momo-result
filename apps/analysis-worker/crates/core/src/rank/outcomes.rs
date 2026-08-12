@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use crate::model::MatchPlayerRow;
 
 use super::{
-    FoldEvaluation, PLAYER_COUNT, PairRecord, PlayerUnexpectedWins, UnexpectedWin,
+    FoldEvaluation, MatchKey, PLAYER_COUNT, PairRecord, PlayerUnexpectedWins, UnexpectedWin,
     encoding::distinct_matches, solver::probability,
 };
 
@@ -12,11 +12,11 @@ type ExpectedRanks = BTreeMap<String, [Option<f64>; PLAYER_COUNT]>;
 pub(super) fn expected_ranks(evaluations: &[FoldEvaluation]) -> Result<ExpectedRanks, ()> {
     let mut expected = BTreeMap::new();
     for evaluation in evaluations {
-        let mut pairs_by_match = BTreeMap::<&str, Vec<&PairRecord>>::new();
+        let mut pairs_by_match = BTreeMap::<MatchKey, Vec<&PairRecord>>::new();
         for pair in &evaluation.test_pairs {
-            pairs_by_match.entry(&pair.match_id).or_default().push(pair);
+            pairs_by_match.entry(pair.match_key).or_default().push(pair);
         }
-        for pairs in pairs_by_match.values() {
+        for (match_key, pairs) in pairs_by_match {
             let mut ranks = BTreeMap::<usize, f64>::new();
             for pair in pairs {
                 ranks.entry(pair.left_member_index).or_insert(1.0);
@@ -26,7 +26,12 @@ pub(super) fn expected_ranks(evaluations: &[FoldEvaluation]) -> Result<ExpectedR
                 *ranks.get_mut(&pair.left_member_index).ok_or(())? += 1.0 - left_above;
                 *ranks.get_mut(&pair.right_member_index).ok_or(())? += left_above;
             }
-            let match_id = pairs.first().ok_or(())?.match_id.clone();
+            let match_id = evaluation
+                .test_events
+                .get(match_key.event_index)
+                .and_then(|event| event.matches.get(match_key.match_index))
+                .map(|rank_match| rank_match.match_id.as_ref().to_owned())
+                .ok_or(())?;
             let expected_by_player = expected.entry(match_id).or_insert([None; PLAYER_COUNT]);
             for (member_index, rank) in ranks {
                 *expected_by_player.get_mut(member_index).ok_or(())? = Some(rank);

@@ -1,10 +1,10 @@
-use std::{cmp::Ordering, collections::BTreeMap};
+use std::{cmp::Ordering, collections::BTreeMap, sync::Arc};
 
 use crate::model::MatchPlayerRow;
 
 use super::{
-    ADJUSTMENT_COUNT, EncodedEvent, EncodedMatch, EncodedRow, FULL_FEATURE_COUNT, Observation,
-    PLAY_ORDER_COUNT, PLAYER_COUNT, PairRecord, SIGNAL_COUNT, SignalKind, SourceRow,
+    ADJUSTMENT_COUNT, EncodedEvent, EncodedMatch, EncodedRow, FULL_FEATURE_COUNT, MatchKey,
+    Observation, PLAY_ORDER_COUNT, PLAYER_COUNT, PairRecord, SIGNAL_COUNT, SignalKind, SourceRow,
     evaluation::bounded_count,
 };
 
@@ -62,9 +62,9 @@ pub(super) fn encode(
             .entry(first.held_event_id.clone())
             .or_default()
             .push(EncodedMatch {
-                match_id: first.match_id.clone(),
+                match_id: Arc::from(first.match_id.as_str()),
                 match_no_in_event: first.match_no_in_event,
-                played_at: first.played_at.clone(),
+                played_at: Arc::from(first.played_at.as_str()),
                 rows: encoded_rows,
             });
     }
@@ -73,16 +73,17 @@ pub(super) fn encode(
         .map(|(held_event_id, mut held_event_matches)| {
             held_event_matches
                 .sort_by(|left, right| match_sort_key(left).cmp(&match_sort_key(right)));
-            let played_at = held_event_matches.first().ok_or(())?.played_at.clone();
+            let played_at = Arc::clone(&held_event_matches.first().ok_or(())?.played_at);
             Ok(EncodedEvent {
-                held_event_id,
+                held_event_id: Arc::from(held_event_id.as_str()),
                 played_at,
                 matches: held_event_matches,
             })
         })
         .collect::<Result<Vec<_>, ()>>()?;
     events.sort_by(|left, right| {
-        (&left.played_at, &left.held_event_id).cmp(&(&right.played_at, &right.held_event_id))
+        (left.played_at.as_ref(), left.held_event_id.as_ref())
+            .cmp(&(right.played_at.as_ref(), right.held_event_id.as_ref()))
     });
     if events.is_empty() {
         Err(())
@@ -112,9 +113,9 @@ pub(super) fn distinct_matches<'a>(rows: &[&'a MatchPlayerRow]) -> Vec<Vec<&'a M
 
 fn match_sort_key(rank_match: &EncodedMatch) -> (&str, i32, &str) {
     (
-        &rank_match.played_at,
+        rank_match.played_at.as_ref(),
         rank_match.match_no_in_event,
-        &rank_match.match_id,
+        rank_match.match_id.as_ref(),
     )
 }
 
@@ -145,7 +146,11 @@ pub(super) fn pair_records_with<'a>(
 ) -> Result<Vec<PairRecord>, ()> {
     let mut records = Vec::new();
     for (event_index, event) in events.into_iter().enumerate() {
-        for rank_match in &event.matches {
+        for (match_index, rank_match) in event.matches.iter().enumerate() {
+            let match_key = MatchKey {
+                event_index,
+                match_index,
+            };
             for (left_index, left) in rank_match.rows.iter().enumerate() {
                 for right in rank_match.rows.iter().skip(left_index + 1) {
                     let outcome = f64::from(left.source.rank < right.source.rank);
@@ -154,7 +159,7 @@ pub(super) fn pair_records_with<'a>(
                     let right_features =
                         full_features(event_index, rank_match, right, &signal_value)?;
                     records.push(PairRecord {
-                        match_id: rank_match.match_id.clone(),
+                        match_key,
                         left_member_index: left.source.member_index,
                         right_member_index: right.source.member_index,
                         full: Observation {

@@ -1,4 +1,5 @@
 use serde_json::{Value, json};
+use std::sync::Arc;
 
 use crate::model::{IncidentCounts, MatchPlayerRow};
 
@@ -244,16 +245,16 @@ struct EncodedRow {
 
 #[derive(Clone, Debug)]
 struct EncodedMatch {
-    match_id: String,
+    match_id: Arc<str>,
     match_no_in_event: i32,
-    played_at: String,
+    played_at: Arc<str>,
     rows: Vec<EncodedRow>,
 }
 
 #[derive(Clone, Debug)]
 struct EncodedEvent {
-    held_event_id: String,
-    played_at: String,
+    held_event_id: Arc<str>,
+    played_at: Arc<str>,
     matches: Vec<EncodedMatch>,
 }
 
@@ -263,9 +264,15 @@ struct Observation<const N: usize> {
     outcome: f64,
 }
 
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+struct MatchKey {
+    event_index: usize,
+    match_index: usize,
+}
+
 #[derive(Clone, Debug)]
 struct PairRecord {
-    match_id: String,
+    match_key: MatchKey,
     left_member_index: usize,
     right_member_index: usize,
     full: Observation<FULL_FEATURE_COUNT>,

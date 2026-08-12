@@ -350,7 +350,7 @@ fn pair_records_with_permuted_signal(
                         .rows
                         .iter()
                         .find(|row| row.source.member_index == member_index)
-                        .map(|row| (rank_match.match_id.as_str(), row))
+                        .map(|row| (rank_match.match_id.as_ref(), row))
                 })
                 .enumerate()
                 .map(|(index, (match_id, row))| {
@@ -368,7 +368,7 @@ fn pair_records_with_permuted_signal(
         if row.source.member_index == member_index && current_signal == signal_index {
             replacements
                 .get(event_index)
-                .and_then(|values| values.get(rank_match.match_id.as_str()))
+                .and_then(|values| values.get(rank_match.match_id.as_ref()))
                 .copied()
                 .ok_or(())
         } else {

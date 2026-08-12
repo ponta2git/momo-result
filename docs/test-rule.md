@@ -132,6 +132,9 @@ PostgreSQL repository、Doobie query、DB table/column、migration 前提に触�
 - runtime smoke / E2Eが機能成功だけを確認している場合、CPU回復や性能予算を検証したとは報告しない。外部メトリクスが未取得・未実行なら未検証として明記する。
 - payload byte数、manifestを含む一時総byte数、親process HWM、子process HWM、runtime / cgroup peakを
   同じ名称へ畳み込まない。子reportと検証済みmanifestの件数・byte数が不一致なら成功測定にも公開にも含めない。
+- 現行のanalysis child 192MiB制限を変更せずに100回連続検証する場合は、
+  `scripts/ci/analysis-worker-analysis-endurance.sh` を使う。DB、対象作品、runtime外部peakファイルを
+  明示し、外部peakが未取得なら成功扱いにしない。このゲートはFly/OCR workerのメモリ設定を変更しない。
 - rollbackでは、対象commitのartifact identityだけでなく、削除対象のユーザー経路とサーバー実行経路が消えたことを直接確認できる回帰ケースを用意する。
 
 実DB実行が特に必要なSQL:

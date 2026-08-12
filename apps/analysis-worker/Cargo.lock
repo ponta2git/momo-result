@@ -1530,6 +1530,7 @@ dependencies = [
  "image",
  "libc",
  "momo-analysis-core",
+ "momo-ocr",
  "openssl",
  "postgres-openssl",
  "redis",
@@ -1558,6 +1559,15 @@ dependencies = [
  "serde_json_canonicalizer",
  "sha2",
  "thiserror 2.0.20",
+]
+
+[[package]]
+name = "momo-ocr"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "time",
 ]
 
 [[package]]

@@ -57,7 +57,7 @@ pub(super) fn encode_request(
     requested_screen_type: RequestedScreenType,
     hints: &OcrHints,
 ) -> Result<Vec<u8>, &'static str> {
-    if image.is_empty() || image.len() > MAXIMUM_IMAGE_BYTES || !hints.validate() {
+    if image.is_empty() || image.len() > MAXIMUM_IMAGE_BYTES || !hints.is_valid() {
         return Err("ocr_child_input_contract");
     }
     let image_bytes = u32::try_from(image.len()).map_err(|_error| "ocr_child_input_contract")?;
@@ -115,7 +115,7 @@ fn decode_request(mut input: impl Read) -> Result<DecodedRequest, &'static str> 
     if header.protocol_version != PROTOCOL_VERSION
         || image_length == 0
         || image_length > MAXIMUM_IMAGE_BYTES
-        || !header.hints.validate()
+        || !header.hints.is_valid()
     {
         return Err("ocr_child_input_contract");
     }

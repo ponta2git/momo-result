@@ -39,6 +39,14 @@ impl CgroupHierarchy {
             _ => None,
         }
     }
+
+    #[cfg(target_os = "linux")]
+    const fn wire(self) -> &'static str {
+        match self {
+            Self::V1 => "v1",
+            Self::V2 => "v2",
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -150,16 +158,6 @@ impl PreparedChildCgroup {
             ),
             (String::from(CGROUP_LIMIT_ENV), self.limit_bytes.to_string()),
         ]
-    }
-}
-
-#[cfg(target_os = "linux")]
-impl CgroupHierarchy {
-    const fn wire(self) -> &'static str {
-        match self {
-            Self::V1 => "v1",
-            Self::V2 => "v2",
-        }
     }
 }
 
@@ -327,10 +325,10 @@ fn runtime_snapshot(
 #[cfg(target_os = "linux")]
 pub(crate) fn prepare_production_child_cgroup(
     limit_bytes: u64,
-    worker_uid: u32,
-    worker_gid: u32,
+    service_user_id: u32,
+    service_group_id: u32,
 ) -> Result<PreparedChildCgroup, CgroupError> {
-    if limit_bytes == 0 || limit_bytes % 4096 != 0 {
+    if limit_bytes == 0 || !limit_bytes.is_multiple_of(4096) {
         return Err(CgroupError::InvalidControllerValue);
     }
     let membership = bounded_read(Path::new(PROC_SELF_CGROUP))?;
@@ -338,12 +336,12 @@ pub(crate) fn prepare_production_child_cgroup(
         if env::var(CGROUP_V2_VALIDATED_ENV).as_deref() != Ok("true") {
             return Err(CgroupError::UnsupportedHierarchy);
         }
-        prepare_v2(&membership, limit_bytes, worker_uid, worker_gid)
+        prepare_v2(&membership, limit_bytes, service_user_id, service_group_id)
     } else if Path::new(V1_MEMORY_ROOT)
         .join("memory.limit_in_bytes")
         .is_file()
     {
-        prepare_v1(&membership, limit_bytes, worker_uid, worker_gid)
+        prepare_v1(&membership, limit_bytes, service_user_id, service_group_id)
     } else {
         Err(CgroupError::UnsupportedHierarchy)
     }
@@ -353,8 +351,8 @@ pub(crate) fn prepare_production_child_cgroup(
 fn prepare_v1(
     membership: &str,
     limit_bytes: u64,
-    worker_uid: u32,
-    worker_gid: u32,
+    service_user_id: u32,
+    service_group_id: u32,
 ) -> Result<PreparedChildCgroup, CgroupError> {
     let member_path = membership_path(membership, CgroupHierarchy::V1)?;
     let parent = controller_member_directory(Path::new(V1_MEMORY_ROOT), &member_path)?;
@@ -369,7 +367,7 @@ fn prepare_v1(
     if directory.join("memory.max_usage_in_bytes").is_file() {
         fs::write(directory.join("memory.max_usage_in_bytes"), "0")?;
     }
-    delegate_process_attachment(&directory, worker_uid, worker_gid)?;
+    delegate_process_attachment(&directory, service_user_id, service_group_id)?;
     Ok(PreparedChildCgroup {
         hierarchy: CgroupHierarchy::V1,
         directory,
@@ -381,8 +379,8 @@ fn prepare_v1(
 fn prepare_v2(
     membership: &str,
     limit_bytes: u64,
-    worker_uid: u32,
-    worker_gid: u32,
+    service_user_id: u32,
+    service_group_id: u32,
 ) -> Result<PreparedChildCgroup, CgroupError> {
     let member_path = membership_path(membership, CgroupHierarchy::V2)?;
     let parent = controller_member_directory(Path::new(V2_ROOT), &member_path)?;
@@ -423,8 +421,8 @@ fn prepare_v2(
     if directory.join("memory.oom.group").is_file() {
         write_exact_u64(&directory.join("memory.oom.group"), 1)?;
     }
-    delegate_process_attachment(&delegation, worker_uid, worker_gid)?;
-    delegate_process_attachment(&directory, worker_uid, worker_gid)?;
+    delegate_process_attachment(&delegation, service_user_id, service_group_id)?;
+    delegate_process_attachment(&directory, service_user_id, service_group_id)?;
     Ok(PreparedChildCgroup {
         hierarchy: CgroupHierarchy::V2,
         directory,
@@ -461,15 +459,15 @@ fn prepare_empty_child_directory(parent: &Path, name: &str) -> Result<PathBuf, C
 #[cfg(target_os = "linux")]
 fn delegate_process_attachment(
     directory: &Path,
-    worker_uid: u32,
-    worker_gid: u32,
+    service_user_id: u32,
+    service_group_id: u32,
 ) -> Result<(), CgroupError> {
     use std::os::unix::fs::{MetadataExt, chown};
 
     let processes = directory.join("cgroup.procs");
-    chown(&processes, Some(worker_uid), Some(worker_gid))?;
+    chown(&processes, Some(service_user_id), Some(service_group_id))?;
     let metadata = fs::metadata(&processes)?;
-    if metadata.uid() != worker_uid || metadata.gid() != worker_gid {
+    if metadata.uid() != service_user_id || metadata.gid() != service_group_id {
         return Err(CgroupError::DelegationFailed);
     }
     Ok(())

@@ -105,7 +105,7 @@ struct LocalFailureCounts {
 
 impl LocalFailureCounts {
     #[cfg(target_os = "linux")]
-    fn total(&self) -> u32 {
+    const fn total(&self) -> u32 {
         self.input
             .saturating_add(self.child)
             .saturating_add(self.domain)
@@ -253,6 +253,10 @@ fn safe_preflight_path(path: &Path) -> bool {
 }
 
 #[cfg(target_os = "linux")]
+#[expect(
+    clippy::too_many_lines,
+    reason = "the release-only endurance runner keeps one explicit serial measurement state machine so partial failure evidence is emitted consistently"
+)]
 async fn run_linux(
     request: &LocalOcrEnduranceRequest,
     images: Vec<PreparedLocalImage>,
@@ -638,7 +642,7 @@ fn duration_milliseconds(duration: Duration) -> u64 {
 }
 
 #[cfg(target_os = "linux")]
-fn duration_within(distribution: &DurationDistribution, p99: u64, maximum: u64) -> bool {
+const fn duration_within(distribution: &DurationDistribution, p99: u64, maximum: u64) -> bool {
     distribution.count > 0 && distribution.p99 <= p99 && distribution.maximum <= maximum
 }
 

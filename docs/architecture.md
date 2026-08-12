@@ -164,6 +164,9 @@ web の import 境界は `apps/web/scripts/check-architecture-imports.mjs`、mod
   workerでも再検証する。URL、bucket、credential、local pathをqueue payloadへ入れない。
 - R2-backed image storeとobject reconcilerを同じruntime契約として運用し、reconcilerの設定または
   resource確保に失敗した状態でuploadを受け付けない。
+- PostgreSQL runtimeはstorage modeにかかわらず `source_images` を画像lifecycleの正本とし、opaqueな
+  relative object keyだけを保存・配送する。local modeもfilesystem object adapterを同じobject-backed
+  storeへ接続し、DBを経由しないstandalone filesystem storeはin-memory runtimeと単体testだけに限定する。
 - OCRジョブ状態の正本はDB。Redis Streams は配送路。
 - queue 契約は `docs/redis-streams-ocr-contract.md`、payload schema は `docs/schemas/*.schema.json` を正本にする。
 - native OCR、Redis、PostgreSQL、R2、tessdataを要する検証は通常のCargo testと分離する。unit testでは

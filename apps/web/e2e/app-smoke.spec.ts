@@ -105,22 +105,23 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
     }
   });
 
-  await test.step("open OCR for the latest held event from held-event history", async () => {
+  await test.step("open OCR for this run's held event from held-event history", async () => {
     expectGeneratedId(heldEventId, "held event ID");
 
     await page.goto("/held-events");
     await expect(page.getByRole("heading", { exact: true, name: "開催履歴" })).toBeVisible();
 
-    const latestOcrLink = page.getByRole("link", { name: /の開催にOCR取り込み$/u });
     const expectedOcrHref = withReturnTo(`/ocr/new?heldEventId=${heldEventId}`, "/held-events");
-    await expect(latestOcrLink).toHaveCount(1);
-    await expect(latestOcrLink).toBeVisible();
-    await expect(latestOcrLink).toHaveAttribute("href", expectedOcrHref);
+    const heldEventOcrLink = page
+      .locator(`a[href="${expectedOcrHref}"]`)
+      .filter({ hasText: "OCR取り込み" });
+    await expect(heldEventOcrLink).toHaveCount(1);
+    await expect(heldEventOcrLink).toBeVisible();
 
     await page.setViewportSize({ height: 844, width: 390 });
-    await expect(latestOcrLink).toBeVisible();
+    await expect(heldEventOcrLink).toBeVisible();
     await expectNoHorizontalPageOverflow(page);
-    await latestOcrLink.click();
+    await heldEventOcrLink.click();
 
     await expect(page).toHaveURL(expectedOcrHref);
     await expect(page.getByRole("heading", { exact: true, name: "OCR取り込み" })).toBeVisible();
@@ -195,11 +196,11 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
     await startDialog.getByRole("button", { name: "1件で読み取りを開始" }).click();
 
     const draftCreateResponse = await draftResponse;
-    expect(draftCreateResponse.ok()).toBe(true);
+    await expectOk(draftCreateResponse, "create uploaded OCR draft");
     const draftBody = (await draftCreateResponse.json()) as { matchDraftId?: string };
     uploadedDraftId = expectGeneratedId(draftBody.matchDraftId, "match draft ID");
 
-    expect((await jobResponse).ok()).toBe(true);
+    await expectOk(await jobResponse, "create OCR job");
     await expect(page).toHaveURL(/\/matches(?:\?.*)?$/u);
     const matchesPageTitle = page.getByRole("heading", { exact: true, name: "試合一覧" });
     await expect(matchesPageTitle).toBeVisible();

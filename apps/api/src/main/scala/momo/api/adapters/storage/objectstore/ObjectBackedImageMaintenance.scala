@@ -18,6 +18,7 @@ import momo.api.repositories.SourceImagesRepository
 final class ObjectBackedImageMaintenance[F[_]: Async: LoggerFactory](
     sourceImages: SourceImagesRepository[F],
     reconciler: SourceImageObjectReconciler[F],
+    diskUsageProbe: F[Option[ImageDiskUsage]],
 ) extends ImageStorageInspector[F], ImageOrphanCleaner[F]:
   private val logger = LoggerFactory[F].getLogger
 
@@ -28,7 +29,7 @@ final class ObjectBackedImageMaintenance[F[_]: Async: LoggerFactory](
     val _ = referenced
     sourceImages.unreferencedUsage(ownerAccountId)
 
-  override def diskUsage: F[Option[ImageDiskUsage]] = Async[F].pure(None)
+  override def diskUsage: F[Option[ImageDiskUsage]] = diskUsageProbe
 
   override def deleteOrphans(referenced: Set[ImageId], olderThan: Instant): F[Int] =
     val _ = (referenced, olderThan)

@@ -31,6 +31,9 @@ final class ApiRuntimeArchitectureSpec extends FunSuite:
   private val ocrJobDomainFile = Paths.get("src/main/scala/momo/api/domain/OcrJob.scala")
   private val localFsImageStoreFile =
     Paths.get("src/main/scala/momo/api/adapters/storage/local/LocalFsImageStore.scala")
+  private val localSourceImageObjectStorageFile = Paths.get(
+    "src/main/scala/momo/api/adapters/storage/local/LocalSourceImageObjectStorage.scala"
+  )
   private val imageValidationFile =
     Paths.get("src/main/scala/momo/api/adapters/storage/ImageValidation.scala")
   private val imageFormatParsersFile =
@@ -132,6 +135,15 @@ final class ApiRuntimeArchitectureSpec extends FunSuite:
     assert(localFsText.contains(
       "extends ImageStorage[F], ImageStorageInspector[F], ImageOrphanCleaner[F]"
     ))
+
+  test("Postgres local image storage preserves the database-backed object lifecycle"):
+    val postgresRuntimeText = read(postgresApiRuntimeFile)
+    val localObjectStorageText = read(localSourceImageObjectStorageFile)
+
+    assert(postgresRuntimeText.contains("LocalSourceImageObjectStorage[F]"))
+    assert(postgresRuntimeText.contains("objectBackedImageStorageResource("))
+    assert(!postgresRuntimeText.contains("LocalFsImageStore"))
+    assert(localObjectStorageText.contains("extends SourceImageObjectStorage[F]"))
 
   test("image header parsing remains split by image format"):
     val validationText = read(imageValidationFile)

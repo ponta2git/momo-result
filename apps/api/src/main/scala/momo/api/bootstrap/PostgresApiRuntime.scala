@@ -1,5 +1,7 @@
 package momo.api.bootstrap
 
+import scala.concurrent.duration.*
+
 import cats.effect.std.SecureRandom
 import cats.effect.{Async, Clock, Resource}
 import cats.syntax.all.*
@@ -7,7 +9,7 @@ import org.typelevel.log4cats.LoggerFactory
 import org.typelevel.log4cats.slf4j.Slf4jFactory
 
 import momo.api.adapters.postgres.*
-import momo.api.adapters.storage.local.LocalFsImageStore
+import momo.api.adapters.storage.local.LocalSourceImageObjectStorage
 import momo.api.adapters.storage.objectstore.{
   ObjectBackedImageMaintenance,
   ObjectBackedImageStore,
@@ -23,7 +25,13 @@ import momo.api.auth.DiscordOAuthClient
 import momo.api.config.{AppConfig, DatabaseConfig, SourceImageStorageConfig}
 import momo.api.db.Database
 import momo.api.domain.ids.ImageId
-import momo.api.ports.storage.{ImageOrphanCleaner, ImageStorage, ImageStorageInspector}
+import momo.api.ports.storage.{
+  ImageDiskUsage,
+  ImageOrphanCleaner,
+  ImageStorage,
+  ImageStorageInspector,
+  SourceImageObjectStorage
+}
 import momo.api.repositories.*
 import momo.api.usecases.ocr.*
 import momo.api.usecases.seriesanalysis.{
@@ -191,8 +199,18 @@ private[bootstrap] object PostgresApiRuntime:
       sourceImages: SourceImagesRepository[F],
   ): Resource[F, RuntimeImageStorage[F]] = config.sourceImageStorage match
     case SourceImageStorageConfig.Local =>
-      val store = LocalFsImageStore[F](config.imageTmpDir)
-      Resource.pure(RuntimeImageStorage(store, store, store))
+      val objects = LocalSourceImageObjectStorage[F](config.imageTmpDir.resolve("objects"))
+      objectBackedImageStorageResource(
+        sourceImages,
+        Resource.pure[F, SourceImageObjectStorage[F]](objects),
+        SourceImageObjectReconcilerConfig(
+          staleStateAge = LocalStaleStateAge,
+          orphanAge = config.resourceLimits.imageOrphanOlderThan,
+          failedRecordRetention = LocalFailedRecordRetention,
+          batchSize = LocalReconciliationBatchSize,
+        ),
+        objects.diskUsage,
+      )
     case SourceImageStorageConfig.R2(r2) =>
       for
         credentials <- Resource.eval(
@@ -212,19 +230,38 @@ private[bootstrap] object PostgresApiRuntime:
             maxAttempts = r2.maximumAttempts,
           ).leftMap(new IllegalArgumentException(_)).liftTo[F]
         )
-        objects <- R2SourceImageObjectStorage.resource[F](objectConfig)
-        now = Clock[F].realTimeInstant
-        store = ObjectBackedImageStore[F](sourceImages, objects, ImageId.fresh[F], now)
-        reconciler = SourceImageObjectReconciler[F](
+        storage <- objectBackedImageStorageResource(
           sourceImages,
-          objects,
+          R2SourceImageObjectStorage.resource[F](objectConfig)
+            .map(objectStorage => objectStorage: SourceImageObjectStorage[F]),
           SourceImageObjectReconcilerConfig(
             staleStateAge = r2.staleStateAge,
             orphanAge = config.resourceLimits.imageOrphanOlderThan,
             failedRecordRetention = r2.failedRecordRetention,
             batchSize = r2.reconciliationBatchSize,
           ),
-          now,
+          Async[F].pure(None),
         )
-        maintenance = ObjectBackedImageMaintenance[F](sourceImages, reconciler)
-      yield RuntimeImageStorage(store, maintenance, maintenance)
+      yield storage
+
+  private def objectBackedImageStorageResource[F[_]: Async: SecureRandom: LoggerFactory](
+      sourceImages: SourceImagesRepository[F],
+      objects: Resource[F, SourceImageObjectStorage[F]],
+      reconcilerConfig: SourceImageObjectReconcilerConfig,
+      diskUsage: F[Option[ImageDiskUsage]],
+  ): Resource[F, RuntimeImageStorage[F]] = objects.map { objectStorage =>
+    val now = Clock[F].realTimeInstant
+    val store = ObjectBackedImageStore[F](sourceImages, objectStorage, ImageId.fresh[F], now)
+    val reconciler = SourceImageObjectReconciler[F](
+      sourceImages,
+      objectStorage,
+      reconcilerConfig,
+      now,
+    )
+    val maintenance = ObjectBackedImageMaintenance[F](sourceImages, reconciler, diskUsage)
+    RuntimeImageStorage(store, maintenance, maintenance)
+  }
+
+  private val LocalStaleStateAge = 60.seconds
+  private val LocalFailedRecordRetention = 60.minutes
+  private val LocalReconciliationBatchSize = 100

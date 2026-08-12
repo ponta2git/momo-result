@@ -226,6 +226,26 @@ public repository に置くため、具体的な障害位置、再現手順、en
 - `docs/dev-rule.md` の CI Gates
 - `docs/test-rule.md` の External Services
 
+### L10 開発hostで通ることをproduction runtimeの証拠にしない
+
+**該当条件**
+
+- `cfg(target_os)`、native library、container内だけのdependencyを変更する。
+- production用のDB-backed adapterと、local / E2E用adapterが同じusecaseへ接続される。
+- retryするE2Eが、前attemptと同じDBやfixture領域を使う。
+
+**確認**
+
+- production target OSで、必要なnative dependencyを明示したlint / build / testを通したか。
+- local adapterもproductionと同じDB row、object key、状態遷移の不変条件を満たすか。
+- retry後に前attemptのfixtureが残っても、test-owned IDで正しいresourceだけを操作するか。
+- release gateの失敗を個別に迂回せず、検出した契約差を直接固定する回帰テストを置いたか。
+
+**参照先**
+
+- `docs/architecture.md` の OCR Worker
+- `docs/test-rule.md` の Locator / E2E、DB-backed API、Analysis Worker Rules
+
 ## 更新ルール
 
 - 新しい教訓を追加する前に、恒久ルールとして移すべき内容がないか確認する。

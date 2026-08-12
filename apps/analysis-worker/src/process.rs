@@ -450,16 +450,28 @@ pub const fn bootstrap_and_exec(_arguments: &[OsString]) -> Result<(), ProcessEr
 #[cfg(target_os = "linux")]
 #[must_use]
 pub fn worker_identity_supported() -> bool {
-    let mut real_uid = 0;
-    let mut effective_uid = 0;
-    let mut saved_uid = 0;
-    let mut real_gid = 0;
-    let mut effective_gid = 0;
-    let mut saved_gid = 0;
+    let mut real_user_id = 0;
+    let mut effective_user_id = 0;
+    let mut saved_user_id = 0;
+    let mut real_group_id = 0;
+    let mut effective_group_id = 0;
+    let mut saved_group_id = 0;
     // SAFETY: all pointers reference writable uid/gid values for the duration of the calls.
-    let uid_result = unsafe { libc::getresuid(&mut real_uid, &mut effective_uid, &mut saved_uid) };
+    let uid_result = unsafe {
+        libc::getresuid(
+            &raw mut real_user_id,
+            &raw mut effective_user_id,
+            &raw mut saved_user_id,
+        )
+    };
     // SAFETY: see the preceding safety argument.
-    let gid_result = unsafe { libc::getresgid(&mut real_gid, &mut effective_gid, &mut saved_gid) };
+    let gid_result = unsafe {
+        libc::getresgid(
+            &raw mut real_group_id,
+            &raw mut effective_group_id,
+            &raw mut saved_group_id,
+        )
+    };
     // SAFETY: a zero-length getgroups call accepts a null list and returns only the count.
     let supplementary_group_count = unsafe { libc::getgroups(0, std::ptr::null_mut()) };
     // SAFETY: PR_GET_NO_NEW_PRIVS has no pointer arguments and only reads process state.
@@ -467,8 +479,8 @@ pub fn worker_identity_supported() -> bool {
 
     uid_result == 0
         && gid_result == 0
-        && [real_uid, effective_uid, saved_uid] == [WORKER_UID; 3]
-        && [real_gid, effective_gid, saved_gid] == [WORKER_GID; 3]
+        && [real_user_id, effective_user_id, saved_user_id] == [WORKER_UID; 3]
+        && [real_group_id, effective_group_id, saved_group_id] == [WORKER_GID; 3]
         && supplementary_group_count == 0
         && no_new_privileges == 1
 }

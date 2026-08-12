@@ -96,7 +96,7 @@ struct FailureCounts {
 
 impl FailureCounts {
     #[cfg(target_os = "linux")]
-    fn total(&self) -> u32 {
+    const fn total(&self) -> u32 {
         self.download
             .saturating_add(self.child_start)
             .saturating_add(self.child_wait)
@@ -317,6 +317,10 @@ fn valid_label(value: &str) -> bool {
 }
 
 #[cfg(target_os = "linux")]
+#[expect(
+    clippy::too_many_lines,
+    reason = "the release-only endurance runner keeps one explicit serial R2 and OCR measurement state machine so partial failure evidence is emitted consistently"
+)]
 async fn run_linux(
     request: &OcrEnduranceRequest,
     objects: Vec<PreparedObject>,
@@ -361,13 +365,13 @@ async fn run_linux(
             .map_err(|_error| OcrEnduranceError::Configuration)?
             % objects.len();
         let object = objects.get(index).ok_or(OcrEnduranceError::Configuration)?;
-        let count = object_runs.entry(object.label.clone()).or_default();
-        *count = count.saturating_add(1);
+        let object_run_count = object_runs.entry(object.label.clone()).or_default();
+        *object_run_count = object_run_count.saturating_add(1);
         let screen_type = object.payload.requested_screen_type().wire();
-        let count = screen_type_runs
+        let screen_type_run_count = screen_type_runs
             .entry(String::from(screen_type))
             .or_default();
-        *count = count.saturating_add(1);
+        *screen_type_run_count = screen_type_run_count.saturating_add(1);
 
         let total_started = Instant::now();
         let download_started = Instant::now();
@@ -389,10 +393,10 @@ async fn run_linux(
         } else {
             "sub_full_hd"
         };
-        let count = dimension_class_runs
+        let dimension_class_run_count = dimension_class_runs
             .entry(String::from(dimension_class))
             .or_default();
-        *count = count.saturating_add(1);
+        *dimension_class_run_count = dimension_class_run_count.saturating_add(1);
 
         let ocr_started = Instant::now();
         let mut attempt = match engine.start(&image, &object.payload) {
@@ -644,7 +648,7 @@ fn within_peak_threshold(evidence: MemoryEvidence, maximum_basis_points: u16) ->
 }
 
 #[cfg(target_os = "linux")]
-fn duration_within(distribution: &DurationDistribution, p99: u64, maximum: u64) -> bool {
+const fn duration_within(distribution: &DurationDistribution, p99: u64, maximum: u64) -> bool {
     distribution.count > 0 && distribution.p99 <= p99 && distribution.maximum <= maximum
 }
 

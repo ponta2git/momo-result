@@ -81,6 +81,8 @@ form、filter、select、input、button、Zod schema、request transform、mutat
 
 - Playwright locator は、実際のアクセシブルロールと名前を組み合わせて対象を一意にする。
 - フォーム項目とナビゲーション、tab と button など、同じ表示名が複数ロールに現れる画面では `getByLabel` や広い text locator だけで選ばず、`getByRole("combobox" | "tab" | "button" | "link", { name })` で操作対象を明示する。
+- retry可能なE2Eは「最新」「唯一」といった共有状態を前提にせず、そのattemptが作成したID、URL、hrefなどの
+  stable identifierで対象を絞る。前attemptのfixtureが残っても別resourceを操作しないことを優先する。
 - Playwright E2E smoke は、開催作成、OCR取り込み開始、OCRレビュー確定、試合詳細、CSV/TSV出力、マスタ/alias管理などの主要UXを狭く通す。
 - E2E assertion は見出しの存在だけでなく、API response、URL、download scope、DB-backedに保存された結果など、壊れ方を捕まえる外部契約に置く。
 
@@ -103,6 +105,8 @@ PostgreSQL repository、Doobie query、DB table/column、migration 前提に触�
 - 新しい table / column / seed / nullable / default 前提は `DbContractSpec` に追加する。
 - 変更した repository method を Testcontainers PostgreSQL で実行する。
 - 同一 transaction で FK 関連 row を作成・更新する method は、成功 path と保存後の linked row values を検証する。
+- PostgreSQL runtimeで画像uploadからOCR job作成までを変更したら、productionと同じDB-backed画像lifecycleを
+  local storage modeでも通し、`source_images` の参照整合性とopaque relative object keyをruntime E2Eで確認する。
 - 新しい table に書き込む integration test を追加したら cleanup 対象も更新する。
 - SQL shape と domain 変換を分けた場合、row mapping の成功 path と不正 DB 値の扱いを repository unit または integration test で確認する。tuple mapping を named row へ変えた場合も、対象 query を実PostgreSQLで実行し、必要なら repository architecture spec へ禁止パターンを追加する。
 
@@ -249,6 +253,8 @@ PostgreSQL repository、Doobie query、DB table/column、migration 前提に触�
   productionのlint抑制、`process` 外のunsafe、testを含む900行超module、PostgreSQL `Row::get` の再導入、
   pure coreからruntime / OS依存への参照はarchitecture testでも拒否する。lintや依存境界を弱めて通す変更は、
   同等以上の決定論的検査がない限り認めない。
+- `cfg(target_os)` を含むworker変更は開発host上のClippyだけで完了扱いにせず、production target OSで
+  native build依存を明示的に導入した上で全target / 全featureのClippyとtestを通す。
 - version付き浮動小数点式へFMA化、評価順変更、丸め変更を入れた場合は、単体精度だけでなく共有fixtureの
   semantic checksumを確認する。checksumが変わる変更は自動修正として扱わず、algorithm version更新判断を行う。
 - DB schema 前提を変えたら `docs/db-rule.md` の Consumer Contract を満たす。

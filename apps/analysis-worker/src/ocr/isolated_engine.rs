@@ -42,7 +42,7 @@ impl OcrEngine for IsolatedNativeOcrEngine {
             payload.requested_screen_type(),
             payload.hints(),
         )
-        .map(|attempt| Box::new(attempt) as Box<dyn OcrEngineAttempt>)
+        .map(|attempt| -> Box<dyn OcrEngineAttempt> { Box::new(attempt) })
     }
 }
 

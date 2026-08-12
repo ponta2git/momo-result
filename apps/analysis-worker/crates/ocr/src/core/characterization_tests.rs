@@ -14,8 +14,9 @@ use super::{
     preprocess::otsu_binarize,
 };
 
-const CHARACTERIZATION: &str =
-    include_str!("../../../../../docs/schemas/fixtures/ocr-worker/core-characterization-v1.json");
+const CHARACTERIZATION: &str = include_str!(
+    "../../../../../../docs/schemas/fixtures/ocr-worker/core-characterization-v1.json"
+);
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]

@@ -69,7 +69,12 @@ impl IsolatedNativeOcrEngine {
         if self.stop_grace.is_zero() {
             return Err("ocr_child_configuration");
         }
-        let framed = super::child_protocol::encode_request(image, requested_screen_type, hints)?;
+        let framed = momo_ocr::protocol::encode_request(
+            crate::process::CHILD_START_MARKER,
+            image,
+            requested_screen_type,
+            hints,
+        )?;
         self.cgroup.ensure_empty().map_err(|error| error.kind())?;
         let memory_before = self.cgroup.snapshot().map_err(|error| error.kind())?;
         let executable = env::current_exe().map_err(|_error| "ocr_child_executable")?;
@@ -169,7 +174,7 @@ impl ManagedOcrAttempt {
         }
         self.finish_writer().await?;
         let response = self.finish_reader().await?;
-        super::child_protocol::decode_response(&response)
+        momo_ocr::protocol::decode_response(&response)
     }
 
     async fn terminate_inner(&mut self) -> Result<(), &'static str> {
@@ -283,12 +288,12 @@ async fn write_framed_input(
 
 #[cfg(target_os = "linux")]
 async fn read_bounded_output(stdout: tokio::process::ChildStdout) -> Result<Vec<u8>, io::Error> {
-    let limit = u64::try_from(super::child_protocol::MAXIMUM_RESPONSE_BYTES)
+    let limit = u64::try_from(momo_ocr::protocol::MAXIMUM_RESPONSE_BYTES)
         .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
     let mut bounded = stdout.take(limit.saturating_add(1));
     let mut bytes = Vec::new();
     bounded.read_to_end(&mut bytes).await?;
-    if bytes.len() > super::child_protocol::MAXIMUM_RESPONSE_BYTES {
+    if bytes.len() > momo_ocr::protocol::MAXIMUM_RESPONSE_BYTES {
         Err(io::Error::new(
             io::ErrorKind::InvalidData,
             "OCR child output exceeded its byte bound",

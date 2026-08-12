@@ -1,7 +1,6 @@
 use std::{future::Future, pin::Pin, time::Duration};
 
 use redis::aio::ConnectionManager;
-use serde_json::Value as JsonValue;
 use thiserror::Error;
 use tokio::{sync::watch, time};
 use tracing::{info, warn};
@@ -9,7 +8,7 @@ use tracing::{info, warn};
 use crate::database;
 
 use super::{
-    contract::{OcrQueuePayload, RequestedScreenType},
+    contract::OcrQueuePayload,
     control::{
         ClaimedOcrJob, OcrClaimResult, OcrControlConfig, OcrControlError, OcrDraftCompletion,
         OcrFailureCode, OcrHeartbeatResult, claim_job, finish_failure, finish_success, heartbeat,
@@ -33,6 +32,8 @@ pub type OcrAttemptFuture<'a> = Pin<
 pub type OcrAttemptTerminationFuture<'a> =
     Pin<Box<dyn Future<Output = Result<(), &'static str>> + Send + 'a>>;
 
+pub(crate) use momo_ocr::{OcrFailure as OcrEngineFailure, OcrOutput as OcrEngineOutput};
+
 pub trait OcrEngineAttempt: Send {
     /// Waits until the isolated OCR child is reaped and returns its closed domain outcome.
     fn wait(&mut self) -> OcrAttemptFuture<'_>;
@@ -54,41 +55,20 @@ pub trait OcrEngine: Send + Sync {
     ) -> Result<Box<dyn OcrEngineAttempt>, &'static str>;
 }
 
-pub struct OcrEngineOutput {
-    pub detected_screen_type: RequestedScreenType,
-    pub profile_id: Option<String>,
-    pub payload: JsonValue,
-    pub warnings: JsonValue,
-    pub timings_milliseconds: JsonValue,
+pub(crate) const fn failure_control_code(failure: OcrEngineFailure) -> OcrFailureCode {
+    match failure {
+        OcrEngineFailure::InvalidImage => OcrFailureCode::InvalidImage,
+        OcrEngineFailure::UnsupportedImageFormat => OcrFailureCode::UnsupportedImageFormat,
+        OcrEngineFailure::DecodeFailed => OcrFailureCode::DecodeFailed,
+        OcrEngineFailure::CategoryUndetected => OcrFailureCode::CategoryUndetected,
+        OcrEngineFailure::LayoutUnsupported => OcrFailureCode::LayoutUnsupported,
+        OcrEngineFailure::EngineUnavailable => OcrFailureCode::OcrEngineUnavailable,
+        OcrEngineFailure::ParserFailed => OcrFailureCode::ParserFailed,
+    }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum OcrEngineFailure {
-    InvalidImage,
-    UnsupportedImageFormat,
-    DecodeFailed,
-    CategoryUndetected,
-    LayoutUnsupported,
-    EngineUnavailable,
-    ParserFailed,
-}
-
-impl OcrEngineFailure {
-    const fn control_code(self) -> OcrFailureCode {
-        match self {
-            Self::InvalidImage => OcrFailureCode::InvalidImage,
-            Self::UnsupportedImageFormat => OcrFailureCode::UnsupportedImageFormat,
-            Self::DecodeFailed => OcrFailureCode::DecodeFailed,
-            Self::CategoryUndetected => OcrFailureCode::CategoryUndetected,
-            Self::LayoutUnsupported => OcrFailureCode::LayoutUnsupported,
-            Self::EngineUnavailable => OcrFailureCode::OcrEngineUnavailable,
-            Self::ParserFailed => OcrFailureCode::ParserFailed,
-        }
-    }
-
-    const fn retryable(self) -> bool {
-        matches!(self, Self::EngineUnavailable)
-    }
+pub(crate) const fn failure_retryable(failure: OcrEngineFailure) -> bool {
+    matches!(failure, OcrEngineFailure::EngineUnavailable)
 }
 
 #[derive(Clone)]
@@ -487,7 +467,7 @@ async fn process_claimed<E: OcrEngine>(
             finish_success(control_client, claim, &config.control, &completion).await?;
             Ok(DeliveryDisposition::Acknowledge)
         }
-        Supervised::Completed(Err(failure)) if failure.retryable() => {
+        Supervised::Completed(Err(failure)) if failure_retryable(failure) => {
             requeue_transient(control_client, claim, &config.control).await?;
             Ok(DeliveryDisposition::LeavePending)
         }
@@ -496,7 +476,7 @@ async fn process_claimed<E: OcrEngine>(
                 control_client,
                 claim,
                 config,
-                failure.control_code(),
+                failure_control_code(failure),
                 started,
             )
             .await
@@ -679,9 +659,9 @@ mod tests {
             OcrEngineFailure::LayoutUnsupported,
             OcrEngineFailure::ParserFailed,
         ] {
-            assert!(!failure.retryable());
+            assert!(!failure_retryable(failure));
         }
-        assert!(OcrEngineFailure::EngineUnavailable.retryable());
+        assert!(failure_retryable(OcrEngineFailure::EngineUnavailable));
     }
 
     #[test]

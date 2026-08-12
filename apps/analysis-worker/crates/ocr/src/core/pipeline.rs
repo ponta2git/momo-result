@@ -8,7 +8,7 @@ use super::{
     DraftPayload, OcrWarning, RecognitionError, RecognitionSession, incident_pipeline,
     player_order, ranked,
 };
-use crate::ocr::contract::{OcrHints, RequestedScreenType};
+use crate::contract::{OcrHints, RequestedScreenType};
 
 const MINIMUM_WIDTH: u32 = 640;
 const MINIMUM_HEIGHT: u32 = 360;

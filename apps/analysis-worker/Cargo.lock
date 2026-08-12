@@ -1534,19 +1534,16 @@ dependencies = [
  "openssl",
  "postgres-openssl",
  "redis",
- "regex",
  "serde",
  "serde_json",
  "sha2",
  "tempfile",
- "tesseract",
  "thiserror 2.0.20",
  "time",
  "tokio",
  "tokio-postgres",
  "tracing",
  "tracing-subscriber",
- "unicode-normalization",
  "url",
 ]
 
@@ -1565,9 +1562,14 @@ dependencies = [
 name = "momo-ocr"
 version = "0.1.0"
 dependencies = [
+ "image",
+ "regex",
  "serde",
  "serde_json",
+ "tesseract",
+ "thiserror 2.0.20",
  "time",
+ "unicode-normalization",
 ]
 
 [[package]]

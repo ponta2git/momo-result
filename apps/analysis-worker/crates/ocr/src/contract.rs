@@ -158,7 +158,7 @@ impl OcrQueuePayload {
         clippy::too_many_arguments,
         reason = "the transport adapter constructs every field of the closed OCR queue contract"
     )]
-    pub fn new(
+    pub const fn new(
         job_id: String,
         draft_id: String,
         source_image_id: String,

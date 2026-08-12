@@ -1,6 +1,6 @@
 use unicode_normalization::UnicodeNormalization;
 
-use crate::ocr::contract::OcrHints;
+use crate::contract::OcrHints;
 
 const MINIMUM_SAFE_ALIAS_CHARACTERS: usize = 5;
 const MINIMUM_MATCH_CHARACTERS: usize = 3;

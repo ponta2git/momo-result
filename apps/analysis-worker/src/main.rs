@@ -11,7 +11,7 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 use momo_analysis::{
     config::WorkerConfig,
     ocr::{
-        NativeOcrEngine,
+        OcrOutput,
         contract::{OcrHints, RequestedScreenType},
         endurance::{
             LocalOcrEnduranceRequest, LocalOcrEnduranceThresholds, OcrEnduranceRequest,
@@ -534,9 +534,17 @@ async fn run_ocr_pilot(
     tessdata_path: Option<PathBuf>,
 ) -> Result<(), String> {
     let (bytes, hints) = read_ocr_pilot_input(image_path, layout_family).await?;
-    let output = NativeOcrEngine::new(tessdata_path)
-        .analyze_local_image_bytes(&bytes, screen_type.into(), &hints)
-        .map_err(|error| format!("OCR pilot failed: {error:?}"))?;
+    let output = momo_analysis::ocr::analyze_isolated_local_image_bytes(
+        &bytes,
+        screen_type.into(),
+        &hints,
+        tessdata_path,
+        Duration::from_mins(1),
+        Duration::from_secs(1),
+    )
+    .await
+    .map_err(String::from)?
+    .map_err(|error| format!("OCR pilot failed: {error:?}"))?;
     write_ocr_pilot_output(&output)
 }
 
@@ -669,9 +677,7 @@ async fn read_ocr_pilot_input(
     Ok((bytes, hints))
 }
 
-fn write_ocr_pilot_output(
-    output: &momo_analysis::ocr::worker::OcrEngineOutput,
-) -> Result<(), String> {
+fn write_ocr_pilot_output(output: &OcrOutput) -> Result<(), String> {
     write_json_line(&serde_json::json!({
         "detectedScreenType": output.detected_screen_type.wire(),
         "profileId": output.profile_id,

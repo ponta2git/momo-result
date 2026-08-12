@@ -12,7 +12,7 @@ use super::{
     recognition::RecognitionLanguage,
     scale_profile_rect,
 };
-use crate::ocr::contract::RequestedScreenType;
+use crate::contract::RequestedScreenType;
 
 const ROWS: [(u8, u32); 4] = [(1, 200), (2, 395), (3, 585), (4, 775)];
 

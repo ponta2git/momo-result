@@ -6,13 +6,6 @@ use crate::{
     rank,
 };
 
-const METRIC_IDS: [&str; 4] = [
-    "rank.averageHistory",
-    "playOrder.rankHistory",
-    "rankAnalysis.rankSignals",
-    "rankAnalysis.unexpectedWins",
-];
-
 mod aggregate;
 mod detail;
 mod metrics;
@@ -47,11 +40,43 @@ pub enum ComputedResourceKind {
     Review,
     Drilldown {
         member_id: String,
-        metric_id: String,
+        metric: DrilldownMetric,
     },
     MatchContext {
         match_id: String,
     },
+}
+
+/// The finite set of drilldown identities emitted by the analysis contract.
+///
+/// Keeping this vocabulary typed prevents a new resource from silently becoming a generic
+/// string that is accepted by one layer and rejected by another.  `wire` remains the sole
+/// boundary conversion for the persisted/API metric id.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum DrilldownMetric {
+    RankAverageHistory,
+    PlayOrderRankHistory,
+    RankSignals,
+    UnexpectedWins,
+}
+
+impl DrilldownMetric {
+    pub const ALL: [Self; 4] = [
+        Self::RankAverageHistory,
+        Self::PlayOrderRankHistory,
+        Self::RankSignals,
+        Self::UnexpectedWins,
+    ];
+
+    #[must_use]
+    pub const fn wire(self) -> &'static str {
+        match self {
+            Self::RankAverageHistory => "rank.averageHistory",
+            Self::PlayOrderRankHistory => "playOrder.rankHistory",
+            Self::RankSignals => "rankAnalysis.rankSignals",
+            Self::UnexpectedWins => "rankAnalysis.unexpectedWins",
+        }
+    }
 }
 
 struct ScopeFacts<'a> {
@@ -159,12 +184,12 @@ pub fn try_for_each_resource<E>(
                 .rows_by_player
                 .get(member_id)
                 .map_or(&[][..], Vec::as_slice);
-            for metric_id in METRIC_IDS {
+            for metric in DrilldownMetric::ALL {
                 consume(ComputedResource {
                     scope: scope.clone(),
                     kind: ComputedResourceKind::Drilldown {
                         member_id: member_id.clone(),
-                        metric_id: String::from(metric_id),
+                        metric,
                     },
                     payload: drilldown(
                         &scope,
@@ -172,7 +197,7 @@ pub fn try_for_each_resource<E>(
                         player_rows,
                         facts.groups.len(),
                         member_id,
-                        metric_id,
+                        metric.wire(),
                         &facts.rank_analysis,
                     ),
                     item_count: player_rows.len(),

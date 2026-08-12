@@ -110,15 +110,12 @@ pub fn validate_computed(resource: &ComputedResource) -> Result<(), PayloadError
         ComputedResourceKind::Review => {
             validate_review(&resource.payload, &resource.scope, item_count)
         }
-        ComputedResourceKind::Drilldown {
-            member_id,
-            metric_id,
-        } => validate_drilldown(
+        ComputedResourceKind::Drilldown { member_id, metric } => validate_drilldown(
             &resource.payload,
             &resource.scope,
             item_count,
             member_id,
-            metric_id,
+            metric.wire(),
         ),
         ComputedResourceKind::MatchContext { match_id } => validate_match_context(
             &resource.payload,

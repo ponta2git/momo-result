@@ -163,13 +163,10 @@ fn resource_manifest(
     Ok(match kind {
         ComputedResourceKind::Aggregate => ResourceManifest::Aggregate { common },
         ComputedResourceKind::Review => ResourceManifest::Review { common },
-        ComputedResourceKind::Drilldown {
-            member_id,
-            metric_id,
-        } => ResourceManifest::Drilldown {
+        ComputedResourceKind::Drilldown { member_id, metric } => ResourceManifest::Drilldown {
             common,
             member_id,
-            metric_id,
+            metric_id: String::from(metric.wire()),
         },
         ComputedResourceKind::MatchContext { match_id } => ResourceManifest::MatchContext {
             common,
@@ -411,10 +408,9 @@ impl Serialize for Decimal {
 fn resource_item_key(kind: &ComputedResourceKind, scope_key: &str) -> String {
     match kind {
         ComputedResourceKind::Aggregate | ComputedResourceKind::Review => String::from(scope_key),
-        ComputedResourceKind::Drilldown {
-            member_id,
-            metric_id,
-        } => format!("{member_id}:{metric_id}"),
+        ComputedResourceKind::Drilldown { member_id, metric } => {
+            format!("{member_id}:{}", metric.wire())
+        }
         ComputedResourceKind::MatchContext { match_id } => match_id.clone(),
     }
 }

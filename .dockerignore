@@ -17,6 +17,7 @@ _deps
 **/__pycache__
 **/metals.sbt
 **/node_modules
+private
 **/target
 *.tsbuildinfo
 apps/api/src/test

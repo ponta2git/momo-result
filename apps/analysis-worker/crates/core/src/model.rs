@@ -17,22 +17,28 @@ pub struct AnalysisInput {
 
 /// Canonically ordered analysis input accepted by deterministic calculations and checksums.
 ///
-/// The inner value is immutable so a caller cannot invalidate ordering between checksum and
-/// resource generation.
+/// Preparation derives the resource-shape bound once and keeps both the rows and that derived
+/// contract immutable.  The alias retains the existing name at call sites while making the
+/// preparation stage explicit in this module.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct NormalizedAnalysisInput(AnalysisInput);
+pub struct PreparedAnalysisInput {
+    input: AnalysisInput,
+    resource_count: Option<u64>,
+}
 
-impl Deref for NormalizedAnalysisInput {
+pub type NormalizedAnalysisInput = PreparedAnalysisInput;
+
+impl Deref for PreparedAnalysisInput {
     type Target = AnalysisInput;
 
     fn deref(&self) -> &Self::Target {
-        &self.0
+        &self.input
     }
 }
 
-impl AsRef<AnalysisInput> for NormalizedAnalysisInput {
+impl AsRef<AnalysisInput> for PreparedAnalysisInput {
     fn as_ref(&self) -> &AnalysisInput {
-        &self.0
+        &self.input
     }
 }
 
@@ -73,7 +79,11 @@ impl AnalysisInput {
     #[must_use]
     pub fn into_normalized(mut self) -> NormalizedAnalysisInput {
         self.normalize();
-        NormalizedAnalysisInput(self)
+        let resource_count = resource_count_for_input(&self);
+        PreparedAnalysisInput {
+            input: self,
+            resource_count,
+        }
     }
 
     /// Returns the input in the single canonical row order used by every calculation and checksum.
@@ -175,7 +185,7 @@ impl AnalysisInput {
     }
 }
 
-impl NormalizedAnalysisInput {
+impl PreparedAnalysisInput {
     /// Returns the exact number of resource chunks the calculator will emit.
     ///
     /// This is deliberately a shape-only pass: it allocates no payloads and retains no per-scope
@@ -183,23 +193,27 @@ impl NormalizedAnalysisInput {
     /// impossible artifact is rejected before rank analysis or JSON construction starts.
     #[must_use]
     pub fn resource_count(&self) -> Option<u64> {
-        self.scopes().into_iter().try_fold(0_u64, |total, scope| {
-            let rows = self.rows_for_scope(&scope);
-            let players = rows
-                .iter()
-                .map(|row| row.member_id.as_str())
-                .collect::<BTreeSet<_>>();
-            let matches = rows
-                .iter()
-                .map(|row| row.match_id.as_str())
-                .collect::<BTreeSet<_>>();
-            let player_chunks = u64::try_from(players.len()).ok()?.checked_mul(4)?;
-            let scope_count = 2_u64
-                .checked_add(player_chunks)?
-                .checked_add(u64::try_from(matches.len()).ok()?)?;
-            total.checked_add(scope_count)
-        })
+        self.resource_count
     }
+}
+
+fn resource_count_for_input(input: &AnalysisInput) -> Option<u64> {
+    input.scopes().into_iter().try_fold(0_u64, |total, scope| {
+        let rows = input.rows_for_scope(&scope);
+        let players = rows
+            .iter()
+            .map(|row| row.member_id.as_str())
+            .collect::<BTreeSet<_>>();
+        let matches = rows
+            .iter()
+            .map(|row| row.match_id.as_str())
+            .collect::<BTreeSet<_>>();
+        let player_chunks = u64::try_from(players.len()).ok()?.checked_mul(4)?;
+        let scope_count = 2_u64
+            .checked_add(player_chunks)?
+            .checked_add(u64::try_from(matches.len()).ok()?)?;
+        total.checked_add(scope_count)
+    })
 }
 
 #[must_use]

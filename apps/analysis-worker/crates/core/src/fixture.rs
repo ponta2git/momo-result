@@ -166,6 +166,10 @@ fn shared_boundary_fixture_generates_the_complete_deterministic_artifact_shape()
 
     let resources = compute_all(&input);
     assert_eq!(
+        normalized.resource_count(),
+        Some(u64::try_from(fixture_count(&fixture, "/expected/resourceCount")).unwrap_or(0))
+    );
+    assert_eq!(
         resources.len(),
         fixture_count(&fixture, "/expected/resourceCount")
     );

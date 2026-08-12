@@ -9,7 +9,7 @@
 
 関連正本:
 
-- JSON Schema: `docs/schemas/ocr-queue-payload-v1.schema.json`, `docs/schemas/ocr-queue-payload-v2.schema.json`
+- JSON Schema: `docs/schemas/ocr-queue-payload-v2.schema.json`
 - OCR hints schema: `docs/schemas/ocr-hints-v1.schema.json`
 - DB schema / migration: `../momo-db`
 - DB利用規約: `docs/db-rule.md`
@@ -19,8 +19,7 @@
 
 | 契約 | Owner | 正本 |
 |---|---|---|
-| Redis Stream payload v1 | API produces / Python worker consumes during drain | この文書、v1 JSON Schema、Scala/Python contract tests |
-| Redis Stream payload v2 | API produces / Rust worker consumes after activation | この文書、v2 JSON Schema、Scala / Rust contract tests |
+| Redis Stream payload v2 | API produces / Rust worker consumes | この文書、v2 JSON Schema、Scala / Rust contract tests |
 | Durable enqueue intent | API | `ocr_queue_outbox` |
 | OCR job state | DB | `ocr_jobs` |
 | OCR draft payload | worker writes / API reads | `ocr_drafts`, worker payload model |
@@ -32,76 +31,25 @@ Redis は配送路であり、ジョブ状態の正本ではない。worker は 
 
 | 項目 | 既定値 | env |
 |---|---|---|
-| v1 job stream | `momo:ocr:jobs` | `OCR_REDIS_STREAM` |
-| v1 consumer group | `momo-ocr-workers` | `OCR_REDIS_GROUP` |
-| v1 dead-letter stream | `momo:ocr:jobs:dead` | `OCR_REDIS_DEAD_LETTER_STREAM` |
 | v2 job stream | `momo:ocr:v2:jobs` | `OCR_REDIS_V2_STREAM` |
 | v2 dead-letter stream | `momo:ocr:v2:jobs:dead` | `OCR_REDIS_V2_DEAD_LETTER_STREAM` |
-| Worker concurrency | `1` | `OCR_WORKER_CONCURRENCY` |
-| Max delivery attempts | `1` | `OCR_MAX_ATTEMPTS` |
-| Pending claim idle | `300000ms` | `OCR_REDIS_CLAIM_IDLE_SECONDS` |
-| Worker blocking read | `30000ms` | `OCR_REDIS_BLOCK_SECONDS` |
 | Outbox recovery poll | `1800s` | `OCR_OUTBOX_RECOVERY_INTERVAL_SECONDS` |
 | Outbox due backlog admission limit | `24` | `OCR_OUTBOX_DUE_BACKLOG_LIMIT` |
 | Outbox active backlog admission limit | `48` | `OCR_OUTBOX_ACTIVE_BACKLOG_LIMIT` |
 | Oldest due outbox max delay | `600s` | `OCR_OUTBOX_OLDEST_DUE_MAX_DELAY_SECONDS` |
 | Dead-letter backlog admission limit | `24` | `OCR_DEAD_LETTER_BACKLOG_LIMIT` |
 
-`OCR_WORKER_CONCURRENCY` は1プロセス内の worker loop slot 数を表す。既定値は1。
-2以上の場合、各 slot は DB 上の `worker_id` に `<OCR_WORKER_ID>-<slot>` を書く。
-同一プロセス内の Redis pull は stale pending delivery の二重 claim を避けるため直列化し、
-OCR実行とDB状態遷移は slot ごとに並行実行する。worker DB pool の `max_size` は
-`OCR_WORKER_CONCURRENCY + 1` とし、追加の1接続は cancellation polling と重複配送確認の
-headroom として使う。
-
 Rules:
 
-- v1とv2は別streamに置く。consumerが理解できないschemaを同じstreamへ混在させない。
-- production activationまではAPI producerをv1に保ち、v2へのdual writeはしない。v2 consumerは明示設定なしで起動しない。
-- v2 producerの有効化は、Rust consumerのcontract test、object storageの縦切り、DB lease/fenceの検証後に行う。
-- API は有効な単一versionのstreamへ `XADD` する。
+- APIはv2 streamだけへ`XADD`し、別schemaを同じstreamへ混在させない。
 - worker は `XGROUP CREATE ... MKSTREAM` を許容する。
 - worker は `XREADGROUP` で新規配送を読み、stale PEL は `XCLAIM` する。
 - 即時 nack は使わない。
-- `OCR_TIMEOUT_SECONDS` はOCR認識timeout。`OCR_REDIS_CLAIM_IDLE_SECONDS` はPEL回収待機時間。混同しない。
+- OCR認識timeoutとPEL回収待機時間を別のbounded設定として扱い、混同しない。
 - claim idle は、正当な長時間ジョブを重複配送しないよう API stale job reaper の基準値以上にする。
 - worker の blocking read は、空 queue で Redis commands を増やしすぎないため長めに取る。メッセージ到着時は block 終了を待たずに返るため、通常の OCR 開始遅延にはしない。
 
-## 3. Stream Payload v1
-
-すべての Redis field value は string。JSON object、number、boolean を直接 field value にしない。
-
-| Field | Required | Meaning |
-|---|---:|---|
-| `schemaVersion` | yes | `"1"` 固定 |
-| `jobId` | yes | DB `ocr_jobs.id`。worker idempotency key |
-| `draftId` | yes | DB `ocr_drafts.id` |
-| `imageId` | yes | API 側の一時画像論理 ID |
-| `imagePath` | yes | worker が読める `IMAGE_TMP_DIR` 配下の絶対パス |
-| `requestedScreenType` | yes | `auto`, `total_assets`, `revenue`, `incident_log` |
-| `attempt` | yes | payload schema 上の正整数。現行 producer は `1` 固定 |
-| `enqueuedAt` | yes | ISO-8601 UTC timestamp |
-| `ocrHintsJson` | no | compact / sorted keys / UTF-8 の JSON string。最大 8192 文字 |
-| `requestId` | no | ログ相関 ID。`^[A-Za-z0-9_-]{1,64}$` |
-
-Counters:
-
-| Counter | Owner | Meaning |
-|---|---|---|
-| payload `attempt` | API | stream payload 上の値。現行は初回配送 `1` |
-| `ocr_jobs.attempt_count` | worker | `queued -> running` claim 回数 |
-| `ocr_queue_outbox.attempt_count` | API dispatcher | Redis publish 失敗回数 |
-| Redis `times_delivered` | Redis | consumer group delivery 回数。DLQ判定に使う |
-
-Schema rules:
-
-- `auto`はv1履歴とdrain中の既存messageを読むためだけに残す。APIは新しいjob/payloadへ`auto`を書かない。
-- producer payload は閉じた契約として扱う。field 追加でも schema と両言語 contract tests を同時に更新する。
-- worker runtime 境界でも stream payload schema を適用する。
-- `ocrHintsJson` がある場合は JSON parse 後に hints schema も適用する。
-- schema validation 後の parser は型変換と runtime 境界条件（絶対 `imagePath` など）を担当する。
-
-## 4. Stream Payload v2
+## 3. Stream Payload v2
 
 v2はRust worker専用のobject-storage契約である。すべてのRedis field valueはstringとし、local path、bucket名、URL、credentialを含めない。
 
@@ -127,9 +75,10 @@ Rules:
 - workerはobject取得後に`sha256`、`byteLength`、`mediaType`を再検証し、不一致をOCRへ渡さない。
 - `imageObjectKey`は取得識別子でありpathへ変換・連結しない。bucket、endpoint、credentialはruntime設定から得てpayloadへ複製しない。
 - v2は閉じた契約であり、未知field、非string value、URL風/絶対/空/dot/parent segment keyを拒否する。
-- v2はPython workerへ対応させない。移行中のPython workerはv1 drainだけを担当し、Rust側の問題は前進修正する。
+- producer payloadは閉じた契約として扱い、field追加でもschemaとScala/Rust contract testsを同時に更新する。
+- worker runtime境界でもstream payload schemaを適用し、`ocrHintsJson`はJSON parse後にhints schemaも適用する。
 
-## 5. OCR Hints
+## 4. OCR Hints
 
 `ocrHintsJson` は省略可能な JSON object を string 化した Redis field。API は null を落とし、key をソートし、空白なしで出力する。
 
@@ -150,7 +99,7 @@ worker は hints を補助情報として扱う。画面種別、プレイヤー
 | `knownPlayerAliases[].aliases` | 1-8 items, each 1-64 chars |
 | `computerPlayerAliases` | max 8 items, each 1-64 chars |
 
-## 6. API Outbox
+## 5. API Outbox
 
 API は OCR job 作成 transaction 内で `ocr_drafts`、`ocr_jobs`、`ocr_queue_outbox` を作成する。DB commit 後、通常経路では作成した outbox 行を即時 claim して `XADD` を試みる。HTTP success は Redis publish 完了ではなく、DB に durable enqueue intent が残ったことを意味する。即時 publish に失敗した場合は outbox 行を backoff 後の `PENDING` へ戻す。outbox recovery dispatcher は低頻度に残りの `PENDING` / stale `IN_FLIGHT` を再配送する。
 
@@ -165,7 +114,8 @@ PENDING -> IN_FLIGHT -> DELIVERED
 
 Rules:
 
-- `ocr_queue_outbox.schema_version`と`stream_payload.schemaVersion`は一致させる。現行writerはv1、v2有効化後のwriterはv2 objectを保存し、`jobId`だけから再構築しない。
+- `ocr_queue_outbox.schema_version`と`stream_payload.schemaVersion`は一致させる。writerはv2 objectを保存し、
+  `jobId`だけから再構築しない。
 - `requestId` と OCR hints は API request 時点の値を保持する。
 - API の即時 publish は作成した `PENDING` 行を id 指定で claim する。
 - recovery dispatcher は due `PENDING` と expired `IN_FLIGHT` を `FOR UPDATE SKIP LOCKED` で claim する。
@@ -173,7 +123,7 @@ Rules:
 - `XADD` 成功後に `DELIVERED`, `redis_message_id`, `delivered_at` を記録する。
 - `XADD` 失敗時は秘密情報を含まない error class だけを `last_error` に記録し、backoff 後の `PENDING` に戻す。
 
-## 7. Worker Delivery / Ack
+## 6. Worker Delivery / Ack
 
 原則: terminal DB write before `XACK`。`succeeded`, `failed`, `cancelled` の永続化前に ack しない。
 
@@ -194,8 +144,7 @@ Ack exceptions:
 Worker rules:
 
 - stale running job の terminal failure 化は API maintenance が担う。
-- v1 worker は `imagePath` を `IMAGE_TMP_DIR` 配下へ解決できる場合だけ読み、3MiB上限を再検証する。
-- v2 worker はpayload中のlocal pathやURLを受理せず、opaque object keyで取得したbytesを検証してからOCRする。
+- workerはpayload中のlocal pathやURLを受理せず、opaque object keyで取得したbytesを検証してからOCRする。
 - API は queued job の cancel 要求だけを行う。running 中の即時中断は MVP では best-effort。
 
 Allowed job transitions:
@@ -210,7 +159,7 @@ queued -> cancelled
 
 終端状態からの遷移は禁止。
 
-## 8. DB Contracts
+## 7. DB Contracts
 
 - `ocr_jobs` は job lifecycle の正本。worker は `SELECT ... FOR UPDATE` 相当で現状を確認し、`queued -> running` claim 時に `attempt_count` を増やす。
 - 成功時は `ocr_drafts` upsert と `ocr_jobs` terminal transition を同一 transaction にする。
@@ -220,7 +169,7 @@ queued -> cancelled
 - v2 jobの実行権はDB lease tokenと単調増加fenceで確定する。期限切れleaseを再取得したworkerだけが新fenceを持ち、古いworkerのterminal writeを拒否する。
 - Redis publish は at-least-once。`XADD` 成功後に `DELIVERED` 更新が失敗すると recovery で再 publish され得る。worker は `ocr_jobs` の状態確認により terminal / running job を再実行せず ack する。
 
-## 9. Compatibility
+## 8. Compatibility
 
 後方互換:
 
@@ -236,22 +185,16 @@ queued -> cancelled
 - `requestedScreenType`, `FailureCode`, job status の既存値削除。
 - ack 前後関係、DB正本性、terminal transition 条件変更。
 
-v1からv2は非互換であるため、同じstream上のin-place切替やdual writeを行わない。deploy順序は次の通り。
+現行producer / consumer契約はv2だけである。DB上の過去rowを保持するためlegacy columnやschema version値が
+残っていても、新しいv1 outbox、stream delivery、local-path jobを作らない。v2に非互換変更が必要なら
+新しいschema versionとstreamを追加し、同じstream上のin-place変更やdual writeで曖昧にしない。
 
-1. additive DB migration、v2 schema/config、Rust consumer contractを先に配置する。
-2. object storageを含むv2縦切りとlease/fenceを検証する。
-3. API writerをv2 streamへ一度だけ切り替える。
-4. v1 stream/outbox/PELをdrainし、Python workerとv1 producer/runtimeを削除する。
-
-切替後にPythonへrollbackしない。問題はRust/v2側で前進修正する。v1 decode契約は履歴・drain完了確認に必要な期間だけ残す。
-
-## 10. Required Tests
+## 9. Required Tests
 
 Redis contract に触れた場合:
 
 ```sh
 cd apps/api
-sbt testOnly momo.api.contracts.ocrworker.OcrWorkerJobMessageSpec
 sbt testOnly momo.api.contracts.ocrworker.OcrWorkerJobMessageV2Spec
 sbt testOnly momo.api.usecases.OcrQueueOutboxDispatcherSpec
 sbt apiRedisQuality
@@ -259,17 +202,17 @@ sbt apiDbQuality
 ```
 
 ```sh
-cd apps/ocr-worker
-uv run pytest tests/unit/features/test_queue_contract.py
-uv run pytest tests/unit/features/test_redis_consumer.py
-uv run pytest -m integration tests/integration/test_redis_stream_consumer.py
+cd apps/analysis-worker
+cargo test --locked --workspace --all-targets --all-features
+cd ../..
+scripts/ci/ocr-rust-control-plane-smoke.sh
 ```
 
-v1 schema変更ではScala/Python双方、v2 schema変更ではScala/Rust双方のserializer出力を`docs/schemas/`のJSON Schemaで検証する。Pythonへv2 testやparserを追加しない。
+Scala/Rust双方のserializer / decoderを`docs/schemas/ocr-queue-payload-v2.schema.json`で検証する。
 
 DB schema に触れた場合は `docs/db-rule.md` と `docs/test-rule.md` に従い、`momo-db` migration 適用済み Testcontainers PostgreSQL で検証する。
 
-## 11. Operations
+## 10. Operations
 
 障害調査で見るもの:
 

@@ -44,8 +44,7 @@ CI の report mode は、同じテスト集合を通常実行と coverage 実行
 |---|---|---|
 | web | `apps/web/vite.config.ts` | global threshold と重要ファイル別 threshold。`COVERAGE_REPORT_ONLY=1` では閾値を外す。`.tsx` と生成型は集計対象外。 |
 | api | `apps/api/build.sbt` | statement / branch threshold。CI report mode の `apiTestWithCoverageReportOnly` は `coverageFailOnMinimum := false`。PostgreSQL / Redis adapter は coverage率でなくintegration contractで保証。 |
-| ocr-worker | `apps/ocr-worker/pyproject.toml` | branch coverage 有効、`fail_under` あり。CI report command は `--cov-fail-under=0` でartifact生成を優先。 |
-| analysis-worker | fixture / property / state-machine testと実service smoke | 現時点はcoverage率をgateにせず、pure calculationの決定論的oracleと、DB / Redis / Linux process contractで保証する。 |
+| analysis / OCR worker | fixture / property / state-machine testと実service smoke | 現時点はcoverage率をgateにせず、pure calculation・OCR characterizationの決定論的oracleと、DB / Redis / R2 / Linux process contractで保証する。 |
 
 丸めルール:
 
@@ -83,23 +82,14 @@ CI の report mode は、同じテスト集合を通常実行と coverage 実行
 
 現行 coverage 設定は `apps/api/build.sbt` を正とする。PostgreSQL / Redis adapter は coverage率ではなく、`apiDbQuality` / `apiRedisQuality` の contract 成功で保証する。
 
-## 5. apps/ocr-worker
+## 5. apps/analysis-worker
 
 | 対象範囲 | 主テストサイズ | 確保するcoverage / oracle |
 |---|---|---|
-| `features/ocr_jobs` | S / M / L | job lifecycle、payload validation、ack / pending / DLQ、failure code。複合条件は table-driven。 |
-| `features/screen_detection`, `features/player_order` | S | screen type、色順、fallback条件。branch を重視する。 |
-| parser系 `total_assets`, `revenue`, `incident_log`, `ocr_results` | S | 金額、順位、事件回数、名前寄せ、警告。外部契約 payload をassertする。 |
-| `features/image_processing`, `temp_images`, `text_recognition` | S / L | 画像メタデータ、サイズ制限、native OCR adapter smoke。 |
-| `app` | M | config、composition、worker process。process境界は代表経路に絞る。 |
-| accuracy evaluator | 別枠 | code coverageではなく、holdout正答率、差分、処理時間をartifactで管理する。 |
-
-現行 coverage 設定は `apps/ocr-worker/pyproject.toml` を正とする。OCR精度劣化は code coverage では検知しにくいため、accuracy report のartifact化は別枠で扱う。
-
-## 6. apps/analysis-worker
-
-| 対象範囲 | 主テストサイズ | 確保するcoverage / oracle |
-|---|---|---|
+| OCR queue / control | S / M / L | v2 payload、job lifecycle、lease / fence、ack / PEL / DLQ、failure code。複合条件はtable-driven。 |
+| OCR parser / image processing | S / L | 画面種別、金額・順位・事件回数・名前寄せ、FullHD / media検証、native OCR adapter。 |
+| OCR object storage | M / L | opaque key、bytes / checksum / media type再検証、R2 get、失敗時のterminal化。 |
+| OCR accuracy evaluator | 別枠 | code coverageではなく、固定datasetの項目別正答率、差分、処理時間を非公開artifactで管理する。 |
 | pure calculation / statistics | S | 数式、分母、同値、丸め、seed、入力順独立性、品質状態。golden、高精度参照値、propertyを使う。 |
 | scope / artifact assembly | S / M | 全有効スコープ、計算再利用、安定した並び順、schema / algorithm version、部分成果物禁止。 |
 | job state machine | S / M | queued / running / terminal、最大3回のtransient retry、timeout非retry、coalescing、preemption。 |
@@ -107,22 +97,23 @@ CI の report mode は、同じテスト集合を通常実行と coverage 実行
 | parent / child process | L | 正常終了、異常終了、hard timeout、signal、zombie防止、atomic publish。 |
 | release resource gate | XL / 別枠 | 固定4名、全scope、現在の2倍かつ最低500試合、100回連続実行のpeak memoryと処理時間。provider実測はprivateに保存する。 |
 
-Rust移植では現行Scalaとの差分を記録するが、Scala値だけを正しさのoracleにしない。より正確な差異は
+OCR精度劣化はcode coverageでは検知しにくいため、characterizationとaccuracy reportを別枠で扱う。
+戦績分析のRust移植では現行Scalaとの差分を記録するが、Scala値だけを正しさのoracleにしない。より正確な差異は
 高精度参照値、要求から導いたgolden、または性質テストで証明し、algorithm versionを更新する。
 
-## 7. Cross-System
+## 6. Cross-System
 
 | 契約 | 主テストサイズ | 管理方法 |
 |---|---|---|
 | API -> web OpenAPI / generated types | M | `apiOpenApiCheck`、`generate:api`、生成差分ゼロ。 |
-| API -> OCR worker Redis queue payload | M / L | JSON Schema、Scala/Python contract tests、Redis wire integration。 |
+| API -> OCR worker Redis queue payload | M / L | v2 JSON Schema、Scala/Rust contract tests、Redis wire integration。 |
 | API -> analysis worker job / queue | M / L | DB consumer contract、Scala/Rust contract tests、Redis wire integration。 |
 | analysis worker -> API / web artifact | M / L | artifact schema fixture、version不一致拒否、同一version読取、API内分析なし。 |
 | DB consumer contract | L | `DbContractSpec`、repository integration、momo-db migration適用済みTestcontainers。 |
 | runtime images | XL | nginx設定、実行ファイル、healthz / worker heartbeat、cache header、origin lock、container logs。 |
 | logged-in UX | XL | Playwright E2E smoke。coverage率ではなく経路リストで管理する。 |
 
-## 8. CI Artifacts
+## 7. CI Artifacts
 
 coverage report はPRを落とす主目的ではなく、推移確認とレビュー補助のために保存する。
 
@@ -130,8 +121,7 @@ coverage report はPRを落とす主目的ではなく、推移確認とレビ�
 |---|---|---|
 | web | `pnpm --filter web test:coverage:report` | `apps/web/coverage/`, `coverage-summary/web/` |
 | API | CI: `sbt apiTestWithCoverageReportOnly`; local standalone: `sbt apiCoverageReportOnly` | `scoverage-report/`, `coverage-report/`, `coverage-summary/api/` |
-| OCR worker | `uv run pytest --cov ... --cov-fail-under=0` | `coverage.xml`, `coverage.json`, `htmlcov/`, `coverage-summary/ocr-worker/` |
-| analysis worker | 未設定。導入までは通常testと実service smokeをrelease gateにする | なし |
+| analysis / OCR worker | coverage artifact未設定。通常testと実service smokeをrelease gateにする | なし |
 
 `scripts/ci/write-coverage-summary.py` が raw 値と丸め候補値を正規化し、次を生成する。
 
@@ -141,7 +131,7 @@ coverage report はPRを落とす主目的ではなく、推移確認とレビ�
 
 resource class、費用、実測memory / timingは公開CI artifactへ含めず、privateのrelease evidenceへ保存する。
 
-## 9. Later Phases
+## 8. Later Phases
 
 別PRで判断する項目:
 

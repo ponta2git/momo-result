@@ -3,14 +3,12 @@ set -euo pipefail
 
 api=false
 web=false
-ocr=false
 analysis=false
 runtime=false
 
 select_all() {
   api=true
   web=true
-  ocr=true
   analysis=true
   runtime=true
 }
@@ -30,10 +28,6 @@ while IFS= read -r -d '' path; do
       web=true
       runtime=true
       ;;
-    apps/ocr-worker/*)
-      ocr=true
-      runtime=true
-      ;;
     apps/analysis-worker/* | fly.analysis.toml | rust-toolchain.toml)
       analysis=true
       ;;
@@ -50,7 +44,6 @@ while IFS= read -r -d '' path; do
       ;;
     .momo-db-ref | scripts/ci/apply-momo-db-migrations.sh)
       api=true
-      ocr=true
       analysis=true
       runtime=true
       ;;
@@ -85,9 +78,6 @@ while IFS= read -r -d '' path; do
     .github/workflows/web.yml)
       web=true
       ;;
-    .github/workflows/ocr-worker.yml)
-      ocr=true
-      ;;
     .github/workflows/analysis-worker.yml | .github/workflows/analysis-candidate.yml | \
       .github/workflows/analysis-production.yml)
       analysis=true
@@ -110,6 +100,5 @@ done
 
 printf 'api=%s\n' "${api}"
 printf 'web=%s\n' "${web}"
-printf 'ocr=%s\n' "${ocr}"
 printf 'analysis=%s\n' "${analysis}"
 printf 'runtime=%s\n' "${runtime}"

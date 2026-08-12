@@ -1,1 +1,0 @@
-"""Shared image-processing feature."""

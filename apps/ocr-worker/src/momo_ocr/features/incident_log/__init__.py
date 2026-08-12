@@ -1,1 +1,0 @@
-"""Incident log OCR feature."""

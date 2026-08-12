@@ -1558,41 +1558,36 @@ rollback契約:
 
 ---
 
-## 10. 実現可能性判定とrelease blocker
+## 10. 実現可能性判定とrelease invariant
 
 | 対象 | 判定 | 根拠 / 未証明点 |
 |---|---|---|
 | Rust版で全分析を非同期化 | 実装済み | 入力抽出、全resource計算、親子process、Redis配送、DB claim / publishをRustへ実装し、共有fixtureで決定性を固定した。 |
 | 全作品campaignのbounded展開 | 実装済み | HTTPとrelease昇格は要求version付きtarget snapshotだけを受理transactionで作り、dispatcherがtargetごとの短いtransactionで冪等展開する。受理後に開始したrunning attemptだけを共有し、途中停止・並行再実行・作品削除を実PostgreSQL testで固定した。 |
-| private運用要件のmemory上限 | 実装済み・release実測待ち | 専用Linux imageでchild hard limit、親生存、公開可能fixtureの100回連続shadowと大規模COPY公開を検証済み。Fly上の本番data shape・本番同等resource classでの再測定はrelease gateとして残る。 |
+| private運用要件のmemory上限 | 運用中・条件付き | 専用Linux imageでcgroup child hard limit、attach/readback barrier、OOM時の親生存を検証した。採用resourceの実測と受容した運用範囲はprivate証跡を正本とし、一般的な持続burst耐性は保証しない。 |
 | 全作品で分析同時実行1 | 実装済み | DB execution slot、lease、fenceを実装し、失効lease回収とowner lossを実service smokeで検証した。 |
 | 直前成果物を保った原子的更新 | 実装済み | current / previous制約、staging検証、fenced publish、checksum reuse、stale revision再queueを実service smokeで検証した。 |
 | Webの「当てはめるだけ」化 | 実装済み | v2 artifact型へ切り替え、旧集計helperを削除し、静的scanとartifact fixtureの直接表示testを追加した。 |
-| OCRとの排他・OCR優先 | 実装済み・activation待ち | v2 object key、Rust consumer、共有slot、実process preemption、子回収を実装・統合試験済み。live object storage、独立holdout、対象runtime実測はrelease gate。 |
+| OCRとの排他・OCR優先 | 有効化済み・残余リスクあり | v2 object key、Rust consumer、共有slot、実process preemption、子回収、live object storage、FullHD本番縦切り、旧queue drainを検証した。固定datasetでは非劣化を確認したが、独立blind holdoutは未実施。 |
 
-実装完了と本番release完了は分ける。schema、DB、API、Rust worker、Web、専用runtime定義とrelease検査toolは
-実装済みである。本番releaseは、次の環境依存gateが未確定または未検証の間は可としない。
+実装完了と本番release完了は分ける。初回activationは完了しているが、以後のreleaseでも次を不変条件とする。
 
-- migration 0020〜0027をrelease対象DBへ適用し、reader / workerとのcompatibility auditを通すこと。
-- 上限fixtureから最大chunk / response / temporary storage budgetを本番同等環境で確定し、publication設定へ反映すること。
-- 本番同等runtimeの実測からhard timeoutが設定されていること。
-- 本番data shapeの上限fixtureを本番同等runtimeで100回連続実行し、最大同時API read、対象browserの
-  resource / response予算を通すこと。
-- reader capabilityを確認してpublicationを有効化し、全作品backfill completenessを機械検査すること。
-- publication停止後もjobと既存artifactを保持できること。初回publication後のmain障害はforward-fixを標準とし、
-  旧Scala同期分析を通常のrollback先として扱わないこと。
-- OCR v2 activation前に、live object storage contract、独立accuracy holdout、対象runtimeのcgroup / FullHD resource、
-  v1 pending / PEL drainを確認し、API writerをdual-writeなしで一度だけ切り替えること。
+- release対象DBへ必要なmigrationを先に適用し、API reader / workerとのcompatibility preflightを通す。
+- 検証したimmutable imageをdigestで昇格し、smoke後に別imageを再buildして差し替えない。
+- 高負荷子processの物理memory hard limitはcgroupを正本とし、`RLIMIT_AS`だけで代用しない。
+- hard timeout、chunk / response / temporary storage上限を明示し、実測値とresource判断はprivate証跡に残す。
+- reader / worker capabilityを確認してからpublicationを有効化し、既存成果物とjobは停止時も保持する。
+- 分析とOCRの障害はRust側で前進修正し、旧Scala同期分析やPython OCRを通常のrollback先にしない。
+- OCR producer / consumerはqueue v2だけを使い、R2 object、DB metadata、queue metadataの整合をworkerでも再検証する。
 
 ---
 
-## 11. 現時点のproduction activation対象外
+## 11. 今後の改善対象
 
-- OCR v2 API writerの有効化とv1 pending / PEL drain。
-- 公開HTTP imageからのPython OCR、Python runtime、supervisord除去と、その後のJVM resource tuning。
-- Rust OCRの独立blind holdoutによるrelease精度判定。
+- Rust OCRの独立blind holdoutによる追加精度判定。
+- 公開HTTP runtimeのJVM memory tuning。APIの可用性・latency・主要失敗経路を維持したまま削減可能性を測る。
 - provider固有のautoscaling、台数、費用最適化の確定。
 - job履歴のpagination、作品filter、45日分の全履歴表示。
 - 利用者による再計算、job cancel、priority変更。
 
-これらを有効化・追加しても、単一実行枠、OCRだけが分析をpreemptできる規則、DB正本、原子的公開は変更しない。
+これらを追加しても、単一実行枠、OCRだけが分析をpreemptできる規則、DB正本、原子的公開は変更しない。

@@ -21,7 +21,7 @@ class Metric:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Write normalized coverage summaries for CI.")
-    parser.add_argument("subsystem", choices=["web", "api", "ocr-worker"])
+    parser.add_argument("subsystem", choices=["web", "api"])
     parser.add_argument("--root", type=Path, default=Path("."))
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--allow-missing", action="store_true")
@@ -79,8 +79,6 @@ def read_metrics(root: Path, subsystem: str) -> tuple[list[Path], dict[str, Metr
         return read_web_metrics(root)
     if subsystem == "api":
         return read_api_metrics(root)
-    if subsystem == "ocr-worker":
-        return read_ocr_worker_metrics(root)
     raise ValueError(f"Unsupported subsystem: {subsystem}")
 
 
@@ -122,30 +120,6 @@ def read_api_metrics(root: Path) -> tuple[list[Path], dict[str, Metric]]:
     return [scoverage_report, cobertura_report], metrics
 
 
-def read_ocr_worker_metrics(root: Path) -> tuple[list[Path], dict[str, Metric]]:
-    report = root / "apps/ocr-worker/coverage.json"
-    data = read_json(report)
-    totals = data["totals"]
-
-    metrics = {
-        "total": Metric(pct=float(totals["percent_covered"])),
-        "lines": Metric(
-            pct=ratio_pct(totals["covered_lines"], totals["num_statements"]),
-            covered=int(totals["covered_lines"]),
-            total=int(totals["num_statements"]),
-        ),
-    }
-    branch_total = int(totals.get("num_branches", 0))
-    if branch_total > 0:
-        metrics["branches"] = Metric(
-            pct=ratio_pct(totals["covered_branches"], branch_total),
-            covered=int(totals["covered_branches"]),
-            total=branch_total,
-        )
-
-    return [report], metrics
-
-
 def find_scala_report(root: Path, relative_report: str) -> Path:
     scala_target = root / "apps/api/target"
     candidates = sorted(scala_target.glob(f"scala-*/{relative_report}"))
@@ -156,13 +130,6 @@ def find_scala_report(root: Path, relative_report: str) -> Path:
 
 def istanbul_metric(value: dict[str, Any]) -> Metric:
     return Metric(pct=float(value["pct"]), covered=int(value["covered"]), total=int(value["total"]))
-
-
-def ratio_pct(covered: Any, total: Any) -> float:
-    total_int = int(total)
-    if total_int == 0:
-        return 100.0
-    return int(covered) / total_int * 100
 
 
 def rounded_baseline(pct: float) -> int:

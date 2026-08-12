@@ -8,7 +8,6 @@ tools/cmd/cgroup-memory-probe/out/
 **/.ruff_cache/
 **/.coverage
 **/.coverage.*
-apps/ocr-worker/out/
 .bloop/
 .metals/
 .scala-build/
@@ -30,7 +29,4 @@ docs/tmp/
 **/.env
 **/.pnpm-store/
 .playwright-mcp
-apps/ocr-worker/coverage.json
-apps/ocr-worker/coverage.xml
-apps/ocr-worker/htmlcov/
 coverage-summary/

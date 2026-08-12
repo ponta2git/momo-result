@@ -30,9 +30,7 @@ final class RedisOcrJobQueuePublisherIntegrationSpec extends RedisIntegrationSui
     val expectedMessage = OcrWorkerJobMessageV2.fromEnqueueRequest(request).fold(fail(_), identity)
     redisStreamFixture.use { fixture =>
       val config = RedisConfig(
-        fixture.redisUrl,
-        fixture.streamName,
-        fixture.deadLetterStreamName,
+        url = fixture.redisUrl,
         v2Stream = fixture.streamName,
         v2DeadLetterStream = fixture.deadLetterStreamName,
       )
@@ -93,8 +91,8 @@ final class RedisOcrJobQueuePublisherIntegrationSpec extends RedisIntegrationSui
         IO.delay(UUID.randomUUID().toString).map { suffix =>
           RedisStreamFixture(
             redisUrl,
-            s"momo:ocr:jobs:test:$suffix",
-            s"momo:ocr:jobs:dead:test:$suffix",
+            s"momo:ocr:v2:jobs:test:$suffix",
+            s"momo:ocr:v2:jobs:dead:test:$suffix",
           )
         }
       }(fixture =>

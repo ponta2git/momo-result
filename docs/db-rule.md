@@ -21,7 +21,7 @@
 | 対象 | 正本 | このrepoの責務 |
 |---|---|---|
 | schema / migration / seed | `../momo-db` | consumerとして必要な前提を明示し、contract testで検知する |
-| PostgreSQL query | `apps/api`, `apps/ocr-worker`, `apps/analysis-worker` | 現在のschema前提に合わせて実行し、PostgreSQL固有挙動をintegration testで確認する |
+| PostgreSQL query | `apps/api`, `apps/analysis-worker` | 現在のschema前提に合わせて実行し、PostgreSQL固有挙動をintegration testで確認する |
 | DB rowの業務意味論 | `docs/domain-rule.md` | API / worker / web が同じ意味で扱う |
 
 - Neon PostgreSQL は summit アプリと共有する。
@@ -39,7 +39,7 @@
 | 試合結果 | `matches`, `match_players`, `match_incidents` | API | 確定済み試合の正本。4名、順位、プレー順、事件数を外部契約として検証する。 |
 | 下書き | `match_drafts` | API, worker | OCR/手入力の作業単位。terminal状態、OCR slot、画像保持情報を含む。 |
 | OCR | `source_images`, `ocr_drafts`, `ocr_jobs`, `ocr_queue_outbox` | API, worker | 画像実体ではなくobject keyと検証metadataを保持する。job状態はDBが正本。Redisは配送路。queue詳細はRedis契約文書へ寄せる。 |
-| 戦績分析 | `series_analysis_*`, `worker_execution_slots`, `matches.analysis_revision` | API, analysis worker | migration 0020〜0027が再計算intent、campaign、job / attempt、全体実行権、fence、outbox、reader / worker capability、chunk成果物、current / previousとfunction hardeningを定義する。状態はDBが正本。 |
+| 戦績分析 | `series_analysis_*`, `worker_execution_slots`, `matches.analysis_revision` | API, analysis worker | migration 0020〜0028が再計算intent、campaign、job / attempt、全体実行権、fence、outbox、reader / worker capability、chunk成果物、current / previousとfunction hardeningを定義する。状態はDBが正本。 |
 | マスタ | `game_titles`, `map_masters`, `season_masters`, `incident_masters`, `member_aliases` | API, worker | 作品/マップ/シーズン/事件/名寄せ。IDはFKとして永続化される。 |
 | 冪等性 | `idempotency_keys` | API | `(key, account_id, endpoint)` でreplay scopeを分ける。 |
 
@@ -54,7 +54,8 @@ DBに保存してよい画像関連情報は、参照ID、非公開のopaque obj
 - `incident_masters` は固定6種の事件IDを持つ。domainの `IncidentKind` との対応は repository 層で扱う。
 - `held_events.session_id` は nullable。本アプリ作成分は `session_id = NULL`、`held_date_iso` は `start_at` のJST日付から埋める。
 - `match_drafts.confirmed_match_id` は `status = confirmed` のときだけ必要。`cancelled` と非terminal状態では持たない。
-- `ocr_jobs.image_path` は内部処理用の一時pathであり、公開HTTP DTOへ出さない。
+- `ocr_jobs.image_path` は旧列とのDB互換性のためv2では`source_images.object_key`を鏡写しすることがある。
+  filesystem pathとは解釈せず、公開HTTP DTOへ出さない。
 - `source_images.object_key` は非公開object storageのopaque keyであり、bucket URL、公開URL、credentialを保存しない。`ocr_jobs.queue_schema_version = 2` は`source_image_id`を必須とし、local pathをworker間契約にしない。
 - `ocr_queue_outbox.stream_payload` は JSON Schema と Redis contract の対象であり、DB column shapeだけで互換性を判断しない。
 - 試合確定・確定済み試合更新・削除と、対象作品の戦績分析再計算intentは同じtransactionで確定する。
@@ -101,14 +102,7 @@ cd apps/api
 sbt apiDbQuality
 ```
 
-worker の PostgreSQL adapter を触った場合:
-
-```sh
-cd apps/ocr-worker
-uv run pytest -m integration
-```
-
-analysis workerのPostgreSQL adapterを触るときは、通常の `cargo test` に加え、migration適用済み実PostgreSQLと
+workerのPostgreSQL adapterを触るときは、通常の `cargo test` に加え、migration適用済み実PostgreSQLと
 実Redisを使う `scripts/ci/analysis-worker-control-plane-smoke.sh` を実行する。release commandとDB control planeは
 `scripts/ci/analysis-release-db-smoke.sh` でも検証する。
 

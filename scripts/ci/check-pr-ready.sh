@@ -32,7 +32,6 @@ require_success public-safety "${PUBLIC_SAFETY_RESULT:?}"
 require_success workflow-lint "${WORKFLOW_LINT_RESULT:?}"
 require_optional api "${API_EXPECTED:?}" "${API_RESULT:?}"
 require_optional web "${WEB_EXPECTED:?}" "${WEB_RESULT:?}"
-require_optional ocr "${OCR_EXPECTED:?}" "${OCR_RESULT:?}"
 require_optional analysis "${ANALYSIS_EXPECTED:?}" "${ANALYSIS_RESULT:?}"
 require_optional runtime "${RUNTIME_EXPECTED:?}" "${RUNTIME_RESULT:?}"
 

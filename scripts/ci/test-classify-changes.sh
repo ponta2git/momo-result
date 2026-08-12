@@ -17,12 +17,12 @@ assert_case() {
   fi
 }
 
-readonly none=$'api=false\nweb=false\nocr=false\nanalysis=false\nruntime=false'
-readonly api_runtime=$'api=true\nweb=false\nocr=false\nanalysis=false\nruntime=true'
-readonly api_web_runtime=$'api=true\nweb=true\nocr=false\nanalysis=false\nruntime=true'
-readonly analysis_only=$'api=false\nweb=false\nocr=false\nanalysis=true\nruntime=false'
-readonly runtime_only=$'api=false\nweb=false\nocr=false\nanalysis=false\nruntime=true'
-readonly all=$'api=true\nweb=true\nocr=true\nanalysis=true\nruntime=true'
+readonly none=$'api=false\nweb=false\nanalysis=false\nruntime=false'
+readonly api_runtime=$'api=true\nweb=false\nanalysis=false\nruntime=true'
+readonly api_web_runtime=$'api=true\nweb=true\nanalysis=false\nruntime=true'
+readonly analysis_only=$'api=false\nweb=false\nanalysis=true\nruntime=false'
+readonly runtime_only=$'api=false\nweb=false\nanalysis=false\nruntime=true'
+readonly all=$'api=true\nweb=true\nanalysis=true\nruntime=true'
 
 assert_case docs-only "${none}" docs/README.md
 assert_case actionlint-only "${none}" scripts/ci/actionlint.sh

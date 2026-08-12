@@ -8,8 +8,8 @@
 
 - 本アプリはこのリポジトリ内のモノレポとして管理する。
 - フロントエンド、APIサーバー、OCRワーカー、戦績分析ワーカーは論理的に分離する。
-- 本番のweb、API、現行OCRは低コストな統合runtimeで運用する。戦績分析ワーカーは高負荷計算が
-  APIやOCRを巻き込まない独立runtimeへ分離する。
+- 本番のwebとAPIは公開HTTP runtimeで運用する。OCRと戦績分析は高負荷処理がAPIを巻き込まない
+  Rust製の独立worker runtimeへ分離する。
 - DBは summit アプリと共有する Neon PostgreSQL を利用する。
 - OCRジョブと戦績分析ジョブの配送にはRedis Streamsを利用し、状態の正本はDBに置く。
 - 本番 Redis 接続は原則 TLS を使う。Fly private network 内の Upstash Redis のように provider が
@@ -26,8 +26,7 @@ MVPでは以下のディレクトリ構成を基本とする。
 apps/
   web/         React/Vite SPA
   api/         Scala API server
-  ocr-worker/ Python OCR worker
-  analysis-worker/ Rust series analysis worker
+  analysis-worker/ Rust series analysis / OCR worker
 ```
 
 パッケージ/ビルド管理は言語ごとに分ける。
@@ -36,8 +35,7 @@ apps/
 |---|---|
 | web | pnpm |
 | api | sbt |
-| ocr-worker | uv |
-| analysis-worker | Cargo |
+| analysis / OCR worker | Cargo |
 
 ---
 
@@ -124,8 +122,8 @@ apps/
 
 ### 5.1 基本構成
 
-- OCRワーカーはPython 3.14 + uv で実装する。
-- OCRライブラリは Tesseract + Pillow を使う。
+- OCRワーカーはRustで実装し、戦績分析ワーカーのruntime・orchestratorを共有する。
+- OCRライブラリはTesseractとRustの画像処理crateを使う。
 - OCR/画像解析には外部APIを使わない。
 - OCR対象画面種別ごとに独立した解析器を作り、共通前処理だけ共有する。
 - 解析器は抽出結果、信頼度、警告、失敗理由を返せるようにする。
@@ -138,8 +136,8 @@ apps/
 - API は OCR job 作成 transaction 内で `ocr_drafts`、`ocr_jobs`、`ocr_queue_outbox` を作成する。
 - `ocr_queue_outbox` が durable enqueue intent の正本であり、Redis publish 完了前でも HTTP request は成功し得る。
 - API は OCR job 作成前に Redis health、`ocr_queue_outbox` backlog、dead-letter stream length を確認し、配送基盤が degraded の場合はDB行を作成せず `503` Problem Details で新規受付を一時停止する。
-- OCRワーカーの同時処理数は設定値で変更可能にする。
-- MVP初期値は1ジョブ直列処理とする。
+- OCRと分析はDB上の単一execution slotを共有し、同時に高負荷子processを実行しない。
+- OCRだけが実行中の分析をpreemptでき、分析からOCRはpreemptしない。
 - worker は terminal DB write before `XACK` を原則とする。
 
 ### 5.3 ジョブ記録
@@ -233,7 +231,7 @@ OCRジョブのタイムアウト初期値は `OCR_TIMEOUT_SECONDS` で管理す
 ## 9. ローカル開発
 
 - ローカル開発では Docker Compose でDB/Redisだけを起動する。
-- web/api/ocr-worker/analysis-workerは各言語のdevコマンドで起動する。
+- web/APIは各言語のdevコマンド、analysis / OCR workerはLinux専用imageで起動する。
 - ローカルの環境変数は `.env` で管理する。
 - 詳細な起動順序と検証コマンドは `docs/dev-rule.md` を正とする。
 
@@ -241,19 +239,18 @@ OCRジョブのタイムアウト初期値は `OCR_TIMEOUT_SECONDS` で管理す
 
 ## 10. 本番デプロイ
 
-### 10.1 Fly.io構成
+### 10.1 Runtime構成
 
-- web、API、現行OCRは同一Fly.ioアプリ、同一ドメインで運用する。
-- nginx がweb SPAの静的ファイル配信とAPI reverse proxyを担当する。
-- APIサーバーとOCRワーカーはnginxと同一VM内の別プロセスとして動かす。
-- 同一VM内の複数プロセス管理には supervisord を使う。
-- 戦績分析ワーカーは利用者向けHTTP入口を持たない独立runtimeで、実行枠を1に制限する。
-- 戦績分析ワーカーのprovider固有のapp名、region、台数、resource classはprivate運用要件を正本とする。
+- webとAPIは同一ドメインの公開HTTP runtimeで運用する。
+- nginxがweb SPAの静的ファイル配信とAPI reverse proxyを担当する。
+- Go製runtime toolがnginxとJVM APIの起動、監視、graceful shutdownを担当する。
+- OCRと戦績分析は利用者向けHTTP入口を持たない独立Rust runtimeで、DB上の実行枠を1に制限する。
+- provider固有のapp名、region、台数、resource classはprivate運用要件を正本とする。
 
 ### 10.2 Dockerイメージ
 
-- マルチステージDockerfileで web/api/ocr-worker/nginx をビルドする。
-- web/API/OCRは単一runtime imageにまとめ、戦績分析ワーカーはRustの独立runtime imageとしてビルドする。
+- マルチステージDockerfileでweb/API/nginx/Go runtime toolをビルドし、最終imageへPythonを含めない。
+- OCRと戦績分析はRustの独立runtime imageとしてビルドする。
 
 ### 10.3 デプロイフロー
 
@@ -279,11 +276,10 @@ OCRジョブのタイムアウト初期値は `OCR_TIMEOUT_SECONDS` で管理す
 |---|---|
 | web | OpenAPI型生成、format、lint、typecheck、Vitest、build |
 | api | format、lint、clean compile、unit / non-integration test、DB quality gate、Redis quality gate、OpenAPI生成チェック |
-| ocr-worker | format、lint、typecheck、pytest |
-| analysis-worker（移行時に追加） | format、lint、unit / integration test、release build |
+| analysis / OCR worker | format、lint、unit / integration test、release build |
 | runtime / E2E | Docker build、runtime smoke、container image scan、Playwright E2E smoke |
 
-Playwright E2E smoke はUX確定済みのログイン後主要フローに絞る。ローカル隔離gateではVite dev serverとE2E専用API / DB / Redisを使う。deploy workflowではweb/API/OCR runtime imageを実DB/Redis付きで起動し、ビルド済みwebへPlaywrightを当てる。分析worker追加時は別途worker runtime smokeを起動し、成果物を介したE2Eと結合する。runtime経路の開発用認証ヘッダはPlaywrightのbrowser route境界で注入し、本番bundleには埋め込まない。
+Playwright E2E smoke はUX確定済みのログイン後主要フローに絞る。ローカル隔離gateではVite dev serverとE2E専用API / DB / Redisを使う。deploy workflowではweb/API runtime imageを実DB/Redis付きで起動し、ビルド済みwebへPlaywrightを当てる。workerは別途runtime smokeを起動し、成果物を介したE2Eと結合する。runtime経路の開発用認証ヘッダはPlaywrightのbrowser route境界で注入し、本番bundleには埋め込まない。
 
 release対象は検証前に一度だけbuildし、後続gateとdeployで同じartifactを使う。候補のcommit、設定digest、artifact digest、registry digestを相互検証し、可変tagの再解決やdeploy直前の再buildを行わない。rollbackも成功済みdeployの同じ来歴を検証し、通常deployと同じ承認・排他境界で実行する。
 
@@ -293,8 +289,7 @@ release対象は検証前に一度だけbuildし、後続gateとdeployで同じa
 |---|---|
 | web | oxlint + oxfmt |
 | api | scalafmt + scalafix |
-| ocr-worker | ruff |
-| analysis-worker | rustfmt + Clippy |
+| analysis / OCR worker | rustfmt + Clippy |
 
 ### 11.3 テスト
 
@@ -303,8 +298,7 @@ release対象は検証前に一度だけbuildし、後続gateとdeployで同じa
 | web | Vitest + Testing Library |
 | api | MUnit |
 | api DB/Redis integration | Testcontainers + MUnit |
-| ocr-worker | pytest |
-| analysis-worker | Cargo test + PostgreSQL / Redis integration |
+| analysis / OCR worker | Cargo test + PostgreSQL / Redis / R2 / Linux process integration |
 
 ---
 

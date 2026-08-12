@@ -1,1 +1,0 @@
-"""Revenue OCR feature."""

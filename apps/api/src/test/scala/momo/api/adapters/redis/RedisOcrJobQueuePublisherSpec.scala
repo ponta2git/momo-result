@@ -29,11 +29,11 @@ final class RedisOcrJobQueuePublisherSpec extends MomoCatsEffectSuite:
   test("publishes OCR worker message fields to the configured Redis stream"):
     for
       client <- RecordingRedisStreamClient.create
-      producer = RedisOcrJobQueuePublisher[IO]("momo:ocr:jobs", client)
+      producer = RedisOcrJobQueuePublisher[IO]("momo:ocr:v2:jobs", client)
       request = requestFor("job-1")
       expectedMessage = OcrWorkerJobMessageV2.fromEnqueueRequest(request).fold(fail(_), identity)
       messageId <- producer.publish(request)
       published <- client.calls
     yield
       assertEquals(messageId, "1-0")
-      assertEquals(published, Vector(RedisXAddCall("momo:ocr:jobs", expectedMessage.fields)))
+      assertEquals(published, Vector(RedisXAddCall("momo:ocr:v2:jobs", expectedMessage.fields)))

@@ -30,13 +30,6 @@ apps/web/src/**/*.test.ts
 apps/web/src/**/*.test.tsx
 apps/web/src/test
 apps/web/test-results
-apps/ocr-worker/.coverage
-apps/ocr-worker/coverage.json
-apps/ocr-worker/coverage.xml
-apps/ocr-worker/htmlcov
-apps/ocr-worker/out
-apps/ocr-worker/scripts
-apps/ocr-worker/tests
 docs/ops
 docs/tmp
 ocr_samples

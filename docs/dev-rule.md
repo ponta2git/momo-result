@@ -21,8 +21,7 @@
 |---|---|
 | web | Node.js 24, pnpm 10.34.5 |
 | api | Java 25, sbt 1.12 系 |
-| ocr-worker | Python 3.14, uv |
-| analysis-worker | Rust 1.97, Cargo; local runtime は Docker/Linux |
+| analysis / OCR worker | Rust 1.97, Cargo, Tesseract; local runtime は Docker/Linux |
 | deploy / ops tools | Go 1.26; zero-install診断境界だけPOSIX shell |
 | integration | Docker / Testcontainers |
 | OCR runtime | Tesseract 5+ |
@@ -33,7 +32,7 @@
 
 - ローカル secret は `.env` に置き、コミットしない。
 - 必要なキー名は `.env.example` を参照する。
-- Scala API、Python worker、Rust analysis worker は root `.env` を自動読み込みしない。起動前に
+- Scala APIとRust analysis / OCR workerはroot `.env` を自動読み込みしない。起動前に
   shellへ読み込むか、必要な変数だけを専用の非追跡env fileへ置く。
 - root の `pnpm dev` は API 起動用に root `.env` を読み込む。
 - Web の `VITE_*` も、root `.env` を使う場合は同じ shell で読み込んでから起動する。
@@ -75,14 +74,7 @@ set -a; source .env; set +a
 cd apps/api && sbt run
 ```
 
-OCR worker:
-
-```sh
-set -a; source .env; set +a
-uv run --directory apps/ocr-worker momo-ocr worker
-```
-
-Analysis worker:
+Analysis / OCR worker:
 
 `pnpm dev` はanalysis workerを起動しない。workerのprocess isolation契約はLinux専用であり、macOSで
 `momo-analysis worker` を直接起動するとjob claim前にfail closedする。ローカルでは専用imageをbuildし、
@@ -218,22 +210,7 @@ sbt apiFullCheck
 
 `sbt test` は integration を除外する。CI report mode では `apiTestWithCoverageReportOnly` が通常テストの代わりに coverage artifact を生成し、`apiCoverageReportOnly` は単体実行向けに `clean` から始める。DB/Redis wire 動作は `apiDbQuality` / `apiRedisQuality` で明示的に実行する。
 
-### OCR Worker
-
-```sh
-cd apps/ocr-worker
-uv run ruff format --check .
-uv run ruff check .
-uv run mypy
-uv run pytest
-uv run pytest --cov
-uv run pytest --cov --cov-report=xml:coverage.xml --cov-report=json:coverage.json --cov-report=html:htmlcov --cov-fail-under=0
-uv run pytest -m integration
-```
-
-通常の `uv run pytest` は `integration` marker を除外する。Redis / PostgreSQL / native OCR / tessdata などの外部runtimeを検証したと言うには、`uv run pytest -m integration` が必要。
-
-### Analysis Worker
+### Analysis / OCR Worker
 
 ```sh
 cd apps/analysis-worker
@@ -296,11 +273,9 @@ sbt apiR2Quality
 | PostgreSQL repository / DB前提 | api gate + `sbt apiDbQuality` |
 | Redis Streams / OCR queue | api gate + `sbt apiRedisQuality` |
 | R2-backed image storage activation | api / DB gate + `sbt apiR2Quality` + object reconciler起動確認。uploadだけの部分切替は禁止 |
-| ocr-worker production code | `uv run ruff format --check .`, `uv run ruff check .`, `uv run mypy`, `uv run pytest` |
-| ocr-worker external runtime | ocr-worker production gate + `uv run pytest -m integration` |
-| analysis-worker production code | `cargo fmt --all -- --check`, `cargo clippy --locked --workspace --all-targets --all-features -- -D warnings`, `cargo test --locked --workspace --all-targets --all-features`, `cargo build --locked --workspace --release` |
+| analysis / OCR worker production code | `cargo fmt --all -- --check`, `cargo clippy --locked --workspace --all-targets --all-features -- -D warnings`, `cargo test --locked --workspace --all-targets --all-features`, `cargo build --locked --workspace --release` |
 | analysis-worker algorithm version | analysis-worker production gate + release DB smoke + control-plane smoke。ローカルDBは互換性dry-run後にrelease昇格 |
-| analysis-worker DB / Redis / process | analysis-worker production gate + release DB smoke + control-plane smoke + dedicated image smoke |
+| worker DB / Redis / process | worker production gate + release DB smoke + analysis control-plane smoke + OCR control-plane smoke + preemption smoke + dedicated image smoke |
 | Go deploy / ops tool | `cd tools && go test ./... && go vet ./...`; zero-install shell collectorを含む場合は対応する`test-*.sh` |
 | Docker/Fly/runtime config | `pnpm public:safety:check`, `docker build`, `scripts/ci/runtime-smoke.sh`, container image scan、必要なら `pnpm web:e2e:runtime` |
 | coverage対象ロジック | 各領域の coverage gate |
@@ -318,8 +293,7 @@ sbt apiR2Quality
 | `.github/workflows/public-safety.yml` | public repository safety check |
 | `.github/workflows/web.yml` | format、API型生成を含むlint、typecheck、Vitestまたはcoverage付きVitest、build |
 | `.github/workflows/api.yml` | format、lint、clean compile、OpenAPI check、testまたはcoverage付きtest、DB/Redis quality |
-| `.github/workflows/ocr-worker.yml` | ruff format/check、mypy、pytestまたはcoverage付きpytest、integration test |
-| `.github/workflows/analysis-worker.yml` | Cargo format / Clippy / test / release build、DB / Redis control-plane smoke、専用image build / scan / hard-limit smoke |
+| `.github/workflows/analysis-worker.yml` | Cargo format / Clippy / test / release build、analysis / OCRのDB / Redis control-plane smoke、専用image build / scan / hard-limit smoke |
 | `.github/workflows/analysis-candidate.yml` | analysis変更時の検証済み候補image作成 |
 | `.github/workflows/analysis-production.yml` | 選択したanalysis候補の来歴検証と再buildなしの昇格 |
 | `.github/workflows/deploy.yml` | runtime config check、隔離CI DBへのmomo-db migration適用、本番DBのread-only preflight、image build / scan / package、runtime / Playwright smoke、digest指定deploy、deploy後検証 |

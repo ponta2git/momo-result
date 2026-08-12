@@ -10,7 +10,6 @@ run_checker() {
     WORKFLOW_LINT_RESULT="${WORKFLOW_LINT_RESULT:-success}" \
     API_EXPECTED="${API_EXPECTED:-false}" API_RESULT="${API_RESULT:-skipped}" \
     WEB_EXPECTED="${WEB_EXPECTED:-false}" WEB_RESULT="${WEB_RESULT:-skipped}" \
-    OCR_EXPECTED="${OCR_EXPECTED:-false}" OCR_RESULT="${OCR_RESULT:-skipped}" \
     ANALYSIS_EXPECTED="${ANALYSIS_EXPECTED:-false}" ANALYSIS_RESULT="${ANALYSIS_RESULT:-skipped}" \
     RUNTIME_EXPECTED="${RUNTIME_EXPECTED:-false}" RUNTIME_RESULT="${RUNTIME_RESULT:-skipped}" \
     "${checker}"

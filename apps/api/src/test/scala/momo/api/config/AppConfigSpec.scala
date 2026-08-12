@@ -392,25 +392,12 @@ class AppConfigSpec extends CatsEffectSuite:
       assertEquals(result.map(_.resourceLimits.ocrOutboxOldestDueMaxDelay.toSeconds), Right(900L))
       assertEquals(result.map(_.resourceLimits.ocrDeadLetterBacklogLimit), Right(12))
       assertEquals(
-        result.flatMap(_.redis.map(_.deadLetterStream).toRight(new RuntimeException())),
-        Right("momo:ocr:jobs:dead"),
-      )
-      assertEquals(
         result.flatMap(_.redis.map(_.v2Stream).toRight(new RuntimeException())),
         Right("momo:ocr:v2:jobs"),
       )
       assertEquals(
         result.flatMap(_.redis.map(_.v2DeadLetterStream).toRight(new RuntimeException())),
         Right("momo:ocr:v2:jobs:dead"),
-      )
-    }
-  }
-
-  test("loadFromEnv reads OCR dead-letter stream name") {
-    load(prodEnv + ("OCR_REDIS_DEAD_LETTER_STREAM" -> "momo:ocr:jobs:dead:test")).map { result =>
-      assertEquals(
-        result.flatMap(_.redis.map(_.deadLetterStream).toRight(new RuntimeException())),
-        Right("momo:ocr:jobs:dead:test"),
       )
     }
   }
@@ -436,20 +423,10 @@ class AppConfigSpec extends CatsEffectSuite:
   test("loadFromEnv ignores blank OCR Redis stream overrides") {
     load(
       prodEnv ++ Map(
-        "OCR_REDIS_STREAM" -> " ",
-        "OCR_REDIS_DEAD_LETTER_STREAM" -> "  ",
         "OCR_REDIS_V2_STREAM" -> " ",
         "OCR_REDIS_V2_DEAD_LETTER_STREAM" -> "  ",
       )
     ).map { result =>
-      assertEquals(
-        result.flatMap(_.redis.map(_.stream).toRight(new RuntimeException())),
-        Right("momo:ocr:jobs"),
-      )
-      assertEquals(
-        result.flatMap(_.redis.map(_.deadLetterStream).toRight(new RuntimeException())),
-        Right("momo:ocr:jobs:dead"),
-      )
       assertEquals(
         result.flatMap(_.redis.map(_.v2Stream).toRight(new RuntimeException())),
         Right("momo:ocr:v2:jobs"),

@@ -49,7 +49,8 @@ private[config] object SourceImageStorageConfigLoader:
   private def mode[F[_]: Async](env: Map[String, String], appEnv: AppEnv): F[String] =
     env.get(ModeEnv).map(_.trim.toLowerCase).filter(_.nonEmpty) match
       case Some(value) => Async[F].pure(value)
-      case None if appEnv == AppEnv.Prod => Async[F].raiseError(
+      case None if appEnv == AppEnv.Prod =>
+        Async[F].raiseError(
           new IllegalArgumentException(s"$ModeEnv must be explicitly set in prod APP_ENV.")
         )
       case None => Async[F].pure("local")

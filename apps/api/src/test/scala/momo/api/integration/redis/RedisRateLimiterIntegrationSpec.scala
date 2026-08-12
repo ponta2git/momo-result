@@ -18,7 +18,7 @@ final class RedisRateLimiterIntegrationSpec extends RedisIntegrationSuite:
 
   test("RedisRateLimiter shares counters across limiter instances"):
     redisUrlResource.use { redisUrl =>
-      val config = RedisConfig(redisUrl, "unused-stream")
+      val config = RedisConfig(redisUrl)
       val namespace = s"login-test-${UUID.randomUUID().toString}"
       val now = IO.pure(Instant.parse("2026-05-14T00:00:00Z"))
 
@@ -38,7 +38,7 @@ final class RedisRateLimiterIntegrationSpec extends RedisIntegrationSuite:
 
   test("RedisRateLimiter sets an expiry on the minute counter"):
     redisUrlResource.use { redisUrl =>
-      val config = RedisConfig(redisUrl, "unused-stream")
+      val config = RedisConfig(redisUrl)
       val namespace = s"login-ttl-test-${UUID.randomUUID().toString}"
       val current = Instant.parse("2026-05-14T00:00:00Z")
       val now = IO.pure(current)
@@ -58,7 +58,7 @@ final class RedisRateLimiterIntegrationSpec extends RedisIntegrationSuite:
 
   test("RedisOAuthProviderBackoff shares provider degraded state across instances"):
     redisUrlResource.use { redisUrl =>
-      val config = RedisConfig(redisUrl, "unused-stream")
+      val config = RedisConfig(redisUrl)
       val namespace = s"oauth-provider-test-${UUID.randomUUID().toString}"
       val now = IO.pure(Instant.parse("2026-05-14T00:00:00Z"))
 

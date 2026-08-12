@@ -31,18 +31,18 @@
 
 | 層 | 捕まえるもの | Gate |
 |---|---|---|
-| domain / pure logic | 不変条件、分岐、validation、parser、ViewModel | `sbt test`, `uv run pytest`, `cargo test`, Vitest |
-| usecase / app service | 状態遷移、副作用境界、repository contract | `sbt test`, `uv run pytest`, `cargo test` |
+| domain / pure logic | 不変条件、分岐、validation、parser、ViewModel | `sbt test`, `cargo test`, Vitest |
+| usecase / app service | 状態遷移、副作用境界、repository contract | `sbt test`, `cargo test` |
 | HTTP/API | request parsing、auth/CSRF、response encoding、error mapping | `sbt test` |
 | web component/page | UI状態、入力操作、APIエラー表示、query cache lifecycle | `pnpm test:run` |
 | PostgreSQL repository | SQL syntax、transaction、PostgreSQL固有挙動 | `sbt apiDbQuality` |
 | DB contract | table / column / seed / nullable / default | `sbt apiDbQuality` |
 | Redis integration | Redis Streams wire 動作、ack/claim/retry | `sbt apiRedisQuality`, worker integration |
-| OCR worker | 画面種別判定、解析、payload validation、失敗処理 | `uv run pytest` |
-| analysis worker | 数値正確性、job状態、timeout、成果物の原子的公開 | `cargo test`, worker integration |
+| analysis / OCR worker | 数値正確性、OCR解析、payload validation、job状態、timeout、原子的公開 | `cargo test`, worker integration |
 | Runtime / E2E smoke | nginx / API / DB / Redis / worker / browser 結合、ログイン後主要UX | deploy workflow, Playwright |
 
-通常の `sbt test` と `uv run pytest` は外部 integration を除外する。DB/Redis/native OCR などの wire 動作を検証したと言うには、対応する integration gate の成功が必要。
+通常の `sbt test` と `cargo test` だけでは外部wireを保証しない。DB/Redis/R2/native OCRなどの動作を
+検証したと言うには、対応するintegration gateの成功が必要。
 
 ## 3. Web Rules
 
@@ -201,7 +201,6 @@ PostgreSQL repository、Doobie query、DB table/column、migration 前提に触�
 - coverage 閾値は各設定ファイルを正とする。
   - web: `apps/web/vite.config.ts`
   - api: `apps/api/build.sbt`
-  - ocr-worker: `apps/ocr-worker/pyproject.toml`
   - analysis-worker: 現時点ではcoverage率をrelease判定へ使わない。`cargo test` のfixture / property / state-machine
     oracleと、実PostgreSQL・Redis・Linux process smokeを正本とする。coverageを導入する場合は
     `apps/analysis-worker` のCI設定と同時にこの記述を更新する。
@@ -215,8 +214,7 @@ PostgreSQL repository、Doobie query、DB table/column、migration 前提に触�
 - Redis-backed spec は `Integration` と `RedisIntegration` tag を付け、`apiRedisQuality` で実行する。
 - API integration tag は `apps/api/src/test/scala/momo/api/testing/TestTags.scala` を正本とし、spec 内で直接 `new munit.Tag(...)` しない。
 - PostgreSQL-backed spec は `IntegrationSuite`、Redis-backed spec は `RedisIntegrationSuite` へ寄せる。
-- OCR worker integration は pytest の `integration` marker を付ける。複数 adapter smoke は必要最小限にし、状態遷移・payload validation・parser分岐は unit/contract test に寄せる。
-- analysis workerのPostgreSQL / Redis integrationは通常の `cargo test` と分離し、CI上で実サービスを
+- analysis / OCR workerのPostgreSQL / Redis integrationは通常の `cargo test` と分離し、CI上で実サービスを
   起動する `analysis-worker-control-plane-smoke.sh` を明示gateとして持つ。
 - Rust OCR consumerのPostgreSQL / Redis integrationは通常の `cargo test` と分離し、隔離した実サービスへ
   `ocr-rust-control-plane-smoke.sh` を明示gateとして実行する。DB terminal writeより先にRedis配送をACKしないこと、

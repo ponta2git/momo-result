@@ -1,1 +1,0 @@
-"""Total assets OCR feature."""

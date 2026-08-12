@@ -32,9 +32,11 @@ final class ObjectBackedImageMaintenance[F[_]: Async: LoggerFactory](
 
   override def deleteOrphans(referenced: Set[ImageId], olderThan: Instant): F[Int] =
     val _ = (referenced, olderThan)
-    reconciler.runOnce.flatTap(stats => logger.info(
-      s"source_image_object_reconciliation recovered=${stats.recovered.toString} " +
-        s"markedFailed=${stats.markedFailed.toString} deleted=${stats.deleted.toString} " +
-        s"purgedFailed=${stats.purgedFailed.toString} deferred=${stats.deferred.toString} " +
-        s"skipped=${stats.skipped.toString}"
-    )).map(_.deleted)
+    reconciler.runOnce.flatTap(stats =>
+      logger.info(
+        s"source_image_object_reconciliation recovered=${stats.recovered.toString} " +
+          s"markedFailed=${stats.markedFailed.toString} deleted=${stats.deleted.toString} " +
+          s"purgedFailed=${stats.purgedFailed.toString} deferred=${stats.deferred.toString} " +
+          s"skipped=${stats.skipped.toString}"
+      )
+    ).map(_.deleted)

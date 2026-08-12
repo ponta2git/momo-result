@@ -38,9 +38,9 @@ jobs:
               echo "Manual runtime releases must run from master." >&2
               exit 1
             }
-            result=$'api=false\nweb=false\nocr=false\nanalysis=false\nruntime=true'
+            result=$'api=false\nweb=false\nanalysis=false\nruntime=true'
           elif [[ "${BASE_SHA}" =~ ^0+$ ]]; then
-            result=$'api=true\nweb=true\nocr=true\nanalysis=true\nruntime=true'
+            result=$'api=true\nweb=true\nanalysis=true\nruntime=true'
           else
             git cat-file -e "${BASE_SHA}^{commit}"
             git cat-file -e "${HEAD_SHA}^{commit}"

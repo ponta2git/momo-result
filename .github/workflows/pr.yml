@@ -18,7 +18,6 @@ jobs:
     outputs:
       api: ${{ steps.changes.outputs.api }}
       web: ${{ steps.changes.outputs.web }}
-      ocr: ${{ steps.changes.outputs.ocr }}
       analysis: ${{ steps.changes.outputs.analysis }}
       runtime: ${{ steps.changes.outputs.runtime }}
     steps:
@@ -57,12 +56,6 @@ jobs:
     if: needs.classify.outputs.web == 'true'
     uses: ./.github/workflows/web.yml
 
-  ocr:
-    name: OCR worker
-    needs: classify
-    if: needs.classify.outputs.ocr == 'true'
-    uses: ./.github/workflows/ocr-worker.yml
-
   analysis:
     name: Analysis worker
     needs: classify
@@ -84,7 +77,6 @@ jobs:
       - workflow-lint
       - api
       - web
-      - ocr
       - analysis
       - runtime
     runs-on: ubuntu-latest
@@ -102,8 +94,6 @@ jobs:
           API_RESULT: ${{ needs.api.result }}
           WEB_EXPECTED: ${{ needs.classify.outputs.web }}
           WEB_RESULT: ${{ needs.web.result }}
-          OCR_EXPECTED: ${{ needs.classify.outputs.ocr }}
-          OCR_RESULT: ${{ needs.ocr.result }}
           ANALYSIS_EXPECTED: ${{ needs.classify.outputs.analysis }}
           ANALYSIS_RESULT: ${{ needs.analysis.result }}
           RUNTIME_EXPECTED: ${{ needs.classify.outputs.runtime }}

@@ -43,4 +43,4 @@ kill_timeout = 90
 [[vm]]
   cpu_kind = "shared"
   cpus = 2
-  memory = "1gb"
+  memory = "768mb"

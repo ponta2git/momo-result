@@ -67,8 +67,8 @@ while IFS= read -r -d '' path; do
     scripts/ci/analysis-*)
       analysis=true
       ;;
-    scripts/ci/runtime-* | scripts/ci/test-runtime-evidence-scripts.py | \
-      scripts/ci/start-runtime-container.sh | \
+    scripts/ci/runtime-* | scripts/ci/start-runtime-container.sh | \
+      scripts/ci/summarize-runtime-logs.sh | \
       scripts/ci/load-runtime-image-artifact.sh | scripts/ci/validate-runtime-image.sh | \
       scripts/ci/check-runtime-config.sh | scripts/ci/dockerfile-lint.sh)
       runtime=true

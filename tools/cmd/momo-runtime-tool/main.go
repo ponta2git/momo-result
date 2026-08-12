@@ -17,6 +17,12 @@ func runCLI(ctx context.Context, args []string, stdout io.Writer, stderr io.Writ
 	}
 
 	switch args[0] {
+	case "serve":
+		if len(args) != 1 {
+			writeResult(stderr, failureResult(serveEvent, "InvalidArguments"))
+			return 2
+		}
+		return runServe(ctx, stdout, stderr)
 	case "preflight":
 		if len(args) != 1 {
 			writeResult(stderr, failureResult(preflightEvent, "InvalidArguments"))
@@ -55,6 +61,14 @@ func runCLI(ctx context.Context, args []string, stdout io.Writer, stderr io.Writ
 			writeResult(stderr, failureResult("runtime_smoke", "InvalidArguments"))
 			return 2
 		}
+	case "validate-postdeploy-evidence":
+		return runValidatePostdeployEvidence(args[1:], stdout, stderr)
+	case "summarize-logs":
+		if len(args) != 1 {
+			writeResult(stderr, failureResult(logSummaryEvent, "InvalidArguments"))
+			return 2
+		}
+		return runSummarizeLogs(os.Stdin, stdout, stderr)
 	default:
 		writeResult(stderr, failureResult("runtime_tool", "InvalidArguments"))
 		return 2

@@ -2,15 +2,14 @@ package main
 
 import "sort"
 
-var legacyRuntimeProcessMarkers = map[string][]string{
-	"api":       {"/opt/java/openjdk/bin/java", "/opt/momo-result/api/lib/", "momo.api.Main"},
-	"nginx":     {"/usr/sbin/nginx"},
-	"ocrWorker": {"/opt/momo-result/ocr-worker/.venv/bin/momo-ocr", "worker"},
+var runtimeProcessMarkers = map[string][]string{
+	"api":   {"/opt/java/openjdk/bin/java", "/opt/momo-result/api/lib/", "momo.api.Main"},
+	"nginx": {"/usr/sbin/nginx"},
 }
 
 func missingRuntimeProcesses(commandLines []string) []string {
 	missing := make([]string, 0)
-	for name, markers := range legacyRuntimeProcessMarkers {
+	for name, markers := range runtimeProcessMarkers {
 		found := false
 		for _, commandLine := range commandLines {
 			if containsAll(commandLine, markers) {

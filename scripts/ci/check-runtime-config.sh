@@ -74,36 +74,18 @@ if APP_ENV=prod \
   exit 1
 fi
 
-python3 -m py_compile \
-  "${repo_root}/scripts/ci/runtime-postdeploy-contract.py" \
-  "${repo_root}/scripts/ci/summarize-runtime-logs.py"
-
 fly_kill_timeout="$(sed -n 's/^kill_timeout = \([0-9][0-9]*\)$/\1/p' "${repo_root}/fly.toml")"
-ocr_timeout="$(sed -n 's/^  OCR_TIMEOUT_SECONDS = "\([0-9][0-9]*\)"$/\1/p' "${repo_root}/fly.toml")"
-redis_block_timeout="$(sed -n 's/^  OCR_REDIS_BLOCK_SECONDS = "\([0-9][0-9]*\)"$/\1/p' "${repo_root}/fly.toml")"
-worker_stop_timeout="$(awk '
-  /^\[program:ocr-worker\]$/ { in_worker = 1; next }
-  /^\[/ { in_worker = 0 }
-  in_worker && /^stopwaitsecs=/ { sub(/^stopwaitsecs=/, ""); print }
-' "${repo_root}/deploy/supervisord.conf")"
+runtime_stop_timeout="$(sed -n 's/^ENV MOMO_RUNTIME_STOP_GRACE_SECONDS=\([0-9][0-9]*\)$/\1/p' "${repo_root}/Dockerfile")"
 
-for value in "${fly_kill_timeout}" "${ocr_timeout}" "${redis_block_timeout}" "${worker_stop_timeout}"; do
+for value in "${fly_kill_timeout}" "${runtime_stop_timeout}"; do
   [[ "${value}" =~ ^[1-9][0-9]*$ ]] || {
     echo "Runtime shutdown timeouts must be explicit positive integers." >&2
     exit 1
   }
 done
 
-if (( worker_stop_timeout < ocr_timeout + 15 )); then
-  echo "OCR supervisor stop timeout lacks an in-flight job drain margin." >&2
-  exit 1
-fi
-if (( worker_stop_timeout < redis_block_timeout + 15 )); then
-  echo "OCR supervisor stop timeout lacks an idle Redis read drain margin." >&2
-  exit 1
-fi
-if (( fly_kill_timeout < worker_stop_timeout + 10 )); then
-  echo "Fly kill timeout lacks a supervisor shutdown margin." >&2
+if (( fly_kill_timeout < runtime_stop_timeout + 10 )); then
+  echo "Fly kill timeout lacks a Go supervisor shutdown margin." >&2
   exit 1
 fi
 
@@ -114,3 +96,17 @@ grep -Fq '/out/momo-runtime-tool /opt/momo-result/bin/momo-runtime-tool' \
   "${repo_root}/Dockerfile"
 grep -Fq 'contracts/runtime-db-contract.json /opt/momo-result/contracts/runtime-db-contract.json' \
   "${repo_root}/Dockerfile"
+grep -Fq 'CMD ["/opt/momo-result/bin/momo-runtime-tool", "serve"]' \
+  "${repo_root}/Dockerfile"
+grep -Fq 'ARG DEBIAN_RUNTIME_IMAGE=debian:bookworm-slim@sha256:' \
+  "${repo_root}/Dockerfile"
+
+if grep -Eiq 'python|supervisor|tesseract|momo-ocr|apps/ocr-worker' "${repo_root}/Dockerfile"; then
+  echo "The main runtime Dockerfile must be Python, supervisor, and OCR-worker free." >&2
+  exit 1
+fi
+
+if [[ -e "${repo_root}/deploy/start-runtime.sh" || -e "${repo_root}/deploy/supervisord.conf" ]]; then
+  echo "Legacy shell/supervisord entrypoints must be absent." >&2
+  exit 1
+fi

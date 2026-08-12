@@ -80,19 +80,17 @@
         "name": "all-runtime-processes",
         "commandLines": [
           "/opt/java/openjdk/bin/java -cp /opt/momo-result/api/lib/app.jar momo.api.Main",
-          "/usr/sbin/nginx -c /tmp/nginx.conf",
-          "/opt/momo-result/ocr-worker/.venv/bin/python /opt/momo-result/ocr-worker/.venv/bin/momo-ocr worker"
+          "/usr/sbin/nginx -c /tmp/nginx.conf"
         ],
         "expectedMissing": []
       },
       {
-        "name": "missing-ocr-worker",
+        "name": "missing-nginx",
         "commandLines": [
-          "/opt/java/openjdk/bin/java -cp /opt/momo-result/api/lib/app.jar momo.api.Main",
-          "/usr/sbin/nginx -c /tmp/nginx.conf"
+          "/opt/java/openjdk/bin/java -cp /opt/momo-result/api/lib/app.jar momo.api.Main"
         ],
         "expectedMissing": [
-          "ocrWorker"
+          "nginx"
         ]
       }
     ],

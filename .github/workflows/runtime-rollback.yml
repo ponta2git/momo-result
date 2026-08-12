@@ -114,6 +114,17 @@ jobs:
 
           target_config="${RUNNER_TEMP}/rollback-fly.toml"
           git show "${CANDIDATE_SHA}:fly.toml" > "${target_config}"
+          target_dockerfile="${RUNNER_TEMP}/rollback-Dockerfile"
+          git show "${CANDIDATE_SHA}:Dockerfile" > "${target_dockerfile}"
+          grep -Fq 'ARG DEBIAN_RUNTIME_IMAGE=debian:bookworm-slim@sha256:' \
+            "${target_dockerfile}"
+          grep -Fq 'CMD ["/opt/momo-result/bin/momo-runtime-tool", "serve"]' \
+            "${target_dockerfile}"
+          if grep -Eiq 'python|supervisor|tesseract|momo-ocr|apps/ocr-worker' \
+            "${target_dockerfile}"; then
+            echo "Rollback targets must use the mature Python-free runtime." >&2
+            exit 1
+          fi
           actual_config_sha="$(sha256sum "${target_config}" | cut -d ' ' -f 1)"
           expected_config_sha="$(jq -r '.configSha256' "${metadata}")"
           [[ "${actual_config_sha}" == "${expected_config_sha}" ]] || {
@@ -253,9 +264,9 @@ jobs:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: |
           flyctl ssh console --app momo-result --pty=false --quiet \
-            --command "if [ -x /opt/momo-result/bin/momo-runtime-tool ]; then env MOMO_POSTDEPLOY_PUBLIC_EDGE=deferred /opt/momo-result/bin/momo-runtime-tool smoke local; else env MOMO_POSTDEPLOY_PUBLIC_EDGE=deferred /opt/momo-result/bin/postdeploy-smoke; fi" \
+            --command "env MOMO_POSTDEPLOY_PUBLIC_EDGE=deferred /opt/momo-result/bin/momo-runtime-tool smoke local" \
             > runtime-rollback-evidence/postdeploy-smoke.json
-          scripts/ci/runtime-postdeploy-contract.py \
+          go run ./tools/cmd/momo-runtime-tool validate-postdeploy-evidence \
             runtime-rollback-evidence/postdeploy-smoke.json \
             > /dev/null
         timeout-minutes: 2

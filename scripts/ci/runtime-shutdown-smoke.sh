@@ -22,13 +22,14 @@ exit_code="$(docker inspect "${container_name}" --format '{{.State.ExitCode}}')"
 docker logs "${container_name}" > "${log_file}" 2>&1
 jq -Rr 'fromjson? | .message // empty' "${log_file}" > "${message_file}"
 
-grep -Fxq 'OCR worker loop exiting' "${message_file}" || {
-  echo "OCR worker did not record a graceful loop drain." >&2
-  exit 1
-}
 grep -Fxq 'momo_result_api_stopping' "${message_file}" || {
   echo "API did not record a graceful shutdown." >&2
   exit 1
 }
+if jq -Re 'fromjson? | select(.event == "runtime_serve" and .status == "failed")' \
+  "${log_file}" >/dev/null; then
+  echo "Go runtime supervisor reported a failed shutdown." >&2
+  exit 1
+fi
 
 echo "Runtime processes drained cleanly after SIGTERM."

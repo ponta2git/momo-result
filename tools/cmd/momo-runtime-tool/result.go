@@ -16,6 +16,7 @@ type commandResult struct {
 	ContractChecks   int            `json:"contractChecks,omitempty"`
 	MissingCounts    map[string]int `json:"missingCounts,omitempty"`
 	MissingProcesses []string       `json:"missingProcesses,omitempty"`
+	Component        string         `json:"component,omitempty"`
 }
 
 func writeResult(destination io.Writer, result commandResult) {

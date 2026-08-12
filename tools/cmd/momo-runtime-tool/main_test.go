@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 type characterizationFixture struct {
@@ -194,6 +195,98 @@ func TestInvalidArgumentsReturnOneJSONResult(t *testing.T) {
 	}
 	if result.Status != "failed" || result.ErrorClass != "InvalidArguments" {
 		t.Fatalf("result = %#v", result)
+	}
+}
+
+func TestPostdeployEvidenceValidationSupportsCurrentAndLegacyEvidence(t *testing.T) {
+	t.Parallel()
+	legacy := map[string]any{
+		"event":  localSmokeEvent,
+		"status": "ok",
+		"checks": []any{"database", "http", "processes", "redis", "web"},
+	}
+	current := map[string]any{
+		"event":         localSmokeEvent,
+		"schemaVersion": float64(1),
+		"status":        "ok",
+		"checks":        []any{"database", "http", "processes", "publicEdge", "redis", "web"},
+	}
+	if errorKind := validatePostdeployEvidence(legacy, nil); errorKind != "" {
+		t.Fatalf("legacy evidence failed: %s", errorKind)
+	}
+	if errorKind := validatePostdeployEvidence(current, []string{"publicEdge"}); errorKind != "" {
+		t.Fatalf("current evidence failed: %s", errorKind)
+	}
+	duplicate := map[string]any{
+		"event":  localSmokeEvent,
+		"status": "ok",
+		"checks": []any{"database", "database"},
+	}
+	if errorKind := validatePostdeployEvidence(duplicate, nil); errorKind != "DuplicateChecks" {
+		t.Fatalf("duplicate error = %q", errorKind)
+	}
+	current["schemaVersion"] = float64(2)
+	if errorKind := validatePostdeployEvidence(current, nil); errorKind != "UnsupportedSchemaVersion" {
+		t.Fatalf("schema error = %q", errorKind)
+	}
+}
+
+func TestPostdeployEvidenceCLIProducesSafeResult(t *testing.T) {
+	t.Parallel()
+	path := filepath.Join(t.TempDir(), "evidence.json")
+	payload := `{"event":"runtime_postdeploy_smoke","schemaVersion":1,"status":"ok","checks":["database","http","processes","publicEdge","redis","web"]}`
+	if err := os.WriteFile(path, []byte(payload), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	exitCode := runValidatePostdeployEvidence(
+		[]string{path, "--require-check", "publicEdge"}, &stdout, &stderr,
+	)
+	if exitCode != 0 || stderr.Len() != 0 {
+		t.Fatalf("exit=%d stderr=%s", exitCode, stderr.String())
+	}
+	var result evidenceValidationResult
+	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if result.Status != "ok" || result.SchemaVersion != 1 {
+		t.Fatalf("result = %#v", result)
+	}
+}
+
+func TestLogSummaryDropsMessagesAndUnstructuredContent(t *testing.T) {
+	t.Parallel()
+	sensitive := "sensitive-value-that-must-not-appear"
+	input := strings.Join([]string{
+		`{"app":"momo-result-api","level":"ERROR","message":"` + sensitive + `","exception_classes":["RuntimeException"]}`,
+		"unstructured " + sensitive,
+	}, "\n")
+	summary, err := summarizeLogs(strings.NewReader(input))
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := json.Marshal(summary)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(encoded), sensitive) {
+		t.Fatal("sensitive log content leaked into summary")
+	}
+	if summary.UnstructuredLineCount != 1 || summary.ExceptionClasses["RuntimeException"] != 1 {
+		t.Fatalf("summary = %#v", summary)
+	}
+}
+
+func TestRuntimeStopGraceIsBounded(t *testing.T) {
+	t.Setenv(stopGraceEnvironmentName, "45")
+	grace, err := runtimeStopGrace()
+	if err != nil || grace != 45*time.Second {
+		t.Fatalf("grace=%s err=%v", grace, err)
+	}
+	t.Setenv(stopGraceEnvironmentName, "91")
+	if _, err := runtimeStopGrace(); err == nil {
+		t.Fatal("unsafe stop grace accepted")
 	}
 }
 

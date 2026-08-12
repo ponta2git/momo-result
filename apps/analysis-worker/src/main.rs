@@ -278,6 +278,8 @@ struct OcrLocalEnduranceArgs {
     expected_runtime_memory_limit_bytes: u64,
     #[arg(long, default_value_t = 30_000)]
     ocr_timeout_ms: u64,
+    #[arg(long, default_value_t = 600_000)]
+    maximum_endurance_ms: u64,
     #[arg(long, default_value_t = 1_000)]
     stop_grace_ms: u64,
     #[arg(long, default_value_t = 7_500)]
@@ -604,6 +606,7 @@ async fn run_ocr_local_endurance(arguments: OcrLocalEnduranceArgs) -> Result<(),
         child_memory_limit_bytes: arguments.child_memory_limit_bytes,
         expected_runtime_memory_limit_bytes: arguments.expected_runtime_memory_limit_bytes,
         ocr_timeout: Duration::from_millis(arguments.ocr_timeout_ms),
+        maximum_endurance: Duration::from_millis(arguments.maximum_endurance_ms),
         stop_grace: Duration::from_millis(arguments.stop_grace_ms),
         thresholds: LocalOcrEnduranceThresholds {
             maximum_child_peak_basis_points: arguments.maximum_child_peak_basis_points,
@@ -816,5 +819,24 @@ mod tests {
         assert!(Cli::try_parse_from(["momo-analysis", "bootstrap", "--", "worker"]).is_ok());
         assert!(Cli::try_parse_from(["momo-analysis", "bootstrap", "worker"]).is_err());
         assert!(Cli::try_parse_from(["momo-analysis", "bootstrap", "--"]).is_err());
+    }
+
+    #[test]
+    fn local_endurance_accepts_an_explicit_wall_time_budget() {
+        let parsed = Cli::try_parse_from([
+            "momo-analysis",
+            "ocr-local-endurance",
+            "--manifest",
+            "/var/lib/momo-analysis/preflight/manifest.json",
+            "--maximum-endurance-ms",
+            "1234",
+        ]);
+        let maximum_endurance_ms = match parsed {
+            Ok(Cli {
+                command: Command::OcrLocalEndurance(arguments),
+            }) => Some(arguments.maximum_endurance_ms),
+            _ => None,
+        };
+        assert_eq!(maximum_endurance_ms, Some(1_234));
     }
 }

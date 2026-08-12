@@ -18,12 +18,17 @@ use super::{
 use image::ImageReader;
 #[cfg(target_os = "linux")]
 use std::io::Cursor;
+#[cfg(target_os = "linux")]
+use tokio::time;
+#[cfg(target_os = "linux")]
+use tracing::info;
 
 #[cfg(target_os = "linux")]
 const MAXIMUM_LOCAL_IMAGE_BYTES: u64 = 3 * 1024 * 1024;
 const MAXIMUM_MANIFEST_BYTES: u64 = 64 * 1024;
 const MAXIMUM_IMAGES: usize = 24;
 const MAXIMUM_RUNS: u32 = 1_000;
+const MAXIMUM_ENDURANCE_DURATION: Duration = Duration::from_hours(1);
 const PREFLIGHT_ROOT: &str = "/var/lib/momo-analysis/preflight";
 
 pub struct LocalOcrEnduranceRequest {
@@ -32,6 +37,7 @@ pub struct LocalOcrEnduranceRequest {
     pub child_memory_limit_bytes: u64,
     pub expected_runtime_memory_limit_bytes: u64,
     pub ocr_timeout: Duration,
+    pub maximum_endurance: Duration,
     pub stop_grace: Duration,
     pub thresholds: LocalOcrEnduranceThresholds,
     pub require_full_hd: bool,
@@ -58,6 +64,8 @@ pub struct LocalOcrEnduranceReport {
     runs_requested: u32,
     runs_completed: u32,
     successful_runs: u32,
+    maximum_endurance_milliseconds: u64,
+    elapsed_milliseconds: u64,
     images_configured: usize,
     image_runs: BTreeMap<String, u32>,
     screen_type_runs: BTreeMap<String, u32>,
@@ -90,6 +98,7 @@ struct LocalFailureCounts {
     child: u32,
     domain: u32,
     screen_type_mismatch: u32,
+    endurance_timeout: u32,
     categories: BTreeMap<String, u32>,
 }
 
@@ -100,6 +109,7 @@ impl LocalFailureCounts {
             .saturating_add(self.child)
             .saturating_add(self.domain)
             .saturating_add(self.screen_type_mismatch)
+            .saturating_add(self.endurance_timeout)
     }
 
     #[cfg(target_os = "linux")]
@@ -161,6 +171,8 @@ fn validate_request(request: &LocalOcrEnduranceRequest) -> Result<(), OcrEnduran
         || request.child_memory_limit_bytes == 0
         || request.expected_runtime_memory_limit_bytes == 0
         || request.ocr_timeout.is_zero()
+        || request.maximum_endurance.is_zero()
+        || request.maximum_endurance > MAXIMUM_ENDURANCE_DURATION
         || request.stop_grace.is_zero()
         || !(1..10_000).contains(&thresholds.maximum_child_peak_basis_points)
         || !(1..10_000).contains(&thresholds.maximum_runtime_peak_basis_points)
@@ -268,12 +280,44 @@ async fn run_linux(
     let mut total_durations = Vec::with_capacity(run_capacity);
     let mut first_run = None;
     let mut successful_runs = 0_u32;
+    let mut runs_completed = 0_u32;
     let mut failures = LocalFailureCounts::default();
     let mut image_runs = BTreeMap::<String, u32>::new();
     let mut screen_type_runs = BTreeMap::<String, u32>::new();
     let mut dimension_class_runs = BTreeMap::<String, u32>::new();
+    let endurance_started = Instant::now();
+    let maximum_endurance_milliseconds = duration_milliseconds(request.maximum_endurance);
+    let effective_ocr_timeout = request.ocr_timeout.min(Duration::from_millis(
+        request.thresholds.maximum_ocr_milliseconds,
+    ));
+    info!(
+        event = "ocr_local_endurance_started",
+        runs_requested = request.runs,
+        images_configured = images.len(),
+        maximum_endurance_milliseconds,
+        ocr_timeout_milliseconds = duration_milliseconds(request.ocr_timeout),
+        effective_ocr_timeout_milliseconds = duration_milliseconds(effective_ocr_timeout),
+        "local OCR endurance gate started"
+    );
 
     for run_index in 0..request.runs {
+        let Some((input_timeout, input_limited_by_endurance)) = bounded_phase_timeout(
+            endurance_started.elapsed(),
+            request.maximum_endurance,
+            Duration::from_millis(request.thresholds.maximum_input_milliseconds),
+        ) else {
+            failures.endurance_timeout = failures.endurance_timeout.saturating_add(1);
+            failures.category("endurance_timeout");
+            info!(
+                event = "ocr_local_endurance_stopped",
+                reason = "endurance_timeout",
+                runs_completed,
+                runs_requested = request.runs,
+                elapsed_milliseconds = duration_milliseconds(endurance_started.elapsed()),
+                "local OCR endurance wall-time budget was exhausted"
+            );
+            break;
+        };
         let index = usize::try_from(run_index)
             .map_err(|_error| OcrEnduranceError::Configuration)?
             % images.len();
@@ -283,13 +327,59 @@ async fn run_linux(
 
         let total_started = Instant::now();
         let input_started = Instant::now();
-        let loaded = match read_local_image(&image.path).await {
-            Ok(loaded) => loaded,
-            Err(kind) => {
-                input_durations.push(elapsed_microseconds(input_started));
-                total_durations.push(elapsed_microseconds(total_started));
+        let loaded = match time::timeout(input_timeout, read_local_image(&image.path)).await {
+            Ok(Ok(loaded)) => loaded,
+            Ok(Err(kind)) => {
+                let input = elapsed_microseconds(input_started);
+                input_durations.push(input);
+                let total = elapsed_microseconds(total_started);
+                total_durations.push(total);
                 failures.input = failures.input.saturating_add(1);
                 failures.category(kind);
+                runs_completed = runs_completed.saturating_add(1);
+                log_local_progress(
+                    request,
+                    runs_completed,
+                    image,
+                    "unavailable",
+                    kind,
+                    input,
+                    0,
+                    total,
+                    endurance_started.elapsed(),
+                    successful_runs,
+                );
+                continue;
+            }
+            Err(_elapsed) => {
+                let input = elapsed_microseconds(input_started);
+                let total = elapsed_microseconds(total_started);
+                input_durations.push(input);
+                total_durations.push(total);
+                let kind = if input_limited_by_endurance {
+                    failures.endurance_timeout = failures.endurance_timeout.saturating_add(1);
+                    "endurance_timeout"
+                } else {
+                    failures.input = failures.input.saturating_add(1);
+                    "local_input_timeout"
+                };
+                failures.category(kind);
+                runs_completed = runs_completed.saturating_add(1);
+                log_local_progress(
+                    request,
+                    runs_completed,
+                    image,
+                    "unavailable",
+                    kind,
+                    input,
+                    0,
+                    total,
+                    endurance_started.elapsed(),
+                    successful_runs,
+                );
+                if input_limited_by_endurance {
+                    break;
+                }
                 continue;
             }
         };
@@ -302,13 +392,37 @@ async fn run_linux(
         };
         increment(&mut dimension_class_runs, dimension_class);
 
+        let Some((ocr_timeout, ocr_limited_by_endurance)) = bounded_phase_timeout(
+            endurance_started.elapsed(),
+            request.maximum_endurance,
+            effective_ocr_timeout,
+        ) else {
+            let total = elapsed_microseconds(total_started);
+            total_durations.push(total);
+            failures.endurance_timeout = failures.endurance_timeout.saturating_add(1);
+            failures.category("endurance_timeout");
+            runs_completed = runs_completed.saturating_add(1);
+            log_local_progress(
+                request,
+                runs_completed,
+                image,
+                dimension_class,
+                "endurance_timeout",
+                input,
+                0,
+                total,
+                endurance_started.elapsed(),
+                successful_runs,
+            );
+            break;
+        };
         let ocr_started = Instant::now();
         let outcome = crate::ocr::analyze_isolated_local_image_bytes(
             &loaded.bytes,
             image.requested_screen_type,
             &image.hints,
             None,
-            request.ocr_timeout,
+            ocr_timeout,
             request.stop_grace,
         )
         .await;
@@ -324,23 +438,54 @@ async fn run_linux(
                 total_milliseconds: milliseconds(total),
             });
         }
-        match outcome {
+        let mut stop_after_progress = false;
+        let outcome_kind = match outcome {
+            Err(kind) if ocr_limited_by_endurance && kind == "ocr_child_pilot_timeout" => {
+                failures.endurance_timeout = failures.endurance_timeout.saturating_add(1);
+                failures.category("endurance_timeout");
+                stop_after_progress = true;
+                "endurance_timeout"
+            }
             Err(kind) => {
                 failures.child = failures.child.saturating_add(1);
                 failures.category(kind);
+                kind
             }
             Ok(Err(failure)) => {
                 failures.domain = failures.domain.saturating_add(1);
-                failures.category(domain_failure_kind(failure));
+                let kind = domain_failure_kind(failure);
+                failures.category(kind);
+                kind
             }
             Ok(Ok(output)) if output.detected_screen_type != image.requested_screen_type => {
                 failures.screen_type_mismatch = failures.screen_type_mismatch.saturating_add(1);
                 failures.category("screen_type_mismatch");
+                "screen_type_mismatch"
             }
-            Ok(Ok(_output)) => successful_runs = successful_runs.saturating_add(1),
+            Ok(Ok(_output)) => {
+                successful_runs = successful_runs.saturating_add(1);
+                "success"
+            }
+        };
+        runs_completed = runs_completed.saturating_add(1);
+        log_local_progress(
+            request,
+            runs_completed,
+            image,
+            dimension_class,
+            outcome_kind,
+            input,
+            ocr,
+            total,
+            endurance_started.elapsed(),
+            successful_runs,
+        );
+        if stop_after_progress {
+            break;
         }
     }
 
+    let elapsed_milliseconds = duration_milliseconds(endurance_started.elapsed());
     cgroup
         .ensure_empty()
         .map_err(|_error| OcrEnduranceError::Cleanup)?;
@@ -365,7 +510,8 @@ async fn run_linux(
     let input_distribution = distribution(input_durations);
     let ocr_distribution = distribution(ocr_durations);
     let total_distribution = distribution(total_durations);
-    let passed = successful_runs == request.runs
+    let passed = runs_completed == request.runs
+        && successful_runs == request.runs
         && failures.total() == 0
         && child_memory.limit_hit_count_delta == 0
         && child_memory.oom_kill_count_delta == 0
@@ -405,11 +551,13 @@ async fn run_linux(
                 > 0);
 
     Ok(LocalOcrEnduranceReport {
-        schema_version: 2,
+        schema_version: 3,
         mode: "local_file_isolated_ocr",
         runs_requested: request.runs,
-        runs_completed: request.runs,
+        runs_completed,
         successful_runs,
+        maximum_endurance_milliseconds,
+        elapsed_milliseconds,
         images_configured: images.len(),
         image_runs,
         screen_type_runs,
@@ -427,6 +575,58 @@ async fn run_linux(
         require_sub_full_hd: request.require_sub_full_hd,
         passed,
     })
+}
+
+#[cfg(target_os = "linux")]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "one progress event records the complete bounded phase outcome without OCR content"
+)]
+fn log_local_progress(
+    request: &LocalOcrEnduranceRequest,
+    runs_completed: u32,
+    image: &PreparedLocalImage,
+    dimension_class: &str,
+    outcome: &str,
+    input_microseconds: u64,
+    ocr_microseconds: u64,
+    total_microseconds: u64,
+    elapsed: Duration,
+    successful_runs: u32,
+) {
+    info!(
+        event = "ocr_local_endurance_progress",
+        runs_completed,
+        runs_requested = request.runs,
+        successful_runs,
+        image_label = %image.label,
+        requested_screen_type = image.requested_screen_type.wire(),
+        dimension_class = %dimension_class,
+        outcome = %outcome,
+        input_milliseconds = milliseconds(input_microseconds),
+        ocr_milliseconds = milliseconds(ocr_microseconds),
+        total_milliseconds = milliseconds(total_microseconds),
+        elapsed_milliseconds = duration_milliseconds(elapsed),
+        "local OCR endurance run completed"
+    );
+}
+
+#[cfg(any(target_os = "linux", test))]
+fn bounded_phase_timeout(
+    elapsed: Duration,
+    maximum_endurance: Duration,
+    phase_timeout: Duration,
+) -> Option<(Duration, bool)> {
+    let remaining = maximum_endurance.checked_sub(elapsed)?;
+    if remaining.is_zero() || phase_timeout.is_zero() {
+        return None;
+    }
+    Some((remaining.min(phase_timeout), remaining < phase_timeout))
+}
+
+#[cfg(target_os = "linux")]
+fn duration_milliseconds(duration: Duration) -> u64 {
+    u64::try_from(duration.as_millis()).unwrap_or(u64::MAX)
 }
 
 #[cfg(target_os = "linux")]
@@ -512,6 +712,34 @@ mod tests {
                 Err(OcrEnduranceError::Manifest)
             ),
             "parent traversal must fail closed"
+        );
+    }
+
+    #[test]
+    fn phase_timeout_never_exceeds_the_remaining_endurance_budget() {
+        assert_eq!(
+            bounded_phase_timeout(
+                Duration::from_secs(2),
+                Duration::from_secs(10),
+                Duration::from_secs(3),
+            ),
+            Some((Duration::from_secs(3), false))
+        );
+        assert_eq!(
+            bounded_phase_timeout(
+                Duration::from_secs(9),
+                Duration::from_secs(10),
+                Duration::from_secs(3),
+            ),
+            Some((Duration::from_secs(1), true))
+        );
+        assert_eq!(
+            bounded_phase_timeout(
+                Duration::from_secs(10),
+                Duration::from_secs(10),
+                Duration::from_secs(3),
+            ),
+            None
         );
     }
 }

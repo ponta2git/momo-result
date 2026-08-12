@@ -13,7 +13,7 @@ import io.lettuce.core.Range
 
 import momo.api.adapters.redis.RedisOcrJobQueuePublisher
 import momo.api.config.RedisConfig
-import momo.api.contracts.ocrworker.OcrWorkerJobMessage
+import momo.api.contracts.ocrworker.OcrWorkerJobMessageV2
 import momo.api.domain.ids.*
 import momo.api.domain.{OcrJobHints, ScreenType, StoredImageLocation}
 import momo.api.ports.queue.OcrJobEnqueueRequest
@@ -27,12 +27,14 @@ final class RedisOcrJobQueuePublisherIntegrationSpec extends RedisIntegrationSui
 
   test("publishes OCR worker message fields to a Redis Streams Testcontainer"):
     val request = requestFor("job-redis")
-    val expectedMessage = OcrWorkerJobMessage.fromEnqueueRequest(request)
+    val expectedMessage = OcrWorkerJobMessageV2.fromEnqueueRequest(request).fold(fail(_), identity)
     redisStreamFixture.use { fixture =>
       val config = RedisConfig(
         fixture.redisUrl,
         fixture.streamName,
         fixture.deadLetterStreamName,
+        v2Stream = fixture.streamName,
+        v2DeadLetterStream = fixture.deadLetterStreamName,
       )
       RedisOcrJobQueuePublisher.resource[IO](config).use { producer =>
         producer.publish(request).flatMap { messageId =>
@@ -74,7 +76,10 @@ final class RedisOcrJobQueuePublisherIntegrationSpec extends RedisIntegrationSui
     jobId = OcrJobId.unsafeFromString(jobId),
     draftId = OcrDraftId.unsafeFromString(s"draft-$jobId"),
     imageId = ImageId.unsafeFromString(s"image-$jobId"),
-    imageLocation = StoredImageLocation.unsafeFromString("/tmp/image.png"),
+    imageLocation = StoredImageLocation.unsafeFromString(s"source-images/v1/ab/image-$jobId.png"),
+    imageSha256 = "ab" * 32,
+    imageByteLength = 1L,
+    imageMediaType = "image/png",
     requestedScreenType = ScreenType.TotalAssets,
     attempt = 1,
     enqueuedAt = Instant.parse("2026-04-29T10:00:00Z"),

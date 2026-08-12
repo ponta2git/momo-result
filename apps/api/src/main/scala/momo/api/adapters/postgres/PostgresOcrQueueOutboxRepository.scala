@@ -13,7 +13,7 @@ import doobie.postgres.implicits.*
 import io.circe.Json
 
 import momo.api.adapters.postgres.PostgresMeta.given
-import momo.api.contracts.ocrworker.OcrWorkerJobMessage
+import momo.api.contracts.ocrworker.OcrWorkerJobMessageV2
 import momo.api.domain.ids.OcrJobId
 import momo.api.repositories.{
   OcrQueueBacklogSnapshot,
@@ -35,40 +35,52 @@ object PostgresOcrQueueOutbox:
   )
 
   def insertIntent(draft: OcrQueueOutboxDraft): ConnectionIO[Unit] =
-    val payloadJson = OcrWorkerJobMessage.fieldsAsJson(
-      OcrWorkerJobMessage.fromEnqueueRequest(draft.enqueueRequest)
-    )
-    sql"""
-      INSERT INTO ocr_queue_outbox (
-        id, job_id, dedupe_key, stream_payload,
-        status, attempt_count, next_attempt_at,
-        created_at, updated_at
-      ) VALUES (
-        ${draft.id}, ${draft.jobId}, ${draft.dedupeKey}, $payloadJson,
-        ${OcrQueueOutboxStatus.Pending}, 0, ${draft.createdAt},
-        ${draft.createdAt}, ${draft.createdAt}
-      )
-    """.update.run.void
-
-  def toRecord(row: Row): ConnectionIO[OcrQueueOutboxRecord] =
-    OcrWorkerJobMessage.fromJson(row.payloadJson) match
-      case Right(message) =>
-        OcrQueueOutboxRecord(
-          row.id,
-          row.jobId,
-          message.toEnqueueRequest,
-          row.attemptCount,
-          row.claimToken,
-          row.claimExpiresAt,
-        ).pure[ConnectionIO]
+    OcrWorkerJobMessageV2.fromEnqueueRequest(draft.enqueueRequest) match
       case Left(reason) => MonadThrow[ConnectionIO].raiseError(
           PostgresDataIntegrityException.invalidPayload(
             "ocr_queue_outbox",
-            row.id,
+            draft.id,
             "stream_payload",
             reason,
           )
         )
+      case Right(message) =>
+        val payloadJson = OcrWorkerJobMessageV2.fieldsAsJson(message)
+        sql"""
+          INSERT INTO ocr_queue_outbox (
+            id, job_id, dedupe_key, stream_payload, schema_version,
+            status, attempt_count, next_attempt_at,
+            created_at, updated_at
+          ) VALUES (
+            ${draft.id}, ${draft.jobId}, ${draft.dedupeKey}, $payloadJson, 2,
+            ${OcrQueueOutboxStatus.Pending}, 0, ${draft.createdAt},
+            ${draft.createdAt}, ${draft.createdAt}
+          )
+        """.update.run.void
+
+  def toRecord(row: Row): ConnectionIO[OcrQueueOutboxRecord] =
+    OcrWorkerJobMessageV2.fromJson(row.payloadJson) match
+      case Right(message) => message.toEnqueueRequest match
+          case Right(request) => OcrQueueOutboxRecord(
+              row.id,
+              row.jobId,
+              request,
+              row.attemptCount,
+              row.claimToken,
+              row.claimExpiresAt,
+            ).pure[ConnectionIO]
+          case Left(reason) => invalidPayload(row, reason)
+      case Left(reason) => invalidPayload(row, reason)
+
+  private def invalidPayload(row: Row, reason: String): ConnectionIO[OcrQueueOutboxRecord] =
+    MonadThrow[ConnectionIO].raiseError(
+      PostgresDataIntegrityException.invalidPayload(
+        "ocr_queue_outbox",
+        row.id,
+        "stream_payload",
+        reason,
+      )
+    )
 
   final case class BacklogSnapshotRow(
       pendingCount: Long,

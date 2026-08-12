@@ -62,10 +62,10 @@ final class ApiRuntimeArchitectureSpec extends FunSuite:
     )
     assert(
       runtimeInfrastructureText.contains(
-        "RedisOcrJobQueuePublisher.fromCommands(redis.stream, commands)"
+        "RedisOcrJobQueuePublisher.fromCommands(redis.v2Stream, commands)"
       )
     )
-    assert(runtimeInfrastructureText.contains("healthProbeFromCommands(redis.deadLetterStream"))
+    assert(runtimeInfrastructureText.contains("healthProbeFromCommands(redis.v2DeadLetterStream"))
     assert(runtimeInfrastructureText.contains(
       "RedisSeriesAnalysisQueuePublisher.fromCommands(redis.analysisStream, commands)"
     ))

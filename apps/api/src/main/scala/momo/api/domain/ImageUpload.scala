@@ -20,4 +20,5 @@ final case class StoredImage(
     location: StoredImageLocation,
     mediaType: String,
     sizeBytes: Long,
+    sha256: String,
 )

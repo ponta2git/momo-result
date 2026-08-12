@@ -106,6 +106,7 @@ object NoReadImageStore:
     location = StoredImageLocation.unsafeFromString("/tmp/not-read-source-image.png"),
     mediaType = "image/png",
     sizeBytes = sizeBytes,
+    sha256 = "ab" * 32,
   )
 
 final case class OutboxClaimDueCall(limit: Int, now: Instant, claimUntil: Instant) derives CanEqual

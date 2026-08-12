@@ -20,7 +20,8 @@ import momo.api.ports.storage.{
   ImageOrphanCleaner,
   ImageStorage,
   ImageStorageInspector,
-  ImageStorageUsage
+  ImageStorageUsage,
+  Sha256Hex
 }
 
 final class LocalFsImageStore[F[_]: Async: Random](root: Path)
@@ -44,12 +45,25 @@ final class LocalFsImageStore[F[_]: Async: Random](root: Path)
       path = directory.resolve(s"${id.value}.${imageType.extension}").toAbsolutePath.normalize()
       _ <- Sync[F]
         .blocking(Files.write(path, bytes, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE))
-    yield StoredImage(id, locationFor(path), imageType.mediaType, bytes.length.toLong)
+    yield StoredImage(
+      id,
+      locationFor(path),
+      imageType.mediaType,
+      bytes.length.toLong,
+      Sha256Hex.digest(bytes).value,
+    )
   }
 
   override def find(imageId: ImageId): F[Option[StoredImage]] = Sync[F].blocking {
     imagePaths(imageId).headOption.map { case (path, imageType) =>
-      StoredImage(imageId, locationFor(path), imageType.mediaType, Files.size(path))
+      val bytes = Files.readAllBytes(path)
+      StoredImage(
+        imageId,
+        locationFor(path),
+        imageType.mediaType,
+        bytes.length.toLong,
+        Sha256Hex.digest(bytes).value,
+      )
     }
   }
 
@@ -75,12 +89,12 @@ final class LocalFsImageStore[F[_]: Async: Random](root: Path)
         }
   }
 
-  override def diskUsage: F[ImageDiskUsage] = Sync[F].blocking {
+  override def diskUsage: F[Option[ImageDiskUsage]] = Sync[F].blocking {
     Files.createDirectories(rootDirectory)
-    ImageDiskUsage(
+    Some(ImageDiskUsage(
       totalBytes = rootDirectory.toFile.getTotalSpace,
       usableBytes = rootDirectory.toFile.getUsableSpace,
-    )
+    ))
   }
 
   override def deleteOrphans(referenced: Set[ImageId], olderThan: Instant): F[Int] = Sync[F]

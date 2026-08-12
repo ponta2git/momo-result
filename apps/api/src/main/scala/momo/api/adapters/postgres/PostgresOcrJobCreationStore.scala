@@ -34,7 +34,7 @@ final class PostgresOcrJobCreationStore[F[_]: MonadCancelThrow](transactor: Tran
           case None => EitherT.rightT[ConnectionIO, OcrJobCreationRejection](())
           case Some(a) => EitherT(attachmentGuard(a))
         _ <- EitherT.liftF(PostgresOcrDrafts.alg.create(plan.draft))
-        _ <- EitherT.liftF(PostgresOcrJobs.alg.create(plan.job))
+        _ <- EitherT.liftF(PostgresOcrJobs.createV2(plan.job))
         _ <- EitherT.liftF(attachment.traverse_(attachMatchDraft))
         _ <- EitherT.liftF(PostgresOcrQueueOutbox.insertIntent(outbox))
       yield ()

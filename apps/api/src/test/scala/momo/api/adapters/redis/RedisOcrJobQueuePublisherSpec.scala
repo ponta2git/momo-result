@@ -4,7 +4,7 @@ import java.time.Instant
 import cats.effect.IO
 
 import momo.api.MomoCatsEffectSuite
-import momo.api.contracts.ocrworker.OcrWorkerJobMessage
+import momo.api.contracts.ocrworker.OcrWorkerJobMessageV2
 import momo.api.domain.ids.*
 import momo.api.domain.{OcrJobHints, ScreenType, StoredImageLocation}
 import momo.api.ports.queue.OcrJobEnqueueRequest
@@ -15,7 +15,10 @@ final class RedisOcrJobQueuePublisherSpec extends MomoCatsEffectSuite:
     jobId = OcrJobId.unsafeFromString(jobId),
     draftId = OcrDraftId.unsafeFromString(s"draft-$jobId"),
     imageId = ImageId.unsafeFromString(s"image-$jobId"),
-    imageLocation = StoredImageLocation.unsafeFromString("/tmp/image.png"),
+    imageLocation = StoredImageLocation.unsafeFromString(s"source-images/v1/ab/image-$jobId.png"),
+    imageSha256 = "ab" * 32,
+    imageByteLength = 1L,
+    imageMediaType = "image/png",
     requestedScreenType = ScreenType.TotalAssets,
     attempt = 1,
     enqueuedAt = Instant.parse("2026-04-29T10:00:00Z"),
@@ -28,7 +31,7 @@ final class RedisOcrJobQueuePublisherSpec extends MomoCatsEffectSuite:
       client <- RecordingRedisStreamClient.create
       producer = RedisOcrJobQueuePublisher[IO]("momo:ocr:jobs", client)
       request = requestFor("job-1")
-      expectedMessage = OcrWorkerJobMessage.fromEnqueueRequest(request)
+      expectedMessage = OcrWorkerJobMessageV2.fromEnqueueRequest(request).fold(fail(_), identity)
       messageId <- producer.publish(request)
       published <- client.calls
     yield

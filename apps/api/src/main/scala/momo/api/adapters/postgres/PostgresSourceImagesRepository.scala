@@ -10,7 +10,12 @@ import doobie.postgres.implicits.*
 
 import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.domain.ids.{AccountId, ImageId}
-import momo.api.ports.storage.{Sha256Hex, SourceImageIdempotencyHash, SourceImageObjectKey}
+import momo.api.ports.storage.{
+  ImageStorageUsage,
+  Sha256Hex,
+  SourceImageIdempotencyHash,
+  SourceImageObjectKey
+}
 import momo.api.repositories.*
 
 final class PostgresSourceImagesRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
@@ -148,8 +153,19 @@ final class PostgresSourceImagesRepository[F[_]: MonadCancelThrow](transactor: T
         AND candidate.updated_at <= $olderThan
     """ ++ unreferencedGuard).update.run.map(_ == 1).transact(transactor)
 
+  override def unreferencedUsage(ownerAccountId: AccountId): F[ImageStorageUsage] = (fr"""
+      SELECT COUNT(*)::bigint, COALESCE(SUM(candidate.byte_length), 0)::bigint
+      FROM source_images AS candidate
+      WHERE candidate.owner_account_id = $ownerAccountId
+        AND candidate.status <> ${SourceImageStatus.Deleted}
+    """ ++ unreferencedGuard).query[UsageRow].unique.map { row =>
+    ImageStorageUsage(Math.toIntExact(row.fileCount), row.sizeBytes)
+  }.transact(transactor)
+
 object PostgresSourceImagesRepository:
   private val MaxReconciliationBatchSize = 1000
+
+  private final case class UsageRow(fileCount: Long, sizeBytes: Long)
 
   private final case class Row(
       id: ImageId,

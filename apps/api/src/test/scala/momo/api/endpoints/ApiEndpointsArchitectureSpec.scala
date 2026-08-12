@@ -13,7 +13,7 @@ final class ApiEndpointsArchitectureSpec extends FunSuite:
   private val httpModulesDir = httpDir.resolve("modules")
   private val codecDir = Paths.get("src/main/scala/momo/api/codec")
   private val ocrWorkerJobMessage = Paths
-    .get("src/main/scala/momo/api/contracts/ocrworker/OcrWorkerJobMessage.scala")
+    .get("src/main/scala/momo/api/contracts/ocrworker/OcrWorkerJobMessageV2.scala")
   private val authModule = Paths.get("src/main/scala/momo/api/http/modules/AuthModule.scala")
   private val authPolicy = httpDir.resolve("AuthPolicy.scala")
   private val commonEndpoint = endpointDir.resolve("CommonEndpoint.scala")

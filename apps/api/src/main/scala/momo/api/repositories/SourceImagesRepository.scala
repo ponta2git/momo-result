@@ -3,7 +3,12 @@ package momo.api.repositories
 import java.time.Instant
 
 import momo.api.domain.ids.{AccountId, ImageId}
-import momo.api.ports.storage.{Sha256Hex, SourceImageIdempotencyHash, SourceImageObjectKey}
+import momo.api.ports.storage.{
+  ImageStorageUsage,
+  Sha256Hex,
+  SourceImageIdempotencyHash,
+  SourceImageObjectKey
+}
 
 enum SourceImageStatus(val wire: String) derives CanEqual:
   case Reserved extends SourceImageStatus("RESERVED")
@@ -80,3 +85,4 @@ trait SourceImagesRepository[F[_]]:
   def reconciliationCandidates(olderThan: Instant, limit: Int): F[List[SourceImageRecord]]
   def orphanCandidates(olderThan: Instant, limit: Int): F[List[SourceImageRecord]]
   def purgeFailed(id: ImageId, olderThan: Instant): F[Boolean]
+  def unreferencedUsage(ownerAccountId: AccountId): F[ImageStorageUsage]

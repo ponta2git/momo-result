@@ -234,5 +234,13 @@ object ObjectBackedImageStore:
   private def storedImage(record: SourceImageRecord): Either[AppError, StoredImage] =
     SourceImageIntegrity.expected(record).toRight(InternalContractError).flatMap { expected =>
       StoredImageLocation.fromString(expected.key.value).leftMap(_ => InternalContractError)
-        .map(location => StoredImage(record.id, location, expected.mediaType, expected.sizeBytes))
+        .map(location =>
+          StoredImage(
+            record.id,
+            location,
+            expected.mediaType,
+            expected.sizeBytes,
+            expected.sha256.value,
+          )
+        )
     }

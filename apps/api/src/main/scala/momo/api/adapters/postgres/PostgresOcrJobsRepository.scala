@@ -139,6 +139,25 @@ object PostgresOcrJobs:
            created_at, updated_at
          FROM ocr_jobs"""
 
+  def createV2(job: OcrJob): ConnectionIO[Unit] = sql"""
+      INSERT INTO ocr_jobs (
+        id, draft_id, image_id, image_path, source_image_id, queue_schema_version,
+        requested_screen_type, detected_screen_type,
+        status, attempt_count, worker_id,
+        failure_code, failure_message, failure_retryable, failure_user_action,
+        started_at, finished_at, duration_ms,
+        created_at, updated_at
+      ) VALUES (
+        ${job.id}, ${job.draftId}, ${job.imageId}, ${job.imageLocation}, ${job.imageId}, 2,
+        ${job.requestedScreenType}, ${OcrJob.detectedScreenType(job)},
+        ${job.status}, ${job.attemptCount}, ${OcrJob.workerId(job)},
+        ${OcrJob.failure(job).map(_.code)}, ${OcrJob.failure(job).map(_.message)},
+        ${OcrJob.failure(job).map(_.retryable)}, ${OcrJob.failure(job).flatMap(_.userAction)},
+        ${OcrJob.startedAt(job)}, ${OcrJob.finishedAt(job)}, ${OcrJob.durationMs(job)},
+        ${job.createdAt}, ${job.updatedAt}
+      )
+    """.update.run.void
+
   val alg: OcrJobsAlg[ConnectionIO] = new OcrJobsAlg[ConnectionIO]:
     override def create(job: OcrJob): ConnectionIO[Unit] = sql"""
         INSERT INTO ocr_jobs (

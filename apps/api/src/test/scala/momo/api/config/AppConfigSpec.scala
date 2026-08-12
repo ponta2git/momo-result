@@ -14,6 +14,11 @@ class AppConfigSpec extends CatsEffectSuite:
     "DISCORD_CLIENT_SECRET" -> "client-secret",
     "DISCORD_REDIRECT_URI" -> "https://example.com/api/auth/callback",
     "AUTH_STATE_SIGNING_KEY" -> "state-signing-key",
+    "SOURCE_IMAGE_STORAGE_MODE" -> "r2",
+    "SOURCE_IMAGE_R2_ENDPOINT" -> "https://example.invalid",
+    "SOURCE_IMAGE_R2_BUCKET" -> "momo-test",
+    "SOURCE_IMAGE_R2_ACCESS_KEY_ID" -> "test-access-key",
+    "SOURCE_IMAGE_R2_SECRET_ACCESS_KEY" -> "test-secret-key",
   )
 
   private def load(env: Map[String, String]): IO[Either[Throwable, AppConfig]] = AppConfig
@@ -210,6 +215,64 @@ class AppConfigSpec extends CatsEffectSuite:
       assertEquals(result.map(_.auth.sessionCookieName), Right("__Host-momo_result_session"))
       assertEquals(result.map(_.auth.stateCookieName), Right("__Host-momo_result_oauth_state"))
     }
+  }
+
+  test("loadFromEnv requires an explicit source image storage mode in production") {
+    load(prodEnv - "SOURCE_IMAGE_STORAGE_MODE").map { result =>
+      assert(result.left.exists(_.getMessage.contains("SOURCE_IMAGE_STORAGE_MODE")))
+    }
+  }
+
+  test("loadFromEnv defaults source image storage to local outside production") {
+    load(Map.empty).map(result =>
+      assertEquals(result.map(_.sourceImageStorage), Right(SourceImageStorageConfig.Local))
+    )
+  }
+
+  test("loadFromEnv parses bounded R2 settings without exposing credentials") {
+    val secret = "credential-that-must-not-appear"
+    val env = prodEnv ++ Map(
+      "SOURCE_IMAGE_R2_SECRET_ACCESS_KEY" -> secret,
+      "SOURCE_IMAGE_R2_REGION" -> "auto",
+      "SOURCE_IMAGE_R2_OPERATION_TIMEOUT_MS" -> "9000",
+      "SOURCE_IMAGE_R2_ATTEMPT_TIMEOUT_MS" -> "4000",
+      "SOURCE_IMAGE_R2_MAXIMUM_ATTEMPTS" -> "2",
+      "SOURCE_IMAGE_RECONCILIATION_STALE_SECONDS" -> "90",
+      "SOURCE_IMAGE_FAILED_RETENTION_MINUTES" -> "120",
+      "SOURCE_IMAGE_RECONCILIATION_BATCH_SIZE" -> "200",
+    )
+
+    load(env).map { result =>
+      val storage = result.fold(error => fail(error.getMessage), _.sourceImageStorage)
+      storage match
+        case SourceImageStorageConfig.Local => fail("expected R2 storage")
+        case SourceImageStorageConfig.R2(r2) =>
+          assertEquals(r2.operationTimeout.toMillis, 9000L)
+          assertEquals(r2.attemptTimeout.toMillis, 4000L)
+          assertEquals(r2.maximumAttempts, 2)
+          assertEquals(r2.staleStateAge.toSeconds, 90L)
+          assertEquals(r2.failedRecordRetention.toMinutes, 120L)
+          assertEquals(r2.reconciliationBatchSize, 200)
+          assert(!storage.toString.contains(secret))
+    }
+  }
+
+  test("loadFromEnv rejects R2 retry and timeout settings outside the bounded envelope") {
+    val invalid = List(
+      Map("SOURCE_IMAGE_R2_MAXIMUM_ATTEMPTS" -> "3"),
+      Map(
+        "SOURCE_IMAGE_R2_OPERATION_TIMEOUT_MS" -> "1000",
+        "SOURCE_IMAGE_R2_ATTEMPT_TIMEOUT_MS" -> "2000",
+      ),
+      Map("SOURCE_IMAGE_RECONCILIATION_BATCH_SIZE" -> "1001"),
+    )
+
+    invalid.traverse(overrides => load(prodEnv ++ overrides)).map(_.foreach(result =>
+      assert(
+        result.left.exists(_.getMessage == "R2 source image storage configuration is invalid."),
+        s"expected unsafe R2 settings to fail: $result",
+      )
+    ))
   }
 
   test("loadFromEnv reads OAuth abuse protection limits") {

@@ -8,19 +8,9 @@ import com.networknt.schema.{InputFormat, SchemaRegistry, SpecificationVersion}
 import io.circe.Json
 import munit.Assertions
 
-import momo.api.contracts.ocrworker.{OcrWorkerJobMessage, OcrWorkerJobMessageV2}
+import momo.api.contracts.ocrworker.OcrWorkerJobMessageV2
 
 trait JsonSchemaAssertions extends Assertions:
-  protected def assertOcrWorkerJobMessageSchemaValid(payloadJson: Json): Unit =
-    assertJsonSchemaValid(streamPayloadSchemaPath, payloadJson.noSpaces)
-    OcrWorkerJobMessage.fromJson(payloadJson) match
-      case Left(reason) => fail(s"stream payload is not an OcrWorkerJobMessage: $reason")
-      case Right(payload) => payload.fields.get(OcrWorkerJobMessage.HintsKey)
-          .foreach(hintsJson => assertJsonSchemaValid(ocrHintsSchemaPath, hintsJson))
-
-  protected def assertOcrWorkerJobMessageSchemaValid(payload: OcrWorkerJobMessage): Unit =
-    assertOcrWorkerJobMessageSchemaValid(OcrWorkerJobMessage.fieldsAsJson(payload))
-
   protected def assertOcrWorkerJobMessageV2SchemaValid(payloadJson: Json): Unit =
     assertJsonSchemaValid(streamPayloadV2SchemaPath, payloadJson.noSpaces)
     OcrWorkerJobMessageV2.fromJson(payloadJson) match
@@ -46,9 +36,6 @@ trait JsonSchemaAssertions extends Assertions:
       errors.nonEmpty,
       s"JSON Schema validation unexpectedly passed for ${schemaPath.getFileName}: $inputJson",
     )
-
-  protected def streamPayloadSchemaPath: Path =
-    repoPath("docs/schemas/ocr-queue-payload-v1.schema.json")
 
   protected def streamPayloadV2SchemaPath: Path =
     repoPath("docs/schemas/ocr-queue-payload-v2.schema.json")

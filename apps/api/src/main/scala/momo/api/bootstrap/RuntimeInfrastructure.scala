@@ -46,9 +46,9 @@ private[bootstrap] object RuntimeInfrastructure:
   ): Resource[F, RuntimeInfrastructure[F]] = config.redis match
     case Some(redis) => Redis[F].simple(redis.url, RedisCodec.Utf8).evalMap { commands =>
         val queue: OcrJobQueuePublisher[F] =
-          RedisOcrJobQueuePublisher.fromCommands(redis.stream, commands)
+          RedisOcrJobQueuePublisher.fromCommands(redis.v2Stream, commands)
         val queueHealth: OcrJobQueueHealthCheck[F] = RedisOcrJobQueuePublisher
-          .healthProbeFromCommands(redis.deadLetterStream, commands)
+          .healthProbeFromCommands(redis.v2DeadLetterStream, commands)
         val analysisQueue: Option[SeriesAnalysisQueuePublisher[F]] = Some(
           RedisSeriesAnalysisQueuePublisher.fromCommands(redis.analysisStream, commands)
         )

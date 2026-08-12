@@ -38,7 +38,7 @@ trait ImageStorage[F[_]]:
 
 trait ImageStorageInspector[F[_]]:
   def unreferencedUsage(ownerAccountId: AccountId, referenced: Set[ImageId]): F[ImageStorageUsage]
-  def diskUsage: F[ImageDiskUsage]
+  def diskUsage: F[Option[ImageDiskUsage]]
 
 trait ImageOrphanCleaner[F[_]]:
   def deleteOrphans(referenced: Set[ImageId], olderThan: Instant): F[Int]

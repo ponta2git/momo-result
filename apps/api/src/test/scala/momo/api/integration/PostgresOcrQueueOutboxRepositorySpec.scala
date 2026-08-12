@@ -10,9 +10,10 @@ import doobie.postgres.implicits.*
 
 import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.adapters.postgres.{PostgresDataIntegrityException, PostgresOcrQueueOutboxRepository}
-import momo.api.contracts.ocrworker.OcrWorkerJobMessage
+import momo.api.contracts.ocrworker.OcrWorkerJobMessageV2
 import momo.api.domain.ids.*
-import momo.api.domain.{OcrJobHints, ScreenType, StoredImageLocation}
+import momo.api.domain.{OcrJobHints, ScreenType}
+import momo.api.ports.storage.{Sha256Hex, SourceImageIdempotencyHash, SourceImageObjectKey}
 import momo.api.repositories.OcrQueueOutboxStatus
 
 final class PostgresOcrQueueOutboxRepositorySpec extends IntegrationSuite:
@@ -25,20 +26,42 @@ final class PostgresOcrQueueOutboxRepositorySpec extends IntegrationSuite:
 
   private def repo = PostgresOcrQueueOutboxRepository[IO](transactor)
 
-  private def workerMessage(jobId: OcrJobId): OcrWorkerJobMessage = OcrWorkerJobMessage.build(
-    jobId = jobId,
-    draftId = OcrDraftId.unsafeFromString(s"draft-${jobId.value}"),
-    imageId = ImageId.unsafeFromString(s"image-${jobId.value}"),
-    imageLocation = StoredImageLocation.unsafeFromString("/tmp/outbox.png"),
-    requestedScreenType = ScreenType.TotalAssets,
-    attempt = 1,
-    enqueuedAt = now,
-    hints = OcrJobHints.empty,
-    requestId = None,
-  )
+  private def imageIdFor(jobId: OcrJobId): ImageId =
+    ImageId.unsafeFromString(s"image-${jobId.value}")
+
+  private def imageObjectKeyFor(jobId: OcrJobId): SourceImageObjectKey =
+    SourceImageObjectKey.forImage(imageIdFor(jobId), "png").fold(fail(_), identity)
+
+  private def workerMessage(jobId: OcrJobId): OcrWorkerJobMessageV2 =
+    OcrWorkerJobMessageV2.build(
+      jobId = jobId,
+      draftId = OcrDraftId.unsafeFromString(s"draft-${jobId.value}"),
+      sourceImageId = imageIdFor(jobId),
+      imageObjectKey = imageObjectKeyFor(jobId).value,
+      sha256 = "a" * 64,
+      byteLength = 128,
+      mediaType = "image/png",
+      requestedScreenType = ScreenType.TotalAssets,
+      attempt = 1,
+      enqueuedAt = now,
+      hints = OcrJobHints.empty,
+      requestId = None,
+    ).fold(fail(_), identity)
 
   private def insertOcrRows(jobId: OcrJobId, draftId: OcrDraftId, createdAt: Instant): IO[Unit] =
     (for
+      _ <- sql"""
+        INSERT INTO source_images (
+          id, owner_account_id, object_key, idempotency_key_hash, status,
+          media_type, byte_length, sha256_hex, width, height,
+          available_at, created_at, updated_at
+        ) VALUES (
+          ${imageIdFor(jobId)}, 'account_ponta', ${imageObjectKeyFor(jobId)},
+          ${SourceImageIdempotencyHash.uniqueFor(imageIdFor(jobId))}, 'AVAILABLE',
+          'image/png', 128, ${Sha256Hex.fromString("a" * 64).fold(fail(_), identity)},
+          1920, 1080, $createdAt, $createdAt, $createdAt
+        )
+      """.update.run
       _ <- sql"""
         INSERT INTO ocr_drafts (
           id, job_id, requested_screen_type, payload_json, warnings_json, timings_ms_json,
@@ -49,11 +72,11 @@ final class PostgresOcrQueueOutboxRepositorySpec extends IntegrationSuite:
       """.update.run
       _ <- sql"""
         INSERT INTO ocr_jobs (
-          id, draft_id, image_id, image_path, requested_screen_type, status, attempt_count,
-          created_at, updated_at
+          id, draft_id, image_id, image_path, source_image_id, queue_schema_version,
+          requested_screen_type, status, attempt_count, created_at, updated_at
         ) VALUES (
-          $jobId, $draftId, ${ImageId.unsafeFromString(s"image-${jobId.value}")}, '/tmp/outbox.png',
-          'total_assets', 'queued', 0, $createdAt, $createdAt
+          $jobId, $draftId, ${imageIdFor(jobId)}, ${imageObjectKeyFor(jobId).value},
+          ${imageIdFor(jobId)}, 2, 'total_assets', 'queued', 0, $createdAt, $createdAt
         )
       """.update.run
     yield ()).transact(transactor)
@@ -67,15 +90,15 @@ final class PostgresOcrQueueOutboxRepositorySpec extends IntegrationSuite:
       claimExpiresAt: Option[Instant],
       createdAt: Instant,
   ): IO[Unit] =
-    val payloadJson = OcrWorkerJobMessage.fieldsAsJson(workerMessage(jobId))
+    val payloadJson = OcrWorkerJobMessageV2.fieldsAsJson(workerMessage(jobId))
     val claimToken = claimExpiresAt.map(_ => claimTokenFor(id))
     sql"""
       INSERT INTO ocr_queue_outbox (
-        id, job_id, dedupe_key, stream_payload,
+        id, job_id, dedupe_key, schema_version, stream_payload,
         status, attempt_count, claim_token, claim_expires_at, next_attempt_at,
         created_at, updated_at
       ) VALUES (
-        $id, $jobId, ${s"ocr-job:${jobId.value}"}, $payloadJson,
+        $id, $jobId, ${s"ocr-job:${jobId.value}"}, 2, $payloadJson,
         $status, $attemptCount, $claimToken, $claimExpiresAt, $nextAttemptAt,
         $createdAt, $createdAt
       )
@@ -507,16 +530,19 @@ final class PostgresOcrQueueOutboxRepositorySpec extends IntegrationSuite:
       )
       _ <- sql"""
         INSERT INTO ocr_queue_outbox (
-          id, job_id, dedupe_key, stream_payload,
+          id, job_id, dedupe_key, schema_version, stream_payload,
           status, attempt_count, next_attempt_at, created_at, updated_at
         ) VALUES (
-          'outbox-invalid-payload', $jobId, 'ocr-job:job-outbox-invalid-payload',
+          'outbox-invalid-payload', $jobId, 'ocr-job:job-outbox-invalid-payload', 2,
           '{
-            "schemaVersion": "1",
+            "schemaVersion": "2",
             "jobId": "job-outbox-invalid-payload",
             "draftId": "draft-outbox-invalid-payload",
-            "imageId": "image-job-outbox-invalid-payload",
-            "imagePath": "/tmp/outbox.png",
+            "sourceImageId": "image-job-outbox-invalid-payload",
+            "imageObjectKey": "source-images/v1/aa/image-job-outbox-invalid-payload.png",
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "byteLength": "128",
+            "mediaType": "image/png",
             "requestedScreenType": "total_assets",
             "attempt": 1,
             "enqueuedAt": "2026-05-08T15:00:00Z"

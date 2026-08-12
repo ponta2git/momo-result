@@ -25,7 +25,7 @@ final class ImageStorageAdmissionSpec extends MomoCatsEffectSuite:
     val admission = ImageStorageAdmission.from[IO](
       inspector = FixedInspector(
         usage = IO.pure(ImageStorageUsage(fileCount = 1, sizeBytes = 20)),
-        disk = IO.pure(ImageDiskUsage(totalBytes = 1000, usableBytes = 500)),
+        disk = IO.pure(Some(ImageDiskUsage(totalBytes = 1000, usableBytes = 500))),
       ),
       references = FixedReferences(IO.pure(Set.empty)),
       config = config,
@@ -39,7 +39,7 @@ final class ImageStorageAdmissionSpec extends MomoCatsEffectSuite:
     val admission = ImageStorageAdmission.from[IO](
       inspector = FixedInspector(
         usage = IO.pure(ImageStorageUsage(fileCount = 2, sizeBytes = 20)),
-        disk = IO.pure(ImageDiskUsage(totalBytes = 1000, usableBytes = 500)),
+        disk = IO.pure(Some(ImageDiskUsage(totalBytes = 1000, usableBytes = 500))),
       ),
       references = FixedReferences(IO.pure(Set.empty)),
       config = config,
@@ -55,7 +55,7 @@ final class ImageStorageAdmissionSpec extends MomoCatsEffectSuite:
     val admission = ImageStorageAdmission.from[IO](
       inspector = FixedInspector(
         usage = IO.pure(ImageStorageUsage(fileCount = 1, sizeBytes = 95)),
-        disk = IO.pure(ImageDiskUsage(totalBytes = 1000, usableBytes = 500)),
+        disk = IO.pure(Some(ImageDiskUsage(totalBytes = 1000, usableBytes = 500))),
       ),
       references = FixedReferences(IO.pure(Set.empty)),
       config = config,
@@ -71,7 +71,7 @@ final class ImageStorageAdmissionSpec extends MomoCatsEffectSuite:
     val admission = ImageStorageAdmission.from[IO](
       inspector = FixedInspector(
         usage = IO.pure(ImageStorageUsage(fileCount = 0, sizeBytes = 0)),
-        disk = IO.pure(ImageDiskUsage(totalBytes = 1000, usableBytes = 15)),
+        disk = IO.pure(Some(ImageDiskUsage(totalBytes = 1000, usableBytes = 15))),
       ),
       references = FixedReferences(IO.pure(Set.empty)),
       config = config,
@@ -87,7 +87,7 @@ final class ImageStorageAdmissionSpec extends MomoCatsEffectSuite:
     val admission = ImageStorageAdmission.from[IO](
       inspector = FixedInspector(
         usage = IO.pure(ImageStorageUsage(fileCount = 0, sizeBytes = 0)),
-        disk = IO.pure(ImageDiskUsage(totalBytes = Long.MaxValue, usableBytes = 1)),
+        disk = IO.pure(Some(ImageDiskUsage(totalBytes = Long.MaxValue, usableBytes = 1))),
       ),
       references = FixedReferences(IO.pure(Set.empty)),
       config = config.copy(unreferencedBytesLimit = Long.MaxValue),
@@ -99,11 +99,25 @@ final class ImageStorageAdmissionSpec extends MomoCatsEffectSuite:
     }
   }
 
+  test("object storage skips local disk waterlines while retaining account quotas") {
+    val admission = ImageStorageAdmission.from[IO](
+      inspector = FixedInspector(
+        usage = IO.pure(ImageStorageUsage(fileCount = 1, sizeBytes = 20)),
+        disk = IO.pure(None),
+      ),
+      references = FixedReferences(IO.pure(Set.empty)),
+      config = config.copy(storageMinFreeBytes = Long.MaxValue),
+    )
+
+    admission.ensureCanAccept(accountId, incomingBytes = 10)
+      .map(result => assertEquals(result, Right(())))
+  }
+
   test("fails closed when referenced image status cannot be read") {
     val admission = ImageStorageAdmission.from[IO](
       inspector = FixedInspector(
         usage = IO.pure(ImageStorageUsage(fileCount = 0, sizeBytes = 0)),
-        disk = IO.pure(ImageDiskUsage(totalBytes = 1000, usableBytes = 500)),
+        disk = IO.pure(Some(ImageDiskUsage(totalBytes = 1000, usableBytes = 500))),
       ),
       references = FixedReferences(IO.raiseError(new RuntimeException("boom"))),
       config = config,
@@ -115,15 +129,17 @@ final class ImageStorageAdmissionSpec extends MomoCatsEffectSuite:
     }
   }
 
-  private final case class FixedInspector(usage: IO[ImageStorageUsage], disk: IO[ImageDiskUsage])
-      extends ImageStorageInspector[IO]:
+  private final case class FixedInspector(
+      usage: IO[ImageStorageUsage],
+      disk: IO[Option[ImageDiskUsage]],
+  ) extends ImageStorageInspector[IO]:
     override def unreferencedUsage(
         ownerAccountId: AccountId,
         referenced: Set[ImageId],
     ): IO[ImageStorageUsage] =
       val _ = (ownerAccountId, referenced)
       usage
-    override def diskUsage: IO[ImageDiskUsage] = disk
+    override def diskUsage: IO[Option[ImageDiskUsage]] = disk
 
   private final case class FixedReferences(result: IO[Set[ImageId]])
       extends ImageReferenceRepository[IO]:

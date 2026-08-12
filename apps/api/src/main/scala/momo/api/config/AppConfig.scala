@@ -14,6 +14,7 @@ final case class AppConfig(
     devMemberIds: List[String],
     auth: AuthConfig = AuthConfig.defaults(AppEnv.Dev),
     resourceLimits: ResourceLimitsConfig = ResourceLimitsConfig.defaults,
+    sourceImageStorage: SourceImageStorageConfig = SourceImageStorageConfig.Local,
     seriesAnalysisRead: SeriesAnalysisReadConfig = SeriesAnalysisReadConfig.defaults,
     database: Option[DatabaseConfig] = None,
     redis: Option[RedisConfig] = None,
@@ -42,8 +43,9 @@ object AppConfig:
             RedisConfigLoader.load[F](env, appEnv),
             AuthConfigLoader.load[F](env, appEnv),
             ResourceLimitsConfigLoader.load[F](env),
+            SourceImageStorageConfigLoader.load[F](env, appEnv),
             SeriesAnalysisReadConfigLoader.load[F](env),
-          ).mapN { (database, redis, auth, resourceLimits, seriesAnalysisRead) =>
+          ).mapN { (database, redis, auth, resourceLimits, sourceImageStorage, seriesAnalysisRead) =>
             AppConfig(
               appEnv = appEnv,
               httpHost = base.httpHost,
@@ -54,6 +56,7 @@ object AppConfig:
               ),
               auth = auth,
               resourceLimits = resourceLimits,
+              sourceImageStorage = sourceImageStorage,
               seriesAnalysisRead = seriesAnalysisRead,
               database = database,
               redis = redis,

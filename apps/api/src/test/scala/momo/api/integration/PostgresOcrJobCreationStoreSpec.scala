@@ -6,16 +6,18 @@ import doobie.implicits.*
 import doobie.postgres.circe.jsonb.implicits.*
 import io.circe.Json
 
-import momo.api.adapters.postgres.PostgresOcrJobCreationStore
+import momo.api.adapters.postgres.{PostgresOcrJobCreationStore, PostgresSourceImagesRepository}
 import momo.api.domain.*
 import momo.api.domain.ids.*
 import momo.api.ports.queue.OcrJobEnqueueRequest
+import momo.api.ports.storage.{Sha256Hex, SourceImageIdempotencyHash, SourceImageObjectKey}
 import momo.api.repositories.OcrJobCreationStore.OcrJobCreationRejection
 import momo.api.repositories.{
   OcrJobCreationPlan,
   OcrJobCreationStore,
   OcrJobDraftAttachment,
-  OcrQueueDispatchIntent
+  OcrQueueDispatchIntent,
+  SourceImageReservation
 }
 import momo.api.testing.JsonSchemaAssertions
 
@@ -25,8 +27,12 @@ final class PostgresOcrJobCreationStoreSpec extends IntegrationSuite with JsonSc
   private val jobId = OcrJobId.unsafeFromString("job-outbox-1")
   private val draftId = OcrDraftId.unsafeFromString("draft-outbox-1")
   private val imageId = ImageId.unsafeFromString("img-outbox-1")
+  private val imageSha256 = "a" * 64
+  private val imageObjectKey = SourceImageObjectKey.forImage(imageId, "png")
+    .fold(fail(_), identity)
 
   private def repo = PostgresOcrJobCreationStore[IO](transactor)
+  private def sourceImages = PostgresSourceImagesRepository[IO](transactor)
 
   private def draft: OcrDraft = OcrDraft(
     id = draftId,
@@ -45,7 +51,7 @@ final class PostgresOcrJobCreationStoreSpec extends IntegrationSuite with JsonSc
     id = jobId,
     draftId = draftId,
     imageId = imageId,
-    imageLocation = StoredImageLocation.unsafeFromString("/tmp/image.png"),
+    imageLocation = StoredImageLocation.unsafeFromString(imageObjectKey.value),
     requestedScreenType = ScreenType.TotalAssets,
     attemptCount = 0,
     createdAt = now,
@@ -56,7 +62,10 @@ final class PostgresOcrJobCreationStoreSpec extends IntegrationSuite with JsonSc
     jobId = jobId,
     draftId = draftId,
     imageId = imageId,
-    imageLocation = StoredImageLocation.unsafeFromString("/tmp/image.png"),
+    imageLocation = StoredImageLocation.unsafeFromString(imageObjectKey.value),
+    imageSha256 = imageSha256,
+    imageByteLength = 128,
+    imageMediaType = "image/png",
     requestedScreenType = ScreenType.TotalAssets,
     attempt = 1,
     enqueuedAt = now,
@@ -72,7 +81,7 @@ final class PostgresOcrJobCreationStoreSpec extends IntegrationSuite with JsonSc
 
   test("store inserts OCR records and durable outbox intent in one transaction"):
     for
-      result <- repo.store(plan(job, draft, None, activeJobLimit = 12))
+      result <- store(plan(job, draft, None, activeJobLimit = 12))
       row <- sql"""
         SELECT status, attempt_count, stream_payload->>'jobId', stream_payload->>'requestId',
                stream_payload
@@ -85,11 +94,11 @@ final class PostgresOcrJobCreationStoreSpec extends IntegrationSuite with JsonSc
       assertEquals(row._2, 0)
       assertEquals(row._3, jobId.value)
       assertEquals(row._4, "req-outbox-1")
-      assertOcrWorkerJobMessageSchemaValid(row._5)
+      assertOcrWorkerJobMessageV2SchemaValid(row._5)
 
   test("store rejects over the active job limit before inserting related rows"):
     for
-      result <- repo.store(plan(job, draft, None, activeJobLimit = 0))
+      result <- store(plan(job, draft, None, activeJobLimit = 0))
       counts <- sql"""
         SELECT
           (SELECT count(*) FROM ocr_drafts WHERE id = ${draftId.value}),
@@ -109,7 +118,7 @@ final class PostgresOcrJobCreationStoreSpec extends IntegrationSuite with JsonSc
       updatedAt = now,
     )
     for
-      result <- repo.store(plan(job, draft, Some(attachment), activeJobLimit = 12))
+      result <- store(plan(job, draft, Some(attachment), activeJobLimit = 12))
       counts <- sql"""
         SELECT
           (SELECT count(*) FROM ocr_drafts WHERE id = ${draftId.value}),
@@ -123,7 +132,7 @@ final class PostgresOcrJobCreationStoreSpec extends IntegrationSuite with JsonSc
   test("store rejects invalid draft JSON before inserting related rows"):
     val invalidDraft = draft.copy(payloadJson = "{")
     for
-      result <- repo.store(plan(job, invalidDraft, None, activeJobLimit = 12)).attempt
+      result <- store(plan(job, invalidDraft, None, activeJobLimit = 12)).attempt
       counts <- sql"""
         SELECT
           (SELECT count(*) FROM ocr_drafts WHERE id = ${draftId.value}),
@@ -133,6 +142,24 @@ final class PostgresOcrJobCreationStoreSpec extends IntegrationSuite with JsonSc
     yield
       assert(result.left.exists(_.getMessage.contains("payloadJson")))
       assertEquals(counts, (0L, 0L, 0L))
+
+  private def store(
+      creationPlan: OcrJobCreationPlan
+  ): IO[OcrJobCreationStore.OcrJobCreationResult] =
+    val reservation = SourceImageReservation(
+      id = imageId,
+      ownerAccountId = AccountId.unsafeFromString("account_ponta"),
+      objectKey = imageObjectKey,
+      idempotencyKeyHash = SourceImageIdempotencyHash.uniqueFor(imageId),
+      mediaType = "image/png",
+      sizeBytes = 128,
+      sha256 = Sha256Hex.fromString(imageSha256).fold(fail(_), identity),
+      width = 1920,
+      height = 1080,
+      now = now,
+    )
+    sourceImages.reserve(reservation) *> sourceImages.markAvailable(imageId, None, now) *>
+      repo.store(creationPlan)
 
   private def assertActiveLimit(
       result: OcrJobCreationStore.OcrJobCreationResult,

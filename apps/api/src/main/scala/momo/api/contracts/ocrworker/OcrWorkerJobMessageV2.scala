@@ -10,7 +10,8 @@ import io.circe.{Json, Printer}
 
 import momo.api.codec.OcrHintsCodec.given
 import momo.api.domain.ids.*
-import momo.api.domain.{OcrJobHints, RequestId, ScreenType}
+import momo.api.domain.{OcrJobHints, RequestId, ScreenType, StoredImageLocation}
+import momo.api.ports.queue.OcrJobEnqueueRequest
 
 /** Rust OCR queue contract. It carries only opaque object identity and verified image metadata. */
 final class OcrWorkerJobMessageV2 private (
@@ -28,6 +29,24 @@ final class OcrWorkerJobMessageV2 private (
     val requestId: Option[String],
 ):
   def fields: Map[String, String] = OcrWorkerJobMessageV2.toStreamFields(this)
+
+  def toEnqueueRequest: Either[String, OcrJobEnqueueRequest] =
+    StoredImageLocation.fromString(imageObjectKey).map(location =>
+      OcrJobEnqueueRequest(
+        jobId = jobId,
+        draftId = draftId,
+        imageId = sourceImageId,
+        imageLocation = location,
+        imageSha256 = sha256,
+        imageByteLength = byteLength,
+        imageMediaType = mediaType,
+        requestedScreenType = requestedScreenType,
+        attempt = attempt,
+        enqueuedAt = enqueuedAt,
+        hints = hints,
+        requestId = requestId,
+      )
+    )
 
 object OcrWorkerJobMessageV2:
   val SchemaVersionKey = "schemaVersion"
@@ -57,6 +76,23 @@ object OcrWorkerJobMessageV2:
   private val ObjectKeyCharacters = "^[A-Za-z0-9][A-Za-z0-9._/-]*$".r
   private val Sha256Pattern = "^[0-9a-f]{64}$".r
   private val printer: Printer = Printer.noSpaces.copy(dropNullValues = true, sortKeys = true)
+
+  def fromEnqueueRequest(
+      request: OcrJobEnqueueRequest
+  ): Either[String, OcrWorkerJobMessageV2] = build(
+    jobId = request.jobId,
+    draftId = request.draftId,
+    sourceImageId = request.imageId,
+    imageObjectKey = request.imageLocation.value,
+    sha256 = request.imageSha256,
+    byteLength = request.imageByteLength,
+    mediaType = request.imageMediaType,
+    requestedScreenType = request.requestedScreenType,
+    attempt = request.attempt,
+    enqueuedAt = request.enqueuedAt,
+    hints = request.hints,
+    requestId = request.requestId,
+  )
 
   def build(
       jobId: OcrJobId,

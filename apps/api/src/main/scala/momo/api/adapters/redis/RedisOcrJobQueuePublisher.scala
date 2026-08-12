@@ -2,15 +2,15 @@ package momo.api.adapters.redis
 
 import scala.jdk.CollectionConverters.*
 
-import cats.Functor
 import cats.effect.{Async, Resource}
-import cats.syntax.functor.*
+import cats.syntax.all.*
+import cats.{Functor, MonadThrow}
 import dev.profunktor.redis4cats.data.RedisCodec
 import dev.profunktor.redis4cats.effect.Log.NoOp.*
 import dev.profunktor.redis4cats.{Redis, RedisCommands}
 
 import momo.api.config.RedisConfig
-import momo.api.contracts.ocrworker.OcrWorkerJobMessage
+import momo.api.contracts.ocrworker.OcrWorkerJobMessageV2
 import momo.api.ports.queue.{OcrJobEnqueueRequest, OcrJobQueueHealthCheck, OcrJobQueuePublisher}
 
 trait RedisStreamClient[F[_]]:
@@ -18,16 +18,23 @@ trait RedisStreamClient[F[_]]:
   def xlen(stream: String): F[Long]
   def ping: F[Unit]
 
-final class RedisOcrJobQueuePublisher[F[_]] private (stream: String, client: RedisStreamClient[F])
-    extends OcrJobQueuePublisher[F]:
+final class RedisOcrJobQueuePublisher[F[_]: MonadThrow] private (
+    stream: String,
+    client: RedisStreamClient[F],
+) extends OcrJobQueuePublisher[F]:
   override def publish(request: OcrJobEnqueueRequest): F[String] =
-    client.xadd(stream, OcrWorkerJobMessage.fromEnqueueRequest(request).fields)
+    OcrWorkerJobMessageV2.fromEnqueueRequest(request)
+      .leftMap(reason => new IllegalArgumentException(s"invalid OCR v2 queue payload: $reason"))
+      .liftTo[F].flatMap(message => client.xadd(stream, message.fields))
 
 object RedisOcrJobQueuePublisher:
-  def apply[F[_]](stream: String, client: RedisStreamClient[F]): RedisOcrJobQueuePublisher[F] =
+  def apply[F[_]: MonadThrow](
+      stream: String,
+      client: RedisStreamClient[F],
+  ): RedisOcrJobQueuePublisher[F] =
     new RedisOcrJobQueuePublisher(stream, client)
 
-  def fromCommands[F[_]: Functor](
+  def fromCommands[F[_]: MonadThrow](
       stream: String,
       commands: RedisCommands[F, String, String],
   ): RedisOcrJobQueuePublisher[F] =
@@ -41,7 +48,7 @@ object RedisOcrJobQueuePublisher:
 
   def resource[F[_]: Async](config: RedisConfig): Resource[F, RedisOcrJobQueuePublisher[F]] =
     Redis[F].simple(config.url, RedisCodec.Utf8).map(commands =>
-      fromCommands(config.stream, commands)
+      fromCommands(config.v2Stream, commands)
     )
 
 private final class Redis4CatsStreamClient[F[_]: Functor](

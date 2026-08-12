@@ -114,7 +114,8 @@ private final class LiveImageStorageAdmission[F[_]: MonadThrow: LoggerFactory](
     inspector.diskUsage.attempt.flatMap {
       case Left(error) =>
         reject(ownerAccountId, Rejection.DiskStatusUnavailable(SafeLog.throwableClasses(error)))
-      case Right(disk) => evaluateDisk(disk, incomingBytes) match
+      case Right(None) => ().asRight[AppError].pure[F]
+      case Right(Some(disk)) => evaluateDisk(disk, incomingBytes) match
           case Some(rejection) => reject(ownerAccountId, rejection)
           case None => ().asRight[AppError].pure[F]
     }

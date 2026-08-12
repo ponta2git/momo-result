@@ -219,6 +219,7 @@ public repository に置くため、具体的な障害位置、再現手順、en
 - fixtureは公開契約の実際の型・形式を表し、都合のよい接頭辞や型を仮定していないか。
 - producerの正規化結果をconsumer validatorへ渡すcontract testがあるか。
 - 候補生成の成功だけで昇格可能と判断せず、本番変更前の来歴解決がfail-closedで完走するか。
+- 部分再実行でproducer attemptとconsumer attemptが異なる場合も、候補identityをcurrent attemptから再計算せず、実artifact IDとsource attemptを保持したか。
 - release evidenceやhealth checkを変更したとき、通常deploy、再実行、rollbackなど全consumerを列挙し、現在世代と旧target世代の両方を直接通したか。
 
 **参照先**

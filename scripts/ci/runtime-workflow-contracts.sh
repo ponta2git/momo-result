@@ -21,6 +21,21 @@ if [[ "$(grep -Fc 'RUNTIME_MEMORY_LIMIT: "512m"' "${deploy_workflow}")" != "2" ]
   exit 1
 fi
 
+if [[ "$(grep -Fc 'artifact-ids: ${{ needs.runtime-image.outputs.artifact_id }}' \
+  "${deploy_workflow}")" != "2" ]] ||
+  [[ "$(grep -Fc 'RUNTIME_CANDIDATE_RUN_ATTEMPT: ${{ needs.runtime-image.outputs.run_attempt }}' \
+  "${deploy_workflow}")" != "3" ]]; then
+  echo "Runtime candidate consumers must use the producer artifact ID and candidate attempt." >&2
+  exit 1
+fi
+grep -Fq 'scripts/ci/validate-runtime-release-selection.sh' "${deploy_workflow}"
+grep -Fq 'sourceRunAttempt: $sourceRunAttempt' "${deploy_workflow}"
+if grep -Fq '"${GITHUB_RUN_ATTEMPT:?GITHUB_RUN_ATTEMPT is required.}"' \
+  "${repo_root}/scripts/ci/load-runtime-image-artifact.sh"; then
+  echo "Runtime candidate loading must not derive producer identity from the consumer attempt." >&2
+  exit 1
+fi
+
 if grep -Fq 'curl -fsS --retry' "${rollback_workflow}"; then
   echo "Runtime rollback must not use a shared CI runner as the public-edge oracle." >&2
   exit 1

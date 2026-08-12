@@ -8,6 +8,7 @@ trap 'rm -rf "${test_dir}"' EXIT
 
 readonly run_id=123456
 readonly run_attempt=2
+readonly current_run_attempt=3
 readonly commit=0123456789abcdef0123456789abcdef01234567
 readonly image_ref="registry.fly.io/momo-result:${commit}-${run_id}-${run_attempt}"
 readonly image_id=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
@@ -61,7 +62,8 @@ run_loader() {
     cd "${repo_root}"
     PATH="${fake_bin}:${PATH}" FAKE_IMAGE_ID="${image_id}" \
       IMAGE_ARTIFACT_NAME="${artifact_dir}" IMAGE_REF="${image_ref}" \
-      GITHUB_RUN_ID="${run_id}" GITHUB_RUN_ATTEMPT="${run_attempt}" GITHUB_SHA="${commit}" \
+      GITHUB_RUN_ID="${run_id}" GITHUB_RUN_ATTEMPT="${current_run_attempt}" \
+      GITHUB_SHA="${commit}" RUNTIME_CANDIDATE_RUN_ATTEMPT="${run_attempt}" \
       "${loader}"
   )
 }

@@ -44,6 +44,7 @@ jobs:
           scripts/ci/test-load-runtime-image-artifact.sh
           scripts/ci/test-resolve-pushed-runtime-image.sh
           scripts/ci/runtime-workflow-contracts.sh
+          scripts/ci/test-validate-runtime-release-selection.sh
           scripts/ci/test-runtime-memory-smoke.sh
           scripts/ci/test-sanitize-analysis-report.sh
           scripts/ci/test-validate-runtime-deployment.sh

@@ -16,8 +16,27 @@ expected_commit="$4"
 [[ "${expected_run_attempt}" =~ ^[1-9][0-9]*$ ]] || exit 1
 [[ "${expected_commit}" =~ ^[0-9a-f]{40}$ ]] || exit 1
 
-expected_image_ref="registry.fly.io/momo-result:${expected_commit}-${expected_run_id}-${expected_run_attempt}"
-expected_source_name="runtime-image-${expected_run_id}-${expected_run_attempt}"
+schema_version="$(
+  jq -er '.schemaVersion | select(type == "number" and (. == 1 or . == 2))' \
+    "${metadata_file}"
+)" || {
+  echo "Unsupported runtime deployment metadata schema." >&2
+  exit 1
+}
+if [[ "${schema_version}" == "1" ]]; then
+  source_run_attempt="${expected_run_attempt}"
+else
+  source_run_attempt="$(
+    jq -er '.sourceRunAttempt | select(type == "string" and test("^[1-9][0-9]*$"))' \
+      "${metadata_file}"
+  )" || {
+    echo "Runtime deployment metadata has no valid source candidate attempt." >&2
+    exit 1
+  }
+fi
+
+expected_image_ref="registry.fly.io/momo-result:${expected_commit}-${expected_run_id}-${source_run_attempt}"
+expected_source_name="runtime-image-${expected_run_id}-${source_run_attempt}"
 expected_manifest_name="runtime-image-registry-manifest-${expected_run_id}-${expected_run_attempt}"
 
 jq -e \
@@ -26,30 +45,57 @@ jq -e \
   --arg manifestName "${expected_manifest_name}" \
   --arg runAttempt "${expected_run_attempt}" \
   --arg runId "${expected_run_id}" \
-  --arg sourceName "${expected_source_name}" '
+  --arg sourceName "${expected_source_name}" \
+  --arg sourceRunAttempt "${source_run_attempt}" \
+  --argjson schemaVersion "${schema_version}" '
     type == "object" and
-    keys == [
-      "commit",
-      "configSha256",
-      "imageId",
-      "imageRef",
-      "manifestArtifactDigest",
-      "manifestArtifactId",
-      "manifestArtifactName",
-      "manifestSha256",
-      "registryDigest",
-      "registryRef",
-      "runAttempt",
-      "runId",
-      "schemaVersion",
-      "sourceArtifactDigest",
-      "sourceArtifactId",
-      "sourceArtifactName"
-    ] and
-    .schemaVersion == 1 and
+    (
+      if $schemaVersion == 1 then
+        keys == [
+          "commit",
+          "configSha256",
+          "imageId",
+          "imageRef",
+          "manifestArtifactDigest",
+          "manifestArtifactId",
+          "manifestArtifactName",
+          "manifestSha256",
+          "registryDigest",
+          "registryRef",
+          "runAttempt",
+          "runId",
+          "schemaVersion",
+          "sourceArtifactDigest",
+          "sourceArtifactId",
+          "sourceArtifactName"
+        ]
+      else
+        keys == [
+          "commit",
+          "configSha256",
+          "imageId",
+          "imageRef",
+          "manifestArtifactDigest",
+          "manifestArtifactId",
+          "manifestArtifactName",
+          "manifestSha256",
+          "registryDigest",
+          "registryRef",
+          "runAttempt",
+          "runId",
+          "schemaVersion",
+          "sourceArtifactDigest",
+          "sourceArtifactId",
+          "sourceArtifactName",
+          "sourceRunAttempt"
+        ]
+      end
+    ) and
+    .schemaVersion == $schemaVersion and
     .commit == $commit and
     .runId == $runId and
     .runAttempt == $runAttempt and
+    ($schemaVersion == 1 or .sourceRunAttempt == $sourceRunAttempt) and
     .imageRef == $imageRef and
     .sourceArtifactName == $sourceName and
     .manifestArtifactName == $manifestName and
@@ -68,6 +114,7 @@ jq -e \
   }
 
 printf 'candidate_sha=%s\n' "${expected_commit}"
+printf 'source_run_attempt=%s\n' "${source_run_attempt}"
 jq -r '
   "config_sha256=\(.configSha256)",
   "image_ref=\(.imageRef)",

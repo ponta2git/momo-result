@@ -4,6 +4,8 @@
 //! side effects: process isolation, `PostgreSQL` and `Redis` coordination, bounded artifact
 //! staging, release tooling, and runtime configuration.
 
+#[path = "orchestrator/analysis/mod.rs"]
+pub mod analysis;
 mod artifact;
 mod cgroup;
 pub mod child;
@@ -12,6 +14,7 @@ pub mod config;
 mod control;
 mod database;
 mod execution_slot;
+#[path = "orchestrator/ocr/mod.rs"]
 pub mod ocr;
 pub mod orchestrator;
 #[expect(
@@ -21,7 +24,6 @@ pub mod orchestrator;
 pub mod process;
 pub mod release;
 pub mod shadow;
-pub mod worker;
 
 #[cfg(test)]
 #[expect(

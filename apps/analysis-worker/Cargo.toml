@@ -6,7 +6,7 @@ rust-version = "1.97"
 publish = false
 
 [workspace]
-members = ["crates/core", "crates/ocr"]
+members = ["crates/analysis-core", "crates/ocr"]
 resolver = "3"
 
 [dependencies]
@@ -17,7 +17,7 @@ futures-util = { version = "0.3.33", default-features = false, features = ["std"
 hex = "0.4.3"
 image = { version = "0.25.10", default-features = false, features = ["jpeg", "png", "webp"] }
 libc = "0.2.176"
-momo-analysis-core = { path = "crates/core" }
+momo-analysis-core = { path = "crates/analysis-core" }
 momo-ocr = { path = "crates/ocr" }
 openssl = "0.10.81"
 postgres-openssl = "0.5.3"

@@ -2,12 +2,12 @@ use thiserror::Error;
 use tokio::sync::watch;
 
 use crate::{
+    analysis::{self, WorkerError},
     config::{ConfigError, PublicationMode, WorkerConfig, WorkerRuntimeConfig},
     ocr::{
         OcrConsumerMode, OcrConsumerRuntimeConfig, OcrRuntimeConfigError,
         consumer_mode_from_environment,
     },
-    worker::{self, WorkerError},
 };
 
 struct ActiveRuntime {
@@ -82,7 +82,7 @@ pub async fn run(
         return wait_until_shutdown(shutdown).await;
     };
     match active.ocr {
-        OcrConsumerRuntimeConfig::Disabled => worker::run(active.analysis, shutdown)
+        OcrConsumerRuntimeConfig::Disabled => analysis::run(active.analysis, shutdown)
             .await
             .map_err(WorkerOrchestratorError::Analysis),
         OcrConsumerRuntimeConfig::Enabled(ocr) => {
@@ -122,7 +122,7 @@ async fn run_combined(
         analysis_config.shutdown_grace,
     );
     let (shutdown_sender, shutdown_receiver) = watch::channel(false);
-    let analysis_worker = worker::run(analysis_config, shutdown_receiver.clone());
+    let analysis_worker = analysis::run(analysis_config, shutdown_receiver.clone());
     let ocr_worker = crate::ocr::worker::run_with_engine(ocr_config, &engine, shutdown_receiver);
     tokio::pin!(analysis_worker);
     tokio::pin!(ocr_worker);

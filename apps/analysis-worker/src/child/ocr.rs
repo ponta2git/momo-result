@@ -1,29 +1,11 @@
-//! OCR orchestration boundaries around the isolated `momo-ocr` capability.
+//! Stdio adapter for the OCR child process.
 
-pub mod contract;
-pub(crate) mod control;
-pub mod endurance;
-mod isolated_engine;
-pub mod object_store;
-pub(crate) mod queue;
-mod runtime_config;
-pub mod worker;
+use std::io::{self, Write};
+use std::path::PathBuf;
 
-pub use momo_ocr::{OcrFailure, OcrOutput};
-
-#[cfg(target_os = "linux")]
-pub(crate) use isolated_engine::IsolatedNativeOcrEngine;
-pub use isolated_engine::{analyze_isolated_local_image_bytes, probe_isolated_child_lifecycle};
-pub use runtime_config::OcrRuntimeConfigError;
-pub(crate) use runtime_config::{
-    OcrConsumerMode, OcrConsumerRuntimeConfig, consumer_mode_from_environment,
-};
-
-#[doc(hidden)]
+/// Decodes one OCR request, runs the capability crate, and writes one bounded response.
 #[must_use]
-pub fn execute_isolated_child(tessdata_path: Option<std::path::PathBuf>) -> i32 {
-    use std::io::{self, Write};
-
+pub fn execute(tessdata_path: Option<PathBuf>) -> i32 {
     let stdin = io::stdin();
     let request = match momo_ocr::protocol::decode_request(
         crate::process::CHILD_START_MARKER,

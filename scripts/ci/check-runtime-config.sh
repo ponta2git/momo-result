@@ -98,6 +98,24 @@ grep -Fq 'contracts/runtime-db-contract.json /opt/momo-result/contracts/runtime-
   "${repo_root}/Dockerfile"
 grep -Fq 'CMD ["/opt/momo-result/bin/momo-runtime-tool", "serve"]' \
   "${repo_root}/Dockerfile"
+
+for jvm_option in \
+  '-Xms32m' \
+  '-Xmx256m' \
+  '-XX:MaxMetaspaceSize=160m' \
+  '-XX:CompressedClassSpaceSize=32m' \
+  '-XX:ReservedCodeCacheSize=48m' \
+  '-Xss512k' \
+  '-XX:+UseSerialGC' \
+  '-XX:ActiveProcessorCount=2' \
+  '-XX:TieredStopAtLevel=1' \
+  '-XX:+ExitOnOutOfMemoryError' \
+  '-XX:NativeMemoryTracking=summary' \
+  '-XX:+PrintNMTStatistics'; do
+  grep -Fq -- "${jvm_option}" "${repo_root}/Dockerfile"
+done
+
+grep -Fqx 'worker_processes 2;' "${repo_root}/deploy/nginx.conf"
 grep -Fq 'ARG DEBIAN_RUNTIME_IMAGE=debian:bookworm-slim@sha256:' \
   "${repo_root}/Dockerfile"
 

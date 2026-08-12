@@ -31,6 +31,10 @@
 公開HTTP runtimeはwebとAPIだけを運用し、Go製runtime toolがJVMとnginxのlifecycleを管理する。戦績分析と
 OCRはRust製の専用image・起動設定を共有し、公開HTTP runtimeへ同居させない。nginxはweb静的配信とAPI
 reverse proxyを担い、worker runtimeは公開HTTPを持たない。
+公開HTTP runtimeのJVMはheap、metaspace、compressed class space、code cache、thread stack、GC、認識CPU数、
+JIT段階、OOM時の終了動作をimage内で明示する。HTTP request内で高負荷分析を実行しない前提で軽量JITを使い、
+CPU集約処理を再導入する変更ではJIT設定を再評価する。nginx worker数も割当CPU数へ明示的に合わせ、build hostの
+CPU数を自動継承しない。
 分析publicationは上限値がすべて設定されるまでfail closedとし、本番同等環境での測定と切替は実装完了とは
 別のrelease gateとして扱う。provider固有の配置、resource値、詳細手順、secret、攻撃対策の手順はpublic docsに置かない。
 

@@ -146,6 +146,8 @@ PostgreSQL repository、Doobie query、DB table/column、migration 前提に触�
 ## 5. OCR Worker Rules
 
 - runner / parser / domain / payload validation は、実 dataclass、実 parser、in-memory repository / consumer、実状態遷移を優先する。
+- accuracy gateはversion固定の回帰datasetと項目別oracleを使う。独立blind holdoutは必須とせず、未知画像への
+  一般化を保証したと報告しない。新しい誤認識は再現可能な回帰fixtureへ追加し、Rust側で前進修正する。
 - interaction verification は Redis wire adapter、native OCR API、process composition、worker loop の停止・retry 境界に限定する。
 - Docker、Redis、PostgreSQL、native OCR engine、tessdata は integration marker へ分離する。
 - screen type 判定、queue payload validation、failure code mapping、ack / pending / DLQ、parser profile selection、OCR postprocess の複合条件は table-driven test にする。
@@ -260,5 +262,8 @@ PostgreSQL repository、Doobie query、DB table/column、migration 前提に触�
 - DB schema 前提を変えたら `docs/db-rule.md` の Consumer Contract を満たす。
 - `docs/post-mortem/lessons.md` に該当するカードがあれば、テスト選択と最終報告に反映する。
 - 性能事故・高負荷計算の変更では、機能テストの成功と性能回復の証拠を分けて報告する。
+- 公開runtimeのJVM / nginx resource profileを変えたら、image内の実効値、cgroup hard limit、runtime smoke、
+  Playwright E2E、HTTP hard concurrency相当の負荷、limit / OOM event、peak headroomを同じimageで検証する。
+  開発hostだけで採用せず、production target OS / architectureのCIを通す。
 - 戦績分析の初回公開とresource影響変更では、private運用要件の本番同等resource/performance gateと
   timeout設定を満たすまでリリース可としない。

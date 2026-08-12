@@ -68,7 +68,7 @@ ENV APP_ENV=prod
 ENV HTTP_HOST=127.0.0.1
 ENV HTTP_PORT=8081
 ENV JAVA_HOME=/opt/java/openjdk
-ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=60 -Djava.security.egd=file:/dev/./urandom"
+ENV JAVA_TOOL_OPTIONS="-Xms32m -Xmx256m -XX:MaxMetaspaceSize=160m -XX:CompressedClassSpaceSize=32m -XX:ReservedCodeCacheSize=48m -Xss512k -XX:+UseSerialGC -XX:ActiveProcessorCount=2 -XX:TieredStopAtLevel=1 -XX:+ExitOnOutOfMemoryError -XX:NativeMemoryTracking=summary -XX:+UnlockDiagnosticVMOptions -XX:+PrintNMTStatistics -Djava.security.egd=file:/dev/./urandom"
 ENV MOMO_NGINX_OUTPUT_PATH=/tmp/momo-result/nginx/nginx.conf
 ENV MOMO_RUNTIME_STOP_GRACE_SECONDS=30
 ENV PATH="${JAVA_HOME}/bin:/opt/momo-result/bin:${PATH}"
@@ -101,7 +101,7 @@ COPY --chown=momo:momo contracts/runtime-db-contract.json /opt/momo-result/contr
 COPY deploy/nginx.conf /etc/nginx/nginx.conf.template
 COPY --from=runtime-tool-builder --chown=momo:momo /out/momo-runtime-tool /opt/momo-result/bin/momo-runtime-tool
 RUN chmod 0755 /opt/momo-result/bin/momo-runtime-tool \
-  && /opt/java/openjdk/bin/java -version \
+  && /opt/java/openjdk/bin/java -XX:-PrintNMTStatistics -version \
   && /opt/momo-result/bin/momo-runtime-tool smoke edge invalid_host >/dev/null 2>&1; test "$?" -eq 1
 
 EXPOSE 8080

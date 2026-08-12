@@ -1568,7 +1568,7 @@ rollback契約:
 | 全作品で分析同時実行1 | 実装済み | DB execution slot、lease、fenceを実装し、失効lease回収とowner lossを実service smokeで検証した。 |
 | 直前成果物を保った原子的更新 | 実装済み | current / previous制約、staging検証、fenced publish、checksum reuse、stale revision再queueを実service smokeで検証した。 |
 | Webの「当てはめるだけ」化 | 実装済み | v2 artifact型へ切り替え、旧集計helperを削除し、静的scanとartifact fixtureの直接表示testを追加した。 |
-| OCRとの排他・OCR優先 | 有効化済み・残余リスクあり | v2 object key、Rust consumer、共有slot、実process preemption、子回収、live object storage、FullHD本番縦切り、旧queue drainを検証した。固定datasetでは非劣化を確認したが、独立blind holdoutは未実施。 |
+| OCRとの排他・OCR優先 | 有効化済み・受容範囲を明示 | v2 object key、Rust consumer、共有slot、実process preemption、子回収、live object storage、FullHD本番縦切り、旧queue drainを検証した。精度判定はversion固定datasetの非劣化を正本とし、未知画像への一般化保証は行わない。 |
 
 実装完了と本番release完了は分ける。初回activationは完了しているが、以後のreleaseでも次を不変条件とする。
 
@@ -1584,8 +1584,8 @@ rollback契約:
 
 ## 11. 今後の改善対象
 
-- Rust OCRの独立blind holdoutによる追加精度判定。
-- 公開HTTP runtimeのJVM memory tuning。APIの可用性・latency・主要失敗経路を維持したまま削減可能性を測る。
+- 公開HTTP runtimeのJVM profileは明示上限とcgroup headroom gateを維持し、実trafficでresource classの縮小余地を
+  継続判定する。
 - provider固有のautoscaling、台数、費用最適化の確定。
 - job履歴のpagination、作品filter、45日分の全履歴表示。
 - 利用者による再計算、job cancel、priority変更。

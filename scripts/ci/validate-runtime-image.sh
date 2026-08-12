@@ -12,6 +12,7 @@ docker run --rm \
 docker run --rm "${image_ref}" test -d /opt/momo-result/api/lib
 docker run --rm "${image_ref}" test -x /opt/java/openjdk/bin/java
 docker run --rm "${image_ref}" test -x /opt/momo-result/bin/momo-runtime-tool
+"$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/runtime-jvm-profile.sh" "${image_ref}"
 if docker run --rm "${image_ref}" \
   /opt/momo-result/bin/momo-runtime-tool smoke edge invalid_host >/dev/null 2>&1; then
   echo "Runtime tool must reject an invalid public-edge host." >&2

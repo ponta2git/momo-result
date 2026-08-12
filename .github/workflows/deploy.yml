@@ -319,6 +319,8 @@ jobs:
           IMAGE_UPLOAD_STORAGE_MAX_USED_PERCENT: "100"
           IMAGE_UPLOAD_STORAGE_MIN_FREE_BYTES: "1"
           MOMO_ORIGIN_LOCK_TOKEN: ${{ env.CI_DUMMY_ORIGIN_LOCK_TOKEN }}
+          RUNTIME_CPU_LIMIT: "2"
+          RUNTIME_MEMORY_LIMIT: "512m"
         timeout-minutes: 3
 
       - name: Release DB contract preflight
@@ -336,6 +338,12 @@ jobs:
         env:
           PLAYWRIGHT_BASE_URL: http://127.0.0.1:8080
         timeout-minutes: 10
+
+      - name: Runtime memory headroom smoke
+        run: scripts/ci/runtime-memory-smoke.sh
+        env:
+          MOMO_ORIGIN_LOCK_TOKEN: ${{ env.CI_DUMMY_ORIGIN_LOCK_TOKEN }}
+        timeout-minutes: 3
 
       - name: Graceful runtime shutdown smoke
         run: scripts/ci/runtime-shutdown-smoke.sh
@@ -462,6 +470,8 @@ jobs:
           IMAGE_UPLOAD_STORAGE_MAX_USED_PERCENT: "100"
           IMAGE_UPLOAD_STORAGE_MIN_FREE_BYTES: "1"
           MOMO_ORIGIN_LOCK_TOKEN: ${{ env.CI_DUMMY_ORIGIN_LOCK_TOKEN }}
+          RUNTIME_CPU_LIMIT: "2"
+          RUNTIME_MEMORY_LIMIT: "512m"
         timeout-minutes: 3
 
       - name: Release DB contract preflight
@@ -479,6 +489,12 @@ jobs:
         env:
           PLAYWRIGHT_BASE_URL: http://127.0.0.1:8080
         timeout-minutes: 10
+
+      - name: Runtime memory headroom smoke
+        run: scripts/ci/runtime-memory-smoke.sh
+        env:
+          MOMO_ORIGIN_LOCK_TOKEN: ${{ env.CI_DUMMY_ORIGIN_LOCK_TOKEN }}
+        timeout-minutes: 3
 
       - name: Graceful runtime shutdown smoke
         run: scripts/ci/runtime-shutdown-smoke.sh

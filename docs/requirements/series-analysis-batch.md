@@ -337,8 +337,10 @@ OCR同居runtimeの実装完了とproduction activationは分ける。activation
 - OCR開始前または成果物commit開始後など、中断不可能な短いcritical sectionを定義し、二重commitを防ぐ。
 - 別runtimeからOCR画像を読むv2 queueは、認可された共有storage上の論理ID / opaque object keyを使う。
   runtime-local volumeの共有やAPIからの一時的なfile配信へ依存しない。
-- Rust OCRのproduction activationは、独立holdoutでの精度、FullHD peak memory、処理時間、cgroup隔離、
-  object storage実疎通を満たして判断する。費用削減だけを完了根拠にしない。
+- Rust OCRのproduction activationは、version固定の回帰datasetでの項目別精度が非劣化または改善方向であること、
+  FullHD peak memory、処理時間、cgroup隔離、object storage実疎通を満たして判断する。独立blind holdoutは
+  release要件にせず、未知画像への一般化精度を保証したとは扱わない。新しい誤認識はRust側へ回帰fixtureを追加して
+  前進修正する。費用削減だけを完了根拠にしない。
 
 ---
 

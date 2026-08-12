@@ -277,7 +277,7 @@ sbt apiR2Quality
 | analysis-worker algorithm version | analysis-worker production gate + release DB smoke + control-plane smoke。ローカルDBは互換性dry-run後にrelease昇格 |
 | worker DB / Redis / process | worker production gate + release DB smoke + analysis control-plane smoke + OCR control-plane smoke + preemption smoke + dedicated image smoke |
 | Go deploy / ops tool | `cd tools && go test ./... && go vet ./...`; zero-install shell collectorを含む場合は対応する`test-*.sh` |
-| Docker/Fly/runtime config | `pnpm public:safety:check`, `docker build`, `scripts/ci/runtime-smoke.sh`, container image scan、必要なら `pnpm web:e2e:runtime` |
+| Docker/Fly/runtime config | `pnpm public:safety:check`, `docker build`, `scripts/ci/validate-runtime-image.sh`, `scripts/ci/runtime-smoke.sh`, `pnpm web:e2e:runtime`, `scripts/ci/runtime-memory-smoke.sh`, `scripts/ci/runtime-shutdown-smoke.sh`, container image scan |
 | coverage対象ロジック | 各領域の coverage gate |
 | docs only | `git diff --check`, `pnpm public:safety:check` |
 

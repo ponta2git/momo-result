@@ -244,6 +244,9 @@ OCRジョブのタイムアウト初期値は `OCR_TIMEOUT_SECONDS` で管理す
 - webとAPIは同一ドメインの公開HTTP runtimeで運用する。
 - nginxがweb SPAの静的ファイル配信とAPI reverse proxyを担当する。
 - Go製runtime toolがnginxとJVM APIの起動、監視、graceful shutdownを担当する。
+- JVMとnginxの並列度・memory上限はimage内で明示し、hostのCPU数やmemory比率だけに委ねない。JVM profile変更は
+  実効flag検査、実runtime image、cgroup hard limit、主要E2E、最大HTTP同時数の負荷、OOM eventなし、25%以上の
+  peak memory余白を同じcandidateで満たす。target OS / architectureのCIを最終判定とする。
 - OCRと戦績分析は利用者向けHTTP入口を持たない独立Rust runtimeで、DB上の実行枠を1に制限する。
 - provider固有のapp名、region、台数、resource classはprivate運用要件を正本とする。
 

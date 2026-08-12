@@ -11,6 +11,14 @@ origin_lock_token="${MOMO_ORIGIN_LOCK_TOKEN:?MOMO_ORIGIN_LOCK_TOKEN is required.
 canonical_host="${MOMO_CANONICAL_HOST:-momo-result.ponta.me}"
 container_name="${RUNTIME_CONTAINER_NAME:-momo-result-runtime}"
 
+runtime_limit_args=()
+if [[ -n "${RUNTIME_MEMORY_LIMIT:-}" ]]; then
+  runtime_limit_args+=(--memory "${RUNTIME_MEMORY_LIMIT}" --memory-swap "${RUNTIME_MEMORY_LIMIT}")
+fi
+if [[ -n "${RUNTIME_CPU_LIMIT:-}" ]]; then
+  runtime_limit_args+=(--cpus "${RUNTIME_CPU_LIMIT}")
+fi
+
 runtime_env_args=(-e APP_ENV=dev)
 if [[ -n "${IMAGE_UPLOAD_STORAGE_MIN_FREE_BYTES:-}" ]]; then
   runtime_env_args+=(-e "IMAGE_UPLOAD_STORAGE_MIN_FREE_BYTES=${IMAGE_UPLOAD_STORAGE_MIN_FREE_BYTES}")
@@ -22,6 +30,7 @@ fi
 docker run -d \
   --name "${container_name}" \
   --network host \
+  "${runtime_limit_args[@]}" \
   -e DATABASE_URL="${database_url}" \
   -e DEV_MEMBER_IDS="${dev_member_ids}" \
   -e MOMO_CANONICAL_HOST="${canonical_host}" \

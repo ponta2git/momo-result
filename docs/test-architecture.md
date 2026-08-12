@@ -89,13 +89,14 @@ CI の report mode は、同じテスト集合を通常実行と coverage 実行
 | OCR queue / control | S / M / L | v2 payload、job lifecycle、lease / fence、ack / PEL / DLQ、failure code。複合条件はtable-driven。 |
 | OCR parser / image processing | S / L | 画面種別、金額・順位・事件回数・名前寄せ、FullHD / media検証、native OCR adapter。 |
 | OCR object storage | M / L | opaque key、bytes / checksum / media type再検証、R2 get、失敗時のterminal化。 |
-| OCR accuracy evaluator | 別枠 | code coverageではなく、固定datasetの項目別正答率、差分、処理時間を非公開artifactで管理する。 |
+| OCR accuracy evaluator | 別枠 | code coverageではなく、version固定datasetの項目別正答率、差分、処理時間を非公開artifactで管理する。独立blind holdoutは必須gateにせず、このoracleから未知画像への一般化保証を導かない。 |
 | pure calculation / statistics | S | 数式、分母、同値、丸め、seed、入力順独立性、品質状態。golden、高精度参照値、propertyを使う。 |
 | scope / artifact assembly | S / M | 全有効スコープ、計算再利用、安定した並び順、schema / algorithm version、部分成果物禁止。 |
 | job state machine | S / M | queued / running / terminal、最大3回のtransient retry、timeout非retry、coalescing、preemption。 |
 | PostgreSQL / Redis adapters | L | lease、outbox、publish、pending / claim / ack、冪等性、terminal write before ackを実サービスで検証する。 |
 | parent / child process | L | 正常終了、異常終了、hard timeout、signal、zombie防止、atomic publish。 |
 | release resource gate | XL / 別枠 | 固定4名、全scope、現在の2倍かつ最低500試合、100回連続実行のpeak memoryと処理時間。provider実測はprivateに保存する。 |
+| public runtime JVM resource gate | XL | 実効JVM flag、cgroup hard limit、runtime smoke、Playwright E2E、最大HTTP同時数の負荷、OOM eventなし、25%以上のpeak memory余白を同じimageで検証する。 |
 
 OCR精度劣化はcode coverageでは検知しにくいため、characterizationとaccuracy reportを別枠で扱う。
 戦績分析のRust移植では現行Scalaとの差分を記録するが、Scala値だけを正しさのoracleにしない。より正確な差異は
@@ -137,5 +138,4 @@ resource class、費用、実測memory / timingは公開CI artifactへ含めず�
 
 1. report mode の baseline を hard gate へ昇格する。
 2. 重要ファイル / 重要glob の non-regression gate を追加する。
-3. OCR holdout accuracy report を nightly / release gate にする。
-4. 既定ブランチのcoverage推移を長期保存する。
+3. 既定ブランチのcoverage推移を長期保存する。

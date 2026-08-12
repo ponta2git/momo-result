@@ -13,6 +13,10 @@ use super::{
     object_store::R2ObjectStoreConfig,
 };
 
+mod local;
+
+pub use local::{LocalOcrEnduranceRequest, LocalOcrEnduranceThresholds, run_local_endurance};
+
 const MAXIMUM_MANIFEST_BYTES: u64 = 64 * 1024;
 const MAXIMUM_OBJECTS: usize = 24;
 const MAXIMUM_RUNS: u32 = 1_000;

@@ -190,6 +190,12 @@ pub(crate) fn build_artifact(
 ) -> Result<ArtifactBuild, ArtifactError> {
     let build_started = Instant::now();
     validate_empty_directory(output_directory)?;
+    if input
+        .resource_count()
+        .is_none_or(|count| count > request.maximum_chunk_count)
+    {
+        return Err(ArtifactError::ResourceBound);
+    }
     let source_input_checksum = source_input_checksum(input)?;
 
     let mut writer = ArtifactWriter::new(request, output_directory)?;
@@ -685,7 +691,7 @@ mod tests {
     }
 
     #[test]
-    fn stops_writing_as_soon_as_the_resource_count_bound_is_reached() {
+    fn rejects_an_impossible_resource_count_before_writing_payloads() {
         let directory = TempDir::new().unwrap_or_else(|error| panic!("temp directory: {error}"));
         let mut bounded = request();
         bounded.maximum_chunk_count = 1;
@@ -697,7 +703,7 @@ mod tests {
             .count();
 
         assert!(matches!(result, Err(ArtifactError::ResourceBound)));
-        assert_eq!(written, 1);
+        assert_eq!(written, 0);
     }
 
     #[test]

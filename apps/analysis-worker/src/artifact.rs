@@ -660,6 +660,10 @@ mod tests {
         assert_eq!(manifest.game_title_id, "title-artifact");
         assert_eq!(manifest.input_revision, "2");
         assert_eq!(manifest.algorithm_version, "series-analysis-v1");
+        assert_eq!(
+            manifest.root_checksum,
+            "sha256:524001b2b7a735365f1f61c0f07ae5e767c3430ef34eac08ef24b6293b08ef9d"
+        );
         let resource_counts = manifest.resources.iter().fold(
             (0_usize, 0_usize, 0_usize, 0_usize),
             |(aggregates, reviews, drilldowns, contexts), resource| match resource {

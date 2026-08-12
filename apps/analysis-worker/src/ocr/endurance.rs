@@ -14,6 +14,7 @@ use super::{
 };
 
 mod local;
+mod vm_memory;
 
 pub use local::{LocalOcrEnduranceRequest, LocalOcrEnduranceThresholds, run_local_endurance};
 
@@ -66,7 +67,8 @@ pub struct OcrEnduranceReport {
     first_run: Option<RunTiming>,
     failures: FailureCounts,
     child_memory: MemoryEvidence,
-    runtime_memory: MemoryEvidence,
+    runtime_memory: vm_memory::VmMemoryEvidence,
+    runtime_cgroup_memory: RuntimeCgroupEvidence,
     thresholds: OcrEnduranceThresholds,
     require_full_hd: bool,
     require_sub_full_hd: bool,
@@ -143,6 +145,18 @@ struct MemoryEvidence {
     peak_basis_points: u64,
 }
 
+#[derive(Clone, Copy, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RuntimeCgroupEvidence {
+    configured_limit_bytes: Option<u64>,
+    baseline_current_bytes: u64,
+    final_current_bytes: u64,
+    baseline_peak_bytes: u64,
+    final_peak_bytes: u64,
+    limit_hit_count_delta: u64,
+    oom_kill_count_delta: u64,
+}
+
 #[derive(Clone, Copy, Debug, Eq, Error, PartialEq)]
 pub enum OcrEnduranceError {
     #[error("OCR endurance configuration is invalid")]
@@ -155,6 +169,10 @@ pub enum OcrEnduranceError {
     UnsupportedPlatform,
     #[error("OCR endurance cgroup evidence is unavailable")]
     Cgroup,
+    #[error(
+        "OCR endurance VM memory evidence is unavailable or does not match the configured class"
+    )]
+    RuntimeMemory,
     #[error("OCR endurance child cleanup failed")]
     Cleanup,
 }
@@ -321,9 +339,8 @@ async fn run_linux(
     let runtime_before = cgroup
         .runtime_snapshot()
         .map_err(|_error| OcrEnduranceError::Cgroup)?;
-    if runtime_before.limit_bytes != Some(request.expected_runtime_memory_limit_bytes) {
-        return Err(OcrEnduranceError::Configuration);
-    }
+    let vm_memory =
+        vm_memory::VmMemorySampler::start(request.expected_runtime_memory_limit_bytes).await?;
 
     let store = R2ObjectStore::new(&request.object_store);
     let engine = IsolatedNativeOcrEngine::new(cgroup.clone(), None, request.stop_grace);
@@ -446,11 +463,8 @@ async fn run_linux(
         .map_err(|_error| OcrEnduranceError::Cgroup)?;
     let child_memory =
         memory_evidence(request.child_memory_limit_bytes, child_before, child_after)?;
-    let runtime_memory = runtime_memory_evidence(
-        request.expected_runtime_memory_limit_bytes,
-        runtime_before,
-        runtime_after,
-    )?;
+    let runtime_cgroup_memory = runtime_cgroup_evidence(runtime_before, runtime_after)?;
+    let runtime_memory = vm_memory.finish().await?;
     let download_distribution = distribution(download_durations);
     let ocr_distribution = distribution(ocr_durations);
     let total_distribution = distribution(total_durations);
@@ -458,16 +472,14 @@ async fn run_linux(
         && failures.total() == 0
         && child_memory.limit_hit_count_delta == 0
         && child_memory.oom_kill_count_delta == 0
-        && runtime_memory.limit_hit_count_delta == 0
-        && runtime_memory.oom_kill_count_delta == 0
+        && runtime_cgroup_memory.limit_hit_count_delta == 0
+        && runtime_cgroup_memory.oom_kill_count_delta == 0
         && within_peak_threshold(
             child_memory,
             request.thresholds.maximum_child_peak_basis_points,
         )
-        && within_peak_threshold(
-            runtime_memory,
-            request.thresholds.maximum_runtime_peak_basis_points,
-        )
+        && runtime_memory
+            .within_peak_threshold(request.thresholds.maximum_runtime_peak_basis_points)
         && duration_within(
             &download_distribution,
             request.thresholds.maximum_download_p99_milliseconds,
@@ -496,7 +508,7 @@ async fn run_linux(
                 > 0);
 
     Ok(OcrEnduranceReport {
-        schema_version: 1,
+        schema_version: 2,
         mode: "r2_isolated_ocr",
         runs_requested: request.runs,
         runs_completed: request.runs,
@@ -512,6 +524,7 @@ async fn run_linux(
         failures,
         child_memory,
         runtime_memory,
+        runtime_cgroup_memory,
         thresholds: request.thresholds,
         require_full_hd: request.require_full_hd,
         require_sub_full_hd: request.require_sub_full_hd,
@@ -564,24 +577,28 @@ fn memory_evidence(
 }
 
 #[cfg(target_os = "linux")]
-fn runtime_memory_evidence(
-    limit_bytes: u64,
+fn runtime_cgroup_evidence(
     before: crate::cgroup::RuntimeMemorySnapshot,
     after: crate::cgroup::RuntimeMemorySnapshot,
-) -> Result<MemoryEvidence, OcrEnduranceError> {
-    if after.limit_bytes != Some(limit_bytes) {
+) -> Result<RuntimeCgroupEvidence, OcrEnduranceError> {
+    if after.limit_bytes != before.limit_bytes {
         return Err(OcrEnduranceError::Configuration);
     }
-    evidence(
-        limit_bytes,
-        before.current_bytes,
-        after.current_bytes,
-        after.peak_bytes,
-        before.limit_hit_count,
-        after.limit_hit_count,
-        before.oom_kill_count,
-        after.oom_kill_count,
-    )
+    Ok(RuntimeCgroupEvidence {
+        configured_limit_bytes: after.limit_bytes,
+        baseline_current_bytes: before.current_bytes,
+        final_current_bytes: after.current_bytes,
+        baseline_peak_bytes: before.peak_bytes,
+        final_peak_bytes: after.peak_bytes,
+        limit_hit_count_delta: after
+            .limit_hit_count
+            .checked_sub(before.limit_hit_count)
+            .ok_or(OcrEnduranceError::Cgroup)?,
+        oom_kill_count_delta: after
+            .oom_kill_count
+            .checked_sub(before.oom_kill_count)
+            .ok_or(OcrEnduranceError::Cgroup)?,
+    })
 }
 
 #[expect(

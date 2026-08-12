@@ -12,7 +12,7 @@ use crate::ocr::contract::{OcrHints, RequestedScreenType};
 #[cfg(target_os = "linux")]
 use super::{
     distribution, domain_failure_kind, elapsed_microseconds, evidence, milliseconds,
-    within_peak_threshold,
+    runtime_cgroup_evidence, vm_memory::VmMemorySampler, within_peak_threshold,
 };
 #[cfg(target_os = "linux")]
 use image::ImageReader;
@@ -68,7 +68,8 @@ pub struct LocalOcrEnduranceReport {
     first_run: Option<RunTiming>,
     failures: LocalFailureCounts,
     child_memory: MemoryEvidence,
-    runtime_memory: MemoryEvidence,
+    runtime_memory: super::vm_memory::VmMemoryEvidence,
+    runtime_cgroup_memory: super::RuntimeCgroupEvidence,
     thresholds: LocalOcrEnduranceThresholds,
     require_full_hd: bool,
     require_sub_full_hd: bool,
@@ -258,9 +259,7 @@ async fn run_linux(
     let runtime_before = cgroup
         .runtime_snapshot()
         .map_err(|_error| OcrEnduranceError::Cgroup)?;
-    if runtime_before.limit_bytes != Some(request.expected_runtime_memory_limit_bytes) {
-        return Err(OcrEnduranceError::Configuration);
-    }
+    let vm_memory = VmMemorySampler::start(request.expected_runtime_memory_limit_bytes).await?;
 
     let run_capacity =
         usize::try_from(request.runs).map_err(|_error| OcrEnduranceError::Configuration)?;
@@ -361,20 +360,8 @@ async fn run_linux(
         child_before.oom_kill_count,
         child_after.oom_kill_count,
     )?;
-    let runtime_limit = runtime_after
-        .limit_bytes
-        .filter(|limit| *limit == request.expected_runtime_memory_limit_bytes)
-        .ok_or(OcrEnduranceError::Configuration)?;
-    let runtime_memory = evidence(
-        runtime_limit,
-        runtime_before.current_bytes,
-        runtime_after.current_bytes,
-        runtime_after.peak_bytes,
-        runtime_before.limit_hit_count,
-        runtime_after.limit_hit_count,
-        runtime_before.oom_kill_count,
-        runtime_after.oom_kill_count,
-    )?;
+    let runtime_cgroup_memory = runtime_cgroup_evidence(runtime_before, runtime_after)?;
+    let runtime_memory = vm_memory.finish().await?;
     let input_distribution = distribution(input_durations);
     let ocr_distribution = distribution(ocr_durations);
     let total_distribution = distribution(total_durations);
@@ -382,16 +369,14 @@ async fn run_linux(
         && failures.total() == 0
         && child_memory.limit_hit_count_delta == 0
         && child_memory.oom_kill_count_delta == 0
-        && runtime_memory.limit_hit_count_delta == 0
-        && runtime_memory.oom_kill_count_delta == 0
+        && runtime_cgroup_memory.limit_hit_count_delta == 0
+        && runtime_cgroup_memory.oom_kill_count_delta == 0
         && within_peak_threshold(
             child_memory,
             request.thresholds.maximum_child_peak_basis_points,
         )
-        && within_peak_threshold(
-            runtime_memory,
-            request.thresholds.maximum_runtime_peak_basis_points,
-        )
+        && runtime_memory
+            .within_peak_threshold(request.thresholds.maximum_runtime_peak_basis_points)
         && duration_within(
             &input_distribution,
             request.thresholds.maximum_input_p99_milliseconds,
@@ -420,7 +405,7 @@ async fn run_linux(
                 > 0);
 
     Ok(LocalOcrEnduranceReport {
-        schema_version: 1,
+        schema_version: 2,
         mode: "local_file_isolated_ocr",
         runs_requested: request.runs,
         runs_completed: request.runs,
@@ -436,6 +421,7 @@ async fn run_linux(
         failures,
         child_memory,
         runtime_memory,
+        runtime_cgroup_memory,
         thresholds: request.thresholds,
         require_full_hd: request.require_full_hd,
         require_sub_full_hd: request.require_sub_full_hd,

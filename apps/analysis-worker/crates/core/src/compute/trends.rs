@@ -158,7 +158,7 @@ impl RunningPopulationStdDev {
         let delta = value - self.mean;
         self.mean += delta / count;
         let corrected_delta = value - self.mean;
-        self.sum_squared_deviations += delta * corrected_delta;
+        self.sum_squared_deviations = delta.mul_add(corrected_delta, self.sum_squared_deviations);
         self.count = next_count;
         (self.sum_squared_deviations.max(0.0) / count).sqrt()
     }

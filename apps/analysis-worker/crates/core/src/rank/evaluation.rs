@@ -32,16 +32,17 @@ pub(super) fn analyze(rows: &[&MatchPlayerRow], players: &[String]) -> RankAnaly
     }
 
     let result = encode(rows, players)
-        .map_err(|_| RankFailure::Calculation)
+        .map_err(|_error| RankFailure::Calculation)
         .and_then(|events| {
             let evaluations = evaluate_folds(&events)?;
             let signals =
-                rank_signals(&evaluations, players).map_err(|_| RankFailure::Calculation)?;
-            let expected = expected_ranks(&evaluations).map_err(|_| RankFailure::Calculation)?;
+                rank_signals(&evaluations, players).map_err(|_error| RankFailure::Calculation)?;
+            let expected =
+                expected_ranks(&evaluations).map_err(|_error| RankFailure::Calculation)?;
             let unexpected_wins = build_unexpected_wins(rows, players, &expected)
-                .map_err(|_| RankFailure::Calculation)?;
-            let crown =
-                crown_certainty(&events, players).map_err(|_| RankFailure::ModelNotConverged)?;
+                .map_err(|_error| RankFailure::Calculation)?;
+            let crown = crown_certainty(&events, players)
+                .map_err(|_error| RankFailure::ModelNotConverged)?;
             Ok((evaluations, signals, unexpected_wins, crown))
         });
     match result {
@@ -181,8 +182,9 @@ fn evaluate_folds(events: &[EncodedEvent]) -> Result<Vec<FoldEvaluation>, RankFa
                     .filter(|(index, _)| index % FOLD_COUNT != fold)
                     .map(|(_, event)| event),
             )
-            .map_err(|_| RankFailure::Calculation)?;
-            let test_pairs = pair_records(&test_events).map_err(|_| RankFailure::Calculation)?;
+            .map_err(|_error| RankFailure::Calculation)?;
+            let test_pairs =
+                pair_records(&test_events).map_err(|_error| RankFailure::Calculation)?;
             if training_pairs.is_empty() || test_pairs.is_empty() {
                 return Err(RankFailure::Calculation);
             }
@@ -190,12 +192,12 @@ fn evaluate_folds(events: &[EncodedEvent]) -> Result<Vec<FoldEvaluation>, RankFa
                 .iter()
                 .map(|pair| pair.baseline)
                 .collect::<Vec<_>>())
-            .map_err(|_| RankFailure::ModelNotConverged)?;
+            .map_err(|_error| RankFailure::ModelNotConverged)?;
             let full_fit = fit(&training_pairs
                 .iter()
                 .map(|pair| pair.full)
                 .collect::<Vec<_>>())
-            .map_err(|_| RankFailure::ModelNotConverged)?;
+            .map_err(|_error| RankFailure::ModelNotConverged)?;
             let baseline_observations = test_pairs
                 .iter()
                 .map(|pair| pair.baseline)
@@ -207,16 +209,16 @@ fn evaluate_folds(events: &[EncodedEvent]) -> Result<Vec<FoldEvaluation>, RankFa
                     held_event_count: test_events.len(),
                     comparison_count: test_pairs.len(),
                     baseline_log_loss: log_loss(&baseline_observations, &baseline_fit.coefficients)
-                        .map_err(|_| RankFailure::Calculation)?,
+                        .map_err(|_error| RankFailure::Calculation)?,
                     full_log_loss: log_loss(&full_observations, &full_fit.coefficients)
-                        .map_err(|_| RankFailure::Calculation)?,
+                        .map_err(|_error| RankFailure::Calculation)?,
                     baseline_brier_score: brier_score(
                         &baseline_observations,
                         &baseline_fit.coefficients,
                     )
-                    .map_err(|_| RankFailure::Calculation)?,
+                    .map_err(|_error| RankFailure::Calculation)?,
                     full_brier_score: brier_score(&full_observations, &full_fit.coefficients)
-                        .map_err(|_| RankFailure::Calculation)?,
+                        .map_err(|_error| RankFailure::Calculation)?,
                 },
                 test_events,
                 test_pairs,

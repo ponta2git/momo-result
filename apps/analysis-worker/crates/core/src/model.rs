@@ -192,7 +192,7 @@ impl PreparedAnalysisInput {
     /// index.  The child uses it immediately after the bounded input snapshot is loaded so an
     /// impossible artifact is rejected before rank analysis or JSON construction starts.
     #[must_use]
-    pub fn resource_count(&self) -> Option<u64> {
+    pub const fn resource_count(&self) -> Option<u64> {
         self.resource_count
     }
 }

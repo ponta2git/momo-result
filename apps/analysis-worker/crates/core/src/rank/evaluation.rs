@@ -6,7 +6,7 @@ use super::{
     CrownCertainty, EncodedEvent, EncodedRow, FOLD_COUNT, FULL_FEATURE_COUNT, FoldEvaluation,
     FoldScore, MINIMUM_EVENT_COUNT, MINIMUM_IMPORTANCE, MINIMUM_IMPROVED_FOLDS,
     MINIMUM_MATCH_COUNT, OK_EVENT_COUNT, PLAYER_COUNT, PairRecord, PlayerSignals,
-    PlayerUnexpectedWins, Quality, RankAnalysis, Signal, SignalKind,
+    PlayerUnexpectedWins, Quality, RankAnalysis, RankFailure, Signal, SignalKind,
     bootstrap::crown_certainty,
     encoding::{distinct_matches, encode, pair_records, pair_records_with},
     outcomes::{build_unexpected_wins, expected_ranks},
@@ -31,49 +31,56 @@ pub(super) fn analyze(rows: &[&MatchPlayerRow], players: &[String]) -> RankAnaly
         return empty_result(rows, players, held_event_count, match_count, reasons);
     }
 
-    let result = encode(rows, players).and_then(|events| {
-        let evaluations = evaluate_folds(&events)?;
-        let signals = rank_signals(&evaluations, players)?;
-        let expected = expected_ranks(&evaluations)?;
-        let unexpected_wins = build_unexpected_wins(rows, players, &expected)?;
-        let crown = crown_certainty(&events, players)?;
-        Ok((evaluations, signals, unexpected_wins, crown))
-    });
-    let Ok((evaluations, signals, unexpected_wins, crown)) = result else {
-        return empty_result(
+    let result = encode(rows, players)
+        .map_err(|_| RankFailure::Calculation)
+        .and_then(|events| {
+            let evaluations = evaluate_folds(&events)?;
+            let signals =
+                rank_signals(&evaluations, players).map_err(|_| RankFailure::Calculation)?;
+            let expected = expected_ranks(&evaluations).map_err(|_| RankFailure::Calculation)?;
+            let unexpected_wins = build_unexpected_wins(rows, players, &expected)
+                .map_err(|_| RankFailure::Calculation)?;
+            let crown =
+                crown_certainty(&events, players).map_err(|_| RankFailure::ModelNotConverged)?;
+            Ok((evaluations, signals, unexpected_wins, crown))
+        });
+    match result {
+        Ok((evaluations, signals, unexpected_wins, crown)) => {
+            let improved_fold_count = evaluations
+                .iter()
+                .filter(|evaluation| evaluation.score.improved())
+                .count();
+            let has_stable = signals
+                .iter()
+                .any(|player| player.signals.iter().any(|signal| signal.stable));
+            let (quality, reasons) = assess(
+                held_event_count,
+                match_count,
+                improved_fold_count,
+                has_stable,
+            );
+            RankAnalysis {
+                quality,
+                reason_codes: reasons,
+                held_event_count,
+                match_count,
+                improved_fold_count,
+                fold_scores: evaluations
+                    .iter()
+                    .map(|entry| entry.score.clone())
+                    .collect(),
+                player_signals: signals,
+                unexpected_wins,
+                crown,
+            }
+        }
+        Err(failure) => empty_result(
             rows,
             players,
             held_event_count,
             match_count,
-            vec!["calculation_failed"],
-        );
-    };
-    let improved_fold_count = evaluations
-        .iter()
-        .filter(|evaluation| evaluation.score.improved())
-        .count();
-    let has_stable = signals
-        .iter()
-        .any(|player| player.signals.iter().any(|signal| signal.stable));
-    let (quality, reasons) = assess(
-        held_event_count,
-        match_count,
-        improved_fold_count,
-        has_stable,
-    );
-    RankAnalysis {
-        quality,
-        reason_codes: reasons,
-        held_event_count,
-        match_count,
-        improved_fold_count,
-        fold_scores: evaluations
-            .iter()
-            .map(|entry| entry.score.clone())
-            .collect(),
-        player_signals: signals,
-        unexpected_wins,
-        crown,
+            vec![failure.reason_code()],
+        ),
     }
 }
 
@@ -158,7 +165,7 @@ pub(super) fn bounded_count(value: usize) -> Result<f64, ()> {
     count_as_f64(value).ok_or(())
 }
 
-fn evaluate_folds(events: &[EncodedEvent]) -> Result<Vec<FoldEvaluation>, ()> {
+fn evaluate_folds(events: &[EncodedEvent]) -> Result<Vec<FoldEvaluation>, RankFailure> {
     (0..FOLD_COUNT)
         .map(|fold| {
             let test_events = events
@@ -173,19 +180,22 @@ fn evaluate_folds(events: &[EncodedEvent]) -> Result<Vec<FoldEvaluation>, ()> {
                     .enumerate()
                     .filter(|(index, _)| index % FOLD_COUNT != fold)
                     .map(|(_, event)| event),
-            )?;
-            let test_pairs = pair_records(&test_events)?;
+            )
+            .map_err(|_| RankFailure::Calculation)?;
+            let test_pairs = pair_records(&test_events).map_err(|_| RankFailure::Calculation)?;
             if training_pairs.is_empty() || test_pairs.is_empty() {
-                return Err(());
+                return Err(RankFailure::Calculation);
             }
             let baseline_fit = fit(&training_pairs
                 .iter()
                 .map(|pair| pair.baseline)
-                .collect::<Vec<_>>())?;
+                .collect::<Vec<_>>())
+            .map_err(|_| RankFailure::ModelNotConverged)?;
             let full_fit = fit(&training_pairs
                 .iter()
                 .map(|pair| pair.full)
-                .collect::<Vec<_>>())?;
+                .collect::<Vec<_>>())
+            .map_err(|_| RankFailure::ModelNotConverged)?;
             let baseline_observations = test_pairs
                 .iter()
                 .map(|pair| pair.baseline)
@@ -196,16 +206,17 @@ fn evaluate_folds(events: &[EncodedEvent]) -> Result<Vec<FoldEvaluation>, ()> {
                     fold,
                     held_event_count: test_events.len(),
                     comparison_count: test_pairs.len(),
-                    baseline_log_loss: log_loss(
-                        &baseline_observations,
-                        &baseline_fit.coefficients,
-                    )?,
-                    full_log_loss: log_loss(&full_observations, &full_fit.coefficients)?,
+                    baseline_log_loss: log_loss(&baseline_observations, &baseline_fit.coefficients)
+                        .map_err(|_| RankFailure::Calculation)?,
+                    full_log_loss: log_loss(&full_observations, &full_fit.coefficients)
+                        .map_err(|_| RankFailure::Calculation)?,
                     baseline_brier_score: brier_score(
                         &baseline_observations,
                         &baseline_fit.coefficients,
-                    )?,
-                    full_brier_score: brier_score(&full_observations, &full_fit.coefficients)?,
+                    )
+                    .map_err(|_| RankFailure::Calculation)?,
+                    full_brier_score: brier_score(&full_observations, &full_fit.coefficients)
+                        .map_err(|_| RankFailure::Calculation)?,
                 },
                 test_events,
                 test_pairs,

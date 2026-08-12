@@ -94,6 +94,21 @@ enum Quality {
     NoTarget,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum RankFailure {
+    ModelNotConverged,
+    Calculation,
+}
+
+impl RankFailure {
+    const fn reason_code(self) -> &'static str {
+        match self {
+            Self::ModelNotConverged => "model_not_converged",
+            Self::Calculation => "calculation_failed",
+        }
+    }
+}
+
 impl Quality {
     const fn wire(self) -> &'static str {
         match self {
@@ -390,5 +405,14 @@ mod tests {
             result.get("heldEventCount").and_then(Value::as_u64),
             Some(1)
         );
+    }
+
+    #[test]
+    fn rank_failure_reason_codes_distinguish_model_nonconvergence() {
+        assert_eq!(
+            RankFailure::ModelNotConverged.reason_code(),
+            "model_not_converged"
+        );
+        assert_eq!(RankFailure::Calculation.reason_code(), "calculation_failed");
     }
 }

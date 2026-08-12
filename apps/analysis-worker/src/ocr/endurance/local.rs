@@ -66,6 +66,7 @@ pub struct LocalOcrEnduranceReport {
     successful_runs: u32,
     maximum_endurance_milliseconds: u64,
     elapsed_milliseconds: u64,
+    stop_reason: Option<&'static str>,
     images_configured: usize,
     image_runs: BTreeMap<String, u32>,
     screen_type_runs: BTreeMap<String, u32>,
@@ -281,6 +282,7 @@ async fn run_linux(
     let mut first_run = None;
     let mut successful_runs = 0_u32;
     let mut runs_completed = 0_u32;
+    let mut stop_reason = None;
     let mut failures = LocalFailureCounts::default();
     let mut image_runs = BTreeMap::<String, u32>::new();
     let mut screen_type_runs = BTreeMap::<String, u32>::new();
@@ -297,6 +299,7 @@ async fn run_linux(
         maximum_endurance_milliseconds,
         ocr_timeout_milliseconds = duration_milliseconds(request.ocr_timeout),
         effective_ocr_timeout_milliseconds = duration_milliseconds(effective_ocr_timeout),
+        failure_policy = "fail_fast",
         "local OCR endurance gate started"
     );
 
@@ -308,14 +311,7 @@ async fn run_linux(
         ) else {
             failures.endurance_timeout = failures.endurance_timeout.saturating_add(1);
             failures.category("endurance_timeout");
-            info!(
-                event = "ocr_local_endurance_stopped",
-                reason = "endurance_timeout",
-                runs_completed,
-                runs_requested = request.runs,
-                elapsed_milliseconds = duration_milliseconds(endurance_started.elapsed()),
-                "local OCR endurance wall-time budget was exhausted"
-            );
+            stop_reason = Some("endurance_timeout");
             break;
         };
         let index = usize::try_from(run_index)
@@ -336,6 +332,7 @@ async fn run_linux(
                 total_durations.push(total);
                 failures.input = failures.input.saturating_add(1);
                 failures.category(kind);
+                stop_reason = Some(kind);
                 runs_completed = runs_completed.saturating_add(1);
                 log_local_progress(
                     request,
@@ -349,7 +346,7 @@ async fn run_linux(
                     endurance_started.elapsed(),
                     successful_runs,
                 );
-                continue;
+                break;
             }
             Err(_elapsed) => {
                 let input = elapsed_microseconds(input_started);
@@ -364,6 +361,7 @@ async fn run_linux(
                     "local_input_timeout"
                 };
                 failures.category(kind);
+                stop_reason = Some(kind);
                 runs_completed = runs_completed.saturating_add(1);
                 log_local_progress(
                     request,
@@ -377,10 +375,7 @@ async fn run_linux(
                     endurance_started.elapsed(),
                     successful_runs,
                 );
-                if input_limited_by_endurance {
-                    break;
-                }
-                continue;
+                break;
             }
         };
         let input = elapsed_microseconds(input_started);
@@ -401,6 +396,7 @@ async fn run_linux(
             total_durations.push(total);
             failures.endurance_timeout = failures.endurance_timeout.saturating_add(1);
             failures.category("endurance_timeout");
+            stop_reason = Some("endurance_timeout");
             runs_completed = runs_completed.saturating_add(1);
             log_local_progress(
                 request,
@@ -438,12 +434,10 @@ async fn run_linux(
                 total_milliseconds: milliseconds(total),
             });
         }
-        let mut stop_after_progress = false;
         let outcome_kind = match outcome {
             Err(kind) if ocr_limited_by_endurance && kind == "ocr_child_pilot_timeout" => {
                 failures.endurance_timeout = failures.endurance_timeout.saturating_add(1);
                 failures.category("endurance_timeout");
-                stop_after_progress = true;
                 "endurance_timeout"
             }
             Err(kind) => {
@@ -467,6 +461,9 @@ async fn run_linux(
                 "success"
             }
         };
+        if outcome_kind != "success" {
+            stop_reason = Some(outcome_kind);
+        }
         runs_completed = runs_completed.saturating_add(1);
         log_local_progress(
             request,
@@ -480,11 +477,21 @@ async fn run_linux(
             endurance_started.elapsed(),
             successful_runs,
         );
-        if stop_after_progress {
+        if stop_reason.is_some() {
             break;
         }
     }
 
+    if let Some(reason) = stop_reason {
+        info!(
+            event = "ocr_local_endurance_stopped",
+            reason,
+            runs_completed,
+            runs_requested = request.runs,
+            elapsed_milliseconds = duration_milliseconds(endurance_started.elapsed()),
+            "local OCR endurance gate stopped early"
+        );
+    }
     let elapsed_milliseconds = duration_milliseconds(endurance_started.elapsed());
     cgroup
         .ensure_empty()
@@ -551,13 +558,14 @@ async fn run_linux(
                 > 0);
 
     Ok(LocalOcrEnduranceReport {
-        schema_version: 3,
+        schema_version: 4,
         mode: "local_file_isolated_ocr",
         runs_requested: request.runs,
         runs_completed,
         successful_runs,
         maximum_endurance_milliseconds,
         elapsed_milliseconds,
+        stop_reason,
         images_configured: images.len(),
         image_runs,
         screen_type_runs,

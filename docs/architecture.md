@@ -158,8 +158,10 @@ web の import 境界は `apps/web/scripts/check-architecture-imports.mjs`、mod
 
 ## 4. OCR Worker
 
-- OCRは `apps/analysis-worker/src/ocr` に置き、queue / DB control、R2取得・整合性検証、停止可能な
-  native OCR子process、typed outputを分離する。OCR子は分析子と同じ固定cgroupを時分割で使う。
+- OCRのオーケストレーションは `apps/analysis-worker/src/orchestrator/ocr`、OCR子のstdio adapterは
+  `apps/analysis-worker/src/child/ocr.rs`、native実装・親子protocol・typed domain contractは
+  `apps/analysis-worker/crates/ocr` に置く。queue / DB control、R2取得・整合性検証、停止可能な
+  native OCR子processを分離し、OCR子は分析子と同じ固定cgroupを時分割で使う。
 - OCR/画像解析に外部APIを使わない。
 - OCR対象画面種別ごとに解析器を分け、共通前処理だけ共有する。
 - 画面種別はrequestで明示し、`auto` modeを受理しない。
@@ -175,18 +177,26 @@ web の import 境界は `apps/web/scripts/check-architecture-imports.mjs`、mod
 - queue 契約は `docs/redis-streams-ocr-contract.md`、payload schema は `docs/schemas/*.schema.json` を正本にする。
 - native OCR、Redis、PostgreSQL、R2、tessdataを要する検証は通常のCargo testと分離する。unit testでは
   parser、payload validation、状態遷移、failure mappingを優先し、外部wireは専用smokeで検証する。
+- `momo-ocr` は Tesseract を含むOCR capability crateであり、親processのspawn、cgroup、timeout、kill、
+  reap、queue ack、retry、DB状態遷移を所有しない。protocol codecとTesseract backendは同crate内に置き、
+  将来のnative crate / binary差し替えはこの境界の内側で行う。
 
 ## 5. Analysis Worker
 
-- workerはRust + Cargo workspaceとして `apps/analysis-worker` に置く。`momo-analysis-core` は決定論的な
+- workerはRust + Cargo workspaceとして `apps/analysis-worker` に置く。`crates/analysis-core` の
+  `momo-analysis-core` は決定論的な
   計算kernelとversion付き成果物契約、`momo-analysis` は起動・設定・logging、job lease / queue、入力snapshot、
   成果物staging、DB / Redis / process adapterを所有する。依存方向はruntimeからcoreへの一方向だけとする。
 - coreはDB row、Redis client、HTTP DTO、filesystem、clock、environment、async runtimeへ依存しない。
   queue / artifactのwire型はversion付き契約としてcoreに置けるが、transport処理はruntimeに残す。
-- runtimeでは `worker` を実行調停、`control` をDB状態遷移、`artifact` をbounded成果物境界、`database` を
-  入力adapter、`process` をOS隔離境界とする。計算結果から制御動作への変換は副作用のないdecision tableへ寄せる。
+- runtimeでは `orchestrator/analysis` と `orchestrator/ocr` を各親workerの実行調停、`control` をDB状態遷移、
+  `artifact` をbounded成果物境界、`database` を入力adapter、`process` をOS隔離境界、`child/analysis` と
+  `child/ocr` を子process entry adapterとする。計算結果から制御動作への変換は副作用のないdecision tableへ寄せる。
 - 親processはdelivery受信、DB上の全体実行slotとfencing token、job lease、timeout、signal、子process回収を
   担当する。1作品の計算は停止可能な子processで実行し、子processから現行成果物を直接更新しない。
+- 親子契約は、能力crateが論理request/result/failureとversion付きcodecを所有し、rootがtransportとprocess
+  lifecycleを所有する一方向関係に固定する。OCRのnative domain failureと、親が観測するOOM/crash/timeoutは
+  別の型として扱い、現行の外部failure code写像は互換性のため維持する。
 - release imageは固定root bootstrapだけでchild cgroupを準備し、`cgroup.procs`以外のcontroller操作をworkerへ
   委譲しない。bootstrapは全UID/GIDと補助groupを固定service identityへ恒久的に落としてからworkerをexecする。
   高負荷childはattach/readback完了後にだけ開始し、物理memory hard limitはcgroupを正本とする。

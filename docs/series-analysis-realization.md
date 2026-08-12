@@ -324,23 +324,30 @@ lockする。実PostgreSQLの競合testでdeadlockがないことを確認する
 Rust部分は次の一方向依存に固定する。
 
 ```text
-momo-analysis（副作用を持つruntime shell）
-  ├─ config / main
-  ├─ worker ─ policy / attempt / queue / storage
-  ├─ control ─ vocabulary / capability / claim / lifecycle / completion / publication / recovery / transaction
-  ├─ child / artifact / database / process
-  └─ release / shadow
-          │
-          ▼
-momo-analysis-core（決定論的kernelとversion付き契約）
-  ├─ model / contract / canonical / payload
-  ├─ compute ─ aggregate / metrics / trends / quality / detail / panels / support
-  └─ rank / playbook / stats
+apps/analysis-worker
+  ├─ momo-analysis（副作用を持つruntime shell）
+  │   ├─ config / main / orchestrator
+  │   ├─ orchestrator/analysis ─ policy / attempt / queue / storage
+  │   ├─ orchestrator/ocr ─ queue / DB control / R2 / supervisor
+  │   ├─ child/analysis + child/ocr ─ process entry adapters
+  │   ├─ control / artifact / database / process
+  │   └─ release / shadow
+  ├─ momo-analysis-core（決定論的kernelとversion付き契約）
+  │   ├─ child / model / contract / canonical / payload
+  │   ├─ compute ─ aggregate / metrics / trends / quality / detail / panels / support
+  │   └─ rank / playbook / stats
+  └─ momo-ocr（OCR domain、protocol、Tesseract capability）
+      ├─ contract / protocol / result
+      ├─ native_engine（Tesseract adapter）
+      └─ core（recognition / parser）
 ```
 
-coreからruntimeへの逆依存は禁止する。coreはPostgreSQL、Redis、Tokio、process、filesystem、clock、環境変数を
-参照せず、所有済み入力から決定論的成果物候補を作る。runtimeはadapterで外部値をfallibleにdecodeし、coreの
-version付き契約へ変換する。queue payload型はwire契約としてcoreに置くが、配送・ack・retryはworkerが所有する。
+`momo-analysis` から `momo-analysis-core` と `momo-ocr` へ依存し、両能力crateからruntimeへ逆依存しない。
+
+能力crateからruntimeへの逆依存は禁止する。`momo-analysis-core` はPostgreSQL、Redis、Tokio、process、filesystem、
+clock、環境変数を参照せず、所有済み入力から決定論的成果物候補を作る。`momo-ocr` もRedis、PostgreSQL、Tokio、
+process lifecycleを参照せず、OCR domain、protocol、native engineを所有する。runtimeはadapterで外部値をfallibleに
+decodeし、各能力crateのversion付き論理契約へ変換する。配送・ack・retry・process管理はworkerが所有する。
 runtime crateはcoreの内部moduleを再公開せず、adapterが必要な型を明示importする。
 production workerのprocess isolation契約はLinuxを対象とし、他OSではcapability登録やjob claimより前にfail closedに
 する。release audit / promotionとpure core testはOS非依存のまま実行できるよう分離する。

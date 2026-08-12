@@ -5,7 +5,7 @@ use serde_json::{Value, json};
 use crate::{
     model::MatchPlayerRow,
     numeric::{ceil_i64, count_as_f64, exact_i64_as_f64, floor_i64},
-    stats::{average, percentile_f64, percentile_i32, population_stddev, quality_status, rate},
+    stats::{average, percentile_f64, percentile_i32, quality_status, rate},
 };
 
 use super::support::MatchGroup;
@@ -19,7 +19,7 @@ pub(super) fn trends(
         .flat_map(|kind| {
             players.iter().map(move |member_id| {
                 let rows = rows_by_player.get(member_id).map_or(&[][..], Vec::as_slice);
-                let mut accumulator = TrendAccumulator::new(kind, rows.len());
+                let mut accumulator = TrendAccumulator::new(kind);
                 let points = rows
                     .iter()
                     .enumerate()
@@ -71,21 +71,21 @@ impl TrendKind {
 
 enum TrendAccumulator {
     RankAverage { total: f64, count: usize },
-    RankStandardDeviation(Vec<f64>),
+    RankStandardDeviation(RunningPopulationStdDev),
     PodiumRate { matches: usize, podiums: usize },
     LowerHalfRate { matches: usize, lower_halves: usize },
     GinjiCount(f64),
 }
 
 impl TrendAccumulator {
-    fn new(kind: TrendKind, capacity: usize) -> Self {
+    fn new(kind: TrendKind) -> Self {
         match kind {
             TrendKind::RankAverage => Self::RankAverage {
                 total: 0.0,
                 count: 0,
             },
             TrendKind::RankStandardDeviation => {
-                Self::RankStandardDeviation(Vec::with_capacity(capacity))
+                Self::RankStandardDeviation(RunningPopulationStdDev::default())
             }
             TrendKind::PodiumRate => Self::PodiumRate {
                 matches: 0,
@@ -106,9 +106,8 @@ impl TrendAccumulator {
                 *count = count.saturating_add(1);
                 count_as_f64(*count).map_or(0.0, |count| *total / count)
             }
-            Self::RankStandardDeviation(values) => {
-                values.push(f64::from(row.rank));
-                population_stddev(values).unwrap_or(0.0)
+            Self::RankStandardDeviation(standard_deviation) => {
+                standard_deviation.push(f64::from(row.rank))
             }
             Self::PodiumRate { matches, podiums } => {
                 *matches = matches.saturating_add(1);
@@ -128,6 +127,40 @@ impl TrendAccumulator {
                 *total
             }
         }
+    }
+}
+
+/// Incremental population standard deviation using constant memory.
+///
+/// The previous implementation retained every rank and recomputed the mean
+/// and squared deviations for every point.  Besides making a long trend
+/// quadratic in work and linear in memory, that operation order amplified
+/// cancellation when ranks were accumulated over large inputs.  Welford's
+/// recurrence keeps the same population-statistic definition while making
+/// each observation O(1).  The small floating-point operation-order change is
+/// intentional and covered by the algorithm-version change at the worker
+/// boundary.
+#[derive(Clone, Copy, Default)]
+struct RunningPopulationStdDev {
+    count: usize,
+    mean: f64,
+    sum_squared_deviations: f64,
+}
+
+impl RunningPopulationStdDev {
+    fn push(&mut self, value: f64) -> f64 {
+        let Some(next_count) = self.count.checked_add(1) else {
+            return 0.0;
+        };
+        let Some(count) = count_as_f64(next_count) else {
+            return 0.0;
+        };
+        let delta = value - self.mean;
+        self.mean += delta / count;
+        let corrected_delta = value - self.mean;
+        self.sum_squared_deviations += delta * corrected_delta;
+        self.count = next_count;
+        (self.sum_squared_deviations.max(0.0) / count).sqrt()
     }
 }
 
@@ -450,4 +483,37 @@ pub(super) fn match_no_in_event(players: &[String], rows: &[&MatchPlayerRow]) ->
         })
         .collect::<Vec<_>>();
     json!({ "entries": entries })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::RunningPopulationStdDev;
+
+    #[test]
+    fn running_population_standard_deviation_matches_reference_values() {
+        let mut accumulator = RunningPopulationStdDev::default();
+        let values = [1.0, 2.0, 3.0, 4.0];
+
+        let actual = values
+            .into_iter()
+            .map(|value| accumulator.push(value))
+            .last()
+            .unwrap_or(0.0);
+
+        assert!((actual - 1.118_033_988_749_895).abs() < 1.0e-15);
+    }
+
+    #[test]
+    fn running_population_standard_deviation_handles_large_offset_values() {
+        let mut accumulator = RunningPopulationStdDev::default();
+        let values = [1.0e12 + 1.0, 1.0e12 + 2.0, 1.0e12 + 3.0];
+
+        let actual = values
+            .into_iter()
+            .map(|value| accumulator.push(value))
+            .last()
+            .unwrap_or(0.0);
+
+        assert!((actual - 0.816_496_580_927_726).abs() < 1.0e-9);
+    }
 }

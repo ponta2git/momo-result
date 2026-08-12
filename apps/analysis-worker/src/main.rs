@@ -514,11 +514,12 @@ async fn run_isolated_ocr_pilot(arguments: OcrIsolatedPilotArgs) -> Result<(), S
 }
 
 async fn run_ocr_r2_endurance(arguments: OcrR2EnduranceArgs) -> Result<(), String> {
-    let object_store = R2ObjectStoreConfig::new(
+    let object_store = R2ObjectStoreConfig::new_with_session_token(
         &required_environment("SOURCE_IMAGE_R2_ENDPOINT")?,
         &required_environment("SOURCE_IMAGE_R2_BUCKET")?,
         required_environment("SOURCE_IMAGE_R2_ACCESS_KEY_ID")?,
         required_environment("SOURCE_IMAGE_R2_SECRET_ACCESS_KEY")?,
+        optional_environment("SOURCE_IMAGE_R2_SESSION_TOKEN"),
         Duration::from_millis(arguments.r2_operation_timeout_ms),
         Duration::from_millis(arguments.r2_attempt_timeout_ms),
         arguments.r2_maximum_attempts,
@@ -561,6 +562,12 @@ fn required_environment(name: &'static str) -> Result<String, String> {
         Ok(_value) => Err(format!("required environment variable {name} is missing")),
         Err(_error) => Err(format!("required environment variable {name} is missing")),
     }
+}
+
+fn optional_environment(name: &'static str) -> Option<String> {
+    std::env::var(name)
+        .ok()
+        .filter(|value| !value.trim().is_empty())
 }
 
 async fn read_ocr_pilot_input(

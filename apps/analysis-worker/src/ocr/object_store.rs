@@ -24,6 +24,7 @@ const MAXIMUM_IMAGE_BYTES: usize = 3 * 1024 * 1024;
 const MAXIMUM_WIDTH: u32 = 1920;
 const MAXIMUM_HEIGHT: u32 = 1080;
 const MAXIMUM_CREDENTIAL_BYTES: usize = 512;
+const MAXIMUM_SESSION_TOKEN_BYTES: usize = 16 * 1024;
 
 #[derive(Clone)]
 pub struct R2ObjectStoreConfig {
@@ -61,11 +62,49 @@ impl R2ObjectStoreConfig {
         attempt_timeout: Duration,
         maximum_attempts: u32,
     ) -> Result<Self, R2ObjectStoreConfigError> {
+        Self::new_with_session_token(
+            endpoint,
+            bucket,
+            access_key_id,
+            secret_access_key,
+            None,
+            operation_timeout,
+            attempt_timeout,
+            maximum_attempts,
+        )
+    }
+
+    /// Builds the same fail-closed client with an optional bounded temporary-credential token.
+    ///
+    /// # Errors
+    ///
+    /// Returns the same closed configuration categories as [`Self::new`], including an empty or
+    /// oversized session token.
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "temporary S3 credentials add one inseparable session token to the closed client configuration"
+    )]
+    pub fn new_with_session_token(
+        endpoint: &str,
+        bucket: &str,
+        access_key_id: String,
+        secret_access_key: String,
+        session_token: Option<String>,
+        operation_timeout: Duration,
+        attempt_timeout: Duration,
+        maximum_attempts: u32,
+    ) -> Result<Self, R2ObjectStoreConfigError> {
         let endpoint = validated_endpoint(endpoint)?;
         if !valid_bucket(bucket) {
             return Err(R2ObjectStoreConfigError::Bucket);
         }
         if !valid_credential(&access_key_id) || !valid_credential(&secret_access_key) {
+            return Err(R2ObjectStoreConfigError::Credentials);
+        }
+        if session_token
+            .as_deref()
+            .is_some_and(|value| value.is_empty() || value.len() > MAXIMUM_SESSION_TOKEN_BYTES)
+        {
             return Err(R2ObjectStoreConfigError::Credentials);
         }
         if operation_timeout.is_zero()
@@ -81,7 +120,7 @@ impl R2ObjectStoreConfig {
             credentials: Credentials::new(
                 access_key_id,
                 secret_access_key,
-                None,
+                session_token,
                 None,
                 "momo-r2-object-store",
             ),

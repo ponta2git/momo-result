@@ -175,6 +175,33 @@ impl AnalysisInput {
     }
 }
 
+impl NormalizedAnalysisInput {
+    /// Returns the exact number of resource chunks the calculator will emit.
+    ///
+    /// This is deliberately a shape-only pass: it allocates no payloads and retains no per-scope
+    /// index.  The child uses it immediately after the bounded input snapshot is loaded so an
+    /// impossible artifact is rejected before rank analysis or JSON construction starts.
+    #[must_use]
+    pub fn resource_count(&self) -> Option<u64> {
+        self.scopes().into_iter().try_fold(0_u64, |total, scope| {
+            let rows = self.rows_for_scope(&scope);
+            let players = rows
+                .iter()
+                .map(|row| row.member_id.as_str())
+                .collect::<BTreeSet<_>>();
+            let matches = rows
+                .iter()
+                .map(|row| row.match_id.as_str())
+                .collect::<BTreeSet<_>>();
+            let player_chunks = u64::try_from(players.len()).ok()?.checked_mul(4)?;
+            let scope_count = 2_u64
+                .checked_add(player_chunks)?
+                .checked_add(u64::try_from(matches.len()).ok()?)?;
+            total.checked_add(scope_count)
+        })
+    }
+}
+
 #[must_use]
 pub(crate) fn player_order(rows: &[&MatchPlayerRow]) -> Vec<String> {
     let mut first_by_player = BTreeMap::<&str, &MatchPlayerRow>::new();
@@ -217,5 +244,53 @@ fn preferred_player_order(member_id: &str) -> i32 {
         "member_akane_mami" | "akane" | "akane-mami" => 2,
         "member_otaka" | "otaka" => 3,
         _ => i32::MAX,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{AnalysisInput, IncidentCounts, MatchPlayerRow};
+
+    #[test]
+    fn resource_count_matches_the_emitted_shape_without_payload_generation() {
+        let rows = (0..2)
+            .flat_map(|match_index| {
+                (1..=4).map(move |player| MatchPlayerRow {
+                    match_id: format!("match-{match_index}"),
+                    match_revision: 0,
+                    played_at: format!("2026-01-0{}T00:00:00.000000Z", match_index + 1),
+                    held_event_id: format!("event-{match_index}"),
+                    match_no_in_event: match_index,
+                    season_master_id: String::from("season-1"),
+                    map_master_id: String::from("map-1"),
+                    member_id: format!("member-{player}"),
+                    play_order: player,
+                    rank: player,
+                    total_assets_man_yen: 0,
+                    revenue_man_yen: 0,
+                    incidents: IncidentCounts::default(),
+                })
+            })
+            .collect();
+        let input = AnalysisInput {
+            game_title_id: String::from("title-shape"),
+            input_revision: 0,
+            rows,
+        }
+        .into_normalized();
+
+        assert_eq!(input.resource_count(), Some(80));
+    }
+
+    #[test]
+    fn empty_input_still_has_overall_aggregate_and_review_chunks() {
+        let input = AnalysisInput {
+            game_title_id: String::from("title-empty"),
+            input_revision: 0,
+            rows: Vec::new(),
+        }
+        .into_normalized();
+
+        assert_eq!(input.resource_count(), Some(2));
     }
 }

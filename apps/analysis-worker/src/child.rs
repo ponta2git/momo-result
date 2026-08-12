@@ -128,6 +128,12 @@ async fn execute_inner(
     telemetry.metrics.input_milliseconds = milliseconds(input_started.elapsed());
     telemetry.metrics.input_row_count =
         u64::try_from(input.rows.len()).map_err(|_error| ChildFailure::CalculationFailed)?;
+    if input
+        .resource_count()
+        .is_none_or(|count| count > request.maximum_chunk_count)
+    {
+        return Err(ChildFailure::ArtifactTooLarge);
+    }
 
     telemetry.phase = ChildPhase::ArtifactBuild;
     let maximum_total_bytes = request

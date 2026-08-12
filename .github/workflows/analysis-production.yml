@@ -272,6 +272,7 @@ jobs:
           --config fly.analysis.toml
           --image "${ANALYSIS_IMAGE_REF}"
           --env MOMO_ANALYSIS_PUBLICATION_MODE=disabled
+          --env MOMO_OCR_V2_CONSUMER_MODE=disabled
           --ha=false
           --yes
         timeout-minutes: 15
@@ -290,7 +291,11 @@ jobs:
                   all(.[];
                     .state == "started" and
                     .config.image == $image and
-                    .config.env.MOMO_ANALYSIS_PUBLICATION_MODE == "disabled"
+                    .config.env.MOMO_ANALYSIS_PUBLICATION_MODE == "disabled" and
+                    .config.env.MOMO_OCR_V2_CONSUMER_MODE == "disabled" and
+                    .config.guest.cpu_kind == "shared" and
+                    .config.guest.cpus == 1 and
+                    .config.guest.memory_mb == 512
                   )
                 )
               } |
@@ -315,6 +320,7 @@ jobs:
           ANALYSIS_CONFIG_VERSION: series-analysis-v1-${{ needs.resolve-candidate.outputs.candidate_sha }}
           ANALYSIS_WORKER_ID: worker-${{ github.run_id }}-${{ github.run_attempt }}
           FLY_API_TOKEN: ${{ secrets.ANALYSIS_FLY_API_TOKEN }}
+          OCR_WORKER_ID: ocr-${{ github.run_id }}-${{ github.run_attempt }}
         run: >-
           flyctl deploy
           --config fly.analysis.toml
@@ -322,9 +328,44 @@ jobs:
           --env MOMO_ANALYSIS_PUBLICATION_MODE=enabled
           --env MOMO_ANALYSIS_CONFIG_VERSION="${ANALYSIS_CONFIG_VERSION}"
           --env MOMO_ANALYSIS_WORKER_ID="${ANALYSIS_WORKER_ID}"
+          --env MOMO_OCR_V2_CONSUMER_MODE=enabled
+          --env MOMO_OCR_V2_WORKER_ID="${OCR_WORKER_ID}"
           --ha=false
           --yes
         timeout-minutes: 15
+
+      - name: Verify enabled combined worker identity and resources
+        if: inputs.operation == 'deploy-enabled'
+        env:
+          FLY_API_TOKEN: ${{ secrets.ANALYSIS_FLY_API_TOKEN }}
+        run: |
+          flyctl machine list --app "${ANALYSIS_APP}" --json |
+            jq -e --arg image "${ANALYSIS_IMAGE_REF}" '
+              {
+                singleStartedExactEnabledImage: (
+                  length == 1 and
+                  all(.[];
+                    .state == "started" and
+                    .config.image == $image and
+                    .config.env.MOMO_ANALYSIS_PUBLICATION_MODE == "enabled" and
+                    .config.env.MOMO_OCR_V2_CONSUMER_MODE == "enabled" and
+                    (.config.env.MOMO_ANALYSIS_WORKER_ID | type == "string" and length > 0) and
+                    (.config.env.MOMO_OCR_V2_WORKER_ID | type == "string" and length > 0) and
+                    .config.guest.cpu_kind == "shared" and
+                    .config.guest.cpus == 1 and
+                    .config.guest.memory_mb == 512
+                  )
+                )
+              } |
+              select(.singleStartedExactEnabledImage)
+            ' > analysis-production-artifact/enabled-deployment-state.json
+          flyctl ssh console --app "${ANALYSIS_APP}" --pty=false --quiet \
+            --command "/usr/local/bin/momo-analysis bootstrap -- release-dependency-probe" \
+            > "${RUNNER_TEMP}/enabled-dependency-probe.json"
+          scripts/ci/sanitize-analysis-report.sh \
+            "${RUNNER_TEMP}/enabled-dependency-probe.json" \
+            analysis-production-artifact/enabled-dependency-probe.json
+        timeout-minutes: 2
 
       - name: Run release audit
         if: inputs.operation == 'audit'

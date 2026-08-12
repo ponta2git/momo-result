@@ -440,7 +440,7 @@ async fn run_linux(
         match outcome {
             Err(kind) => {
                 failures.child_wait = failures.child_wait.saturating_add(1);
-                failures.category(kind);
+                failures.category(process_failure_kind(kind));
             }
             Ok(Err(failure)) => {
                 failures.domain = failures.domain.saturating_add(1);
@@ -538,16 +538,22 @@ async fn run_linux(
 
 #[cfg(target_os = "linux")]
 const fn domain_failure_kind(failure: momo_ocr::OcrFailure) -> &'static str {
-    use momo_ocr::OcrFailure;
-
     match failure {
-        OcrEngineFailure::InvalidImage => "invalid_image",
-        OcrEngineFailure::UnsupportedImageFormat => "unsupported_image_format",
-        OcrEngineFailure::DecodeFailed => "decode_failed",
-        OcrEngineFailure::CategoryUndetected => "category_undetected",
-        OcrEngineFailure::LayoutUnsupported => "layout_unsupported",
-        OcrEngineFailure::EngineUnavailable => "engine_unavailable",
-        OcrEngineFailure::ParserFailed => "parser_failed",
+        momo_ocr::OcrFailure::InvalidImage => "invalid_image",
+        momo_ocr::OcrFailure::UnsupportedImageFormat => "unsupported_image_format",
+        momo_ocr::OcrFailure::DecodeFailed => "decode_failed",
+        momo_ocr::OcrFailure::CategoryUndetected => "category_undetected",
+        momo_ocr::OcrFailure::LayoutUnsupported => "layout_unsupported",
+        momo_ocr::OcrFailure::EngineUnavailable => "engine_unavailable",
+        momo_ocr::OcrFailure::ParserFailed => "parser_failed",
+    }
+}
+
+#[cfg(target_os = "linux")]
+const fn process_failure_kind(failure: super::worker::OcrProcessFailure) -> &'static str {
+    match failure {
+        super::worker::OcrProcessFailure::Runtime(kind) => kind,
+        super::worker::OcrProcessFailure::ResourceExhausted => "ocr_child_resource_exhausted",
     }
 }
 

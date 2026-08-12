@@ -198,14 +198,14 @@ INSERT INTO match_players (
   ('ci-preemption-match', 'member_akane_mami', 3, 2, 3000, 600),
   ('ci-preemption-match', 'member_otaka', 4, 3, 2000, 400);
 UPDATE series_analysis_title_states
-SET input_revision = 1, pending_work = true, algorithm_version = 'series-analysis-v1',
+SET input_revision = 1, pending_work = true, algorithm_version = 'series-analysis-v2',
     artifact_schema_version = 1
 WHERE game_title_id = 'ci-preemption-title';
 INSERT INTO series_analysis_jobs (
   id, game_title_id, input_revision, algorithm_version,
   artifact_schema_version, status, trigger, requested_at, available_at
 ) VALUES (
-  'ci-preemption-analysis-job', 'ci-preemption-title', 1, 'series-analysis-v1',
+  'ci-preemption-analysis-job', 'ci-preemption-title', 1, 'series-analysis-v2',
   1, 'queued', 'manual', clock_timestamp(), clock_timestamp()
 );
 INSERT INTO source_images (

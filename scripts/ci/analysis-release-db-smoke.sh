@@ -5,7 +5,7 @@ binary="${1:-}"
 postgres_image="${POSTGRES_IMAGE:-postgres:18-alpine}"
 worker_image="${ANALYSIS_WORKER_IMAGE:-}"
 operation_key="ci-release-control-plane"
-algorithm_version="${ANALYSIS_ALGORITHM_VERSION:-series-analysis-v1}"
+algorithm_version="${ANALYSIS_ALGORITHM_VERSION:-series-analysis-v2}"
 release_database_url="${RELEASE_DATABASE_URL:-${WORKER_DATABASE_URL:-${DATABASE_URL:-}}}"
 
 if [[ ! "${algorithm_version}" =~ ^series-analysis-v[0-9]+$ ]]; then

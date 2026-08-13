@@ -1,3 +1,5 @@
+//! Linux parent-liveness process contract.
+
 #![cfg(target_os = "linux")]
 #![forbid(unsafe_op_in_unsafe_fn)]
 #![deny(
@@ -22,35 +24,6 @@ mod tests {
         thread,
         time::{Duration, Instant},
     };
-
-    use momo_analysis::process::{HardLimitProbeResult, ProbeOutcome};
-
-    #[test]
-    fn operating_system_limit_terminates_only_the_child() {
-        let output = Command::new(env!("CARGO_BIN_EXE_momo-analysis"))
-            .args([
-                "probe-hard-limit",
-                "--limit-bytes",
-                "134217728",
-                "--allocation-bytes",
-                "402653184",
-                "--timeout-ms",
-                "10000",
-            ])
-            .output()
-            .unwrap_or_else(|error| panic!("failed to execute hard-limit probe: {error}"));
-
-        assert!(
-            output.status.success(),
-            "probe failed: stdout={} stderr={}",
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr)
-        );
-        let result: HardLimitProbeResult = serde_json::from_slice(&output.stdout)
-            .unwrap_or_else(|error| panic!("invalid probe JSON: {error}"));
-        assert_eq!(result.outcome, ProbeOutcome::ResourceLimitEnforced);
-        assert!(result.parent_survived);
-    }
 
     #[test]
     fn killing_the_parent_does_not_leave_the_child_running() {

@@ -18,7 +18,7 @@ use momo_analysis::{
         },
         object_store::R2ObjectStoreConfig,
     },
-    process::{ProbeOutcome, allocate_and_touch, run_hard_limit_probe},
+    process::{ProbeOutcome, allocate_and_touch},
     release::{PromotionRequest, PromotionTrigger},
 };
 use momo_ocr::OcrOutput;
@@ -82,14 +82,6 @@ enum Command {
         #[arg(long)]
         external_runtime_peak_file: PathBuf,
     },
-    ProbeHardLimit {
-        #[arg(long)]
-        limit_bytes: u64,
-        #[arg(long)]
-        allocation_bytes: u64,
-        #[arg(long, default_value_t = 5_000)]
-        timeout_ms: u64,
-    },
     ProbeCgroupLimit {
         #[arg(long)]
         allocation_bytes: u64,
@@ -122,11 +114,6 @@ enum Command {
     OcrLocalEndurance(OcrLocalEnduranceArgs),
     #[command(hide = true)]
     ProbeParentDeath,
-    #[command(hide = true)]
-    ChildAllocate {
-        #[arg(long)]
-        allocation_bytes: u64,
-    },
     #[command(hide = true)]
     ChildCgroupAllocate {
         #[arg(long)]
@@ -311,9 +298,6 @@ async fn main() -> ExitCode {
                 Err(_error) => ExitCode::FAILURE,
             };
         }
-        Command::ChildAllocate { allocation_bytes } => {
-            return exit_code(allocate_and_touch(*allocation_bytes));
-        }
         Command::ChildCgroupAllocate { allocation_bytes } => {
             if momo_analysis::process::wait_for_child_start_barrier().is_err() {
                 return exit_code(momo_analysis::process::CHILD_START_BARRIER_FAILED_EXIT_CODE);
@@ -360,7 +344,6 @@ async fn main() -> ExitCode {
         | Command::ReleaseAudit { .. }
         | Command::ReleasePromote { .. }
         | Command::ShadowEndurance { .. }
-        | Command::ProbeHardLimit { .. }
         | Command::ProbeCgroupLimit { .. }
         | Command::ProbeOcrChildLifecycle { .. }
         | Command::OcrPilot { .. }
@@ -423,11 +406,6 @@ async fn run(command: Command) -> Result<(), String> {
             })
             .await
         }
-        Command::ProbeHardLimit {
-            limit_bytes,
-            allocation_bytes,
-            timeout_ms,
-        } => run_legacy_hard_limit_probe(limit_bytes, allocation_bytes, timeout_ms).await,
         Command::ProbeCgroupLimit {
             allocation_bytes,
             timeout_ms,
@@ -445,8 +423,7 @@ async fn run(command: Command) -> Result<(), String> {
         Command::OcrIsolatedPilot(arguments) => run_isolated_ocr_pilot(arguments).await,
         Command::OcrR2Endurance(arguments) => run_ocr_r2_endurance(arguments).await,
         Command::OcrLocalEndurance(arguments) => run_ocr_local_endurance(arguments).await,
-        Command::ChildAllocate { .. }
-        | Command::ChildCgroupAllocate { .. }
+        Command::ChildCgroupAllocate { .. }
         | Command::ChildOcr { .. }
         | Command::ChildCompute { .. } => Err(String::from("child command dispatch failed")),
         Command::Bootstrap { .. } => Err(String::from("bootstrap command dispatch failed")),
@@ -467,26 +444,6 @@ async fn run(command: Command) -> Result<(), String> {
             .map_err(|error| error.to_string())?;
             wait_for_shutdown().await.map_err(|error| error.to_string())
         }
-    }
-}
-
-async fn run_legacy_hard_limit_probe(
-    limit_bytes: u64,
-    allocation_bytes: u64,
-    timeout_ms: u64,
-) -> Result<(), String> {
-    let result = run_hard_limit_probe(
-        limit_bytes,
-        allocation_bytes,
-        Duration::from_millis(timeout_ms),
-    )
-    .await
-    .map_err(|error| error.to_string())?;
-    write_json_line(&result)?;
-    if result.outcome == ProbeOutcome::ResourceLimitEnforced && result.parent_survived {
-        Ok(())
-    } else {
-        Err(format!("hard limit probe was inconclusive: {result:?}"))
     }
 }
 

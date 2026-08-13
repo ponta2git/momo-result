@@ -17,7 +17,7 @@ mod bootstrap_config;
 mod probe;
 
 pub use allocation::allocate_and_touch;
-pub use probe::{run_cgroup_hard_limit_probe, run_hard_limit_probe};
+pub use probe::run_cgroup_hard_limit_probe;
 
 pub(crate) const RESOURCE_LIMIT_HIT_EXIT_CODE: i32 = 73;
 pub(crate) const CHILD_SUPERSEDED_EXIT_CODE: i32 = 78;
@@ -684,14 +684,6 @@ pub fn spawn_parent_death_probe() -> Result<ParentDeathProbe, ProcessError> {
     Err(ProcessError::UnsupportedPlatform)
 }
 
-#[cfg(unix)]
-fn configure_memory_limit(command: &mut tokio::process::Command, limit_bytes: u64) {
-    // SAFETY: the closure only invokes async-signal-safe wrappers before exec.
-    unsafe {
-        command.pre_exec(move || set_address_space_limit(limit_bytes));
-    }
-}
-
 #[cfg(target_os = "linux")]
 pub(crate) fn configure_parent_death_signal(command: &mut tokio::process::Command) {
     // SAFETY: getpid has no preconditions and does not dereference pointers.
@@ -712,20 +704,6 @@ fn configure_inherited_liveness(command: &mut tokio::process::Command, descripto
             set_descriptor_flags(descriptor, flags & !libc::FD_CLOEXEC)?;
             Ok(())
         });
-    }
-}
-
-#[cfg(unix)]
-fn set_address_space_limit(limit_bytes: u64) -> io::Result<()> {
-    let limit = libc::rlimit {
-        rlim_cur: limit_bytes,
-        rlim_max: limit_bytes,
-    };
-    // SAFETY: the pointer references a live `rlimit` value for the duration of the syscall.
-    if unsafe { libc::setrlimit(libc::RLIMIT_AS, &raw const limit) } == 0 {
-        Ok(())
-    } else {
-        Err(io::Error::last_os_error())
     }
 }
 

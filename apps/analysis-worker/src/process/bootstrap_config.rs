@@ -15,7 +15,6 @@ pub(super) fn command_allowed(arguments: &[OsString]) -> bool {
             | "shadow-endurance"
             | "probe-cgroup-limit"
             | "probe-ocr-child-lifecycle"
-            | "ocr-isolated-pilot"
             | "ocr-r2-endurance"
             | "ocr-local-endurance"
     )
@@ -32,7 +31,6 @@ pub(super) fn requires_child_cgroup(arguments: &[OsString]) -> bool {
                     | "shadow-endurance"
                     | "probe-cgroup-limit"
                     | "probe-ocr-child-lifecycle"
-                    | "ocr-isolated-pilot"
                     | "ocr-r2-endurance"
                     | "ocr-local-endurance"
             )
@@ -60,7 +58,6 @@ mod tests {
             "shadow-endurance",
             "probe-cgroup-limit",
             "probe-ocr-child-lifecycle",
-            "ocr-isolated-pilot",
             "ocr-r2-endurance",
             "ocr-local-endurance",
         ] {
@@ -84,7 +81,6 @@ mod tests {
             "shadow-endurance",
             "probe-cgroup-limit",
             "probe-ocr-child-lifecycle",
-            "ocr-isolated-pilot",
             "ocr-r2-endurance",
             "ocr-local-endurance",
         ] {

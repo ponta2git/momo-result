@@ -107,8 +107,6 @@ enum Command {
         tessdata_path: Option<PathBuf>,
     },
     #[command(hide = true)]
-    OcrIsolatedPilot(OcrIsolatedPilotArgs),
-    #[command(hide = true)]
     OcrR2Endurance(OcrR2EnduranceArgs),
     #[command(hide = true)]
     OcrLocalEndurance(OcrLocalEnduranceArgs),
@@ -194,22 +192,6 @@ impl OcrPilotLayoutFamily {
             Self::Momotetsu2 => "momotetsu_2",
         }
     }
-}
-
-#[derive(Debug, Args)]
-struct OcrIsolatedPilotArgs {
-    #[arg(long)]
-    image: PathBuf,
-    #[arg(long, value_enum)]
-    screen_type: OcrPilotScreenType,
-    #[arg(long, value_enum)]
-    layout_family: Option<OcrPilotLayoutFamily>,
-    #[arg(long)]
-    tessdata_path: Option<PathBuf>,
-    #[arg(long, default_value_t = 60_000)]
-    timeout_ms: u64,
-    #[arg(long, default_value_t = 1_000)]
-    stop_grace_ms: u64,
 }
 
 #[derive(Debug, Args)]
@@ -347,7 +329,6 @@ async fn main() -> ExitCode {
         | Command::ProbeCgroupLimit { .. }
         | Command::ProbeOcrChildLifecycle { .. }
         | Command::OcrPilot { .. }
-        | Command::OcrIsolatedPilot(_)
         | Command::OcrR2Endurance(_)
         | Command::OcrLocalEndurance(_)
         | Command::ProbeParentDeath
@@ -420,7 +401,6 @@ async fn run(command: Command) -> Result<(), String> {
             layout_family,
             tessdata_path,
         } => run_ocr_pilot(&image, screen_type, layout_family, tessdata_path).await,
-        Command::OcrIsolatedPilot(arguments) => run_isolated_ocr_pilot(arguments).await,
         Command::OcrR2Endurance(arguments) => run_ocr_r2_endurance(arguments).await,
         Command::OcrLocalEndurance(arguments) => run_ocr_local_endurance(arguments).await,
         Command::ChildCgroupAllocate { .. }
@@ -483,33 +463,9 @@ async fn run_ocr_pilot(
     tessdata_path: Option<PathBuf>,
 ) -> Result<(), String> {
     let (bytes, hints) = read_ocr_pilot_input(image_path, layout_family).await?;
-    let output = momo_analysis::ocr::analyze_isolated_local_image_bytes(
-        &bytes,
-        screen_type.into(),
-        &hints,
-        tessdata_path,
-        Duration::from_mins(1),
-        Duration::from_secs(1),
-    )
-    .await
-    .map_err(String::from)?
-    .map_err(|error| format!("OCR pilot failed: {error:?}"))?;
-    write_ocr_pilot_output(&output)
-}
-
-async fn run_isolated_ocr_pilot(arguments: OcrIsolatedPilotArgs) -> Result<(), String> {
-    let (bytes, hints) = read_ocr_pilot_input(&arguments.image, arguments.layout_family).await?;
-    let output = momo_analysis::ocr::analyze_isolated_local_image_bytes(
-        &bytes,
-        arguments.screen_type.into(),
-        &hints,
-        arguments.tessdata_path,
-        Duration::from_millis(arguments.timeout_ms),
-        Duration::from_millis(arguments.stop_grace_ms),
-    )
-    .await
-    .map_err(String::from)?
-    .map_err(|error| format!("isolated OCR pilot failed: {error:?}"))?;
+    let output =
+        momo_ocr::recognize_local_image_bytes(tessdata_path, &bytes, screen_type.into(), &hints)
+            .map_err(|error| format!("OCR pilot failed: {error:?}"))?;
     write_ocr_pilot_output(&output)
 }
 

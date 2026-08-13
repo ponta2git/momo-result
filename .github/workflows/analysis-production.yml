@@ -295,7 +295,7 @@ jobs:
                     .config.env.MOMO_OCR_V2_CONSUMER_MODE == "disabled" and
                     .config.guest.cpu_kind == "shared" and
                     .config.guest.cpus == 1 and
-                    .config.guest.memory_mb == 512
+                    .config.guest.memory_mb == 256
                   )
                 )
               } |
@@ -353,7 +353,7 @@ jobs:
                     (.config.env.MOMO_OCR_V2_WORKER_ID | type == "string" and length > 0) and
                     .config.guest.cpu_kind == "shared" and
                     .config.guest.cpus == 1 and
-                    .config.guest.memory_mb == 512
+                    .config.guest.memory_mb == 256
                   )
                 )
               } |

@@ -46,7 +46,6 @@ enum Command {
         arguments: Vec<OsString>,
     },
     Worker,
-    ReleaseDependencyProbe,
     ReleaseAudit {
         #[arg(long)]
         require_current: bool,
@@ -358,7 +357,6 @@ async fn main() -> ExitCode {
             );
         }
         Command::Worker
-        | Command::ReleaseDependencyProbe
         | Command::ReleaseAudit { .. }
         | Command::ReleasePromote { .. }
         | Command::ShadowEndurance { .. }
@@ -390,12 +388,6 @@ async fn main() -> ExitCode {
 async fn run(command: Command) -> Result<(), String> {
     match command {
         Command::Worker => run_worker().await,
-        Command::ReleaseDependencyProbe => {
-            let report = momo_analysis::release::probe_dependencies()
-                .await
-                .map_err(|error| error.to_string())?;
-            write_json_line(&report)
-        }
         Command::ReleaseAudit {
             require_current,
             require_quiescent,

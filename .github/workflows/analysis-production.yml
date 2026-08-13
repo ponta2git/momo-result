@@ -277,43 +277,6 @@ jobs:
           --yes
         timeout-minutes: 15
 
-      - name: Probe production dependencies before publication
-        if: inputs.operation == 'deploy-disabled' || inputs.operation == 'deploy-enabled'
-        env:
-          FLY_API_TOKEN: ${{ secrets.ANALYSIS_FLY_API_TOKEN }}
-        run: |
-          mkdir -p analysis-production-artifact
-          flyctl machine list --app "${ANALYSIS_APP}" --json |
-            jq -e --arg image "${ANALYSIS_IMAGE_REF}" '
-              {
-                singleStartedExactDisabledImage: (
-                  length == 1 and
-                  all(.[];
-                    .state == "started" and
-                    .config.image == $image and
-                    .config.env.MOMO_ANALYSIS_PUBLICATION_MODE == "disabled" and
-                    .config.env.MOMO_OCR_V2_CONSUMER_MODE == "disabled" and
-                    .config.guest.cpu_kind == "shared" and
-                    .config.guest.cpus == 1 and
-                    .config.guest.memory_mb == 256
-                  )
-                )
-              } |
-              select(.singleStartedExactDisabledImage)
-            ' > analysis-production-artifact/deployment-state.json
-          flyctl ssh console --app "${ANALYSIS_APP}" --pty=false --quiet \
-            --command "/usr/local/bin/momo-analysis bootstrap -- release-dependency-probe" \
-            > "${RUNNER_TEMP}/dependency-probe.json"
-          jq -e '
-            .controlReadOnly == false and
-            .readerReadOnly == true and
-            .redisPong == true
-          ' "${RUNNER_TEMP}/dependency-probe.json"
-          scripts/ci/sanitize-analysis-report.sh \
-            "${RUNNER_TEMP}/dependency-probe.json" \
-            analysis-production-artifact/dependency-probe.json
-        timeout-minutes: 2
-
       - name: Deploy analysis worker with publication enabled
         if: inputs.operation == 'deploy-enabled'
         env:
@@ -359,12 +322,6 @@ jobs:
               } |
               select(.singleStartedExactEnabledImage)
             ' > analysis-production-artifact/enabled-deployment-state.json
-          flyctl ssh console --app "${ANALYSIS_APP}" --pty=false --quiet \
-            --command "/usr/local/bin/momo-analysis bootstrap -- release-dependency-probe" \
-            > "${RUNNER_TEMP}/enabled-dependency-probe.json"
-          scripts/ci/sanitize-analysis-report.sh \
-            "${RUNNER_TEMP}/enabled-dependency-probe.json" \
-            analysis-production-artifact/enabled-dependency-probe.json
         timeout-minutes: 2
 
       - name: Run release audit

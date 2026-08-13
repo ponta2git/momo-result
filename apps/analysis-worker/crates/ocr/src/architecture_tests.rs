@@ -1,14 +1,13 @@
 use std::{collections::BTreeSet, fs, path::Path};
 
 const MAXIMUM_MODULE_LINES: usize = 900;
-const ALLOWED_DEPENDENCIES: [&str; 8] = [
+const ALLOWED_DEPENDENCIES: [&str; 7] = [
     "image",
     "regex",
     "serde",
     "serde_json",
     "tesseract",
     "thiserror",
-    "time",
     "unicode-normalization",
 ];
 const FORBIDDEN_SOURCE_PATTERNS: [&str; 10] = [

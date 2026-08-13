@@ -1,5 +1,3 @@
-use time::OffsetDateTime;
-
 const MAXIMUM_HINT_TEXT_CHARACTERS: usize = 64;
 const MAXIMUM_KNOWN_PLAYERS: usize = 4;
 const MAXIMUM_MEMBER_ID_CHARACTERS: usize = 128;
@@ -147,7 +145,6 @@ pub struct OcrQueuePayload {
     media_type: OcrMediaType,
     requested_screen_type: RequestedScreenType,
     attempt: u32,
-    enqueued_at: OffsetDateTime,
     hints: OcrHints,
     request_id: Option<String>,
 }
@@ -168,7 +165,6 @@ impl OcrQueuePayload {
         media_type: OcrMediaType,
         requested_screen_type: RequestedScreenType,
         attempt: u32,
-        enqueued_at: OffsetDateTime,
         hints: OcrHints,
         request_id: Option<String>,
     ) -> Self {
@@ -182,7 +178,6 @@ impl OcrQueuePayload {
             media_type,
             requested_screen_type,
             attempt,
-            enqueued_at,
             hints,
             request_id,
         }
@@ -231,11 +226,6 @@ impl OcrQueuePayload {
     #[must_use]
     pub const fn attempt(&self) -> u32 {
         self.attempt
-    }
-
-    #[must_use]
-    pub const fn enqueued_at(&self) -> OffsetDateTime {
-        self.enqueued_at
     }
 
     #[must_use]

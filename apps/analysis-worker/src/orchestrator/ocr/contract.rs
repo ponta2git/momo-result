@@ -86,7 +86,7 @@ pub fn parse_delivery(delivery: &StreamId) -> Result<OcrQueuePayload, OcrQueueCo
         .ok()
         .filter(|value| i32::try_from(*value).is_ok())
         .ok_or(OcrQueueContractError::InvalidField("attempt"))?;
-    let enqueued_at = OffsetDateTime::parse(&required_string(delivery, "enqueuedAt")?, &Rfc3339)
+    OffsetDateTime::parse(&required_string(delivery, "enqueuedAt")?, &Rfc3339)
         .map_err(|_parse_error| OcrQueueContractError::InvalidField("enqueuedAt"))?;
     let hints = optional_string(delivery, "ocrHintsJson")?
         .map_or_else(|| Ok(OcrHints::default()), |value| parse_hints(&value))?;
@@ -108,7 +108,6 @@ pub fn parse_delivery(delivery: &StreamId) -> Result<OcrQueuePayload, OcrQueueCo
         media_type,
         requested_screen_type,
         attempt,
-        enqueued_at,
         hints,
         request_id,
     ))

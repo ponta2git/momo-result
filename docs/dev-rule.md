@@ -301,7 +301,7 @@ sbt apiR2Quality
 
 `deploy.yml` の production deploy 経路では、サブシステム quality gate、public safety、runtime image build / scan / smoke を可能な範囲で並列に進め、`release-ready` で合流させる。coverage artifactはPRレビュー補助としてPR時だけ生成し、同じテスト集合をcoverageなしで重複実行しない。
 
-masterへのmergeは変更分類を通し、runtime対象だけがproduction approvalへ進む。masterからの手動`deploy`はruntimeを明示的に再検証する。Analysisはmasterでcandidateを作る経路と、production environmentで`deploy-disabled`、`deploy-enabled`、backfill、auditを行う手動経路を分ける。具体的な入力順序と人間の確認手順は `private/ops/runbook.md` を正とする。
+masterへのmergeは変更分類を通し、runtime対象だけがproduction approvalへ進む。masterからの手動`deploy`はruntimeを明示的に再検証する。Analysisはmasterでcandidateを作る経路と、production environmentで検証済みcandidateを一度だけ`deploy`する経路を分ける。backfillとauditは独立した手動運用として残す。具体的な入力順序と人間の確認手順は `private/ops/runbook.md` を正とする。
 
 runtimeとanalysisのrelease候補は、検証対象を一度だけbuildしてidentityと入力commit、設定、artifact digestを記録する。CI actionやprovider APIの出力は外部wire値として境界で検証・正規化してから来歴へ記録し、consumerが期待する内部表現をproducer側の推測で組み立てない。後続のsmokeとdeployは同じ候補を検証して再利用し、本番指定は可変tagではなくregistry digestを使う。cacheはcontent-addressedな高速化として利用できるが、cache hitを検証成功の根拠にせず、cold cacheでも同じgateが完走しなければならない。異なるimage系列はcache scopeを分離する。
 

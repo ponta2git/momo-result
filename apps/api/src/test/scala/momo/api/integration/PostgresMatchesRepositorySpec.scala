@@ -30,22 +30,38 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
   private def heldEvents = new PostgresHeldEventsRepository[IO](transactor)
   private def matches = new PostgresMatchesRepository[IO](transactor)
   private def confirmations = new PostgresMatchConfirmationRepository[IO](transactor)
+  private def createMatch(record: MatchRecord): IO[Unit] = confirmations
+    .confirm(record, None, record.createdAt).map(_ => ())
 
   /** Insert a complete prerequisite graph: game/map/season/held_event. */
   private def seedPrereqs: IO[Unit] =
     for
-      _ <- gameTitles.create(GameTitle(gameTitleId, "桃太郎電鉄ワールド", "world", 1, now))
-      _ <- mapMasters.create(MapMaster(mapMasterId, gameTitleId, "東日本編", 1, now))
-      _ <- seasonMasters.create(SeasonMaster(seasonMasterId, gameTitleId, "2024-spring", 1, now))
+      _ <- gameTitles
+        .createWithNextDisplayOrder(GameTitle(gameTitleId, "桃太郎電鉄ワールド", "world", 1, now))
+      _ <- mapMasters
+        .createWithNextDisplayOrder(MapMaster(mapMasterId, gameTitleId, "東日本編", 1, now))
+      _ <- seasonMasters
+        .createWithNextDisplayOrder(SeasonMaster(
+          seasonMasterId,
+          gameTitleId,
+          "2024-spring",
+          1,
+          now
+        ))
       _ <- heldEvents.create(HeldEvent(heldEventId, now))
     yield ()
 
   private def seedSecondTitle: IO[Unit] =
     for
-      _ <- gameTitles.create(GameTitle(secondGameTitleId, "桃太郎電鉄ワールド2", "world", 2, now))
-      _ <- mapMasters.create(MapMaster(secondMapMasterId, secondGameTitleId, "西日本編", 1, now))
+      _ <- gameTitles.createWithNextDisplayOrder(
+        GameTitle(secondGameTitleId, "桃太郎電鉄ワールド2", "world", 2, now)
+      )
+      _ <- mapMasters
+        .createWithNextDisplayOrder(MapMaster(secondMapMasterId, secondGameTitleId, "西日本編", 1, now))
       _ <- seasonMasters
-        .create(SeasonMaster(secondSeasonMasterId, secondGameTitleId, "2025-spring", 1, now))
+        .createWithNextDisplayOrder(
+          SeasonMaster(secondSeasonMasterId, secondGameTitleId, "2025-spring", 1, now)
+        )
     yield ()
 
   private def player(
@@ -116,14 +132,14 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
     val rec = sampleMatch("match_001", 1)
     for
       _ <- seedPrereqs
-      _ <- matches.create(rec)
+      _ <- createMatch(rec)
       found <- matches.find(MatchId.unsafeFromString("match_001"))
     yield
       val got = found.getOrElse(fail("match_001 not found after create"))
       assertEquals(got.id, rec.id)
       assertEquals(got.players.toList.size, 4)
       assertEquals(got.players.byPlayOrder.map(_.playOrder.value), List(1, 2, 3, 4))
-      assertEquals(got.players.byRank.map(_.rank.value), List(1, 2, 3, 4))
+      assertEquals(got.players.toList.map(_.rank.value).sorted, List(1, 2, 3, 4))
       val ponta = got.players.toList.find(_.memberId == MemberId.unsafeFromString("member_ponta"))
         .get
       assertEquals(ponta.totalAssetsManYen.value, 12000)
@@ -141,7 +157,7 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
     for
       _ <- seedPrereqs
       _ <- seedSecondTitle
-      _ <- matches.create(rec)
+      _ <- createMatch(rec)
       _ <- matches.update(moved, now.plusSeconds(1))
       matchRevision <- sql"SELECT analysis_revision FROM matches WHERE id = ${rec.id}"
         .query[Long].unique.transact(transactor)
@@ -169,29 +185,25 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
   test("listByHeldEvent orders by match_no_in_event"):
     for
       _ <- seedPrereqs
-      _ <- matches.create(sampleMatch("match_b", 2))
-      _ <- matches.create(sampleMatch("match_a", 1))
+      _ <- createMatch(sampleMatch("match_b", 2))
+      _ <- createMatch(sampleMatch("match_a", 1))
       list <- matches.listByHeldEvent(heldEventId)
     yield
       assertEquals(list.map(_.id.value), List("match_a", "match_b"))
       assertEquals(list.map(_.matchNoInEvent.value), List(1, 2))
 
-  test("existsMatchNo and maxMatchNo reflect inserted rows"):
+  test("existsMatchNo reflects inserted rows"):
     for
       _ <- seedPrereqs
       empty <- matches.existsMatchNo(heldEventId, MatchNoInEvent.unsafeFromInt(1))
-      m0 <- matches.maxMatchNo(heldEventId)
-      _ <- matches.create(sampleMatch("match_001", 1))
-      _ <- matches.create(sampleMatch("match_003", 3))
+      _ <- createMatch(sampleMatch("match_001", 1))
+      _ <- createMatch(sampleMatch("match_003", 3))
       ex1 <- matches.existsMatchNo(heldEventId, MatchNoInEvent.unsafeFromInt(1))
       ex2 <- matches.existsMatchNo(heldEventId, MatchNoInEvent.unsafeFromInt(2))
-      mn <- matches.maxMatchNo(heldEventId)
     yield
       assertEquals(empty, false)
-      assertEquals(m0, 0)
       assertEquals(ex1, true)
       assertEquals(ex2, false)
-      assertEquals(mn, 3)
 
   test("update changes parent fields and replaces child player rows without deleting the match"):
     val rec = sampleMatch("match_001", 1)
@@ -206,7 +218,7 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
     )
     for
       _ <- seedPrereqs
-      _ <- matches.create(rec)
+      _ <- createMatch(rec)
       _ <- matches.update(updated, now.plusSeconds(60))
       found <- matches.find(rec.id)
     yield
@@ -215,7 +227,7 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
       assertEquals(got.createdAt, rec.createdAt)
       assertEquals(got.matchNoInEvent.value, 2)
       assertEquals(
-        got.players.byRank.map(_.memberId.value),
+        got.players.toList.sortBy(_.rank.value).map(_.memberId.value),
         List("member_eu", "member_otaka", "member_akane_mami", "member_ponta"),
       )
       val ponta = got.players.toList.find(_.memberId == MemberId.unsafeFromString("member_ponta"))
@@ -233,44 +245,18 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
         assertEquals(error.error, AppError.NotFound("match", rec.id.value))
       case other => fail(s"expected AppException(NotFound), got $other")
 
-  test("countByHeldEvents returns zero for unknown event ids"):
-    for
-      _ <- seedPrereqs
-      _ <- matches.create(sampleMatch("match_001", 1))
-      _ <- matches.create(sampleMatch("match_002", 2))
-      counts <- matches
-        .countByHeldEvents(List(heldEventId, HeldEventId.unsafeFromString("missing_event")))
-    yield
-      assertEquals(counts.get(heldEventId), Some(2))
-      assertEquals(counts.get(HeldEventId.unsafeFromString("missing_event")), Some(0))
-
-  test("countByHeldEvents short-circuits on empty input"):
-    matches.countByHeldEvents(Nil).map(m => assertEquals(m, Map.empty[HeldEventId, Int]))
-
   test("statsByHeldEvents returns count and maximum match number including gaps"):
     val missing = HeldEventId.unsafeFromString("missing_event")
     for
       _ <- seedPrereqs
-      _ <- matches.create(sampleMatch("match_stats_001", 1))
-      _ <- matches.create(sampleMatch("match_stats_004", 4))
+      _ <- createMatch(sampleMatch("match_stats_001", 1))
+      _ <- createMatch(sampleMatch("match_stats_004", 4))
       stats <- matches.statsByHeldEvents(List(heldEventId, missing))
     yield
       assertEquals(stats(heldEventId).matchCount, 2)
       assertEquals(stats(heldEventId).maxMatchNo, 4)
       assertEquals(stats(missing).matchCount, 0)
       assertEquals(stats(missing).maxMatchNo, 0)
-
-  test("duplicate match_no_in_event for same held_event raises"):
-    val rec1 = sampleMatch("match_001", 1)
-    val rec2 = sampleMatch("match_002", 1)
-    val program =
-      for
-        _ <- seedPrereqs
-        _ <- matches.create(rec1)
-        e <- matches.create(rec2).attempt
-      yield e
-    program
-      .map(result => assert(result.isLeft, s"expected duplicate match_no to fail, got $result"))
 
   test("confirmation maps duplicate match_no_in_event to Conflict"):
     val rec1 = sampleMatch("match_confirm_001", 1)
@@ -282,9 +268,13 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
     yield
       assertEquals(inserted, MatchConfirmationResult.Confirmed)
       result match
-        case Left(error: AppException) => error.error match
-            case _: AppError.Conflict => ()
-            case other => fail(s"expected Conflict, got $other")
+        case Left(error: AppException) =>
+          assertEquals(
+            error.error,
+            AppError.Conflict(
+              "matchNoInEvent 1 already exists for held event held_2026_04_30."
+            ),
+          )
         case other => fail(s"expected AppException(Conflict), got $other")
 
   test("confirmation from draft persists match and confirmed draft link"):

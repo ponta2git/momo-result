@@ -55,15 +55,20 @@ final class InMemoryMasterRepositoriesSpec extends MomoCatsEffectSuite:
       maps <- InMemoryMapMastersRepository.create[IO]
       seasons <- InMemorySeasonMastersRepository.create[IO]
       aliases <- InMemoryMemberAliasesRepository.create[IO]
-      _ <- titles.create(gameTitle(titleId, "World"))
+      _ <- titles.createWithNextDisplayOrder(gameTitle(titleId, "World"))
       duplicateTitle <- titles
-        .create(gameTitle(GameTitleId.unsafeFromString("title_other"), "World")).attempt
-      _ <- maps.create(mapMaster(mapId, titleId, "East"))
+        .createWithNextDisplayOrder(gameTitle(GameTitleId.unsafeFromString("title_other"), "World"))
+        .attempt
+      _ <- maps.createWithNextDisplayOrder(mapMaster(mapId, titleId, "East"))
       duplicateMap <- maps
-        .create(mapMaster(MapMasterId.unsafeFromString("map_other"), titleId, "East")).attempt
-      _ <- seasons.create(seasonMaster(seasonId, titleId, "Spring"))
+        .createWithNextDisplayOrder(
+          mapMaster(MapMasterId.unsafeFromString("map_other"), titleId, "East")
+        ).attempt
+      _ <- seasons.createWithNextDisplayOrder(seasonMaster(seasonId, titleId, "Spring"))
       duplicateSeason <- seasons
-        .create(seasonMaster(SeasonMasterId.unsafeFromString("season_other"), titleId, "Spring"))
+        .createWithNextDisplayOrder(
+          seasonMaster(SeasonMasterId.unsafeFromString("season_other"), titleId, "Spring")
+        )
         .attempt
       _ <- aliases.create(MemberAlias(aliasId1, memberId, "ポン太社長", now))
       duplicateAlias <- aliases.create(MemberAlias(aliasId2, otherMemberId, "ポン太社長", now)).attempt
@@ -88,17 +93,22 @@ final class InMemoryMasterRepositoriesSpec extends MomoCatsEffectSuite:
       maps <- InMemoryMapMastersRepository.create[IO]
       seasons <- InMemorySeasonMastersRepository.create[IO]
       aliases <- InMemoryMemberAliasesRepository.create[IO]
-      _ <- titles.create(gameTitle(titleId, "World"))
-      _ <- titles.create(gameTitle(GameTitleId.unsafeFromString("title_other"), "Japan"))
+      _ <- titles.createWithNextDisplayOrder(gameTitle(titleId, "World"))
+      _ <- titles
+        .createWithNextDisplayOrder(gameTitle(GameTitleId.unsafeFromString("title_other"), "Japan"))
       duplicateTitle <- titles
         .update(gameTitle(GameTitleId.unsafeFromString("title_other"), "World")).attempt
-      _ <- maps.create(mapMaster(mapId, titleId, "East"))
-      _ <- maps.create(mapMaster(MapMasterId.unsafeFromString("map_other"), titleId, "West"))
+      _ <- maps.createWithNextDisplayOrder(mapMaster(mapId, titleId, "East"))
+      _ <- maps.createWithNextDisplayOrder(
+        mapMaster(MapMasterId.unsafeFromString("map_other"), titleId, "West")
+      )
       duplicateMap <- maps
         .update(mapMaster(MapMasterId.unsafeFromString("map_other"), titleId, "East")).attempt
-      _ <- seasons.create(seasonMaster(seasonId, titleId, "Spring"))
+      _ <- seasons.createWithNextDisplayOrder(seasonMaster(seasonId, titleId, "Spring"))
       _ <- seasons
-        .create(seasonMaster(SeasonMasterId.unsafeFromString("season_other"), titleId, "Summer"))
+        .createWithNextDisplayOrder(
+          seasonMaster(SeasonMasterId.unsafeFromString("season_other"), titleId, "Summer")
+        )
       duplicateSeason <- seasons
         .update(seasonMaster(SeasonMasterId.unsafeFromString("season_other"), titleId, "Spring"))
         .attempt

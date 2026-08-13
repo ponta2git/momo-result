@@ -2,11 +2,11 @@ package momo.api.http
 
 import java.util.UUID
 
-import cats.data.{Kleisli, OptionT}
+import cats.data.Kleisli
 import cats.effect.Sync
 import cats.effect.syntax.all.*
 import cats.syntax.all.*
-import org.http4s.{Header, HttpApp as Http4sApp, HttpRoutes as Http4sRoutes, Request, Response}
+import org.http4s.{Header, HttpApp as Http4sApp, Request, Response}
 import org.slf4j.MDC
 import org.typelevel.ci.CIString
 
@@ -34,10 +34,6 @@ object RequestIdMiddleware:
   val HeaderName: CIString = CIString(AuthHeaderNames.RequestId)
   val MdcKey: String = "request_id"
 
-  /** Read the current request id (if any) from MDC. */
-  def lookup[F[_]: Sync]: F[Option[String]] = Sync[F]
-    .delay(Option(MDC.get(MdcKey)).filter(_.nonEmpty))
-
   def apply[F[_]: Sync](http: Http4sApp[F]): Http4sApp[F] = Kleisli { (request: Request[F]) =>
     val incoming = request.headers.get(HeaderName).map(_.head.value).flatMap(RequestId.sanitize)
     val effect: F[String] = incoming match
@@ -48,19 +44,6 @@ object RequestIdMiddleware:
       val requestWithId = request.putHeaders(Header.Raw(HeaderName, id))
       runWithMdc(id)(http.run(requestWithId)).map(addHeader(_, id))
     }
-  }
-
-  /** Wrap http4s `HttpRoutes` (vs HttpApp) — convenience for nested wiring. */
-  def routes[F[_]: Sync](rs: Http4sRoutes[F]): Http4sRoutes[F] = Kleisli { (request: Request[F]) =>
-    val incoming = request.headers.get(HeaderName).map(_.head.value).flatMap(RequestId.sanitize)
-    val effect: F[String] = incoming match
-      case Some(id) => Sync[F].pure(id)
-      case None => Sync[F].delay(UUID.randomUUID().toString)
-
-    OptionT(effect.flatMap { id =>
-      val requestWithId = request.putHeaders(Header.Raw(HeaderName, id))
-      runWithMdc(id)(rs.run(requestWithId).value).map(_.map(resp => addHeader(resp, id)))
-    })
   }
 
   private def addHeader[F[_]](response: Response[F], id: String): Response[F] = response

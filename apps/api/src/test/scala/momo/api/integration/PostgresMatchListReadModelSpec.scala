@@ -21,16 +21,24 @@ final class PostgresMatchListReadModelSpec extends IntegrationSuite:
   private def mapMasters = new PostgresMapMastersRepository[IO](transactor)
   private def seasonMasters = new PostgresSeasonMastersRepository[IO](transactor)
   private def heldEvents = new PostgresHeldEventsRepository[IO](transactor)
-  private def matches = new PostgresMatchesRepository[IO](transactor)
+  private def confirmations = new PostgresMatchConfirmationRepository[IO](transactor)
   private def drafts = new PostgresMatchDraftsRepository[IO](transactor)
   private def matchList = new PostgresMatchListReadModel[IO](transactor)
 
+  private def createMatch(record: MatchRecord): IO[Unit] = confirmations
+    .confirm(record, None, record.createdAt).map(_ => ())
+
   private def seedPrereqs: IO[Unit] =
     for
-      _ <- gameTitles.create(GameTitle(gameTitleId, "桃太郎電鉄ワールド", "world", 1, baseTime))
-      _ <- mapMasters.create(MapMaster(mapMasterId, gameTitleId, "東日本編", 1, baseTime))
+      _ <- gameTitles.createWithNextDisplayOrder(
+        GameTitle(gameTitleId, "桃太郎電鉄ワールド", "world", 1, baseTime)
+      )
+      _ <- mapMasters
+        .createWithNextDisplayOrder(MapMaster(mapMasterId, gameTitleId, "東日本編", 1, baseTime))
       _ <- seasonMasters
-        .create(SeasonMaster(seasonMasterId, gameTitleId, "2024-spring", 1, baseTime))
+        .createWithNextDisplayOrder(
+          SeasonMaster(seasonMasterId, gameTitleId, "2024-spring", 1, baseTime)
+        )
       _ <- heldEvents.create(HeldEvent(heldEventId, baseTime))
     yield ()
 
@@ -109,7 +117,7 @@ final class PostgresMatchListReadModelSpec extends IntegrationSuite:
   test("default list returns confirmed matches and active drafts without union SQL errors"):
     for
       _ <- seedPrereqs
-      _ <- matches.create(sampleMatch("match_older", 1, Instant.parse("2026-04-30T01:00:00Z")))
+      _ <- createMatch(sampleMatch("match_older", 1, Instant.parse("2026-04-30T01:00:00Z")))
       _ <- drafts.create(sampleDraft(
         "draft_ready",
         MatchDraftStatus.DraftReady,
@@ -129,7 +137,11 @@ final class PostgresMatchListReadModelSpec extends IntegrationSuite:
   test("filters confirmed matches and active drafts by kind and status"):
     for
       _ <- seedPrereqs
-      _ <- matches.create(sampleMatch("match_confirmed", 1, Instant.parse("2026-04-30T01:00:00Z")))
+      _ <- createMatch(sampleMatch(
+        "match_confirmed",
+        1,
+        Instant.parse("2026-04-30T01:00:00Z"),
+      ))
       _ <- drafts.create(sampleDraft(
         "draft_ready",
         MatchDraftStatus.DraftReady,
@@ -152,7 +164,7 @@ final class PostgresMatchListReadModelSpec extends IntegrationSuite:
   test("applies status-priority ordering before pagination"):
     for
       _ <- seedPrereqs
-      _ <- matches.create(sampleMatch("match_middle", 1, Instant.parse("2026-04-30T02:00:00Z")))
+      _ <- createMatch(sampleMatch("match_middle", 1, Instant.parse("2026-04-30T02:00:00Z")))
       _ <- drafts.create(sampleDraft(
         "draft_latest",
         MatchDraftStatus.DraftReady,
@@ -173,7 +185,7 @@ final class PostgresMatchListReadModelSpec extends IntegrationSuite:
   test("keeps total count on later and empty pages"):
     for
       _ <- seedPrereqs
-      _ <- matches.create(sampleMatch("match_middle", 1, Instant.parse("2026-04-30T02:00:00Z")))
+      _ <- createMatch(sampleMatch("match_middle", 1, Instant.parse("2026-04-30T02:00:00Z")))
       _ <- drafts.create(sampleDraft(
         "draft_latest",
         MatchDraftStatus.DraftReady,
@@ -202,7 +214,11 @@ final class PostgresMatchListReadModelSpec extends IntegrationSuite:
   test("summarizes active draft work independently of pagination"):
     for
       _ <- seedPrereqs
-      _ <- matches.create(sampleMatch("match_confirmed", 1, Instant.parse("2026-04-30T01:00:00Z")))
+      _ <- createMatch(sampleMatch(
+        "match_confirmed",
+        1,
+        Instant.parse("2026-04-30T01:00:00Z"),
+      ))
       _ <- drafts.create(sampleDraft(
         "draft_ready",
         MatchDraftStatus.DraftReady,

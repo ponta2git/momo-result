@@ -12,7 +12,7 @@ import doobie.postgres.implicits.*
 import doobie.postgres.sqlstate
 import doobie.util.fragments
 
-import momo.api.adapters.postgres.PostgresMatchInsertOps.{insertMatchCascade, replaceMatchChildren}
+import momo.api.adapters.postgres.PostgresMatchInsertOps.replaceMatchChildren
 import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.adapters.postgres.PostgresSeriesAnalysisMutationOps.enqueueMatchMutation
 import momo.api.db.Database
@@ -37,15 +37,6 @@ object PostgresMatches extends PostgresMatchesReadSupport:
     .raiseError[A](new AppException(AppError.NotFound(resource, id)))
 
   val alg: MatchesAlg[ConnectionIO] = new MatchesAlg[ConnectionIO]:
-    override def create(record: MatchRecord): ConnectionIO[Unit] =
-      (insertMatchCascade(record, record.createdAt) *>
-        enqueueMatchMutation(List(record.gameTitleId)))
-        .exceptSomeSqlState {
-          case state if isUniqueViolation(state) =>
-            conflict[Unit](s"matchNoInEvent ${record.matchNoInEvent.value
-                .toString} already exists for held event ${record.heldEventId.value}.")
-        }
-
     override def update(record: MatchRecord, updatedAt: Instant): ConnectionIO[Unit] =
       val previousTitle = sql"""
         SELECT game_title_id
@@ -152,16 +143,6 @@ object PostgresMatches extends PostgresMatchesReadSupport:
             AND id <> $excludeMatchId
         )
       """.query[Boolean].unique
-
-    override def maxMatchNo(heldEventId: HeldEventId): ConnectionIO[Int] = sql"""
-        SELECT COALESCE(MAX(match_no_in_event), 0)
-        FROM matches WHERE held_event_id = $heldEventId
-      """.query[Int].unique
-
-    override def countByHeldEvents(
-        heldEventIds: List[HeldEventId]
-    ): ConnectionIO[Map[HeldEventId, Int]] = statsByHeldEvents(heldEventIds).map(_.view
-      .mapValues(_.matchCount).toMap)
 
     override def statsByHeldEvents(
         heldEventIds: List[HeldEventId]

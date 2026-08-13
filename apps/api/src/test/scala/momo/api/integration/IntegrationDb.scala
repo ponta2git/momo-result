@@ -11,7 +11,7 @@ import com.zaxxer.hikari.HikariConfig
 import doobie.*
 import doobie.hikari.HikariTransactor
 import doobie.implicits.*
-import org.testcontainers.containers.PostgreSQLContainer
+import org.testcontainers.postgresql.PostgreSQLContainer
 import org.testcontainers.utility.DockerImageName
 
 /**
@@ -31,27 +31,19 @@ object IntegrationDb:
   private val Password = "summit"
   private val StatementBreakpoint = raw"(?m)-->\s*statement-breakpoint\s*".r
 
-  private final class MomoPostgresContainer
-      extends PostgreSQLContainer[MomoPostgresContainer](PostgresImage)
-
   final case class Settings(jdbcUrl: String, user: String, password: String)
 
   /**
    * Suite-wide fixture combining a transactor with auto-cleanup before each test. Suites
-   * instantiate via [[withDb]] in their `munitFixtures`.
+   * acquire it through [[IntegrationDb.acquire]] in their `munitFixtures`.
    */
-  final class DbFixture(
-      val settings: Settings,
-      val transactor: HikariTransactor[IO],
-      release: IO[Unit],
-  ):
+  final class DbFixture(val transactor: HikariTransactor[IO]):
     def cleanup(): IO[Unit] = truncateAppTables(transactor)
-    def close(): IO[Unit] = release
 
   private lazy val sharedFixture: DbFixture =
     import cats.effect.unsafe.implicits.global
 
-    val container = new MomoPostgresContainer().withDatabaseName(DatabaseName)
+    val container = new PostgreSQLContainer(PostgresImage).withDatabaseName(DatabaseName)
       .withUsername(Username).withPassword(Password)
     container.start()
 
@@ -65,7 +57,7 @@ object IntegrationDb:
     val (transactor, releaseTransactor) = transactorResource(settings).allocated.unsafeRunSync()
     val release = releaseTransactor >> IO.blocking(container.stop())
     val _ = sys.addShutdownHook(release.unsafeRunSync())
-    new DbFixture(settings, transactor, IO.unit)
+    new DbFixture(transactor)
 
   def acquire: IO[DbFixture] = IO.blocking(sharedFixture)
 
@@ -86,7 +78,6 @@ object IntegrationDb:
     val migrations = migrationFiles(migrationsDirectory)
     if migrations.isEmpty then sys.error("No momo-db migration SQL files found.")
 
-    Class.forName("org.postgresql.Driver")
     val connection = DriverManager.getConnection(settings.jdbcUrl, settings.user, settings.password)
     try
       connection.setAutoCommit(true)

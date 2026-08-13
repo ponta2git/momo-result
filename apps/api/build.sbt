@@ -7,7 +7,6 @@ ThisBuild / evictionErrorLevel := Level.Warn
 addCommandAlias("apiFormat", "scalafmtAll")
 addCommandAlias("apiFormatCheck", "scalafmtCheckAll")
 addCommandAlias("apiLint", "scalafixAll --check")
-addCommandAlias("apiFix", "scalafixAll")
 addCommandAlias("apiQuality", "apiFormatCheck; apiLint; Test / compile; apiOpenApiCheck")
 addCommandAlias("apiCheck", "apiQuality; test")
 addCommandAlias("apiFullCheck", "apiCheck; apiDbQuality; apiRedisQuality")
@@ -45,8 +44,8 @@ addCommandAlias(
 
 lazy val apiOpenApi = taskKey[File]("Generate OpenAPI from Tapir endpoint definitions")
 lazy val apiOpenApiCheck = taskKey[Unit]("Check that openapi.yaml matches generated Tapir output")
+lazy val OpenApi = config("openapi").hide.extend(Compile)
 
-lazy val testcontainersDockerApiVersion = "1.40"
 lazy val nettyVersion = "4.2.15.Final"
 lazy val isMacOs =
   sys.props.getOrElse("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("mac")
@@ -88,8 +87,13 @@ lazy val sharedScalacOptions = Seq(
 )
 
 lazy val root = (project in file("."))
+  .configs(OpenApi)
   .enablePlugins(JavaAppPackaging)
   .settings(
+    inConfig(OpenApi)(Defaults.compileSettings),
+    org.scalafmt.sbt.ScalafmtPlugin.scalafmtConfigSettings(OpenApi),
+    scalafixConfigSettings(OpenApi),
+    OpenApi / compile := (OpenApi / compile).dependsOn(Compile / compile).value,
     name := "momo-result-api",
     organization := "momo",
     scalacOptions ++= sharedScalacOptions,
@@ -112,25 +116,17 @@ lazy val root = (project in file("."))
     Test / parallelExecution := true,
     Test / fork := false,
     Test / envVars ++= {
-      val apiVersionEnv = Map(
-        // docker-java 3.4.x defaults to API 1.32; Docker 29+ rejects it because its minimum is 1.40.
-        "api.version" -> sys.env.getOrElse("api.version", testcontainersDockerApiVersion)
-      )
-      val dockerHostEnv = sys.env.get("DOCKER_HOST").fold {
+      sys.env.get("DOCKER_HOST").fold {
         val dockerDesktopSocket = Paths.get(sys.props("user.home"), ".docker", "run", "docker.sock")
         if (Files.exists(dockerDesktopSocket)) {
           Map("DOCKER_HOST" -> s"unix://$dockerDesktopSocket")
         } else Map.empty[String, String]
       }(dockerHost => Map("DOCKER_HOST" -> dockerHost))
-      apiVersionEnv ++ dockerHostEnv
     },
     coverageFailOnMinimum := true,
     coverageMinimumStmtTotal := 80,
     coverageMinimumBranchTotal := 70,
-    coverageExcludedPackages := Seq(
-      "momo\\.api\\.Main",
-      "momo\\.api\\.openapi\\..*",
-    ).mkString(";"),
+    coverageExcludedPackages := "momo\\.api\\.Main",
     coverageExcludedFiles := Seq(
       ".*/momo/api/adapters/postgres/.*",
       ".*/momo/api/adapters/redis/.*",
@@ -153,12 +149,13 @@ lazy val root = (project in file("."))
       val munitVersion = "1.3.3"
       val redis4catsVersion = "2.0.4"
       val tapirVersion = "1.13.23"
-      val testcontainersPostgresVersion = "1.21.4"
       val testcontainersVersion = "2.0.5"
 
       Seq(
         "org.typelevel" %% "cats-effect" % catsEffectVersion,
-        "software.amazon.awssdk" % "s3" % awsSdkVersion,
+        ("software.amazon.awssdk" % "s3" % awsSdkVersion)
+          .exclude("software.amazon.awssdk", "apache5-client")
+          .exclude("software.amazon.awssdk", "netty-nio-client"),
         "software.amazon.awssdk" % "url-connection-client" % awsSdkVersion,
         "is.cir" %% "ciris" % cirisVersion,
         "org.typelevel" %% "log4cats-slf4j" % log4catsVersion,
@@ -167,8 +164,8 @@ lazy val root = (project in file("."))
         "com.softwaremill.sttp.tapir" %% "tapir-core" % tapirVersion,
         "com.softwaremill.sttp.tapir" %% "tapir-json-circe" % tapirVersion,
         "com.softwaremill.sttp.tapir" %% "tapir-http4s-server" % tapirVersion,
-        "com.softwaremill.sttp.tapir" %% "tapir-openapi-docs" % tapirVersion,
-        "com.softwaremill.sttp.apispec" %% "openapi-circe" % apiSpecVersion,
+        "com.softwaremill.sttp.tapir" %% "tapir-openapi-docs" % tapirVersion % OpenApi,
+        "com.softwaremill.sttp.apispec" %% "openapi-circe" % apiSpecVersion % OpenApi,
         "io.circe" %% "circe-core" % circeVersion,
         "io.circe" %% "circe-parser" % circeVersion,
         "io.github.iltotore" %% "iron" % ironVersion,
@@ -183,7 +180,7 @@ lazy val root = (project in file("."))
         "org.codehaus.janino" % "janino" % janinoVersion,
         "com.networknt" % "json-schema-validator" % jsonSchemaValidatorVersion % Test,
         "org.scalameta" %% "munit" % munitVersion % Test,
-        "org.testcontainers" % "postgresql" % testcontainersPostgresVersion % Test,
+        "org.testcontainers" % "testcontainers-postgresql" % testcontainersVersion % Test,
         "org.testcontainers" % "testcontainers" % testcontainersVersion % Test,
         "org.typelevel" %% "munit-cats-effect" % munitCatsEffectVersion % Test
       ) ++ macOsNettyDnsResolver
@@ -207,9 +204,9 @@ lazy val root = (project in file("."))
     },
     apiOpenApi := {
       val output = baseDirectory.value / "openapi.yaml"
-      val result = (Compile / runner).value.run(
+      val result = (OpenApi / runner).value.run(
         "momo.api.openapi.OpenApiMain",
-        (Compile / fullClasspath).value.files,
+        (OpenApi / fullClasspath).value.files,
         Seq(output.getAbsolutePath),
         streams.value.log
       )
@@ -221,9 +218,9 @@ lazy val root = (project in file("."))
       if (!output.exists()) sys.error(s"OpenAPI file does not exist: ${output.getAbsolutePath}")
       val generated = Files.createTempFile("momo-result-openapi-", ".yaml")
       try {
-        val result = (Compile / runner).value.run(
+        val result = (OpenApi / runner).value.run(
           "momo.api.openapi.OpenApiMain",
-          (Compile / fullClasspath).value.files,
+          (OpenApi / fullClasspath).value.files,
           Seq(generated.toAbsolutePath.toString),
           streams.value.log
         )

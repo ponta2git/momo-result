@@ -65,19 +65,19 @@ final class InMemoryMatchDraftsRepository[F[_]: Sync] private (
     }.toMap
   }
 
-  override def markConfirmed(
+  private[inmemory] def markConfirmedUnchecked(
       draftId: MatchDraftId,
       confirmedMatchId: MatchId,
       updatedAt: Instant,
-  ): F[MatchDraftMarkConfirmedResult] = ref.modify { current =>
+  ): F[Boolean] = ref.modify { current =>
     current.get(draftId) match
       case Some(e: MatchDraft.Editable) =>
         val next = MatchDraft.Confirmed(
           common = e.common.copy(updatedAt = updatedAt),
           confirmedMatchIdValue = confirmedMatchId,
         )
-        (current + (draftId -> next), MatchDraftMarkConfirmedResult.Confirmed)
-      case _ => (current, MatchDraftMarkConfirmedResult.NotConfirmable)
+        (current + (draftId -> next), true)
+      case _ => (current, false)
   }
 
   override def markOcrFailed(
@@ -92,13 +92,10 @@ final class InMemoryMatchDraftsRepository[F[_]: Sync] private (
         case _ => (current, MatchDraftOcrFailureResult.NotRunning)
     }
 
-  override def cancel(
-      draftId: MatchDraftId,
-      updatedAt: Instant,
-  ): F[MatchDraftDeletionResult] = ref.modify { current =>
+  private[inmemory] def cancelUnchecked(draftId: MatchDraftId): F[Boolean] = ref.modify { current =>
     current.get(draftId) match
-      case Some(_: MatchDraft.Editable) => (current - draftId, MatchDraftDeletionResult.Deleted)
-      case _ => (current, MatchDraftDeletionResult.NotCancellable)
+      case Some(_: MatchDraft.Editable) => (current - draftId, true)
+      case _ => (current, false)
   }
 
   override def attachOcrArtifacts(

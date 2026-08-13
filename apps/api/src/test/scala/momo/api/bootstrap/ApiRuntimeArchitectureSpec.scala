@@ -3,13 +3,9 @@ package momo.api.bootstrap
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path, Paths}
 
-import scala.jdk.CollectionConverters.*
-
 import munit.FunSuite
-import org.slf4j.LoggerFactory
 
 final class ApiRuntimeArchitectureSpec extends FunSuite:
-  private val logger = LoggerFactory.getLogger("momo.api.bootstrap.ApiRuntimeArchitectureSpec")
   private val apiAppFile = Paths.get("src/main/scala/momo/api/bootstrap/ApiApp.scala")
   private val postgresApiRuntimeFile =
     Paths.get("src/main/scala/momo/api/bootstrap/PostgresApiRuntime.scala")
@@ -80,9 +76,6 @@ final class ApiRuntimeArchitectureSpec extends FunSuite:
     assert(runtimeInfrastructureText.contains("readApi <- ResilientRateLimiter.create[F]"))
     assert(runtimeInfrastructureText.contains("mutation <- ResilientRateLimiter.create[F]"))
     assert(!runtimeInfrastructureText.contains("ocrJobCreate <- ResilientRateLimiter"))
-    assert(!runtimeInfrastructureText.contains("RedisOcrJobQueuePublisher.resource[F](redis)"))
-    assert(!runtimeInfrastructureText.contains("RedisRateLimiter.resource[F](redis"))
-    assert(!runtimeInfrastructureText.contains("RedisOAuthProviderBackoff.resource[F](redis"))
     assert(!runtimeInfrastructureText.contains("SeriesAnalysisQueuePublisher.noop"))
 
   test("API runtime validates dev identities before constructing domain ids"):
@@ -182,17 +175,6 @@ final class ApiRuntimeArchitectureSpec extends FunSuite:
     assert(createOcrJobText.contains("creationPlan = OcrJobCreationPlan"))
     assert(createOcrJobText.contains(".store(plan)"))
     assert(!createOcrJobText.contains(".createQueuedJob("))
-
-  test("API main module size is reported as a refactoring smell"):
-    val oversized = Files.walk(Paths.get("src/main/scala")).iterator.asScala
-      .filter(path => Files.isRegularFile(path) && path.toString.endsWith(".scala"))
-      .map(path => path -> Files.readAllLines(path, StandardCharsets.UTF_8).size)
-      .filter { case (_, lineCount) => lineCount >= 300 }
-      .map { case (path, lineCount) => s"$path: $lineCount lines" }
-      .toList.sorted
-
-    if oversized.nonEmpty then
-      logger.warn(s"API module size smell detected (300+ lines): ${oversized.mkString(", ")}")
 
   private def read(path: Path): String = Files.readString(path, StandardCharsets.UTF_8)
 end ApiRuntimeArchitectureSpec

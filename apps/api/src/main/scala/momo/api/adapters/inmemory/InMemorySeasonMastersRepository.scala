@@ -18,14 +18,6 @@ final class InMemorySeasonMastersRepository[F[_]: Sync] private (
     items.toList.sortBy(x => (x.gameTitleId.value, x.displayOrder, x.createdAt, x.id.value))
   }
   override def find(id: SeasonMasterId): F[Option[SeasonMaster]] = ref.get.map(_.get(id))
-  override def create(season: SeasonMaster): F[Unit] = ref.modify { items =>
-    if containsSeasonConflict(items, season, excluding = None) then
-      (
-        items,
-        Left(masterConflict(s"season_master already exists: ${season.id.value} or ${season.name}")),
-      )
-    else (items.updated(season.id, season), Right(()))
-  }.flatMap(completeUnit)
   override def createWithNextDisplayOrder(season: SeasonMaster): F[SeasonMaster] = ref
     .modify { items =>
       if containsSeasonConflict(items, season, excluding = None) then

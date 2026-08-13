@@ -8,20 +8,7 @@ import scala.jdk.CollectionConverters.*
 import munit.FunSuite
 
 final class PostgresRepositoryArchitectureSpec extends FunSuite:
-  private val matchListReadModel =
-    Paths.get("src/main/scala/momo/api/adapters/postgres/PostgresMatchListReadModel.scala")
-  private val matchListSupport =
-    Paths.get("src/main/scala/momo/api/adapters/postgres/PostgresMatchListSupport.scala")
   private val postgresDir = Paths.get("src/main/scala/momo/api/adapters/postgres")
-
-  test("match list read-model maps DB rows through named fields"):
-    val text = read(matchListReadModel)
-    val supportText = read(matchListSupport)
-
-    assert(text.contains("extends PostgresMatchListSupport"))
-    assert(supportText.contains("protected final case class Row("))
-    assert(!supportText.contains("private type Row = ("))
-    assert(!supportText.contains("row._"))
 
   test("synchronous Scala series analysis sources are absent"):
     val engineRoot = Paths.get("src/main/scala/momo/api/usecases/seriescomparison")

@@ -116,7 +116,8 @@ final class UpdateMatchDraftSpec extends MomoCatsEffectSuite:
     for
       fixture <- Fixture.create
       _ <- fixture.seedPrereqs()
-      _ <- fixture.gameTitles.create(GameTitle(otherTitleId, "Japan", "japan", 2, createdAt))
+      _ <- fixture.gameTitles
+        .createWithNextDisplayOrder(GameTitle(otherTitleId, "Japan", "japan", 2, createdAt))
       _ <- fixture.matchDrafts.create(editingDraft(draftId, MatchDraftStatus.DraftReady))
       result <- fixture.usecase.run(
         draftId,
@@ -136,8 +137,10 @@ final class UpdateMatchDraftSpec extends MomoCatsEffectSuite:
     for
       fixture <- Fixture.create
       _ <- fixture.seedPrereqs()
-      _ <- fixture.gameTitles.create(GameTitle(otherTitleId, "Japan", "japan", 2, createdAt))
-      _ <- fixture.mapMasters.create(MapMaster(otherMapId, otherTitleId, "西日本編", 2, createdAt))
+      _ <- fixture.gameTitles
+        .createWithNextDisplayOrder(GameTitle(otherTitleId, "Japan", "japan", 2, createdAt))
+      _ <- fixture.mapMasters
+        .createWithNextDisplayOrder(MapMaster(otherMapId, otherTitleId, "西日本編", 2, createdAt))
       _ <- fixture.matchDrafts.create(referencedDraft(draftId))
       titleChange <- fixture.usecase
         .run(draftId, blankCommand.copy(gameTitleId = Some(otherTitleId)))

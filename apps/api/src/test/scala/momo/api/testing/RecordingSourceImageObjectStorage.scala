@@ -44,12 +44,8 @@ final class RecordingSourceImageObjectStorage private (
 
   override def delete(
       key: SourceImageObjectKey
-  ): IO[Either[SourceImageObjectFailure, Unit]] = ref.modify { state =>
-    val next = state.copy(nextDeleteFailure = None)
-    state.nextDeleteFailure match
-      case Some(failure) => next -> Left(failure)
-      case None => next.copy(objects = next.objects.removed(key)) -> Right(())
-  }
+  ): IO[Either[SourceImageObjectFailure, Unit]] =
+    ref.modify(state => state.copy(objects = state.objects.removed(key)) -> Right(()))
 
   def failNextPut(failure: SourceImageObjectFailure): IO[Unit] = ref.update(
     _.copy(nextPutFailure = Some(failure))
@@ -57,10 +53,6 @@ final class RecordingSourceImageObjectStorage private (
 
   def failNextGet(failure: SourceImageObjectFailure): IO[Unit] = ref.update(
     _.copy(nextGetFailure = Some(failure))
-  )
-
-  def failNextDelete(failure: SourceImageObjectFailure): IO[Unit] = ref.update(
-    _.copy(nextDeleteFailure = Some(failure))
   )
 
   def putCount: IO[Int] = ref.get.map(_.putCount)
@@ -82,7 +74,6 @@ object RecordingSourceImageObjectStorage:
       putCount: Int,
       nextPutFailure: Option[SourceImageObjectFailure],
       nextGetFailure: Option[SourceImageObjectFailure],
-      nextDeleteFailure: Option[SourceImageObjectFailure],
   )
 
   def create: IO[RecordingSourceImageObjectStorage] = Ref.of[IO, State](State(
@@ -90,5 +81,4 @@ object RecordingSourceImageObjectStorage:
     putCount = 0,
     nextPutFailure = None,
     nextGetFailure = None,
-    nextDeleteFailure = None,
   )).map(new RecordingSourceImageObjectStorage(_))

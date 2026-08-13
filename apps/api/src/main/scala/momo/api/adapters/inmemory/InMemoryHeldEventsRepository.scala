@@ -21,16 +21,14 @@ final class InMemoryHeldEventsRepository[F[_]: Sync] private (
     ref: Ref[F, Map[HeldEventId, HeldEvent]]
 ) extends HeldEventsRepository[F]:
   private val alg: HeldEventsAlg[F] = new HeldEventsAlg[F]:
-    override def list(query: Option[String], limit: Int): F[List[HeldEvent]] = ref.get
-      .map(events => InMemoryHeldEventsRepository.filterAndSort(events.values, query, limit))
     override def listPage(query: Option[String], page: PageRequest): F[PagedResult[HeldEvent]] = ref
       .get.map { events =>
-        val all = InMemoryHeldEventsRepository.filterAndSort(events.values, query, Int.MaxValue)
+        val all = InMemoryHeldEventsRepository.filterAndSort(events.values, query)
         val pageItems = all.slice(page.offset.toInt, page.offset.toInt + page.pageSize)
         PagedResult(pageItems, page, all.size)
       }
     override def listIds(query: Option[String]): F[List[HeldEventId]] = ref.get.map(events =>
-      InMemoryHeldEventsRepository.filterAndSort(events.values, query, Int.MaxValue).map(_.id)
+      InMemoryHeldEventsRepository.filterAndSort(events.values, query).map(_.id)
     )
     override def find(id: HeldEventId): F[Option[HeldEvent]] = ref.get.map(_.get(id))
     override def create(event: HeldEvent): F[Unit] = ref.modify { current =>
@@ -41,22 +39,20 @@ final class InMemoryHeldEventsRepository[F[_]: Sync] private (
           .raiseError(new AppException(AppError.Conflict(s"held event already exists: ${event.id
               .value}")))
     }
-    override def delete(id: HeldEventId): F[Boolean] = ref
-      .modify(current => if current.contains(id) then (current - id, true) else (current, false))
 
   private val delegate: HeldEventsRepository[F] = HeldEventsRepository.liftIdentity(alg)
 
-  override def list(query: Option[String], limit: Int): F[List[HeldEvent]] = delegate
-    .list(query, limit)
   override def listPage(query: Option[String], page: PageRequest): F[PagedResult[HeldEvent]] =
     delegate.listPage(query, page)
   override def listIds(query: Option[String]): F[List[HeldEventId]] = delegate.listIds(query)
   override def find(id: HeldEventId): F[Option[HeldEvent]] = delegate.find(id)
   override def create(event: HeldEvent): F[Unit] = delegate.create(event)
-  override def delete(id: HeldEventId): F[Boolean] = delegate.delete(id)
+
+  private[inmemory] def deleteUnchecked(id: HeldEventId): F[Boolean] = ref
+    .modify(current => if current.contains(id) then (current - id, true) else (current, false))
 
 final class InMemoryHeldEventDeletionRepository[F[_]: Monad](
-    events: HeldEventsRepository[F],
+    events: InMemoryHeldEventsRepository[F],
     matches: MatchesRepository[F],
     drafts: MatchDraftsRepository[F],
 ) extends HeldEventDeletionRepository[F]:
@@ -66,15 +62,15 @@ final class InMemoryHeldEventDeletionRepository[F[_]: Monad](
         case None => Monad[F].pure(HeldEventDeletionResult.NotFound)
         case Some(_) =>
           for
-            matchCounts <- matches.countByHeldEvents(List(id))
+            matchStats <- matches.statsByHeldEvents(List(id))
             draftRefs <- drafts
               .list(MatchDraftsRepository.ListFilter(heldEventId = Some(id), limit = Some(1)))
             result <-
-              if matchCounts.getOrElse(id, 0) > 0 then
+              if matchStats.get(id).exists(_.matchCount > 0) then
                 Monad[F].pure(HeldEventDeletionResult.HasConfirmedMatches)
               else if draftRefs.nonEmpty then Monad[F].pure(HeldEventDeletionResult.HasMatchDrafts)
               else
-                events.delete(id).map(deleted =>
+                events.deleteUnchecked(id).map(deleted =>
                   if deleted then HeldEventDeletionResult.Deleted
                   else HeldEventDeletionResult.NotFound
                 )
@@ -91,14 +87,13 @@ object InMemoryHeldEventsRepository:
   private[adapters] def filterAndSort(
       events: Iterable[HeldEvent],
       query: Option[String],
-      limit: Int,
   ): List[HeldEvent] =
     val filtered = query match
       case Some(q) if q.trim.nonEmpty =>
         val lower = q.toLowerCase
         events.filter(e => e.id.value.toLowerCase.contains(lower))
       case _ => events
-    filtered.toList.sortBy(_.heldAt).reverse.take(math.max(limit, 0))
+    filtered.toList.sortBy(event => (event.heldAt, event.id.value)).reverse
 
   def create[F[_]: Sync]: F[InMemoryHeldEventsRepository[F]] = Ref
     .of[F, Map[HeldEventId, HeldEvent]](Map.empty).map(new InMemoryHeldEventsRepository(_))

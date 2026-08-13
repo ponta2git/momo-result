@@ -44,16 +44,6 @@ object PostgresMapMasters:
     override def find(id: MapMasterId): ConnectionIO[Option[MapMaster]] =
       (selectAll ++ fr"WHERE id = $id").query[MapMasterRow].option.map(_.map(fromRow))
 
-    override def create(map: MapMaster): ConnectionIO[Unit] = sql"""
-        INSERT INTO map_masters (id, game_title_id, name, display_order, created_at)
-        VALUES (${map.id}, ${map.gameTitleId}, ${map.name}, ${map.displayOrder}, ${map.createdAt})
-      """.update.run.void.exceptSomeSqlState {
-      case state if isUniqueViolation(state) =>
-        conflict(s"map_master already exists: ${map.id.value} or ${map.name}")
-      case state if isForeignKeyViolation(state) =>
-        appError(AppError.NotFound("game_title", map.gameTitleId.value))
-    }
-
     override def createWithNextDisplayOrder(map: MapMaster): ConnectionIO[MapMaster] =
       val lockKey = s"momo:map_masters:${map.gameTitleId.value}:display_order"
       sql"""

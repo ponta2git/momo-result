@@ -49,8 +49,4 @@ object AppSessionsRepository:
       def renew(idHash: String, lastSeenAt: Instant, expiresAt: Instant): F[Unit] =
         liftK(alg.renew(idHash, lastSeenAt, expiresAt))
       def deleteExpired(now: Instant): F[Int] = liftK(alg.deleteExpired(now))
-
-  def liftIdentity[F[_]](alg: AppSessionsAlg[F]): AppSessionsRepository[F] =
-    new AppSessionsRepository[F]:
-      export alg.*
 end AppSessionsRepository

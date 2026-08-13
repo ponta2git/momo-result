@@ -44,17 +44,6 @@ object PostgresSeasonMasters:
     override def find(id: SeasonMasterId): ConnectionIO[Option[SeasonMaster]] =
       (selectAll ++ fr"WHERE id = $id").query[SeasonMasterRow].option.map(_.map(fromRow))
 
-    override def create(season: SeasonMaster): ConnectionIO[Unit] = sql"""
-        INSERT INTO season_masters (id, game_title_id, name, display_order, created_at)
-        VALUES (${season.id}, ${season.gameTitleId}, ${season.name}, ${season
-        .displayOrder}, ${season.createdAt})
-      """.update.run.void.exceptSomeSqlState {
-      case state if isUniqueViolation(state) =>
-        conflict(s"season_master already exists: ${season.id.value} or ${season.name}")
-      case state if isForeignKeyViolation(state) =>
-        appError(AppError.NotFound("game_title", season.gameTitleId.value))
-    }
-
     override def createWithNextDisplayOrder(season: SeasonMaster): ConnectionIO[SeasonMaster] =
       val lockKey = s"momo:season_masters:${season.gameTitleId.value}:display_order"
       sql"""

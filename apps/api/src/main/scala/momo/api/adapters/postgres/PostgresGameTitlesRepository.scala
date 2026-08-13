@@ -42,15 +42,6 @@ object PostgresGameTitles:
     override def find(id: GameTitleId): ConnectionIO[Option[GameTitle]] =
       (selectAll ++ fr"WHERE id = $id").query[GameTitleRow].option.map(_.map(fromRow))
 
-    override def create(title: GameTitle): ConnectionIO[Unit] = sql"""
-        INSERT INTO game_titles (id, name, layout_family, display_order, created_at)
-        VALUES (${title.id}, ${title.name}, ${title.layoutFamily}, ${title.displayOrder}, ${title
-        .createdAt})
-      """.update.run.void.exceptSomeSqlState {
-      case state if isUniqueViolation(state) =>
-        conflict(s"game_title already exists: ${title.id.value} or ${title.name}")
-    }
-
     override def createWithNextDisplayOrder(title: GameTitle): ConnectionIO[GameTitle] =
       val lockKey = "momo:game_titles:display_order"
       sql"""

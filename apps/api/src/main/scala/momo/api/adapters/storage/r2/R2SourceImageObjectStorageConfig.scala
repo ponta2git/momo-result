@@ -35,23 +35,6 @@ object R2SourceImageObjectStorageConfig:
       credentials: R2Credentials,
       apiCallTimeout: Duration,
       apiCallAttemptTimeout: Duration,
-  ): Either[String, R2SourceImageObjectStorageConfig] = create(
-    endpoint,
-    region,
-    bucket,
-    credentials,
-    apiCallTimeout,
-    apiCallAttemptTimeout,
-    maxAttempts = 2,
-  )
-
-  def create(
-      endpoint: URI,
-      region: String,
-      bucket: String,
-      credentials: R2Credentials,
-      apiCallTimeout: Duration,
-      apiCallAttemptTimeout: Duration,
       maxAttempts: Int,
   ): Either[String, R2SourceImageObjectStorageConfig] =
     val endpointScheme = Option(endpoint.getScheme).map(_.toLowerCase)

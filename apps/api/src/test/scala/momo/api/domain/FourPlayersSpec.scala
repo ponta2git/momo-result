@@ -36,7 +36,6 @@ final class FourPlayersSpec extends FunSuite:
     val fp = result.toOption.getOrElse(fail(s"expected Right, got $result"))
     assertEquals(fp.toList, good)
     assertEquals(fp.byPlayOrder.map(_.memberId.value), List("m1", "m2", "m3", "m4"))
-    assertEquals(fp.byRank.map(_.memberId.value), List("m1", "m2", "m3", "m4"))
 
   test("count mismatch is reported"):
     val result = FourPlayers.fromList(good.take(3), allowed)

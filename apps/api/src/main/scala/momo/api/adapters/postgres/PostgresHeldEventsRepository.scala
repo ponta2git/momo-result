@@ -52,12 +52,6 @@ object PostgresHeldEvents:
     }
 
   val alg: HeldEventsAlg[ConnectionIO] = new HeldEventsAlg[ConnectionIO]:
-    override def list(query: Option[String], limit: Int): ConnectionIO[List[HeldEvent]] =
-      val where = whereQuery(query)
-      val order = fr"ORDER BY start_at DESC, id DESC"
-      val lim = fr"LIMIT ${math.max(limit, 0)}"
-      (selectAll ++ where ++ order ++ lim).query[HeldEventRow].to[List].map(_.map(fromRow))
-
     override def listPage(
         query: Option[String],
         page: PageRequest,
@@ -88,9 +82,6 @@ object PostgresHeldEvents:
           conflict(s"held event already exists: ${event.id.value}")
       }
 
-    override def delete(id: HeldEventId): ConnectionIO[Boolean] = sql"""
-        DELETE FROM held_events WHERE id = $id
-      """.update.run.map(_ > 0)
 end PostgresHeldEvents
 
 object PostgresHeldEventDeletion:

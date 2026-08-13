@@ -143,8 +143,6 @@ object HttpRequestBodies:
       player("member_eu", 4, 4),
     )
 
-    def confirmMatch(heldEventId: String): Json = confirmMatchWithNo(heldEventId, 1)
-
     def confirmMatchWithNo(heldEventId: String, matchNoInEvent: Int): Json =
       confirmMatchWithPlayers(heldEventId, matchNoInEvent, defaultPlayers)
 

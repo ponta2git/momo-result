@@ -17,7 +17,6 @@ final class ApiEndpointsArchitectureSpec extends FunSuite:
   private val authModule = Paths.get("src/main/scala/momo/api/http/modules/AuthModule.scala")
   private val authPolicy = httpDir.resolve("AuthPolicy.scala")
   private val commonEndpoint = endpointDir.resolve("CommonEndpoint.scala")
-  private val csrfMiddleware = httpDir.resolve("CsrfMiddleware.scala")
   private val maxBodySizeMiddleware = httpDir.resolve("MaxBodySizeMiddleware.scala")
   private val healthModule = httpModulesDir.resolve("HealthModule.scala")
   private val requestIdMiddleware = httpDir.resolve("RequestIdMiddleware.scala")
@@ -84,19 +83,16 @@ final class ApiEndpointsArchitectureSpec extends FunSuite:
 
   test("Tapir endpoints and middleware share common HTTP header names"):
     val endpointText = read(commonEndpoint)
-    val csrfText = read(csrfMiddleware)
     val requestIdText = read(requestIdMiddleware)
 
     assert(endpointText.contains("AuthHeaderNames.AccountId"))
     assert(endpointText.contains("AuthHeaderNames.CsrfToken"))
     assert(endpointText.contains("AuthHeaderNames.RequestId"))
     assert(endpointText.contains("AuthHeaderNames.IdempotencyKey"))
-    assert(csrfText.contains("AuthHeaderNames.CsrfToken"))
     assert(requestIdText.contains("AuthHeaderNames.RequestId"))
     assert(!endpointText.contains("""header[Option[String]]("X-CSRF-Token")"""))
     assert(!endpointText.contains("""header[Option[String]]("X-Request-Id")"""))
     assert(!endpointText.contains("""header[Option[String]]("Idempotency-Key")"""))
-    assert(!csrfText.contains("""val HeaderName = "X-CSRF-Token""""))
     assert(!requestIdText.contains("""CIString("X-Request-Id")"""))
 
   test("Tapir endpoints and middleware share common public path contracts"):

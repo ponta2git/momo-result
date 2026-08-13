@@ -24,7 +24,7 @@ final class SeriesAnalysisHttpSpec extends MomoCatsEffectSuite with HttpAppTestF
   private val app = ResourceFunFixture(seededWiredHttpAppResource(
     "momo-series-analysis-http",
     runtime =>
-      runtime.gameTitles.create(
+      runtime.gameTitles.createWithNextDisplayOrder(
         GameTitle(
           titleId,
           "分析HTTP作品",
@@ -32,7 +32,7 @@ final class SeriesAnalysisHttpSpec extends MomoCatsEffectSuite with HttpAppTestF
           1,
           Instant.parse("2026-08-09T00:00:00Z"),
         )
-      ),
+      ).void,
   ))
 
   app.test("v2 options and status are lightweight no-store reads") { httpApp =>

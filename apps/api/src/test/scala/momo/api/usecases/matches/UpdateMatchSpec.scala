@@ -90,7 +90,8 @@ final class UpdateMatchSpec extends MomoCatsEffectSuite:
     for
       fixture <- Fixture.create
       _ <- fixture.seedPrereqs()
-      _ <- fixture.gameTitles.create(GameTitle(otherTitleId, "Japan", "japan", 2, createdAt))
+      _ <- fixture.gameTitles
+        .createWithNextDisplayOrder(GameTitle(otherTitleId, "Japan", "japan", 2, createdAt))
       _ <- fixture.matches.create(sampleMatch(matchId, matchNoInEvent = 1))
       result <- fixture.usecase
         .run(matchId, command(matchNoInEvent = 2, gameTitleId = otherTitleId))
@@ -201,7 +202,6 @@ final class UpdateMatchSpec extends MomoCatsEffectSuite:
 
   private final class MatchesRepositoryWithUpdateConflict(delegate: MatchesRepository[IO])
       extends MatchesRepository[IO]:
-    override def create(record: MatchRecord): IO[Unit] = delegate.create(record)
     override def update(record: MatchRecord, updatedAt: Instant): IO[Unit] = IO
       .raiseError(new AppException(AppError.Conflict("repository conflict")))
     override def delete(id: MatchId): IO[Boolean] = delegate.delete(id)
@@ -219,9 +219,6 @@ final class UpdateMatchSpec extends MomoCatsEffectSuite:
         matchNoInEvent: MatchNoInEvent,
         excludeMatchId: MatchId,
     ): IO[Boolean] = IO.pure(false)
-    override def maxMatchNo(heldEventId: HeldEventId): IO[Int] = delegate.maxMatchNo(heldEventId)
-    override def countByHeldEvents(heldEventIds: List[HeldEventId]): IO[Map[HeldEventId, Int]] =
-      delegate.countByHeldEvents(heldEventIds)
     override def statsByHeldEvents(
         heldEventIds: List[HeldEventId]
     ): IO[Map[HeldEventId, MatchesRepository.HeldEventStats]] =

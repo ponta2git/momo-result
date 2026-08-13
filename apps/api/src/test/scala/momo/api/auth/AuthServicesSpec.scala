@@ -7,8 +7,6 @@ import java.nio.charset.StandardCharsets
 import java.time.Instant
 import java.util.Optional
 import java.util.concurrent.{CompletableFuture, Executor, Flow}
-import javax.crypto.Mac
-import javax.crypto.spec.SecretKeySpec
 import javax.net.ssl.{SSLContext, SSLParameters, SSLSession}
 
 import scala.concurrent.duration.*
@@ -83,15 +81,6 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
         Some(codec.Payload(silent = true, redirectPath = Some("/exports?format=tsv#latest"))),
       )
       assertEquals(external, Some(codec.Payload(silent = true, redirectPath = None)))
-  }
-
-  test("OAuthStateCodec accepts legacy state payloads without redirect paths") {
-    val now = IO.pure(Instant.parse("2026-01-01T00:00:00Z"))
-    val codec = OAuthStateCodec[IO](config, now)
-    val legacy = signedLegacyState("nonce", "1767225900", "1")
-
-    codec.validate(legacy)
-      .map(result => assertEquals(result, Some(codec.Payload(silent = true, redirectPath = None))))
   }
 
   test("CompleteOAuthLogin creates a session for an enabled allow-listed Discord account") {
@@ -360,18 +349,6 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
       assert(blockedAfterSecond)
       assert(!blockedAfterCooldown)
   }
-
-  private def signedLegacyState(nonce: String, expires: String, marker: String): String =
-    val payload = s"$nonce:$expires:$marker"
-    val payloadBytes = payload.getBytes(StandardCharsets.UTF_8)
-    val mac = Mac.getInstance("HmacSHA256")
-    mac.init(SecretKeySpec(
-      config.stateSigningKey.getOrElse(fail("missing state signing key"))
-        .getBytes(StandardCharsets.UTF_8),
-      "HmacSHA256",
-    ))
-    val signature = Base64Url.encode(mac.doFinal(payloadBytes))
-    s"${Base64Url.encode(payloadBytes)}.$signature"
 
   private def assertProviderFailure(
       result: Either[OAuthLoginFailure, OAuthLoginCompletion],

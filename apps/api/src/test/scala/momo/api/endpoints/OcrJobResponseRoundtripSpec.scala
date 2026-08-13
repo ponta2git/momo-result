@@ -10,7 +10,7 @@ import momo.api.domain.ids.*
 import momo.api.domain.{FailureCode, OcrFailure, OcrJob, ScreenType, StoredImageLocation}
 
 /**
- * Roundtrip + golden-JSON guard for [[OcrJobResponse]].
+ * Golden-JSON guard for [[OcrJobResponse]].
  *
  * The two cases (`Queued` happy path and `Failed` with full failure detail) cover both branches of
  * the optional fields, so the golden snapshot will catch any accidental nesting / casing change in
@@ -53,14 +53,6 @@ final class OcrJobResponseRoundtripSpec extends FunSuite:
     createdAt = createdAt,
     updatedAt = updatedAt,
   )
-
-  test("OcrJobResponse: encode → decode is identity (queued)"):
-    val response = OcrJobResponse.from(queuedJob)
-    assertEquals(response.asJson.as[OcrJobResponse], Right(response))
-
-  test("OcrJobResponse: encode → decode is identity (failed)"):
-    val response = OcrJobResponse.from(failedJob)
-    assertEquals(response.asJson.as[OcrJobResponse], Right(response))
 
   test("OcrJobResponse: golden JSON pins the wire format (queued)"):
     val response = OcrJobResponse.from(queuedJob)

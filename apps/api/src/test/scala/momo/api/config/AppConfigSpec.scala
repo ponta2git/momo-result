@@ -126,7 +126,11 @@ class AppConfigSpec extends CatsEffectSuite:
   }
 
   test("ensureProdRedisUrl: rejects insecure Redis URLs in prod") {
-    val result = RedisUrlConfig.ensureProdRedisUrl("redis://redis.example.com:6379", AppEnv.Prod)
+    val result = RedisUrlConfig.ensureProdRedisUrl(
+      "redis://redis.example.com:6379",
+      AppEnv.Prod,
+      allowPlaintextInProd = false,
+    )
     assertEquals(
       result.left.map(_.getMessage),
       Left("REDIS_URL must use rediss:// in prod APP_ENV."),
@@ -165,7 +169,11 @@ class AppConfigSpec extends CatsEffectSuite:
   }
 
   test("ensureProdRedisUrl: allows local Redis URLs outside prod") {
-    val result = RedisUrlConfig.ensureProdRedisUrl("redis://localhost:6379/0", AppEnv.Dev)
+    val result = RedisUrlConfig.ensureProdRedisUrl(
+      "redis://localhost:6379/0",
+      AppEnv.Dev,
+      allowPlaintextInProd = false,
+    )
     assertEquals(result, Right("redis://localhost:6379/0"))
   }
 
@@ -446,13 +454,7 @@ class AppConfigSpec extends CatsEffectSuite:
 
   test("loadFromEnv rejects production __Host cookie prefix drift") {
     load(prodEnv + ("SESSION_COOKIE_NAME" -> "momo_result_session")).map { result =>
-      assert(result.left.exists(_.getMessage.contains("AUTH_COOKIE_HOST_PREFIX requires __Host-")))
-    }
-  }
-
-  test("loadFromEnv rejects disabled production __Host cookie prefix") {
-    load(prodEnv + ("AUTH_COOKIE_HOST_PREFIX" -> "false")).map { result =>
-      assert(result.left.exists(_.getMessage.contains("AUTH_COOKIE_HOST_PREFIX must be true")))
+      assert(result.left.exists(_.getMessage.contains("must use the __Host- prefix")))
     }
   }
 

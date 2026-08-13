@@ -10,7 +10,7 @@ import momo.api.repositories.OcrDraftsRepository
 
 final class InMemoryOcrDraftsRepository[F[_]: Sync] private (ref: Ref[F, Map[String, OcrDraft]])
     extends OcrDraftsRepository[F]:
-  override def create(draft: OcrDraft): F[Unit] = ref.modify { current =>
+  def create(draft: OcrDraft): F[Unit] = ref.modify { current =>
     if current.contains(draft.id.value) then
       current ->
         Left(new AppException(AppError.Conflict(s"ocr draft already exists: ${draft.id.value}")))

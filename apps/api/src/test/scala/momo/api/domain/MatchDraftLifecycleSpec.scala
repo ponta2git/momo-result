@@ -2,16 +2,12 @@ package momo.api.domain
 
 import java.time.Instant
 
-import cats.effect.IO
-import munit.CatsEffectSuite
+import munit.FunSuite
 
-import momo.api.adapters.inmemory.InMemoryMatchDraftsRepository
 import momo.api.domain.ids.*
-import momo.api.repositories.{MatchDraftDeletionResult, MatchDraftMarkConfirmedResult}
 
-final class MatchDraftLifecycleSpec extends CatsEffectSuite:
+final class MatchDraftLifecycleSpec extends FunSuite:
   private val createdAt = Instant.parse("2026-05-04T10:00:00Z")
-  private val laterAt = Instant.parse("2026-05-04T10:05:00Z")
 
   private def newEditing(status: MatchDraftStatus): MatchDraft.Editable = MatchDraft.editable(
     common = MatchDraftCommon(
@@ -39,37 +35,6 @@ final class MatchDraftLifecycleSpec extends CatsEffectSuite:
     ),
     status = status,
   ).getOrElse(fail(s"invalid editable status=${status.wire}"))
-
-  test("Editable → Confirmed via markConfirmed; subsequent transitions are rejected"):
-    for
-      repo <- InMemoryMatchDraftsRepository.create[IO]
-      draft = newEditing(MatchDraftStatus.DraftReady)
-      _ <- repo.create(draft)
-      ok <- repo.markConfirmed(draft.id, MatchId.unsafeFromString("match_1"), laterAt)
-      _ = assertEquals(ok, MatchDraftMarkConfirmedResult.Confirmed)
-      after <- repo.find(draft.id)
-      _ = after match
-        case Some(c: MatchDraft.Confirmed) =>
-          assertEquals(c.confirmedMatchIdValue, MatchId.unsafeFromString("match_1"))
-          assertEquals(c.confirmedMatchId, Some(MatchId.unsafeFromString("match_1")))
-          assertEquals(c.status, MatchDraftStatus.Confirmed)
-          assertEquals(c.updatedAt, laterAt)
-        case other => fail(s"expected Confirmed, got $other")
-      // a second confirm attempt on a non-editable draft should fail
-      ok2 <- repo.markConfirmed(draft.id, MatchId.unsafeFromString("match_2"), laterAt)
-    yield assertEquals(ok2, MatchDraftMarkConfirmedResult.NotConfirmable)
-
-  test("cancel physically removes editable drafts; repeated calls are rejected after deletion"):
-    for
-      repo <- InMemoryMatchDraftsRepository.create[IO]
-      draft = newEditing(MatchDraftStatus.NeedsReview)
-      _ <- repo.create(draft)
-      ok <- repo.cancel(draft.id, laterAt)
-      _ = assertEquals(ok, MatchDraftDeletionResult.Deleted)
-      after <- repo.find(draft.id)
-      _ = assertEquals(after, None)
-      ok2 <- repo.cancel(draft.id, laterAt)
-    yield assertEquals(ok2, MatchDraftDeletionResult.NotCancellable)
 
   test("smart factory rejects status=Confirmed without confirmedMatchId"):
     val result = MatchDraft.fromInputs(

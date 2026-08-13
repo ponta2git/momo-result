@@ -14,14 +14,6 @@ final class InMemoryGameTitlesRepository[F[_]: Sync] private (
   override def list: F[List[GameTitle]] = ref.get
     .map(_.values.toList.sortBy(t => (t.displayOrder, t.createdAt, t.id.value)))
   override def find(id: GameTitleId): F[Option[GameTitle]] = ref.get.map(_.get(id))
-  override def create(title: GameTitle): F[Unit] = ref.modify { items =>
-    if containsGameTitleConflict(items, title, excluding = None) then
-      (
-        items,
-        Left(masterConflict(s"game_title already exists: ${title.id.value} or ${title.name}")),
-      )
-    else (items.updated(title.id, title), Right(()))
-  }.flatMap(completeUnit)
   override def createWithNextDisplayOrder(title: GameTitle): F[GameTitle] = ref.modify { items =>
     if containsGameTitleConflict(items, title, excluding = None) then
       (

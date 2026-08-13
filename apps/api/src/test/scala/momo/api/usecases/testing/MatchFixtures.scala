@@ -66,15 +66,6 @@ object MatchFixtures:
       player(members(3), 4, 4),
     )
 
-  def duplicateRankPlayers(memberValues: List[String]): List[PlayerResult] =
-    val members = fourMemberValues(memberValues)
-    List(
-      player(members(0), 1, 1),
-      player(members(1), 2, 1),
-      player(members(2), 3, 3),
-      player(members(3), 4, 4),
-    )
-
   def defaultPlayerInputs(memberValues: List[String]): List[PlayerResult.Input] =
     val members = fourMemberValues(memberValues)
     List(
@@ -93,14 +84,14 @@ object MatchFixtures:
       playerInput(members(3), 4, 4),
     )
 
-  def fourPlayers(memberValues: List[String]): FourPlayers = defaultPlayers(memberValues) match
-    case a :: b :: c :: d :: _ => FourPlayers(a, b, c, d)
-    case _ => FourPlayers(
-        player("missing_member_1", 1, 1),
-        player("missing_member_2", 2, 2),
-        player("missing_member_3", 3, 3),
-        player("missing_member_4", 4, 4),
-      )
+  def fourPlayers(memberValues: List[String]): FourPlayers =
+    val members = fourMemberValues(memberValues)
+    FourPlayers(
+      player(members(0), 1, 1),
+      player(members(1), 2, 2),
+      player(members(2), 3, 3),
+      player(members(3), 4, 4),
+    )
 
   def seedWorldMasters(
       gameTitles: GameTitlesRepository[IO],
@@ -112,9 +103,10 @@ object MatchFixtures:
       createdAt: Instant,
   ): IO[Unit] =
     for
-      _ <- gameTitles.create(GameTitle(titleId, "World", "world", 1, createdAt))
-      _ <- mapMasters.create(MapMaster(mapId, titleId, "East", 1, createdAt))
-      _ <- seasonMasters.create(SeasonMaster(seasonId, titleId, "Spring", 1, createdAt))
+      _ <- gameTitles.createWithNextDisplayOrder(GameTitle(titleId, "World", "world", 1, createdAt))
+      _ <- mapMasters.createWithNextDisplayOrder(MapMaster(mapId, titleId, "East", 1, createdAt))
+      _ <- seasonMasters
+        .createWithNextDisplayOrder(SeasonMaster(seasonId, titleId, "Spring", 1, createdAt))
     yield ()
 
   def seedWorldPrereqs(

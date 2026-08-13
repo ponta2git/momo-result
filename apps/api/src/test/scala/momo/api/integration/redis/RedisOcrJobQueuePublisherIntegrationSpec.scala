@@ -12,7 +12,6 @@ import dev.profunktor.redis4cats.effect.Log.NoOp.*
 import io.lettuce.core.Range
 
 import momo.api.adapters.redis.RedisOcrJobQueuePublisher
-import momo.api.config.RedisConfig
 import momo.api.contracts.ocrworker.OcrWorkerJobMessageV2
 import momo.api.domain.ids.*
 import momo.api.domain.{OcrJobHints, ScreenType, StoredImageLocation}
@@ -29,25 +28,18 @@ final class RedisOcrJobQueuePublisherIntegrationSpec extends RedisIntegrationSui
     val request = requestFor("job-redis")
     val expectedMessage = OcrWorkerJobMessageV2.fromEnqueueRequest(request).fold(fail(_), identity)
     redisStreamFixture.use { fixture =>
-      val config = RedisConfig(
-        url = fixture.redisUrl,
-        v2Stream = fixture.streamName,
-        v2DeadLetterStream = fixture.deadLetterStreamName,
-      )
-      RedisOcrJobQueuePublisher.resource[IO](config).use { producer =>
+      Redis[IO].simple(fixture.redisUrl, RedisCodec.Utf8).use { commands =>
+        val producer = RedisOcrJobQueuePublisher.fromCommands(fixture.streamName, commands)
         producer.publish(request).flatMap { messageId =>
-          Redis[IO].simple(fixture.redisUrl, RedisCodec.Utf8).use { commands =>
-            commands.unsafe(_.xrange(fixture.streamName, Range.unbounded[String]())).map {
-              messages =>
-                val rows = messages.asScala.toList
-                assert(
-                  rows.nonEmpty,
-                  s"expected at least 1 message in stream=${fixture.streamName}",
-                )
-                assertEquals(messageId, rows.head.getId)
-                val body: util.Map[String, String] = rows.head.getBody
-                assertEquals(body, expectedMessage.fields.asJava)
-            }
+          commands.unsafe(_.xrange(fixture.streamName, Range.unbounded[String]())).map { messages =>
+            val rows = messages.asScala.toList
+            assert(
+              rows.nonEmpty,
+              s"expected at least 1 message in stream=${fixture.streamName}",
+            )
+            assertEquals(messageId, rows.head.getId)
+            val body: util.Map[String, String] = rows.head.getBody
+            assertEquals(body, expectedMessage.fields.asJava)
           }
         }
       }

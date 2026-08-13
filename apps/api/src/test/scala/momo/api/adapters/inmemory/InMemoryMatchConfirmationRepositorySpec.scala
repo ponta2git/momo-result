@@ -24,7 +24,7 @@ final class InMemoryMatchConfirmationRepositorySpec extends MomoCatsEffectSuite:
     for
       matches <- InMemoryMatchesRepository.create[IO]
       matchDrafts <- InMemoryMatchDraftsRepository.create[IO]
-      confirmations = InMemoryMatchConfirmationRepository[IO](matches, matchDrafts)
+      confirmations = InMemoryMatchConfirmationRepository[IO](matches, matches.create, matchDrafts)
       currentDraft = draft()
       existing = record("match-in-memory-confirm-existing", 1)
       duplicate = record("match-in-memory-confirm-duplicate", 1)

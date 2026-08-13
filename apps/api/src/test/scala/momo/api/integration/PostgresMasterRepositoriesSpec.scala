@@ -11,7 +11,6 @@ import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.domain.*
 import momo.api.domain.ids.*
 import momo.api.errors.AppError
-import momo.api.repositories.MatchDraftDeletionResult
 import momo.api.testing.AppErrorAssertions.assertAppException
 import momo.api.usecases.masters.*
 
@@ -27,16 +26,16 @@ final class PostgresMasterRepositoriesSpec extends IntegrationSuite:
   private def seasonMasters = new PostgresSeasonMastersRepository[IO](transactor)
   private def memberAliases = new PostgresMemberAliasesRepository[IO](transactor)
   private def members = new PostgresMembersRepository[IO](transactor)
-  private def matchDrafts = new PostgresMatchDraftsRepository[IO](transactor)
 
   private def seedTitle: IO[Unit] = gameTitles
-    .create(GameTitle(titleId, "テストタイトル", "world", 1, now))
+    .createWithNextDisplayOrder(GameTitle(titleId, "テストタイトル", "world", 1, now)).void
 
   private def seedScopedMasters: IO[Unit] =
     for
       _ <- seedTitle
-      _ <- mapMasters.create(MapMaster(mapId, titleId, "テストマップ", 1, now))
-      _ <- seasonMasters.create(SeasonMaster(seasonId, titleId, "テスト期間", 1, now))
+      _ <- mapMasters.createWithNextDisplayOrder(MapMaster(mapId, titleId, "テストマップ", 1, now))
+      _ <- seasonMasters
+        .createWithNextDisplayOrder(SeasonMaster(seasonId, titleId, "テスト期間", 1, now))
     yield ()
 
   test("game titles update and delete unused rows"):
@@ -106,9 +105,12 @@ final class PostgresMasterRepositoriesSpec extends IntegrationSuite:
     val updateSeason = new UpdateSeasonMaster[IO](seasonMasters)
     for
       _ <- seedScopedMasters
-      _ <- gameTitles.create(GameTitle(otherTitleId, "別タイトル", "world", 2, now))
-      _ <- mapMasters.create(MapMaster(otherMapId, titleId, "別マップ", 2, now))
-      _ <- seasonMasters.create(SeasonMaster(otherSeasonId, titleId, "別期間", 2, now))
+      _ <- gameTitles
+        .createWithNextDisplayOrder(GameTitle(otherTitleId, "別タイトル", "world", 2, now))
+      _ <- mapMasters
+        .createWithNextDisplayOrder(MapMaster(otherMapId, titleId, "別マップ", 2, now))
+      _ <- seasonMasters
+        .createWithNextDisplayOrder(SeasonMaster(otherSeasonId, titleId, "別期間", 2, now))
       titleConflict <- updateTitle.run(UpdateGameTitleCommand(otherTitleId, "テストタイトル", "world"))
       mapConflict <- updateMap.run(UpdateMapMasterCommand(otherMapId, "テストマップ"))
       seasonConflict <- updateSeason.run(UpdateSeasonMasterCommand(otherSeasonId, "テスト期間"))
@@ -152,13 +154,13 @@ final class PostgresMasterRepositoriesSpec extends IntegrationSuite:
         )
       """.update.run.transact(transactor)
       blocked <- deleteMap.run(mapId)
-      cancelled <- matchDrafts.cancel(draftId, now.plusSeconds(1))
+      discarded <- sql"DELETE FROM match_drafts WHERE id = $draftId".update.run.transact(transactor)
       deletedMap <- deleteMap.run(mapId)
       deletedSeason <- deleteSeason.run(seasonId)
       deletedTitle <- deleteTitle.run(titleId)
     yield
       assertEquals(blocked, Left(AppError.Conflict("map master is still referenced.")))
-      assertEquals(cancelled, MatchDraftDeletionResult.Deleted)
+      assertEquals(discarded, 1)
       assertEquals(deletedMap, Right(()))
       assertEquals(deletedSeason, Right(()))
       assertEquals(deletedTitle, Right(()))

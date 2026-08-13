@@ -161,13 +161,3 @@ final class LocalFsImageStore[F[_]: Async: Random](root: Path)
     .unsafeFromString(path.toAbsolutePath.normalize().toString)
 
   private def pathFor(location: StoredImageLocation): Path = Path.of(location.value)
-
-object LocalFsImageStore:
-  val MaxBytes: Int = ImageValidation.MaxBytes
-  val MaxWidth: Int = ImageValidation.MaxWidth
-  val MaxHeight: Int = ImageValidation.MaxHeight
-  val MaxDimensionsLabel: String = ImageValidation.MaxDimensionsLabel
-
-  def normalizeMediaType(value: String): String = ImageValidation.normalizeMediaType(value)
-
-  def detect(bytes: Array[Byte]): Option[ImageValidation.ImageType] = ImageValidation.detect(bytes)

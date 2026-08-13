@@ -31,11 +31,6 @@ final case class FourPlayers(
   /** Players sorted ascending by playOrder (1..4). */
   def byPlayOrder: List[PlayerResult] = toList.sortBy(_.playOrder.value)
 
-  /** Players sorted ascending by rank (1..4). */
-  def byRank: List[PlayerResult] = toList.sortBy(_.rank.value)
-
-  def memberIds: Set[MemberId] = toList.iterator.map(_.memberId).toSet
-
 object FourPlayers:
   private val RequiredOrdinals: Set[Int] = Set(1, 2, 3, 4)
 

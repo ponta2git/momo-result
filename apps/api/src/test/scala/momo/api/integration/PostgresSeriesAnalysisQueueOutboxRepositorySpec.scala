@@ -128,7 +128,7 @@ final class PostgresSeriesAnalysisQueueOutboxRepositorySpec extends IntegrationS
     val accountId = AccountId.unsafeFromString("account_ponta")
     for
       _ <- new PostgresGameTitlesRepository[IO](transactor)
-        .create(GameTitle(titleId, "分析配送作品", "momotetsu2", 1, now))
+        .createWithNextDisplayOrder(GameTitle(titleId, "分析配送作品", "momotetsu2", 1, now))
       analysis <- PostgresSeriesAnalysisRepository.create[IO](
         transactor,
         SeriesAnalysisReadConfig.defaults,
@@ -154,7 +154,7 @@ final class PostgresSeriesAnalysisQueueOutboxRepositorySpec extends IntegrationS
     val cutoff = now.minusSeconds(45L * 24L * 60L * 60L)
     for
       _ <- new PostgresGameTitlesRepository[IO](transactor)
-        .create(GameTitle(titleId, "分析配送作品", "momotetsu2", 1, now))
+        .createWithNextDisplayOrder(GameTitle(titleId, "分析配送作品", "momotetsu2", 1, now))
       _ <- sql"""
         INSERT INTO series_analysis_jobs (
           id, game_title_id, input_revision, algorithm_version,
@@ -200,7 +200,7 @@ final class PostgresSeriesAnalysisQueueOutboxRepositorySpec extends IntegrationS
   private def seedJob(jobId: String, outboxId: Option[String]): IO[Unit] =
     for
       _ <- new PostgresGameTitlesRepository[IO](transactor)
-        .create(GameTitle(titleId, "分析配送作品", "momotetsu2", 1, now))
+        .createWithNextDisplayOrder(GameTitle(titleId, "分析配送作品", "momotetsu2", 1, now))
       _ <- sql"""
         INSERT INTO series_analysis_jobs (
           id, game_title_id, input_revision, algorithm_version,

@@ -37,7 +37,10 @@ final class InMemoryLoginAccountsRepository[F[_]: Sync] private (
         )
       else (accounts.updated(created.id, created), Right(created))
     }.flatMap(complete)
-  override def update(id: AccountId, data: UpdateLoginAccountData): F[Option[LoginAccount]] = ref
+  private[inmemory] def updateUnchecked(
+      id: AccountId,
+      data: UpdateLoginAccountData,
+  ): F[Option[LoginAccount]] = ref
     .modify { accounts =>
       accounts.get(id) match
         case None => (accounts, None)
@@ -55,11 +58,8 @@ final class InMemoryLoginAccountsRepository[F[_]: Sync] private (
           if wouldRemoveLastAdmin then (accounts, None)
           else (accounts.updated(id, updated), Some(updated))
     }
-  override def enabledAdminCount: F[Int] = ref.get
-    .map(_.values.count(a => a.loginEnabled && a.isAdmin))
-
 final class InMemoryLoginAccountAdministrationRepository[F[_]: Sync](
-    accounts: LoginAccountsRepository[F],
+    accounts: InMemoryLoginAccountsRepository[F],
     sessions: AppSessionsRepository[F],
 ) extends LoginAccountAdministrationRepository[F]:
   override def updateAndRevokeSessionsWhenDisabled(
@@ -76,16 +76,17 @@ final class InMemoryLoginAccountAdministrationRepository[F[_]: Sync](
   private def updateExisting(
       existing: LoginAccount,
       data: UpdateLoginAccountData,
-  ): F[LoginAccountAdministrationUpdateResult] = accounts.update(existing.id, data).flatMap {
-    case Some(updated) =>
-      val revokeSessions = existing.loginEnabled && !updated.loginEnabled
-      val revoke =
-        if revokeSessions then sessions.deleteByAccount(existing.id).void else Sync[F].unit
-      revoke.as(LoginAccountAdministrationUpdateResult.Updated(updated))
-    case None if wouldRemoveEnabledAdmin(existing, data) =>
-      Sync[F].pure(LoginAccountAdministrationUpdateResult.LastEnabledAdmin)
-    case None => Sync[F].pure(LoginAccountAdministrationUpdateResult.NotFound)
-  }
+  ): F[LoginAccountAdministrationUpdateResult] = accounts
+    .updateUnchecked(existing.id, data).flatMap {
+      case Some(updated) =>
+        val revokeSessions = existing.loginEnabled && !updated.loginEnabled
+        val revoke =
+          if revokeSessions then sessions.deleteByAccount(existing.id).void else Sync[F].unit
+        revoke.as(LoginAccountAdministrationUpdateResult.Updated(updated))
+      case None if wouldRemoveEnabledAdmin(existing, data) =>
+        Sync[F].pure(LoginAccountAdministrationUpdateResult.LastEnabledAdmin)
+      case None => Sync[F].pure(LoginAccountAdministrationUpdateResult.NotFound)
+    }
 
   private def wouldRemoveEnabledAdmin(
       existing: LoginAccount,

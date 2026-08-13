@@ -31,16 +31,12 @@ trait LoginAccountsAlg[F0[_]]:
   def find(id: AccountId): F0[Option[LoginAccount]]
   def findByDiscordUserId(userId: UserId): F0[Option[LoginAccount]]
   def create(account: CreateLoginAccountData): F0[LoginAccount]
-  def update(id: AccountId, data: UpdateLoginAccountData): F0[Option[LoginAccount]]
-  def enabledAdminCount: F0[Int]
 
 trait LoginAccountsRepository[F[_]]:
   def list: F[List[LoginAccount]]
   def find(id: AccountId): F[Option[LoginAccount]]
   def findByDiscordUserId(userId: UserId): F[Option[LoginAccount]]
   def create(account: CreateLoginAccountData): F[LoginAccount]
-  def update(id: AccountId, data: UpdateLoginAccountData): F[Option[LoginAccount]]
-  def enabledAdminCount: F[Int]
 
 enum LoginAccountAdministrationUpdateResult derives CanEqual:
   case Updated(account: LoginAccount)
@@ -61,11 +57,5 @@ object LoginAccountsRepository:
       def findByDiscordUserId(userId: UserId): F[Option[LoginAccount]] =
         liftK(alg.findByDiscordUserId(userId))
       def create(account: CreateLoginAccountData): F[LoginAccount] = liftK(alg.create(account))
-      def update(id: AccountId, data: UpdateLoginAccountData): F[Option[LoginAccount]] =
-        liftK(alg.update(id, data))
-      def enabledAdminCount: F[Int] = liftK(alg.enabledAdminCount)
 
-  def liftIdentity[F[_]](alg: LoginAccountsAlg[F]): LoginAccountsRepository[F] =
-    new LoginAccountsRepository[F]:
-      export alg.*
 end LoginAccountsRepository

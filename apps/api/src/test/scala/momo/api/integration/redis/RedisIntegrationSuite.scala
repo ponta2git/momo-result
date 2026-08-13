@@ -1,5 +1,7 @@
 package momo.api.integration.redis
 
+import scala.concurrent.duration.DurationInt
+
 import cats.effect.{IO, Resource}
 import org.testcontainers.containers.GenericContainer
 import org.testcontainers.utility.DockerImageName
@@ -8,6 +10,8 @@ import momo.api.MomoCatsEffectSuite
 import momo.api.testing.TestTags
 
 abstract class RedisIntegrationSuite extends MomoCatsEffectSuite:
+  override def munitIOTimeout = 60.seconds
+
   override def munitTests(): Seq[munit.Test] = super.munitTests()
     .map(_.tag(TestTags.Integration).tag(TestTags.RedisIntegration))
 

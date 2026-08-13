@@ -92,7 +92,14 @@ final class InMemoryOcrJobCreationStoreSpec extends MomoCatsEffectSuite:
       jobs <- InMemoryOcrJobsRepository.create[IO]
       matchDrafts <- InMemoryMatchDraftsRepository.create[IO]
       store =
-        InMemoryOcrJobCreationStore[IO](drafts, jobs, matchDrafts, jobs.existsActiveByDraft)
+        InMemoryOcrJobCreationStore[IO](
+          drafts,
+          drafts.create,
+          jobs,
+          jobs.create,
+          matchDrafts,
+          jobs.existsActiveByDraft,
+        )
     yield Fixture(drafts, jobs, matchDrafts, store)
 
   private def editableMatchDraft: MatchDraft = MatchDraft.fromInputs(

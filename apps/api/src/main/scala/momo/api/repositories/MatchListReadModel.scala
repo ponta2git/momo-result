@@ -46,7 +46,4 @@ object MatchListReadModel:
       def listDraftsByHeldEvent(heldEventId: HeldEventId): F[List[MatchListItem]] =
         liftK(alg.listDraftsByHeldEvent(heldEventId))
       def summarize(filter: SummaryFilter): F[MatchListSummary] = liftK(alg.summarize(filter))
-
-  def liftIdentity[F[_]](alg: MatchListAlg[F]): MatchListReadModel[F] = new MatchListReadModel[F]:
-    export alg.*
 end MatchListReadModel

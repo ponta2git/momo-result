@@ -26,7 +26,6 @@ private[config] object AuthConfigLoader:
       ConfigParsers.parsePositiveInt(env, "AUTH_PROVIDER_FAILURE_THRESHOLD", default = 3),
       ConfigParsers.parsePositiveLong(env, "AUTH_PROVIDER_BACKOFF_SECONDS", default = 60L),
       ConfigParsers.parseBoolean(env, "AUTH_COOKIE_SECURE", default = appEnv == AppEnv.Prod),
-      ConfigParsers.parseBoolean(env, "AUTH_COOKIE_HOST_PREFIX", default = appEnv == AppEnv.Prod),
     ).mapN {
       (
           sessionTtlDays,
@@ -36,7 +35,6 @@ private[config] object AuthConfigLoader:
           providerFailureThreshold,
           providerBackoffSeconds,
           secureCookies,
-          hostPrefix,
       ) =>
         AuthConfig(
           discordClientId = env.get("DISCORD_CLIENT_ID").filter(_.nonEmpty),
@@ -60,7 +58,6 @@ private[config] object AuthConfigLoader:
           providerBackoff = providerBackoffSeconds.seconds,
           callbackRedirectPath = env.getOrElse("AUTH_CALLBACK_REDIRECT_PATH", "/"),
           useSecureCookies = secureCookies,
-          useHostPrefix = hostPrefix,
         )
     }
 
@@ -80,14 +77,11 @@ private[config] object AuthConfigLoader:
       "AUTH_STATE_SIGNING_KEY" -> config.stateSigningKey,
     ).collect { case (name, None) => s"$name is required" }
     val secureCookie = Option.when(!config.useSecureCookies)("AUTH_COOKIE_SECURE must be true")
-    val hostPrefixEnabled = Option
-      .when(!config.useHostPrefix)("AUTH_COOKIE_HOST_PREFIX must be true")
     val hostPrefix = Option.when(
-      config.useHostPrefix &&
-        (!config.sessionCookieName.startsWith("__Host-") ||
-          !config.stateCookieName.startsWith("__Host-"))
-    )("AUTH_COOKIE_HOST_PREFIX requires __Host- session and OAuth state cookie names")
+      !config.sessionCookieName.startsWith("__Host-") ||
+        !config.stateCookieName.startsWith("__Host-")
+    )("production session and OAuth state cookie names must use the __Host- prefix")
     val redirect = Option.when(!RedirectPath.isSafe(config.callbackRedirectPath))(
       "AUTH_CALLBACK_REDIRECT_PATH must be a root-relative path"
     )
-    missing ++ List(secureCookie, hostPrefixEnabled, hostPrefix, redirect).flatten
+    missing ++ List(secureCookie, hostPrefix, redirect).flatten

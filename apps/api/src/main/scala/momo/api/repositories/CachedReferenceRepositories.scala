@@ -50,8 +50,6 @@ object CachedReferenceRepositories:
     new MembersRepository[F]:
       def list: F[List[Member]] = cache.get
       def find(id: MemberId): F[Option[Member]] = cache.get.map(_.find(_.id == id))
-      def findByDiscordUserId(userId: UserId): F[Option[Member]] =
-        cache.get.map(_.find(_.userId == userId))
   }
 
   def gameTitles[F[_]: Clock: Sync](
@@ -65,7 +63,6 @@ object CachedReferenceRepositories:
     new GameTitlesRepository[F]:
       def list: F[List[GameTitle]] = cache.get
       def find(id: GameTitleId): F[Option[GameTitle]] = cache.get.map(_.find(_.id == id))
-      def create(title: GameTitle): F[Unit] = delegate.create(title) <* cache.invalidate
       def createWithNextDisplayOrder(title: GameTitle): F[GameTitle] =
         delegate.createWithNextDisplayOrder(title) <* cache.invalidate
       def update(title: GameTitle): F[Unit] = delegate.update(title) <* cache.invalidate
@@ -84,7 +81,6 @@ object CachedReferenceRepositories:
       def list(gameTitleId: Option[GameTitleId]): F[List[MapMaster]] =
         cache.get.map(rows => gameTitleId.fold(rows)(id => rows.filter(_.gameTitleId == id)))
       def find(id: MapMasterId): F[Option[MapMaster]] = cache.get.map(_.find(_.id == id))
-      def create(map: MapMaster): F[Unit] = delegate.create(map) <* cache.invalidate
       def createWithNextDisplayOrder(map: MapMaster): F[MapMaster] =
         delegate.createWithNextDisplayOrder(map) <* cache.invalidate
       def update(map: MapMaster): F[Unit] = delegate.update(map) <* cache.invalidate
@@ -103,7 +99,6 @@ object CachedReferenceRepositories:
       def list(gameTitleId: Option[GameTitleId]): F[List[SeasonMaster]] =
         cache.get.map(rows => gameTitleId.fold(rows)(id => rows.filter(_.gameTitleId == id)))
       def find(id: SeasonMasterId): F[Option[SeasonMaster]] = cache.get.map(_.find(_.id == id))
-      def create(season: SeasonMaster): F[Unit] = delegate.create(season) <* cache.invalidate
       def createWithNextDisplayOrder(season: SeasonMaster): F[SeasonMaster] =
         delegate.createWithNextDisplayOrder(season) <* cache.invalidate
       def update(season: SeasonMaster): F[Unit] = delegate.update(season) <* cache.invalidate

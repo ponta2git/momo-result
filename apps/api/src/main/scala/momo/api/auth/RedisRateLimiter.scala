@@ -2,14 +2,10 @@ package momo.api.auth
 
 import java.time.Instant
 
-import cats.effect.{Async, Resource, Sync}
+import cats.effect.Sync
 import cats.syntax.all.*
-import dev.profunktor.redis4cats.data.RedisCodec
-import dev.profunktor.redis4cats.effect.Log.NoOp.*
+import dev.profunktor.redis4cats.RedisCommands
 import dev.profunktor.redis4cats.effects.ScriptOutputType
-import dev.profunktor.redis4cats.{Redis, RedisCommands}
-
-import momo.api.config.RedisConfig
 
 final class RedisRateLimiter[F[_]: Sync] private (
     commands: RedisCommands[F, String, String],
@@ -45,11 +41,3 @@ object RedisRateLimiter:
       maxPerMinute: Int,
       now: F[Instant],
   ): RedisRateLimiter[F] = RedisRateLimiter(commands, namespace, maxPerMinute, now)
-
-  def resource[F[_]: Async](
-      config: RedisConfig,
-      namespace: String,
-      maxPerMinute: Int,
-      now: F[Instant],
-  ): Resource[F, RedisRateLimiter[F]] = Redis[F].simple(config.url, RedisCodec.Utf8)
-    .map(commands => fromCommands(commands, namespace, maxPerMinute, now))

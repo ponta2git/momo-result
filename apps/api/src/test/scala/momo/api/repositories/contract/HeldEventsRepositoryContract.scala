@@ -53,20 +53,7 @@ trait HeldEventsRepositoryContract:
         assertEquals(error.error, AppError.Conflict("held event already exists: held_duplicate"))
       case other => fail(s"expected AppException(Conflict), got $other")
 
-  test("delete removes an existing held event and returns false for missing ids"):
-    val event = HeldEvent(HeldEventId.unsafeFromString("held_delete"), baseInstant)
-    for
-      repo <- freshRepo
-      _ <- repo.create(event)
-      first <- repo.delete(event.id)
-      second <- repo.delete(event.id)
-      got <- repo.find(event.id)
-    yield
-      assertEquals(first, true)
-      assertEquals(second, false)
-      assertEquals(got, None)
-
-  test("list orders events by heldAt desc, then by id desc as tie-breaker"):
+  test("listPage applies ordering and offset pagination and returns total count"):
     val older = HeldEvent(HeldEventId.unsafeFromString("held_alpha"), at(0))
     val newer = HeldEvent(HeldEventId.unsafeFromString("held_beta"), at(60))
     val tieA = HeldEvent(HeldEventId.unsafeFromString("held_zzz"), at(120))
@@ -77,43 +64,22 @@ trait HeldEventsRepositoryContract:
       _ <- repo.create(newer)
       _ <- repo.create(tieA)
       _ <- repo.create(tieB)
-      list <- repo.list(query = None, limit = 10)
+      first <- repo.listPage(query = None, PageRequest(page = 1, pageSize = 3))
+      second <- repo.listPage(query = None, PageRequest(page = 2, pageSize = 3))
+      filtered <- repo.listPage(query = Some("HELD_BETA"), PageRequest(page = 1, pageSize = 3))
     yield
-      assertEquals(list.size, 4, s"expected 4 events, got: $list")
-      assertEquals(list.map(_.id.value).take(2).toSet, Set("held_zzz", "held_aaa"))
-      assertEquals(list(2).id.value, "held_beta")
-      assertEquals(list(3).id.value, "held_alpha")
+      assertEquals(first.items.map(_.id.value), List("held_zzz", "held_aaa", "held_beta"))
+      assertEquals(second.items.map(_.id.value), List("held_alpha"))
+      assertEquals(first.totalItems, 4)
+      assertEquals(first.totalPages, 2)
+      assertEquals(first.hasPreviousPage, false)
+      assertEquals(first.hasNextPage, true)
+      assertEquals(second.hasPreviousPage, true)
+      assertEquals(second.hasNextPage, false)
+      assertEquals(filtered.items.map(_.id.value), List("held_beta"))
+      assertEquals(filtered.totalItems, 1)
 
-  test("list applies limit"):
-    val a = HeldEvent(HeldEventId.unsafeFromString("held_001"), at(0))
-    val b = HeldEvent(HeldEventId.unsafeFromString("held_002"), at(60))
-    val c = HeldEvent(HeldEventId.unsafeFromString("held_003"), at(120))
-    for
-      repo <- freshRepo
-      _ <- repo.create(a)
-      _ <- repo.create(b)
-      _ <- repo.create(c)
-      list <- repo.list(query = None, limit = 2)
-    yield assertEquals(list.size, 2)
-
-  test("listPage applies offset pagination and returns total count"):
-    val a = HeldEvent(HeldEventId.unsafeFromString("held_page_001"), at(0))
-    val b = HeldEvent(HeldEventId.unsafeFromString("held_page_002"), at(60))
-    val c = HeldEvent(HeldEventId.unsafeFromString("held_page_003"), at(120))
-    for
-      repo <- freshRepo
-      _ <- repo.create(a)
-      _ <- repo.create(b)
-      _ <- repo.create(c)
-      page <- repo.listPage(query = None, PageRequest(page = 2, pageSize = 2))
-    yield
-      assertEquals(page.items.map(_.id.value), List("held_page_001"))
-      assertEquals(page.totalItems, 3)
-      assertEquals(page.totalPages, 2)
-      assertEquals(page.hasPreviousPage, true)
-      assertEquals(page.hasNextPage, false)
-
-  test("listIds returns all filtered ids in list order"):
+  test("listIds applies ordered, case-insensitive filtering and treats blank as no filter"):
     val a = HeldEvent(HeldEventId.unsafeFromString("held_ids_2026_a"), at(0))
     val b = HeldEvent(HeldEventId.unsafeFromString("held_ids_2026_b"), at(60))
     val c = HeldEvent(HeldEventId.unsafeFromString("held_ids_2025_c"), at(120))
@@ -123,43 +89,16 @@ trait HeldEventsRepositoryContract:
       _ <- repo.create(b)
       _ <- repo.create(c)
       ids <- repo.listIds(query = Some("2026"))
-    yield assertEquals(ids.map(_.value), List("held_ids_2026_b", "held_ids_2026_a"))
-
-  test("list with negative limit returns no events"):
-    val event = HeldEvent(HeldEventId.unsafeFromString("held_neg"), baseInstant)
-    for
-      repo <- freshRepo
-      _ <- repo.create(event)
-      list <- repo.list(query = None, limit = -1)
-    yield assertEquals(list, Nil)
-
-  test("list with empty / whitespace query is treated as no filter"):
-    val a = HeldEvent(HeldEventId.unsafeFromString("held_alpha"), at(0))
-    val b = HeldEvent(HeldEventId.unsafeFromString("held_beta"), at(60))
-    for
-      repo <- freshRepo
-      _ <- repo.create(a)
-      _ <- repo.create(b)
-      empty <- repo.list(query = Some(""), limit = 10)
-      blank <- repo.list(query = Some("   "), limit = 10)
+      upper <- repo.listIds(query = Some("HELD_IDS_2026"))
+      blank <- repo.listIds(query = Some("   "))
+      none <- repo.listIds(query = Some("nope"))
     yield
-      assertEquals(empty.map(_.id.value).toSet, Set("held_alpha", "held_beta"))
-      assertEquals(blank.map(_.id.value).toSet, Set("held_alpha", "held_beta"))
-
-  test("list query filters by case-insensitive substring of id"):
-    val a = HeldEvent(HeldEventId.unsafeFromString("held_2026_04_30"), at(0))
-    val b = HeldEvent(HeldEventId.unsafeFromString("held_2026_05_07"), at(60))
-    val c = HeldEvent(HeldEventId.unsafeFromString("held_2025_12_25"), at(120))
-    for
-      repo <- freshRepo
-      _ <- repo.create(a)
-      _ <- repo.create(b)
-      _ <- repo.create(c)
-      lower <- repo.list(query = Some("2026"), limit = 10)
-      upper <- repo.list(query = Some("HELD_2026"), limit = 10)
-      none <- repo.list(query = Some("nope"), limit = 10)
-    yield
-      assertEquals(lower.map(_.id.value).toSet, Set("held_2026_04_30", "held_2026_05_07"))
-      assertEquals(upper.map(_.id.value).toSet, Set("held_2026_04_30", "held_2026_05_07"))
+      val expected = List("held_ids_2026_b", "held_ids_2026_a")
+      assertEquals(ids.map(_.value), expected)
+      assertEquals(upper.map(_.value), expected)
+      assertEquals(
+        blank.map(_.value),
+        List("held_ids_2025_c", "held_ids_2026_b", "held_ids_2026_a")
+      )
       assertEquals(none, Nil)
 end HeldEventsRepositoryContract

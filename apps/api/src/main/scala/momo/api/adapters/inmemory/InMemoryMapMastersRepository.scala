@@ -18,11 +18,6 @@ final class InMemoryMapMastersRepository[F[_]: Sync] private (
     items.toList.sortBy(x => (x.gameTitleId.value, x.displayOrder, x.createdAt, x.id.value))
   }
   override def find(id: MapMasterId): F[Option[MapMaster]] = ref.get.map(_.get(id))
-  override def create(map: MapMaster): F[Unit] = ref.modify { items =>
-    if containsMapConflict(items, map, excluding = None) then
-      (items, Left(masterConflict(s"map_master already exists: ${map.id.value} or ${map.name}")))
-    else (items.updated(map.id, map), Right(()))
-  }.flatMap(completeUnit)
   override def createWithNextDisplayOrder(map: MapMaster): F[MapMaster] = ref.modify { items =>
     if containsMapConflict(items, map, excluding = None) then
       (items, Left(masterConflict(s"map_master already exists: ${map.id.value} or ${map.name}")))

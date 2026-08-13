@@ -16,7 +16,4 @@ object AuthPaths:
   val ErrorQuery: String = "error"
 
   val LoginPath: String = s"/$Api/$Auth/$Login"
-  val CallbackPath: String = s"/$Api/$Auth/$Callback"
-  val LogoutPath: String = s"/$Api/$Auth/$Logout"
-  val MePath: String = s"/$Api/$Auth/$Me"
 end AuthPaths

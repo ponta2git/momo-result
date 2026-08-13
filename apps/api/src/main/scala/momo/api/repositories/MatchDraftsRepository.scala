@@ -15,15 +15,7 @@ trait MatchDraftsAlg[F0[_]]:
   def statsByHeldEvents(
       heldEventIds: List[HeldEventId]
   ): F0[Map[HeldEventId, MatchDraftsRepository.HeldEventStats]]
-  def markConfirmed(
-      draftId: MatchDraftId,
-      confirmedMatchId: MatchId,
-      updatedAt: Instant,
-  ): F0[MatchDraftMarkConfirmedResult]
   def markOcrFailed(draftId: MatchDraftId, updatedAt: Instant): F0[MatchDraftOcrFailureResult]
-
-  /** Physically remove a non-terminal draft when the user discards it. */
-  def cancel(draftId: MatchDraftId, updatedAt: Instant): F0[MatchDraftDeletionResult]
   def attachOcrArtifacts(
       draftId: MatchDraftId,
       screenType: ScreenType,
@@ -46,15 +38,7 @@ trait MatchDraftsRepository[F[_]]:
   def statsByHeldEvents(
       heldEventIds: List[HeldEventId]
   ): F[Map[HeldEventId, MatchDraftsRepository.HeldEventStats]]
-  def markConfirmed(
-      draftId: MatchDraftId,
-      confirmedMatchId: MatchId,
-      updatedAt: Instant,
-  ): F[MatchDraftMarkConfirmedResult]
   def markOcrFailed(draftId: MatchDraftId, updatedAt: Instant): F[MatchDraftOcrFailureResult]
-
-  /** Physically remove a non-terminal draft when the user discards it. */
-  def cancel(draftId: MatchDraftId, updatedAt: Instant): F[MatchDraftDeletionResult]
   def attachOcrArtifacts(
       draftId: MatchDraftId,
       screenType: ScreenType,
@@ -73,17 +57,9 @@ enum MatchDraftUpdateResult derives CanEqual:
   case Updated
   case NotEditableOrChanged
 
-enum MatchDraftMarkConfirmedResult derives CanEqual:
-  case Confirmed
-  case NotConfirmable
-
 enum MatchDraftOcrFailureResult derives CanEqual:
   case MarkedFailed
   case NotRunning
-
-enum MatchDraftDeletionResult derives CanEqual:
-  case Deleted
-  case NotCancellable
 
 enum MatchDraftAttachmentResult derives CanEqual:
   case Attached
@@ -125,19 +101,11 @@ object MatchDraftsRepository:
       def statsByHeldEvents(
           heldEventIds: List[HeldEventId]
       ): F[Map[HeldEventId, HeldEventStats]] = liftK(alg.statsByHeldEvents(heldEventIds))
-      def markConfirmed(
-          draftId: MatchDraftId,
-          confirmedMatchId: MatchId,
-          updatedAt: Instant,
-      ): F[MatchDraftMarkConfirmedResult] =
-        liftK(alg.markConfirmed(draftId, confirmedMatchId, updatedAt))
       def markOcrFailed(
           draftId: MatchDraftId,
           updatedAt: Instant,
       ): F[MatchDraftOcrFailureResult] =
         liftK(alg.markOcrFailed(draftId, updatedAt))
-      def cancel(draftId: MatchDraftId, updatedAt: Instant): F[MatchDraftDeletionResult] =
-        liftK(alg.cancel(draftId, updatedAt))
       def attachOcrArtifacts(
           draftId: MatchDraftId,
           screenType: ScreenType,
@@ -154,7 +122,4 @@ object MatchDraftsRepository:
       ): F[MatchDraftSourceImageRetentionResult] =
         liftK(alg.markSourceImagesRetention(draftId, retainedUntil, deletedAt, updatedAt))
 
-  def liftIdentity[F[_]](alg: MatchDraftsAlg[F]): MatchDraftsRepository[F] =
-    new MatchDraftsRepository[F]:
-      export alg.*
 end MatchDraftsRepository

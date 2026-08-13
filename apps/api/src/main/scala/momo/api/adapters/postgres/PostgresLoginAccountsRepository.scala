@@ -97,11 +97,11 @@ object PostgresLoginAccounts:
         )
     }
 
-    override def update(
-        id: AccountId,
-        data: UpdateLoginAccountData,
-    ): ConnectionIO[Option[LoginAccount]] =
-      (sql"""
+  private[postgres] def updateUnchecked(
+      id: AccountId,
+      data: UpdateLoginAccountData,
+  ): ConnectionIO[Option[LoginAccount]] =
+    (sql"""
         WITH admin_guard AS (
           SELECT pg_advisory_xact_lock(hashtext('momo:login_accounts:admin_guard'))
         )
@@ -130,12 +130,8 @@ object PostgresLoginAccounts:
               WHERE login_enabled = true AND is_admin = true
             ) <= 1
           )
-      """ ++ returningAll).query[LoginAccountRow].option.map(_.map(fromRow))
+    """ ++ returningAll).query[LoginAccountRow].option.map(_.map(fromRow))
 
-    override def enabledAdminCount: ConnectionIO[Int] = sql"""
-        SELECT COUNT(*) FROM momo_login_accounts
-        WHERE login_enabled = true AND is_admin = true
-      """.query[Int].unique
 end PostgresLoginAccounts
 
 object PostgresLoginAccountAdministration:
@@ -153,8 +149,8 @@ object PostgresLoginAccountAdministration:
   private def updateExisting(
       existing: LoginAccount,
       data: UpdateLoginAccountData,
-  ): ConnectionIO[LoginAccountAdministrationUpdateResult] = PostgresLoginAccounts.alg
-    .update(existing.id, data).flatMap {
+  ): ConnectionIO[LoginAccountAdministrationUpdateResult] = PostgresLoginAccounts
+    .updateUnchecked(existing.id, data).flatMap {
       case Some(updated) =>
         val revokeSessions = existing.loginEnabled && !updated.loginEnabled
         val revoke =

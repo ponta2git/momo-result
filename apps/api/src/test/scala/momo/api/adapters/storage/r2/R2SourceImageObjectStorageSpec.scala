@@ -91,6 +91,7 @@ final class R2SourceImageObjectStorageSpec extends MomoCatsEffectSuite:
       credentials,
       Duration.ofSeconds(10),
       Duration.ofSeconds(5),
+      maxAttempts = 2,
     )
     val plaintext = R2SourceImageObjectStorageConfig.create(
       URI.create("http://account.r2.cloudflarestorage.com"),
@@ -99,6 +100,7 @@ final class R2SourceImageObjectStorageSpec extends MomoCatsEffectSuite:
       credentials,
       Duration.ofSeconds(10),
       Duration.ofSeconds(5),
+      maxAttempts = 2,
     )
     val excessiveRetries = R2SourceImageObjectStorageConfig.create(
       URI.create("https://account.r2.cloudflarestorage.com"),

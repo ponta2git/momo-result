@@ -8,7 +8,6 @@ import cats.Applicative
 import cats.effect.{Clock, IO, Ref}
 import fs2.Stream
 
-import momo.api.adapters.redis.RedisStreamClient
 import momo.api.auth.{DiscordOAuthClient, DiscordUser}
 import momo.api.domain.ids.{AccountId, ImageId, OcrDraftId, OcrJobId}
 import momo.api.domain.{OcrFailure, OcrJob, StoredImage, StoredImageLocation}
@@ -59,7 +58,6 @@ final case class FailingMarkFailedOcrJobsRepository(
     delegate: OcrJobsRepository[IO],
     markFailedError: Throwable,
 ) extends OcrJobsRepository[IO]:
-  override def create(job: OcrJob): IO[Unit] = delegate.create(job)
   override def find(jobId: OcrJobId): IO[Option[OcrJob]] = delegate.find(jobId)
   override def countActive: IO[Long] = delegate.countActive
   override def markFailed(jobId: OcrJobId, failure: OcrFailure, now: Instant): IO[Unit] =
@@ -246,23 +244,6 @@ object RecordingOcrQueueOutboxRepository:
       deliveries,
       releases,
     )
-
-final case class RedisXAddCall(stream: String, fields: Map[String, String]) derives CanEqual
-
-final class RecordingRedisStreamClient private (ref: Ref[IO, Vector[RedisXAddCall]])
-    extends RedisStreamClient[IO]:
-  override def xadd(stream: String, fields: Map[String, String]): IO[String] = ref
-    .update(_ :+ RedisXAddCall(stream, fields)).as("1-0")
-  override def xlen(stream: String): IO[Long] =
-    val _ = stream
-    IO.pure(0L)
-  override def ping: IO[Unit] = IO.unit
-
-  def calls: IO[Vector[RedisXAddCall]] = ref.get
-
-object RecordingRedisStreamClient:
-  def create: IO[RecordingRedisStreamClient] = Ref.of[IO, Vector[RedisXAddCall]](Vector.empty)
-    .map(new RecordingRedisStreamClient(_))
 
 final case class StaticOcrJobQueueHealthCheck(deadLetterLengthValue: Long = 0L)
     extends OcrJobQueueHealthCheck[IO]:

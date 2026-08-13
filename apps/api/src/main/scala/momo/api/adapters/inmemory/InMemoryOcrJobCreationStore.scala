@@ -20,7 +20,9 @@ import momo.api.repositories.{
 
 final class InMemoryOcrJobCreationStore[F[_]: MonadThrow](
     drafts: OcrDraftsRepository[F],
+    createDraft: OcrDraft => F[Unit],
     jobs: OcrJobsRepository[F],
+    createJob: OcrJob => F[Unit],
     matchDrafts: MatchDraftsRepository[F],
     activeJobForDraft: OcrDraftId => F[Boolean],
 ) extends OcrJobCreationStore[F]:
@@ -35,8 +37,8 @@ final class InMemoryOcrJobCreationStore[F[_]: MonadThrow](
         case None => EitherT.rightT[F, OcrJobCreationRejection](())
         case Some(a) => EitherT(rejectActiveSlot(a))
       _ <- EitherT(attachMatchDraft(attachment))
-      _ <- EitherT.liftF(drafts.create(draft))
-      _ <- EitherT.liftF(jobs.create(job))
+      _ <- EitherT.liftF(createDraft(draft))
+      _ <- EitherT.liftF(createJob(job))
     yield ()).value
 
   private def activeLimitGuard(

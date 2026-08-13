@@ -2,12 +2,10 @@ package momo.api.http
 
 import cats.Applicative
 
-import momo.api.auth.AuthHeaderNames
 import momo.api.config.AppEnv
 import momo.api.errors.AppError
 
 object CsrfMiddleware:
-  val HeaderName = AuthHeaderNames.CsrfToken
   val DevToken = "dev"
 
   def validate[F[_]: Applicative](

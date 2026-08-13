@@ -11,19 +11,19 @@ import dev.profunktor.redis4cats.data.RedisCodec
 import dev.profunktor.redis4cats.effect.Log.NoOp.*
 
 import momo.api.auth.{RedisOAuthProviderBackoff, RedisRateLimiter}
-import momo.api.config.RedisConfig
 import momo.api.errors.AppError
 
 final class RedisRateLimiterIntegrationSpec extends RedisIntegrationSuite:
 
   test("RedisRateLimiter shares counters across limiter instances"):
     redisUrlResource.use { redisUrl =>
-      val config = RedisConfig(redisUrl)
       val namespace = s"login-test-${UUID.randomUUID().toString}"
       val now = IO.pure(Instant.parse("2026-05-14T00:00:00Z"))
 
-      RedisRateLimiter.resource[IO](config, namespace, 2, now).use { firstLimiter =>
-        RedisRateLimiter.resource[IO](config, namespace, 2, now).use { secondLimiter =>
+      Redis[IO].simple(redisUrl, RedisCodec.Utf8).use { firstCommands =>
+        Redis[IO].simple(redisUrl, RedisCodec.Utf8).use { secondCommands =>
+          val firstLimiter = RedisRateLimiter.fromCommands(firstCommands, namespace, 2, now)
+          val secondLimiter = RedisRateLimiter.fromCommands(secondCommands, namespace, 2, now)
           for
             first <- firstLimiter.allow("ip")
             second <- secondLimiter.allow("ip")
@@ -38,14 +38,13 @@ final class RedisRateLimiterIntegrationSpec extends RedisIntegrationSuite:
 
   test("RedisRateLimiter sets an expiry on the minute counter"):
     redisUrlResource.use { redisUrl =>
-      val config = RedisConfig(redisUrl)
       val namespace = s"login-ttl-test-${UUID.randomUUID().toString}"
       val current = Instant.parse("2026-05-14T00:00:00Z")
       val now = IO.pure(current)
       val minute = current.getEpochSecond / 60
       val redisKey = s"momo:rate-limit:$namespace:ip:$minute"
 
-      Redis[IO].simple(config.url, RedisCodec.Utf8).use { commands =>
+      Redis[IO].simple(redisUrl, RedisCodec.Utf8).use { commands =>
         val limiter = RedisRateLimiter.fromCommands(commands, namespace, 2, now)
         for
           allowed <- limiter.allow("ip")
@@ -58,23 +57,24 @@ final class RedisRateLimiterIntegrationSpec extends RedisIntegrationSuite:
 
   test("RedisOAuthProviderBackoff shares provider degraded state across instances"):
     redisUrlResource.use { redisUrl =>
-      val config = RedisConfig(redisUrl)
       val namespace = s"oauth-provider-test-${UUID.randomUUID().toString}"
       val now = IO.pure(Instant.parse("2026-05-14T00:00:00Z"))
 
-      RedisOAuthProviderBackoff.resource[IO](config, namespace, 1, 60.seconds, now).use {
-        firstBackoff =>
-          RedisOAuthProviderBackoff.resource[IO](config, namespace, 1, 60.seconds, now).use {
-            secondBackoff =>
-              for
-                initiallyBlocked <- secondBackoff.isBlocked
-                opened <- firstBackoff.recordFailure(AppError.DependencyFailed("provider failed"))
-                blocked <- secondBackoff.isBlocked
-              yield
-                assert(!initiallyBlocked)
-                assert(opened)
-                assert(blocked)
-          }
+      Redis[IO].simple(redisUrl, RedisCodec.Utf8).use { firstCommands =>
+        Redis[IO].simple(redisUrl, RedisCodec.Utf8).use { secondCommands =>
+          val firstBackoff =
+            RedisOAuthProviderBackoff.fromCommands(firstCommands, namespace, 1, 60.seconds, now)
+          val secondBackoff =
+            RedisOAuthProviderBackoff.fromCommands(secondCommands, namespace, 1, 60.seconds, now)
+          for
+            initiallyBlocked <- secondBackoff.isBlocked
+            opened <- firstBackoff.recordFailure(AppError.DependencyFailed("provider failed"))
+            blocked <- secondBackoff.isBlocked
+          yield
+            assert(!initiallyBlocked)
+            assert(opened)
+            assert(blocked)
+        }
       }
     }
 end RedisRateLimiterIntegrationSpec

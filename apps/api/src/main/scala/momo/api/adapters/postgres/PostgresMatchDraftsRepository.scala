@@ -154,23 +154,6 @@ object PostgresMatchDrafts extends PostgresMatchDraftsRowSupport:
           ).toMap
         }
 
-    override def markConfirmed(
-        draftId: MatchDraftId,
-        confirmedMatchId: MatchId,
-        updatedAt: Instant,
-    ): ConnectionIO[MatchDraftMarkConfirmedResult] = sql"""
-      UPDATE match_drafts SET
-        status = ${MatchDraftStatus.Confirmed},
-        confirmed_match_id = $confirmedMatchId,
-        updated_at = $updatedAt
-      WHERE id = $draftId
-        AND status <> ${MatchDraftStatus.Confirmed}
-        AND status <> ${MatchDraftStatus.Cancelled}
-    """.update.run.map {
-      case affected if affected > 0 => MatchDraftMarkConfirmedResult.Confirmed
-      case _ => MatchDraftMarkConfirmedResult.NotConfirmable
-    }
-
     override def markOcrFailed(
         draftId: MatchDraftId,
         updatedAt: Instant,
@@ -185,23 +168,6 @@ object PostgresMatchDrafts extends PostgresMatchDraftsRowSupport:
         case affected if affected > 0 => MatchDraftOcrFailureResult.MarkedFailed
         case _ => MatchDraftOcrFailureResult.NotRunning
       }
-
-    override def cancel(
-        draftId: MatchDraftId,
-        updatedAt: Instant,
-    ): ConnectionIO[MatchDraftDeletionResult] = sql"""
-      DELETE FROM match_drafts
-      WHERE id = $draftId
-        AND status IN (
-          ${MatchDraftStatus.OcrRunning},
-          ${MatchDraftStatus.OcrFailed},
-          ${MatchDraftStatus.DraftReady},
-          ${MatchDraftStatus.NeedsReview}
-        )
-    """.update.run.map {
-      case affected if affected > 0 => MatchDraftDeletionResult.Deleted
-      case _ => MatchDraftDeletionResult.NotCancellable
-    }
 
     override def attachOcrArtifacts(
         draftId: MatchDraftId,

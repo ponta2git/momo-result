@@ -159,25 +159,6 @@ object PostgresOcrJobs:
     """.update.run.void
 
   val alg: OcrJobsAlg[ConnectionIO] = new OcrJobsAlg[ConnectionIO]:
-    override def create(job: OcrJob): ConnectionIO[Unit] = sql"""
-        INSERT INTO ocr_jobs (
-          id, draft_id, image_id, image_path,
-          requested_screen_type, detected_screen_type,
-          status, attempt_count, worker_id,
-          failure_code, failure_message, failure_retryable, failure_user_action,
-          started_at, finished_at, duration_ms,
-          created_at, updated_at
-        ) VALUES (
-          ${job.id}, ${job.draftId}, ${job.imageId}, ${job.imageLocation},
-          ${job.requestedScreenType}, ${OcrJob.detectedScreenType(job)},
-          ${job.status}, ${job.attemptCount}, ${OcrJob.workerId(job)},
-          ${OcrJob.failure(job).map(_.code)}, ${OcrJob.failure(job).map(_.message)},
-          ${OcrJob.failure(job).map(_.retryable)}, ${OcrJob.failure(job).flatMap(_.userAction)},
-          ${OcrJob.startedAt(job)}, ${OcrJob.finishedAt(job)}, ${OcrJob.durationMs(job)},
-          ${job.createdAt}, ${job.updatedAt}
-        )
-      """.update.run.void
-
     override def find(jobId: OcrJobId): ConnectionIO[Option[OcrJob]] =
       (selectAll ++ fr"WHERE id = $jobId").query[Row].option.flatMap {
         case None => Option.empty[OcrJob].pure[ConnectionIO]

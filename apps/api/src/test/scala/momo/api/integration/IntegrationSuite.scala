@@ -35,8 +35,6 @@ abstract class IntegrationSuite extends CatsEffectSuite:
         import cats.effect.unsafe.implicits.global
         holder.set(Some(IntegrationDb.acquire.unsafeRunSync()))
       override def afterAll(): Unit =
-        import cats.effect.unsafe.implicits.global
-        holder.get().foreach(_.close().unsafeRunSync())
         holder.set(None)
 
   override def munitFixtures: Seq[AnyFixture[?]] = List(dbFixture)

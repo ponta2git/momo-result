@@ -49,15 +49,8 @@ trait HttpAppTestFixtures:
       seed: ApiApp.Runtime[IO] => IO[Unit],
   ): Resource[IO, TestHttpApp] = wiredHttpAppResourceWith(prefix, identity, seed)
 
-  protected def devReadHeader(): Header.Raw = devReadHeader(DefaultAccountId)
-
   protected def devReadHeader(accountId: String): Header.Raw = Header
     .Raw(CIString(AuthHeaderNames.AccountId), accountId)
-
-  protected def devWriteHeaders(): List[Header.ToRaw] = devWriteHeaders(DefaultAccountId, None)
-
-  protected def devWriteHeadersWithIdempotency(idempotencyKey: Option[String]): List[Header.ToRaw] =
-    devWriteHeaders(DefaultAccountId, idempotencyKey)
 
   protected def readRequest(method: Method, uri: Uri): Request[IO] =
     readRequest(method, uri, DefaultAccountId)

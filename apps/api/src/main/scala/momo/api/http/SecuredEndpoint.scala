@@ -8,24 +8,11 @@ import sttp.tapir.server.{PartialServerEndpoint, ServerEndpoint}
 import momo.api.auth.AuthenticatedAccount
 import momo.api.endpoints.CommonEndpoint
 import momo.api.endpoints.ProblemDetails.ProblemResponse
-import momo.api.errors.AppError
 
 object SecuredEndpoint:
   type ReadSecurityInput = (Option[String], ServerRequest)
-  type MutationSecurityInput = (Option[String], Option[String], ServerRequest)
-
   type Read[F[_], I, O] =
     PartialServerEndpoint[ReadSecurityInput, AuthenticatedAccount, I, ProblemResponse, O, Any, F]
-
-  type Mutation[F[_], I, O] = PartialServerEndpoint[
-    MutationSecurityInput,
-    AuthenticatedAccount,
-    I,
-    ProblemResponse,
-    O,
-    Any,
-    F,
-  ]
 
   type ReadEndpoint[I, O] = Endpoint[Option[String], I, ProblemResponse, O, Any]
   type MutationEndpoint[I, O] =
@@ -107,17 +94,3 @@ object SecuredEndpoint:
     .serverSecurityLogic { case (accountHeader, request) =>
       security.authorizeRead(accountHeader, request)(account => Async[F].pure(Right(account)))
     }
-
-  def mutation[F[_]: Async](security: EndpointSecurity[F]): Mutation[F, Unit, Unit] = endpoint
-    .securityIn(CommonEndpoint.accountHeader.and(CommonEndpoint.csrfHeader)
-      .and(CommonEndpoint.serverRequest))
-    .errorOut(CommonEndpoint.errorOut)
-    .serverSecurityLogic { case (accountHeader, csrfToken, request) =>
-      security.authorizeMutation(accountHeader, csrfToken, request)(account =>
-        Async[F].pure(Right(account))
-      )
-    }
-
-  extension [F[_]](security: EndpointSecurity[F])
-    def run[A](result: F[Either[AppError, A]]): F[Either[ProblemResponse, A]] =
-      security.respond(result)(identity)

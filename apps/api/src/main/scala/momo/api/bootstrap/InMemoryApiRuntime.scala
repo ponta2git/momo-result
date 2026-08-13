@@ -95,7 +95,11 @@ private[bootstrap] object InMemoryApiRuntime:
         ocrJobs = Some(jobs),
         ocrDrafts = Some(drafts),
       )
-      matchConfirmation = InMemoryMatchConfirmationRepository[F](matches, matchDrafts)
+      matchConfirmation = InMemoryMatchConfirmationRepository[F](
+        matches,
+        matchesBase.create,
+        matchDrafts,
+      )
       heldEventDeletion =
         InMemoryHeldEventDeletionRepository[F](heldEvents, matches, matchDrafts)
       appSessions <- InMemoryAppSessionsRepository.create[F]
@@ -153,7 +157,9 @@ private[bootstrap] object InMemoryApiRuntime:
       idempotency <- InMemoryIdempotencyRepository.create[F]
       ocrJobCreationStore = InMemoryOcrJobCreationStore[F](
         drafts,
+        drafts.create,
         jobs,
+        jobs.create,
         matchDrafts,
         jobs.existsActiveByDraft,
       )

@@ -1,7 +1,7 @@
 package momo.api.usecases.images
 
+import cats.MonadThrow
 import cats.syntax.all.*
-import cats.{Applicative, MonadThrow}
 import org.typelevel.log4cats.LoggerFactory
 
 import momo.api.domain.ids.AccountId
@@ -59,12 +59,6 @@ object ImageStorageAdmission:
           )
       case _ => AppError
           .ServiceUnavailable("Image upload storage is temporarily unavailable. Try again later.")
-
-  def allowAll[F[_]: Applicative]: ImageStorageAdmission[F] = new ImageStorageAdmission[F]:
-    override def ensureCanAccept(
-        ownerAccountId: AccountId,
-        incomingBytes: Long,
-    ): F[Either[AppError, Unit]] = Applicative[F].pure(().asRight[AppError])
 
   def from[F[_]: MonadThrow: LoggerFactory](
       inspector: ImageStorageInspector[F],

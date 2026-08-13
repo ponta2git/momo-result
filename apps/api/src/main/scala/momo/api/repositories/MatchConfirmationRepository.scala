@@ -2,8 +2,6 @@ package momo.api.repositories
 
 import java.time.Instant
 
-import cats.~>
-
 import momo.api.domain.ids.{MatchDraftId, OcrDraftId}
 import momo.api.domain.{MatchDraft, MatchRecord}
 
@@ -28,32 +26,9 @@ enum MatchConfirmationResult derives CanEqual:
   case Confirmed
   case DraftSnapshotMismatch
 
-trait MatchConfirmationAlg[F0[_]]:
-  def confirm(
-      record: MatchRecord,
-      draft: Option[MatchDraftConfirmation],
-      updatedAt: Instant,
-  ): F0[MatchConfirmationResult]
-
 trait MatchConfirmationRepository[F[_]]:
   def confirm(
       record: MatchRecord,
       draft: Option[MatchDraftConfirmation],
       updatedAt: Instant,
   ): F[MatchConfirmationResult]
-
-object MatchConfirmationRepository:
-  def fromAlg[F0[_], F[_]](
-      alg: MatchConfirmationAlg[F0],
-      liftK: F0 ~> F,
-  ): MatchConfirmationRepository[F] = new MatchConfirmationRepository[F]:
-    def confirm(
-        record: MatchRecord,
-        draft: Option[MatchDraftConfirmation],
-        updatedAt: Instant,
-    ): F[MatchConfirmationResult] = liftK(alg.confirm(record, draft, updatedAt))
-
-  def liftIdentity[F[_]](alg: MatchConfirmationAlg[F]): MatchConfirmationRepository[F] =
-    new MatchConfirmationRepository[F]:
-      export alg.*
-end MatchConfirmationRepository

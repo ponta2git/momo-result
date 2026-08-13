@@ -26,9 +26,6 @@ final class HttpProblemResponseSpec extends MomoCatsEffectSuite:
       assertEquals(json.hcursor.get[String]("detail"), Right("Unexpected server error."))
       assert(!body.contains(secret))
 
-  test("falls back to 500 when a ProblemDetails status cannot be converted to http4s"):
-    assertEquals(HttpProblemResponse.statusFrom(999), Status.InternalServerError)
-
   test("analysis read saturation returns a bounded Retry-After header"):
     val response = HttpProblemResponse.fromError[IO](AppError.AnalysisReadBusy(3))
 

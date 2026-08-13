@@ -10,15 +10,10 @@ trait OcrDraftsAlg[F0[_]]:
   def find(draftId: OcrDraftId): F0[Option[OcrDraft]]
 
 trait OcrDraftsRepository[F[_]]:
-  def create(draft: OcrDraft): F[Unit]
   def find(draftId: OcrDraftId): F[Option[OcrDraft]]
 
 object OcrDraftsRepository:
   def fromAlg[F0[_], F[_]](alg: OcrDraftsAlg[F0], liftK: F0 ~> F): OcrDraftsRepository[F] =
     new OcrDraftsRepository[F]:
-      def create(draft: OcrDraft): F[Unit] = liftK(alg.create(draft))
       def find(draftId: OcrDraftId): F[Option[OcrDraft]] = liftK(alg.find(draftId))
-
-  def liftIdentity[F[_]](alg: OcrDraftsAlg[F]): OcrDraftsRepository[F] = new OcrDraftsRepository[F]:
-    export alg.*
 end OcrDraftsRepository

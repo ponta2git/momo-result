@@ -49,11 +49,6 @@ object OcrQueueOutboxDispatcher:
   def resource[F[_]: Temporal: Clock: LoggerFactory](
       outbox: OcrQueueOutboxRepository[F],
       queue: OcrJobQueuePublisher[F],
-  ): Resource[F, Unit] = resource(outbox, queue, OcrQueueOutboxDispatcherConfig())
-
-  def resource[F[_]: Temporal: Clock: LoggerFactory](
-      outbox: OcrQueueOutboxRepository[F],
-      queue: OcrJobQueuePublisher[F],
       config: OcrQueueOutboxDispatcherConfig,
   ): Resource[F, Unit] = Resource
     .make(new OcrQueueOutboxDispatcher(outbox, queue, config).run.start)(_.cancel).void

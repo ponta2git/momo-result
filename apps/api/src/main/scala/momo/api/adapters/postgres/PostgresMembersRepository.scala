@@ -39,8 +39,6 @@ object PostgresMembers:
     override def find(id: MemberId): ConnectionIO[Option[Member]] =
       (selectAll ++ fr"WHERE id = $id").query[MemberRow].option.map(_.map(fromRow))
 
-    override def findByDiscordUserId(userId: UserId): ConnectionIO[Option[Member]] =
-      (selectAll ++ fr"WHERE user_id = $userId").query[MemberRow].option.map(_.map(fromRow))
 end PostgresMembers
 
 /** Backwards-compatible class facade. */

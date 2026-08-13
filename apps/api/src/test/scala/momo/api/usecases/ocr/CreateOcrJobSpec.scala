@@ -312,7 +312,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
           oldImageId,
           MatchDraftStatus.OcrRunning,
         ))
-        _ <- fixture.jobs.create(queuedJob(oldJobId, oldDraftId, oldImageId, image.location))
+        _ <- fixture.createJob(queuedJob(oldJobId, oldDraftId, oldImageId, image.location))
         usecase <- fixture.usecase
         result <- usecase.run(
           CreateOcrJobCommand(
@@ -352,7 +352,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
         _ <- fixture.matchDrafts.create(
           draftWithTotalAssetsSlot(matchDraftId, oldDraftId, oldImageId, MatchDraftStatus.OcrFailed)
         )
-        _ <- fixture.jobs.create(queuedJob(oldJobId, oldDraftId, oldImageId, image.location))
+        _ <- fixture.createJob(queuedJob(oldJobId, oldDraftId, oldImageId, image.location))
         _ <- fixture.jobs.cancelQueued(oldJobId, now)
         usecase <- fixture.usecase
         created <- usecase.run(
@@ -488,6 +488,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
     yield Fixture(
       imageStore,
       jobs,
+      jobsBase.create,
       drafts,
       matchDrafts,
       memberAliases,
@@ -556,6 +557,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
   private final case class Fixture[Q <: OcrJobQueuePublisher[IO]](
       imageStore: ImageStorage[IO],
       jobs: OcrJobsRepository[IO],
+      createJob: OcrJob => IO[Unit],
       drafts: InMemoryOcrDraftsRepository[IO],
       matchDrafts: InMemoryMatchDraftsRepository[IO],
       memberAliases: InMemoryMemberAliasesRepository[IO],
@@ -578,7 +580,14 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
         CreateOcrJob[IO](
           imageStore = imageStore,
           creationStore =
-            InMemoryOcrJobCreationStore[IO](drafts, jobs, matchDrafts, activeJobForDraft),
+            InMemoryOcrJobCreationStore[IO](
+              drafts,
+              drafts.create,
+              jobs,
+              createJob,
+              matchDrafts,
+              activeJobForDraft,
+            ),
           matchDrafts = matchDrafts,
           queueSubmitter = OcrJobQueueSubmitter.direct[IO](jobs, matchDrafts, queue),
           admissionGuard = admissionGuard,

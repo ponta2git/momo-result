@@ -11,7 +11,6 @@ import momo.api.errors.AppError
 
 private[http] final class EndpointSecurity[F[_]: Async](
     policy: AuthPolicy[F],
-    masterManagementPolicy: MasterManagementPolicy,
     incidentLogger: AppError => F[Unit],
 ):
   def authorizeRead[A](accountHeader: Option[String], request: ServerRequest)(
@@ -59,12 +58,11 @@ private[http] final class EndpointSecurity[F[_]: Async](
       request: ServerRequest,
   )(
       authorized: AuthenticatedAccount => F[Either[ProblemDetails.ProblemResponse, A]]
-  ): F[Either[ProblemDetails.ProblemResponse, A]] =
-    authorizeMutation(accountHeader, csrfToken, request) { account =>
-      masterManagementPolicy.requireManage(account) match
-        case Right(_) => authorized(account)
-        case Left(error) => Async[F].pure(Left(toProblem(error)))
-    }
+  ): F[Either[ProblemDetails.ProblemResponse, A]] = authorizeAdminMutation(
+    accountHeader,
+    csrfToken,
+    request,
+  )(authorized)
 
   def toProblem(error: AppError): ProblemDetails.ProblemResponse = ProblemDetails.from(error)
 
@@ -91,12 +89,12 @@ object EndpointSecurity:
   private val logger = LoggerFactory.getLogger("momo.api.http.EndpointSecurity")
 
   def apply[F[_]: Async](policy: AuthPolicy[F]): EndpointSecurity[F] =
-    new EndpointSecurity(policy, new MasterManagementPolicy, defaultIncidentLogger[F])
+    new EndpointSecurity(policy, defaultIncidentLogger[F])
 
   def apply[F[_]: Async](
       policy: AuthPolicy[F],
       incidentLogger: AppError => F[Unit],
-  ): EndpointSecurity[F] = new EndpointSecurity(policy, new MasterManagementPolicy, incidentLogger)
+  ): EndpointSecurity[F] = new EndpointSecurity(policy, incidentLogger)
 
   private def defaultIncidentLogger[F[_]: Async](error: AppError): F[Unit] = Async[F]
     .delay(logger.error(s"HTTP endpoint returned incident problemCode=${error.code}"))

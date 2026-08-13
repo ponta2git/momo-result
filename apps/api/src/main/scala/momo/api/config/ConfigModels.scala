@@ -69,7 +69,6 @@ final case class AuthConfig(
     providerBackoff: FiniteDuration,
     callbackRedirectPath: String,
     useSecureCookies: Boolean,
-    useHostPrefix: Boolean,
 ):
   val discordScope: String = "identify"
 
@@ -100,7 +99,6 @@ object AuthConfig:
     providerBackoff = 60.seconds,
     callbackRedirectPath = "/",
     useSecureCookies = appEnv == AppEnv.Prod,
-    useHostPrefix = appEnv == AppEnv.Prod,
   )
 
 object RedisConfig:

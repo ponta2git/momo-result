@@ -8,7 +8,11 @@ import momo.api.MomoCatsEffectSuite
 import momo.api.domain.LoginAccount
 import momo.api.domain.ids.{AccountId, UserId}
 import momo.api.errors.AppError
-import momo.api.repositories.{CreateLoginAccountData, UpdateLoginAccountData}
+import momo.api.repositories.{
+  CreateLoginAccountData,
+  LoginAccountAdministrationUpdateResult,
+  UpdateLoginAccountData
+}
 import momo.api.testing.AppErrorAssertions.assertAppException
 
 final class InMemoryLoginAccountsRepositorySpec extends MomoCatsEffectSuite:
@@ -36,7 +40,7 @@ final class InMemoryLoginAccountsRepositorySpec extends MomoCatsEffectSuite:
       )
       assertEquals(listed.map(_.id), List(primaryId))
 
-  test("update atomically preserves the last enabled administrator"):
+  test("administration preserves the last enabled administrator"):
     val admin = loginAccount(primaryId, primaryDiscordId, loginEnabled = true, isAdmin = true)
     val disable = UpdateLoginAccountData(
       displayName = None,
@@ -47,14 +51,16 @@ final class InMemoryLoginAccountsRepositorySpec extends MomoCatsEffectSuite:
     )
     for
       accounts <- InMemoryLoginAccountsRepository.create[IO](List(admin))
-      updated <- accounts.update(primaryId, disable)
+      sessions <- InMemoryAppSessionsRepository.create[IO]
+      administration = InMemoryLoginAccountAdministrationRepository(accounts, sessions)
+      updated <- administration.updateAndRevokeSessionsWhenDisabled(primaryId, disable)
       found <- accounts.find(primaryId)
     yield
-      assertEquals(updated, None)
+      assertEquals(updated, LoginAccountAdministrationUpdateResult.LastEnabledAdmin)
       assertEquals(found.map(_.loginEnabled), Some(true))
       assertEquals(found.map(_.isAdmin), Some(true))
 
-  test("update allows disabling an administrator when another enabled administrator remains"):
+  test("administration allows disabling an administrator when another remains"):
     val first = loginAccount(primaryId, primaryDiscordId, loginEnabled = true, isAdmin = true)
     val second = loginAccount(
       AccountId.unsafeFromString("account-second"),
@@ -71,10 +77,18 @@ final class InMemoryLoginAccountsRepositorySpec extends MomoCatsEffectSuite:
     )
     for
       accounts <- InMemoryLoginAccountsRepository.create[IO](List(first, second))
-      updated <- accounts.update(primaryId, disable)
+      sessions <- InMemoryAppSessionsRepository.create[IO]
+      administration = InMemoryLoginAccountAdministrationRepository(accounts, sessions)
+      updated <- administration.updateAndRevokeSessionsWhenDisabled(primaryId, disable)
       found <- accounts.find(primaryId)
     yield
-      assertEquals(updated.map(_.loginEnabled), Some(false))
+      assertEquals(
+        updated,
+        LoginAccountAdministrationUpdateResult.Updated(first.copy(
+          loginEnabled = false,
+          updatedAt = now.plusSeconds(60),
+        )),
+      )
       assertEquals(found.map(_.loginEnabled), Some(false))
 
   private def createData(id: AccountId, discordUserId: UserId): CreateLoginAccountData =

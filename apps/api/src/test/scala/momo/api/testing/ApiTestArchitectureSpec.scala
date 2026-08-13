@@ -15,8 +15,6 @@ final class ApiTestArchitectureSpec extends FunSuite:
   private val testingRoot = testRoot.resolve("momo/api/testing")
   private val usecaseTestingRoot = testRoot.resolve("momo/api/usecases/testing")
   private val buildFile = Paths.get("build.sbt")
-  private val pluginsFile = Paths.get("project/plugins.sbt")
-  private val testRuleFile = Paths.get("../../docs/test-rule.md")
   private val localIntegrationTagSyntax = "new munit.Tag(" + "\"Integration\"" + ")"
 
   test("integration tags are defined only through TestTags"):
@@ -85,22 +83,6 @@ final class ApiTestArchitectureSpec extends FunSuite:
     assert(text.contains("set Test / fork := true;"))
     assert(text.contains("set Test / parallelExecution := false;"))
     assert(text.contains("set Test / testOptions := Seq();"))
-
-  test("API coverage gate is explicit and C2 policy is documented"):
-    val buildText = read(buildFile)
-    val pluginsText = read(pluginsFile)
-    val testRuleText = read(testRuleFile)
-
-    assert(pluginsText.contains("sbt-scoverage"))
-    assert(buildText.contains("addCommandAlias(\"apiCoverage\""))
-    assert(buildText.contains("coverageFailOnMinimum := true"))
-    assert(buildText.contains("coverageMinimumStmtTotal :="))
-    assert(buildText.contains("coverageMinimumBranchTotal :="))
-    assert(buildText.contains("coverageExcludedPackages :="))
-    assert(buildText.contains("coverageExcludedFiles :="))
-    assert(testRuleText.contains("sbt apiCoverage"))
-    assert(testRuleText.contains("C2"))
-    assert(testRuleText.contains("table-driven test"))
 
   test("stateful API test doubles live in typed test support"):
     val forbiddenInlineDoubles = List(

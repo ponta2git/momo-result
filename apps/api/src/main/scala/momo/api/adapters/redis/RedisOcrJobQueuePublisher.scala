@@ -2,14 +2,10 @@ package momo.api.adapters.redis
 
 import scala.jdk.CollectionConverters.*
 
-import cats.effect.{Async, Resource}
 import cats.syntax.all.*
 import cats.{Functor, MonadThrow}
-import dev.profunktor.redis4cats.data.RedisCodec
-import dev.profunktor.redis4cats.effect.Log.NoOp.*
-import dev.profunktor.redis4cats.{Redis, RedisCommands}
+import dev.profunktor.redis4cats.RedisCommands
 
-import momo.api.config.RedisConfig
 import momo.api.contracts.ocrworker.OcrWorkerJobMessageV2
 import momo.api.ports.queue.{OcrJobEnqueueRequest, OcrJobQueueHealthCheck, OcrJobQueuePublisher}
 
@@ -45,11 +41,6 @@ object RedisOcrJobQueuePublisher:
       commands: RedisCommands[F, String, String],
   ): OcrJobQueueHealthCheck[F] =
     RedisOcrJobQueueHealthCheck(deadLetterStream, Redis4CatsStreamClient(commands))
-
-  def resource[F[_]: Async](config: RedisConfig): Resource[F, RedisOcrJobQueuePublisher[F]] =
-    Redis[F].simple(config.url, RedisCodec.Utf8).map(commands =>
-      fromCommands(config.v2Stream, commands)
-    )
 
 private final class Redis4CatsStreamClient[F[_]: Functor](
     commands: RedisCommands[F, String, String]

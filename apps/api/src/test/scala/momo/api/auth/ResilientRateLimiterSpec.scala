@@ -59,7 +59,12 @@ final class ResilientRateLimiterSpec extends MomoCatsEffectSuite:
       Duration.Zero,
       "read api"
     ).attempt.map {
-      result => assert(result.isLeft)
+      case Left(error: IllegalArgumentException) =>
+        assertEquals(
+          error.getMessage,
+          "ResilientRateLimiter requires a positive timeout and a safe non-empty scope",
+        )
+      case other => fail(s"expected IllegalArgumentException, got $other")
     }
 
   test("uses one fallback decision per outage and returns to the primary after recovery"):

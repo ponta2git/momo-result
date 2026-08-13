@@ -31,7 +31,7 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite:
   private val accountId = AccountId.unsafeFromString("account_ponta")
 
   private def seedTitle: IO[Unit] = new PostgresGameTitlesRepository[IO](transactor)
-    .create(GameTitle(titleId, "分析契約作品", "momotetsu2", 1, now))
+    .createWithNextDisplayOrder(GameTitle(titleId, "分析契約作品", "momotetsu2", 1, now)).void
 
   private def repository: IO[PostgresSeriesAnalysisRepository[IO]] =
     PostgresSeriesAnalysisRepository.create[IO](transactor, SeriesAnalysisReadConfig.defaults)
@@ -114,7 +114,7 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite:
     for
       _ <- seedTitle
       _ <- new PostgresGameTitlesRepository[IO](transactor)
-        .create(GameTitle(secondId, "分析契約作品2", "momotetsu2", 2, now))
+        .createWithNextDisplayOrder(GameTitle(secondId, "分析契約作品2", "momotetsu2", 2, now))
       repo <- repository
       first <- repo.requestAllRecalculation(accountId, "hash-all-request")
       replay <- repo.requestAllRecalculation(accountId, "hash-all-request")
@@ -203,8 +203,12 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite:
     val newerTitleId = GameTitleId.unsafeFromString("title-analysis-running-after")
     val titles = new PostgresGameTitlesRepository[IO](transactor)
     for
-      _ <- titles.create(GameTitle(olderTitleId, "受理前実行", "momotetsu2", 1, now))
-      _ <- titles.create(GameTitle(newerTitleId, "受理後実行", "momotetsu2", 2, now))
+      _ <- titles.createWithNextDisplayOrder(
+        GameTitle(olderTitleId, "受理前実行", "momotetsu2", 1, now)
+      )
+      _ <- titles.createWithNextDisplayOrder(
+        GameTitle(newerTitleId, "受理後実行", "momotetsu2", 2, now)
+      )
       analysis <- repository
       _ <- analysis.requestAllRecalculation(accountId, "hash-running-race")
       acceptedAt <- sql"SELECT accepted_at FROM series_analysis_campaigns".query[Instant].unique

@@ -72,6 +72,7 @@ final class R2SourceImageObjectStorageIntegrationSpec extends MomoCatsEffectSuit
         credentials,
         apiCallTimeout = Duration.ofSeconds(20),
         apiCallAttemptTimeout = Duration.ofSeconds(10),
+        maxAttempts = 2,
       )
     yield config
 

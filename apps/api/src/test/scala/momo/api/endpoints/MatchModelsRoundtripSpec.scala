@@ -22,7 +22,7 @@ import momo.api.domain.{
 }
 
 /**
- * Roundtrip + golden-JSON guard for [[MatchDetailResponse]] and [[MatchSummaryResponse]].
+ * Decoder contract for replayed match details and golden-JSON guards for match responses.
  *
  * See [[HeldEventResponseRoundtripSpec]] for the rationale: locking the wire format here lets the
  * domain model evolve without silently changing the JSON the SPA depends on.
@@ -204,11 +204,6 @@ final class MatchModelsRoundtripSpec extends FunSuite:
       }
     """).getOrElse(Json.Null)
     assertEquals(response.asJson, expected)
-
-  test("MatchSummaryResponse: encode → decode is identity"):
-    val response = MatchSummaryResponse.from(matchListItem)
-    val decoded = response.asJson.as[MatchSummaryResponse]
-    assertEquals(decoded, Right(response))
 
   test("MatchSummaryResponse: golden JSON pins the wire format"):
     val response = MatchSummaryResponse.from(matchListItem)

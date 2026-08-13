@@ -27,12 +27,10 @@ final class CachedReferenceRepositoriesSpec extends MomoCatsEffectSuite:
       delegate = CountingMembersRepository(rows, listCalls)
       cached <- CachedReferenceRepositories.members[IO](delegate, 1.hour)
       foundById <- cached.find(memberId)
-      foundByUser <- cached.findByDiscordUserId(userId)
       listed <- cached.list
       calls <- listCalls.get
     yield
       assertEquals(foundById, Some(member))
-      assertEquals(foundByUser, Some(member))
       assertEquals(listed, List(member))
       assertEquals(calls, 1)
 
@@ -80,8 +78,6 @@ final class CachedReferenceRepositoriesSpec extends MomoCatsEffectSuite:
   ) extends MembersRepository[IO]:
     def list: IO[List[Member]] = listCalls.update(_ + 1) *> rows.get
     def find(id: MemberId): IO[Option[Member]] = rows.get.map(_.find(_.id == id))
-    def findByDiscordUserId(userId: UserId): IO[Option[Member]] =
-      rows.get.map(_.find(_.userId == userId))
 
   private object CountingMembersRepository:
     def apply(rows: Ref[IO, List[Member]], listCalls: Ref[IO, Int]): CountingMembersRepository =
@@ -93,9 +89,8 @@ final class CachedReferenceRepositoriesSpec extends MomoCatsEffectSuite:
   ) extends GameTitlesRepository[IO]:
     def list: IO[List[GameTitle]] = listCalls.update(_ + 1) *> rows.get
     def find(id: GameTitleId): IO[Option[GameTitle]] = rows.get.map(_.find(_.id == id))
-    def create(title: GameTitle): IO[Unit] = rows.update(existing => existing :+ title)
     def createWithNextDisplayOrder(title: GameTitle): IO[GameTitle] =
-      create(title).as(title)
+      rows.update(existing => existing :+ title).as(title)
     def update(title: GameTitle): IO[Unit] = rows.update(_.map(row =>
       if row.id == title.id then title else row
     ))

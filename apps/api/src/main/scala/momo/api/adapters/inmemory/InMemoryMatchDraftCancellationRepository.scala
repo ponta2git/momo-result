@@ -10,13 +10,11 @@ import momo.api.domain.ids.MatchDraftId
 import momo.api.repositories.{
   MatchDraftCancellationRepository,
   MatchDraftCancellationResult,
-  MatchDraftDeletionResult,
-  MatchDraftsRepository,
   OcrJobsRepository
 }
 
 final class InMemoryMatchDraftCancellationRepository[F[_]: Sync](
-    matchDrafts: MatchDraftsRepository[F],
+    matchDrafts: InMemoryMatchDraftsRepository[F],
     ocrJobs: OcrJobsRepository[F],
 ) extends MatchDraftCancellationRepository[F]:
   override def cancelDraftAndQueuedOcrJobs(
@@ -26,11 +24,11 @@ final class InMemoryMatchDraftCancellationRepository[F[_]: Sync](
     case None => MatchDraftCancellationResult.NotFound.pure[F]
     case Some(draft) if !MatchDraftStatus.nonTerminalStatuses.contains(draft.status) =>
       MatchDraftCancellationResult.NotCancellable(draft.status).pure[F]
-    case Some(draft) => matchDrafts.cancel(draftId, updatedAt).flatMap {
-        case MatchDraftDeletionResult.Deleted =>
+    case Some(draft) => matchDrafts.cancelUnchecked(draftId).flatMap {
+        case true =>
           ocrJobs.cancelQueuedByDraftIds(draft.ocrDraftIds, updatedAt)
             .as(MatchDraftCancellationResult.Cancelled(draft.sourceImageIds))
-        case MatchDraftDeletionResult.NotCancellable => classifyCurrent(draftId)
+        case false => classifyCurrent(draftId)
       }
   }
 

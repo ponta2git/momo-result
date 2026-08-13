@@ -41,8 +41,6 @@ final class OAuthStateCodec[F[_]: Sync: SecureRandom](config: AuthConfig, now: F
           payload.split(":", 4).toList match
             case _ :: expires :: marker :: redirect :: Nil =>
               validatePayload(payload, signature, expires, marker, decodeRedirectPath(redirect))
-            case _ :: expires :: marker :: Nil =>
-              validatePayload(payload, signature, expires, marker, None)
             case _ => Sync[F].pure(None)
     case _ => Sync[F].pure(None)
 

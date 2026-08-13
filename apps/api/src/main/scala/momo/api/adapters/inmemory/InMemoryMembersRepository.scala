@@ -11,8 +11,6 @@ final class InMemoryMembersRepository[F[_]: Sync] private (ref: Ref[F, Map[Membe
     extends MembersRepository[F]:
   override def list: F[List[Member]] = ref.get.map(_.values.toList.sortBy(_.id.value))
   override def find(id: MemberId): F[Option[Member]] = ref.get.map(_.get(id))
-  override def findByDiscordUserId(userId: UserId): F[Option[Member]] = ref.get
-    .map(_.values.find(_.userId == userId))
 
 object InMemoryMembersRepository:
   def create[F[_]: Sync]: F[InMemoryMembersRepository[F]] = create(Nil)

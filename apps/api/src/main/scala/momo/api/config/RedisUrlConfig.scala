@@ -5,9 +5,6 @@ import java.net.URI
 import cats.syntax.all.*
 
 private[config] object RedisUrlConfig:
-  private[config] def ensureProdRedisUrl(raw: String, appEnv: AppEnv): Either[Throwable, String] =
-    ensureProdRedisUrl(raw, appEnv, allowPlaintextInProd = false)
-
   private[config] def ensureProdRedisUrl(
       raw: String,
       appEnv: AppEnv,

@@ -22,7 +22,7 @@ final class InMemoryOcrJobsRepository[F[_]: Sync] private (
     ref: Ref[F, Map[String, OcrJob]],
     onQueuedCancel: (OcrJob.Cancelled, List[OcrJob]) => F[Unit],
 ) extends OcrJobsRepository[F]:
-  override def create(job: OcrJob): F[Unit] = ref.modify { current =>
+  def create(job: OcrJob): F[Unit] = ref.modify { current =>
     if current.contains(job.id.value) then
       (
         current,

@@ -2,13 +2,10 @@ package momo.api.auth
 
 import java.time.Instant
 
-import cats.effect.{Async, Resource, Sync}
+import cats.effect.Sync
 import cats.syntax.all.*
-import dev.profunktor.redis4cats.data.RedisCodec
-import dev.profunktor.redis4cats.effect.Log.NoOp.*
-import dev.profunktor.redis4cats.{Redis, RedisCommands}
+import dev.profunktor.redis4cats.RedisCommands
 
-import momo.api.config.RedisConfig
 import momo.api.errors.AppError
 
 final class RedisOAuthProviderBackoff[F[_]: Sync] private (
@@ -52,12 +49,3 @@ object RedisOAuthProviderBackoff:
       now: F[Instant],
   ): RedisOAuthProviderBackoff[F] =
     RedisOAuthProviderBackoff(commands, namespace, failureThreshold, backoff, now)
-
-  def resource[F[_]: Async](
-      config: RedisConfig,
-      namespace: String,
-      failureThreshold: Int,
-      backoff: scala.concurrent.duration.FiniteDuration,
-      now: F[Instant],
-  ): Resource[F, RedisOAuthProviderBackoff[F]] = Redis[F].simple(config.url, RedisCodec.Utf8)
-    .map(commands => fromCommands(commands, namespace, failureThreshold, backoff, now))

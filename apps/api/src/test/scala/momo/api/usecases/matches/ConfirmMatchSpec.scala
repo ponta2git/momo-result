@@ -138,7 +138,9 @@ final class ConfirmMatchSpec extends MomoCatsEffectSuite:
       for
         _ <- fixture.seedPrereqs()
         _ <- fixture.gameTitles
-          .create(GameTitle(GameTitleId.unsafeFromString("title_japan"), "Japan", "japan", 2, now))
+          .createWithNextDisplayOrder(
+            GameTitle(GameTitleId.unsafeFromString("title_japan"), "Japan", "japan", 2, now)
+          )
         result <- fixture.usecase.run(
           commandWithGameTitle(GameTitleId.unsafeFromString("title_japan")),
           AccountId.unsafeFromString("ponta"),
@@ -213,7 +215,7 @@ final class ConfirmMatchSpec extends MomoCatsEffectSuite:
         customRetention: PurgeSourceImages[IO],
         nextId: IO[MatchId],
     ): ConfirmMatch[IO] = buildUsecase(
-      InMemoryMatchConfirmationRepository[IO](matches, matchDrafts),
+      InMemoryMatchConfirmationRepository[IO](matches, matches.create, matchDrafts),
       customRetention,
       nextId,
     )
@@ -246,7 +248,8 @@ final class ConfirmMatchSpec extends MomoCatsEffectSuite:
         matches <- InMemoryMatchesRepository.create[IO]
         matchDrafts <- InMemoryMatchDraftsRepository.create[IO]
         retention = PurgeSourceImages[IO](matchDrafts, LocalFsImageStore[IO](dir))
-        confirmations = InMemoryMatchConfirmationRepository[IO](matches, matchDrafts)
+        confirmations =
+          InMemoryMatchConfirmationRepository[IO](matches, matches.create, matchDrafts)
         ids <- IO.ref(List("match-1", "match-2"))
         usecase = ConfirmMatch[IO](
           heldEvents = heldEvents,

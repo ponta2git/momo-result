@@ -10,7 +10,7 @@ import momo.api.repositories.MatchesRepository
 
 final class InMemoryMatchesRepository[F[_]: Sync] private (ref: Ref[F, Map[MatchId, MatchRecord]])
     extends MatchesRepository[F]:
-  override def create(record: MatchRecord): F[Unit] = ref.modify { current =>
+  def create(record: MatchRecord): F[Unit] = ref.modify { current =>
     if current.contains(record.id) || containsMatchNo(current, record, excluding = None) then
       (current, Left(conflict(record)))
     else (current.updated(record.id, record), Right(()))
@@ -52,19 +52,6 @@ final class InMemoryMatchesRepository[F[_]: Sync] private (ref: Ref[F, Map[Match
   ): F[Boolean] = ref.get.map(_.values.exists(r =>
     r.heldEventId == heldEventId && r.matchNoInEvent == matchNoInEvent && r.id != excludeMatchId
   ))
-
-  override def maxMatchNo(heldEventId: HeldEventId): F[Int] = ref.get.map { m =>
-    val nums = m.values.filter(_.heldEventId == heldEventId).map(_.matchNoInEvent.value)
-    if nums.isEmpty then 0 else nums.max
-  }
-
-  override def countByHeldEvents(heldEventIds: List[HeldEventId]): F[Map[HeldEventId, Int]] = ref
-    .get.map { m =>
-      val ids = heldEventIds.toSet
-      val counts = m.values.filter(r => ids.contains(r.heldEventId))
-        .groupMapReduce(_.heldEventId)(_ => 1)(_ + _)
-      heldEventIds.map(id => id -> counts.getOrElse(id, 0)).toMap
-    }
 
   override def statsByHeldEvents(
       heldEventIds: List[HeldEventId]
@@ -109,8 +96,6 @@ object InMemoryMatchesRepository:
       matches: InMemoryMatchesRepository[F],
       matchDrafts: InMemoryMatchDraftsRepository[F],
   ): MatchesRepository[F] = new MatchesRepository[F]:
-    override def create(record: MatchRecord): F[Unit] = matches.create(record)
-
     override def update(record: MatchRecord, updatedAt: java.time.Instant): F[Unit] = matches
       .update(record, updatedAt)
 
@@ -137,11 +122,6 @@ object InMemoryMatchesRepository:
         matchNoInEvent: MatchNoInEvent,
         excludeMatchId: MatchId,
     ): F[Boolean] = matches.existsMatchNoExcept(heldEventId, matchNoInEvent, excludeMatchId)
-
-    override def maxMatchNo(heldEventId: HeldEventId): F[Int] = matches.maxMatchNo(heldEventId)
-
-    override def countByHeldEvents(heldEventIds: List[HeldEventId]): F[Map[HeldEventId, Int]] =
-      matches.countByHeldEvents(heldEventIds)
 
     override def statsByHeldEvents(
         heldEventIds: List[HeldEventId]

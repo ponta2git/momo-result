@@ -106,28 +106,12 @@ pub(crate) enum OcrFailureCode {
     TempImageMissing,
     InvalidImage,
     UnsupportedImageFormat,
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "the C3 engine adapter will preserve the API image-size failure vocabulary"
-        )
-    )]
-    ImageTooLarge,
     DecodeFailed,
     CategoryUndetected,
     LayoutUnsupported,
     OcrTimeout,
     OcrEngineUnavailable,
     ParserFailed,
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "the C3 persistence adapter will preserve the API database failure vocabulary"
-        )
-    )]
-    DbWriteFailed,
     QueueFailure,
 }
 
@@ -137,23 +121,18 @@ impl OcrFailureCode {
             Self::TempImageMissing => "TEMP_IMAGE_MISSING",
             Self::InvalidImage => "INVALID_IMAGE",
             Self::UnsupportedImageFormat => "UNSUPPORTED_IMAGE_FORMAT",
-            Self::ImageTooLarge => "IMAGE_TOO_LARGE",
             Self::DecodeFailed => "DECODE_FAILED",
             Self::CategoryUndetected => "CATEGORY_UNDETECTED",
             Self::LayoutUnsupported => "LAYOUT_UNSUPPORTED",
             Self::OcrTimeout => "OCR_TIMEOUT",
             Self::OcrEngineUnavailable => "OCR_ENGINE_UNAVAILABLE",
             Self::ParserFailed => "PARSER_FAILED",
-            Self::DbWriteFailed => "DB_WRITE_FAILED",
             Self::QueueFailure => "QUEUE_FAILURE",
         }
     }
 
     pub(crate) const fn retryable(self) -> bool {
-        matches!(
-            self,
-            Self::OcrTimeout | Self::OcrEngineUnavailable | Self::DbWriteFailed
-        )
+        matches!(self, Self::OcrTimeout | Self::OcrEngineUnavailable)
     }
 
     const fn message(self) -> &'static str {
@@ -161,28 +140,25 @@ impl OcrFailureCode {
             Self::TempImageMissing => "The OCR source image is unavailable.",
             Self::InvalidImage => "The OCR source image failed integrity validation.",
             Self::UnsupportedImageFormat => "The OCR source image format is unsupported.",
-            Self::ImageTooLarge => "The OCR source image exceeds the supported bounds.",
             Self::DecodeFailed => "The OCR source image could not be decoded.",
             Self::CategoryUndetected => "The OCR screen category could not be detected.",
             Self::LayoutUnsupported => "The OCR screen layout is unsupported.",
             Self::OcrTimeout => "OCR processing exceeded its deadline.",
             Self::OcrEngineUnavailable => "The OCR dependency is temporarily unavailable.",
             Self::ParserFailed => "The OCR result could not be parsed safely.",
-            Self::DbWriteFailed => "The OCR result could not be persisted.",
             Self::QueueFailure => "The OCR queue delivery failed its persisted contract.",
         }
     }
 
     const fn user_action(self) -> &'static str {
         match self {
-            Self::OcrEngineUnavailable | Self::DbWriteFailed | Self::OcrTimeout => {
+            Self::OcrEngineUnavailable | Self::OcrTimeout => {
                 "しばらく待ってからOCRをやり直してください。"
             }
             Self::QueueFailure => "運用担当者に連絡してください。",
             Self::TempImageMissing
             | Self::InvalidImage
             | Self::UnsupportedImageFormat
-            | Self::ImageTooLarge
             | Self::DecodeFailed
             | Self::CategoryUndetected
             | Self::LayoutUnsupported

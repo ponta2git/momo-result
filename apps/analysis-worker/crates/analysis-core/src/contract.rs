@@ -115,8 +115,6 @@ pub enum ContractError {
     UnsafePath(String),
     #[error("artifact exceeds the configured chunk count")]
     ChunkCountExceeded,
-    #[error("artifact chunk exceeds the configured byte limit")]
-    ChunkBytesExceeded,
     #[error("artifact chunk metadata is inconsistent")]
     InvalidChunkMetadata,
     #[error("artifact root checksum does not match its resources")]

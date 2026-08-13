@@ -47,7 +47,6 @@ fn failure_vocabulary_stays_compatible_with_the_api_contract() {
             "UNSUPPORTED_IMAGE_FORMAT",
             false,
         ),
-        (OcrFailureCode::ImageTooLarge, "IMAGE_TOO_LARGE", false),
         (OcrFailureCode::DecodeFailed, "DECODE_FAILED", false),
         (
             OcrFailureCode::CategoryUndetected,
@@ -66,7 +65,6 @@ fn failure_vocabulary_stays_compatible_with_the_api_contract() {
             true,
         ),
         (OcrFailureCode::ParserFailed, "PARSER_FAILED", false),
-        (OcrFailureCode::DbWriteFailed, "DB_WRITE_FAILED", true),
         (OcrFailureCode::QueueFailure, "QUEUE_FAILURE", false),
     ];
     for (failure, wire, retryable) in values {

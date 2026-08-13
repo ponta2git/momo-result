@@ -240,18 +240,6 @@ pub enum OcrObjectStoreError {
     Integrity,
 }
 
-impl OcrObjectStoreError {
-    #[must_use]
-    pub const fn kind(self) -> &'static str {
-        match self {
-            Self::NotFound => "object_not_found",
-            Self::AccessDenied => "object_access_denied",
-            Self::Unavailable => "object_unavailable",
-            Self::Integrity => "object_integrity",
-        }
-    }
-}
-
 struct DownloadMetadata {
     content_length: Option<i64>,
     content_type: Option<String>,

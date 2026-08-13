@@ -82,7 +82,7 @@ pub fn parse_delivery(delivery: &StreamId) -> Result<OcrQueuePayload, OcrQueueCo
             .ok_or(OcrQueueContractError::InvalidField("requestedScreenType"))?;
     let attempt_string = required_string(delivery, "attempt")?;
     let attempt_value = positive_decimal(&attempt_string, "attempt")?;
-    let attempt = u32::try_from(attempt_value)
+    u32::try_from(attempt_value)
         .ok()
         .filter(|value| i32::try_from(*value).is_ok())
         .ok_or(OcrQueueContractError::InvalidField("attempt"))?;
@@ -107,7 +107,6 @@ pub fn parse_delivery(delivery: &StreamId) -> Result<OcrQueuePayload, OcrQueueCo
         byte_length,
         media_type,
         requested_screen_type,
-        attempt,
         hints,
         request_id,
     ))
@@ -271,7 +270,6 @@ mod tests {
             payload.requested_screen_type(),
             RequestedScreenType::IncidentLog
         );
-        assert_eq!(payload.attempt(), 1);
         assert_eq!(payload.request_id(), Some("req_v2-1"));
         assert_eq!(payload.hints(), &OcrHints::default());
     }

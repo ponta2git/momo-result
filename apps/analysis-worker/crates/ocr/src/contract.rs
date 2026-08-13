@@ -144,7 +144,6 @@ pub struct OcrQueuePayload {
     byte_length: u64,
     media_type: OcrMediaType,
     requested_screen_type: RequestedScreenType,
-    attempt: u32,
     hints: OcrHints,
     request_id: Option<String>,
 }
@@ -164,7 +163,6 @@ impl OcrQueuePayload {
         byte_length: u64,
         media_type: OcrMediaType,
         requested_screen_type: RequestedScreenType,
-        attempt: u32,
         hints: OcrHints,
         request_id: Option<String>,
     ) -> Self {
@@ -177,7 +175,6 @@ impl OcrQueuePayload {
             byte_length,
             media_type,
             requested_screen_type,
-            attempt,
             hints,
             request_id,
         }
@@ -221,11 +218,6 @@ impl OcrQueuePayload {
     #[must_use]
     pub const fn requested_screen_type(&self) -> RequestedScreenType {
         self.requested_screen_type
-    }
-
-    #[must_use]
-    pub const fn attempt(&self) -> u32 {
-        self.attempt
     }
 
     #[must_use]

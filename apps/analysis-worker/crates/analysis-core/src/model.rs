@@ -18,17 +18,14 @@ pub struct AnalysisInput {
 /// Canonically ordered analysis input accepted by deterministic calculations and checksums.
 ///
 /// Preparation derives the resource-shape bound once and keeps both the rows and that derived
-/// contract immutable.  The alias retains the existing name at call sites while making the
-/// preparation stage explicit in this module.
+/// contract immutable.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct PreparedAnalysisInput {
+pub struct NormalizedAnalysisInput {
     input: AnalysisInput,
     resource_count: Option<u64>,
 }
 
-pub type NormalizedAnalysisInput = PreparedAnalysisInput;
-
-impl Deref for PreparedAnalysisInput {
+impl Deref for NormalizedAnalysisInput {
     type Target = AnalysisInput;
 
     fn deref(&self) -> &Self::Target {
@@ -36,7 +33,7 @@ impl Deref for PreparedAnalysisInput {
     }
 }
 
-impl AsRef<AnalysisInput> for PreparedAnalysisInput {
+impl AsRef<AnalysisInput> for NormalizedAnalysisInput {
     fn as_ref(&self) -> &AnalysisInput {
         &self.input
     }
@@ -80,7 +77,7 @@ impl AnalysisInput {
     pub fn into_normalized(mut self) -> NormalizedAnalysisInput {
         self.normalize();
         let resource_count = resource_count_for_input(&self);
-        PreparedAnalysisInput {
+        NormalizedAnalysisInput {
             input: self,
             resource_count,
         }
@@ -185,7 +182,7 @@ impl AnalysisInput {
     }
 }
 
-impl PreparedAnalysisInput {
+impl NormalizedAnalysisInput {
     /// Returns the exact number of resource chunks the calculator will emit.
     ///
     /// This is deliberately a shape-only pass: it allocates no payloads and retains no per-scope

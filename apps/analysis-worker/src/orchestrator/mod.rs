@@ -16,7 +16,6 @@ struct ActiveRuntime {
 }
 
 pub struct WorkerOrchestratorConfig {
-    ocr_mode: OcrConsumerMode,
     active: Option<ActiveRuntime>,
 }
 
@@ -33,10 +32,7 @@ impl WorkerOrchestratorConfig {
             if ocr_mode == OcrConsumerMode::Enabled {
                 return Err(WorkerOrchestratorError::OcrRequiresAnalysisRuntime);
             }
-            return Ok(Self {
-                ocr_mode,
-                active: None,
-            });
+            return Ok(Self { active: None });
         }
 
         let analysis = WorkerRuntimeConfig::from_environment(worker)?;
@@ -50,14 +46,19 @@ impl WorkerOrchestratorConfig {
             return Err(WorkerOrchestratorError::ConfigurationChangedDuringLoad);
         }
         Ok(Self {
-            ocr_mode,
             active: Some(ActiveRuntime { analysis, ocr }),
         })
     }
 
     #[must_use]
     pub const fn ocr_enabled(&self) -> bool {
-        matches!(self.ocr_mode, OcrConsumerMode::Enabled)
+        matches!(
+            self.active,
+            Some(ActiveRuntime {
+                ocr: OcrConsumerRuntimeConfig::Enabled(_),
+                ..
+            })
+        )
     }
 
     #[must_use]

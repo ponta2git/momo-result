@@ -99,7 +99,7 @@ impl AttemptInterruption {
 ///
 /// Returns an error only when a runtime dependency or safety boundary fails. Individual analysis
 /// failures are persisted as terminal jobs and do not stop the parent worker.
-pub async fn run(
+pub(crate) async fn run(
     config: WorkerRuntimeConfig,
     mut shutdown: watch::Receiver<bool>,
 ) -> Result<(), WorkerError> {

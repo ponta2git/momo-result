@@ -201,7 +201,6 @@ impl R2ObjectStore {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct VerifiedSourceImage {
     bytes: Vec<u8>,
-    media_type: OcrMediaType,
     width: u32,
     height: u32,
 }
@@ -210,11 +209,6 @@ impl VerifiedSourceImage {
     #[must_use]
     pub fn bytes(&self) -> &[u8] {
         &self.bytes
-    }
-
-    #[must_use]
-    pub const fn media_type(&self) -> OcrMediaType {
-        self.media_type
     }
 
     #[must_use]
@@ -385,7 +379,6 @@ fn verify_bytes(
     validate_dimensions(width, height)?;
     Ok(VerifiedSourceImage {
         bytes,
-        media_type: payload.media_type(),
         width,
         height,
     })
@@ -712,7 +705,7 @@ mod tests {
                 String::from("requestedScreenType"),
                 String::from(payload.requested_screen_type().wire()),
             ),
-            (String::from("attempt"), payload.attempt().to_string()),
+            (String::from("attempt"), String::from("1")),
             (
                 String::from("enqueuedAt"),
                 String::from("2026-08-11T00:00:00Z"),

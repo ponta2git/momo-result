@@ -90,11 +90,14 @@ pub(crate) fn prepare_ranked_row_variants(image: &DynamicImage) -> Vec<GrayImage
     let gray = image.to_luma8();
     let enhanced = contrast(&gray, 2.0);
     let base = resize(&enhanced, 2, FilterType::Lanczos3);
-    let mut variants = vec![base.clone()];
-    if mean_luminance(&gray) < 110.0 {
-        variants.push(invert(&base));
+    let inverted = (mean_luminance(&gray) < 110.0).then(|| invert(&base));
+    let binarized = otsu_binarize(&base);
+    let mut variants = Vec::with_capacity(if inverted.is_some() { 3 } else { 2 });
+    variants.push(base);
+    if let Some(inverted) = inverted {
+        variants.push(inverted);
     }
-    variants.push(otsu_binarize(&base));
+    variants.push(binarized);
     variants
 }
 

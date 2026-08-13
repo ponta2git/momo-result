@@ -468,6 +468,10 @@ async fn process_claimed<E: OcrEngine>(
     let mut attempt = engine
         .start(&image, payload)
         .map_err(OcrWorkerError::Engine)?;
+    // The attempt owns the child transport, not the source image. Release the bounded
+    // compressed object before waiting for the child so the parent does not retain up to
+    // the object-size limit for the whole OCR duration.
+    drop(image);
     let recognized = supervise_ocr_attempt(
         attempt.as_mut(),
         config.ocr_timeout,

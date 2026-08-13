@@ -99,7 +99,6 @@ fn recognize_slot_name(
     aliases: &AliasResolver,
     recognition: &mut RecognitionSession,
 ) -> Result<(Option<String>, Option<f64>), RecognitionError> {
-    let variants = prepare_slot_name_variants(image);
     let raw_candidates = recognize_raw_name(image, aliases, recognition)?;
     if let Some(candidate) = raw_candidates
         .iter()
@@ -108,6 +107,7 @@ fn recognize_slot_name(
     {
         return Ok((Some(candidate.name.clone()), candidate.confidence));
     }
+    let variants = prepare_slot_name_variants(image);
     let mut candidates = raw_candidates;
     for variant in &variants {
         candidates.extend(recognize_name_variant(variant, aliases, recognition)?);

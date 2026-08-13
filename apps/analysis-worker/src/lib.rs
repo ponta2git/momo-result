@@ -5,7 +5,7 @@
 //! staging, release tooling, and runtime configuration.
 
 #[path = "orchestrator/analysis/mod.rs"]
-pub mod analysis;
+mod analysis;
 mod artifact;
 mod cgroup;
 pub mod child;
@@ -24,6 +24,8 @@ pub mod orchestrator;
 pub mod process;
 pub mod release;
 pub mod shadow;
+
+pub use analysis::WorkerError;
 
 #[cfg(test)]
 #[expect(

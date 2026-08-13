@@ -6,11 +6,11 @@ use serde_json::Value as JsonValue;
 use crate::{OcrFailure, OcrHints, OcrOutput, RequestedScreenType};
 
 /// Version of the OCR parent/child frame contract.
-pub const PROTOCOL_VERSION: u8 = 1;
+const PROTOCOL_VERSION: u8 = 1;
 /// Upper bound for the serialized request header.
-pub const MAXIMUM_HEADER_BYTES: usize = 16 * 1024;
+const MAXIMUM_HEADER_BYTES: usize = 16 * 1024;
 /// Upper bound for the encoded image sent to one child attempt.
-pub const MAXIMUM_IMAGE_BYTES: usize = 3 * 1024 * 1024;
+const MAXIMUM_IMAGE_BYTES: usize = 3 * 1024 * 1024;
 /// Upper bound for one child response.
 pub const MAXIMUM_RESPONSE_BYTES: usize = 1024 * 1024;
 const MAXIMUM_PROFILE_ID_BYTES: usize = 128;

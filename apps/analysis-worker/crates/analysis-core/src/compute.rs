@@ -61,7 +61,7 @@ pub enum DrilldownMetric {
 }
 
 impl DrilldownMetric {
-    pub const ALL: [Self; 4] = [
+    const ALL: [Self; 4] = [
         Self::RankAverageHistory,
         Self::PlayOrderRankHistory,
         Self::RankSignals,

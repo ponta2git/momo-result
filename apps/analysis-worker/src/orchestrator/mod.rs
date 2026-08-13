@@ -2,7 +2,7 @@ use thiserror::Error;
 use tokio::sync::watch;
 
 use crate::{
-    analysis::{self, WorkerError},
+    WorkerError, analysis,
     config::{ConfigError, PublicationMode, WorkerConfig, WorkerRuntimeConfig},
     ocr::{
         OcrConsumerMode, OcrConsumerRuntimeConfig, OcrRuntimeConfigError,

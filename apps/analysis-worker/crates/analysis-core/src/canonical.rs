@@ -174,7 +174,7 @@ impl FramedSha256 {
     /// # Errors
     ///
     /// Returns [`CanonicalError::RecordTooLarge`] if the record length cannot fit in a `u64`.
-    pub fn update(&mut self, record: &[u8]) -> Result<(), CanonicalError> {
+    fn update(&mut self, record: &[u8]) -> Result<(), CanonicalError> {
         let length = u64::try_from(record.len())?;
         self.0.update(length.to_be_bytes());
         self.0.update(record);

@@ -1,7 +1,9 @@
-use std::{path::PathBuf, time::Duration};
+use std::time::Duration;
 
+#[cfg(target_os = "linux")]
 use super::contract::{OcrHints, RequestedScreenType};
 
+#[cfg(target_os = "linux")]
 use momo_ocr::{OcrFailure as OcrEngineFailure, OcrOutput as OcrEngineOutput};
 
 #[cfg(target_os = "linux")]
@@ -15,7 +17,7 @@ use super::{
 };
 
 #[cfg(target_os = "linux")]
-use std::{env, io, process::Stdio};
+use std::{env, io, path::PathBuf, process::Stdio};
 #[cfg(target_os = "linux")]
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
@@ -377,7 +379,8 @@ pub async fn probe_isolated_child_lifecycle(
 ///
 /// Returns an opaque process-boundary category when cgroup setup, child lifecycle, or the timeout
 /// contract fails. OCR-domain failures remain a closed inner result.
-pub async fn analyze_isolated_local_image_bytes(
+#[cfg(target_os = "linux")]
+pub(crate) async fn analyze_isolated_local_image_bytes(
     image: &[u8],
     requested_screen_type: RequestedScreenType,
     hints: &OcrHints,
@@ -385,34 +388,18 @@ pub async fn analyze_isolated_local_image_bytes(
     timeout: Duration,
     stop_grace: Duration,
 ) -> Result<Result<OcrEngineOutput, OcrEngineFailure>, &'static str> {
-    #[cfg(target_os = "linux")]
-    {
-        if timeout.is_zero() || stop_grace.is_zero() || !crate::process::worker_identity_supported()
-        {
-            return Err("ocr_child_pilot_configuration");
-        }
-        let cgroup = child_cgroup_from_environment("ocr_child_pilot_configuration")?;
-        let engine = IsolatedNativeOcrEngine::new(cgroup, tessdata_path, stop_grace);
-        let mut attempt = engine.start_raw(image, requested_screen_type, hints)?;
-        match time::timeout(timeout, attempt.wait_inner()).await {
-            Ok(result) => result.map_err(process_failure_kind),
-            Err(_elapsed) => {
-                attempt.terminate_inner().await?;
-                Err("ocr_child_pilot_timeout")
-            }
-        }
+    if timeout.is_zero() || stop_grace.is_zero() || !crate::process::worker_identity_supported() {
+        return Err("ocr_child_pilot_configuration");
     }
-    #[cfg(not(target_os = "linux"))]
-    {
-        drop((
-            image,
-            requested_screen_type,
-            hints,
-            tessdata_path,
-            timeout,
-            stop_grace,
-        ));
-        Err("ocr_child_platform")
+    let cgroup = child_cgroup_from_environment("ocr_child_pilot_configuration")?;
+    let engine = IsolatedNativeOcrEngine::new(cgroup, tessdata_path, stop_grace);
+    let mut attempt = engine.start_raw(image, requested_screen_type, hints)?;
+    match time::timeout(timeout, attempt.wait_inner()).await {
+        Ok(result) => result.map_err(process_failure_kind),
+        Err(_elapsed) => {
+            attempt.terminate_inner().await?;
+            Err("ocr_child_pilot_timeout")
+        }
     }
 }
 

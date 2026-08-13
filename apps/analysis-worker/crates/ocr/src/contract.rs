@@ -64,19 +64,19 @@ impl RequestedScreenType {
 
 #[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct PlayerAliasHint {
+pub(crate) struct PlayerAliasHint {
     member_id: String,
     aliases: Vec<String>,
 }
 
 impl PlayerAliasHint {
     #[must_use]
-    pub fn member_id(&self) -> &str {
+    pub(crate) fn member_id(&self) -> &str {
         &self.member_id
     }
 
     #[must_use]
-    pub fn aliases(&self) -> &[String] {
+    pub(crate) fn aliases(&self) -> &[String] {
         &self.aliases
     }
 }
@@ -94,22 +94,17 @@ pub struct OcrHints {
 
 impl OcrHints {
     #[must_use]
-    pub fn game_title(&self) -> Option<&str> {
-        self.game_title.as_deref()
-    }
-
-    #[must_use]
-    pub fn layout_family(&self) -> Option<&str> {
+    pub(crate) fn layout_family(&self) -> Option<&str> {
         self.layout_family.as_deref()
     }
 
     #[must_use]
-    pub fn known_player_aliases(&self) -> &[PlayerAliasHint] {
+    pub(crate) fn known_player_aliases(&self) -> &[PlayerAliasHint] {
         &self.known_player_aliases
     }
 
     #[must_use]
-    pub fn computer_player_aliases(&self) -> &[String] {
+    pub(crate) fn computer_player_aliases(&self) -> &[String] {
         &self.computer_player_aliases
     }
 

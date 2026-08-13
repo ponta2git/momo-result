@@ -26,7 +26,7 @@ pub enum OcrFailure {
 
 impl OcrFailure {
     #[must_use]
-    pub const fn wire(self) -> &'static str {
+    pub(crate) const fn wire(self) -> &'static str {
         match self {
             Self::InvalidImage => "invalid_image",
             Self::UnsupportedImageFormat => "unsupported_image_format",
@@ -39,7 +39,7 @@ impl OcrFailure {
     }
 
     #[must_use]
-    pub fn from_wire(value: &str) -> Option<Self> {
+    pub(crate) fn from_wire(value: &str) -> Option<Self> {
         match value {
             "invalid_image" => Some(Self::InvalidImage),
             "unsupported_image_format" => Some(Self::UnsupportedImageFormat),

@@ -144,7 +144,7 @@ pub enum R2ObjectStoreConfigError {
 }
 
 #[derive(Clone)]
-pub struct R2ObjectStore {
+pub(crate) struct R2ObjectStore {
     client: Client,
     bucket: String,
 }
@@ -157,7 +157,7 @@ impl fmt::Debug for R2ObjectStore {
 
 impl R2ObjectStore {
     #[must_use]
-    pub fn new(config: &R2ObjectStoreConfig) -> Self {
+    pub(crate) fn new(config: &R2ObjectStoreConfig) -> Self {
         Self {
             client: Client::from_conf(build_sdk_config(config)),
             bucket: config.bucket.clone(),
@@ -170,7 +170,7 @@ impl R2ObjectStore {
     ///
     /// Returns a safe failure category for missing or inaccessible objects, bounded dependency
     /// failures, and any byte, checksum, media type, or `FullHD` integrity mismatch.
-    pub async fn download(
+    pub(crate) async fn download(
         &self,
         payload: &OcrQueuePayload,
     ) -> Result<VerifiedSourceImage, OcrObjectStoreError> {
@@ -223,7 +223,7 @@ impl VerifiedSourceImage {
 }
 
 #[derive(Clone, Copy, Debug, Error, Eq, PartialEq)]
-pub enum OcrObjectStoreError {
+pub(crate) enum OcrObjectStoreError {
     #[error("source image object was not found")]
     NotFound,
     #[error("source image object access was denied")]
@@ -232,6 +232,19 @@ pub enum OcrObjectStoreError {
     Unavailable,
     #[error("source image object failed integrity validation")]
     Integrity,
+}
+
+#[cfg(target_os = "linux")]
+impl OcrObjectStoreError {
+    #[must_use]
+    pub(crate) const fn kind(self) -> &'static str {
+        match self {
+            Self::NotFound => "object_not_found",
+            Self::AccessDenied => "object_access_denied",
+            Self::Unavailable => "object_unavailable",
+            Self::Integrity => "object_integrity",
+        }
+    }
 }
 
 struct DownloadMetadata {

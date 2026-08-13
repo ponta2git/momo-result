@@ -38,7 +38,7 @@ pub struct WorkerConfig {
 }
 
 #[derive(Clone)]
-pub struct WorkerRuntimeConfig {
+pub(crate) struct WorkerRuntimeConfig {
     pub(crate) database_url: String,
     pub(crate) read_database_url: String,
     pub(crate) redis_url: String,
@@ -144,7 +144,7 @@ impl WorkerRuntimeConfig {
     ///
     /// Returns an error without exposing connection strings when runtime configuration is absent
     /// or its timing relationship cannot stop a child before lease expiry.
-    pub fn from_environment(worker: &WorkerConfig) -> Result<Self, ConfigError> {
+    pub(crate) fn from_environment(worker: &WorkerConfig) -> Result<Self, ConfigError> {
         let publication_limits = worker.limits.clone().ok_or(ConfigError::MissingRuntime {
             name: PUBLICATION_MODE_ENV,
         })?;

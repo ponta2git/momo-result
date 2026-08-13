@@ -5,7 +5,7 @@
 
 use serde::{Deserialize, Serialize};
 
-pub const REPORT_SCHEMA_VERSION: u32 = 3;
+const REPORT_SCHEMA_VERSION: u32 = 3;
 
 /// Logical identity of one Analysis child computation.
 #[derive(Clone, Debug, Eq, PartialEq)]

@@ -4,7 +4,7 @@
 //! versioned parent/child protocol and Tesseract backend. Queue transport, process lifecycle,
 //! persistence, retry, and publication policy remain in the outer `momo-analysis` crate.
 
-pub mod contract;
+mod contract;
 mod core;
 mod native_engine;
 pub mod protocol;

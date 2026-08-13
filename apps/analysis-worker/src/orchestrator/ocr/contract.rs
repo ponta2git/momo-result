@@ -1,6 +1,7 @@
 use std::str;
 
-pub use momo_ocr::{OcrHints, OcrMediaType, OcrQueuePayload, RequestedScreenType};
+pub use momo_ocr::{OcrHints, RequestedScreenType};
+pub(crate) use momo_ocr::{OcrMediaType, OcrQueuePayload};
 use redis::{Value, streams::StreamId};
 use thiserror::Error;
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
@@ -26,7 +27,7 @@ const REQUIRED_FIELDS: [&str; 11] = [
 const OPTIONAL_FIELDS: [&str; 2] = ["ocrHintsJson", "requestId"];
 
 #[derive(Clone, Copy, Debug, Error, Eq, PartialEq)]
-pub enum OcrQueueContractError {
+pub(crate) enum OcrQueueContractError {
     #[error("OCR v2 delivery violates the closed field set")]
     ClosedFieldSet,
     #[error("OCR v2 delivery is missing field {0}")]
@@ -44,7 +45,9 @@ pub enum OcrQueueContractError {
 /// # Errors
 ///
 /// Returns a safe field-level classification for malformed, oversized, or unsupported payloads.
-pub fn parse_delivery(delivery: &StreamId) -> Result<OcrQueuePayload, OcrQueueContractError> {
+pub(crate) fn parse_delivery(
+    delivery: &StreamId,
+) -> Result<OcrQueuePayload, OcrQueueContractError> {
     if delivery.map.len() < REQUIRED_FIELDS.len()
         || delivery.map.len() > REQUIRED_FIELDS.len() + OPTIONAL_FIELDS.len()
         || delivery.map.keys().any(|field| {
@@ -114,7 +117,7 @@ pub fn parse_delivery(delivery: &StreamId) -> Result<OcrQueuePayload, OcrQueueCo
 
 /// Extracts only a bounded job ID for terminal malformed-delivery handling.
 #[must_use]
-pub fn readable_job_id(delivery: &StreamId) -> Option<String> {
+pub(crate) fn readable_job_id(delivery: &StreamId) -> Option<String> {
     required_string(delivery, "jobId")
         .ok()
         .filter(|value| valid_id(value))
@@ -336,8 +339,27 @@ mod tests {
             Value::BulkString(valid_hints.as_bytes().to_vec()),
         );
         let parsed = parsed_fixture(&valid);
-        assert_eq!(parsed.hints().game_title(), Some("桃鉄2"));
-        assert_eq!(parsed.hints().known_player_aliases().len(), 1);
+        assert!(parsed.hints().is_valid());
+        let encoded_hints = serde_json::to_value(parsed.hints());
+        assert!(
+            encoded_hints.is_ok(),
+            "validated hints must remain encodable"
+        );
+        let Ok(encoded_hints) = encoded_hints else {
+            return;
+        };
+        assert_eq!(
+            encoded_hints
+                .pointer("/gameTitle")
+                .and_then(serde_json::Value::as_str),
+            Some("桃鉄2")
+        );
+        assert_eq!(
+            encoded_hints
+                .pointer("/knownPlayerAliases/0/memberId")
+                .and_then(serde_json::Value::as_str),
+            Some("member-1")
+        );
 
         for invalid_hints in [
             "null",

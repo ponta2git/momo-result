@@ -9,9 +9,9 @@ pub(crate) mod queue;
 mod runtime_config;
 pub mod worker;
 
+pub use isolated_engine::probe_isolated_child_lifecycle;
 #[cfg(target_os = "linux")]
-pub(crate) use isolated_engine::IsolatedNativeOcrEngine;
-pub use isolated_engine::{analyze_isolated_local_image_bytes, probe_isolated_child_lifecycle};
+pub(crate) use isolated_engine::{IsolatedNativeOcrEngine, analyze_isolated_local_image_bytes};
 pub use runtime_config::OcrRuntimeConfigError;
 pub(crate) use runtime_config::{
     OcrConsumerMode, OcrConsumerRuntimeConfig, consumer_mode_from_environment,

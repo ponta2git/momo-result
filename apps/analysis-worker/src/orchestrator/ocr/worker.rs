@@ -32,7 +32,6 @@ pub type OcrAttemptFuture<'a> = Pin<
 pub type OcrAttemptTerminationFuture<'a> =
     Pin<Box<dyn Future<Output = Result<(), &'static str>> + Send + 'a>>;
 
-pub use momo_ocr::{OcrFailure, OcrOutput};
 use momo_ocr::{OcrFailure as OcrEngineFailure, OcrOutput as OcrEngineOutput};
 
 /// Failure observed by the parent supervisor rather than returned by OCR domain logic.

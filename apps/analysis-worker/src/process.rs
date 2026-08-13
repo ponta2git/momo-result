@@ -447,7 +447,7 @@ pub const fn bootstrap_and_exec(_arguments: &[OsString]) -> Result<(), ProcessEr
 
 #[cfg(target_os = "linux")]
 #[must_use]
-pub fn worker_identity_supported() -> bool {
+pub(crate) fn worker_identity_supported() -> bool {
     let mut real_user_id = 0;
     let mut effective_user_id = 0;
     let mut saved_user_id = 0;
@@ -485,7 +485,7 @@ pub fn worker_identity_supported() -> bool {
 
 #[cfg(not(target_os = "linux"))]
 #[must_use]
-pub const fn worker_identity_supported() -> bool {
+pub(crate) const fn worker_identity_supported() -> bool {
     false
 }
 

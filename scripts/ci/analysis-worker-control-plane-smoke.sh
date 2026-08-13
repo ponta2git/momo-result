@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-binary="${1:-}"
+if (( $# != 0 )); then
+  echo "analysis-worker-control-plane-smoke.sh accepts no positional arguments." >&2
+  exit 1
+fi
+
 postgres_image="${POSTGRES_IMAGE:-postgres:18-alpine}"
 redis_image="${REDIS_IMAGE:-redis:7-alpine}"
 redis_stream="${MOMO_REDIS_ANALYSIS_STREAM:-momo:analysis:jobs}"
@@ -23,37 +27,27 @@ if [[ -z "${DATABASE_URL:-}" || -z "${REDIS_URL:-}" ]]; then
   exit 1
 fi
 
-if [[ -z "${worker_image}" && ! -x "${binary}" ]]; then
-  echo "analysis worker binary is not executable: ${binary}" >&2
+if [[ -z "${worker_image}" ]]; then
+  echo "ANALYSIS_WORKER_IMAGE is required." >&2
   exit 1
 fi
 
 run_release_command() {
-  if [[ -n "${worker_image}" ]]; then
-    docker run --rm --network host --add-host host.docker.internal:host-gateway \
-      -e "DATABASE_URL=${release_database_url}" \
-      "${worker_image}" \
-      /usr/local/bin/momo-analysis bootstrap -- "$@"
-  else
-    DATABASE_URL="${release_database_url}" "${binary}" "$@"
-  fi
+  docker run --rm --network host --add-host host.docker.internal:host-gateway \
+    -e "DATABASE_URL=${release_database_url}" \
+    "${worker_image}" \
+    /usr/local/bin/momo-analysis bootstrap -- "$@"
 }
 
 run_root="$(mktemp -d "${TMPDIR:-/tmp}/momo-analysis-control-plane.XXXXXX")"
-worker_temporary_root="${run_root}/attempts"
 worker_log="${run_root}/worker.log"
-mkdir -p "${worker_temporary_root}"
 worker_pid=""
 
 cleanup() {
   local status=$?
   set +e
   if [[ -n "${worker_pid}" ]]; then
-    if [[ -n "${worker_image}" ]]; then
-      docker stop --timeout 5 "${worker_container}" >/dev/null 2>&1
-    elif kill -0 "${worker_pid}" 2>/dev/null; then
-      kill -TERM "${worker_pid}" 2>/dev/null
-    fi
+    docker stop --timeout 5 "${worker_container}" >/dev/null 2>&1
     wait "${worker_pid}" 2>/dev/null
   fi
   case "${run_root}" in
@@ -70,11 +64,7 @@ cleanup() {
 trap cleanup EXIT
 
 worker_is_running() {
-  if [[ -n "${worker_image}" ]]; then
-    [[ "$(docker inspect --format '{{.State.Running}}' "${worker_container}" 2>/dev/null)" == "true" ]]
-  else
-    [[ -n "${worker_pid}" ]] && kill -0 "${worker_pid}" 2>/dev/null
-  fi
+  [[ "$(docker inspect --format '{{.State.Running}}' "${worker_container}" 2>/dev/null)" == "true" ]]
 }
 
 psql_ci() {
@@ -294,10 +284,6 @@ publish_job() {
   redis_ci XADD "${redis_stream}" '*' schemaVersion 1 jobId "${job_id}" >/dev/null
 }
 
-worker_runtime_temporary_root="${worker_temporary_root}"
-if [[ -n "${worker_image}" ]]; then
-  worker_runtime_temporary_root="/var/lib/momo-analysis"
-fi
 worker_environment=(
   "DATABASE_URL=${worker_database_url}"
   "REDIS_URL=${worker_redis_url}"
@@ -315,7 +301,7 @@ worker_environment=(
   "MOMO_REDIS_ANALYSIS_STREAM=${redis_stream}"
   "MOMO_ANALYSIS_REDIS_GROUP=${redis_group}"
   "MOMO_ANALYSIS_WORKER_ID=ci-analysis-worker"
-  "MOMO_ANALYSIS_TEMPORARY_ROOT=${worker_runtime_temporary_root}"
+  "MOMO_ANALYSIS_TEMPORARY_ROOT=/var/lib/momo-analysis"
   "MOMO_ANALYSIS_CONFIG_VERSION=ci-control-plane-v1"
   "MOMO_ANALYSIS_LEASE_DURATION_MS=60000"
   "MOMO_ANALYSIS_HEARTBEAT_INTERVAL_MS=1000"
@@ -326,21 +312,17 @@ worker_environment=(
   "RUST_LOG=momo_analysis=info"
 )
 
-if [[ -n "${worker_image}" ]]; then
-  docker_environment=()
-  for value in "${worker_environment[@]}"; do
-    docker_environment+=(--env "${value}")
-  done
-  docker run --rm --name "${worker_container}" --privileged --cgroupns private \
-    --memory 256m --memory-swap 256m \
-    --add-host host.docker.internal:host-gateway \
-    --tmpfs /var/lib/momo-analysis:rw,noexec,nosuid,size=${temporary_limit_bytes},uid=10001,gid=10001,mode=0700 \
-    --env MOMO_HEAVY_CGROUP_V2_VALIDATED=true \
-    "${docker_environment[@]}" \
-    "${worker_image}" >"${worker_log}" 2>&1 &
-else
-  env "${worker_environment[@]}" "${binary}" worker >"${worker_log}" 2>&1 &
-fi
+docker_environment=()
+for value in "${worker_environment[@]}"; do
+  docker_environment+=(--env "${value}")
+done
+docker run --rm --name "${worker_container}" --privileged --cgroupns private \
+  --memory 256m --memory-swap 256m \
+  --add-host host.docker.internal:host-gateway \
+  --tmpfs /var/lib/momo-analysis:rw,noexec,nosuid,size=${temporary_limit_bytes},uid=10001,gid=10001,mode=0700 \
+  --env MOMO_HEAVY_CGROUP_V2_VALIDATED=true \
+  "${docker_environment[@]}" \
+  "${worker_image}" >"${worker_log}" 2>&1 &
 worker_pid=$!
 
 wait_for_sql_value "1" "
@@ -645,15 +627,11 @@ if [[ "${unsupported_shape}" != "queued|0|t" || "${unsupported_pending}" != "1" 
     "Unsupported-version delivery was not preserved for a compatible worker: ${unsupported_shape}|${unsupported_pending}"
 fi
 
-if [[ -n "${worker_image}" ]]; then
-  residue="$(docker exec "${worker_container}" find /var/lib/momo-analysis -mindepth 1 -print -quit)"
-  if [[ -n "${residue}" ]]; then
-    fail_with_worker_log "Worker left temporary attempt data behind."
-  fi
-  docker stop --timeout 5 "${worker_container}" >/dev/null
-else
-  kill -TERM "${worker_pid}"
+residue="$(docker exec "${worker_container}" find /var/lib/momo-analysis -mindepth 1 -print -quit)"
+if [[ -n "${residue}" ]]; then
+  fail_with_worker_log "Worker left temporary attempt data behind."
 fi
+docker stop --timeout 5 "${worker_container}" >/dev/null
 if ! wait "${worker_pid}"; then
   worker_pid=""
   fail_with_worker_log "Worker did not drain cleanly."
@@ -667,8 +645,4 @@ draining="$(psql_ci -At -c "
 if [[ "${draining}" != "t" ]]; then
   fail_with_worker_log "Worker capability did not enter draining state."
 fi
-if [[ -z "${worker_image}" ]] && find "${worker_temporary_root}" -mindepth 1 -print -quit | grep -q .; then
-  fail_with_worker_log "Worker left temporary attempt data behind."
-fi
-
 echo "Analysis worker control-plane smoke passed."

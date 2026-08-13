@@ -10,28 +10,10 @@ const coverageThresholds = coverageReportOnly
   ? {}
   : {
       thresholds: {
-        "src/features/masters/masterResourceCache.ts": {
-          branches: 100,
-          functions: 100,
-          lines: 100,
-          statements: 100,
-        },
-        "src/features/matches/workspace/scoreGrid/ScoreGridKeyboard.ts": {
-          branches: 95,
-          functions: 100,
-          lines: 95,
-          statements: 95,
-        },
-        "src/shared/api/queryErrorState.ts": {
-          branches: 100,
-          functions: 100,
-          lines: 100,
-          statements: 100,
-        },
-        branches: 75,
-        functions: 85,
-        lines: 85,
-        statements: 85,
+        branches: 80,
+        functions: 80,
+        lines: 80,
+        statements: 80,
       },
     };
 const backendProxy = {

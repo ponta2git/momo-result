@@ -42,7 +42,7 @@ CI の report mode は、同じテスト集合を通常実行と coverage 実行
 
 | 領域 | 正本 | 現在の要点 |
 |---|---|---|
-| web | `apps/web/vite.config.ts` | statements / lines / functions / branches を各80%。`COVERAGE_REPORT_ONLY=1` では閾値を外す。`.tsx` と生成型は集計対象外。 |
+| web | `apps/web/vite.config.ts` | statements / lines / functions は80%、branches は75%。`COVERAGE_REPORT_ONLY=1` では閾値を外す。`.tsx` と生成型は集計対象外。 |
 | api | `apps/api/build.sbt` | statements 80%、branches 70%。CI report mode の `apiTestWithCoverageReportOnly` は `coverageFailOnMinimum := false`。PostgreSQL / Redis adapter は coverage率でなくintegration contractで保証。 |
 | analysis / OCR worker | fixture / property / state-machine testと実service smoke | 現時点はcoverage率をgateにせず、pure calculation・OCR characterizationの決定論的oracleと、DB / Redis / R2 / Linux process contractで保証する。 |
 
@@ -65,7 +65,7 @@ CI の report mode は、同じテスト集合を通常実行と coverage 実行
 | `src/features/**/*.tsx` page/component | M | line coverageより scenario coverage を優先する。loading / error / success / mutation / cache反映を検証する。 |
 | `e2e/app-smoke.spec.ts` | XL | 開催作成、OCR開始、レビュー確定、一覧、詳細、export、master管理、戦績分析状態と管理操作を狭く通す。 |
 
-現行 coverage 設定は `apps/web/vite.config.ts` を正とする。全体の4指標を各80%で判定し、`.tsx` は集計対象外にする。UIは scenario coverage と Playwright smoke で管理する。
+現行 coverage 設定は `apps/web/vite.config.ts` を正とする。全体の statements / lines / functions を80%、branchesを75%で判定し、`.tsx` は集計対象外にする。UIは scenario coverage と Playwright smoke で管理する。
 
 ## 4. apps/api
 

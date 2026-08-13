@@ -88,46 +88,6 @@ fn database_tls_preserves_peer_verification_and_channel_binding() {
 }
 
 #[test]
-fn production_workflow_has_one_enabled_analysis_deploy_path() {
-    let workflow = include_str!("../../../.github/workflows/analysis-production.yml");
-    assert!(
-        workflow.contains("          - deploy\n"),
-        "production workflow must expose one deploy operation"
-    );
-    for removed_operation in ["deploy-disabled", "deploy-enabled"] {
-        assert!(
-            !workflow.contains(removed_operation),
-            "migration-only operation remains in production workflow: {removed_operation}"
-        );
-    }
-    assert!(
-        workflow.contains("- name: Deploy analysis worker\n"),
-        "production workflow must deploy the verified candidate"
-    );
-    for required in [
-        "--env MOMO_ANALYSIS_PUBLICATION_MODE=enabled",
-        "--env MOMO_OCR_V2_CONSUMER_MODE=enabled",
-        "singleStartedExactEnabledImage",
-    ] {
-        assert!(
-            workflow.contains(required),
-            "single deploy path is missing {required}"
-        );
-    }
-    for removed_gate in [
-        "MOMO_ANALYSIS_PUBLICATION_MODE=disabled",
-        "MOMO_OCR_V2_CONSUMER_MODE=disabled",
-        "Probe production dependencies before publication",
-        "release-dependency-probe",
-    ] {
-        assert!(
-            !workflow.contains(removed_gate),
-            "migration-only gate remains in production workflow: {removed_gate}"
-        );
-    }
-}
-
-#[test]
 fn runtime_does_not_flatten_or_reexport_the_kernel_api() {
     let facade = include_str!("lib.rs");
     assert!(

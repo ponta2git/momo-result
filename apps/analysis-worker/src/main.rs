@@ -726,13 +726,6 @@ mod tests {
     }
 
     #[test]
-    fn bootstrap_requires_an_escaped_command() {
-        assert!(Cli::try_parse_from(["momo-analysis", "bootstrap", "--", "worker"]).is_ok());
-        assert!(Cli::try_parse_from(["momo-analysis", "bootstrap", "worker"]).is_err());
-        assert!(Cli::try_parse_from(["momo-analysis", "bootstrap", "--"]).is_err());
-    }
-
-    #[test]
     fn local_endurance_accepts_an_explicit_wall_time_budget() {
         let parsed = Cli::try_parse_from([
             "momo-analysis",

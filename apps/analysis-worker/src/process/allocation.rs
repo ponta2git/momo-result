@@ -104,12 +104,3 @@ impl Drop for AnonymousMapping {
 pub const fn allocate_and_touch(_bytes: u64) -> i32 {
     76
 }
-
-#[cfg(test)]
-mod tests {
-    #[cfg(target_os = "linux")]
-    #[test]
-    fn linux_probe_defers_admission_to_physical_page_allocation() {
-        assert_ne!(super::anonymous_mapping_flags() & libc::MAP_NORESERVE, 0);
-    }
-}

@@ -326,6 +326,10 @@ mod tests {
             rows: Vec::new(),
         };
         let resources = compute_all(&input);
+        assert_eq!(
+            input.normalized().resource_count(),
+            u64::try_from(resources.len()).ok()
+        );
         match resources.as_slice() {
             [aggregate, review] => {
                 assert_eq!(aggregate.scope, ScopeRef::Overall);
@@ -447,10 +451,13 @@ mod tests {
             focused_ids.len(),
             "focused IDs must be unique"
         );
+        let player_count = 4;
+        let focused_items_per_player = 12;
+        let match_summary_items = 1;
         assert_eq!(
             focused.len(),
-            49,
-            "four players use the complete focus bound"
+            player_count * focused_items_per_player + match_summary_items,
+            "the complete focus set must cover every player category and the match summary"
         );
         assert!(
             crate::payload::validate_computed(context).is_ok(),

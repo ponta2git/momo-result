@@ -69,8 +69,6 @@ func runCLI(ctx context.Context, args []string, stdout io.Writer, stderr io.Writ
 			return 2
 		}
 		return runSummarizeLogs(os.Stdin, stdout, stderr)
-	case "ocr-cutover-audit":
-		return runOCRCutoverAudit(ctx, args[1:], stdout, stderr)
 	default:
 		writeResult(stderr, failureResult("runtime_tool", "InvalidArguments"))
 		return 2

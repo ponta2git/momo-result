@@ -60,7 +60,12 @@ pub(super) fn parse(
     let profiles = selected_profiles(layout_family_hint);
     let mut attempts = Vec::with_capacity(profiles.len());
     for profile in profiles {
-        attempts.push(parse_profile(image, profile, recognition)?);
+        let attempt = parse_profile(image, profile, recognition)?;
+        let profile_is_complete = attempt.missing_count == 0;
+        attempts.push(attempt);
+        if profile_is_complete {
+            break;
+        }
     }
     let selected = attempts
         .into_iter()

@@ -39,15 +39,10 @@ impl RecognitionSession {
             "jpn+eng",
             RecognitionLanguage::General,
         )?);
-        let incident_digits = Some(initialize(
-            tessdata_path.as_deref(),
-            "eng",
-            RecognitionLanguage::IncidentDigits,
-        )?);
         Ok(Self {
             tessdata_path,
             general,
-            incident_digits,
+            incident_digits: None,
         })
     }
 

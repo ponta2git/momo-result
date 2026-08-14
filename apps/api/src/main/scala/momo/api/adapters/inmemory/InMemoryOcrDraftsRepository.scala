@@ -22,6 +22,10 @@ final class InMemoryOcrDraftsRepository[F[_]: Sync] private (ref: Ref[F, Map[Str
 
   override def find(draftId: OcrDraftId): F[Option[OcrDraft]] = ref.get.map(_.get(draftId.value))
 
+  override def findMany(draftIds: List[OcrDraftId]): F[Map[OcrDraftId, OcrDraft]] = ref.get.map {
+    current => draftIds.iterator.distinct.flatMap(id => current.get(id.value).map(id -> _)).toMap
+  }
+
 object InMemoryOcrDraftsRepository:
   def create[F[_]: Sync]: F[InMemoryOcrDraftsRepository[F]] = Ref
     .of[F, Map[String, OcrDraft]](Map.empty).map(new InMemoryOcrDraftsRepository(_))

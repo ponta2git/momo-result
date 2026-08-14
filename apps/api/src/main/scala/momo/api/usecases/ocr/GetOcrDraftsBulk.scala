@@ -16,9 +16,9 @@ final class GetOcrDraftsBulk[F[_]: Monad](drafts: OcrDraftsRepository[F]):
       Monad[F].pure(Left(AppError.ValidationFailed(s"ids query must contain at most ${OcrDraft
           .MaxBulkIds.toString} ids.")))
     else
-      ids.traverse(id => drafts.find(id).map(_.toRight(id))).map { results =>
-        val missing = results.collect { case Left(id) => id }
+      drafts.findMany(ids).map { draftsById =>
+        val missing = ids.filterNot(draftsById.contains)
         if missing.nonEmpty then
           Left(AppError.NotFound("ocr draft", missing.map(_.value).mkString(",")))
-        else Right(results.collect { case Right(d) => d })
+        else Right(ids.map(draftsById))
       }

@@ -76,6 +76,19 @@ object PostgresOcrDrafts:
         FROM ocr_drafts
         WHERE id = $draftId
       """.query[Row].option.map(_.map(toDraft))
+
+    override def findMany(
+        draftIds: List[OcrDraftId]
+    ): ConnectionIO[Map[OcrDraftId, OcrDraft]] =
+      if draftIds.isEmpty then Map.empty[OcrDraftId, OcrDraft].pure[ConnectionIO]
+      else
+        val ids = draftIds.map(_.value).distinct.toArray
+        sql"""
+          SELECT id, job_id, requested_screen_type, detected_screen_type, profile_id,
+                 payload_json, warnings_json, timings_ms_json, created_at, updated_at
+          FROM ocr_drafts
+          WHERE id = ANY($ids)
+        """.query[Row].to[List].map(_.iterator.map(row => row.id -> toDraft(row)).toMap)
 end PostgresOcrDrafts
 
 /** Backwards-compatible class facade. */

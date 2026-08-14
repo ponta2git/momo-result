@@ -10,17 +10,21 @@ use crate::{
 };
 
 mod aggregate;
-mod detail;
+mod drilldown;
+mod match_context;
 mod metrics;
 mod panels;
 mod quality;
+mod review;
 mod support;
 mod trends;
 
 use aggregate::aggregate;
+use drilldown::build as build_drilldown;
 #[cfg(test)]
-use detail::event_rank_rows;
-use detail::{AggregateItemIds, MatchContextIndex, drilldown, match_context, review};
+use drilldown::event_rank_rows;
+use match_context::{AggregateItemIds, MatchContextIndex, build as build_match_context};
+use review::build as build_review;
 use support::{MatchGroup, match_groups};
 
 #[cfg(test)]
@@ -173,7 +177,7 @@ pub fn try_for_each_resource<E>(
             item_count: analysis.player_matches.len(),
             source_match_revision: None,
         })?;
-        let review = review(
+        let review = build_review(
             &scope,
             &analysis.player_matches,
             &analysis.member_ids,
@@ -199,7 +203,7 @@ pub fn try_for_each_resource<E>(
                         member_id: member_id.clone(),
                         metric,
                     },
-                    payload: drilldown(
+                    payload: build_drilldown(
                         &scope,
                         member_matches,
                         analysis.match_groups.len(),
@@ -219,7 +223,7 @@ pub fn try_for_each_resource<E>(
                 kind: ComputedResourceKind::MatchContext {
                     match_id: String::from(group.match_id),
                 },
-                payload: match_context(
+                payload: build_match_context(
                     &scope,
                     &group.player_matches,
                     &context_index,

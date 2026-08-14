@@ -226,7 +226,7 @@ web の import 境界は `apps/web/scripts/check-architecture-imports.mjs`、mod
 - OS FFIとproductionの `unsafe` は `process` moduleへ隔離し、lifetime、所有権、RAIIで解放を保証するsafe APIを
   workerへ公開する。productionの子process隔離契約はLinuxでのみ有効とし、他OSではjob claim前にfail closedにする。
   DB rowはadapter境界でfallibleにdecodeし、schema driftをpanicへ変えない。
-- 純粋計算はpipeline、resource走査、集約、指標、trend、品質判定、rank、playbookへ、control planeは
+- 純粋計算はpipeline、resource走査、集約、指標、trend、品質判定、outcome model、competition rank、reviewへ、control planeは
   vocabulary、capability、claim、lifecycle、completion、publication、recovery、transactionへ分割する。
   入力は一度だけ正規化したimmutable型をchecksumと計算の双方へ渡し、失敗状態と制御動作はenumで全分岐を表す。
 - Rust moduleはtestを含め900行上限とし、coreのruntime依存禁止、productionのlint抑制禁止、`process` 外の

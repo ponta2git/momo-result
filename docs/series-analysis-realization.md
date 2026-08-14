@@ -335,8 +335,9 @@ apps/processing-worker
   │   └─ process / execution_slot ─ 共有隔離・実行枠
   ├─ momo-analysis-core（決定論的kernelとversion付き契約）
   │   ├─ child / model / contract / canonical / payload
-  │   ├─ compute ─ aggregate / metrics / trends / quality / detail / panels / support
-  │   └─ rank / playbook / stats
+  │   ├─ compute ─ aggregate / metrics / trends / quality / review / drilldown / match_context
+  │   │           panels / support
+  │   └─ outcome_model / competition_rank / stats
   └─ momo-ocr（OCR domain、protocol、Tesseract capability）
       ├─ contract / protocol / result
       ├─ native_engine（Tesseract adapter）

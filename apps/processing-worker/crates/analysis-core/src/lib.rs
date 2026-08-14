@@ -15,7 +15,6 @@ pub mod model;
 mod numeric;
 mod outcome_model;
 pub mod payload;
-mod playbook;
 mod stats;
 
 #[cfg(test)]

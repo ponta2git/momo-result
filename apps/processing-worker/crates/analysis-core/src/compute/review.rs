@@ -1,3 +1,5 @@
+//! Builds a scope review by selecting and presenting actionable player-analysis candidates.
+
 use std::collections::{BTreeMap, BTreeSet};
 
 use serde_json::{Value, json};

@@ -103,14 +103,14 @@ sbt apiDbQuality
 ```
 
 workerのPostgreSQL adapterを触るときは、通常の `cargo test` に加え、migration適用済み実PostgreSQLと
-実Redisを使う `scripts/ci/analysis-worker-control-plane-smoke.sh` を実行する。release commandとDB control planeは
+実Redisを使う `scripts/ci/series-analysis-control-plane-smoke.sh` を実行する。release commandとDB control planeは
 `scripts/ci/analysis-release-db-smoke.sh` でも検証する。
 
 Rust OCR consumerのclaim、lease、fencing、terminal write、Redis ACK / PEL / DLQを触るときは、通常の
 `cargo test` に加え、migration適用済みの隔離PostgreSQLと隔離Redisへ
 `scripts/ci/ocr-rust-control-plane-smoke.sh` を実行する。
 共有execution slot、分析 / OCR supervisor、preemptionを触るときは、検証済みruntime imageに対して
-`scripts/ci/analysis-worker-preemption-smoke.sh` も実行し、DB状態遷移と実process回収を同じ試験で確認する。
+`scripts/ci/processing-worker-preemption-smoke.sh` も実行し、DB状態遷移と実process回収を同じ試験で確認する。
 
 ## 5. SQL Risk Checklist
 

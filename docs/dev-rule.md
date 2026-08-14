@@ -32,12 +32,12 @@
 
 - ローカル secret は `.env` に置き、コミットしない。
 - 必要なキー名は `.env.example` を参照する。
-- Scala APIとRust analysis / OCR workerはroot `.env` を自動読み込みしない。起動前に
+- Scala APIとRust processing workerはroot `.env` を自動読み込みしない。起動前に
   shellへ読み込むか、必要な変数だけを専用の非追跡env fileへ置く。
 - root の `pnpm dev` は API 起動用に root `.env` を読み込む。
 - Web の `VITE_*` も、root `.env` を使う場合は同じ shell で読み込んでから起動する。
-- analysis workerのローカルコンテナにはroot `.env` 全体を渡さない。DB / Redis接続とworker専用設定だけを
-  `private/analysis-worker.local.env` などの非追跡fileへ置き、OAuth secret等をコンテナへ伝播させない。
+- processing workerのローカルコンテナにはroot `.env` 全体を渡さない。DB / Redis接続とworker専用設定だけを
+  `private/processing-worker.local.env` などの非追跡fileへ置き、OAuth secret等をコンテナへ伝播させない。
 - 本番 secret は `fly secrets`、CI secret は GitHub Actions secrets で管理する。
 - `MOMO_LOG_FORMAT=json` は本番向け1行JSON、`MOMO_LOG_FORMAT=text` はローカル向け。
 - DB integration をローカルで実行する場合、`momo-db` の migration が取得済みで、対象DBに適用されることを確認する。
@@ -74,27 +74,27 @@ set -a; source .env; set +a
 cd apps/api && sbt run
 ```
 
-Analysis / OCR worker:
+Processing worker（series analysis / OCR）:
 
-`pnpm dev` はanalysis workerを起動しない。workerのprocess isolation契約はLinux専用であり、macOSで
+`pnpm dev` はprocessing workerを起動しない。workerのprocess isolation契約はLinux専用であり、macOSで
 `momo-processing-worker worker` を直接起動するとjob claim前にfail closedする。ローカルでは専用imageをbuildし、
 別terminalからDockerで起動する。
 
 ```sh
 docker build \
   --file apps/processing-worker/Dockerfile \
-  --tag momo-analysis-worker:local \
+  --tag momo-processing-worker:local \
   .
 
 docker run --rm \
-  --name momo-analysis-local \
+  --name momo-processing-worker-local \
   --privileged \
   --cgroupns private \
   --memory 256m \
   --memory-swap 256m \
   --add-host host.docker.internal:host-gateway \
-  --env-file private/analysis-worker.local.env \
-  momo-analysis-worker:local
+  --env-file private/processing-worker.local.env \
+  momo-processing-worker:local
 ```
 
 worker imageの更新だけでは、DBに保存されたdesired algorithm versionは変わらない。`ALGORITHM_VERSION` を更新した
@@ -102,11 +102,11 @@ worker imageの更新だけでは、DBに保存されたdesired algorithm versio
 release昇格をdry-run、applyの順で行う。同じoperation keyを両方に使い、key内のversionと日付は対象ごとに更新する。
 
 ```sh
-docker exec momo-analysis-local momo-processing-worker bootstrap -- release-promote \
+docker exec momo-processing-worker-local momo-processing-worker bootstrap -- release-promote \
   --trigger algorithm-update \
   --operation-key local-algorithm-v2-20260813
 
-docker exec momo-analysis-local momo-processing-worker bootstrap -- release-promote \
+docker exec momo-processing-worker-local momo-processing-worker bootstrap -- release-promote \
   --trigger algorithm-update \
   --operation-key local-algorithm-v2-20260813 \
   --apply
@@ -118,7 +118,7 @@ DB正本のjob version、fresh worker capability、`analysis_delivery_deferred` 
 
 `--memory` と `--memory-swap` を同値にしてswapを許可せず、現行runtime定義と同じworker全体256MiB上限にする。
 `--privileged --cgroupns private` は専用のローカル検証コンテナ内で固定child cgroupを作るために必要であり、
-起動前に `analysis-worker-image-smoke.sh` のcgroup probeを通す。bootstrapはcgroup準備後に補助groupと
+起動前に `processing-worker-image-smoke.sh` のcgroup probeを通す。bootstrapはcgroup準備後に補助groupと
 real/effective/saved UID/GIDを固定service identityへ落とし、worker本体をrootで実行しない。
 Docker Desktop上のコンテナからホストのDB / Redisへ接続するため、専用env fileの接続先hostは
 `host.docker.internal`とする。URL値は文書、shell history、tracked fileへ書かない。
@@ -126,7 +126,7 @@ Docker Desktop上のコンテナからホストのDB / Redisへ接続するた�
 専用env fileは少なくとも `DATABASE_URL`、`MOMO_ANALYSIS_READ_DATABASE_URL`、`REDIS_URL`、
 `MOMO_ANALYSIS_PUBLICATION_MODE=enabled` と、`AnalysisConsumerConfig` が要求するmemory、timeout、一時領域、
 Redis stream / group、worker ID、config version、lease / heartbeat設定を持つ。ローカル既定値は
-`scripts/ci/analysis-worker-control-plane-smoke.sh` の `worker_environment` と整合させ、worker IDとconsumer groupは
+`scripts/ci/series-analysis-control-plane-smoke.sh` の `worker_environment` と整合させ、worker IDとconsumer groupは
 ローカル専用の一意な値にする。Fly用設定はpublicationが既定でdisabledなので、そのままローカル実行設定として
 使わない。OCR v2は既定でdisabledとし、統合確認するときだけR2 credential、v2 stream / group / DLQ、worker ID、
 R2 / lease / heartbeat / OCR / Redisの全時間上限を揃えて明示的にenabledにする。`auto`はOCR modeとして使わない。
@@ -237,9 +237,9 @@ PostgreSQL / Redis / Linux process境界は通常のCargo testと分け、reposi
 ```sh
 scripts/ci/analysis-release-db-smoke.sh apps/processing-worker/target/release/momo-processing-worker
 scripts/ci/ocr-rust-control-plane-smoke.sh
-scripts/ci/analysis-worker-image-smoke.sh <local-image-tag>
-ANALYSIS_WORKER_IMAGE=<local-image-tag> scripts/ci/analysis-worker-control-plane-smoke.sh
-scripts/ci/analysis-worker-preemption-smoke.sh <local-image-tag>
+scripts/ci/processing-worker-image-smoke.sh <local-image-tag>
+ANALYSIS_WORKER_IMAGE=<local-image-tag> scripts/ci/series-analysis-control-plane-smoke.sh
+scripts/ci/processing-worker-preemption-smoke.sh <local-image-tag>
 ```
 
 release / control-plane / OCR / preemption smokeはmigration適用済みPostgreSQLを必要とし、OCR、control-plane、
@@ -274,7 +274,7 @@ sbt apiR2Quality
 | Redis Streams / OCR queue | api gate + `sbt apiRedisQuality` |
 | R2-backed image storage activation | api / DB gate + `sbt apiR2Quality` + object reconciler起動確認。uploadだけの部分切替は禁止 |
 | analysis / OCR worker production code | `cargo fmt --all -- --check`, `cargo clippy --locked --workspace --all-targets --all-features -- -D warnings`, `cargo test --locked --workspace --all-targets --all-features`, `cargo build --locked --workspace --release` |
-| analysis-worker algorithm version | analysis-worker production gate + release DB smoke + control-plane smoke。ローカルDBは互換性dry-run後にrelease昇格 |
+| series-analysis algorithm version | processing-worker production gate + release DB smoke + control-plane smoke。ローカルDBは互換性dry-run後にrelease昇格 |
 | worker DB / Redis / process | worker production gate + release DB smoke + analysis control-plane smoke + OCR control-plane smoke + preemption smoke + dedicated image smoke |
 | Go deploy / ops tool | `cd tools && go test ./... && go vet ./...`; zero-install shell collectorを含む場合は対応する`test-*.sh` |
 | Docker/Fly/runtime config | `pnpm public:safety:check`, `docker build`, `scripts/ci/validate-runtime-image.sh`, `scripts/ci/runtime-smoke.sh`, `pnpm web:e2e:runtime`, `scripts/ci/runtime-memory-smoke.sh`, `scripts/ci/runtime-shutdown-smoke.sh`, container image scan |
@@ -293,7 +293,7 @@ sbt apiR2Quality
 | `.github/workflows/public-safety.yml` | public repository safety check |
 | `.github/workflows/web.yml` | format、API型生成を含むlint、typecheck、Vitestまたはcoverage付きVitest、build |
 | `.github/workflows/api.yml` | format、lint、clean compile、OpenAPI check、testまたはcoverage付きtest、DB/Redis quality |
-| `.github/workflows/analysis-worker.yml` | Cargo format / Clippy / test / release build、analysis / OCRのDB / Redis control-plane smoke、専用image build / scan / hard-limit smoke |
+| `.github/workflows/processing-worker.yml` | Cargo format / Clippy / test / release build、analysis / OCRのDB / Redis control-plane smoke、専用image build / scan / hard-limit smoke |
 | `.github/workflows/analysis-candidate.yml` | analysis変更時の検証済み候補image作成 |
 | `.github/workflows/analysis-production.yml` | 選択したanalysis候補の来歴検証と再buildなしの昇格 |
 | `.github/workflows/deploy.yml` | runtime config check、隔離CI DBへのmomo-db migration適用、本番DBのread-only preflight、image build / scan / package、runtime / Playwright smoke、digest指定deploy、deploy後検証 |

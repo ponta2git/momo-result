@@ -119,7 +119,7 @@ PostgreSQL repository、Doobie query、DB table/column、migration 前提に触�
   architecture / usecase / HTTP testで固定する。
 - 固定4名、現在データ量の2倍かつ最低500試合/作品に、season、map、実在組合せ数と件数偏りを加えた
   決定論的fixtureを用意する。公開可能な下限fixtureは
-  `scripts/ci/analysis-worker-resource-fixture.sql` とし、現在データshapeが上回る場合はprivate fixtureを使い、
+  `scripts/ci/series-analysis-resource-fixture.sql` とし、現在データshapeが上回る場合はprivate fixtureを使い、
   correctness testとは別に処理時間、計算回数、peak memoryを検証する。
 - 上限fixtureを単一実行枠で100回連続実行し、OOM、runtime再起動、未解放memoryの増加傾向がないことを
   本番同等runtimeで測定する。provider固有の上限値と実測結果はprivateに残す。
@@ -133,7 +133,7 @@ PostgreSQL repository、Doobie query、DB table/column、migration 前提に触�
 - payload byte数、manifestを含む一時総byte数、親process HWM、子process HWM、runtime / cgroup peakを
   同じ名称へ畳み込まない。子reportと検証済みmanifestの件数・byte数が不一致なら成功測定にも公開にも含めない。
 - 現行のanalysis child 192MiB制限を変更せずに100回連続検証する場合は、
-  `scripts/ci/analysis-worker-analysis-endurance.sh` を使う。DB、対象作品、runtime外部peakファイルを
+  `scripts/ci/series-analysis-endurance.sh` を使う。DB、対象作品、runtime外部peakファイルを
   明示し、外部peakが未取得なら成功扱いにしない。このゲートはFly/OCR workerのメモリ設定を変更しない。
 - rollbackでは、対象commitのartifact identityだけでなく、削除対象のユーザー経路とサーバー実行経路が消えたことを直接確認できる回帰ケースを用意する。
 
@@ -210,7 +210,7 @@ PostgreSQL repository、Doobie query、DB table/column、migration 前提に触�
 - coverage 閾値は各設定ファイルを正とする。
   - web: `apps/web/vite.config.ts`
   - api: `apps/api/build.sbt`
-  - analysis-worker: 現時点ではcoverage率をrelease判定へ使わない。`cargo test` のfixture / property / state-machine
+  - processing-worker: 現時点ではcoverage率をrelease判定へ使わない。`cargo test` のfixture / property / state-machine
     oracleと、実PostgreSQL・Redis・Linux process smokeを正本とする。coverageを導入する場合は
     `apps/processing-worker` のCI設定と同時にこの記述を更新する。
 - aggregate coverage だけで重要経路を保証しない。blast radius が大きい下位モジュールは file / glob 単位または明示的な table test で固定する。
@@ -224,12 +224,12 @@ PostgreSQL repository、Doobie query、DB table/column、migration 前提に触�
 - API integration tag は `apps/api/src/test/scala/momo/api/testing/TestTags.scala` を正本とし、spec 内で直接 `new munit.Tag(...)` しない。
 - PostgreSQL-backed spec は `IntegrationSuite`、Redis-backed spec は `RedisIntegrationSuite` へ寄せる。
 - analysis / OCR workerのPostgreSQL / Redis integrationは通常の `cargo test` と分離し、CI上で実サービスを
-  起動する `analysis-worker-control-plane-smoke.sh` を明示gateとして持つ。
+  起動する `series-analysis-control-plane-smoke.sh` を明示gateとして持つ。
 - Rust OCR consumerのPostgreSQL / Redis integrationは通常の `cargo test` と分離し、隔離した実サービスへ
   `ocr-rust-control-plane-smoke.sh` を明示gateとして実行する。DB terminal writeより先にRedis配送をACKしないこと、
   旧fenceの拒否、PEL回収、bounded DLQを外部契約として確認する。
 - 分析 / OCR統合は検証済みruntime imageと隔離PostgreSQL / Redisを使う
-  `analysis-worker-preemption-smoke.sh` を明示gateとし、一方向preemption、失敗回数非加算、子回収、slot解放、
+  `processing-worker-preemption-smoke.sh` を明示gateとし、一方向preemption、失敗回数非加算、子回収、slot解放、
   同じcgroupでの分析復帰を実processで確認する。
 - R2 adapterは通常testから分離した `apiR2Quality` を、検証専用の隔離bucketと明示credentialで実行する。
   put / head / get / delete、metadata / checksum、削除後のnot-foundを一つのprobeで確認し、未実行を成功扱いしない。
@@ -255,7 +255,7 @@ PostgreSQL repository、Doobie query、DB table/column、migration 前提に触�
   queued jobが同じversionへ収束することを直接確認する。
 - 非対応versionのdeliveryは、実PostgreSQL / Redis / worker経路でjobがattempt未開始の `queued`、deliveryが
   pendingのまま保たれ、`analysis_delivery_deferred` の安全な構造化logで原因を判別できることを固定する。
-- analysis-workerのClippyは `Cargo.toml` のdeny設定を正本とし、全target / 全featureで実行する。
+- processing-workerのClippyは `Cargo.toml` のdeny設定を正本とし、全target / 全featureで実行する。
   productionのlint抑制、`process` 外のunsafe、testを含む900行超module、PostgreSQL `Row::get` の再導入、
   pure coreからruntime / OS依存への参照はarchitecture testでも拒否する。lintや依存境界を弱めて通す変更は、
   同等以上の決定論的検査がない限り認めない。

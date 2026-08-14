@@ -328,15 +328,15 @@ Rust部分は次の一方向依存に固定する。
 apps/processing-worker
   ├─ momo-processing-worker（分析 / OCRの副作用を持つprocessing runtime）
   │   ├─ main / CLI / supervisor
-  │   ├─ series_analysis ─ consumer / policy / attempt / queue / control / artifact / child
-  │   │                     input_repository / config / release / endurance
+  │   ├─ series_analysis ─ consumer / policy / attempt / queue / control / child
+  │   │                     artifact（facade / build / validate / shared）/ input_repository / config / release / endurance
   │   ├─ ocr ─ consumer / queue / DB control / R2 / child / endurance
   │   ├─ postgres ─ 共有PostgreSQL TLS接続adapter
   │   └─ process / execution_slot ─ 共有隔離・実行枠
   ├─ momo-analysis-core（決定論的kernelとversion付き契約）
   │   ├─ child / model / contract / canonical / payload
   │   ├─ compute ─ aggregate / metrics / trends / quality / review / drilldown / match_context
-  │   │           panels / support
+  │   │           panels / grouping / presentation / signals
   │   └─ outcome_model / competition_rank / stats
   └─ momo-ocr（OCR domain、protocol、Tesseract capability）
       ├─ contract / protocol / result
@@ -1538,7 +1538,7 @@ rollback契約:
 
 - 4名、現在データ量の2倍かつ最低500試合/作品に加え、実在season数、map数、season×map組合せ数、
   開催ごとの件数偏り、context最大4件を上限側へ寄せたfixtureを使う。
-  公開可能な決定論的下限fixtureは `scripts/ci/analysis-worker-resource-fixture.sql` とし、現在データshapeが
+  公開可能な決定論的下限fixtureは `scripts/ci/series-analysis-resource-fixture.sql` とし、現在データshapeが
   これを上回る場合はprivate fixtureを優先する。
 - private運用要件のmemory上限を設定した本番同等runtimeで、worker全体と子processのpeak memory、
   親process headroom、処理時間、成功率を測る。子process memory上限超過時に親が生存してterminal状態を

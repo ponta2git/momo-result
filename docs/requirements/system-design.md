@@ -26,7 +26,7 @@ MVPでは以下のディレクトリ構成を基本とする。
 apps/
   web/         React/Vite SPA
   api/         Scala API server
-  analysis-worker/ Rust series analysis / OCR worker
+  processing-worker/ Rust series-analysis / OCR background processing runtime
 ```
 
 パッケージ/ビルド管理は言語ごとに分ける。

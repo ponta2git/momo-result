@@ -147,3 +147,50 @@ final class PostgresOcrJobMaintenanceRepositorySpec extends IntegrationSuite:
         List("job-fresh-slot-maintenance" -> "queued", "job-stale-slot-maintenance" -> "failed"),
       )
       assertEquals(draftStatus, "ocr_running")
+
+  test("failStaleJobs reconciles historical terminal drafts across bounded batches"):
+    val terminalAt = now.minusSeconds(600)
+    for
+      _ <- sql"""
+        INSERT INTO ocr_jobs (
+          id, draft_id, image_id, image_path, requested_screen_type, status, attempt_count,
+          finished_at, created_at, updated_at
+        )
+        SELECT
+          'job-reconcile-' || sequence_no,
+          'draft-reconcile-' || sequence_no,
+          'image-reconcile-' || sequence_no,
+          '/tmp/reconcile-' || sequence_no || '.png',
+          'total_assets',
+          'succeeded',
+          0,
+          $terminalAt,
+          $terminalAt,
+          $terminalAt
+        FROM generate_series(1, 257) AS sequence_no
+      """.update.run.transact(transactor)
+      _ <- sql"""
+        INSERT INTO match_drafts (
+          id, created_by_account_id, created_by_member_id, status, total_assets_draft_id,
+          created_at, updated_at
+        )
+        SELECT
+          'match-draft-reconcile-' || sequence_no,
+          'account_ponta',
+          'member_ponta',
+          'ocr_running',
+          'draft-reconcile-' || sequence_no,
+          $terminalAt,
+          $terminalAt
+        FROM generate_series(1, 257) AS sequence_no
+      """.update.run.transact(transactor)
+      failed <- repo.failStaleJobs(now, now.minusSeconds(300))
+      statuses <- sql"""
+        SELECT status, COUNT(*)::int
+        FROM match_drafts
+        WHERE id LIKE 'match-draft-reconcile-%'
+        GROUP BY status
+      """.query[(String, Int)].to[List].transact(transactor)
+    yield
+      assertEquals(failed, 0)
+      assertEquals(statuses, List("draft_ready" -> 257))

@@ -20,6 +20,11 @@ private[usecases] object ListPagination:
       parsedPageSize <- validatePageSize(pageSize, limit, policy)
     yield PageRequest(parsedPage, parsedPageSize)
 
+  def validatePageSize(
+      pageSize: Option[Int],
+      policy: Policy,
+  ): Either[AppError, Int] = validatePageSize(pageSize, None, policy)
+
   private def validatePage(page: Option[Int]): Either[AppError, Int] =
     val value = page.getOrElse(1)
     if value < 1 then Left(AppError.ValidationFailed("page must be greater than or equal to 1."))

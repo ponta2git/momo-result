@@ -3,7 +3,14 @@ import type { ApiSignalOptions, IdempotencyRequestOptions } from "@/shared/api/c
 import type { components } from "@/shared/api/generated";
 
 export type MatchSummaryResponse = components["schemas"]["MatchSummaryResponse"];
-export type MatchListResponse = components["schemas"]["MatchListResponse"];
+type GeneratedMatchListResponse = components["schemas"]["MatchListResponse"];
+export type MatchListResponse = Omit<GeneratedMatchListResponse, "pagination"> & {
+  pagination: GeneratedMatchListResponse["pagination"] & {
+    lastCursor?: string | null;
+    nextCursor?: string | null;
+    previousCursor?: string | null;
+  };
+};
 export type MatchListSummaryResponse = components["schemas"]["MatchListSummaryResponse"];
 export type MatchDetailResponse = components["schemas"]["MatchDetailResponse"];
 export type UpdateMatchRequest = components["schemas"]["UpdateMatchRequest"];
@@ -17,9 +24,8 @@ export type ListMatchesQuery = {
   seasonMasterId?: string;
   status?: "all" | "confirmed" | "incomplete" | "needs_review" | "ocr_running" | "pre_confirm";
   kind?: "match" | "match_draft";
-  limit?: number;
-  page?: number;
   pageSize?: number;
+  cursor?: string;
   sort?: "status_priority" | "updated_desc" | "held_desc" | "held_asc" | "match_no_asc";
 };
 
@@ -33,9 +39,8 @@ export async function listMatches(
   if (query.seasonMasterId) params.set("seasonMasterId", query.seasonMasterId);
   if (query.status) params.set("status", query.status);
   if (query.kind) params.set("kind", query.kind);
-  if (query.limit !== undefined) params.set("limit", String(query.limit));
-  if (query.page !== undefined) params.set("page", String(query.page));
   if (query.pageSize !== undefined) params.set("pageSize", String(query.pageSize));
+  if (query.cursor) params.set("cursor", query.cursor);
   if (query.sort) params.set("sort", query.sort);
   const qs = params.toString();
   return apiRequest<MatchListResponse>(`/api/matches${qs ? `?${qs}` : ""}`, options);

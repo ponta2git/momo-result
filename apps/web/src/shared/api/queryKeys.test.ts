@@ -18,6 +18,7 @@ import {
   heldEventDirectoryQueryOptions,
   heldEventDirectorySuspenseQueryOptions,
   heldEventsQueryOptions,
+  matchListQueryOptions,
   memberAliasesQueryOptions,
 } from "@/shared/api/queryOptions";
 import { createTestQueryClient } from "@/test/queryClient";
@@ -50,6 +51,12 @@ describe("shared query keys", () => {
 
   it("uses the unfiltered member-alias directory key", () => {
     expect(memberAliasesQueryOptions().queryKey).toEqual(masterKeys.memberAliases.list());
+  });
+
+  it("partitions match-list cache entries by opaque cursor", () => {
+    expect(matchListQueryOptions({ cursor: "cursor-a", pageSize: 25 }).queryKey).not.toEqual(
+      matchListQueryOptions({ cursor: "cursor-b", pageSize: 25 }).queryKey,
+    );
   });
 
   it("invalidates mutable analysis state but preserves pinned artifacts after confirmation", async () => {

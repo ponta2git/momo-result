@@ -11,6 +11,7 @@ import momo.api.domain.{
   MatchDraftStatus,
   MatchListItemKind,
   MatchListKindFilter,
+  MatchListSort,
   MatchListStatusFilter
 }
 import momo.api.repositories.MatchListReadModel
@@ -55,7 +56,35 @@ final class InMemoryMatchListReadModelSpec extends MomoCatsEffectSuite:
       assertEquals(ocrRunning.items.map(_.kind), List(MatchListItemKind.MatchDraft))
       assertEquals(confirmed.items.map(_.kind), List(MatchListItemKind.Match))
 
-  private def draft(id: MatchDraftId): MatchDraft = MatchDraft.fromInputs(
+  test("cursor ordering uses the same sub-millisecond precision as its boundary"):
+    val older = now.plusNanos(100_100)
+    val newer = now.plusNanos(900_900)
+    for
+      matches <- InMemoryMatchesRepository.create[IO]
+      drafts <- InMemoryMatchDraftsRepository.create[IO]
+      _ <- drafts.create(draftAt(MatchDraftId.unsafeFromString("draft-a-older"), older))
+      _ <- drafts.create(draftAt(MatchDraftId.unsafeFromString("draft-z-newer"), newer))
+      model = InMemoryMatchListReadModel[IO](matches, drafts)
+      first <- model.list(MatchListReadModel.Filter(
+        kind = MatchListKindFilter.MatchDraft,
+        sort = MatchListSort.UpdatedDesc,
+        page = MatchListReadModel.CursorPageRequest(pageSize = 1),
+      ))
+      second <- model.list(MatchListReadModel.Filter(
+        kind = MatchListKindFilter.MatchDraft,
+        sort = MatchListSort.UpdatedDesc,
+        page = MatchListReadModel.CursorPageRequest(
+          pageSize = 1,
+          cursor = first.nextCursor,
+        ),
+      ))
+    yield
+      assertEquals(first.items.map(_.id), List("draft-z-newer"))
+      assertEquals(second.items.map(_.id), List("draft-a-older"))
+
+  private def draft(id: MatchDraftId): MatchDraft = draftAt(id, now)
+
+  private def draftAt(id: MatchDraftId, updatedAt: Instant): MatchDraft = MatchDraft.fromInputs(
     id = id,
     createdByAccountId = AccountId.unsafeFromString("account_ponta"),
     createdByMemberId = Some(MemberId.unsafeFromString("member_ponta")),
@@ -78,5 +107,5 @@ final class InMemoryMatchListReadModelSpec extends MomoCatsEffectSuite:
     sourceImagesDeletedAt = None,
     confirmedMatchId = None,
     createdAt = now,
-    updatedAt = now,
+    updatedAt = updatedAt,
   ).getOrElse(fail("test fixture draft should be valid"))

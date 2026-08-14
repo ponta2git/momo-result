@@ -10,7 +10,7 @@ import {
 describe("matchListSearchParams", () => {
   it("parses defaults when query values are missing or invalid", () => {
     const search = parseMatchListSearchParams(
-      new URLSearchParams("status=broken&sort=nope&page=2abc&pageSize=50x"),
+      new URLSearchParams("status=broken&sort=nope&pageSize=50x"),
     );
     expect(search).toEqual(defaultMatchListSearch);
   });
@@ -42,7 +42,7 @@ describe("matchListSearchParams", () => {
     const params = buildMatchListSearchParams({
       gameTitleId: "game-1",
       heldEventId: "",
-      page: 2,
+      cursor: "opaque-cursor",
       pageSize: 50,
       seasonMasterId: "season-1",
       sort: "updated_desc",
@@ -50,7 +50,13 @@ describe("matchListSearchParams", () => {
     });
 
     expect(params.toString()).toBe(
-      "status=needs_review&gameTitleId=game-1&page=2&pageSize=50&seasonMasterId=season-1&sort=updated_desc",
+      "status=needs_review&gameTitleId=game-1&cursor=opaque-cursor&pageSize=50&seasonMasterId=season-1&sort=updated_desc",
     );
+  });
+
+  it("drops cursor values above the API codec bound", () => {
+    const search = parseMatchListSearchParams(new URLSearchParams({ cursor: "x".repeat(4097) }));
+
+    expect(search.cursor).toBe("");
   });
 });

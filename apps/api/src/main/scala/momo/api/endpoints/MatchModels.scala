@@ -161,7 +161,19 @@ final case class MatchRankEntry(memberId: String, rank: Int, playOrder: Int) der
 
 final case class MatchListResponse(
     items: List[MatchSummaryResponse],
-    pagination: PaginationResponse,
+    pagination: MatchListPaginationResponse,
+) derives Codec.AsObject
+
+final case class MatchListPaginationResponse(
+    page: Int,
+    pageSize: Int,
+    totalItems: Int,
+    totalPages: Int,
+    hasPreviousPage: Boolean,
+    hasNextPage: Boolean,
+    previousCursor: Option[String],
+    nextCursor: Option[String],
+    lastCursor: Option[String],
 ) derives Codec.AsObject
 
 final case class MatchListSummaryResponse(

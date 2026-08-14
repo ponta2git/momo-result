@@ -18,6 +18,7 @@ object ProblemDetails:
   type ProblemResponse = (StatusCode, Option[String], ProblemDetails)
 
   private val ProblemCodes = List(
+    "BAD_REQUEST",
     "UNAUTHORIZED",
     "FORBIDDEN",
     "NOT_FOUND",
@@ -64,6 +65,7 @@ object ProblemDetails:
     case _ => error.detail
 
   private def statusOf(error: AppError): StatusCode = error match
+    case _: AppError.BadRequest => StatusCode.BadRequest
     case _: AppError.Unauthorized => StatusCode.Unauthorized
     case _: AppError.Forbidden => StatusCode.Forbidden
     case _: AppError.NotFound => StatusCode.NotFound

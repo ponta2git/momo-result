@@ -6,6 +6,7 @@ import cats.data.NonEmptyList
 import cats.syntax.all.*
 import doobie.*
 import doobie.implicits.*
+import doobie.postgres.implicits.*
 import doobie.util.fragments
 
 import momo.api.adapters.postgres.PostgresMeta.given
@@ -21,6 +22,7 @@ import momo.api.domain.{
   PlayOrder,
   Rank
 }
+import momo.api.repositories.MatchListReadModel
 
 private[postgres] trait PostgresMatchListSupport:
   protected final case class Row(
@@ -41,7 +43,7 @@ private[postgres] trait PostgresMatchListSupport:
       heldAtSort: Instant,
   )
 
-  protected final case class PagedRow(
+  protected final case class CursorRow(
       kind: String,
       id: String,
       matchId: Option[MatchId],
@@ -57,7 +59,9 @@ private[postgres] trait PostgresMatchListSupport:
       createdAt: Instant,
       updatedAt: Instant,
       heldAtSort: Instant,
-      totalCount: Int,
+      statusPriority: Int,
+      matchNoIsNull: Boolean,
+      matchNoSort: Int,
   ):
     def row: Row = Row(
       kind = kind,
@@ -75,6 +79,16 @@ private[postgres] trait PostgresMatchListSupport:
       createdAt = createdAt,
       updatedAt = updatedAt,
       heldAtSort = heldAtSort,
+    )
+
+    def position: MatchListReadModel.CursorPosition = MatchListReadModel.CursorPosition(
+      statusPriority = statusPriority,
+      updatedAt = updatedAt,
+      heldAt = heldAtSort,
+      matchNoIsNull = matchNoIsNull,
+      matchNoSort = matchNoSort,
+      kind = kind,
+      id = id,
     )
 
   protected final case class RankRow(
@@ -99,7 +113,7 @@ private[postgres] trait PostgresMatchListSupport:
     )
 
   protected enum StatusColumn(val fragment: Fragment):
-    case DraftComputed extends StatusColumn(fr"d.computed_status")
+    case DraftPersisted extends StatusColumn(fr"d.status")
     case CombinedStatus extends StatusColumn(fr"combined.status")
 
   protected val confirmedBase = fr"""SELECT
@@ -126,7 +140,7 @@ private[postgres] trait PostgresMatchListSupport:
     d.id AS id,
     NULL::text AS match_id,
     d.id AS match_draft_id,
-    d.computed_status AS status,
+    d.status AS status,
     d.held_event_id,
     d.match_no_in_event,
     d.game_title_id,
@@ -137,47 +151,93 @@ private[postgres] trait PostgresMatchListSupport:
     d.created_at,
     d.updated_at,
     COALESCE(he.start_at, d.played_at, d.updated_at) AS held_at_sort
-  FROM (
-    SELECT
-      md.*,
-      md.status AS persisted_status,
-      CASE
-        WHEN md.status <> 'ocr_running' THEN md.status
-        WHEN md.total_assets_draft_id IS NULL
-          AND md.revenue_draft_id IS NULL
-          AND md.incident_log_draft_id IS NULL THEN md.status
-        WHEN EXISTS (
-          SELECT 1
-          FROM unnest(
-            ARRAY[md.total_assets_draft_id, md.revenue_draft_id, md.incident_log_draft_id]
-          ) AS slot(ocr_draft_id)
-          LEFT JOIN ocr_jobs j ON j.draft_id = slot.ocr_draft_id
-          WHERE slot.ocr_draft_id IS NOT NULL
-            AND (j.status IS NULL OR j.status IN ('queued', 'running'))
-        ) THEN 'ocr_running'
-        WHEN EXISTS (
-          SELECT 1
-          FROM unnest(
-            ARRAY[md.total_assets_draft_id, md.revenue_draft_id, md.incident_log_draft_id]
-          ) AS slot(ocr_draft_id)
-          JOIN ocr_jobs j ON j.draft_id = slot.ocr_draft_id
-          WHERE slot.ocr_draft_id IS NOT NULL
-            AND j.status IN ('failed', 'cancelled')
-        ) THEN 'ocr_failed'
-        WHEN EXISTS (
-          SELECT 1
-          FROM unnest(
-            ARRAY[md.total_assets_draft_id, md.revenue_draft_id, md.incident_log_draft_id]
-          ) AS slot(ocr_draft_id)
-          JOIN ocr_drafts od ON od.id = slot.ocr_draft_id
-          WHERE slot.ocr_draft_id IS NOT NULL
-            AND jsonb_array_length(od.warnings_json) > 0
-        ) THEN 'needs_review'
-        ELSE 'draft_ready'
-      END AS computed_status
-    FROM match_drafts md
-  ) d
+  FROM match_drafts d
   LEFT JOIN held_events he ON he.id = d.held_event_id"""
+
+  protected final def sortable(select: Fragment): Fragment =
+    fr"""SELECT
+      combined.*,
+      CASE combined.status
+        WHEN 'ocr_running' THEN 0
+        WHEN 'needs_review' THEN 1
+        WHEN 'draft_ready' THEN 2
+        WHEN 'ocr_failed' THEN 4
+        WHEN 'confirmed' THEN 5
+        ELSE 3
+      END AS status_priority,
+      (combined.match_no_in_event IS NULL) AS match_no_is_null,
+      COALESCE(combined.match_no_in_event, 2147483647)::int AS match_no_sort
+    FROM (""" ++ select ++ fr") AS combined"
+
+  private final case class SortTerm(
+      column: Fragment,
+      value: Fragment,
+      ascending: Boolean,
+  )
+
+  protected final def cursorBoundary(
+      sort: MatchListSort,
+      cursor: MatchListReadModel.Cursor,
+  ): Option[Fragment] = cursor.position.map { position =>
+    val terms = sortTerms(sort, position)
+    val branches = terms.indices.toList.map { index =>
+      val prefix = terms.take(index).map(term => term.column ++ fr" = " ++ term.value)
+      val term = terms(index)
+      val later = cursor.direction == MatchListReadModel.CursorDirection.After
+      val greater = if later then term.ascending else !term.ascending
+      val comparison = term.column ++ (if greater then fr" > " else fr" < ") ++ term.value
+      fragments.and(NonEmptyList.fromListUnsafe(prefix :+ comparison))
+    }
+    fr"(" ++ branches.intercalate(fr" OR ") ++ fr")"
+  }
+
+  protected final def cursorOrderBy(
+      sort: MatchListSort,
+      direction: MatchListReadModel.CursorDirection,
+  ): Fragment =
+    val reverse = direction == MatchListReadModel.CursorDirection.Before
+    def ordering(ascending: Boolean): Fragment =
+      if ascending != reverse then fr"ASC" else fr"DESC"
+    val statusPriority = fr"sortable.status_priority " ++ ordering(ascending = true)
+    val updatedAt = fr"sortable.updated_at " ++ ordering(ascending = false)
+    val heldAt = fr"sortable.held_at_sort " ++ ordering(sort == MatchListSort.HeldAsc)
+    val matchNoIsNull = fr"sortable.match_no_is_null " ++ ordering(ascending = true)
+    val matchNoSort = fr"sortable.match_no_sort " ++ ordering(ascending = true)
+    val kind = fr"sortable.kind " ++ ordering(ascending = true)
+    val id = fr"sortable.id " ++ ordering(ascending = true)
+    sort match
+      case MatchListSort.StatusPriority =>
+        fr"ORDER BY " ++ statusPriority ++ fr", " ++ updatedAt ++ fr", " ++ kind ++ fr", " ++ id
+      case MatchListSort.UpdatedDesc =>
+        fr"ORDER BY " ++ updatedAt ++ fr", " ++ kind ++ fr", " ++ id
+      case MatchListSort.HeldDesc | MatchListSort.HeldAsc =>
+        fr"ORDER BY " ++ heldAt ++ fr", " ++ updatedAt ++ fr", " ++ kind ++ fr", " ++ id
+      case MatchListSort.MatchNoAsc =>
+        fr"ORDER BY " ++ matchNoIsNull ++ fr", " ++ matchNoSort ++ fr", " ++ updatedAt ++
+          fr", " ++ kind ++ fr", " ++ id
+
+  private def sortTerms(
+      sort: MatchListSort,
+      position: MatchListReadModel.CursorPosition,
+  ): List[SortTerm] =
+    val statusPriority =
+      SortTerm(fr"sortable.status_priority", fr"${position.statusPriority}", true)
+    val updatedAt = SortTerm(fr"sortable.updated_at", fr"${position.updatedAt}", false)
+    val heldAt = SortTerm(
+      fr"sortable.held_at_sort",
+      fr"${position.heldAt}",
+      sort == MatchListSort.HeldAsc,
+    )
+    val matchNoIsNull =
+      SortTerm(fr"sortable.match_no_is_null", fr"${position.matchNoIsNull}", true)
+    val matchNoSort = SortTerm(fr"sortable.match_no_sort", fr"${position.matchNoSort}", true)
+    val kind = SortTerm(fr"sortable.kind", fr"${position.kind}", true)
+    val id = SortTerm(fr"sortable.id", fr"${position.id}", true)
+    sort match
+      case MatchListSort.StatusPriority => List(statusPriority, updatedAt, kind, id)
+      case MatchListSort.UpdatedDesc => List(updatedAt, kind, id)
+      case MatchListSort.HeldDesc | MatchListSort.HeldAsc => List(heldAt, updatedAt, kind, id)
+      case MatchListSort.MatchNoAsc => List(matchNoIsNull, matchNoSort, updatedAt, kind, id)
 
   protected final def loadRanks(
       matchIds: List[MatchId]

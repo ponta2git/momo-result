@@ -8,8 +8,11 @@ function pagination(page: number, pageSize: number, totalItems: number) {
   return {
     hasNextPage: totalPages > 0 && page < totalPages,
     hasPreviousPage: page > 1 && totalPages > 0,
+    lastCursor: totalPages > 1 ? `mock-cursor-${totalPages}` : null,
+    nextCursor: page < totalPages ? `mock-cursor-${page + 1}` : null,
     page,
     pageSize,
+    previousCursor: page > 1 ? `mock-cursor-${page - 1}` : null,
     totalItems,
     totalPages,
   };
@@ -82,10 +85,11 @@ export const matchHandlers = [
     const seasonMasterId = url.searchParams.get("seasonMasterId");
     const status = url.searchParams.get("status");
     const kind = url.searchParams.get("kind");
-    const page = Number(url.searchParams.get("page") ?? "1");
-    const pageSize = Number(
-      url.searchParams.get("pageSize") ?? url.searchParams.get("limit") ?? "100",
-    );
+    const cursor = url.searchParams.get("cursor");
+    const page = cursor?.startsWith("mock-cursor-")
+      ? Number(cursor.slice("mock-cursor-".length))
+      : 1;
+    const pageSize = Number(url.searchParams.get("pageSize") ?? "100");
 
     const items = mswState.matchList.filter((item) => {
       if (heldEventId && item.heldEventId !== heldEventId) return false;

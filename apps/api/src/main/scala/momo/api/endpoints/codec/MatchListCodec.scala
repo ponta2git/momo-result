@@ -13,9 +13,8 @@ object MatchListCodec:
       seasonMasterId: Option[String],
       status: Option[String],
       kind: Option[String],
-      limit: Option[Int],
-      page: Option[Int],
       pageSize: Option[Int],
+      cursor: Option[String],
       sort: Option[String],
   ): Either[AppError, ListMatchesCommand] =
     for
@@ -32,9 +31,8 @@ object MatchListCodec:
       seasonMasterId = parsedSeasonMasterId,
       status = parsedStatus,
       kind = parsedKind,
-      limit = limit,
-      page = page,
       pageSize = pageSize,
+      cursor = cursor,
       sort = parsedSort,
     )
 
@@ -50,32 +48,24 @@ object MatchListCodec:
         .optional("seasonMasterId", seasonMasterId)(SeasonMasterId.fromString)
     yield (parsedHeldEventId, parsedGameTitleId, parsedSeasonMasterId)
 
-  private def parseStatus(status: Option[String]): Either[AppError, MatchListStatusFilter] =
-    status match
-      case None | Some("all") => Right(MatchListStatusFilter.All)
-      case Some("incomplete") => Right(MatchListStatusFilter.Incomplete)
-      case Some("ocr_running") => Right(MatchListStatusFilter.OcrRunning)
-      case Some("pre_confirm") => Right(MatchListStatusFilter.PreConfirm)
-      case Some("needs_review") => Right(MatchListStatusFilter.NeedsReview)
-      case Some("confirmed") => Right(MatchListStatusFilter.Confirmed)
-      case Some(other) => Left(AppError.ValidationFailed(
-          s"status must be all, incomplete, ocr_running, pre_confirm, needs_review, or confirmed: $other"
-        ))
+  private def parseStatus(status: Option[String]): Either[AppError, MatchListStatusFilter] = status
+    .fold(Right(MatchListStatusFilter.All): Either[AppError, MatchListStatusFilter])(other =>
+      MatchListStatusFilter.fromWire(other).toRight(AppError.ValidationFailed(
+        s"status must be all, incomplete, ocr_running, pre_confirm, needs_review, or confirmed: $other"
+      ))
+    )
 
   private def parseKind(kind: Option[String]): Either[AppError, MatchListKindFilter] = kind match
-    case None => Right(MatchListKindFilter.All)
-    case Some("match") => Right(MatchListKindFilter.Match)
-    case Some("match_draft") => Right(MatchListKindFilter.MatchDraft)
+    case None | Some("all") => Right(MatchListKindFilter.All)
+    case Some(value) if MatchListKindFilter.fromWire(value).nonEmpty =>
+      Right(MatchListKindFilter.fromWire(value).get)
     case Some(other) =>
       Left(AppError.ValidationFailed(s"kind must be match or match_draft: $other"))
 
-  private def parseSort(sort: Option[String]): Either[AppError, MatchListSort] = sort match
-    case None | Some("status_priority") => Right(MatchListSort.StatusPriority)
-    case Some("updated_desc") => Right(MatchListSort.UpdatedDesc)
-    case Some("held_desc") => Right(MatchListSort.HeldDesc)
-    case Some("held_asc") => Right(MatchListSort.HeldAsc)
-    case Some("match_no_asc") => Right(MatchListSort.MatchNoAsc)
-    case Some(other) => Left(AppError.ValidationFailed(
+  private def parseSort(sort: Option[String]): Either[AppError, MatchListSort] = sort
+    .fold(Right(MatchListSort.StatusPriority): Either[AppError, MatchListSort])(other =>
+      MatchListSort.fromWire(other).toRight(AppError.ValidationFailed(
         s"sort must be status_priority, updated_desc, held_desc, held_asc, or match_no_asc: $other"
       ))
+    )
 end MatchListCodec

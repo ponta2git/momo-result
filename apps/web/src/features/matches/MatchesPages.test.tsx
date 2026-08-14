@@ -188,20 +188,43 @@ describe("MatchesListPage", () => {
   it("retries a failed match list without presenting it as empty", async () => {
     setDevUser();
     let attempts = 0;
+    const cursors: Array<string | null> = [];
     server.use(
-      http.get("/api/matches", () => {
+      http.get("/api/matches", ({ request }) => {
         attempts += 1;
+        cursors.push(new URL(request.url).searchParams.get("cursor"));
         return attempts === 1
           ? HttpResponse.json({ detail: "temporarily unavailable" }, { status: 500 })
-          : HttpResponse.json({ items: [] });
+          : HttpResponse.json({
+              items: [],
+              pagination: {
+                hasNextPage: false,
+                hasPreviousPage: false,
+                lastCursor: null,
+                nextCursor: null,
+                page: 1,
+                pageSize: 10,
+                previousCursor: null,
+                totalItems: 0,
+                totalPages: 0,
+              },
+            });
       }),
     );
 
     render(
       <QueryClientProvider client={queryClient}>
-        <MemoryRouter initialEntries={["/matches"]}>
+        <MemoryRouter initialEntries={["/matches?cursor=stale-cursor"]}>
           <Routes>
-            <Route path="/matches" element={<MatchesListPage />} />
+            <Route
+              path="/matches"
+              element={
+                <>
+                  <LocationProbe />
+                  <MatchesListPage />
+                </>
+              }
+            />
           </Routes>
         </MemoryRouter>
       </QueryClientProvider>,
@@ -214,6 +237,8 @@ describe("MatchesListPage", () => {
 
     expect(await screen.findByText("試合はまだありません")).toBeInTheDocument();
     expect(attempts).toBe(2);
+    expect(cursors).toEqual(["stale-cursor", null]);
+    expect(screen.getByLabelText("current location")).not.toHaveTextContent("cursor=");
   });
 
   it("preserves selected held-event filter in URL after submitting", async () => {
@@ -331,41 +356,44 @@ describe("MatchesListPage", () => {
     expect(summaryRequests).toBe(1);
   });
 
-  it("corrects an out-of-range list page before showing an empty-list state", async () => {
+  it("uses opaque cursor requests for next, last, previous, and first navigation", async () => {
     setDevUser();
-    const items = [
-      {
-        createdAt: "2026-01-01T00:00:00.000Z",
-        gameTitleId: "gt_momotetsu_2",
-        heldEventId: "held-1",
-        id: "match-1",
-        kind: "match",
-        mapMasterId: "map_east",
-        matchId: "match-1",
-        matchNoInEvent: 1,
-        ownerMemberId: "member_ponta",
-        playedAt: "2026-01-01T00:00:00.000Z",
-        ranks: [{ memberId: "member_ponta", playOrder: 1, rank: 1 }],
-        seasonMasterId: "season_current",
-        status: "confirmed",
-        updatedAt: "2026-01-01T00:00:00.000Z",
-      },
-    ];
+    const requestedCursors: Array<string | null> = [];
+    const items = [1, 2, 3].map((number) => ({
+      createdAt: "2026-01-01T00:00:00.000Z",
+      gameTitleId: "gt_momotetsu_2",
+      heldEventId: "held-1",
+      id: `match-${number}`,
+      kind: "match",
+      mapMasterId: "map_east",
+      matchId: `match-${number}`,
+      matchNoInEvent: number,
+      ownerMemberId: "member_ponta",
+      playedAt: "2026-01-01T00:00:00.000Z",
+      ranks: [{ memberId: "member_ponta", playOrder: 1, rank: 1 }],
+      seasonMasterId: "season_current",
+      status: "confirmed",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    }));
     server.use(
       http.get("/api/matches", ({ request }) => {
         const url = new URL(request.url);
-        const page = Number(url.searchParams.get("page") ?? "1");
-        const pageSize = Number(url.searchParams.get("pageSize") ?? "10");
-        const offset = (page - 1) * pageSize;
+        const cursor = url.searchParams.get("cursor");
+        requestedCursors.push(cursor);
+        const page =
+          cursor === "last-token" ? 3 : cursor === "next-token" || cursor === "prev-token" ? 2 : 1;
         return HttpResponse.json({
-          items: items.slice(offset, offset + pageSize),
+          items: [items[page - 1]!],
           pagination: {
-            hasNextPage: false,
+            hasNextPage: page < 3,
             hasPreviousPage: page > 1,
+            lastCursor: "last-token",
+            nextCursor: page === 1 ? "next-token" : page === 2 ? "last-token" : null,
             page,
-            pageSize,
-            totalItems: items.length,
-            totalPages: 1,
+            pageSize: 1,
+            previousCursor: page === 3 ? "prev-token" : page === 2 ? "first-token" : null,
+            totalItems: 3,
+            totalPages: 3,
           },
         });
       }),
@@ -373,7 +401,7 @@ describe("MatchesListPage", () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <MemoryRouter initialEntries={["/matches?page=99"]}>
+        <MemoryRouter initialEntries={["/matches?pageSize=1"]}>
           <LocationProbe />
           <Routes>
             <Route path="/matches" element={<MatchesListPage />} />
@@ -384,18 +412,23 @@ describe("MatchesListPage", () => {
     );
 
     expect(await screen.findByRole("heading", { name: "試合一覧" })).toBeInTheDocument();
-    await waitFor(() =>
-      expect(screen.getByLabelText("current location")).toHaveTextContent("/matches"),
-    );
-    await waitFor(() => {
-      const detailLinks = screen.getAllByRole("link", {
-        name: "第1試合 東日本編の試合結果を見る",
-      });
-      detailLinks.forEach((link) =>
-        expect(link).toHaveAttribute("href", "/matches/match-1?returnTo=%2Fmatches"),
-      );
-    });
-    expect(screen.queryByText("試合はまだありません")).not.toBeInTheDocument();
+    expect(requestedCursors.at(-1)).toBeNull();
+
+    await user.click(await screen.findByRole("button", { name: "次のページへ" }));
+    await waitFor(() => expect(requestedCursors.at(-1)).toBe("next-token"));
+    expect(screen.getByLabelText("current location")).toHaveTextContent("cursor=next-token");
+
+    await user.click(screen.getByRole("button", { name: "最後のページへ" }));
+    await waitFor(() => expect(requestedCursors.at(-1)).toBe("last-token"));
+    expect(screen.getByLabelText("current location")).toHaveTextContent("cursor=last-token");
+
+    await user.click(screen.getByRole("button", { name: "前のページへ" }));
+    await waitFor(() => expect(requestedCursors.at(-1)).toBe("prev-token"));
+    expect(screen.getByLabelText("current location")).toHaveTextContent("cursor=prev-token");
+
+    await user.click(screen.getByRole("button", { name: "先頭ページへ" }));
+    await waitFor(() => expect(requestedCursors.at(-1)).toBeNull());
+    expect(screen.getByLabelText("current location")).not.toHaveTextContent("cursor=");
   });
 
   it("offers 10, 25, and 50 as match page sizes", async () => {
@@ -983,7 +1016,9 @@ describe("MatchEditPage", () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <MemoryRouter initialEntries={["/matches/match-1/edit?returnTo=%2Fmatches%3Fpage%3D2"]}>
+        <MemoryRouter
+          initialEntries={["/matches/match-1/edit?returnTo=%2Fmatches%3Fcursor%3Dcursor-2"]}
+        >
           <Routes>
             <Route path="/matches/:matchId/edit" element={<MatchEditPage />} />
           </Routes>
@@ -998,7 +1033,7 @@ describe("MatchEditPage", () => {
     expect(await screen.findByRole("heading", { name: "試合を編集" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "編集をやめる" })).toHaveAttribute(
       "href",
-      "/matches?page=2",
+      "/matches?cursor=cursor-2",
     );
   });
 });
@@ -1135,7 +1170,9 @@ describe("MatchDetailPage", () => {
     render(
       <QueryClientProvider client={queryClient}>
         <MemoryRouter
-          initialEntries={["/matches/match-1?returnTo=%2Fmatches%3Fstatus%3Dconfirmed%26page%3D2"]}
+          initialEntries={[
+            "/matches/match-1?returnTo=%2Fmatches%3Fstatus%3Dconfirmed%26cursor%3Dcursor-2",
+          ]}
         >
           <LocationProbe />
           <Routes>
@@ -1148,14 +1185,14 @@ describe("MatchDetailPage", () => {
 
     expect(await screen.findByRole("link", { name: "試合一覧へ戻る" })).toHaveAttribute(
       "href",
-      "/matches?status=confirmed&page=2",
+      "/matches?status=confirmed&cursor=cursor-2",
     );
     await user.click(screen.getByRole("button", { name: "削除" }));
     await user.click(screen.getByRole("button", { name: "削除する" }));
 
     await waitFor(() =>
       expect(screen.getByLabelText("current location")).toHaveTextContent(
-        "/matches?status=confirmed&page=2",
+        "/matches?status=confirmed&cursor=cursor-2",
       ),
     );
   });

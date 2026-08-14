@@ -24,8 +24,7 @@ object MatchesEndpoints:
       Option[String],
       Option[String],
       Option[Int],
-      Option[Int],
-      Option[Int],
+      Option[String],
       Option[String],
   )
 
@@ -38,9 +37,10 @@ object MatchesEndpoints:
     .in(query[Option[String]]("seasonMasterId"))
     .in(query[Option[String]]("status"))
     .in(query[Option[String]]("kind"))
-    .in(query[Option[Int]]("limit").description("1..200; defaults to 100."))
-    .in(query[Option[Int]]("page").description("1-based page number; defaults to 1."))
-    .in(query[Option[Int]]("pageSize").description("1..200; overrides limit when present."))
+    .in(query[Option[Int]]("pageSize").description("1..200; defaults to 100."))
+    .in(query[Option[String]]("cursor").description(
+      "Opaque cursor returned by this endpoint. Omit it to refresh the count snapshot."
+    ))
     .in(query[Option[String]]("sort").description(
       "status_priority, updated_desc, held_desc, held_asc, or match_no_asc."
     ))

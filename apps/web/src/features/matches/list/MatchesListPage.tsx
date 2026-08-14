@@ -144,7 +144,7 @@ export function MatchesListPage() {
         loading={summaryLoading}
         masked={summaryMasked}
         onSelectStatus={(status) => {
-          applySearch({ ...search, page: 1, status });
+          applySearch({ ...search, cursor: "", status });
         }}
       />
 

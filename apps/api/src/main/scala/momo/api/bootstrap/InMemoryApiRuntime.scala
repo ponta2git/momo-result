@@ -90,12 +90,7 @@ private[bootstrap] object InMemoryApiRuntime:
       matches = InMemoryMatchesRepository
         .withConfirmedDraftCleanup[F](matchesBase, matchDrafts)
       matchExports = matchesBase
-      matchList = InMemoryMatchListReadModel[F](
-        matches,
-        matchDrafts,
-        ocrJobs = Some(jobs),
-        ocrDrafts = Some(drafts),
-      )
+      matchList = InMemoryMatchListReadModel[F](matches, matchDrafts)
       matchConfirmation = InMemoryMatchConfirmationRepository[F](
         matches,
         matchesBase.create,

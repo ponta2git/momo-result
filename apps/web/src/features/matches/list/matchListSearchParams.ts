@@ -8,7 +8,7 @@ import { parsePositiveIntSearchParam, trimSearchParam } from "@/shared/lib/searc
 export const defaultMatchListSearch: MatchListSearch = {
   heldEventId: "",
   gameTitleId: "",
-  page: 1,
+  cursor: "",
   pageSize: 10,
   seasonMasterId: "",
   status: "all",
@@ -47,7 +47,7 @@ export function parseMatchListSearchParams(searchParams: URLSearchParams): Match
   return {
     heldEventId: trimSearchParam(searchParams.get("heldEventId")) ?? "",
     gameTitleId: trimSearchParam(searchParams.get("gameTitleId")) ?? "",
-    page: parsePositiveIntSearchParam(searchParams.get("page"), defaultMatchListSearch.page),
+    cursor: parseCursor(searchParams.get("cursor")),
     pageSize: pageSizeOptions.has(pageSize) ? pageSize : defaultMatchListSearch.pageSize,
     seasonMasterId: trimSearchParam(searchParams.get("seasonMasterId")) ?? "",
     status:
@@ -73,8 +73,8 @@ export function buildMatchListSearchParams(search: MatchListSearch): URLSearchPa
   if (search.gameTitleId) {
     params.set("gameTitleId", search.gameTitleId);
   }
-  if (search.page !== defaultMatchListSearch.page) {
-    params.set("page", String(search.page));
+  if (search.cursor) {
+    params.set("cursor", search.cursor);
   }
   if (search.pageSize !== defaultMatchListSearch.pageSize) {
     params.set("pageSize", String(search.pageSize));
@@ -87,6 +87,11 @@ export function buildMatchListSearchParams(search: MatchListSearch): URLSearchPa
   }
 
   return params;
+}
+
+function parseCursor(value: string | null): string {
+  const cursor = value?.trim() ?? "";
+  return cursor.length <= 4096 ? cursor : "";
 }
 
 export function hasMatchListFilters(search: MatchListSearch): boolean {

@@ -15,6 +15,7 @@ import {
   confirmedDraftMessages,
 } from "@/features/matches/confirmedDraftNavigation";
 import { addMatchListReturnTo } from "@/features/matches/list/matchListNavigation";
+import { cursorForMatchPage } from "@/features/matches/list/matchListPagination";
 import {
   buildMatchListApiQuery,
   buildMatchListSummaryQuery,
@@ -135,21 +136,6 @@ export function useMatchesListPageController() {
   }, [optimisticSearch, searchSignature]);
 
   const pagination = matchesQuery.data?.pagination;
-  const pageCorrectionPending = Boolean(
-    pagination &&
-    !matchesQuery.isPlaceholderData &&
-    search.page > Math.max(pagination.totalPages, 1),
-  );
-
-  useEffect(() => {
-    if (!pagination || matchesQuery.isPlaceholderData) {
-      return;
-    }
-    const lastPage = Math.max(pagination.totalPages, 1);
-    if (search.page > lastPage) {
-      applySearch({ ...search, page: lastPage });
-    }
-  }, [applySearch, matchesQuery.isPlaceholderData, pagination, search]);
 
   const initialMatchesLoading = isInitialQueryLoading(matchesQuery);
   const filterSettling = isFilterPending || activeSearchSignature !== deferredSearchSignature;
@@ -162,7 +148,7 @@ export function useMatchesListPageController() {
     hasVisibleData: matchesQuery.data !== undefined,
     isPlaceholderData: listHasPlaceholderData,
     isRefreshing: listBackgroundRefreshing,
-    isSettling: filterSettling || pageCorrectionPending,
+    isSettling: filterSettling,
   });
   const showSummaryShield = shouldShowStaleShield({
     hasVisibleData: matchesSummaryQuery.data !== undefined,
@@ -178,8 +164,16 @@ export function useMatchesListPageController() {
     }
     setIsManualRefreshing(true);
     try {
+      const refreshedSearch = { ...activeSearch, cursor: "" };
+      if (activeSearch.cursor) applySearch(refreshedSearch);
+      const listRefresh = activeSearch.cursor
+        ? queryClient.fetchQuery({
+            ...matchListQueryOptions(buildMatchListApiQuery(refreshedSearch)),
+            staleTime: 0,
+          })
+        : matchesQuery.refetch();
       await Promise.all([
-        matchesQuery.refetch(),
+        listRefresh,
         matchesSummaryQuery.refetch(),
         heldEventsQuery.refetch(),
         gameTitlesQuery.refetch(),
@@ -262,10 +256,12 @@ export function useMatchesListPageController() {
     summaryLoading: matchesSummaryQuery.isLoading,
     summaryMasked: showSummaryShield,
     updatePage: (page: number) => {
-      applySearch({ ...activeSearch, page });
+      if (!pagination) return;
+      const cursor = cursorForMatchPage(pagination, page);
+      if (cursor !== undefined) applySearch({ ...activeSearch, cursor });
     },
     updatePageSize: (pageSize: number) => {
-      applySearch({ ...activeSearch, page: 1, pageSize });
+      applySearch({ ...activeSearch, cursor: "", pageSize });
     },
   };
 }

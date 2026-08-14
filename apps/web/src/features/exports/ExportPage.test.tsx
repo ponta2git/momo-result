@@ -105,15 +105,15 @@ describe("ExportPage", () => {
 
   it("keeps the source-page return link while export conditions change", async () => {
     renderPage({
-      path: "/exports?returnTo=%2Fmatches%3Fstatus%3Dconfirmed%26page%3D2",
+      path: "/exports?returnTo=%2Fmatches%3Fstatus%3Dconfirmed%26cursor%3Dcursor-2",
     });
 
     await screen.findByRole("heading", { name: "CSV/TSV出力" });
     const backLink = screen.getByRole("link", { name: "前の画面へ戻る" });
-    expect(backLink).toHaveAttribute("href", "/matches?status=confirmed&page=2");
+    expect(backLink).toHaveAttribute("href", "/matches?status=confirmed&cursor=cursor-2");
 
     await user.click(screen.getByRole("button", { name: "TSV" }));
-    expect(backLink).toHaveAttribute("href", "/matches?status=confirmed&page=2");
+    expect(backLink).toHaveAttribute("href", "/matches?status=confirmed&cursor=cursor-2");
   });
 
   it("prefills match scope from deep link and downloads TSV for a single match", async () => {
@@ -169,7 +169,8 @@ describe("ExportPage", () => {
     expect(capturedExport?.searchParams.get("matchId")).toBe("match-1");
     expect(capturedMatchList?.searchParams.get("status")).toBe("confirmed");
     expect(capturedMatchList?.searchParams.get("kind")).toBe("match");
-    expect(capturedMatchList?.searchParams.get("page")).toBe("1");
+    expect(capturedMatchList?.searchParams.has("page")).toBe(false);
+    expect(capturedMatchList?.searchParams.has("cursor")).toBe(false);
     expect(capturedMatchList?.searchParams.get("pageSize")).toBe("20");
     expect(capturedMatchList?.searchParams.get("sort")).toBe("held_desc");
     expect(anchorClick.clickedAnchors[0]?.download).toBe("momo-results-match-match-1.tsv");
@@ -224,10 +225,13 @@ describe("ExportPage", () => {
   });
 
   it("resolves a match deep link outside the current candidate page", async () => {
+    const requestedCursors: Array<string | null> = [];
     server.use(
       http.get("/api/matches", ({ request }) => {
         const url = new URL(request.url);
-        const page = Number(url.searchParams.get("page") ?? "1");
+        const cursor = url.searchParams.get("cursor");
+        requestedCursors.push(cursor);
+        const page = cursor === "candidate-last" ? 2 : 1;
         const pageSize = Number(url.searchParams.get("pageSize") ?? "20");
         const allMatches = Array.from({ length: 21 }, (_, index) => ({
           createdAt: "2026-01-01T00:00:00.000Z",
@@ -247,8 +251,11 @@ describe("ExportPage", () => {
           pagination: {
             hasNextPage: page * pageSize < allMatches.length,
             hasPreviousPage: page > 1,
+            lastCursor: "candidate-last",
+            nextCursor: page === 1 ? "candidate-last" : null,
             page,
             pageSize,
+            previousCursor: page === 2 ? "candidate-first" : null,
             totalItems: allMatches.length,
             totalPages: Math.ceil(allMatches.length / pageSize),
           },
@@ -280,6 +287,7 @@ describe("ExportPage", () => {
     expectSingleCandidateScrollRegion("試合");
     await user.click(screen.getByRole("button", { name: "次の候補ページへ" }));
     expect(await screen.findByRole("radio", { name: /第21試合/u })).toBeChecked();
+    expect(requestedCursors).toEqual([null, "candidate-last"]);
   });
 
   it("syncs scope changes to one URL scope and shows empty actions", async () => {

@@ -1,12 +1,20 @@
 package momo.api.integration
 
+import java.sql.Connection
 import java.time.Instant
 
-import cats.effect.IO
+import scala.concurrent.duration.DurationInt
+
+import cats.effect.{Deferred, IO, Resource}
+import cats.syntax.all.*
+import doobie.ConnectionIO
+import doobie.free.KleisliInterpreter
 import doobie.implicits.*
 import doobie.postgres.implicits.*
+import doobie.util.log.LogHandler
 
-import momo.api.adapters.postgres.PostgresOcrJobsRepository
+import momo.api.adapters.postgres.PostgresMeta.given
+import momo.api.adapters.postgres.{PostgresMatchDraftStatusSync, PostgresOcrJobsRepository}
 import momo.api.domain.ids.{OcrDraftId, OcrJobId}
 
 final class PostgresOcrJobsRepositorySpec extends IntegrationSuite:
@@ -140,6 +148,74 @@ final class PostgresOcrJobsRepositorySpec extends IntegrationSuite:
         ),
       )
 
+  test("concurrent terminal slots serialize before recomputing the persisted draft status"):
+    val jobA = OcrJobId.unsafeFromString("job-concurrent-terminal-a")
+    val jobB = OcrJobId.unsafeFromString("job-concurrent-terminal-b")
+    for
+      _ <- insertOcrDraft("draft-concurrent-terminal-a", jobA.value)
+      _ <- insertOcrDraft("draft-concurrent-terminal-b", jobB.value)
+      _ <- insertMatchDraft(
+        id = "match-draft-concurrent-terminal",
+        status = "ocr_running",
+        totalAssetsDraftId = Some("draft-concurrent-terminal-a"),
+        revenueDraftId = Some("draft-concurrent-terminal-b"),
+      )
+      _ <- insertOcrJob(
+        id = jobA.value,
+        draftId = "draft-concurrent-terminal-a",
+        imageId = "image-concurrent-terminal-a",
+        status = "queued",
+      )
+      _ <- insertOcrJob(
+        id = jobB.value,
+        draftId = "draft-concurrent-terminal-b",
+        imageId = "image-concurrent-terminal-b",
+        status = "queued",
+      )
+      lockedA <- Deferred[IO, Unit]
+      attemptingB <- Deferred[IO, Unit]
+      lockedB <- Deferred[IO, Unit]
+      releaseA <- Deferred[IO, Unit]
+      _ <- (rawConnection, rawConnection).tupled.use { case (connectionA, connectionB) =>
+        val terminalA = terminalTransaction(
+          connectionA,
+          jobA,
+          beforeLock = IO.unit,
+          locked = lockedA,
+          proceed = releaseA.get,
+        )
+        val terminalB = terminalTransaction(
+          connectionB,
+          jobB,
+          beforeLock = attemptingB.complete(()).void,
+          locked = lockedB,
+          proceed = IO.unit,
+        )
+        for
+          fiberA <- terminalA.start
+          _ <- lockedA.get
+          fiberB <- terminalB.start
+          _ <- attemptingB.get
+          blocked <- IO.race(lockedB.get, IO.sleep(100.millis))
+          _ = assertEquals(blocked, Right(()))
+          _ <- releaseA.complete(())
+          _ <- fiberA.joinWithNever
+          _ <- fiberB.joinWithNever
+        yield ()
+      }
+      result <- sql"""
+        SELECT
+          (SELECT status FROM match_drafts WHERE id = 'match-draft-concurrent-terminal'),
+          ARRAY(
+            SELECT status FROM ocr_jobs
+            WHERE id IN (${jobA.value}, ${jobB.value})
+            ORDER BY id
+          )
+      """.query[(String, Array[String])].unique.transact(transactor)
+    yield
+      assertEquals(result._1, "ocr_failed")
+      assertEquals(result._2.toList, List("cancelled", "cancelled"))
+
   private def insertOcrDraft(id: String, jobId: String): IO[Int] = sql"""
     INSERT INTO ocr_drafts (
       id, job_id, requested_screen_type, payload_json, warnings_json, timings_ms_json,
@@ -173,4 +249,45 @@ final class PostgresOcrJobsRepositorySpec extends IntegrationSuite:
       $totalAssetsDraftId, $revenueDraftId, $now, $now
     )
   """.update.run.transact(transactor)
+
+  private def rawConnection: Resource[IO, Connection] = Resource.fromAutoCloseable(
+    IO.blocking(dbFixture().transactor.kernel.getConnection)
+  )
+
+  private def runOn[A](connection: Connection, program: ConnectionIO[A]): IO[A] = program
+    .foldMap(KleisliInterpreter[IO](LogHandler.noop).ConnectionInterpreter).run(connection)
+
+  private def terminalTransaction(
+      connection: Connection,
+      jobId: OcrJobId,
+      beforeLock: IO[Unit],
+      locked: Deferred[IO, Unit],
+      proceed: IO[Unit],
+  ): IO[Unit] = manualTransaction(connection) {
+    for
+      _ <- beforeLock
+      _ <- runOn(connection, PostgresMatchDraftStatusSync.lockForJob(jobId))
+      _ <- locked.complete(())
+      _ <- proceed
+      updated <- runOn(
+        connection,
+        sql"""
+        UPDATE ocr_jobs SET
+          status = 'cancelled',
+          finished_at = $now,
+          updated_at = $now
+        WHERE id = $jobId
+          AND status = 'queued'
+      """.update.run
+      )
+      _ <- IO(assertEquals(updated, 1))
+      _ <- runOn(connection, PostgresMatchDraftStatusSync.recomputeForJob(jobId, now))
+    yield ()
+  }
+
+  private def manualTransaction[A](connection: Connection)(action: IO[A]): IO[A] =
+    (IO.blocking(connection.setAutoCommit(false)) >> action.attempt.flatMap {
+      case Right(value) => IO.blocking(connection.commit()).as(value)
+      case Left(error) => IO.blocking(connection.rollback()).attempt >> IO.raiseError(error)
+    }).guarantee(IO.blocking(connection.setAutoCommit(true)))
 end PostgresOcrJobsRepositorySpec

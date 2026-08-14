@@ -8,6 +8,10 @@ sealed trait AppError:
 final class AppException(val error: AppError) extends RuntimeException(error.detail)
 
 object AppError:
+  final case class BadRequest(detail: String) extends AppError:
+    val code = "BAD_REQUEST"
+    val title = "Bad Request"
+
   final case class Unauthorized(detail: String = "Authentication is required.") extends AppError:
     val code = "UNAUTHORIZED"
     val title = "Unauthorized"

@@ -223,6 +223,16 @@ pub(crate) async fn claim_job(
 ) -> Result<OcrClaimResult, OcrControlError> {
     let transaction = bounded_transaction(client, config.finalization_timeout).await?;
     let slot = lock_execution_slot(&transaction).await?;
+    let mut draft_lock_job_ids = vec![String::from(payload.job_id())];
+    if let Some(holder) = &slot.holder
+        && holder.expired
+        && holder.task_kind == ExecutionTaskKind::Ocr
+    {
+        draft_lock_job_ids.push(holder.job_id.clone());
+    }
+    draft_lock_job_ids.sort_unstable();
+    draft_lock_job_ids.dedup();
+    lock_match_drafts_for_jobs(&transaction, &draft_lock_job_ids).await?;
     if let Some(holder) = &slot.holder
         && holder.expired
     {
@@ -535,6 +545,7 @@ pub(crate) async fn record_queue_failure(
     finalization_timeout: Duration,
 ) -> Result<(), OcrControlError> {
     let transaction = bounded_transaction(client, finalization_timeout).await?;
+    lock_match_drafts_for_job(&transaction, job_id).await?;
     let row = transaction
         .query_opt(
             "SELECT status, queue_schema_version FROM ocr_jobs WHERE id = $1 FOR UPDATE",
@@ -576,6 +587,7 @@ async fn lock_owned_job(
     if !lock_owned_slot(transaction, identity(claim, config)).await? {
         return Err(OcrControlError::OwnerLost);
     }
+    lock_match_drafts_for_job(transaction, &claim.job_id).await?;
     let job = transaction
         .query_opt(
             "SELECT 1 FROM ocr_jobs WHERE id = $1 AND status = 'running' AND lease_owner = $2\x20\
@@ -723,6 +735,32 @@ async fn sync_match_draft_status(
                FROM next_status ns WHERE md.id = ns.match_draft_id\x20\
                  AND md.status = 'ocr_running' AND md.status <> ns.status",
             &[&job_id],
+        )
+        .await?;
+    Ok(())
+}
+
+// Cross-language lock order: match_drafts -> ocr_jobs. The API cancellation path deletes/locks the
+// match draft before cancelling jobs, so every worker terminal path must acquire the same row first.
+async fn lock_match_drafts_for_job(
+    transaction: &Transaction<'_>,
+    job_id: &str,
+) -> Result<(), OcrControlError> {
+    lock_match_drafts_for_jobs(transaction, &[String::from(job_id)]).await
+}
+
+async fn lock_match_drafts_for_jobs(
+    transaction: &Transaction<'_>,
+    job_ids: &[String],
+) -> Result<(), OcrControlError> {
+    transaction
+        .query(
+            "SELECT md.id FROM match_drafts md JOIN ocr_jobs changed_job\x20\
+               ON changed_job.id = ANY($1)\x20\
+               WHERE md.status = 'ocr_running' AND changed_job.draft_id IN (\x20\
+                 md.total_assets_draft_id, md.revenue_draft_id, md.incident_log_draft_id\x20\
+               ) ORDER BY md.id FOR UPDATE OF md",
+            &[&job_ids],
         )
         .await?;
     Ok(())

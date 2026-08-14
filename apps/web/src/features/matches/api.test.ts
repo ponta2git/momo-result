@@ -33,9 +33,7 @@ describe("matches api", () => {
   it("loads paged match list and summary", async () => {
     setDevUser();
 
-    await expect(
-      listMatches({ page: 1, pageSize: 2, sort: "status_priority" }),
-    ).resolves.toMatchObject({
+    await expect(listMatches({ pageSize: 2, sort: "status_priority" })).resolves.toMatchObject({
       items: [{ id: "draft-running-1" }, { id: "draft-review-1" }],
       pagination: { page: 1, pageSize: 2, totalItems: 3, totalPages: 2 },
     });

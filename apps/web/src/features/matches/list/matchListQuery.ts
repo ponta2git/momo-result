@@ -8,7 +8,7 @@ export function buildMatchListApiQuery(search: MatchListSearch): ListMatchesQuer
     gameTitleId: search.gameTitleId || undefined,
     heldEventId: search.heldEventId || undefined,
     seasonMasterId: search.seasonMasterId || undefined,
-    page: search.page,
+    cursor: search.cursor || undefined,
     pageSize: search.pageSize,
     sort: search.sort,
     status: search.status === "all" ? undefined : search.status,

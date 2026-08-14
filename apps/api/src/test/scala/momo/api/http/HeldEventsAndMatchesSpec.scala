@@ -289,36 +289,51 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
       .flatMap(res => assertProblem(res, Status.NotFound, "NOT_FOUND", "ocr draft was not found"))
   }
 
-  app.test("GET /api/matches rejects negative limit before repository access") { httpApp =>
-    val req = readGet(uri"/api/matches?limit=-1")
+  app.test("GET /api/matches rejects invalid page size before repository access") { httpApp =>
+    val req = readGet(uri"/api/matches?pageSize=-1")
     httpApp.run(req)
-      .flatMap(res => assertProblem(res, Status.UnprocessableContent, "VALIDATION_FAILED", "limit"))
+      .flatMap(res =>
+        assertProblem(res, Status.UnprocessableContent, "VALIDATION_FAILED", "pageSize")
+      )
   }
 
-  app.test("GET /api/matches rejects invalid pagination before repository access") { httpApp =>
-    val req = readGet(uri"/api/matches?page=0")
+  app.test("GET /api/matches rejects malformed cursors with 400") { httpApp =>
+    val req = readGet(uri"/api/matches?cursor=%25%25%25")
     httpApp.run(req)
-      .flatMap(res => assertProblem(res, Status.UnprocessableContent, "VALIDATION_FAILED", "page"))
+      .flatMap(res => assertProblem(res, Status.BadRequest, "BAD_REQUEST", "cursor"))
   }
 
-  app.test("GET /api/matches returns pagination metadata") { httpApp =>
-    for
-      id <- createEvent(httpApp)
-      first <- httpApp.run(writePost(uri"/api/matches", confirmBody(id, 1)))
-      _ = assertEquals(first.status, Status.Ok)
-      second <- httpApp.run(writePost(uri"/api/matches", confirmBody(id, 2)))
-      _ = assertEquals(second.status, Status.Ok)
-      res <- httpApp.run(readGet(uri"/api/matches?page=2&pageSize=1&sort=match_no_asc"))
-      body <- res.as[Json]
-      pagination = jsonField[Json](body, "pagination")
-      items = jsonField[List[Json]](body, "items")
-    yield
-      assertEquals(res.status, Status.Ok)
-      assertEquals(items.size, 1)
-      assertEquals(jsonField[Int](pagination, "page"), 2)
-      assertEquals(jsonField[Int](pagination, "pageSize"), 1)
-      assertEquals(jsonField[Int](pagination, "totalItems"), 2)
-      assertEquals(jsonField[Boolean](pagination, "hasPreviousPage"), true)
+  app.test("GET /api/matches navigates with scoped cursors and returns pagination metadata") {
+    httpApp =>
+      for
+        id <- createEvent(httpApp)
+        first <- httpApp.run(writePost(uri"/api/matches", confirmBody(id, 1)))
+        _ = assertEquals(first.status, Status.Ok)
+        second <- httpApp.run(writePost(uri"/api/matches", confirmBody(id, 2)))
+        _ = assertEquals(second.status, Status.Ok)
+        firstPage <- httpApp.run(readGet(uri"/api/matches?pageSize=1&sort=match_no_asc"))
+        firstBody <- firstPage.as[Json]
+        firstPagination = jsonField[Json](firstBody, "pagination")
+        nextCursor = jsonField[String](firstPagination, "nextCursor")
+        res <- httpApp.run(readGet(
+          uri"/api/matches?pageSize=1&sort=match_no_asc".withQueryParam("cursor", nextCursor)
+        ))
+        body <- res.as[Json]
+        pagination = jsonField[Json](body, "pagination")
+        items = jsonField[List[Json]](body, "items")
+        mismatch <- httpApp.run(readGet(
+          uri"/api/matches?pageSize=1&sort=updated_desc".withQueryParam("cursor", nextCursor)
+        ))
+      yield
+        assertEquals(res.status, Status.Ok)
+        assertEquals(items.size, 1)
+        assertEquals(jsonField[Int](pagination, "page"), 2)
+        assertEquals(jsonField[Int](pagination, "pageSize"), 1)
+        assertEquals(jsonField[Int](pagination, "totalItems"), 2)
+        assertEquals(jsonField[Boolean](pagination, "hasPreviousPage"), true)
+        assert(jsonField[Option[String]](pagination, "previousCursor").nonEmpty)
+        assert(jsonField[Option[String]](pagination, "lastCursor").nonEmpty)
+        assertEquals(mismatch.status, Status.BadRequest)
   }
 
   app.test("GET /api/matches/summary returns aggregate draft counts") { httpApp =>

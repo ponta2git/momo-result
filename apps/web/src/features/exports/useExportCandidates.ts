@@ -10,6 +10,7 @@ import {
 } from "@/features/exports/exportCandidateData";
 import type { ExportCandidate, ExportScope } from "@/features/exports/exportTypes";
 import { buildCandidateView } from "@/features/exports/exportViewModel";
+import { cursorForMatchPage } from "@/features/matches/list/matchListPagination";
 import { shouldShowQueryError } from "@/shared/api/queryErrorState";
 import {
   gameTitlesQueryOptions,
@@ -35,7 +36,7 @@ export function useExportCandidates({
   selectedId: string;
 }) {
   const [heldEventPage, setHeldEventPage] = useState(1);
-  const [matchPage, setMatchPage] = useState(1);
+  const [matchCursor, setMatchCursor] = useState("");
   const [rememberedCandidate, setRememberedCandidate] = useState<RememberedCandidate | undefined>();
 
   const seasonsQuery = useQuery(
@@ -52,7 +53,7 @@ export function useExportCandidates({
   const matchesQuery = useQuery({
     ...matchExportCandidatesQueryOptions({
       kind: "match",
-      page: matchPage,
+      ...(matchCursor ? { cursor: matchCursor } : {}),
       pageSize: CANDIDATE_PAGE_SIZE,
       sort: "held_desc",
       status: "confirmed",
@@ -149,7 +150,7 @@ export function useExportCandidates({
 
   const reset = () => {
     setHeldEventPage(1);
-    setMatchPage(1);
+    setMatchCursor("");
     setRememberedCandidate(undefined);
   };
 
@@ -172,7 +173,10 @@ export function useExportCandidates({
         if (currentCandidate) setRememberedCandidate({ candidate: currentCandidate, scope });
       }
       if (scope === "heldEvent") setHeldEventPage(page);
-      if (scope === "match") setMatchPage(page);
+      if (scope === "match" && matchesQuery.data) {
+        const cursor = cursorForMatchPage(matchesQuery.data.pagination, page);
+        if (cursor !== undefined) setMatchCursor(cursor);
+      }
     },
     retry: () => {
       if (scope === "season") void seasonsQuery.refetch();

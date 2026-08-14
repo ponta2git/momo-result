@@ -12,7 +12,6 @@ import momo.api.db.Database
 import momo.api.domain.ids.*
 import momo.api.domain.{
   FailureCode,
-  MatchDraftStatus,
   OcrFailure,
   OcrJob,
   OcrJobStatus,
@@ -176,7 +175,8 @@ object PostgresOcrJobs:
         jobId: OcrJobId,
         failure: OcrFailure,
         now: Instant,
-    ): ConnectionIO[Unit] = sql"""
+    ): ConnectionIO[Unit] =
+      PostgresMatchDraftStatusSync.lockForJob(jobId) >> sql"""
         UPDATE ocr_jobs SET
           status = ${OcrJobStatus.Failed},
           failure_code = ${failure.code},
@@ -186,10 +186,11 @@ object PostgresOcrJobs:
           finished_at = $now,
           updated_at = $now
         WHERE id = $jobId
-      """.update.run.void
+      """.update.run.void >> PostgresMatchDraftStatusSync.recomputeForJob(jobId, now)
 
     override def cancelQueued(jobId: OcrJobId, now: Instant): ConnectionIO[Boolean] =
       for
+        _ <- PostgresMatchDraftStatusSync.lockForJob(jobId)
         updated <- sql"""
         UPDATE ocr_jobs SET
           status = ${OcrJobStatus.Cancelled},
@@ -198,7 +199,7 @@ object PostgresOcrJobs:
         WHERE id = $jobId AND status = ${OcrJobStatus.Queued}
       """.update.run
         _ <-
-          if updated == 1 then syncMatchDraftStatusForTerminalJob(jobId, now)
+          if updated == 1 then PostgresMatchDraftStatusSync.recomputeForJob(jobId, now)
           else ().pure[ConnectionIO]
       yield updated == 1
 
@@ -210,70 +211,27 @@ object PostgresOcrJobs:
       else
         val ids = draftIds.map(_.value).toArray
         for
-          cancelledJobIds <- sql"""
-            UPDATE ocr_jobs SET
+          _ <- PostgresMatchDraftStatusSync.lockForDrafts(draftIds)
+          cancelledDraftIds <- sql"""
+            WITH candidates AS (
+              SELECT id
+              FROM ocr_jobs
+              WHERE draft_id = ANY($ids)
+                AND status = ${OcrJobStatus.Queued}
+              ORDER BY id
+              FOR UPDATE
+            )
+            UPDATE ocr_jobs jobs SET
               status = ${OcrJobStatus.Cancelled},
               finished_at = $now,
               updated_at = $now
-            WHERE draft_id = ANY($ids)
-              AND status = ${OcrJobStatus.Queued}
-            RETURNING id
-          """.query[OcrJobId].to[List]
-          _ <- cancelledJobIds.traverse_(jobId => syncMatchDraftStatusForTerminalJob(jobId, now))
-        yield cancelledJobIds.size
-
-  private def syncMatchDraftStatusForTerminalJob(
-      jobId: OcrJobId,
-      now: Instant,
-  ): ConnectionIO[Unit] = sql"""
-    WITH touched AS (
-      SELECT md.id
-      FROM match_drafts md
-      JOIN ocr_jobs j ON j.id = $jobId
-      WHERE md.status = ${MatchDraftStatus.OcrRunning}
-        AND j.draft_id IN (
-          md.total_assets_draft_id,
-          md.revenue_draft_id,
-          md.incident_log_draft_id
-        )
-    ),
-    slot_jobs AS (
-      SELECT
-        md.id AS match_draft_id,
-        j.status AS job_status,
-        COALESCE(jsonb_array_length(od.warnings_json), 0) AS warning_count
-      FROM match_drafts md
-      JOIN touched t ON t.id = md.id
-      JOIN LATERAL unnest(
-        ARRAY[md.total_assets_draft_id, md.revenue_draft_id, md.incident_log_draft_id]
-      ) AS slot(ocr_draft_id) ON slot.ocr_draft_id IS NOT NULL
-      LEFT JOIN ocr_jobs j ON j.draft_id = slot.ocr_draft_id
-      LEFT JOIN ocr_drafts od ON od.id = slot.ocr_draft_id
-    ),
-    next_status AS (
-      SELECT
-        match_draft_id,
-        CASE
-          WHEN COUNT(*) FILTER (
-            WHERE job_status IN ('queued', 'running') OR job_status IS NULL
-          ) > 0 THEN 'ocr_running'
-          WHEN COUNT(*) FILTER (
-            WHERE job_status IN ('failed', 'cancelled')
-          ) > 0 THEN 'ocr_failed'
-          WHEN COUNT(*) FILTER (WHERE warning_count > 0) > 0 THEN 'needs_review'
-          ELSE 'draft_ready'
-        END AS status
-      FROM slot_jobs
-      GROUP BY match_draft_id
-    )
-    UPDATE match_drafts md
-    SET status = ns.status,
-        updated_at = $now
-    FROM next_status ns
-    WHERE md.id = ns.match_draft_id
-      AND md.status = ${MatchDraftStatus.OcrRunning}
-      AND md.status <> ns.status
-  """.update.run.void
+            FROM candidates
+            WHERE jobs.id = candidates.id
+              AND jobs.status = ${OcrJobStatus.Queued}
+            RETURNING jobs.draft_id
+          """.query[OcrDraftId].to[List]
+          _ <- PostgresMatchDraftStatusSync.recomputeForDrafts(cancelledDraftIds, now)
+        yield cancelledDraftIds.size
 end PostgresOcrJobs
 
 /** Backwards-compatible class facade. */

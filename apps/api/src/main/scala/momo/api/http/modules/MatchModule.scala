@@ -14,15 +14,22 @@ import momo.api.endpoints.{
   ConfirmMatchResponse,
   DeleteMatchResponse,
   MatchDetailResponse,
+  MatchListPaginationResponse,
   MatchListResponse,
   MatchListSummaryResponse,
   MatchSummaryResponse,
   MatchesEndpoints,
-  PaginationResponse,
   UpdateMatchRequest
 }
 import momo.api.http.{EndpointSecurity, HttpOperation, IdempotencyReplay, SecuredEndpoint}
-import momo.api.usecases.matches.{ConfirmMatch, DeleteMatch, GetMatch, ListMatches, UpdateMatch}
+import momo.api.usecases.matches.{
+  ConfirmMatch,
+  DeleteMatch,
+  GetMatch,
+  ListMatches,
+  ListMatchesPagination,
+  UpdateMatch
+}
 
 object MatchModule:
   def routes[F[_]: Async](
@@ -69,9 +76,8 @@ object MatchModule:
               seasonMasterId,
               status,
               kind,
-              limit,
-              page,
               pageSize,
+              cursor,
               sort,
             ) =>
           ReadRateLimit.enforce(readRateLimiter, member.accountId.value, HttpOperation.ListMatches) {
@@ -81,15 +87,14 @@ object MatchModule:
               seasonMasterId,
               status,
               kind,
-              limit,
-              page,
               pageSize,
+              cursor,
               sort,
             ))(command =>
-              security.respond(listMatches.run(command))(result =>
+              security.respond(listMatches.run(command, member.accountId))(result =>
                 MatchListResponse(
                   items = result.items.map(MatchSummaryResponse.from),
-                  pagination = PaginationResponse.from(result),
+                  pagination = paginationResponse(result.pagination),
                 )
               )
             )
@@ -153,3 +158,16 @@ object MatchModule:
       }
     },
   )
+
+  private def paginationResponse(value: ListMatchesPagination): MatchListPaginationResponse =
+    MatchListPaginationResponse(
+      page = value.page,
+      pageSize = value.pageSize,
+      totalItems = value.totalItems,
+      totalPages = value.totalPages,
+      hasPreviousPage = value.hasPreviousPage,
+      hasNextPage = value.hasNextPage,
+      previousCursor = value.previousCursor,
+      nextCursor = value.nextCursor,
+      lastCursor = value.lastCursor,
+    )

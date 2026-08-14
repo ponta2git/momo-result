@@ -3,95 +3,114 @@ package momo.api.adapters.postgres
 import java.time.Instant
 
 import cats.effect.MonadCancelThrow
+import cats.syntax.all.*
 import doobie.*
 import doobie.implicits.*
 import doobie.postgres.implicits.*
 
 import momo.api.adapters.postgres.PostgresMeta.given
+import momo.api.domain.ids.{MatchDraftId, OcrDraftId, OcrJobId}
 import momo.api.domain.{FailureCode, MatchDraftStatus, OcrJobStatus}
 import momo.api.repositories.OcrJobMaintenanceRepository
 
 final class PostgresOcrJobMaintenanceRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
     extends OcrJobMaintenanceRepository[F]:
+  private val batchSize = 256
 
   override def failStaleJobs(now: Instant, staleBefore: Instant): F[Int] =
     val message = "OCR job timed out before completion."
     val userAction = "画像を再アップロードしてOCRをやり直してください。"
-    sql"""
+
+    def selectCandidates: ConnectionIO[List[(OcrJobId, OcrDraftId)]] = sql"""
+      SELECT id, draft_id
+      FROM ocr_jobs
+      WHERE status IN (${OcrJobStatus.Queued}, ${OcrJobStatus.Running})
+        AND COALESCE(started_at, created_at) < $staleBefore
+      ORDER BY id
+      LIMIT $batchSize
+    """.query[(OcrJobId, OcrDraftId)].to[List]
+
+    def failBatch(jobIds: List[OcrJobId]): ConnectionIO[List[OcrDraftId]] =
+      val ids = jobIds.map(_.value).toArray
+      sql"""
       WITH stale AS (
-        SELECT id, draft_id
-          FROM ocr_jobs
-         WHERE status IN (${OcrJobStatus.Queued}, ${OcrJobStatus.Running})
-           AND COALESCE(started_at, created_at) < $staleBefore
-      ),
-      updated_jobs AS (
-        UPDATE ocr_jobs jobs SET
-          status = ${OcrJobStatus.Failed},
-          failure_code = ${FailureCode.OcrTimeout},
-          failure_message = $message,
-          failure_retryable = ${FailureCode.OcrTimeout.retryable},
-          failure_user_action = $userAction,
-          finished_at = $now,
-          updated_at = $now
-        FROM stale
-        WHERE jobs.id = stale.id
-        RETURNING jobs.draft_id, jobs.status
-      ),
-      touched AS (
-        SELECT drafts.id
-        FROM match_drafts drafts
-        WHERE drafts.status = ${MatchDraftStatus.OcrRunning}
-          AND (
-            drafts.total_assets_draft_id IN (SELECT draft_id FROM updated_jobs)
-            OR drafts.revenue_draft_id IN (SELECT draft_id FROM updated_jobs)
-            OR drafts.incident_log_draft_id IN (SELECT draft_id FROM updated_jobs)
-          )
-      ),
-      slot_jobs AS (
-        SELECT
-          drafts.id AS match_draft_id,
-          COALESCE(updated_jobs.status, jobs.status) AS job_status,
-          COALESCE(jsonb_array_length(ocr_drafts.warnings_json), 0) AS warning_count
-        FROM match_drafts drafts
-        JOIN touched ON touched.id = drafts.id
-        JOIN LATERAL unnest(
-          ARRAY[
-            drafts.total_assets_draft_id,
-            drafts.revenue_draft_id,
-            drafts.incident_log_draft_id
-          ]
-        ) AS slot(ocr_draft_id) ON slot.ocr_draft_id IS NOT NULL
-        LEFT JOIN updated_jobs ON updated_jobs.draft_id = slot.ocr_draft_id
-        LEFT JOIN ocr_jobs jobs ON jobs.draft_id = slot.ocr_draft_id
-        LEFT JOIN ocr_drafts ON ocr_drafts.id = slot.ocr_draft_id
-      ),
-      next_status AS (
-        SELECT
-          match_draft_id,
-          CASE
-            WHEN COUNT(*) FILTER (
-              WHERE job_status IN (${OcrJobStatus.Queued}, ${OcrJobStatus.Running})
-                 OR job_status IS NULL
-            ) > 0 THEN ${MatchDraftStatus.OcrRunning}
-            WHEN COUNT(*) FILTER (
-              WHERE job_status IN (${OcrJobStatus.Failed}, ${OcrJobStatus.Cancelled})
-            ) > 0 THEN ${MatchDraftStatus.OcrFailed}
-            WHEN COUNT(*) FILTER (WHERE warning_count > 0) > 0 THEN ${MatchDraftStatus.NeedsReview}
-            ELSE ${MatchDraftStatus.DraftReady}
-          END AS status
-        FROM slot_jobs
-        GROUP BY match_draft_id
-      ),
-      updated_drafts AS (
-        UPDATE match_drafts drafts SET
-          status = next_status.status,
-          updated_at = $now
-        FROM next_status
-        WHERE drafts.id = next_status.match_draft_id
-          AND drafts.status = ${MatchDraftStatus.OcrRunning}
-          AND drafts.status <> next_status.status
-        RETURNING drafts.id
+        SELECT id
+        FROM ocr_jobs
+        WHERE id = ANY($ids)
+          AND status IN (${OcrJobStatus.Queued}, ${OcrJobStatus.Running})
+          AND COALESCE(started_at, created_at) < $staleBefore
+        ORDER BY id
+        FOR UPDATE
       )
-      SELECT COUNT(*) FROM updated_jobs
-    """.query[Int].unique.transact(transactor)
+      UPDATE ocr_jobs jobs SET
+        status = ${OcrJobStatus.Failed},
+        failure_code = ${FailureCode.OcrTimeout},
+        failure_message = $message,
+        failure_retryable = ${FailureCode.OcrTimeout.retryable},
+        failure_user_action = $userAction,
+        finished_at = $now,
+        updated_at = $now
+      FROM stale
+      WHERE jobs.id = stale.id
+        AND jobs.status IN (${OcrJobStatus.Queued}, ${OcrJobStatus.Running})
+      RETURNING jobs.draft_id
+    """.query[OcrDraftId].to[List]
+
+    val runBatch = (for
+      candidates <- selectCandidates
+      candidateDraftIds = candidates.map(_._2)
+      _ <- PostgresMatchDraftStatusSync.lockForDrafts(candidateDraftIds)
+      updatedDraftIds <- failBatch(candidates.map(_._1))
+      _ <- PostgresMatchDraftStatusSync.recomputeForDrafts(updatedDraftIds, now)
+    yield candidates.size -> updatedDraftIds.size).transact(transactor)
+
+    val failAll = cats.Monad[F].tailRecM(0) { total =>
+      runBatch.map { case (candidateCount, updatedCount) =>
+        val nextTotal = total + updatedCount
+        if candidateCount < batchSize then Right(nextTotal)
+        else Left(nextTotal)
+      }
+    }
+
+    def selectTerminalDrafts: ConnectionIO[List[MatchDraftId]] = sql"""
+      SELECT md.id
+      FROM match_drafts md
+      WHERE md.status = ${MatchDraftStatus.OcrRunning}
+        AND COALESCE(
+          md.total_assets_draft_id,
+          md.revenue_draft_id,
+          md.incident_log_draft_id
+        ) IS NOT NULL
+        AND NOT EXISTS (
+          SELECT 1
+          FROM unnest(ARRAY[
+            md.total_assets_draft_id,
+            md.revenue_draft_id,
+            md.incident_log_draft_id
+          ]) AS slot(ocr_draft_id)
+          LEFT JOIN ocr_jobs job ON job.draft_id = slot.ocr_draft_id
+          WHERE slot.ocr_draft_id IS NOT NULL
+            AND (
+              job.status IN (${OcrJobStatus.Queued}, ${OcrJobStatus.Running})
+              OR job.status IS NULL
+            )
+        )
+      ORDER BY md.id
+      LIMIT $batchSize
+      FOR UPDATE OF md
+    """.query[MatchDraftId].to[List]
+
+    val reconcileBatch = (for
+      draftIds <- selectTerminalDrafts
+      _ <- PostgresMatchDraftStatusSync.recomputeMatchDrafts(draftIds, now)
+    yield draftIds.size).transact(transactor)
+
+    val reconcileAll = cats.Monad[F].tailRecM(()) { _ =>
+      reconcileBatch.map(reconciled =>
+        if reconciled < batchSize then Right(())
+        else Left(())
+      )
+    }
+
+    failAll.flatTap(_ => reconcileAll)
 end PostgresOcrJobMaintenanceRepository

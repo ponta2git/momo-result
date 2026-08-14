@@ -8,7 +8,7 @@ import type { MatchListSearch } from "@/features/matches/list/matchListTypes";
 const initialSearch: MatchListSearch = {
   gameTitleId: "",
   heldEventId: "",
-  page: 1,
+  cursor: "",
   pageSize: 10,
   seasonMasterId: "",
   sort: "held_desc",
@@ -24,7 +24,7 @@ describe("MatchesListFilters", () => {
       <MatchesListFilters
         actions={{ onApply, onClear: vi.fn() }}
         candidates={{ gameTitles: [], heldEvents: [], seasons: [] }}
-        search={initialSearch}
+        search={{ ...initialSearch, cursor: "opaque-cursor" }}
       />,
     );
 
@@ -34,6 +34,7 @@ describe("MatchesListFilters", () => {
 
     expect(onApply).toHaveBeenCalledWith({
       ...initialSearch,
+      cursor: "",
       sort: "updated_desc",
     });
   });

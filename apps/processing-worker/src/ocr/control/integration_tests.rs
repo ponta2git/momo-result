@@ -27,6 +27,7 @@ type SmokeResult<T = ()> = Result<T, Box<dyn Error + Send + Sync>>;
 const TAKEOVER: Fixture = Fixture {
     job_id: "c2-smoke-job-takeover",
     draft_id: "c2-smoke-draft-takeover",
+    match_draft_id: "c2-smoke-match-draft-takeover",
     source_image_id: "c2-smoke-source-takeover",
     object_key: "source-images/c2-smoke-takeover.png",
     idempotency_digit: "1",
@@ -34,13 +35,23 @@ const TAKEOVER: Fixture = Fixture {
 const SUCCESS: Fixture = Fixture {
     job_id: "c2-smoke-job-success",
     draft_id: "c2-smoke-draft-success",
+    match_draft_id: "c2-smoke-match-draft-success",
     source_image_id: "c2-smoke-source-success",
     object_key: "source-images/c2-smoke-success.png",
     idempotency_digit: "2",
 };
+const SUCCESS_WITH_WARNINGS: Fixture = Fixture {
+    job_id: "c2-smoke-job-success-warnings",
+    draft_id: "c2-smoke-draft-success-warnings",
+    match_draft_id: "c2-smoke-match-draft-success-warnings",
+    source_image_id: "c2-smoke-source-success-warnings",
+    object_key: "source-images/c2-smoke-success-warnings.png",
+    idempotency_digit: "5",
+};
 const PREEMPT: Fixture = Fixture {
     job_id: "c2-smoke-job-preempt",
     draft_id: "c2-smoke-draft-preempt",
+    match_draft_id: "c2-smoke-match-draft-preempt",
     source_image_id: "c2-smoke-source-preempt",
     object_key: "source-images/c2-smoke-preempt.png",
     idempotency_digit: "3",
@@ -48,6 +59,7 @@ const PREEMPT: Fixture = Fixture {
 const MALFORMED: Fixture = Fixture {
     job_id: "c2-smoke-job-malformed",
     draft_id: "c2-smoke-draft-malformed",
+    match_draft_id: "c2-smoke-match-draft-malformed",
     source_image_id: "c2-smoke-source-malformed",
     object_key: "source-images/c2-smoke-malformed.png",
     idempotency_digit: "4",
@@ -56,6 +68,7 @@ const MALFORMED: Fixture = Fixture {
 struct Fixture {
     job_id: &'static str,
     draft_id: &'static str,
+    match_draft_id: &'static str,
     source_image_id: &'static str,
     object_key: &'static str,
     idempotency_digit: &'static str,
@@ -69,12 +82,19 @@ async fn real_postgres_and_redis_preserve_ocr_fencing_and_delivery_order() -> Sm
     let mut primary = crate::postgres::connect(&database_url).await?;
     let mut stale = crate::postgres::connect(&database_url).await?;
     prepare_database(&primary).await?;
-    for fixture in [&TAKEOVER, &SUCCESS, &PREEMPT, &MALFORMED] {
+    for fixture in [
+        &TAKEOVER,
+        &SUCCESS,
+        &SUCCESS_WITH_WARNINGS,
+        &PREEMPT,
+        &MALFORMED,
+    ] {
         insert_fixture(&primary, fixture).await?;
     }
 
     verify_expired_takeover(&mut primary, &mut stale).await?;
     verify_success_and_terminal_duplicate(&mut primary).await?;
+    verify_success_with_warnings(&mut primary).await?;
     verify_analysis_preemption_and_stale_intent(&mut primary).await?;
     verify_redis_failure_order(&mut primary, &redis_url).await?;
 
@@ -156,6 +176,7 @@ async fn verify_expired_takeover(primary: &mut Client, stale: &mut Client) -> Sm
     assert_eq!(row.try_get::<_, String>(0)?, "failed");
     assert_eq!(row.try_get::<_, String>(1)?, "OCR_TIMEOUT");
     assert_eq!(row.try_get::<_, i32>(2)?, 2);
+    assert_match_draft_status(primary, &TAKEOVER, "ocr_failed").await?;
     assert!(matches!(
         claim_job(primary, &payload, &config_a).await?,
         OcrClaimResult::MissingOrTerminal
@@ -190,10 +211,33 @@ async fn verify_success_and_terminal_duplicate(primary: &mut Client) -> SmokeRes
         .await?;
     assert_eq!(row.try_get::<_, String>(0)?, "succeeded");
     assert_eq!(row.try_get::<_, i64>(1)?, 1);
+    assert_match_draft_status(primary, &SUCCESS, "draft_ready").await?;
     assert!(matches!(
         claim_job(primary, &payload, &config).await?,
         OcrClaimResult::MissingOrTerminal
     ));
+    Ok(())
+}
+
+async fn verify_success_with_warnings(primary: &mut Client) -> SmokeResult {
+    let payload = payload(&SUCCESS_WITH_WARNINGS)?;
+    let config = control_config("ocr-c2-worker-success-warnings")?;
+    let claim = claimed(claim_job(primary, &payload, &config).await?)?;
+    finish_success(
+        primary,
+        &claim,
+        &config,
+        &OcrDraftCompletion {
+            detected_screen_type: RequestedScreenType::TotalAssets,
+            profile_id: Some(String::from("c2-smoke-profile")),
+            payload: json!({"screenType": "total_assets", "rows": []}),
+            warnings: json!([{"code": "LOW_CONFIDENCE"}]),
+            timings_milliseconds: json!({"total": 1}),
+            duration_milliseconds: 1,
+        },
+    )
+    .await?;
+    assert_match_draft_status(primary, &SUCCESS_WITH_WARNINGS, "needs_review").await?;
     Ok(())
 }
 
@@ -261,6 +305,7 @@ async fn verify_analysis_preemption_and_stale_intent(primary: &mut Client) -> Sm
         1,
     )
     .await?;
+    assert_match_draft_status(primary, &PREEMPT, "ocr_failed").await?;
 
     primary
         .execute(
@@ -323,6 +368,7 @@ async fn verify_redis_failure_order(primary: &mut Client, redis_url: &str) -> Sm
         .await?;
     assert_eq!(status.try_get::<_, String>(0)?, "failed");
     assert_eq!(status.try_get::<_, String>(1)?, "QUEUE_FAILURE");
+    assert_match_draft_status(primary, &MALFORMED, "ocr_failed").await?;
     acknowledge(&mut redis, &queue, &malformed.message_id).await?;
     let pending_after_ack: StreamPendingReply = redis.xpending(stream, group).await?;
     assert_eq!(pending_after_ack.count(), 0);
@@ -403,6 +449,15 @@ async fn insert_fixture(client: &Client, fixture: &Fixture) -> SmokeResult {
         .await?;
     client
         .execute(
+            "INSERT INTO match_drafts (id, created_by_account_id, created_by_member_id, status,\x20\
+               total_assets_draft_id, created_at, updated_at)\x20\
+             VALUES ($1, 'account_ponta', 'member_ponta', 'ocr_running', $2,\x20\
+               clock_timestamp(), clock_timestamp())",
+            &[&fixture.match_draft_id, &fixture.draft_id],
+        )
+        .await?;
+    client
+        .execute(
             "INSERT INTO ocr_jobs (id, draft_id, image_id, image_path, requested_screen_type,\x20\
                status, source_image_id, queue_schema_version, available_at)\x20\
              VALUES ($1, $2, $3, NULL, 'total_assets', 'queued', $3, 2, clock_timestamp())",
@@ -420,20 +475,42 @@ async fn cleanup_database(client: &Client) -> SmokeResult {
                preempt_requested_by = NULL, preempt_requested_at = NULL,\x20\
                updated_at = clock_timestamp() WHERE slot_key = 'shared-heavy-work' AND (\x20\
                  owner IN ('ocr-c2-worker-a','ocr-c2-worker-b','ocr-c2-worker-success',\x20\
+                   'ocr-c2-worker-success-warnings',\x20\
                    'ocr-c2-priority','analysis-c2-holder')\x20\
                  OR (owner IS NULL AND preempt_requested_by IN ('ocr-c2-priority','ocr-c2-crashed'))\x20\
                );\x20\
+             DELETE FROM match_drafts WHERE id IN (\x20\
+               'c2-smoke-match-draft-takeover','c2-smoke-match-draft-success',\x20\
+               'c2-smoke-match-draft-success-warnings',\x20\
+               'c2-smoke-match-draft-preempt','c2-smoke-match-draft-malformed');\x20\
              DELETE FROM ocr_drafts WHERE job_id IN (\x20\
-               'c2-smoke-job-takeover','c2-smoke-job-success',\x20\
+               'c2-smoke-job-takeover','c2-smoke-job-success','c2-smoke-job-success-warnings',\x20\
                'c2-smoke-job-preempt','c2-smoke-job-malformed');\x20\
              DELETE FROM ocr_jobs WHERE id IN (\x20\
-               'c2-smoke-job-takeover','c2-smoke-job-success',\x20\
+               'c2-smoke-job-takeover','c2-smoke-job-success','c2-smoke-job-success-warnings',\x20\
                'c2-smoke-job-preempt','c2-smoke-job-malformed');\x20\
              DELETE FROM source_images WHERE id IN (\x20\
                'c2-smoke-source-takeover','c2-smoke-source-success',\x20\
+               'c2-smoke-source-success-warnings',\x20\
                'c2-smoke-source-preempt','c2-smoke-source-malformed');",
         )
         .await?;
+    Ok(())
+}
+
+async fn assert_match_draft_status(
+    client: &Client,
+    fixture: &Fixture,
+    expected: &str,
+) -> SmokeResult {
+    let status = client
+        .query_one(
+            "SELECT status FROM match_drafts WHERE id = $1",
+            &[&fixture.match_draft_id],
+        )
+        .await?
+        .try_get::<_, String>(0)?;
+    assert_eq!(status, expected);
     Ok(())
 }
 

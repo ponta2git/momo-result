@@ -9,6 +9,7 @@ import sttp.capabilities.fs2.Fs2Streams
 import sttp.tapir.server.ServerEndpoint
 
 import momo.api.auth.RateLimiter
+import momo.api.domain.RequestId
 import momo.api.domain.ids.MatchDraftId
 import momo.api.endpoints.codec.{BoundaryId, MatchDraftCodec}
 import momo.api.endpoints.{
@@ -27,7 +28,9 @@ import momo.api.http.{
   HttpDownloadHeaders,
   HttpOperation,
   IdempotencyReplay,
-  SecuredEndpoint
+  SecuredEndpoint,
+  SourceImageTransferContext,
+  SourceImageTransferLogging
 }
 import momo.api.usecases.matchdrafts.{
   CancelMatchDraft,
@@ -133,7 +136,8 @@ object MatchDraftModule:
       security: EndpointSecurity[F],
   ): List[ServerEndpoint[Fs2Streams[F], F]] = List(
     SecuredEndpoint.readLogic(security, MatchDraftEndpoints.downloadSourceImagesStream[F]) {
-      member => draftId =>
+      member => (draftId, rawRequestId) =>
+        val requestId = normalizedRequestId(rawRequestId)
         security.decode(BoundaryId.required("matchDraftId", draftId)(MatchDraftId.fromString))(id =>
           sourceImageDownloadRateLimiter.allow(s"source-image-download:${member.accountId.value}")
             .flatMap {
@@ -147,27 +151,33 @@ object MatchDraftModule:
               case true => getMatchDraftSourceImages.archive(id, member.accountId).flatMap {
                   case Left(error) => security.toProblemF(error).map(Left(_))
                   case Right(archive) =>
-                    val event =
-                      s"source_image_archive_downloaded accountId=${member.accountId.value} " +
-                        s"draftId=${id.value} imageCount=${archive.imageCount.toString} " +
-                        s"archiveBytes=${archive.archiveBytes.toString}"
                     HttpDownloadHeaders.attachment(archive.fileName) match
                       case Left(error) => security.toProblemF(error).map(Left(_))
-                      case Right(disposition) => Async[F].delay(logger.info(event)) *>
-                          Async[F].pure(Right((
-                            archive.contentType,
-                            disposition,
-                            HttpDownloadHeaders.PrivateNoStore,
-                            HttpDownloadHeaders.Nosniff,
+                      case Right(disposition) => Async[F].pure(Right((
+                          archive.contentType,
+                          disposition,
+                          HttpDownloadHeaders.PrivateNoStore,
+                          HttpDownloadHeaders.Nosniff,
+                          SourceImageTransferLogging.observe(
                             archive.body,
-                          )))
+                            SourceImageTransferContext(
+                              requestId = requestId,
+                              event = "source_image_archive_transfer_completed",
+                              fields =
+                                s"accountId=${member.accountId.value} draftId=${id.value} " +
+                                  s"imageCount=${archive.imageCount.toString} " +
+                                  s"expectedArchiveBytes=${archive.archiveBytes.toString}",
+                            ),
+                          ),
+                        )))
                 }
             }
         )
     },
     SecuredEndpoint.readLogic(security, MatchDraftEndpoints.getSourceImageStream[F]) { member =>
       {
-        case (draftId, kind) =>
+        case (draftId, kind, rawRequestId) =>
+          val requestId = normalizedRequestId(rawRequestId)
           val decoded =
             for
               id <- BoundaryId.required("matchDraftId", draftId)(MatchDraftId.fromString)
@@ -187,14 +197,21 @@ object MatchDraftModule:
                 case true => getMatchDraftSourceImages.stream(id, parsedKind).flatMap {
                     case Left(error) => security.toProblemF(error).map(Left(_))
                     case Right(image) =>
-                      val event = s"source_image_downloaded accountId=${member.accountId.value} " +
-                        s"draftId=${id.value} kind=${parsedKind.wire} " +
-                        s"bodyBytes=${image.bodyBytes.toString}"
-                      Async[F].delay(logger.info(event)) *> Async[F].pure(Right((
+                      Async[F].pure(Right((
                         image.contentType,
                         HttpDownloadHeaders.PrivateNoStore,
                         HttpDownloadHeaders.Nosniff,
-                        image.body,
+                        SourceImageTransferLogging.observe(
+                          image.body,
+                          SourceImageTransferContext(
+                            requestId = requestId,
+                            event = "source_image_transfer_completed",
+                            fields =
+                              s"accountId=${member.accountId.value} draftId=${id.value} " +
+                                s"kind=${parsedKind.wire} " +
+                                s"expectedBodyBytes=${image.bodyBytes.toString}",
+                          ),
+                        ),
                       )))
                   }
               }
@@ -202,6 +219,9 @@ object MatchDraftModule:
       }
     },
   )
+
+  private def normalizedRequestId(raw: Option[String]): String = raw.flatMap(RequestId.sanitize)
+    .getOrElse("none")
 
   private def sourceImageRateLimited[F[_]: Async, A](
       route: String,

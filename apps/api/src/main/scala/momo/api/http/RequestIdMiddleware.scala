@@ -49,6 +49,22 @@ object RequestIdMiddleware:
   private def addHeader[F[_]](response: Response[F], id: String): Response[F] = response
     .putHeaders(Header.Raw(HeaderName, id))
 
+  /**
+   * Emits one synchronous log action with an explicit correlation id.
+   *
+   * Response bodies are consumed after the handler's MDC scope has ended. Stream finalizers must
+   * therefore carry the request id as data and install it only around the actual log call.
+   */
+  private[http] def logWithMdc[F[_]: Sync](id: String)(log: => Unit): F[Unit] = Sync[F].delay {
+    val previous = Option(MDC.get(MdcKey))
+    MDC.put(MdcKey, id)
+    try log
+    finally
+      previous match
+        case Some(value) => MDC.put(MdcKey, value)
+        case None => MDC.remove(MdcKey)
+  }
+
   private def runWithMdc[F[_]: Sync, A](id: String)(fa: F[A]): F[A] = Sync[F]
     .delay(Option(MDC.get(MdcKey))).flatMap { previous =>
       Sync[F].delay(MDC.put(MdcKey, id)) *> fa.guarantee(Sync[F].delay {

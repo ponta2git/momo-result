@@ -65,7 +65,7 @@ object MatchDraftEndpoints:
   def getSourceImageStream[F[_]]
       : Endpoint[
         Option[String],
-        (String, String),
+        (String, String, Option[String]),
         ProblemDetails.ProblemResponse,
         SourceImageStreamOutput[F],
         Fs2Streams[F]
@@ -74,6 +74,7 @@ object MatchDraftEndpoints:
       .get
       .in("api" / "match-drafts" / path[String]("draftId") / "source-images" / path[String]("kind"))
       .securityIn(CommonEndpoint.accountHeader)
+      .in(CommonEndpoint.requestIdHeader)
       .errorOut(CommonEndpoint.errorOut)
       .out(header[String]("Content-Type"))
       .out(header[String]("Cache-Control"))
@@ -86,7 +87,7 @@ object MatchDraftEndpoints:
   def downloadSourceImagesStream[F[_]]
       : Endpoint[
         Option[String],
-        String,
+        (String, Option[String]),
         ProblemDetails.ProblemResponse,
         SourceImageArchiveStreamOutput[F],
         Fs2Streams[F]
@@ -95,6 +96,7 @@ object MatchDraftEndpoints:
       .get
       .in("api" / "match-drafts" / path[String]("draftId") / "source-images.zip")
       .securityIn(CommonEndpoint.accountHeader)
+      .in(CommonEndpoint.requestIdHeader)
       .errorOut(CommonEndpoint.errorOut)
       .out(header[String]("Content-Type"))
       .out(header[String]("Content-Disposition"))

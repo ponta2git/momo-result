@@ -63,7 +63,7 @@ export function useSeriesAnalysisDisplayBundle({
   state: SeriesAnalysisUrlState;
 }) {
   const [displayBundle, setDisplayBundle] = useState<SeriesAnalysisDisplayBundle | undefined>();
-  const handledExpiredArtifacts = useRef(new Set<string>());
+  const handledExpiredResources = useRef(new Set<string>());
   const statusQuery = useQuery(seriesAnalysisStatusQueryOptions(state.gameTitleId));
   const publishedArtifactId = statusQuery.data?.currentArtifact?.artifactId;
 
@@ -171,17 +171,36 @@ export function useSeriesAnalysisDisplayBundle({
     bundleResolution.kind === "ready" ? bundleResolution.value : displayBundle;
   useEffect(() => {
     const artifactId = activeQueryParams?.artifactId;
-    if (!artifactId || handledExpiredArtifacts.current.has(artifactId)) return;
-    const expired =
-      isAnalysisArtifactExpired(activeQuery.error) ||
-      isAnalysisArtifactExpired(matchContextQuery.error);
-    if (!expired) return;
-    handledExpiredArtifacts.current.add(artifactId);
+    if (!artifactId) return;
+    const activeExpired = isAnalysisArtifactExpired(activeQuery.error);
+    const contextExpired = isAnalysisArtifactExpired(matchContextQuery.error);
+    const queryIdentity = [
+      artifactId,
+      activeQueryParams.gameTitleId,
+      activeQueryParams.seasonMasterId ?? "",
+      activeQueryParams.mapMasterId ?? "",
+    ].join("|");
+    const activeResourceKey = `${activeView}|${queryIdentity}`;
+    const contextResourceKey = matchContextQueryParams
+      ? `context|${queryIdentity}|${matchContextQueryParams.matchId}`
+      : undefined;
+    const retryActive = activeExpired && !handledExpiredResources.current.has(activeResourceKey);
+    const retryContext = Boolean(
+      contextExpired &&
+      contextResourceKey &&
+      !handledExpiredResources.current.has(contextResourceKey),
+    );
+    const unhandledKeys = [
+      ...(retryActive ? [activeResourceKey] : []),
+      ...(retryContext && contextResourceKey ? [contextResourceKey] : []),
+    ];
+    if (unhandledKeys.length === 0) return;
+    unhandledKeys.forEach((key) => handledExpiredResources.current.add(key));
     void statusQuery.refetch().then((result) => {
       if (result.data?.currentArtifact?.artifactId === artifactId) {
         return Promise.all([
-          activeQuery.refetch(),
-          ...(matchContextQueryParams ? [matchContextQuery.refetch()] : []),
+          ...(retryActive ? [activeQuery.refetch()] : []),
+          ...(retryContext ? [matchContextQuery.refetch()] : []),
         ]);
       }
       return undefined;
@@ -189,6 +208,10 @@ export function useSeriesAnalysisDisplayBundle({
   }, [
     activeQuery,
     activeQueryParams?.artifactId,
+    activeQueryParams?.gameTitleId,
+    activeQueryParams?.mapMasterId,
+    activeQueryParams?.seasonMasterId,
+    activeView,
     matchContextQuery,
     matchContextQueryParams,
     statusQuery,

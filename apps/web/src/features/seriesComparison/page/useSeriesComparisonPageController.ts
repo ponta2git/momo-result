@@ -11,6 +11,7 @@ import {
 import { useSearchParams } from "react-router-dom";
 
 import {
+  matchesSeriesAnalysisScope,
   seriesAnalysisFocusExclusionNotice,
   seriesAnalysisScopeSignature,
 } from "@/features/seriesComparison/model/seriesAnalysisDisplayBundle";
@@ -107,7 +108,13 @@ export function useSeriesComparisonPageController() {
     (matchContextQueryParams !== undefined && matchContextQuery.isFetching);
   const displayMatchesActivePurpose =
     activeView === "review" ? displayBundle?.kind === "review" : displayBundle?.kind === "analysis";
-  const visibleBundle = displayMatchesActivePurpose || bundleFetching ? displayBundle : undefined;
+  const displayedResource =
+    displayBundle?.kind === "review" ? displayBundle.review : displayBundle?.aggregate;
+  const displayMatchesCurrentScope = matchesSeriesAnalysisScope(displayedResource, normalizedState);
+  const visibleBundle =
+    (displayMatchesActivePurpose && displayMatchesCurrentScope) || bundleFetching
+      ? displayBundle
+      : undefined;
   const resourceShielded = shouldShowStaleShield({
     hasVisibleData: visibleBundle !== undefined,
     isPlaceholderData: activeQuery.isPlaceholderData,
@@ -262,7 +269,8 @@ export function useSeriesComparisonPageController() {
       canRefresh: activeQueryParams !== undefined,
       data: visibleResource,
       hasError: shouldShowQueryError(activeQuery),
-      loading: isInitialQueryLoading(activeQuery) || !activeResourceMatches,
+      loading:
+        isInitialQueryLoading(activeQuery) || (!activeResourceMatches && activeQuery.isFetching),
       refreshing: activeQuery.isFetching && activeQuery.data !== undefined,
       shielded: resourceShielded,
     },

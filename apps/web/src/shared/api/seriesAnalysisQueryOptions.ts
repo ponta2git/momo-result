@@ -16,6 +16,9 @@ import type {
   SeriesAnalysisQuery,
 } from "@/shared/api/seriesAnalysis";
 
+// Artifact IDs address immutable payloads; explicit refresh still bypasses staleTime.
+const immutableArtifactStaleTime = Number.POSITIVE_INFINITY;
+
 export function seriesAnalysisOptionsQueryOptions() {
   return queryOptions({
     queryKey: seriesAnalysisKeys.options(),
@@ -49,6 +52,7 @@ export function seriesAnalysisAggregateQueryOptions(query: SeriesAnalysisQuery |
     enabled: query !== undefined,
     placeholderData: keepPreviousData,
     retry: false,
+    staleTime: immutableArtifactStaleTime,
   });
 }
 
@@ -65,6 +69,7 @@ export function seriesAnalysisReviewQueryOptions(
     enabled: enabled && query !== undefined,
     placeholderData: keepPreviousData,
     retry: false,
+    staleTime: immutableArtifactStaleTime,
   });
 }
 
@@ -80,6 +85,7 @@ export function seriesAnalysisDrilldownQueryOptions(
     },
     enabled: enabled && query !== undefined,
     retry: false,
+    staleTime: immutableArtifactStaleTime,
   });
 }
 
@@ -95,6 +101,7 @@ export function seriesAnalysisMatchContextQueryOptions(
     },
     enabled: enabled && query !== undefined,
     retry: false,
+    staleTime: immutableArtifactStaleTime,
   });
 }
 

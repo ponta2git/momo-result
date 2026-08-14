@@ -63,8 +63,18 @@ export function matchesSeriesAnalysisResource(
   return Boolean(
     resource &&
     artifactId &&
-    state.gameTitleId &&
     resource.artifact.artifactId === artifactId &&
+    matchesSeriesAnalysisScope(resource, state),
+  );
+}
+
+export function matchesSeriesAnalysisScope(
+  resource: ArtifactScopedResource | undefined,
+  state: SeriesAnalysisUrlState,
+): boolean {
+  return Boolean(
+    resource &&
+    state.gameTitleId &&
     resource.artifact.gameTitleId === state.gameTitleId &&
     resource.scope.seasonMasterId === state.seasonMasterId &&
     resource.scope.mapMasterId === state.mapMasterId,

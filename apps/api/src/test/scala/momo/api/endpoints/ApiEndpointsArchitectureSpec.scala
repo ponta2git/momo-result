@@ -1,11 +1,13 @@
 package momo.api.endpoints
 
+import java.lang.reflect.Modifier
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path, Paths}
 
 import scala.jdk.CollectionConverters.*
 
 import munit.FunSuite
+import sttp.tapir.{endpoint, query, Endpoint, EndpointInput, PublicEndpoint}
 
 final class ApiEndpointsArchitectureSpec extends FunSuite:
   private val endpointDir = Paths.get("src/main/scala/momo/api/endpoints")
@@ -22,21 +24,28 @@ final class ApiEndpointsArchitectureSpec extends FunSuite:
   private val requestIdMiddleware = httpDir.resolve("RequestIdMiddleware.scala")
   private val httpOperation = Paths.get("src/main/scala/momo/api/http/HttpOperation.scala")
 
-  private val ObjectBlock =
-    raw"(?s)object\s+([A-Za-z0-9_]+Endpoints):(.+?)(?=\nobject\s+[A-Za-z0-9_]+Endpoints:|\z)".r
-  private val EndpointVal =
-    raw"val\s+([A-Za-z0-9_]+)\s*:\s*(?:PublicEndpoint|SecuredRead|Endpoint|CommonEndpoint\.Secured(?:Read|Mutation))".r
+  private val EndpointObject = raw"(?m)^[ \t]*object\s+([A-Za-z0-9_]+Endpoints):".r
+  private val EndpointRef =
+    raw"([A-Za-z0-9_]+Endpoints\.[A-Za-z0-9_]+)(?:\s*\[[^\]]+\])?".r
   private val ServerLogicRef =
-    raw"([A-Za-z0-9_]+Endpoints\.[A-Za-z0-9_]+)\s*\.(?:serverLogic(?:Success)?|serverSecurityLogic)".r
+    raw"([A-Za-z0-9_]+Endpoints\.[A-Za-z0-9_]+)(?:\s*\[[^\]]+\])?\s*\.(?:serverLogic(?:Success)?|serverSecurityLogic)".r
   private val SecuredLogicRef =
-    raw"SecuredEndpoint\s*\.\s*(?:readLogic|mutationLogic|adminReadLogic|adminMutationLogic|masterMutationLogic)\([^,]+,\s*([A-Za-z0-9_]+Endpoints\.[A-Za-z0-9_]+)\)".r
+    raw"SecuredEndpoint\s*\.\s*(?:readLogic|mutationLogic|adminReadLogic|adminMutationLogic|masterMutationLogic)\([^,]+,\s*([A-Za-z0-9_]+Endpoints\.[A-Za-z0-9_]+)(?:\s*\[[^\]]+\])?\s*\)".r
   private val OperationLabelLiteral = """"(?:GET|POST|PUT|PATCH|DELETE) /api[^"]*"""".r
+  private val EndpointClass = classOf[Endpoint[?, ?, ?, ?, ?]]
+
+  private object EndpointDiscoveryFixture:
+    val route: PublicEndpoint[Unit, Unit, Unit, Any] = endpoint
+    val inputHelper: EndpointInput[String] = query[String]("fixture")
 
   test("ApiEndpoints.all includes every Tapir endpoint definition"):
-    val apiEndpointsText = read(endpointDir.resolve("ApiEndpoints.scala"))
-    val missing = definedEndpointRefs.filterNot(apiEndpointsText.contains).sorted
+    val registered = endpointRefs(read(endpointDir.resolve("ApiEndpoints.scala")))
+    val duplicates = registered.groupBy(identity).collect {
+      case (ref, occurrences) if occurrences.size > 1 => ref
+    }.toList.sorted
 
-    assertEquals(missing, Nil)
+    assertEquals(duplicates, Nil)
+    assertEquals(registered.distinct.sorted, definedEndpointRefs)
 
   test("every non-auth Tapir endpoint has server logic"):
     val serverRefs = scalaFiles(httpDir).map(path => read(path))
@@ -47,6 +56,13 @@ final class ApiEndpointsArchitectureSpec extends FunSuite:
     val missing = definedEndpointRefs.filterNot(serverRefs.contains).sorted
 
     assertEquals(missing, Nil)
+
+  test("endpoint discovery uses compiled return types instead of Endpoint-prefixed type names"):
+    assertEquals(endpointMemberNames(EndpointDiscoveryFixture.getClass), List("route"))
+
+  test("endpoint discovery covers public endpoint factories and local type aliases"):
+    assert(definedEndpointRefs.contains("MatchDraftEndpoints.downloadSourceImagesStream"))
+    assert(definedEndpointRefs.contains("SeriesAnalysisEndpoints.recalculateTitle"))
 
   test("API boundaries parse ids before constructing domain id types"):
     val boundaryFiles = scalaFiles(endpointDir) ++ scalaFiles(httpDir) ++ scalaFiles(codecDir) ++
@@ -154,12 +170,35 @@ final class ApiEndpointsArchitectureSpec extends FunSuite:
     assertEquals(missing, Nil)
 
   private def definedEndpointRefs: List[String] = scalaFiles(endpointDir).flatMap { path =>
-    ObjectBlock.findAllMatchIn(read(path)).flatMap { objectMatch =>
+    EndpointObject.findAllMatchIn(read(path)).flatMap { objectMatch =>
       val objectName = objectMatch.group(1)
-      EndpointVal.findAllMatchIn(objectMatch.group(2))
-        .map(valueMatch => s"$objectName.${valueMatch.group(1)}")
+      val objectClass = Class.forName(
+        s"momo.api.endpoints.$objectName$$",
+        false,
+        getClass.getClassLoader,
+      )
+      endpointMemberNames(objectClass).map(memberName => s"$objectName.$memberName")
     }
-  }.sorted
+  }.distinct.sorted
+
+  /**
+   * Scala type aliases are erased to `Endpoint`, so compiled return types classify public endpoint
+   * vals and generic factories without depending on source-level alias names. Tapir construction
+   * helpers retain their distinct `EndpointInput` / `EndpointOutput` / `EndpointIO` runtime types
+   * and are therefore excluded.
+   */
+  private def endpointMemberNames(owner: Class[?]): List[String] = owner.getDeclaredMethods.iterator
+    .filter(method =>
+      Modifier.isPublic(method.getModifiers) &&
+        !Modifier.isStatic(method.getModifiers) &&
+        !method.isSynthetic &&
+        method.getParameterCount == 0 &&
+        EndpointClass.isAssignableFrom(method.getReturnType)
+    )
+    .map(_.getName).toList.sorted
+
+  private def endpointRefs(text: String): List[String] = EndpointRef.findAllMatchIn(text)
+    .map(_.group(1)).toList
 
   private def scalaFiles(root: Path): List[Path] =
     val stream = Files.walk(root)

@@ -140,14 +140,13 @@ pub struct OcrQueuePayload {
     media_type: OcrMediaType,
     requested_screen_type: RequestedScreenType,
     hints: OcrHints,
-    request_id: Option<String>,
 }
 
 impl OcrQueuePayload {
     #[must_use]
     #[expect(
         clippy::too_many_arguments,
-        reason = "the transport adapter constructs every field of the closed OCR queue contract"
+        reason = "the transport adapter passes every execution-relevant field of the closed OCR queue contract"
     )]
     pub const fn new(
         job_id: String,
@@ -159,7 +158,6 @@ impl OcrQueuePayload {
         media_type: OcrMediaType,
         requested_screen_type: RequestedScreenType,
         hints: OcrHints,
-        request_id: Option<String>,
     ) -> Self {
         Self {
             job_id,
@@ -171,7 +169,6 @@ impl OcrQueuePayload {
             media_type,
             requested_screen_type,
             hints,
-            request_id,
         }
     }
 
@@ -218,11 +215,6 @@ impl OcrQueuePayload {
     #[must_use]
     pub const fn hints(&self) -> &OcrHints {
         &self.hints
-    }
-
-    #[must_use]
-    pub fn request_id(&self) -> Option<&str> {
-        self.request_id.as_deref()
     }
 }
 

@@ -67,7 +67,7 @@ v2はRust worker専用のobject-storage契約である。すべてのRedis field
 | `attempt` | yes | payload schema上の正整数 |
 | `enqueuedAt` | yes | ISO-8601 UTC timestamp |
 | `ocrHintsJson` | no | compact / sorted keys / UTF-8 JSON string。最大8192 UTF-8 bytes |
-| `requestId` | no | ログ相関ID。`^[A-Za-z0-9_-]{1,64}$` |
+| `requestId` | no | producer / outboxのログ相関ID。workerは形式を検証するが処理payloadには保持しない。`^[A-Za-z0-9_-]{1,64}$` |
 
 Rules:
 

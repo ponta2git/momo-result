@@ -111,7 +111,6 @@ pub(crate) fn parse_delivery(
         media_type,
         requested_screen_type,
         hints,
-        request_id,
     ))
 }
 
@@ -280,7 +279,6 @@ mod tests {
             payload.requested_screen_type(),
             RequestedScreenType::IncidentLog
         );
-        assert_eq!(payload.request_id(), Some("req_v2-1"));
         assert_eq!(payload.hints(), &OcrHints::default());
     }
 

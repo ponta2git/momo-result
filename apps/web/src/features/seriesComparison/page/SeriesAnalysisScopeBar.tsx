@@ -1,13 +1,20 @@
 import { RefreshCw } from "lucide-react";
 import { useState } from "react";
 
-import type { SeriesComparisonAggregateV2 } from "@/shared/api/seriesAnalysis";
+import type {
+  SeriesComparisonAggregateV2,
+  SeriesComparisonReviewV2,
+} from "@/shared/api/seriesAnalysis";
 import { useMediaQuery } from "@/shared/lib/useMediaQuery";
 import { Button } from "@/shared/ui/actions/Button";
 import { Disclosure } from "@/shared/ui/data/Collapsible";
 import { SelectField } from "@/shared/ui/forms/SelectField";
 
 type SelectOption = { disabled?: boolean | undefined; label: string; value: string };
+type SeriesAnalysisResourceSummary = Pick<
+  SeriesComparisonAggregateV2 | SeriesComparisonReviewV2,
+  "artifact" | "dataQuality" | "scope"
+>;
 
 export function SeriesAnalysisScopeBar({
   canRefresh,
@@ -33,7 +40,7 @@ export function SeriesAnalysisScopeBar({
   onSeasonChange: (value: string) => void;
   onSeriesChange: (value: string) => void;
   refreshing: boolean;
-  response: SeriesComparisonAggregateV2 | undefined;
+  response: SeriesAnalysisResourceSummary | undefined;
   scopeLabel: string;
   seasonOptions: SelectOption[];
   seasonValue: string;

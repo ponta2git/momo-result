@@ -17,17 +17,15 @@ const state = {
 } as const;
 
 describe("series analysis display bundle", () => {
-  it("waits until aggregate, review, and selected match share one artifact", () => {
-    const aggregate = makeSeriesAnalysisAggregate();
+  it("resolves review and selected match without requiring aggregate", () => {
     const review = makeSeriesAnalysisReview();
     const matchContext = makeSeriesAnalysisMatchContext();
-    const nextArtifact = { ...aggregate.artifact, artifactId: "artifact-next" };
-    const nextAggregate = makeSeriesAnalysisAggregate(nextArtifact);
+    const nextArtifact = { ...review.artifact, artifactId: "artifact-next" };
 
     expect(
       resolveSeriesAnalysisDisplayBundle({
         activeView: "review",
-        aggregate: nextAggregate,
+        aggregate: undefined,
         artifactId: nextArtifact.artifactId,
         matchContext,
         review,
@@ -39,7 +37,7 @@ describe("series analysis display bundle", () => {
     matchContext.artifact = nextArtifact;
     const resolved = resolveSeriesAnalysisDisplayBundle({
       activeView: "review",
-      aggregate: nextAggregate,
+      aggregate: undefined,
       artifactId: nextArtifact.artifactId,
       matchContext,
       review,
@@ -47,8 +45,9 @@ describe("series analysis display bundle", () => {
     });
     expect(resolved.kind).toBe("ready");
     if (resolved.kind !== "ready") throw new Error("ready bundle expected");
-    expect(resolved.value.aggregate.artifact.artifactId).toBe("artifact-next");
-    expect(resolved.value.review?.artifact.artifactId).toBe("artifact-next");
+    expect(resolved.value.kind).toBe("review");
+    if (resolved.value.kind !== "review") throw new Error("review bundle expected");
+    expect(resolved.value.review.artifact.artifactId).toBe("artifact-next");
     expect(resolved.value.matchContext?.artifact.artifactId).toBe("artifact-next");
   });
 
@@ -79,7 +78,7 @@ describe("series analysis display bundle", () => {
     ).toEqual({ kind: "excluded", status: "not_in_scope" });
   });
 
-  it("does not require review outside the next-match purpose", () => {
+  it("resolves aggregate without requiring review outside the next-match purpose", () => {
     const aggregate = makeSeriesAnalysisAggregate();
     const resolved = resolveSeriesAnalysisDisplayBundle({
       activeView: "flow",
@@ -90,5 +89,7 @@ describe("series analysis display bundle", () => {
       state: { gameTitleId: state.gameTitleId, view: "flow" },
     });
     expect(resolved.kind).toBe("ready");
+    if (resolved.kind !== "ready") throw new Error("ready bundle expected");
+    expect(resolved.value.kind).toBe("analysis");
   });
 });

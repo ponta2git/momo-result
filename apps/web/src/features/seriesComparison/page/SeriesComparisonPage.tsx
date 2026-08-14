@@ -18,7 +18,7 @@ import { StaleShield } from "@/shared/ui/motion/StaleShield";
 
 export function SeriesComparisonPage() {
   const page = useSeriesComparisonPageController();
-  const { aggregate, filters, focus, options, review, status } = page;
+  const { filters, focus, options, resource, status } = page;
 
   if (options.loading) return <PageSkeleton />;
   if (page.clientUpgradeRequired) {
@@ -88,11 +88,11 @@ export function SeriesComparisonPage() {
       ) : filters.seriesOptions.length > 0 ? (
         <>
           <SeriesAnalysisScopeBar
-            canRefresh={aggregate.canRefresh || Boolean(filters.state.gameTitleId)}
+            canRefresh={resource.canRefresh || Boolean(filters.state.gameTitleId)}
             mapOptions={filters.mapOptions}
             mapValue={filters.state.mapMasterId ?? ""}
-            refreshing={aggregate.refreshing || review.refreshing || status.refreshing}
-            response={aggregate.data}
+            refreshing={resource.refreshing || status.refreshing}
+            response={resource.data}
             scopeLabel={filters.scopeLabel}
             seasonOptions={filters.seasonOptions}
             seasonValue={filters.state.seasonMasterId ?? ""}
@@ -113,8 +113,8 @@ export function SeriesComparisonPage() {
           {status.loading && !status.data ? <ComparisonSkeleton /> : null}
           {!status.loading &&
           status.data?.currentArtifact &&
-          aggregate.hasError &&
-          !aggregate.data ? (
+          resource.hasError &&
+          !resource.data ? (
             <Notice tone="danger" title="戦績データを読み込めません">
               <p>分析結果を取得できませんでした。通信状態を確認して再読み込みしてください。</p>
               <div className="mt-3">
@@ -123,9 +123,9 @@ export function SeriesComparisonPage() {
                 </Button>
               </div>
             </Notice>
-          ) : status.data?.currentArtifact && aggregate.data ? (
+          ) : status.data?.currentArtifact && resource.data && resource.bundle ? (
             <div className="grid gap-3">
-              {aggregate.hasError ? (
+              {resource.hasError ? (
                 <Notice tone="warning" title="最新の戦績データを取得できません">
                   直前に取得した分析結果を表示しています。
                 </Notice>
@@ -141,15 +141,13 @@ export function SeriesComparisonPage() {
                 </Notice>
               ) : null}
               <StaleShield
-                active={
-                  aggregate.loading || aggregate.shielded || focus.shielded || review.shielded
-                }
+                active={resource.loading || resource.shielded || focus.shielded}
                 busyLabel="比較条件を更新中"
                 contentClassName="grid gap-4"
                 fallback={<ComparisonSkeleton />}
                 preserveContent
               >
-                {aggregate.data.scope.matchCount === 0 ? (
+                {resource.data.scope.matchCount === 0 ? (
                   <EmptyState
                     action={
                       filters.state.mapMasterId || filters.state.seasonMasterId ? (
@@ -166,12 +164,7 @@ export function SeriesComparisonPage() {
                   />
                 ) : (
                   <SeriesAnalysisContent
-                    activeView={filters.activeView}
-                    matchContext={focus.data}
-                    response={aggregate.data}
-                    review={review.data}
-                    reviewError={review.hasError}
-                    reviewLoading={review.loading}
+                    bundle={resource.bundle}
                     onArtifactExpired={page.actions.refresh}
                     onClearFocusedMatch={page.actions.clearFocusedMatch}
                     onFocusMatch={page.actions.focusMatch}

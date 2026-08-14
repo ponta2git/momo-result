@@ -187,7 +187,7 @@ describe("app routing", () => {
     expect(screen.getByRole("link", { name: "開催" })).toBeInTheDocument();
   });
 
-  it("renders aggregate and review resources pinned to one published artifact", async () => {
+  it("loads only the active review, then loads aggregate after switching views", async () => {
     setDevUser();
     const aggregateSearches: URLSearchParams[] = [];
     const reviewSearches: URLSearchParams[] = [];
@@ -220,13 +220,16 @@ describe("app routing", () => {
     expect(screen.getByText(/収益上位時の勝率: 60%/u)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "ダイアログを閉じる" }));
 
+    expect(aggregateSearches).toHaveLength(0);
+    expect(reviewSearches).toHaveLength(1);
+    expect(reviewSearches[0]?.get("artifactId")).toBe(analysisArtifact.artifactId);
+
     await user.click(screen.getByRole("tab", { name: "分析する" }));
     expect(await screen.findByRole("tabpanel", { name: "今の差" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "順位と基礎比較" })).toBeInTheDocument();
     expect(router.state.location.search).toContain("view=overview");
 
-    expect(aggregateSearches).not.toHaveLength(0);
-    expect(reviewSearches).not.toHaveLength(0);
+    expect(aggregateSearches).toHaveLength(1);
     expect(
       aggregateSearches.every((params) => params.get("artifactId") === analysisArtifact.artifactId),
     ).toBe(true);
@@ -308,7 +311,7 @@ describe("app routing", () => {
         return HttpResponse.json(makeSeriesAnalysisAggregate());
       }),
     );
-    const { router } = renderApp("/analytics/series");
+    const { router } = renderApp("/analytics/series?view=overview");
 
     expect(await screen.findByRole("heading", { name: "戦績比較" })).toBeInTheDocument();
     await user.selectOptions(screen.getByRole("combobox", { name: "シーズン" }), "season_current");

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { SeriesAnalysisDrilldownSelection } from "@/features/seriesComparison/drilldowns/SeriesAnalysisDrilldownDialog";
 import { SeriesAnalysisDrilldownDialog } from "@/features/seriesComparison/drilldowns/SeriesAnalysisDrilldownDialog";
+import type { SeriesAnalysisDisplayBundle } from "@/features/seriesComparison/model/seriesAnalysisDisplayBundle";
 import type { SeriesAnalysisViewId } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
 import { ContextView } from "@/features/seriesComparison/page/SeriesAnalysisContextView";
 import { DriversView } from "@/features/seriesComparison/page/SeriesAnalysisDriversView";
@@ -16,38 +17,25 @@ import {
   purposeTabId,
   PurposeTabs,
 } from "@/features/seriesComparison/page/SeriesComparisonAnalysisNavigation";
-import type {
-  SeriesAnalysisQuery,
-  SeriesAnalysisMatchContextV2,
-  SeriesComparisonAggregateV2,
-  SeriesComparisonReviewV2,
-} from "@/shared/api/seriesAnalysis";
+import type { SeriesAnalysisQuery } from "@/shared/api/seriesAnalysis";
 
 export function SeriesAnalysisContent({
-  activeView,
-  matchContext,
+  bundle,
   onArtifactExpired,
   onClearFocusedMatch,
   onFocusMatch,
   onViewChange,
-  response,
-  review,
-  reviewError,
-  reviewLoading,
 }: {
-  activeView: SeriesAnalysisViewId;
-  matchContext: SeriesAnalysisMatchContextV2 | undefined;
+  bundle: SeriesAnalysisDisplayBundle;
   onArtifactExpired: () => void;
   onClearFocusedMatch: () => void;
   onFocusMatch: (matchId: string) => void;
   onViewChange: (view: SeriesAnalysisViewId, options?: { replace?: boolean }) => void;
-  response: SeriesComparisonAggregateV2;
-  review: SeriesComparisonReviewV2 | undefined;
-  reviewError: boolean;
-  reviewLoading: boolean;
 }) {
   const [drilldown, setDrilldown] = useState<SeriesAnalysisDrilldownSelection | null>(null);
-  const artifactId = response.artifact.artifactId;
+  const resource = bundle.kind === "review" ? bundle.review : bundle.aggregate;
+  const { matchContext, view: activeView } = bundle;
+  const artifactId = resource.artifact.artifactId;
   const previousArtifactId = useRef(artifactId);
   useEffect(() => {
     if (previousArtifactId.current === artifactId) return;
@@ -63,9 +51,9 @@ export function SeriesAnalysisContent({
 
   const baseQuery: SeriesAnalysisQuery = {
     artifactId,
-    gameTitleId: response.artifact.gameTitleId,
-    mapMasterId: response.scope.mapMasterId,
-    seasonMasterId: response.scope.seasonMasterId,
+    gameTitleId: resource.artifact.gameTitleId,
+    mapMasterId: resource.scope.mapMasterId,
+    seasonMasterId: resource.scope.seasonMasterId,
   };
   const changeView = useCallback(
     (view: Parameters<typeof onViewChange>[0]) => onViewChange(view),
@@ -79,11 +67,11 @@ export function SeriesAnalysisContent({
         <SeriesAnalysisSelectedMatch context={matchContext} onClear={onClearFocusedMatch} />
       ) : null}
       <PurposeTabs activeView={activeView} onViewChange={changeView} />
-      {activeView === "review" ? (
+      {bundle.kind === "review" ? (
         <ReviewView
-          loading={reviewLoading}
-          response={review}
-          showError={reviewError}
+          loading={false}
+          response={bundle.review}
+          showError={false}
           onViewChange={onViewChange}
         />
       ) : (
@@ -93,45 +81,49 @@ export function SeriesAnalysisContent({
           id={purposePanelId("analysis")}
           role="tabpanel"
         >
-          <AnalysisTabs activeView={activeView} onViewChange={changeView} />
-          {activeView === "overview" ? (
+          <AnalysisTabs activeView={bundle.view} onViewChange={changeView} />
+          {bundle.view === "overview" ? (
             <OverviewView
               focusedItemIds={focusedItemIds}
-              response={response}
+              response={bundle.aggregate}
               onDrilldown={setDrilldown}
             />
           ) : null}
-          {activeView === "drivers" ? (
+          {bundle.view === "drivers" ? (
             <DriversView
               focusedItemIds={focusedItemIds}
-              response={response}
+              response={bundle.aggregate}
               onDrilldown={setDrilldown}
             />
           ) : null}
-          {activeView === "flow" ? (
+          {bundle.view === "flow" ? (
             <FlowView
               focusedItemIds={focusedItemIds}
-              response={response}
+              response={bundle.aggregate}
               onDrilldown={setDrilldown}
               onFocusMatch={onFocusMatch}
             />
           ) : null}
-          {activeView === "context" ? (
+          {bundle.view === "context" ? (
             <ContextView
               focusedItemIds={focusedItemIds}
-              response={response}
+              response={bundle.aggregate}
               onDrilldown={setDrilldown}
             />
           ) : null}
         </div>
       )}
-      <MetricDefinitions response={response} />
-      <SeriesAnalysisDrilldownDialog
-        baseQuery={baseQuery}
-        selection={drilldown}
-        onArtifactExpired={onArtifactExpired}
-        onClose={() => setDrilldown(null)}
-      />
+      {bundle.kind === "analysis" ? (
+        <>
+          <MetricDefinitions response={bundle.aggregate} />
+          <SeriesAnalysisDrilldownDialog
+            baseQuery={baseQuery}
+            selection={drilldown}
+            onArtifactExpired={onArtifactExpired}
+            onClose={() => setDrilldown(null)}
+          />
+        </>
+      ) : null}
     </div>
   );
 }

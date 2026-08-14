@@ -1,4 +1,7 @@
-import type { SeriesAnalysisUrlState } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
+import type {
+  SeriesAnalysisUrlState,
+  SeriesAnalysisViewId,
+} from "@/features/seriesComparison/model/seriesAnalysisViewModel";
 import type {
   SeriesAnalysisMatchContextV2,
   SeriesAnalysisScope,
@@ -6,11 +9,21 @@ import type {
   SeriesComparisonReviewV2,
 } from "@/shared/api/seriesAnalysis";
 
-export type SeriesAnalysisDisplayBundle = {
-  aggregate: SeriesComparisonAggregateV2;
-  matchContext: SeriesAnalysisMatchContextV2 | undefined;
-  review: SeriesComparisonReviewV2 | undefined;
-};
+type SeriesAnalysisAnalysisViewId = Exclude<SeriesAnalysisViewId, "review">;
+
+export type SeriesAnalysisDisplayBundle =
+  | {
+      aggregate: SeriesComparisonAggregateV2;
+      kind: "analysis";
+      matchContext: SeriesAnalysisMatchContextV2 | undefined;
+      view: SeriesAnalysisAnalysisViewId;
+    }
+  | {
+      kind: "review";
+      matchContext: SeriesAnalysisMatchContextV2 | undefined;
+      review: SeriesComparisonReviewV2;
+      view: "review";
+    };
 
 export type SeriesAnalysisBundleResolution =
   | {
@@ -58,6 +71,28 @@ export function matchesSeriesAnalysisResource(
   );
 }
 
+function readyBundle(
+  activeView: SeriesAnalysisViewId,
+  aggregate: SeriesComparisonAggregateV2 | undefined,
+  review: SeriesComparisonReviewV2 | undefined,
+  matchContext: SeriesAnalysisMatchContextV2 | undefined,
+): SeriesAnalysisBundleResolution {
+  if (activeView === "review") {
+    return review
+      ? {
+          kind: "ready",
+          value: { kind: "review", matchContext, review, view: "review" },
+        }
+      : { kind: "waiting" };
+  }
+  return aggregate
+    ? {
+        kind: "ready",
+        value: { aggregate, kind: "analysis", matchContext, view: activeView },
+      }
+    : { kind: "waiting" };
+}
+
 export function resolveSeriesAnalysisDisplayBundle({
   activeView,
   aggregate,
@@ -66,27 +101,25 @@ export function resolveSeriesAnalysisDisplayBundle({
   review,
   state,
 }: {
-  activeView: SeriesAnalysisUrlState["view"];
+  activeView: SeriesAnalysisViewId;
   aggregate: SeriesComparisonAggregateV2 | undefined;
   artifactId: string | undefined;
   matchContext: SeriesAnalysisMatchContextV2 | undefined;
   review: SeriesComparisonReviewV2 | undefined;
   state: SeriesAnalysisUrlState;
 }): SeriesAnalysisBundleResolution {
-  if (!aggregate || !matchesSeriesAnalysisResource(aggregate, artifactId, state)) {
-    return { kind: "waiting" };
-  }
-
+  const matchingAggregate = matchesSeriesAnalysisResource(aggregate, artifactId, state)
+    ? aggregate
+    : undefined;
   const matchingReview = matchesSeriesAnalysisResource(review, artifactId, state)
     ? review
     : undefined;
-  if (activeView === "review" && !matchingReview) return { kind: "waiting" };
+  if (activeView === "review" ? !matchingReview : !matchingAggregate) {
+    return { kind: "waiting" };
+  }
 
   if (!state.focusMatchId) {
-    return {
-      kind: "ready",
-      value: { aggregate, matchContext: undefined, review: matchingReview },
-    };
+    return readyBundle(activeView, matchingAggregate, matchingReview, undefined);
   }
   if (
     !matchesSeriesAnalysisResource(matchContext, artifactId, state) ||
@@ -98,8 +131,5 @@ export function resolveSeriesAnalysisDisplayBundle({
     return { kind: "excluded", status: matchContext.inclusion.status };
   }
   if (!matchContext.match) return { kind: "waiting" };
-  return {
-    kind: "ready",
-    value: { aggregate, matchContext, review: matchingReview },
-  };
+  return readyBundle(activeView, matchingAggregate, matchingReview, matchContext);
 }

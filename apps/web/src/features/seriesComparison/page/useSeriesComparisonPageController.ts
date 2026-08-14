@@ -67,16 +67,14 @@ export function useSeriesComparisonPageController() {
     state: normalizedState,
   });
   const {
-    aggregateQuery,
-    aggregateQueryParams,
+    activeQuery,
+    activeQueryParams,
+    activeResourceMatches,
     bundleResolution,
     candidateArtifactId,
     displayBundle,
     matchContextQuery,
     matchContextQueryParams,
-    reviewArtifactMatches,
-    reviewEnabled,
-    reviewQuery,
     statusQuery,
   } = resources;
 
@@ -105,25 +103,19 @@ export function useSeriesComparisonPageController() {
   const scopeSettling =
     seriesAnalysisScopeSignature(normalizedState) !== seriesAnalysisScopeSignature(deferredState);
   const bundleFetching =
-    aggregateQuery.isFetching ||
-    (reviewEnabled && reviewQuery.isFetching) ||
+    activeQuery.isFetching ||
     (matchContextQueryParams !== undefined && matchContextQuery.isFetching);
-  const aggregateShielded = shouldShowStaleShield({
-    hasVisibleData: displayBundle !== undefined,
-    isPlaceholderData: aggregateQuery.isPlaceholderData,
-    isRefreshing: bundleFetching && displayBundle !== undefined,
+  const displayMatchesActivePurpose =
+    activeView === "review" ? displayBundle?.kind === "review" : displayBundle?.kind === "analysis";
+  const visibleBundle = displayMatchesActivePurpose || bundleFetching ? displayBundle : undefined;
+  const resourceShielded = shouldShowStaleShield({
+    hasVisibleData: visibleBundle !== undefined,
+    isPlaceholderData: activeQuery.isPlaceholderData,
+    isRefreshing: bundleFetching && visibleBundle !== undefined,
     isSettling: scopeSettling || (bundleResolution.kind === "waiting" && bundleFetching),
   });
-  const reviewLoading =
-    reviewEnabled && (isInitialQueryLoading(reviewQuery) || !reviewArtifactMatches);
-  const reviewShielded =
-    reviewEnabled &&
-    shouldShowStaleShield({
-      hasVisibleData: reviewArtifactMatches,
-      isPlaceholderData: reviewQuery.isPlaceholderData,
-      isRefreshing: reviewQuery.isFetching && reviewArtifactMatches,
-      isSettling: scopeSettling,
-    });
+  const visibleResource =
+    visibleBundle?.kind === "review" ? visibleBundle.review : visibleBundle?.aggregate;
 
   const updateState = useCallback(
     (next: SeriesAnalysisUrlState, options: { replace?: boolean } = {}) => {
@@ -215,16 +207,14 @@ export function useSeriesComparisonPageController() {
   const refresh = () => {
     void optionsQuery.refetch();
     void statusQuery.refetch();
-    if (aggregateQueryParams) void aggregateQuery.refetch();
-    if (reviewEnabled) void reviewQuery.refetch();
+    if (activeQueryParams) void activeQuery.refetch();
     if (matchContextQueryParams) void matchContextQuery.refetch();
   };
   const clientUpgradeRequired = [
     optionsQuery.error,
     statusQuery.error,
-    aggregateQuery.error,
+    activeQuery.error,
     matchContextQuery.error,
-    reviewQuery.error,
   ].some(isAnalysisClientUpgradeRequired);
 
   return {
@@ -234,14 +224,6 @@ export function useSeriesComparisonPageController() {
       focusMatch,
       refresh,
       reloadClient: () => window.location.reload(),
-    },
-    aggregate: {
-      canRefresh: aggregateQueryParams !== undefined,
-      data: displayBundle?.aggregate,
-      hasError: shouldShowQueryError(aggregateQuery),
-      loading: isInitialQueryLoading(aggregateQuery),
-      refreshing: aggregateQuery.isFetching && aggregateQuery.data !== undefined,
-      shielded: aggregateShielded,
     },
     clientUpgradeRequired,
     filters: {
@@ -258,7 +240,7 @@ export function useSeriesComparisonPageController() {
       updateView,
     },
     focus: {
-      data: displayBundle?.matchContext,
+      data: visibleBundle?.matchContext,
       hasError: matchContextQueryParams !== undefined && shouldShowQueryError(matchContextQuery),
       loading: matchContextQueryParams !== undefined && isInitialQueryLoading(matchContextQuery),
       notice: focusNotice,
@@ -275,12 +257,14 @@ export function useSeriesComparisonPageController() {
       refreshing: optionsQuery.isFetching,
     },
     returnTo,
-    review: {
-      data: displayBundle?.review,
-      hasError: reviewEnabled && shouldShowQueryError(reviewQuery),
-      loading: reviewLoading,
-      refreshing: reviewEnabled && reviewQuery.isFetching && reviewArtifactMatches,
-      shielded: reviewShielded,
+    resource: {
+      bundle: visibleBundle,
+      canRefresh: activeQueryParams !== undefined,
+      data: visibleResource,
+      hasError: shouldShowQueryError(activeQuery),
+      loading: isInitialQueryLoading(activeQuery) || !activeResourceMatches,
+      refreshing: activeQuery.isFetching && activeQuery.data !== undefined,
+      shielded: resourceShielded,
     },
     status: {
       data: statusQuery.data,

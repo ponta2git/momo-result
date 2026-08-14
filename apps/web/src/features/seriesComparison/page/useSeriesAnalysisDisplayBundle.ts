@@ -19,6 +19,39 @@ import {
   seriesAnalysisReviewQueryOptions,
   seriesAnalysisStatusQueryOptions,
 } from "@/shared/api/queryOptions";
+import type {
+  SeriesComparisonAggregateV2,
+  SeriesComparisonReviewV2,
+} from "@/shared/api/seriesAnalysis";
+
+function sameDisplayBundle(
+  current: SeriesAnalysisDisplayBundle | undefined,
+  next: SeriesAnalysisDisplayBundle,
+): boolean {
+  if (!current || current.kind !== next.kind || current.view !== next.view) return false;
+  if (current.kind === "review" && next.kind === "review") {
+    return current.review === next.review && current.matchContext === next.matchContext;
+  }
+  return (
+    current.kind === "analysis" &&
+    next.kind === "analysis" &&
+    current.aggregate === next.aggregate &&
+    current.matchContext === next.matchContext
+  );
+}
+
+function displayBundleWithoutContext(
+  activeView: SeriesAnalysisViewId,
+  aggregate: SeriesComparisonAggregateV2 | undefined,
+  review: SeriesComparisonReviewV2 | undefined,
+): SeriesAnalysisDisplayBundle | undefined {
+  if (activeView === "review") {
+    return review ? { kind: "review", matchContext: undefined, review, view: "review" } : undefined;
+  }
+  return aggregate
+    ? { aggregate, kind: "analysis", matchContext: undefined, view: activeView }
+    : undefined;
+}
 
 export function useSeriesAnalysisDisplayBundle({
   activeView,
@@ -33,11 +66,24 @@ export function useSeriesAnalysisDisplayBundle({
   const handledExpiredArtifacts = useRef(new Set<string>());
   const statusQuery = useQuery(seriesAnalysisStatusQueryOptions(state.gameTitleId));
   const publishedArtifactId = statusQuery.data?.currentArtifact?.artifactId;
+
   const aggregateQueryParams = useMemo(
-    () => seriesAnalysisQueryFromState(deferredState, publishedArtifactId),
-    [deferredState, publishedArtifactId],
+    () =>
+      activeView === "review"
+        ? undefined
+        : seriesAnalysisQueryFromState(deferredState, publishedArtifactId),
+    [activeView, deferredState, publishedArtifactId],
+  );
+  const reviewQueryParams = useMemo(
+    () =>
+      activeView === "review"
+        ? seriesAnalysisQueryFromState(state, publishedArtifactId)
+        : undefined,
+    [activeView, publishedArtifactId, state],
   );
   const aggregateQuery = useQuery(seriesAnalysisAggregateQueryOptions(aggregateQueryParams));
+  const reviewQuery = useQuery(seriesAnalysisReviewQueryOptions(reviewQueryParams));
+
   const candidateAggregate = matchesSeriesAnalysisResource(
     aggregateQuery.data,
     publishedArtifactId,
@@ -45,19 +91,26 @@ export function useSeriesAnalysisDisplayBundle({
   )
     ? aggregateQuery.data
     : undefined;
-  const candidateArtifactId = candidateAggregate?.artifact.artifactId;
-  const reviewQueryParams = useMemo(
-    () => seriesAnalysisQueryFromState(state, candidateArtifactId),
-    [candidateArtifactId, state],
+  const candidateReview = matchesSeriesAnalysisResource(
+    reviewQuery.data,
+    publishedArtifactId,
+    state,
+  )
+    ? reviewQuery.data
+    : undefined;
+  const candidateResource = activeView === "review" ? candidateReview : candidateAggregate;
+  const candidateArtifactId = candidateResource?.artifact.artifactId;
+
+  const contextQueryParams = useMemo(
+    () => seriesAnalysisQueryFromState(state, publishedArtifactId),
+    [publishedArtifactId, state],
   );
-  const reviewEnabled = reviewQueryParams !== undefined && activeView === "review";
-  const reviewQuery = useQuery(seriesAnalysisReviewQueryOptions(reviewQueryParams, reviewEnabled));
   const matchContextQueryParams = useMemo(
     () =>
-      reviewQueryParams && state.focusMatchId
-        ? { ...reviewQueryParams, matchId: state.focusMatchId }
+      contextQueryParams && state.focusMatchId
+        ? { ...contextQueryParams, matchId: state.focusMatchId }
         : undefined,
-    [reviewQueryParams, state.focusMatchId],
+    [contextQueryParams, state.focusMatchId],
   );
   const matchContextQuery = useQuery(
     seriesAnalysisMatchContextQueryOptions(matchContextQueryParams),
@@ -67,100 +120,89 @@ export function useSeriesAnalysisDisplayBundle({
       resolveSeriesAnalysisDisplayBundle({
         activeView,
         aggregate: candidateAggregate,
-        artifactId: candidateArtifactId,
+        artifactId: publishedArtifactId,
         matchContext: matchContextQuery.data,
-        review: reviewQuery.data,
+        review: candidateReview,
         state,
       }),
     [
       activeView,
       candidateAggregate,
-      candidateArtifactId,
+      candidateReview,
       matchContextQuery.data,
-      reviewQuery.data,
+      publishedArtifactId,
       state,
     ],
   );
 
   useEffect(() => {
     if (bundleResolution.kind !== "ready") return;
-    setDisplayBundle((current) => {
-      const next = bundleResolution.value;
-      return current?.aggregate === next.aggregate &&
-        current.review === next.review &&
-        current.matchContext === next.matchContext
-        ? current
-        : next;
-    });
+    setDisplayBundle((current) =>
+      sameDisplayBundle(current, bundleResolution.value) ? current : bundleResolution.value,
+    );
   }, [bundleResolution]);
 
   useEffect(() => {
-    if (displayBundle || !candidateAggregate || bundleResolution.kind !== "waiting") return;
-    const reviewFailed = reviewEnabled && shouldShowQueryError(reviewQuery);
-    const contextFailed =
-      matchContextQueryParams !== undefined && shouldShowQueryError(matchContextQuery);
-    if (reviewFailed || contextFailed) {
-      setDisplayBundle({
-        aggregate: candidateAggregate,
-        matchContext: undefined,
-        review: undefined,
-      });
+    if (
+      !candidateResource ||
+      bundleResolution.kind !== "waiting" ||
+      matchContextQueryParams === undefined ||
+      !shouldShowQueryError(matchContextQuery)
+    ) {
+      return;
+    }
+    const fallback = displayBundleWithoutContext(activeView, candidateAggregate, candidateReview);
+    if (fallback) {
+      setDisplayBundle((current) => (sameDisplayBundle(current, fallback) ? current : fallback));
     }
   }, [
+    activeView,
     bundleResolution.kind,
     candidateAggregate,
-    displayBundle,
+    candidateResource,
+    candidateReview,
     matchContextQuery,
     matchContextQueryParams,
-    reviewEnabled,
-    reviewQuery,
   ]);
 
+  const activeQuery = activeView === "review" ? reviewQuery : aggregateQuery;
+  const activeQueryParams = activeView === "review" ? reviewQueryParams : aggregateQueryParams;
+  const currentDisplayBundle =
+    bundleResolution.kind === "ready" ? bundleResolution.value : displayBundle;
   useEffect(() => {
-    const artifactId = aggregateQueryParams?.artifactId;
+    const artifactId = activeQueryParams?.artifactId;
     if (!artifactId || handledExpiredArtifacts.current.has(artifactId)) return;
     const expired =
-      isAnalysisArtifactExpired(aggregateQuery.error) ||
-      isAnalysisArtifactExpired(reviewQuery.error) ||
+      isAnalysisArtifactExpired(activeQuery.error) ||
       isAnalysisArtifactExpired(matchContextQuery.error);
     if (!expired) return;
     handledExpiredArtifacts.current.add(artifactId);
     void statusQuery.refetch().then((result) => {
       if (result.data?.currentArtifact?.artifactId === artifactId) {
         return Promise.all([
-          aggregateQuery.refetch(),
-          ...(reviewEnabled ? [reviewQuery.refetch()] : []),
+          activeQuery.refetch(),
           ...(matchContextQueryParams ? [matchContextQuery.refetch()] : []),
         ]);
       }
       return undefined;
     });
   }, [
-    aggregateQuery,
-    aggregateQueryParams?.artifactId,
+    activeQuery,
+    activeQueryParams?.artifactId,
     matchContextQuery,
     matchContextQueryParams,
-    reviewEnabled,
-    reviewQuery,
     statusQuery,
   ]);
 
   return {
-    aggregateQuery,
-    aggregateQueryParams,
+    activeQuery,
+    activeQueryParams,
+    activeResourceMatches: candidateResource !== undefined,
     bundleResolution,
-    candidateAggregate,
     candidateArtifactId,
-    displayBundle,
+    displayBundle: currentDisplayBundle,
     matchContextQuery,
     matchContextQueryParams,
-    reviewArtifactMatches: matchesSeriesAnalysisResource(
-      reviewQuery.data,
-      candidateArtifactId,
-      state,
-    ),
-    reviewEnabled,
-    reviewQuery,
     statusQuery,
   };
 }

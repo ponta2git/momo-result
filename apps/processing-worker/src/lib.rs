@@ -10,6 +10,7 @@ mod artifact;
 mod cgroup;
 pub mod child;
 mod child_report;
+mod cli;
 pub mod config;
 mod control;
 mod database;
@@ -26,6 +27,7 @@ pub mod release;
 pub mod shadow;
 
 pub use analysis::WorkerError;
+pub use cli::entrypoint;
 
 #[cfg(test)]
 #[expect(

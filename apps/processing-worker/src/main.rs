@@ -8,7 +8,8 @@ use std::{
 };
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
-use momo_analysis::{
+use momo_ocr::OcrOutput;
+use momo_processing_worker::{
     config::WorkerConfig,
     ocr::{
         contract::{OcrHints, RequestedScreenType},
@@ -21,7 +22,6 @@ use momo_analysis::{
     process::{ProbeOutcome, allocate_and_touch},
     release::{PromotionRequest, PromotionTrigger},
 };
-use momo_ocr::OcrOutput;
 use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
 
@@ -275,19 +275,23 @@ async fn main() -> ExitCode {
     let cli = Cli::parse();
     match &cli.command {
         Command::Bootstrap { arguments } => {
-            return match momo_analysis::process::bootstrap_and_exec(arguments) {
+            return match momo_processing_worker::process::bootstrap_and_exec(arguments) {
                 Ok(()) => ExitCode::SUCCESS,
                 Err(_error) => ExitCode::FAILURE,
             };
         }
         Command::ChildCgroupAllocate { allocation_bytes } => {
-            if momo_analysis::process::wait_for_child_start_barrier().is_err() {
-                return exit_code(momo_analysis::process::CHILD_START_BARRIER_FAILED_EXIT_CODE);
+            if momo_processing_worker::process::wait_for_child_start_barrier().is_err() {
+                return exit_code(
+                    momo_processing_worker::process::CHILD_START_BARRIER_FAILED_EXIT_CODE,
+                );
             }
             return exit_code(allocate_and_touch(*allocation_bytes));
         }
         Command::ChildOcr { tessdata_path } => {
-            return exit_code(momo_analysis::child::ocr::execute(tessdata_path.clone()));
+            return exit_code(momo_processing_worker::child::ocr::execute(
+                tessdata_path.clone(),
+            ));
         }
         Command::ChildCompute {
             game_title_id,
@@ -301,24 +305,28 @@ async fn main() -> ExitCode {
             parent_liveness_fd,
             parent_liveness_timeout_ms,
         } => {
-            if momo_analysis::process::wait_for_child_start_barrier().is_err() {
-                return exit_code(momo_analysis::process::CHILD_START_BARRIER_FAILED_EXIT_CODE);
+            if momo_processing_worker::process::wait_for_child_start_barrier().is_err() {
+                return exit_code(
+                    momo_processing_worker::process::CHILD_START_BARRIER_FAILED_EXIT_CODE,
+                );
             }
             return exit_code(
-                momo_analysis::child::execute(&momo_analysis::child::ChildComputeRequest {
-                    request: momo_analysis_core::child::AnalysisChildRequest {
-                        game_title_id: game_title_id.clone(),
-                        input_revision: *input_revision,
-                        artifact_id: artifact_id.clone(),
+                momo_processing_worker::child::execute(
+                    &momo_processing_worker::child::ChildComputeRequest {
+                        request: momo_analysis_core::child::AnalysisChildRequest {
+                            game_title_id: game_title_id.clone(),
+                            input_revision: *input_revision,
+                            artifact_id: artifact_id.clone(),
+                        },
+                        output_directory,
+                        maximum_chunk_bytes: *maximum_chunk_bytes,
+                        maximum_chunk_count: *maximum_chunk_count,
+                        maximum_total_bytes: *maximum_total_bytes,
+                        maximum_file_count: *maximum_file_count,
+                        parent_liveness_fd: *parent_liveness_fd,
+                        parent_liveness_timeout: Duration::from_millis(*parent_liveness_timeout_ms),
                     },
-                    output_directory,
-                    maximum_chunk_bytes: *maximum_chunk_bytes,
-                    maximum_chunk_count: *maximum_chunk_count,
-                    maximum_total_bytes: *maximum_total_bytes,
-                    maximum_file_count: *maximum_file_count,
-                    parent_liveness_fd: *parent_liveness_fd,
-                    parent_liveness_timeout: Duration::from_millis(*parent_liveness_timeout_ms),
-                })
+                )
                 .await,
             );
         }
@@ -373,7 +381,7 @@ async fn run(command: Command) -> Result<(), String> {
             temporary_root,
             external_runtime_peak_file,
         } => {
-            shadow_endurance(momo_analysis::shadow::ShadowRequest {
+            shadow_endurance(momo_processing_worker::shadow::ShadowRequest {
                 game_title_id,
                 runs,
                 child_memory_limit_bytes,
@@ -408,7 +416,7 @@ async fn run(command: Command) -> Result<(), String> {
         | Command::ChildCompute { .. } => Err(String::from("child command dispatch failed")),
         Command::Bootstrap { .. } => Err(String::from("bootstrap command dispatch failed")),
         Command::ProbeParentDeath => {
-            let probe = momo_analysis::process::spawn_parent_death_probe()
+            let probe = momo_processing_worker::process::spawn_parent_death_probe()
                 .map_err(|error| error.to_string())?;
             write_stdout_line(probe.process_id())?;
             wait_for_shutdown().await.map_err(|error| error.to_string())
@@ -417,7 +425,7 @@ async fn run(command: Command) -> Result<(), String> {
             parent_liveness_fd,
             parent_liveness_timeout_ms,
         } => {
-            momo_analysis::process::start_parent_liveness_monitor(
+            momo_processing_worker::process::start_parent_liveness_monitor(
                 parent_liveness_fd,
                 Duration::from_millis(parent_liveness_timeout_ms),
             )
@@ -428,7 +436,7 @@ async fn run(command: Command) -> Result<(), String> {
 }
 
 async fn run_cgroup_hard_limit_probe(allocation_bytes: u64, timeout_ms: u64) -> Result<(), String> {
-    let result = momo_analysis::process::run_cgroup_hard_limit_probe(
+    let result = momo_processing_worker::process::run_cgroup_hard_limit_probe(
         allocation_bytes,
         Duration::from_millis(timeout_ms),
     )
@@ -443,7 +451,7 @@ async fn run_cgroup_hard_limit_probe(allocation_bytes: u64, timeout_ms: u64) -> 
 }
 
 async fn run_ocr_child_lifecycle_probe(timeout_ms: u64, stop_grace_ms: u64) -> Result<(), String> {
-    momo_analysis::ocr::probe_isolated_child_lifecycle(
+    momo_processing_worker::ocr::probe_isolated_child_lifecycle(
         Duration::from_millis(timeout_ms),
         Duration::from_millis(stop_grace_ms),
     )
@@ -481,7 +489,7 @@ async fn run_ocr_r2_endurance(arguments: OcrR2EnduranceArgs) -> Result<(), Strin
         arguments.r2_maximum_attempts,
     )
     .map_err(|error| error.to_string())?;
-    let report = momo_analysis::ocr::endurance::run_r2_endurance(&OcrEnduranceRequest {
+    let report = momo_processing_worker::ocr::endurance::run_r2_endurance(&OcrEnduranceRequest {
         manifest_path: arguments.manifest,
         runs: arguments.runs,
         child_memory_limit_bytes: arguments.child_memory_limit_bytes,
@@ -513,28 +521,29 @@ async fn run_ocr_r2_endurance(arguments: OcrR2EnduranceArgs) -> Result<(), Strin
 }
 
 async fn run_ocr_local_endurance(arguments: OcrLocalEnduranceArgs) -> Result<(), String> {
-    let report = momo_analysis::ocr::endurance::run_local_endurance(&LocalOcrEnduranceRequest {
-        manifest_path: arguments.manifest,
-        runs: arguments.runs,
-        child_memory_limit_bytes: arguments.child_memory_limit_bytes,
-        expected_runtime_memory_limit_bytes: arguments.expected_runtime_memory_limit_bytes,
-        ocr_timeout: Duration::from_millis(arguments.ocr_timeout_ms),
-        maximum_endurance: Duration::from_millis(arguments.maximum_endurance_ms),
-        stop_grace: Duration::from_millis(arguments.stop_grace_ms),
-        thresholds: LocalOcrEnduranceThresholds {
-            maximum_child_peak_basis_points: arguments.maximum_child_peak_basis_points,
-            maximum_runtime_peak_basis_points: arguments.maximum_runtime_peak_basis_points,
-            maximum_input_p99_milliseconds: arguments.maximum_input_p99_ms,
-            maximum_input_milliseconds: arguments.maximum_input_ms,
-            maximum_ocr_p99_milliseconds: arguments.maximum_ocr_p99_ms,
-            maximum_ocr_milliseconds: arguments.maximum_ocr_ms,
-            maximum_total_milliseconds: arguments.maximum_total_ms,
-        },
-        require_full_hd: arguments.require_full_hd,
-        require_sub_full_hd: arguments.require_sub_full_hd,
-    })
-    .await
-    .map_err(|error| error.to_string())?;
+    let report =
+        momo_processing_worker::ocr::endurance::run_local_endurance(&LocalOcrEnduranceRequest {
+            manifest_path: arguments.manifest,
+            runs: arguments.runs,
+            child_memory_limit_bytes: arguments.child_memory_limit_bytes,
+            expected_runtime_memory_limit_bytes: arguments.expected_runtime_memory_limit_bytes,
+            ocr_timeout: Duration::from_millis(arguments.ocr_timeout_ms),
+            maximum_endurance: Duration::from_millis(arguments.maximum_endurance_ms),
+            stop_grace: Duration::from_millis(arguments.stop_grace_ms),
+            thresholds: LocalOcrEnduranceThresholds {
+                maximum_child_peak_basis_points: arguments.maximum_child_peak_basis_points,
+                maximum_runtime_peak_basis_points: arguments.maximum_runtime_peak_basis_points,
+                maximum_input_p99_milliseconds: arguments.maximum_input_p99_ms,
+                maximum_input_milliseconds: arguments.maximum_input_ms,
+                maximum_ocr_p99_milliseconds: arguments.maximum_ocr_p99_ms,
+                maximum_ocr_milliseconds: arguments.maximum_ocr_ms,
+                maximum_total_milliseconds: arguments.maximum_total_ms,
+            },
+            require_full_hd: arguments.require_full_hd,
+            require_sub_full_hd: arguments.require_sub_full_hd,
+        })
+        .await
+        .map_err(|error| error.to_string())?;
     let passed = report.passed();
     write_json_line(&report)?;
     if passed {
@@ -593,9 +602,10 @@ fn write_ocr_pilot_output(output: &OcrOutput) -> Result<(), String> {
 }
 
 async fn release_audit(require_current: bool, require_quiescent: bool) -> Result<(), String> {
-    let report = momo_analysis::release::audit_completeness(require_current, require_quiescent)
-        .await
-        .map_err(|error| error.to_string())?;
+    let report =
+        momo_processing_worker::release::audit_completeness(require_current, require_quiescent)
+            .await
+            .map_err(|error| error.to_string())?;
     write_json_line(&report)?;
     if report.passed {
         Ok(())
@@ -609,7 +619,7 @@ async fn release_promote(
     operation_key: &str,
     apply: bool,
 ) -> Result<(), String> {
-    let report = momo_analysis::release::promote(&PromotionRequest {
+    let report = momo_processing_worker::release::promote(&PromotionRequest {
         trigger,
         operation_key,
         apply,
@@ -620,8 +630,10 @@ async fn release_promote(
     Ok(())
 }
 
-async fn shadow_endurance(request: momo_analysis::shadow::ShadowRequest) -> Result<(), String> {
-    let report = momo_analysis::shadow::run(&request)
+async fn shadow_endurance(
+    request: momo_processing_worker::shadow::ShadowRequest,
+) -> Result<(), String> {
+    let report = momo_processing_worker::shadow::run(&request)
         .await
         .map_err(|error| error.to_string())?;
     write_json_line(&report)?;
@@ -646,7 +658,7 @@ fn exit_code(code: i32) -> ExitCode {
 async fn run_worker() -> Result<(), String> {
     let config = WorkerConfig::from_environment().map_err(|error| error.to_string())?;
     let orchestrator =
-        momo_analysis::orchestrator::WorkerOrchestratorConfig::from_environment(&config)
+        momo_processing_worker::orchestrator::WorkerOrchestratorConfig::from_environment(&config)
             .map_err(|error| error.to_string())?;
     info!(
         event = "analysis_configuration_accepted",
@@ -656,7 +668,7 @@ async fn run_worker() -> Result<(), String> {
         "combined worker configuration accepted"
     );
     let (shutdown_sender, shutdown_receiver) = tokio::sync::watch::channel(false);
-    let worker = momo_analysis::orchestrator::run(orchestrator, shutdown_receiver);
+    let worker = momo_processing_worker::orchestrator::run(orchestrator, shutdown_receiver);
     tokio::pin!(worker);
     tokio::select! {
         result = &mut worker => result.map_err(|error| error.to_string()),

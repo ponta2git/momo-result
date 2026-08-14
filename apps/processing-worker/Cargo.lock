@@ -1519,7 +1519,31 @@ dependencies = [
 ]
 
 [[package]]
-name = "momo-analysis"
+name = "momo-analysis-core"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "serde_json_canonicalizer",
+ "sha2",
+ "thiserror 2.0.20",
+]
+
+[[package]]
+name = "momo-ocr"
+version = "0.1.0"
+dependencies = [
+ "image",
+ "regex",
+ "serde",
+ "serde_json",
+ "tesseract",
+ "thiserror 2.0.20",
+ "unicode-normalization",
+]
+
+[[package]]
+name = "momo-processing-worker"
 version = "0.1.0"
 dependencies = [
  "aws-sdk-s3",
@@ -1545,30 +1569,6 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "url",
-]
-
-[[package]]
-name = "momo-analysis-core"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
- "serde_json_canonicalizer",
- "sha2",
- "thiserror 2.0.20",
-]
-
-[[package]]
-name = "momo-ocr"
-version = "0.1.0"
-dependencies = [
- "image",
- "regex",
- "serde",
- "serde_json",
- "tesseract",
- "thiserror 2.0.20",
- "unicode-normalization",
 ]
 
 [[package]]

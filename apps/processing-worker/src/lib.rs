@@ -1,8 +1,8 @@
-//! Runtime shell for the deterministic series-analysis kernel.
+//! Background processing runtime for the series-analysis and OCR capabilities.
 //!
 //! The `momo-analysis-core` crate owns calculation semantics and wire contracts. This crate owns
-//! side effects: process isolation, `PostgreSQL` and `Redis` coordination, bounded artifact
-//! staging, release tooling, and runtime configuration.
+//! their side effects: job coordination, process isolation, bounded storage, release tooling, and
+//! runtime configuration.
 
 #[path = "orchestrator/analysis/mod.rs"]
 mod analysis;

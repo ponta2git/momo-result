@@ -325,7 +325,7 @@ Rust部分は次の一方向依存に固定する。
 
 ```text
 apps/processing-worker
-  ├─ momo-analysis（副作用を持つruntime shell）
+  ├─ momo-processing-worker（分析 / OCRの副作用を持つprocessing runtime）
   │   ├─ config / main / orchestrator
   │   ├─ orchestrator/analysis ─ policy / attempt / queue / storage
   │   ├─ orchestrator/ocr ─ queue / DB control / R2 / supervisor
@@ -342,7 +342,7 @@ apps/processing-worker
       └─ core（recognition / parser）
 ```
 
-`momo-analysis` から `momo-analysis-core` と `momo-ocr` へ依存し、両能力crateからruntimeへ逆依存しない。
+`momo-processing-worker` から `momo-analysis-core` と `momo-ocr` へ依存し、両能力crateからruntimeへ逆依存しない。
 
 能力crateからruntimeへの逆依存は禁止する。`momo-analysis-core` はPostgreSQL、Redis、Tokio、process、filesystem、
 clock、環境変数を参照せず、所有済み入力から決定論的成果物候補を作る。`momo-ocr` もRedis、PostgreSQL、Tokio、

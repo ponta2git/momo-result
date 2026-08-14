@@ -44,7 +44,7 @@ kill_timeout = "60s"
   MOMO_REDIS_ANALYSIS_STREAM = "momo:analysis:jobs"
   OCR_REDIS_V2_DEAD_LETTER_STREAM = "momo:ocr:v2:jobs:dead"
   OCR_REDIS_V2_STREAM = "momo:ocr:v2:jobs"
-  RUST_LOG = "momo_analysis=info"
+  RUST_LOG = "momo_processing_worker=info,momo_analysis=info"
 
 [[vm]]
   size = "shared-cpu-1x"

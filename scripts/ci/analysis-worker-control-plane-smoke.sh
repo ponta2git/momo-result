@@ -309,7 +309,7 @@ worker_environment=(
   "MOMO_ANALYSIS_REDIS_BLOCK_MS=200"
   "MOMO_OCR_V2_CONSUMER_MODE=disabled"
   "MOMO_LOG_FORMAT=json"
-  "RUST_LOG=momo_analysis=info"
+  "RUST_LOG=momo_processing_worker=info,momo_analysis=info"
 )
 
 docker_environment=()

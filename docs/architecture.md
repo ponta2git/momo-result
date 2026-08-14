@@ -185,7 +185,7 @@ web の import 境界は `apps/web/scripts/check-architecture-imports.mjs`、mod
 
 - workerはRust + Cargo workspaceとして `apps/processing-worker` に置く。`crates/analysis-core` の
   `momo-analysis-core` は決定論的な
-  計算kernelとversion付き成果物契約、`momo-analysis` は起動・設定・logging、job lease / queue、入力snapshot、
+  計算kernelとversion付き成果物契約、`momo-processing-worker` は起動・設定・logging、job lease / queue、入力snapshot、
   成果物staging、DB / Redis / process adapterを所有する。依存方向はruntimeからcoreへの一方向だけとする。
 - coreはDB row、Redis client、HTTP DTO、filesystem、clock、environment、async runtimeへ依存しない。
   queue / artifactのwire型はversion付き契約としてcoreに置けるが、transport処理はruntimeに残す。

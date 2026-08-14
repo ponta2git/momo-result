@@ -274,7 +274,7 @@ docker run --rm --name "${worker_container}" --privileged --cgroupns private \
   --env MOMO_OCR_V2_MAXIMUM_DELIVERY_ATTEMPTS=2 \
   --env MOMO_OCR_V2_PENDING_SCAN_COUNT=10 \
   --env MOMO_LOG_FORMAT=json \
-  --env RUST_LOG=momo_analysis=info \
+  --env RUST_LOG=momo_processing_worker=info,momo_analysis=info \
   "${image_ref}" >"${worker_log}" 2>&1 &
 worker_pid=$!
 

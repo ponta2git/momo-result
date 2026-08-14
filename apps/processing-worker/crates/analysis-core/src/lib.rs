@@ -2,7 +2,7 @@
 //!
 //! This crate owns calculation semantics and versioned artifact contracts. Runtime concerns such
 //! as `PostgreSQL`, `Redis`, processes, environment variables, clocks, and filesystems belong to the
-//! outer `momo-analysis` crate. Keeping this boundary free of runtime infrastructure makes
+//! outer `momo-processing-worker` crate. Keeping this boundary free of runtime infrastructure makes
 //! calculation changes reusable, locally testable, and impossible to couple accidentally to
 //! worker infrastructure.
 

@@ -1,9 +1,13 @@
 [package]
-name = "momo-analysis"
+name = "momo-processing-worker"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.97"
 publish = false
+
+[[bin]]
+name = "momo-analysis"
+path = "src/main.rs"
 
 [workspace]
 members = ["crates/analysis-core", "crates/ocr"]

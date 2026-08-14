@@ -20,7 +20,7 @@ const FORBIDDEN_SOURCE_PATTERNS: [&str; 10] = [
     "tokio::",
     "tokio_postgres",
     "tracing::",
-    "momo_analysis",
+    "momo_processing_worker",
 ];
 
 #[test]

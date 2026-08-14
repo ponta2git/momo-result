@@ -24,10 +24,13 @@ describe("cursorForMatchPage", () => {
   });
 
   it("does not invent a cursor for arbitrary or unavailable navigation", () => {
+    const { nextCursor, ...paginationWithoutNextCursor } = pagination;
+
+    expect(nextCursor).toBe("after-current");
     expect(cursorForMatchPage(pagination, 5)).toBeUndefined();
     expect(cursorForMatchPage(pagination, 10)).toBeUndefined();
     expect(
-      cursorForMatchPage({ ...pagination, nextCursor: null }, pagination.page + 1),
+      cursorForMatchPage(paginationWithoutNextCursor, pagination.page + 1),
     ).toBeUndefined();
   });
 });

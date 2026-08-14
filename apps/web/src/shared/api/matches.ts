@@ -3,14 +3,7 @@ import type { ApiSignalOptions, IdempotencyRequestOptions } from "@/shared/api/c
 import type { components } from "@/shared/api/generated";
 
 export type MatchSummaryResponse = components["schemas"]["MatchSummaryResponse"];
-type GeneratedMatchListResponse = components["schemas"]["MatchListResponse"];
-export type MatchListResponse = Omit<GeneratedMatchListResponse, "pagination"> & {
-  pagination: GeneratedMatchListResponse["pagination"] & {
-    lastCursor?: string | null;
-    nextCursor?: string | null;
-    previousCursor?: string | null;
-  };
-};
+export type MatchListResponse = components["schemas"]["MatchListResponse"];
 export type MatchListSummaryResponse = components["schemas"]["MatchListSummaryResponse"];
 export type MatchDetailResponse = components["schemas"]["MatchDetailResponse"];
 export type UpdateMatchRequest = components["schemas"]["UpdateMatchRequest"];

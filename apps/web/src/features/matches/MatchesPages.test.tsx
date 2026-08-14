@@ -200,11 +200,8 @@ describe("MatchesListPage", () => {
               pagination: {
                 hasNextPage: false,
                 hasPreviousPage: false,
-                lastCursor: null,
-                nextCursor: null,
                 page: 1,
                 pageSize: 10,
-                previousCursor: null,
                 totalItems: 0,
                 totalPages: 0,
               },

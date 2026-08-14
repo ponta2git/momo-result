@@ -1566,6 +1566,14 @@
             "schema" : {
               "type" : "string"
             }
+          },
+          {
+            "name" : "X-Request-Id",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
           }
         ],
         "responses" : {
@@ -1654,6 +1662,14 @@
             "name" : "kind",
             "in" : "path",
             "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "X-Request-Id",
+            "in" : "header",
+            "required" : false,
             "schema" : {
               "type" : "string"
             }
@@ -1768,7 +1784,7 @@
             }
           },
           {
-            "name" : "limit",
+            "name" : "pageSize",
             "in" : "query",
             "description" : "1..200; defaults to 100.",
             "required" : false,
@@ -1778,23 +1794,12 @@
             }
           },
           {
-            "name" : "page",
+            "name" : "cursor",
             "in" : "query",
-            "description" : "1-based page number; defaults to 1.",
+            "description" : "Opaque cursor returned by this endpoint. Omit it to refresh the count snapshot.",
             "required" : false,
             "schema" : {
-              "type" : "integer",
-              "format" : "int32"
-            }
-          },
-          {
-            "name" : "pageSize",
-            "in" : "query",
-            "description" : "1..200; overrides limit when present.",
-            "required" : false,
-            "schema" : {
-              "type" : "integer",
-              "format" : "int32"
+              "type" : "string"
             }
           },
           {
@@ -1819,7 +1824,7 @@
             }
           },
           "400" : {
-            "description" : "Invalid value for: query parameter limit, Invalid value for: query parameter page, Invalid value for: query parameter pageSize",
+            "description" : "Invalid value for: query parameter pageSize",
             "content" : {
               "text/plain" : {
                 "schema" : {
@@ -5720,6 +5725,51 @@
           }
         }
       },
+      "MatchListPaginationResponse" : {
+        "title" : "MatchListPaginationResponse",
+        "type" : "object",
+        "required" : [
+          "page",
+          "pageSize",
+          "totalItems",
+          "totalPages",
+          "hasPreviousPage",
+          "hasNextPage"
+        ],
+        "properties" : {
+          "page" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "pageSize" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "totalItems" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "totalPages" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "hasPreviousPage" : {
+            "type" : "boolean"
+          },
+          "hasNextPage" : {
+            "type" : "boolean"
+          },
+          "previousCursor" : {
+            "type" : "string"
+          },
+          "nextCursor" : {
+            "type" : "string"
+          },
+          "lastCursor" : {
+            "type" : "string"
+          }
+        }
+      },
       "MatchListResponse" : {
         "title" : "MatchListResponse",
         "type" : "object",
@@ -5734,7 +5784,7 @@
             }
           },
           "pagination" : {
-            "$ref" : "#/components/schemas/PaginationResponse"
+            "$ref" : "#/components/schemas/MatchListPaginationResponse"
           }
         }
       },
@@ -6191,6 +6241,7 @@
           "code" : {
             "type" : "string",
             "enum" : [
+              "BAD_REQUEST",
               "UNAUTHORIZED",
               "FORBIDDEN",
               "NOT_FOUND",

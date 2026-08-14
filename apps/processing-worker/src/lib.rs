@@ -15,6 +15,7 @@ mod postgres;
     reason = "all operating-system FFI is isolated here behind checked safe APIs and documented blocks"
 )]
 mod process;
+mod runtime_identifier;
 mod series_analysis;
 mod supervisor;
 

@@ -144,7 +144,7 @@ fn decode_locked_slot(row: &Row) -> Result<LockedExecutionSlot, ExecutionSlotErr
     };
     if preempt_requested_by
         .as_deref()
-        .is_some_and(|requester| !valid_runtime_identifier(requester))
+        .is_some_and(|requester| !crate::runtime_identifier::valid(requester))
         || holder.as_ref().is_some_and(|holder| {
             holder.task_kind == ExecutionTaskKind::Ocr && preempt_requested_by.is_some()
         })
@@ -425,14 +425,6 @@ pub(crate) async fn request_analysis_preemption(
         )
         .await?;
     Ok(requested == 1)
-}
-
-fn valid_runtime_identifier(value: &str) -> bool {
-    !value.is_empty()
-        && value.len() <= 128
-        && value.bytes().enumerate().all(|(index, byte)| {
-            byte.is_ascii_alphanumeric() || (index > 0 && b"._:-".contains(&byte))
-        })
 }
 
 #[cfg(test)]

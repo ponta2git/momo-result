@@ -208,9 +208,7 @@ fn publication_accepts_a_complete_bounded_configuration() {
 }
 
 #[test]
-fn runtime_identifiers_and_temporary_roots_are_structurally_bounded() {
-    assert!(valid_runtime_identifier("momo:analysis:jobs"));
-    assert!(!valid_runtime_identifier(" analysis jobs"));
+fn temporary_root_must_be_a_dedicated_absolute_path() {
     assert!(dedicated_absolute_path(Path::new("/var/lib/momo-analysis")));
     assert!(!dedicated_absolute_path(Path::new("/")));
     assert!(!dedicated_absolute_path(Path::new(

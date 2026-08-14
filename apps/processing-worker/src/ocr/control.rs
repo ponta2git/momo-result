@@ -36,7 +36,7 @@ impl OcrControlConfig {
         finalization_timeout: Duration,
         retry_delay: Duration,
     ) -> Result<Self, OcrControlError> {
-        if !valid_runtime_identifier(&worker_id)
+        if !crate::runtime_identifier::valid(&worker_id)
             || lease_duration.is_zero()
             || finalization_timeout.is_zero()
             || retry_delay.is_zero()
@@ -776,14 +776,6 @@ async fn bounded_transaction(
 
 fn duration_milliseconds(duration: Duration) -> Result<i64, OcrControlError> {
     i64::try_from(duration.as_millis()).map_err(|_conversion_error| OcrControlError::NumericBound)
-}
-
-fn valid_runtime_identifier(value: &str) -> bool {
-    !value.is_empty()
-        && value.len() <= 128
-        && value.bytes().enumerate().all(|(index, byte)| {
-            byte.is_ascii_alphanumeric() || (index > 0 && b"._:-".contains(&byte))
-        })
 }
 
 #[cfg(test)]

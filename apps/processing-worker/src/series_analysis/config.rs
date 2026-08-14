@@ -186,7 +186,7 @@ impl AnalysisConsumerConfig {
                 effective_config_version.as_str(),
             ),
         ] {
-            if !valid_runtime_identifier(value) {
+            if !crate::runtime_identifier::valid(value) {
                 return Err(AnalysisConfigError::UnsafeRuntimeIdentifier { name });
             }
         }
@@ -232,14 +232,6 @@ fn required_string(name: &'static str) -> Result<String, AnalysisConfigError> {
         .ok()
         .filter(|value| !value.trim().is_empty())
         .ok_or(AnalysisConfigError::MissingRuntime { name })
-}
-
-fn valid_runtime_identifier(value: &str) -> bool {
-    !value.is_empty()
-        && value.len() <= 128
-        && value.bytes().enumerate().all(|(index, byte)| {
-            byte.is_ascii_alphanumeric() || (index > 0 && b"._:-".contains(&byte))
-        })
 }
 
 fn dedicated_absolute_path(path: &Path) -> bool {

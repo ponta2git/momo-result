@@ -4,12 +4,12 @@ use crate::process::available_filesystem_bytes;
 
 use super::{
     ConsumerError,
-    config::WorkerRuntimeConfig,
+    config::AnalysisConsumerConfig,
     control::{ClaimedJob, ControlError},
 };
 
 pub(super) async fn validate_temporary_root(
-    config: &WorkerRuntimeConfig,
+    config: &AnalysisConsumerConfig,
 ) -> Result<(), ConsumerError> {
     tokio::fs::create_dir_all(&config.temporary_root).await?;
     let metadata = tokio::fs::symlink_metadata(&config.temporary_root).await?;
@@ -17,7 +17,7 @@ pub(super) async fn validate_temporary_root(
         return Err(ConsumerError::TemporaryStorageBound);
     }
     if available_filesystem_bytes(&config.temporary_root)?
-        < config.publication_limits.temporary_bytes_limit.get()
+        < config.execution_limits.temporary_bytes_limit.get()
     {
         return Err(ConsumerError::TemporaryStorageBound);
     }
@@ -25,7 +25,7 @@ pub(super) async fn validate_temporary_root(
 }
 
 pub(super) async fn cleanup_stale_attempt_directories(
-    config: &WorkerRuntimeConfig,
+    config: &AnalysisConsumerConfig,
     client: &tokio_postgres::Client,
 ) -> Result<(), ConsumerError> {
     let active_attempts = client
@@ -72,11 +72,11 @@ pub(super) async fn cleanup_stale_attempt_directories(
 }
 
 pub(super) async fn create_attempt_directory(
-    config: &WorkerRuntimeConfig,
+    config: &AnalysisConsumerConfig,
     claim: &ClaimedJob,
 ) -> Result<PathBuf, ConsumerError> {
     if available_filesystem_bytes(&config.temporary_root)?
-        < config.publication_limits.temporary_bytes_limit.get()
+        < config.execution_limits.temporary_bytes_limit.get()
     {
         return Err(ConsumerError::TemporaryStorageBound);
     }

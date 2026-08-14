@@ -13,13 +13,13 @@ const PUBLICATION_MODE_ENV: &str = "MOMO_ANALYSIS_PUBLICATION_MODE";
 pub(crate) const CHILD_MEMORY_LIMIT_ENV: &str = "MOMO_ANALYSIS_CHILD_MEMORY_LIMIT_BYTES";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum PublicationMode {
+pub enum AnalysisPublicationMode {
     Disabled,
     Enabled,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct PublicationLimits {
+pub struct AnalysisExecutionLimits {
     pub runtime_memory_limit: NonZeroU64,
     pub child_memory_limit: NonZeroU64,
     pub parent_headroom: NonZeroU64,
@@ -32,13 +32,13 @@ pub struct PublicationLimits {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct WorkerConfig {
-    pub publication_mode: PublicationMode,
-    pub limits: Option<PublicationLimits>,
+pub struct AnalysisActivationConfig {
+    pub publication_mode: AnalysisPublicationMode,
+    pub execution_limits: Option<AnalysisExecutionLimits>,
 }
 
 #[derive(Clone)]
-pub(crate) struct WorkerRuntimeConfig {
+pub(crate) struct AnalysisConsumerConfig {
     pub(crate) database_url: String,
     pub(crate) read_database_url: String,
     pub(crate) redis_url: String,
@@ -49,14 +49,14 @@ pub(crate) struct WorkerRuntimeConfig {
     pub(crate) effective_config_version: String,
     pub(crate) lease_duration: Duration,
     pub(crate) heartbeat_interval: Duration,
-    pub(crate) shutdown_grace: Duration,
+    pub(crate) child_stop_grace: Duration,
     pub(crate) redis_block: Duration,
-    pub(crate) publication_limits: PublicationLimits,
+    pub(crate) execution_limits: AnalysisExecutionLimits,
     pub(crate) child_cgroup: ChildCgroup,
 }
 
 #[derive(Debug, Error, Eq, PartialEq)]
-pub enum ConfigError {
+pub enum AnalysisConfigError {
     #[error("{name} must be set when analysis publication is enabled")]
     Missing { name: &'static str },
     #[error("{name} must be a positive integer")]
@@ -79,30 +79,30 @@ pub enum ConfigError {
     ChildCgroup { kind: &'static str },
 }
 
-impl WorkerConfig {
+impl AnalysisActivationConfig {
     /// Loads the publication mode and its mandatory safety limits.
     ///
     /// # Errors
     ///
     /// Returns an error when publication is enabled with missing, invalid, or unsafe limits.
-    pub fn from_environment() -> Result<Self, ConfigError> {
+    pub fn from_environment() -> Result<Self, AnalysisConfigError> {
         let publication_mode = match env::var(PUBLICATION_MODE_ENV)
             .unwrap_or_else(|_| String::from("disabled"))
             .trim()
         {
-            "disabled" => PublicationMode::Disabled,
-            "enabled" => PublicationMode::Enabled,
-            _ => return Err(ConfigError::InvalidPublicationMode),
+            "disabled" => AnalysisPublicationMode::Disabled,
+            "enabled" => AnalysisPublicationMode::Enabled,
+            _ => return Err(AnalysisConfigError::InvalidPublicationMode),
         };
 
-        if publication_mode == PublicationMode::Disabled {
+        if publication_mode == AnalysisPublicationMode::Disabled {
             return Ok(Self {
                 publication_mode,
-                limits: None,
+                execution_limits: None,
             });
         }
 
-        let limits = PublicationLimits {
+        let execution_limits = AnalysisExecutionLimits {
             runtime_memory_limit: positive("MOMO_ANALYSIS_RUNTIME_MEMORY_LIMIT_BYTES")?,
             child_memory_limit: positive(CHILD_MEMORY_LIMIT_ENV)?,
             parent_headroom: positive("MOMO_ANALYSIS_PARENT_HEADROOM_BYTES")?,
@@ -113,57 +113,63 @@ impl WorkerConfig {
             chunk_count_limit: positive("MOMO_ANALYSIS_CHUNK_COUNT_MAX")?,
             temporary_file_count_limit: positive("MOMO_ANALYSIS_TEMPORARY_FILE_COUNT_MAX")?,
         };
-        if limits
+        if execution_limits
             .child_memory_limit
             .get()
-            .checked_add(limits.parent_headroom.get())
-            .is_none_or(|required| required > limits.runtime_memory_limit.get())
+            .checked_add(execution_limits.parent_headroom.get())
+            .is_none_or(|required| required > execution_limits.runtime_memory_limit.get())
         {
-            return Err(ConfigError::UnsafeMemoryRelationship);
+            return Err(AnalysisConfigError::UnsafeMemoryRelationship);
         }
-        if limits
+        if execution_limits
             .chunk_count_limit
             .get()
             .checked_add(1)
-            .is_none_or(|required| required > limits.temporary_file_count_limit.get())
+            .is_none_or(|required| required > execution_limits.temporary_file_count_limit.get())
         {
-            return Err(ConfigError::UnsafeFileRelationship);
+            return Err(AnalysisConfigError::UnsafeFileRelationship);
         }
 
         Ok(Self {
             publication_mode,
-            limits: Some(limits),
+            execution_limits: Some(execution_limits),
         })
     }
 }
 
-impl WorkerRuntimeConfig {
+impl AnalysisConsumerConfig {
     /// Loads connection and lease settings only after publication safety limits are accepted.
     ///
     /// # Errors
     ///
     /// Returns an error without exposing connection strings when runtime configuration is absent
     /// or its timing relationship cannot stop a child before lease expiry.
-    pub(crate) fn from_environment(worker: &WorkerConfig) -> Result<Self, ConfigError> {
-        let publication_limits = worker.limits.clone().ok_or(ConfigError::MissingRuntime {
-            name: PUBLICATION_MODE_ENV,
-        })?;
+    pub(crate) fn from_environment(
+        activation: &AnalysisActivationConfig,
+    ) -> Result<Self, AnalysisConfigError> {
+        let execution_limits =
+            activation
+                .execution_limits
+                .clone()
+                .ok_or(AnalysisConfigError::MissingRuntime {
+                    name: PUBLICATION_MODE_ENV,
+                })?;
         let lease_duration = duration_millis("MOMO_ANALYSIS_LEASE_DURATION_MS")?;
         let heartbeat_interval = duration_millis("MOMO_ANALYSIS_HEARTBEAT_INTERVAL_MS")?;
-        let shutdown_grace = duration_millis("MOMO_ANALYSIS_CHILD_STOP_GRACE_MS")?;
+        let child_stop_grace = duration_millis("MOMO_ANALYSIS_CHILD_STOP_GRACE_MS")?;
         let redis_block = duration_millis("MOMO_ANALYSIS_REDIS_BLOCK_MS")?;
         let required_margin = heartbeat_interval
             .checked_mul(3)
-            .and_then(|value| value.checked_add(shutdown_grace));
+            .and_then(|value| value.checked_add(child_stop_grace));
         if required_margin.is_none_or(|required| required >= lease_duration) {
-            return Err(ConfigError::UnsafeLeaseRelationship);
+            return Err(AnalysisConfigError::UnsafeLeaseRelationship);
         }
         if heartbeat_interval
-            .checked_add(publication_limits.finalization_timeout)
+            .checked_add(execution_limits.finalization_timeout)
             .is_none_or(|required| required >= lease_duration)
             || redis_block > heartbeat_interval
         {
-            return Err(ConfigError::UnsafeLeaseRelationship);
+            return Err(AnalysisConfigError::UnsafeLeaseRelationship);
         }
         let redis_stream = env::var("MOMO_REDIS_ANALYSIS_STREAM")
             .unwrap_or_else(|_| String::from("momo:analysis:jobs"));
@@ -181,16 +187,15 @@ impl WorkerRuntimeConfig {
             ),
         ] {
             if !valid_runtime_identifier(value) {
-                return Err(ConfigError::UnsafeRuntimeIdentifier { name });
+                return Err(AnalysisConfigError::UnsafeRuntimeIdentifier { name });
             }
         }
         let temporary_root = PathBuf::from(required_string("MOMO_ANALYSIS_TEMPORARY_ROOT")?);
         if !dedicated_absolute_path(&temporary_root) {
-            return Err(ConfigError::UnsafeTemporaryRoot);
+            return Err(AnalysisConfigError::UnsafeTemporaryRoot);
         }
-        let child_cgroup =
-            ChildCgroup::from_environment(publication_limits.child_memory_limit.get())
-                .map_err(|error| ConfigError::ChildCgroup { kind: error.kind() })?;
+        let child_cgroup = ChildCgroup::from_environment(execution_limits.child_memory_limit.get())
+            .map_err(|error| AnalysisConfigError::ChildCgroup { kind: error.kind() })?;
         Ok(Self {
             database_url: required_string("DATABASE_URL")?,
             read_database_url: required_string("MOMO_ANALYSIS_READ_DATABASE_URL")?,
@@ -202,31 +207,31 @@ impl WorkerRuntimeConfig {
             effective_config_version,
             lease_duration,
             heartbeat_interval,
-            shutdown_grace,
+            child_stop_grace,
             redis_block,
-            publication_limits,
+            execution_limits,
             child_cgroup,
         })
     }
 }
 
-fn positive(name: &'static str) -> Result<NonZeroU64, ConfigError> {
-    let raw = env::var(name).map_err(|_environment_error| ConfigError::Missing { name })?;
+fn positive(name: &'static str) -> Result<NonZeroU64, AnalysisConfigError> {
+    let raw = env::var(name).map_err(|_environment_error| AnalysisConfigError::Missing { name })?;
     raw.parse::<u64>()
         .ok()
         .and_then(NonZeroU64::new)
-        .ok_or(ConfigError::InvalidPositiveInteger { name })
+        .ok_or(AnalysisConfigError::InvalidPositiveInteger { name })
 }
 
-fn duration_millis(name: &'static str) -> Result<Duration, ConfigError> {
+fn duration_millis(name: &'static str) -> Result<Duration, AnalysisConfigError> {
     positive(name).map(|value| Duration::from_millis(value.get()))
 }
 
-fn required_string(name: &'static str) -> Result<String, ConfigError> {
+fn required_string(name: &'static str) -> Result<String, AnalysisConfigError> {
     env::var(name)
         .ok()
         .filter(|value| !value.trim().is_empty())
-        .ok_or(ConfigError::MissingRuntime { name })
+        .ok_or(AnalysisConfigError::MissingRuntime { name })
 }
 
 fn valid_runtime_identifier(value: &str) -> bool {

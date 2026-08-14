@@ -124,7 +124,7 @@ Docker Desktop上のコンテナからホストのDB / Redisへ接続するた�
 `host.docker.internal`とする。URL値は文書、shell history、tracked fileへ書かない。
 
 専用env fileは少なくとも `DATABASE_URL`、`MOMO_ANALYSIS_READ_DATABASE_URL`、`REDIS_URL`、
-`MOMO_ANALYSIS_PUBLICATION_MODE=enabled` と、`WorkerRuntimeConfig` が要求するmemory、timeout、一時領域、
+`MOMO_ANALYSIS_PUBLICATION_MODE=enabled` と、`AnalysisConsumerConfig` が要求するmemory、timeout、一時領域、
 Redis stream / group、worker ID、config version、lease / heartbeat設定を持つ。ローカル既定値は
 `scripts/ci/analysis-worker-control-plane-smoke.sh` の `worker_environment` と整合させ、worker IDとconsumer groupは
 ローカル専用の一意な値にする。Fly用設定はpublicationが既定でdisabledなので、そのままローカル実行設定として

@@ -4,7 +4,7 @@ use crate::{
     execution_slot::{
         ExecutionSlotIdentity, ExecutionTaskKind, SlotRenewal, renew_owned as renew_slot,
     },
-    series_analysis::config::WorkerRuntimeConfig,
+    series_analysis::config::AnalysisConsumerConfig,
 };
 
 use super::{
@@ -26,7 +26,7 @@ use super::{
 pub(crate) async fn heartbeat(
     client: &mut Client,
     claim: &ClaimedJob,
-    config: &WorkerRuntimeConfig,
+    config: &AnalysisConsumerConfig,
 ) -> Result<HeartbeatResult, ControlError> {
     let transaction = bounded_transaction(client, config.heartbeat_interval).await?;
     let lease_milliseconds = duration_milliseconds(config.lease_duration)?;
@@ -90,11 +90,11 @@ pub(crate) async fn heartbeat(
 pub(crate) async fn supersede(
     client: &mut Client,
     claim: &ClaimedJob,
-    config: &WorkerRuntimeConfig,
+    config: &AnalysisConsumerConfig,
     metrics: &AttemptMetrics,
 ) -> Result<(), ControlError> {
     let transaction =
-        bounded_transaction(client, config.publication_limits.finalization_timeout).await?;
+        bounded_transaction(client, config.execution_limits.finalization_timeout).await?;
     lock_owned(&transaction, claim, config).await?;
     let desired = transaction
         .query_one(
@@ -150,12 +150,12 @@ pub(crate) async fn supersede(
 pub(crate) async fn finish_failure(
     client: &mut Client,
     claim: &ClaimedJob,
-    config: &WorkerRuntimeConfig,
+    config: &AnalysisConsumerConfig,
     failure: AttemptFailure,
     metrics: &AttemptMetrics,
 ) -> Result<(), ControlError> {
     let transaction =
-        bounded_transaction(client, config.publication_limits.finalization_timeout).await?;
+        bounded_transaction(client, config.execution_limits.finalization_timeout).await?;
     lock_owned(&transaction, claim, config).await?;
     finish_terminal_failure(&transaction, claim, config, failure, metrics).await?;
     transaction.commit().await?;
@@ -165,7 +165,7 @@ pub(crate) async fn finish_failure(
 pub(super) async fn finish_terminal_failure(
     transaction: &Transaction<'_>,
     claim: &ClaimedJob,
-    config: &WorkerRuntimeConfig,
+    config: &AnalysisConsumerConfig,
     failure: AttemptFailure,
     metrics: &AttemptMetrics,
 ) -> Result<(), ControlError> {
@@ -213,11 +213,11 @@ pub(super) async fn finish_terminal_failure(
 pub(crate) async fn retry_transient_failure(
     client: &mut Client,
     claim: &ClaimedJob,
-    config: &WorkerRuntimeConfig,
+    config: &AnalysisConsumerConfig,
     metrics: &AttemptMetrics,
 ) -> Result<TransientRetryResult, ControlError> {
     let transaction =
-        bounded_transaction(client, config.publication_limits.finalization_timeout).await?;
+        bounded_transaction(client, config.execution_limits.finalization_timeout).await?;
     lock_owned(&transaction, claim, config).await?;
     let retry_count = transaction
         .query_one(
@@ -291,12 +291,12 @@ pub(crate) async fn retry_transient_failure(
 pub(crate) async fn requeue_interrupted(
     client: &mut Client,
     claim: &ClaimedJob,
-    config: &WorkerRuntimeConfig,
+    config: &AnalysisConsumerConfig,
     cause: RequeueCause,
     metrics: &AttemptMetrics,
 ) -> Result<(), ControlError> {
     let transaction =
-        bounded_transaction(client, config.publication_limits.finalization_timeout).await?;
+        bounded_transaction(client, config.execution_limits.finalization_timeout).await?;
     lock_owned(&transaction, claim, config).await?;
     finish_attempt(&transaction, claim, cause.attempt_outcome(), metrics).await?;
     transaction

@@ -5,7 +5,9 @@ use tokio_postgres::{Transaction, binary_copy::BinaryCopyInWriter, types::Type};
 use tracing::{error, info};
 
 use crate::process::current_process_peak_resident_bytes;
-use crate::series_analysis::{artifact::validate_artifact_directory, config::WorkerRuntimeConfig};
+use crate::series_analysis::{
+    artifact::validate_artifact_directory, config::AnalysisConsumerConfig,
+};
 
 use super::{
     AttemptMetrics, AttemptOutcome, ClaimedJob, ControlError, RequestOutcome, ResultDisposition,
@@ -16,11 +18,11 @@ use super::{
 };
 
 pub(super) fn validated_manifest(
-    config: &WorkerRuntimeConfig,
+    config: &AnalysisConsumerConfig,
     claim: &ClaimedJob,
     artifact_directory: &Path,
 ) -> Result<ArtifactManifest, ControlError> {
-    let limits = &config.publication_limits;
+    let limits = &config.execution_limits;
     let manifest = validate_artifact_directory(
         artifact_directory,
         limits.chunk_count_limit.get(),
@@ -91,7 +93,7 @@ pub(super) async fn existing_artifact(
 pub(super) async fn publish_new_artifact(
     transaction: &Transaction<'_>,
     claim: &ClaimedJob,
-    config: &WorkerRuntimeConfig,
+    config: &AnalysisConsumerConfig,
     manifest: &ArtifactManifest,
     artifact_directory: &Path,
     metrics: &mut AttemptMetrics,
@@ -142,7 +144,7 @@ pub(super) async fn publish_new_artifact(
 pub(super) async fn finish_success(
     transaction: &Transaction<'_>,
     claim: &ClaimedJob,
-    config: &WorkerRuntimeConfig,
+    config: &AnalysisConsumerConfig,
     metrics: &AttemptMetrics,
     output_checksum: &str,
     disposition: ResultDisposition,

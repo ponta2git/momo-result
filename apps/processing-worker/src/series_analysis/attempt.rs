@@ -13,7 +13,7 @@ use crate::{
 
 use super::{
     AttemptInterruption, ConsumerError, DeliveryDisposition, child_report,
-    config::WorkerRuntimeConfig,
+    config::AnalysisConsumerConfig,
     control::{
         AttemptFailure, AttemptMetrics, ClaimedJob, ControlError, HeartbeatResult,
         PublicationResult, SafeFailureCode, artifact_id_for_attempt, finish_failure, heartbeat,
@@ -24,7 +24,7 @@ use super::{
 };
 
 pub(super) fn child_spec(
-    config: &WorkerRuntimeConfig,
+    config: &AnalysisConsumerConfig,
     claim: &ClaimedJob,
     attempt_directory: &std::path::Path,
 ) -> Result<AnalysisChildSpec, ConsumerError> {
@@ -40,17 +40,17 @@ pub(super) fn child_spec(
         },
         read_database_url: config.read_database_url.clone(),
         output_directory: attempt_directory.to_path_buf(),
-        maximum_chunk_bytes: config.publication_limits.chunk_bytes_limit.get(),
-        maximum_chunk_count: config.publication_limits.chunk_count_limit.get(),
-        maximum_total_bytes: config.publication_limits.temporary_bytes_limit.get(),
-        maximum_file_count: config.publication_limits.temporary_file_count_limit.get(),
+        maximum_chunk_bytes: config.execution_limits.chunk_bytes_limit.get(),
+        maximum_chunk_count: config.execution_limits.chunk_count_limit.get(),
+        maximum_total_bytes: config.execution_limits.temporary_bytes_limit.get(),
+        maximum_file_count: config.execution_limits.temporary_file_count_limit.get(),
         parent_liveness_timeout,
     })
 }
 
 pub(super) async fn finish_attempt_result(
     control_client: &mut tokio_postgres::Client,
-    config: &WorkerRuntimeConfig,
+    config: &AnalysisConsumerConfig,
     claim: &ClaimedJob,
     attempt_directory: &std::path::Path,
     started: Instant,
@@ -68,7 +68,7 @@ pub(super) async fn finish_attempt_result(
 
 async fn finish_child_outcome(
     control_client: &mut tokio_postgres::Client,
-    config: &WorkerRuntimeConfig,
+    config: &AnalysisConsumerConfig,
     claim: &ClaimedJob,
     attempt_directory: &std::path::Path,
     result: (AnalysisChildOutcome, AttemptMetrics),
@@ -127,7 +127,7 @@ async fn finish_child_outcome(
 
 async fn finish_interruption(
     control_client: &mut tokio_postgres::Client,
-    config: &WorkerRuntimeConfig,
+    config: &AnalysisConsumerConfig,
     claim: &ClaimedJob,
     started: Instant,
     interruption: AttemptInterruption,
@@ -171,7 +171,7 @@ async fn finish_interruption(
 
 pub(super) async fn run_claimed_child(
     heartbeat_client: &mut tokio_postgres::Client,
-    config: &WorkerRuntimeConfig,
+    config: &AnalysisConsumerConfig,
     claim: &ClaimedJob,
     child_spec: &AnalysisChildSpec,
     shutdown: &mut watch::Receiver<bool>,
@@ -188,7 +188,8 @@ pub(super) async fn run_claimed_child(
             );
             AttemptInterruption::WorkerCrashed
         })?;
-    if let Some(result) = refresh_child_liveness(&mut child, started, config.shutdown_grace).await?
+    if let Some(result) =
+        refresh_child_liveness(&mut child, started, config.child_stop_grace).await?
     {
         return Ok(finalize_child_result(child_spec, result));
     }
@@ -198,7 +199,7 @@ pub(super) async fn run_claimed_child(
     let mut sample_interval = time::interval(time::Duration::from_millis(100));
     sample_interval.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
     sample_interval.tick().await;
-    let deadline = time::sleep(config.publication_limits.calculation_timeout);
+    let deadline = time::sleep(config.execution_limits.calculation_timeout);
     tokio::pin!(deadline);
 
     loop {
@@ -215,7 +216,7 @@ pub(super) async fn run_claimed_child(
                         if let Some(result) = refresh_child_liveness(
                             &mut child,
                             started,
-                            config.shutdown_grace,
+                            config.child_stop_grace,
                         )
                         .await?
                         {
@@ -232,7 +233,7 @@ pub(super) async fn run_claimed_child(
                         );
                         return Err(terminate_for(
                             &mut child,
-                            config.shutdown_grace,
+                            config.child_stop_grace,
                             AttemptInterruption::WorkerCrashed,
                         ).await);
                     }
@@ -252,7 +253,7 @@ pub(super) async fn run_claimed_child(
             () = &mut deadline => {
                 return Err(terminate_for(
                     &mut child,
-                    config.shutdown_grace,
+                    config.child_stop_grace,
                     AttemptInterruption::TimedOut,
                 ).await);
             }
@@ -260,7 +261,7 @@ pub(super) async fn run_claimed_child(
                 if result.is_err() || *shutdown.borrow() {
                     return Err(terminate_for(
                         &mut child,
-                        config.shutdown_grace,
+                        config.child_stop_grace,
                         AttemptInterruption::Shutdown,
                     ).await);
                 }
@@ -350,7 +351,7 @@ fn finalize_child_result(
 
 async fn handle_heartbeat(
     heartbeat_client: &mut tokio_postgres::Client,
-    config: &WorkerRuntimeConfig,
+    config: &AnalysisConsumerConfig,
     claim: &ClaimedJob,
     child: &mut ManagedAnalysisChild,
     started: Instant,
@@ -362,11 +363,14 @@ async fn handle_heartbeat(
     .await
     {
         Ok(Ok(HeartbeatResult::Continue)) => {
-            refresh_child_liveness(child, started, config.shutdown_grace).await
+            refresh_child_liveness(child, started, config.child_stop_grace).await
         }
-        Ok(Ok(HeartbeatResult::PreemptRequested)) => {
-            Err(terminate_for(child, config.shutdown_grace, AttemptInterruption::Preempted).await)
-        }
+        Ok(Ok(HeartbeatResult::PreemptRequested)) => Err(terminate_for(
+            child,
+            config.child_stop_grace,
+            AttemptInterruption::Preempted,
+        )
+        .await),
         Ok(Ok(HeartbeatResult::OwnerLost)) => {
             warn!(
                 event = "analysis_heartbeat_rejected",
@@ -374,7 +378,12 @@ async fn handle_heartbeat(
                 reason = "owner_lost",
                 "analysis attempt heartbeat lost fencing ownership"
             );
-            Err(terminate_for(child, config.shutdown_grace, AttemptInterruption::OwnerLost).await)
+            Err(terminate_for(
+                child,
+                config.child_stop_grace,
+                AttemptInterruption::OwnerLost,
+            )
+            .await)
         }
         Ok(Err(error)) => {
             warn!(
@@ -384,7 +393,12 @@ async fn handle_heartbeat(
                 error_kind = error.kind(),
                 "analysis attempt heartbeat failed"
             );
-            Err(terminate_for(child, config.shutdown_grace, AttemptInterruption::OwnerLost).await)
+            Err(terminate_for(
+                child,
+                config.child_stop_grace,
+                AttemptInterruption::OwnerLost,
+            )
+            .await)
         }
         Err(_elapsed) => {
             warn!(
@@ -393,7 +407,12 @@ async fn handle_heartbeat(
                 reason = "timeout",
                 "analysis attempt heartbeat timed out"
             );
-            Err(terminate_for(child, config.shutdown_grace, AttemptInterruption::OwnerLost).await)
+            Err(terminate_for(
+                child,
+                config.child_stop_grace,
+                AttemptInterruption::OwnerLost,
+            )
+            .await)
         }
     }
 }
@@ -401,7 +420,7 @@ async fn handle_heartbeat(
 async fn refresh_child_liveness(
     child: &mut ManagedAnalysisChild,
     started: Instant,
-    shutdown_grace: time::Duration,
+    child_stop_grace: time::Duration,
 ) -> Result<Option<(AnalysisChildOutcome, AttemptMetrics)>, AttemptInterruption> {
     match child.refresh_liveness() {
         Ok(()) => return Ok(None),
@@ -420,7 +439,7 @@ async fn refresh_child_liveness(
             elapsed_metrics(started, child.peak_resident_bytes()),
         ))),
         Ok(None) | Err(_) => {
-            Err(terminate_for(child, shutdown_grace, AttemptInterruption::WorkerCrashed).await)
+            Err(terminate_for(child, child_stop_grace, AttemptInterruption::WorkerCrashed).await)
         }
     }
 }
@@ -447,14 +466,14 @@ async fn terminate_for(
 
 async fn finish_successful_child(
     control_client: &mut tokio_postgres::Client,
-    config: &WorkerRuntimeConfig,
+    config: &AnalysisConsumerConfig,
     claim: &ClaimedJob,
     attempt_directory: &std::path::Path,
     metrics: &mut AttemptMetrics,
 ) -> Result<DeliveryDisposition, ConsumerError> {
     let publication_started = Instant::now();
     let result = time::timeout(
-        config.publication_limits.finalization_timeout,
+        config.execution_limits.finalization_timeout,
         publish(control_client, claim, config, attempt_directory, metrics),
     )
     .await;
@@ -556,7 +575,7 @@ fn log_attempt_success(publication: PublicationResult, metrics: &AttemptMetrics)
 }
 
 async fn finish_publication_failure(
-    config: &WorkerRuntimeConfig,
+    config: &AnalysisConsumerConfig,
     claim: &ClaimedJob,
     metrics: &AttemptMetrics,
 ) -> Result<DeliveryDisposition, ConsumerError> {

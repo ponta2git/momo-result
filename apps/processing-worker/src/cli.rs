@@ -21,7 +21,7 @@ use crate::{
     },
     process::{ProbeOutcome, allocate_and_touch},
     series_analysis::{
-        config::WorkerConfig,
+        config::AnalysisActivationConfig,
         release::{PromotionRequest, PromotionTrigger},
     },
 };
@@ -652,12 +652,13 @@ fn exit_code(code: i32) -> ExitCode {
 }
 
 async fn run_worker() -> Result<(), String> {
-    let config = WorkerConfig::from_environment().map_err(|error| error.to_string())?;
-    let runtime_plan = crate::supervisor::WorkerRuntimePlan::from_environment(&config)
+    let analysis_activation =
+        AnalysisActivationConfig::from_environment().map_err(|error| error.to_string())?;
+    let runtime_plan = crate::supervisor::WorkerRuntimePlan::from_environment(&analysis_activation)
         .map_err(|error| error.to_string())?;
     info!(
         event = "analysis_configuration_accepted",
-        publication_mode = ?config.publication_mode,
+        publication_mode = ?analysis_activation.publication_mode,
         analysis_enabled = runtime_plan.series_analysis_enabled(),
         ocr_v2_enabled = runtime_plan.ocr_enabled(),
         "combined worker configuration accepted"

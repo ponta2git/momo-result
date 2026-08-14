@@ -142,13 +142,13 @@ fn publication_is_disabled_without_limit_configuration() {
     let _guard = EnvironmentGuard::capture();
     clear();
 
-    let config = WorkerConfig::from_environment();
+    let config = AnalysisActivationConfig::from_environment();
 
     assert_eq!(
         config,
-        Ok(WorkerConfig {
-            publication_mode: PublicationMode::Disabled,
-            limits: None,
+        Ok(AnalysisActivationConfig {
+            publication_mode: AnalysisPublicationMode::Disabled,
+            execution_limits: None,
         })
     );
 }
@@ -162,11 +162,11 @@ fn publication_fails_closed_when_a_limit_is_missing() {
     clear();
     EnvironmentGuard::set(PUBLICATION_MODE_ENV, "enabled");
 
-    let config = WorkerConfig::from_environment();
+    let config = AnalysisActivationConfig::from_environment();
 
     assert_eq!(
         config,
-        Err(ConfigError::Missing {
+        Err(AnalysisConfigError::Missing {
             name: "MOMO_ANALYSIS_RUNTIME_MEMORY_LIMIT_BYTES"
         })
     );
@@ -182,9 +182,9 @@ fn publication_rejects_an_unsafe_memory_relationship() {
     valid_enabled_environment();
     EnvironmentGuard::set("MOMO_ANALYSIS_PARENT_HEADROOM_BYTES", "134217729");
 
-    let config = WorkerConfig::from_environment();
+    let config = AnalysisActivationConfig::from_environment();
 
-    assert_eq!(config, Err(ConfigError::UnsafeMemoryRelationship));
+    assert_eq!(config, Err(AnalysisConfigError::UnsafeMemoryRelationship));
 }
 
 #[test]
@@ -196,13 +196,13 @@ fn publication_accepts_a_complete_bounded_configuration() {
     clear();
     valid_enabled_environment();
 
-    let config = WorkerConfig::from_environment();
+    let config = AnalysisActivationConfig::from_environment();
 
     assert!(matches!(
         config,
-        Ok(WorkerConfig {
-            publication_mode: PublicationMode::Enabled,
-            limits: Some(_),
+        Ok(AnalysisActivationConfig {
+            publication_mode: AnalysisPublicationMode::Enabled,
+            execution_limits: Some(_),
         })
     ));
 }
@@ -230,23 +230,23 @@ fn runtime_accepts_only_timing_that_preserves_lease_recovery_margin() {
     clear();
     valid_enabled_environment();
     let _cgroup = valid_runtime_environment();
-    let initial_worker = WorkerConfig::from_environment()
-        .unwrap_or_else(|error| panic!("valid worker limits: {error}"));
+    let initial_activation = AnalysisActivationConfig::from_environment()
+        .unwrap_or_else(|error| panic!("valid analysis execution limits: {error}"));
 
-    assert!(WorkerRuntimeConfig::from_environment(&initial_worker).is_ok());
+    assert!(AnalysisConsumerConfig::from_environment(&initial_activation).is_ok());
 
     EnvironmentGuard::set("MOMO_ANALYSIS_REDIS_BLOCK_MS", "5001");
     assert!(matches!(
-        WorkerRuntimeConfig::from_environment(&initial_worker),
-        Err(ConfigError::UnsafeLeaseRelationship)
+        AnalysisConsumerConfig::from_environment(&initial_activation),
+        Err(AnalysisConfigError::UnsafeLeaseRelationship)
     ));
 
     EnvironmentGuard::set("MOMO_ANALYSIS_REDIS_BLOCK_MS", "5000");
     EnvironmentGuard::set("MOMO_ANALYSIS_FINALIZATION_TIMEOUT_MS", "56000");
-    let worker_with_long_finalization = WorkerConfig::from_environment()
-        .unwrap_or_else(|error| panic!("valid memory limits: {error}"));
+    let activation_with_long_finalization = AnalysisActivationConfig::from_environment()
+        .unwrap_or_else(|error| panic!("valid analysis memory limits: {error}"));
     assert!(matches!(
-        WorkerRuntimeConfig::from_environment(&worker_with_long_finalization),
-        Err(ConfigError::UnsafeLeaseRelationship)
+        AnalysisConsumerConfig::from_environment(&activation_with_long_finalization),
+        Err(AnalysisConfigError::UnsafeLeaseRelationship)
     ));
 }

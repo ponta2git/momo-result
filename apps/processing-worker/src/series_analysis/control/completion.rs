@@ -3,7 +3,7 @@ use std::{path::Path, time::Instant};
 use tokio_postgres::Client;
 
 use crate::process::current_process_peak_resident_bytes;
-use crate::series_analysis::config::WorkerRuntimeConfig;
+use crate::series_analysis::config::AnalysisConsumerConfig;
 
 use super::{
     AttemptFailure, AttemptMetrics, ClaimedJob, ControlError, PublicationResult, ResultDisposition,
@@ -24,7 +24,7 @@ use super::{
 pub(crate) async fn publish(
     client: &mut Client,
     claim: &ClaimedJob,
-    config: &WorkerRuntimeConfig,
+    config: &AnalysisConsumerConfig,
     artifact_directory: &Path,
     metrics: &mut AttemptMetrics,
 ) -> Result<PublicationResult, ControlError> {
@@ -43,7 +43,7 @@ pub(crate) async fn publish(
     validate_child_artifact_metrics(metrics, artifact_chunk_count, artifact_encoded_bytes)?;
     let publication_started = Instant::now();
     let transaction =
-        bounded_transaction(client, config.publication_limits.finalization_timeout).await?;
+        bounded_transaction(client, config.execution_limits.finalization_timeout).await?;
     lock_owned(&transaction, claim, config).await?;
     let desired = transaction
         .query_one(

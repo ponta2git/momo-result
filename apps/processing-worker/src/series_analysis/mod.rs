@@ -20,7 +20,7 @@ use crate::{
 };
 
 use self::{
-    config::WorkerRuntimeConfig,
+    config::AnalysisConsumerConfig,
     control::{
         ALGORITHM_VERSION, AttemptFailure, ClaimResult, ControlError, SafeFailureCode, claim_job,
         finish_failure, mark_draining, register_capability,
@@ -112,7 +112,7 @@ impl AttemptInterruption {
 /// Returns an error only when a runtime dependency or safety boundary fails. Individual analysis
 /// failures are persisted as terminal jobs and do not stop the parent worker.
 pub(crate) async fn run(
-    config: WorkerRuntimeConfig,
+    config: AnalysisConsumerConfig,
     mut shutdown: watch::Receiver<bool>,
 ) -> Result<(), ConsumerError> {
     if !crate::process::managed_analysis_runtime_supported() {
@@ -227,7 +227,7 @@ async fn consume_deliveries(
     control_client: &mut tokio_postgres::Client,
     heartbeat_client: &mut tokio_postgres::Client,
     redis: &mut ConnectionManager,
-    config: &WorkerRuntimeConfig,
+    config: &AnalysisConsumerConfig,
     shutdown: &mut watch::Receiver<bool>,
 ) -> Result<(), ConsumerError> {
     while !*shutdown.borrow() {
@@ -291,7 +291,7 @@ async fn consume_deliveries(
 async fn process_delivery(
     control_client: &mut tokio_postgres::Client,
     heartbeat_client: &mut tokio_postgres::Client,
-    config: &WorkerRuntimeConfig,
+    config: &AnalysisConsumerConfig,
     message_id: &str,
     payload: &QueuePayload,
     shutdown: &mut watch::Receiver<bool>,
@@ -364,7 +364,7 @@ async fn process_delivery(
 async fn process_claimed_delivery(
     control_client: &mut tokio_postgres::Client,
     heartbeat_client: &mut tokio_postgres::Client,
-    config: &WorkerRuntimeConfig,
+    config: &AnalysisConsumerConfig,
     claim: &control::ClaimedJob,
     shutdown: &mut watch::Receiver<bool>,
 ) -> Result<DeliveryDisposition, ConsumerError> {

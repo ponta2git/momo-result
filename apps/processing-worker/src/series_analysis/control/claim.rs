@@ -7,7 +7,7 @@ use crate::{
         ExecutionTaskKind, NewExecutionSlotHolder, SlotAcquisition, acquire_analysis,
         clear_stale_preemption, lock as lock_execution_slot,
     },
-    series_analysis::config::WorkerRuntimeConfig,
+    series_analysis::config::AnalysisConsumerConfig,
 };
 
 use super::{
@@ -25,10 +25,10 @@ use super::{
 pub(crate) async fn claim_job(
     client: &mut Client,
     job_id: &str,
-    config: &WorkerRuntimeConfig,
+    config: &AnalysisConsumerConfig,
 ) -> Result<ClaimResult, ControlError> {
     let transaction =
-        bounded_transaction(client, config.publication_limits.finalization_timeout).await?;
+        bounded_transaction(client, config.execution_limits.finalization_timeout).await?;
     let lease_milliseconds = duration_milliseconds(config.lease_duration)?;
     let candidate = match prepare_claim(&transaction, job_id, lease_milliseconds).await? {
         ClaimPreparation::Ready(candidate) => candidate,
@@ -52,8 +52,7 @@ pub(crate) async fn claim_job(
         .checked_add(1)
         .ok_or(ControlError::NumericBound)?;
     let attempt_id = stable_id("analysis-attempt", &[job_id, &attempt_no.to_string()]);
-    let timeout_milliseconds =
-        duration_milliseconds(config.publication_limits.calculation_timeout)?;
+    let timeout_milliseconds = duration_milliseconds(config.execution_limits.calculation_timeout)?;
     let fencing_token = acquire_execution_slot(
         &transaction,
         config,
@@ -167,7 +166,7 @@ async fn prepare_claim(
 
 async fn acquire_execution_slot(
     transaction: &Transaction<'_>,
-    config: &WorkerRuntimeConfig,
+    config: &AnalysisConsumerConfig,
     job_id: &str,
     attempt_id: &str,
     lease_milliseconds: i64,
@@ -202,7 +201,7 @@ struct ClaimAttempt<'a> {
 
 async fn persist_claim(
     transaction: &Transaction<'_>,
-    config: &WorkerRuntimeConfig,
+    config: &AnalysisConsumerConfig,
     attempt: &ClaimAttempt<'_>,
 ) -> Result<(), ControlError> {
     let updated = transaction

@@ -7,13 +7,13 @@ use redis::{
     },
 };
 
-use crate::series_analysis::config::WorkerRuntimeConfig;
+use crate::series_analysis::config::AnalysisConsumerConfig;
 
 use super::ConsumerError;
 
 pub(super) async fn ensure_consumer_group(
     redis: &mut ConnectionManager,
-    config: &WorkerRuntimeConfig,
+    config: &AnalysisConsumerConfig,
 ) -> Result<(), ConsumerError> {
     let result: Result<(), RedisError> = redis
         .xgroup_create_mkstream(&config.redis_stream, &config.redis_group, "0")
@@ -27,7 +27,7 @@ pub(super) async fn ensure_consumer_group(
 
 pub(super) async fn next_delivery(
     redis: &mut ConnectionManager,
-    config: &WorkerRuntimeConfig,
+    config: &AnalysisConsumerConfig,
 ) -> Result<Option<StreamId>, ConsumerError> {
     let minimum_idle = usize::try_from(config.lease_duration.as_millis())?;
     let claimed: StreamAutoClaimReply = redis
@@ -74,7 +74,7 @@ pub(super) fn payload_from_delivery(delivery: &StreamId) -> Option<QueuePayload>
 
 pub(super) async fn acknowledge(
     redis: &mut ConnectionManager,
-    config: &WorkerRuntimeConfig,
+    config: &AnalysisConsumerConfig,
     message_id: &str,
 ) -> Result<(), ConsumerError> {
     let _: usize = redis

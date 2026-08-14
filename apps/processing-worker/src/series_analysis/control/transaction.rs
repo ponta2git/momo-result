@@ -9,7 +9,7 @@ use crate::{
         ExecutionSlotIdentity, ExecutionTaskKind, lock_owned as lock_owned_slot,
         release_owned as release_owned_slot,
     },
-    series_analysis::config::WorkerRuntimeConfig,
+    series_analysis::config::AnalysisConsumerConfig,
 };
 
 use super::{
@@ -19,7 +19,7 @@ use super::{
 pub(super) async fn lock_owned(
     transaction: &Transaction<'_>,
     claim: &ClaimedJob,
-    config: &WorkerRuntimeConfig,
+    config: &AnalysisConsumerConfig,
 ) -> Result<(), ControlError> {
     let identity = ExecutionSlotIdentity {
         task_kind: ExecutionTaskKind::Analysis,
@@ -253,7 +253,7 @@ pub(super) async fn refresh_operation_projections(
 pub(super) async fn release_slot(
     transaction: &Transaction<'_>,
     claim: &ClaimedJob,
-    config: &WorkerRuntimeConfig,
+    config: &AnalysisConsumerConfig,
 ) -> Result<(), ControlError> {
     let identity = ExecutionSlotIdentity {
         task_kind: ExecutionTaskKind::Analysis,

@@ -8,17 +8,20 @@ use crate::{
     },
     series_analysis::{
         self, ConsumerError as SeriesAnalysisConsumerError,
-        config::{ConfigError, PublicationMode, WorkerConfig, WorkerRuntimeConfig},
+        config::{
+            AnalysisActivationConfig, AnalysisConfigError, AnalysisConsumerConfig,
+            AnalysisPublicationMode,
+        },
     },
 };
 
-struct ActiveRuntimePlan {
-    series_analysis: WorkerRuntimeConfig,
+struct EnabledConsumers {
+    series_analysis: AnalysisConsumerConfig,
     ocr: OcrConsumerRuntimeConfig,
 }
 
 pub struct WorkerRuntimePlan {
-    active: Option<ActiveRuntimePlan>,
+    enabled_consumers: Option<EnabledConsumers>,
 }
 
 impl WorkerRuntimePlan {
@@ -28,16 +31,20 @@ impl WorkerRuntimePlan {
     ///
     /// Returns an error when OCR is requested without the shared series-analysis runtime, or when
     /// either consumer's bounded configuration is incomplete.
-    pub fn from_environment(worker_config: &WorkerConfig) -> Result<Self, SupervisorError> {
+    pub fn from_environment(
+        analysis_activation: &AnalysisActivationConfig,
+    ) -> Result<Self, SupervisorError> {
         let ocr_mode = consumer_mode_from_environment()?;
-        if worker_config.publication_mode == PublicationMode::Disabled {
+        if analysis_activation.publication_mode == AnalysisPublicationMode::Disabled {
             if ocr_mode == OcrConsumerMode::Enabled {
                 return Err(SupervisorError::OcrRequiresSeriesAnalysisRuntime);
             }
-            return Ok(Self { active: None });
+            return Ok(Self {
+                enabled_consumers: None,
+            });
         }
 
-        let series_analysis = WorkerRuntimeConfig::from_environment(worker_config)?;
+        let series_analysis = AnalysisConsumerConfig::from_environment(analysis_activation)?;
         let ocr = OcrConsumerRuntimeConfig::from_environment(
             series_analysis.database_url.clone(),
             series_analysis.redis_url.clone(),
@@ -48,7 +55,7 @@ impl WorkerRuntimePlan {
             return Err(SupervisorError::ConfigurationChangedDuringLoad);
         }
         Ok(Self {
-            active: Some(ActiveRuntimePlan {
+            enabled_consumers: Some(EnabledConsumers {
                 series_analysis,
                 ocr,
             }),
@@ -58,8 +65,8 @@ impl WorkerRuntimePlan {
     #[must_use]
     pub const fn ocr_enabled(&self) -> bool {
         matches!(
-            self.active,
-            Some(ActiveRuntimePlan {
+            self.enabled_consumers,
+            Some(EnabledConsumers {
                 ocr: OcrConsumerRuntimeConfig::Enabled(_),
                 ..
             })
@@ -68,7 +75,7 @@ impl WorkerRuntimePlan {
 
     #[must_use]
     pub const fn series_analysis_enabled(&self) -> bool {
-        self.active.is_some()
+        self.enabled_consumers.is_some()
     }
 }
 
@@ -81,20 +88,20 @@ impl WorkerRuntimePlan {
 ///
 /// Returns the first consumer failure after signalling and awaiting the sibling consumer.
 pub async fn run(
-    config: WorkerRuntimePlan,
+    plan: WorkerRuntimePlan,
     shutdown: watch::Receiver<bool>,
 ) -> Result<(), SupervisorError> {
-    let Some(active) = config.active else {
+    let Some(enabled_consumers) = plan.enabled_consumers else {
         return wait_until_shutdown(shutdown).await;
     };
-    match active.ocr {
+    match enabled_consumers.ocr {
         OcrConsumerRuntimeConfig::Disabled => {
-            series_analysis::run(active.series_analysis, shutdown)
+            series_analysis::run(enabled_consumers.series_analysis, shutdown)
                 .await
                 .map_err(SupervisorError::SeriesAnalysis)
         }
         OcrConsumerRuntimeConfig::Enabled(ocr) => {
-            run_combined(active.series_analysis, *ocr, shutdown).await
+            run_combined(enabled_consumers.series_analysis, *ocr, shutdown).await
         }
     }
 }
@@ -110,7 +117,7 @@ async fn wait_until_shutdown(mut shutdown: watch::Receiver<bool>) -> Result<(), 
 
 #[cfg(target_os = "linux")]
 async fn run_combined(
-    series_analysis_config: WorkerRuntimeConfig,
+    series_analysis_config: AnalysisConsumerConfig,
     ocr_config: crate::ocr::consumer::OcrConsumerConfig,
     mut external_shutdown: watch::Receiver<bool>,
 ) -> Result<(), SupervisorError> {
@@ -125,7 +132,7 @@ async fn run_combined(
     let launcher = IsolatedOcrChildLauncher::new(
         series_analysis_config.child_cgroup.clone(),
         None,
-        series_analysis_config.shutdown_grace,
+        series_analysis_config.child_stop_grace,
     );
     let (shutdown_sender, shutdown_receiver) = watch::channel(false);
     let series_analysis_consumer =
@@ -195,7 +202,7 @@ fn log_secondary_series_analysis_failure(result: &Result<(), SeriesAnalysisConsu
 
 #[cfg(not(target_os = "linux"))]
 fn run_combined(
-    series_analysis_config: WorkerRuntimeConfig,
+    series_analysis_config: AnalysisConsumerConfig,
     ocr_config: crate::ocr::consumer::OcrConsumerConfig,
     shutdown: watch::Receiver<bool>,
 ) -> std::future::Ready<Result<(), SupervisorError>> {
@@ -206,7 +213,7 @@ fn run_combined(
 #[derive(Debug, Error)]
 pub enum SupervisorError {
     #[error(transparent)]
-    SeriesAnalysisConfiguration(#[from] ConfigError),
+    SeriesAnalysisConfiguration(#[from] AnalysisConfigError),
     #[error(transparent)]
     OcrConfiguration(#[from] OcrRuntimeConfigError),
     #[error("Rust OCR v2 requires the shared series-analysis runtime to be enabled")]

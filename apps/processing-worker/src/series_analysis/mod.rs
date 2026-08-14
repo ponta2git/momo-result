@@ -81,7 +81,7 @@ impl ConsumerError {
 enum DeliveryDisposition {
     Acknowledge,
     LeavePending,
-    Stop,
+    StopLoop,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -282,7 +282,7 @@ async fn consume_deliveries(
                 }
             }
             DeliveryDisposition::LeavePending => {}
-            DeliveryDisposition::Stop => break,
+            DeliveryDisposition::StopLoop => break,
         }
     }
     Ok(())
@@ -325,7 +325,7 @@ async fn process_delivery(
             );
             return Ok(DeliveryDisposition::LeavePending);
         }
-        ClaimResult::NotReady => {
+        ClaimResult::NotYetAvailable => {
             return Ok(DeliveryDisposition::LeavePending);
         }
         ClaimResult::Busy => return Ok(DeliveryDisposition::LeavePending),

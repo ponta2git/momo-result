@@ -140,7 +140,10 @@ async fn finish_interruption(
             log_attempt_failure(failure, &metrics, "child_supervision");
             DeliveryDisposition::Acknowledge
         }
-        InterruptionAction::Requeue { cause, stop } => {
+        InterruptionAction::Requeue {
+            cause,
+            stop_consumer,
+        } => {
             requeue_interrupted(control_client, claim, config, cause, &metrics).await?;
             info!(
                 event = "analysis_attempt_requeued",
@@ -149,8 +152,8 @@ async fn finish_interruption(
                 elapsed_milliseconds = metrics.elapsed_milliseconds,
                 "analysis attempt was requeued without failure"
             );
-            if stop {
-                DeliveryDisposition::Stop
+            if stop_consumer {
+                DeliveryDisposition::StopLoop
             } else {
                 DeliveryDisposition::Acknowledge
             }

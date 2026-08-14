@@ -16,7 +16,10 @@ pub(super) enum ChildAction {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum InterruptionAction {
     Fail(AttemptFailure),
-    Requeue { cause: RequeueCause, stop: bool },
+    Requeue {
+        cause: RequeueCause,
+        stop_consumer: bool,
+    },
     LeavePending,
 }
 
@@ -48,11 +51,11 @@ pub(super) const fn interruption_action(interruption: AttemptInterruption) -> In
         AttemptInterruption::TimedOut => InterruptionAction::Fail(AttemptFailure::timed_out()),
         AttemptInterruption::Preempted => InterruptionAction::Requeue {
             cause: RequeueCause::Preempted,
-            stop: false,
+            stop_consumer: false,
         },
         AttemptInterruption::Shutdown => InterruptionAction::Requeue {
             cause: RequeueCause::GracefulStop,
-            stop: true,
+            stop_consumer: true,
         },
         AttemptInterruption::OwnerLost => InterruptionAction::LeavePending,
         AttemptInterruption::WorkerCrashed => {
@@ -118,14 +121,14 @@ mod tests {
                 AttemptInterruption::Preempted,
                 InterruptionAction::Requeue {
                     cause: RequeueCause::Preempted,
-                    stop: false,
+                    stop_consumer: false,
                 },
             ),
             (
                 AttemptInterruption::Shutdown,
                 InterruptionAction::Requeue {
                     cause: RequeueCause::GracefulStop,
-                    stop: true,
+                    stop_consumer: true,
                 },
             ),
             (

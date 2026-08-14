@@ -152,7 +152,7 @@ async fn prepare_claim(
         return Ok(ClaimPreparation::Rejected(ClaimResult::MissingOrTerminal));
     }
     if !job.try_get::<_, bool>(4)? {
-        return Ok(ClaimPreparation::Rejected(ClaimResult::NotReady));
+        return Ok(ClaimPreparation::Rejected(ClaimResult::NotYetAvailable));
     }
     Ok(ClaimPreparation::Ready(ClaimCandidate {
         game_title_id,

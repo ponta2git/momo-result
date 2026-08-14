@@ -43,7 +43,7 @@ pub(crate) enum ClaimResult {
     Busy,
     MissingOrTerminal,
     UnsupportedVersion(UnsupportedJobVersion),
-    NotReady,
+    NotYetAvailable,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

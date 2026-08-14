@@ -19,11 +19,10 @@ export type ListHeldEventsQuery = {
 };
 
 export async function listHeldEvents(
-  query: ListHeldEventsQuery | string = "",
-  limit = 10,
+  query: ListHeldEventsQuery | undefined = undefined,
   options: ApiSignalOptions = {},
 ): Promise<HeldEventListResponse> {
-  const request = typeof query === "string" ? { limit, q: query } : query;
+  const request = query ?? { limit: 10 };
   const params = new URLSearchParams();
   if (request.limit !== undefined) params.set("limit", String(request.limit));
   if (request.page !== undefined) params.set("page", String(request.page));

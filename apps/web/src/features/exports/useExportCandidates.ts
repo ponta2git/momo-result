@@ -46,11 +46,7 @@ export function useExportCandidates({
     enabled: scope === "match",
   });
   const heldEventsQuery = useQuery({
-    ...heldEventsQueryOptions(
-      { page: heldEventPage, pageSize: CANDIDATE_PAGE_SIZE },
-      CANDIDATE_PAGE_SIZE,
-      "exports",
-    ),
+    ...heldEventsQueryOptions({ page: heldEventPage, pageSize: CANDIDATE_PAGE_SIZE }),
     enabled: scope === "heldEvent",
   });
   const matchesQuery = useQuery({

@@ -7,10 +7,51 @@ import {
   invalidateAfterMatchUpdated,
   invalidateAfterOcrSubmissionStarted,
 } from "@/shared/api/cacheInvalidation";
-import { heldEventKeys, matchKeys, ocrDraftKeys, seriesAnalysisKeys } from "@/shared/api/queryKeys";
+import {
+  heldEventKeys,
+  masterKeys,
+  matchKeys,
+  ocrDraftKeys,
+  seriesAnalysisKeys,
+} from "@/shared/api/queryKeys";
+import {
+  heldEventDirectoryQueryOptions,
+  heldEventDirectorySuspenseQueryOptions,
+  heldEventsQueryOptions,
+  memberAliasesQueryOptions,
+} from "@/shared/api/queryOptions";
 import { createTestQueryClient } from "@/test/queryClient";
 
 describe("shared query keys", () => {
+  it("normalizes held-event search before using it in the query key", () => {
+    expect(
+      heldEventsQueryOptions({ limit: 25, page: 2, pageSize: 10, q: "  tournament  " }).queryKey,
+    ).toEqual(heldEventKeys.list({ limit: 25, page: 2, pageSize: 10, q: "tournament" }));
+    expect(heldEventsQueryOptions({ q: "   " }).queryKey).toEqual(heldEventKeys.list({}));
+  });
+
+  it.each([
+    ["limit", { limit: 25 }, { limit: 100 }],
+    ["page", { page: 1 }, { page: 2 }],
+    ["pageSize", { pageSize: 10 }, { pageSize: 25 }],
+    ["q", { q: "spring" }, { q: "summer" }],
+  ])("partitions held-event caches when %s changes", (_name, left, right) => {
+    expect(heldEventsQueryOptions(left).queryKey).not.toEqual(
+      heldEventsQueryOptions(right).queryKey,
+    );
+  });
+
+  it("shares the fixed held-event directory key across query modes", () => {
+    expect(heldEventDirectoryQueryOptions().queryKey).toEqual(
+      heldEventDirectorySuspenseQueryOptions().queryKey,
+    );
+    expect(heldEventDirectoryQueryOptions().queryKey).toEqual(heldEventKeys.scope("workspace"));
+  });
+
+  it("uses the unfiltered member-alias directory key", () => {
+    expect(memberAliasesQueryOptions().queryKey).toEqual(masterKeys.memberAliases.list());
+  });
+
   it("invalidates mutable analysis state but preserves pinned artifacts after confirmation", async () => {
     const queryClient = createTestQueryClient();
     queryClient.setQueryData(matchKeys.list({ status: "confirmed" }), { items: [] });

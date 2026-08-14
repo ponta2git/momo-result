@@ -51,7 +51,7 @@ export const masterKeys = {
     all: () => ["masters", "member-aliases"] as const,
     adminList: (authScope: string) =>
       ["masters", "member-aliases", "admin-list", authScope] as const,
-    list: (_scope: string) => ["masters", "member-aliases", "list-response"] as const,
+    list: () => ["masters", "member-aliases", "list-response"] as const,
   },
   seasonMasters: {
     all: () => ["masters", "season-masters"] as const,

@@ -83,6 +83,6 @@ export async function fetchIncidentMasters(
 export async function fetchMemberAliases(
   options: ApiSignalOptions = {},
 ): Promise<MemberAliasResponse[]> {
-  const response = await listMemberAliases(undefined, options);
+  const response = await listMemberAliases(options);
   return (response.items ?? []).toSorted(byMemberAlias);
 }

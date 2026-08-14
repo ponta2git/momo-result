@@ -28,37 +28,51 @@ export function adminLoginAccountsQueryOptions() {
   });
 }
 
-export function heldEventsQueryOptions(
-  query: ListHeldEventsQuery | string = "",
-  limit = 10,
-  scope = "list",
-) {
+/** A bounded, unfiltered directory shared by screens that only resolve held-event names. */
+const heldEventDirectoryQuery = { limit: 100 } as const;
+
+export function heldEventsQueryOptions(query: ListHeldEventsQuery) {
   return queryOptions({
-    ...heldEventsQueryDefinition(query, limit, scope),
+    ...heldEventsQueryDefinition(query),
     placeholderData: keepPreviousData,
   });
 }
 
-export function heldEventsSuspenseQueryOptions(
-  query: ListHeldEventsQuery | string = "",
-  limit = 10,
-  scope = "list",
-) {
-  return heldEventsQueryDefinition(query, limit, scope);
+export function heldEventDirectoryQueryOptions() {
+  return queryOptions({
+    ...heldEventDirectoryQueryDefinition(),
+    placeholderData: keepPreviousData,
+  });
 }
 
-function heldEventsQueryDefinition(
-  query: ListHeldEventsQuery | string,
-  limit: number,
-  scope: string,
-) {
+export function heldEventDirectorySuspenseQueryOptions() {
+  return heldEventDirectoryQueryDefinition();
+}
+
+function heldEventDirectoryQueryDefinition() {
   return queryOptions({
-    queryKey:
-      typeof query === "string"
-        ? heldEventKeys.scope(scope)
-        : heldEventKeys.list({ ...query, scope }),
-    queryFn: ({ signal }) => listHeldEvents(query, limit, { signal }),
+    queryKey: heldEventKeys.scope("directory"),
+    queryFn: ({ signal }) => listHeldEvents(heldEventDirectoryQuery, { signal }),
   });
+}
+
+function heldEventsQueryDefinition(query: ListHeldEventsQuery) {
+  // A single normalized value owns both cache identity and request behavior.
+  const normalizedQuery = normalizeHeldEventsQuery(query);
+  return queryOptions({
+    queryKey: heldEventKeys.list(normalizedQuery),
+    queryFn: ({ signal }) => listHeldEvents(normalizedQuery, { signal }),
+  });
+}
+
+function normalizeHeldEventsQuery(query: ListHeldEventsQuery): ListHeldEventsQuery {
+  const normalizedQ = query.q?.trim();
+  return {
+    ...(query.limit === undefined ? {} : { limit: query.limit }),
+    ...(query.page === undefined ? {} : { page: query.page }),
+    ...(query.pageSize === undefined ? {} : { pageSize: query.pageSize }),
+    ...(normalizedQ ? { q: normalizedQ } : {}),
+  };
 }
 
 export function heldEventDetailQueryOptions(heldEventId: string | undefined, enabled = true) {
@@ -105,10 +119,10 @@ export function seasonMastersQueryOptions(
   });
 }
 
-export function memberAliasesQueryOptions(scope: string, memberId?: string | undefined) {
+export function memberAliasesQueryOptions() {
   return queryOptions({
-    queryKey: masterKeys.memberAliases.list(scope),
-    queryFn: ({ signal }) => listMemberAliases(memberId, { signal }),
+    queryKey: masterKeys.memberAliases.list(),
+    queryFn: ({ signal }) => listMemberAliases({ signal }),
   });
 }
 

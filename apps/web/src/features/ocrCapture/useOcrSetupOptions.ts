@@ -14,7 +14,7 @@ import { shouldShowQueryError } from "@/shared/api/queryErrorState";
 import {
   gameTitlesQueryOptions,
   heldEventDetailQueryOptions,
-  heldEventsQueryOptions,
+  heldEventDirectoryQueryOptions,
   mapMastersQueryOptions,
   seasonMastersQueryOptions,
 } from "@/shared/api/queryOptions";
@@ -144,7 +144,7 @@ export function useOcrSetupOptions({
   const authScope = authAccountId ?? "anonymous";
   const gameTitlesQuery = useQuery({ ...gameTitlesQueryOptions(authScope), enabled });
   const heldEventsQuery = useQuery({
-    ...heldEventsQueryOptions("", 100, "ocr-capture"),
+    ...heldEventDirectoryQueryOptions(),
     enabled,
   });
   const preferredHeldEventQuery = useQuery({

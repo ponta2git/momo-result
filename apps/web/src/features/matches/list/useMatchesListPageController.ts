@@ -35,7 +35,7 @@ import {
 } from "@/shared/api/queryErrorState";
 import {
   gameTitlesQueryOptions,
-  heldEventsQueryOptions,
+  heldEventDirectoryQueryOptions,
   mapMastersQueryOptions,
   matchDraftDetailQueryOptions,
   matchListQueryOptions,
@@ -84,7 +84,7 @@ export function useMatchesListPageController() {
     });
   }, [parentReturnTo, setSearchParams, startFilterTransition]);
 
-  const heldEventsQuery = useQuery(heldEventsQueryOptions("", 100, "matches-list"));
+  const heldEventsQuery = useQuery(heldEventDirectoryQueryOptions());
   const gameTitlesQuery = useQuery(gameTitlesQueryOptions("matches-list"));
   const seasonsQuery = useQuery(seasonMastersQueryOptions("matches-list", undefined));
   const mapsQuery = useQuery(mapMastersQueryOptions("matches-list", undefined));

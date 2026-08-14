@@ -23,7 +23,7 @@ import {
 import { isInitialQueryLoading, shouldShowBlockingQueryError } from "@/shared/api/queryErrorState";
 import {
   gameTitlesQueryOptions,
-  heldEventsQueryOptions,
+  heldEventDirectoryQueryOptions,
   mapMastersQueryOptions,
   matchDetailQueryOptions,
   seasonMastersQueryOptions,
@@ -59,7 +59,7 @@ export function useMatchDetailPageController() {
 
   const matchQuery = useQuery(matchDetailQueryOptions(matchId, matchId.trim().length > 0));
 
-  const heldEventsQuery = useQuery(heldEventsQueryOptions("", 100, "all"));
+  const heldEventsQuery = useQuery(heldEventDirectoryQueryOptions());
   const gameTitlesQuery = useQuery(gameTitlesQueryOptions("match-detail"));
   const seasonsQuery = useQuery(seasonMastersQueryOptions("match-detail", undefined));
   const mapsQuery = useQuery(mapMastersQueryOptions("match-detail", undefined));

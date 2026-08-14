@@ -140,13 +140,9 @@ export async function listIncidentMasters(
 }
 
 export async function listMemberAliases(
-  memberId?: string,
   options: ApiSignalOptions = {},
 ): Promise<MemberAliasListResponse> {
-  const path = memberId
-    ? `/api/member-aliases?memberId=${encodeURIComponent(memberId)}`
-    : "/api/member-aliases";
-  return apiRequest<MemberAliasListResponse>(path, options);
+  return apiRequest<MemberAliasListResponse>("/api/member-aliases", options);
 }
 
 export async function createMemberAlias(

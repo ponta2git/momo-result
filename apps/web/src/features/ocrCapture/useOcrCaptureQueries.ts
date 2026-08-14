@@ -42,7 +42,7 @@ export function useOcrCaptureQueries(): OcrCaptureQueries {
   const accountId = authQuery.data?.accountId;
 
   const memberAliasesQuery = useQuery({
-    ...memberAliasesQueryOptions(accountId ?? "anonymous"),
+    ...memberAliasesQueryOptions(),
     enabled: ready,
   });
 

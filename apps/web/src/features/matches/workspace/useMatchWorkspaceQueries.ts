@@ -29,7 +29,7 @@ import { shouldShowBlockingQueryError, shouldShowQueryError } from "@/shared/api
 import {
   gameTitlesQueryOptions,
   heldEventDetailQueryOptions,
-  heldEventsSuspenseQueryOptions,
+  heldEventDirectorySuspenseQueryOptions,
   mapMastersQueryOptions,
   matchDetailQueryOptions,
   matchDraftDetailQueryOptions,
@@ -115,9 +115,9 @@ export function useMatchWorkspaceQueries(
   const matchDetailQuery = useQuery(matchDetailQueryOptions(matchId, mode === "edit"));
   const [heldEventsQuery, gameTitlesQuery, memberAliasesQuery] = useSuspenseQueries({
     queries: [
-      heldEventsSuspenseQueryOptions("", 100, "workspace"),
+      heldEventDirectorySuspenseQueryOptions(),
       gameTitlesQueryOptions("workspace"),
-      memberAliasesQueryOptions("workspace"),
+      memberAliasesQueryOptions(),
     ],
   });
   const heldEventItems = mergeHeldEventItems(

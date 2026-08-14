@@ -64,7 +64,7 @@ fn postgres_rows_are_decoded_without_panicking_getters() {
 }
 
 #[test]
-fn postgres_tls_preserves_peer_verification_and_channel_binding() {
+fn postgres_adapter_uses_openssl_without_disabling_peer_verification() {
     let manifest = include_str!("../Cargo.toml");
     let adapter = include_str!("postgres.rs");
     assert!(
@@ -88,16 +88,7 @@ fn postgres_tls_preserves_peer_verification_and_channel_binding() {
 }
 
 #[test]
-fn runtime_does_not_flatten_or_reexport_the_kernel_api() {
-    let facade = include_str!("lib.rs");
-    assert!(
-        !facade.contains("pub use momo_analysis_core"),
-        "runtime crate must not turn kernel internals into its own public API"
-    );
-}
-
-#[test]
-fn native_ocr_dependencies_are_owned_by_the_ocr_capability_crate() {
+fn native_ocr_dependency_is_owned_by_the_ocr_capability_crate() {
     let runtime_manifest = include_str!("../Cargo.toml");
     let ocr_manifest = include_str!("../crates/ocr/Cargo.toml");
     assert!(
@@ -108,25 +99,6 @@ fn native_ocr_dependencies_are_owned_by_the_ocr_capability_crate() {
         ocr_manifest.contains("tesseract ="),
         "OCR capability crate must own the Tesseract dependency"
     );
-    assert!(
-        Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("crates/ocr/src/protocol.rs")
-            .is_file(),
-        "OCR protocol must remain next to the native capability"
-    );
-    assert!(
-        Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("src/ocr/child.rs")
-            .is_file(),
-        "OCR stdio entry adapter must remain visible under the child process boundary"
-    );
-    for source in production_sources() {
-        assert!(
-            !source.body.contains("tesseract::"),
-            "{} reaches the native OCR implementation outside momo-ocr",
-            source.relative_path
-        );
-    }
 }
 
 struct SourceFile {

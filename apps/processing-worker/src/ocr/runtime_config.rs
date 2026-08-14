@@ -157,7 +157,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn consumer_is_explicitly_disabled_without_r2_credentials() {
+    fn ocr_consumer_defaults_to_disabled_when_mode_is_absent() {
         let result = OcrConsumerRuntimeConfig::from_lookup(
             String::from("postgresql://localhost/test"),
             String::from("redis://localhost/"),
@@ -167,7 +167,7 @@ mod tests {
     }
 
     #[test]
-    fn enabled_consumer_requires_every_bounded_runtime_setting() {
+    fn enabled_consumer_requires_secret_access_key_and_accepts_complete_settings() {
         let mut values = complete_values();
         values.remove("SOURCE_IMAGE_R2_SECRET_ACCESS_KEY");
         let result = build(&values);

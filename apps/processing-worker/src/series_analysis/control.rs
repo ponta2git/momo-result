@@ -203,7 +203,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn staged_attempt_metrics_preserve_total_time_instead_of_child_time_only() {
+    fn attempt_metrics_include_staging_and_publication_in_elapsed_time() {
         let mut metrics = AttemptMetrics {
             calculation_milliseconds: 10,
             ..AttemptMetrics::default()

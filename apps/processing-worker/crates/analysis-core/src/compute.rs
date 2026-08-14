@@ -416,7 +416,7 @@ mod tests {
     }
 
     #[test]
-    fn match_context_focus_references_only_items_in_the_same_aggregate() {
+    fn match_context_focus_is_complete_unique_and_within_the_aggregate() {
         let input = AnalysisInput {
             game_title_id: String::from("title-1"),
             input_revision: 1,

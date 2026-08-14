@@ -98,7 +98,7 @@ fn boundary_input() -> AnalysisInput {
 }
 
 #[test]
-fn shared_boundary_fixture_generates_the_complete_deterministic_artifact_shape() {
+fn shared_boundary_fixture_matches_normalized_input_and_overall_checksum() {
     let fixture = fixture_json();
     assert_eq!(fixture_value(&fixture, "/schemaVersion"), &Value::from(1));
     assert_eq!(

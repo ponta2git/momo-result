@@ -1,17 +1,14 @@
 package momo.api.http
 
-import scala.jdk.CollectionConverters.*
-
 import cats.data.Kleisli
-import cats.effect.{Deferred, IO, Resource}
+import cats.effect.{Deferred, IO}
+import ch.qos.logback.classic.Level
 import ch.qos.logback.classic.spi.ILoggingEvent
-import ch.qos.logback.classic.{Level, Logger}
-import ch.qos.logback.core.read.ListAppender
 import fs2.Stream
 import org.http4s.{Header, HttpApp, Request, Response, Status, Uri}
-import org.slf4j.LoggerFactory
 
 import momo.api.MomoCatsEffectSuite
+import momo.api.testing.LogbackCapture
 
 final class RequestDurationLoggingMiddlewareSpec extends MomoCatsEffectSuite:
   private val request = Request[IO](uri = Uri.unsafeFromString("/stream")).putHeaders(
@@ -98,30 +95,7 @@ final class RequestDurationLoggingMiddlewareSpec extends MomoCatsEffectSuite:
 
   private def captureLogs[A](
       use: IO[Vector[ILoggingEvent]] => IO[A]
-  ): IO[A] =
-    val logger = IO.delay(
-      LoggerFactory.getLogger("momo.api.http.RequestDurationLoggingMiddleware")
-    ).flatMap {
-      case logback: Logger => IO.pure(logback)
-      case other => IO.raiseError(new IllegalStateException(
-          s"Expected logback logger, got ${other.getClass.getName}"
-        ))
-    }
-    Resource.make(logger.flatMap { logback =>
-      IO.delay {
-        val appender = new ListAppender[ILoggingEvent]()
-        appender.start()
-        val originalLevel = logback.getLevel
-        logback.setLevel(Level.INFO)
-        logback.addAppender(appender)
-        (logback, appender, originalLevel)
-      }
-    }) { case (logback, appender, originalLevel) =>
-      IO.delay {
-        logback.detachAppender(appender)
-        logback.setLevel(originalLevel)
-        appender.stop()
-      }
-    }.use { case (_, appender, _) =>
-      use(IO.delay(appender.list.asScala.toVector))
-    }
+  ): IO[A] = LogbackCapture.withEvents(
+    "momo.api.http.RequestDurationLoggingMiddleware",
+    Level.INFO,
+  )(use)

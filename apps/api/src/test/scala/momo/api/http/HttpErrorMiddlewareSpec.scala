@@ -2,18 +2,15 @@ package momo.api.http
 
 import java.sql.SQLException
 
-import scala.jdk.CollectionConverters.*
-
-import cats.effect.{IO, Resource}
-import ch.qos.logback.classic.Logger
+import cats.effect.IO
+import ch.qos.logback.classic.Level
 import ch.qos.logback.classic.spi.ILoggingEvent
-import ch.qos.logback.core.read.ListAppender
 import io.circe.parser.parse
 import org.http4s.{HttpRoutes, Request, Status, Uri}
-import org.slf4j.LoggerFactory
 
 import momo.api.MomoCatsEffectSuite
 import momo.api.errors.{AppError, AppException}
+import momo.api.testing.LogbackCapture
 
 final class HttpErrorMiddlewareSpec extends MomoCatsEffectSuite:
   test("maps database exceptions to sanitized dependency ProblemDetails") {
@@ -79,22 +76,6 @@ final class HttpErrorMiddlewareSpec extends MomoCatsEffectSuite:
   }
 
   private def captureHttpErrorLogs[A](fa: IO[A]): IO[(A, Vector[ILoggingEvent])] =
-    val logger = IO.delay(LoggerFactory.getLogger("momo.api.http.HttpErrorMiddleware")).flatMap {
-      case logback: Logger => IO.pure(logback)
-      case other => IO
-          .raiseError(new IllegalStateException(s"Expected logback logger, got ${other.getClass
-              .getName}"))
+    LogbackCapture.withEvents("momo.api.http.HttpErrorMiddleware", Level.ERROR) { events =>
+      fa.flatMap(result => events.map(result -> _))
     }
-    Resource.make(logger.flatMap { logback =>
-      IO.delay {
-        val appender = new ListAppender[ILoggingEvent]()
-        appender.start()
-        logback.addAppender(appender)
-        (logback, appender)
-      }
-    }) { case (logback, appender) =>
-      IO.delay {
-        logback.detachAppender(appender)
-        appender.stop()
-      }
-    }.use { case (_, appender) => fa.map(result => (result, appender.list.asScala.toVector)) }

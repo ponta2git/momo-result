@@ -52,6 +52,18 @@ final class ExportMatchesSpec extends MomoCatsEffectSuite:
           "Spring\t1\tponta\tEast\t2026-05-07\t1\t4\teu\t4\t100\t50\t0\t0\t0\t0\t0\t0\r\n",
       )
 
+  test("keeps full-history sequence numbers in a single-match export"):
+    for
+      usecase <- createUsecaseWithMatches(count = 3, limits = generousLimits)
+      result <- usecase
+        .run(MatchExportFormat.Tsv, MatchExportScope.Match(MatchId.unsafeFromString("match-2")))
+    yield
+      val body = result.getOrElse(fail(s"expected export file, got $result")).body
+      val dataRows = body.split("\r\n").toList.drop(1).filter(_.nonEmpty).map(_.split("\t").toList)
+      assertEquals(dataRows.size, 4)
+      assertEquals(dataRows.map(_(1)).distinct, List("2"))
+      assertEquals(dataRows.map(_(5)).distinct, List("2"))
+
   test("rejects an export when rendered rows exceed the configured row limit"):
     for
       usecase <- createUsecaseWithMatches(

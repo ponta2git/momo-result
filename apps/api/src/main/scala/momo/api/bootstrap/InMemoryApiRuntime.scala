@@ -89,6 +89,7 @@ private[bootstrap] object InMemoryApiRuntime:
       matchesBase <- InMemoryMatchesRepository.create[F]
       matches = InMemoryMatchesRepository
         .withConfirmedDraftCleanup[F](matchesBase, matchDrafts)
+      matchExports = matchesBase
       matchList = InMemoryMatchListReadModel[F](
         matches,
         matchDrafts,
@@ -175,6 +176,7 @@ private[bootstrap] object InMemoryApiRuntime:
         heldEvents = heldEvents,
         heldEventDeletion = heldEventDeletion,
         matches = matches,
+        matchExports = matchExports,
         matchDrafts = matchDrafts,
         matchDraftCancellation = matchDraftCancellation,
         matchList = matchList,

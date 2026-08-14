@@ -106,6 +106,7 @@ private[bootstrap] object UseCaseWiring:
       heldEvents: HeldEventsRepository[F],
       heldEventDeletion: HeldEventDeletionRepository[F],
       matches: MatchesRepository[F],
+      matchExports: MatchExportsRepository[F],
       matchDrafts: MatchDraftsRepository[F],
       matchDraftCancellation: MatchDraftCancellationRepository[F],
       matchList: MatchListReadModel[F],

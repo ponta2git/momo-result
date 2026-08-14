@@ -10,7 +10,6 @@ import momo.api.domain.{
   MatchExportFormat,
   MatchExportRow,
   MatchExportScope,
-  MatchRecord,
   Member,
   PlayerResult,
   SeasonMaster
@@ -18,13 +17,13 @@ import momo.api.domain.{
 import momo.api.errors.AppError
 import momo.api.repositories.{
   MapMastersRepository,
-  MatchesRepository,
+  MatchExportsRepository,
   MembersRepository,
   SeasonMastersRepository
 }
 
 final class ExportMatches[F[_]: Monad](
-    matches: MatchesRepository[F],
+    matchExports: MatchExportsRepository[F],
     members: MembersRepository[F],
     mapMasters: MapMastersRepository[F],
     seasonMasters: SeasonMastersRepository[F],
@@ -37,7 +36,7 @@ final class ExportMatches[F[_]: Monad](
       scope: MatchExportScope,
   ): F[Either[AppError, MatchExportFile]] =
     for
-      selected <- matches.list(scopeToFilter(scope).copy(limit = Some(selectedMatchLimit)))
+      selected <- matchExports.project(scopeToSelection(scope))
       result <- scope match
         case MatchExportScope.Match(id) if selected.isEmpty =>
           AppError.NotFound("match", id.value).asLeft[MatchExportFile].pure[F]
@@ -47,18 +46,16 @@ final class ExportMatches[F[_]: Monad](
   private def runBounded(
       format: MatchExportFormat,
       scope: MatchExportScope,
-      selected: List[MatchRecord],
+      selected: List[MatchExportsRepository.ProjectedMatch],
   ): F[Either[AppError, MatchExportFile]] = selectedRowsUpperBound(selected) match
     case Some(rowCount) => rowLimitError(rowCount).asLeft[MatchExportFile].pure[F]
     case None =>
       for
-        sequenceMatches <- loadSequenceMatches(scope, selected)
         memberRows <- members.list
         mapRows <- mapMasters.list(None)
         seasonRows <- seasonMasters.list(None)
       yield buildRows(
         selected = selected,
-        allMatches = sequenceMatches,
         members = memberRows,
         maps = mapRows,
         seasons = seasonRows,
@@ -74,37 +71,19 @@ final class ExportMatches[F[_]: Monad](
         )
       }
 
-  private def scopeToFilter(scope: MatchExportScope): MatchesRepository.ListFilter = scope match
-    case MatchExportScope.All => MatchesRepository.ListFilter()
-    case MatchExportScope.Season(id) => MatchesRepository.ListFilter(seasonMasterId = Some(id))
-    case MatchExportScope.HeldEvent(id) => MatchesRepository.ListFilter(heldEventId = Some(id))
-    case MatchExportScope.Match(id) => MatchesRepository.ListFilter(matchId = Some(id))
-
-  /**
-   * The CSV columns シーズンNo. (sequence within season) and 対戦No. (sequence within game title)
-   * are computed across the **entire** dataset for the relevant season / game title, not just the
-   * selected slice. For narrow scopes we therefore fan out targeted queries by season and game
-   * title instead of pulling the full table — the result is byte-identical to the previous
-   * full-scan implementation, but DB load stays bounded.
-   */
-  private def loadSequenceMatches(
-      scope: MatchExportScope,
-      selected: List[MatchRecord],
-  ): F[List[MatchRecord]] = scope match
-    case MatchExportScope.All => selected.pure[F]
-    case _ =>
-      val seasonIds = selected.map(_.seasonMasterId).distinct
-      val gameTitleIds = selected.map(_.gameTitleId).distinct
-      for
-        bySeason <- seasonIds
-          .flatTraverse(id => matches.list(MatchesRepository.ListFilter(seasonMasterId = Some(id))))
-        byGame <- gameTitleIds
-          .flatTraverse(id => matches.list(MatchesRepository.ListFilter(gameTitleId = Some(id))))
-      yield (bySeason ++ byGame).distinctBy(_.id)
+  private def scopeToSelection(scope: MatchExportScope): MatchExportsRepository.Selection =
+    val selected = scope match
+      case MatchExportScope.All => MatchExportsRepository.Selection(limit = selectedMatchLimit)
+      case MatchExportScope.Season(id) =>
+        MatchExportsRepository.Selection(seasonMasterId = Some(id), limit = selectedMatchLimit)
+      case MatchExportScope.HeldEvent(id) =>
+        MatchExportsRepository.Selection(heldEventId = Some(id), limit = selectedMatchLimit)
+      case MatchExportScope.Match(id) =>
+        MatchExportsRepository.Selection(matchId = Some(id), limit = selectedMatchLimit)
+    selected
 
   private def buildRows(
-      selected: List[MatchRecord],
-      allMatches: List[MatchRecord],
+      selected: List[MatchExportsRepository.ProjectedMatch],
       members: List[Member],
       maps: List[MapMaster],
       seasons: List[SeasonMaster],
@@ -112,40 +91,34 @@ final class ExportMatches[F[_]: Monad](
     val memberNames = members.map(m => m.id -> m.displayName).toMap
     val mapNames = maps.map(m => m.id -> m.name).toMap
     val seasonNames = seasons.map(s => s.id -> s.name).toMap
-    val seasonNoByMatch = sequenceBy(allMatches)(_.seasonMasterId)
-    val gameNoByMatch = sequenceBy(allMatches)(_.gameTitleId)
 
-    selected.sortWith(compareMatches).traverse { record =>
+    selected.traverse { record =>
       for
         seasonName <- lookup(seasonNames, record.seasonMasterId, "season")
         mapName <- lookup(mapNames, record.mapMasterId, "map")
         ownerName <- lookup(memberNames, record.ownerMemberId, "member")
-        seasonNo <- lookup(seasonNoByMatch, record.id, "season sequence")
-        gameNo <- lookup(gameNoByMatch, record.id, "game title sequence")
         rows <- record.players.byPlayOrder.traverse { player =>
-          playerRow(record, player, memberNames, seasonName, seasonNo, ownerName, mapName, gameNo)
+          playerRow(record, player, memberNames, seasonName, ownerName, mapName)
         }
       yield rows
     }.map(_.flatten)
 
   private def playerRow(
-      record: MatchRecord,
+      record: MatchExportsRepository.ProjectedMatch,
       player: PlayerResult,
       memberNames: Map[MemberId, String],
       seasonName: String,
-      seasonNo: Int,
       ownerName: String,
       mapName: String,
-      gameNo: Int,
   ): Either[AppError, MatchExportRow] = lookup(memberNames, player.memberId, "member")
     .map { playerName =>
       MatchExportRow(
         seasonName = seasonName,
-        seasonNo = seasonNo,
+        seasonNo = record.seasonSequence,
         ownerName = ownerName,
         mapName = mapName,
         playedAt = record.playedAt,
-        gameTitleMatchNo = gameNo,
+        gameTitleMatchNo = record.gameTitleSequence,
         playOrder = player.playOrder.value,
         playerName = playerName,
         rank = player.rank.value,
@@ -158,22 +131,12 @@ final class ExportMatches[F[_]: Monad](
   private def lookup[A, Id](values: Map[Id, A], id: Id, label: String): Either[AppError, A] = values
     .get(id).toRight(AppError.Internal(s"Export $label lookup failed for id: $id"))
 
-  private def sequenceBy[Id](records: List[MatchRecord])(
-      key: MatchRecord => Id
-  ): Map[MatchId, Int] =
-    val sorted = records.sortWith(compareMatches)
-    sorted.groupMap(key)(identity).values
-      .flatMap(_.zipWithIndex.map { case (record, index) => record.id -> (index + 1) }).toMap
-
-  private def compareMatches(a: MatchRecord, b: MatchRecord): Boolean =
-    val ak = (a.playedAt.toEpochMilli, a.heldEventId.value, a.matchNoInEvent.value, a.id.value)
-    val bk = (b.playedAt.toEpochMilli, b.heldEventId.value, b.matchNoInEvent.value, b.id.value)
-    ak < bk
-
   private def selectedMatchLimit: Int =
     ((limits.maxRows + MatchRowsPerMatch - 1) / MatchRowsPerMatch) + 1
 
-  private def selectedRowsUpperBound(selected: List[MatchRecord]): Option[Int] = Option
+  private def selectedRowsUpperBound(
+      selected: List[MatchExportsRepository.ProjectedMatch]
+  ): Option[Int] = Option
     .when(selected.length >= selectedMatchLimit)(selected.length * MatchRowsPerMatch)
 
   private def ensureRowLimit(rowCount: Int): Either[AppError, Unit] = Either

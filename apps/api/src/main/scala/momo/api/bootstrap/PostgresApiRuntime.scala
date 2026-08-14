@@ -60,6 +60,7 @@ private[bootstrap] object PostgresApiRuntime:
     val heldEventDeletion: HeldEventDeletionRepository[F] =
       PostgresHeldEventDeletionRepository[F](transactor)
     val matches: MatchesRepository[F] = PostgresMatchesRepository[F](transactor)
+    val matchExports: MatchExportsRepository[F] = PostgresMatchExportsRepository[F](transactor)
     val matchDrafts: MatchDraftsRepository[F] = PostgresMatchDraftsRepository[F](transactor)
     val matchDraftCancellation: MatchDraftCancellationRepository[F] =
       PostgresMatchDraftCancellationRepository[F](transactor)
@@ -154,6 +155,7 @@ private[bootstrap] object PostgresApiRuntime:
                 heldEvents = heldEvents,
                 heldEventDeletion = heldEventDeletion,
                 matches = matches,
+                matchExports = matchExports,
                 matchDrafts = matchDrafts,
                 matchDraftCancellation = matchDraftCancellation,
                 matchList = matchList,

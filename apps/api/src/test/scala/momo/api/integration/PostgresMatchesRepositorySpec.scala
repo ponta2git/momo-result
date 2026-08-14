@@ -3,6 +3,7 @@ package momo.api.integration
 import java.time.Instant
 
 import cats.effect.IO
+import cats.syntax.all.*
 import doobie.implicits.*
 import doobie.postgres.implicits.*
 
@@ -11,7 +12,11 @@ import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.domain.*
 import momo.api.domain.ids.*
 import momo.api.errors.{AppError, AppException}
-import momo.api.repositories.{MatchConfirmationResult, MatchDraftConfirmation}
+import momo.api.repositories.{
+  MatchConfirmationResult,
+  MatchDraftConfirmation,
+  MatchExportsRepository
+}
 
 final class PostgresMatchesRepositorySpec extends IntegrationSuite:
 
@@ -29,6 +34,7 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
   private def seasonMasters = new PostgresSeasonMastersRepository[IO](transactor)
   private def heldEvents = new PostgresHeldEventsRepository[IO](transactor)
   private def matches = new PostgresMatchesRepository[IO](transactor)
+  private def matchExports = new PostgresMatchExportsRepository[IO](transactor)
   private def confirmations = new PostgresMatchConfirmationRepository[IO](transactor)
   private def createMatch(record: MatchRecord): IO[Unit] = confirmations
     .confirm(record, None, record.createdAt).map(_ => ())
@@ -191,6 +197,52 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
     yield
       assertEquals(list.map(_.id.value), List("match_a", "match_b"))
       assertEquals(list.map(_.matchNoInEvent.value), List(1, 2))
+
+  test("export projection ranks full parent history but loads only selected children"):
+    val laterSeasonId = SeasonMasterId.unsafeFromString("season_2024_later")
+    val records = (1 to 4).toList.map { index =>
+      val playedAt = index match
+        case 1 => now.plusMillis(1).plusNanos(800000)
+        case 2 => now.plusMillis(1).plusNanos(100000)
+        case _ => now.plusSeconds(index.toLong)
+      sampleMatch(s"match_export_$index", index).copy(
+        seasonMasterId = if index <= 2 then seasonMasterId else laterSeasonId,
+        playedAt = playedAt,
+        createdAt = now.plusSeconds(index.toLong),
+      )
+    }
+    for
+      _ <- seedPrereqs
+      _ <- seasonMasters.createWithNextDisplayOrder(
+        SeasonMaster(laterSeasonId, gameTitleId, "2024-later", 2, now)
+      )
+      _ <- records.traverse_(createMatch)
+      _ <- sql"DELETE FROM match_incidents WHERE match_id = ${records.head.id}".update.run
+        .transact(transactor)
+      _ <- sql"DELETE FROM match_players WHERE match_id = ${records.head.id}".update.run
+        .transact(transactor)
+      single <- matchExports.project(
+        MatchExportsRepository.Selection(
+          matchId = Some(records.last.id),
+          limit = 2,
+        )
+      )
+      sameMillisecond <- matchExports.project(
+        MatchExportsRepository.Selection(matchId = Some(records(1).id), limit = 2)
+      )
+      recent <- matchExports.project(
+        MatchExportsRepository.Selection(limit = 2)
+      )
+    yield
+      assertEquals(single.map(_.id), List(records.last.id))
+      assertEquals(single.map(_.seasonSequence), List(2))
+      assertEquals(single.map(_.gameTitleSequence), List(4))
+      assertEquals(single.flatMap(_.players.byPlayOrder).size, 4)
+      assertEquals(sameMillisecond.map(_.seasonSequence), List(2))
+      assertEquals(sameMillisecond.map(_.gameTitleSequence), List(2))
+      assertEquals(recent.map(_.id), records.takeRight(2).map(_.id))
+      assertEquals(recent.map(_.seasonSequence), List(1, 2))
+      assertEquals(recent.map(_.gameTitleSequence), List(3, 4))
 
   test("existsMatchNo reflects inserted rows"):
     for

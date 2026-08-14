@@ -46,6 +46,7 @@ private[bootstrap] object UseCaseRouteBundles:
     val heldEvents = repositories.heldEvents
     val heldEventDeletion = repositories.heldEventDeletion
     val matches = repositories.matches
+    val matchExports = repositories.matchExports
     val matchDrafts = repositories.matchDrafts
     val matchDraftCancellation = repositories.matchDraftCancellation
     val matchList = repositories.matchList
@@ -133,7 +134,7 @@ private[bootstrap] object UseCaseRouteBundles:
     val getSeriesAnalysisAdminOverview = GetSeriesAnalysisAdminOverview[F](seriesAnalysis)
     val requestSeriesAnalysisRecalculation = RequestSeriesAnalysisRecalculation[F](seriesAnalysis)
     val exportMatches = ExportMatches[F](
-      matches,
+      matchExports,
       members,
       mapMasters,
       seasonMasters,

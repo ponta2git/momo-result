@@ -6,10 +6,10 @@ import cats.syntax.all.*
 import momo.api.domain.ids.*
 import momo.api.domain.{MatchNoInEvent, MatchRecord}
 import momo.api.errors.{AppError, AppException}
-import momo.api.repositories.MatchesRepository
+import momo.api.repositories.{MatchExportsRepository, MatchesRepository}
 
 final class InMemoryMatchesRepository[F[_]: Sync] private (ref: Ref[F, Map[MatchId, MatchRecord]])
-    extends MatchesRepository[F]:
+    extends MatchesRepository[F], MatchExportsRepository[F]:
   def create(record: MatchRecord): F[Unit] = ref.modify { current =>
     if current.contains(record.id) || containsMatchNo(current, record, excluding = None) then
       (current, Left(conflict(record)))
@@ -40,6 +40,33 @@ final class InMemoryMatchesRepository[F[_]: Sync] private (ref: Ref[F, Map[Match
 
   override def listByHeldEvent(heldEventId: HeldEventId): F[List[MatchRecord]] = ref.get
     .map(_.values.filter(_.heldEventId == heldEventId).toList.sortBy(_.matchNoInEvent.value))
+
+  override def project(
+      selection: MatchExportsRepository.Selection
+  ): F[List[MatchExportsRepository.ProjectedMatch]] = ref.get.map { stored =>
+    val all = stored.values.toList
+    val seasonSequence = sequenceBy(all)(_.seasonMasterId)
+    val gameTitleSequence = sequenceBy(all)(_.gameTitleId)
+    val selected = all.filter { record =>
+      selection.heldEventId.forall(_ == record.heldEventId) &&
+      selection.seasonMasterId.forall(_ == record.seasonMasterId) &&
+      selection.matchId.forall(_ == record.id)
+    }.sortBy(record => (-record.playedAt.toEpochMilli, -record.createdAt.toEpochMilli))
+      .take(selection.limit).sortWith(comesBefore)
+
+    selected.map { record =>
+      MatchExportsRepository.ProjectedMatch(
+        id = record.id,
+        seasonMasterId = record.seasonMasterId,
+        ownerMemberId = record.ownerMemberId,
+        mapMasterId = record.mapMasterId,
+        playedAt = record.playedAt,
+        seasonSequence = seasonSequence(record.id),
+        gameTitleSequence = gameTitleSequence(record.id),
+        players = record.players,
+      )
+    }
+  }
 
   override def existsMatchNo(heldEventId: HeldEventId, matchNoInEvent: MatchNoInEvent): F[Boolean] =
     ref.get
@@ -87,6 +114,26 @@ final class InMemoryMatchesRepository[F[_]: Sync] private (ref: Ref[F, Map[Match
   private def complete(result: Either[AppException, Unit]): F[Unit] = result match
     case Right(()) => Sync[F].unit
     case Left(error) => Sync[F].raiseError(error)
+
+  private def sequenceBy[Id](records: List[MatchRecord])(
+      key: MatchRecord => Id
+  ): Map[MatchId, Int] = records.sortWith(comesBefore).groupMap(key)(identity).valuesIterator
+    .flatMap(_.iterator.zipWithIndex.map { case (record, index) => record.id -> (index + 1) }).toMap
+
+  private def comesBefore(left: MatchRecord, right: MatchRecord): Boolean =
+    val leftKey = (
+      left.playedAt.toEpochMilli,
+      left.heldEventId.value,
+      left.matchNoInEvent.value,
+      left.id.value,
+    )
+    val rightKey = (
+      right.playedAt.toEpochMilli,
+      right.heldEventId.value,
+      right.matchNoInEvent.value,
+      right.id.value,
+    )
+    leftKey < rightKey
 
 object InMemoryMatchesRepository:
   def create[F[_]: Sync]: F[InMemoryMatchesRepository[F]] = Ref

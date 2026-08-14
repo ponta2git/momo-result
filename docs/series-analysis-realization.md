@@ -545,13 +545,17 @@ checksumを通常columnへ分ける構成を推奨仕様とする。作品全体
 
 ### 4.3 原子的公開
 
-親processはtemp chunkの検証後、1つのdeadline付きfenced transactionで未公開artifact headerを `staging` として
-作成し、resource kindごとの4本のPostgreSQL binary COPYへchunkを流す。manifest全件を走査してもpayloadは
-現在の上限付きchunkだけをfileから保持し、作品全体をmemoryへ載せない。chunkごとのINSERT往復を行わず、COPYの
-実書込行数をmanifest件数と照合する。いずれかのfile読込、COPY、DB制約、件数照合が失敗すればtransaction全体を
-rollbackするため、途中staging rowは残らずcurrent表示にも影響しない。
+親processはtemp chunkの検証後、publicationを次の2 transactionへ分ける。
 
-同じtransaction内で次を行う。
+Phase Aは未公開artifact headerをdeterministic IDで `staging` として作成し、resource kindごとの4本の
+PostgreSQL binary COPYへchunkを流す。このtransactionはexecution slot、title state、jobをlockしない。
+manifest全件を走査してもpayloadは現在の上限付きchunkだけをfileから保持し、作品全体をmemoryへ載せない。
+chunkごとのINSERT往復を行わず、COPY直前にもfile size / checksumを検証し、COPYの実書込行数と全resourceの
+kind、scope、member / metric / match ID、revision、byte数、件数、深さ、checksumをmanifestと完全照合する。
+失敗時はPhase A全体をrollbackし、current表示には影響しない。commit応答が不明な場合は壊れた接続を再利用せず、
+新しい接続で同じattemptのstagingを再構築または完全照合して、成功を推測しない。
+
+Phase Bは必ず新しい接続の短いfenced transactionで次を行う。Phase BではpayloadをCOPY・再読込しない。
 
 1. execution slot、title state、jobを一定順でlockする。
 2. owner、attempt、fencing token、lease、target version、現在のdesired versionがすべて一致することを確認する。
@@ -564,9 +568,9 @@ rollbackするため、途中staging rowは残らずcurrent表示にも影響し
 7. jobを `succeeded` にし、関連requestを充足済みにし、次の未充足強制runがあれば次job / outboxを作る。
 8. execution slotを同じfencing tokenで解放する。
 
-いずれかが失敗した場合はtransaction全体をrollbackする。子process、timeout、preemption、1 scopeの
-予期しない失敗からcurrent pointerを変更できない。publish pointer更新中の短いcritical sectionは
-preempt不可とし、OCRはその完了を待つ。
+Phase Bのいずれかが失敗した場合はtransaction全体をrollbackする。Phase A完了後のstagingはcurrentから不可視で、
+同attempt retryまたはstale staging cleanupが回収する。子process、timeout、preemption、1 scopeの予期しない失敗から
+current pointerを変更できない。Phase Bの短いcritical sectionだけをpreempt不可とし、OCRはその完了を待つ。
 
 同じversionの強制runでは先にsource input checksumを比較する。不一致なら `input_revision_violation`、入力が
 同じでsemantic checksumだけが不一致なら `non_deterministic_output` とする。両方が一致した場合はchunkの
@@ -633,6 +637,14 @@ temporary cleanup失敗、API read busy継続を検知対象にする。
 - artifact decodeは既存read rate limitに加えてmemory予算から決めたbounded concurrencyへ通し、同時request数に
   比例して無制限にchunk decodeを開始しない。上限値と超過時の安全なread error mappingはAPI同時負荷測定後に
   確定する。status / optionsを重いdecode枠で待たせない。
+- artifact payloadと読取可否を短いread transactionでowned byte列へ取り出した後、DB connectionを返してから
+  checksum、strict UTF-8、JSON depth / node数 / schemaを検証する。入力全体の中間`String`、hydrate時の
+  無条件deep copy、response size計測用の全体`String`を作らず、copy-on-write hydrateと上限付きUTF-8 bytes
+  生成をadapter内で完了する。HTTP境界は検証済みJSON bytesをそのまま`application/json`として返し、別の
+  JSON AST decode / encodeを繰り返さない。
+- decode設定はencoded bytes、decoded文字列、JSON node、hydrate後tree、response bytesの同時生存量を
+  conservativeに合算し、decode concurrencyを掛けたmaterialization予算でfail closedにする。byte上限だけで
+  dense object / arrayのheap増幅を許さず、JSON node上限も独立して持つ。
 
 ### 5.2 endpoint一覧
 

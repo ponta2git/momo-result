@@ -72,6 +72,15 @@ API境界の一部は `ApiEndpointsArchitectureSpec` と `ApiRuntimeArchitecture
   分析engineをHTTP request内で呼ばない。
 - 状態取得と成果物取得を分離し、集計、振り返り、drilldown、選択試合文脈は、状態取得で解決した
   同じartifact IDへ固定する。APIごとにcurrent artifactを引き直してversionを混在させない。
+- 試合一覧のwire paginationはversion付きopaque cursorをusecase codecが所有し、repositoryへ未検証tokenを
+  渡さない。cursorはfilter、sort、page size、完全なstable sort key、初回exact totalを束ね、別scopeへの
+  再利用を拒否する。repositoryはtyped keysetだけを適用し、Webはtokenをdecodeせずfirst / previous / next /
+  last edgeとして扱う。filter、page size、明示refreshではcursorを捨てて新しいtotal snapshotを取る。
+- 試合一覧の下書き状態は`match_drafts.status`をread modelの正本とし、OCR terminal遷移と同じtransactionで
+  同期する。read時に全candidateのOCR jobを相関subqueryで再導出せず、過去の不整合はbounded maintenanceで
+  再計算する。
+- scope指定exportは専用read portが、選択試合と全履歴内sequenceをDB projectionとして返す。汎用の
+  `MatchesRepository.list`でseason / title全履歴と非選択childrenを組み立ててから捨てるdata flowへ戻さない。
 
 ### 2.3 Module Layout
 
@@ -173,6 +182,12 @@ web の import 境界は `apps/web/scripts/check-architecture-imports.mjs`、mod
 - PostgreSQL runtimeはstorage modeにかかわらず `source_images` を画像lifecycleの正本とし、opaqueな
   relative object keyだけを保存・配送する。local modeもfilesystem object adapterを同じobject-backed
   storeへ接続し、DBを経由しないstandalone filesystem storeはin-memory runtimeと単体testだけに限定する。
+- DB-backed画像のaccount quotaは`SourceImagesRepository`の予約transactionが所有し、冪等確認、未参照使用量、
+  quota判定、insertを同じ境界へ閉じる。object-backed maintenanceはDB自身の参照判定を使い、無視される
+  全参照ID集合をportへ要求しない。参照集合を必要とするstandalone filesystem cleanupは別adapterに限定する。
+- OCR作成plan内で重複するjob、draft、source image、queue metadataは、永続化前に1つの整合性契約として検証する。
+  source image参照をdraftへ作るtransactionはdraft row、source rowの順にlockし、DB正本の`AVAILABLE`とmetadataを
+  確認する。callerが渡した別image IDを暗黙に信頼しない。
 - OCRジョブ状態の正本はDB。Redis Streams は配送路。
 - queue 契約は `docs/redis-streams-ocr-contract.md`、payload schema は `docs/schemas/*.schema.json` を正本にする。
 - native OCR、Redis、PostgreSQL、R2、tessdataを要する検証は通常のCargo testと分離する。unit testでは
@@ -232,6 +247,9 @@ web の import 境界は `apps/web/scripts/check-architecture-imports.mjs`、mod
 - Rust moduleはtestを含め900行上限とし、coreのruntime依存禁止、productionのlint抑制禁止、`process` 外の
   `unsafe` 禁止、fallible DB row decodeをarchitecture testで固定する。行数は設計の代用ではなく、責務混在を
   reviewするための上限として扱う。
+- 分析成果物の大容量COPYはglobal control rowをlockしないPhase Aへ隔離し、durable stagingを完全manifestで照合する。
+  pointer / job / slot更新だけをfresh DB connection上の短いfenced Phase B transactionへ閉じる。commit応答不明時は
+  接続を再利用せず、別接続の完全照合から再開する。
 - 初回からハードタイムアウトを設定可能にする。設定値がない本番起動またはjob受付はfail closedにし、
   値自体は本番同等runtimeでの実測後に確定する。
 - `worker` supervisorは分析loopと明示有効化されたOCR v2 loopを同じshutdown / failure境界で動かす。
@@ -262,6 +280,9 @@ web の import 境界は `apps/web/scripts/check-architecture-imports.mjs`、mod
 - `/healthz` はAPIプロセスの生存確認。DB/Redis接続確認は詳細ヘルスとして分ける。公開HTTPを持たない
   分析workerはprocess生存、DB heartbeat、queue待機時間、job状態で観測する。
 - 本番ログは1行JSONにする。
+- HTTP handler完了とresponse body転送完了を同じeventとして扱わない。stream bodyは終了時finalizerでbytesと
+  success / error / cancelをexactly once観測し、source image取得をresponse生成時点で成功記録しない。
+  handlerのMDC scopeへ依存せず、request IDをimmutable transfer contextとしてfinalizerまで運ぶ。
 - 分析runtime imageはpackage manager、DB/Redis client、ptrace系debuggerをPATHまたは対応consoleから
   実行可能にしない。OCI entryは固定root bootstrapとし、workerおよび保守commandは権限降格後の非rootで実行する。
   障害時のconsole調査に必要なshell、process / cgroup / filesystem、DNS / TCP / TLSのread-only診断手段だけを

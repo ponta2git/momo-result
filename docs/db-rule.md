@@ -54,9 +54,17 @@ DBに保存してよい画像関連情報は、参照ID、非公開のopaque obj
 - `incident_masters` は固定6種の事件IDを持つ。domainの `IncidentKind` との対応は repository 層で扱う。
 - `held_events.session_id` は nullable。本アプリ作成分は `session_id = NULL`、`held_date_iso` は `start_at` のJST日付から埋める。
 - `match_drafts.confirmed_match_id` は `status = confirmed` のときだけ必要。`cancelled` と非terminal状態では持たない。
+- OCR success / failure / cancel / stale failureで下書き表示状態が変わる場合は、OCR jobと
+  `match_drafts.status`を同じtransactionで更新する。試合一覧は保存済みstatusを正本として読み、表示のたびに
+  OCR job全体から状態を再計算しない。
 - `ocr_jobs.image_path` は旧列とのDB互換性のためv2では`source_images.object_key`を鏡写しすることがある。
   filesystem pathとは解釈せず、公開HTTP DTOへ出さない。
 - `source_images.object_key` は非公開object storageのopaque keyであり、bucket URL、公開URL、credentialを保存しない。`ocr_jobs.queue_schema_version = 2` は`source_image_id`を必須とし、local pathをworker間契約にしない。
+- `source_images` のaccount別未参照quotaは、account単位に直列化した同一transactionで冪等keyを先に確認し、DB内の参照有無を含む使用量を集計してから予約する。事前checkとinsertを別transactionへ分けず、冪等retryをquota超過として拒否しない。
+- source imageを参照するOCR作成はdraft row、source row、OCR jobの順にlockし、terminal OCR writerもdraft row、
+  OCR jobの順へ揃える。逆順のcancel / maintenance経路を作らない。
+- `FAILED` objectを外部削除する前にDBでpurge claimをCAS取得し、`FAILED -> RESERVED` retryと線形化する。
+  外部削除後のrow purgeは取得したclaimだけを完了し、stale claimは期限後に別reconcilerが引き継げるようにする。
 - `ocr_queue_outbox.stream_payload` は JSON Schema と Redis contract の対象であり、DB column shapeだけで互換性を判断しない。
 - 試合確定・確定済み試合更新・削除と、対象作品の戦績分析再計算intentは同じtransactionで確定する。
 - 戦績分析の入力versionは作品単位の単調増加revisionとして同じtransactionで進め、timestampを
@@ -88,12 +96,17 @@ DB-backed API / worker query を触る変更では、同じ変更内で次を確
 - 同一 transaction で FK 関連 row を作成・更新する場合、statement order と保存後の linked row values を integration test で確認する。
 - lease、execution slot、artifact pointerのような競合制御は、2接続以上を使う実PostgreSQL testでlock順、
   fencing token不一致、失効lease、cleanup競合を直接確認する。
+- 大容量staging COPYはcontrol rowのlock transactionから分離する。durable stagingはattemptへ決定的に対応付け、
+  fresh接続の短いpublication transactionで完全metadata、desired version、lease、fenceを再検証してからpointerを切り替える。
 - 新しい table に書き込む integration test を追加したら、`IntegrationDb.truncateAppTables` など cleanup 対象も更新する。
 - integration が skip / 未実行なら、そのDB挙動は未検証として報告する。
 - connection startup parameterはPostgreSQL engineだけでなくpooler / proxyとのwire契約でもある。release probeのtimeoutは、接続文字列やstartup optionsへ埋め込まず、接続後のread-only transaction内で`SET LOCAL`して対象queryと同じ境界へ閉じる。
 - API の Doobie repository は DB row shape と domain 変換を明示的に分ける。query は named row case class へ decode し、domain/application 型への変換は `fromRow` / `toItem` などの専用関数へ閉じる。
 - `row._1` のような tuple index に依存する mapping、10要素を超える tuple alias、unchecked default fallback による row decode は避ける。DB enum / status の不正値は repository 境界で `AppError` か integration failure として扱い、HTTP 層へ DB 由来の例外型を漏らさない。
 - dynamic SQL fragment は sealed enum、whitelist、または固定 fragment の選択で表す。`Fragment.const` を使う場合は、外部入力が混ざらないことを同じ関数内で読める形にする。
+- keyset paginationはfilterと同じqueryへstable tie-breakerを含む境界条件を適用し、deep pageで`OFFSET`を
+  増やさない。初回exact countをcursorへ引き継ぐ場合、その値がnavigation中のsnapshot表示であり、refresh時に
+  再集計する契約をHTTP DTOとtestに残す。
 
 標準コマンド:
 

@@ -180,11 +180,19 @@ OCRジョブのタイムアウト初期値は `OCR_TIMEOUT_SECONDS` で管理す
 - 画像ファイルは1枚3MBまでに制限する。
 - upload request 全体の上限は `UPLOAD_REQUEST_MAX_BYTES` で管理する。
 - OCR へ進んでいない未参照 upload は account 別に件数・容量上限を持つ。上限は `IMAGE_UPLOAD_UNREFERENCED_COUNT_LIMIT` と `IMAGE_UPLOAD_UNREFERENCED_BYTES_LIMIT` で管理し、超過時は `429` Problem Details で拒否する。
+- PostgreSQL runtimeのaccount別上限は、同じaccountの予約を直列化したDB transaction内で、冪等keyの既存確認、未参照使用量の集計、上限判定、新規予約を一体として行う。冪等retryは新しい枠を消費せず、並行uploadで上限を超えて予約しない。object storageの空き容量確認は外部状態を含むpreflightであり、このDB上限とは責務を分ける。
 - OCR worker はデコード後メモリ保護のため、FullHD（1920x1080）を超える寸法の画像を処理しない。
 - アップロード画像は非公開Cloudflare R2 bucketへ保存し、DBとqueueには推測困難なopaque object keyだけを保持する。bucket URL、credential、署名付きURL、worker間のlocal pathを永続契約にしない。
 - OCR完了時点では画像を削除しない。下書き確定または下書き削除まで保持し、その後削除する。
 - OCR へ進まない未参照 upload は `IMAGE_ORPHAN_OLDER_THAN_MINUTES` より古くなった時点で orphan reaper の削除対象とする。MVP既定値は15分、reaper interval は5分とする。
 - object writeとDB commitの片方だけが成功した状態、削除失敗、参照のないobjectはreconciliation対象とし、削除直前にDB参照を再検査する。
+- 下書き確定・取消はsource imageの `DELETE_PENDING` intentを同じDB transactionで保存する。object削除はtransaction外で
+  再試行し、並行OCR受付はsource rowをlockして `AVAILABLE` を再確認する。active OCR jobまたは非terminal draftが
+  参照中なら削除へ遷移しない。
+- PostgreSQL-backed reconciliationとorphan cleanupは、候補抽出時にDB内で参照有無を判定し、全参照画像IDをAPI processへmaterializeしない。standalone filesystem storeだけは、sweep時に解決した参照集合を明示的なadapterから渡す。
+- `FAILED` uploadの再試行とobject cleanupは、外部object削除前のDB purge claimで排他的にする。retryが先なら
+  replacement objectを削除せず、cleanupが先ならretryを明示的に失敗させる。cleanup途中で停止したclaimは
+  stale期限後に再取得し、object deleteとrow purgeを冪等に完了する。
 - R2-backed uploadとobject reconciliationは同じrelease gateで有効化する。reconcilerを起動できないまま
   R2-backed uploadだけを有効化する部分切替を許可しない。
 - OCR待ち中にobjectが存在しない、またはbytes、SHA-256、media type、寸法がDB / queue契約と一致しない場合は、ジョブを失敗扱いにし、必要に応じて再アップロードを求める。
@@ -316,6 +324,7 @@ release対象は検証前に一度だけbuildし、後続gateとdeployで同じa
 - JSON mutation の account 別 rate limit は `MUTATION_RATE_LIMIT_PER_MINUTE` で管理し、既定値は60回/分とする。`idempotency_keys` の未期限切れ key 数は account 別に `IDEMPOTENCY_ACTIVE_KEY_LIMIT_PER_ACCOUNT` で上限を設け、既定値は240件とする。上限超過時は新規 row を作らず `429` Problem Details を返す。これらは週1開催・1開催4〜6試合・試合後都度OCR・開催後1回exportの通常利用を妨げない余裕を持たせる。
 - CSV/TSV出力は scope 指定 export と全件 export の account 別 rate limit を分ける。scope 指定は `EXPORT_RATE_LIMIT_PER_MINUTE` で管理し、既定値は30回/分とする。全件 export は `EXPORT_ALL_RATE_LIMIT_PER_MINUTE` で管理し、既定値は6回/分とする。
 - 同期CSV/TSV出力は生成前後に出力規模を検査し、`EXPORT_MAX_ROWS` または `EXPORT_MAX_BYTES` を超える場合は `413` Problem Details で拒否する。既定値は20,000明細行、16MiBとし、週1開催・1開催4〜6試合・開催後1回exportの通常利用を妨げない余裕を持たせる。
+- scope指定exportの開催内・season内sequenceはDB projectionで算出し、選択された試合本体とそのplayer / incidentだけをmaterializeする。sequence算出のために同じ作品・seasonの全履歴と非選択試合の子rowをAPI heapへ読み込まない。
 - CSV/TSV出力の短時間cacheは、試合編集直後の stale export を避けるためMVPでは導入しない。同期上限に正当な利用が当たり始めた場合は、保持期限、再生成条件、認可境界を設計した非同期exportとして別途扱う。
 - OAuth callback は IP 単位のログイン制限に加え、同一 state の callback 連打を provider 呼び出し前に抑制する。上限は `AUTH_CALLBACK_STATE_RATE_LIMIT_PER_MINUTE` で管理し、既定値は3回/分とする。
 - Discord OAuth provider の `429` / `5xx` / transport error が続く場合は、短時間 provider 呼び出しを止めて `503` Problem Details を返す。閾値は `AUTH_PROVIDER_FAILURE_THRESHOLD`、停止時間は `AUTH_PROVIDER_BACKOFF_SECONDS` で管理し、既定値は3回・60秒とする。
@@ -354,11 +363,15 @@ MVPでは外部監視基盤を必須にせず、Fly.io logs と `/healthz/detail
 | OCR受付数・作成拒否 | API log、`/healthz/details` | `ocr_job_accepted`, `ocr_job_create_rate_limited`, `ocr_job_create_rejected`, `OCR admission rejected`, `ocrAdmission` |
 | OCR queue/backlog/DLQ | `docs/redis-streams-ocr-contract.md` の Operations | `ocr_queue_outbox` 件数、Redis stream length、consumer group pending count、DLQ stream length |
 | 画像upload容量・object storage | API log、object storage metrics | `image_upload_accepted`, `image_upload_rate_limited`, `image_upload_admission rejected`, `source_image_orphan_reaper` |
-| source image download量 | API log | `source_image_downloaded`, `source_image_archive_downloaded`, `source_image_download_rate_limited`, `source_image_archive_rejected` |
+| source image download量 | API log | `source_image_transfer_completed`, `source_image_archive_transfer_completed`, `source_image_download_rate_limited`, `source_image_archive_rejected` |
 | CSV/TSV export量 | API log | `match_export_completed`, `match_export_rate_limited`, `match_export_rejected` |
 | OAuth provider / session負荷 | API log | `auth_login_completed`, `auth_login_rate_limited`, `auth_callback_rejected`, `auth_callback_state_rate_limited`, `auth_oauth_provider_backoff_active`, `auth_oauth_provider_backoff_opened` |
 
 ログに含める値は、相関に必要なID、reason、件数、bytes、例外クラス列に限定する。画像内容、OCR raw text 全文、session / CSRF / OAuth token、Redis URL、DB URL、例外message / stack trace は出さない。
+streaming responseはhandlerがresponseを生成した時刻とbody転送完了を別eventとして記録する。転送eventは
+body streamの終了時にexactly onceで、success / error / cancel、実際にpullしたbytes、転送時間を記録し、
+response生成時点をdownload成功として扱わない。request IDはhandler終了後も明示contextとして運び、finalizerの
+log callだけにMDCを復元する。
 
 継続的な `rate_limited`、`rejected`、`degraded:*`、DLQ増加、source image / export の bytes 急増を見つけた場合は、対象機能の受付を一時的に絞る、該当env上限を下げる、または provider / Fly.io 側の設定変更要否を人間が判断する。外部監視基盤、WAF、provider plan 変更はこの文書だけでは実行しない。
 

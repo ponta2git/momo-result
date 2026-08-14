@@ -107,6 +107,20 @@ PostgreSQL repository、Doobie query、DB table/column、migration 前提に触�
 - 同一 transaction で FK 関連 row を作成・更新する method は、成功 path と保存後の linked row values を検証する。
 - PostgreSQL runtimeで画像uploadからOCR job作成までを変更したら、productionと同じDB-backed画像lifecycleを
   local storage modeでも通し、`source_images` の参照整合性とopaque relative object keyをruntime E2Eで確認する。
+- DB-backed画像quotaを変更したら、上限直前から同一accountへ並行予約し、成功件数・合計bytesが上限を超えないこと、同じ冪等keyのretryが枠を再消費しないこと、参照済み画像が未参照quotaへ数えられないことを実PostgreSQLで固定する。
+- source image lifecycleを変更したら、OCR attachとorphan遷移の両lock順、下書き確定・取消と削除intent、
+  `FAILED` object検査後の再uploadとpurge claimをgatedな2接続 / recording object storeで競合させる。
+  最終状態が参照付きobjectの保持、または明示的なretry拒否のどちらかへ線形化されることを固定する。
+- OCR作成transactionを変更したら、job / draft / attachment / queue payloadのimage IDとmetadata不一致を
+  mutation前に拒否し、source rowの`AVAILABLE`確認とdraft attachが同じlock境界にあることを固定する。
+- response bodyの観測を変更したら、pull前、正常終了、途中error、cancelをgated streamで通し、転送完了eventが終了後にexactly onceだけ記録され、bytesとoutcomeが一致し、例外messageをログへ出さないことを固定する。
+- 試合一覧paginationまたはstatus projectionを変更したら、OCR success / failure / cancel / stale failureが
+  `match_drafts.status`と同じtransactionで確定することを固定する。500件以上の偏ったfixtureで全sortの
+  first / previous / next / last、同値tie、filter違いcursor拒否、改ざんtokenのscope外row非返却を実PostgreSQL
+  とHTTPで通し、後続page queryへ`OFFSET`と反復exact countを戻さない。
+- scope指定exportのprojectionを変更したら、上限を超える同作品・season履歴から1試合だけを選び、sequenceと
+  golden wireが従来契約と一致し、非選択試合のplayer / incident破損や件数が選択結果の取得量へ影響しないことを
+  実PostgreSQLで固定する。
 - 新しい table に書き込む integration test を追加したら cleanup 対象も更新する。
 - SQL shape と domain 変換を分けた場合、row mapping の成功 path と不正 DB 値の扱いを repository unit または integration test で確認する。tuple mapping を named row へ変えた場合も、対象 query を実PostgreSQLで実行し、必要なら repository architecture spec へ禁止パターンを追加する。
 
@@ -176,6 +190,9 @@ PostgreSQL repository、Doobie query、DB table/column、migration 前提に触�
   処理できることと、旧consumer drain前にversion campaignを開始できないことを固定する。
 - attempt開始後の手動request、全作品target snapshot、展開途中crash、DB commit応答喪失後のreconcileを
   直接通し、予約消失、対象欠落、二重job、二重公開がないことを確認する。
+- publication Phase A中にcurrent pointerが不変でcontrol rowをlockしないこと、partial COPYがrollbackすること、
+  commit応答不明後にfresh接続で完全stagingを照合できることを実PostgreSQLで確認する。Phase Bは旧fence、lease失効、
+  manifest改変でpointer / job / slotを全rollbackし、成功時だけ一括更新することを確認する。
 - 全作品操作の同一idempotency key再送と異なるkeyでの後発操作を分け、後発操作より前のattemptが誤って
   充足扱いにならず、必要な次runだけを作品単位で共有できることを確認する。
 - Redis append後のoutbox更新失敗、重複delivery、stream消失後のqueued job再配送を実Redisで通し、
@@ -194,6 +211,10 @@ PostgreSQL repository、Doobie query、DB table/column、migration 前提に触�
   限定cleanupを実file system testで確認する。
 - 対象試合revision不一致では古いmatch contextを返さず、artifactのread中cleanup競合でも整合した1 chunkを
   返すことを実PostgreSQL / HTTP testで固定する。
+- API artifact materializationを変更したら、最大wire bytesと最大JSON node数を同時に満たすfixtureを設定上の
+  decode concurrencyで並行処理し、strict UTF-8、孤立surrogate、depth / node超過、response byte境界、
+  `application/json`のwire bytes完全一致を固定する。DB connectionはdecodeを停止した間も返却済みであることを
+  別のqueryから確認する。
 - Rust OCR同居またはexecution slotを変更するときは、OCRから分析へのpreemption、逆方向の禁止、
   失敗回数非加算、最新版への再queue、commit critical section、子process group回収、同じcgroupでの
   後続実行を実process / integration testで固定する。

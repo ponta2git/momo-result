@@ -11,6 +11,32 @@ use crate::series_analysis::config::AnalysisConsumerConfig;
 
 use super::ConsumerError;
 
+const AUTO_CLAIM_COUNT: usize = 1;
+const AUTO_CLAIM_START: &str = "0-0";
+
+#[derive(Debug)]
+pub(super) struct AutoClaimCursor {
+    start_id: String,
+}
+
+impl AutoClaimCursor {
+    #[must_use]
+    pub(super) fn start() -> Self {
+        Self {
+            start_id: String::from(AUTO_CLAIM_START),
+        }
+    }
+
+    fn current(&self) -> &str {
+        &self.start_id
+    }
+
+    fn advance(&mut self, reply: StreamAutoClaimReply) -> Option<StreamId> {
+        self.start_id = reply.next_stream_id;
+        reply.claimed.into_iter().next()
+    }
+}
+
 pub(super) async fn ensure_consumer_group(
     redis: &mut ConnectionManager,
     config: &AnalysisConsumerConfig,
@@ -28,6 +54,7 @@ pub(super) async fn ensure_consumer_group(
 pub(super) async fn next_delivery(
     redis: &mut ConnectionManager,
     config: &AnalysisConsumerConfig,
+    recovery_cursor: &mut AutoClaimCursor,
 ) -> Result<Option<StreamId>, ConsumerError> {
     let minimum_idle = usize::try_from(config.lease_duration.as_millis())?;
     let claimed: StreamAutoClaimReply = redis
@@ -36,11 +63,11 @@ pub(super) async fn next_delivery(
             &config.redis_group,
             &config.worker_id,
             minimum_idle,
-            "0-0",
-            StreamAutoClaimOptions::default().count(1),
+            recovery_cursor.current(),
+            StreamAutoClaimOptions::default().count(AUTO_CLAIM_COUNT),
         )
         .await?;
-    if let Some(delivery) = claimed.claimed.into_iter().next() {
+    if let Some(delivery) = recovery_cursor.advance(claimed) {
         return Ok(Some(delivery));
     }
 
@@ -90,6 +117,42 @@ mod tests {
     use redis::Value;
 
     use super::*;
+
+    #[test]
+    fn auto_claim_cursor_advances_across_empty_pages_and_wraps_after_a_full_scan() {
+        let mut cursor = AutoClaimCursor::start();
+
+        let first = cursor.advance(StreamAutoClaimReply {
+            next_stream_id: String::from("42-0"),
+            claimed: Vec::new(),
+            deleted_ids: Vec::new(),
+        });
+        assert!(
+            first.is_none(),
+            "an ineligible scan page must not invent a delivery"
+        );
+        assert_eq!(
+            cursor.current(),
+            "42-0",
+            "the next scan must continue after the ineligible PEL prefix"
+        );
+
+        let claimed = StreamId {
+            id: String::from("84-0"),
+            map: HashMap::new(),
+        };
+        let second = cursor.advance(StreamAutoClaimReply {
+            next_stream_id: String::from(AUTO_CLAIM_START),
+            claimed: vec![claimed.clone()],
+            deleted_ids: Vec::new(),
+        });
+        assert_eq!(second.map(|delivery| delivery.id), Some(claimed.id));
+        assert_eq!(
+            cursor.current(),
+            AUTO_CLAIM_START,
+            "Redis 0-0 completion cursor must restart the next recovery scan"
+        );
+    }
 
     #[test]
     fn queue_delivery_rejects_extra_fields() {

@@ -39,7 +39,9 @@ use attempt_directory::{
     cleanup_stale_attempt_directories, create_attempt_directory, validate_temporary_root,
 };
 use metrics::elapsed_metrics;
-use queue::{acknowledge, ensure_consumer_group, next_delivery, payload_from_delivery};
+use queue::{
+    AutoClaimCursor, acknowledge, ensure_consumer_group, next_delivery, payload_from_delivery,
+};
 
 #[derive(Debug, Error)]
 pub(crate) enum ConsumerError {
@@ -233,12 +235,13 @@ async fn consume_deliveries(
     mut capability_refresh: IdleRefreshSchedule,
     shutdown: &mut watch::Receiver<bool>,
 ) -> Result<(), ConsumerError> {
+    let mut recovery_cursor = AutoClaimCursor::start();
     while !*shutdown.borrow() {
         if capability_refresh.is_due_at(Instant::now()) {
             register_capability(heartbeat_client, &config.worker_id).await?;
             capability_refresh.record_success_at(Instant::now());
         }
-        let delivery = next_delivery(redis, config).await?;
+        let delivery = next_delivery(redis, config, &mut recovery_cursor).await?;
         let Some(delivery) = delivery else {
             continue;
         };

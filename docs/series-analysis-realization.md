@@ -328,9 +328,9 @@ apps/processing-worker
   ├─ momo-processing-worker（分析 / OCRの副作用を持つprocessing runtime）
   │   ├─ main / CLI / supervisor
   │   ├─ series_analysis ─ consumer / policy / attempt / queue / control / artifact / child
-  │   │                     config / release / endurance
+  │   │                     input_repository / config / release / endurance
   │   ├─ ocr ─ consumer / queue / DB control / R2 / child / endurance
-  │   ├─ database ─ PostgreSQL接続 / 分析入力adapter
+  │   ├─ postgres ─ 共有PostgreSQL TLS接続adapter
   │   └─ process / execution_slot ─ 共有隔離・実行枠
   ├─ momo-analysis-core（決定論的kernelとversion付き契約）
   │   ├─ child / model / contract / canonical / payload

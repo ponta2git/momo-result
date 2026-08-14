@@ -4,7 +4,7 @@ use tokio::{sync::watch, time};
 use tracing::{error, info, warn};
 
 use crate::{
-    database,
+    postgres,
     process::{
         AnalysisChildOutcome, AnalysisChildSpec, ManagedAnalysisChild,
         current_process_peak_resident_bytes,
@@ -560,7 +560,7 @@ async fn finish_publication_failure(
     claim: &ClaimedJob,
     metrics: &AttemptMetrics,
 ) -> Result<DeliveryDisposition, ConsumerError> {
-    let mut recovery_client = database::connect(&config.database_url).await?;
+    let mut recovery_client = postgres::connect(&config.database_url).await?;
     let failure = AttemptFailure::failed(SafeFailureCode::PublicationFailed);
     match finish_failure(&mut recovery_client, claim, config, failure, metrics).await {
         Ok(()) => {

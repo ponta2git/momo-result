@@ -8,7 +8,7 @@ use sha2::{Digest, Sha256};
 use thiserror::Error;
 use tokio_postgres::{Client, Row, Transaction};
 
-use crate::database::{DatabaseError, connect};
+use crate::postgres::{PostgresError, connect};
 
 use super::control::ALGORITHM_VERSION;
 
@@ -86,7 +86,7 @@ pub enum ReleaseError {
     #[error("release operation key must be 8 to 128 visible characters")]
     InvalidOperationKey,
     #[error("analysis database connection failed")]
-    Database(#[from] DatabaseError),
+    Database(#[from] PostgresError),
     #[error("analysis release database operation failed")]
     Postgres(#[from] tokio_postgres::Error),
     #[error("analysis release database operation failed phase={phase}")]

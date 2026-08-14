@@ -190,8 +190,9 @@ web の import 境界は `apps/web/scripts/check-architecture-imports.mjs`、mod
 - coreはDB row、Redis client、HTTP DTO、filesystem、clock、environment、async runtimeへ依存しない。
   queue / artifactのwire型はversion付き契約としてcoreに置けるが、transport処理はruntimeに残す。
 - runtimeでは `series_analysis` と `ocr` を能力別境界とし、各配下にconsumer、DB状態遷移、
-  bounded storage、子process entry adapter、能力固有の運用commandを置く。`supervisor` は両consumerの
-  shutdown / failure境界、`process` は共有OS隔離境界とする。計算結果から制御動作への変換は
+  bounded storage、子process entry adapter、能力固有の運用commandを置く。分析入力snapshotのquery / decode /
+  validationは `series_analysis/input_repository`、共有PostgreSQL TLS接続は `postgres` に閉じる。`supervisor` は
+  両consumerのshutdown / failure境界、`process` は共有OS隔離境界とする。計算結果から制御動作への変換は
   副作用のないdecision tableへ寄せる。
 - 親processはdelivery受信、DB上の全体実行slotとfencing token、job lease、timeout、signal、子process回収を
   担当する。1作品の計算は停止可能な子processで実行し、子processから現行成果物を直接更新しない。

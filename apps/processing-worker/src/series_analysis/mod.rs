@@ -15,7 +15,7 @@ pub mod endurance;
 pub mod release;
 
 use crate::{
-    database::{self, DatabaseError},
+    postgres::{self, PostgresError},
     process::ProcessError,
 };
 
@@ -28,6 +28,7 @@ use self::{
 };
 
 mod attempt;
+mod input_repository;
 mod metrics;
 mod policy;
 mod queue;
@@ -43,7 +44,7 @@ use storage::{
 #[derive(Debug, Error)]
 pub enum ConsumerError {
     #[error("analysis control database connection failed")]
-    Database(#[from] DatabaseError),
+    Database(#[from] PostgresError),
     #[error("analysis control-plane transition failed")]
     Control(#[from] ControlError),
     #[error("analysis Redis operation failed")]
@@ -136,11 +137,11 @@ pub(crate) async fn run(
         "temporary_storage_validation",
     )?;
     let mut control_client = startup_result(
-        database::connect(&config.database_url).await,
+        postgres::connect(&config.database_url).await,
         "control_database_connect",
     )?;
     let mut heartbeat_client = startup_result(
-        database::connect(&config.database_url).await,
+        postgres::connect(&config.database_url).await,
         "heartbeat_database_connect",
     )?;
     startup_result(

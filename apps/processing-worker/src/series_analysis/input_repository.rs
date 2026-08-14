@@ -1,27 +1,15 @@
-use std::time::Duration;
-
 use futures_util::TryStreamExt;
 use momo_analysis_core::model::{
-    AnalysisInput, IncidentCounts, MatchPlayerRow, NormalizedAnalysisInput,
+    AnalysisInput, IncidentCounts, NormalizedAnalysisInput, MatchPlayerRow,
 };
-use openssl::{
-    error::ErrorStack,
-    ssl::{SslConnector, SslMethod},
-};
-use postgres_openssl::MakeTlsConnector;
 use thiserror::Error;
-use tokio_postgres::{Client, Config, IsolationLevel, Row};
-use tracing::error;
+use tokio_postgres::{Client, IsolationLevel, Row};
 
 // This is deliberately well above the release resource fixture (500 matches / 2,000 rows).
 // The child process hard limit remains the authoritative memory bound for unexpectedly large
 // snapshots; this row cap prevents unbounded input independently of a deployment-specific limit.
 const MAXIMUM_INPUT_ROWS: usize = 100_000;
 const MAXIMUM_INPUT_ID_BYTES: usize = 128;
-const DEFAULT_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
-const DEFAULT_TCP_USER_TIMEOUT: Duration = Duration::from_secs(30);
-#[cfg(target_os = "linux")]
-const SYSTEM_CA_BUNDLE: &str = "/etc/ssl/certs/ca-certificates.crt";
 const ANALYSIS_INPUT_QUERY: &str = r#"SELECT
        m.id, m.analysis_revision,
        to_char(m.played_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),
@@ -47,11 +35,7 @@ const ANALYSIS_INPUT_QUERY: &str = r#"SELECT
      LIMIT $2"#;
 
 #[derive(Debug, Error)]
-pub enum DatabaseError {
-    #[error("invalid PostgreSQL connection configuration")]
-    InvalidConfiguration(#[source] tokio_postgres::Error),
-    #[error("PostgreSQL TLS configuration failed")]
-    TlsConfiguration(#[source] ErrorStack),
+pub(super) enum InputRepositoryError {
     #[error("PostgreSQL operation failed")]
     Postgres(#[from] tokio_postgres::Error),
     #[error("analysis title does not exist")]
@@ -62,78 +46,19 @@ pub enum DatabaseError {
     InputContract(&'static str),
 }
 
-impl DatabaseError {
-    #[must_use]
-    pub(crate) const fn kind(&self) -> &'static str {
-        match self {
-            Self::InvalidConfiguration(_) => "postgres_configuration",
-            Self::TlsConfiguration(_) => "postgres_tls_configuration",
-            Self::Postgres(_) => "postgres_operation",
-            Self::TitleNotFound => "analysis_title_missing",
-            Self::Superseded => "input_revision_superseded",
-            Self::InputContract(_) => "input_contract",
-        }
-    }
-}
-
-/// Opens a bounded asynchronous `PostgreSQL` connection and drives its I/O on the current runtime.
-///
-/// # Errors
-///
-/// Returns a safe error when configuration, trust roots, or the connection are invalid.
-pub(crate) async fn connect(database_url: &str) -> Result<Client, DatabaseError> {
-    let mut config = database_url
-        .parse::<Config>()
-        .map_err(DatabaseError::InvalidConfiguration)?;
-    if config.get_connect_timeout().is_none() {
-        config.connect_timeout(DEFAULT_CONNECT_TIMEOUT);
-    }
-    if config.get_tcp_user_timeout().is_none() {
-        config.tcp_user_timeout(DEFAULT_TCP_USER_TIMEOUT);
-    }
-    let (client, connection) = config.connect(native_tls_connector()?).await?;
-    tokio::spawn(async move {
-        if let Err(_connection_error) = connection.await {
-            error!(
-                event = "analysis_dependency_connection_stopped",
-                dependency = "postgresql",
-                error_kind = "connection_driver",
-                "analysis PostgreSQL connection stopped"
-            );
-        }
-    });
-    Ok(client)
-}
-
-fn native_tls_connector() -> Result<MakeTlsConnector, DatabaseError> {
-    // Production connection strings can require RFC 5929 channel binding. The official
-    // postgres-openssl adapter derives tls-server-end-point from OpenSSL's parsed peer
-    // certificate while SslConnector keeps CA and hostname verification enabled.
-    let builder =
-        SslConnector::builder(SslMethod::tls()).map_err(DatabaseError::TlsConfiguration)?;
-    #[cfg(target_os = "linux")]
-    let builder = {
-        let mut builder = builder;
-        builder
-            .set_ca_file(SYSTEM_CA_BUNDLE)
-            .map_err(DatabaseError::TlsConfiguration)?;
-        builder
-    };
-    Ok(MakeTlsConnector::new(builder.build()))
-}
-
 /// Loads all calculation input from one repeatable-read, read-only snapshot.
 ///
 /// Mutable display metadata is intentionally not loaded into the calculation snapshot.
 ///
 /// # Errors
 ///
-/// Returns [`DatabaseError::Superseded`] before calculation when the leased revision is stale.
-pub(crate) async fn load_analysis_input(
+/// Returns [`InputRepositoryError::Superseded`] before calculation when the leased revision is
+/// stale.
+pub(super) async fn load_analysis_input(
     client: &mut Client,
     game_title_id: &str,
     expected_revision: i64,
-) -> Result<NormalizedAnalysisInput, DatabaseError> {
+) -> Result<NormalizedAnalysisInput, InputRepositoryError> {
     let transaction = client
         .build_transaction()
         .isolation_level(IsolationLevel::RepeatableRead)
@@ -152,20 +77,20 @@ pub(crate) async fn load_analysis_input(
             &[&game_title_id],
         )
         .await?
-        .ok_or(DatabaseError::TitleNotFound)?;
+        .ok_or(InputRepositoryError::TitleNotFound)?;
     let input_revision = title.try_get::<_, i64>(0)?;
     if input_revision != expected_revision {
-        return Err(DatabaseError::Superseded);
+        return Err(InputRepositoryError::Superseded);
     }
 
-    let expected_row_count = validate_input_shape(&transaction, game_title_id).await?;
+    let expected_player_match_count = validate_input_shape(&transaction, game_title_id).await?;
 
     let query_limit = i64::try_from(MAXIMUM_INPUT_ROWS)
         .map_err(|_conversion_error| {
-            DatabaseError::InputContract("input row bound is unsupported")
+            InputRepositoryError::InputContract("input row bound is unsupported")
         })?
         .checked_add(1)
-        .ok_or(DatabaseError::InputContract(
+        .ok_or(InputRepositoryError::InputContract(
             "input row bound is unsupported",
         ))?;
     let parameters: [&(dyn tokio_postgres::types::ToSql + Sync); 2] =
@@ -174,22 +99,22 @@ pub(crate) async fn load_analysis_input(
         .query_raw(ANALYSIS_INPUT_QUERY, parameters)
         .await?;
     tokio::pin!(rows);
-    let mut decoded = Vec::with_capacity(expected_row_count);
+    let mut player_matches = Vec::with_capacity(expected_player_match_count);
     while let Some(row) = rows.try_next().await? {
-        decoded.push(row_from_database(&row)?);
+        player_matches.push(player_match_from_database(&row)?);
     }
-    if decoded.len() != expected_row_count {
-        return Err(DatabaseError::InputContract(
+    if player_matches.len() != expected_player_match_count {
+        return Err(InputRepositoryError::InputContract(
             "input snapshot row count changed inside a repeatable-read transaction",
         ));
     }
     let input = AnalysisInput {
         game_title_id: String::from(game_title_id),
         input_revision,
-        rows: decoded,
+        rows: player_matches,
     }
     .into_normalized();
-    validate_rows(&input.rows)?;
+    validate_player_matches(&input.rows)?;
     transaction.commit().await?;
     Ok(input)
 }
@@ -197,7 +122,7 @@ pub(crate) async fn load_analysis_input(
 async fn validate_input_shape(
     transaction: &tokio_postgres::Transaction<'_>,
     game_title_id: &str,
-) -> Result<usize, DatabaseError> {
+) -> Result<usize, InputRepositoryError> {
     let row = transaction
         .query_one(
             r"SELECT COUNT(*)::bigint,
@@ -212,7 +137,7 @@ async fn validate_input_shape(
             &[&game_title_id],
         )
         .await?;
-    let row_count = row.try_get::<_, i64>(0)?;
+    let player_match_count = row.try_get::<_, i64>(0)?;
     let maximum_lengths = [
         row.try_get::<_, i32>(1)?,
         row.try_get::<_, i32>(2)?,
@@ -220,25 +145,25 @@ async fn validate_input_shape(
         row.try_get::<_, i32>(4)?,
         row.try_get::<_, i32>(5)?,
     ];
-    let supported_row_count = usize::try_from(row_count)
+    let supported_player_match_count = usize::try_from(player_match_count)
         .ok()
         .filter(|count| *count <= MAXIMUM_INPUT_ROWS);
-    if supported_row_count.is_none()
+    if supported_player_match_count.is_none()
         || !valid_input_id(game_title_id)
         || maximum_lengths.into_iter().any(|length| {
             usize::try_from(length).map_or(true, |value| value > MAXIMUM_INPUT_ID_BYTES)
         })
     {
-        return Err(DatabaseError::InputContract(
+        return Err(InputRepositoryError::InputContract(
             "input snapshot exceeds its bounded shape",
         ));
     }
-    supported_row_count.ok_or(DatabaseError::InputContract(
+    supported_player_match_count.ok_or(InputRepositoryError::InputContract(
         "input snapshot exceeds its bounded shape",
     ))
 }
 
-fn row_from_database(row: &Row) -> Result<MatchPlayerRow, tokio_postgres::Error> {
+fn player_match_from_database(row: &Row) -> Result<MatchPlayerRow, tokio_postgres::Error> {
     Ok(MatchPlayerRow {
         match_id: row.try_get(0)?,
         match_revision: row.try_get(1)?,
@@ -263,69 +188,81 @@ fn row_from_database(row: &Row) -> Result<MatchPlayerRow, tokio_postgres::Error>
     })
 }
 
-fn validate_rows(rows: &[MatchPlayerRow]) -> Result<(), DatabaseError> {
-    if rows.len() > MAXIMUM_INPUT_ROWS {
-        return Err(DatabaseError::InputContract(
+fn validate_player_matches(
+    player_matches: &[MatchPlayerRow],
+) -> Result<(), InputRepositoryError> {
+    if player_matches.len() > MAXIMUM_INPUT_ROWS {
+        return Err(InputRepositoryError::InputContract(
             "input row count exceeds the numeric safety bound",
         ));
     }
-    for row in rows {
+    for player_match in player_matches {
         if ![
-            row.match_id.as_str(),
-            row.held_event_id.as_str(),
-            row.season_master_id.as_str(),
-            row.map_master_id.as_str(),
-            row.member_id.as_str(),
+            player_match.match_id.as_str(),
+            player_match.held_event_id.as_str(),
+            player_match.season_master_id.as_str(),
+            player_match.map_master_id.as_str(),
+            player_match.member_id.as_str(),
         ]
         .into_iter()
         .all(valid_input_id)
-            || !(1..=4).contains(&row.rank)
-            || !(1..=4).contains(&row.play_order)
-            || row.match_revision < 0
+            || !(1..=4).contains(&player_match.rank)
+            || !(1..=4).contains(&player_match.play_order)
+            || player_match.match_revision < 0
             || [
-                row.incidents.destination,
-                row.incidents.plus_station,
-                row.incidents.minus_station,
-                row.incidents.card_station,
-                row.incidents.card_shop,
-                row.incidents.suri_no_ginji,
+                player_match.incidents.destination,
+                player_match.incidents.plus_station,
+                player_match.incidents.minus_station,
+                player_match.incidents.card_station,
+                player_match.incidents.card_shop,
+                player_match.incidents.suri_no_ginji,
             ]
             .into_iter()
             .any(|count| count < 0)
         {
-            return Err(DatabaseError::InputContract("invalid row value"));
+            return Err(InputRepositoryError::InputContract("invalid row value"));
         }
     }
-    for match_rows in rows.chunk_by(|left, right| left.match_id == right.match_id) {
-        if match_rows.len() != 4 {
-            return Err(DatabaseError::InputContract(
+    for match_player_matches in
+        player_matches.chunk_by(|left, right| left.match_id == right.match_id)
+    {
+        if match_player_matches.len() != 4 {
+            return Err(InputRepositoryError::InputContract(
                 "match must contain four players",
             ));
         }
-        let Some(first) = match_rows.first() else {
-            return Err(DatabaseError::InputContract(
+        let Some(first) = match_player_matches.first() else {
+            return Err(InputRepositoryError::InputContract(
                 "match must contain four players",
             ));
         };
-        let distinct_players = match_rows.iter().enumerate().all(|(index, row)| {
-            !match_rows
+        let distinct_players =
+            match_player_matches
                 .iter()
-                .take(index)
-                .any(|previous| previous.member_id == row.member_id)
+                .enumerate()
+                .all(|(index, player_match)| {
+                    !match_player_matches
+                        .iter()
+                        .take(index)
+                        .any(|previous| previous.member_id == player_match.member_id)
+                });
+        let complete_ranks =
+            (1..=4).all(|rank| match_player_matches.iter().any(|row| row.rank == rank));
+        let complete_orders = (1..=4).all(|order| {
+            match_player_matches
+                .iter()
+                .any(|row| row.play_order == order)
         });
-        let complete_ranks = (1..=4).all(|rank| match_rows.iter().any(|row| row.rank == rank));
-        let complete_orders =
-            (1..=4).all(|order| match_rows.iter().any(|row| row.play_order == order));
-        let consistent_match = match_rows.iter().all(|row| {
-            row.match_revision == first.match_revision
-                && row.played_at == first.played_at
-                && row.held_event_id == first.held_event_id
-                && row.match_no_in_event == first.match_no_in_event
-                && row.season_master_id == first.season_master_id
-                && row.map_master_id == first.map_master_id
+        let consistent_match = match_player_matches.iter().all(|player_match| {
+            player_match.match_revision == first.match_revision
+                && player_match.played_at == first.played_at
+                && player_match.held_event_id == first.held_event_id
+                && player_match.match_no_in_event == first.match_no_in_event
+                && player_match.season_master_id == first.season_master_id
+                && player_match.map_master_id == first.map_master_id
         });
         if !distinct_players || !complete_ranks || !complete_orders || !consistent_match {
-            return Err(DatabaseError::InputContract(
+            return Err(InputRepositoryError::InputContract(
                 "match players, ranks, play orders, or metadata are inconsistent",
             ));
         }
@@ -353,8 +290,9 @@ mod tests {
 
     use super::*;
 
-    const DEPENDENCIES: &str =
-        include_str!("../../../docs/schemas/fixtures/series-analysis/input-dependencies-v1.json");
+    const DEPENDENCIES: &str = include_str!(
+        "../../../../docs/schemas/fixtures/series-analysis/input-dependencies-v1.json"
+    );
 
     #[derive(Debug, Deserialize)]
     #[serde(deny_unknown_fields, rename_all = "camelCase")]
@@ -385,7 +323,7 @@ mod tests {
             .collect()
     }
 
-    fn valid_rows() -> Vec<MatchPlayerRow> {
+    fn valid_player_matches() -> Vec<MatchPlayerRow> {
         (1..=4)
             .map(|player| MatchPlayerRow {
                 match_id: String::from("match-1"),
@@ -407,8 +345,8 @@ mod tests {
 
     #[test]
     fn input_validation_rejects_duplicate_players_and_inconsistent_match_metadata() {
-        let valid = valid_rows();
-        assert!(validate_rows(&valid).is_ok());
+        let valid = valid_player_matches();
+        assert!(validate_player_matches(&valid).is_ok());
 
         let mut duplicate_player = valid.clone();
         duplicate_player
@@ -416,8 +354,8 @@ mod tests {
             .unwrap_or_else(|| panic!("fourth player row"))
             .member_id = String::from("member-1");
         assert!(matches!(
-            validate_rows(&duplicate_player),
-            Err(DatabaseError::InputContract(
+            validate_player_matches(&duplicate_player),
+            Err(InputRepositoryError::InputContract(
                 "match players, ranks, play orders, or metadata are inconsistent"
             ))
         ));
@@ -428,8 +366,8 @@ mod tests {
             .unwrap_or_else(|| panic!("fourth player row"))
             .season_master_id = String::from("season-2");
         assert!(matches!(
-            validate_rows(&inconsistent_match),
-            Err(DatabaseError::InputContract(
+            validate_player_matches(&inconsistent_match),
+            Err(InputRepositoryError::InputContract(
                 "match players, ranks, play orders, or metadata are inconsistent"
             ))
         ));

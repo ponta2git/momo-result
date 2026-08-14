@@ -11,7 +11,7 @@ use tokio::time;
 
 use crate::{
     cgroup::ChildCgroup,
-    database::{DatabaseError, connect},
+    postgres::{PostgresError, connect},
     process::{
         AnalysisChildOutcome, AnalysisChildSpec, ManagedAnalysisChild, ProcessError,
         current_process_peak_resident_bytes, current_process_resident_bytes,
@@ -105,7 +105,9 @@ pub enum ShadowError {
     #[error("shadow temporary root must be an owned empty directory")]
     UnsafeTemporaryRoot,
     #[error("shadow database operation failed")]
-    Database(#[from] DatabaseError),
+    Database(#[from] PostgresError),
+    #[error("shadow database operation failed")]
+    TitleNotFound,
     #[error("shadow database query failed")]
     Postgres(#[from] tokio_postgres::Error),
     #[error("shadow child process failed")]
@@ -166,7 +168,7 @@ pub async fn run(request: &ShadowRequest) -> Result<ShadowReport, ShadowError> {
             &[&request.game_title_id],
         )
         .await?
-        .ok_or(DatabaseError::TitleNotFound)?
+        .ok_or(ShadowError::TitleNotFound)?
         .try_get(0)?;
     let mut runs = Vec::with_capacity(usize::try_from(request.runs)?);
     for run_number in 1..=request.runs {

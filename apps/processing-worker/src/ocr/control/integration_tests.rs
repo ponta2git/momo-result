@@ -66,8 +66,8 @@ struct Fixture {
 async fn real_postgres_and_redis_preserve_ocr_fencing_and_delivery_order() -> SmokeResult {
     let database_url = std::env::var("OCR_CONTROL_SMOKE_DATABASE_URL")?;
     let redis_url = std::env::var("OCR_CONTROL_SMOKE_REDIS_URL")?;
-    let mut primary = crate::database::connect(&database_url).await?;
-    let mut stale = crate::database::connect(&database_url).await?;
+    let mut primary = crate::postgres::connect(&database_url).await?;
+    let mut stale = crate::postgres::connect(&database_url).await?;
     prepare_database(&primary).await?;
     for fixture in [&TAKEOVER, &SUCCESS, &PREEMPT, &MALFORMED] {
         insert_fixture(&primary, fixture).await?;

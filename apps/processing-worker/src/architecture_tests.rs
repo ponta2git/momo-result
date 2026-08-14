@@ -64,16 +64,16 @@ fn postgres_rows_are_decoded_without_panicking_getters() {
 }
 
 #[test]
-fn database_tls_preserves_peer_verification_and_channel_binding() {
+fn postgres_tls_preserves_peer_verification_and_channel_binding() {
     let manifest = include_str!("../Cargo.toml");
-    let adapter = include_str!("database.rs");
+    let adapter = include_str!("postgres.rs");
     assert!(
         manifest.contains("postgres-openssl ="),
-        "database transport must use the channel-binding-capable official OpenSSL adapter"
+        "PostgreSQL transport must use the channel-binding-capable official OpenSSL adapter"
     );
     assert!(
         adapter.contains("postgres_openssl::MakeTlsConnector"),
-        "database adapter must construct the reviewed TLS connector"
+        "PostgreSQL adapter must construct the reviewed TLS connector"
     );
     for forbidden in [
         "set_verify_hostname(false)",
@@ -82,7 +82,7 @@ fn database_tls_preserves_peer_verification_and_channel_binding() {
     ] {
         assert!(
             !adapter.contains(forbidden),
-            "database adapter disables TLS peer identity verification with {forbidden}"
+            "PostgreSQL adapter disables TLS peer identity verification with {forbidden}"
         );
     }
 }

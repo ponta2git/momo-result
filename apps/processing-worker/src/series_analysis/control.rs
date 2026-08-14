@@ -2,8 +2,6 @@ use std::time::Duration;
 
 use thiserror::Error;
 
-use crate::database::DatabaseError;
-
 pub(crate) const ALGORITHM_VERSION: &str = "series-analysis-v2";
 
 mod capability;
@@ -151,8 +149,6 @@ fn signed_milliseconds(duration: Duration) -> i64 {
 
 #[derive(Debug, Error)]
 pub enum ControlError {
-    #[error("analysis database operation failed")]
-    Database(#[from] DatabaseError),
     #[error("analysis PostgreSQL state transition failed")]
     Postgres(#[from] tokio_postgres::Error),
     #[error("analysis shared execution-slot transition failed: {0}")]
@@ -181,7 +177,6 @@ impl ControlError {
     #[must_use]
     pub(crate) const fn kind(&self) -> &'static str {
         match self {
-            Self::Database(error) => error.kind(),
             Self::Postgres(_) => "postgres_state_transition",
             Self::ExecutionSlot(kind) => kind,
             Self::OwnerLost => "fencing_owner_lost",

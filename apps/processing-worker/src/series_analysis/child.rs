@@ -5,7 +5,7 @@ use std::{
 };
 
 use crate::{
-    database::{DatabaseError, connect, load_analysis_input},
+    postgres::{PostgresError, connect},
     process::{
         CHILD_ARTIFACT_TOO_LARGE_EXIT_CODE, CHILD_CALCULATION_FAILED_EXIT_CODE,
         CHILD_DEPENDENCY_FAILED_EXIT_CODE, CHILD_INPUT_INVALID_EXIT_CODE,
@@ -18,6 +18,7 @@ use super::{
     artifact::{ArtifactBuildRequest, ArtifactError, build_artifact},
     child_report::{self, ChildPhase, ChildReport, ChildReportMetrics, ChildReportOutcome},
     control::ALGORITHM_VERSION,
+    input_repository::{InputRepositoryError, load_analysis_input},
 };
 
 pub struct ChildComputeRequest<'a> {
@@ -114,7 +115,7 @@ async fn execute_inner(
         Ok(client) => client,
         Err(error) => {
             telemetry.metrics.input_milliseconds = milliseconds(input_started.elapsed());
-            return Err(map_database_failure(&error));
+            return Err(map_postgres_failure(&error));
         }
     };
     let input = match load_analysis_input(
@@ -127,12 +128,12 @@ async fn execute_inner(
         Ok(input) => input,
         Err(error) => {
             telemetry.metrics.input_milliseconds = milliseconds(input_started.elapsed());
-            return Err(map_database_failure(&error));
+            return Err(map_input_repository_failure(&error));
         }
     };
     telemetry.metrics.input_milliseconds = milliseconds(input_started.elapsed());
-    telemetry.metrics.input_row_count =
-        u64::try_from(input.rows.len()).map_err(|_error| ChildFailure::CalculationFailed)?;
+    telemetry.metrics.input_row_count = u64::try_from(input.rows.len())
+        .map_err(|_error| ChildFailure::CalculationFailed)?;
     if input
         .resource_count()
         .is_none_or(|count| count > request.maximum_chunk_count)
@@ -176,16 +177,22 @@ fn milliseconds(duration: Duration) -> u64 {
     u64::try_from(duration.as_millis()).unwrap_or(u64::MAX)
 }
 
-const fn map_database_failure(error: &DatabaseError) -> ChildFailure {
+const fn map_postgres_failure(error: &PostgresError) -> ChildFailure {
     match error {
-        DatabaseError::Superseded => ChildFailure::Superseded,
-        DatabaseError::TitleNotFound | DatabaseError::InputContract(_) => {
-            ChildFailure::InputInvalid
-        }
-        DatabaseError::InvalidConfiguration(_) | DatabaseError::TlsConfiguration(_) => {
+        PostgresError::InvalidConfiguration(_) | PostgresError::TlsConfiguration(_) => {
             ChildFailure::CalculationFailed
         }
-        DatabaseError::Postgres(_) => ChildFailure::DependencyFailed,
+        PostgresError::Postgres(_) => ChildFailure::DependencyFailed,
+    }
+}
+
+const fn map_input_repository_failure(error: &InputRepositoryError) -> ChildFailure {
+    match error {
+        InputRepositoryError::Superseded => ChildFailure::Superseded,
+        InputRepositoryError::TitleNotFound | InputRepositoryError::InputContract(_) => {
+            ChildFailure::InputInvalid
+        }
+        InputRepositoryError::Postgres(_) => ChildFailure::DependencyFailed,
     }
 }
 

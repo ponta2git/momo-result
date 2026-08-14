@@ -5,7 +5,7 @@ use thiserror::Error;
 use tokio::{sync::watch, time};
 use tracing::{info, warn};
 
-use crate::database;
+use crate::postgres;
 
 use super::{
     contract::OcrQueuePayload,
@@ -249,10 +249,10 @@ pub async fn run<E: OcrEngine>(
     engine: &E,
     mut shutdown: watch::Receiver<bool>,
 ) -> Result<(), OcrConsumerError> {
-    let mut control_client = database::connect(&config.database_url)
+    let mut control_client = postgres::connect(&config.database_url)
         .await
         .map_err(|error| OcrConsumerError::Database(error.kind()))?;
-    let mut heartbeat_client = database::connect(&config.database_url)
+    let mut heartbeat_client = postgres::connect(&config.database_url)
         .await
         .map_err(|error| OcrConsumerError::Database(error.kind()))?;
     let redis_client = redis::Client::open(config.redis_url.as_str())

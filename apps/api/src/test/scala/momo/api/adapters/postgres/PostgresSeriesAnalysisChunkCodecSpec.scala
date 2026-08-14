@@ -101,6 +101,43 @@ final class PostgresSeriesAnalysisChunkCodecSpec extends FunSuite:
       10L,
     )
 
+  test("hydrates display metadata only when every referenced member is available"):
+    val decoded = decodedAggregate()
+    val hydrated = PostgresSeriesAnalysisChunkCodec.hydrate(
+      decoded,
+      List("member-ponta"),
+      Map("member-ponta" -> "ぽんた"),
+      Some("総合"),
+      SeriesAnalysisReadConfig.defaults,
+    )
+
+    assertEquals(
+      hydrated.map(_.payload.hcursor.downField("scope").get[String]("displayName")),
+      Right(Right("総合")),
+    )
+    assertInternal(
+      PostgresSeriesAnalysisChunkCodec.hydrate(
+        decoded,
+        List("member-ponta"),
+        Map.empty,
+        Some("総合"),
+        SeriesAnalysisReadConfig.defaults,
+      ),
+      "Analysis display metadata is unavailable.",
+    )
+
+  test("applies the response byte bound after display metadata hydration"):
+    assertInternal(
+      PostgresSeriesAnalysisChunkCodec.hydrate(
+        decodedAggregate(),
+        Nil,
+        Map.empty,
+        Some("総合"),
+        SeriesAnalysisReadConfig.defaults.copy(maxResponseBytes = 1),
+      ),
+      "Analysis response exceeds the configured bound.",
+    )
+
   private def stored(
       payload: Array[Byte],
       nestingDepth: Int,
@@ -126,6 +163,12 @@ final class PostgresSeriesAnalysisChunkCodecSpec extends FunSuite:
       nestingDepth = Some(nestingDepth),
       checksum = Some(checksum),
     )
+
+  private def decodedAggregate() =
+    val payload = aggregate("{}").getBytes(StandardCharsets.UTF_8)
+    PostgresSeriesAnalysisChunkCodec
+      .decode(stored(payload, nestingDepth = 3), request, SeriesAnalysisReadConfig.defaults, None)
+      .fold(error => fail(s"invalid decoded aggregate fixture: $error"), identity)
 
   private def assertInternal[A](result: Either[AppError, A], expectedDetail: String): Unit =
     result match

@@ -116,6 +116,25 @@ private[postgres] object PostgresSeriesAnalysisChunkCodec:
       AppError.Internal("Analysis artifact contains too many member identifiers."),
     )
 
+  def hydrate(
+      chunk: SeriesAnalysisChunk,
+      memberIds: List[String],
+      memberNames: Map[String, String],
+      scopeName: Option[String],
+      config: SeriesAnalysisReadConfig,
+  ): Either[AppError, SeriesAnalysisChunk] =
+    scopeName
+      .filter(_ => memberNames.keySet == memberIds.toSet)
+      .toRight(AppError.Internal("Analysis display metadata is unavailable."))
+      .flatMap { displayName =>
+        val hydrated = chunk.copy(payload = hydratePayload(chunk, memberNames, displayName))
+        Either.cond(
+          jsonUtf8BytesUpperBound(hydrated.payload) <= config.maxResponseBytes,
+          hydrated,
+          AppError.Internal("Analysis response exceeds the configured bound."),
+        )
+      }
+
   def jsonUtf8BytesUpperBound(json: Json): Long =
     val value = json.noSpaces
     @tailrec

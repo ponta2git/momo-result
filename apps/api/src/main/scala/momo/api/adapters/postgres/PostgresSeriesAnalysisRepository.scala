@@ -33,11 +33,66 @@ final class PostgresSeriesAnalysisRepository[F[_]: Async] private (
       request: SeriesAnalysisChunkRequest
   ): F[Either[AppError, SeriesAnalysisChunk]] =
     PostgresSeriesAnalysisRepository.boundedChunkRead(decodeSemaphore, readConfig)(
-      PostgresSeriesAnalysisChunkOps.chunk(request, readConfig).exceptSomeSqlState {
-        case state if state.value == PostgresSeriesAnalysisRepository.QueryCanceledSqlState =>
-          AppError.AnalysisReadBusy(readConfig.busyRetryAfterSeconds)
-            .asLeft[SeriesAnalysisChunk].pure[ConnectionIO]
-      }.transact(transactor)
+      chunkPipeline(request)
+    )
+
+  /**
+   * Keeps the memory/decode permit for the complete read while releasing database connections
+   * before checksum, JSON decoding, hydration and response sizing. Artifact bytes belong to the
+   * first snapshot; display names are intentionally resolved from a second, short live snapshot.
+   */
+  private def chunkPipeline(
+      request: SeriesAnalysisChunkRequest
+  ): F[Either[AppError, SeriesAnalysisChunk]] = transactChunk(
+    PostgresSeriesAnalysisChunkOps.load(request, readConfig)
+  ).flatMap {
+    case Left(error) => error.asLeft[SeriesAnalysisChunk].pure[F]
+    case Right(loaded) =>
+      Async[F].blocking(decodeAndCollectMemberIds(loaded)).flatMap {
+        case Left(error) => error.asLeft[SeriesAnalysisChunk].pure[F]
+        case Right((chunk, memberIds)) =>
+          transactChunk(
+            PostgresSeriesAnalysisChunkOps
+              .displayMetadata(chunk, memberIds, readConfig).map(_.asRight[AppError])
+          ).flatMap {
+            case Left(error) => error.asLeft[SeriesAnalysisChunk].pure[F]
+            case Right(metadata) => Async[F].blocking(
+                PostgresSeriesAnalysisChunkCodec.hydrate(
+                  chunk,
+                  memberIds,
+                  metadata.memberNames,
+                  metadata.scopeName,
+                  readConfig,
+                )
+              )
+          }
+      }
+  }
+
+  private def transactChunk[A](
+      read: ConnectionIO[Either[AppError, A]]
+  ): F[Either[AppError, A]] = read.exceptSomeSqlState {
+    case state if state.value == PostgresSeriesAnalysisRepository.QueryCanceledSqlState =>
+      AppError.AnalysisReadBusy(readConfig.busyRetryAfterSeconds).asLeft[A].pure[ConnectionIO]
+  }.transact(transactor)
+
+  private def decodeAndCollectMemberIds(
+      loaded: PostgresSeriesAnalysisChunkOps.LoadedChunk
+  ): Either[AppError, (SeriesAnalysisChunk, List[String])] =
+    val decoded = loaded.material match
+      case PostgresSeriesAnalysisChunkOps.ChunkMaterial.Excluded(artifact, matchId, status) =>
+        PostgresSeriesAnalysisChunkCodec
+          .excludedContext(artifact, loaded.request.scope, matchId, status).asRight
+      case PostgresSeriesAnalysisChunkOps.ChunkMaterial.Stored(row, sourceMatchRevision) =>
+        PostgresSeriesAnalysisChunkCodec
+          .decode(row, loaded.request, readConfig, sourceMatchRevision)
+          .map(chunk =>
+            sourceMatchRevision.fold(chunk)(revision =>
+              PostgresSeriesAnalysisChunkCodec.includedContext(chunk, revision)
+            )
+          )
+    decoded.flatMap(chunk =>
+      PostgresSeriesAnalysisChunkCodec.memberIds(chunk.payload).map(chunk -> _)
     )
 
   override def adminOverview(

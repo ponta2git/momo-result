@@ -13,6 +13,20 @@ import momo.api.domain.ids.{GameTitleId, MapMasterId, MatchId, SeasonMasterId}
 import momo.api.errors.AppError
 
 private[postgres] object PostgresSeriesAnalysisChunkOps:
+  final case class LoadedChunk(
+      request: SeriesAnalysisChunkRequest,
+      material: ChunkMaterial,
+  )
+
+  enum ChunkMaterial:
+    case Stored(chunk: SeriesAnalysisStoredChunk, sourceMatchRevision: Option[Long])
+    case Excluded(artifact: SeriesAnalysisArtifactRef, matchId: MatchId, status: String)
+
+  final case class DisplayMetadata(
+      memberNames: Map[String, String],
+      scopeName: Option[String],
+  )
+
   private final case class MatchIdentityRow(
       gameTitleId: GameTitleId,
       seasonMasterId: SeasonMasterId,
@@ -27,34 +41,46 @@ private[postgres] object PostgresSeriesAnalysisChunkOps:
 
   private final case class MemberDisplayNameRow(id: String, displayName: String)
 
-  def chunk(
+  def load(
       request: SeriesAnalysisChunkRequest,
       config: SeriesAnalysisReadConfig,
-  ): ConnectionIO[Either[AppError, SeriesAnalysisChunk]] = localStatementTimeout(config) *>
+  ): ConnectionIO[Either[AppError, LoadedChunk]] = localStatementTimeout(config) *>
     (request.kind match
-      case SeriesAnalysisChunkKind.MatchContext => matchContextCio(request, config)
-      case _ => regularChunkCio(request, config))
+      case SeriesAnalysisChunkKind.MatchContext => matchContextCio(request)
+      case _ => regularChunkCio(request))
+
+  def displayMetadata(
+      chunk: SeriesAnalysisChunk,
+      memberIds: List[String],
+      config: SeriesAnalysisReadConfig,
+  ): ConnectionIO[DisplayMetadata] = localStatementTimeout(config) *>
+    (for
+      names <- memberIds match
+        case Nil => Map.empty[String, String].pure[ConnectionIO]
+        case head :: tail =>
+          val ids = NonEmptyList(head, tail)
+          (fr"SELECT id, display_name FROM members WHERE " ++ Fragments.in(fr"id", ids))
+            .query[MemberDisplayNameRow].to[List].map(_.map(row => row.id -> row.displayName).toMap)
+      scopeName <- PostgresSeriesAnalysisScopeOps
+        .displayName(chunk.artifact.gameTitleId, chunk.scope)
+    yield DisplayMetadata(names, scopeName))
 
   private def localStatementTimeout(config: SeriesAnalysisReadConfig): ConnectionIO[Unit] =
     val value = s"${config.readTimeout.toMillis}ms"
     sql"SELECT set_config('statement_timeout', $value, true)".query[String].unique.void
 
   private def regularChunkCio(
-      request: SeriesAnalysisChunkRequest,
-      config: SeriesAnalysisReadConfig,
-  ): ConnectionIO[Either[AppError, SeriesAnalysisChunk]] =
+      request: SeriesAnalysisChunkRequest
+  ): ConnectionIO[Either[AppError, LoadedChunk]] =
     for
       scopeExists <- PostgresSeriesAnalysisScopeOps.exists(request.gameTitleId, request.scope)
       row <- selectChunk(request)
-      decoded = if !scopeExists then AppError.AnalysisScopeNotFound().asLeft
+      loaded = if !scopeExists then AppError.AnalysisScopeNotFound().asLeft
       else
         row match
           case None => AppError.AnalysisArtifactExpired().asLeft
-          case Some(value) => PostgresSeriesAnalysisChunkCodec.decode(value, request, config, None)
-      result <- decoded match
-        case Left(error) => error.asLeft[SeriesAnalysisChunk].pure[ConnectionIO]
-        case Right(chunk) => hydrateChunk(chunk, config)
-    yield result
+          case Some(value) => LoadedChunk(request, ChunkMaterial.Stored(value, None)).asRight
+    yield loaded
 
   private def selectChunk(
       request: SeriesAnalysisChunkRequest
@@ -104,9 +130,8 @@ private[postgres] object PostgresSeriesAnalysisChunkOps:
     query.query[SeriesAnalysisStoredChunk].option
 
   private def matchContextCio(
-      request: SeriesAnalysisChunkRequest,
-      config: SeriesAnalysisReadConfig,
-  ): ConnectionIO[Either[AppError, SeriesAnalysisChunk]] = request.matchId match
+      request: SeriesAnalysisChunkRequest
+  ): ConnectionIO[Either[AppError, LoadedChunk]] = request.matchId match
     case None => AppError.ValidationFailed("matchId is required.").asLeft.pure[ConnectionIO]
     case Some(matchId) =>
       for
@@ -116,51 +141,48 @@ private[postgres] object PostgresSeriesAnalysisChunkOps:
           WHERE id = $matchId
         """.query[MatchIdentityRow].option
         artifact <- selectReadableArtifact(request.gameTitleId, request.artifactId)
-        decoded <- (current, artifact) match
-          case (None, _) => AppError.NotFound("match", matchId.value).asLeft[SeriesAnalysisChunk]
+        loaded <- (current, artifact) match
+          case (None, _) => AppError.NotFound("match", matchId.value).asLeft[LoadedChunk]
               .pure[ConnectionIO]
-          case (_, None) => AppError.AnalysisArtifactExpired().asLeft[SeriesAnalysisChunk]
+          case (_, None) => AppError.AnalysisArtifactExpired().asLeft[LoadedChunk]
               .pure[ConnectionIO]
           case (Some(identity), Some(artifactRef))
               if identity.gameTitleId != request.gameTitleId =>
-            PostgresSeriesAnalysisChunkCodec
-              .excludedContext(artifactRef, request.scope, matchId, "match_changed_since_artifact")
-              .asRight[AppError].pure[ConnectionIO]
+            LoadedChunk(
+              request,
+              ChunkMaterial.Excluded(artifactRef, matchId, "match_changed_since_artifact"),
+            ).asRight[AppError].pure[ConnectionIO]
           case (Some(identity), Some(artifactRef))
               if !PostgresSeriesAnalysisScopeOps.contains(
                 request.scope,
                 identity.seasonMasterId,
                 identity.mapMasterId,
               ) =>
-            PostgresSeriesAnalysisChunkCodec
-              .excludedContext(artifactRef, request.scope, matchId, "not_in_scope")
+            LoadedChunk(request, ChunkMaterial.Excluded(artifactRef, matchId, "not_in_scope"))
               .asRight[AppError]
               .pure[ConnectionIO]
           case (Some(identity), Some(artifactRef)) =>
             selectMatchContextChunk(request, matchId).map {
-              case None => PostgresSeriesAnalysisChunkCodec
-                  .excludedContext(artifactRef, request.scope, matchId, "not_in_artifact").asRight
+              case None => LoadedChunk(
+                  request,
+                  ChunkMaterial.Excluded(artifactRef, matchId, "not_in_artifact"),
+                ).asRight
               case Some(row) if row.sourceMatchRevision != identity.analysisRevision =>
-                PostgresSeriesAnalysisChunkCodec
-                  .excludedContext(
+                LoadedChunk(
+                  request,
+                  ChunkMaterial.Excluded(
                     artifactRef,
-                    request.scope,
                     matchId,
                     "match_changed_since_artifact",
-                  ).asRight
-              case Some(row) => PostgresSeriesAnalysisChunkCodec
-                  .decode(row.chunk, request, config, Some(row.sourceMatchRevision))
-                  .map(chunk =>
-                    PostgresSeriesAnalysisChunkCodec.includedContext(
-                      chunk,
-                      row.sourceMatchRevision,
-                    )
-                  )
+                  ),
+                ).asRight
+              case Some(row) =>
+                LoadedChunk(
+                  request,
+                  ChunkMaterial.Stored(row.chunk, Some(row.sourceMatchRevision)),
+                ).asRight
             }
-        result <- decoded match
-          case Left(error) => error.asLeft[SeriesAnalysisChunk].pure[ConnectionIO]
-          case Right(chunk) => hydrateChunk(chunk, config)
-      yield result
+      yield loaded
 
   private def selectReadableArtifact(
       gameTitleId: GameTitleId,
@@ -213,41 +235,5 @@ private[postgres] object PostgresSeriesAnalysisChunkOps:
      AND c.match_id = $matchId
     WHERE s.game_title_id = ${request.gameTitleId}
   """.query[MatchContextChunkRow].option
-
-  private def hydrateChunk(
-      chunk: SeriesAnalysisChunk,
-      config: SeriesAnalysisReadConfig,
-  ): ConnectionIO[Either[AppError, SeriesAnalysisChunk]] =
-    PostgresSeriesAnalysisChunkCodec.memberIds(chunk.payload) match
-      case Left(error) => error.asLeft[SeriesAnalysisChunk].pure[ConnectionIO]
-      case Right(memberIds) => hydrateKnownMembers(chunk, memberIds, config)
-
-  private def hydrateKnownMembers(
-      chunk: SeriesAnalysisChunk,
-      memberIds: List[String],
-      config: SeriesAnalysisReadConfig,
-  ): ConnectionIO[Either[AppError, SeriesAnalysisChunk]] =
-    for
-      names <- memberIds match
-        case Nil => Map.empty[String, String].pure[ConnectionIO]
-        case head :: tail =>
-          val ids = NonEmptyList(head, tail)
-          (fr"SELECT id, display_name FROM members WHERE " ++ Fragments.in(fr"id", ids))
-            .query[MemberDisplayNameRow].to[List].map(_.map(row => row.id -> row.displayName).toMap)
-      scopeName <- PostgresSeriesAnalysisScopeOps
-        .displayName(chunk.artifact.gameTitleId, chunk.scope)
-    yield
-      val metadataComplete = names.keySet == memberIds.toSet
-      val hydrated = chunk.copy(payload =
-        PostgresSeriesAnalysisChunkCodec
-          .hydratePayload(chunk, names, scopeName.getOrElse(""))
-      )
-      val responseBytes = PostgresSeriesAnalysisChunkCodec
-        .jsonUtf8BytesUpperBound(hydrated.payload)
-      if !metadataComplete || scopeName.isEmpty then
-        AppError.Internal("Analysis display metadata is unavailable.").asLeft
-      else if responseBytes > config.maxResponseBytes then
-        AppError.Internal("Analysis response exceeds the configured bound.").asLeft
-      else hydrated.asRight
 
 end PostgresSeriesAnalysisChunkOps

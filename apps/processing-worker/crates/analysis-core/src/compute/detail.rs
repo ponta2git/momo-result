@@ -3,7 +3,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde_json::{Value, json};
 
 use crate::{
-    model::{MatchPlayerRow, RowsByPlayer, Scope},
+    contract::ScopeRef,
+    model::{PlayerMatchInput, PlayerMatchesByMember},
     numeric::count_as_f64,
     rank::RankAnalysis,
     rankings::{by_match as ranks_by_match, value as rank_value},
@@ -11,43 +12,42 @@ use crate::{
 };
 
 use super::support::{
-    change_direction, distribution, evidence, player_json, revenue_asset_rate, scope_json,
+    change_direction, distribution, evidence, member_ref_json, revenue_asset_rate, scope_json,
 };
 
 pub(super) fn review(
-    scope: &Scope,
-    rows: &[&MatchPlayerRow],
+    scope: &ScopeRef,
+    rows: &[&PlayerMatchInput],
     players: &[String],
-    rows_by_player: &RowsByPlayer<'_>,
+    player_matches_by_member: &PlayerMatchesByMember<'_>,
     data_quality: Option<Value>,
 ) -> Value {
-    crate::playbook::build(scope, rows, players, rows_by_player, data_quality)
+    crate::playbook::build(scope, rows, players, player_matches_by_member, data_quality)
 }
 
 pub(super) fn drilldown(
-    scope: &Scope,
-    rows: &[&MatchPlayerRow],
-    player_rows: &[&MatchPlayerRow],
+    scope: &ScopeRef,
+    member_matches: &[&PlayerMatchInput],
     match_count: usize,
     member_id: &str,
     metric_id: &str,
     rank_analysis: &RankAnalysis,
 ) -> Value {
     let payload = match metric_id {
-        "rank.averageHistory" => rank_history_payload(player_rows),
-        "playOrder.rankHistory" => play_order_history_payload(player_rows),
+        "rank.averageHistory" => rank_history_payload(member_matches),
+        "playOrder.rankHistory" => play_order_history_payload(member_matches),
         "rankAnalysis.rankSignals" => rank_analysis.signal_drilldown_json(member_id),
         _ => rank_analysis.unexpected_wins_drilldown_json(member_id),
     };
     json!({
         "schemaVersion": 2,
         "scope": scope_json(scope, match_count),
-        "player": player_json(member_id, rows),
+        "player": member_ref_json(member_id),
         "payload": payload,
     })
 }
 
-fn rank_history_payload(rows: &[&MatchPlayerRow]) -> Value {
+fn rank_history_payload(rows: &[&PlayerMatchInput]) -> Value {
     let mut rank_sum = 0.0;
     let mut rank_count = 0_usize;
     let mut previous_rank = None;
@@ -85,7 +85,7 @@ fn rank_history_payload(rows: &[&MatchPlayerRow]) -> Value {
     })
 }
 
-fn play_order_history_payload(rows: &[&MatchPlayerRow]) -> Value {
+fn play_order_history_payload(rows: &[&PlayerMatchInput]) -> Value {
     let mut by_order = BTreeMap::<i32, (f64, usize)>::new();
     let series = rows
         .iter()
@@ -138,9 +138,9 @@ fn play_order_history_payload(rows: &[&MatchPlayerRow]) -> Value {
     })
 }
 
-pub(super) fn event_rank_rows(rows: &[&MatchPlayerRow]) -> Vec<Value> {
+pub(super) fn event_rank_rows(rows: &[&PlayerMatchInput]) -> Vec<Value> {
     let mut event_order = Vec::<&str>::new();
-    let mut events = BTreeMap::<&str, Vec<&MatchPlayerRow>>::new();
+    let mut events = BTreeMap::<&str, Vec<&PlayerMatchInput>>::new();
     for row in rows {
         let event_id = row.held_event_id.as_str();
         match events.entry(event_id) {
@@ -238,7 +238,7 @@ fn collect_item_ids(node: &Value, item_ids: &mut BTreeSet<String>) {
 }
 
 impl<'a> MatchContextIndex<'a> {
-    pub(super) fn new(rows: &[&'a MatchPlayerRow]) -> Self {
+    pub(super) fn new(rows: &[&'a PlayerMatchInput]) -> Self {
         let mut match_ids = BTreeSet::new();
         let mut player_history = BTreeMap::new();
         let mut running = BTreeMap::<&str, (f64, f64, Option<i32>)>::new();
@@ -269,8 +269,8 @@ impl<'a> MatchContextIndex<'a> {
 }
 
 pub(super) fn match_context(
-    scope: &Scope,
-    group: &[&MatchPlayerRow],
+    scope: &ScopeRef,
+    group: &[&PlayerMatchInput],
     index: &MatchContextIndex<'_>,
     aggregate_item_ids: &AggregateItemIds,
     match_id: &str,
@@ -376,7 +376,7 @@ pub(super) fn match_context(
     })
 }
 
-fn match_features(group: &[&MatchPlayerRow]) -> Vec<Value> {
+fn match_features(group: &[&PlayerMatchInput]) -> Vec<Value> {
     let winner = group.iter().copied().find(|row| row.rank == 1);
     let second = group.iter().copied().find(|row| row.rank == 2);
     let last = group.iter().copied().find(|row| row.rank == 4);
@@ -446,9 +446,9 @@ fn match_features(group: &[&MatchPlayerRow]) -> Vec<Value> {
 }
 
 fn asset_gap_features(
-    winner: Option<&MatchPlayerRow>,
-    second: Option<&MatchPlayerRow>,
-    last: Option<&MatchPlayerRow>,
+    winner: Option<&PlayerMatchInput>,
+    second: Option<&PlayerMatchInput>,
+    last: Option<&PlayerMatchInput>,
 ) -> Vec<(i32, Value)> {
     let mut features = Vec::new();
     if winner.zip(second).is_some_and(|(winner, second)| {
@@ -481,11 +481,11 @@ fn asset_gap_features(
 
 fn push_member_condition_feature(
     features: &mut Vec<(i32, Value)>,
-    group: &[&MatchPlayerRow],
+    group: &[&PlayerMatchInput],
     priority: i32,
     code: &str,
     tone: &str,
-    predicate: impl Fn(&MatchPlayerRow) -> bool,
+    predicate: impl Fn(&PlayerMatchInput) -> bool,
 ) {
     let members = group
         .iter()

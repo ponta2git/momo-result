@@ -3,7 +3,8 @@ use std::collections::BTreeMap;
 use serde_json::{Value, json};
 
 use crate::{
-    model::{MatchPlayerRow, Scope},
+    contract::ScopeRef,
+    model::PlayerMatchInput,
     stats::{quality_status, rate, sample_maturity},
 };
 
@@ -16,7 +17,7 @@ pub(super) fn evidence(
     json!({ "metricId": metric_id, "unit": unit, "value": value, "denominator": denominator, "qualityStatus": denominator.map_or("ok", quality_status) })
 }
 
-pub(super) fn scope_json(scope: &Scope, match_count: usize) -> Value {
+pub(super) fn scope_json(scope: &ScopeRef, match_count: usize) -> Value {
     let mut value = scope.json_value();
     if let Some(object) = value.as_object_mut() {
         object.insert("matchCount".into(), json!(match_count));
@@ -24,7 +25,7 @@ pub(super) fn scope_json(scope: &Scope, match_count: usize) -> Value {
     value
 }
 
-pub(super) fn player_json(member_id: &str, _rows: &[&MatchPlayerRow]) -> Value {
+pub(super) fn member_ref_json(member_id: &str) -> Value {
     json!({ "memberId": member_id })
 }
 
@@ -34,21 +35,21 @@ pub(super) struct MatchGroup<'a> {
     pub(super) played_at: &'a str,
     pub(super) held_event_id: &'a str,
     pub(super) match_no_in_event: i32,
-    pub(super) rows: Vec<&'a MatchPlayerRow>,
+    pub(super) player_matches: Vec<&'a PlayerMatchInput>,
 }
 
-pub(super) fn match_groups<'a>(rows: &[&'a MatchPlayerRow]) -> Vec<MatchGroup<'a>> {
+pub(super) fn match_groups<'a>(rows: &[&'a PlayerMatchInput]) -> Vec<MatchGroup<'a>> {
     let mut groups = Vec::<MatchGroup<'a>>::new();
     for row in rows {
         match groups.last_mut() {
-            Some(group) if group.match_id == row.match_id => group.rows.push(row),
+            Some(group) if group.match_id == row.match_id => group.player_matches.push(row),
             _ => groups.push(MatchGroup {
                 match_id: row.match_id.as_str(),
                 match_revision: row.match_revision,
                 played_at: row.played_at.as_str(),
                 held_event_id: row.held_event_id.as_str(),
                 match_no_in_event: row.match_no_in_event,
-                rows: vec![row],
+                player_matches: vec![row],
             }),
         }
     }
@@ -56,8 +57,8 @@ pub(super) fn match_groups<'a>(rows: &[&'a MatchPlayerRow]) -> Vec<MatchGroup<'a
 }
 
 pub(super) fn maxima_by_match<'a>(
-    rows: &[&'a MatchPlayerRow],
-    value: impl Fn(&MatchPlayerRow) -> i32,
+    rows: &[&'a PlayerMatchInput],
+    value: impl Fn(&PlayerMatchInput) -> i32,
 ) -> BTreeMap<&'a str, i32> {
     let mut result = BTreeMap::<&str, i32>::new();
     for row in rows {
@@ -69,7 +70,7 @@ pub(super) fn maxima_by_match<'a>(
     result
 }
 
-pub(super) fn distribution(rows: &[&MatchPlayerRow]) -> Vec<Value> {
+pub(super) fn distribution(rows: &[&PlayerMatchInput]) -> Vec<Value> {
     (1..=4)
         .map(|rank_value| {
             let count = rows.iter().filter(|row| row.rank == rank_value).count();
@@ -78,14 +79,14 @@ pub(super) fn distribution(rows: &[&MatchPlayerRow]) -> Vec<Value> {
         .collect()
 }
 
-pub(super) fn revenue_asset_rate(row: &MatchPlayerRow) -> Option<f64> {
+pub(super) fn revenue_asset_rate(row: &PlayerMatchInput) -> Option<f64> {
     (row.total_assets_man_yen > 0)
         .then(|| f64::from(row.revenue_man_yen) / f64::from(row.total_assets_man_yen))
 }
 
 pub(super) fn suffix_count(
-    rows: &[&MatchPlayerRow],
-    predicate: impl Fn(&MatchPlayerRow) -> bool,
+    rows: &[&PlayerMatchInput],
+    predicate: impl Fn(&PlayerMatchInput) -> bool,
 ) -> usize {
     rows.iter().rev().take_while(|row| predicate(row)).count()
 }

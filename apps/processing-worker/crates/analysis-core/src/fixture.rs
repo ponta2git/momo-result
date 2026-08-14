@@ -6,7 +6,7 @@ use crate::{
     canonical::{canonicalize_value, sha256_prefixed},
     compute::{ComputedResourceKind, compute_all},
     contract::ScopeRef,
-    model::{AnalysisInput, IncidentCounts, MatchPlayerRow},
+    model::{AnalysisInput, IncidentCounts, PlayerMatchInput},
 };
 
 const INPUT_FIXTURE: &str =
@@ -64,7 +64,7 @@ fn boundary_input() -> AnalysisInput {
                                 event_index + 1
                             )
                         };
-                        MatchPlayerRow {
+                        PlayerMatchInput {
                             match_id,
                             match_revision: 1,
                             played_at,
@@ -93,7 +93,7 @@ fn boundary_input() -> AnalysisInput {
     AnalysisInput {
         game_title_id: String::from("title-boundary-fixture"),
         input_revision: 7,
-        rows,
+        player_matches: rows,
     }
 }
 
@@ -116,12 +116,12 @@ fn shared_boundary_fixture_generates_the_complete_deterministic_artifact_shape()
 
     let input = boundary_input();
     assert_eq!(
-        input.rows.len(),
+        input.player_matches.len(),
         fixture_count(&fixture, "/expected/rowCount")
     );
     assert_eq!(
         input
-            .rows
+            .player_matches
             .iter()
             .map(|row| row.match_id.as_str())
             .collect::<BTreeSet<_>>()
@@ -136,7 +136,7 @@ fn shared_boundary_fixture_generates_the_complete_deterministic_artifact_shape()
     let normalized = input.normalized();
     assert!(
         normalized
-            .rows
+            .player_matches
             .get(..4)
             .unwrap_or_default()
             .iter()
@@ -144,21 +144,21 @@ fn shared_boundary_fixture_generates_the_complete_deterministic_artifact_shape()
     );
     assert!(
         normalized
-            .rows
+            .player_matches
             .get(4..8)
             .unwrap_or_default()
             .iter()
             .all(|row| row.match_id == "match-00-01")
     );
     let zero_denominator = normalized
-        .rows
+        .player_matches
         .iter()
         .find(|row| row.match_id == "match-01-00" && row.member_id == "ponta")
         .unwrap_or_else(|| panic!("zero-denominator fixture row is missing"));
     assert_eq!(zero_denominator.total_assets_man_yen, 0);
     assert_eq!(zero_denominator.revenue_man_yen, 10);
     let negative_assets = normalized
-        .rows
+        .player_matches
         .iter()
         .find(|row| row.match_id == "match-02-00" && row.member_id == "eu")
         .unwrap_or_else(|| panic!("negative-assets fixture row is missing"));

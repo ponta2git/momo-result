@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use crate::model::MatchPlayerRow;
+use crate::model::PlayerMatchInput;
 
 use super::{
     FoldEvaluation, MatchKey, PLAYER_COUNT, PairRecord, PlayerUnexpectedWins, UnexpectedWin,
@@ -42,7 +42,7 @@ pub(super) fn expected_ranks(evaluations: &[FoldEvaluation]) -> Result<ExpectedR
 }
 
 pub(super) fn build_unexpected_wins(
-    rows: &[&MatchPlayerRow],
+    rows: &[&PlayerMatchInput],
     players: &[String],
     expected: &ExpectedRanks,
 ) -> Result<Vec<PlayerUnexpectedWins>, ()> {

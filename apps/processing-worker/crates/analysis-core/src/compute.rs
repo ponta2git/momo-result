@@ -2,7 +2,10 @@ use serde_json::Value;
 
 use crate::{
     contract::ScopeRef,
-    model::{MatchPlayerRow, NormalizedAnalysisInput, RowsByPlayer, player_order, rows_by_player},
+    model::{
+        NormalizedAnalysisInput, PlayerMatchInput, PlayerMatchesByMember, ordered_member_ids,
+        player_matches_by_member,
+    },
     rank,
 };
 
@@ -79,35 +82,38 @@ impl DrilldownMetric {
     }
 }
 
-struct ScopeFacts<'a> {
-    rows: Vec<&'a MatchPlayerRow>,
-    players: Vec<String>,
-    rows_by_player: RowsByPlayer<'a>,
-    groups: Vec<MatchGroup<'a>>,
+struct ScopeAnalysis<'a> {
+    player_matches: Vec<&'a PlayerMatchInput>,
+    member_ids: Vec<String>,
+    player_matches_by_member: PlayerMatchesByMember<'a>,
+    match_groups: Vec<MatchGroup<'a>>,
     rank_analysis: rank::RankAnalysis,
 }
 
-impl<'a> ScopeFacts<'a> {
-    fn new(rows: Vec<&'a MatchPlayerRow>) -> Self {
-        let players = player_order(&rows);
-        let rows_by_player = rows_by_player(&rows, &players);
-        let groups = match_groups(&rows);
-        let rank_analysis = rank::analyze(&rows, &players);
+impl<'a> ScopeAnalysis<'a> {
+    fn new(player_matches: Vec<&'a PlayerMatchInput>) -> Self {
+        let member_ids = ordered_member_ids(&player_matches);
+        let player_matches_by_member = player_matches_by_member(&player_matches, &member_ids);
+        let match_groups = match_groups(&player_matches);
+        let rank_analysis = rank::analyze(&player_matches, &member_ids);
         Self {
-            rows,
-            players,
-            rows_by_player,
-            groups,
+            player_matches,
+            member_ids,
+            player_matches_by_member,
+            match_groups,
             rank_analysis,
         }
     }
 
-    fn contains_identical_rows(&self, rows: &[&MatchPlayerRow]) -> bool {
-        self.rows.len() == rows.len()
+    fn references_same_player_matches_in_order(
+        &self,
+        player_matches: &[&PlayerMatchInput],
+    ) -> bool {
+        self.player_matches.len() == player_matches.len()
             && self
-                .rows
+                .player_matches
                 .iter()
-                .zip(rows)
+                .zip(player_matches)
                 .all(|(left, right)| std::ptr::eq(*left, *right))
     }
 }
@@ -130,7 +136,7 @@ pub(crate) fn compute_all(input: &AnalysisInput) -> Vec<ComputedResource> {
 /// Computes resources in deterministic scope order while allowing the caller to consume and
 /// release each payload immediately.
 ///
-/// The type boundary guarantees that checksum and calculation use the same canonical row order.
+/// The type boundary guarantees that checksum and calculation use the same canonical player-match order.
 /// Runtime callers should consume each resource immediately so artifact generation remains bounded.
 ///
 /// # Errors
@@ -140,21 +146,23 @@ pub fn try_for_each_resource<E>(
     input: &NormalizedAnalysisInput,
     mut consume: impl FnMut(ComputedResource) -> Result<(), E>,
 ) -> Result<(), E> {
-    let mut previous_facts: Option<ScopeFacts<'_>> = None;
+    let mut previous_analysis: Option<ScopeAnalysis<'_>> = None;
     for scope in input.scopes() {
-        let rows = input.rows_for_scope(&scope);
-        let facts = match previous_facts.take() {
-            Some(facts) if facts.contains_identical_rows(&rows) => facts,
-            Some(_) | None => ScopeFacts::new(rows),
+        let player_matches = input.player_matches_for_scope(&scope);
+        let analysis = match previous_analysis.take() {
+            Some(analysis) if analysis.references_same_player_matches_in_order(&player_matches) => {
+                analysis
+            }
+            Some(_) | None => ScopeAnalysis::new(player_matches),
         };
         let aggregate = aggregate(
             input,
             &scope,
-            &facts.rows,
-            &facts.players,
-            &facts.rows_by_player,
-            &facts.groups,
-            &facts.rank_analysis,
+            &analysis.player_matches,
+            &analysis.member_ids,
+            &analysis.player_matches_by_member,
+            &analysis.match_groups,
+            &analysis.rank_analysis,
         );
         let aggregate_item_ids = AggregateItemIds::from_aggregate(&aggregate);
         let review_data_quality = aggregate.get("dataQuality").cloned();
@@ -162,26 +170,26 @@ pub fn try_for_each_resource<E>(
             scope: scope.clone(),
             kind: ComputedResourceKind::Aggregate,
             payload: aggregate,
-            item_count: facts.rows.len(),
+            item_count: analysis.player_matches.len(),
             source_match_revision: None,
         })?;
         let review = review(
             &scope,
-            &facts.rows,
-            &facts.players,
-            &facts.rows_by_player,
+            &analysis.player_matches,
+            &analysis.member_ids,
+            &analysis.player_matches_by_member,
             review_data_quality,
         );
         consume(ComputedResource {
             scope: scope.clone(),
             kind: ComputedResourceKind::Review,
             payload: review,
-            item_count: facts.players.len(),
+            item_count: analysis.member_ids.len(),
             source_match_revision: None,
         })?;
-        for member_id in &facts.players {
-            let player_rows = facts
-                .rows_by_player
+        for member_id in &analysis.member_ids {
+            let member_matches = analysis
+                .player_matches_by_member
                 .get(member_id)
                 .map_or(&[][..], Vec::as_slice);
             for metric in DrilldownMetric::ALL {
@@ -193,20 +201,19 @@ pub fn try_for_each_resource<E>(
                     },
                     payload: drilldown(
                         &scope,
-                        &facts.rows,
-                        player_rows,
-                        facts.groups.len(),
+                        member_matches,
+                        analysis.match_groups.len(),
                         member_id,
                         metric.wire(),
-                        &facts.rank_analysis,
+                        &analysis.rank_analysis,
                     ),
-                    item_count: player_rows.len(),
+                    item_count: member_matches.len(),
                     source_match_revision: None,
                 })?;
             }
         }
-        let context_index = MatchContextIndex::new(&facts.rows);
-        for (group_offset, group) in facts.groups.iter().enumerate() {
+        let context_index = MatchContextIndex::new(&analysis.player_matches);
+        for (group_offset, group) in analysis.match_groups.iter().enumerate() {
             consume(ComputedResource {
                 scope: scope.clone(),
                 kind: ComputedResourceKind::MatchContext {
@@ -214,17 +221,17 @@ pub fn try_for_each_resource<E>(
                 },
                 payload: match_context(
                     &scope,
-                    &group.rows,
+                    &group.player_matches,
                     &context_index,
                     &aggregate_item_ids,
                     group.match_id,
                     group_offset + 1,
                 ),
-                item_count: group.rows.len(),
+                item_count: group.player_matches.len(),
                 source_match_revision: Some(group.match_revision),
             })?;
         }
-        previous_facts = Some(facts);
+        previous_analysis = Some(analysis);
     }
     Ok(())
 }
@@ -257,8 +264,8 @@ mod tests {
         result
     }
 
-    fn row(match_index: i32, player: i32) -> MatchPlayerRow {
-        MatchPlayerRow {
+    fn row(match_index: i32, player: i32) -> PlayerMatchInput {
+        PlayerMatchInput {
             match_id: format!("match-{match_index}"),
             match_revision: 0,
             played_at: format!("2026-01-{match_index:02}T00:00:00.000000Z"),
@@ -282,7 +289,7 @@ mod tests {
             .collect::<Vec<_>>();
         let rows = owned_rows.iter().collect::<Vec<_>>();
         let players = vec![String::from("member-1")];
-        let grouped_rows = rows_by_player(&rows, &players);
+        let grouped_rows = player_matches_by_member(&rows, &players);
 
         let recent = metrics::recent_ranks(&players, &grouped_rows);
         let entry = recent.first();
@@ -323,7 +330,7 @@ mod tests {
         let input = AnalysisInput {
             game_title_id: String::from("title-empty"),
             input_revision: 0,
-            rows: Vec::new(),
+            player_matches: Vec::new(),
         };
         let resources = compute_all(&input);
         assert_eq!(
@@ -354,7 +361,7 @@ mod tests {
         let input = AnalysisInput {
             game_title_id: String::from("title-1"),
             input_revision: 1,
-            rows: (1..=4).map(|player| row(1, player)).collect(),
+            player_matches: (1..=4).map(|player| row(1, player)).collect(),
         };
         let resources = compute_all(&input);
         let contexts = resources
@@ -409,7 +416,7 @@ mod tests {
         let input = AnalysisInput {
             game_title_id: String::from("title-1"),
             input_revision: 1,
-            rows: (1..=2)
+            player_matches: (1..=2)
                 .flat_map(|match_index| (1..=4).map(move |player| row(match_index, player)))
                 .collect(),
         };
@@ -481,7 +488,7 @@ mod tests {
         let input = AnalysisInput {
             game_title_id: String::from("title-1"),
             input_revision: 1,
-            rows: (1..=4)
+            player_matches: (1..=4)
                 .map(|player| {
                     let mut value = row(1, player);
                     value.rank = 5 - player;
@@ -550,7 +557,7 @@ mod tests {
         let resources = compute_all(&AnalysisInput {
             game_title_id: String::from("title-1"),
             input_revision: 1,
-            rows,
+            player_matches: rows,
         });
         let aggregate = overall_aggregate(&resources);
         assert!(aggregate.is_some(), "overall aggregate missing");
@@ -634,7 +641,7 @@ mod tests {
         let resources = compute_all(&AnalysisInput {
             game_title_id: String::from("title-1"),
             input_revision: 1,
-            rows,
+            player_matches: rows,
         });
         let aggregate = overall_aggregate(&resources);
         assert!(aggregate.is_some(), "overall aggregate missing");

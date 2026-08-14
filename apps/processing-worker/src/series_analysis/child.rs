@@ -132,7 +132,7 @@ async fn execute_inner(
         }
     };
     telemetry.metrics.input_milliseconds = milliseconds(input_started.elapsed());
-    telemetry.metrics.input_row_count = u64::try_from(input.rows.len())
+    telemetry.metrics.input_row_count = u64::try_from(input.player_matches.len())
         .map_err(|_error| ChildFailure::CalculationFailed)?;
     if input
         .resource_count()

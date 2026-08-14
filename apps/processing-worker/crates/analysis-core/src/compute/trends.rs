@@ -3,7 +3,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde_json::{Value, json};
 
 use crate::{
-    model::MatchPlayerRow,
+    model::PlayerMatchInput,
     numeric::{ceil_i64, count_as_f64, exact_i64_as_f64, floor_i64},
     stats::{average, percentile_f64, percentile_i32, quality_status, rate},
 };
@@ -12,13 +12,13 @@ use super::support::MatchGroup;
 
 pub(super) fn trends(
     players: &[String],
-    rows_by_player: &BTreeMap<String, Vec<&MatchPlayerRow>>,
+    player_matches_by_member: &BTreeMap<String, Vec<&PlayerMatchInput>>,
 ) -> Vec<Value> {
     TrendKind::ALL
         .into_iter()
         .flat_map(|kind| {
             players.iter().map(move |member_id| {
-                let rows = rows_by_player.get(member_id).map_or(&[][..], Vec::as_slice);
+                let rows = player_matches_by_member.get(member_id).map_or(&[][..], Vec::as_slice);
                 let mut accumulator = TrendAccumulator::new(kind);
                 let points = rows
                     .iter()
@@ -99,7 +99,7 @@ impl TrendAccumulator {
         }
     }
 
-    fn push(&mut self, row: &MatchPlayerRow) -> f64 {
+    fn push(&mut self, row: &PlayerMatchInput) -> f64 {
         match self {
             Self::RankAverage { total, count } => {
                 *total += f64::from(row.rank);
@@ -165,25 +165,25 @@ impl RunningPopulationStdDev {
 }
 
 pub(super) fn histogram(
-    rows: &[&MatchPlayerRow],
+    rows: &[&PlayerMatchInput],
     players: &[String],
-    value: impl Fn(&MatchPlayerRow) -> i32 + Copy,
+    value: impl Fn(&PlayerMatchInput) -> i32 + Copy,
 ) -> Value {
     histogram_with_zero_handling(rows, players, value, ZeroHandling::SharedBin)
 }
 
 pub(super) fn revenue_histogram(
-    rows: &[&MatchPlayerRow],
+    rows: &[&PlayerMatchInput],
     players: &[String],
-    value: impl Fn(&MatchPlayerRow) -> i32 + Copy,
+    value: impl Fn(&PlayerMatchInput) -> i32 + Copy,
 ) -> Value {
     histogram_with_zero_handling(rows, players, value, ZeroHandling::Isolated)
 }
 
 fn histogram_with_zero_handling(
-    rows: &[&MatchPlayerRow],
+    rows: &[&PlayerMatchInput],
     players: &[String],
-    value: impl Fn(&MatchPlayerRow) -> i32 + Copy,
+    value: impl Fn(&PlayerMatchInput) -> i32 + Copy,
     zero_handling: ZeroHandling,
 ) -> Value {
     let all_values = rows.iter().map(|row| value(row)).collect::<Vec<_>>();
@@ -261,9 +261,9 @@ fn bins_with_isolated_zero(bins: Vec<HistogramBin>, nonzero_values: &[i32]) -> V
 }
 
 fn histogram_json(
-    rows: &[&MatchPlayerRow],
+    rows: &[&PlayerMatchInput],
     players: &[String],
-    value: impl Fn(&MatchPlayerRow) -> i32 + Copy,
+    value: impl Fn(&PlayerMatchInput) -> i32 + Copy,
     bins: &[HistogramBin],
 ) -> Value {
     let bin_rows = bins
@@ -359,9 +359,9 @@ fn timeline_rows(groups: &[MatchGroup<'_>]) -> Vec<Value> {
     let gaps = groups
         .iter()
         .filter_map(|group| {
-            let winner = group.rows.iter().find(|row| row.rank == 1)?;
-            let second = group.rows.iter().find(|row| row.rank == 2)?;
-            let last = group.rows.iter().find(|row| row.rank == 4)?;
+            let winner = group.player_matches.iter().find(|row| row.rank == 1)?;
+            let second = group.player_matches.iter().find(|row| row.rank == 2)?;
+            let last = group.player_matches.iter().find(|row| row.rank == 4)?;
             Some((
                 i64::from(winner.total_assets_man_yen) - i64::from(second.total_assets_man_yen),
                 i64::from(winner.total_assets_man_yen) - i64::from(last.total_assets_man_yen),
@@ -386,13 +386,17 @@ fn timeline_rows(groups: &[MatchGroup<'_>]) -> Vec<Value> {
         .iter()
         .enumerate()
         .map(|(index, group)| {
-            let winner = group.rows.iter().find(|row| row.rank == 1);
-            let second = group.rows.iter().find(|row| row.rank == 2);
-            let last = group.rows.iter().find(|row| row.rank == 4);
-            let max_revenue = group.rows.iter().map(|row| row.revenue_man_yen).max();
+            let winner = group.player_matches.iter().find(|row| row.rank == 1);
+            let second = group.player_matches.iter().find(|row| row.rank == 2);
+            let last = group.player_matches.iter().find(|row| row.rank == 4);
+            let max_revenue = group
+                .player_matches
+                .iter()
+                .map(|row| row.revenue_man_yen)
+                .max();
             let revenue_leaders = max_revenue.map_or_else(Vec::new, |maximum| {
                 group
-                    .rows
+                    .player_matches
                     .iter()
                     .filter(|row| row.revenue_man_yen == maximum)
                     .map(|row| row.member_id.clone())
@@ -405,7 +409,7 @@ fn timeline_rows(groups: &[MatchGroup<'_>]) -> Vec<Value> {
                 i64::from(left.total_assets_man_yen) - i64::from(right.total_assets_man_yen)
             });
             let ginji = group
-                .rows
+                .player_matches
                 .iter()
                 .map(|row| i64::from(row.incidents.suri_no_ginji))
                 .sum::<i64>();
@@ -449,7 +453,7 @@ fn timeline_rows(groups: &[MatchGroup<'_>]) -> Vec<Value> {
         .collect()
 }
 
-pub(super) fn match_no_in_event(players: &[String], rows: &[&MatchPlayerRow]) -> Value {
+pub(super) fn match_no_in_event(players: &[String], rows: &[&PlayerMatchInput]) -> Value {
     let numbers = rows
         .iter()
         .map(|row| row.match_no_in_event)

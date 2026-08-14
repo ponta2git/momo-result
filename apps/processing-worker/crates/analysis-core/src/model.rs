@@ -12,13 +12,14 @@ use crate::contract::ScopeRef;
 pub struct AnalysisInput {
     pub game_title_id: String,
     pub input_revision: i64,
-    pub rows: Vec<MatchPlayerRow>,
+    #[serde(rename = "rows")]
+    pub player_matches: Vec<PlayerMatchInput>,
 }
 
 /// Canonically ordered analysis input accepted by deterministic calculations and checksums.
 ///
-/// Preparation derives the resource-shape bound once and keeps both the rows and that derived
-/// contract immutable.
+/// Preparation derives the resource-shape bound once and keeps both the player-match inputs and
+/// that derived contract immutable.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct NormalizedAnalysisInput {
     input: AnalysisInput,
@@ -41,7 +42,7 @@ impl AsRef<AnalysisInput> for NormalizedAnalysisInput {
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct MatchPlayerRow {
+pub struct PlayerMatchInput {
     pub match_id: String,
     pub match_revision: i64,
     pub played_at: String,
@@ -68,8 +69,7 @@ pub struct IncidentCounts {
     pub suri_no_ginji: i32,
 }
 
-pub(crate) type Scope = ScopeRef;
-pub(crate) type RowsByPlayer<'a> = BTreeMap<String, Vec<&'a MatchPlayerRow>>;
+pub(crate) type PlayerMatchesByMember<'a> = BTreeMap<String, Vec<&'a PlayerMatchInput>>;
 
 impl AnalysisInput {
     /// Consumes and canonically orders input exactly once.
@@ -83,19 +83,19 @@ impl AnalysisInput {
         }
     }
 
-    /// Returns the input in the single canonical row order used by every calculation and checksum.
+    /// Returns the input in the canonical player-match order used by every calculation and checksum.
     ///
     /// Database result ordering is deliberately not trusted here: a retry, query-plan change, or
-    /// test fixture with the same rows must produce the same artifact.
+    /// test fixture with the same player matches must produce the same artifact.
     #[cfg(test)]
     #[must_use]
     pub(crate) fn normalized(&self) -> NormalizedAnalysisInput {
         self.clone().into_normalized()
     }
 
-    /// Sorts the owned input in place without duplicating every row and identifier.
+    /// Sorts the owned input in place without duplicating every player match and identifier.
     fn normalize(&mut self) {
-        self.rows.sort_by(|left, right| {
+        self.player_matches.sort_by(|left, right| {
             left.played_at
                 .cmp(&right.played_at)
                 .then_with(|| left.held_event_id.cmp(&right.held_event_id))
@@ -135,14 +135,14 @@ impl AnalysisInput {
     }
 
     #[must_use]
-    pub(crate) fn scopes(&self) -> Vec<Scope> {
+    pub(crate) fn scopes(&self) -> Vec<ScopeRef> {
         let mut seasons = BTreeSet::<&str>::new();
         let mut maps = BTreeSet::<&str>::new();
         let mut pairs = BTreeSet::<(&str, &str)>::new();
-        for row in &self.rows {
-            seasons.insert(&row.season_master_id);
-            maps.insert(&row.map_master_id);
-            pairs.insert((&row.season_master_id, &row.map_master_id));
+        for player_match in &self.player_matches {
+            seasons.insert(&player_match.season_master_id);
+            maps.insert(&player_match.map_master_id);
+            pairs.insert((&player_match.season_master_id, &player_match.map_master_id));
         }
 
         let mut scopes = vec![ScopeRef::Overall];
@@ -164,18 +164,21 @@ impl AnalysisInput {
     }
 
     #[must_use]
-    pub(crate) fn rows_for_scope(&self, scope: &ScopeRef) -> Vec<&MatchPlayerRow> {
-        self.rows
+    pub(crate) fn player_matches_for_scope(&self, scope: &ScopeRef) -> Vec<&PlayerMatchInput> {
+        self.player_matches
             .iter()
-            .filter(|row| match scope {
+            .filter(|player_match| match scope {
                 ScopeRef::Overall => true,
-                ScopeRef::Season { season_master_id } => row.season_master_id == *season_master_id,
-                ScopeRef::Map { map_master_id } => row.map_master_id == *map_master_id,
+                ScopeRef::Season { season_master_id } => {
+                    player_match.season_master_id == *season_master_id
+                }
+                ScopeRef::Map { map_master_id } => player_match.map_master_id == *map_master_id,
                 ScopeRef::SeasonMap {
                     season_master_id,
                     map_master_id,
                 } => {
-                    row.season_master_id == *season_master_id && row.map_master_id == *map_master_id
+                    player_match.season_master_id == *season_master_id
+                        && player_match.map_master_id == *map_master_id
                 }
             })
             .collect()
@@ -196,64 +199,114 @@ impl NormalizedAnalysisInput {
 
 fn resource_count_for_input(input: &AnalysisInput) -> Option<u64> {
     input.scopes().into_iter().try_fold(0_u64, |total, scope| {
-        let rows = input.rows_for_scope(&scope);
-        let players = rows
+        let player_matches = input.player_matches_for_scope(&scope);
+        let member_ids = player_matches
             .iter()
-            .map(|row| row.member_id.as_str())
+            .map(|player_match| player_match.member_id.as_str())
             .collect::<BTreeSet<_>>();
-        let matches = rows
+        let match_ids = player_matches
             .iter()
-            .map(|row| row.match_id.as_str())
+            .map(|player_match| player_match.match_id.as_str())
             .collect::<BTreeSet<_>>();
-        let player_chunks = u64::try_from(players.len()).ok()?.checked_mul(4)?;
+        let player_chunks = u64::try_from(member_ids.len()).ok()?.checked_mul(4)?;
         let scope_count = 2_u64
             .checked_add(player_chunks)?
-            .checked_add(u64::try_from(matches.len()).ok()?)?;
+            .checked_add(u64::try_from(match_ids.len()).ok()?)?;
         total.checked_add(scope_count)
     })
 }
 
 #[must_use]
-pub(crate) fn player_order(rows: &[&MatchPlayerRow]) -> Vec<String> {
-    let mut first_by_player = BTreeMap::<&str, &MatchPlayerRow>::new();
-    for row in rows {
-        first_by_player.entry(&row.member_id).or_insert(row);
+pub(crate) fn ordered_member_ids(player_matches: &[&PlayerMatchInput]) -> Vec<String> {
+    let mut first_match_by_member = BTreeMap::<&str, &PlayerMatchInput>::new();
+    for player_match in player_matches {
+        first_match_by_member
+            .entry(&player_match.member_id)
+            .or_insert(player_match);
     }
-    let mut players = first_by_player.into_values().collect::<Vec<_>>();
-    players.sort_by(|left, right| {
-        preferred_player_order(&left.member_id)
-            .cmp(&preferred_player_order(&right.member_id))
+    let mut first_matches = first_match_by_member.into_values().collect::<Vec<_>>();
+    first_matches.sort_by(|left, right| {
+        preferred_member_order(&left.member_id)
+            .cmp(&preferred_member_order(&right.member_id))
             .then_with(|| left.member_id.cmp(&right.member_id))
     });
-    players
+    first_matches
         .into_iter()
-        .map(|row| row.member_id.clone())
+        .map(|player_match| player_match.member_id.clone())
         .collect()
 }
 
 #[must_use]
-pub(crate) fn rows_by_player<'a>(
-    rows: &[&'a MatchPlayerRow],
-    players: &[String],
-) -> RowsByPlayer<'a> {
-    let mut grouped = players
+pub(crate) fn player_matches_by_member<'a>(
+    player_matches: &[&'a PlayerMatchInput],
+    member_ids: &[String],
+) -> PlayerMatchesByMember<'a> {
+    let mut grouped = member_ids
         .iter()
         .map(|member_id| (member_id.clone(), Vec::new()))
-        .collect::<RowsByPlayer<'a>>();
-    for row in rows {
-        if let Some(player_rows) = grouped.get_mut(row.member_id.as_str()) {
-            player_rows.push(*row);
+        .collect::<PlayerMatchesByMember<'a>>();
+    for player_match in player_matches {
+        if let Some(member_matches) = grouped.get_mut(player_match.member_id.as_str()) {
+            member_matches.push(*player_match);
         }
     }
     grouped
 }
 
-fn preferred_player_order(member_id: &str) -> i32 {
+fn preferred_member_order(member_id: &str) -> i32 {
     match member_id {
         "member_eu" | "eu" => 0,
         "member_ponta" | "ponta" => 1,
         "member_akane_mami" | "akane" | "akane-mami" => 2,
         "member_otaka" | "otaka" => 3,
         _ => i32::MAX,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::*;
+
+    #[test]
+    fn analysis_input_uses_rows_as_the_wire_name_for_player_matches() {
+        let input = AnalysisInput {
+            game_title_id: String::from("title-1"),
+            input_revision: 1,
+            player_matches: Vec::new(),
+        };
+
+        let encoded = serde_json::to_value(&input);
+        assert!(
+            encoded
+                .as_ref()
+                .is_ok_and(|value| value.get("rows") == Some(&json!([]))),
+            "analysis input must keep the versioned rows field"
+        );
+        assert!(
+            encoded
+                .as_ref()
+                .is_ok_and(|value| value.get("playerMatches").is_none()),
+            "internal terminology must not change the analysis-input wire contract"
+        );
+        let decoded = serde_json::from_value::<AnalysisInput>(json!({
+            "gameTitleId": "title-1",
+            "inputRevision": 1,
+            "rows": [],
+        }));
+        assert!(
+            decoded.is_ok(),
+            "the existing rows wire field must remain accepted"
+        );
+        assert!(
+            serde_json::from_value::<AnalysisInput>(json!({
+                "gameTitleId": "title-1",
+                "inputRevision": 1,
+                "playerMatches": [],
+            }))
+            .is_err(),
+            "internal terminology must not widen the versioned wire contract"
+        );
     }
 }

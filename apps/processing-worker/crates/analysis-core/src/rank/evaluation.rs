@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use crate::{model::MatchPlayerRow, numeric::count_as_f64};
+use crate::{model::PlayerMatchInput, numeric::count_as_f64};
 
 use super::{
     CrownCertainty, EncodedEvent, EncodedRow, FOLD_COUNT, FULL_FEATURE_COUNT, FoldEvaluation,
@@ -14,7 +14,7 @@ use super::{
 };
 
 #[must_use]
-pub(super) fn analyze(rows: &[&MatchPlayerRow], players: &[String]) -> RankAnalysis {
+pub(super) fn analyze(rows: &[&PlayerMatchInput], players: &[String]) -> RankAnalysis {
     let match_count = distinct_matches(rows).len();
     let held_event_count = rows
         .iter()
@@ -119,7 +119,7 @@ fn assess(
 }
 
 fn empty_result(
-    rows: &[&MatchPlayerRow],
+    rows: &[&PlayerMatchInput],
     players: &[String],
     held_event_count: usize,
     match_count: usize,

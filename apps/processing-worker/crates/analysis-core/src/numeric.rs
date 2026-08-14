@@ -6,7 +6,7 @@
 
 /// Converts an in-memory collection size to an exactly representable `f64` count.
 ///
-/// The worker rejects inputs above its much smaller row bound, but this helper remains checked so
+/// The worker rejects inputs above its much smaller player-match bound, but this helper remains checked so
 /// kernels also behave safely when called directly from tests or future tools.
 pub(super) fn count_as_f64(value: usize) -> Option<f64> {
     u32::try_from(value).ok().map(f64::from)

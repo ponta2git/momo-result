@@ -1,18 +1,18 @@
 use std::collections::BTreeMap;
 
-use crate::{model::MatchPlayerRow, numeric::count_as_f64};
+use crate::{model::PlayerMatchInput, numeric::count_as_f64};
 
 pub(super) type MatchPlayerRanks<'a> = BTreeMap<(&'a str, &'a str), f64>;
 
 /// Computes average competition rank for each player within each match.
 ///
 /// Keys borrow stable identifiers from the input snapshot; callers therefore avoid allocating two
-/// new `String`s for every lookup while the map cannot outlive its source rows.
+/// new `String`s for every lookup while the map cannot outlive its source player matches.
 pub(super) fn by_match<'a>(
-    rows: &[&'a MatchPlayerRow],
-    value: impl Fn(&MatchPlayerRow) -> i32,
+    rows: &[&'a PlayerMatchInput],
+    value: impl Fn(&PlayerMatchInput) -> i32,
 ) -> MatchPlayerRanks<'a> {
-    let mut rows_by_match = BTreeMap::<&str, Vec<&MatchPlayerRow>>::new();
+    let mut rows_by_match = BTreeMap::<&str, Vec<&PlayerMatchInput>>::new();
     for row in rows {
         rows_by_match.entry(&row.match_id).or_default().push(row);
     }
@@ -44,7 +44,7 @@ pub(super) fn by_match<'a>(
     ranks
 }
 
-pub(super) fn value(ranks: &MatchPlayerRanks<'_>, row: &MatchPlayerRow) -> Option<f64> {
+pub(super) fn value(ranks: &MatchPlayerRanks<'_>, row: &PlayerMatchInput) -> Option<f64> {
     ranks
         .get(&(row.match_id.as_str(), row.member_id.as_str()))
         .copied()
@@ -55,8 +55,8 @@ mod tests {
     use super::*;
     use crate::model::IncidentCounts;
 
-    fn row(member_id: &str, revenue: i32) -> MatchPlayerRow {
-        MatchPlayerRow {
+    fn row(member_id: &str, revenue: i32) -> PlayerMatchInput {
+        PlayerMatchInput {
             match_id: String::from("match-1"),
             match_revision: 1,
             played_at: String::from("2026-08-10T00:00:00.000000Z"),

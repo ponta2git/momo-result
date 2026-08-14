@@ -3,14 +3,14 @@ use std::collections::BTreeMap;
 use serde_json::{Value, json};
 
 use crate::{
-    model::MatchPlayerRow,
+    model::PlayerMatchInput,
     rankings::{MatchPlayerRanks, value as rank_value},
     stats::{average, quality_status, rate},
 };
 
 pub(super) fn highlights(
     players: &[String],
-    rows_by_player: &BTreeMap<String, Vec<&MatchPlayerRow>>,
+    player_matches_by_member: &BTreeMap<String, Vec<&PlayerMatchInput>>,
 ) -> Vec<Value> {
     let metrics = [
         ("rank.average", false),
@@ -22,7 +22,7 @@ pub(super) fn highlights(
         .into_iter()
         .filter_map(|(metric_id, larger_is_better)| {
             let values = players.iter().filter_map(|member_id| {
-                let rows = rows_by_player.get(member_id).map_or(&[][..], Vec::as_slice);
+                let rows = player_matches_by_member.get(member_id).map_or(&[][..], Vec::as_slice);
                 let value = match metric_id {
                     "rank.average" => average(rows.iter().map(|row| f64::from(row.rank))),
                     "assets.average" => average(rows.iter().map(|row| f64::from(row.total_assets_man_yen))),
@@ -47,7 +47,7 @@ pub(super) fn highlights(
 
 pub(super) fn data_quality(
     players: &[String],
-    rows_by_player: &BTreeMap<String, Vec<&MatchPlayerRow>>,
+    player_matches_by_member: &BTreeMap<String, Vec<&PlayerMatchInput>>,
     revenue_ranks: &MatchPlayerRanks<'_>,
     destination_ranks: &MatchPlayerRanks<'_>,
 ) -> Vec<Value> {
@@ -64,7 +64,9 @@ pub(super) fn data_quality(
     players
         .iter()
         .flat_map(|member_id| {
-            let rows = rows_by_player.get(member_id).map_or(&[][..], Vec::as_slice);
+            let rows = player_matches_by_member
+                .get(member_id)
+                .map_or(&[][..], Vec::as_slice);
             metric_ids.into_iter().map(move |metric_id| {
                 let target_count = if metric_id == "revenueOutcome.topWinRate" {
                     rows.iter()

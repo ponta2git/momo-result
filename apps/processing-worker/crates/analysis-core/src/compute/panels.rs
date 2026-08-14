@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use serde_json::{Value, json};
 
 use crate::{
-    model::MatchPlayerRow,
+    model::PlayerMatchInput,
     stats::{
         average, median_f64, median_i32, momentum_status, percentile_i32, population_stddev,
         quality_status, rate, sample_maturity,
@@ -14,7 +14,7 @@ use super::support::{
     head_to_head_signal, relative_intensity, revenue_asset_rate, signal_intensity,
 };
 
-pub(super) fn head_to_head(players: &[String], rows: &[&MatchPlayerRow]) -> Value {
+pub(super) fn head_to_head(players: &[String], rows: &[&PlayerMatchInput]) -> Value {
     let lookup = rows
         .iter()
         .map(|row| ((row.match_id.as_str(), row.member_id.as_str()), *row))
@@ -71,12 +71,12 @@ pub(super) fn head_to_head(players: &[String], rows: &[&MatchPlayerRow]) -> Valu
 
 pub(super) fn momentum_switch(
     players: &[String],
-    rows_by_player: &BTreeMap<String, Vec<&MatchPlayerRow>>,
+    player_matches_by_member: &BTreeMap<String, Vec<&PlayerMatchInput>>,
 ) -> Vec<Value> {
     players
         .iter()
         .map(|member_id| {
-            let rows = rows_by_player.get(member_id).map_or(&[][..], Vec::as_slice);
+            let rows = player_matches_by_member.get(member_id).map_or(&[][..], Vec::as_slice);
             let transitions = rows
                 .windows(2)
                 .filter_map(|pair| match pair {
@@ -124,9 +124,9 @@ pub(super) fn momentum_switch(
 }
 
 fn momentum_rate(
-    transitions: &[(&MatchPlayerRow, &MatchPlayerRow)],
-    previous: impl Fn(&MatchPlayerRow) -> bool,
-    current: impl Fn(&MatchPlayerRow) -> bool,
+    transitions: &[(&PlayerMatchInput, &PlayerMatchInput)],
+    previous: impl Fn(&PlayerMatchInput) -> bool,
+    current: impl Fn(&PlayerMatchInput) -> bool,
     baseline: Option<f64>,
     inverse: bool,
 ) -> Value {
@@ -174,12 +174,14 @@ fn momentum_rate(
 
 pub(super) fn performance_profiles(
     players: &[String],
-    rows_by_player: &BTreeMap<String, Vec<&MatchPlayerRow>>,
+    player_matches_by_member: &BTreeMap<String, Vec<&PlayerMatchInput>>,
 ) -> Value {
     let bases = players
         .iter()
         .map(|member_id| {
-            let rows = rows_by_player.get(member_id).map_or(&[][..], Vec::as_slice);
+            let rows = player_matches_by_member
+                .get(member_id)
+                .map_or(&[][..], Vec::as_slice);
             let rank_values = rows
                 .iter()
                 .map(|row| f64::from(row.rank))
@@ -246,8 +248,8 @@ pub(super) fn performance_profiles(
 
 pub(super) fn asset_style_profiles(
     players: &[String],
-    rows_by_player: &BTreeMap<String, Vec<&MatchPlayerRow>>,
-    all_rows: &[&MatchPlayerRow],
+    player_matches_by_member: &BTreeMap<String, Vec<&PlayerMatchInput>>,
+    all_rows: &[&PlayerMatchInput],
 ) -> Value {
     let assets = all_rows
         .iter()
@@ -258,7 +260,9 @@ pub(super) fn asset_style_profiles(
     let bases = players
         .iter()
         .map(|member_id| {
-            let rows = rows_by_player.get(member_id).map_or(&[][..], Vec::as_slice);
+            let rows = player_matches_by_member
+                .get(member_id)
+                .map_or(&[][..], Vec::as_slice);
             let values = rows
                 .iter()
                 .map(|row| row.total_assets_man_yen)
@@ -338,7 +342,7 @@ pub(super) fn asset_style_profiles(
 
 pub(super) fn card_shop_destination(
     players: &[String],
-    rows_by_player: &BTreeMap<String, Vec<&MatchPlayerRow>>,
+    player_matches_by_member: &BTreeMap<String, Vec<&PlayerMatchInput>>,
 ) -> Vec<Value> {
     let kinds = [
         "destination_with_shop",
@@ -349,7 +353,7 @@ pub(super) fn card_shop_destination(
     players
         .iter()
         .map(|member_id| {
-            let rows = rows_by_player.get(member_id).map_or(&[][..], Vec::as_slice);
+            let rows = player_matches_by_member.get(member_id).map_or(&[][..], Vec::as_slice);
             let card_shop_count = rows.iter().filter(|row| row.incidents.card_shop > 0).count();
             let quadrants = kinds
                 .into_iter()

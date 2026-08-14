@@ -1,7 +1,7 @@
 use serde_json::{Value, json};
 use std::sync::Arc;
 
-use crate::model::{IncidentCounts, MatchPlayerRow};
+use crate::model::{IncidentCounts, PlayerMatchInput};
 
 mod bootstrap;
 mod encoding;
@@ -74,7 +74,7 @@ impl SignalKind {
         }
     }
 
-    const fn raw_value(self, row: &MatchPlayerRow) -> i32 {
+    const fn raw_value(self, row: &PlayerMatchInput) -> i32 {
         match self {
             Self::Revenue => row.revenue_man_yen,
             Self::Destination => row.incidents.destination,
@@ -307,7 +307,7 @@ struct FoldEvaluation {
     full_fit: Fit<FULL_FEATURE_COUNT>,
 }
 
-pub(super) fn analyze(rows: &[&MatchPlayerRow], players: &[String]) -> RankAnalysis {
+pub(super) fn analyze(rows: &[&PlayerMatchInput], players: &[String]) -> RankAnalysis {
     evaluation::analyze(rows, players)
 }
 
@@ -319,13 +319,13 @@ pub(super) fn analyze(rows: &[&MatchPlayerRow], players: &[String]) -> RankAnaly
 mod tests {
     use super::*;
 
-    fn row(match_index: usize, event_index: usize, player: usize) -> MatchPlayerRow {
+    fn row(match_index: usize, event_index: usize, player: usize) -> PlayerMatchInput {
         let match_index_i32 =
             i32::try_from(match_index).unwrap_or_else(|_| panic!("test match index exceeds i32"));
         let player_i32 =
             i32::try_from(player).unwrap_or_else(|_| panic!("test player index exceeds i32"));
         let rank = (player_i32 + match_index_i32).rem_euclid(4) + 1;
-        MatchPlayerRow {
+        PlayerMatchInput {
             match_id: format!("match-{match_index:03}"),
             match_revision: 1,
             played_at: format!("2026-01-{:02}T00:00:00.000000Z", event_index + 1),
@@ -349,7 +349,7 @@ mod tests {
         }
     }
 
-    fn dataset() -> Vec<MatchPlayerRow> {
+    fn dataset() -> Vec<PlayerMatchInput> {
         (0..32)
             .flat_map(|match_index| {
                 (0..4).map(move |player| row(match_index, match_index / 4, player))
@@ -363,7 +363,7 @@ mod tests {
         let forward = rows.iter().collect::<Vec<_>>();
         let mut reverse = forward.clone();
         reverse.reverse();
-        let players = crate::model::player_order(&forward);
+        let players = crate::model::ordered_member_ids(&forward);
 
         let first = analyze(&forward, &players).aggregate_json();
         let second = analyze(&reverse, &players).aggregate_json();
@@ -386,7 +386,7 @@ mod tests {
     fn small_sample_is_explicitly_no_target() {
         let rows = dataset();
         let sample = rows.iter().take(16).collect::<Vec<_>>();
-        let players = crate::model::player_order(&sample);
+        let players = crate::model::ordered_member_ids(&sample);
         let result = analyze(&sample, &players).aggregate_json();
 
         assert_eq!(

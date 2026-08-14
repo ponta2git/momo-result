@@ -1,6 +1,6 @@
 use std::{cmp::Ordering, collections::BTreeMap, sync::Arc};
 
-use crate::model::MatchPlayerRow;
+use crate::model::PlayerMatchInput;
 
 use super::{
     ADJUSTMENT_COUNT, EncodedEvent, EncodedMatch, EncodedRow, FULL_FEATURE_COUNT, MatchKey,
@@ -9,7 +9,7 @@ use super::{
 };
 
 pub(super) fn encode(
-    rows: &[&MatchPlayerRow],
+    rows: &[&PlayerMatchInput],
     players: &[String],
 ) -> Result<Vec<EncodedEvent>, ()> {
     let player_index = players
@@ -92,9 +92,11 @@ pub(super) fn encode(
     }
 }
 
-pub(super) fn distinct_matches<'a>(rows: &[&'a MatchPlayerRow]) -> Vec<Vec<&'a MatchPlayerRow>> {
+pub(super) fn distinct_matches<'a>(
+    rows: &[&'a PlayerMatchInput],
+) -> Vec<Vec<&'a PlayerMatchInput>> {
     let mut match_order = Vec::<&str>::new();
-    let mut matches = BTreeMap::<&str, Vec<&MatchPlayerRow>>::new();
+    let mut matches = BTreeMap::<&str, Vec<&PlayerMatchInput>>::new();
     for row in rows {
         let match_id = row.match_id.as_str();
         match matches.entry(match_id) {

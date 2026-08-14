@@ -348,7 +348,7 @@ fn source_input_checksum(input: &NormalizedAnalysisInput) -> Result<String, Arti
         },
         &mut buffer,
     )?;
-    for row in &input.rows {
+    for row in &input.player_matches {
         digest.update_serialized(&SourceRow::from(row), &mut buffer)?;
     }
     Ok(digest.finalize())
@@ -379,8 +379,8 @@ struct SourceRow<'a> {
     incidents: &'a momo_analysis_core::model::IncidentCounts,
 }
 
-impl<'a> From<&'a momo_analysis_core::model::MatchPlayerRow> for SourceRow<'a> {
-    fn from(row: &'a momo_analysis_core::model::MatchPlayerRow) -> Self {
+impl<'a> From<&'a momo_analysis_core::model::PlayerMatchInput> for SourceRow<'a> {
+    fn from(row: &'a momo_analysis_core::model::PlayerMatchInput) -> Self {
         Self {
             match_id: &row.match_id,
             match_revision: Decimal(row.match_revision),
@@ -588,14 +588,14 @@ mod tests {
     use tempfile::TempDir;
 
     use super::*;
-    use momo_analysis_core::model::{IncidentCounts, MatchPlayerRow};
+    use momo_analysis_core::model::{IncidentCounts, PlayerMatchInput};
 
     fn input() -> AnalysisInput {
         AnalysisInput {
             game_title_id: String::from("title-artifact"),
             input_revision: 2,
-            rows: (1..=4)
-                .map(|player| MatchPlayerRow {
+            player_matches: (1..=4)
+                .map(|player| PlayerMatchInput {
                     match_id: String::from("match-1"),
                     match_revision: 1,
                     played_at: String::from("2026-08-09T00:00:00.000000Z"),
@@ -742,7 +742,7 @@ mod tests {
             TempDir::new().unwrap_or_else(|error| panic!("second temp directory: {error}"));
         let original = input();
         let mut reversed = original.clone();
-        reversed.rows.reverse();
+        reversed.player_matches.reverse();
 
         let first = build(original, &request(), first_directory.path())
             .unwrap_or_else(|error| panic!("first artifact: {error}"));

@@ -1,6 +1,6 @@
 use futures_util::TryStreamExt;
 use momo_analysis_core::model::{
-    AnalysisInput, IncidentCounts, NormalizedAnalysisInput, MatchPlayerRow,
+    AnalysisInput, IncidentCounts, NormalizedAnalysisInput, PlayerMatchInput,
 };
 use thiserror::Error;
 use tokio_postgres::{Client, IsolationLevel, Row};
@@ -111,10 +111,10 @@ pub(super) async fn load_analysis_input(
     let input = AnalysisInput {
         game_title_id: String::from(game_title_id),
         input_revision,
-        rows: player_matches,
+        player_matches,
     }
     .into_normalized();
-    validate_player_matches(&input.rows)?;
+    validate_player_matches(&input.player_matches)?;
     transaction.commit().await?;
     Ok(input)
 }
@@ -163,8 +163,8 @@ async fn validate_input_shape(
     ))
 }
 
-fn player_match_from_database(row: &Row) -> Result<MatchPlayerRow, tokio_postgres::Error> {
-    Ok(MatchPlayerRow {
+fn player_match_from_database(row: &Row) -> Result<PlayerMatchInput, tokio_postgres::Error> {
+    Ok(PlayerMatchInput {
         match_id: row.try_get(0)?,
         match_revision: row.try_get(1)?,
         played_at: row.try_get(2)?,
@@ -189,7 +189,7 @@ fn player_match_from_database(row: &Row) -> Result<MatchPlayerRow, tokio_postgre
 }
 
 fn validate_player_matches(
-    player_matches: &[MatchPlayerRow],
+    player_matches: &[PlayerMatchInput],
 ) -> Result<(), InputRepositoryError> {
     if player_matches.len() > MAXIMUM_INPUT_ROWS {
         return Err(InputRepositoryError::InputContract(
@@ -223,37 +223,40 @@ fn validate_player_matches(
             return Err(InputRepositoryError::InputContract("invalid row value"));
         }
     }
-    for match_player_matches in
+    for player_matches_in_match in
         player_matches.chunk_by(|left, right| left.match_id == right.match_id)
     {
-        if match_player_matches.len() != 4 {
+        if player_matches_in_match.len() != 4 {
             return Err(InputRepositoryError::InputContract(
                 "match must contain four players",
             ));
         }
-        let Some(first) = match_player_matches.first() else {
+        let Some(first) = player_matches_in_match.first() else {
             return Err(InputRepositoryError::InputContract(
                 "match must contain four players",
             ));
         };
-        let distinct_players =
-            match_player_matches
+        let distinct_members =
+            player_matches_in_match
                 .iter()
                 .enumerate()
                 .all(|(index, player_match)| {
-                    !match_player_matches
+                    !player_matches_in_match
                         .iter()
                         .take(index)
                         .any(|previous| previous.member_id == player_match.member_id)
                 });
-        let complete_ranks =
-            (1..=4).all(|rank| match_player_matches.iter().any(|row| row.rank == rank));
-        let complete_orders = (1..=4).all(|order| {
-            match_player_matches
+        let complete_ranks = (1..=4).all(|rank| {
+            player_matches_in_match
                 .iter()
-                .any(|row| row.play_order == order)
+                .any(|player_match| player_match.rank == rank)
         });
-        let consistent_match = match_player_matches.iter().all(|player_match| {
+        let complete_orders = (1..=4).all(|order| {
+            player_matches_in_match
+                .iter()
+                .any(|player_match| player_match.play_order == order)
+        });
+        let consistent_match = player_matches_in_match.iter().all(|player_match| {
             player_match.match_revision == first.match_revision
                 && player_match.played_at == first.played_at
                 && player_match.held_event_id == first.held_event_id
@@ -261,7 +264,7 @@ fn validate_player_matches(
                 && player_match.season_master_id == first.season_master_id
                 && player_match.map_master_id == first.map_master_id
         });
-        if !distinct_players || !complete_ranks || !complete_orders || !consistent_match {
+        if !distinct_members || !complete_ranks || !complete_orders || !consistent_match {
             return Err(InputRepositoryError::InputContract(
                 "match players, ranks, play orders, or metadata are inconsistent",
             ));
@@ -323,9 +326,9 @@ mod tests {
             .collect()
     }
 
-    fn valid_player_matches() -> Vec<MatchPlayerRow> {
+    fn valid_player_matches() -> Vec<PlayerMatchInput> {
         (1..=4)
-            .map(|player| MatchPlayerRow {
+            .map(|player| PlayerMatchInput {
                 match_id: String::from("match-1"),
                 match_revision: 1,
                 played_at: String::from("2026-08-10T00:00:00.000000Z"),

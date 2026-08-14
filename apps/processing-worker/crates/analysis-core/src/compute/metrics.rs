@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use serde_json::{Value, json};
 
 use crate::{
-    model::MatchPlayerRow,
+    model::PlayerMatchInput,
     rankings::{MatchPlayerRanks, value as rank_value},
     stats::{average, median_i32, population_stddev, quality_status, rate},
 };
@@ -16,13 +16,13 @@ const RECENT_WINDOW: usize = 20;
 
 pub(super) fn leader_summary(
     players: &[String],
-    rows_by_player: &BTreeMap<String, Vec<&MatchPlayerRow>>,
+    player_matches_by_member: &BTreeMap<String, Vec<&PlayerMatchInput>>,
 ) -> (Vec<String>, Option<f64>) {
     let average_ranks = players
         .iter()
         .filter_map(|member_id| {
             average(
-                rows_by_player
+                player_matches_by_member
                     .get(member_id)
                     .into_iter()
                     .flatten()
@@ -45,10 +45,12 @@ pub(super) fn leader_summary(
     let leader_member_ids = players
         .iter()
         .filter(|member_id| {
-            rows_by_player.get(*member_id).is_some_and(|player_rows| {
-                average(player_rows.iter().map(|row| f64::from(row.rank)))
-                    .is_some_and(|value| (value - leader_average).abs() < 1e-12)
-            })
+            player_matches_by_member
+                .get(*member_id)
+                .is_some_and(|player_rows| {
+                    average(player_rows.iter().map(|row| f64::from(row.rank)))
+                        .is_some_and(|value| (value - leader_average).abs() < 1e-12)
+                })
         })
         .cloned()
         .collect::<Vec<_>>();
@@ -57,8 +59,8 @@ pub(super) fn leader_summary(
 
 pub(super) fn player_metrics(
     players: &[String],
-    rows_by_player: &BTreeMap<String, Vec<&MatchPlayerRow>>,
-    all_rows: &[&MatchPlayerRow],
+    player_matches_by_member: &BTreeMap<String, Vec<&PlayerMatchInput>>,
+    all_rows: &[&PlayerMatchInput],
     revenue_ranks: &MatchPlayerRanks<'_>,
     destination_ranks: &MatchPlayerRanks<'_>,
 ) -> Vec<Value> {
@@ -67,7 +69,7 @@ pub(super) fn player_metrics(
     players
         .iter()
         .map(|member_id| {
-            let rows = rows_by_player.get(member_id).map_or(&[][..], Vec::as_slice);
+            let rows = player_matches_by_member.get(member_id).map_or(&[][..], Vec::as_slice);
             let ranks = rows.iter().map(|row| f64::from(row.rank)).collect::<Vec<_>>();
             let assets = rows.iter().map(|row| row.total_assets_man_yen).collect::<Vec<_>>();
             let revenue = rows.iter().map(|row| row.revenue_man_yen).collect::<Vec<_>>();
@@ -144,18 +146,18 @@ pub(super) fn player_metrics(
 }
 
 struct PlayerMetricSubsets<'a> {
-    ginji: Vec<&'a MatchPlayerRow>,
-    top_revenue: Vec<&'a MatchPlayerRow>,
-    low_revenue: Vec<&'a MatchPlayerRow>,
-    top_destination: Vec<&'a MatchPlayerRow>,
-    low_destination: Vec<&'a MatchPlayerRow>,
-    zero_destination: Vec<&'a MatchPlayerRow>,
+    ginji: Vec<&'a PlayerMatchInput>,
+    top_revenue: Vec<&'a PlayerMatchInput>,
+    low_revenue: Vec<&'a PlayerMatchInput>,
+    top_destination: Vec<&'a PlayerMatchInput>,
+    low_destination: Vec<&'a PlayerMatchInput>,
+    zero_destination: Vec<&'a PlayerMatchInput>,
     revenue_rank_values: Vec<f64>,
     destination_rank_values: Vec<f64>,
 }
 
 fn player_metric_subsets<'a>(
-    rows: &[&'a MatchPlayerRow],
+    rows: &[&'a PlayerMatchInput],
     revenue_ranks: &MatchPlayerRanks<'_>,
     destination_ranks: &MatchPlayerRanks<'_>,
     revenue_max_by_match: &BTreeMap<&str, i32>,
@@ -203,7 +205,7 @@ fn player_metric_subsets<'a>(
     subsets
 }
 
-fn play_order_metrics(rows: &[&MatchPlayerRow], all_rows: &[&MatchPlayerRow]) -> Value {
+fn play_order_metrics(rows: &[&PlayerMatchInput], all_rows: &[&PlayerMatchInput]) -> Value {
     let mut breakdown = Vec::new();
     let mut assets_differences = Vec::new();
     let mut revenue_differences = Vec::new();
@@ -256,7 +258,7 @@ fn play_order_metrics(rows: &[&MatchPlayerRow], all_rows: &[&MatchPlayerRow]) ->
     })
 }
 
-fn conditional_outcome(rows: &[&MatchPlayerRow]) -> Value {
+fn conditional_outcome(rows: &[&PlayerMatchInput]) -> Value {
     let wins = rows.iter().filter(|row| row.rank == 1).count();
     let podium = rows.iter().filter(|row| row.rank <= 2).count();
     let lower = rows.iter().filter(|row| row.rank >= 3).count();
@@ -274,7 +276,7 @@ fn conditional_outcome(rows: &[&MatchPlayerRow]) -> Value {
 }
 
 fn destination_dependence(
-    rows: &[&MatchPlayerRow],
+    rows: &[&PlayerMatchInput],
     destination_ranks: &MatchPlayerRanks<'_>,
 ) -> Option<f64> {
     let upper = average(rows.iter().filter_map(|row| {
@@ -292,12 +294,14 @@ fn destination_dependence(
 
 pub(super) fn rank_distribution(
     players: &[String],
-    rows_by_player: &BTreeMap<String, Vec<&MatchPlayerRow>>,
+    player_matches_by_member: &BTreeMap<String, Vec<&PlayerMatchInput>>,
 ) -> Vec<Value> {
     players
         .iter()
         .map(|member_id| {
-            let rows = rows_by_player.get(member_id).map_or(&[][..], Vec::as_slice);
+            let rows = player_matches_by_member
+                .get(member_id)
+                .map_or(&[][..], Vec::as_slice);
             json!({
                 "memberId": member_id,
                 "total": rows.len(),
@@ -318,12 +322,12 @@ pub(super) fn rank_distribution(
 
 pub(super) fn recent_ranks(
     players: &[String],
-    rows_by_player: &BTreeMap<String, Vec<&MatchPlayerRow>>,
+    player_matches_by_member: &BTreeMap<String, Vec<&PlayerMatchInput>>,
 ) -> Vec<Value> {
     players
         .iter()
         .map(|member_id| {
-            let rows = rows_by_player.get(member_id).map_or(&[][..], Vec::as_slice);
+            let rows = player_matches_by_member.get(member_id).map_or(&[][..], Vec::as_slice);
             let start = rows.len().saturating_sub(RECENT_WINDOW);
             let selected = rows.get(start..).unwrap_or_default();
             json!({
@@ -355,7 +359,7 @@ pub(super) fn strategy_scatter(
 ) -> Value {
     json!({
         "points": groups.iter().enumerate().flat_map(|(index, group)| {
-            group.rows.iter().map(move |row| json!({
+            group.player_matches.iter().map(move |row| json!({
                 "itemId": format!("strategy-point:{}:{}", row.match_id, row.member_id),
                 "matchIndex": index + 1,
                 "matchId": row.match_id,
@@ -374,12 +378,12 @@ pub(super) fn strategy_scatter(
 
 pub(super) fn play_order_comparison(
     players: &[String],
-    rows_by_player: &BTreeMap<String, Vec<&MatchPlayerRow>>,
+    player_matches_by_member: &BTreeMap<String, Vec<&PlayerMatchInput>>,
 ) -> Vec<Value> {
     players
         .iter()
         .map(|member_id| {
-            let rows = rows_by_player.get(member_id).map_or(&[][..], Vec::as_slice);
+            let rows = player_matches_by_member.get(member_id).map_or(&[][..], Vec::as_slice);
             let mut cells = Vec::new();
             for order in 1..=4 {
                 let target = rows
@@ -416,13 +420,13 @@ pub(super) fn play_order_comparison(
 
 pub(super) fn revenue_rank_conversion(
     players: &[String],
-    rows_by_player: &BTreeMap<String, Vec<&MatchPlayerRow>>,
+    player_matches_by_member: &BTreeMap<String, Vec<&PlayerMatchInput>>,
     revenue_ranks: &MatchPlayerRanks<'_>,
 ) -> Vec<Value> {
     players
         .iter()
         .map(|member_id| {
-            let rows = rows_by_player.get(member_id).map_or(&[][..], Vec::as_slice);
+            let rows = player_matches_by_member.get(member_id).map_or(&[][..], Vec::as_slice);
             let cells = (1..=4)
                 .flat_map(|revenue_rank| {
                     (1..=4).map(move |final_rank| {

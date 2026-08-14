@@ -3,7 +3,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde_json::{Value, json};
 
 use crate::{
-    model::{MatchPlayerRow, RowsByPlayer, Scope},
+    contract::ScopeRef,
+    model::{PlayerMatchInput, PlayerMatchesByMember},
     numeric::count_as_f64,
     rankings::{MatchPlayerRanks, by_match as ranks_by_match, value as rank_value},
     stats::{average, cliffs_delta, percentile_i32, quality_status, rate, round},
@@ -85,10 +86,10 @@ struct CommonTopic {
 }
 
 pub(super) fn build(
-    scope: &Scope,
-    rows: &[&MatchPlayerRow],
+    scope: &ScopeRef,
+    rows: &[&PlayerMatchInput],
     players: &[String],
-    rows_by_player: &RowsByPlayer<'_>,
+    player_matches_by_member: &PlayerMatchesByMember<'_>,
     data_quality: Option<Value>,
 ) -> Value {
     let revenue_ranks = ranks_by_match(rows, |row| row.revenue_man_yen);
@@ -97,7 +98,9 @@ pub(super) fn build(
         .flat_map(|member_id| {
             player_candidates(
                 member_id,
-                rows_by_player.get(member_id).map_or(&[][..], Vec::as_slice),
+                player_matches_by_member
+                    .get(member_id)
+                    .map_or(&[][..], Vec::as_slice),
                 &revenue_ranks,
             )
         })
@@ -158,7 +161,7 @@ pub(super) fn build(
 
 fn player_candidates(
     member_id: &str,
-    rows: &[&MatchPlayerRow],
+    rows: &[&PlayerMatchInput],
     revenue_ranks: &MatchPlayerRanks<'_>,
 ) -> Vec<Candidate> {
     if rows.len() < MINIMUM_CONDITIONAL_COUNT {
@@ -241,7 +244,7 @@ fn player_candidates(
 struct CandidateContext<'a> {
     member_id: &'a str,
     category: Category,
-    baseline_rows: &'a [&'a MatchPlayerRow],
+    baseline_rows: &'a [&'a PlayerMatchInput],
     revenue_ranks: &'a MatchPlayerRanks<'a>,
     split: OutcomeSplit,
 }
@@ -250,7 +253,7 @@ impl<'a> CandidateContext<'a> {
     const fn new(
         member_id: &'a str,
         category: Category,
-        baseline_rows: &'a [&'a MatchPlayerRow],
+        baseline_rows: &'a [&'a PlayerMatchInput],
         revenue_ranks: &'a MatchPlayerRanks<'a>,
         split: OutcomeSplit,
     ) -> Self {
@@ -267,7 +270,7 @@ impl<'a> CandidateContext<'a> {
 fn push_matching_candidate(
     candidates: &mut Vec<Candidate>,
     context: CandidateContext<'_>,
-    predicate: impl Fn(&MatchPlayerRow) -> bool,
+    predicate: impl Fn(&PlayerMatchInput) -> bool,
 ) {
     let target_rows = context
         .baseline_rows
@@ -291,7 +294,7 @@ fn push_matching_candidate(
 fn push_low_asset_candidate(
     candidates: &mut Vec<Candidate>,
     member_id: &str,
-    rows: &[&MatchPlayerRow],
+    rows: &[&PlayerMatchInput],
     revenue_ranks: &MatchPlayerRanks<'_>,
 ) {
     let assets = rows
@@ -316,7 +319,7 @@ fn push_low_asset_candidate(
 fn push_worst_order_candidate(
     candidates: &mut Vec<Candidate>,
     member_id: &str,
-    rows: &[&MatchPlayerRow],
+    rows: &[&PlayerMatchInput],
     revenue_ranks: &MatchPlayerRanks<'_>,
 ) {
     if let Some(worst_order) = worst_play_order(rows) {
@@ -343,8 +346,8 @@ fn push_candidate(candidates: &mut Vec<Candidate>, candidate: Option<Candidate>)
 fn make_candidate(
     member_id: &str,
     category: Category,
-    target_rows: &[&MatchPlayerRow],
-    baseline_rows: &[&MatchPlayerRow],
+    target_rows: &[&PlayerMatchInput],
+    baseline_rows: &[&PlayerMatchInput],
     revenue_ranks: &MatchPlayerRanks<'_>,
     split: OutcomeSplit,
 ) -> Option<Candidate> {
@@ -411,8 +414,8 @@ fn make_candidate(
 
 fn symptom(
     category: Category,
-    target_rows: &[&MatchPlayerRow],
-    baseline_rows: &[&MatchPlayerRow],
+    target_rows: &[&PlayerMatchInput],
+    baseline_rows: &[&PlayerMatchInput],
 ) -> Option<f64> {
     if category == Category::Revenue {
         let target_rate = rate(
@@ -433,8 +436,8 @@ fn symptom(
 
 fn strongest_driver(
     category: Category,
-    positive: &[&MatchPlayerRow],
-    negative: &[&MatchPlayerRow],
+    positive: &[&PlayerMatchInput],
+    negative: &[&PlayerMatchInput],
     revenue_ranks: &MatchPlayerRanks<'_>,
 ) -> Option<DriverContrast> {
     drivers(category)
@@ -486,7 +489,7 @@ const fn drivers(category: Category) -> &'static [Driver] {
 
 fn driver_values(
     driver: Driver,
-    rows: &[&MatchPlayerRow],
+    rows: &[&PlayerMatchInput],
     revenue_ranks: &MatchPlayerRanks<'_>,
 ) -> Vec<f64> {
     rows.iter()
@@ -632,11 +635,11 @@ fn shrink(value: f64, target_count: usize) -> f64 {
     value * target_count / (target_count + PRIOR_WEIGHT)
 }
 
-fn rank_score(row: &MatchPlayerRow) -> f64 {
+fn rank_score(row: &PlayerMatchInput) -> f64 {
     f64::from(5 - row.rank)
 }
 
-fn worst_play_order(rows: &[&MatchPlayerRow]) -> Option<i32> {
+fn worst_play_order(rows: &[&PlayerMatchInput]) -> Option<i32> {
     let mut rows_by_order = BTreeMap::<i32, Vec<f64>>::new();
     for row in rows {
         rows_by_order
@@ -656,7 +659,7 @@ fn worst_play_order(rows: &[&MatchPlayerRow]) -> Option<i32> {
         .map(|value| value.0)
 }
 
-fn recovery_rows<'a>(rows: &[&'a MatchPlayerRow]) -> Vec<&'a MatchPlayerRow> {
+fn recovery_rows<'a>(rows: &[&'a PlayerMatchInput]) -> Vec<&'a PlayerMatchInput> {
     let mut ordered = rows.to_vec();
     ordered.sort_by(|left, right| {
         left.played_at
@@ -672,7 +675,7 @@ fn recovery_rows<'a>(rows: &[&'a MatchPlayerRow]) -> Vec<&'a MatchPlayerRow> {
         .collect()
 }
 
-fn revenue_rank_score(ranks: &MatchPlayerRanks<'_>, row: &MatchPlayerRow) -> Option<f64> {
+fn revenue_rank_score(ranks: &MatchPlayerRanks<'_>, row: &PlayerMatchInput) -> Option<f64> {
     rank_value(ranks, row).map(|rank| 5.0 - rank)
 }
 
@@ -680,22 +683,22 @@ fn revenue_rank_score(ranks: &MatchPlayerRanks<'_>, row: &MatchPlayerRow) -> Opt
 mod tests {
     use super::*;
     use crate::contract::ScopeRef;
-    use crate::model::{IncidentCounts, player_order, rows_by_player};
+    use crate::model::{IncidentCounts, ordered_member_ids, player_matches_by_member};
 
-    fn build_for_test(rows: &[&MatchPlayerRow], data_quality: Option<Value>) -> Value {
-        let players = player_order(rows);
-        let rows_by_player = rows_by_player(rows, &players);
+    fn build_for_test(rows: &[&PlayerMatchInput], data_quality: Option<Value>) -> Value {
+        let players = ordered_member_ids(rows);
+        let player_matches_by_member = player_matches_by_member(rows, &players);
         build(
             &ScopeRef::Overall,
             rows,
             &players,
-            &rows_by_player,
+            &player_matches_by_member,
             data_quality,
         )
     }
 
-    fn row(index: i32, player: i32, rank: i32) -> MatchPlayerRow {
-        MatchPlayerRow {
+    fn row(index: i32, player: i32, rank: i32) -> PlayerMatchInput {
+        PlayerMatchInput {
             match_id: format!("match-{index:02}"),
             match_revision: 1,
             played_at: format!("2026-01-{index:02}T00:00:00.000000Z"),

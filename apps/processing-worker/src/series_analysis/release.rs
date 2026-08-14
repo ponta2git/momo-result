@@ -10,9 +10,8 @@ use tokio_postgres::{Client, Row, Transaction};
 
 use crate::postgres::{PostgresError, connect};
 
-use super::control::ALGORITHM_VERSION;
+use super::control::{ALGORITHM_VERSION, CAPABILITY_FRESH_SECONDS};
 
-const CAPABILITY_FRESH_SECONDS: i64 = 60;
 const RELEASE_TRANSACTION_LIMITS: &str = "SET LOCAL lock_timeout = '5s'; SET LOCAL statement_timeout = '30s'; \
      SET LOCAL idle_in_transaction_session_timeout = '30s'";
 const RELEASE_READ_LIMITS: &str = "SET lock_timeout = '5s'; SET statement_timeout = '30s'; \

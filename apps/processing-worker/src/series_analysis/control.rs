@@ -13,7 +13,9 @@ mod recovery;
 mod transaction;
 mod vocabulary;
 
-pub(crate) use capability::{mark_draining, register_capability};
+pub(crate) use capability::{
+    CAPABILITY_FRESH_SECONDS, IdleRefreshSchedule, mark_draining, register_capability,
+};
 pub(crate) use claim::claim_job;
 pub(crate) use completion::publish;
 pub(crate) use lifecycle::{

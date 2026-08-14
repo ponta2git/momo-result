@@ -22,8 +22,8 @@ use crate::{
 use self::{
     config::AnalysisConsumerConfig,
     control::{
-        ALGORITHM_VERSION, AttemptFailure, ClaimResult, ControlError, SafeFailureCode, claim_job,
-        finish_failure, mark_draining, register_capability,
+        ALGORITHM_VERSION, AttemptFailure, ClaimResult, ControlError, IdleRefreshSchedule,
+        SafeFailureCode, claim_job, finish_failure, mark_draining, register_capability,
     },
 };
 
@@ -149,9 +149,10 @@ pub(crate) async fn run(
         "temporary_storage_recovery",
     )?;
     startup_result(
-        register_capability(&control_client, &config.worker_id).await,
+        register_capability(&heartbeat_client, &config.worker_id).await,
         "capability_registration",
     )?;
+    let capability_refresh = IdleRefreshSchedule::after_success(Instant::now());
 
     let redis_client = startup_result(
         redis::Client::open(config.redis_url.as_str()),
@@ -172,6 +173,7 @@ pub(crate) async fn run(
         &mut heartbeat_client,
         &mut redis,
         &config,
+        capability_refresh,
         &mut shutdown,
     )
     .await;
@@ -228,10 +230,14 @@ async fn consume_deliveries(
     heartbeat_client: &mut tokio_postgres::Client,
     redis: &mut ConnectionManager,
     config: &AnalysisConsumerConfig,
+    mut capability_refresh: IdleRefreshSchedule,
     shutdown: &mut watch::Receiver<bool>,
 ) -> Result<(), ConsumerError> {
     while !*shutdown.borrow() {
-        register_capability(control_client, &config.worker_id).await?;
+        if capability_refresh.is_due_at(Instant::now()) {
+            register_capability(heartbeat_client, &config.worker_id).await?;
+            capability_refresh.record_success_at(Instant::now());
+        }
         let delivery = next_delivery(redis, config).await?;
         let Some(delivery) = delivery else {
             continue;

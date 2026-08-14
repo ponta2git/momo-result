@@ -1,4 +1,4 @@
-import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
+import { useQuery, useSuspenseQueries } from "@tanstack/react-query";
 import type { UseQueryResult, UseSuspenseQueryResult } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
 
@@ -29,7 +29,7 @@ import { shouldShowBlockingQueryError, shouldShowQueryError } from "@/shared/api
 import {
   gameTitlesQueryOptions,
   heldEventDetailQueryOptions,
-  heldEventsQueryOptions,
+  heldEventsSuspenseQueryOptions,
   mapMastersQueryOptions,
   matchDetailQueryOptions,
   matchDraftDetailQueryOptions,
@@ -100,16 +100,9 @@ export function useMatchWorkspaceQueries(
 
   const legacyIds = useMemo(() => draftIdsFromParams(searchParams), [searchParams]);
 
-  const heldEventsQuery = useSuspenseQuery(heldEventsQueryOptions("", 100, "workspace"));
   const preferredHeldEventQuery = useQuery(
     heldEventDetailQueryOptions(preferredHeldEventId, Boolean(preferredHeldEventId)),
   );
-  const heldEventItems = mergeHeldEventItems(
-    heldEventsQuery.data?.items ?? [],
-    preferredHeldEventQuery.data,
-  );
-  const gameTitlesQuery = useSuspenseQuery(gameTitlesQueryOptions("workspace"));
-  const memberAliasesQuery = useSuspenseQuery(memberAliasesQueryOptions("workspace"));
   const mapMastersQuery = useQuery(
     mapMastersQueryOptions("workspace", gameTitleId, Boolean(gameTitleId)),
   );
@@ -118,6 +111,18 @@ export function useMatchWorkspaceQueries(
   );
   const draftDetailQuery = useQuery(
     matchDraftDetailQueryOptions(matchDraftId, mode !== "edit" && !useSampleDrafts),
+  );
+  const matchDetailQuery = useQuery(matchDetailQueryOptions(matchId, mode === "edit"));
+  const [heldEventsQuery, gameTitlesQuery, memberAliasesQuery] = useSuspenseQueries({
+    queries: [
+      heldEventsSuspenseQueryOptions("", 100, "workspace"),
+      gameTitlesQueryOptions("workspace"),
+      memberAliasesQueryOptions("workspace"),
+    ],
+  });
+  const heldEventItems = mergeHeldEventItems(
+    heldEventsQuery.data?.items ?? [],
+    preferredHeldEventQuery.data,
   );
 
   const reviewDraftIds = useMemo<SlotMap<string>>(() => {
@@ -138,7 +143,6 @@ export function useMatchWorkspaceQueries(
     [reviewDraftIds],
   );
 
-  const matchDetailQuery = useQuery(matchDetailQueryOptions(matchId, mode === "edit"));
   const ocrDraftsQuery = useQuery(
     ocrDraftsBulkQueryOptions(
       reviewDraftIdList,

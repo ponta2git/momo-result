@@ -58,6 +58,37 @@ describe("MastersPage", () => {
     expect(screen.getByRole("tab", { name: "事件簿" })).toBeInTheDocument();
   });
 
+  it("starts independent master directory requests in parallel", async () => {
+    setDevUser();
+    const responseGate = createDeferred();
+    const requested = new Set<string>();
+    server.use(
+      http.get("/api/game-titles", async () => {
+        requested.add("game-titles");
+        await responseGate.promise;
+        return HttpResponse.json({ items: [] });
+      }),
+      http.get("/api/incident-masters", async () => {
+        requested.add("incident-masters");
+        await responseGate.promise;
+        return HttpResponse.json({ items: [] });
+      }),
+      http.get("/api/member-aliases", async () => {
+        requested.add("member-aliases");
+        await responseGate.promise;
+        return HttpResponse.json({ items: [] });
+      }),
+    );
+
+    renderPage();
+
+    await waitFor(() =>
+      expect(requested).toEqual(new Set(["game-titles", "incident-masters", "member-aliases"])),
+    );
+    responseGate.resolve();
+    expect(await screen.findByRole("heading", { name: "設定管理" })).toBeInTheDocument();
+  });
+
   it("shows scoped skeletons while maps and seasons are loading", async () => {
     setDevUser();
     const responseGate = createDeferred();

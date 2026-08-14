@@ -1,4 +1,4 @@
-import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
+import { useQuery, useSuspenseQueries } from "@tanstack/react-query";
 import { useMemo } from "react";
 
 import {
@@ -11,9 +11,21 @@ import {
 } from "@/features/masters/masterQueries";
 
 export function useMasterResourceQueries(authScope: string, selectedGameTitleId: string) {
-  const gameTitlesQuery = useSuspenseQuery({
-    queryKey: masterQueryKeys.gameTitles(authScope),
-    queryFn: ({ signal }) => fetchGameTitles({ signal }),
+  const [gameTitlesQuery, incidentMastersQuery, memberAliasesQuery] = useSuspenseQueries({
+    queries: [
+      {
+        queryKey: masterQueryKeys.gameTitles(authScope),
+        queryFn: ({ signal }) => fetchGameTitles({ signal }),
+      },
+      {
+        queryKey: masterQueryKeys.incidentMasters(authScope),
+        queryFn: ({ signal }) => fetchIncidentMasters({ signal }),
+      },
+      {
+        queryKey: masterQueryKeys.memberAliases(authScope),
+        queryFn: ({ signal }) => fetchMemberAliases({ signal }),
+      },
+    ],
   });
 
   const mapMastersQuery = useQuery({
@@ -26,16 +38,6 @@ export function useMasterResourceQueries(authScope: string, selectedGameTitleId:
     queryKey: masterQueryKeys.seasonMasters(authScope, selectedGameTitleId),
     queryFn: ({ signal }) => fetchSeasonMasters(selectedGameTitleId, { signal }),
     enabled: Boolean(selectedGameTitleId),
-  });
-
-  const incidentMastersQuery = useSuspenseQuery({
-    queryKey: masterQueryKeys.incidentMasters(authScope),
-    queryFn: ({ signal }) => fetchIncidentMasters({ signal }),
-  });
-
-  const memberAliasesQuery = useSuspenseQuery({
-    queryKey: masterQueryKeys.memberAliases(authScope),
-    queryFn: ({ signal }) => fetchMemberAliases({ signal }),
   });
 
   const gameTitles = useMemo(() => gameTitlesQuery.data ?? [], [gameTitlesQuery.data]);

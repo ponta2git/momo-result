@@ -852,6 +852,51 @@ describe("MatchEditPage", () => {
     user = userEvent.setup();
   });
 
+  it("starts the match detail and independent directories before any directory resolves", async () => {
+    setDevUser();
+    const directoryGate = createDeferred();
+    const requested = new Set<string>();
+    server.use(
+      http.get("/api/held-events", async () => {
+        requested.add("held-events");
+        await directoryGate.promise;
+        return HttpResponse.json({ items: [] });
+      }),
+      http.get("/api/game-titles", async () => {
+        requested.add("game-titles");
+        await directoryGate.promise;
+        return HttpResponse.json({ items: [] });
+      }),
+      http.get("/api/member-aliases", async () => {
+        requested.add("member-aliases");
+        await directoryGate.promise;
+        return HttpResponse.json({ items: [] });
+      }),
+      http.get("/api/matches/:matchId", ({ params }) => {
+        requested.add("match-detail");
+        return HttpResponse.json(makeMatchDetail({ matchId: String(params["matchId"]) }));
+      }),
+    );
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/matches/match-1/edit"]}>
+          <Routes>
+            <Route path="/matches/:matchId/edit" element={<MatchEditPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() =>
+      expect(requested).toEqual(
+        new Set(["held-events", "game-titles", "member-aliases", "match-detail"]),
+      ),
+    );
+    directoryGate.resolve();
+    expect(await screen.findByRole("heading", { name: "試合を編集" })).toBeInTheDocument();
+  });
+
   it("shows a structured loading shell while the saved match is loading", async () => {
     setDevUser();
     const responseGate = createDeferred();

@@ -27,9 +27,11 @@ import {
   mapMastersQueryOptions,
   matchDetailQueryOptions,
   seasonMastersQueryOptions,
+} from "@/shared/api/queryOptions";
+import {
   seriesAnalysisMatchContextQueryOptions,
   seriesAnalysisStatusQueryOptions,
-} from "@/shared/api/queryOptions";
+} from "@/shared/api/seriesAnalysisQueryOptions";
 import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
 import { matchPerformanceContextFromArtifact } from "@/shared/domain/matchPerformanceContext";
 import {

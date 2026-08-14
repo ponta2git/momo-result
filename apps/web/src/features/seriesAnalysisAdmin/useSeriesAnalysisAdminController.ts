@@ -5,11 +5,11 @@ import { useSearchParams } from "react-router-dom";
 import { runIdempotentMutation } from "@/shared/api/idempotency";
 import { normalizeDisplayApiError } from "@/shared/api/problemDetails";
 import { seriesAnalysisKeys } from "@/shared/api/queryKeys";
-import { seriesAnalysisAdminOverviewQueryOptions } from "@/shared/api/queryOptions";
 import {
   requestAllSeriesAnalysisRecalculation,
   requestSeriesAnalysisRecalculation,
 } from "@/shared/api/seriesAnalysis";
+import { seriesAnalysisAdminOverviewQueryOptions } from "@/shared/api/seriesAnalysisQueryOptions";
 import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
 
 type AcceptanceMessage = { detail: string; title: string };

@@ -3,8 +3,8 @@ import { useEffect } from "react";
 
 import type { SeriesAnalysisDrilldownSelection } from "@/features/seriesComparison/drilldowns/SeriesAnalysisDrilldownDialog";
 import { isAnalysisArtifactExpired } from "@/shared/api/problemDetails";
-import { seriesAnalysisDrilldownQueryOptions } from "@/shared/api/queryOptions";
 import type { SeriesAnalysisQuery } from "@/shared/api/seriesAnalysis";
+import { seriesAnalysisDrilldownQueryOptions } from "@/shared/api/seriesAnalysisQueryOptions";
 
 export function useSeriesAnalysisDrilldown({
   baseQuery,

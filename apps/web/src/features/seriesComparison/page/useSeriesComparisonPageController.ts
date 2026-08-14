@@ -34,7 +34,7 @@ import {
   shouldShowQueryError,
   shouldShowStaleShield,
 } from "@/shared/api/queryErrorState";
-import { seriesAnalysisOptionsQueryOptions } from "@/shared/api/queryOptions";
+import { seriesAnalysisOptionsQueryOptions } from "@/shared/api/seriesAnalysisQueryOptions";
 import { sanitizeReturnTo } from "@/shared/navigation/returnTo";
 
 export function useSeriesComparisonPageController() {

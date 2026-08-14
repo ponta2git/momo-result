@@ -13,16 +13,16 @@ import type {
 } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
 import { isAnalysisArtifactExpired } from "@/shared/api/problemDetails";
 import { shouldShowQueryError } from "@/shared/api/queryErrorState";
+import type {
+  SeriesComparisonAggregateV2,
+  SeriesComparisonReviewV2,
+} from "@/shared/api/seriesAnalysis";
 import {
   seriesAnalysisAggregateQueryOptions,
   seriesAnalysisMatchContextQueryOptions,
   seriesAnalysisReviewQueryOptions,
   seriesAnalysisStatusQueryOptions,
-} from "@/shared/api/queryOptions";
-import type {
-  SeriesComparisonAggregateV2,
-  SeriesComparisonReviewV2,
-} from "@/shared/api/seriesAnalysis";
+} from "@/shared/api/seriesAnalysisQueryOptions";
 
 function sameDisplayBundle(
   current: SeriesAnalysisDisplayBundle | undefined,

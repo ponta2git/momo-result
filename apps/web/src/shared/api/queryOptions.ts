@@ -19,22 +19,7 @@ import {
   masterKeys,
   matchKeys,
   ocrDraftKeys,
-  seriesAnalysisKeys,
 } from "@/shared/api/queryKeys";
-import {
-  getSeriesAnalysisAdminOverview,
-  getSeriesAnalysisAggregate,
-  getSeriesAnalysisDrilldown,
-  getSeriesAnalysisMatchContext,
-  getSeriesAnalysisOptions,
-  getSeriesAnalysisReview,
-  getSeriesAnalysisStatus,
-} from "@/shared/api/seriesAnalysis";
-import type {
-  SeriesAnalysisDrilldownQuery,
-  SeriesAnalysisMatchContextQuery,
-  SeriesAnalysisQuery,
-} from "@/shared/api/seriesAnalysis";
 
 export function adminLoginAccountsQueryOptions() {
   return queryOptions({
@@ -49,12 +34,30 @@ export function heldEventsQueryOptions(
   scope = "list",
 ) {
   return queryOptions({
+    ...heldEventsQueryDefinition(query, limit, scope),
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function heldEventsSuspenseQueryOptions(
+  query: ListHeldEventsQuery | string = "",
+  limit = 10,
+  scope = "list",
+) {
+  return heldEventsQueryDefinition(query, limit, scope);
+}
+
+function heldEventsQueryDefinition(
+  query: ListHeldEventsQuery | string,
+  limit: number,
+  scope: string,
+) {
+  return queryOptions({
     queryKey:
       typeof query === "string"
         ? heldEventKeys.scope(scope)
         : heldEventKeys.list({ ...query, scope }),
     queryFn: ({ signal }) => listHeldEvents(query, limit, { signal }),
-    placeholderData: keepPreviousData,
   });
 }
 
@@ -137,6 +140,17 @@ export function matchListSummaryQueryOptions(
 
 export function matchDetailQueryOptions(matchId: string | undefined, enabled = true) {
   return queryOptions({
+    ...matchDetailQueryDefinition(matchId),
+    enabled: enabled && Boolean(matchId),
+  });
+}
+
+export function matchDetailPrefetchQueryOptions(matchId: string | undefined) {
+  return matchDetailQueryDefinition(matchId);
+}
+
+function matchDetailQueryDefinition(matchId: string | undefined) {
+  return queryOptions({
     queryKey: matchKeys.detail(matchId),
     queryFn: ({ signal }) => {
       if (!matchId) {
@@ -144,7 +158,6 @@ export function matchDetailQueryOptions(matchId: string | undefined, enabled = t
       }
       return getMatch(matchId, { signal });
     },
-    enabled: enabled && Boolean(matchId),
   });
 }
 
@@ -180,109 +193,5 @@ export function ocrDraftsBulkQueryOptions(draftIds: string[], enabled = true) {
     queryFn: ({ signal }) => getOcrDraftsBulk(draftIds, { signal }),
     enabled: enabled && draftIds.length > 0,
     retry: false,
-  });
-}
-
-export function seriesAnalysisOptionsQueryOptions() {
-  return queryOptions({
-    queryKey: seriesAnalysisKeys.options(),
-    queryFn: ({ signal }) => getSeriesAnalysisOptions({ signal }),
-  });
-}
-
-export function seriesAnalysisStatusQueryOptions(gameTitleId: string | undefined) {
-  return queryOptions({
-    queryKey: seriesAnalysisKeys.status(gameTitleId),
-    queryFn: ({ signal }) => {
-      if (!gameTitleId) throw new Error("series analysis status query is not ready");
-      return getSeriesAnalysisStatus(gameTitleId, { signal });
-    },
-    enabled: Boolean(gameTitleId),
-    refetchInterval: (query) => {
-      const status = query.state.data?.calculation?.status;
-      return status === "queued" || status === "running" ? 5_000 : false;
-    },
-    refetchIntervalInBackground: false,
-  });
-}
-
-export function seriesAnalysisAggregateQueryOptions(query: SeriesAnalysisQuery | undefined) {
-  return queryOptions({
-    queryKey: seriesAnalysisKeys.aggregate(query),
-    queryFn: ({ signal }) => {
-      if (!query) throw new Error("series analysis aggregate query is not ready");
-      return getSeriesAnalysisAggregate(query, { signal });
-    },
-    enabled: query !== undefined,
-    placeholderData: keepPreviousData,
-    retry: false,
-  });
-}
-
-export function seriesAnalysisReviewQueryOptions(
-  query: SeriesAnalysisQuery | undefined,
-  enabled = true,
-) {
-  return queryOptions({
-    queryKey: seriesAnalysisKeys.review(query),
-    queryFn: ({ signal }) => {
-      if (!query) throw new Error("series analysis review query is not ready");
-      return getSeriesAnalysisReview(query, { signal });
-    },
-    enabled: enabled && query !== undefined,
-    placeholderData: keepPreviousData,
-    retry: false,
-  });
-}
-
-export function seriesAnalysisDrilldownQueryOptions(
-  query: SeriesAnalysisDrilldownQuery | undefined,
-  enabled = true,
-) {
-  return queryOptions({
-    queryKey: seriesAnalysisKeys.drilldown(query),
-    queryFn: ({ signal }) => {
-      if (!query) throw new Error("series analysis drilldown query is not ready");
-      return getSeriesAnalysisDrilldown(query, { signal });
-    },
-    enabled: enabled && query !== undefined,
-    retry: false,
-  });
-}
-
-export function seriesAnalysisMatchContextQueryOptions(
-  query: SeriesAnalysisMatchContextQuery | undefined,
-  enabled = true,
-) {
-  return queryOptions({
-    queryKey: seriesAnalysisKeys.matchContext(query),
-    queryFn: ({ signal }) => {
-      if (!query) throw new Error("series analysis match context query is not ready");
-      return getSeriesAnalysisMatchContext(query, { signal });
-    },
-    enabled: enabled && query !== undefined,
-    retry: false,
-  });
-}
-
-export function seriesAnalysisAdminOverviewQueryOptions(
-  gameTitleId: string | undefined,
-  enabled = true,
-) {
-  return queryOptions({
-    queryKey: seriesAnalysisKeys.adminOverview(gameTitleId),
-    queryFn: ({ signal }) => getSeriesAnalysisAdminOverview(gameTitleId, { signal }),
-    enabled,
-    placeholderData: keepPreviousData,
-    refetchInterval: (query) => {
-      const execution = query.state.data?.globalExecution;
-      return execution &&
-        (execution.runningCount > 0 ||
-          execution.queuedTitleCount > 0 ||
-          execution.activeCampaignCount > 0)
-        ? 5_000
-        : false;
-    },
-    refetchIntervalInBackground: false,
   });
 }

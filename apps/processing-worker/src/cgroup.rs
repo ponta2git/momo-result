@@ -21,7 +21,9 @@ const V2_ROOT: &str = "/sys/fs/cgroup";
 #[cfg(target_os = "linux")]
 const DELEGATION_CGROUP_NAME: &str = "momo-heavy-delegated";
 #[cfg(target_os = "linux")]
-const ORCHESTRATOR_CGROUP_NAME: &str = "momo-orchestrator";
+// The cgroup path is an operational compatibility contract; only the Rust name follows the
+// processing-runtime terminology.
+const WORKER_CGROUP_NAME: &str = "momo-orchestrator";
 
 const MAXIMUM_CONTROLLER_FILE_BYTES: u64 = 64 * 1024;
 
@@ -257,7 +259,7 @@ impl ChildCgroup {
         }
     }
 
-    /// Reads the enclosing runtime cgroup that accounts for both the orchestrator and its child.
+    /// Reads the enclosing runtime cgroup that accounts for both the worker and its child.
     ///
     /// The v2 bootstrap inserts a delegated level between the runtime and the two managed process
     /// groups, while v1 creates the heavy child directly below the runtime group. Deriving this
@@ -393,16 +395,16 @@ fn prepare_v2(
 
     // A non-root cgroup v2 migration requires write access to both the
     // destination cgroup.procs and the common ancestor's cgroup.procs. Keep
-    // both the orchestrator and heavy child under one narrowly delegated root
+    // both the worker and heavy child under one narrowly delegated root
     // so the worker never needs write access to the container's cgroup root.
     let delegation = prepare_empty_child_directory(&parent, DELEGATION_CGROUP_NAME)?;
-    let orchestrator = prepare_empty_child_directory(&delegation, ORCHESTRATOR_CGROUP_NAME)?;
+    let worker_cgroup = prepare_empty_child_directory(&delegation, WORKER_CGROUP_NAME)?;
     fs::write(
-        orchestrator.join("cgroup.procs"),
+        worker_cgroup.join("cgroup.procs"),
         std::process::id().to_string(),
     )?;
-    let orchestrator_processes = read_process_ids(&orchestrator.join("cgroup.procs"))?;
-    if orchestrator_processes.as_slice() != [std::process::id()] {
+    let worker_processes = read_process_ids(&worker_cgroup.join("cgroup.procs"))?;
+    if worker_processes.as_slice() != [std::process::id()] {
         return Err(CgroupError::AttachFailed);
     }
     if !read_process_ids(&parent.join("cgroup.procs"))?.is_empty() {

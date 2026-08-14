@@ -45,6 +45,7 @@ COPY apps/api/build.sbt build.sbt
 
 FROM api-deps AS api-builder
 COPY apps/api/src/main src/main
+COPY apps/api/src/openapi src/openapi
 COPY apps/api/openapi.yaml openapi.yaml
 RUN --mount=type=cache,id=sbt-boot,target=/root/.sbt,sharing=locked \
   --mount=type=cache,id=coursier-cache,target=/root/.cache/coursier,sharing=locked \

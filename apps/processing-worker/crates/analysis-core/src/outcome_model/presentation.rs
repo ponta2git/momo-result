@@ -4,10 +4,11 @@ use crate::numeric::floor_u8;
 
 use super::{
     BOOTSTRAP_SEED, FOLD_COUNT, FoldScore, MINIMUM_EVENT_COUNT, MINIMUM_IMPORTANCE,
-    MINIMUM_IMPROVED_FOLDS, MINIMUM_MATCH_COUNT, Quality, RankAnalysis, Signal, UnexpectedWin,
+    MINIMUM_IMPROVED_FOLDS, MINIMUM_MATCH_COUNT, OutcomeModelAnalysis, Quality, Signal,
+    UnexpectedWin,
 };
 
-impl RankAnalysis {
+impl OutcomeModelAnalysis {
     #[must_use]
     pub(crate) fn aggregate_json(&self) -> Value {
         let default_member_id = self

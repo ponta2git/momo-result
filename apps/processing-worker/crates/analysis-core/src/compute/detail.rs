@@ -3,11 +3,13 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde_json::{Value, json};
 
 use crate::{
+    competition_rank::{
+        calculate_by_match as competition_ranks_by_match, rank_for as competition_rank_for,
+    },
     contract::ScopeRef,
     model::{PlayerMatchInput, PlayerMatchesByMember},
     numeric::count_as_f64,
-    rank::RankAnalysis,
-    rankings::{by_match as ranks_by_match, value as rank_value},
+    outcome_model::OutcomeModelAnalysis,
     stats::{average, quality_status, rate},
 };
 
@@ -31,13 +33,13 @@ pub(super) fn drilldown(
     match_count: usize,
     member_id: &str,
     metric_id: &str,
-    rank_analysis: &RankAnalysis,
+    outcome_model: &OutcomeModelAnalysis,
 ) -> Value {
     let payload = match metric_id {
         "rank.averageHistory" => rank_history_payload(member_matches),
         "playOrder.rankHistory" => play_order_history_payload(member_matches),
-        "rankAnalysis.rankSignals" => rank_analysis.signal_drilldown_json(member_id),
-        _ => rank_analysis.unexpected_wins_drilldown_json(member_id),
+        "rankAnalysis.rankSignals" => outcome_model.signal_drilldown_json(member_id),
+        _ => outcome_model.unexpected_wins_drilldown_json(member_id),
     };
     json!({
         "schemaVersion": 2,
@@ -276,7 +278,7 @@ pub(super) fn match_context(
     match_id: &str,
     match_index: usize,
 ) -> Value {
-    let revenue_ranks = ranks_by_match(group, |row| row.revenue_man_yen);
+    let revenue_ranks = competition_ranks_by_match(group, |row| row.revenue_man_yen);
     let mut ordered_group = group.to_vec();
     ordered_group.sort_by(|left, right| {
         left.rank
@@ -302,7 +304,7 @@ pub(super) fn match_context(
                 "rank": row.rank,
                 "totalAssetsManYen": row.total_assets_man_yen,
                 "revenueManYen": row.revenue_man_yen,
-                "revenueRank": rank_value(&revenue_ranks, row),
+                "revenueRank": competition_rank_for(&revenue_ranks, row),
                 "revenueAssetRate": revenue_asset_rate(row),
                 "previousRank": history.previous_rank,
                 "cumulativeAverageBefore": before,
@@ -318,7 +320,7 @@ pub(super) fn match_context(
             let history = index
                 .player_history
                 .get(&(row.match_id.as_str(), row.member_id.as_str()));
-            let revenue_rank = rank_value(&revenue_ranks, row).and_then(|rank| {
+            let revenue_rank = competition_rank_for(&revenue_ranks, row).and_then(|rank| {
                 (1..=4).find(|expected| (rank - f64::from(*expected)).abs() < f64::EPSILON)
             });
             let mut item_ids = vec![

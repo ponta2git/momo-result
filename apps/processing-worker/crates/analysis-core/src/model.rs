@@ -190,7 +190,7 @@ impl NormalizedAnalysisInput {
     ///
     /// This is deliberately a shape-only pass: it allocates no payloads and retains no per-scope
     /// index.  The child uses it immediately after the bounded input snapshot is loaded so an
-    /// impossible artifact is rejected before rank analysis or JSON construction starts.
+    /// impossible artifact is rejected before outcome-model analysis or JSON construction starts.
     #[must_use]
     pub const fn resource_count(&self) -> Option<u64> {
         self.resource_count

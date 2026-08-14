@@ -3,8 +3,8 @@ use std::collections::BTreeMap;
 use serde_json::{Value, json};
 
 use crate::{
+    competition_rank::{CompetitionRanks, rank_for as competition_rank_for},
     model::PlayerMatchInput,
-    rankings::{MatchPlayerRanks, value as rank_value},
     stats::{average, quality_status, rate},
 };
 
@@ -48,8 +48,8 @@ pub(super) fn highlights(
 pub(super) fn data_quality(
     players: &[String],
     player_matches_by_member: &BTreeMap<String, Vec<&PlayerMatchInput>>,
-    revenue_ranks: &MatchPlayerRanks<'_>,
-    destination_ranks: &MatchPlayerRanks<'_>,
+    revenue_ranks: &CompetitionRanks<'_>,
+    destination_ranks: &CompetitionRanks<'_>,
 ) -> Vec<Value> {
     let metric_ids = [
         "rank.average",
@@ -71,7 +71,7 @@ pub(super) fn data_quality(
                 let target_count = if metric_id == "revenueOutcome.topWinRate" {
                     rows.iter()
                         .filter(|row| {
-                            rank_value(revenue_ranks, row).is_some_and(|rank| rank <= 1.5)
+                            competition_rank_for(revenue_ranks, row).is_some_and(|rank| rank <= 1.5)
                         })
                         .count()
                 } else {

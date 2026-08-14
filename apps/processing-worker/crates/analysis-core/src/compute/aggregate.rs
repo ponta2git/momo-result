@@ -1,10 +1,10 @@
 use serde_json::{Value, json};
 
 use crate::{
+    competition_rank::calculate_by_match as competition_ranks_by_match,
     contract::ScopeRef,
     model::{AnalysisInput, PlayerMatchInput, PlayerMatchesByMember},
-    rank::RankAnalysis,
-    rankings::by_match as ranks_by_match,
+    outcome_model::OutcomeModelAnalysis,
 };
 
 use super::{
@@ -28,11 +28,11 @@ pub(super) fn aggregate(
     players: &[String],
     player_matches_by_member: &PlayerMatchesByMember<'_>,
     groups: &[MatchGroup<'_>],
-    rank_analysis: &RankAnalysis,
+    outcome_model: &OutcomeModelAnalysis,
 ) -> Value {
-    let revenue_ranks = ranks_by_match(rows, |row| row.revenue_man_yen);
-    let asset_ranks = ranks_by_match(rows, |row| row.total_assets_man_yen);
-    let destination_ranks = ranks_by_match(rows, |row| row.incidents.destination);
+    let revenue_ranks = competition_ranks_by_match(rows, |row| row.revenue_man_yen);
+    let asset_ranks = competition_ranks_by_match(rows, |row| row.total_assets_man_yen);
+    let destination_ranks = competition_ranks_by_match(rows, |row| row.incidents.destination);
     let metrics = player_metrics(
         players,
         player_matches_by_member,
@@ -86,7 +86,7 @@ pub(super) fn aggregate(
         "cardShopDestination": card_shop_destination(players, player_matches_by_member),
         "matchDigest": match_digest,
         "matchNoInEvent": match_no_in_event(players, rows),
-        "rankAnalysis": rank_analysis.aggregate_json(),
+        "rankAnalysis": outcome_model.aggregate_json(),
         "highlights": highlights(players, player_matches_by_member),
         "dataQuality": { "items": quality_items, "summary": quality_summary },
         "metricDefinitions": metric_definitions(),

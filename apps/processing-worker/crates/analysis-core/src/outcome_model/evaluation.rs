@@ -5,8 +5,8 @@ use crate::{model::PlayerMatchInput, numeric::count_as_f64};
 use super::{
     CrownCertainty, EncodedEvent, EncodedRow, FOLD_COUNT, FULL_FEATURE_COUNT, FoldEvaluation,
     FoldScore, MINIMUM_EVENT_COUNT, MINIMUM_IMPORTANCE, MINIMUM_IMPROVED_FOLDS,
-    MINIMUM_MATCH_COUNT, OK_EVENT_COUNT, PLAYER_COUNT, PairRecord, PlayerSignals,
-    PlayerUnexpectedWins, Quality, RankAnalysis, RankFailure, Signal, SignalKind,
+    MINIMUM_MATCH_COUNT, OK_EVENT_COUNT, OutcomeModelAnalysis, OutcomeModelFailure, PLAYER_COUNT,
+    PairRecord, PlayerSignals, PlayerUnexpectedWins, Quality, Signal, SignalKind,
     bootstrap::crown_certainty,
     encoding::{distinct_matches, encode, pair_records, pair_records_with},
     outcomes::{build_unexpected_wins, expected_ranks},
@@ -14,7 +14,7 @@ use super::{
 };
 
 #[must_use]
-pub(super) fn analyze(rows: &[&PlayerMatchInput], players: &[String]) -> RankAnalysis {
+pub(super) fn analyze(rows: &[&PlayerMatchInput], players: &[String]) -> OutcomeModelAnalysis {
     let match_count = distinct_matches(rows).len();
     let held_event_count = rows
         .iter()
@@ -32,17 +32,17 @@ pub(super) fn analyze(rows: &[&PlayerMatchInput], players: &[String]) -> RankAna
     }
 
     let result = encode(rows, players)
-        .map_err(|_error| RankFailure::Calculation)
+        .map_err(|_error| OutcomeModelFailure::Calculation)
         .and_then(|events| {
             let evaluations = evaluate_folds(&events)?;
-            let signals =
-                rank_signals(&evaluations, players).map_err(|_error| RankFailure::Calculation)?;
+            let signals = rank_signals(&evaluations, players)
+                .map_err(|_error| OutcomeModelFailure::Calculation)?;
             let expected =
-                expected_ranks(&evaluations).map_err(|_error| RankFailure::Calculation)?;
+                expected_ranks(&evaluations).map_err(|_error| OutcomeModelFailure::Calculation)?;
             let unexpected_wins = build_unexpected_wins(rows, players, &expected)
-                .map_err(|_error| RankFailure::Calculation)?;
+                .map_err(|_error| OutcomeModelFailure::Calculation)?;
             let crown = crown_certainty(&events, players)
-                .map_err(|_error| RankFailure::ModelNotConverged)?;
+                .map_err(|_error| OutcomeModelFailure::ModelNotConverged)?;
             Ok((evaluations, signals, unexpected_wins, crown))
         });
     match result {
@@ -60,7 +60,7 @@ pub(super) fn analyze(rows: &[&PlayerMatchInput], players: &[String]) -> RankAna
                 improved_fold_count,
                 has_stable,
             );
-            RankAnalysis {
+            OutcomeModelAnalysis {
                 quality,
                 reason_codes: reasons,
                 held_event_count,
@@ -124,8 +124,8 @@ fn empty_result(
     held_event_count: usize,
     match_count: usize,
     reasons: Vec<&'static str>,
-) -> RankAnalysis {
-    RankAnalysis {
+) -> OutcomeModelAnalysis {
+    OutcomeModelAnalysis {
         quality: Quality::NoTarget,
         reason_codes: reasons,
         held_event_count,
@@ -166,7 +166,7 @@ pub(super) fn bounded_count(value: usize) -> Result<f64, ()> {
     count_as_f64(value).ok_or(())
 }
 
-fn evaluate_folds(events: &[EncodedEvent]) -> Result<Vec<FoldEvaluation>, RankFailure> {
+fn evaluate_folds(events: &[EncodedEvent]) -> Result<Vec<FoldEvaluation>, OutcomeModelFailure> {
     (0..FOLD_COUNT)
         .map(|fold| {
             let test_events = events
@@ -182,22 +182,22 @@ fn evaluate_folds(events: &[EncodedEvent]) -> Result<Vec<FoldEvaluation>, RankFa
                     .filter(|(index, _)| index % FOLD_COUNT != fold)
                     .map(|(_, event)| event),
             )
-            .map_err(|_error| RankFailure::Calculation)?;
+            .map_err(|_error| OutcomeModelFailure::Calculation)?;
             let test_pairs =
-                pair_records(&test_events).map_err(|_error| RankFailure::Calculation)?;
+                pair_records(&test_events).map_err(|_error| OutcomeModelFailure::Calculation)?;
             if training_pairs.is_empty() || test_pairs.is_empty() {
-                return Err(RankFailure::Calculation);
+                return Err(OutcomeModelFailure::Calculation);
             }
             let baseline_fit = fit(&training_pairs
                 .iter()
                 .map(|pair| pair.baseline)
                 .collect::<Vec<_>>())
-            .map_err(|_error| RankFailure::ModelNotConverged)?;
+            .map_err(|_error| OutcomeModelFailure::ModelNotConverged)?;
             let full_fit = fit(&training_pairs
                 .iter()
                 .map(|pair| pair.full)
                 .collect::<Vec<_>>())
-            .map_err(|_error| RankFailure::ModelNotConverged)?;
+            .map_err(|_error| OutcomeModelFailure::ModelNotConverged)?;
             let baseline_observations = test_pairs
                 .iter()
                 .map(|pair| pair.baseline)
@@ -209,16 +209,16 @@ fn evaluate_folds(events: &[EncodedEvent]) -> Result<Vec<FoldEvaluation>, RankFa
                     held_event_count: test_events.len(),
                     comparison_count: test_pairs.len(),
                     baseline_log_loss: log_loss(&baseline_observations, &baseline_fit.coefficients)
-                        .map_err(|_error| RankFailure::Calculation)?,
+                        .map_err(|_error| OutcomeModelFailure::Calculation)?,
                     full_log_loss: log_loss(&full_observations, &full_fit.coefficients)
-                        .map_err(|_error| RankFailure::Calculation)?,
+                        .map_err(|_error| OutcomeModelFailure::Calculation)?,
                     baseline_brier_score: brier_score(
                         &baseline_observations,
                         &baseline_fit.coefficients,
                     )
-                    .map_err(|_error| RankFailure::Calculation)?,
+                    .map_err(|_error| OutcomeModelFailure::Calculation)?,
                     full_brier_score: brier_score(&full_observations, &full_fit.coefficients)
-                        .map_err(|_error| RankFailure::Calculation)?,
+                        .map_err(|_error| OutcomeModelFailure::Calculation)?,
                 },
                 test_events,
                 test_pairs,

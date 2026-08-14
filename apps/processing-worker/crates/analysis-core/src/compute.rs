@@ -6,7 +6,7 @@ use crate::{
         NormalizedAnalysisInput, PlayerMatchInput, PlayerMatchesByMember, ordered_member_ids,
         player_matches_by_member,
     },
-    rank,
+    outcome_model,
 };
 
 mod aggregate;
@@ -87,7 +87,7 @@ struct ScopeAnalysis<'a> {
     member_ids: Vec<String>,
     player_matches_by_member: PlayerMatchesByMember<'a>,
     match_groups: Vec<MatchGroup<'a>>,
-    rank_analysis: rank::RankAnalysis,
+    outcome_model: outcome_model::OutcomeModelAnalysis,
 }
 
 impl<'a> ScopeAnalysis<'a> {
@@ -95,13 +95,13 @@ impl<'a> ScopeAnalysis<'a> {
         let member_ids = ordered_member_ids(&player_matches);
         let player_matches_by_member = player_matches_by_member(&player_matches, &member_ids);
         let match_groups = match_groups(&player_matches);
-        let rank_analysis = rank::analyze(&player_matches, &member_ids);
+        let outcome_model = outcome_model::analyze(&player_matches, &member_ids);
         Self {
             player_matches,
             member_ids,
             player_matches_by_member,
             match_groups,
-            rank_analysis,
+            outcome_model,
         }
     }
 
@@ -162,7 +162,7 @@ pub fn try_for_each_resource<E>(
             &analysis.member_ids,
             &analysis.player_matches_by_member,
             &analysis.match_groups,
-            &analysis.rank_analysis,
+            &analysis.outcome_model,
         );
         let aggregate_item_ids = AggregateItemIds::from_aggregate(&aggregate);
         let review_data_quality = aggregate.get("dataQuality").cloned();
@@ -205,7 +205,7 @@ pub fn try_for_each_resource<E>(
                         analysis.match_groups.len(),
                         member_id,
                         metric.wire(),
-                        &analysis.rank_analysis,
+                        &analysis.outcome_model,
                     ),
                     item_count: member_matches.len(),
                     source_match_revision: None,

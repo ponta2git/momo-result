@@ -3,8 +3,8 @@ use std::collections::BTreeMap;
 use serde_json::{Value, json};
 
 use crate::{
+    competition_rank::{CompetitionRanks, rank_for as competition_rank_for},
     model::PlayerMatchInput,
-    rankings::{MatchPlayerRanks, value as rank_value},
     stats::{average, median_i32, population_stddev, quality_status, rate},
 };
 
@@ -61,8 +61,8 @@ pub(super) fn player_metrics(
     players: &[String],
     player_matches_by_member: &BTreeMap<String, Vec<&PlayerMatchInput>>,
     all_rows: &[&PlayerMatchInput],
-    revenue_ranks: &MatchPlayerRanks<'_>,
-    destination_ranks: &MatchPlayerRanks<'_>,
+    revenue_ranks: &CompetitionRanks<'_>,
+    destination_ranks: &CompetitionRanks<'_>,
 ) -> Vec<Value> {
     let revenue_max_by_match = maxima_by_match(all_rows, |row| row.revenue_man_yen);
     let destination_max_by_match = maxima_by_match(all_rows, |row| row.incidents.destination);
@@ -127,8 +127,8 @@ pub(super) fn player_metrics(
                 "destination": {
                     "conversionDelta": destination_rank_average.zip(average_rank).map(|(destination_rank, rank)| destination_rank - rank),
                     "dependenceScore": destination_dependence(rows, destination_ranks),
-                    "upperTargetCount": rows.iter().filter(|row| rank_value(destination_ranks, row).is_some_and(|rank| rank < 2.5)).count(),
-                    "lowerTargetCount": rows.iter().filter(|row| rank_value(destination_ranks, row).is_some_and(|rank| rank > 2.5)).count(),
+                    "upperTargetCount": rows.iter().filter(|row| competition_rank_for(destination_ranks, row).is_some_and(|rank| rank < 2.5)).count(),
+                    "lowerTargetCount": rows.iter().filter(|row| competition_rank_for(destination_ranks, row).is_some_and(|rank| rank > 2.5)).count(),
                 },
                 "revenueOutcome": {
                     "top": conditional_outcome(&subsets.top_revenue),
@@ -158,8 +158,8 @@ struct PlayerMetricSubsets<'a> {
 
 fn player_metric_subsets<'a>(
     rows: &[&'a PlayerMatchInput],
-    revenue_ranks: &MatchPlayerRanks<'_>,
-    destination_ranks: &MatchPlayerRanks<'_>,
+    revenue_ranks: &CompetitionRanks<'_>,
+    destination_ranks: &CompetitionRanks<'_>,
     revenue_max_by_match: &BTreeMap<&str, i32>,
     destination_max_by_match: &BTreeMap<&str, i32>,
 ) -> PlayerMetricSubsets<'a> {
@@ -189,13 +189,13 @@ fn player_metric_subsets<'a>(
         {
             subsets.top_destination.push(row);
         }
-        if let Some(rank) = rank_value(revenue_ranks, row) {
+        if let Some(rank) = competition_rank_for(revenue_ranks, row) {
             subsets.revenue_rank_values.push(rank);
             if rank > 2.5 {
                 subsets.low_revenue.push(row);
             }
         }
-        if let Some(rank) = rank_value(destination_ranks, row) {
+        if let Some(rank) = competition_rank_for(destination_ranks, row) {
             subsets.destination_rank_values.push(rank);
             if rank > 2.5 {
                 subsets.low_destination.push(row);
@@ -277,15 +277,15 @@ fn conditional_outcome(rows: &[&PlayerMatchInput]) -> Value {
 
 fn destination_dependence(
     rows: &[&PlayerMatchInput],
-    destination_ranks: &MatchPlayerRanks<'_>,
+    destination_ranks: &CompetitionRanks<'_>,
 ) -> Option<f64> {
     let upper = average(rows.iter().filter_map(|row| {
-        rank_value(destination_ranks, row)
+        competition_rank_for(destination_ranks, row)
             .filter(|rank| *rank < 2.5)
             .map(|_| f64::from(5 - row.rank))
     }));
     let lower = average(rows.iter().filter_map(|row| {
-        rank_value(destination_ranks, row)
+        competition_rank_for(destination_ranks, row)
             .filter(|rank| *rank > 2.5)
             .map(|_| f64::from(5 - row.rank))
     }));
@@ -354,8 +354,8 @@ pub(super) fn recent_ranks(
 
 pub(super) fn strategy_scatter(
     groups: &[MatchGroup<'_>],
-    revenue_ranks: &MatchPlayerRanks<'_>,
-    asset_ranks: &MatchPlayerRanks<'_>,
+    revenue_ranks: &CompetitionRanks<'_>,
+    asset_ranks: &CompetitionRanks<'_>,
 ) -> Value {
     json!({
         "points": groups.iter().enumerate().flat_map(|(index, group)| {
@@ -369,8 +369,8 @@ pub(super) fn strategy_scatter(
                 "totalAssetsManYen": row.total_assets_man_yen,
                 "revenueManYen": row.revenue_man_yen,
                 "revenueAssetRate": revenue_asset_rate(row),
-                "assetRank": rank_value(asset_ranks, row),
-                "revenueRank": rank_value(revenue_ranks, row),
+                "assetRank": competition_rank_for(asset_ranks, row),
+                "revenueRank": competition_rank_for(revenue_ranks, row),
             }))
         }).collect::<Vec<_>>()
     })
@@ -421,7 +421,7 @@ pub(super) fn play_order_comparison(
 pub(super) fn revenue_rank_conversion(
     players: &[String],
     player_matches_by_member: &BTreeMap<String, Vec<&PlayerMatchInput>>,
-    revenue_ranks: &MatchPlayerRanks<'_>,
+    revenue_ranks: &CompetitionRanks<'_>,
 ) -> Vec<Value> {
     players
         .iter()
@@ -433,7 +433,7 @@ pub(super) fn revenue_rank_conversion(
                         let target_count = rows
                             .iter()
                             .filter(|candidate_row| {
-                                rank_value(revenue_ranks, candidate_row).is_some_and(|value| {
+                                competition_rank_for(revenue_ranks, candidate_row).is_some_and(|value| {
                                     rounded_rank_is(value, revenue_rank)
                                         && candidate_row.rank == final_rank
                                 })
@@ -442,7 +442,7 @@ pub(super) fn revenue_rank_conversion(
                         let denominator = rows
                             .iter()
                             .filter(|candidate_row| {
-                                rank_value(revenue_ranks, candidate_row)
+                                competition_rank_for(revenue_ranks, candidate_row)
                                     .is_some_and(|value| rounded_rank_is(value, revenue_rank))
                             })
                             .count();
@@ -453,7 +453,7 @@ pub(super) fn revenue_rank_conversion(
                             "finalRank": final_rank,
                             "count": target_count,
                             "rate": cell_rate,
-                            "hasRevenueTie": rows.iter().any(|candidate_row| rank_value(revenue_ranks, candidate_row).is_some_and(|value| value.fract() != 0.0)),
+                            "hasRevenueTie": rows.iter().any(|candidate_row| competition_rank_for(revenue_ranks, candidate_row).is_some_and(|value| value.fract() != 0.0)),
                             "relativeIntensity": relative_intensity(cell_rate),
                         })
                     })

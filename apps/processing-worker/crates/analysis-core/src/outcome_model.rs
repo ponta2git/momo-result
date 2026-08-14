@@ -95,12 +95,12 @@ enum Quality {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum RankFailure {
+enum OutcomeModelFailure {
     ModelNotConverged,
     Calculation,
 }
 
-impl RankFailure {
+impl OutcomeModelFailure {
     const fn reason_code(self) -> &'static str {
         match self {
             Self::ModelNotConverged => "model_not_converged",
@@ -233,7 +233,7 @@ struct CrownCertainty {
 }
 
 #[derive(Clone, Debug)]
-pub(super) struct RankAnalysis {
+pub(super) struct OutcomeModelAnalysis {
     quality: Quality,
     reason_codes: Vec<&'static str>,
     held_event_count: usize,
@@ -307,14 +307,14 @@ struct FoldEvaluation {
     full_fit: Fit<FULL_FEATURE_COUNT>,
 }
 
-pub(super) fn analyze(rows: &[&PlayerMatchInput], players: &[String]) -> RankAnalysis {
+pub(super) fn analyze(rows: &[&PlayerMatchInput], players: &[String]) -> OutcomeModelAnalysis {
     evaluation::analyze(rows, players)
 }
 
 #[cfg(test)]
 #[expect(
     clippy::panic,
-    reason = "rank test-data conversion failures indicate a broken fixture generator"
+    reason = "outcome-model test-data conversion failures indicate a broken fixture generator"
 )]
 mod tests {
     use super::*;
@@ -358,7 +358,7 @@ mod tests {
     }
 
     #[test]
-    fn rank_model_is_deterministic_for_input_order() {
+    fn outcome_model_is_deterministic_for_input_order() {
         let rows = dataset();
         let forward = rows.iter().collect::<Vec<_>>();
         let mut reverse = forward.clone();
@@ -408,11 +408,14 @@ mod tests {
     }
 
     #[test]
-    fn rank_failure_reason_codes_distinguish_model_nonconvergence() {
+    fn outcome_model_failure_reason_codes_distinguish_nonconvergence() {
         assert_eq!(
-            RankFailure::ModelNotConverged.reason_code(),
+            OutcomeModelFailure::ModelNotConverged.reason_code(),
             "model_not_converged"
         );
-        assert_eq!(RankFailure::Calculation.reason_code(), "calculation_failed");
+        assert_eq!(
+            OutcomeModelFailure::Calculation.reason_code(),
+            "calculation_failed"
+        );
     }
 }

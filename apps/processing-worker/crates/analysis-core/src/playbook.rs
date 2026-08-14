@@ -3,10 +3,13 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde_json::{Value, json};
 
 use crate::{
+    competition_rank::{
+        CompetitionRanks, calculate_by_match as competition_ranks_by_match,
+        rank_for as competition_rank_for,
+    },
     contract::ScopeRef,
     model::{PlayerMatchInput, PlayerMatchesByMember},
     numeric::count_as_f64,
-    rankings::{MatchPlayerRanks, by_match as ranks_by_match, value as rank_value},
     stats::{average, cliffs_delta, percentile_i32, quality_status, rate, round},
 };
 
@@ -92,7 +95,7 @@ pub(super) fn build(
     player_matches_by_member: &PlayerMatchesByMember<'_>,
     data_quality: Option<Value>,
 ) -> Value {
-    let revenue_ranks = ranks_by_match(rows, |row| row.revenue_man_yen);
+    let revenue_ranks = competition_ranks_by_match(rows, |row| row.revenue_man_yen);
     let mut candidates = players
         .iter()
         .flat_map(|member_id| {
@@ -162,7 +165,7 @@ pub(super) fn build(
 fn player_candidates(
     member_id: &str,
     rows: &[&PlayerMatchInput],
-    revenue_ranks: &MatchPlayerRanks<'_>,
+    revenue_ranks: &CompetitionRanks<'_>,
 ) -> Vec<Candidate> {
     if rows.len() < MINIMUM_CONDITIONAL_COUNT {
         return Vec::new();
@@ -245,7 +248,7 @@ struct CandidateContext<'a> {
     member_id: &'a str,
     category: Category,
     baseline_rows: &'a [&'a PlayerMatchInput],
-    revenue_ranks: &'a MatchPlayerRanks<'a>,
+    revenue_ranks: &'a CompetitionRanks<'a>,
     split: OutcomeSplit,
 }
 
@@ -254,7 +257,7 @@ impl<'a> CandidateContext<'a> {
         member_id: &'a str,
         category: Category,
         baseline_rows: &'a [&'a PlayerMatchInput],
-        revenue_ranks: &'a MatchPlayerRanks<'a>,
+        revenue_ranks: &'a CompetitionRanks<'a>,
         split: OutcomeSplit,
     ) -> Self {
         Self {
@@ -295,7 +298,7 @@ fn push_low_asset_candidate(
     candidates: &mut Vec<Candidate>,
     member_id: &str,
     rows: &[&PlayerMatchInput],
-    revenue_ranks: &MatchPlayerRanks<'_>,
+    revenue_ranks: &CompetitionRanks<'_>,
 ) {
     let assets = rows
         .iter()
@@ -320,7 +323,7 @@ fn push_worst_order_candidate(
     candidates: &mut Vec<Candidate>,
     member_id: &str,
     rows: &[&PlayerMatchInput],
-    revenue_ranks: &MatchPlayerRanks<'_>,
+    revenue_ranks: &CompetitionRanks<'_>,
 ) {
     if let Some(worst_order) = worst_play_order(rows) {
         push_matching_candidate(
@@ -348,7 +351,7 @@ fn make_candidate(
     category: Category,
     target_rows: &[&PlayerMatchInput],
     baseline_rows: &[&PlayerMatchInput],
-    revenue_ranks: &MatchPlayerRanks<'_>,
+    revenue_ranks: &CompetitionRanks<'_>,
     split: OutcomeSplit,
 ) -> Option<Candidate> {
     let target_count = target_rows.len();
@@ -438,7 +441,7 @@ fn strongest_driver(
     category: Category,
     positive: &[&PlayerMatchInput],
     negative: &[&PlayerMatchInput],
-    revenue_ranks: &MatchPlayerRanks<'_>,
+    revenue_ranks: &CompetitionRanks<'_>,
 ) -> Option<DriverContrast> {
     drivers(category)
         .iter()
@@ -490,7 +493,7 @@ const fn drivers(category: Category) -> &'static [Driver] {
 fn driver_values(
     driver: Driver,
     rows: &[&PlayerMatchInput],
-    revenue_ranks: &MatchPlayerRanks<'_>,
+    revenue_ranks: &CompetitionRanks<'_>,
 ) -> Vec<f64> {
     rows.iter()
         .filter_map(|row| match driver {
@@ -675,8 +678,8 @@ fn recovery_rows<'a>(rows: &[&'a PlayerMatchInput]) -> Vec<&'a PlayerMatchInput>
         .collect()
 }
 
-fn revenue_rank_score(ranks: &MatchPlayerRanks<'_>, row: &PlayerMatchInput) -> Option<f64> {
-    rank_value(ranks, row).map(|rank| 5.0 - rank)
+fn revenue_rank_score(ranks: &CompetitionRanks<'_>, row: &PlayerMatchInput) -> Option<f64> {
+    competition_rank_for(ranks, row).map(|rank| 5.0 - rank)
 }
 
 #[cfg(test)]

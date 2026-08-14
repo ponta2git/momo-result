@@ -8,14 +8,14 @@
 
 pub mod canonical;
 pub mod child;
+mod competition_rank;
 pub mod compute;
 pub mod contract;
 pub mod model;
 mod numeric;
+mod outcome_model;
 pub mod payload;
 mod playbook;
-mod rank;
-mod rankings;
 mod stats;
 
 #[cfg(test)]

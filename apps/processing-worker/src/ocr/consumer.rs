@@ -99,7 +99,7 @@ impl std::fmt::Debug for OcrConsumerConfig {
 }
 
 impl OcrConsumerConfig {
-    /// Builds a dormant Rust OCR v2 runtime with closed topology and timing bounds.
+    /// Builds a bounded Rust OCR v2 runtime with closed topology and timing bounds.
     ///
     /// # Errors
     ///
@@ -107,7 +107,7 @@ impl OcrConsumerConfig {
     /// concurrent ownership or unbounded dependency work.
     #[expect(
         clippy::too_many_arguments,
-        reason = "the dormant consumer requires every topology and timing bound explicitly"
+        reason = "the consumer requires every topology and timing bound explicitly"
     )]
     pub(crate) fn new(
         database_url: String,
@@ -235,7 +235,7 @@ enum OcrSupervised<T> {
     OwnerLost,
 }
 
-/// Runs the dormant Rust OCR v2 consumer with an injected OCR child launcher.
+/// Runs the explicitly enabled Rust OCR v2 consumer with an injected OCR child launcher.
 ///
 /// The production writer must remain disabled until the live R2, control-plane, resource, and
 /// accuracy gates pass.

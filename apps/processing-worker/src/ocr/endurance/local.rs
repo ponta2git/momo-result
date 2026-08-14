@@ -11,8 +11,8 @@ use crate::ocr::contract::{OcrHints, RequestedScreenType};
 
 #[cfg(target_os = "linux")]
 use super::{
-    distribution, domain_failure_kind, elapsed_microseconds, evidence, milliseconds,
-    runtime_cgroup_evidence, vm_memory::VmMemorySampler, within_peak_threshold,
+    distribution, domain_failure_kind, duration_within, elapsed_microseconds, evidence,
+    milliseconds, runtime_cgroup_evidence, vm_memory::VmMemorySampler, within_peak_threshold,
 };
 #[cfg(target_os = "linux")]
 use image::ImageReader;
@@ -642,11 +642,6 @@ fn bounded_phase_timeout(
 #[cfg(target_os = "linux")]
 fn duration_milliseconds(duration: Duration) -> u64 {
     u64::try_from(duration.as_millis()).unwrap_or(u64::MAX)
-}
-
-#[cfg(target_os = "linux")]
-const fn duration_within(distribution: &DurationDistribution, p99: u64, maximum: u64) -> bool {
-    distribution.count > 0 && distribution.p99 <= p99 && distribution.maximum <= maximum
 }
 
 #[cfg(target_os = "linux")]

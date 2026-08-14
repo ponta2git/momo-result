@@ -6,7 +6,7 @@ use std::{
     time::Duration,
 };
 
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use thiserror::Error;
 
 use crate::cgroup::{CgroupError, ChildCgroup};
@@ -84,15 +84,23 @@ pub(crate) struct ManagedAnalysisChild {
     parent_liveness: std::os::unix::net::UnixStream,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub(crate) enum ProbeOutcome {
     ResourceLimitEnforced,
+    #[cfg_attr(
+        not(target_os = "linux"),
+        expect(dead_code, reason = "the production cgroup probe runs only on Linux")
+    )]
     ChildCompleted,
+    #[cfg_attr(
+        not(target_os = "linux"),
+        expect(dead_code, reason = "the production cgroup probe runs only on Linux")
+    )]
     TimedOut,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct HardLimitProbeResult {
     pub(crate) outcome: ProbeOutcome,

@@ -98,7 +98,7 @@ fn recognize_row(
     let mut snippets = Vec::new();
     let mut confidences = Vec::new();
     if let Some(primary) = variants.first() {
-        run_variant(
+        append_grayscale_recognitions(
             primary,
             &[6, 7],
             recognition,
@@ -110,7 +110,7 @@ fn recognize_row(
         if has_money_and_name(&snippets) {
             break;
         }
-        run_variant(
+        append_grayscale_recognitions(
             variant,
             &[6, 7],
             recognition,
@@ -119,14 +119,20 @@ fn recognize_row(
         )?;
     }
     if !has_money_and_name(&snippets) {
-        run_color_variant(image, &[6, 7], recognition, &mut snippets, &mut confidences)?;
+        append_color_recognitions(image, &[6, 7], recognition, &mut snippets, &mut confidences)?;
     }
     if !has_money_and_name(&snippets) {
         for variant in &variants {
             if has_money_and_name(&snippets) {
                 break;
             }
-            run_variant(variant, &[11], recognition, &mut snippets, &mut confidences)?;
+            append_grayscale_recognitions(
+                variant,
+                &[11],
+                recognition,
+                &mut snippets,
+                &mut confidences,
+            )?;
         }
     }
     Ok(RankedRecognition {
@@ -135,7 +141,7 @@ fn recognize_row(
     })
 }
 
-fn run_color_variant(
+fn append_color_recognitions(
     image: &DynamicImage,
     psms: &[u8],
     recognition: &mut RecognitionSession,
@@ -152,7 +158,7 @@ fn run_color_variant(
     Ok(())
 }
 
-fn run_variant(
+fn append_grayscale_recognitions(
     image: &GrayImage,
     psms: &[u8],
     recognition: &mut RecognitionSession,

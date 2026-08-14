@@ -187,7 +187,7 @@ pub(crate) async fn promote(
         .await
         .map_err(|source| postgres_phase("advisory_lock", source))?;
 
-    let key_hash = sha256_prefixed(request.operation_key.as_bytes());
+    let key_hash = canonical::sha256_prefixed(request.operation_key.as_bytes());
     let operation_id = stable_id("analysis-release-operation", &key_hash, "all");
     let campaign_id = stable_id("analysis-release-campaign", &key_hash, "all");
     let endpoint = format!("release:{}", request.trigger.wire());
@@ -689,10 +689,6 @@ fn stable_id(prefix: &str, left: &str, right: &str) -> String {
     let digest = Sha256::digest(format!("{prefix}\0{left}\0{right}").as_bytes());
     let digest_prefix = canonical::lower_hex_prefix(&digest, 16);
     format!("{prefix}-{digest_prefix}")
-}
-
-fn sha256_prefixed(bytes: &[u8]) -> String {
-    format!("sha256:{}", canonical::lower_hex(&Sha256::digest(bytes)))
 }
 
 const fn postgres_phase(phase: &'static str, source: tokio_postgres::Error) -> ReleaseError {

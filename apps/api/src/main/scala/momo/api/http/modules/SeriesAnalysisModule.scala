@@ -193,7 +193,7 @@ object SeriesAnalysisModule:
       getChunk: GetSeriesAnalysisChunk[F],
       decoded: Either[AppError, momo.api.domain.SeriesAnalysisChunkRequest],
       security: EndpointSecurity[F],
-  ): F[Either[ProblemDetails.ProblemResponse, io.circe.Json]] = read(
+  ): F[Either[ProblemDetails.ProblemResponse, Array[Byte]]] = read(
     limiter,
     accountId,
     operation,

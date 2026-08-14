@@ -1,6 +1,5 @@
 package momo.api.endpoints
 
-import io.circe.Json
 import sttp.model.StatusCode
 import sttp.tapir.*
 import sttp.tapir.json.circe.*
@@ -14,7 +13,11 @@ object SeriesAnalysisEndpoints:
     Endpoint[(Option[String], Option[String]), I, ProblemResponse, O, Any]
 
   private val noStore = header("Cache-Control", "private, no-store")
-  private given Schema[Json] = Schema.anyObject[Json]
+  private val rawJsonBody: EndpointIO.Body[Array[Byte], Array[Byte]] = EndpointIO.Body(
+    RawBodyType.ByteArrayBody,
+    Codec.id(CodecFormat.Json(), Schema.anyObject[Array[Byte]]),
+    EndpointIO.Info.empty,
+  )
 
   val options: SecuredRead[Unit, SeriesAnalysisOptionsResponse] = endpoint
     .securityIn(CommonEndpoint.accountHeader)
@@ -39,10 +42,10 @@ object SeriesAnalysisEndpoints:
   type DrilldownInput = (String, String, String, String, Option[String], Option[String])
   type MatchContextInput = (String, String, String, Option[String], Option[String])
 
-  val aggregate: SecuredRead[ScopedArtifactInput, Json] = artifactEndpoint("aggregate")
-  val review: SecuredRead[ScopedArtifactInput, Json] = artifactEndpoint("review")
+  val aggregate: SecuredRead[ScopedArtifactInput, Array[Byte]] = artifactEndpoint("aggregate")
+  val review: SecuredRead[ScopedArtifactInput, Array[Byte]] = artifactEndpoint("review")
 
-  val drilldown: SecuredRead[DrilldownInput, Json] = endpoint
+  val drilldown: SecuredRead[DrilldownInput, Array[Byte]] = endpoint
     .securityIn(CommonEndpoint.accountHeader)
     .get
     .in("api" / "analytics" / "series-comparison" / "v2" / "drilldown")
@@ -53,11 +56,11 @@ object SeriesAnalysisEndpoints:
     .in(query[Option[String]]("seasonMasterId"))
     .in(query[Option[String]]("mapMasterId"))
     .errorOut(CommonEndpoint.errorOut)
-    .out(jsonBody[Json])
+    .out(rawJsonBody)
     .out(noStore)
     .tag("analytics")
 
-  val matchContext: SecuredRead[MatchContextInput, Json] = endpoint
+  val matchContext: SecuredRead[MatchContextInput, Array[Byte]] = endpoint
     .securityIn(CommonEndpoint.accountHeader)
     .get
     .in("api" / "analytics" / "series-comparison" / "v2" / "match-context")
@@ -67,7 +70,7 @@ object SeriesAnalysisEndpoints:
     .in(query[Option[String]]("seasonMasterId"))
     .in(query[Option[String]]("mapMasterId"))
     .errorOut(CommonEndpoint.errorOut)
-    .out(jsonBody[Json])
+    .out(rawJsonBody)
     .out(noStore)
     .tag("analytics")
 
@@ -112,7 +115,9 @@ object SeriesAnalysisEndpoints:
       .out(noStore)
       .tag("admin-analysis")
 
-  private def artifactEndpoint(path: String): SecuredRead[ScopedArtifactInput, Json] = endpoint
+  private def artifactEndpoint(
+      path: String
+  ): SecuredRead[ScopedArtifactInput, Array[Byte]] = endpoint
     .securityIn(CommonEndpoint.accountHeader)
     .get
     .in("api" / "analytics" / "series-comparison" / "v2" / path)
@@ -121,6 +126,6 @@ object SeriesAnalysisEndpoints:
     .in(query[Option[String]]("seasonMasterId"))
     .in(query[Option[String]]("mapMasterId"))
     .errorOut(CommonEndpoint.errorOut)
-    .out(jsonBody[Json])
+    .out(rawJsonBody)
     .out(noStore)
     .tag("analytics")

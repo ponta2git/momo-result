@@ -8,6 +8,7 @@ import cats.effect.IO
 import cats.syntax.all.*
 import doobie.implicits.*
 import doobie.postgres.implicits.*
+import io.circe.parser.parse
 
 import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.adapters.postgres.{
@@ -347,7 +348,9 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite:
       memberName: String,
   ): Unit = result match
     case Right(chunk) =>
-      val cursor = chunk.payload.hcursor
+      val payload = parse(new String(chunk.payload, StandardCharsets.UTF_8))
+        .fold(error => fail(s"expected JSON analysis payload, got $error"), identity)
+      val cursor = payload.hcursor
       assertEquals(cursor.get[Int]("schemaVersion"), Right(2))
       assertEquals(cursor.downField("artifact").get[String]("artifactId"), Right(artifactId))
       assertEquals(cursor.downField("scope").get[String]("displayName"), Right("総合"))

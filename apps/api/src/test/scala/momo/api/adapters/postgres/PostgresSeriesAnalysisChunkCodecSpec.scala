@@ -46,14 +46,17 @@ final class PostgresSeriesAnalysisChunkCodecSpec extends FunSuite:
     )
 
   test("rejects more than four distinct member identifiers before building a SQL IN clause"):
-    val json = Json.arr((1 to 5).map(index =>
-      Json.obj(
-        "memberId" -> Json.fromString(s"member-$index")
-      )
-    )*)
+    val members = (1 to 5).map(index => s"{\"memberId\":\"member-$index\"}").mkString(",")
+    val text = aggregate(s"{\"members\":[$members]}")
+    val payload = text.getBytes(StandardCharsets.UTF_8)
 
     assertInternal(
-      PostgresSeriesAnalysisChunkCodec.memberIds(json),
+      PostgresSeriesAnalysisChunkCodec.decode(
+        stored(payload, nestingDepth = 5),
+        request,
+        SeriesAnalysisReadConfig.defaults,
+        None,
+      ),
       "Analysis artifact contains too many member identifiers.",
     )
 
@@ -100,30 +103,71 @@ final class PostgresSeriesAnalysisChunkCodecSpec extends FunSuite:
       parse(text).left.map(error => fail(s"invalid test fixture: $error")),
     )
 
-  test("counts exact UTF-8 response bytes for BMP and supplementary characters"):
+  test("rejects an isolated surrogate introduced by a JSON Unicode escape"):
+    val isolatedSurrogateEscape = "\\u" + "D800"
+    val text = aggregate(s"""{"note":"$isolatedSurrogateEscape"}""")
+    val payload = text.getBytes(StandardCharsets.UTF_8)
+
+    assertInternal(
+      PostgresSeriesAnalysisChunkCodec
+        .decode(
+          stored(payload, nestingDepth = 3),
+          request,
+          SeriesAnalysisReadConfig.defaults,
+          None
+        ),
+      "Analysis artifact contains invalid Unicode.",
+    )
+
+  test("renders exact UTF-8 response bytes without a full JSON String"):
     assertEquals(
-      PostgresSeriesAnalysisChunkCodec.jsonUtf8BytesUpperBound(Json.fromString("aあ😀")),
-      10L,
+      PostgresSeriesAnalysisChunkCodec
+        .renderJson(Json.fromString("aあ😀"), maximumBytes = 10)
+        .map(_.toList),
+      Right(Json.fromString("aあ😀").noSpaces.getBytes(StandardCharsets.UTF_8).toList),
+    )
+
+  test("byte rendering matches the JDK UTF-8 replacement for an isolated surrogate"):
+    val isolatedSurrogate = Character.toString(0xd800.toChar)
+    val json = Json.fromString(isolatedSurrogate)
+
+    assertEquals(
+      PostgresSeriesAnalysisChunkCodec
+        .renderJson(json, maximumBytes = 3)
+        .map(_.toList),
+      Right(json.noSpaces.getBytes(StandardCharsets.UTF_8).toList),
+    )
+
+  test("rejects a decoded tree above the configured JSON node bound"):
+    val payload = aggregate("{}").getBytes(StandardCharsets.UTF_8)
+    assertInternal(
+      PostgresSeriesAnalysisChunkCodec.decode(
+        stored(payload, nestingDepth = 3),
+        request,
+        SeriesAnalysisReadConfig.defaults.copy(maxJsonNodes = 1),
+        None,
+      ),
+      "Analysis artifact exceeds the JSON node bound.",
     )
 
   test("hydrates display metadata only when every referenced member is available"):
-    val decoded = decodedAggregate()
-    val hydrated = PostgresSeriesAnalysisChunkCodec.hydrate(
+    val decoded = decodedAggregate().copy(memberIds = List("member-ponta"))
+    val hydrated = PostgresSeriesAnalysisChunkCodec.hydrateAndRender(
       decoded,
-      List("member-ponta"),
       Map("member-ponta" -> "ぽんた"),
       Some("総合"),
       SeriesAnalysisReadConfig.defaults,
     )
 
     assertEquals(
-      hydrated.map(_.payload.hcursor.downField("scope").get[String]("displayName")),
+      hydrated.flatMap(chunk =>
+        parsePayload(chunk.payload).map(_.hcursor.downField("scope").get[String]("displayName"))
+      ),
       Right(Right("総合")),
     )
     assertInternal(
-      PostgresSeriesAnalysisChunkCodec.hydrate(
+      PostgresSeriesAnalysisChunkCodec.hydrateAndRender(
         decoded,
-        List("member-ponta"),
         Map.empty,
         Some("総合"),
         SeriesAnalysisReadConfig.defaults,
@@ -133,9 +177,8 @@ final class PostgresSeriesAnalysisChunkCodecSpec extends FunSuite:
 
   test("applies the response byte bound after display metadata hydration"):
     assertInternal(
-      PostgresSeriesAnalysisChunkCodec.hydrate(
+      PostgresSeriesAnalysisChunkCodec.hydrateAndRender(
         decodedAggregate(),
-        Nil,
         Map.empty,
         Some("総合"),
         SeriesAnalysisReadConfig.defaults.copy(maxResponseBytes = 1),
@@ -180,6 +223,10 @@ final class PostgresSeriesAnalysisChunkCodecSpec extends FunSuite:
     PostgresSeriesAnalysisChunkCodec
       .decode(stored(payload, nestingDepth = 3), request, SeriesAnalysisReadConfig.defaults, None)
       .fold(error => fail(s"invalid decoded aggregate fixture: $error"), identity)
+
+  private def parsePayload(payload: Array[Byte]): Either[AppError, Json] =
+    parse(new String(payload, StandardCharsets.UTF_8))
+      .left.map(error => AppError.Internal(error.message))
 
   private def assertInternal[A](result: Either[AppError, A], expectedDetail: String): Unit =
     result match

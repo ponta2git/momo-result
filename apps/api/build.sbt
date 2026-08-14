@@ -167,6 +167,7 @@ lazy val root = (project in file("."))
         "com.softwaremill.sttp.tapir" %% "tapir-openapi-docs" % tapirVersion % OpenApi,
         "com.softwaremill.sttp.apispec" %% "openapi-circe" % apiSpecVersion % OpenApi,
         "io.circe" %% "circe-core" % circeVersion,
+        "io.circe" %% "circe-jawn" % circeVersion,
         "io.circe" %% "circe-parser" % circeVersion,
         "io.github.iltotore" %% "iron" % ironVersion,
         "io.github.iltotore" %% "iron-ciris" % ironVersion,

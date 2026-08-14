@@ -54,7 +54,8 @@ private[postgres] object PostgresSeriesAnalysisChunkOps:
       case _ => regularChunkCio(request))
 
   def displayMetadata(
-      chunk: SeriesAnalysisChunk,
+      artifact: SeriesAnalysisArtifactRef,
+      scope: SeriesAnalysisScope,
       memberIds: List[String],
       config: SeriesAnalysisReadConfig,
   ): ConnectionIO[DisplayMetadata] = localStatementTimeout(config) *>
@@ -66,7 +67,7 @@ private[postgres] object PostgresSeriesAnalysisChunkOps:
           (fr"SELECT id, display_name FROM members WHERE " ++ Fragments.in(fr"id", ids))
             .query[MemberDisplayNameRow].to[List].map(_.map(row => row.id -> row.displayName).toMap)
       scopeName <- PostgresSeriesAnalysisScopeOps
-        .displayName(chunk.artifact.gameTitleId, chunk.scope)
+        .displayName(artifact.gameTitleId, scope)
     yield DisplayMetadata(names, scopeName))
 
   private def localStatementTimeout(config: SeriesAnalysisReadConfig): ConnectionIO[Unit] =

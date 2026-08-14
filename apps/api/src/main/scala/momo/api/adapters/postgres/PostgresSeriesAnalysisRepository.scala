@@ -38,35 +38,43 @@ final class PostgresSeriesAnalysisRepository[F[_]: Async] private (
 
   /**
    * Keeps the memory/decode permit for the complete read while releasing database connections
-   * before checksum, JSON decoding, hydration and response sizing. Artifact bytes belong to the
-   * first snapshot; display names are intentionally resolved from a second, short live snapshot.
+   * before checksum, JSON decoding, hydration and bounded byte rendering. The first stage returns
+   * only the decoded tree, so the database byte array does not cross the hydration stage boundary.
+   * Display names are intentionally resolved from a second, short live snapshot.
    */
   private def chunkPipeline(
       request: SeriesAnalysisChunkRequest
-  ): F[Either[AppError, SeriesAnalysisChunk]] = transactChunk(
+  ): F[Either[AppError, SeriesAnalysisChunk]] = decodeChunk(request).flatMap {
+    case Left(error) => error.asLeft[SeriesAnalysisChunk].pure[F]
+    case Right(chunk) =>
+      transactChunk(
+        PostgresSeriesAnalysisChunkOps
+          .displayMetadata(
+            chunk.artifact,
+            chunk.scope,
+            chunk.memberIds,
+            readConfig,
+          ).map(_.asRight[AppError])
+      ).flatMap {
+        case Left(error) => error.asLeft[SeriesAnalysisChunk].pure[F]
+        case Right(metadata) => Async[F].blocking(
+            PostgresSeriesAnalysisChunkCodec.hydrateAndRender(
+              chunk,
+              metadata.memberNames,
+              metadata.scopeName,
+              readConfig,
+            )
+          )
+      }
+  }
+
+  private def decodeChunk(
+      request: SeriesAnalysisChunkRequest
+  ): F[Either[AppError, DecodedSeriesAnalysisChunk]] = transactChunk(
     PostgresSeriesAnalysisChunkOps.load(request, readConfig)
   ).flatMap {
-    case Left(error) => error.asLeft[SeriesAnalysisChunk].pure[F]
-    case Right(loaded) =>
-      Async[F].blocking(decodeAndCollectMemberIds(loaded)).flatMap {
-        case Left(error) => error.asLeft[SeriesAnalysisChunk].pure[F]
-        case Right((chunk, memberIds)) =>
-          transactChunk(
-            PostgresSeriesAnalysisChunkOps
-              .displayMetadata(chunk, memberIds, readConfig).map(_.asRight[AppError])
-          ).flatMap {
-            case Left(error) => error.asLeft[SeriesAnalysisChunk].pure[F]
-            case Right(metadata) => Async[F].blocking(
-                PostgresSeriesAnalysisChunkCodec.hydrate(
-                  chunk,
-                  memberIds,
-                  metadata.memberNames,
-                  metadata.scopeName,
-                  readConfig,
-                )
-              )
-          }
-      }
+    case Left(error) => error.asLeft[DecodedSeriesAnalysisChunk].pure[F]
+    case Right(loaded) => Async[F].blocking(decodeLoadedChunk(loaded))
   }
 
   private def transactChunk[A](
@@ -76,24 +84,20 @@ final class PostgresSeriesAnalysisRepository[F[_]: Async] private (
       AppError.AnalysisReadBusy(readConfig.busyRetryAfterSeconds).asLeft[A].pure[ConnectionIO]
   }.transact(transactor)
 
-  private def decodeAndCollectMemberIds(
+  private def decodeLoadedChunk(
       loaded: PostgresSeriesAnalysisChunkOps.LoadedChunk
-  ): Either[AppError, (SeriesAnalysisChunk, List[String])] =
-    val decoded = loaded.material match
-      case PostgresSeriesAnalysisChunkOps.ChunkMaterial.Excluded(artifact, matchId, reason) =>
-        PostgresSeriesAnalysisChunkCodec
-          .excludedContext(artifact, loaded.request.scope, matchId, reason).asRight
-      case PostgresSeriesAnalysisChunkOps.ChunkMaterial.Stored(row, sourceMatchRevision) =>
-        PostgresSeriesAnalysisChunkCodec
-          .decode(row, loaded.request, readConfig, sourceMatchRevision)
-          .map(chunk =>
-            sourceMatchRevision.fold(chunk)(revision =>
-              PostgresSeriesAnalysisChunkCodec.includedContext(chunk, revision)
-            )
+  ): Either[AppError, DecodedSeriesAnalysisChunk] = loaded.material match
+    case PostgresSeriesAnalysisChunkOps.ChunkMaterial.Excluded(artifact, matchId, reason) =>
+      PostgresSeriesAnalysisChunkCodec
+        .excludedContext(artifact, loaded.request.scope, matchId, reason).asRight
+    case PostgresSeriesAnalysisChunkOps.ChunkMaterial.Stored(row, sourceMatchRevision) =>
+      PostgresSeriesAnalysisChunkCodec
+        .decode(row, loaded.request, readConfig, sourceMatchRevision)
+        .map(chunk =>
+          sourceMatchRevision.fold(chunk)(revision =>
+            PostgresSeriesAnalysisChunkCodec.includedContext(chunk, revision)
           )
-    decoded.flatMap(chunk =>
-      PostgresSeriesAnalysisChunkCodec.memberIds(chunk.payload).map(chunk -> _)
-    )
+        )
 
   override def adminOverview(
       gameTitleId: Option[GameTitleId]

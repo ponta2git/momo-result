@@ -2,8 +2,6 @@ package momo.api.domain
 
 import java.time.Instant
 
-import io.circe.Json
-
 import momo.api.domain.ids.{AccountId, GameTitleId, MapMasterId, MatchId, MemberId, SeasonMasterId}
 
 final case class SeriesAnalysisDesiredVersion(
@@ -98,7 +96,7 @@ final case class SeriesAnalysisOptions(
 final case class SeriesAnalysisChunk(
     artifact: SeriesAnalysisArtifactRef,
     scope: SeriesAnalysisScope,
-    payload: Json,
+    payload: Array[Byte],
 )
 
 enum SeriesAnalysisChunkKind derives CanEqual:

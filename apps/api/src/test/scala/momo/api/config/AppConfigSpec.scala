@@ -325,6 +325,7 @@ class AppConfigSpec extends CatsEffectSuite:
     val invalid = List(
       Map("ANALYSIS_API_MAX_ENCODED_BYTES" -> "16777217"),
       Map("ANALYSIS_API_MAX_NESTING_DEPTH" -> "65"),
+      Map("ANALYSIS_API_MAX_JSON_NODES" -> "60001"),
       Map("ANALYSIS_API_DECODE_CONCURRENCY" -> "3"),
       Map("ANALYSIS_API_READ_TIMEOUT_MS" -> "30001"),
     )
@@ -334,6 +335,18 @@ class AppConfigSpec extends CatsEffectSuite:
         s"expected an unsafe series-analysis limit to fail: $result",
       )
     ))
+  }
+
+  test("default analysis concurrency fits the explicit 160 MiB materialization budget") {
+    val config = SeriesAnalysisReadConfig.defaults
+    val concurrentBytes = SeriesAnalysisReadConfigLoader.maximumMaterializationBytes(config) *
+      BigInt(config.decodeConcurrency)
+
+    assert(
+      concurrentBytes <= BigInt(
+        SeriesAnalysisReadConfigLoader.MaximumConcurrentMaterializationBytes
+      )
+    )
   }
 
   test("loadFromEnv reads image upload storage limits") {

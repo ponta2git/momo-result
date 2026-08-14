@@ -279,6 +279,58 @@ describe("MatchesListPage", () => {
     );
   });
 
+  it("does not refetch the scope summary for list-only sorting and pagination", async () => {
+    setDevUser();
+    let summaryRequests = 0;
+    server.use(
+      http.get("/api/matches/summary", () => {
+        summaryRequests += 1;
+        return HttpResponse.json({
+          incompleteCount: 1,
+          needsReviewCount: 1,
+          ocrRunningCount: 0,
+          preConfirmCount: 1,
+        });
+      }),
+    );
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/matches"]}>
+          <Routes>
+            <Route
+              path="/matches"
+              element={
+                <>
+                  <LocationProbe />
+                  <MatchesListPage />
+                </>
+              }
+            />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "試合一覧" })).toBeInTheDocument();
+    const listRegion = screen.getByRole("region", { name: "登録済みの試合" });
+    await waitFor(() => expect(listRegion).not.toHaveAttribute("aria-busy"));
+    expect(summaryRequests).toBe(1);
+
+    await user.selectOptions(screen.getByLabelText("並び順"), "updated_desc");
+    await waitFor(() =>
+      expect(screen.getByLabelText("current location")).toHaveTextContent("sort=updated_desc"),
+    );
+    await waitFor(() => expect(listRegion).not.toHaveAttribute("aria-busy"));
+
+    await user.selectOptions(await screen.findByLabelText("表示件数"), "25");
+    await waitFor(() =>
+      expect(screen.getByLabelText("current location")).toHaveTextContent("pageSize=25"),
+    );
+    await waitFor(() => expect(listRegion).not.toHaveAttribute("aria-busy"));
+    expect(summaryRequests).toBe(1);
+  });
+
   it("corrects an out-of-range list page before showing an empty-list state", async () => {
     setDevUser();
     const items = [

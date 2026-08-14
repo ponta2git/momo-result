@@ -115,22 +115,6 @@ export function useMatchesListPageController() {
     preConfirmCount: 0,
   };
 
-  const matchesDataUpdatedAt = matchesQuery.dataUpdatedAt;
-  const summaryDataUpdatedAt = matchesSummaryQuery.dataUpdatedAt;
-  const summaryIsFetching = matchesSummaryQuery.isFetching;
-  const refetchSummary = matchesSummaryQuery.refetch;
-
-  useEffect(() => {
-    if (
-      matchesDataUpdatedAt === 0 ||
-      summaryIsFetching ||
-      matchesDataUpdatedAt <= summaryDataUpdatedAt
-    ) {
-      return;
-    }
-    void refetchSummary();
-  }, [matchesDataUpdatedAt, refetchSummary, summaryDataUpdatedAt, summaryIsFetching]);
-
   const searchSignature = useMemo(() => buildMatchListSearchParams(search).toString(), [search]);
   const activeSearchSignature = useMemo(
     () => buildMatchListSearchParams(activeSearch).toString(),

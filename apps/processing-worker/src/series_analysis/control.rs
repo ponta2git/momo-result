@@ -27,14 +27,14 @@ use vocabulary::{AttemptOutcome, DeliveryReason, RequestOutcome, ResultDispositi
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct ClaimedJob {
-    pub job_id: String,
-    pub game_title_id: String,
-    pub input_revision: i64,
-    pub algorithm_version: String,
-    pub artifact_schema_version: i32,
-    pub attempt_id: String,
-    pub attempt_no: i32,
-    pub fencing_token: i64,
+    pub(crate) job_id: String,
+    pub(crate) game_title_id: String,
+    pub(crate) input_revision: i64,
+    pub(crate) algorithm_version: String,
+    pub(crate) artifact_schema_version: i32,
+    pub(crate) attempt_id: String,
+    pub(crate) attempt_no: i32,
+    pub(crate) fencing_token: i64,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -48,8 +48,8 @@ pub(crate) enum ClaimResult {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct UnsupportedJobVersion {
-    pub algorithm_version: String,
-    pub artifact_schema_version: i32,
+    pub(crate) algorithm_version: String,
+    pub(crate) artifact_schema_version: i32,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -97,18 +97,18 @@ impl TransientRetryResult {
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub(crate) struct AttemptMetrics {
-    pub elapsed_milliseconds: i64,
-    pub calculation_milliseconds: i64,
-    pub staging_milliseconds: i64,
-    pub publication_milliseconds: i64,
-    pub child_peak_bytes: Option<i64>,
-    pub worker_peak_bytes: Option<i64>,
-    pub artifact_chunk_count: Option<i64>,
-    pub artifact_encoded_bytes: Option<i64>,
-    pub input_milliseconds: Option<i64>,
-    pub kernel_milliseconds: Option<i64>,
-    pub encoding_milliseconds: Option<i64>,
-    pub input_row_count: Option<i64>,
+    pub(crate) elapsed_milliseconds: i64,
+    pub(crate) calculation_milliseconds: i64,
+    pub(crate) staging_milliseconds: i64,
+    pub(crate) publication_milliseconds: i64,
+    pub(crate) child_peak_bytes: Option<i64>,
+    pub(crate) worker_peak_bytes: Option<i64>,
+    pub(crate) artifact_chunk_count: Option<i64>,
+    pub(crate) artifact_encoded_bytes: Option<i64>,
+    pub(crate) input_milliseconds: Option<i64>,
+    pub(crate) kernel_milliseconds: Option<i64>,
+    pub(crate) encoding_milliseconds: Option<i64>,
+    pub(crate) input_row_count: Option<i64>,
 }
 
 impl AttemptMetrics {
@@ -148,7 +148,7 @@ fn signed_milliseconds(duration: Duration) -> i64 {
 }
 
 #[derive(Debug, Error)]
-pub enum ControlError {
+pub(crate) enum ControlError {
     #[error("analysis PostgreSQL state transition failed")]
     Postgres(#[from] tokio_postgres::Error),
     #[error("analysis shared execution-slot transition failed: {0}")]

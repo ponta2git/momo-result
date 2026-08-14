@@ -1,6 +1,6 @@
 use std::str;
 
-pub use momo_ocr::{OcrHints, RequestedScreenType};
+pub(crate) use momo_ocr::{OcrHints, RequestedScreenType};
 pub(crate) use momo_ocr::{OcrMediaType, OcrQueuePayload};
 use redis::{Value, streams::StreamId};
 use thiserror::Error;
@@ -117,6 +117,13 @@ pub(crate) fn parse_delivery(
 
 /// Extracts only a bounded job ID for terminal malformed-delivery handling.
 #[must_use]
+#[cfg_attr(
+    all(not(target_os = "linux"), not(test)),
+    expect(
+        dead_code,
+        reason = "malformed delivery handling is performed by the production Linux consumer"
+    )
+)]
 pub(crate) fn readable_job_id(delivery: &StreamId) -> Option<String> {
     required_string(delivery, "jobId")
         .ok()

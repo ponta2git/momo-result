@@ -27,7 +27,7 @@ const MAXIMUM_CREDENTIAL_BYTES: usize = 512;
 const MAXIMUM_SESSION_TOKEN_BYTES: usize = 16 * 1024;
 
 #[derive(Clone)]
-pub struct R2ObjectStoreConfig {
+pub(crate) struct R2ObjectStoreConfig {
     endpoint: String,
     bucket: String,
     credentials: Credentials,
@@ -53,7 +53,7 @@ impl R2ObjectStoreConfig {
     ///
     /// Returns an error for remote plaintext endpoints, unsafe bucket names, credentials outside
     /// their structural bounds, missing timeouts, or more than two SDK attempts.
-    pub fn new(
+    pub(crate) fn new(
         endpoint: &str,
         bucket: &str,
         access_key_id: String,
@@ -84,7 +84,7 @@ impl R2ObjectStoreConfig {
         clippy::too_many_arguments,
         reason = "temporary S3 credentials add one inseparable session token to the closed client configuration"
     )]
-    pub fn new_with_session_token(
+    pub(crate) fn new_with_session_token(
         endpoint: &str,
         bucket: &str,
         access_key_id: String,
@@ -132,7 +132,7 @@ impl R2ObjectStoreConfig {
 }
 
 #[derive(Clone, Copy, Debug, Error, Eq, PartialEq)]
-pub enum R2ObjectStoreConfigError {
+pub(crate) enum R2ObjectStoreConfigError {
     #[error("R2 endpoint must be remote HTTPS or a loopback test endpoint without URL state")]
     Endpoint,
     #[error("R2 bucket name is invalid")]
@@ -199,7 +199,7 @@ impl R2ObjectStore {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct VerifiedSourceImage {
+pub(crate) struct VerifiedSourceImage {
     bytes: Vec<u8>,
     width: u32,
     height: u32,
@@ -207,17 +207,17 @@ pub struct VerifiedSourceImage {
 
 impl VerifiedSourceImage {
     #[must_use]
-    pub fn bytes(&self) -> &[u8] {
+    pub(crate) fn bytes(&self) -> &[u8] {
         &self.bytes
     }
 
     #[must_use]
-    pub const fn width(&self) -> u32 {
+    pub(crate) const fn width(&self) -> u32 {
         self.width
     }
 
     #[must_use]
-    pub const fn height(&self) -> u32 {
+    pub(crate) const fn height(&self) -> u32 {
         self.height
     }
 }

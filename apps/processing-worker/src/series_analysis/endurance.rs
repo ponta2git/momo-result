@@ -21,83 +21,83 @@ use crate::{
 use super::{artifact::validate_artifact_directory, child_report};
 
 #[derive(Clone, Debug)]
-pub struct ShadowRequest {
-    pub game_title_id: String,
-    pub runs: u32,
-    pub child_memory_limit_bytes: u64,
-    pub calculation_timeout: Duration,
-    pub maximum_chunk_bytes: u64,
-    pub maximum_chunk_count: u64,
-    pub maximum_total_bytes: u64,
-    pub maximum_file_count: u64,
-    pub temporary_root: PathBuf,
-    pub external_runtime_peak_file: PathBuf,
+pub(crate) struct ShadowRequest {
+    pub(crate) game_title_id: String,
+    pub(crate) runs: u32,
+    pub(crate) child_memory_limit_bytes: u64,
+    pub(crate) calculation_timeout: Duration,
+    pub(crate) maximum_chunk_bytes: u64,
+    pub(crate) maximum_chunk_count: u64,
+    pub(crate) maximum_total_bytes: u64,
+    pub(crate) maximum_file_count: u64,
+    pub(crate) temporary_root: PathBuf,
+    pub(crate) external_runtime_peak_file: PathBuf,
 }
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ShadowReport {
-    pub evidence_complete: bool,
-    pub run_count: usize,
-    pub input_revision: i64,
-    pub semantic_root_checksum: String,
-    pub elapsed_milliseconds: Distribution,
-    pub input_milliseconds: Distribution,
-    pub kernel_milliseconds: Distribution,
-    pub encoding_milliseconds: Distribution,
-    pub child_peak_bytes: Distribution,
-    pub worker_peak_bytes: Distribution,
-    pub worker_resident_bytes_after_cleanup: Distribution,
-    pub worker_resident_trend: ResidentTrend,
-    pub external_runtime_peak_bytes: u64,
-    pub artifact_payload_bytes: u64,
-    pub artifact_temporary_bytes: u64,
-    pub maximum_chunk_bytes: u64,
-    pub chunk_count: usize,
-    pub temporary_residue_count: usize,
-    pub runs: Vec<ShadowRun>,
+pub(crate) struct ShadowReport {
+    pub(crate) evidence_complete: bool,
+    pub(crate) run_count: usize,
+    pub(crate) input_revision: i64,
+    pub(crate) semantic_root_checksum: String,
+    pub(crate) elapsed_milliseconds: Distribution,
+    pub(crate) input_milliseconds: Distribution,
+    pub(crate) kernel_milliseconds: Distribution,
+    pub(crate) encoding_milliseconds: Distribution,
+    pub(crate) child_peak_bytes: Distribution,
+    pub(crate) worker_peak_bytes: Distribution,
+    pub(crate) worker_resident_bytes_after_cleanup: Distribution,
+    pub(crate) worker_resident_trend: ResidentTrend,
+    pub(crate) external_runtime_peak_bytes: u64,
+    pub(crate) artifact_payload_bytes: u64,
+    pub(crate) artifact_temporary_bytes: u64,
+    pub(crate) maximum_chunk_bytes: u64,
+    pub(crate) chunk_count: usize,
+    pub(crate) temporary_residue_count: usize,
+    pub(crate) runs: Vec<ShadowRun>,
 }
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ShadowRun {
-    pub run: u32,
-    pub elapsed_milliseconds: u64,
-    pub input_milliseconds: u64,
-    pub kernel_milliseconds: u64,
-    pub encoding_milliseconds: u64,
-    pub input_row_count: u64,
-    pub child_peak_bytes: u64,
-    pub worker_peak_bytes: u64,
-    pub worker_resident_bytes_after_cleanup: u64,
-    pub artifact_payload_bytes: u64,
-    pub artifact_temporary_bytes: u64,
-    pub maximum_chunk_bytes: u64,
-    pub chunk_count: usize,
-    pub root_checksum: String,
+pub(crate) struct ShadowRun {
+    pub(crate) run: u32,
+    pub(crate) elapsed_milliseconds: u64,
+    pub(crate) input_milliseconds: u64,
+    pub(crate) kernel_milliseconds: u64,
+    pub(crate) encoding_milliseconds: u64,
+    pub(crate) input_row_count: u64,
+    pub(crate) child_peak_bytes: u64,
+    pub(crate) worker_peak_bytes: u64,
+    pub(crate) worker_resident_bytes_after_cleanup: u64,
+    pub(crate) artifact_payload_bytes: u64,
+    pub(crate) artifact_temporary_bytes: u64,
+    pub(crate) maximum_chunk_bytes: u64,
+    pub(crate) chunk_count: usize,
+    pub(crate) root_checksum: String,
 }
 
 #[derive(Clone, Copy, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Distribution {
-    pub p50: u64,
-    pub p95: u64,
-    pub p99: u64,
-    pub maximum: u64,
+pub(crate) struct Distribution {
+    pub(crate) p50: u64,
+    pub(crate) p95: u64,
+    pub(crate) p99: u64,
+    pub(crate) maximum: u64,
 }
 
 #[derive(Clone, Copy, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ResidentTrend {
-    pub window_runs: usize,
-    pub initial_p50_bytes: u64,
-    pub terminal_p50_bytes: u64,
-    pub terminal_delta_bytes: i64,
-    pub maximum_after_initial_window_bytes: u64,
+pub(crate) struct ResidentTrend {
+    pub(crate) window_runs: usize,
+    pub(crate) initial_p50_bytes: u64,
+    pub(crate) terminal_p50_bytes: u64,
+    pub(crate) terminal_delta_bytes: i64,
+    pub(crate) maximum_after_initial_window_bytes: u64,
 }
 
 #[derive(Debug, Error)]
-pub enum ShadowError {
+pub(crate) enum ShadowError {
     #[error("MOMO_ANALYSIS_READ_DATABASE_URL must be set for shadow calculation")]
     MissingReadDatabaseUrl,
     #[error("shadow run count must be between 1 and 1000")]
@@ -150,7 +150,7 @@ pub enum ShadowError {
 /// # Errors
 ///
 /// Returns a safe error for timeout, non-determinism, missing metrics, residue, or failed children.
-pub async fn run(request: &ShadowRequest) -> Result<ShadowReport, ShadowError> {
+pub(crate) async fn run(request: &ShadowRequest) -> Result<ShadowReport, ShadowError> {
     if !(1..=1_000).contains(&request.runs) {
         return Err(ShadowError::InvalidRunCount);
     }

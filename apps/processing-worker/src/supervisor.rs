@@ -20,7 +20,7 @@ struct EnabledConsumers {
     ocr: OcrConsumerRuntimeConfig,
 }
 
-pub struct WorkerRuntimePlan {
+pub(crate) struct WorkerRuntimePlan {
     enabled_consumers: Option<EnabledConsumers>,
 }
 
@@ -31,7 +31,7 @@ impl WorkerRuntimePlan {
     ///
     /// Returns an error when OCR is requested without the shared series-analysis runtime, or when
     /// either consumer's bounded configuration is incomplete.
-    pub fn from_environment(
+    pub(crate) fn from_environment(
         analysis_activation: &AnalysisActivationConfig,
     ) -> Result<Self, SupervisorError> {
         let ocr_mode = consumer_mode_from_environment()?;
@@ -63,7 +63,7 @@ impl WorkerRuntimePlan {
     }
 
     #[must_use]
-    pub const fn ocr_enabled(&self) -> bool {
+    pub(crate) const fn ocr_enabled(&self) -> bool {
         matches!(
             self.enabled_consumers,
             Some(EnabledConsumers {
@@ -74,7 +74,7 @@ impl WorkerRuntimePlan {
     }
 
     #[must_use]
-    pub const fn series_analysis_enabled(&self) -> bool {
+    pub(crate) const fn series_analysis_enabled(&self) -> bool {
         self.enabled_consumers.is_some()
     }
 }
@@ -87,7 +87,7 @@ impl WorkerRuntimePlan {
 /// # Errors
 ///
 /// Returns the first consumer failure after signalling and awaiting the sibling consumer.
-pub async fn run(
+pub(crate) async fn run(
     plan: WorkerRuntimePlan,
     shutdown: watch::Receiver<bool>,
 ) -> Result<(), SupervisorError> {
@@ -211,7 +211,7 @@ fn run_combined(
 }
 
 #[derive(Debug, Error)]
-pub enum SupervisorError {
+pub(crate) enum SupervisorError {
     #[error(transparent)]
     SeriesAnalysisConfiguration(#[from] AnalysisConfigError),
     #[error(transparent)]
@@ -222,8 +222,16 @@ pub enum SupervisorError {
     ConfigurationChangedDuringLoad,
     #[error("series-analysis consumer failed: {0}")]
     SeriesAnalysis(SeriesAnalysisConsumerError),
+    #[cfg_attr(
+        not(target_os = "linux"),
+        expect(dead_code, reason = "combined OCR supervision runs only on Linux")
+    )]
     #[error("OCR consumer failed: {0}")]
     Ocr(crate::ocr::consumer::OcrConsumerError),
+    #[cfg_attr(
+        not(target_os = "linux"),
+        expect(dead_code, reason = "combined consumer supervision runs only on Linux")
+    )]
     #[error("{worker} worker exited without a shutdown request")]
     UnexpectedExit { worker: &'static str },
     #[error("combined worker runtime is supported only on Linux")]

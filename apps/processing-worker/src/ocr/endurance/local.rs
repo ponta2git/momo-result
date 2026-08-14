@@ -31,34 +31,41 @@ const MAXIMUM_RUNS: u32 = 1_000;
 const MAXIMUM_ENDURANCE_DURATION: Duration = Duration::from_hours(1);
 const PREFLIGHT_ROOT: &str = "/var/lib/momo-analysis/preflight";
 
-pub struct LocalOcrEnduranceRequest {
-    pub manifest_path: PathBuf,
-    pub runs: u32,
-    pub child_memory_limit_bytes: u64,
-    pub expected_runtime_memory_limit_bytes: u64,
-    pub ocr_timeout: Duration,
-    pub maximum_endurance: Duration,
-    pub stop_grace: Duration,
-    pub thresholds: LocalOcrEnduranceThresholds,
-    pub require_full_hd: bool,
-    pub require_sub_full_hd: bool,
+pub(crate) struct LocalOcrEnduranceRequest {
+    pub(crate) manifest_path: PathBuf,
+    pub(crate) runs: u32,
+    pub(crate) child_memory_limit_bytes: u64,
+    pub(crate) expected_runtime_memory_limit_bytes: u64,
+    pub(crate) ocr_timeout: Duration,
+    pub(crate) maximum_endurance: Duration,
+    pub(crate) stop_grace: Duration,
+    pub(crate) thresholds: LocalOcrEnduranceThresholds,
+    pub(crate) require_full_hd: bool,
+    pub(crate) require_sub_full_hd: bool,
 }
 
 #[derive(Clone, Copy, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct LocalOcrEnduranceThresholds {
-    pub maximum_child_peak_basis_points: u16,
-    pub maximum_runtime_peak_basis_points: u16,
-    pub maximum_input_p99_milliseconds: u64,
-    pub maximum_input_milliseconds: u64,
-    pub maximum_ocr_p99_milliseconds: u64,
-    pub maximum_ocr_milliseconds: u64,
-    pub maximum_total_milliseconds: u64,
+pub(crate) struct LocalOcrEnduranceThresholds {
+    #[serde(rename = "maximumChildPeakBasisPoints")]
+    pub(crate) child_peak_basis_points: u16,
+    #[serde(rename = "maximumRuntimePeakBasisPoints")]
+    pub(crate) runtime_peak_basis_points: u16,
+    #[serde(rename = "maximumInputP99Milliseconds")]
+    pub(crate) input_p99_milliseconds: u64,
+    #[serde(rename = "maximumInputMilliseconds")]
+    pub(crate) input_milliseconds: u64,
+    #[serde(rename = "maximumOcrP99Milliseconds")]
+    pub(crate) ocr_p99_milliseconds: u64,
+    #[serde(rename = "maximumOcrMilliseconds")]
+    pub(crate) ocr_milliseconds: u64,
+    #[serde(rename = "maximumTotalMilliseconds")]
+    pub(crate) total_milliseconds: u64,
 }
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct LocalOcrEnduranceReport {
+pub(crate) struct LocalOcrEnduranceReport {
     schema_version: u8,
     mode: &'static str,
     runs_requested: u32,
@@ -87,7 +94,7 @@ pub struct LocalOcrEnduranceReport {
 
 impl LocalOcrEnduranceReport {
     #[must_use]
-    pub const fn passed(&self) -> bool {
+    pub(crate) const fn passed(&self) -> bool {
         self.passed
     }
 }
@@ -156,7 +163,7 @@ struct LocalImageBytes {
 /// # Errors
 ///
 /// Returns the same closed preflight categories used by the R2-backed endurance gate.
-pub async fn run_local_endurance(
+pub(crate) async fn run_local_endurance(
     request: &LocalOcrEnduranceRequest,
 ) -> Result<LocalOcrEnduranceReport, OcrEnduranceError> {
     validate_request(request)?;
@@ -175,13 +182,13 @@ fn validate_request(request: &LocalOcrEnduranceRequest) -> Result<(), OcrEnduran
         || request.maximum_endurance.is_zero()
         || request.maximum_endurance > MAXIMUM_ENDURANCE_DURATION
         || request.stop_grace.is_zero()
-        || !(1..10_000).contains(&thresholds.maximum_child_peak_basis_points)
-        || !(1..10_000).contains(&thresholds.maximum_runtime_peak_basis_points)
-        || thresholds.maximum_input_p99_milliseconds == 0
-        || thresholds.maximum_input_p99_milliseconds > thresholds.maximum_input_milliseconds
-        || thresholds.maximum_ocr_p99_milliseconds == 0
-        || thresholds.maximum_ocr_p99_milliseconds > thresholds.maximum_ocr_milliseconds
-        || thresholds.maximum_total_milliseconds == 0
+        || !(1..10_000).contains(&thresholds.child_peak_basis_points)
+        || !(1..10_000).contains(&thresholds.runtime_peak_basis_points)
+        || thresholds.input_p99_milliseconds == 0
+        || thresholds.input_p99_milliseconds > thresholds.input_milliseconds
+        || thresholds.ocr_p99_milliseconds == 0
+        || thresholds.ocr_p99_milliseconds > thresholds.ocr_milliseconds
+        || thresholds.total_milliseconds == 0
     {
         return Err(OcrEnduranceError::Configuration);
     }
@@ -293,9 +300,9 @@ async fn run_linux(
     let mut dimension_class_runs = BTreeMap::<String, u32>::new();
     let endurance_started = Instant::now();
     let maximum_endurance_milliseconds = duration_milliseconds(request.maximum_endurance);
-    let effective_ocr_timeout = request.ocr_timeout.min(Duration::from_millis(
-        request.thresholds.maximum_ocr_milliseconds,
-    ));
+    let effective_ocr_timeout = request
+        .ocr_timeout
+        .min(Duration::from_millis(request.thresholds.ocr_milliseconds));
     info!(
         event = "ocr_local_endurance_started",
         runs_requested = request.runs,
@@ -311,7 +318,7 @@ async fn run_linux(
         let Some((input_timeout, input_limited_by_endurance)) = bounded_phase_timeout(
             endurance_started.elapsed(),
             request.maximum_endurance,
-            Duration::from_millis(request.thresholds.maximum_input_milliseconds),
+            Duration::from_millis(request.thresholds.input_milliseconds),
         ) else {
             failures.endurance_timeout = failures.endurance_timeout.saturating_add(1);
             failures.category("endurance_timeout");
@@ -528,23 +535,19 @@ async fn run_linux(
         && child_memory.oom_kill_count_delta == 0
         && runtime_cgroup_memory.limit_hit_count_delta == 0
         && runtime_cgroup_memory.oom_kill_count_delta == 0
-        && within_peak_threshold(
-            child_memory,
-            request.thresholds.maximum_child_peak_basis_points,
-        )
-        && runtime_memory
-            .within_peak_threshold(request.thresholds.maximum_runtime_peak_basis_points)
+        && within_peak_threshold(child_memory, request.thresholds.child_peak_basis_points)
+        && runtime_memory.within_peak_threshold(request.thresholds.runtime_peak_basis_points)
         && duration_within(
             &input_distribution,
-            request.thresholds.maximum_input_p99_milliseconds,
-            request.thresholds.maximum_input_milliseconds,
+            request.thresholds.input_p99_milliseconds,
+            request.thresholds.input_milliseconds,
         )
         && duration_within(
             &ocr_distribution,
-            request.thresholds.maximum_ocr_p99_milliseconds,
-            request.thresholds.maximum_ocr_milliseconds,
+            request.thresholds.ocr_p99_milliseconds,
+            request.thresholds.ocr_milliseconds,
         )
-        && total_distribution.maximum <= request.thresholds.maximum_total_milliseconds
+        && total_distribution.maximum <= request.thresholds.total_milliseconds
         && images
             .iter()
             .all(|image| image_runs.get(&image.label).copied().unwrap_or_default() > 0)

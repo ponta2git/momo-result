@@ -20,7 +20,7 @@ const RELEASE_READ_LIMITS: &str = "SET lock_timeout = '5s'; SET statement_timeou
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, ValueEnum)]
 #[serde(rename_all = "snake_case")]
-pub enum PromotionTrigger {
+pub(crate) enum PromotionTrigger {
     AlgorithmUpdate,
     ArtifactSchemaUpdate,
     InitialBackfill,
@@ -37,50 +37,50 @@ impl PromotionTrigger {
 }
 
 #[derive(Clone, Debug)]
-pub struct PromotionRequest<'a> {
-    pub trigger: PromotionTrigger,
-    pub operation_key: &'a str,
-    pub apply: bool,
+pub(crate) struct PromotionRequest<'a> {
+    pub(crate) trigger: PromotionTrigger,
+    pub(crate) operation_key: &'a str,
+    pub(crate) apply: bool,
 }
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct PromotionReport {
-    pub mode: &'static str,
-    pub trigger: PromotionTrigger,
-    pub operation_id: String,
-    pub campaign_id: String,
-    pub target_count: usize,
-    pub compatible_reader_count: i64,
-    pub compatible_worker_count: i64,
-    pub idempotent_replay: bool,
+pub(crate) struct PromotionReport {
+    pub(crate) mode: &'static str,
+    pub(crate) trigger: PromotionTrigger,
+    pub(crate) operation_id: String,
+    pub(crate) campaign_id: String,
+    pub(crate) target_count: usize,
+    pub(crate) compatible_reader_count: i64,
+    pub(crate) compatible_worker_count: i64,
+    pub(crate) idempotent_replay: bool,
 }
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct CompletenessReport {
-    pub passed: bool,
-    pub require_current: bool,
-    pub require_quiescent: bool,
-    pub title_count: usize,
-    pub current_artifact_count: usize,
-    pub active_job_count: i64,
-    pub failed_outbox_count: i64,
-    pub compatible_reader_count: i64,
-    pub compatible_worker_count: i64,
-    pub violations: Vec<CompletenessViolation>,
+pub(crate) struct CompletenessReport {
+    pub(crate) passed: bool,
+    pub(crate) require_current: bool,
+    pub(crate) require_quiescent: bool,
+    pub(crate) title_count: usize,
+    pub(crate) current_artifact_count: usize,
+    pub(crate) active_job_count: i64,
+    pub(crate) failed_outbox_count: i64,
+    pub(crate) compatible_reader_count: i64,
+    pub(crate) compatible_worker_count: i64,
+    pub(crate) violations: Vec<CompletenessViolation>,
 }
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct CompletenessViolation {
-    pub code: &'static str,
+pub(crate) struct CompletenessViolation {
+    pub(crate) code: &'static str,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub game_title_id: Option<String>,
+    pub(crate) game_title_id: Option<String>,
 }
 
 #[derive(Debug, Error)]
-pub enum ReleaseError {
+pub(crate) enum ReleaseError {
     #[error("DATABASE_URL must be set for release inspection")]
     MissingDatabaseUrl,
     #[error("release operation key must be 8 to 128 visible characters")]
@@ -165,7 +165,9 @@ struct TitleAuditRow {
 /// # Errors
 ///
 /// Returns a safe error for unavailable capabilities, conflicting idempotency, or database failure.
-pub async fn promote(request: &PromotionRequest<'_>) -> Result<PromotionReport, ReleaseError> {
+pub(crate) async fn promote(
+    request: &PromotionRequest<'_>,
+) -> Result<PromotionReport, ReleaseError> {
     validate_operation_key(request.operation_key)?;
     let database_url = database_url()?;
     let mut client = connect(&database_url).await?;
@@ -268,7 +270,7 @@ pub async fn promote(request: &PromotionRequest<'_>) -> Result<PromotionReport, 
 ///
 /// Returns a safe error only when the inspection itself cannot complete. An inconsistent system is
 /// represented by `passed = false` and deterministic violation codes.
-pub async fn audit_completeness(
+pub(crate) async fn audit_completeness(
     require_current: bool,
     require_quiescent: bool,
 ) -> Result<CompletenessReport, ReleaseError> {

@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 /// Decodes one OCR request, runs the capability crate, and writes one bounded response.
 #[must_use]
-pub fn execute(tessdata_path: Option<PathBuf>) -> i32 {
+pub(crate) fn execute(tessdata_path: Option<PathBuf>) -> i32 {
     let stdin = io::stdin();
     let request = match momo_ocr::protocol::decode_request(
         crate::process::CHILD_START_MARKER,

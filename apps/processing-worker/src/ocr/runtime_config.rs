@@ -137,7 +137,7 @@ where
 }
 
 #[derive(Debug, Error)]
-pub enum OcrRuntimeConfigError {
+pub(crate) enum OcrRuntimeConfigError {
     #[error("{CONSUMER_MODE_ENV} must be disabled or enabled")]
     InvalidMode,
     #[error("{name} must be set when the Rust OCR v2 consumer is enabled")]

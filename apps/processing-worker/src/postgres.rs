@@ -15,7 +15,7 @@ const DEFAULT_TCP_USER_TIMEOUT: Duration = Duration::from_secs(30);
 const SYSTEM_CA_BUNDLE: &str = "/etc/ssl/certs/ca-certificates.crt";
 
 #[derive(Debug, Error)]
-pub enum PostgresError {
+pub(crate) enum PostgresError {
     #[error("invalid PostgreSQL connection configuration")]
     InvalidConfiguration(#[source] tokio_postgres::Error),
     #[error("PostgreSQL TLS configuration failed")]

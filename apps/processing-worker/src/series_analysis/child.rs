@@ -21,15 +21,15 @@ use super::{
     input_repository::{InputRepositoryError, load_analysis_input},
 };
 
-pub struct AnalysisChildExecutionConfig<'a> {
-    pub identity: momo_analysis_core::child::AnalysisAttemptIdentity,
-    pub output_directory: &'a Path,
-    pub maximum_chunk_bytes: u64,
-    pub maximum_chunk_count: u64,
-    pub maximum_total_bytes: u64,
-    pub maximum_file_count: u64,
-    pub parent_liveness_fd: i32,
-    pub parent_liveness_timeout: Duration,
+pub(crate) struct AnalysisChildExecutionConfig<'a> {
+    pub(crate) identity: momo_analysis_core::child::AnalysisAttemptIdentity,
+    pub(crate) output_directory: &'a Path,
+    pub(crate) maximum_chunk_bytes: u64,
+    pub(crate) maximum_chunk_count: u64,
+    pub(crate) maximum_total_bytes: u64,
+    pub(crate) maximum_file_count: u64,
+    pub(crate) parent_liveness_fd: i32,
+    pub(crate) parent_liveness_timeout: Duration,
 }
 
 /// Executes the read-only calculation side of one worker attempt.
@@ -37,7 +37,7 @@ pub struct AnalysisChildExecutionConfig<'a> {
 /// This boundary intentionally returns only documented exit codes. Connection details, query
 /// errors, and artifact contents are never printed by the child.
 #[must_use]
-pub async fn execute(config: &AnalysisChildExecutionConfig<'_>) -> i32 {
+pub(crate) async fn execute(config: &AnalysisChildExecutionConfig<'_>) -> i32 {
     let started = Instant::now();
     let mut telemetry = ChildTelemetry::default();
     let result = execute_inner(config, &mut telemetry).await;

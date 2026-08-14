@@ -15,7 +15,7 @@ use super::{HardLimitProbeResult, ProcessError};
 ///
 /// Returns an error when configuration, attachment, signalling, or reaping fails.
 #[cfg(target_os = "linux")]
-pub async fn run_cgroup_hard_limit_probe(
+pub(crate) async fn run_cgroup_hard_limit_probe(
     allocation_bytes: u64,
     timeout: Duration,
 ) -> Result<HardLimitProbeResult, ProcessError> {
@@ -107,7 +107,7 @@ pub async fn run_cgroup_hard_limit_probe(
 ///
 /// Always returns [`ProcessError::UnsupportedPlatform`].
 #[cfg(not(target_os = "linux"))]
-pub async fn run_cgroup_hard_limit_probe(
+pub(crate) async fn run_cgroup_hard_limit_probe(
     _allocation_bytes: u64,
     _timeout: Duration,
 ) -> Result<HardLimitProbeResult, ProcessError> {

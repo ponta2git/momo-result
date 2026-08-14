@@ -13,28 +13,28 @@ const PUBLICATION_MODE_ENV: &str = "MOMO_ANALYSIS_PUBLICATION_MODE";
 pub(crate) const CHILD_MEMORY_LIMIT_ENV: &str = "MOMO_ANALYSIS_CHILD_MEMORY_LIMIT_BYTES";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum AnalysisPublicationMode {
+pub(crate) enum AnalysisPublicationMode {
     Disabled,
     Enabled,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct AnalysisExecutionLimits {
-    pub runtime_memory_limit: NonZeroU64,
-    pub child_memory_limit: NonZeroU64,
-    pub parent_headroom: NonZeroU64,
-    pub calculation_timeout: Duration,
-    pub finalization_timeout: Duration,
-    pub temporary_bytes_limit: NonZeroU64,
-    pub chunk_bytes_limit: NonZeroU64,
-    pub chunk_count_limit: NonZeroU64,
-    pub temporary_file_count_limit: NonZeroU64,
+pub(crate) struct AnalysisExecutionLimits {
+    pub(crate) runtime_memory_limit: NonZeroU64,
+    pub(crate) child_memory_limit: NonZeroU64,
+    pub(crate) parent_headroom: NonZeroU64,
+    pub(crate) calculation_timeout: Duration,
+    pub(crate) finalization_timeout: Duration,
+    pub(crate) temporary_bytes_limit: NonZeroU64,
+    pub(crate) chunk_bytes_limit: NonZeroU64,
+    pub(crate) chunk_count_limit: NonZeroU64,
+    pub(crate) temporary_file_count_limit: NonZeroU64,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct AnalysisActivationConfig {
-    pub publication_mode: AnalysisPublicationMode,
-    pub execution_limits: Option<AnalysisExecutionLimits>,
+pub(crate) struct AnalysisActivationConfig {
+    pub(crate) publication_mode: AnalysisPublicationMode,
+    pub(crate) execution_limits: Option<AnalysisExecutionLimits>,
 }
 
 #[derive(Clone)]
@@ -56,7 +56,7 @@ pub(crate) struct AnalysisConsumerConfig {
 }
 
 #[derive(Debug, Error, Eq, PartialEq)]
-pub enum AnalysisConfigError {
+pub(crate) enum AnalysisConfigError {
     #[error("{name} must be set when analysis publication is enabled")]
     Missing { name: &'static str },
     #[error("{name} must be a positive integer")]
@@ -85,7 +85,7 @@ impl AnalysisActivationConfig {
     /// # Errors
     ///
     /// Returns an error when publication is enabled with missing, invalid, or unsafe limits.
-    pub fn from_environment() -> Result<Self, AnalysisConfigError> {
+    pub(crate) fn from_environment() -> Result<Self, AnalysisConfigError> {
         let publication_mode = match env::var(PUBLICATION_MODE_ENV)
             .unwrap_or_else(|_| String::from("disabled"))
             .trim()

@@ -16,8 +16,8 @@ mod allocation;
 mod bootstrap_config;
 mod probe;
 
-pub use allocation::allocate_and_touch;
-pub use probe::run_cgroup_hard_limit_probe;
+pub(crate) use allocation::allocate_and_touch;
+pub(crate) use probe::run_cgroup_hard_limit_probe;
 
 pub(crate) const RESOURCE_LIMIT_HIT_EXIT_CODE: i32 = 73;
 pub(crate) const CHILD_SUPERSEDED_EXIT_CODE: i32 = 78;
@@ -26,7 +26,7 @@ pub(crate) const CHILD_ARTIFACT_TOO_LARGE_EXIT_CODE: i32 = 80;
 pub(crate) const CHILD_CALCULATION_FAILED_EXIT_CODE: i32 = 81;
 pub(crate) const CHILD_DEPENDENCY_FAILED_EXIT_CODE: i32 = 82;
 pub(crate) const CHILD_PARENT_LIVENESS_LOST_EXIT_CODE: i32 = 83;
-pub const CHILD_START_BARRIER_FAILED_EXIT_CODE: i32 = 84;
+pub(crate) const CHILD_START_BARRIER_FAILED_EXIT_CODE: i32 = 84;
 
 pub(crate) const CHILD_START_MARKER: u8 = 0x4d;
 #[cfg(target_os = "linux")]
@@ -36,14 +36,14 @@ const WORKER_GID: libc::gid_t = 10_001;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct AnalysisChildProcessSpec {
-    pub identity: momo_analysis_core::child::AnalysisAttemptIdentity,
-    pub read_database_url: String,
-    pub output_directory: PathBuf,
-    pub maximum_chunk_bytes: u64,
-    pub maximum_chunk_count: u64,
-    pub maximum_total_bytes: u64,
-    pub maximum_file_count: u64,
-    pub parent_liveness_timeout: Duration,
+    pub(crate) identity: momo_analysis_core::child::AnalysisAttemptIdentity,
+    pub(crate) read_database_url: String,
+    pub(crate) output_directory: PathBuf,
+    pub(crate) maximum_chunk_bytes: u64,
+    pub(crate) maximum_chunk_count: u64,
+    pub(crate) maximum_total_bytes: u64,
+    pub(crate) maximum_file_count: u64,
+    pub(crate) parent_liveness_timeout: Duration,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -86,7 +86,7 @@ pub(crate) struct ManagedAnalysisChild {
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub enum ProbeOutcome {
+pub(crate) enum ProbeOutcome {
     ResourceLimitEnforced,
     ChildCompleted,
     TimedOut,
@@ -94,22 +94,22 @@ pub enum ProbeOutcome {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct HardLimitProbeResult {
-    pub outcome: ProbeOutcome,
-    pub parent_survived: bool,
-    pub child_exit_code: Option<i32>,
-    pub child_signal: Option<i32>,
+pub(crate) struct HardLimitProbeResult {
+    pub(crate) outcome: ProbeOutcome,
+    pub(crate) parent_survived: bool,
+    pub(crate) child_exit_code: Option<i32>,
+    pub(crate) child_signal: Option<i32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub cgroup_limit_bytes: Option<u64>,
+    pub(crate) cgroup_limit_bytes: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub cgroup_peak_bytes: Option<u64>,
+    pub(crate) cgroup_peak_bytes: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub cgroup_limit_hit_count_delta: Option<u64>,
+    pub(crate) cgroup_limit_hit_count_delta: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub cgroup_oom_kill_count_delta: Option<u64>,
+    pub(crate) cgroup_oom_kill_count_delta: Option<u64>,
 }
 
-pub struct ParentDeathProbe {
+pub(crate) struct ParentDeathProbe {
     process_id: u32,
     _child: tokio::process::Child,
     #[cfg(unix)]
@@ -118,13 +118,13 @@ pub struct ParentDeathProbe {
 
 impl ParentDeathProbe {
     #[must_use]
-    pub const fn process_id(&self) -> u32 {
+    pub(crate) const fn process_id(&self) -> u32 {
         self.process_id
     }
 }
 
 #[derive(Debug, Error)]
-pub enum ProcessError {
+pub(crate) enum ProcessError {
     #[error("child memory limit is not supported on this platform")]
     UnsupportedPlatform,
     #[error("failed to resolve the current executable: {0}")]
@@ -143,16 +143,36 @@ pub enum ProcessError {
     StartBarrier(io::Error),
     #[error("managed child cgroup failed: {kind}")]
     Cgroup { kind: &'static str },
+    #[cfg_attr(
+        not(target_os = "linux"),
+        expect(dead_code, reason = "the Linux child launcher validates this bound")
+    )]
     #[error("child liveness timeout exceeds a supported bound")]
     LivenessTimeoutBound,
     #[error("child liveness timeout conversion exceeds a supported bound")]
     LivenessTimeoutConversion(#[from] std::num::TryFromIntError),
+    #[cfg_attr(
+        not(target_os = "linux"),
+        expect(dead_code, reason = "bootstrap execution is Linux-only")
+    )]
     #[error("worker bootstrap command is not permitted")]
     BootstrapCommand,
+    #[cfg_attr(
+        not(target_os = "linux"),
+        expect(dead_code, reason = "bootstrap execution is Linux-only")
+    )]
     #[error("worker bootstrap configuration is missing or invalid")]
     BootstrapConfiguration,
+    #[cfg_attr(
+        not(target_os = "linux"),
+        expect(dead_code, reason = "bootstrap execution is Linux-only")
+    )]
     #[error("worker bootstrap identity transition failed: {0}")]
     BootstrapIdentity(io::Error),
+    #[cfg_attr(
+        not(target_os = "linux"),
+        expect(dead_code, reason = "bootstrap execution is Linux-only")
+    )]
     #[error("worker bootstrap could not execute the unprivileged command: {0}")]
     BootstrapExec(io::Error),
     #[error("worker process does not have the fixed unprivileged identity")]
@@ -408,7 +428,7 @@ pub(crate) const fn managed_analysis_runtime_supported() -> bool {
 ///
 /// Returns an error when the command, cgroup, identity transition, or exec boundary is invalid.
 #[cfg(target_os = "linux")]
-pub fn bootstrap_and_exec(arguments: &[OsString]) -> Result<(), ProcessError> {
+pub(crate) fn bootstrap_and_exec(arguments: &[OsString]) -> Result<(), ProcessError> {
     use std::{os::unix::process::CommandExt, process::Command};
 
     if !bootstrap_config::command_allowed(arguments) {
@@ -441,7 +461,7 @@ pub fn bootstrap_and_exec(arguments: &[OsString]) -> Result<(), ProcessError> {
 ///
 /// Always returns [`ProcessError::UnsupportedPlatform`].
 #[cfg(not(target_os = "linux"))]
-pub const fn bootstrap_and_exec(_arguments: &[OsString]) -> Result<(), ProcessError> {
+pub(crate) const fn bootstrap_and_exec(_arguments: &[OsString]) -> Result<(), ProcessError> {
     Err(ProcessError::UnsupportedPlatform)
 }
 
@@ -539,7 +559,7 @@ fn classify_analysis_status(
 /// # Errors
 ///
 /// Returns an error if stdin closes early, carries the wrong marker, or contains trailing bytes.
-pub fn wait_for_child_start_barrier() -> Result<(), ProcessError> {
+pub(crate) fn wait_for_child_start_barrier() -> Result<(), ProcessError> {
     let stdin = io::stdin();
     let mut input = stdin.lock();
     let mut marker = [0_u8; 1];
@@ -645,7 +665,7 @@ pub(crate) fn available_filesystem_bytes(_path: &Path) -> Result<u64, io::Error>
 /// # Errors
 ///
 /// Returns an error when the executable cannot be resolved or the child cannot be spawned.
-pub fn spawn_parent_death_probe() -> Result<ParentDeathProbe, ProcessError> {
+pub(crate) fn spawn_parent_death_probe() -> Result<ParentDeathProbe, ProcessError> {
     use std::os::fd::AsRawFd;
     use std::os::unix::net::UnixStream;
 
@@ -680,7 +700,7 @@ pub fn spawn_parent_death_probe() -> Result<ParentDeathProbe, ProcessError> {
 /// # Errors
 ///
 /// Always returns [`ProcessError::UnsupportedPlatform`].
-pub fn spawn_parent_death_probe() -> Result<ParentDeathProbe, ProcessError> {
+pub(crate) fn spawn_parent_death_probe() -> Result<ParentDeathProbe, ProcessError> {
     Err(ProcessError::UnsupportedPlatform)
 }
 
@@ -737,7 +757,7 @@ fn set_descriptor_flags(descriptor: i32, flags: i32) -> io::Result<()> {
 ///
 /// Returns an error when the inherited descriptor is invalid or the monitor cannot be started.
 #[cfg(unix)]
-pub fn start_parent_liveness_monitor(
+pub(crate) fn start_parent_liveness_monitor(
     descriptor: i32,
     timeout: Duration,
 ) -> Result<(), ProcessError> {
@@ -768,7 +788,7 @@ pub fn start_parent_liveness_monitor(
 }
 
 #[cfg(not(unix))]
-pub fn start_parent_liveness_monitor(
+pub(crate) fn start_parent_liveness_monitor(
     _descriptor: i32,
     _timeout: Duration,
 ) -> Result<(), ProcessError> {

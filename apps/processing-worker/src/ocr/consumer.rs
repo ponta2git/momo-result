@@ -21,7 +21,7 @@ use super::{
     },
 };
 
-pub type OcrChildWaitFuture<'a> = Pin<
+pub(crate) type OcrChildWaitFuture<'a> = Pin<
     Box<
         dyn Future<Output = Result<Result<OcrOutput, OcrFailure>, OcrChildProcessFailure>>
             + Send
@@ -29,19 +29,19 @@ pub type OcrChildWaitFuture<'a> = Pin<
     >,
 >;
 
-pub type OcrChildTerminationFuture<'a> =
+pub(crate) type OcrChildTerminationFuture<'a> =
     Pin<Box<dyn Future<Output = Result<(), &'static str>> + Send + 'a>>;
 
 use momo_ocr::{OcrFailure, OcrOutput};
 
 /// Failure observed by the parent supervisor rather than returned by OCR domain logic.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum OcrChildProcessFailure {
+pub(crate) enum OcrChildProcessFailure {
     Runtime(&'static str),
     ResourceExhausted,
 }
 
-pub trait OcrChildHandle: Send {
+pub(crate) trait OcrChildHandle: Send {
     /// Waits until the isolated OCR child is reaped and returns its closed domain outcome.
     fn wait(&mut self) -> OcrChildWaitFuture<'_>;
 
@@ -49,7 +49,7 @@ pub trait OcrChildHandle: Send {
     fn terminate(&mut self) -> OcrChildTerminationFuture<'_>;
 }
 
-pub trait OcrChildLauncher: Send + Sync {
+pub(crate) trait OcrChildLauncher: Send + Sync {
     /// Starts one OCR child behind the shared attach barrier.
     ///
     /// # Errors
@@ -79,7 +79,7 @@ pub(crate) const fn failure_retryable(failure: OcrFailure) -> bool {
 }
 
 #[derive(Clone)]
-pub struct OcrConsumerConfig {
+pub(crate) struct OcrConsumerConfig {
     database_url: String,
     redis_url: String,
     queue: OcrQueueConfig,
@@ -109,7 +109,7 @@ impl OcrConsumerConfig {
         clippy::too_many_arguments,
         reason = "the dormant consumer requires every topology and timing bound explicitly"
     )]
-    pub fn new(
+    pub(crate) fn new(
         database_url: String,
         redis_url: String,
         stream: String,
@@ -179,7 +179,7 @@ impl OcrConsumerConfig {
 }
 
 #[derive(Debug, Error)]
-pub enum OcrConsumerError {
+pub(crate) enum OcrConsumerError {
     #[error("OCR consumer configuration is unsafe")]
     InvalidConfiguration,
     #[error("OCR consumer database dependency failed: {0}")]
@@ -244,7 +244,7 @@ enum OcrSupervised<T> {
 ///
 /// Returns an opaque dependency or control-plane category without exposing connection strings,
 /// credentials, object keys, or OCR payloads.
-pub async fn run<L: OcrChildLauncher>(
+pub(crate) async fn run<L: OcrChildLauncher>(
     config: OcrConsumerConfig,
     launcher: &L,
     mut shutdown: watch::Receiver<bool>,

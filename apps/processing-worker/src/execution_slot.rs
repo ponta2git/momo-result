@@ -174,6 +174,13 @@ pub(crate) async fn acquire_analysis(
     .await
 }
 
+#[cfg_attr(
+    all(not(target_os = "linux"), not(test)),
+    expect(
+        dead_code,
+        reason = "OCR slot acquisition is used by the production Linux consumer"
+    )
+)]
 pub(crate) async fn acquire_ocr(
     transaction: &Transaction<'_>,
     expected_fencing_token: i64,
@@ -385,6 +392,13 @@ pub(crate) async fn clear_stale_preemption(
     Ok(cleared == 1)
 }
 
+#[cfg_attr(
+    all(not(target_os = "linux"), not(test)),
+    expect(
+        dead_code,
+        reason = "OCR requests analysis preemption only in the production Linux consumer"
+    )
+)]
 pub(crate) async fn request_analysis_preemption(
     transaction: &Transaction<'_>,
     holder: &ExecutionSlotHolder,

@@ -32,24 +32,24 @@ const MANIFEST_FILE_NAME: &str = "manifest.json";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct ArtifactBuildRequest {
-    pub artifact_id: String,
-    pub algorithm_version: String,
-    pub maximum_chunk_bytes: u64,
-    pub maximum_chunk_count: u64,
-    pub maximum_total_bytes: u64,
-    pub maximum_file_count: u64,
+    pub(crate) artifact_id: String,
+    pub(crate) algorithm_version: String,
+    pub(crate) maximum_chunk_bytes: u64,
+    pub(crate) maximum_chunk_count: u64,
+    pub(crate) maximum_total_bytes: u64,
+    pub(crate) maximum_file_count: u64,
 }
 
 pub(crate) struct BuiltArtifact {
-    pub manifest: ArtifactManifest,
-    pub calculation_duration: Duration,
-    pub encoding_duration: Duration,
-    pub chunk_bytes: u64,
-    pub directory_bytes: u64,
+    pub(crate) manifest: ArtifactManifest,
+    pub(crate) calculation_duration: Duration,
+    pub(crate) encoding_duration: Duration,
+    pub(crate) chunk_bytes: u64,
+    pub(crate) directory_bytes: u64,
 }
 
 #[derive(Debug, Error)]
-pub enum ArtifactError {
+pub(crate) enum ArtifactError {
     #[error("artifact directory is not an owned empty directory")]
     UnsafeDirectory,
     #[error("artifact file-system operation failed")]

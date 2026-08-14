@@ -6,13 +6,13 @@ use thiserror::Error;
 use tokio::sync::watch;
 use tracing::{Instrument, error, info, info_span, warn};
 
-pub mod artifact;
-pub mod child;
-pub mod child_report;
-pub mod config;
-pub mod control;
-pub mod endurance;
-pub mod release;
+pub(crate) mod artifact;
+pub(crate) mod child;
+pub(crate) mod child_report;
+pub(crate) mod config;
+pub(crate) mod control;
+pub(crate) mod endurance;
+pub(crate) mod release;
 
 use crate::{
     postgres::{self, PostgresError},
@@ -42,7 +42,7 @@ use metrics::elapsed_metrics;
 use queue::{acknowledge, ensure_consumer_group, next_delivery, payload_from_delivery};
 
 #[derive(Debug, Error)]
-pub enum ConsumerError {
+pub(crate) enum ConsumerError {
     #[error("analysis control database connection failed")]
     Database(#[from] PostgresError),
     #[error("analysis control-plane transition failed")]

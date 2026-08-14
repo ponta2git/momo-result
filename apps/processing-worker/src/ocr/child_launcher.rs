@@ -328,7 +328,7 @@ async fn read_bounded_output(stdout: tokio::process::ChildStdout) -> Result<Vec<
 ///
 /// Returns an opaque process-boundary category when identity, cgroup, framing, cleanup, or the
 /// expected decode-failure response violates the dormant runtime contract.
-pub async fn probe_isolated_child_lifecycle(
+pub(crate) async fn probe_isolated_child_lifecycle(
     timeout: Duration,
     stop_grace: Duration,
 ) -> Result<(), &'static str> {

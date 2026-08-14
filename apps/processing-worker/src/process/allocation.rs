@@ -1,7 +1,7 @@
 /// Allocates and physically touches an anonymous mapping for the explicit memory-limit probes.
 #[cfg(unix)]
 #[must_use]
-pub fn allocate_and_touch(bytes: u64) -> i32 {
+pub(crate) fn allocate_and_touch(bytes: u64) -> i32 {
     let Ok(length) = usize::try_from(bytes) else {
         return super::RESOURCE_LIMIT_HIT_EXIT_CODE;
     };
@@ -101,6 +101,6 @@ impl Drop for AnonymousMapping {
 /// Reports that the allocation probe is unavailable outside Unix runtimes.
 #[cfg(not(unix))]
 #[must_use]
-pub const fn allocate_and_touch(_bytes: u64) -> i32 {
+pub(crate) const fn allocate_and_touch(_bytes: u64) -> i32 {
     76
 }

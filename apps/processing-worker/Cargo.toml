@@ -6,7 +6,7 @@ rust-version = "1.97"
 publish = false
 
 [[bin]]
-name = "momo-analysis"
+name = "momo-processing-worker"
 path = "src/main.rs"
 
 [workspace]

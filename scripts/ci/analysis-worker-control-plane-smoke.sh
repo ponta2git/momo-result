@@ -36,7 +36,7 @@ run_release_command() {
   docker run --rm --network host --add-host host.docker.internal:host-gateway \
     -e "DATABASE_URL=${release_database_url}" \
     "${worker_image}" \
-    /usr/local/bin/momo-analysis bootstrap -- "$@"
+    /usr/local/bin/momo-processing-worker bootstrap -- "$@"
 }
 
 run_root="$(mktemp -d "${TMPDIR:-/tmp}/momo-analysis-control-plane.XXXXXX")"
@@ -309,7 +309,7 @@ worker_environment=(
   "MOMO_ANALYSIS_REDIS_BLOCK_MS=200"
   "MOMO_OCR_V2_CONSUMER_MODE=disabled"
   "MOMO_LOG_FORMAT=json"
-  "RUST_LOG=momo_processing_worker=info,momo_analysis=info"
+  "RUST_LOG=momo_processing_worker=info"
 )
 
 docker_environment=()

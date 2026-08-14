@@ -77,7 +77,7 @@ cd apps/api && sbt run
 Analysis / OCR worker:
 
 `pnpm dev` はanalysis workerを起動しない。workerのprocess isolation契約はLinux専用であり、macOSで
-`momo-analysis worker` を直接起動するとjob claim前にfail closedする。ローカルでは専用imageをbuildし、
+`momo-processing-worker worker` を直接起動するとjob claim前にfail closedする。ローカルでは専用imageをbuildし、
 別terminalからDockerで起動する。
 
 ```sh
@@ -102,11 +102,11 @@ worker imageの更新だけでは、DBに保存されたdesired algorithm versio
 release昇格をdry-run、applyの順で行う。同じoperation keyを両方に使い、key内のversionと日付は対象ごとに更新する。
 
 ```sh
-docker exec momo-analysis-local momo-analysis bootstrap -- release-promote \
+docker exec momo-analysis-local momo-processing-worker bootstrap -- release-promote \
   --trigger algorithm-update \
   --operation-key local-algorithm-v2-20260813
 
-docker exec momo-analysis-local momo-analysis bootstrap -- release-promote \
+docker exec momo-analysis-local momo-processing-worker bootstrap -- release-promote \
   --trigger algorithm-update \
   --operation-key local-algorithm-v2-20260813 \
   --apply
@@ -235,7 +235,7 @@ productionのOS FFIは `process` moduleだけに隔離し、外側へcheckedなs
 PostgreSQL / Redis / Linux process境界は通常のCargo testと分け、repository rootで次を実行する。
 
 ```sh
-scripts/ci/analysis-release-db-smoke.sh apps/processing-worker/target/release/momo-analysis
+scripts/ci/analysis-release-db-smoke.sh apps/processing-worker/target/release/momo-processing-worker
 scripts/ci/ocr-rust-control-plane-smoke.sh
 scripts/ci/analysis-worker-image-smoke.sh <local-image-tag>
 ANALYSIS_WORKER_IMAGE=<local-image-tag> scripts/ci/analysis-worker-control-plane-smoke.sh

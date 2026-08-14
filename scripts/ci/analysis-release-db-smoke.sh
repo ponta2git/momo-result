@@ -28,7 +28,7 @@ run_release_command() {
     docker run --rm --network host --add-host host.docker.internal:host-gateway \
       -e "DATABASE_URL=${release_database_url}" \
       "${worker_image}" \
-      /usr/local/bin/momo-analysis bootstrap -- "$@"
+      /usr/local/bin/momo-processing-worker bootstrap -- "$@"
   else
     DATABASE_URL="${release_database_url}" "${binary}" "$@"
   fi

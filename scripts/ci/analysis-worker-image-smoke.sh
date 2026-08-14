@@ -2,6 +2,8 @@
 set -euo pipefail
 
 image_ref="${1:?analysis worker image reference is required}"
+primary_binary="/usr/local/bin/momo-processing-worker"
+compatibility_binary="/usr/local/bin/momo-analysis"
 runtime_memory_limit="256m"
 child_memory_limit_bytes="134217728"
 probe_allocation_bytes="268435456"
@@ -39,7 +41,31 @@ then
   exit 1
 fi
 
-docker run --rm --entrypoint /usr/local/bin/momo-analysis "${image_ref}" --version
+docker run --rm --entrypoint "${primary_binary}" "${image_ref}" --version
+docker run --rm --entrypoint "${compatibility_binary}" "${image_ref}" --version
+
+if ! docker run --rm --entrypoint sh "${image_ref}" -c \
+  'test -L /usr/local/bin/momo-analysis'
+then
+  echo "analysis worker compatibility path must be a symbolic link" >&2
+  exit 1
+fi
+compatibility_target="$(
+  docker run --rm --entrypoint /momo-toolbox/readlink \
+    "${image_ref}" "${compatibility_binary}"
+)"
+if [[ "${compatibility_target}" != "momo-processing-worker" ]]; then
+  echo "analysis worker compatibility link must use the relative primary binary target" >&2
+  exit 1
+fi
+resolved_compatibility_target="$(
+  docker run --rm --entrypoint /momo-toolbox/readlink \
+    "${image_ref}" -f "${compatibility_binary}"
+)"
+if [[ "${resolved_compatibility_target}" != "${primary_binary}" ]]; then
+  echo "analysis worker compatibility link does not resolve to the primary binary" >&2
+  exit 1
+fi
 
 configured_user="$(docker inspect --format '{{.Config.User}}' "${image_ref}")"
 if [[ "${configured_user}" != "0:0" ]]; then
@@ -48,7 +74,7 @@ if [[ "${configured_user}" != "0:0" ]]; then
 fi
 
 configured_command="$(docker inspect --format '{{json .Config.Cmd}}' "${image_ref}")"
-expected_command='["/usr/local/bin/momo-analysis","bootstrap","--","worker"]'
+expected_command='["/usr/local/bin/momo-processing-worker","bootstrap","--","worker"]'
 if [[ "${configured_command}" != "${expected_command}" ]]; then
   echo "analysis worker image must drop privileges through the fixed worker bootstrap" >&2
   exit 1
@@ -187,7 +213,7 @@ docker run --rm --privileged --cgroupns private \
   --env "MOMO_ANALYSIS_CHILD_MEMORY_LIMIT_BYTES=${child_memory_limit_bytes}" \
   --env MOMO_HEAVY_CGROUP_V2_VALIDATED=true \
   "${image_ref}" \
-  /usr/local/bin/momo-analysis bootstrap -- probe-cgroup-limit \
+  "${primary_binary}" bootstrap -- probe-cgroup-limit \
   --allocation-bytes "${probe_allocation_bytes}" \
   --timeout-ms 10000
 
@@ -196,14 +222,14 @@ docker run --rm --privileged --cgroupns private \
   --env "MOMO_ANALYSIS_CHILD_MEMORY_LIMIT_BYTES=${child_memory_limit_bytes}" \
   --env MOMO_HEAVY_CGROUP_V2_VALIDATED=true \
   "${image_ref}" \
-  /usr/local/bin/momo-analysis bootstrap -- probe-ocr-child-lifecycle \
+  "${primary_binary}" bootstrap -- probe-ocr-child-lifecycle \
   --timeout-ms 10000 \
   --stop-grace-ms 1000
 
 docker run --rm --user 10001:10001 --entrypoint sh "${image_ref}" -c '
   set -eu
   child_file=/tmp/analysis-child-pid
-  /usr/local/bin/momo-analysis probe-parent-death >"${child_file}" &
+  /usr/local/bin/momo-processing-worker probe-parent-death >"${child_file}" &
   parent_pid=$!
   attempts=0
   while [ ! -s "${child_file}" ] && [ "${attempts}" -lt 100 ]; do

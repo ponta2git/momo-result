@@ -32,9 +32,9 @@ const MAXIMUM_OCR_PILOT_IMAGE_BYTES: u64 = 3 * 1024 * 1024;
 
 #[derive(Debug, Parser)]
 #[command(
-    name = "momo-analysis",
+    name = "momo-processing-worker",
     version,
-    about = "momo-result series analysis worker"
+    about = "momo-result analysis and OCR processing worker"
 )]
 struct Cli {
     #[command(subcommand)]
@@ -717,7 +717,12 @@ mod tests {
 
     #[test]
     fn ocr_pilot_rejects_auto_and_accepts_only_explicit_screen_types() {
-        let base = ["momo-analysis", "ocr-pilot", "--image", "sample.png"];
+        let base = [
+            "momo-processing-worker",
+            "ocr-pilot",
+            "--image",
+            "sample.png",
+        ];
         for screen_type in ["total_assets", "revenue", "incident_log"] {
             let arguments = base
                 .into_iter()
@@ -735,7 +740,7 @@ mod tests {
     #[test]
     fn local_endurance_accepts_an_explicit_wall_time_budget() {
         let parsed = Cli::try_parse_from([
-            "momo-analysis",
+            "momo-processing-worker",
             "ocr-local-endurance",
             "--manifest",
             "/var/lib/momo-analysis/preflight/manifest.json",

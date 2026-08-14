@@ -274,7 +274,7 @@ docker run --rm --name "${worker_container}" --privileged --cgroupns private \
   --env MOMO_OCR_V2_MAXIMUM_DELIVERY_ATTEMPTS=2 \
   --env MOMO_OCR_V2_PENDING_SCAN_COUNT=10 \
   --env MOMO_LOG_FORMAT=json \
-  --env RUST_LOG=momo_processing_worker=info,momo_analysis=info \
+  --env RUST_LOG=momo_processing_worker=info \
   "${image_ref}" >"${worker_log}" 2>&1 &
 worker_pid=$!
 
@@ -304,7 +304,7 @@ wait_for_sql_value "analysis|ci-preemption-analysis-worker" "
 " "the running analysis holder"
 
 analysis_child="$(docker exec --user 10001:10001 "${worker_container}" \
-  pgrep -f '^/usr/local/bin/momo-analysis child-compute ' | head -1 || true)"
+  pgrep -f '^/usr/local/bin/momo-processing-worker child-compute ' | head -1 || true)"
 if [[ ! "${analysis_child}" =~ ^[0-9]+$ ]]; then
   fail_with_log "The analysis child was not running behind the held input lock."
 fi
@@ -345,7 +345,7 @@ wait_for_sql_value "true" "
 " "the released shared execution slot"
 
 if docker exec --user 10001:10001 "${worker_container}" \
-  pgrep -f '^/usr/local/bin/momo-analysis child-compute ' >/dev/null
+  pgrep -f '^/usr/local/bin/momo-processing-worker child-compute ' >/dev/null
 then
   fail_with_log "The preempted analysis process group was not reaped."
 fi

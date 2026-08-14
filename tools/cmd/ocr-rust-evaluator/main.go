@@ -120,7 +120,7 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 	flags.SetOutput(stderr)
 	flags.StringVar(&options.samplesDirectory, "samples-dir", "", "local OCR sample directory")
 	flags.StringVar(&options.answersPath, "answers", "", "answer TSV path")
-	flags.StringVar(&options.rustBinary, "rust-binary", "", "momo-analysis binary path")
+	flags.StringVar(&options.rustBinary, "rust-binary", "", "momo-processing-worker binary path")
 	flags.StringVar(&options.tessdataPath, "tessdata-path", "", "optional tessdata directory")
 	flags.StringVar(&options.reportPath, "report", "", "private detailed report path")
 	flags.StringVar(&options.baselineReport, "baseline-report", "", "optional Python evaluator JSON report")

@@ -94,9 +94,18 @@ RUN --mount=type=cache,id=analysis-cargo-registry,target=/usr/local/cargo/regist
   --mount=type=cache,id=analysis-cargo-git,target=/usr/local/cargo/git,sharing=locked \
   --mount=type=cache,id=analysis-target,target=/workspace/apps/processing-worker/target,sharing=locked \
   cargo build --locked --release \
-  && install -m 0755 target/release/momo-analysis /tmp/momo-analysis \
+  && install -d -m 0755 /tmp/runtime-root/usr/local/bin \
+  && install -m 0755 \
+    target/release/momo-processing-worker \
+    /tmp/runtime-root/usr/local/bin/momo-processing-worker \
+  && ln -s momo-processing-worker /tmp/runtime-root/usr/local/bin/momo-analysis \
   && install -d -m 0700 /tmp/runtime-root/var/lib/momo-analysis \
-  && for executable in /tmp/momo-analysis /bin/dash /usr/bin/getent /usr/bin/openssl; do \
+  && for executable in \
+    /tmp/runtime-root/usr/local/bin/momo-processing-worker \
+    /bin/dash \
+    /usr/bin/getent \
+    /usr/bin/openssl \
+  ; do \
     lddtree -l "${executable}"; \
   done \
     | grep -E '^/(lib|usr/lib|opt/tesseract/lib)/' \
@@ -125,10 +134,9 @@ COPY --from=builder /tmp/runtime-root/ /
 COPY --from=builder --chown=momo:momo /tmp/runtime-root/var/lib /var/lib
 COPY --from=tessdata /tessdata/ /usr/share/tesseract-ocr/5/tessdata/
 COPY --from=builder --chmod=0755 /usr/bin/getent /usr/bin/openssl /usr/bin/
-COPY --from=builder --chmod=0755 /tmp/momo-analysis /usr/local/bin/momo-analysis
 WORKDIR /var/lib/momo-analysis
 # Root exists only to prepare the fixed cgroup and delegate cgroup.procs. The bootstrap permanently
 # drops supplementary groups and all real/effective/saved IDs before re-execing the worker.
 # trivy:ignore:AVD-DS-0002:exp:2026-10-31
 USER 0:0
-CMD ["/usr/local/bin/momo-analysis", "bootstrap", "--", "worker"]
+CMD ["/usr/local/bin/momo-processing-worker", "bootstrap", "--", "worker"]

@@ -32,7 +32,7 @@ mod tests {
         let subreaper_result = unsafe { libc::prctl(libc::PR_SET_CHILD_SUBREAPER, 1) };
         assert_eq!(subreaper_result, 0, "failed to configure test subreaper");
 
-        let mut parent = Command::new(env!("CARGO_BIN_EXE_momo-analysis"))
+        let mut parent = Command::new(env!("CARGO_BIN_EXE_momo-processing-worker"))
             .arg("probe-parent-death")
             .stdout(Stdio::piped())
             .spawn()

@@ -1,6 +1,6 @@
 # Rust OCR development evaluator
 
-This Go tool runs the hidden, side-effect-free `momo-analysis ocr-pilot` command over a local
+This Go tool runs the hidden, side-effect-free `momo-processing-worker ocr-pilot` command over a local
 answer-keyed image directory. It is a development calibration tool, not a production worker or a
 release switch.
 

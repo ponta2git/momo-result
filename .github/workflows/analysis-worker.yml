@@ -105,7 +105,7 @@ jobs:
         run: ../../scripts/ci/apply-momo-db-migrations.sh
 
       - name: Release control-plane smoke
-        run: ../../scripts/ci/analysis-release-db-smoke.sh target/release/momo-analysis
+        run: ../../scripts/ci/analysis-release-db-smoke.sh target/release/momo-processing-worker
 
       - name: Rust OCR PostgreSQL and Redis control-plane smoke
         env:

@@ -10,8 +10,12 @@ mod completion;
 mod lifecycle;
 mod publication;
 mod recovery;
+mod staging_metadata;
 mod transaction;
 mod vocabulary;
+
+#[cfg(test)]
+mod integration_tests;
 
 pub(crate) use capability::{
     CAPABILITY_FRESH_SECONDS, IdleRefreshSchedule, mark_draining, register_capability,
@@ -124,8 +128,17 @@ impl AttemptMetrics {
         self.refresh_elapsed();
     }
 
-    pub(crate) fn record_publication(&mut self, duration: Duration) {
-        self.publication_milliseconds = signed_milliseconds(duration);
+    pub(crate) fn add_staging(&mut self, duration: Duration) {
+        self.staging_milliseconds = self
+            .staging_milliseconds
+            .saturating_add(signed_milliseconds(duration));
+        self.refresh_elapsed();
+    }
+
+    pub(crate) fn add_publication(&mut self, duration: Duration) {
+        self.publication_milliseconds = self
+            .publication_milliseconds
+            .saturating_add(signed_milliseconds(duration));
         self.refresh_elapsed();
     }
 
@@ -153,6 +166,8 @@ fn signed_milliseconds(duration: Duration) -> i64 {
 pub(crate) enum ControlError {
     #[error("analysis PostgreSQL state transition failed")]
     Postgres(#[from] tokio_postgres::Error),
+    #[error("analysis PostgreSQL connection failed")]
+    PostgresConnection(#[from] crate::postgres::PostgresError),
     #[error("analysis shared execution-slot transition failed: {0}")]
     ExecutionSlot(&'static str),
     #[error("analysis worker lost its fencing ownership")]
@@ -180,6 +195,7 @@ impl ControlError {
     pub(crate) const fn kind(&self) -> &'static str {
         match self {
             Self::Postgres(_) => "postgres_state_transition",
+            Self::PostgresConnection(error) => error.kind(),
             Self::ExecutionSlot(kind) => kind,
             Self::OwnerLost => "fencing_owner_lost",
             Self::Artifact(_) => "artifact_validation",
@@ -212,7 +228,7 @@ mod tests {
         };
 
         metrics.record_staging(Duration::from_millis(3));
-        metrics.record_publication(Duration::from_millis(4));
+        metrics.add_publication(Duration::from_millis(4));
         assert_eq!(metrics.elapsed_milliseconds, 17);
 
         metrics.record_finalization(Duration::from_millis(9));

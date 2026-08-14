@@ -21,9 +21,17 @@ pub(super) async fn lock_owned(
     claim: &ClaimedJob,
     config: &AnalysisConsumerConfig,
 ) -> Result<(), ControlError> {
+    lock_owned_by(transaction, claim, &config.worker_id).await
+}
+
+pub(super) async fn lock_owned_by(
+    transaction: &Transaction<'_>,
+    claim: &ClaimedJob,
+    worker_id: &str,
+) -> Result<(), ControlError> {
     let identity = ExecutionSlotIdentity {
         task_kind: ExecutionTaskKind::Analysis,
-        owner: &config.worker_id,
+        owner: worker_id,
         job_id: &claim.job_id,
         attempt_id: &claim.attempt_id,
         fencing_token: claim.fencing_token,
@@ -42,16 +50,31 @@ pub(super) async fn lock_owned(
         .query_opt(
             "SELECT id FROM series_analysis_jobs WHERE id = $1 AND status = 'running'\x20\
                AND lease_owner = $2 AND lease_attempt_id = $3 AND lease_fencing_token = $4\x20\
+               AND lease_expires_at > clock_timestamp()\x20\
              FOR UPDATE",
             &[
                 &claim.job_id,
-                &config.worker_id,
+                &worker_id,
                 &claim.attempt_id,
                 &claim.fencing_token,
             ],
         )
         .await?;
-    if title.is_none() || job.is_none() {
+    let attempt = transaction
+        .query_opt(
+            "SELECT id FROM series_analysis_job_attempts\x20\
+             WHERE id = $1 AND job_id = $2 AND attempt_no = $3 AND owner = $4\x20\
+               AND fencing_token = $5 AND status = 'running' FOR UPDATE",
+            &[
+                &claim.attempt_id,
+                &claim.job_id,
+                &claim.attempt_no,
+                &worker_id,
+                &claim.fencing_token,
+            ],
+        )
+        .await?;
+    if title.is_none() || job.is_none() || attempt.is_none() {
         return Err(ControlError::OwnerLost);
     }
     Ok(())
@@ -255,9 +278,17 @@ pub(super) async fn release_slot(
     claim: &ClaimedJob,
     config: &AnalysisConsumerConfig,
 ) -> Result<(), ControlError> {
+    release_slot_by(transaction, claim, &config.worker_id).await
+}
+
+pub(super) async fn release_slot_by(
+    transaction: &Transaction<'_>,
+    claim: &ClaimedJob,
+    worker_id: &str,
+) -> Result<(), ControlError> {
     let identity = ExecutionSlotIdentity {
         task_kind: ExecutionTaskKind::Analysis,
-        owner: &config.worker_id,
+        owner: worker_id,
         job_id: &claim.job_id,
         attempt_id: &claim.attempt_id,
         fencing_token: claim.fencing_token,

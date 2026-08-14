@@ -284,47 +284,10 @@ fn valid_input_id(value: &str) -> bool {
 #[cfg(test)]
 #[expect(
     clippy::panic,
-    reason = "dependency fixtures are mandatory test inputs and report their parse failure"
+    reason = "invalid hand-built validation fixtures must fail with a precise test message"
 )]
 mod tests {
-    use std::collections::BTreeMap;
-
-    use serde::Deserialize;
-
     use super::*;
-
-    const DEPENDENCIES: &str = include_str!(
-        "../../../../docs/schemas/fixtures/series-analysis/input-dependencies-v1.json"
-    );
-
-    #[derive(Debug, Deserialize)]
-    #[serde(deny_unknown_fields, rename_all = "camelCase")]
-    struct DependencyFixture {
-        schema_version: u32,
-        calculation_input: Vec<RelationColumns>,
-        revision_guard: Vec<RelationColumns>,
-        display_hydration: Vec<RelationColumns>,
-        excluded_relations: Vec<String>,
-    }
-
-    #[derive(Debug, Deserialize)]
-    #[serde(deny_unknown_fields, rename_all = "camelCase")]
-    struct RelationColumns {
-        relation: String,
-        columns: Vec<String>,
-    }
-
-    fn relation_map(entries: &[RelationColumns]) -> BTreeMap<&str, Vec<&str>> {
-        entries
-            .iter()
-            .map(|entry| {
-                (
-                    entry.relation.as_str(),
-                    entry.columns.iter().map(String::as_str).collect::<Vec<_>>(),
-                )
-            })
-            .collect()
-    }
 
     fn valid_player_matches() -> Vec<PlayerMatchInput> {
         (1..=4)
@@ -376,100 +339,4 @@ mod tests {
         ));
     }
 
-    #[test]
-    fn input_dependency_fixture_matches_the_worker_snapshot_query() {
-        let fixture: DependencyFixture = serde_json::from_str(DEPENDENCIES)
-            .unwrap_or_else(|error| panic!("invalid dependency fixture: {error}"));
-        assert_eq!(fixture.schema_version, 1);
-
-        let expected = BTreeMap::from([
-            (
-                "matches",
-                vec![
-                    "id",
-                    "analysis_revision",
-                    "played_at",
-                    "held_event_id",
-                    "match_no_in_event",
-                    "game_title_id",
-                    "season_master_id",
-                    "map_master_id",
-                ],
-            ),
-            (
-                "match_players",
-                vec![
-                    "match_id",
-                    "member_id",
-                    "play_order",
-                    "rank",
-                    "total_assets_man_yen",
-                    "revenue_man_yen",
-                ],
-            ),
-            (
-                "match_incidents",
-                vec!["match_id", "member_id", "incident_master_id", "count"],
-            ),
-        ]);
-        assert_eq!(relation_map(&fixture.calculation_input), expected);
-        assert_eq!(
-            relation_map(&fixture.revision_guard),
-            BTreeMap::from([
-                ("game_titles", vec!["id"]),
-                (
-                    "series_analysis_title_states",
-                    vec!["game_title_id", "input_revision"],
-                ),
-            ])
-        );
-        assert_eq!(
-            relation_map(&fixture.display_hydration),
-            BTreeMap::from([
-                ("game_titles", vec!["name", "display_order"]),
-                ("map_masters", vec!["name", "display_order"]),
-                ("members", vec!["display_name"]),
-                ("season_masters", vec!["name", "display_order"]),
-            ])
-        );
-        assert_eq!(
-            fixture
-                .excluded_relations
-                .iter()
-                .map(String::as_str)
-                .collect::<Vec<_>>(),
-            vec!["held_events", "member_aliases", "incident_masters"]
-        );
-
-        for excluded in &fixture.excluded_relations {
-            assert!(!ANALYSIS_INPUT_QUERY.contains(&format!("JOIN {excluded}")));
-        }
-        for required in [
-            "FROM matches m",
-            "JOIN match_players mp",
-            "LEFT JOIN match_incidents mi",
-            "m.analysis_revision",
-            "m.played_at",
-            "m.held_event_id",
-            "m.match_no_in_event",
-            "m.game_title_id",
-            "m.season_master_id",
-            "m.map_master_id",
-            "mp.member_id",
-            "mp.play_order",
-            "mp.rank",
-            "mp.total_assets_man_yen",
-            "mp.revenue_man_yen",
-            "mi.incident_master_id",
-            "mi.count",
-        ] {
-            assert!(
-                ANALYSIS_INPUT_QUERY.contains(required),
-                "snapshot query no longer references required input token {required}"
-            );
-        }
-        assert!(!ANALYSIS_INPUT_QUERY.contains("display_name"));
-        assert!(!ANALYSIS_INPUT_QUERY.contains(".name"));
-        assert!(!ANALYSIS_INPUT_QUERY.contains("display_order"));
-    }
 }

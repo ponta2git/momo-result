@@ -121,9 +121,10 @@ flowchart LR
 | 作品名、player表示名、season / map表示名など表示専用metadata | versionを進めず、APIで現在masterからhydrateする |
 | Webのlabel、locale、layout | artifact versionを進めない |
 
-この表の機械可読契約は `docs/schemas/fixtures/series-analysis/input-dependencies-v1.json` とする。Rust workerの
-入力SQL contract testとAPIのmutation integration testで照合し、未列挙のmaster変更を暗黙に「表示専用」と
-みなさない。
+この表を入力dependencyの設計正本とする。APIのmutation integration testと、実PostgreSQLへqueryを実行して
+row decode・checksum・revision再利用まで確認するworker control-plane smokeで照合し、未列挙のmaster変更を
+暗黙に「表示専用」とみなさない。SQL tokenの存在だけを調べるsource testは、projection順・join条件・型変換を
+保証しないため契約証跡として扱わない。
 
 現行Scala read modelのSQL監査では、計算入力は次へ限定されている。Rust版はこの列集合を出発点にし、
 入力追加はdependency一覧とrevision triggerを同時に変更する。

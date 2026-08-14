@@ -42,7 +42,7 @@
 | ドメイン正本 | `docs/domain-rule.md` | 用語、状態遷移、不変条件、認証主体と試合参加者の区別 |
 | DB正本 | `docs/db-rule.md` | 共有DB所有権、migration前提、consumer contract |
 | Queue正本 | `docs/redis-streams-ocr-contract.md` | Redis Streams、outbox、payload、ack / retry 契約 |
-| Schema正本 | `docs/schemas/*.schema.json`, `docs/schemas/fixtures/` | Redis payload、OCR hints、戦績分析artifact / queue / input dependencyの機械可読契約と共有fixture |
+| Schema正本 | `docs/schemas/*.schema.json`, `docs/schemas/fixtures/` | Redis payload、OCR hints、戦績分析artifact / queueの機械可読契約と共有fixture |
 | テスト正本 | `docs/test-rule.md` | 変更種別ごとのテスト選択、oracle、品質ゲート判断 |
 | テスト補助 | `docs/test-architecture.md` | テストサイズ、coverage、CI artifact、段階計画 |
 | 開発正本 | `docs/dev-rule.md` | toolchain、ローカル起動、コマンド、Git運用 |

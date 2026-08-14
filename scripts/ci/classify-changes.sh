@@ -57,7 +57,7 @@ while IFS= read -r -d '' path; do
     mise.toml)
       select_all
       ;;
-    scripts/ci/analysis-*)
+    scripts/ci/analysis-* | scripts/ci/processing-worker-* | scripts/ci/series-analysis-*)
       analysis=true
       ;;
     scripts/ci/runtime-* | scripts/ci/start-runtime-container.sh | \
@@ -78,7 +78,7 @@ while IFS= read -r -d '' path; do
     .github/workflows/web.yml)
       web=true
       ;;
-    .github/workflows/analysis-worker.yml | .github/workflows/analysis-candidate.yml | \
+    .github/workflows/processing-worker.yml | .github/workflows/analysis-candidate.yml | \
       .github/workflows/analysis-production.yml)
       analysis=true
       ;;

@@ -30,6 +30,9 @@ assert_case api-source "${api_runtime}" apps/api/src/main/scala/momo/api/Main.sc
 assert_case openapi "${api_web_runtime}" apps/api/openapi.yaml
 assert_case analysis-source "${analysis_only}" apps/processing-worker/src/main.rs
 assert_case analysis-candidate-workflow "${analysis_only}" .github/workflows/analysis-candidate.yml
+assert_case processing-worker-workflow "${analysis_only}" .github/workflows/processing-worker.yml
+assert_case processing-worker-script "${analysis_only}" scripts/ci/processing-worker-image-smoke.sh
+assert_case series-analysis-script "${analysis_only}" scripts/ci/series-analysis-control-plane-smoke.sh
 assert_case runtime-tool "${runtime_only}" tools/cmd/momo-runtime-tool/main.go
 assert_case runtime-log-summary "${runtime_only}" scripts/ci/summarize-runtime-logs.sh
 assert_case runtime-memory-smoke "${runtime_only}" scripts/ci/runtime-memory-smoke.sh

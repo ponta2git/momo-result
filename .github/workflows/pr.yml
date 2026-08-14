@@ -60,7 +60,7 @@ jobs:
     name: Analysis worker
     needs: classify
     if: needs.classify.outputs.analysis == 'true'
-    uses: ./.github/workflows/analysis-worker.yml
+    uses: ./.github/workflows/processing-worker.yml
 
   runtime:
     name: Runtime smoke

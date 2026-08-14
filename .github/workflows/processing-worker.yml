@@ -1,0 +1,293 @@
+name: Analysis worker
+
+on:
+  workflow_call:
+    inputs:
+      package_image:
+        description: Package the verified image as an immutable release candidate
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  analysis-worker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_DB: momo_result
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+        ports:
+          - "5432:5432"
+        options: >-
+          --health-cmd "pg_isready -U postgres -d momo_result"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports:
+          - "6379:6379"
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/momo_result
+      REDIS_URL: redis://127.0.0.1:6379
+    defaults:
+      run:
+        working-directory: apps/processing-worker
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Read pinned momo-db revision
+        id: momo-db
+        working-directory: ${{ github.workspace }}
+        run: |
+          ref="$(tr -d '\r\n' < .momo-db-ref)"
+          [[ "${ref}" =~ ^[0-9a-f]{40}$ ]] || { echo "Invalid .momo-db-ref." >&2; exit 1; }
+          echo "ref=${ref}" >> "${GITHUB_OUTPUT}"
+
+      - name: Checkout momo-db migrations
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository_owner }}/momo-db
+          ref: ${{ steps.momo-db.outputs.ref }}
+          path: _deps/momo-db
+          token: ${{ github.token }}
+          sparse-checkout: drizzle
+          persist-credentials: false
+
+      - name: Install Rust toolchain
+        run: rustup show active-toolchain
+
+      - name: Install native OCR build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            clang \
+            libclang-dev \
+            libleptonica-dev \
+            libtesseract-dev \
+            pkg-config \
+            tesseract-ocr-eng \
+            tesseract-ocr-jpn
+
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          workspaces: apps/processing-worker
+
+      - name: Format check
+        run: cargo fmt --all -- --check
+
+      - name: Lint check
+        run: cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+
+      - name: Test
+        run: cargo test --locked --workspace --all-targets --all-features
+
+      - name: Release build
+        run: cargo build --locked --workspace --release
+
+      - name: Apply momo-db migrations
+        run: ../../scripts/ci/apply-momo-db-migrations.sh
+
+      - name: Release control-plane smoke
+        run: ../../scripts/ci/analysis-release-db-smoke.sh target/release/momo-processing-worker
+
+      - name: Rust OCR PostgreSQL and Redis control-plane smoke
+        env:
+          OCR_CONTROL_SMOKE_DATABASE_URL: ${{ env.DATABASE_URL }}
+          OCR_CONTROL_SMOKE_REDIS_URL: ${{ env.REDIS_URL }}
+        run: ../../scripts/ci/ocr-rust-control-plane-smoke.sh
+
+  runtime-image:
+    name: Build, scan, and package analysis image
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_DB: momo_result
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+        ports:
+          - "5432:5432"
+        options: >-
+          --health-cmd "pg_isready -U postgres -d momo_result"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports:
+          - "6379:6379"
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      ANALYSIS_IMAGE_ARTIFACT_NAME: analysis-worker-image-${{ github.run_id }}-${{ github.run_attempt }}
+      ANALYSIS_METADATA_ARTIFACT_NAME: analysis-candidate-metadata-${{ github.run_id }}-${{ github.run_attempt }}
+      ANALYSIS_IMAGE_REF: ${{ inputs.package_image && format('registry.fly.io/momo-result-analysis:{0}-{1}-{2}', github.sha, github.run_id, github.run_attempt) || 'momo-analysis-worker:test' }}
+      DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/momo_result
+      REDIS_URL: redis://127.0.0.1:6379
+      WORKER_DATABASE_URL: postgres://postgres:postgres@host.docker.internal:5432/momo_result
+      WORKER_REDIS_URL: redis://host.docker.internal:6379
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Read pinned momo-db revision
+        id: runtime-momo-db
+        run: |
+          ref="$(tr -d '\r\n' < .momo-db-ref)"
+          [[ "${ref}" =~ ^[0-9a-f]{40}$ ]] || { echo "Invalid .momo-db-ref." >&2; exit 1; }
+          echo "ref=${ref}" >> "${GITHUB_OUTPUT}"
+
+      - name: Checkout momo-db migrations
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository_owner }}/momo-db
+          ref: ${{ steps.runtime-momo-db.outputs.ref }}
+          path: _deps/momo-db
+          token: ${{ github.token }}
+          sparse-checkout: drizzle
+          persist-credentials: false
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+
+      - name: Build dedicated worker image
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        env:
+          DOCKER_BUILD_RECORD_UPLOAD: "false"
+          DOCKER_BUILD_SUMMARY: "false"
+        with:
+          cache-from: type=gha,scope=momo-result-analysis-v1
+          cache-to: type=gha,mode=max,scope=momo-result-analysis-v1,ignore-error=true
+          context: .
+          file: apps/processing-worker/Dockerfile
+          load: true
+          tags: ${{ env.ANALYSIS_IMAGE_REF }}
+        timeout-minutes: 30
+
+      - name: Smoke test worker isolation and hard limit
+        run: scripts/ci/processing-worker-image-smoke.sh "${ANALYSIS_IMAGE_REF}"
+
+      - name: Apply momo-db migrations
+        run: scripts/ci/apply-momo-db-migrations.sh
+
+      - name: Seed release control-plane fixtures through the runtime image
+        env:
+          ANALYSIS_WORKER_IMAGE: ${{ env.ANALYSIS_IMAGE_REF }}
+        run: scripts/ci/analysis-release-db-smoke.sh
+
+      - name: Worker PostgreSQL and Redis control-plane smoke through the runtime image
+        env:
+          ANALYSIS_WORKER_IMAGE: ${{ env.ANALYSIS_IMAGE_REF }}
+        run: scripts/ci/series-analysis-control-plane-smoke.sh
+
+      - name: Combined analysis and OCR preemption smoke
+        run: scripts/ci/processing-worker-preemption-smoke.sh "${ANALYSIS_IMAGE_REF}"
+
+      - name: Scan worker image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
+        with:
+          image-ref: ${{ env.ANALYSIS_IMAGE_REF }}
+          version: v0.73.0
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          format: table
+          exit-code: "1"
+        env:
+          TRIVY_DISABLE_VEX_NOTICE: "true"
+
+      - name: Record verified image metadata
+        if: inputs.package_image
+        run: |
+          mkdir -p "${ANALYSIS_IMAGE_ARTIFACT_NAME}"
+          printf '%s\n' "${ANALYSIS_IMAGE_REF}" \
+            > "${ANALYSIS_IMAGE_ARTIFACT_NAME}/image-ref.txt"
+          docker image inspect "${ANALYSIS_IMAGE_REF}" --format '{{.Id}}' \
+            > "${ANALYSIS_IMAGE_ARTIFACT_NAME}/image-id.txt"
+
+      - name: Save verified image
+        if: inputs.package_image
+        run: |
+          docker save "${ANALYSIS_IMAGE_REF}" |
+            gzip -1 > "${ANALYSIS_IMAGE_ARTIFACT_NAME}/analysis-worker-image.tar.gz"
+          sha256sum "${ANALYSIS_IMAGE_ARTIFACT_NAME}/analysis-worker-image.tar.gz" \
+            > "${ANALYSIS_IMAGE_ARTIFACT_NAME}/image-tar.sha256"
+        timeout-minutes: 10
+
+      - name: Upload verified image
+        if: inputs.package_image
+        id: image-upload
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: ${{ env.ANALYSIS_IMAGE_ARTIFACT_NAME }}
+          path: ${{ env.ANALYSIS_IMAGE_ARTIFACT_NAME }}/
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
+
+      - name: Create candidate provenance
+        if: inputs.package_image
+        env:
+          IMAGE_ARTIFACT_DIGEST: ${{ steps.image-upload.outputs.artifact-digest }}
+          IMAGE_ARTIFACT_ID: ${{ steps.image-upload.outputs.artifact-id }}
+        run: |
+          mkdir -p "${ANALYSIS_METADATA_ARTIFACT_NAME}"
+          tar_sha="$(cut -d ' ' -f 1 \
+            "${ANALYSIS_IMAGE_ARTIFACT_NAME}/image-tar.sha256")"
+          config_sha="$(sha256sum fly.analysis.toml | cut -d ' ' -f 1)"
+          image_artifact_digest="$(
+            scripts/ci/canonicalize-artifact-digest.sh "${IMAGE_ARTIFACT_DIGEST}"
+          )"
+          jq -n \
+            --arg commit "${GITHUB_SHA}" \
+            --arg configSha256 "${config_sha}" \
+            --arg imageArtifactDigest "${image_artifact_digest}" \
+            --arg imageArtifactId "${IMAGE_ARTIFACT_ID}" \
+            --arg imageArtifactName "${ANALYSIS_IMAGE_ARTIFACT_NAME}" \
+            --arg imageRef "${ANALYSIS_IMAGE_REF}" \
+            --arg runAttempt "${GITHUB_RUN_ATTEMPT}" \
+            --arg runId "${GITHUB_RUN_ID}" \
+            --arg tarSha256 "${tar_sha}" \
+            '{
+              schemaVersion: 1,
+              commit: $commit,
+              runId: $runId,
+              runAttempt: $runAttempt,
+              imageRef: $imageRef,
+              imageArtifactName: $imageArtifactName,
+              imageArtifactId: $imageArtifactId,
+              imageArtifactDigest: $imageArtifactDigest,
+              tarSha256: $tarSha256,
+              configSha256: $configSha256
+            }' > "${ANALYSIS_METADATA_ARTIFACT_NAME}/candidate.json"
+
+      - name: Upload candidate provenance
+        if: inputs.package_image
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: ${{ env.ANALYSIS_METADATA_ARTIFACT_NAME }}
+          path: ${{ env.ANALYSIS_METADATA_ARTIFACT_NAME }}/candidate.json
+          if-no-files-found: error
+          retention-days: 7

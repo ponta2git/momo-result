@@ -56,7 +56,7 @@ jobs:
   candidate:
     needs: scope
     if: needs.scope.outputs.analysis == 'true'
-    uses: ./.github/workflows/analysis-worker.yml
+    uses: ./.github/workflows/processing-worker.yml
     with:
       package_image: true
 

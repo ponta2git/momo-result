@@ -27,6 +27,14 @@ import momo.api.repositories.{
 
 final class PostgresMatchConfirmationRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
     extends MatchConfirmationRepository[F]:
+  private final case class ConfirmedDraftSourceImagesRow(
+      totalAssetsImageId: Option[ImageId],
+      revenueImageId: Option[ImageId],
+      incidentLogImageId: Option[ImageId],
+  ):
+    def imageIds: List[ImageId] =
+      List(totalAssetsImageId, revenueImageId, incidentLogImageId).flatten
+
   private def isUniqueViolation(state: SqlState): Boolean = state.value ==
     sqlstate.class23.UNIQUE_VIOLATION.value
 
@@ -56,11 +64,10 @@ final class PostgresMatchConfirmationRepository[F[_]: MonadCancelThrow](transact
               AND status IN (${MatchDraftStatus.DraftReady}, ${MatchDraftStatus
               .NeedsReview}, ${MatchDraftStatus.OcrFailed})
             RETURNING total_assets_image_id, revenue_image_id, incident_log_image_id
-          """.query[(Option[ImageId], Option[ImageId], Option[ImageId])].option
+          """.query[ConfirmedDraftSourceImagesRow].option
           _ <- updatedImages match
-            case Some((totalAssets, revenue, incidentLog)) =>
-              val sourceImageIds = List(totalAssets, revenue, incidentLog).flatten
-              PostgresSourceImageLifecycle.stageDeletion(sourceImageIds, updatedAt) *>
+            case Some(images) =>
+              PostgresSourceImageLifecycle.stageDeletion(images.imageIds, updatedAt) *>
                 insert(record, updatedAt) *> attachConfirmedMatch(expected, record)
             case None => ().pure[ConnectionIO]
         yield

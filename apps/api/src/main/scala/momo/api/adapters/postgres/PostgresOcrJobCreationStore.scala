@@ -23,6 +23,13 @@ import momo.api.repositories.{
 
 final class PostgresOcrJobCreationStore[F[_]: MonadCancelThrow](transactor: Transactor[F])
     extends OcrJobCreationStore[F]:
+  private final case class SourceImageGuardRow(
+      status: SourceImageStatus,
+      objectKey: SourceImageObjectKey,
+      sha256: Option[Sha256Hex],
+      byteLength: Option[Long],
+      mediaType: Option[String],
+  )
 
   override def store(plan: OcrJobCreationPlan): F[OcrJobCreationStore.OcrJobCreationResult] =
     val attachment = plan.matchDraftAttachment
@@ -55,22 +62,15 @@ final class PostgresOcrJobCreationStore[F[_]: MonadCancelThrow](transactor: Tran
       FROM source_images
       WHERE id = ${plan.job.imageId}
       FOR UPDATE
-    """.query[(
-      SourceImageStatus,
-      SourceImageObjectKey,
-      Option[Sha256Hex],
-      Option[Long],
-      Option[String],
-  )].option.map {
-    case Some((
+    """.query[SourceImageGuardRow].option.map {
+    case Some(SourceImageGuardRow(
           SourceImageStatus.Available,
           objectKey,
           Some(sha256),
           Some(byteLength),
-          Some(mediaType)
-        ))
-        if sourceMetadataMatches(plan, objectKey, sha256, byteLength, mediaType) => Right(())
-    case Some((SourceImageStatus.Available, _, _, _, _)) =>
+          Some(mediaType),
+        )) if sourceMetadataMatches(plan, objectKey, sha256, byteLength, mediaType) => Right(())
+    case Some(SourceImageGuardRow(SourceImageStatus.Available, _, _, _, _)) =>
       Left(OcrJobCreationRejection.InvalidPlan)
     case _ => Left(OcrJobCreationRejection.SourceImageUnavailable(plan.job.imageId))
   }

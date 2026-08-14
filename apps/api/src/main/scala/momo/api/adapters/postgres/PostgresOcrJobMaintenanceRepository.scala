@@ -15,20 +15,22 @@ import momo.api.repositories.OcrJobMaintenanceRepository
 
 final class PostgresOcrJobMaintenanceRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
     extends OcrJobMaintenanceRepository[F]:
+  private final case class StaleJobCandidateRow(jobId: OcrJobId, draftId: OcrDraftId)
+
   private val batchSize = 256
 
   override def failStaleJobs(now: Instant, staleBefore: Instant): F[Int] =
     val message = "OCR job timed out before completion."
     val userAction = "画像を再アップロードしてOCRをやり直してください。"
 
-    def selectCandidates: ConnectionIO[List[(OcrJobId, OcrDraftId)]] = sql"""
+    def selectCandidates: ConnectionIO[List[StaleJobCandidateRow]] = sql"""
       SELECT id, draft_id
       FROM ocr_jobs
       WHERE status IN (${OcrJobStatus.Queued}, ${OcrJobStatus.Running})
         AND COALESCE(started_at, created_at) < $staleBefore
       ORDER BY id
       LIMIT $batchSize
-    """.query[(OcrJobId, OcrDraftId)].to[List]
+    """.query[StaleJobCandidateRow].to[List]
 
     def failBatch(jobIds: List[OcrJobId]): ConnectionIO[List[OcrDraftId]] =
       val ids = jobIds.map(_.value).toArray
@@ -58,9 +60,9 @@ final class PostgresOcrJobMaintenanceRepository[F[_]: MonadCancelThrow](transact
 
     val runBatch = (for
       candidates <- selectCandidates
-      candidateDraftIds = candidates.map(_._2)
+      candidateDraftIds = candidates.map(_.draftId)
       _ <- PostgresMatchDraftStatusSync.lockForDrafts(candidateDraftIds)
-      updatedDraftIds <- failBatch(candidates.map(_._1))
+      updatedDraftIds <- failBatch(candidates.map(_.jobId))
       _ <- PostgresMatchDraftStatusSync.recomputeForDrafts(updatedDraftIds, now)
     yield candidates.size -> updatedDraftIds.size).transact(transactor)
 

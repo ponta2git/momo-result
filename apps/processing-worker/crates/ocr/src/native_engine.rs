@@ -64,7 +64,7 @@ const fn engine_failure(error: CoreOcrError) -> OcrFailure {
 ///
 /// Returns the closed OCR domain failure vocabulary for decode, layout, native engine, or parser
 /// failures.
-pub fn recognize_local_image_bytes(
+pub fn analyze_local_image_bytes(
     tessdata_path: Option<PathBuf>,
     bytes: &[u8],
     requested_screen_type: RequestedScreenType,

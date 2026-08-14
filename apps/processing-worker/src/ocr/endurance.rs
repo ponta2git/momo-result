@@ -329,7 +329,9 @@ async fn run_linux(
 
     use tokio::time;
 
-    use super::{IsolatedNativeOcrEngine, consumer::OcrEngine, object_store::R2ObjectStore};
+    use super::{
+        IsolatedOcrChildLauncher, consumer::OcrChildLauncher, object_store::R2ObjectStore,
+    };
     use crate::cgroup::ChildCgroup;
 
     if !crate::process::worker_identity_supported() {
@@ -347,7 +349,7 @@ async fn run_linux(
         vm_memory::VmMemorySampler::start(request.expected_runtime_memory_limit_bytes).await?;
 
     let store = R2ObjectStore::new(&request.object_store);
-    let engine = IsolatedNativeOcrEngine::new(cgroup.clone(), None, request.stop_grace);
+    let launcher = IsolatedOcrChildLauncher::new(cgroup.clone(), None, request.stop_grace);
     let mut failures = FailureCounts::default();
     let run_capacity =
         usize::try_from(request.runs).map_err(|_error| OcrEnduranceError::Configuration)?;
@@ -399,8 +401,8 @@ async fn run_linux(
         *dimension_class_run_count = dimension_class_run_count.saturating_add(1);
 
         let ocr_started = Instant::now();
-        let mut attempt = match engine.start(&image, &object.payload) {
-            Ok(attempt) => attempt,
+        let mut child = match launcher.launch(&image, &object.payload) {
+            Ok(child) => child,
             Err(kind) => {
                 let ocr = elapsed_microseconds(ocr_started);
                 ocr_durations.push(ocr);
@@ -410,10 +412,10 @@ async fn run_linux(
                 continue;
             }
         };
-        let outcome = match time::timeout(request.ocr_timeout, attempt.wait()).await {
+        let outcome = match time::timeout(request.ocr_timeout, child.wait()).await {
             Ok(outcome) => outcome,
             Err(_elapsed) => {
-                attempt
+                child
                     .terminate()
                     .await
                     .map_err(|_error| OcrEnduranceError::Cleanup)?;
@@ -550,10 +552,12 @@ const fn domain_failure_kind(failure: momo_ocr::OcrFailure) -> &'static str {
 }
 
 #[cfg(target_os = "linux")]
-const fn process_failure_kind(failure: super::consumer::OcrProcessFailure) -> &'static str {
+const fn process_failure_kind(failure: super::consumer::OcrChildProcessFailure) -> &'static str {
     match failure {
-        super::consumer::OcrProcessFailure::Runtime(kind) => kind,
-        super::consumer::OcrProcessFailure::ResourceExhausted => "ocr_child_resource_exhausted",
+        super::consumer::OcrChildProcessFailure::Runtime(kind) => kind,
+        super::consumer::OcrChildProcessFailure::ResourceExhausted => {
+            "ocr_child_resource_exhausted"
+        }
     }
 }
 

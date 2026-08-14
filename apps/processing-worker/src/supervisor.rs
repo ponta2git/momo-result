@@ -114,7 +114,7 @@ async fn run_combined(
     ocr_config: crate::ocr::consumer::OcrConsumerConfig,
     mut external_shutdown: watch::Receiver<bool>,
 ) -> Result<(), SupervisorError> {
-    use crate::ocr::IsolatedNativeOcrEngine;
+    use crate::ocr::IsolatedOcrChildLauncher;
 
     enum FirstExit {
         SeriesAnalysis(Result<(), SeriesAnalysisConsumerError>),
@@ -122,7 +122,7 @@ async fn run_combined(
         Shutdown,
     }
 
-    let engine = IsolatedNativeOcrEngine::new(
+    let launcher = IsolatedOcrChildLauncher::new(
         series_analysis_config.child_cgroup.clone(),
         None,
         series_analysis_config.shutdown_grace,
@@ -130,7 +130,7 @@ async fn run_combined(
     let (shutdown_sender, shutdown_receiver) = watch::channel(false);
     let series_analysis_consumer =
         series_analysis::run(series_analysis_config, shutdown_receiver.clone());
-    let ocr_consumer = crate::ocr::consumer::run(ocr_config, &engine, shutdown_receiver);
+    let ocr_consumer = crate::ocr::consumer::run(ocr_config, &launcher, shutdown_receiver);
     tokio::pin!(series_analysis_consumer);
     tokio::pin!(ocr_consumer);
 

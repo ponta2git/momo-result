@@ -14,7 +14,7 @@ pub fn execute(tessdata_path: Option<PathBuf>) -> i32 {
         Ok(request) => request,
         Err(_kind) => return crate::process::CHILD_START_BARRIER_FAILED_EXIT_CODE,
     };
-    let result = momo_ocr::recognize_local_image_bytes(
+    let result = momo_ocr::analyze_local_image_bytes(
         tessdata_path,
         &request.image,
         request.requested_screen_type,

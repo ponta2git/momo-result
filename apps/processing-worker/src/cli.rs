@@ -469,7 +469,7 @@ async fn run_ocr_pilot(
 ) -> Result<(), String> {
     let (bytes, hints) = read_ocr_pilot_input(image_path, layout_family).await?;
     let output =
-        momo_ocr::recognize_local_image_bytes(tessdata_path, &bytes, screen_type.into(), &hints)
+        momo_ocr::analyze_local_image_bytes(tessdata_path, &bytes, screen_type.into(), &hints)
             .map_err(|error| format!("OCR pilot failed: {error:?}"))?;
     write_ocr_pilot_output(&output)
 }

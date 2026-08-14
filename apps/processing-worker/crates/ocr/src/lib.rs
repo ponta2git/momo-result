@@ -11,7 +11,7 @@ pub mod protocol;
 mod result;
 
 pub use contract::{OcrHints, OcrMediaType, OcrQueuePayload, RequestedScreenType};
-pub use native_engine::recognize_local_image_bytes;
+pub use native_engine::analyze_local_image_bytes;
 pub use result::{OcrFailure, OcrOutput};
 
 #[cfg(test)]

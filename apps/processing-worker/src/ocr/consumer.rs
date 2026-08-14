@@ -21,61 +21,61 @@ use super::{
     },
 };
 
-pub type OcrAttemptFuture<'a> = Pin<
+pub type OcrChildWaitFuture<'a> = Pin<
     Box<
-        dyn Future<Output = Result<Result<OcrEngineOutput, OcrEngineFailure>, OcrProcessFailure>>
+        dyn Future<Output = Result<Result<OcrOutput, OcrFailure>, OcrChildProcessFailure>>
             + Send
             + 'a,
     >,
 >;
 
-pub type OcrAttemptTerminationFuture<'a> =
+pub type OcrChildTerminationFuture<'a> =
     Pin<Box<dyn Future<Output = Result<(), &'static str>> + Send + 'a>>;
 
-use momo_ocr::{OcrFailure as OcrEngineFailure, OcrOutput as OcrEngineOutput};
+use momo_ocr::{OcrFailure, OcrOutput};
 
 /// Failure observed by the parent supervisor rather than returned by OCR domain logic.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum OcrProcessFailure {
+pub enum OcrChildProcessFailure {
     Runtime(&'static str),
     ResourceExhausted,
 }
 
-pub trait OcrEngineAttempt: Send {
+pub trait OcrChildHandle: Send {
     /// Waits until the isolated OCR child is reaped and returns its closed domain outcome.
-    fn wait(&mut self) -> OcrAttemptFuture<'_>;
+    fn wait(&mut self) -> OcrChildWaitFuture<'_>;
 
     /// Stops and reaps the isolated OCR child before control-plane ownership is released.
-    fn terminate(&mut self) -> OcrAttemptTerminationFuture<'_>;
+    fn terminate(&mut self) -> OcrChildTerminationFuture<'_>;
 }
 
-pub trait OcrEngine: Send + Sync {
+pub trait OcrChildLauncher: Send + Sync {
     /// Starts one OCR child behind the shared attach barrier.
     ///
     /// # Errors
     ///
     /// Returns an opaque runtime category when the process cannot be created safely.
-    fn start(
+    fn launch(
         &self,
         image: &VerifiedSourceImage,
         payload: &OcrQueuePayload,
-    ) -> Result<Box<dyn OcrEngineAttempt>, &'static str>;
+    ) -> Result<Box<dyn OcrChildHandle>, &'static str>;
 }
 
-pub(crate) const fn failure_control_code(failure: OcrEngineFailure) -> OcrFailureCode {
+pub(crate) const fn failure_control_code(failure: OcrFailure) -> OcrFailureCode {
     match failure {
-        OcrEngineFailure::InvalidImage => OcrFailureCode::InvalidImage,
-        OcrEngineFailure::UnsupportedImageFormat => OcrFailureCode::UnsupportedImageFormat,
-        OcrEngineFailure::DecodeFailed => OcrFailureCode::DecodeFailed,
-        OcrEngineFailure::CategoryUndetected => OcrFailureCode::CategoryUndetected,
-        OcrEngineFailure::LayoutUnsupported => OcrFailureCode::LayoutUnsupported,
-        OcrEngineFailure::EngineUnavailable => OcrFailureCode::OcrEngineUnavailable,
-        OcrEngineFailure::ParserFailed => OcrFailureCode::ParserFailed,
+        OcrFailure::InvalidImage => OcrFailureCode::InvalidImage,
+        OcrFailure::UnsupportedImageFormat => OcrFailureCode::UnsupportedImageFormat,
+        OcrFailure::DecodeFailed => OcrFailureCode::DecodeFailed,
+        OcrFailure::CategoryUndetected => OcrFailureCode::CategoryUndetected,
+        OcrFailure::LayoutUnsupported => OcrFailureCode::LayoutUnsupported,
+        OcrFailure::EngineUnavailable => OcrFailureCode::OcrEngineUnavailable,
+        OcrFailure::ParserFailed => OcrFailureCode::ParserFailed,
     }
 }
 
-pub(crate) const fn failure_retryable(failure: OcrEngineFailure) -> bool {
-    matches!(failure, OcrEngineFailure::EngineUnavailable)
+pub(crate) const fn failure_retryable(failure: OcrFailure) -> bool {
+    matches!(failure, OcrFailure::EngineUnavailable)
 }
 
 #[derive(Clone)]
@@ -189,7 +189,7 @@ pub enum OcrConsumerError {
     #[error("OCR consumer control transition failed: {0}")]
     Control(&'static str),
     #[error("OCR isolated process boundary failed: {0}")]
-    Engine(&'static str),
+    ChildProcess(&'static str),
 }
 
 impl From<OcrQueueError> for OcrConsumerError {
@@ -235,7 +235,7 @@ enum OcrSupervised<T> {
     OwnerLost,
 }
 
-/// Runs the dormant Rust OCR v2 consumer with an injected OCR engine.
+/// Runs the dormant Rust OCR v2 consumer with an injected OCR child launcher.
 ///
 /// The production writer must remain disabled until the live R2, control-plane, resource, and
 /// accuracy gates pass.
@@ -244,9 +244,9 @@ enum OcrSupervised<T> {
 ///
 /// Returns an opaque dependency or control-plane category without exposing connection strings,
 /// credentials, object keys, or OCR payloads.
-pub async fn run<E: OcrEngine>(
+pub async fn run<L: OcrChildLauncher>(
     config: OcrConsumerConfig,
-    engine: &E,
+    launcher: &L,
     mut shutdown: watch::Receiver<bool>,
 ) -> Result<(), OcrConsumerError> {
     let mut control_client = postgres::connect(&config.database_url)
@@ -276,7 +276,7 @@ pub async fn run<E: OcrEngine>(
             &mut heartbeat_client,
             &mut redis,
             &objects,
-            engine,
+            launcher,
             &config,
             &delivery,
             &mut shutdown,
@@ -299,14 +299,14 @@ pub async fn run<E: OcrEngine>(
 
 #[expect(
     clippy::too_many_arguments,
-    reason = "one delivery coordinates the four durable adapters and injected engine explicitly"
+    reason = "one delivery coordinates the four durable adapters and injected child launcher explicitly"
 )]
-async fn process_delivery<E: OcrEngine>(
+async fn process_delivery<L: OcrChildLauncher>(
     control_client: &mut tokio_postgres::Client,
     heartbeat_client: &mut tokio_postgres::Client,
     redis: &mut ConnectionManager,
     objects: &R2ObjectStore,
-    engine: &E,
+    launcher: &L,
     config: &OcrConsumerConfig,
     delivery: &OcrQueueDelivery,
     shutdown: &mut watch::Receiver<bool>,
@@ -344,7 +344,7 @@ async fn process_delivery<E: OcrEngine>(
                         control_client,
                         heartbeat_client,
                         objects,
-                        engine,
+                        launcher,
                         config,
                         &claim,
                         payload,
@@ -403,13 +403,13 @@ fn classify_claim_result(result: OcrClaimResult) -> ClaimDecision {
 
 #[expect(
     clippy::too_many_arguments,
-    reason = "the claimed attempt keeps control, heartbeat, object, and engine boundaries explicit"
+    reason = "the claimed attempt keeps control, heartbeat, object, and child-process boundaries explicit"
 )]
-async fn process_claimed<E: OcrEngine>(
+async fn process_claimed<L: OcrChildLauncher>(
     control_client: &mut tokio_postgres::Client,
     heartbeat_client: &mut tokio_postgres::Client,
     objects: &R2ObjectStore,
-    engine: &E,
+    launcher: &L,
     config: &OcrConsumerConfig,
     claim: &ClaimedOcrJob,
     payload: &OcrQueuePayload,
@@ -464,15 +464,15 @@ async fn process_claimed<E: OcrEngine>(
         }
         Supervised::OwnerLost => return Ok(DeliveryDisposition::LeavePending),
     };
-    let mut attempt = engine
-        .start(&image, payload)
-        .map_err(OcrConsumerError::Engine)?;
-    // The attempt owns the child transport, not the source image. Release the bounded
+    let mut child = launcher
+        .launch(&image, payload)
+        .map_err(OcrConsumerError::ChildProcess)?;
+    // The child handle owns the transport, not the source image. Release the bounded
     // compressed object before waiting for the child so the parent does not retain up to
     // the object-size limit for the whole OCR duration.
     drop(image);
-    let recognized = supervise_ocr_attempt(
-        attempt.as_mut(),
+    let recognized = supervise_ocr_child(
+        child.as_mut(),
         config.ocr_timeout,
         heartbeat_client,
         claim,
@@ -488,7 +488,7 @@ async fn finish_recognized(
     claim: &ClaimedOcrJob,
     config: &OcrConsumerConfig,
     started: time::Instant,
-    recognized: OcrSupervised<Result<OcrEngineOutput, OcrEngineFailure>>,
+    recognized: OcrSupervised<Result<OcrOutput, OcrFailure>>,
 ) -> Result<DeliveryDisposition, OcrConsumerError> {
     match recognized {
         OcrSupervised::Completed(Ok(output)) => {
@@ -544,7 +544,7 @@ async fn handle_resource_exhausted(
     Ok(DeliveryDisposition::LeavePending)
 }
 
-fn draft_completion(output: OcrEngineOutput, duration_milliseconds: i32) -> OcrDraftCompletion {
+fn draft_completion(output: OcrOutput, duration_milliseconds: i32) -> OcrDraftCompletion {
     OcrDraftCompletion {
         detected_screen_type: output.detected_screen_type,
         profile_id: output.profile_id,
@@ -609,24 +609,24 @@ where
     }
 }
 
-enum OcrAttemptEvent {
-    Completed(Result<Result<OcrEngineOutput, OcrEngineFailure>, OcrProcessFailure>),
+enum OcrChildEvent {
+    Completed(Result<Result<OcrOutput, OcrFailure>, OcrChildProcessFailure>),
     TimedOut,
     Shutdown,
     OwnerLost,
     Dependency(OcrConsumerError),
 }
 
-async fn supervise_ocr_attempt(
-    attempt: &mut dyn OcrEngineAttempt,
+async fn supervise_ocr_child(
+    child: &mut dyn OcrChildHandle,
     timeout: Duration,
     heartbeat_client: &mut tokio_postgres::Client,
     claim: &ClaimedOcrJob,
     config: &OcrConsumerConfig,
     shutdown: &mut watch::Receiver<bool>,
-) -> Result<OcrSupervised<Result<OcrEngineOutput, OcrEngineFailure>>, OcrConsumerError> {
+) -> Result<OcrSupervised<Result<OcrOutput, OcrFailure>>, OcrConsumerError> {
     let event = {
-        let waiting = attempt.wait();
+        let waiting = child.wait();
         tokio::pin!(waiting);
         let deadline = time::sleep(timeout);
         tokio::pin!(deadline);
@@ -635,21 +635,21 @@ async fn supervise_ocr_attempt(
         interval.tick().await;
         loop {
             tokio::select! {
-                output = &mut waiting => break OcrAttemptEvent::Completed(output),
-                () = &mut deadline => break OcrAttemptEvent::TimedOut,
+                output = &mut waiting => break OcrChildEvent::Completed(output),
+                () = &mut deadline => break OcrChildEvent::TimedOut,
                 result = shutdown.changed() => {
                     if result.is_err() || *shutdown.borrow() {
-                        break OcrAttemptEvent::Shutdown;
+                        break OcrChildEvent::Shutdown;
                     }
                 }
                 _ = interval.tick() => {
                     match heartbeat(heartbeat_client, claim, &config.control).await {
                         Ok(OcrHeartbeatResult::Continue) => {}
                         Ok(OcrHeartbeatResult::OwnerLost) => {
-                            break OcrAttemptEvent::OwnerLost;
+                            break OcrChildEvent::OwnerLost;
                         }
                         Err(error) => {
-                            break OcrAttemptEvent::Dependency(error.into());
+                            break OcrChildEvent::Dependency(error.into());
                         }
                     }
                 }
@@ -658,36 +658,39 @@ async fn supervise_ocr_attempt(
     };
 
     match event {
-        OcrAttemptEvent::Completed(Ok(output)) => Ok(OcrSupervised::Completed(output)),
-        OcrAttemptEvent::Completed(Err(OcrProcessFailure::ResourceExhausted)) => {
-            terminate_ocr_attempt(attempt).await?;
+        OcrChildEvent::Completed(Ok(output)) => Ok(OcrSupervised::Completed(output)),
+        OcrChildEvent::Completed(Err(OcrChildProcessFailure::ResourceExhausted)) => {
+            terminate_ocr_child(child).await?;
             Ok(OcrSupervised::ResourceExhausted)
         }
-        OcrAttemptEvent::Completed(Err(OcrProcessFailure::Runtime(kind))) => {
-            terminate_ocr_attempt(attempt).await?;
-            Err(OcrConsumerError::Engine(kind))
+        OcrChildEvent::Completed(Err(OcrChildProcessFailure::Runtime(kind))) => {
+            terminate_ocr_child(child).await?;
+            Err(OcrConsumerError::ChildProcess(kind))
         }
-        OcrAttemptEvent::TimedOut => {
-            terminate_ocr_attempt(attempt).await?;
+        OcrChildEvent::TimedOut => {
+            terminate_ocr_child(child).await?;
             Ok(OcrSupervised::TimedOut)
         }
-        OcrAttemptEvent::Shutdown => {
-            terminate_ocr_attempt(attempt).await?;
+        OcrChildEvent::Shutdown => {
+            terminate_ocr_child(child).await?;
             Ok(OcrSupervised::Shutdown)
         }
-        OcrAttemptEvent::OwnerLost => {
-            terminate_ocr_attempt(attempt).await?;
+        OcrChildEvent::OwnerLost => {
+            terminate_ocr_child(child).await?;
             Ok(OcrSupervised::OwnerLost)
         }
-        OcrAttemptEvent::Dependency(error) => {
-            terminate_ocr_attempt(attempt).await?;
+        OcrChildEvent::Dependency(error) => {
+            terminate_ocr_child(child).await?;
             Err(error)
         }
     }
 }
 
-async fn terminate_ocr_attempt(attempt: &mut dyn OcrEngineAttempt) -> Result<(), OcrConsumerError> {
-    attempt.terminate().await.map_err(OcrConsumerError::Engine)
+async fn terminate_ocr_child(child: &mut dyn OcrChildHandle) -> Result<(), OcrConsumerError> {
+    child
+        .terminate()
+        .await
+        .map_err(OcrConsumerError::ChildProcess)
 }
 
 fn elapsed_milliseconds(started: time::Instant) -> i32 {
@@ -699,18 +702,18 @@ mod tests {
     use super::*;
 
     #[test]
-    fn engine_failures_have_one_deterministic_control_policy() {
+    fn ocr_failures_have_one_deterministic_control_policy() {
         for failure in [
-            OcrEngineFailure::InvalidImage,
-            OcrEngineFailure::UnsupportedImageFormat,
-            OcrEngineFailure::DecodeFailed,
-            OcrEngineFailure::CategoryUndetected,
-            OcrEngineFailure::LayoutUnsupported,
-            OcrEngineFailure::ParserFailed,
+            OcrFailure::InvalidImage,
+            OcrFailure::UnsupportedImageFormat,
+            OcrFailure::DecodeFailed,
+            OcrFailure::CategoryUndetected,
+            OcrFailure::LayoutUnsupported,
+            OcrFailure::ParserFailed,
         ] {
             assert!(!failure_retryable(failure));
         }
-        assert!(failure_retryable(OcrEngineFailure::EngineUnavailable));
+        assert!(failure_retryable(OcrFailure::EngineUnavailable));
     }
 
     #[test]

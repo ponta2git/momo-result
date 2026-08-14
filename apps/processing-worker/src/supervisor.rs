@@ -234,6 +234,13 @@ pub(crate) enum SupervisorError {
     )]
     #[error("{worker} worker exited without a shutdown request")]
     UnexpectedExit { worker: &'static str },
+    #[cfg_attr(
+        target_os = "linux",
+        expect(
+            dead_code,
+            reason = "the fail-closed combined-runtime stub is only built on non-Linux"
+        )
+    )]
     #[error("combined worker runtime is supported only on Linux")]
     UnsupportedPlatform,
 }

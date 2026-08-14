@@ -26,7 +26,7 @@ const MAXIMUM_RUNS: u32 = 1_000;
 #[cfg(any(target_os = "linux", test))]
 const BASIS_POINTS: u128 = 10_000;
 
-pub(crate) struct OcrEnduranceRequest {
+pub(crate) struct R2OcrEnduranceRequest {
     pub(crate) manifest_path: PathBuf,
     pub(crate) runs: u32,
     pub(crate) child_memory_limit_bytes: u64,
@@ -34,14 +34,14 @@ pub(crate) struct OcrEnduranceRequest {
     pub(crate) ocr_timeout: Duration,
     pub(crate) stop_grace: Duration,
     pub(crate) object_store: R2ObjectStoreConfig,
-    pub(crate) thresholds: OcrEnduranceThresholds,
+    pub(crate) thresholds: R2OcrEnduranceThresholds,
     pub(crate) require_full_hd: bool,
     pub(crate) require_sub_full_hd: bool,
 }
 
 #[derive(Clone, Copy, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct OcrEnduranceThresholds {
+pub(crate) struct R2OcrEnduranceThresholds {
     #[serde(rename = "maximumChildPeakBasisPoints")]
     pub(crate) child_peak_basis_points: u16,
     #[serde(rename = "maximumRuntimePeakBasisPoints")]
@@ -60,7 +60,7 @@ pub(crate) struct OcrEnduranceThresholds {
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct OcrEnduranceReport {
+pub(crate) struct R2OcrEnduranceReport {
     schema_version: u8,
     mode: &'static str,
     runs_requested: u32,
@@ -78,13 +78,13 @@ pub(crate) struct OcrEnduranceReport {
     child_memory: MemoryEvidence,
     runtime_memory: vm_memory::VmMemoryEvidence,
     runtime_cgroup_memory: RuntimeCgroupEvidence,
-    thresholds: OcrEnduranceThresholds,
+    thresholds: R2OcrEnduranceThresholds,
     require_full_hd: bool,
     require_sub_full_hd: bool,
     passed: bool,
 }
 
-impl OcrEnduranceReport {
+impl R2OcrEnduranceReport {
     #[must_use]
     pub(crate) const fn passed(&self) -> bool {
         self.passed
@@ -219,15 +219,15 @@ struct PreparedObject {
 /// cgroup evidence, or failed child cleanup. Per-run dependency and OCR failures are retained in a
 /// serializable report so a complete bounded run can still be audited.
 pub(crate) async fn run_r2_endurance(
-    request: &OcrEnduranceRequest,
-) -> Result<OcrEnduranceReport, OcrEnduranceError> {
+    request: &R2OcrEnduranceRequest,
+) -> Result<R2OcrEnduranceReport, OcrEnduranceError> {
     validate_request(request)?;
     let manifest = read_manifest(&request.manifest_path).await?;
     let objects = prepare_objects(manifest)?;
     run_linux(request, objects).await
 }
 
-fn validate_request(request: &OcrEnduranceRequest) -> Result<(), OcrEnduranceError> {
+fn validate_request(request: &R2OcrEnduranceRequest) -> Result<(), OcrEnduranceError> {
     let thresholds = request.thresholds;
     if request.runs == 0
         || request.runs > MAXIMUM_RUNS
@@ -331,9 +331,9 @@ fn valid_label(value: &str) -> bool {
     reason = "the release-only endurance runner keeps one explicit serial R2 and OCR measurement state machine so partial failure evidence is emitted consistently"
 )]
 async fn run_linux(
-    request: &OcrEnduranceRequest,
+    request: &R2OcrEnduranceRequest,
     objects: Vec<PreparedObject>,
-) -> Result<OcrEnduranceReport, OcrEnduranceError> {
+) -> Result<R2OcrEnduranceReport, OcrEnduranceError> {
     use std::time::Instant;
 
     use tokio::time;
@@ -518,7 +518,7 @@ async fn run_linux(
                 .unwrap_or_default()
                 > 0);
 
-    Ok(OcrEnduranceReport {
+    Ok(R2OcrEnduranceReport {
         schema_version: 2,
         mode: "r2_isolated_ocr",
         runs_requested: request.runs,
@@ -559,7 +559,7 @@ const fn domain_failure_kind(failure: momo_ocr::OcrFailure) -> &'static str {
 #[cfg(target_os = "linux")]
 const fn process_failure_kind(failure: super::consumer::OcrChildProcessFailure) -> &'static str {
     match failure {
-        super::consumer::OcrChildProcessFailure::Runtime(kind) => kind,
+        super::consumer::OcrChildProcessFailure::ProcessBoundary(kind) => kind,
         super::consumer::OcrChildProcessFailure::ResourceExhausted => {
             "ocr_child_resource_exhausted"
         }
@@ -568,9 +568,9 @@ const fn process_failure_kind(failure: super::consumer::OcrChildProcessFailure) 
 
 #[cfg(not(target_os = "linux"))]
 async fn run_linux(
-    _request: &OcrEnduranceRequest,
+    _request: &R2OcrEnduranceRequest,
     objects: Vec<PreparedObject>,
-) -> Result<OcrEnduranceReport, OcrEnduranceError> {
+) -> Result<R2OcrEnduranceReport, OcrEnduranceError> {
     for object in objects {
         drop((object.label, object.payload));
     }

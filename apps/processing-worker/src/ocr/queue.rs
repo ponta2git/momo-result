@@ -9,7 +9,7 @@ use redis::{
 };
 use thiserror::Error;
 
-use super::contract::{OcrQueueContractError, OcrQueuePayload, parse_delivery, readable_job_id};
+use super::contract::{OcrQueueContractError, OcrQueuePayload, parse_delivery, recoverable_job_id};
 
 const MAXIMUM_PENDING_SCAN_COUNT: usize = 100;
 const MAXIMUM_DELIVERY_ATTEMPTS: usize = 10;
@@ -79,12 +79,12 @@ pub(crate) struct OcrQueueDelivery {
 pub(crate) enum OcrQueueDeliveryBody {
     Job(Box<OcrQueuePayload>),
     Malformed {
-        readable_job_id: Option<String>,
+        recoverable_job_id: Option<String>,
         error: OcrQueueContractError,
     },
     MaximumAttempts {
-        readable_job_id: Option<String>,
-        deliveries: usize,
+        recoverable_job_id: Option<String>,
+        delivery_count: usize,
         contract_error: Option<OcrQueueContractError>,
     },
 }
@@ -130,10 +130,10 @@ pub(crate) async fn next_delivery(
     redis: &mut ConnectionManager,
     config: &OcrQueueConfig,
 ) -> Result<Option<OcrQueueDelivery>, OcrQueueError> {
-    if let Some((delivery, deliveries)) = claim_stale_delivery(redis, config).await? {
+    if let Some((delivery, prior_delivery_count)) = claim_stale_delivery(redis, config).await? {
         return Ok(Some(decode_delivery(
             &delivery,
-            Some(deliveries),
+            Some(prior_delivery_count),
             config.maximum_delivery_attempts,
         )));
     }
@@ -189,22 +189,22 @@ async fn claim_stale_delivery(
 
 fn decode_delivery(
     delivery: &StreamId,
-    stale_deliveries: Option<usize>,
+    prior_delivery_count: Option<usize>,
     maximum_delivery_attempts: usize,
 ) -> OcrQueueDelivery {
     let message_id = delivery.id.clone();
     let parsed = parse_delivery(delivery);
-    let body = if stale_deliveries.is_some_and(|count| count >= maximum_delivery_attempts) {
+    let body = if prior_delivery_count.is_some_and(|count| count >= maximum_delivery_attempts) {
         OcrQueueDeliveryBody::MaximumAttempts {
-            readable_job_id: readable_job_id(delivery),
-            deliveries: stale_deliveries.unwrap_or(maximum_delivery_attempts),
+            recoverable_job_id: recoverable_job_id(delivery),
+            delivery_count: prior_delivery_count.unwrap_or(maximum_delivery_attempts),
             contract_error: parsed.err(),
         }
     } else {
         match parsed {
             Ok(payload) => OcrQueueDeliveryBody::Job(Box::new(payload)),
             Err(error) => OcrQueueDeliveryBody::Malformed {
-                readable_job_id: readable_job_id(delivery),
+                recoverable_job_id: recoverable_job_id(delivery),
                 error,
             },
         }
@@ -265,12 +265,12 @@ fn dead_letter_fields(delivery: &OcrQueueDelivery) -> BTreeMap<&'static str, Str
     ]);
     match &delivery.body {
         OcrQueueDeliveryBody::MaximumAttempts {
-            readable_job_id,
-            deliveries,
+            recoverable_job_id,
+            delivery_count,
             contract_error,
         } => {
-            fields.insert("deadLetterDeliveries", deliveries.to_string());
-            if let Some(job_id) = readable_job_id {
+            fields.insert("deadLetterDeliveries", delivery_count.to_string());
+            if let Some(job_id) = recoverable_job_id {
                 fields.insert("jobId", job_id.clone());
             }
             if let Some(error) = contract_error {
@@ -374,7 +374,7 @@ mod tests {
         assert!(matches!(
             decode_delivery(&delivery, None, 1).body,
             OcrQueueDeliveryBody::Malformed {
-                readable_job_id: Some(_),
+                recoverable_job_id: Some(_),
                 ..
             }
         ));

@@ -124,7 +124,7 @@ pub(crate) fn parse_delivery(
         reason = "malformed delivery handling is performed by the production Linux consumer"
     )
 )]
-pub(crate) fn readable_job_id(delivery: &StreamId) -> Option<String> {
+pub(crate) fn recoverable_job_id(delivery: &StreamId) -> Option<String> {
     required_string(delivery, "jobId")
         .ok()
         .filter(|value| valid_id(value))
@@ -393,13 +393,16 @@ mod tests {
             String::from("schemaVersion"),
             Value::BulkString(b"unsupported".to_vec()),
         );
-        assert_eq!(readable_job_id(&delivery), Some(String::from("job-v2-1")));
+        assert_eq!(
+            recoverable_job_id(&delivery),
+            Some(String::from("job-v2-1"))
+        );
 
         delivery.map.insert(
             String::from("jobId"),
             Value::BulkString("日本語".as_bytes().to_vec()),
         );
-        assert_eq!(readable_job_id(&delivery), None);
+        assert_eq!(recoverable_job_id(&delivery), None);
     }
 
     fn delivery_from_json(encoded: &str) -> StreamId {

@@ -308,7 +308,7 @@ async fn verify_redis_failure_order(primary: &mut Client, redis_url: &str) -> Sm
     assert!(matches!(
         &malformed.body,
         OcrQueueDeliveryBody::Malformed {
-            readable_job_id: Some(job_id),
+            recoverable_job_id: Some(job_id),
             ..
         } if job_id == MALFORMED.job_id
     ));
@@ -340,7 +340,7 @@ async fn verify_redis_failure_order(primary: &mut Client, redis_url: &str) -> Sm
     assert!(matches!(
         poison.body,
         OcrQueueDeliveryBody::Malformed {
-            readable_job_id: None,
+            recoverable_job_id: None,
             ..
         }
     ));
@@ -478,9 +478,9 @@ fn claimed(result: OcrClaimResult) -> SmokeResult<ClaimedOcrJob> {
         | OcrClaimResult::PreemptionRequested
         | OcrClaimResult::MissingOrTerminal
         | OcrClaimResult::AlreadyRunning
-        | OcrClaimResult::NotReady
-        | OcrClaimResult::ForeignSchema
-        | OcrClaimResult::RejectedQueueContract) => {
+        | OcrClaimResult::NotYetAvailable
+        | OcrClaimResult::UnsupportedQueueSchema
+        | OcrClaimResult::QueueContractMismatch) => {
             Err(smoke_error(format!("expected claimed OCR job, got {other:?}")).into())
         }
     }

@@ -90,9 +90,9 @@ pub(crate) enum OcrClaimResult {
     PreemptionRequested,
     MissingOrTerminal,
     AlreadyRunning,
-    NotReady,
-    ForeignSchema,
-    RejectedQueueContract,
+    NotYetAvailable,
+    UnsupportedQueueSchema,
+    QueueContractMismatch,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -244,7 +244,7 @@ pub(crate) async fn claim_job(
             )
             .await?;
             transaction.commit().await?;
-            return Ok(OcrClaimResult::RejectedQueueContract);
+            return Ok(OcrClaimResult::QueueContractMismatch);
         }
     };
     if !candidate.matches(payload) {
@@ -256,7 +256,7 @@ pub(crate) async fn claim_job(
         )
         .await?;
         transaction.commit().await?;
-        return Ok(OcrClaimResult::RejectedQueueContract);
+        return Ok(OcrClaimResult::QueueContractMismatch);
     }
 
     if let Some(holder) = &slot.holder

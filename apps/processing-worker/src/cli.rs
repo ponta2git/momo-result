@@ -14,8 +14,8 @@ use crate::{
     ocr::{
         contract::{OcrHints, RequestedScreenType},
         endurance::{
-            LocalOcrEnduranceRequest, LocalOcrEnduranceThresholds, OcrEnduranceRequest,
-            OcrEnduranceThresholds,
+            LocalOcrEnduranceRequest, LocalOcrEnduranceThresholds, R2OcrEnduranceRequest,
+            R2OcrEnduranceThresholds,
         },
         object_store::R2ObjectStoreConfig,
     },
@@ -486,7 +486,7 @@ async fn run_ocr_r2_endurance(arguments: OcrR2EnduranceArgs) -> Result<(), Strin
         arguments.r2_maximum_attempts,
     )
     .map_err(|error| error.to_string())?;
-    let report = crate::ocr::endurance::run_r2_endurance(&OcrEnduranceRequest {
+    let report = crate::ocr::endurance::run_r2_endurance(&R2OcrEnduranceRequest {
         manifest_path: arguments.manifest,
         runs: arguments.runs,
         child_memory_limit_bytes: arguments.child_memory_limit_bytes,
@@ -494,7 +494,7 @@ async fn run_ocr_r2_endurance(arguments: OcrR2EnduranceArgs) -> Result<(), Strin
         ocr_timeout: Duration::from_millis(arguments.ocr_timeout_ms),
         stop_grace: Duration::from_millis(arguments.stop_grace_ms),
         object_store,
-        thresholds: OcrEnduranceThresholds {
+        thresholds: R2OcrEnduranceThresholds {
             child_peak_basis_points: arguments.maximum_child_peak_basis_points,
             runtime_peak_basis_points: arguments.maximum_runtime_peak_basis_points,
             download_p99_milliseconds: arguments.maximum_download_p99_ms,

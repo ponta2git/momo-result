@@ -37,7 +37,7 @@ use momo_ocr::{OcrFailure, OcrOutput};
 /// Failure observed by the parent supervisor rather than returned by OCR domain logic.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum OcrChildProcessFailure {
-    Runtime(&'static str),
+    ProcessBoundary(&'static str),
     ResourceExhausted,
 }
 
@@ -62,7 +62,7 @@ pub(crate) trait OcrChildLauncher: Send + Sync {
     ) -> Result<Box<dyn OcrChildHandle>, &'static str>;
 }
 
-pub(crate) const fn failure_control_code(failure: OcrFailure) -> OcrFailureCode {
+pub(crate) const fn domain_failure_control_code(failure: OcrFailure) -> OcrFailureCode {
     match failure {
         OcrFailure::InvalidImage => OcrFailureCode::InvalidImage,
         OcrFailure::UnsupportedImageFormat => OcrFailureCode::UnsupportedImageFormat,
@@ -74,7 +74,7 @@ pub(crate) const fn failure_control_code(failure: OcrFailure) -> OcrFailureCode 
     }
 }
 
-pub(crate) const fn failure_retryable(failure: OcrFailure) -> bool {
+pub(crate) const fn domain_failure_is_retryable(failure: OcrFailure) -> bool {
     matches!(failure, OcrFailure::EngineUnavailable)
 }
 
@@ -207,27 +207,27 @@ impl From<OcrControlError> for OcrConsumerError {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum DeliveryDisposition {
     Acknowledge,
-    Resolved,
+    AlreadyAcknowledged,
     LeavePending,
-    Stop,
+    StopLoop,
 }
 
 enum ClaimDecision {
     Claimed(ClaimedOcrJob),
-    Retry,
+    RetryClaim,
     Acknowledge,
     LeavePending,
-    Stop,
+    StopWaiting,
 }
 
-enum Supervised<T> {
+enum DownloadOutcome<T> {
     Completed(T),
     TimedOut,
     Shutdown,
     OwnerLost,
 }
 
-enum OcrSupervised<T> {
+enum OcrChildOutcome<T> {
     Completed(T),
     ResourceExhausted,
     TimedOut,
@@ -237,8 +237,8 @@ enum OcrSupervised<T> {
 
 /// Runs the explicitly enabled Rust OCR v2 consumer with an injected OCR child launcher.
 ///
-/// The production writer must remain disabled until the live R2, control-plane, resource, and
-/// accuracy gates pass.
+/// Activation remains explicit; rollout requires the independently maintained R2, control-plane,
+/// resource, and accuracy gates.
 ///
 /// # Errors
 ///
@@ -286,8 +286,8 @@ pub(crate) async fn run<L: OcrChildLauncher>(
             DeliveryDisposition::Acknowledge => {
                 acknowledge(&mut redis, &config.queue, &delivery.message_id).await?;
             }
-            DeliveryDisposition::Resolved | DeliveryDisposition::LeavePending => {}
-            DeliveryDisposition::Stop => break,
+            DeliveryDisposition::AlreadyAcknowledged | DeliveryDisposition::LeavePending => {}
+            DeliveryDisposition::StopLoop => break,
         }
     }
     info!(
@@ -313,7 +313,7 @@ async fn process_delivery<L: OcrChildLauncher>(
 ) -> Result<DeliveryDisposition, OcrConsumerError> {
     match &delivery.body {
         OcrQueueDeliveryBody::Malformed {
-            readable_job_id,
+            recoverable_job_id,
             error,
         } => {
             warn!(
@@ -321,7 +321,7 @@ async fn process_delivery<L: OcrChildLauncher>(
                 contract_error = ?error,
                 "Rust OCR v2 delivery failed its closed contract"
             );
-            if let Some(job_id) = readable_job_id {
+            if let Some(job_id) = recoverable_job_id {
                 record_queue_failure(control_client, job_id, config.finalization_timeout).await?;
                 Ok(DeliveryDisposition::Acknowledge)
             } else {
@@ -329,13 +329,13 @@ async fn process_delivery<L: OcrChildLauncher>(
             }
         }
         OcrQueueDeliveryBody::MaximumAttempts {
-            readable_job_id, ..
+            recoverable_job_id, ..
         } => {
-            if let Some(job_id) = readable_job_id {
+            if let Some(job_id) = recoverable_job_id {
                 record_queue_failure(control_client, job_id, config.finalization_timeout).await?;
             }
             dead_letter_and_acknowledge(redis, &config.queue, delivery).await?;
-            Ok(DeliveryDisposition::Resolved)
+            Ok(DeliveryDisposition::AlreadyAcknowledged)
         }
         OcrQueueDeliveryBody::Job(payload) => {
             match wait_for_claim(control_client, payload, config, shutdown).await? {
@@ -353,10 +353,10 @@ async fn process_delivery<L: OcrChildLauncher>(
                     .await
                 }
                 ClaimDecision::Acknowledge => Ok(DeliveryDisposition::Acknowledge),
-                ClaimDecision::LeavePending | ClaimDecision::Retry => {
+                ClaimDecision::LeavePending | ClaimDecision::RetryClaim => {
                     Ok(DeliveryDisposition::LeavePending)
                 }
-                ClaimDecision::Stop => Ok(DeliveryDisposition::Stop),
+                ClaimDecision::StopWaiting => Ok(DeliveryDisposition::StopLoop),
             }
         }
     }
@@ -375,14 +375,14 @@ async fn wait_for_claim(
             ClaimDecision::Claimed(claim) => return Ok(ClaimDecision::Claimed(claim)),
             ClaimDecision::Acknowledge => return Ok(ClaimDecision::Acknowledge),
             ClaimDecision::LeavePending => return Ok(ClaimDecision::LeavePending),
-            ClaimDecision::Stop => return Ok(ClaimDecision::Stop),
-            ClaimDecision::Retry => {}
+            ClaimDecision::StopWaiting => return Ok(ClaimDecision::StopWaiting),
+            ClaimDecision::RetryClaim => {}
         }
         tokio::select! {
             () = &mut deadline => return Ok(ClaimDecision::LeavePending),
             result = shutdown.changed() => {
                 if result.is_err() || *shutdown.borrow() {
-                    return Ok(ClaimDecision::Stop);
+                    return Ok(ClaimDecision::StopWaiting);
                 }
             }
             () = time::sleep(config.heartbeat_interval) => {}
@@ -395,9 +395,11 @@ fn classify_claim_result(result: OcrClaimResult) -> ClaimDecision {
         OcrClaimResult::Claimed(claim) => ClaimDecision::Claimed(claim),
         OcrClaimResult::MissingOrTerminal
         | OcrClaimResult::AlreadyRunning
-        | OcrClaimResult::RejectedQueueContract => ClaimDecision::Acknowledge,
-        OcrClaimResult::ForeignSchema | OcrClaimResult::NotReady => ClaimDecision::LeavePending,
-        OcrClaimResult::Busy | OcrClaimResult::PreemptionRequested => ClaimDecision::Retry,
+        | OcrClaimResult::QueueContractMismatch => ClaimDecision::Acknowledge,
+        OcrClaimResult::UnsupportedQueueSchema | OcrClaimResult::NotYetAvailable => {
+            ClaimDecision::LeavePending
+        }
+        OcrClaimResult::Busy | OcrClaimResult::PreemptionRequested => ClaimDecision::RetryClaim,
     }
 }
 
@@ -416,7 +418,7 @@ async fn process_claimed<L: OcrChildLauncher>(
     shutdown: &mut watch::Receiver<bool>,
 ) -> Result<DeliveryDisposition, OcrConsumerError> {
     let started = time::Instant::now();
-    let downloaded = Box::pin(supervise(
+    let downloaded = Box::pin(supervise_download(
         objects.download(payload),
         config.object_download_timeout,
         heartbeat_client,
@@ -426,12 +428,12 @@ async fn process_claimed<L: OcrChildLauncher>(
     ))
     .await?;
     let image = match downloaded {
-        Supervised::Completed(Ok(image))
+        DownloadOutcome::Completed(Ok(image))
             if image.width() == claim.expected_width && image.height() == claim.expected_height =>
         {
             image
         }
-        Supervised::Completed(Err(OcrObjectStoreError::NotFound)) => {
+        DownloadOutcome::Completed(Err(OcrObjectStoreError::NotFound)) => {
             return finish_terminal_failure(
                 control_client,
                 claim,
@@ -441,7 +443,7 @@ async fn process_claimed<L: OcrChildLauncher>(
             )
             .await;
         }
-        Supervised::Completed(Ok(_) | Err(OcrObjectStoreError::Integrity)) => {
+        DownloadOutcome::Completed(Ok(_) | Err(OcrObjectStoreError::Integrity)) => {
             return finish_terminal_failure(
                 control_client,
                 claim,
@@ -451,18 +453,18 @@ async fn process_claimed<L: OcrChildLauncher>(
             )
             .await;
         }
-        Supervised::Completed(Err(
+        DownloadOutcome::Completed(Err(
             OcrObjectStoreError::AccessDenied | OcrObjectStoreError::Unavailable,
         ))
-        | Supervised::TimedOut => {
+        | DownloadOutcome::TimedOut => {
             requeue_transient(control_client, claim, &config.control).await?;
             return Ok(DeliveryDisposition::LeavePending);
         }
-        Supervised::Shutdown => {
+        DownloadOutcome::Shutdown => {
             requeue_transient(control_client, claim, &config.control).await?;
-            return Ok(DeliveryDisposition::Stop);
+            return Ok(DeliveryDisposition::StopLoop);
         }
-        Supervised::OwnerLost => return Ok(DeliveryDisposition::LeavePending),
+        DownloadOutcome::OwnerLost => return Ok(DeliveryDisposition::LeavePending),
     };
     let mut child = launcher
         .launch(&image, payload)
@@ -471,7 +473,7 @@ async fn process_claimed<L: OcrChildLauncher>(
     // compressed object before waiting for the child so the parent does not retain up to
     // the object-size limit for the whole OCR duration.
     drop(image);
-    let recognized = supervise_ocr_child(
+    let child_outcome = supervise_ocr_child(
         child.as_mut(),
         config.ocr_timeout,
         heartbeat_client,
@@ -480,40 +482,40 @@ async fn process_claimed<L: OcrChildLauncher>(
         shutdown,
     )
     .await?;
-    finish_recognized(control_client, claim, config, started, recognized).await
+    finish_ocr_attempt(control_client, claim, config, started, child_outcome).await
 }
 
-async fn finish_recognized(
+async fn finish_ocr_attempt(
     control_client: &mut tokio_postgres::Client,
     claim: &ClaimedOcrJob,
     config: &OcrConsumerConfig,
     started: time::Instant,
-    recognized: OcrSupervised<Result<OcrOutput, OcrFailure>>,
+    child_outcome: OcrChildOutcome<Result<OcrOutput, OcrFailure>>,
 ) -> Result<DeliveryDisposition, OcrConsumerError> {
-    match recognized {
-        OcrSupervised::Completed(Ok(output)) => {
+    match child_outcome {
+        OcrChildOutcome::Completed(Ok(output)) => {
             let completion = draft_completion(output, elapsed_milliseconds(started));
             finish_success(control_client, claim, &config.control, &completion).await?;
             Ok(DeliveryDisposition::Acknowledge)
         }
-        OcrSupervised::Completed(Err(failure)) if failure_retryable(failure) => {
+        OcrChildOutcome::Completed(Err(failure)) if domain_failure_is_retryable(failure) => {
             requeue_transient(control_client, claim, &config.control).await?;
             Ok(DeliveryDisposition::LeavePending)
         }
-        OcrSupervised::Completed(Err(failure)) => {
+        OcrChildOutcome::Completed(Err(failure)) => {
             finish_terminal_failure(
                 control_client,
                 claim,
                 config,
-                failure_control_code(failure),
+                domain_failure_control_code(failure),
                 started,
             )
             .await
         }
-        OcrSupervised::ResourceExhausted => {
+        OcrChildOutcome::ResourceExhausted => {
             handle_resource_exhausted(control_client, claim, config).await
         }
-        OcrSupervised::TimedOut => {
+        OcrChildOutcome::TimedOut => {
             finish_terminal_failure(
                 control_client,
                 claim,
@@ -523,11 +525,11 @@ async fn finish_recognized(
             )
             .await
         }
-        OcrSupervised::Shutdown => {
+        OcrChildOutcome::Shutdown => {
             requeue_transient(control_client, claim, &config.control).await?;
-            Ok(DeliveryDisposition::Stop)
+            Ok(DeliveryDisposition::StopLoop)
         }
-        OcrSupervised::OwnerLost => Ok(DeliveryDisposition::LeavePending),
+        OcrChildOutcome::OwnerLost => Ok(DeliveryDisposition::LeavePending),
     }
 }
 
@@ -573,14 +575,14 @@ async fn finish_terminal_failure(
     Ok(DeliveryDisposition::Acknowledge)
 }
 
-async fn supervise<F, T>(
+async fn supervise_download<F, T>(
     future: F,
     timeout: Duration,
     heartbeat_client: &mut tokio_postgres::Client,
     claim: &ClaimedOcrJob,
     config: &OcrConsumerConfig,
     shutdown: &mut watch::Receiver<bool>,
-) -> Result<Supervised<T>, OcrConsumerError>
+) -> Result<DownloadOutcome<T>, OcrConsumerError>
 where
     F: Future<Output = T>,
 {
@@ -592,17 +594,17 @@ where
     interval.tick().await;
     loop {
         tokio::select! {
-            output = &mut future => return Ok(Supervised::Completed(output)),
-            () = &mut deadline => return Ok(Supervised::TimedOut),
+            output = &mut future => return Ok(DownloadOutcome::Completed(output)),
+            () = &mut deadline => return Ok(DownloadOutcome::TimedOut),
             result = shutdown.changed() => {
                 if result.is_err() || *shutdown.borrow() {
-                    return Ok(Supervised::Shutdown);
+                    return Ok(DownloadOutcome::Shutdown);
                 }
             }
             _ = interval.tick() => {
                 match heartbeat(heartbeat_client, claim, &config.control).await? {
                     OcrHeartbeatResult::Continue => {}
-                    OcrHeartbeatResult::OwnerLost => return Ok(Supervised::OwnerLost),
+                    OcrHeartbeatResult::OwnerLost => return Ok(DownloadOutcome::OwnerLost),
                 }
             }
         }
@@ -624,7 +626,7 @@ async fn supervise_ocr_child(
     claim: &ClaimedOcrJob,
     config: &OcrConsumerConfig,
     shutdown: &mut watch::Receiver<bool>,
-) -> Result<OcrSupervised<Result<OcrOutput, OcrFailure>>, OcrConsumerError> {
+) -> Result<OcrChildOutcome<Result<OcrOutput, OcrFailure>>, OcrConsumerError> {
     let event = {
         let waiting = child.wait();
         tokio::pin!(waiting);
@@ -658,26 +660,26 @@ async fn supervise_ocr_child(
     };
 
     match event {
-        OcrChildEvent::Completed(Ok(output)) => Ok(OcrSupervised::Completed(output)),
+        OcrChildEvent::Completed(Ok(output)) => Ok(OcrChildOutcome::Completed(output)),
         OcrChildEvent::Completed(Err(OcrChildProcessFailure::ResourceExhausted)) => {
             terminate_ocr_child(child).await?;
-            Ok(OcrSupervised::ResourceExhausted)
+            Ok(OcrChildOutcome::ResourceExhausted)
         }
-        OcrChildEvent::Completed(Err(OcrChildProcessFailure::Runtime(kind))) => {
+        OcrChildEvent::Completed(Err(OcrChildProcessFailure::ProcessBoundary(kind))) => {
             terminate_ocr_child(child).await?;
             Err(OcrConsumerError::ChildProcess(kind))
         }
         OcrChildEvent::TimedOut => {
             terminate_ocr_child(child).await?;
-            Ok(OcrSupervised::TimedOut)
+            Ok(OcrChildOutcome::TimedOut)
         }
         OcrChildEvent::Shutdown => {
             terminate_ocr_child(child).await?;
-            Ok(OcrSupervised::Shutdown)
+            Ok(OcrChildOutcome::Shutdown)
         }
         OcrChildEvent::OwnerLost => {
             terminate_ocr_child(child).await?;
-            Ok(OcrSupervised::OwnerLost)
+            Ok(OcrChildOutcome::OwnerLost)
         }
         OcrChildEvent::Dependency(error) => {
             terminate_ocr_child(child).await?;
@@ -711,9 +713,9 @@ mod tests {
             OcrFailure::LayoutUnsupported,
             OcrFailure::ParserFailed,
         ] {
-            assert!(!failure_retryable(failure));
+            assert!(!domain_failure_is_retryable(failure));
         }
-        assert!(failure_retryable(OcrFailure::EngineUnavailable));
+        assert!(domain_failure_is_retryable(OcrFailure::EngineUnavailable));
     }
 
     #[test]
@@ -721,14 +723,17 @@ mod tests {
         for result in [
             OcrClaimResult::MissingOrTerminal,
             OcrClaimResult::AlreadyRunning,
-            OcrClaimResult::RejectedQueueContract,
+            OcrClaimResult::QueueContractMismatch,
         ] {
             assert!(matches!(
                 classify_claim_result(result),
                 ClaimDecision::Acknowledge
             ));
         }
-        for result in [OcrClaimResult::ForeignSchema, OcrClaimResult::NotReady] {
+        for result in [
+            OcrClaimResult::UnsupportedQueueSchema,
+            OcrClaimResult::NotYetAvailable,
+        ] {
             assert!(matches!(
                 classify_claim_result(result),
                 ClaimDecision::LeavePending
@@ -737,7 +742,7 @@ mod tests {
         for result in [OcrClaimResult::Busy, OcrClaimResult::PreemptionRequested] {
             assert!(matches!(
                 classify_claim_result(result),
-                ClaimDecision::Retry
+                ClaimDecision::RetryClaim
             ));
         }
     }

@@ -160,40 +160,41 @@ impl ManagedOcrChild {
         if let Some(kind) = self.start_error.take() {
             self.terminate_inner()
                 .await
-                .map_err(OcrChildProcessFailure::Runtime)?;
-            return Err(OcrChildProcessFailure::Runtime(kind));
+                .map_err(OcrChildProcessFailure::ProcessBoundary)?;
+            return Err(OcrChildProcessFailure::ProcessBoundary(kind));
         }
         let status = match self.child.as_mut() {
             Some(child) => child
                 .wait()
                 .await
-                .map_err(|_error| OcrChildProcessFailure::Runtime("ocr_child_wait"))?,
-            None => return Err(OcrChildProcessFailure::Runtime("ocr_child_state")),
+                .map_err(|_error| OcrChildProcessFailure::ProcessBoundary("ocr_child_wait"))?,
+            None => return Err(OcrChildProcessFailure::ProcessBoundary("ocr_child_state")),
         };
         drop(self.child.take());
         let memory_after = self
             .cgroup
             .snapshot()
-            .map_err(|error| OcrChildProcessFailure::Runtime(error.kind()))?;
+            .map_err(|error| OcrChildProcessFailure::ProcessBoundary(error.kind()))?;
         self.cgroup
             .ensure_empty()
-            .map_err(|error| OcrChildProcessFailure::Runtime(error.kind()))?;
+            .map_err(|error| OcrChildProcessFailure::ProcessBoundary(error.kind()))?;
         if memory_after.oom_kill_count > self.oom_kill_count_before {
             self.abort_io_tasks().await;
             return Err(OcrChildProcessFailure::ResourceExhausted);
         }
         if !status.success() {
             self.abort_io_tasks().await;
-            return Err(OcrChildProcessFailure::Runtime("ocr_child_exit"));
+            return Err(OcrChildProcessFailure::ProcessBoundary("ocr_child_exit"));
         }
         self.finish_writer()
             .await
-            .map_err(OcrChildProcessFailure::Runtime)?;
+            .map_err(OcrChildProcessFailure::ProcessBoundary)?;
         let response = self
             .finish_reader()
             .await
-            .map_err(OcrChildProcessFailure::Runtime)?;
-        momo_ocr::protocol::decode_response(&response).map_err(OcrChildProcessFailure::Runtime)
+            .map_err(OcrChildProcessFailure::ProcessBoundary)?;
+        momo_ocr::protocol::decode_response(&response)
+            .map_err(OcrChildProcessFailure::ProcessBoundary)
     }
 
     async fn terminate_inner(&mut self) -> Result<(), &'static str> {
@@ -406,7 +407,7 @@ pub(crate) async fn analyze_isolated_local_image_bytes(
 #[cfg(target_os = "linux")]
 const fn process_failure_kind(failure: OcrChildProcessFailure) -> &'static str {
     match failure {
-        OcrChildProcessFailure::Runtime(kind) => kind,
+        OcrChildProcessFailure::ProcessBoundary(kind) => kind,
         OcrChildProcessFailure::ResourceExhausted => "ocr_child_resource_exhausted",
     }
 }

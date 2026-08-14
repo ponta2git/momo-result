@@ -60,10 +60,12 @@ pub(super) async fn load_candidate(
         return Err(OcrControlError::InvalidState);
     }
     if job.try_get::<_, i16>(5)? != 2 {
-        return Ok(CandidateResult::Rejected(OcrClaimResult::ForeignSchema));
+        return Ok(CandidateResult::Rejected(
+            OcrClaimResult::UnsupportedQueueSchema,
+        ));
     }
     if !job.try_get::<_, bool>(4)? {
-        return Ok(CandidateResult::Rejected(OcrClaimResult::NotReady));
+        return Ok(CandidateResult::Rejected(OcrClaimResult::NotYetAvailable));
     }
     let Some(source_image_id) = job.try_get::<_, Option<String>>(1)? else {
         return Ok(CandidateResult::InvalidPersistedContract);

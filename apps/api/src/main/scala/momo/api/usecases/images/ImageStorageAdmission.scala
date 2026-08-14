@@ -8,8 +8,7 @@ import momo.api.domain.ids.AccountId
 import momo.api.errors.AppError
 import momo.api.logging.SafeLog
 import momo.api.ports.storage.{ImageDiskUsage, ImageStorageCapacityInspector, ImageStorageInspector}
-import momo.api.repositories.ImageReferenceRepository
-import momo.api.repositories.SourceImageQuota
+import momo.api.repositories.{ImageReferenceRepository, SourceImageQuota}
 
 trait ImageStorageAdmission[F[_]]:
   def ensureCanAccept(ownerAccountId: AccountId, incomingBytes: Long): F[Either[AppError, Unit]]

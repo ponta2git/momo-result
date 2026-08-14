@@ -471,7 +471,12 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
   private def insertMatchDraft(
       draftId: MatchDraftId,
       updatedAt: Instant,
-      totalAssetsImageId: Option[ImageId] = None,
+  ): IO[Int] = insertMatchDraft(draftId, updatedAt, None)
+
+  private def insertMatchDraft(
+      draftId: MatchDraftId,
+      updatedAt: Instant,
+      totalAssetsImageId: Option[ImageId],
   ): IO[Int] = sql"""
     INSERT INTO match_drafts (
       id, created_by_account_id, created_by_member_id, status,

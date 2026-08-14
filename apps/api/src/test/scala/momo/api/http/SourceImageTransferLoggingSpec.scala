@@ -3,8 +3,8 @@ package momo.api.http
 import scala.jdk.CollectionConverters.*
 
 import cats.effect.{Deferred, IO, Resource}
-import ch.qos.logback.classic.{Level, Logger}
 import ch.qos.logback.classic.spi.ILoggingEvent
+import ch.qos.logback.classic.{Level, Logger}
 import ch.qos.logback.core.read.ListAppender
 import fs2.Stream
 import org.slf4j.LoggerFactory

@@ -19,9 +19,9 @@ import momo.api.repositories.{
   OcrJobCreationStore,
   OcrJobDraftAttachment,
   OcrQueueDispatchIntent,
+  SourceImageDeleteResult,
   SourceImageQuota,
   SourceImageReservation,
-  SourceImageDeleteResult,
   SourceImageStatus
 }
 import momo.api.testing.JsonSchemaAssertions
@@ -263,7 +263,7 @@ final class PostgresOcrJobCreationStoreSpec extends IntegrationSuite with JsonSc
           statement.setTimestamp(2, java.sql.Timestamp.from(now.plusSeconds(1)))
           statement.setString(3, imageId.value)
           if statement.executeUpdate() != 1 then
-            throw new IllegalStateException("test deletion transition did not lock one image")
+            fail("test deletion transition did not lock one image")
         finally statement.close()
       }
       (transition *> locked.complete(()) *> release.get *> IO.blocking(connection.commit()))
@@ -285,7 +285,7 @@ final class PostgresOcrJobCreationStoreSpec extends IntegrationSuite with JsonSc
           val rows = lock.executeQuery()
           try
             if !rows.next() || rows.getString(1) != SourceImageStatus.Available.wire then
-              throw new IllegalStateException("test source image was not AVAILABLE")
+              fail("test source image was not AVAILABLE")
           finally rows.close()
         finally lock.close()
 
@@ -303,7 +303,7 @@ final class PostgresOcrJobCreationStoreSpec extends IntegrationSuite with JsonSc
           insert.setTimestamp(5, java.sql.Timestamp.from(now))
           insert.setTimestamp(6, java.sql.Timestamp.from(now))
           if insert.executeUpdate() != 1 then
-            throw new IllegalStateException("test OCR reference was not inserted")
+            fail("test OCR reference was not inserted")
         finally insert.close()
       }
       (insertReference *> locked.complete(()) *> release.get *> IO.blocking(connection.commit()))

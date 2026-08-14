@@ -17,9 +17,9 @@ import momo.api.repositories.{
   OcrJobCreationPlan,
   OcrJobCreationStore,
   OcrJobDraftAttachment,
-  OcrQueueOutboxDraft
+  OcrQueueOutboxDraft,
+  SourceImageStatus
 }
-import momo.api.repositories.SourceImageStatus
 
 final class PostgresOcrJobCreationStore[F[_]: MonadCancelThrow](transactor: Transactor[F])
     extends OcrJobCreationStore[F]:

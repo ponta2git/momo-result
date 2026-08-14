@@ -32,8 +32,8 @@ import momo.api.ports.storage.{
   SourceImageObjectStorage
 }
 import momo.api.repositories.*
-import momo.api.usecases.ocr.*
 import momo.api.usecases.images.ImageStorageAdmission
+import momo.api.usecases.ocr.*
 import momo.api.usecases.seriesanalysis.{
   SeriesAnalysisQueueDispatcherConfig,
   SeriesAnalysisQueueOutboxDispatcher

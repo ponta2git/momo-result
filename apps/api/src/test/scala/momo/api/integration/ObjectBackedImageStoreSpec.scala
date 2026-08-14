@@ -6,8 +6,8 @@ import scala.jdk.CollectionConverters.*
 
 import cats.effect.{IO, Ref, Resource}
 import cats.syntax.all.*
-import ch.qos.logback.classic.{Level, Logger}
 import ch.qos.logback.classic.spi.ILoggingEvent
+import ch.qos.logback.classic.{Level, Logger}
 import ch.qos.logback.core.read.ListAppender
 import org.slf4j.LoggerFactory
 
@@ -142,9 +142,9 @@ final class ObjectBackedImageStoreSpec extends IntegrationSuite:
       objects <- RecordingSourceImageObjectStorage.create
       remaining <- Ref.of[IO, Vector[ImageId]](ids)
       nextId = remaining.modify {
-        case head +: tail => tail -> head
-        case _ => throw new IllegalStateException("test image ids exhausted")
-      }
+        case head +: tail => tail -> Some(head)
+        case _ => Vector.empty -> None
+      }.flatMap(_.liftTo[IO](new IllegalStateException("test image ids exhausted")))
       store = ObjectBackedImageStore[IO](
         PostgresSourceImagesRepository[IO](transactor),
         objects,
@@ -164,7 +164,13 @@ final class ObjectBackedImageStoreSpec extends IntegrationSuite:
       putCount <- objects.putCount
     yield
       assertEquals(results.count(_.isRight), 2)
-      assertEquals(results.count(_.left.exists(_.isInstanceOf[AppError.TooManyRequests])), 6)
+      assertEquals(
+        results.count {
+          case Left(_: AppError.TooManyRequests) => true
+          case _ => false
+        },
+        6
+      )
       assertEquals(putCount, 2)
 
   test("atomic quota rejection preserves its bounded operational reason"):
@@ -186,7 +192,9 @@ final class ObjectBackedImageStoreSpec extends IntegrationSuite:
           SourceImageIdempotencyHash.fromRawKey("quota-observed"),
         ).flatMap { result =>
           events.map { captured =>
-            assert(result.left.exists(_.isInstanceOf[AppError.TooManyRequests]))
+            assert(result match
+              case Left(_: AppError.TooManyRequests) => true
+              case _ => false)
             val messages = captured.map(_.getFormattedMessage)
             assertEquals(
               messages.count(_.startsWith("image_upload_admission rejected ")),

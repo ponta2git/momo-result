@@ -9,8 +9,8 @@ import doobie.implicits.*
 import doobie.postgres.implicits.*
 
 import momo.api.adapters.postgres.PostgresMeta.given
-import momo.api.domain.{MatchDraftStatus, OcrJobStatus}
 import momo.api.domain.ids.{AccountId, ImageId}
+import momo.api.domain.{MatchDraftStatus, OcrJobStatus}
 import momo.api.ports.storage.{Sha256Hex, SourceImageIdempotencyHash, SourceImageObjectKey}
 import momo.api.repositories.*
 

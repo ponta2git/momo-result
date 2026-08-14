@@ -17,9 +17,9 @@ import momo.api.repositories.{
   OcrJobMaintenanceRepository,
   SessionAccountLookup
 }
-import momo.api.usecases.ocr.{OcrAdmissionGuard, OcrJobQueueSubmitter}
-import momo.api.usecases.maintenance.SourceImageOrphanReaper
 import momo.api.usecases.images.ImageStorageAdmission
+import momo.api.usecases.maintenance.SourceImageOrphanReaper
+import momo.api.usecases.ocr.{OcrAdmissionGuard, OcrJobQueueSubmitter}
 
 private[bootstrap] object InMemoryApiRuntime:
   private final case class RuntimeParts[F[_]](

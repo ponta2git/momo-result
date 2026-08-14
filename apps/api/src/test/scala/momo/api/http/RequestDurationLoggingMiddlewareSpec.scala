@@ -4,8 +4,8 @@ import scala.jdk.CollectionConverters.*
 
 import cats.data.Kleisli
 import cats.effect.{Deferred, IO, Resource}
-import ch.qos.logback.classic.{Level, Logger}
 import ch.qos.logback.classic.spi.ILoggingEvent
+import ch.qos.logback.classic.{Level, Logger}
 import ch.qos.logback.core.read.ListAppender
 import fs2.Stream
 import org.http4s.{Header, HttpApp, Request, Response, Status, Uri}

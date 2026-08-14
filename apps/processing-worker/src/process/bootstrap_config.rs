@@ -1,7 +1,7 @@
 use std::ffi::OsString;
 
 use super::ProcessError;
-use crate::config::CHILD_MEMORY_LIMIT_ENV;
+use crate::series_analysis::config::CHILD_MEMORY_LIMIT_ENV;
 
 pub(super) fn command_allowed(arguments: &[OsString]) -> bool {
     let Some(command) = arguments.first().and_then(|value| value.to_str()) else {

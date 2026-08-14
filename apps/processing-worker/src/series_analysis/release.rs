@@ -8,10 +8,9 @@ use sha2::{Digest, Sha256};
 use thiserror::Error;
 use tokio_postgres::{Client, Row, Transaction};
 
-use crate::{
-    control::ALGORITHM_VERSION,
-    database::{DatabaseError, connect},
-};
+use crate::database::{DatabaseError, connect};
+
+use super::control::ALGORITHM_VERSION;
 
 const CAPABILITY_FRESH_SECONDS: i64 = 60;
 const RELEASE_TRANSACTION_LIMITS: &str = "SET LOCAL lock_timeout = '5s'; SET LOCAL statement_timeout = '30s'; \

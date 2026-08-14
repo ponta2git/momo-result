@@ -1,10 +1,10 @@
 use tokio_postgres::{Client, Transaction};
 
 use crate::{
-    config::WorkerRuntimeConfig,
     execution_slot::{
         ExecutionSlotIdentity, ExecutionTaskKind, SlotRenewal, renew_owned as renew_slot,
     },
+    series_analysis::config::WorkerRuntimeConfig,
 };
 
 use super::{

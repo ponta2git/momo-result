@@ -3,11 +3,11 @@ use tokio_postgres::{Client, Transaction};
 use momo_analysis_core::contract::ARTIFACT_SCHEMA_VERSION;
 
 use crate::{
-    config::WorkerRuntimeConfig,
     execution_slot::{
         ExecutionTaskKind, NewExecutionSlotHolder, SlotAcquisition, acquire_analysis,
         clear_stale_preemption, lock as lock_execution_slot,
     },
+    series_analysis::config::WorkerRuntimeConfig,
 };
 
 use super::{

@@ -7,7 +7,7 @@ use redis::{
     },
 };
 
-use crate::config::WorkerRuntimeConfig;
+use crate::series_analysis::config::WorkerRuntimeConfig;
 
 use super::ConsumerError;
 

@@ -2,12 +2,14 @@ use thiserror::Error;
 use tokio::sync::watch;
 
 use crate::{
-    config::{ConfigError, PublicationMode, WorkerConfig, WorkerRuntimeConfig},
     ocr::{
         OcrConsumerMode, OcrConsumerRuntimeConfig, OcrRuntimeConfigError,
         consumer_mode_from_environment,
     },
-    series_analysis::{self, ConsumerError as SeriesAnalysisConsumerError},
+    series_analysis::{
+        self, ConsumerError as SeriesAnalysisConsumerError,
+        config::{ConfigError, PublicationMode, WorkerConfig, WorkerRuntimeConfig},
+    },
 };
 
 struct ActiveRuntimePlan {

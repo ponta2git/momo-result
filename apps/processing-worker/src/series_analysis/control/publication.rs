@@ -5,7 +5,7 @@ use tokio_postgres::{Transaction, binary_copy::BinaryCopyInWriter, types::Type};
 use tracing::{error, info};
 
 use crate::process::current_process_peak_resident_bytes;
-use crate::{artifact::validate_artifact_directory, config::WorkerRuntimeConfig};
+use crate::series_analysis::{artifact::validate_artifact_directory, config::WorkerRuntimeConfig};
 
 use super::{
     AttemptMetrics, AttemptOutcome, ClaimedJob, ControlError, RequestOutcome, ResultDisposition,

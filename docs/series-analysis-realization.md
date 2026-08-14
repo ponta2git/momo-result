@@ -327,11 +327,11 @@ Rust部分は次の一方向依存に固定する。
 apps/processing-worker
   ├─ momo-processing-worker（分析 / OCRの副作用を持つprocessing runtime）
   │   ├─ main / CLI / supervisor
-  │   ├─ series_analysis ─ consumer / policy / attempt / queue / storage
-  │   ├─ ocr ─ consumer / queue / DB control / R2
-  │   ├─ child/analysis + child/ocr ─ process entry adapters
-  │   ├─ control / artifact / database / process
-  │   └─ release / shadow
+  │   ├─ series_analysis ─ consumer / policy / attempt / queue / control / artifact / child
+  │   │                     config / release / endurance
+  │   ├─ ocr ─ consumer / queue / DB control / R2 / child / endurance
+  │   ├─ database ─ PostgreSQL接続 / 分析入力adapter
+  │   └─ process / execution_slot ─ 共有隔離・実行枠
   ├─ momo-analysis-core（決定論的kernelとversion付き契約）
   │   ├─ child / model / contract / canonical / payload
   │   ├─ compute ─ aggregate / metrics / trends / quality / detail / panels / support

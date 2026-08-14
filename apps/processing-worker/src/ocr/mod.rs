@@ -1,5 +1,6 @@
 //! Durable OCR processing around the isolated `momo-ocr` capability.
 
+pub mod child;
 pub mod consumer;
 pub mod contract;
 pub(crate) mod control;

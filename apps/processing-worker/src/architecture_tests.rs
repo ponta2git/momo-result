@@ -116,7 +116,7 @@ fn native_ocr_dependencies_are_owned_by_the_ocr_capability_crate() {
     );
     assert!(
         Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("src/child/ocr.rs")
+            .join("src/ocr/child.rs")
             .is_file(),
         "OCR stdio entry adapter must remain visible under the child process boundary"
     );

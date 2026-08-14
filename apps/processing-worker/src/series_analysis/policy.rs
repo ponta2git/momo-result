@@ -1,9 +1,9 @@
-use crate::{
-    control::{AttemptFailure, RequeueCause, SafeFailureCode},
-    process::AnalysisChildOutcome,
-};
+use crate::process::AnalysisChildOutcome;
 
-use super::AttemptInterruption;
+use super::{
+    AttemptInterruption,
+    control::{AttemptFailure, RequeueCause, SafeFailureCode},
+};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum ChildAction {

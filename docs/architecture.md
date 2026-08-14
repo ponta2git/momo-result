@@ -159,7 +159,7 @@ web の import 境界は `apps/web/scripts/check-architecture-imports.mjs`、mod
 ## 4. OCR Worker
 
 - OCRの配送・制御・object取得は `apps/processing-worker/src/ocr`、OCR子のstdio adapterは
-  `apps/processing-worker/src/child/ocr.rs`、native実装・親子protocol・typed domain contractは
+  `apps/processing-worker/src/ocr/child.rs`、native実装・親子protocol・typed domain contractは
   `apps/processing-worker/crates/ocr` に置く。queue / DB control、R2取得・整合性検証、停止可能な
   native OCR子processを分離し、OCR子は分析子と同じ固定cgroupを時分割で使う。
 - OCR/画像解析に外部APIを使わない。
@@ -189,10 +189,10 @@ web の import 境界は `apps/web/scripts/check-architecture-imports.mjs`、mod
   成果物staging、DB / Redis / process adapterを所有する。依存方向はruntimeからcoreへの一方向だけとする。
 - coreはDB row、Redis client、HTTP DTO、filesystem、clock、environment、async runtimeへ依存しない。
   queue / artifactのwire型はversion付き契約としてcoreに置けるが、transport処理はruntimeに残す。
-- runtimeでは `series_analysis` と `ocr` を能力別consumer、`supervisor` を両consumerの
-  shutdown / failure境界、`control` をDB状態遷移、
-  `artifact` をbounded成果物境界、`database` を入力adapter、`process` をOS隔離境界、`child/analysis` と
-  `child/ocr` を子process entry adapterとする。計算結果から制御動作への変換は副作用のないdecision tableへ寄せる。
+- runtimeでは `series_analysis` と `ocr` を能力別境界とし、各配下にconsumer、DB状態遷移、
+  bounded storage、子process entry adapter、能力固有の運用commandを置く。`supervisor` は両consumerの
+  shutdown / failure境界、`process` は共有OS隔離境界とする。計算結果から制御動作への変換は
+  副作用のないdecision tableへ寄せる。
 - 親processはdelivery受信、DB上の全体実行slotとfencing token、job lease、timeout、signal、子process回収を
   担当する。1作品の計算は停止可能な子processで実行し、子processから現行成果物を直接更新しない。
 - 親子契約は、能力crateが論理request/result/failureとversion付きcodecを所有し、rootがtransportとprocess

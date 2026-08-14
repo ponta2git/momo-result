@@ -1,12 +1,12 @@
 use std::{collections::HashSet, path::PathBuf};
 
-use crate::{
+use crate::process::available_filesystem_bytes;
+
+use super::{
+    ConsumerError,
     config::WorkerRuntimeConfig,
     control::{ClaimedJob, ControlError},
-    process::available_filesystem_bytes,
 };
-
-use super::ConsumerError;
 
 pub(super) async fn validate_temporary_root(
     config: &WorkerRuntimeConfig,

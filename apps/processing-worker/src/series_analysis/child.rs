@@ -5,9 +5,6 @@ use std::{
 };
 
 use crate::{
-    artifact::{ArtifactBuildRequest, ArtifactError, build_artifact},
-    child_report::{self, ChildPhase, ChildReport, ChildReportMetrics, ChildReportOutcome},
-    control::ALGORITHM_VERSION,
     database::{DatabaseError, connect, load_analysis_input},
     process::{
         CHILD_ARTIFACT_TOO_LARGE_EXIT_CODE, CHILD_CALCULATION_FAILED_EXIT_CODE,
@@ -15,6 +12,12 @@ use crate::{
         CHILD_SUPERSEDED_EXIT_CODE, current_process_peak_resident_bytes,
         start_parent_liveness_monitor,
     },
+};
+
+use super::{
+    artifact::{ArtifactBuildRequest, ArtifactError, build_artifact},
+    child_report::{self, ChildPhase, ChildReport, ChildReportMetrics, ChildReportOutcome},
+    control::ALGORITHM_VERSION,
 };
 
 pub struct ChildComputeRequest<'a> {

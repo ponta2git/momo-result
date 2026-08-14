@@ -2,8 +2,8 @@ use std::{path::Path, time::Instant};
 
 use tokio_postgres::Client;
 
-use crate::config::WorkerRuntimeConfig;
 use crate::process::current_process_peak_resident_bytes;
+use crate::series_analysis::config::WorkerRuntimeConfig;
 
 use super::{
     AttemptFailure, AttemptMetrics, ClaimedJob, ControlError, PublicationResult, ResultDisposition,

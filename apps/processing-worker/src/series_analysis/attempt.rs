@@ -4,13 +4,6 @@ use tokio::{sync::watch, time};
 use tracing::{error, info, warn};
 
 use crate::{
-    child_report,
-    config::WorkerRuntimeConfig,
-    control::{
-        AttemptFailure, AttemptMetrics, ClaimedJob, ControlError, HeartbeatResult, SafeFailureCode,
-        artifact_id_for_attempt, finish_failure, heartbeat, publish, requeue_interrupted,
-        retry_transient_failure, supersede,
-    },
     database,
     process::{
         AnalysisChildOutcome, AnalysisChildSpec, ManagedAnalysisChild,
@@ -19,7 +12,13 @@ use crate::{
 };
 
 use super::{
-    AttemptInterruption, ConsumerError, DeliveryDisposition,
+    AttemptInterruption, ConsumerError, DeliveryDisposition, child_report,
+    config::WorkerRuntimeConfig,
+    control::{
+        AttemptFailure, AttemptMetrics, ClaimedJob, ControlError, HeartbeatResult,
+        PublicationResult, SafeFailureCode, artifact_id_for_attempt, finish_failure, heartbeat,
+        publish, requeue_interrupted, retry_transient_failure, supersede,
+    },
     metrics::{elapsed_metrics, signed_optional_quantity, signed_quantity},
     policy::{ChildAction, InterruptionAction, child_action, interruption_action},
 };
@@ -461,14 +460,11 @@ async fn finish_successful_child(
     .await;
     metrics.observe_worker_peak(current_process_peak_resident_bytes().await);
     match result {
-        Ok(Ok(
-            publication @ (crate::control::PublicationResult::Published
-            | crate::control::PublicationResult::Reused),
-        )) => {
+        Ok(Ok(publication @ (PublicationResult::Published | PublicationResult::Reused))) => {
             log_attempt_success(publication, metrics);
             Ok(DeliveryDisposition::Acknowledge)
         }
-        Ok(Ok(crate::control::PublicationResult::Superseded)) => {
+        Ok(Ok(PublicationResult::Superseded)) => {
             info!(
                 event = "analysis_attempt_finished",
                 phase = "publication_revision_guard",
@@ -478,7 +474,7 @@ async fn finish_successful_child(
             );
             Ok(DeliveryDisposition::Acknowledge)
         }
-        Ok(Ok(crate::control::PublicationResult::IntegrityFailure(failure_code))) => {
+        Ok(Ok(PublicationResult::IntegrityFailure(failure_code))) => {
             warn!(
                 event = "analysis_attempt_finished",
                 phase = "publication_integrity",
@@ -537,7 +533,7 @@ async fn finish_successful_child(
     }
 }
 
-fn log_attempt_success(publication: crate::control::PublicationResult, metrics: &AttemptMetrics) {
+fn log_attempt_success(publication: PublicationResult, metrics: &AttemptMetrics) {
     info!(
         event = "analysis_attempt_finished",
         phase = "publication",
@@ -609,7 +605,7 @@ mod tests {
     use tempfile::TempDir;
 
     use super::*;
-    use crate::child_report::{
+    use crate::series_analysis::child_report::{
         ChildPhase, ChildReport, ChildReportMetrics, ChildReportOutcome, write,
     };
 

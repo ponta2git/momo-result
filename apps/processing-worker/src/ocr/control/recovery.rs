@@ -2,8 +2,8 @@ use tokio_postgres::Transaction;
 
 use super::OcrControlError;
 use crate::{
-    control::recover_expired_analysis_holder,
     execution_slot::{ExecutionSlotHolder, ExecutionTaskKind, clear_expired},
+    series_analysis::control::recover_expired_analysis_holder,
 };
 
 pub(super) async fn recover_expired_holder(

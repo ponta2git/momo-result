@@ -6,14 +6,25 @@ use thiserror::Error;
 use tokio::sync::watch;
 use tracing::{Instrument, error, info, info_span, warn};
 
+pub mod artifact;
+pub mod child;
+pub mod child_report;
+pub mod config;
+pub mod control;
+pub mod endurance;
+pub mod release;
+
 use crate::{
+    database::{self, DatabaseError},
+    process::ProcessError,
+};
+
+use self::{
     config::WorkerRuntimeConfig,
     control::{
         ALGORITHM_VERSION, AttemptFailure, ClaimResult, ControlError, SafeFailureCode, claim_job,
         finish_failure, mark_draining, register_capability,
     },
-    database::{self, DatabaseError},
-    process::ProcessError,
 };
 
 mod attempt;
@@ -353,7 +364,7 @@ async fn process_claimed_delivery(
     control_client: &mut tokio_postgres::Client,
     heartbeat_client: &mut tokio_postgres::Client,
     config: &WorkerRuntimeConfig,
-    claim: &crate::control::ClaimedJob,
+    claim: &control::ClaimedJob,
     shutdown: &mut watch::Receiver<bool>,
 ) -> Result<DeliveryDisposition, ConsumerError> {
     info!(

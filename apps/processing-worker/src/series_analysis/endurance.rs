@@ -10,15 +10,15 @@ use thiserror::Error;
 use tokio::time;
 
 use crate::{
-    artifact::validate_artifact_directory,
     cgroup::ChildCgroup,
-    child_report,
     database::{DatabaseError, connect},
     process::{
         AnalysisChildOutcome, AnalysisChildSpec, ManagedAnalysisChild, ProcessError,
         current_process_peak_resident_bytes, current_process_resident_bytes,
     },
 };
+
+use super::{artifact::validate_artifact_directory, child_report};
 
 #[derive(Clone, Debug)]
 pub struct ShadowRequest {
@@ -115,7 +115,7 @@ pub enum ShadowError {
     #[error("shadow file-system operation failed")]
     Io(#[from] std::io::Error),
     #[error("shadow artifact validation failed")]
-    Artifact(#[from] crate::artifact::ArtifactError),
+    Artifact(#[from] super::artifact::ArtifactError),
     #[error("shadow calculation exceeded its hard timeout")]
     TimedOut,
     #[error("shadow calculation did not succeed")]

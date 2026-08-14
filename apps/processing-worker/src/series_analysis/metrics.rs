@@ -1,6 +1,6 @@
 use std::time::Instant;
 
-use crate::control::AttemptMetrics;
+use crate::series_analysis::control::AttemptMetrics;
 
 pub(super) fn elapsed_metrics(started: Instant, child_peak_bytes: Option<u64>) -> AttemptMetrics {
     let elapsed = signed_milliseconds(started.elapsed());

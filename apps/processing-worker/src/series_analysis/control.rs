@@ -160,7 +160,7 @@ pub enum ControlError {
     #[error("analysis worker lost its fencing ownership")]
     OwnerLost,
     #[error("analysis artifact file is invalid")]
-    Artifact(#[from] crate::artifact::ArtifactError),
+    Artifact(#[from] crate::series_analysis::artifact::ArtifactError),
     #[error("analysis artifact file read failed")]
     Io(#[from] std::io::Error),
     #[error("analysis artifact metadata exceeds database bounds")]

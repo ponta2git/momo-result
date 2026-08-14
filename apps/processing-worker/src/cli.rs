@@ -11,7 +11,6 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 use momo_ocr::OcrOutput;
 
 use crate::{
-    config::WorkerConfig,
     ocr::{
         contract::{OcrHints, RequestedScreenType},
         endurance::{
@@ -21,7 +20,10 @@ use crate::{
         object_store::R2ObjectStoreConfig,
     },
     process::{ProbeOutcome, allocate_and_touch},
-    release::{PromotionRequest, PromotionTrigger},
+    series_analysis::{
+        config::WorkerConfig,
+        release::{PromotionRequest, PromotionTrigger},
+    },
 };
 use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
@@ -288,7 +290,7 @@ pub async fn entrypoint() -> ExitCode {
             return exit_code(allocate_and_touch(*allocation_bytes));
         }
         Command::ChildOcr { tessdata_path } => {
-            return exit_code(crate::child::ocr::execute(tessdata_path.clone()));
+            return exit_code(crate::ocr::child::execute(tessdata_path.clone()));
         }
         Command::ChildCompute {
             game_title_id,
@@ -306,20 +308,22 @@ pub async fn entrypoint() -> ExitCode {
                 return exit_code(crate::process::CHILD_START_BARRIER_FAILED_EXIT_CODE);
             }
             return exit_code(
-                crate::child::execute(&crate::child::ChildComputeRequest {
-                    request: momo_analysis_core::child::AnalysisChildRequest {
-                        game_title_id: game_title_id.clone(),
-                        input_revision: *input_revision,
-                        artifact_id: artifact_id.clone(),
+                crate::series_analysis::child::execute(
+                    &crate::series_analysis::child::ChildComputeRequest {
+                        request: momo_analysis_core::child::AnalysisChildRequest {
+                            game_title_id: game_title_id.clone(),
+                            input_revision: *input_revision,
+                            artifact_id: artifact_id.clone(),
+                        },
+                        output_directory,
+                        maximum_chunk_bytes: *maximum_chunk_bytes,
+                        maximum_chunk_count: *maximum_chunk_count,
+                        maximum_total_bytes: *maximum_total_bytes,
+                        maximum_file_count: *maximum_file_count,
+                        parent_liveness_fd: *parent_liveness_fd,
+                        parent_liveness_timeout: Duration::from_millis(*parent_liveness_timeout_ms),
                     },
-                    output_directory,
-                    maximum_chunk_bytes: *maximum_chunk_bytes,
-                    maximum_chunk_count: *maximum_chunk_count,
-                    maximum_total_bytes: *maximum_total_bytes,
-                    maximum_file_count: *maximum_file_count,
-                    parent_liveness_fd: *parent_liveness_fd,
-                    parent_liveness_timeout: Duration::from_millis(*parent_liveness_timeout_ms),
-                })
+                )
                 .await,
             );
         }
@@ -374,7 +378,7 @@ async fn run(command: Command) -> Result<(), String> {
             temporary_root,
             external_runtime_peak_file,
         } => {
-            shadow_endurance(crate::shadow::ShadowRequest {
+            shadow_endurance(crate::series_analysis::endurance::ShadowRequest {
                 game_title_id,
                 runs,
                 child_memory_limit_bytes,
@@ -594,9 +598,10 @@ fn write_ocr_pilot_output(output: &OcrOutput) -> Result<(), String> {
 }
 
 async fn release_audit(require_current: bool, require_quiescent: bool) -> Result<(), String> {
-    let report = crate::release::audit_completeness(require_current, require_quiescent)
-        .await
-        .map_err(|error| error.to_string())?;
+    let report =
+        crate::series_analysis::release::audit_completeness(require_current, require_quiescent)
+            .await
+            .map_err(|error| error.to_string())?;
     write_json_line(&report)?;
     if report.passed {
         Ok(())
@@ -610,7 +615,7 @@ async fn release_promote(
     operation_key: &str,
     apply: bool,
 ) -> Result<(), String> {
-    let report = crate::release::promote(&PromotionRequest {
+    let report = crate::series_analysis::release::promote(&PromotionRequest {
         trigger,
         operation_key,
         apply,
@@ -621,8 +626,10 @@ async fn release_promote(
     Ok(())
 }
 
-async fn shadow_endurance(request: crate::shadow::ShadowRequest) -> Result<(), String> {
-    let report = crate::shadow::run(&request)
+async fn shadow_endurance(
+    request: crate::series_analysis::endurance::ShadowRequest,
+) -> Result<(), String> {
+    let report = crate::series_analysis::endurance::run(&request)
         .await
         .map_err(|error| error.to_string())?;
     write_json_line(&report)?;

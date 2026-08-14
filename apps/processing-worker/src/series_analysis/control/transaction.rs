@@ -5,11 +5,11 @@ use sha2::{Digest, Sha256};
 use tokio_postgres::{Client, Transaction};
 
 use crate::{
-    config::WorkerRuntimeConfig,
     execution_slot::{
         ExecutionSlotIdentity, ExecutionTaskKind, lock_owned as lock_owned_slot,
         release_owned as release_owned_slot,
     },
+    series_analysis::config::WorkerRuntimeConfig,
 };
 
 use super::{

@@ -4,13 +4,8 @@
 //! their side effects: job coordination, process isolation, bounded storage, release tooling, and
 //! runtime configuration.
 
-mod artifact;
 mod cgroup;
-pub mod child;
-mod child_report;
 mod cli;
-pub mod config;
-mod control;
 mod database;
 mod execution_slot;
 pub mod ocr;
@@ -19,9 +14,7 @@ pub mod ocr;
     reason = "all operating-system FFI is isolated here behind checked safe APIs and documented blocks"
 )]
 pub mod process;
-pub mod release;
-mod series_analysis;
-pub mod shadow;
+pub mod series_analysis;
 pub mod supervisor;
 
 pub use cli::entrypoint;

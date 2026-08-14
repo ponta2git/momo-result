@@ -415,7 +415,7 @@ const fn process_failure_kind(failure: OcrProcessFailure) -> &'static str {
 fn child_cgroup_from_environment(
     configuration_error: &'static str,
 ) -> Result<crate::cgroup::ChildCgroup, &'static str> {
-    let child_limit = env::var(crate::config::CHILD_MEMORY_LIMIT_ENV)
+    let child_limit = env::var(crate::series_analysis::config::CHILD_MEMORY_LIMIT_ENV)
         .ok()
         .and_then(|value| value.parse::<u64>().ok())
         .filter(|value| *value > 0)

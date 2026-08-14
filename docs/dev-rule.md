@@ -82,7 +82,7 @@ Analysis / OCR worker:
 
 ```sh
 docker build \
-  --file apps/analysis-worker/Dockerfile \
+  --file apps/processing-worker/Dockerfile \
   --tag momo-analysis-worker:local \
   .
 
@@ -213,14 +213,14 @@ sbt apiFullCheck
 ### Analysis / OCR Worker
 
 ```sh
-cd apps/analysis-worker
+cd apps/processing-worker
 cargo fmt --all -- --check
 cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
 cargo test --locked --workspace --all-targets --all-features
 cargo build --locked --workspace --release
 ```
 
-Rust / Clippy lintの正本は `apps/analysis-worker/Cargo.toml` とする。rustc warning、`unsafe_code`、
+Rust / Clippy lintの正本は `apps/processing-worker/Cargo.toml` とする。rustc warning、`unsafe_code`、
 Clippy `all` / `pedantic` / `nursery` をdenyし、panicし得るindex、unchecked cast、`unwrap` / `expect`、
 診断sourceの破棄、理由のない抑制などは選択したrestriction lintで追加禁止する。`restriction` group全体は
 相互に矛盾するlintを含むため一括有効化しない。lint例外は対象式またはtest moduleへ最小化した
@@ -235,7 +235,7 @@ productionのOS FFIは `process` moduleだけに隔離し、外側へcheckedなs
 PostgreSQL / Redis / Linux process境界は通常のCargo testと分け、repository rootで次を実行する。
 
 ```sh
-scripts/ci/analysis-release-db-smoke.sh apps/analysis-worker/target/release/momo-analysis
+scripts/ci/analysis-release-db-smoke.sh apps/processing-worker/target/release/momo-analysis
 scripts/ci/ocr-rust-control-plane-smoke.sh
 scripts/ci/analysis-worker-image-smoke.sh <local-image-tag>
 ANALYSIS_WORKER_IMAGE=<local-image-tag> scripts/ci/analysis-worker-control-plane-smoke.sh

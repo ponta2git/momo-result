@@ -202,7 +202,7 @@ sbt apiDbQuality
 ```
 
 ```sh
-cd apps/analysis-worker
+cd apps/processing-worker
 cargo test --locked --workspace --all-targets --all-features
 cd ../..
 scripts/ci/ocr-rust-control-plane-smoke.sh

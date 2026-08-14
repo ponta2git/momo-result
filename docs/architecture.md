@@ -22,11 +22,11 @@
 |---|---|---|---|
 | web | `apps/web` | React 19, React Router 7, TanStack Query 5, Zod, Tailwind CSS 4, Base UI | SPA、入力、確認、CSV/TSV取得 |
 | api | `apps/api` | Scala 3, Tapir, http4s, Cats Effect, Doobie | HTTP API、認証、業務usecase、DB/Redis接続 |
-| analysis / OCR worker | `apps/analysis-worker` | Rust, Cargo, Tesseract | 作品単位の戦績分析、version付き成果物の原子的公開、OCR queue v2 consumer |
+| analysis / OCR worker | `apps/processing-worker` | Rust, Cargo, Tesseract | 作品単位の戦績分析、version付き成果物の原子的公開、OCR queue v2 consumer |
 | DB | `../momo-db` | Neon PostgreSQL, drizzle | schema / migration / seed の正本 |
 | Queue | Upstash Redis Streams | Redis Streams | OCR・戦績分析ジョブの配送。状態の正本にはしない |
 | public HTTP runtime | `Dockerfile`, `deploy/`, `tools/cmd/momo-runtime-tool` | Debian slim, JVM, nginx, Go | web/APIの起動・監視・停止、静的配信、reverse proxy。PythonとOCRを含めない |
-| analysis runtime定義 | `apps/analysis-worker/Dockerfile`, `fly.analysis.toml` | Rust parent / child process | 公開HTTPを持たず、DB上の単一実行枠で分析 / OCR子processを管理 |
+| analysis runtime定義 | `apps/processing-worker/Dockerfile`, `fly.analysis.toml` | Rust parent / child process | 公開HTTPを持たず、DB上の単一実行枠で分析 / OCR子processを管理 |
 
 公開HTTP runtimeはwebとAPIだけを運用し、Go製runtime toolがJVMとnginxのlifecycleを管理する。戦績分析と
 OCRはRust製の専用image・起動設定を共有し、公開HTTP runtimeへ同居させない。nginxはweb静的配信とAPI
@@ -158,9 +158,9 @@ web の import 境界は `apps/web/scripts/check-architecture-imports.mjs`、mod
 
 ## 4. OCR Worker
 
-- OCRのオーケストレーションは `apps/analysis-worker/src/orchestrator/ocr`、OCR子のstdio adapterは
-  `apps/analysis-worker/src/child/ocr.rs`、native実装・親子protocol・typed domain contractは
-  `apps/analysis-worker/crates/ocr` に置く。queue / DB control、R2取得・整合性検証、停止可能な
+- OCRのオーケストレーションは `apps/processing-worker/src/orchestrator/ocr`、OCR子のstdio adapterは
+  `apps/processing-worker/src/child/ocr.rs`、native実装・親子protocol・typed domain contractは
+  `apps/processing-worker/crates/ocr` に置く。queue / DB control、R2取得・整合性検証、停止可能な
   native OCR子processを分離し、OCR子は分析子と同じ固定cgroupを時分割で使う。
 - OCR/画像解析に外部APIを使わない。
 - OCR対象画面種別ごとに解析器を分け、共通前処理だけ共有する。
@@ -183,7 +183,7 @@ web の import 境界は `apps/web/scripts/check-architecture-imports.mjs`、mod
 
 ## 5. Analysis Worker
 
-- workerはRust + Cargo workspaceとして `apps/analysis-worker` に置く。`crates/analysis-core` の
+- workerはRust + Cargo workspaceとして `apps/processing-worker` に置く。`crates/analysis-core` の
   `momo-analysis-core` は決定論的な
   計算kernelとversion付き成果物契約、`momo-analysis` は起動・設定・logging、job lease / queue、入力snapshot、
   成果物staging、DB / Redis / process adapterを所有する。依存方向はruntimeからcoreへの一方向だけとする。

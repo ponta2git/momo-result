@@ -83,16 +83,16 @@ RUN for lang in eng jpn; do \
   done
 
 FROM native-builder AS builder
-WORKDIR /workspace/apps/analysis-worker
-COPY apps/analysis-worker/Cargo.toml apps/analysis-worker/Cargo.lock ./
-COPY apps/analysis-worker/crates/analysis-core/Cargo.toml crates/analysis-core/Cargo.toml
-COPY apps/analysis-worker/crates/analysis-core/src crates/analysis-core/src
-COPY apps/analysis-worker/crates/ocr/Cargo.toml crates/ocr/Cargo.toml
-COPY apps/analysis-worker/crates/ocr/src crates/ocr/src
-COPY apps/analysis-worker/src src
+WORKDIR /workspace/apps/processing-worker
+COPY apps/processing-worker/Cargo.toml apps/processing-worker/Cargo.lock ./
+COPY apps/processing-worker/crates/analysis-core/Cargo.toml crates/analysis-core/Cargo.toml
+COPY apps/processing-worker/crates/analysis-core/src crates/analysis-core/src
+COPY apps/processing-worker/crates/ocr/Cargo.toml crates/ocr/Cargo.toml
+COPY apps/processing-worker/crates/ocr/src crates/ocr/src
+COPY apps/processing-worker/src src
 RUN --mount=type=cache,id=analysis-cargo-registry,target=/usr/local/cargo/registry,sharing=locked \
   --mount=type=cache,id=analysis-cargo-git,target=/usr/local/cargo/git,sharing=locked \
-  --mount=type=cache,id=analysis-target,target=/workspace/apps/analysis-worker/target,sharing=locked \
+  --mount=type=cache,id=analysis-target,target=/workspace/apps/processing-worker/target,sharing=locked \
   cargo build --locked --release \
   && install -m 0755 target/release/momo-analysis /tmp/momo-analysis \
   && install -d -m 0700 /tmp/runtime-root/var/lib/momo-analysis \

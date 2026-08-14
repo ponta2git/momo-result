@@ -212,7 +212,7 @@ PostgreSQL repository、Doobie query、DB table/column、migration 前提に触�
   - api: `apps/api/build.sbt`
   - analysis-worker: 現時点ではcoverage率をrelease判定へ使わない。`cargo test` のfixture / property / state-machine
     oracleと、実PostgreSQL・Redis・Linux process smokeを正本とする。coverageを導入する場合は
-    `apps/analysis-worker` のCI設定と同時にこの記述を更新する。
+    `apps/processing-worker` のCI設定と同時にこの記述を更新する。
 - aggregate coverage だけで重要経路を保証しない。blast radius が大きい下位モジュールは file / glob 単位または明示的な table test で固定する。
 - C2 は coverage tool の branch coverage だけでは保証しない。`&&`、`||`、三項演算子、mode discriminator、`enabled`、`isFetching`、`isError`、cached data 有無などは decision table で独立因子と期待値を示す。
 - 型耐性が重要な fixture は生成型、domain型、`satisfies` などで shape 変更を型エラーにする。

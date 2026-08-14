@@ -21,7 +21,7 @@
 | 対象 | 正本 | このrepoの責務 |
 |---|---|---|
 | schema / migration / seed | `../momo-db` | consumerとして必要な前提を明示し、contract testで検知する |
-| PostgreSQL query | `apps/api`, `apps/analysis-worker` | 現在のschema前提に合わせて実行し、PostgreSQL固有挙動をintegration testで確認する |
+| PostgreSQL query | `apps/api`, `apps/processing-worker` | 現在のschema前提に合わせて実行し、PostgreSQL固有挙動をintegration testで確認する |
 | DB rowの業務意味論 | `docs/domain-rule.md` | API / worker / web が同じ意味で扱う |
 
 - Neon PostgreSQL は summit アプリと共有する。

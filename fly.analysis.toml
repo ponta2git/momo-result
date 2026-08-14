@@ -4,7 +4,7 @@ kill_signal = "SIGTERM"
 kill_timeout = "60s"
 
 [build]
-  dockerfile = "apps/analysis-worker/Dockerfile"
+  dockerfile = "apps/processing-worker/Dockerfile"
 
 [processes]
   worker = "/usr/local/bin/momo-analysis bootstrap -- worker"

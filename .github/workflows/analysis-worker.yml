@@ -44,7 +44,7 @@ jobs:
       REDIS_URL: redis://127.0.0.1:6379
     defaults:
       run:
-        working-directory: apps/analysis-worker
+        working-directory: apps/processing-worker
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -87,7 +87,7 @@ jobs:
       - name: Cache Cargo
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
-          workspaces: apps/analysis-worker
+          workspaces: apps/processing-worker
 
       - name: Format check
         run: cargo fmt --all -- --check
@@ -182,7 +182,7 @@ jobs:
           cache-from: type=gha,scope=momo-result-analysis-v1
           cache-to: type=gha,mode=max,scope=momo-result-analysis-v1,ignore-error=true
           context: .
-          file: apps/analysis-worker/Dockerfile
+          file: apps/processing-worker/Dockerfile
           load: true
           tags: ${{ env.ANALYSIS_IMAGE_REF }}
         timeout-minutes: 30

@@ -28,7 +28,7 @@ while IFS= read -r -d '' path; do
       web=true
       runtime=true
       ;;
-    apps/analysis-worker/* | fly.analysis.toml | rust-toolchain.toml)
+    apps/processing-worker/* | fly.analysis.toml | rust-toolchain.toml)
       analysis=true
       ;;
     Dockerfile | deploy/* | fly.toml)

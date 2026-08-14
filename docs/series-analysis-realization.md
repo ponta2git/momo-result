@@ -324,7 +324,7 @@ lockする。実PostgreSQLの競合testでdeadlockがないことを確認する
 Rust部分は次の一方向依存に固定する。
 
 ```text
-apps/analysis-worker
+apps/processing-worker
   ├─ momo-analysis（副作用を持つruntime shell）
   │   ├─ config / main / orchestrator
   │   ├─ orchestrator/analysis ─ policy / attempt / queue / storage

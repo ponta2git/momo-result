@@ -28,7 +28,7 @@ assert_case docs-only "${none}" docs/README.md
 assert_case actionlint-only "${none}" scripts/ci/actionlint.sh
 assert_case api-source "${api_runtime}" apps/api/src/main/scala/momo/api/Main.scala
 assert_case openapi "${api_web_runtime}" apps/api/openapi.yaml
-assert_case analysis-source "${analysis_only}" apps/analysis-worker/src/main.rs
+assert_case analysis-source "${analysis_only}" apps/processing-worker/src/main.rs
 assert_case analysis-candidate-workflow "${analysis_only}" .github/workflows/analysis-candidate.yml
 assert_case runtime-tool "${runtime_only}" tools/cmd/momo-runtime-tool/main.go
 assert_case runtime-log-summary "${runtime_only}" scripts/ci/summarize-runtime-logs.sh

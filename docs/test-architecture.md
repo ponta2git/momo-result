@@ -82,7 +82,7 @@ CI の report mode は、同じテスト集合を通常実行と coverage 実行
 
 現行 coverage 設定は `apps/api/build.sbt` を正とする。PostgreSQL / Redis adapter は coverage率ではなく、`apiDbQuality` / `apiRedisQuality` の contract 成功で保証する。
 
-## 5. apps/analysis-worker
+## 5. apps/processing-worker
 
 | 対象範囲 | 主テストサイズ | 確保するcoverage / oracle |
 |---|---|---|

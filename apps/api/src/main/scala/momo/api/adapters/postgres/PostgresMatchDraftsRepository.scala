@@ -175,74 +175,89 @@ object PostgresMatchDrafts extends PostgresMatchDraftsRowSupport:
         sourceImageId: ImageId,
         ocrDraftId: OcrDraftId,
         updatedAt: Instant,
-    ): ConnectionIO[MatchDraftAttachmentResult] = screenType match
-      case ScreenType.TotalAssets => sql"""
-          UPDATE match_drafts SET
-            total_assets_image_id = $sourceImageId,
-            total_assets_draft_id = $ocrDraftId,
-            status = ${MatchDraftStatus.OcrRunning},
-            source_images_deleted_at = NULL,
-            updated_at = $updatedAt
-          WHERE id = $draftId
-            AND status <> ${MatchDraftStatus.Confirmed}
-            AND status <> ${MatchDraftStatus.Cancelled}
-            AND (
-              total_assets_draft_id IS NULL
-              OR NOT EXISTS (
-                SELECT 1 FROM ocr_jobs existing
-                WHERE existing.draft_id = match_drafts.total_assets_draft_id
-                  AND existing.status IN ('queued', 'running')
+    ): ConnectionIO[MatchDraftAttachmentResult] =
+      val lockDraft = sql"""
+        SELECT id FROM match_drafts WHERE id = $draftId FOR UPDATE
+      """.query[MatchDraftId].option
+      val lockSource = sql"""
+        SELECT id FROM source_images
+        WHERE id = $sourceImageId AND status = ${SourceImageStatus.Available}
+        FOR UPDATE
+      """.query[ImageId].option
+      val attach = screenType match
+        case ScreenType.TotalAssets => sql"""
+            UPDATE match_drafts SET
+              total_assets_image_id = $sourceImageId,
+              total_assets_draft_id = $ocrDraftId,
+              status = ${MatchDraftStatus.OcrRunning},
+              source_images_deleted_at = NULL,
+              updated_at = $updatedAt
+            WHERE id = $draftId
+              AND status <> ${MatchDraftStatus.Confirmed}
+              AND status <> ${MatchDraftStatus.Cancelled}
+              AND (
+                total_assets_draft_id IS NULL
+                OR NOT EXISTS (
+                  SELECT 1 FROM ocr_jobs existing
+                  WHERE existing.draft_id = match_drafts.total_assets_draft_id
+                    AND existing.status IN ('queued', 'running')
+                )
               )
-            )
-        """.update.run.map {
-          case affected if affected > 0 => MatchDraftAttachmentResult.Attached
-          case _ => MatchDraftAttachmentResult.NotAttachable
-        }
-      case ScreenType.Revenue => sql"""
-          UPDATE match_drafts SET
-            revenue_image_id = $sourceImageId,
-            revenue_draft_id = $ocrDraftId,
-            status = ${MatchDraftStatus.OcrRunning},
-            source_images_deleted_at = NULL,
-            updated_at = $updatedAt
-          WHERE id = $draftId
-            AND status <> ${MatchDraftStatus.Confirmed}
-            AND status <> ${MatchDraftStatus.Cancelled}
-            AND (
-              revenue_draft_id IS NULL
-              OR NOT EXISTS (
-                SELECT 1 FROM ocr_jobs existing
-                WHERE existing.draft_id = match_drafts.revenue_draft_id
-                  AND existing.status IN ('queued', 'running')
+          """.update.run
+        case ScreenType.Revenue => sql"""
+            UPDATE match_drafts SET
+              revenue_image_id = $sourceImageId,
+              revenue_draft_id = $ocrDraftId,
+              status = ${MatchDraftStatus.OcrRunning},
+              source_images_deleted_at = NULL,
+              updated_at = $updatedAt
+            WHERE id = $draftId
+              AND status <> ${MatchDraftStatus.Confirmed}
+              AND status <> ${MatchDraftStatus.Cancelled}
+              AND (
+                revenue_draft_id IS NULL
+                OR NOT EXISTS (
+                  SELECT 1 FROM ocr_jobs existing
+                  WHERE existing.draft_id = match_drafts.revenue_draft_id
+                    AND existing.status IN ('queued', 'running')
+                )
               )
-            )
-        """.update.run.map {
-          case affected if affected > 0 => MatchDraftAttachmentResult.Attached
-          case _ => MatchDraftAttachmentResult.NotAttachable
-        }
-      case ScreenType.IncidentLog => sql"""
-          UPDATE match_drafts SET
-            incident_log_image_id = $sourceImageId,
-            incident_log_draft_id = $ocrDraftId,
-            status = ${MatchDraftStatus.OcrRunning},
-            source_images_deleted_at = NULL,
-            updated_at = $updatedAt
-          WHERE id = $draftId
-            AND status <> ${MatchDraftStatus.Confirmed}
-            AND status <> ${MatchDraftStatus.Cancelled}
-            AND (
-              incident_log_draft_id IS NULL
-              OR NOT EXISTS (
-                SELECT 1 FROM ocr_jobs existing
-                WHERE existing.draft_id = match_drafts.incident_log_draft_id
-                  AND existing.status IN ('queued', 'running')
+          """.update.run
+        case ScreenType.IncidentLog => sql"""
+            UPDATE match_drafts SET
+              incident_log_image_id = $sourceImageId,
+              incident_log_draft_id = $ocrDraftId,
+              status = ${MatchDraftStatus.OcrRunning},
+              source_images_deleted_at = NULL,
+              updated_at = $updatedAt
+            WHERE id = $draftId
+              AND status <> ${MatchDraftStatus.Confirmed}
+              AND status <> ${MatchDraftStatus.Cancelled}
+              AND (
+                incident_log_draft_id IS NULL
+                OR NOT EXISTS (
+                  SELECT 1 FROM ocr_jobs existing
+                  WHERE existing.draft_id = match_drafts.incident_log_draft_id
+                    AND existing.status IN ('queued', 'running')
+                )
               )
-            )
-        """.update.run.map {
-          case affected if affected > 0 => MatchDraftAttachmentResult.Attached
-          case _ => MatchDraftAttachmentResult.NotAttachable
+          """.update.run
+        case ScreenType.Auto => 0.pure[ConnectionIO]
+
+      if screenType == ScreenType.Auto then
+        MatchDraftAttachmentResult.NotAttachable
+          .pure[ConnectionIO]
+      else
+        lockDraft.flatMap {
+          case None => MatchDraftAttachmentResult.NotAttachable.pure[ConnectionIO]
+          case Some(_) => lockSource.flatMap {
+              case None => MatchDraftAttachmentResult.NotAttachable.pure[ConnectionIO]
+              case Some(_) => attach.map {
+                  case affected if affected > 0 => MatchDraftAttachmentResult.Attached
+                  case _ => MatchDraftAttachmentResult.NotAttachable
+                }
+            }
         }
-      case ScreenType.Auto => MatchDraftAttachmentResult.NotAttachable.pure[ConnectionIO]
 
     override def markSourceImagesRetention(
         draftId: MatchDraftId,

@@ -17,15 +17,15 @@ import momo.api.domain.{StoredImage, StoredImageLocation}
 import momo.api.errors.AppError
 import momo.api.ports.storage.{
   ImageDiskUsage,
-  ImageOrphanCleaner,
   ImageStorage,
   ImageStorageInspector,
   ImageStorageUsage,
+  ReferenceAwareImageOrphanCleaner,
   Sha256Hex
 }
 
 final class LocalFsImageStore[F[_]: Async: Random](root: Path)
-    extends ImageStorage[F], ImageStorageInspector[F], ImageOrphanCleaner[F]:
+    extends ImageStorage[F], ImageStorageInspector[F], ReferenceAwareImageOrphanCleaner[F]:
   import ImageValidation.*
   import LocalFsImageStoreSupport.*
 

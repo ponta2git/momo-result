@@ -45,5 +45,6 @@ abstract class IntegrationSuite extends CatsEffectSuite:
     dbFixture().cleanup().unsafeRunSync()
 
   protected def transactor: doobie.Transactor[IO] = dbFixture().transactor
+  protected def dataSource: javax.sql.DataSource = dbFixture().transactor.kernel
 end IntegrationSuite
 // scalafix:on DisableSyntax.noUnsafeRunSync

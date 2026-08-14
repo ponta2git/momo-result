@@ -2,14 +2,21 @@ package momo.api.integration
 
 import java.time.Instant
 
-import cats.effect.IO
+import scala.jdk.CollectionConverters.*
+
+import cats.effect.{IO, Ref, Resource}
+import cats.syntax.all.*
+import ch.qos.logback.classic.{Level, Logger}
+import ch.qos.logback.classic.spi.ILoggingEvent
+import ch.qos.logback.core.read.ListAppender
+import org.slf4j.LoggerFactory
 
 import momo.api.adapters.postgres.PostgresSourceImagesRepository
 import momo.api.adapters.storage.objectstore.ObjectBackedImageStore
 import momo.api.domain.ids.{AccountId, ImageId}
 import momo.api.errors.{AppError, AppException}
 import momo.api.ports.storage.*
-import momo.api.repositories.SourceImageStatus
+import momo.api.repositories.{SourceImageQuota, SourceImageStatus}
 import momo.api.testing.{RecordingSourceImageObjectStorage, TestImages}
 
 final class ObjectBackedImageStoreSpec extends IntegrationSuite:
@@ -127,10 +134,104 @@ final class ObjectBackedImageStoreSpec extends IntegrationSuite:
         assertEquals(error.error.code, "DEPENDENCY_FAILED")
       case other => fail(s"expected integrity failure, got $other")
 
+  test("concurrent uploads cannot overrun the account reservation quota"):
+    val ids = (1 to 8).toVector.map(index => ImageId.unsafeFromString(s"source-quota-$index"))
+    val quota = SourceImageQuota(unreferencedCountLimit = 2, unreferencedBytesLimit = Long.MaxValue)
+
+    for
+      objects <- RecordingSourceImageObjectStorage.create
+      remaining <- Ref.of[IO, Vector[ImageId]](ids)
+      nextId = remaining.modify {
+        case head +: tail => tail -> head
+        case _ => throw new IllegalStateException("test image ids exhausted")
+      }
+      store = ObjectBackedImageStore[IO](
+        PostgresSourceImagesRepository[IO](transactor),
+        objects,
+        nextId,
+        IO.pure(now),
+        quota,
+      )
+      results <- (1 to 8).toList.parTraverse(index =>
+        store.saveIdempotent(
+          accountId,
+          None,
+          Some("image/png"),
+          TestImages.png1x1,
+          SourceImageIdempotencyHash.fromRawKey(s"quota-key-$index"),
+        )
+      )
+      putCount <- objects.putCount
+    yield
+      assertEquals(results.count(_.isRight), 2)
+      assertEquals(results.count(_.left.exists(_.isInstanceOf[AppError.TooManyRequests])), 6)
+      assertEquals(putCount, 2)
+
+  test("atomic quota rejection preserves its bounded operational reason"):
+    for
+      objects <- RecordingSourceImageObjectStorage.create
+      store = ObjectBackedImageStore[IO](
+        PostgresSourceImagesRepository[IO](transactor),
+        objects,
+        IO.pure(ImageId.unsafeFromString("source-quota-observed")),
+        IO.pure(now),
+        SourceImageQuota(unreferencedCountLimit = 0, unreferencedBytesLimit = Long.MaxValue),
+      )
+      _ <- captureLogs { events =>
+        store.saveIdempotent(
+          accountId,
+          None,
+          Some("image/png"),
+          TestImages.png1x1,
+          SourceImageIdempotencyHash.fromRawKey("quota-observed"),
+        ).flatMap { result =>
+          events.map { captured =>
+            assert(result.left.exists(_.isInstanceOf[AppError.TooManyRequests]))
+            val messages = captured.map(_.getFormattedMessage)
+            assertEquals(
+              messages.count(_.startsWith("image_upload_admission rejected ")),
+              1,
+            )
+            assert(messages.exists(_.contains("reason=unreferenced_count_exceeded")))
+            assert(messages.exists(_.contains("countAfter=1 limit=0")))
+          }
+        }
+      }
+    yield ()
+
   private def imageStore(objects: SourceImageObjectStorage[IO]): ObjectBackedImageStore[IO] =
     ObjectBackedImageStore[IO](
       PostgresSourceImagesRepository[IO](transactor),
       objects,
       IO.pure(imageId),
       IO.pure(now),
+      SourceImageQuota(1000, Long.MaxValue),
     )
+
+  private def captureLogs[A](use: IO[Vector[ILoggingEvent]] => IO[A]): IO[A] =
+    val logger =
+      IO.delay(LoggerFactory.getLogger("momo.api.adapters.storage.ObjectBackedImageStore"))
+        .flatMap {
+          case logback: Logger => IO.pure(logback)
+          case other => IO.raiseError(new IllegalStateException(
+              s"Expected logback logger, got ${other.getClass.getName}"
+            ))
+        }
+    Resource.make(logger.flatMap { logback =>
+      IO.delay {
+        val appender = new ListAppender[ILoggingEvent]()
+        appender.start()
+        val originalLevel = logback.getLevel
+        logback.setLevel(Level.WARN)
+        logback.addAppender(appender)
+        (logback, appender, originalLevel)
+      }
+    }) { case (logback, appender, originalLevel) =>
+      IO.delay {
+        logback.detachAppender(appender)
+        logback.setLevel(originalLevel)
+        appender.stop()
+      }
+    }.use { case (_, appender, _) =>
+      use(IO.delay(appender.list.asScala.toVector))
+    }

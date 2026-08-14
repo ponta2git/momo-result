@@ -18,10 +18,13 @@ import momo.api.repositories.{
   SessionAccountLookup
 }
 import momo.api.usecases.ocr.{OcrAdmissionGuard, OcrJobQueueSubmitter}
+import momo.api.usecases.maintenance.SourceImageOrphanReaper
+import momo.api.usecases.images.ImageStorageAdmission
 
 private[bootstrap] object InMemoryApiRuntime:
   private final case class RuntimeParts[F[_]](
       repositories: UseCaseWiring.RuntimeRepositories[F],
+      imageReferences: ImageReferenceRepository[F],
       ocrQueueSubmitter: OcrJobQueueSubmitter[F],
       ocrAdmissionGuard: OcrAdmissionGuard[F],
       ocrMaintenance: OcrJobMaintenanceRepository[F],
@@ -37,6 +40,17 @@ private[bootstrap] object InMemoryApiRuntime:
       val imageStore = LocalFsImageStore[F](config.imageTmpDir)
 
       Resource.eval(createParts[F](config, infrastructure.queue)).flatMap { parts =>
+        val imageCleaner = SourceImageOrphanReaper.referenceAwareCleaner(
+          imageStore,
+          parts.imageReferences,
+          config.resourceLimits.imageOrphanOlderThan,
+          Clock[F].realTimeInstant,
+        )
+        val imageAdmission = ImageStorageAdmission.referenceAware[F](
+          imageStore,
+          parts.imageReferences,
+          UseCaseWiring.imageStorageAdmissionConfig(config.resourceLimits),
+        )
         val health =
           RuntimeHealthDetails.build[F](
             None,
@@ -45,8 +59,7 @@ private[bootstrap] object InMemoryApiRuntime:
           )
         RuntimeMaintenance.resource(
           config = config,
-          imageStore = imageStore,
-          imageReferences = parts.repositories.imageReferences,
+          imageOrphanCleaner = imageCleaner,
           ocrMaintenance = parts.ocrMaintenance,
           appSessions = parts.repositories.appSessions,
           idempotency = parts.repositories.idempotency,
@@ -57,7 +70,7 @@ private[bootstrap] object InMemoryApiRuntime:
             config = config,
             storage = UseCaseWiring.RuntimeStorage(
               imageStorage = imageStore,
-              imageStorageInspector = imageStore,
+              imageStorageAdmission = imageAdmission,
             ),
             repositories = parts.repositories,
             services = UseCaseWiring.RuntimeServices(
@@ -164,7 +177,6 @@ private[bootstrap] object InMemoryApiRuntime:
       ocrQueueSubmitter = OcrJobQueueSubmitter.direct[F](jobs, matchDrafts, queue)
       ocrAdmissionGuard = OcrAdmissionGuard.allowAll[F]
       repositories = UseCaseWiring.RuntimeRepositories(
-        imageReferences = imageReferences,
         ocrJobCreationStore = ocrJobCreationStore,
         jobs = jobs,
         drafts = drafts,
@@ -191,6 +203,7 @@ private[bootstrap] object InMemoryApiRuntime:
       )
     yield RuntimeParts(
       repositories = repositories,
+      imageReferences = imageReferences,
       ocrQueueSubmitter = ocrQueueSubmitter,
       ocrAdmissionGuard = ocrAdmissionGuard,
       ocrMaintenance = new InMemoryOcrJobMaintenanceRepository[F],

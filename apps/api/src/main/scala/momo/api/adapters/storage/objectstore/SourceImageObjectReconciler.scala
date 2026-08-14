@@ -65,7 +65,9 @@ final class SourceImageObjectReconciler[F[_]: Async](
     val failedPurgeCutoff = timestamp.minusMillis(config.failedRecordRetention.toMillis)
     for
       stateCandidates <- sourceImages.reconciliationCandidates(staleCutoff, config.batchSize)
-      stateStats <- stateCandidates.traverse(reconcileState(_, timestamp, failedPurgeCutoff))
+      stateStats <- stateCandidates.traverse(
+        reconcileState(_, timestamp, staleCutoff, failedPurgeCutoff)
+      )
       orphanCandidates <- sourceImages.orphanCandidates(orphanCutoff, config.batchSize)
       orphanStats <- orphanCandidates.traverse(deleteOrphan(_, timestamp))
     yield (stateStats ++ orphanStats).foldLeft(SourceImageObjectReconciliationStats.empty)(
@@ -76,10 +78,12 @@ final class SourceImageObjectReconciler[F[_]: Async](
   private def reconcileState(
       record: SourceImageRecord,
       timestamp: Instant,
+      staleCutoff: Instant,
       failedPurgeCutoff: Instant,
   ): F[SourceImageObjectReconciliationStats] = record.status match
     case SourceImageStatus.Reserved => reconcileReserved(record, timestamp)
-    case SourceImageStatus.Failed => reconcileFailed(record, timestamp, failedPurgeCutoff)
+    case SourceImageStatus.Failed =>
+      reconcileFailed(record, timestamp, staleCutoff, failedPurgeCutoff)
     case SourceImageStatus.DeletePending => finishDelete(record, timestamp)
     case _ => Async[F].pure(Skipped)
 
@@ -100,13 +104,15 @@ final class SourceImageObjectReconciler[F[_]: Async](
   private def reconcileFailed(
       record: SourceImageRecord,
       timestamp: Instant,
+      staleCutoff: Instant,
       failedPurgeCutoff: Instant,
   ): F[SourceImageObjectReconciliationStats] = objects.get(record.objectKey).flatMap {
     case Right(sourceObject) if SourceImageIntegrity.matches(record, sourceObject) =>
       recoverFailed(record, sourceObject.metadata.etag, timestamp)
     case Right(_) | Left(SourceImageObjectFailure.IntegrityViolation) =>
-      deleteFailedObject(record, failedPurgeCutoff)
-    case Left(SourceImageObjectFailure.NotFound) => purgeFailed(record, failedPurgeCutoff)
+      claimAndDeleteFailed(record, timestamp, staleCutoff, failedPurgeCutoff)
+    case Left(SourceImageObjectFailure.NotFound) =>
+      claimAndDeleteFailed(record, timestamp, staleCutoff, failedPurgeCutoff)
     case Left(_) => Async[F].pure(Deferred)
   }
 
@@ -121,23 +127,28 @@ final class SourceImageObjectReconciler[F[_]: Async](
           .map(if _ then Recovered else Deferred)
     }
 
-  private def deleteFailedObject(
+  private def claimAndDeleteFailed(
       record: SourceImageRecord,
-      failedPurgeCutoff: Instant,
-  ): F[SourceImageObjectReconciliationStats] = objects.delete(record.objectKey).flatMap {
-    case Right(_) | Left(SourceImageObjectFailure.NotFound) =>
-      purgeFailed(record, failedPurgeCutoff)
-    case Left(_) => Async[F].pure(Deferred)
-  }
-
-  private def purgeFailed(
-      record: SourceImageRecord,
+      timestamp: Instant,
+      staleCutoff: Instant,
       failedPurgeCutoff: Instant,
   ): F[SourceImageObjectReconciliationStats] =
     if record.updatedAt.isAfter(failedPurgeCutoff) then Async[F].pure(Skipped)
     else
-      sourceImages.purgeFailed(record.id, failedPurgeCutoff)
-        .map(if _ then PurgedFailed else Deferred)
+      sourceImages.claimFailedPurge(
+        record.id,
+        failedPurgeCutoff,
+        staleCutoff,
+        timestamp,
+      ).flatMap {
+        case None => Async[F].pure(Deferred)
+        case Some(claimed) => objects.delete(claimed.objectKey).flatMap {
+            case Right(_) | Left(SourceImageObjectFailure.NotFound) =>
+              sourceImages.purgeClaimedFailed(claimed.id, timestamp)
+                .map(if _ then PurgedFailed else Deferred)
+            case Left(_) => Async[F].pure(Deferred)
+          }
+      }
 
   private def markFailed(
       record: SourceImageRecord,

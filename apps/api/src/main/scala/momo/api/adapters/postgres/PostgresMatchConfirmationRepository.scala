@@ -42,9 +42,11 @@ final class PostgresMatchConfirmationRepository[F[_]: MonadCancelThrow](transact
       case None => insert(record, updatedAt).as(MatchConfirmationResult.Confirmed)
       case Some(expected) =>
         for
-          updated <- sql"""
+          updatedImages <- sql"""
             UPDATE match_drafts SET
               status = ${MatchDraftStatus.Confirmed},
+              source_images_retained_until = $updatedAt,
+              source_images_deleted_at = $updatedAt,
               updated_at = $updatedAt
             WHERE id = ${expected.draftId}
               AND updated_at = ${expected.updatedAt}
@@ -53,12 +55,16 @@ final class PostgresMatchConfirmationRepository[F[_]: MonadCancelThrow](transact
               AND incident_log_draft_id IS NOT DISTINCT FROM ${expected.incidentLogDraftId}
               AND status IN (${MatchDraftStatus.DraftReady}, ${MatchDraftStatus
               .NeedsReview}, ${MatchDraftStatus.OcrFailed})
-          """.update.run.map(_ > 0)
-          _ <-
-            if updated then insert(record, updatedAt) *> attachConfirmedMatch(expected, record)
-            else ().pure[ConnectionIO]
+            RETURNING total_assets_image_id, revenue_image_id, incident_log_image_id
+          """.query[(Option[ImageId], Option[ImageId], Option[ImageId])].option
+          _ <- updatedImages match
+            case Some((totalAssets, revenue, incidentLog)) =>
+              val sourceImageIds = List(totalAssets, revenue, incidentLog).flatten
+              PostgresSourceImageLifecycle.stageDeletion(sourceImageIds, updatedAt) *>
+                insert(record, updatedAt) *> attachConfirmedMatch(expected, record)
+            case None => ().pure[ConnectionIO]
         yield
-          if updated then MatchConfirmationResult.Confirmed
+          if updatedImages.nonEmpty then MatchConfirmationResult.Confirmed
           else MatchConfirmationResult.DraftSnapshotMismatch
     program.transact(transactor)
 

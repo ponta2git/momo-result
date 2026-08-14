@@ -11,7 +11,6 @@ import momo.api.ports.storage.ImageOrphanCleaner
 import momo.api.repositories.{
   AppSessionsRepository,
   IdempotencyRepository,
-  ImageReferenceRepository,
   OcrJobMaintenanceRepository,
   SeriesAnalysisQueueOutboxRepository
 }
@@ -25,8 +24,7 @@ import momo.api.usecases.ocr.StaleOcrJobReaper
 private[bootstrap] object RuntimeMaintenance:
   def resource[F[_]: Async: LoggerFactory](
       config: AppConfig,
-      imageStore: ImageOrphanCleaner[F],
-      imageReferences: ImageReferenceRepository[F],
+      imageOrphanCleaner: ImageOrphanCleaner[F],
       ocrMaintenance: OcrJobMaintenanceRepository[F],
       appSessions: AppSessionsRepository[F],
       idempotency: IdempotencyRepository[F],
@@ -35,11 +33,8 @@ private[bootstrap] object RuntimeMaintenance:
   ): Resource[F, Unit] =
     val logger = LoggerFactory[F].getLogger
     SourceImageOrphanReaper.resource[F](
-      imageStore = imageStore,
-      references = imageReferences,
-      olderThan = config.resourceLimits.imageOrphanOlderThan,
+      cleaner = imageOrphanCleaner,
       interval = config.resourceLimits.imageOrphanReaperInterval,
-      now = now,
     ).flatMap(_ =>
       StaleOcrJobReaper.resource[F](
         jobs = ocrMaintenance,

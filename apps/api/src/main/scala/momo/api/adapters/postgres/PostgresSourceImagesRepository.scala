@@ -9,20 +9,19 @@ import doobie.implicits.*
 import doobie.postgres.implicits.*
 
 import momo.api.adapters.postgres.PostgresMeta.given
+import momo.api.domain.{MatchDraftStatus, OcrJobStatus}
 import momo.api.domain.ids.{AccountId, ImageId}
-import momo.api.ports.storage.{
-  ImageStorageUsage,
-  Sha256Hex,
-  SourceImageIdempotencyHash,
-  SourceImageObjectKey
-}
+import momo.api.ports.storage.{Sha256Hex, SourceImageIdempotencyHash, SourceImageObjectKey}
 import momo.api.repositories.*
 
 final class PostgresSourceImagesRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
     extends SourceImagesRepository[F]:
   import PostgresSourceImagesRepository.*
 
-  override def reserve(reservation: SourceImageReservation): F[SourceImageReservationResult] =
+  override def reserveWithinQuota(
+      reservation: SourceImageReservation,
+      quota: SourceImageQuota,
+  ): F[SourceImageReservationResult] =
     val insert =
       (fr"""
       INSERT INTO source_images (
@@ -39,12 +38,27 @@ final class PostgresSourceImagesRepository[F[_]: MonadCancelThrow](transactor: T
     val existing = (selectAll ++ fr"""
       WHERE owner_account_id = ${reservation.ownerAccountId}
         AND idempotency_key_hash = ${reservation.idempotencyKeyHash}
-    """).query[Row].unique
+    """).query[Row]
 
-    insert.flatMap {
-      case Some(row) => SourceImageReservationResult.Reserved(row.toRecord).pure[ConnectionIO]
-      case None => existing.map(row => SourceImageReservationResult.Existing(row.toRecord))
-    }.transact(transactor)
+    val reserve =
+      for
+        _ <- lockAccount(reservation.ownerAccountId)
+        current <- existing.option
+        result: SourceImageReservationResult <- current match
+          case Some(row) => SourceImageReservationResult.Existing(row.toRecord).pure[ConnectionIO]
+          case None => unreferencedUsageCio(reservation.ownerAccountId).flatMap { usage =>
+              evaluateQuota(usage, reservation.sizeBytes, quota) match
+                case Some(rejection) => SourceImageReservationResult.Rejected(rejection)
+                    .pure[ConnectionIO]
+                case None => insert.flatMap {
+                    case Some(row) => SourceImageReservationResult.Reserved(row.toRecord)
+                        .pure[ConnectionIO]
+                    case None => existing.unique
+                        .map(row => SourceImageReservationResult.Existing(row.toRecord))
+                  }
+            }
+      yield result
+    reserve.transact(transactor)
 
   override def find(id: ImageId): F[Option[SourceImageRecord]] = (selectAll ++ fr"WHERE id = $id")
     .query[Row].option.map(_.map(_.toRecord)).transact(transactor)
@@ -72,45 +86,62 @@ final class PostgresSourceImagesRepository[F[_]: MonadCancelThrow](transactor: T
 
   override def retryFailed(id: ImageId, now: Instant): F[Boolean] = sql"""
       UPDATE source_images
-      SET status = ${SourceImageStatus.Reserved}, failure_code = NULL, updated_at = $now
-      WHERE id = $id AND status = ${SourceImageStatus.Failed}
+      SET status = ${SourceImageStatus.Reserved}, failure_code = NULL,
+          delete_pending_at = NULL, updated_at = $now
+      WHERE id = $id
+        AND status = ${SourceImageStatus.Failed}
+        AND delete_pending_at IS NULL
     """.update.run.map(_ == 1).transact(transactor)
 
-  override def beginDelete(id: ImageId, now: Instant): F[SourceImageDeleteResult] =
-    val update = (fr"""
-      UPDATE source_images
-      SET status = ${SourceImageStatus.DeletePending}, delete_pending_at = $now, updated_at = $now
-      WHERE id = $id AND status = ${SourceImageStatus.Available}
-    """ ++ returningAll).query[Row].option
-    beginDeleteResult(update, id).transact(transactor)
+  override def claimFailedPurge(
+      id: ImageId,
+      olderThan: Instant,
+      claimStaleBefore: Instant,
+      claimedAt: Instant,
+  ): F[Option[SourceImageRecord]] =
+    val claim = (fr"""
+      UPDATE source_images AS candidate
+      SET delete_pending_at = $claimedAt
+      WHERE candidate.id = $id
+        AND candidate.status = ${SourceImageStatus.Failed}
+        AND candidate.updated_at <= $olderThan
+        AND (
+          candidate.delete_pending_at IS NULL
+          OR candidate.delete_pending_at <= $claimStaleBefore
+        )
+    """ ++ unreferencedGuard ++ returningAll).query[Row].option
+    claim.map(_.map(_.toRecord)).transact(transactor)
+
+  override def purgeClaimedFailed(id: ImageId, claimedAt: Instant): F[Boolean] = (fr"""
+      DELETE FROM source_images AS candidate
+      WHERE candidate.id = $id
+        AND candidate.status = ${SourceImageStatus.Failed}
+        AND candidate.delete_pending_at = $claimedAt
+    """ ++ unreferencedGuard).update.run.map(_ == 1).transact(transactor)
 
   override def beginDeleteUnreferenced(
       id: ImageId,
       now: Instant,
   ): F[SourceImageDeleteResult] =
+    val currentForUpdate = (selectAll ++ fr"WHERE id = $id FOR UPDATE").query[Row].option
     val update = (fr"""
       UPDATE source_images AS candidate
       SET status = ${SourceImageStatus.DeletePending}, delete_pending_at = $now, updated_at = $now
       WHERE candidate.id = $id AND candidate.status = ${SourceImageStatus.Available}
     """ ++ unreferencedGuard ++ returningAll).query[Row].option
-    beginDeleteResult(update, id).transact(transactor)
-
-  private def beginDeleteResult(
-      update: ConnectionIO[Option[Row]],
-      id: ImageId,
-  ): ConnectionIO[SourceImageDeleteResult] =
-    val current = (selectAll ++ fr"WHERE id = $id").query[Row].option
-    update.flatMap {
-      case Some(row) => SourceImageDeleteResult.Pending(row.toRecord).pure[ConnectionIO]
-      case None => current.map {
-          case None => SourceImageDeleteResult.Missing
-          case Some(row) if row.status == SourceImageStatus.DeletePending =>
-            SourceImageDeleteResult.Pending(row.toRecord)
-          case Some(row) if row.status == SourceImageStatus.Deleted =>
-            SourceImageDeleteResult.AlreadyDeleted
-          case Some(row) => SourceImageDeleteResult.NotReady(row.status)
+    currentForUpdate.flatMap {
+      case None => SourceImageDeleteResult.Missing.pure[ConnectionIO]
+      case Some(row) if row.status == SourceImageStatus.DeletePending =>
+        SourceImageDeleteResult.Pending(row.toRecord).pure[ConnectionIO]
+      case Some(row) if row.status == SourceImageStatus.Deleted =>
+        SourceImageDeleteResult.AlreadyDeleted.pure[ConnectionIO]
+      case Some(row) if row.status != SourceImageStatus.Available =>
+        SourceImageDeleteResult.NotReady(row.status).pure[ConnectionIO]
+      case Some(_) => update.map {
+          case Some(pending) => SourceImageDeleteResult.Pending(pending.toRecord)
+          case None => SourceImageDeleteResult.NotReady(SourceImageStatus.Available)
         }
-    }
+    }.transact(transactor)
 
   override def markDeleted(id: ImageId, now: Instant): F[Boolean] = sql"""
       UPDATE source_images
@@ -138,29 +169,75 @@ final class PostgresSourceImagesRepository[F[_]: MonadCancelThrow](transactor: T
       limit: Int,
   ): F[List[SourceImageRecord]] =
     val boundedLimit = limit.max(1).min(MaxReconciliationBatchSize)
-    (selectAllAliased ++ fr"""
+    (liveReferencesCte ++ selectAllAliased ++ fr"""
       WHERE candidate.status = ${SourceImageStatus.Available}
-        AND candidate.available_at <= $olderThan
-    """ ++ unreferencedGuard ++ fr"""
-      ORDER BY candidate.available_at, candidate.id
+        AND candidate.updated_at <= $olderThan
+    """ ++ unreferencedFromCte ++ fr"""
+      ORDER BY candidate.updated_at, candidate.id
       LIMIT $boundedLimit
     """).query[Row].to[List].map(_.map(_.toRecord)).transact(transactor)
 
-  override def purgeFailed(id: ImageId, olderThan: Instant): F[Boolean] = (fr"""
-      DELETE FROM source_images AS candidate
-      WHERE candidate.id = $id
-        AND candidate.status = ${SourceImageStatus.Failed}
-        AND candidate.updated_at <= $olderThan
-    """ ++ unreferencedGuard).update.run.map(_ == 1).transact(transactor)
-
-  override def unreferencedUsage(ownerAccountId: AccountId): F[ImageStorageUsage] = (fr"""
+  private def unreferencedUsageCio(ownerAccountId: AccountId): ConnectionIO[UsageRow] = (
+    liveReferencesCte ++ fr"""
       SELECT COUNT(*)::bigint, COALESCE(SUM(candidate.byte_length), 0)::bigint
       FROM source_images AS candidate
       WHERE candidate.owner_account_id = $ownerAccountId
         AND candidate.status <> ${SourceImageStatus.Deleted}
-    """ ++ unreferencedGuard).query[UsageRow].unique.map { row =>
-    ImageStorageUsage(Math.toIntExact(row.fileCount), row.sizeBytes)
-  }.transact(transactor)
+    """ ++ unreferencedFromCte
+  ).query[UsageRow].unique
+
+  private def lockAccount(ownerAccountId: AccountId): ConnectionIO[Unit] = sql"""
+      -- The second advisory-key component is this repository's quota namespace. Hash collisions
+      -- can only serialize unrelated accounts; they cannot weaken the quota decision.
+      SELECT pg_advisory_xact_lock(hashtext(${ownerAccountId.value}), 1)
+    """.query[Unit].unique.void
+
+  private def evaluateQuota(
+      usage: UsageRow,
+      incomingBytes: Long,
+      quota: SourceImageQuota,
+  ): Option[SourceImageQuotaRejection] =
+    val countAfter = usage.fileCount + 1L
+    val bytesAfter = saturatedAdd(usage.sizeBytes, incomingBytes)
+    if countAfter > quota.unreferencedCountLimit.toLong then
+      Some(SourceImageQuotaRejection.CountExceeded(countAfter, quota.unreferencedCountLimit))
+    else
+      Option.when(bytesAfter > quota.unreferencedBytesLimit)(
+        SourceImageQuotaRejection.BytesExceeded(bytesAfter, quota.unreferencedBytesLimit)
+      )
+
+  private def saturatedAdd(left: Long, right: Long): Long =
+    if right > 0L && left > Long.MaxValue - right then Long.MaxValue else left + right
+
+private[postgres] object PostgresSourceImageLifecycle:
+  /**
+   * Persists object-deletion intent in the same transaction that makes a draft terminal.
+   *
+   * Object deletion remains an external, retryable reconciliation step. Rows already outside
+   * AVAILABLE are left unchanged so retries are idempotent.
+   */
+  def stageDeletion(imageIds: List[ImageId], now: Instant): ConnectionIO[Unit] =
+    imageIds.distinct.map(_.value).sorted match
+      case Nil => ().pure[ConnectionIO]
+      case ids =>
+        val rawIds = ids.toArray
+        val lock = sql"""
+          SELECT id
+          FROM source_images
+          WHERE id = ANY($rawIds)
+          ORDER BY id
+          FOR UPDATE
+        """.query[String].to[List].void
+        val update =
+          (sql"""
+          UPDATE source_images AS candidate
+          SET status = ${SourceImageStatus.DeletePending},
+              delete_pending_at = $now,
+              updated_at = $now
+          WHERE candidate.id = ANY($rawIds)
+            AND candidate.status = ${SourceImageStatus.Available}
+        """ ++ PostgresSourceImagesRepository.unreferencedGuard).update.run.void
+        lock *> update
 
 object PostgresSourceImagesRepository:
   private val MaxReconciliationBatchSize = 1000
@@ -223,16 +300,62 @@ object PostgresSourceImagesRepository:
     FROM source_images AS candidate
   """
 
-  private val unreferencedGuard = fr"""
+  /**
+   * Builds the live-reference set once inside PostgreSQL. This avoids a correlated full
+   * match_drafts scan for every quota/orphan candidate while keeping the set out of JVM heap.
+   */
+  private val liveReferencesCte = fr"""
+    WITH live_source_image_references(image_id) AS MATERIALIZED (
+      SELECT source_image_id
+      FROM ocr_jobs
+      WHERE status IN (${OcrJobStatus.Queued}, ${OcrJobStatus.Running})
+        AND source_image_id IS NOT NULL
+      UNION ALL
+      SELECT image_id
+      FROM ocr_jobs
+      WHERE status IN (${OcrJobStatus.Queued}, ${OcrJobStatus.Running})
+        AND image_id IS NOT NULL
+      UNION ALL
+      SELECT total_assets_image_id
+      FROM match_drafts
+      WHERE source_images_deleted_at IS NULL
+        AND status NOT IN (${MatchDraftStatus.Confirmed}, ${MatchDraftStatus.Cancelled})
+        AND total_assets_image_id IS NOT NULL
+      UNION ALL
+      SELECT revenue_image_id
+      FROM match_drafts
+      WHERE source_images_deleted_at IS NULL
+        AND status NOT IN (${MatchDraftStatus.Confirmed}, ${MatchDraftStatus.Cancelled})
+        AND revenue_image_id IS NOT NULL
+      UNION ALL
+      SELECT incident_log_image_id
+      FROM match_drafts
+      WHERE source_images_deleted_at IS NULL
+        AND status NOT IN (${MatchDraftStatus.Confirmed}, ${MatchDraftStatus.Cancelled})
+        AND incident_log_image_id IS NOT NULL
+    )
+  """
+
+  private val unreferencedFromCte = fr"""
+    AND NOT EXISTS (
+      SELECT 1
+      FROM live_source_image_references live_reference
+      WHERE live_reference.image_id = candidate.id
+    )
+  """
+
+  private[postgres] val unreferencedGuard = fr"""
     AND NOT EXISTS (
       SELECT 1
       FROM ocr_jobs
-      WHERE ocr_jobs.source_image_id = candidate.id OR ocr_jobs.image_id = candidate.id
+      WHERE (ocr_jobs.source_image_id = candidate.id OR ocr_jobs.image_id = candidate.id)
+        AND ocr_jobs.status IN (${OcrJobStatus.Queued}, ${OcrJobStatus.Running})
     )
     AND NOT EXISTS (
       SELECT 1
       FROM match_drafts
       WHERE match_drafts.source_images_deleted_at IS NULL
+        AND match_drafts.status NOT IN (${MatchDraftStatus.Confirmed}, ${MatchDraftStatus.Cancelled})
         AND (
           match_drafts.total_assets_image_id = candidate.id OR
           match_drafts.revenue_image_id = candidate.id OR

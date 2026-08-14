@@ -22,7 +22,7 @@ final class ImageStorageAdmissionSpec extends MomoCatsEffectSuite:
   )
 
   test("allows uploads when account quota and disk waterline stay within limits") {
-    val admission = ImageStorageAdmission.from[IO](
+    val admission = ImageStorageAdmission.referenceAware[IO](
       inspector = FixedInspector(
         usage = IO.pure(ImageStorageUsage(fileCount = 1, sizeBytes = 20)),
         disk = IO.pure(Some(ImageDiskUsage(totalBytes = 1000, usableBytes = 500))),
@@ -36,7 +36,7 @@ final class ImageStorageAdmissionSpec extends MomoCatsEffectSuite:
   }
 
   test("rejects uploads that exceed the unreferenced image count quota") {
-    val admission = ImageStorageAdmission.from[IO](
+    val admission = ImageStorageAdmission.referenceAware[IO](
       inspector = FixedInspector(
         usage = IO.pure(ImageStorageUsage(fileCount = 2, sizeBytes = 20)),
         disk = IO.pure(Some(ImageDiskUsage(totalBytes = 1000, usableBytes = 500))),
@@ -52,7 +52,7 @@ final class ImageStorageAdmissionSpec extends MomoCatsEffectSuite:
   }
 
   test("rejects uploads that exceed the unreferenced image byte quota") {
-    val admission = ImageStorageAdmission.from[IO](
+    val admission = ImageStorageAdmission.referenceAware[IO](
       inspector = FixedInspector(
         usage = IO.pure(ImageStorageUsage(fileCount = 1, sizeBytes = 95)),
         disk = IO.pure(Some(ImageDiskUsage(totalBytes = 1000, usableBytes = 500))),
@@ -68,7 +68,7 @@ final class ImageStorageAdmissionSpec extends MomoCatsEffectSuite:
   }
 
   test("rejects uploads when disk free reserve would be crossed") {
-    val admission = ImageStorageAdmission.from[IO](
+    val admission = ImageStorageAdmission.referenceAware[IO](
       inspector = FixedInspector(
         usage = IO.pure(ImageStorageUsage(fileCount = 0, sizeBytes = 0)),
         disk = IO.pure(Some(ImageDiskUsage(totalBytes = 1000, usableBytes = 15))),
@@ -84,7 +84,7 @@ final class ImageStorageAdmissionSpec extends MomoCatsEffectSuite:
   }
 
   test("rejects uploads when disk reserve subtraction would underflow") {
-    val admission = ImageStorageAdmission.from[IO](
+    val admission = ImageStorageAdmission.referenceAware[IO](
       inspector = FixedInspector(
         usage = IO.pure(ImageStorageUsage(fileCount = 0, sizeBytes = 0)),
         disk = IO.pure(Some(ImageDiskUsage(totalBytes = Long.MaxValue, usableBytes = 1))),
@@ -100,7 +100,7 @@ final class ImageStorageAdmissionSpec extends MomoCatsEffectSuite:
   }
 
   test("object storage skips local disk waterlines while retaining account quotas") {
-    val admission = ImageStorageAdmission.from[IO](
+    val admission = ImageStorageAdmission.referenceAware[IO](
       inspector = FixedInspector(
         usage = IO.pure(ImageStorageUsage(fileCount = 1, sizeBytes = 20)),
         disk = IO.pure(None),
@@ -113,8 +113,21 @@ final class ImageStorageAdmissionSpec extends MomoCatsEffectSuite:
       .map(result => assertEquals(result, Right(())))
   }
 
+  test("capacity-only admission never loads account usage or reference ids") {
+    val admission = ImageStorageAdmission.capacityOnly[IO](
+      inspector = FixedInspector(
+        usage = IO.raiseError(new AssertionError("usage must be owned by DB reservation")),
+        disk = IO.pure(None),
+      ),
+      config = config.capacity,
+    )
+
+    admission.ensureCanAccept(accountId, incomingBytes = 10)
+      .map(result => assertEquals(result, Right(())))
+  }
+
   test("fails closed when referenced image status cannot be read") {
-    val admission = ImageStorageAdmission.from[IO](
+    val admission = ImageStorageAdmission.referenceAware[IO](
       inspector = FixedInspector(
         usage = IO.pure(ImageStorageUsage(fileCount = 0, sizeBytes = 0)),
         disk = IO.pure(Some(ImageDiskUsage(totalBytes = 1000, usableBytes = 500))),

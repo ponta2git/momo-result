@@ -124,9 +124,9 @@ final class ApiRuntimeArchitectureSpec extends FunSuite:
     assert(!ocrJobText.contains("java.nio.file.Path"))
     assert(!useCaseWiringText.contains("LocalFsImageStore"))
     assert(useCaseWiringText.contains("imageStorage: ImageStorage[F]"))
-    assert(useCaseWiringText.contains("imageStorageInspector: ImageStorageInspector[F]"))
+    assert(useCaseWiringText.contains("imageStorageAdmission: ImageStorageAdmission[F]"))
     assert(localFsText.contains(
-      "extends ImageStorage[F], ImageStorageInspector[F], ImageOrphanCleaner[F]"
+      "extends ImageStorage[F], ImageStorageInspector[F], ReferenceAwareImageOrphanCleaner[F]"
     ))
 
   test("Postgres local image storage preserves the database-backed object lifecycle"):
@@ -136,6 +136,7 @@ final class ApiRuntimeArchitectureSpec extends FunSuite:
     assert(postgresRuntimeText.contains("LocalSourceImageObjectStorage[F]"))
     assert(postgresRuntimeText.contains("objectBackedImageStorageResource("))
     assert(!postgresRuntimeText.contains("LocalFsImageStore"))
+    assert(!postgresRuntimeText.contains("PostgresImageReferenceRepository"))
     assert(localObjectStorageText.contains("extends SourceImageObjectStorage[F]"))
 
   test("image header parsing remains split by image format"):

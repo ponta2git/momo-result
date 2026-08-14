@@ -86,6 +86,22 @@ final class InMemoryOcrJobCreationStoreSpec extends MomoCatsEffectSuite:
       assertEquals(storedDraft, None)
       assertEquals(storedJob, None)
 
+  test("store rejects inconsistent duplicated image identity before mutation"):
+    for
+      fixture <- newFixture
+      draft = ocrDraft("ocr-draft-invalid-plan", "ocr-job-invalid-plan")
+      job = queuedJob("ocr-job-invalid-plan", draft.id)
+      inconsistent = attachment(draft.id).copy(
+        sourceImageId = ImageId.unsafeFromString("different-source-image")
+      )
+      result <- fixture.store.store(plan(job, draft, Some(inconsistent), 10))
+      storedDraft <- fixture.drafts.find(draft.id)
+      storedJob <- fixture.jobs.find(job.id)
+    yield
+      assertEquals(result, Left(OcrJobCreationRejection.InvalidPlan))
+      assertEquals(storedDraft, None)
+      assertEquals(storedJob, None)
+
   private def newFixture: IO[Fixture] =
     for
       drafts <- InMemoryOcrDraftsRepository.create[IO]

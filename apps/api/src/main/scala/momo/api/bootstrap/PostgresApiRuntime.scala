@@ -29,11 +29,11 @@ import momo.api.ports.storage.{
   ImageDiskUsage,
   ImageOrphanCleaner,
   ImageStorage,
-  ImageStorageInspector,
   SourceImageObjectStorage
 }
 import momo.api.repositories.*
 import momo.api.usecases.ocr.*
+import momo.api.usecases.images.ImageStorageAdmission
 import momo.api.usecases.seriesanalysis.{
   SeriesAnalysisQueueDispatcherConfig,
   SeriesAnalysisQueueOutboxDispatcher
@@ -84,8 +84,6 @@ private[bootstrap] object PostgresApiRuntime:
       PostgresMemberAliasesRepository[F](transactor)
     val idempotency: IdempotencyRepository[F] = PostgresIdempotencyRepository[F](transactor)
     val sourceImages: SourceImagesRepository[F] = PostgresSourceImagesRepository[F](transactor)
-    val imageReferences: ImageReferenceRepository[F] =
-      PostgresImageReferenceRepository[F](transactor)
     val ocrMaintenance: OcrJobMaintenanceRepository[F] =
       PostgresOcrJobMaintenanceRepository[F](transactor)
     val ocrAdmissionGuard = OcrAdmissionGuard.from[F](
@@ -122,8 +120,7 @@ private[bootstrap] object PostgresApiRuntime:
       dispatchers.flatMap { _ =>
         RuntimeMaintenance.resource(
           config = config,
-          imageStore = imageStorage.cleaner,
-          imageReferences = imageReferences,
+          imageOrphanCleaner = imageStorage.cleaner,
           ocrMaintenance = ocrMaintenance,
           appSessions = appSessions,
           idempotency = idempotency,
@@ -145,10 +142,9 @@ private[bootstrap] object PostgresApiRuntime:
               config = config,
               storage = UseCaseWiring.RuntimeStorage(
                 imageStorage = imageStorage.store,
-                imageStorageInspector = imageStorage.inspector,
+                imageStorageAdmission = imageStorage.admission,
               ),
               repositories = UseCaseWiring.RuntimeRepositories(
-                imageReferences = imageReferences,
                 ocrJobCreationStore = ocrJobCreationStore,
                 jobs = jobs,
                 drafts = drafts,
@@ -192,7 +188,7 @@ private[bootstrap] object PostgresApiRuntime:
 
   private final case class RuntimeImageStorage[F[_]](
       store: ImageStorage[F],
-      inspector: ImageStorageInspector[F],
+      admission: ImageStorageAdmission[F],
       cleaner: ImageOrphanCleaner[F],
   )
 
@@ -212,6 +208,7 @@ private[bootstrap] object PostgresApiRuntime:
           batchSize = LocalReconciliationBatchSize,
         ),
         objects.diskUsage,
+        UseCaseWiring.imageStorageAdmissionConfig(config.resourceLimits),
       )
     case SourceImageStorageConfig.R2(r2) =>
       for
@@ -243,6 +240,7 @@ private[bootstrap] object PostgresApiRuntime:
             batchSize = r2.reconciliationBatchSize,
           ),
           Async[F].pure(None),
+          UseCaseWiring.imageStorageAdmissionConfig(config.resourceLimits),
         )
       yield storage
 
@@ -251,17 +249,25 @@ private[bootstrap] object PostgresApiRuntime:
       objects: Resource[F, SourceImageObjectStorage[F]],
       reconcilerConfig: SourceImageObjectReconcilerConfig,
       diskUsage: F[Option[ImageDiskUsage]],
+      admissionConfig: ImageStorageAdmission.Config,
   ): Resource[F, RuntimeImageStorage[F]] = objects.map { objectStorage =>
     val now = Clock[F].realTimeInstant
-    val store = ObjectBackedImageStore[F](sourceImages, objectStorage, ImageId.fresh[F], now)
+    val store = ObjectBackedImageStore[F](
+      sourceImages,
+      objectStorage,
+      ImageId.fresh[F],
+      now,
+      admissionConfig.quota,
+    )
     val reconciler = SourceImageObjectReconciler[F](
       sourceImages,
       objectStorage,
       reconcilerConfig,
       now,
     )
-    val maintenance = ObjectBackedImageMaintenance[F](sourceImages, reconciler, diskUsage)
-    RuntimeImageStorage(store, maintenance, maintenance)
+    val maintenance = ObjectBackedImageMaintenance[F](reconciler, diskUsage)
+    val admission = ImageStorageAdmission.capacityOnly[F](maintenance, admissionConfig.capacity)
+    RuntimeImageStorage(store, admission, maintenance)
   }
 
   private val LocalStaleStateAge = 60.seconds

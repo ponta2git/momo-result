@@ -10,6 +10,7 @@ import doobie.implicits.*
 import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.domain.{MatchDraftStatus, OcrJobStatus, ScreenType}
 import momo.api.errors.{AppError, AppException}
+import momo.api.ports.storage.{Sha256Hex, SourceImageObjectKey}
 import momo.api.repositories.OcrJobCreationStore.OcrJobCreationRejection
 import momo.api.repositories.{
   MatchDraftAttachmentResult,
@@ -18,6 +19,7 @@ import momo.api.repositories.{
   OcrJobDraftAttachment,
   OcrQueueOutboxDraft
 }
+import momo.api.repositories.SourceImageStatus
 
 final class PostgresOcrJobCreationStore[F[_]: MonadCancelThrow](transactor: Transactor[F])
     extends OcrJobCreationStore[F]:
@@ -29,16 +31,63 @@ final class PostgresOcrJobCreationStore[F[_]: MonadCancelThrow](transactor: Tran
       OcrQueueOutboxDraft.forJob(dispatch.jobId, dispatch.enqueueRequest, dispatch.createdAt)
     val program =
       for
+        _ <- EitherT.cond[ConnectionIO](
+          OcrJobCreationPlan.isConsistent(plan),
+          (),
+          OcrJobCreationRejection.InvalidPlan,
+        )
         _ <- EitherT(activeLimitGuard(plan.activeJobLimit))
         _ <- attachment match
           case None => EitherT.rightT[ConnectionIO, OcrJobCreationRejection](())
           case Some(a) => EitherT(attachmentGuard(a))
+        _ <- EitherT(sourceImageGuard(plan))
         _ <- EitherT.liftF(PostgresOcrDrafts.alg.create(plan.draft))
         _ <- EitherT.liftF(PostgresOcrJobs.createV2(plan.job))
         _ <- EitherT.liftF(attachment.traverse_(attachMatchDraft))
         _ <- EitherT.liftF(PostgresOcrQueueOutbox.insertIntent(outbox))
       yield ()
     program.value.transact(transactor)
+
+  private def sourceImageGuard(
+      plan: OcrJobCreationPlan
+  ): ConnectionIO[Either[OcrJobCreationRejection, Unit]] = sql"""
+      SELECT status, object_key, sha256_hex, byte_length::bigint, media_type
+      FROM source_images
+      WHERE id = ${plan.job.imageId}
+      FOR UPDATE
+    """.query[(
+      SourceImageStatus,
+      SourceImageObjectKey,
+      Option[Sha256Hex],
+      Option[Long],
+      Option[String],
+  )].option.map {
+    case Some((
+          SourceImageStatus.Available,
+          objectKey,
+          Some(sha256),
+          Some(byteLength),
+          Some(mediaType)
+        ))
+        if sourceMetadataMatches(plan, objectKey, sha256, byteLength, mediaType) => Right(())
+    case Some((SourceImageStatus.Available, _, _, _, _)) =>
+      Left(OcrJobCreationRejection.InvalidPlan)
+    case _ => Left(OcrJobCreationRejection.SourceImageUnavailable(plan.job.imageId))
+  }
+
+  private def sourceMetadataMatches(
+      plan: OcrJobCreationPlan,
+      objectKey: SourceImageObjectKey,
+      sha256: Sha256Hex,
+      byteLength: Long,
+      mediaType: String,
+  ): Boolean =
+    val request = plan.queueDispatch.enqueueRequest
+    plan.job.imageLocation.value == objectKey.value &&
+    request.imageLocation.value == objectKey.value &&
+    request.imageSha256 == sha256.value &&
+    request.imageByteLength == byteLength &&
+    request.imageMediaType == mediaType
 
   private def activeLimitGuard(
       activeJobLimit: Int

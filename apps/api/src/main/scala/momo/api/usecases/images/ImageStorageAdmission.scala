@@ -7,8 +7,9 @@ import org.typelevel.log4cats.LoggerFactory
 import momo.api.domain.ids.AccountId
 import momo.api.errors.AppError
 import momo.api.logging.SafeLog
-import momo.api.ports.storage.{ImageDiskUsage, ImageStorageInspector}
+import momo.api.ports.storage.{ImageDiskUsage, ImageStorageCapacityInspector, ImageStorageInspector}
 import momo.api.repositories.ImageReferenceRepository
+import momo.api.repositories.SourceImageQuota
 
 trait ImageStorageAdmission[F[_]]:
   def ensureCanAccept(ownerAccountId: AccountId, incomingBytes: Long): F[Either[AppError, Unit]]
@@ -17,6 +18,17 @@ object ImageStorageAdmission:
   final case class Config(
       unreferencedCountLimit: Int,
       unreferencedBytesLimit: Long,
+      storageMinFreeBytes: Long,
+      storageMaxUsedPercent: Int,
+  ):
+    def quota: SourceImageQuota = SourceImageQuota(
+      unreferencedCountLimit = unreferencedCountLimit,
+      unreferencedBytesLimit = unreferencedBytesLimit,
+    )
+
+    def capacity: CapacityConfig = CapacityConfig(storageMinFreeBytes, storageMaxUsedPercent)
+
+  final case class CapacityConfig(
       storageMinFreeBytes: Long,
       storageMaxUsedPercent: Int,
   )
@@ -60,20 +72,32 @@ object ImageStorageAdmission:
       case _ => AppError
           .ServiceUnavailable("Image upload storage is temporarily unavailable. Try again later.")
 
-  def from[F[_]: MonadThrow: LoggerFactory](
+  def referenceAware[F[_]: MonadThrow: LoggerFactory](
       inspector: ImageStorageInspector[F],
       references: ImageReferenceRepository[F],
       config: Config,
-  ): ImageStorageAdmission[F] = LiveImageStorageAdmission(inspector, references, config)
+  ): ImageStorageAdmission[F] = ReferenceAwareImageStorageAdmission(inspector, references, config)
 
-private final class LiveImageStorageAdmission[F[_]: MonadThrow: LoggerFactory](
+  /**
+   * Checks only physical storage capacity.
+   *
+   * Account quota enforcement for DB-backed object storage belongs to the atomic image
+   * reservation transaction, not this preflight check.
+   */
+  def capacityOnly[F[_]: MonadThrow: LoggerFactory](
+      inspector: ImageStorageCapacityInspector[F],
+      config: CapacityConfig,
+  ): ImageStorageAdmission[F] = CapacityImageStorageAdmission(inspector, config)
+
+private final class ReferenceAwareImageStorageAdmission[F[_]: MonadThrow: LoggerFactory](
     inspector: ImageStorageInspector[F],
     references: ImageReferenceRepository[F],
     config: ImageStorageAdmission.Config,
 ) extends ImageStorageAdmission[F]:
   import ImageStorageAdmission.*
 
-  private val logger = LoggerFactory[F].getLoggerFromClass(classOf[LiveImageStorageAdmission[F]])
+  private val logger = LoggerFactory[F]
+    .getLoggerFromClass(classOf[ReferenceAwareImageStorageAdmission[F]])
 
   override def ensureCanAccept(
       ownerAccountId: AccountId,
@@ -100,9 +124,32 @@ private final class LiveImageStorageAdmission[F[_]: MonadThrow: LoggerFactory](
                 ownerAccountId,
                 Rejection.UnreferencedBytesExceeded(bytesAfter, config.unreferencedBytesLimit),
               )
-            else checkDisk(ownerAccountId, incomingBytes)
+            else capacity.ensureCanAccept(ownerAccountId, incomingBytes)
         }
   }
+
+  private val capacity = CapacityImageStorageAdmission[F](inspector, config.capacity)
+
+  private def reject(ownerAccountId: AccountId, rejection: Rejection): F[Either[AppError, Unit]] =
+    logger.warn(s"image_upload_admission rejected accountId=${ownerAccountId.value} ${rejection
+        .logFields}") >> rejection.error.asLeft[Unit].pure[F]
+
+  private def saturatedAdd(left: Long, right: Long): Long =
+    if right > 0L && left > Long.MaxValue - right then Long.MaxValue else left + right
+
+private final class CapacityImageStorageAdmission[F[_]: MonadThrow: LoggerFactory](
+    inspector: ImageStorageCapacityInspector[F],
+    config: ImageStorageAdmission.CapacityConfig,
+) extends ImageStorageAdmission[F]:
+  import ImageStorageAdmission.*
+
+  private val logger = LoggerFactory[F]
+    .getLoggerFromClass(classOf[CapacityImageStorageAdmission[F]])
+
+  override def ensureCanAccept(
+      ownerAccountId: AccountId,
+      incomingBytes: Long,
+  ): F[Either[AppError, Unit]] = checkDisk(ownerAccountId, incomingBytes)
 
   private def checkDisk(ownerAccountId: AccountId, incomingBytes: Long): F[Either[AppError, Unit]] =
     inspector.diskUsage.attempt.flatMap {

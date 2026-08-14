@@ -115,6 +115,7 @@ final class PostgresMatchDraftsRepositorySpec extends IntegrationSuite:
 
   test("attachOcrArtifacts allows replacing a slot after its OCR job is terminal"):
     val draftId = MatchDraftId.unsafeFromString("match-draft-terminal-slot")
+    val replacementImageId = "image-replacement-slot"
     for
       _ <- insertDraftWithSlot(draftId.value, "ocr_failed", Some("ocr-draft-terminal-slot"))
       _ <- insertOcrJob(
@@ -123,10 +124,11 @@ final class PostgresMatchDraftsRepositorySpec extends IntegrationSuite:
         "image-terminal-slot",
         "failed",
       )
+      _ <- insertAvailableSourceImage(replacementImageId)
       attached <- repo.attachOcrArtifacts(
         draftId = draftId,
         screenType = ScreenType.TotalAssets,
-        sourceImageId = ImageId.unsafeFromString("image-replacement-slot"),
+        sourceImageId = ImageId.unsafeFromString(replacementImageId),
         ocrDraftId = OcrDraftId.unsafeFromString("ocr-draft-replacement-slot"),
         updatedAt = updatedAt,
       )
@@ -136,6 +138,19 @@ final class PostgresMatchDraftsRepositorySpec extends IntegrationSuite:
       assertEquals(attached, MatchDraftAttachmentResult.Attached)
       assertEquals(slot, Some("ocr-draft-replacement-slot"))
       assertEquals(status, "ocr_running")
+
+  test("attachOcrArtifacts refuses an unavailable source image"):
+    val draftId = MatchDraftId.unsafeFromString("match-draft-missing-source")
+    for
+      _ <- insertDraft(draftId.value, "draft_ready")
+      attached <- repo.attachOcrArtifacts(
+        draftId,
+        ScreenType.TotalAssets,
+        ImageId.unsafeFromString("missing-source-image"),
+        OcrDraftId.unsafeFromString("ocr-draft-missing-source"),
+        updatedAt,
+      )
+    yield assertEquals(attached, MatchDraftAttachmentResult.NotAttachable)
 
   test("statsByHeldEvents excludes terminal drafts and returns the maximum active match number"):
     val heldEventId = HeldEventId.unsafeFromString("held-draft-stats")
@@ -196,6 +211,16 @@ final class PostgresMatchDraftsRepositorySpec extends IntegrationSuite:
     ) VALUES (
       $id, $draftId, $imageId, ${s"/tmp/$imageId.png"}, 'total_assets', $status, 0,
       $createdAt, $createdAt
+    )
+  """.update.run.transact(transactor)
+
+  private def insertAvailableSourceImage(id: String): IO[Int] = sql"""
+    INSERT INTO source_images (
+      id, owner_account_id, object_key, idempotency_key_hash, status,
+      media_type, byte_length, sha256_hex, width, height, available_at, created_at, updated_at
+    ) VALUES (
+      $id, 'account_ponta', ${s"source-images/$id.png"}, ${"a" * 64}, 'AVAILABLE',
+      'image/png', 128, ${"b" * 64}, 1, 1, $createdAt, $createdAt, $createdAt
     )
   """.update.run.transact(transactor)
 

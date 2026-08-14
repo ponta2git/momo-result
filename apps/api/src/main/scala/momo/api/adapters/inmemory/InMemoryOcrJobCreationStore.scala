@@ -31,6 +31,11 @@ final class InMemoryOcrJobCreationStore[F[_]: MonadThrow](
     val job = plan.job
     val attachment = plan.matchDraftAttachment
     (for
+      _ <- EitherT.cond[F](
+        OcrJobCreationPlan.isConsistent(plan),
+        (),
+        OcrJobCreationRejection.InvalidPlan,
+      )
       _ <- EitherT(activeLimitGuard(plan.activeJobLimit))
       _ <- EitherT.liftF(rejectDuplicateOcrRecords(draft, job))
       _ <- attachment match

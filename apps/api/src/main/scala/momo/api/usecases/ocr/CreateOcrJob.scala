@@ -126,12 +126,16 @@ final class CreateOcrJob[F[_]: MonadThrow](
   private def creationRejectionToAppError(
       rejection: OcrJobCreationRejection
   ): F[Either[AppError, Unit]] = rejection match
+    case OcrJobCreationRejection.InvalidPlan => AppError
+        .Internal("OCR job creation plan is inconsistent.").asLeft[Unit].pure[F]
     case OcrJobCreationRejection.ActiveJobLimitExceeded(limit) => logger.warn(
         s"ocr_job_create_rejected reason=active_job_limit_exceeded limit=$limit"
       ) >> AppError.ServiceUnavailable("OCR queue is currently full. Try again later.")
         .asLeft[Unit].pure[F]
     case OcrJobCreationRejection.MatchDraftAttachmentRejected(_) => AppError
         .Conflict("match draft could not be attached to the OCR job.").asLeft[Unit].pure[F]
+    case OcrJobCreationRejection.SourceImageUnavailable(_) => AppError
+        .Conflict("source image is no longer available.").asLeft[Unit].pure[F]
 
   private def mergeMemberAliases(hints: OcrJobHints): F[OcrJobHints] = memberAliases.list(None)
     .map { rows =>

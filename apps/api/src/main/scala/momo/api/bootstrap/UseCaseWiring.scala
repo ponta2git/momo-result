@@ -21,7 +21,7 @@ import momo.api.config.{AppConfig, AuthConfig, ResourceLimitsConfig}
 import momo.api.domain.ids.*
 import momo.api.endpoints.HealthEndpoints.HealthDetailsResponse
 import momo.api.http.{HttpRateLimiters, HttpRoutes}
-import momo.api.ports.storage.{ImageStorage, ImageStorageInspector}
+import momo.api.ports.storage.ImageStorage
 import momo.api.repositories.*
 import momo.api.usecases.exports.*
 import momo.api.usecases.images.*
@@ -95,11 +95,10 @@ private[bootstrap] object UseCaseWiring:
 
   final case class RuntimeStorage[F[_]](
       imageStorage: ImageStorage[F],
-      imageStorageInspector: ImageStorageInspector[F],
+      imageStorageAdmission: ImageStorageAdmission[F],
   )
 
   final case class RuntimeRepositories[F[_]](
-      imageReferences: ImageReferenceRepository[F],
       ocrJobCreationStore: OcrJobCreationStore[F],
       jobs: OcrJobsRepository[F],
       drafts: OcrDraftsRepository[F],

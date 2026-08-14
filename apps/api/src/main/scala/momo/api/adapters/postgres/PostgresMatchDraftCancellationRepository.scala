@@ -32,8 +32,10 @@ object PostgresMatchDraftCancellation:
       draftId: MatchDraftId,
       updatedAt: Instant,
   ): ConnectionIO[MatchDraftCancellationResult] = deleteCancellableDraft(draftId).flatMap {
-    case Some(deleted) => PostgresOcrJobs.alg.cancelQueuedByDraftIds(deleted.ocrDraftIds, updatedAt)
-        .as(MatchDraftCancellationResult.Cancelled(deleted.sourceImageIds))
+    case Some(deleted) =>
+      PostgresOcrJobs.alg.cancelQueuedByDraftIds(deleted.ocrDraftIds, updatedAt) *>
+        PostgresSourceImageLifecycle.stageDeletion(deleted.sourceImageIds, updatedAt)
+          .as(MatchDraftCancellationResult.Cancelled(deleted.sourceImageIds))
     case None => classifyCurrent(draftId)
   }
 

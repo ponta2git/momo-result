@@ -38,8 +38,7 @@ private[bootstrap] object UseCaseRouteBundles:
       ids: UseCaseWiring.RuntimeIds[F],
   ): UseCaseRouteBundles[F] =
     val imageStorage = storage.imageStorage
-    val imageStorageInspector = storage.imageStorageInspector
-    val imageReferences = repositories.imageReferences
+    val imageStorageAdmission = storage.imageStorageAdmission
     val ocrJobCreationStore = repositories.ocrJobCreationStore
     val jobs = repositories.jobs
     val drafts = repositories.drafts
@@ -62,12 +61,6 @@ private[bootstrap] object UseCaseRouteBundles:
     val memberAliases = repositories.memberAliases
     val ocrQueueSubmitter = services.ocrQueueSubmitter
     val ocrAdmissionGuard = services.ocrAdmissionGuard
-    val imageStorageAdmission = ImageStorageAdmission
-      .from[F](
-        imageStorageInspector,
-        imageReferences,
-        UseCaseWiring.imageStorageAdmissionConfig(config.resourceLimits),
-      )
     val uploadImage = UploadImage[F](imageStorage, imageStorageAdmission)
     val createOcrJob = CreateOcrJob[F](
       imageStore = imageStorage,

@@ -370,6 +370,33 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
         (1L, true, 1L, "queued", "match_mutation", "pending", true, "pending"),
       )
 
+  test("confirmation commits source-image deletion intent with the terminal draft"):
+    val draftId = MatchDraftId.unsafeFromString("match-draft-confirm-source-intent")
+    val imageId = ImageId.unsafeFromString("image-confirm-source-intent")
+    val rec = sampleMatch("match_confirm_source_intent", 1)
+    val confirmedAt = now.plusSeconds(2)
+    val snapshot = MatchDraftConfirmation(
+      draftId = draftId,
+      updatedAt = now,
+      totalAssetsDraftId = None,
+      revenueDraftId = None,
+      incidentLogDraftId = None,
+    )
+    for
+      _ <- seedPrereqs
+      _ <- insertSourceImage(imageId)
+      _ <- insertMatchDraft(draftId, now, Some(imageId))
+      confirmed <- confirmations.confirm(rec, Some(snapshot), confirmedAt)
+      lifecycle <- sql"""
+        SELECT d.source_images_deleted_at, s.status, s.delete_pending_at
+        FROM match_drafts d
+        JOIN source_images s ON s.id = d.total_assets_image_id
+        WHERE d.id = $draftId
+      """.query[(Option[Instant], String, Option[Instant])].unique.transact(transactor)
+    yield
+      assertEquals(confirmed, MatchConfirmationResult.Confirmed)
+      assertEquals(lifecycle, (Some(confirmedAt), "DELETE_PENDING", Some(confirmedAt)))
+
   test("delete removes the confirmed draft that produced the match"):
     val draftId = MatchDraftId.unsafeFromString("match-draft-delete-confirmed")
     val rec = sampleMatch("match_delete_confirmed", 1)
@@ -441,11 +468,27 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
       assertEquals(foundSecond, None)
       assertEquals(status, (MatchDraftStatus.Confirmed, Some(firstRecord.id)))
 
-  private def insertMatchDraft(draftId: MatchDraftId, updatedAt: Instant): IO[Int] = sql"""
+  private def insertMatchDraft(
+      draftId: MatchDraftId,
+      updatedAt: Instant,
+      totalAssetsImageId: Option[ImageId] = None,
+  ): IO[Int] = sql"""
     INSERT INTO match_drafts (
-      id, created_by_account_id, created_by_member_id, status, created_at, updated_at
+      id, created_by_account_id, created_by_member_id, status,
+      total_assets_image_id, created_at, updated_at
     ) VALUES (
-      $draftId, 'account_ponta', 'member_ponta', ${MatchDraftStatus.DraftReady}, $now, $updatedAt
+      $draftId, 'account_ponta', 'member_ponta', ${MatchDraftStatus.DraftReady},
+      $totalAssetsImageId, $now, $updatedAt
+    )
+  """.update.run.transact(transactor)
+
+  private def insertSourceImage(id: ImageId): IO[Int] = sql"""
+    INSERT INTO source_images (
+      id, owner_account_id, object_key, idempotency_key_hash, status,
+      media_type, byte_length, sha256_hex, width, height, available_at, created_at, updated_at
+    ) VALUES (
+      $id, 'account_ponta', ${s"source-images/${id.value}.png"}, ${"c" * 64}, 'AVAILABLE',
+      'image/png', 128, ${"d" * 64}, 1920, 1080, $now, $now, $now
     )
   """.update.run.transact(transactor)
 

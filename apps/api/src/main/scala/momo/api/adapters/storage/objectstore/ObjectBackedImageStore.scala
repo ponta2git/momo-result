@@ -5,6 +5,7 @@ import java.time.Instant
 import cats.effect.Async
 import cats.syntax.all.*
 import fs2.Stream
+import org.slf4j.LoggerFactory
 
 import momo.api.adapters.storage.ImageValidation
 import momo.api.domain.ids.{AccountId, ImageId}
@@ -18,8 +19,11 @@ final class ObjectBackedImageStore[F[_]: Async](
     objects: SourceImageObjectStorage[F],
     nextImageId: F[ImageId],
     now: F[Instant],
+    quota: SourceImageQuota,
 ) extends ImageStorage[F]:
   import ObjectBackedImageStore.*
+
+  private val logger = LoggerFactory.getLogger("momo.api.adapters.storage.ObjectBackedImageStore")
 
   override def save(
       ownerAccountId: AccountId,
@@ -58,7 +62,7 @@ final class ObjectBackedImageStore[F[_]: Async](
   }
 
   override def delete(imageId: ImageId): F[Boolean] = now.flatMap(timestamp =>
-    sourceImages.beginDelete(imageId, timestamp).flatMap {
+    sourceImages.beginDeleteUnreferenced(imageId, timestamp).flatMap {
       case SourceImageDeleteResult.Pending(record) => deletePending(record)
       case SourceImageDeleteResult.Missing | SourceImageDeleteResult.AlreadyDeleted =>
         Async[F].pure(false)
@@ -90,11 +94,16 @@ final class ObjectBackedImageStore[F[_]: Async](
                 height = validated.dimensions.height.toInt,
                 now = timestamp,
               )
-              sourceImages.reserve(reservation).flatMap {
+              sourceImages.reserveWithinQuota(reservation, quota).flatMap {
                 case SourceImageReservationResult.Reserved(record) =>
                   uploadReserved(record, bytes)
                 case SourceImageReservationResult.Existing(record) =>
                   resolveExisting(record, reservation, bytes)
+                case SourceImageReservationResult.Rejected(rejection) => Async[F]
+                    .delay(logger.warn(
+                      s"image_upload_admission rejected accountId=${ownerAccountId.value} ${rejection
+                          .logFields}"
+                    )).as(Left(QuotaExceeded))
               }
             }
       }
@@ -221,6 +230,9 @@ object ObjectBackedImageStore:
     "Stored image integrity verification failed."
   )
   private val InternalContractError = AppError.Internal("Source image metadata is invalid.")
+  private val QuotaExceeded = AppError.TooManyRequests(
+    "Too many unprocessed image uploads. Start OCR or wait for old uploads to expire."
+  )
 
   private def samePayload(
       record: SourceImageRecord,

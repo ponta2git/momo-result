@@ -1,6 +1,5 @@
 package momo.api.testing
 
-import scala.concurrent.duration.DurationInt
 import scala.jdk.CollectionConverters.*
 
 import cats.effect.{IO, Resource}
@@ -10,13 +9,11 @@ import ch.qos.logback.core.read.ListAppender
 import org.slf4j.LoggerFactory
 
 object LogbackCapture:
-  private val ResolveAttempts = 100
-
   def withEvents[A](
       loggerName: String,
       level: Level,
   )(use: IO[Vector[ILoggingEvent]] => IO[A]): IO[A] = Resource
-    .make(resolveLogger(loggerName, ResolveAttempts).flatMap { logger =>
+    .make(resolveLogger(loggerName).flatMap { logger =>
       IO.delay {
         val appender = new ListAppender[ILoggingEvent]()
         appender.start()
@@ -34,14 +31,12 @@ object LogbackCapture:
     }
     .use { case (_, appender, _) => use(IO.delay(appender.list.asScala.toVector)) }
 
-  // Parallel suites can briefly observe SLF4J's substitute provider while the real binding starts.
-  // Wait for the actual Logback logger before attaching an appender instead of making tests race it.
-  private def resolveLogger(loggerName: String, attemptsRemaining: Int): IO[Logger] = IO
-    .delay(LoggerFactory.getLogger(loggerName))
+  // SLF4J initializes its provider under this monitor. Taking the same monitor keeps parallel test
+  // suites from observing the temporary substitute provider without adding a wall-clock wait.
+  private def resolveLogger(loggerName: String): IO[Logger] = IO
+    .blocking(classOf[LoggerFactory].synchronized(LoggerFactory.getLogger(loggerName)))
     .flatMap {
       case logger: Logger => IO.pure(logger)
-      case _ if attemptsRemaining > 0 =>
-        IO.sleep(10.millis) *> resolveLogger(loggerName, attemptsRemaining - 1)
       case other => IO.raiseError(new IllegalStateException(
           s"Expected logback logger, got ${other.getClass.getName}"
         ))

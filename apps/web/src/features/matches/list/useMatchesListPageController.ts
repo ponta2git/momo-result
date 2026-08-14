@@ -15,7 +15,6 @@ import {
   confirmedDraftMessages,
 } from "@/features/matches/confirmedDraftNavigation";
 import { addMatchListReturnTo } from "@/features/matches/list/matchListNavigation";
-import { cursorForMatchPage } from "@/features/matches/list/matchListPagination";
 import {
   buildMatchListApiQuery,
   buildMatchListSummaryQuery,
@@ -43,6 +42,7 @@ import {
   matchListSummaryQueryOptions,
   seasonMastersQueryOptions,
 } from "@/shared/api/queryOptions";
+import { cursorForPage } from "@/shared/lib/cursorPagination";
 import { sanitizeReturnTo, withReturnTo } from "@/shared/navigation/returnTo";
 import { showToast } from "@/shared/ui/feedback/Toast";
 
@@ -257,7 +257,7 @@ export function useMatchesListPageController() {
     summaryMasked: showSummaryShield,
     updatePage: (page: number) => {
       if (!pagination) return;
-      const cursor = cursorForMatchPage(pagination, page);
+      const cursor = cursorForPage(pagination, page);
       if (cursor !== undefined) applySearch({ ...activeSearch, cursor });
     },
     updatePageSize: (pageSize: number) => {

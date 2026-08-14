@@ -10,7 +10,6 @@ import {
 } from "@/features/exports/exportCandidateData";
 import type { ExportCandidate, ExportScope } from "@/features/exports/exportTypes";
 import { buildCandidateView } from "@/features/exports/exportViewModel";
-import { cursorForMatchPage } from "@/features/matches/list/matchListPagination";
 import { shouldShowQueryError } from "@/shared/api/queryErrorState";
 import {
   gameTitlesQueryOptions,
@@ -20,6 +19,7 @@ import {
   matchDetailQueryOptions,
   seasonMastersQueryOptions,
 } from "@/shared/api/queryOptions";
+import { cursorForPage } from "@/shared/lib/cursorPagination";
 
 const CANDIDATE_PAGE_SIZE = 20;
 
@@ -174,7 +174,7 @@ export function useExportCandidates({
       }
       if (scope === "heldEvent") setHeldEventPage(page);
       if (scope === "match" && matchesQuery.data) {
-        const cursor = cursorForMatchPage(matchesQuery.data.pagination, page);
+        const cursor = cursorForPage(matchesQuery.data.pagination, page);
         if (cursor !== undefined) setMatchCursor(cursor);
       }
     },

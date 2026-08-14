@@ -341,7 +341,7 @@ pub async fn entrypoint() -> ExitCode {
     }
 
     initialize_logging();
-    match run(cli.command).await {
+    match Box::pin(run(cli.command)).await {
         Ok(()) => ExitCode::SUCCESS,
         Err(message) => {
             error!(
@@ -356,7 +356,7 @@ pub async fn entrypoint() -> ExitCode {
 
 async fn run(command: Command) -> Result<(), String> {
     match command {
-        Command::Worker => run_worker().await,
+        Command::Worker => Box::pin(run_worker()).await,
         Command::ReleaseAudit {
             require_current,
             require_quiescent,

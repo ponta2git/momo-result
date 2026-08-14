@@ -1,7 +1,5 @@
 package momo.api.usecases.exports
 
-import java.nio.charset.StandardCharsets
-
 import cats.Monad
 import cats.syntax.all.*
 
@@ -67,12 +65,12 @@ final class ExportMatches[F[_]: Monad](
       ).flatMap { rows =>
         for
           _ <- ensureRowLimit(rows.length)
-          body = MatchExportRenderer.render(format, rows)
-          _ <- ensureByteLimit(body)
+          rendered = MatchExportRenderer.render(format, rows)
+          _ <- ensureByteLimit(rendered.sizeBytes)
         yield MatchExportFile(
           fileName = s"momo-results-${scope.filePart}.${format.extension}",
           contentType = format.contentType,
-          body = body,
+          body = rendered.body,
         )
       }
 
@@ -181,10 +179,9 @@ final class ExportMatches[F[_]: Monad](
   private def ensureRowLimit(rowCount: Int): Either[AppError, Unit] = Either
     .cond(rowCount <= limits.maxRows, (), rowLimitError(rowCount))
 
-  private def ensureByteLimit(body: String): Either[AppError, Unit] =
-    val bodyBytes = body.getBytes(StandardCharsets.UTF_8).length
+  private def ensureByteLimit(bodyBytes: Long): Either[AppError, Unit] =
     Either.cond(
-      bodyBytes.toLong <= limits.maxBytes,
+      bodyBytes <= limits.maxBytes,
       (),
       AppError.PayloadTooLarge(
         s"Match export has $bodyBytes bytes, exceeding the configured limit of ${limits

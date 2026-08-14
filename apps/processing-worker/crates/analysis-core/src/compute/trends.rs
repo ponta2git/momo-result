@@ -8,7 +8,7 @@ use crate::{
     stats::{average, percentile_f64, percentile_i32, quality_status, rate},
 };
 
-use super::support::MatchGroup;
+use super::grouping::MatchGroup;
 
 pub(super) fn trends(
     players: &[String],

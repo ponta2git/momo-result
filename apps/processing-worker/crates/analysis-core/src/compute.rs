@@ -11,21 +11,23 @@ use crate::{
 
 mod aggregate;
 mod drilldown;
+mod grouping;
 mod match_context;
 mod metrics;
 mod panels;
+mod presentation;
 mod quality;
 mod review;
-mod support;
+mod signals;
 mod trends;
 
 use aggregate::aggregate;
 use drilldown::build as build_drilldown;
 #[cfg(test)]
 use drilldown::event_rank_rows;
+use grouping::{MatchGroup, group_player_matches};
 use match_context::{AggregateItemIds, MatchContextIndex, build as build_match_context};
 use review::build as build_review;
-use support::{MatchGroup, match_groups};
 
 #[cfg(test)]
 use crate::model::AnalysisInput;
@@ -98,7 +100,7 @@ impl<'a> ScopeAnalysis<'a> {
     fn new(player_matches: Vec<&'a PlayerMatchInput>) -> Self {
         let member_ids = ordered_member_ids(&player_matches);
         let player_matches_by_member = player_matches_by_member(&player_matches, &member_ids);
-        let match_groups = match_groups(&player_matches);
+        let match_groups = group_player_matches(&player_matches);
         let outcome_model = outcome_model::analyze(&player_matches, &member_ids);
         Self {
             player_matches,

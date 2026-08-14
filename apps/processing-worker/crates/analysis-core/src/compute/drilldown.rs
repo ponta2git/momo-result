@@ -12,7 +12,11 @@ use crate::{
     stats::{average, quality_status, rate},
 };
 
-use super::support::{change_direction, distribution, member_ref_json, scope_json};
+use super::{
+    metrics::rank_distribution_cells,
+    presentation::{member_ref_json, scope_summary_json},
+    signals::change_direction,
+};
 
 pub(super) fn build(
     scope: &ScopeRef,
@@ -30,7 +34,7 @@ pub(super) fn build(
     };
     json!({
         "schemaVersion": 2,
-        "scope": scope_json(scope, match_count),
+        "scope": scope_summary_json(scope, match_count),
         "player": member_ref_json(member_id),
         "payload": payload,
     })
@@ -112,7 +116,7 @@ fn play_order_history_payload(rows: &[&PlayerMatchInput]) -> Value {
                 "playOrder": order,
                 "targetCount": target.len(),
                 "rankAverage": average(target.iter().map(|row| f64::from(row.rank))),
-                "rankDistribution": distribution(&target),
+                "rankDistribution": rank_distribution_cells(&target),
                 "podiumRate": rate(target.iter().filter(|row| row.rank <= 2).count(), target.len()),
                 "lowerHalfRate": rate(target.iter().filter(|row| row.rank >= 3).count(), target.len()),
                 "qualityStatus": quality_status(target.len()),

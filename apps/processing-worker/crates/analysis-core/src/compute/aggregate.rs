@@ -8,6 +8,7 @@ use crate::{
 };
 
 use super::{
+    grouping::MatchGroup,
     metrics::{
         leader_summary, play_order_comparison, player_metrics, rank_distribution, recent_ranks,
         revenue_rank_conversion, strategy_scatter,
@@ -16,8 +17,9 @@ use super::{
         asset_style_profiles, card_shop_destination, head_to_head, momentum_switch,
         performance_profiles,
     },
+    presentation::{member_ref_json, scope_summary_json},
     quality::{data_quality, highlights, metric_definitions, quality_summary},
-    support::{MatchGroup, member_ref_json, rank_spread_signal, scope_json},
+    signals::rank_spread_signal,
     trends::{histogram, match_digest, match_no_in_event, revenue_histogram, trends},
 };
 
@@ -59,7 +61,7 @@ pub(super) fn aggregate(
 
     json!({
         "schemaVersion": 2,
-        "scope": scope_json(scope, groups.len()),
+        "scope": scope_summary_json(scope, groups.len()),
         "players": players.iter().map(|member_id| member_ref_json(member_id)).collect::<Vec<_>>(),
         "summary": {
             "leaderMemberIds": leader_member_ids,

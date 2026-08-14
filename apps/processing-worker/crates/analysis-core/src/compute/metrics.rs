@@ -8,11 +8,44 @@ use crate::{
     stats::{average, median_i32, population_stddev, quality_status, rate},
 };
 
-use super::support::{
-    MatchGroup, distribution, maxima_by_match, relative_intensity, revenue_asset_rate, suffix_count,
-};
+use super::{grouping::MatchGroup, signals::relative_intensity};
 
 const RECENT_WINDOW: usize = 20;
+
+fn maxima_by_match<'a>(
+    rows: &[&'a PlayerMatchInput],
+    value: impl Fn(&PlayerMatchInput) -> i32,
+) -> BTreeMap<&'a str, i32> {
+    let mut result = BTreeMap::<&str, i32>::new();
+    for row in rows {
+        result
+            .entry(row.match_id.as_str())
+            .and_modify(|maximum| *maximum = (*maximum).max(value(row)))
+            .or_insert_with(|| value(row));
+    }
+    result
+}
+
+pub(super) fn rank_distribution_cells(rows: &[&PlayerMatchInput]) -> Vec<Value> {
+    (1..=4)
+        .map(|rank_value| {
+            let count = rows.iter().filter(|row| row.rank == rank_value).count();
+            json!({ "rank": rank_value, "count": count, "rate": rate(count, rows.len()) })
+        })
+        .collect()
+}
+
+pub(super) fn revenue_asset_rate(row: &PlayerMatchInput) -> Option<f64> {
+    (row.total_assets_man_yen > 0)
+        .then(|| f64::from(row.revenue_man_yen) / f64::from(row.total_assets_man_yen))
+}
+
+fn suffix_count(
+    rows: &[&PlayerMatchInput],
+    predicate: impl Fn(&PlayerMatchInput) -> bool,
+) -> usize {
+    rows.iter().rev().take_while(|row| predicate(row)).count()
+}
 
 pub(super) fn leader_summary(
     players: &[String],
@@ -92,7 +125,7 @@ pub(super) fn player_metrics(
                 "rank": {
                     "average": average_rank,
                     "standardDeviation": population_stddev(&ranks),
-                    "distribution": distribution(rows),
+                    "distribution": rank_distribution_cells(rows),
                 },
                 "assets": {
                     "max": assets.iter().max(),
@@ -270,7 +303,7 @@ fn conditional_outcome(rows: &[&PlayerMatchInput]) -> Value {
         "podiumRate": rate(podium, rows.len()),
         "lowerHalfCount": lower,
         "lowerHalfRate": rate(lower, rows.len()),
-        "rankDistribution": distribution(rows),
+        "rankDistribution": rank_distribution_cells(rows),
         "qualityStatus": quality_status(rows.len()),
     })
 }

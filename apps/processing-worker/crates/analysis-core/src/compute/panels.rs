@@ -10,8 +10,9 @@ use crate::{
     },
 };
 
-use super::support::{
-    head_to_head_signal, relative_intensity, revenue_asset_rate, signal_intensity,
+use super::{
+    metrics::revenue_asset_rate,
+    signals::{head_to_head_signal, relative_intensity, signal_intensity},
 };
 
 pub(super) fn head_to_head(players: &[String], rows: &[&PlayerMatchInput]) -> Value {

@@ -12,7 +12,11 @@ use crate::{
     model::PlayerMatchInput,
 };
 
-use super::support::{change_direction, evidence, revenue_asset_rate, scope_json};
+use super::{
+    metrics::revenue_asset_rate,
+    presentation::{metric_evidence_json, scope_summary_json},
+    signals::change_direction,
+};
 
 #[derive(Clone, Copy)]
 struct PlayerMatchHistory {
@@ -185,7 +189,7 @@ pub(super) fn build(
         .collect::<Vec<_>>();
     json!({
         "schemaVersion": 1,
-        "scope": scope_json(scope, index.match_count),
+        "scope": scope_summary_json(scope, index.match_count),
         "matchId": match_id,
         "sourceMatchRevision": group.first().map_or(0, |row| row.match_revision).to_string(),
         "match": {
@@ -243,7 +247,12 @@ fn match_features(group: &[&PlayerMatchInput]) -> Vec<Value> {
                     .filter(|row| row.incidents.suri_no_ginji > 0)
                     .map(|row| row.member_id.clone())
                     .collect(),
-                vec![evidence("ginji.count", "count", Some(ginji_value), None)],
+                vec![metric_evidence_json(
+                    "ginji.count",
+                    "count",
+                    Some(ginji_value),
+                    None,
+                )],
             ),
         ));
     }

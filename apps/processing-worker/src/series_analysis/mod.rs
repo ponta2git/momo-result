@@ -28,18 +28,18 @@ use self::{
 };
 
 mod attempt;
+mod attempt_directory;
 mod input_repository;
 mod metrics;
 mod policy;
 mod queue;
-mod storage;
 
 use attempt::{child_spec, finish_attempt_result, run_claimed_child};
-use metrics::elapsed_metrics;
-use queue::{acknowledge, ensure_consumer_group, next_delivery, payload_from_delivery};
-use storage::{
+use attempt_directory::{
     cleanup_stale_attempt_directories, create_attempt_directory, validate_temporary_root,
 };
+use metrics::elapsed_metrics;
+use queue::{acknowledge, ensure_consumer_group, next_delivery, payload_from_delivery};
 
 #[derive(Debug, Error)]
 pub enum ConsumerError {

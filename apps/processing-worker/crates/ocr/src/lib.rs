@@ -1,4 +1,4 @@
-//! OCR capability boundary shared by the orchestrator and the isolated OCR child.
+//! OCR capability boundary shared by the processing runtime and the isolated OCR child.
 //!
 //! This crate owns OCR-domain values and, as the native implementation is extracted, the
 //! versioned parent/child protocol and Tesseract backend. Queue transport, process lifecycle,

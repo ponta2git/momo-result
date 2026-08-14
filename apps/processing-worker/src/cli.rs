@@ -646,24 +646,24 @@ fn exit_code(code: i32) -> ExitCode {
 
 async fn run_worker() -> Result<(), String> {
     let config = WorkerConfig::from_environment().map_err(|error| error.to_string())?;
-    let orchestrator = crate::orchestrator::WorkerOrchestratorConfig::from_environment(&config)
+    let runtime_plan = crate::supervisor::WorkerRuntimePlan::from_environment(&config)
         .map_err(|error| error.to_string())?;
     info!(
         event = "analysis_configuration_accepted",
         publication_mode = ?config.publication_mode,
-        analysis_enabled = orchestrator.analysis_enabled(),
-        ocr_v2_enabled = orchestrator.ocr_enabled(),
+        analysis_enabled = runtime_plan.series_analysis_enabled(),
+        ocr_v2_enabled = runtime_plan.ocr_enabled(),
         "combined worker configuration accepted"
     );
     let (shutdown_sender, shutdown_receiver) = tokio::sync::watch::channel(false);
-    let worker = crate::orchestrator::run(orchestrator, shutdown_receiver);
-    tokio::pin!(worker);
+    let supervised_runtime = crate::supervisor::run(runtime_plan, shutdown_receiver);
+    tokio::pin!(supervised_runtime);
     tokio::select! {
-        result = &mut worker => result.map_err(|error| error.to_string()),
+        result = &mut supervised_runtime => result.map_err(|error| error.to_string()),
         signal = wait_for_shutdown() => {
             signal.map_err(|error| error.to_string())?;
             if let Err(_receiver_closed) = shutdown_sender.send(true) {}
-            worker.await.map_err(|error| error.to_string())
+            supervised_runtime.await.map_err(|error| error.to_string())
         }
     }
 }

@@ -3,8 +3,8 @@ use std::{env, time::Duration};
 use thiserror::Error;
 
 use super::{
+    consumer::{OcrConsumerConfig, OcrConsumerError},
     object_store::{R2ObjectStoreConfig, R2ObjectStoreConfigError},
-    worker::{OcrWorkerError, OcrWorkerRuntimeConfig},
 };
 
 const CONSUMER_MODE_ENV: &str = "MOMO_OCR_V2_CONSUMER_MODE";
@@ -17,7 +17,7 @@ pub(crate) enum OcrConsumerMode {
 
 pub(crate) enum OcrConsumerRuntimeConfig {
     Disabled,
-    Enabled(Box<OcrWorkerRuntimeConfig>),
+    Enabled(Box<OcrConsumerConfig>),
 }
 
 impl OcrConsumerRuntimeConfig {
@@ -50,7 +50,7 @@ impl OcrConsumerRuntimeConfig {
                     duration(&mut lookup, "MOMO_OCR_V2_R2_ATTEMPT_TIMEOUT_MS")?,
                     positive(&mut lookup, "MOMO_OCR_V2_R2_MAXIMUM_ATTEMPTS")?,
                 )?;
-                let config = OcrWorkerRuntimeConfig::new(
+                let config = OcrConsumerConfig::new(
                     database_url,
                     redis_url,
                     required(&mut lookup, "OCR_REDIS_V2_STREAM")?,
@@ -147,7 +147,7 @@ pub enum OcrRuntimeConfigError {
     #[error("Rust OCR v2 object-store configuration is unsafe")]
     ObjectStore(#[from] R2ObjectStoreConfigError),
     #[error("Rust OCR v2 worker configuration is unsafe")]
-    Worker(#[from] OcrWorkerError),
+    Consumer(#[from] OcrConsumerError),
 }
 
 #[cfg(test)]
@@ -195,8 +195,8 @@ mod tests {
         values.insert("MOMO_OCR_V2_CLAIM_IDLE_MS", "110000");
         assert!(matches!(
             build(&values),
-            Err(OcrRuntimeConfigError::Worker(
-                OcrWorkerError::InvalidConfiguration
+            Err(OcrRuntimeConfigError::Consumer(
+                OcrConsumerError::InvalidConfiguration
             ))
         ));
     }

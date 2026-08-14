@@ -122,7 +122,7 @@ apps/
 
 ### 5.1 基本構成
 
-- OCRワーカーはRustで実装し、戦績分析ワーカーのruntime・orchestratorを共有する。
+- OCR consumerはRustで実装し、戦績分析consumerとprocessing runtime・supervisorを共有する。
 - OCRライブラリはTesseractとRustの画像処理crateを使う。
 - OCR/画像解析には外部APIを使わない。
 - OCR対象画面種別ごとに独立した解析器を作り、共通前処理だけ共有する。

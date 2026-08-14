@@ -19,7 +19,7 @@ use crate::{
 };
 
 use super::{
-    AttemptInterruption, DeliveryDisposition, WorkerError,
+    AttemptInterruption, ConsumerError, DeliveryDisposition,
     metrics::{elapsed_metrics, signed_optional_quantity, signed_quantity},
     policy::{ChildAction, InterruptionAction, child_action, interruption_action},
 };
@@ -28,11 +28,11 @@ pub(super) fn child_spec(
     config: &WorkerRuntimeConfig,
     claim: &ClaimedJob,
     attempt_directory: &std::path::Path,
-) -> Result<AnalysisChildSpec, WorkerError> {
+) -> Result<AnalysisChildSpec, ConsumerError> {
     let parent_liveness_timeout = config
         .heartbeat_interval
         .checked_mul(2)
-        .ok_or(WorkerError::DurationBound)?;
+        .ok_or(ConsumerError::DurationBound)?;
     Ok(AnalysisChildSpec {
         request: momo_analysis_core::child::AnalysisChildRequest {
             game_title_id: claim.game_title_id.clone(),
@@ -56,7 +56,7 @@ pub(super) async fn finish_attempt_result(
     attempt_directory: &std::path::Path,
     started: Instant,
     result: Result<(AnalysisChildOutcome, AttemptMetrics), AttemptInterruption>,
-) -> Result<DeliveryDisposition, WorkerError> {
+) -> Result<DeliveryDisposition, ConsumerError> {
     match result {
         Ok(result) => {
             finish_child_outcome(control_client, config, claim, attempt_directory, result).await
@@ -73,7 +73,7 @@ async fn finish_child_outcome(
     claim: &ClaimedJob,
     attempt_directory: &std::path::Path,
     result: (AnalysisChildOutcome, AttemptMetrics),
-) -> Result<DeliveryDisposition, WorkerError> {
+) -> Result<DeliveryDisposition, ConsumerError> {
     let (outcome, mut metrics) = result;
     metrics.observe_worker_peak(current_process_peak_resident_bytes().await);
     info!(
@@ -132,7 +132,7 @@ async fn finish_interruption(
     claim: &ClaimedJob,
     started: Instant,
     interruption: AttemptInterruption,
-) -> Result<DeliveryDisposition, WorkerError> {
+) -> Result<DeliveryDisposition, ConsumerError> {
     let mut metrics = elapsed_metrics(started, None);
     metrics.observe_worker_peak(current_process_peak_resident_bytes().await);
     let disposition = match interruption_action(interruption) {
@@ -452,7 +452,7 @@ async fn finish_successful_child(
     claim: &ClaimedJob,
     attempt_directory: &std::path::Path,
     metrics: &mut AttemptMetrics,
-) -> Result<DeliveryDisposition, WorkerError> {
+) -> Result<DeliveryDisposition, ConsumerError> {
     let publication_started = Instant::now();
     let result = time::timeout(
         config.publication_limits.finalization_timeout,
@@ -563,7 +563,7 @@ async fn finish_publication_failure(
     config: &WorkerRuntimeConfig,
     claim: &ClaimedJob,
     metrics: &AttemptMetrics,
-) -> Result<DeliveryDisposition, WorkerError> {
+) -> Result<DeliveryDisposition, ConsumerError> {
     let mut recovery_client = database::connect(&config.database_url).await?;
     let failure = AttemptFailure::failed(SafeFailureCode::PublicationFailed);
     match finish_failure(&mut recovery_client, claim, config, failure, metrics).await {
@@ -572,7 +572,7 @@ async fn finish_publication_failure(
             Ok(DeliveryDisposition::Acknowledge)
         }
         Err(ControlError::OwnerLost) => Ok(DeliveryDisposition::LeavePending),
-        Err(error) => Err(WorkerError::Control(error)),
+        Err(error) => Err(ConsumerError::Control(error)),
     }
 }
 

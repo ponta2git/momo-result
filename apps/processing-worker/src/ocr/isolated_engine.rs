@@ -7,13 +7,13 @@ use super::contract::{OcrHints, RequestedScreenType};
 use momo_ocr::{OcrFailure as OcrEngineFailure, OcrOutput as OcrEngineOutput};
 
 #[cfg(target_os = "linux")]
-use super::worker::OcrProcessFailure;
+use super::consumer::OcrProcessFailure;
 
 #[cfg(target_os = "linux")]
 use super::{
+    consumer::{OcrAttemptFuture, OcrAttemptTerminationFuture, OcrEngine, OcrEngineAttempt},
     contract::OcrQueuePayload,
     object_store::VerifiedSourceImage,
-    worker::{OcrAttemptFuture, OcrAttemptTerminationFuture, OcrEngine, OcrEngineAttempt},
 };
 
 #[cfg(target_os = "linux")]

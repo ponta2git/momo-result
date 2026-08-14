@@ -427,7 +427,7 @@ mod tests {
     use crate::ocr::contract::parse_delivery;
 
     const VALID_PAYLOAD: &str =
-        include_str!("../../../../../docs/schemas/fixtures/ocr-worker/valid-queue-payload-v2.json");
+        include_str!("../../../../docs/schemas/fixtures/ocr-worker/valid-queue-payload-v2.json");
     const PNG_1X1_BASE64: &str = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
 
     #[test]

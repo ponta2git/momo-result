@@ -9,26 +9,26 @@ use redis::{
 
 use crate::config::WorkerRuntimeConfig;
 
-use super::WorkerError;
+use super::ConsumerError;
 
 pub(super) async fn ensure_consumer_group(
     redis: &mut ConnectionManager,
     config: &WorkerRuntimeConfig,
-) -> Result<(), WorkerError> {
+) -> Result<(), ConsumerError> {
     let result: Result<(), RedisError> = redis
         .xgroup_create_mkstream(&config.redis_stream, &config.redis_group, "0")
         .await;
     match result {
         Ok(()) => Ok(()),
         Err(error) if error.code() == Some("BUSYGROUP") => Ok(()),
-        Err(error) => Err(WorkerError::Redis(error)),
+        Err(error) => Err(ConsumerError::Redis(error)),
     }
 }
 
 pub(super) async fn next_delivery(
     redis: &mut ConnectionManager,
     config: &WorkerRuntimeConfig,
-) -> Result<Option<StreamId>, WorkerError> {
+) -> Result<Option<StreamId>, ConsumerError> {
     let minimum_idle = usize::try_from(config.lease_duration.as_millis())?;
     let claimed: StreamAutoClaimReply = redis
         .xautoclaim_options(
@@ -76,7 +76,7 @@ pub(super) async fn acknowledge(
     redis: &mut ConnectionManager,
     config: &WorkerRuntimeConfig,
     message_id: &str,
-) -> Result<(), WorkerError> {
+) -> Result<(), ConsumerError> {
     let _: usize = redis
         .xack(&config.redis_stream, &config.redis_group, &[message_id])
         .await?;

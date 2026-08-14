@@ -4,8 +4,6 @@
 //! their side effects: job coordination, process isolation, bounded storage, release tooling, and
 //! runtime configuration.
 
-#[path = "orchestrator/analysis/mod.rs"]
-mod analysis;
 mod artifact;
 mod cgroup;
 pub mod child;
@@ -15,18 +13,17 @@ pub mod config;
 mod control;
 mod database;
 mod execution_slot;
-#[path = "orchestrator/ocr/mod.rs"]
 pub mod ocr;
-pub mod orchestrator;
 #[expect(
     unsafe_code,
     reason = "all operating-system FFI is isolated here behind checked safe APIs and documented blocks"
 )]
 pub mod process;
 pub mod release;
+mod series_analysis;
 pub mod shadow;
+pub mod supervisor;
 
-pub use analysis::WorkerError;
 pub use cli::entrypoint;
 
 #[cfg(test)]

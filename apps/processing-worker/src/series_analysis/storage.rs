@@ -6,20 +6,20 @@ use crate::{
     process::available_filesystem_bytes,
 };
 
-use super::WorkerError;
+use super::ConsumerError;
 
 pub(super) async fn validate_temporary_root(
     config: &WorkerRuntimeConfig,
-) -> Result<(), WorkerError> {
+) -> Result<(), ConsumerError> {
     tokio::fs::create_dir_all(&config.temporary_root).await?;
     let metadata = tokio::fs::symlink_metadata(&config.temporary_root).await?;
     if !metadata.is_dir() || metadata.file_type().is_symlink() {
-        return Err(WorkerError::TemporaryStorageBound);
+        return Err(ConsumerError::TemporaryStorageBound);
     }
     if available_filesystem_bytes(&config.temporary_root)?
         < config.publication_limits.temporary_bytes_limit.get()
     {
-        return Err(WorkerError::TemporaryStorageBound);
+        return Err(ConsumerError::TemporaryStorageBound);
     }
     Ok(())
 }
@@ -27,7 +27,7 @@ pub(super) async fn validate_temporary_root(
 pub(super) async fn cleanup_stale_attempt_directories(
     config: &WorkerRuntimeConfig,
     client: &tokio_postgres::Client,
-) -> Result<(), WorkerError> {
+) -> Result<(), ConsumerError> {
     let active_attempts = client
         .query(
             "SELECT attempt_id FROM worker_execution_slots\x20\
@@ -43,7 +43,7 @@ pub(super) async fn cleanup_stale_attempt_directories(
     let minimum_age = config
         .lease_duration
         .checked_mul(2)
-        .ok_or(WorkerError::DurationBound)?;
+        .ok_or(ConsumerError::DurationBound)?;
     let mut entries = tokio::fs::read_dir(&config.temporary_root).await?;
     while let Some(entry) = entries.next_entry().await? {
         let Some(name) = entry.file_name().to_str().map(String::from) else {
@@ -54,7 +54,7 @@ pub(super) async fn cleanup_stale_attempt_directories(
         };
         let metadata = tokio::fs::symlink_metadata(entry.path()).await?;
         if metadata.file_type().is_symlink() || !metadata.is_dir() {
-            return Err(WorkerError::TemporaryStorageBound);
+            return Err(ConsumerError::TemporaryStorageBound);
         }
         if active_attempts.contains(attempt_id) {
             continue;
@@ -74,11 +74,11 @@ pub(super) async fn cleanup_stale_attempt_directories(
 pub(super) async fn create_attempt_directory(
     config: &WorkerRuntimeConfig,
     claim: &ClaimedJob,
-) -> Result<PathBuf, WorkerError> {
+) -> Result<PathBuf, ConsumerError> {
     if available_filesystem_bytes(&config.temporary_root)?
         < config.publication_limits.temporary_bytes_limit.get()
     {
-        return Err(WorkerError::TemporaryStorageBound);
+        return Err(ConsumerError::TemporaryStorageBound);
     }
     let path = config
         .temporary_root

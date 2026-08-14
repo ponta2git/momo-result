@@ -79,26 +79,26 @@ pub(crate) const fn failure_retryable(failure: OcrEngineFailure) -> bool {
 }
 
 #[derive(Clone)]
-pub struct OcrWorkerRuntimeConfig {
+pub struct OcrConsumerConfig {
     database_url: String,
     redis_url: String,
     queue: OcrQueueConfig,
     control: OcrControlConfig,
     object_store: R2ObjectStoreConfig,
     heartbeat_interval: Duration,
-    priority_wait: Duration,
+    claim_wait_timeout: Duration,
     object_download_timeout: Duration,
     ocr_timeout: Duration,
     finalization_timeout: Duration,
 }
 
-impl std::fmt::Debug for OcrWorkerRuntimeConfig {
+impl std::fmt::Debug for OcrConsumerConfig {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter.write_str("OcrWorkerRuntimeConfig([REDACTED])")
+        formatter.write_str("OcrConsumerConfig([REDACTED])")
     }
 }
 
-impl OcrWorkerRuntimeConfig {
+impl OcrConsumerConfig {
     /// Builds a dormant Rust OCR v2 runtime with closed topology and timing bounds.
     ///
     /// # Errors
@@ -126,14 +126,14 @@ impl OcrWorkerRuntimeConfig {
         ocr_timeout: Duration,
         maximum_delivery_attempts: usize,
         pending_scan_count: usize,
-    ) -> Result<Self, OcrWorkerError> {
+    ) -> Result<Self, OcrConsumerError> {
         if database_url.trim().is_empty()
             || redis_url.trim().is_empty()
             || heartbeat_interval.is_zero()
             || ocr_timeout.is_zero()
             || redis_block > heartbeat_interval
         {
-            return Err(OcrWorkerError::InvalidConfiguration);
+            return Err(OcrConsumerError::InvalidConfiguration);
         }
         let required_lease_margin = heartbeat_interval
             .checked_mul(3)
@@ -141,7 +141,7 @@ impl OcrWorkerRuntimeConfig {
         let object_download_timeout = object_store
             .operation_timeout()
             .checked_add(heartbeat_interval)
-            .ok_or(OcrWorkerError::InvalidConfiguration)?;
+            .ok_or(OcrConsumerError::InvalidConfiguration)?;
         let maximum_delivery_time = lease_duration
             .checked_add(object_download_timeout)
             .and_then(|duration| duration.checked_add(ocr_timeout))
@@ -149,7 +149,7 @@ impl OcrWorkerRuntimeConfig {
         if required_lease_margin.is_none_or(|required| required >= lease_duration)
             || maximum_delivery_time.is_none_or(|required| required >= claim_idle)
         {
-            return Err(OcrWorkerError::InvalidConfiguration);
+            return Err(OcrConsumerError::InvalidConfiguration);
         }
         let queue = OcrQueueConfig::new(
             stream,
@@ -170,7 +170,7 @@ impl OcrWorkerRuntimeConfig {
             control,
             object_store,
             heartbeat_interval,
-            priority_wait: lease_duration,
+            claim_wait_timeout: lease_duration,
             object_download_timeout,
             ocr_timeout,
             finalization_timeout,
@@ -179,26 +179,26 @@ impl OcrWorkerRuntimeConfig {
 }
 
 #[derive(Debug, Error)]
-pub enum OcrWorkerError {
-    #[error("OCR worker configuration is unsafe")]
+pub enum OcrConsumerError {
+    #[error("OCR consumer configuration is unsafe")]
     InvalidConfiguration,
-    #[error("OCR worker database dependency failed: {0}")]
+    #[error("OCR consumer database dependency failed: {0}")]
     Database(&'static str),
-    #[error("OCR worker queue dependency failed: {0}")]
+    #[error("OCR consumer queue dependency failed: {0}")]
     Queue(&'static str),
-    #[error("OCR worker control transition failed: {0}")]
+    #[error("OCR consumer control transition failed: {0}")]
     Control(&'static str),
     #[error("OCR isolated process boundary failed: {0}")]
     Engine(&'static str),
 }
 
-impl From<OcrQueueError> for OcrWorkerError {
+impl From<OcrQueueError> for OcrConsumerError {
     fn from(error: OcrQueueError) -> Self {
         Self::Queue(error.kind())
     }
 }
 
-impl From<OcrControlError> for OcrWorkerError {
+impl From<OcrControlError> for OcrConsumerError {
     fn from(error: OcrControlError) -> Self {
         Self::Control(error.kind())
     }
@@ -244,23 +244,23 @@ enum OcrSupervised<T> {
 ///
 /// Returns an opaque dependency or control-plane category without exposing connection strings,
 /// credentials, object keys, or OCR payloads.
-pub async fn run_with_engine<E: OcrEngine>(
-    config: OcrWorkerRuntimeConfig,
+pub async fn run<E: OcrEngine>(
+    config: OcrConsumerConfig,
     engine: &E,
     mut shutdown: watch::Receiver<bool>,
-) -> Result<(), OcrWorkerError> {
+) -> Result<(), OcrConsumerError> {
     let mut control_client = database::connect(&config.database_url)
         .await
-        .map_err(|error| OcrWorkerError::Database(error.kind()))?;
+        .map_err(|error| OcrConsumerError::Database(error.kind()))?;
     let mut heartbeat_client = database::connect(&config.database_url)
         .await
-        .map_err(|error| OcrWorkerError::Database(error.kind()))?;
+        .map_err(|error| OcrConsumerError::Database(error.kind()))?;
     let redis_client = redis::Client::open(config.redis_url.as_str())
-        .map_err(|_error| OcrWorkerError::Queue("ocr_redis_configuration"))?;
+        .map_err(|_error| OcrConsumerError::Queue("ocr_redis_configuration"))?;
     let mut redis = redis_client
         .get_connection_manager()
         .await
-        .map_err(|_error| OcrWorkerError::Queue("ocr_redis_connect"))?;
+        .map_err(|_error| OcrConsumerError::Queue("ocr_redis_connect"))?;
     ensure_consumer_group(&mut redis, &config.queue).await?;
     let objects = R2ObjectStore::new(&config.object_store);
     info!(
@@ -307,10 +307,10 @@ async fn process_delivery<E: OcrEngine>(
     redis: &mut ConnectionManager,
     objects: &R2ObjectStore,
     engine: &E,
-    config: &OcrWorkerRuntimeConfig,
+    config: &OcrConsumerConfig,
     delivery: &OcrQueueDelivery,
     shutdown: &mut watch::Receiver<bool>,
-) -> Result<DeliveryDisposition, OcrWorkerError> {
+) -> Result<DeliveryDisposition, OcrConsumerError> {
     match &delivery.body {
         OcrQueueDeliveryBody::Malformed {
             readable_job_id,
@@ -365,10 +365,10 @@ async fn process_delivery<E: OcrEngine>(
 async fn wait_for_claim(
     client: &mut tokio_postgres::Client,
     payload: &OcrQueuePayload,
-    config: &OcrWorkerRuntimeConfig,
+    config: &OcrConsumerConfig,
     shutdown: &mut watch::Receiver<bool>,
-) -> Result<ClaimDecision, OcrWorkerError> {
-    let deadline = time::sleep(config.priority_wait);
+) -> Result<ClaimDecision, OcrConsumerError> {
+    let deadline = time::sleep(config.claim_wait_timeout);
     tokio::pin!(deadline);
     loop {
         match classify_claim_result(claim_job(client, payload, &config.control).await?) {
@@ -410,11 +410,11 @@ async fn process_claimed<E: OcrEngine>(
     heartbeat_client: &mut tokio_postgres::Client,
     objects: &R2ObjectStore,
     engine: &E,
-    config: &OcrWorkerRuntimeConfig,
+    config: &OcrConsumerConfig,
     claim: &ClaimedOcrJob,
     payload: &OcrQueuePayload,
     shutdown: &mut watch::Receiver<bool>,
-) -> Result<DeliveryDisposition, OcrWorkerError> {
+) -> Result<DeliveryDisposition, OcrConsumerError> {
     let started = time::Instant::now();
     let downloaded = Box::pin(supervise(
         objects.download(payload),
@@ -466,7 +466,7 @@ async fn process_claimed<E: OcrEngine>(
     };
     let mut attempt = engine
         .start(&image, payload)
-        .map_err(OcrWorkerError::Engine)?;
+        .map_err(OcrConsumerError::Engine)?;
     // The attempt owns the child transport, not the source image. Release the bounded
     // compressed object before waiting for the child so the parent does not retain up to
     // the object-size limit for the whole OCR duration.
@@ -486,10 +486,10 @@ async fn process_claimed<E: OcrEngine>(
 async fn finish_recognized(
     control_client: &mut tokio_postgres::Client,
     claim: &ClaimedOcrJob,
-    config: &OcrWorkerRuntimeConfig,
+    config: &OcrConsumerConfig,
     started: time::Instant,
     recognized: OcrSupervised<Result<OcrEngineOutput, OcrEngineFailure>>,
-) -> Result<DeliveryDisposition, OcrWorkerError> {
+) -> Result<DeliveryDisposition, OcrConsumerError> {
     match recognized {
         OcrSupervised::Completed(Ok(output)) => {
             let completion = draft_completion(output, elapsed_milliseconds(started));
@@ -534,8 +534,8 @@ async fn finish_recognized(
 async fn handle_resource_exhausted(
     control_client: &mut tokio_postgres::Client,
     claim: &ClaimedOcrJob,
-    config: &OcrWorkerRuntimeConfig,
-) -> Result<DeliveryDisposition, OcrWorkerError> {
+    config: &OcrConsumerConfig,
+) -> Result<DeliveryDisposition, OcrConsumerError> {
     warn!(
         event = "ocr_child_resource_exhausted",
         "OCR child exceeded the cgroup memory budget; retrying through the existing unavailable policy"
@@ -558,10 +558,10 @@ fn draft_completion(output: OcrEngineOutput, duration_milliseconds: i32) -> OcrD
 async fn finish_terminal_failure(
     client: &mut tokio_postgres::Client,
     claim: &ClaimedOcrJob,
-    config: &OcrWorkerRuntimeConfig,
+    config: &OcrConsumerConfig,
     failure: OcrFailureCode,
     started: time::Instant,
-) -> Result<DeliveryDisposition, OcrWorkerError> {
+) -> Result<DeliveryDisposition, OcrConsumerError> {
     finish_failure(
         client,
         claim,
@@ -578,9 +578,9 @@ async fn supervise<F, T>(
     timeout: Duration,
     heartbeat_client: &mut tokio_postgres::Client,
     claim: &ClaimedOcrJob,
-    config: &OcrWorkerRuntimeConfig,
+    config: &OcrConsumerConfig,
     shutdown: &mut watch::Receiver<bool>,
-) -> Result<Supervised<T>, OcrWorkerError>
+) -> Result<Supervised<T>, OcrConsumerError>
 where
     F: Future<Output = T>,
 {
@@ -614,7 +614,7 @@ enum OcrAttemptEvent {
     TimedOut,
     Shutdown,
     OwnerLost,
-    Dependency(OcrWorkerError),
+    Dependency(OcrConsumerError),
 }
 
 async fn supervise_ocr_attempt(
@@ -622,9 +622,9 @@ async fn supervise_ocr_attempt(
     timeout: Duration,
     heartbeat_client: &mut tokio_postgres::Client,
     claim: &ClaimedOcrJob,
-    config: &OcrWorkerRuntimeConfig,
+    config: &OcrConsumerConfig,
     shutdown: &mut watch::Receiver<bool>,
-) -> Result<OcrSupervised<Result<OcrEngineOutput, OcrEngineFailure>>, OcrWorkerError> {
+) -> Result<OcrSupervised<Result<OcrEngineOutput, OcrEngineFailure>>, OcrConsumerError> {
     let event = {
         let waiting = attempt.wait();
         tokio::pin!(waiting);
@@ -665,7 +665,7 @@ async fn supervise_ocr_attempt(
         }
         OcrAttemptEvent::Completed(Err(OcrProcessFailure::Runtime(kind))) => {
             terminate_ocr_attempt(attempt).await?;
-            Err(OcrWorkerError::Engine(kind))
+            Err(OcrConsumerError::Engine(kind))
         }
         OcrAttemptEvent::TimedOut => {
             terminate_ocr_attempt(attempt).await?;
@@ -686,8 +686,8 @@ async fn supervise_ocr_attempt(
     }
 }
 
-async fn terminate_ocr_attempt(attempt: &mut dyn OcrEngineAttempt) -> Result<(), OcrWorkerError> {
-    attempt.terminate().await.map_err(OcrWorkerError::Engine)
+async fn terminate_ocr_attempt(attempt: &mut dyn OcrEngineAttempt) -> Result<(), OcrConsumerError> {
+    attempt.terminate().await.map_err(OcrConsumerError::Engine)
 }
 
 fn elapsed_milliseconds(started: time::Instant) -> i32 {
@@ -755,7 +755,7 @@ mod tests {
             return;
         };
         let build = |claim_idle| {
-            OcrWorkerRuntimeConfig::new(
+            OcrConsumerConfig::new(
                 String::from("postgresql://localhost/test"),
                 String::from("redis://localhost/"),
                 String::from("momo:ocr:v2:jobs"),

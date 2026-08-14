@@ -158,7 +158,7 @@ web の import 境界は `apps/web/scripts/check-architecture-imports.mjs`、mod
 
 ## 4. OCR Worker
 
-- OCRのオーケストレーションは `apps/processing-worker/src/orchestrator/ocr`、OCR子のstdio adapterは
+- OCRの配送・制御・object取得は `apps/processing-worker/src/ocr`、OCR子のstdio adapterは
   `apps/processing-worker/src/child/ocr.rs`、native実装・親子protocol・typed domain contractは
   `apps/processing-worker/crates/ocr` に置く。queue / DB control、R2取得・整合性検証、停止可能な
   native OCR子processを分離し、OCR子は分析子と同じ固定cgroupを時分割で使う。
@@ -181,7 +181,7 @@ web の import 境界は `apps/web/scripts/check-architecture-imports.mjs`、mod
   reap、queue ack、retry、DB状態遷移を所有しない。protocol codecとTesseract backendは同crate内に置き、
   将来のnative crate / binary差し替えはこの境界の内側で行う。
 
-## 5. Analysis Worker
+## 5. Processing Worker
 
 - workerはRust + Cargo workspaceとして `apps/processing-worker` に置く。`crates/analysis-core` の
   `momo-analysis-core` は決定論的な
@@ -189,7 +189,8 @@ web の import 境界は `apps/web/scripts/check-architecture-imports.mjs`、mod
   成果物staging、DB / Redis / process adapterを所有する。依存方向はruntimeからcoreへの一方向だけとする。
 - coreはDB row、Redis client、HTTP DTO、filesystem、clock、environment、async runtimeへ依存しない。
   queue / artifactのwire型はversion付き契約としてcoreに置けるが、transport処理はruntimeに残す。
-- runtimeでは `orchestrator/analysis` と `orchestrator/ocr` を各親workerの実行調停、`control` をDB状態遷移、
+- runtimeでは `series_analysis` と `ocr` を能力別consumer、`supervisor` を両consumerの
+  shutdown / failure境界、`control` をDB状態遷移、
   `artifact` をbounded成果物境界、`database` を入力adapter、`process` をOS隔離境界、`child/analysis` と
   `child/ocr` を子process entry adapterとする。計算結果から制御動作への変換は副作用のないdecision tableへ寄せる。
 - 親processはdelivery受信、DB上の全体実行slotとfencing token、job lease、timeout、signal、子process回収を
@@ -232,7 +233,7 @@ web の import 境界は `apps/web/scripts/check-architecture-imports.mjs`、mod
   reviewするための上限として扱う。
 - 初回からハードタイムアウトを設定可能にする。設定値がない本番起動またはjob受付はfail closedにし、
   値自体は本番同等runtimeでの実測後に確定する。
-- `worker` orchestratorは分析loopと明示有効化されたOCR v2 loopを同じshutdown / failure境界で動かす。
+- `worker` supervisorは分析loopと明示有効化されたOCR v2 loopを同じshutdown / failure境界で動かす。
   OCR v2の有効化は分析publicationと完全なbounded設定を前提とし、暗黙には有効化しない。
 - 同居時も実行枠は1とする。OCRだけが分析子processをpreemptでき、分析はOCRをpreemptできない。
   preemptされた分析は子process groupを回収し、失敗回数へ加算せず最新版へ集約して再度 `queued` にする。

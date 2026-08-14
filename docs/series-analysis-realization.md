@@ -326,9 +326,9 @@ Rust部分は次の一方向依存に固定する。
 ```text
 apps/processing-worker
   ├─ momo-processing-worker（分析 / OCRの副作用を持つprocessing runtime）
-  │   ├─ config / main / orchestrator
-  │   ├─ orchestrator/analysis ─ policy / attempt / queue / storage
-  │   ├─ orchestrator/ocr ─ queue / DB control / R2 / supervisor
+  │   ├─ main / CLI / supervisor
+  │   ├─ series_analysis ─ consumer / policy / attempt / queue / storage
+  │   ├─ ocr ─ consumer / queue / DB control / R2
   │   ├─ child/analysis + child/ocr ─ process entry adapters
   │   ├─ control / artifact / database / process
   │   └─ release / shadow

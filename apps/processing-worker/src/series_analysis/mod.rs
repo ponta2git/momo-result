@@ -30,7 +30,7 @@ use storage::{
 };
 
 #[derive(Debug, Error)]
-pub enum WorkerError {
+pub enum ConsumerError {
     #[error("analysis control database connection failed")]
     Database(#[from] DatabaseError),
     #[error("analysis control-plane transition failed")]
@@ -49,7 +49,7 @@ pub enum WorkerError {
     TemporaryStorageBound,
 }
 
-impl WorkerError {
+impl ConsumerError {
     #[must_use]
     const fn kind(&self) -> &'static str {
         match self {
@@ -102,14 +102,14 @@ impl AttemptInterruption {
 pub(crate) async fn run(
     config: WorkerRuntimeConfig,
     mut shutdown: watch::Receiver<bool>,
-) -> Result<(), WorkerError> {
+) -> Result<(), ConsumerError> {
     if !crate::process::managed_analysis_runtime_supported() {
-        let error = WorkerError::Process(ProcessError::UnsupportedPlatform);
+        let error = ConsumerError::Process(ProcessError::UnsupportedPlatform);
         log_startup_failure("platform_contract", &error);
         return Err(error);
     }
     if !crate::process::worker_identity_supported() {
-        let error = WorkerError::Process(ProcessError::InvalidWorkerIdentity);
+        let error = ConsumerError::Process(ProcessError::InvalidWorkerIdentity);
         log_startup_failure("worker_identity", &error);
         return Err(error);
     }
@@ -191,9 +191,9 @@ pub(crate) async fn run(
     Ok(())
 }
 
-fn startup_result<T, E>(result: Result<T, E>, phase: &'static str) -> Result<T, WorkerError>
+fn startup_result<T, E>(result: Result<T, E>, phase: &'static str) -> Result<T, ConsumerError>
 where
-    E: Into<WorkerError>,
+    E: Into<ConsumerError>,
 {
     result.map_err(|source| {
         let error = source.into();
@@ -202,7 +202,7 @@ where
     })
 }
 
-fn log_startup_failure(phase: &'static str, error: &WorkerError) {
+fn log_startup_failure(phase: &'static str, error: &ConsumerError) {
     error!(
         event = "analysis_worker_startup_failed",
         phase,
@@ -217,7 +217,7 @@ async fn consume_deliveries(
     redis: &mut ConnectionManager,
     config: &WorkerRuntimeConfig,
     shutdown: &mut watch::Receiver<bool>,
-) -> Result<(), WorkerError> {
+) -> Result<(), ConsumerError> {
     while !*shutdown.borrow() {
         register_capability(control_client, &config.worker_id).await?;
         let delivery = next_delivery(redis, config).await?;
@@ -283,7 +283,7 @@ async fn process_delivery(
     message_id: &str,
     payload: &QueuePayload,
     shutdown: &mut watch::Receiver<bool>,
-) -> Result<DeliveryDisposition, WorkerError> {
+) -> Result<DeliveryDisposition, ConsumerError> {
     let claim = claim_job(control_client, &payload.job_id, config).await?;
     let claim = match claim {
         ClaimResult::Claimed(claim) => claim,
@@ -355,7 +355,7 @@ async fn process_claimed_delivery(
     config: &WorkerRuntimeConfig,
     claim: &crate::control::ClaimedJob,
     shutdown: &mut watch::Receiver<bool>,
-) -> Result<DeliveryDisposition, WorkerError> {
+) -> Result<DeliveryDisposition, ConsumerError> {
     info!(
         event = "analysis_attempt_claimed",
         phase = "claim",
@@ -407,7 +407,7 @@ async fn process_claimed_delivery(
             error_kind = "temporary_storage_io",
             "analysis attempt directory cleanup failed"
         );
-        return Err(WorkerError::Temporary(cleanup_error));
+        return Err(ConsumerError::Temporary(cleanup_error));
     }
     Ok(disposition)
 }

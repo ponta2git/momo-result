@@ -252,7 +252,7 @@ mod tests {
     use super::*;
 
     const VALID_PAYLOAD: &str =
-        include_str!("../../../../../docs/schemas/fixtures/ocr-worker/valid-queue-payload-v2.json");
+        include_str!("../../../../docs/schemas/fixtures/ocr-worker/valid-queue-payload-v2.json");
 
     #[test]
     fn shared_fixture_decodes_to_the_exact_typed_contract() {

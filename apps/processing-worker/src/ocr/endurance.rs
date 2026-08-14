@@ -329,7 +329,7 @@ async fn run_linux(
 
     use tokio::time;
 
-    use super::{IsolatedNativeOcrEngine, object_store::R2ObjectStore, worker::OcrEngine};
+    use super::{IsolatedNativeOcrEngine, consumer::OcrEngine, object_store::R2ObjectStore};
     use crate::cgroup::ChildCgroup;
 
     if !crate::process::worker_identity_supported() {
@@ -550,10 +550,10 @@ const fn domain_failure_kind(failure: momo_ocr::OcrFailure) -> &'static str {
 }
 
 #[cfg(target_os = "linux")]
-const fn process_failure_kind(failure: super::worker::OcrProcessFailure) -> &'static str {
+const fn process_failure_kind(failure: super::consumer::OcrProcessFailure) -> &'static str {
     match failure {
-        super::worker::OcrProcessFailure::Runtime(kind) => kind,
-        super::worker::OcrProcessFailure::ResourceExhausted => "ocr_child_resource_exhausted",
+        super::consumer::OcrProcessFailure::Runtime(kind) => kind,
+        super::consumer::OcrProcessFailure::ResourceExhausted => "ocr_child_resource_exhausted",
     }
 }
 

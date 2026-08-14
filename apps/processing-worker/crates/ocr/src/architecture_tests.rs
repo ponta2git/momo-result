@@ -24,7 +24,7 @@ const FORBIDDEN_SOURCE_PATTERNS: [&str; 10] = [
 ];
 
 #[test]
-fn capability_has_no_orchestrator_dependencies() {
+fn capability_has_no_processing_runtime_dependencies() {
     let manifest = include_str!("../Cargo.toml");
     let dependency_section = manifest
         .split("[dependencies]")
@@ -38,14 +38,14 @@ fn capability_has_no_orchestrator_dependencies() {
     let allowed_dependencies = ALLOWED_DEPENDENCIES.into_iter().collect::<BTreeSet<_>>();
     assert_eq!(
         actual_dependencies, allowed_dependencies,
-        "OCR capability dependencies changed; review the orchestrator boundary"
+        "OCR capability dependencies changed; review the processing-runtime boundary"
     );
 
     for source in production_sources() {
         for pattern in FORBIDDEN_SOURCE_PATTERNS {
             assert!(
                 !source.body.contains(pattern),
-                "{} crosses the capability/orchestrator boundary with {pattern}",
+                "{} crosses the capability/processing-runtime boundary with {pattern}",
                 source.relative_path
             );
         }

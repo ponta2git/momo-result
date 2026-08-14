@@ -363,7 +363,7 @@ wait_for_sql_value "succeeded|2|1|1" "
 " "same-cgroup analysis recovery after preemption"
 
 if ! docker inspect --format '{{.State.Running}}' "${worker_container}" | grep -qx true; then
-  fail_with_log "The combined orchestrator did not survive child preemption."
+  fail_with_log "The combined processing runtime did not survive child preemption."
 fi
 if grep -Eq '(postgres|redis)://[^" ]+' "${worker_log}"; then
   fail_with_log "Worker log exposed a database or Redis connection URL."

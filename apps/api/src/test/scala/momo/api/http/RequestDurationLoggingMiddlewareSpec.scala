@@ -68,7 +68,8 @@ final class RequestDurationLoggingMiddlewareSpec extends MomoCatsEffectSuite:
     for
       started <- Deferred[IO, Unit]
       release <- Deferred[IO, Unit]
-      body = Stream.eval(started.complete(())) >> Stream.eval(release.get) >> Stream.emit[IO, Byte](1)
+      body = Stream.eval(started.complete(())) >> Stream.eval(release.get) >>
+        Stream.emit[IO, Byte](1)
       _ <- captureLogs { events =>
         for
           response <- middleware(body).run(request)
@@ -86,9 +87,11 @@ final class RequestDurationLoggingMiddlewareSpec extends MomoCatsEffectSuite:
     yield ()
 
   private def middleware(body: Stream[IO, Byte]): HttpApp[IO] =
-    RequestDurationLoggingMiddleware[IO](Kleisli(_ => IO.pure(
-      Response[IO](Status.Ok).withBodyStream(body)
-    )))
+    RequestDurationLoggingMiddleware[IO](Kleisli(_ =>
+      IO.pure(
+        Response[IO](Status.Ok).withBodyStream(body)
+      )
+    ))
 
   private def messages(events: Vector[ILoggingEvent]): Vector[String] =
     events.map(_.getFormattedMessage)

@@ -4,11 +4,12 @@ import cats.effect.Async
 import fs2.Stream
 import org.slf4j.LoggerFactory
 
-/** Immutable context carried from request decoding to lazy body finalization.
-  *
-  * Keeping correlation and safe domain fields as data avoids depending on handler-scoped MDC when
-  * the body is pulled later or on another thread.
-  */
+/**
+ * Immutable context carried from request decoding to lazy body finalization.
+ *
+ * Keeping correlation and safe domain fields as data avoids depending on handler-scoped MDC when
+ * the body is pulled later or on another thread.
+ */
 private[api] final case class SourceImageTransferContext(
     requestId: String,
     event: String,

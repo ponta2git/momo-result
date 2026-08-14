@@ -21,11 +21,12 @@ private[api] final case class BodyTransferResult(
 ):
   def duration: FiniteDuration = finishedAt - startedAt
 
-/** Observes the actual response-body consumption boundary, including cancellation.
-  *
-  * The callback runs exactly once when the returned stream terminates. Merely constructing a
-  * response does not report a successful transfer.
-  */
+/**
+ * Observes the actual response-body consumption boundary, including cancellation.
+ *
+ * The callback runs exactly once when the returned stream terminates. Merely constructing a
+ * response does not report a successful transfer.
+ */
 private[api] object BodyTransferObserver:
   private given CanEqual[ExitCase, ExitCase] = CanEqual.derived
 

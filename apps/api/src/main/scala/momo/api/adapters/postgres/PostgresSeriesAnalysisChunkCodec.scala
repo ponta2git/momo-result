@@ -184,7 +184,7 @@ private[postgres] object PostgresSeriesAnalysisChunkCodec:
       artifact: SeriesAnalysisArtifactRef,
       scope: SeriesAnalysisScope,
       matchId: MatchId,
-      status: String,
+      reason: SeriesAnalysisMatchContextExclusion,
   ): SeriesAnalysisChunk = SeriesAnalysisChunk(
     artifact,
     scope,
@@ -193,7 +193,7 @@ private[postgres] object PostgresSeriesAnalysisChunkCodec:
       "artifact" -> artifactJson(artifact),
       "scope" -> scopeJson(scope),
       "matchId" -> Json.fromString(matchId.value),
-      "inclusion" -> Json.obj("status" -> Json.fromString(status)),
+      "inclusion" -> Json.obj("status" -> Json.fromString(reason.wire)),
       "match" -> Json.Null,
     ),
   )

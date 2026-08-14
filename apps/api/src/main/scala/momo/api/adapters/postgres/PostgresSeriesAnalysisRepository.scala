@@ -80,9 +80,9 @@ final class PostgresSeriesAnalysisRepository[F[_]: Async] private (
       loaded: PostgresSeriesAnalysisChunkOps.LoadedChunk
   ): Either[AppError, (SeriesAnalysisChunk, List[String])] =
     val decoded = loaded.material match
-      case PostgresSeriesAnalysisChunkOps.ChunkMaterial.Excluded(artifact, matchId, status) =>
+      case PostgresSeriesAnalysisChunkOps.ChunkMaterial.Excluded(artifact, matchId, reason) =>
         PostgresSeriesAnalysisChunkCodec
-          .excludedContext(artifact, loaded.request.scope, matchId, status).asRight
+          .excludedContext(artifact, loaded.request.scope, matchId, reason).asRight
       case PostgresSeriesAnalysisChunkOps.ChunkMaterial.Stored(row, sourceMatchRevision) =>
         PostgresSeriesAnalysisChunkCodec
           .decode(row, loaded.request, readConfig, sourceMatchRevision)

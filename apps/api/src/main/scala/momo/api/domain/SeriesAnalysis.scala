@@ -104,6 +104,12 @@ final case class SeriesAnalysisChunk(
 enum SeriesAnalysisChunkKind derives CanEqual:
   case Aggregate, Review, Drilldown, MatchContext
 
+enum SeriesAnalysisMatchContextExclusion(val wire: String) derives CanEqual:
+  case MatchChangedSinceArtifact
+      extends SeriesAnalysisMatchContextExclusion("match_changed_since_artifact")
+  case NotInArtifact extends SeriesAnalysisMatchContextExclusion("not_in_artifact")
+  case NotInScope extends SeriesAnalysisMatchContextExclusion("not_in_scope")
+
 final case class SeriesAnalysisChunkRequest(
     kind: SeriesAnalysisChunkKind,
     gameTitleId: GameTitleId,

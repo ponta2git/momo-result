@@ -20,7 +20,11 @@ private[postgres] object PostgresSeriesAnalysisChunkOps:
 
   enum ChunkMaterial:
     case Stored(chunk: SeriesAnalysisStoredChunk, sourceMatchRevision: Option[Long])
-    case Excluded(artifact: SeriesAnalysisArtifactRef, matchId: MatchId, status: String)
+    case Excluded(
+        artifact: SeriesAnalysisArtifactRef,
+        matchId: MatchId,
+        reason: SeriesAnalysisMatchContextExclusion,
+    )
 
   final case class DisplayMetadata(
       memberNames: Map[String, String],
@@ -44,7 +48,7 @@ private[postgres] object PostgresSeriesAnalysisChunkOps:
   def load(
       request: SeriesAnalysisChunkRequest,
       config: SeriesAnalysisReadConfig,
-  ): ConnectionIO[Either[AppError, LoadedChunk]] = localStatementTimeout(config) *>
+  ): ConnectionIO[Either[AppError, LoadedChunk]] = beginArtifactSnapshot(config) *>
     (request.kind match
       case SeriesAnalysisChunkKind.MatchContext => matchContextCio(request)
       case _ => regularChunkCio(request))
@@ -68,6 +72,11 @@ private[postgres] object PostgresSeriesAnalysisChunkOps:
   private def localStatementTimeout(config: SeriesAnalysisReadConfig): ConnectionIO[Unit] =
     val value = s"${config.readTimeout.toMillis}ms"
     sql"SELECT set_config('statement_timeout', $value, true)".query[String].unique.void
+
+  /** Keeps match identity, readable artifact pointers and stored chunk classification coherent. */
+  private def beginArtifactSnapshot(config: SeriesAnalysisReadConfig): ConnectionIO[Unit] =
+    sql"SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY".update.run.void *>
+      localStatementTimeout(config)
 
   private def regularChunkCio(
       request: SeriesAnalysisChunkRequest
@@ -150,7 +159,11 @@ private[postgres] object PostgresSeriesAnalysisChunkOps:
               if identity.gameTitleId != request.gameTitleId =>
             LoadedChunk(
               request,
-              ChunkMaterial.Excluded(artifactRef, matchId, "match_changed_since_artifact"),
+              ChunkMaterial.Excluded(
+                artifactRef,
+                matchId,
+                SeriesAnalysisMatchContextExclusion.MatchChangedSinceArtifact,
+              ),
             ).asRight[AppError].pure[ConnectionIO]
           case (Some(identity), Some(artifactRef))
               if !PostgresSeriesAnalysisScopeOps.contains(
@@ -158,14 +171,25 @@ private[postgres] object PostgresSeriesAnalysisChunkOps:
                 identity.seasonMasterId,
                 identity.mapMasterId,
               ) =>
-            LoadedChunk(request, ChunkMaterial.Excluded(artifactRef, matchId, "not_in_scope"))
+            LoadedChunk(
+              request,
+              ChunkMaterial.Excluded(
+                artifactRef,
+                matchId,
+                SeriesAnalysisMatchContextExclusion.NotInScope,
+              ),
+            )
               .asRight[AppError]
               .pure[ConnectionIO]
           case (Some(identity), Some(artifactRef)) =>
             selectMatchContextChunk(request, matchId).map {
               case None => LoadedChunk(
                   request,
-                  ChunkMaterial.Excluded(artifactRef, matchId, "not_in_artifact"),
+                  ChunkMaterial.Excluded(
+                    artifactRef,
+                    matchId,
+                    SeriesAnalysisMatchContextExclusion.NotInArtifact,
+                  ),
                 ).asRight
               case Some(row) if row.sourceMatchRevision != identity.analysisRevision =>
                 LoadedChunk(
@@ -173,7 +197,7 @@ private[postgres] object PostgresSeriesAnalysisChunkOps:
                   ChunkMaterial.Excluded(
                     artifactRef,
                     matchId,
-                    "match_changed_since_artifact",
+                    SeriesAnalysisMatchContextExclusion.MatchChangedSinceArtifact,
                   ),
                 ).asRight
               case Some(row) =>

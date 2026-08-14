@@ -10,7 +10,12 @@ import munit.FunSuite
 
 import momo.api.config.SeriesAnalysisReadConfig
 import momo.api.domain.ids.GameTitleId
-import momo.api.domain.{SeriesAnalysisChunkKind, SeriesAnalysisChunkRequest, SeriesAnalysisScope}
+import momo.api.domain.{
+  SeriesAnalysisChunkKind,
+  SeriesAnalysisChunkRequest,
+  SeriesAnalysisMatchContextExclusion,
+  SeriesAnalysisScope
+}
 import momo.api.errors.AppError
 
 final class PostgresSeriesAnalysisChunkCodecSpec extends FunSuite:
@@ -136,6 +141,12 @@ final class PostgresSeriesAnalysisChunkCodecSpec extends FunSuite:
         SeriesAnalysisReadConfig.defaults.copy(maxResponseBytes = 1),
       ),
       "Analysis response exceeds the configured bound.",
+    )
+
+  test("match context exclusion reasons form a closed stable wire contract"):
+    assertEquals(
+      SeriesAnalysisMatchContextExclusion.values.map(_.wire).toList,
+      List("match_changed_since_artifact", "not_in_artifact", "not_in_scope"),
     )
 
   private def stored(

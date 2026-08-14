@@ -40,12 +40,12 @@ pub(crate) struct ArtifactBuildRequest {
     pub maximum_file_count: u64,
 }
 
-pub(crate) struct ArtifactBuild {
+pub(crate) struct BuiltArtifact {
     pub manifest: ArtifactManifest,
     pub calculation_duration: Duration,
     pub encoding_duration: Duration,
-    pub payload_bytes: u64,
-    pub temporary_bytes: u64,
+    pub chunk_bytes: u64,
+    pub directory_bytes: u64,
 }
 
 #[derive(Debug, Error)]
@@ -187,7 +187,7 @@ pub(crate) fn build_artifact(
     input: &NormalizedAnalysisInput,
     request: &ArtifactBuildRequest,
     output_directory: &Path,
-) -> Result<ArtifactBuild, ArtifactError> {
+) -> Result<BuiltArtifact, ArtifactError> {
     let build_started = Instant::now();
     validate_empty_directory(output_directory)?;
     if input
@@ -241,12 +241,12 @@ pub(crate) fn build_artifact(
         .ok_or(ArtifactError::ResourceBound)?;
     encoding_duration = encoding_duration.saturating_add(manifest_encoding_started.elapsed());
     let total_duration = build_started.elapsed();
-    Ok(ArtifactBuild {
+    Ok(BuiltArtifact {
         manifest,
         calculation_duration: total_duration.saturating_sub(encoding_duration),
         encoding_duration,
-        payload_bytes: total_bytes,
-        temporary_bytes: final_total_bytes,
+        chunk_bytes: total_bytes,
+        directory_bytes: final_total_bytes,
     })
 }
 
@@ -448,7 +448,7 @@ const fn resource_common(resource: &ResourceManifest) -> &CommonResource {
     }
 }
 
-struct CanonicalFile {
+struct CanonicalFileMetadata {
     encoded_bytes: u64,
     checksum: String,
 }
@@ -474,8 +474,8 @@ impl BoundedHashWriter {
         }
     }
 
-    fn finish(self) -> CanonicalFile {
-        CanonicalFile {
+    fn finish(self) -> CanonicalFileMetadata {
+        CanonicalFileMetadata {
             encoded_bytes: self.encoded_bytes,
             checksum: format!("sha256:{}", lower_hex(&self.digest.finalize())),
         }
@@ -539,7 +539,7 @@ fn write_canonical_file<T: Serialize>(
     path: &Path,
     value: &T,
     maximum_bytes: u64,
-) -> Result<CanonicalFile, ArtifactError> {
+) -> Result<CanonicalFileMetadata, ArtifactError> {
     let mut incomplete = IncompleteFile::new(path);
     let file = OpenOptions::new().write(true).create_new(true).open(path)?;
     let mut writer = BoundedHashWriter::new(file, maximum_bytes);

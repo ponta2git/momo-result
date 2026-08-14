@@ -6,7 +6,7 @@ use tracing::{error, info, warn};
 use crate::{
     postgres,
     process::{
-        AnalysisChildOutcome, AnalysisChildSpec, ManagedAnalysisChild,
+        AnalysisChildOutcome, AnalysisChildProcessSpec, ManagedAnalysisChild,
         current_process_peak_resident_bytes,
     },
 };
@@ -27,13 +27,13 @@ pub(super) fn child_spec(
     config: &AnalysisConsumerConfig,
     claim: &ClaimedJob,
     attempt_directory: &std::path::Path,
-) -> Result<AnalysisChildSpec, ConsumerError> {
+) -> Result<AnalysisChildProcessSpec, ConsumerError> {
     let parent_liveness_timeout = config
         .heartbeat_interval
         .checked_mul(2)
         .ok_or(ConsumerError::DurationBound)?;
-    Ok(AnalysisChildSpec {
-        request: momo_analysis_core::child::AnalysisChildRequest {
+    Ok(AnalysisChildProcessSpec {
+        identity: momo_analysis_core::child::AnalysisAttemptIdentity {
             game_title_id: claim.game_title_id.clone(),
             input_revision: claim.input_revision,
             artifact_id: artifact_id_for_attempt(&claim.attempt_id),
@@ -173,7 +173,7 @@ pub(super) async fn run_claimed_child(
     heartbeat_client: &mut tokio_postgres::Client,
     config: &AnalysisConsumerConfig,
     claim: &ClaimedJob,
-    child_spec: &AnalysisChildSpec,
+    child_spec: &AnalysisChildProcessSpec,
     shutdown: &mut watch::Receiver<bool>,
     started: Instant,
 ) -> Result<(AnalysisChildOutcome, AttemptMetrics), AttemptInterruption> {
@@ -271,7 +271,7 @@ pub(super) async fn run_claimed_child(
 }
 
 fn finalize_child_result(
-    child_spec: &AnalysisChildSpec,
+    child_spec: &AnalysisChildProcessSpec,
     result: (AnalysisChildOutcome, AttemptMetrics),
 ) -> (AnalysisChildOutcome, AttemptMetrics) {
     let (outcome, mut metrics) = result;
@@ -628,9 +628,9 @@ mod tests {
         ChildPhase, ChildReport, ChildReportMetrics, ChildReportOutcome, write,
     };
 
-    fn test_child_spec(directory: &std::path::Path) -> AnalysisChildSpec {
-        AnalysisChildSpec {
-            request: momo_analysis_core::child::AnalysisChildRequest {
+    fn test_child_spec(directory: &std::path::Path) -> AnalysisChildProcessSpec {
+        AnalysisChildProcessSpec {
+            identity: momo_analysis_core::child::AnalysisAttemptIdentity {
                 game_title_id: String::from("title-1"),
                 input_revision: 1,
                 artifact_id: String::from("artifact-1"),

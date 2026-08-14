@@ -35,8 +35,8 @@ const WORKER_UID: libc::uid_t = 10_001;
 const WORKER_GID: libc::gid_t = 10_001;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct AnalysisChildSpec {
-    pub request: momo_analysis_core::child::AnalysisChildRequest,
+pub(crate) struct AnalysisChildProcessSpec {
+    pub identity: momo_analysis_core::child::AnalysisAttemptIdentity,
     pub read_database_url: String,
     pub output_directory: PathBuf,
     pub maximum_chunk_bytes: u64,
@@ -198,7 +198,7 @@ impl ManagedAnalysisChild {
     /// Returns an error when the current executable cannot be resolved or the child cannot start.
     #[cfg(target_os = "linux")]
     pub(crate) async fn spawn(
-        spec: &AnalysisChildSpec,
+        spec: &AnalysisChildProcessSpec,
         cgroup: &ChildCgroup,
     ) -> Result<Self, ProcessError> {
         use std::os::fd::AsRawFd;
@@ -223,11 +223,11 @@ impl ManagedAnalysisChild {
         command
             .arg("child-compute")
             .arg("--game-title-id")
-            .arg(&spec.request.game_title_id)
+            .arg(&spec.identity.game_title_id)
             .arg("--input-revision")
-            .arg(spec.request.input_revision.to_string())
+            .arg(spec.identity.input_revision.to_string())
             .arg("--artifact-id")
-            .arg(&spec.request.artifact_id)
+            .arg(&spec.identity.artifact_id)
             .arg("--output-directory")
             .arg(&spec.output_directory)
             .arg("--maximum-chunk-bytes")
@@ -297,7 +297,7 @@ impl ManagedAnalysisChild {
         reason = "the cross-platform API remains awaitable while non-Linux runtimes fail closed"
     )]
     pub(crate) async fn spawn(
-        _spec: &AnalysisChildSpec,
+        _spec: &AnalysisChildProcessSpec,
         _cgroup: &ChildCgroup,
     ) -> Result<Self, ProcessError> {
         Err(ProcessError::UnsupportedPlatform)

@@ -309,8 +309,8 @@ pub async fn entrypoint() -> ExitCode {
             }
             return exit_code(
                 crate::series_analysis::child::execute(
-                    &crate::series_analysis::child::ChildComputeRequest {
-                        request: momo_analysis_core::child::AnalysisChildRequest {
+                    &crate::series_analysis::child::AnalysisChildExecutionConfig {
+                        identity: momo_analysis_core::child::AnalysisAttemptIdentity {
                             game_title_id: game_title_id.clone(),
                             input_revision: *input_revision,
                             artifact_id: artifact_id.clone(),

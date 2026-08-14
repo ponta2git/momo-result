@@ -21,8 +21,8 @@ use super::{
     input_repository::{InputRepositoryError, load_analysis_input},
 };
 
-pub struct ChildComputeRequest<'a> {
-    pub request: momo_analysis_core::child::AnalysisChildRequest,
+pub struct AnalysisChildExecutionConfig<'a> {
+    pub identity: momo_analysis_core::child::AnalysisAttemptIdentity,
     pub output_directory: &'a Path,
     pub maximum_chunk_bytes: u64,
     pub maximum_chunk_count: u64,
@@ -37,10 +37,10 @@ pub struct ChildComputeRequest<'a> {
 /// This boundary intentionally returns only documented exit codes. Connection details, query
 /// errors, and artifact contents are never printed by the child.
 #[must_use]
-pub async fn execute(request: &ChildComputeRequest<'_>) -> i32 {
+pub async fn execute(config: &AnalysisChildExecutionConfig<'_>) -> i32 {
     let started = Instant::now();
     let mut telemetry = ChildTelemetry::default();
-    let result = execute_inner(request, &mut telemetry).await;
+    let result = execute_inner(config, &mut telemetry).await;
     telemetry.metrics.peak_resident_bytes = current_process_peak_resident_bytes().await;
     telemetry.metrics.total_milliseconds = milliseconds(started.elapsed());
     let (outcome, exit_code) = match result {
@@ -48,7 +48,7 @@ pub async fn execute(request: &ChildComputeRequest<'_>) -> i32 {
         Err(failure) => (failure.report_outcome(), failure.exit_code()),
     };
     let report = ChildReport::new(outcome, telemetry.phase, telemetry.metrics);
-    if child_report::write(request.output_directory, &report).is_err() {
+    if child_report::write(config.output_directory, &report).is_err() {
         return CHILD_CALCULATION_FAILED_EXIT_CODE;
     }
     exit_code
@@ -100,10 +100,10 @@ impl Default for ChildTelemetry {
 }
 
 async fn execute_inner(
-    request: &ChildComputeRequest<'_>,
+    config: &AnalysisChildExecutionConfig<'_>,
     telemetry: &mut ChildTelemetry,
 ) -> Result<(), ChildFailure> {
-    start_parent_liveness_monitor(request.parent_liveness_fd, request.parent_liveness_timeout)
+    start_parent_liveness_monitor(config.parent_liveness_fd, config.parent_liveness_timeout)
         .map_err(|_liveness_error| ChildFailure::CalculationFailed)?;
     let read_database_url = env::var("MOMO_ANALYSIS_READ_DATABASE_URL")
         .ok()
@@ -120,8 +120,8 @@ async fn execute_inner(
     };
     let input = match load_analysis_input(
         &mut client,
-        &request.request.game_title_id,
-        request.request.input_revision,
+        &config.identity.game_title_id,
+        config.identity.input_revision,
     )
     .await
     {
@@ -136,39 +136,39 @@ async fn execute_inner(
         .map_err(|_error| ChildFailure::CalculationFailed)?;
     if input
         .resource_count()
-        .is_none_or(|count| count > request.maximum_chunk_count)
+        .is_none_or(|count| count > config.maximum_chunk_count)
     {
         return Err(ChildFailure::ArtifactTooLarge);
     }
 
     telemetry.phase = ChildPhase::ArtifactBuild;
-    let maximum_total_bytes = request
+    let maximum_total_bytes = config
         .maximum_total_bytes
         .checked_sub(child_report::RESERVED_BYTES)
         .ok_or(ChildFailure::ArtifactTooLarge)?;
-    let maximum_file_count = request
+    let maximum_file_count = config
         .maximum_file_count
         .checked_sub(child_report::RESERVED_FILES)
         .ok_or(ChildFailure::ArtifactTooLarge)?;
     let artifact = build_artifact(
         &input,
         &ArtifactBuildRequest {
-            artifact_id: request.request.artifact_id.clone(),
+            artifact_id: config.identity.artifact_id.clone(),
             algorithm_version: String::from(ALGORITHM_VERSION),
-            maximum_chunk_bytes: request.maximum_chunk_bytes,
-            maximum_chunk_count: request.maximum_chunk_count,
+            maximum_chunk_bytes: config.maximum_chunk_bytes,
+            maximum_chunk_count: config.maximum_chunk_count,
             maximum_total_bytes,
             maximum_file_count,
         },
-        request.output_directory,
+        config.output_directory,
     )
     .map_err(|error| map_artifact_failure(&error))?;
     telemetry.metrics.calculation_milliseconds = milliseconds(artifact.calculation_duration);
     telemetry.metrics.encoding_milliseconds = milliseconds(artifact.encoding_duration);
     telemetry.metrics.artifact_chunk_count = u64::try_from(artifact.manifest.resources.len())
         .map_err(|_error| ChildFailure::CalculationFailed)?;
-    telemetry.metrics.artifact_payload_bytes = artifact.payload_bytes;
-    telemetry.metrics.artifact_temporary_bytes = artifact.temporary_bytes;
+    telemetry.metrics.artifact_payload_bytes = artifact.chunk_bytes;
+    telemetry.metrics.artifact_temporary_bytes = artifact.directory_bytes;
     telemetry.phase = ChildPhase::Complete;
     Ok(())
 }

@@ -13,7 +13,7 @@ use crate::{
     cgroup::ChildCgroup,
     postgres::{PostgresError, connect},
     process::{
-        AnalysisChildOutcome, AnalysisChildSpec, ManagedAnalysisChild, ProcessError,
+        AnalysisChildOutcome, AnalysisChildProcessSpec, ManagedAnalysisChild, ProcessError,
         current_process_peak_resident_bytes, current_process_resident_bytes,
     },
 };
@@ -355,9 +355,9 @@ fn shadow_child_spec(
     input_revision: i64,
     run_number: u32,
     output_directory: &Path,
-) -> AnalysisChildSpec {
-    AnalysisChildSpec {
-        request: momo_analysis_core::child::AnalysisChildRequest {
+) -> AnalysisChildProcessSpec {
+    AnalysisChildProcessSpec {
+        identity: momo_analysis_core::child::AnalysisAttemptIdentity {
             game_title_id: request.game_title_id.clone(),
             input_revision,
             artifact_id: format!("shadow-artifact-{run_number}"),

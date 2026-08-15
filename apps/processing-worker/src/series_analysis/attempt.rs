@@ -4,6 +4,7 @@ use tokio::{sync::watch, time};
 use tracing::{error, info, warn};
 
 use crate::{
+    outbox::ControlOutcome,
     postgres,
     process::{
         AnalysisChildOutcome, AnalysisChildProcessSpec, ManagedAnalysisChild,
@@ -55,7 +56,7 @@ pub(super) async fn finish_attempt_result(
     attempt_directory: &std::path::Path,
     started: Instant,
     result: Result<(AnalysisChildOutcome, AttemptMetrics), AttemptInterruption>,
-) -> Result<DeliveryDisposition, ConsumerError> {
+) -> Result<ControlOutcome<DeliveryDisposition>, ConsumerError> {
     match result {
         Ok(result) => {
             finish_child_outcome(control_client, config, claim, attempt_directory, result).await
@@ -72,18 +73,18 @@ async fn finish_child_outcome(
     claim: &ClaimedJob,
     attempt_directory: &std::path::Path,
     result: (AnalysisChildOutcome, AttemptMetrics),
-) -> Result<DeliveryDisposition, ConsumerError> {
-    let (outcome, mut metrics) = result;
+) -> Result<ControlOutcome<DeliveryDisposition>, ConsumerError> {
+    let (child_outcome, mut metrics) = result;
     metrics.observe_worker_peak(current_process_peak_resident_bytes().await);
     info!(
         event = "analysis_child_finished",
         phase = "calculation",
-        child_outcome = outcome.wire(),
+        child_outcome = child_outcome.wire(),
         calculation_milliseconds = metrics.calculation_milliseconds,
         child_peak_bytes = metrics.child_peak_bytes,
         "analysis child process exited"
     );
-    let disposition = match child_action(outcome) {
+    let control_outcome = match child_action(child_outcome) {
         ChildAction::Publish => {
             finish_successful_child(
                 control_client,
@@ -95,7 +96,7 @@ async fn finish_child_outcome(
             .await?
         }
         ChildAction::Supersede => {
-            supersede(control_client, claim, config, &metrics).await?;
+            let control_outcome = supersede(control_client, claim, config, &metrics).await?;
             info!(
                 event = "analysis_attempt_finished",
                 phase = "revision_guard",
@@ -103,10 +104,12 @@ async fn finish_child_outcome(
                 elapsed_milliseconds = metrics.elapsed_milliseconds,
                 "analysis attempt was superseded"
             );
-            DeliveryDisposition::Acknowledge
+            control_outcome.map(|()| DeliveryDisposition::Acknowledge)
         }
         ChildAction::RetryTransient => {
-            let retry = retry_transient_failure(control_client, claim, config, &metrics).await?;
+            let control_outcome =
+                retry_transient_failure(control_client, claim, config, &metrics).await?;
+            let retry = control_outcome.value;
             warn!(
                 event = "analysis_attempt_dependency_failure",
                 phase = "input_snapshot",
@@ -114,15 +117,16 @@ async fn finish_child_outcome(
                 elapsed_milliseconds = metrics.elapsed_milliseconds,
                 "analysis dependency failure was persisted"
             );
-            DeliveryDisposition::Acknowledge
+            control_outcome.map(|_| DeliveryDisposition::Acknowledge)
         }
         ChildAction::Fail(failure) => {
-            finish_failure(control_client, claim, config, failure, &metrics).await?;
+            let control_outcome =
+                finish_failure(control_client, claim, config, failure, &metrics).await?;
             log_attempt_failure(failure, &metrics, "calculation");
-            DeliveryDisposition::Acknowledge
+            control_outcome.map(|()| DeliveryDisposition::Acknowledge)
         }
     };
-    Ok(disposition)
+    Ok(control_outcome)
 }
 
 async fn finish_interruption(
@@ -131,20 +135,21 @@ async fn finish_interruption(
     claim: &ClaimedJob,
     started: Instant,
     interruption: AttemptInterruption,
-) -> Result<DeliveryDisposition, ConsumerError> {
+) -> Result<ControlOutcome<DeliveryDisposition>, ConsumerError> {
     let mut metrics = elapsed_metrics(started, None);
     metrics.observe_worker_peak(current_process_peak_resident_bytes().await);
-    let disposition = match interruption_action(interruption) {
+    let outcome = match interruption_action(interruption) {
         InterruptionAction::Fail(failure) => {
-            finish_failure(control_client, claim, config, failure, &metrics).await?;
+            let outcome = finish_failure(control_client, claim, config, failure, &metrics).await?;
             log_attempt_failure(failure, &metrics, "child_supervision");
-            DeliveryDisposition::Acknowledge
+            outcome.map(|()| DeliveryDisposition::Acknowledge)
         }
         InterruptionAction::Requeue {
             cause,
             stop_consumer,
         } => {
-            requeue_interrupted(control_client, claim, config, cause, &metrics).await?;
+            let outcome =
+                requeue_interrupted(control_client, claim, config, cause, &metrics).await?;
             info!(
                 event = "analysis_attempt_requeued",
                 phase = "child_supervision",
@@ -152,11 +157,13 @@ async fn finish_interruption(
                 elapsed_milliseconds = metrics.elapsed_milliseconds,
                 "analysis attempt was requeued without failure"
             );
-            if stop_consumer {
-                DeliveryDisposition::StopLoop
-            } else {
-                DeliveryDisposition::Acknowledge
-            }
+            outcome.map(|()| {
+                if stop_consumer {
+                    DeliveryDisposition::StopLoop
+                } else {
+                    DeliveryDisposition::Acknowledge
+                }
+            })
         }
         InterruptionAction::LeavePending => {
             warn!(
@@ -166,10 +173,10 @@ async fn finish_interruption(
                 elapsed_milliseconds = metrics.elapsed_milliseconds,
                 "analysis attempt ownership was lost"
             );
-            DeliveryDisposition::LeavePending
+            ControlOutcome::without_effects(DeliveryDisposition::LeavePending)
         }
     };
-    Ok(disposition)
+    Ok(outcome)
 }
 
 pub(super) async fn run_claimed_child(
@@ -473,7 +480,7 @@ async fn finish_successful_child(
     claim: &ClaimedJob,
     attempt_directory: &std::path::Path,
     metrics: &mut AttemptMetrics,
-) -> Result<DeliveryDisposition, ConsumerError> {
+) -> Result<ControlOutcome<DeliveryDisposition>, ConsumerError> {
     let publication_started = Instant::now();
     let result = time::timeout(
         config.execution_limits.finalization_timeout,
@@ -482,34 +489,36 @@ async fn finish_successful_child(
     .await;
     metrics.observe_worker_peak(current_process_peak_resident_bytes().await);
     match result {
-        Ok(Ok(publication @ (PublicationResult::Published | PublicationResult::Reused))) => {
-            log_attempt_success(publication, metrics);
-            Ok(DeliveryDisposition::Acknowledge)
-        }
-        Ok(Ok(PublicationResult::Superseded)) => {
-            info!(
-                event = "analysis_attempt_finished",
-                phase = "publication_revision_guard",
-                outcome = "superseded",
-                elapsed_milliseconds = metrics.elapsed_milliseconds,
-                "analysis attempt was superseded during publication"
-            );
-            Ok(DeliveryDisposition::Acknowledge)
-        }
-        Ok(Ok(PublicationResult::IntegrityFailure(failure_code))) => {
-            warn!(
-                event = "analysis_attempt_finished",
-                phase = "publication_integrity",
-                outcome = "failed",
-                safe_failure_code = failure_code.wire(),
-                elapsed_milliseconds = metrics.elapsed_milliseconds,
-                calculation_milliseconds = metrics.calculation_milliseconds,
-                staging_milliseconds = metrics.staging_milliseconds,
-                publication_milliseconds = metrics.publication_milliseconds,
-                "analysis artifact integrity failure was persisted"
-            );
-            Ok(DeliveryDisposition::Acknowledge)
-        }
+        Ok(Ok(outcome)) => match outcome.value {
+            publication @ (PublicationResult::Published | PublicationResult::Reused) => {
+                log_attempt_success(publication, metrics);
+                Ok(outcome.map(|_| DeliveryDisposition::Acknowledge))
+            }
+            PublicationResult::Superseded => {
+                info!(
+                    event = "analysis_attempt_finished",
+                    phase = "publication_revision_guard",
+                    outcome = "superseded",
+                    elapsed_milliseconds = metrics.elapsed_milliseconds,
+                    "analysis attempt was superseded during publication"
+                );
+                Ok(outcome.map(|_| DeliveryDisposition::Acknowledge))
+            }
+            PublicationResult::IntegrityFailure(failure_code) => {
+                warn!(
+                    event = "analysis_attempt_finished",
+                    phase = "publication_integrity",
+                    outcome = "failed",
+                    safe_failure_code = failure_code.wire(),
+                    elapsed_milliseconds = metrics.elapsed_milliseconds,
+                    calculation_milliseconds = metrics.calculation_milliseconds,
+                    staging_milliseconds = metrics.staging_milliseconds,
+                    publication_milliseconds = metrics.publication_milliseconds,
+                    "analysis artifact integrity failure was persisted"
+                );
+                Ok(outcome.map(|_| DeliveryDisposition::Acknowledge))
+            }
+        },
         Ok(Err(ControlError::OwnerLost)) => {
             warn!(
                 event = "analysis_publication_rejected",
@@ -517,7 +526,9 @@ async fn finish_successful_child(
                 reason = "owner_lost",
                 "analysis publication lost fencing ownership"
             );
-            Ok(DeliveryDisposition::LeavePending)
+            Ok(ControlOutcome::without_effects(
+                DeliveryDisposition::LeavePending,
+            ))
         }
         Ok(Err(error @ (ControlError::Artifact(_) | ControlError::ChildArtifactMetrics))) => {
             metrics.record_staging(publication_started.elapsed());
@@ -528,9 +539,9 @@ async fn finish_successful_child(
                 "analysis artifact validation failed"
             );
             let failure = AttemptFailure::failed(SafeFailureCode::ArtifactValidationFailed);
-            finish_failure(control_client, claim, config, failure, metrics).await?;
+            let outcome = finish_failure(control_client, claim, config, failure, metrics).await?;
             log_attempt_failure(failure, metrics, "artifact_validation");
-            Ok(DeliveryDisposition::Acknowledge)
+            Ok(outcome.map(|()| DeliveryDisposition::Acknowledge))
         }
         Ok(Err(error)) => {
             metrics.record_finalization(publication_started.elapsed());
@@ -581,15 +592,17 @@ async fn finish_publication_failure(
     config: &AnalysisConsumerConfig,
     claim: &ClaimedJob,
     metrics: &AttemptMetrics,
-) -> Result<DeliveryDisposition, ConsumerError> {
+) -> Result<ControlOutcome<DeliveryDisposition>, ConsumerError> {
     let mut recovery_client = postgres::connect(&config.database_url).await?;
     let failure = AttemptFailure::failed(SafeFailureCode::PublicationFailed);
     match finish_failure(&mut recovery_client, claim, config, failure, metrics).await {
-        Ok(()) => {
+        Ok(outcome) => {
             log_attempt_failure(failure, metrics, "publication");
-            Ok(DeliveryDisposition::Acknowledge)
+            Ok(outcome.map(|()| DeliveryDisposition::Acknowledge))
         }
-        Err(ControlError::OwnerLost) => Ok(DeliveryDisposition::LeavePending),
+        Err(ControlError::OwnerLost) => Ok(ControlOutcome::without_effects(
+            DeliveryDisposition::LeavePending,
+        )),
         Err(error) => Err(ConsumerError::Control(error)),
     }
 }

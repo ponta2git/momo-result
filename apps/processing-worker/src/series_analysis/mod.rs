@@ -380,9 +380,15 @@ async fn process_delivery(
         fencing_token = claim.fencing_token,
     );
     async {
-        let result =
-            process_claimed_delivery(control_client, heartbeat_client, config, &claim, shutdown)
-                .await;
+        let result = process_claimed_delivery(
+            control_client,
+            heartbeat_client,
+            config,
+            post_commit_sink,
+            &claim,
+            shutdown,
+        )
+        .await;
         if let Err(error) = &result {
             error!(
                 event = "analysis_attempt_runtime_failed",
@@ -409,6 +415,7 @@ async fn process_claimed_delivery(
     control_client: &mut tokio_postgres::Client,
     heartbeat_client: &mut tokio_postgres::Client,
     config: &AnalysisConsumerConfig,
+    post_commit_sink: &PostCommitSink,
     claim: &control::ClaimedJob,
     shutdown: &mut watch::Receiver<bool>,
 ) -> Result<DeliveryDisposition, ConsumerError> {
@@ -425,7 +432,8 @@ async fn process_claimed_delivery(
         Err(_error) => {
             let metrics = elapsed_metrics(started, None);
             let failure = AttemptFailure::failed(SafeFailureCode::TemporaryStorageExhausted);
-            finish_failure(control_client, claim, config, failure, &metrics).await?;
+            let outcome = finish_failure(control_client, claim, config, failure, &metrics).await?;
+            submit_control_outcome(post_commit_sink, outcome)?;
             warn!(
                 event = "analysis_attempt_finished",
                 phase = "temporary_storage_prepare",
@@ -447,7 +455,7 @@ async fn process_claimed_delivery(
         started,
     )
     .await;
-    let disposition = finish_attempt_result(
+    let outcome = finish_attempt_result(
         control_client,
         config,
         claim,
@@ -456,6 +464,7 @@ async fn process_claimed_delivery(
         result,
     )
     .await?;
+    let disposition = submit_control_outcome(post_commit_sink, outcome)?;
     if let Err(cleanup_error) = tokio::fs::remove_dir_all(&attempt_directory).await {
         error!(
             event = "analysis_attempt_cleanup_failed",
@@ -466,4 +475,39 @@ async fn process_claimed_delivery(
         return Err(ConsumerError::Temporary(cleanup_error));
     }
     Ok(disposition)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::outbox::{OutboxKind, PostCommitEffects};
+
+    #[test]
+    fn closed_sink_blocks_a_committed_queue_disposition() {
+        let (sink, receiver) = PostCommitSink::channel(OutboxKind::SeriesAnalysis);
+        drop(receiver);
+
+        let result = submit_control_outcome(
+            &sink,
+            ControlOutcome::new(
+                DeliveryDisposition::Acknowledge,
+                PostCommitEffects::wake(OutboxKind::SeriesAnalysis),
+            ),
+        );
+
+        assert!(matches!(result, Err(ConsumerError::PostCommitSink(_))));
+    }
+
+    #[test]
+    fn empty_effects_do_not_block_a_no_outbox_disposition() {
+        let (sink, receiver) = PostCommitSink::channel(OutboxKind::SeriesAnalysis);
+        drop(receiver);
+
+        let result = submit_control_outcome(
+            &sink,
+            ControlOutcome::without_effects(DeliveryDisposition::LeavePending),
+        );
+
+        assert!(matches!(result, Ok(DeliveryDisposition::LeavePending)));
+    }
 }

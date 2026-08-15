@@ -3,11 +3,14 @@ use std::{path::Path, time::Instant};
 use momo_analysis_core::contract::ArtifactManifest;
 use tokio_postgres::{Client, Transaction};
 
-use crate::process::current_process_peak_resident_bytes;
-use crate::series_analysis::config::AnalysisConsumerConfig;
+use crate::{
+    outbox::ControlOutcome, process::current_process_peak_resident_bytes,
+    series_analysis::config::AnalysisConsumerConfig,
+};
 
 use super::{
     AttemptFailure, AttemptMetrics, ClaimedJob, ControlError, PublicationResult, ResultDisposition,
+    TransactionEffects,
     lifecycle::{finish_terminal_failure, supersede},
     publication::{
         ExistingArtifact, discard_staged_artifact, existing_artifact, finish_success,
@@ -29,7 +32,7 @@ pub(crate) async fn publish(
     config: &AnalysisConsumerConfig,
     artifact_directory: &Path,
     metrics: &mut AttemptMetrics,
-) -> Result<PublicationResult, ControlError> {
+) -> Result<ControlOutcome<PublicationResult>, ControlError> {
     let (manifest, mut staged) =
         prepare_staging(client, claim, config, artifact_directory, metrics).await?;
 
@@ -50,8 +53,9 @@ pub(crate) async fn publish(
         if !desired.matches(claim) {
             transaction.rollback().await?;
             finish_publication_metrics(metrics, publication_started);
-            supersede(&mut publication_client, claim, config, metrics).await?;
-            return Ok(PublicationResult::Superseded);
+            return supersede(&mut publication_client, claim, config, metrics)
+                .await
+                .map(|outcome| outcome.map(|()| PublicationResult::Superseded));
         }
         if staged {
             validate_staged_artifact(&transaction, claim, &manifest).await?;
@@ -83,36 +87,35 @@ pub(crate) async fn publish(
             ExistingArtifact::DifferentVersion => {
                 publish_staged_artifact(&transaction, claim, &manifest).await?;
                 finish_publication_metrics(metrics, publication_started);
-                finish_success(
-                    &transaction,
+                return commit_successful_publication(
+                    transaction,
                     claim,
-                    &config.worker_id,
+                    config,
                     metrics,
                     &manifest.root_checksum,
                     ResultDisposition::Published,
+                    PublicationResult::Published,
                 )
-                .await?;
-                transaction.commit().await?;
-                return Ok(PublicationResult::Published);
+                .await;
             }
             ExistingArtifact::Reusable => {
                 if staged {
                     discard_staged_artifact(&transaction, claim, &manifest).await?;
                 }
                 finish_publication_metrics(metrics, publication_started);
-                finish_success(
-                    &transaction,
+                return commit_successful_publication(
+                    transaction,
                     claim,
-                    &config.worker_id,
+                    config,
                     metrics,
                     &manifest.root_checksum,
                     ResultDisposition::Reused,
+                    PublicationResult::Reused,
                 )
-                .await?;
-                transaction.commit().await?;
-                return Ok(PublicationResult::Reused);
+                .await;
             }
             ExistingArtifact::IntegrityFailure(failure_code) => {
+                let mut effects = TransactionEffects::empty();
                 finish_publication_metrics(metrics, publication_started);
                 finish_terminal_failure(
                     &transaction,
@@ -120,13 +123,50 @@ pub(crate) async fn publish(
                     config,
                     AttemptFailure::failed(failure_code),
                     metrics,
+                    &mut effects,
                 )
                 .await?;
-                transaction.commit().await?;
-                return Ok(PublicationResult::IntegrityFailure(failure_code));
+                return commit_publication(
+                    transaction,
+                    effects,
+                    PublicationResult::IntegrityFailure(failure_code),
+                )
+                .await;
             }
         }
     }
+}
+
+async fn commit_successful_publication(
+    transaction: Transaction<'_>,
+    claim: &ClaimedJob,
+    config: &AnalysisConsumerConfig,
+    metrics: &AttemptMetrics,
+    output_checksum: &str,
+    disposition: ResultDisposition,
+    result: PublicationResult,
+) -> Result<ControlOutcome<PublicationResult>, ControlError> {
+    let mut effects = TransactionEffects::empty();
+    finish_success(
+        &transaction,
+        claim,
+        &config.worker_id,
+        metrics,
+        output_checksum,
+        disposition,
+        &mut effects,
+    )
+    .await?;
+    commit_publication(transaction, effects, result).await
+}
+
+async fn commit_publication(
+    transaction: Transaction<'_>,
+    effects: TransactionEffects,
+    result: PublicationResult,
+) -> Result<ControlOutcome<PublicationResult>, ControlError> {
+    transaction.commit().await?;
+    Ok(effects.committed(result))
 }
 
 async fn prepare_staging(

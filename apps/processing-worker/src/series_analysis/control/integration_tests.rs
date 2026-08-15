@@ -16,6 +16,7 @@ use tokio_postgres::Client;
 
 use super::{
     ALGORITHM_VERSION, AttemptMetrics, ClaimedJob, ControlError, ResultDisposition,
+    TransactionEffects,
     completion::reconcile_staging,
     publication::{
         finish_success, publish_staged_artifact, requires_staging, stage_artifact,
@@ -164,6 +165,7 @@ async fn real_postgres_keeps_staging_separate_from_fenced_publication() -> Smoke
     validate_staged_artifact(&transaction, &new_claim, &new_manifest).await?;
     publish_staged_artifact(&transaction, &new_claim, &new_manifest).await?;
     tokio::time::sleep(Duration::from_millis(2_100)).await;
+    let mut rejected_effects = TransactionEffects::empty();
     assert!(matches!(
         finish_success(
             &transaction,
@@ -172,11 +174,13 @@ async fn real_postgres_keeps_staging_separate_from_fenced_publication() -> Smoke
             &AttemptMetrics::default(),
             &new_manifest.root_checksum,
             ResultDisposition::Published,
+            &mut rejected_effects,
         )
         .await,
         Err(ControlError::OwnerLost)
     ));
     transaction.rollback().await?;
+    assert_eq!(rejected_effects, TransactionEffects::empty());
     assert_current(&secondary, None).await?;
     assert_artifact_shape(&secondary, &new_manifest.artifact_id, "1|0|4").await?;
 
@@ -192,6 +196,7 @@ async fn real_postgres_keeps_staging_separate_from_fenced_publication() -> Smoke
     lock_owned_by(&publication, &new_claim, NEW_WORKER_ID).await?;
     validate_staged_artifact(&publication, &new_claim, &new_manifest).await?;
     publish_staged_artifact(&publication, &new_claim, &new_manifest).await?;
+    let mut effects = TransactionEffects::empty();
     finish_success(
         &publication,
         &new_claim,
@@ -199,9 +204,11 @@ async fn real_postgres_keeps_staging_separate_from_fenced_publication() -> Smoke
         &AttemptMetrics::default(),
         &new_manifest.root_checksum,
         ResultDisposition::Published,
+        &mut effects,
     )
     .await?;
     publication.commit().await?;
+    assert_eq!(effects, TransactionEffects::empty());
     assert_current(&secondary, Some(&new_manifest.artifact_id)).await?;
     assert_artifact_shape(&secondary, &new_manifest.artifact_id, "0|1|4").await?;
     assert!(!requires_staging(&secondary, &new_claim).await?);

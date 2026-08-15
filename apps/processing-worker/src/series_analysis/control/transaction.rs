@@ -143,7 +143,8 @@ pub(super) async fn fulfill_requests(
 pub(super) async fn schedule_follow_up(
     transaction: &Transaction<'_>,
     claim: &ClaimedJob,
-) -> Result<TransactionEffects, ControlError> {
+    effects: &mut TransactionEffects,
+) -> Result<(), ControlError> {
     let pending = transaction
         .query_opt(
             "SELECT id, trigger FROM series_analysis_job_requests\x20\
@@ -153,7 +154,7 @@ pub(super) async fn schedule_follow_up(
         )
         .await?;
     let Some(pending) = pending else {
-        return Ok(TransactionEffects::empty());
+        return Ok(());
     };
     let request_id = pending.try_get::<_, String>(0)?;
     let trigger = pending.try_get::<_, String>(1)?;
@@ -209,7 +210,14 @@ pub(super) async fn schedule_follow_up(
             &[&next_job_id],
         )
         .await?;
-    enqueue_delivery(transaction, &next_job_id, DeliveryReason::FollowUp, 0).await
+    enqueue_delivery(
+        transaction,
+        &next_job_id,
+        DeliveryReason::FollowUp,
+        0,
+        effects,
+    )
+    .await
 }
 
 pub(super) async fn refresh_operation_projections(
@@ -304,7 +312,8 @@ pub(super) async fn enqueue_delivery(
     job_id: &str,
     reason: DeliveryReason,
     sequence: i32,
-) -> Result<TransactionEffects, ControlError> {
+    effects: &mut TransactionEffects,
+) -> Result<(), ControlError> {
     let reason = reason.wire();
     let sequence = sequence.to_string();
     let id = stable_id("analysis-outbox", &[job_id, reason, &sequence]);
@@ -316,7 +325,8 @@ pub(super) async fn enqueue_delivery(
             &[&id, &job_id, &dedupe],
         )
         .await?;
-    Ok(TransactionEffects::series_analysis())
+    effects.record_series_analysis();
+    Ok(())
 }
 
 pub(super) const fn scope_columns(scope: &ScopeRef) -> (&'static str, Option<&str>, Option<&str>) {

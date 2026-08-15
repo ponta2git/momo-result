@@ -7,9 +7,12 @@ use crate::{
     series_analysis::config::AnalysisConsumerConfig,
 };
 
+use crate::outbox::ControlOutcome;
+
 use super::{
     AttemptFailure, AttemptMetrics, AttemptOutcome, ClaimedJob, ControlError, DeliveryReason,
-    HeartbeatResult, RequestOutcome, RequeueCause, SafeFailureCode, TransientRetryResult,
+    HeartbeatResult, RequestOutcome, RequeueCause, SafeFailureCode, TransactionEffects,
+    TransientRetryResult,
     transaction::{
         bounded_transaction, duration_milliseconds, enqueue_delivery, finish_attempt,
         fulfill_requests, lock_owned, refresh_operation_projections, release_slot,
@@ -92,7 +95,7 @@ pub(crate) async fn supersede(
     claim: &ClaimedJob,
     config: &AnalysisConsumerConfig,
     metrics: &AttemptMetrics,
-) -> Result<(), ControlError> {
+) -> Result<ControlOutcome<()>, ControlError> {
     let transaction =
         bounded_transaction(client, config.execution_limits.finalization_timeout).await?;
     lock_owned(&transaction, claim, config).await?;
@@ -130,16 +133,18 @@ pub(crate) async fn supersede(
             &[&claim.attempt_id],
         )
         .await?;
+    let mut effects = TransactionEffects::empty();
     enqueue_delivery(
         &transaction,
         &claim.job_id,
         DeliveryReason::Superseded,
         claim.attempt_no,
+        &mut effects,
     )
     .await?;
     release_slot(&transaction, claim, config).await?;
     transaction.commit().await?;
-    Ok(())
+    Ok(effects.committed(()))
 }
 
 /// Records a bounded failure code, releases ownership, and schedules any still-pending request.
@@ -153,13 +158,14 @@ pub(crate) async fn finish_failure(
     config: &AnalysisConsumerConfig,
     failure: AttemptFailure,
     metrics: &AttemptMetrics,
-) -> Result<(), ControlError> {
+) -> Result<ControlOutcome<()>, ControlError> {
     let transaction =
         bounded_transaction(client, config.execution_limits.finalization_timeout).await?;
     lock_owned(&transaction, claim, config).await?;
-    finish_terminal_failure(&transaction, claim, config, failure, metrics).await?;
+    let mut effects = TransactionEffects::empty();
+    finish_terminal_failure(&transaction, claim, config, failure, metrics, &mut effects).await?;
     transaction.commit().await?;
-    Ok(())
+    Ok(effects.committed(()))
 }
 
 pub(super) async fn finish_terminal_failure(
@@ -168,6 +174,7 @@ pub(super) async fn finish_terminal_failure(
     config: &AnalysisConsumerConfig,
     failure: AttemptFailure,
     metrics: &AttemptMetrics,
+    effects: &mut TransactionEffects,
 ) -> Result<(), ControlError> {
     let outcome = failure.outcome();
     let outcome_wire = outcome.wire();
@@ -199,7 +206,7 @@ pub(super) async fn finish_terminal_failure(
         )
         .await?;
     fulfill_requests(transaction, claim, RequestOutcome::Failed).await?;
-    schedule_follow_up(transaction, claim).await?;
+    schedule_follow_up(transaction, claim, effects).await?;
     refresh_operation_projections(transaction, &claim.attempt_id).await?;
     release_slot(transaction, claim, config).await?;
     Ok(())
@@ -215,7 +222,7 @@ pub(crate) async fn retry_transient_failure(
     claim: &ClaimedJob,
     config: &AnalysisConsumerConfig,
     metrics: &AttemptMetrics,
-) -> Result<TransientRetryResult, ControlError> {
+) -> Result<ControlOutcome<TransientRetryResult>, ControlError> {
     let transaction =
         bounded_transaction(client, config.execution_limits.finalization_timeout).await?;
     lock_owned(&transaction, claim, config).await?;
@@ -226,6 +233,7 @@ pub(crate) async fn retry_transient_failure(
         )
         .await?
         .try_get::<_, i32>(0)?;
+    let mut effects = TransactionEffects::empty();
     if retry_count < 3 {
         finish_attempt(&transaction, claim, AttemptOutcome::Failed, metrics).await?;
         let next_retry = retry_count
@@ -264,11 +272,12 @@ pub(crate) async fn retry_transient_failure(
             &claim.job_id,
             DeliveryReason::TransientRetry,
             next_retry,
+            &mut effects,
         )
         .await?;
         release_slot(&transaction, claim, config).await?;
         transaction.commit().await?;
-        return Ok(TransientRetryResult::Requeued);
+        return Ok(effects.committed(TransientRetryResult::Requeued));
     }
 
     finish_terminal_failure(
@@ -277,10 +286,11 @@ pub(crate) async fn retry_transient_failure(
         config,
         AttemptFailure::failed(SafeFailureCode::DependencyRetryExhausted),
         metrics,
+        &mut effects,
     )
     .await?;
     transaction.commit().await?;
-    Ok(TransientRetryResult::Exhausted)
+    Ok(effects.committed(TransientRetryResult::Exhausted))
 }
 
 /// Returns an interrupted claim to the durable queue without consuming its logical request.
@@ -294,7 +304,7 @@ pub(crate) async fn requeue_interrupted(
     config: &AnalysisConsumerConfig,
     cause: RequeueCause,
     metrics: &AttemptMetrics,
-) -> Result<(), ControlError> {
+) -> Result<ControlOutcome<()>, ControlError> {
     let transaction =
         bounded_transaction(client, config.execution_limits.finalization_timeout).await?;
     lock_owned(&transaction, claim, config).await?;
@@ -323,14 +333,16 @@ pub(crate) async fn requeue_interrupted(
             &[&claim.job_id],
         )
         .await?;
+    let mut effects = TransactionEffects::empty();
     enqueue_delivery(
         &transaction,
         &claim.job_id,
         cause.delivery_reason(),
         claim.attempt_no,
+        &mut effects,
     )
     .await?;
     release_slot(&transaction, claim, config).await?;
     transaction.commit().await?;
-    Ok(())
+    Ok(effects.committed(()))
 }

@@ -7,7 +7,7 @@ use crate::{
         ExecutionTaskKind, NewExecutionSlotHolder, SlotAcquisition, acquire_analysis,
         clear_stale_preemption, lock as lock_execution_slot,
     },
-    outbox::{ControlOutcome, PostCommitEffects},
+    outbox::ControlOutcome,
     series_analysis::config::AnalysisConsumerConfig,
 };
 
@@ -37,7 +37,7 @@ pub(crate) async fn claim_job(
         ClaimPreparation::Ready { candidate, effects } => (candidate, effects),
         ClaimPreparation::Rejected(result) => {
             transaction.rollback().await?;
-            return Ok(ControlOutcome::new(result, PostCommitEffects::empty()));
+            return Ok(ControlOutcome::without_effects(result));
         }
     };
     let expected_schema = i32::try_from(ARTIFACT_SCHEMA_VERSION)?;
@@ -45,12 +45,11 @@ pub(crate) async fn claim_job(
         || candidate.artifact_schema_version != expected_schema
     {
         transaction.rollback().await?;
-        return Ok(ControlOutcome::new(
+        return Ok(ControlOutcome::without_effects(
             ClaimResult::UnsupportedVersion(UnsupportedJobVersion {
                 algorithm_version: candidate.algorithm_version,
                 artifact_schema_version: candidate.artifact_schema_version,
             }),
-            PostCommitEffects::empty(),
         ));
     }
     let attempt_no = candidate
@@ -129,7 +128,7 @@ async fn prepare_claim(
         if !holder.expired || holder.task_kind == ExecutionTaskKind::Ocr {
             return Ok(ClaimPreparation::Rejected(ClaimResult::Busy));
         }
-        effects = effects.union(recover_expired_analysis_holder(transaction, holder).await?);
+        effects.merge(recover_expired_analysis_holder(transaction, holder).await?);
     }
     if slot.preempt_requested_by.is_some()
         && !clear_stale_preemption(transaction, stale_preemption_milliseconds).await?

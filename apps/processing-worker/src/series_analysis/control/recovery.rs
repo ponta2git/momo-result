@@ -40,11 +40,18 @@ pub(crate) async fn recover_expired_analysis_holder(
             &[&job_id],
         )
         .await?;
-    let effects = if let Some(job) = job {
-        recover_expired_job(transaction, job_id, attempt_id, fencing_token, &job).await?
-    } else {
-        TransactionEffects::empty()
-    };
+    let mut effects = TransactionEffects::empty();
+    if let Some(job) = job {
+        recover_expired_job(
+            transaction,
+            job_id,
+            attempt_id,
+            fencing_token,
+            &job,
+            &mut effects,
+        )
+        .await?;
+    }
     if !clear_expired_slot(transaction, holder).await? {
         return Err(ControlError::OwnerLost);
     }
@@ -80,12 +87,20 @@ async fn recover_expired_job(
     attempt_id: &str,
     fencing_token: i64,
     row: &Row,
-) -> Result<TransactionEffects, ControlError> {
+    effects: &mut TransactionEffects,
+) -> Result<(), ControlError> {
     let job = decode_expired_job(row)?;
     if job.next_recovery_count <= 3 {
-        requeue_expired_job(transaction, job_id, attempt_id, job.next_recovery_count).await
+        requeue_expired_job(
+            transaction,
+            job_id,
+            attempt_id,
+            job.next_recovery_count,
+            effects,
+        )
+        .await
     } else {
-        fail_expired_job(transaction, job_id, attempt_id, fencing_token, job).await
+        fail_expired_job(transaction, job_id, attempt_id, fencing_token, job, effects).await
     }
 }
 
@@ -94,7 +109,8 @@ async fn requeue_expired_job(
     job_id: &str,
     attempt_id: &str,
     recovery_count: i32,
-) -> Result<TransactionEffects, ControlError> {
+    effects: &mut TransactionEffects,
+) -> Result<(), ControlError> {
     transaction
         .execute(
             "UPDATE series_analysis_jobs SET status = 'queued', lease_recovery_count = $1,\x20\
@@ -124,6 +140,7 @@ async fn requeue_expired_job(
         job_id,
         DeliveryReason::LeaseRecovery,
         recovery_count,
+        effects,
     )
     .await
 }
@@ -134,7 +151,8 @@ async fn fail_expired_job(
     attempt_id: &str,
     fencing_token: i64,
     job: ExpiredJob,
-) -> Result<TransactionEffects, ControlError> {
+    effects: &mut TransactionEffects,
+) -> Result<(), ControlError> {
     let failure_code = SafeFailureCode::LeaseRecoveryExhausted.wire();
     transaction
         .execute(
@@ -164,7 +182,7 @@ async fn fail_expired_job(
         fencing_token,
     };
     fulfill_requests(transaction, &recovered_claim, RequestOutcome::Failed).await?;
-    let effects = schedule_follow_up(transaction, &recovered_claim).await?;
+    schedule_follow_up(transaction, &recovered_claim, effects).await?;
     refresh_operation_projections(transaction, attempt_id).await?;
-    Ok(effects)
+    Ok(())
 }

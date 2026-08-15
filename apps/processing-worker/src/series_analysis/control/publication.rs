@@ -13,6 +13,7 @@ use crate::series_analysis::{
 
 use super::{
     AttemptMetrics, AttemptOutcome, ClaimedJob, ControlError, RequestOutcome, ResultDisposition,
+    TransactionEffects,
     staging_metadata::validate_staged_resource_metadata,
     transaction::{
         artifact_id_for_attempt, finish_attempt, fulfill_requests, refresh_operation_projections,
@@ -203,6 +204,7 @@ pub(super) async fn finish_success(
     metrics: &AttemptMetrics,
     output_checksum: &str,
     disposition: ResultDisposition,
+    effects: &mut TransactionEffects,
 ) -> Result<(), ControlError> {
     let disposition = disposition.wire();
     finish_attempt(transaction, claim, AttemptOutcome::Succeeded, metrics).await?;
@@ -240,7 +242,7 @@ pub(super) async fn finish_success(
         )
         .await?;
     fulfill_requests(transaction, claim, RequestOutcome::Succeeded).await?;
-    schedule_follow_up(transaction, claim).await?;
+    schedule_follow_up(transaction, claim, effects).await?;
     refresh_operation_projections(transaction, &claim.attempt_id).await?;
     release_slot_by(transaction, claim, worker_id).await?;
     Ok(())

@@ -50,16 +50,12 @@ impl TransactionEffects {
         }
     }
 
-    pub(super) const fn series_analysis() -> Self {
-        Self {
-            series_analysis_wake: true,
-        }
+    pub(super) const fn record_series_analysis(&mut self) {
+        self.series_analysis_wake = true;
     }
 
-    pub(super) const fn union(self, other: Self) -> Self {
-        Self {
-            series_analysis_wake: self.series_analysis_wake || other.series_analysis_wake,
-        }
+    pub(super) const fn merge(&mut self, other: Self) {
+        self.series_analysis_wake = self.series_analysis_wake || other.series_analysis_wake;
     }
 
     pub(crate) const fn committed<T>(self, value: T) -> ControlOutcome<T> {
@@ -280,9 +276,11 @@ mod tests {
 
     #[test]
     fn nested_transaction_effects_preserve_analysis_wakes() {
-        let nested = TransactionEffects::empty()
-            .union(TransactionEffects::series_analysis())
-            .union(TransactionEffects::empty());
+        let mut nested = TransactionEffects::empty();
+        let mut child = TransactionEffects::empty();
+        child.record_series_analysis();
+        nested.merge(child);
+        nested.merge(TransactionEffects::empty());
         let outcome = nested.committed(());
 
         assert!(
@@ -291,5 +289,54 @@ mod tests {
                 .outbox_wakes
                 .contains(OutboxKind::SeriesAnalysis)
         );
+    }
+
+    #[test]
+    fn empty_transaction_effects_do_not_fabricate_a_wake() {
+        let outcome = TransactionEffects::empty().committed(());
+
+        assert!(outcome.effects.outbox_wakes.is_empty());
+    }
+
+    #[test]
+    fn analysis_outbox_paths_share_one_transaction_accumulator_contract() {
+        const CLAIM: &str = include_str!("control/claim.rs");
+        const COMPLETION: &str = include_str!("control/completion.rs");
+        const LIFECYCLE: &str = include_str!("control/lifecycle.rs");
+        const PUBLICATION: &str = include_str!("control/publication.rs");
+        const RECOVERY: &str = include_str!("control/recovery.rs");
+        const TRANSACTION: &str = include_str!("control/transaction.rs");
+
+        let enqueue_occurrences = [TRANSACTION, RECOVERY, LIFECYCLE]
+            .into_iter()
+            .map(|source| source.matches("enqueue_delivery(").count())
+            .sum::<usize>();
+        assert_eq!(
+            enqueue_occurrences, 6,
+            "update the post-commit architecture check when adding an enqueue path"
+        );
+        for (source, route) in [
+            (TRANSACTION, "DeliveryReason::FollowUp"),
+            (RECOVERY, "DeliveryReason::LeaseRecovery"),
+            (LIFECYCLE, "DeliveryReason::Superseded"),
+            (LIFECYCLE, "DeliveryReason::TransientRetry"),
+            (LIFECYCLE, "cause.delivery_reason()"),
+        ] {
+            assert!(source.contains(route), "missing accumulated route {route}");
+        }
+        assert!(TRANSACTION.contains("effects: &mut TransactionEffects"));
+        assert!(RECOVERY.contains("schedule_follow_up(transaction, &recovered_claim, effects)"));
+        assert!(LIFECYCLE.contains("schedule_follow_up(transaction, claim, effects)"));
+        assert!(PUBLICATION.contains("schedule_follow_up(transaction, claim, effects)"));
+
+        assert_eq!(CLAIM.matches(") -> Result<ControlOutcome<").count(), 1);
+        assert_eq!(COMPLETION.matches(") -> Result<ControlOutcome<").count(), 3);
+        assert_eq!(LIFECYCLE.matches(") -> Result<ControlOutcome<").count(), 4);
+        for nested in [TRANSACTION, RECOVERY, PUBLICATION] {
+            assert!(
+                !nested.contains("PostCommitEffects"),
+                "nested transaction code converted effects before its outer commit"
+            );
+        }
     }
 }

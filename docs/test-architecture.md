@@ -44,7 +44,7 @@ CI の report mode は、同じテスト集合を通常実行と coverage 実行
 |---|---|---|
 | web | `apps/web/vite.config.ts` | statements / lines / functions は80%、branches は75%。`COVERAGE_REPORT_ONLY=1` では閾値を外す。`.tsx` と生成型は集計対象外。 |
 | api | `apps/api/build.sbt` | statements 80%、branches 70%。CI report mode の `apiTestWithCoverageReportOnly` は `coverageFailOnMinimum := false`。PostgreSQL / Redis adapter は coverage率でなくintegration contractで保証。 |
-| analysis / OCR worker | fixture / property / state-machine testと実service smoke | 現時点はcoverage率をgateにせず、pure calculation・OCR characterizationの決定論的oracleと、DB / Redis / R2 / Linux process contractで保証する。 |
+| Processing Worker runtime | fixture / property / state-machine testと実service smoke | 現時点はcoverage率をgateにせず、pure calculation・OCR characterizationの決定論的oracleと、DB / Redis / R2 / Linux process contractで保証する。 |
 
 丸めルール:
 
@@ -107,9 +107,9 @@ OCR精度劣化はcode coverageでは検知しにくいため、characterization
 | 契約 | 主テストサイズ | 管理方法 |
 |---|---|---|
 | API -> web OpenAPI / generated types | M | `apiOpenApiCheck`、`generate:api`、生成差分ゼロ。 |
-| API -> OCR worker Redis queue payload | M / L | v2 JSON Schema、Scala/Rust contract tests、Redis wire integration。 |
-| API -> analysis worker job / queue | M / L | DB consumer contract、Scala/Rust contract tests、Redis wire integration。 |
-| analysis worker -> API / web artifact | M / L | artifact schema fixture、version不一致拒否、同一version読取、API内分析なし。 |
+| API -> OCR Worker role Redis queue payload | M / L | v2 JSON Schema、Scala/Rust contract tests、Redis wire integration。 |
+| API -> Analysis Worker role job / queue | M / L | DB consumer contract、Scala/Rust contract tests、Redis wire integration。 |
+| Analysis Worker role -> API / web artifact | M / L | artifact schema fixture、version不一致拒否、同一version読取、API内分析なし。 |
 | DB consumer contract | L | `DbContractSpec`、repository integration、momo-db migration適用済みTestcontainers。 |
 | runtime images | XL | nginx設定、実行ファイル、healthz / worker heartbeat、cache header、origin lock、container logs。 |
 | logged-in UX | XL | Playwright E2E smoke。coverage率ではなく経路リストで管理する。 |
@@ -122,7 +122,7 @@ coverage report はPRを落とす主目的ではなく、推移確認とレビ�
 |---|---|---|
 | web | `pnpm --filter web test:coverage:report` | `apps/web/coverage/`, `coverage-summary/web/` |
 | API | CI: `sbt apiTestWithCoverageReportOnly`; local standalone: `sbt apiCoverageReportOnly` | `scoverage-report/`, `coverage-report/`, `coverage-summary/api/` |
-| analysis / OCR worker | coverage artifact未設定。通常testと実service smokeをrelease gateにする | なし |
+| Processing Worker runtime | coverage artifact未設定。通常testと実service smokeをrelease gateにする | なし |
 
 `scripts/ci/write-coverage-summary.py` が raw 値と丸め候補値を正規化し、次を生成する。
 

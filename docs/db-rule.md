@@ -66,7 +66,14 @@ DBに保存してよい画像関連情報は、参照ID、非公開のopaque obj
 - `FAILED` objectを外部削除する前にDBでpurge claimをCAS取得し、`FAILED -> RESERVED` retryと線形化する。
   外部削除後のrow purgeは取得したclaimだけを完了し、stale claimは期限後に別reconcilerが引き継げるようにする。
 - `ocr_queue_outbox.stream_payload` は JSON Schema と Redis contract の対象であり、DB column shapeだけで互換性を判断しない。
+- OCR semantic redeliveryは1 job 1 outbox rowを維持し、thresholdを超えても`queued`のjobをlockしてから
+  既存`DELIVERED` rowを`PENDING`へ再武装する。`running`またはterminal job、recent delivery、active claimを
+  再武装せず、保存済みpayloadを書き換えない。
 - 試合確定・確定済み試合更新・削除と、対象作品の戦績分析再計算intentは同じtransactionで確定する。
+- APIまたはProcessing Workerのoutbox writer transactionはRedis I/Oを含めず、commit完了後にだけoutbox種別を
+  持つtyped post-commit effectを返す。callerはeffectをprocess-local coordinatorへ渡してdispatchを起動する。
+  どのWorker roleがtransactionを開始したかではなく、commitしたoutbox種別でwake先を決める。dispatch失敗は
+  commit済み業務状態をrollbackせず、outbox statusと次回時刻へ保存する。
 - 戦績分析の入力versionは作品単位の単調増加revisionとして同じtransactionで進め、timestampを
   concurrency tokenの代用にしない。
 - 全登録作品に戦績分析title stateを1件持たせる。既存作品は導入migrationでbackfillし、作品master追加時は

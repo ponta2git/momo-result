@@ -7,7 +7,7 @@
 ## 1. 全体方針
 
 - 本アプリはこのリポジトリ内のモノレポとして管理する。
-- フロントエンド、APIサーバー、OCRワーカー、戦績分析ワーカーは論理的に分離する。
+- フロントエンド、APIサーバー、OCR / Analysis Worker roleは論理的に分離する。
 - 本番のwebとAPIは公開HTTP runtimeで運用する。OCRと戦績分析は高負荷処理がAPIを巻き込まない
   Rust製の独立worker runtimeへ分離する。
 - DBは summit アプリと共有する Neon PostgreSQL を利用する。
@@ -35,7 +35,7 @@ apps/
 |---|---|
 | web | pnpm |
 | api | sbt |
-| analysis / OCR worker | Cargo |
+| Processing Worker runtime | Cargo |
 
 ---
 
@@ -100,7 +100,7 @@ apps/
 
 ### 4.3 OCR依存障害時の縮退境界
 
-- API processとDBが利用可能な限り、既存resultの表示と`matchDraftId`を持たない画像なし手入力記録は、OCR worker、queue、object storageを呼ばずに継続する。
+- API processとDBが利用可能な限り、既存resultの表示と`matchDraftId`を持たない画像なし手入力記録は、OCR Worker role、queue、object storageを呼ばずに継続する。
 - 稼働中に共有Redis rate limiterが失敗または応答停止した場合、通常のread/mutationだけは短いtimeout後に同じ設定上限を持つprocess-local limiterへ縮退する。分散上限からinstance単位上限へ弱まるため、状態遷移を安全なログへ記録し、Redis復旧後は自動的に共有limiterへ戻す。
 - OCR受付、画像upload、source image取得は上記fallbackの対象にしない。必要なqueue/object storageを確認できない場合はfail-closedにする。
 - この縮退はAPI processまたはDB障害を隠さない。cold start、DB write、認証sessionの成立は別の可用性前提として扱う。
@@ -116,13 +116,50 @@ apps/
 - 認証主体は `momo_login_accounts` とし、試合参加者 `members` とは分離する。
 - dev/test では検証済み session の代替として `X-Momo-Account-Id` を使える。本番では外部から送られた account header を信頼しない。
 
+### 4.5 ジョブoutbox配送
+
+- OCRはjobとRedis配送outboxを同じDB transactionで確定する。戦績分析は試合mutation、再計算request、
+  campaign targetをdurableに確定し、jobを割り当てるtransactionでは対応outboxも同時に確定する。
+- outboxまたは未展開campaign targetを作成したruntimeはDB commit成功後にだけ配送処理をwakeし、必要な
+  job materializationを経て対象queueへのRedis appendを直ちに試みる。wakeは低遅延化のための非durableな
+  通知であり、配送intentの正本にはしない。
+- outboxを作成または再武装し得るDB writeは、commit済みvalueとoutbox種別ごとのpost-commit effectを返す。
+  callerは直後にeffectをprocess-local coordinatorへ渡し、queue consumerでは元deliveryのACK / leave-pendingより
+  先に行う。どのworker roleがwriteを開始したかではなく、実際にcommitしたoutbox種別でwake先を決める。
+- Redis appendをDB transactionの成功条件にしない。配送成功はRedis appendだけでなく、対応outboxを
+  `DELIVERED`へ更新するDB transactionまで成功した時点とする。
+- post-commit wake、process停止、Redis応答喪失、outbox更新失敗のいずれでもDB上のintentを失わず、
+  startup recoveryと用途別のcold sweepで再配送できるようにする。
+- 通常経路は固定短周期でDBをpollしない。wake後はdue workをbounded batchで空になるまで処理し、
+  配送成功または将来時刻へのretry予約後はactive reconcileを終了し、次のwake、予約deadline、またはcold sweepまで
+  DB accessを停止する。coordinator自体は終了させず、commandを発行しない待機状態へ戻す。
+- retryまたはsemantic redeliveryの将来wakeは用途ごとに最も早い時刻へcoalesceし、同時に保持するdeadline
+  timerを1つ以下にする。jobまたはoutboxごとの常駐fiberを作らない。
+- drain全体がDB接続失敗などで完了できない場合はdispatcherを終了またはhot loopさせず、上限付きbackoff後に
+  1回だけ再試行する。依存回復後の正常drainでbackoffをresetする。
+- OCRと戦績分析は同じ安全契約を持つが、semantic redeliveryとcold sweepの時間はjob lifecycleに合わせて
+  個別に定める。重複deliveryはProcessing WorkerのDB claimとterminal状態確認で安全に収束させる。
+- wake、startup、最短deadline、error backoff、bounded drainは共通coordinator契約へ寄せ、outbox固有SQL、
+  payload、semantic reconcileは用途別driverへ残す。Processing Worker runtimeは自身が書くoutbox種別だけを
+  登録し、現在は戦績分析driver 1つを持つ。OCR roleが期限切れ分析attemptを回収した場合も分析wakeを返すが、
+  OCRの通常transient retryは既存PEL deliveryを使うため新しいoutbox wakeを返さない。
+- wake専用の常時稼働service、PostgreSQL `LISTEN`接続、Redis Pub/SubはMVPの必須構成にしない。
+  少人数利用では既存runtime内のpost-commit処理と低頻度recoveryを優先し、idle時の課金対象I/Oを増やさない。
+
 ---
 
-## 5. OCRワーカー
+## 5. OCR Capability / Worker Role
 
 ### 5.1 基本構成
 
-- OCR consumerはRustで実装し、戦績分析consumerとprocessing runtime・supervisorを共有する。
+- `Processing Worker runtime`はdeploy単位、`processing parent process`は長寿命OS process、OCR / Analysis
+  Worker roleはその中で動く論理的な処理担当、attempt子processは1回分だけを実行する短寿命OS processとする。
+- OCR consumerはRustで実装し、Analysis consumerとprocessing parent process・supervisorを共有する。
+- supervisorは長寿命consumer / coordinatorの開始、shutdown、unexpected exitだけを扱い、OCR / 分析のclaim SQL、
+  payload、outbox意味論を持たない。
+- 親processはqueue、DB claim / lease / fence、共有slot、object取得、子process lifecycle、durable write、
+  post-commit effect、ACKを所有する。OCR / Analysis子processは1 attemptのbounded candidateだけを返し、
+  durable DB write、Redis、outbox、ACKを行わない。
 - OCRライブラリはTesseractとRustの画像処理crateを使う。
 - OCR/画像解析には外部APIを使わない。
 - OCR対象画面種別ごとに独立した解析器を作り、共通前処理だけ共有する。
@@ -138,7 +175,7 @@ apps/
 - API は OCR job 作成前に Redis health、`ocr_queue_outbox` backlog、dead-letter stream length を確認し、配送基盤が degraded の場合はDB行を作成せず `503` Problem Details で新規受付を一時停止する。
 - OCRと分析はDB上の単一execution slotを共有し、同時に高負荷子processを実行しない。
 - OCRだけが実行中の分析をpreemptでき、分析からOCRはpreemptしない。
-- worker は terminal DB write before `XACK` を原則とする。
+- processing parent processはterminal DB write before `XACK`を原則とする。
 
 ### 5.3 ジョブ記録
 
@@ -158,12 +195,13 @@ OCRジョブのタイムアウト初期値は `OCR_TIMEOUT_SECONDS` で管理す
 
 ---
 
-## 6. 戦績分析ワーカー
+## 6. Analysis Capability / Worker Role
 
-- 戦績比較、振り返り、ドリルダウンに必要な値はRust製の専用workerで作品単位に事前計算する。
+- 戦績比較、振り返り、ドリルダウンに必要な値はRust製Analysis Worker roleで作品単位に事前計算する。
 - APIはjob受付、成果物と状態の読み取り、認証・認可を担当し、分析計算を実行しない。
 - DBをjob、再計算intent、成果物、状態の正本とし、Redis Streamsは配送路として使う。
-- workerの同時実行数は1とし、1作品の全有効スコープを1つの入力snapshotから計算する。
+- Processing WorkerのDB execution slotは全runtime / deploy世代で1とし、1作品の全有効スコープを1つの
+  入力snapshotから計算する。
 - 計算本体は停止可能な子プロセス境界に置き、timeout、異常終了、将来のOCRによるpreemptionで
   部分成果物を公開しない。
 - 初回リリースからハードタイムアウト機構を持つ。値は本番同等runtimeで実測後に設定し、
@@ -181,7 +219,7 @@ OCRジョブのタイムアウト初期値は `OCR_TIMEOUT_SECONDS` で管理す
 - upload request 全体の上限は `UPLOAD_REQUEST_MAX_BYTES` で管理する。
 - OCR へ進んでいない未参照 upload は account 別に件数・容量上限を持つ。上限は `IMAGE_UPLOAD_UNREFERENCED_COUNT_LIMIT` と `IMAGE_UPLOAD_UNREFERENCED_BYTES_LIMIT` で管理し、超過時は `429` Problem Details で拒否する。
 - PostgreSQL runtimeのaccount別上限は、同じaccountの予約を直列化したDB transaction内で、冪等keyの既存確認、未参照使用量の集計、上限判定、新規予約を一体として行う。冪等retryは新しい枠を消費せず、並行uploadで上限を超えて予約しない。object storageの空き容量確認は外部状態を含むpreflightであり、このDB上限とは責務を分ける。
-- OCR worker はデコード後メモリ保護のため、FullHD（1920x1080）を超える寸法の画像を処理しない。
+- OCR Worker roleの親側境界はデコード後メモリ保護のため、FullHD（1920x1080）を超える寸法の画像を処理しない。
 - アップロード画像は非公開Cloudflare R2 bucketへ保存し、DBとqueueには推測困難なopaque object keyだけを保持する。bucket URL、credential、署名付きURL、worker間のlocal pathを永続契約にしない。
 - OCR完了時点では画像を削除しない。下書き確定または下書き削除まで保持し、その後削除する。
 - OCR へ進まない未参照 upload は `IMAGE_ORPHAN_OLDER_THAN_MINUTES` より古くなった時点で orphan reaper の削除対象とする。MVP既定値は15分、reaper interval は5分とする。
@@ -239,7 +277,7 @@ OCRジョブのタイムアウト初期値は `OCR_TIMEOUT_SECONDS` で管理す
 ## 9. ローカル開発
 
 - ローカル開発では Docker Compose でDB/Redisだけを起動する。
-- web/APIは各言語のdevコマンド、analysis / OCR workerはLinux専用imageで起動する。
+- web/APIは各言語のdevコマンド、Processing Worker runtimeはLinux専用imageで起動する。
 - ローカルの環境変数は `.env` で管理する。
 - 詳細な起動順序と検証コマンドは `docs/dev-rule.md` を正とする。
 
@@ -287,7 +325,7 @@ OCRジョブのタイムアウト初期値は `OCR_TIMEOUT_SECONDS` で管理す
 |---|---|
 | web | OpenAPI型生成、format、lint、typecheck、Vitest、build |
 | api | format、lint、clean compile、unit / non-integration test、DB quality gate、Redis quality gate、OpenAPI生成チェック |
-| analysis / OCR worker | format、lint、unit / integration test、release build |
+| Processing Worker runtime | format、lint、unit / integration test、release build |
 | runtime / E2E | Docker build、runtime smoke、container image scan、Playwright E2E smoke |
 
 Playwright E2E smoke はUX確定済みのログイン後主要フローに絞る。ローカル隔離gateではVite dev serverとE2E専用API / DB / Redisを使う。deploy workflowではweb/API runtime imageを実DB/Redis付きで起動し、ビルド済みwebへPlaywrightを当てる。workerは別途runtime smokeを起動し、成果物を介したE2Eと結合する。runtime経路の開発用認証ヘッダはPlaywrightのbrowser route境界で注入し、本番bundleには埋め込まない。
@@ -300,7 +338,7 @@ release対象は検証前に一度だけbuildし、後続gateとdeployで同じa
 |---|---|
 | web | oxlint + oxfmt |
 | api | scalafmt + scalafix |
-| analysis / OCR worker | rustfmt + Clippy |
+| Processing Worker runtime | rustfmt + Clippy |
 
 ### 11.3 テスト
 
@@ -309,7 +347,7 @@ release対象は検証前に一度だけbuildし、後続gateとdeployで同じa
 | web | Vitest + Testing Library |
 | api | MUnit |
 | api DB/Redis integration | Testcontainers + MUnit |
-| analysis / OCR worker | Cargo test + PostgreSQL / Redis / R2 / Linux process integration |
+| Processing Worker runtime | Cargo test + PostgreSQL / Redis / R2 / Linux process integration |
 
 ---
 
@@ -349,7 +387,7 @@ release対象は検証前に一度だけbuildし、後続gateとdeployで同じa
 - `/healthz` はAPIプロセスの生存のみ確認する。
 - DB/Redis接続は `/healthz/details` で確認する。
 - dev/prod startup 時のDB contract不一致を fail-fast にするか health warning にするかは未決の運用設計事項とし、詳細な follow-up tracking は private postmortem 側で扱う。
-- 公開HTTPを持たない戦績分析ワーカーは、process生存、最終heartbeat、queue待機時間、job状態を
+- 公開HTTPを持たないProcessing Worker runtimeは、process生存、最終heartbeat、queue待機時間、job状態を
   runtimeとDBから観測する。
 
 ### 13.3 費用・攻撃観測
@@ -362,6 +400,7 @@ MVPでは外部監視基盤を必須にせず、Fly.io logs と `/healthz/detail
 |---|---|---|
 | OCR受付数・作成拒否 | API log、`/healthz/details` | `ocr_job_accepted`, `ocr_job_create_rate_limited`, `ocr_job_create_rejected`, `OCR admission rejected`, `ocrAdmission` |
 | OCR queue/backlog/DLQ | `docs/redis-streams-ocr-contract.md` の Operations | `ocr_queue_outbox` 件数、Redis stream length、consumer group pending count、DLQ stream length |
+| Outbox wake/recovery | API / Processing Worker log、DB | wake理由、drain件数、再配送件数、最古due時刻、idle復帰、cold recovery |
 | 画像upload容量・object storage | API log、object storage metrics | `image_upload_accepted`, `image_upload_rate_limited`, `image_upload_admission rejected`, `source_image_orphan_reaper` |
 | source image download量 | API log | `source_image_transfer_completed`, `source_image_archive_transfer_completed`, `source_image_download_rate_limited`, `source_image_archive_rejected` |
 | CSV/TSV export量 | API log | `match_export_completed`, `match_export_rate_limited`, `match_export_rejected` |

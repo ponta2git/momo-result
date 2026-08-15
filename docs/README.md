@@ -15,8 +15,8 @@
 | API / usecase | `docs/architecture.md` の API | `docs/domain-rule.md`, `docs/test-rule.md`, `docs/dev-rule.md` |
 | DB / repository | `docs/db-rule.md` | `docs/test-rule.md`, `docs/dev-rule.md` |
 | Redis / OCR queue | `docs/redis-streams-ocr-contract.md` | `docs/schemas/*.schema.json`, `docs/test-rule.md` |
-| OCR worker | `docs/architecture.md` の OCR Worker | `docs/redis-streams-ocr-contract.md`, `docs/test-rule.md` |
-| 戦績分析 worker / job / artifact / API | `docs/series-analysis-realization.md` | `docs/requirements/series-analysis-batch.md`, 指標を変える場合は `docs/requirements/series-comparison.md` と `docs/requirements/series-review-playbook.md`、必要に応じて `docs/db-rule.md`, `docs/test-rule.md` |
+| OCR capability / worker role | `docs/architecture.md` の OCR Capability / Worker Role | `docs/redis-streams-ocr-contract.md`, `docs/test-rule.md` |
+| Analysis capability / worker role / job / artifact / API | `docs/series-analysis-realization.md` | `docs/requirements/series-analysis-batch.md`, 指標を変える場合は `docs/requirements/series-comparison.md` と `docs/requirements/series-review-playbook.md`、必要に応じて `docs/db-rule.md`, `docs/test-rule.md` |
 | テスト / coverage / CI | `docs/test-rule.md` | `docs/test-architecture.md`, `docs/dev-rule.md` |
 | ローカル起動 / コマンド / Git | `docs/dev-rule.md` | `docs/test-rule.md` |
 | 戦績比較ページ | `docs/requirements/series-comparison.md` | 非同期計算・成果物・API・管理状態を触る場合は `docs/requirements/series-analysis-batch.md` と `docs/series-analysis-realization.md`、振り返り/行動プレイブックを触る場合は `docs/requirements/series-review-playbook.md`、必要に応じて `docs/architecture.md`, `docs/test-rule.md` |
@@ -36,7 +36,7 @@
 | 要求正本 | `docs/requirements/series-analysis-batch.md` | 戦績分析の非同期ジョブ、成果物、状態表示、管理、正確性、OCR統合制約 |
 | 要求正本 | `docs/requirements/series-review-playbook.md` | 戦績比較ページ内の振り返り、行動プレイブック要求 |
 | 要求正本 | `docs/requirements/held-event-detail.md` | 開催一覧、開催詳細、試合記録・戦績比較への導線 |
-| 実装正本 | `docs/architecture.md` | API / web / OCR worker / 戦績分析workerの構造、依存方向、実装規約 |
+| 実装正本 | `docs/architecture.md` | API / web / Processing Worker runtime、OCR / 戦績分析能力の構造、依存方向、実装規約 |
 | 戦績分析実現正本 | `docs/series-analysis-realization.md` | 戦績分析のjob、queue、artifact、API schema、Web計算境界、IA / UX / UI、切替・検証契約 |
 | UI正本 | `docs/ui-rule.md` | Web の意味表現、余白、操作、motion、状態表示、画面遷移の一貫性 |
 | ドメイン正本 | `docs/domain-rule.md` | 用語、状態遷移、不変条件、認証主体と試合参加者の区別 |

@@ -37,9 +37,9 @@
 | web component/page | UI状態、入力操作、APIエラー表示、query cache lifecycle | `pnpm test:run` |
 | PostgreSQL repository | SQL syntax、transaction、PostgreSQL固有挙動 | `sbt apiDbQuality` |
 | DB contract | table / column / seed / nullable / default | `sbt apiDbQuality` |
-| Redis integration | Redis Streams wire 動作、ack/claim/retry | `sbt apiRedisQuality`, worker integration |
-| analysis / OCR worker | 数値正確性、OCR解析、payload validation、job状態、timeout、原子的公開 | `cargo test`, worker integration |
-| Runtime / E2E smoke | nginx / API / DB / Redis / worker / browser 結合、ログイン後主要UX | deploy workflow, Playwright |
+| Redis integration | Redis Streams wire 動作、ack/claim/retry | `sbt apiRedisQuality`, Processing Worker integration |
+| Processing Worker runtime | 数値正確性、OCR解析、payload validation、job状態、timeout、原子的公開 | `cargo test`, Processing Worker integration |
+| Runtime / E2E smoke | nginx / API / DB / Redis / Processing Worker / browser 結合、ログイン後主要UX | deploy workflow, Playwright |
 
 通常の `sbt test` と `cargo test` だけでは外部wireを保証しない。DB/Redis/R2/native OCRなどの動作を
 検証したと言うには、対応するintegration gateの成功が必要。
@@ -148,7 +148,7 @@ PostgreSQL repository、Doobie query、DB table/column、migration 前提に触�
   同じ名称へ畳み込まない。子reportと検証済みmanifestの件数・byte数が不一致なら成功測定にも公開にも含めない。
 - 現行のanalysis child 192MiB制限を変更せずに100回連続検証する場合は、
   `scripts/ci/series-analysis-endurance.sh` を使う。DB、対象作品、runtime外部peakファイルを
-  明示し、外部peakが未取得なら成功扱いにしない。このゲートはFly/OCR workerのメモリ設定を変更しない。
+  明示し、外部peakが未取得なら成功扱いにしない。このゲートはOCR側runtimeのメモリ設定を変更しない。
 - rollbackでは、対象commitのartifact identityだけでなく、削除対象のユーザー経路とサーバー実行経路が消えたことを直接確認できる回帰ケースを用意する。
 
 実DB実行が特に必要なSQL:
@@ -160,7 +160,35 @@ PostgreSQL repository、Doobie query、DB table/column、migration 前提に触�
 - dynamic fragment
 - 複数 table をまたぐ filter / order / limit
 
-## 5. OCR Worker Rules
+## 5. Processing Worker Rules
+
+### 5.1 Parent / Child Common Contract
+
+- Analysis / OCRの両Worker roleについて、`consume -> claim / lease / shared slot -> child起動・監視 -> candidate検証 ->
+  durable commit -> post-commit effect -> ACK / leave-pending`の順序を同じcontract testの観点で固定する。
+- processing parent processがDB / Redis / object storage、process lifecycle、timeout / preemption、fence、outbox、ACKを
+  所有し、attempt childがdurable DB write、Redis、outbox、ACKを行わないことをarchitecture / process testで固定する。
+- Analysis childのread-only DB + attempt directory、OCR childのframed stdin / stdoutは能力固有transportとして
+  個別testを持つが、どちらも1 attemptだけを実行して非authoritativeなbounded candidateを返すことを共通oracleにする。
+- supervisorはconsumer / outbox coordinatorのshutdownとunexpected exitだけを扱い、能力固有SQL、payload、
+  retry判断へ依存しないことをarchitecture testで固定する。
+- outboxを書き得るRust control transactionは、commit成功時だけtyped `PostCommitEffects`相当を返し、rollbackでは
+  effectを返さないことを固定する。nested recovery / follow-upのeffectが上位結果へ集約され、consumerが元deliveryの
+  dispositionより先にsinkへ渡すことを検証する。
+- OCR roleが期限切れAnalysis holderを回収して分析outboxを作る場合はAnalysis wakeを返すこと、OCR transient retryは
+  outbox wakeを返さず既存Redis PEL deliveryをpendingのまま使うことを固定する。
+- event-driven outboxへ触れた場合は、連続wakeがoutbox種別ごとにcoalesceされること、startup drainが残存outboxを
+  回収すること、due workが空になった後は次wake / 最短deadline / 設定されたcold timerまでrepositoryを呼ばないこと、
+  複数retry / semantic deadlineが最短1件へcoalesceされることを決定論的なclock / signal testで固定する。
+- post-commit decoratorは失敗結果でwakeせず、成功結果からwakeまでのcancel maskを固定する。DB effect全体や
+  Redis I/Oをuncancelableにしない。
+- publish成功はRedis appendだけでなくoutboxの`DELIVERED`確定までを条件とし、append後DB更新失敗ではactive処理が
+  完了扱いにならず、claim expiry後の重複deliveryへ安全に収束することを固定する。
+- drain全体のrecoverable failureではcoordinatorが終了せず、制御可能clock上の上限付きbackoffまでrepositoryを
+  再呼出ししないこと、backoff中のwakeが失われないことを固定する。unexpected coordinator exitはsupervisorが
+  sibling taskを停止することを固定する。
+
+### 5.2 OCR Capability / Worker Role
 
 - runner / parser / domain / payload validation は、実 dataclass、実 parser、in-memory repository / consumer、実状態遷移を優先する。
 - accuracy gateはversion固定の回帰datasetと項目別oracleを使う。独立blind holdoutは必須とせず、未知画像への
@@ -170,8 +198,10 @@ PostgreSQL repository、Doobie query、DB table/column、migration 前提に触�
 - screen type 判定、queue payload validation、failure code mapping、ack / pending / DLQ、parser profile selection、OCR postprocess の複合条件は table-driven test にする。
 - oracle は OCR draft payload、warning / failure code、queue ack / DLQ field、DB row、画像メタデータなど外部契約に置く。
 - fixture は domain 上の意味が分かる名前にし、大量の inline dict / temporary image を増やさない。
+- OCRのsemantic redeliveryはrecent `DELIVERED`、`running`、terminal jobを変更せず、thresholdを過ぎた
+  `queued` jobの既存outboxだけを`PENDING`へ再武装することを実PostgreSQLで固定する。
 
-## 6. Analysis Worker Rules
+## 6. Analysis Capability / Worker Role Rules
 
 - 純粋計算はDB、Redis、clock、process、wire DTOから分離し、数式、分母、同値、丸め、境界、品質状態を
   table-driven testとproperty testで固定する。
@@ -197,6 +227,9 @@ PostgreSQL repository、Doobie query、DB table/column、migration 前提に触�
   充足扱いにならず、必要な次runだけを作品単位で共有できることを確認する。
 - Redis append後のoutbox更新失敗、重複delivery、stream消失後のqueued job再配送を実Redisで通し、
   DB上のqueued jobが配送路から孤立しないことを確認する。
+- Analysis roleがsupersede、retry、interruption、lease recovery、follow-upで作るoutboxは、commit結果に
+  Analysis wakeを含むことをRust control-plane testで固定する。dispatch失敗でもoutboxを残して元attemptの確定や
+  delivery dispositionを巻き戻さず、成功後のsemantic deadlineまでは追加reconcile queryを行わない。
 - transient DB / queue failureの最大3回再試行と、timeout・入力契約違反・決定論的失敗の非再試行を
   decision tableで検証する。
 - 子processの正常終了、異常終了、hard timeout、親process停止を実process testで通し、部分成果物、
@@ -244,7 +277,7 @@ PostgreSQL repository、Doobie query、DB table/column、migration 前提に触�
 - Redis-backed spec は `Integration` と `RedisIntegration` tag を付け、`apiRedisQuality` で実行する。
 - API integration tag は `apps/api/src/test/scala/momo/api/testing/TestTags.scala` を正本とし、spec 内で直接 `new munit.Tag(...)` しない。
 - PostgreSQL-backed spec は `IntegrationSuite`、Redis-backed spec は `RedisIntegrationSuite` へ寄せる。
-- analysis / OCR workerのPostgreSQL / Redis integrationは通常の `cargo test` と分離し、CI上で実サービスを
+- Processing WorkerのPostgreSQL / Redis integrationは通常の `cargo test` と分離し、CI上で実サービスを
   起動する `series-analysis-control-plane-smoke.sh` を明示gateとして持つ。
 - Rust OCR consumerのPostgreSQL / Redis integrationは通常の `cargo test` と分離し、隔離した実サービスへ
   `ocr-rust-control-plane-smoke.sh` を明示gateとして実行する。DB terminal writeより先にRedis配送をACKしないこと、
@@ -270,7 +303,10 @@ PostgreSQL repository、Doobie query、DB table/column、migration 前提に触�
 - API / web DTO 契約を変えたら OpenAPI生成物と web generated type を更新する。
 - API coverage 対象ロジックを変更したら `docs/dev-rule.md` の `sbt apiCoverage` を実行する。
 - Redis Streams / OCR queue 契約を変えたら `docs/redis-streams-ocr-contract.md` の Required Tests を実行する。
-- 戦績分析workerを変えたらformat、Clippy、unit test、PostgreSQL / Redis integration、release buildを
+- 30秒pollからevent-driven outboxへ切り替える変更はRedis payloadとDB schemaを変えない限り、queue dispatcherの
+  unit / DB integration、既存Redis quality gate、分析workerの対象control-plane testを必須範囲とする。
+  全分析計算benchmark、browser E2E、dual-run shadowはこの配送切替だけを理由には要求しない。
+- Analysis capability / Worker roleを変えたらformat、Clippy、unit test、PostgreSQL / Redis integration、release buildを
   実行する。数式または候補採用を変えたらalgorithm version判定も行う。algorithm versionを進める変更では
   release DB smokeとcontrol-plane smokeを必須にし、release fixtureのworker capability、promotion target、
   queued jobが同じversionへ収束することを直接確認する。

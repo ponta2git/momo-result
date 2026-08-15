@@ -1,6 +1,6 @@
 # 戦績分析バッチ 実現仕様
 
-目的: `docs/requirements/series-analysis-batch.md` の要求を、worker、DB、queue、API、Web、管理画面を
+目的: `docs/requirements/series-analysis-batch.md` の要求を、Processing Worker runtime、DB、queue、API、Web、管理画面を
 またぐ実装可能な契約へ落とす。
 
 本書は「どう実現するか」の正本である。指標の意味と数式は
@@ -70,7 +70,7 @@ flowchart LR
   M --> R[再計算 request / job]
   R --> O[DB outbox]
   O --> Q[分析用 Redis Stream]
-  Q --> P[Rust worker 親process]
+  Q --> P[processing parent process / Analysis Worker role]
   P -->|global slot + job lease + fence| G[(PostgreSQL 実行調停)]
   G --> J[停止可能な子process]
   J -->|一貫した入力snapshot| D[(PostgreSQL)]
@@ -85,12 +85,14 @@ flowchart LR
 |---|---|---|
 | Web | URL、filter、選択、表示文言、locale整形、chart geometry、状態表示 | 集計、閾値、候補採否、意味順、統計fallback |
 | Scala API | 認証、入力検証、成果物取得、artifact pin検証、Problem Details、admin mutation | 分析、推薦、結果補完、統計fallback |
-| Rust親process | delivery、全体slot、job lease、fence、timeout、preemption、子process回収、公開transaction | 指標計算、巨大成果物の一括保持 |
-| Rust子process | read-only snapshot取得、純粋計算、bounded chunk生成、checksum生成 | 現行成果物pointer更新、Redis ack、任意pathへの書込 |
+| processing parent process | delivery、全体slot、job lease、fence、timeout、preemption、子process回収、公開transaction、post-commit effect | 指標計算、巨大成果物の一括保持 |
+| Analysis attempt child process | read-only snapshot取得、純粋計算、bounded chunk生成、checksum生成 | 現行成果物pointer更新、Redis ack / outbox、任意pathへの書込 |
 | PostgreSQL | revision、request、job、全体slot、fence、outbox、成果物、current/previous pointerの正本 | workerの生存だけで推測した状態 |
 | Redis Streams | 少なくとも1回配送、pending recovery | job状態、retry回数、分析入力・成果物の正本 |
 
 分析runtimeは公開HTTP endpointを持たない。生存、DB heartbeat、queue待機時間、job状態で観測する。
+用語は `docs/architecture.md` 5.1を正とし、Analysis Workerは親process内の論理role、consumerはその長寿命queue task、
+attempt childは1回だけ実行する短寿命OS process、`momo-analysis-core`はprocessではなく能力crateを表す。
 
 ---
 
@@ -269,21 +271,64 @@ retryとしてdurable deliveryごとに最大3回とする。同じqueued jobに
 残る間はjobを早期失敗させず、利用可能なdeliveryがすべて尽きた場合だけ
 `dependency_retry_exhausted` として関連request、campaign target、operationをterminalへ収束させる。
 
-workerは起動時にsupportするalgorithm / artifact schema versionのexact setを宣言し、job claim SQLでも
+配送起動は固定短周期pollではなく、次のevent-driven契約とする。
+
+- APIが試合mutation、1作品要求、全作品campaign、campaign target展開からoutboxをcommitした場合、同じAPI
+  runtimeのcoalescing signalをcommit後にwakeする。wakeは失われてもよいhintであり、DB outboxだけを正本とする。
+- Processing Workerのcontrol transactionは、outboxを作成または再武装し得る場合、commit済みvalueと
+  `PostCommitEffects`相当のtyped resultを返す。effectはoutbox種別の集合であり、rollbackでは返さない。
+  Analysis / OCRいずれのconsumerも、結果を受け取った直後、元deliveryのACK / leave-pending判断より前に
+  共通sinkへeffectを渡す。OCR claim中の期限切れAnalysis holder回収が分析outboxを作る場合も分析wakeとなる。
+- Processing Worker rootの`outbox` moduleは、容量1の種別別wake、startup drain、最短deadline、error backoff、
+  bounded drain budgetを持つoutbox coordinatorを提供する。Rustの`series_analysis`側driverはsemantic reconcile、
+  claim SQL、payload、Redis append、outbox状態遷移を所有し、API application責務であるcampaign展開は複製しない。
+  `supervisor`はcoordinatorと両consumerをpeer taskとして監視するだけで、SQLやpayloadを知らない。
+- 現在Processing Workerが作るoutboxは戦績分析だけなので、Rust側coordinator / driverは分析用1組だけを起動する。
+  OCR用の空dispatcherは起動しない。将来RustがOCR outboxを書き始める場合は、同じcoordinator engineへOCR driverを
+  登録し、OCR role固有loopへ配送責務を埋め込まない。
+- API dispatcherはstartup時に1回drainする。その後はpost-commit wake、予約retry、5分後のsemantic
+  redelivery wake、30分ごとのcold recoveryのいずれかまでDB accessを停止する。
+- Rust coordinatorもstartup drain、post-commit wake、publish retry、claim expiry、semantic redeliveryの最短deadlineを
+  処理するが、無条件のglobal cold sweepは持たない。Rust process停止でsignal / deadlineを失った場合は、再起動時の
+  startup drainまたはAPIのglobal cold recoveryが回収する。
+- APIの1回のdrainはpending campaign target展開、queued job reconcile、due outbox claim、Redis appendをbatch単位で
+  繰り返す。Rustのdrainはcampaign展開を除く同じoutbox lifecycleを繰り返す。どちらもworkが空になれば終了し、
+  batch上限へ連続到達した場合は自分自身を再wakeして1 taskを無制限に占有しない。
+- Redis append成功とoutbox `delivered`更新成功の両方を確認してから、5分後のone-shot semantic wakeを予約する。
+  その時点でjobが`running`またはterminalなら何も作らず終了し、まだ`queued`かつ最近のdeliveryがなければ
+  新しいreconcile outboxを作成して同じdrain内でpublishする。
+- API / Rust coordinatorは用途ごとに最短deadlineを1つだけ保持する。jobまたはoutboxごとのtimer taskを作らず、
+  deadline到達後のdrainで次の最短時刻をDB stateから再計算する。`delivered`確定後はそのrowのactive dispatchを
+  終了し、必要ならsemantic deadlineだけを残して待機へ戻る。
+- publish失敗で`pending`へ戻したoutboxは、同じruntimeが生存している間は`next_attempt_at`に合わせてwakeする。
+  dispatch失敗はcommit済みattempt結果や元delivery dispositionを巻き戻さない。process停止でtimerが失われた
+  場合もstartupまたはAPI cold recoveryが引き継ぐ。
+- drain全体がDB接続失敗などで完了できない場合は、coordinatorが最大60秒の指数backoffを1つだけ保持して
+  再試行する。backoff中の追加wakeは保持するが即時retryの理由にはせず、正常drain後にbackoffをresetする。
+  recoverable dependency errorはcoordinator内で処理し、unexpected coordinator exitはsupervisorがruntime failureとして
+  sibling taskを停止する。
+
+初期設定は`SERIES_ANALYSIS_OUTBOX_RECOVERY_INTERVAL_SECONDS=1800`、
+`SERIES_ANALYSIS_OUTBOX_REDELIVERY_AFTER_SECONDS=300`とする。30秒のdispatcher poll設定は削除し、旧loopとの
+dual runやfeature flagは設けない。APIとProcessing Workerが同時にdispatchしても、outbox claimとDB job claimのfencingで
+重複を安全に収束させる。
+
+Analysis Worker roleは起動時にsupportするalgorithm / artifact schema versionのexact setを宣言し、job claim SQLでも
 target versionがそのsetに含まれることを条件にする。非対応deliveryを未知versionで計算・失敗扱いにせず、
 DB上のjobを `queued` のまま保つ。元deliveryをackする場合は、compatible consumerへ再配送できるdurable outbox
 intentを同じDB transactionで先に作る。非対応deliveryの継続は構成不整合として観測し、計算retryへ数えない。
 
 ### 3.3 全体実行slot、lease、fencing、回収
 
-workerは次の順で、同じDB transaction内に全体実行権を確立する。
+processing parent processは次の順で、同じDB transaction内に全体実行権を確立する。
 
 1. DB時刻で期限切れと判定できる固定execution slotをlockする。
 2. slotの単調増加 `fencingToken` を進め、owner、job、attempt、期限を保存する。
 3. 対象jobが `queued` かつterminalでなく、作品別active制約を満たすことを確認する。
 4. job leaseへ同じownerとfencing tokenを保存し、jobを `running`、attemptを開始済みにする。
 
-worker transactionのlock順は `execution slot -> title state -> job -> request / artifact` に統一する。
+processing parent processのcontrol transactionは、lock順を
+`execution slot -> title state -> job -> request / artifact`に統一する。
 試合mutationとcampaign展開はexecution slotを取得せず、複数title stateを触る場合はgame title IDの決定順で
 lockする。実PostgreSQLの競合testでdeadlockがないことを確認する。
 
@@ -316,7 +361,7 @@ lockする。実PostgreSQLの競合testでdeadlockがないことを確認する
 
 ---
 
-## 4. Rust workerと成果物公開
+## 4. Analysis Capability / Processing Workerと成果物公開
 
 ### 4.1 Rustアーキテクチャと親子process
 
@@ -328,6 +373,7 @@ Rust部分は次の一方向依存に固定する。
 apps/processing-worker
   ├─ momo-processing-worker（分析 / OCRの副作用を持つprocessing runtime）
   │   ├─ main / CLI / supervisor
+  │   ├─ outbox ─ post-commit effect / wake sink / coordinator
   │   ├─ series_analysis ─ consumer / policy / attempt / queue / control / child
   │   │                     artifact（facade / build / validate / shared）/ input_repository / config / release / endurance
   │   ├─ ocr ─ consumer / queue / DB control / R2 / child / endurance
@@ -349,9 +395,9 @@ apps/processing-worker
 能力crateからruntimeへの逆依存は禁止する。`momo-analysis-core` はPostgreSQL、Redis、Tokio、process、filesystem、
 clock、環境変数を参照せず、所有済み入力から決定論的成果物候補を作る。`momo-ocr` もRedis、PostgreSQL、Tokio、
 process lifecycleを参照せず、OCR domain、protocol、native engineを所有する。runtimeはadapterで外部値をfallibleに
-decodeし、各能力crateのversion付き論理契約へ変換する。配送・ack・retry・process管理はworkerが所有する。
+decodeし、各能力crateのversion付き論理契約へ変換する。配送・ack・retry・process管理はprocessing parent processが所有する。
 runtime crateはcoreの内部moduleを再公開せず、adapterが必要な型を明示importする。
-production workerのprocess isolation契約はLinuxを対象とし、他OSではcapability登録やjob claimより前にfail closedに
+production Processing Workerのprocess isolation契約はLinuxを対象とし、他OSではcapability登録やjob claimより前にfail closedに
 する。release audit / promotionとpure core testはOS非依存のまま実行できるよう分離する。
 
 ISO/IEC 25010:2023の保守性は、本実装では次の評価可能な設計目標へ落とす。これは規格認証の主張ではなく、
@@ -371,9 +417,24 @@ source checksumと成果物の入力が分離する状態を型境界で作れ�
 shutdown、owner喪失からcontrol-plane動作への変換は副作用のないdecision tableとし、文字列状態や呼出側ごとの
 分岐重複を禁止する。
 
-#### 親子process
+#### Processing parent / attempt child共通契約
 
-親processは小さい常駐processとし、1作品計算ごとに子processを起動する。子process終了によって計算中に
+Analysis / OCRの親子境界は次に揃える。
+
+| 関心事 | processing parent process | attempt child process |
+|---|---|---|
+| 実行単位 | Redis deliveryをDB lease / fence付きattemptへ変換し、終了まで監督する | 1 attemptだけを実行して終了する |
+| 外部副作用 | DB / Redis / object storage、ACK、outbox、公開pointerを所有する | durable DB write、Redis、object storage、ACK、outboxを行わない |
+| process安全性 | spawn、cgroup attach、heartbeat、timeout、preemption、termination、reapを所有する | 親liveness喪失時に終了し、grandchildを残さない |
+| 結果 | bounded candidateを検証し、fenced transactionで初めて正本へ反映する | 非authoritativeなbounded candidateだけを返す |
+
+Analysis adapterは大量入力を複製しないため、子へread-only DB snapshot権限とattempt directoryだけを渡し、
+chunk / manifestを返させる。OCR adapterは親がobject bytesを取得・整合性検証し、framed stdinで子へ渡してtypedな
+stdout responseを受け取る。この差は入出力volumeに対するtransport選択であり、子が副作用を持たない契約は同じである。
+
+#### Analysis attempt child
+
+processing parent processは小さい常駐processとし、1作品計算ごとにAnalysis attempt childを起動する。子process終了によって計算中に
 確保したallocator memoryをOSへ返し、連続jobで常駐memoryが積み上がることを防ぐ。
 
 子processの処理順:
@@ -583,7 +644,7 @@ DB stagingを省略し、jobの `resultDisposition` を `reused` として成功
 
 - gauge: 全体slot holder 0/1、queued作品数、最古queue待機時間、stale作品数、未完了campaign target数。
 - counter: job / attempt outcome、safe failure code、timeout、lease回収、preemption、delivery再作成、
-  artifact reuse、APIのartifact decode拒否・read busy。
+  post-commit wake、dispatcher drain、cold recovery、artifact reuse、APIのartifact decode拒否・read busy。
 - histogram: queue待機、入力抽出、計算、encode、staging、publication、API chunk取得・decode・response時間、
   child / worker peak memory、chunk / temporary byte数。
 - structured log: operation / campaign / request / job / attempt / artifact ID、version組、fencing token、状態遷移、
@@ -1407,6 +1468,11 @@ page順序:
 ---
 
 ## 8. 実装順序と切替
+
+既存の30秒dispatcherからevent-driven配送への切替は同一releaseで行う。先に新wake経路だけを有効化して旧pollを
+残すdual modeは設けず、API / Processing Workerのpost-commit wakeとprocess-local coordinator、startup/cold recovery、semantic
+redeliveryを揃えてから旧`pollInterval`と無条件loopを削除する。DB tableとRedis payloadは互換のまま使い、
+この切替専用のbackfillまたはschema migrationを要求しない。
 
 1. artifact・queueの機械可読schema、数値規則、golden fixtureを固定する。
 2. resource種別ごとのpayload件数・decoded byte上限と、API response予算をfixtureで仮固定する。

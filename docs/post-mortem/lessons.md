@@ -8,7 +8,7 @@ public repository に置くため、具体的な障害位置、再現手順、en
 恒久ルールは次へ置く。
 
 - 業務要件・CSV/TSV: `docs/requirements/base.md`
-- 技術構成・API/Web/OCR/戦績分析worker実装規約: `docs/architecture.md`
+- 技術構成・API / Web / Processing Worker runtime実装規約: `docs/architecture.md`
 - ドメイン用語・状態遷移: `docs/domain-rule.md`
 - DB共有・migration: `docs/db-rule.md`
 - Redis Streams / OCR queue 契約: `docs/redis-streams-ocr-contract.md`
@@ -244,8 +244,8 @@ public repository に置くため、具体的な障害位置、再現手順、en
 
 **参照先**
 
-- `docs/architecture.md` の OCR Worker
-- `docs/test-rule.md` の Locator / E2E、DB-backed API、Analysis Worker Rules
+- `docs/architecture.md` の OCR Capability / Worker Role
+- `docs/test-rule.md` の Locator / E2E、DB-backed API、Analysis Capability / Worker Role Rules
 
 ## 更新ルール
 

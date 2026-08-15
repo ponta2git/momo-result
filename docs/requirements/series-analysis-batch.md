@@ -140,14 +140,24 @@ preemptionはterminal状態ではない。`running` から `queued` へ戻し、
 - ジョブ状態と再計算intentの正本はDBとする。
 - Redis deliveryにはジョブを一意に識別する値だけを持たせ、完全な業務状態を正本化しない。
 - 分析deliveryはOCRとは別のversion付きstream / consumer group契約を持ち、payload schemaを混在させない。
-- workerはDB上で実行権を取得できたdeliveryだけを処理する。
-- workerは自身がsupportするalgorithm / artifact schema versionのjobだけをclaimする。非対応versionを
+- Analysis Worker roleはDB上で実行権を取得できたdeliveryだけを処理する。
+- Analysis Worker roleは自身がsupportするalgorithm / artifact schema versionのjobだけをclaimする。非対応versionを
   計算失敗へせずqueuedのままdurableに再配送し、対応workerへ到達させる。
 - 実行権は全worker processとdeploy世代を横断するDB上の単一slotと単調増加fencing tokenで管理する。
   lease失効後の旧workerはheartbeat、terminal遷移、成果物公開、slot解放を行えないようにする。
 - terminal DB writeが成功してからdeliveryをackする。
 - worker停止後に残ったleaseやpending deliveryを回収し、同じジョブを安全に再実行できるようにする。
 - 同一入力version、algorithm version、artifact schema versionの成果物公開は冪等にする。
+- APIまたはProcessing Workerのtransactionがoutboxをcommitした場合は、commit済み結果へoutbox種別の
+  post-commit effectを含め、対応するprocess-local coordinatorを即時wakeする。どのworker roleがtransactionを
+  開始したかではなく、commitしたoutbox種別でwake先を決める。OCR roleが期限切れAnalysis holderを回収して
+  分析outboxを作る場合も分析wakeとする。
+- post-commit配送の失敗は元の業務transactionまたはattempt確定を失敗へ戻さない。outboxをdurableに残し、
+  process-local startup recovery、予約retry、APIのglobal cold recoveryのいずれかで再配送する。
+- Redis appendとoutboxの`delivered`更新が両方成功したdeliveryはactive dispatchを終了する。長時間`queued`、
+  active leaseなし、最近のdeliveryなしを満たすjobだけをsemantic redeliveryの対象にする。
+- 通常配送のための固定30秒pollは行わない。既知のworkはpost-commit wakeで処理し、無条件の全体scanは
+  startupとAPIの低頻度global cold recoveryへ限定する。delivery成功から導いた1回限りのsemantic確認はこの限りでない。
 
 ### 4.3 同時実行と再試行
 
@@ -327,8 +337,15 @@ Scala版と異なる値を採用する場合、少なくとも次のいずれか
 OCR同居runtimeの実装完了とproduction activationは分ける。activation gateを満たすまではAPI writerと旧consumerを
 切り替えないが、分析とOCRの双方を停止可能な子プロセスとし、部分成果物を公開しない構造は共通で満たす。
 
-同じworkerへOCRを移す場合:
+同じProcessing Worker runtimeへOCRを置く場合:
 
+- Processing Worker runtimeはdeploy単位、processing parent processは長寿命OS process、Analysis / OCR Worker roleは
+  親内の論理的な処理担当、attempt childは1回分だけを実行する短寿命OS processとする。
+- supervisorはAnalysis / OCR consumerとprocess-level coordinatorのshutdown / failureだけを扱い、能力固有の
+  claim、payload、outbox意味論を持たない。
+- 親processはqueue、DB claim / lease / fence、単一slot、子process lifecycle、candidate検証、durable write、
+  post-commit effect、ACKを所有する。両attempt childは非authoritativeなbounded candidateだけを返し、
+  durable DB write、Redis、outbox、ACKを行わない。
 - worker全体の実行スロットは1とし、分析とOCRを同時実行しない。
 - OCR deliveryが到着したら、実行中の分析子プロセスを安全に終了してOCRを開始できる。
 - 分析は待機中または実行中のOCRを中断できない。
@@ -337,6 +354,8 @@ OCR同居runtimeの実装完了とproduction activationは分ける。activation
 - OCR開始前または成果物commit開始後など、中断不可能な短いcritical sectionを定義し、二重commitを防ぐ。
 - 別runtimeからOCR画像を読むv2 queueは、認可された共有storage上の論理ID / opaque object keyを使う。
   runtime-local volumeの共有やAPIからの一時的なfile配信へ依存しない。
+- Analysis childはread-only DB snapshotとattempt directory、OCR childは親が検証したimage bytesのstdinとtyped
+  stdout responseを使ってよい。この違いは入出力transportだけで、親子の責務境界は変えない。
 - Rust OCRのproduction activationは、version固定の回帰datasetでの項目別精度が非劣化または改善方向であること、
   FullHD peak memory、処理時間、cgroup隔離、object storage実疎通を満たして判断する。独立blind holdoutは
   release要件にせず、未知画像への一般化精度を保証したとは扱わない。新しい誤認識はRust側へ回帰fixtureを追加して

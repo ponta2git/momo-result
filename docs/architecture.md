@@ -1,11 +1,11 @@
 # アーキテクチャ規約
 
-目的: API / web / OCR worker / 戦績分析workerの構造、依存方向、実装境界を判断するための正本。
+目的: API / web / Processing Worker runtimeと、OCR / 戦績分析能力の構造、依存方向、実装境界を判断するための正本。
 
 読む条件:
 
 - 新しい module / package / feature を作る。
-- API / web / OCR worker / 戦績分析workerの境界、依存方向、wire契約を変える。
+- API / web / Processing Worker runtime、OCR / Analysis Worker roleの境界、依存方向、wire契約を変える。
 - 認証、エラー、画像、server state、外部I/O、runtime構成を触る。
 
 役割:
@@ -22,7 +22,7 @@
 |---|---|---|---|
 | web | `apps/web` | React 19, React Router 7, TanStack Query 5, Zod, Tailwind CSS 4, Base UI | SPA、入力、確認、CSV/TSV取得 |
 | api | `apps/api` | Scala 3, Tapir, http4s, Cats Effect, Doobie | HTTP API、認証、業務usecase、DB/Redis接続 |
-| analysis / OCR worker | `apps/processing-worker` | Rust, Cargo, Tesseract | 作品単位の戦績分析、version付き成果物の原子的公開、OCR queue v2 consumer |
+| Processing Worker runtime | `apps/processing-worker` | Rust, Cargo, Tesseract | 戦績分析 / OCRのconsumer、attempt子process、DB / Redis / object storageとの副作用 |
 | DB | `../momo-db` | Neon PostgreSQL, drizzle | schema / migration / seed の正本 |
 | Queue | Upstash Redis Streams | Redis Streams | OCR・戦績分析ジョブの配送。状態の正本にはしない |
 | public HTTP runtime | `Dockerfile`, `deploy/`, `tools/cmd/momo-runtime-tool` | Debian slim, JVM, nginx, Go | web/APIの起動・監視・停止、静的配信、reverse proxy。PythonとOCRを含めない |
@@ -30,7 +30,7 @@
 
 公開HTTP runtimeはwebとAPIだけを運用し、Go製runtime toolがJVMとnginxのlifecycleを管理する。戦績分析と
 OCRはRust製の専用image・起動設定を共有し、公開HTTP runtimeへ同居させない。nginxはweb静的配信とAPI
-reverse proxyを担い、worker runtimeは公開HTTPを持たない。
+reverse proxyを担い、Processing Worker runtimeは公開HTTPを持たない。
 公開HTTP runtimeのJVMはheap、metaspace、compressed class space、code cache、thread stack、GC、認識CPU数、
 JIT段階、OOM時の終了動作をimage内で明示する。HTTP request内で高負荷分析を実行しない前提で軽量JITを使い、
 CPU集約処理を再導入する変更ではJIT設定を再評価する。nginx worker数も割当CPU数へ明示的に合わせ、build hostの
@@ -68,6 +68,7 @@ API境界の一部は `ApiEndpointsArchitectureSpec` と `ApiRuntimeArchitecture
 - PostgreSQL repository / migration 前提に触れたら `docs/db-rule.md` と `docs/test-rule.md` の DB-backed API ルールに従う。
 - 試合確定・確定済み試合更新・削除は、対象作品の戦績分析再計算intentを同じtransactionへ書く。
   Redis publishをtransaction成功条件にせず、DB outboxから配送する。
+
 - 戦績比較の読み取りusecaseはversion付き成果物とjob状態を取得するだけにし、ScalaまたはRustの
   分析engineをHTTP request内で呼ばない。
 - 状態取得と成果物取得を分離し、集計、振り返り、drilldown、選択試合文脈は、状態取得で解決した
@@ -82,7 +83,44 @@ API境界の一部は `ApiEndpointsArchitectureSpec` と `ApiRuntimeArchitecture
 - scope指定exportは専用read portが、選択試合と全履歴内sequenceをDB projectionとして返す。汎用の
   `MatchesRepository.list`でseason / title全履歴と非選択childrenを組み立ててから捨てるdata flowへ戻さない。
 
-### 2.3 Module Layout
+### 2.3 Cross-runtime Job Outbox Coordination
+
+- outbox writerとdispatcherの境界はpost-commitに置く。DB adapterが返る前、または
+  `ConnectionIO` / PostgreSQL transaction内からwakeやRedis publishを呼ばない。
+- APIのpost-commit decoratorはDB effect自体をcancelableに保ち、成功結果を受け取ってからsignalをenqueueする
+  短い区間だけをcancel maskする。commit応答不明またはprocess停止はmaskで解決しようとせず、startup/cold
+  recoveryへ委ねる。
+- APIとProcessing Workerのpost-commit wakeは、outbox種別ごとに容量1のcoalescing signalとして扱う。
+  複数commitを1回のbounded drainへ集約でき、signalが既にpendingなら追加signalを捨ててよいが、outbox rowを
+  捨ててはならない。signalは業務IDやpayloadを運ばず、どのoutboxをdrainするかだけを表す。
+- outbox coordinatorはstartup時に1回drainし、その後はwake、予約deadline、用途別cold sweepのうち必要な
+  eventを待つ。待機、deadline、error backoff、bounded drain budgetは共通化し、campaign展開、semantic
+  reconcile、claim SQL、payload生成はoutbox固有driverに閉じる。due workがなくなればactive reconcileを終了し、
+  次eventまでDB accessを行わない。短周期の無条件 `foreverM` pollingを実装しない。
+- Redis append成功後もoutboxの`DELIVERED`更新が失敗またはstale claimで拒否された場合は配送完了としない。
+  claim expiryまたは次回recoveryに委ね、同じjob IDの重複deliveryを許容する。
+- repository接続失敗などbatch全体のerrorはcoordinator fiberを終了させず、上限付き指数backoffのdeadlineへ
+  変換する。backoff中の追加wakeは容量1へ保持するが、backoffを迂回してDBを連打しない。
+- dispatcherがpublish失敗を`PENDING`へ戻した場合は、同じruntimeが生存している間は
+  `next_attempt_at`に合わせたone-shot wakeを予約する。retryとsemantic redeliveryのdeadlineは用途ごとに
+  最も早い1件へcoalesceし、coordinator自身がwake signal、deadline、cold timerを待つ。rowごとのtimer fiberは
+  作らず、process停止でdeadlineが失われてもstartupまたはglobal cold recoveryで回収する。
+- `DELIVERED`後のjobが用途別thresholdを超えて`queued`のままならsemantic reconcilerがdeliveryを再武装する。
+  再武装後は同じdrainで直ちにpublishし、`running`またはterminalへ進んだjobは対象から外す。
+- outboxを作成または再武装し得るtransactionは、commit完了後にvalueとtypedなpost-commit effectを返す。
+  rollbackはeffectを返さず、callerはcommit結果を受け取った直後に対応outbox種別のsinkへwakeを渡す。
+  queue consumerでは元deliveryのACK / leave-pending判断より前に行う。nested recoveryやfollow-upが作るeffectも
+  上位結果へ集約し、捨てられないAPIにする。
+- APIは自身が書けるOCR / 戦績分析outboxのcoordinatorを持つ。Processing Worker runtimeは、どの論理worker roleが
+  transactionを開始したかにかかわらず、自身がcommitしたoutbox種別をprocess-local coordinatorへ通知する。
+  現状Rust側が作るのは戦績分析outboxだけなので、Rust側coordinator / driverも戦績分析用1組だけとし、空のOCR
+  dispatcherを常駐させない。OCR roleが期限切れ分析holderを回収して分析outboxを作った場合も、分析wakeを返す。
+  OCRの通常transient retryは既存Redis PEL deliveryを残してDB jobだけを再queueするため、outbox wakeを返さない。
+- APIとProcessing Workerのdispatcherは同じoutbox claim fencingを使い、同時wakeは`FOR UPDATE SKIP LOCKED`と
+  claim identityで競合を解消する。MVPではwake専用service、PostgreSQL `LISTEN/NOTIFY`、Redis Pub/Subを
+  追加しない。
+
+### 2.4 Module Layout
 
 - `momo.api.usecases` 直下は公開 usecase facade を置く。集計、採点、文言生成などの内部実装が大きくなる場合は `momo.api.usecases.<domain>` へ package-private object として分け、HTTP / repository から直接参照しない。
 - Scala戦績比較engine / aggregationはproduction sourceから撤去し、旧endpointには固定reload-requiredを返す
@@ -94,7 +132,7 @@ API境界の一部は `ApiEndpointsArchitectureSpec` と `ApiRuntimeArchitecture
 - composition root は `momo.api.bootstrap.ApiApp` に置くが、`ApiApp` は runtime 実装セットの選択に寄せる。Redis / rate limit / queue の infrastructure、maintenance、health details、usecase-to-HTTP wiring は bootstrap 配下の helper object へ分ける。
 - 大きい純粋集計アルゴリズムを残す場合は、公開 facade から分離し、責務を名前で表す専用 package / file に置く。単に行数だけで細切れにせず、共通 mutable state や wire表現を漏らさない境界を優先する。
 
-### 2.4 Error / Auth
+### 2.5 Error / Auth
 
 - エラーは業務、認証、権限、入力、外部依存を区別し、UIが扱える Problem Details に正規化する。
 - Discord OAuth session は HttpOnly Cookie と PostgreSQL `app_sessions` で管理する。
@@ -165,9 +203,9 @@ web の import 境界は `apps/web/scripts/check-architecture-imports.mjs`、mod
 - OCR intakeは画像uploadからjob作成まで同じ操作keyを再利用し、両方が成功してからkeyを完了する。upload側のfingerprintは画像内容のSHA-256、byte数、media type、file名を含め、同じkeyで別画像を受理しない。
 - 公開HTTP DTOへ内部画像path、旧OCR field名、旧dev header名を戻さない。残存検出は `apps/web/scripts/check-api-contract.mjs` へ寄せる。
 
-## 4. OCR Worker
+## 4. OCR Capability / Worker Role
 
-- OCRの配送・制御・object取得は `apps/processing-worker/src/ocr`、OCR子のstdio adapterは
+- OCR Worker roleの配送・制御・object取得は `apps/processing-worker/src/ocr`、OCR attempt子processのstdio adapterは
   `apps/processing-worker/src/ocr/child.rs`、native実装・親子protocol・typed domain contractは
   `apps/processing-worker/crates/ocr` に置く。queue / DB control、R2取得・整合性検証、停止可能な
   native OCR子processを分離し、OCR子は分析子と同じ固定cgroupを時分割で使う。
@@ -196,19 +234,61 @@ web の import 境界は `apps/web/scripts/check-architecture-imports.mjs`、mod
   reap、queue ack、retry、DB状態遷移を所有しない。protocol codecとTesseract backendは同crate内に置き、
   将来のnative crate / binary差し替えはこの境界の内側で行う。
 
-## 5. Processing Worker
+## 5. Processing Worker Runtime
 
-- workerはRust + Cargo workspaceとして `apps/processing-worker` に置く。`crates/analysis-core` の
+### 5.1 語彙とprocess境界
+
+この章では、無修飾の「worker」をOS processと論理的な処理担当の両方へ使わない。親・子はOS processの関係だけを
+指し、OCR / Analysisの違いはworker roleまたはcapabilityとして表す。
+
+| 用語 | 意味 |
+|---|---|
+| Processing Worker runtime | `apps/processing-worker`のdeployable image / runtime shell |
+| processing parent process | `worker` commandで起動する長寿命OS process。全副作用と長寿命taskを所有する |
+| Analysis Worker role / OCR Worker role | 親process内の論理的な処理担当。consumer、能力固有control / adapter、attempt子adapterから成り、OS processそのものではない |
+| consumer | Redis deliveryを待ち、1件ごとの親側lifecycleを進める長寿命async task |
+| attempt | DB leaseとfenceで識別される1回分の業務実行 |
+| attempt child process | 1 attemptだけを実行して終了する短寿命OS process。`child-compute`または`child-ocr` |
+| capability crate | `momo-analysis-core`または`momo-ocr`。業務計算、domain型、version付き論理契約を表し、processやqueueを表さない |
+| supervisor | consumer / coordinatorを開始し、shutdown、unexpected exit、sibling停止を扱う親process内のlifecycle境界 |
+| orchestrator | 独立component / 包括moduleとしては設けない。旧能力containerの意味では使用禁止 |
+| outbox coordinator | wake、startup、deadline、backoff、bounded drainを管理する長寿命event loop |
+| outbox driver | outbox種別固有のSQL、semantic reconcile、payload生成、publish状態遷移を所有するadapter |
+
+Analysis Worker roleとOCR Worker roleは、次の親側lifecycleへ揃える。
+
+```text
+consume -> delivery検証 -> DB claim / lease / shared slot -> attempt子process起動・監視
+        -> candidate検証 -> durable完了 / requeue + outboxをDB commit
+        -> post-commit effect送信 -> ACK / leave pending / loop停止
+```
+
+| 関心事 | processing parent process | attempt child process |
+|---|---|---|
+| DB / Redis / object storage | claim、lease、fence、状態遷移、queue、object取得、outboxを所有 | 分析入力のread-only snapshot以外は持たず、durable writeやqueue accessをしない |
+| process lifecycle | spawn、cgroup attach確認、heartbeat、timeout、preemption、termination、reapを所有 | 1 attemptだけを実行し、親liveness喪失時は終了する |
+| 入力 | deliveryとDB正本を検証し、boundedなread-only ingressだけを渡す | 渡されたattempt identityと入力範囲から能力処理を行う |
+| 出力 | bounded candidateを検証し、fence付きtransactionで初めてauthoritative stateへ反映する | 非authoritativeなcandidateだけを返し、公開pointer、job終端、ACK、outboxを変更しない |
+| post-commit | typed effectをsinkへ渡してからdelivery dispositionを実行する | wake、publish、retry、reconcileを行わない |
+
+入力・出力transportだけは能力特性に合わせる。Analysis子は大量入力を親へ複製せずread-only DB snapshotを読み、
+attempt directoryへbounded chunk / manifestを返す。OCR親はobjectを取得・検証してbounded image bytesをframed stdinで
+OCR子へ渡し、OCR子はtyped responseをstdoutで返す。この差は責務差ではなく、データ量と検証境界に基づくadapter差である。
+
+### 5.2 Module / Runtime Rules
+
+- Processing Worker runtimeはRust + Cargo workspaceとして `apps/processing-worker` に置く。`crates/analysis-core` の
   `momo-analysis-core` は決定論的な
   計算kernelとversion付き成果物契約、`momo-processing-worker` は起動・設定・logging、job lease / queue、入力snapshot、
   成果物staging、DB / Redis / process adapterを所有する。依存方向はruntimeからcoreへの一方向だけとする。
 - coreはDB row、Redis client、HTTP DTO、filesystem、clock、environment、async runtimeへ依存しない。
   queue / artifactのwire型はversion付き契約としてcoreに置けるが、transport処理はruntimeに残す。
-- runtimeでは `series_analysis` と `ocr` を能力別境界とし、各配下にconsumer、DB状態遷移、
+- runtimeでは `series_analysis` と `ocr` を能力別worker role境界とし、各配下にconsumer、DB状態遷移、
   bounded storage、子process entry adapter、能力固有の運用commandを置く。分析入力snapshotのquery / decode /
   validationは `series_analysis/input_repository`、共有PostgreSQL TLS接続は `postgres` に閉じる。`supervisor` は
-  両consumerのshutdown / failure境界、`process` は共有OS隔離境界とする。計算結果から制御動作への変換は
-  副作用のないdecision tableへ寄せる。
+  consumerとoutbox coordinatorのshutdown / failure境界、`process` は共有OS隔離境界とする。root `outbox` moduleは
+  post-commit effect、coalescing sink、coordinatorだけを所有する。包括的な`orchestrator` moduleや旧来の能力containerへ
+  戻さない。計算結果から制御動作への変換は副作用のないdecision tableへ寄せる。
 - 親processはdelivery受信、DB上の全体実行slotとfencing token、job lease、timeout、signal、子process回収を
   担当する。1作品の計算は停止可能な子processで実行し、子processから現行成果物を直接更新しない。
 - 親子契約は、能力crateが論理request/result/failureとversion付きcodecを所有し、rootがtransportとprocess
@@ -252,7 +332,8 @@ web の import 境界は `apps/web/scripts/check-architecture-imports.mjs`、mod
   接続を再利用せず、別接続の完全照合から再開する。
 - 初回からハードタイムアウトを設定可能にする。設定値がない本番起動またはjob受付はfail closedにし、
   値自体は本番同等runtimeでの実測後に確定する。
-- `worker` supervisorは分析loopと明示有効化されたOCR v2 loopを同じshutdown / failure境界で動かす。
+- supervisorはAnalysis consumerと明示有効化されたOCR v2 consumer、process-local coordinatorを同じshutdown /
+  failure境界で動かす。
   OCR v2の有効化は分析publicationと完全なbounded設定を前提とし、暗黙には有効化しない。
 - 同居時も実行枠は1とする。OCRだけが分析子processをpreemptでき、分析はOCRをpreemptできない。
   preemptされた分析は子process groupを回収し、失敗回数へ加算せず最新版へ集約して再度 `queued` にする。

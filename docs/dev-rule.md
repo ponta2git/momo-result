@@ -21,7 +21,7 @@
 |---|---|
 | web | Node.js 24, pnpm 10.34.5 |
 | api | Java 25, sbt 1.12 系 |
-| analysis / OCR worker | Rust 1.97, Cargo, Tesseract; local runtime は Docker/Linux |
+| Processing Worker runtime | Rust 1.97, Cargo, Tesseract; local runtime は Docker/Linux |
 | deploy / ops tools | Go 1.26; zero-install診断境界だけPOSIX shell |
 | integration | Docker / Testcontainers |
 | OCR runtime | Tesseract 5+ |
@@ -210,7 +210,7 @@ sbt apiFullCheck
 
 `sbt test` は integration を除外する。CI report mode では `apiTestWithCoverageReportOnly` が通常テストの代わりに coverage artifact を生成し、`apiCoverageReportOnly` は単体実行向けに `clean` から始める。DB/Redis wire 動作は `apiDbQuality` / `apiRedisQuality` で明示的に実行する。
 
-### Analysis / OCR Worker
+### Processing Worker Runtime
 
 ```sh
 cd apps/processing-worker
@@ -273,7 +273,7 @@ sbt apiR2Quality
 | PostgreSQL repository / DB前提 | api gate + `sbt apiDbQuality` |
 | Redis Streams / OCR queue | api gate + `sbt apiRedisQuality` |
 | R2-backed image storage activation | api / DB gate + `sbt apiR2Quality` + object reconciler起動確認。uploadだけの部分切替は禁止 |
-| analysis / OCR worker production code | `cargo fmt --all -- --check`, `cargo clippy --locked --workspace --all-targets --all-features -- -D warnings`, `cargo test --locked --workspace --all-targets --all-features`, `cargo build --locked --workspace --release` |
+| Processing Worker production code | `cargo fmt --all -- --check`, `cargo clippy --locked --workspace --all-targets --all-features -- -D warnings`, `cargo test --locked --workspace --all-targets --all-features`, `cargo build --locked --workspace --release` |
 | series-analysis algorithm version | processing-worker production gate + release DB smoke + control-plane smoke。ローカルDBは互換性dry-run後にrelease昇格 |
 | worker DB / Redis / process | worker production gate + release DB smoke + analysis control-plane smoke + OCR control-plane smoke + preemption smoke + dedicated image smoke |
 | Go deploy / ops tool | `cd tools && go test ./... && go vet ./...`; zero-install shell collectorを含む場合は対応する`test-*.sh` |

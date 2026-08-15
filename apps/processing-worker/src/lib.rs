@@ -9,6 +9,11 @@ mod cgroup;
 mod cli;
 mod execution_slot;
 mod ocr;
+#[expect(
+    dead_code,
+    reason = "the outbox foundation is wired into role consumers and the supervisor by the follow-up migration packages"
+)]
+mod outbox;
 mod postgres;
 #[expect(
     unsafe_code,

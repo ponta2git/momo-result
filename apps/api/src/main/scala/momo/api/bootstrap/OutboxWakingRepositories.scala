@@ -9,6 +9,7 @@ import org.typelevel.log4cats.LoggerFactory
 import momo.api.domain.*
 import momo.api.domain.ids.*
 import momo.api.errors.AppError
+import momo.api.logging.SafeLog
 import momo.api.repositories.*
 import momo.api.usecases.queue.{
   OutboxKind,
@@ -157,13 +158,16 @@ private[bootstrap] object OutboxWakingRepositories:
       }
 
     private def escalate(kind: OutboxKind, cause: Option[Throwable]): F[Unit] =
-      val message =
-        s"event=outbox_wake_sink_unavailable outboxKind=$kind committedResultPreserved=true"
-      val log = cause.fold(logger.error(message))(logger.error(_)(message))
+      val errorClasses = cause.fold("none")(SafeLog.throwableClasses)
+      val log = logger.error(
+        s"event=outbox_wake_sink_unavailable outboxKind=$kind " +
+          s"errorClasses=$errorClasses committedResultPreserved=true"
+      )
       log.attempt.void >> onSinkClosed.handleErrorWith { error =>
-        logger.error(error)(
+        val escalationErrorClasses = SafeLog.throwableClasses(error)
+        logger.error(
           s"event=outbox_wake_sink_escalation_failed outboxKind=$kind " +
-            "committedResultPreserved=true"
+            s"errorClasses=$escalationErrorClasses committedResultPreserved=true"
         )
       }.attempt.void
 

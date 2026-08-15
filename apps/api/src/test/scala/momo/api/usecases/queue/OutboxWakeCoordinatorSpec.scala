@@ -3,7 +3,7 @@ package momo.api.usecases.queue
 import scala.concurrent.duration.*
 
 import cats.effect.testkit.TestControl
-import cats.effect.{Clock, IO, Ref}
+import cats.effect.{Clock, IO, Ref, Temporal}
 import org.typelevel.log4cats.LoggerFactory
 import org.typelevel.log4cats.noop.NoOpFactory
 
@@ -58,9 +58,9 @@ final class OutboxWakeCoordinatorSpec extends MomoCatsEffectSuite:
           )
           fiber <- coordinator.run.start
           _ <- awaitCalls(calls, 1)
-          _ <- IO.sleep(4999.millis)
+          _ <- Temporal[IO].sleep(4999.millis)
           before <- calls.get
-          _ <- IO.sleep(1.millis) >> awaitCalls(calls, 2)
+          _ <- Temporal[IO].sleep(1.millis) >> awaitCalls(calls, 2)
           atDeadline <- calls.get
           _ <- fiber.cancel
         yield
@@ -83,9 +83,9 @@ final class OutboxWakeCoordinatorSpec extends MomoCatsEffectSuite:
           )
           fiber <- coordinator.run.start
           _ <- awaitCalls(calls, 1)
-          _ <- IO.sleep(9999.millis)
+          _ <- Temporal[IO].sleep(9999.millis)
           before <- calls.get
-          _ <- IO.sleep(1.millis) >> awaitCalls(calls, 2)
+          _ <- Temporal[IO].sleep(1.millis) >> awaitCalls(calls, 2)
           atDeadline <- calls.get
           _ <- fiber.cancel
         yield
@@ -112,13 +112,13 @@ final class OutboxWakeCoordinatorSpec extends MomoCatsEffectSuite:
           fiber <- coordinator.run.start
           _ <- awaitCalls(calls, 1)
           _ <- wakeup.submit(PostCommitEffects.wake(OutboxKind.SeriesAnalysis))
-          _ <- IO.sleep(999.millis)
+          _ <- Temporal[IO].sleep(999.millis)
           beforeFirstRetry <- calls.get
-          _ <- IO.sleep(1.millis) >> awaitCalls(calls, 2)
+          _ <- Temporal[IO].sleep(1.millis) >> awaitCalls(calls, 2)
           firstRetry <- calls.get
-          _ <- IO.sleep(1999.millis)
+          _ <- Temporal[IO].sleep(1999.millis)
           beforeSecondRetry <- calls.get
-          _ <- IO.sleep(1.millis) >> awaitCalls(calls, 3)
+          _ <- Temporal[IO].sleep(1.millis) >> awaitCalls(calls, 3)
           secondRetry <- calls.get
           _ <- fiber.cancel
         yield

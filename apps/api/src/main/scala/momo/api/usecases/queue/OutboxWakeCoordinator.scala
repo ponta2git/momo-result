@@ -4,8 +4,8 @@ import java.time.Instant
 
 import scala.concurrent.duration.*
 
-import cats.effect.syntax.all.*
 import cats.effect.kernel.Outcome
+import cats.effect.syntax.all.*
 import cats.effect.{Clock, Resource, Temporal}
 import cats.syntax.all.*
 import org.typelevel.log4cats.LoggerFactory

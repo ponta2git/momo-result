@@ -297,14 +297,29 @@ class AppConfigSpec extends CatsEffectSuite:
     }
   }
 
-  test("loadFromEnv reads low-frequency OCR maintenance intervals") {
+  test("loadFromEnv reads outbox cold-recovery and semantic-redelivery intervals") {
     load(
       prodEnv ++ Map(
         "OCR_OUTBOX_RECOVERY_INTERVAL_SECONDS" -> "1200",
+        "OCR_OUTBOX_SEMANTIC_REDELIVERY_INTERVAL_SECONDS" -> "90",
+        "ANALYSIS_OUTBOX_RECOVERY_INTERVAL_SECONDS" -> "2400",
+        "ANALYSIS_OUTBOX_SEMANTIC_REDELIVERY_INTERVAL_SECONDS" -> "240",
         "STALE_OCR_JOB_REAPER_INTERVAL_SECONDS" -> "1800",
       )
     ).map { result =>
       assertEquals(result.map(_.resourceLimits.ocrOutboxRecoveryInterval.toSeconds), Right(1200L))
+      assertEquals(
+        result.map(_.resourceLimits.ocrOutboxSemanticRedeliveryInterval.toSeconds),
+        Right(90L),
+      )
+      assertEquals(
+        result.map(_.resourceLimits.seriesAnalysisOutboxRecoveryInterval.toSeconds),
+        Right(2400L),
+      )
+      assertEquals(
+        result.map(_.resourceLimits.seriesAnalysisOutboxSemanticRedeliveryInterval.toSeconds),
+        Right(240L),
+      )
       assertEquals(result.map(_.resourceLimits.staleOcrJobReaperInterval.toSeconds), Right(1800L))
     }
   }

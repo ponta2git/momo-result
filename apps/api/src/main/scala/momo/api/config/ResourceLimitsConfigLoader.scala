@@ -53,7 +53,7 @@ private[config] object ResourceLimitsConfigLoader:
       parsePositiveLong(env, "STALE_OCR_JOB_AFTER_SECONDS", default = 300L),
       parsePositiveLong(env, "STALE_OCR_JOB_REAPER_INTERVAL_SECONDS", default = 1800L),
       parsePositiveLong(env, "SESSION_PRUNE_INTERVAL_MINUTES", default = 60L),
-      parsePositiveLong(env, "OCR_OUTBOX_RECOVERY_INTERVAL_SECONDS", default = 1800L),
+      loadOutboxIntervals(env),
       parseNonNegativeInt(env, "OCR_OUTBOX_DUE_BACKLOG_LIMIT", default = 24),
       parseNonNegativeInt(env, "OCR_OUTBOX_ACTIVE_BACKLOG_LIMIT", default = 48),
       parsePositiveLong(env, "OCR_OUTBOX_OLDEST_DUE_MAX_DELAY_SECONDS", default = 600L),
@@ -77,7 +77,7 @@ private[config] object ResourceLimitsConfigLoader:
           staleOcrJobAfter,
           staleOcrJobReaperInterval,
           sessionPruneInterval,
-          ocrOutboxRecoveryInterval,
+          outboxIntervals,
           ocrOutboxDueBacklogLimit,
           ocrOutboxActiveBacklogLimit,
           ocrOutboxOldestDueMaxDelay,
@@ -108,7 +108,11 @@ private[config] object ResourceLimitsConfigLoader:
           staleOcrJobAfter = staleOcrJobAfter.seconds,
           staleOcrJobReaperInterval = staleOcrJobReaperInterval.seconds,
           sessionPruneInterval = sessionPruneInterval.minutes,
-          ocrOutboxRecoveryInterval = ocrOutboxRecoveryInterval.seconds,
+          ocrOutboxRecoveryInterval = outboxIntervals.ocrRecovery,
+          ocrOutboxSemanticRedeliveryInterval = outboxIntervals.ocrSemanticRedelivery,
+          seriesAnalysisOutboxRecoveryInterval = outboxIntervals.seriesAnalysisRecovery,
+          seriesAnalysisOutboxSemanticRedeliveryInterval =
+            outboxIntervals.seriesAnalysisSemanticRedelivery,
           ocrOutboxDueBacklogLimit = ocrOutboxDueBacklogLimit,
           ocrOutboxActiveBacklogLimit = ocrOutboxActiveBacklogLimit,
           ocrOutboxOldestDueMaxDelay = ocrOutboxOldestDueMaxDelay.seconds,
@@ -130,6 +134,13 @@ private[config] object ResourceLimitsConfigLoader:
       idempotencyActiveKeyLimitPerAccount: Int,
   )
 
+  private final case class OutboxIntervals(
+      ocrRecovery: FiniteDuration,
+      ocrSemanticRedelivery: FiniteDuration,
+      seriesAnalysisRecovery: FiniteDuration,
+      seriesAnalysisSemanticRedelivery: FiniteDuration,
+  )
+
   private def loadExportResourceLimits(
       env: Map[String, String]
   ): ConfigValue[Effect, ExportResourceLimits] = (
@@ -146,3 +157,23 @@ private[config] object ResourceLimitsConfigLoader:
     parseNonNegativeInt(env, "MUTATION_RATE_LIMIT_PER_MINUTE", default = 60),
     parseNonNegativeInt(env, "IDEMPOTENCY_ACTIVE_KEY_LIMIT_PER_ACCOUNT", default = 240),
   ).mapN(ApiResourceLimits.apply)
+
+  private def loadOutboxIntervals(
+      env: Map[String, String]
+  ): ConfigValue[Effect, OutboxIntervals] = (
+    parsePositiveLong(env, "OCR_OUTBOX_RECOVERY_INTERVAL_SECONDS", default = 300L),
+    parsePositiveLong(env, "OCR_OUTBOX_SEMANTIC_REDELIVERY_INTERVAL_SECONDS", default = 120L),
+    parsePositiveLong(env, "ANALYSIS_OUTBOX_RECOVERY_INTERVAL_SECONDS", default = 1800L),
+    parsePositiveLong(
+      env,
+      "ANALYSIS_OUTBOX_SEMANTIC_REDELIVERY_INTERVAL_SECONDS",
+      default = 300L,
+    ),
+  ).mapN((ocrRecovery, ocrSemantic, analysisRecovery, analysisSemantic) =>
+    OutboxIntervals(
+      ocrRecovery.seconds,
+      ocrSemantic.seconds,
+      analysisRecovery.seconds,
+      analysisSemantic.seconds,
+    )
+  )

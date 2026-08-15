@@ -162,11 +162,11 @@ private[config] object ResourceLimitsConfigLoader:
       env: Map[String, String]
   ): ConfigValue[Effect, OutboxIntervals] = (
     parsePositiveLong(env, "OCR_OUTBOX_RECOVERY_INTERVAL_SECONDS", default = 300L),
-    parsePositiveLong(env, "OCR_OUTBOX_SEMANTIC_REDELIVERY_INTERVAL_SECONDS", default = 120L),
-    parsePositiveLong(env, "ANALYSIS_OUTBOX_RECOVERY_INTERVAL_SECONDS", default = 1800L),
+    parsePositiveLong(env, "OCR_OUTBOX_REDELIVERY_AFTER_SECONDS", default = 120L),
+    parsePositiveLong(env, "SERIES_ANALYSIS_OUTBOX_RECOVERY_INTERVAL_SECONDS", default = 1800L),
     parsePositiveLong(
       env,
-      "ANALYSIS_OUTBOX_SEMANTIC_REDELIVERY_INTERVAL_SECONDS",
+      "SERIES_ANALYSIS_OUTBOX_REDELIVERY_AFTER_SECONDS",
       default = 300L,
     ),
   ).mapN((ocrRecovery, ocrSemantic, analysisRecovery, analysisSemantic) =>

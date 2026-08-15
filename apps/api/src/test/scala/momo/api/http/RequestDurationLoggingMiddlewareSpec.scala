@@ -34,9 +34,12 @@ final class RequestDurationLoggingMiddlewareSpec extends MomoCatsEffectSuite:
         assert(completed.head.contains("outcome=succeeded"))
         assert(completed.head.contains("bodyBytes=3"))
         assert(completed.head.contains("requestId=request-stream-1"))
-        val completedEvent = afterPull.find(_.getFormattedMessage.startsWith(
-          "http_response_transfer_completed "
-        )).getOrElse(fail("expected transfer-completed event"))
+        val completedEvent = afterPull
+          .find(event =>
+            event.getFormattedMessage.startsWith("http_response_transfer_completed ") &&
+              event.getMDCPropertyMap.get("request_id") == "request-stream-1"
+          )
+          .getOrElse(fail("expected transfer-completed event"))
         assertEquals(completedEvent.getMDCPropertyMap.get("request_id"), "request-stream-1")
     }
 
@@ -91,7 +94,9 @@ final class RequestDurationLoggingMiddlewareSpec extends MomoCatsEffectSuite:
     ))
 
   private def messages(events: Vector[ILoggingEvent]): Vector[String] =
-    events.map(_.getFormattedMessage)
+    events
+      .filter(_.getMDCPropertyMap.get("request_id") == "request-stream-1")
+      .map(_.getFormattedMessage)
 
   private def captureLogs[A](
       use: IO[Vector[ILoggingEvent]] => IO[A]

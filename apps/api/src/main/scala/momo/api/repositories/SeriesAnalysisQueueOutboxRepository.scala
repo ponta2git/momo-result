@@ -2,6 +2,8 @@ package momo.api.repositories
 
 import java.time.Instant
 
+import scala.concurrent.duration.FiniteDuration
+
 final case class SeriesAnalysisQueueOutboxRecord(
     id: String,
     jobId: String,
@@ -43,6 +45,7 @@ trait SeriesAnalysisQueueOutboxRepository[F[_]]:
       redeliverBefore: Instant,
       limit: Int,
   ): F[Int]
+  def nextWakeAt(now: Instant, redeliveryAfter: FiniteDuration): F[Option[Instant]]
   def cleanupHistory(
       terminalBefore: Instant,
       stagingBefore: Instant,

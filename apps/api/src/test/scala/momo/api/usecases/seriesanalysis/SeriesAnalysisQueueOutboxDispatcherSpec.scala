@@ -16,6 +16,7 @@ import momo.api.repositories.{
   SeriesAnalysisQueueOutboxRepository
 }
 import momo.api.testing.FixedClock
+import momo.api.usecases.queue.OutboxDrainResult
 
 final class SeriesAnalysisQueueOutboxDispatcherSpec extends MomoCatsEffectSuite:
   private given LoggerFactory[IO] = NoOpFactory[IO]
@@ -28,16 +29,17 @@ final class SeriesAnalysisQueueOutboxDispatcherSpec extends MomoCatsEffectSuite:
     redeliveryAfter = 5.minutes,
   )
 
-  test("runOnce performs maintenance, publishes each claim, and records exact delivery identity"):
+  test("drainBatch performs maintenance, publishes each claim, and records exact identity"):
     for
       calls <- Ref.of[IO, Calls](Calls.empty)
       published <- Ref.of[IO, Vector[String]](Vector.empty)
-      repository = RecordingRepository(calls, List(row))
+      repository = RecordingRepository(calls, List(row), None)
       queue = RecordingPublisher(published, Right("redis-message-1"))
-      _ <- dispatcher(repository, queue).runOnce
+      result <- dispatcher(repository, queue).drainBatch
       actual <- calls.get
       actualPublished <- published.get
     yield
+      assertEquals(result, OutboxDrainResult.Progress)
       assertEquals(actual.expansions, Vector(now -> 25))
       assertEquals(actual.reconciliations, Vector((now, now.minusSeconds(300), 25)))
       assertEquals(actual.claims, Vector((25, now, claimUntil)))
@@ -47,15 +49,38 @@ final class SeriesAnalysisQueueOutboxDispatcherSpec extends MomoCatsEffectSuite:
         Vector(("outbox-1", claimUntil, "redis-message-1", now)),
       )
       assertEquals(actual.releases, Vector.empty)
+      assertEquals(actual.nextWakeAts, Vector.empty)
 
-  test("runOnce releases a failed publish with bounded backoff and a sanitized error class"):
+  test("idle batch returns the repository's earliest one-shot deadline"):
+    val nextWakeAt = now.plusSeconds(90)
+    for
+      calls <- Ref.of[IO, Calls](Calls.empty)
+      published <- Ref.of[IO, Vector[String]](Vector.empty)
+      repository = RecordingRepository(calls, Nil, Some(nextWakeAt))
+      queue = RecordingPublisher(published, Right("unused"))
+      result <- dispatcher(repository, queue).drainBatch
+      actual <- calls.get
+    yield
+      assertEquals(result, OutboxDrainResult.Idle(Some(nextWakeAt)))
+      assertEquals(actual.nextWakeAts, Vector(now -> 5.minutes))
+
+  test("overdue work skipped by a competing claim gets a one-shot contention delay"):
+    for
+      calls <- Ref.of[IO, Calls](Calls.empty)
+      published <- Ref.of[IO, Vector[String]](Vector.empty)
+      repository = RecordingRepository(calls, Nil, Some(now.minusSeconds(1)))
+      queue = RecordingPublisher(published, Right("unused"))
+      result <- dispatcher(repository, queue).drainBatch
+    yield assertEquals(result, OutboxDrainResult.Idle(Some(now.plusSeconds(1))))
+
+  test("failed publish uses a one-second first retry and a sanitized error class"):
     val failure = new IllegalStateException("redis://secret-host/analysis")
     for
       calls <- Ref.of[IO, Calls](Calls.empty)
       published <- Ref.of[IO, Vector[String]](Vector.empty)
-      repository = RecordingRepository(calls, List(row))
+      repository = RecordingRepository(calls, List(row), None)
       queue = RecordingPublisher(published, Left(failure))
-      _ <- dispatcher(repository, queue).runOnce
+      _ <- dispatcher(repository, queue).drainBatch
       actual <- calls.get
       actualPublished <- published.get
     yield
@@ -66,7 +91,7 @@ final class SeriesAnalysisQueueOutboxDispatcherSpec extends MomoCatsEffectSuite:
         Vector((
           "outbox-1",
           claimUntil,
-          now.plusSeconds(2),
+          now.plusSeconds(1),
           classOf[IllegalStateException].getName,
           now,
         )),
@@ -85,23 +110,30 @@ final class SeriesAnalysisQueueOutboxDispatcherSpec extends MomoCatsEffectSuite:
       claims: Vector[(Int, Instant, Instant)],
       deliveries: Vector[(String, Instant, String, Instant)],
       releases: Vector[(String, Instant, Instant, String, Instant)],
+      nextWakeAts: Vector[(Instant, FiniteDuration)],
   )
 
   private object Calls:
-    val empty: Calls = Calls(Vector.empty, Vector.empty, Vector.empty, Vector.empty, Vector.empty)
+    val empty: Calls = Calls(
+      Vector.empty,
+      Vector.empty,
+      Vector.empty,
+      Vector.empty,
+      Vector.empty,
+      Vector.empty,
+    )
 
   private final case class RecordingRepository(
       calls: Ref[IO, Calls],
       rows: List[SeriesAnalysisQueueOutboxRecord],
+      nextWakeAtResult: Option[Instant],
   ) extends SeriesAnalysisQueueOutboxRepository[IO]:
     override def expandPendingCampaignTargets(now: Instant, limit: Int): IO[Int] = calls
       .update(value => value.copy(expansions = value.expansions :+ (now -> limit))).as(0)
 
     override def reconcileQueued(now: Instant, redeliverBefore: Instant, limit: Int): IO[Int] =
       calls.update(value =>
-        value.copy(
-          reconciliations = value.reconciliations :+ ((now, redeliverBefore, limit))
-        )
+        value.copy(reconciliations = value.reconciliations :+ ((now, redeliverBefore, limit)))
       ).as(0)
 
     override def claimDue(
@@ -118,9 +150,7 @@ final class SeriesAnalysisQueueOutboxDispatcherSpec extends MomoCatsEffectSuite:
         redisMessageId: String,
         now: Instant,
     ): IO[Boolean] = calls.update(value =>
-      value.copy(
-        deliveries = value.deliveries :+ ((id, claimExpiresAt, redisMessageId, now))
-      )
+      value.copy(deliveries = value.deliveries :+ ((id, claimExpiresAt, redisMessageId, now)))
     ).as(true)
 
     override def releaseForRetry(
@@ -131,16 +161,16 @@ final class SeriesAnalysisQueueOutboxDispatcherSpec extends MomoCatsEffectSuite:
         now: Instant,
     ): IO[Boolean] = calls.update(value =>
       value.copy(
-        releases = value.releases :+
-          ((
-            id,
-            claimExpiresAt,
-            nextAttemptAt,
-            safeErrorClass,
-            now,
-          ))
+        releases = value.releases :+ ((id, claimExpiresAt, nextAttemptAt, safeErrorClass, now))
       )
     ).as(true)
+
+    override def nextWakeAt(
+        now: Instant,
+        redeliveryAfter: FiniteDuration,
+    ): IO[Option[Instant]] = calls
+      .update(value => value.copy(nextWakeAts = value.nextWakeAts :+ (now -> redeliveryAfter)))
+      .as(nextWakeAtResult)
 
     override def cleanupHistory(
         terminalBefore: Instant,

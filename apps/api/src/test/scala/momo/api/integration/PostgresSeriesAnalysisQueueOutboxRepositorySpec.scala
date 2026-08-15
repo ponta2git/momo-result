@@ -2,6 +2,8 @@ package momo.api.integration
 
 import java.time.Instant
 
+import scala.concurrent.duration.*
+
 import cats.effect.IO
 import cats.syntax.all.*
 import doobie.implicits.*
@@ -94,6 +96,45 @@ final class PostgresSeriesAnalysisQueueOutboxRepositorySpec extends IntegrationS
       assertEquals(inserted, 1)
       assertEquals(replay, 0)
       assertEquals(rows, List(("analysis-job-reconcile", "pending")))
+
+  test("newest delivered identity protects semantic redelivery until its exact deadline"):
+    val oldDeliveredAt = now.minusSeconds(400)
+    val newestDeliveredAt = now.minusSeconds(100)
+    val deadline = newestDeliveredAt.plusSeconds(300)
+    for
+      _ <- seedJob("analysis-job-semantic-deadline", None)
+      _ <- sql"""
+        INSERT INTO series_analysis_queue_outbox (
+          id, job_id, dedupe_key, status, delivered_at, redis_message_id,
+          next_attempt_at, created_at, updated_at
+        ) VALUES
+          ('analysis-outbox-semantic-old', 'analysis-job-semantic-deadline',
+           'dedupe:analysis-semantic-old', 'delivered', $oldDeliveredAt, '1-0',
+           $oldDeliveredAt, $oldDeliveredAt, $oldDeliveredAt),
+          ('analysis-outbox-semantic-new', 'analysis-job-semantic-deadline',
+           'dedupe:analysis-semantic-new', 'delivered', $newestDeliveredAt, '2-0',
+           $newestDeliveredAt, $newestDeliveredAt, $newestDeliveredAt)
+      """.update.run.transact(transactor)
+      protectedCount <- repo.reconcileQueued(now, now.minusSeconds(300), 10)
+      next <- repo.nextWakeAt(now, 300.seconds)
+      rearmedAtBoundary <- repo.reconcileQueued(deadline, deadline.minusSeconds(300), 10)
+    yield
+      assertEquals(protectedCount, 0)
+      assertEquals(next, Some(deadline))
+      assertEquals(rearmedAtBoundary, 1)
+
+  test("nextWakeAt prefers an in-flight claim expiry over later retry work"):
+    for
+      _ <- seedJob("analysis-job-next-wake", Some("analysis-outbox-next-wake"))
+      _ <- sql"""
+        UPDATE series_analysis_queue_outbox
+        SET status = 'in_flight',
+            claim_expires_at = ${now.plusSeconds(30)},
+            next_attempt_at = ${now.plusSeconds(90)}
+        WHERE id = 'analysis-outbox-next-wake'
+      """.update.run.transact(transactor)
+      next <- repo.nextWakeAt(now, 300.seconds)
+    yield assertEquals(next, Some(now.plusSeconds(30)))
 
   test("does not fail a queued job while another durable delivery can still succeed"):
     for

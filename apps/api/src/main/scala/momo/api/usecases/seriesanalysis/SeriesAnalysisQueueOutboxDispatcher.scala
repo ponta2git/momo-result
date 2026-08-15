@@ -4,7 +4,6 @@ import java.time.Instant
 
 import scala.concurrent.duration.*
 
-import cats.effect.syntax.all.*
 import cats.effect.{Clock, Resource, Temporal}
 import cats.syntax.all.*
 import org.typelevel.log4cats.LoggerFactory
@@ -12,19 +11,35 @@ import org.typelevel.log4cats.LoggerFactory
 import momo.api.logging.SafeLog
 import momo.api.ports.queue.SeriesAnalysisQueuePublisher
 import momo.api.repositories.{SeriesAnalysisQueueOutboxRecord, SeriesAnalysisQueueOutboxRepository}
+import momo.api.usecases.queue.{
+  OutboxDrainResult,
+  OutboxKind,
+  OutboxWakeCoordinator,
+  OutboxWakeCoordinatorConfig,
+  OutboxWakeDriver,
+  OutboxWakeup
+}
 
 final case class SeriesAnalysisQueueDispatcherConfig(
     batchSize: Int = 10,
-    pollInterval: FiniteDuration = 30.seconds,
     claimTtl: FiniteDuration = 30.seconds,
     maxBackoff: FiniteDuration = 60.seconds,
     redeliveryAfter: FiniteDuration = 5.minutes,
+    coldRecoveryInterval: FiniteDuration = 30.minutes,
+    maxConsecutiveBatches: Int = 100,
 ):
   require((1 to 100).contains(batchSize), "analysis dispatcher batchSize must be between 1 and 100")
-  require(pollInterval > Duration.Zero, "analysis dispatcher pollInterval must be positive")
   require(claimTtl > Duration.Zero, "analysis dispatcher claimTtl must be positive")
-  require(maxBackoff > Duration.Zero, "analysis dispatcher maxBackoff must be positive")
+  require(maxBackoff >= 1.second, "analysis dispatcher maxBackoff must be at least one second")
   require(redeliveryAfter > Duration.Zero, "analysis dispatcher redeliveryAfter must be positive")
+  require(
+    coldRecoveryInterval > Duration.Zero,
+    "analysis dispatcher coldRecoveryInterval must be positive",
+  )
+  require(
+    (1 to 100).contains(maxConsecutiveBatches),
+    "analysis dispatcher maxConsecutiveBatches must be between 1 and 100",
+  )
 
 private[seriesanalysis] final class SeriesAnalysisQueueOutboxDispatcher[
     F[_]: Temporal: Clock: LoggerFactory
@@ -32,18 +47,12 @@ private[seriesanalysis] final class SeriesAnalysisQueueOutboxDispatcher[
     outbox: SeriesAnalysisQueueOutboxRepository[F],
     queue: SeriesAnalysisQueuePublisher[F],
     config: SeriesAnalysisQueueDispatcherConfig,
-):
+) extends OutboxWakeDriver[F]:
   private val logger = LoggerFactory[F].getLoggerFromClass(
     classOf[SeriesAnalysisQueueOutboxDispatcher[F]]
   )
 
-  def run: F[Unit] =
-    (runOnce.handleErrorWith(error =>
-      logger.error(s"Analysis queue dispatcher tick failed errorClasses=${SafeLog
-          .throwableClasses(error)}")
-    ) >> Temporal[F].sleep(config.pollInterval)).foreverM
-
-  def runOnce: F[Unit] =
+  override def drainBatch: F[OutboxDrainResult] =
     for
       now <- Clock[F].realTimeInstant
       claimUntil = plus(now, config.claimTtl)
@@ -52,12 +61,21 @@ private[seriesanalysis] final class SeriesAnalysisQueueOutboxDispatcher[
       reconciled <- outbox.reconcileQueued(now, redeliverBefore, config.batchSize)
       _ <- Option.when(expanded > 0 || reconciled > 0)(
         logger.info(
-          s"Analysis queue maintenance expandedTargets=${expanded.toString} reconciledJobs=${reconciled.toString}"
+          s"Analysis queue maintenance expandedTargets=${expanded.toString} " +
+            s"reconciledJobs=${reconciled.toString}"
         )
       ).sequence_
       rows <- outbox.claimDue(config.batchSize, now, claimUntil)
       _ <- rows.traverse_(publish)
-    yield ()
+      result <-
+        if expanded > 0 || reconciled > 0 || rows.nonEmpty then OutboxDrainResult.Progress.pure[F]
+        else
+          outbox.nextWakeAt(now, config.redeliveryAfter)
+            .map(nextWakeAt => OutboxDrainResult.Idle(afterContention(now, nextWakeAt)))
+    yield result
+
+  private def afterContention(now: Instant, nextWakeAt: Option[Instant]): Option[Instant] =
+    nextWakeAt.map(deadline => if deadline.isAfter(now) then deadline else plus(now, 1.second))
 
   private def publish(row: SeriesAnalysisQueueOutboxRecord): F[Unit] = queue.publish(row.jobId)
     .attempt.flatMap {
@@ -82,18 +100,17 @@ private[seriesanalysis] final class SeriesAnalysisQueueOutboxDispatcher[
           )
           _ <- if released then
             logger.warn(
-              s"Analysis queue publish failed outboxId=${row.id} attempt=${row.attemptCount + 1} errorClasses=${SafeLog
-                  .throwableClasses(error)}"
+              s"Analysis queue publish failed outboxId=${row.id} " +
+                s"attempt=${row.attemptCount + 1} " +
+                s"errorClasses=${SafeLog.throwableClasses(error)}"
             )
-          else
-            logger.warn(
-              s"Analysis outbox retry ignored for stale claim outboxId=${row.id}"
-            )
+          else logger.warn(s"Analysis outbox retry ignored for stale claim outboxId=${row.id}")
         yield ()
     }
 
-  private def nextBackoff(attempt: Int): FiniteDuration = math
-    .min(config.maxBackoff.toSeconds, math.max(1L, 1L << math.min(attempt, 6))).seconds
+  private def nextBackoff(attempt: Int): FiniteDuration =
+    val exponent = math.max(0, math.min(attempt - 1, 6))
+    math.min(config.maxBackoff.toSeconds, 1L << exponent).seconds
 
   private def plus(instant: Instant, duration: FiniteDuration): Instant = instant
     .plusMillis(duration.toMillis)
@@ -103,5 +120,21 @@ object SeriesAnalysisQueueOutboxDispatcher:
       outbox: SeriesAnalysisQueueOutboxRepository[F],
       queue: SeriesAnalysisQueuePublisher[F],
       config: SeriesAnalysisQueueDispatcherConfig,
-  ): Resource[F, Unit] = Resource
-    .make(new SeriesAnalysisQueueOutboxDispatcher(outbox, queue, config).run.start)(_.cancel).void
+  ): Resource[F, Unit] = OutboxWakeup.resource[F].flatMap(wakeup =>
+    resource(outbox, queue, config, wakeup)
+  )
+
+  def resource[F[_]: Temporal: Clock: LoggerFactory](
+      outbox: SeriesAnalysisQueueOutboxRepository[F],
+      queue: SeriesAnalysisQueuePublisher[F],
+      config: SeriesAnalysisQueueDispatcherConfig,
+      wakeup: OutboxWakeup[F],
+  ): Resource[F, Unit] = OutboxWakeCoordinator.resource(
+    OutboxKind.SeriesAnalysis,
+    wakeup,
+    new SeriesAnalysisQueueOutboxDispatcher(outbox, queue, config),
+    OutboxWakeCoordinatorConfig(
+      coldRecoveryInterval = Some(config.coldRecoveryInterval),
+      maxConsecutiveBatches = config.maxConsecutiveBatches,
+    ),
+  )

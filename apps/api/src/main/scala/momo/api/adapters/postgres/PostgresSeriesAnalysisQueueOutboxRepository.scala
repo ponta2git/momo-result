@@ -2,6 +2,8 @@ package momo.api.adapters.postgres
 
 import java.time.Instant
 
+import scala.concurrent.duration.FiniteDuration
+
 import cats.effect.MonadCancelThrow
 import cats.syntax.all.*
 import doobie.*
@@ -41,7 +43,7 @@ final class PostgresSeriesAnalysisQueueOutboxRepository[F[_]: MonadCancelThrow](
       SELECT id
       FROM series_analysis_queue_outbox
       WHERE (status = 'pending' AND next_attempt_at <= $now)
-         OR (status = 'in_flight' AND claim_expires_at < $now)
+         OR (status = 'in_flight' AND claim_expires_at <= $now)
       ORDER BY next_attempt_at, created_at, id
       LIMIT $limit
       FOR UPDATE SKIP LOCKED
@@ -114,7 +116,7 @@ final class PostgresSeriesAnalysisQueueOutboxRepository[F[_]: MonadCancelThrow](
           WHERE q.job_id = j.id
             AND (
               q.status IN ('pending', 'in_flight')
-              OR (q.status = 'delivered' AND q.delivered_at >= $redeliverBefore)
+              OR (q.status = 'delivered' AND q.delivered_at > $redeliverBefore)
             )
         )
       ORDER BY j.available_at, j.requested_at, j.id
@@ -130,6 +132,35 @@ final class PostgresSeriesAnalysisQueueOutboxRepository[F[_]: MonadCancelThrow](
     FROM candidates
     ON CONFLICT (dedupe_key) DO NOTHING
   """.update.run.transact(transactor)
+
+  override def nextWakeAt(
+      now: Instant,
+      redeliveryAfter: FiniteDuration,
+  ): F[Option[Instant]] =
+    val redeliveryMillis = redeliveryAfter.toMillis
+    sql"""
+      SELECT MIN(wake_at)
+      FROM (
+        SELECT next_attempt_at AS wake_at
+        FROM series_analysis_queue_outbox
+        WHERE status = 'pending'
+        UNION ALL
+        SELECT claim_expires_at AS wake_at
+        FROM series_analysis_queue_outbox
+        WHERE status = 'in_flight'
+        UNION ALL
+        SELECT COALESCE(
+          MAX(q.delivered_at) + ($redeliveryMillis * INTERVAL '1 millisecond'),
+          $now
+        ) AS wake_at
+        FROM series_analysis_jobs j
+        LEFT JOIN series_analysis_queue_outbox q ON q.job_id = j.id
+        WHERE j.status = 'queued'
+        GROUP BY j.id
+        HAVING COUNT(q.id) FILTER (WHERE q.status IN ('pending', 'in_flight')) = 0
+      ) deadlines
+      WHERE wake_at IS NOT NULL
+    """.query[Option[Instant]].unique.transact(transactor)
 
   override def cleanupHistory(
       terminalBefore: Instant,

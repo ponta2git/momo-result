@@ -5,7 +5,10 @@ use thiserror::Error;
 use tokio::{sync::watch, time};
 use tracing::{info, warn};
 
-use crate::postgres;
+use crate::{
+    outbox::{ControlOutcome, PostCommitEffects, PostCommitSink, PostCommitSinkClosed},
+    postgres,
+};
 
 use super::{
     contract::OcrQueuePayload,
@@ -190,6 +193,10 @@ pub(crate) enum OcrConsumerError {
     Control(&'static str),
     #[error("OCR isolated process boundary failed: {0}")]
     ChildProcess(&'static str),
+    #[error("OCR post-commit outbox sink is unavailable")]
+    PostCommitSinkUnavailable,
+    #[error("OCR post-commit outbox sink stopped")]
+    PostCommitSink(#[from] PostCommitSinkClosed),
 }
 
 impl From<OcrQueueError> for OcrConsumerError {
@@ -220,6 +227,21 @@ enum ClaimDecision {
     StopWaiting,
 }
 
+enum PostCommitRoute {
+    Registered(PostCommitSink),
+    Unavailable,
+}
+
+impl PostCommitRoute {
+    fn submit(&self, effects: PostCommitEffects) -> Result<(), OcrConsumerError> {
+        match self {
+            Self::Registered(sink) => sink.submit(effects).map_err(Into::into),
+            Self::Unavailable if effects.outbox_wakes.is_empty() => Ok(()),
+            Self::Unavailable => Err(OcrConsumerError::PostCommitSinkUnavailable),
+        }
+    }
+}
+
 enum DownloadOutcome<T> {
     Completed(T),
     TimedOut,
@@ -247,6 +269,36 @@ enum OcrChildOutcome<T> {
 pub(crate) async fn run<L: OcrChildLauncher>(
     config: OcrConsumerConfig,
     launcher: &L,
+    shutdown: watch::Receiver<bool>,
+) -> Result<(), OcrConsumerError> {
+    run_with_post_commit_route(config, launcher, PostCommitRoute::Unavailable, shutdown).await
+}
+
+/// Runs the OCR consumer with the process-local post-commit coordinator sink.
+///
+/// # Errors
+///
+/// Returns a structural error when the coordinator has stopped accepting committed work. The
+/// durable database transition is not rolled back and the source delivery is not advanced.
+pub(crate) async fn run_with_post_commit_sink<L: OcrChildLauncher>(
+    config: OcrConsumerConfig,
+    launcher: &L,
+    post_commit_sink: PostCommitSink,
+    shutdown: watch::Receiver<bool>,
+) -> Result<(), OcrConsumerError> {
+    run_with_post_commit_route(
+        config,
+        launcher,
+        PostCommitRoute::Registered(post_commit_sink),
+        shutdown,
+    )
+    .await
+}
+
+async fn run_with_post_commit_route<L: OcrChildLauncher>(
+    config: OcrConsumerConfig,
+    launcher: &L,
+    post_commit_route: PostCommitRoute,
     mut shutdown: watch::Receiver<bool>,
 ) -> Result<(), OcrConsumerError> {
     let mut control_client = postgres::connect(&config.database_url)
@@ -278,6 +330,7 @@ pub(crate) async fn run<L: OcrChildLauncher>(
             &objects,
             launcher,
             &config,
+            &post_commit_route,
             &delivery,
             &mut shutdown,
         ))
@@ -308,6 +361,7 @@ async fn process_delivery<L: OcrChildLauncher>(
     objects: &R2ObjectStore,
     launcher: &L,
     config: &OcrConsumerConfig,
+    post_commit_route: &PostCommitRoute,
     delivery: &OcrQueueDelivery,
     shutdown: &mut watch::Receiver<bool>,
 ) -> Result<DeliveryDisposition, OcrConsumerError> {
@@ -338,7 +392,9 @@ async fn process_delivery<L: OcrChildLauncher>(
             Ok(DeliveryDisposition::AlreadyAcknowledged)
         }
         OcrQueueDeliveryBody::Job(payload) => {
-            match wait_for_claim(control_client, payload, config, shutdown).await? {
+            match wait_for_claim(control_client, payload, config, post_commit_route, shutdown)
+                .await?
+            {
                 ClaimDecision::Claimed(claim) => {
                     Box::pin(process_claimed(
                         control_client,
@@ -366,12 +422,16 @@ async fn wait_for_claim(
     client: &mut tokio_postgres::Client,
     payload: &OcrQueuePayload,
     config: &OcrConsumerConfig,
+    post_commit_route: &PostCommitRoute,
     shutdown: &mut watch::Receiver<bool>,
 ) -> Result<ClaimDecision, OcrConsumerError> {
     let deadline = time::sleep(config.claim_wait_timeout);
     tokio::pin!(deadline);
     loop {
-        match classify_claim_result(claim_job(client, payload, &config.control).await?) {
+        match submit_claim_outcome(
+            post_commit_route,
+            claim_job(client, payload, &config.control).await?,
+        )? {
             ClaimDecision::Claimed(claim) => return Ok(ClaimDecision::Claimed(claim)),
             ClaimDecision::Acknowledge => return Ok(ClaimDecision::Acknowledge),
             ClaimDecision::LeavePending => return Ok(ClaimDecision::LeavePending),
@@ -388,6 +448,14 @@ async fn wait_for_claim(
             () = time::sleep(config.heartbeat_interval) => {}
         }
     }
+}
+
+fn submit_claim_outcome(
+    route: &PostCommitRoute,
+    outcome: ControlOutcome<OcrClaimResult>,
+) -> Result<ClaimDecision, OcrConsumerError> {
+    route.submit(outcome.effects)?;
+    Ok(classify_claim_result(outcome.value))
 }
 
 fn classify_claim_result(result: OcrClaimResult) -> ClaimDecision {
@@ -702,6 +770,7 @@ fn elapsed_milliseconds(started: time::Instant) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::outbox::{OutboxKind, PostCommitEffects};
 
     #[test]
     fn ocr_failures_have_one_deterministic_control_policy() {
@@ -745,6 +814,44 @@ mod tests {
                 ClaimDecision::RetryClaim
             ));
         }
+    }
+
+    #[test]
+    fn effect_free_claim_does_not_require_an_outbox_sink() {
+        let decision = submit_claim_outcome(
+            &PostCommitRoute::Unavailable,
+            ControlOutcome::without_effects(OcrClaimResult::Busy),
+        );
+
+        assert!(matches!(decision, Ok(ClaimDecision::RetryClaim)));
+    }
+
+    #[test]
+    fn analysis_wake_submission_must_succeed_before_claim_disposition() {
+        let (sink, receiver) = PostCommitSink::channel(OutboxKind::SeriesAnalysis);
+        drop(receiver);
+        let outcome = ControlOutcome::new(
+            OcrClaimResult::MissingOrTerminal,
+            PostCommitEffects::wake(OutboxKind::SeriesAnalysis),
+        );
+
+        assert!(matches!(
+            submit_claim_outcome(&PostCommitRoute::Registered(sink), outcome),
+            Err(OcrConsumerError::PostCommitSink(_))
+        ));
+    }
+
+    #[test]
+    fn missing_sink_fails_closed_only_when_a_claim_committed_outbox_work() {
+        let outcome = ControlOutcome::new(
+            OcrClaimResult::MissingOrTerminal,
+            PostCommitEffects::wake(OutboxKind::SeriesAnalysis),
+        );
+
+        assert!(matches!(
+            submit_claim_outcome(&PostCommitRoute::Unavailable, outcome),
+            Err(OcrConsumerError::PostCommitSinkUnavailable)
+        ));
     }
 
     #[test]

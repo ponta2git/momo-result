@@ -3,21 +3,21 @@ use tokio_postgres::Transaction;
 use super::OcrControlError;
 use crate::{
     execution_slot::{ExecutionSlotHolder, ExecutionTaskKind, clear_expired},
-    series_analysis::control::recover_expired_analysis_holder,
+    series_analysis::control::{TransactionEffects, recover_expired_analysis_holder},
 };
 
 pub(super) async fn recover_expired_holder(
     transaction: &Transaction<'_>,
     holder: &ExecutionSlotHolder,
-) -> Result<(), OcrControlError> {
+) -> Result<TransactionEffects, OcrControlError> {
     match holder.task_kind {
-        ExecutionTaskKind::Analysis => {
-            recover_expired_analysis_holder(transaction, holder)
-                .await
-                .map_err(|error| OcrControlError::AnalysisRecovery(error.kind()))?;
-            Ok(())
+        ExecutionTaskKind::Analysis => recover_expired_analysis_holder(transaction, holder)
+            .await
+            .map_err(|error| OcrControlError::AnalysisRecovery(error.kind())),
+        ExecutionTaskKind::Ocr => {
+            recover_expired_ocr_holder(transaction, holder).await?;
+            Ok(TransactionEffects::default())
         }
-        ExecutionTaskKind::Ocr => recover_expired_ocr_holder(transaction, holder).await,
     }
 }
 

@@ -9,6 +9,8 @@ use crate::execution_slot::{
     NewExecutionSlotHolder, SlotAcquisition, SlotRenewal, acquire_ocr, lock as lock_execution_slot,
     lock_owned as lock_owned_slot, release_owned, renew_owned, request_analysis_preemption,
 };
+use crate::outbox::ControlOutcome;
+use crate::series_analysis::control::TransactionEffects;
 
 use super::contract::{OcrMediaType, OcrQueuePayload, RequestedScreenType};
 
@@ -220,7 +222,7 @@ pub(crate) async fn claim_job(
     client: &mut Client,
     payload: &OcrQueuePayload,
     config: &OcrControlConfig,
-) -> Result<OcrClaimResult, OcrControlError> {
+) -> Result<ControlOutcome<OcrClaimResult>, OcrControlError> {
     let transaction = bounded_transaction(client, config.finalization_timeout).await?;
     let slot = lock_execution_slot(&transaction).await?;
     let mut draft_lock_job_ids = vec![String::from(payload.job_id())];
@@ -233,17 +235,19 @@ pub(crate) async fn claim_job(
     draft_lock_job_ids.sort_unstable();
     draft_lock_job_ids.dedup();
     lock_match_drafts_for_jobs(&transaction, &draft_lock_job_ids).await?;
-    if let Some(holder) = &slot.holder
+    let recovery_effects = if let Some(holder) = &slot.holder
         && holder.expired
     {
-        recover_expired_holder(&transaction, holder).await?;
-    }
+        recover_expired_holder(&transaction, holder).await?
+    } else {
+        TransactionEffects::default()
+    };
 
     let candidate = match load_candidate(&transaction, payload.job_id()).await? {
         CandidateResult::Ready(candidate) => candidate,
         CandidateResult::Rejected(result) => {
             transaction.rollback().await?;
-            return Ok(result);
+            return Ok(ControlOutcome::without_effects(result));
         }
         CandidateResult::InvalidPersistedContract => {
             fail_locked_queued_job(
@@ -254,7 +258,7 @@ pub(crate) async fn claim_job(
             )
             .await?;
             transaction.commit().await?;
-            return Ok(OcrClaimResult::QueueContractMismatch);
+            return Ok(recovery_effects.committed(OcrClaimResult::QueueContractMismatch));
         }
     };
     if !candidate.matches(payload) {
@@ -266,16 +270,25 @@ pub(crate) async fn claim_job(
         )
         .await?;
         transaction.commit().await?;
-        return Ok(OcrClaimResult::QueueContractMismatch);
+        return Ok(recovery_effects.committed(OcrClaimResult::QueueContractMismatch));
     }
 
     if let Some(holder) = &slot.holder
         && !holder.expired
     {
-        return handle_active_holder(transaction, &slot, holder, config).await;
+        let result = handle_active_holder(transaction, &slot, holder, config).await?;
+        return Ok(ControlOutcome::without_effects(result));
     }
 
-    acquire_candidate(transaction, slot.fencing_token, payload, candidate, config).await
+    acquire_candidate(
+        transaction,
+        slot.fencing_token,
+        payload,
+        candidate,
+        config,
+        recovery_effects,
+    )
+    .await
 }
 
 async fn acquire_candidate(
@@ -284,7 +297,8 @@ async fn acquire_candidate(
     payload: &OcrQueuePayload,
     candidate: OcrClaimCandidate,
     config: &OcrControlConfig,
-) -> Result<OcrClaimResult, OcrControlError> {
+    transaction_effects: TransactionEffects,
+) -> Result<ControlOutcome<OcrClaimResult>, OcrControlError> {
     let (attempt_id, lease_token) = new_lease_identity(&transaction).await?;
     let lease_milliseconds = duration_milliseconds(config.lease_duration)?;
     let fencing_token = match acquire_ocr(
@@ -302,7 +316,7 @@ async fn acquire_candidate(
         SlotAcquisition::Acquired(fencing_token) => fencing_token,
         SlotAcquisition::Busy => {
             transaction.rollback().await?;
-            return Ok(OcrClaimResult::Busy);
+            return Ok(ControlOutcome::without_effects(OcrClaimResult::Busy));
         }
     };
     let attempt_count = candidate
@@ -340,22 +354,24 @@ async fn acquire_candidate(
         return Err(OcrControlError::OwnerLost);
     }
     transaction.commit().await?;
-    Ok(OcrClaimResult::Claimed(ClaimedOcrJob {
-        job_id: String::from(payload.job_id()),
-        draft_id: candidate.draft_id,
-        source_image_id: candidate.source_image_id,
-        object_key: candidate.object_key,
-        sha256: candidate.sha256,
-        byte_length: candidate.byte_length,
-        media_type: candidate.media_type,
-        expected_width: candidate.width,
-        expected_height: candidate.height,
-        requested_screen_type: candidate.requested_screen_type,
-        attempt_id,
-        lease_token,
-        attempt_count,
-        fencing_token,
-    }))
+    Ok(
+        transaction_effects.committed(OcrClaimResult::Claimed(ClaimedOcrJob {
+            job_id: String::from(payload.job_id()),
+            draft_id: candidate.draft_id,
+            source_image_id: candidate.source_image_id,
+            object_key: candidate.object_key,
+            sha256: candidate.sha256,
+            byte_length: candidate.byte_length,
+            media_type: candidate.media_type,
+            expected_width: candidate.width,
+            expected_height: candidate.height,
+            requested_screen_type: candidate.requested_screen_type,
+            attempt_id,
+            lease_token,
+            attempt_count,
+            fencing_token,
+        })),
+    )
 }
 
 async fn handle_active_holder(

@@ -183,6 +183,7 @@ lazy val root = (project in file("."))
         "org.scalameta" %% "munit" % munitVersion % Test,
         "org.testcontainers" % "testcontainers-postgresql" % testcontainersVersion % Test,
         "org.testcontainers" % "testcontainers" % testcontainersVersion % Test,
+        "org.typelevel" %% "cats-effect-testkit" % catsEffectVersion % Test,
         "org.typelevel" %% "munit-cats-effect" % munitCatsEffectVersion % Test
       ) ++ macOsNettyDnsResolver
     },

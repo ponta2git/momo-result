@@ -174,7 +174,7 @@ private[bootstrap] object InMemoryApiRuntime:
       )
       imageReferences: ImageReferenceRepository[F] =
         InMemoryImageReferenceRepository[F](jobs, matchDrafts)
-      ocrQueueSubmitter = OcrJobQueueSubmitter.direct[F](jobs, matchDrafts, queue)
+      ocrQueueSubmitter = OcrJobQueueSubmitter.nonDurable[F](jobs, matchDrafts, queue)
       ocrAdmissionGuard = OcrAdmissionGuard.allowAll[F]
       repositories = UseCaseWiring.RuntimeRepositories(
         ocrJobCreationStore = ocrJobCreationStore,

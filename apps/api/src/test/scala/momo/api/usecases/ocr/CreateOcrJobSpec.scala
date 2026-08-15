@@ -589,7 +589,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
               activeJobForDraft,
             ),
           matchDrafts = matchDrafts,
-          queueSubmitter = OcrJobQueueSubmitter.direct[IO](jobs, matchDrafts, queue),
+          queueSubmitter = OcrJobQueueSubmitter.nonDurable[IO](jobs, matchDrafts, queue),
           admissionGuard = admissionGuard,
           now = IO.pure(now),
           nextJobId = ids.modify {

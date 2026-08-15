@@ -120,21 +120,6 @@ object SeriesAnalysisQueueOutboxDispatcher:
       outbox: SeriesAnalysisQueueOutboxRepository[F],
       queue: SeriesAnalysisQueuePublisher[F],
       config: SeriesAnalysisQueueDispatcherConfig,
-  ): Resource[F, Unit] = OutboxWakeup.resource[F].flatMap(wakeup =>
-    resource(outbox, queue, config, wakeup)
-  )
-
-  def resource[F[_]: Temporal: Clock: LoggerFactory](
-      outbox: SeriesAnalysisQueueOutboxRepository[F],
-      queue: SeriesAnalysisQueuePublisher[F],
-      config: SeriesAnalysisQueueDispatcherConfig,
-      wakeup: OutboxWakeup[F],
-  ): Resource[F, Unit] = resource(outbox, queue, config, wakeup, _ => Temporal[F].unit)
-
-  def resource[F[_]: Temporal: Clock: LoggerFactory](
-      outbox: SeriesAnalysisQueueOutboxRepository[F],
-      queue: SeriesAnalysisQueuePublisher[F],
-      config: SeriesAnalysisQueueDispatcherConfig,
       wakeup: OutboxWakeup[F],
       onUnexpectedExit: Throwable => F[Unit],
   ): Resource[F, Unit] = OutboxWakeCoordinator.resource(

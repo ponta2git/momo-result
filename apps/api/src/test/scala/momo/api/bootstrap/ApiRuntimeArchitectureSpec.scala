@@ -24,6 +24,14 @@ final class ApiRuntimeArchitectureSpec extends FunSuite:
     Paths.get("src/main/scala/momo/api/repositories/OcrJobCreationStore.scala")
   private val createOcrJobFile =
     Paths.get("src/main/scala/momo/api/usecases/ocr/CreateOcrJob.scala")
+  private val ocrOutboxDispatcherFile = Paths.get(
+    "src/main/scala/momo/api/usecases/ocr/OcrQueueOutboxDispatcher.scala"
+  )
+  private val analysisOutboxDispatcherFile = Paths.get(
+    "src/main/scala/momo/api/usecases/seriesanalysis/SeriesAnalysisQueueOutboxDispatcher.scala"
+  )
+  private val ocrQueueSubmitterFile =
+    Paths.get("src/main/scala/momo/api/usecases/ocr/OcrJobQueueSubmitter.scala")
   private val imageUploadDomainFile = Paths.get("src/main/scala/momo/api/domain/ImageUpload.scala")
   private val ocrJobDomainFile = Paths.get("src/main/scala/momo/api/domain/OcrJob.scala")
   private val localFsImageStoreFile =
@@ -82,6 +90,10 @@ final class ApiRuntimeArchitectureSpec extends FunSuite:
   test("Postgres writes share one event-driven outbox wake boundary"):
     val mainText = read(mainFile)
     val postgresRuntimeText = read(postgresApiRuntimeFile)
+    val inMemoryRuntimeText = read(inMemoryApiRuntimeFile)
+    val ocrDispatcherText = read(ocrOutboxDispatcherFile)
+    val analysisDispatcherText = read(analysisOutboxDispatcherFile)
+    val ocrQueueSubmitterText = read(ocrQueueSubmitterFile)
 
     assertEquals(count(postgresRuntimeText, "OutboxWakeup.resource[F]"), 1)
     assert(postgresRuntimeText.contains("OutboxWakingRepositories.ocrJobCreation("))
@@ -94,6 +106,13 @@ final class ApiRuntimeArchitectureSpec extends FunSuite:
     assert(!postgresRuntimeText.contains("pollInterval"))
     assert(mainText.contains("tupleLeft(runtime.backgroundFailure)"))
     assert(mainText.contains("awaitRuntimeFailure(backgroundFailure)"))
+    assertEquals(count(ocrDispatcherText, "def resource"), 1)
+    assertEquals(count(analysisDispatcherText, "def resource"), 1)
+    assert(!ocrDispatcherText.contains("OutboxWakeup.resource"))
+    assert(!analysisDispatcherText.contains("OutboxWakeup.resource"))
+    assert(ocrQueueSubmitterText.contains("private[api] def nonDurable"))
+    assert(inMemoryRuntimeText.contains("OcrJobQueueSubmitter.nonDurable"))
+    assert(!postgresRuntimeText.contains("OcrJobQueueSubmitter.nonDurable"))
 
   test("API runtime validates dev identities before constructing domain ids"):
     val apiAppText = read(apiAppFile)

@@ -14,7 +14,11 @@ trait OcrJobQueueSubmitter[F[_]]:
   def submit(intent: OcrQueueDispatchIntent): F[Either[AppError, Unit]]
 
 object OcrJobQueueSubmitter:
-  def direct[F[_]: MonadThrow: LoggerFactory](
+  /**
+   * Non-durable adapter for the explicitly in-memory development runtime and focused use-case
+   * tests. PostgreSQL wiring must use [[durable]] plus the shared outbox wake coordinator.
+   */
+  private[api] def nonDurable[F[_]: MonadThrow: LoggerFactory](
       jobs: OcrJobsRepository[F],
       matchDrafts: MatchDraftsRepository[F],
       queue: OcrJobQueuePublisher[F],

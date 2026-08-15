@@ -781,7 +781,11 @@ fn claimed_with_analysis_wake(
 }
 
 fn claim_result(outcome: ControlOutcome<OcrClaimResult>) -> SmokeResult<OcrClaimResult> {
-    if !outcome.effects.outbox_wakes.is_empty() {
+    if outcome
+        .effects
+        .outbox_wakes
+        .contains(OutboxKind::SeriesAnalysis)
+    {
         return Err(smoke_error("normal OCR claim unexpectedly emitted an outbox wake").into());
     }
     Ok(outcome.value)

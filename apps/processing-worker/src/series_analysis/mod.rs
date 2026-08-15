@@ -12,10 +12,11 @@ pub(crate) mod child_report;
 pub(crate) mod config;
 pub(crate) mod control;
 pub(crate) mod endurance;
+pub(crate) mod outbox;
 pub(crate) mod release;
 
 use crate::{
-    outbox::{ControlOutcome, OutboxKind, PostCommitSink, PostCommitSinkClosed},
+    outbox::{ControlOutcome, PostCommitSink, PostCommitSinkClosed},
     postgres::{self, PostgresError},
     process::ProcessError,
 };
@@ -111,28 +112,13 @@ impl AttemptInterruption {
     }
 }
 
-/// Runs the durable analysis consumer until shutdown is requested.
-///
-/// # Errors
-///
-/// Returns an error only when a runtime dependency or safety boundary fails. Individual analysis
-/// failures are persisted as terminal jobs and do not stop the parent worker.
-pub(crate) async fn run(
-    config: AnalysisConsumerConfig,
-    shutdown: watch::Receiver<bool>,
-) -> Result<(), ConsumerError> {
-    let (sink, receiver) = PostCommitSink::channel(OutboxKind::SeriesAnalysis);
-    drop(receiver);
-    run_with_post_commit_sink(config, sink, shutdown).await
-}
-
 /// Runs the durable analysis consumer with the process-local post-commit coordinator sink.
 ///
 /// # Errors
 ///
 /// Returns a structural error when the coordinator has stopped accepting committed work. The
 /// durable database transition is not rolled back and the source delivery is not advanced.
-pub(crate) async fn run_with_post_commit_sink(
+pub(crate) async fn run(
     config: AnalysisConsumerConfig,
     post_commit_sink: PostCommitSink,
     mut shutdown: watch::Receiver<bool>,

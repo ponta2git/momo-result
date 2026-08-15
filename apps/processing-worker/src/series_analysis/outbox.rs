@@ -18,6 +18,10 @@ const MAXIMUM_BATCH_SIZE: usize = 100;
 const MAXIMUM_DELIVERY_ATTEMPTS: i32 = 3;
 const QUEUE_PUBLISH_ERROR_CLASS: &str = "redis_operation";
 const DELIVERY_RETRY_SECONDS: [u64; 3] = [2, 4, 8];
+const RUNTIME_BATCH_SIZE: usize = 10;
+const RUNTIME_CLAIM_TTL: Duration = Duration::from_secs(30);
+const RUNTIME_MAXIMUM_PUBLISH_BACKOFF: Duration = Duration::from_mins(1);
+const RUNTIME_SEMANTIC_REDELIVERY_AFTER: Duration = Duration::from_mins(5);
 
 /// Bounded policy required by the Series Analysis outbox state machine.
 ///
@@ -33,6 +37,22 @@ pub(crate) struct SeriesAnalysisOutboxConfig {
 }
 
 impl SeriesAnalysisOutboxConfig {
+    /// Builds the processing-runtime policy while keeping timing and batch choices inside the
+    /// Analysis outbox adapter.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the configured stream name violates the bounded driver contract.
+    pub(crate) fn for_runtime(stream: String) -> Result<Self, SeriesAnalysisOutboxError> {
+        Self::new(
+            stream,
+            RUNTIME_BATCH_SIZE,
+            RUNTIME_CLAIM_TTL,
+            RUNTIME_MAXIMUM_PUBLISH_BACKOFF,
+            RUNTIME_SEMANTIC_REDELIVERY_AFTER,
+        )
+    }
+
     /// Validates the bounded driver policy without opening either dependency.
     ///
     /// # Errors
@@ -740,6 +760,7 @@ mod tests {
             )
             .is_ok()
         );
+        assert!(SeriesAnalysisOutboxConfig::for_runtime(String::from("analysis-stream")).is_ok());
     }
 
     #[tokio::test]

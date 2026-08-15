@@ -295,7 +295,12 @@ mod tests {
     fn empty_transaction_effects_do_not_fabricate_a_wake() {
         let outcome = TransactionEffects::empty().committed(());
 
-        assert!(outcome.effects.outbox_wakes.is_empty());
+        assert!(
+            !outcome
+                .effects
+                .outbox_wakes
+                .contains(OutboxKind::SeriesAnalysis)
+        );
     }
 
     #[test]

@@ -101,6 +101,42 @@ fn native_ocr_dependency_is_owned_by_the_ocr_capability_crate() {
     );
 }
 
+#[test]
+fn supervisor_owns_the_only_production_post_commit_channels() {
+    let supervisor = include_str!("supervisor.rs");
+    let analysis_consumer = production_section(include_str!("series_analysis/mod.rs"));
+    let ocr_consumer = production_section(include_str!("ocr/consumer.rs"));
+
+    assert!(
+        supervisor.contains("PostCommitSink::channel(OutboxKind::SeriesAnalysis)"),
+        "supervisor must create the process-local Analysis outbox channel"
+    );
+    assert!(
+        supervisor.contains("coordinator::run(driver, wake, shutdown)"),
+        "supervisor must run the outbox coordinator as a lifecycle peer"
+    );
+    for (role, source) in [("analysis", analysis_consumer), ("ocr", ocr_consumer)] {
+        assert!(
+            source.contains("post_commit_sink: PostCommitSink"),
+            "{role} consumer must require the shared post-commit sink"
+        );
+        assert!(
+            !source.contains("PostCommitSink::channel"),
+            "{role} consumer must not create or discard its own outbox receiver"
+        );
+        assert!(
+            !source.contains("run_with_post_commit"),
+            "{role} consumer must expose one production entry point without a compatibility route"
+        );
+    }
+}
+
+fn production_section(source: &str) -> &str {
+    source
+        .split_once("#[cfg(test)]")
+        .map_or(source, |(production, _tests)| production)
+}
+
 struct SourceFile {
     relative_path: String,
     body: String,

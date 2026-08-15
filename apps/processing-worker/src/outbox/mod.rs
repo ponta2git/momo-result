@@ -56,16 +56,6 @@ impl OutboxWakeSet {
     pub(crate) const fn contains(self, kind: OutboxKind) -> bool {
         self.0 & kind.wake_bit() != 0
     }
-
-    #[must_use]
-    pub(crate) const fn union(self, other: Self) -> Self {
-        Self(self.0 | other.0)
-    }
-
-    #[must_use]
-    pub(crate) const fn is_empty(self) -> bool {
-        self.0 == 0
-    }
 }
 
 /// Non-durable work hints produced only after the transaction that created the outbox work commits.
@@ -89,13 +79,6 @@ impl PostCommitEffects {
     pub(crate) const fn wake(kind: OutboxKind) -> Self {
         Self {
             outbox_wakes: OutboxWakeSet::one(kind),
-        }
-    }
-
-    #[must_use]
-    pub(crate) const fn union(self, other: Self) -> Self {
-        Self {
-            outbox_wakes: self.outbox_wakes.union(other.outbox_wakes),
         }
     }
 }
@@ -186,21 +169,15 @@ mod tests {
     use super::*;
 
     #[test]
-    fn wake_sets_form_an_idempotent_union() {
+    fn wake_sets_identify_only_the_registered_kind() {
         let analysis = OutboxWakeSet::one(OutboxKind::SeriesAnalysis);
 
         assert!(analysis.contains(OutboxKind::SeriesAnalysis));
-        assert_eq!(analysis.union(analysis), analysis);
-        assert!(OutboxWakeSet::empty().is_empty());
-        assert_eq!(
-            PostCommitEffects::wake(OutboxKind::SeriesAnalysis)
-                .union(PostCommitEffects::wake(OutboxKind::SeriesAnalysis)),
-            PostCommitEffects::wake(OutboxKind::SeriesAnalysis)
-        );
+        assert!(!OutboxWakeSet::empty().contains(OutboxKind::SeriesAnalysis));
     }
 
     #[test]
-    fn control_outcome_preserves_effects_while_mapping_its_value() {
+    fn control_outcome_keeps_its_value_and_committed_effects_together() {
         let outcome =
             ControlOutcome::new(20_u32, PostCommitEffects::wake(OutboxKind::SeriesAnalysis))
                 .map(|value| value.to_string());
@@ -211,10 +188,10 @@ mod tests {
             PostCommitEffects::wake(OutboxKind::SeriesAnalysis)
         );
         assert!(
-            ControlOutcome::without_effects(())
+            !ControlOutcome::without_effects(())
                 .effects
                 .outbox_wakes
-                .is_empty()
+                .contains(OutboxKind::SeriesAnalysis)
         );
     }
 

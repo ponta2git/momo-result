@@ -9,10 +9,6 @@ mod cgroup;
 mod cli;
 mod execution_slot;
 mod ocr;
-#[expect(
-    dead_code,
-    reason = "the outbox foundation is wired into role consumers and the supervisor by the follow-up migration packages"
-)]
 mod outbox;
 mod postgres;
 #[expect(
@@ -22,12 +18,6 @@ mod postgres;
 mod process;
 mod runtime_identifier;
 mod series_analysis;
-#[expect(
-    dead_code,
-    reason = "the analysis outbox driver is wired into the supervisor by the follow-up composition package"
-)]
-#[path = "series_analysis/outbox.rs"]
-mod series_analysis_outbox;
 mod supervisor;
 
 pub use cli::entrypoint;

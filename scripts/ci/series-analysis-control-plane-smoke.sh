@@ -477,11 +477,8 @@ psql_ci -c "
   WHERE game_title_id = 'title-release-smoke-a';
 "
 publish_job "${stale_job}"
-wait_for_sql_value "1|queued|1" "
-  SELECT input_revision, status, attempt_count
-  FROM series_analysis_jobs WHERE id = '${stale_job}';
-" "stale input revision detection"
-publish_job "${stale_job}"
+# The stale attempt commits a superseding job and its analysis outbox row together. The
+# process-local post-commit wake must publish that row without a second manual delivery.
 publish_job "${peer_job}"
 wait_for_sql_value "8|0" "
   SELECT

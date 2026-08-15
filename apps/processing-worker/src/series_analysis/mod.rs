@@ -15,6 +15,7 @@ pub(crate) mod endurance;
 pub(crate) mod release;
 
 use crate::{
+    outbox::{ControlOutcome, OutboxKind, PostCommitSink, PostCommitSinkClosed},
     postgres::{self, PostgresError},
     process::ProcessError,
 };
@@ -61,6 +62,8 @@ pub(crate) enum ConsumerError {
     DurationConversion(#[from] std::num::TryFromIntError),
     #[error("analysis temporary storage does not meet the configured bound")]
     TemporaryStorageBound,
+    #[error("analysis post-commit coordination channel is closed")]
+    PostCommitSink(#[from] PostCommitSinkClosed),
 }
 
 impl ConsumerError {
@@ -75,6 +78,7 @@ impl ConsumerError {
             Self::DurationBound => "duration_bound",
             Self::DurationConversion(_) => "duration_conversion",
             Self::TemporaryStorageBound => "temporary_storage_bound",
+            Self::PostCommitSink(_) => "post_commit_sink_closed",
         }
     }
 }
@@ -115,6 +119,22 @@ impl AttemptInterruption {
 /// failures are persisted as terminal jobs and do not stop the parent worker.
 pub(crate) async fn run(
     config: AnalysisConsumerConfig,
+    shutdown: watch::Receiver<bool>,
+) -> Result<(), ConsumerError> {
+    let (sink, receiver) = PostCommitSink::channel(OutboxKind::SeriesAnalysis);
+    drop(receiver);
+    run_with_post_commit_sink(config, sink, shutdown).await
+}
+
+/// Runs the durable analysis consumer with the process-local post-commit coordinator sink.
+///
+/// # Errors
+///
+/// Returns a structural error when the coordinator has stopped accepting committed work. The
+/// durable database transition is not rolled back and the source delivery is not advanced.
+pub(crate) async fn run_with_post_commit_sink(
+    config: AnalysisConsumerConfig,
+    post_commit_sink: PostCommitSink,
     mut shutdown: watch::Receiver<bool>,
 ) -> Result<(), ConsumerError> {
     if !crate::process::managed_analysis_runtime_supported() {
@@ -175,6 +195,7 @@ pub(crate) async fn run(
         &mut heartbeat_client,
         &mut redis,
         &config,
+        &post_commit_sink,
         capability_refresh,
         &mut shutdown,
     )
@@ -232,6 +253,7 @@ async fn consume_deliveries(
     heartbeat_client: &mut tokio_postgres::Client,
     redis: &mut ConnectionManager,
     config: &AnalysisConsumerConfig,
+    post_commit_sink: &PostCommitSink,
     mut capability_refresh: IdleRefreshSchedule,
     shutdown: &mut watch::Receiver<bool>,
 ) -> Result<(), ConsumerError> {
@@ -271,6 +293,7 @@ async fn consume_deliveries(
             control_client,
             heartbeat_client,
             config,
+            post_commit_sink,
             &message_id,
             &payload,
             shutdown,
@@ -301,11 +324,15 @@ async fn process_delivery(
     control_client: &mut tokio_postgres::Client,
     heartbeat_client: &mut tokio_postgres::Client,
     config: &AnalysisConsumerConfig,
+    post_commit_sink: &PostCommitSink,
     message_id: &str,
     payload: &QueuePayload,
     shutdown: &mut watch::Receiver<bool>,
 ) -> Result<DeliveryDisposition, ConsumerError> {
-    let claim = claim_job(control_client, &payload.job_id, config).await?;
+    let claim = submit_control_outcome(
+        post_commit_sink,
+        claim_job(control_client, &payload.job_id, config).await?,
+    )?;
     let claim = match claim {
         ClaimResult::Claimed(claim) => claim,
         ClaimResult::MissingOrTerminal => {
@@ -368,6 +395,14 @@ async fn process_delivery(
     }
     .instrument(span)
     .await
+}
+
+fn submit_control_outcome<T>(
+    sink: &PostCommitSink,
+    outcome: ControlOutcome<T>,
+) -> Result<T, ConsumerError> {
+    sink.submit(outcome.effects)?;
+    Ok(outcome.value)
 }
 
 async fn process_claimed_delivery(

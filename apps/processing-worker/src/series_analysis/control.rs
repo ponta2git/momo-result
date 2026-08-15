@@ -2,6 +2,8 @@ use std::time::Duration;
 
 use thiserror::Error;
 
+use crate::outbox::{ControlOutcome, OutboxKind, PostCommitEffects};
+
 pub(crate) const ALGORITHM_VERSION: &str = "series-analysis-v2";
 
 mod capability;
@@ -30,6 +32,45 @@ pub(crate) use transaction::artifact_id_for_attempt;
 pub(crate) use vocabulary::{AttemptFailure, RequeueCause, SafeFailureCode};
 
 use vocabulary::{AttemptOutcome, DeliveryReason, RequestOutcome, ResultDisposition};
+
+/// Outbox work made durable by the transaction currently in progress.
+///
+/// This value is deliberately distinct from [`PostCommitEffects`]: callers may convert it only
+/// after `Transaction::commit` has confirmed success. Nested control operations union their work
+/// here so a recovery or follow-up cannot be hidden by an outer state transition.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(crate) struct TransactionEffects {
+    series_analysis_wake: bool,
+}
+
+impl TransactionEffects {
+    pub(super) const fn empty() -> Self {
+        Self {
+            series_analysis_wake: false,
+        }
+    }
+
+    pub(super) const fn series_analysis() -> Self {
+        Self {
+            series_analysis_wake: true,
+        }
+    }
+
+    pub(super) const fn union(self, other: Self) -> Self {
+        Self {
+            series_analysis_wake: self.series_analysis_wake || other.series_analysis_wake,
+        }
+    }
+
+    pub(crate) const fn committed<T>(self, value: T) -> ControlOutcome<T> {
+        let effects = if self.series_analysis_wake {
+            PostCommitEffects::wake(OutboxKind::SeriesAnalysis)
+        } else {
+            PostCommitEffects::empty()
+        };
+        ControlOutcome::new(value, effects)
+    }
+}
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct ClaimedJob {
@@ -235,5 +276,20 @@ mod tests {
         assert_eq!(metrics.staging_milliseconds, 3);
         assert_eq!(metrics.publication_milliseconds, 6);
         assert_eq!(metrics.elapsed_milliseconds, 19);
+    }
+
+    #[test]
+    fn nested_transaction_effects_preserve_analysis_wakes() {
+        let nested = TransactionEffects::empty()
+            .union(TransactionEffects::series_analysis())
+            .union(TransactionEffects::empty());
+        let outcome = nested.committed(());
+
+        assert!(
+            outcome
+                .effects
+                .outbox_wakes
+                .contains(OutboxKind::SeriesAnalysis)
+        );
     }
 }

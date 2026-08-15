@@ -7,11 +7,13 @@ use crate::{
         ExecutionTaskKind, NewExecutionSlotHolder, SlotAcquisition, acquire_analysis,
         clear_stale_preemption, lock as lock_execution_slot,
     },
+    outbox::{ControlOutcome, PostCommitEffects},
     series_analysis::config::AnalysisConsumerConfig,
 };
 
 use super::{
-    ALGORITHM_VERSION, ClaimResult, ClaimedJob, ControlError, UnsupportedJobVersion,
+    ALGORITHM_VERSION, ClaimResult, ClaimedJob, ControlError, TransactionEffects,
+    UnsupportedJobVersion,
     recovery::recover_expired_analysis_holder,
     transaction::{bounded_transaction, duration_milliseconds, stable_id},
 };
@@ -26,15 +28,16 @@ pub(crate) async fn claim_job(
     client: &mut Client,
     job_id: &str,
     config: &AnalysisConsumerConfig,
-) -> Result<ClaimResult, ControlError> {
+) -> Result<ControlOutcome<ClaimResult>, ControlError> {
     let transaction =
         bounded_transaction(client, config.execution_limits.finalization_timeout).await?;
     let lease_milliseconds = duration_milliseconds(config.lease_duration)?;
-    let candidate = match prepare_claim(&transaction, job_id, lease_milliseconds).await? {
-        ClaimPreparation::Ready(candidate) => candidate,
+    let (candidate, effects) = match prepare_claim(&transaction, job_id, lease_milliseconds).await?
+    {
+        ClaimPreparation::Ready { candidate, effects } => (candidate, effects),
         ClaimPreparation::Rejected(result) => {
             transaction.rollback().await?;
-            return Ok(result);
+            return Ok(ControlOutcome::new(result, PostCommitEffects::empty()));
         }
     };
     let expected_schema = i32::try_from(ARTIFACT_SCHEMA_VERSION)?;
@@ -42,10 +45,13 @@ pub(crate) async fn claim_job(
         || candidate.artifact_schema_version != expected_schema
     {
         transaction.rollback().await?;
-        return Ok(ClaimResult::UnsupportedVersion(UnsupportedJobVersion {
-            algorithm_version: candidate.algorithm_version,
-            artifact_schema_version: candidate.artifact_schema_version,
-        }));
+        return Ok(ControlOutcome::new(
+            ClaimResult::UnsupportedVersion(UnsupportedJobVersion {
+                algorithm_version: candidate.algorithm_version,
+                artifact_schema_version: candidate.artifact_schema_version,
+            }),
+            PostCommitEffects::empty(),
+        ));
     }
     let attempt_no = candidate
         .attempt_count
@@ -73,7 +79,7 @@ pub(crate) async fn claim_job(
     };
     persist_claim(&transaction, config, &attempt).await?;
     transaction.commit().await?;
-    Ok(ClaimResult::Claimed(ClaimedJob {
+    Ok(effects.committed(ClaimResult::Claimed(ClaimedJob {
         job_id: String::from(job_id),
         game_title_id: candidate.game_title_id,
         input_revision: candidate.input_revision,
@@ -82,7 +88,7 @@ pub(crate) async fn claim_job(
         attempt_id,
         attempt_no,
         fencing_token,
-    }))
+    })))
 }
 
 struct ClaimCandidate {
@@ -95,7 +101,10 @@ struct ClaimCandidate {
 }
 
 enum ClaimPreparation {
-    Ready(ClaimCandidate),
+    Ready {
+        candidate: ClaimCandidate,
+        effects: TransactionEffects,
+    },
     Rejected(ClaimResult),
 }
 
@@ -115,11 +124,12 @@ async fn prepare_claim(
     };
     let game_title_id = preview.try_get::<_, String>(0)?;
     let slot = lock_execution_slot(transaction).await?;
+    let mut effects = TransactionEffects::empty();
     if let Some(holder) = &slot.holder {
         if !holder.expired || holder.task_kind == ExecutionTaskKind::Ocr {
             return Ok(ClaimPreparation::Rejected(ClaimResult::Busy));
         }
-        recover_expired_analysis_holder(transaction, holder).await?;
+        effects = effects.union(recover_expired_analysis_holder(transaction, holder).await?);
     }
     if slot.preempt_requested_by.is_some()
         && !clear_stale_preemption(transaction, stale_preemption_milliseconds).await?
@@ -154,14 +164,17 @@ async fn prepare_claim(
     if !job.try_get::<_, bool>(4)? {
         return Ok(ClaimPreparation::Rejected(ClaimResult::NotYetAvailable));
     }
-    Ok(ClaimPreparation::Ready(ClaimCandidate {
-        game_title_id,
-        input_revision: job.try_get(0)?,
-        algorithm_version: job.try_get(1)?,
-        artifact_schema_version: job.try_get(2)?,
-        attempt_count: job.try_get(5)?,
-        slot_fencing_token: slot.fencing_token,
-    }))
+    Ok(ClaimPreparation::Ready {
+        candidate: ClaimCandidate {
+            game_title_id,
+            input_revision: job.try_get(0)?,
+            algorithm_version: job.try_get(1)?,
+            artifact_schema_version: job.try_get(2)?,
+            attempt_count: job.try_get(5)?,
+            slot_fencing_token: slot.fencing_token,
+        },
+        effects,
+    })
 }
 
 async fn acquire_execution_slot(

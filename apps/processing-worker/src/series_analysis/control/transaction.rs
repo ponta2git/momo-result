@@ -14,6 +14,7 @@ use crate::{
 
 use super::{
     AttemptMetrics, AttemptOutcome, ClaimedJob, ControlError, DeliveryReason, RequestOutcome,
+    TransactionEffects,
 };
 
 pub(super) async fn lock_owned(
@@ -142,7 +143,7 @@ pub(super) async fn fulfill_requests(
 pub(super) async fn schedule_follow_up(
     transaction: &Transaction<'_>,
     claim: &ClaimedJob,
-) -> Result<(), ControlError> {
+) -> Result<TransactionEffects, ControlError> {
     let pending = transaction
         .query_opt(
             "SELECT id, trigger FROM series_analysis_job_requests\x20\
@@ -152,7 +153,7 @@ pub(super) async fn schedule_follow_up(
         )
         .await?;
     let Some(pending) = pending else {
-        return Ok(());
+        return Ok(TransactionEffects::empty());
     };
     let request_id = pending.try_get::<_, String>(0)?;
     let trigger = pending.try_get::<_, String>(1)?;
@@ -208,8 +209,7 @@ pub(super) async fn schedule_follow_up(
             &[&next_job_id],
         )
         .await?;
-    enqueue_delivery(transaction, &next_job_id, DeliveryReason::FollowUp, 0).await?;
-    Ok(())
+    enqueue_delivery(transaction, &next_job_id, DeliveryReason::FollowUp, 0).await
 }
 
 pub(super) async fn refresh_operation_projections(
@@ -304,7 +304,7 @@ pub(super) async fn enqueue_delivery(
     job_id: &str,
     reason: DeliveryReason,
     sequence: i32,
-) -> Result<(), ControlError> {
+) -> Result<TransactionEffects, ControlError> {
     let reason = reason.wire();
     let sequence = sequence.to_string();
     let id = stable_id("analysis-outbox", &[job_id, reason, &sequence]);
@@ -316,7 +316,7 @@ pub(super) async fn enqueue_delivery(
             &[&id, &job_id, &dedupe],
         )
         .await?;
-    Ok(())
+    Ok(TransactionEffects::series_analysis())
 }
 
 pub(super) const fn scope_columns(scope: &ScopeRef) -> (&'static str, Option<&str>, Option<&str>) {

@@ -3,7 +3,10 @@ import java.nio.charset.StandardCharsets
 import java.time.Instant
 import java.util.UUID
 
+import scala.concurrent.duration.*
+
 import cats.effect.IO
+import cats.syntax.all.*
 import doobie.implicits.*
 import doobie.postgres.circe.jsonb.implicits.*
 import doobie.postgres.implicits.*
@@ -175,90 +178,103 @@ final class PostgresOcrQueueOutboxRepositorySpec extends IntegrationSuite:
         ),
       )
 
-  test("claimById claims only the requested pending row"):
-    val targetJobId = OcrJobId.unsafeFromString("job-outbox-claim-target")
-    val otherJobId = OcrJobId.unsafeFromString("job-outbox-claim-other")
+  test("semantic redelivery rearms only stale delivered rows whose job is still queued"):
+    val oldQueued = OcrJobId.unsafeFromString("job-outbox-semantic-old")
+    val recentQueued = OcrJobId.unsafeFromString("job-outbox-semantic-recent")
+    val running = OcrJobId.unsafeFromString("job-outbox-semantic-running")
+    val terminal = OcrJobId.unsafeFromString("job-outbox-semantic-terminal")
+    val jobs = List(oldQueued, recentQueued, running, terminal)
     for
-      _ <- insertOcrRows(
-        targetJobId,
-        OcrDraftId.unsafeFromString("draft-outbox-claim-target"),
-        now.minusSeconds(120),
-      )
-      _ <- insertOcrRows(
-        otherJobId,
-        OcrDraftId.unsafeFromString("draft-outbox-claim-other"),
-        now.minusSeconds(60),
-      )
-      _ <- insertOutbox(
-        id = "outbox-claim-target",
-        jobId = targetJobId,
-        status = OcrQueueOutboxStatus.Pending,
-        attemptCount = 0,
-        nextAttemptAt = now.plusSeconds(3600),
-        claimExpiresAt = None,
-        createdAt = now.minusSeconds(120),
-      )
-      _ <- insertOutbox(
-        id = "outbox-claim-other",
-        jobId = otherJobId,
-        status = OcrQueueOutboxStatus.Pending,
-        attemptCount = 0,
-        nextAttemptAt = now.minusSeconds(1),
-        claimExpiresAt = None,
-        createdAt = now.minusSeconds(60),
-      )
-      claimed <- repo.claimById("outbox-claim-target", now = now, claimUntil = claimUntil)
-      states <- sql"""
-        SELECT id, status, claim_expires_at
+      _ <- jobs.zipWithIndex.traverse_ { case (jobId, index) =>
+        insertOcrRows(
+          jobId,
+          OcrDraftId.unsafeFromString(s"draft-${jobId.value}"),
+          now.minusSeconds(600L - index.toLong),
+        ) >> insertOutbox(
+          id = s"outbox-${jobId.value}",
+          jobId = jobId,
+          status = OcrQueueOutboxStatus.Delivered,
+          attemptCount = 2,
+          nextAttemptAt = now.minusSeconds(300),
+          claimExpiresAt = None,
+          createdAt = now.minusSeconds(600L - index.toLong),
+        )
+      }
+      _ <- sql"""
+        UPDATE ocr_queue_outbox
+        SET delivered_at = CASE
+              WHEN job_id = $recentQueued THEN ${now.minusSeconds(30)}
+              ELSE ${now.minusSeconds(180)}
+            END,
+            redis_message_id = 'existing-message',
+            last_error = 'old-error'
+      """.update.run.transact(transactor)
+      _ <- sql"UPDATE ocr_jobs SET status = 'running' WHERE id = $running".update.run
+        .transact(transactor)
+      _ <- sql"UPDATE ocr_jobs SET status = 'failed' WHERE id = $terminal".update.run
+        .transact(transactor)
+      rearmed <- repo.rearmQueuedForRedelivery(now, now.minusSeconds(120), 10)
+      rows <- sql"""
+        SELECT job_id, status, attempt_count, last_error, next_attempt_at,
+               delivered_at, redis_message_id
         FROM ocr_queue_outbox
-        WHERE id IN ('outbox-claim-target', 'outbox-claim-other')
-        ORDER BY id
-      """.query[(String, String, Option[Instant])].to[List].transact(transactor)
+        ORDER BY job_id
+      """.query[(String, String, Int, Option[String], Instant, Option[Instant], Option[String])]
+        .to[List].transact(transactor)
     yield
-      assertEquals(claimed.map(_.id), Some("outbox-claim-target"))
-      assertEquals(claimed.map(_.enqueueRequest.jobId.value), Some(targetJobId.value))
-      assertEquals(claimed.map(_.claimExpiresAt), Some(claimUntil))
-      assert(claimed.exists(record =>
-        !record.claimToken.equals(claimTokenFor(
-          "outbox-claim-target"
-        ))
-      ))
+      assertEquals(rearmed, 1)
       assertEquals(
-        states,
-        List(
-          ("outbox-claim-other", "PENDING", None),
-          ("outbox-claim-target", "IN_FLIGHT", Some(claimUntil)),
-        ),
+        rows.find(_._1 == oldQueued.value),
+        Some((oldQueued.value, "PENDING", 0, None, now, None, None)),
       )
+      assertEquals(rows.filterNot(_._1 == oldQueued.value).map(_._2).distinct, List("DELIVERED"))
 
-  test("claimById ignores delivered and missing rows"):
-    val jobId = OcrJobId.unsafeFromString("job-outbox-claim-delivered")
+  test("nextWakeAt chooses the earliest pending, claim-expiry, or semantic deadline"):
+    val pending = OcrJobId.unsafeFromString("job-outbox-deadline-pending")
+    val inFlight = OcrJobId.unsafeFromString("job-outbox-deadline-in-flight")
+    val delivered = OcrJobId.unsafeFromString("job-outbox-deadline-delivered")
     for
-      _ <- insertOcrRows(
-        jobId,
-        OcrDraftId.unsafeFromString("draft-outbox-claim-delivered"),
-        now.minusSeconds(60),
+      _ <- List(pending, inFlight, delivered).traverse_(jobId =>
+        insertOcrRows(
+          jobId,
+          OcrDraftId.unsafeFromString(s"draft-${jobId.value}"),
+          now.minusSeconds(60),
+        )
       )
       _ <- insertOutbox(
-        id = "outbox-claim-delivered",
-        jobId = jobId,
-        status = OcrQueueOutboxStatus.Delivered,
-        attemptCount = 1,
-        nextAttemptAt = now.minusSeconds(1),
-        claimExpiresAt = None,
-        createdAt = now.minusSeconds(60),
+        "outbox-deadline-pending",
+        pending,
+        OcrQueueOutboxStatus.Pending,
+        0,
+        now.plusSeconds(90),
+        None,
+        now,
       )
-      delivered <- repo.claimById("outbox-claim-delivered", now = now, claimUntil = claimUntil)
-      missing <- repo.claimById("outbox-claim-missing", now = now, claimUntil = claimUntil)
-      row <- sql"""
-        SELECT status, claim_expires_at
-        FROM ocr_queue_outbox
-        WHERE id = 'outbox-claim-delivered'
-      """.query[(String, Option[Instant])].unique.transact(transactor)
-    yield
-      assertEquals(delivered, None)
-      assertEquals(missing, None)
-      assertEquals(row, ("DELIVERED", None))
+      _ <- insertOutbox(
+        "outbox-deadline-in-flight",
+        inFlight,
+        OcrQueueOutboxStatus.InFlight,
+        0,
+        now,
+        Some(now.plusSeconds(30)),
+        now,
+      )
+      _ <- insertOutbox(
+        "outbox-deadline-delivered",
+        delivered,
+        OcrQueueOutboxStatus.Delivered,
+        0,
+        now,
+        None,
+        now,
+      )
+      _ <- sql"""
+        UPDATE ocr_queue_outbox
+        SET delivered_at = ${now.minusSeconds(20)}, redis_message_id = 'existing-message'
+        WHERE id = 'outbox-deadline-delivered'
+      """.update.run.transact(transactor)
+      deadline <- repo.nextWakeAt(now, 120.seconds)
+    yield assertEquals(deadline, Some(now.plusSeconds(30)))
 
   test("backlogSnapshot summarizes pending, due, and in-flight backlog"):
     val dueJobId = OcrJobId.unsafeFromString("job-outbox-snapshot-due")
@@ -493,8 +509,8 @@ final class PostgresOcrQueueOutboxRepositorySpec extends IntegrationSuite:
         claimExpiresAt = None,
         createdAt = now.minusSeconds(180),
       )
-      first <- repo.claimById("outbox-token-fence", firstClaimAt, firstClaimUntil)
-        .map(_.getOrElse(fail("first claim was not acquired")))
+      first <- repo.claimDue(1, firstClaimAt, firstClaimUntil)
+        .map(_.headOption.getOrElse(fail("first claim was not acquired")))
       second <- repo.claimDue(limit = 1, now = now, claimUntil = claimUntil)
         .map(_.headOption.getOrElse(fail("expired claim was not reclaimed")))
       staleDelivered <- repo.markDelivered(

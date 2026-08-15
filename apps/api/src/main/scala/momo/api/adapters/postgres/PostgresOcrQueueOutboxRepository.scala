@@ -3,6 +3,8 @@ package momo.api.adapters.postgres
 import java.time.Instant
 import java.util.UUID
 
+import scala.concurrent.duration.FiniteDuration
+
 import cats.MonadThrow
 import cats.effect.MonadCancelThrow
 import cats.syntax.all.*
@@ -101,30 +103,6 @@ final class PostgresOcrQueueOutboxRepository[F[_]: MonadCancelThrow](transactor:
     extends OcrQueueOutboxRepository[F]:
   import PostgresOcrQueueOutbox.*
 
-  override def claimById(
-      id: String,
-      now: Instant,
-      claimUntil: Instant,
-  ): F[Option[OcrQueueOutboxRecord]] = sql"""
-      WITH candidate AS (
-        SELECT id
-        FROM ocr_queue_outbox
-        WHERE id = $id
-          AND status = ${OcrQueueOutboxStatus.Pending}
-        FOR UPDATE SKIP LOCKED
-      )
-      UPDATE ocr_queue_outbox q
-      SET
-        status = ${OcrQueueOutboxStatus.InFlight},
-        claim_token = gen_random_uuid(),
-        claim_expires_at = $claimUntil,
-        updated_at = $now
-      FROM candidate
-      WHERE q.id = candidate.id
-      RETURNING q.id, q.job_id, q.stream_payload, q.attempt_count,
-                q.claim_token, q.claim_expires_at
-    """.query[Row].option.flatMap(_.traverse(toRecord)).transact(transactor)
-
   override def claimDue(
       limit: Int,
       now: Instant,
@@ -135,7 +113,7 @@ final class PostgresOcrQueueOutboxRepository[F[_]: MonadCancelThrow](transactor:
         FROM ocr_queue_outbox
         WHERE
           (status = ${OcrQueueOutboxStatus.Pending} AND next_attempt_at <= $now)
-          OR (status = ${OcrQueueOutboxStatus.InFlight} AND claim_expires_at < $now)
+          OR (status = ${OcrQueueOutboxStatus.InFlight} AND claim_expires_at <= $now)
         ORDER BY next_attempt_at ASC, created_at ASC, id ASC
         LIMIT $limit
         FOR UPDATE SKIP LOCKED
@@ -152,13 +130,70 @@ final class PostgresOcrQueueOutboxRepository[F[_]: MonadCancelThrow](transactor:
                 q.claim_token, q.claim_expires_at
     """.query[Row].to[List].flatMap(_.traverse(toRecord)).transact(transactor)
 
+  override def rearmQueuedForRedelivery(
+      now: Instant,
+      redeliverBefore: Instant,
+      limit: Int,
+  ): F[Int] = sql"""
+      WITH candidates AS (
+        SELECT q.id
+        FROM ocr_queue_outbox q
+        JOIN ocr_jobs j ON j.id = q.job_id
+        WHERE q.status = ${OcrQueueOutboxStatus.Delivered}
+          AND q.delivered_at <= $redeliverBefore
+          AND j.status = 'queued'
+        ORDER BY q.delivered_at, q.created_at, q.id
+        LIMIT $limit
+        FOR UPDATE OF q, j SKIP LOCKED
+      )
+      UPDATE ocr_queue_outbox q
+      SET
+        status = ${OcrQueueOutboxStatus.Pending},
+        attempt_count = 0,
+        last_error = NULL,
+        claim_token = NULL,
+        claim_expires_at = NULL,
+        next_attempt_at = $now,
+        delivered_at = NULL,
+        redis_message_id = NULL,
+        updated_at = $now
+      FROM candidates
+      WHERE q.id = candidates.id
+    """.update.run.transact(transactor)
+
+  override def nextWakeAt(
+      _now: Instant,
+      redeliveryAfter: FiniteDuration,
+  ): F[Option[Instant]] =
+    val redeliveryMillis = redeliveryAfter.toMillis
+    sql"""
+      SELECT MIN(wake_at)
+      FROM (
+        SELECT next_attempt_at AS wake_at
+        FROM ocr_queue_outbox
+        WHERE status = ${OcrQueueOutboxStatus.Pending}
+        UNION ALL
+        SELECT claim_expires_at AS wake_at
+        FROM ocr_queue_outbox
+        WHERE status = ${OcrQueueOutboxStatus.InFlight}
+        UNION ALL
+        SELECT q.delivered_at + ($redeliveryMillis * INTERVAL '1 millisecond') AS wake_at
+        FROM ocr_queue_outbox q
+        JOIN ocr_jobs j ON j.id = q.job_id
+        WHERE q.status = ${OcrQueueOutboxStatus.Delivered}
+          AND j.status = 'queued'
+          AND q.delivered_at IS NOT NULL
+      ) deadlines
+      WHERE wake_at IS NOT NULL
+    """.query[Option[Instant]].unique.transact(transactor)
+
   override def backlogSnapshot(now: Instant): F[OcrQueueBacklogSnapshot] = sql"""
       SELECT
         COUNT(*) FILTER (WHERE status = ${OcrQueueOutboxStatus.Pending}) AS pending_count,
         COUNT(*) FILTER (WHERE status = ${OcrQueueOutboxStatus.InFlight}) AS in_flight_count,
         COUNT(*) FILTER (
           WHERE status = ${OcrQueueOutboxStatus.InFlight}
-            AND claim_expires_at < $now
+            AND claim_expires_at <= $now
         ) AS expired_in_flight_count,
         COUNT(*) FILTER (
           WHERE status = ${OcrQueueOutboxStatus.Pending}

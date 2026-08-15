@@ -110,6 +110,9 @@ object NoReadImageStore:
 final case class OutboxClaimDueCall(limit: Int, now: Instant, claimUntil: Instant) derives CanEqual
 final case class OutboxClaimByIdCall(id: String, now: Instant, claimUntil: Instant) derives CanEqual
 final case class OutboxBacklogSnapshotCall(now: Instant) derives CanEqual
+final case class OutboxRearmCall(now: Instant, redeliverBefore: Instant, limit: Int)
+    derives CanEqual
+final case class OutboxNextWakeCall(now: Instant, redeliveryAfter: FiniteDuration) derives CanEqual
 
 final case class OutboxMarkDeliveredCall(
     id: String,
@@ -128,24 +131,18 @@ final case class OutboxReleaseForRetryCall(
 
 final class RecordingOcrQueueOutboxRepository private (
     claimRows: OutboxClaimDueCall => List[OcrQueueOutboxRecord],
-    claimByIdRows: OutboxClaimByIdCall => Option[OcrQueueOutboxRecord],
     backlogSnapshotRows: Instant => OcrQueueBacklogSnapshot,
+    rearmResult: Int,
+    nextWakeAtResult: Option[Instant],
     markDeliveredResult: Boolean,
     releaseForRetryResult: Boolean,
     claimsRef: Ref[IO, Vector[OutboxClaimDueCall]],
-    claimByIdsRef: Ref[IO, Vector[OutboxClaimByIdCall]],
     backlogSnapshotsRef: Ref[IO, Vector[OutboxBacklogSnapshotCall]],
+    rearmsRef: Ref[IO, Vector[OutboxRearmCall]],
+    nextWakeAtsRef: Ref[IO, Vector[OutboxNextWakeCall]],
     deliveriesRef: Ref[IO, Vector[OutboxMarkDeliveredCall]],
     releasesRef: Ref[IO, Vector[OutboxReleaseForRetryCall]],
 ) extends OcrQueueOutboxRepository[IO]:
-  override def claimById(
-      id: String,
-      now: Instant,
-      claimUntil: Instant,
-  ): IO[Option[OcrQueueOutboxRecord]] =
-    val call = OutboxClaimByIdCall(id, now, claimUntil)
-    claimByIdsRef.update(_ :+ call).as(claimByIdRows(call))
-
   override def claimDue(
       limit: Int,
       now: Instant,
@@ -153,6 +150,18 @@ final class RecordingOcrQueueOutboxRepository private (
   ): IO[List[OcrQueueOutboxRecord]] =
     val call = OutboxClaimDueCall(limit, now, claimUntil)
     claimsRef.update(_ :+ call).as(claimRows(call))
+
+  override def rearmQueuedForRedelivery(
+      now: Instant,
+      redeliverBefore: Instant,
+      limit: Int,
+  ): IO[Int] = rearmsRef.update(_ :+ OutboxRearmCall(now, redeliverBefore, limit)).as(rearmResult)
+
+  override def nextWakeAt(
+      now: Instant,
+      redeliveryAfter: FiniteDuration,
+  ): IO[Option[Instant]] = nextWakeAtsRef
+    .update(_ :+ OutboxNextWakeCall(now, redeliveryAfter)).as(nextWakeAtResult)
 
   override def backlogSnapshot(now: Instant): IO[OcrQueueBacklogSnapshot] = backlogSnapshotsRef
     .update(_ :+ OutboxBacklogSnapshotCall(now)).as(backlogSnapshotRows(now))
@@ -177,8 +186,9 @@ final class RecordingOcrQueueOutboxRepository private (
     .as(releaseForRetryResult)
 
   def claims: IO[Vector[OutboxClaimDueCall]] = claimsRef.get
-  def claimByIds: IO[Vector[OutboxClaimByIdCall]] = claimByIdsRef.get
   def backlogSnapshots: IO[Vector[OutboxBacklogSnapshotCall]] = backlogSnapshotsRef.get
+  def rearms: IO[Vector[OutboxRearmCall]] = rearmsRef.get
+  def nextWakeAts: IO[Vector[OutboxNextWakeCall]] = nextWakeAtsRef.get
   def deliveries: IO[Vector[OutboxMarkDeliveredCall]] = deliveriesRef.get
   def releases: IO[Vector[OutboxReleaseForRetryCall]] = releasesRef.get
 
@@ -193,11 +203,6 @@ object RecordingOcrQueueOutboxRepository:
 
   def createWithRows(rows: List[OcrQueueOutboxRecord]): IO[RecordingOcrQueueOutboxRepository] =
     create(_ => rows, markDeliveredResult = true, releaseForRetryResult = true)
-
-  def createWithClaimById(
-      row: OutboxClaimByIdCall => Option[OcrQueueOutboxRecord]
-  ): IO[RecordingOcrQueueOutboxRepository] =
-    create(_ => Nil, row, markDeliveredResult = true, releaseForRetryResult = true)
 
   def create(
       claimRows: OutboxClaimDueCall => List[OcrQueueOutboxRecord],
@@ -226,21 +231,57 @@ object RecordingOcrQueueOutboxRepository:
       releaseForRetryResult: Boolean,
       backlogSnapshotRows: Instant => OcrQueueBacklogSnapshot,
   ): IO[RecordingOcrQueueOutboxRepository] =
+    require(Option(claimByIdRows).nonEmpty, "legacy claimById test function must be present")
+    createWithScheduleAndBacklog(
+      claimRows,
+      markDeliveredResult,
+      releaseForRetryResult,
+      backlogSnapshotRows,
+      rearmResult = 0,
+      nextWakeAtResult = None,
+    )
+
+  def createWithSchedule(
+      claimRows: OutboxClaimDueCall => List[OcrQueueOutboxRecord],
+      markDeliveredResult: Boolean,
+      releaseForRetryResult: Boolean,
+      rearmResult: Int,
+      nextWakeAtResult: Option[Instant],
+  ): IO[RecordingOcrQueueOutboxRepository] = createWithScheduleAndBacklog(
+    claimRows,
+    markDeliveredResult,
+    releaseForRetryResult,
+    _ => emptyBacklog,
+    rearmResult,
+    nextWakeAtResult,
+  )
+
+  private def createWithScheduleAndBacklog(
+      claimRows: OutboxClaimDueCall => List[OcrQueueOutboxRecord],
+      markDeliveredResult: Boolean,
+      releaseForRetryResult: Boolean,
+      backlogSnapshotRows: Instant => OcrQueueBacklogSnapshot,
+      rearmResult: Int,
+      nextWakeAtResult: Option[Instant],
+  ): IO[RecordingOcrQueueOutboxRepository] =
     for
       claims <- Ref.of[IO, Vector[OutboxClaimDueCall]](Vector.empty)
-      claimByIds <- Ref.of[IO, Vector[OutboxClaimByIdCall]](Vector.empty)
       backlogSnapshots <- Ref.of[IO, Vector[OutboxBacklogSnapshotCall]](Vector.empty)
+      rearms <- Ref.of[IO, Vector[OutboxRearmCall]](Vector.empty)
+      nextWakeAts <- Ref.of[IO, Vector[OutboxNextWakeCall]](Vector.empty)
       deliveries <- Ref.of[IO, Vector[OutboxMarkDeliveredCall]](Vector.empty)
       releases <- Ref.of[IO, Vector[OutboxReleaseForRetryCall]](Vector.empty)
     yield new RecordingOcrQueueOutboxRepository(
       claimRows,
-      claimByIdRows,
       backlogSnapshotRows,
+      rearmResult,
+      nextWakeAtResult,
       markDeliveredResult,
       releaseForRetryResult,
       claims,
-      claimByIds,
       backlogSnapshots,
+      rearms,
+      nextWakeAts,
       deliveries,
       releases,
     )

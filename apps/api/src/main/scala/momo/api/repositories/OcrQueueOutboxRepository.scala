@@ -3,6 +3,8 @@ package momo.api.repositories
 import java.time.Instant
 import java.util.UUID
 
+import scala.concurrent.duration.FiniteDuration
+
 import momo.api.domain.ids.OcrJobId
 import momo.api.ports.queue.OcrJobEnqueueRequest
 
@@ -60,8 +62,9 @@ object OcrQueueOutboxDraft:
     )
 
 trait OcrQueueOutboxRepository[F[_]]:
-  def claimById(id: String, now: Instant, claimUntil: Instant): F[Option[OcrQueueOutboxRecord]]
   def claimDue(limit: Int, now: Instant, claimUntil: Instant): F[List[OcrQueueOutboxRecord]]
+  def rearmQueuedForRedelivery(now: Instant, redeliverBefore: Instant, limit: Int): F[Int]
+  def nextWakeAt(now: Instant, redeliveryAfter: FiniteDuration): F[Option[Instant]]
   def backlogSnapshot(now: Instant): F[OcrQueueBacklogSnapshot]
   def markDelivered(
       id: String,

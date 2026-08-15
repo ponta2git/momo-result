@@ -1,4 +1,5 @@
 package momo.api.usecases.ocr
+
 import java.time.Instant
 import java.util.UUID
 
@@ -23,20 +24,20 @@ import momo.api.testing.{
   FixedClock,
   OutboxClaimDueCall,
   OutboxMarkDeliveredCall,
+  OutboxNextWakeCall,
+  OutboxRearmCall,
   RecordingOcrJobQueuePublisher,
   RecordingOcrQueueOutboxRepository
 }
+import momo.api.usecases.queue.OutboxDrainResult
 
 final class OcrQueueOutboxDispatcherSpec extends MomoCatsEffectSuite:
   private given LoggerFactory[IO] = NoOpFactory[IO]
   private val fixedNow = Instant.parse("2026-05-09T00:00:00Z")
   private val claimToken = UUID.fromString("00000000-0000-0000-0000-000000000001")
 
-  private def rowAt(claimExpiresAt: Instant): OcrQueueOutboxRecord =
-    rowAt(claimExpiresAt, "outbox-1")
-
-  private def rowAt(claimExpiresAt: Instant, id: String) = OcrQueueOutboxRecord(
-    id = id,
+  private def rowAt(claimExpiresAt: Instant): OcrQueueOutboxRecord = OcrQueueOutboxRecord(
+    id = "outbox-1",
     jobId = OcrJobId.unsafeFromString("job-1"),
     enqueueRequest = OcrJobEnqueueRequest(
       jobId = OcrJobId.unsafeFromString("job-1"),
@@ -66,38 +67,94 @@ final class OcrQueueOutboxDispatcherSpec extends MomoCatsEffectSuite:
     given Clock[IO] = FixedClock.at(now)
     OcrQueueOutboxDispatcher[IO](repo, queue, config)
 
-  test("runOnce publishes claimed rows and marks them delivered"):
+  test("drainBatch rearms semantics, publishes claimed rows, and records delivery"):
     for
-      repo <- RecordingOcrQueueOutboxRepository
-        .create(call => List(rowAt(call.claimUntil)), true, true)
+      repo <- RecordingOcrQueueOutboxRepository.createWithSchedule(
+        call => List(rowAt(call.claimUntil)),
+        markDeliveredResult = true,
+        releaseForRetryResult = true,
+        rearmResult = 1,
+        nextWakeAtResult = None,
+      )
       queue <- RecordingOcrJobQueuePublisher.create
       config = OcrQueueOutboxDispatcherConfig(batchSize = 25, claimTtl = 30.seconds)
-      _ <- dispatcherAt(fixedNow, repo, queue, config).runOnce
-      gotClaimed <- repo.claims
+      result <- dispatcherAt(fixedNow, repo, queue, config).drainBatch
+      gotRearms <- repo.rearms
+      gotClaims <- repo.claims
       gotDelivered <- repo.deliveries
+      wakeups <- repo.nextWakeAts
     yield
-      assertEquals(gotClaimed, Vector(OutboxClaimDueCall(25, fixedNow, fixedNow.plusSeconds(30))))
+      assertEquals(result, OutboxDrainResult.Progress)
+      assertEquals(
+        gotRearms,
+        Vector(OutboxRearmCall(
+          fixedNow,
+          fixedNow.minusSeconds(120),
+          25,
+        ))
+      )
+      assertEquals(
+        gotClaims,
+        Vector(OutboxClaimDueCall(
+          25,
+          fixedNow,
+          fixedNow.plusSeconds(30),
+        ))
+      )
       assertEquals(
         gotDelivered,
-        Vector(
-          OutboxMarkDeliveredCall("outbox-1", claimToken, "redis-job-1", fixedNow)
-        ),
+        Vector(OutboxMarkDeliveredCall("outbox-1", claimToken, "redis-job-1", fixedNow)),
       )
+      assertEquals(wakeups, Vector.empty)
 
-  test("runOnce releases failed publishes for retry with sanitized error class"):
+  test("idle batch returns the repository's earliest retry or semantic deadline"):
+    val nextWakeAt = fixedNow.plusSeconds(45)
+    for
+      repo <- RecordingOcrQueueOutboxRepository.createWithSchedule(
+        _ => Nil,
+        markDeliveredResult = true,
+        releaseForRetryResult = true,
+        rearmResult = 0,
+        nextWakeAtResult = Some(nextWakeAt),
+      )
+      queue <- RecordingOcrJobQueuePublisher.create
+      result <- dispatcherAt(fixedNow, repo, queue, OcrQueueOutboxDispatcherConfig()).drainBatch
+      wakeups <- repo.nextWakeAts
+    yield
+      assertEquals(result, OutboxDrainResult.Idle(Some(nextWakeAt)))
+      assertEquals(wakeups, Vector(OutboxNextWakeCall(fixedNow, 120.seconds)))
+
+  test("overdue work skipped by a competing claim gets a one-shot contention delay"):
+    for
+      repo <- RecordingOcrQueueOutboxRepository.createWithSchedule(
+        _ => Nil,
+        markDeliveredResult = true,
+        releaseForRetryResult = true,
+        rearmResult = 0,
+        nextWakeAtResult = Some(fixedNow.minusSeconds(1)),
+      )
+      queue <- RecordingOcrJobQueuePublisher.create
+      result <- dispatcherAt(fixedNow, repo, queue, OcrQueueOutboxDispatcherConfig()).drainBatch
+    yield assertEquals(result, OutboxDrainResult.Idle(Some(fixedNow.plusSeconds(1))))
+
+  test("failed publish is released for a one-second first retry with a safe error class"):
     val queueError = new RuntimeException("redis://secret-host/boom")
     for
-      repo <- RecordingOcrQueueOutboxRepository
-        .createWithRows(List(rowAt(fixedNow.plusSeconds(30))))
-      queue = FailingOcrJobQueuePublisher(queueError)
-      _ <- dispatcherAt(fixedNow, repo, queue, OcrQueueOutboxDispatcherConfig()).runOnce
+      repo <-
+        RecordingOcrQueueOutboxRepository.createWithRows(List(rowAt(fixedNow.plusSeconds(30))))
+      _ <- dispatcherAt(
+        fixedNow,
+        repo,
+        FailingOcrJobQueuePublisher(queueError),
+        OcrQueueOutboxDispatcherConfig(),
+      ).drainBatch
       got <- repo.releases
     yield
       assertEquals(
         got.map(call => call.id -> call.lastError),
         Vector("outbox-1" -> classOf[RuntimeException].getName),
       )
-      assertEquals(got.map(_.nextAttemptAt), Vector(fixedNow.plusSeconds(2)))
+      assertEquals(got.map(_.nextAttemptAt), Vector(fixedNow.plusSeconds(1)))
 
   test("stale claim fencing makes delivery and retry updates harmless"):
     val queueError = new RuntimeException("redis://secret-host/boom")
@@ -110,7 +167,7 @@ final class OcrQueueOutboxDispatcherSpec extends MomoCatsEffectSuite:
         deliveredRepo,
         deliveredQueue,
         OcrQueueOutboxDispatcherConfig(),
-      ).runOnce
+      ).drainBatch
       retriedRepo <- RecordingOcrQueueOutboxRepository
         .create(call => List(rowAt(call.claimUntil)), true, false)
       _ <- dispatcherAt(
@@ -118,7 +175,7 @@ final class OcrQueueOutboxDispatcherSpec extends MomoCatsEffectSuite:
         retriedRepo,
         FailingOcrJobQueuePublisher(queueError),
         OcrQueueOutboxDispatcherConfig(),
-      ).runOnce
+      ).drainBatch
       deliveries <- deliveredRepo.deliveries
       releases <- retriedRepo.releases
     yield
@@ -131,51 +188,20 @@ final class OcrQueueOutboxDispatcherSpec extends MomoCatsEffectSuite:
     }
     assertEquals(OcrQueueOutboxStatus.fromWire("UNKNOWN"), None)
 
-  test("outbox-backed submitter claims the created outbox row and marks it delivered"):
-    val outboxId = "ocr-outbox-job-1"
+  test("outbox-backed submitter trusts the durable intent without direct claim or publish"):
     for
-      repo <- RecordingOcrQueueOutboxRepository
-        .createWithClaimById(call => Some(rowAt(call.claimUntil, outboxId)))
+      repo <-
+        RecordingOcrQueueOutboxRepository.createWithRows(List(rowAt(fixedNow.plusSeconds(30))))
       queue <- RecordingOcrJobQueuePublisher.create
-      submitter = withFixedClock:
-        OcrJobQueueSubmitter.outboxBacked[IO](repo, queue)
-      result <- submitter.submit(context)
-      gotClaims <- repo.claimByIds
-      gotDelivered <- repo.deliveries
+      result <- OcrJobQueueSubmitter.outboxBacked[IO](repo, queue).submit(context)
+      claims <- repo.claims
+      deliveries <- repo.deliveries
+      published <- queue.published
     yield
       assertEquals(result, Right(()))
-      assertEquals(gotClaims.map(_.id), Vector(outboxId))
-      assertEquals(
-        gotDelivered,
-        Vector(OutboxMarkDeliveredCall(
-          outboxId,
-          claimToken,
-          "redis-job-1",
-          fixedNow
-        )),
-      )
-
-  test("outbox-backed submitter keeps the API result successful when immediate publish fails"):
-    val queueError = new RuntimeException("redis://secret-host/boom")
-    val outboxId = "ocr-outbox-job-1"
-    for
-      repo <- RecordingOcrQueueOutboxRepository
-        .createWithClaimById(call => Some(rowAt(call.claimUntil, outboxId)))
-      submitter = withFixedClock:
-        OcrJobQueueSubmitter.outboxBacked[IO](repo, FailingOcrJobQueuePublisher(queueError))
-      result <- submitter.submit(context)
-      got <- repo.releases
-    yield
-      assertEquals(result, Right(()))
-      assertEquals(
-        got.map(call => call.id -> call.lastError),
-        Vector(outboxId -> classOf[RuntimeException].getName),
-      )
-      assertEquals(got.map(_.nextAttemptAt), Vector(fixedNow.plusSeconds(2)))
-
-  private def withFixedClock[A](body: Clock[IO] ?=> A): A =
-    given Clock[IO] = FixedClock.at(fixedNow)
-    body
+      assertEquals(claims, Vector.empty)
+      assertEquals(deliveries, Vector.empty)
+      assertEquals(published, Vector.empty)
 
   private def context: OcrQueueDispatchIntent = OcrQueueDispatchIntent(
     enqueueRequest = rowAt(fixedNow.plusSeconds(30)).enqueueRequest,

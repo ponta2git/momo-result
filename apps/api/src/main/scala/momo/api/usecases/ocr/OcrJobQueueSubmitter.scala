@@ -1,10 +1,7 @@
 package momo.api.usecases.ocr
 
-import scala.concurrent.duration.*
-
-import cats.MonadThrow
-import cats.effect.{Clock, Temporal}
 import cats.syntax.all.*
+import cats.{Applicative, MonadThrow}
 import org.typelevel.log4cats.LoggerFactory
 
 import momo.api.domain.{FailureCode, OcrFailure}
@@ -15,7 +12,6 @@ import momo.api.repositories.{
   MatchDraftsRepository,
   OcrJobsRepository,
   OcrQueueDispatchIntent,
-  OcrQueueOutboxDraft,
   OcrQueueOutboxRepository
 }
 
@@ -62,43 +58,20 @@ object OcrJobQueueSubmitter:
         _ => ().asRight[AppError].pure[F],
       )
 
-  def outboxBacked[F[_]: Temporal: Clock: LoggerFactory](
+  def outboxBacked[F[_]: Applicative](
       outbox: OcrQueueOutboxRepository[F],
       queue: OcrJobQueuePublisher[F],
-  ): OcrJobQueueSubmitter[F] = outboxBacked(outbox, queue, 30.seconds, 60.seconds)
+  ): OcrJobQueueSubmitter[F] =
+    require(
+      Option(outbox).nonEmpty && Option(queue).nonEmpty,
+      "outbox-backed submitter dependencies must be present",
+    )
+    durable[F]
 
-  def outboxBacked[F[_]: Temporal: Clock: LoggerFactory](
-      outbox: OcrQueueOutboxRepository[F],
-      queue: OcrJobQueuePublisher[F],
-      claimTtl: FiniteDuration,
-      maxBackoff: FiniteDuration,
-  ): OcrJobQueueSubmitter[F] = new OcrJobQueueSubmitter[F]:
-    private val logger = LoggerFactory[F].getLoggerFromClass(classOf[OcrJobQueueSubmitter[F]])
-    private val publisher = OcrQueueOutboxPublisher[F](outbox, queue, maxBackoff)
-
-    override def submit(intent: OcrQueueDispatchIntent): F[Either[AppError, Unit]] =
-      val outboxId = OcrQueueOutboxDraft.idForJob(intent.jobId)
-      val publishAttempt =
-        for
-          now <- Clock[F].realTimeInstant
-          claimed <- outbox.claimById(outboxId, now, now.plusMillis(claimTtl.toMillis))
-          _ <- claimed match
-            case Some(row) => publisher.publish(row)
-            case None => logger.warn(
-                s"OCR queue outbox immediate claim skipped outboxId=$outboxId " +
-                  s"jobId=${intent.jobId.value}"
-              )
-        yield ()
-
-      publishAttempt.attempt.flatMap {
-        case Right(_) => ().asRight[AppError].pure[F]
-        case Left(error) =>
-          val errorClasses = SafeLog.throwableClasses(error)
-          logger.error(
-            s"OCR queue outbox immediate publish failed outboxId=$outboxId " + s"jobId=${intent
-                .jobId.value} draftId=${intent.draftId.value} " + s"errorClasses=$errorClasses"
-          ) >> ().asRight[AppError].pure[F]
-      }
+  /** The creation transaction already persisted the durable enqueue intent. */
+  def durable[F[_]: Applicative]: OcrJobQueueSubmitter[F] = new OcrJobQueueSubmitter[F]:
+    override def submit(_intent: OcrQueueDispatchIntent): F[Either[AppError, Unit]] =
+      ().asRight[AppError].pure[F]
 
   private val queueFailure: OcrFailure = OcrFailure(
     code = FailureCode.QueueFailure,

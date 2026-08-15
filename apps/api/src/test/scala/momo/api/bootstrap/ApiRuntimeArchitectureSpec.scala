@@ -30,6 +30,8 @@ final class ApiRuntimeArchitectureSpec extends FunSuite:
   private val analysisOutboxDispatcherFile = Paths.get(
     "src/main/scala/momo/api/usecases/seriesanalysis/SeriesAnalysisQueueOutboxDispatcher.scala"
   )
+  private val outboxWakeCoordinatorFile =
+    Paths.get("src/main/scala/momo/api/usecases/queue/OutboxWakeCoordinator.scala")
   private val ocrQueueSubmitterFile =
     Paths.get("src/main/scala/momo/api/usecases/ocr/OcrJobQueueSubmitter.scala")
   private val imageUploadDomainFile = Paths.get("src/main/scala/momo/api/domain/ImageUpload.scala")
@@ -93,6 +95,7 @@ final class ApiRuntimeArchitectureSpec extends FunSuite:
     val inMemoryRuntimeText = read(inMemoryApiRuntimeFile)
     val ocrDispatcherText = read(ocrOutboxDispatcherFile)
     val analysisDispatcherText = read(analysisOutboxDispatcherFile)
+    val outboxCoordinatorText = read(outboxWakeCoordinatorFile)
     val ocrQueueSubmitterText = read(ocrQueueSubmitterFile)
 
     assertEquals(count(postgresRuntimeText, "OutboxWakeup.resource[F]"), 1)
@@ -108,6 +111,7 @@ final class ApiRuntimeArchitectureSpec extends FunSuite:
     assert(mainText.contains("awaitRuntimeFailure(backgroundFailure)"))
     assertEquals(count(ocrDispatcherText, "def resource"), 1)
     assertEquals(count(analysisDispatcherText, "def resource"), 1)
+    assertEquals(count(outboxCoordinatorText, "def resource"), 1)
     assert(!ocrDispatcherText.contains("OutboxWakeup.resource"))
     assert(!analysisDispatcherText.contains("OutboxWakeup.resource"))
     assert(ocrQueueSubmitterText.contains("private[api] def nonDurable"))

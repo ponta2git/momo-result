@@ -95,13 +95,6 @@ object OutboxWakeCoordinator:
       wakeup: OutboxWakeup[F],
       driver: OutboxWakeDriver[F],
       config: OutboxWakeCoordinatorConfig,
-  ): Resource[F, Unit] = resource(kind, wakeup, driver, config, _ => Temporal[F].unit)
-
-  def resource[F[_]: Temporal: Clock: LoggerFactory](
-      kind: OutboxKind,
-      wakeup: OutboxWakeup[F],
-      driver: OutboxWakeDriver[F],
-      config: OutboxWakeCoordinatorConfig,
       onUnexpectedExit: Throwable => F[Unit],
   ): Resource[F, Unit] = Resource
     .make(

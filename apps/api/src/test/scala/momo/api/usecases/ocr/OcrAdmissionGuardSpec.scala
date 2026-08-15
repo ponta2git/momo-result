@@ -126,7 +126,6 @@ final class OcrAdmissionGuardSpec extends MomoCatsEffectSuite:
       snapshot: OcrQueueBacklogSnapshot
   ): IO[RecordingOcrQueueOutboxRepository] = RecordingOcrQueueOutboxRepository.createWithBacklog(
     _ => Nil,
-    _ => None,
     markDeliveredResult = true,
     releaseForRetryResult = true,
     backlogSnapshotRows = _ => snapshot,

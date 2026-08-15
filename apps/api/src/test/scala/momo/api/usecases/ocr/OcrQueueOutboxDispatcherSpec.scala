@@ -188,12 +188,12 @@ final class OcrQueueOutboxDispatcherSpec extends MomoCatsEffectSuite:
     }
     assertEquals(OcrQueueOutboxStatus.fromWire("UNKNOWN"), None)
 
-  test("outbox-backed submitter trusts the durable intent without direct claim or publish"):
+  test("durable submitter trusts the persisted intent without direct queue work"):
     for
       repo <-
         RecordingOcrQueueOutboxRepository.createWithRows(List(rowAt(fixedNow.plusSeconds(30))))
       queue <- RecordingOcrJobQueuePublisher.create
-      result <- OcrJobQueueSubmitter.outboxBacked[IO](repo, queue).submit(context)
+      result <- OcrJobQueueSubmitter.durable[IO].submit(context)
       claims <- repo.claims
       deliveries <- repo.deliveries
       published <- queue.published

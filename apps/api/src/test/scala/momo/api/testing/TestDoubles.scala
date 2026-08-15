@@ -108,7 +108,6 @@ object NoReadImageStore:
   )
 
 final case class OutboxClaimDueCall(limit: Int, now: Instant, claimUntil: Instant) derives CanEqual
-final case class OutboxClaimByIdCall(id: String, now: Instant, claimUntil: Instant) derives CanEqual
 final case class OutboxBacklogSnapshotCall(now: Instant) derives CanEqual
 final case class OutboxRearmCall(now: Instant, redeliverBefore: Instant, limit: Int)
     derives CanEqual
@@ -208,17 +207,8 @@ object RecordingOcrQueueOutboxRepository:
       claimRows: OutboxClaimDueCall => List[OcrQueueOutboxRecord],
       markDeliveredResult: Boolean,
       releaseForRetryResult: Boolean,
-  ): IO[RecordingOcrQueueOutboxRepository] =
-    create(claimRows, _ => None, markDeliveredResult, releaseForRetryResult)
-
-  def create(
-      claimRows: OutboxClaimDueCall => List[OcrQueueOutboxRecord],
-      claimByIdRows: OutboxClaimByIdCall => Option[OcrQueueOutboxRecord],
-      markDeliveredResult: Boolean,
-      releaseForRetryResult: Boolean,
   ): IO[RecordingOcrQueueOutboxRepository] = createWithBacklog(
     claimRows,
-    claimByIdRows,
     markDeliveredResult,
     releaseForRetryResult,
     _ => emptyBacklog,
@@ -226,20 +216,17 @@ object RecordingOcrQueueOutboxRepository:
 
   def createWithBacklog(
       claimRows: OutboxClaimDueCall => List[OcrQueueOutboxRecord],
-      claimByIdRows: OutboxClaimByIdCall => Option[OcrQueueOutboxRecord],
       markDeliveredResult: Boolean,
       releaseForRetryResult: Boolean,
       backlogSnapshotRows: Instant => OcrQueueBacklogSnapshot,
-  ): IO[RecordingOcrQueueOutboxRepository] =
-    require(Option(claimByIdRows).nonEmpty, "legacy claimById test function must be present")
-    createWithScheduleAndBacklog(
-      claimRows,
-      markDeliveredResult,
-      releaseForRetryResult,
-      backlogSnapshotRows,
-      rearmResult = 0,
-      nextWakeAtResult = None,
-    )
+  ): IO[RecordingOcrQueueOutboxRepository] = createWithScheduleAndBacklog(
+    claimRows,
+    markDeliveredResult,
+    releaseForRetryResult,
+    backlogSnapshotRows,
+    rearmResult = 0,
+    nextWakeAtResult = None,
+  )
 
   def createWithSchedule(
       claimRows: OutboxClaimDueCall => List[OcrQueueOutboxRecord],

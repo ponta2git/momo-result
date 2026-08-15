@@ -8,12 +8,7 @@ import momo.api.domain.{FailureCode, OcrFailure}
 import momo.api.errors.AppError
 import momo.api.logging.SafeLog
 import momo.api.ports.queue.OcrJobQueuePublisher
-import momo.api.repositories.{
-  MatchDraftsRepository,
-  OcrJobsRepository,
-  OcrQueueDispatchIntent,
-  OcrQueueOutboxRepository
-}
+import momo.api.repositories.{MatchDraftsRepository, OcrJobsRepository, OcrQueueDispatchIntent}
 
 trait OcrJobQueueSubmitter[F[_]]:
   def submit(intent: OcrQueueDispatchIntent): F[Either[AppError, Unit]]
@@ -57,16 +52,6 @@ object OcrJobQueueSubmitter:
         ,
         _ => ().asRight[AppError].pure[F],
       )
-
-  def outboxBacked[F[_]: Applicative](
-      outbox: OcrQueueOutboxRepository[F],
-      queue: OcrJobQueuePublisher[F],
-  ): OcrJobQueueSubmitter[F] =
-    require(
-      Option(outbox).nonEmpty && Option(queue).nonEmpty,
-      "outbox-backed submitter dependencies must be present",
-    )
-    durable[F]
 
   /** The creation transaction already persisted the durable enqueue intent. */
   def durable[F[_]: Applicative]: OcrJobQueueSubmitter[F] = new OcrJobQueueSubmitter[F]:

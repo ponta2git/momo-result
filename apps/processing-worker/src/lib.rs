@@ -22,6 +22,12 @@ mod postgres;
 mod process;
 mod runtime_identifier;
 mod series_analysis;
+#[expect(
+    dead_code,
+    reason = "the analysis outbox driver is wired into the supervisor by the follow-up composition package"
+)]
+#[path = "series_analysis/outbox.rs"]
+mod series_analysis_outbox;
 mod supervisor;
 
 pub use cli::entrypoint;

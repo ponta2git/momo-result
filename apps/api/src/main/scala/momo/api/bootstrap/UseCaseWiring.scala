@@ -197,5 +197,6 @@ private[bootstrap] object UseCaseWiring:
           repositories.idempotency,
           repositories.loginAccounts,
           authServices.sessionService.create,
+          Async[F].never[Nothing],
         )
       }

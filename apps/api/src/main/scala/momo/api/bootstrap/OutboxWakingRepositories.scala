@@ -10,7 +10,12 @@ import momo.api.domain.*
 import momo.api.domain.ids.*
 import momo.api.errors.AppError
 import momo.api.repositories.*
-import momo.api.usecases.queue.{OutboxKind, OutboxWakeSink, OutboxWakeSubmitResult, PostCommitEffects}
+import momo.api.usecases.queue.{
+  OutboxKind,
+  OutboxWakeSink,
+  OutboxWakeSubmitResult,
+  PostCommitEffects
+}
 
 /** Adds process-local outbox wake hints after successful durable repository transitions. */
 private[bootstrap] object OutboxWakingRepositories:

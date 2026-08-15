@@ -15,13 +15,15 @@ object Main extends IOApp:
 
   override def run(_args: List[String]): IO[ExitCode] = AppConfig.load[IO].flatMap { config =>
     bindAddress(config).flatMap { case (host, port) =>
-      ApiApp.resource[IO](config).flatMap(app =>
-        EmberServerBuilder.default[IO].withHost(host).withPort(port).withHttpApp(app).build
-      ).use { _ =>
+      ApiApp.wired[IO](config).flatMap(runtime =>
+        EmberServerBuilder.default[IO].withHost(host).withPort(port).withHttpApp(runtime.app).build
+          .tupleLeft(runtime.backgroundFailure)
+      ).use { case (backgroundFailure, _) =>
         val startedMessage = "momo_result_api_started " + s"host=${config.httpHost} " +
           s"port=${config.httpPort} " + s"env=${config.appEnv}"
         IO.delay(logger.info(startedMessage)) *>
-          IO.never.guarantee(IO.delay(logger.info("momo_result_api_stopping")))
+          awaitRuntimeFailure(backgroundFailure)
+            .guarantee(IO.delay(logger.info("momo_result_api_stopping")))
       }
     }
   }.as(ExitCode.Success).handleErrorWith { error =>
@@ -37,3 +39,6 @@ object Main extends IOApp:
       .toRight(new IllegalArgumentException(s"HTTP_PORT is not a valid bind port: ${config.httpPort
           .toString}")),
   ).mapN((_, _)).liftTo[IO]
+
+  private[api] def awaitRuntimeFailure(backgroundFailure: IO[Nothing]): IO[Unit] =
+    IO.race(IO.never[Unit], backgroundFailure).void

@@ -13,7 +13,12 @@ import momo.api.errors.AppError
 import momo.api.ports.queue.OcrJobEnqueueRequest
 import momo.api.repositories.*
 import momo.api.repositories.OcrJobCreationStore.OcrJobCreationRejection
-import momo.api.usecases.queue.{OutboxKind, OutboxWakeSink, OutboxWakeSubmitResult, PostCommitEffects}
+import momo.api.usecases.queue.{
+  OutboxKind,
+  OutboxWakeSink,
+  OutboxWakeSubmitResult,
+  PostCommitEffects
+}
 import momo.api.usecases.testing.MatchFixtures
 
 final class OutboxWakingRepositoriesSpec extends MomoCatsEffectSuite:

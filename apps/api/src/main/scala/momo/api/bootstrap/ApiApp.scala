@@ -19,6 +19,8 @@ object ApiApp:
       idempotency: momo.api.repositories.IdempotencyRepository[F],
       loginAccounts: momo.api.repositories.LoginAccountsRepository[F],
       createSession: LoginAccount => F[CreatedSession],
+      /** Fails when a supervised background runtime boundary can no longer make safe progress. */
+      backgroundFailure: F[Nothing],
   )
 
   def resource[F[_]: Async](config: AppConfig): Resource[F, Http4sApp[F]] = wired[F](config)

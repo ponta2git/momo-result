@@ -86,6 +86,14 @@ object OcrQueueOutboxDispatcher:
       queue: OcrJobQueuePublisher[F],
       config: OcrQueueOutboxDispatcherConfig,
       wakeup: OutboxWakeup[F],
+  ): Resource[F, Unit] = resource(outbox, queue, config, wakeup, _ => Temporal[F].unit)
+
+  def resource[F[_]: Temporal: Clock: LoggerFactory](
+      outbox: OcrQueueOutboxRepository[F],
+      queue: OcrJobQueuePublisher[F],
+      config: OcrQueueOutboxDispatcherConfig,
+      wakeup: OutboxWakeup[F],
+      onUnexpectedExit: Throwable => F[Unit],
   ): Resource[F, Unit] = OutboxWakeCoordinator.resource(
     OutboxKind.Ocr,
     wakeup,
@@ -94,6 +102,7 @@ object OcrQueueOutboxDispatcher:
       coldRecoveryInterval = Some(config.coldRecoveryInterval),
       maxConsecutiveBatches = config.maxConsecutiveBatches,
     ),
+    onUnexpectedExit,
   )
 
 final class OcrQueueOutboxPublisher[F[_]: Temporal: Clock: LoggerFactory](

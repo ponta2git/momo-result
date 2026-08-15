@@ -5,6 +5,7 @@ import java.time.Instant
 import scala.concurrent.duration.*
 
 import cats.effect.syntax.all.*
+import cats.effect.kernel.Outcome
 import cats.effect.{Clock, Resource, Temporal}
 import cats.syntax.all.*
 import org.typelevel.log4cats.LoggerFactory
@@ -94,6 +95,33 @@ object OutboxWakeCoordinator:
       wakeup: OutboxWakeup[F],
       driver: OutboxWakeDriver[F],
       config: OutboxWakeCoordinatorConfig,
+  ): Resource[F, Unit] = resource(kind, wakeup, driver, config, _ => Temporal[F].unit)
+
+  def resource[F[_]: Temporal: Clock: LoggerFactory](
+      kind: OutboxKind,
+      wakeup: OutboxWakeup[F],
+      driver: OutboxWakeDriver[F],
+      config: OutboxWakeCoordinatorConfig,
+      onUnexpectedExit: Throwable => F[Unit],
   ): Resource[F, Unit] = Resource
-    .make(new OutboxWakeCoordinator(kind, wakeup, driver, config).run.start)(_.cancel)
+    .make(
+      observeTermination(
+        new OutboxWakeCoordinator(kind, wakeup, driver, config).run,
+        kind,
+        onUnexpectedExit,
+      ).start
+    )(_.cancel)
     .void
+
+  private[queue] def observeTermination[F[_]: Temporal](
+      task: F[Unit],
+      kind: OutboxKind,
+      onUnexpectedExit: Throwable => F[Unit],
+  ): F[Unit] = task.guaranteeCase {
+    case Outcome.Succeeded(_) => onUnexpectedExit(OutboxWakeCoordinatorStopped(kind))
+    case Outcome.Errored(error) => onUnexpectedExit(error)
+    case Outcome.Canceled() => Temporal[F].unit
+  }
+
+  private final case class OutboxWakeCoordinatorStopped(kind: OutboxKind)
+      extends RuntimeException(s"outbox wake coordinator stopped unexpectedly: $kind")

@@ -129,6 +129,14 @@ object SeriesAnalysisQueueOutboxDispatcher:
       queue: SeriesAnalysisQueuePublisher[F],
       config: SeriesAnalysisQueueDispatcherConfig,
       wakeup: OutboxWakeup[F],
+  ): Resource[F, Unit] = resource(outbox, queue, config, wakeup, _ => Temporal[F].unit)
+
+  def resource[F[_]: Temporal: Clock: LoggerFactory](
+      outbox: SeriesAnalysisQueueOutboxRepository[F],
+      queue: SeriesAnalysisQueuePublisher[F],
+      config: SeriesAnalysisQueueDispatcherConfig,
+      wakeup: OutboxWakeup[F],
+      onUnexpectedExit: Throwable => F[Unit],
   ): Resource[F, Unit] = OutboxWakeCoordinator.resource(
     OutboxKind.SeriesAnalysis,
     wakeup,
@@ -137,4 +145,5 @@ object SeriesAnalysisQueueOutboxDispatcher:
       coldRecoveryInterval = Some(config.coldRecoveryInterval),
       maxConsecutiveBatches = config.maxConsecutiveBatches,
     ),
+    onUnexpectedExit,
   )

@@ -154,6 +154,27 @@ final class OutboxWakeCoordinatorSpec extends MomoCatsEffectSuite:
       }
     }
 
+  test("reports unexpected completion but not resource cancellation"):
+    for
+      exits <- Ref.of[IO, List[String]](Nil)
+      report = (error: Throwable) => exits.update(_ :+ error.getClass.getSimpleName)
+      _ <- OutboxWakeCoordinator.observeTermination(
+        IO.unit,
+        OutboxKind.SeriesAnalysis,
+        report,
+      )
+      afterCompletion <- exits.get
+      fiber <- OutboxWakeCoordinator.observeTermination(
+        IO.never[Unit],
+        OutboxKind.SeriesAnalysis,
+        report,
+      ).start
+      _ <- fiber.cancel
+      afterCancellation <- exits.get
+    yield
+      assertEquals(afterCompletion, List("OutboxWakeCoordinatorStopped"))
+      assertEquals(afterCancellation, afterCompletion)
+
   private def recordingDriver(
       calls: Ref[IO, Int]
   )(result: Int => IO[OutboxDrainResult]): OutboxWakeDriver[IO] = new OutboxWakeDriver[IO]:

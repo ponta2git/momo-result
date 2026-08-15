@@ -6,6 +6,7 @@ import java.nio.file.{Files, Path, Paths}
 import munit.FunSuite
 
 final class ApiRuntimeArchitectureSpec extends FunSuite:
+  private val mainFile = Paths.get("src/main/scala/momo/api/Main.scala")
   private val apiAppFile = Paths.get("src/main/scala/momo/api/bootstrap/ApiApp.scala")
   private val postgresApiRuntimeFile =
     Paths.get("src/main/scala/momo/api/bootstrap/PostgresApiRuntime.scala")
@@ -77,6 +78,22 @@ final class ApiRuntimeArchitectureSpec extends FunSuite:
     assert(runtimeInfrastructureText.contains("mutation <- ResilientRateLimiter.create[F]"))
     assert(!runtimeInfrastructureText.contains("ocrJobCreate <- ResilientRateLimiter"))
     assert(!runtimeInfrastructureText.contains("SeriesAnalysisQueuePublisher.noop"))
+
+  test("Postgres writes share one event-driven outbox wake boundary"):
+    val mainText = read(mainFile)
+    val postgresRuntimeText = read(postgresApiRuntimeFile)
+
+    assertEquals(count(postgresRuntimeText, "OutboxWakeup.resource[F]"), 1)
+    assert(postgresRuntimeText.contains("OutboxWakingRepositories.ocrJobCreation("))
+    assert(postgresRuntimeText.contains("OutboxWakingRepositories.matches("))
+    assert(postgresRuntimeText.contains("OutboxWakingRepositories.matchConfirmation("))
+    assert(postgresRuntimeText.contains("OutboxWakingRepositories.seriesAnalysis("))
+    assert(postgresRuntimeText.contains("OcrJobQueueSubmitter.durable[F]"))
+    assert(postgresRuntimeText.contains("reportCoordinatorFailure"))
+    assert(postgresRuntimeText.contains("backgroundFailure = backgroundFailure.get"))
+    assert(!postgresRuntimeText.contains("pollInterval"))
+    assert(mainText.contains("tupleLeft(runtime.backgroundFailure)"))
+    assert(mainText.contains("awaitRuntimeFailure(backgroundFailure)"))
 
   test("API runtime validates dev identities before constructing domain ids"):
     val apiAppText = read(apiAppFile)
@@ -178,4 +195,7 @@ final class ApiRuntimeArchitectureSpec extends FunSuite:
     assert(!createOcrJobText.contains(".createQueuedJob("))
 
   private def read(path: Path): String = Files.readString(path, StandardCharsets.UTF_8)
+
+  private def count(text: String, pattern: String): Int =
+    text.sliding(pattern.length).count(_ == pattern)
 end ApiRuntimeArchitectureSpec

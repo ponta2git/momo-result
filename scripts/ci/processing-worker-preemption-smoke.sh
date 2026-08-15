@@ -225,6 +225,21 @@ INSERT INTO ocr_jobs (
 );
 SQL
 
+psql_ci -c \
+  "SET application_name = 'ci-preemption-lock'; BEGIN; LOCK TABLE matches IN ACCESS EXCLUSIVE MODE; SELECT pg_sleep(120);" \
+  >"${lock_log}" 2>&1 &
+lock_pid=$!
+wait_for_sql_value "1" "
+  SELECT COUNT(*)::int
+  FROM pg_locks lock
+  JOIN pg_stat_activity activity ON activity.pid = lock.pid
+  WHERE activity.application_name = 'ci-preemption-lock'
+    AND lock.relation = 'matches'::regclass
+    AND lock.mode = 'AccessExclusiveLock'
+    AND lock.granted;
+" "the deterministic analysis input lock"
+echo "Analysis input lock is held."
+
 docker run --rm --name "${worker_container}" --privileged --cgroupns private \
   --memory 256m --memory-swap 256m \
   --add-host host.docker.internal:host-gateway \
@@ -281,21 +296,6 @@ worker_pid=$!
 wait_for_log '"event":"analysis_worker_ready"' "analysis readiness"
 wait_for_log '"event":"ocr_rust_v2_worker_ready"' "OCR readiness"
 echo "Combined worker loops are ready."
-
-psql_ci -c \
-  "SET application_name = 'ci-preemption-lock'; BEGIN; LOCK TABLE matches IN ACCESS EXCLUSIVE MODE; SELECT pg_sleep(120);" \
-  >"${lock_log}" 2>&1 &
-lock_pid=$!
-wait_for_sql_value "1" "
-  SELECT COUNT(*)::int
-  FROM pg_locks lock
-  JOIN pg_stat_activity activity ON activity.pid = lock.pid
-  WHERE activity.application_name = 'ci-preemption-lock'
-    AND lock.relation = 'matches'::regclass
-    AND lock.mode = 'AccessExclusiveLock'
-    AND lock.granted;
-" "the deterministic analysis input lock"
-echo "Analysis input lock is held."
 
 redis_ci XADD "${analysis_stream}" '*' schemaVersion 1 jobId "${analysis_job}" >/dev/null
 wait_for_sql_value "analysis|ci-preemption-analysis-worker" "

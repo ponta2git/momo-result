@@ -25,16 +25,17 @@
 | Processing Worker runtime | `apps/processing-worker` | Rust, Cargo, Tesseract | 戦績分析 / OCRのconsumer、attempt子process、DB / Redis / object storageとの副作用 |
 | DB | `../momo-db` | Neon PostgreSQL, drizzle | schema / migration / seed の正本 |
 | Queue | Upstash Redis Streams | Redis Streams | OCR・戦績分析ジョブの配送。状態の正本にはしない |
-| public HTTP runtime | `Dockerfile`, `deploy/`, `tools/cmd/momo-runtime-tool` | Debian slim, JVM, nginx, Go | web/APIの起動・監視・停止、静的配信、reverse proxy。PythonとOCRを含めない |
+| public HTTP runtime | `Dockerfile`, `deploy/`, `tools/cmd/momo-runtime-tool` | Debian slim, JVM, Caddy, Go | web/APIの起動・監視・停止、静的配信、HTTP/2 reverse proxy。PythonとOCRを含めない |
 | analysis runtime定義 | `apps/processing-worker/Dockerfile`, `fly.analysis.toml` | Rust parent / child process | 公開HTTPを持たず、DB上の単一実行枠で分析 / OCR子processを管理 |
 
-公開HTTP runtimeはwebとAPIだけを運用し、Go製runtime toolがJVMとnginxのlifecycleを管理する。戦績分析と
-OCRはRust製の専用image・起動設定を共有し、公開HTTP runtimeへ同居させない。nginxはweb静的配信とAPI
-reverse proxyを担い、Processing Worker runtimeは公開HTTPを持たない。
+公開HTTP runtimeはwebとAPIだけを運用し、Go製runtime toolがJVMとCaddyのlifecycleを管理する。戦績分析と
+OCRはRust製の専用image・起動設定を共有し、公開HTTP runtimeへ同居させない。Caddyはweb静的配信とAPIへの
+HTTP/2 reverse proxyを担い、Processing Worker runtimeは公開HTTPを持たない。HTTP/2の完了判定は公開listener、
+reverse proxy、API受信protocol、多重化を別々に検証し、edge側の結果から内部hopを推測しない。
 公開HTTP runtimeのJVMはheap、metaspace、compressed class space、code cache、thread stack、GC、認識CPU数、
 JIT段階、OOM時の終了動作をimage内で明示する。HTTP request内で高負荷分析を実行しない前提で軽量JITを使い、
-CPU集約処理を再導入する変更ではJIT設定を再評価する。nginx worker数も割当CPU数へ明示的に合わせ、build hostの
-CPU数を自動継承しない。
+CPU集約処理を再導入する変更ではJIT設定を再評価する。Caddyを含むruntime全体は、実imageのcgroup hard limitと
+並列HTTP負荷でmemory headroomを検証する。
 分析publicationは上限値がすべて設定されるまでfail closedとし、本番同等環境での測定と切替は実装完了とは
 別のrelease gateとして扱う。provider固有の配置、resource値、詳細手順、secret、攻撃対策の手順はpublic docsに置かない。
 

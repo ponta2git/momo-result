@@ -288,9 +288,11 @@ OCRジョブのタイムアウト初期値は `OCR_TIMEOUT_SECONDS` で管理す
 ### 10.1 Runtime構成
 
 - webとAPIは同一ドメインの公開HTTP runtimeで運用する。
-- nginxがweb SPAの静的ファイル配信とAPI reverse proxyを担当する。
-- Go製runtime toolがnginxとJVM APIの起動、監視、graceful shutdownを担当する。
-- JVMとnginxの並列度・memory上限はimage内で明示し、hostのCPU数やmemory比率だけに委ねない。JVM profile変更は
+- Caddyがweb SPAの静的ファイル配信とAPI reverse proxyを担当する。
+- 公開経路の各hopとCaddyからJVM APIまでをHTTP/2で接続し、edge側のprotocol表示だけで完了判定しない。
+  runtime smokeはAPIが直接受信したprotocolと、並列requestが単一接続へ多重化されることを検証する。
+- Go製runtime toolがCaddyとJVM APIの起動、監視、graceful shutdownを担当する。
+- JVMとCaddyのresource上限はimageと実行環境で明示的に検証し、hostのCPU数やmemory比率だけに委ねない。JVM profile変更は
   実効flag検査、実runtime image、cgroup hard limit、主要E2E、最大HTTP同時数の負荷、OOM eventなし、25%以上の
   peak memory余白を同じcandidateで満たす。target OS / architectureのCIを最終判定とする。
 - OCRと戦績分析は利用者向けHTTP入口を持たない独立Rust runtimeで、DB上の実行枠を1に制限する。
@@ -298,7 +300,7 @@ OCRジョブのタイムアウト初期値は `OCR_TIMEOUT_SECONDS` で管理す
 
 ### 10.2 Dockerイメージ
 
-- マルチステージDockerfileでweb/API/nginx/Go runtime toolをビルドし、最終imageへPythonを含めない。
+- マルチステージDockerfileでweb/API/Caddy/Go runtime toolを構成し、最終imageへPythonを含めない。
 - OCRと戦績分析はRustの独立runtime imageとしてビルドする。
 
 ### 10.3 デプロイフロー

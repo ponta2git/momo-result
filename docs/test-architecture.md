@@ -111,7 +111,7 @@ OCR精度劣化はcode coverageでは検知しにくいため、characterization
 | API -> Analysis Worker role job / queue | M / L | DB consumer contract、Scala/Rust contract tests、Redis wire integration。 |
 | Analysis Worker role -> API / web artifact | M / L | artifact schema fixture、version不一致拒否、同一version読取、API内分析なし。 |
 | DB consumer contract | L | `DbContractSpec`、repository integration、momo-db migration適用済みTestcontainers。 |
-| runtime images | XL | nginx設定、実行ファイル、healthz / worker heartbeat、cache header、origin lock、container logs。 |
+| runtime images | XL | Caddy設定、HTTP/2多重化、実行ファイル、healthz / worker heartbeat、cache header、origin lock、container logs。 |
 | logged-in UX | XL | Playwright E2E smoke。coverage率ではなく経路リストで管理する。 |
 
 ## 7. CI Artifacts

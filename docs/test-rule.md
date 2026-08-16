@@ -39,7 +39,7 @@
 | DB contract | table / column / seed / nullable / default | `sbt apiDbQuality` |
 | Redis integration | Redis Streams wire 動作、ack/claim/retry | `sbt apiRedisQuality`, Processing Worker integration |
 | Processing Worker runtime | 数値正確性、OCR解析、payload validation、job状態、timeout、原子的公開 | `cargo test`, Processing Worker integration |
-| Runtime / E2E smoke | nginx / API / DB / Redis / Processing Worker / browser 結合、ログイン後主要UX | deploy workflow, Playwright |
+| Runtime / E2E smoke | Caddy / HTTP/2 / API / DB / Redis / Processing Worker / browser 結合、ログイン後主要UX | deploy workflow, Playwright |
 
 通常の `sbt test` と `cargo test` だけでは外部wireを保証しない。DB/Redis/R2/native OCRなどの動作を
 検証したと言うには、対応するintegration gateの成功が必要。
@@ -323,8 +323,10 @@ PostgreSQL repository、Doobie query、DB table/column、migration 前提に触�
 - DB schema 前提を変えたら `docs/db-rule.md` の Consumer Contract を満たす。
 - `docs/post-mortem/lessons.md` に該当するカードがあれば、テスト選択と最終報告に反映する。
 - 性能事故・高負荷計算の変更では、機能テストの成功と性能回復の証拠を分けて報告する。
-- 公開runtimeのJVM / nginx resource profileを変えたら、image内の実効値、cgroup hard limit、runtime smoke、
+- 公開runtimeのJVM / Caddy resource profileを変えたら、image内の実効値、cgroup hard limit、runtime smoke、
   Playwright E2E、HTTP hard concurrency相当の負荷、limit / OOM event、peak headroomを同じimageで検証する。
   開発hostだけで採用せず、production target OS / architectureのCIを通す。
+- 公開HTTP protocolを変えたら、edgeのHTTP versionだけで判断せず、公開listener、reverse proxy、API受信protocol、
+  並列request時のupstream接続数を実runtime imageで検証する。
 - 戦績分析の初回公開とresource影響変更では、private運用要件の本番同等resource/performance gateと
   timeout設定を満たすまでリリース可としない。

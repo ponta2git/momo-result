@@ -104,7 +104,7 @@ grep -Fqx '  release_command = "/opt/momo-result/bin/momo-runtime-tool preflight
 grep -Fqx '  [http_service.http_options]' "${repo_root}/fly.toml"
 grep -Fqx '    h2_backend = true' "${repo_root}/fly.toml"
 grep -Fqx '  [http_service.tls_options]' "${repo_root}/fly.toml"
-grep -Fqx '    alpn = ["h2", "http/1.1"]' "${repo_root}/fly.toml"
+grep -Fqx '    alpn = ["h2"]' "${repo_root}/fly.toml"
 grep -Fq '/out/momo-runtime-tool /opt/momo-result/bin/momo-runtime-tool' \
   "${repo_root}/Dockerfile"
 grep -Fq 'contracts/runtime-db-contract.json /opt/momo-result/contracts/runtime-db-contract.json' \

@@ -24,7 +24,7 @@
       }
     }
   ],
-  "renderNginx": [
+  "renderCaddy": [
     {
       "name": "production-hosts-are-normalized-and-deduplicated",
       "appEnv": "prod",
@@ -80,17 +80,17 @@
         "name": "all-runtime-processes",
         "commandLines": [
           "/opt/java/openjdk/bin/java -cp /opt/momo-result/api/lib/app.jar momo.api.Main",
-          "/usr/sbin/nginx -c /tmp/nginx.conf"
+          "/usr/bin/caddy run --config /tmp/Caddyfile --adapter caddyfile"
         ],
         "expectedMissing": []
       },
       {
-        "name": "missing-nginx",
+        "name": "missing-caddy",
         "commandLines": [
           "/opt/java/openjdk/bin/java -cp /opt/momo-result/api/lib/app.jar momo.api.Main"
         ],
         "expectedMissing": [
-          "nginx"
+          "caddy"
         ]
       }
     ],
@@ -100,6 +100,7 @@
         "expectedChecks": [
           "database",
           "http",
+          "http2",
           "processes",
           "redis",
           "web"
@@ -110,6 +111,7 @@
         "expectedChecks": [
           "database",
           "http",
+          "http2",
           "processes",
           "publicEdge",
           "redis",

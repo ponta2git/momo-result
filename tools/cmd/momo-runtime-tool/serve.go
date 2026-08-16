@@ -16,7 +16,7 @@ import (
 const (
 	serveEvent               = "runtime_serve"
 	defaultAPICommand        = "/opt/java/openjdk/bin/java"
-	defaultNginxCommand      = "/usr/sbin/nginx"
+	defaultCaddyCommand      = "/usr/bin/caddy"
 	defaultAPIDirectory      = "/opt/momo-result/api"
 	defaultStopGrace         = 30 * time.Second
 	maximumStopGrace         = 90 * time.Second
@@ -24,11 +24,8 @@ const (
 )
 
 var runtimeDirectories = []string{
-	"/tmp/momo-result/nginx/client_body",
-	"/tmp/momo-result/nginx/fastcgi",
-	"/tmp/momo-result/nginx/proxy",
-	"/tmp/momo-result/nginx/scgi",
-	"/tmp/momo-result/nginx/uwsgi",
+	"/tmp/momo-result/caddy/config",
+	"/tmp/momo-result/caddy/data",
 	"/tmp/momo-result/uploads",
 }
 
@@ -54,13 +51,13 @@ func runServe(ctx context.Context, stdout io.Writer, stderr io.Writer) int {
 		writeResult(stderr, failureResult(serveEvent, "RuntimeDirectoryError"))
 		return 1
 	}
-	if runRenderNginx(stdout, stderr) != 0 {
+	if runRenderCaddy(stdout, stderr) != 0 {
 		return 1
 	}
-	nginxConfig := environmentOrDefault("MOMO_NGINX_OUTPUT_PATH", defaultNginxOutputPath)
-	nginxCommand := environmentOrDefault("MOMO_RUNTIME_NGINX_COMMAND", defaultNginxCommand)
-	if err := validateNginxCommand(ctx, nginxCommand, nginxConfig); err != nil {
-		writeResult(stderr, failureResult(serveEvent, "NginxConfigurationError"))
+	caddyConfig := environmentOrDefault("MOMO_CADDY_OUTPUT_PATH", defaultCaddyOutputPath)
+	caddyCommand := environmentOrDefault("MOMO_RUNTIME_CADDY_COMMAND", defaultCaddyCommand)
+	if err := validateCaddyCommand(ctx, caddyCommand, caddyConfig); err != nil {
+		writeResult(stderr, failureResult(serveEvent, "CaddyConfigurationError"))
 		return 1
 	}
 	stopGrace, err := runtimeStopGrace()
@@ -76,8 +73,8 @@ func runServe(ctx context.Context, stdout io.Writer, stderr io.Writer) int {
 			Directory: environmentOrDefault("MOMO_RUNTIME_API_DIRECTORY", defaultAPIDirectory),
 		},
 		{
-			Name: "nginx", Command: nginxCommand,
-			Arguments: []string{"-c", nginxConfig, "-g", "daemon off;"},
+			Name: "caddy", Command: caddyCommand,
+			Arguments: []string{"run", "--config", caddyConfig, "--adapter", "caddyfile"},
 		},
 	}
 
@@ -140,8 +137,16 @@ func ensureRuntimeDirectories() error {
 	return nil
 }
 
-func validateNginxCommand(ctx context.Context, commandPath string, configPath string) error {
-	command := exec.CommandContext(ctx, commandPath, "-t", "-c", configPath)
+func validateCaddyCommand(ctx context.Context, commandPath string, configPath string) error {
+	command := exec.CommandContext(
+		ctx,
+		commandPath,
+		"validate",
+		"--config",
+		configPath,
+		"--adapter",
+		"caddyfile",
+	)
 	command.Stdout = io.Discard
 	command.Stderr = io.Discard
 	return command.Run()

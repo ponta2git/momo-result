@@ -4,6 +4,7 @@ ARG NODE_IMAGE=node:24-bookworm-slim@sha256:c2d5ade763cacfb03fe9cb8e8af5d1be5041
 ARG JAVA_JDK_IMAGE=eclipse-temurin:25-jdk-noble@sha256:02aba7518e48cfed96403ac9634e357a40329d6ec9418feb0b32636e43b245a1
 ARG JAVA_JRE_IMAGE=eclipse-temurin:25-jre-noble@sha256:f9bd8815e73632c22985ebb133ec49b9fc4ad5ffe0657594ac02748ad0431ab7
 ARG GO_IMAGE=golang:1.26.6-bookworm@sha256:116d58cbd88c1297624acc6e967a060012422bacf9930927e23fb719189c6f36
+ARG CADDY_IMAGE=caddy:2.11.4-alpine@sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648
 ARG DEBIAN_RUNTIME_IMAGE=debian:bookworm-slim@sha256:abd67ffcfa541b485a3dff59865ab629aa048a6c613e639d36e7456b0b229241
 
 FROM ${NODE_IMAGE} AS web-deps
@@ -64,44 +65,44 @@ RUN --mount=type=cache,id=go-build,target=/root/.cache/go-build,sharing=locked \
 
 FROM ${JAVA_JRE_IMAGE} AS java-runtime
 
+FROM ${CADDY_IMAGE} AS caddy-runtime
+
 FROM ${DEBIAN_RUNTIME_IMAGE} AS runtime
 ENV APP_ENV=prod
 ENV HTTP_HOST=127.0.0.1
 ENV HTTP_PORT=8081
 ENV JAVA_HOME=/opt/java/openjdk
 ENV JAVA_TOOL_OPTIONS="-Xms32m -Xmx256m -XX:MaxMetaspaceSize=160m -XX:CompressedClassSpaceSize=32m -XX:ReservedCodeCacheSize=48m -Xss512k -XX:+UseSerialGC -XX:ActiveProcessorCount=2 -XX:TieredStopAtLevel=1 -XX:+ExitOnOutOfMemoryError -XX:NativeMemoryTracking=summary -XX:+UnlockDiagnosticVMOptions -XX:+PrintNMTStatistics -Djava.security.egd=file:/dev/./urandom"
-ENV MOMO_NGINX_OUTPUT_PATH=/tmp/momo-result/nginx/nginx.conf
+ENV MOMO_CADDY_OUTPUT_PATH=/tmp/momo-result/caddy/Caddyfile
 ENV MOMO_RUNTIME_STOP_GRACE_SECONDS=30
+ENV XDG_CONFIG_HOME=/tmp/momo-result/caddy/config
+ENV XDG_DATA_HOME=/tmp/momo-result/caddy/data
 ENV PATH="${JAVA_HOME}/bin:/opt/momo-result/bin:${PATH}"
 COPY --from=java-runtime /opt/java/openjdk /opt/java/openjdk
+COPY --from=caddy-runtime /usr/bin/caddy /usr/bin/caddy
 RUN apt-get update \
   && apt-get install -y --no-install-recommends \
     ca-certificates \
     libstdc++6 \
-    nginx \
     zlib1g \
   && rm -rf /var/lib/apt/lists/* \
   && groupadd --gid 10001 momo \
   && useradd --uid 10001 --gid momo --home-dir /nonexistent --shell /usr/sbin/nologin --no-create-home momo \
-  && rm -f /etc/nginx/sites-enabled/default \
   && mkdir -p \
     /opt/momo-result/bin \
-    /run/nginx \
     /srv/momo-result/web \
-    /tmp/momo-result/nginx/client_body \
-    /tmp/momo-result/nginx/fastcgi \
-    /tmp/momo-result/nginx/proxy \
-    /tmp/momo-result/nginx/scgi \
-    /tmp/momo-result/nginx/uwsgi \
+    /tmp/momo-result/caddy/config \
+    /tmp/momo-result/caddy/data \
     /tmp/momo-result/uploads \
-  && chown -R momo:momo /opt/momo-result /run/nginx /srv/momo-result /tmp/momo-result
+  && chown -R momo:momo /opt/momo-result /srv/momo-result /tmp/momo-result
 
 COPY --from=api-builder --chown=momo:momo /workspace/apps/api/target/universal/stage /opt/momo-result/api
 COPY --from=web-builder --chown=momo:momo /workspace/apps/web/dist /srv/momo-result/web
 COPY --chown=momo:momo contracts/runtime-db-contract.json /opt/momo-result/contracts/runtime-db-contract.json
-COPY deploy/nginx.conf /etc/nginx/nginx.conf.template
+COPY deploy/Caddyfile /etc/caddy/Caddyfile.template
 COPY --from=runtime-tool-builder --chown=momo:momo /out/momo-runtime-tool /opt/momo-result/bin/momo-runtime-tool
 RUN chmod 0755 /opt/momo-result/bin/momo-runtime-tool \
+  && /usr/bin/caddy version \
   && /opt/java/openjdk/bin/java -XX:-PrintNMTStatistics -version \
   && /opt/momo-result/bin/momo-runtime-tool smoke edge invalid_host >/dev/null 2>&1; test "$?" -eq 1
 

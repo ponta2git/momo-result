@@ -7,10 +7,11 @@ origin_lock_token="${MOMO_ORIGIN_LOCK_TOKEN:?MOMO_ORIGIN_LOCK_TOKEN is required.
 docker run --rm \
   -e MOMO_ORIGIN_LOCK_TOKEN="${origin_lock_token}" \
   "${image_ref}" \
-  /bin/sh -c 'nginx_conf="${MOMO_NGINX_OUTPUT_PATH:-/etc/nginx/nginx.conf}"; /opt/momo-result/bin/momo-runtime-tool render-nginx >/dev/null && nginx -t -c "${nginx_conf}"'
+  /bin/sh -c 'caddy_config="${MOMO_CADDY_OUTPUT_PATH:-/tmp/momo-result/caddy/Caddyfile}"; /opt/momo-result/bin/momo-runtime-tool render-caddy >/dev/null && caddy validate --config "${caddy_config}" --adapter caddyfile'
 
 docker run --rm "${image_ref}" test -d /opt/momo-result/api/lib
 docker run --rm "${image_ref}" test -x /opt/java/openjdk/bin/java
+docker run --rm "${image_ref}" test -x /usr/bin/caddy
 docker run --rm "${image_ref}" test -x /opt/momo-result/bin/momo-runtime-tool
 "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/runtime-jvm-profile.sh" "${image_ref}"
 if docker run --rm "${image_ref}" \

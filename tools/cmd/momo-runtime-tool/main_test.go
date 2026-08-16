@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -18,7 +19,7 @@ type characterizationFixture struct {
 		RemovedColumn         *string        `json:"removedColumn"`
 		ExpectedMissingCounts map[string]int `json:"expectedMissingCounts"`
 	} `json:"preflight"`
-	RenderNginx []struct {
+	RenderCaddy []struct {
 		Name                            string   `json:"name"`
 		AppEnv                          string   `json:"appEnv"`
 		CanonicalHost                   string   `json:"canonicalHost"`
@@ -27,7 +28,7 @@ type characterizationFixture struct {
 		ExpectedStatus                  string   `json:"expectedStatus"`
 		ExpectedAllowedHosts            []string `json:"expectedAllowedHosts"`
 		ExpectedOptionalOriginLockHosts []string `json:"expectedOptionalOriginLockHosts"`
-	} `json:"renderNginx"`
+	} `json:"renderCaddy"`
 	Smoke struct {
 		ProcessCases []struct {
 			Name            string   `json:"name"`
@@ -64,9 +65,9 @@ func TestCharacterizationFixture(t *testing.T) {
 		})
 	}
 
-	for _, testCase := range fixture.RenderNginx {
-		t.Run("render-nginx/"+testCase.Name, func(t *testing.T) {
-			values, err := resolveNginxRenderValues(nginxRenderConfig{
+	for _, testCase := range fixture.RenderCaddy {
+		t.Run("render-caddy/"+testCase.Name, func(t *testing.T) {
+			values, err := resolveCaddyRenderValues(caddyRenderConfig{
 				AppEnv:            testCase.AppEnv,
 				CanonicalHost:     testCase.CanonicalHost,
 				ExtraAllowedHosts: testCase.ExtraAllowedHosts,
@@ -106,10 +107,11 @@ func TestCharacterizationFixture(t *testing.T) {
 	}
 }
 
-func TestRenderNginxWritesExpectedConfigurationAndSafeResult(t *testing.T) {
-	templatePath := filepath.Join(t.TempDir(), "nginx.conf.template")
-	outputPath := filepath.Join(t.TempDir(), "nginx.conf")
-	template := allowedHostPlaceholder + "\n" + optionalOriginHostPlaceholder + "\n" + originLockTokenPlaceholder
+func TestRenderCaddyWritesExpectedConfigurationAndSafeResult(t *testing.T) {
+	templatePath := filepath.Join(t.TempDir(), "Caddyfile.template")
+	outputPath := filepath.Join(t.TempDir(), "Caddyfile")
+	template := allowedHostsPlaceholder + "\n" + optionalOriginLockRoutesPlaceholder + "\n" +
+		originLockTokenPlaceholder
 	if err := os.WriteFile(templatePath, []byte(template), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -118,18 +120,18 @@ func TestRenderNginxWritesExpectedConfigurationAndSafeResult(t *testing.T) {
 	t.Setenv("MOMO_CANONICAL_HOST", "example.com")
 	t.Setenv("MOMO_EXTRA_ALLOWED_HOSTS", "api.example.com")
 	t.Setenv("MOMO_ORIGIN_LOCK_TOKEN", secret)
-	t.Setenv("MOMO_NGINX_TEMPLATE_PATH", templatePath)
-	t.Setenv("MOMO_NGINX_OUTPUT_PATH", outputPath)
+	t.Setenv("MOMO_CADDY_TEMPLATE_PATH", templatePath)
+	t.Setenv("MOMO_CADDY_OUTPUT_PATH", outputPath)
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
-	if exitCode := runRenderNginx(&stdout, &stderr); exitCode != 0 {
+	if exitCode := runRenderCaddy(&stdout, &stderr); exitCode != 0 {
 		t.Fatalf("exit code = %d, stderr = %s", exitCode, stderr.String())
 	}
 	rendered, err := os.ReadFile(outputPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, expected := range []string{`"example.com" 1;`, `"api.example.com" 1;`, `"` + secret + `"`} {
+	for _, expected := range []string{`"example.com" "api.example.com"`, `"` + secret + `"`} {
 		if !strings.Contains(string(rendered), expected) {
 			t.Fatalf("rendered config is missing %q", expected)
 		}
@@ -137,18 +139,25 @@ func TestRenderNginxWritesExpectedConfigurationAndSafeResult(t *testing.T) {
 	if strings.Contains(stdout.String(), secret) || strings.Contains(stderr.String(), secret) {
 		t.Fatal("origin lock token leaked to command output")
 	}
+	info, err := os.Stat(outputPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0o600 {
+		t.Fatalf("rendered config mode = %o, want 600", info.Mode().Perm())
+	}
 }
 
-func TestNginxTemplateRequiresEachPlaceholderExactlyOnce(t *testing.T) {
+func TestCaddyTemplateRequiresEachPlaceholderExactlyOnce(t *testing.T) {
 	t.Parallel()
-	valid := allowedHostPlaceholder + optionalOriginHostPlaceholder + originLockTokenPlaceholder
-	if err := validateNginxTemplate(valid); err != nil {
+	valid := allowedHostsPlaceholder + optionalOriginLockRoutesPlaceholder + originLockTokenPlaceholder
+	if err := validateCaddyTemplate(valid); err != nil {
 		t.Fatalf("valid template rejected: %v", err)
 	}
-	if err := validateNginxTemplate(valid + allowedHostPlaceholder); err == nil {
+	if err := validateCaddyTemplate(valid + allowedHostsPlaceholder); err == nil {
 		t.Fatal("duplicate placeholder accepted")
 	}
-	if err := validateNginxTemplate(strings.ReplaceAll(valid, originLockTokenPlaceholder, "")); err == nil {
+	if err := validateCaddyTemplate(strings.ReplaceAll(valid, originLockTokenPlaceholder, "")); err == nil {
 		t.Fatal("missing placeholder accepted")
 	}
 }
@@ -157,6 +166,22 @@ func TestHealthPayloadRejectsTrailingData(t *testing.T) {
 	t.Parallel()
 	if decodeValidHealthPayload(strings.NewReader(`{"status":"ok"}{"status":"ok"}`)) {
 		t.Fatal("health payload with trailing JSON was accepted")
+	}
+}
+
+func TestCountEstablishedTCPConnectionsFiltersByLocalPortAndState(t *testing.T) {
+	t.Parallel()
+	procNetTCP := `  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode
+   0: 0100007F:1F91 0100007F:C350 01 00000000:00000000 00:00000000 00000000  1000        0 1
+   1: 00000000:1F91 00000000:0000 0A 00000000:00000000 00:00000000 00000000  1000        0 2
+   2: 0100007F:1F90 0100007F:C351 01 00000000:00000000 00:00000000 00000000  1000        0 3
+`
+	actual, err := countEstablishedTCPConnections(bufio.NewScanner(strings.NewReader(procNetTCP)), 8081)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if actual != 1 {
+		t.Fatalf("established connections = %d, want 1", actual)
 	}
 }
 
@@ -198,7 +223,7 @@ func TestInvalidArgumentsReturnOneJSONResult(t *testing.T) {
 	}
 }
 
-func TestPostdeployEvidenceValidationSupportsCurrentAndLegacyEvidence(t *testing.T) {
+func TestPostdeployEvidenceValidationRequiresCurrentHTTP2Evidence(t *testing.T) {
 	t.Parallel()
 	legacy := map[string]any{
 		"event":  localSmokeEvent,
@@ -209,10 +234,12 @@ func TestPostdeployEvidenceValidationSupportsCurrentAndLegacyEvidence(t *testing
 		"event":         localSmokeEvent,
 		"schemaVersion": float64(1),
 		"status":        "ok",
-		"checks":        []any{"database", "http", "processes", "publicEdge", "redis", "web"},
+		"checks": []any{
+			"database", "http", "http2", "processes", "publicEdge", "redis", "web",
+		},
 	}
-	if errorKind := validatePostdeployEvidence(legacy, nil); errorKind != "" {
-		t.Fatalf("legacy evidence failed: %s", errorKind)
+	if errorKind := validatePostdeployEvidence(legacy, nil); errorKind != "MissingRequiredChecks" {
+		t.Fatalf("legacy evidence error = %q", errorKind)
 	}
 	if errorKind := validatePostdeployEvidence(current, []string{"publicEdge"}); errorKind != "" {
 		t.Fatalf("current evidence failed: %s", errorKind)
@@ -234,7 +261,7 @@ func TestPostdeployEvidenceValidationSupportsCurrentAndLegacyEvidence(t *testing
 func TestPostdeployEvidenceCLIProducesSafeResult(t *testing.T) {
 	t.Parallel()
 	path := filepath.Join(t.TempDir(), "evidence.json")
-	payload := `{"event":"runtime_postdeploy_smoke","schemaVersion":1,"status":"ok","checks":["database","http","processes","publicEdge","redis","web"]}`
+	payload := `{"event":"runtime_postdeploy_smoke","schemaVersion":1,"status":"ok","checks":["database","http","http2","processes","publicEdge","redis","web"]}`
 	if err := os.WriteFile(path, []byte(payload), 0o600); err != nil {
 		t.Fatal(err)
 	}

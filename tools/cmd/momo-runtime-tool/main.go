@@ -29,12 +29,12 @@ func runCLI(ctx context.Context, args []string, stdout io.Writer, stderr io.Writ
 			return 2
 		}
 		return runPreflight(ctx, stdout, stderr)
-	case "render-nginx":
+	case "render-caddy":
 		if len(args) != 1 {
-			writeResult(stderr, failureResult(renderNginxEvent, "InvalidArguments"))
+			writeResult(stderr, failureResult(renderCaddyEvent, "InvalidArguments"))
 			return 2
 		}
-		return runRenderNginx(stdout, stderr)
+		return runRenderCaddy(stdout, stderr)
 	case "smoke":
 		if len(args) < 2 {
 			writeResult(stderr, failureResult("runtime_smoke", "InvalidArguments"))
@@ -57,6 +57,12 @@ func runCLI(ctx context.Context, args []string, stdout io.Writer, stderr io.Writ
 				host = args[2]
 			}
 			return runEdgeSmoke(ctx, host, stdout, stderr)
+		case "http2":
+			if len(args) != 2 {
+				writeResult(stderr, failureResult(http2SmokeEvent, "InvalidArguments"))
+				return 2
+			}
+			return runHTTP2Smoke(ctx, stdout, stderr)
 		default:
 			writeResult(stderr, failureResult("runtime_smoke", "InvalidArguments"))
 			return 2

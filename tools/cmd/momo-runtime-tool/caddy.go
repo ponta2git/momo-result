@@ -2,7 +2,6 @@ package main
 
 import (
 	"errors"
-	"fmt"
 	"io"
 	"os"
 	"regexp"
@@ -10,20 +9,20 @@ import (
 )
 
 const (
-	renderNginxEvent              = "runtime_nginx_render"
-	defaultNginxTemplatePath      = "/etc/nginx/nginx.conf.template"
-	defaultNginxOutputPath        = "/etc/nginx/nginx.conf"
-	defaultCanonicalHost          = "momo-result.ponta.me"
-	minimumOriginLockTokenLength  = 32
-	developmentOriginLockToken    = "dev-origin-lock"
-	allowedHostPlaceholder        = "__MOMO_ALLOWED_HOST_MAP_ENTRIES__"
-	optionalOriginHostPlaceholder = "__MOMO_OPTIONAL_ORIGIN_LOCK_HOST_MAP_ENTRIES__"
-	originLockTokenPlaceholder    = "__MOMO_ORIGIN_LOCK_TOKEN_VALUE__"
+	renderCaddyEvent                    = "runtime_caddy_render"
+	defaultCaddyTemplatePath            = "/etc/caddy/Caddyfile.template"
+	defaultCaddyOutputPath              = "/tmp/momo-result/caddy/Caddyfile"
+	defaultCanonicalHost                = "momo-result.ponta.me"
+	minimumOriginLockTokenLength        = 32
+	developmentOriginLockToken          = "dev-origin-lock"
+	allowedHostsPlaceholder             = "__MOMO_ALLOWED_HOSTS__"
+	optionalOriginLockRoutesPlaceholder = "__MOMO_OPTIONAL_ORIGIN_LOCK_ROUTES__"
+	originLockTokenPlaceholder          = "__MOMO_ORIGIN_LOCK_TOKEN_VALUE__"
 )
 
 var hostPattern = regexp.MustCompile(`^[A-Za-z0-9.-]+$`)
 
-type nginxRenderConfig struct {
+type caddyRenderConfig struct {
 	AppEnv            string
 	CanonicalHost     string
 	ExtraAllowedHosts string
@@ -32,79 +31,79 @@ type nginxRenderConfig struct {
 	OutputPath        string
 }
 
-type nginxRenderValues struct {
+type caddyRenderValues struct {
 	AllowedHosts            []string
 	OptionalOriginLockHosts []string
 	OriginLockToken         string
 }
 
-func runRenderNginx(stdout io.Writer, stderr io.Writer) int {
-	config := nginxRenderConfig{
+func runRenderCaddy(stdout io.Writer, stderr io.Writer) int {
+	config := caddyRenderConfig{
 		AppEnv:            strings.ToLower(environmentOrDefault("APP_ENV", "prod")),
 		CanonicalHost:     environmentOrDefault("MOMO_CANONICAL_HOST", defaultCanonicalHost),
 		ExtraAllowedHosts: os.Getenv("MOMO_EXTRA_ALLOWED_HOSTS"),
 		OriginLockToken:   os.Getenv("MOMO_ORIGIN_LOCK_TOKEN"),
-		TemplatePath:      environmentOrDefault("MOMO_NGINX_TEMPLATE_PATH", defaultNginxTemplatePath),
-		OutputPath:        environmentOrDefault("MOMO_NGINX_OUTPUT_PATH", defaultNginxOutputPath),
+		TemplatePath:      environmentOrDefault("MOMO_CADDY_TEMPLATE_PATH", defaultCaddyTemplatePath),
+		OutputPath:        environmentOrDefault("MOMO_CADDY_OUTPUT_PATH", defaultCaddyOutputPath),
 	}
-	values, err := resolveNginxRenderValues(config)
+	values, err := resolveCaddyRenderValues(config)
 	if err != nil {
-		writeResult(stderr, failureResult(renderNginxEvent, "InvalidConfiguration"))
+		writeResult(stderr, failureResult(renderCaddyEvent, "InvalidConfiguration"))
 		return 1
 	}
 	template, err := os.ReadFile(config.TemplatePath)
 	if err != nil {
-		writeResult(stderr, failureResult(renderNginxEvent, "TemplateReadError"))
+		writeResult(stderr, failureResult(renderCaddyEvent, "TemplateReadError"))
 		return 1
 	}
-	if err := validateNginxTemplate(string(template)); err != nil {
-		writeResult(stderr, failureResult(renderNginxEvent, "TemplateContractError"))
+	if err := validateCaddyTemplate(string(template)); err != nil {
+		writeResult(stderr, failureResult(renderCaddyEvent, "TemplateContractError"))
 		return 1
 	}
-	rendered := renderNginxTemplate(string(template), values)
-	if err := os.WriteFile(config.OutputPath, []byte(rendered), 0o644); err != nil {
-		writeResult(stderr, failureResult(renderNginxEvent, "OutputWriteError"))
+	rendered := renderCaddyTemplate(string(template), values)
+	if err := os.WriteFile(config.OutputPath, []byte(rendered), 0o600); err != nil {
+		writeResult(stderr, failureResult(renderCaddyEvent, "OutputWriteError"))
 		return 1
 	}
-	writeResult(stdout, successResult(renderNginxEvent))
+	writeResult(stdout, successResult(renderCaddyEvent))
 	return 0
 }
 
-func validateNginxTemplate(template string) error {
+func validateCaddyTemplate(template string) error {
 	for _, placeholder := range []string{
-		allowedHostPlaceholder,
-		optionalOriginHostPlaceholder,
+		allowedHostsPlaceholder,
+		optionalOriginLockRoutesPlaceholder,
 		originLockTokenPlaceholder,
 	} {
 		if strings.Count(template, placeholder) != 1 {
-			return errors.New("invalid nginx template placeholder count")
+			return errors.New("invalid Caddy template placeholder count")
 		}
 	}
 	return nil
 }
 
-func resolveNginxRenderValues(config nginxRenderConfig) (nginxRenderValues, error) {
+func resolveCaddyRenderValues(config caddyRenderConfig) (caddyRenderValues, error) {
 	if config.AppEnv != "dev" && config.AppEnv != "test" && config.AppEnv != "prod" {
-		return nginxRenderValues{}, errors.New("invalid app environment")
+		return caddyRenderValues{}, errors.New("invalid app environment")
 	}
 	token := config.OriginLockToken
 	if token == "" {
 		if config.AppEnv == "prod" {
-			return nginxRenderValues{}, errors.New("missing production origin lock token")
+			return caddyRenderValues{}, errors.New("missing production origin lock token")
 		}
 		token = developmentOriginLockToken
 	}
 	if strings.ContainsAny(token, "\r\n") {
-		return nginxRenderValues{}, errors.New("invalid origin lock token")
+		return caddyRenderValues{}, errors.New("invalid origin lock token")
 	}
 	if config.AppEnv == "prod" {
 		if len(token) < minimumOriginLockTokenLength || !isVisibleASCII(token) {
-			return nginxRenderValues{}, errors.New("invalid production origin lock token")
+			return caddyRenderValues{}, errors.New("invalid production origin lock token")
 		}
 	}
 	allowed, err := parseHosts(config.CanonicalHost + "," + config.ExtraAllowedHosts)
 	if err != nil || len(allowed) == 0 {
-		return nginxRenderValues{}, errors.New("invalid allowed hosts")
+		return caddyRenderValues{}, errors.New("invalid allowed hosts")
 	}
 	optional := make([]string, 0)
 	if config.AppEnv != "prod" {
@@ -115,7 +114,7 @@ func resolveNginxRenderValues(config nginxRenderConfig) (nginxRenderValues, erro
 			}
 		}
 	}
-	return nginxRenderValues{
+	return caddyRenderValues{
 		AllowedHosts:            allowed,
 		OptionalOriginLockHosts: optional,
 		OriginLockToken:         token,
@@ -152,22 +151,38 @@ func validateHost(host string) error {
 	return nil
 }
 
-func renderNginxTemplate(template string, values nginxRenderValues) string {
-	rendered := strings.ReplaceAll(template, allowedHostPlaceholder, nginxMapEntries(values.AllowedHosts, 1))
-	rendered = strings.ReplaceAll(rendered, optionalOriginHostPlaceholder,
-		nginxMapEntries(values.OptionalOriginLockHosts, 0))
-	return strings.ReplaceAll(rendered, originLockTokenPlaceholder, nginxQuote(values.OriginLockToken))
+func renderCaddyTemplate(template string, values caddyRenderValues) string {
+	rendered := strings.ReplaceAll(template, allowedHostsPlaceholder, caddyTokens(values.AllowedHosts))
+	rendered = strings.ReplaceAll(
+		rendered,
+		optionalOriginLockRoutesPlaceholder,
+		caddyOptionalOriginRoutes(values.OptionalOriginLockHosts),
+	)
+	return strings.ReplaceAll(rendered, originLockTokenPlaceholder, caddyQuote(values.OriginLockToken))
 }
 
-func nginxMapEntries(hosts []string, value int) string {
-	entries := make([]string, 0, len(hosts))
-	for _, host := range hosts {
-		entries = append(entries, fmt.Sprintf("    %s %d;", nginxQuote(host), value))
+func caddyTokens(values []string) string {
+	tokens := make([]string, 0, len(values))
+	for _, value := range values {
+		tokens = append(tokens, caddyQuote(value))
 	}
-	return strings.Join(entries, "\n")
+	return strings.Join(tokens, " ")
 }
 
-func nginxQuote(value string) string {
+func caddyOptionalOriginRoutes(hosts []string) string {
+	if len(hosts) == 0 {
+		return ""
+	}
+	routes := strings.Join([]string{
+		"\t\t@originLockOptional host " + caddyTokens(hosts),
+		"\t\thandle @originLockOptional {",
+		"\t\t\timport protected_routes",
+		"\t\t}",
+	}, "\n")
+	return "\n" + routes + "\n"
+}
+
+func caddyQuote(value string) string {
 	escaped := strings.ReplaceAll(value, `\`, `\\`)
 	escaped = strings.ReplaceAll(escaped, `"`, `\"`)
 	return `"` + escaped + `"`

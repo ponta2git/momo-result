@@ -52,6 +52,20 @@ expect_body_contains() {
   fi
 }
 
+expect_http2() {
+  local url="$1"
+  local result
+
+  result="$(curl --http2-prior-knowledge -sS -o /dev/null -w "%{http_version} %{http_code}" \
+    -H "Host: ${canonical_host}" \
+    -H "X-Momo-Origin-Lock: ${origin_lock_token}" \
+    "${url}")"
+  if [[ "${result}" != "2 200" ]]; then
+    echo "Expected ${url} to use HTTP/2 with status 200, got ${result}." >&2
+    exit 1
+  fi
+}
+
 expect_header() {
   local method="$1"
   local url="$2"
@@ -91,6 +105,7 @@ find_built_asset_path() {
 }
 
 expect_body_contains "${base_url}/healthz" '"status":"ok"'
+expect_http2 "${base_url}/healthz"
 expect_body_contains "${base_url}/healthz/details" '"database":"ok"'
 expect_body_contains "${base_url}/healthz/details" '"redis":"ok"'
 expect_body_contains "${base_url}/api/auth/me" "\"accountId\":\"${dev_account}\""

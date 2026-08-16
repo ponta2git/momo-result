@@ -4,7 +4,7 @@ import "sort"
 
 var runtimeProcessMarkers = map[string][]string{
 	"api":   {"/opt/java/openjdk/bin/java", "/opt/momo-result/api/lib/", "momo.api.Main"},
-	"nginx": {"/usr/sbin/nginx"},
+	"caddy": {"/usr/bin/caddy", "run", "--config"},
 }
 
 func missingRuntimeProcesses(commandLines []string) []string {

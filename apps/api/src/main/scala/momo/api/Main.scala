@@ -8,6 +8,7 @@ import org.slf4j.LoggerFactory
 
 import momo.api.bootstrap.ApiApp
 import momo.api.config.AppConfig
+import momo.api.http.RuntimeHttp2ProbeMiddleware
 import momo.api.logging.SafeLog
 
 object Main extends IOApp:
@@ -17,7 +18,7 @@ object Main extends IOApp:
     bindAddress(config).flatMap { case (host, port) =>
       ApiApp.wired[IO](config).flatMap(runtime =>
         EmberServerBuilder.default[IO].withHost(host).withPort(port).withHttp2
-          .withHttpApp(runtime.app).build
+          .withHttpApp(RuntimeHttp2ProbeMiddleware[IO](runtime.app)).build
           .tupleLeft(runtime.backgroundFailure)
       ).use { case (backgroundFailure, _) =>
         val startedMessage = "momo_result_api_started " + s"host=${config.httpHost} " +

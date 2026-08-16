@@ -1,0 +1,148 @@
+{
+	admin off
+	auto_https off
+	persist_config off
+	grace_period 20s
+
+	servers :8080 {
+		protocols h1 h2c
+		trusted_proxies static private_ranges
+		trusted_proxies_strict
+	}
+
+	log default {
+		output stdout
+		level ERROR
+		format filter {
+			request>uri delete
+			request>headers delete
+			resp_headers delete
+			wrap json
+		}
+	}
+}
+
+(api_proxy) {
+	reverse_proxy h2c://127.0.0.1:8081 {
+		transport http {
+			versions h2c
+			dial_timeout 3s
+			response_header_timeout 30s
+			keepalive 2m
+			keepalive_idle_conns_per_host 16
+		}
+	}
+}
+
+(security_headers) {
+	header {
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "no-referrer"
+		Permissions-Policy "camera=(self), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()"
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+	}
+}
+
+(protected_routes) {
+	route {
+		@loopbackRuntimeProbe {
+			path /api/__momo_runtime/http2-probe
+			remote_ip 127.0.0.1 ::1
+		}
+		request_header @loopbackRuntimeProbe X-Momo-Runtime-Probe "v1"
+
+		@externalRuntimeProbe {
+			path /api/__momo_runtime/*
+			not remote_ip 127.0.0.1 ::1
+		}
+		respond @externalRuntimeProbe 404
+
+		@api path /api/*
+		header @api Cache-Control "no-store"
+
+		@sourceImages path_regexp sourceImages ^/api/match-drafts/[^/]+/source-images(\.zip|/[^/]+)$
+		header @sourceImages Cache-Control "private, no-store"
+
+		@protectedBackend path /healthz/details /api/*
+		handle @protectedBackend {
+			import api_proxy
+		}
+
+		handle /assets/* {
+			@notReadMethod not method GET HEAD
+			respond @notReadMethod 405
+			import security_headers
+			header Cache-Control "public, max-age=31536000, immutable"
+			file_server
+		}
+
+		handle {
+			@notReadMethod not method GET HEAD
+			respond @notReadMethod 405
+			import security_headers
+			header {
+				Content-Security-Policy "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; font-src 'self' data:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
+				Cache-Control "no-cache"
+			}
+			try_files {path} /index.html
+			file_server
+		}
+	}
+}
+
+http://:8080 {
+	bind 0.0.0.0
+	root * /srv/momo-result/web
+
+	log {
+		output stdout
+		format filter {
+			request>uri delete
+			request>headers delete
+			request>remote_ip delete
+			request>remote_port delete
+			request>client_ip delete
+			resp_headers delete
+			wrap json
+		}
+	}
+	log_append app "momo-result-runtime"
+	log_append component "caddy"
+	log_append event "caddy_access"
+	log_append path {http.request.uri.path}
+	log_append request_id {http.request.header.X-Request-Id}
+	log_append host {http.request.host}
+
+	route {
+		request_body {
+			max_size 4MB
+		}
+		request_header -X-Momo-Runtime-Probe
+
+		@invalidHost not host __MOMO_ALLOWED_HOSTS__
+		respond @invalidHost 421
+
+		handle /healthz {
+			header Cache-Control "no-store"
+			import api_proxy
+		}
+
+		handle /openapi.yaml {
+			respond 404
+		}
+
+		@runtimeProbe path /__momo_runtime/*
+		respond @runtimeProbe 404
+
+		@dotFile path_regexp dotFile (^|/)\.
+		respond @dotFile 404
+__MOMO_OPTIONAL_ORIGIN_LOCK_ROUTES__
+		@originLockValid header X-Momo-Origin-Lock __MOMO_ORIGIN_LOCK_TOKEN_VALUE__
+		handle @originLockValid {
+			import protected_routes
+		}
+
+		respond 421
+	}
+}

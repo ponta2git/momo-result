@@ -12,7 +12,7 @@ const postdeployEvidenceValidationEvent = "runtime_postdeploy_evidence_validatio
 
 var checkNamePattern = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9]*$`)
 
-var corePostdeployChecks = []string{"database", "http", "processes", "redis", "web"}
+var corePostdeployChecks = []string{"database", "http", "http2", "processes", "redis", "web"}
 
 type evidenceValidationResult struct {
 	Event         string `json:"event,omitempty"`

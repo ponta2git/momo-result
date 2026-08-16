@@ -6,7 +6,7 @@ tmp_dir="$(mktemp -d)"
 trap 'rm -rf "${tmp_dir}"' EXIT
 
 safe_token="0123456789abcdef0123456789abcdef=="
-rendered_nginx="${tmp_dir}/nginx.conf"
+rendered_caddy="${tmp_dir}/Caddyfile"
 runtime_tool="${tmp_dir}/momo-runtime-tool"
 
 (
@@ -16,50 +16,59 @@ runtime_tool="${tmp_dir}/momo-runtime-tool"
 
 APP_ENV=prod \
 MOMO_ORIGIN_LOCK_TOKEN="${safe_token}" \
-MOMO_NGINX_TEMPLATE_PATH="${repo_root}/deploy/nginx.conf" \
-MOMO_NGINX_OUTPUT_PATH="${rendered_nginx}" \
-"${runtime_tool}" render-nginx >/dev/null
+MOMO_CADDY_TEMPLATE_PATH="${repo_root}/deploy/Caddyfile" \
+MOMO_CADDY_OUTPUT_PATH="${rendered_caddy}" \
+"${runtime_tool}" render-caddy >/dev/null
 
-if ! grep -Fq "log_format momo_json escape=json" "${rendered_nginx}"; then
-  echo "nginx access logs must use the momo_json log format." >&2
+if ! grep -Fq "protocols h1 h2c" "${rendered_caddy}"; then
+  echo "Caddy must accept HTTP/1.1 and h2c on the public listener." >&2
   exit 1
 fi
 
-if grep -Fq 'access_log /dev/stdout combined' "${rendered_nginx}"; then
-  echo "nginx access logs must not use the combined format." >&2
+if ! grep -Fq "reverse_proxy h2c://127.0.0.1:8081" "${rendered_caddy}" ||
+  ! grep -Fq "versions h2c" "${rendered_caddy}"; then
+  echo "Caddy must use h2c for API upstream requests." >&2
   exit 1
 fi
 
-if awk '!/^[[:space:]]*#/' "${rendered_nginx}" | grep -Eq '\$request([^_[:alnum:]]|$)'; then
-  echo 'nginx log format must not include $request because it contains query strings.' >&2
+if ! grep -Fq "request>uri delete" "${rendered_caddy}" ||
+  ! grep -Fq "request>headers delete" "${rendered_caddy}" ||
+  ! grep -Fq "resp_headers delete" "${rendered_caddy}"; then
+  echo "Caddy logs must remove request targets, request headers, and response headers." >&2
+  exit 1
+fi
+
+if grep -Fq "log_credentials" "${rendered_caddy}" ||
+  grep -Fq "log_append uri" "${rendered_caddy}"; then
+  echo "Caddy logs must not retain credentials or full request targets." >&2
   exit 1
 fi
 
 if APP_ENV=prod \
   MOMO_ORIGIN_LOCK_TOKEN=short \
-  MOMO_NGINX_TEMPLATE_PATH="${repo_root}/deploy/nginx.conf" \
-  MOMO_NGINX_OUTPUT_PATH="${tmp_dir}/short-token-nginx.conf" \
-  "${runtime_tool}" render-nginx >/dev/null 2>&1; then
-  echo "production nginx rendering must reject short origin-lock tokens." >&2
+  MOMO_CADDY_TEMPLATE_PATH="${repo_root}/deploy/Caddyfile" \
+  MOMO_CADDY_OUTPUT_PATH="${tmp_dir}/short-token-Caddyfile" \
+  "${runtime_tool}" render-caddy >/dev/null 2>&1; then
+  echo "production Caddy rendering must reject short origin-lock tokens." >&2
   exit 1
 fi
 
 if APP_ENV=production \
   MOMO_ORIGIN_LOCK_TOKEN="${safe_token}" \
-  MOMO_NGINX_TEMPLATE_PATH="${repo_root}/deploy/nginx.conf" \
-  MOMO_NGINX_OUTPUT_PATH="${tmp_dir}/unknown-env-nginx.conf" \
-  "${runtime_tool}" render-nginx >/dev/null 2>&1; then
-  echo "nginx rendering must reject unsupported APP_ENV values." >&2
+  MOMO_CADDY_TEMPLATE_PATH="${repo_root}/deploy/Caddyfile" \
+  MOMO_CADDY_OUTPUT_PATH="${tmp_dir}/unknown-env-Caddyfile" \
+  "${runtime_tool}" render-caddy >/dev/null 2>&1; then
+  echo "Caddy rendering must reject unsupported APP_ENV values." >&2
   exit 1
 fi
 
 if APP_ENV=prod \
   MOMO_CANONICAL_HOST="bad..host" \
   MOMO_ORIGIN_LOCK_TOKEN="${safe_token}" \
-  MOMO_NGINX_TEMPLATE_PATH="${repo_root}/deploy/nginx.conf" \
-  MOMO_NGINX_OUTPUT_PATH="${tmp_dir}/invalid-host-nginx.conf" \
-  "${runtime_tool}" render-nginx >/dev/null 2>&1; then
-  echo "nginx rendering must reject invalid allowed host values." >&2
+  MOMO_CADDY_TEMPLATE_PATH="${repo_root}/deploy/Caddyfile" \
+  MOMO_CADDY_OUTPUT_PATH="${tmp_dir}/invalid-host-Caddyfile" \
+  "${runtime_tool}" render-caddy >/dev/null 2>&1; then
+  echo "Caddy rendering must reject invalid allowed host values." >&2
   exit 1
 fi
 
@@ -67,10 +76,10 @@ if APP_ENV=prod \
   MOMO_CANONICAL_HOST=" " \
   MOMO_EXTRA_ALLOWED_HOSTS=" " \
   MOMO_ORIGIN_LOCK_TOKEN="${safe_token}" \
-  MOMO_NGINX_TEMPLATE_PATH="${repo_root}/deploy/nginx.conf" \
-  MOMO_NGINX_OUTPUT_PATH="${tmp_dir}/empty-host-nginx.conf" \
-  "${runtime_tool}" render-nginx >/dev/null 2>&1; then
-  echo "nginx rendering must reject an empty allowed host set." >&2
+  MOMO_CADDY_TEMPLATE_PATH="${repo_root}/deploy/Caddyfile" \
+  MOMO_CADDY_OUTPUT_PATH="${tmp_dir}/empty-host-Caddyfile" \
+  "${runtime_tool}" render-caddy >/dev/null 2>&1; then
+  echo "Caddy rendering must reject an empty allowed host set." >&2
   exit 1
 fi
 
@@ -115,9 +124,15 @@ for jvm_option in \
   grep -Fq -- "${jvm_option}" "${repo_root}/Dockerfile"
 done
 
-grep -Fqx 'worker_processes 2;' "${repo_root}/deploy/nginx.conf"
+grep -Fq 'ARG CADDY_IMAGE=caddy:2.11.4-alpine@sha256:' \
+  "${repo_root}/Dockerfile"
 grep -Fq 'ARG DEBIAN_RUNTIME_IMAGE=debian:bookworm-slim@sha256:' \
   "${repo_root}/Dockerfile"
+
+if grep -Eiq 'nginx' "${repo_root}/Dockerfile"; then
+  echo "The main runtime Dockerfile must not retain nginx after the Caddy migration." >&2
+  exit 1
+fi
 
 if grep -Eiq 'python|supervisor|tesseract|momo-ocr|apps/ocr-worker' "${repo_root}/Dockerfile"; then
   echo "The main runtime Dockerfile must be Python, supervisor, and OCR-worker free." >&2

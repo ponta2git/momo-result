@@ -4,7 +4,10 @@ ARG NODE_IMAGE=node:24-bookworm-slim@sha256:c2d5ade763cacfb03fe9cb8e8af5d1be5041
 ARG JAVA_JDK_IMAGE=eclipse-temurin:25-jdk-noble@sha256:02aba7518e48cfed96403ac9634e357a40329d6ec9418feb0b32636e43b245a1
 ARG JAVA_JRE_IMAGE=eclipse-temurin:25-jre-noble@sha256:f9bd8815e73632c22985ebb133ec49b9fc4ad5ffe0657594ac02748ad0431ab7
 ARG GO_IMAGE=golang:1.26.6-bookworm@sha256:116d58cbd88c1297624acc6e967a060012422bacf9930927e23fb719189c6f36
-ARG CADDY_IMAGE=caddy:2.11.4-alpine@sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648
+ARG CADDY_VERSION=v2.11.4
+ARG CADDY_X_NET_VERSION=v0.56.0
+ARG CADDY_X_TEXT_VERSION=v0.39.0
+ARG CADDY_GRPC_VERSION=v1.82.1
 ARG DEBIAN_RUNTIME_IMAGE=debian:bookworm-slim@sha256:abd67ffcfa541b485a3dff59865ab629aa048a6c613e639d36e7456b0b229241
 
 FROM ${NODE_IMAGE} AS web-deps
@@ -63,9 +66,39 @@ RUN --mount=type=cache,id=go-build,target=/root/.cache/go-build,sharing=locked \
   CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' \
     -o /out/momo-runtime-tool ./cmd/momo-runtime-tool
 
-FROM ${JAVA_JRE_IMAGE} AS java-runtime
+FROM ${GO_IMAGE} AS caddy-builder
+ARG CADDY_VERSION
+ARG CADDY_X_NET_VERSION
+ARG CADDY_X_TEXT_VERSION
+ARG CADDY_GRPC_VERSION
+WORKDIR /workspace/caddy
+RUN --mount=type=cache,id=caddy-go-mod,target=/go/pkg/mod,sharing=locked \
+  go mod download "github.com/caddyserver/caddy/v2@${CADDY_VERSION}" \
+  && cp -R "$(go env GOMODCACHE)/github.com/caddyserver/caddy/v2@${CADDY_VERSION}/." . \
+  && chmod -R u+w .
+RUN --mount=type=cache,id=caddy-go-mod,target=/go/pkg/mod,sharing=locked \
+  go get \
+    "golang.org/x/net@${CADDY_X_NET_VERSION}" \
+    "golang.org/x/text@${CADDY_X_TEXT_VERSION}" \
+    "google.golang.org/grpc@${CADDY_GRPC_VERSION}"
+RUN --mount=type=cache,id=caddy-go-mod,target=/go/pkg/mod,sharing=locked \
+  go mod tidy
+RUN --mount=type=cache,id=caddy-go-mod,target=/go/pkg/mod,sharing=locked \
+  --mount=type=cache,id=caddy-go-build,target=/root/.cache/go-build,sharing=locked \
+  CGO_ENABLED=0 go build -trimpath \
+    -ldflags="-s -w -X github.com/caddyserver/caddy/v2.CustomVersion=${CADDY_VERSION}" \
+    -o /out/caddy ./cmd/caddy \
+  && go version -m /out/caddy | awk -v module="golang.org/x/net" \
+    -v version="${CADDY_X_NET_VERSION}" \
+    '$1 == "dep" && $2 == module && $3 == version { found = 1 } END { exit !found }' \
+  && go version -m /out/caddy | awk -v module="golang.org/x/text" \
+    -v version="${CADDY_X_TEXT_VERSION}" \
+    '$1 == "dep" && $2 == module && $3 == version { found = 1 } END { exit !found }' \
+  && go version -m /out/caddy | awk -v module="google.golang.org/grpc" \
+    -v version="${CADDY_GRPC_VERSION}" \
+    '$1 == "dep" && $2 == module && $3 == version { found = 1 } END { exit !found }'
 
-FROM ${CADDY_IMAGE} AS caddy-runtime
+FROM ${JAVA_JRE_IMAGE} AS java-runtime
 
 FROM ${DEBIAN_RUNTIME_IMAGE} AS runtime
 ENV APP_ENV=prod
@@ -79,7 +112,7 @@ ENV XDG_CONFIG_HOME=/tmp/momo-result/caddy/config
 ENV XDG_DATA_HOME=/tmp/momo-result/caddy/data
 ENV PATH="${JAVA_HOME}/bin:/opt/momo-result/bin:${PATH}"
 COPY --from=java-runtime /opt/java/openjdk /opt/java/openjdk
-COPY --from=caddy-runtime /usr/bin/caddy /usr/bin/caddy
+COPY --from=caddy-builder /out/caddy /usr/bin/caddy
 RUN apt-get update \
   && apt-get install -y --no-install-recommends \
     ca-certificates \

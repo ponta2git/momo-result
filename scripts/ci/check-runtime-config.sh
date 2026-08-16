@@ -126,8 +126,14 @@ for jvm_option in \
   grep -Fq -- "${jvm_option}" "${repo_root}/Dockerfile"
 done
 
-grep -Fq 'ARG CADDY_IMAGE=caddy:2.11.4-alpine@sha256:' \
-  "${repo_root}/Dockerfile"
+for caddy_build_pin in \
+  'ARG CADDY_VERSION=v2.11.4' \
+  'ARG CADDY_X_NET_VERSION=v0.56.0' \
+  'ARG CADDY_X_TEXT_VERSION=v0.39.0' \
+  'ARG CADDY_GRPC_VERSION=v1.82.1'; do
+  grep -Fqx "${caddy_build_pin}" "${repo_root}/Dockerfile"
+done
+grep -Fqx 'FROM ${GO_IMAGE} AS caddy-builder' "${repo_root}/Dockerfile"
 grep -Fq 'ARG DEBIAN_RUNTIME_IMAGE=debian:bookworm-slim@sha256:' \
   "${repo_root}/Dockerfile"
 

@@ -13,6 +13,29 @@ docker run --rm "${image_ref}" test -d /opt/momo-result/api/lib
 docker run --rm "${image_ref}" test -x /opt/java/openjdk/bin/java
 docker run --rm "${image_ref}" test -x /usr/bin/caddy
 docker run --rm "${image_ref}" test -x /opt/momo-result/bin/momo-runtime-tool
+
+caddy_version="$(
+  docker run --rm --entrypoint /usr/bin/caddy "${image_ref}" version
+)"
+if [[ "${caddy_version}" != "v2.11.4" ]]; then
+  echo "Runtime image does not contain the required Caddy version." >&2
+  exit 1
+fi
+
+caddy_build_info="$(
+  docker run --rm --entrypoint /usr/bin/caddy "${image_ref}" build-info
+)"
+for required_build_dependency in \
+  $'go\tgo1.26.6' \
+  $'dep\tgolang.org/x/net\tv0.56.0\t' \
+  $'dep\tgolang.org/x/text\tv0.39.0\t' \
+  $'dep\tgoogle.golang.org/grpc\tv1.82.1\t'; do
+  if ! grep -Fq -- "${required_build_dependency}" <<<"${caddy_build_info}"; then
+    echo "Runtime Caddy build is missing a required patched dependency." >&2
+    exit 1
+  fi
+done
+
 "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/runtime-jvm-profile.sh" "${image_ref}"
 if docker run --rm "${image_ref}" \
   /opt/momo-result/bin/momo-runtime-tool smoke edge invalid_host >/dev/null 2>&1; then

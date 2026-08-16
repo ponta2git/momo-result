@@ -16,11 +16,12 @@ object Main extends IOApp:
   override def run(_args: List[String]): IO[ExitCode] = AppConfig.load[IO].flatMap { config =>
     bindAddress(config).flatMap { case (host, port) =>
       ApiApp.wired[IO](config).flatMap(runtime =>
-        EmberServerBuilder.default[IO].withHost(host).withPort(port).withHttpApp(runtime.app).build
+        EmberServerBuilder.default[IO].withHost(host).withPort(port).withHttp2
+          .withHttpApp(runtime.app).build
           .tupleLeft(runtime.backgroundFailure)
       ).use { case (backgroundFailure, _) =>
         val startedMessage = "momo_result_api_started " + s"host=${config.httpHost} " +
-          s"port=${config.httpPort} " + s"env=${config.appEnv}"
+          s"port=${config.httpPort} " + s"env=${config.appEnv} http2=true"
         IO.delay(logger.info(startedMessage)) *>
           awaitRuntimeFailure(backgroundFailure)
             .guarantee(IO.delay(logger.info("momo_result_api_stopping")))

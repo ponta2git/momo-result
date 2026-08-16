@@ -5,15 +5,16 @@ import cats.effect.{Deferred, IO}
 import ch.qos.logback.classic.Level
 import ch.qos.logback.classic.spi.ILoggingEvent
 import fs2.Stream
-import org.http4s.{Header, HttpApp, Request, Response, Status, Uri}
+import org.http4s.{Header, HttpApp, HttpVersion, Request, Response, Status, Uri}
 
 import momo.api.MomoCatsEffectSuite
 import momo.api.testing.LogbackCapture
 
 final class RequestDurationLoggingMiddlewareSpec extends MomoCatsEffectSuite:
-  private val request = Request[IO](uri = Uri.unsafeFromString("/stream")).putHeaders(
-    Header.Raw(RequestIdMiddleware.HeaderName, "request-stream-1")
-  )
+  private val request = Request[IO](
+    uri = Uri.unsafeFromString("/stream"),
+    httpVersion = HttpVersion.`HTTP/2`,
+  ).putHeaders(Header.Raw(RequestIdMiddleware.HeaderName, "request-stream-1"))
 
   test("logs readiness before pull and successful transfer only after the body is consumed"):
     val app = middleware(Stream.emits[IO, Byte](Array[Byte](1, 2, 3)))
@@ -31,6 +32,7 @@ final class RequestDurationLoggingMiddlewareSpec extends MomoCatsEffectSuite:
         val completed = messages(afterPull)
           .filter(_.startsWith("http_response_transfer_completed "))
         assertEquals(completed.size, 1)
+        assert(completed.head.contains("httpVersion=HTTP/2.0"))
         assert(completed.head.contains("outcome=succeeded"))
         assert(completed.head.contains("bodyBytes=3"))
         assert(completed.head.contains("requestId=request-stream-1"))
@@ -41,6 +43,9 @@ final class RequestDurationLoggingMiddlewareSpec extends MomoCatsEffectSuite:
           )
           .getOrElse(fail("expected transfer-completed event"))
         assertEquals(completedEvent.getMDCPropertyMap.get("request_id"), "request-stream-1")
+        val ready = messages(afterPull).find(_.startsWith("http_response_ready "))
+          .getOrElse(fail("expected response-ready event"))
+        assert(ready.contains("httpVersion=HTTP/2.0"))
     }
 
   test("logs an errored body once with only bytes pulled from the observed stream"):

@@ -21,12 +21,14 @@ private[http] object RequestDurationLoggingMiddleware:
         case Right(response) =>
           val method = request.method.name
           val path = request.uri.path.renderString
+          val httpVersion = request.httpVersion.renderString
           val status = response.status.code
           logResponseReady(request, response, correlationId, started).as(
             response.withBodyStream(BodyTransferObserver(response.body)(result =>
               logTransferCompleted(
                 method,
                 path,
+                httpVersion,
                 status,
                 correlationId,
                 started,
@@ -51,7 +53,8 @@ private[http] object RequestDurationLoggingMiddleware:
       val slow = duration >= SlowThreshold
       logger.info(
         s"http_response_ready method=${request.method.name} path=${request.uri.path.renderString} " +
-          s"status=${response.status.code} requestId=$requestId " +
+          s"httpVersion=${request.httpVersion.renderString} status=${response.status.code} " +
+          s"requestId=$requestId " +
           s"handlerDurationMs=${duration.toMillis} slow=$slow"
       )
     }
@@ -60,6 +63,7 @@ private[http] object RequestDurationLoggingMiddleware:
   private def logTransferCompleted[F[_]: Async](
       method: String,
       path: String,
+      httpVersion: String,
       status: Int,
       requestId: String,
       requestStarted: FiniteDuration,
@@ -67,7 +71,8 @@ private[http] object RequestDurationLoggingMiddleware:
   ): F[Unit] = RequestIdMiddleware.logWithMdc[F](requestId) {
     val totalDuration = result.finishedAt - requestStarted
     val message =
-      s"http_response_transfer_completed method=$method path=$path status=$status " +
+      s"http_response_transfer_completed method=$method path=$path httpVersion=$httpVersion " +
+        s"status=$status " +
         s"requestId=$requestId " +
         s"outcome=${result.outcome.wire} bodyBytes=${result.bodyBytes.toString} " +
         s"errorClass=${result.errorClass.getOrElse("none")} " +
@@ -87,7 +92,8 @@ private[http] object RequestDurationLoggingMiddleware:
       val duration = finished - started
       logger.warn(
         s"http_request_failed method=${request.method.name} path=${request.uri.path.renderString} " +
-          s"requestId=$requestId durationMs=${duration.toMillis}"
+          s"httpVersion=${request.httpVersion.renderString} requestId=$requestId " +
+          s"durationMs=${duration.toMillis}"
       )
     }
   }

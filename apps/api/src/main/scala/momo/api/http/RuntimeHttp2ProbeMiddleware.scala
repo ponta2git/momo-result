@@ -10,11 +10,12 @@ import org.http4s.headers.`Content-Type`
 import org.http4s.{Header, HttpApp, MediaType, Method, Request, Response, Status}
 import org.typelevel.ci.CIString
 
-/** Loopback-only protocol oracle used by the runtime post-deploy probe.
-  *
-  * The public proxy removes the probe header and injects it only for loopback requests before
-  * forwarding through the same h2c transport used by normal API routes.
-  */
+/**
+ * Loopback-only protocol oracle used by the runtime post-deploy probe.
+ *
+ * The public proxy removes the probe header and injects it only for loopback requests before
+ * forwarding through the same h2c transport used by normal API routes.
+ */
 private[api] object RuntimeHttp2ProbeMiddleware:
   val Path = "/api/__momo_runtime/http2-probe"
   val HeaderName: CIString = CIString("X-Momo-Runtime-Probe")

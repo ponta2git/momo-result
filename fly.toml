@@ -29,6 +29,9 @@ kill_timeout = 90
   [http_service.http_options]
     h2_backend = true
 
+  [http_service.tls_options]
+    alpn = ["h2", "http/1.1"]
+
   [http_service.concurrency]
     type = "requests"
     soft_limit = 6

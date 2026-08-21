@@ -38,7 +38,7 @@
 構造余白は 4px 基準の定義済み scale を使う。2px は badge 内や文字の光学調整に限り、page、section、card の構造間隔には使わない。
 
 | 役割 | 基準 |
-|---|---|
+| --- | --- |
 | ページ内の主要 section 間 | `PageFrame` の `gap-4` |
 | card / empty state の内側 | `p-4` |
 | compact notice / status surface | `p-3` |

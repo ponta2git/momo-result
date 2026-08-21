@@ -2,18 +2,18 @@
 
 目的: toolchain、ローカル起動、検証コマンド、Git運用の正本。
 
-読む条件:
+## AI作業導線
 
-- 開発環境を起動する。
-- 変更範囲に対して実行する quality gate を選ぶ。
-- Git branch / commit / PR を作る。
+この文書は実行可能なコマンドと変更gateを決める。何を証明すべきかはテスト規約、境界の意味は各実装正本を先に使う。
 
-参照:
-
-- テスト選択とoracle: `docs/test-rule.md`
-- coverage / CI artifact: `docs/test-architecture.md`
-- DB所有権と migration: `docs/db-rule.md`
-- Redis/OCR queue 契約: `docs/redis-streams-ocr-contract.md`
+| 項目 | 到達先 / 判断 |
+| --- | --- |
+| 第一読 | 開発環境を起動する、変更範囲のquality gateを実行する、Git branch / commit / PRを作るときに読む。 |
+| この文書だけで決めること | toolchain、ローカル起動方法、実行コマンド、変更種別ごとのgate、Git運用。 |
+| 常に併読 | quality gateを選ぶときは `docs/test-rule.md`。 |
+| 条件付き併読 | coverage / CI artifactは `docs/test-architecture.md`、DBは `docs/db-rule.md`、Redis/OCR queueは Redis契約、分析workerは `docs/series-analysis-realization.md`。 |
+| 実行正本 | package manifest、`apps/*` のtoolchain / build設定、CI workflow、`scripts/ci/`。本文のコマンドと差があれば設定・scriptを正とする。 |
+| 検証先 | 第5章の変更gate。docs-onlyは `git diff --check` と `pnpm public:safety:check` を使う。 |
 
 ## 1. Toolchain
 

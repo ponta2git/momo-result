@@ -2,18 +2,18 @@
 
 目的: API と Processing Worker内のOCR Worker roleの Redis Streams / outbox / ack 契約の正本。
 
-読む条件:
+## AI作業導線
 
-- OCR queue payload、Redis stream、outbox、OCR Worker roleのdelivery / ack、OCR job lifecycle を変更する。
-- API、Processing Worker、`momo-db` のいずれかでOCR配送境界に触る。
+この文書はOCR配送のwire契約と、DB正本・outbox・ACKの順序を決める。Redisの一時状態からjob状態を推測しない。
 
-関連正本:
-
-- JSON Schema: `docs/schemas/ocr-queue-payload-v2.schema.json`
-- OCR hints schema: `docs/schemas/ocr-hints-v1.schema.json`
-- DB schema / migration: `../momo-db`
-- DB利用規約: `docs/db-rule.md`
-- テスト規約: `docs/test-rule.md`
+| 項目 | 到達先 / 判断 |
+| --- | --- |
+| 第一読 | OCR queue payload、stream、outbox、delivery / ACK、OCR job lifecycleを変えるときに読む。 |
+| この文書だけで決めること | v2 payloadの意味、Redis / DBの正本境界、delivery・retry・ACK・互換性。 |
+| 常に併読 | `docs/schemas/ocr-queue-payload-v2.schema.json`、`docs/schemas/ocr-hints-v1.schema.json`、`docs/db-rule.md`、`docs/test-rule.md`、`docs/dev-rule.md`。 |
+| 条件付き併読 | parent / child とOCR roleの責務は `docs/architecture.md`、業務状態遷移は `docs/domain-rule.md`。 |
+| 実行正本 | JSON Schema、`../momo-db` migration、API producer / Processing Worker consumer、Scala / Rust contract test。 |
+| 検証先 | payloadはschemaと双方のcontract test、deliveryは実Redis integration、DB前提は実PostgreSQLで検証する。実行コマンドは `docs/dev-rule.md` を正とする。 |
 
 ## 1. Ownership
 

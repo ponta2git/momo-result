@@ -2,19 +2,18 @@
 
 目的: サブシステムごとのテストサイズ、coverage 管理、CI成果物を一枚で確認できるようにする。
 
-読む条件:
+## AI作業導線
 
-- テスト方針、coverage閾値、CI quality gate を変更する。
-- どの層・どのサイズのテストを追加するか判断する。
-- coverage report / artifact / 推移管理を確認する。
+この文書はtest size、coverageの管理方法、CI成果物の責務を扱う。日々のテスト選択やコマンドをここで重複管理しない。
 
-参照:
-
-- テスト選択とoracle: `docs/test-rule.md`
-- 検証コマンド: `docs/dev-rule.md`
-- DB契約: `docs/db-rule.md`
-- Redis/OCR queue契約: `docs/redis-streams-ocr-contract.md`
-- 戦績分析job / 成果物契約: `docs/requirements/series-analysis-batch.md`
+| 項目 | 到達先 / 判断 |
+| --- | --- |
+| 第一読 | テスト方針、coverage閾値、CI quality gate、report / artifact / 推移管理を変えるときに読む。 |
+| この文書だけで決めること | S / M / L / XLの境界、coverageのgate / report分離、CI artifactの位置。 |
+| 常に併読 | `docs/test-rule.md` と `docs/dev-rule.md`。前者でoracleを選び、後者で実行する。 |
+| 条件付き併読 | DBは `docs/db-rule.md`、Redis/OCRは Redis契約、分析job / artifactは `docs/series-analysis-realization.md` と `docs/requirements/series-analysis-batch.md`。 |
+| 実行正本 | `apps/web/vite.config.ts`、`apps/api/build.sbt`、CI workflow、test source。 |
+| 検証先 | `docs/dev-rule.md` の変更gate。coverage率ではなく外部契約を証明する場合は、対応するintegration / smokeを使う。 |
 
 ## 1. Test Size
 

@@ -2,6 +2,19 @@
 
 目的: momo-result の全ページで、同じ意味・状態・操作を同じ見た目と挙動で表し、画面追加や改修で局所的な例外を増やさないための正本とする。
 
+## AI作業導線
+
+この文書はUIの意味表現と操作上の不変条件を決める。画面の目的・情報設計・文言の意図をここから推測しない。
+
+| 項目 | 到達先 / 判断 |
+| --- | --- |
+| 第一読 | 画面の状態表示、操作、余白、token、motion、loading / empty / error、画面遷移を変えるときに読む。 |
+| この文書だけで決めること | 同じ意味を同じ部品・token・操作で表すための実装不変条件。 |
+| 常に併読 | `docs/test-rule.md` と `docs/dev-rule.md`。UI変更は状態と操作を直接検証する。 |
+| 条件付き併読 | UI方向とcomponent anatomyは `docs/requirements/design-system.md`、UI文字列は `docs/requirements/writing-guidelines.md`、画面固有の目的は対象要求、Web層は `docs/architecture.md`。 |
+| 実行正本 | `apps/web/src/styles.css` とtheme定義、`shared/ui`、対象component、`apps/web/scripts/check-ui-consistency.mjs`。 |
+| 検証先 | 本書の検証章、`docs/test-rule.md` のWeb規則、必要なTesting Library / Playwright gate。 |
+
 ## 1. 基本原則
 
 - 画面は、落ち着いた記録台帳として情報の比較と入力を優先する。装飾だけの面、影、色、動きを増やさない。

@@ -2,19 +2,18 @@
 
 目的: 共有 PostgreSQL の所有権、consumer contract、migration 順序を判断するための正本。
 
-読む条件:
+## AI作業導線
 
-- DB table / column / seed / nullable / default に依存する変更をする。
-- PostgreSQL repository、Doobie query、worker の psycopg query、DB-backed API を触る。
-- `relation does not exist`、存在しない column、SQLSTATE、FK / unique violation を含むエラーを扱う。
+この文書はconsumerが依存してよいDB前提と、その検証順を決める。DDLの現在値はこのrepoでは所有しない。
 
-参照:
-
-- ドメイン状態遷移: `docs/domain-rule.md`
-- テスト選択: `docs/test-rule.md`
-- コマンド: `docs/dev-rule.md`
-- Redis/OCR queue: `docs/redis-streams-ocr-contract.md`
-- 戦績分析job / 成果物: `docs/requirements/series-analysis-batch.md`, `docs/series-analysis-realization.md`
+| 項目 | 到達先 / 判断 |
+| --- | --- |
+| 第一読 | table / column / seed / nullable / default、PostgreSQL repository、Doobie query、worker query、DB-backed APIを触るときに読む。 |
+| この文書だけで決めること | schema owner、consumer contract、SQLの危険条件、migrationとconsumerの順序。 |
+| 常に併読 | `docs/test-rule.md` と `docs/dev-rule.md`。DB前提を変えるなら、契約と実行gateを同じ変更で特定する。 |
+| 条件付き併読 | 状態遷移は `docs/domain-rule.md`、OCR queueは `docs/redis-streams-ocr-contract.md`、戦績分析のjob / artifactは `docs/series-analysis-realization.md` と `docs/requirements/series-analysis-batch.md`。 |
+| 実行正本 | schema / migration / seedは `../momo-db`、consumer queryは `apps/api` と `apps/processing-worker`、存在前提は `DbContractSpec`。 |
+| 検証先 | DB-backed testの選択は `docs/test-rule.md`、コマンドは `docs/dev-rule.md`。実PostgreSQLで未実行なら、DB挙動は未検証として扱う。 |
 
 ## 1. Ownership
 

@@ -2,19 +2,18 @@
 
 目的: 変更種別ごとのテスト選択、oracle、品質ゲート判断の正本。
 
-読む条件:
+## AI作業導線
 
-- テストを追加・修正する。
-- 変更範囲に対して必要な gate を選ぶ。
-- 障害対応で再発防止テストを決める。
+この文書は「何をどの境界で証明するか」を選ぶ。coverage値、CI artifact、具体的な実行コマンドの正本ではない。
 
-参照:
-
-- コマンド: `docs/dev-rule.md`
-- coverage / CI artifact / test size: `docs/test-architecture.md`
-- DB所有権: `docs/db-rule.md`
-- Redis/OCR queue契約: `docs/redis-streams-ocr-contract.md`
-- 最終チェック: `docs/post-mortem/lessons.md`
+| 項目 | 到達先 / 判断 |
+| --- | --- |
+| 第一読 | テストを追加・修正する、変更範囲のgateを選ぶ、障害の再発防止testを決めるときに読む。 |
+| この文書だけで決めること | 変更経路に対応するtest layer、oracle、未検証として報告すべき条件。 |
+| 常に併読 | `docs/dev-rule.md`。選んだ検証を実行するコマンドと変更gateは開発規約を正とする。 |
+| 条件付き併読 | coverage / CI artifact / test sizeは `docs/test-architecture.md`、DBは `docs/db-rule.md`、OCR queueは Redis契約、分析job / artifactは `docs/series-analysis-realization.md`、完了前の再発防止確認は `docs/post-mortem/lessons.md`。 |
+| 実行正本 | test source、test config、CI workflow、schema / fixture、対象runtime。 |
+| 検証先 | 本書の変更種別ごとの規則から、`docs/dev-rule.md` の該当gateへ進む。外部wireを実行しなければ、そのwireは未検証と報告する。 |
 
 ## 1. Principles
 

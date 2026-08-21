@@ -2,19 +2,19 @@
 
 目的: API / web / Processing Worker runtimeと、OCR / 戦績分析能力の構造、依存方向、実装境界を判断するための正本。
 
-読む条件:
+## AI作業導線
 
-- 新しい module / package / feature を作る。
-- API / web / Processing Worker runtime、OCR / Analysis Worker roleの境界、依存方向、wire契約を変える。
-- 認証、エラー、画像、server state、外部I/O、runtime構成を触る。
+この文書は「どこに責務を置き、どの方向へ依存させるか」を決める。payloadの厳密なshape、DB DDL、個別の
+テストコマンドを写す場所ではない。
 
-役割:
-
-- この文書は「どう実装するか」を扱う。
-- 業務意味論は `docs/domain-rule.md`、DB所有権は `docs/db-rule.md`、Redis/OCR queue は `docs/redis-streams-ocr-contract.md` を正とする。
-- 戦績分析のjob、artifact、API pinning、Web計算境界、管理画面の具体契約は
-  `docs/series-analysis-realization.md` を正とする。
-- テスト選択は `docs/test-rule.md`、実行コマンドは `docs/dev-rule.md` を正とする。
+| 項目 | 到達先 / 判断 |
+| --- | --- |
+| 第一読 | 新しい module / package / feature、API / Web / Processing Workerの境界、認証・外部I/O・runtime構成を変えるときに読む。 |
+| この文書だけで決めること | 層、依存方向、wire境界の所有者、parent / child と公開HTTP runtimeの責務分離。 |
+| 常に併読 | なし。先に `docs/README.md` を読んだ前提で、この文書の該当章から必要な正本だけへ進む。 |
+| 条件付き併読 | 業務意味は `docs/domain-rule.md`、DBは `docs/db-rule.md`、Redis/OCR queueは `docs/redis-streams-ocr-contract.md`、戦績分析のjob / artifact / API pinning / Web計算境界は `docs/series-analysis-realization.md`、UIの意味表現は `docs/ui-rule.md`。 |
+| 実行正本 | API wireはTapir endpointと生成された `apps/api/openapi.yaml`、Web境界は `apps/web/src/` と `apps/web/scripts/check-architecture-imports.mjs`、worker runtimeは `apps/processing-worker/` とそのruntime定義。 |
+| 検証先 | 必要なoracleは `docs/test-rule.md`、実行コマンドと変更gateは `docs/dev-rule.md`。新しい静的境界は可能な限り既存のarchitecture spec / checkerへ固定する。 |
 
 ## 1. System Map
 

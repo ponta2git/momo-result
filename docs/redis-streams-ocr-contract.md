@@ -222,32 +222,14 @@ queued -> cancelled
 残っていても、新しいv1 outbox、stream delivery、local-path jobを作らない。v2に非互換変更が必要なら
 新しいschema versionとstreamを追加し、同じstream上のin-place変更やdual writeで曖昧にしない。
 
-## 9. Required Tests
+## 9. Verification
 
-Redis contract に触れた場合:
-
-```sh
-cd apps/api
-sbt testOnly momo.api.contracts.ocrworker.OcrWorkerJobMessageV2Spec
-sbt testOnly momo.api.usecases.OcrQueueOutboxDispatcherSpec
-sbt apiRedisQuality
-sbt apiDbQuality
-```
-
-```sh
-cd apps/processing-worker
-cargo test --locked --workspace --all-targets --all-features
-cd ../..
-scripts/ci/ocr-rust-control-plane-smoke.sh
-```
-
-Scala/Rust双方のserializer / decoderを`docs/schemas/ocr-queue-payload-v2.schema.json`で検証する。
-
-dispatcher testでは、post-commit wake、wake coalescing、startup/cold recovery、publish失敗後のone-shot retry、
-`DELIVERED`確定後のidle、120秒後も`queued`のjobだけを対象とするsemantic redeliveryを固定する。時間境界は
-実時間sleepではなく制御可能なclockで検証する。
-
-DB schema に触れた場合は `docs/db-rule.md` と `docs/test-rule.md` に従い、`momo-db` migration 適用済み Testcontainers PostgreSQL で検証する。
+- Scala / Rust双方のserializer / decoderを`docs/schemas/ocr-queue-payload-v2.schema.json`と共有fixtureで検証する。
+- dispatcherはpost-commit wake、wake coalescing、startup / cold recovery、publish失敗後の予約retry、delivery確定後のidle、
+  `queued` jobだけを対象とするsemantic redeliveryを、実時間sleepでなく制御可能clockで固定する。
+- DB schemaに触れた場合は `docs/db-rule.md` と `docs/test-rule.md` に従い、`momo-db` migration適用済みの
+  Testcontainers PostgreSQLで検証する。
+- 実行コマンドは `docs/dev-rule.md` のRedis / OCR queueおよびProcessing Workerの変更gateを正とする。
 
 ## 10. Operations
 

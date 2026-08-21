@@ -173,7 +173,7 @@ async fn finish_interruption(
                 elapsed_milliseconds = metrics.elapsed_milliseconds,
                 "analysis attempt ownership was lost"
             );
-            ControlOutcome::without_effects(DeliveryDisposition::LeavePending)
+            ControlOutcome::without_effects(DeliveryDisposition::leave_pending_cold())
         }
     };
     Ok(outcome)
@@ -527,7 +527,7 @@ async fn finish_successful_child(
                 "analysis publication lost fencing ownership"
             );
             Ok(ControlOutcome::without_effects(
-                DeliveryDisposition::LeavePending,
+                DeliveryDisposition::leave_pending_cold(),
             ))
         }
         Ok(Err(error @ (ControlError::Artifact(_) | ControlError::ChildArtifactMetrics))) => {
@@ -601,7 +601,7 @@ async fn finish_publication_failure(
             Ok(outcome.map(|()| DeliveryDisposition::Acknowledge))
         }
         Err(ControlError::OwnerLost) => Ok(ControlOutcome::without_effects(
-            DeliveryDisposition::LeavePending,
+            DeliveryDisposition::leave_pending_cold(),
         )),
         Err(error) => Err(ConsumerError::Control(error)),
     }

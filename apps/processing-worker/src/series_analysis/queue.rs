@@ -3,7 +3,8 @@ use redis::{
     AsyncCommands, RedisError,
     aio::ConnectionManager,
     streams::{
-        StreamAutoClaimOptions, StreamAutoClaimReply, StreamId, StreamReadOptions, StreamReadReply,
+        StreamAutoClaimOptions, StreamAutoClaimReply, StreamClaimReply, StreamId,
+        StreamReadOptions, StreamReadReply,
     },
 };
 
@@ -19,6 +20,12 @@ pub(super) struct AutoClaimCursor {
     start_id: String,
 }
 
+#[derive(Debug)]
+pub(super) struct ColdRecoveryPage {
+    pub(super) complete: bool,
+    pub(super) delivery: Option<StreamId>,
+}
+
 impl AutoClaimCursor {
     #[must_use]
     pub(super) fn start() -> Self {
@@ -31,9 +38,13 @@ impl AutoClaimCursor {
         &self.start_id
     }
 
-    fn advance(&mut self, reply: StreamAutoClaimReply) -> Option<StreamId> {
+    fn advance(&mut self, reply: StreamAutoClaimReply) -> ColdRecoveryPage {
+        let complete = reply.next_stream_id == AUTO_CLAIM_START;
         self.start_id = reply.next_stream_id;
-        reply.claimed.into_iter().next()
+        ColdRecoveryPage {
+            complete,
+            delivery: reply.claimed.into_iter().next(),
+        }
     }
 }
 
@@ -51,11 +62,26 @@ pub(super) async fn ensure_consumer_group(
     }
 }
 
-pub(super) async fn next_delivery(
+pub(super) async fn read_new_delivery(
+    redis: &mut ConnectionManager,
+    config: &AnalysisConsumerConfig,
+) -> Result<Option<StreamId>, ConsumerError> {
+    let block = usize::try_from(config.redis_block.as_millis())?;
+    let options = StreamReadOptions::default()
+        .group(&config.redis_group, &config.worker_id)
+        .count(1)
+        .block(block);
+    let reply: Option<StreamReadReply> = redis
+        .xread_options(&[&config.redis_stream], &[">"], &options)
+        .await?;
+    Ok(reply.and_then(|reply| reply.keys.into_iter().flat_map(|stream| stream.ids).next()))
+}
+
+pub(super) async fn recover_cold_page(
     redis: &mut ConnectionManager,
     config: &AnalysisConsumerConfig,
     recovery_cursor: &mut AutoClaimCursor,
-) -> Result<Option<StreamId>, ConsumerError> {
+) -> Result<ColdRecoveryPage, ConsumerError> {
     let minimum_idle = usize::try_from(config.lease_duration.as_millis())?;
     let claimed: StreamAutoClaimReply = redis
         .xautoclaim_options(
@@ -67,19 +93,25 @@ pub(super) async fn next_delivery(
             StreamAutoClaimOptions::default().count(AUTO_CLAIM_COUNT),
         )
         .await?;
-    if let Some(delivery) = recovery_cursor.advance(claimed) {
-        return Ok(Some(delivery));
-    }
+    Ok(recovery_cursor.advance(claimed))
+}
 
-    let block = usize::try_from(config.redis_block.as_millis())?;
-    let options = StreamReadOptions::default()
-        .group(&config.redis_group, &config.worker_id)
-        .count(1)
-        .block(block);
-    let reply: Option<StreamReadReply> = redis
-        .xread_options(&[&config.redis_stream], &[">"], &options)
+pub(super) async fn recover_targeted_delivery(
+    redis: &mut ConnectionManager,
+    config: &AnalysisConsumerConfig,
+    message_id: &str,
+) -> Result<Option<StreamId>, ConsumerError> {
+    let minimum_idle = usize::try_from(config.lease_duration.as_millis())?;
+    let claimed: StreamClaimReply = redis
+        .xclaim(
+            &config.redis_stream,
+            &config.redis_group,
+            &config.worker_id,
+            minimum_idle,
+            &[message_id],
+        )
         .await?;
-    Ok(reply.and_then(|reply| reply.keys.into_iter().flat_map(|stream| stream.ids).next()))
+    Ok(claimed.ids.into_iter().next())
 }
 
 pub(super) fn payload_from_delivery(delivery: &StreamId) -> Option<QueuePayload> {
@@ -128,9 +160,10 @@ mod tests {
             deleted_ids: Vec::new(),
         });
         assert!(
-            first.is_none(),
+            first.delivery.is_none(),
             "an ineligible scan page must not invent a delivery"
         );
+        assert!(!first.complete, "a nonzero cursor must continue the sweep");
         assert_eq!(
             cursor.current(),
             "42-0",
@@ -146,7 +179,11 @@ mod tests {
             claimed: vec![claimed.clone()],
             deleted_ids: Vec::new(),
         });
-        assert_eq!(second.map(|delivery| delivery.id), Some(claimed.id));
+        assert_eq!(
+            second.delivery.map(|delivery| delivery.id),
+            Some(claimed.id)
+        );
+        assert!(second.complete, "the zero cursor must complete the sweep");
         assert_eq!(
             cursor.current(),
             AUTO_CLAIM_START,

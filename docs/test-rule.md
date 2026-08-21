@@ -165,6 +165,8 @@ PostgreSQL repository、Doobie query、DB table/column、migration 前提に触�
 
 - Analysis / OCRの両Worker roleについて、`consume -> claim / lease / shared slot -> child起動・監視 -> candidate検証 ->
   durable commit -> post-commit effect -> ACK / leave-pending`の順序を同じcontract testの観点で固定する。
+- Redis Streams PEL recoveryを変更する場合は、起動時cold scan、空queueでのinterval待機、page間の新規配送read、
+  known retryのidle-threshold再確認、local target数とscan page数の上限を制御可能clockのtestで固定する。
 - processing parent processがDB / Redis / object storage、process lifecycle、timeout / preemption、fence、outbox、ACKを
   所有し、attempt childがdurable DB write、Redis、outbox、ACKを行わないことをarchitecture / process testで固定する。
 - Analysis childのread-only DB + attempt directory、OCR childのframed stdin / stdoutは能力固有transportとして

@@ -10,6 +10,7 @@ mod cli;
 mod execution_slot;
 mod ocr;
 mod outbox;
+mod pel_recovery;
 mod postgres;
 #[expect(
     unsafe_code,

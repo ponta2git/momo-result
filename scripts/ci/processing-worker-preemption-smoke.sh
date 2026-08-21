@@ -266,6 +266,7 @@ docker run --rm --name "${worker_container}" --privileged --cgroupns private \
   --env MOMO_ANALYSIS_HEARTBEAT_INTERVAL_MS=200 \
   --env MOMO_ANALYSIS_CHILD_STOP_GRACE_MS=1000 \
   --env MOMO_ANALYSIS_REDIS_BLOCK_MS=50 \
+  --env MOMO_ANALYSIS_PEL_RECOVERY_INTERVAL_MS=300000 \
   --env MOMO_HEAVY_CGROUP_V2_VALIDATED=true \
   --env MOMO_OCR_V2_CONSUMER_MODE=enabled \
   --env "OCR_REDIS_V2_STREAM=${ocr_stream}" \
@@ -284,6 +285,7 @@ docker run --rm --name "${worker_container}" --privileged --cgroupns private \
   --env MOMO_OCR_V2_FINALIZATION_TIMEOUT_MS=1000 \
   --env MOMO_OCR_V2_RETRY_DELAY_MS=1000 \
   --env MOMO_OCR_V2_REDIS_BLOCK_MS=50 \
+  --env MOMO_OCR_V2_PEL_RECOVERY_INTERVAL_MS=300000 \
   --env MOMO_OCR_V2_CLAIM_IDLE_MS=15000 \
   --env MOMO_OCR_V2_TIMEOUT_MS=5000 \
   --env MOMO_OCR_V2_MAXIMUM_DELIVERY_ATTEMPTS=2 \

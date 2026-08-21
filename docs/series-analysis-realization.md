@@ -187,6 +187,11 @@ OCR roleが期限切れAnalysis holderを回収して分析outboxを作る場合
 
 - workerはDB leaseを取得できたdeliveryだけを実行する。terminal / running jobは状態に応じて安全にACKし、
   再計算しない。
+- Analysis consumerの新規配送は`XREADGROUP ... > BLOCK`だけで待つ。`XADD`はこのserver-side blockを直ちに
+  起床させるため、空queue時のblock値を伸ばしても通常の計算開始待ちにはしない。
+- stale PELは起動時と低頻度cold intervalだけで、上限付きの`XAUTOCLAIM` pageとして回収する。pageを継続する前には
+  必ず1回の新規配送readを挟み、空queueを短周期pollにしない。現workerがshared slotのbusyで残したentryだけは
+  lease idle到達時に1件だけ再確認し、local予定を失ってもcold recoveryが回収する。
 - jobの状態遷移と必要な次outboxをDBへ確定してから元deliveryをACKする。DB commitの成否が不明なら、
   job / attempt / artifactを再読してからACKまたはretryを決め、同じpublishを推測で再実行しない。
 - Analysis Worker roleはsupportするalgorithm / artifact schema versionのexact setを宣言し、job claimも

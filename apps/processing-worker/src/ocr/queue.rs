@@ -13,6 +13,7 @@ use super::contract::{OcrQueueContractError, OcrQueuePayload, parse_delivery, re
 
 const MAXIMUM_PENDING_SCAN_COUNT: usize = 100;
 const MAXIMUM_DELIVERY_ATTEMPTS: usize = 10;
+const PENDING_CURSOR_START: &str = "-";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct OcrQueueConfig {
@@ -67,6 +68,64 @@ impl OcrQueueConfig {
             pending_scan_count,
         })
     }
+
+    pub(crate) const fn claim_idle(&self) -> Duration {
+        self.claim_idle
+    }
+}
+
+/// Cursor for a bounded `XPENDING` PEL sweep.
+///
+/// The next request uses Redis's exclusive range syntax, so a partial sweep cannot repeatedly
+/// inspect its first entry. The cursor is intentionally local: a restart starts one bounded cold
+/// scan from the beginning, which is the durable safe fallback for work left by another worker.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct PendingRecoveryCursor {
+    start_id: String,
+}
+
+impl PendingRecoveryCursor {
+    #[must_use]
+    pub(crate) fn start() -> Self {
+        Self {
+            start_id: String::from(PENDING_CURSOR_START),
+        }
+    }
+
+    fn current(&self) -> &str {
+        &self.start_id
+    }
+
+    fn advance_after(&mut self, message_id: &str) {
+        self.start_id = format!("({message_id}");
+    }
+
+    fn reset(&mut self) {
+        self.start_id = String::from(PENDING_CURSOR_START);
+    }
+}
+
+/// A young pending entry found during the bounded cold scan.
+#[derive(Debug)]
+pub(crate) struct PendingRecoveryTarget {
+    pub(crate) message_id: String,
+    pub(crate) remaining_idle: Duration,
+}
+
+/// Result of one bounded PEL recovery page.
+#[derive(Debug)]
+pub(crate) struct ColdRecoveryPage {
+    pub(crate) complete: bool,
+    pub(crate) delivery: Option<OcrQueueDelivery>,
+    pub(crate) targets: Vec<PendingRecoveryTarget>,
+}
+
+/// Result of checking one locally known pending delivery at its idle threshold.
+#[derive(Debug)]
+pub(crate) enum TargetedRecovery {
+    Delivery(OcrQueueDelivery),
+    NotYetEligible(Duration),
+    Missing,
 }
 
 #[derive(Debug)]
@@ -126,17 +185,14 @@ pub(crate) async fn ensure_consumer_group(
     }
 }
 
-pub(crate) async fn next_delivery(
+/// Waits only for entries that have never been delivered to the consumer group.
+///
+/// `XREADGROUP ... > BLOCK` is deliberately kept separate from PEL recovery. Redis wakes this
+/// blocking request immediately when an `XADD` makes a new entry available.
+pub(crate) async fn read_new_delivery(
     redis: &mut ConnectionManager,
     config: &OcrQueueConfig,
 ) -> Result<Option<OcrQueueDelivery>, OcrQueueError> {
-    if let Some((delivery, prior_delivery_count)) = claim_stale_delivery(redis, config).await? {
-        return Ok(Some(decode_delivery(
-            &delivery,
-            Some(prior_delivery_count),
-            config.maximum_delivery_attempts,
-        )));
-    }
     let block = duration_milliseconds(config.block)?;
     let options = StreamReadOptions::default()
         .group(&config.group, &config.consumer)
@@ -150,41 +206,140 @@ pub(crate) async fn next_delivery(
         .map(|delivery| decode_delivery(&delivery, None, config.maximum_delivery_attempts)))
 }
 
-async fn claim_stale_delivery(
+/// Scans at most one configured `XPENDING` page and claims at most one eligible delivery.
+///
+/// The caller interleaves pages with a normal blocking read, and caps the number of pages in a
+/// sweep. Young entries become bounded local target-time checks so a graceful restart does not
+/// unnecessarily defer a transient retry to the next cold scan.
+pub(crate) async fn recover_cold_page(
     redis: &mut ConnectionManager,
     config: &OcrQueueConfig,
-) -> Result<Option<(StreamId, usize)>, OcrQueueError> {
+    cursor: &mut PendingRecoveryCursor,
+) -> Result<ColdRecoveryPage, OcrQueueError> {
     let pending: StreamPendingCountReply = redis
         .xpending_count(
             &config.stream,
             &config.group,
-            "-",
+            cursor.current(),
             "+",
             config.pending_scan_count,
         )
         .await?;
     let minimum_idle = duration_milliseconds(config.claim_idle)?;
-    let Some(candidate) = pending
-        .ids
-        .into_iter()
-        .find(|entry| entry.last_delivered_ms >= minimum_idle)
-    else {
-        return Ok(None);
+    let page_length = pending.ids.len();
+    if page_length == 0 {
+        cursor.reset();
+        return Ok(ColdRecoveryPage {
+            complete: true,
+            delivery: None,
+            targets: Vec::new(),
+        });
+    }
+
+    let mut targets = Vec::new();
+    for (index, candidate) in pending.ids.into_iter().enumerate() {
+        if candidate.last_delivered_ms < minimum_idle {
+            targets.push(PendingRecoveryTarget {
+                message_id: candidate.id.clone(),
+                remaining_idle: remaining_idle(minimum_idle, candidate.last_delivered_ms)?,
+            });
+            cursor.advance_after(&candidate.id);
+            continue;
+        }
+
+        let is_last_entry_in_page = index + 1 == page_length;
+        let complete = is_last_entry_in_page && page_length < config.pending_scan_count;
+        cursor.advance_after(&candidate.id);
+        if complete {
+            cursor.reset();
+        }
+        let claimed: StreamClaimReply = redis
+            .xclaim(
+                &config.stream,
+                &config.group,
+                &config.consumer,
+                minimum_idle,
+                &[&candidate.id],
+            )
+            .await?;
+        return Ok(ColdRecoveryPage {
+            complete,
+            delivery: claimed.ids.into_iter().next().map(|delivery| {
+                decode_delivery(
+                    &delivery,
+                    Some(candidate.times_delivered),
+                    config.maximum_delivery_attempts,
+                )
+            }),
+            targets,
+        });
+    }
+
+    let complete = page_length < config.pending_scan_count;
+    if complete {
+        cursor.reset();
+    }
+    Ok(ColdRecoveryPage {
+        complete,
+        delivery: None,
+        targets,
+    })
+}
+
+/// Rechecks one known PEL entry at its idle threshold without scanning the entire PEL.
+pub(crate) async fn recover_targeted_delivery(
+    redis: &mut ConnectionManager,
+    config: &OcrQueueConfig,
+    message_id: &str,
+) -> Result<TargetedRecovery, OcrQueueError> {
+    let pending: StreamPendingCountReply = redis
+        .xpending_count(&config.stream, &config.group, message_id, message_id, 1)
+        .await?;
+    let Some(candidate) = pending.ids.into_iter().next() else {
+        return Ok(TargetedRecovery::Missing);
     };
+    if candidate.id != message_id {
+        return Ok(TargetedRecovery::Missing);
+    }
+    let minimum_idle = duration_milliseconds(config.claim_idle)?;
+    if candidate.last_delivered_ms < minimum_idle {
+        return Ok(TargetedRecovery::NotYetEligible(remaining_idle(
+            minimum_idle,
+            candidate.last_delivered_ms,
+        )?));
+    }
     let claimed: StreamClaimReply = redis
         .xclaim(
             &config.stream,
             &config.group,
             &config.consumer,
             minimum_idle,
-            &[&candidate.id],
+            &[message_id],
         )
         .await?;
     Ok(claimed
         .ids
         .into_iter()
         .next()
-        .map(|delivery| (delivery, candidate.times_delivered)))
+        .map_or(TargetedRecovery::Missing, |delivery| {
+            TargetedRecovery::Delivery(decode_delivery(
+                &delivery,
+                Some(candidate.times_delivered),
+                config.maximum_delivery_attempts,
+            ))
+        }))
+}
+
+fn remaining_idle(
+    minimum_idle: usize,
+    last_delivered_ms: usize,
+) -> Result<Duration, OcrQueueError> {
+    let milliseconds = minimum_idle
+        .checked_sub(last_delivered_ms)
+        .ok_or(OcrQueueError::DurationBound)?;
+    let milliseconds =
+        u64::try_from(milliseconds).map_err(|_error| OcrQueueError::DurationBound)?;
+    Ok(Duration::from_millis(milliseconds))
 }
 
 fn decode_delivery(
@@ -378,6 +533,27 @@ mod tests {
                 ..
             }
         ));
+    }
+
+    #[test]
+    fn pending_recovery_cursor_advances_exclusively_and_resets_after_a_completed_sweep() {
+        let mut cursor = PendingRecoveryCursor::start();
+        assert_eq!(cursor.current(), PENDING_CURSOR_START);
+
+        cursor.advance_after("42-0");
+        assert_eq!(cursor.current(), "(42-0");
+
+        cursor.reset();
+        assert_eq!(cursor.current(), PENDING_CURSOR_START);
+    }
+
+    #[test]
+    fn remaining_idle_keeps_the_exact_server_reported_difference() {
+        assert!(matches!(
+            remaining_idle(120_000, 119_999),
+            Ok(duration) if duration == Duration::from_millis(1)
+        ));
+        assert!(remaining_idle(120_000, 120_001).is_err());
     }
 
     fn config(

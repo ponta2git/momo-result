@@ -17,6 +17,7 @@ pub(crate) mod release;
 
 use crate::{
     outbox::{ControlOutcome, PostCommitSink, PostCommitSinkClosed},
+    pel_recovery::{PelRecoverySchedule, RecoveryAction},
     postgres::{self, PostgresError},
     process::ProcessError,
 };
@@ -42,7 +43,8 @@ use attempt_directory::{
 };
 use metrics::elapsed_metrics;
 use queue::{
-    AutoClaimCursor, acknowledge, ensure_consumer_group, next_delivery, payload_from_delivery,
+    AutoClaimCursor, acknowledge, ensure_consumer_group, payload_from_delivery, read_new_delivery,
+    recover_cold_page, recover_targeted_delivery,
 };
 
 #[derive(Debug, Error)]
@@ -87,8 +89,20 @@ impl ConsumerError {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum DeliveryDisposition {
     Acknowledge,
-    LeavePending,
+    LeavePending(PendingRecoveryPolicy),
     StopLoop,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum PendingRecoveryPolicy {
+    ColdOnly,
+    AtIdleThreshold,
+}
+
+impl DeliveryDisposition {
+    const fn leave_pending_cold() -> Self {
+        Self::LeavePending(PendingRecoveryPolicy::ColdOnly)
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -244,16 +258,38 @@ async fn consume_deliveries(
     shutdown: &mut watch::Receiver<bool>,
 ) -> Result<(), ConsumerError> {
     let mut recovery_cursor = AutoClaimCursor::start();
+    let mut recovery_schedule =
+        PelRecoverySchedule::new(Instant::now(), config.pel_recovery_interval);
     while !*shutdown.borrow() {
         if capability_refresh.is_due_at(Instant::now()) {
             register_capability(heartbeat_client, &config.worker_id).await?;
             capability_refresh.record_success_at(Instant::now());
         }
-        let delivery = next_delivery(redis, config, &mut recovery_cursor).await?;
+        let delivery = match recovery_schedule.due_action(Instant::now()) {
+            Some(RecoveryAction::ColdPage) => {
+                let page = recover_cold_page(redis, config, &mut recovery_cursor).await?;
+                if !recovery_schedule.record_cold_page(Instant::now(), page.complete) {
+                    return Err(ConsumerError::DurationBound);
+                }
+                page.delivery
+            }
+            Some(RecoveryAction::Targeted(message_id)) => {
+                let delivery = recover_targeted_delivery(redis, config, &message_id).await?;
+                recovery_schedule.record_target_attempt(&message_id);
+                delivery
+            }
+            None => {
+                let delivery = read_new_delivery(redis, config).await?;
+                recovery_schedule.record_new_delivery_read();
+                delivery
+            }
+        };
         let Some(delivery) = delivery else {
             continue;
         };
         let message_id = delivery.id.clone();
+        let delivery_received_at = Instant::now();
+        recovery_schedule.forget_target(&message_id);
         let Some(payload) = payload_from_delivery(&delivery) else {
             warn!(
                 event = "analysis_delivery_discarded",
@@ -299,7 +335,21 @@ async fn consume_deliveries(
                     return Err(error);
                 }
             }
-            DeliveryDisposition::LeavePending => {}
+            DeliveryDisposition::LeavePending(policy) => {
+                if policy == PendingRecoveryPolicy::AtIdleThreshold {
+                    let Some(due_at) = delivery_received_at.checked_add(config.lease_duration)
+                    else {
+                        return Err(ConsumerError::DurationBound);
+                    };
+                    if !recovery_schedule.schedule_target(message_id.clone(), due_at) {
+                        warn!(
+                            event = "analysis_pel_target_schedule_full",
+                            recovery = "cold",
+                            "analysis pending delivery will wait for bounded cold recovery"
+                        );
+                    }
+                }
+            }
             DeliveryDisposition::StopLoop => break,
         }
     }
@@ -345,12 +395,16 @@ async fn process_delivery(
                 supported_artifact_schema_version = ARTIFACT_SCHEMA_VERSION,
                 "analysis delivery requires a compatible worker generation"
             );
-            return Ok(DeliveryDisposition::LeavePending);
+            return Ok(DeliveryDisposition::leave_pending_cold());
         }
         ClaimResult::NotYetAvailable => {
-            return Ok(DeliveryDisposition::LeavePending);
+            return Ok(DeliveryDisposition::leave_pending_cold());
         }
-        ClaimResult::Busy => return Ok(DeliveryDisposition::LeavePending),
+        ClaimResult::Busy => {
+            return Ok(DeliveryDisposition::LeavePending(
+                PendingRecoveryPolicy::AtIdleThreshold,
+            ));
+        }
     };
     let span = info_span!(
         "analysis_attempt",
@@ -491,9 +545,14 @@ mod tests {
 
         let result = submit_control_outcome(
             &sink,
-            ControlOutcome::without_effects(DeliveryDisposition::LeavePending),
+            ControlOutcome::without_effects(DeliveryDisposition::leave_pending_cold()),
         );
 
-        assert!(matches!(result, Ok(DeliveryDisposition::LeavePending)));
+        assert!(matches!(
+            result,
+            Ok(DeliveryDisposition::LeavePending(
+                PendingRecoveryPolicy::ColdOnly
+            ))
+        ));
     }
 }

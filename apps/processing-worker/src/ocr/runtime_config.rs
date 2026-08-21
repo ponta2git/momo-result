@@ -63,6 +63,7 @@ impl OcrConsumerRuntimeConfig {
                     duration(&mut lookup, "MOMO_OCR_V2_FINALIZATION_TIMEOUT_MS")?,
                     duration(&mut lookup, "MOMO_OCR_V2_RETRY_DELAY_MS")?,
                     duration(&mut lookup, "MOMO_OCR_V2_REDIS_BLOCK_MS")?,
+                    duration(&mut lookup, "MOMO_OCR_V2_PEL_RECOVERY_INTERVAL_MS")?,
                     duration(&mut lookup, "MOMO_OCR_V2_CLAIM_IDLE_MS")?,
                     duration(&mut lookup, "MOMO_OCR_V2_TIMEOUT_MS")?,
                     positive_usize(&mut lookup, "MOMO_OCR_V2_MAXIMUM_DELIVERY_ATTEMPTS")?,
@@ -178,6 +179,15 @@ mod tests {
             })
         ));
 
+        let mut missing_interval = complete_values();
+        missing_interval.remove("MOMO_OCR_V2_PEL_RECOVERY_INTERVAL_MS");
+        assert!(matches!(
+            build(&missing_interval),
+            Err(OcrRuntimeConfigError::Missing {
+                name: "MOMO_OCR_V2_PEL_RECOVERY_INTERVAL_MS"
+            })
+        ));
+
         let complete = build(&complete_values());
         assert!(matches!(complete, Ok(OcrConsumerRuntimeConfig::Enabled(_))));
     }
@@ -230,6 +240,7 @@ mod tests {
             ("MOMO_OCR_V2_FINALIZATION_TIMEOUT_MS", "5000"),
             ("MOMO_OCR_V2_RETRY_DELAY_MS", "1000"),
             ("MOMO_OCR_V2_REDIS_BLOCK_MS", "1000"),
+            ("MOMO_OCR_V2_PEL_RECOVERY_INTERVAL_MS", "300000"),
             ("MOMO_OCR_V2_CLAIM_IDLE_MS", "111000"),
             ("MOMO_OCR_V2_TIMEOUT_MS", "30000"),
             ("MOMO_OCR_V2_MAXIMUM_DELIVERY_ATTEMPTS", "2"),

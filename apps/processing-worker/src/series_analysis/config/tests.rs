@@ -3,7 +3,7 @@ use std::{ffi::OsString, sync::Mutex};
 use super::*;
 
 static ENV_LOCK: Mutex<()> = Mutex::new(());
-const ENVIRONMENT_NAMES: [&str; 25] = [
+const ENVIRONMENT_NAMES: [&str; 26] = [
     PUBLICATION_MODE_ENV,
     "MOMO_ANALYSIS_RUNTIME_MEMORY_LIMIT_BYTES",
     "MOMO_ANALYSIS_CHILD_MEMORY_LIMIT_BYTES",
@@ -26,6 +26,7 @@ const ENVIRONMENT_NAMES: [&str; 25] = [
     "MOMO_ANALYSIS_HEARTBEAT_INTERVAL_MS",
     "MOMO_ANALYSIS_CHILD_STOP_GRACE_MS",
     "MOMO_ANALYSIS_REDIS_BLOCK_MS",
+    "MOMO_ANALYSIS_PEL_RECOVERY_INTERVAL_MS",
     crate::cgroup::CGROUP_HIERARCHY_ENV,
     crate::cgroup::CGROUP_DIRECTORY_ENV,
     crate::cgroup::CGROUP_LIMIT_ENV,
@@ -106,6 +107,7 @@ fn valid_runtime_environment() -> tempfile::TempDir {
     EnvironmentGuard::set("MOMO_ANALYSIS_HEARTBEAT_INTERVAL_MS", "5000");
     EnvironmentGuard::set("MOMO_ANALYSIS_CHILD_STOP_GRACE_MS", "5000");
     EnvironmentGuard::set("MOMO_ANALYSIS_REDIS_BLOCK_MS", "5000");
+    EnvironmentGuard::set("MOMO_ANALYSIS_PEL_RECOVERY_INTERVAL_MS", "300000");
     let cgroup_root = tempfile::tempdir().expect("temporary cgroup root must be created");
     let cgroup = cgroup_root
         .path()

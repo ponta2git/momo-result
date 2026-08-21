@@ -6,7 +6,7 @@ use tokio::{sync::watch, time};
 use tracing::{info, warn};
 
 use crate::{
-    outbox::{ControlOutcome, PostCommitSink, PostCommitSinkClosed},
+    outbox::{PostCommitSink, PostCommitSinkClosed},
     postgres,
 };
 
@@ -19,10 +19,17 @@ use super::{
     },
     object_store::{OcrObjectStoreError, R2ObjectStore, R2ObjectStoreConfig, VerifiedSourceImage},
     queue::{
-        OcrQueueConfig, OcrQueueDelivery, OcrQueueDeliveryBody, OcrQueueError, acknowledge,
-        dead_letter_and_acknowledge, ensure_consumer_group, next_delivery,
+        OcrQueueConfig, OcrQueueDelivery, OcrQueueDeliveryBody, OcrQueueError,
+        dead_letter_and_acknowledge, ensure_consumer_group,
     },
 };
+
+#[path = "consumer_claim_wait.rs"]
+mod claim_wait;
+#[path = "consumer_loop.rs"]
+mod consumer_loop;
+
+use claim_wait::{ClaimDecision, wait_for_claim};
 
 pub(crate) type OcrChildWaitFuture<'a> = Pin<
     Box<
@@ -90,6 +97,7 @@ pub(crate) struct OcrConsumerConfig {
     object_store: R2ObjectStoreConfig,
     heartbeat_interval: Duration,
     claim_wait_timeout: Duration,
+    pel_recovery_interval: Duration,
     object_download_timeout: Duration,
     ocr_timeout: Duration,
     finalization_timeout: Duration,
@@ -125,6 +133,7 @@ impl OcrConsumerConfig {
         finalization_timeout: Duration,
         retry_delay: Duration,
         redis_block: Duration,
+        pel_recovery_interval: Duration,
         claim_idle: Duration,
         ocr_timeout: Duration,
         maximum_delivery_attempts: usize,
@@ -134,6 +143,7 @@ impl OcrConsumerConfig {
             || redis_url.trim().is_empty()
             || heartbeat_interval.is_zero()
             || ocr_timeout.is_zero()
+            || pel_recovery_interval.is_zero()
             || redis_block > heartbeat_interval
         {
             return Err(OcrConsumerError::InvalidConfiguration);
@@ -174,6 +184,7 @@ impl OcrConsumerConfig {
             object_store,
             heartbeat_interval,
             claim_wait_timeout: lease_duration,
+            pel_recovery_interval,
             object_download_timeout,
             ocr_timeout,
             finalization_timeout,
@@ -195,6 +206,8 @@ pub(crate) enum OcrConsumerError {
     ChildProcess(&'static str),
     #[error("OCR post-commit outbox sink stopped")]
     PostCommitSink(#[from] PostCommitSinkClosed),
+    #[error("OCR PEL recovery schedule exceeded the monotonic clock bound")]
+    DurationBound,
 }
 
 impl From<OcrQueueError> for OcrConsumerError {
@@ -213,16 +226,24 @@ impl From<OcrControlError> for OcrConsumerError {
 enum DeliveryDisposition {
     Acknowledge,
     AlreadyAcknowledged,
-    LeavePending,
+    LeavePending(PendingRecoveryPolicy),
     StopLoop,
 }
 
-enum ClaimDecision {
-    Claimed(ClaimedOcrJob),
-    RetryClaim,
-    Acknowledge,
-    LeavePending,
-    StopWaiting,
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum PendingRecoveryPolicy {
+    ColdOnly,
+    AtIdleThreshold,
+}
+
+impl DeliveryDisposition {
+    const fn leave_pending_cold() -> Self {
+        Self::LeavePending(PendingRecoveryPolicy::ColdOnly)
+    }
+
+    const fn leave_pending_at_idle() -> Self {
+        Self::LeavePending(PendingRecoveryPolicy::AtIdleThreshold)
+    }
 }
 
 enum DownloadOutcome<T> {
@@ -273,30 +294,17 @@ pub(crate) async fn run<L: OcrChildLauncher>(
         event = "ocr_rust_v2_worker_ready",
         "Rust OCR v2 consumer is ready"
     );
-    while !*shutdown.borrow() {
-        let Some(delivery) = next_delivery(&mut redis, &config.queue).await? else {
-            continue;
-        };
-        let disposition = Box::pin(process_delivery(
-            &mut control_client,
-            &mut heartbeat_client,
-            &mut redis,
-            &objects,
-            launcher,
-            &config,
-            &post_commit_sink,
-            &delivery,
-            &mut shutdown,
-        ))
-        .await?;
-        match disposition {
-            DeliveryDisposition::Acknowledge => {
-                acknowledge(&mut redis, &config.queue, &delivery.message_id).await?;
-            }
-            DeliveryDisposition::AlreadyAcknowledged | DeliveryDisposition::LeavePending => {}
-            DeliveryDisposition::StopLoop => break,
-        }
-    }
+    consumer_loop::consume_deliveries(
+        &mut control_client,
+        &mut heartbeat_client,
+        &mut redis,
+        &objects,
+        launcher,
+        &config,
+        &post_commit_sink,
+        &mut shutdown,
+    )
+    .await?;
     info!(
         event = "ocr_rust_v2_worker_drained",
         "Rust OCR v2 consumer drained"
@@ -333,7 +341,7 @@ async fn process_delivery<L: OcrChildLauncher>(
                 record_queue_failure(control_client, job_id, config.finalization_timeout).await?;
                 Ok(DeliveryDisposition::Acknowledge)
             } else {
-                Ok(DeliveryDisposition::LeavePending)
+                Ok(DeliveryDisposition::leave_pending_at_idle())
             }
         }
         OcrQueueDeliveryBody::MaximumAttempts {
@@ -363,65 +371,13 @@ async fn process_delivery<L: OcrChildLauncher>(
                     .await
                 }
                 ClaimDecision::Acknowledge => Ok(DeliveryDisposition::Acknowledge),
-                ClaimDecision::LeavePending | ClaimDecision::RetryClaim => {
-                    Ok(DeliveryDisposition::LeavePending)
+                ClaimDecision::LeavePendingCold => Ok(DeliveryDisposition::leave_pending_cold()),
+                ClaimDecision::RetryAtIdleThreshold | ClaimDecision::RetryClaim => {
+                    Ok(DeliveryDisposition::leave_pending_at_idle())
                 }
                 ClaimDecision::StopWaiting => Ok(DeliveryDisposition::StopLoop),
             }
         }
-    }
-}
-
-async fn wait_for_claim(
-    client: &mut tokio_postgres::Client,
-    payload: &OcrQueuePayload,
-    config: &OcrConsumerConfig,
-    post_commit_sink: &PostCommitSink,
-    shutdown: &mut watch::Receiver<bool>,
-) -> Result<ClaimDecision, OcrConsumerError> {
-    let deadline = time::sleep(config.claim_wait_timeout);
-    tokio::pin!(deadline);
-    loop {
-        match submit_claim_outcome(
-            post_commit_sink,
-            claim_job(client, payload, &config.control).await?,
-        )? {
-            ClaimDecision::Claimed(claim) => return Ok(ClaimDecision::Claimed(claim)),
-            ClaimDecision::Acknowledge => return Ok(ClaimDecision::Acknowledge),
-            ClaimDecision::LeavePending => return Ok(ClaimDecision::LeavePending),
-            ClaimDecision::StopWaiting => return Ok(ClaimDecision::StopWaiting),
-            ClaimDecision::RetryClaim => {}
-        }
-        tokio::select! {
-            () = &mut deadline => return Ok(ClaimDecision::LeavePending),
-            result = shutdown.changed() => {
-                if result.is_err() || *shutdown.borrow() {
-                    return Ok(ClaimDecision::StopWaiting);
-                }
-            }
-            () = time::sleep(config.heartbeat_interval) => {}
-        }
-    }
-}
-
-fn submit_claim_outcome(
-    sink: &PostCommitSink,
-    outcome: ControlOutcome<OcrClaimResult>,
-) -> Result<ClaimDecision, OcrConsumerError> {
-    sink.submit(outcome.effects)?;
-    Ok(classify_claim_result(outcome.value))
-}
-
-fn classify_claim_result(result: OcrClaimResult) -> ClaimDecision {
-    match result {
-        OcrClaimResult::Claimed(claim) => ClaimDecision::Claimed(claim),
-        OcrClaimResult::MissingOrTerminal
-        | OcrClaimResult::AlreadyRunning
-        | OcrClaimResult::QueueContractMismatch => ClaimDecision::Acknowledge,
-        OcrClaimResult::UnsupportedQueueSchema | OcrClaimResult::NotYetAvailable => {
-            ClaimDecision::LeavePending
-        }
-        OcrClaimResult::Busy | OcrClaimResult::PreemptionRequested => ClaimDecision::RetryClaim,
     }
 }
 
@@ -480,13 +436,13 @@ async fn process_claimed<L: OcrChildLauncher>(
         ))
         | DownloadOutcome::TimedOut => {
             requeue_transient(control_client, claim, &config.control).await?;
-            return Ok(DeliveryDisposition::LeavePending);
+            return Ok(DeliveryDisposition::leave_pending_at_idle());
         }
         DownloadOutcome::Shutdown => {
             requeue_transient(control_client, claim, &config.control).await?;
             return Ok(DeliveryDisposition::StopLoop);
         }
-        DownloadOutcome::OwnerLost => return Ok(DeliveryDisposition::LeavePending),
+        DownloadOutcome::OwnerLost => return Ok(DeliveryDisposition::leave_pending_cold()),
     };
     let mut child = launcher
         .launch(&image, payload)
@@ -522,7 +478,7 @@ async fn finish_ocr_attempt(
         }
         OcrChildOutcome::Completed(Err(failure)) if domain_failure_is_retryable(failure) => {
             requeue_transient(control_client, claim, &config.control).await?;
-            Ok(DeliveryDisposition::LeavePending)
+            Ok(DeliveryDisposition::leave_pending_at_idle())
         }
         OcrChildOutcome::Completed(Err(failure)) => {
             finish_terminal_failure(
@@ -551,7 +507,7 @@ async fn finish_ocr_attempt(
             requeue_transient(control_client, claim, &config.control).await?;
             Ok(DeliveryDisposition::StopLoop)
         }
-        OcrChildOutcome::OwnerLost => Ok(DeliveryDisposition::LeavePending),
+        OcrChildOutcome::OwnerLost => Ok(DeliveryDisposition::leave_pending_cold()),
     }
 }
 
@@ -565,7 +521,7 @@ async fn handle_resource_exhausted(
         "OCR child exceeded the cgroup memory budget; retrying through the existing unavailable policy"
     );
     requeue_transient(control_client, claim, &config.control).await?;
-    Ok(DeliveryDisposition::LeavePending)
+    Ok(DeliveryDisposition::leave_pending_at_idle())
 }
 
 fn draft_completion(output: OcrOutput, duration_milliseconds: i32) -> OcrDraftCompletion {
@@ -723,8 +679,9 @@ fn elapsed_milliseconds(started: time::Instant) -> i32 {
 
 #[cfg(test)]
 mod tests {
+    use super::claim_wait::{classify_claim_result, submit_claim_outcome};
     use super::*;
-    use crate::outbox::{OutboxKind, PostCommitEffects};
+    use crate::outbox::{ControlOutcome, OutboxKind, PostCommitEffects};
 
     #[test]
     fn ocr_failures_have_one_deterministic_control_policy() {
@@ -759,7 +716,7 @@ mod tests {
         ] {
             assert!(matches!(
                 classify_claim_result(result),
-                ClaimDecision::LeavePending
+                ClaimDecision::LeavePendingCold
             ));
         }
         for result in [OcrClaimResult::Busy, OcrClaimResult::PreemptionRequested] {
@@ -824,6 +781,7 @@ mod tests {
                 Duration::from_secs(5),
                 Duration::from_secs(1),
                 Duration::from_secs(1),
+                Duration::from_mins(5),
                 claim_idle,
                 Duration::from_secs(30),
                 2,

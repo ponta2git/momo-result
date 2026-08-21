@@ -34,6 +34,8 @@ Redis は配送路であり、ジョブ状態の正本ではない。OCR Worker 
 | --- | --- | --- |
 | v2 job stream | `momo:ocr:v2:jobs` | `OCR_REDIS_V2_STREAM` |
 | v2 dead-letter stream | `momo:ocr:v2:jobs:dead` | `OCR_REDIS_V2_DEAD_LETTER_STREAM` |
+| PEL cold recovery | `300s` | `MOMO_OCR_V2_PEL_RECOVERY_INTERVAL_MS` |
+| new delivery blocking read | `5s` | `MOMO_OCR_V2_REDIS_BLOCK_MS` |
 | Outbox cold recovery | `300s` | `OCR_OUTBOX_RECOVERY_INTERVAL_SECONDS` |
 | Delivered queued redelivery | `120s` | `OCR_OUTBOX_REDELIVERY_AFTER_SECONDS` |
 | Outbox due backlog admission limit | `24` | `OCR_OUTBOX_DUE_BACKLOG_LIMIT` |
@@ -45,7 +47,14 @@ Rules:
 
 - APIはv2 streamだけへ`XADD`し、別schemaを同じstreamへ混在させない。
 - OCR consumerは`XGROUP CREATE ... MKSTREAM`を許容する。
-- OCR consumerは`XREADGROUP`で新規配送を読み、stale PELは`XCLAIM`する。
+- OCR consumerは新規配送だけを`XREADGROUP ... > BLOCK`で読み、stale PELの探索を通常配送の
+  待受けループへ混在させない。`XADD`で新規entryが利用可能になると、blockの満了を待たずにRedisがreadを返す。
+- PELは起動時と設定されたcold intervalでのみ、上限付きの`XPENDING` pageから回収する。pageの継続前には
+  必ず1回の新規配送readを挟み、空queueを短周期のRedis pollへ変えない。
+- 現workerがtransient retryのため残したknown PEL entryは、claim idle到達時に1件だけ正確に再確認する。
+  そのlocal予定が失われてもPELとcold recoveryがdurableなfallbackになる。
+- OCR PELのclaim前に`XPENDING`でdelivery countを読み、`XCLAIM`による再配送とbounded DLQ判定を同じentryに
+  対して行う。
 - 即時 nack は使わない。
 - OCR認識timeoutとPEL回収待機時間を別のbounded設定として扱い、混同しない。
 - claim idle は、正当な長時間ジョブを重複配送しないよう API stale job reaper の基準値以上にする。

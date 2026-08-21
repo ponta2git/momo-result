@@ -51,6 +51,7 @@ pub(crate) struct AnalysisConsumerConfig {
     pub(crate) heartbeat_interval: Duration,
     pub(crate) child_stop_grace: Duration,
     pub(crate) redis_block: Duration,
+    pub(crate) pel_recovery_interval: Duration,
     pub(crate) execution_limits: AnalysisExecutionLimits,
     pub(crate) child_cgroup: ChildCgroup,
 }
@@ -158,6 +159,7 @@ impl AnalysisConsumerConfig {
         let heartbeat_interval = duration_millis("MOMO_ANALYSIS_HEARTBEAT_INTERVAL_MS")?;
         let child_stop_grace = duration_millis("MOMO_ANALYSIS_CHILD_STOP_GRACE_MS")?;
         let redis_block = duration_millis("MOMO_ANALYSIS_REDIS_BLOCK_MS")?;
+        let pel_recovery_interval = duration_millis("MOMO_ANALYSIS_PEL_RECOVERY_INTERVAL_MS")?;
         let required_margin = heartbeat_interval
             .checked_mul(3)
             .and_then(|value| value.checked_add(child_stop_grace));
@@ -209,6 +211,7 @@ impl AnalysisConsumerConfig {
             heartbeat_interval,
             child_stop_grace,
             redis_block,
+            pel_recovery_interval,
             execution_limits,
             child_cgroup,
         })

@@ -18,8 +18,9 @@ use crate::{
     ocr::{
         contract::{OcrQueuePayload, parse_delivery},
         queue::{
-            OcrQueueConfig, OcrQueueDeliveryBody, acknowledge, dead_letter_and_acknowledge,
-            ensure_consumer_group, next_delivery,
+            OcrQueueConfig, OcrQueueDeliveryBody, PendingRecoveryCursor, acknowledge,
+            dead_letter_and_acknowledge, ensure_consumer_group, read_new_delivery,
+            recover_cold_page,
         },
     },
     outbox::OutboxKind,
@@ -493,7 +494,7 @@ async fn verify_transient_requeue_preserves_pending(
         .arg("2026-08-12T00:00:00Z")
         .query_async(redis)
         .await?;
-    let transient = next_delivery(redis, queue)
+    let transient = read_new_delivery(redis, queue)
         .await?
         .ok_or_else(|| smoke_error("transient OCR delivery was not read"))?;
     let OcrQueueDeliveryBody::Job(transient_payload) = &transient.body else {
@@ -543,7 +544,7 @@ async fn verify_redis_failure_order(primary: &mut Client, redis_url: &str) -> Sm
         .arg(MALFORMED.job_id)
         .query_async(&mut redis)
         .await?;
-    let malformed = next_delivery(&mut redis, &queue)
+    let malformed = read_new_delivery(&mut redis, &queue)
         .await?
         .ok_or_else(|| smoke_error("malformed OCR delivery was not read"))?;
     assert!(matches!(
@@ -576,7 +577,7 @@ async fn verify_redis_failure_order(primary: &mut Client, redis_url: &str) -> Sm
         .arg("must-not-enter-dlq")
         .query_async(&mut redis)
         .await?;
-    let poison = next_delivery(&mut redis, &queue)
+    let poison = read_new_delivery(&mut redis, &queue)
         .await?
         .ok_or_else(|| smoke_error("poison OCR delivery was not read"))?;
     assert!(matches!(
@@ -587,8 +588,10 @@ async fn verify_redis_failure_order(primary: &mut Client, redis_url: &str) -> Sm
         }
     ));
     time::sleep(Duration::from_millis(25)).await;
-    let exhausted = next_delivery(&mut redis, &queue)
+    let mut recovery_cursor = PendingRecoveryCursor::start();
+    let exhausted = recover_cold_page(&mut redis, &queue, &mut recovery_cursor)
         .await?
+        .delivery
         .ok_or_else(|| smoke_error("stale OCR delivery was not reclaimed"))?;
     assert!(matches!(
         exhausted.body,

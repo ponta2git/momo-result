@@ -29,7 +29,7 @@
 ## 2. Test Layers
 
 | 層 | 捕まえるもの | Gate |
-|---|---|---|
+| --- | --- | --- |
 | domain / pure logic | 不変条件、分岐、validation、parser、ViewModel | `sbt test`, `cargo test`, Vitest |
 | usecase / app service | 状態遷移、副作用境界、repository contract | `sbt test`, `cargo test` |
 | HTTP/API | request parsing、auth/CSRF、response encoding、error mapping | `sbt test` |

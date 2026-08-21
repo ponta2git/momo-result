@@ -18,7 +18,7 @@
 ## 1. Ownership
 
 | 対象 | 正本 | このrepoの責務 |
-|---|---|---|
+| --- | --- | --- |
 | schema / migration / seed | `../momo-db` | consumerとして必要な前提を明示し、contract testで検知する |
 | PostgreSQL query | `apps/api`, `apps/processing-worker` | 現在のschema前提に合わせて実行し、PostgreSQL固有挙動をintegration testで確認する |
 | DB rowの業務意味論 | `docs/domain-rule.md` | API / worker / web が同じ意味で扱う |
@@ -31,7 +31,7 @@
 ## 2. Tables Consumed By This App
 
 | 領域 | テーブル | 主なconsumer | 注意 |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | summit共有 | `members` | API | 固定4名のseedを前提にする。UI定数で局所置換しない。 |
 | summit共有 | `held_events`, `held_event_participants` | API | 本アプリ作成の `held_events.session_id` は `NULL` になり得る。 |
 | 認証・権限 | `momo_login_accounts`, `app_sessions` | API | ログイン主体と試合参加者を分ける。無効化時はsessionを削除する。 |

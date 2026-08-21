@@ -18,7 +18,7 @@
 ## 1. Test Size
 
 | Size | 境界 | 主な対象 | CIでの扱い |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | S | プロセス内、外部I/Oなし | pure function、domain、parser、codec、view model | 通常PRで常時 |
 | M | プロセス内または軽量境界、test doubleあり | HTTP app、usecase、web component/page、MSW、in-memory adapter | 通常PRで常時 |
 | L | 外部runtimeまたは実processあり | PostgreSQL、Redis、native OCR、分析子process、Testcontainers | 関連PRとCI quality gate |
@@ -31,7 +31,7 @@
 coverage は二つのモードを分ける。
 
 | モード | 目的 | 失敗扱い |
-|---|---|---|
+| --- | --- | --- |
 | gate mode | ローカルまたは明示実行で閾値を守る | 設定ファイルの閾値で失敗 |
 | report mode | CI artifact と job summary を残す | テスト失敗は失敗。coverage閾値は report-only 設定で非ブロック |
 
@@ -40,7 +40,7 @@ CI の report mode は、同じテスト集合を通常実行と coverage 実行
 閾値の正本:
 
 | 領域 | 正本 | 現在の要点 |
-|---|---|---|
+| --- | --- | --- |
 | web | `apps/web/vite.config.ts` | threshold、report-only時の扱い、集計対象は設定を正とする。UIはscenario / E2Eで補う。 |
 | api | `apps/api/build.sbt` | thresholdとreport-only時の扱いは設定を正とする。PostgreSQL / Redis adapterはcoverage率でなくintegration contractで保証する。 |
 | Processing Worker runtime | fixture / property / state-machine testと実service smoke | 現時点はcoverage率をgateにせず、pure calculation・OCR characterizationの決定論的oracleと、DB / Redis / R2 / Linux process contractで保証する。 |
@@ -56,7 +56,7 @@ CI の report mode は、同じテスト集合を通常実行と coverage 実行
 ## 3. apps/web
 
 | 対象範囲 | 主テストサイズ | 確保するcoverage / oracle |
-|---|---|---|
+| --- | --- | --- |
 | `src/app` | S / M | router、redirect、layout shell の代表分岐。URLと可視状態をassertする。 |
 | `src/shared/api` | S / M | API wrapper、Problem Details、query key、cache helper。重要ファイルはfile別thresholdで固定する。 |
 | `src/shared/auth`, `src/shared/lib`, `src/shared/domain` | S | pure logic とブラウザ境界。分岐の独立因子をtable化する。 |
@@ -70,7 +70,7 @@ Playwright smokeで管理する。
 ## 4. apps/api
 
 | 対象範囲 | 主テストサイズ | 確保するcoverage / oracle |
-|---|---|---|
+| --- | --- | --- |
 | `domain` | S | 不変条件、lifecycle、policy。複合条件はtable-driven testで固定する。 |
 | `usecases` | S / M | 状態遷移、validation、副作用境界。DTO、DB row intent、queue payloadをassertする。 |
 | `endpoints`, `codec` | S / M | request / response roundtrip、OpenAPI、Problem Details。 |
@@ -85,7 +85,7 @@ Playwright smokeで管理する。
 ## 5. apps/processing-worker
 
 | 対象範囲 | 主テストサイズ | 確保するcoverage / oracle |
-|---|---|---|
+| --- | --- | --- |
 | OCR queue / control | S / M / L | v2 payload、job lifecycle、lease / fence、ack / PEL / DLQ、failure code。複合条件はtable-driven。 |
 | OCR parser / image processing | S / L | 画面種別、金額・順位・事件回数・名前寄せ、FullHD / media検証、native OCR adapter。 |
 | OCR object storage | M / L | opaque key、bytes / checksum / media type再検証、R2 get、失敗時のterminal化。 |
@@ -105,7 +105,7 @@ OCR精度劣化はcode coverageでは検知しにくいため、characterization
 ## 6. Cross-System
 
 | 契約 | 主テストサイズ | 管理方法 |
-|---|---|---|
+| --- | --- | --- |
 | API -> web OpenAPI / generated types | M | `apiOpenApiCheck`、`generate:api`、生成差分ゼロ。 |
 | API -> OCR Worker role Redis queue payload | M / L | v2 JSON Schema、Scala/Rust contract tests、Redis wire integration。 |
 | API -> Analysis Worker role job / queue | M / L | DB consumer contract、Scala/Rust contract tests、Redis wire integration。 |
@@ -119,7 +119,7 @@ OCR精度劣化はcode coverageでは検知しにくいため、characterization
 coverage report はPRを落とす主目的ではなく、推移確認とレビュー補助のために保存する。
 
 | Workflow | Report command | Artifact |
-|---|---|---|
+| --- | --- | --- |
 | web | `pnpm --filter web test:coverage:report` | `apps/web/coverage/`, `coverage-summary/web/` |
 | API | CI: `sbt apiTestWithCoverageReportOnly`; local standalone: `sbt apiCoverageReportOnly` | `scoverage-report/`, `coverage-report/`, `coverage-summary/api/` |
 | Processing Worker runtime | coverage artifact未設定。通常testと実service smokeをrelease gateにする | なし |

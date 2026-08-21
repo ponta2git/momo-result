@@ -32,6 +32,16 @@ AIは実装前に、(1) その規則のowner、(2) 必読と発火した条件�
 
 長い要求仕様は、まず目次と該当章だけ読む。既に読んだ文書は再読せず、ファイル名と要点を再利用する。
 
+### Markdown書式
+
+実装系文書は次の書式に統一する。
+
+- UTF-8、LF、末尾改行1つを使う。通常の末尾空白は置かず、Markdownの強制改行が必要な場合だけ2つの空白を許可する。
+- 見出し、段落、表、リスト、コードフェンスの間は空行1つで区切る。ブロック内に空行を入れない。
+- 表は `| cell |` 形式とし、区切り行は `| --- |` 形式にする。列幅合わせの空白や列ごとの左右寄せは行わない。
+- 箇条書きは `-`、番号付き箇条書きは `1.` を使う。コードフェンスには言語名を付け、該当しない場合は `text` を使う。
+- 本文の改行は意味の区切りで行い、段落の途中を空行で分断しない。長いURL・コマンド・表セルは無理に折り返さない。
+
 ## 2. AI到達性の受入ケース
 
 次のケースで、`AGENTS.md` と本書だけから「第一読 → 必読依存 → 実行正本 → 検証先」へ到達できることを保つ。
@@ -50,33 +60,33 @@ AIは実装前に、(1) その規則のowner、(2) 必読と発火した条件�
 
 ## 3. 文書の責務
 
-| 種別             | ファイル                                               | 責務                                                                                                                                        |
-| ---------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| 索引             | `docs/README.md`                                       | 読む順、文書境界、public/private境界                                                                                                        |
-| 要求正本         | `docs/requirements/base.md`                            | 業務要件、MVP範囲、CSV/TSV列順                                                                                                              |
-| 要求正本         | `docs/requirements/system-design.md`                   | 技術構成、非機能、運用方針の高レベル要求                                                                                                    |
-| 要求正本         | `docs/requirements/series-comparison.md`               | 戦績比較ページの要求、指標、API方針                                                                                                         |
-| 要求正本         | `docs/requirements/series-analysis-batch.md`           | 戦績分析の非同期ジョブ、成果物、状態表示、管理、正確性、OCR統合制約                                                                         |
-| 要求正本         | `docs/requirements/series-review-playbook.md`          | 戦績比較ページ内の振り返り、行動プレイブック要求                                                                                            |
-| 要求正本         | `docs/requirements/held-event-detail.md`               | 開催一覧、開催詳細、試合記録・戦績比較への導線                                                                                              |
-| 要求正本         | `docs/requirements/product-experience.md`              | 総合戦績プラットフォームのUX、概念モデル、トップレベルIA、情報所有権、主要フロー、状態、再発防止条件                                        |
-| 要求正本         | `docs/requirements/design-system.md`                   | 新IAに適したUI方針、現行監査、foundation、component anatomy、interaction contract、移行・再発防止条件                                       |
-| 要求正本draft    | `docs/requirements/writing-guidelines.md`              | Voice / tone、Fact / Perspective / NextEventNote、UI文字列、日本語表記、writing test                                                        |
-| Application標本  | `docs/prototypes/product-experience-ia.html`           | route / state / history / latest-event / OCR / conflict / background taskを実操作で検証するscenario harness。production実装の写経元ではない |
-| Pattern Library  | `docs/prototypes/design-system-direction.html`         | token、部品、状態、chart、画面構成の視覚・keyboard標本。業務routeや長期taskの正本にしない                                                   |
-| Design review    | `docs/prototypes/design-system-review.md`              | visual directionとapplication proofを分けた追認結果・残課題                                                                                 |
-| 実装正本         | `docs/architecture.md`                                 | API / web / Processing Worker runtime、OCR / 戦績分析能力の構造、依存方向、実装規約                                                         |
-| 戦績分析実現正本 | `docs/series-analysis-realization.md`                  | 戦績分析のjob、queue、artifact公開、API / Web pinning、表示状態、version・release・検証の横断契約                                           |
-| UI正本           | `docs/ui-rule.md`                                      | Web の意味表現、余白、操作、motion、状態表示、画面遷移の一貫性                                                                              |
-| ドメイン正本     | `docs/domain-rule.md`                                  | 用語、状態遷移、不変条件、認証主体と試合参加者の区別                                                                                        |
-| DB正本           | `docs/db-rule.md`                                      | 共有DB所有権、migration前提、consumer contract                                                                                              |
-| Queue正本        | `docs/redis-streams-ocr-contract.md`                   | Redis Streams、outbox、payload、ack / retry 契約                                                                                            |
-| Schema正本       | `docs/schemas/*.schema.json`, `docs/schemas/fixtures/` | Redis payload、OCR hints、戦績分析artifact / queueの機械可読契約と共有fixture                                                               |
-| テスト正本       | `docs/test-rule.md`                                    | 変更種別ごとのテスト選択、oracle、品質ゲート判断                                                                                            |
-| テスト補助       | `docs/test-architecture.md`                            | テストサイズ、coverage、CI artifact、段階計画                                                                                               |
-| 開発正本         | `docs/dev-rule.md`                                     | toolchain、ローカル起動、コマンド、Git運用                                                                                                  |
-| 最終確認         | `docs/post-mortem/lessons.md`                          | 作業完了前に該当カードだけ確認する再発防止チェック                                                                                          |
-| 公開運用原則     | `docs/ops/README.md`                                   | public repo に置ける運用原則                                                                                                                |
+| 種別 | ファイル | 責務 |
+| --- | --- | --- |
+| 索引 | `docs/README.md` | 読む順、文書境界、public/private境界 |
+| 要求正本 | `docs/requirements/base.md` | 業務要件、MVP範囲、CSV/TSV列順 |
+| 要求正本 | `docs/requirements/system-design.md` | 技術構成、非機能、運用方針の高レベル要求 |
+| 要求正本 | `docs/requirements/series-comparison.md` | 戦績比較ページの要求、指標、API方針 |
+| 要求正本 | `docs/requirements/series-analysis-batch.md` | 戦績分析の非同期ジョブ、成果物、状態表示、管理、正確性、OCR統合制約 |
+| 要求正本 | `docs/requirements/series-review-playbook.md` | 戦績比較ページ内の振り返り、行動プレイブック要求 |
+| 要求正本 | `docs/requirements/held-event-detail.md` | 開催一覧、開催詳細、試合記録・戦績比較への導線 |
+| 要求正本 | `docs/requirements/product-experience.md` | 総合戦績プラットフォームのUX、概念モデル、トップレベルIA、情報所有権、主要フロー、状態、再発防止条件 |
+| 要求正本 | `docs/requirements/design-system.md` | 新IAに適したUI方針、現行監査、foundation、component anatomy、interaction contract、移行・再発防止条件 |
+| 要求正本draft | `docs/requirements/writing-guidelines.md` | Voice / tone、Fact / Perspective / NextEventNote、UI文字列、日本語表記、writing test |
+| Application標本 | `docs/prototypes/product-experience-ia.html` | route / state / history / latest-event / OCR / conflict / background taskを実操作で検証するscenario harness。production実装の写経元ではない |
+| Pattern Library | `docs/prototypes/design-system-direction.html` | token、部品、状態、chart、画面構成の視覚・keyboard標本。業務routeや長期taskの正本にしない |
+| Design review | `docs/prototypes/design-system-review.md` | visual directionとapplication proofを分けた追認結果・残課題 |
+| 実装正本 | `docs/architecture.md` | API / web / Processing Worker runtime、OCR / 戦績分析能力の構造、依存方向、実装規約 |
+| 戦績分析実現正本 | `docs/series-analysis-realization.md` | 戦績分析のjob、queue、artifact公開、API / Web pinning、表示状態、version・release・検証の横断契約 |
+| UI正本 | `docs/ui-rule.md` | Web の意味表現、余白、操作、motion、状態表示、画面遷移の一貫性 |
+| ドメイン正本 | `docs/domain-rule.md` | 用語、状態遷移、不変条件、認証主体と試合参加者の区別 |
+| DB正本 | `docs/db-rule.md` | 共有DB所有権、migration前提、consumer contract |
+| Queue正本 | `docs/redis-streams-ocr-contract.md` | Redis Streams、outbox、payload、ack / retry 契約 |
+| Schema正本 | `docs/schemas/*.schema.json`, `docs/schemas/fixtures/` | Redis payload、OCR hints、戦績分析artifact / queueの機械可読契約と共有fixture |
+| テスト正本 | `docs/test-rule.md` | 変更種別ごとのテスト選択、oracle、品質ゲート判断 |
+| テスト補助 | `docs/test-architecture.md` | テストサイズ、coverage、CI artifact、段階計画 |
+| 開発正本 | `docs/dev-rule.md` | toolchain、ローカル起動、コマンド、Git運用 |
+| 最終確認 | `docs/post-mortem/lessons.md` | 作業完了前に該当カードだけ確認する再発防止チェック |
+| 公開運用原則 | `docs/ops/README.md` | public repo に置ける運用原則 |
 
 ## 4. 正本の分け方
 

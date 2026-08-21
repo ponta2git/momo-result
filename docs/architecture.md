@@ -19,7 +19,7 @@
 ## 1. System Map
 
 | 領域 | 場所 | 主な技術 | 責務 |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | web | `apps/web` | React 19, React Router 7, TanStack Query 5, Zod, Tailwind CSS 4, Base UI | SPA、入力、確認、CSV/TSV取得 |
 | api | `apps/api` | Scala 3, Tapir, http4s, Cats Effect, Doobie | HTTP API、認証、業務usecase、DB/Redis接続 |
 | Processing Worker runtime | `apps/processing-worker` | Rust, Cargo, Tesseract | 戦績分析 / OCRのconsumer、attempt子process、DB / Redis / object storageとの副作用 |
@@ -243,7 +243,7 @@ web の import 境界は `apps/web/scripts/check-architecture-imports.mjs`、mod
 指し、OCR / Analysisの違いはworker roleまたはcapabilityとして表す。
 
 | 用語 | 意味 |
-|---|---|
+| --- | --- |
 | Processing Worker runtime | `apps/processing-worker`のdeployable image / runtime shell |
 | processing parent process | `worker` commandで起動する長寿命OS process。全副作用と長寿命taskを所有する |
 | Analysis Worker role / OCR Worker role | 親process内の論理的な処理担当。consumer、能力固有control / adapter、attempt子adapterから成り、OS processそのものではない |
@@ -265,7 +265,7 @@ consume -> delivery検証 -> DB claim / lease / shared slot -> attempt子process
 ```
 
 | 関心事 | processing parent process | attempt child process |
-|---|---|---|
+| --- | --- | --- |
 | DB / Redis / object storage | claim、lease、fence、状態遷移、queue、object取得、outboxを所有 | 分析入力のread-only snapshot以外は持たず、durable writeやqueue accessをしない |
 | process lifecycle | spawn、cgroup attach確認、heartbeat、timeout、preemption、termination、reapを所有 | 1 attemptだけを実行し、親liveness喪失時は終了する |
 | 入力 | deliveryとDB正本を検証し、boundedなread-only ingressだけを渡す | 渡されたattempt identityと入力範囲から能力処理を行う |

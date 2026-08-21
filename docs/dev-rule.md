@@ -18,7 +18,7 @@
 ## 1. Toolchain
 
 | 領域 | ツール |
-|---|---|
+| --- | --- |
 | web | Node.js 24, pnpm 10.34.5 |
 | api | Java 25, sbt 1.12 系 |
 | Processing Worker runtime | Rust 1.97, Cargo, Tesseract; local runtime は Docker/Linux |
@@ -149,7 +149,7 @@ pnpm web:dev
 ### Root
 
 | 目的 | コマンド |
-|---|---|
+| --- | --- |
 | API + Web dev | `pnpm dev` |
 | local dev launcher test | `pnpm dev:launcher:test` |
 | web dev | `pnpm web:dev` |
@@ -263,7 +263,7 @@ sbt apiR2Quality
 ## 5. Change Gates
 
 | 変更 | 必須ゲート |
-|---|---|
+| --- | --- |
 | web production code | `pnpm --filter web format:check`, `pnpm --filter web lint`, `pnpm --filter web typecheck`, `pnpm --filter web test:run` |
 | web API DTO / generated type | `pnpm --filter web generate:api`, `pnpm --filter web lint`, `pnpm --filter web typecheck`, `pnpm --filter web test:run` |
 | web build/runtime config | web production code gate + `pnpm --filter web build` |
@@ -288,7 +288,7 @@ sbt apiR2Quality
 現行CIの代表:
 
 | Workflow | 実行内容 |
-|---|---|
+| --- | --- |
 | `.github/workflows/pr.yml` | 変更範囲の分類、対象workflowの起動、単一のfail-closed PR gate集約 |
 | `.github/workflows/public-safety.yml` | public repository safety check |
 | `.github/workflows/web.yml` | format、API型生成を含むlint、typecheck、Vitestまたはcoverage付きVitest、build |

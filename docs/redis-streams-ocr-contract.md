@@ -18,7 +18,7 @@
 ## 1. Ownership
 
 | 契約 | Owner | 正本 |
-|---|---|---|
+| --- | --- | --- |
 | Redis Stream payload v2 | API produces / Rust OCR Worker role consumes | この文書、v2 JSON Schema、Scala / Rust contract tests |
 | Durable enqueue intent | API | `ocr_queue_outbox` |
 | OCR job state | DB | `ocr_jobs` |
@@ -31,7 +31,7 @@ Redis は配送路であり、ジョブ状態の正本ではない。OCR Worker 
 ## 2. Redis Topology
 
 | 項目 | 既定値 | env |
-|---|---|---|
+| --- | --- | --- |
 | v2 job stream | `momo:ocr:v2:jobs` | `OCR_REDIS_V2_STREAM` |
 | v2 dead-letter stream | `momo:ocr:v2:jobs:dead` | `OCR_REDIS_V2_DEAD_LETTER_STREAM` |
 | Outbox cold recovery | `300s` | `OCR_OUTBOX_RECOVERY_INTERVAL_SECONDS` |
@@ -57,7 +57,7 @@ Rules:
 v2はRust OCR Worker role専用のobject-storage契約である。すべてのRedis field valueはstringとし、local path、bucket名、URL、credentialを含めない。
 
 | Field | Required | Meaning |
-|---|---:|---|
+| --- | --- | --- |
 | `schemaVersion` | yes | `"2"` 固定 |
 | `jobId` | yes | DB `ocr_jobs.id`。OCR Worker roleのidempotency key。1-128 printable ASCII chars |
 | `draftId` | yes | DB `ocr_drafts.id`。1-128 printable ASCII chars |
@@ -95,7 +95,7 @@ OCR capabilityはhintsを補助情報として扱う。画面種別、プレイ�
 上限:
 
 | Field | Limit |
-|---|---|
+| --- | --- |
 | `gameTitle`, `layoutFamily` | 1-64 chars |
 | `knownPlayerAliases` | max 4 |
 | `knownPlayerAliases[].memberId` | 1-128 chars |
@@ -155,7 +155,7 @@ outbox、ACKを扱わない。
 Ack exceptions:
 
 | 状態 | worker動作 |
-|---|---|
+| --- | --- |
 | unknown `jobId` | DB正本に存在しない残骸として ack して破棄 |
 | already terminal | 再実行せず ack |
 | already running | 他workerの実行権を尊重し、再実行も失敗書き込みもせず ack |

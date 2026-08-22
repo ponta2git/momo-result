@@ -214,9 +214,11 @@ jobs:
               http4sPatchVersion: $http4sPatchVersion
             }' \
             > "${IMAGE_ARTIFACT_NAME}/candidate.json"
-          printf 'artifact_name=%s\n' "${IMAGE_ARTIFACT_NAME}" >> "${GITHUB_OUTPUT}"
-          printf 'image_ref=%s\n' "${IMAGE_REF}" >> "${GITHUB_OUTPUT}"
-          printf 'run_attempt=%s\n' "${GITHUB_RUN_ATTEMPT}" >> "${GITHUB_OUTPUT}"
+          {
+            printf 'artifact_name=%s\n' "${IMAGE_ARTIFACT_NAME}"
+            printf 'image_ref=%s\n' "${IMAGE_REF}"
+            printf 'run_attempt=%s\n' "${GITHUB_RUN_ATTEMPT}"
+          } >> "${GITHUB_OUTPUT}"
 
       - name: Upload runtime image
         id: image-upload

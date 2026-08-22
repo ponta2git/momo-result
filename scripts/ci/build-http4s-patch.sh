@@ -53,14 +53,34 @@ actual_ref="$(git -C "${source_dir}" rev-parse HEAD)"
 }
 
 version_log="${tmp_dir}/version.log"
-if ! (cd "${source_dir}" && "${sbt_args[@]}" -batch 'show version' > "${version_log}" 2>&1); then
+if ! (cd "${source_dir}" && "${sbt_args[@]}" -batch 'show ThisBuild / version' > "${version_log}" 2>&1); then
   cat "${version_log}" >&2
   exit 1
 fi
-version="$(sed 's/^\[info\] //' "${version_log}" |
-  awk '$0 == "version" { getline; gsub(/^[[:space:]]+/, ""); print; exit }')"
+version="$(awk '
+  function clean(line) {
+    gsub(/\r/, "", line)
+    sub(/^\[info\][[:space:]]*/, "", line)
+    gsub(/^[[:space:]]+|[[:space:]]+$/, "", line)
+    return line
+  }
+  {
+    line = clean($0)
+    if (awaiting_value) {
+      if (line ~ /^[0-9A-Za-z][0-9A-Za-z.+-]*$/) {
+        print line
+        exit
+      }
+      awaiting_value = 0
+    }
+    if (line == "ThisBuild / version" || line == "version") {
+      awaiting_value = 1
+    }
+  }
+' "${version_log}")"
 [[ "${version}" =~ ^[0-9A-Za-z][0-9A-Za-z.+-]*$ ]] || {
   echo "Could not determine a valid http4s version." >&2
+  tail -n 40 "${version_log}" >&2
   exit 1
 }
 

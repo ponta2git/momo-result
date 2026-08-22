@@ -60,21 +60,23 @@ fi
 version="$(awk '
   function clean(line) {
     gsub(/\r/, "", line)
+    gsub(/\033\[[0-9;]*[[:alpha:]]/, "", line)
     sub(/^\[info\][[:space:]]*/, "", line)
     gsub(/^[[:space:]]+|[[:space:]]+$/, "", line)
     return line
   }
   {
     line = clean($0)
-    if (awaiting_value) {
-      if (line ~ /^[0-9A-Za-z][0-9A-Za-z.+-]*$/) {
-        print line
-        exit
-      }
-      awaiting_value = 0
+    # SBT prints the value for each project and may print the final
+    # `ThisBuild / version` key without a following value. Keep the last
+    # version-shaped value instead of assuming a key/value pair layout.
+    if (line ~ /^[0-9A-Za-z][0-9A-Za-z.+-]*$/) {
+      candidate = line
     }
-    if (line == "ThisBuild / version" || line == "version") {
-      awaiting_value = 1
+  }
+  END {
+    if (candidate != "") {
+      print candidate
     }
   }
 ' "${version_log}")"

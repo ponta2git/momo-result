@@ -4,6 +4,7 @@ ARG NODE_IMAGE=node:24-bookworm-slim@sha256:c2d5ade763cacfb03fe9cb8e8af5d1be5041
 ARG JAVA_JDK_IMAGE=eclipse-temurin:25-jdk-noble@sha256:02aba7518e48cfed96403ac9634e357a40329d6ec9418feb0b32636e43b245a1
 ARG JAVA_JRE_IMAGE=eclipse-temurin:25-jre-noble@sha256:f9bd8815e73632c22985ebb133ec49b9fc4ad5ffe0657594ac02748ad0431ab7
 ARG GO_IMAGE=golang:1.26.6-bookworm@sha256:116d58cbd88c1297624acc6e967a060012422bacf9930927e23fb719189c6f36
+ARG HTTP4S_REPOSITORY=https://github.com/ponta2git/http4s.git
 ARG CADDY_VERSION=v2.11.4
 ARG CADDY_X_NET_VERSION=v0.56.0
 ARG CADDY_X_TEXT_VERSION=v0.39.0
@@ -47,14 +48,32 @@ RUN SBT_VERSION="$(sed -n 's/^sbt.version=//p' project/build.properties)" \
 COPY apps/api/project/plugins.sbt project/plugins.sbt
 COPY apps/api/build.sbt build.sbt
 
+FROM api-deps AS http4s-builder
+ARG HTTP4S_REPOSITORY
+WORKDIR /workspace/http4s
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends git \
+  && rm -rf /var/lib/apt/lists/*
+COPY .http4s-ref /workspace/.http4s-ref
+COPY scripts/ci/build-http4s-patch.sh /usr/local/bin/build-http4s-patch
+RUN chmod 0755 /usr/local/bin/build-http4s-patch \
+  && HTTP4S_REPOSITORY="${HTTP4S_REPOSITORY}" \
+    HTTP4S_REF_FILE=/workspace/.http4s-ref \
+    HTTP4S_SCALA_VERSION=3.3.6 \
+    HTTP4S_PATCH_OUTPUT_DIR=/opt/http4s-patch \
+    /usr/local/bin/build-http4s-patch
+
 FROM api-deps AS api-builder
+COPY --from=http4s-builder /root/.ivy2/local /root/.ivy2/local
+COPY --from=http4s-builder /opt/http4s-patch /opt/http4s-patch
 COPY apps/api/src/main src/main
 COPY apps/api/src/openapi src/openapi
 COPY apps/api/openapi.yaml openapi.yaml
 RUN --mount=type=cache,id=sbt-boot,target=/root/.sbt,sharing=locked \
   --mount=type=cache,id=coursier-cache,target=/root/.cache/coursier,sharing=locked \
   --mount=type=cache,id=ivy-cache,target=/root/.ivy2/cache,sharing=locked \
-  sbt apiOpenApiCheck stage
+  export HTTP4S_PATCH_VERSION="$(cat /opt/http4s-patch/version.txt)" \
+  && sbt "-Dmomo.http4s.patched.version=${HTTP4S_PATCH_VERSION}" apiOpenApiCheck stage
 
 FROM ${GO_IMAGE} AS runtime-tool-builder
 WORKDIR /workspace/tools
@@ -132,6 +151,7 @@ RUN apt-get update \
 COPY --from=api-builder --chown=momo:momo /workspace/apps/api/target/universal/stage /opt/momo-result/api
 COPY --from=web-builder --chown=momo:momo /workspace/apps/web/dist /srv/momo-result/web
 COPY --chown=momo:momo contracts/runtime-db-contract.json /opt/momo-result/contracts/runtime-db-contract.json
+COPY --from=http4s-builder --chown=momo:momo /opt/http4s-patch /opt/momo-result/contracts/http4s-patch
 COPY deploy/Caddyfile /etc/caddy/Caddyfile.template
 COPY --from=runtime-tool-builder --chown=momo:momo /out/momo-runtime-tool /opt/momo-result/bin/momo-runtime-tool
 RUN chmod 0755 /opt/momo-result/bin/momo-runtime-tool \

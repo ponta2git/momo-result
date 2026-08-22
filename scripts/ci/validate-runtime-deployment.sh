@@ -17,7 +17,7 @@ expected_commit="$4"
 [[ "${expected_commit}" =~ ^[0-9a-f]{40}$ ]] || exit 1
 
 schema_version="$(
-  jq -er '.schemaVersion | select(type == "number" and (. == 1 or . == 2))' \
+  jq -er '.schemaVersion | select(type == "number" and (. == 1 or . == 2 or . == 3))' \
     "${metadata_file}"
 )" || {
   echo "Unsupported runtime deployment metadata schema." >&2
@@ -69,10 +69,34 @@ jq -e \
           "sourceArtifactId",
           "sourceArtifactName"
         ]
+      elif $schemaVersion == 2 then
+        keys == [
+          "commit",
+          "configSha256",
+          "imageId",
+          "imageRef",
+          "manifestArtifactDigest",
+          "manifestArtifactId",
+          "manifestArtifactName",
+          "manifestSha256",
+          "registryDigest",
+          "registryRef",
+          "runAttempt",
+          "runId",
+          "schemaVersion",
+          "sourceArtifactDigest",
+          "sourceArtifactId",
+          "sourceArtifactName",
+          "sourceRunAttempt"
+        ]
       else
         keys == [
           "commit",
           "configSha256",
+          "http4sPatchRepository",
+          "http4sPatchScalaVersion",
+          "http4sPatchSourceSha",
+          "http4sPatchVersion",
           "imageId",
           "imageRef",
           "manifestArtifactDigest",
@@ -97,6 +121,13 @@ jq -e \
     .runAttempt == $runAttempt and
     ($schemaVersion == 1 or .sourceRunAttempt == $sourceRunAttempt) and
     .imageRef == $imageRef and
+    ($schemaVersion != 3 or
+      (
+        .http4sPatchRepository == "https://github.com/ponta2git/http4s.git" and
+        .http4sPatchScalaVersion == "3.3.6" and
+        (.http4sPatchSourceSha | type == "string" and test("^[0-9a-f]{40}$")) and
+        (.http4sPatchVersion | type == "string" and test("^[0-9A-Za-z][0-9A-Za-z.+-]*$"))
+      )) and
     .sourceArtifactName == $sourceName and
     .manifestArtifactName == $manifestName and
     (.imageId | type == "string" and test("^sha256:[0-9a-f]{64}$")) and

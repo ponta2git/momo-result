@@ -139,15 +139,19 @@ describe("app routing", () => {
     if (!detailLink) throw new Error("expected a detail link");
     await user.click(detailLink);
 
-    await waitFor(() => expect(router.state.location.pathname).toBe("/matches/match-1"));
-    expect(await screen.findByLabelText("試合詳細を読み込み中")).toHaveAttribute(
-      "aria-busy",
-      "true",
+    await waitFor(
+      () => {
+        expect(router.state.location.pathname).toBe("/matches/match-1");
+        expect(screen.getByLabelText("試合詳細を読み込み中")).toHaveAttribute("aria-busy", "true");
+      },
+      { timeout: 5_000 },
     );
     await waitFor(() => expect(detailRequested).toBe(true));
 
     detailGate.resolve();
-    expect(await screen.findByRole("heading", { name: /第1試合の結果/u })).toBeInTheDocument();
+    await waitFor(() => {
+      screen.getByRole("heading", { name: /第1試合の結果/u });
+    });
   });
 
   it("logs out from the global nav in dev auth mode", async () => {

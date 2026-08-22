@@ -20,7 +20,8 @@ import momo.api.domain.GameTitle
 import momo.api.domain.ids.{AccountId, GameTitleId}
 
 final class PostgresSeriesAnalysisQueueOutboxRepositorySpec extends IntegrationSuite:
-  private val now = Instant.parse("2026-08-09T12:00:00Z")
+  // Keep the fixture clock ahead of the database DEFAULT now() used by new outbox rows.
+  private val now = Instant.parse("2099-08-09T12:00:00Z")
   private val titleId = GameTitleId.unsafeFromString("title-analysis-outbox")
   private def repo = PostgresSeriesAnalysisQueueOutboxRepository[IO](transactor)
 

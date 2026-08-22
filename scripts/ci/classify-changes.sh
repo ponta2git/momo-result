@@ -42,7 +42,7 @@ while IFS= read -r -d '' path; do
       runtime=true
       analysis=true
       ;;
-    .momo-db-ref | scripts/ci/apply-momo-db-migrations.sh)
+    .momo-db-ref | .http4s-ref | scripts/ci/apply-momo-db-migrations.sh)
       api=true
       analysis=true
       runtime=true

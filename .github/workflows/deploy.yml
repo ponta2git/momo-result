@@ -153,6 +153,22 @@ jobs:
           mkdir -p "${IMAGE_ARTIFACT_NAME}"
           printf "%s\n" "${IMAGE_REF}" > "${IMAGE_ARTIFACT_NAME}/image-ref.txt"
           docker image inspect "${IMAGE_REF}" --format '{{.Id}}' > "${IMAGE_ARTIFACT_NAME}/image-id.txt"
+          http4s_repository="$(docker run --rm --entrypoint /usr/bin/cat "${IMAGE_REF}" \
+            /opt/momo-result/contracts/http4s-patch/repository.txt)"
+          http4s_source_sha="$(docker run --rm --entrypoint /usr/bin/cat "${IMAGE_REF}" \
+            /opt/momo-result/contracts/http4s-patch/source-sha.txt)"
+          http4s_version="$(docker run --rm --entrypoint /usr/bin/cat "${IMAGE_REF}" \
+            /opt/momo-result/contracts/http4s-patch/version.txt)"
+          http4s_scala_version="$(docker run --rm --entrypoint /usr/bin/cat "${IMAGE_REF}" \
+            /opt/momo-result/contracts/http4s-patch/scala-version.txt)"
+          jq -n \
+            --arg repository "${http4s_repository}" \
+            --arg scalaVersion "${http4s_scala_version}" \
+            --arg sourceSha "${http4s_source_sha}" \
+            --arg version "${http4s_version}" \
+            '{repository: $repository, scalaVersion: $scalaVersion,
+              sourceSha: $sourceSha, version: $version}' \
+            > "${IMAGE_ARTIFACT_NAME}/http4s-patch.json"
 
       - name: Save runtime image
         run: |
@@ -167,23 +183,35 @@ jobs:
           image_id="$(sed -n '1p' "${IMAGE_ARTIFACT_NAME}/image-id.txt")"
           tar_sha="$(cut -d ' ' -f 1 "${IMAGE_ARTIFACT_NAME}/image-tar.sha256")"
           config_sha="$(sha256sum fly.toml | cut -d ' ' -f 1)"
+          http4s_repository="$(jq -r '.repository' "${IMAGE_ARTIFACT_NAME}/http4s-patch.json")"
+          http4s_scala_version="$(jq -r '.scalaVersion' "${IMAGE_ARTIFACT_NAME}/http4s-patch.json")"
+          http4s_source_sha="$(jq -r '.sourceSha' "${IMAGE_ARTIFACT_NAME}/http4s-patch.json")"
+          http4s_version="$(jq -r '.version' "${IMAGE_ARTIFACT_NAME}/http4s-patch.json")"
           jq -n \
             --arg commit "${GITHUB_SHA}" \
             --arg configSha256 "${config_sha}" \
             --arg imageId "${image_id}" \
             --arg imageRef "${IMAGE_REF}" \
+            --arg http4sPatchRepository "${http4s_repository}" \
+            --arg http4sPatchScalaVersion "${http4s_scala_version}" \
+            --arg http4sPatchSourceSha "${http4s_source_sha}" \
+            --arg http4sPatchVersion "${http4s_version}" \
             --arg runId "${GITHUB_RUN_ID}" \
             --arg runAttempt "${GITHUB_RUN_ATTEMPT}" \
             --arg tarSha256 "${tar_sha}" \
             '{
-              schemaVersion: 1,
+              schemaVersion: 2,
               commit: $commit,
               runId: $runId,
               runAttempt: $runAttempt,
               imageRef: $imageRef,
               imageId: $imageId,
               tarSha256: $tarSha256,
-              configSha256: $configSha256
+              configSha256: $configSha256,
+              http4sPatchRepository: $http4sPatchRepository,
+              http4sPatchScalaVersion: $http4sPatchScalaVersion,
+              http4sPatchSourceSha: $http4sPatchSourceSha,
+              http4sPatchVersion: $http4sPatchVersion
             }' \
             > "${IMAGE_ARTIFACT_NAME}/candidate.json"
           printf 'artifact_name=%s\n' "${IMAGE_ARTIFACT_NAME}" >> "${GITHUB_OUTPUT}"
@@ -650,6 +678,10 @@ jobs:
             "${GITHUB_SHA}" "${IMAGE_REF}"
           image_id="$(sed -n '1p' "${IMAGE_ARTIFACT_NAME}/image-id.txt")"
           config_sha="$(jq -r '.configSha256' "${IMAGE_ARTIFACT_NAME}/candidate.json")"
+          http4s_repository="$(jq -r '.http4sPatchRepository' "${IMAGE_ARTIFACT_NAME}/candidate.json")"
+          http4s_scala_version="$(jq -r '.http4sPatchScalaVersion' "${IMAGE_ARTIFACT_NAME}/candidate.json")"
+          http4s_source_sha="$(jq -r '.http4sPatchSourceSha' "${IMAGE_ARTIFACT_NAME}/candidate.json")"
+          http4s_version="$(jq -r '.http4sPatchVersion' "${IMAGE_ARTIFACT_NAME}/candidate.json")"
           manifest_sha="$(sha256sum "${IMAGE_ARTIFACT_NAME}/registry-manifest.json" | cut -d ' ' -f 1)"
           manifest_artifact_digest="$(
             scripts/ci/canonicalize-artifact-digest.sh "${MANIFEST_ARTIFACT_DIGEST}"
@@ -662,6 +694,10 @@ jobs:
             --arg configSha256 "${config_sha}" \
             --arg imageId "${image_id}" \
             --arg imageRef "${IMAGE_REF}" \
+            --arg http4sPatchRepository "${http4s_repository}" \
+            --arg http4sPatchScalaVersion "${http4s_scala_version}" \
+            --arg http4sPatchSourceSha "${http4s_source_sha}" \
+            --arg http4sPatchVersion "${http4s_version}" \
             --arg manifestArtifactDigest "${manifest_artifact_digest}" \
             --arg manifestArtifactId "${MANIFEST_ARTIFACT_ID}" \
             --arg manifestArtifactName "runtime-image-registry-manifest-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
@@ -675,7 +711,7 @@ jobs:
             --arg sourceArtifactName "${IMAGE_ARTIFACT_NAME}" \
             --arg sourceRunAttempt "${RUNTIME_CANDIDATE_RUN_ATTEMPT}" \
             '{
-              schemaVersion: 2,
+              schemaVersion: 3,
               commit: $commit,
               runId: $runId,
               runAttempt: $runAttempt,
@@ -685,6 +721,10 @@ jobs:
               registryDigest: $registryDigest,
               registryRef: $registryRef,
               configSha256: $configSha256,
+              http4sPatchRepository: $http4sPatchRepository,
+              http4sPatchScalaVersion: $http4sPatchScalaVersion,
+              http4sPatchSourceSha: $http4sPatchSourceSha,
+              http4sPatchVersion: $http4sPatchVersion,
               sourceArtifactName: $sourceArtifactName,
               sourceArtifactId: $sourceArtifactId,
               sourceArtifactDigest: $sourceArtifactDigest,

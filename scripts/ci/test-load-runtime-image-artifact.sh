@@ -12,6 +12,9 @@ readonly current_run_attempt=3
 readonly commit=0123456789abcdef0123456789abcdef01234567
 readonly image_ref="registry.fly.io/momo-result:${commit}-${run_id}-${run_attempt}"
 readonly image_id=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+readonly http4s_ref=23a6bcdadd133c16e4b465fc5d21d32e8753261c
+readonly http4s_version=0.23.36-5-23a6bcd-SNAPSHOT
+readonly http4s_scala_version=3.3.6
 artifact_dir="${test_dir}/runtime-image-${run_id}-${run_attempt}"
 fake_bin="${test_dir}/bin"
 mkdir -p "${artifact_dir}" "${fake_bin}"
@@ -37,6 +40,12 @@ write_valid_artifact() {
   printf '%s  %s\n' "${tar_sha}" momo-result-image.tar.gz \
     > "${artifact_dir}/image-tar.sha256"
   jq -n \
+    '{repository: "https://github.com/ponta2git/http4s.git",
+      scalaVersion: $scalaVersion, sourceSha: $ref, version: $version}' \
+    --arg ref "${http4s_ref}" --arg scalaVersion "${http4s_scala_version}" \
+    --arg version "${http4s_version}" \
+    > "${artifact_dir}/http4s-patch.json"
+  jq -n \
     --arg commit "${commit}" \
     --arg configSha256 "${config_sha}" \
     --arg imageId "${image_id}" \
@@ -45,16 +54,23 @@ write_valid_artifact() {
     --arg runId "${run_id}" \
     --arg tarSha256 "${tar_sha}" '
       {
-        schemaVersion: 1,
+        schemaVersion: 2,
         commit: $commit,
         runId: $runId,
         runAttempt: $runAttempt,
         imageRef: $imageRef,
         imageId: $imageId,
         tarSha256: $tarSha256,
-        configSha256: $configSha256
+        configSha256: $configSha256,
+        http4sPatchRepository: "https://github.com/ponta2git/http4s.git",
+        http4sPatchScalaVersion: $http4sScalaVersion,
+        http4sPatchSourceSha: $http4sRef,
+        http4sPatchVersion: $http4sVersion
       }
-    ' > "${artifact_dir}/candidate.json"
+    ' --arg http4sRef "${http4s_ref}" \
+    --arg http4sScalaVersion "${http4s_scala_version}" \
+    --arg http4sVersion "${http4s_version}" \
+    > "${artifact_dir}/candidate.json"
 }
 
 run_loader() {
@@ -74,6 +90,15 @@ run_loader
 printf '%s\n' tampered >> "${artifact_dir}/momo-result-image.tar.gz"
 if run_loader > /dev/null 2>&1; then
   echo "A tampered runtime image archive was accepted." >&2
+  exit 1
+fi
+
+write_valid_artifact
+jq '.sourceSha = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"' \
+  "${artifact_dir}/http4s-patch.json" > "${artifact_dir}/tampered-patch.json"
+mv "${artifact_dir}/tampered-patch.json" "${artifact_dir}/http4s-patch.json"
+if run_loader > /dev/null 2>&1; then
+  echo "Tampered http4s patch provenance was accepted." >&2
   exit 1
 fi
 

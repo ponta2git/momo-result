@@ -47,6 +47,21 @@ lazy val apiOpenApiCheck = taskKey[Unit]("Check that openapi.yaml matches genera
 lazy val OpenApi = config("openapi").hide.extend(Compile)
 
 lazy val nettyVersion = "4.2.15.Final"
+lazy val http4sVersion = "0.23.36"
+lazy val http4sPatchedVersion =
+  sys.props
+    .get("momo.http4s.patched.version")
+    .orElse(sys.env.get("MOMO_HTTP4S_PATCHED_VERSION"))
+    .filter(_.nonEmpty)
+lazy val http4sEmberVersion = http4sPatchedVersion.getOrElse(http4sVersion)
+lazy val http4sPatchedOverrides = http4sPatchedVersion.toSeq.flatMap { version =>
+  Seq(
+    "org.http4s" %% "http4s-core" % version,
+    "org.http4s" %% "http4s-server" % version,
+    "org.http4s" %% "http4s-ember-core" % version,
+    "org.http4s" %% "http4s-ember-server" % version,
+  )
+}
 lazy val isMacOs =
   sys.props.getOrElse("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("mac")
 
@@ -138,7 +153,6 @@ lazy val root = (project in file("."))
       val circeVersion = "0.14.15"
       val cirisVersion = "3.15.0"
       val doobieVersion = "1.0.0-RC12"
-      val http4sVersion = "0.23.36"
       val ironVersion = "3.3.1"
       val logbackVersion = "1.5.34"
       val logstashEncoderVersion = "9.0"
@@ -159,7 +173,7 @@ lazy val root = (project in file("."))
         "software.amazon.awssdk" % "url-connection-client" % awsSdkVersion,
         "is.cir" %% "ciris" % cirisVersion,
         "org.typelevel" %% "log4cats-slf4j" % log4catsVersion,
-        "org.http4s" %% "http4s-ember-server" % http4sVersion,
+        "org.http4s" %% "http4s-ember-server" % http4sEmberVersion,
         "org.http4s" %% "http4s-circe" % http4sVersion,
         "com.softwaremill.sttp.tapir" %% "tapir-core" % tapirVersion,
         "com.softwaremill.sttp.tapir" %% "tapir-json-circe" % tapirVersion,
@@ -202,7 +216,7 @@ lazy val root = (project in file("."))
         "org.postgresql" % "postgresql" % "42.7.12",
         "tools.jackson.core" % "jackson-core" % jacksonVersion,
         "tools.jackson.core" % "jackson-databind" % jacksonVersion,
-      )
+      ) ++ http4sPatchedOverrides
     },
     apiOpenApi := {
       val output = baseDirectory.value / "openapi.yaml"

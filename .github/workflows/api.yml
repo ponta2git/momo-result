@@ -46,6 +46,17 @@ jobs:
       - name: Setup sbt
         uses: sbt/setup-sbt@8feba82adc7f01ddcf8165b86f778bdb5b82cebc # v1.5.7
 
+      - name: Build fixed http4s Fork artifacts
+        working-directory: ${{ github.workspace }}
+        run: |
+          HTTP4S_REPOSITORY=https://github.com/ponta2git/http4s.git \
+            HTTP4S_SCALA_VERSION=3.3.6 \
+            HTTP4S_RUN_TESTS=1 \
+            HTTP4S_PATCH_OUTPUT_DIR="${RUNNER_TEMP}/http4s-patch" \
+            scripts/ci/build-http4s-patch.sh
+          printf 'MOMO_HTTP4S_PATCHED_VERSION=%s\n' \
+            "$(cat "${RUNNER_TEMP}/http4s-patch/version.txt")" >> "${GITHUB_ENV}"
+
       - name: Format check
         timeout-minutes: 5
         run: sbt scalafmtCheckAll

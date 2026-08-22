@@ -147,7 +147,9 @@ describe("app routing", () => {
     await waitFor(() => expect(detailRequested).toBe(true));
 
     detailGate.resolve();
-    expect(await screen.findByRole("heading", { name: /第1試合の結果/u })).toBeInTheDocument();
+    await waitFor(() => {
+      screen.getByRole("heading", { name: /第1試合の結果/u });
+    });
   });
 
   it("logs out from the global nav in dev auth mode", async () => {

@@ -1,152 +1,48 @@
 # DB利用規約
 
-目的: 共有 PostgreSQL の所有権、consumer contract、migration 順序を判断するための正本。
-
-## AI作業導線
-
-この文書はconsumerが依存してよいDB前提と、その検証順を決める。DDLの現在値はこのrepoでは所有しない。
-
-| 項目 | 到達先 / 判断 |
-| --- | --- |
-| 第一読 | table / column / seed / nullable / default、PostgreSQL repository、Doobie query、worker query、DB-backed APIを触るときに読む。 |
-| この文書だけで決めること | schema owner、consumer contract、SQLの危険条件、migrationとconsumerの順序。 |
-| 常に併読 | `docs/test-rule.md` と `docs/dev-rule.md`。DB前提を変えるなら、契約と実行gateを同じ変更で特定する。 |
-| 条件付き併読 | 状態遷移は `docs/domain-rule.md`、OCR queueは `docs/redis-streams-ocr-contract.md`、戦績分析のjob / artifactは `docs/series-analysis-realization.md` と `docs/requirements/series-analysis-batch.md`。 |
-| 実行正本 | schema / migration / seedは `../momo-db`、consumer queryは `apps/api` と `apps/processing-worker`、存在前提は `DbContractSpec`。 |
-| 検証先 | DB-backed testの選択は `docs/test-rule.md`、コマンドは `docs/dev-rule.md`。実PostgreSQLで未実行なら、DB挙動は未検証として扱う。 |
+目的: 共有 PostgreSQL の所有権、consumer contract、migration 順序を判断する。DDL の現在値は `../momo-db`、query の現在値は各 consumer、検証コマンドは `docs/dev-rule.md` を正本とする。
 
 ## 1. Ownership
 
-| 対象 | 正本 | このrepoの責務 |
-| --- | --- | --- |
-| schema / migration / seed | `../momo-db` | consumerとして必要な前提を明示し、contract testで検知する |
-| PostgreSQL query | `apps/api`, `apps/processing-worker` | 現在のschema前提に合わせて実行し、PostgreSQL固有挙動をintegration testで確認する |
-| DB rowの業務意味論 | `docs/domain-rule.md` | API / worker / web が同じ意味で扱う |
+- schema、migration、seed は `../momo-db` が所有する。この repository に migration SQL を複製しない。
+- この repository は API / worker の query と、依存する DB 前提の contract test を所有する。
+- migration の存在と接続先への適用済み状態は別々に確認する。
+- Testcontainers、CI、E2E は `momo-db` の migration を適用した DB を使う。
+- row の業務意味と状態遷移は `docs/domain-rule.md`、分析 job / artifact は `docs/requirements/series-analysis-batch.md` を正本とする。
 
-- Neon PostgreSQL は summit アプリと共有する。
-- このリポジトリは DB schema を所有しない。必要な schema 変更は先に `momo-db` へ入れる。
-- `momo-db` に migration が存在することと、接続先DBに適用済みであることは別問題として確認する。
-- 本repo側で migration SQL を複製しない。Testcontainers / CI / E2E は `momo-db` の migration を適用してから実行する。
+## 2. Durable State Rules
 
-## 2. Tables Consumed By This App
+- 認証主体、試合参加者、開催回、試合、下書き、OCR job、分析 job の意味を table 名や nullable だけから推測しない。
+- OCR / 分析 job と成果物の状態は DB を正本とし、Redis を配送路に限定する。
+- 画像実体、bucket / public URL、credential、OCR raw text 全文を DB 契約にしない。非公開の opaque object key と検証・保持 metadata だけを保存する。
+- OCR job の terminal 遷移が下書き表示状態を変える場合は、両方を同じ transaction で更新する。read 時に job 履歴から状態を再構成しない。
+- 試合確定、確定済み試合の更新・削除と、対象作品の分析再計算 intent は同じ transaction で確定する。
+- outbox writer は transaction 内で外部 I/O を行わず、commit 後にだけ typed effect を返す。dispatch 失敗は業務 transaction を巻き戻さない。
+- quota、idempotency、job claim、lease、fence、pointer 切替など競合する判断は、事前 read と write を分けず DB の同じ整合性境界へ閉じる。
+- 分析の入力 revision は単調増加値とし、時刻を concurrency token にしない。入力 version、algorithm version、artifact schema version を区別する。
+- 分析成果物は作品単位で原子的に公開し、失敗時は直前の成功成果物を維持する。current / previous の確認と chunk read は cleanup と競合しない read 境界で行う。
+- terminal job の保持期間と UI の表示件数を別契約として扱い、未完了 job を履歴 cleanup しない。
 
-| 領域 | テーブル | 主なconsumer | 注意 |
-| --- | --- | --- | --- |
-| summit共有 | `members` | API | 固定4名のseedを前提にする。UI定数で局所置換しない。 |
-| summit共有 | `held_events`, `held_event_participants` | API | 本アプリ作成の `held_events.session_id` は `NULL` になり得る。 |
-| 認証・権限 | `momo_login_accounts`, `app_sessions` | API | ログイン主体と試合参加者を分ける。無効化時はsessionを削除する。 |
-| 試合結果 | `matches`, `match_players`, `match_incidents` | API | 確定済み試合の正本。4名、順位、プレー順、事件数を外部契約として検証する。 |
-| 下書き | `match_drafts` | API, worker | OCR/手入力の作業単位。terminal状態、OCR slot、画像保持情報を含む。 |
-| OCR | `source_images`, `ocr_drafts`, `ocr_jobs`, `ocr_queue_outbox` | API, worker | 画像実体ではなくobject keyと検証metadataを保持する。job状態はDBが正本。Redisは配送路。queue詳細はRedis契約文書へ寄せる。 |
-| 戦績分析 | `series_analysis_*`, `worker_execution_slots`, `matches.analysis_revision` | API, analysis worker | migration 0020〜0028が再計算intent、campaign、job / attempt、全体実行権、fence、outbox、reader / worker capability、chunk成果物、current / previousとfunction hardeningを定義する。状態はDBが正本。 |
-| マスタ | `game_titles`, `map_masters`, `season_masters`, `incident_masters`, `member_aliases` | API, worker | 作品/マップ/シーズン/事件/名寄せ。IDはFKとして永続化される。 |
-| 冪等性 | `idempotency_keys` | API | `(key, account_id, endpoint)` でreplay scopeを分ける。 |
+## 3. Consumer Contract
 
-DBに保存してよい画像関連情報は、参照ID、非公開のopaque object key、内部一時path、検証metadata、保持期限、削除時刻などの管理情報だけ。画像実体、bucket URL、長寿命URL、公開URL、OCR raw text全文をDB契約として増やさない。
+DB-backed API / worker を変更するときは、次を同じ変更内で満たす。
 
-## 3. Critical Assumptions
+- 依存する table、column、seed、nullable、default、index、constraint を特定し、新しい前提を contract test に追加する。
+- 変更した query / repository を migration 適用済みの実 PostgreSQL で実行する。未実行または skip は DB 挙動を未検証として報告する。
+- 複数 table の write は statement / lock 順と、保存後の関連 row を integration test で確認する。
+- lease、fence、slot、pointer、cleanup 競合は複数接続で stale owner と rollback を直接通す。
+- 大容量 staging は長い control lock から分離し、短い fenced transaction で完全性を再検証してから公開する。
+- 分析 publication の lock 順は execution slot、title state、job、request / artifact とし、複数 title state は作品ID順に取得する。試合 mutation と campaign 展開は execution slot を取得しない。
+- test が作る row を共通 cleanup の対象へ追加し、並列 test 間で ID、row、stream、file を分離する。
+- production が pooler / proxy を使う場合、直接 PostgreSQL への接続成功を wire 互換性の証拠にしない。
+- DB row は adapter 境界で失敗可能に decode し、不正値や SQL 例外を domain / application failure へ正規化する。
+- dynamic SQL は列挙された fragment から選び、外部入力を SQL text へ連結しない。
+- keyset pagination は filter と同じ query に stable tie-breaker を含める。exact count を引き継ぐ場合は snapshot 値であることを契約化する。
 
-新しいDB前提を増やす場合は、この章ではなく `DbContractSpec` に機械検査を追加する。この章には、実装判断に必要な要点だけ置く。
+集合演算、window / JSON 演算、dynamic fragment、`ON CONFLICT`、lock、guard 付き update、nullable FK、複数 table の filter / order / limit は DB 固有の挙動が強いため、実 PostgreSQL test を必須とする。
 
-- `members` は固定4名 seed を持つ。
-- `momo_login_accounts` はログイン可能な操作主体を表す。`player_member_id` は nullable。
-- `incident_masters` は固定6種の事件IDを持つ。domainの `IncidentKind` との対応は repository 層で扱う。
-- `held_events.session_id` は nullable。本アプリ作成分は `session_id = NULL`、`held_date_iso` は `start_at` のJST日付から埋める。
-- `match_drafts.confirmed_match_id` は `status = confirmed` のときだけ必要。`cancelled` と非terminal状態では持たない。
-- OCR success / failure / cancel / stale failureで下書き表示状態が変わる場合は、OCR jobと
-  `match_drafts.status`を同じtransactionで更新する。試合一覧は保存済みstatusを正本として読み、表示のたびに
-  OCR job全体から状態を再計算しない。
-- `ocr_jobs.image_path` は旧列とのDB互換性のためv2では`source_images.object_key`を鏡写しすることがある。
-  filesystem pathとは解釈せず、公開HTTP DTOへ出さない。
-- `source_images.object_key` は非公開object storageのopaque keyであり、bucket URL、公開URL、credentialを保存しない。`ocr_jobs.queue_schema_version = 2` は`source_image_id`を必須とし、local pathをworker間契約にしない。
-- `source_images` のaccount別未参照quotaは、account単位に直列化した同一transactionで冪等keyを先に確認し、DB内の参照有無を含む使用量を集計してから予約する。事前checkとinsertを別transactionへ分けず、冪等retryをquota超過として拒否しない。
-- source imageを参照するOCR作成はdraft row、source row、OCR jobの順にlockし、terminal OCR writerもdraft row、
-  OCR jobの順へ揃える。逆順のcancel / maintenance経路を作らない。
-- `FAILED` objectを外部削除する前にDBでpurge claimをCAS取得し、`FAILED -> RESERVED` retryと線形化する。
-  外部削除後のrow purgeは取得したclaimだけを完了し、stale claimは期限後に別reconcilerが引き継げるようにする。
-- `ocr_queue_outbox.stream_payload` は JSON Schema と Redis contract の対象であり、DB column shapeだけで互換性を判断しない。
-- OCR semantic redeliveryは1 job 1 outbox rowを維持し、thresholdを超えても`queued`のjobをlockしてから
-  既存`DELIVERED` rowを`PENDING`へ再武装する。`running`またはterminal job、recent delivery、active claimを
-  再武装せず、保存済みpayloadを書き換えない。
-- 試合確定・確定済み試合更新・削除と、対象作品の戦績分析再計算intentは同じtransactionで確定する。
-- APIまたはProcessing Workerのoutbox writer transactionはRedis I/Oを含めず、commit完了後にだけoutbox種別を
-  持つtyped post-commit effectを返す。callerはeffectをprocess-local coordinatorへ渡してdispatchを起動する。
-  どのWorker roleがtransactionを開始したかではなく、commitしたoutbox種別でwake先を決める。dispatch失敗は
-  commit済み業務状態をrollbackせず、outbox statusと次回時刻へ保存する。
-- 戦績分析の入力versionは作品単位の単調増加revisionとして同じtransactionで進め、timestampを
-  concurrency tokenの代用にしない。
-- 全登録作品に戦績分析title stateを1件持たせる。既存作品は導入migrationでbackfillし、作品master追加時は
-  同じ変更単位で初期stateを作る。read queryで欠落stateを暗黙作成しない。
-- 確定済み試合は分析入力へ影響する更新ごとの単調増加revisionを持ち、成果物の試合文脈と現在値の
-  不一致を検出できるようにする。
-- 戦績分析成果物は入力version、algorithm version、artifact schema versionを区別し、1作品の全スコープを
-  原子的に公開する。job失敗やtimeoutで現行成功成果物を上書きしない。
-- 戦績分析の全体実行slotは単調増加fencing tokenを持ち、job leaseと公開transactionが同じtokenを
-  検証する。1作品のactive job制約だけを全体同時実行1の代用にしない。
-- artifactのcurrent / previous可否確認と対象chunk取得は同じstatementまたはread transactionで行い、
-  cleanupとの存在確認後削除raceを作らない。
-- 戦績分析の派生rowを追加したことで、参照されていない作品・season・map masterの既存削除経路を永久に
-  blockしない。作品削除時は未完了workを安全に閉じて派生state / artifactを削除し、過去artifactのscope参照は
-  masterへの強い削除防止FKにしない。
-- terminal戦績分析jobは終了後45日保持し、管理画面の直近3件という表示上限とは分離する。
-  `queued` / `running` jobを履歴cleanupで削除しない。
-- `idempotency_keys.response_status = 0` は処理中予約を表す。
+## 4. Migration / Deployment
 
-## 4. Consumer Contract
+後方互換な変更は migration 適用後に consumer を deploy する。
 
-DB-backed API / worker query を触る変更では、同じ変更内で次を確認する。
-
-- 依存する table / column / seed / nullable / default / index / constraint を特定する。
-- 新しいDB前提は `apps/api/src/test/scala/momo/api/integration/DbContractSpec.scala` に追加する。
-- 変更した repository method または worker adapter を Testcontainers PostgreSQL で実行する。
-- 同一 transaction で FK 関連 row を作成・更新する場合、statement order と保存後の linked row values を integration test で確認する。
-- lease、execution slot、artifact pointerのような競合制御は、2接続以上を使う実PostgreSQL testでlock順、
-  fencing token不一致、失効lease、cleanup競合を直接確認する。
-- 大容量staging COPYはcontrol rowのlock transactionから分離する。durable stagingはattemptへ決定的に対応付け、
-  fresh接続の短いpublication transactionで完全metadata、desired version、lease、fenceを再検証してからpointerを切り替える。
-- 新しい table に書き込む integration test を追加したら、`IntegrationDb.truncateAppTables` など cleanup 対象も更新する。
-- integration が skip / 未実行なら、そのDB挙動は未検証として報告する。
-- connection startup parameterはPostgreSQL engineだけでなくpooler / proxyとのwire契約でもある。release probeのtimeoutは、接続文字列やstartup optionsへ埋め込まず、接続後のread-only transaction内で`SET LOCAL`して対象queryと同じ境界へ閉じる。
-- API の Doobie repository は DB row shape と domain 変換を明示的に分ける。query は named row case class へ decode し、domain/application 型への変換は `fromRow` / `toItem` などの専用関数へ閉じる。
-- `row._1` のような tuple index に依存する mapping、10要素を超える tuple alias、unchecked default fallback による row decode は避ける。DB enum / status の不正値は repository 境界で `AppError` か integration failure として扱い、HTTP 層へ DB 由来の例外型を漏らさない。
-- dynamic SQL fragment は sealed enum、whitelist、または固定 fragment の選択で表す。`Fragment.const` を使う場合は、外部入力が混ざらないことを同じ関数内で読める形にする。
-- keyset paginationはfilterと同じqueryへstable tie-breakerを含む境界条件を適用し、deep pageで`OFFSET`を
-  増やさない。初回exact countをcursorへ引き継ぐ場合、その値がnavigation中のsnapshot表示であり、refresh時に
-  再集計する契約をHTTP DTOとtestに残す。
-
-実行コマンドは `docs/dev-rule.md` を正とする。APIのDB consumerはDB quality gate、分析workerの
-PostgreSQL adapterはrelease DBとanalysis control-plane gate、OCR consumerはOCR control-plane gateを選ぶ。
-共有execution slot、分析 / OCR supervisor、preemptionを変える場合は、検証済みruntime imageでDB状態遷移と
-実process回収を同じpreemption gateに通す。
-
-## 5. SQL Risk Checklist
-
-次を含む変更は実PostgreSQLで検証する。
-
-- `UNION` / `INTERSECT` / `EXCEPT`
-- `DISTINCT`
-- window function
-- JSON operator
-- dynamic fragment
-- `ON CONFLICT`
-- advisory lock
-- `UPDATE ... WHERE` で同時実行guardを表す処理
-- 複数 table をまたぐ filter / order / limit
-- nullable FK と `IS NOT DISTINCT FROM`
-
-PostgreSQL SQLSTATE を業務エラーへ変換する場合は、repository境界で `AppError` / worker failure へ正規化し、HTTP層やworker runnerへDB例外型を漏らさない。
-
-## 6. Migration / Deployment
-
-後方互換なDB変更:
-
-1. `momo-db` に migration を追加する。
-2. migration 適用を確認する。
-3. consumer 側 API / worker / web を deploy する。
-
-破壊的変更、NOT NULL 追加、型変更、大量 backfill、旧 schema 削除:
-
-- consumer deploy と別 migration に分ける。
-- 旧consumerと新consumerが同時に動く期間を考慮する。
-- deploy順序、rollback、未移行データの扱いを実装前に決める。
-- public docs にprovider固有の復旧手順や実測値を書かない。必要なら `private/` に置く。
+破壊的変更、NOT NULL / 型変更、大量 backfill、旧 schema 削除は、旧新 consumer の同時稼働期間を考慮して複数段階へ分ける。deploy 順序、rollback、未移行データを実装前に決め、provider 固有の手順は `private/` に置く。

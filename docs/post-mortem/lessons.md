@@ -200,9 +200,9 @@ public repository に置くため、具体的な障害位置、再現手順、en
 
 **参照先**
 
-- `docs/requirements/series-comparison.md` の性能要求
-- `docs/requirements/series-analysis-batch.md` のresource・性能・timeout要求
-- `docs/requirements/series-review-playbook.md` の実装境界
+- `docs/requirements/series-comparison.md` の Read / Failure Behavior
+- `docs/requirements/series-analysis-batch.md` の Correctness / Resource / OCR
+- `docs/requirements/series-review-playbook.md` の Detail / Artifact Boundary
 - `docs/test-rule.md` の Performance-sensitive analytics
 - `docs/dev-rule.md` の Production rollback verification
 

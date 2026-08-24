@@ -1,257 +1,109 @@
 # OCR Redis Streams Contract
 
-目的: API と Processing Worker内のOCR Worker roleの Redis Streams / outbox / ack 契約の正本。
+目的: API producer と Processing Worker の OCR consumer 間にある payload、outbox、delivery、retry、ACK の意味論を定義する。field shape / limit は JSON Schema、DB shape は `../momo-db`、現在の topology / timeout は runtime 設定を正本とする。
 
-## AI作業導線
+関連正本:
 
-この文書はOCR配送のwire契約と、DB正本・outbox・ACKの順序を決める。Redisの一時状態からjob状態を推測しない。
-
-| 項目 | 到達先 / 判断 |
-| --- | --- |
-| 第一読 | OCR queue payload、stream、outbox、delivery / ACK、OCR job lifecycleを変えるときに読む。 |
-| この文書だけで決めること | v2 payloadの意味、Redis / DBの正本境界、delivery・retry・ACK・互換性。 |
-| 常に併読 | `docs/schemas/ocr-queue-payload-v2.schema.json`、`docs/schemas/ocr-hints-v1.schema.json`、`docs/db-rule.md`、`docs/test-rule.md`、`docs/dev-rule.md`。 |
-| 条件付き併読 | parent / child とOCR roleの責務は `docs/architecture.md`、業務状態遷移は `docs/domain-rule.md`。 |
-| 実行正本 | JSON Schema、`../momo-db` migration、API producer / Processing Worker consumer、Scala / Rust contract test。 |
-| 検証先 | payloadはschemaと双方のcontract test、deliveryは実Redis integration、DB前提は実PostgreSQLで検証する。実行コマンドは `docs/dev-rule.md` を正とする。 |
+- payload: `docs/schemas/ocr-queue-payload-v2.schema.json`
+- hints: `docs/schemas/ocr-hints-v1.schema.json`
+- job lifecycle: `docs/domain-rule.md`
+- DB transaction: `docs/db-rule.md`
+- parent / child boundary: `docs/architecture.md`
+- test / command: `docs/test-rule.md`、`docs/dev-rule.md`
 
 ## 1. Ownership
 
-| 契約 | Owner | 正本 |
-| --- | --- | --- |
-| Redis Stream payload v2 | API produces / Rust OCR Worker role consumes | この文書、v2 JSON Schema、Scala / Rust contract tests |
-| Durable enqueue intent | API | `ocr_queue_outbox` |
-| OCR job state | DB | `ocr_jobs` |
-| OCR draft payload | processing parent process writes / API reads | `ocr_drafts`, `momo-ocr` domain model |
-| DB schema / migration | `momo-db` | `../momo-db` migrations |
-
-Redis は配送路であり、ジョブ状態の正本ではない。OCR Worker roleは`jobId`からDBを確認し、DB状態に基づいて
-実行、破棄、またはackする。Redis / DB / ACKを行うのはprocessing parent processであり、OCR attempt childではない。
-
-## 2. Redis Topology
-
-| 項目 | 既定値 | env |
-| --- | --- | --- |
-| v2 job stream | `momo:ocr:v2:jobs` | `OCR_REDIS_V2_STREAM` |
-| v2 dead-letter stream | `momo:ocr:v2:jobs:dead` | `OCR_REDIS_V2_DEAD_LETTER_STREAM` |
-| PEL cold recovery | `300s` | `MOMO_OCR_V2_PEL_RECOVERY_INTERVAL_MS` |
-| new delivery blocking read | `5s` | `MOMO_OCR_V2_REDIS_BLOCK_MS` |
-| Outbox cold recovery | `300s` | `OCR_OUTBOX_RECOVERY_INTERVAL_SECONDS` |
-| Delivered queued redelivery | `120s` | `OCR_OUTBOX_REDELIVERY_AFTER_SECONDS` |
-| Outbox due backlog admission limit | `24` | `OCR_OUTBOX_DUE_BACKLOG_LIMIT` |
-| Outbox active backlog admission limit | `48` | `OCR_OUTBOX_ACTIVE_BACKLOG_LIMIT` |
-| Oldest due outbox max delay | `600s` | `OCR_OUTBOX_OLDEST_DUE_MAX_DELAY_SECONDS` |
-| Dead-letter backlog admission limit | `24` | `OCR_DEAD_LETTER_BACKLOG_LIMIT` |
-
-Rules:
-
-- APIはv2 streamだけへ`XADD`し、別schemaを同じstreamへ混在させない。
-- OCR consumerは`XGROUP CREATE ... MKSTREAM`を許容する。
-- OCR consumerは新規配送だけを`XREADGROUP ... > BLOCK`で読み、stale PELの探索を通常配送の
-  待受けループへ混在させない。`XADD`で新規entryが利用可能になると、blockの満了を待たずにRedisがreadを返す。
-- PELは起動時と設定されたcold intervalでのみ、上限付きの`XPENDING` pageから回収する。pageの継続前には
-  必ず1回の新規配送readを挟み、空queueを短周期のRedis pollへ変えない。
-- 現workerがtransient retryのため残したknown PEL entryは、claim idle到達時に1件だけ正確に再確認する。
-  そのlocal予定が失われてもPELとcold recoveryがdurableなfallbackになる。
-- OCR PELのclaim前に`XPENDING`でdelivery countを読み、`XCLAIM`による再配送とbounded DLQ判定を同じentryに
-  対して行う。
-- 即時 nack は使わない。
-- OCR認識timeoutとPEL回収待機時間を別のbounded設定として扱い、混同しない。
-- claim idle は、正当な長時間ジョブを重複配送しないよう API stale job reaper の基準値以上にする。
-- OCR consumerのblocking readは、空queueでRedis commandsを増やしすぎないため長めに取る。メッセージ到着時は
-  block終了を待たずに返るため、通常のOCR開始遅延にはしない。
-
-## 3. Stream Payload v2
-
-v2はRust OCR Worker role専用のobject-storage契約である。すべてのRedis field valueはstringとし、local path、bucket名、URL、credentialを含めない。
-
-| Field | Required | Meaning |
-| --- | --- | --- |
-| `schemaVersion` | yes | `"2"` 固定 |
-| `jobId` | yes | DB `ocr_jobs.id`。OCR Worker roleのidempotency key。1-128 printable ASCII chars |
-| `draftId` | yes | DB `ocr_drafts.id`。1-128 printable ASCII chars |
-| `sourceImageId` | yes | DB `source_images.id`。1-128 printable ASCII chars |
-| `imageObjectKey` | yes | 非公開object storage内のopaque relative key。最大512 ASCII chars |
-| `sha256` | yes | upload時に確定した画像bytesのlowercase SHA-256 hex |
-| `byteLength` | yes | `1..3145728` のdecimal string |
-| `mediaType` | yes | `image/png`, `image/jpeg`, `image/webp` |
-| `requestedScreenType` | yes | `total_assets`, `revenue`, `incident_log`。`auto`禁止 |
-| `attempt` | yes | payload schema上の正整数 |
-| `enqueuedAt` | yes | ISO-8601 UTC timestamp |
-| `ocrHintsJson` | no | compact / sorted keys / UTF-8 JSON string。最大8192 UTF-8 bytes |
-| `requestId` | no | producer / outboxのログ相関ID。workerは形式を検証するが処理payloadには保持しない。`^[A-Za-z0-9_-]{1,64}$` |
-
-Rules:
-
-- producerはupload時にformat、静的画像、FullHD以下、3MiB以下を検証し、`source_images`へmetadataを確定してからenqueue intentを作る。
-- workerはobject取得後に`sha256`、`byteLength`、`mediaType`を再検証し、不一致をOCRへ渡さない。
-- `imageObjectKey`は取得識別子でありpathへ変換・連結しない。bucket、endpoint、credentialはruntime設定から得てpayloadへ複製しない。
-- v2は閉じた契約であり、未知field、非string value、URL風/絶対/空/dot/parent segment keyを拒否する。
-- producer payloadは閉じた契約として扱い、field追加でもschemaとScala/Rust contract testsを同時に更新する。
-- processing parent process境界でもstream payload schemaを適用し、`ocrHintsJson`はJSON parse後にhints schemaも適用する。
-
-## 4. OCR Hints
-
-`ocrHintsJson` は省略可能な JSON object を string 化した Redis field。API は null を落とし、key をソートし、空白なしで出力する。
-
-OCR capabilityはhintsを補助情報として扱う。画面種別、プレイヤー名、結果値の正本として扱わない。
-
-互換性:
-
-- optional field 追加は後方互換。
-- 既存 field の型変更・削除は非互換。
-
-上限:
-
-| Field | Limit |
+| 契約 | Owner / 正本 |
 | --- | --- |
-| `gameTitle`, `layoutFamily` | 1-64 chars |
-| `knownPlayerAliases` | max 4 |
-| `knownPlayerAliases[].memberId` | 1-128 chars |
-| `knownPlayerAliases[].aliases` | 1-8 items, each 1-64 chars |
-| `computerPlayerAliases` | max 8 items, each 1-64 chars |
+| v2 payload | API producer、Rust consumer、JSON Schema、共有 fixture |
+| durable enqueue intent | DB outbox |
+| OCR job / draft state | DB |
+| stream delivery / PEL / DLQ | Redis |
+| schema / migration | `../momo-db` |
 
-## 5. API Outbox
+Redis は少なくとも1回配送する transport であり、job 状態の正本ではない。consumer は `jobId` から DB 状態を確認して実行または破棄する。Redis / DB / ACK は processing parent process が所有し、attempt child は扱わない。
 
-API は OCR job 作成 transaction 内で `ocr_drafts`、`ocr_jobs`、`ocr_queue_outbox` を作成する。DB commit 後、通常経路ではcoalescing wakeを発行し、dispatcherがdue outboxを直ちにclaimして`XADD`を試みる。HTTP success は Redis publish 完了ではなく、DB に durable enqueue intent が残ったことを意味する。即時 publish に失敗した場合は outbox 行を backoff 後の `PENDING` へ戻し、runtimeが生存している間は`next_attempt_at`に合わせたone-shot wakeを予約する。wakeやtimerが失われてもstartup recoveryと低頻度cold recoveryが残りの `PENDING` / stale `IN_FLIGHT` を再配送する。
+## 2. Stream / Payload v2
 
-API は OCR job / draft / outbox 作成前に admission guard を実行する。Redis ping 失敗、due `PENDING` + expired `IN_FLIGHT` backlog 超過、`PENDING` + `IN_FLIGHT` active backlog 超過、oldest due outbox 遅延超過、dead-letter stream length 超過のいずれかでは、DB row を作らず `503 SERVICE_UNAVAILABLE` Problem Details で fail-fast する。閾値は通常利用（週1開催、1開催4〜6試合、担当者1人が試合後都度OCR）を妨げない初期値として設定し、env で変更可能にする。
+- producer は version ごとに専用 stream を使い、異なる schema を同じ stream に混在させない。consumer group は stream が未作成でも初期化できること。
+- 新規 delivery は blocking read、stale PEL は startup と低頻度 recovery で扱う。PEL は bounded page で走査し、page 間に新規 delivery を処理して飢餓と短周期 polling を防ぐ。
+- transient retry の既知 PEL entry は claim 可能時刻に個別確認し、process 停止後は PEL recovery が回収する。即時 nack や新規 message による retry へ置き換えない。
+- claim 前に delivery count と idle を再確認し、bounded attempt を超えた entry だけを DLQ 判断へ進める。OCR execution timeout と PEL claim idle を同じ設定にしない。
+- payload field、型、上限、列挙値は v2 schema を正本とし、全 Redis value は string とする。未知 field、非 string value、schema 違反を拒否する。
+- payload は非公開 object の opaque key と、取得後の再検証に必要な ID / metadata だけを運ぶ。local path、URL、bucket、endpoint、credential を含めない。
+- producer は upload metadata を確定してから enqueue intent を作り、consumer は取得 bytes の length、media type、checksum を OCR 前に再検証する。object key を filesystem path として連結しない。
+- `requestedScreenType` は明示し、legacy decode を除いて `auto` を受理しない。
+- `ocrHintsJson` は hints schema に従う省略可能な補助情報であり、画面種別、player、OCR 結果の正本にしない。
+- `requestId` と hints は enqueue 時の値を outbox payload に保持し、retry 時に job row だけから再構築しない。
 
-Lifecycle:
+## 3. Producer / Outbox
+
+HTTP success は Redis publish 完了ではなく、DB に job、draft、durable enqueue intent が確定したことを意味する。
 
 ```text
 PENDING -> IN_FLIGHT -> DELIVERED
-                 \-> PENDING (publish failure / retry)
-DELIVERED -> PENDING (jobがthreshold後もqueuedのsemantic redelivery)
+                 \-> PENDING  (publish failure)
+DELIVERED -> PENDING            (queued jobのsemantic redelivery)
 ```
 
-Rules:
+- job / draft / outbox は同じ transaction で作成し、commit 後にだけ coalescing wake を送る。rollback、受付拒否、既存 row の replay で新規 wake を必須にしない。
+- admission guard は Redis 到達不能、due / active outbox、oldest due delay、DLQ backlog を判定し、危険域では row を作らず fail fast する。閾値は runtime 設定を正本とする。
+- dispatcher は startup、wake、retry / semantic deadline、cold recovery を待ち、bounded drain する。due work がなければ DB access を止め、固定短周期 polling や row ごとの timer を作らない。
+- due `PENDING` と stale `IN_FLIGHT` は lock を競合回避して claim し、claim ごとに新しい identity を発行する。完了 / retry は同じ claim identity だけが更新できる。
+- `XADD` 後に message identity と `DELIVERED` を DB へ確定して初めて publish 完了とする。DB 更新失敗時は再 publish を許容する。
+- publish / drain failure は安全な error class と次回時刻を保存し、bounded backoff する。wake は保持するが backoff を迂回して hot loop しない。
+- `DELIVERED` のまま threshold を超えて `queued` の job だけを、DB lock 下で同じ outbox row の `PENDING` へ再武装する。保存済み payload は変えない。
+- `running` / terminal job、recent delivery、active claim を semantic redelivery しない。1 job 1 outbox row を維持する。
 
-- `ocr_queue_outbox.schema_version`と`stream_payload.schemaVersion`は一致させる。writerはv2 objectを保存し、
-  `jobId`だけから再構築しない。
-- `requestId` と OCR hints は API request 時点の値を保持する。
-- OCR job作成transactionがcommitした後にだけwakeする。rollback、通常の作成拒否、既存rowを返すだけの
-  経路では新しいwakeを必須にしない。
-- PostgreSQL runtimeではcreation storeをpost-commit decoratorで包み、成功結果からwakeまでの短い区間を
-  cancel maskする。HTTP usecaseからoutboxを再claimして直接`XADD`する経路は持たない。
-- dispatcherはstartup、post-commit wake、予約retry、semantic redelivery、cold recoveryで起動する。
-  retryとsemantic redeliveryの最短deadlineを1つだけ保持し、due workを空にした後はsignal、そのdeadline、
-  cold recoveryのいずれかまでDB accessを停止する。固定短周期pollやrowごとのtimer fiberを作らない。
-- recovery dispatcher は due `PENDING` と expired `IN_FLIGHT` を `FOR UPDATE SKIP LOCKED` で claim する。
-- claimごとに新しいUUID `claim_token`を発行する。expired rowの再claimはtokenを必ず更新し、`DELIVERED`確定とretry releaseは同じtokenを持つclaimだけを受理する。時刻が一致しても旧claimへ実行権を戻さない。
-- `XADD` 成功後に `DELIVERED`, `redis_message_id`, `delivered_at` を記録する。このDB更新まで成功した場合だけ
-  そのdeliveryを完了とし、active dispatchを停止できる。
-- `XADD` 失敗時は秘密情報を含まない error class だけを `last_error` に記録し、backoff 後の `PENDING` に戻す。
-- claim queryなどdrain全体の失敗はdispatcherを停止またはhot loopさせず、最大60秒の指数backoff後に再試行する。
-  backoff中のpost-commit wakeはcoalesceして保持し、依存回復後の正常drainでbackoffをresetする。
-- `DELIVERED`から120秒経過しても対応`ocr_jobs.status`が`queued`なら、job rowをlockして状態を再確認した上で
-  同じoutbox rowを`PENDING`へ再武装する。再武装では保存済みv2 payloadを保持し、claim、delivery identity、
-  error、attempt countを新しいdelivery cycle用にclearし、`next_attempt_at`を現在時刻へ進める。
-- semantic redeliveryは`running`またはterminal jobへ行わない。processing parent processのDB claimと重複delivery規則により、
-  元messageが遅れて到着してもOCR処理を二重実行しない。
-- cold recoveryはstartup時と既定300秒間隔で行う。既知のretryとsemantic redeliveryはこの間隔を待たず、
-  one-shot wakeで処理する。
+## 4. Consumer Delivery / ACK
 
-## 6. OCR Worker Role Delivery / Ack
+原則は terminal DB write before `XACK`。DB の `succeeded`、`failed`、`cancelled` を確定する前に ACK しない。
 
-この章のOCR Worker roleはprocessing parent process内の論理的な処理担当であり、OCR attempt child processそのものではない。
-親processがRedis delivery、DB claim / lease / fence、object取得、子process supervision、durable write、ACKを所有する。
-OCR childは親が検証したbounded image bytesから1 attemptのcandidateを返すだけで、DB / Redis / object storage、
-outbox、ACKを扱わない。
-
-原則: terminal DB write before `XACK`。`succeeded`, `failed`, `cancelled` の永続化前に ack しない。
-
-Ack exceptions:
-
-| 状態 | worker動作 |
+| Delivery / DB state | 動作 |
 | --- | --- |
-| unknown `jobId` | DB正本に存在しない残骸として ack して破棄 |
-| already terminal | 再実行せず ack |
-| already running | 他workerの実行権を尊重し、再実行も失敗書き込みもせず ack |
-| queued 確認後に別workerが先に running claim | already running と同じ扱いにし、再実行も失敗書き込みもせず ack |
-| malformed payload with recoverable bounded-valid `jobId` | `QUEUE_FAILURE` を terminal failure としてDBに書いてから ack |
-| malformed payload and failure write failed | ack せず PEL claim / DLQ に任せる |
-| max attempts exceeded with recoverable bounded-valid `jobId` | `QUEUE_FAILURE` を terminal failure としてDBに書き、DLQへ `XADD` してから元messageを ack |
-| max attempts exceeded and failure write failed | DLQ/ack せず PEL claim に任せる |
-| max attempts exceeded without recoverable bounded-valid `jobId` | DLQへ `XADD` してから元messageを ack |
+| unknown `jobId` | DB に存在しない残骸として ACK |
+| already terminal | 再実行せず ACK |
+| already running、または claim 競合に敗れた | owner を尊重し、再実行・失敗書込みをせず ACK |
+| malformed、bounded-valid `jobId` を回収可能 | `QUEUE_FAILURE` を DB へ terminal write 後に ACK |
+| malformed、failure write 失敗 | ACK せず PEL recovery に委ねる |
+| attempt 上限、bounded-valid `jobId` を回収可能 | terminal failure、DLQ write の順に成功してから ACK |
+| attempt 上限、`jobId` を回収不能 | DLQ write 後に ACK |
+| DLQ / terminal write 失敗 | ACK せず PEL recovery に委ねる |
 
-Worker rules:
+- queued job の claim は DB lease / fence で確定し、stale owner の terminal write を拒否する。
+- success は draft upsert と job terminal transition を同じ transaction にする。1 job の再処理は同じ draft を冪等に更新する。
+- transient OCR failure は job を将来時刻の `queued` へ戻し、元 delivery を PEL に残す。新規 outbox、semantic redelivery、outbox wake を作らない。
+- OCR role が別種の outbox を commit した場合は、initiator ではなく outbox 種別に対応する wake を commit 後に送る。
+- stale running job の terminal 化は maintenance が所有する。running 中の cancel は即時中断を保証しない。
+- terminal transition と前状態の詳細は `docs/domain-rule.md` を正本とする。
 
-- stale running job の terminal failure 化は API maintenance が担う。
-- processing parent processはpayload中のlocal pathやURLを受理せず、opaque object keyで取得したbytesを検証してからOCRする。
-- OCR attemptのtransient failureでは、親processがDB jobを将来時刻の`queued`へ戻し、元Redis deliveryをPELへ
-  pendingのまま残す。新しい`ocr_queue_outbox`を作成・再武装せず、post-commit outbox wakeも発行しない。
-- OCR roleによる期限切れAnalysis holder回収が`series_analysis_queue_outbox`を作る場合は、commit後にAnalysis
-  outbox wakeを発行する。initiatorがOCR roleであることをwake先の判定に使わない。
-- API は queued job の cancel 要求だけを行う。running 中の即時中断は MVP では best-effort。
+## 5. DB / Delivery Guarantees
 
-Allowed job transitions:
+- Redis publish は at-least-once とし、consumer は DB 状態、lease、fence、job ID で冪等にする。
+- outbox の schema version と保存済み payload version は一致させる。
+- message identity と delivery timestamp は最新 cycle を表し、過去 cycle の相関は secret を含まない structured log で行う。
+- draft payload、warning、timing の domain shape は OCR capability が所有する。Redis payload と DB row shape へ同じ型を漏らさない。
+- DB schema を変える場合は migration、producer、consumer、DB contract を同じ compatibility 計画で更新する。
 
-```text
-queued -> running -> succeeded
-queued -> running -> failed
-queued -> running -> cancelled
-queued -> failed
-queued -> cancelled
-```
+## 6. Compatibility
 
-終端状態からの遷移は禁止。
+後方互換として扱えるのは、consumer が無視または default 化できる optional field / warning の追加と、DB の nullable / default 付き追加である。ただし schema と producer / consumer contract test は同時更新する。
 
-## 7. DB Contracts
+required field の削除・rename、型・意味・単位の変更、既存 enum 値の削除、ACK順序、DB正本性、terminal条件の変更は非互換とする。非互換変更は新しい schema version と stream を追加し、同じ stream の in-place変更や曖昧な dual write を行わない。
 
-- `ocr_jobs` は job lifecycle の正本。processing parent processは`SELECT ... FOR UPDATE`相当で現状を確認し、
-  `queued -> running` claim時に`attempt_count`を増やす。
-- 成功時は `ocr_drafts` upsert と `ocr_jobs` terminal transition を同一 transaction にする。
-- `ocr_drafts.payload_json`, `warnings_json`, `timings_ms_json` は`momo-ocr`のOCR domain modelをJSON化した値。
-- 1 job につき最大1 draft。ack 前 crash の再処理では同じ `job_id` を upsert する。
-- `ocr_queue_outbox` は Redis publish intent の正本。DB schema 変更は `momo-db` migration と consumer 側検証を揃える。
-- OCR outboxは1 job 1 rowを維持し、semantic redeliveryでは新規rowを増やさず既存`DELIVERED` rowを再武装する。
-  `redis_message_id`と`delivered_at`は最新delivery cycleを表し、過去cycleの相関は安全な構造化logで行う。
-- v2 jobの実行権はDB lease tokenと単調増加fenceで確定する。期限切れleaseを再取得したworkerだけが新fenceを持ち、古いworkerのterminal writeを拒否する。
-- Redis publish は at-least-once。`XADD` 成功後に `DELIVERED` 更新が失敗すると recovery で再 publish され得る。
-  processing parent processは`ocr_jobs`の状態確認によりterminal / running jobを再実行せずackする。
+新規 producer / consumer は v2 だけを扱う。legacy row / column を保持していても、v1 outbox、v1 delivery、local-path job を新規作成しない。
 
-## 8. Compatibility
+## 7. Verification
 
-後方互換:
+- 共有 canonical fixture を JSON Schema、Scala serializer / decoder、Rust serializer / decoder のすべてへ通す。各言語で都合のよい fixture を作らない。
+- producer transaction、post-commit wake、claim fencing、publish 後 DB failure、retry、semantic redeliveryを実 PostgreSQL と制御可能 clock で検証する。
+- blocking read、PEL recovery、delivery count、claim、DLQ、ACKを隔離した実 Redis で検証する。
+- consumer は duplicate、terminal / running、malformed、stale fence、transient failure、terminal write failure、DLQ failure を直接通す。
+- DB schema 変更は migration 適用済み PostgreSQL、wire 変更は producer / consumer contract、parent / child 変更は process / control-plane smoke を使う。
+- command と変更 gate は `docs/dev-rule.md` を正本とし、external gate 未実行は未検証として報告する。
 
-- Redis payload optional field 追加。ただし schema と contract tests を同時更新する。
-- `ocrHintsJson` optional field 追加。ただし hints schema と contract tests を同時更新する。
-- DB nullable column または default 付き column 追加。
-- 新しい warning code 追加。API は未知 warning を透過表示する。
+## 8. Operations
 
-非互換:
+監視は DB の outbox backlog / oldest due、job state、Redis stream / PEL / DLQ、producer / consumer health を別々に見る。Redis の entry だけから job の成否を推測しない。
 
-- required field の削除・rename。
-- 既存 field の型、意味、単位変更。
-- `requestedScreenType`, `FailureCode`, job status の既存値削除。
-- ack 前後関係、DB正本性、terminal transition 条件変更。
-
-現行producer / consumer契約はv2だけである。DB上の過去rowを保持するためlegacy columnやschema version値が
-残っていても、新しいv1 outbox、stream delivery、local-path jobを作らない。v2に非互換変更が必要なら
-新しいschema versionとstreamを追加し、同じstream上のin-place変更やdual writeで曖昧にしない。
-
-## 9. Verification
-
-- Scala / Rust双方のserializer / decoderを`docs/schemas/ocr-queue-payload-v2.schema.json`と共有fixtureで検証する。
-- dispatcherはpost-commit wake、wake coalescing、startup / cold recovery、publish失敗後の予約retry、delivery確定後のidle、
-  `queued` jobだけを対象とするsemantic redeliveryを、実時間sleepでなく制御可能clockで固定する。
-- DB schemaに触れた場合は `docs/db-rule.md` と `docs/test-rule.md` に従い、`momo-db` migration適用済みの
-  Testcontainers PostgreSQLで検証する。
-- 実行コマンドは `docs/dev-rule.md` のRedis / OCR queueおよびProcessing Workerの変更gateを正とする。
-
-## 10. Operations
-
-障害調査で見るもの:
-
-- API `/healthz/details` の Redis status。
-- `ocr_queue_outbox` の `PENDING`, `IN_FLIGHT`, `FAILED` 件数と oldest `next_attempt_at`。
-- Redis stream length、consumer group pending count、DLQ stream length。
-- `jobId` によるAPI log、Processing Worker log、`ocr_jobs`、`ocr_queue_outbox`の横断検索。
-
-ログに出さないもの:
-
-- 画像内容
-- OCR raw text 全文
-- session / CSRF / OAuth token
-- Redis URL / DB URL
+調査時は `jobId` を安全な相関 key とし、API log、worker log、job、outbox、delivery を追う。画像内容、OCR raw text、session / CSRF / OAuth token、Redis / DB URL を log や public docs に出さない。

@@ -1,141 +1,66 @@
 # テストアーキテクチャ
 
-目的: サブシステムごとのテストサイズ、coverage 管理、CI成果物を一枚で確認できるようにする。
-
-## AI作業導線
-
-この文書はtest size、coverageの管理方法、CI成果物の責務を扱う。日々のテスト選択やコマンドをここで重複管理しない。
-
-| 項目 | 到達先 / 判断 |
-| --- | --- |
-| 第一読 | テスト方針、coverage閾値、CI quality gate、report / artifact / 推移管理を変えるときに読む。 |
-| この文書だけで決めること | S / M / L / XLの境界、coverageのgate / report分離、CI artifactの位置。 |
-| 常に併読 | `docs/test-rule.md` と `docs/dev-rule.md`。前者でoracleを選び、後者で実行する。 |
-| 条件付き併読 | DBは `docs/db-rule.md`、Redis/OCRは Redis契約、分析job / artifactは `docs/series-analysis-realization.md` と `docs/requirements/series-analysis-batch.md`。 |
-| 実行正本 | `apps/web/vite.config.ts`、`apps/api/build.sbt`、CI workflow、test source。 |
-| 検証先 | `docs/dev-rule.md` の変更gate。coverage率ではなく外部契約を証明する場合は、対応するintegration / smokeを使う。 |
+目的: test size、coverage の運用、cross-system 契約、CI artifact の責務を定義する。日々の test 選択と oracle は `docs/test-rule.md`、command と変更 gate は `docs/dev-rule.md`、現在値は test / coverage 設定と CI workflow を正本とする。
 
 ## 1. Test Size
 
-| Size | 境界 | 主な対象 | CIでの扱い |
-| --- | --- | --- | --- |
-| S | プロセス内、外部I/Oなし | pure function、domain、parser、codec、view model | 通常PRで常時 |
-| M | プロセス内または軽量境界、test doubleあり | HTTP app、usecase、web component/page、MSW、in-memory adapter | 通常PRで常時 |
-| L | 外部runtimeまたは実processあり | PostgreSQL、Redis、native OCR、分析子process、Testcontainers | 関連PRとCI quality gate |
-| XL | runtime image / browser / 複数process / resource計測 | runtime smoke、Playwright E2E、分析worker連続実行、deploy前確認 | deploy workflow / main / 重要PR |
+| Size | 境界 | 主な用途 |
+| --- | --- | --- |
+| S | process 内、外部 I/O なし | pure function、domain、parser、codec、ViewModel |
+| M | process 内の組み合わせ、制御した double | HTTP app、usecase、component、MSW、in-memory adapter |
+| L | 実 service、native dependency、別 process | PostgreSQL、Redis、object storage、OCR、worker process |
+| XL | runtime image、browser、複数 process、resource 計測 | runtime smoke、Playwright、preemption、release resource gate |
 
-サイズは実行時間ではなく、失敗時に疑う境界と依存範囲で決める。近いサイズの成功を、変更した経路そのものの検証として代用しない。
+size は実行時間ではなく、失敗時に疑う境界と依存範囲で決める。下位 size は分岐を詳しく、上位 size は接続と代表経路を検証し、近い test の成功を変更経路の証拠にしない。
 
 ## 2. Coverage Model
 
-coverage は二つのモードを分ける。
+coverage は次の2モードを分ける。
 
-| モード | 目的 | 失敗扱い |
+| Mode | 目的 | 失敗条件 |
 | --- | --- | --- |
-| gate mode | ローカルまたは明示実行で閾値を守る | 設定ファイルの閾値で失敗 |
-| report mode | CI artifact と job summary を残す | テスト失敗は失敗。coverage閾値は report-only 設定で非ブロック |
+| gate | 明示した threshold の維持 | test または threshold 違反 |
+| report | PR review と推移確認 | test failure。coverage 値は非 blocking |
 
-CI の report mode は、同じテスト集合を通常実行と coverage 実行で二重に回さない。`report_coverage` が有効な workflow では、通常テスト step を coverage 付きテスト step に置き換える。`report_coverage` が無効な production deploy 経路では、通常テストだけを release gate とし、coverage artifact 生成を待たない。
+- CI は同じ test 集合を通常実行と coverage 実行で二重に回さない。report を作る場合は通常 test を coverage 付き実行へ置き換える。
+- production deploy は coverage artifact の生成を待たず、同じ test 集合と変更対象の integration / smoke を release gate にする。
+- threshold、対象 file、除外、丸め、report path は tool 設定と生成 script を正本とし、この文書へ値を写さない。
+- aggregate coverage は重要経路の証拠にしない。重要 module は file / glob threshold、decision table、property / contract test のいずれかで固定する。
+- external adapter、process isolation、resource、OCR accuracy は coverage 率ではなく専用の contract / smoke / dataset で評価する。
 
-閾値の正本:
+## 3. Subsystem Strategy
 
-| 領域 | 正本 | 現在の要点 |
+| 領域 | coverage が主に扱う範囲 | coverage 外で必須の oracle |
 | --- | --- | --- |
-| web | `apps/web/vite.config.ts` | threshold、report-only時の扱い、集計対象は設定を正とする。UIはscenario / E2Eで補う。 |
-| api | `apps/api/build.sbt` | thresholdとreport-only時の扱いは設定を正とする。PostgreSQL / Redis adapterはcoverage率でなくintegration contractで保証する。 |
-| Processing Worker runtime | fixture / property / state-machine testと実service smoke | 現時点はcoverage率をgateにせず、pure calculation・OCR characterizationの決定論的oracleと、DB / Redis / R2 / Linux process contractで保証する。 |
+| Web | pure logic、request transform、API wrapper、ViewModel、component state | 主要 flow、URL、cache lifecycle、download / save を component / Playwright で確認 |
+| API | domain、usecase、codec、HTTP mapping | PostgreSQL / Redis / object storage と migration 前提を実 service で確認 |
+| Processing Worker | pure calculation、parser、codec、state machine、decision table | DB / Redis、native OCR、parent / child process、cgroup、preemption、resource を専用 smoke で確認 |
 
-丸めルール:
+- UI は line coverage より loading / empty / error / success / mutation の scenario coverage を優先する。
+- DB / queue adapter は coverage 対象へ含めること自体を品質目標にせず、production と同じ wire / transaction を通す。
+- OCR accuracy は version 固定 dataset の項目別 oracle と差分で管理し、code coverage から未知画像への一般化を推測しない。
+- 分析計算は golden、高精度参照、property を組み合わせる。既存実装の出力だけを正解にしない。
+- performance / endurance の対象量、回数、上限は要求文書と private release gate を正本とし、public な coverage 設計へ複製しない。
 
-- raw coverage は小数1桁で `raw-summary.json` に保存する。
-- baseline候補値は 5% 刻みで切り捨てる。
-- `99.5%` 以上だけ `100%` 候補に丸める。
-- 重要ファイルに明示した `95%` / `100%` threshold は、丸めず契約として維持する。
-- 初回CIの fresh report を正とし、古いローカル report は参考値に留める。
+## 4. Cross-System Contracts
 
-## 3. apps/web
+| 契約 | 必要な境界 |
+| --- | --- |
+| API -> Web | OpenAPI generation、generated type、代表 request / response |
+| API -> OCR Worker | JSON Schema、producer / consumer fixture、Redis wire、DB lifecycle |
+| API -> Analysis Worker | DB consumer contract、queue schema、version capability、Redis wire |
+| Analysis Worker -> API / Web | artifact schema、version pinning、bounded read、非対応 version |
+| DB consumers -> shared DB | migration 適用済み PostgreSQL、contract spec、repository integration |
+| runtime -> user / operator | image smoke、health / readiness、主要 E2E、resource / isolation |
 
-| 対象範囲 | 主テストサイズ | 確保するcoverage / oracle |
-| --- | --- | --- |
-| `src/app` | S / M | router、redirect、layout shell の代表分岐。URLと可視状態をassertする。 |
-| `src/shared/api` | S / M | API wrapper、Problem Details、query key、cache helper。重要ファイルはfile別thresholdで固定する。 |
-| `src/shared/auth`, `src/shared/lib`, `src/shared/domain` | S | pure logic とブラウザ境界。分岐の独立因子をtable化する。 |
-| `src/features/*/*ViewModel`, request transform, Zod schema | S | mode discriminator、optional field、payload shape を decision table で固定する。 |
-| `src/features/**/*.tsx` page/component | M | line coverageより scenario coverage を優先する。loading / error / success / mutation / cache反映を検証する。 |
-| `e2e/app-smoke.spec.ts` | XL | 開催作成、OCR開始、レビュー確定、一覧、詳細、export、master管理、戦績分析状態と管理操作を狭く通す。 |
+契約 fixture は producer と consumer の両 validator を通す。同じ意味を各言語の手書き fixture へ複製せず、共有 schema / canonical fixture を使う。どの contract test が必要かは各専門正本を参照する。
 
-現行 coverage 設定は `apps/web/vite.config.ts` を正とする。thresholdや集計対象を文書へ写さず、UIはscenario coverageと
-Playwright smokeで管理する。
+## 5. CI Artifacts
 
-## 4. apps/api
+- coverage artifact は PR review と推移確認の補助であり、integration / smoke の代わりにしない。
+- artifact は raw summary、review 用 summary、必要な HTML / machine-readable report に分け、生成 script と workflow が path / format を所有する。
+- coverage report を有効にした job は test failure を隠さず、artifact upload failure と品質 failure を区別する。
+- Processing Worker に coverage artifact を導入する場合も、実 service / process gate を coverage へ置き換えない。
+- provider resource、費用、実測 memory / timing、非公開 OCR dataset は public artifact にせず private release evidence へ置く。
 
-| 対象範囲 | 主テストサイズ | 確保するcoverage / oracle |
-| --- | --- | --- |
-| `domain` | S | 不変条件、lifecycle、policy。複合条件はtable-driven testで固定する。 |
-| `usecases` | S / M | 状態遷移、validation、副作用境界。DTO、DB row intent、queue payloadをassertする。 |
-| `endpoints`, `codec` | S / M | request / response roundtrip、OpenAPI、Problem Details。 |
-| `http` | M | auth、CSRF、routing、error mapping。HTTP app起動は境界確認に限定する。 |
-| in-memory `adapters` / repository contract | S / M | 本番adapterと共有する意味論を契約テストで固定する。 |
-| `adapters/postgres` | L | scoverage対象外でよい。SQL、transaction、DB contract、FK順序を実PostgreSQLで検証する。 |
-| Redis producer / outbox | M / L | JSON Schema、payload contract、Redis wire ack / claim / retry を検証する。 |
-| 戦績分析job / artifact repository | M / L | mutationとintentのtransaction、lease、coalescing、version、原子的成果物公開を検証する。 |
-
-現行 coverage 設定は `apps/api/build.sbt` を正とする。PostgreSQL / Redis adapter は coverage率ではなく、`apiDbQuality` / `apiRedisQuality` の contract 成功で保証する。
-
-## 5. apps/processing-worker
-
-| 対象範囲 | 主テストサイズ | 確保するcoverage / oracle |
-| --- | --- | --- |
-| OCR queue / control | S / M / L | v2 payload、job lifecycle、lease / fence、ack / PEL / DLQ、failure code。複合条件はtable-driven。 |
-| OCR parser / image processing | S / L | 画面種別、金額・順位・事件回数・名前寄せ、FullHD / media検証、native OCR adapter。 |
-| OCR object storage | M / L | opaque key、bytes / checksum / media type再検証、R2 get、失敗時のterminal化。 |
-| OCR accuracy evaluator | 別枠 | code coverageではなく、version固定datasetの項目別正答率、差分、処理時間を非公開artifactで管理する。独立blind holdoutは必須gateにせず、このoracleから未知画像への一般化保証を導かない。 |
-| pure calculation / statistics | S | 数式、分母、同値、丸め、seed、入力順独立性、品質状態。golden、高精度参照値、propertyを使う。 |
-| scope / artifact assembly | S / M | 全有効スコープ、計算再利用、安定した並び順、schema / algorithm version、部分成果物禁止。 |
-| job state machine | S / M | queued / running / terminal、最大3回のtransient retry、timeout非retry、coalescing、preemption。 |
-| PostgreSQL / Redis adapters | L | lease、outbox、publish、pending / claim / ack、冪等性、terminal write before ackを実サービスで検証する。 |
-| parent / child process | L | 正常終了、異常終了、hard timeout、signal、zombie防止、atomic publish。 |
-| release resource gate | XL / 別枠 | 固定4名、全scope、現在の2倍かつ最低500試合、100回連続実行のpeak memoryと処理時間。provider実測はprivateに保存する。 |
-| public runtime JVM resource gate | XL | 実効JVM flag、cgroup hard limit、runtime smoke、Playwright E2E、最大HTTP同時数の負荷、OOM eventなし、25%以上のpeak memory余白を同じimageで検証する。 |
-
-OCR精度劣化はcode coverageでは検知しにくいため、characterizationとaccuracy reportを別枠で扱う。
-戦績分析のRust移植では現行Scalaとの差分を記録するが、Scala値だけを正しさのoracleにしない。より正確な差異は
-高精度参照値、要求から導いたgolden、または性質テストで証明し、algorithm versionを更新する。
-
-## 6. Cross-System
-
-| 契約 | 主テストサイズ | 管理方法 |
-| --- | --- | --- |
-| API -> web OpenAPI / generated types | M | `apiOpenApiCheck`、`generate:api`、生成差分ゼロ。 |
-| API -> OCR Worker role Redis queue payload | M / L | v2 JSON Schema、Scala/Rust contract tests、Redis wire integration。 |
-| API -> Analysis Worker role job / queue | M / L | DB consumer contract、Scala/Rust contract tests、Redis wire integration。 |
-| Analysis Worker role -> API / web artifact | M / L | artifact schema fixture、version不一致拒否、同一version読取、API内分析なし。 |
-| DB consumer contract | L | `DbContractSpec`、repository integration、momo-db migration適用済みTestcontainers。 |
-| runtime images | XL | Caddy設定、HTTP/2多重化、実行ファイル、healthz / worker heartbeat、cache header、origin lock、container logs。 |
-| logged-in UX | XL | Playwright E2E smoke。coverage率ではなく経路リストで管理する。 |
-
-## 7. CI Artifacts
-
-coverage report はPRを落とす主目的ではなく、推移確認とレビュー補助のために保存する。
-
-| Workflow | Report command | Artifact |
-| --- | --- | --- |
-| web | `pnpm --filter web test:coverage:report` | `apps/web/coverage/`, `coverage-summary/web/` |
-| API | CI: `sbt apiTestWithCoverageReportOnly`; local standalone: `sbt apiCoverageReportOnly` | `scoverage-report/`, `coverage-report/`, `coverage-summary/api/` |
-| Processing Worker runtime | coverage artifact未設定。通常testと実service smokeをrelease gateにする | なし |
-
-`scripts/ci/write-coverage-summary.py` が raw 値と丸め候補値を正規化し、次を生成する。
-
-- `raw-summary.json`
-- `rounded-baseline.json`
-- `summary.md`
-
-resource class、費用、実測memory / timingは公開CI artifactへ含めず、privateのrelease evidenceへ保存する。
-
-## 8. Later Phases
-
-別PRで判断する項目:
-
-1. report mode の baseline を hard gate へ昇格する。
-2. 重要ファイル / 重要glob の non-regression gate を追加する。
-3. 既定ブランチのcoverage推移を長期保存する。
+baseline の hard gate 化、重要 file の non-regression、長期推移保存は、観測データと維持コストを確認して個別に導入する。将来案を現行 gate として記述しない。

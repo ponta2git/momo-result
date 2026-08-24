@@ -1,471 +1,124 @@
 # 桃鉄結果記録・集計アプリ 技術構成・非機能要件
 
-本書は `docs/requirements/base.md` で定めた業務要求を実現するための技術構成、運用方針、非機能要件を定める。実装者向けの詳細規約は `docs/architecture.md`、DB所有権は `docs/db-rule.md`、Redis Streams / OCR queue 契約は `docs/redis-streams-ocr-contract.md`、戦績分析jobと成果物は `docs/requirements/series-analysis-batch.md` を正とする。
-
----
-
-## 1. 全体方針
-
-- 本アプリはこのリポジトリ内のモノレポとして管理する。
-- フロントエンド、APIサーバー、OCR / Analysis Worker roleは論理的に分離する。
-- 本番のwebとAPIは公開HTTP runtimeで運用する。OCRと戦績分析は高負荷処理がAPIを巻き込まない
-  Rust製の独立worker runtimeへ分離する。
-- DBは summit アプリと共有する Neon PostgreSQL を利用する。
-- OCRジョブと戦績分析ジョブの配送にはRedis Streamsを利用し、状態の正本はDBに置く。
-- 本番 Redis 接続は原則 TLS を使う。Fly private network 内の Upstash Redis のように provider が
-  TLS 非対応の内部接続として案内している場合は、明示設定付きで `redis://` を許可する。
-- DB schema / migration は本リポジトリで直接所有せず、`../momo-db` を正本とする。
-
----
-
-## 2. リポジトリ構成
-
-MVPでは以下のディレクトリ構成を基本とする。
-
-```text
-apps/
-  web/         React/Vite SPA
-  api/         Scala API server
-  processing-worker/ Rust series-analysis / OCR background processing runtime
-```
-
-パッケージ/ビルド管理は言語ごとに分ける。
-
-| 対象 | ツール |
-|---|---|
-| web | pnpm |
-| api | sbt |
-| Processing Worker runtime | Cargo |
-
----
-
-## 3. フロントエンド
-
-### 3.1 基本構成
-
-- React 19 + Vite のSPAとする。
-- ルーティングは React Router を使う。
-- スタイリングは Tailwind CSS を使う。
-- UIは原則として自作の共有コンポーネントで構成する。
-- Dialog / Toast / Tooltip などのアクセシビリティ primitive には Base UI を使える。ただし feature から直接 import せず、`shared/ui` 内に閉じる。
-
-### 3.2 フォーム・バリデーション
-
-- フォーム検証は Zod を基本にする。
-- React 19 の `useActionState` / `useFormStatus` / `useOptimistic` は既存フォーム経路と整合する場合だけ使う。
-- 業務バリデーションのうち、クライアントで即時判定できるものはZodで表現する。
-- サーバー側でも同等の検証を行い、クライアント検証だけに依存しない。
-- フォーム・DTO変換では、route param や hidden state 由来の workflow identifier を落とさない。
-
-### 3.3 API型・クライアント
-
-- API仕様はScala API側の Tapir エンドポイント定義を正本とする。
-- Tapir定義から `apps/api/openapi.yaml` を生成する。
-- web側は `openapi-typescript` で `apps/web/src/shared/api/generated.ts` を生成する。
-- HTTP呼び出しはブラウザ標準 `fetch` を薄くラップして手書きする。
-- 共通 client は credential、CSRF、Problem Details 正規化、dev/test account header を一元的に扱う。
-- API DTO 変更後は OpenAPI から web 型を再生成し、旧 field / 旧 header の残存を検出する。
-
-### 3.4 サーバーデータ管理
-
-- API取得・サーバーデータ管理には TanStack Query を使う。
-- route 単位の lazy loading / fallback には Suspense を使う。
-- query/render error は route error boundary で扱う。
-- mutation、フォーム保存、バリデーションエラー、ユーザー操作中状態は、Suspense任せにせず明示的に状態を扱う。
-- query key は backend resource 名だけでなく、cache に保存する runtime data shape を表す。
-- 作成・更新 mutation が作成した resource を同画面で選択・表示する場合は、選択値だけでなく候補リストを供給する query cache も更新または invalidation する。
-
----
-
-## 4. APIサーバー
-
-### 4.1 言語・フレームワーク
-
-- APIサーバーはScalaで実装する。
-- Scala 3 + Tapir + http4s + Cats Effect を使う。
-- PostgreSQL/NeonへのDBアクセスは Doobie を使う。
-
-### 4.2 API仕様
-
-- Tapirのエンドポイント定義をAPI仕様の正本とする。
-- OpenAPIはTapir定義から生成する。
-- 生成されたOpenAPIをweb側の型生成入力にする。
-- HTTPエラーは Problem Details として返し、UI が機械可読 `code` を解釈できるようにする。
-- JSON mutation は `Idempotency-Key` による replay / in-progress / payload mismatch を扱う。
-- 同じ key + 同じ payload の完了済み request は replay する。
-- 同じ key + 同じ payload の処理中 request は `409` / `IDEMPOTENCY_IN_PROGRESS` を返す。
-- 同じ key + 異なる payload は `409` / `IDEMPOTENCY_PAYLOAD_MISMATCH` を返す。
-- upload 以外の mutation request body には `REQUEST_MAX_BYTES` を適用する。既定値は 256 KiB とする。
-- 画像 upload request には `UPLOAD_REQUEST_MAX_BYTES` を適用し、画像実体は1枚3MBまでとする。
-
-### 4.3 OCR依存障害時の縮退境界
-
-- API processとDBが利用可能な限り、既存resultの表示と`matchDraftId`を持たない画像なし手入力記録は、OCR Worker role、queue、object storageを呼ばずに継続する。
-- 稼働中に共有Redis rate limiterが失敗または応答停止した場合、通常のread/mutationだけは短いtimeout後に同じ設定上限を持つprocess-local limiterへ縮退する。分散上限からinstance単位上限へ弱まるため、状態遷移を安全なログへ記録し、Redis復旧後は自動的に共有limiterへ戻す。
-- OCR受付、画像upload、source image取得は上記fallbackの対象にしない。必要なqueue/object storageを確認できない場合はfail-closedにする。
-- この縮退はAPI processまたはDB障害を隠さない。cold start、DB write、認証sessionの成立は別の可用性前提として扱う。
-
-### 4.4 認証・セッション
-
-- Discord OAuthでログインする。
-- OAuth後はAPIサーバーがHttpOnly Cookieのサーバーサイドセッションを管理する。
-- サーバーサイドセッションはPostgreSQL/Neonの `app_sessions` に保存する。
-- CookieのSameSiteはLaxを基本とする。
-- 本番 Cookie は Secure を基本とする。
-- 状態変更APIにはCSRFトークンを要求する。
-- 認証主体は `momo_login_accounts` とし、試合参加者 `members` とは分離する。
-- dev/test では検証済み session の代替として `X-Momo-Account-Id` を使える。本番では外部から送られた account header を信頼しない。
-
-### 4.5 ジョブoutbox配送
-
-- OCRはjobとRedis配送outboxを同じDB transactionで確定する。戦績分析は試合mutation、再計算request、
-  campaign targetをdurableに確定し、jobを割り当てるtransactionでは対応outboxも同時に確定する。
-- outboxまたは未展開campaign targetを作成したruntimeはDB commit成功後にだけ配送処理をwakeし、必要な
-  job materializationを経て対象queueへのRedis appendを直ちに試みる。wakeは低遅延化のための非durableな
-  通知であり、配送intentの正本にはしない。
-- outboxを作成または再武装し得るDB writeは、commit済みvalueとoutbox種別ごとのpost-commit effectを返す。
-  callerは直後にeffectをprocess-local coordinatorへ渡し、queue consumerでは元deliveryのACK / leave-pendingより
-  先に行う。どのworker roleがwriteを開始したかではなく、実際にcommitしたoutbox種別でwake先を決める。
-- Redis appendをDB transactionの成功条件にしない。配送成功はRedis appendだけでなく、対応outboxを
-  `DELIVERED`へ更新するDB transactionまで成功した時点とする。
-- post-commit wake、process停止、Redis応答喪失、outbox更新失敗のいずれでもDB上のintentを失わず、
-  startup recoveryと用途別のcold sweepで再配送できるようにする。
-- 通常経路は固定短周期でDBをpollしない。wake後はdue workをbounded batchで空になるまで処理し、
-  配送成功または将来時刻へのretry予約後はactive reconcileを終了し、次のwake、予約deadline、またはcold sweepまで
-  DB accessを停止する。coordinator自体は終了させず、commandを発行しない待機状態へ戻す。
-- retryまたはsemantic redeliveryの将来wakeは用途ごとに最も早い時刻へcoalesceし、同時に保持するdeadline
-  timerを1つ以下にする。jobまたはoutboxごとの常駐fiberを作らない。
-- drain全体がDB接続失敗などで完了できない場合はdispatcherを終了またはhot loopさせず、上限付きbackoff後に
-  1回だけ再試行する。依存回復後の正常drainでbackoffをresetする。
-- OCRと戦績分析は同じ安全契約を持つが、semantic redeliveryとcold sweepの時間はjob lifecycleに合わせて
-  個別に定める。重複deliveryはProcessing WorkerのDB claimとterminal状態確認で安全に収束させる。
-- wake、startup、最短deadline、error backoff、bounded drainは共通coordinator契約へ寄せ、outbox固有SQL、
-  payload、semantic reconcileは用途別driverへ残す。Processing Worker runtimeは自身が書くoutbox種別だけを
-  登録し、現在は戦績分析driver 1つを持つ。OCR roleが期限切れ分析attemptを回収した場合も分析wakeを返すが、
-  OCRの通常transient retryは既存PEL deliveryを使うため新しいoutbox wakeを返さない。
-- wake専用の常時稼働service、PostgreSQL `LISTEN`接続、Redis Pub/SubはMVPの必須構成にしない。
-  少人数利用では既存runtime内のpost-commit処理と低頻度recoveryを優先し、idle時の課金対象I/Oを増やさない。
-
----
-
-## 5. OCR Capability / Worker Role
-
-### 5.1 基本構成
-
-- `Processing Worker runtime`はdeploy単位、`processing parent process`は長寿命OS process、OCR / Analysis
-  Worker roleはその中で動く論理的な処理担当、attempt子processは1回分だけを実行する短寿命OS processとする。
-- OCR consumerはRustで実装し、Analysis consumerとprocessing parent process・supervisorを共有する。
-- supervisorは長寿命consumer / coordinatorの開始、shutdown、unexpected exitだけを扱い、OCR / 分析のclaim SQL、
-  payload、outbox意味論を持たない。
-- 親processはqueue、DB claim / lease / fence、共有slot、object取得、子process lifecycle、durable write、
-  post-commit effect、ACKを所有する。OCR / Analysis子processは1 attemptのbounded candidateだけを返し、
-  durable DB write、Redis、outbox、ACKを行わない。
-- OCRライブラリはTesseractとRustの画像処理crateを使う。
-- OCR/画像解析には外部APIを使わない。
-- OCR対象画面種別ごとに独立した解析器を作り、共通前処理だけ共有する。
-- 解析器は抽出結果、信頼度、警告、失敗理由を返せるようにする。
-
-### 5.2 ジョブキュー
-
-- Upstash RedisのRedis StreamsでOCRジョブ配送を実装する。
-- OCRジョブ状態の正本はDBに置く。
-- Redis Streamsは配送キューとして使う。
-- API は OCR job 作成 transaction 内で `ocr_drafts`、`ocr_jobs`、`ocr_queue_outbox` を作成する。
-- `ocr_queue_outbox` が durable enqueue intent の正本であり、Redis publish 完了前でも HTTP request は成功し得る。
-- API は OCR job 作成前に Redis health、`ocr_queue_outbox` backlog、dead-letter stream length を確認し、配送基盤が degraded の場合はDB行を作成せず `503` Problem Details で新規受付を一時停止する。
-- OCRと分析はDB上の単一execution slotを共有し、同時に高負荷子processを実行しない。
-- OCRだけが実行中の分析をpreemptでき、分析からOCRはpreemptしない。
-- processing parent processはterminal DB write before `XACK`を原則とする。
-
-### 5.3 ジョブ記録
-
-OCRジョブごとに以下をDBに保存する。
-
-- 作成時刻
-- 更新時刻
-- 開始時刻
-- 終了時刻
-- 処理時間
-- requested / detected の OCR対象画面種別
-- attempt count
-- 失敗理由
-- warning / timing payload
-
-OCRジョブのタイムアウト初期値は `OCR_TIMEOUT_SECONDS` で管理する。Redis PEL 回収待ちは `OCR_REDIS_CLAIM_IDLE_SECONDS` で別に管理し、OCR処理 timeout と同じ値として扱わない。
-
----
-
-## 6. Analysis Capability / Worker Role
-
-- 戦績比較、振り返り、ドリルダウンに必要な値はRust製Analysis Worker roleで作品単位に事前計算する。
-- APIはjob受付、成果物と状態の読み取り、認証・認可を担当し、分析計算を実行しない。
-- DBをjob、再計算intent、成果物、状態の正本とし、Redis Streamsは配送路として使う。
-- Processing WorkerのDB execution slotは全runtime / deploy世代で1とし、1作品の全有効スコープを1つの
-  入力snapshotから計算する。
-- 計算本体は停止可能な子プロセス境界に置き、timeout、異常終了、将来のOCRによるpreemptionで
-  部分成果物を公開しない。
-- 初回リリースからハードタイムアウト機構を持つ。値は本番同等runtimeで実測後に設定し、
-  未設定のまま公開しない。
-- 成果物の入力version、algorithm version、artifact schema versionを分離して記録する。
-- 詳細要件は `docs/requirements/series-analysis-batch.md` を正本とする。
-- provider固有の配置、resource値、実測値、費用はprivate運用要件で管理する。
-
----
-
-## 7. 画像アップロード・一時ファイル
-
-- アップロード可能な画像形式は PNG/JPEG/WebP とする。
-- 画像ファイルは1枚3MBまでに制限する。
-- upload request 全体の上限は `UPLOAD_REQUEST_MAX_BYTES` で管理する。
-- OCR へ進んでいない未参照 upload は account 別に件数・容量上限を持つ。上限は `IMAGE_UPLOAD_UNREFERENCED_COUNT_LIMIT` と `IMAGE_UPLOAD_UNREFERENCED_BYTES_LIMIT` で管理し、超過時は `429` Problem Details で拒否する。
-- PostgreSQL runtimeのaccount別上限は、同じaccountの予約を直列化したDB transaction内で、冪等keyの既存確認、未参照使用量の集計、上限判定、新規予約を一体として行う。冪等retryは新しい枠を消費せず、並行uploadで上限を超えて予約しない。object storageの空き容量確認は外部状態を含むpreflightであり、このDB上限とは責務を分ける。
-- OCR Worker roleの親側境界はデコード後メモリ保護のため、FullHD（1920x1080）を超える寸法の画像を処理しない。
-- アップロード画像は非公開Cloudflare R2 bucketへ保存し、DBとqueueには推測困難なopaque object keyだけを保持する。bucket URL、credential、署名付きURL、worker間のlocal pathを永続契約にしない。
-- OCR完了時点では画像を削除しない。下書き確定または下書き削除まで保持し、その後削除する。
-- OCR へ進まない未参照 upload は `IMAGE_ORPHAN_OLDER_THAN_MINUTES` より古くなった時点で orphan reaper の削除対象とする。MVP既定値は15分、reaper interval は5分とする。
-- object writeとDB commitの片方だけが成功した状態、削除失敗、参照のないobjectはreconciliation対象とし、削除直前にDB参照を再検査する。
-- 下書き確定・取消はsource imageの `DELETE_PENDING` intentを同じDB transactionで保存する。object削除はtransaction外で
-  再試行し、並行OCR受付はsource rowをlockして `AVAILABLE` を再確認する。active OCR jobまたは非terminal draftが
-  参照中なら削除へ遷移しない。
-- PostgreSQL-backed reconciliationとorphan cleanupは、候補抽出時にDB内で参照有無を判定し、全参照画像IDをAPI processへmaterializeしない。standalone filesystem storeだけは、sweep時に解決した参照集合を明示的なadapterから渡す。
-- `FAILED` uploadの再試行とobject cleanupは、外部object削除前のDB purge claimで排他的にする。retryが先なら
-  replacement objectを削除せず、cleanupが先ならretryを明示的に失敗させる。cleanup途中で停止したclaimは
-  stale期限後に再取得し、object deleteとrow purgeを冪等に完了する。
-- R2-backed uploadとobject reconciliationは同じrelease gateで有効化する。reconcilerを起動できないまま
-  R2-backed uploadだけを有効化する部分切替を許可しない。
-- OCR待ち中にobjectが存在しない、またはbytes、SHA-256、media type、寸法がDB / queue契約と一致しない場合は、ジョブを失敗扱いにし、必要に応じて再アップロードを求める。
-- 画像は下書きの保持lifecycleを超えて恒久保存しない。
-- DBには画像実体、内部ファイルパス、長寿命URLを保存・公開しない。
-- 下書きに紐づく source image は認証付きAPI経由でプレビュー・個別取得・zipダウンロードできる。
-- source image の個別取得・zipダウンロードには account 別の分間 rate limit を適用する。上限は `SOURCE_IMAGE_DOWNLOAD_RATE_LIMIT_PER_MINUTE` で管理し、既定値は60回/分とする。
-- source image zip は生成前に元画像合計サイズを検査し、`SOURCE_IMAGE_ARCHIVE_MAX_BYTES` を超える場合は拒否する。既定値は10MiBとする。
-
----
-
-## 8. DB・スキーマ管理
-
-### 8.1 DB
-
-- DBは Neon PostgreSQL を使い、summit アプリと共有する。
-- DBスキーマの正本は momo-db リポジトリに集約する。
-- 本アプリは momo-db が公開する `members` / `held_events` / `held_event_participants` / `app_sessions` などをDB契約として参照する。
-- 本アプリの認証主体は `momo_login_accounts` で管理する。
-- 本アプリ専用・共有の主要テーブルは以下を含む。
-  - 試合結果: `match_drafts`, `matches`, `match_players`, `match_incidents`
-  - OCR: `ocr_drafts`, `ocr_jobs`, `ocr_queue_outbox`
-  - 戦績分析: job、再計算intent / outbox、version付き成果物を管理するtable
-  - マスタ: `game_titles`, `map_masters`, `season_masters`, `incident_masters`, `member_aliases`
-  - 冪等性: `idempotency_keys`
-
-### 8.2 マイグレーション
-
-- DBマイグレーションの所有権は momo-db に集約する。
-- schema 定義は `../momo-db/src/schema.ts`、migration SQL は `../momo-db/drizzle/` を参照する。
-- スキーマ変更時は momo-db 側で schema / migration を変更し、consumer への影響と deploy 順序を明示する。
-- 消費プロジェクト（本アプリ・summit）の deploy 前に momo-db の migration が適用済みであることを確認する。
-- 後方互換でない schema 変更は、migration と consumer deploy を分割する。
-
-### 8.3 DB契約テスト
-
-- DB-backed API を触る場合は、Testcontainers PostgreSQL に momo-db migration を適用して検証する。
-- DB contract test は、API が前提にする table / column / seed / nullable / default を確認する。
-- repository integration test は、主要クエリを実PostgreSQLで実行する。
-- 標準確認コマンドは `cd apps/api && sbt apiDbQuality` とする。
-
----
-
-## 9. ローカル開発
-
-- ローカル開発では Docker Compose でDB/Redisだけを起動する。
-- web/APIは各言語のdevコマンド、Processing Worker runtimeはLinux専用imageで起動する。
-- ローカルの環境変数は `.env` で管理する。
-- 詳細な起動順序と検証コマンドは `docs/dev-rule.md` を正とする。
-
----
-
-## 10. 本番デプロイ
-
-### 10.1 Runtime構成
-
-- webとAPIは同一ドメインの公開HTTP runtimeで運用する。
-- Caddyがweb SPAの静的ファイル配信とAPI reverse proxyを担当する。
-- 公開経路の各hopとCaddyからJVM APIまでをHTTP/2で接続し、edge側のprotocol表示だけで完了判定しない。
-  runtime smokeはAPIが直接受信したprotocolと、並列requestが単一接続へ多重化されることを検証する。
-- Go製runtime toolがCaddyとJVM APIの起動、監視、graceful shutdownを担当する。
-- JVMとCaddyのresource上限はimageと実行環境で明示的に検証し、hostのCPU数やmemory比率だけに委ねない。JVM profile変更は
-  実効flag検査、実runtime image、cgroup hard limit、主要E2E、最大HTTP同時数の負荷、OOM eventなし、25%以上の
-  peak memory余白を同じcandidateで満たす。target OS / architectureのCIを最終判定とする。
-- OCRと戦績分析は利用者向けHTTP入口を持たない独立Rust runtimeで、DB上の実行枠を1に制限する。
-- provider固有のapp名、region、台数、resource classはprivate運用要件を正本とする。
-
-### 10.2 Dockerイメージ
-
-- マルチステージDockerfileでweb/API/Caddy/Go runtime toolを構成し、最終imageへPythonを含めない。
-- OCRと戦績分析はRustの独立runtime imageとしてビルドする。
-
-### 10.3 デプロイフロー
-
-- 既定ブランチへのmergeではGitHub Actionsが変更範囲を分類し、runtime対象変更だけを承認付きで自動デプロイする。戦績分析は検証済みcandidate作成までを自動化し、本番publicationは手動昇格とする。
-- APIとworkerで互換なartifact schema versionを確認する。本番DB migrationは所有repoからconsumerより先に適用し、このrepoのCIでは隔離DBへの適用と本番read-only preflightを行う。
-- 本番Secretsは `fly secrets` で管理する。
-- CI SecretsはGitHub Actions secretsで管理する。
-
-### 10.4 環境
-
-- MVPではローカル + 本番のみを用意する。
-- 必要に応じてPRごとにNeon branchで検証する。
-
----
-
-## 11. CI・品質管理
-
-### 11.1 CI必須チェック
-
-対象領域ごとに以下を実行する。
-
-| 対象 | 必須チェック |
-|---|---|
-| web | OpenAPI型生成、format、lint、typecheck、Vitest、build |
-| api | format、lint、clean compile、unit / non-integration test、DB quality gate、Redis quality gate、OpenAPI生成チェック |
-| Processing Worker runtime | format、lint、unit / integration test、release build |
-| runtime / E2E | Docker build、runtime smoke、container image scan、Playwright E2E smoke |
-
-Playwright E2E smoke はUX確定済みのログイン後主要フローに絞る。ローカル隔離gateではVite dev serverとE2E専用API / DB / Redisを使う。deploy workflowではweb/API runtime imageを実DB/Redis付きで起動し、ビルド済みwebへPlaywrightを当てる。workerは別途runtime smokeを起動し、成果物を介したE2Eと結合する。runtime経路の開発用認証ヘッダはPlaywrightのbrowser route境界で注入し、本番bundleには埋め込まない。
-
-release対象は検証前に一度だけbuildし、後続gateとdeployで同じartifactを使う。候補のcommit、設定digest、artifact digest、registry digestを相互検証し、可変tagの再解決やdeploy直前の再buildを行わない。rollbackも成功済みdeployの同じ来歴を検証し、通常deployと同じ承認・排他境界で実行する。
-
-### 11.2 フォーマッタ・リンタ
-
-| 対象 | ツール |
-|---|---|
-| web | oxlint + oxfmt |
-| api | scalafmt + scalafix |
-| Processing Worker runtime | rustfmt + Clippy |
-
-### 11.3 テスト
-
-| 対象 | ツール |
-|---|---|
-| web | Vitest + Testing Library |
-| api | MUnit |
-| api DB/Redis integration | Testcontainers + MUnit |
-| Processing Worker runtime | Cargo test + PostgreSQL / Redis / R2 / Linux process integration |
-
----
-
-## 12. セキュリティ
-
-- ログイン可能なユーザーは `momo_login_accounts` で許可した Discord ID に限定する。
-- Discord OAuth後のセッションはHttpOnly Secure Cookieで管理する。
-- セッションはPostgreSQL/Neonに保存する。
-- 状態変更APIにはCSRFトークンを要求する。
-- JSON mutation には `Idempotency-Key` を使い、retry による二重実行を避ける。
-- ログイン、画像アップロード、JSON mutation、CSV/TSV出力に軽いレート制限を入れる。
-- JSON mutation の account 別 rate limit は `MUTATION_RATE_LIMIT_PER_MINUTE` で管理し、既定値は60回/分とする。`idempotency_keys` の未期限切れ key 数は account 別に `IDEMPOTENCY_ACTIVE_KEY_LIMIT_PER_ACCOUNT` で上限を設け、既定値は240件とする。上限超過時は新規 row を作らず `429` Problem Details を返す。これらは週1開催・1開催4〜6試合・試合後都度OCR・開催後1回exportの通常利用を妨げない余裕を持たせる。
-- CSV/TSV出力は scope 指定 export と全件 export の account 別 rate limit を分ける。scope 指定は `EXPORT_RATE_LIMIT_PER_MINUTE` で管理し、既定値は30回/分とする。全件 export は `EXPORT_ALL_RATE_LIMIT_PER_MINUTE` で管理し、既定値は6回/分とする。
-- 同期CSV/TSV出力は生成前後に出力規模を検査し、`EXPORT_MAX_ROWS` または `EXPORT_MAX_BYTES` を超える場合は `413` Problem Details で拒否する。既定値は20,000明細行、16MiBとし、週1開催・1開催4〜6試合・開催後1回exportの通常利用を妨げない余裕を持たせる。
-- scope指定exportの開催内・season内sequenceはDB projectionで算出し、選択された試合本体とそのplayer / incidentだけをmaterializeする。sequence算出のために同じ作品・seasonの全履歴と非選択試合の子rowをAPI heapへ読み込まない。
-- CSV/TSV出力の短時間cacheは、試合編集直後の stale export を避けるためMVPでは導入しない。同期上限に正当な利用が当たり始めた場合は、保持期限、再生成条件、認可境界を設計した非同期exportとして別途扱う。
-- OAuth callback は IP 単位のログイン制限に加え、同一 state の callback 連打を provider 呼び出し前に抑制する。上限は `AUTH_CALLBACK_STATE_RATE_LIMIT_PER_MINUTE` で管理し、既定値は3回/分とする。
-- Discord OAuth provider の `429` / `5xx` / transport error が続く場合は、短時間 provider 呼び出しを止めて `503` Problem Details を返す。閾値は `AUTH_PROVIDER_FAILURE_THRESHOLD`、停止時間は `AUTH_PROVIDER_BACKOFF_SECONDS` で管理し、既定値は3回・60秒とする。
-- アップロード画像はサイズ、形式、寸法、実体を検証する。
-- 画像は下書き確定または下書き削除まで保持し、その後削除する。サーバーに恒久保存しない。
-- ログに画像内容、セッションID、OAuth token、CSRF token、個人情報、Secrets を出さない。
-
----
-
-## 13. 可観測性・運用
-
-### 13.1 ログ
-
-- アプリケーションログは本番で1行JSONログとする。
-- MVPではFly.ioログ確認を主な運用手段とする。
-- 例外ログは秘密情報や個人情報を含めず、必要な相関IDと例外クラス中心に記録する。
-- 戦績分析はjob id、対象作品、version、状態、処理時間、peak memory、安全な失敗codeを記録し、
-  成果物本文や内部例外messageをログに出さない。
-
-### 13.2 ヘルスチェック
-
-- `/healthz` はAPIプロセスの生存のみ確認する。
-- DB/Redis接続は `/healthz/details` で確認する。
-- dev/prod startup 時のDB contract不一致を fail-fast にするか health warning にするかは未決の運用設計事項とし、詳細な follow-up tracking は private postmortem 側で扱う。
-- 公開HTTPを持たないProcessing Worker runtimeは、process生存、最終heartbeat、queue待機時間、job状態を
-  runtimeとDBから観測する。
-
-### 13.3 費用・攻撃観測
-
-MVPでは外部監視基盤を必須にせず、Fly.io logs と `/healthz/details` を主な観測手段にする。公開 `/healthz/details` は攻撃者へ内部件数を渡しすぎないため、DB/Redis/OCR admission の粗い status と reason に留める。件数や容量は安全なログイベント、DB/Redis確認、Fly.ioメトリクスで見る。
-
-費用増加攻撃を疑うときは、以下を同じ時間帯で確認する。
-
-| 観測対象 | 確認元 | 主なイベント・項目 |
-|---|---|---|
-| OCR受付数・作成拒否 | API log、`/healthz/details` | `ocr_job_accepted`, `ocr_job_create_rate_limited`, `ocr_job_create_rejected`, `OCR admission rejected`, `ocrAdmission` |
-| OCR queue/backlog/DLQ | `docs/redis-streams-ocr-contract.md` の Operations | `ocr_queue_outbox` 件数、Redis stream length、consumer group pending count、DLQ stream length |
-| Outbox wake/recovery | API / Processing Worker log、DB | wake理由、drain件数、再配送件数、最古due時刻、idle復帰、cold recovery |
-| 画像upload容量・object storage | API log、object storage metrics | `image_upload_accepted`, `image_upload_rate_limited`, `image_upload_admission rejected`, `source_image_orphan_reaper` |
-| source image download量 | API log | `source_image_transfer_completed`, `source_image_archive_transfer_completed`, `source_image_download_rate_limited`, `source_image_archive_rejected` |
-| CSV/TSV export量 | API log | `match_export_completed`, `match_export_rate_limited`, `match_export_rejected` |
-| OAuth provider / session負荷 | API log | `auth_login_completed`, `auth_login_rate_limited`, `auth_callback_rejected`, `auth_callback_state_rate_limited`, `auth_oauth_provider_backoff_active`, `auth_oauth_provider_backoff_opened` |
-
-ログに含める値は、相関に必要なID、reason、件数、bytes、例外クラス列に限定する。画像内容、OCR raw text 全文、session / CSRF / OAuth token、Redis URL、DB URL、例外message / stack trace は出さない。
-streaming responseはhandlerがresponseを生成した時刻とbody転送完了を別eventとして記録する。転送eventは
-body streamの終了時にexactly onceで、success / error / cancel、実際にpullしたbytes、転送時間を記録し、
-response生成時点をdownload成功として扱わない。request IDはhandler終了後も明示contextとして運び、finalizerの
-log callだけにMDCを復元する。
-
-継続的な `rate_limited`、`rejected`、`degraded:*`、DLQ増加、source image / export の bytes 急増を見つけた場合は、対象機能の受付を一時的に絞る、該当env上限を下げる、または provider / Fly.io 側の設定変更要否を人間が判断する。外部監視基盤、WAF、provider plan 変更はこの文書だけでは実行しない。
-
-### 13.4 バックアップ・復旧
-
-- DBバックアップ/復旧はNeonのPITR/バックアップ機能に依存する。
-- アプリ側では削除前確認を徹底する。
-- 試合結果や下書きは物理削除とする。
-
----
-
-## 14. 性能要件
-
-- 通常画面/APIは体感1秒以内を目標とする。
-- CSV/TSV出力は数秒以内を目標とする。
-- OCRは非同期処理とし、ユーザーが待てればよい。
-- OCR処理時間は実測し、タイムアウトやリトライ方針の判断材料にする。
-- 戦績比較の表示は保存済み成果物の読み取りに限定し、HTTP経路で分析しない。
-- 戦績分析は現在データ量の2倍かつ最低500試合/作品、固定4名、全有効スコープのfixtureで、
-  連続実行、peak memory、処理時間を本番同等runtime上で測定する。
-- 戦績分析のtimeout値は候補版の実測後に決め、resource/performance gateとともに
-  `docs/requirements/series-analysis-batch.md` の受け入れ条件を満たす。
-
----
-
-## 15. 対応環境・アクセシビリティ
-
-### 15.1 ブラウザ
-
-対象ブラウザは以下の最新安定版とする。
-
-- Chrome
-- Firefox
-- Safari
-- Edge
-
-### 15.2 画面サイズ
-
-- 画像アップロード/CSV出力系はPC主対象とする。
-- 画像アップロード/CSV出力系のスマホ対応は軽微操作までとする。
-- その他の機能はスマホでも快適に操作できることを目指す。
-
-### 15.3 アクセシビリティ
-
-- キーボード操作、ラベル、フォーカス、コントラストなど、基本的なWCAG AA相当を目指す。
-
----
-
-## 16. 運用チューニング事項
-
-- OCRジョブのタイムアウト初期値は30秒とし、`OCR_TIMEOUT_SECONDS` で変更可能にする。
-- OCRジョブのRedis配送上限初期値は1回とし、`OCR_MAX_ATTEMPTS` で変更可能にする。
-- Redis PEL claim idle は `OCR_REDIS_CLAIM_IDLE_SECONDS` で変更可能にする。
-- 実測に応じて timeout / retry / DLQ の値を調整する。
-- 戦績分析のハードタイムアウトは設定可能にするが、初期値を推測で固定しない。本番同等runtimeで
-  通常、上限、cold start、連続実行を測定してから設定する。
+目的: `docs/requirements/base.md` の業務要求を実現する技術構成と、可用性、セキュリティ、性能、運用上の達成条件を定義する。
+
+専門正本:
+
+- 実装境界: `docs/architecture.md`
+- DB / migration: `docs/db-rule.md`
+- OCR queue: `docs/redis-streams-ocr-contract.md`
+- 戦績分析: `docs/requirements/series-analysis-batch.md`
+- UI / test / command: `docs/ui-rule.md`、`docs/test-rule.md`、`docs/dev-rule.md`
+
+現在のframework version、directory、env名、threshold、workflow、provider設定は実装・設定を正本とし、この文書へ複製しない。
+
+## 1. System Boundaries
+
+- Web、API、Processing Worker、共有DB、queue、object storageを独立した責務として扱う。
+- WebとAPIだけが利用者向けHTTP runtimeを構成する。OCRと戦績分析は高負荷処理がHTTP可用性を巻き込まない独立Rust runtimeへ置く。
+- APIは認証、入力検証、業務usecase、保存済み状態の読み取りを担う。OCR / 分析engineをHTTP request内で実行しない。
+- DBはsummitと共有するPostgreSQLを使い、schema / migrationは`../momo-db`が所有する。
+- Redis StreamsはOCR / 分析jobの少なくとも1回の配送に使い、状態の正本にしない。
+- upload画像は非公開object storageへ置き、DB / queueにはopaque keyと検証metadataだけを保存する。
+- provider固有のtopology、resource、費用、実測、復旧手順はprivateに置く。
+
+## 2. Web / API Contract
+
+- WebはSPAとし、画面固有状態とserver stateを分離する。accessibility primitive、shared UI、semantic tokenを共通化する。
+- client / serverの両方で入力を検証し、workflow identifierやmode discriminatorを変換で失わない。
+- APIのwire契約はendpoint定義を正本とし、OpenAPIとWeb生成型を同期する。
+- 共通clientがcredential、CSRF、Problem Details、idempotencyを扱い、featureごとに再実装しない。
+- server stateはcache lifecycleを明示し、loading、cached refetch、error、mutation後の関連resourceを区別する。
+- HTTP errorは機械可読な分類を持ち、UIがretry、修正、権限不足、依存障害を区別できること。
+- JSON mutationは同一操作のretryを冪等にし、処理中とpayload不一致を別の競合として扱う。
+- request、response、exportは件数・byte数・複雑性の上限を持ち、上限超過を明示的に拒否する。
+
+具体的なframework、API shape、status code、上限値はsource、OpenAPI、runtime設定を正本とする。
+
+## 3. Asynchronous Processing
+
+- OCR / 分析job、outbox、業務状態は同じDB transactionでdurableに確定し、Redis publishを業務transactionの成功条件にしない。
+- commit後のwakeは低遅延化のhintとし、startup / bounded recoveryで失われたwakeや重複deliveryから回復する。
+- dispatcherはidle時に短周期pollingせず、wake、deadline、低頻度recoveryで動く。
+- terminal DB write前にdeliveryをACKしない。重複deliveryはDB claim、lease、fence、terminal状態で冪等に収束させる。
+- parent processが外部I/O、lease、timeout、子process、durable write、ACKを所有し、attempt childはboundedで非authoritativeなcandidateだけを返す。
+- OCRと分析は共有実行枠を1件とし、OCRだけが分析をpreemptできる。詳細は各専門正本に従う。
+
+## 4. Image / Object Lifecycle
+
+- uploadは許可形式、byte数、寸法、実体、checksumを検証し、workerが取得後にもmetadataを再検証する。
+- account別の未参照upload上限とstorage空き容量preflightを分け、並行retryでもquotaを超過しない。
+- OCR受付、画像取得、object reconciliationの必須依存を確認できない場合はfail closedにする。
+- 画像は下書き確定または削除まで保持し、その後削除する。OCR完了だけでは削除しない。
+- object writeとDB commitの片側成功、orphan、削除失敗、retry / cleanup競合をreconcilerが冪等に収束させる。
+- object-backed uploadとreconcilerは同じrelease単位で有効化し、cleanup不能な部分切替をしない。
+- 画像実体、内部path、長寿命URL、credentialをDB、queue、公開DTOへ置かない。
+- 認証済み利用者は下書きに属する元画像をpreview / downloadできるが、件数・byte数・rateを上限化する。
+
+## 5. Availability / Degradation
+
+- APIとDBが利用可能なら、既存結果の閲覧と画像なしの手入力をOCR / queue / object storageなしで継続できること。
+- 共有rate limiter障害時、通常read / mutationは短いtimeout後に同じ設定上限のprocess-local limiterへ縮退できる。ただし分散上限からinstance単位へ弱まった状態を観測可能にする。
+- OCR受付、upload、source image取得はlocal fallbackの対象にせず、queue / storageを確認できなければ受付を停止する。
+- dependency readiness、process liveness、機能応答、resource / performanceを別の健康状態として扱う。
+- failure時も秘密情報を含まないProblem Detailsと安全な運用情報を返し、内部例外やprovider情報を公開しない。
+
+## 6. Runtime / Release
+
+- public runtimeはWeb静的配信、API、reverse proxyを一つのrelease artifactとして構成し、process lifecycleとgraceful shutdownを管理する。
+- 公開listenerからAPI受信までのprotocol要件は各hopを直接検証し、edge表示から内部hopを推測しない。
+- Processing Workerは利用者向けHTTP入口を持たず、productionと同じOS isolation、cgroup、native dependencyで検証する。
+- runtimeは最小権限で実行し、不要な言語runtime、package manager、debuggerをrelease imageへ含めない。
+- DB migrationはconsumerより先に適用し、破壊的変更は旧新consumerの共存期間を持つ段階migrationにする。
+- release候補は一度だけbuildし、immutable identity / provenanceを後続gateとdeployで再利用する。
+- rollbackは同じ承認・排他・provenance検証を通し、health、機能、性能回復を別々に確認する。
+- secretはlocal、CI、productionの各secret storeで管理し、tracked fileやpublic docsへ置かない。
+
+具体的なruntime構成、CI workflow、release commandは実装と`docs/dev-rule.md`を正本とする。
+
+## 7. Security / Abuse Resistance
+
+- ログインは許可済みaccountに限定し、認証主体と試合参加者を分離する。
+- sessionはserver sideで管理し、cookieのSecure / HttpOnly / SameSiteとCSRF防御を適用する。
+- login、OAuth callback、upload、画像取得、JSON mutation、CSV / TSV exportをaccount / IP / operationの適切なscopeでrate limitする。
+- retry済みidempotent operationを新規操作と同じrate / key上限で誤拒否しない。
+- exportはscope指定と全件を別のcostとして制限し、生成前後にrow / byte上限を検証する。同期上限を超える需要は認可・保持・再生成を設計した非同期処理として扱う。
+- provider連続障害はbounded backoffし、callback replayをprovider呼出し前に抑止する。
+- secret、session / CSRF / OAuth token、接続URL、画像内容、OCR raw text、分析成果物本文、例外全文をlog / responseへ出さない。
+- security gateを通すためにedge policyや認証要件を弱めない。
+
+上限値とfailure thresholdは通常利用を妨げない余裕を持たせ、runtime設定と検証を正本とする。
+
+## 8. Observability / Recovery
+
+- production logはstructured eventとし、相関ID、分類、件数、byte数、処理時間、状態遷移を必要最小限で記録する。
+- stream responseはhandler完了と転送完了を分け、body終了時にsuccess / error / cancelと実転送byte数をexactly once記録する。
+- DBのjob / outbox / artifact、Redis stream / PEL / DLQ、worker heartbeat、queue待機、resourceを別々に観測し、transportから業務状態を推測しない。
+- public healthは粗いstatus / reasonに限定し、内部件数や攻撃面を公開しない。詳細は管理下のlog / metric / DBで確認する。
+- metric labelにaccount、job、作品など高cardinality IDを入れず、安全なopaque IDでlog相関する。
+- DB backup / restoreはDB providerの機能を利用し、復旧可能性を定期的に確認する。アプリの削除確認とprovider backupを混同しない。
+- 外部監視、provider dashboard、alert threshold、個別障害対応はprivate運用文書で管理する。
+
+## 9. Performance / Client Quality
+
+- 通常画面 / APIは体感1秒以内、同期CSV / TSV exportは数秒以内を目標とする。
+- OCRは非同期とし、timeout / retry / DLQは実測とjob lifecycleに基づいて調整する。
+- 戦績比較は保存済みartifactだけを読み、worker、API decode / response、browser parse / renderを別々に測定する。
+- 戦績分析のfixture、連続実行、timeout、resource条件は`docs/requirements/series-analysis-batch.md`を正本とする。
+- target OS / architecture上のruntime imageでmemory hard limit、peak headroom、OOM、shutdown、主要E2Eを検証する。
+- 最新安定版のChrome、Firefox、Safari、Edgeを対象とし、通常操作はmobileでも破綻させない。
+- keyboard、label、focus、contrastを含むWCAG AA相当を目標にする。画像upload / exportはPC主対象としてよいが、意味と安全性をdevice間で変えない。
+
+## 10. Acceptance Evidence
+
+| 変更 | 必要な証拠 |
+| --- | --- |
+| Web / API contract | generated OpenAPI / type、unit / component、主要Playwright |
+| DB / queue / object | migration適用済み実service、transaction / recovery / wire contract |
+| worker / native / isolation | production相当image、process / cgroup / timeout / preemption smoke |
+| runtime / protocol | image build / scan、各hopのprotocol、health、shutdown、主要E2E |
+| security / limits | boundary value、concurrency、retry、dependency failure、secret非露出 |
+| performance | production相当resource、代表・上限・連続実行、process別のmemory / latency |
+| release / rollback | immutable provenance、同一candidate、通常deploy / rollback双方のvalidator |
+
+外部境界を未実行またはskipした場合は、その挙動を未検証として報告する。

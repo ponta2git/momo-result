@@ -206,7 +206,7 @@ INSERT INTO series_analysis_jobs (
   artifact_schema_version, status, trigger, requested_at, available_at
 ) VALUES (
   'ci-preemption-analysis-job', 'ci-preemption-title', 1, 'series-analysis-v3',
-  1, 'queued', 'manual', clock_timestamp(), clock_timestamp()
+  2, 'queued', 'manual', clock_timestamp(), clock_timestamp()
 );
 INSERT INTO source_images (
   id, owner_account_id, object_key, idempotency_key_hash, status,

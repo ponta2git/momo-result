@@ -140,8 +140,9 @@
 ### Series comparison
 
 - Treat series comparison as a path from next-match hypothesis to evidence to an individual match, not as a KPI dashboard.
-- Reserve pale surface backgrounds for visual anchors that establish the reading path: the current scope, selection, or primary result; page-local navigation; section and table/matrix headers; disclosure triggers; and the primary next-match hypothesis. Supporting facts, chart containers, result cards, explanatory copy, and expanded detail bodies stay on the base surface and use spacing, type, and quiet borders for structure.
+- Reserve pale surface backgrounds for visual anchors that establish the reading path: the current scope, selection, or primary result; page-local navigation; section and labeled table/matrix headers; actionable disclosure triggers; and the primary next-match hypothesis. Supporting facts, metric-definition disclosures, empty table cells, unlabeled header intersections, chart containers, result cards, explanatory copy, and expanded detail bodies stay on the base surface and use spacing, type, and quiet borders for structure.
 - Semantic warnings and data-encoded fills are exceptions to the visual-anchor surface rule. They must communicate a real warning, rank, series, or selected-data state rather than decorate a container, and must retain a non-color label or marker.
+- A neutral plot or per-series chart frame is not data encoding. Keep it on the base surface; tint only marks, ranges, or tracks whose color maps to a value, series, warning, or current selection.
 - Keep the comparison loop finite and user-directed: a post-match question provides the trigger, one visual anchor exposes the simplest relevant evidence, and the evidence resolves the question or identifies one next check. Recording or confirming a later match may improve future comparisons, but do not add variable rewards, streaks, urgency, notifications, or engagement-only calls to action.
 - Keep one page title, followed by a compact scope bar ordered as game title, season, then map.
 - Separate the top-level purpose into “次戦に備える” and “分析する”. Within analysis, use “今の差”, “勝因候補”, “推移”, and “条件別” as actual tabs.

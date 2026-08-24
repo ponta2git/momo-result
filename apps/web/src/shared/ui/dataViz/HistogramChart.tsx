@@ -58,7 +58,7 @@ function SingleHistogram({
   const binWidth = chartWidth / Math.max(1, bins.length);
   const barWidth = Math.max(10, binWidth * 0.62);
   return (
-    <div className="min-w-0 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3">
+    <div className="min-w-0 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
       <div className="mb-2 flex min-w-0 items-center gap-2 text-sm font-semibold">
         <span
           aria-hidden="true"

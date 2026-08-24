@@ -14,7 +14,7 @@ export function MetricDefinitions({ response }: { response: SeriesComparisonAggr
       ariaLabel="指標の読み方"
       className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)]"
       panelClassName="border-t border-[var(--color-border)] p-3"
-      triggerClassName="bg-[var(--color-surface-subtle)] hover:bg-[var(--color-surface-selected)]"
+      triggerClassName="font-medium text-[var(--color-text-secondary)] hover:bg-transparent"
       summary={
         <span className="inline-flex items-center gap-2">
           <BookOpenText className="size-4" />

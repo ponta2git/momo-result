@@ -65,7 +65,7 @@ export function RecentRankStrips({
           <thead>
             <tr>
               <th
-                className="sticky left-0 z-[var(--z-sticky)] w-40 min-w-40 bg-[var(--color-surface-subtle)] pr-2"
+                className="sticky left-0 z-[var(--z-sticky)] w-40 min-w-40 bg-[var(--color-surface)] pr-2"
                 scope="col"
               >
                 <span className="sr-only">プレーヤー</span>

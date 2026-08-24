@@ -1,4 +1,9 @@
 const numberFormatter = new Intl.NumberFormat("ja-JP", { maximumFractionDigits: 2 });
+const importanceFormatter = new Intl.NumberFormat("ja-JP", {
+  maximumFractionDigits: 6,
+  minimumFractionDigits: 3,
+  signDisplay: "exceptZero",
+});
 
 export function rankSignalLabel(signal: string): string {
   switch (signal) {
@@ -28,4 +33,12 @@ export function rankSignalCandidateShareLabel(
   if (candidateCount === 1) return "候補はこの1件";
   if (candidateSharePercent === null) return "—";
   return `${numberFormatter.format(candidateSharePercent)}%`;
+}
+
+export function rankSignalFoldLabel(fold: number): string {
+  return fold >= 0 && fold < 26 ? String.fromCodePoint(65 + fold) : String(fold + 1);
+}
+
+export function formatRankSignalImportance(value: number): string {
+  return Number.isFinite(value) ? importanceFormatter.format(value) : "—";
 }

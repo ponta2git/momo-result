@@ -3,7 +3,9 @@ import type { ReactNode } from "react";
 
 import { evidenceStrengthLabel } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
 import {
+  formatRankSignalImportance,
   rankSignalCandidateShareLabel,
+  rankSignalFoldLabel,
   rankSignalLabel,
 } from "@/features/seriesComparison/model/seriesAnalysisRankPresentation";
 import type { SeriesAnalysisDrilldownV3 } from "@/shared/api/seriesAnalysis";
@@ -15,12 +17,6 @@ export type RankSignalPayload = Extract<
   { kind: "rank_signals" }
 >;
 type RankSignalCandidate = RankSignalPayload["candidates"][number];
-
-const importanceFormatter = new Intl.NumberFormat("ja-JP", {
-  maximumFractionDigits: 6,
-  minimumFractionDigits: 3,
-  signDisplay: "exceptZero",
-});
 
 export function RankSignalValidationMethod({ payload }: { payload: RankSignalPayload }) {
   const rows = payload.candidates[0]?.foldRows ?? [];
@@ -39,6 +35,7 @@ export function RankSignalValidationMethod({ payload }: { payload: RankSignalPay
           </span>
         </span>
       }
+      triggerClassName="bg-[var(--color-surface-subtle)] hover:bg-[var(--color-surface-selected)]"
     >
       <section aria-labelledby="rank-signal-validation-flow">
         <h4 className="text-sm font-semibold text-balance" id="rank-signal-validation-flow">
@@ -69,7 +66,7 @@ export function RankSignalValidationMethod({ payload }: { payload: RankSignalPay
           />
           <MethodFact
             label="候補の境目"
-            value={`重要度 ${formatImportance(payload.method.minimumImportance)}以上`}
+            value={`重要度 ${formatRankSignalImportance(payload.method.minimumImportance)}以上`}
           />
         </dl>
       </section>
@@ -82,7 +79,7 @@ export function RankSignalValidationMethod({ payload }: { payload: RankSignalPay
             const row = rowsByFold.get(fold);
             return (
               <li className="flex items-baseline gap-2 text-sm" key={fold}>
-                <span className="font-medium">開催{foldLabel(fold)}</span>
+                <span className="font-medium">開催{rankSignalFoldLabel(fold)}</span>
                 <span className="text-[var(--color-text-secondary)] tabular-nums">
                   {row ? `${row.heldEventCount}開催` : "確認用"}
                 </span>
@@ -123,7 +120,10 @@ export function RankSignalCandidates({ payload }: { payload: RankSignalPayload }
 function MethodStep({ number, title, value }: { number: string; title: string; value: string }) {
   return (
     <li className="grid grid-cols-[1.5rem_minmax(0,1fr)] gap-2 border-t border-[var(--color-border)] py-3 first:border-t-0 sm:border-t-0 sm:border-l sm:px-3 sm:first:border-l-0 sm:first:pl-0 sm:last:pr-0">
-      <span className="text-xs text-[var(--color-text-muted)] tabular-nums" aria-hidden="true">
+      <span
+        className="flex size-6 items-center justify-center rounded-[var(--radius-xs)] bg-[var(--color-surface-selected)] text-xs font-medium text-[var(--color-text-primary)] tabular-nums"
+        aria-hidden="true"
+      >
         {number}
       </span>
       <div>
@@ -157,63 +157,79 @@ function CandidateCard({
   return (
     <article
       aria-label={`${candidateLabel}の検証結果`}
-      className="min-w-0 rounded-[var(--radius-sm)] border border-[var(--color-border)] p-4"
+      className="min-w-0 overflow-hidden rounded-[var(--radius-sm)] border border-[var(--color-border)]"
     >
-      <h4 className="font-semibold text-balance">{candidateLabel}</h4>
-      <dl className="mt-3 grid border-y border-[var(--color-border)] sm:grid-cols-3">
-        <CandidateFact label="別開催で支持" value={`${candidate.supportCount}/${foldCount}組`} />
-        <CandidateFact label="安定性" value={evidenceStrengthLabel(candidate.stabilityBand)} />
-        <CandidateFact
-          label="候補内の比重"
-          value={rankSignalCandidateShareLabel(candidate.candidateSharePercent, candidateCount)}
-        />
-      </dl>
-      <div className="mt-4">
-        <p className="text-xs font-medium text-[var(--color-text-secondary)]">開催ごとの判定</p>
-        <ol
-          aria-label={`${candidateLabel}の別開催での支持`}
-          className="mt-2 grid grid-cols-5 divide-x divide-[var(--color-border)] overflow-hidden rounded-[var(--radius-xs)] border border-[var(--color-border)]"
-        >
-          {Array.from({ length: foldCount }, (_, fold) => {
-            const row = rowByFold.get(fold);
-            const supported = row?.supported ?? false;
-            return (
-              <li
-                aria-label={`開催${foldLabel(fold)}、${row ? (supported ? "支持" : "支持なし") : "データなし"}`}
-                className="grid min-w-0 justify-items-center gap-1 px-1 py-3 text-center"
-                key={fold}
-              >
-                {row && supported ? (
-                  <Check aria-hidden="true" className="size-3.5 text-[var(--color-success)]" />
-                ) : (
-                  <Minus aria-hidden="true" className="size-3.5 text-[var(--color-text-muted)]" />
-                )}
-                <span className="text-[11px] font-medium">開催{foldLabel(fold)}</span>
-                <span
-                  className={cn(
-                    "text-[11px]",
-                    row && supported
-                      ? "text-[var(--color-success)]"
-                      : "text-[var(--color-text-secondary)]",
-                  )}
+      <header className="border-b border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-4 py-3">
+        <h4 className="font-semibold text-balance">{candidateLabel}</h4>
+      </header>
+      <div className="p-4">
+        <dl className="grid border-y border-[var(--color-border)] sm:grid-cols-3">
+          <CandidateFact
+            emphasis
+            label="別開催で支持"
+            value={`${candidate.supportCount}/${foldCount}組`}
+          />
+          <CandidateFact label="安定性" value={evidenceStrengthLabel(candidate.stabilityBand)} />
+          <CandidateFact
+            label="候補内の比重"
+            value={rankSignalCandidateShareLabel(candidate.candidateSharePercent, candidateCount)}
+          />
+        </dl>
+        <div className="mt-4">
+          <p className="text-xs font-medium text-[var(--color-text-secondary)]">開催ごとの判定</p>
+          <ol
+            aria-label={`${candidateLabel}の別開催での支持`}
+            className="mt-2 grid grid-cols-5 divide-x divide-[var(--color-border)] overflow-hidden rounded-[var(--radius-xs)] border border-[var(--color-border)]"
+          >
+            {Array.from({ length: foldCount }, (_, fold) => {
+              const row = rowByFold.get(fold);
+              const supported = row?.supported ?? false;
+              return (
+                <li
+                  aria-label={`開催${rankSignalFoldLabel(fold)}、${row ? (supported ? "支持" : "支持なし") : "データなし"}`}
+                  className="grid min-w-0 justify-items-center gap-1 px-1 py-3 text-center"
+                  key={fold}
                 >
-                  {row ? (supported ? "支持" : "支持なし") : "データなし"}
-                </span>
-              </li>
-            );
-          })}
-        </ol>
+                  {row && supported ? (
+                    <Check aria-hidden="true" className="size-3.5 text-[var(--color-success)]" />
+                  ) : (
+                    <Minus aria-hidden="true" className="size-3.5 text-[var(--color-text-muted)]" />
+                  )}
+                  <span className="text-[11px] font-medium">開催{rankSignalFoldLabel(fold)}</span>
+                  <span
+                    className={cn(
+                      "text-[11px]",
+                      row && supported
+                        ? "text-[var(--color-success)]"
+                        : "text-[var(--color-text-secondary)]",
+                    )}
+                  >
+                    {row ? (supported ? "支持" : "支持なし") : "データなし"}
+                  </span>
+                </li>
+              );
+            })}
+          </ol>
+        </div>
+        <FoldDetails candidate={candidate} />
       </div>
-      <FoldDetails candidate={candidate} />
     </article>
   );
 }
 
-function CandidateFact({ label, value }: { label: string; value: string }) {
+function CandidateFact({
+  emphasis = false,
+  label,
+  value,
+}: {
+  emphasis?: boolean | undefined;
+  label: string;
+  value: string;
+}) {
   return (
     <div className="border-t border-[var(--color-border)] py-3 first:border-t-0 sm:border-t-0 sm:border-l sm:px-3 sm:first:border-l-0 sm:first:pl-0 sm:last:pr-0">
       <dt className="text-xs text-[var(--color-text-secondary)]">{label}</dt>
-      <dd className="mt-0.5 font-semibold tabular-nums">{value}</dd>
+      <dd className={cn("mt-0.5 font-semibold tabular-nums", emphasis && "text-lg")}>{value}</dd>
     </div>
   );
 }
@@ -248,11 +264,11 @@ function FoldDetails({ candidate }: { candidate: RankSignalCandidate }) {
         <tbody>
           {candidate.foldRows.map((row) => (
             <tr className="border-t border-[var(--color-border)]" key={row.fold}>
-              <FoldTableCell>開催{foldLabel(row.fold)}</FoldTableCell>
+              <FoldTableCell>開催{rankSignalFoldLabel(row.fold)}</FoldTableCell>
               <FoldTableCell>{row.heldEventCount}開催</FoldTableCell>
               <FoldTableCell>{row.comparisonCount}組</FoldTableCell>
               <FoldTableCell>{row.supported ? "支持" : "支持なし"}</FoldTableCell>
-              <FoldTableCell>{formatImportance(row.importance)}</FoldTableCell>
+              <FoldTableCell>{formatRankSignalImportance(row.importance)}</FoldTableCell>
             </tr>
           ))}
         </tbody>
@@ -271,12 +287,4 @@ function FoldTableHead({ children }: { children: ReactNode }) {
 
 function FoldTableCell({ children }: { children: ReactNode }) {
   return <td className="px-3 py-2 tabular-nums">{children}</td>;
-}
-
-function foldLabel(fold: number): string {
-  return fold >= 0 && fold < 26 ? String.fromCodePoint(65 + fold) : String(fold + 1);
-}
-
-function formatImportance(value: number): string {
-  return Number.isFinite(value) ? importanceFormatter.format(value) : "—";
 }

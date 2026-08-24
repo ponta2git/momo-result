@@ -50,6 +50,13 @@
 - Disable the selected status control so selecting it again cannot trigger flicker or duplicate loading.
 - Keep unfinished sub-status controls visually subordinate to the primary confirmation split.
 
+### Reliability and data availability
+
+- Treat reliability as an exception state. Render no affirmative reliability label when evidence is ordinary or sufficient; normal operation stays visually quiet.
+- Render low reliability with plain-language warning text and a semantic warning signifier, not color alone. Use “参考値” for reference-quality analysis and “信頼度低め” for low-strength hypotheses.
+- Treat “対象なし” as a neutral data-availability state, not as a reliability warning. In aggregate summaries, list only nonzero “参考値” and “対象なし” counts; never repeat reassuring labels such as “十分”, “信頼度高め”, or “信頼度中”.
+- Never infer healthy reliability from missing metadata. Keep the affected result in the low-reliability warning state until its reliability can be classified.
+
 ### Filter accordion
 
 - Use one reset action for the complete display state. Do not place similarly named full-reset and partial-clear actions together.

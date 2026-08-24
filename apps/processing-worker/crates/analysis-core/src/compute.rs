@@ -208,6 +208,7 @@ pub fn try_for_each_resource<E>(
                     payload: build_drilldown(
                         &scope,
                         member_matches,
+                        &analysis.player_matches,
                         analysis.match_groups.len(),
                         member_id,
                         metric.wire(),
@@ -328,6 +329,22 @@ mod tests {
             (resource.scope == ScopeRef::Overall
                 && resource.kind == ComputedResourceKind::Aggregate)
                 .then_some(&resource.payload)
+        })
+    }
+
+    fn overall_drilldown<'a>(
+        resources: &'a [ComputedResource],
+        member_id: &str,
+        metric: DrilldownMetric,
+    ) -> Option<&'a Value> {
+        resources.iter().find_map(|resource| {
+            (resource.scope == ScopeRef::Overall
+                && resource.kind
+                    == ComputedResourceKind::Drilldown {
+                        member_id: String::from(member_id),
+                        metric,
+                    })
+            .then_some(&resource.payload)
         })
     }
 
@@ -543,6 +560,46 @@ mod tests {
                 .filter_map(|event| event.get("heldEventId").and_then(Value::as_str))
                 .collect::<Vec<_>>(),
             vec!["event-z", "event-a"]
+        );
+        assert_eq!(events[0].get("eventRankDelta"), Some(&json!(null)));
+        assert_eq!(events[1].get("cumulativeAverageDelta"), Some(&json!(0.0)));
+    }
+
+    #[test]
+    fn play_order_drilldown_compares_member_against_whole_scope_baseline() {
+        let mut rows = (1..=2)
+            .flat_map(|match_index| {
+                (1..=4).map(move |player| {
+                    let mut value = row(match_index, player);
+                    value.play_order = 1;
+                    value.rank = if player == 1 { match_index * 2 - 1 } else { 4 };
+                    value
+                })
+            })
+            .collect::<Vec<_>>();
+        rows.sort_by(|left, right| left.played_at.cmp(&right.played_at));
+        let resources = compute_all(&AnalysisInput {
+            game_title_id: String::from("title-1"),
+            input_revision: 1,
+            player_matches: rows,
+        });
+        let drilldown = overall_drilldown(
+            &resources,
+            "member-1",
+            DrilldownMetric::PlayOrderRankHistory,
+        );
+
+        assert_eq!(
+            drilldown.and_then(|payload| payload.pointer("/payload/rows/0/baselineRankAverage")),
+            Some(&json!(3.5))
+        );
+        assert_eq!(
+            drilldown.and_then(|payload| payload.pointer("/payload/rows/0/baselineDelta")),
+            Some(&json!(-1.5))
+        );
+        assert_eq!(
+            drilldown.and_then(|payload| payload.pointer("/payload/summary/bestPlayOrder")),
+            Some(&json!(1))
         );
     }
 

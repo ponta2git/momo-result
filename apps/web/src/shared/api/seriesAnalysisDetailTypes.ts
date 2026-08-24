@@ -39,8 +39,10 @@ export type SeriesAnalysisDrilldownV2 = {
           changeDirection: ChangeDirection;
           cumulativeAverageAfter: number;
           cumulativeAverageBefore: number | null;
+          cumulativeAverageDelta: number | null;
           eventAverageRank: number;
           eventAverageRankDelta: number | null;
+          eventRankDelta: number | null;
           firstPlayedAt: string;
           heldEventId: string;
           matchCount: number;
@@ -62,7 +64,9 @@ export type SeriesAnalysisDrilldownV2 = {
           rankDelta: number | null;
         }>;
         summary: {
+          averageRankDeltaFromFirst: number | null;
           currentAverageRank: number | null;
+          latestHeldEventAverageRankDelta: number | null;
           qualityStatus: DataQualityStatus;
           targetCount: number;
         };
@@ -70,8 +74,12 @@ export type SeriesAnalysisDrilldownV2 = {
     | {
         kind: "play_order_rank_history";
         rows: Array<{
+          baselineDelta: number | null;
+          baselineRankAverage: number | null;
+          lowerHalfCount: number;
           lowerHalfRate: number | null;
           playOrder: number;
+          podiumCount: number;
           podiumRate: number | null;
           qualityStatus: DataQualityStatus;
           rankAverage: number | null;
@@ -93,9 +101,15 @@ export type SeriesAnalysisDrilldownV2 = {
           rank: number;
         }>;
         summary: {
+          bestPlayOrder: number | null;
+          bestPlayOrderAverageRank: number | null;
+          countsByPlayOrder: Array<{ matchCount: number; playOrder: number }>;
           currentAverageRank: number | null;
           qualityStatus: DataQualityStatus;
           targetCount: number;
+          spread: number | null;
+          worstPlayOrder: number | null;
+          worstPlayOrderAverageRank: number | null;
         };
       }
     | {

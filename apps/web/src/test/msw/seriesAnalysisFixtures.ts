@@ -631,8 +631,12 @@ export function makeSeriesAnalysisDrilldown(metricId: string): SeriesAnalysisDri
         kind: "play_order_rank_history",
         rows: [
           {
+            baselineDelta: -0.25,
+            baselineRankAverage: 1.75,
+            lowerHalfCount: 0,
             lowerHalfRate: 0,
             playOrder: 1,
+            podiumCount: 3,
             podiumRate: 1,
             qualityStatus: "ok",
             rankAverage: 1.5,
@@ -656,7 +660,22 @@ export function makeSeriesAnalysisDrilldown(metricId: string): SeriesAnalysisDri
             rank: 1,
           },
         ],
-        summary: { currentAverageRank: 1.75, qualityStatus: "ok", targetCount: 12 },
+        summary: {
+          bestPlayOrder: 1,
+          bestPlayOrderAverageRank: 1.5,
+          countsByPlayOrder: [
+            { matchCount: 3, playOrder: 1 },
+            { matchCount: 3, playOrder: 2 },
+            { matchCount: 3, playOrder: 3 },
+            { matchCount: 3, playOrder: 4 },
+          ],
+          currentAverageRank: 1.75,
+          qualityStatus: "ok",
+          spread: 1.25,
+          targetCount: 12,
+          worstPlayOrder: 4,
+          worstPlayOrderAverageRank: 2.75,
+        },
       },
     };
   }
@@ -736,8 +755,10 @@ export function makeSeriesAnalysisDrilldown(metricId: string): SeriesAnalysisDri
           changeDirection: "improved",
           cumulativeAverageAfter: 1.75,
           cumulativeAverageBefore: 2,
+          cumulativeAverageDelta: -0.25,
           eventAverageRank: 1.5,
           eventAverageRankDelta: -0.5,
+          eventRankDelta: -1,
           firstPlayedAt: "2026-08-08T12:00:00.000Z",
           heldEventId: "event-12",
           matchCount: 4,
@@ -761,7 +782,13 @@ export function makeSeriesAnalysisDrilldown(metricId: string): SeriesAnalysisDri
           rankDelta: -1,
         },
       ],
-      summary: { currentAverageRank: 1.75, qualityStatus: "ok", targetCount: 12 },
+      summary: {
+        averageRankDeltaFromFirst: -0.25,
+        currentAverageRank: 1.75,
+        latestHeldEventAverageRankDelta: -0.25,
+        qualityStatus: "ok",
+        targetCount: 12,
+      },
     },
   };
 }

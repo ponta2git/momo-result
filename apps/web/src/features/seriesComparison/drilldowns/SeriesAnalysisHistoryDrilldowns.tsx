@@ -44,6 +44,26 @@ export function RankHistoryDrilldown({
             value: `${formatDecimal(payload.summary.currentAverageRank)}位`,
           },
           {
+            id: "since-first",
+            label: "初戦後からの通算変化",
+            value: (
+              <ChangeBadge
+                direction={deltaDirection(payload.summary.averageRankDeltaFromFirst)}
+                magnitude={payload.summary.averageRankDeltaFromFirst}
+              />
+            ),
+          },
+          {
+            id: "latest-event",
+            label: "直近開催での通算変化",
+            value: (
+              <ChangeBadge
+                direction={deltaDirection(payload.summary.latestHeldEventAverageRankDelta)}
+                magnitude={payload.summary.latestHeldEventAverageRankDelta}
+              />
+            ),
+          },
+          {
             id: "quality",
             label: "読み取り",
             value: qualityLabel(payload.summary.qualityStatus),
@@ -71,6 +91,49 @@ export function RankHistoryDrilldown({
         yAxisLabel="累積平均順位"
         yTicks={[1, 2, 3, 4]}
       />
+      <div className="overflow-x-auto">
+        <table
+          aria-label={`${playerName}の開催別平均順位`}
+          className="w-full min-w-[48rem] text-left text-sm"
+        >
+          <thead>
+            <tr>
+              <TableHead>開催</TableHead>
+              <TableHead>初回日時</TableHead>
+              <TableHead>順位列</TableHead>
+              <TableHead>開催平均</TableHead>
+              <TableHead>開催内変化</TableHead>
+              <TableHead>通算平均の変化</TableHead>
+            </tr>
+          </thead>
+          <tbody>
+            {payload.eventRows.map((row) => (
+              <tr className="border-t border-[var(--color-border)]" key={row.heldEventId}>
+                <TableCell>{row.heldEventId}</TableCell>
+                <TableCell>{formatDateTime(row.firstPlayedAt)}</TableCell>
+                <TableCell>{row.ranks.join(" → ")}</TableCell>
+                <TableCell>{formatDecimal(row.eventAverageRank)}位</TableCell>
+                <TableCell>
+                  <ChangeBadge
+                    direction={deltaDirection(row.eventRankDelta)}
+                    magnitude={row.eventRankDelta}
+                  />
+                </TableCell>
+                <TableCell>
+                  <span className="mr-2 tabular-nums">
+                    {formatDecimal(row.cumulativeAverageBefore)}位 →{" "}
+                    {formatDecimal(row.cumulativeAverageAfter)}位
+                  </span>
+                  <ChangeBadge
+                    direction={deltaDirection(row.cumulativeAverageDelta)}
+                    magnitude={row.cumulativeAverageDelta}
+                  />
+                </TableCell>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[54rem] text-left text-sm">
           <thead>
@@ -139,6 +202,27 @@ export function PlayOrderHistoryDrilldown({
             value: `${formatDecimal(payload.summary.currentAverageRank)}位`,
           },
           {
+            id: "best",
+            label: "最良番手",
+            value:
+              payload.summary.bestPlayOrder === null
+                ? "—"
+                : `${payload.summary.bestPlayOrder}番手・${formatDecimal(payload.summary.bestPlayOrderAverageRank)}位`,
+          },
+          {
+            id: "worst",
+            label: "最悪番手",
+            value:
+              payload.summary.worstPlayOrder === null
+                ? "—"
+                : `${payload.summary.worstPlayOrder}番手・${formatDecimal(payload.summary.worstPlayOrderAverageRank)}位`,
+          },
+          {
+            id: "spread",
+            label: "番手間の平均順位差",
+            value: `${formatDecimal(payload.summary.spread)}位`,
+          },
+          {
             id: "quality",
             label: "読み取り",
             value: qualityLabel(payload.summary.qualityStatus),
@@ -158,7 +242,12 @@ export function PlayOrderHistoryDrilldown({
               {formatDecimal(row.rankAverage)}位
             </p>
             <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
-              入賞 {formatPercent(row.podiumRate)} / 下位 {formatPercent(row.lowerHalfRate)}
+              入賞 {row.podiumCount}戦・{formatPercent(row.podiumRate)} / 下位 {row.lowerHalfCount}
+              戦・{formatPercent(row.lowerHalfRate)}
+            </p>
+            <p className="mt-1 text-xs text-[var(--color-text-secondary)] tabular-nums">
+              全体同番手 {formatDecimal(row.baselineRankAverage)}位・差{" "}
+              {formatSignedDecimal(row.baselineDelta)}位
             </p>
           </div>
         ))}
@@ -277,4 +366,16 @@ function rankDeltaLabel(delta: number | null): string {
   if (delta === null) return "初戦";
   if (delta === 0) return "0位・維持";
   return `${delta < 0 ? -delta : delta}位・${delta < 0 ? "改善" : "後退"}`;
+}
+
+function deltaDirection(value: number | null): ChangeBadgeProps["direction"] {
+  if (value === null) return "unavailable";
+  if (value < 0) return "improved";
+  if (value > 0) return "declined";
+  return "unchanged";
+}
+
+function formatSignedDecimal(value: number | null): string {
+  if (value === null) return "—";
+  return `${value > 0 ? "+" : ""}${formatDecimal(value)}`;
 }

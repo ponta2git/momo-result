@@ -96,6 +96,12 @@ describe("rich series analysis views", () => {
     await user.click(screen.getByRole("button", { name: "ぽんたの資産傾向の詳しい根拠" }));
     expect(screen.getByText("勝利時の2位差中央")).toBeInTheDocument();
     expect(screen.getByText(/大勝 8億円.*惜しい2位 2億円.*大敗 12億円/u)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "収益と順位の詳細" }));
+    expect(screen.getByText("収益順位だけでは説明しない順位差")).toBeInTheDocument();
+    expect(screen.getByText("収益1位以外からの勝利")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "目的地と順位の詳細" }));
+    expect(screen.getByText("到着多寡による入賞率差")).toBeInTheDocument();
+    expect(screen.getByText("目的地への依存度")).toBeInTheDocument();
     expect(screen.getByText(/候補はこの1件.*別開催で支持 5組/u)).toBeInTheDocument();
     expect(screen.getByText("4億5000万円")).toBeInTheDocument();
     expect(screen.getByText("0円")).toBeInTheDocument();
@@ -127,6 +133,9 @@ describe("rich series analysis views", () => {
     expect(document.querySelector('[data-focused-metric="true"]')).toBeInTheDocument();
     expect(document.body).not.toHaveTextContent("destination_with_shop");
     expect(screen.getByText("得意")).toBeInTheDocument();
+    expect(screen.getByText("複数回遭遇した試合")).toBeInTheDocument();
+    expect(screen.getByText("1試合の最多遭遇")).toBeInTheDocument();
+    expect(screen.getByText("遭遇時平均収益")).toBeInTheDocument();
     const playOrderMatrix = screen.getByRole("table", { name: "番手別成績" });
     expect(within(playOrderMatrix).getAllByRole("columnheader")).toHaveLength(5);
     expect(within(playOrderMatrix).getAllByRole("cell")).toHaveLength(4);
@@ -180,6 +189,9 @@ describe("rich series analysis views", () => {
     expect(screen.getByLabelText("順位の切り替わりのセルの読み方")).toHaveTextContent(
       "同じ前戦順位から、その次戦順位になった割合",
     );
+    expect(screen.getByText(/連勝 1・連続入賞 2・連続下位 0/u)).toBeInTheDocument();
+    expect(screen.getByText("下位の次に入賞")).toBeInTheDocument();
+    expect(screen.getByText(/2\/4戦・50%/u)).toBeInTheDocument();
     expect(screen.getByRole("region", { name: "直近20戦" })).toBeInTheDocument();
     expect(screen.getByText("第1試合")).toBeInTheDocument();
     expect(screen.getByText("第2試合")).toBeInTheDocument();

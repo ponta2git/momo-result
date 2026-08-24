@@ -10,8 +10,10 @@ import {
 import {
   formatDecimal,
   formatPercent,
+  qualityLabel,
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
 import type { SeriesComparisonAggregateV2 } from "@/shared/api/seriesAnalysis";
+import type { SeriesAnalysisMomentumRate } from "@/shared/api/seriesAnalysisMetricTypes";
 import { DataVizLineChart } from "@/shared/ui/dataViz/LineChart";
 import { dataVizSeriesColor } from "@/shared/ui/dataViz/playerSeries";
 import { rankBackgroundColor, rankBorderColor } from "@/shared/ui/rank/rankPresentation";
@@ -168,6 +170,11 @@ export function MomentumMatrices({
               >
                 {entry.displayName}
               </h3>
+              <dl className="mb-3 grid gap-2 text-xs sm:grid-cols-3">
+                <MomentumRateSummary label="下位の次に入賞" rate={entry.afterLower} />
+                <MomentumRateSummary label="4位の次に入賞" rate={entry.afterFourth} />
+                <MomentumRateSummary label="入賞の次に下位" rate={entry.afterPodium} />
+              </dl>
               <AnalysisMatrix
                 ariaLabel={`${entry.displayName}の順位の切り替わり`}
                 className="min-w-[24rem] table-fixed"
@@ -248,6 +255,32 @@ export function MomentumMatrices({
       </div>
     </div>
   );
+}
+
+function MomentumRateSummary({ label, rate }: { label: string; rate: SeriesAnalysisMomentumRate }) {
+  return (
+    <div className="rounded-[var(--radius-xs)] bg-[var(--color-surface)] p-2">
+      <dt className="font-semibold">{label}</dt>
+      <dd className="mt-1 text-[var(--color-text-secondary)] tabular-nums">
+        {rate.successCount}/{rate.targetCount}戦・{formatPercent(rate.rate)}
+      </dd>
+      <dd className="text-[var(--color-text-secondary)] tabular-nums">
+        通常 {formatPercent(rate.baselineRate)}・差 {formatPercent(rate.deltaFromBaseline)}・
+        {momentumSignalLabel(rate.signal)}・{qualityLabel(rate.qualityStatus)}
+      </dd>
+    </div>
+  );
+}
+
+function momentumSignalLabel(signal: SeriesAnalysisMomentumRate["signal"]): string {
+  switch (signal) {
+    case "strength":
+      return "強み候補";
+    case "risk":
+      return "注意候補";
+    case "none":
+      return "目立つ差なし";
+  }
 }
 
 function trendSeries(response: SeriesComparisonAggregateV2, kind: string) {

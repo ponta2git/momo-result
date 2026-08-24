@@ -120,6 +120,12 @@ export function RecentRankStrips({
                       {formatPercent(entry?.podiumRate)}・
                       {qualityLabel(entry?.qualityStatus ?? "no_target")}
                     </span>
+                    {entry ? (
+                      <span className="block text-[11px] font-normal text-[var(--color-text-secondary)] tabular-nums">
+                        連勝 {entry.winStreak}・連続入賞 {entry.podiumStreak}・連続下位{" "}
+                        {entry.lowerHalfStreak}
+                      </span>
+                    ) : null}
                   </th>
                   {axisRows.map((axisRow, pointIndex) => {
                     const row = rowsByMatchId.get(axisRow.matchId);

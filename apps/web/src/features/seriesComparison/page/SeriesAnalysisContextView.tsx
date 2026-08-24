@@ -74,6 +74,15 @@ export function ContextView({ focusedItemIds, response, onDrilldown }: AnalysisV
                   label="遭遇時平均資産"
                   value={formatManYen(metric.ginji.resilienceAssetsAverage)}
                 />
+                <MetricValue
+                  label="複数回遭遇した試合"
+                  value={`${metric.ginji.multiEncounterMatchCount}戦`}
+                />
+                <MetricValue label="1試合の最多遭遇" value={`${metric.ginji.maxInSingleMatch}回`} />
+                <MetricValue
+                  label="遭遇時平均収益"
+                  value={formatManYen(metric.ginji.resilienceRevenueAverage)}
+                />
               </dl>
             </article>
           ))}

@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 3,
+  "scope": { "kind": "overall", "matchCount": 3 },
+  "baseline": {},
+  "commonPlaybookTopics": [],
+  "playbookByPlayer": [
+    {
+      "player": { "memberId": "member-1" },
+      "primaryCard": {
+        "cardId": "playbook:member-1:accident",
+        "classification": "verify",
+        "category": "accident",
+        "heading": "事故後の戻し方",
+        "actionHypothesis": "事故後の戻し方を確かめる。",
+        "triggerCondition": "事故があったとき。",
+        "recommendedAction": "収益と目的地を確認する。",
+        "avoidAction": "単発で断定しない。",
+        "dataReason": "開催単位で再標本化した。",
+        "postMatchCheck": "次戦後に再確認する。",
+        "plainReason": "入賞側と下位側に差がある候補です。",
+        "evidenceStrength": "medium",
+        "targetCount": 8,
+        "evidence": [
+          {
+            "metricId": "accident.rankScore",
+            "label": "条件内と本人基準の差",
+            "unit": "score",
+            "value": -0.25,
+            "denominator": 12,
+            "targetCount": 8,
+            "qualityStatus": "ok",
+            "stabilityBand": "medium"
+          },
+          {
+            "metricId": "revenue.rank",
+            "label": "物件収益順位",
+            "unit": "score",
+            "value": 0.5,
+            "effectEstimate": 0.6,
+            "method": "event_cluster_bootstrap_v1",
+            "confidenceLow": 0.2,
+            "confidenceHigh": 0.9,
+            "stability": 0.75,
+            "denominator": 8,
+            "targetCount": 8,
+            "supportCount": 3,
+            "qualityStatus": "ok",
+            "stabilityBand": "medium"
+          }
+        ],
+        "qualityStatus": "ok",
+        "stabilityBand": "medium",
+        "supportCount": 3,
+        "anchorTarget": { "view": "flow", "sectionId": "metric-match-digest", "label": "期間内の荒れ" },
+        "actionAdviceScore": 0.123
+      },
+      "secondaryCards": []
+    }
+  ],
+  "dataQuality": {}
+}

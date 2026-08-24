@@ -266,7 +266,7 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite:
 
   test("aggregate reader accepts only current or previous bounded checksummed chunk"):
     val payload =
-      """{"schemaVersion":2,"scope":{"kind":"overall","matchCount":1},"players":[{"memberId":"member_ponta"}],"summary":{},"metricsByPlayer":[{"memberId":"member_ponta","denominator":1}],"rankDistribution":[],"recentRanks":[],"strategyScatter":{},"playOrderComparison":[],"revenueRankConversion":[],"trends":[],"histograms":{},"headToHead":[],"momentumSwitch":{},"performanceProfiles":{},"assetStyleProfiles":{},"cardShopDestination":{},"matchDigest":[],"matchNoInEvent":[],"rankAnalysis":{},"highlights":[],"dataQuality":{},"metricDefinitions":[],"source":{}}"""
+      """{"schemaVersion":3,"scope":{"kind":"overall","matchCount":1},"players":[{"memberId":"member_ponta"}],"summary":{},"metricsByPlayer":[{"memberId":"member_ponta","denominator":1}],"rankDistribution":[],"recentRanks":[],"strategyScatter":{},"playOrderComparison":[],"revenueRankConversion":[],"trends":[],"histograms":{},"headToHead":[],"momentumSwitch":{},"performanceProfiles":{},"assetStyleProfiles":{},"cardShopDestination":{},"matchDigest":[],"matchNoInEvent":[],"rankAnalysis":{},"highlights":[],"dataQuality":{},"metricDefinitions":[],"source":{}}"""
         .getBytes(StandardCharsets.UTF_8)
     for
       _ <- seedTitle

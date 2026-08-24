@@ -2,8 +2,8 @@ import { RefreshCw } from "lucide-react";
 import { useState } from "react";
 
 import type {
-  SeriesComparisonAggregateV2,
-  SeriesComparisonReviewV2,
+  SeriesComparisonAggregateV3,
+  SeriesComparisonReviewV3,
 } from "@/shared/api/seriesAnalysis";
 import { useMediaQuery } from "@/shared/lib/useMediaQuery";
 import { Button } from "@/shared/ui/actions/Button";
@@ -12,7 +12,7 @@ import { SelectField } from "@/shared/ui/forms/SelectField";
 
 type SelectOption = { disabled?: boolean | undefined; label: string; value: string };
 type SeriesAnalysisResourceSummary = Pick<
-  SeriesComparisonAggregateV2 | SeriesComparisonReviewV2,
+  SeriesComparisonAggregateV3 | SeriesComparisonReviewV3,
   "artifact" | "dataQuality" | "scope"
 >;
 

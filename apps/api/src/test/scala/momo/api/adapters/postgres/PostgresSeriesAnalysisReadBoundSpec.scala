@@ -29,7 +29,7 @@ final class PostgresSeriesAnalysisReadBoundSpec extends CatsEffectSuite:
     scope,
   )
   private val AggregatePrefix =
-    """{"schemaVersion":2,"scope":{"kind":"overall","matchCount":0},"players":[],"summary":"""
+    """{"schemaVersion":3,"scope":{"kind":"overall","matchCount":0},"players":[],"summary":"""
   private val AggregateSuffix =
     ""","metricsByPlayer":[],"rankDistribution":[],"recentRanks":[],"strategyScatter":{},"playOrderComparison":[],"revenueRankConversion":[],"trends":[],"histograms":{},"headToHead":[],"momentumSwitch":{},"performanceProfiles":{},"assetStyleProfiles":{},"cardShopDestination":{},"matchDigest":[],"matchNoInEvent":[],"rankAnalysis":{},"highlights":[],"dataQuality":{},"metricDefinitions":[],"source":{}}"""
 
@@ -175,7 +175,7 @@ final class PostgresSeriesAnalysisReadBoundSpec extends CatsEffectSuite:
     artifactGameTitleId = gameTitleId,
     inputRevision = 0,
     algorithmVersion = "series-analysis-v1",
-    artifactSchemaVersion = 1,
+    artifactSchemaVersion = 2,
     publishedAt = Instant.parse("2026-08-09T00:00:00Z"),
     scopeKind = Some(scope.kind),
     payload = Some(payload),

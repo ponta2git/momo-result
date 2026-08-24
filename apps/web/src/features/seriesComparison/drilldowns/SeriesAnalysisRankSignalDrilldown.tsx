@@ -10,12 +10,12 @@ import {
   rankSignalCandidateShareLabel,
   rankSignalLabel,
 } from "@/features/seriesComparison/model/seriesAnalysisRankPresentation";
-import type { SeriesAnalysisDrilldownV2 } from "@/shared/api/seriesAnalysis";
+import type { SeriesAnalysisDrilldownV3 } from "@/shared/api/seriesAnalysis";
 import { cn } from "@/shared/ui/cn";
 import { Disclosure } from "@/shared/ui/data/Collapsible";
 import { Notice } from "@/shared/ui/feedback/Notice";
 
-type RankSignalPayload = Extract<SeriesAnalysisDrilldownV2["payload"], { kind: "rank_signals" }>;
+type RankSignalPayload = Extract<SeriesAnalysisDrilldownV3["payload"], { kind: "rank_signals" }>;
 type RankSignalCandidate = RankSignalPayload["candidates"][number];
 
 const importanceFormatter = new Intl.NumberFormat("ja-JP", {

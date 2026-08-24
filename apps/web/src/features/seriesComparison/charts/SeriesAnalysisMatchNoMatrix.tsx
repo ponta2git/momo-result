@@ -10,13 +10,13 @@ import {
   formatPercent,
   qualityLabel,
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
-import type { SeriesComparisonAggregateV2 } from "@/shared/api/seriesAnalysis";
+import type { SeriesComparisonAggregateV3 } from "@/shared/api/seriesAnalysis";
 import { Disclosure } from "@/shared/ui/data/Collapsible";
 import { dataVizSeriesColor } from "@/shared/ui/dataViz/playerSeries";
 
-type MatchNoEntry = SeriesComparisonAggregateV2["matchNoInEvent"]["entries"][number];
+type MatchNoEntry = SeriesComparisonAggregateV3["matchNoInEvent"]["entries"][number];
 
-export function MatchNoInEventMatrix({ response }: { response: SeriesComparisonAggregateV2 }) {
+export function MatchNoInEventMatrix({ response }: { response: SeriesComparisonAggregateV3 }) {
   const entryByNo = new Map(
     response.matchNoInEvent.entries.map((entry) => [entry.matchNoInEvent, entry]),
   );
@@ -63,7 +63,7 @@ function MatchNoMatrix({
 }: {
   ariaLabel: string;
   entries: MatchNoEntry[];
-  response: SeriesComparisonAggregateV2;
+  response: SeriesComparisonAggregateV3;
 }) {
   return (
     <AnalysisMatrix ariaLabel={ariaLabel} className="min-w-[42rem] table-fixed">
@@ -103,7 +103,7 @@ function MatchNoRow({
   rowByMemberId,
 }: {
   entry: MatchNoEntry;
-  response: SeriesComparisonAggregateV2;
+  response: SeriesComparisonAggregateV3;
   rowByMemberId: Map<string, MatchNoEntry["players"][number]>;
 }) {
   return (

@@ -14,8 +14,8 @@ import type {
 import { isAnalysisArtifactExpired } from "@/shared/api/problemDetails";
 import { shouldShowQueryError } from "@/shared/api/queryErrorState";
 import type {
-  SeriesComparisonAggregateV2,
-  SeriesComparisonReviewV2,
+  SeriesComparisonAggregateV3,
+  SeriesComparisonReviewV3,
 } from "@/shared/api/seriesAnalysis";
 import {
   seriesAnalysisAggregateQueryOptions,
@@ -42,8 +42,8 @@ function sameDisplayBundle(
 
 function displayBundleWithoutContext(
   activeView: SeriesAnalysisViewId,
-  aggregate: SeriesComparisonAggregateV2 | undefined,
-  review: SeriesComparisonReviewV2 | undefined,
+  aggregate: SeriesComparisonAggregateV3 | undefined,
+  review: SeriesComparisonReviewV3 | undefined,
 ): SeriesAnalysisDisplayBundle | undefined {
   if (activeView === "review") {
     return review ? { kind: "review", matchContext: undefined, review, view: "review" } : undefined;

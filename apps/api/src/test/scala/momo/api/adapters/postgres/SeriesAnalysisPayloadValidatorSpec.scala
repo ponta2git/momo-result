@@ -1,5 +1,7 @@
 package momo.api.adapters.postgres
 
+import java.nio.file.Files
+
 import io.circe.Json
 import io.circe.parser.parse
 import munit.FunSuite
@@ -11,8 +13,9 @@ import momo.api.domain.{
   SeriesAnalysisDrilldownMetric,
   SeriesAnalysisScope
 }
+import momo.api.testing.JsonSchemaAssertions
 
-final class SeriesAnalysisPayloadValidatorSpec extends FunSuite:
+final class SeriesAnalysisPayloadValidatorSpec extends FunSuite with JsonSchemaAssertions:
   private val titleId = GameTitleId.unsafeFromString("title-payload-validator")
   private val overall = SeriesAnalysisScope.Overall
 
@@ -47,6 +50,39 @@ final class SeriesAnalysisPayloadValidatorSpec extends FunSuite:
       true,
     )
 
+  test("accepts the shared v3 payload fixtures"):
+    assertEquals(
+      validate(
+        sharedFixture("aggregate-payload-v3.json"),
+        simpleRequest(SeriesAnalysisChunkKind.Aggregate),
+        0,
+        None
+      ),
+      true,
+    )
+    assertEquals(
+      validate(
+        sharedFixture("review-payload-v3.json"),
+        simpleRequest(SeriesAnalysisChunkKind.Review),
+        1,
+        None
+      ),
+      true,
+    )
+    assertEquals(
+      validate(
+        sharedFixture("drilldown-payload-v3.json"),
+        request(
+          SeriesAnalysisChunkKind.Drilldown,
+          Some("member-1"),
+          Some(SeriesAnalysisDrilldownMetric.RankAverageHistory),
+          None,
+        ),
+        1,
+        None,
+      ),
+      true,
+    )
   test("rejects unknown fields and manifest identity mismatches"):
     assertEquals(
       validate(
@@ -184,6 +220,10 @@ final class SeriesAnalysisPayloadValidatorSpec extends FunSuite:
   private def simpleRequest(kind: SeriesAnalysisChunkKind): SeriesAnalysisChunkRequest =
     request(kind, None, None, None)
 
+  private def sharedFixture(name: String): Json =
+    parse(Files.readString(repositoryFile(s"docs/schemas/fixtures/series-analysis/$name")))
+      .fold(error => fail(s"invalid shared fixture: $error"), identity)
+
   private def validate(
       json: Json,
       request: SeriesAnalysisChunkRequest,
@@ -193,7 +233,7 @@ final class SeriesAnalysisPayloadValidatorSpec extends FunSuite:
 
   private def aggregate: Json = json(
     """{
-      "schemaVersion":2,
+      "schemaVersion":3,
       "scope":{"kind":"overall","matchCount":0},
       "players":[],
       "summary":{},
@@ -222,7 +262,7 @@ final class SeriesAnalysisPayloadValidatorSpec extends FunSuite:
 
   private def review: Json = json(
     """{
-      "schemaVersion":2,
+      "schemaVersion":3,
       "scope":{"kind":"overall","matchCount":0},
       "baseline":{},
       "commonPlaybookTopics":[],
@@ -261,7 +301,7 @@ final class SeriesAnalysisPayloadValidatorSpec extends FunSuite:
           "rows" -> Json.arr(),
         )
     Json.obj(
-      "schemaVersion" -> Json.fromInt(2),
+      "schemaVersion" -> Json.fromInt(3),
       "scope" -> Json.obj(
         "kind" -> Json.fromString("overall"),
         "matchCount" -> Json.fromInt(1),

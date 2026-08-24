@@ -14,7 +14,7 @@ import type {
   SeriesAnalysisRankAnalysis,
 } from "@/shared/api/seriesAnalysisMetricTypes";
 
-export type SeriesComparisonAggregateV2 = {
+export type SeriesComparisonAggregateV3 = {
   artifact: SeriesAnalysisArtifactRef;
   assetStyleProfiles: {
     entries: Array<{
@@ -239,7 +239,7 @@ export type SeriesComparisonAggregateV2 = {
     displayName: string;
     memberId: string;
   }>;
-  schemaVersion: 2;
+  schemaVersion: 3;
   scope: SeriesAnalysisScope;
   strategyScatter: {
     points: Array<{

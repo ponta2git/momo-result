@@ -5,7 +5,7 @@ binary="${1:-}"
 postgres_image="${POSTGRES_IMAGE:-postgres:18-alpine}"
 worker_image="${ANALYSIS_WORKER_IMAGE:-}"
 operation_key="ci-release-control-plane"
-algorithm_version="${ANALYSIS_ALGORITHM_VERSION:-series-analysis-v2}"
+algorithm_version="${ANALYSIS_ALGORITHM_VERSION:-series-analysis-v3}"
 release_database_url="${RELEASE_DATABASE_URL:-${WORKER_DATABASE_URL:-${DATABASE_URL:-}}}"
 
 if [[ ! "${algorithm_version}" =~ ^series-analysis-v[0-9]+$ ]]; then
@@ -81,10 +81,10 @@ psql_ci -c "
     ('match-release-smoke-a', 'member_eu', 'incident_suri_no_ginji', 1);
   INSERT INTO series_analysis_reader_capabilities (
     reader_id, artifact_schema_versions
-  ) VALUES ('reader-release-smoke', '[1]');
+  ) VALUES ('reader-release-smoke', '[2]');
   INSERT INTO series_analysis_worker_capabilities (
     worker_id, algorithm_versions, artifact_schema_versions
-  ) VALUES ('worker-release-smoke', jsonb_build_array('${algorithm_version}'), '[1]');
+  ) VALUES ('worker-release-smoke', jsonb_build_array('${algorithm_version}'), '[2]');
 "
 
 dry_run="$(run_release_command release-promote \
@@ -130,7 +130,7 @@ applied_counts="$(psql_ci -At -c "
       WHERE status = 'pending'
         AND job_request_id IS NULL
         AND algorithm_version = '${algorithm_version}'
-        AND artifact_schema_version = 1);
+        AND artifact_schema_version = 2);
 ")"
 if [[ "${applied_counts}" != "1|1|2|0|0|0|2" ]]; then
   echo "release apply produced an unexpected control-plane shape: ${applied_counts}" >&2

@@ -12,11 +12,11 @@ final class SeriesAnalysisArtifactContractSpec extends FunSuite with JsonSchemaA
   test("artifact and queue fixtures satisfy the shared JSON Schemas"):
     assertJsonSchemaValid(
       seriesAnalysisArtifactSchemaPath,
-      fixture("valid-artifact-v1.json"),
+      fixture("valid-artifact-v2.json"),
     )
     assertJsonSchemaInvalid(
       seriesAnalysisArtifactSchemaPath,
-      fixture("invalid-artifact-v1.json"),
+      fixture("invalid-artifact-v2.json"),
     )
     assertJsonSchemaValid(
       seriesAnalysisQueueSchemaPath,

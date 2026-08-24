@@ -10,18 +10,18 @@ import {
   qualityLabel,
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
 import { SeriesAnalysisMatchLink } from "@/features/seriesComparison/navigation/SeriesAnalysisMatchLink";
-import type { SeriesAnalysisDrilldownV2 } from "@/shared/api/seriesAnalysis";
+import type { SeriesAnalysisDrilldownV3 } from "@/shared/api/seriesAnalysis";
 import { DataVizLineChart } from "@/shared/ui/dataViz/LineChart";
 import { RankBadge } from "@/shared/ui/rank/RankBadge";
 
 import { DrilldownFacts } from "./SeriesAnalysisDrilldownPrimitives";
 
 type RankHistoryPayload = Extract<
-  SeriesAnalysisDrilldownV2["payload"],
+  SeriesAnalysisDrilldownV3["payload"],
   { kind: "rank_average_history" }
 >;
 type PlayOrderHistoryPayload = Extract<
-  SeriesAnalysisDrilldownV2["payload"],
+  SeriesAnalysisDrilldownV3["payload"],
   { kind: "play_order_rank_history" }
 >;
 

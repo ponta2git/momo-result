@@ -34,7 +34,7 @@ pub(super) fn build(
         _ => outcome_model.unexpected_wins_drilldown_json(member_id),
     };
     json!({
-        "schemaVersion": 2,
+        "schemaVersion": 3,
         "scope": scope_summary_json(scope, match_count),
         "player": member_ref_json(member_id),
         "payload": payload,

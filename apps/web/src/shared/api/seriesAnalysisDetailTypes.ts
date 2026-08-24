@@ -31,7 +31,7 @@ export type SeriesAnalysisDrilldownQuery = SeriesAnalysisQuery & {
   metricId: SeriesAnalysisDrilldownMetricId;
 };
 
-export type SeriesAnalysisDrilldownV2 = {
+export type SeriesAnalysisDrilldownV3 = {
   artifact: SeriesAnalysisArtifactRef;
   payload:
     | {
@@ -162,7 +162,7 @@ export type SeriesAnalysisDrilldownV2 = {
         };
       };
   player: SeriesAnalysisPlayer;
-  schemaVersion: 2;
+  schemaVersion: 3;
   scope: SeriesAnalysisScope;
 };
 

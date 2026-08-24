@@ -4,11 +4,11 @@ import type { ReactNode } from "react";
 import type { SeriesAnalysisDrilldownSelection } from "@/features/seriesComparison/drilldowns/SeriesAnalysisDrilldownDialog";
 import type {
   SeriesAnalysisPlayer,
-  SeriesComparisonAggregateV2,
+  SeriesComparisonAggregateV3,
 } from "@/shared/api/seriesAnalysis";
 import { Disclosure } from "@/shared/ui/data/Collapsible";
 
-export function MetricDefinitions({ response }: { response: SeriesComparisonAggregateV2 }) {
+export function MetricDefinitions({ response }: { response: SeriesComparisonAggregateV3 }) {
   return (
     <Disclosure
       ariaLabel="指標の読み方"
@@ -40,7 +40,7 @@ export function MetricDefinitions({ response }: { response: SeriesComparisonAggr
 
 export type AnalysisViewProps = {
   focusedItemIds: readonly string[];
-  response: SeriesComparisonAggregateV2;
+  response: SeriesComparisonAggregateV3;
   onDrilldown: (selection: SeriesAnalysisDrilldownSelection) => void;
 };
 
@@ -178,7 +178,7 @@ export function memberNames(players: SeriesAnalysisPlayer[], memberIds: string[]
 }
 
 function metricReadingCue(
-  definition: SeriesComparisonAggregateV2["metricDefinitions"][number],
+  definition: SeriesComparisonAggregateV3["metricDefinitions"][number],
 ): string {
   const cue = metricReadingCues[definition.metricId];
   if (cue) return cue;

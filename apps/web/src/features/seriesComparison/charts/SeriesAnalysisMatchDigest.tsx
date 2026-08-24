@@ -8,7 +8,7 @@ import {
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
 import { SeriesAnalysisMatchLink } from "@/features/seriesComparison/navigation/SeriesAnalysisMatchLink";
 import { playerName } from "@/features/seriesComparison/page/SeriesAnalysisViewPrimitives";
-import type { SeriesComparisonAggregateV2 } from "@/shared/api/seriesAnalysis";
+import type { SeriesComparisonAggregateV3 } from "@/shared/api/seriesAnalysis";
 import { Button } from "@/shared/ui/actions/Button";
 
 const flagOrder = ["close_finish", "asset_blowout", "ginji_storm", "revenue_top_no_win"];
@@ -20,7 +20,7 @@ export function MatchDigestStrip({
 }: {
   focusedItemIds: readonly string[];
   onFocusMatch: (matchId: string) => void;
-  response: SeriesComparisonAggregateV2;
+  response: SeriesComparisonAggregateV3;
 }) {
   return (
     <div className="grid gap-3">

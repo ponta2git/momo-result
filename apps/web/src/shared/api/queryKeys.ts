@@ -86,14 +86,14 @@ export const seriesAnalysisKeys = {
   statusRoot: () => ["series-analysis", "status", "v2"] as const,
   status: (gameTitleId: string | undefined) =>
     ["series-analysis", "status", "v2", gameTitleId ?? "none"] as const,
-  artifactRoot: () => ["series-analysis", "artifact", "v2"] as const,
+  artifactRoot: () => ["series-analysis", "artifact", "v3"] as const,
   aggregate: (params: unknown) =>
-    ["series-analysis", "artifact", "v2", "aggregate", params] as const,
-  review: (params: unknown) => ["series-analysis", "artifact", "v2", "review", params] as const,
+    ["series-analysis", "artifact", "v3", "aggregate", params] as const,
+  review: (params: unknown) => ["series-analysis", "artifact", "v3", "review", params] as const,
   drilldown: (params: unknown) =>
-    ["series-analysis", "artifact", "v2", "drilldown", params] as const,
+    ["series-analysis", "artifact", "v3", "drilldown", params] as const,
   matchContext: (params: unknown) =>
-    ["series-analysis", "artifact", "v2", "match-context", params] as const,
+    ["series-analysis", "artifact", "v3", "match-context", params] as const,
   adminRoot: () => ["series-analysis", "admin", "overview"] as const,
   adminOverview: (gameTitleId: string | undefined) =>
     ["series-analysis", "admin", "overview", gameTitleId ?? "default"] as const,

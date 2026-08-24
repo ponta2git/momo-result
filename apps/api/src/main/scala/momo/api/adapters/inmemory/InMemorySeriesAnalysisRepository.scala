@@ -34,7 +34,7 @@ final class InMemorySeriesAnalysisRepository[F[_]: Sync] private (
     case Some(_) => calculations.get.map(values =>
         SeriesAnalysisStatus(
           gameTitleId,
-          SeriesAnalysisDesiredVersion(0, "series-analysis-v1", 1),
+          SeriesAnalysisDesiredVersion(0, "series-analysis-v3", 2),
           "unavailable",
           None,
           values.get(gameTitleId),
@@ -70,7 +70,7 @@ final class InMemorySeriesAnalysisRepository[F[_]: Sync] private (
                       option.displayName,
                       SeriesAnalysisStatus(
                         id,
-                        SeriesAnalysisDesiredVersion(0, "series-analysis-v1", 1),
+                        SeriesAnalysisDesiredVersion(0, "series-analysis-v3", 2),
                         "unavailable",
                         None,
                         calculationsValue.get(id),
@@ -140,7 +140,7 @@ final class InMemorySeriesAnalysisRepository[F[_]: Sync] private (
             None,
             None,
             0,
-            "series-analysis-v1",
+            "series-analysis-v3",
             0,
             0,
             0,

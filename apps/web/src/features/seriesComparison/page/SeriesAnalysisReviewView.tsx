@@ -17,7 +17,7 @@ import {
 } from "@/features/seriesComparison/page/SeriesComparisonAnalysisNavigation";
 import type {
   SeriesAnalysisPlaybookCard,
-  SeriesComparisonReviewV2,
+  SeriesComparisonReviewV3,
 } from "@/shared/api/seriesAnalysis";
 import { Button } from "@/shared/ui/actions/Button";
 import { Disclosure } from "@/shared/ui/data/Collapsible";
@@ -33,7 +33,7 @@ export function ReviewView({
 }: {
   loading: boolean;
   onViewChange: (view: SeriesAnalysisViewId, options?: { replace?: boolean }) => void;
-  response: SeriesComparisonReviewV2 | undefined;
+  response: SeriesComparisonReviewV3 | undefined;
   showError: boolean;
 }) {
   if (loading) {

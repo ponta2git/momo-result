@@ -60,7 +60,7 @@ pub(super) fn aggregate(
     let (leader_member_ids, rank_spread) = leader_summary(players, player_matches_by_member);
 
     json!({
-        "schemaVersion": 2,
+        "schemaVersion": 3,
         "scope": scope_summary_json(scope, groups.len()),
         "players": players.iter().map(|member_id| member_ref_json(member_id)).collect::<Vec<_>>(),
         "summary": {

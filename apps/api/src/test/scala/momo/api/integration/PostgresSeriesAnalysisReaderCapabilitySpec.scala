@@ -16,8 +16,8 @@ final class PostgresSeriesAnalysisReaderCapabilitySpec extends IntegrationSuite:
         .use(_ => capabilityRow)
       draining <- capabilityRow
     yield
-      assertEquals(active, ("[1]", false))
-      assertEquals(draining, ("[1]", true))
+      assertEquals(active, ("[2]", false))
+      assertEquals(draining, ("[2]", true))
 
   private def capabilityRow: IO[(String, Boolean)] = sql"""
     SELECT artifact_schema_versions::text, draining

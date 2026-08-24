@@ -3,8 +3,8 @@
   "artifactId": "artifact-contract-invalid",
   "gameTitleId": "title-contract-1",
   "inputRevision": "7",
-  "algorithmVersion": "series-analysis-v1",
-  "artifactSchemaVersion": 1,
+  "algorithmVersion": "series-analysis-v3",
+  "artifactSchemaVersion": 2,
   "sourceInputChecksum": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
   "rootChecksum": "sha256:523d3565c60a4547df9eeb536855af333e2390a6d197b11987f4cb12d01fe1f9",
   "resources": [

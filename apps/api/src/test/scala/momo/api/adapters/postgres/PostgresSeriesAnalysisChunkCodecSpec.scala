@@ -207,7 +207,7 @@ final class PostgresSeriesAnalysisChunkCodecSpec extends FunSuite:
       artifactGameTitleId = gameTitleId,
       inputRevision = 0,
       algorithmVersion = "series-analysis-v1",
-      artifactSchemaVersion = 1,
+      artifactSchemaVersion = 2,
       publishedAt = Instant.parse("2026-08-09T00:00:00Z"),
       scopeKind = Some(scope.kind),
       payload = Some(payload),
@@ -234,7 +234,7 @@ final class PostgresSeriesAnalysisChunkCodecSpec extends FunSuite:
       case other => fail(s"expected Internal($expectedDetail), got $other")
 
   private def aggregate(summary: String): String =
-    s"""{"schemaVersion":2,"scope":{"kind":"overall","matchCount":0},"players":[],"summary":$summary,"metricsByPlayer":[],"rankDistribution":[],"recentRanks":[],"strategyScatter":{},"playOrderComparison":[],"revenueRankConversion":[],"trends":[],"histograms":{},"headToHead":[],"momentumSwitch":{},"performanceProfiles":{},"assetStyleProfiles":{},"cardShopDestination":{},"matchDigest":[],"matchNoInEvent":[],"rankAnalysis":{},"highlights":[],"dataQuality":{},"metricDefinitions":[],"source":{}}"""
+    s"""{"schemaVersion":3,"scope":{"kind":"overall","matchCount":0},"players":[],"summary":$summary,"metricsByPlayer":[],"rankDistribution":[],"recentRanks":[],"strategyScatter":{},"playOrderComparison":[],"revenueRankConversion":[],"trends":[],"histograms":{},"headToHead":[],"momentumSwitch":{},"performanceProfiles":{},"assetStyleProfiles":{},"cardShopDestination":{},"matchDigest":[],"matchNoInEvent":[],"rankAnalysis":{},"highlights":[],"dataQuality":{},"metricDefinitions":[],"source":{}}"""
 
   private def sha256(bytes: Array[Byte]): String =
     val digest = MessageDigest.getInstance("SHA-256").digest(bytes)

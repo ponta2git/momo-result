@@ -6,7 +6,7 @@ import {
   qualityLabel,
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
 import { SeriesAnalysisMatchLink } from "@/features/seriesComparison/navigation/SeriesAnalysisMatchLink";
-import type { SeriesComparisonAggregateV2 } from "@/shared/api/seriesAnalysis";
+import type { SeriesComparisonAggregateV3 } from "@/shared/api/seriesAnalysis";
 import { dataVizSeriesColor } from "@/shared/ui/dataViz/playerSeries";
 import { rankColor, rankForegroundColor } from "@/shared/ui/rank/rankPresentation";
 
@@ -15,7 +15,7 @@ export function RecentRankStrips({
   response,
 }: {
   focusedItemIds: readonly string[];
-  response: SeriesComparisonAggregateV2;
+  response: SeriesComparisonAggregateV3;
 }) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const entryByMemberId = new Map(response.recentRanks.map((entry) => [entry.memberId, entry]));

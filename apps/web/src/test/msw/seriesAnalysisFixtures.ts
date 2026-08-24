@@ -1,18 +1,18 @@
 import type {
   SeriesAnalysisAdminOverview,
-  SeriesAnalysisDrilldownV2,
+  SeriesAnalysisDrilldownV3,
   SeriesAnalysisMatchContextV2,
   SeriesAnalysisOptionsResponse,
   SeriesAnalysisStatusResponse,
   SeriesAnalysisArtifactRef,
-  SeriesComparisonAggregateV2,
-  SeriesComparisonReviewV2,
+  SeriesComparisonAggregateV3,
+  SeriesComparisonReviewV3,
 } from "@/shared/api/seriesAnalysis";
 
 export const analysisArtifact = {
-  algorithmVersion: "series-analysis-v1",
+  algorithmVersion: "series-analysis-v3",
   artifactId: "artifact-current",
-  artifactSchemaVersion: 1,
+  artifactSchemaVersion: 2,
   gameTitleId: "gt_momotetsu_2",
   inputRevision: "12",
   publishedAt: "2026-08-09T01:02:03.000Z",
@@ -53,7 +53,7 @@ export function makeSeriesAnalysisStatus(
     currentArtifact: analysisArtifact,
     desired: {
       algorithmVersion: analysisArtifact.algorithmVersion,
-      artifactSchemaVersion: 1,
+      artifactSchemaVersion: 2,
       inputRevision: analysisArtifact.inputRevision,
     },
     gameTitleId: analysisArtifact.gameTitleId,
@@ -66,7 +66,7 @@ const quality = { noTargetCount: 0, okCount: 8, referenceCount: 0 };
 
 export function makeSeriesAnalysisAggregate(
   artifact: SeriesAnalysisArtifactRef = analysisArtifact,
-): SeriesComparisonAggregateV2 {
+): SeriesComparisonAggregateV3 {
   return {
     artifact,
     assetStyleProfiles: {
@@ -475,7 +475,7 @@ export function makeSeriesAnalysisAggregate(
         memberId: player.memberId,
       },
     ],
-    schemaVersion: 2,
+    schemaVersion: 3,
     scope,
     strategyScatter: {
       points: [
@@ -572,7 +572,7 @@ export function makeSeriesAnalysisAggregate(
   };
 }
 
-export function makeSeriesAnalysisReview(): SeriesComparisonReviewV2 {
+export function makeSeriesAnalysisReview(): SeriesComparisonReviewV3 {
   return {
     artifact: analysisArtifact,
     baseline: { matchCount: 12, playerCount: 1, qualityStatus: "ok" },
@@ -623,13 +623,13 @@ export function makeSeriesAnalysisReview(): SeriesComparisonReviewV2 {
         secondaryCards: [],
       },
     ],
-    schemaVersion: 2,
+    schemaVersion: 3,
     scope,
   };
 }
 
-export function makeSeriesAnalysisDrilldown(metricId: string): SeriesAnalysisDrilldownV2 {
-  const common = { artifact: analysisArtifact, player, schemaVersion: 2 as const, scope };
+export function makeSeriesAnalysisDrilldown(metricId: string): SeriesAnalysisDrilldownV3 {
+  const common = { artifact: analysisArtifact, player, schemaVersion: 3 as const, scope };
   if (metricId === "playOrder.rankHistory") {
     return {
       ...common,
@@ -865,7 +865,7 @@ export function makeSeriesAnalysisAdminOverview(): SeriesAnalysisAdminOverview {
     },
     recentJobs: [
       {
-        algorithmVersion: "series-analysis-v1",
+        algorithmVersion: "series-analysis-v3",
         attemptCount: 1,
         coalescedTriggers: [],
         elapsedMilliseconds: 1234,

@@ -4,19 +4,19 @@ import type {
   SeriesAnalysisAdminOverview,
   SeriesAnalysisRecalculationAccepted,
 } from "@/shared/api/seriesAnalysisAdminTypes";
-import type { SeriesComparisonAggregateV2 } from "@/shared/api/seriesAnalysisAggregateTypes";
+import type { SeriesComparisonAggregateV3 } from "@/shared/api/seriesAnalysisAggregateTypes";
 import type {
   SeriesAnalysisOptionsResponse,
   SeriesAnalysisStatusResponse,
 } from "@/shared/api/seriesAnalysisCoreTypes";
 import type {
   SeriesAnalysisDrilldownQuery,
-  SeriesAnalysisDrilldownV2,
+  SeriesAnalysisDrilldownV3,
   SeriesAnalysisMatchContextQuery,
   SeriesAnalysisMatchContextV2,
   SeriesAnalysisQuery,
 } from "@/shared/api/seriesAnalysisDetailTypes";
-import type { SeriesComparisonReviewV2 } from "@/shared/api/seriesAnalysisReviewTypes";
+import type { SeriesComparisonReviewV3 } from "@/shared/api/seriesAnalysisReviewTypes";
 
 export type * from "@/shared/api/seriesAnalysisCoreTypes";
 export type * from "@/shared/api/seriesAnalysisAggregateTypes";
@@ -57,21 +57,21 @@ export function getSeriesAnalysisStatus(
 export function getSeriesAnalysisAggregate(
   query: SeriesAnalysisQuery,
   options: ApiSignalOptions = {},
-): Promise<SeriesComparisonAggregateV2> {
+): Promise<SeriesComparisonAggregateV3> {
   return apiRequest(scopedPath("aggregate", query), options);
 }
 
 export function getSeriesAnalysisReview(
   query: SeriesAnalysisQuery,
   options: ApiSignalOptions = {},
-): Promise<SeriesComparisonReviewV2> {
+): Promise<SeriesComparisonReviewV3> {
   return apiRequest(scopedPath("review", query), options);
 }
 
 export function getSeriesAnalysisDrilldown(
   query: SeriesAnalysisDrilldownQuery,
   options: ApiSignalOptions = {},
-): Promise<SeriesAnalysisDrilldownV2> {
+): Promise<SeriesAnalysisDrilldownV3> {
   const params = scopeParams(query);
   params.set("memberId", query.memberId);
   params.set("metricId", query.metricId);

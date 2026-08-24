@@ -1,4 +1,4 @@
-import type { SeriesComparisonAggregateV2 } from "@/shared/api/seriesAnalysisAggregateTypes";
+import type { SeriesComparisonAggregateV3 } from "@/shared/api/seriesAnalysisAggregateTypes";
 import type {
   DataQualityStatus,
   SeriesAnalysisArtifactRef,
@@ -45,7 +45,7 @@ export type SeriesAnalysisPlaybookCard = {
   triggerCondition: string;
 };
 
-export type SeriesComparisonReviewV2 = {
+export type SeriesComparisonReviewV3 = {
   artifact: SeriesAnalysisArtifactRef;
   baseline: {
     matchCount: number;
@@ -59,12 +59,12 @@ export type SeriesComparisonReviewV2 = {
     playerIds: string[];
     topicId: string;
   }>;
-  dataQuality: SeriesComparisonAggregateV2["dataQuality"];
+  dataQuality: SeriesComparisonAggregateV3["dataQuality"];
   playbookByPlayer: Array<{
     player: SeriesAnalysisPlayer;
     primaryCard: SeriesAnalysisPlaybookCard | null;
     secondaryCards: SeriesAnalysisPlaybookCard[];
   }>;
-  schemaVersion: 2;
+  schemaVersion: 3;
   scope: SeriesAnalysisScope;
 };

@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://momo-result.local/schemas/series-analysis-artifact-v1.schema.json",
-  "title": "Series analysis artifact manifest v1",
+  "$id": "https://momo-result.local/schemas/series-analysis-artifact-v2.schema.json",
+  "title": "Series analysis artifact manifest v2",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -21,7 +21,7 @@
     "gameTitleId": { "$ref": "#/$defs/opaqueId" },
     "inputRevision": { "$ref": "#/$defs/nonNegativeDecimal" },
     "algorithmVersion": { "$ref": "#/$defs/version" },
-    "artifactSchemaVersion": { "const": 1 },
+    "artifactSchemaVersion": { "const": 2 },
     "sourceInputChecksum": { "$ref": "#/$defs/checksum" },
     "rootChecksum": { "$ref": "#/$defs/checksum" },
     "resources": {

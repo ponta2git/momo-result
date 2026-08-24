@@ -21,7 +21,7 @@ import {
 import { SeriesAnalysisMatchLink } from "@/features/seriesComparison/navigation/SeriesAnalysisMatchLink";
 import type {
   SeriesAnalysisDrilldownMetricId,
-  SeriesAnalysisDrilldownV2,
+  SeriesAnalysisDrilldownV3,
   SeriesAnalysisQuery,
 } from "@/shared/api/seriesAnalysis";
 import { Button } from "@/shared/ui/actions/Button";
@@ -79,7 +79,7 @@ export function SeriesAnalysisDrilldownDialog({
   );
 }
 
-function DrilldownBody({ response }: { response: SeriesAnalysisDrilldownV2 }) {
+function DrilldownBody({ response }: { response: SeriesAnalysisDrilldownV3 }) {
   const payload = response.payload;
   switch (payload.kind) {
     case "rank_average_history":
@@ -98,7 +98,7 @@ function DrilldownBody({ response }: { response: SeriesAnalysisDrilldownV2 }) {
 export function UnexpectedWinsDrilldown({
   payload,
 }: {
-  payload: Extract<SeriesAnalysisDrilldownV2["payload"], { kind: "unexpected_wins" }>;
+  payload: Extract<SeriesAnalysisDrilldownV3["payload"], { kind: "unexpected_wins" }>;
 }) {
   return (
     <div className="grid gap-4">

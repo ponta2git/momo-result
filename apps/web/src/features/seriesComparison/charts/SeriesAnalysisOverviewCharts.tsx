@@ -10,13 +10,13 @@ import {
   formatPercent,
   headToHeadSignalLabel,
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
-import type { RelativeIntensity, SeriesComparisonAggregateV2 } from "@/shared/api/seriesAnalysis";
+import type { RelativeIntensity, SeriesComparisonAggregateV3 } from "@/shared/api/seriesAnalysis";
 import { dataVizSeriesColor } from "@/shared/ui/dataViz/playerSeries";
 import { colorMix, rankColor } from "@/shared/ui/rank/rankPresentation";
 
 type OverviewChartProps = {
   focusedItemIds: readonly string[];
-  response: SeriesComparisonAggregateV2;
+  response: SeriesComparisonAggregateV3;
 };
 
 export function RankDistributionBars({ focusedItemIds, response }: OverviewChartProps) {
@@ -89,7 +89,7 @@ export function RankDistributionBars({ focusedItemIds, response }: OverviewChart
   );
 }
 
-export function CrownShareBars({ response }: { response: SeriesComparisonAggregateV2 }) {
+export function CrownShareBars({ response }: { response: SeriesComparisonAggregateV3 }) {
   const shareByMemberId = new Map(
     response.rankAnalysis.crownCertainty.shares.map((entry) => [entry.memberId, entry.share]),
   );
@@ -144,7 +144,7 @@ export function CrownShareBars({ response }: { response: SeriesComparisonAggrega
   );
 }
 
-export function HeadToHeadMatrix({ response }: { response: SeriesComparisonAggregateV2 }) {
+export function HeadToHeadMatrix({ response }: { response: SeriesComparisonAggregateV3 }) {
   return (
     <AnalysisMatrix ariaLabel="直接対決" className="min-w-[42rem] table-fixed">
       <thead>

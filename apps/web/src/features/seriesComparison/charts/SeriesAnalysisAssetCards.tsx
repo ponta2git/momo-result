@@ -12,11 +12,11 @@ import {
   profileLabel,
   qualityLabel,
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
-import type { SeriesComparisonAggregateV2 } from "@/shared/api/seriesAnalysis";
+import type { SeriesComparisonAggregateV3 } from "@/shared/api/seriesAnalysis";
 import { Disclosure } from "@/shared/ui/data/Collapsible";
 import { DataVizQuadrantPlot } from "@/shared/ui/dataViz/QuadrantPlot";
 
-export function AssetComparisonCards({ response }: { response: SeriesComparisonAggregateV2 }) {
+export function AssetComparisonCards({ response }: { response: SeriesComparisonAggregateV3 }) {
   const revenueLeaders = response.highlights.find(
     (highlight) => highlight.metricId === "revenue.average",
   )?.leaderMemberIds;
@@ -207,7 +207,7 @@ function AssetDetailFact({ label, value }: { label: string; value: string }) {
   );
 }
 
-export function StrategyProfileQuadrant({ response }: { response: SeriesComparisonAggregateV2 }) {
+export function StrategyProfileQuadrant({ response }: { response: SeriesComparisonAggregateV3 }) {
   return (
     <DataVizQuadrantPlot
       ariaLabel="物件収益比率と順位スコアの4象限"

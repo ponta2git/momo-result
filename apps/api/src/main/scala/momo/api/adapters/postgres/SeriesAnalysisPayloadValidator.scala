@@ -68,6 +68,32 @@ private[postgres] object SeriesAnalysisPayloadValidator:
     "anchorTarget",
     "actionAdviceScore",
   )
+  private val SymptomEvidenceKeys = Set(
+    "metricId",
+    "label",
+    "unit",
+    "value",
+    "denominator",
+    "targetCount",
+    "qualityStatus",
+    "stabilityBand",
+  )
+  private val DriverEvidenceKeys = Set(
+    "metricId",
+    "label",
+    "unit",
+    "value",
+    "effectEstimate",
+    "method",
+    "confidenceLow",
+    "confidenceHigh",
+    "stability",
+    "denominator",
+    "targetCount",
+    "supportCount",
+    "qualityStatus",
+    "stabilityBand",
+  )
   private val Categories = Set(
     "revenue",
     "destination",
@@ -103,7 +129,7 @@ private[postgres] object SeriesAnalysisPayloadValidator:
     val denominators = metrics.traverseValues(
       _.asObject.flatMap(objectLong(_, "denominator"))
     )
-    schemaAndScope(value, 2, scope) && players.size <= 4 &&
+    schemaAndScope(value, 3, scope) && players.size <= 4 &&
     playerIds.size == players.size && playerIds.distinct.size == playerIds.size &&
     metrics.size == players.size && metrics.forall(metric =>
       metric.hcursor.get[String]("memberId").toOption.exists(playerIds.contains)
@@ -119,7 +145,7 @@ private[postgres] object SeriesAnalysisPayloadValidator:
   ): Boolean = exactObject(json, ReviewKeys).exists { value =>
     val topics = value("commonPlaybookTopics").flatMap(_.asArray).getOrElse(Vector.empty)
     val playbooks = value("playbookByPlayer").flatMap(_.asArray).getOrElse(Vector.empty)
-    schemaAndScope(value, 2, scope) && topics.size <= 2 && topics.forall(validateCommonTopic) &&
+    schemaAndScope(value, 3, scope) && topics.size <= 2 && topics.forall(validateCommonTopic) &&
     playbooks.size == itemCount && playbooks.size <= 4 &&
     playbooks.flatMap(playbookMemberId).distinct.size == playbooks.size &&
     playbooks.forall(validatePlaybook)
@@ -148,10 +174,15 @@ private[postgres] object SeriesAnalysisPayloadValidator:
   }
 
   private def validateCard(json: Json): Boolean = exactObject(json, CardKeys).exists { value =>
+    val evidence = value("evidence").flatMap(_.asArray).getOrElse(Vector.empty)
     value("classification").flatMap(_.asString).exists(Classifications.contains) &&
     value("category").flatMap(_.asString).exists(Categories.contains) &&
     objectLong(value, "targetCount").exists(_ >= 3) &&
-    value("evidence").flatMap(_.asArray).exists(_.size == 2)
+    (evidence match
+      case Vector(symptom, driver) =>
+        exactObject(symptom, SymptomEvidenceKeys).nonEmpty &&
+        exactObject(driver, DriverEvidenceKeys).nonEmpty
+      case _ => false)
   }
 
   private def cardCategories(cards: Vector[Json]): Option[Vector[String]] =
@@ -185,7 +216,7 @@ private[postgres] object SeriesAnalysisPayloadValidator:
       case SeriesAnalysisDrilldownMetric.UnexpectedWins =>
         "unexpected_wins" -> Set("kind", "summary", "rows")
     }
-    schemaAndScope(value, 2, request.scope) && playerMatches && expected.exists {
+    schemaAndScope(value, 3, request.scope) && playerMatches && expected.exists {
       case (kind, keys) => detail.exists(detailValue =>
           detailValue.keys.toSet == keys &&
             detailValue("kind").flatMap(_.asString).contains(kind) &&

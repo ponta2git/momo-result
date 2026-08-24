@@ -6,7 +6,7 @@ use thiserror::Error;
 
 use crate::canonical::{CanonicalError, FramedSha256};
 
-pub const ARTIFACT_SCHEMA_VERSION: u32 = 1;
+pub const ARTIFACT_SCHEMA_VERSION: u32 = 2;
 pub const MANIFEST_VERSION: u32 = 1;
 pub const QUEUE_SCHEMA_VERSION: u32 = 1;
 
@@ -444,9 +444,9 @@ mod tests {
     use super::*;
 
     const VALID_ARTIFACT: &str =
-        include_str!("../../../../../docs/schemas/fixtures/series-analysis/valid-artifact-v1.json");
+        include_str!("../../../../../docs/schemas/fixtures/series-analysis/valid-artifact-v2.json");
     const INVALID_ARTIFACT: &str = include_str!(
-        "../../../../../docs/schemas/fixtures/series-analysis/invalid-artifact-v1.json"
+        "../../../../../docs/schemas/fixtures/series-analysis/invalid-artifact-v2.json"
     );
     const VALID_QUEUE: &str = include_str!(
         "../../../../../docs/schemas/fixtures/series-analysis/valid-queue-payload-v1.json"

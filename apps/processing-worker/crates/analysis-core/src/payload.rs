@@ -71,6 +71,32 @@ const PLAYBOOK_CARD_KEYS: &[&str] = &[
     "anchorTarget",
     "actionAdviceScore",
 ];
+const PLAYBOOK_SYMPTOM_EVIDENCE_KEYS: &[&str] = &[
+    "metricId",
+    "label",
+    "unit",
+    "value",
+    "denominator",
+    "targetCount",
+    "qualityStatus",
+    "stabilityBand",
+];
+const PLAYBOOK_DRIVER_EVIDENCE_KEYS: &[&str] = &[
+    "metricId",
+    "label",
+    "unit",
+    "value",
+    "effectEstimate",
+    "method",
+    "confidenceLow",
+    "confidenceHigh",
+    "stability",
+    "denominator",
+    "targetCount",
+    "supportCount",
+    "qualityStatus",
+    "stabilityBand",
+];
 const PLAYBOOK_CATEGORIES: &[&str] = &[
     "revenue",
     "destination",
@@ -174,7 +200,7 @@ fn validate_aggregate(
     item_count: u64,
 ) -> Result<(), PayloadError> {
     let object = exact_object(payload, AGGREGATE_KEYS)?;
-    require_schema(object, 2)?;
+    require_schema(object, 3)?;
     validate_scope(object.get("scope"), scope)?;
     let players = array(object.get("players"))?;
     if players.len() > 4 {
@@ -217,7 +243,7 @@ fn validate_aggregate(
 
 fn validate_review(payload: &Value, scope: &ScopeRef, item_count: u64) -> Result<(), PayloadError> {
     let object = exact_object(payload, REVIEW_KEYS)?;
-    require_schema(object, 2)?;
+    require_schema(object, 3)?;
     validate_scope(object.get("scope"), scope)?;
     let topics = array(object.get("commonPlaybookTopics"))?;
     if topics.len() > 2 {
@@ -283,11 +309,16 @@ fn validate_card<'a>(
         return Err(PayloadError::InvalidSchema);
     }
     let category = validate_category(card.get("category"))?;
-    if !categories.insert(category)
-        || required_u64(card.get("targetCount"))? < 3
-        || array(card.get("evidence"))?.len() != 2
-    {
+    let evidence = array(card.get("evidence"))?;
+    if !categories.insert(category) || required_u64(card.get("targetCount"))? < 3 {
         return Err(PayloadError::InvalidSchema);
+    }
+    match evidence.as_slice() {
+        [symptom, driver] => {
+            exact_object(symptom, PLAYBOOK_SYMPTOM_EVIDENCE_KEYS)?;
+            exact_object(driver, PLAYBOOK_DRIVER_EVIDENCE_KEYS)?;
+        }
+        _ => return Err(PayloadError::InvalidSchema),
     }
     Ok(())
 }
@@ -310,7 +341,7 @@ fn validate_drilldown(
     metric_id: &str,
 ) -> Result<(), PayloadError> {
     let object = exact_object(payload, DRILLDOWN_KEYS)?;
-    require_schema(object, 2)?;
+    require_schema(object, 3)?;
     validate_scope(object.get("scope"), scope)?;
     let player = exact_object(
         object.get("player").ok_or(PayloadError::InvalidSchema)?,
@@ -450,4 +481,42 @@ fn required_u64(value: Option<&Value>) -> Result<u64, PayloadError> {
     value
         .and_then(Value::as_u64)
         .ok_or(PayloadError::InvalidSchema)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn fixture(contents: &str) -> Value {
+        serde_json::from_str(contents).expect("shared payload fixture must be valid JSON")
+    }
+
+    #[test]
+    fn shared_v3_payload_fixtures_match_worker_contract() {
+        let aggregate = fixture(include_str!(concat!(
+            "../../../../../docs/schemas/fixtures/series-analysis/",
+            "aggregate-payload-v3.json"
+        )));
+        let review = fixture(include_str!(concat!(
+            "../../../../../docs/schemas/fixtures/series-analysis/",
+            "review-payload-v3.json"
+        )));
+        let drilldown = fixture(include_str!(concat!(
+            "../../../../../docs/schemas/fixtures/series-analysis/",
+            "drilldown-payload-v3.json"
+        )));
+
+        assert!(validate_aggregate(&aggregate, &ScopeRef::Overall, 0).is_ok());
+        assert!(validate_review(&review, &ScopeRef::Overall, 1).is_ok());
+        assert!(
+            validate_drilldown(
+                &drilldown,
+                &ScopeRef::Overall,
+                1,
+                "member-1",
+                "rank.averageHistory"
+            )
+            .is_ok()
+        );
+    }
 }

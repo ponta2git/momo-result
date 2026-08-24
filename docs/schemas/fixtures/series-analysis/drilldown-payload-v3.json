@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 3,
+  "scope": { "kind": "overall", "matchCount": 1 },
+  "player": { "memberId": "member-1" },
+  "payload": {
+    "kind": "rank_average_history",
+    "summary": { "targetCount": 1 },
+    "matchRows": [],
+    "eventRows": []
+  }
+}

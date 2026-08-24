@@ -109,6 +109,7 @@ job、publication、artifact、version の詳細ケースは `docs/requirements/
 - provider / CI action の wire fixture は実契約の表現を使い、producer の正規化結果を consumer validator まで通す。
 - release の producer attempt と consumer attempt が異なるケース、通常 deploy と rollback の両方を同じ provenance validator で検証する。
 - 公開 edge test は URL だけでなく観測地点を契約に含め、意図的に拒否される地点を blocking oracle にしない。
+- deploy / credential rotation の dependency gate は、対象世代固有の identity で新規接続を直接確認する。更新前から生存する connection、process の起動状態、別 consumer の成功を代用証拠にしない。
 - live credential を tracked file、docs、log に出さない。
 
 ## 9. Quality Gates

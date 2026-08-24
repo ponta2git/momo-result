@@ -92,6 +92,7 @@ pub(crate) const fn domain_failure_is_retryable(failure: OcrFailure) -> bool {
 pub(crate) struct OcrConsumerConfig {
     database_url: String,
     redis_url: String,
+    worker_id: String,
     queue: OcrQueueConfig,
     control: OcrControlConfig,
     object_store: R2ObjectStoreConfig,
@@ -174,11 +175,16 @@ impl OcrConsumerConfig {
             maximum_delivery_attempts,
             pending_scan_count,
         )?;
-        let control =
-            OcrControlConfig::new(worker_id, lease_duration, finalization_timeout, retry_delay)?;
+        let control = OcrControlConfig::new(
+            worker_id.clone(),
+            lease_duration,
+            finalization_timeout,
+            retry_delay,
+        )?;
         Ok(Self {
             database_url,
             redis_url,
+            worker_id,
             queue,
             control,
             object_store,
@@ -292,6 +298,7 @@ pub(crate) async fn run<L: OcrChildLauncher>(
     let objects = R2ObjectStore::new(&config.object_store);
     info!(
         event = "ocr_rust_v2_worker_ready",
+        worker_id = %config.worker_id,
         "Rust OCR v2 consumer is ready"
     );
     consumer_loop::consume_deliveries(

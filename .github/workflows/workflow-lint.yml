@@ -40,6 +40,7 @@ jobs:
           scripts/ci/test-check-pr-ready.sh
           scripts/ci/test-canonicalize-artifact-digest.sh
           scripts/ci/test-validate-analysis-candidate.sh
+          scripts/ci/test-validate-analysis-worker-readiness.sh
           scripts/ci/test-load-analysis-candidate.sh
           scripts/ci/test-load-runtime-image-artifact.sh
           scripts/ci/test-resolve-pushed-runtime-image.sh

@@ -35,6 +35,7 @@ struct AnalysisOutboxRuntimeConfig {
     database_url: String,
     redis_url: String,
     stream: String,
+    worker_id: String,
 }
 
 impl From<&AnalysisConsumerConfig> for AnalysisOutboxRuntimeConfig {
@@ -43,6 +44,7 @@ impl From<&AnalysisConsumerConfig> for AnalysisOutboxRuntimeConfig {
             database_url: config.database_url.clone(),
             redis_url: config.redis_url.clone(),
             stream: config.redis_stream.clone(),
+            worker_id: config.worker_id.clone(),
         }
     }
 }
@@ -249,6 +251,11 @@ async fn run_analysis_outbox(
     let driver_config = SeriesAnalysisOutboxConfig::for_runtime(runtime_config.stream)
         .map_err(SupervisorError::AnalysisOutboxConfiguration)?;
     let driver = SeriesAnalysisOutboxDriver::new(database, redis, driver_config);
+    tracing::info!(
+        event = "analysis_outbox_ready",
+        worker_id = %runtime_config.worker_id,
+        "series-analysis outbox coordinator is ready"
+    );
     coordinator::run(driver, wake, shutdown)
         .await
         .map_err(SupervisorError::AnalysisOutboxCoordinator)

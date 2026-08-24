@@ -247,6 +247,26 @@ public repository に置くため、具体的な障害位置、再現手順、en
 - `docs/architecture.md` の OCR Capability / Worker Role
 - `docs/test-rule.md` の Locator / E2E、DB-backed API、Analysis Capability / Worker Role Rules
 
+### L11 共有credentialのrotationは既存connectionが不整合を隠す
+
+**該当条件**
+
+- 複数のservice / workerが同じcredentialまたは同時に変わるcredential群を使う。
+- provider側でcredentialを更新し、各consumerのsecret storeを個別に更新する。
+- healthや稼働時間が、rotation前から維持されたconnectionに依存し得る。
+
+**確認**
+
+- 更新前に全consumer、secret store、read / write roleを列挙し、同じ保守単位のchecklistへ固定したか。
+- 各consumerが対象世代固有のidentityで新規接続し、必要なruntime peerがすべてreadyになったか。
+- processのstarted、既存connectionの継続、別consumerの成功をcredential整合の証拠にしていないか。
+- rotation後の再起動やconnection recycleが失敗した場合、release gateが成功扱いせず停止するか。
+
+**参照先**
+
+- `docs/dev-rule.md` の CI Gates / Release
+- `docs/test-rule.md` の External Services
+
 ## 更新ルール
 
 - 新しい教訓を追加する前に、恒久ルールとして移すべき内容がないか確認する。

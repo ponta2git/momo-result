@@ -166,6 +166,13 @@ pub(crate) async fn run(
         postgres::connect(&config.database_url).await,
         "heartbeat_database_connect",
     )?;
+    let read_client = startup_result(
+        postgres::connect(&config.read_database_url).await,
+        "read_database_connect",
+    )?;
+    // A fresh startup must authenticate every configured database credential. The calculation
+    // child opens its own read-only connection later, so this probe is intentionally not retained.
+    drop(read_client);
     startup_result(
         cleanup_stale_attempt_directories(&config, &control_client).await,
         "temporary_storage_recovery",

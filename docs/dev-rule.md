@@ -68,6 +68,7 @@
 - mutable tag や cache hit を provenance / 検証成功の根拠にしない。
 - analysis candidate 作成と production 昇格、backfill、audit は別操作とする。人間向け手順は `private/ops/runbook.md` を正本とする。
 - 公開 edge、内部 health、機能応答、resource / performance は別の観測点・証拠として扱う。gate のために security policy を弱めない。
+- 共有 credential の rotation は、更新前に全 consumer と secret store を列挙し、同じ保守単位で更新する。各 consumer が更新後の credential で新規接続し、必要な runtime peer が ready になった証拠を揃えるまで完了としない。
 
 ## 6. Production rollback verification
 

@@ -207,6 +207,8 @@ jobs:
     env:
       ANALYSIS_IMAGE_ARTIFACT_NAME: ${{ needs.resolve-candidate.outputs.image_artifact_name }}
       ANALYSIS_IMAGE_REF: ${{ needs.resolve-candidate.outputs.image_ref }}
+      ANALYSIS_WORKER_ID: worker-${{ github.run_id }}-${{ github.run_attempt }}
+      OCR_WORKER_ID: ocr-${{ github.run_id }}-${{ github.run_attempt }}
     environment:
       name: production
       url: https://momo-result.ponta.me
@@ -259,9 +261,7 @@ jobs:
         if: inputs.operation == 'deploy'
         env:
           ANALYSIS_CONFIG_VERSION: series-analysis-v1-${{ needs.resolve-candidate.outputs.candidate_sha }}
-          ANALYSIS_WORKER_ID: worker-${{ github.run_id }}-${{ github.run_attempt }}
           FLY_API_TOKEN: ${{ secrets.ANALYSIS_FLY_API_TOKEN }}
-          OCR_WORKER_ID: ocr-${{ github.run_id }}-${{ github.run_attempt }}
         run: >-
           flyctl deploy
           --config fly.analysis.toml
@@ -280,27 +280,66 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.ANALYSIS_FLY_API_TOKEN }}
         run: |
-          flyctl machine list --app "${ANALYSIS_APP}" --json |
-            jq -e --arg image "${ANALYSIS_IMAGE_REF}" '
-              {
-                singleStartedExactEnabledImage: (
-                  length == 1 and
-                  all(.[];
-                    .state == "started" and
-                    .config.image == $image and
-                    .config.env.MOMO_ANALYSIS_PUBLICATION_MODE == "enabled" and
-                    .config.env.MOMO_OCR_V2_CONSUMER_MODE == "enabled" and
-                    (.config.env.MOMO_ANALYSIS_WORKER_ID | type == "string" and length > 0) and
-                    (.config.env.MOMO_OCR_V2_WORKER_ID | type == "string" and length > 0) and
-                    .config.guest.cpu_kind == "shared" and
-                    .config.guest.cpus == 1 and
-                    .config.guest.memory_mb == 256
-                  )
-                )
-              } |
-              select(.singleStartedExactEnabledImage)
-            ' > analysis-production-artifact/enabled-deployment-state.json
-        timeout-minutes: 2
+          deployment_state="${RUNNER_TEMP}/analysis-machine-state.json"
+          readiness_log="${RUNNER_TEMP}/analysis-worker-readiness.json"
+          readiness_evidence="analysis-production-artifact/worker-readiness.json"
+
+          verify_machine_state() {
+            flyctl machine list --app "${ANALYSIS_APP}" --json |
+              jq -e \
+                --arg image "${ANALYSIS_IMAGE_REF}" \
+                --arg analysisWorkerId "${ANALYSIS_WORKER_ID}" \
+                --arg ocrWorkerId "${OCR_WORKER_ID}" '
+                  select(
+                    length == 1 and
+                    all(.[];
+                      .state == "started" and
+                      .config.image == $image and
+                      .config.env.MOMO_ANALYSIS_PUBLICATION_MODE == "enabled" and
+                      .config.env.MOMO_OCR_V2_CONSUMER_MODE == "enabled" and
+                      .config.env.MOMO_ANALYSIS_WORKER_ID == $analysisWorkerId and
+                      .config.env.MOMO_OCR_V2_WORKER_ID == $ocrWorkerId and
+                      .config.guest.cpu_kind == "shared" and
+                      .config.guest.cpus == 1 and
+                      .config.guest.memory_mb == 256
+                    )
+                  ) |
+                  {
+                    schemaVersion: 1,
+                    machineId: .[0].id,
+                    state: .[0].state,
+                    image: .[0].config.image,
+                    analysisWorkerId: .[0].config.env.MOMO_ANALYSIS_WORKER_ID,
+                    ocrWorkerId: .[0].config.env.MOMO_OCR_V2_WORKER_ID
+                  }
+                ' > "${deployment_state}"
+          }
+
+          verify_machine_state
+          machine_id="$(jq -er '.machineId' "${deployment_state}")"
+          deadline=$((SECONDS + 120))
+          until flyctl logs \
+              --app "${ANALYSIS_APP}" \
+              --machine "${machine_id}" \
+              --no-tail \
+              --json > "${readiness_log}" 2> /dev/null &&
+            scripts/ci/validate-analysis-worker-readiness.sh \
+              "${readiness_log}" \
+              "${machine_id}" \
+              "${ANALYSIS_WORKER_ID}" \
+              "${OCR_WORKER_ID}" > "${readiness_evidence}"; do
+            if (( SECONDS >= deadline )); then
+              echo "Combined analysis worker did not establish fresh dependency connections." >&2
+              exit 1
+            fi
+            sleep 5
+          done
+
+          sleep 10
+          verify_machine_state
+          mv "${deployment_state}" \
+            analysis-production-artifact/enabled-deployment-state.json
+        timeout-minutes: 4
 
       - name: Run release audit
         if: inputs.operation == 'audit'

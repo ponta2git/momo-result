@@ -16,6 +16,8 @@
 
 本書は指標の数式、推薦候補、画面構成、wire fieldを複製しない。
 
+artifact resourceのJSON本文は共有fixtureとproducer / reader validatorを正本とする。Tapir / OpenAPIはHTTP envelopeと取得経路を表し、raw JSON本文の全ネストを代替しない。
+
 provider固有値、費用、実測、昇格・復旧手順は public docs へ置かず、private release evidence / runbook を正本とする。
 
 ## 1. Core Decisions
@@ -149,10 +151,12 @@ OCR同居を有効化する場合は、共通parent-child境界、単一slot、�
 ## 8. Compatibility / Release / Rollback
 
 - DB migrationはadditiveに進め、reader-firstで新artifact schemaを読めるAPIを先に配置する。readerとworker capability確認後にdesired version / campaignを進める。
+- 計画保守で全reader / workerを停止し、公開再開前に全作品を再計算できる場合に限り、単一世代の一括切替を選べる。この場合は旧・新schemaの同時decodeを要求せず、停止確認、復元可能なDB snapshot、旧immutable release、全runtimeの新version一致、全作品の再計算完了を再開条件にする。
 - 新HTTP wireはOpenAPIと生成型を同時更新する。旧clientは明示的なreload-requiredへ縮退し、旧同期engineへfallbackしない。
 - artifactからwireへのprojectionはrename、enum mapping、metadata hydrateに限定し、旧artifactにない意味値を再計算しない。
 - rollbackはcurrent artifact、request、campaign、job、outboxを維持する。旧workerがdesired versionを非対応ならjobを `queued` に保ち、旧algorithmへ黙って戻さない。
 - DB down migrationでrevision / job / artifactを削除せず、publication停止中もcurrent artifactを読める状態を維持する。
+- 単一世代の保守切替を切り戻す場合は、サービスを停止したままDB snapshotと旧immutable releaseを同じ世代へ戻す。新旧のdesired version、job、artifactを部分的に組み合わせた状態では再開しない。
 - release候補はmigration、reader / worker compatibility、immutable provenance、resource hard limit、timeout、artifact / API上限を確認してから昇格する。
 
 ## 9. Acceptance Evidence
@@ -165,7 +169,7 @@ OCR同居を有効化する場合は、共通parent-child境界、単一slot、�
 | calculation / artifact | golden、高精度参照、property、canonical fixture、上限、部分公開拒否、current維持 |
 | API / Web | bounded read、artifact pinning、expired retry、revision mismatch、状態decision table、意味再計算禁止 |
 | admin / retention | auth / CSRF / idempotency、target snapshot、未充足run、直近3件、45日cleanup |
-| compatibility / release | reader-first、version capability、reload導線、rollback後current維持、旧engine不在 |
+| compatibility / release | reader-first、または停止を伴う単一世代切替の再開条件、version capability、reload導線、rollback後current維持、旧engine不在 |
 | resource | 上限fixture、本番同等runtime、worker / API / browser別測定、timeout設定、private evidence |
 
 外部DB、Redis、Linux process、browser、resource gateをskipした場合、その境界は未検証として報告する。完了前に `docs/post-mortem/lessons.md` の該当カードを確認する。

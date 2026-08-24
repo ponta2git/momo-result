@@ -318,8 +318,8 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite:
         drilldown_chunk_count, match_context_chunk_count,
         encoded_bytes, decoded_bytes, published_at
       ) VALUES (
-        $artifactId, $titleId, 0, 'series-analysis-v1',
-        1,
+        $artifactId, $titleId, 0, 'series-analysis-v3',
+        2,
         'sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
         'sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd',
         'published', 1, 0, 0, 0, $length, $length, now()
@@ -336,7 +336,9 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite:
 
   private def pointToArtifacts(currentId: String, previousId: Option[String]): IO[Unit] = sql"""
       UPDATE series_analysis_title_states
-      SET current_artifact_id = $currentId,
+      SET algorithm_version = 'series-analysis-v3',
+          artifact_schema_version = 2,
+          current_artifact_id = $currentId,
           previous_artifact_id = $previousId,
           pending_work = false
       WHERE game_title_id = $titleId
@@ -351,7 +353,7 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite:
       val payload = parse(new String(chunk.payload, StandardCharsets.UTF_8))
         .fold(error => fail(s"expected JSON analysis payload, got $error"), identity)
       val cursor = payload.hcursor
-      assertEquals(cursor.get[Int]("schemaVersion"), Right(2))
+      assertEquals(cursor.get[Int]("schemaVersion"), Right(3))
       assertEquals(cursor.downField("artifact").get[String]("artifactId"), Right(artifactId))
       assertEquals(cursor.downField("scope").get[String]("displayName"), Right("総合"))
       assertEquals(

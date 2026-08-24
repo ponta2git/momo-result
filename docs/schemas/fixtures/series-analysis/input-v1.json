@@ -72,6 +72,16 @@
     "matchCount": 32,
     "scopeCount": 9,
     "resourceCount": 290,
-    "overallAggregateChecksum": "sha256:3649d7cbef9509364af2c7293eeb527857ab33b8950097777197b9a565fea074"
+    "assetStyle": {
+      "blowoutWinThreshold": 0,
+      "nearMissSecondThreshold": -250,
+      "heavyLossThreshold": 313,
+      "euPrimaryKind": "high_risk_breakthrough",
+      "euShapeKind": "lower_tail",
+      "euTags": ["downside_risk", "card_base"],
+      "otakaPrimaryKind": "asset_explosion",
+      "otakaSecondaryKind": "property_base"
+    },
+    "overallAggregateChecksum": "sha256:cd7ed114d30c1e6c98190a42c7051f02e40c3a399566d8c2f15081e18b383f9f"
   }
 }

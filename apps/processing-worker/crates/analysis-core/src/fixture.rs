@@ -183,6 +183,46 @@ fn shared_boundary_fixture_matches_normalized_input_and_overall_checksum() {
         overall.payload.pointer("/scope/matchCount"),
         Some(fixture_value(&fixture, "/expected/matchCount"))
     );
+    for (payload_pointer, fixture_pointer) in [
+        (
+            "/assetStyleProfiles/blowoutWinThreshold",
+            "/expected/assetStyle/blowoutWinThreshold",
+        ),
+        (
+            "/assetStyleProfiles/nearMissSecondThreshold",
+            "/expected/assetStyle/nearMissSecondThreshold",
+        ),
+        (
+            "/assetStyleProfiles/heavyLossThreshold",
+            "/expected/assetStyle/heavyLossThreshold",
+        ),
+        (
+            "/assetStyleProfiles/entries/0/primaryKind",
+            "/expected/assetStyle/euPrimaryKind",
+        ),
+        (
+            "/assetStyleProfiles/entries/0/shapeKind",
+            "/expected/assetStyle/euShapeKind",
+        ),
+        (
+            "/assetStyleProfiles/entries/0/tags",
+            "/expected/assetStyle/euTags",
+        ),
+        (
+            "/assetStyleProfiles/entries/3/primaryKind",
+            "/expected/assetStyle/otakaPrimaryKind",
+        ),
+        (
+            "/assetStyleProfiles/entries/3/secondaryKind",
+            "/expected/assetStyle/otakaSecondaryKind",
+        ),
+    ] {
+        assert_eq!(
+            overall.payload.pointer(payload_pointer),
+            Some(fixture_value(&fixture, fixture_pointer)),
+            "asset-style fixture drifted at {payload_pointer}",
+        );
+    }
     let encoded = canonicalize_value(&overall.payload)
         .unwrap_or_else(|error| panic!("overall aggregate is not canonicalizable: {error}"));
     let checksum = sha256_prefixed(&encoded);

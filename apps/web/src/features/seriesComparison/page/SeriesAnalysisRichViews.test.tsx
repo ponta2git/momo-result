@@ -91,6 +91,11 @@ describe("rich series analysis views", () => {
     expect(screen.getByText("主要根拠")).toBeInTheDocument();
     expect(screen.getByText("総資産レンジ")).toBeInTheDocument();
     expect(screen.getByText("物件収益額")).toBeInTheDocument();
+    expect(screen.getByText("補助傾向: 物件基盤")).toBeInTheDocument();
+    expect(screen.getByText("目的地を重ねる")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "ぽんたの資産傾向の詳しい根拠" }));
+    expect(screen.getByText("勝利時の2位差中央")).toBeInTheDocument();
+    expect(screen.getByText(/大勝 8億円.*惜しい2位 2億円.*大敗 12億円/u)).toBeInTheDocument();
     expect(screen.getByText(/候補はこの1件.*別開催で支持 5組/u)).toBeInTheDocument();
     expect(screen.getByText("4億5000万円")).toBeInTheDocument();
     expect(screen.getByText("0円")).toBeInTheDocument();

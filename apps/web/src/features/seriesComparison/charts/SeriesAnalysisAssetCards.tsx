@@ -3,6 +3,7 @@ import {
   assetEvidenceToneLabel,
   assetShapeLabel,
   assetStyleLabel,
+  assetTagLabel,
 } from "@/features/seriesComparison/model/seriesAnalysisAssetPresentation";
 import {
   formatDecimal,
@@ -12,6 +13,7 @@ import {
   qualityLabel,
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
 import type { SeriesComparisonAggregateV2 } from "@/shared/api/seriesAnalysis";
+import { Disclosure } from "@/shared/ui/data/Collapsible";
 import { DataVizQuadrantPlot } from "@/shared/ui/dataViz/QuadrantPlot";
 
 export function AssetComparisonCards({ response }: { response: SeriesComparisonAggregateV2 }) {
@@ -38,14 +40,34 @@ export function AssetComparisonCards({ response }: { response: SeriesComparisonA
                 {entry.targetCount}戦・{qualityLabel(entry.qualityStatus)}
               </span>
             </div>
-            <section className="min-h-24 border-b border-[var(--color-border)] py-3">
+            <section className="min-h-36 border-b border-[var(--color-border)] py-3">
               <h4 className="text-[11px] font-semibold text-[var(--color-text-secondary)]">
                 総資産の出方
               </h4>
               <p className="mt-1 text-sm font-semibold">{assetStyleLabel(entry.primaryKind)}</p>
+              {entry.secondaryKind ? (
+                <p className="mt-1 text-xs font-semibold text-[var(--color-text-secondary)]">
+                  補助傾向: {assetTagLabel(entry.secondaryKind)}
+                </p>
+              ) : null}
               <p className="mt-1 text-xs leading-5 text-[var(--color-text-secondary)]">
                 {assetShapeLabel(entry.shapeKind)}
               </p>
+              {entry.tags.length > 0 ? (
+                <ul
+                  aria-label={`${entry.displayName}の資産傾向タグ`}
+                  className="mt-2 flex flex-wrap gap-1"
+                >
+                  {entry.tags.map((tag) => (
+                    <li
+                      className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-2 py-1 text-[11px]"
+                      key={tag}
+                    >
+                      {assetTagLabel(tag)}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
             </section>
             <section className="min-h-20 border-b border-[var(--color-border)] py-3">
               <h4 className="text-[11px] font-semibold text-[var(--color-text-secondary)]">
@@ -113,9 +135,74 @@ export function AssetComparisonCards({ response }: { response: SeriesComparisonA
                 <AssetFact label="中央" value={formatManYen(metrics?.revenue.median)} />
               </div>
             </section>
+            <Disclosure
+              ariaLabel={`${entry.displayName}の資産傾向の詳しい根拠`}
+              className="mt-3 rounded-[var(--radius-xs)] border border-[var(--color-border)]"
+              panelClassName="border-t border-[var(--color-border)] p-2"
+              summary="詳しい根拠"
+            >
+              <dl className="grid grid-cols-2 gap-2 text-xs">
+                <AssetDetailFact
+                  label="資産の幅"
+                  value={formatManYen(entry.metrics.p90P10Spread)}
+                />
+                <AssetDetailFact
+                  label="目的地あり"
+                  value={formatPercent(entry.metrics.destinationPositiveRate)}
+                />
+                <AssetDetailFact
+                  label="1位"
+                  value={`${entry.metrics.winCount}件・${formatPercent(entry.metrics.winRate)}`}
+                />
+                <AssetDetailFact
+                  label="2位"
+                  value={`${entry.metrics.secondCount}件・${formatPercent(entry.metrics.secondRate)}`}
+                />
+                <AssetDetailFact
+                  label="下位率"
+                  value={formatPercent(entry.metrics.lowerHalfRate)}
+                />
+                <AssetDetailFact
+                  label="勝利時資産中央"
+                  value={formatManYen(entry.metrics.winMedianAssets)}
+                />
+                <AssetDetailFact
+                  label="勝利時の2位差中央"
+                  value={formatManYen(entry.metrics.winMedianMargin)}
+                />
+                <AssetDetailFact
+                  label="2位時の1位差中央"
+                  value={formatManYen(entry.metrics.secondMedianGap)}
+                />
+                <AssetDetailFact
+                  label="下位時の1位差中央"
+                  value={formatManYen(entry.metrics.lowerHalfMedianGap)}
+                />
+                <AssetDetailFact label="大勝" value={`${entry.metrics.blowoutWinCount}件`} />
+                <AssetDetailFact
+                  label="惜しい2位"
+                  value={`${entry.metrics.nearMissSecondCount}件`}
+                />
+                <AssetDetailFact label="大敗" value={`${entry.metrics.heavyLossCount}件`} />
+              </dl>
+              <p className="mt-2 text-[11px] leading-5 text-[var(--color-text-muted)]">
+                判定境界: 大勝 {formatManYen(response.assetStyleProfiles.blowoutWinThreshold)}・
+                惜しい2位 {formatManYen(response.assetStyleProfiles.nearMissSecondThreshold)}・大敗{" "}
+                {formatManYen(response.assetStyleProfiles.heavyLossThreshold)}
+              </p>
+            </Disclosure>
           </article>
         );
       })}
+    </div>
+  );
+}
+
+function AssetDetailFact({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0 rounded-[var(--radius-xs)] bg-[var(--color-surface-subtle)] p-2">
+      <dt className="text-[11px] text-[var(--color-text-secondary)]">{label}</dt>
+      <dd className="mt-1 font-semibold break-words tabular-nums">{value}</dd>
     </div>
   );
 }

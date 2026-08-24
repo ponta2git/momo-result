@@ -4,8 +4,12 @@ export function assetStyleLabel(value: string | null): string {
       return "高資産まで伸ばす試合が多い";
     case "high_risk_breakthrough":
       return "低資産と上位が同居する";
+    case "close_collector":
+      return "接戦を拾って上位へ届く";
     case "steady_accumulator":
       return "低資産で終える試合が少ない";
+    case "upper_chaser":
+      return "2位圏へ追い上げる試合が多い";
     case "balanced":
       return "資産帯の偏りが小さい";
     default:
@@ -15,12 +19,41 @@ export function assetStyleLabel(value: string | null): string {
 
 export function assetShapeLabel(value: string | null): string {
   switch (value) {
-    case "wide":
-      return "高い試合と低い試合の幅が広めです。";
-    case "compact":
-      return "試合ごとの資産帯が比較的まとまっています。";
+    case "two_tailed":
+      return "高資産と低資産の両側へ広がっています。";
+    case "upper_side":
+      return "低資産を避け、高資産側へ寄っています。";
+    case "lower_tail":
+      return "低資産側へ裾が伸びています。";
+    case "thin_right_tail":
+      return "高資産側の突出が少ない分布です。";
+    case "right_tail":
+      return "一部の試合が高資産側へ伸びています。";
+    case "middle_heavy":
+      return "中央の資産帯へ集まっています。";
     default:
       return "資産帯の広がりを判定できません。";
+  }
+}
+
+export function assetTagLabel(value: string): string {
+  switch (value) {
+    case "high_variance":
+      return "振れ幅大";
+    case "mobility_collecting":
+      return "目的地を重ねる";
+    case "upper_chaser":
+      return "2位追走";
+    case "property_base":
+      return "物件基盤";
+    case "downside_risk":
+      return "下振れ注意";
+    case "card_base":
+      return "カード寄り";
+    case "close_finish":
+      return "接戦型";
+    default:
+      return "補助傾向";
   }
 }
 

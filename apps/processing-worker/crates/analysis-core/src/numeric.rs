@@ -54,6 +54,10 @@ pub(super) fn ceil_i64(value: f64) -> Option<i64> {
     Some(ceiled as i64)
 }
 
+pub(super) fn round_i64(value: f64) -> Option<i64> {
+    floor_i64(value + 0.5)
+}
+
 pub(super) fn exact_i64_as_f64(value: i64) -> Option<f64> {
     const MAXIMUM_EXACT_INTEGER: i64 = 1_i64 << f64::MANTISSA_DIGITS;
     if !(-MAXIMUM_EXACT_INTEGER..=MAXIMUM_EXACT_INTEGER).contains(&value) {
@@ -117,6 +121,9 @@ mod tests {
         assert_eq!(floor_u8(100.9), Some(100));
         assert_eq!(floor_u8(-0.1), None);
         assert_eq!(floor_usize(f64::INFINITY), None);
+        assert_eq!(round_i64(2.49), Some(2));
+        assert_eq!(round_i64(2.5), Some(3));
+        assert_eq!(round_i64(-2.5), Some(-2));
     }
 
     #[test]

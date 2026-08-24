@@ -106,6 +106,29 @@ describe("ui foundation", () => {
     expect(screen.getByText("追加条件")).toBeInTheDocument();
   });
 
+  it("Disclosure applies semantic trigger hierarchy variants", () => {
+    const { rerender } = render(
+      <Disclosure summary="主要な開示" triggerVariant="anchor">
+        <p>主要な内容</p>
+      </Disclosure>,
+    );
+
+    const anchorTrigger = screen.getByRole("button", { name: "主要な開示" });
+    expect(anchorTrigger).toHaveClass("bg-[var(--color-surface-subtle)]");
+    expect(anchorTrigger).toHaveClass("hover:bg-[var(--color-surface-selected)]");
+
+    rerender(
+      <Disclosure summary="補助的な開示" triggerVariant="supporting">
+        <p>補助的な内容</p>
+      </Disclosure>,
+    );
+
+    const supportingTrigger = screen.getByRole("button", { name: "補助的な開示" });
+    expect(supportingTrigger).toHaveClass("font-medium");
+    expect(supportingTrigger).toHaveClass("text-[var(--color-text-secondary)]");
+    expect(supportingTrigger).toHaveClass("hover:bg-transparent");
+  });
+
   it("danger Notice defaults role=alert", () => {
     render(<Notice tone="danger">失敗</Notice>);
 

@@ -88,7 +88,8 @@ export function SeriesAnalysisScopeBar({
           </span>
         </span>
       }
-      triggerClassName="border-b border-[var(--color-border)] bg-[var(--color-surface-subtle)] hover:bg-[var(--color-surface-selected)]"
+      triggerClassName="border-b border-[var(--color-border)]"
+      triggerVariant="anchor"
       onOpenChange={setOpenOverride}
     >
       <div className="grid gap-3 md:grid-cols-3">

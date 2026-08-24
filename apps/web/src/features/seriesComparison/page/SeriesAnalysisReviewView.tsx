@@ -69,7 +69,7 @@ export function ReviewView({
           className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)]"
           panelClassName="grid gap-2 border-t border-[var(--color-border)] p-3"
           summary={response.commonPlaybookTopics.map((topic) => topic.heading).join("・")}
-          triggerClassName="bg-[var(--color-surface-subtle)] hover:bg-[var(--color-surface-selected)]"
+          triggerVariant="anchor"
         >
           {response.commonPlaybookTopics.map((topic) => (
             <div

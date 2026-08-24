@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
 import type { SeriesAnalysisDrilldownSelection } from "@/features/seriesComparison/drilldowns/SeriesAnalysisDrilldownDialog";
 import { SeriesAnalysisDrilldownDialog } from "@/features/seriesComparison/drilldowns/SeriesAnalysisDrilldownDialog";
@@ -19,29 +19,32 @@ import {
 } from "@/features/seriesComparison/page/SeriesComparisonAnalysisNavigation";
 import type { SeriesAnalysisQuery } from "@/shared/api/seriesAnalysis";
 
-export function SeriesAnalysisContent({
-  bundle,
-  onArtifactExpired,
-  onClearFocusedMatch,
-  onFocusMatch,
-  onViewChange,
-}: {
+type SeriesAnalysisContentProps = {
   bundle: SeriesAnalysisDisplayBundle;
   onArtifactExpired: () => void;
   onClearFocusedMatch: () => void;
   onFocusMatch: (matchId: string) => void;
   onViewChange: (view: SeriesAnalysisViewId, options?: { replace?: boolean }) => void;
-}) {
+};
+
+export function SeriesAnalysisContent(props: SeriesAnalysisContentProps) {
+  const resource = props.bundle.kind === "review" ? props.bundle.review : props.bundle.aggregate;
+  // A drilldown belongs to one artifact/view and must reset before either identity can be mixed.
+  const contentIdentity = `${resource.artifact.artifactId}:${props.bundle.view}`;
+  return <ArtifactViewContent {...props} key={contentIdentity} />;
+}
+
+function ArtifactViewContent({
+  bundle,
+  onArtifactExpired,
+  onClearFocusedMatch,
+  onFocusMatch,
+  onViewChange,
+}: SeriesAnalysisContentProps) {
   const [drilldown, setDrilldown] = useState<SeriesAnalysisDrilldownSelection | null>(null);
   const resource = bundle.kind === "review" ? bundle.review : bundle.aggregate;
   const { matchContext, view: activeView } = bundle;
   const artifactId = resource.artifact.artifactId;
-  const previousArtifactId = useRef(artifactId);
-  useEffect(() => {
-    if (previousArtifactId.current === artifactId) return;
-    previousArtifactId.current = artifactId;
-    setDrilldown(null);
-  }, [artifactId]);
 
   useEffect(() => {
     const sectionId = decodeURIComponent(window.location.hash.slice(1));
@@ -55,10 +58,6 @@ export function SeriesAnalysisContent({
     mapMasterId: resource.scope.mapMasterId,
     seasonMasterId: resource.scope.seasonMasterId,
   };
-  const changeView = useCallback(
-    (view: Parameters<typeof onViewChange>[0]) => onViewChange(view),
-    [onViewChange],
-  );
   const focusedItemIds = matchContext?.match?.focusedItemIds ?? [];
 
   return (
@@ -66,7 +65,7 @@ export function SeriesAnalysisContent({
       {matchContext ? (
         <SeriesAnalysisSelectedMatch context={matchContext} onClear={onClearFocusedMatch} />
       ) : null}
-      <PurposeTabs activeView={activeView} onViewChange={changeView} />
+      <PurposeTabs activeView={activeView} onViewChange={onViewChange} />
       {bundle.kind === "review" ? (
         <ReviewView
           loading={false}
@@ -81,7 +80,7 @@ export function SeriesAnalysisContent({
           id={purposePanelId("analysis")}
           role="tabpanel"
         >
-          <AnalysisTabs activeView={bundle.view} onViewChange={changeView} />
+          <AnalysisTabs activeView={bundle.view} onViewChange={onViewChange} />
           {bundle.view === "overview" ? (
             <OverviewView
               focusedItemIds={focusedItemIds}

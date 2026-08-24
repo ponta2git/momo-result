@@ -35,7 +35,7 @@ export function RankSignalValidationMethod({ payload }: { payload: RankSignalPay
           </span>
         </span>
       }
-      triggerClassName="bg-[var(--color-surface-subtle)] hover:bg-[var(--color-surface-selected)]"
+      triggerVariant="anchor"
     >
       <section aria-labelledby="rank-signal-validation-flow">
         <h4 className="text-sm font-semibold text-balance" id="rank-signal-validation-flow">

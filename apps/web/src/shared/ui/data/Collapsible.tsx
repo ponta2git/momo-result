@@ -4,6 +4,14 @@ import type { ReactNode } from "react";
 
 import { cn } from "@/shared/ui/cn";
 
+type DisclosureTriggerVariant = "anchor" | "default" | "supporting";
+
+const triggerVariantClass = {
+  anchor: "bg-[var(--color-surface-subtle)] hover:bg-[var(--color-surface-selected)]",
+  default: "",
+  supporting: "font-medium text-[var(--color-text-secondary)] hover:bg-transparent",
+} as const satisfies Record<DisclosureTriggerVariant, string>;
+
 type DisclosureProps = {
   ariaLabel?: string | undefined;
   children: ReactNode;
@@ -17,6 +25,7 @@ type DisclosureProps = {
   summary: ReactNode;
   summaryClassName?: string | undefined;
   triggerClassName?: string | undefined;
+  triggerVariant?: DisclosureTriggerVariant | undefined;
 };
 
 export function Disclosure({
@@ -32,6 +41,7 @@ export function Disclosure({
   summary,
   summaryClassName,
   triggerClassName,
+  triggerVariant = "default",
 }: DisclosureProps) {
   return (
     <BaseCollapsible.Root
@@ -45,6 +55,7 @@ export function Disclosure({
         aria-label={ariaLabel}
         className={cn(
           "group flex min-h-11 w-full min-w-0 items-center justify-between gap-3 rounded-[var(--radius-sm)] px-3 py-2 text-left text-sm font-semibold text-[var(--color-text-primary)] hover:bg-[var(--color-surface-subtle)] disabled:cursor-default disabled:opacity-70",
+          triggerVariantClass[triggerVariant],
           triggerClassName,
         )}
         disabled={disabled}

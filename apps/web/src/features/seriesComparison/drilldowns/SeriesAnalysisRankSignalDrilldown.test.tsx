@@ -16,18 +16,25 @@ describe("RankSignalDrilldown", () => {
     expect(
       within(screen.getByLabelText("順位を読む手掛かりの分析範囲")).getByText("5/5組で改善"),
     ).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "判断の順序" })).toBeInTheDocument();
     const usage = screen.getByLabelText("順位を読む手掛かりの使い方");
-    expect(within(usage).getByText("選ぶ")).toBeInTheDocument();
+    expect(within(usage).getByText("候補を選ぶ")).toBeInTheDocument();
     expect(within(usage).getByText(/試合後に同じ傾向が続いたか確認/u)).toBeInTheDocument();
-    expect(screen.getByText("候補はこの1件")).toBeInTheDocument();
-    expect(screen.getByText("5/5組")).toBeInTheDocument();
+
+    const candidate = screen.getByRole("article", { name: "物件収益の検証結果" });
+    expect(within(candidate).getByText("候補はこの1件")).toBeInTheDocument();
+    expect(within(candidate).getByText("5/5組")).toBeInTheDocument();
 
     const support = screen.getByRole("list", { name: "物件収益の別開催での支持" });
     expect(within(support).getAllByRole("listitem")).toHaveLength(5);
 
     await user.click(screen.getByRole("button", { name: "別開催テストと採用基準" }));
-    expect(screen.getByText("4組で候補を作る")).toBeInTheDocument();
-    expect(screen.getByText("残した1組で確かめる")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "検証の流れ" })).toBeInTheDocument();
+    expect(screen.getByText("候補を作る")).toBeInTheDocument();
+    expect(screen.getByText("4組を使用")).toBeInTheDocument();
+    expect(screen.getByText("別開催で確かめる")).toBeInTheDocument();
+    expect(screen.getByText("残した1組を使用")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "採用基準" })).toBeInTheDocument();
     expect(screen.getByText("重要度 +0.0001以上")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "物件収益の開催別の数値" }));

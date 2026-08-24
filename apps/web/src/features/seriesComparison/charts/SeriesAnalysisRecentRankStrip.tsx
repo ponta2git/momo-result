@@ -45,14 +45,14 @@ export function RecentRankStrips({
 
   if (axisRows.length === 0) {
     return (
-      <p className="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-3 py-2 text-sm text-[var(--color-text-secondary)]">
+      <p className="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text-secondary)]">
         直近順位の対象試合はありません。
       </p>
     );
   }
 
   return (
-    <div className="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3">
+    <div className="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
       <div
         aria-label="直近順位ストリップ横スクロール"
         className="w-full [scrollbar-width:thin] [scrollbar-color:var(--color-border)_transparent] [scrollbar-gutter:stable] overflow-x-auto pb-2"
@@ -139,7 +139,7 @@ export function RecentRankStrips({
                         {row ? (
                           <SeriesAnalysisMatchLink
                             ariaLabel={`${player.displayName}、第${matchIndex}戦、${row.rank}位${focused ? "、この試合" : ""}。試合結果を見る`}
-                            className={`size-11 justify-center overflow-hidden rounded-[var(--radius-xs)] border p-0 text-xs tabular-nums no-underline hover:no-underline ${focused ? "momo-enter ring-2 ring-[var(--color-action)] ring-offset-2 ring-offset-[var(--color-surface-subtle)]" : ""}`}
+                            className={`size-11 justify-center overflow-hidden rounded-[var(--radius-xs)] border p-0 text-xs tabular-nums no-underline hover:no-underline ${focused ? "momo-enter ring-2 ring-[var(--color-action)] ring-offset-2 ring-offset-[var(--color-surface)]" : ""}`}
                             matchId={row.matchId}
                             style={{
                               backgroundColor: rankColor(row.rank),

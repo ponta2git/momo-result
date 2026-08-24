@@ -14,6 +14,7 @@ export function MetricDefinitions({ response }: { response: SeriesComparisonAggr
       ariaLabel="指標の読み方"
       className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)]"
       panelClassName="border-t border-[var(--color-border)] p-3"
+      triggerClassName="bg-[var(--color-surface-subtle)] hover:bg-[var(--color-surface-selected)]"
       summary={
         <span className="inline-flex items-center gap-2">
           <BookOpenText className="size-4" />
@@ -57,15 +58,15 @@ export function AnalysisSection({
   return (
     <section
       aria-labelledby={headingId}
-      className="min-w-0 scroll-mt-24 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3 sm:p-4"
+      className="min-w-0 scroll-mt-24 overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)]"
       id={id}
     >
-      <div className="mb-3">
+      <header className="border-b border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-3 py-3 sm:px-4">
         <h2 className="text-base font-semibold" id={headingId}>
           {title}
         </h2>
-      </div>
-      {children}
+      </header>
+      <div className="p-3 sm:p-4">{children}</div>
     </section>
   );
 }
@@ -141,6 +142,7 @@ export function AnalysisReadingGuide({
       ariaLabel={ariaLabel}
       className="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)]"
       panelClassName="border-t border-[var(--color-border)] p-3"
+      triggerClassName="bg-[var(--color-surface-subtle)] hover:bg-[var(--color-surface-selected)]"
       summary={
         <span className="inline-flex items-center gap-2">
           <BookOpenText aria-hidden="true" className="size-4" />

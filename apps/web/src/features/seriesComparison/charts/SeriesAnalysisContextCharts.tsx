@@ -172,7 +172,7 @@ export function CardShopDestinationQuadrants({
     <div className="grid gap-3 lg:grid-cols-2">
       {response.cardShopDestination.map((entry, index) => (
         <article
-          className="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3"
+          className="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3"
           key={entry.memberId}
         >
           <div className="flex flex-wrap items-start justify-between gap-2">
@@ -196,7 +196,7 @@ export function CardShopDestinationQuadrants({
               const focused = focusedItemIds.includes(quadrant.itemId);
               return (
                 <div
-                  className={`rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface)] p-2 ${focused ? "momo-enter ring-2 ring-[var(--color-action)] ring-offset-1 ring-offset-[var(--color-surface-subtle)]" : ""}`}
+                  className={`rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface)] p-2 ${focused ? "momo-enter ring-2 ring-[var(--color-action)] ring-offset-1 ring-offset-[var(--color-surface)]" : ""}`}
                   data-focused-metric={focused ? "true" : undefined}
                   key={quadrant.itemId}
                 >

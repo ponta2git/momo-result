@@ -26,7 +26,7 @@ export function RankDistributionBars({ focusedItemIds, response }: OverviewChart
   return (
     <section
       aria-labelledby={titleId}
-      className="grid gap-3 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3"
+      className="grid gap-3 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3"
     >
       <h3 className="text-sm font-semibold" id={titleId}>
         各順位の回数
@@ -154,7 +154,7 @@ export function CrownShareBars({ response }: { response: SeriesComparisonAggrega
           const share = shareByMemberId.get(player.memberId);
           return (
             <div
-              className="flex items-center justify-between gap-2 bg-[var(--color-surface-subtle)] px-3 py-2"
+              className="flex items-center justify-between gap-2 bg-[var(--color-surface)] px-3 py-2"
               key={player.memberId}
               style={{
                 borderLeftColor: dataVizSeriesColor(index),

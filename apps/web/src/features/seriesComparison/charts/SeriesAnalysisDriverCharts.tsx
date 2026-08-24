@@ -89,7 +89,7 @@ export function RevenueConversionMatrices({
           );
           return (
             <article
-              className="min-w-0 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3"
+              className="min-w-0 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3"
               key={entry.memberId}
             >
               <h3
@@ -109,13 +109,13 @@ export function RevenueConversionMatrices({
                 <thead>
                   <tr>
                     <MatrixAxisHeader
-                      className="w-[4.5rem] bg-[var(--color-surface)] px-1"
+                      className="w-[4.5rem] px-1"
                       columnLabel="最終順位"
                       rowLabel="収益順位"
                     />
                     {SERIES_RANKS.map((rank) => (
                       <MatrixColumnHeader
-                        className="bg-[var(--color-surface)] px-1 py-1 text-[11px]"
+                        className="px-1 py-1 text-[11px]"
                         key={rank}
                         style={{ borderTopColor: rankBorderColor(rank), borderTopWidth: 3 }}
                       >
@@ -127,7 +127,7 @@ export function RevenueConversionMatrices({
                 <tbody>
                   {SERIES_RANKS.map((revenueRank) => (
                     <tr key={revenueRank}>
-                      <MatrixRowHeader className="bg-[var(--color-surface)] px-1 text-[11px]">
+                      <MatrixRowHeader className="px-1 text-[11px]">
                         収益{revenueRank}位
                       </MatrixRowHeader>
                       {SERIES_RANKS.map((finalRank) => {
@@ -147,7 +147,7 @@ export function RevenueConversionMatrices({
                         return (
                           <MatrixCell
                             aria-label={`収益${cell.revenueRank}位から最終${cell.finalRank}位、${cell.count}戦、${formatPercent(cell.rate)}${focused ? "、この試合" : ""}`}
-                            className={`rounded-[var(--radius-xs)] border px-1 py-2 text-center ${focused ? "momo-enter ring-2 ring-[var(--color-action)] ring-offset-1 ring-offset-[var(--color-surface-subtle)]" : ""}`}
+                            className={`rounded-[var(--radius-xs)] border px-1 py-2 text-center ${focused ? "momo-enter ring-2 ring-[var(--color-action)] ring-offset-1 ring-offset-[var(--color-surface)]" : ""}`}
                             data-focused-metric={focused ? "true" : undefined}
                             key={finalRank}
                             style={

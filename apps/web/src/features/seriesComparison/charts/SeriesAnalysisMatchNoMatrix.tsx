@@ -44,9 +44,10 @@ export function MatchNoInEventMatrix({ response }: { response: SeriesComparisonA
       />
       {additionalEntries.length > 0 ? (
         <Disclosure
-          className="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)]"
+          className="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)]"
           panelClassName="border-t border-[var(--color-border)] p-3"
           summary="第5試合以降"
+          triggerClassName="bg-[var(--color-surface-subtle)] hover:bg-[var(--color-surface-selected)]"
         >
           <MatchNoMatrix
             ariaLabel="開催内第5試合以降の傾向"

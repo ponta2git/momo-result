@@ -143,7 +143,7 @@ export function DestinationOutcomeSection({ response }: { response: Response }) 
 function OutcomeDetails({ label, outcome }: { label: string; outcome: Outcome }) {
   const qualityAdvisory = qualityAdvisoryLabel(outcome.qualityStatus);
   return (
-    <div className="rounded-[var(--radius-xs)] bg-[var(--color-surface-subtle)] p-2">
+    <div className="border-l-2 border-[var(--color-border)] px-2 py-1">
       <dt className="font-semibold">{label}の内訳</dt>
       <dd className="mt-1 text-[var(--color-text-secondary)] tabular-nums">
         勝利 {outcome.winCount}戦・入賞 {outcome.podiumCount}戦・下位 {outcome.lowerHalfCount}戦（
@@ -174,7 +174,7 @@ function ConditionalOutcome({
   winRate: number | null;
 }) {
   return (
-    <div className="rounded-[var(--radius-xs)] bg-[var(--color-surface-subtle)] p-2">
+    <div className="border-l-2 border-[var(--color-border)] px-2 py-1">
       <dt className="text-xs font-semibold">{label}</dt>
       <dd className="mt-1 text-xs text-[var(--color-text-secondary)] tabular-nums">
         {targetCount}戦・勝率 {formatPercent(winRate)}・入賞率 {formatPercent(podiumRate)}

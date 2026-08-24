@@ -171,7 +171,7 @@ export function AnalysisTableOfContents({ view }: { view: AnalysisViewId }) {
   return (
     <nav
       aria-label={`${definition.label}の目次`}
-      className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-[var(--color-border)] pb-2 text-xs"
+      className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-3 text-xs"
     >
       <span className="font-semibold text-[var(--color-text-secondary)]">このページ</span>
       <ol className="flex min-w-0 flex-wrap gap-x-3 gap-y-1">

@@ -69,6 +69,7 @@ export function ReviewView({
           className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)]"
           panelClassName="grid gap-2 border-t border-[var(--color-border)] p-3"
           summary={response.commonPlaybookTopics.map((topic) => topic.heading).join("・")}
+          triggerClassName="bg-[var(--color-surface-subtle)] hover:bg-[var(--color-surface-selected)]"
         >
           {response.commonPlaybookTopics.map((topic) => (
             <div
@@ -192,7 +193,7 @@ function PlaybookCard({
               <div className="mt-1 grid gap-2">
                 {card.evidence.map((evidence) => (
                   <p
-                    className="rounded-[var(--radius-sm)] bg-[var(--color-surface-subtle)] px-3 py-2 tabular-nums"
+                    className="border-l-2 border-[var(--color-border)] px-3 py-2 tabular-nums"
                     key={`${evidence.metricId}:${evidence.label ?? ""}:${evidence.targetCount}:${evidence.value ?? "null"}`}
                   >
                     {evidence.label ?? reviewEvidenceLabel(evidence.metricId)}:{" "}

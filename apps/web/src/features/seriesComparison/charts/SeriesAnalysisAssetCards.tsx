@@ -201,7 +201,7 @@ export function AssetComparisonCards({ response }: { response: SeriesComparisonA
 
 function AssetDetailFact({ label, value }: { label: string; value: string }) {
   return (
-    <div className="min-w-0 rounded-[var(--radius-xs)] bg-[var(--color-surface-subtle)] p-2">
+    <div className="min-w-0 rounded-[var(--radius-xs)] border border-[var(--color-border)] p-2">
       <dt className="text-[11px] text-[var(--color-text-secondary)]">{label}</dt>
       <dd className="mt-1 font-semibold break-words tabular-nums">{value}</dd>
     </div>
@@ -249,7 +249,7 @@ function AssetFact({
   value: string;
 }) {
   return (
-    <div className="min-w-0 self-start rounded-[var(--radius-xs)] bg-[var(--color-surface-subtle)] p-2 text-center">
+    <div className="min-w-0 self-start rounded-[var(--radius-xs)] border border-[var(--color-border)] p-2 text-center">
       <p className="text-[11px] font-semibold text-[var(--color-text-secondary)]">{label}</p>
       {subLabel ? <p className="text-[11px] text-[var(--color-text-muted)]">{subLabel}</p> : null}
       <p className="mt-1 text-xs font-semibold break-words tabular-nums">{value}</p>
@@ -269,6 +269,6 @@ function assetEvidenceToneClassName(tone: "neutral" | "risk" | "strength"): stri
     case "risk":
       return "border-[var(--color-warning)]/65 bg-[var(--color-warning)]/18";
     case "neutral":
-      return "border-[var(--color-border)] bg-[var(--color-surface-subtle)]";
+      return "border-[var(--color-border)]";
   }
 }

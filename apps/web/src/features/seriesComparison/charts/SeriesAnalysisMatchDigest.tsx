@@ -27,7 +27,7 @@ export function MatchDigestStrip({
       <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
         {flagOrder.map((flag) => (
           <div
-            className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-3 py-2"
+            className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2"
             key={flag}
           >
             <p className="text-xs text-[var(--color-text-secondary)]">{timelineFlagLabel(flag)}</p>
@@ -38,7 +38,7 @@ export function MatchDigestStrip({
         ))}
       </div>
       {response.matchDigest.recent.length === 0 ? (
-        <p className="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-3 py-2 text-sm text-[var(--color-text-secondary)]">
+        <p className="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text-secondary)]">
           対象試合はありません。
         </p>
       ) : (
@@ -48,7 +48,7 @@ export function MatchDigestStrip({
               const focused = focusedItemIds.includes(match.itemId);
               return (
                 <article
-                  className={`w-52 shrink-0 rounded-[var(--radius-sm)] border bg-[var(--color-surface-subtle)] p-3 ${focused ? "momo-enter border-[var(--color-action)] ring-2 ring-[var(--color-action)]/25" : "border-[var(--color-border)]"}`}
+                  className={`w-52 shrink-0 rounded-[var(--radius-sm)] border bg-[var(--color-surface)] p-3 ${focused ? "momo-enter border-[var(--color-action)] ring-2 ring-[var(--color-action)]/25" : "border-[var(--color-border)]"}`}
                   data-focused-metric={focused ? "true" : undefined}
                   key={match.itemId}
                 >
@@ -97,7 +97,7 @@ export function MatchDigestStrip({
                     ) : (
                       match.flags.map((flag) => (
                         <span
-                          className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-[11px] text-[var(--color-text-secondary)]"
+                          className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-2 py-1 text-[11px] text-[var(--color-text-secondary)]"
                           key={flag}
                         >
                           {timelineFlagLabel(flag)}

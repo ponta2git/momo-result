@@ -107,11 +107,15 @@ export type SeriesAnalysisUnexpectedWinEvidence = {
 
 export type SeriesAnalysisReviewEvidence = {
   denominator?: number | null | undefined;
+  confidenceHigh?: number | null | undefined;
+  confidenceLow?: number | null | undefined;
   effectEstimate?: number | null | undefined;
   label?: string | undefined;
   metricId: string;
+  method?: string | null | undefined;
   qualityStatus?: DataQualityStatus | undefined;
   stabilityBand?: "high" | "low" | "medium" | undefined;
+  stability?: number | null | undefined;
   status?: DataQualityStatus | "hidden" | undefined;
   supportCount?: number | undefined;
   targetCount?: number | undefined;

@@ -235,6 +235,18 @@ function PlaybookCard({
                             : evidence.status),
                       )}
                     </span>
+                    {evidence.method ? (
+                      <span className="mt-1 block text-xs text-[var(--color-text-secondary)]">
+                        開催単位bootstrap・効果 {formatDecimal(evidence.effectEstimate)}・95%区間{" "}
+                        {formatDecimal(evidence.confidenceLow)}〜
+                        {formatDecimal(evidence.confidenceHigh)}・開催安定性{" "}
+                        {formatPercent(evidence.stability)}
+                      </span>
+                    ) : evidence.stability !== undefined && evidence.stability !== null ? (
+                      <span className="mt-1 block text-xs text-[var(--color-text-secondary)]">
+                        開催安定性 {formatPercent(evidence.stability)}
+                      </span>
+                    ) : null}
                   </p>
                 ))}
               </div>

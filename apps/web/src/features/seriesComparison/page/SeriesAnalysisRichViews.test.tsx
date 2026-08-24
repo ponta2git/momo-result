@@ -130,6 +130,8 @@ describe("rich series analysis views", () => {
     );
 
     expect(screen.getByText("目的地あり・売り場あり・この試合")).toBeInTheDocument();
+    expect(screen.getByText(/売り場あり 5\/12戦・目的地なし20%/u)).toBeInTheDocument();
+    expect(screen.getByText("平均収益")).toBeInTheDocument();
     expect(document.querySelector('[data-focused-metric="true"]')).toBeInTheDocument();
     expect(document.body).not.toHaveTextContent("destination_with_shop");
     expect(screen.getByText("得意")).toBeInTheDocument();

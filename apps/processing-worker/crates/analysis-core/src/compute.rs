@@ -561,8 +561,16 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec!["event-z", "event-a"]
         );
-        assert_eq!(events[0].get("eventRankDelta"), Some(&json!(null)));
-        assert_eq!(events[1].get("cumulativeAverageDelta"), Some(&json!(0.0)));
+        assert_eq!(
+            events.first().and_then(|event| event.get("eventRankDelta")),
+            Some(&json!(null))
+        );
+        assert_eq!(
+            events
+                .get(1)
+                .and_then(|event| event.get("cumulativeAverageDelta")),
+            Some(&json!(0.0))
+        );
     }
 
     #[test]

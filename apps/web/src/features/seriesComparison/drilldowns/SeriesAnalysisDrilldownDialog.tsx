@@ -91,68 +91,86 @@ function DrilldownBody({ response }: { response: SeriesAnalysisDrilldownV2 }) {
     case "rank_signals":
       return <RankSignalDrilldown payload={payload} />;
     case "unexpected_wins":
-      return (
-        <div className="grid gap-4">
-          <DrilldownFacts
-            ariaLabel="予測より上位だった勝利の要約"
-            items={[
-              {
-                id: "wins",
-                label: "勝利",
-                value: `${payload.summary.totalWinCount}戦`,
-              },
-              {
-                id: "targets",
-                label: "確認対象",
-                value: `${payload.summary.unexpectedWinCount}戦`,
-              },
-              {
-                id: "quality",
-                label: "読み取り",
-                value: qualityLabel(payload.summary.status),
-              },
-            ]}
-          />
-          {payload.rows.length === 0 ? (
-            <Notice tone="info" title="予測より上位だった勝利はありません">
-              この比較範囲では、確認対象になった勝利はありません。
-            </Notice>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[42rem] text-left text-sm">
-                <thead>
-                  <tr>
-                    <TableHead>試合</TableHead>
-                    <TableHead>日時</TableHead>
-                    <TableHead>期待順位</TableHead>
-                    <TableHead>実順位</TableHead>
-                    <TableHead>物件収益</TableHead>
-                    <TableHead>目的地</TableHead>
-                  </tr>
-                </thead>
-                <tbody>
-                  {payload.rows.map((row) => (
-                    <tr className="border-t border-[var(--color-border)]" key={row.matchId}>
-                      <TableCell>
-                        <SeriesAnalysisMatchLink
-                          ariaLabel={`第${row.matchIndex}戦の試合結果を見る`}
-                          matchId={row.matchId}
-                        >
-                          第{row.matchIndex}戦
-                        </SeriesAnalysisMatchLink>
-                      </TableCell>
-                      <TableCell>{formatDateTime(row.playedAt)}</TableCell>
-                      <TableCell>{formatDecimal(row.expectedRank)}位</TableCell>
-                      <TableCell>{row.actualRank}位</TableCell>
-                      <TableCell>{formatManYen(row.evidence.revenueManYen)}</TableCell>
-                      <TableCell>{row.evidence.destinationCount}回</TableCell>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      );
+      return <UnexpectedWinsDrilldown payload={payload} />;
   }
+}
+
+export function UnexpectedWinsDrilldown({
+  payload,
+}: {
+  payload: Extract<SeriesAnalysisDrilldownV2["payload"], { kind: "unexpected_wins" }>;
+}) {
+  return (
+    <div className="grid gap-4">
+      <DrilldownFacts
+        ariaLabel="予測より上位だった勝利の要約"
+        items={[
+          {
+            id: "wins",
+            label: "勝利",
+            value: `${payload.summary.totalWinCount}戦`,
+          },
+          {
+            id: "targets",
+            label: "確認対象",
+            value: `${payload.summary.unexpectedWinCount}戦`,
+          },
+          {
+            id: "quality",
+            label: "読み取り",
+            value: qualityLabel(payload.summary.status),
+          },
+        ]}
+      />
+      {payload.rows.length === 0 ? (
+        <Notice tone="info" title="予測より上位だった勝利はありません">
+          この比較範囲では、確認対象になった勝利はありません。
+        </Notice>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[68rem] text-left text-sm">
+            <thead>
+              <tr>
+                <TableHead>試合</TableHead>
+                <TableHead>日時</TableHead>
+                <TableHead>期待順位</TableHead>
+                <TableHead>実順位</TableHead>
+                <TableHead>物件収益</TableHead>
+                <TableHead>目的地</TableHead>
+                <TableHead>プラス駅</TableHead>
+                <TableHead>マイナス駅</TableHead>
+                <TableHead>カード駅</TableHead>
+                <TableHead>カード売り場</TableHead>
+                <TableHead>スリの銀次</TableHead>
+              </tr>
+            </thead>
+            <tbody>
+              {payload.rows.map((row) => (
+                <tr className="border-t border-[var(--color-border)]" key={row.matchId}>
+                  <TableCell>
+                    <SeriesAnalysisMatchLink
+                      ariaLabel={`第${row.matchIndex}戦の試合結果を見る`}
+                      matchId={row.matchId}
+                    >
+                      第{row.matchIndex}戦
+                    </SeriesAnalysisMatchLink>
+                  </TableCell>
+                  <TableCell>{formatDateTime(row.playedAt)}</TableCell>
+                  <TableCell>{formatDecimal(row.expectedRank)}位</TableCell>
+                  <TableCell>{row.actualRank}位</TableCell>
+                  <TableCell>{formatManYen(row.evidence.revenueManYen)}</TableCell>
+                  <TableCell>{row.evidence.destinationCount}回</TableCell>
+                  <TableCell>{row.evidence.plusStationCount}回</TableCell>
+                  <TableCell>{row.evidence.minusStationCount}回</TableCell>
+                  <TableCell>{row.evidence.cardStationCount}回</TableCell>
+                  <TableCell>{row.evidence.cardShopCount}回</TableCell>
+                  <TableCell>{row.evidence.ginjiCount}回</TableCell>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
 }

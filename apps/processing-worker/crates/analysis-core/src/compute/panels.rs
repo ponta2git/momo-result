@@ -823,6 +823,10 @@ pub(super) fn card_shop_destination(
         .map(|member_id| {
             let rows = player_matches_by_member.get(member_id).map_or(&[][..], Vec::as_slice);
             let card_shop_count = rows.iter().filter(|row| row.incidents.card_shop > 0).count();
+            let card_shop_without_destination_count = rows
+                .iter()
+                .filter(|row| row.incidents.card_shop > 0 && row.incidents.destination == 0)
+                .count();
             let quadrants = kinds
                 .into_iter()
                 .map(|kind| {
@@ -855,7 +859,8 @@ pub(super) fn card_shop_destination(
                 "denominator": rows.len(),
                 "cardShopMatchCount": card_shop_count,
                 "cardShopRate": rate(card_shop_count, rows.len()),
-                "cardShopWithoutDestinationCount": rows.iter().filter(|row| row.incidents.card_shop > 0 && row.incidents.destination == 0).count(),
+                "cardShopWithoutDestinationCount": card_shop_without_destination_count,
+                "cardShopWithoutDestinationRate": rate(card_shop_without_destination_count, card_shop_count),
                 "quadrants": quadrants,
             })
         })

@@ -16,6 +16,7 @@ use crate::{
 };
 
 mod presentation;
+mod statistics;
 mod template;
 
 #[cfg(test)]
@@ -73,6 +74,9 @@ struct Candidate {
     normalized_symptom: f64,
     shrunk_symptom: f64,
     contrast: DriverContrast,
+    confidence_high: Option<f64>,
+    confidence_low: Option<f64>,
+    event_stability: Option<f64>,
     target_count: usize,
     baseline_count: usize,
     action_connection: f64,
@@ -399,6 +403,23 @@ fn make_candidate(
     if contrast.effect < minimum_effect {
         return None;
     }
+    let event_stability = statistics::event_stability(
+        target_rows,
+        baseline_rows,
+        raw_symptom,
+        |reduced_target, reduced_baseline| symptom(category, reduced_target, reduced_baseline),
+    );
+    let interval = matches!(category, Category::Accident | Category::DestinationPositive)
+        .then(|| {
+            statistics::event_bootstrap_interval(
+                member_id,
+                category.code(),
+                contrast.driver.metric_id(),
+                target_rows,
+                |sampled| driver_effect(contrast.driver, sampled, split, revenue_ranks),
+            )
+        })
+        .flatten();
 
     Some(Candidate {
         member_id: String::from(member_id),
@@ -407,6 +428,9 @@ fn make_candidate(
         normalized_symptom,
         shrunk_symptom,
         contrast,
+        confidence_high: interval.map(|value| value.high),
+        confidence_low: interval.map(|value| value.low),
+        event_stability,
         target_count,
         baseline_count: baseline_rows.len(),
         action_connection: action_connection(category),
@@ -415,6 +439,37 @@ fn make_candidate(
         retained: true,
         action_advice_score: 0.0,
     })
+}
+
+fn driver_effect(
+    driver: Driver,
+    rows: &[&PlayerMatchInput],
+    split: OutcomeSplit,
+    revenue_ranks: &CompetitionRanks<'_>,
+) -> Option<f64> {
+    let positive = rows
+        .iter()
+        .copied()
+        .filter(|row| match split {
+            OutcomeSplit::Win => row.rank == 1,
+            OutcomeSplit::Podium => row.rank <= 2,
+        })
+        .collect::<Vec<_>>();
+    let negative = rows
+        .iter()
+        .copied()
+        .filter(|row| match split {
+            OutcomeSplit::Win => row.rank != 1,
+            OutcomeSplit::Podium => row.rank >= 3,
+        })
+        .collect::<Vec<_>>();
+    if positive.is_empty() || negative.is_empty() {
+        return None;
+    }
+    let positive_values = driver_values(driver, &positive, revenue_ranks);
+    let negative_values = driver_values(driver, &negative, revenue_ranks);
+    (positive_values.len() == positive.len() && negative_values.len() == negative.len())
+        .then(|| cliffs_delta(&positive_values, &negative_values))
 }
 
 fn symptom(

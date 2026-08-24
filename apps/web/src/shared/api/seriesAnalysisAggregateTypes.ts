@@ -68,6 +68,7 @@ export type SeriesComparisonAggregateV2 = {
     cardShopMatchCount: number;
     cardShopRate: number | null;
     cardShopWithoutDestinationCount: number;
+    cardShopWithoutDestinationRate: number | null;
     denominator: number;
     displayName: string;
     memberId: string;

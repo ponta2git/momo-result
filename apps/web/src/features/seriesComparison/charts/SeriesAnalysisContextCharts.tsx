@@ -187,7 +187,8 @@ export function CardShopDestinationQuadrants({
               {entry.displayName}
             </h3>
             <span className="text-xs text-[var(--color-text-secondary)] tabular-nums">
-              売り場あり {entry.cardShopMatchCount}/{entry.denominator}戦
+              売り場あり {entry.cardShopMatchCount}/{entry.denominator}戦・目的地なし
+              {formatPercent(entry.cardShopWithoutDestinationRate)}
             </span>
           </div>
           <div className="mt-3 grid gap-2 sm:grid-cols-2">
@@ -209,6 +210,7 @@ export function CardShopDestinationQuadrants({
                     <Value label="勝率" value={formatPercent(quadrant.winRate)} />
                     <Value label="入賞率" value={formatPercent(quadrant.podiumRate)} />
                     <Value label="平均資産" value={formatManYen(quadrant.averageAssets)} />
+                    <Value label="平均収益" value={formatManYen(quadrant.averageRevenue)} />
                     <Value label="該当率" value={formatPercent(quadrant.rate)} />
                   </dl>
                 </div>

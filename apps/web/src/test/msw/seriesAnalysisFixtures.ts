@@ -124,6 +124,7 @@ export function makeSeriesAnalysisAggregate(
         cardShopMatchCount: 5,
         cardShopRate: 0.42,
         cardShopWithoutDestinationCount: 1,
+        cardShopWithoutDestinationRate: 0.2,
         denominator: 12,
         displayName: player.displayName,
         memberId: player.memberId,
@@ -595,10 +596,15 @@ export function makeSeriesAnalysisReview(): SeriesComparisonReviewV2 {
           dataReason: "収益上位5戦のうち2戦は勝ち切れていません。",
           evidence: [
             {
+              confidenceHigh: 0.82,
+              confidenceLow: 0.31,
+              effectEstimate: 0.56,
               label: "収益上位時の勝率",
+              method: "event_cluster_bootstrap_v1",
               metricId: "revenue.topWinRate",
               qualityStatus: "ok",
               targetCount: 5,
+              stability: 0.74,
               unit: "rate",
               value: 0.6,
             },

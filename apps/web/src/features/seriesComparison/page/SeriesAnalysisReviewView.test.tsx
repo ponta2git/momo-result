@@ -65,5 +65,8 @@ describe("ReviewView", () => {
     const detailDialog = await screen.findByRole("dialog");
     expect(within(detailDialog).getByText("収益だけで安全と見ない。")).toBeInTheDocument();
     expect(within(detailDialog).getByText(/対象 5戦／ぶれにくさ 高め/u)).toBeInTheDocument();
+    expect(within(detailDialog).getByText(/開催単位bootstrap/u)).toHaveTextContent(
+      "95%区間 0.31〜0.82・開催安定性 74%",
+    );
   });
 });

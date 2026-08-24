@@ -1,10 +1,11 @@
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, TriangleAlert } from "lucide-react";
 import { useState } from "react";
 
 import type {
   SeriesComparisonAggregateV3,
   SeriesComparisonReviewV3,
 } from "@/shared/api/seriesAnalysis";
+import { formatDateTimeLong } from "@/shared/lib/dateTime";
 import { useMediaQuery } from "@/shared/lib/useMediaQuery";
 import { Button } from "@/shared/ui/actions/Button";
 import { Disclosure } from "@/shared/ui/data/Collapsible";
@@ -53,11 +54,12 @@ export function SeriesAnalysisScopeBar({
   const [openOverride, setOpenOverride] = useState<boolean>();
   const open = openOverride ?? (!responsiveViewportAvailable || wideViewport);
   const quality = response?.dataQuality.summary;
-  const qualityText = quality
-    ? quality.referenceCount === 0 && quality.noTargetCount === 0
-      ? "読み取り目安: 十分"
-      : `参考 ${quality.referenceCount}項目・対象なし ${quality.noTargetCount}項目`
-    : "読み取り目安を確認中";
+  const qualityAdvisories = quality
+    ? [
+        quality.referenceCount > 0 ? `参考値 ${quality.referenceCount}項目` : null,
+        quality.noTargetCount > 0 ? `対象なし ${quality.noTargetCount}項目` : null,
+      ].filter((entry): entry is string => entry !== null)
+    : [];
   return (
     <Disclosure
       ariaLabel="比較条件"
@@ -71,7 +73,18 @@ export function SeriesAnalysisScopeBar({
             {scopeLabel}
           </span>
           <span className="mt-0.5 block text-xs text-[var(--color-text-secondary)] tabular-nums">
-            {response ? `${response.scope.matchCount}戦` : "対戦数を確認中"} ・ {qualityText}
+            {response ? `${response.scope.matchCount}戦` : "対戦数を確認中"}
+            {qualityAdvisories.length > 0 ? (
+              <span className="ml-2 inline-flex items-center gap-1 font-semibold text-[var(--color-text-primary)]">
+                {quality && quality.referenceCount > 0 ? (
+                  <TriangleAlert
+                    aria-hidden="true"
+                    className="size-3.5 shrink-0 text-[var(--color-warning)]"
+                  />
+                ) : null}
+                {qualityAdvisories.join("・")}
+              </span>
+            ) : null}
           </span>
         </span>
       }
@@ -101,7 +114,7 @@ export function SeriesAnalysisScopeBar({
       <div className="flex flex-col gap-2 border-t border-[var(--color-border)] pt-3 text-xs text-[var(--color-text-secondary)] sm:flex-row sm:items-center sm:justify-between">
         <span>
           {response
-            ? `最終更新 ${formatDateTime(response.artifact.publishedAt)}`
+            ? `最終更新 ${formatDateTimeLong(response.artifact.publishedAt)}`
             : "分析結果を読み込みます"}
         </span>
         <Button
@@ -118,12 +131,4 @@ export function SeriesAnalysisScopeBar({
       </div>
     </Disclosure>
   );
-}
-
-function formatDateTime(value: string): string {
-  return new Intl.DateTimeFormat("ja-JP", {
-    dateStyle: "medium",
-    timeZone: "Asia/Tokyo",
-    timeStyle: "short",
-  }).format(new Date(value));
 }

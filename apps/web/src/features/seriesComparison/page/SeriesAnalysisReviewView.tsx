@@ -1,4 +1,4 @@
-import { ChevronRight, CircleHelp } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 
 import {
   classificationLabel,
@@ -7,14 +7,19 @@ import {
   formatManYen,
   formatPercent,
   playbookCategoryLabel,
-  qualityLabel,
   reviewEvidenceLabel,
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
 import type { SeriesAnalysisViewId } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
+import { SeriesAnalysisReviewHelpDialog } from "@/features/seriesComparison/page/SeriesAnalysisReviewHelpDialog";
 import {
   purposePanelId,
   purposeTabId,
 } from "@/features/seriesComparison/page/SeriesComparisonAnalysisNavigation";
+import {
+  lowEvidenceStrengthWarningLabel,
+  SeriesAnalysisEvidenceStrengthWarning,
+  SeriesAnalysisQualityAdvisory,
+} from "@/features/seriesComparison/SeriesAnalysisQualityAdvisory";
 import type {
   SeriesAnalysisPlaybookCard,
   SeriesComparisonReviewV3,
@@ -87,47 +92,7 @@ export function ReviewView({
             <dd className="font-semibold">発動条件に当てはまるとき</dd>
           </div>
         </dl>
-        <Dialog
-          description="分類は行動の扱い方、信頼度は根拠の確かさを示します。"
-          title="分類と信頼度の読み方"
-          trigger={
-            <Button icon={<CircleHelp className="size-4" />} size="sm" variant="quiet">
-              分類と信頼度の読み方
-            </Button>
-          }
-        >
-          <div className="grid gap-4 text-sm leading-6">
-            <section>
-              <h4 className="font-semibold">分類</h4>
-              <dl className="mt-2 grid gap-2">
-                <HelpItem
-                  label="再現する"
-                  value="成績が伸びた条件を、次の4戦でも意識する候補です。"
-                />
-                <HelpItem
-                  label="見直す"
-                  value="成績が崩れた条件を避けるため、行動を変える候補です。"
-                />
-                <HelpItem
-                  label="検証する"
-                  value="差は見えるものの、まず次の4戦で確かめる候補です。"
-                />
-              </dl>
-            </section>
-            <section>
-              <h4 className="font-semibold">信頼度</h4>
-              <p className="mt-2 text-[var(--color-text-secondary)]">
-                対象件数と差のぶれにくさを合わせた読み取り目安です。低い候補は結論ではなく、試す価値のある仮説として扱います。
-              </p>
-            </section>
-            <dl className="rounded-[var(--radius-sm)] bg-[var(--color-surface-subtle)] p-3">
-              <HelpItem
-                label="試合中"
-                value="「発動条件」に当てはまったら、「やること」を行動候補にします。"
-              />
-            </dl>
-          </div>
-        </Dialog>
+        <SeriesAnalysisReviewHelpDialog />
       </div>
       <div className="grid items-stretch gap-3 lg:grid-cols-4">
         {response.playbookByPlayer.map((entry) => (
@@ -189,9 +154,9 @@ function PlaybookCard({
           {classificationLabel(card.classification)}
         </span>
         <span className="text-xs text-[var(--color-text-secondary)]">
-          {playbookCategoryLabel(card.category)}・{card.targetCount}戦・信頼度
-          {evidenceStrengthLabel(card.evidenceStrength)}
+          {playbookCategoryLabel(card.category)}・{card.targetCount}戦
         </span>
+        <SeriesAnalysisEvidenceStrengthWarning strength={card.evidenceStrength} />
       </div>
       <div>
         <h4 className="leading-6 font-semibold">{card.actionHypothesis}</h4>
@@ -203,7 +168,13 @@ function PlaybookCard({
       </dl>
       <div className="mt-auto grid gap-2 pt-1">
         <Dialog
-          description={`${playbookCategoryLabel(card.category)}・対象${card.targetCount}戦・信頼度${evidenceStrengthLabel(card.evidenceStrength)}`}
+          description={[
+            playbookCategoryLabel(card.category),
+            `対象${card.targetCount}戦`,
+            lowEvidenceStrengthWarningLabel(card.evidenceStrength),
+          ]
+            .filter((entry): entry is string => entry !== null)
+            .join("・")}
           title="根拠・注意・試合後の確認"
           trigger={
             <Button size="sm" variant="quiet">
@@ -227,14 +198,17 @@ function PlaybookCard({
                     {evidence.label ?? reviewEvidenceLabel(evidence.metricId)}:{" "}
                     {formatEvidenceValue(evidence.value, evidence.unit)}
                     <span className="ml-2 text-[var(--color-text-secondary)]">
-                      対象{evidence.targetCount ?? evidence.denominator ?? card.targetCount}戦・
-                      {qualityLabel(
-                        evidence.qualityStatus ??
-                          (evidence.status === "hidden" || evidence.status === undefined
-                            ? card.qualityStatus
-                            : evidence.status),
-                      )}
+                      対象{evidence.targetCount ?? evidence.denominator ?? card.targetCount}戦
                     </span>
+                    <SeriesAnalysisQualityAdvisory
+                      className="ml-2"
+                      status={
+                        evidence.qualityStatus ??
+                        (evidence.status === "hidden" || evidence.status === undefined
+                          ? card.qualityStatus
+                          : evidence.status)
+                      }
+                    />
                     {evidence.method ? (
                       <span className="mt-1 block text-xs text-[var(--color-text-secondary)]">
                         開催単位bootstrap・効果 {formatDecimal(evidence.effectEstimate)}・95%区間{" "}
@@ -270,15 +244,6 @@ function PlaybookCard({
         </Button>
       </div>
     </article>
-  );
-}
-
-function HelpItem({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="grid gap-0.5 sm:grid-cols-[6rem_1fr]">
-      <dt className="font-semibold">{label}</dt>
-      <dd className="text-[var(--color-text-secondary)]">{value}</dd>
-    </div>
   );
 }
 

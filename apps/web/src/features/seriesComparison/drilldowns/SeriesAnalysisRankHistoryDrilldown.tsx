@@ -5,9 +5,12 @@ import {
 import {
   formatDateTime,
   formatDecimal,
-  qualityLabel,
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
 import { SeriesAnalysisMatchLink } from "@/features/seriesComparison/navigation/SeriesAnalysisMatchLink";
+import {
+  qualityAdvisoryLabel,
+  SeriesAnalysisQualityAdvisory,
+} from "@/features/seriesComparison/SeriesAnalysisQualityAdvisory";
 import type { SeriesAnalysisDrilldownV3 } from "@/shared/api/seriesAnalysis";
 import { DataVizLineChart } from "@/shared/ui/dataViz/LineChart";
 import { RankBadge } from "@/shared/ui/rank/RankBadge";
@@ -27,6 +30,7 @@ export function RankHistoryDrilldown({
   payload: RankHistoryPayload;
   playerName: string;
 }) {
+  const qualityAdvisory = qualityAdvisoryLabel(payload.summary.qualityStatus);
   return (
     <div className="grid gap-4">
       <DrilldownFacts
@@ -39,16 +43,6 @@ export function RankHistoryDrilldown({
             value: `${formatDecimal(payload.summary.currentAverageRank)}位`,
           },
           {
-            id: "since-first",
-            label: "初戦後からの通算変化",
-            value: (
-              <ChangeBadge
-                direction={deltaDirection(payload.summary.averageRankDeltaFromFirst)}
-                magnitude={payload.summary.averageRankDeltaFromFirst}
-              />
-            ),
-          },
-          {
             id: "latest-event",
             label: "直近開催での通算変化",
             value: (
@@ -58,11 +52,15 @@ export function RankHistoryDrilldown({
               />
             ),
           },
-          {
-            id: "quality",
-            label: "読み取り",
-            value: qualityLabel(payload.summary.qualityStatus),
-          },
+          ...(qualityAdvisory
+            ? [
+                {
+                  id: "quality",
+                  label: payload.summary.qualityStatus === "reference" ? "注意" : "状態",
+                  value: <SeriesAnalysisQualityAdvisory status={payload.summary.qualityStatus} />,
+                },
+              ]
+            : []),
         ]}
       />
       <DataVizLineChart
@@ -93,8 +91,7 @@ export function RankHistoryDrilldown({
         >
           <thead>
             <tr>
-              <TableHead>開催</TableHead>
-              <TableHead>初回日時</TableHead>
+              <TableHead>開催日時</TableHead>
               <TableHead>順位列</TableHead>
               <TableHead>開催平均</TableHead>
               <TableHead>開催内変化</TableHead>
@@ -104,7 +101,6 @@ export function RankHistoryDrilldown({
           <tbody>
             {payload.eventRows.map((row) => (
               <tr className="border-t border-[var(--color-border)]" key={row.heldEventId}>
-                <TableCell>{row.heldEventId}</TableCell>
                 <TableCell>{formatDateTime(row.firstPlayedAt)}</TableCell>
                 <TableCell>{row.ranks.join(" → ")}</TableCell>
                 <TableCell>{formatDecimal(row.eventAverageRank)}位</TableCell>

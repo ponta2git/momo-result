@@ -7,13 +7,12 @@ import {
   MatrixValueLegend,
   SERIES_RANKS,
 } from "@/features/seriesComparison/charts/SeriesAnalysisMatrix";
+import { MomentumRateSummary } from "@/features/seriesComparison/charts/SeriesAnalysisMomentumRateSummary";
 import {
   formatDecimal,
   formatPercent,
-  qualityLabel,
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
 import type { SeriesComparisonAggregateV3 } from "@/shared/api/seriesAnalysis";
-import type { SeriesAnalysisMomentumRate } from "@/shared/api/seriesAnalysisMetricTypes";
 import { DataVizLineChart } from "@/shared/ui/dataViz/LineChart";
 import { dataVizSeriesColor } from "@/shared/ui/dataViz/playerSeries";
 import { rankBackgroundColor, rankBorderColor } from "@/shared/ui/rank/rankPresentation";
@@ -255,32 +254,6 @@ export function MomentumMatrices({
       </div>
     </div>
   );
-}
-
-function MomentumRateSummary({ label, rate }: { label: string; rate: SeriesAnalysisMomentumRate }) {
-  return (
-    <div className="rounded-[var(--radius-xs)] bg-[var(--color-surface)] p-2">
-      <dt className="font-semibold">{label}</dt>
-      <dd className="mt-1 text-[var(--color-text-secondary)] tabular-nums">
-        {rate.successCount}/{rate.targetCount}戦・{formatPercent(rate.rate)}
-      </dd>
-      <dd className="text-[var(--color-text-secondary)] tabular-nums">
-        通常 {formatPercent(rate.baselineRate)}・差 {formatPercent(rate.deltaFromBaseline)}・
-        {momentumSignalLabel(rate.signal)}・{qualityLabel(rate.qualityStatus)}
-      </dd>
-    </div>
-  );
-}
-
-function momentumSignalLabel(signal: SeriesAnalysisMomentumRate["signal"]): string {
-  switch (signal) {
-    case "strength":
-      return "強み候補";
-    case "risk":
-      return "注意候補";
-    case "none":
-      return "目立つ差なし";
-  }
 }
 
 function trendSeries(response: SeriesComparisonAggregateV3, kind: string) {

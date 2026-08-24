@@ -38,11 +38,16 @@ describe("rich series analysis views", () => {
       "aria-label",
       expect.stringMatching(/1位 6回 50%、この試合/u),
     );
+    expect(screen.getByRole("heading", { name: "各順位の回数" })).toBeInTheDocument();
+    expect(screen.getByLabelText("ぽんたの順位回数")).toHaveTextContent(
+      "1位 6回（この試合）・2位 2回・3位 2回・4位 2回",
+    );
     expect(document.body).not.toHaveTextContent(/member_ponta|property_focused|rank\.average/u);
 
     const crownRegion = screen.getByRole("region", { name: "平均順位首位の確からしさ" });
     expect(within(crownRegion).getByText("先頭と次点の比率差")).toBeInTheDocument();
-    expect(within(crownRegion).getByText("12戦・8開催・十分")).toBeInTheDocument();
+    expect(within(crownRegion).getByText("12戦・8開催")).toBeInTheDocument();
+    expect(within(crownRegion).queryByText("十分")).not.toBeInTheDocument();
     expect(within(crownRegion).queryByText(/次戦の勝率や最終順位/u)).not.toBeInTheDocument();
     await user.click(
       within(crownRegion).getByRole("button", { name: "平均順位首位の確からしさの読み方" }),

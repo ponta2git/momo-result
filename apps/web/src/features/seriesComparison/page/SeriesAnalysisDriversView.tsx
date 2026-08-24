@@ -9,7 +9,6 @@ import {
 import {
   formatHighlightValue,
   highlightMetricLabel,
-  qualityLabel,
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
 import {
   rankSignalCandidateShareLabel,
@@ -31,6 +30,7 @@ import {
   analysisTabId,
   AnalysisTableOfContents,
 } from "@/features/seriesComparison/page/SeriesComparisonAnalysisNavigation";
+import { SeriesAnalysisQualityAdvisory } from "@/features/seriesComparison/SeriesAnalysisQualityAdvisory";
 import { Button } from "@/shared/ui/actions/Button";
 
 export function DriversView({ focusedItemIds, response, onDrilldown }: AnalysisViewProps) {
@@ -86,9 +86,7 @@ export function DriversView({ focusedItemIds, response, onDrilldown }: AnalysisV
             >
               <div className="flex items-center justify-between gap-2">
                 <h3 className="font-semibold">{playerName(response.players, entry.memberId)}</h3>
-                <span className="text-xs text-[var(--color-text-secondary)]">
-                  {qualityLabel(entry.status)}
-                </span>
+                <SeriesAnalysisQualityAdvisory status={entry.status} />
               </div>
               {entry.candidates.length === 0 ? (
                 <p className="mt-3 text-sm text-[var(--color-text-secondary)]">

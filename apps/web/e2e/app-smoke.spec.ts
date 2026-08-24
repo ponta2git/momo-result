@@ -461,6 +461,9 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
     await comparisonLink.click();
 
     await expect(page.getByRole("heading", { exact: true, name: "戦績比較" })).toBeVisible();
+    const scopeControl = page.getByRole("button", { name: "比較条件" });
+    await expect(scopeControl).toContainText(`${analysisScope.matchCount}戦`);
+    await expect(scopeControl).not.toContainText("十分");
     await expect(page.getByText("新しい戦績データを計算中です")).toBeVisible();
     await expect(page.getByText(/更新のデータを表示します/u)).toBeVisible();
     const selectedMatch = page.getByRole("region", { name: "選択中の試合" });
@@ -489,6 +492,11 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
     await page.getByRole("tab", { name: "今の差" }).click();
     await expect(page.getByRole("heading", { name: "順位と基礎比較" })).toBeVisible();
     await expect(page.getByRole("region", { name: "順位と基礎比較" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "各順位の回数" })).toBeVisible();
+    await expect(page.getByLabel("ぽんたの順位回数")).toContainText(
+      "1位 6回（この試合）・2位 2回・3位 2回・4位 2回",
+    );
+    await expectNoHorizontalPageOverflow(page);
     const crownRegion = page.getByRole("region", { name: "平均順位首位の確からしさ" });
     await expect(crownRegion.getByRole("img", { name: /平均順位首位に残った比率/u })).toBeVisible();
     await crownRegion.getByRole("button", { name: "平均順位首位の確からしさの読み方" }).click();
@@ -500,6 +508,9 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
     await page.getByRole("button", { name: "詳細" }).first().click();
     const rankDialog = page.getByRole("dialog", { name: "平均順位の推移" });
     await expect(rankDialog.getByRole("img", { name: "ぽんたの累積平均順位の推移" })).toBeVisible();
+    await expect(rankDialog.getByRole("columnheader", { name: "開催日時" })).toBeVisible();
+    await expect(rankDialog).not.toContainText("event-12");
+    await expect(rankDialog).not.toContainText("初戦後からの通算変化");
     await expect(rankDialog.getByRole("cell", { name: "第1戦" })).toBeVisible();
     await expect(rankDialog.getByText("0.05 改善")).toBeVisible();
     const rankHistoryMatchHref = withReturnTo(
@@ -511,6 +522,10 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
       rankHistoryMatchHref,
     );
     await rankDialog.getByRole("button", { name: "ダイアログを閉じる" }).click();
+
+    await page.setViewportSize({ height: 900, width: 1280 });
+    await expect(page.getByLabel("ぽんたの順位回数")).toBeVisible();
+    await expectNoHorizontalPageOverflow(page);
 
     await page.getByRole("tab", { name: "条件別" }).click();
     await expect(page.getByRole("heading", { name: "番手比較" })).toBeVisible();

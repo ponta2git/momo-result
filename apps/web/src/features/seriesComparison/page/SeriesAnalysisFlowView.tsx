@@ -5,7 +5,6 @@ import {
 import { MatchDigestStrip } from "@/features/seriesComparison/charts/SeriesAnalysisMatchDigest";
 import { MatchNoInEventMatrix } from "@/features/seriesComparison/charts/SeriesAnalysisMatchNoMatrix";
 import { RecentRankStrips } from "@/features/seriesComparison/charts/SeriesAnalysisRecentRankStrip";
-import { qualityLabel } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
 import type { AnalysisViewProps } from "@/features/seriesComparison/page/SeriesAnalysisViewPrimitives";
 import {
   AnalysisFacts,
@@ -18,6 +17,7 @@ import {
   analysisTabId,
   AnalysisTableOfContents,
 } from "@/features/seriesComparison/page/SeriesComparisonAnalysisNavigation";
+import { SeriesAnalysisQualityAdvisory } from "@/features/seriesComparison/SeriesAnalysisQualityAdvisory";
 import { Button } from "@/shared/ui/actions/Button";
 
 export function FlowView({
@@ -67,9 +67,7 @@ export function FlowView({
             >
               <div className="flex justify-between gap-2">
                 <h3 className="font-semibold">{playerName(response.players, entry.memberId)}</h3>
-                <span className="text-xs text-[var(--color-text-secondary)]">
-                  {qualityLabel(entry.status)}
-                </span>
+                <SeriesAnalysisQualityAdvisory status={entry.status} />
               </div>
               <p className="mt-2 text-sm tabular-nums">
                 全{entry.totalWinCount}勝のうち {entry.unexpectedWinCount}戦

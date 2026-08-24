@@ -6,9 +6,12 @@ import {
   formatDateTime,
   formatDecimal,
   formatPercent,
-  qualityLabel,
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
 import { SeriesAnalysisMatchLink } from "@/features/seriesComparison/navigation/SeriesAnalysisMatchLink";
+import {
+  qualityAdvisoryLabel,
+  SeriesAnalysisQualityAdvisory,
+} from "@/features/seriesComparison/SeriesAnalysisQualityAdvisory";
 import type { SeriesAnalysisDrilldownV3 } from "@/shared/api/seriesAnalysis";
 import { DataVizLineChart } from "@/shared/ui/dataViz/LineChart";
 import { RankBadge } from "@/shared/ui/rank/RankBadge";
@@ -30,6 +33,7 @@ export function PlayOrderHistoryDrilldown({
   payload: PlayOrderHistoryPayload;
   playerName: string;
 }) {
+  const qualityAdvisory = qualityAdvisoryLabel(payload.summary.qualityStatus);
   return (
     <div className="grid gap-4">
       <DrilldownFacts
@@ -62,11 +66,15 @@ export function PlayOrderHistoryDrilldown({
             label: "番手間の平均順位差",
             value: `${formatDecimal(payload.summary.spread)}位`,
           },
-          {
-            id: "quality",
-            label: "読み取り",
-            value: qualityLabel(payload.summary.qualityStatus),
-          },
+          ...(qualityAdvisory
+            ? [
+                {
+                  id: "quality",
+                  label: payload.summary.qualityStatus === "reference" ? "注意" : "状態",
+                  value: <SeriesAnalysisQualityAdvisory status={payload.summary.qualityStatus} />,
+                },
+              ]
+            : []),
         ]}
       />
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

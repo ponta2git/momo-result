@@ -10,8 +10,8 @@ import {
   formatManYen,
   formatPercent,
   profileLabel,
-  qualityLabel,
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
+import { SeriesAnalysisQualityAdvisory } from "@/features/seriesComparison/SeriesAnalysisQualityAdvisory";
 import type { SeriesComparisonAggregateV3 } from "@/shared/api/seriesAnalysis";
 import { Disclosure } from "@/shared/ui/data/Collapsible";
 import { DataVizQuadrantPlot } from "@/shared/ui/dataViz/QuadrantPlot";
@@ -36,8 +36,9 @@ export function AssetComparisonCards({ response }: { response: SeriesComparisonA
           >
             <div className="flex items-start justify-between gap-2 border-b border-[var(--color-border)] pb-3">
               <h3 className="font-semibold">{entry.displayName}</h3>
-              <span className="text-xs text-[var(--color-text-secondary)] tabular-nums">
-                {entry.targetCount}戦・{qualityLabel(entry.qualityStatus)}
+              <span className="grid justify-items-end gap-1 text-xs text-[var(--color-text-secondary)] tabular-nums">
+                <span>{entry.targetCount}戦</span>
+                <SeriesAnalysisQualityAdvisory status={entry.qualityStatus} />
               </span>
             </div>
             <section className="min-h-36 border-b border-[var(--color-border)] py-3">

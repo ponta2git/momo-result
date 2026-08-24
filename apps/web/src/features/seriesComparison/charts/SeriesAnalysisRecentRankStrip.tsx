@@ -3,9 +3,9 @@ import { useEffect, useRef } from "react";
 import {
   formatDecimal,
   formatPercent,
-  qualityLabel,
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
 import { SeriesAnalysisMatchLink } from "@/features/seriesComparison/navigation/SeriesAnalysisMatchLink";
+import { SeriesAnalysisQualityAdvisory } from "@/features/seriesComparison/SeriesAnalysisQualityAdvisory";
 import type { SeriesComparisonAggregateV3 } from "@/shared/api/seriesAnalysis";
 import { dataVizSeriesColor } from "@/shared/ui/dataViz/playerSeries";
 import { rankColor, rankForegroundColor } from "@/shared/ui/rank/rankPresentation";
@@ -117,9 +117,12 @@ export function RecentRankStrips({
                     </span>
                     <span className="block text-[11px] font-normal text-[var(--color-text-secondary)] tabular-nums">
                       平均{formatDecimal(entry?.averageRank)}位・入賞
-                      {formatPercent(entry?.podiumRate)}・
-                      {qualityLabel(entry?.qualityStatus ?? "no_target")}
+                      {formatPercent(entry?.podiumRate)}
                     </span>
+                    <SeriesAnalysisQualityAdvisory
+                      className="mt-0.5"
+                      status={entry?.qualityStatus ?? "no_target"}
+                    />
                     {entry ? (
                       <span className="block text-[11px] font-normal text-[var(--color-text-secondary)] tabular-nums">
                         連勝 {entry.winStreak}・連続入賞 {entry.podiumStreak}・連続下位{" "}

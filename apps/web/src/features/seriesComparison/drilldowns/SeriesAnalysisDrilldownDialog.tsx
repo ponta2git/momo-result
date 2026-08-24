@@ -16,9 +16,12 @@ import {
   formatDateTime,
   formatDecimal,
   formatManYen,
-  qualityLabel,
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
 import { SeriesAnalysisMatchLink } from "@/features/seriesComparison/navigation/SeriesAnalysisMatchLink";
+import {
+  qualityAdvisoryLabel,
+  SeriesAnalysisQualityAdvisory,
+} from "@/features/seriesComparison/SeriesAnalysisQualityAdvisory";
 import type {
   SeriesAnalysisDrilldownMetricId,
   SeriesAnalysisDrilldownV3,
@@ -100,6 +103,7 @@ export function UnexpectedWinsDrilldown({
 }: {
   payload: Extract<SeriesAnalysisDrilldownV3["payload"], { kind: "unexpected_wins" }>;
 }) {
+  const qualityAdvisory = qualityAdvisoryLabel(payload.summary.status);
   return (
     <div className="grid gap-4">
       <DrilldownFacts
@@ -115,11 +119,15 @@ export function UnexpectedWinsDrilldown({
             label: "確認対象",
             value: `${payload.summary.unexpectedWinCount}戦`,
           },
-          {
-            id: "quality",
-            label: "読み取り",
-            value: qualityLabel(payload.summary.status),
-          },
+          ...(qualityAdvisory
+            ? [
+                {
+                  id: "quality",
+                  label: payload.summary.status === "reference" ? "注意" : "状態",
+                  value: <SeriesAnalysisQualityAdvisory status={payload.summary.status} />,
+                },
+              ]
+            : []),
         ]}
       />
       {payload.rows.length === 0 ? (

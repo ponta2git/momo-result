@@ -3,11 +3,11 @@ import { ArrowUpRight, Search } from "lucide-react";
 import {
   formatDateTime,
   formatManYen,
-  qualityLabel,
   timelineFlagLabel,
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
 import { SeriesAnalysisMatchLink } from "@/features/seriesComparison/navigation/SeriesAnalysisMatchLink";
 import { playerName } from "@/features/seriesComparison/page/SeriesAnalysisViewPrimitives";
+import { SeriesAnalysisQualityAdvisory } from "@/features/seriesComparison/SeriesAnalysisQualityAdvisory";
 import type { SeriesComparisonAggregateV3 } from "@/shared/api/seriesAnalysis";
 import { Button } from "@/shared/ui/actions/Button";
 
@@ -68,9 +68,7 @@ export function MatchDigestStrip({
                           : "勝者不明"}
                       </p>
                     </div>
-                    <span className="text-[11px] text-[var(--color-text-secondary)]">
-                      {qualityLabel(match.qualityStatus)}
-                    </span>
+                    <SeriesAnalysisQualityAdvisory status={match.qualityStatus} />
                   </div>
                   <p className="mt-1 text-[11px] text-[var(--color-text-muted)]">
                     {formatDateTime(match.playedAt)}

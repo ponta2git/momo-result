@@ -1,3 +1,5 @@
+import { useId } from "react";
+
 import {
   AnalysisMatrix,
   MatrixAxisHeader,
@@ -20,8 +22,15 @@ type OverviewChartProps = {
 };
 
 export function RankDistributionBars({ focusedItemIds, response }: OverviewChartProps) {
+  const titleId = useId();
   return (
-    <div className="grid gap-3 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3">
+    <section
+      aria-labelledby={titleId}
+      className="grid gap-3 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3"
+    >
+      <h3 className="text-sm font-semibold" id={titleId}>
+        各順位の回数
+      </h3>
       <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs">
         {[1, 2, 3, 4].map((rank) => (
           <span className="inline-flex items-center gap-2" key={rank}>
@@ -41,6 +50,7 @@ export function RankDistributionBars({ focusedItemIds, response }: OverviewChart
           );
           return (
             <div
+              aria-label={`${player.displayName}の順位回数`}
               className="grid gap-1 sm:grid-cols-[8rem_minmax(0,1fr)_4rem] sm:items-center"
               key={player.memberId}
             >
@@ -81,12 +91,31 @@ export function RankDistributionBars({ focusedItemIds, response }: OverviewChart
               <div className="text-xs text-[var(--color-text-secondary)] tabular-nums sm:text-right">
                 {entry?.total ?? 0}戦
               </div>
+              <p className="text-sm leading-5 font-medium text-[var(--color-text-primary)] tabular-nums sm:col-start-2 sm:col-end-4">
+                {rankCountSummary(entry?.cells ?? [], focusedItemIds)}
+              </p>
             </div>
           );
         })}
       </div>
-    </div>
+    </section>
   );
+}
+
+function rankCountSummary(
+  cells: ReadonlyArray<{ count: number; itemId: string; rank: number }>,
+  focusedItemIds: readonly string[],
+): string {
+  const countByRank = new Map(cells.map((cell) => [cell.rank, cell.count]));
+  const focusedRanks = new Set(
+    cells.filter((cell) => focusedItemIds.includes(cell.itemId)).map((cell) => cell.rank),
+  );
+  return [1, 2, 3, 4]
+    .map(
+      (rank) =>
+        `${rank}位 ${countByRank.get(rank) ?? 0}回${focusedRanks.has(rank) ? "（この試合）" : ""}`,
+    )
+    .join("・");
 }
 
 export function CrownShareBars({ response }: { response: SeriesComparisonAggregateV3 }) {

@@ -12,7 +12,6 @@ import {
   formatDecimal,
   formatManYen,
   formatPercent,
-  qualityLabel,
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
 import type { AnalysisViewProps } from "@/features/seriesComparison/page/SeriesAnalysisViewPrimitives";
 import {
@@ -26,9 +25,14 @@ import {
   analysisTabId,
   AnalysisTableOfContents,
 } from "@/features/seriesComparison/page/SeriesComparisonAnalysisNavigation";
+import {
+  qualityAdvisoryLabel,
+  SeriesAnalysisQualityAdvisory,
+} from "@/features/seriesComparison/SeriesAnalysisQualityAdvisory";
 import { Button } from "@/shared/ui/actions/Button";
 
 export function OverviewView({ focusedItemIds, response, onDrilldown }: AnalysisViewProps) {
+  const crownQualityAdvisory = qualityAdvisoryLabel(response.rankAnalysis.crownCertainty.status);
   return (
     <div
       aria-labelledby={analysisTabId("overview")}
@@ -113,8 +117,22 @@ export function OverviewView({ focusedItemIds, response, onDrilldown }: Analysis
             {
               id: "scope",
               label: "根拠の範囲",
-              value: `${response.rankAnalysis.matchCount}戦・${response.rankAnalysis.heldEventCount}開催・${qualityLabel(response.rankAnalysis.crownCertainty.status)}`,
+              value: `${response.rankAnalysis.matchCount}戦・${response.rankAnalysis.heldEventCount}開催`,
             },
+            ...(crownQualityAdvisory
+              ? [
+                  {
+                    id: "quality",
+                    label:
+                      response.rankAnalysis.crownCertainty.status === "reference" ? "注意" : "状態",
+                    value: (
+                      <SeriesAnalysisQualityAdvisory
+                        status={response.rankAnalysis.crownCertainty.status}
+                      />
+                    ),
+                  },
+                ]
+              : []),
           ]}
         />
         <CrownShareBars response={response} />

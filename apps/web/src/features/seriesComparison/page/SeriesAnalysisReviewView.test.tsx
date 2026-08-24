@@ -55,7 +55,8 @@ describe("ReviewView", () => {
     await user.click(screen.getByRole("button", { name: "ぽんたのほかの仮説" }));
     expect(screen.getByText("下位後は目的地を1回取って戻す。")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "分類と信頼度の読み方" }));
+    expect(screen.queryByText(/信頼度高め/u)).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "分類の読み方" }));
     const helpDialog = await screen.findByRole("dialog");
     expect(within(helpDialog).getByText("再現する")).toBeInTheDocument();
     expect(within(helpDialog).getByText(/「やること」を行動候補にします/u)).toBeInTheDocument();
@@ -68,5 +69,24 @@ describe("ReviewView", () => {
     expect(within(detailDialog).getByText(/開催単位bootstrap/u)).toHaveTextContent(
       "95%区間 0.31〜0.82・開催安定性 74%",
     );
+  });
+
+  it("warns only when a playbook or its evidence has low reliability", async () => {
+    const user = userEvent.setup();
+    const response = makeSeriesAnalysisReview();
+    const card = response.playbookByPlayer[0]?.primaryCard;
+    const evidence = card?.evidence[0];
+    if (!card || !evidence) throw new Error("primary evidence fixture is required");
+    card.evidenceStrength = "low";
+    evidence.qualityStatus = "reference";
+
+    render(
+      <ReviewView loading={false} response={response} showError={false} onViewChange={vi.fn()} />,
+    );
+
+    expect(screen.getByText("信頼度低め")).toBeInTheDocument();
+    expect(screen.queryByText(/信頼度高め|信頼度中/u)).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "根拠・注意・試合後の確認" }));
+    expect(await screen.findByText("参考値")).toBeInTheDocument();
   });
 });

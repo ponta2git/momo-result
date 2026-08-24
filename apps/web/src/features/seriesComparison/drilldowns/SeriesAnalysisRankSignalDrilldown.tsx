@@ -2,14 +2,15 @@ import { Check, Minus } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { DrilldownFacts } from "@/features/seriesComparison/drilldowns/SeriesAnalysisDrilldownPrimitives";
-import {
-  evidenceStrengthLabel,
-  qualityLabel,
-} from "@/features/seriesComparison/model/seriesAnalysisPresentation";
+import { evidenceStrengthLabel } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
 import {
   rankSignalCandidateShareLabel,
   rankSignalLabel,
 } from "@/features/seriesComparison/model/seriesAnalysisRankPresentation";
+import {
+  qualityAdvisoryLabel,
+  SeriesAnalysisQualityAdvisory,
+} from "@/features/seriesComparison/SeriesAnalysisQualityAdvisory";
 import type { SeriesAnalysisDrilldownV3 } from "@/shared/api/seriesAnalysis";
 import { cn } from "@/shared/ui/cn";
 import { Disclosure } from "@/shared/ui/data/Collapsible";
@@ -25,6 +26,7 @@ const importanceFormatter = new Intl.NumberFormat("ja-JP", {
 });
 
 export function RankSignalDrilldown({ payload }: { payload: RankSignalPayload }) {
+  const qualityAdvisory = qualityAdvisoryLabel(payload.status);
   return (
     <div className="grid gap-4">
       <DrilldownFacts
@@ -32,7 +34,15 @@ export function RankSignalDrilldown({ payload }: { payload: RankSignalPayload })
         items={[
           { id: "matches", label: "対象試合", value: `${payload.matchCount}戦` },
           { id: "events", label: "対象開催", value: `${payload.heldEventCount}開催` },
-          { id: "quality", label: "読み取り", value: qualityLabel(payload.status) },
+          ...(qualityAdvisory
+            ? [
+                {
+                  id: "quality",
+                  label: payload.status === "reference" ? "注意" : "状態",
+                  value: <SeriesAnalysisQualityAdvisory status={payload.status} />,
+                },
+              ]
+            : []),
           {
             id: "validation",
             label: "別開催テスト",

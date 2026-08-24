@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 
@@ -21,11 +21,19 @@ describe("series analysis history drilldowns", () => {
 
     expect(screen.getByRole("img", { name: "ぽんたの累積平均順位の推移" })).toBeInTheDocument();
     expect(screen.getByLabelText("ぽんたの平均順位推移の要約")).toHaveTextContent(
-      /対象12戦.*現在1.75位.*読み取り十分/u,
+      /対象12戦.*現在1.75位.*直近開催での通算変化/u,
     );
+    expect(screen.queryByText("初戦後からの通算変化")).not.toBeInTheDocument();
+    expect(screen.queryByText("十分")).not.toBeInTheDocument();
     expect(screen.getByText("0.05 改善")).toBeInTheDocument();
     expect(screen.getByText("順位 1位・改善")).toBeInTheDocument();
-    expect(screen.getByLabelText("ぽんたの開催別平均順位")).toHaveTextContent("2 → 2 → 1 → 1");
+    const eventHistory = screen.getByLabelText("ぽんたの開催別平均順位");
+    expect(eventHistory).toHaveTextContent("2026/08/08 21:00");
+    expect(eventHistory).toHaveTextContent("2 → 2 → 1 → 1");
+    expect(eventHistory).not.toHaveTextContent("event-12");
+    expect(
+      within(eventHistory).getByRole("columnheader", { name: "開催日時" }),
+    ).toBeInTheDocument();
     expect(screen.getByText("直近開催での通算変化")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "第12戦の試合結果を見る" })).toHaveAttribute(
       "href",

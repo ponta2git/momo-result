@@ -8,8 +8,11 @@ import {
 import {
   formatDecimal,
   formatPercent,
-  qualityLabel,
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
+import {
+  qualityAdvisoryLabel,
+  SeriesAnalysisQualityAdvisory,
+} from "@/features/seriesComparison/SeriesAnalysisQualityAdvisory";
 import type { SeriesComparisonAggregateV3 } from "@/shared/api/seriesAnalysis";
 import { Disclosure } from "@/shared/ui/data/Collapsible";
 import { dataVizSeriesColor } from "@/shared/ui/dataViz/playerSeries";
@@ -111,10 +114,11 @@ function MatchNoRow({
       <MatrixRowHeader className="py-3">第{entry.matchNoInEvent}試合</MatrixRowHeader>
       {response.players.map((player) => {
         const row = rowByMemberId.get(player.memberId);
-        const quality = qualityLabel(row?.qualityStatus ?? "no_target");
+        const qualityStatus = row?.qualityStatus ?? "no_target";
+        const qualityAdvisory = qualityAdvisoryLabel(qualityStatus);
         return (
           <MatrixCell
-            aria-label={`${player.displayName}、第${entry.matchNoInEvent}試合、${row?.targetCount ?? 0}戦、${quality}、平均${formatDecimal(row?.averageRank)}位、入賞${formatPercent(row?.podiumRate)}`}
+            aria-label={`${player.displayName}、第${entry.matchNoInEvent}試合、${row?.targetCount ?? 0}戦${qualityAdvisory ? `、${qualityAdvisory}` : ""}、平均${formatDecimal(row?.averageRank)}位、入賞${formatPercent(row?.podiumRate)}`}
             className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-2"
             key={player.memberId}
           >
@@ -122,7 +126,7 @@ function MatchNoRow({
               <span className="text-xs text-[var(--color-text-secondary)] tabular-nums">
                 {row?.targetCount ?? 0}戦
               </span>
-              <span className="text-[11px] text-[var(--color-text-muted)]">{quality}</span>
+              <SeriesAnalysisQualityAdvisory status={qualityStatus} />
             </div>
             <p className="mt-1 text-sm font-semibold tabular-nums">
               平均 {formatDecimal(row?.averageRank)}位

@@ -209,7 +209,9 @@ describe("app routing", () => {
     const { router } = renderApp("/analytics/series");
 
     expect(await screen.findByRole("heading", { name: "戦績比較" })).toBeInTheDocument();
-    expect(await screen.findByText(/12戦 ・ 読み取り目安: 十分/u)).toBeInTheDocument();
+    const scopeControl = await screen.findByRole("button", { name: "比較条件" });
+    await waitFor(() => expect(scopeControl).toHaveTextContent("12戦"));
+    expect(scopeControl).not.toHaveTextContent("十分");
     expect(screen.getByRole("tab", { name: "次戦に備える" })).toHaveAttribute(
       "aria-selected",
       "true",

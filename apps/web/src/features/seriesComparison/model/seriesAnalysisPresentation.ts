@@ -1,11 +1,11 @@
 import type {
   ChangeDirection,
-  DataQualityStatus,
   RelativeIntensity,
   SeriesAnalysisPlaybookCategory,
   SeriesAnalysisPlaybookClassification,
   SeriesAnalysisPlaybookEvidenceStrength,
 } from "@/shared/api/seriesAnalysis";
+import { formatDateTimeLong } from "@/shared/lib/dateTime";
 import { formatManYen as formatStoredManYen } from "@/shared/lib/formatters";
 
 const numberFormatter = new Intl.NumberFormat("ja-JP", { maximumFractionDigits: 2 });
@@ -13,11 +13,6 @@ const integerFormatter = new Intl.NumberFormat("ja-JP", { maximumFractionDigits:
 const percentFormatter = new Intl.NumberFormat("ja-JP", {
   maximumFractionDigits: 1,
   style: "percent",
-});
-const dateTimeFormatter = new Intl.DateTimeFormat("ja-JP", {
-  dateStyle: "medium",
-  timeZone: "Asia/Tokyo",
-  timeStyle: "short",
 });
 
 export function formatDecimal(value: number | null | undefined): string {
@@ -49,18 +44,7 @@ export function formatPercent(value: number | null | undefined): string {
 }
 
 export function formatDateTime(value: string | null | undefined): string {
-  return value ? dateTimeFormatter.format(new Date(value)) : "—";
-}
-
-export function qualityLabel(status: DataQualityStatus): string {
-  switch (status) {
-    case "ok":
-      return "十分";
-    case "reference":
-      return "参考";
-    case "no_target":
-      return "対象なし";
-  }
+  return formatDateTimeLong(value ?? undefined, "—");
 }
 
 export function intensityClassName(intensity: RelativeIntensity): string {

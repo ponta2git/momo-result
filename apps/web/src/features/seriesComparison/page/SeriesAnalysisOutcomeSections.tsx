@@ -2,13 +2,16 @@ import { RevenueConversionMatrices } from "@/features/seriesComparison/charts/Se
 import {
   formatDecimal,
   formatPercent,
-  qualityLabel,
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
 import type { AnalysisViewProps } from "@/features/seriesComparison/page/SeriesAnalysisViewPrimitives";
 import {
   AnalysisSection,
   MetricValue,
 } from "@/features/seriesComparison/page/SeriesAnalysisViewPrimitives";
+import {
+  qualityAdvisoryLabel,
+  SeriesAnalysisQualityAdvisory,
+} from "@/features/seriesComparison/SeriesAnalysisQualityAdvisory";
 import { Disclosure } from "@/shared/ui/data/Collapsible";
 
 type Response = AnalysisViewProps["response"];
@@ -138,6 +141,7 @@ export function DestinationOutcomeSection({ response }: { response: Response }) 
 }
 
 function OutcomeDetails({ label, outcome }: { label: string; outcome: Outcome }) {
+  const qualityAdvisory = qualityAdvisoryLabel(outcome.qualityStatus);
   return (
     <div className="rounded-[var(--radius-xs)] bg-[var(--color-surface-subtle)] p-2">
       <dt className="font-semibold">{label}の内訳</dt>
@@ -147,9 +151,13 @@ function OutcomeDetails({ label, outcome }: { label: string; outcome: Outcome })
       </dd>
       <dd className="mt-1 text-[var(--color-text-secondary)] tabular-nums">
         順位分布{" "}
-        {outcome.rankDistribution.map((cell) => `${cell.rank}位 ${cell.count}戦`).join("・")}・
-        {qualityLabel(outcome.qualityStatus)}
+        {outcome.rankDistribution.map((cell) => `${cell.rank}位 ${cell.count}戦`).join("・")}
       </dd>
+      {qualityAdvisory ? (
+        <dd className="mt-1">
+          <SeriesAnalysisQualityAdvisory status={outcome.qualityStatus} />
+        </dd>
+      ) : null}
     </div>
   );
 }

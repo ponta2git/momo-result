@@ -100,9 +100,19 @@ fn play_order_history_payload(
     rows: &[&PlayerMatchInput],
     all_scope_rows: &[&PlayerMatchInput],
 ) -> Value {
+    let series = play_order_series(rows);
+    let rows_by_order = play_order_breakdown(rows, all_scope_rows);
+    json!({
+        "kind": "play_order_rank_history",
+        "summary": play_order_summary(rows, &rows_by_order),
+        "seriesByPlayOrder": series,
+        "rows": rows_by_order,
+    })
+}
+
+fn play_order_series(rows: &[&PlayerMatchInput]) -> Vec<Value> {
     let mut by_order = BTreeMap::<i32, (f64, usize)>::new();
-    let series = rows
-        .iter()
+    rows.iter()
         .enumerate()
         .map(|(index, row)| {
             let (sum, count) = by_order.entry(row.play_order).or_default();
@@ -125,8 +135,14 @@ fn play_order_history_payload(
                 "changeDirection": change_direction(previous, current, true),
             })
         })
-        .collect::<Vec<_>>();
-    let rows_by_order = (1..=4)
+        .collect()
+}
+
+fn play_order_breakdown(
+    rows: &[&PlayerMatchInput],
+    all_scope_rows: &[&PlayerMatchInput],
+) -> Vec<Value> {
+    (1..=4)
         .map(|order| {
             let target = rows
                 .iter()
@@ -156,7 +172,10 @@ fn play_order_history_payload(
                 "qualityStatus": quality_status(target.len()),
             })
         })
-        .collect::<Vec<_>>();
+        .collect()
+}
+
+fn play_order_summary(rows: &[&PlayerMatchInput], rows_by_order: &[Value]) -> Value {
     let ranked_rows = rows_by_order
         .iter()
         .filter_map(|row| {
@@ -165,42 +184,37 @@ fn play_order_history_payload(
                 .map(|average| (row, average))
         })
         .collect::<Vec<_>>();
-    let best = ranked_rows
+    let best_entry = ranked_rows
         .iter()
         .min_by(|left, right| left.1.total_cmp(&right.1));
-    let worst = ranked_rows
+    let worst_entry = ranked_rows
         .iter()
         .max_by(|left, right| left.1.total_cmp(&right.1));
-    let best_play_order = best
+    let best_play_order = best_entry
         .and_then(|(row, _)| row.get("playOrder"))
         .and_then(Value::as_i64);
-    let best_play_order_average_rank = best.map(|(_, average)| *average);
-    let worst_play_order = worst
+    let best_play_order_average_rank = best_entry.map(|(_, average)| *average);
+    let worst_play_order = worst_entry
         .and_then(|(row, _)| row.get("playOrder"))
         .and_then(Value::as_i64);
-    let worst_play_order_average_rank = worst.map(|(_, average)| *average);
+    let worst_play_order_average_rank = worst_entry.map(|(_, average)| *average);
     let spread = best_play_order_average_rank
         .zip(worst_play_order_average_rank)
         .filter(|_| ranked_rows.len() >= 2)
-        .map(|(best, worst)| worst - best);
+        .map(|(best_average, worst_average)| worst_average - best_average);
     json!({
-        "kind": "play_order_rank_history",
-        "summary": {
-            "targetCount": rows.len(),
-            "currentAverageRank": average(rows.iter().map(|row| f64::from(row.rank))),
-            "bestPlayOrder": best_play_order,
-            "bestPlayOrderAverageRank": best_play_order_average_rank,
-            "worstPlayOrder": worst_play_order,
-            "worstPlayOrderAverageRank": worst_play_order_average_rank,
-            "spread": spread,
-            "countsByPlayOrder": (1..=4).map(|order| json!({
-                "playOrder": order,
-                "matchCount": rows.iter().filter(|row| row.play_order == order).count(),
-            })).collect::<Vec<_>>(),
-            "qualityStatus": quality_status(rows.len()),
-        },
-        "seriesByPlayOrder": series,
-        "rows": rows_by_order,
+        "targetCount": rows.len(),
+        "currentAverageRank": average(rows.iter().map(|row| f64::from(row.rank))),
+        "bestPlayOrder": best_play_order,
+        "bestPlayOrderAverageRank": best_play_order_average_rank,
+        "worstPlayOrder": worst_play_order,
+        "worstPlayOrderAverageRank": worst_play_order_average_rank,
+        "spread": spread,
+        "countsByPlayOrder": (1..=4).map(|order| json!({
+            "playOrder": order,
+            "matchCount": rows.iter().filter(|row| row.play_order == order).count(),
+        })).collect::<Vec<_>>(),
+        "qualityStatus": quality_status(rows.len()),
     })
 }
 

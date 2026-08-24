@@ -487,8 +487,8 @@ fn required_u64(value: Option<&Value>) -> Result<u64, PayloadError> {
 mod tests {
     use super::*;
 
-    fn fixture(contents: &str) -> Value {
-        serde_json::from_str(contents).expect("shared payload fixture must be valid JSON")
+    fn fixture(contents: &str) -> Result<Value, serde_json::Error> {
+        serde_json::from_str(contents)
     }
 
     #[test]
@@ -505,6 +505,12 @@ mod tests {
             "../../../../../docs/schemas/fixtures/series-analysis/",
             "drilldown-payload-v3.json"
         )));
+        assert!(aggregate.is_ok() && review.is_ok() && drilldown.is_ok());
+        let (Some(aggregate), Some(review), Some(drilldown)) =
+            (aggregate.ok(), review.ok(), drilldown.ok())
+        else {
+            return;
+        };
 
         assert!(validate_aggregate(&aggregate, &ScopeRef::Overall, 0).is_ok());
         assert!(validate_review(&review, &ScopeRef::Overall, 1).is_ok());

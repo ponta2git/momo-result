@@ -183,6 +183,17 @@ fn shared_boundary_fixture_matches_normalized_input_and_overall_checksum() {
         overall.payload.pointer("/scope/matchCount"),
         Some(fixture_value(&fixture, "/expected/matchCount"))
     );
+    assert_asset_style_fixture(&overall.payload, &fixture);
+    let encoded = canonicalize_value(&overall.payload)
+        .unwrap_or_else(|error| panic!("overall aggregate is not canonicalizable: {error}"));
+    let checksum = sha256_prefixed(&encoded);
+    assert_eq!(
+        Some(checksum.as_str()),
+        fixture_value(&fixture, "/expected/overallAggregateChecksum").as_str()
+    );
+}
+
+fn assert_asset_style_fixture(payload: &Value, fixture: &Value) {
     for (payload_pointer, fixture_pointer) in [
         (
             "/assetStyleProfiles/blowoutWinThreshold",
@@ -218,16 +229,9 @@ fn shared_boundary_fixture_matches_normalized_input_and_overall_checksum() {
         ),
     ] {
         assert_eq!(
-            overall.payload.pointer(payload_pointer),
-            Some(fixture_value(&fixture, fixture_pointer)),
+            payload.pointer(payload_pointer),
+            Some(fixture_value(fixture, fixture_pointer)),
             "asset-style fixture drifted at {payload_pointer}",
         );
     }
-    let encoded = canonicalize_value(&overall.payload)
-        .unwrap_or_else(|error| panic!("overall aggregate is not canonicalizable: {error}"));
-    let checksum = sha256_prefixed(&encoded);
-    assert_eq!(
-        Some(checksum.as_str()),
-        fixture_value(&fixture, "/expected/overallAggregateChecksum").as_str()
-    );
 }

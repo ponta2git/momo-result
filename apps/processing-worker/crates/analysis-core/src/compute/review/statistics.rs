@@ -89,7 +89,7 @@ pub(super) fn event_bootstrap_interval<'a>(
                         .index(event_rows.len())
                         .and_then(|index| event_rows.get(index))
                         .into_iter()
-                        .flat_map(|rows| rows.iter().copied())
+                        .flat_map(|event_group| event_group.iter().copied())
                 })
                 .collect::<Vec<_>>();
             compute(&sampled).filter(|value| value.is_finite())

@@ -71,6 +71,25 @@ struct AssetStyleMedians {
     destination_average: Option<f64>,
 }
 
+#[derive(Clone, Copy, Debug, Default)]
+struct AssetStyleThresholds {
+    low: Option<f64>,
+    high: Option<f64>,
+    blowout_win: Option<f64>,
+    near_miss_second: Option<f64>,
+    heavy_loss: Option<f64>,
+}
+
+struct AssetStyleRows<'a> {
+    assets: Vec<i32>,
+    wins: Vec<&'a PlayerMatchInput>,
+    seconds: Vec<&'a PlayerMatchInput>,
+    lower_half: Vec<&'a PlayerMatchInput>,
+    win_margins: Vec<i32>,
+    second_gaps: Vec<i32>,
+    lower_half_gaps: Vec<i32>,
+}
+
 use super::{
     metrics::revenue_asset_rate,
     signals::{head_to_head_signal, relative_intensity, signal_intensity},
@@ -317,124 +336,90 @@ pub(super) fn asset_style_profiles(
         .iter()
         .map(|row| ((row.match_id.as_str(), row.rank), row.total_assets_man_yen))
         .collect::<BTreeMap<_, _>>();
-    let assets = all_rows
-        .iter()
-        .map(|row| row.total_assets_man_yen)
-        .collect::<Vec<_>>();
-    let low = percentile_i32(&assets, 0.1);
-    let high = percentile_i32(&assets, 0.9);
-    let win_margins = all_rows
-        .iter()
-        .filter(|row| row.rank == 1)
-        .map(|row| {
-            row.total_assets_man_yen
-                - assets_by_rank
-                    .get(&(row.match_id.as_str(), 2))
-                    .copied()
-                    .unwrap_or(row.total_assets_man_yen)
-        })
-        .collect::<Vec<_>>();
-    let second_gaps = all_rows
-        .iter()
-        .filter(|row| row.rank == 2)
-        .map(|row| {
-            assets_by_rank
-                .get(&(row.match_id.as_str(), 1))
-                .copied()
-                .unwrap_or(row.total_assets_man_yen)
-                - row.total_assets_man_yen
-        })
-        .collect::<Vec<_>>();
-    let lower_gaps = all_rows
-        .iter()
-        .filter(|row| row.rank >= 3)
-        .map(|row| {
-            assets_by_rank
-                .get(&(row.match_id.as_str(), 1))
-                .copied()
-                .unwrap_or(row.total_assets_man_yen)
-                - row.total_assets_man_yen
-        })
-        .collect::<Vec<_>>();
-    let blowout_win_threshold = percentile_i32(&win_margins, 0.75);
-    let near_miss_second_threshold = percentile_i32(&second_gaps, 0.25);
-    let heavy_loss_threshold = percentile_i32(&lower_gaps, 0.75);
+    let thresholds = asset_style_thresholds(all_rows, &assets_by_rank);
     let bases = players
         .iter()
         .map(|member_id| {
             let rows = player_matches_by_member
                 .get(member_id)
                 .map_or(&[][..], Vec::as_slice);
-            asset_style_base(
-                member_id,
-                rows,
-                &assets_by_rank,
-                low,
-                high,
-                blowout_win_threshold,
-                near_miss_second_threshold,
-                heavy_loss_threshold,
-            )
+            asset_style_base(member_id, rows, &assets_by_rank, thresholds)
         })
         .collect::<Vec<_>>();
     let medians = asset_style_medians(&bases);
     let entries = bases
         .iter()
-        .map(|base| {
-            let primary = asset_style_primary_kind(base, &medians);
-            let shape = asset_style_shape_kind(base, &medians);
-            let tags = asset_style_tags(base, &medians, shape);
-            let metrics = &base.metrics;
-            let evidence = [
-                json!({ "kind": "high_asset_rate", "value": metrics.high_asset_rate, "tone": if primary == Some("asset_explosion") { "strength" } else { "neutral" } }),
-                json!({ "kind": "low_asset_rate", "value": metrics.low_asset_rate, "tone": if primary == Some("high_risk_breakthrough") { "risk" } else { "neutral" } }),
-                json!({ "kind": "win_rate", "value": metrics.win_rate, "tone": "neutral" }),
-            ];
-            json!({
-                "memberId": base.member_id,
-                "targetCount": base.target_count,
-                "primaryKind": primary,
-                "secondaryKind": tags.first(),
-                "shapeKind": shape,
-                "tags": tags,
-                "qualityStatus": quality_status(base.target_count),
-                "evidence": evidence,
-                "metrics": {
-                    "p10Assets": metrics.p10_assets,
-                    "medianAssets": metrics.median_assets,
-                    "p90Assets": metrics.p90_assets,
-                    "p90P10Spread": metrics.p90_p10_spread,
-                    "highAssetCount": metrics.high_asset_count,
-                    "highAssetRate": metrics.high_asset_rate,
-                    "lowAssetCount": metrics.low_asset_count,
-                    "lowAssetRate": metrics.low_asset_rate,
-                    "winCount": metrics.win_count,
-                    "winRate": metrics.win_rate,
-                    "podiumRate": metrics.podium_rate,
-                    "secondCount": metrics.second_count,
-                    "secondRate": metrics.second_rate,
-                    "lowerHalfRate": metrics.lower_half_rate,
-                    "winMedianAssets": metrics.win_median_assets,
-                    "winMedianMargin": metrics.win_median_margin,
-                    "secondMedianGap": metrics.second_median_gap,
-                    "lowerHalfMedianGap": metrics.lower_half_median_gap,
-                    "blowoutWinCount": metrics.blowout_win_count,
-                    "nearMissSecondCount": metrics.near_miss_second_count,
-                    "heavyLossCount": metrics.heavy_loss_count,
-                    "averageRevenueAssetRate": metrics.average_revenue_asset_rate,
-                    "destinationAverage": metrics.destination_average,
-                    "destinationPositiveRate": metrics.destination_positive_rate,
-                },
-            })
-        })
+        .map(|base| asset_style_entry_json(base, &medians))
         .collect::<Vec<_>>();
     json!({
-        "lowAssetThreshold": low.and_then(round_i64),
-        "highAssetThreshold": high.and_then(round_i64),
-        "blowoutWinThreshold": blowout_win_threshold.and_then(round_i64),
-        "nearMissSecondThreshold": near_miss_second_threshold.and_then(round_i64),
-        "heavyLossThreshold": heavy_loss_threshold.and_then(round_i64),
+        "lowAssetThreshold": thresholds.low.and_then(round_i64),
+        "highAssetThreshold": thresholds.high.and_then(round_i64),
+        "blowoutWinThreshold": thresholds.blowout_win.and_then(round_i64),
+        "nearMissSecondThreshold": thresholds.near_miss_second.and_then(round_i64),
+        "heavyLossThreshold": thresholds.heavy_loss.and_then(round_i64),
         "entries": entries,
+    })
+}
+
+fn asset_style_thresholds(
+    rows: &[&PlayerMatchInput],
+    assets_by_rank: &BTreeMap<(&str, i32), i32>,
+) -> AssetStyleThresholds {
+    let grouped = asset_style_rows(rows, assets_by_rank);
+    AssetStyleThresholds {
+        low: percentile_i32(&grouped.assets, 0.1),
+        high: percentile_i32(&grouped.assets, 0.9),
+        blowout_win: percentile_i32(&grouped.win_margins, 0.75),
+        near_miss_second: percentile_i32(&grouped.second_gaps, 0.25),
+        heavy_loss: percentile_i32(&grouped.lower_half_gaps, 0.75),
+    }
+}
+
+fn asset_style_entry_json(base: &AssetStyleBase<'_>, medians: &AssetStyleMedians) -> Value {
+    let primary = asset_style_primary_kind(base, medians);
+    let shape = asset_style_shape_kind(base, medians);
+    let tags = asset_style_tags(base, medians, shape);
+    let metrics = &base.metrics;
+    let evidence = [
+        json!({ "kind": "high_asset_rate", "value": metrics.high_asset_rate, "tone": if primary == Some("asset_explosion") { "strength" } else { "neutral" } }),
+        json!({ "kind": "low_asset_rate", "value": metrics.low_asset_rate, "tone": if primary == Some("high_risk_breakthrough") { "risk" } else { "neutral" } }),
+        json!({ "kind": "win_rate", "value": metrics.win_rate, "tone": "neutral" }),
+    ];
+    json!({
+        "memberId": base.member_id,
+        "targetCount": base.target_count,
+        "primaryKind": primary,
+        "secondaryKind": tags.first(),
+        "shapeKind": shape,
+        "tags": tags,
+        "qualityStatus": quality_status(base.target_count),
+        "evidence": evidence,
+        "metrics": {
+            "p10Assets": metrics.p10_assets,
+            "medianAssets": metrics.median_assets,
+            "p90Assets": metrics.p90_assets,
+            "p90P10Spread": metrics.p90_p10_spread,
+            "highAssetCount": metrics.high_asset_count,
+            "highAssetRate": metrics.high_asset_rate,
+            "lowAssetCount": metrics.low_asset_count,
+            "lowAssetRate": metrics.low_asset_rate,
+            "winCount": metrics.win_count,
+            "winRate": metrics.win_rate,
+            "podiumRate": metrics.podium_rate,
+            "secondCount": metrics.second_count,
+            "secondRate": metrics.second_rate,
+            "lowerHalfRate": metrics.lower_half_rate,
+            "winMedianAssets": metrics.win_median_assets,
+            "winMedianMargin": metrics.win_median_margin,
+            "secondMedianGap": metrics.second_median_gap,
+            "lowerHalfMedianGap": metrics.lower_half_median_gap,
+            "blowoutWinCount": metrics.blowout_win_count,
+            "nearMissSecondCount": metrics.near_miss_second_count,
+            "heavyLossCount": metrics.heavy_loss_count,
+            "averageRevenueAssetRate": metrics.average_revenue_asset_rate,
+            "destinationAverage": metrics.destination_average,
+            "destinationPositiveRate": metrics.destination_positive_rate,
+        },
     })
 }
 
@@ -442,88 +427,38 @@ fn asset_style_base<'a>(
     member_id: &'a str,
     rows: &[&PlayerMatchInput],
     assets_by_rank: &BTreeMap<(&str, i32), i32>,
-    low_asset_threshold: Option<f64>,
-    high_asset_threshold: Option<f64>,
-    blowout_win_threshold: Option<f64>,
-    near_miss_second_threshold: Option<f64>,
-    heavy_loss_threshold: Option<f64>,
+    thresholds: AssetStyleThresholds,
 ) -> AssetStyleBase<'a> {
-    let assets = rows
-        .iter()
-        .map(|row| row.total_assets_man_yen)
-        .collect::<Vec<_>>();
-    let win_rows = rows
-        .iter()
-        .copied()
-        .filter(|row| row.rank == 1)
-        .collect::<Vec<_>>();
-    let second_rows = rows
-        .iter()
-        .copied()
-        .filter(|row| row.rank == 2)
-        .collect::<Vec<_>>();
-    let lower_rows = rows
-        .iter()
-        .copied()
-        .filter(|row| row.rank >= 3)
-        .collect::<Vec<_>>();
-    let win_margins = win_rows
-        .iter()
-        .map(|row| {
-            row.total_assets_man_yen
-                - assets_by_rank
-                    .get(&(row.match_id.as_str(), 2))
-                    .copied()
-                    .unwrap_or(row.total_assets_man_yen)
-        })
-        .collect::<Vec<_>>();
-    let second_gaps = second_rows
-        .iter()
-        .map(|row| {
-            assets_by_rank
-                .get(&(row.match_id.as_str(), 1))
-                .copied()
-                .unwrap_or(row.total_assets_man_yen)
-                - row.total_assets_man_yen
-        })
-        .collect::<Vec<_>>();
-    let lower_gaps = lower_rows
-        .iter()
-        .map(|row| {
-            assets_by_rank
-                .get(&(row.match_id.as_str(), 1))
-                .copied()
-                .unwrap_or(row.total_assets_man_yen)
-                - row.total_assets_man_yen
-        })
-        .collect::<Vec<_>>();
-    let high_asset_count = threshold_count(&assets, high_asset_threshold, |value, threshold| {
+    let grouped = asset_style_rows(rows, assets_by_rank);
+    let high_asset_count = threshold_count(&grouped.assets, thresholds.high, |value, threshold| {
         value >= threshold
     });
-    let low_asset_count = threshold_count(&assets, low_asset_threshold, |value, threshold| {
+    let low_asset_count = threshold_count(&grouped.assets, thresholds.low, |value, threshold| {
         value <= threshold
     });
-    let blowout_win_count =
-        threshold_count(&win_margins, blowout_win_threshold, |value, threshold| {
-            value >= threshold
-        });
+    let blowout_win_count = threshold_count(
+        &grouped.win_margins,
+        thresholds.blowout_win,
+        |value, threshold| value >= threshold,
+    );
     let near_miss_second_count = threshold_count(
-        &second_gaps,
-        near_miss_second_threshold,
+        &grouped.second_gaps,
+        thresholds.near_miss_second,
         |value, threshold| value <= threshold,
     );
-    let heavy_loss_count =
-        threshold_count(&lower_gaps, heavy_loss_threshold, |value, threshold| {
-            value >= threshold
-        });
-    let p10_assets = percentile_i32(&assets, 0.1);
-    let p90_assets = percentile_i32(&assets, 0.9);
+    let heavy_loss_count = threshold_count(
+        &grouped.lower_half_gaps,
+        thresholds.heavy_loss,
+        |value, threshold| value >= threshold,
+    );
+    let p10_assets = percentile_i32(&grouped.assets, 0.1);
+    let p90_assets = percentile_i32(&grouped.assets, 0.9);
     AssetStyleBase {
         member_id,
         target_count: rows.len(),
         metrics: AssetStyleMetrics {
             p10_assets,
-            median_assets: median_i32(&assets),
+            median_assets: median_i32(&grouped.assets),
             p90_assets,
             p90_p10_spread: p90_assets
                 .zip(p10_assets)
@@ -532,21 +467,22 @@ fn asset_style_base<'a>(
             high_asset_rate: rate(high_asset_count, rows.len()),
             low_asset_count,
             low_asset_rate: rate(low_asset_count, rows.len()),
-            win_count: win_rows.len(),
-            win_rate: rate(win_rows.len(), rows.len()),
+            win_count: grouped.wins.len(),
+            win_rate: rate(grouped.wins.len(), rows.len()),
             podium_rate: rate(rows.iter().filter(|row| row.rank <= 2).count(), rows.len()),
-            second_count: second_rows.len(),
-            second_rate: rate(second_rows.len(), rows.len()),
-            lower_half_rate: rate(lower_rows.len(), rows.len()),
+            second_count: grouped.seconds.len(),
+            second_rate: rate(grouped.seconds.len(), rows.len()),
+            lower_half_rate: rate(grouped.lower_half.len(), rows.len()),
             win_median_assets: median_i32(
-                &win_rows
+                &grouped
+                    .wins
                     .iter()
                     .map(|row| row.total_assets_man_yen)
                     .collect::<Vec<_>>(),
             ),
-            win_median_margin: median_i32(&win_margins),
-            second_median_gap: median_i32(&second_gaps),
-            lower_half_median_gap: median_i32(&lower_gaps),
+            win_median_margin: median_i32(&grouped.win_margins),
+            second_median_gap: median_i32(&grouped.second_gaps),
+            lower_half_median_gap: median_i32(&grouped.lower_half_gaps),
             blowout_win_count,
             near_miss_second_count,
             heavy_loss_count,
@@ -563,6 +499,52 @@ fn asset_style_base<'a>(
                 rows.len(),
             ),
         },
+    }
+}
+
+fn asset_style_rows<'a>(
+    rows: &[&'a PlayerMatchInput],
+    assets_by_rank: &BTreeMap<(&str, i32), i32>,
+) -> AssetStyleRows<'a> {
+    let wins = rows
+        .iter()
+        .copied()
+        .filter(|row| row.rank == 1)
+        .collect::<Vec<_>>();
+    let seconds = rows
+        .iter()
+        .copied()
+        .filter(|row| row.rank == 2)
+        .collect::<Vec<_>>();
+    let lower_half = rows
+        .iter()
+        .copied()
+        .filter(|row| row.rank >= 3)
+        .collect::<Vec<_>>();
+    let winner_gap = |row: &&PlayerMatchInput| {
+        assets_by_rank
+            .get(&(row.match_id.as_str(), 1))
+            .copied()
+            .unwrap_or(row.total_assets_man_yen)
+            - row.total_assets_man_yen
+    };
+    AssetStyleRows {
+        assets: rows.iter().map(|row| row.total_assets_man_yen).collect(),
+        win_margins: wins
+            .iter()
+            .map(|row| {
+                row.total_assets_man_yen
+                    - assets_by_rank
+                        .get(&(row.match_id.as_str(), 2))
+                        .copied()
+                        .unwrap_or(row.total_assets_man_yen)
+            })
+            .collect(),
+        second_gaps: seconds.iter().map(winner_gap).collect(),
+        lower_half_gaps: lower_half.iter().map(winner_gap).collect(),
+        wins,
+        seconds,
+        lower_half,
     }
 }
 

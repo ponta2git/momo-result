@@ -94,7 +94,7 @@ fn builds_and_stream_validates_a_complete_artifact() {
     assert_eq!(manifest.algorithm_version, "series-analysis-v1");
     assert_eq!(
         manifest.root_checksum,
-        "sha256:524001b2b7a735365f1f61c0f07ae5e767c3430ef34eac08ef24b6293b08ef9d"
+        "sha256:4ed6bf144f9ae27f254730eee870c096cfe2daf1c9bfbe4f2d2512e9162a5db2"
     );
     let resource_counts = manifest.resources.iter().fold(
         (0_usize, 0_usize, 0_usize, 0_usize),

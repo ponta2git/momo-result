@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 use crate::{model::PlayerMatchInput, numeric::count_as_f64, stats::average};
 
@@ -12,33 +12,52 @@ pub(super) struct Interval {
     pub(super) high: f64,
 }
 
-pub(super) fn event_stability<'a>(
-    target_rows: &[&'a PlayerMatchInput],
-    baseline_rows: &[&'a PlayerMatchInput],
+#[derive(Clone, Copy, Debug, Default)]
+struct EventTotals {
+    target_total: f64,
+    target_count: usize,
+    baseline_total: f64,
+    baseline_count: usize,
+}
+
+pub(super) fn event_stability(
+    target_rows: &[&PlayerMatchInput],
+    baseline_rows: &[&PlayerMatchInput],
     full_effect: f64,
-    compute: impl Fn(&[&'a PlayerMatchInput], &[&'a PlayerMatchInput]) -> Option<f64>,
+    project_value: impl Fn(&PlayerMatchInput) -> f64,
 ) -> Option<f64> {
-    let event_ids = baseline_rows
-        .iter()
-        .map(|row| row.held_event_id.as_str())
-        .collect::<BTreeSet<_>>();
-    if target_rows.len() < MINIMUM_TARGET_COUNT || event_ids.len() < MINIMUM_EVENT_COUNT {
+    let mut totals_by_event = BTreeMap::<&str, EventTotals>::new();
+    let mut baseline_total = 0.0;
+    for row in baseline_rows {
+        let row_value = project_value(row);
+        baseline_total += row_value;
+        let totals = totals_by_event
+            .entry(row.held_event_id.as_str())
+            .or_default();
+        totals.baseline_total += row_value;
+        totals.baseline_count = totals.baseline_count.saturating_add(1);
+    }
+    let mut target_total = 0.0;
+    for row in target_rows {
+        let row_value = project_value(row);
+        target_total += row_value;
+        if let Some(totals) = totals_by_event.get_mut(row.held_event_id.as_str()) {
+            totals.target_total += row_value;
+            totals.target_count = totals.target_count.saturating_add(1);
+        }
+    }
+    if target_rows.len() < MINIMUM_TARGET_COUNT || totals_by_event.len() < MINIMUM_EVENT_COUNT {
         return None;
     }
-    let reduced_effects = event_ids
-        .into_iter()
-        .filter_map(|event_id| {
-            let target = target_rows
-                .iter()
-                .copied()
-                .filter(|row| row.held_event_id != event_id)
-                .collect::<Vec<_>>();
-            let baseline = baseline_rows
-                .iter()
-                .copied()
-                .filter(|row| row.held_event_id != event_id)
-                .collect::<Vec<_>>();
-            compute(&target, &baseline).filter(|value| value.is_finite())
+    let reduced_effects = totals_by_event
+        .into_values()
+        .filter_map(|event| {
+            let target_count = target_rows.len().checked_sub(event.target_count)?;
+            let baseline_count = baseline_rows.len().checked_sub(event.baseline_count)?;
+            mean(target_total - event.target_total, target_count)
+                .zip(mean(baseline_total - event.baseline_total, baseline_count))
+                .map(|(target, baseline)| target - baseline)
+                .filter(|effect| effect.is_finite())
         })
         .collect::<Vec<_>>();
     if reduced_effects.is_empty() {
@@ -62,6 +81,12 @@ pub(super) fn event_stability<'a>(
     )
 }
 
+fn mean(total: f64, count: usize) -> Option<f64> {
+    count_as_f64(count)
+        .filter(|count| *count > 0.0)
+        .map(|count| total / count)
+}
+
 pub(super) fn event_bootstrap_interval<'a>(
     member_id: &str,
     category: &str,
@@ -81,20 +106,22 @@ pub(super) fn event_bootstrap_interval<'a>(
     }
     let event_rows = rows_by_event.into_values().collect::<Vec<_>>();
     let mut random = StableRandom::new(stable_seed(member_id, category, metric_id));
-    let mut effects = (0..BOOTSTRAP_ITERATIONS)
-        .filter_map(|_| {
-            let sampled = (0..event_rows.len())
-                .flat_map(|_| {
-                    random
-                        .index(event_rows.len())
-                        .and_then(|index| event_rows.get(index))
-                        .into_iter()
-                        .flat_map(|event_group| event_group.iter().copied())
-                })
-                .collect::<Vec<_>>();
-            compute(&sampled).filter(|value| value.is_finite())
-        })
-        .collect::<Vec<_>>();
+    let mut effects = Vec::with_capacity(BOOTSTRAP_ITERATIONS);
+    let mut sampled = Vec::with_capacity(rows.len());
+    for _ in 0..BOOTSTRAP_ITERATIONS {
+        sampled.clear();
+        for _ in 0..event_rows.len() {
+            if let Some(event_group) = random
+                .index(event_rows.len())
+                .and_then(|index| event_rows.get(index))
+            {
+                sampled.extend(event_group.iter().copied());
+            }
+        }
+        if let Some(effect) = compute(&sampled).filter(|value| value.is_finite()) {
+            effects.push(effect);
+        }
+    }
     if effects.len() < 8 {
         return None;
     }
@@ -196,11 +223,6 @@ mod tests {
         assert!(
             event_bootstrap_interval("member", "accident", "driver", small_rows, compute).is_none()
         );
-        assert!(
-            event_stability(small_rows, &rows, 0.2, |target, _| {
-                average(target.iter().map(|row| f64::from(row.rank)))
-            })
-            .is_none()
-        );
+        assert!(event_stability(small_rows, &rows, 0.2, |row| f64::from(row.rank)).is_none());
     }
 }

@@ -403,12 +403,14 @@ fn make_candidate(
     if contrast.effect < minimum_effect {
         return None;
     }
-    let event_stability = statistics::event_stability(
-        target_rows,
-        baseline_rows,
-        raw_symptom,
-        |reduced_target, reduced_baseline| symptom(category, reduced_target, reduced_baseline),
-    );
+    let event_stability =
+        statistics::event_stability(target_rows, baseline_rows, raw_symptom, |row| {
+            if category == Category::Revenue {
+                if row.rank == 1 { 1.0 } else { 0.0 }
+            } else {
+                rank_score(row)
+            }
+        });
     let interval = matches!(category, Category::Accident | Category::DestinationPositive)
         .then(|| {
             statistics::event_bootstrap_interval(
@@ -556,9 +558,9 @@ fn driver_values(
         .filter_map(|row| match driver {
             Driver::RevenueRank => revenue_rank_score(revenue_ranks, row),
             Driver::Destination => Some(f64::from(row.incidents.destination)),
-            Driver::IncidentAvoidance => Some(-f64::from(
-                row.incidents.suri_no_ginji + row.incidents.minus_station,
-            )),
+            Driver::IncidentAvoidance => Some(
+                -(f64::from(row.incidents.suri_no_ginji) + f64::from(row.incidents.minus_station)),
+            ),
             Driver::CardShop => Some(f64::from(row.incidents.card_shop)),
         })
         .collect()
@@ -787,6 +789,20 @@ mod tests {
         assert_eq!(conditional_quality_status(7), "reference");
         assert_eq!(conditional_quality_status(8), "ok");
         assert!((shrink(1.0, 8) - 0.5).abs() < 1e-12);
+    }
+
+    #[test]
+    fn incident_avoidance_handles_full_i32_counts_without_overflow() {
+        let mut extreme = row(1, 1, 1);
+        extreme.incidents.suri_no_ginji = i32::MAX;
+        extreme.incidents.minus_station = i32::MAX;
+        let values = driver_values(Driver::IncidentAvoidance, &[&extreme], &BTreeMap::new());
+        let expected = -2.0 * f64::from(i32::MAX);
+        assert!(
+            values
+                .first()
+                .is_some_and(|value| (*value - expected).abs() < f64::EPSILON)
+        );
     }
 
     #[test]

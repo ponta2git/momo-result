@@ -95,6 +95,10 @@ use super::{
     signals::{head_to_head_signal, relative_intensity, signal_intensity},
 };
 
+mod card_shop;
+
+pub(super) use card_shop::card_shop_destination;
+
 pub(super) fn head_to_head(players: &[String], rows: &[&PlayerMatchInput]) -> Value {
     let lookup = rows
         .iter()
@@ -789,62 +793,3 @@ fn at_most(value: Option<f64>, baseline: Option<f64>) -> bool {
 #[cfg(test)]
 #[path = "asset_style_tests.rs"]
 mod asset_style_tests;
-
-pub(super) fn card_shop_destination(
-    players: &[String],
-    player_matches_by_member: &BTreeMap<String, Vec<&PlayerMatchInput>>,
-) -> Vec<Value> {
-    let kinds = [
-        "destination_with_shop",
-        "destination_without_shop",
-        "no_destination_with_shop",
-        "no_destination_without_shop",
-    ];
-    players
-        .iter()
-        .map(|member_id| {
-            let rows = player_matches_by_member.get(member_id).map_or(&[][..], Vec::as_slice);
-            let card_shop_count = rows.iter().filter(|row| row.incidents.card_shop > 0).count();
-            let card_shop_without_destination_count = rows
-                .iter()
-                .filter(|row| row.incidents.card_shop > 0 && row.incidents.destination == 0)
-                .count();
-            let quadrants = kinds
-                .into_iter()
-                .map(|kind| {
-                    let target = rows.iter().copied().filter(|row| {
-                        let destination = row.incidents.destination > 0;
-                        let shop = row.incidents.card_shop > 0;
-                        match kind {
-                            "destination_with_shop" => destination && shop,
-                            "destination_without_shop" => destination && !shop,
-                            "no_destination_with_shop" => !destination && shop,
-                            _ => !destination && !shop,
-                        }
-                    }).collect::<Vec<_>>();
-                    json!({
-                        "itemId": format!("card-shop:{member_id}:{kind}"),
-                        "kind": kind,
-                        "targetCount": target.len(),
-                        "rate": rate(target.len(), rows.len()),
-                        "averageRank": average(target.iter().map(|row| f64::from(row.rank))),
-                        "winRate": rate(target.iter().filter(|row| row.rank == 1).count(), target.len()),
-                        "podiumRate": rate(target.iter().filter(|row| row.rank <= 2).count(), target.len()),
-                        "averageAssets": average(target.iter().map(|row| f64::from(row.total_assets_man_yen))),
-                        "averageRevenue": average(target.iter().map(|row| f64::from(row.revenue_man_yen))),
-                        "qualityStatus": quality_status(target.len()),
-                    })
-                })
-                .collect::<Vec<_>>();
-            json!({
-                "memberId": member_id,
-                "denominator": rows.len(),
-                "cardShopMatchCount": card_shop_count,
-                "cardShopRate": rate(card_shop_count, rows.len()),
-                "cardShopWithoutDestinationCount": card_shop_without_destination_count,
-                "cardShopWithoutDestinationRate": rate(card_shop_without_destination_count, card_shop_count),
-                "quadrants": quadrants,
-            })
-        })
-        .collect()
-}

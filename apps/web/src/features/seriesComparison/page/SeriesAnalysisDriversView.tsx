@@ -4,13 +4,10 @@ import {
 } from "@/features/seriesComparison/charts/SeriesAnalysisAssetCards";
 import {
   AssetRevenueHistograms,
-  RevenueConversionMatrices,
   StrategyScatter,
 } from "@/features/seriesComparison/charts/SeriesAnalysisDriverCharts";
 import {
-  formatDecimal,
   formatHighlightValue,
-  formatPercent,
   highlightMetricLabel,
   qualityLabel,
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
@@ -18,12 +15,15 @@ import {
   rankSignalCandidateShareLabel,
   rankSignalLabel,
 } from "@/features/seriesComparison/model/seriesAnalysisRankPresentation";
+import {
+  DestinationOutcomeSection,
+  RevenueOutcomeSection,
+} from "@/features/seriesComparison/page/SeriesAnalysisOutcomeSections";
 import type { AnalysisViewProps } from "@/features/seriesComparison/page/SeriesAnalysisViewPrimitives";
 import {
   AnalysisReadingGuide,
   AnalysisSection,
   memberNames,
-  MetricValue,
   playerName,
 } from "@/features/seriesComparison/page/SeriesAnalysisViewPrimitives";
 import {
@@ -32,7 +32,6 @@ import {
   AnalysisTableOfContents,
 } from "@/features/seriesComparison/page/SeriesComparisonAnalysisNavigation";
 import { Button } from "@/shared/ui/actions/Button";
-import { Disclosure } from "@/shared/ui/data/Collapsible";
 
 export function DriversView({ focusedItemIds, response, onDrilldown }: AnalysisViewProps) {
   return (
@@ -55,116 +54,8 @@ export function DriversView({ focusedItemIds, response, onDrilldown }: AnalysisV
           </div>
         </div>
       </AnalysisSection>
-      <AnalysisSection id="metric-revenue-outcome" title="物件収益と最終順位">
-        <RevenueConversionMatrices focusedItemIds={focusedItemIds} response={response} />
-        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          {response.metricsByPlayer.map((metric) => (
-            <article
-              className="rounded-[var(--radius-sm)] border border-[var(--color-border)] p-3"
-              key={metric.memberId}
-            >
-              <h3 className="font-semibold">{metric.displayName}</h3>
-              <dl className="mt-3 grid grid-cols-2 gap-3 text-sm">
-                <MetricValue
-                  label="収益上位時の勝率"
-                  value={formatPercent(metric.revenueOutcome.top.winRate)}
-                />
-                <MetricValue
-                  label="収益上位時の入賞率"
-                  value={formatPercent(metric.revenueOutcome.top.podiumRate)}
-                />
-                <MetricValue
-                  label="収益上位でも未勝利"
-                  value={`${metric.nonRevenue.highRevenueNoWinCount}戦`}
-                />
-                <MetricValue
-                  label="低収益時の入賞率"
-                  value={formatPercent(metric.revenueOutcome.lowRevenue.podiumRate)}
-                />
-              </dl>
-              <Disclosure className="mt-3" summary="収益と順位の詳細">
-                <dl className="grid gap-2 pt-2 text-xs">
-                  <MetricValue
-                    label="収益順位だけでは説明しない順位差"
-                    value={`${formatDecimal(metric.nonRevenue.rankDelta)}位`}
-                  />
-                  <MetricValue
-                    label="収益上位でも未勝利の割合"
-                    value={formatPercent(metric.nonRevenue.highRevenueNoWinRate)}
-                  />
-                  <MetricValue
-                    label="収益1位以外からの勝利"
-                    value={`${metric.revenueOutcome.nonTopWinCount}戦`}
-                  />
-                  <OutcomeDetails label="収益上位時" outcome={metric.revenueOutcome.top} />
-                  <OutcomeDetails label="低収益時" outcome={metric.revenueOutcome.lowRevenue} />
-                </dl>
-              </Disclosure>
-            </article>
-          ))}
-        </div>
-      </AnalysisSection>
-      <AnalysisSection id="metric-destination-outcome" title="目的地到着と順位">
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          {response.metricsByPlayer.map((metric) => (
-            <article
-              className="rounded-[var(--radius-sm)] border border-[var(--color-border)] p-3"
-              key={metric.memberId}
-            >
-              <h3 className="font-semibold">{metric.displayName}</h3>
-              <dl className="mt-3 grid gap-3 text-sm">
-                <ConditionalOutcome
-                  label="目的地到着が多い試合"
-                  podiumRate={metric.destinationOutcome.top.podiumRate}
-                  targetCount={metric.destinationOutcome.top.targetCount}
-                  winRate={metric.destinationOutcome.top.winRate}
-                />
-                <ConditionalOutcome
-                  label="目的地到着が少ない試合"
-                  podiumRate={metric.destinationOutcome.lowDestination.podiumRate}
-                  targetCount={metric.destinationOutcome.lowDestination.targetCount}
-                  winRate={metric.destinationOutcome.lowDestination.winRate}
-                />
-                <ConditionalOutcome
-                  label="目的地到着0回"
-                  podiumRate={metric.destinationOutcome.zeroDestination.podiumRate}
-                  targetCount={metric.destinationOutcome.zeroDestination.targetCount}
-                  winRate={metric.destinationOutcome.zeroDestination.winRate}
-                />
-              </dl>
-              <Disclosure className="mt-3" summary="目的地と順位の詳細">
-                <dl className="grid gap-2 pt-2 text-xs">
-                  <MetricValue
-                    label="到着多寡による入賞率差"
-                    value={formatPercent(metric.destination.conversionDelta)}
-                  />
-                  <MetricValue
-                    label="目的地への依存度"
-                    value={formatPercent(metric.destination.dependenceScore)}
-                  />
-                  <MetricValue
-                    label="到着上位の対象"
-                    value={`${metric.destination.upperTargetCount}戦`}
-                  />
-                  <MetricValue
-                    label="到着下位の対象"
-                    value={`${metric.destination.lowerTargetCount}戦`}
-                  />
-                  <OutcomeDetails label="到着上位" outcome={metric.destinationOutcome.top} />
-                  <OutcomeDetails
-                    label="到着下位"
-                    outcome={metric.destinationOutcome.lowDestination}
-                  />
-                  <OutcomeDetails
-                    label="到着0回"
-                    outcome={metric.destinationOutcome.zeroDestination}
-                  />
-                </dl>
-              </Disclosure>
-            </article>
-          ))}
-        </div>
-      </AnalysisSection>
+      <RevenueOutcomeSection focusedItemIds={focusedItemIds} response={response} />
+      <DestinationOutcomeSection response={response} />
       <AnalysisSection id="metric-strategy-scatter" title="試合ごとの資産と収益">
         <StrategyScatter focusedItemIds={focusedItemIds} response={response} />
         <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
@@ -256,46 +147,6 @@ export function DriversView({ focusedItemIds, response, onDrilldown }: AnalysisV
           />
         </div>
       </AnalysisSection>
-    </div>
-  );
-}
-
-type Outcome = AnalysisViewProps["response"]["metricsByPlayer"][number]["revenueOutcome"]["top"];
-
-function OutcomeDetails({ label, outcome }: { label: string; outcome: Outcome }) {
-  return (
-    <div className="rounded-[var(--radius-xs)] bg-[var(--color-surface-subtle)] p-2">
-      <dt className="font-semibold">{label}の内訳</dt>
-      <dd className="mt-1 text-[var(--color-text-secondary)] tabular-nums">
-        勝利 {outcome.winCount}戦・入賞 {outcome.podiumCount}戦・下位 {outcome.lowerHalfCount}戦（
-        {formatPercent(outcome.lowerHalfRate)}）
-      </dd>
-      <dd className="mt-1 text-[var(--color-text-secondary)] tabular-nums">
-        順位分布{" "}
-        {outcome.rankDistribution.map((cell) => `${cell.rank}位 ${cell.count}戦`).join("・")}・
-        {qualityLabel(outcome.qualityStatus)}
-      </dd>
-    </div>
-  );
-}
-
-function ConditionalOutcome({
-  label,
-  podiumRate,
-  targetCount,
-  winRate,
-}: {
-  label: string;
-  podiumRate: number | null;
-  targetCount: number;
-  winRate: number | null;
-}) {
-  return (
-    <div className="rounded-[var(--radius-xs)] bg-[var(--color-surface-subtle)] p-2">
-      <dt className="text-xs font-semibold">{label}</dt>
-      <dd className="mt-1 text-xs text-[var(--color-text-secondary)] tabular-nums">
-        {targetCount}戦・勝率 {formatPercent(winRate)}・入賞率 {formatPercent(podiumRate)}
-      </dd>
     </div>
   );
 }

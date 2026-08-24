@@ -18,6 +18,39 @@ use super::{
     signals::change_direction,
 };
 
+struct EventRankHistory {
+    rows: Vec<Value>,
+    latest_cumulative_average_delta: Option<f64>,
+}
+
+struct PlayOrderBreakdown {
+    play_order: i32,
+    target_count: usize,
+    rank_average: Option<f64>,
+    rank_distribution: Vec<Value>,
+    podium_count: usize,
+    lower_half_count: usize,
+    baseline_rank_average: Option<f64>,
+}
+
+impl PlayOrderBreakdown {
+    fn to_json(&self) -> Value {
+        json!({
+            "playOrder": self.play_order,
+            "targetCount": self.target_count,
+            "rankAverage": self.rank_average,
+            "rankDistribution": self.rank_distribution,
+            "podiumCount": self.podium_count,
+            "podiumRate": rate(self.podium_count, self.target_count),
+            "lowerHalfCount": self.lower_half_count,
+            "lowerHalfRate": rate(self.lower_half_count, self.target_count),
+            "baselineRankAverage": self.baseline_rank_average,
+            "baselineDelta": self.rank_average.zip(self.baseline_rank_average).map(|(rank, baseline)| rank - baseline),
+            "qualityStatus": quality_status(self.target_count),
+        })
+    }
+}
+
 pub(super) fn build(
     scope: &ScopeRef,
     member_matches: &[&PlayerMatchInput],
@@ -71,28 +104,24 @@ fn rank_history_payload(rows: &[&PlayerMatchInput]) -> Value {
         })
         .collect::<Vec<_>>();
     let current = average_total(rank_sum, rank_count);
-    let average_rank_delta_from_first = match_rows
+    let average_rank_delta_from_first = rows
         .first()
-        .and_then(|first| first.get("cumulativeAverageRank").and_then(Value::as_f64))
+        .map(|row| f64::from(row.rank))
         .zip(current)
         .filter(|_| match_rows.len() >= 2)
         .map(|(first, current)| current - first);
-    let event_rows = event_rank_rows(rows);
-    let latest_held_event_average_rank_delta = event_rows
-        .last()
-        .and_then(|event| event.get("cumulativeAverageDelta"))
-        .and_then(Value::as_f64);
+    let event_history = event_rank_history(rows);
     json!({
         "kind": "rank_average_history",
         "summary": {
             "targetCount": rows.len(),
             "currentAverageRank": current,
             "averageRankDeltaFromFirst": average_rank_delta_from_first,
-            "latestHeldEventAverageRankDelta": latest_held_event_average_rank_delta,
+            "latestHeldEventAverageRankDelta": event_history.latest_cumulative_average_delta,
             "qualityStatus": quality_status(rows.len()),
         },
         "matchRows": match_rows,
-        "eventRows": event_rows,
+        "eventRows": event_history.rows,
     })
 }
 
@@ -102,9 +131,14 @@ fn play_order_history_payload(
 ) -> Value {
     let series = play_order_series(rows);
     let rows_by_order = play_order_breakdown(rows, all_scope_rows);
+    let summary = play_order_summary(rows, &rows_by_order);
+    let rows_by_order = rows_by_order
+        .iter()
+        .map(PlayOrderBreakdown::to_json)
+        .collect::<Vec<_>>();
     json!({
         "kind": "play_order_rank_history",
-        "summary": play_order_summary(rows, &rows_by_order),
+        "summary": summary,
         "seriesByPlayOrder": series,
         "rows": rows_by_order,
     })
@@ -141,48 +175,53 @@ fn play_order_series(rows: &[&PlayerMatchInput]) -> Vec<Value> {
 fn play_order_breakdown(
     rows: &[&PlayerMatchInput],
     all_scope_rows: &[&PlayerMatchInput],
-) -> Vec<Value> {
-    (1..=4)
-        .map(|order| {
-            let target = rows
-                .iter()
-                .copied()
-                .filter(|row| row.play_order == order)
-                .collect::<Vec<_>>();
-            let baseline_rank_average = average(
-                all_scope_rows
-                    .iter()
-                    .filter(|row| row.play_order == order)
-                    .map(|row| f64::from(row.rank)),
-            );
-            let rank_average = average(target.iter().map(|row| f64::from(row.rank)));
+) -> Vec<PlayOrderBreakdown> {
+    let mut rows_by_order: [Vec<&PlayerMatchInput>; 4] = std::array::from_fn(|_| Vec::new());
+    let mut baseline_rank_totals = [0.0_f64; 4];
+    let mut baseline_counts = [0_usize; 4];
+    for row in rows {
+        if let Some(target) =
+            play_order_index(row.play_order).and_then(|index| rows_by_order.get_mut(index))
+        {
+            target.push(row);
+        }
+    }
+    for row in all_scope_rows {
+        if let Some(index) = play_order_index(row.play_order) {
+            let total = baseline_rank_totals.get_mut(index);
+            let count = baseline_counts.get_mut(index);
+            if let (Some(total), Some(count)) = (total, count) {
+                *total += f64::from(row.rank);
+                *count = count.saturating_add(1);
+            }
+        }
+    }
+    rows_by_order
+        .into_iter()
+        .zip(baseline_rank_totals)
+        .zip(baseline_counts)
+        .enumerate()
+        .map(|(index, ((target, baseline_rank_total), baseline_count))| {
+            let target_count = target.len();
             let podium_count = target.iter().filter(|row| row.rank <= 2).count();
             let lower_half_count = target.iter().filter(|row| row.rank >= 3).count();
-            json!({
-                "playOrder": order,
-                "targetCount": target.len(),
-                "rankAverage": rank_average,
-                "rankDistribution": rank_distribution_cells(&target),
-                "podiumCount": podium_count,
-                "podiumRate": rate(podium_count, target.len()),
-                "lowerHalfCount": lower_half_count,
-                "lowerHalfRate": rate(lower_half_count, target.len()),
-                "baselineRankAverage": baseline_rank_average,
-                "baselineDelta": rank_average.zip(baseline_rank_average).map(|(rank, baseline)| rank - baseline),
-                "qualityStatus": quality_status(target.len()),
-            })
+            PlayOrderBreakdown {
+                play_order: i32::try_from(index).map_or(1, |value| value + 1),
+                target_count,
+                rank_average: average(target.iter().map(|row| f64::from(row.rank))),
+                rank_distribution: rank_distribution_cells(&target),
+                podium_count,
+                lower_half_count,
+                baseline_rank_average: average_total(baseline_rank_total, baseline_count),
+            }
         })
         .collect()
 }
 
-fn play_order_summary(rows: &[&PlayerMatchInput], rows_by_order: &[Value]) -> Value {
+fn play_order_summary(rows: &[&PlayerMatchInput], rows_by_order: &[PlayOrderBreakdown]) -> Value {
     let ranked_rows = rows_by_order
         .iter()
-        .filter_map(|row| {
-            row.get("rankAverage")
-                .and_then(Value::as_f64)
-                .map(|average| (row, average))
-        })
+        .filter_map(|row| row.rank_average.map(|average| (row, average)))
         .collect::<Vec<_>>();
     let best_entry = ranked_rows
         .iter()
@@ -190,13 +229,9 @@ fn play_order_summary(rows: &[&PlayerMatchInput], rows_by_order: &[Value]) -> Va
     let worst_entry = ranked_rows
         .iter()
         .max_by(|left, right| left.1.total_cmp(&right.1));
-    let best_play_order = best_entry
-        .and_then(|(row, _)| row.get("playOrder"))
-        .and_then(Value::as_i64);
+    let best_play_order = best_entry.map(|(row, _)| row.play_order);
     let best_play_order_average_rank = best_entry.map(|(_, average)| *average);
-    let worst_play_order = worst_entry
-        .and_then(|(row, _)| row.get("playOrder"))
-        .and_then(Value::as_i64);
+    let worst_play_order = worst_entry.map(|(row, _)| row.play_order);
     let worst_play_order_average_rank = worst_entry.map(|(_, average)| *average);
     let spread = best_play_order_average_rank
         .zip(worst_play_order_average_rank)
@@ -218,7 +253,18 @@ fn play_order_summary(rows: &[&PlayerMatchInput], rows_by_order: &[Value]) -> Va
     })
 }
 
+fn play_order_index(play_order: i32) -> Option<usize> {
+    usize::try_from(play_order.checked_sub(1)?)
+        .ok()
+        .filter(|index| *index < 4)
+}
+
+#[cfg(test)]
 pub(super) fn event_rank_rows(rows: &[&PlayerMatchInput]) -> Vec<Value> {
+    event_rank_history(rows).rows
+}
+
+fn event_rank_history(rows: &[&PlayerMatchInput]) -> EventRankHistory {
     let mut event_order = Vec::<&str>::new();
     let mut events = BTreeMap::<&str, Vec<&PlayerMatchInput>>::new();
     for row in rows {
@@ -234,7 +280,7 @@ pub(super) fn event_rank_rows(rows: &[&PlayerMatchInput]) -> Vec<Value> {
     let mut previous: Option<f64> = None;
     let mut cumulative_sum = 0.0;
     let mut cumulative_count = 0_usize;
-    event_order
+    let rows_with_delta = event_order
         .into_iter()
         .filter_map(|event_id| {
             events
@@ -257,21 +303,29 @@ pub(super) fn event_rank_rows(rows: &[&PlayerMatchInput]) -> Vec<Value> {
                 .filter(|_| ranks.len() >= 2)
                 .map(|(first, last)| last - first);
             let cumulative_average_delta = before.map(|before| after - before);
-            json!({
-                "heldEventId": held_event_id,
-                "firstPlayedAt": event_rows.first().map(|row| &row.played_at),
-                "matchCount": event_rows.len(),
-                "ranks": ranks,
-                "eventAverageRank": event_average,
-                "eventAverageRankDelta": event_delta,
-                "eventRankDelta": event_rank_delta,
-                "cumulativeAverageBefore": before,
-                "cumulativeAverageAfter": after,
-                "cumulativeAverageDelta": cumulative_average_delta,
-                "changeDirection": change_direction(before, after, true),
-            })
+            (
+                json!({
+                    "heldEventId": held_event_id,
+                    "firstPlayedAt": event_rows.first().map(|row| &row.played_at),
+                    "matchCount": event_rows.len(),
+                    "ranks": ranks,
+                    "eventAverageRank": event_average,
+                    "eventAverageRankDelta": event_delta,
+                    "eventRankDelta": event_rank_delta,
+                    "cumulativeAverageBefore": before,
+                    "cumulativeAverageAfter": after,
+                    "cumulativeAverageDelta": cumulative_average_delta,
+                    "changeDirection": change_direction(before, after, true),
+                }),
+                cumulative_average_delta,
+            )
         })
-        .collect()
+        .collect::<Vec<_>>();
+    let latest_cumulative_average_delta = rows_with_delta.last().and_then(|(_, delta)| *delta);
+    EventRankHistory {
+        rows: rows_with_delta.into_iter().map(|(row, _)| row).collect(),
+        latest_cumulative_average_delta,
+    }
 }
 
 fn average_total(total: f64, count: usize) -> Option<f64> {

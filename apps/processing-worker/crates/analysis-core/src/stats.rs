@@ -145,17 +145,25 @@ pub(super) fn cliffs_delta(left: &[f64], right: &[f64]) -> f64 {
     if left.is_empty() || right.is_empty() {
         return 0.0;
     }
+    let mut sorted_right = right
+        .iter()
+        .copied()
+        .filter(|value| !value.is_nan())
+        .collect::<Vec<_>>();
+    sorted_right.sort_by(f64::total_cmp);
     let mut score = 0.0;
     for a in left {
-        for b in right {
-            score += if a > b {
-                1.0
-            } else if a < b {
-                -1.0
-            } else {
-                0.0
-            };
+        if a.is_nan() {
+            continue;
         }
+        let lower_count = sorted_right.partition_point(|value| value < a);
+        let upper = sorted_right.partition_point(|value| value <= a);
+        let greater_count = sorted_right.len().saturating_sub(upper);
+        let Some((lower, greater)) = count_as_f64(lower_count).zip(count_as_f64(greater_count))
+        else {
+            return 0.0;
+        };
+        score += lower - greater;
     }
     let Some(pair_count) = count_as_f64(left.len())
         .zip(count_as_f64(right.len()))
@@ -178,6 +186,37 @@ pub(super) fn round(value: f64, digits: i32) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn reference_cliffs_delta(left: &[f64], right: &[f64]) -> f64 {
+        let score = left
+            .iter()
+            .flat_map(|a| right.iter().map(move |b| (a, b)))
+            .map(|(a, b)| {
+                if a > b {
+                    1.0
+                } else if a < b {
+                    -1.0
+                } else {
+                    0.0
+                }
+            })
+            .sum::<f64>();
+        score / count_as_f64(left.len().saturating_mul(right.len())).unwrap_or(1.0)
+    }
+
+    #[test]
+    fn cliffs_delta_matches_pairwise_reference_for_ties_and_non_finite_values() {
+        let cases = [
+            (vec![1.0, 2.0, 2.0, 4.0], vec![0.0, 2.0, 3.0]),
+            (vec![f64::NAN, 1.0], vec![f64::NAN, 0.0]),
+            (vec![f64::NEG_INFINITY, 0.0], vec![0.0, f64::INFINITY]),
+        ];
+        for (left, right) in cases {
+            let actual = cliffs_delta(&left, &right);
+            let expected = reference_cliffs_delta(&left, &right);
+            assert!((actual - expected).abs() < f64::EPSILON);
+        }
+    }
 
     #[test]
     fn percentile_uses_linear_interpolation() {

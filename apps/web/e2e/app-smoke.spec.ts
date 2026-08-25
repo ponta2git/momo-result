@@ -1,14 +1,4 @@
-import { randomUUID } from "node:crypto";
-
-import { expect, test } from "@playwright/test";
-import type {
-  APIRequestContext,
-  APIResponse,
-  Locator,
-  Page,
-  Request,
-  Route,
-} from "@playwright/test";
+import type { APIResponse, Locator, Page } from "@playwright/test";
 
 import { withReturnTo } from "../src/shared/navigation/returnTo";
 import {
@@ -20,43 +10,62 @@ import {
   makeSeriesAnalysisReview,
   makeSeriesAnalysisStatus,
 } from "../src/test/msw/seriesAnalysisFixtures";
+import {
+  continueWithE2eAuth,
+  continueWithE2eNonAdminAuth,
+  deleteJson,
+  devAccountId,
+  devUserStorageKey,
+  expect,
+  expectDeleted,
+  expectGeneratedId,
+  expectNoHorizontalPageOverflow,
+  expectOk,
+  installE2eAuthHeaders,
+  postJson,
+  postMutation,
+  test,
+} from "./support";
 
-const devAccountId = "account_ponta";
-const devUserStorageKey = "momoresult.devUser";
-const runId = randomUUID().replaceAll("-", "");
-const masterIdSuffix = runId.slice(-18) || "1";
-const gameTitleId = `gt_e2e_${masterIdSuffix}`;
-const seasonMasterId = `season_e2e_${masterIdSuffix}`;
-const mapMasterId = `map_e2e_${masterIdSuffix}`;
-const gameTitleName = `桃太郎電鉄2 E2E ${masterIdSuffix}`;
-const aliasName = `E2E-${masterIdSuffix}`;
-const generatedIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u;
 const png1x1 = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
   "base64",
 );
 
-test("completes the app smoke workflow with isolated scoped data", async ({ page, request }) => {
+test("completes the app smoke workflow with isolated scoped data", async ({
+  e2eRun,
+  page,
+  request,
+}) => {
+  const { masterIdSuffix } = e2eRun;
+  const gameTitleId = `gt_e2e_${masterIdSuffix}`;
+  const seasonMasterId = `season_e2e_${masterIdSuffix}`;
+  const mapMasterId = `map_e2e_${masterIdSuffix}`;
+  const gameTitleName = `桃太郎電鉄2 E2E ${masterIdSuffix}`;
+  const aliasName = `E2E-${masterIdSuffix}`;
   let heldEventId = "";
   let matchId = "";
   let uploadedDraftId = "";
 
   await test.step("seed scoped masters", async () => {
-    await postJson(request, "/api/game-titles", {
+    await postJson(request, e2eRun, "/api/game-titles", {
       id: gameTitleId,
       name: gameTitleName,
       layoutFamily: "momotetsu_2",
     });
-    await postJson(request, "/api/season-masters", {
+    e2eRun.trackGameTitle(gameTitleId);
+    await postJson(request, e2eRun, "/api/season-masters", {
       id: seasonMasterId,
       gameTitleId,
       name: "E2Eシーズン",
     });
-    await postJson(request, "/api/map-masters", {
+    e2eRun.trackSeasonMaster(seasonMasterId);
+    await postJson(request, e2eRun, "/api/map-masters", {
       id: mapMasterId,
       gameTitleId,
       name: "E2Eマップ",
     });
+    e2eRun.trackMapMaster(mapMasterId);
   });
 
   await page.addInitScript(
@@ -77,13 +86,14 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
     await page.getByRole("button", { exact: true, name: "開催を作成" }).click();
     const createDialog = page.getByRole("dialog", { name: "新しい開催を作成" });
     await expect(createDialog).toBeVisible();
-    await createDialog.getByLabel("開催日時").fill(uniqueLocalDateTime(test.info().retry));
+    await createDialog.getByLabel("開催日時").fill(e2eRun.uniqueLocalDateTime());
     await createDialog.getByRole("button", { exact: true, name: "開催を作成" }).click();
 
     const response = await createResponse;
     expect(response.ok()).toBe(true);
     const body = (await response.json()) as { id?: string };
     heldEventId = expectGeneratedId(body.id, "held event ID");
+    e2eRun.trackHeldEvent(heldEventId);
     const heldEventDetailHref = withReturnTo(`/held-events/${heldEventId}`, "/held-events");
     await expect(page).toHaveURL(heldEventDetailHref);
     await expect(page.getByText("確定 0試合・未完了 0件。次は第1試合です。")).toBeVisible();
@@ -156,6 +166,8 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
 
     const response = await createResponse;
     expect(response.ok()).toBe(true);
+    const body = (await response.json()) as { id?: string };
+    e2eRun.trackAlias(expectGeneratedId(body.id, "member alias ID"));
     await expect(page.getByText(aliasName)).toBeVisible();
   });
 
@@ -163,7 +175,7 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
     await page.goto("/ocr/new");
 
     await expect(page.getByRole("heading", { exact: true, name: "OCR取り込み" })).toBeVisible();
-    await selectSeedMasters(page);
+    await selectSeedMasters(page, { gameTitleId, mapMasterId, seasonMasterId });
 
     const totalAssetsFrame = page.getByRole("group", { name: "総資産の16:9画像枠" });
     await expect(totalAssetsFrame).toBeVisible();
@@ -199,6 +211,7 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
     await expectOk(draftCreateResponse, "create uploaded OCR draft");
     const draftBody = (await draftCreateResponse.json()) as { matchDraftId?: string };
     uploadedDraftId = expectGeneratedId(draftBody.matchDraftId, "match draft ID");
+    e2eRun.trackDraft(uploadedDraftId);
 
     await expectOk(await jobResponse, "create OCR job");
     await expect(page).toHaveURL(/\/matches(?:\?.*)?$/u);
@@ -237,7 +250,7 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
 
     await page.getByLabel(/開催履歴/u).selectOption(heldEventId);
     await expect(page.getByLabel(/開催履歴/u)).toHaveValue(heldEventId);
-    await selectSeedMasters(page);
+    await selectSeedMasters(page, { gameTitleId, mapMasterId, seasonMasterId });
 
     const confirmResponse = page.waitForResponse(
       (response) =>
@@ -257,6 +270,7 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
     expect(response.ok()).toBe(true);
     const body = (await response.json()) as { matchId?: string };
     matchId = expectGeneratedId(body.matchId, "match ID");
+    e2eRun.trackMatch(matchId);
 
     await expect(page).toHaveURL(new RegExp(`/matches/${matchId}$`, "u"));
     await expect(page.getByRole("heading", { name: /第\d+試合の結果/u })).toBeVisible();
@@ -269,13 +283,15 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
     await expect(resultLedger).toBeVisible();
     const resultLedgerCardBox = await measureElement(resultLedgerCard, "Result ledger card");
     expect(resultLedgerCardBox.width).toBeLessThanOrEqual(896);
-    const firstLedgerRow = resultLedgerCard.getByRole("listitem").first();
+    const firstPlaceLedgerRow = resultLedgerCard
+      .getByRole("listitem")
+      .filter({ hasText: "ぽんた" });
     const rankBox = await measureElement(
-      firstLedgerRow.getByText("1位", { exact: true }),
+      firstPlaceLedgerRow.getByText("1位", { exact: true }),
       "Result ledger rank",
     );
     const totalAssetsBox = await measureElement(
-      firstLedgerRow.getByText("総資産", { exact: true }).locator(".."),
+      firstPlaceLedgerRow.getByText("総資産", { exact: true }).locator(".."),
       "Result ledger total assets",
     );
     expect(totalAssetsBox.x - rankBox.x).toBeLessThanOrEqual(480);
@@ -461,9 +477,9 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
     await comparisonLink.click();
 
     await expect(page.getByRole("heading", { exact: true, name: "戦績比較" })).toBeVisible();
-    const scopeControl = page.getByRole("button", { name: "比較条件" });
-    await expect(scopeControl).toContainText(`${analysisScope.matchCount}戦`);
-    await expect(scopeControl).not.toContainText("十分");
+    const scopeSurface = page.getByRole("region", { name: "比較条件" });
+    await expect(scopeSurface).toContainText(`${analysisScope.matchCount}戦`);
+    await expect(scopeSurface).not.toContainText("十分");
     await expect(page.getByText("新しい戦績データを計算中です")).toBeVisible();
     await expect(page.getByText(/更新のデータを表示します/u)).toBeVisible();
     const selectedMatch = page.getByRole("region", { name: "選択中の試合" });
@@ -551,7 +567,7 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
       currentPagePath(page),
     );
     await expect(
-      page.getByRole("link", { name: /1戦目、12%、21億円、1位の試合結果を見る/u }),
+      page.getByRole("link", { name: /第1戦、12%、21億円、1位の試合結果を見る/u }),
     ).toHaveAttribute("href", scatterMatchHref);
     await page.getByRole("button", { name: "検証範囲を見る" }).click();
     const rankSignalDialog = page.getByRole("dialog", { name: "順位を読む手掛かり" });
@@ -582,7 +598,7 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
     const failedStatusResponse = page.waitForResponse((response) =>
       new URL(response.url()).pathname.endsWith("/v2/status"),
     );
-    await page.getByRole("button", { name: "表示を再読み込み" }).click();
+    await page.getByRole("button", { name: "表示を更新" }).click();
     expect((await failedStatusResponse).ok()).toBe(true);
     await expect(page.getByText("分析データを再計算できませんでした")).toBeVisible();
     await expect(page.getByText(/更新のデータを表示しています/u)).toBeVisible();
@@ -800,6 +816,7 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
 
     const cancelResponse = await postMutation(
       request,
+      e2eRun,
       `/api/match-drafts/${uploadedDraftId}/cancel`,
     );
     await expectOk(cancelResponse, "cancel uploaded draft");
@@ -811,124 +828,26 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
     });
     expect(draftAfterCancel.status()).toBe(404);
 
-    const blockedMapDelete = await deleteJson(request, `/api/map-masters/${mapMasterId}`);
+    const blockedMapDelete = await deleteJson(request, e2eRun, `/api/map-masters/${mapMasterId}`);
     expect(blockedMapDelete.status()).toBe(409);
 
-    const matchDelete = await deleteJson(request, `/api/matches/${matchId}`);
+    const matchDelete = await deleteJson(request, e2eRun, `/api/matches/${matchId}`);
     await expectOk(matchDelete, "delete confirmed match");
 
-    await expectDeleted(await deleteJson(request, `/api/map-masters/${mapMasterId}`), mapMasterId);
     await expectDeleted(
-      await deleteJson(request, `/api/season-masters/${seasonMasterId}`),
+      await deleteJson(request, e2eRun, `/api/map-masters/${mapMasterId}`),
+      mapMasterId,
+    );
+    await expectDeleted(
+      await deleteJson(request, e2eRun, `/api/season-masters/${seasonMasterId}`),
       seasonMasterId,
     );
-    await expectDeleted(await deleteJson(request, `/api/game-titles/${gameTitleId}`), gameTitleId);
+    await expectDeleted(
+      await deleteJson(request, e2eRun, `/api/game-titles/${gameTitleId}`),
+      gameTitleId,
+    );
   });
 });
-
-function uniqueLocalDateTime(retry: number): string {
-  const numericRunId = Number.parseInt(masterIdSuffix.slice(-8), 16);
-  const retryWindowMinutes = 20 * 24 * 60;
-  const minutes =
-    (Number.isFinite(numericRunId) ? numericRunId % retryWindowMinutes : 0) +
-    retry * retryWindowMinutes;
-  const value = new Date(Date.UTC(2026, 4, 1, 0, minutes));
-  return `${value.getUTCFullYear().toString().padStart(4, "0")}-${(value.getUTCMonth() + 1)
-    .toString()
-    .padStart(2, "0")}-${value.getUTCDate().toString().padStart(2, "0")}T${value
-    .getUTCHours()
-    .toString()
-    .padStart(2, "0")}:${value.getUTCMinutes().toString().padStart(2, "0")}`;
-}
-
-async function postJson(
-  request: APIRequestContext,
-  path: string,
-  data: Record<string, unknown>,
-): Promise<Record<string, unknown>> {
-  const response = await request.post(path, {
-    data,
-    headers: {
-      "Idempotency-Key": `e2e-${masterIdSuffix}-${path.split("/").at(-1)}`,
-      "X-CSRF-Token": "dev",
-      "X-Momo-Account-Id": devAccountId,
-    },
-  });
-  await expectOk(response, path);
-  return (await response.json()) as Record<string, unknown>;
-}
-
-async function deleteJson(request: APIRequestContext, path: string): Promise<APIResponse> {
-  return request.delete(path, {
-    headers: {
-      "Idempotency-Key": `e2e-${masterIdSuffix}-${path.replaceAll(/[^a-z0-9]+/giu, "-")}`,
-      "X-CSRF-Token": "dev",
-      "X-Momo-Account-Id": devAccountId,
-    },
-  });
-}
-
-async function postMutation(request: APIRequestContext, path: string): Promise<APIResponse> {
-  return request.post(path, {
-    headers: {
-      "Idempotency-Key": `e2e-${masterIdSuffix}-${path.replaceAll(/[^a-z0-9]+/giu, "-")}`,
-      "X-CSRF-Token": "dev",
-      "X-Momo-Account-Id": devAccountId,
-    },
-  });
-}
-
-async function expectDeleted(response: APIResponse, id: string): Promise<void> {
-  await expectOk(response, id);
-  expect((await response.json()) as { deleted?: boolean; id?: string }).toMatchObject({
-    deleted: true,
-    id,
-  });
-}
-
-async function expectOk(response: APIResponse, label: string): Promise<void> {
-  if (response.ok()) {
-    return;
-  }
-  throw new Error(`${label} failed with ${response.status()}: ${await response.text()}`);
-}
-
-async function installE2eAuthHeaders(page: Page): Promise<void> {
-  // Runtime E2E exercises the built web bundle, where import.meta.env.DEV is false.
-  // Inject the dev auth contract at the browser boundary instead of relying on localStorage.
-  await page.route("**/api/**", continueWithE2eAuth);
-}
-
-async function continueWithE2eAuth(route: Route): Promise<void> {
-  await route.continue({ headers: e2eAuthHeaders(route.request()) });
-}
-
-async function continueWithE2eNonAdminAuth(route: Route): Promise<void> {
-  await route.continue({ headers: e2eAuthHeaders(route.request(), "account_eu") });
-}
-
-function e2eAuthHeaders(
-  request: Request,
-  accountId: string = devAccountId,
-): Record<string, string> {
-  const headers = {
-    ...request.headers(),
-    "X-Momo-Account-Id": accountId,
-  };
-  if (["DELETE", "PATCH", "POST", "PUT"].includes(request.method())) {
-    headers["X-CSRF-Token"] = "dev";
-  }
-  return headers;
-}
-
-function expectGeneratedId(value: string | undefined, label: string): string {
-  expect(typeof value).toBe("string");
-  if (typeof value !== "string") {
-    throw new TypeError(`Expected ${label}, but received ${String(value)}`);
-  }
-  expect(value).toEqual(expect.stringMatching(generatedIdPattern));
-  return value;
-}
 
 function isMatchListResponse(response: APIResponse): boolean {
   const url = new URL(response.url());
@@ -938,79 +857,6 @@ function isMatchListResponse(response: APIResponse): boolean {
 function currentPagePath(page: Page): string {
   const url = new URL(page.url());
   return `${url.pathname}${url.search}${url.hash}`;
-}
-
-async function expectNoHorizontalPageOverflow(page: Page): Promise<void> {
-  const geometry = await page.evaluate(() => {
-    const viewportWidth = document.documentElement.clientWidth;
-    const isClippedByAncestor = (element: Element) => {
-      let ancestor = element.parentElement;
-      while (ancestor && ancestor !== document.body) {
-        const overflowX = window.getComputedStyle(ancestor).overflowX;
-        const ancestorRect = ancestor.getBoundingClientRect();
-        const clipsWithinViewport =
-          ancestorRect.left >= -1 && ancestorRect.right <= viewportWidth + 1;
-        if (clipsWithinViewport && ["auto", "clip", "hidden", "scroll"].includes(overflowX)) {
-          return true;
-        }
-        ancestor = ancestor.parentElement;
-      }
-      return false;
-    };
-    const offenders = [...document.body.querySelectorAll("*")]
-      .flatMap((element) => {
-        const rect = element.getBoundingClientRect();
-        if (
-          rect.width <= 0 ||
-          (rect.left >= -1 && rect.right <= viewportWidth + 1) ||
-          isClippedByAncestor(element)
-        ) {
-          return [];
-        }
-        const ancestry = [];
-        let current: Element | null = element;
-        while (current && ancestry.length < 12) {
-          const currentRect = current.getBoundingClientRect();
-          const style = window.getComputedStyle(current);
-          ancestry.push({
-            className: current.getAttribute("class")?.slice(0, 120) ?? "",
-            clientWidth: current.clientWidth,
-            display: style.display,
-            left: Math.round(currentRect.left),
-            overflowX: style.overflowX,
-            right: Math.round(currentRect.right),
-            scrollWidth: current.scrollWidth,
-            tag: current.tagName.toLowerCase(),
-            width: Math.round(currentRect.width),
-          });
-          current = current.parentElement;
-        }
-        return [
-          {
-            ancestry,
-            className: element.getAttribute("class")?.slice(0, 160) ?? "",
-            depth: ancestry.length,
-            left: Math.round(rect.left),
-            right: Math.round(rect.right),
-            tag: element.tagName.toLowerCase(),
-            text: element.textContent?.trim().replaceAll(/\s+/gu, " ").slice(0, 100) ?? "",
-            width: Math.round(rect.width),
-          },
-        ];
-      })
-      .toSorted((left, right) => right.depth - left.depth || right.right - left.right)
-      .slice(0, 1);
-    return {
-      offenders,
-      scrollWidth: document.documentElement.scrollWidth,
-      viewportWidth,
-    };
-  });
-
-  expect(
-    geometry.scrollWidth,
-    `horizontal overflow: ${JSON.stringify(geometry.offenders)}`,
-  ).toBeLessThanOrEqual(geometry.viewportWidth);
 }
 
 function matchDetailLink(page: Page, matchId: string) {
@@ -1023,23 +869,26 @@ function matchTableRow(page: Page, matchId: string) {
   return page.getByRole("row").filter({ has: matchDetailLink(page, matchId) });
 }
 
-async function selectSeedMasters(page: Page): Promise<void> {
+async function selectSeedMasters(
+  page: Page,
+  ids: { gameTitleId: string; mapMasterId: string; seasonMasterId: string },
+): Promise<void> {
   const gameTitleSelect = page.getByRole("combobox", { name: /^作品/u });
   await expect(gameTitleSelect).toBeEnabled();
-  await gameTitleSelect.selectOption(gameTitleId);
-  await expect(gameTitleSelect).toHaveValue(gameTitleId);
+  await gameTitleSelect.selectOption(ids.gameTitleId);
+  await expect(gameTitleSelect).toHaveValue(ids.gameTitleId);
 
   const seasonSelect = page.getByRole("combobox", { name: /^シーズン/u });
   await expect(seasonSelect).toBeEnabled();
-  await expect(seasonSelect.locator(`option[value="${seasonMasterId}"]`)).toHaveCount(1);
-  await seasonSelect.selectOption(seasonMasterId);
-  await expect(seasonSelect).toHaveValue(seasonMasterId);
+  await expect(seasonSelect.locator(`option[value="${ids.seasonMasterId}"]`)).toHaveCount(1);
+  await seasonSelect.selectOption(ids.seasonMasterId);
+  await expect(seasonSelect).toHaveValue(ids.seasonMasterId);
 
   const mapSelect = page.getByRole("combobox", { name: /^マップ/u });
   await expect(mapSelect).toBeEnabled();
-  await expect(mapSelect.locator(`option[value="${mapMasterId}"]`)).toHaveCount(1);
-  await mapSelect.selectOption(mapMasterId);
-  await expect(mapSelect).toHaveValue(mapMasterId);
+  await expect(mapSelect.locator(`option[value="${ids.mapMasterId}"]`)).toHaveCount(1);
+  await mapSelect.selectOption(ids.mapMasterId);
+  await expect(mapSelect).toHaveValue(ids.mapMasterId);
 }
 
 async function measureElement(locator: Locator, label: string) {

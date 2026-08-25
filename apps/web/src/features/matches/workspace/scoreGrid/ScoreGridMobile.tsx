@@ -4,7 +4,6 @@ import {
   incidentScoreGridColumns,
   keyToPath,
   playerSlotKey,
-  textNumericShortClass,
 } from "@/features/matches/workspace/scoreGrid/ScoreGridColumns";
 import {
   MobileMemberSelect,
@@ -186,7 +185,6 @@ export function ScoreGridMobileCards({
                     <ScoreGridNumericEditor
                       allowSign={false}
                       ariaLabel={`${memberDisplayName(player.memberId)} ${column.header}`}
-                      baseClassName={textNumericShortClass}
                       cellId={getCellId(index, incidentIndex + 5)}
                       commitKind="incident"
                       error={errorPathSet.has(keyToPath(index, `incident.${column.incidentKey}`))}

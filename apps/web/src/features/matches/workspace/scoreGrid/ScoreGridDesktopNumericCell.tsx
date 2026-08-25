@@ -3,8 +3,6 @@ import type { ReviewItem } from "@/features/matches/workspace/review/reviewProgr
 import {
   keyToPath,
   playerFieldLabels,
-  textNumericClass,
-  textNumericShortClass,
 } from "@/features/matches/workspace/scoreGrid/ScoreGridColumns";
 import { ScoreGridNumericEditor } from "@/features/matches/workspace/scoreGrid/ScoreGridNumericEditor";
 import type {
@@ -50,13 +48,11 @@ export function PlayerNumericDesktopCell({
   reviewItem,
   reviewed,
 }: PlayerNumericDesktopCellProps) {
-  const baseClassName = field === "rank" ? textNumericShortClass : textNumericClass;
   return (
     <td className="px-2 py-3 align-top">
       <ScoreGridNumericEditor
         allowSign={allowSign}
         ariaLabel={`${memberDisplayName(player.memberId)} ${playerFieldLabels[field]}`}
-        baseClassName={baseClassName}
         cellId={getCellId(rowIndex, col)}
         col={col}
         commitKind="player"

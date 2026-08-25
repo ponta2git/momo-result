@@ -1,8 +1,7 @@
 import { useId } from "react";
-import type { SelectHTMLAttributes } from "react";
 
-import { cn } from "@/shared/ui/cn";
-import { fieldControlClass, fieldErrorControlClass } from "@/shared/ui/forms/controlStyles";
+import { SelectControl } from "@/shared/ui/forms/Control";
+import type { SelectControlProps } from "@/shared/ui/forms/Control";
 import { buildFieldDescribedBy, Field } from "@/shared/ui/forms/Field";
 
 type SelectOption = {
@@ -19,7 +18,7 @@ export type SelectFieldProps = {
   label: string;
   options: SelectOption[];
   selectClassName?: string | undefined;
-} & Omit<SelectHTMLAttributes<HTMLSelectElement>, "aria-describedby" | "children">;
+} & Omit<SelectControlProps, "aria-describedby" | "children" | "className" | "invalid">;
 
 export function SelectField({
   "aria-describedby": ariaDescribedBy,
@@ -49,12 +48,12 @@ export function SelectField({
       label={label}
       required={required}
     >
-      <select
+      <SelectControl
         {...props}
-        className={cn(fieldControlClass, error ? fieldErrorControlClass : "", selectClassName)}
+        className={selectClassName}
         id={fieldId}
+        invalid={Boolean(error)}
         required={required}
-        aria-invalid={error ? true : undefined}
         aria-describedby={buildFieldDescribedBy(descriptionId, errorId, ariaDescribedBy)}
       >
         {options.map((option) => (
@@ -62,7 +61,7 @@ export function SelectField({
             {option.label}
           </option>
         ))}
-      </select>
+      </SelectControl>
     </Field>
   );
 }

@@ -7,10 +7,7 @@ import type {
 import {
   incidentScoreGridColumns,
   keyToPath,
-  memberSelectClass,
   playerSlotKey,
-  selectShortClass,
-  textNumericShortClass,
 } from "@/features/matches/workspace/scoreGrid/ScoreGridColumns";
 import type { GridColumn } from "@/features/matches/workspace/scoreGrid/ScoreGridColumns";
 import { ScoreGridDesktopHeader } from "@/features/matches/workspace/scoreGrid/ScoreGridDesktopHeader";
@@ -28,8 +25,8 @@ import type {
   ScoreGridNumericHandlers,
 } from "@/features/matches/workspace/scoreGrid/ScoreGridTypes";
 import { memberDisplayName, workspaceInputMembers } from "@/shared/domain/members";
-import { cn } from "@/shared/ui/cn";
 import { PlayOrderMark, playOrderPresentation } from "@/shared/ui/data/PlayOrderMark";
+import { SelectControl } from "@/shared/ui/forms/Control";
 
 type ScoreGridDesktopTableProps = ScoreGridData &
   ScoreGridCellRegistry &
@@ -84,19 +81,18 @@ export function ScoreGridDesktopTable({
               }
             >
               <td className="sticky left-0 z-[var(--z-sticky)] rounded-l-[var(--radius-md)] border-l-[3px] border-l-[var(--play-order-accent)] bg-[var(--color-surface-subtle)] px-2 py-3 align-top">
-                <select
+                <SelectControl
                   ref={(node) => registerCellRef(memberCellId, node)}
                   aria-describedby={memberReviewItem ? `${memberCellId}-review-status` : undefined}
                   aria-label={`${memberDisplayName(player.memberId)} メンバー`}
-                  className={cn(
-                    memberSelectClass,
-                    selectCellTone({
-                      changed: Boolean(originalRow && originalRow.memberId !== player.memberId),
-                      reviewItem: memberReviewItem,
-                      reviewed: reviewedCellIds.has(memberCellId),
-                    }),
-                  )}
+                  className="min-w-[10rem]"
                   data-validation-path={keyToPath(rowIndex, "memberId")}
+                  density="compact"
+                  tone={selectCellTone({
+                    changed: Boolean(originalRow && originalRow.memberId !== player.memberId),
+                    reviewItem: memberReviewItem,
+                    reviewed: reviewedCellIds.has(memberCellId),
+                  })}
                   value={player.memberId}
                   onChange={(event) => {
                     onPlayerChange(rowIndex, {
@@ -122,7 +118,7 @@ export function ScoreGridDesktopTable({
                       {member.displayName}
                     </option>
                   ))}
-                </select>
+                </SelectControl>
                 <ScoreGridSelectStatus
                   cellId={memberCellId}
                   changed={Boolean(originalRow && originalRow.memberId !== player.memberId)}
@@ -133,25 +129,24 @@ export function ScoreGridDesktopTable({
               </td>
 
               <td className="px-2 py-3 align-top">
-                <select
+                <SelectControl
                   ref={(node) => registerCellRef(playOrderCellId, node)}
                   aria-describedby={
                     playOrderError || playOrderReviewItem
                       ? `${playOrderCellId}-review-status`
                       : undefined
                   }
-                  aria-invalid={playOrderError || undefined}
                   aria-label={`${memberDisplayName(player.memberId)} プレー順`}
-                  className={cn(
-                    selectShortClass,
-                    selectCellTone({
-                      changed: Boolean(originalRow && originalRow.playOrder !== player.playOrder),
-                      error: playOrderError,
-                      reviewItem: playOrderReviewItem,
-                      reviewed: reviewedCellIds.has(playOrderCellId),
-                    }),
-                  )}
+                  className="min-w-[6ch]"
                   data-validation-path={keyToPath(rowIndex, "playOrder")}
+                  density="compact"
+                  invalid={playOrderError}
+                  textAlign="center"
+                  tone={selectCellTone({
+                    changed: Boolean(originalRow && originalRow.playOrder !== player.playOrder),
+                    reviewItem: playOrderReviewItem,
+                    reviewed: reviewedCellIds.has(playOrderCellId),
+                  })}
                   value={Number.isFinite(player.playOrder) ? String(player.playOrder) : ""}
                   onChange={(event) =>
                     onPlayOrderChange(rowIndex, Math.trunc(Number(event.target.value)))
@@ -175,7 +170,7 @@ export function ScoreGridDesktopTable({
                       {order}
                     </option>
                   ))}
-                </select>
+                </SelectControl>
                 <ScoreGridSelectStatus
                   cellId={playOrderCellId}
                   changed={Boolean(originalRow && originalRow.playOrder !== player.playOrder)}
@@ -252,7 +247,6 @@ export function ScoreGridDesktopTable({
                     <ScoreGridNumericEditor
                       allowSign={false}
                       ariaLabel={`${memberDisplayName(player.memberId)} ${column.header}`}
-                      baseClassName={textNumericShortClass}
                       cellId={cellId}
                       col={col}
                       commitKind="incident"

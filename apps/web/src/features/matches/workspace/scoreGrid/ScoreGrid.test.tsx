@@ -10,10 +10,14 @@ import { ScoreGridReviewToolbar } from "@/features/matches/workspace/scoreGrid/S
 import { installMatchMediaController } from "@/test/doubles/dom";
 import type { MatchMediaController } from "@/test/doubles/dom";
 
+const noErrorPaths = new Set<string>();
+
 function ScoreGridHarness({
+  errorPathSet = noErrorPaths,
   initialPlayers = emptyPlayers(),
   onPlayerChange,
 }: {
+  errorPathSet?: Set<string>;
   initialPlayers?: MatchFormValues["players"];
   onPlayerChange: (index: number, patch: Partial<MatchFormValues["players"][number]>) => void;
 }) {
@@ -57,7 +61,7 @@ function ScoreGridHarness({
         onReviewCellFocus: () => undefined,
       }}
       data={{
-        errorPathSet: new Set(),
+        errorPathSet,
         lastSyncedPlayerIndex: null,
         originalPlayers: undefined,
         players,
@@ -176,6 +180,27 @@ describe("ScoreGrid", () => {
 
     expect(onPlayerChange).toHaveBeenLastCalledWith(0, { memberId: "member_eu" });
     expect(memberSelect).toHaveValue("member_eu");
+  });
+
+  it("keeps shared grid controls compact, touch-safe, and invalid through native ARIA", () => {
+    const errorPathSet = new Set(["players.0.playOrder", "players.0.rank"]);
+
+    render(<ScoreGridHarness errorPathSet={errorPathSet} onPlayerChange={vi.fn()} />);
+
+    const memberSelect = screen.getByRole("combobox", { name: "ぽんた メンバー" });
+    const playOrderSelect = screen.getByRole("combobox", { name: "ぽんた プレー順" });
+    const rankInput = screen.getByRole("textbox", { name: "ぽんた 順位" });
+
+    expect(memberSelect).toHaveClass("min-h-11", "px-2", "min-w-[10rem]");
+    expect(playOrderSelect).toHaveClass(
+      "min-h-11",
+      "px-2",
+      "text-center",
+      "border-[var(--color-danger)]/65",
+    );
+    expect(playOrderSelect).toHaveAttribute("aria-invalid", "true");
+    expect(rankInput).toHaveClass("min-h-11", "px-2", "text-center", "min-w-[6ch]");
+    expect(rankInput).toHaveAttribute("aria-invalid", "true");
   });
 
   it("keeps desktop and mobile accents attached to playOrder instead of row index", () => {

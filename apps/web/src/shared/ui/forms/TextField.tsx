@@ -1,8 +1,7 @@
 import { useId } from "react";
-import type { InputHTMLAttributes } from "react";
 
-import { cn } from "@/shared/ui/cn";
-import { fieldControlClass, fieldErrorControlClass } from "@/shared/ui/forms/controlStyles";
+import { InputControl } from "@/shared/ui/forms/Control";
+import type { InputControlProps } from "@/shared/ui/forms/Control";
 import { buildFieldDescribedBy, Field } from "@/shared/ui/forms/Field";
 
 export type TextFieldProps = {
@@ -12,7 +11,7 @@ export type TextFieldProps = {
   fieldClassName?: string | undefined;
   inputClassName?: string | undefined;
   label: string;
-} & Omit<InputHTMLAttributes<HTMLInputElement>, "aria-describedby">;
+} & Omit<InputControlProps, "aria-describedby" | "className" | "invalid">;
 
 export function TextField({
   "aria-describedby": ariaDescribedBy,
@@ -41,12 +40,12 @@ export function TextField({
       label={label}
       required={required}
     >
-      <input
+      <InputControl
         {...props}
-        className={cn(fieldControlClass, error ? fieldErrorControlClass : "", inputClassName)}
+        className={inputClassName}
         id={fieldId}
+        invalid={Boolean(error)}
         required={required}
-        aria-invalid={error ? true : undefined}
         aria-describedby={buildFieldDescribedBy(descriptionId, errorId, ariaDescribedBy)}
       />
     </Field>

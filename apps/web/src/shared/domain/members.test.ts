@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   canonicalResultMemberIds,
+  canonicalResultMembers,
   defaultOwnerMemberId,
   fixedMemberIds,
   fixedMemberRegistry,
@@ -35,6 +36,9 @@ describe("fixed member contracts", () => {
     ]);
     expect(defaultOwnerMemberId).toBe("member_ponta");
     expect(fixedMembers.map((member) => member.memberId)).toEqual(workspaceInputMemberIds);
+    expect(canonicalResultMembers.map((member) => member.memberId)).toEqual(
+      canonicalResultMemberIds,
+    );
   });
 
   it("orders known members canonically and moves unknown IDs behind them without losing stability", () => {

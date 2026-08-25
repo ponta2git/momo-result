@@ -1,6 +1,6 @@
 import { QueryClientProvider } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -36,12 +36,29 @@ describe("AdminAccountsPage", () => {
 
     expect(await screen.findByText("ぽんた")).toBeInTheDocument();
 
+    const playerSelect = screen.getByRole("combobox", { name: "紐づくプレーヤー" });
+    expect(
+      within(playerSelect)
+        .getAllByRole("option")
+        .map((option) => option.textContent),
+    ).toEqual(["試合参加者に紐づけない", "いーゆー", "ぽんた", "あかねまみ", "おーたか"]);
+
+    const permissions = screen.getByRole("group", { name: "権限" });
+    const loginEnabled = within(permissions).getByRole("checkbox", { name: "ログイン許可" });
+    const isAdmin = within(permissions).getByRole("checkbox", { name: "管理者" });
+    expect(loginEnabled).toBeChecked();
+    expect(isAdmin).not.toBeChecked();
+    expect(loginEnabled.closest("label")).toHaveClass("min-h-11");
+
     await user.type(screen.getByPlaceholderText("例: 523484457705930752"), "999000111222333444");
     await user.type(screen.getByPlaceholderText("例: 代理入力者"), "監査ユーザー");
+    await user.click(isAdmin);
     await user.click(screen.getByRole("button", { name: "追加" }));
 
-    expect(await screen.findByText("監査ユーザー")).toBeInTheDocument();
-    expect(screen.getByText("999000111222333444")).toBeInTheDocument();
+    const createdRow = (await screen.findByText("監査ユーザー")).closest("tr");
+    expect(createdRow).not.toBeNull();
+    expect(within(createdRow!).getByText("999000111222333444")).toBeInTheDocument();
+    expect(within(createdRow!).getByText("管理者 / 許可")).toBeInTheDocument();
   });
 
   it("confirms login permission changes before applying them", async () => {

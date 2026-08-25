@@ -2,11 +2,7 @@ import type { MatchFormValues } from "@/features/matches/workspace/matchFormType
 import type { ReviewItem } from "@/features/matches/workspace/review/reviewProgress";
 import {
   keyToPath,
-  memberSelectClass,
   playerFieldLabels,
-  selectShortClass,
-  textNumericClass,
-  textNumericShortClass,
 } from "@/features/matches/workspace/scoreGrid/ScoreGridColumns";
 import { ScoreGridNumericEditor } from "@/features/matches/workspace/scoreGrid/ScoreGridNumericEditor";
 import {
@@ -19,7 +15,7 @@ import type {
   ScoreGridNumericHandlers,
 } from "@/features/matches/workspace/scoreGrid/ScoreGridTypes";
 import { memberDisplayName, workspaceInputMembers } from "@/shared/domain/members";
-import { cn } from "@/shared/ui/cn";
+import { SelectControl } from "@/shared/ui/forms/Control";
 
 export function MobileMemberSelect({
   cellId,
@@ -48,11 +44,13 @@ export function MobileMemberSelect({
   return (
     <label className="grid gap-1 text-xs text-[var(--color-text-secondary)]">
       メンバー
-      <select
+      <SelectControl
         ref={(node) => registerCellRef(cellId, node)}
         aria-describedby={reviewItem ? `${cellId}-review-status` : undefined}
-        className={cn(memberSelectClass, selectCellTone({ changed, reviewItem, reviewed }))}
+        className="min-w-[10rem]"
         data-validation-path={keyToPath(index, "memberId")}
+        density="compact"
+        tone={selectCellTone({ changed, reviewItem, reviewed })}
         value={memberId}
         onChange={(event) => {
           onPlayerChange(index, {
@@ -69,7 +67,7 @@ export function MobileMemberSelect({
             {member.displayName}
           </option>
         ))}
-      </select>
+      </SelectControl>
       <ScoreGridSelectStatus
         cellId={cellId}
         changed={changed}
@@ -111,12 +109,15 @@ export function MobilePlayOrderSelect({
   return (
     <label className="grid gap-1 text-xs text-[var(--color-text-secondary)]">
       プレー順
-      <select
+      <SelectControl
         ref={(node) => registerCellRef(cellId, node)}
         aria-describedby={error || reviewItem ? `${cellId}-review-status` : undefined}
-        aria-invalid={error || undefined}
-        className={cn(selectShortClass, selectCellTone({ changed, error, reviewItem, reviewed }))}
+        className="min-w-[6ch]"
         data-validation-path={keyToPath(index, "playOrder")}
+        density="compact"
+        invalid={error}
+        textAlign="center"
+        tone={selectCellTone({ changed, reviewItem, reviewed })}
         value={Number.isFinite(playOrder) ? String(playOrder) : ""}
         onChange={(event) => onPlayOrderChange(index, Math.trunc(Number(event.target.value)))}
         onFocus={() => {
@@ -130,7 +131,7 @@ export function MobilePlayOrderSelect({
             {order}
           </option>
         ))}
-      </select>
+      </SelectControl>
       <ScoreGridSelectStatus
         cellId={cellId}
         changed={changed}
@@ -174,14 +175,12 @@ export function MobilePlayerNumericField({
   reviewItem: ReviewItem | undefined;
   reviewed: boolean;
 }) {
-  const baseClassName = field === "rank" ? textNumericShortClass : textNumericClass;
   return (
     <label className="grid gap-1 text-xs text-[var(--color-text-secondary)]" htmlFor={cellId}>
       {playerFieldLabels[field]}
       <ScoreGridNumericEditor
         allowSign={allowSign}
         ariaLabel={`${memberDisplayName(player.memberId)} ${playerFieldLabels[field]}`}
-        baseClassName={baseClassName}
         cellId={cellId}
         commitKind="player"
         error={error}

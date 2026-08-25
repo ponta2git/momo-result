@@ -3,6 +3,8 @@ import { memo, useCallback, useRef, useState } from "react";
 import type { ChangeEvent, KeyboardEvent } from "react";
 
 import type { ReviewFieldKey } from "@/features/matches/workspace/review/reviewWarningModel";
+import { InputControl } from "@/shared/ui/forms/Control";
+import type { ControlTone } from "@/shared/ui/forms/Control";
 import { momoTransition } from "@/shared/ui/motion/variants";
 
 export type PreferredImageKind = "incident_log" | "revenue" | "total_assets";
@@ -20,7 +22,7 @@ export type NumericKeyboardHandler = (args: NumericKeyboardArgs) => void;
 type CellViewState = {
   description?: string;
   label?: string;
-  toneClass: string;
+  tone: ControlTone;
 };
 
 function cellViewState(args: {
@@ -34,7 +36,7 @@ function cellViewState(args: {
   if (args.error) {
     return {
       label: "要確認",
-      toneClass: "border-[var(--color-danger)]/65 bg-[var(--color-danger)]/10",
+      tone: "default",
     };
   }
 
@@ -42,14 +44,14 @@ function cellViewState(args: {
     return {
       description: args.reviewMessage,
       label: "OCR要確認",
-      toneClass: "border-[var(--color-review)]/75 bg-[var(--color-review)]/14",
+      tone: "review",
     };
   }
 
   if (args.originalValue !== undefined && args.currentValue !== args.originalValue) {
     return {
       label: "手修正",
-      toneClass: "border-[var(--color-warning)]/65 bg-[var(--color-warning)]/18",
+      tone: "warning",
     };
   }
 
@@ -57,19 +59,19 @@ function cellViewState(args: {
     return {
       description: args.reviewMessage,
       label: "確認済み",
-      toneClass: "border-[var(--color-success)]/55 bg-[var(--color-success)]/12",
+      tone: "success",
     };
   }
 
   if (args.synced) {
     return {
       label: "同期済み",
-      toneClass: "border-[var(--color-action)]/55 bg-[var(--color-action)]/10",
+      tone: "action",
     };
   }
 
   return {
-    toneClass: "",
+    tone: "default",
   };
 }
 
@@ -108,8 +110,8 @@ function parseNumericValue(value: string, allowSign: boolean): number | undefine
 export type NumericInputCellField = {
   allowSign: boolean;
   ariaLabel: string;
-  baseClassName: string;
   cellId: string;
+  controlWidth: "short" | "wide";
   validationPath?: string | undefined;
   value: number;
 };
@@ -153,7 +155,7 @@ export const NumericInputCell = memo(function NumericInputCell({
   const parsedDraftValue =
     draftValue === undefined ? undefined : parseNumericValue(draftValue, field.allowSign);
   const currentValue = parsedDraftValue ?? field.value;
-  const viewState = state?.showStateLabel
+  const viewState: CellViewState = state?.showStateLabel
     ? cellViewState({
         currentValue,
         error: state.error ?? false,
@@ -162,7 +164,7 @@ export const NumericInputCell = memo(function NumericInputCell({
         reviewed: state.reviewed ?? false,
         synced: state.synced ?? false,
       })
-    : { toneClass: "" };
+    : { tone: "default" };
 
   const commitInputValue = useCallback(() => {
     const parsed = parseNumericValue(inputValue, field.allowSign);
@@ -223,17 +225,22 @@ export const NumericInputCell = memo(function NumericInputCell({
 
   return (
     <>
-      <input
+      <InputControl
         ref={interaction.registerCellRef ? handleRef : undefined}
         aria-label={field.ariaLabel}
         aria-describedby={
           state?.showStateLabel && viewState.label ? `${field.cellId}-status` : undefined
         }
-        aria-invalid={state?.error || undefined}
-        className={`${field.baseClassName} ${viewState.toneClass}`}
+        className={
+          field.controlWidth === "short" ? "min-w-[6ch] tabular-nums" : "min-w-[12ch] tabular-nums"
+        }
         data-validation-path={field.validationPath}
+        density="compact"
         id={field.cellId}
         inputMode="numeric"
+        invalid={state?.error ?? false}
+        textAlign={field.controlWidth === "short" ? "center" : "end"}
+        tone={viewState.tone}
         type="text"
         value={inputValue}
         onBlur={commitInputValue}

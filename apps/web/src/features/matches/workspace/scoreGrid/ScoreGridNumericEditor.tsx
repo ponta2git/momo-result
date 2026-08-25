@@ -11,7 +11,7 @@ export type NumericPlayerField = "rank" | "revenueManYen" | "totalAssetsManYen";
 export type PlayerNumericCommit = (index: number, field: NumericPlayerField, value: number) => void;
 export type IncidentNumericCommit = (index: number, key: IncidentKey, value: number) => void;
 
-type ScoreGridNumericEditorBaseProps = NumericInput.NumericInputCellField &
+type ScoreGridNumericEditorBaseProps = Omit<NumericInput.NumericInputCellField, "controlWidth"> &
   NumericInput.NumericInputCellState &
   Omit<NumericInput.NumericInputCellInteraction, "onCommit">;
 
@@ -39,7 +39,6 @@ export const ScoreGridNumericEditor = memo(function ScoreGridNumericEditor({
   incidentKey,
   allowSign,
   ariaLabel,
-  baseClassName,
   cellId,
   col,
   error,
@@ -70,7 +69,9 @@ export const ScoreGridNumericEditor = memo(function ScoreGridNumericEditor({
     },
     [commitKind, field, incidentKey, onIncidentCommit, onPlayerCommit, row],
   );
-  const inputField = { allowSign, ariaLabel, baseClassName, cellId, validationPath, value };
+  const controlWidth: NumericInput.NumericInputCellField["controlWidth"] =
+    commitKind === "incident" || field === "rank" ? "short" : "wide";
+  const inputField = { allowSign, ariaLabel, cellId, controlWidth, validationPath, value };
   const interaction = {
     col,
     focusImageKind,

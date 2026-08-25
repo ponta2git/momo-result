@@ -1,7 +1,6 @@
 import { incidentColumns } from "@/shared/domain/incidents";
 import type { IncidentKey, IncidentLabel } from "@/shared/domain/incidents";
 import { workspaceInputMembers } from "@/shared/domain/members";
-import { fieldControlClass } from "@/shared/ui/forms/controlStyles";
 
 export type GridColumn =
   | "memberId"
@@ -63,11 +62,6 @@ export function playerSlotKey(index: number): string {
   return workspaceInputMembers[index]?.memberId ?? `extra-player-${index}`;
 }
 
-export const baseInputClass = `${fieldControlClass} px-2`;
-export const textNumericShortClass = `${baseInputClass} min-w-[6ch] text-center tabular-nums`;
-export const textNumericClass = `${baseInputClass} min-w-[12ch] text-right tabular-nums`;
-export const selectShortClass = `${baseInputClass} min-w-[6ch] text-center`;
-export const memberSelectClass = `${baseInputClass} min-w-[10rem]`;
 export const playerFieldLabels = {
   rank: "順位",
   revenueManYen: "収益（万円）",

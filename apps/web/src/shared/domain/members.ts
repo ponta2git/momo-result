@@ -71,9 +71,15 @@ export const canonicalResultMemberIds = [
   "member_otaka",
 ] as const satisfies readonly FixedMemberId[];
 
+/** 固定メンバーをcanonicalな結果表示順で列挙する読み取り専用view。 */
+export const canonicalResultMembers: readonly FixedMember[] = canonicalResultMemberIds.map(
+  (memberId) => fixedMemberRegistry[memberId],
+);
+
 /**
  * 既存の順序非明示な呼び出し元との互換出口。
- * 新しい順序依存処理では用途に応じてworkspaceInputMembersかorderFixedMembersを使うこと。
+ * 新しい順序依存処理では用途に応じてworkspaceInputMembers、canonicalResultMembers、
+ * orderFixedMembersのいずれかを使うこと。
  */
 export const fixedMembers: readonly FixedMember[] = workspaceInputMembers;
 

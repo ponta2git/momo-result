@@ -1,22 +1,19 @@
 import type { ReviewItem } from "@/features/matches/workspace/review/reviewProgress";
+import type { ControlTone } from "@/shared/ui/forms/Control";
 
 export function selectCellTone({
   changed,
-  error = false,
   reviewItem,
   reviewed,
 }: {
   changed: boolean;
-  error?: boolean;
   reviewItem: ReviewItem | undefined;
   reviewed: boolean;
-}): string {
-  if (error) return "border-[var(--color-danger)]/65 bg-[var(--color-danger)]/10";
-  if (reviewItem && !reviewed) return "border-[var(--color-review)]/75 bg-[var(--color-review)]/14";
-  if (changed) return "border-[var(--color-warning)]/65 bg-[var(--color-warning)]/18";
-  if (reviewItem && reviewed)
-    return "border-[var(--color-success)]/55 bg-[var(--color-success)]/12";
-  return "";
+}): ControlTone {
+  if (reviewItem && !reviewed) return "review";
+  if (changed) return "warning";
+  if (reviewItem && reviewed) return "success";
+  return "default";
 }
 
 export function ScoreGridSelectStatus({

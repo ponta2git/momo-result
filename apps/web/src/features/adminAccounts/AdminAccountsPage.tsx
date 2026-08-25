@@ -4,18 +4,26 @@ import { useFormStatus } from "react-dom";
 import { useAdminAccountsPageController } from "@/features/adminAccounts/useAdminAccountsPageController";
 import type { LoginAccountResponse, UpdateLoginAccountRequest } from "@/shared/api/adminAccounts";
 import { formatApiError } from "@/shared/api/problemDetails";
-import { fixedMembers, memberDisplayName } from "@/shared/domain/members";
+import { canonicalResultMembers, memberDisplayName } from "@/shared/domain/members";
 import { Button } from "@/shared/ui/actions/Button";
 import { AlertDialog } from "@/shared/ui/feedback/Dialog";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
-import { checkboxInputClass, checkboxLabelClass } from "@/shared/ui/forms/controlStyles";
+import { CheckboxField } from "@/shared/ui/forms/CheckboxField";
 import { Fieldset } from "@/shared/ui/forms/Fieldset";
 import { SelectField } from "@/shared/ui/forms/SelectField";
 import { TextField } from "@/shared/ui/forms/TextField";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
 import { PageHeader } from "@/shared/ui/layout/PageHeader";
+
+const accountPlayerOptions = [
+  { label: "試合参加者に紐づけない", value: "" },
+  ...canonicalResultMembers.map((member) => ({
+    label: member.displayName,
+    value: member.memberId,
+  })),
+];
 
 export function AdminAccountsPage() {
   const {
@@ -66,28 +74,11 @@ export function AdminAccountsPage() {
             defaultValue=""
             label="紐づくプレーヤー"
             name="playerMemberId"
-            options={[
-              { label: "試合参加者に紐づけない", value: "" },
-              ...fixedMembers.map((member) => ({
-                label: member.displayName,
-                value: member.memberId,
-              })),
-            ]}
+            options={accountPlayerOptions}
           />
           <Fieldset legend="権限">
-            <label className={checkboxLabelClass}>
-              <input
-                className={checkboxInputClass}
-                defaultChecked
-                name="loginEnabled"
-                type="checkbox"
-              />
-              ログイン許可
-            </label>
-            <label className={checkboxLabelClass}>
-              <input className={checkboxInputClass} name="isAdmin" type="checkbox" />
-              管理者
-            </label>
+            <CheckboxField defaultChecked label="ログイン許可" name="loginEnabled" />
+            <CheckboxField label="管理者" name="isAdmin" />
           </Fieldset>
           <div className="flex items-end">
             <CreateAccountSubmitButton />

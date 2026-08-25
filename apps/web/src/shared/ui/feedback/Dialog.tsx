@@ -40,6 +40,10 @@ type AlertDialogProps = DialogBaseProps & {
   trigger?: ReactElement | undefined;
 };
 
+/** Keeps action-bearing dialog forms in one reading order without moving them outside the form. */
+export const dialogFooterClassName =
+  "flex flex-wrap justify-end gap-2 border-t border-[var(--color-border)] pt-4";
+
 function defaultAlertErrorMessage(error: unknown) {
   if (error instanceof Error && error.message.trim()) {
     return error.message;

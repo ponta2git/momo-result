@@ -66,7 +66,10 @@ export function useHeldEventsPageController() {
 
   const heldEventsQuery = useQuery(heldEventsQueryOptions(paginationSearch));
 
-  const [createState, createAction] = useActionState<typeof initialCreateHeldEventState, FormData>(
+  const [createState, createAction, createPending] = useActionState<
+    typeof initialCreateHeldEventState,
+    FormData
+  >(
     async (previous, formData) => {
       const heldAt = String(formData.get("heldAt") ?? "");
       if (!heldAt) {
@@ -168,6 +171,7 @@ export function useHeldEventsPageController() {
       errorMessage,
       heldAtDraft,
       open: createOpen,
+      pending: createPending,
       setHeldAtDraft,
       setOpen: updateCreateOpen,
       state: createState,

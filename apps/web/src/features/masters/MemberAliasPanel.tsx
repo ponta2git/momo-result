@@ -1,6 +1,5 @@
 import { Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
-import { useFormStatus } from "react-dom";
 
 import type { MemberAliasResponse } from "@/shared/api/masters";
 import { formatApiError } from "@/shared/api/problemDetails";
@@ -69,7 +68,9 @@ export function MemberAliasPanel({
           required
         />
         <div className="flex items-end">
-          <MemberAliasCreateButton />
+          <Button pendingLabel="追加中" type="submit">
+            追加
+          </Button>
         </div>
       </form>
 
@@ -124,15 +125,6 @@ export function MemberAliasPanel({
   );
 }
 
-function MemberAliasCreateButton() {
-  const { pending } = useFormStatus();
-  return (
-    <Button pending={pending} pendingLabel="追加中" type="submit">
-      追加
-    </Button>
-  );
-}
-
 function AliasEditDialog({
   alias,
   onUpdate,
@@ -146,6 +138,7 @@ function AliasEditDialog({
 
   return (
     <Dialog
+      busy={pending}
       open={open}
       onOpenChange={setOpen}
       title="別名を編集"

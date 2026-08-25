@@ -13,6 +13,7 @@ export type HeldEventCreateFormModel = {
   errorMessage: string;
   heldAtDraft: string;
   open: boolean;
+  pending: boolean;
   setHeldAtDraft: (value: string) => void;
   setOpen: (open: boolean) => void;
   state: { version: number };

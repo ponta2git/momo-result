@@ -3,13 +3,14 @@ import { useFormStatus } from "react-dom";
 
 import type { HeldEventCreateFormModel } from "@/features/heldEvents/heldEventViewModel";
 import { Button } from "@/shared/ui/actions/Button";
-import { Dialog } from "@/shared/ui/feedback/Dialog";
+import { Dialog, dialogFooterClassName } from "@/shared/ui/feedback/Dialog";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { TextField } from "@/shared/ui/forms/TextField";
 
 export function CreateHeldEventDialog({ model }: { model: HeldEventCreateFormModel }) {
   return (
     <Dialog
+      busy={model.pending}
       description="開催日時を決めると、試合をまとめて記録・閲覧する場所ができます。"
       open={model.open}
       title="新しい開催を作成"
@@ -48,14 +49,13 @@ function CreateHeldEventDialogActions({
 }) {
   const { pending } = useFormStatus();
   return (
-    <div className="flex flex-wrap justify-end gap-2 border-t border-[var(--color-border)] pt-4">
+    <div className={dialogFooterClassName}>
       <Button disabled={pending} variant="secondary" onClick={close}>
         キャンセル
       </Button>
       <Button
         disabled={!canSubmit}
         icon={<CalendarPlus aria-hidden="true" className="size-4" />}
-        pending={pending}
         pendingLabel="作成中…"
         type="submit"
       >

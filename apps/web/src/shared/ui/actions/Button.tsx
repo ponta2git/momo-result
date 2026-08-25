@@ -1,5 +1,6 @@
 import { LoaderCircle } from "lucide-react";
 import type { ButtonHTMLAttributes, ReactNode, Ref } from "react";
+import { useFormStatus } from "react-dom";
 
 import { cn } from "@/shared/ui/cn";
 
@@ -51,12 +52,16 @@ export type ButtonProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, "type"> 
   variant?: ButtonVariant;
 };
 
+/**
+ * Owns the button's semantic type and pending feedback. Submit buttons inherit the
+ * nearest parent form's transition unless the caller supplies an explicit pending value.
+ */
 export function Button({
   children,
   className,
   disabled,
   icon,
-  pending = false,
+  pending,
   pendingLabel,
   ref,
   size = "md",
@@ -64,11 +69,13 @@ export function Button({
   variant = "primary",
   ...props
 }: ButtonProps) {
-  const isDisabled = disabled || pending;
+  const formStatus = useFormStatus();
+  const actualPending = pending ?? (type === "submit" && formStatus.pending);
+  const isDisabled = disabled || actualPending;
   const buttonClasses = buttonClassName({ className, size, variant });
   const inner = (
     <>
-      {pending ? (
+      {actualPending ? (
         <LoaderCircle
           aria-hidden="true"
           className="size-4 animate-spin motion-reduce:animate-none"
@@ -76,7 +83,7 @@ export function Button({
       ) : (
         icon
       )}
-      <span>{pending ? (pendingLabel ?? children) : children}</span>
+      <span>{actualPending ? (pendingLabel ?? children) : children}</span>
     </>
   );
 
@@ -86,7 +93,7 @@ export function Button({
     return (
       <button
         ref={ref}
-        aria-busy={pending || undefined}
+        aria-busy={actualPending || undefined}
         className={buttonClasses}
         disabled={isDisabled}
         type="submit"
@@ -100,7 +107,7 @@ export function Button({
     return (
       <button
         ref={ref}
-        aria-busy={pending || undefined}
+        aria-busy={actualPending || undefined}
         className={buttonClasses}
         disabled={isDisabled}
         type="reset"
@@ -113,7 +120,7 @@ export function Button({
   return (
     <button
       ref={ref}
-      aria-busy={pending || undefined}
+      aria-busy={actualPending || undefined}
       className={buttonClasses}
       disabled={isDisabled}
       type="button"

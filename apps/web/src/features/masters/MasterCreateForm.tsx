@@ -1,5 +1,3 @@
-import { useFormStatus } from "react-dom";
-
 import { Button } from "@/shared/ui/actions/Button";
 import { TextField } from "@/shared/ui/forms/TextField";
 
@@ -15,29 +13,6 @@ type MasterCreateFormProps = {
   placeholder?: string;
   submitLabel?: string;
 };
-
-function SubmitButton({
-  disabled,
-  label,
-  pendingLabel,
-}: {
-  disabled: boolean;
-  label: string;
-  pendingLabel: string;
-}) {
-  const { pending } = useFormStatus();
-  return (
-    <Button
-      disabled={disabled || pending}
-      pending={pending}
-      pendingLabel={pendingLabel}
-      type="submit"
-      variant="primary"
-    >
-      {label}
-    </Button>
-  );
-}
 
 export function MasterCreateForm({
   action,
@@ -65,7 +40,9 @@ export function MasterCreateForm({
         placeholder={placeholder}
         type="text"
       />
-      <SubmitButton disabled={disabled} label={buttonLabel} pendingLabel={pendingLabel} />
+      <Button disabled={disabled} pendingLabel={pendingLabel} type="submit" variant="primary">
+        {buttonLabel}
+      </Button>
     </form>
   );
 }

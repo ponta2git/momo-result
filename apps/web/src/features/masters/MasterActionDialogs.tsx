@@ -33,6 +33,7 @@ export function MasterEditDialog({
 
   return (
     <Dialog
+      busy={pending}
       open={open}
       onOpenChange={setOpen}
       title={title}

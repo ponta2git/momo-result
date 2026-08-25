@@ -1,5 +1,4 @@
 import { QueryErrorResetBoundary } from "@tanstack/react-query";
-import { AnimatePresence, motion } from "motion/react";
 import { Suspense, useCallback } from "react";
 import type { FocusEvent, MouseEvent, PointerEvent } from "react";
 import { Outlet, useLocation } from "react-router-dom";
@@ -11,7 +10,6 @@ import { RouteSuspenseFallback } from "@/shared/ui/feedback/RouteSuspenseFallbac
 import { ToastHost } from "@/shared/ui/feedback/ToastHost";
 import { GlobalNav } from "@/shared/ui/layout/GlobalNav";
 import { MotionProvider } from "@/shared/ui/motion/MotionProvider";
-import { routeTransition } from "@/shared/ui/motion/variants";
 
 function shouldPreloadAnchor(anchor: HTMLAnchorElement): boolean {
   if (anchor.target === "_blank" || anchor.hasAttribute("download")) {
@@ -36,8 +34,6 @@ export function AppShell() {
   const auth = useAuth();
   const location = useLocation();
   const routeResetKey = `${location.pathname}${location.search}${location.hash}`;
-  // Query/hash changes are in-page state changes; only pathname changes are route transitions.
-  const routeTransitionKey = location.pathname;
 
   const handlePreloadIntent = useCallback(
     (event: FocusEvent<HTMLElement> | PointerEvent<HTMLElement>) => {
@@ -110,18 +106,10 @@ export function AppShell() {
           {({ reset }) => (
             <RouteErrorBoundary onReset={reset} resetKey={routeResetKey}>
               <Suspense fallback={<RouteSuspenseFallback pathname={location.pathname} />}>
-                <AnimatePresence initial={false} mode="wait">
-                  <motion.div
-                    key={routeTransitionKey}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="grid min-w-0"
-                    exit={{ opacity: 0, y: -4 }}
-                    initial={{ opacity: 0, y: 4 }}
-                    transition={routeTransition}
-                  >
-                    <Outlet />
-                  </motion.div>
-                </AnimatePresence>
+                {/* Route availability must not depend on an exit-animation lifecycle. */}
+                <div className="grid min-w-0">
+                  <Outlet />
+                </div>
               </Suspense>
             </RouteErrorBoundary>
           )}

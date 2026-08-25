@@ -18,11 +18,6 @@ export const momoSpring = {
   type: "spring",
 } satisfies Transition;
 
-export const routeTransition = {
-  duration: 0.16,
-  ease: momoEaseOut,
-} satisfies Transition;
-
 export const panelRevealVariants = {
   hidden: { opacity: 0, y: 6 },
   visible: { opacity: 1, y: 0 },

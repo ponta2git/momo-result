@@ -156,6 +156,7 @@ export function useMatchesListPageController() {
     isRefreshing: summaryBackgroundRefreshing,
     isSettling: filterSettling,
   });
+  const listScopeChanging = filterSettling || listHasPlaceholderData;
   const isStale = showListShield || showSummaryShield;
 
   const handleManualRefresh = async () => {
@@ -234,6 +235,7 @@ export function useMatchesListPageController() {
     isManualRefreshing,
     isStale,
     items,
+    listScopeChanging,
     masterLoadFailed:
       shouldShowBlockingQueryError(heldEventsQuery) ||
       shouldShowBlockingQueryError(gameTitlesQuery) ||

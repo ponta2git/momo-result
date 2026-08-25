@@ -2,13 +2,15 @@ import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import {
+  applyUiPolicyBaseline,
+  collectUiPolicyViolations,
+  currentUiPolicyBaseline,
+  formatUiPolicyViolation,
+} from "./ui-consistency-policy.mjs";
+
 const webRoot = fileURLToPath(new URL("..", import.meta.url));
 const srcRoot = path.join(webRoot, "src");
-const interactivePrimitiveFiles = new Set([
-  "shared/ui/actions/Button.tsx",
-  "shared/ui/actions/IconButton.tsx",
-  "shared/ui/layout/GlobalNav.tsx",
-]);
 
 function normalizedRelativePath(filePath) {
   return path.relative(srcRoot, filePath).split(path.sep).join("/");
@@ -47,37 +49,6 @@ function addPatternViolations(violations, relativePath, source, pattern, message
   }
 }
 
-function hasTouchTargetContract(openingTag) {
-  return /\b(?:min-h-11|size-11)\b|buttonClassName|buttonClasses/u.test(openingTag);
-}
-
-function checkInteractiveTargets(violations, relativePath, source) {
-  if (interactivePrimitiveFiles.has(relativePath)) {
-    return;
-  }
-
-  for (const match of source.matchAll(/<button\b[\s\S]*?>/gu)) {
-    if (!hasTouchTargetContract(match[0])) {
-      violations.push(
-        `${relativePath}:${lineNumberAt(source, match.index)} native button must expose a 44px mobile touch target or use the shared action primitive`,
-      );
-    }
-  }
-
-  for (const match of source.matchAll(/<(?:Link|NavLink|a)\b[\s\S]*?>/gu)) {
-    const openingTag = match[0];
-    if (
-      !hasTouchTargetContract(openingTag) &&
-      !/\bsr-only\b/u.test(openingTag) &&
-      !/buttonClassName/u.test(openingTag)
-    ) {
-      violations.push(
-        `${relativePath}:${lineNumberAt(source, match.index)} raw link must expose a 44px mobile touch target or use LinkButton`,
-      );
-    }
-  }
-}
-
 function checkReducedMotion(violations, relativePath, source) {
   const lines = source.split(/\r?\n/u);
   for (const [index, line] of lines.entries()) {
@@ -112,6 +83,15 @@ const definedSemanticVariables = new Set(
   [...styles.matchAll(/--((?:motion|shadow|z)-[a-z0-9-]+)\s*:/gu)].map((match) => match[1]),
 );
 const violations = [];
+
+const policySources = new Map(
+  [...sources].map(([filePath, source]) => [normalizedRelativePath(filePath), source]),
+);
+violations.push(
+  ...applyUiPolicyBaseline(collectUiPolicyViolations(policySources), currentUiPolicyBaseline).map(
+    formatUiPolicyViolation,
+  ),
+);
 
 for (const [filePath, source] of sources) {
   const relativePath = normalizedRelativePath(filePath);
@@ -167,7 +147,6 @@ for (const [filePath, source] of sources) {
   }
 
   if (relativePath.endsWith(".tsx")) {
-    checkInteractiveTargets(violations, relativePath, source);
     checkReducedMotion(violations, relativePath, source);
   }
 

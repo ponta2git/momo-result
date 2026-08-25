@@ -152,7 +152,7 @@ function PlaybookCard({
 }) {
   return (
     <article
-      className={`flex h-full min-w-0 flex-col gap-3 rounded-[var(--radius-sm)] border p-3 ${emphasis ? "border-[var(--color-action)]/55 bg-[var(--color-action)]/6" : "border-[var(--color-border)]"}`}
+      className={`flex h-full min-w-0 flex-col gap-3 rounded-[var(--radius-sm)] border p-3 ${emphasis ? "border-[var(--color-analysis-emphasis)]/55 bg-[var(--color-analysis-emphasis)]/6" : "border-[var(--color-border)]"}`}
     >
       <div className="flex flex-wrap items-center gap-2">
         <span className="rounded-[var(--radius-xs)] border border-[var(--color-border)] px-2 py-0.5 text-[11px] font-semibold">

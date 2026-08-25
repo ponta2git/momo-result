@@ -44,7 +44,7 @@ export function MatchFeatureSection({
 
 function matchFeatureBadgeClass(badge: MatchFeatureBadge): string {
   if (badge.source === "series") {
-    return "border-[var(--color-action)]/35 bg-[var(--color-action)]/8";
+    return "border-[var(--color-analysis-emphasis)]/35 bg-[var(--color-analysis-emphasis)]/8";
   }
   if (badge.tone === "notice") {
     return "border-[var(--color-review)]/45 bg-[var(--color-review)]/10";

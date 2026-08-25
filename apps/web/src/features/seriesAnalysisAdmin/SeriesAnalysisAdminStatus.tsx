@@ -9,6 +9,8 @@ import type {
 } from "@/shared/api/seriesAnalysis";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
+import { StatusBadge } from "@/shared/ui/status/StatusBadge";
+import type { StatusBadgeTone } from "@/shared/ui/status/StatusBadge";
 
 export function ExecutionStatus({ data }: { data: SeriesAnalysisAdminOverview }) {
   const execution = data.globalExecution;
@@ -50,7 +52,7 @@ export function SelectedTitleStatus({
     <section className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)]">
       <header className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--color-border)] px-4 py-3">
         <h2 className="font-semibold">{selected.gameTitleName}</h2>
-        <StatusBadge status={status.calculation?.status ?? "not_run"} />
+        <AnalysisJobStatusBadge announceChanges status={status.calculation?.status ?? "not_run"} />
       </header>
       <dl className="grid divide-y divide-[var(--color-border)] text-sm sm:grid-cols-3 sm:divide-x sm:divide-y-0">
         <StatusDatum
@@ -113,7 +115,7 @@ export function RecentJobs({ jobs }: { jobs: SeriesAnalysisAdminOverview["recent
                     <strong>{job.gameTitleName}</strong>
                   </TableCell>
                   <TableCell>
-                    <StatusBadge status={job.status} />
+                    <AnalysisJobStatusBadge status={job.status} />
                   </TableCell>
                   <TableCell>{triggerLabel(job.trigger)}</TableCell>
                   <TableCell>{formatDateTime(job.requestedAt)}</TableCell>
@@ -148,11 +150,21 @@ function StatusDatum({ label, value }: { label: string; value: string }) {
   );
 }
 
-function StatusBadge({ status }: { status: SeriesAnalysisJobStatus | "not_run" }) {
+function AnalysisJobStatusBadge({
+  announceChanges = false,
+  status,
+}: {
+  announceChanges?: boolean | undefined;
+  status: SeriesAnalysisJobStatus | "not_run";
+}) {
+  const model: AnalysisJobStatusViewModel = analysisJobStatusViewModel[status];
   return (
-    <span className="inline-flex min-h-7 items-center rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-2 text-xs font-semibold">
-      {statusLabel(status)}
-    </span>
+    <StatusBadge
+      announceChanges={announceChanges}
+      busy={model.busy}
+      label={statusLabel(status)}
+      tone={model.tone}
+    />
   );
 }
 
@@ -202,6 +214,20 @@ const statusLabels = {
   succeeded: "成功",
   timed_out: "タイムアウト",
 } as const satisfies Record<SeriesAnalysisJobStatus | "not_run", string>;
+
+type AnalysisJobStatusViewModel = {
+  busy?: boolean | undefined;
+  tone: StatusBadgeTone;
+};
+
+const analysisJobStatusViewModel = {
+  failed: { tone: "danger" },
+  not_run: { tone: "neutral" },
+  queued: { busy: true, tone: "info" },
+  running: { busy: true, tone: "info" },
+  succeeded: { tone: "success" },
+  timed_out: { tone: "danger" },
+} as const satisfies Record<SeriesAnalysisJobStatus | "not_run", AnalysisJobStatusViewModel>;
 
 const triggerLabels = {
   algorithm_update: "計算版更新",

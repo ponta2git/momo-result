@@ -43,5 +43,8 @@ describe("CaptureSlotCard", () => {
     expect(screen.getByRole("button", { name: "次の分類へ移動" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "撮り直し先にする" })).toBeDisabled();
     expect(screen.getByText("読み取り中は分類を固定")).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("読み取り中");
+    expect(screen.getByRole("status")).toHaveAttribute("aria-live", "polite");
+    expect(screen.getByRole("status")).toHaveClass("border-[var(--color-status-info)]/60");
   });
 });

@@ -1,0 +1,5 @@
+{
+  "styles.css": "@theme {\n  --ref-action: #111111;\n  --ref-rank-1: #222222;\n  --ref-status-warning: #333333;\n  --color-action: var(--ref-action);\n  --color-rank-1: var(--ref-rank-1);\n  --color-warning: var(--ref-status-warning);\n}\n",
+  "features/adminAccounts/AdminAccountsPage.tsx": "import { checkboxInputClass } from \"@/shared/ui/forms/controlStyles\";\nexport function Page() { return <input className={checkboxInputClass} type=\"checkbox\" />; }\n",
+  "features/matches/workspace/scoreGrid/ScoreGridColumns.ts": "import { fieldControlClass } from \"@/shared/ui/forms/controlStyles\";\n"
+}

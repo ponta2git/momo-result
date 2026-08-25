@@ -14,7 +14,12 @@ describe("FilterBar", () => {
         activeSummary="確定済み・第12回・新しい順"
         ariaLabel="試合の表示条件"
         meta="24件"
-        primary={<label>並び順<select aria-label="並び順" /></label>}
+        primary={
+          <label>
+            並び順
+            <select aria-label="並び順" />
+          </label>
+        }
         resetAction={<Button variant="quiet">表示条件をリセット</Button>}
       />,
     );
@@ -34,7 +39,12 @@ describe("FilterBar", () => {
       <FilterBar
         ariaLabel="比較条件"
         details={{
-          controls: <label>マップ<select aria-label="マップ" /></label>,
+          controls: (
+            <label>
+              マップ
+              <select aria-label="マップ" />
+            </label>
+          ),
           label: "詳細条件",
           onOpenChange,
           open: false,
@@ -55,7 +65,12 @@ describe("FilterBar", () => {
       <FilterBar
         ariaLabel="比較条件"
         details={{
-          controls: <label>マップ<select aria-label="マップ" /></label>,
+          controls: (
+            <label>
+              マップ
+              <select aria-label="マップ" />
+            </label>
+          ),
           label: "詳細条件",
           onOpenChange,
           open: true,

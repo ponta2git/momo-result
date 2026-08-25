@@ -102,7 +102,9 @@ function PlayerLedger({ values }: { values: MatchFormValues }) {
               <td className="px-3 py-2">
                 <RankBadge rank={player.rank} />
               </td>
-              <td className="px-3 py-2">{memberDisplayName(player.memberId)}</td>
+              <th className="px-3 py-2 text-left font-semibold" scope="row">
+                {memberDisplayName(player.memberId)}
+              </th>
               <td className="px-3 py-2 text-right tabular-nums">
                 {player.totalAssetsManYen.toLocaleString()}
               </td>

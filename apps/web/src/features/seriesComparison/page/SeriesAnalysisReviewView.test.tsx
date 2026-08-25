@@ -43,6 +43,10 @@ describe("ReviewView", () => {
       />,
     );
 
+    expect(screen.getByText(primary.actionHypothesis).closest("article")).toHaveClass(
+      "border-[var(--color-analysis-emphasis)]/55",
+    );
+
     const usage = screen.getByLabelText("行動仮説の使い方");
     expect(within(usage).getByText("対象")).toBeInTheDocument();
     expect(within(usage).getByText("次の4戦")).toBeInTheDocument();

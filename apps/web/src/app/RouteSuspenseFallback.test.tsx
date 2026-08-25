@@ -1,10 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import {
-  RouteSuspenseFallback,
-  routeLoadingPresentation,
-} from "@/app/RouteSuspenseFallback";
+import { RouteSuspenseFallback, routeLoadingPresentation } from "@/app/RouteSuspenseFallback";
 
 describe("RouteSuspenseFallback", () => {
   it("can provide the root main landmark", () => {

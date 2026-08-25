@@ -49,10 +49,10 @@ export function rankDeltaLabel(delta: number | null): string {
 
 function changeTone(direction: ChangeDirection): string {
   if (direction === "improved") {
-    return "border-[var(--color-success)]/45 bg-[var(--color-success)]/10";
+    return "border-[var(--color-analysis-positive)]/45 bg-[var(--color-analysis-positive)]/10";
   }
   if (direction === "declined") {
-    return "border-[var(--color-warning)]/65 bg-[var(--color-warning)]/18";
+    return "border-[var(--color-analysis-negative)]/45 bg-[var(--color-analysis-negative)]/10";
   }
   return "border-[var(--color-border)] bg-[var(--color-surface-subtle)] text-[var(--color-text-secondary)]";
 }

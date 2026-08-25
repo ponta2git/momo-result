@@ -255,7 +255,7 @@ function AssetFact({
       {subLabel ? <p className="text-[11px] text-[var(--color-text-muted)]">{subLabel}</p> : null}
       <p className="mt-1 text-xs font-semibold break-words tabular-nums">{value}</p>
       {badge ? (
-        <span className="mt-1 inline-flex rounded-full border border-[var(--color-action)]/45 bg-[var(--color-action)]/10 px-2 py-1 text-[11px] font-semibold text-[var(--color-action)]">
+        <span className="mt-1 inline-flex rounded-full border border-[var(--color-analysis-emphasis)]/45 bg-[var(--color-analysis-emphasis)]/10 px-2 py-1 text-[11px] font-semibold text-[var(--color-analysis-emphasis)]">
           {badge}
         </span>
       ) : null}
@@ -266,9 +266,9 @@ function AssetFact({
 function assetEvidenceToneClassName(tone: "neutral" | "risk" | "strength"): string {
   switch (tone) {
     case "strength":
-      return "border-[var(--color-success)]/45 bg-[var(--color-success)]/10";
+      return "border-[var(--color-analysis-positive)]/45 bg-[var(--color-analysis-positive)]/10";
     case "risk":
-      return "border-[var(--color-warning)]/65 bg-[var(--color-warning)]/18";
+      return "border-[var(--color-analysis-negative)]/45 bg-[var(--color-analysis-negative)]/10";
     case "neutral":
       return "border-[var(--color-border)]";
   }

@@ -34,7 +34,10 @@ describe("AdminAccountsPage", () => {
   it("shows the created login account in the account list", async () => {
     renderPage();
 
-    expect(await screen.findByText("ぽんた")).toBeInTheDocument();
+    expect(
+      await screen.findByRole("table", { name: "ログイン可能なアカウントと権限" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("rowheader", { name: "ぽんた" })).toBeInTheDocument();
 
     const playerSelect = screen.getByRole("combobox", { name: "紐づくプレーヤー" });
     expect(

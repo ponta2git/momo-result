@@ -99,10 +99,11 @@ describe("HeldEventDetailPage", () => {
     expect(screen.getByRole("region", { name: "ぽんたの開催戦績" })).toHaveTextContent("1勝");
     const results = screen.getByRole("list", { name: "第1試合の順位と総資産" });
     expect(within(results).getByText("1億2345万円")).toBeInTheDocument();
-    expect(within(results).getAllByRole("listitem").map((item) => item.textContent)).toEqual([
-      expect.stringContaining("いーゆー"),
-      expect.stringContaining("ぽんた"),
-    ]);
+    expect(
+      within(results)
+        .getAllByRole("listitem")
+        .map((item) => item.textContent),
+    ).toEqual([expect.stringContaining("いーゆー"), expect.stringContaining("ぽんた")]);
     expect(screen.getByRole("link", { name: "第1試合の結果を見る" })).toHaveAttribute(
       "href",
       "/matches/match-1?returnTo=%2Fheld-events%2Fheld-1",

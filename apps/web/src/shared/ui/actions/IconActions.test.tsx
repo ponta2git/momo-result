@@ -29,10 +29,7 @@ describe("icon actions", () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByRole("link", { name: "試合結果へ" })).toHaveAttribute(
-      "href",
-      "/matches/1",
-    );
+    expect(screen.getByRole("link", { name: "試合結果へ" })).toHaveAttribute("href", "/matches/1");
 
     rerender(
       <MemoryRouter>

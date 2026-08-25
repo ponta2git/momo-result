@@ -20,10 +20,13 @@ type StatusRailOption = {
   countKey?: keyof MatchListSummaryCounts;
   label: string;
   status: MatchListStatusFilter;
+};
+
+type MainStatusRailOption = StatusRailOption & {
   toneClass: string;
 };
 
-const mainOptions: StatusRailOption[] = [
+const mainOptions: MainStatusRailOption[] = [
   {
     label: "すべて",
     status: "all",
@@ -47,25 +50,21 @@ const unfinishedOptions: StatusRailOption[] = [
     countKey: "incompleteCount",
     label: "未確定すべて",
     status: "incomplete",
-    toneClass: "bg-[var(--color-warning)]",
   },
   {
     countKey: "ocrRunningCount",
     label: "処理中",
     status: "ocr_running",
-    toneClass: "bg-[var(--color-action)]",
   },
   {
     countKey: "preConfirmCount",
     label: "対応待ち",
     status: "pre_confirm",
-    toneClass: "bg-[var(--color-warning)]",
   },
   {
     countKey: "needsReviewCount",
     label: "要確認のみ",
     status: "needs_review",
-    toneClass: "bg-[var(--color-review)]",
   },
 ];
 

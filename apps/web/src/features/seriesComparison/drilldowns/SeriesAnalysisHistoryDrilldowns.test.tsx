@@ -2,6 +2,7 @@ import { render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 
+import { ChangeBadge } from "@/features/seriesComparison/drilldowns/SeriesAnalysisChangeBadge";
 import {
   PlayOrderHistoryDrilldown,
   RankHistoryDrilldown,
@@ -9,6 +10,18 @@ import {
 import { makeSeriesAnalysisDrilldown } from "@/test/msw/seriesAnalysisFixtures";
 
 describe("series analysis history drilldowns", () => {
+  it("maps improvement and decline to analysis polarity", () => {
+    render(
+      <>
+        <ChangeBadge direction="improved" magnitude={-0.5} />
+        <ChangeBadge direction="declined" magnitude={0.5} />
+      </>,
+    );
+
+    expect(screen.getByText("0.5 改善")).toHaveClass("border-[var(--color-analysis-positive)]/45");
+    expect(screen.getByText("0.5 後退")).toHaveClass("border-[var(--color-analysis-negative)]/45");
+  });
+
   it("shows the rank graph, concrete changes, and source-match links", () => {
     const response = makeSeriesAnalysisDrilldown("rank.averageHistory");
     if (response.payload.kind !== "rank_average_history") throw new Error("unexpected fixture");

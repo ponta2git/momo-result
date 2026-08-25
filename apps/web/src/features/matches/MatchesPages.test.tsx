@@ -553,7 +553,8 @@ describe("MatchesListPage", () => {
     );
 
     expect(await screen.findByRole("heading", { name: "試合一覧" })).toBeInTheDocument();
-    expect(await screen.findAllByRole("button", { name: "確認事項を直す" })).not.toHaveLength(0);
+    const draftActionButtons = await screen.findAllByRole("button", { name: "確認事項を直す" });
+    expect(draftActionButtons).not.toHaveLength(0);
     const incompleteButton = (await screen.findAllByRole("button", { name: /^未確定/u })).find(
       (button) => !button.textContent?.includes("すべて"),
     );
@@ -569,9 +570,9 @@ describe("MatchesListPage", () => {
     expect(needsReviewButton).toHaveAttribute("aria-pressed", "true");
     expect(needsReviewButton).toBeDisabled();
     expect(screen.getByText("一覧を更新中")).toBeInTheDocument();
-    screen
-      .getAllByRole("button", { name: "確認事項を直す" })
-      .forEach((button) => expect(button).toBeDisabled());
+    const listRegion = screen.getByRole("region", { name: "登録済みの試合" });
+    expect(listRegion.querySelector("[inert]")).not.toBeNull();
+    draftActionButtons.forEach((button) => expect(button).toBeDisabled());
     await waitFor(() => expect(needsReviewRequested).toBe(true));
 
     responseGate.resolve();
@@ -580,6 +581,7 @@ describe("MatchesListPage", () => {
         .getAllByRole("button", { name: "確認事項を直す" })
         .forEach((button) => expect(button).toBeEnabled()),
     );
+    expect(listRegion.querySelector("[inert]")).toBeNull();
   });
 
   it("checks a draft action before navigation and redirects to detail when already confirmed", async () => {
@@ -1334,7 +1336,9 @@ describe("MatchDetailPage", () => {
     expect(screen.getByText("借金あり")).toBeInTheDocument();
     expect(screen.getByText("目的地なし決着")).toBeInTheDocument();
     expect(screen.getByText("低収益勝ち")).toBeInTheDocument();
-    expect(screen.getByText("同条件内")).toBeInTheDocument();
+    const seriesFeature = screen.getByText("同条件内").closest("li");
+    expect(seriesFeature).toHaveClass("border-[var(--color-analysis-emphasis)]/35");
+    expect(seriesFeature).not.toHaveClass("border-[var(--color-action)]/35");
     const contextParams = new URLSearchParams(contextSearches.at(-1));
     expect(contextParams.get("artifactId")).toBe("artifact-current");
     expect(contextParams.get("gameTitleId")).toBe("gt_momotetsu_2");

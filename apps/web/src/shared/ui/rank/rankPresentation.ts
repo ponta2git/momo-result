@@ -40,5 +40,8 @@ export function rankAverageTone(
   const ratio = (value - minimum) / (maximum - minimum);
   const distance = Math.abs(ratio - 0.5);
   const alpha = 0.08 + distance * 0.54;
-  return colorMix(ratio <= 0.5 ? "var(--color-action)" : "var(--color-danger)", alpha);
+  return colorMix(
+    ratio <= 0.5 ? "var(--color-analysis-positive)" : "var(--color-analysis-negative)",
+    alpha,
+  );
 }

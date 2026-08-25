@@ -27,6 +27,10 @@
   --ref-neutral-night: oklch(24% 0.035 260);
 
   --ref-action-700: oklch(43% 0.07 245);
+  --ref-analysis-emphasis-700: oklch(43% 0.08 70);
+  --ref-analysis-positive-700: oklch(44% 0.105 185);
+  --ref-analysis-negative-700: oklch(46% 0.145 335);
+  --ref-status-info-700: oklch(45% 0.115 285);
   --ref-status-success-700: oklch(46% 0.105 150);
   --ref-status-warning-700: oklch(54% 0.115 82);
   --ref-status-review-700: oklch(48% 0.135 48);
@@ -65,6 +69,10 @@
   --color-border: var(--ref-neutral-border);
   --color-border-strong: var(--ref-neutral-border-strong);
   --color-action: var(--ref-action-700);
+  --color-analysis-emphasis: var(--ref-analysis-emphasis-700);
+  --color-analysis-positive: var(--ref-analysis-positive-700);
+  --color-analysis-negative: var(--ref-analysis-negative-700);
+  --color-status-info: var(--ref-status-info-700);
   --color-success: var(--ref-status-success-700);
   --color-warning: var(--ref-status-warning-700);
   --color-review: var(--ref-status-review-700);

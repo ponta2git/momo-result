@@ -50,11 +50,11 @@ export function formatDateTime(value: string | null | undefined): string {
 export function intensityClassName(intensity: RelativeIntensity): string {
   switch (intensity) {
     case "high":
-      return "bg-[var(--color-action)]/24";
+      return "bg-[var(--color-analysis-emphasis)]/24";
     case "medium":
-      return "bg-[var(--color-action)]/16";
+      return "bg-[var(--color-analysis-emphasis)]/16";
     case "low":
-      return "bg-[var(--color-action)]/8";
+      return "bg-[var(--color-analysis-emphasis)]/8";
     case "none":
       return "bg-[var(--color-surface)]";
   }

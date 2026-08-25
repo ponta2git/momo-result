@@ -69,42 +69,39 @@ export function useHeldEventsPageController() {
   const [createState, createAction, createPending] = useActionState<
     typeof initialCreateHeldEventState,
     FormData
-  >(
-    async (previous, formData) => {
-      const heldAt = String(formData.get("heldAt") ?? "");
-      if (!heldAt) {
-        setErrorMessage("開催日時を入力してください。");
-        return previous;
-      }
+  >(async (previous, formData) => {
+    const heldAt = String(formData.get("heldAt") ?? "");
+    if (!heldAt) {
+      setErrorMessage("開催日時を入力してください。");
+      return previous;
+    }
 
-      try {
-        const request = { heldAt: toIsoFromLocal(heldAt) };
-        const event = await runIdempotentMutation(
-          idempotencyKeys,
-          "heldEvents.createHeldEvent",
-          request,
-          (options) => createHeldEvent(request, options),
-        );
-        updatePagination({ page: 1, pageSize: paginationSearch.pageSize });
-        await queryClient.invalidateQueries({ queryKey: heldEventKeys.all() });
-        queryClient.setQueryData(heldEventKeys.detail(event.id), {
-          ...event,
-          drafts: [],
-          matches: [],
-        });
-        setHeldAtDraft(currentLocalIsoMinute());
-        setErrorMessage("");
-        setCreateOpen(false);
-        showToast({ title: "開催履歴を作成しました。", tone: "success" });
-        navigate(withReturnTo(`/held-events/${encodeURIComponent(event.id)}`, listReturnTo));
-        return { version: previous.version + 1 };
-      } catch (error) {
-        setErrorMessage(formatApiError(error, "開催履歴の作成に失敗しました"));
-        return previous;
-      }
-    },
-    initialCreateHeldEventState,
-  );
+    try {
+      const request = { heldAt: toIsoFromLocal(heldAt) };
+      const event = await runIdempotentMutation(
+        idempotencyKeys,
+        "heldEvents.createHeldEvent",
+        request,
+        (options) => createHeldEvent(request, options),
+      );
+      updatePagination({ page: 1, pageSize: paginationSearch.pageSize });
+      await queryClient.invalidateQueries({ queryKey: heldEventKeys.all() });
+      queryClient.setQueryData(heldEventKeys.detail(event.id), {
+        ...event,
+        drafts: [],
+        matches: [],
+      });
+      setHeldAtDraft(currentLocalIsoMinute());
+      setErrorMessage("");
+      setCreateOpen(false);
+      showToast({ title: "開催履歴を作成しました。", tone: "success" });
+      navigate(withReturnTo(`/held-events/${encodeURIComponent(event.id)}`, listReturnTo));
+      return { version: previous.version + 1 };
+    } catch (error) {
+      setErrorMessage(formatApiError(error, "開催履歴の作成に失敗しました"));
+      return previous;
+    }
+  }, initialCreateHeldEventState);
 
   const deleteMutation = useMutation({
     mutationFn: (event: HeldEventResponse) => deleteHeldEvent(event.id),

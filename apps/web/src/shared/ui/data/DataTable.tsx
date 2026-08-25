@@ -13,7 +13,7 @@ export type DataTableCaption = {
   visibility?: "screen-reader" | "visible" | undefined;
 };
 
-export type DataTableColumn<Row> = {
+type DataTableColumnBase<Row> = {
   align?: DataTableAlign;
   header: ReactNode;
   key: string;
@@ -21,11 +21,25 @@ export type DataTableColumn<Row> = {
   width?: string;
   renderCell: (row: Row) => ReactNode;
   rowHeader?: boolean;
-  sortDisabled?: boolean;
-  sortDirection?: "asc" | "desc" | undefined;
-  sortable?: boolean;
-  onSort?: () => void;
 };
+
+type StaticDataTableColumn = {
+  onSort?: never;
+  sortDirection?: never;
+  sortDisabled?: never;
+  sortable?: false | undefined;
+};
+
+type SortableDataTableColumn = {
+  onSort: () => void;
+  sortDirection?: "asc" | "desc" | undefined;
+  sortDisabled?: boolean | undefined;
+  sortable: true;
+};
+
+/** Sortable columns require an action; static columns cannot accidentally expose sort state. */
+export type DataTableColumn<Row> = DataTableColumnBase<Row> &
+  (StaticDataTableColumn | SortableDataTableColumn);
 
 export type DataTableProps<Row> = {
   caption: DataTableCaption;

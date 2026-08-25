@@ -191,7 +191,10 @@ function CandidateCard({
                   key={fold}
                 >
                   {row && supported ? (
-                    <Check aria-hidden="true" className="size-3.5 text-[var(--color-success)]" />
+                    <Check
+                      aria-hidden="true"
+                      className="size-3.5 text-[var(--color-analysis-positive)]"
+                    />
                   ) : (
                     <Minus aria-hidden="true" className="size-3.5 text-[var(--color-text-muted)]" />
                   )}
@@ -200,7 +203,7 @@ function CandidateCard({
                     className={cn(
                       "text-[11px]",
                       row && supported
-                        ? "text-[var(--color-success)]"
+                        ? "text-[var(--color-analysis-positive)]"
                         : "text-[var(--color-text-secondary)]",
                     )}
                   >

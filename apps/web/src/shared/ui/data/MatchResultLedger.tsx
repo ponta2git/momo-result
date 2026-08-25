@@ -155,10 +155,10 @@ function trendLabel(row: MatchResultLedgerRow): string {
 
 function trendTone(trend: MatchResultLedgerRow["trend"]): string {
   if (trend === "improved") {
-    return "border-[var(--color-success)]/45 bg-[var(--color-success)]/10 text-[var(--color-success)]";
+    return "border-[var(--color-analysis-positive)]/45 bg-[var(--color-analysis-positive)]/10 text-[var(--color-analysis-positive)]";
   }
   if (trend === "declined") {
-    return "border-[var(--color-danger)]/35 bg-[var(--color-danger)]/8 text-[var(--color-danger)]";
+    return "border-[var(--color-analysis-negative)]/35 bg-[var(--color-analysis-negative)]/8 text-[var(--color-analysis-negative)]";
   }
   return "border-[var(--color-border)] bg-[var(--color-surface-subtle)] text-[var(--color-text-secondary)]";
 }

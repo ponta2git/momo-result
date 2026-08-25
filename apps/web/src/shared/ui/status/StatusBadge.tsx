@@ -3,20 +3,14 @@ import type { ReactNode } from "react";
 
 import { cn } from "@/shared/ui/cn";
 
-export type StatusBadgeTone =
-  | "attention"
-  | "danger"
-  | "info"
-  | "neutral"
-  | "success"
-  | "warning";
+export type StatusBadgeTone = "attention" | "danger" | "info" | "neutral" | "success" | "warning";
 
 const toneClass = {
   attention:
     "border-[var(--color-review)]/70 bg-[var(--color-review)]/14 text-[var(--color-text-primary)]",
   danger:
     "border-[var(--color-danger)]/55 bg-[var(--color-danger)]/10 text-[var(--color-text-primary)]",
-  info: "border-[var(--color-action)]/60 bg-[var(--color-action)]/12 text-[var(--color-text-primary)]",
+  info: "border-[var(--color-status-info)]/60 bg-[var(--color-status-info)]/12 text-[var(--color-text-primary)]",
   neutral:
     "border-[var(--color-border)] bg-[var(--color-surface-subtle)] text-[var(--color-text-secondary)]",
   success:
@@ -26,6 +20,8 @@ const toneClass = {
 } as const satisfies Record<StatusBadgeTone, string>;
 
 export type StatusBadgeProps = {
+  /** Opts a persistent, dynamically changing badge into a polite atomic live region. */
+  announceChanges?: boolean | undefined;
   busy?: boolean | undefined;
   className?: string | undefined;
   hideIcon?: boolean | undefined;
@@ -37,6 +33,7 @@ export type StatusBadgeProps = {
 
 /** A domain-free visual status primitive; feature adapters own status labels and mapping. */
 export function StatusBadge({
+  announceChanges = false,
   busy = false,
   className,
   hideIcon = false,
@@ -53,12 +50,15 @@ export function StatusBadge({
 
   return (
     <span
+      aria-atomic={announceChanges || undefined}
       aria-busy={busy || undefined}
+      aria-live={announceChanges ? "polite" : undefined}
       className={cn(
         "inline-flex min-h-8 shrink-0 items-center gap-2 whitespace-nowrap rounded-[var(--radius-xs)] border px-2 py-1 text-xs font-semibold leading-5",
         toneClass[tone],
         className,
       )}
+      role={announceChanges ? "status" : undefined}
     >
       {!hideIcon && statusIcon ? (
         <span aria-hidden="true" className="shrink-0">

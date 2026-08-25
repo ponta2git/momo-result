@@ -35,7 +35,7 @@ describe("MatchConfirmDialog", () => {
       within(dialog)
         .getAllByRole("row")
         .slice(1)
-        .map((row) => within(row).getAllByRole("cell")[1]?.textContent),
+        .map((row) => within(row).getByRole("rowheader").textContent),
     ).toEqual(["いーゆー", "ぽんた", "あかねまみ", "おーたか"]);
     expect(within(dialog).getByRole("button", { name: "確定する" })).toBeEnabled();
   });

@@ -43,6 +43,7 @@ const statusViewModel: Record<MatchStatus, StatusViewModel> = {
 };
 
 export type StatusPillProps = {
+  announceChanges?: boolean;
   className?: string;
   hideIcon?: boolean;
   label?: string;
@@ -50,11 +51,19 @@ export type StatusPillProps = {
   status: MatchStatus;
 };
 
-export function StatusPill({ className, hideIcon = false, label, note, status }: StatusPillProps) {
+export function StatusPill({
+  announceChanges = false,
+  className,
+  hideIcon = false,
+  label,
+  note,
+  status,
+}: StatusPillProps) {
   const model = statusViewModel[status];
 
   return (
     <StatusBadge
+      announceChanges={announceChanges}
       busy={model.busy}
       className={className}
       hideIcon={hideIcon}

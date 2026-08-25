@@ -23,7 +23,7 @@ describe("ChoiceList", () => {
     );
 
     expect(screen.getByRole("group", { name: "出力対象" })).toBeInTheDocument();
-    expect(screen.getByRole("radio", { name: /第12回/ })).toBeChecked();
+    expect(screen.getByRole("radio", { name: /第12回/u })).toBeChecked();
     expect(screen.getByText("選択中")).toBeVisible();
 
     await user.click(screen.getByText("第11回"));
@@ -73,6 +73,6 @@ describe("ChoiceList", () => {
 
     const group = screen.getByRole("group", { name: "開催" });
     expect(group).toHaveAttribute("aria-busy", "true");
-    expect(screen.getByRole("radio", { name: /第12回/ })).toBeDisabled();
+    expect(screen.getByRole("radio", { name: /第12回/u })).toBeDisabled();
   });
 });

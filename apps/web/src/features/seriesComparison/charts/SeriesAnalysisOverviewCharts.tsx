@@ -264,9 +264,9 @@ export function headToHeadCellStyle(
 ): { backgroundColor: string; borderColor: string } {
   const alpha = intensityAlpha(intensity);
   const color = signal?.includes("disadvantage")
-    ? "var(--color-danger)"
+    ? "var(--color-analysis-negative)"
     : signal?.includes("advantage")
-      ? "var(--color-action)"
+      ? "var(--color-analysis-positive)"
       : "var(--color-tray-incident)";
   const borderAlpha = alpha + 0.18 > 0.62 ? 0.62 : alpha + 0.18;
   return {

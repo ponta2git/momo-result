@@ -141,6 +141,7 @@ export function AdminAccountsPage() {
             ) : null}
             <div className="overflow-x-auto">
               <table className="w-full min-w-[44rem] text-left text-sm">
+                <caption className="sr-only">ログイン可能なアカウントと権限</caption>
                 <thead className="bg-[var(--color-surface-subtle)] text-[var(--color-text-secondary)]">
                   <tr>
                     <th className="px-3 py-2">表示名</th>
@@ -208,7 +209,9 @@ function AccountRow({
       aria-busy={Boolean(pendingRequest) || undefined}
       className="border-t border-[var(--color-border)]"
     >
-      <td className="px-3 py-2 font-semibold">{account.displayName}</td>
+      <th className="px-3 py-2 text-left font-semibold" scope="row">
+        {account.displayName}
+      </th>
       <td className="momo-data max-w-[14rem] truncate px-3 py-2 text-xs">
         {account.discordUserId}
       </td>

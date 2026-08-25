@@ -1,0 +1,9 @@
+{
+  "styles.css": "@theme {\n  --ref-shared: #111111;\n  --ref-play-order: #222222;\n  --ref-analysis-positive: oklch(45% 0.115 285);\n  --ref-status-info: oklch(45% 0.115 285);\n  --alias-rank: var(--ref-shared);\n  --cycle-a: var(--cycle-b);\n  --cycle-b: var(--cycle-a);\n  --color-action: var(--ref-shared);\n  --color-analysis-positive: var(--ref-analysis-positive);\n  --color-status-info: var(--ref-status-info);\n  --color-rank-1: var(--alias-rank);\n  --color-rank-2: var(--cycle-a);\n  --color-play-order-1: var(--ref-play-order);\n  --color-series-1: var(--color-play-order-1);\n  --color-series-2: var(--missing-series-reference);\n  --color-player-1: var(--ref-shared);\n}\n",
+  "shared/ui/dataViz/Chart.tsx": "const seriesColor = \"var(--color-play-order-1)\";\n",
+  "features/example/Page.tsx": "import { checkboxInputClass } from \"@/shared/ui/forms/controlStyles\";\nexport function Page() {\n  return (\n    <>\n      <input className={checkboxInputClass} type=\"checkbox\" />\n      <input type=\"radio\" />\n      <Link to=\"/raw\">Raw feature link</Link>\n    </>\n  );\n}\n",
+  "features/example/LegacyIdentity.tsx": "const color = `var(--color-player-${index + 1})`;\n",
+  "features/example/AmbiguousMembers.tsx": "import { fixedMembers } from \"@/shared/domain/members\";\nexport const members = fixedMembers;\n",
+  "features/example/IconOnlyHeight.tsx": "export function IconOnlyHeight() { return <button aria-label=\"詳細を開く\" className=\"min-h-11\" type=\"button\"><svg aria-hidden=\"true\" /></button>; }\n",
+  "features/example/IconOnlySelfClosing.tsx": "export function IconOnlySelfClosing() { return <button aria-label=\"閉じる\" type=\"button\" />; }\n"
+}

@@ -1,12 +1,4 @@
-import {
-  AlertTriangle,
-  ArrowLeft,
-  Download,
-  LoaderCircle,
-  PenSquare,
-  ScanLine,
-} from "lucide-react";
-import { AnimatePresence, motion } from "motion/react";
+import { AlertTriangle, ArrowLeft, Download, PenSquare, ScanLine } from "lucide-react";
 
 import { MatchesFilterBar } from "@/features/matches/list/MatchesFilterBar";
 import { MatchesTable } from "@/features/matches/list/MatchesTable";
@@ -22,7 +14,6 @@ import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
 import { PageHeader } from "@/shared/ui/layout/PageHeader";
 import { StaleShield } from "@/shared/ui/motion/StaleShield";
-import { momoTransition } from "@/shared/ui/motion/variants";
 
 function ListSkeleton() {
   return (
@@ -53,6 +44,7 @@ export function MatchesListPage() {
     isManualRefreshing,
     isStale,
     items,
+    listScopeChanging,
     masterLoadFailed,
     navigation,
     pagination,
@@ -156,25 +148,6 @@ export function MatchesListPage() {
       >
         <div className="flex min-w-0 justify-end">
           <div className="flex w-full flex-wrap items-center justify-between gap-2 sm:w-auto sm:shrink-0 sm:justify-end">
-            <AnimatePresence initial={false}>
-              {isStale ? (
-                <motion.span
-                  key="list-pending"
-                  animate={{ opacity: 1, y: 0 }}
-                  aria-live="polite"
-                  className="inline-flex shrink-0 items-center gap-2 rounded-full bg-[var(--color-action)]/10 px-3 py-1 text-xs font-semibold text-[var(--color-text-secondary)]"
-                  exit={{ opacity: 0, y: -2 }}
-                  initial={{ opacity: 0, y: 2 }}
-                  transition={momoTransition}
-                >
-                  <LoaderCircle
-                    aria-hidden="true"
-                    className="size-3.5 animate-spin motion-reduce:animate-none"
-                  />
-                  一覧を更新中
-                </motion.span>
-              ) : null}
-            </AnimatePresence>
             <LinkButton
               icon={<Download className="size-4" />}
               size="sm"
@@ -187,10 +160,12 @@ export function MatchesListPage() {
         </div>
 
         <StaleShield active={showMatchesLoading} fallback={<ListSkeleton />}>
-          <motion.div
-            animate={{ opacity: isStale ? 0.7 : 1 }}
-            className="grid gap-4"
-            transition={momoTransition}
+          <StaleShield
+            active={isStale}
+            busyLabel="一覧を更新中"
+            contentClassName="grid gap-4"
+            fallback={<ListSkeleton />}
+            strategy={listScopeChanging ? "preserve-inert" : "preserve-interactive"}
           >
             {showMatchesError ? (
               <Notice tone="danger" title="試合一覧を読み込めません">
@@ -249,7 +224,7 @@ export function MatchesListPage() {
                 ) : null}
               </>
             )}
-          </motion.div>
+          </StaleShield>
         </StaleShield>
       </section>
     </PageFrame>

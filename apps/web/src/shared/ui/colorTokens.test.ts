@@ -35,15 +35,18 @@ function resolvedToken(name: string): string {
   return value;
 }
 
-function relativeLuminance(value: string): number {
+function oklab(value: string): readonly [number, number, number] {
   const match = value.match(/^oklch\(([0-9.]+)%\s+([0-9.]+)\s+([0-9.]+)(?:\s*\/\s*[0-9.]+)?\)$/u);
   if (!match) throw new Error(`Expected an OKLCH color, received: ${value}`);
 
   const lightness = Number(match[1]) / 100;
   const chroma = Number(match[2]);
   const hue = (Number(match[3]) * Math.PI) / 180;
-  const a = chroma * Math.cos(hue);
-  const b = chroma * Math.sin(hue);
+  return [lightness, chroma * Math.cos(hue), chroma * Math.sin(hue)];
+}
+
+function relativeLuminance(value: string): number {
+  const [lightness, a, b] = oklab(value);
   const l = Math.pow(lightness + 0.396_337_777_4 * a + 0.215_803_757_3 * b, 3);
   const m = Math.pow(lightness - 0.105_561_345_8 * a - 0.063_854_172_8 * b, 3);
   const s = Math.pow(lightness - 0.089_484_177_5 * a - 1.291_485_548 * b, 3);
@@ -60,14 +63,31 @@ function contrast(foreground: string, background: string): number {
   return ((values[0] ?? 0) + 0.05) / ((values[1] ?? 0) + 0.05);
 }
 
+function oklabDistance(left: string, right: string): number {
+  const leftChannels = oklab(left);
+  const rightChannels = oklab(right);
+  return Math.hypot(...leftChannels.map((channel, index) => channel - (rightChannels[index] ?? 0)));
+}
+
 describe("semantic color tokens", () => {
-  it("keeps action, status, rank, play-order, and chart-series identities on separate references", () => {
+  it("keeps action, analysis, status, rank, play-order, and chart-series identities separate", () => {
     const families = {
       action: ["--color-action"],
+      analysis: [
+        "--color-analysis-emphasis",
+        "--color-analysis-positive",
+        "--color-analysis-negative",
+      ],
       playOrder: [1, 2, 3, 4].map((value) => `--color-play-order-${value}`),
       rank: [1, 2, 3, 4].map((value) => `--color-rank-${value}`),
       series: [1, 2, 3, 4, 5, 6].map((value) => `--color-series-${value}`),
-      status: ["--color-success", "--color-warning", "--color-review", "--color-danger"],
+      status: [
+        "--color-status-info",
+        "--color-success",
+        "--color-warning",
+        "--color-review",
+        "--color-danger",
+      ],
     };
 
     for (const [family, tokens] of Object.entries(families)) {
@@ -79,7 +99,29 @@ describe("semantic color tokens", () => {
     }
 
     const allIdentityValues = Object.values(families).flat().map(resolvedToken);
+    for (const value of allIdentityValues) expect(value).toMatch(/^oklch\(/u);
     expect(new Set(allIdentityValues).size).toBe(allIdentityValues.length);
+  });
+
+  it("keeps critical semantic pairs perceptually separated in OKLab", () => {
+    expect(
+      oklabDistance(resolvedToken("--color-action"), resolvedToken("--color-status-info")),
+    ).toBeGreaterThanOrEqual(0.07);
+    expect(
+      oklabDistance(resolvedToken("--color-action"), resolvedToken("--color-analysis-emphasis")),
+    ).toBeGreaterThanOrEqual(0.14);
+    expect(
+      oklabDistance(resolvedToken("--color-success"), resolvedToken("--color-analysis-positive")),
+    ).toBeGreaterThanOrEqual(0.06);
+    expect(
+      oklabDistance(resolvedToken("--color-danger"), resolvedToken("--color-analysis-negative")),
+    ).toBeGreaterThanOrEqual(0.1);
+    expect(
+      oklabDistance(
+        resolvedToken("--color-analysis-positive"),
+        resolvedToken("--color-analysis-negative"),
+      ),
+    ).toBeGreaterThanOrEqual(0.2);
   });
 
   it("meets AA for text/control combinations and 3:1 for visual marks", () => {
@@ -87,6 +129,10 @@ describe("semantic color tokens", () => {
     const textTokens = ["--color-text-primary", "--color-text-secondary", "--color-text-muted"];
     const statusTextTokens = [
       "--color-action",
+      "--color-analysis-emphasis",
+      "--color-analysis-positive",
+      "--color-analysis-negative",
+      "--color-status-info",
       "--color-success",
       "--color-warning",
       "--color-review",

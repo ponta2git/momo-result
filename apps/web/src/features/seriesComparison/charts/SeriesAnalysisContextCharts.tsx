@@ -104,7 +104,7 @@ export function PlayOrderMatrix({
   );
 }
 
-function playOrderCellPresentation({
+export function playOrderCellPresentation({
   bestPlayOrder,
   playOrder,
   relativeIntensity,
@@ -135,9 +135,9 @@ function playOrderCellPresentation({
     isBest && isWorst
       ? "var(--color-tray-incident)"
       : isBest
-        ? "var(--color-action)"
+        ? "var(--color-analysis-positive)"
         : isWorst
-          ? "var(--color-danger)"
+          ? "var(--color-analysis-negative)"
           : "var(--color-tray-incident)";
   return {
     accentColor,

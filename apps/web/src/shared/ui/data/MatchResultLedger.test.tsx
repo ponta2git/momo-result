@@ -22,13 +22,26 @@ describe("MatchResultLedger", () => {
             totalAssetsManYen: 1800,
             trend: "improved",
           },
+          {
+            cumulativeAverageAfter: 2.05,
+            cumulativeAverageBefore: 2,
+            cumulativeAverageDelta: 0.05,
+            displayName: "いーゆー",
+            memberId: "member_eu",
+            rank: 2,
+            revenueManYen: 700,
+            revenueRank: 2,
+            totalAssetsManYen: 1400,
+            trend: "declined",
+          },
         ]}
       />,
     );
 
     expect(screen.getByRole("list", { name: "試合の順位と成績" })).toBeInTheDocument();
     expect(screen.getByText("2.00 → 1.97")).toBeInTheDocument();
-    expect(screen.getByText("0.03改善")).toBeInTheDocument();
+    expect(screen.getByText("0.03改善")).toHaveClass("border-[var(--color-analysis-positive)]/45");
+    expect(screen.getByText("0.05後退")).toHaveClass("border-[var(--color-analysis-negative)]/35");
     expect(screen.getByText("収益順位 1.5位")).toBeInTheDocument();
     expect(screen.getByText("物件収益比率 50.0%")).toBeInTheDocument();
     expect(screen.queryByText("+0.03")).not.toBeInTheDocument();

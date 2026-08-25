@@ -27,6 +27,9 @@ describe("RankSignalDrilldown", () => {
 
     const support = screen.getByRole("list", { name: "物件収益の別開催での支持" });
     expect(within(support).getAllByRole("listitem")).toHaveLength(5);
+    for (const supported of within(support).getAllByText("支持")) {
+      expect(supported).toHaveClass("text-[var(--color-analysis-positive)]");
+    }
 
     await user.click(screen.getByRole("button", { name: "別開催テストと採用基準" }));
     expect(screen.getByRole("heading", { name: "検証の流れ" })).toBeInTheDocument();

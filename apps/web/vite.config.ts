@@ -48,7 +48,7 @@ export default defineConfig({
       ...coverageThresholds,
     },
     environment: "jsdom",
-    exclude: [...configDefaults.exclude, "e2e/**"],
+    exclude: [...configDefaults.exclude, "e2e/**", "scripts/**/*.test.mjs"],
     globals: true,
     setupFiles: ["./src/test/setup.ts"],
   },

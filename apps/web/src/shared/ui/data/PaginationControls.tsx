@@ -1,10 +1,10 @@
 import { ChevronsLeft, ChevronsRight, ChevronLeft, ChevronRight } from "lucide-react";
 
+import { formatPaginationRange } from "@/shared/lib/pagination";
+import type { PaginationState } from "@/shared/lib/pagination";
 import { IconButton } from "@/shared/ui/actions/IconButton";
 import { cn } from "@/shared/ui/cn";
 import { SelectField } from "@/shared/ui/forms/SelectField";
-import { formatPaginationRange } from "@/shared/lib/pagination";
-import type { PaginationState } from "@/shared/lib/pagination";
 
 type PaginationControlsBaseProps = {
   ariaLabel?: string | undefined;
@@ -26,9 +26,7 @@ type CompactPaginationControlsProps = PaginationControlsBaseProps & {
   onPageSizeChange?: never;
 };
 
-export type PaginationControlsProps =
-  | CompactPaginationControlsProps
-  | FullPaginationControlsProps;
+export type PaginationControlsProps = CompactPaginationControlsProps | FullPaginationControlsProps;
 
 /** Provides either full page-size navigation or a deliberately smaller previous/next contract. */
 export function PaginationControls(props: PaginationControlsProps) {
@@ -63,7 +61,7 @@ export function PaginationControls(props: PaginationControlsProps) {
           variant === "full" ? "sm:grid-cols-[auto_auto]" : "sm:justify-end",
         )}
       >
-        {props.variant !== "compact" ? (
+        {props.variant === "compact" ? null : (
           <SelectField
             disabled={disabled}
             label="表示件数"
@@ -77,7 +75,7 @@ export function PaginationControls(props: PaginationControlsProps) {
               props.onPageSizeChange(Number(event.currentTarget.value));
             }}
           />
-        ) : null}
+        )}
         <div
           className={cn(
             "grid w-full items-center gap-2 sm:w-auto sm:justify-end",

@@ -3,7 +3,9 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
+import { playOrderCellPresentation } from "@/features/seriesComparison/charts/SeriesAnalysisContextCharts";
 import { headToHeadCellStyle } from "@/features/seriesComparison/charts/SeriesAnalysisOverviewCharts";
+import { intensityClassName } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
 import { ContextView } from "@/features/seriesComparison/page/SeriesAnalysisContextView";
 import { DriversView } from "@/features/seriesComparison/page/SeriesAnalysisDriversView";
 import { FlowView } from "@/features/seriesComparison/page/SeriesAnalysisFlowView";
@@ -125,6 +127,43 @@ describe("rich series analysis views", () => {
     expect(screen.getByText(/次戦の順位確率としては使わない/u)).toBeInTheDocument();
   });
 
+  it("uses analysis semantics for neutral emphasis and evidence polarity", () => {
+    const response = makeSeriesAnalysisAggregate();
+    const entry = response.assetStyleProfiles.entries[0];
+    const strengthEvidence = entry?.evidence[0];
+    const riskEvidence = entry?.evidence[1];
+    if (!entry || !strengthEvidence || !riskEvidence) {
+      throw new Error("asset evidence fixtures are required");
+    }
+    entry.evidence = [
+      { ...strengthEvidence, tone: "strength" },
+      { ...riskEvidence, tone: "risk" },
+    ];
+    response.highlights.push({
+      highlightId: "highlight:revenue.average",
+      leaderMemberIds: [entry.memberId],
+      metricId: "revenue.average",
+      qualityStatus: "ok",
+      targetCount: 12,
+      value: 45_000,
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/analytics/series?view=drivers"]}>
+        <DriversView focusedItemIds={[]} response={response} onDrilldown={vi.fn()} />
+      </MemoryRouter>,
+    );
+
+    expect(intensityClassName("high")).toContain("--color-analysis-emphasis");
+    expect(screen.getByText("4人内最高")).toHaveClass("border-[var(--color-analysis-emphasis)]/45");
+    expect(screen.getByText("強み").closest("div")).toHaveClass(
+      "border-[var(--color-analysis-positive)]/45",
+    );
+    expect(screen.getByText("注意").closest("div")).toHaveClass(
+      "border-[var(--color-analysis-negative)]/45",
+    );
+  });
+
   it("uses readable condition names for focused contextual evidence", () => {
     render(
       <ContextView
@@ -234,11 +273,29 @@ describe("rich series analysis views", () => {
 
   it("assigns disadvantage and advantage to different semantic colors", () => {
     expect(headToHeadCellStyle("strong_advantage", "high").backgroundColor).toContain(
-      "--color-action",
+      "--color-analysis-positive",
     );
     expect(headToHeadCellStyle("strong_disadvantage", "high").backgroundColor).toContain(
-      "--color-danger",
+      "--color-analysis-negative",
     );
+    expect(
+      playOrderCellPresentation({
+        bestPlayOrder: 1,
+        playOrder: 1,
+        relativeIntensity: "high",
+        targetCount: 4,
+        worstPlayOrder: 4,
+      }).accentColor,
+    ).toBe("var(--color-analysis-positive)");
+    expect(
+      playOrderCellPresentation({
+        bestPlayOrder: 1,
+        playOrder: 4,
+        relativeIntensity: "high",
+        targetCount: 4,
+        worstPlayOrder: 4,
+      }).accentColor,
+    ).toBe("var(--color-analysis-negative)");
   });
 
   it("keeps the selected match inline with its ledger and an explicit clear action", async () => {

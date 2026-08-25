@@ -2,7 +2,7 @@
 
 目的: momo-result の全画面で、同じ意味・状態・操作を一貫して表し、記録、確認、比較、出力を迷わず完了できるようにする。
 
-本書は Web の横断的な意味表現、視覚階層、操作、安全性、状態表示の正本である。業務用語・状態遷移は `docs/domain-rule.md`、画面固有の目的・順序・指標は対象要求、実装境界は `docs/architecture.md`、検証方針は `docs/test-rule.md`、実行コマンドは `docs/dev-rule.md` を正本とする。コンポーネント、トークン、フォーマッターの現在値は実装と checker を正本とし、本書へ複製しない。
+本書は Web の横断的な意味表現、視覚階層、操作文法、安全性、状態表示の正本である。業務用語・状態遷移は `docs/domain-rule.md`、画面固有の目的・順序・指標は対象要求、実装境界は `docs/architecture.md`、検証方針は `docs/test-rule.md`、実行コマンドは `docs/dev-rule.md` を正本とする。コンポーネント、トークン、フォーマッターの現在値は実装と checker を正本とし、本書へ複製しない。
 
 規則が競合する場合は、正確性・データ保全・利用者の制御、アクセシビリティとタスク完遂、意味の一貫性、視覚上の洗練の順で判断する。統一感とは同じ意味が同じ原則で働くことであり、異なる文脈を同じ外形へ押し込むことではない。
 
@@ -32,25 +32,63 @@
 - 日時、金額、試合番号、状態名は共通 formatter / ViewModel を使う。件数と比較値には対象、単位、分母または基準を添え、整列する数値には tabular numerals を使う。
 - table は row / column header と identity を保つ。グラフは答える問いがある場合に使い、数値表現を併記し、比較軸、単位、スケールを揃える。モバイルへ再配置しても、プレーヤーと試合の対応、比較順、詳細への到達を失わせない。
 - disclosure、tab、dialog、navigation を見た目だけで取り替えない。panel は trigger との関係を保ち、周囲の位置・幅・focus を不必要に変えない。可視見出しを省略する場合も `section`、`aria-label` / `aria-labelledby`、field label、accessible control name で構造を残す。
-- filter の全解除はスコープを示す1操作に集約する。適用中の条件を短く要約しても、完全なラベルを DOM と accessible name に残す。主要操作は常時発見可能にし、二次操作だけを段階的に開示する。
+- 主要操作は常時発見可能にし、二次操作だけを段階的に開示する。
 
-## 3. コンポーネント・操作・アクセシビリティ
+## 3. 操作文法とコンポーネント境界
 
-- button、link、form control、status、notice、dialog、disclosure は shared UI とアクセシブルな primitive を優先し、機能ごとに keyboard / focus 挙動を手作りしない。
-- interactive component は、該当する default、hover、focus-visible、active、disabled、pending / loading、error、success を定義する。data surface は loading、empty、error、stale、not found を混同しない。
-- 操作は影響する対象の近くへ置き、ラベルは対象と結果を示す。選択、スコープ、並び順、表示範囲の変更は、影響領域へ持続的に反映する。
+操作文法は、利用者の目的を一貫した操作と結果へ対応させるための横断契約である。共通化は外形や event handler の類似ではなく、目的、対象、作用、開始前と完了後の状態、制約、feedback、失敗時の回復が同じかで判断する。
+
+### 3.1 抽象化の単位と所有権
+
+- 同じ目的、対象への作用、状態遷移、制約、回復方法を持つ操作は、画面が異なっても同じ shared UI primitive または操作 pattern を使う。業務上の結果や制約が異なる場合は、外形を揃えるために一つの操作へ統合しない。
+- shared UI は、意味に対応する構造、keyboard / focus、accessible name、hit target、disabled / pending、局所 feedback、responsive な配置を所有する。feature は業務語彙、URL / query / cache、権限、入力変換、副作用、業務状態遷移を所有し、app は route と画面 composition、shared domain は横断する業務 identity、順序、formatter を所有する。
+- shared UI へ切り出すのは、複数の現在用途を一つの小さい契約で覆える場合、または単独用途でも accessibility、制約、feedback、状態同期の重要な判断を隠せる場合に限る。名前を付けただけの wrapper、呼び出し元の判断を props へ移すだけの万能 component、将来用途だけを見込んだ schema は作らない。
+- primitive、操作 pattern、feature composition の三層で考える。feature は shared UI を組み合わせて文脈固有の操作を作り、shared UI は feature の業務 enum、API DTO、query key、文言一覧を知らない。
+- button、link、form control、status、notice、dialog、disclosure は shared UI とアクセシブルな primitive を優先し、機能ごとに同じ keyboard / focus / pending 挙動を手作りしない。
+
+### 3.2 選択・表示切替・表示範囲
+
+- 説明を読み比べて一つを選ぶ候補は、可視 legend を持つ native radio group と説明付きの選択行で表す。選択行全体を操作可能にし、選択状態は control、文字、形で示して色だけに依存しない。候補固有の別操作は選択 label の内側へ混ぜない。
+- 少数の短い mode 切替は segmented control、同じ対象の view 切替は tab、補助詳細の開閉は disclosure、多数の簡潔な候補は select または検索可能な選択を使う。見た目の都合でこれらを交換せず、選択と即時実行を混同しない。
+- filter は表示対象の scope を変える操作であり、変更先の data surface の近くへ置く。主要条件、必要な場合だけ開く詳細条件、適用中の完全な条件、結果または件数、scope を示す一つの全解除を一つの操作面として対応させる。status navigation は少数の直接 filter とし、未完了の下位状態を従属させる。
+- filter の見た目と操作契約は横断化してよいが、URL、query、cache、cursor、候補間の依存、既定値、更新文言は feature が所有する。横断 component に filter schema や query 実装を持たせない。
+- sort、page、selection、filter は現在状態が読み取れ、影響領域へ持続的に反映されること。選択中 control の再実行で duplicate load や flicker を起こさず、表示範囲を変えても対象 identity と戻り先を失わせない。
+- 取得済み内容を保持したまま filter、sort、page を変える場合は、表示中の scope と要求中の scope を区別して知らせる。同じ scope の更新では安全な操作を保ち、scope 変更により対象を誤認する領域だけを一時的に制約する。見た目だけを残して支援技術から無条件に隠すことを「保持」としない。
+
+### 3.3 移動・実行・確定
+
+- link は場所の移動、button は現在の文脈での実行に使う。icon-only の移動と実行もこの区別を保ち、見た目を共通化しても element の意味を変えない。
+- 実行操作は影響する対象の近くへ置き、ラベルで対象と予測できる結果を示す。操作前に必要な制約と影響を示し、押下直後、pending、成功、部分成功、失敗のうち該当する状態を同じ操作文脈で返す。
+- form の確定は選択または編集と区別し、pending 中は同じ送信を重複実行させない。dialog 内の確定操作は一貫した footer、読み順、主要度を持ち、pending 中に不用意に閉じて結果を見失わせない。
+- 不可逆または高コストな操作は、対象と結果を `AlertDialog` で明示する。安全に可逆な操作は即時反映と Undo を優先し、routine な操作へ確認 dialog を増やさない。
+
+### 3.4 更新・再試行・初期化・破棄
+
+- 更新は、現在有効な表示条件のまま data を再取得する操作である。`ready → updating with stale content → ready` を基本とし、失敗しても取得済み内容を残して更新失敗を局所表示する。初回 loading へ戻さない。
+- 再試行は、失敗した同じ操作を同じ入力と scope でやり直す回復操作である。`error → pending → success | error` を失敗箇所の近くで示し、入力、選択、scroll 位置を保つ。route retry は query と error boundary を同時に reset する。
+- 初期化は、利用者が変更できる値を明示された既定値へ戻す操作である。`customized → defaults` の対象 scope をラベルで示し、変更がない場合は主要操作にしない。初期化に伴う再取得は更新 feedback を併用するが、再試行や破棄とは呼ばない。
+- 破棄は、未確定または一時的な変更を取り除き、`dirty → clean` へ戻す操作である。失われる内容を先に示し、影響が大きい場合だけ確認を挟む。保存済み data の削除と未保存変更の破棄を同じ文言にしない。
+- 更新、再試行、初期化、破棄は、icon、文言、loading 表示を流用して同じ操作に見せない。共通化する場合も、各状態遷移と回復契約を保つ composition に留める。
+
+### 3.5 状態・制約・feedback
+
+- interactive component は、該当する default、hover、focus-visible、active、selected、disabled、pending / loading、error、success を定義する。data surface は loading、empty、error、stale、not found を混同しない。
+- 利用可能な操作、対象、現在状態を実行前に読み取れ、押下または選択を直ちに知覚でき、完了結果と次の操作を判断できるようにする。操作の重要度に feedback の強さを合わせ、routine な選択へ toast や dialog を使わない。
+- disabled は利用不能な理由を対象の近くに示す。pending は進行中であることを表示し、単に control を無反応にしない。長時間操作は進行中であることと、安全に離脱または中断できるかを示す。
+- 失敗は操作箇所の近くに表示し、何が起きたか、影響範囲、次にできることを示す。保存、削除、再取得、download の失敗を toast だけへ逃がさず、同じ結果を toast と inline notice に重複表示しない。
+- 補助 metadata や color だけから業務状態を推測せず、明示された状態を表示用の共通表現へ変換する。業務状態の enum や遷移自体は feature / domain が所有する。
+
+## 4. 入力・ワークスペース・アクセシビリティ
+
+- form は可視ラベル、説明、必須、validation error、disabled / pending を同じ field 境界で関連付け、paste を妨げない。checkbox、radio、select、text input は native semantics を保ち、見た目のために keyboard 操作を再実装しない。
+- OCR 結果修正と手入力は、入力 field と対応する source image、同じプレーヤー・項目順、編集結果の feedback を一つの workspace として保つ。この対応関係と少ない修正手数を保護し、画面の分断や画像と field の往復を増やさない。
 - モバイルの主要操作と icon-only action は 44px 以上の hit target を持つ。icon-only action は文脈を含む `aria-label`、decorative icon は `aria-hidden` を持つ。
 - hover で現れる操作や情報は keyboard focus と touch でも到達できる。tooltip は補助説明であり、主要な意味やエラーをそこだけに置かない。
-- form は可視ラベル、説明、必須、validation error、disabled / pending を同じ field 境界で関連付け、paste を妨げない。
-- OCR 結果修正と手入力は、入力 field と対応する source image、同じプレーヤー・項目順、編集結果の feedback を一つの workspace として保つ。この対応関係と少ない修正手数を保護し、画面の分断や画像と field の往復を増やさない。
-- status navigation は少数の直接 filter とし、未完了の下位状態を従属させる。選択中 control の再実行で duplicate load や flicker を起こさない。
-- 操作前に対象、制約、影響を示す。失敗は操作箇所の近くに表示し、入力、選択、scroll 位置を消さない。保存、削除、再取得、download の失敗を toast だけへ逃がさず、同じ結果を toast と inline notice に重複表示しない。
-- 不可逆または高コストな操作は、対象と結果を `AlertDialog` で明示する。安全に可逆な操作は即時反映と Undo を優先し、pending 中の重複実行を許さない。
-- 複数ステップの flow は Back、キャンセル、完了または安全な中断点を持つ。ダイアログを閉じた後は起点へ focus を返し、ナビゲーションを阻止する場合は理由と進行状況を示す。
+- 複数ステップの flow は Back、キャンセル、完了または安全な中断点を持つ。dialog を閉じた後は起点へ focus を返し、ナビゲーションを阻止する場合は理由と進行状況を示す。
 - fixed / sticky UI は safe-area inset を尊重し、focus target や主要操作を viewport 外へ隠さない。狭い幅では再配置して hit target と accessible name を保つ。
 - keyboard、focus、label、contrast、status announcement は WCAG AA 相当を最低基準とする。
 
-## 4. UI ライティングと分析の断定
+## 5. UI ライティングと分析の断定
 
 - 文体は普通の Web アプリとして、短く、具体的に、落ち着いて書く。親しさを演出する冗談や過剰な励ましは足さず、要求正本で定義された `桃鉄型`、`遊戯王型` など仲間内の語彙は一般的な分析語へ言い換えない。
 - 一つの文言は、対象、現在状態、結果、影響、次の操作、判断に必要な根拠のいずれかを伝える。同じ事実を heading、lead、notice、button 周辺で言い直さず、正本となるラベルまたは表示を1か所に定める。条件付きの注意は条件が成立した箇所だけに出す。
@@ -61,22 +99,22 @@
 - 信頼性は例外として扱う。OCR 品質、data 欠損、分析上の不確かさを別の原因として正本から受け取り、解釈を実質的に変える場合だけ影響範囲とともに警告する。`参考値`、`信頼度低め`、`対象なし` を混同せず、UI が metadata 欠落から健全性を推測しない。通常または十分な状態の安心文言は出さない。
 - エラー文は、何が起きたか、影響を受けた範囲、利用者が次にできること、確定していて役立つ場合だけ原因を示す。未確定の原因を断定せず、謝罪、責任転嫁、一般論で要点を埋めない。
 
-## 5. 状態・フィードバック・モーション
+## 6. 取得状態・フィードバック・モーション
 
 - 初回 loading は最終 layout に近い structural skeleton を使い、refetch は既存内容を保って更新中を示す。全面 skeleton へ戻さない。
-- error、not found、empty、stale data を別状態にする。retry は失敗箇所へ置き、route retry は query と error boundary を同時に reset する。
+- error、not found、empty、stale data を別状態にし、更新と再試行は操作文法で定めた回復契約に従う。
 - empty state は現在実行可能で安全な主要操作を1件示し、二次操作は弱める。権限または前提条件で実行不能な導線を出さない。
 - 補助情報の取得失敗で、取得済みの主表示を置き換えない。完了結果が画面上で明らかな場合は祝福目的の toast を追加せず、局所的な feedback を優先する。
 - motion は状態の因果または連続性を伝える場合だけ使う。既存 token、短い feedback、opacity / transform を使い、layout shift、stagger、常時 loop、engagement 目的の演出を避ける。
 - 非必須 motion は `prefers-reduced-motion` で無効化し、route content の表示を animation 完了まで block しない。
 
-## 6. ナビゲーションと有限のタスクループ
+## 7. ナビゲーションと有限のタスクループ
 
 - 一覧、詳細、編集、出力、OCR、管理をまたぐ場合は、必要な filter、sort、page、selection、内部 `returnTo` を保持する。`returnTo` は app 内 path だけを受け入れ、復元不能時は安全な既定導線と理由を示す。
 - タスクは、きっかけ、最小の操作、確認できる結果、明確な終了からなる有限の流れにする。完了後の連続利用表示、緊急性の演出、予測不能な報酬、再利用させるだけの CTA は追加しない。
 - 通知、再訪誘導、保存済み条件、shortcut は、要求で定義した利用者の便益と停止方法を持つ場合だけ使う。FOMO や不安、export を妨げる lock-in を作らず、通常経路と発見可能なラベルを残す。
 
-## 7. 4人の共通結果台帳
+## 8. 4人の共通結果台帳
 
 - OCR 確認の要約、試合詳細、開催結果、分析では、4人の同一性、順序、整列を共通の視覚文法として反復する。これは同じ card を複製する規則ではなく、文脈に合う表、列、行、図表へ変形してよい。
 - 固定メンバーは `いーゆー → ぽんた → あかねまみ → おーたか` の順と名前で識別する。この順序を共通台帳、分析表、グラフ凡例へ例外なく適用し、順位、指標値、試合ごとのプレー順で並べ替えない。固定メンバーの順序と、試合記録の `プレー順1〜4` を色やラベルで混同させない。
@@ -85,7 +123,7 @@
 - 前後の差は「改善」「後退」「維持」「初戦」と値を併記し、符号付き小数だけに意味を持たせない。
 - 主要結果は同一スコープの比較取得に妨げられず、比較の失敗または対象試合なしでも保存済みの結果を残す。試合の識別情報は文字として残し、ナビゲーションと出力は明示した操作として表す。
 
-## 8. 検証
+## 9. 検証
 
 - UI checker は raw palette、undefined token、arbitrary spacing、small hit target、motion、reduced-motion など決定可能な規則を検査する。
 - component test は state matrix、keyboard、focus、accessible name、local error、pending 中の重複操作を実操作で固定する。

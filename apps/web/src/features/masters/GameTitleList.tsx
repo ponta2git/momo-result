@@ -1,12 +1,10 @@
-import { useFormStatus } from "react-dom";
-
 import { MasterDeleteDialog, MasterEditDialog } from "@/features/masters/MasterActionDialogs";
 import { layoutFamilies, layoutFamilyLabels } from "@/shared/api/enums";
 import type { LayoutFamily } from "@/shared/api/enums";
 import type { GameTitleResponse } from "@/shared/api/masters";
 import { Button } from "@/shared/ui/actions/Button";
-import { cn } from "@/shared/ui/cn";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
+import { ChoiceList } from "@/shared/ui/forms/ChoiceList";
 import { SelectField } from "@/shared/ui/forms/SelectField";
 import { TextField } from "@/shared/ui/forms/TextField";
 
@@ -30,21 +28,6 @@ type GameTitleListProps = {
   selectedGameTitleId: string;
 };
 
-function CreateButton() {
-  const { pending } = useFormStatus();
-  return (
-    <Button
-      disabled={pending}
-      pending={pending}
-      pendingLabel="追加中"
-      type="submit"
-      variant="primary"
-    >
-      作品を追加
-    </Button>
-  );
-}
-
 export function GameTitleList({
   create,
   defaultLayoutFamily,
@@ -54,6 +37,44 @@ export function GameTitleList({
   onSelect,
   selectedGameTitleId,
 }: GameTitleListProps) {
+  const choices = items.map((item) => {
+    const isPending = item.pending === true;
+    return {
+      accessibleLabel: `${item.name}${isPending ? "（追加中）" : ""}`,
+      description: `読み取り方式: ${layoutFamilyLabels[item.layoutFamily as LayoutFamily] ?? "未設定"}`,
+      label: (
+        <>
+          {item.name}
+          {isPending ? (
+            <span className="ml-2 text-xs font-normal text-[var(--color-text-secondary)]">
+              (追加中…)
+            </span>
+          ) : null}
+        </>
+      ),
+      pending: isPending,
+      trailingAction: isPending ? undefined : (
+        <div className="flex items-center">
+          <MasterEditDialog
+            initialLayoutFamily={item.layoutFamily}
+            initialName={item.name}
+            label="作品"
+            onSave={async (values) => {
+              await onUpdate(item.id, {
+                name: values.name,
+                layoutFamily: values.layoutFamily ?? item.layoutFamily,
+              });
+            }}
+            showLayoutFamily
+            title="作品を編集"
+          />
+          <MasterDeleteDialog label="作品" name={item.name} onDelete={() => onDelete(item.id)} />
+        </div>
+      ),
+      value: item.id,
+    };
+  });
+
   return (
     <section className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
       <header>
@@ -71,68 +92,14 @@ export function GameTitleList({
           description="作品を追加すると、マップとシーズンを登録できます。"
         />
       ) : (
-        <ul className="mt-3 grid gap-2">
-          {items.map((item) => {
-            const isSelected = item.id === selectedGameTitleId;
-            const isPending = item.pending === true;
-            return (
-              <li key={item.id}>
-                <div
-                  className={cn(
-                    "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-[var(--radius-sm)] border px-3 py-2 transition-colors duration-[var(--motion-fast)] motion-reduce:transition-none",
-                    isSelected
-                      ? "border-[var(--color-action)]/60 bg-[var(--color-action)]/12"
-                      : "border-[var(--color-border)] bg-[var(--color-surface)] hover:bg-[var(--color-surface-subtle)]",
-                    isPending ? "opacity-60" : "",
-                  )}
-                  aria-busy={isPending || undefined}
-                >
-                  <button
-                    className="min-h-11 min-w-0 text-left"
-                    type="button"
-                    disabled={isPending}
-                    onClick={() => onSelect(item.id)}
-                  >
-                    <p className="line-clamp-2 text-sm font-semibold text-[var(--color-text-primary)]">
-                      {item.name}
-                      {isPending ? (
-                        <span className="ml-2 text-xs font-normal text-[var(--color-text-secondary)]">
-                          (追加中…)
-                        </span>
-                      ) : null}
-                    </p>
-                    <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">
-                      読み取り方式:{" "}
-                      {layoutFamilyLabels[item.layoutFamily as LayoutFamily] ?? "未設定"}
-                    </p>
-                  </button>
-                  {isPending ? null : (
-                    <div className="flex items-center">
-                      <MasterEditDialog
-                        initialLayoutFamily={item.layoutFamily}
-                        initialName={item.name}
-                        label="作品"
-                        onSave={async (values) => {
-                          await onUpdate(item.id, {
-                            name: values.name,
-                            layoutFamily: values.layoutFamily ?? item.layoutFamily,
-                          });
-                        }}
-                        showLayoutFamily
-                        title="作品を編集"
-                      />
-                      <MasterDeleteDialog
-                        label="作品"
-                        name={item.name}
-                        onDelete={() => onDelete(item.id)}
-                      />
-                    </div>
-                  )}
-                </div>
-              </li>
-            );
-          })}
-        </ul>
+        <ChoiceList
+          className="mt-3"
+          legend="編集する作品"
+          name="selected-game-title"
+          options={choices}
+          value={selectedGameTitleId}
+          onValueChange={onSelect}
+        />
       )}
 
       <form action={create.action} className="mt-4 grid gap-2" key={create.formKey}>
@@ -155,7 +122,9 @@ export function GameTitleList({
           }))}
         />
 
-        <CreateButton />
+        <Button pendingLabel="追加中" type="submit">
+          作品を追加
+        </Button>
       </form>
     </section>
   );

@@ -1,9 +1,10 @@
-import { Check, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/shared/ui/actions/Button";
-import { IconButton } from "@/shared/ui/actions/IconButton";
+import { PaginationControls } from "@/shared/ui/data/PaginationControls";
 import { Dialog } from "@/shared/ui/feedback/Dialog";
+import { ChoiceList } from "@/shared/ui/forms/ChoiceList";
 
 import type { ExportScope } from "./exportTypes";
 import { candidateDisplayLabel } from "./exportViewModel";
@@ -24,15 +25,6 @@ function labelForScope(scope: ExportCandidatePickerDialogProps["scope"]): string
   return scope === "heldEvent" ? "開催" : "試合";
 }
 
-function visibleRange(view: ReadyCandidateView): string | undefined {
-  const pagination = view.pagination;
-  if (!pagination) return undefined;
-  if (pagination.totalItems === 0) return "0件 / 全0件";
-  const start = (pagination.page - 1) * pagination.pageSize + 1;
-  const end = Math.min(pagination.page * pagination.pageSize, pagination.totalItems);
-  return `${start.toLocaleString()}-${end.toLocaleString()}件 / 全${pagination.totalItems.toLocaleString()}件`;
-}
-
 export function ExportCandidatePickerDialog({
   disabled = false,
   refreshing = false,
@@ -43,7 +35,6 @@ export function ExportCandidatePickerDialog({
 }: ExportCandidatePickerDialogProps) {
   const [open, setOpen] = useState(false);
   const label = labelForScope(scope);
-  const range = visibleRange(view);
   const pagination = view.pagination;
 
   const selectCandidate = (value: string) => {
@@ -79,86 +70,33 @@ export function ExportCandidatePickerDialog({
           onOpenChange={setOpen}
         >
           <div className="flex min-h-0 flex-1 flex-col gap-3">
-            <fieldset
-              aria-label={`${label}候補`}
-              className="max-h-[min(24rem,55dvh)] min-h-0 min-w-0 overflow-y-auto overscroll-contain rounded-[var(--radius-sm)] border border-[var(--color-border)]"
-            >
-              <legend className="sr-only">{label}候補</legend>
-              {view.candidates.length === 0 ? (
-                <p className="p-3 text-sm text-[var(--color-text-secondary)]">
-                  このページに選べる候補はありません。
-                </p>
-              ) : null}
-              {view.candidates.map((candidate) => {
-                const selected = candidate.value === view.selectedId;
-                return (
-                  <label
-                    className="momo-pressable grid min-h-11 cursor-pointer grid-cols-[1.25rem_minmax(0,1fr)] items-center gap-2 border-b border-[var(--color-border)] px-3 py-2 last:border-b-0 hover:bg-[var(--color-surface-subtle)] has-[:focus-visible]:outline-3 has-[:focus-visible]:-outline-offset-3 has-[:focus-visible]:outline-[var(--color-action)]"
-                    key={candidate.value}
-                  >
-                    <input
-                      aria-label={candidateDisplayLabel(candidate)}
-                      checked={selected}
-                      className="sr-only"
-                      disabled={disabled}
-                      name={`export-${scope}-candidate`}
-                      type="radio"
-                      value={candidate.value}
-                      onChange={() => selectCandidate(candidate.value)}
-                    />
-                    <span
-                      aria-hidden="true"
-                      className="inline-flex size-5 items-center justify-center rounded-full border border-[var(--color-border-strong)] text-[var(--color-action)]"
-                    >
-                      {selected ? <Check className="size-3.5" strokeWidth={3} /> : null}
-                    </span>
-                    <span className="min-w-0">
-                      <span className="block text-sm font-medium text-pretty text-[var(--color-text-primary)]">
-                        {candidate.label}
-                      </span>
-                      {candidate.description ? (
-                        <span className="mt-0.5 block text-xs leading-5 text-pretty text-[var(--color-text-secondary)]">
-                          {candidate.description}
-                        </span>
-                      ) : null}
-                    </span>
-                  </label>
-                );
-              })}
-            </fieldset>
+            <ChoiceList
+              className="flex min-h-0 flex-col"
+              disabled={disabled}
+              emptyState="このページに選べる候補はありません。"
+              legend={`${label}候補`}
+              listClassName="max-h-[min(24rem,55dvh)] min-h-0 flex-1 overflow-y-auto overscroll-contain"
+              name={`export-${scope}-candidate`}
+              options={view.candidates.map((candidate) => ({
+                accessibleLabel: candidateDisplayLabel(candidate),
+                description: candidate.description,
+                label: candidate.label,
+                value: candidate.value,
+              }))}
+              pending={refreshing}
+              value={view.selectedId}
+              onValueChange={selectCandidate}
+            />
 
             {pagination && pagination.totalPages > 1 ? (
-              <nav
-                aria-label={`${label}候補のページネーション`}
-                className="flex min-w-0 shrink-0 items-center justify-between gap-3"
-              >
-                <p className="min-w-0 text-sm font-semibold text-[var(--color-text-secondary)] tabular-nums">
-                  {range}
-                </p>
-                <div className="flex shrink-0 items-center gap-2">
-                  <IconButton
-                    aria-label="前の候補ページへ"
-                    disabled={disabled || !pagination.hasPreviousPage}
-                    icon={<ChevronLeft />}
-                    size="sm"
-                    tooltip="前の候補ページへ"
-                    onClick={() => onPageChange(Math.max(1, pagination.page - 1))}
-                  />
-                  <span className="min-w-14 text-center text-sm font-semibold text-[var(--color-text-secondary)] tabular-nums">
-                    {pagination.page.toLocaleString()} / {pagination.totalPages.toLocaleString()}
-                  </span>
-                  <IconButton
-                    aria-label="次の候補ページへ"
-                    disabled={disabled || !pagination.hasNextPage}
-                    icon={<ChevronRight />}
-                    size="sm"
-                    tooltip="次の候補ページへ"
-                    onClick={() =>
-                      onPageChange(Math.min(pagination.totalPages, pagination.page + 1))
-                    }
-                  />
-                </div>
-              </nav>
+              <PaginationControls
+                ariaLabel={`${label}候補のページネーション`}
+                className="shrink-0 rounded-none border-0 bg-transparent p-0"
+                disabled={disabled || refreshing}
+                pagination={pagination}
+                variant="compact"
+                onPageChange={onPageChange}
+              />
             ) : null}
           </div>
         </Dialog>

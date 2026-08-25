@@ -149,12 +149,12 @@ describe("MastersPage", () => {
     setDevUser();
     renderPage();
 
-    expect(await screen.findByRole("button", { name: /桃太郎電鉄2/u })).toBeInTheDocument();
+    expect(await screen.findByRole("radio", { name: "桃太郎電鉄2" })).toBeChecked();
 
     await user.type(screen.getByPlaceholderText("例: 桃太郎電鉄2"), "桃太郎電鉄ワールド");
     await user.click(screen.getByRole("button", { name: "作品を追加" }));
 
-    expect(await screen.findByRole("button", { name: /桃太郎電鉄ワールド/u })).toBeInTheDocument();
+    expect(await screen.findByRole("radio", { name: "桃太郎電鉄ワールド" })).toBeChecked();
   });
 
   it("invalidates consumer-facing master caches after creating a game title", async () => {
@@ -163,7 +163,7 @@ describe("MastersPage", () => {
     queryClient.setQueryData(masterKeys.gameTitles.list("match-detail"), { items: [] });
     renderPage();
 
-    expect(await screen.findByRole("button", { name: /桃太郎電鉄2/u })).toBeInTheDocument();
+    expect(await screen.findByRole("radio", { name: "桃太郎電鉄2" })).toBeChecked();
 
     await user.type(screen.getByPlaceholderText("例: 桃太郎電鉄2"), "桃太郎電鉄ワールド");
     await user.click(screen.getByRole("button", { name: "作品を追加" }));
@@ -195,7 +195,7 @@ describe("MastersPage", () => {
     );
 
     renderPage();
-    expect(await screen.findByRole("button", { name: /桃太郎電鉄2/u })).toBeInTheDocument();
+    expect(await screen.findByRole("radio", { name: "桃太郎電鉄2" })).toBeChecked();
 
     await user.type(screen.getByPlaceholderText("例: 桃太郎電鉄2"), "桃鉄DX");
     await user.click(screen.getByRole("button", { name: "作品を追加" }));
@@ -204,6 +204,11 @@ describe("MastersPage", () => {
     expect(
       screen.getByText((_, node) => node?.textContent === "桃鉄DX(追加中…)"),
     ).toBeInTheDocument();
+    const pendingChoice = screen.getByRole("radio", { name: "桃鉄DX（追加中）" });
+    expect(pendingChoice).toBeDisabled();
+    expect(pendingChoice).not.toBeChecked();
+    expect(screen.getByRole("radio", { name: "桃太郎電鉄2" })).toBeChecked();
+    expect(screen.getByRole("button", { name: "追加中" })).toBeDisabled();
 
     responseGate.resolve();
     await waitFor(() => expect(screen.queryByText("(追加中…)")).not.toBeInTheDocument());
@@ -244,15 +249,21 @@ describe("MastersPage", () => {
     setDevUser();
     renderPage();
 
-    expect(await screen.findByRole("button", { name: /桃太郎電鉄2/u })).toBeInTheDocument();
+    const gameTitleChoice = await screen.findByRole("radio", { name: "桃太郎電鉄2" });
+    expect(gameTitleChoice).toBeChecked();
 
-    await user.click(screen.getByRole("button", { name: "作品を編集" }));
+    const editButton = screen.getByRole("button", { name: "作品を編集" });
+    const deleteButton = screen.getByRole("button", { name: "作品を削除" });
+    expect(gameTitleChoice.closest("label")).not.toContainElement(editButton);
+    expect(gameTitleChoice.closest("label")).not.toContainElement(deleteButton);
+    await user.click(editButton);
+    expect(gameTitleChoice).toBeChecked();
     const nameInput = screen.getByDisplayValue("桃太郎電鉄2");
     await user.clear(nameInput);
     await user.type(nameInput, "桃太郎電鉄2 DX");
     await user.click(screen.getByRole("button", { name: "保存" }));
 
-    expect(await screen.findByRole("button", { name: /桃太郎電鉄2 DX/u })).toBeInTheDocument();
+    expect(await screen.findByRole("radio", { name: "桃太郎電鉄2 DX" })).toBeChecked();
   });
 
   it("creates and deletes member aliases", async () => {

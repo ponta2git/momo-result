@@ -51,10 +51,10 @@ function expectSingleCandidateScrollRegion(label: "開催" | "試合") {
   expect(dialog).not.toHaveClass("overflow-y-auto");
   expect(dialog.firstElementChild).toHaveClass("overflow-y-hidden");
   expect(dialog.firstElementChild).not.toHaveClass("overflow-y-auto");
-  expect(screen.getByRole("group", { name: `${label}候補` })).toHaveClass(
-    "overflow-y-auto",
-    "overscroll-contain",
-  );
+  const candidateGroup = screen.getByRole("group", { name: `${label}候補` });
+  const candidateList = candidateGroup.querySelector(":scope > div");
+  expect(candidateGroup).not.toHaveClass("overflow-y-auto");
+  expect(candidateList).toHaveClass("overflow-y-auto", "overscroll-contain");
 }
 
 describe("ExportPage", () => {
@@ -214,7 +214,7 @@ describe("ExportPage", () => {
     expectSingleCandidateScrollRegion("開催");
     expect(screen.getByText("1-20件 / 全21件")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "次の候補ページへ" }));
+    await user.click(screen.getByRole("button", { name: "次のページへ" }));
     const lastEvent = await screen.findByRole("radio", { name: /21試合/u });
     expect(requestedPages).toEqual([1, 2]);
     expect(screen.getByText("21-21件 / 全21件")).toBeInTheDocument();
@@ -285,7 +285,7 @@ describe("ExportPage", () => {
 
     await user.click(screen.getByRole("button", { name: "試合を変更" }));
     expectSingleCandidateScrollRegion("試合");
-    await user.click(screen.getByRole("button", { name: "次の候補ページへ" }));
+    await user.click(screen.getByRole("button", { name: "次のページへ" }));
     expect(await screen.findByRole("radio", { name: /第21試合/u })).toBeChecked();
     expect(requestedCursors).toEqual([null, "candidate-last"]);
   });

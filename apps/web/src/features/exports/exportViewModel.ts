@@ -1,5 +1,5 @@
 import type { NormalizedApiError } from "@/shared/api/problemDetails";
-import type { PaginationState } from "@/shared/ui/data/PaginationControls";
+import type { PaginationState } from "@/shared/lib/pagination";
 
 import type { ExportCandidate, ExportFormat, ExportScope } from "./exportTypes";
 import type { ExportUrlState } from "./exportUrlState";

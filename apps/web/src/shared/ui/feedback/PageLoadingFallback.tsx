@@ -1,19 +1,30 @@
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 import { pageFrameWidthClass } from "@/shared/ui/layout/PageFrame";
+import type { PageFrameWidth } from "@/shared/ui/layout/PageFrame";
 
-type RouteSuspenseFallbackProps = {
-  asMain?: boolean;
-  pathname?: string | undefined;
+export type PageLoadingKind =
+  | "catalog"
+  | "comparison"
+  | "detail"
+  | "generic"
+  | "list"
+  | "split"
+  | "workspace";
+
+export type PageLoadingFallbackProps = {
+  asMain?: boolean | undefined;
+  kind?: PageLoadingKind | undefined;
+  width?: PageFrameWidth | undefined;
 };
 
-/**
- * ルート単位の Suspense fallback。遷移先の画面骨格に近い skeleton を表示する。
- * `<Suspense fallback={<RouteSuspenseFallback />}>` で利用する。
- */
-export function RouteSuspenseFallback({ asMain = false, pathname }: RouteSuspenseFallbackProps) {
-  const kind = routeSkeletonKind(pathname ?? "");
-  const className = `mx-auto flex w-full ${routeSkeletonWidthClass(kind)} flex-col gap-4 px-4 py-8`;
-  const content = <RouteSkeleton kind={kind} />;
+/** Renders a route-agnostic structural loading region selected by the app composition. */
+export function PageLoadingFallback({
+  asMain = false,
+  kind = "generic",
+  width = "standard",
+}: PageLoadingFallbackProps) {
+  const className = `mx-auto flex w-full ${pageFrameWidthClass[width]} flex-col gap-4 px-4 py-8`;
+  const content = <PageLoadingSkeleton kind={kind} />;
 
   if (asMain) {
     return (
@@ -21,7 +32,7 @@ export function RouteSuspenseFallback({ asMain = false, pathname }: RouteSuspens
         aria-busy="true"
         aria-live="polite"
         className={className}
-        data-testid="route-suspense-fallback"
+        data-testid="page-loading-fallback"
         id="main-content"
       >
         {content}
@@ -34,14 +45,14 @@ export function RouteSuspenseFallback({ asMain = false, pathname }: RouteSuspens
       aria-busy="true"
       aria-live="polite"
       className={className}
-      data-testid="route-suspense-fallback"
+      data-testid="page-loading-fallback"
     >
       {content}
     </div>
   );
 }
 
-function RouteSkeleton({ kind }: { kind: RouteSkeletonKind }) {
+function PageLoadingSkeleton({ kind }: { kind: PageLoadingKind }) {
   if (kind === "list") {
     return (
       <>
@@ -54,7 +65,7 @@ function RouteSkeleton({ kind }: { kind: RouteSkeletonKind }) {
           <Skeleton className="h-24 rounded-[var(--radius-md)]" />
         </div>
         <Skeleton className="h-80 rounded-[var(--radius-md)]" />
-        <span className="sr-only">読み込んでいます…</span>
+        <LoadingLabel />
       </>
     );
   }
@@ -65,13 +76,12 @@ function RouteSkeleton({ kind }: { kind: RouteSkeletonKind }) {
         <HeaderSkeleton />
         <Skeleton className="h-24 rounded-[var(--radius-md)]" />
         <div className="grid gap-4 lg:grid-cols-4">
-          <Skeleton className="h-20 rounded-[var(--radius-md)]" />
-          <Skeleton className="h-20 rounded-[var(--radius-md)]" />
-          <Skeleton className="h-20 rounded-[var(--radius-md)]" />
-          <Skeleton className="h-20 rounded-[var(--radius-md)]" />
+          {Array.from({ length: 4 }, (_, index) => (
+            <Skeleton key={index} className="h-20 rounded-[var(--radius-md)]" />
+          ))}
         </div>
         <Skeleton className="h-[26rem] rounded-[var(--radius-md)]" />
-        <span className="sr-only">読み込んでいます…</span>
+        <LoadingLabel />
       </>
     );
   }
@@ -86,7 +96,7 @@ function RouteSkeleton({ kind }: { kind: RouteSkeletonKind }) {
           <Skeleton className="h-52 rounded-[var(--radius-md)]" />
         </div>
         <Skeleton className="h-72 rounded-[var(--radius-md)]" />
-        <span className="sr-only">読み込んでいます…</span>
+        <LoadingLabel />
       </>
     );
   }
@@ -98,10 +108,9 @@ function RouteSkeleton({ kind }: { kind: RouteSkeletonKind }) {
         <Skeleton className="h-28 rounded-[var(--radius-md)]" />
         <Skeleton className="h-12 rounded-[var(--radius-md)]" />
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <Skeleton className="h-24 rounded-[var(--radius-md)]" />
-          <Skeleton className="h-24 rounded-[var(--radius-md)]" />
-          <Skeleton className="h-24 rounded-[var(--radius-md)]" />
-          <Skeleton className="h-24 rounded-[var(--radius-md)]" />
+          {Array.from({ length: 4 }, (_, index) => (
+            <Skeleton key={index} className="h-24 rounded-[var(--radius-md)]" />
+          ))}
         </div>
         <Skeleton className="h-80 rounded-[var(--radius-md)]" />
         <span className="sr-only">比較画面を読み込んでいます…</span>
@@ -109,22 +118,22 @@ function RouteSkeleton({ kind }: { kind: RouteSkeletonKind }) {
     );
   }
 
-  if (kind === "masters") {
+  if (kind === "catalog") {
     return (
       <>
         <HeaderSkeleton />
         <Skeleton className="h-14 rounded-[var(--radius-md)]" />
         <div className="grid gap-4 xl:grid-cols-3">
-          <Skeleton className="h-[28rem] rounded-[var(--radius-md)]" />
-          <Skeleton className="h-[28rem] rounded-[var(--radius-md)]" />
-          <Skeleton className="h-[28rem] rounded-[var(--radius-md)]" />
+          {Array.from({ length: 3 }, (_, index) => (
+            <Skeleton key={index} className="h-[28rem] rounded-[var(--radius-md)]" />
+          ))}
         </div>
-        <span className="sr-only">読み込んでいます…</span>
+        <LoadingLabel />
       </>
     );
   }
 
-  if (kind === "export") {
+  if (kind === "split") {
     return (
       <>
         <HeaderSkeleton />
@@ -132,7 +141,7 @@ function RouteSkeleton({ kind }: { kind: RouteSkeletonKind }) {
           <Skeleton className="h-80 rounded-[var(--radius-md)]" />
           <Skeleton className="h-80 rounded-[var(--radius-md)]" />
         </div>
-        <span className="sr-only">読み込んでいます…</span>
+        <LoadingLabel />
       </>
     );
   }
@@ -142,7 +151,7 @@ function RouteSkeleton({ kind }: { kind: RouteSkeletonKind }) {
       <HeaderSkeleton />
       <Skeleton className="h-40 w-full rounded-[var(--radius-md)]" />
       <Skeleton className="h-32 w-full rounded-[var(--radius-md)]" />
-      <span className="sr-only">読み込んでいます…</span>
+      <LoadingLabel />
     </>
   );
 }
@@ -157,51 +166,6 @@ function HeaderSkeleton() {
   );
 }
 
-function routeSkeletonKind(pathname: string): RouteSkeletonKind {
-  if (pathname === "/matches" || pathname === "/held-events" || pathname === "/admin/accounts") {
-    return "list";
-  }
-  if (
-    pathname === "/matches/new" ||
-    pathname === "/ocr/new" ||
-    /^\/review\/[^/]+$/u.test(pathname) ||
-    /^\/matches\/[^/]+\/edit$/u.test(pathname)
-  ) {
-    return "workspace";
-  }
-  if (/^\/(?:matches|held-events)\/[^/]+$/u.test(pathname)) {
-    return "detail";
-  }
-  if (pathname === "/analytics/series" || pathname === "/admin/analysis") {
-    return "comparison";
-  }
-  if (pathname === "/admin/masters") {
-    return "masters";
-  }
-  if (pathname === "/exports") {
-    return "export";
-  }
-  return "generic";
-}
-
-type RouteSkeletonKind =
-  | "comparison"
-  | "detail"
-  | "export"
-  | "generic"
-  | "list"
-  | "masters"
-  | "workspace";
-
-function routeSkeletonWidthClass(kind: RouteSkeletonKind): string {
-  if (kind === "workspace") {
-    return pageFrameWidthClass.workspace;
-  }
-  if (kind === "comparison" || kind === "detail") {
-    return pageFrameWidthClass.wide;
-  }
-  if (kind === "export") {
-    return pageFrameWidthClass.narrow;
-  }
-  return pageFrameWidthClass.standard;
+function LoadingLabel() {
+  return <span className="sr-only">読み込んでいます…</span>;
 }

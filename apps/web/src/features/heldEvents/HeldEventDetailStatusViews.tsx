@@ -1,8 +1,4 @@
-import { ArrowLeft } from "lucide-react";
-
-import { Button } from "@/shared/ui/actions/Button";
-import { LinkButton } from "@/shared/ui/actions/LinkButton";
-import { Notice } from "@/shared/ui/feedback/Notice";
+import { ResourcePageState } from "@/shared/ui/feedback/ResourcePageState";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 import { Card } from "@/shared/ui/layout/Card";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
@@ -58,38 +54,24 @@ export function HeldEventDetailUnavailable({
   onRetry?: (() => void) | undefined;
   retrying?: boolean;
 }) {
-  return (
-    <PageFrame className="gap-4" width="wide">
-      <Notice
-        tone={notFound ? "warning" : "danger"}
-        title={notFound ? "開催履歴が見つかりません" : "開催詳細を読み込めませんでした"}
-      >
-        <p>
-          {notFound
-            ? "削除されたか、URLが正しくない可能性があります。"
-            : "通信状態を確認して、もう一度お試しください。"}
-        </p>
-        {!notFound && onRetry ? (
-          <div className="mt-3">
-            <Button
-              pending={retrying}
-              pendingLabel="再読み込み中"
-              size="sm"
-              variant="secondary"
-              onClick={onRetry}
-            >
-              開催詳細を再読み込み
-            </Button>
-          </div>
-        ) : null}
-      </Notice>
-      <LinkButton
-        icon={<ArrowLeft aria-hidden="true" className="size-4" />}
-        to={backHref}
-        variant="secondary"
-      >
-        開催履歴へ戻る
-      </LinkButton>
-    </PageFrame>
-  );
+  return notFound ? (
+    <ResourcePageState
+      backHref={backHref}
+      backLabel="開催履歴へ戻る"
+      description="削除されたか、URLが正しくない可能性があります。"
+      kind="not-found"
+      title="開催履歴が見つかりません"
+    />
+  ) : onRetry ? (
+    <ResourcePageState
+      backHref={backHref}
+      backLabel="開催履歴へ戻る"
+      description="通信状態を確認して、もう一度お試しください。"
+      kind="error"
+      retryLabel="開催詳細を再読み込み"
+      retrying={retrying}
+      title="開催詳細を読み込めませんでした"
+      onRetry={onRetry}
+    />
+  ) : null;
 }

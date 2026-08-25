@@ -1,47 +1,44 @@
-import { AlertTriangle, CircleCheck, LoaderCircle, PencilLine } from "lucide-react";
+import { AlertTriangle, CircleCheck, PencilLine } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { draftStatusLabels } from "@/shared/domain/draftStatus";
 import type { DraftStatusOrUnknown } from "@/shared/domain/draftStatus";
-import { cn } from "@/shared/ui/cn";
+import { StatusBadge } from "@/shared/ui/status/StatusBadge";
+import type { StatusBadgeTone } from "@/shared/ui/status/StatusBadge";
 
 export type MatchStatus = DraftStatusOrUnknown;
 
 type StatusViewModel = {
+  busy?: boolean;
   icon: ReactNode;
-  toneClass: string;
+  tone: StatusBadgeTone;
 };
 
 const statusViewModel: Record<MatchStatus, StatusViewModel> = {
   confirmed: {
     icon: <CircleCheck className="size-4" />,
-    toneClass:
-      "border-[var(--color-success)]/60 bg-[var(--color-success)]/12 text-[var(--color-text-primary)]",
+    tone: "success",
   },
   draft_ready: {
     icon: <PencilLine className="size-4" />,
-    toneClass:
-      "border-[var(--color-warning)]/80 bg-[var(--color-warning)]/20 text-[var(--color-text-primary)]",
+    tone: "warning",
   },
   needs_review: {
     icon: <AlertTriangle className="size-4" />,
-    toneClass:
-      "border-[var(--color-review)]/70 bg-[var(--color-review)]/14 text-[var(--color-text-primary)]",
+    tone: "attention",
   },
   ocr_failed: {
     icon: <AlertTriangle className="size-4" />,
-    toneClass:
-      "border-[var(--color-danger)]/55 bg-[var(--color-danger)]/10 text-[var(--color-text-primary)]",
+    tone: "danger",
   },
   ocr_running: {
-    icon: <LoaderCircle className="size-4 animate-spin motion-reduce:animate-none" />,
-    toneClass:
-      "border-[var(--color-action)]/60 bg-[var(--color-action)]/12 text-[var(--color-text-primary)]",
+    busy: true,
+    icon: null,
+    tone: "info",
   },
   unknown: {
     icon: <AlertTriangle className="size-4" />,
-    toneClass:
-      "border-[var(--color-warning)]/80 bg-[var(--color-warning)]/20 text-[var(--color-text-primary)]",
+    tone: "warning",
   },
 };
 
@@ -57,20 +54,14 @@ export function StatusPill({ className, hideIcon = false, label, note, status }:
   const model = statusViewModel[status];
 
   return (
-    <span
-      className={cn(
-        "inline-flex min-h-8 shrink-0 items-center gap-2 whitespace-nowrap rounded-[var(--radius-xs)] border px-2 py-1 text-xs font-semibold leading-5",
-        model.toneClass,
-        className,
-      )}
-    >
-      {hideIcon ? null : (
-        <span aria-hidden="true" className="shrink-0">
-          {model.icon}
-        </span>
-      )}
-      <span>{label ?? draftStatusLabels[status]}</span>
-      {note ? <span className="text-[var(--color-text-secondary)]">{note}</span> : null}
-    </span>
+    <StatusBadge
+      busy={model.busy}
+      className={className}
+      hideIcon={hideIcon}
+      icon={model.icon}
+      label={label ?? draftStatusLabels[status]}
+      note={note}
+      tone={model.tone}
+    />
   );
 }

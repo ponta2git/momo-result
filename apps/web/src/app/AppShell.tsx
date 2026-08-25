@@ -4,9 +4,9 @@ import type { FocusEvent, MouseEvent, PointerEvent } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 
 import { preloadRouteForPath } from "@/app/routeModules";
+import { RouteSuspenseFallback } from "@/app/RouteSuspenseFallback";
 import { useAuth } from "@/shared/auth/useAuth";
 import { RouteErrorBoundary } from "@/shared/ui/feedback/RouteErrorBoundary";
-import { RouteSuspenseFallback } from "@/shared/ui/feedback/RouteSuspenseFallback";
 import { ToastHost } from "@/shared/ui/feedback/ToastHost";
 import { GlobalNav } from "@/shared/ui/layout/GlobalNav";
 import { MotionProvider } from "@/shared/ui/motion/MotionProvider";

@@ -145,7 +145,7 @@ export function SeriesComparisonPage() {
                 busyLabel="比較条件を更新中"
                 contentClassName="grid gap-4"
                 fallback={<ComparisonSkeleton />}
-                preserveContent
+                strategy="preserve-inert"
               >
                 {resource.data.scope.matchCount === 0 ? (
                   <EmptyState

@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 
-import { RouteSuspenseFallback } from "@/shared/ui/feedback/RouteSuspenseFallback";
+import { RouteSuspenseFallback } from "@/app/RouteSuspenseFallback";
 
 export function App() {
   const location = useLocation();

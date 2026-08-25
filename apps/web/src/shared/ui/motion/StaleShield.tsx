@@ -12,9 +12,13 @@ type StaleShieldProps = {
   className?: string | undefined;
   contentClassName?: string | undefined;
   fallback: ReactNode;
-  preserveContent?: boolean | undefined;
+  strategy?: "preserve-inert" | "preserve-interactive" | "replace" | undefined;
 };
 
+/**
+ * Distinguishes replacement loading from preserved content. Preserved content is only
+ * inert when the caller knows the rendered scope no longer matches the requested scope.
+ */
 export function StaleShield({
   active,
   busyLabel = "表示を更新中",
@@ -22,9 +26,10 @@ export function StaleShield({
   className,
   contentClassName,
   fallback,
-  preserveContent = false,
+  strategy = "replace",
 }: StaleShieldProps) {
-  if (preserveContent) {
+  if (strategy !== "replace") {
+    const interactionBlocked = strategy === "preserve-inert" && active;
     return (
       <div
         aria-busy={active || undefined}
@@ -34,7 +39,7 @@ export function StaleShield({
         <motion.div
           animate={{ opacity: active ? 0.62 : 1 }}
           className={cn("min-w-0", contentClassName)}
-          inert={active || undefined}
+          inert={interactionBlocked || undefined}
           transition={momoPanelTransition}
         >
           {children}

@@ -1,0 +1,34 @@
+import { render, screen } from "@testing-library/react";
+import { describe, expect, it } from "vitest";
+
+import {
+  RouteSuspenseFallback,
+  routeLoadingPresentation,
+} from "@/app/RouteSuspenseFallback";
+
+describe("RouteSuspenseFallback", () => {
+  it("can provide the root main landmark", () => {
+    render(<RouteSuspenseFallback asMain pathname="/" />);
+
+    const main = screen.getByRole("main");
+    expect(main).toHaveAttribute("aria-busy", "true");
+    expect(main).toHaveAttribute("id", "main-content");
+  });
+
+  it.each([
+    ["/matches/new", { kind: "workspace", width: "workspace" }],
+    ["/held-events/event-1", { kind: "detail", width: "wide" }],
+    ["/analytics/series", { kind: "comparison", width: "wide" }],
+    ["/admin/analysis", { kind: "comparison", width: "wide" }],
+    ["/exports", { kind: "split", width: "narrow" }],
+    ["/admin/masters", { kind: "catalog", width: "standard" }],
+  ] as const)("maps %s in the app layer", (pathname, presentation) => {
+    expect(routeLoadingPresentation(pathname)).toEqual(presentation);
+  });
+
+  it("renders the selected workspace width", () => {
+    render(<RouteSuspenseFallback pathname="/matches/new" />);
+
+    expect(screen.getByTestId("page-loading-fallback")).toHaveClass("max-w-[90rem]");
+  });
+});

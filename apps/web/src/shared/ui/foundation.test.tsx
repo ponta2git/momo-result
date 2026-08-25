@@ -10,7 +10,6 @@ import { Disclosure } from "@/shared/ui/data/Collapsible";
 import { PaginationControls } from "@/shared/ui/data/PaginationControls";
 import { Dialog, AlertDialog } from "@/shared/ui/feedback/Dialog";
 import { Notice } from "@/shared/ui/feedback/Notice";
-import { RouteSuspenseFallback } from "@/shared/ui/feedback/RouteSuspenseFallback";
 import { SegmentedControl } from "@/shared/ui/forms/SegmentedControl";
 import { SelectField } from "@/shared/ui/forms/SelectField";
 import { TextField } from "@/shared/ui/forms/TextField";
@@ -318,32 +317,6 @@ describe("ui foundation", () => {
     );
   });
 
-  it("RouteSuspenseFallback can provide the root main landmark", () => {
-    render(<RouteSuspenseFallback asMain />);
-
-    const main = screen.getByRole("main");
-    expect(main).toHaveAttribute("aria-busy", "true");
-    expect(main).toHaveAttribute("id", "main-content");
-  });
-
-  it("RouteSuspenseFallback matches workspace page width", () => {
-    render(<RouteSuspenseFallback pathname="/matches/new" />);
-
-    expect(screen.getByTestId("route-suspense-fallback")).toHaveClass("max-w-[90rem]");
-  });
-
-  it.each([
-    ["/held-events/event-1", "max-w-[82rem]"],
-    ["/analytics/series", "max-w-[82rem]"],
-    ["/admin/analysis", "max-w-[82rem]"],
-    ["/exports", "max-w-[48rem]"],
-    ["/admin/masters", "max-w-[75rem]"],
-  ])("RouteSuspenseFallback matches %s page width", (pathname, widthClass) => {
-    render(<RouteSuspenseFallback pathname={pathname} />);
-
-    expect(screen.getByTestId("route-suspense-fallback")).toHaveClass(widthClass);
-  });
-
   it("StaleShield removes shielded content from the readable tree", () => {
     render(
       <StaleShield active fallback={<div>読み込み中</div>}>
@@ -359,7 +332,7 @@ describe("ui foundation", () => {
     render(
       <StaleShield
         active
-        preserveContent
+        strategy="preserve-inert"
         busyLabel="比較条件を更新中"
         fallback={<div>読み込み中</div>}
       >

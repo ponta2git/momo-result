@@ -77,7 +77,7 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
     await page.getByRole("button", { exact: true, name: "開催を作成" }).click();
     const createDialog = page.getByRole("dialog", { name: "新しい開催を作成" });
     await expect(createDialog).toBeVisible();
-    await createDialog.getByLabel("開催日時").fill(uniqueLocalDateTime());
+    await createDialog.getByLabel("開催日時").fill(uniqueLocalDateTime(test.info().retry));
     await createDialog.getByRole("button", { exact: true, name: "開催を作成" }).click();
 
     const response = await createResponse;
@@ -563,7 +563,9 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
       rankSignalDialog.getByRole("list", { name: "物件収益の別開催での支持" }),
     ).toBeVisible();
     await rankSignalDialog.getByRole("button", { name: "別開催テストと採用基準" }).click();
-    await expect(rankSignalDialog.getByText("4組で候補を作る")).toBeVisible();
+    await expect(
+      rankSignalDialog.getByRole("listitem").filter({ hasText: "候補を作る" }),
+    ).toContainText("4組を使用");
     await rankSignalDialog.getByRole("button", { name: "ダイアログを閉じる" }).click();
 
     await page.setViewportSize({ height: 900, width: 1440 });
@@ -824,9 +826,12 @@ test("completes the app smoke workflow with isolated scoped data", async ({ page
   });
 });
 
-function uniqueLocalDateTime(): string {
+function uniqueLocalDateTime(retry: number): string {
   const numericRunId = Number.parseInt(masterIdSuffix.slice(-8), 16);
-  const minutes = Number.isFinite(numericRunId) ? numericRunId % (20 * 24 * 60) : 0;
+  const retryWindowMinutes = 20 * 24 * 60;
+  const minutes =
+    (Number.isFinite(numericRunId) ? numericRunId % retryWindowMinutes : 0) +
+    retry * retryWindowMinutes;
   const value = new Date(Date.UTC(2026, 4, 1, 0, minutes));
   return `${value.getUTCFullYear().toString().padStart(4, "0")}-${(value.getUTCMonth() + 1)
     .toString()

@@ -170,6 +170,13 @@ MVPのUIでは、画像を3種類の分類トレイへ配置して読み取り�
 - OCRが失敗した場合は失敗理由を表示し、空の手入力下書きとして続行できる導線を残す。
 - OCR結果の信頼度が低そうな項目や警告は、確認画面で強調表示する。
 
+### 6.3 UIフロー契約
+
+- OCR取り込みは記録先、camera、3分類トレイ、送信の順で扱い、cameraを主入力、ファイル選択をfallbackとする。active target、次の空トレイ、置換対象を常に明示し、empty / selected / working のプレビューは同じ16:9領域を保つ。
+- 開始確認時に設定と選択画像をsnapshotする。uploadとOCR job登録中は重複送信を防ぎ、部分handoffでは自動遷移せず、利用者が明示的に次へ進めるようにする。
+- OCR確認は記録先・試合文脈、全体通知、4人のreviewとsource、確定操作の順とする。evidenceは表示行ではなくsemantic fieldとplayerへ結び付け、cell stateは決定的な優先順を持たせる。wideではledger、narrowではplayer単位のaccordionとし、未解決項目の確認はsoft gateにする。
+- guided review は未解決数、active field、evidence、source kind、confidence、前後移動、明示acknowledgeを示す。source imageの自動追従は明示操作で停止・再開でき、未保存値とacknowledgementはtab単位で復旧し、dirty workの破棄前に確認する。
+
 ---
 
 ## 7. 結果記録
@@ -328,6 +335,12 @@ CSV/TSVは、1行を1プレイヤーの試合結果明細とする。
 | スリの銀次 | 桃鉄事件簿の回数 |
 
 `シーズンNo.` は選択範囲内だけでなく該当シーズン全体での連番とする。`対戦No.` は選択範囲内だけでなく該当作品全体での通算対戦番号とする。
+
+### 9.4 UIフロー契約
+
+- 出力画面はscope、必要なtarget、format、生成summary、downloadの順で扱い、action直前に選択targetとformatを明示する。short listは既存control、long listは選択dialogとpaginationを使い、pageをまたいでもselectionを保持する。
+- confirmed matches only、1 player per row、金額単位などの不変条件はaction付近の1か所へ集約し、button labelはscopeとformatを含める。
+- loading、refreshing、empty、invalid URL、progress、success、timeout、failureは所有するcontrolの近くへ置き、local retryまたはresetを用意する。
 
 ---
 

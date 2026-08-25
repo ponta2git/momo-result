@@ -72,6 +72,14 @@ endpoint path、DTO field、component構成、query cache key、閾値の配置�
 - highlightは短く遊びを入れてよいが、対象件数、根拠、同値を示し、個人攻撃や能力断定をしない。
 - 空状態、help、dialog、graph、table、responsiveの共通要件は `docs/ui-rule.md` に従う。
 
+### 4.1 UI構造契約
+
+- 「次戦に備える」「分析する」の目的を分け、共通topicの開示、4人のprimary hypothesis、player内の補助開示をこの順で扱う。根拠やreliability helpは比較の高さを変えないdialogへ置く。
+- pale surfaceはscope、selection、primary result、page-local navigation、label付きheader、actionable disclosure、primary hypothesisなどreading pathのanchorに限定し、意味を持つfillには非色labelまたはmarkerを併用する。
+- chart / table 内だけに必要な横スクロールを閉じ込め、legendはplot外でwrapし、axis名とtick labelをplot境界内に収める。mobileのdialogは本文に1つの縦scroll領域を持つ。
+- parts-of-a-wholeは1本の100% compositionと値一覧で示し、単一候補は確率100%ではなく「候補はこの1件」と表現する。
+- 選択試合のresult ledgerを分析目的より前に共有し、根拠試合と比較をURL stateで往復できるようにする。markerは試合粒度で一意に対応できる場合だけ表示し、tab切替後もfocusを保持する。
+
 ## 5. Metric Semantics
 
 単純なcount、sum、max、min、average、medianと表示用projectionは実装・schemaを正本とする。以下は誤解や実装差が起きやすいため、要求として意味を固定する。

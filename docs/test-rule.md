@@ -50,6 +50,12 @@
 - retry 後も test-owned ID で対象 resource を特定し、前 attempt の data を成功条件にしない。
 - UI / E2E 変更は Playwright で PC / mobile の主要状態を確認する。
 
+### UI Conformance
+
+- UI checkerはraw palette、undefined token、arbitrary spacing、small hit target、motion、reduced-motionを決定論的に検査する。視覚レビューでは階層、読み幅、関係的余白、目的・現在地・主要操作の発見可能性を確認する。
+- 主要flowは320 / 375 / 414 / 768pxとdesktopの代表viewportで、意図しない横scroll、safe area、labelの崩れ、dialog / disclosureのfocus復帰と位置変化を確認する。
+- component / E2Eではkeyboard、accessible name、status announcement、local error、pending中の重複操作を実操作で確認する。Trunk Test / cognitive walkthroughはscreenshotではなく、目的・現在地・次操作を説明できるかをoracleにする。
+
 ## 4. API Rules
 
 - endpoint は wire validation、auth / CSRF、status / Problem Details、usecase 接続を検証する。

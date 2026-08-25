@@ -12,9 +12,9 @@
 | 業務要件 / CSV / TSV | `docs/requirements/base.md` | — | 用語・状態遷移は `docs/domain-rule.md` | — | 対象実装の規約 |
 | 技術構成 / 非機能 | `docs/requirements/system-design.md` | — | 実装境界は `docs/architecture.md`、公開運用原則は `docs/ops/README.md` | 対象の設定・runtime定義 | `docs/test-rule.md`, `docs/dev-rule.md` |
 | web | `docs/architecture.md` の Web | `docs/test-rule.md`, `docs/dev-rule.md` | UIは `docs/ui-rule.md`、API境界は `docs/architecture.md` の API | `apps/web/src/`, `apps/web/scripts/` | `docs/test-rule.md` の Web 規則 |
-| Web UI / UX / デザインシステム | `docs/requirements/design-system.md` | `docs/ui-rule.md`, `docs/test-rule.md`, `docs/dev-rule.md` | 対象画面の要求、Web構成は architecture | `apps/web/src/styles.css`, `shared/ui`, UI checker | UI規約の検証章、Web test / Playwright |
-| UI文字列 / UX Writing / 日本語表記 | `docs/requirements/writing-guidelines.md` | 対象画面の要求正本 | UI実装は `docs/ui-rule.md`、用語は `docs/domain-rule.md` | 対象UIと writing test | `docs/test-rule.md` |
-| 製品横断の Product Experience / IA | `docs/requirements/product-experience.md` | 対象画面の要求正本 | design system、`docs/ui-rule.md`、`docs/domain-rule.md`、該当カードの lessons | 対象route / component | `docs/test-rule.md` |
+| Web UI / UX / デザインシステム | `docs/ui-rule.md` | `docs/test-rule.md`, `docs/dev-rule.md` | 対象画面の要求、Web構成は architecture、用語は domain | `apps/web/src/styles.css`, `apps/web/src/shared/ui/`, UI checker、対象component | `docs/ui-rule.md` の Verification、`docs/test-rule.md` の UI Conformance / Web test |
+| UI文字列 / UX Writing / 日本語表記 | `docs/ui-rule.md` の Product Direction / Meaning と Orientation / Visual Hierarchy | 対象画面の要求正本 | 用語は `docs/domain-rule.md` | 対象UIと formatter / ViewModel | `docs/test-rule.md` |
+| 製品横断の Product Experience / IA | `docs/ui-rule.md` の Product Direction / Meaning と Navigation / Finite Task Loop | 対象画面の要求正本 | 用語は `docs/domain-rule.md`、該当カードは lessons | 対象route / component | `docs/test-rule.md` |
 | API / usecase | `docs/architecture.md` の API | `docs/test-rule.md`, `docs/dev-rule.md` | 業務意味は `docs/domain-rule.md`、DBは `docs/db-rule.md`、OCR queueは Redis契約、分析はbatch要求 | Tapir endpoint、`apps/api/openapi.yaml`、API source | API規則と変更gate |
 | DB / repository | `docs/db-rule.md` | `docs/test-rule.md`, `docs/dev-rule.md` | 業務意味は domain、OCR queueは Redis契約、分析はbatch要求 | `../momo-db` migration、repository、`DbContractSpec` | DB-backed API / worker gate |
 | Redis / OCR queue | `docs/redis-streams-ocr-contract.md` | OCR JSON Schema、`docs/db-rule.md`, `docs/test-rule.md`, `docs/dev-rule.md` | OCR role境界は architecture | `docs/schemas/ocr-*.schema.json`、Scala/Rust contract test | Redis wire / control-plane gate |

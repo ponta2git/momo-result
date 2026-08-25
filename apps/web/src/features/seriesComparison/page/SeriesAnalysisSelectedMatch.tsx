@@ -6,6 +6,7 @@ import {
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
 import { SeriesAnalysisMatchLink } from "@/features/seriesComparison/navigation/SeriesAnalysisMatchLink";
 import type { SeriesAnalysisMatchContextV2 } from "@/shared/api/seriesAnalysis";
+import { formatSeriesMatchIndex } from "@/shared/domain/matchLabels";
 import { matchPerformanceContextFromArtifact } from "@/shared/domain/matchPerformanceContext";
 import { Button } from "@/shared/ui/actions/Button";
 import { MatchResultLedger } from "@/shared/ui/data/MatchResultLedger";
@@ -36,10 +37,11 @@ export function SeriesAnalysisSelectedMatch({
           <p className="text-[11px] font-semibold text-[var(--color-action)]">選択中の試合</p>
           <h2 className="mt-0.5 text-base font-semibold text-[var(--color-text-primary)]">
             <SeriesAnalysisMatchLink
-              ariaLabel={`第${context.match.matchIndex}戦の試合結果を見る`}
+              ariaLabel={`${formatSeriesMatchIndex(context.match.matchIndex)}の試合結果を見る`}
               matchId={context.matchId}
             >
-              第{context.match.matchIndex}戦・{formatDateTime(context.match.playedAt)}
+              {formatSeriesMatchIndex(context.match.matchIndex)}・
+              {formatDateTime(context.match.playedAt)}
             </SeriesAnalysisMatchLink>
           </h2>
           <p className="mt-1 text-xs leading-5 text-[var(--color-text-secondary)]">

@@ -3,14 +3,17 @@ import { useFormStatus } from "react-dom";
 
 import type { MatchFormValues } from "@/features/matches/workspace/matchFormTypes";
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
-import { memberDisplayName } from "@/shared/domain/members";
+import { formatMatchNoInEvent } from "@/shared/domain/matchLabels";
+import { memberDisplayName, orderFixedMembers } from "@/shared/domain/members";
 import { formatDateTimeLong } from "@/shared/lib/dateTime";
 import { Button } from "@/shared/ui/actions/Button";
-import { Dialog } from "@/shared/ui/feedback/Dialog";
+import { FactList } from "@/shared/ui/data/FactList";
+import { Dialog, dialogFooterClassName } from "@/shared/ui/feedback/Dialog";
 import { RankBadge } from "@/shared/ui/rank/RankBadge";
 
 type MatchConfirmDialogProps = {
   actions: MatchConfirmActions;
+  pending?: boolean | undefined;
   reviewSummary: MatchConfirmReviewSummary;
   summary: MatchConfirmSummaryProps;
   validationMessage?: string | undefined;
@@ -38,11 +41,11 @@ type MatchConfirmReviewSummary = {
 function ConfirmActionButtons({ onCancel }: { onCancel: () => void }) {
   const { pending } = useFormStatus();
   return (
-    <div className="mt-6 flex justify-end gap-2">
+    <div className={`mt-6 ${dialogFooterClassName}`}>
       <Button variant="secondary" disabled={pending} onClick={onCancel} type="button">
         戻って修正
       </Button>
-      <Button disabled={pending} pending={pending} pendingLabel="確定中…" type="submit">
+      <Button disabled={pending} pendingLabel="確定中…" type="submit">
         確定する
       </Button>
     </div>
@@ -57,33 +60,30 @@ function MatchConfirmSummary({
   values,
 }: MatchConfirmSummaryProps & { values: MatchFormValues }) {
   return (
-    <dl className="grid gap-2 text-sm text-[var(--color-text-primary)]">
-      <div className="flex justify-between gap-4">
-        <dt className="text-[var(--color-text-secondary)]">開催履歴</dt>
-        <dd>{heldEvent ? formatDateTimeLong(heldEvent.heldAt) : "未選択"}</dd>
-      </div>
-      <div className="flex justify-between gap-4">
-        <dt className="text-[var(--color-text-secondary)]">試合番号</dt>
-        <dd>第{values.matchNoInEvent}試合</dd>
-      </div>
-      <div className="flex justify-between gap-4">
-        <dt className="text-[var(--color-text-secondary)]">作品</dt>
-        <dd>{gameTitleName ?? "未選択"}</dd>
-      </div>
-      <div className="flex justify-between gap-4">
-        <dt className="text-[var(--color-text-secondary)]">シーズン</dt>
-        <dd>{seasonName ?? "未選択"}</dd>
-      </div>
-      <div className="flex justify-between gap-4">
-        <dt className="text-[var(--color-text-secondary)]">マップ</dt>
-        <dd>{mapName ?? "未選択"}</dd>
-      </div>
-    </dl>
+    <FactList
+      ariaLabel="確定する試合の開催条件"
+      items={[
+        {
+          id: "held-event",
+          label: "開催履歴",
+          value: heldEvent ? formatDateTimeLong(heldEvent.heldAt) : "未選択",
+        },
+        {
+          id: "match-no",
+          label: "試合番号",
+          value: formatMatchNoInEvent(values.matchNoInEvent),
+        },
+        { id: "game-title", label: "作品", value: gameTitleName ?? "未選択" },
+        { id: "season", label: "シーズン", value: seasonName ?? "未選択" },
+        { id: "map", label: "マップ", value: mapName ?? "未選択" },
+      ]}
+      layout="inline"
+    />
   );
 }
 
 function PlayerLedger({ values }: { values: MatchFormValues }) {
-  const playersByRank = [...values.players].toSorted((left, right) => left.rank - right.rank);
+  const orderedPlayers = orderFixedMembers(values.players);
   return (
     <div className="mt-4 overflow-x-auto rounded-[var(--radius-sm)] border border-[var(--color-border)]">
       <table className="w-full min-w-[29rem] text-left text-sm">
@@ -97,7 +97,7 @@ function PlayerLedger({ values }: { values: MatchFormValues }) {
           </tr>
         </thead>
         <tbody className="divide-y divide-[var(--color-border)]">
-          {playersByRank.map((player) => (
+          {orderedPlayers.map((player) => (
             <tr key={player.memberId}>
               <td className="px-3 py-2">
                 <RankBadge rank={player.rank} />
@@ -158,6 +158,7 @@ function OcrReviewSummary({
 
 export function MatchConfirmDialog({
   actions,
+  pending = false,
   reviewSummary,
   summary,
   validationMessage,
@@ -165,6 +166,7 @@ export function MatchConfirmDialog({
 }: MatchConfirmDialogProps) {
   return (
     <Dialog
+      busy={pending}
       open
       description="確定前の確認"
       title="この内容で確定しますか？"

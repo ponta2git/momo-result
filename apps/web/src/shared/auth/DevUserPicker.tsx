@@ -1,7 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 
 import { useDevUser } from "@/shared/auth/useDevUser";
-import { fixedMembers } from "@/shared/domain/members";
+import { canonicalResultMembers } from "@/shared/domain/members";
 import { cn } from "@/shared/ui/cn";
 import { SelectField } from "@/shared/ui/forms/SelectField";
 
@@ -18,7 +18,7 @@ export function DevUserPicker({ embedded = false, force = false }: DevUserPicker
     return null;
   }
 
-  const devAccounts = fixedMembers.map((member) => ({
+  const devAccounts = canonicalResultMembers.map((member) => ({
     accountId: `account_${member.memberId.replace(/^member_/u, "")}`,
     displayName: member.displayName,
   }));

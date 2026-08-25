@@ -53,7 +53,7 @@ export function useMatchDetailPageController() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const handledExpiredArtifacts = useRef(new Set<string>());
   const [sort, setSort] = useState<MatchDetailSortState>({
-    key: "playOrder",
+    key: "member",
     direction: "asc",
   });
 

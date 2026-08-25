@@ -16,6 +16,7 @@ import type { OcrSubmissionPlan } from "@/features/ocrCapture/useOcrStartFlow";
 import { parseLayoutFamily } from "@/shared/api/enums";
 import type { SlotKind } from "@/shared/api/enums";
 import type { NormalizedApiError } from "@/shared/api/problemDetails";
+import { formatMatchNoInEvent } from "@/shared/domain/matchLabels";
 import { memberDisplayName } from "@/shared/domain/members";
 import { formatDateTimeLong } from "@/shared/lib/dateTime";
 import { trimSearchParam } from "@/shared/lib/searchParams";
@@ -136,7 +137,7 @@ export function useOcrCapturePageController() {
           setupOptions.mapMasters.find((item) => item.id === setup.mapMasterId)?.name ??
           setup.mapMasterId,
         owner: memberDisplayName(setup.ownerMemberId),
-        matchNo: setup.matchNoInEvent ? `第${setup.matchNoInEvent}試合` : "確定時に設定",
+        matchNo: formatMatchNoInEvent(setup.matchNoInEvent, "確定時に設定"),
         season:
           setupOptions.seasonMasters.find((item) => item.id === setup.seasonMasterId)?.name ??
           setup.seasonMasterId,

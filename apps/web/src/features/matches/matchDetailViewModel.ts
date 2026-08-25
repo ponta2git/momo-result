@@ -2,7 +2,7 @@ import type { MatchDetailResponse } from "@/shared/api/matches";
 import type { SeriesAnalysisMatchContextV2 } from "@/shared/api/seriesAnalysis";
 import { matchFeatureDefinition } from "@/shared/domain/matchFeatures";
 import type { MatchFeatureDefinition, MatchFeatureSource } from "@/shared/domain/matchFeatures";
-import { memberDisplayName } from "@/shared/domain/members";
+import { memberDisplayName, orderFixedMembers } from "@/shared/domain/members";
 import { formatDateOnly, formatDateTimeLong } from "@/shared/lib/dateTime";
 export { seriesComparisonHrefForMatch } from "@/shared/navigation/matchLinks";
 
@@ -65,6 +65,11 @@ export function sortMatchDetailPlayers(
   players: MatchDetailPlayerResult[],
   sort: MatchDetailSortState,
 ): MatchDetailPlayerResult[] {
+  if (sort.key === "member") {
+    const ordered = orderFixedMembers(players);
+    return sort.direction === "asc" ? ordered : ordered.toReversed();
+  }
+
   return players.toSorted((left, right) => {
     const leftValue = sortValue(left, sort.key);
     const rightValue = sortValue(right, sort.key);

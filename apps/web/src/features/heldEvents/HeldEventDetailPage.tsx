@@ -10,6 +10,7 @@ import { HeldEventMatchTimeline } from "@/features/heldEvents/HeldEventMatchTime
 import { heldEventOcrCaptureHref } from "@/features/heldEvents/heldEventNavigation";
 import { HeldEventPlayerRecap } from "@/features/heldEvents/HeldEventPlayerRecap";
 import { useHeldEventDetailPageController } from "@/features/heldEvents/useHeldEventDetailPageController";
+import { formatMatchNoInEvent } from "@/shared/domain/matchLabels";
 import { withReturnTo } from "@/shared/navigation/returnTo";
 import { Button } from "@/shared/ui/actions/Button";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
@@ -78,7 +79,7 @@ function HeldEventDetailReadyContent({
       <PageHeader
         eyebrow="開催記録"
         title={formatHeldEventDateTime(detail.heldAt)}
-        description={`確定 ${detail.matchCount}試合・未完了 ${detail.draftCount}件。次は第${detail.nextMatchNo}試合です。`}
+        description={`確定 ${detail.matchCount}試合・未完了 ${detail.draftCount}件。次は${formatMatchNoInEvent(detail.nextMatchNo)}です。`}
         actions={
           <>
             <Button
@@ -121,7 +122,9 @@ function HeldEventDetailReadyContent({
           </div>
           <div>
             <dt className="momo-label text-[var(--color-text-secondary)]">次の番号</dt>
-            <dd className="mt-1 text-xl font-semibold tabular-nums">第{detail.nextMatchNo}試合</dd>
+            <dd className="mt-1 text-xl font-semibold tabular-nums">
+              {formatMatchNoInEvent(detail.nextMatchNo)}
+            </dd>
           </div>
         </dl>
         <nav aria-label="この開催の関連操作" className="flex shrink-0 flex-wrap gap-2">

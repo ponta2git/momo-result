@@ -8,6 +8,7 @@ import {
 import type { HeldEventMasterNames } from "@/features/heldEvents/heldEventDetailViewModel";
 import type { HeldEventDraftResponse } from "@/shared/api/heldEvents";
 import { asDraftStatusOrUnknown, reviewStatusLabel } from "@/shared/domain/draftStatus";
+import { formatMatchNoInEvent } from "@/shared/domain/matchLabels";
 import { withReturnTo } from "@/shared/navigation/returnTo";
 import { Button } from "@/shared/ui/actions/Button";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
@@ -56,7 +57,7 @@ export function HeldEventDraftsSection({
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
                   <p className="font-semibold tabular-nums">
-                    {draft.matchNoInEvent ? `第${draft.matchNoInEvent}試合` : "試合番号未設定"}
+                    {formatMatchNoInEvent(draft.matchNoInEvent)}
                   </p>
                   <StatusPill
                     label={reviewStatusLabel(draft.status)}

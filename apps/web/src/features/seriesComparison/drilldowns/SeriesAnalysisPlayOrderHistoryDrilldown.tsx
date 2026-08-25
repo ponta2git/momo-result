@@ -13,11 +13,12 @@ import {
   SeriesAnalysisQualityAdvisory,
 } from "@/features/seriesComparison/SeriesAnalysisQualityAdvisory";
 import type { SeriesAnalysisDrilldownV3 } from "@/shared/api/seriesAnalysis";
+import { formatMatchNoInEvent, formatSeriesMatchIndex } from "@/shared/domain/matchLabels";
+import { FactList } from "@/shared/ui/data/FactList";
 import { DataVizLineChart } from "@/shared/ui/dataViz/LineChart";
 import { RankBadge } from "@/shared/ui/rank/RankBadge";
 
 import { ChangeBadge, formatSignedDecimal } from "./SeriesAnalysisChangeBadge";
-import { DrilldownFacts } from "./SeriesAnalysisDrilldownPrimitives";
 
 type PlayOrderHistoryPayload = Extract<
   SeriesAnalysisDrilldownV3["payload"],
@@ -36,8 +37,9 @@ export function PlayOrderHistoryDrilldown({
   const qualityAdvisory = qualityAdvisoryLabel(payload.summary.qualityStatus);
   return (
     <div className="grid gap-4">
-      <DrilldownFacts
+      <FactList
         ariaLabel={`${playerName}の番手別順位推移の要約`}
+        columns={4}
         items={[
           { id: "target", label: "対象", value: `${payload.summary.targetCount}戦` },
           {
@@ -76,6 +78,7 @@ export function PlayOrderHistoryDrilldown({
               ]
             : []),
         ]}
+        layout="segmented"
       />
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {payload.rows.map((row) => (
@@ -103,6 +106,7 @@ export function PlayOrderHistoryDrilldown({
       <DataVizLineChart
         ariaLabel={`${playerName}の番手別累積平均順位の推移`}
         domain={[1, 4]}
+        formatIndex={formatSeriesMatchIndex}
         formatValue={(value) => `${formatDecimal(value)}位`}
         lowValueAtTop
         minimumYStep={0.5}
@@ -143,14 +147,14 @@ export function PlayOrderHistoryDrilldown({
               <tr className="border-t border-[var(--color-border)]" key={row.itemId}>
                 <TableCell>
                   <SeriesAnalysisMatchLink
-                    ariaLabel={`第${row.matchIndex}戦の試合結果を見る`}
+                    ariaLabel={`${formatSeriesMatchIndex(row.matchIndex)}の試合結果を見る`}
                     matchId={row.matchId}
                   >
-                    第{row.matchIndex}戦
+                    {formatSeriesMatchIndex(row.matchIndex)}
                   </SeriesAnalysisMatchLink>
                 </TableCell>
                 <TableCell>{formatDateTime(row.playedAt)}</TableCell>
-                <TableCell>第{row.matchNoInEvent}試合</TableCell>
+                <TableCell>{formatMatchNoInEvent(row.matchNoInEvent)}</TableCell>
                 <TableCell>{row.playOrder}番手</TableCell>
                 <TableCell>{row.occurrenceIndex}戦目</TableCell>
                 <TableCell>

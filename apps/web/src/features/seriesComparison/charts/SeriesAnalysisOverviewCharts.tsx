@@ -13,6 +13,7 @@ import {
   headToHeadSignalLabel,
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
 import type { RelativeIntensity, SeriesComparisonAggregateV3 } from "@/shared/api/seriesAnalysis";
+import { orderFixedMembers } from "@/shared/domain/members";
 import { dataVizSeriesPresentation } from "@/shared/ui/dataViz/seriesPresentation";
 import { colorMix, rankColor } from "@/shared/ui/rank/rankPresentation";
 
@@ -23,6 +24,7 @@ type OverviewChartProps = {
 
 export function RankDistributionBars({ focusedItemIds, response }: OverviewChartProps) {
   const titleId = useId();
+  const players = orderFixedMembers(response.players);
   return (
     <section
       aria-labelledby={titleId}
@@ -44,7 +46,7 @@ export function RankDistributionBars({ focusedItemIds, response }: OverviewChart
         ))}
       </div>
       <div className="grid gap-2">
-        {response.players.map((player) => {
+        {players.map((player) => {
           const entry = response.rankDistribution.find(
             (candidate) => candidate.memberId === player.memberId,
           );
@@ -119,10 +121,11 @@ function rankCountSummary(
 }
 
 export function CrownShareBars({ response }: { response: SeriesComparisonAggregateV3 }) {
+  const players = orderFixedMembers(response.players);
   const shareByMemberId = new Map(
     response.rankAnalysis.crownCertainty.shares.map((entry) => [entry.memberId, entry.share]),
   );
-  const chartLabel = response.players
+  const chartLabel = players
     .map((player) => `${player.displayName} ${formatPercent(shareByMemberId.get(player.memberId))}`)
     .join("、");
   return (
@@ -132,7 +135,7 @@ export function CrownShareBars({ response }: { response: SeriesComparisonAggrega
         className="flex h-3 overflow-hidden rounded-full bg-[var(--color-surface-subtle)]"
         role="img"
       >
-        {response.players.map((player) => {
+        {players.map((player) => {
           const share = shareByMemberId.get(player.memberId) ?? 0;
           return (
             <span
@@ -150,7 +153,7 @@ export function CrownShareBars({ response }: { response: SeriesComparisonAggrega
         })}
       </div>
       <dl className="grid gap-px overflow-hidden rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-border)] sm:grid-cols-2 xl:grid-cols-4">
-        {response.players.map((player) => {
+        {players.map((player) => {
           const share = shareByMemberId.get(player.memberId);
           return (
             <div
@@ -174,12 +177,13 @@ export function CrownShareBars({ response }: { response: SeriesComparisonAggrega
 }
 
 export function HeadToHeadMatrix({ response }: { response: SeriesComparisonAggregateV3 }) {
+  const players = orderFixedMembers(response.players);
   return (
     <AnalysisMatrix ariaLabel="直接対決" className="min-w-[42rem] table-fixed">
       <thead>
         <tr>
           <MatrixAxisHeader className="w-36" columnLabel="相手" rowLabel="本人" />
-          {response.players.map((player) => (
+          {players.map((player) => (
             <MatrixColumnHeader
               key={player.memberId}
               style={{
@@ -193,7 +197,7 @@ export function HeadToHeadMatrix({ response }: { response: SeriesComparisonAggre
         </tr>
       </thead>
       <tbody>
-        {response.players.map((subject) => (
+        {players.map((subject) => (
           <tr key={subject.memberId}>
             <MatrixRowHeader
               style={{
@@ -203,7 +207,7 @@ export function HeadToHeadMatrix({ response }: { response: SeriesComparisonAggre
             >
               {subject.displayName}
             </MatrixRowHeader>
-            {response.players.map((opponent) => {
+            {players.map((opponent) => {
               const entry = response.headToHead.entries.find(
                 (candidate) =>
                   candidate.subjectMemberId === subject.memberId &&

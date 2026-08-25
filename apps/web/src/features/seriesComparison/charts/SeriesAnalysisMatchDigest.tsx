@@ -9,6 +9,7 @@ import { SeriesAnalysisMatchLink } from "@/features/seriesComparison/navigation/
 import { playerName } from "@/features/seriesComparison/page/SeriesAnalysisViewPrimitives";
 import { SeriesAnalysisQualityAdvisory } from "@/features/seriesComparison/SeriesAnalysisQualityAdvisory";
 import type { SeriesComparisonAggregateV3 } from "@/shared/api/seriesAnalysis";
+import { formatSeriesMatchIndex } from "@/shared/domain/matchLabels";
 import { Button } from "@/shared/ui/actions/Button";
 
 const flagOrder = ["close_finish", "asset_blowout", "ginji_storm", "revenue_top_no_win"];
@@ -55,11 +56,11 @@ export function MatchDigestStrip({
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <SeriesAnalysisMatchLink
-                        ariaLabel={`第${match.matchIndex}戦の試合結果を見る`}
+                        ariaLabel={`${formatSeriesMatchIndex(match.matchIndex)}の試合結果を見る`}
                         className="gap-1 text-xs"
                         matchId={match.matchId}
                       >
-                        第{match.matchIndex}戦
+                        {formatSeriesMatchIndex(match.matchIndex)}
                         <ArrowUpRight aria-hidden="true" className="size-3.5" />
                       </SeriesAnalysisMatchLink>
                       <p className="mt-0.5 text-sm font-semibold break-words">

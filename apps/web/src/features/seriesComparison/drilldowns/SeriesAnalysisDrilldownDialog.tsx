@@ -2,10 +2,7 @@ import {
   AnalysisTableCell as TableCell,
   AnalysisTableHead as TableHead,
 } from "@/features/seriesComparison/charts/SeriesAnalysisMatrix";
-import {
-  DrilldownFacts,
-  drilldownTitle,
-} from "@/features/seriesComparison/drilldowns/SeriesAnalysisDrilldownPrimitives";
+import { drilldownTitle } from "@/features/seriesComparison/drilldowns/SeriesAnalysisDrilldownPrimitives";
 import {
   PlayOrderHistoryDrilldown,
   RankHistoryDrilldown,
@@ -27,7 +24,9 @@ import type {
   SeriesAnalysisDrilldownV3,
   SeriesAnalysisQuery,
 } from "@/shared/api/seriesAnalysis";
+import { formatSeriesMatchIndex } from "@/shared/domain/matchLabels";
 import { Button } from "@/shared/ui/actions/Button";
+import { FactList } from "@/shared/ui/data/FactList";
 import { Dialog } from "@/shared/ui/feedback/Dialog";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
@@ -106,8 +105,9 @@ export function UnexpectedWinsDrilldown({
   const qualityAdvisory = qualityAdvisoryLabel(payload.summary.status);
   return (
     <div className="grid gap-4">
-      <DrilldownFacts
+      <FactList
         ariaLabel="予測より上位だった勝利の要約"
+        columns={4}
         items={[
           {
             id: "wins",
@@ -129,6 +129,7 @@ export function UnexpectedWinsDrilldown({
               ]
             : []),
         ]}
+        layout="segmented"
       />
       {payload.rows.length === 0 ? (
         <Notice tone="info" title="予測より上位だった勝利はありません">
@@ -157,10 +158,10 @@ export function UnexpectedWinsDrilldown({
                 <tr className="border-t border-[var(--color-border)]" key={row.matchId}>
                   <TableCell>
                     <SeriesAnalysisMatchLink
-                      ariaLabel={`第${row.matchIndex}戦の試合結果を見る`}
+                      ariaLabel={`${formatSeriesMatchIndex(row.matchIndex)}の試合結果を見る`}
                       matchId={row.matchId}
                     >
-                      第{row.matchIndex}戦
+                      {formatSeriesMatchIndex(row.matchIndex)}
                     </SeriesAnalysisMatchLink>
                   </TableCell>
                   <TableCell>{formatDateTime(row.playedAt)}</TableCell>

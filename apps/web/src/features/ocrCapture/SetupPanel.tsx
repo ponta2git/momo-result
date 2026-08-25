@@ -1,6 +1,6 @@
 import type { SetupFormValues } from "@/features/ocrCapture/schema";
 import type { OcrSetupOptions } from "@/features/ocrCapture/useOcrSetupOptions";
-import { fixedMembers } from "@/shared/domain/members";
+import { workspaceInputMembers } from "@/shared/domain/members";
 import { formatDateTimeLong } from "@/shared/lib/dateTime";
 import { SelectField } from "@/shared/ui/forms/SelectField";
 import { TextField } from "@/shared/ui/forms/TextField";
@@ -127,7 +127,7 @@ export function SetupPanel({ value, onChange, enabled, options }: SetupPanelProp
       <SelectField
         fieldClassName="xl:col-span-2"
         label="オーナー"
-        options={fixedMembers.map((member) => ({
+        options={workspaceInputMembers.map((member) => ({
           label: member.displayName,
           value: member.memberId,
         }))}

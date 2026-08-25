@@ -114,7 +114,7 @@ describe("rich series analysis views", () => {
     expect(screen.queryByText("0〜9999")).not.toBeInTheDocument();
     expect(
       screen.getByRole("link", {
-        name: /12戦目、12%、21億円、1位の試合結果を見る/u,
+        name: /第12戦、12%、21億円、1位の試合結果を見る/u,
       }),
     ).toHaveAttribute("href", expect.stringContaining("/matches/match-12?returnTo="));
     expect(
@@ -186,8 +186,10 @@ describe("rich series analysis views", () => {
     expect(selectedRankLink).toHaveClass("size-11");
     expect(within(selectedRankLink).getByText("4")).toBeInTheDocument();
     expect(
-      screen.getAllByRole("link", { name: /ぽんた、第\d+戦、\d位.*試合結果を見る/u }),
-    ).toHaveLength(20);
+      screen.getAllByRole("link", {
+        name: /ぽんた、対戦順未設定、\d位.*試合結果を見る/u,
+      }),
+    ).toHaveLength(19);
     expect(screen.getByText("行: 前戦")).toBeInTheDocument();
     expect(screen.getByText("列: 次戦")).toBeInTheDocument();
     const momentumMatrix = screen.getByRole("table", { name: "ぽんたの順位の切り替わり" });

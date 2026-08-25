@@ -9,6 +9,7 @@ import type {
   MapMasterListResponse,
   SeasonMasterListResponse,
 } from "@/shared/api/masters";
+import { formatMatchNoInEvent } from "@/shared/domain/matchLabels";
 import { formatDateTimeLong } from "@/shared/lib/dateTime";
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
@@ -85,7 +86,7 @@ export function MatchSetupSection({
   const contextSummary = contextComplete
     ? [
         selectedHeldEvent ? formatDateTimeLong(selectedHeldEvent.heldAt) : null,
-        `第${values.matchNoInEvent}試合`,
+        formatMatchNoInEvent(values.matchNoInEvent),
         selectedGameTitle?.name,
         selectedSeason?.name,
         selectedMap?.name,

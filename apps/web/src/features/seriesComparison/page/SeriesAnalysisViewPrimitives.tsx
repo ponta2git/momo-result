@@ -6,7 +6,9 @@ import type {
   SeriesAnalysisPlayer,
   SeriesComparisonAggregateV3,
 } from "@/shared/api/seriesAnalysis";
+import { orderFixedMembers } from "@/shared/domain/members";
 import { Disclosure } from "@/shared/ui/data/Collapsible";
+import type { FactListItem } from "@/shared/ui/data/FactList";
 
 export function MetricDefinitions({ response }: { response: SeriesComparisonAggregateV3 }) {
   return (
@@ -71,35 +73,7 @@ export function AnalysisSection({
   );
 }
 
-export type AnalysisFact = {
-  id: string;
-  label: string;
-  value: ReactNode;
-};
-
-export function AnalysisFacts({
-  ariaLabel,
-  items,
-}: {
-  ariaLabel: string;
-  items: readonly AnalysisFact[];
-}) {
-  return (
-    <dl
-      aria-label={ariaLabel}
-      className="mb-4 grid gap-px overflow-hidden rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-border)] sm:grid-cols-2"
-    >
-      {items.map((item) => (
-        <div className="bg-[var(--color-surface-subtle)] px-3 py-2" key={item.id}>
-          <dt className="text-[11px] font-semibold text-[var(--color-text-secondary)]">
-            {item.label}
-          </dt>
-          <dd className="mt-0.5 text-sm font-semibold tabular-nums">{item.value}</dd>
-        </div>
-      ))}
-    </dl>
-  );
-}
+export type AnalysisFact = FactListItem;
 
 export function AnalysisSubsection({
   children,
@@ -176,7 +150,13 @@ export function playerName(players: SeriesAnalysisPlayer[], memberId: string): s
 }
 
 export function memberNames(players: SeriesAnalysisPlayer[], memberIds: string[]): string {
-  return memberIds.map((memberId) => playerName(players, memberId)).join("、") || "—";
+  return (
+    orderFixedMembers(
+      memberIds.map((memberId) => ({ memberId, name: playerName(players, memberId) })),
+    )
+      .map(({ name }) => name)
+      .join("、") || "—"
+  );
 }
 
 function metricReadingCue(

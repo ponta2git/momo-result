@@ -1,4 +1,5 @@
 import type { MatchPerformanceContextRow } from "@/shared/domain/matchPerformanceContext";
+import { orderFixedMembers } from "@/shared/domain/members";
 import { formatManYen } from "@/shared/lib/formatters";
 import { cn } from "@/shared/ui/cn";
 import { RankBadge } from "@/shared/ui/rank/RankBadge";
@@ -21,6 +22,8 @@ export function MatchResultLedger({
   contextStatus: MatchResultLedgerContextStatus;
   rows: MatchResultLedgerRow[];
 }) {
+  const orderedRows = orderFixedMembers(rows);
+
   return (
     <ol
       aria-label={ariaLabel}
@@ -29,7 +32,7 @@ export function MatchResultLedger({
         className,
       )}
     >
-      {rows.map((row) => (
+      {orderedRows.map((row) => (
         <li
           key={row.memberId}
           className="grid min-w-0 gap-3 border-b border-[var(--color-border)] p-3 last:border-b-0 sm:grid-cols-[4rem_minmax(9rem,16rem)_minmax(10rem,12rem)] sm:items-center sm:justify-center"

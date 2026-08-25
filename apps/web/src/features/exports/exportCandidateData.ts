@@ -1,6 +1,7 @@
 import type { HeldEventDetailResponse, HeldEventResponse } from "@/shared/api/heldEvents";
 import type { GameTitleResponse, SeasonMasterResponse } from "@/shared/api/masters";
 import type { MatchDetailResponse, MatchSummaryResponse } from "@/shared/api/matches";
+import { formatMatchNoInEvent } from "@/shared/domain/matchLabels";
 
 import type { ExportCandidate } from "./exportTypes";
 import { formatDateTime } from "./exportViewModel";
@@ -37,7 +38,7 @@ export function toMatchCandidates(
     .filter((match) => match.kind === "match" && match.status === "confirmed" && match.matchId)
     .map((match) => ({
       description: matchMetadata(match.gameTitleId, match.seasonMasterId, gameTitles, seasons),
-      label: `${match.playedAt ? formatDateTime(match.playedAt) : "開催日時未設定"} / 第${match.matchNoInEvent ?? "-"}試合`,
+      label: `${match.playedAt ? formatDateTime(match.playedAt) : "開催日時未設定"} / ${formatMatchNoInEvent(match.matchNoInEvent)}`,
       value: match.matchId ?? "",
     }));
 }
@@ -62,7 +63,7 @@ export function candidateFromMatchDetail(
   return match
     ? {
         description: matchMetadata(match.gameTitleId, match.seasonMasterId, gameTitles, seasons),
-        label: `${formatDateTime(match.playedAt)} / 第${match.matchNoInEvent}試合`,
+        label: `${formatDateTime(match.playedAt)} / ${formatMatchNoInEvent(match.matchNoInEvent)}`,
         value: match.matchId,
       }
     : undefined;

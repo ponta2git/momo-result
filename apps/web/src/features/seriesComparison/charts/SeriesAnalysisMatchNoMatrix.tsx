@@ -14,6 +14,8 @@ import {
   SeriesAnalysisQualityAdvisory,
 } from "@/features/seriesComparison/SeriesAnalysisQualityAdvisory";
 import type { SeriesComparisonAggregateV3 } from "@/shared/api/seriesAnalysis";
+import { formatMatchNoInEvent } from "@/shared/domain/matchLabels";
+import { orderFixedMembers } from "@/shared/domain/members";
 import { Disclosure } from "@/shared/ui/data/Collapsible";
 import { dataVizSeriesPresentation } from "@/shared/ui/dataViz/seriesPresentation";
 
@@ -69,12 +71,13 @@ function MatchNoMatrix({
   entries: MatchNoEntry[];
   response: SeriesComparisonAggregateV3;
 }) {
+  const players = orderFixedMembers(response.players);
   return (
     <AnalysisMatrix ariaLabel={ariaLabel} className="min-w-[42rem] table-fixed">
       <thead>
         <tr>
           <MatrixAxisHeader className="w-28" columnLabel="プレーヤー" rowLabel="試合順" />
-          {response.players.map((player) => (
+          {players.map((player) => (
             <MatrixColumnHeader
               key={player.memberId}
               style={{
@@ -113,16 +116,19 @@ function MatchNoRow({
   response: SeriesComparisonAggregateV3;
   rowByMemberId: Map<string, MatchNoEntry["players"][number]>;
 }) {
+  const players = orderFixedMembers(response.players);
   return (
     <tr>
-      <MatrixRowHeader className="py-3">第{entry.matchNoInEvent}試合</MatrixRowHeader>
-      {response.players.map((player) => {
+      <MatrixRowHeader className="py-3">
+        {formatMatchNoInEvent(entry.matchNoInEvent)}
+      </MatrixRowHeader>
+      {players.map((player) => {
         const row = rowByMemberId.get(player.memberId);
         const qualityStatus = row?.qualityStatus ?? "no_target";
         const qualityAdvisory = qualityAdvisoryLabel(qualityStatus);
         return (
           <MatrixCell
-            aria-label={`${player.displayName}、第${entry.matchNoInEvent}試合、${row?.targetCount ?? 0}戦${qualityAdvisory ? `、${qualityAdvisory}` : ""}、平均${formatDecimal(row?.averageRank)}位、入賞${formatPercent(row?.podiumRate)}`}
+            aria-label={`${player.displayName}、${formatMatchNoInEvent(entry.matchNoInEvent)}、${row?.targetCount ?? 0}戦${qualityAdvisory ? `、${qualityAdvisory}` : ""}、平均${formatDecimal(row?.averageRank)}位、入賞${formatPercent(row?.podiumRate)}`}
             className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-2"
             key={player.memberId}
           >

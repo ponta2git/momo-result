@@ -57,4 +57,36 @@ describe("MatchResultLedger", () => {
     expect(screen.getByText("物件収益比率 対象外")).toBeInTheDocument();
     expect(screen.getByText("比較データなし")).toBeInTheDocument();
   });
+
+  it("owns the canonical member order independently of rank and API array order", () => {
+    render(
+      <MatchResultLedger
+        contextStatus="unavailable"
+        rows={[
+          ledgerRow("member_otaka", "おーたか", 1),
+          ledgerRow("member_akane_mami", "あかねまみ", 2),
+          ledgerRow("member_ponta", "ぽんた", 3),
+          ledgerRow("member_eu", "いーゆー", 4),
+        ]}
+      />,
+    );
+
+    expect(screen.getAllByRole("listitem").map((item) => item.textContent)).toEqual([
+      expect.stringContaining("いーゆー"),
+      expect.stringContaining("ぽんた"),
+      expect.stringContaining("あかねまみ"),
+      expect.stringContaining("おーたか"),
+    ]);
+  });
 });
+
+function ledgerRow(memberId: string, displayName: string, rank: number) {
+  return {
+    displayName,
+    memberId,
+    rank,
+    revenueManYen: rank * 100,
+    totalAssetsManYen: rank * 200,
+    trend: "unavailable" as const,
+  };
+}

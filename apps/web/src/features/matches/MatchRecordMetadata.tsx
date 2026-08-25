@@ -3,6 +3,7 @@ import { useCallback } from "react";
 import { formatMatchDetailDate } from "@/features/matches/matchDetailViewModel";
 import type { MatchDetailResponse } from "@/shared/api/matches";
 import { formatApiError } from "@/shared/api/problemDetails";
+import { formatMatchNoInEvent } from "@/shared/domain/matchLabels";
 import { memberDisplayName } from "@/shared/domain/members";
 import { Button } from "@/shared/ui/actions/Button";
 import { AlertDialog } from "@/shared/ui/feedback/Dialog";
@@ -50,7 +51,7 @@ export function MatchRecordMetadata({
           confirmLabel={isDeletePending ? "削除中…" : "削除する"}
           formatError={(error) => formatApiError(error, "削除に失敗しました")}
           pending={isDeletePending}
-          description={`第${match.matchNoInEvent}試合を完全に削除します。この操作は取り消せません。`}
+          description={`${formatMatchNoInEvent(match.matchNoInEvent)}を完全に削除します。この操作は取り消せません。`}
           open={showConfirm}
           title="試合を削除しますか？"
           trigger={

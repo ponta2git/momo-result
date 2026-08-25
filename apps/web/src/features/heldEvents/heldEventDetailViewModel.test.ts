@@ -45,24 +45,24 @@ const draft = (status: string): HeldEventDraftResponse => ({
 });
 
 describe("held event detail view model", () => {
-  it("builds player recap in fixed-member order and match-number order", () => {
+  it("builds player recap in canonical result order and match-number order", () => {
     const recaps = buildHeldEventPlayerRecaps([match(2, 3, 1), match(1, 1, 4)]);
 
     expect(recaps).toEqual([
-      {
-        averageRank: 2,
-        displayName: "ぽんた",
-        matchCount: 2,
-        memberId: "member_ponta",
-        ranks: [1, 3],
-        wins: 1,
-      },
       {
         averageRank: 2.5,
         displayName: "いーゆー",
         matchCount: 2,
         memberId: "member_eu",
         ranks: [4, 1],
+        wins: 1,
+      },
+      {
+        averageRank: 2,
+        displayName: "ぽんた",
+        matchCount: 2,
+        memberId: "member_ponta",
+        ranks: [1, 3],
         wins: 1,
       },
     ]);

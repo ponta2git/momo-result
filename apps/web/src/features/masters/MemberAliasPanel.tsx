@@ -3,7 +3,7 @@ import { useState } from "react";
 
 import type { MemberAliasResponse } from "@/shared/api/masters";
 import { formatApiError } from "@/shared/api/problemDetails";
-import { fixedMembers, memberDisplayName } from "@/shared/domain/members";
+import { canonicalResultMembers, memberDisplayName } from "@/shared/domain/members";
 import { Button } from "@/shared/ui/actions/Button";
 import { IconButton } from "@/shared/ui/actions/IconButton";
 import { AlertDialog, Dialog } from "@/shared/ui/feedback/Dialog";
@@ -30,7 +30,7 @@ export function MemberAliasPanel({
   onDelete,
   onUpdate,
 }: MemberAliasPanelProps) {
-  const aliasesByMember = fixedMembers.map((member) => ({
+  const aliasesByMember = canonicalResultMembers.map((member) => ({
     member,
     aliases: aliases.filter((alias) => alias.memberId === member.memberId),
   }));
@@ -55,7 +55,7 @@ export function MemberAliasPanel({
         <SelectField
           label="プレーヤー"
           name="memberId"
-          options={fixedMembers.map((member) => ({
+          options={canonicalResultMembers.map((member) => ({
             label: member.displayName,
             value: member.memberId,
           }))}
@@ -176,7 +176,7 @@ function AliasEditDialog({
           defaultValue={alias.memberId}
           label="プレーヤー"
           name="memberId"
-          options={fixedMembers.map((member) => ({
+          options={canonicalResultMembers.map((member) => ({
             label: member.displayName,
             value: member.memberId,
           }))}

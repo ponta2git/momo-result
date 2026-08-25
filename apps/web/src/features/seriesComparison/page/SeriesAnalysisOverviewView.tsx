@@ -15,7 +15,6 @@ import {
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
 import type { AnalysisViewProps } from "@/features/seriesComparison/page/SeriesAnalysisViewPrimitives";
 import {
-  AnalysisFacts,
   AnalysisReadingGuide,
   AnalysisSection,
   memberNames,
@@ -29,7 +28,9 @@ import {
   qualityAdvisoryLabel,
   SeriesAnalysisQualityAdvisory,
 } from "@/features/seriesComparison/SeriesAnalysisQualityAdvisory";
+import { orderFixedMembers } from "@/shared/domain/members";
 import { Button } from "@/shared/ui/actions/Button";
+import { FactList } from "@/shared/ui/data/FactList";
 
 export function OverviewView({ focusedItemIds, response, onDrilldown }: AnalysisViewProps) {
   const crownQualityAdvisory = qualityAdvisoryLabel(response.rankAnalysis.crownCertainty.status);
@@ -42,8 +43,10 @@ export function OverviewView({ focusedItemIds, response, onDrilldown }: Analysis
     >
       <AnalysisTableOfContents view="overview" />
       <AnalysisSection id="metric-basic" title="順位と基礎比較">
-        <AnalysisFacts
+        <FactList
           ariaLabel="現在の順位差"
+          className="mb-4"
+          columns={2}
           items={[
             {
               id: "leader",
@@ -56,6 +59,7 @@ export function OverviewView({ focusedItemIds, response, onDrilldown }: Analysis
               value: `${formatDecimal(response.summary.averageRankSpread)}位`,
             },
           ]}
+          layout="segmented"
         />
         <div className="overflow-x-auto">
           <table className="w-full min-w-[52rem] text-left text-sm">
@@ -72,7 +76,7 @@ export function OverviewView({ focusedItemIds, response, onDrilldown }: Analysis
               </tr>
             </thead>
             <tbody>
-              {response.metricsByPlayer.map((metric) => (
+              {orderFixedMembers(response.metricsByPlayer).map((metric) => (
                 <tr className="border-t border-[var(--color-border)]" key={metric.memberId}>
                   <AnalysisTableCell>
                     <strong>{metric.displayName}</strong>
@@ -106,8 +110,10 @@ export function OverviewView({ focusedItemIds, response, onDrilldown }: Analysis
         </div>
       </AnalysisSection>
       <AnalysisSection id="metric-crown-certainty" title="平均順位首位の確からしさ">
-        <AnalysisFacts
+        <FactList
           ariaLabel="平均順位首位の確からしさの判断材料"
+          className="mb-4"
+          columns={2}
           items={[
             {
               id: "comparison",
@@ -134,6 +140,7 @@ export function OverviewView({ focusedItemIds, response, onDrilldown }: Analysis
                 ]
               : []),
           ]}
+          layout="segmented"
         />
         <CrownShareBars response={response} />
         <div className="mt-4">

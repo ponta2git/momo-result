@@ -8,6 +8,7 @@ import { MatchFeatureSection } from "@/features/matches/MatchFeatureSection";
 import { MatchRecordMetadata } from "@/features/matches/MatchRecordMetadata";
 import { MatchSeriesComparisonCta } from "@/features/matches/MatchSeriesComparisonCta";
 import { useMatchDetailPageController } from "@/features/matches/useMatchDetailPageController";
+import { formatMatchNoInEvent, formatSeriesMatchIndex } from "@/shared/domain/matchLabels";
 import { memberDisplayName } from "@/shared/domain/members";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { MatchResultLedger } from "@/shared/ui/data/MatchResultLedger";
@@ -94,7 +95,7 @@ function MatchDetailReadyContent({ controller }: { controller: MatchDetailReadyC
       </div>
       <PageHeader
         eyebrow="試合記録"
-        title={`第${match.matchNoInEvent}試合の結果`}
+        title={`${formatMatchNoInEvent(match.matchNoInEvent)}の結果`}
         actions={
           <>
             <LinkButton to={exportHref} variant="secondary">
@@ -133,9 +134,9 @@ function MatchDetailReadyContent({ controller }: { controller: MatchDetailReadyC
               物件収益と、この試合による通算平均順位の変化も併記しています。
             </p>
           </div>
-          {performanceContext?.matchIndex ? (
+          {performanceContext ? (
             <p className="shrink-0 text-xs font-semibold text-[var(--color-text-secondary)] tabular-nums">
-              同条件内 {performanceContext.matchIndex}戦目
+              同条件内 {formatSeriesMatchIndex(performanceContext.matchIndex)}
             </p>
           ) : null}
         </div>

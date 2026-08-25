@@ -17,6 +17,7 @@ export function DataVizLineChart({
   ariaLabel,
   domain,
   focusItemIds = emptyFocusItemIds,
+  formatIndex = String,
   formatValue,
   lowValueAtTop = false,
   minimumYStep = 1,
@@ -29,6 +30,7 @@ export function DataVizLineChart({
   ariaLabel: string;
   domain?: [number, number] | undefined;
   focusItemIds?: readonly string[];
+  formatIndex?: ((value: number) => string) | undefined;
   formatValue: (value: number) => string;
   lowValueAtTop?: boolean;
   minimumYStep?: number;
@@ -90,7 +92,7 @@ export function DataVizLineChart({
             y2={height - padding.bottom}
           />
           {focusedPoint ? (
-            <g aria-label={`${focusedPoint.index}戦目を選択中`} className="momo-enter">
+            <g aria-label={`${formatIndex(focusedPoint.index)}を選択中`} className="momo-enter">
               <rect
                 fill="var(--color-action)"
                 fillOpacity="0.08"
@@ -150,7 +152,7 @@ export function DataVizLineChart({
               x={x(value)}
               y={height - 12}
             >
-              {value}
+              {formatIndex(value)}
             </text>
           ))}
           {series.map((item) => {

@@ -7,7 +7,6 @@ import { MatchNoInEventMatrix } from "@/features/seriesComparison/charts/SeriesA
 import { RecentRankStrips } from "@/features/seriesComparison/charts/SeriesAnalysisRecentRankStrip";
 import type { AnalysisViewProps } from "@/features/seriesComparison/page/SeriesAnalysisViewPrimitives";
 import {
-  AnalysisFacts,
   AnalysisSection,
   AnalysisSubsection,
   playerName,
@@ -18,7 +17,9 @@ import {
   AnalysisTableOfContents,
 } from "@/features/seriesComparison/page/SeriesComparisonAnalysisNavigation";
 import { SeriesAnalysisQualityAdvisory } from "@/features/seriesComparison/SeriesAnalysisQualityAdvisory";
+import { orderFixedMembers } from "@/shared/domain/members";
 import { Button } from "@/shared/ui/actions/Button";
+import { FactList } from "@/shared/ui/data/FactList";
 
 export function FlowView({
   focusedItemIds,
@@ -37,8 +38,10 @@ export function FlowView({
     >
       <AnalysisTableOfContents view="flow" />
       <AnalysisSection id="metric-match-digest" title="最近の試合と荒れ方">
-        <AnalysisFacts
+        <FactList
           ariaLabel="最近の試合の対象範囲"
+          className="mb-4"
+          columns={2}
           items={[
             {
               id: "shown",
@@ -51,6 +54,7 @@ export function FlowView({
               value: `全${response.matchDigest.totalCount}戦`,
             },
           ]}
+          layout="segmented"
         />
         <MatchDigestStrip
           focusedItemIds={focusedItemIds}
@@ -60,7 +64,7 @@ export function FlowView({
       </AnalysisSection>
       <AnalysisSection id="metric-unexpected-wins" title="事前予測より上位で終えた勝利">
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          {response.rankAnalysis.unexpectedWinsByPlayer.map((entry) => (
+          {orderFixedMembers(response.rankAnalysis.unexpectedWinsByPlayer).map((entry) => (
             <article
               className="rounded-[var(--radius-sm)] border border-[var(--color-border)] p-3"
               key={entry.memberId}

@@ -15,6 +15,8 @@ import {
   formatPercent,
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
 import type { SeriesComparisonAggregateV3 } from "@/shared/api/seriesAnalysis";
+import { formatSeriesMatchIndex } from "@/shared/domain/matchLabels";
+import { orderFixedMembers } from "@/shared/domain/members";
 import { currentInternalLocation, withReturnTo } from "@/shared/navigation/returnTo";
 import { DataVizHistogramChart } from "@/shared/ui/dataViz/HistogramChart";
 import { DataVizScatterPlot } from "@/shared/ui/dataViz/ScatterPlot";
@@ -22,7 +24,7 @@ import { dataVizSeriesPresentation } from "@/shared/ui/dataViz/seriesPresentatio
 import { rankBackgroundColor, rankBorderColor } from "@/shared/ui/rank/rankPresentation";
 
 export function AssetRevenueHistograms({ response }: { response: SeriesComparisonAggregateV3 }) {
-  const seriesIdentity = response.players.map((player) => ({
+  const seriesIdentity = orderFixedMembers(response.players).map((player) => ({
     id: player.memberId,
     label: player.displayName,
   }));
@@ -83,7 +85,7 @@ export function RevenueConversionMatrices({
         ]}
       />
       <div className="grid gap-3 lg:grid-cols-2">
-        {response.revenueRankConversion.map((entry) => {
+        {orderFixedMembers(response.revenueRankConversion).map((entry) => {
           const cellByRanks = new Map(
             entry.cells.map((cell) => [`${cell.revenueRank}:${cell.finalRank}`, cell]),
           );
@@ -210,14 +212,14 @@ export function StrategyScatter({
               {
                 href: withReturnTo(`/matches/${encodeURIComponent(point.matchId)}`, returnTo),
                 itemId: point.itemId,
-                label: `${point.matchIndex}戦目、${formatPercent(point.revenueAssetRate)}、${formatManYen(point.totalAssetsManYen)}、${point.rank}位`,
+                label: `${formatSeriesMatchIndex(point.matchIndex)}、${formatPercent(point.revenueAssetRate)}、${formatManYen(point.totalAssetsManYen)}、${point.rank}位`,
                 seriesId: point.memberId,
                 x: point.revenueAssetRate,
                 y: point.totalAssetsManYen,
               },
             ],
       )}
-      seriesIdentity={response.players.map((player) => ({
+      seriesIdentity={orderFixedMembers(response.players).map((player) => ({
         id: player.memberId,
         label: player.displayName,
       }))}

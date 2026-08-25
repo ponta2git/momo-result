@@ -1,4 +1,5 @@
 import { formatMatchDetailDateOnly } from "@/features/matches/matchDetailViewModel";
+import { formatMatchNoInEvent } from "@/shared/domain/matchLabels";
 
 export function MatchDetailIdentity({
   gameTitleName,
@@ -13,6 +14,7 @@ export function MatchDetailIdentity({
   matchNoInEvent: number;
   seasonName: string | undefined;
 }) {
+  const matchLabel = formatMatchNoInEvent(matchNoInEvent);
   const items = [
     ["開催日", formatMatchDetailDateOnly(heldAt)],
     ["作品", gameTitleName ?? "作品未設定"],
@@ -22,7 +24,7 @@ export function MatchDetailIdentity({
 
   return (
     <section
-      aria-label={`第${matchNoInEvent}試合の開催条件`}
+      aria-label={`${matchLabel}の開催条件`}
       className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-4 py-3"
     >
       <dl className="flex min-w-0 flex-wrap gap-x-5 gap-y-2">

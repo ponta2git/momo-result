@@ -12,11 +12,12 @@ import {
   SeriesAnalysisQualityAdvisory,
 } from "@/features/seriesComparison/SeriesAnalysisQualityAdvisory";
 import type { SeriesAnalysisDrilldownV3 } from "@/shared/api/seriesAnalysis";
+import { formatMatchNoInEvent, formatSeriesMatchIndex } from "@/shared/domain/matchLabels";
+import { FactList } from "@/shared/ui/data/FactList";
 import { DataVizLineChart } from "@/shared/ui/dataViz/LineChart";
 import { RankBadge } from "@/shared/ui/rank/RankBadge";
 
 import { ChangeBadge, deltaDirection, rankDeltaLabel } from "./SeriesAnalysisChangeBadge";
-import { DrilldownFacts } from "./SeriesAnalysisDrilldownPrimitives";
 
 type RankHistoryPayload = Extract<
   SeriesAnalysisDrilldownV3["payload"],
@@ -33,8 +34,9 @@ export function RankHistoryDrilldown({
   const qualityAdvisory = qualityAdvisoryLabel(payload.summary.qualityStatus);
   return (
     <div className="grid gap-4">
-      <DrilldownFacts
+      <FactList
         ariaLabel={`${playerName}の平均順位推移の要約`}
+        columns={4}
         items={[
           { id: "target", label: "対象", value: `${payload.summary.targetCount}戦` },
           {
@@ -62,10 +64,12 @@ export function RankHistoryDrilldown({
               ]
             : []),
         ]}
+        layout="segmented"
       />
       <DataVizLineChart
         ariaLabel={`${playerName}の累積平均順位の推移`}
         domain={[1, 4]}
+        formatIndex={formatSeriesMatchIndex}
         formatValue={(value) => `${formatDecimal(value)}位`}
         lowValueAtTop
         minimumYStep={0.5}
@@ -142,14 +146,14 @@ export function RankHistoryDrilldown({
               <tr className="border-t border-[var(--color-border)]" key={row.itemId}>
                 <TableCell>
                   <SeriesAnalysisMatchLink
-                    ariaLabel={`第${row.matchIndex}戦の試合結果を見る`}
+                    ariaLabel={`${formatSeriesMatchIndex(row.matchIndex)}の試合結果を見る`}
                     matchId={row.matchId}
                   >
-                    第{row.matchIndex}戦
+                    {formatSeriesMatchIndex(row.matchIndex)}
                   </SeriesAnalysisMatchLink>
                 </TableCell>
                 <TableCell>{formatDateTime(row.playedAt)}</TableCell>
-                <TableCell>第{row.matchNoInEvent}試合</TableCell>
+                <TableCell>{formatMatchNoInEvent(row.matchNoInEvent)}</TableCell>
                 <TableCell>
                   <RankBadge rank={row.rank} />
                 </TableCell>

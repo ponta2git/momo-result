@@ -13,6 +13,8 @@ import {
   formatPercent,
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
 import type { SeriesComparisonAggregateV3 } from "@/shared/api/seriesAnalysis";
+import { formatSeriesMatchIndex } from "@/shared/domain/matchLabels";
+import { orderFixedMembers } from "@/shared/domain/members";
 import { DataVizLineChart } from "@/shared/ui/dataViz/LineChart";
 import { dataVizSeriesPresentation } from "@/shared/ui/dataViz/seriesPresentation";
 import { rankBackgroundColor, rankBorderColor } from "@/shared/ui/rank/rankPresentation";
@@ -24,7 +26,7 @@ export function RankTrendCharts({
   focusedItemIds: readonly string[];
   response: SeriesComparisonAggregateV3;
 }) {
-  const seriesIdentity = response.players.map((player) => ({
+  const seriesIdentity = orderFixedMembers(response.players).map((player) => ({
     id: player.memberId,
     label: player.displayName,
   }));
@@ -36,6 +38,7 @@ export function RankTrendCharts({
           ariaLabel="4人の累積平均順位の推移"
           domain={[1, 4]}
           focusItemIds={focusedItemIds}
+          formatIndex={formatSeriesMatchIndex}
           formatValue={(value) => `${formatDecimal(value)}位`}
           lowValueAtTop
           minimumYStep={0.5}
@@ -50,6 +53,7 @@ export function RankTrendCharts({
         <DataVizLineChart
           ariaLabel="4人の順位のぶれの推移"
           focusItemIds={focusedItemIds}
+          formatIndex={formatSeriesMatchIndex}
           formatValue={formatDecimal}
           minimumYStep={0.25}
           series={trendSeries(response, "rank_cumulative_standard_deviation")}
@@ -68,7 +72,7 @@ export function CumulativeFormCharts({
   focusedItemIds: readonly string[];
   response: SeriesComparisonAggregateV3;
 }) {
-  const seriesIdentity = response.players.map((player) => ({
+  const seriesIdentity = orderFixedMembers(response.players).map((player) => ({
     id: player.memberId,
     label: player.displayName,
   }));
@@ -80,6 +84,7 @@ export function CumulativeFormCharts({
           ariaLabel="4人の累積入賞率の推移"
           domain={[0, 1]}
           focusItemIds={focusedItemIds}
+          formatIndex={formatSeriesMatchIndex}
           formatValue={formatPercent}
           minimumYStep={0.25}
           series={trendSeries(response, "podium_cumulative_rate")}
@@ -94,6 +99,7 @@ export function CumulativeFormCharts({
           ariaLabel="4人の累積下位率の推移"
           domain={[0, 1]}
           focusItemIds={focusedItemIds}
+          formatIndex={formatSeriesMatchIndex}
           formatValue={formatPercent}
           minimumYStep={0.25}
           series={trendSeries(response, "lower_half_cumulative_rate")}
@@ -117,10 +123,11 @@ export function GinjiCumulativeChart({
     <DataVizLineChart
       ariaLabel="4人のスリの銀次累計回数の推移"
       focusItemIds={focusedItemIds}
+      formatIndex={formatSeriesMatchIndex}
       formatValue={(value) => `${formatDecimal(value)}回`}
       minimumYStep={1}
       series={trendSeries(response, "ginji_cumulative_count")}
-      seriesIdentity={response.players.map((player) => ({
+      seriesIdentity={orderFixedMembers(response.players).map((player) => ({
         id: player.memberId,
         label: player.displayName,
       }))}
@@ -150,7 +157,7 @@ export function MomentumMatrices({
         ]}
       />
       <div className="grid gap-3 lg:grid-cols-2">
-        {response.momentumSwitch.map((entry) => {
+        {orderFixedMembers(response.momentumSwitch).map((entry) => {
           const cellByRanks = new Map(
             entry.cells.map((cell) => [`${cell.previousRank}:${cell.nextRank}`, cell]),
           );
@@ -253,14 +260,14 @@ export function MomentumMatrices({
 }
 
 function trendSeries(response: SeriesComparisonAggregateV3, kind: string) {
-  return response.trends
-    .filter((series) => series.kind === kind)
-    .map((series) => ({
+  return orderFixedMembers(response.trends.filter((series) => series.kind === kind)).map(
+    (series) => ({
       id: series.memberId,
       points: series.points.map((point) => ({
         index: point.index,
         itemId: point.itemId,
         value: point.value,
       })),
-    }));
+    }),
+  );
 }

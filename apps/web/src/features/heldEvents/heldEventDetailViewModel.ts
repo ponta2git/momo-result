@@ -1,5 +1,5 @@
 import type { HeldEventDraftResponse, HeldEventMatchResponse } from "@/shared/api/heldEvents";
-import { fixedMembers, memberDisplayName } from "@/shared/domain/members";
+import { memberDisplayName, orderFixedMembers } from "@/shared/domain/members";
 import { formatDateTimeCompact, formatDateTimeLong } from "@/shared/lib/dateTime";
 
 export type HeldEventPlayerRecap = {
@@ -37,22 +37,16 @@ export function buildHeldEventPlayerRecaps(
     }
   }
 
-  const memberOrder = new Map(fixedMembers.map((member, index) => [member.memberId, index]));
-  return [...ranksByMember.entries()]
-    .map(([memberId, ranks]) => ({
+  return orderFixedMembers(
+    [...ranksByMember.entries()].map(([memberId, ranks]) => ({
       averageRank: ranks.reduce((sum, rank) => sum + rank, 0) / ranks.length,
       displayName: memberDisplayName(memberId),
       matchCount: ranks.length,
       memberId,
       ranks,
       wins: ranks.filter((rank) => rank === 1).length,
-    }))
-    .toSorted(
-      (left, right) =>
-        (memberOrder.get(left.memberId) ?? Number.MAX_SAFE_INTEGER) -
-          (memberOrder.get(right.memberId) ?? Number.MAX_SAFE_INTEGER) ||
-        left.memberId.localeCompare(right.memberId),
-    );
+    })),
+  );
 }
 
 export function heldEventDraftAction(draft: HeldEventDraftResponse): HeldEventDraftAction {

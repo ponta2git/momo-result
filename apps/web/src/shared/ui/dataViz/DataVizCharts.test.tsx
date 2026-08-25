@@ -54,6 +54,7 @@ describe("data visualizations at the analysis display bound", () => {
       <DataVizLineChart
         ariaLabel="上限折れ線"
         focusItemIds={["trend:player-1:500"]}
+        formatIndex={(value) => `第${value}戦`}
         formatValue={String}
         minimumYStep={0.25}
         series={series}
@@ -68,6 +69,8 @@ describe("data visualizations at the analysis display bound", () => {
     for (const path of paths) {
       expect(path.getAttribute("d")?.match(/[ML]/gu)).toHaveLength(500);
     }
+    expect(chart?.querySelector('[aria-label="第500戦を選択中"]')).toBeInTheDocument();
+    expect(chart).toHaveTextContent("第500戦");
     expect(chart).toHaveTextContent("この試合");
   });
 });

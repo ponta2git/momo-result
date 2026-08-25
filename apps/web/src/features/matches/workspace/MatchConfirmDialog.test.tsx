@@ -31,6 +31,12 @@ describe("MatchConfirmDialog", () => {
     expect(within(dialog).getByText(/未確認の強調項目が1件あります/u)).toBeInTheDocument();
     expect(within(dialog).getByRole("cell", { name: "12,345" })).toBeInTheDocument();
     expect(within(dialog).getByRole("cell", { name: "-678" })).toBeInTheDocument();
+    expect(
+      within(dialog)
+        .getAllByRole("row")
+        .slice(1)
+        .map((row) => within(row).getAllByRole("cell")[1]?.textContent),
+    ).toEqual(["いーゆー", "ぽんた", "あかねまみ", "おーたか"]);
     expect(within(dialog).getByRole("button", { name: "確定する" })).toBeEnabled();
   });
 });

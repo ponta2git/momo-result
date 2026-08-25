@@ -31,6 +31,7 @@ import {
   AnalysisTableOfContents,
 } from "@/features/seriesComparison/page/SeriesComparisonAnalysisNavigation";
 import { SeriesAnalysisQualityAdvisory } from "@/features/seriesComparison/SeriesAnalysisQualityAdvisory";
+import { orderFixedMembers } from "@/shared/domain/members";
 import { Button } from "@/shared/ui/actions/Button";
 
 export function DriversView({ focusedItemIds, response, onDrilldown }: AnalysisViewProps) {
@@ -79,7 +80,7 @@ export function DriversView({ focusedItemIds, response, onDrilldown }: AnalysisV
       </AnalysisSection>
       <AnalysisSection id="metric-rank-signals" title="順位を読む追加の手掛かり">
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          {response.rankAnalysis.rankSignalsByPlayer.map((entry) => (
+          {orderFixedMembers(response.rankAnalysis.rankSignalsByPlayer).map((entry) => (
             <article
               className="rounded-[var(--radius-sm)] border border-[var(--color-border)] p-3"
               key={entry.memberId}

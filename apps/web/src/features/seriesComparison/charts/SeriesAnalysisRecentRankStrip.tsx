@@ -7,6 +7,8 @@ import {
 import { SeriesAnalysisMatchLink } from "@/features/seriesComparison/navigation/SeriesAnalysisMatchLink";
 import { SeriesAnalysisQualityAdvisory } from "@/features/seriesComparison/SeriesAnalysisQualityAdvisory";
 import type { SeriesComparisonAggregateV3 } from "@/shared/api/seriesAnalysis";
+import { formatSeriesMatchIndex } from "@/shared/domain/matchLabels";
+import { orderFixedMembers } from "@/shared/domain/members";
 import { dataVizSeriesPresentation } from "@/shared/ui/dataViz/seriesPresentation";
 import { rankColor, rankForegroundColor } from "@/shared/ui/rank/rankPresentation";
 
@@ -19,7 +21,7 @@ export function RecentRankStrips({
 }) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const entryByMemberId = new Map(response.recentRanks.map((entry) => [entry.memberId, entry]));
-  const orderedEntries = response.players.map((player) => ({
+  const orderedEntries = orderFixedMembers(response.players).map((player) => ({
     entry: entryByMemberId.get(player.memberId),
     player,
   }));
@@ -71,7 +73,7 @@ export function RecentRankStrips({
                 <span className="sr-only">プレーヤー</span>
               </th>
               {axisRows.map((row, pointIndex) => {
-                const matchIndex = matchIndexById.get(row.matchId) ?? pointIndex + 1;
+                const matchIndex = matchIndexById.get(row.matchId);
                 const focused = focusedMatchIds.has(row.matchId);
                 const showMarker =
                   focused ||
@@ -84,11 +86,11 @@ export function RecentRankStrips({
                   >
                     {showMarker ? (
                       <SeriesAnalysisMatchLink
-                        ariaLabel={`第${matchIndex}戦の試合結果を見る${focused ? "、この試合" : ""}`}
+                        ariaLabel={`${formatSeriesMatchIndex(matchIndex)}の試合結果を見る${focused ? "、この試合" : ""}`}
                         className={`justify-center text-[11px] whitespace-nowrap ${focused ? "momo-enter" : "text-[var(--color-text-muted)]"}`}
                         matchId={row.matchId}
                       >
-                        {focused ? "この試合" : `第${matchIndex}戦`}
+                        {focused ? "この試合" : formatSeriesMatchIndex(matchIndex)}
                       </SeriesAnalysisMatchLink>
                     ) : (
                       <span aria-hidden="true" className="block h-11" />
@@ -130,15 +132,15 @@ export function RecentRankStrips({
                       </span>
                     ) : null}
                   </th>
-                  {axisRows.map((axisRow, pointIndex) => {
+                  {axisRows.map((axisRow) => {
                     const row = rowsByMatchId.get(axisRow.matchId);
-                    const matchIndex = matchIndexById.get(axisRow.matchId) ?? pointIndex + 1;
+                    const matchIndex = matchIndexById.get(axisRow.matchId);
                     const focused = row ? focusedItemIds.includes(row.itemId) : false;
                     return (
                       <td className="h-11 w-11 min-w-11 px-0 align-middle" key={axisRow.matchId}>
                         {row ? (
                           <SeriesAnalysisMatchLink
-                            ariaLabel={`${player.displayName}、第${matchIndex}戦、${row.rank}位${focused ? "、この試合" : ""}。試合結果を見る`}
+                            ariaLabel={`${player.displayName}、${formatSeriesMatchIndex(matchIndex)}、${row.rank}位${focused ? "、この試合" : ""}。試合結果を見る`}
                             className={`size-11 justify-center overflow-hidden rounded-[var(--radius-xs)] border p-0 text-xs tabular-nums no-underline hover:no-underline ${focused ? "momo-enter ring-2 ring-[var(--color-action)] ring-offset-2 ring-offset-[var(--color-surface)]" : ""}`}
                             matchId={row.matchId}
                             style={{
@@ -146,7 +148,7 @@ export function RecentRankStrips({
                               borderColor: rankColor(row.rank),
                               color: rankForegroundColor(row.rank),
                             }}
-                            title={`第${matchIndex}戦 ${row.rank}位`}
+                            title={`${formatSeriesMatchIndex(matchIndex)} ${row.rank}位`}
                           >
                             <span
                               className="grid size-full place-items-center rounded-[calc(var(--radius-xs)-1px)]"
@@ -172,13 +174,16 @@ export function RecentRankStrips({
 }
 
 export function shouldShowRankStripMatchMarker(
-  matchIndex: number,
+  matchIndex: number | undefined,
   pointIndex: number,
   pointCount: number,
 ): boolean {
   return (
     pointIndex === 0 ||
     pointIndex === pointCount - 1 ||
-    (Number.isInteger(matchIndex) && matchIndex % 5 === 0)
+    (typeof matchIndex === "number" &&
+      Number.isInteger(matchIndex) &&
+      matchIndex > 0 &&
+      matchIndex % 5 === 0)
   );
 }

@@ -4,10 +4,11 @@ import { describe, expect, it } from "vitest";
 import {
   buildMatchFeatureBadges,
   seriesComparisonHrefForMatch,
+  sortMatchDetailPlayers,
 } from "@/features/matches/matchDetailViewModel";
 import type { SeriesAnalysisMatchContextV2 } from "@/shared/api/seriesAnalysis";
 import type { MatchFeatureId } from "@/shared/domain/matchFeatures";
-import { makeMatchDetail } from "@/test/factories";
+import { makeFourPlayerResults, makeMatchDetail } from "@/test/factories";
 
 type AnalysisFeature = NonNullable<SeriesAnalysisMatchContextV2["match"]>["features"][number];
 
@@ -24,6 +25,18 @@ describe("match detail navigation", () => {
     expect(seriesComparisonHrefForMatch(makeMatchDetail())).toBe(
       "/analytics/series?gameTitleId=gt_momotetsu_2&seasonMasterId=season_current&mapMasterId=map_east&focusMatchId=match-1&view=flow",
     );
+  });
+});
+
+describe("match detail result ordering", () => {
+  it("uses canonical fixed-member order for the initial member sort", () => {
+    const players = makeFourPlayerResults().toReversed();
+
+    expect(
+      sortMatchDetailPlayers(players, { direction: "asc", key: "member" }).map(
+        (player) => player.memberId,
+      ),
+    ).toEqual(["member_eu", "member_ponta", "member_akane_mami", "member_otaka"]);
   });
 });
 

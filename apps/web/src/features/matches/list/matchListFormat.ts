@@ -1,3 +1,4 @@
+import { formatMatchNoInEvent } from "@/shared/domain/matchLabels";
 import { formatDateTimeCompact, formatDateTimeLong } from "@/shared/lib/dateTime";
 
 export function formatDateTime(iso: string | undefined): string {
@@ -9,7 +10,7 @@ export function formatCompactDateTime(iso: string | undefined): string {
 }
 
 export function formatMatchNo(matchNoInEvent: number | undefined): string {
-  return matchNoInEvent ? `第${matchNoInEvent}試合` : "試合番号未設定";
+  return formatMatchNoInEvent(matchNoInEvent);
 }
 
 export function formatGameSeason(

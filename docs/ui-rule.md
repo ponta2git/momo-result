@@ -1,78 +1,96 @@
 # Web UI / UX 規約
 
-目的: momo-result の全画面で、同じ意味・状態・操作を同じ見た目と挙動で表し、記録、確認、比較、出力を迷わず完了できるようにする。
+目的: momo-result の全画面で、同じ意味・状態・操作を一貫して表し、記録、確認、比較、出力を迷わず完了できるようにする。
 
-本書は Web の横断的な意味表現、視覚階層、操作、安全性、状態表示の正本である。業務用語・状態遷移は `docs/domain-rule.md`、画面固有の目的・順序・指標は対象要求、実装境界は `docs/architecture.md`、検証手段は `docs/test-rule.md`、実行 command は `docs/dev-rule.md` を正本とする。component、token、formatter の現在値は実装と checker を正本とし、本書へ複製しない。
+本書は Web の横断的な意味表現、視覚階層、操作、安全性、状態表示の正本である。業務用語・状態遷移は `docs/domain-rule.md`、画面固有の目的・順序・指標は対象要求、実装境界は `docs/architecture.md`、検証方針は `docs/test-rule.md`、実行コマンドは `docs/dev-rule.md` を正本とする。コンポーネント、トークン、フォーマッターの現在値は実装と checker を正本とし、本書へ複製しない。
 
-## 1. Product Direction / Meaning
+規則が競合する場合は、正確性・データ保全・利用者の制御、アクセシビリティとタスク完遂、意味の一貫性、視覚上の洗練の順で判断する。統一感とは同じ意味が同じ原則で働くことであり、異なる文脈を同じ外形へ押し込むことではない。
 
-- 製品は generic dashboard ではなく、登録済み試合を探し、確定状態を理解し、次の必要操作へ進むための落ち着いた試合台帳として設計する。
-- 開催回、試合番号、OCR、下書き、確定、順位、結果、出力という業務語彙を使い、抽象的な dashboard 語彙へ置き換えない。
-- ドメインの用語と状態遷移は `docs/domain-rule.md` を参照し、UIでは対象、親スコープ、現在状態、実行可能な次操作を利用者が判断できるようにする。
-- 同じ意味には同じ shared component、semantic token、formatter を使う。feature 固有の見た目で共通概念を再実装しない。
+## 1. 製品の方向性と意味
+
+- 主な利用場面は、4人の仲間が1試合ごとに OCR 取り込み、下書き確認、確定、次の対戦を繰り返し、開催分が揃った後に累積結果と傾向を囲んで振り返る時間である。この流れを分断せず、記録から雑談と仮説の発見までを支える。
+- 製品は汎用ダッシュボードではなく、静かな対戦卓に置かれた、作り込まれた試合台帳として設計する。落ち着き、明瞭さ、精度を優先し、派手な演出、焦点の定まらない構成、AI Slop に見える定型意匠を避ける。
+- 注目対象は利用段階に合わせる。取り込み・確認中は現在の OCR 状態と次の修正または確定、確定後は累積結果、開催分が揃った後は結果を裏付ける比較と傾向を主役にする。異なる段階の主要情報を同じ強さで競合させない。
+- トップページに確認可能な OCR 下書きがある場合は、現在の開催回に属するものを優先し、同じ開催回では試合番号が小さい未確認下書きを先にする。OCR 状態、開催日時、試合番号、確認または確定への1操作を最初の視覚的な錨にする。累積結果は進行を妨げない二次情報とし、下書きがない場合だけ現在の開催または累積結果を主役にする。
+- 開催回、試合番号、OCR、下書き、確定、順位、結果、出力という業務語彙を使う。UI では対象、親スコープ、現在状態、実行可能な次の操作を判断できるようにする。
+- 同じ意味には共通の意味トークン、フォーマッター、アクセシブルな primitive を使う。表示部品は再利用を優先するが、情報量や操作文脈が異なる場合は、意味と挙動を保ったまま構成を変えてよい。
 - 利用者または保存済みデータが提供していない指標、件数、原因、信頼度、推薦を UI 都合で補完しない。不明、未分類、計算不能、対象なしは、その状態を明示する。
-- 信頼性は例外として扱い、通常または十分な状態を繰り返し強調しない。`参考値`、`信頼度低め`、`対象なし` は意味を混同せず、metadata 欠落から健全性を推測しない。
-- PC と mobile で配置が変わっても、情報、状態、操作、現在地、戻り先の意味を変えない。
-- 構造、label、境界、整列、accessible name で意味を伝える。説明文を足す前に構造で解決し、主要操作や未知の操作を説明不要として隠さない。
+- PC、タブレット、モバイルで配置が変わっても、情報、状態、操作、現在地、戻り先の意味を変えない。モバイルでは主要情報を削らず、再配置、必要な横スクロール、段階的開示、要約と詳細の対応で情報量を保つ。
+- 構造、ラベル、境界、整列、accessible name で意味を伝える。主要操作や未知の操作を説明不要として隠さない。
 
-## 2. Orientation / Visual Hierarchy / Disclosure / Data
+## 2. 現在地・視覚階層・情報表現
 
-- page title、global navigation の現在地、必要な親スコープ、主要な検索・絞り込みを、初見の画面でも判断できる位置へ置く。詳細画面は安全な戻り先を持つ。
-- feature から palette 色や one-off color を直接指定せず semantic token を使う。action color は選択、focus、操作可能性の強調に限定し、色だけで状態、系列、順位、warning、selection を伝えない。
-- 一次情報、補助情報、label、placeholder、disabled を既存の text token と weight で階層化する。値より目立つ説明文や、装飾だけの heading を増やさない。
-- 余白は定義済み token を使い、密接な要素よりグループ間を大きくする。padding は内容上の理由がない限り対称にし、任意の値や z-index を追加しない。
-- 通常の階層は border と静かな surface 差で表し、shadow は dialog、tooltip、toast など浮遊 UI に限定する。gradient、glow、大きな surface contrast を密な業務画面の装飾に使わない。
-- 日時、金額、試合番号、状態名は共通 formatter / ViewModel を使い、整列する数値には tabular numerals を使う。
-- native table は row / column header と identity を保つ。graph は数値表現を併記し、比較軸、単位、スケールを揃え、正確な比較を装飾で代替しない。
-- disclosure、tab、dialog、navigation を見た目だけで取り替えない。panel は trigger の直後へ展開し、周囲の位置・幅・focus を不必要に変えない。
-- 可視 heading を省略する場合も `section`、`aria-label` / `aria-labelledby`、field label、accessible control name で構造を保つ。
-- filter の全解除は scope を示す1操作に集約し、部分解除と似た名前で並べない。active 条件は短く要約しても full label を DOM と accessible name に残し、開閉状態は局所的な chevron などで示す。
-- 主要操作は常時発見可能にし、二次操作だけを段階的に開示する。icon-only 操作や hover-only 情報を主要導線にしない。
+- 画面タイトル、グローバルナビゲーションの現在地、必要な親スコープ、主要な検索・絞り込みを、初見でも判断できる位置へ置く。詳細画面は安全な戻り先を持つ。
+- 機能から参照外の色や一回限りの色値を直接指定せず、参照色、意味トークン、コンポーネント用途の順に参照する。操作色は選択、フォーカス、操作可能性の強調に限定し、色だけで状態、系列、順位、警告、選択を伝えない。
+- 視覚基盤は light mode のみとする。白に近い canvas、無彩色から低彩度の neutral surface、十分な明度差を持つ text と border で端正に構成する。neutral の参照色は OKLCH の明度順に段階化し、canvas、surface、inset / selected、text、border、control、action の役割へ割り当てる。主要操作は高コントラストの dark neutral を基本とし、dark theme と theme switch は設けない。
+- プレー順用に定義した4色は、各試合の `プレー順1=青`、`2=赤`、`3=黄`、`4=緑` だけを表す。固定メンバー、順位、傾向、任意のグラフ系列、装飾へ流用しない。試合記録では `プレー順N` の文字と色を併記する。
+- 操作、状態、順位、グラフ系列、プレー順は別の意味トークンと参照値を持ち、同じトークンや値を alias しない。error、warning、success はプレー順色と明確に区別できる範囲で赤、黄、緑の色相を使ってよいが、ラベル、アイコン、形を併用し、プレー順色と同時に表示して取り違えがないことを検証する。区別できない組み合わせは neutral を基調にする。文字と面、control、focus、graph mark は実際の組み合わせで contrast と色覚多様性を検証する。
+- 一次情報、補助情報、ラベル、placeholder、disabled を既存の文字トークンとウェイトで階層化する。見出し、本文、ラベル、データの役割を固定し、本文と control は regular 以上を使う。小さい文字は補助 metadata に限定し、主要結果、操作、エラーを細字や低コントラストにしない。
+- 各画面は、見出し、主要結果、主要操作のうち最初に見る対象を1つ決める。これらを同時に最大強度へせず、内容のない kicker、section 番号、大文字ラベル、同じ強さの KPI card や CTA を反復しない。
+- 余白は定義済み token を使い、密接な要素よりグループ間を大きくする。通常は読みやすい余白と抑制した読み幅を保ち、試合間・プレーヤー間の走査や比較が速くなる表・図表だけを一貫して密にする。不規則な欠け、根拠のない非対称、任意の値や z-index を追加しない。
+- グルーピングは整列、余白、divider から始める。border や surface はスコープ、状態、操作の境界が必要な場合だけ使い、各 section を既定で角丸 card にしない。shadow は dialog、tooltip、toast など浮遊 UI に限定し、gradient、glow、大きな surface contrast を装飾に使わない。
+- 日時、金額、試合番号、状態名は共通 formatter / ViewModel を使う。件数と比較値には対象、単位、分母または基準を添え、整列する数値には tabular numerals を使う。
+- table は row / column header と identity を保つ。グラフは答える問いがある場合に使い、数値表現を併記し、比較軸、単位、スケールを揃える。モバイルへ再配置しても、プレーヤーと試合の対応、比較順、詳細への到達を失わせない。
+- disclosure、tab、dialog、navigation を見た目だけで取り替えない。panel は trigger との関係を保ち、周囲の位置・幅・focus を不必要に変えない。可視見出しを省略する場合も `section`、`aria-label` / `aria-labelledby`、field label、accessible control name で構造を残す。
+- filter の全解除はスコープを示す1操作に集約する。適用中の条件を短く要約しても、完全なラベルを DOM と accessible name に残す。主要操作は常時発見可能にし、二次操作だけを段階的に開示する。
 
-## 3. Component / Interaction / Accessibility
+## 3. コンポーネント・操作・アクセシビリティ
 
-- button、link、form control、status、notice、dialog、disclosure は shared UI とアクセシブルな primitive を優先し、feature で keyboard / focus 挙動を手作りしない。
-- interactive component は該当する default、hover、focus-visible、active、disabled、pending / loading、error、success を定義する。data surface は loading、empty、error、stale、not found を混同しない。
-- 操作は影響する対象の近くへ置き、label は対象と結果を示す。選択、scope、並び順、表示範囲の変更は、影響領域へ持続的に反映する。
-- mobile の主要操作と icon-only action は 44px 以上の hit target を持つ。icon-only action は文脈を含む `aria-label`、decorative icon は `aria-hidden` を持つ。
+- button、link、form control、status、notice、dialog、disclosure は shared UI とアクセシブルな primitive を優先し、機能ごとに keyboard / focus 挙動を手作りしない。
+- interactive component は、該当する default、hover、focus-visible、active、disabled、pending / loading、error、success を定義する。data surface は loading、empty、error、stale、not found を混同しない。
+- 操作は影響する対象の近くへ置き、ラベルは対象と結果を示す。選択、スコープ、並び順、表示範囲の変更は、影響領域へ持続的に反映する。
+- モバイルの主要操作と icon-only action は 44px 以上の hit target を持つ。icon-only action は文脈を含む `aria-label`、decorative icon は `aria-hidden` を持つ。
 - hover で現れる操作や情報は keyboard focus と touch でも到達できる。tooltip は補助説明であり、主要な意味やエラーをそこだけに置かない。
-- form は可視 label、説明、必須、validation error、disabled / pending を同じ field 境界で関連付け、paste を妨げない。
+- form は可視ラベル、説明、必須、validation error、disabled / pending を同じ field 境界で関連付け、paste を妨げない。
+- OCR 結果修正と手入力は、入力 field と対応する source image、同じプレーヤー・項目順、編集結果の feedback を一つの workspace として保つ。この対応関係と少ない修正手数を保護し、画面の分断や画像と field の往復を増やさない。
 - status navigation は少数の直接 filter とし、未完了の下位状態を従属させる。選択中 control の再実行で duplicate load や flicker を起こさない。
-- 操作前に対象、制約、影響を示し、失敗時は「何が起きたか・理由・修正方法・代替手段」を操作箇所の近くに表示する。入力、選択、scroll 位置を失敗で消さない。
-- 保存、削除、再取得、download の失敗は local error とし、toast だけへ逃がさない。同じ結果を toast と inline notice に重複表示しない。
-- 不可逆または高コストな操作は対象と結果を `AlertDialog` で明示する。安全に可逆な操作は即時反映と Undo を優先し、pending 中の重複実行を許さない。
+- 操作前に対象、制約、影響を示す。失敗は操作箇所の近くに表示し、入力、選択、scroll 位置を消さない。保存、削除、再取得、download の失敗を toast だけへ逃がさず、同じ結果を toast と inline notice に重複表示しない。
+- 不可逆または高コストな操作は、対象と結果を `AlertDialog` で明示する。安全に可逆な操作は即時反映と Undo を優先し、pending 中の重複実行を許さない。
 - 複数ステップの flow は Back、キャンセル、完了または安全な中断点を持つ。ダイアログを閉じた後は起点へ focus を返し、ナビゲーションを阻止する場合は理由と進行状況を示す。
-- fixed / sticky UI は safe-area inset を尊重し、focus target や主要操作を viewport 外へ隠さない。狭い幅では label を短くするか reflow し、hit target と accessible name を保つ。
+- fixed / sticky UI は safe-area inset を尊重し、focus target や主要操作を viewport 外へ隠さない。狭い幅では再配置して hit target と accessible name を保つ。
 - keyboard、focus、label、contrast、status announcement は WCAG AA 相当を最低基準とする。
 
-## 4. Loading / Empty / Error / Feedback / Motion
+## 4. UI ライティングと分析の断定
+
+- 文体は普通の Web アプリとして、短く、具体的に、落ち着いて書く。親しさを演出する冗談や過剰な励ましは足さず、要求正本で定義された `桃鉄型`、`遊戯王型` など仲間内の語彙は一般的な分析語へ言い換えない。
+- 一つの文言は、対象、現在状態、結果、影響、次の操作、判断に必要な根拠のいずれかを伝える。同じ事実を heading、lead、notice、button 周辺で言い直さず、正本となるラベルまたは表示を1か所に定める。条件付きの注意は条件が成立した箇所だけに出す。
+- 曖昧な構造、不正確な値、欠けた状態、発見しにくい操作を説明文で補償しない。まず構造、コンポーネント、data contract、状態表現を直し、それでも判断に必要な説明だけを残す。
+- section 番号への参照、他の表示との重複回避、候補の選別など、生成・編集の内部都合を利用者向け説明にしない。省略や選別が解釈を変える場合だけ、その結果と範囲を対象の近くへ示す。
+- 分析文の強さを `事実 → 傾向 → 仮説 → 提案` の順に区別し、要求正本と根拠が許す段階を越えない。仮説は次の対戦で確かめる対象として示し、提案は要求で明示された場合だけ、根拠とともに示す。
+- 分析は「分かったこと → 根拠となる試合・件数 → 実戦上の意味 → 必要な場合だけ手法」の順で示し、数学知識を前提にしない。定義済みの判定と根拠がある事実または傾向は会話に近い heading にできるが、観測していない原因や推薦へ広げない。手法名は主要ラベルにせず、必要なら二次 disclosure で平易な説明と対応させる。
+- 信頼性は例外として扱う。OCR 品質、data 欠損、分析上の不確かさを別の原因として正本から受け取り、解釈を実質的に変える場合だけ影響範囲とともに警告する。`参考値`、`信頼度低め`、`対象なし` を混同せず、UI が metadata 欠落から健全性を推測しない。通常または十分な状態の安心文言は出さない。
+- エラー文は、何が起きたか、影響を受けた範囲、利用者が次にできること、確定していて役立つ場合だけ原因を示す。未確定の原因を断定せず、謝罪、責任転嫁、一般論で要点を埋めない。
+
+## 5. 状態・フィードバック・モーション
 
 - 初回 loading は最終 layout に近い structural skeleton を使い、refetch は既存内容を保って更新中を示す。全面 skeleton へ戻さない。
 - error、not found、empty、stale data を別状態にする。retry は失敗箇所へ置き、route retry は query と error boundary を同時に reset する。
-- empty state は現在実行可能で安全な primary action を最大1件だけ示す。権限または前提条件で実行不能な導線を出さない。
-- ancillary resource の失敗で取得済み主表示を置き換えない。完了結果が画面上で明らかな場合は celebratory toast を追加せず、局所的な feedback を優先する。
+- empty state は現在実行可能で安全な主要操作を1件示し、二次操作は弱める。権限または前提条件で実行不能な導線を出さない。
+- 補助情報の取得失敗で、取得済みの主表示を置き換えない。完了結果が画面上で明らかな場合は祝福目的の toast を追加せず、局所的な feedback を優先する。
 - motion は状態の因果または連続性を伝える場合だけ使う。既存 token、短い feedback、opacity / transform を使い、layout shift、stagger、常時 loop、engagement 目的の演出を避ける。
 - 非必須 motion は `prefers-reduced-motion` で無効化し、route content の表示を animation 完了まで block しない。
 
-## 5. Navigation / Finite Task Loop
+## 6. ナビゲーションと有限のタスクループ
 
-- 一覧、詳細、編集、出力、OCR、管理をまたぐ場合は必要な filter、sort、page、selection、内部 `returnTo` を保持する。`returnTo` は app 内 path だけを受け入れ、復元不能時は安全な既定導線と理由を示す。
-- task flow は trigger、最小の action、確認可能な result、明確な終了の有限ループにする。完了後の streak、urgency、variable reward、engagement-only CTA は追加しない。
-- 保存・確認した試合や修正済み OCR data は、将来の検索、比較、出力を改善する investment として扱い、export を妨げる switching cost を作らない。
-- 通知または再訪誘導には、利用者が明示した業務上の価値、停止地点、設定、opt-outを要求正本で定義する。FOMO や不安を目的に使わない。
-- 頻繁な低リスク操作には shortcut、最近の条件、保存済み filter などの高速化を許可するが、通常経路と発見可能なラベルを隠さない。
+- 一覧、詳細、編集、出力、OCR、管理をまたぐ場合は、必要な filter、sort、page、selection、内部 `returnTo` を保持する。`returnTo` は app 内 path だけを受け入れ、復元不能時は安全な既定導線と理由を示す。
+- タスクは、きっかけ、最小の操作、確認できる結果、明確な終了からなる有限の流れにする。完了後の連続利用表示、緊急性の演出、予測不能な報酬、再利用させるだけの CTA は追加しない。
+- 通知、再訪誘導、保存済み条件、shortcut は、要求で定義した利用者の便益と停止方法を持つ場合だけ使う。FOMO や不安、export を妨げる lock-in を作らず、通常経路と発見可能なラベルを残す。
 
-## 6. Shared Result Ledger
+## 7. 4人の共通結果台帳
 
-- 試合詳細と選択試合の比較で同じ4人の result ledger を共有し、順位、player name、total assets を主情報、補助指標を従属情報とする。画面固有の表示順・指標定義は対象要求を正本とする。
-- before / after の差は「改善」「後退」「維持」「初戦」と値を併記し、signed decimal だけに意味を持たせない。
-- primary result は同一 scope の比較取得にブロックされず、failure または対象試合なしでも保存済み result ledger を残す。
-- match identity は text として残し、navigation と export は明示した action として表す。compact action の target、label、tooltip は共通 component に従う。
+- OCR 確認の要約、試合詳細、開催結果、分析では、4人の同一性、順序、整列を共通の視覚文法として反復する。これは同じ card を複製する規則ではなく、文脈に合う表、列、行、図表へ変形してよい。
+- 固定メンバーは `いーゆー → ぽんた → あかねまみ → おーたか` の順と名前で識別する。この順序を共通台帳、分析表、グラフ凡例へ例外なく適用し、順位、指標値、試合ごとのプレー順で並べ替えない。固定メンバーの順序と、試合記録の `プレー順1〜4` を色やラベルで混同させない。
+- source image と連動する編集 workspace は、対応関係を保つため画像上の並びに合わせてよい。ただし、固定メンバー名と `プレー順N` を別のラベルとして各入力に示し、確定後の結果表示は固定メンバー順へ戻す。結果表示では順位、プレーヤー名、総資産を主情報とし、画面固有の補助指標は対象要求を正本とする。
+- 分析の入口は「平均順位の差が縮まったか」「最近の負けが通常より続いているか」「桃鉄型など別の型を試す根拠があるか」という会話へ答えられる構成にする。順位内訳、平均順位と差、直近範囲、総資産・収益を優先候補とし、型の変更は推薦ではなく根拠付きの仮説として示す。
+- 前後の差は「改善」「後退」「維持」「初戦」と値を併記し、符号付き小数だけに意味を持たせない。
+- 主要結果は同一スコープの比較取得に妨げられず、比較の失敗または対象試合なしでも保存済みの結果を残す。試合の識別情報は文字として残し、ナビゲーションと出力は明示した操作として表す。
 
-## 7. Verification
+## 8. 検証
 
 - UI checker は raw palette、undefined token、arbitrary spacing、small hit target、motion、reduced-motion など決定可能な規則を検査する。
 - component test は state matrix、keyboard、focus、accessible name、local error、pending 中の重複操作を実操作で固定する。
-- 主要 flow は Playwright で PC / mobile の主要状態を確認し、URL、request、保存、download、主要結果を主 oracle とする。意図しない横 scroll、safe area、focus復帰、dialog / disclosure の位置変化も確認する。
-- screenshot は補助とし、視覚レビューでは hierarchy、読み幅、関係的余白、product specificity、restraint、structural fit を確認する。初見の利用者が目的・現在地・主要操作を説明できるかを Trunk Test / cognitive walkthrough で確認する。
-- UI変更の完了時は、対象要求、実行正本、checker、component test、必要な Playwright が同じ規則を検証していることを確認する。
+- 主要 flow は Playwright で、対応する最小幅、代表的なモバイル、タブレット、PC の主要状態を確認し、URL、request、保存、download、主要結果を主 oracle とする。意図しない横 scroll、safe area、focus 復帰、dialog / disclosure の位置変化も確認する。
+- screenshot は補助とし、視覚レビューでは hierarchy、読み幅、関係的余白、product specificity、restraint、structural fit を確認する。初見点検と cognitive walkthrough で、目的、現在地、主要操作を説明できるか確認する。
+- 各利用段階の代表画面は、3秒見た利用者が「いま見る対象」と「次の1操作」を説明できることを確認する。grayscale / blur でも主役が残ること、色なしで固定メンバーと試合ごとのプレー順を区別できること、通常状態で信頼性の注意が出ないこと、同じ事実や内部都合を反復していないことも確認する。
+- OCR 結果修正と手入力は、現行 baseline に対して画像と field の対応理解、修正完了時間、誤修正、操作数を比較し、同等以上であることを確認する。
+- UI 変更の完了時は、対象要求、実行正本、checker、component test、必要な Playwright が同じ規則を検証していることを確認する。

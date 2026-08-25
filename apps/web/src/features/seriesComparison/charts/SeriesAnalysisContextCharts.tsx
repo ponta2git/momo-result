@@ -14,7 +14,7 @@ import {
   formatPercent,
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
 import type { RelativeIntensity, SeriesComparisonAggregateV3 } from "@/shared/api/seriesAnalysis";
-import { dataVizSeriesColor } from "@/shared/ui/dataViz/playerSeries";
+import { dataVizSeriesPresentation } from "@/shared/ui/dataViz/seriesPresentation";
 import { colorMix } from "@/shared/ui/rank/rankPresentation";
 
 const PLAY_ORDERS = [1, 2, 3, 4] as const;
@@ -37,13 +37,13 @@ export function PlayOrderMatrix({
         </tr>
       </thead>
       <tbody>
-        {response.playOrderComparison.map((entry, index) => {
+        {response.playOrderComparison.map((entry) => {
           const cellByPlayOrder = new Map(entry.cells.map((cell) => [cell.playOrder, cell]));
           return (
             <tr key={entry.memberId}>
               <MatrixRowHeader
                 style={{
-                  borderLeftColor: dataVizSeriesColor(index),
+                  borderLeftColor: dataVizSeriesPresentation(entry.memberId).color,
                   borderLeftWidth: 3,
                 }}
               >
@@ -170,7 +170,7 @@ export function CardShopDestinationQuadrants({
 }) {
   return (
     <div className="grid gap-3 lg:grid-cols-2">
-      {response.cardShopDestination.map((entry, index) => (
+      {response.cardShopDestination.map((entry) => (
         <article
           className="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3"
           key={entry.memberId}
@@ -179,7 +179,7 @@ export function CardShopDestinationQuadrants({
             <h3
               className="font-semibold"
               style={{
-                borderLeftColor: dataVizSeriesColor(index),
+                borderLeftColor: dataVizSeriesPresentation(entry.memberId).color,
                 borderLeftWidth: 3,
                 paddingLeft: 8,
               }}

@@ -27,8 +27,9 @@ import type {
   ScoreGridKeyboardHandler,
   ScoreGridNumericHandlers,
 } from "@/features/matches/workspace/scoreGrid/ScoreGridTypes";
-import { fixedMembers, memberDisplayName } from "@/shared/domain/members";
+import { memberDisplayName, workspaceInputMembers } from "@/shared/domain/members";
 import { cn } from "@/shared/ui/cn";
+import { PlayOrderMark, playOrderPresentation } from "@/shared/ui/data/PlayOrderMark";
 
 type ScoreGridDesktopTableProps = ScoreGridData &
   ScoreGridCellRegistry &
@@ -76,9 +77,13 @@ export function ScoreGridDesktopTable({
             <tr
               key={playerSlotKey(rowIndex)}
               className="bg-[var(--color-surface-subtle)]"
-              style={{ "--player-accent": `var(--color-player-${rowIndex + 1})` } as CSSProperties}
+              style={
+                {
+                  "--play-order-accent": playOrderPresentation(player.playOrder).color,
+                } as CSSProperties
+              }
             >
-              <td className="sticky left-0 z-[var(--z-sticky)] rounded-l-[var(--radius-md)] border-l-[3px] border-l-[var(--player-accent)] bg-[var(--color-surface-subtle)] px-2 py-3 align-top">
+              <td className="sticky left-0 z-[var(--z-sticky)] rounded-l-[var(--radius-md)] border-l-[3px] border-l-[var(--play-order-accent)] bg-[var(--color-surface-subtle)] px-2 py-3 align-top">
                 <select
                   ref={(node) => registerCellRef(memberCellId, node)}
                   aria-describedby={memberReviewItem ? `${memberCellId}-review-status` : undefined}
@@ -112,7 +117,7 @@ export function ScoreGridDesktopTable({
                     })
                   }
                 >
-                  {fixedMembers.map((member) => (
+                  {workspaceInputMembers.map((member) => (
                     <option key={member.memberId} value={member.memberId}>
                       {member.displayName}
                     </option>
@@ -124,6 +129,7 @@ export function ScoreGridDesktopTable({
                   reviewItem={memberReviewItem}
                   reviewed={reviewedCellIds.has(memberCellId)}
                 />
+                <PlayOrderMark className="mt-1" playOrder={player.playOrder} />
               </td>
 
               <td className="px-2 py-3 align-top">

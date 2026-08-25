@@ -1,11 +1,10 @@
+import { finiteNumber, indexTicks, niceCeil, numberTicks } from "@/shared/ui/dataViz/scales";
 import {
   DataVizLegend,
   DataVizPointMark,
-  dataVizSeriesColor,
-  dataVizSeriesDash,
-} from "@/shared/ui/dataViz/playerSeries";
-import type { DataVizSeriesIdentity } from "@/shared/ui/dataViz/playerSeries";
-import { finiteNumber, indexTicks, niceCeil, numberTicks } from "@/shared/ui/dataViz/scales";
+  dataVizSeriesPresentation,
+} from "@/shared/ui/dataViz/seriesPresentation";
+import type { DataVizSeriesIdentity } from "@/shared/ui/dataViz/seriesPresentation";
 
 export type DataVizLineSeries = {
   id: string;
@@ -54,7 +53,6 @@ export function DataVizLineChart({
   const ySpan = Math.max(minimumYStep, maxValue - minValue);
   const chartWidth = width - padding.left - padding.right;
   const chartHeight = height - padding.top - padding.bottom;
-  const identityIndex = new Map(seriesIdentity.map((item, index) => [item.id, index]));
   const nameById = new Map(seriesIdentity.map((item) => [item.id, item.label]));
   const x = (index: number) =>
     padding.left + ((index - 1) / Math.max(1, maxIndex - 1)) * chartWidth;
@@ -156,7 +154,7 @@ export function DataVizLineChart({
             </text>
           ))}
           {series.map((item) => {
-            const seriesIndex = identityIndex.get(item.id) ?? 0;
+            const presentation = dataVizSeriesPresentation(item.id);
             const path = item.points
               .map(
                 (point, index) => `${index === 0 ? "M" : "L"} ${x(point.index)} ${y(point.value)}`,
@@ -166,10 +164,11 @@ export function DataVizLineChart({
               <g key={item.id}>
                 <title>{nameById.get(item.id) ?? item.id}</title>
                 <path
+                  data-series-id={item.id}
                   d={path}
                   fill="none"
-                  stroke={dataVizSeriesColor(seriesIndex)}
-                  strokeDasharray={dataVizSeriesDash(seriesIndex)}
+                  stroke={presentation.color}
+                  strokeDasharray={presentation.dash}
                   strokeLinecap="round"
                   strokeWidth="1.8"
                 />
@@ -178,9 +177,9 @@ export function DataVizLineChart({
                       <DataVizPointMark
                         cx={x(point.index)}
                         cy={y(point.value)}
-                        index={seriesIndex}
                         key={point.itemId}
                         outlined={focusItemIds.includes(point.itemId)}
+                        seriesId={item.id}
                         size={focusItemIds.includes(point.itemId) ? 4 : 2.5}
                       />
                     ))
@@ -190,9 +189,9 @@ export function DataVizLineChart({
                         <DataVizPointMark
                           cx={x(point.index)}
                           cy={y(point.value)}
-                          index={seriesIndex}
                           key={point.itemId}
                           outlined
+                          seriesId={item.id}
                           size={4}
                         />
                       ))}

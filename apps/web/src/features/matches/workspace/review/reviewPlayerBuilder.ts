@@ -21,7 +21,7 @@ import {
   reviewWarningMessage,
 } from "@/features/matches/workspace/review/reviewWarningModel";
 import type { MemberAliasDirectory } from "@/shared/domain/memberDirectory";
-import { fixedMembers } from "@/shared/domain/members";
+import { workspaceInputMembers } from "@/shared/domain/members";
 
 type ParsedReviewDraft = {
   payload: OcrDraftPayload;
@@ -67,7 +67,7 @@ export function buildReviewPlayers(
   const memberIds = directory.memberIds;
   const sourcePlayers = parsed.totalAssets?.payload.players.length
     ? parsed.totalAssets.payload.players
-    : fixedMembers.map(() => undefined);
+    : workspaceInputMembers.map(() => undefined);
   const trimmedSources = sourcePlayers.slice(0, 4);
   const resolvedMemberIds = resolveMemberIds(trimmedSources, directory);
   const resolvedPlayOrders = resolvePlayOrders(trimmedSources);

@@ -1,4 +1,4 @@
-import { fixedMembers } from "@/shared/domain/members";
+import { workspaceInputMembers } from "@/shared/domain/members";
 
 const maxAliasesPerPlayerHint = 8;
 
@@ -39,7 +39,7 @@ export function buildMemberAliasDirectory(
 ): MemberAliasDirectory {
   const aliasesByMemberId = new Map<string, string[]>();
 
-  for (const member of fixedMembers) {
+  for (const member of workspaceInputMembers) {
     aliasesByMemberId.set(
       member.memberId,
       uniqueAliases([
@@ -54,7 +54,7 @@ export function buildMemberAliasDirectory(
 
   return {
     aliasesByMemberId,
-    memberIds: fixedMembers.map((member) => member.memberId),
+    memberIds: workspaceInputMembers.map((member) => member.memberId),
   };
 }
 

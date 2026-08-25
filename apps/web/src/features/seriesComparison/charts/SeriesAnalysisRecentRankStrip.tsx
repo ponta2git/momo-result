@@ -7,7 +7,7 @@ import {
 import { SeriesAnalysisMatchLink } from "@/features/seriesComparison/navigation/SeriesAnalysisMatchLink";
 import { SeriesAnalysisQualityAdvisory } from "@/features/seriesComparison/SeriesAnalysisQualityAdvisory";
 import type { SeriesComparisonAggregateV3 } from "@/shared/api/seriesAnalysis";
-import { dataVizSeriesColor } from "@/shared/ui/dataViz/playerSeries";
+import { dataVizSeriesPresentation } from "@/shared/ui/dataViz/seriesPresentation";
 import { rankColor, rankForegroundColor } from "@/shared/ui/rank/rankPresentation";
 
 export function RecentRankStrips({
@@ -99,7 +99,7 @@ export function RecentRankStrips({
             </tr>
           </thead>
           <tbody>
-            {orderedEntries.map(({ entry, player }, playerIndex) => {
+            {orderedEntries.map(({ entry, player }) => {
               const rowsByMatchId = new Map((entry?.rows ?? []).map((row) => [row.matchId, row]));
               return (
                 <tr key={player.memberId}>
@@ -107,7 +107,7 @@ export function RecentRankStrips({
                     className="sticky left-0 z-[var(--z-base)] w-40 min-w-40 bg-[var(--color-surface-subtle)] py-1 pr-2 text-left align-middle"
                     scope="row"
                     style={{
-                      borderLeftColor: dataVizSeriesColor(playerIndex),
+                      borderLeftColor: dataVizSeriesPresentation(player.memberId).color,
                       borderLeftWidth: 3,
                       paddingLeft: 8,
                     }}

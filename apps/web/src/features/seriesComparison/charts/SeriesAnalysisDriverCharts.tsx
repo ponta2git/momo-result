@@ -17,8 +17,8 @@ import {
 import type { SeriesComparisonAggregateV3 } from "@/shared/api/seriesAnalysis";
 import { currentInternalLocation, withReturnTo } from "@/shared/navigation/returnTo";
 import { DataVizHistogramChart } from "@/shared/ui/dataViz/HistogramChart";
-import { dataVizSeriesColor } from "@/shared/ui/dataViz/playerSeries";
 import { DataVizScatterPlot } from "@/shared/ui/dataViz/ScatterPlot";
+import { dataVizSeriesPresentation } from "@/shared/ui/dataViz/seriesPresentation";
 import { rankBackgroundColor, rankBorderColor } from "@/shared/ui/rank/rankPresentation";
 
 export function AssetRevenueHistograms({ response }: { response: SeriesComparisonAggregateV3 }) {
@@ -83,7 +83,7 @@ export function RevenueConversionMatrices({
         ]}
       />
       <div className="grid gap-3 lg:grid-cols-2">
-        {response.revenueRankConversion.map((entry, playerIndex) => {
+        {response.revenueRankConversion.map((entry) => {
           const cellByRanks = new Map(
             entry.cells.map((cell) => [`${cell.revenueRank}:${cell.finalRank}`, cell]),
           );
@@ -95,7 +95,7 @@ export function RevenueConversionMatrices({
               <h3
                 className="mb-3 text-sm font-semibold"
                 style={{
-                  borderLeftColor: dataVizSeriesColor(playerIndex),
+                  borderLeftColor: dataVizSeriesPresentation(entry.memberId).color,
                   borderLeftWidth: 3,
                   paddingLeft: 8,
                 }}

@@ -11,11 +11,13 @@ import { installMatchMediaController } from "@/test/doubles/dom";
 import type { MatchMediaController } from "@/test/doubles/dom";
 
 function ScoreGridHarness({
+  initialPlayers = emptyPlayers(),
   onPlayerChange,
 }: {
+  initialPlayers?: MatchFormValues["players"];
   onPlayerChange: (index: number, patch: Partial<MatchFormValues["players"][number]>) => void;
 }) {
-  const [players, setPlayers] = useState(emptyPlayers());
+  const [players, setPlayers] = useState(initialPlayers);
 
   return (
     <ScoreGrid
@@ -174,6 +176,38 @@ describe("ScoreGrid", () => {
 
     expect(onPlayerChange).toHaveBeenLastCalledWith(0, { memberId: "member_eu" });
     expect(memberSelect).toHaveValue("member_eu");
+  });
+
+  it("keeps desktop and mobile accents attached to playOrder instead of row index", () => {
+    const players = emptyPlayers();
+    for (const [index, player] of players.entries()) {
+      player.playOrder = index === 1 ? 9 : 4 - index;
+    }
+    const onPlayerChange = vi.fn();
+
+    const desktop = render(
+      <ScoreGridHarness initialPlayers={players} onPlayerChange={onPlayerChange} />,
+    );
+
+    expect(desktop.container.querySelector('[data-play-order="4"]')?.closest("tr")).toHaveStyle({
+      "--play-order-accent": "var(--color-play-order-4)",
+    });
+    expect(
+      desktop.container.querySelector('[data-play-order="unknown"]')?.closest("tr"),
+    ).toHaveStyle({ "--play-order-accent": "var(--color-border-strong)" });
+    desktop.unmount();
+
+    matchMedia = installMatchMediaController(true);
+    const mobile = render(
+      <ScoreGridHarness initialPlayers={players} onPlayerChange={onPlayerChange} />,
+    );
+
+    expect(mobile.container.querySelector('[data-play-order="4"]')?.closest("article")).toHaveStyle(
+      { "--play-order-accent": "var(--color-play-order-4)" },
+    );
+    expect(
+      mobile.container.querySelector('[data-play-order="unknown"]')?.closest("article"),
+    ).toHaveStyle({ "--play-order-accent": "var(--color-border-strong)" });
   });
 
   it("does not commit NaN when a mobile numeric draft is incomplete", async () => {

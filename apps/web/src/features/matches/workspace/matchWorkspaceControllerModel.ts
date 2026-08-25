@@ -102,6 +102,7 @@ export function buildMatchWorkspaceControllerModel(args: MatchWorkspaceControlle
             confirmAction: args.confirmAction,
             onCancel: args.closeConfirm,
           },
+          pending: args.isMutating,
           summary: {
             gameTitleName: viewModel.selectedGameTitle?.name,
             heldEvent: viewModel.selectedHeldEvent,

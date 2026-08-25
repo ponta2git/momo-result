@@ -20,6 +20,7 @@ import type {
 } from "@/features/matches/workspace/scoreGrid/ScoreGridTypes";
 import { memberDisplayName } from "@/shared/domain/members";
 import { Disclosure } from "@/shared/ui/data/Collapsible";
+import { PlayOrderMark, playOrderPresentation } from "@/shared/ui/data/PlayOrderMark";
 import { RankBadge } from "@/shared/ui/rank/RankBadge";
 
 type ScoreGridMobileCardsProps = ScoreGridData &
@@ -64,8 +65,12 @@ export function ScoreGridMobileCards({
         return (
           <article
             key={playerSlotKey(index)}
-            className="rounded-[var(--radius-md)] border border-l-[3px] border-[var(--color-border)] border-l-[var(--player-accent)] bg-[var(--color-surface)] p-3"
-            style={{ "--player-accent": `var(--color-player-${index + 1})` } as CSSProperties}
+            className="rounded-[var(--radius-md)] border border-l-[3px] border-[var(--color-border)] border-l-[var(--play-order-accent)] bg-[var(--color-surface)] p-3"
+            style={
+              {
+                "--play-order-accent": playOrderPresentation(player.playOrder).color,
+              } as CSSProperties
+            }
           >
             <Disclosure
               open={expandedMobilePlayer === index}
@@ -77,6 +82,7 @@ export function ScoreGridMobileCards({
                       {memberDisplayName(player.memberId)}
                     </span>
                     <span className="mt-1 flex flex-wrap items-center gap-2 text-xs text-[var(--color-text-secondary)] tabular-nums">
+                      <PlayOrderMark playOrder={player.playOrder} />
                       <RankBadge rank={player.rank} />
                       <span>総資産 {player.totalAssetsManYen.toLocaleString()}万円</span>
                       {unresolvedCount > 0 ? <span>・ 未確認 {unresolvedCount}</span> : null}

@@ -48,6 +48,19 @@ function draft(kind: "total_assets" | "revenue" | "incident_log"): OcrDraftRespo
 }
 
 describe("mergeDrafts", () => {
+  it("preserves workspace member, playOrder, and rank fallbacks when OCR drafts are absent", () => {
+    const merged = mergeDrafts({});
+
+    expect(
+      merged.players.map(({ memberId, playOrder, rank }) => ({ memberId, playOrder, rank })),
+    ).toEqual([
+      { memberId: "member_ponta", playOrder: 1, rank: 1 },
+      { memberId: "member_akane_mami", playOrder: 2, rank: 2 },
+      { memberId: "member_otaka", playOrder: 3, rank: 3 },
+      { memberId: "member_eu", playOrder: 4, rank: 4 },
+    ]);
+  });
+
   it("uses aliases and maps Japanese incidents to review rows", () => {
     const merged = mergeDrafts({
       total_assets: draft("total_assets"),

@@ -15,7 +15,7 @@ import {
 } from "@/features/seriesComparison/SeriesAnalysisQualityAdvisory";
 import type { SeriesComparisonAggregateV3 } from "@/shared/api/seriesAnalysis";
 import { Disclosure } from "@/shared/ui/data/Collapsible";
-import { dataVizSeriesColor } from "@/shared/ui/dataViz/playerSeries";
+import { dataVizSeriesPresentation } from "@/shared/ui/dataViz/seriesPresentation";
 
 type MatchNoEntry = SeriesComparisonAggregateV3["matchNoInEvent"]["entries"][number];
 
@@ -74,10 +74,13 @@ function MatchNoMatrix({
       <thead>
         <tr>
           <MatrixAxisHeader className="w-28" columnLabel="プレーヤー" rowLabel="試合順" />
-          {response.players.map((player, playerIndex) => (
+          {response.players.map((player) => (
             <MatrixColumnHeader
               key={player.memberId}
-              style={{ borderTopColor: dataVizSeriesColor(playerIndex), borderTopWidth: 3 }}
+              style={{
+                borderTopColor: dataVizSeriesPresentation(player.memberId).color,
+                borderTopWidth: 3,
+              }}
             >
               {player.displayName}
             </MatrixColumnHeader>

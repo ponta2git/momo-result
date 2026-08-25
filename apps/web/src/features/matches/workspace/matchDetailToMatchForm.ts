@@ -1,7 +1,7 @@
 import type { MatchFormValues } from "@/features/matches/workspace/matchFormTypes";
 import { createEmptyMatchForm, emptyIncidents } from "@/features/matches/workspace/matchFormTypes";
 import type { MatchDetailResponse } from "@/shared/api/matches";
-import { fixedMembers } from "@/shared/domain/members";
+import { workspaceInputMembers } from "@/shared/domain/members";
 
 export function matchDetailToMatchForm(detail: MatchDetailResponse): MatchFormValues {
   const base = createEmptyMatchForm(detail.playedAt);
@@ -25,7 +25,7 @@ export function matchDetailToMatchForm(detail: MatchDetailResponse): MatchFormVa
   }));
 
   while (players.length < 4) {
-    const member = fixedMembers[players.length];
+    const member = workspaceInputMembers[players.length];
     players.push({
       incidents: emptyIncidents(),
       memberId: member?.memberId ?? base.ownerMemberId,

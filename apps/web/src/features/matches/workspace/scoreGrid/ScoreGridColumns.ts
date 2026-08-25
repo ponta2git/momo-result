@@ -1,6 +1,6 @@
 import { incidentColumns } from "@/shared/domain/incidents";
 import type { IncidentKey, IncidentLabel } from "@/shared/domain/incidents";
-import { fixedMembers } from "@/shared/domain/members";
+import { workspaceInputMembers } from "@/shared/domain/members";
 import { fieldControlClass } from "@/shared/ui/forms/controlStyles";
 
 export type GridColumn =
@@ -60,7 +60,7 @@ export const gridColumns = scoreGridColumns.map((column) => column.column);
 export const incidentScoreGridColumns = scoreGridColumns.filter(isIncidentScoreGridColumn);
 
 export function playerSlotKey(index: number): string {
-  return fixedMembers[index]?.memberId ?? `extra-player-${index}`;
+  return workspaceInputMembers[index]?.memberId ?? `extra-player-${index}`;
 }
 
 export const baseInputClass = `${fieldControlClass} px-2`;

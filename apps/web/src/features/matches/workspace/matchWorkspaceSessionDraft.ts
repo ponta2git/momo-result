@@ -1,10 +1,10 @@
 import { z } from "zod";
 
 import type { MatchFormValues, WorkspaceMode } from "@/features/matches/workspace/matchFormTypes";
-import { fixedMembers } from "@/shared/domain/members";
+import { fixedMemberIds } from "@/shared/domain/members";
 
 const storagePrefix = "momoresult.matchWorkspaceDraft.v1.";
-const memberIds = fixedMembers.map((member) => member.memberId) as [string, ...string[]];
+const memberIds = [...fixedMemberIds] as [string, ...string[]];
 
 const incidentSchema = z.object({
   cardShop: z.number().finite(),

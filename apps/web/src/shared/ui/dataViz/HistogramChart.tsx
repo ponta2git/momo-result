@@ -1,6 +1,6 @@
-import { dataVizSeriesColor } from "@/shared/ui/dataViz/playerSeries";
-import type { DataVizSeriesIdentity } from "@/shared/ui/dataViz/playerSeries";
 import { niceCeil, numberTicks } from "@/shared/ui/dataViz/scales";
+import { dataVizSeriesPresentation } from "@/shared/ui/dataViz/seriesPresentation";
+import type { DataVizSeriesIdentity } from "@/shared/ui/dataViz/seriesPresentation";
 
 export function DataVizHistogramChart({
   ariaLabel,
@@ -19,10 +19,10 @@ export function DataVizHistogramChart({
   return (
     <figure aria-label={ariaLabel} className="grid gap-3">
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        {seriesIdentity.map((identity, index) => (
+        {seriesIdentity.map((identity) => (
           <SingleHistogram
             bins={bins}
-            color={dataVizSeriesColor(index)}
+            color={dataVizSeriesPresentation(identity.id).color}
             countCeil={countCeil}
             counts={countsById.get(identity.id) ?? []}
             identity={identity}

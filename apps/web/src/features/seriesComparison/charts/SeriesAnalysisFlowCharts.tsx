@@ -14,7 +14,7 @@ import {
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
 import type { SeriesComparisonAggregateV3 } from "@/shared/api/seriesAnalysis";
 import { DataVizLineChart } from "@/shared/ui/dataViz/LineChart";
-import { dataVizSeriesColor } from "@/shared/ui/dataViz/playerSeries";
+import { dataVizSeriesPresentation } from "@/shared/ui/dataViz/seriesPresentation";
 import { rankBackgroundColor, rankBorderColor } from "@/shared/ui/rank/rankPresentation";
 
 export function RankTrendCharts({
@@ -150,7 +150,7 @@ export function MomentumMatrices({
         ]}
       />
       <div className="grid gap-3 lg:grid-cols-2">
-        {response.momentumSwitch.map((entry, index) => {
+        {response.momentumSwitch.map((entry) => {
           const cellByRanks = new Map(
             entry.cells.map((cell) => [`${cell.previousRank}:${cell.nextRank}`, cell]),
           );
@@ -162,7 +162,7 @@ export function MomentumMatrices({
               <h3
                 className="mb-3 font-semibold"
                 style={{
-                  borderLeftColor: dataVizSeriesColor(index),
+                  borderLeftColor: dataVizSeriesPresentation(entry.memberId).color,
                   borderLeftWidth: 3,
                   paddingLeft: 8,
                 }}

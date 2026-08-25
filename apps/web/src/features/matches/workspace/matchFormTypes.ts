@@ -6,7 +6,7 @@ import type {
 import type { OcrDraftResponse } from "@/shared/api/ocrDrafts";
 import { emptyIncidentCountsByKey } from "@/shared/domain/incidents";
 import type { IncidentKey, IncidentLabel } from "@/shared/domain/incidents";
-import { fixedMembers } from "@/shared/domain/members";
+import { defaultOwnerMemberId, workspaceInputMembers } from "@/shared/domain/members";
 import type { SlotMap } from "@/shared/lib/slotMap";
 
 export type { IncidentKey, IncidentLabel };
@@ -70,7 +70,7 @@ export const emptyIncidents = (): Record<IncidentKey, number> => ({
 });
 
 export function emptyPlayers(): MatchFormValues["players"] {
-  return fixedMembers.map((member, index) => ({
+  return workspaceInputMembers.map((member, index) => ({
     incidents: emptyIncidents(),
     memberId: member.memberId,
     playOrder: index + 1,
@@ -87,7 +87,7 @@ export function createEmptyMatchForm(nowIso: string): MatchFormValues {
     heldEventId: "",
     mapMasterId: "",
     matchNoInEvent: 1,
-    ownerMemberId: fixedMembers[0]?.memberId ?? "member_ponta",
+    ownerMemberId: defaultOwnerMemberId,
     playedAt: nowIso,
     players: emptyPlayers(),
     seasonMasterId: "",

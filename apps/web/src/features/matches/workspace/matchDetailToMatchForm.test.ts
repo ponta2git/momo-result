@@ -130,7 +130,7 @@ describe("matchDetailToMatchForm", () => {
     expect(values.players[0]!.incidents).toEqual(incidents);
   });
 
-  it("pads to 4 players using fixedMembers when fewer players are returned", () => {
+  it("pads to 4 players using the existing workspace input slot order", () => {
     const values = matchDetailToMatchForm(
       detail({
         players: [
@@ -155,6 +155,12 @@ describe("matchDetailToMatchForm", () => {
     );
 
     expect(values.players).toHaveLength(4);
+    expect(values.players.map((player) => player.memberId)).toEqual([
+      "member_ponta",
+      "member_akane_mami",
+      "member_otaka",
+      "member_eu",
+    ]);
     expect(values.players[2]!.playOrder).toBe(3);
     expect(values.players[2]!.rank).toBe(3);
     expect(values.players[2]!.totalAssetsManYen).toBe(0);

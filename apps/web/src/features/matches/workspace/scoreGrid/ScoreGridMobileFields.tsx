@@ -18,7 +18,7 @@ import type {
   ScoreGridCellRegistry,
   ScoreGridNumericHandlers,
 } from "@/features/matches/workspace/scoreGrid/ScoreGridTypes";
-import { fixedMembers, memberDisplayName } from "@/shared/domain/members";
+import { memberDisplayName, workspaceInputMembers } from "@/shared/domain/members";
 import { cn } from "@/shared/ui/cn";
 
 export function MobileMemberSelect({
@@ -64,7 +64,7 @@ export function MobileMemberSelect({
           onReviewCellFocus(index, "memberId");
         }}
       >
-        {fixedMembers.map((member) => (
+        {workspaceInputMembers.map((member) => (
           <option key={member.memberId} value={member.memberId}>
             {member.displayName}
           </option>

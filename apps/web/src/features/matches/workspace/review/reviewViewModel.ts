@@ -26,7 +26,7 @@ import {
 } from "@/features/matches/workspace/review/reviewWarningModel";
 import { defaultMemberAliasDirectory } from "@/shared/domain/memberDirectory";
 import type { MemberAliasDirectory } from "@/shared/domain/memberDirectory";
-import { fixedMembers } from "@/shared/domain/members";
+import { workspaceInputMembers } from "@/shared/domain/members";
 import { pipe } from "@/shared/lib/pipe";
 
 export type ReviewPlayer = OriginalPlayerSnapshot;
@@ -122,7 +122,7 @@ function padToFour(players: readonly ReviewPlayer[]): ReviewPlayer[] {
   }
   const usedMemberIds = new Set(players.map((player) => player.memberId));
   const padded: ReviewPlayer[] = [...players];
-  for (const member of fixedMembers) {
+  for (const member of workspaceInputMembers) {
     if (padded.length >= 4) {
       break;
     }

@@ -1,9 +1,9 @@
 import { z } from "zod";
 
 import type { ConfirmMatchRequest } from "@/shared/api/matches";
-import { fixedMembers } from "@/shared/domain/members";
+import { fixedMemberIds } from "@/shared/domain/members";
 
-const memberIds = fixedMembers.map((member) => member.memberId) as [string, ...string[]];
+const memberIds = [...fixedMemberIds] as [string, ...string[]];
 
 const incidentSchema = z.object({
   destination: z.number().int().min(0),

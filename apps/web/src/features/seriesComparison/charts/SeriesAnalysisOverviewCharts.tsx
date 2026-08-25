@@ -13,7 +13,7 @@ import {
   headToHeadSignalLabel,
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
 import type { RelativeIntensity, SeriesComparisonAggregateV3 } from "@/shared/api/seriesAnalysis";
-import { dataVizSeriesColor } from "@/shared/ui/dataViz/playerSeries";
+import { dataVizSeriesPresentation } from "@/shared/ui/dataViz/seriesPresentation";
 import { colorMix, rankColor } from "@/shared/ui/rank/rankPresentation";
 
 type OverviewChartProps = {
@@ -44,7 +44,7 @@ export function RankDistributionBars({ focusedItemIds, response }: OverviewChart
         ))}
       </div>
       <div className="grid gap-2">
-        {response.players.map((player, playerIndex) => {
+        {response.players.map((player) => {
           const entry = response.rankDistribution.find(
             (candidate) => candidate.memberId === player.memberId,
           );
@@ -57,7 +57,7 @@ export function RankDistributionBars({ focusedItemIds, response }: OverviewChart
               <div
                 className="text-sm font-semibold break-words"
                 style={{
-                  borderLeftColor: dataVizSeriesColor(playerIndex),
+                  borderLeftColor: dataVizSeriesPresentation(player.memberId).color,
                   borderLeftWidth: 3,
                   paddingLeft: 8,
                 }}
@@ -132,7 +132,7 @@ export function CrownShareBars({ response }: { response: SeriesComparisonAggrega
         className="flex h-3 overflow-hidden rounded-full bg-[var(--color-surface-subtle)]"
         role="img"
       >
-        {response.players.map((player, index) => {
+        {response.players.map((player) => {
           const share = shareByMemberId.get(player.memberId) ?? 0;
           return (
             <span
@@ -140,7 +140,7 @@ export function CrownShareBars({ response }: { response: SeriesComparisonAggrega
               className="block h-full"
               key={player.memberId}
               style={{
-                backgroundColor: dataVizSeriesColor(index),
+                backgroundColor: dataVizSeriesPresentation(player.memberId).color,
                 flexBasis: `${share * 100}%`,
                 flexGrow: 0,
                 flexShrink: 0,
@@ -150,14 +150,14 @@ export function CrownShareBars({ response }: { response: SeriesComparisonAggrega
         })}
       </div>
       <dl className="grid gap-px overflow-hidden rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-border)] sm:grid-cols-2 xl:grid-cols-4">
-        {response.players.map((player, index) => {
+        {response.players.map((player) => {
           const share = shareByMemberId.get(player.memberId);
           return (
             <div
               className="flex items-center justify-between gap-2 bg-[var(--color-surface)] px-3 py-2"
               key={player.memberId}
               style={{
-                borderLeftColor: dataVizSeriesColor(index),
+                borderLeftColor: dataVizSeriesPresentation(player.memberId).color,
                 borderLeftWidth: 3,
               }}
             >
@@ -179,11 +179,11 @@ export function HeadToHeadMatrix({ response }: { response: SeriesComparisonAggre
       <thead>
         <tr>
           <MatrixAxisHeader className="w-36" columnLabel="相手" rowLabel="本人" />
-          {response.players.map((player, playerIndex) => (
+          {response.players.map((player) => (
             <MatrixColumnHeader
               key={player.memberId}
               style={{
-                borderTopColor: dataVizSeriesColor(playerIndex),
+                borderTopColor: dataVizSeriesPresentation(player.memberId).color,
                 borderTopWidth: 3,
               }}
             >
@@ -193,11 +193,11 @@ export function HeadToHeadMatrix({ response }: { response: SeriesComparisonAggre
         </tr>
       </thead>
       <tbody>
-        {response.players.map((subject, subjectIndex) => (
+        {response.players.map((subject) => (
           <tr key={subject.memberId}>
             <MatrixRowHeader
               style={{
-                borderLeftColor: dataVizSeriesColor(subjectIndex),
+                borderLeftColor: dataVizSeriesPresentation(subject.memberId).color,
                 borderLeftWidth: 3,
               }}
             >

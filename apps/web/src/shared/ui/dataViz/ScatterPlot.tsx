@@ -1,6 +1,6 @@
-import { DataVizLegend, DataVizPointMark } from "@/shared/ui/dataViz/playerSeries";
-import type { DataVizSeriesIdentity } from "@/shared/ui/dataViz/playerSeries";
 import { finiteNumber, niceCeil, numberTicks } from "@/shared/ui/dataViz/scales";
+import { DataVizLegend, DataVizPointMark } from "@/shared/ui/dataViz/seriesPresentation";
+import type { DataVizSeriesIdentity } from "@/shared/ui/dataViz/seriesPresentation";
 
 export type DataVizScatterPoint = {
   href?: string | undefined;
@@ -54,7 +54,6 @@ export function DataVizScatterPlot({
   const ySpan = Math.max(yMinimumStep, maxY - minY);
   const chartWidth = width - padding.left - padding.right;
   const chartHeight = height - padding.top - padding.bottom;
-  const identityIndex = new Map(seriesIdentity.map((item, index) => [item.id, index]));
   const x = (value: number) => padding.left + ((value - minX) / xSpan) * chartWidth;
   const y = (value: number) => padding.top + (1 - (value - minY) / ySpan) * chartHeight;
 
@@ -130,9 +129,9 @@ export function DataVizScatterPlot({
               <DataVizPointMark
                 cx={x(point.x)}
                 cy={y(point.y)}
-                index={identityIndex.get(point.seriesId) ?? 0}
                 opacity={focused ? 1 : focusItemIds.length > 0 ? 0.48 : 0.78}
                 outlined={focused}
+                seriesId={point.seriesId}
                 size={focused ? 5 : 3.5}
               >
                 <title>{`${point.label}${focused ? "、この試合" : ""}`}</title>

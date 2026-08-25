@@ -19,12 +19,14 @@ export function MatchesTable({ items, rowActions }: MatchesTableProps) {
   const actionsDisabled = rowActions.disabled ?? false;
   return (
     <DataTable
+      caption={{ content: "登録済みの試合" }}
       columns={[
         {
           header: "開催・試合",
           key: "match",
           minWidth: "15rem",
           renderCell: (item) => <MatchListMatchIdentity item={item} />,
+          rowHeader: true,
           width: "17rem",
         },
         {

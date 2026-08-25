@@ -1,0 +1,157 @@
+import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { describe, expect, it, vi } from "vitest";
+
+import { MatchesFilterBar } from "@/features/matches/list/MatchesFilterBar";
+import type {
+  MatchListFilterCandidates,
+  MatchListSearch,
+} from "@/features/matches/list/matchListTypes";
+
+const initialSearch: MatchListSearch = {
+  cursor: "",
+  gameTitleId: "",
+  heldEventId: "",
+  pageSize: 10,
+  seasonMasterId: "",
+  sort: "held_desc",
+  status: "all",
+};
+
+const counts = {
+  incompleteCount: 8,
+  needsReviewCount: 2,
+  ocrRunningCount: 3,
+  preConfirmCount: 5,
+};
+
+const candidates: MatchListFilterCandidates = {
+  gameTitles: [
+    {
+      createdAt: "2026-01-01T00:00:00.000Z",
+      displayOrder: 1,
+      id: "game-1",
+      layoutFamily: "momotetsu_2",
+      name: "桃太郎電鉄2",
+    },
+  ],
+  heldEvents: [],
+  seasons: [
+    {
+      createdAt: "2026-01-01T00:00:00.000Z",
+      displayOrder: 1,
+      gameTitleId: "game-1",
+      id: "season-1",
+      name: "今シーズン",
+    },
+  ],
+};
+
+describe("MatchesFilterBar", () => {
+  it("keeps status, sort, details, complete summary, result count, and actions in one surface", async () => {
+    const user = userEvent.setup();
+    const onClear = vi.fn();
+    const onRefresh = vi.fn();
+
+    render(
+      <MatchesFilterBar
+        actions={{ onApply: vi.fn(), onClear }}
+        candidates={candidates}
+        counts={counts}
+        resultCount={42}
+        search={{
+          ...initialSearch,
+          gameTitleId: "game-1",
+          seasonMasterId: "season-1",
+          sort: "updated_desc",
+          status: "needs_review",
+        }}
+        onRefresh={onRefresh}
+      />,
+    );
+
+    const surface = screen.getByRole("region", { name: "試合の表示条件" });
+    expect(within(surface).getByRole("group", { name: "確定状況" })).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "確定状況" })).not.toBeInTheDocument();
+    expect(surface).toHaveTextContent(
+      "適用中: 確定状況 要確認のみ・並び順 更新が新しい順・作品 桃太郎電鉄2・シーズン 今シーズン",
+    );
+    expect(surface).toHaveTextContent("42件");
+
+    const detailTrigger = within(surface).getByRole("button", { name: /^詳細条件/u });
+    expect(detailTrigger).toHaveAttribute("aria-expanded", "true");
+    expect(within(surface).getByLabelText("開催")).toBeInTheDocument();
+
+    const resetButton = within(surface).getByRole("button", {
+      name: "確定状況・並び順・詳細条件を初期状態に戻す",
+    });
+    expect(
+      within(surface).getAllByRole("button", {
+        name: "確定状況・並び順・詳細条件を初期状態に戻す",
+      }),
+    ).toHaveLength(1);
+    await user.click(resetButton);
+    expect(onClear).toHaveBeenCalledOnce();
+
+    await user.click(within(surface).getByRole("button", { name: "最新情報に更新" }));
+    expect(onRefresh).toHaveBeenCalledOnce();
+  });
+
+  it("clears the cursor when status or sort changes", async () => {
+    const user = userEvent.setup();
+    const onApply = vi.fn();
+    const search = { ...initialSearch, cursor: "opaque-cursor" };
+
+    const { rerender } = render(
+      <MatchesFilterBar
+        actions={{ onApply, onClear: vi.fn() }}
+        candidates={candidates}
+        counts={counts}
+        search={search}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /処理中3件/u }));
+    expect(onApply).toHaveBeenLastCalledWith({ ...search, cursor: "", status: "ocr_running" });
+
+    onApply.mockClear();
+    rerender(
+      <MatchesFilterBar
+        actions={{ onApply, onClear: vi.fn() }}
+        candidates={candidates}
+        counts={counts}
+        search={search}
+      />,
+    );
+    await user.selectOptions(screen.getByLabelText("並び順"), "updated_desc");
+    expect(onApply).toHaveBeenLastCalledWith({ ...search, cursor: "", sort: "updated_desc" });
+  });
+
+  it("keeps detail controls mounted while collapsed and exposes aggregate busy state", () => {
+    render(
+      <MatchesFilterBar
+        actions={{ onApply: vi.fn(), onClear: vi.fn() }}
+        candidates={candidates}
+        counts={counts}
+        search={initialSearch}
+        summaryLoading
+      />,
+    );
+
+    const surface = screen.getByRole("region", { name: "試合の表示条件" });
+    expect(surface).toHaveAttribute("aria-busy", "true");
+    expect(within(surface).getByRole("button", { name: /^詳細条件/u })).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
+    expect(within(surface).getByLabelText("開催")).toBeInTheDocument();
+    expect(surface).toHaveTextContent(
+      "適用中: 確定状況 すべて・並び順 開催が新しい順・開催・作品・シーズン すべて",
+    );
+    expect(
+      within(surface).queryByRole("button", {
+        name: "確定状況・並び順・詳細条件を初期状態に戻す",
+      }),
+    ).not.toBeInTheDocument();
+  });
+});

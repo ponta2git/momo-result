@@ -111,13 +111,13 @@ export function MatchesStatusRail({
   const unfinishedSelected = unfinishedStatuses.has(currentStatus);
 
   return (
-    <section
-      aria-busy={loading || masked || undefined}
+    <div
       aria-label="確定状況"
       className={cn(
-        "rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 transition-opacity duration-[var(--motion-base)] motion-reduce:transition-none",
+        "min-w-0 transition-opacity duration-[var(--motion-base)] motion-reduce:transition-none",
         masked ? "opacity-70" : "opacity-100",
       )}
+      role="group"
     >
       <LayoutGroup id="matches-main-status">
         <div className="grid grid-cols-3 gap-1 rounded-[var(--radius-sm)] bg-[var(--color-surface-subtle)] p-1">
@@ -210,6 +210,6 @@ export function MatchesStatusRail({
           })}
         </LayoutGroup>
       </div>
-    </section>
+    </div>
   );
 }

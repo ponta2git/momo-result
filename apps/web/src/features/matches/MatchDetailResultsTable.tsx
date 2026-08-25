@@ -45,6 +45,7 @@ export function MatchDetailResultsTable({
         header: "プレーヤー",
         minWidth: "10rem",
         renderCell: (player) => memberDisplayName(player.memberId),
+        rowHeader: true,
       }),
       sortable("rank", {
         align: "right",
@@ -79,5 +80,12 @@ export function MatchDetailResultsTable({
     ];
   }, [setSortKey, sort.direction, sort.key]);
 
-  return <DataTable columns={columns} getRowKey={matchDetailPlayerRowKey} rows={players} />;
+  return (
+    <DataTable
+      caption={{ content: "試合結果" }}
+      columns={columns}
+      getRowKey={matchDetailPlayerRowKey}
+      rows={players}
+    />
+  );
 }

@@ -5,7 +5,13 @@ import type { CSSProperties, ReactNode } from "react";
 import { cn } from "@/shared/ui/cn";
 
 type DataTableAlign = "center" | "left" | "right";
+type DataTableDensity = "comfortable" | "compact";
 type DataTableVerticalAlign = "middle" | "top";
+
+export type DataTableCaption = {
+  content: ReactNode;
+  visibility?: "screen-reader" | "visible" | undefined;
+};
 
 export type DataTableColumn<Row> = {
   align?: DataTableAlign;
@@ -14,6 +20,7 @@ export type DataTableColumn<Row> = {
   minWidth?: string;
   width?: string;
   renderCell: (row: Row) => ReactNode;
+  rowHeader?: boolean;
   sortDisabled?: boolean;
   sortDirection?: "asc" | "desc" | undefined;
   sortable?: boolean;
@@ -21,13 +28,16 @@ export type DataTableColumn<Row> = {
 };
 
 export type DataTableProps<Row> = {
+  caption: DataTableCaption;
   className?: string;
   columns: Array<DataTableColumn<Row>>;
+  density?: DataTableDensity;
   emptyState?: ReactNode;
   getRowKey: (row: Row, index: number) => string;
   layout?: "auto" | "fixed";
   minWidth?: string;
   rows: Row[];
+  isRowBusy?: ((row: Row) => boolean) | undefined;
   verticalAlign?: DataTableVerticalAlign;
 };
 
@@ -42,14 +52,22 @@ const verticalAlignClass = {
   top: "align-top",
 } as const satisfies Record<DataTableVerticalAlign, string>;
 
+const densityClass = {
+  comfortable: "px-3 py-3",
+  compact: "px-3 py-2",
+} as const satisfies Record<DataTableDensity, string>;
+
 export function DataTable<Row>({
+  caption,
   className,
   columns,
+  density = "comfortable",
   emptyState,
   getRowKey,
   layout = "auto",
   minWidth,
   rows,
+  isRowBusy,
   verticalAlign = "top",
 }: DataTableProps<Row>) {
   const columnStyleByKey = useMemo(() => {
@@ -77,6 +95,15 @@ export function DataTable<Row>({
         )}
         style={minWidth ? { minWidth } : undefined}
       >
+        <caption
+          className={cn(
+            caption.visibility === "visible"
+              ? "border-b border-[var(--color-border)] px-3 py-2 text-left text-sm font-semibold text-[var(--color-text-primary)]"
+              : "sr-only",
+          )}
+        >
+          {caption.content}
+        </caption>
         <colgroup>
           {columns.map((column) => (
             <col key={column.key} style={columnStyleByKey.get(column.key)} />
@@ -133,26 +160,39 @@ export function DataTable<Row>({
           {rows.map((row, rowIndex) => (
             <tr
               key={getRowKey(row, rowIndex)}
-              className="group transition-colors duration-[var(--motion-fast)] hover:bg-[var(--color-surface-subtle)] motion-reduce:transition-none last:[&_td]:border-b-0"
+              aria-busy={isRowBusy?.(row) || undefined}
+              className="group transition-colors duration-[var(--motion-fast)] hover:bg-[var(--color-surface-subtle)] motion-reduce:transition-none last:[&_td]:border-b-0 last:[&_th]:border-b-0"
             >
-              {columns.map((column) => (
-                <td
-                  key={column.key}
-                  className={cn(
-                    "border-b border-[var(--color-border)] px-3 py-3 text-[var(--color-text-primary)]",
-                    alignClass[column.align ?? "left"],
-                    verticalAlignClass[verticalAlign],
-                  )}
-                  style={columnStyleByKey.get(column.key)}
-                >
-                  <div className="min-w-0">{column.renderCell(row)}</div>
-                </td>
-              ))}
+              {columns.map((column) => {
+                const Cell = column.rowHeader ? "th" : "td";
+                return (
+                  <Cell
+                    key={column.key}
+                    className={cn(
+                      "border-b border-[var(--color-border)] text-[var(--color-text-primary)]",
+                      densityClass[density],
+                      alignClass[column.align ?? "left"],
+                      verticalAlignClass[verticalAlign],
+                      column.rowHeader ? "font-semibold" : "",
+                    )}
+                    scope={column.rowHeader ? "row" : undefined}
+                    style={columnStyleByKey.get(column.key)}
+                  >
+                    <div className="min-w-0">{column.renderCell(row)}</div>
+                  </Cell>
+                );
+              })}
             </tr>
           ))}
+          {rows.length === 0 && emptyState ? (
+            <tr>
+              <td className="p-3" colSpan={columns.length}>
+                {emptyState}
+              </td>
+            </tr>
+          ) : null}
         </tbody>
       </table>
-      {rows.length === 0 && emptyState ? <div className="mt-3">{emptyState}</div> : null}
     </div>
   );
 }

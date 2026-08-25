@@ -8,7 +8,7 @@ import type {
 import { formatDateTimeLong } from "@/shared/lib/dateTime";
 import { useMediaQuery } from "@/shared/lib/useMediaQuery";
 import { Button } from "@/shared/ui/actions/Button";
-import { Disclosure } from "@/shared/ui/data/Collapsible";
+import { FilterBar } from "@/shared/ui/forms/FilterBar";
 import { SelectField } from "@/shared/ui/forms/SelectField";
 
 type SelectOption = { disabled?: boolean | undefined; label: string; value: string };
@@ -60,76 +60,88 @@ export function SeriesAnalysisScopeBar({
         quality.noTargetCount > 0 ? `対象なし ${quality.noTargetCount}項目` : null,
       ].filter((entry): entry is string => entry !== null)
     : [];
-  return (
-    <Disclosure
-      ariaLabel="比較条件"
-      className="min-w-0 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)]"
-      keepMounted
-      open={open}
-      panelClassName="grid gap-3 px-3 py-3"
-      summary={
-        <span className="min-w-0">
-          <span className="block truncate text-sm font-semibold text-[var(--color-text-primary)]">
-            {scopeLabel}
-          </span>
-          <span className="mt-0.5 block text-xs text-[var(--color-text-secondary)] tabular-nums">
-            {response ? `${response.scope.matchCount}戦` : "対戦数を確認中"}
-            {qualityAdvisories.length > 0 ? (
-              <span className="ml-2 inline-flex items-center gap-1 font-semibold text-[var(--color-text-primary)]">
-                {quality && quality.referenceCount > 0 ? (
-                  <TriangleAlert
-                    aria-hidden="true"
-                    className="size-3.5 shrink-0 text-[var(--color-warning)]"
-                  />
-                ) : null}
-                {qualityAdvisories.join("・")}
-              </span>
+
+  const scopeSummary = (
+    <div className="min-w-0">
+      <p className="truncate text-sm font-semibold text-[var(--color-text-primary)]">
+        {scopeLabel}
+      </p>
+      <p className="mt-0.5 text-xs text-[var(--color-text-secondary)] tabular-nums">
+        {response ? `${response.scope.matchCount}戦` : "対戦数を確認中"}
+        {qualityAdvisories.length > 0 ? (
+          <span className="ml-2 inline-flex items-center gap-1 font-semibold text-[var(--color-text-primary)]">
+            {quality && quality.referenceCount > 0 ? (
+              <TriangleAlert
+                aria-hidden="true"
+                className="size-3.5 shrink-0 text-[var(--color-warning)]"
+              />
             ) : null}
+            {qualityAdvisories.join("・")}
           </span>
-        </span>
-      }
-      triggerClassName="border-b border-[var(--color-border)]"
-      triggerVariant="anchor"
-      onOpenChange={setOpenOverride}
-    >
-      <div className="grid gap-3 md:grid-cols-3">
-        <SelectField
-          label="対象作品"
-          options={seriesOptions}
-          value={seriesValue}
-          onChange={(event) => onSeriesChange(event.currentTarget.value)}
-        />
-        <SelectField
-          label="シーズン"
-          options={seasonOptions}
-          value={seasonValue}
-          onChange={(event) => onSeasonChange(event.currentTarget.value)}
-        />
-        <SelectField
-          label="マップ"
-          options={mapOptions}
-          value={mapValue}
-          onChange={(event) => onMapChange(event.currentTarget.value)}
-        />
-      </div>
-      <div className="flex flex-col gap-2 border-t border-[var(--color-border)] pt-3 text-xs text-[var(--color-text-secondary)] sm:flex-row sm:items-center sm:justify-between">
-        <span>
-          {response
-            ? `最終更新 ${formatDateTimeLong(response.artifact.publishedAt)}`
-            : "分析結果を読み込みます"}
-        </span>
+        ) : null}
+      </p>
+    </div>
+  );
+
+  return (
+    <FilterBar
+      action={
         <Button
           className="w-full sm:w-auto"
           disabled={!canRefresh}
           icon={<RefreshCw className="size-4" />}
           pending={refreshing}
-          pendingLabel="再読み込み中"
+          pendingLabel="表示を更新中"
+          size="sm"
           variant="secondary"
           onClick={onRefresh}
         >
-          表示を再読み込み
+          表示を更新
         </Button>
-      </div>
-    </Disclosure>
+      }
+      activeSummary={scopeSummary}
+      ariaLabel="比較条件"
+      busy={refreshing}
+      details={{
+        controls: (
+          <>
+            <SelectField
+              label="シーズン"
+              options={seasonOptions}
+              value={seasonValue}
+              onChange={(event) => onSeasonChange(event.currentTarget.value)}
+            />
+            <SelectField
+              label="マップ"
+              options={mapOptions}
+              value={mapValue}
+              onChange={(event) => onMapChange(event.currentTarget.value)}
+            />
+          </>
+        ),
+        label: "比較対象を変更",
+        onOpenChange: setOpenOverride,
+        open,
+        panelClassName: "md:grid-cols-2",
+        summary: "シーズン・マップ",
+      }}
+      meta={
+        <span>
+          {response
+            ? `最終更新 ${formatDateTimeLong(response.artifact.publishedAt)}`
+            : "分析結果を読み込みます"}
+        </span>
+      }
+      primary={
+        <div className="sm:max-w-72">
+          <SelectField
+            label="対象作品"
+            options={seriesOptions}
+            value={seriesValue}
+            onChange={(event) => onSeriesChange(event.currentTarget.value)}
+          />
+        </div>
+      }
+    />
   );
 }

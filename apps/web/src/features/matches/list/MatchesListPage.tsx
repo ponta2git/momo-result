@@ -8,8 +8,7 @@ import {
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 
-import { MatchesListFilters } from "@/features/matches/list/MatchesListFilters";
-import { MatchesStatusRail } from "@/features/matches/list/MatchesStatusRail";
+import { MatchesFilterBar } from "@/features/matches/list/MatchesFilterBar";
 import { MatchesTable } from "@/features/matches/list/MatchesTable";
 import { matchListPageSizeOptions } from "@/features/matches/list/matchListSearchParams";
 import { MatchMobileCard } from "@/features/matches/list/MatchMobileCard";
@@ -137,24 +136,17 @@ export function MatchesListPage() {
         </Notice>
       ) : null}
 
-      <MatchesStatusRail
-        counts={summaryCounts}
-        currentStatus={search.status}
-        disabled={isStale}
-        loading={summaryLoading}
-        masked={summaryMasked}
-        onSelectStatus={(status) => {
-          applySearch({ ...search, cursor: "", status });
-        }}
-      />
-
-      <MatchesListFilters
+      <MatchesFilterBar
         actions={filterActions}
         candidates={filterCandidates}
+        counts={summaryCounts}
         onRefresh={refresh}
         pending={isStale}
         refreshing={isManualRefreshing}
+        resultCount={pagination?.totalItems}
         search={search}
+        summaryLoading={summaryLoading}
+        summaryMasked={summaryMasked}
       />
 
       <section
@@ -162,14 +154,7 @@ export function MatchesListPage() {
         aria-label="登録済みの試合"
         className="relative grid min-h-[24rem] gap-4"
       >
-        <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          {pagination ? (
-            <p className="text-sm font-medium text-[var(--color-text-secondary)] tabular-nums">
-              {pagination.totalItems.toLocaleString()}件
-            </p>
-          ) : (
-            <span aria-hidden="true" />
-          )}
+        <div className="flex min-w-0 justify-end">
           <div className="flex w-full flex-wrap items-center justify-between gap-2 sm:w-auto sm:shrink-0 sm:justify-end">
             <AnimatePresence initial={false}>
               {isStale ? (
@@ -225,11 +210,7 @@ export function MatchesListPage() {
             ) : items.length === 0 ? (
               <EmptyState
                 action={
-                  hasFilters ? (
-                    <Button onClick={clearSearch} variant="secondary">
-                      条件をクリア
-                    </Button>
-                  ) : (
+                  hasFilters ? undefined : (
                     <div className="flex flex-wrap gap-2">
                       <LinkButton to={navigation.ocrHref}>OCR取り込み</LinkButton>
                       <LinkButton to={navigation.manualCreateHref} variant="secondary">

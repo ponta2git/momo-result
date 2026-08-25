@@ -49,7 +49,7 @@ export function Disclosure({
       className={className}
       defaultOpen={defaultOpen}
       open={open}
-      onOpenChange={onOpenChange}
+      onOpenChange={(nextOpen) => onOpenChange?.(nextOpen)}
     >
       <BaseCollapsible.Trigger
         aria-label={ariaLabel}

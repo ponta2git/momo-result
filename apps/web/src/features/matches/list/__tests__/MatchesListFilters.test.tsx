@@ -2,114 +2,119 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
-import { MatchesListFilters } from "@/features/matches/list/MatchesListFilters";
-import type { MatchListSearch } from "@/features/matches/list/matchListTypes";
+import {
+  describeMatchListDetailFilters,
+  MatchesListFilters,
+} from "@/features/matches/list/MatchesListFilters";
+import type {
+  MatchListFilterCandidates,
+  MatchListSearch,
+} from "@/features/matches/list/matchListTypes";
 
 const initialSearch: MatchListSearch = {
+  cursor: "",
   gameTitleId: "",
   heldEventId: "",
-  cursor: "",
   pageSize: 10,
   seasonMasterId: "",
   sort: "held_desc",
   status: "all",
 };
 
+const candidates: MatchListFilterCandidates = {
+  gameTitles: [
+    {
+      createdAt: "2026-01-01T00:00:00.000Z",
+      displayOrder: 1,
+      id: "game-1",
+      layoutFamily: "momotetsu_2",
+      name: "桃太郎電鉄2",
+    },
+    {
+      createdAt: "2026-01-02T00:00:00.000Z",
+      displayOrder: 2,
+      id: "game-2",
+      layoutFamily: "momotetsu_2",
+      name: "別の作品",
+    },
+  ],
+  heldEvents: [
+    {
+      draftCount: 0,
+      heldAt: "2026-08-09T00:00:00.000Z",
+      id: "held-1",
+      matchCount: 3,
+      nextMatchNo: 4,
+    },
+  ],
+  seasons: [
+    {
+      createdAt: "2026-01-01T00:00:00.000Z",
+      displayOrder: 1,
+      gameTitleId: "game-1",
+      id: "season-1",
+      name: "今シーズン",
+    },
+    {
+      createdAt: "2026-01-02T00:00:00.000Z",
+      displayOrder: 2,
+      gameTitleId: "game-2",
+      id: "season-2",
+      name: "別シーズン",
+    },
+  ],
+};
+
 describe("MatchesListFilters", () => {
-  it("updates sort filter without reading the event inside the state updater", async () => {
+  it("keeps dependent season options with the selected game title", () => {
+    render(
+      <MatchesListFilters
+        actions={{ onApply: vi.fn(), onClear: vi.fn() }}
+        candidates={candidates}
+        search={{ ...initialSearch, gameTitleId: "game-1", seasonMasterId: "season-1" }}
+      />,
+    );
+
+    expect(screen.getByLabelText("シーズン")).toHaveTextContent("今シーズン");
+    expect(screen.getByLabelText("シーズン")).not.toHaveTextContent("別シーズン");
+  });
+
+  it("clears cursor and an incompatible season when the game title changes", async () => {
     const user = userEvent.setup();
     const onApply = vi.fn();
+    const search = {
+      ...initialSearch,
+      cursor: "opaque-cursor",
+      gameTitleId: "game-1",
+      seasonMasterId: "season-1",
+    };
 
     render(
       <MatchesListFilters
         actions={{ onApply, onClear: vi.fn() }}
-        candidates={{ gameTitles: [], heldEvents: [], seasons: [] }}
-        search={{ ...initialSearch, cursor: "opaque-cursor" }}
-      />,
-    );
-
-    expect(screen.getByRole("region", { name: "表示条件" })).toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: "表示条件" })).not.toBeInTheDocument();
-    await user.selectOptions(screen.getByLabelText("並び順"), "updated_desc");
-
-    expect(onApply).toHaveBeenCalledWith({
-      ...initialSearch,
-      cursor: "",
-      sort: "updated_desc",
-    });
-  });
-
-  it("summarizes active detail conditions in the accordion header", () => {
-    const search = { ...initialSearch, gameTitleId: "game-1", seasonMasterId: "season-1" };
-
-    render(
-      <MatchesListFilters
-        actions={{ onApply: vi.fn(), onClear: vi.fn() }}
-        candidates={{
-          gameTitles: [
-            {
-              createdAt: "2026-01-01T00:00:00.000Z",
-              displayOrder: 1,
-              id: "game-1",
-              layoutFamily: "momotetsu_2",
-              name: "桃太郎電鉄2",
-            },
-          ],
-          heldEvents: [],
-          seasons: [
-            {
-              createdAt: "2026-01-01T00:00:00.000Z",
-              displayOrder: 1,
-              gameTitleId: "game-1",
-              id: "season-1",
-              name: "今シーズン",
-            },
-          ],
-        }}
+        candidates={candidates}
         search={search}
       />,
     );
 
-    expect(screen.queryByLabelText("状態")).not.toBeInTheDocument();
-    const accordionLabel = screen.getByText("詳細条件");
-    const trigger = accordionLabel.closest("button");
-    expect(trigger).toHaveTextContent("作品 桃太郎電鉄2");
-    expect(trigger).toHaveTextContent("シーズン 今シーズン");
-    expect(trigger).not.toHaveTextContent("2件");
-    expect(screen.queryByRole("button", { name: /条件を解除/u })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "詳細条件をクリア" })).not.toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText("作品"), "game-2");
+
+    expect(onApply).toHaveBeenCalledWith({
+      ...search,
+      cursor: "",
+      gameTitleId: "game-2",
+      seasonMasterId: "",
+    });
   });
 
-  it("shows an accordion indicator without press animation and exposes one reset action", async () => {
-    const user = userEvent.setup();
-    const onClear = vi.fn();
-
-    render(
-      <MatchesListFilters
-        actions={{ onApply: vi.fn(), onClear }}
-        candidates={{ gameTitles: [], heldEvents: [], seasons: [] }}
-        search={{ ...initialSearch, sort: "updated_desc" }}
-      />,
-    );
-
-    const accordionLabel = screen.getByText("詳細条件");
-    const trigger = accordionLabel.closest("button");
-    if (!trigger) {
-      throw new Error("expected the detail filters accordion");
-    }
-    expect(trigger.querySelector(".lucide-chevron-down")).not.toBeNull();
-    expect(trigger).not.toHaveClass("momo-pressable");
-    expect(trigger).toHaveAttribute("aria-expanded", "false");
-
-    await user.click(trigger);
-    expect(trigger).toHaveAttribute("aria-expanded", "true");
-
-    const resetButton = screen.getByRole("button", {
-      name: "確定状況・並び順・詳細条件を初期状態に戻す",
-    });
-    expect(resetButton).toHaveTextContent("表示条件をリセット");
-    expect(screen.queryByRole("button", { name: "詳細条件をクリア" })).not.toBeInTheDocument();
-    await user.click(resetButton);
-    expect(onClear).toHaveBeenCalledOnce();
+  it("describes all active details using the selected candidate labels", () => {
+    expect(
+      describeMatchListDetailFilters(candidates, {
+        ...initialSearch,
+        gameTitleId: "game-1",
+        heldEventId: "held-1",
+        seasonMasterId: "season-1",
+      }),
+    ).toEqual(["開催 2026/08/09", "作品 桃太郎電鉄2", "シーズン 今シーズン"]);
   });
 });

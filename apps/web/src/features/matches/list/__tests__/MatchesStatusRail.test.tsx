@@ -24,7 +24,8 @@ describe("MatchesStatusRail", () => {
       />,
     );
 
-    expect(screen.getByRole("region", { name: "確定状況" })).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "確定状況" })).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "確定状況" })).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "確定状況" })).not.toBeInTheDocument();
     const unfinishedButton = screen.getByRole("button", { name: /未確定8件/u });
     const selectedReviewButton = screen.getByRole("button", { name: /要確認のみ2件/u });

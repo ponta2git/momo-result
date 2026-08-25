@@ -1,6 +1,6 @@
 import { QueryClientProvider } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
@@ -66,7 +66,7 @@ describe("MatchesListPage", () => {
     expect(screen.getByRole("columnheader", { name: "出力" })).toBeInTheDocument();
     expect(screen.queryByRole("columnheader", { name: "操作" })).not.toBeInTheDocument();
     expect(screen.queryByRole("columnheader", { name: "更新" })).not.toBeInTheDocument();
-    const matchInfoCell = screen.getAllByRole("cell").find((cell) => {
+    const matchInfoCell = screen.getAllByRole("rowheader").find((cell) => {
       const text = cell.textContent ?? "";
       return [
         formatCompactDateTime("2026-01-01T00:00:00.000Z"),
@@ -78,7 +78,7 @@ describe("MatchesListPage", () => {
     });
     if (!matchInfoCell) {
       throw new Error(
-        "expected the confirmed match info cell to include date, title, season, match number, and map",
+        "expected the confirmed match row header to include date, title, season, match number, and map",
       );
     }
     expect(matchInfoCell).toHaveTextContent("桃太郎電鉄2");
@@ -174,7 +174,9 @@ describe("MatchesListPage", () => {
 
     expect(await screen.findByRole("heading", { name: "試合一覧" })).toBeInTheDocument();
     expect(await screen.findByText("試合はまだありません")).toBeInTheDocument();
-    const filterSection = screen.getByRole("region", { name: "表示条件" });
+    const filterSection = screen.getByRole("region", { name: "試合の表示条件" });
+    expect(within(filterSection).getByRole("group", { name: "確定状況" })).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "確定状況" })).not.toBeInTheDocument();
     const emptyState = screen.getByText("試合はまだありません").closest("section");
     if (!filterSection || !emptyState) {
       throw new Error("expected filter and empty-list sections to be present");
@@ -183,6 +185,36 @@ describe("MatchesListPage", () => {
       Node.DOCUMENT_POSITION_FOLLOWING,
     );
     expect(screen.queryByText("未完了タスク")).not.toBeInTheDocument();
+  });
+
+  it("offers one filter reset that clears status and cursor from an empty result", async () => {
+    setDevUser();
+    server.use(http.get("/api/matches", () => HttpResponse.json({ items: [] })));
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/matches?status=confirmed&cursor=opaque-cursor"]}>
+          <LocationProbe />
+          <Routes>
+            <Route path="/matches" element={<MatchesListPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByText("該当する試合はありません")).toBeInTheDocument();
+    const resetButtons = screen.getAllByRole("button", {
+      name: "確定状況・並び順・詳細条件を初期状態に戻す",
+    });
+    expect(resetButtons).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: "条件をクリア" })).not.toBeInTheDocument();
+
+    await user.click(resetButtons[0]!);
+
+    await waitFor(() =>
+      expect(screen.getByLabelText("current location")).toHaveTextContent("/matches"),
+    );
+    expect(screen.getByLabelText("current location")).not.toHaveTextContent(/status=|cursor=/u);
   });
 
   it("retries a failed match list without presenting it as empty", async () => {

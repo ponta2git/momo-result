@@ -209,9 +209,9 @@ describe("app routing", () => {
     const { router } = renderApp("/analytics/series");
 
     expect(await screen.findByRole("heading", { name: "戦績比較" })).toBeInTheDocument();
-    const scopeControl = await screen.findByRole("button", { name: "比較条件" });
-    await waitFor(() => expect(scopeControl).toHaveTextContent("12戦"));
-    expect(scopeControl).not.toHaveTextContent("十分");
+    const scopeSurface = await screen.findByRole("region", { name: "比較条件" });
+    await waitFor(() => expect(scopeSurface).toHaveTextContent("12戦"));
+    expect(scopeSurface).not.toHaveTextContent("十分");
     expect(screen.getByRole("tab", { name: "次戦に備える" })).toHaveAttribute(
       "aria-selected",
       "true",
@@ -308,13 +308,13 @@ describe("app routing", () => {
     renderApp("/analytics/series");
 
     expect(await screen.findByText("収益先行時は目的地0回で終えない。")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "表示を再読み込み" }));
+    await user.click(screen.getByRole("button", { name: "表示を更新" }));
     expect(await screen.findByText("最新の戦績データを取得できません")).toBeInTheDocument();
     expect(screen.getByText("収益先行時は目的地0回で終えない。")).toBeInTheDocument();
     await waitFor(() => expect(screen.queryByText("比較条件を更新中")).not.toBeInTheDocument());
     const reviewPanel = screen.getByRole("tabpanel", { name: "次戦に備える" });
     expect(reviewPanel.closest("[inert]")).toBeNull();
-    expect(screen.getByRole("button", { name: "表示を再読み込み" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "表示を更新" })).toBeEnabled();
   });
 
   it("does not show an old scope after the newly selected scope fails", async () => {

@@ -56,7 +56,7 @@ describe("MatchesListPage", () => {
     );
 
     const pageTitle = await screen.findByRole("heading", { name: "試合一覧" });
-    expect(pageTitle).toHaveClass("text-xl", "md:text-2xl", "text-balance");
+    expect(pageTitle).toHaveClass("text-2xl", "md:text-3xl", "text-balance");
     expect(screen.queryByLabelText("開催の振り返り")).not.toBeInTheDocument();
     expect(await screen.findAllByText("優勝 ぽんた")).toHaveLength(2);
     expect(screen.getByRole("columnheader", { name: /開催・試合/u })).toBeInTheDocument();

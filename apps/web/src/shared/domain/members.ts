@@ -76,6 +76,19 @@ export const canonicalResultMembers: readonly FixedMember[] = canonicalResultMem
   (memberId) => fixedMemberRegistry[memberId],
 );
 
+export type MemberSequence = 1 | 2 | 3 | 4;
+
+const memberSequenceById = new Map<string, MemberSequence>(
+  canonicalResultMemberIds.map(
+    (memberId, index) => [memberId, (index + 1) as MemberSequence] as const,
+  ),
+);
+
+/** canonicalな固定メンバー順を、青→赤→黄→緑の表示sequenceへ写像する。 */
+export function memberSequence(memberId: string): MemberSequence | null {
+  return memberSequenceById.get(memberId) ?? null;
+}
+
 /**
  * 既存の順序非明示な呼び出し元との互換出口。
  * 新しい順序依存処理では用途に応じてworkspaceInputMembers、canonicalResultMembers、

@@ -22,7 +22,7 @@ export function PageHeader({
   return (
     <header
       className={cn(
-        "flex min-w-0 flex-col gap-3 md:flex-row md:items-end md:justify-between",
+        "grid min-w-0 gap-4 border-b border-[var(--color-border)] pb-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end",
         className,
       )}
     >
@@ -30,7 +30,7 @@ export function PageHeader({
         {eyebrow ? (
           <p className="momo-label text-[var(--color-text-secondary)]">{eyebrow}</p>
         ) : null}
-        <h1 className="momo-heading mt-1 text-xl font-semibold text-balance text-[var(--color-text-primary)] md:text-2xl">
+        <h1 className="momo-heading mt-1 text-2xl font-semibold text-balance text-[var(--color-text-primary)] md:text-3xl">
           {title}
         </h1>
         {description ? (
@@ -39,8 +39,12 @@ export function PageHeader({
           </p>
         ) : null}
       </div>
-      {meta ? <div className="shrink-0">{meta}</div> : null}
-      {actions ? <div className="flex min-w-0 flex-wrap items-center gap-2">{actions}</div> : null}
+      {meta || actions ? (
+        <div className="flex min-w-0 flex-wrap items-center gap-2 md:justify-end">
+          {meta ? <div className="shrink-0">{meta}</div> : null}
+          {actions}
+        </div>
+      ) : null}
     </header>
   );
 }

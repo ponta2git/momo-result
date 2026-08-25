@@ -19,7 +19,7 @@ export function PageFrame({ className, width = "standard", ...props }: PageFrame
   return (
     <div
       className={cn(
-        "mx-auto flex w-full max-w-full min-w-0 flex-col gap-4",
+        "mx-auto flex w-full max-w-full min-w-0 flex-col gap-6",
         pageFrameWidthClass[width],
         className,
       )}

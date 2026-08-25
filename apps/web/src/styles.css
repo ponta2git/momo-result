@@ -13,7 +13,7 @@
     ui-monospace, "SFMono-Regular", "SF Mono", "Cascadia Mono", "Roboto Mono", "Yu Gothic",
     YuGothic, monospace;
 
-  /* Reference palette: every identity family owns distinct OKLCH values. */
+  /* Reference palette: concrete OKLCH values stay below semantic UI roles. */
   --ref-neutral-0: oklch(100% 0 0);
   --ref-neutral-50: oklch(97.5% 0.006 190);
   --ref-neutral-100: oklch(95.5% 0.01 210);
@@ -36,10 +36,10 @@
   --ref-status-review-700: oklch(48% 0.135 48);
   --ref-status-danger-700: oklch(46% 0.17 28);
 
-  --ref-play-order-1: oklch(54% 0.145 255);
-  --ref-play-order-2: oklch(53% 0.17 22);
-  --ref-play-order-3: oklch(58% 0.125 95);
-  --ref-play-order-4: oklch(51% 0.13 145);
+  --ref-four-player-sequence-1: oklch(54% 0.145 255);
+  --ref-four-player-sequence-2: oklch(53% 0.17 22);
+  --ref-four-player-sequence-3: oklch(58% 0.125 95);
+  --ref-four-player-sequence-4: oklch(51% 0.13 145);
 
   --ref-series-1: oklch(49% 0.15 300);
   --ref-series-2: oklch(48% 0.105 205);
@@ -77,10 +77,14 @@
   --color-warning: var(--ref-status-warning-700);
   --color-review: var(--ref-status-review-700);
   --color-danger: var(--ref-status-danger-700);
-  --color-play-order-1: var(--ref-play-order-1);
-  --color-play-order-2: var(--ref-play-order-2);
-  --color-play-order-3: var(--ref-play-order-3);
-  --color-play-order-4: var(--ref-play-order-4);
+  --color-member-sequence-1: var(--ref-four-player-sequence-1);
+  --color-member-sequence-2: var(--ref-four-player-sequence-2);
+  --color-member-sequence-3: var(--ref-four-player-sequence-3);
+  --color-member-sequence-4: var(--ref-four-player-sequence-4);
+  --color-play-order-1: var(--ref-four-player-sequence-1);
+  --color-play-order-2: var(--ref-four-player-sequence-2);
+  --color-play-order-3: var(--ref-four-player-sequence-3);
+  --color-play-order-4: var(--ref-four-player-sequence-4);
   --color-series-1: var(--ref-series-1);
   --color-series-2: var(--ref-series-2);
   --color-series-3: var(--ref-series-3);

@@ -70,7 +70,7 @@ function oklabDistance(left: string, right: string): number {
 }
 
 describe("semantic color tokens", () => {
-  it("keeps action, analysis, status, rank, play-order, and chart-series identities separate", () => {
+  it("shares only the reference palette for matching member and play-order sequences", () => {
     const families = {
       action: ["--color-action"],
       analysis: [
@@ -78,6 +78,7 @@ describe("semantic color tokens", () => {
         "--color-analysis-positive",
         "--color-analysis-negative",
       ],
+      memberSequence: [1, 2, 3, 4].map((value) => `--color-member-sequence-${value}`),
       playOrder: [1, 2, 3, 4].map((value) => `--color-play-order-${value}`),
       rank: [1, 2, 3, 4].map((value) => `--color-rank-${value}`),
       series: [1, 2, 3, 4, 5, 6].map((value) => `--color-series-${value}`),
@@ -90,17 +91,40 @@ describe("semantic color tokens", () => {
       ],
     };
 
+    const referenceFamilies = {
+      action: "action",
+      analysis: "analysis",
+      memberSequence: "four-player-sequence",
+      playOrder: "four-player-sequence",
+      rank: "rank",
+      series: "series",
+      status: "status",
+    } as const;
+
     for (const [family, tokens] of Object.entries(families)) {
       for (const token of tokens) {
         expect(rawToken(token), token).toContain(
-          `--ref-${family.replace("playOrder", "play-order")}`,
+          `--ref-${referenceFamilies[family as keyof typeof referenceFamilies]}`,
         );
       }
     }
 
-    const allIdentityValues = Object.values(families).flat().map(resolvedToken);
-    for (const value of allIdentityValues) expect(value).toMatch(/^oklch\(/u);
-    expect(new Set(allIdentityValues).size).toBe(allIdentityValues.length);
+    for (const sequence of [1, 2, 3, 4]) {
+      expect(rawToken(`--color-member-sequence-${sequence}`)).toBe(
+        rawToken(`--color-play-order-${sequence}`),
+      );
+    }
+
+    const independentIdentityValues = [
+      ...families.action,
+      ...families.analysis,
+      ...families.memberSequence,
+      ...families.rank,
+      ...families.series,
+      ...families.status,
+    ].map(resolvedToken);
+    for (const value of independentIdentityValues) expect(value).toMatch(/^oklch\(/u);
+    expect(new Set(independentIdentityValues).size).toBe(independentIdentityValues.length);
   });
 
   it("keeps critical semantic pairs perceptually separated in OKLab", () => {
@@ -155,6 +179,7 @@ describe("semantic color tokens", () => {
     }
 
     const markTokens = [
+      ...[1, 2, 3, 4].map((value) => `--color-member-sequence-${value}`),
       ...[1, 2, 3, 4].map((value) => `--color-play-order-${value}`),
       ...[1, 2, 3, 4].map((value) => `--color-rank-${value}`),
       ...[1, 2, 3, 4, 5, 6].map((value) => `--color-series-${value}`),

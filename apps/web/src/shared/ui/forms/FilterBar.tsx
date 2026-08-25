@@ -25,7 +25,7 @@ export type FilterBarProps = {
 };
 
 /**
- * Owns the cross-feature filter surface: labeled scope, primary controls, one detail
+ * Owns the cross-feature filter operation group: labeled scope, primary controls, one detail
  * disclosure, complete active summary, and stable reset/action placement. Query and
  * cache behavior deliberately remain with the feature composition.
  */
@@ -44,10 +44,7 @@ export function FilterBar({
     <section
       aria-busy={busy || undefined}
       aria-label={ariaLabel}
-      className={cn(
-        "min-w-0 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4",
-        className,
-      )}
+      className={cn("min-w-0 border-y border-[var(--color-border)] py-4", className)}
     >
       <div className="grid min-w-0 gap-4">
         <div className="grid min-w-0 gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
@@ -62,11 +59,11 @@ export function FilterBar({
 
         {details ? (
           <Disclosure
-            className="group rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)]"
+            className="group border-t border-[var(--color-border)]"
             keepMounted
             open={details.open}
             panelClassName={cn(
-              "grid gap-4 border-t border-[var(--color-border)] p-3",
+              "grid gap-4 rounded-b-[var(--radius-sm)] bg-[var(--color-surface-subtle)] p-3",
               details.panelClassName,
             )}
             summary={

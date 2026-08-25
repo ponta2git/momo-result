@@ -1,5 +1,8 @@
 import type { ReactNode } from "react";
 
+import { memberSequence } from "@/shared/domain/members";
+import { playOrderPresentation } from "@/shared/ui/data/PlayOrderMark";
+
 export type DataVizSeriesIdentity = { id: string; label: string };
 export type DataVizSeriesShape = "circle" | "diamond" | "square" | "triangle";
 
@@ -21,6 +24,17 @@ const seriesColors = [
 const dashPatterns = [undefined, "8 3", "2 3", "9 3 2 3", "12 4", "4 2"] as const;
 const pointShapes = ["circle", "square", "diamond", "triangle"] as const;
 
+export function playOrderSeriesId(playOrder: 1 | 2 | 3 | 4): string {
+  return `play-order:${playOrder}`;
+}
+
+function playOrderFromSeriesId(seriesId: string): 1 | 2 | 3 | 4 | null {
+  const match = /^play-order:([1-4])$/u.exec(seriesId);
+  if (!match) return null;
+  const value = Number(match[1]);
+  return value === 1 || value === 2 || value === 3 || value === 4 ? value : null;
+}
+
 function stableHash(value: string): number {
   let hash = 2_166_136_261;
   for (const character of value) {
@@ -35,6 +49,24 @@ function stableHash(value: string): number {
  * deliberately absent so filtering or reordering a data set cannot recolor the series.
  */
 export function dataVizSeriesPresentation(seriesId: string): DataVizSeriesPresentation {
+  const fixedMemberSequence = memberSequence(seriesId);
+  if (fixedMemberSequence !== null) {
+    return {
+      color: `var(--color-member-sequence-${fixedMemberSequence})`,
+      dash: dashPatterns[fixedMemberSequence - 1],
+      shape: pointShapes[fixedMemberSequence - 1] ?? "circle",
+    };
+  }
+
+  const playOrder = playOrderFromSeriesId(seriesId);
+  if (playOrder !== null) {
+    return {
+      color: playOrderPresentation(playOrder).color,
+      dash: dashPatterns[playOrder],
+      shape: pointShapes.toReversed()[playOrder - 1] ?? "circle",
+    };
+  }
+
   const colorIndex = stableHash(`series-color:${seriesId}`) % seriesColors.length;
   const dashIndex = stableHash(`series-dash:${seriesId}`) % dashPatterns.length;
   const shapeIndex = stableHash(`series-shape:${seriesId}`) % pointShapes.length;

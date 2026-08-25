@@ -1,0 +1,48 @@
+import type { ReactNode } from "react";
+
+import { memberSequence } from "@/shared/domain/members";
+import { cn } from "@/shared/ui/cn";
+
+export type MemberSequencePresentation = {
+  color: string;
+  sequence: 1 | 2 | 3 | 4 | null;
+};
+
+export function memberSequencePresentation(memberId: string): MemberSequencePresentation {
+  const sequence = memberSequence(memberId);
+  return {
+    color:
+      sequence === null ? "var(--color-border-strong)" : `var(--color-member-sequence-${sequence})`,
+    sequence,
+  };
+}
+
+/**
+ * Pairs a fixed member's visible name with the canonical blue→red→yellow→green
+ * scan accent. Play-order keeps its circular mark and explicit `プレー順N` label.
+ */
+export function MemberSequenceLabel({
+  children,
+  className,
+  memberId,
+}: {
+  children: ReactNode;
+  className?: string | undefined;
+  memberId: string;
+}) {
+  const presentation = memberSequencePresentation(memberId);
+
+  return (
+    <span
+      className={cn("inline-flex min-w-0 items-center gap-2", className)}
+      data-member-sequence={presentation.sequence ?? "unknown"}
+    >
+      <span
+        aria-hidden="true"
+        className="h-5 w-1 shrink-0 rounded-full"
+        style={{ backgroundColor: presentation.color }}
+      />
+      <span className="min-w-0">{children}</span>
+    </span>
+  );
+}

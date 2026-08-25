@@ -1,7 +1,11 @@
 import { render } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { DataVizLegend, dataVizSeriesPresentation } from "@/shared/ui/dataViz/seriesPresentation";
+import {
+  DataVizLegend,
+  dataVizSeriesPresentation,
+  playOrderSeriesId,
+} from "@/shared/ui/dataViz/seriesPresentation";
 
 const memberIds = ["member_eu", "member_ponta", "member_akane_mami", "member_otaka"];
 
@@ -16,13 +20,8 @@ describe("dataVizSeriesPresentation", () => {
 
     expect(after).toEqual(before);
     expect(new Set(Object.values(before).map(({ color }) => color)).size).toBe(4);
-    expect(Object.values(before).every(({ color }) => color.includes("--color-series-"))).toBe(
-      true,
-    );
     expect(
-      Object.values(before).every(
-        ({ color }) => !color.includes("play-order") && !color.includes("player"),
-      ),
+      Object.values(before).every(({ color }) => color.includes("--color-member-sequence-")),
     ).toBe(true);
   });
 
@@ -46,6 +45,11 @@ describe("dataVizSeriesPresentation", () => {
     );
 
     expect(secondMarks).toEqual(firstMarks);
-    expect(new Set(Object.values(firstMarks)).size).toBe(3);
+    expect(new Set(Object.values(firstMarks)).size).toBe(4);
+  });
+
+  it("keeps play-order series on the same hues through a separate semantic role", () => {
+    expect(dataVizSeriesPresentation(playOrderSeriesId(2)).color).toBe("var(--color-play-order-2)");
+    expect(dataVizSeriesPresentation("unrelated-series").color).toContain("--color-series-");
   });
 });

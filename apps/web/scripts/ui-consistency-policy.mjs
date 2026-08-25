@@ -3,6 +3,7 @@ import ts from "typescript";
 const semanticColorFamilies = [
   { family: "action", pattern: /^--color-action(?:-|$)/u },
   { family: "analysis", pattern: /^--color-analysis-/u },
+  { family: "member-sequence", pattern: /^--color-member-sequence-/u },
   { family: "play-order", pattern: /^--color-play-order-/u },
   { family: "rank", pattern: /^--color-rank-/u },
   { family: "series", pattern: /^--color-series-/u },
@@ -48,6 +49,15 @@ function lineNumberAt(source, index) {
 
 function semanticColorFamily(name) {
   return semanticColorFamilies.find(({ pattern }) => pattern.test(name))?.family;
+}
+
+function isAllowedFourPlayerSequenceAlias(left, right) {
+  const families = new Set([left.family, right.family]);
+  if (!families.has("member-sequence") || !families.has("play-order")) return false;
+
+  const leftSequence = /-([1-4])$/u.exec(left.name)?.[1];
+  const rightSequence = /-([1-4])$/u.exec(right.name)?.[1];
+  return leftSequence !== undefined && leftSequence === rightSequence;
 }
 
 function parseCustomProperties(styles) {
@@ -182,6 +192,7 @@ function collectSemanticColorViolations(sources) {
     for (let rightIndex = leftIndex + 1; rightIndex < semanticTokens.length; rightIndex += 1) {
       const right = semanticTokens[rightIndex];
       if (!right || left.family === right.family) continue;
+      if (isAllowedFourPlayerSequenceAlias(left, right)) continue;
       const leftLeaves = resolutions.get(left.name)?.leaves ?? new Set();
       const rightLeaves = resolutions.get(right.name)?.leaves ?? new Set();
       const sharedLeaves = [...leftLeaves].filter((leaf) => rightLeaves.has(leaf)).toSorted();
@@ -229,7 +240,7 @@ function collectLegacyPlayerTokenViolations(sources) {
       violations.push(
         makeViolation({
           line: lineNumberAt(source, match.index),
-          message: `${subject} is a legacy ambiguous identity token; use a play-order or series token through its shared presentation API`,
+          message: `${subject} is a legacy ambiguous identity token; use a member-sequence, play-order, or series token through its shared presentation API`,
           path,
           rule: "legacy-player-token",
           subject,

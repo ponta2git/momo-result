@@ -418,11 +418,13 @@ test("completes the app smoke workflow with isolated scoped data", async ({
     }
 
     let statusPhase: "failed" | "running" = "running";
+    let interceptedStatusRequests = 0;
     const statusPattern = /\/api\/analytics\/series-comparison\/v2\/status(?:\?.*)?$/u;
     await page.route(/\/api\/analytics\/series-comparison\/v2\/options(?:\?.*)?$/u, async (route) =>
       route.fulfill({ json: optionsFixture }),
     );
     await page.route(statusPattern, async (route) => {
+      interceptedStatusRequests += 1;
       const calculation =
         statusPhase === "running"
           ? {
@@ -506,6 +508,25 @@ test("completes the app smoke workflow with isolated scoped data", async ({
     await comparisonLink.click();
 
     await expect(page.getByRole("heading", { exact: true, name: "戦績比較" })).toBeVisible();
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve) => {
+          window.dispatchEvent(new Event("focus"));
+          document.dispatchEvent(new Event("visibilitychange"));
+          window.dispatchEvent(new Event("pageshow"));
+          window.dispatchEvent(new Event("online"));
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+        }),
+    );
+    expect(interceptedStatusRequests).toBe(0);
+
+    const currentStatusResponse = page.waitForResponse((response) =>
+      statusPattern.test(response.url()),
+    );
+    await page.getByRole("button", { name: "状態を再確認" }).click();
+    expect((await currentStatusResponse).ok()).toBe(true);
+    expect(interceptedStatusRequests).toBe(1);
+
     const purposeTabs = page.getByRole("tablist", { name: "戦績比較の目的" });
     const analysisTabs = page.getByRole("tablist", { name: "分析の切り口" });
     await expect(purposeTabs.getByRole("tab", { name: "分析する" })).toHaveAttribute(
@@ -680,6 +701,7 @@ test("completes the app smoke workflow with isolated scoped data", async ({
     );
     await page.getByRole("button", { name: "表示を更新" }).click();
     expect((await failedStatusResponse).ok()).toBe(true);
+    expect(interceptedStatusRequests).toBe(2);
     await expect(page.getByText("分析データを再計算できませんでした")).toBeVisible();
     await expect(page.getByText(/更新のデータを表示しています/u)).toBeVisible();
 

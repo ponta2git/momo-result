@@ -148,6 +148,20 @@ describe("semantic color tokens", () => {
     ).toBeGreaterThanOrEqual(0.2);
   });
 
+  it("keeps hover as a distinct step in the shared surface ramp", () => {
+    expect(rawToken("--color-surface")).toBe("var(--ref-neutral-25)");
+    expect(rawToken("--color-surface-hover")).toBe("var(--ref-neutral-75)");
+    expect(rawToken("--color-surface-subtle")).toBe("var(--ref-neutral-100)");
+
+    const surfaceLightness = oklab(resolvedToken("--color-surface"))[0];
+    const hoverLightness = oklab(resolvedToken("--color-surface-hover"))[0];
+    const subtleLightness = oklab(resolvedToken("--color-surface-subtle"))[0];
+    const selectedLightness = oklab(resolvedToken("--color-surface-selected"))[0];
+    expect(surfaceLightness).toBeGreaterThan(hoverLightness);
+    expect(hoverLightness).toBeGreaterThan(subtleLightness);
+    expect(subtleLightness).toBeGreaterThan(selectedLightness);
+  });
+
   it("meets AA for text/control combinations and 3:1 for visual marks", () => {
     const surfaces = [resolvedToken("--color-surface"), resolvedToken("--color-canvas")];
     const textTokens = ["--color-text-primary", "--color-text-secondary", "--color-text-muted"];

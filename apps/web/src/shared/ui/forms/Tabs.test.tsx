@@ -61,11 +61,11 @@ describe("Tabs", () => {
     );
     expect(second).toHaveClass(
       "text-[var(--color-text-secondary)]",
-      "hover:bg-[var(--color-surface-subtle)]",
+      "hover:bg-[var(--color-surface-hover)]",
     );
     expect(disabled).toHaveAttribute("aria-disabled", "true");
     expect(disabled).toHaveClass("cursor-not-allowed", "opacity-60");
-    expect(disabled).not.toHaveClass("hover:bg-[var(--color-surface-subtle)]");
+    expect(disabled).not.toHaveClass("hover:bg-[var(--color-surface-hover)]");
     expect(first).toHaveAttribute("aria-controls", firstPanel.id);
     expect(firstPanel).toHaveAttribute("aria-labelledby", first.id);
     expect(secondPanel).not.toBeNull();

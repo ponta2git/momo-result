@@ -56,7 +56,7 @@ describe("FilterBar", () => {
     const panel = screen.getByLabelText("マップ").parentElement?.parentElement;
     expect(trigger).toHaveAttribute("aria-expanded", "false");
     expect(trigger).toHaveTextContent("作品・シーズン・マップ");
-    expect(trigger).toHaveClass("hover:bg-[var(--color-surface-subtle)]");
+    expect(trigger).toHaveClass("hover:bg-[var(--color-surface-hover)]");
     expect(trigger).not.toHaveClass("hover:bg-transparent");
     expect(panel).toHaveClass("bg-transparent");
     expect(panel).not.toHaveClass("bg-[var(--color-surface-subtle)]");

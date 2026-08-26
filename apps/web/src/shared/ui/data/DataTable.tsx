@@ -82,7 +82,7 @@ export function DataTableBodyRow({ className, ...props }: ComponentPropsWithoutR
   return (
     <tr
       className={cn(
-        "group transition-colors duration-[var(--motion-fast)] hover:bg-[var(--color-surface-subtle)] motion-reduce:transition-none last:[&>td]:border-b last:[&>td]:border-[var(--color-border-strong)] last:[&>th]:border-b last:[&>th]:border-[var(--color-border-strong)]",
+        "group transition-colors duration-[var(--motion-fast)] hover:bg-[var(--color-surface-hover)] motion-reduce:transition-none last:[&>td]:border-b last:[&>td]:border-[var(--color-border-strong)] last:[&>th]:border-b last:[&>th]:border-[var(--color-border-strong)]",
         className,
       )}
       {...props}
@@ -162,7 +162,7 @@ export function DataTable<Row>({
                   <button
                     className={cn(
                       "momo-pressable inline-flex min-h-11 items-center gap-1 rounded-[var(--radius-xs)] px-1 py-1 text-left text-inherit sm:min-h-9",
-                      "hover:bg-[var(--color-surface-subtle)] disabled:cursor-not-allowed disabled:opacity-60",
+                      "hover:bg-[var(--color-surface-hover)] disabled:cursor-not-allowed disabled:opacity-60",
                       column.sortDirection
                         ? "bg-[var(--color-action)]/10 text-[var(--color-text-primary)]"
                         : "",

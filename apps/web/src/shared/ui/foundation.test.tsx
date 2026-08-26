@@ -139,7 +139,7 @@ describe("ui foundation", () => {
     );
 
     const anchorTrigger = screen.getByRole("button", { name: "主要な開示" });
-    expect(anchorTrigger).toHaveClass("hover:bg-[var(--color-surface-subtle)]");
+    expect(anchorTrigger).toHaveClass("hover:bg-[var(--color-surface-hover)]");
     expect(anchorTrigger).not.toHaveClass("bg-[var(--color-surface-subtle)]");
     expect(anchorTrigger).not.toHaveClass("bg-[var(--color-surface-selected)]");
 
@@ -152,7 +152,7 @@ describe("ui foundation", () => {
     const supportingTrigger = screen.getByRole("button", { name: "補助的な開示" });
     expect(supportingTrigger).toHaveClass("font-medium");
     expect(supportingTrigger).toHaveClass("text-[var(--color-text-secondary)]");
-    expect(supportingTrigger).toHaveClass("hover:bg-[var(--color-surface-subtle)]");
+    expect(supportingTrigger).toHaveClass("hover:bg-[var(--color-surface-hover)]");
     expect(supportingTrigger).not.toHaveClass("hover:bg-transparent");
     expect(supportingTrigger).toHaveClass("disabled:hover:bg-transparent");
   });

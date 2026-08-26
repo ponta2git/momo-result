@@ -94,7 +94,7 @@ export function TabsTab({ className, ref, ...props }: TabsTabProps) {
                       "text-[var(--color-text-secondary)]",
                       state.disabled
                         ? ""
-                        : "hover:bg-[var(--color-surface-subtle)] hover:text-[var(--color-text-primary)]",
+                        : "hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]",
                     ),
               )
             : cn(

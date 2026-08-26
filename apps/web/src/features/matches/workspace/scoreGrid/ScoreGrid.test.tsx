@@ -228,7 +228,7 @@ describe("ScoreGrid", () => {
     render(<ScoreGridHarness onPlayerChange={onPlayerChange} />);
 
     const collapsedPlayerTrigger = screen.getAllByText("詳細")[0]?.closest("button");
-    expect(collapsedPlayerTrigger).toHaveClass("hover:bg-[var(--color-surface-subtle)]");
+    expect(collapsedPlayerTrigger).toHaveClass("hover:bg-[var(--color-surface-hover)]");
     expect(collapsedPlayerTrigger).not.toHaveClass("hover:bg-transparent");
 
     const memberSelect = screen.getByLabelText("メンバー");

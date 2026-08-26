@@ -15,52 +15,55 @@
 
   /* Reference palette: concrete OKLCH values stay below semantic UI roles. */
   --ref-neutral-0: oklch(100% 0 0);
-  --ref-neutral-50: oklch(97.5% 0.006 190);
-  --ref-neutral-100: oklch(95.5% 0.01 210);
-  --ref-neutral-200: oklch(91.5% 0.017 215);
-  --ref-neutral-300: oklch(55% 0.015 245);
-  --ref-neutral-500: oklch(48% 0.018 250);
+  --ref-neutral-25: oklch(99% 0.003 235);
+  --ref-neutral-50: oklch(97.5% 0.012 235);
+  --ref-neutral-75: oklch(97% 0.005 235);
+  --ref-neutral-100: oklch(96% 0.008 235);
+  --ref-neutral-200: oklch(92.5% 0.025 235);
+  --ref-neutral-300: oklch(54% 0.018 250);
+  --ref-neutral-500: oklch(47.5% 0.022 250);
   --ref-neutral-700: oklch(36% 0.018 250);
-  --ref-neutral-900: oklch(25% 0.018 250);
-  --ref-neutral-border: oklch(25% 0.018 250 / 0.12);
-  --ref-neutral-border-strong: oklch(25% 0.018 250 / 0.22);
+  --ref-neutral-900: oklch(24.5% 0.02 250);
+  --ref-neutral-border: oklch(24.5% 0.02 250 / 0.12);
+  --ref-neutral-border-strong: oklch(24.5% 0.02 250 / 0.22);
   --ref-neutral-night: oklch(24% 0.035 260);
 
-  --ref-action-700: oklch(43% 0.07 245);
-  --ref-analysis-emphasis-700: oklch(43% 0.08 70);
-  --ref-analysis-positive-700: oklch(44% 0.105 185);
-  --ref-analysis-negative-700: oklch(46% 0.145 335);
-  --ref-status-info-700: oklch(45% 0.115 285);
-  --ref-status-success-700: oklch(46% 0.105 150);
-  --ref-status-warning-700: oklch(54% 0.115 82);
-  --ref-status-review-700: oklch(48% 0.135 48);
-  --ref-status-danger-700: oklch(46% 0.17 28);
+  --ref-action-700: oklch(48% 0.095 245);
+  --ref-analysis-emphasis-700: oklch(51% 0.105 70);
+  --ref-analysis-positive-700: oklch(49% 0.08 195);
+  --ref-analysis-negative-700: oklch(50% 0.14 340);
+  --ref-status-info-700: oklch(49% 0.12 285);
+  --ref-status-success-700: oklch(49% 0.105 150);
+  --ref-status-warning-700: oklch(55% 0.105 82);
+  --ref-status-review-700: oklch(51% 0.13 48);
+  --ref-status-danger-700: oklch(49% 0.17 28);
 
-  --ref-four-player-sequence-1: oklch(54% 0.145 255);
-  --ref-four-player-sequence-2: oklch(53% 0.17 22);
-  --ref-four-player-sequence-3: oklch(58% 0.125 95);
-  --ref-four-player-sequence-4: oklch(51% 0.13 145);
+  --ref-four-player-sequence-1: oklch(61% 0.145 250);
+  --ref-four-player-sequence-2: oklch(59% 0.195 25);
+  --ref-four-player-sequence-3: oklch(65.5% 0.135 100);
+  --ref-four-player-sequence-4: oklch(59% 0.135 150);
 
-  --ref-series-1: oklch(49% 0.15 300);
-  --ref-series-2: oklch(48% 0.105 205);
-  --ref-series-3: oklch(52% 0.14 55);
-  --ref-series-4: oklch(45% 0.14 275);
-  --ref-series-5: oklch(50% 0.15 340);
-  --ref-series-6: oklch(47% 0.1 110);
+  --ref-series-1: oklch(59% 0.13 300);
+  --ref-series-2: oklch(58% 0.095 205);
+  --ref-series-3: oklch(60% 0.135 55);
+  --ref-series-4: oklch(56% 0.125 275);
+  --ref-series-5: oklch(58% 0.15 340);
+  --ref-series-6: oklch(57% 0.105 115);
 
-  --ref-rank-1: oklch(56% 0.12 88);
-  --ref-rank-2: oklch(47% 0.075 235);
-  --ref-rank-3: oklch(44% 0.06 305);
-  --ref-rank-4: oklch(43% 0.11 355);
+  --ref-rank-1: oklch(63% 0.115 78);
+  --ref-rank-2: oklch(56% 0.045 235);
+  --ref-rank-3: oklch(56% 0.008 240);
+  --ref-rank-4: oklch(56% 0.145 28);
 
-  --ref-tray-assets: oklch(48% 0.075 235);
-  --ref-tray-revenue: oklch(48% 0.075 80);
-  --ref-tray-incident: oklch(47% 0.045 155);
+  --ref-tray-assets: oklch(60% 0.09 240);
+  --ref-tray-revenue: oklch(61% 0.09 92);
+  --ref-tray-incident: oklch(59% 0.075 160);
   --ref-tray-marker: oklch(42% 0.025 250);
 
   /* Semantic tokens are the only color API consumed by component and feature UI. */
   --color-canvas: var(--ref-neutral-50);
-  --color-surface: var(--ref-neutral-0);
+  --color-surface: var(--ref-neutral-25);
+  --color-surface-hover: var(--ref-neutral-75);
   --color-surface-subtle: var(--ref-neutral-100);
   --color-surface-selected: var(--ref-neutral-200);
   --color-text-primary: var(--ref-neutral-900);

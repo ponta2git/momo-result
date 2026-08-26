@@ -87,7 +87,7 @@ export function ChoiceList<Value extends string>({
                   "momo-pressable grid min-h-11 min-w-0 grid-cols-[1.25rem_minmax(0,1fr)_auto] items-center gap-2 px-3 py-2",
                   optionDisabled
                     ? "cursor-not-allowed"
-                    : "cursor-pointer hover:bg-[var(--color-surface-subtle)]",
+                    : "cursor-pointer hover:bg-[var(--color-surface-hover)]",
                   "has-[:focus-visible]:outline-3 has-[:focus-visible]:-outline-offset-3 has-[:focus-visible]:outline-[var(--color-action)]",
                 )}
               >

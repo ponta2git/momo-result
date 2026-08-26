@@ -71,7 +71,7 @@ describe("MatchResultLedger", () => {
     expect(screen.getByText("比較データなし")).toBeInTheDocument();
   });
 
-  it("owns the canonical member order independently of rank and API array order", () => {
+  it("always uses rank order independently of API array order", () => {
     render(
       <MatchResultLedger
         contextStatus="unavailable"
@@ -85,10 +85,10 @@ describe("MatchResultLedger", () => {
     );
 
     expect(screen.getAllByRole("listitem").map((item) => item.textContent)).toEqual([
-      expect.stringContaining("いーゆー"),
-      expect.stringContaining("ぽんた"),
-      expect.stringContaining("あかねまみ"),
       expect.stringContaining("おーたか"),
+      expect.stringContaining("あかねまみ"),
+      expect.stringContaining("ぽんた"),
+      expect.stringContaining("いーゆー"),
     ]);
     expect(
       screen
@@ -97,7 +97,7 @@ describe("MatchResultLedger", () => {
           (item) =>
             item.querySelector<HTMLElement>("[data-member-sequence]")?.dataset["memberSequence"],
         ),
-    ).toEqual(["1", "2", "3", "4"]);
+    ).toEqual(["4", "3", "2", "1"]);
     expect(screen.getAllByText(/^[1-4]位$/u)).toHaveLength(4);
   });
 });

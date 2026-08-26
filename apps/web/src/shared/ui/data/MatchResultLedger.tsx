@@ -1,5 +1,4 @@
 import type { MatchPerformanceContextRow } from "@/shared/domain/matchPerformanceContext";
-import { orderFixedMembers } from "@/shared/domain/members";
 import { formatManYen } from "@/shared/lib/formatters";
 import { cn } from "@/shared/ui/cn";
 import { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
@@ -22,7 +21,7 @@ export function MatchResultLedger({
   contextStatus: MatchResultLedgerContextStatus;
   rows: MatchResultLedgerRow[];
 }) {
-  const orderedRows = orderFixedMembers(rows);
+  const orderedRows = rows.toSorted((left, right) => left.rank - right.rank);
 
   return (
     <ol

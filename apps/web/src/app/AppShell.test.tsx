@@ -13,7 +13,7 @@ vi.mock("@/app/AppGlobalNav", () => ({
 }));
 
 vi.mock("@/shared/ui/feedback/ToastHost", () => ({
-  ToastHost: () => null,
+  ToastHost: () => <div data-testid="toast-host" />,
 }));
 
 function StatefulRoute() {
@@ -44,6 +44,7 @@ describe("AppShell", () => {
       </QueryClientProvider>,
     );
 
+    expect(screen.getByTestId("toast-host")).toBeInTheDocument();
     expect(await screen.findByRole("heading", { name: "ルート本文" })).toBeVisible();
     expect(screen.queryByTestId("blocked-animation-lifecycle")).not.toBeInTheDocument();
   });

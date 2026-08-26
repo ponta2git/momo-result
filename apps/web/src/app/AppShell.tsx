@@ -1,5 +1,5 @@
 import { QueryErrorResetBoundary } from "@tanstack/react-query";
-import { lazy, Suspense, useCallback, useLayoutEffect, useState } from "react";
+import { Suspense, useCallback, useLayoutEffect, useState } from "react";
 import type { FocusEvent, MouseEvent, PointerEvent, ReactNode } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 
@@ -7,12 +7,8 @@ import { AppGlobalNav } from "@/app/AppGlobalNav";
 import { RouteErrorBoundary } from "@/app/RouteErrorBoundary";
 import { preloadRouteForPath } from "@/app/routeModules";
 import { RouteSuspenseFallback } from "@/app/RouteSuspenseFallback";
+import { ToastHost } from "@/shared/ui/feedback/ToastHost";
 import { SkipLink } from "@/shared/ui/layout/SkipLink";
-
-const ToastHost = lazy(async () => {
-  const module = await import("@/shared/ui/feedback/ToastHost");
-  return { default: module.ToastHost };
-});
 
 function shouldPreloadAnchor(anchor: HTMLAnchorElement): boolean {
   if (anchor.target === "_blank" || anchor.hasAttribute("download")) {
@@ -140,9 +136,7 @@ export function AppShell() {
           )}
         </QueryErrorResetBoundary>
       </main>
-      <Suspense fallback={null}>
-        <ToastHost />
-      </Suspense>
+      <ToastHost />
     </>
   );
 }

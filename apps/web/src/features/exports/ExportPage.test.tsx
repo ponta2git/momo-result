@@ -124,9 +124,13 @@ describe("ExportPage", () => {
       "aria-selected",
       "true",
     );
+    const exclusionNotice = screen.getByText("下書きや確認待ちの試合は含みません。");
+    expect(
+      exclusionNotice.compareDocumentPosition(scope) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
     const allScopePanel = screen.getByRole("tabpanel", { name: "全試合" });
     expect(allScopePanel).toBeInTheDocument();
-    expect(within(allScopePanel).getByText("下書きや確認待ちの試合は含みません。")).toBeVisible();
+    expect(within(allScopePanel).queryByText("下書きや確認待ちの試合は含みません。")).toBeNull();
     expect(screen.getByRole("tabpanel", { name: "CSV" })).toBeInTheDocument();
     expect(screen.getByText("すべての確定済み試合をCSVで書き出します。")).toBeInTheDocument();
   });
@@ -136,11 +140,11 @@ describe("ExportPage", () => {
 
     await screen.findByRole("heading", { name: "CSV/TSV出力" });
     const scopeTabs = screen.getByRole("tablist", { name: "出力範囲" });
+    const exclusionNotice = screen.getByText("下書きや確認待ちの試合は含みません。");
 
     for (const label of ["全試合", "シーズン", "開催", "試合"]) {
       await user.click(within(scopeTabs).getByRole("tab", { name: label }));
-      const panel = screen.getByRole("tabpanel", { name: label });
-      expect(within(panel).getByText("下書きや確認待ちの試合は含みません。")).toBeVisible();
+      expect(screen.getByText("下書きや確認待ちの試合は含みません。")).toBe(exclusionNotice);
     }
   });
 

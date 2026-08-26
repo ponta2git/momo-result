@@ -32,6 +32,7 @@ export function ExportScopeTabs({
       <h2 className="mb-2 text-sm font-semibold text-[var(--color-text-primary)]" id={headingId}>
         出力範囲
       </h2>
+      <p className="mb-3 text-sm text-[var(--color-text-secondary)]">{exportExclusionNotice}</p>
       <TabsRoot
         value={scope}
         onValueChange={(value) => {
@@ -53,16 +54,7 @@ export function ExportScopeTabs({
             key={item.value}
             value={item.value}
           >
-            {scope === item.value ? (
-              <>
-                {item.value === "all" ? null : children}
-                <p
-                  className={`${item.value === "all" ? "" : "mt-3 "}text-sm text-[var(--color-text-secondary)]`}
-                >
-                  {exportExclusionNotice}
-                </p>
-              </>
-            ) : null}
+            {scope === item.value && item.value !== "all" ? children : null}
           </TabsPanel>
         ))}
       </TabsRoot>

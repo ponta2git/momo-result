@@ -23,10 +23,7 @@ export function MatchDetailIdentity({
   ] as const;
 
   return (
-    <section
-      aria-label={`${matchLabel}の開催条件`}
-      className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-4 py-3"
-    >
+    <section aria-label={`${matchLabel}の開催条件`} className="min-w-0">
       <dl className="flex min-w-0 flex-wrap gap-x-5 gap-y-2">
         {items.map(([label, value]) => (
           <div key={label} className="flex min-w-0 items-baseline gap-2">

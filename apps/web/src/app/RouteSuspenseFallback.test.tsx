@@ -26,7 +26,7 @@ describe("RouteSuspenseFallback", () => {
   it("renders the selected workspace width", () => {
     render(<RouteSuspenseFallback pathname="/matches/new" />);
 
-    expect(screen.getByTestId("page-loading-fallback")).toHaveClass("max-w-[90rem]");
+    expect(screen.getByTestId("page-loading-fallback")).toHaveClass("max-w-[120rem]");
   });
 
   it("keeps the export fallback in the same single-column task order as the page", () => {

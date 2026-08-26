@@ -14,7 +14,7 @@ import { formatMatchNoInEvent, formatSeriesMatchIndex } from "@/shared/domain/ma
 import { memberDisplayName } from "@/shared/domain/members";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { MatchResultLedger } from "@/shared/ui/data/MatchResultLedger";
-import { Card } from "@/shared/ui/layout/Card";
+import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
 import { PageHeader } from "@/shared/ui/layout/PageHeader";
 
@@ -108,68 +108,60 @@ function MatchDetailReadyContent({ controller }: { controller: MatchDetailReadyC
         }
       />
 
-      <div className="grid gap-3">
-        <MatchDetailIdentity
-          gameTitleName={gameTitle?.name}
-          heldAt={heldAt}
-          mapName={map?.name}
-          matchNoInEvent={match.matchNoInEvent}
-          seasonName={season?.name}
-        />
-        <MatchFeatureSection view={featureView} />
-      </div>
+      <PageContentSurface className="grid gap-8">
+        <div className="grid gap-4">
+          <MatchDetailIdentity
+            gameTitleName={gameTitle?.name}
+            heldAt={heldAt}
+            mapName={map?.name}
+            matchNoInEvent={match.matchNoInEvent}
+            seasonName={season?.name}
+          />
+          <MatchFeatureSection view={featureView} />
+        </div>
 
-      <Card
-        aria-labelledby="match-result-ledger-heading"
-        className="w-full max-w-4xl self-center overflow-hidden p-0"
-        role="region"
-      >
-        <div className="flex flex-col gap-1 border-b border-[var(--color-border)] px-4 py-3 sm:flex-row sm:items-end sm:justify-between">
+        <section aria-labelledby="match-result-ledger-heading" className="grid w-full gap-4">
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h2
+                className="text-base font-semibold text-[var(--color-text-primary)]"
+                id="match-result-ledger-heading"
+              >
+                順位・総資産
+              </h2>
+              <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">
+                物件収益と、この試合による通算平均順位の変化も併記しています。
+              </p>
+            </div>
+            {performanceContext ? (
+              <p className="shrink-0 text-xs font-semibold text-[var(--color-text-secondary)] tabular-nums">
+                同条件内 {formatSeriesMatchIndex(performanceContext.matchIndex)}
+              </p>
+            ) : null}
+          </div>
+          <MatchResultLedger contextStatus={comparisonContextStatus} rows={ledgerRows} />
+          <MatchSeriesComparisonCta href={comparisonHref} />
+        </section>
+
+        <section className="grid gap-3">
           <div>
-            <h2
-              className="text-base font-semibold text-[var(--color-text-primary)]"
-              id="match-result-ledger-heading"
-            >
-              順位・総資産
-            </h2>
-            <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">
-              物件収益と、この試合による通算平均順位の変化も併記しています。
+            <h2 className="text-lg font-semibold text-[var(--color-text-primary)]">成績詳細</h2>
+            <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
+              列見出しで並び替えできます。
             </p>
           </div>
-          {performanceContext ? (
-            <p className="shrink-0 text-xs font-semibold text-[var(--color-text-secondary)] tabular-nums">
-              同条件内 {formatSeriesMatchIndex(performanceContext.matchIndex)}
-            </p>
-          ) : null}
-        </div>
-        <MatchResultLedger
-          className="rounded-none border-0"
-          contextStatus={comparisonContextStatus}
-          rows={ledgerRows}
+          <MatchDetailResultsTable players={players} setSortKey={setSortKey} sort={sort} />
+        </section>
+
+        <MatchRecordMetadata
+          confirmDelete={confirmDelete}
+          errorMessage={errorMessage}
+          isDeletePending={isDeletePending}
+          match={match}
+          setShowConfirm={setShowConfirm}
+          showConfirm={showConfirm}
         />
-        <div className="px-4 pb-4">
-          <MatchSeriesComparisonCta href={comparisonHref} />
-        </div>
-      </Card>
-
-      <section className="border-t border-[var(--color-border)] pt-6">
-        <div className="mb-3">
-          <h2 className="text-lg font-semibold text-[var(--color-text-primary)]">成績詳細</h2>
-          <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
-            列見出しで並び替えできます。
-          </p>
-        </div>
-        <MatchDetailResultsTable players={players} setSortKey={setSortKey} sort={sort} />
-      </section>
-
-      <MatchRecordMetadata
-        confirmDelete={confirmDelete}
-        errorMessage={errorMessage}
-        isDeletePending={isDeletePending}
-        match={match}
-        setShowConfirm={setShowConfirm}
-        showConfirm={showConfirm}
-      />
+      </PageContentSurface>
     </PageFrame>
   );
 }

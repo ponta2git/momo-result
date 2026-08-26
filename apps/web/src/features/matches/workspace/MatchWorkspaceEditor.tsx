@@ -7,7 +7,7 @@ import { ScoreGrid } from "@/features/matches/workspace/scoreGrid/ScoreGrid";
 import { SourceImagePanel } from "@/features/matches/workspace/sourceImages/SourceImagePanel";
 import type { MatchWorkspaceController } from "@/features/matches/workspace/useMatchWorkspaceController";
 import { cn } from "@/shared/ui/cn";
-import { Card } from "@/shared/ui/layout/Card";
+import { Notice } from "@/shared/ui/feedback/Notice";
 
 type MatchWorkspaceEditorProps = {
   editor: MatchWorkspaceController["editor"];
@@ -60,13 +60,13 @@ export function MatchWorkspaceEditor({
       {editor.sessionRecovery ? <MatchWorkspaceRecoveryNotice {...editor.sessionRecovery} /> : null}
 
       {editor.warnings.length > 0 ? (
-        <Card className="border-[var(--color-warning)]/65 bg-[var(--color-warning)]/18 p-3 shadow-none">
+        <Notice tone="warning" title="入力内容を確認してください">
           <ul className="list-disc pl-5 text-sm text-[var(--color-text-primary)]">
             {editor.warnings.map((warning) => (
               <li key={warning}>{warning}</li>
             ))}
           </ul>
-        </Card>
+        </Notice>
       ) : null}
 
       <div
@@ -75,9 +75,9 @@ export function MatchWorkspaceEditor({
           editor.sourceImagePanel ? "2xl:grid-cols-[minmax(0,1fr)_minmax(20rem,24rem)]" : "",
         )}
       >
-        <Card className="order-2 p-4 2xl:order-none">
+        <div className="order-2 min-w-0 2xl:order-none">
           <ScoreGrid actions={scoreGridActions} data={editor.scoreGrid.data} />
-        </Card>
+        </div>
 
         <aside className="contents 2xl:sticky 2xl:top-4 2xl:grid 2xl:h-fit 2xl:gap-4">
           {editor.sourceImagePanel ? (

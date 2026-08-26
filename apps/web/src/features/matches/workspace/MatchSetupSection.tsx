@@ -18,7 +18,6 @@ import { Disclosure } from "@/shared/ui/data/Collapsible";
 import { AlertDialog } from "@/shared/ui/feedback/Dialog";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { TextField } from "@/shared/ui/forms/TextField";
-import { Card } from "@/shared/ui/layout/Card";
 
 export type MatchSetupActions = {
   onGameTitleChange: (gameTitleId: string) => void;
@@ -99,13 +98,14 @@ export function MatchSetupSection({
         .join(" ・ ")
     : "必須条件を設定してください";
   return (
-    <Card className="p-0 shadow-none">
+    <section>
       <h2 className="sr-only">保存先と試合条件</h2>
       <Disclosure
         ariaLabel={editorOpen ? "条件を閉じる" : "条件を変更"}
         keepMounted
         open={editorOpen}
-        panelClassName="border-t border-[var(--color-border)] px-4 py-4"
+        panelClassName="px-4 py-4"
+        presentation="inset"
         summary={
           <span className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
             <span className="min-w-0 flex-1">
@@ -140,7 +140,7 @@ export function MatchSetupSection({
         />
 
         <Disclosure
-          className="mt-4 border-t border-[var(--color-border)] pt-1"
+          className="mt-4"
           keepMounted
           panelClassName="pt-2"
           summary="一覧にない開催履歴を追加する"
@@ -174,7 +174,7 @@ export function MatchSetupSection({
         {workspaceActions.mastersNavigation.show ||
         workspaceActions.cancelDraft.canCancel ||
         workspaceActions.cancelDraft.error ? (
-          <div className="mt-4 grid gap-2 border-t border-[var(--color-border)] pt-3">
+          <div className="mt-6 grid gap-2">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 {workspaceActions.mastersNavigation.show ? (
@@ -226,6 +226,6 @@ export function MatchSetupSection({
           </div>
         ) : null}
       </Disclosure>
-    </Card>
+    </section>
   );
 }

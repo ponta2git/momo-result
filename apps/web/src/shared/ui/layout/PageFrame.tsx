@@ -9,10 +9,10 @@ type PageFrameProps = HTMLAttributes<HTMLDivElement> & {
 };
 
 export const pageFrameWidthClass = {
-  narrow: "max-w-[48rem]",
-  standard: "max-w-[75rem]",
-  wide: "max-w-[82rem]",
-  workspace: "max-w-[90rem]",
+  narrow: "max-w-[56rem]",
+  standard: "max-w-[96rem]",
+  wide: "max-w-[108rem]",
+  workspace: "max-w-[120rem]",
 } as const satisfies Record<PageFrameWidth, string>;
 
 export function PageFrame({ className, width = "standard", ...props }: PageFrameProps) {

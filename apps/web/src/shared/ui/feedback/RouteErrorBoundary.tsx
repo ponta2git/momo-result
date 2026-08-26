@@ -5,6 +5,7 @@ import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import { isModuleLoadError, reloadCurrentPage } from "@/shared/lib/moduleLoadError";
 import { Button } from "@/shared/ui/actions/Button";
 import { Notice } from "@/shared/ui/feedback/Notice";
+import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
 import { PageHeader } from "@/shared/ui/layout/PageHeader";
 
@@ -67,14 +68,16 @@ export class RouteErrorBoundary extends Component<
       return (
         <PageFrame className="py-8 sm:py-12" width="narrow">
           <PageHeader title="画面の読み込みに失敗しました" />
-          <Notice className="p-4" role="alert" tone="danger">
-            <p className="text-sm">{detail}</p>
-            <div className="mt-3">
-              <Button onClick={this.handleRecovery}>
-                {reloadRequired ? "画面を再読み込み" : "もう一度読み込む"}
-              </Button>
-            </div>
-          </Notice>
+          <PageContentSurface>
+            <Notice className="p-4" role="alert" tone="danger">
+              <p className="momo-break-token text-sm">{detail}</p>
+              <div className="mt-3">
+                <Button onClick={this.handleRecovery}>
+                  {reloadRequired ? "画面を再読み込み" : "もう一度読み込む"}
+                </Button>
+              </div>
+            </Notice>
+          </PageContentSurface>
         </PageFrame>
       );
     }

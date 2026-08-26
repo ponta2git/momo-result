@@ -8,7 +8,6 @@ import { memberDisplayName } from "@/shared/domain/members";
 import { Button } from "@/shared/ui/actions/Button";
 import { AlertDialog } from "@/shared/ui/feedback/Dialog";
 import { Notice } from "@/shared/ui/feedback/Notice";
-import { Card } from "@/shared/ui/layout/Card";
 
 export function MatchRecordMetadata({
   confirmDelete,
@@ -33,7 +32,7 @@ export function MatchRecordMetadata({
   }, [confirmDelete]);
 
   return (
-    <Card className="grid gap-4">
+    <section aria-labelledby="match-record-metadata-heading" className="grid gap-4">
       {errorMessage && !showConfirm ? (
         <Notice tone="danger" title="削除に失敗しました">
           {errorMessage}
@@ -41,7 +40,12 @@ export function MatchRecordMetadata({
       ) : null}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h2 className="text-base font-semibold text-[var(--color-text-primary)]">記録情報</h2>
+          <h2
+            className="text-base font-semibold text-[var(--color-text-primary)]"
+            id="match-record-metadata-heading"
+          >
+            記録情報
+          </h2>
         </div>
         <AlertDialog
           cancelLabel="キャンセル"
@@ -74,6 +78,6 @@ export function MatchRecordMetadata({
           <dd className="mt-1 tabular-nums">{formatMatchDetailDate(match.createdAt)}</dd>
         </div>
       </dl>
-    </Card>
+    </section>
   );
 }

@@ -123,7 +123,7 @@ export function GlobalNav({
         className,
       )}
     >
-      <div className="mx-auto grid w-full max-w-[75rem] min-w-0 grid-cols-1 gap-2 px-3 py-2 sm:px-4 lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:items-center lg:py-2">
+      <div className="mx-auto grid w-full max-w-[120rem] min-w-0 grid-cols-1 gap-2 px-3 py-2 sm:px-4 lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:items-center lg:py-2">
         <div className="flex min-w-0 items-center justify-between gap-2 lg:contents">
           <div className="flex min-w-0 items-center gap-2 lg:col-start-1 lg:row-start-1">
             <Link

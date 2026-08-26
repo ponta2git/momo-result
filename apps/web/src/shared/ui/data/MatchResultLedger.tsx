@@ -35,7 +35,7 @@ export function MatchResultLedger({
       {orderedRows.map((row) => (
         <li
           key={row.memberId}
-          className="grid min-w-0 gap-3 border-b border-[var(--color-border)] p-3 last:border-b-0 sm:grid-cols-[4rem_minmax(9rem,16rem)_minmax(10rem,12rem)] sm:items-center sm:justify-center"
+          className="grid min-w-0 gap-3 border-b border-[var(--color-border)] p-3 last:border-b-0 sm:grid-cols-[4rem_minmax(12rem,1fr)_minmax(10rem,auto)] sm:items-center"
         >
           <div className="flex items-center gap-3 sm:block">
             <RankBadge rank={row.rank} size="md" />
@@ -78,7 +78,7 @@ export function MatchResultLedger({
             </p>
           </div>
 
-          <div className="col-span-full flex min-w-0 flex-wrap items-center justify-between gap-2 border-t border-[var(--color-border)] pt-2 text-xs">
+          <div className="col-span-full flex min-w-0 flex-wrap items-center justify-between gap-2 pt-1 text-xs sm:col-span-2 sm:col-start-2">
             <span className="font-medium text-[var(--color-text-secondary)]">通算平均順位</span>
             <AverageRankChange contextStatus={contextStatus} row={row} />
           </div>

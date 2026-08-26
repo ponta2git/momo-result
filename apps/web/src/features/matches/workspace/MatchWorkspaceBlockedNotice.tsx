@@ -3,7 +3,6 @@ import { Link } from "react-router-dom";
 import type { MatchWorkspaceOperationErrorView } from "@/features/matches/workspace/matchWorkspaceOperationError";
 import { Button } from "@/shared/ui/actions/Button";
 import { Notice } from "@/shared/ui/feedback/Notice";
-import { Card } from "@/shared/ui/layout/Card";
 
 export function MatchWorkspaceBlockedNotice({
   error,
@@ -15,8 +14,11 @@ export function MatchWorkspaceBlockedNotice({
   refreshingReviewStatus: boolean;
 }) {
   return (
-    <Card className="mt-4">
-      <h2 className="text-xl font-semibold text-[var(--color-text-primary)]">
+    <section aria-labelledby="workspace-blocked-heading">
+      <h2
+        className="text-xl font-semibold text-[var(--color-text-primary)]"
+        id="workspace-blocked-heading"
+      >
         読み取り中は編集できません
       </h2>
       <p className="mt-2 text-sm text-pretty text-[var(--color-text-secondary)]">
@@ -45,6 +47,6 @@ export function MatchWorkspaceBlockedNotice({
           <p className="mt-1">{error.nextStep}</p>
         </Notice>
       ) : null}
-    </Card>
+    </section>
   );
 }

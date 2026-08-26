@@ -137,7 +137,6 @@ body {
   font-kerning: normal;
   line-break: strict;
   line-height: 1.65;
-  overflow-wrap: anywhere;
   text-rendering: optimizeLegibility;
 }
 
@@ -146,13 +145,6 @@ h2,
 h3 {
   font-family: var(--font-momo-heading);
   line-height: 1.35;
-  text-wrap: balance;
-}
-
-p,
-li,
-dd {
-  text-wrap: pretty;
 }
 
 button,
@@ -262,6 +254,11 @@ samp {
   font-size: 0.75rem;
   font-weight: 650;
   line-height: 1.5;
+}
+
+@utility momo-break-token {
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 @utility momo-data {

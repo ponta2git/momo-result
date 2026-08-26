@@ -4,6 +4,7 @@ import { AuthPanel } from "@/shared/auth/AuthPanel";
 import { sanitizeAppRedirectPath } from "@/shared/auth/redirectPath";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { GlobalNav } from "@/shared/ui/layout/GlobalNav";
+import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
 
 export function LoginPage() {
@@ -25,7 +26,7 @@ export function LoginPage() {
       <GlobalNav isAuthenticated={false} />
       <main id="main-content">
         <PageFrame className="px-3 py-4 sm:px-4 sm:py-6">
-          <section className="mx-auto w-full max-w-[34rem] space-y-4 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-[var(--color-text-primary)]">
+          <PageContentSurface className="mx-auto max-w-[34rem] space-y-4">
             <header>
               <h1 className="text-2xl font-semibold text-[var(--color-text-primary)]">ログイン</h1>
               <p className="momo-copy mt-2 text-sm text-[var(--color-text-secondary)]">
@@ -51,7 +52,7 @@ export function LoginPage() {
                 別のDiscordアカウントを使う場合は、Discord側でログアウトするか、シークレットウィンドウで開きます。
               </p>
             )}
-          </section>
+          </PageContentSurface>
         </PageFrame>
       </main>
     </>

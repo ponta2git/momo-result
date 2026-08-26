@@ -11,7 +11,9 @@ import { useMatchWorkspaceController } from "@/features/matches/workspace/useMat
 import { Button } from "@/shared/ui/actions/Button";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { Notice } from "@/shared/ui/feedback/Notice";
+import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
+import { PageHeader } from "@/shared/ui/layout/PageHeader";
 
 type MatchWorkspacePageProps = {
   matchDraftId?: string;
@@ -75,33 +77,34 @@ export function MatchWorkspacePage({
 
   if (loadState.editLoadFailureKind) {
     const notFound = loadState.editLoadFailureKind === "notFound";
+    const title = notFound ? "試合が見つかりませんでした" : "試合編集を読み込めませんでした";
     return (
       <PageFrame>
-        <Notice
-          tone={notFound ? "warning" : "danger"}
-          title={notFound ? "試合が見つかりませんでした" : "試合編集を読み込めませんでした"}
-        >
-          <p>
-            {notFound
-              ? "削除されたか、URLが正しくない可能性があります。"
-              : "通信状態を確認して、もう一度お試しください。"}
-          </p>
-          {notFound ? null : (
-            <div className="mt-3">
-              <Button
-                pending={loadState.retryingEdit}
-                pendingLabel="再読み込み中"
-                size="sm"
-                onClick={loadState.onRetryEdit}
-              >
-                試合編集を再読み込み
-              </Button>
-            </div>
-          )}
-        </Notice>
-        <LinkButton to={header.cancelHref} variant="secondary">
-          前の画面へ戻る
-        </LinkButton>
+        <PageHeader title={title} />
+        <PageContentSurface className="grid justify-items-start gap-4">
+          <Notice tone={notFound ? "warning" : "danger"}>
+            <p>
+              {notFound
+                ? "削除されたか、URLが正しくない可能性があります。"
+                : "通信状態を確認して、もう一度お試しください。"}
+            </p>
+            {notFound ? null : (
+              <div className="mt-3">
+                <Button
+                  pending={loadState.retryingEdit}
+                  pendingLabel="再読み込み中"
+                  size="sm"
+                  onClick={loadState.onRetryEdit}
+                >
+                  試合編集を再読み込み
+                </Button>
+              </div>
+            )}
+          </Notice>
+          <LinkButton to={header.cancelHref} variant="secondary">
+            前の画面へ戻る
+          </LinkButton>
+        </PageContentSurface>
       </PageFrame>
     );
   }
@@ -119,40 +122,42 @@ export function MatchWorkspacePage({
     <PageFrame width="workspace">
       <MatchWorkspaceHeader header={header} />
 
-      {baseErrors.length > 0 ? (
-        <Notice tone="danger" title="画面データを読み込めません">
-          <ul className="grid list-disc gap-1 pl-5 text-sm">
-            {baseErrors.map((error) => (
-              <li key={`${error.status}-${error.detail}`}>
-                <span className="font-semibold">{error.title}</span>：{error.detail}
-              </li>
-            ))}
-          </ul>
-          <div className="mt-3">
-            <Button
-              pending={baseErrorActions.retrying}
-              pendingLabel="再読み込み中"
-              size="sm"
-              variant="secondary"
-              onClick={() => void baseErrorActions.onRetry()}
-            >
-              失敗したデータを再読み込み
-            </Button>
-          </div>
-        </Notice>
-      ) : null}
+      <PageContentSurface className="grid gap-6">
+        {baseErrors.length > 0 ? (
+          <Notice tone="danger" title="画面データを読み込めません">
+            <ul className="grid list-disc gap-1 pl-5 text-sm">
+              {baseErrors.map((error) => (
+                <li className="momo-break-token" key={`${error.status}-${error.detail}`}>
+                  <span className="font-semibold">{error.title}</span>：{error.detail}
+                </li>
+              ))}
+            </ul>
+            <div className="mt-3">
+              <Button
+                pending={baseErrorActions.retrying}
+                pendingLabel="再読み込み中"
+                size="sm"
+                variant="secondary"
+                onClick={() => void baseErrorActions.onRetry()}
+              >
+                失敗したデータを再読み込み
+              </Button>
+            </div>
+          </Notice>
+        ) : null}
 
-      {blockedNotice ? (
-        <MatchWorkspaceBlockedNotice {...blockedNotice} />
-      ) : (
-        <MatchWorkspaceEditor
-          editor={editor}
-          formActions={formActions}
-          primaryActionRef={primaryActionRef}
-          setup={setup}
-          onRequestSubmitFocus={onRequestSubmitFocus}
-        />
-      )}
+        {blockedNotice ? (
+          <MatchWorkspaceBlockedNotice {...blockedNotice} />
+        ) : (
+          <MatchWorkspaceEditor
+            editor={editor}
+            formActions={formActions}
+            primaryActionRef={primaryActionRef}
+            setup={setup}
+            onRequestSubmitFocus={onRequestSubmitFocus}
+          />
+        )}
+      </PageContentSurface>
 
       {confirmDialog ? <MatchConfirmDialog {...confirmDialog} /> : null}
       <MatchWorkspaceNavigationGuard {...navigationGuard} />

@@ -208,7 +208,7 @@ export function CameraCapture({
           onChange={(event) => setDeviceId(event.currentTarget.value)}
         />
       ) : null}
-      <div className="relative max-w-[44rem] overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--momo-night-900)]">
+      <div className="relative w-full max-w-[56rem] overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--momo-night-900)]">
         {active ? null : (
           <div className="pointer-events-none absolute inset-0 grid place-items-center px-6 text-center text-white/75">
             <div>
@@ -270,7 +270,8 @@ export function CameraCapture({
         <Disclosure
           className="w-full text-sm text-[var(--color-text-secondary)] sm:w-fit"
           keepMounted
-          panelClassName="mt-2 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-2"
+          panelClassName="mt-2 p-2"
+          presentation="inset"
           summary="カメラが使えない場合"
           triggerClassName="w-full sm:w-auto"
         >

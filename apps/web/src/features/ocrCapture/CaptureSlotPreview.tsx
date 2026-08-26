@@ -25,10 +25,9 @@ export function CaptureSlotPreview({
 
   return (
     <div
-      key={slot.previewUrl ?? "empty"}
       aria-label={`${label}の16:9画像枠`}
       className={cn(
-        "momo-enter relative aspect-video w-full overflow-hidden rounded-[var(--radius-sm)] border border-[var(--color-border)]",
+        "relative aspect-video w-full overflow-hidden rounded-[var(--radius-sm)] border border-[var(--color-border)]",
         hasImage
           ? "bg-[var(--color-media-canvas)]"
           : "border-dashed bg-[var(--color-surface-subtle)]",

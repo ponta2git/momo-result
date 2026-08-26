@@ -49,7 +49,7 @@ export function ExportCandidateSelect({
       <div
         aria-busy="true"
         aria-label={`${labelForScope(scope)}候補を読み込み中`}
-        className="momo-enter grid gap-2"
+        className="grid gap-2"
       >
         <p className="text-sm leading-5 font-semibold text-[var(--color-text-primary)]">
           {labelForScope(scope)}
@@ -68,7 +68,6 @@ export function ExportCandidateSelect({
             再読み込み
           </Button>
         }
-        className="momo-enter"
         tone="danger"
         title={view.message}
       >
@@ -92,7 +91,6 @@ export function ExportCandidateSelect({
       <div className="grid gap-3">
         <EmptyState
           action={action}
-          className="momo-enter"
           description={view.message}
           placement="embedded"
           title={view.title}

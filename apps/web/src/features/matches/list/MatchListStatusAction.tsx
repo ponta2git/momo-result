@@ -20,7 +20,7 @@ export function MatchListStatusAction({
   }
 
   return (
-    <div className="momo-enter" key={`${item.status}:${item.primaryAction.label}`}>
+    <div>
       <MatchListActions
         checkingDraftIds={rowActions.checkingDraftIds}
         disabled={rowActions.disabled ?? false}

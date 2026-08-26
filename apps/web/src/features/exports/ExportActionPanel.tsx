@@ -38,7 +38,6 @@ export function ExportActionPanel({
               初期条件へ戻す
             </Button>
           }
-          className="momo-enter"
           tone="danger"
           title="出力条件を確認"
         >

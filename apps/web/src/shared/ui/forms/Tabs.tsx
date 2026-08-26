@@ -84,7 +84,7 @@ export function TabsTab({ className, ref, ...props }: TabsTabProps) {
       ref={ref}
       className={(state) =>
         cn(
-          "inline-flex min-h-11 shrink-0 items-center justify-center px-3 py-2 text-sm font-semibold whitespace-nowrap transition-colors duration-[var(--motion-fast)] motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-[var(--color-action)] sm:min-h-9 sm:py-1",
+          "inline-flex min-h-11 shrink-0 items-center justify-center px-3 py-2 text-sm font-semibold whitespace-nowrap focus-visible:outline-2 focus-visible:outline-[var(--color-action)] sm:min-h-9 sm:py-1",
           variant === "filled"
             ? cn(
                 "rounded-[var(--radius-sm)] focus-visible:outline-offset-2",

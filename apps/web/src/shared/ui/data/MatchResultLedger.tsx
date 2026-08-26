@@ -27,7 +27,7 @@ export function MatchResultLedger({
     <ol
       aria-label={ariaLabel}
       className={cn(
-        "momo-enter grid overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border-strong)] bg-[var(--color-surface)]",
+        "grid overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border-strong)] bg-[var(--color-surface)]",
         className,
       )}
     >

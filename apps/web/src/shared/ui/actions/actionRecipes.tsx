@@ -8,8 +8,7 @@ export type ButtonVariant = "primary" | "secondary" | "quiet" | "danger";
 export type IconActionSize = "sm" | "md" | "lg";
 export type IconActionVariant = "secondary" | "quiet" | "danger";
 
-const actionBaseClass =
-  "momo-pressable inline-flex items-center justify-center rounded-[var(--radius-sm)] border";
+const actionBaseClass = "inline-flex items-center justify-center rounded-[var(--radius-sm)] border";
 
 const surfaceVariantClass = {
   secondary:

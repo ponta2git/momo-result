@@ -46,7 +46,7 @@ const dialogBackdropClassName = "fixed inset-0 z-[var(--z-dialog)] bg-[var(--col
 const dialogPopupClassName =
   "momo-dialog-popup fixed inset-0 z-[var(--z-dialog)] mx-auto flex w-full max-w-[40rem] items-center justify-center overflow-hidden";
 const dialogSurfaceClassName =
-  "momo-dialog-surface momo-enter w-full rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-[var(--color-text-primary)] shadow-[var(--shadow-dialog)]";
+  "momo-dialog-surface w-full rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-[var(--color-text-primary)] shadow-[var(--shadow-dialog)]";
 
 function defaultAlertErrorMessage(error: unknown) {
   if (error instanceof Error && error.message.trim()) {

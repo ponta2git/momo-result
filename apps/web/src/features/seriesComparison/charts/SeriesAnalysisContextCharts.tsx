@@ -74,7 +74,7 @@ export function PlayOrderMatrix({
                 return (
                   <MatrixCell
                     aria-label={`${entry.displayName}、${cell.playOrder}番手、平均${formatDecimal(cell.rankAverage)}位、${cell.targetCount}戦${presentation.label ? `、${presentation.label}` : ""}${focused ? "、この試合" : ""}`}
-                    className={`rounded-[var(--radius-xs)] border px-2 py-2 text-center ${focused ? "momo-enter ring-2 ring-[var(--color-action)] ring-offset-1 ring-offset-[var(--color-surface)]" : ""}`}
+                    className={`rounded-[var(--radius-xs)] border px-2 py-2 text-center ${focused ? "ring-2 ring-[var(--color-action)] ring-offset-1 ring-offset-[var(--color-surface)]" : ""}`}
                     data-focused-metric={focused ? "true" : undefined}
                     key={playOrder}
                     style={presentation.style}
@@ -192,7 +192,7 @@ export function CardShopDestinationQuadrants({
               const focused = focusedItemIds.includes(quadrant.itemId);
               return (
                 <div
-                  className={`border-l-2 border-[var(--color-border)] px-2 py-1 ${focused ? "momo-enter ring-2 ring-[var(--color-action)] ring-offset-1 ring-offset-[var(--color-surface)]" : ""}`}
+                  className={`border-l-2 border-[var(--color-border)] px-2 py-1 ${focused ? "ring-2 ring-[var(--color-action)] ring-offset-1 ring-offset-[var(--color-surface)]" : ""}`}
                   data-focused-metric={focused ? "true" : undefined}
                   key={quadrant.itemId}
                 >

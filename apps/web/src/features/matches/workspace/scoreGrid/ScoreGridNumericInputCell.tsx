@@ -264,8 +264,7 @@ export const NumericInputCell = memo(function NumericInputCell({
         <div className="min-h-5 pt-1">
           {viewState.label ? (
             <p
-              key={viewState.label}
-              className="momo-enter text-xs leading-4 text-[var(--color-text-secondary)]"
+              className="text-xs leading-4 text-[var(--color-text-secondary)]"
               id={`${cellId}-status`}
             >
               {viewState.label}

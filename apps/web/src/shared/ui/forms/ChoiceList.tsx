@@ -84,7 +84,7 @@ export function ChoiceList<Value extends string>({
             >
               <label
                 className={cn(
-                  "momo-pressable grid min-h-11 min-w-0 grid-cols-[1.25rem_minmax(0,1fr)_auto] items-center gap-2 px-3 py-2",
+                  "grid min-h-11 min-w-0 grid-cols-[1.25rem_minmax(0,1fr)_auto] items-center gap-2 px-3 py-2",
                   optionDisabled
                     ? "cursor-not-allowed"
                     : "cursor-pointer hover:bg-[var(--color-surface-hover)]",

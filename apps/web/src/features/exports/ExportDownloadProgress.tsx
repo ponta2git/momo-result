@@ -10,7 +10,6 @@ export function ExportDownloadProgress({ isPending, isSlow }: ExportDownloadProg
 
   return (
     <Notice
-      className="momo-enter"
       tone={isSlow ? "warning" : "info"}
       title={isSlow ? "通常より時間がかかっています" : "出力ファイルを作成しています"}
     >

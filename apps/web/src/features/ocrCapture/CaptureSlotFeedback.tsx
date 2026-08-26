@@ -44,7 +44,7 @@ export function CaptureSlotFeedback({ mismatch, slot, onRefreshStatus }: Capture
 function CaptureMismatchAlert({ detectedKind }: { detectedKind?: SlotKind | undefined }) {
   return (
     <div
-      className="momo-enter mt-4 rounded-[var(--radius-md)] border border-[var(--color-warning)]/60 bg-[var(--color-warning)]/20 p-3 text-sm text-[var(--color-text-primary)]"
+      className="mt-4 rounded-[var(--radius-md)] border border-[var(--color-warning)]/60 bg-[var(--color-warning)]/20 p-3 text-sm text-[var(--color-text-primary)]"
       role="alert"
     >
       OCR判定は <strong>{detectedKind ? slotKindLabels[detectedKind] : "別の分類"}</strong>{" "}
@@ -60,7 +60,7 @@ function CaptureTransportError({
 }) {
   return (
     <div
-      className="momo-enter mt-4 rounded-[var(--radius-md)] border border-[var(--color-danger)]/45 bg-[var(--color-danger)]/10 p-3 text-sm text-[var(--color-text-primary)]"
+      className="mt-4 rounded-[var(--radius-md)] border border-[var(--color-danger)]/45 bg-[var(--color-danger)]/10 p-3 text-sm text-[var(--color-text-primary)]"
       role="alert"
     >
       <strong>{error.title}</strong>
@@ -72,7 +72,7 @@ function CaptureTransportError({
 function CaptureJobFailure({ failure }: { failure: NonNullable<CaptureSlotState["jobFailure"]> }) {
   return (
     <div
-      className="momo-enter mt-4 rounded-[var(--radius-md)] border border-[var(--color-danger)]/45 bg-[var(--color-danger)]/10 p-3 text-sm text-[var(--color-text-primary)]"
+      className="mt-4 rounded-[var(--radius-md)] border border-[var(--color-danger)]/45 bg-[var(--color-danger)]/10 p-3 text-sm text-[var(--color-text-primary)]"
       role="alert"
     >
       <strong>{failure.code}</strong>

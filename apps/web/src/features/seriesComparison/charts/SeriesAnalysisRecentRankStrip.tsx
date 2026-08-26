@@ -85,7 +85,7 @@ export function RecentRankStrips({
                     {showMarker ? (
                       <SeriesAnalysisMatchLink
                         ariaLabel={`${formatSeriesMatchIndex(matchIndex)}の試合結果を見る${focused ? "、この試合" : ""}`}
-                        className={`justify-center text-[11px] whitespace-nowrap ${focused ? "momo-enter" : "text-[var(--color-text-muted)]"}`}
+                        className={`justify-center text-[11px] whitespace-nowrap ${focused ? "" : "text-[var(--color-text-muted)]"}`}
                         matchId={row.matchId}
                       >
                         {focused ? "この試合" : formatSeriesMatchIndex(matchIndex)}
@@ -136,7 +136,7 @@ export function RecentRankStrips({
                         {row ? (
                           <SeriesAnalysisMatchLink
                             ariaLabel={`${player.displayName}、${formatSeriesMatchIndex(matchIndex)}、${row.rank}位${focused ? "、この試合" : ""}。試合結果を見る`}
-                            className={`size-11 justify-center overflow-hidden rounded-[var(--radius-xs)] border p-0 text-xs tabular-nums no-underline hover:no-underline ${focused ? "momo-enter ring-2 ring-[var(--color-action)] ring-offset-2 ring-offset-[var(--color-surface)]" : ""}`}
+                            className={`size-11 justify-center overflow-hidden rounded-[var(--radius-xs)] border p-0 text-xs tabular-nums no-underline hover:no-underline ${focused ? "ring-2 ring-[var(--color-action)] ring-offset-2 ring-offset-[var(--color-surface)]" : ""}`}
                             matchId={row.matchId}
                             style={{
                               backgroundColor: rankColor(row.rank),

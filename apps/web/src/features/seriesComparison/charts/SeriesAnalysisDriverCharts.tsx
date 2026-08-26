@@ -144,7 +144,7 @@ export function RevenueConversionMatrices({
                         return (
                           <MatrixCell
                             aria-label={`収益${cell.revenueRank}位から最終${cell.finalRank}位、${cell.count}戦、${formatPercent(cell.rate)}${focused ? "、この試合" : ""}`}
-                            className={`rounded-[var(--radius-xs)] border px-1 py-2 text-center ${focused ? "momo-enter ring-2 ring-[var(--color-action)] ring-offset-1 ring-offset-[var(--color-surface)]" : ""}`}
+                            className={`rounded-[var(--radius-xs)] border px-1 py-2 text-center ${focused ? "ring-2 ring-[var(--color-action)] ring-offset-1 ring-offset-[var(--color-surface)]" : ""}`}
                             data-focused-metric={focused ? "true" : undefined}
                             key={finalRank}
                             style={

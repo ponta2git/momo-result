@@ -46,7 +46,7 @@ export function MatchDigestStrip({
               const focused = focusedItemIds.includes(match.itemId);
               return (
                 <article
-                  className={`w-52 shrink-0 rounded-[var(--radius-sm)] border bg-[var(--color-surface)] p-3 ${focused ? "momo-enter border-[var(--color-action)] ring-2 ring-[var(--color-action)]/25" : "border-[var(--color-border)]"}`}
+                  className={`w-52 shrink-0 rounded-[var(--radius-sm)] border bg-[var(--color-surface)] p-3 ${focused ? "border-[var(--color-action)] ring-2 ring-[var(--color-action)]/25" : "border-[var(--color-border)]"}`}
                   data-focused-metric={focused ? "true" : undefined}
                   key={match.itemId}
                 >

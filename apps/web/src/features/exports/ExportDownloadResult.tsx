@@ -13,7 +13,7 @@ export function ExportDownloadResult({ onRetry, result }: ExportDownloadResultPr
 
   if (result.kind === "success") {
     return (
-      <Notice className="momo-enter" tone="success" title="ダウンロードを開始しました">
+      <Notice tone="success" title="ダウンロードを開始しました">
         {result.fileName}
       </Notice>
     );
@@ -29,7 +29,6 @@ export function ExportDownloadResult({ onRetry, result }: ExportDownloadResultPr
             </Button>
           ) : undefined
         }
-        className="momo-enter"
         tone="warning"
         title={result.title}
       >
@@ -47,7 +46,6 @@ export function ExportDownloadResult({ onRetry, result }: ExportDownloadResultPr
           </Button>
         ) : undefined
       }
-      className="momo-enter"
       tone="danger"
       title={result.title}
     >

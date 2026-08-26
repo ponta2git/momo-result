@@ -67,17 +67,13 @@ export function StaleShield({
         data-stale={active || undefined}
       >
         <div
-          className={cn(
-            "min-w-0 transition-opacity duration-[var(--motion-panel)] motion-reduce:transition-none",
-            active ? "opacity-60" : "opacity-100",
-            contentClassName,
-          )}
+          className={cn("min-w-0", active ? "opacity-60" : "opacity-100", contentClassName)}
           ref={contentRef}
         >
           {children}
         </div>
         {active ? (
-          <div className="momo-enter pointer-events-none absolute inset-x-0 top-3 flex justify-center">
+          <div className="pointer-events-none absolute inset-x-0 top-3 flex justify-center">
             <span
               className="inline-flex min-h-8 items-center gap-2 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-xs font-semibold text-[var(--color-text-muted)] shadow-[var(--shadow-raised)]"
               role="status"
@@ -97,11 +93,11 @@ export function StaleShield({
   return (
     <div aria-busy={active || undefined} className={cn("min-w-0", className)}>
       {active ? (
-        <div key="shield" className={cn("momo-enter min-w-0", contentClassName)}>
+        <div key="shield" className={cn("min-w-0", contentClassName)}>
           {fallback}
         </div>
       ) : (
-        <div key="content" className={cn("momo-enter min-w-0", contentClassName)}>
+        <div key="content" className={cn("min-w-0", contentClassName)}>
           {children}
         </div>
       )}

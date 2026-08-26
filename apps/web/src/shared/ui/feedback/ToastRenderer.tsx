@@ -11,7 +11,7 @@ export function ToastRenderer() {
     <Toast.Portal>
       <Toast.Viewport aria-live="polite" className={toastViewportClassName}>
         {toasts.map((toast) => (
-          <div className="momo-enter" key={toast.id}>
+          <div key={toast.id}>
             <Toast.Root
               className={cn(
                 "rounded-[var(--radius-lg)] border p-3 shadow-[var(--shadow-raised)]",

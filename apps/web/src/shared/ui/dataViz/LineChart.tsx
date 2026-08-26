@@ -98,7 +98,7 @@ export function DataVizLineChart({
             y2={height - padding.bottom}
           />
           {focusedPoint ? (
-            <g aria-label={`${formatIndex(focusedPoint.index)}を選択中`} className="momo-enter">
+            <g aria-label={`${formatIndex(focusedPoint.index)}を選択中`}>
               <rect
                 fill="var(--color-action)"
                 fillOpacity="0.08"

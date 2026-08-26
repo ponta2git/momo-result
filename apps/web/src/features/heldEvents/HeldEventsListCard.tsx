@@ -23,12 +23,7 @@ export function HeldEventsListCard({
       {data.loading ? (
         <HeldEventsLoading />
       ) : (
-        <div
-          className={cn(
-            "grid min-w-0 gap-4 transition-opacity duration-[var(--motion-base)] motion-reduce:transition-none",
-            data.refreshing ? "opacity-70" : "opacity-100",
-          )}
-        >
+        <div className={cn("grid min-w-0 gap-4", data.refreshing ? "opacity-70" : "opacity-100")}>
           {data.stale ? (
             <Notice
               action={

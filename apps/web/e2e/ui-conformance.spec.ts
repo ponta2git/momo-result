@@ -101,9 +101,13 @@ test("keeps shared UI operation contracts across responsive application flows", 
 
     await expect(page.getByRole("heading", { exact: true, name: "試合一覧" })).toBeVisible();
     const filterBar = page.getByRole("region", { name: "試合の表示条件" });
-    await expect(filterBar.getByRole("button", { name: "すべて" })).toBeVisible();
-    await expect(filterBar.getByRole("button", { name: /未確定\s*\d+件/u })).toBeVisible();
-    await expect(filterBar.getByRole("button", { name: "確定済" })).toBeVisible();
+    const statusFilter = filterBar.getByLabel("確定状況");
+    await expect(statusFilter).toBeVisible();
+    await expect(statusFilter).toHaveValue("all");
+    await expect(statusFilter.getByRole("option")).toHaveCount(6);
+    await expect(statusFilter.getByRole("option", { name: /未確定すべて（\d+件）/u })).toHaveCount(
+      1,
+    );
     await expect(filterBar).not.toContainText("確定状況 すべて");
     await expect(filterBar).not.toContainText("並び順 開催が新しい順");
     await expect(filterBar).toContainText(`作品 ${primaryGameTitleName}`);

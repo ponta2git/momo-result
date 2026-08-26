@@ -68,8 +68,7 @@ describe("MatchesFilterBar", () => {
     );
 
     const surface = screen.getByRole("region", { name: "試合の表示条件" });
-    expect(within(surface).getByRole("group", { name: "確定状況" })).toBeInTheDocument();
-    expect(screen.queryByRole("region", { name: "確定状況" })).not.toBeInTheDocument();
+    expect(within(surface).getByLabelText("確定状況")).toHaveValue("needs_review");
     expect(surface).toHaveTextContent(
       "適用中: 確定状況 要確認のみ・並び順 更新が新しい順・作品 桃太郎電鉄2・シーズン 今シーズン",
     );
@@ -104,7 +103,7 @@ describe("MatchesFilterBar", () => {
       />,
     );
 
-    await user.click(screen.getByRole("button", { name: /処理中3件/u }));
+    await user.selectOptions(screen.getByLabelText("確定状況"), "ocr_running");
     expect(onApply).toHaveBeenLastCalledWith({ ...search, cursor: "", status: "ocr_running" });
 
     onApply.mockClear();
@@ -144,5 +143,25 @@ describe("MatchesFilterBar", () => {
         name: "確定状況・並び順・詳細条件を初期状態に戻す",
       }),
     ).not.toBeInTheDocument();
+  });
+
+  it("keeps status choices available when summary counts fail and retries nearby", async () => {
+    const user = userEvent.setup();
+    const onRetrySummary = vi.fn();
+
+    render(
+      <MatchesFilterBar
+        actions={{ onApply: vi.fn(), onClear: vi.fn() }}
+        candidates={candidates}
+        onRetrySummary={onRetrySummary}
+        search={initialSearch}
+        summaryError
+      />,
+    );
+
+    expect(screen.getByLabelText("確定状況")).toBeEnabled();
+    expect(screen.queryByText(/0件/u)).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "件数を再取得" }));
+    expect(onRetrySummary).toHaveBeenCalledOnce();
   });
 });

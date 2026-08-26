@@ -12,6 +12,7 @@ import { PaginationControls } from "@/shared/ui/data/PaginationControls";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
+import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
 import { PageHeader } from "@/shared/ui/layout/PageHeader";
 import { StaleShield } from "@/shared/ui/motion/StaleShield";
@@ -51,6 +52,7 @@ export function MatchesListPage() {
     navigation,
     pagination,
     refresh,
+    retrySummary,
     search,
     sameScopeRefreshing,
     seasons,
@@ -58,6 +60,7 @@ export function MatchesListPage() {
     showMatchesError,
     showMatchesLoading,
     summaryCounts,
+    summaryError,
     summaryLoading,
     summaryMasked,
     updatePage,
@@ -115,159 +118,165 @@ export function MatchesListPage() {
         title="試合一覧"
       />
 
-      {masterLoadFailed ? (
-        <Notice tone="warning" title="絞り込み候補を一部読み込めません">
-          <p>試合一覧は表示できます。開催、作品、シーズンの候補を再取得できます。</p>
-          <div className="mt-3">
-            <Button
-              pending={isManualRefreshing}
-              pendingLabel="再読み込み中"
-              size="sm"
-              variant="secondary"
-              onClick={() => void refresh()}
-            >
-              候補を再読み込み
-            </Button>
-          </div>
-        </Notice>
-      ) : null}
-
-      <MatchesFilterBar
-        actions={filterActions}
-        candidates={filterCandidates}
-        counts={summaryCounts}
-        pending={listScopeChanging}
-        search={search}
-        summaryLoading={summaryLoading}
-        summaryMasked={summaryMasked}
-      />
-
-      <section
-        aria-busy={listScopeChanging || sameScopeRefreshing || undefined}
-        aria-label="登録済みの試合"
-        className="relative grid min-h-[24rem] gap-4"
-      >
-        <div className="flex min-w-0 flex-wrap items-center justify-between gap-2 border-b border-[var(--color-border)] pb-3">
-          <p className="text-sm font-semibold text-[var(--color-text-secondary)] tabular-nums">
-            {showMatchesLoading
-              ? "件数を確認中"
-              : showMatchesError
-                ? "件数を取得できません"
-                : `${(pagination?.totalItems ?? items.length).toLocaleString()}件`}
-          </p>
-          <div
-            aria-label="試合一覧の操作"
-            className="flex flex-wrap items-center justify-end gap-1"
-            role="group"
-          >
-            <IconButton
-              aria-label="最新情報に更新"
-              disabled={listScopeChanging && !isManualRefreshing}
-              icon={<RefreshCw />}
-              pending={isManualRefreshing}
-              pendingLabel="一覧を更新中"
-              tooltip={isManualRefreshing ? "更新中…" : "最新情報に更新"}
-              variant="quiet"
-              onClick={() => void refresh()}
-            />
-            <LinkButton
-              icon={<Download className="size-4" />}
-              size="sm"
-              to={navigation.exportHref}
-              variant="quiet"
-            >
-              CSV/TSVをまとめて出力
-            </LinkButton>
-          </div>
-        </div>
-
-        {matchesRefreshFailed ? (
-          <Notice
-            action={
+      <PageContentSurface className="grid gap-6">
+        {masterLoadFailed ? (
+          <Notice tone="warning" title="絞り込み候補を一部読み込めません">
+            <p>試合一覧は表示できます。開催、作品、シーズンの候補を再取得できます。</p>
+            <div className="mt-3">
               <Button
                 pending={isManualRefreshing}
-                pendingLabel="一覧を再読み込み中"
+                pendingLabel="再読み込み中"
                 size="sm"
                 variant="secondary"
                 onClick={() => void refresh()}
               >
-                一覧を再読み込み
+                候補を再読み込み
               </Button>
-            }
-            title="一覧を更新できませんでした"
-            tone="warning"
-          >
-            <p>取得済みの試合は表示したままです。通信状態を確認して再読み込みしてください。</p>
+            </div>
           </Notice>
         ) : null}
 
-        <StaleShield active={showMatchesLoading} fallback={<ListSkeleton />}>
-          <StaleShield
-            active={listUpdating}
-            busyLabel="一覧を更新中"
-            contentClassName="grid gap-4"
-            fallback={<ListSkeleton />}
-            strategy={listScopeChanging ? "preserve-inert" : "preserve-interactive"}
-          >
-            {showMatchesError ? (
-              <Notice tone="danger" title="試合一覧を読み込めません">
-                <p>通信状態を確認して、もう一度お試しください。</p>
-                <div className="mt-3">
-                  <Button
-                    pending={isManualRefreshing}
-                    pendingLabel="再読み込み中"
-                    size="sm"
-                    onClick={() => void refresh()}
-                  >
-                    一覧を再読み込み
-                  </Button>
-                </div>
-              </Notice>
-            ) : items.length === 0 ? (
-              <EmptyState
-                action={
-                  hasFilters ? undefined : (
-                    <div className="flex flex-wrap gap-2">
-                      <LinkButton to={navigation.ocrHref}>OCR取り込み</LinkButton>
-                      <LinkButton to={navigation.manualCreateHref} variant="secondary">
-                        手入力で作成
-                      </LinkButton>
-                    </div>
-                  )
-                }
-                className="min-h-[18rem]"
-                description={
-                  hasFilters
-                    ? "状態や開催条件を広げると、他の試合記録を確認できます。"
-                    : "OCR取り込みか手入力で、最初の試合を登録します。"
-                }
-                icon={<AlertTriangle className="size-5" />}
-                title={hasFilters ? "該当する試合はありません" : "試合はまだありません"}
+        <MatchesFilterBar
+          actions={filterActions}
+          candidates={filterCandidates}
+          counts={summaryCounts}
+          onRetrySummary={retrySummary}
+          pending={listScopeChanging}
+          search={search}
+          summaryError={summaryError}
+          summaryLoading={summaryLoading}
+          summaryMasked={summaryMasked}
+        />
+
+        <section
+          aria-busy={listScopeChanging || sameScopeRefreshing || undefined}
+          aria-label="登録済みの試合"
+          className="relative grid min-h-[24rem] gap-4"
+        >
+          <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+            <p className="text-sm font-semibold text-[var(--color-text-secondary)] tabular-nums">
+              {showMatchesLoading
+                ? "件数を確認中"
+                : showMatchesError
+                  ? "件数を取得できません"
+                  : `${(pagination?.totalItems ?? items.length).toLocaleString()}件`}
+            </p>
+            <div
+              aria-label="試合一覧の操作"
+              className="flex flex-wrap items-center justify-end gap-1"
+              role="group"
+            >
+              <IconButton
+                aria-label="最新情報に更新"
+                disabled={listScopeChanging && !isManualRefreshing}
+                icon={<RefreshCw />}
+                pending={isManualRefreshing}
+                pendingLabel="一覧を更新中"
+                tooltip={isManualRefreshing ? "更新中…" : "最新情報に更新"}
+                variant="quiet"
+                onClick={() => void refresh()}
               />
-            ) : (
-              <>
-                <div className="hidden lg:block">
-                  <MatchesTable items={items} rowActions={rowActions} />
-                </div>
-                <div className="grid gap-3 lg:hidden">
-                  {items.map((item) => (
-                    <MatchMobileCard key={item.id} item={item} rowActions={rowActions} />
-                  ))}
-                </div>
-                {pagination ? (
-                  <PaginationControls
-                    disabled={listScopeChanging}
-                    pageSizeOptions={[...matchListPageSizeOptions]}
-                    pagination={pagination}
-                    onPageChange={updatePage}
-                    onPageSizeChange={updatePageSize}
-                  />
-                ) : null}
-              </>
-            )}
+              <LinkButton
+                icon={<Download className="size-4" />}
+                size="sm"
+                to={navigation.exportHref}
+                variant="quiet"
+              >
+                CSV/TSVをまとめて出力
+              </LinkButton>
+            </div>
+          </div>
+
+          {matchesRefreshFailed ? (
+            <Notice
+              action={
+                <Button
+                  pending={isManualRefreshing}
+                  pendingLabel="一覧を再読み込み中"
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => void refresh()}
+                >
+                  一覧を再読み込み
+                </Button>
+              }
+              title="一覧を更新できませんでした"
+              tone="warning"
+            >
+              <p>取得済みの試合は表示したままです。通信状態を確認して再読み込みしてください。</p>
+            </Notice>
+          ) : null}
+
+          <StaleShield active={showMatchesLoading} fallback={<ListSkeleton />}>
+            <StaleShield
+              active={listUpdating}
+              busyLabel="一覧を更新中"
+              contentClassName="grid gap-4"
+              fallback={<ListSkeleton />}
+              strategy={listScopeChanging ? "preserve-inert" : "preserve-interactive"}
+            >
+              {showMatchesError ? (
+                <Notice tone="danger" title="試合一覧を読み込めません">
+                  <p>通信状態を確認して、もう一度お試しください。</p>
+                  <div className="mt-3">
+                    <Button
+                      pending={isManualRefreshing}
+                      pendingLabel="再読み込み中"
+                      size="sm"
+                      onClick={() => void refresh()}
+                    >
+                      一覧を再読み込み
+                    </Button>
+                  </div>
+                </Notice>
+              ) : items.length === 0 ? (
+                <EmptyState
+                  action={
+                    hasFilters ? undefined : (
+                      <div className="flex flex-wrap gap-2">
+                        <LinkButton to={navigation.ocrHref}>OCR取り込み</LinkButton>
+                        <LinkButton to={navigation.manualCreateHref} variant="secondary">
+                          手入力で作成
+                        </LinkButton>
+                      </div>
+                    )
+                  }
+                  className="min-h-[18rem]"
+                  description={
+                    hasFilters
+                      ? "状態や開催条件を広げると、他の試合記録を確認できます。"
+                      : "OCR取り込みか手入力で、最初の試合を登録します。"
+                  }
+                  icon={<AlertTriangle className="size-5" />}
+                  placement="embedded"
+                  title={hasFilters ? "該当する試合はありません" : "試合はまだありません"}
+                />
+              ) : (
+                <>
+                  <div className="hidden lg:block">
+                    <MatchesTable items={items} rowActions={rowActions} />
+                  </div>
+                  <div className="grid gap-3 lg:hidden">
+                    {items.map((item) => (
+                      <MatchMobileCard key={item.id} item={item} rowActions={rowActions} />
+                    ))}
+                  </div>
+                  {pagination ? (
+                    <PaginationControls
+                      disabled={listScopeChanging}
+                      pageSizeOptions={[...matchListPageSizeOptions]}
+                      pagination={pagination}
+                      placement="embedded"
+                      onPageChange={updatePage}
+                      onPageSizeChange={updatePageSize}
+                    />
+                  ) : null}
+                </>
+              )}
+            </StaleShield>
           </StaleShield>
-        </StaleShield>
-      </section>
+        </section>
+      </PageContentSurface>
     </PageFrame>
   );
 }

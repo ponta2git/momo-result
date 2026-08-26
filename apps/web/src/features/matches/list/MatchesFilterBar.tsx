@@ -5,7 +5,7 @@ import {
   describeMatchListDetailFilters,
   MatchesListFilters,
 } from "@/features/matches/list/MatchesListFilters";
-import { MatchesStatusRail } from "@/features/matches/list/MatchesStatusRail";
+import { MatchesStatusFilter } from "@/features/matches/list/MatchesStatusFilter";
 import type {
   MatchListFilterActions,
   MatchListFilterCandidates,
@@ -22,10 +22,12 @@ import { SelectField } from "@/shared/ui/forms/SelectField";
 type MatchesFilterBarProps = {
   actions: MatchListFilterActions;
   candidates: MatchListFilterCandidates;
-  counts: MatchListSummaryCounts;
+  counts?: MatchListSummaryCounts | undefined;
+  onRetrySummary?: (() => void) | undefined;
   pending?: boolean | undefined;
   search: MatchListSearch;
   selectionErrors?: MatchListFilterSelectionErrors | undefined;
+  summaryError?: boolean | undefined;
   summaryLoading?: boolean | undefined;
   summaryMasked?: boolean | undefined;
 };
@@ -51,9 +53,11 @@ export function MatchesFilterBar({
   actions,
   candidates,
   counts,
+  onRetrySummary,
   pending = false,
   search,
   selectionErrors,
+  summaryError = false,
   summaryLoading = false,
   summaryMasked = false,
 }: MatchesFilterBarProps) {
@@ -109,13 +113,15 @@ export function MatchesFilterBar({
         summary: detailLabels.length > 0 ? detailLabels.join("・") : undefined,
       }}
       primary={
-        <div className="grid min-w-0 gap-4 md:grid-cols-[minmax(0,1fr)_13rem] md:items-end">
-          <MatchesStatusRail
+        <div className="grid min-w-0 gap-4 md:grid-cols-2 md:items-start">
+          <MatchesStatusFilter
             counts={counts}
             currentStatus={search.status}
             disabled={disabled}
             loading={summaryLoading}
             masked={summaryMasked}
+            unavailable={summaryError}
+            onRetry={onRetrySummary}
             onSelectStatus={(status) => patchSearch({ status })}
           />
           <div className="min-w-0">

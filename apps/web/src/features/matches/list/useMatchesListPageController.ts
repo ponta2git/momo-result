@@ -109,12 +109,7 @@ export function useMatchesListPageController() {
     );
   }, [listReturnTo, lookupMaps, matchesQuery.data]);
 
-  const summaryCounts = matchesSummaryQuery.data ?? {
-    incompleteCount: 0,
-    needsReviewCount: 0,
-    ocrRunningCount: 0,
-    preConfirmCount: 0,
-  };
+  const summaryCounts = matchesSummaryQuery.data;
 
   const searchSignature = useMemo(() => buildMatchListSearchParams(search).toString(), [search]);
   const activeSearchSignature = useMemo(
@@ -125,6 +120,8 @@ export function useMatchesListPageController() {
     () => buildMatchListSearchParams(deferredSearch).toString(),
     [deferredSearch],
   );
+  const activeSummarySignature = JSON.stringify(buildMatchListSummaryQuery(activeSearch));
+  const deferredSummarySignature = JSON.stringify(buildMatchListSummaryQuery(deferredSearch));
 
   useEffect(() => {
     if (
@@ -150,12 +147,8 @@ export function useMatchesListPageController() {
     isRefreshing: listBackgroundRefreshing,
     isSettling: filterSettling,
   });
-  const showSummaryShield = shouldShowStaleShield({
-    hasVisibleData: matchesSummaryQuery.data !== undefined,
-    isPlaceholderData: summaryHasPlaceholderData,
-    isRefreshing: summaryBackgroundRefreshing,
-    isSettling: filterSettling,
-  });
+  const summaryScopeChanging =
+    activeSummarySignature !== deferredSummarySignature || summaryHasPlaceholderData;
   const listScopeChanging = filterSettling || listHasPlaceholderData;
   const sameScopeRefreshing =
     !listScopeChanging && (listBackgroundRefreshing || summaryBackgroundRefreshing);
@@ -259,8 +252,10 @@ export function useMatchesListPageController() {
     showMatchesError: shouldShowBlockingQueryError(matchesQuery),
     showMatchesLoading: initialMatchesLoading,
     summaryCounts,
-    summaryLoading: matchesSummaryQuery.isLoading,
-    summaryMasked: showSummaryShield,
+    summaryError: shouldShowBlockingQueryError(matchesSummaryQuery),
+    summaryLoading: isInitialQueryLoading(matchesSummaryQuery),
+    summaryMasked: summaryScopeChanging,
+    retrySummary: () => void matchesSummaryQuery.refetch(),
     updatePage: (page: number) => {
       if (!pagination) return;
       const cursor = cursorForPage(pagination, page);

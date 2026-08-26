@@ -183,8 +183,7 @@ describe("MatchesListPage", () => {
     const emptyOcrAction = screen.getAllByRole("link", { name: "OCR取り込み" }).at(-1)!;
     expect(emptyOcrAction).toHaveClass("bg-[var(--color-action)]");
     const filterSection = screen.getByRole("region", { name: "試合の表示条件" });
-    expect(within(filterSection).getByRole("group", { name: "確定状況" })).toBeInTheDocument();
-    expect(screen.queryByRole("region", { name: "確定状況" })).not.toBeInTheDocument();
+    expect(within(filterSection).getByLabelText("確定状況")).toHaveValue("all");
     const emptyState = screen.getByText("試合はまだありません").closest("section");
     if (!filterSection || !emptyState) {
       throw new Error("expected filter and empty-list sections to be present");
@@ -281,6 +280,47 @@ describe("MatchesListPage", () => {
     expect(attempts).toBe(2);
     expect(cursors).toEqual(["stale-cursor", null]);
     expect(screen.getByLabelText("current location")).not.toHaveTextContent("cursor=");
+  });
+
+  it("keeps status filtering usable and retries when summary counts are unavailable", async () => {
+    setDevUser();
+    let summaryAttempts = 0;
+    server.use(
+      http.get("/api/matches/summary", () => {
+        summaryAttempts += 1;
+        return summaryAttempts === 1
+          ? HttpResponse.json({ detail: "temporarily unavailable" }, { status: 500 })
+          : HttpResponse.json({
+              incompleteCount: 4,
+              needsReviewCount: 1,
+              ocrRunningCount: 1,
+              preConfirmCount: 2,
+            });
+      }),
+    );
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/matches"]}>
+          <Routes>
+            <Route path="/matches" element={<MatchesListPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    const retryButton = await screen.findByRole("button", { name: "件数を再取得" });
+    const statusFilter = screen.getByLabelText("確定状況");
+    expect(statusFilter).toBeEnabled();
+    expect(within(statusFilter).getByRole("option", { name: "未確定すべて" })).toBeInTheDocument();
+    expect(within(statusFilter).queryByRole("option", { name: /0件/u })).not.toBeInTheDocument();
+
+    await user.click(retryButton);
+
+    expect(
+      await within(statusFilter).findByRole("option", { name: "未確定すべて（4件）" }),
+    ).toBeInTheDocument();
+    expect(summaryAttempts).toBe(2);
   });
 
   it("preserves selected held-event filter in URL after submitting", async () => {
@@ -568,20 +608,11 @@ describe("MatchesListPage", () => {
     expect(await screen.findByRole("heading", { name: "試合一覧" })).toBeInTheDocument();
     const draftActionButtons = await screen.findAllByRole("button", { name: "確認事項を直す" });
     expect(draftActionButtons).not.toHaveLength(0);
-    const incompleteButton = (await screen.findAllByRole("button", { name: /^未確定/u })).find(
-      (button) => !button.textContent?.includes("すべて"),
-    );
-    if (!incompleteButton) {
-      throw new Error("expected the main incomplete status button");
-    }
-    await user.click(incompleteButton);
-    const needsReviewButton = await screen.findByRole("button", { name: /要確認のみ/u });
-    await waitFor(() => expect(needsReviewButton).toBeEnabled());
+    const statusFilter = screen.getByLabelText("確定状況");
+    await user.selectOptions(statusFilter, "needs_review");
 
-    await user.click(needsReviewButton);
-
-    expect(needsReviewButton).toHaveAttribute("aria-pressed", "true");
-    expect(needsReviewButton).toBeDisabled();
+    expect(statusFilter).toHaveValue("needs_review");
+    expect(statusFilter).toBeDisabled();
     expect(screen.getByText("一覧を更新中")).toBeInTheDocument();
     const listRegion = screen.getByRole("region", { name: "登録済みの試合" });
     expect(listRegion.querySelector("[inert]")).not.toBeNull();
@@ -594,6 +625,7 @@ describe("MatchesListPage", () => {
         .getAllByRole("button", { name: "確認事項を直す" })
         .forEach((button) => expect(button).toBeEnabled()),
     );
+    expect(statusFilter).toBeEnabled();
     expect(listRegion.querySelector("[inert]")).toBeNull();
   });
 
@@ -1276,7 +1308,7 @@ describe("MatchDetailPage", () => {
     const resultLedger = screen.getByRole("list", { name: "試合の順位と成績" });
     expect(resultLedger).toBeInTheDocument();
     const resultLedgerRegion = screen.getByRole("region", { name: "順位・総資産" });
-    expect(resultLedgerRegion).toHaveClass("max-w-4xl");
+    expect(resultLedgerRegion).toHaveClass("w-full");
     expect(resultLedgerRegion).toContainElement(resultLedger);
     const detailTable = screen.getByRole("table", { name: "試合結果" });
     expect(detailTable.querySelectorAll("[data-member-sequence]")).toHaveLength(4);

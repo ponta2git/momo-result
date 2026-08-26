@@ -1,22 +1,25 @@
 import type { MatchFeatureBadge } from "@/features/matches/matchDetailViewModel";
+import type { MatchFeatureView } from "@/features/matches/matchFeatureViewModel";
+import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
+import { Notice } from "@/shared/ui/feedback/Notice";
 
-export function MatchFeatureSection({
-  badges,
-  scopeLabel,
-}: {
-  badges: MatchFeatureBadge[];
-  scopeLabel: string;
-}) {
+export function MatchFeatureSection({ view }: { view: MatchFeatureView }) {
+  const ready = view.kind === "ready-empty" || view.kind === "with-items";
+
   return (
     <section aria-label="試合の特徴" className="grid gap-2">
       <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
         <h2 className="text-xs font-semibold text-[var(--color-text-primary)]">試合の特徴</h2>
-        <p className="text-[11px] font-medium text-[var(--color-text-secondary)]">{scopeLabel}</p>
+        {ready ? (
+          <p className="text-[11px] font-medium text-[var(--color-text-secondary)]">
+            {view.scopeLabel}
+          </p>
+        ) : null}
       </div>
-      {badges.length > 0 ? (
+      {view.kind === "with-items" ? (
         <ul className="flex flex-wrap gap-2">
-          {badges.map((badge) => (
+          {view.badges.map((badge) => (
             <li
               key={badge.id}
               aria-label={`${badge.label}。${badge.description}。${
@@ -35,9 +38,39 @@ export function MatchFeatureSection({
             </li>
           ))}
         </ul>
-      ) : (
-        <p className="text-xs text-[var(--color-text-secondary)]">目立つ特徴はありません。</p>
-      )}
+      ) : null}
+      {view.kind === "ready-empty" ? (
+        <p className="text-xs text-[var(--color-text-secondary)]">
+          同じ条件の試合と比べて、表示対象の特徴はありません。
+        </p>
+      ) : null}
+      {view.kind === "loading" ? (
+        <p className="text-xs text-[var(--color-text-secondary)]" role="status">
+          同じ条件の試合との特徴を確認しています。
+        </p>
+      ) : null}
+      {view.kind === "load-failed" ? (
+        <Notice
+          action={
+            <Button
+              pending={view.retrying}
+              pendingLabel="特徴を再読み込み中"
+              size="sm"
+              variant="secondary"
+              onClick={view.onRetry}
+            >
+              特徴を再読み込み
+            </Button>
+          }
+          title="試合の特徴を読み込めません"
+          tone="warning"
+        >
+          <p>順位・総資産は表示したままです。通信状態を確認して再読み込みしてください。</p>
+        </Notice>
+      ) : null}
+      {view.kind === "unavailable" ? (
+        <p className="text-xs text-[var(--color-text-secondary)]">{view.message}</p>
+      ) : null}
     </section>
   );
 }

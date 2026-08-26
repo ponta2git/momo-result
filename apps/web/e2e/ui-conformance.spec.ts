@@ -92,7 +92,7 @@ test("keeps shared UI operation contracts across responsive application flows", 
   await installE2eAuthHeaders(page);
 
   await test.step("keep the complete match filter contract at mobile and desktop widths", async () => {
-    await page.setViewportSize({ height: 844, width: 390 });
+    await page.setViewportSize({ height: 844, width: 320 });
     await page.goto(
       `/matches?heldEventId=${encodeURIComponent(heldEventId)}&gameTitleId=${encodeURIComponent(
         primaryGameTitleId,
@@ -101,11 +101,15 @@ test("keeps shared UI operation contracts across responsive application flows", 
 
     await expect(page.getByRole("heading", { exact: true, name: "試合一覧" })).toBeVisible();
     const filterBar = page.getByRole("region", { name: "試合の表示条件" });
-    await expect(filterBar).toContainText("適用中: 確定状況 すべて・並び順 開催が新しい順");
+    await expect(filterBar.getByRole("button", { name: "すべて" })).toBeVisible();
+    await expect(filterBar.getByRole("button", { name: /未確定\d+件/u })).toBeVisible();
+    await expect(filterBar.getByRole("button", { name: "確定済" })).toBeVisible();
+    await expect(filterBar).not.toContainText("確定状況 すべて");
+    await expect(filterBar).not.toContainText("並び順 開催が新しい順");
     await expect(filterBar).toContainText(`作品 ${primaryGameTitleName}`);
     await expect(filterBar).toContainText(`シーズン ${seasonName}`);
     await expect(filterBar).not.toContainText("選択中");
-    await expect(filterBar).toContainText("2件");
+    await expect(page.getByRole("region", { name: "登録済みの試合" })).toContainText("2件");
     await expect(page.getByRole("button", { name: resetAccessibleName })).toHaveCount(1);
     await expectNoHorizontalPageOverflow(page);
 

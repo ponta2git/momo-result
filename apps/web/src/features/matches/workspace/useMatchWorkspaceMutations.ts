@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 
 import { toUpdateMatchRequest } from "@/features/matches/workspace/matchFormToRequest";
 import type { MatchFormValues } from "@/features/matches/workspace/matchFormTypes";
+import type { MatchWorkspaceOperationErrorKind } from "@/features/matches/workspace/matchWorkspaceOperationError";
 import {
   invalidateAfterDraftCancelled,
   invalidateAfterMatchConfirmed,
@@ -22,7 +23,8 @@ export type MatchWorkspaceMutationsParams = {
   mode: "create" | "edit" | "review";
   onConfirmConflict?: (matchDraftId: string) => Promise<boolean>;
   onConfirmSuccess: () => void;
-  onError: (message: string) => void;
+  onError: (kind: MatchWorkspaceOperationErrorKind, message: string) => void;
+  onOperationStart: (kind: MatchWorkspaceOperationErrorKind) => void;
   onPersistedSuccess: () => void;
   returnTo?: string | undefined;
 };
@@ -44,6 +46,7 @@ export function useMatchWorkspaceMutations({
   onConfirmConflict,
   onConfirmSuccess,
   onError,
+  onOperationStart,
   onPersistedSuccess,
   returnTo,
 }: MatchWorkspaceMutationsParams) {
@@ -52,6 +55,7 @@ export function useMatchWorkspaceMutations({
   const idempotencyKeys = useIdempotencyKeyStore();
 
   const confirmMutation = useMutation({
+    onMutate: () => onOperationStart("confirm"),
     mutationFn: async (request: Parameters<typeof confirmMatch>[0]) => {
       return runIdempotentMutation(
         idempotencyKeys,
@@ -73,11 +77,12 @@ export function useMatchWorkspaceMutations({
           return;
         }
       }
-      onError(formatApiError(error, "確定に失敗しました"));
+      onError("confirm", formatApiError(error, "確定に失敗しました"));
     },
   });
 
   const updateMutation = useMutation({
+    onMutate: () => onOperationStart("update"),
     mutationFn: (values: MatchFormValues) => {
       assertDefined(matchId, "matchId");
       const request = toUpdateMatchRequest(values);
@@ -96,11 +101,12 @@ export function useMatchWorkspaceMutations({
       navigate(matchSuccessDestination(response.matchId, mode, returnTo));
     },
     onError: (error) => {
-      onError(formatApiError(error, "更新に失敗しました"));
+      onError("update", formatApiError(error, "更新に失敗しました"));
     },
   });
 
   const cancelDraftMutation = useMutation({
+    onMutate: () => onOperationStart("cancelDraft"),
     mutationFn: async (draftId: string) => {
       const payload = { draftId };
       return runIdempotentMutation(
@@ -119,7 +125,7 @@ export function useMatchWorkspaceMutations({
       );
     },
     onError: (error) => {
-      onError(formatApiError(error, "確定前の記録を削除できませんでした"));
+      onError("cancelDraft", formatApiError(error, "確定前の記録を削除できませんでした"));
     },
   });
 

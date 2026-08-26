@@ -1,12 +1,16 @@
 import { Link } from "react-router-dom";
 
+import type { MatchWorkspaceOperationErrorView } from "@/features/matches/workspace/matchWorkspaceOperationError";
 import { Button } from "@/shared/ui/actions/Button";
+import { Notice } from "@/shared/ui/feedback/Notice";
 import { Card } from "@/shared/ui/layout/Card";
 
 export function MatchWorkspaceBlockedNotice({
+  error,
   onRefreshReviewStatus,
   refreshingReviewStatus,
 }: {
+  error: MatchWorkspaceOperationErrorView | null;
   onRefreshReviewStatus: () => void;
   refreshingReviewStatus: boolean;
 }) {
@@ -35,6 +39,12 @@ export function MatchWorkspaceBlockedNotice({
           試合一覧へ戻る
         </Link>
       </div>
+      {error ? (
+        <Notice className="mt-3" title={error.title} tone="danger">
+          <p>{error.detail}</p>
+          <p className="mt-1">{error.nextStep}</p>
+        </Notice>
+      ) : null}
     </Card>
   );
 }

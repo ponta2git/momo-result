@@ -201,7 +201,7 @@ test("completes the app smoke workflow with isolated scoped data", async ({
         response.url().includes("/api/ocr-jobs") && response.request().method() === "POST",
     );
 
-    await page.getByRole("button", { name: "読み取りを開始" }).click();
+    await page.getByRole("button", { name: "1件で読み取りを開始" }).click();
     const startDialog = page.getByRole("dialog", { name: "読み取りを開始しますか？" });
     await expect(startDialog).toBeVisible();
     await expect(startDialog.getByText("1件だけで開始します")).toBeVisible();
@@ -222,7 +222,12 @@ test("completes the app smoke workflow with isolated scoped data", async ({
         const style = window.getComputedStyle(element);
         return { fontSize: style.fontSize, fontWeight: style.fontWeight };
       }),
-    ).toEqual({ fontSize: "24px", fontWeight: "600" });
+    ).toEqual({ fontSize: "30px", fontWeight: "600" });
+    await page.setViewportSize({ height: 844, width: 320 });
+    expect(
+      await matchesPageTitle.evaluate((element) => window.getComputedStyle(element).fontSize),
+    ).toBe("24px");
+    await page.setViewportSize({ height: 900, width: 1440 });
   });
 
   await test.step("confirm the sample OCR review into a match detail", async () => {

@@ -16,13 +16,15 @@ import { withReturnTo } from "@/shared/navigation/returnTo";
 export function useConfirmedDraftRedirect({
   notify,
   onBeforeRedirect,
-  setValidationMessage,
+  onStatusCheckError,
+  onStatusCheckStart,
   returnTo,
   useSampleDrafts,
 }: {
   notify: (message: string, tone?: WorkspaceNoticeTone) => void;
   onBeforeRedirect?: () => void;
-  setValidationMessage: (message: string) => void;
+  onStatusCheckError: (message: string) => void;
+  onStatusCheckStart: () => void;
   returnTo?: string | undefined;
   useSampleDrafts: boolean;
 }) {
@@ -80,16 +82,22 @@ export function useConfirmedDraftRedirect({
         return true;
       }
 
-      setValidationMessage("");
+      onStatusCheckStart();
       try {
         const detail = await fetchLatestDraftDetail(draftId);
         return !redirectConfirmedDraft(detail, confirmedDraftMessages.confirmConflict);
       } catch {
-        setValidationMessage(confirmedDraftMessages.statusCheckFailed);
+        onStatusCheckError(confirmedDraftMessages.statusCheckFailed);
         return false;
       }
     },
-    [fetchLatestDraftDetail, redirectConfirmedDraft, setValidationMessage, useSampleDrafts],
+    [
+      fetchLatestDraftDetail,
+      onStatusCheckError,
+      onStatusCheckStart,
+      redirectConfirmedDraft,
+      useSampleDrafts,
+    ],
   );
 
   return {

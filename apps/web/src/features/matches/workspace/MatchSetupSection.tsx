@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 
 import type { MatchFormValues } from "@/features/matches/workspace/matchFormTypes";
 import { MatchSetupFields } from "@/features/matches/workspace/MatchSetupFields";
+import type { MatchWorkspaceOperationErrorView } from "@/features/matches/workspace/matchWorkspaceOperationError";
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
 import type {
   GameTitleListResponse,
@@ -15,6 +16,7 @@ import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
 import { Disclosure } from "@/shared/ui/data/Collapsible";
 import { AlertDialog } from "@/shared/ui/feedback/Dialog";
+import { Notice } from "@/shared/ui/feedback/Notice";
 import { TextField } from "@/shared/ui/forms/TextField";
 import { Card } from "@/shared/ui/layout/Card";
 
@@ -25,6 +27,7 @@ export type MatchSetupActions = {
 
 type MatchSetupEventCreation = {
   draftValue: string;
+  error: MatchWorkspaceOperationErrorView | null;
   pending: boolean;
   onCreate: () => void;
   onDraftChange: (value: string) => void;
@@ -49,6 +52,7 @@ type MatchSetupSectionProps = {
       confirmOpen: boolean;
       confirmPending: boolean;
       disabled: boolean;
+      error: MatchWorkspaceOperationErrorView | null;
       onConfirm: () => void | Promise<void>;
       onOpenChange: (open: boolean) => void;
       onTrigger: () => void;
@@ -159,47 +163,65 @@ export function MatchSetupSection({
               作成して選択
             </Button>
           </div>
+          {eventCreation.error ? (
+            <Notice className="mt-2" title={eventCreation.error.title} tone="danger">
+              <p>{eventCreation.error.detail}</p>
+              <p className="mt-1">{eventCreation.error.nextStep}</p>
+            </Notice>
+          ) : null}
         </Disclosure>
 
-        {workspaceActions.mastersNavigation.show || workspaceActions.cancelDraft.canCancel ? (
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-[var(--color-border)] pt-3">
-            <div>
-              {workspaceActions.mastersNavigation.show ? (
-                <Button
-                  icon={<Settings2 aria-hidden="true" className="size-4" />}
-                  pending={workspaceActions.mastersNavigation.pending}
-                  pendingLabel="移動中…"
-                  size="sm"
-                  variant="quiet"
-                  onClick={workspaceActions.mastersNavigation.onClick}
-                >
-                  設定管理へ
-                </Button>
-              ) : null}
-            </div>
-            {workspaceActions.cancelDraft.canCancel ? (
-              <AlertDialog
-                cancelLabel="キャンセル"
-                confirmLabel={workspaceActions.cancelDraft.confirmPending ? "削除中…" : "削除する"}
-                description="この確定前の記録を削除します。元に戻せません。"
-                open={workspaceActions.cancelDraft.confirmOpen}
-                pending={workspaceActions.cancelDraft.confirmPending}
-                title="確定前の記録を削除しますか？"
-                trigger={
+        {workspaceActions.mastersNavigation.show ||
+        workspaceActions.cancelDraft.canCancel ||
+        workspaceActions.cancelDraft.error ? (
+          <div className="mt-4 grid gap-2 border-t border-[var(--color-border)] pt-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                {workspaceActions.mastersNavigation.show ? (
                   <Button
-                    className="text-[var(--color-danger)] hover:text-[var(--color-danger)]"
-                    disabled={workspaceActions.cancelDraft.disabled}
-                    icon={<Trash2 aria-hidden="true" className="size-4" />}
+                    icon={<Settings2 aria-hidden="true" className="size-4" />}
+                    pending={workspaceActions.mastersNavigation.pending}
+                    pendingLabel="移動中…"
                     size="sm"
                     variant="quiet"
-                    onClick={workspaceActions.cancelDraft.onTrigger}
+                    onClick={workspaceActions.mastersNavigation.onClick}
                   >
-                    確定前の記録を削除
+                    設定管理へ
                   </Button>
-                }
-                onConfirm={workspaceActions.cancelDraft.onConfirm}
-                onOpenChange={workspaceActions.cancelDraft.onOpenChange}
-              />
+                ) : null}
+              </div>
+              {workspaceActions.cancelDraft.canCancel ? (
+                <AlertDialog
+                  cancelLabel="キャンセル"
+                  confirmLabel={
+                    workspaceActions.cancelDraft.confirmPending ? "削除中…" : "削除する"
+                  }
+                  description="この確定前の記録を削除します。元に戻せません。"
+                  open={workspaceActions.cancelDraft.confirmOpen}
+                  pending={workspaceActions.cancelDraft.confirmPending}
+                  title="確定前の記録を削除しますか？"
+                  trigger={
+                    <Button
+                      className="text-[var(--color-danger)] hover:text-[var(--color-danger)]"
+                      disabled={workspaceActions.cancelDraft.disabled}
+                      icon={<Trash2 aria-hidden="true" className="size-4" />}
+                      size="sm"
+                      variant="quiet"
+                      onClick={workspaceActions.cancelDraft.onTrigger}
+                    >
+                      確定前の記録を削除
+                    </Button>
+                  }
+                  onConfirm={workspaceActions.cancelDraft.onConfirm}
+                  onOpenChange={workspaceActions.cancelDraft.onOpenChange}
+                />
+              ) : null}
+            </div>
+            {workspaceActions.cancelDraft.error ? (
+              <Notice title={workspaceActions.cancelDraft.error.title} tone="danger">
+                <p>{workspaceActions.cancelDraft.error.detail}</p>
+                <p className="mt-1">{workspaceActions.cancelDraft.error.nextStep}</p>
+              </Notice>
             ) : null}
           </div>
         ) : null}

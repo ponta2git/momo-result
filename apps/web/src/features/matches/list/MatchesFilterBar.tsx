@@ -1,4 +1,4 @@
-import { Filter, RefreshCw } from "lucide-react";
+import { Filter } from "lucide-react";
 import { useState } from "react";
 
 import {
@@ -16,7 +16,6 @@ import type {
   MatchListSummaryCounts,
 } from "@/features/matches/list/matchListTypes";
 import { Button } from "@/shared/ui/actions/Button";
-import { IconButton } from "@/shared/ui/actions/IconButton";
 import { FilterBar } from "@/shared/ui/forms/FilterBar";
 import { SelectField } from "@/shared/ui/forms/SelectField";
 
@@ -24,10 +23,7 @@ type MatchesFilterBarProps = {
   actions: MatchListFilterActions;
   candidates: MatchListFilterCandidates;
   counts: MatchListSummaryCounts;
-  onRefresh?: (() => void) | undefined;
   pending?: boolean | undefined;
-  refreshing?: boolean | undefined;
-  resultCount?: number | undefined;
   search: MatchListSearch;
   selectionErrors?: MatchListFilterSelectionErrors | undefined;
   summaryLoading?: boolean | undefined;
@@ -55,10 +51,7 @@ export function MatchesFilterBar({
   actions,
   candidates,
   counts,
-  onRefresh,
   pending = false,
-  refreshing = false,
-  resultCount,
   search,
   selectionErrors,
   summaryLoading = false,
@@ -69,14 +62,14 @@ export function MatchesFilterBar({
   const hasResettableFilters =
     hasDetailFilters || search.status !== "all" || search.sort !== "held_desc";
   const [detailOpen, setDetailOpen] = useState(hasDetailFilters);
-  const disabled = pending || refreshing;
+  const disabled = pending;
   const sortLabel =
     sortOptions.find((option) => option.value === search.sort)?.label ?? search.sort;
-  const completeSummary = [
-    `確定状況 ${statusLabels[search.status]}`,
-    `並び順 ${sortLabel}`,
-    ...(hasDetailFilters ? detailLabels : ["開催・作品・シーズン すべて"]),
-  ].join("・");
+  const activeLabels = [
+    search.status === "all" ? undefined : `確定状況 ${statusLabels[search.status]}`,
+    search.sort === "held_desc" ? undefined : `並び順 ${sortLabel}`,
+    ...detailLabels,
+  ].filter((label): label is string => label !== undefined);
 
   function patchSearch(patch: Partial<MatchListSearch>) {
     actions.onApply({ ...search, ...patch, cursor: "" });
@@ -84,28 +77,16 @@ export function MatchesFilterBar({
 
   return (
     <FilterBar
-      action={
-        onRefresh ? (
-          <IconButton
-            aria-label="最新情報に更新"
-            disabled={pending}
-            icon={<RefreshCw />}
-            pending={refreshing}
-            pendingLabel="一覧を更新中"
-            tooltip={refreshing ? "更新中…" : "最新情報に更新"}
-            variant="quiet"
-            onClick={onRefresh}
-          />
+      activeSummary={
+        activeLabels.length > 0 ? (
+          <p>
+            <span className="font-semibold text-[var(--color-text-primary)]">適用中: </span>
+            {activeLabels.join("・")}
+          </p>
         ) : undefined
       }
-      activeSummary={
-        <p>
-          <span className="font-semibold text-[var(--color-text-primary)]">適用中: </span>
-          {completeSummary}
-        </p>
-      }
       ariaLabel="試合の表示条件"
-      busy={pending || refreshing || summaryLoading || summaryMasked}
+      busy={pending || summaryLoading || summaryMasked}
       details={{
         controls: (
           <MatchesListFilters
@@ -125,11 +106,10 @@ export function MatchesFilterBar({
         onOpenChange: setDetailOpen,
         open: detailOpen,
         panelClassName: "md:grid-cols-3 md:items-end",
-        summary: detailLabels.length > 0 ? detailLabels.join("・") : "開催・作品・シーズンはすべて",
+        summary: detailLabels.length > 0 ? detailLabels.join("・") : undefined,
       }}
-      meta={resultCount === undefined ? undefined : `${resultCount.toLocaleString()}件`}
       primary={
-        <div className="grid min-w-0 gap-4">
+        <div className="grid min-w-0 gap-4 md:grid-cols-[minmax(0,1fr)_13rem] md:items-end">
           <MatchesStatusRail
             counts={counts}
             currentStatus={search.status}
@@ -138,7 +118,7 @@ export function MatchesFilterBar({
             masked={summaryMasked}
             onSelectStatus={(status) => patchSearch({ status })}
           />
-          <div className="min-w-0 sm:w-52">
+          <div className="min-w-0">
             <SelectField
               disabled={disabled}
               label="並び順"

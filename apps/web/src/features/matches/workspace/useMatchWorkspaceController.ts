@@ -80,7 +80,8 @@ export function useMatchWorkspaceController({
     sourceImageQuery,
   } = queries;
   const createEventMutation = useWorkspaceHeldEventCreation({
-    onError: local.setValidationMessage,
+    onError: (message) => local.setOperationError({ kind: "heldEventCreation", message }),
+    onOperationStart: () => local.setOperationError(null),
     onSelectCreatedEvent: (event) => {
       dispatch({
         patch: {
@@ -174,6 +175,7 @@ export function useMatchWorkspaceController({
     notify,
     onPersistedSuccess: sessionDraft.markCommitted,
     setConfirmOpen: local.setConfirmOpen,
+    setOperationError: local.setOperationError,
     setValidationMessage: local.setValidationMessage,
     returnTo: contextualReturnTo,
     useSampleDrafts,
@@ -260,6 +262,7 @@ export function useMatchWorkspaceController({
     isNavigatingToMasters,
     isOcrRunningBlocked,
     mode,
+    operationError: local.operationError,
     preferredImageKind: local.preferredImageKind,
     refreshingReviewStatus,
     returnTo: masterReturnTo,

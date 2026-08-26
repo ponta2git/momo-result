@@ -30,6 +30,7 @@ export function MatchWorkspaceEditor({
   };
   const setupEventCreation = {
     draftValue: setup.eventDraftValue,
+    error: setup.eventCreationError,
     pending: setup.createEventPending,
     onCreate: setup.onCreateEvent,
     onDraftChange: setup.onEventDraftChange,
@@ -89,12 +90,6 @@ export function MatchWorkspaceEditor({
           </div>
         </aside>
       </div>
-
-      {editor.validationMessage ? (
-        <Card className="border-[var(--color-warning)]/65 bg-[var(--color-warning)]/18 p-3 shadow-none">
-          {editor.validationMessage}
-        </Card>
-      ) : null}
     </>
   );
 }

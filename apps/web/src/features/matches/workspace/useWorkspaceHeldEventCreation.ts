@@ -10,6 +10,7 @@ import { formatDateTimeLong } from "@/shared/lib/dateTime";
 
 export function useWorkspaceHeldEventCreation(args: {
   onError: (message: string) => void;
+  onOperationStart: () => void;
   onSelectCreatedEvent: (event: HeldEventResponse) => void;
   onSuccessNotice: (message: string) => void;
 }) {
@@ -17,6 +18,7 @@ export function useWorkspaceHeldEventCreation(args: {
   const idempotencyKeys = useIdempotencyKeyStore();
 
   return useMutation({
+    onMutate: args.onOperationStart,
     mutationFn: async (request: Parameters<typeof createHeldEvent>[0]) => {
       return runIdempotentMutation(
         idempotencyKeys,

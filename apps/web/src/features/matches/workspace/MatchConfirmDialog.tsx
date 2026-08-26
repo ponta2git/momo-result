@@ -8,6 +8,7 @@ import { memberDisplayName, orderFixedMembers } from "@/shared/domain/members";
 import { formatDateTimeLong } from "@/shared/lib/dateTime";
 import { Button } from "@/shared/ui/actions/Button";
 import { FactList } from "@/shared/ui/data/FactList";
+import { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
 import { Dialog, dialogFooterClassName } from "@/shared/ui/feedback/Dialog";
 import { RankBadge } from "@/shared/ui/rank/RankBadge";
 
@@ -103,7 +104,9 @@ function PlayerLedger({ values }: { values: MatchFormValues }) {
                 <RankBadge rank={player.rank} />
               </td>
               <th className="px-3 py-2 text-left font-semibold" scope="row">
-                {memberDisplayName(player.memberId)}
+                <MemberSequenceLabel memberId={player.memberId}>
+                  {memberDisplayName(player.memberId)}
+                </MemberSequenceLabel>
               </th>
               <td className="px-3 py-2 text-right tabular-nums">
                 {player.totalAssetsManYen.toLocaleString()}

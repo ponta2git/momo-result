@@ -71,9 +71,7 @@ export function ScoreGrid({ actions, data }: ScoreGridProps) {
     (item) => !acknowledgedCellIdSet.has(item.cellId),
   );
   const activeItem =
-    data.review.items.find((item) => item.cellId === data.review.activeCellId) ??
-    unresolvedItems[0] ??
-    data.review.items[0];
+    unresolvedItems.find((item) => item.cellId === data.review.activeCellId) ?? unresolvedItems[0];
 
   const requestReviewItemFocus = useCallback((cellId: string, row: number) => {
     setExpandedMobilePlayer(row);
@@ -101,8 +99,11 @@ export function ScoreGrid({ actions, data }: ScoreGridProps) {
   const acknowledgeActiveItem = useCallback(() => {
     if (activeItem) {
       actions.onAcknowledgeReviewCell(activeItem.cellId);
+      if (unresolvedItems.length === 1) {
+        actions.onRequestSubmitFocus();
+      }
     }
-  }, [actions, activeItem]);
+  }, [actions, activeItem, unresolvedItems.length]);
 
   const handleKeyboard = useCallback<ScoreGridKeyboardHandler>(
     (args) => {
@@ -165,9 +166,11 @@ export function ScoreGrid({ actions, data }: ScoreGridProps) {
           <h2 className="text-xl font-semibold text-[var(--color-text-primary)]">
             4人分の結果を確認・修正
           </h2>
-          <p className="mt-1 text-sm text-pretty text-[var(--color-text-secondary)]">
-            Enterキーと矢印キーで移動できます。Escキーで編集中のセルを元に戻せます。
-          </p>
+          {isNarrowViewport ? null : (
+            <p className="mt-1 text-sm text-pretty text-[var(--color-text-secondary)]">
+              Enterキーと矢印キーで移動できます。Escキーで編集中のセルを元に戻せます。
+            </p>
+          )}
         </div>
       </div>
 

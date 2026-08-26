@@ -6,11 +6,13 @@ import {
 } from "@/features/matches/workspace/matchFormReducer";
 import { createEmptyMatchForm } from "@/features/matches/workspace/matchFormTypes";
 import type { MatchWorkspaceInitialData } from "@/features/matches/workspace/matchFormTypes";
+import type { MatchWorkspaceOperationError } from "@/features/matches/workspace/matchWorkspaceOperationError";
 import type { SourceImageKind } from "@/features/matches/workspace/sourceImages/sourceImageTypes";
 import { currentLocalIsoMinute } from "@/features/matches/workspace/workspaceDerivations";
 
 export function useMatchWorkspaceLocalState() {
   const [validationMessage, setValidationMessage] = useState("");
+  const [operationError, setOperationError] = useState<MatchWorkspaceOperationError | null>(null);
   const [showValidationErrors, setShowValidationErrors] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [cancelDraftConfirmOpen, setCancelDraftConfirmOpen] = useState(false);
@@ -37,10 +39,12 @@ export function useMatchWorkspaceLocalState() {
     emptyFormFactory,
     eventDraftValue,
     nowIsoFactory,
+    operationError,
     preferredImageKind,
     setCancelDraftConfirmOpen,
     setConfirmOpen,
     setEventDraftValue,
+    setOperationError,
     setPreferredImageKind,
     setShowValidationErrors,
     setValidationFocusRequest,

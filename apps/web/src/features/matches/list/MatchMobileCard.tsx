@@ -34,9 +34,7 @@ export function MatchMobileCard({ item, rowActions }: MatchMobileCardProps) {
       </div>
 
       <div className="mt-3">
-        <div className="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-3 py-2">
-          <MatchListRankSummary item={item} />
-        </div>
+        <MatchListRankSummary item={item} />
       </div>
 
       <div className="mt-auto pt-4">

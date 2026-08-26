@@ -16,11 +16,9 @@ import { Notice } from "@/shared/ui/feedback/Notice";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
 import { PageHeader } from "@/shared/ui/layout/PageHeader";
 
-const panelClass =
-  "rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3 sm:p-4";
+const panelClass = "rounded-[var(--radius-md)] border border-[var(--color-border)] p-3 sm:p-4";
 
 const panelTitleClass = "text-base font-semibold text-[var(--color-text-primary)]";
-
 const panelLeadClass = "mt-1 text-sm leading-5 text-[var(--color-text-secondary)]";
 
 export function OcrCapturePage() {
@@ -56,6 +54,7 @@ export function OcrCapturePage() {
   if (!captureTarget) return null;
   const selectedImageCount = flow.slots.filter((slot) => Boolean(slot.file)).length;
   const cameraDisabled = submissionLocked || hasWorkingSlot;
+  const trayFull = selectedImageCount === slotDefinitions.length;
 
   return (
     <PageFrame className="gap-4" width="workspace">
@@ -171,23 +170,19 @@ export function OcrCapturePage() {
           </div>
 
           <CameraCapture
+            actionVariant={trayFull ? "secondary" : "primary"}
             disabled={cameraDisabled}
             slotLabel={captureTarget.label}
             onSelect={handleImageSelected}
             onValidationError={handleValidationError}
             renderFallback={(prominent) => (
-              <div className="flex flex-wrap items-center gap-2">
-                <ImageInput
-                  disabled={cameraDisabled}
-                  prominent={prominent}
-                  slotLabel={captureTarget.label}
-                  onSelect={handleImageSelected}
-                  onValidationError={handleValidationError}
-                />
-                <span className="text-xs text-[var(--color-text-secondary)]">
-                  {captureTarget.label}へ配置します
-                </span>
-              </div>
+              <ImageInput
+                disabled={cameraDisabled}
+                prominent={prominent}
+                slotLabel={captureTarget.label}
+                onSelect={handleImageSelected}
+                onValidationError={handleValidationError}
+              />
             )}
           />
         </section>
@@ -254,9 +249,10 @@ export function OcrCapturePage() {
               ocrReadyCount === 0 || hasWorkingSlot || submission.isSubmitting || !setupReady
             }
             size="lg"
+            variant={trayFull ? "primary" : "secondary"}
             onClick={handleStartOcr}
           >
-            読み取りを開始
+            {ocrReadyCount === 0 ? "読み取りを開始" : `${ocrReadyCount}件で読み取りを開始`}
           </Button>
           <AlertDialog
             confirmLabel={`${selectedImageCount}件を削除`}

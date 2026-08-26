@@ -1,3 +1,5 @@
+import { ArrowLeft } from "lucide-react";
+
 import { MatchDetailIdentity } from "@/features/matches/MatchDetailIdentity";
 import { MatchDetailResultsTable } from "@/features/matches/MatchDetailResultsTable";
 import {
@@ -55,8 +57,7 @@ function MatchDetailReadyContent({ controller }: { controller: MatchDetailReadyC
     errorMessage,
     editHref,
     exportHref,
-    featureBadges,
-    featureScopeLabel,
+    featureView,
     gameTitle,
     heldAt,
     isDeletePending,
@@ -82,7 +83,7 @@ function MatchDetailReadyContent({ controller }: { controller: MatchDetailReadyC
   ).map((row) => Object.assign({ displayName: memberDisplayName(row.memberId) }, row));
 
   return (
-    <PageFrame className="min-w-0 gap-4" width="wide">
+    <PageFrame className="min-w-0" width="wide">
       <div>
         <LinkButton
           icon={<ArrowLeft aria-hidden="true" className="size-4" />}
@@ -94,14 +95,15 @@ function MatchDetailReadyContent({ controller }: { controller: MatchDetailReadyC
         </LinkButton>
       </div>
       <PageHeader
-        eyebrow="試合記録"
         title={`${formatMatchNoInEvent(match.matchNoInEvent)}の結果`}
         actions={
           <>
             <LinkButton to={exportHref} variant="secondary">
               この試合を出力
             </LinkButton>
-            <LinkButton to={editHref}>編集</LinkButton>
+            <LinkButton to={editHref} variant="secondary">
+              編集
+            </LinkButton>
           </>
         }
       />
@@ -114,7 +116,7 @@ function MatchDetailReadyContent({ controller }: { controller: MatchDetailReadyC
           matchNoInEvent={match.matchNoInEvent}
           seasonName={season?.name}
         />
-        <MatchFeatureSection badges={featureBadges} scopeLabel={featureScopeLabel} />
+        <MatchFeatureSection view={featureView} />
       </div>
 
       <Card
@@ -150,15 +152,15 @@ function MatchDetailReadyContent({ controller }: { controller: MatchDetailReadyC
         </div>
       </Card>
 
-      <Card>
+      <section className="border-t border-[var(--color-border)] pt-6">
         <div className="mb-3">
           <h2 className="text-lg font-semibold text-[var(--color-text-primary)]">成績詳細</h2>
           <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
-            プレー順と事件簿を含む保存内容です。見出しで並び替えできます。
+            列見出しで並び替えできます。
           </p>
         </div>
         <MatchDetailResultsTable players={players} setSortKey={setSortKey} sort={sort} />
-      </Card>
+      </section>
 
       <MatchRecordMetadata
         confirmDelete={confirmDelete}
@@ -171,4 +173,3 @@ function MatchDetailReadyContent({ controller }: { controller: MatchDetailReadyC
     </PageFrame>
   );
 }
-import { ArrowLeft } from "lucide-react";

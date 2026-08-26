@@ -157,7 +157,9 @@ export function useMatchesListPageController() {
     isSettling: filterSettling,
   });
   const listScopeChanging = filterSettling || listHasPlaceholderData;
-  const isStale = showListShield || showSummaryShield;
+  const sameScopeRefreshing =
+    !listScopeChanging && (listBackgroundRefreshing || summaryBackgroundRefreshing);
+  const matchesRefreshFailed = matchesQuery.isRefetchError || matchesSummaryQuery.isRefetchError;
 
   const handleManualRefresh = async () => {
     if (isManualRefreshing) {
@@ -233,9 +235,9 @@ export function useMatchesListPageController() {
     hasFilters: hasMatchListFilters(activeSearch),
     heldEvents: heldEventsQuery.data?.items ?? [],
     isManualRefreshing,
-    isStale,
     items,
     listScopeChanging,
+    listUpdating: showListShield,
     masterLoadFailed:
       shouldShowBlockingQueryError(heldEventsQuery) ||
       shouldShowBlockingQueryError(gameTitlesQuery) ||
@@ -249,6 +251,8 @@ export function useMatchesListPageController() {
       ocrHref: withReturnTo("/ocr/new", listReturnTo),
     },
     refresh: handleManualRefresh,
+    matchesRefreshFailed,
+    sameScopeRefreshing,
     search: activeSearch,
     seasons: seasonsQuery.data?.items ?? [],
     selectDraftAction: handleDraftStatusCheckAction,

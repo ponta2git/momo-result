@@ -42,9 +42,6 @@ export function MatchRecordMetadata({
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h2 className="text-base font-semibold text-[var(--color-text-primary)]">記録情報</h2>
-          <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
-            この結果の管理情報です。
-          </p>
         </div>
         <AlertDialog
           cancelLabel="キャンセル"

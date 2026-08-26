@@ -48,17 +48,15 @@ const candidates: MatchListFilterCandidates = {
 };
 
 describe("MatchesFilterBar", () => {
-  it("keeps status, sort, details, complete summary, result count, and actions in one surface", async () => {
+  it("keeps the condition hierarchy and summarizes only non-default conditions", async () => {
     const user = userEvent.setup();
     const onClear = vi.fn();
-    const onRefresh = vi.fn();
 
     render(
       <MatchesFilterBar
         actions={{ onApply: vi.fn(), onClear }}
         candidates={candidates}
         counts={counts}
-        resultCount={42}
         search={{
           ...initialSearch,
           gameTitleId: "game-1",
@@ -66,7 +64,6 @@ describe("MatchesFilterBar", () => {
           sort: "updated_desc",
           status: "needs_review",
         }}
-        onRefresh={onRefresh}
       />,
     );
 
@@ -76,7 +73,6 @@ describe("MatchesFilterBar", () => {
     expect(surface).toHaveTextContent(
       "適用中: 確定状況 要確認のみ・並び順 更新が新しい順・作品 桃太郎電鉄2・シーズン 今シーズン",
     );
-    expect(surface).toHaveTextContent("42件");
 
     const detailTrigger = within(surface).getByRole("button", { name: /^詳細条件/u });
     expect(detailTrigger).toHaveAttribute("aria-expanded", "true");
@@ -92,15 +88,12 @@ describe("MatchesFilterBar", () => {
     ).toHaveLength(1);
     await user.click(resetButton);
     expect(onClear).toHaveBeenCalledOnce();
-
-    await user.click(within(surface).getByRole("button", { name: "最新情報に更新" }));
-    expect(onRefresh).toHaveBeenCalledOnce();
   });
 
   it("clears the cursor when status or sort changes", async () => {
     const user = userEvent.setup();
     const onApply = vi.fn();
-    const search = { ...initialSearch, cursor: "opaque-cursor" };
+    const search = { ...initialSearch, cursor: "opaque-cursor", status: "incomplete" as const };
 
     const { rerender } = render(
       <MatchesFilterBar
@@ -145,9 +138,7 @@ describe("MatchesFilterBar", () => {
       "false",
     );
     expect(within(surface).getByLabelText("開催")).toBeInTheDocument();
-    expect(surface).toHaveTextContent(
-      "適用中: 確定状況 すべて・並び順 開催が新しい順・開催・作品・シーズン すべて",
-    );
+    expect(surface).not.toHaveTextContent("適用中:");
     expect(
       within(surface).queryByRole("button", {
         name: "確定状況・並び順・詳細条件を初期状態に戻す",

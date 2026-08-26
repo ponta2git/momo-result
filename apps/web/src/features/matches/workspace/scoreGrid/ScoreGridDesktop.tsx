@@ -24,7 +24,7 @@ import type {
   ScoreGridKeyboardHandler,
   ScoreGridNumericHandlers,
 } from "@/features/matches/workspace/scoreGrid/ScoreGridTypes";
-import { memberDisplayName, workspaceInputMembers } from "@/shared/domain/members";
+import { canonicalResultMembers, memberDisplayName } from "@/shared/domain/members";
 import { PlayOrderMark, playOrderPresentation } from "@/shared/ui/data/PlayOrderMark";
 import { SelectControl } from "@/shared/ui/forms/Control";
 
@@ -113,7 +113,7 @@ export function ScoreGridDesktopTable({
                     })
                   }
                 >
-                  {workspaceInputMembers.map((member) => (
+                  {canonicalResultMembers.map((member) => (
                     <option key={member.memberId} value={member.memberId}>
                       {member.displayName}
                     </option>

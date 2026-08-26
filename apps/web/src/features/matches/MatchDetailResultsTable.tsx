@@ -10,6 +10,8 @@ import { memberDisplayName } from "@/shared/domain/members";
 import { formatManYen } from "@/shared/lib/formatters";
 import { DataTable } from "@/shared/ui/data/DataTable";
 import type { DataTableColumn } from "@/shared/ui/data/DataTable";
+import { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
+import { PlayOrderMark } from "@/shared/ui/data/PlayOrderMark";
 import { RankBadge } from "@/shared/ui/rank/RankBadge";
 
 const matchDetailPlayerRowKey = (player: MatchDetailPlayerResult) => player.memberId;
@@ -38,13 +40,17 @@ export function MatchDetailResultsTable({
     return [
       sortable("playOrder", {
         header: "プレー順",
-        minWidth: "6rem",
-        renderCell: (player) => player.playOrder,
+        minWidth: "8rem",
+        renderCell: (player) => <PlayOrderMark playOrder={player.playOrder} />,
       }),
       sortable("member", {
         header: "プレーヤー",
         minWidth: "10rem",
-        renderCell: (player) => memberDisplayName(player.memberId),
+        renderCell: (player) => (
+          <MemberSequenceLabel memberId={player.memberId}>
+            {memberDisplayName(player.memberId)}
+          </MemberSequenceLabel>
+        ),
         rowHeader: true,
       }),
       sortable("rank", {

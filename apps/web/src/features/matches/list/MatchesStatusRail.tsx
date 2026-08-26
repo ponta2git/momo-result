@@ -131,7 +131,7 @@ export function MatchesStatusRail({
                 key={option.status}
                 aria-pressed={selected}
                 className={cn(
-                  "momo-pressable relative flex min-h-11 min-w-0 items-center justify-center gap-2 rounded-[calc(var(--radius-sm)-0.25rem)] px-2 py-2 text-sm font-semibold text-[var(--color-text-secondary)]",
+                  "momo-pressable relative flex min-h-11 min-w-0 flex-col items-center justify-center gap-0.5 rounded-[calc(var(--radius-sm)-0.25rem)] px-2 py-2 text-sm font-semibold text-[var(--color-text-secondary)] sm:flex-row sm:gap-2",
                   selected
                     ? "cursor-default"
                     : "hover:text-[var(--color-text-primary)] disabled:cursor-not-allowed disabled:opacity-60",
@@ -147,7 +147,7 @@ export function MatchesStatusRail({
                     transition={momoTransition}
                   />
                 ) : null}
-                <span className="relative z-[var(--z-base)] min-w-0 truncate">{option.label}</span>
+                <span className="relative z-[var(--z-base)] whitespace-nowrap">{option.label}</span>
                 <span className="relative z-[var(--z-base)] inline-flex shrink-0">
                   <CountBadge count={count} loading={loading && option.countKey !== undefined} />
                 </span>
@@ -168,47 +168,49 @@ export function MatchesStatusRail({
         </div>
       </LayoutGroup>
 
-      <div
-        aria-label="未確定の内訳"
-        className="flex min-w-0 flex-wrap items-center gap-1 pt-3"
-        role="group"
-      >
-        <LayoutGroup id="matches-unfinished-status">
-          {unfinishedOptions.map((option) => {
-            const selected = currentStatus === option.status;
-            return (
-              <button
-                key={option.status}
-                aria-pressed={selected}
-                className={cn(
-                  "momo-pressable relative inline-flex min-h-11 items-center gap-1 rounded-full border border-[var(--color-border)] px-3 py-2 text-xs font-semibold text-[var(--color-text-secondary)]",
-                  selected
-                    ? "cursor-default"
-                    : "hover:bg-[var(--color-surface-subtle)] hover:text-[var(--color-text-primary)] disabled:cursor-not-allowed disabled:opacity-60",
-                )}
-                disabled={disabled || selected}
-                type="button"
-                onClick={() => onSelectStatus(option.status)}
-              >
-                {selected ? (
-                  <motion.span
-                    className="absolute inset-0 rounded-full border border-[var(--color-action)]/50 bg-[var(--color-action)]/10"
-                    layoutId="active-unfinished-status"
-                    transition={momoTransition}
-                  />
-                ) : null}
-                <span className="relative z-[var(--z-base)]">{option.label}</span>
-                <span className="relative z-[var(--z-base)] inline-flex">
-                  <CountBadge
-                    count={counts[option.countKey ?? "incompleteCount"]}
-                    loading={loading}
-                  />
-                </span>
-              </button>
-            );
-          })}
-        </LayoutGroup>
-      </div>
+      {unfinishedSelected ? (
+        <div
+          aria-label="未確定の内訳"
+          className="flex min-w-0 flex-wrap items-center gap-1 pt-3"
+          role="group"
+        >
+          <LayoutGroup id="matches-unfinished-status">
+            {unfinishedOptions.map((option) => {
+              const selected = currentStatus === option.status;
+              return (
+                <button
+                  key={option.status}
+                  aria-pressed={selected}
+                  className={cn(
+                    "momo-pressable relative inline-flex min-h-11 items-center gap-1 rounded-full border border-[var(--color-border)] px-3 py-2 text-xs font-semibold text-[var(--color-text-secondary)]",
+                    selected
+                      ? "cursor-default"
+                      : "hover:bg-[var(--color-surface-subtle)] hover:text-[var(--color-text-primary)] disabled:cursor-not-allowed disabled:opacity-60",
+                  )}
+                  disabled={disabled || selected}
+                  type="button"
+                  onClick={() => onSelectStatus(option.status)}
+                >
+                  {selected ? (
+                    <motion.span
+                      className="absolute inset-0 rounded-full border border-[var(--color-action)]/50 bg-[var(--color-action)]/10"
+                      layoutId="active-unfinished-status"
+                      transition={momoTransition}
+                    />
+                  ) : null}
+                  <span className="relative z-[var(--z-base)]">{option.label}</span>
+                  <span className="relative z-[var(--z-base)] inline-flex">
+                    <CountBadge
+                      count={counts[option.countKey ?? "incompleteCount"]}
+                      loading={loading}
+                    />
+                  </span>
+                </button>
+              );
+            })}
+          </LayoutGroup>
+        </div>
+      ) : null}
     </div>
   );
 }

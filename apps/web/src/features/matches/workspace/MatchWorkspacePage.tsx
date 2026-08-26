@@ -10,7 +10,6 @@ import { MatchWorkspaceNavigationGuard } from "@/features/matches/workspace/Matc
 import { useMatchWorkspaceController } from "@/features/matches/workspace/useMatchWorkspaceController";
 import { Button } from "@/shared/ui/actions/Button";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
-import { LiveRegion } from "@/shared/ui/feedback/LiveRegion";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
 
@@ -48,7 +47,6 @@ export function MatchWorkspacePage({
     editor,
     formActions,
     header,
-    liveMessage,
     loadState,
     navigationGuard,
     setup,
@@ -75,15 +73,6 @@ export function MatchWorkspacePage({
     );
   }
 
-  if (loadState.workspaceLoading) {
-    return (
-      <MatchWorkspaceLoading
-        description={loadState.workspaceLoadingCopy.description}
-        title={loadState.workspaceLoadingCopy.title}
-      />
-    );
-  }
-
   if (loadState.editLoadFailureKind) {
     const notFound = loadState.editLoadFailureKind === "notFound";
     return (
@@ -103,7 +92,6 @@ export function MatchWorkspacePage({
                 pending={loadState.retryingEdit}
                 pendingLabel="再読み込み中"
                 size="sm"
-                variant="secondary"
                 onClick={loadState.onRetryEdit}
               >
                 試合編集を再読み込み
@@ -118,10 +106,17 @@ export function MatchWorkspacePage({
     );
   }
 
+  if (loadState.workspaceLoading) {
+    return (
+      <MatchWorkspaceLoading
+        description={loadState.workspaceLoadingCopy.description}
+        title={loadState.workspaceLoadingCopy.title}
+      />
+    );
+  }
+
   return (
     <PageFrame width="workspace">
-      <LiveRegion message={liveMessage} />
-
       <MatchWorkspaceHeader header={header} />
 
       {baseErrors.length > 0 ? (

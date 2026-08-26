@@ -2,6 +2,7 @@ import { Camera as CameraIcon } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
+import { selectableVideoDevices, stopCameraStream } from "@/features/ocrCapture/cameraCaptureMedia";
 import type { InputSource } from "@/features/ocrCapture/captureState";
 import { validateImageFile } from "@/features/ocrCapture/captureState";
 import { Button } from "@/shared/ui/actions/Button";
@@ -9,6 +10,7 @@ import { Disclosure } from "@/shared/ui/data/Collapsible";
 import { SelectField } from "@/shared/ui/forms/SelectField";
 
 type CameraCaptureProps = {
+  actionVariant?: "primary" | "secondary";
   disabled?: boolean;
   renderFallback?: ((prominent: boolean) => ReactNode) | undefined;
   slotLabel: string;
@@ -16,28 +18,8 @@ type CameraCaptureProps = {
   onValidationError: (message: string) => void;
 };
 
-function stopStream(stream: MediaStream | null) {
-  if (!stream) {
-    return;
-  }
-  for (const track of stream.getTracks()) {
-    track.stop();
-  }
-}
-
-function selectableVideoDevices(items: MediaDeviceInfo[]): MediaDeviceInfo[] {
-  const seenDeviceIds = new Set<string>();
-  return items.filter((item) => {
-    const deviceId = item.deviceId.trim();
-    if (item.kind !== "videoinput" || !deviceId || seenDeviceIds.has(deviceId)) {
-      return false;
-    }
-    seenDeviceIds.add(deviceId);
-    return true;
-  });
-}
-
 export function CameraCapture({
+  actionVariant = "primary",
   disabled = false,
   renderFallback,
   slotLabel,
@@ -64,7 +46,7 @@ export function CameraCapture({
       }
       video.srcObject = null;
     }
-    stopStream(streamRef.current);
+    stopCameraStream(streamRef.current);
     streamRef.current = null;
     setActive(false);
   }, []);
@@ -91,7 +73,7 @@ export function CameraCapture({
 
   useEffect(() => {
     return () => {
-      stopStream(streamRef.current);
+      stopCameraStream(streamRef.current);
       streamRef.current = null;
     };
   }, []);
@@ -108,7 +90,7 @@ export function CameraCapture({
     startingRef.current = true;
     setStarting(true);
     try {
-      stopStream(streamRef.current);
+      stopCameraStream(streamRef.current);
       streamRef.current = null;
 
       const nextStream = await navigator.mediaDevices.getUserMedia({
@@ -127,7 +109,7 @@ export function CameraCapture({
 
       const video = videoRef.current;
       if (!video) {
-        stopStream(nextStream);
+        stopCameraStream(nextStream);
         streamRef.current = null;
         return;
       }
@@ -136,9 +118,6 @@ export function CameraCapture({
       try {
         await video.play();
       } catch (playError) {
-        // play() can reject with AbortError when interrupted by srcObject changes
-        // or autoplay policies. If the stream is still live we keep going so the
-        // user can retry capture; otherwise surface the error.
         if (!nextStream.active) {
           throw playError;
         }
@@ -146,7 +125,7 @@ export function CameraCapture({
       setActive(true);
       setError(null);
     } catch (caught) {
-      stopStream(streamRef.current);
+      stopCameraStream(streamRef.current);
       streamRef.current = null;
       setActive(false);
       setError(
@@ -207,6 +186,10 @@ export function CameraCapture({
     }
   }
 
+  const useSecondaryActions = actionVariant === "secondary";
+  const startVariant = useSecondaryActions || active || error !== null ? "secondary" : "primary";
+  const captureVariant = useSecondaryActions || !active ? "secondary" : "primary";
+
   return (
     <div className="space-y-3">
       {devices.length > 0 ? (
@@ -254,13 +237,14 @@ export function CameraCapture({
             </p>
             <p className="mt-1 text-sm text-[var(--color-text-secondary)]">{error}</p>
           </div>
-          {renderFallback?.(true)}
+          {renderFallback?.(!useSecondaryActions)}
         </div>
       ) : null}
       <div className="flex flex-wrap gap-2">
         <Button
           pending={starting}
           pendingLabel="起動中…"
+          variant={startVariant}
           onClick={startCamera}
           disabled={disabled || active}
         >
@@ -269,6 +253,7 @@ export function CameraCapture({
         <Button
           pending={capturing}
           pendingLabel="撮影中…"
+          variant={captureVariant}
           onClick={capture}
           disabled={disabled || !active}
         >
@@ -278,9 +263,9 @@ export function CameraCapture({
           停止
         </Button>
       </div>
-      <p className="text-xs text-[var(--color-text-secondary)]">
-        {disabled ? "現在は撮影できません。" : `撮影すると「${slotLabel}」へ配置します。`}
-      </p>
+      {disabled ? (
+        <p className="text-xs text-[var(--color-text-secondary)]">現在は撮影できません。</p>
+      ) : null}
       {!error && renderFallback ? (
         <Disclosure
           className="w-full text-sm text-[var(--color-text-secondary)] sm:w-fit"

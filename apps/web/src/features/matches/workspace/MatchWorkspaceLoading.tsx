@@ -12,7 +12,7 @@ export function MatchWorkspaceLoading({
 }) {
   return (
     <PageFrame aria-busy="true" aria-label={title} className="gap-4" width="workspace">
-      <PageHeader description={description} eyebrow="試合記録" title={title} />
+      <PageHeader description={description} title={title} />
 
       <Card>
         <div className="grid gap-3 md:grid-cols-4">

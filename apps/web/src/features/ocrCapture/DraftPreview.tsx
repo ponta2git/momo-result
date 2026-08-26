@@ -18,41 +18,45 @@ function screenTypeLabel(value: string | undefined): string {
   return screenTypeLabels[value] ?? "判定できませんでした";
 }
 
-function warningSummary(value: unknown): string {
+function warningSummary(value: unknown): string | null {
   if (!value) {
-    return "警告はありません。";
+    return null;
   }
   if (Array.isArray(value)) {
-    return value.length === 0 ? "警告はありません。" : `${value.length}件の確認事項があります。`;
+    return value.length === 0 ? null : `${value.length}件の確認事項があります。`;
   }
   if (typeof value === "object") {
     return Object.keys(value).length === 0
-      ? "警告はありません。"
+      ? null
       : "確認事項があります。結果確認画面で内容を確認してください。";
   }
-  return String(value);
+  const text = String(value).trim();
+  return text.length > 0 ? text : null;
 }
 
 export function DraftPreview({ draft }: DraftPreviewProps) {
   if (!draft) {
     return null;
   }
+  const warning = warningSummary(draft.warningsJson);
 
   return (
     <Disclosure
-      className="mt-4 rounded-[var(--radius-md)] border border-[var(--color-success)]/45 bg-[var(--color-success)]/10"
-      panelClassName="border-t border-[var(--color-success)]/30 px-3 py-3"
-      summary="読み取り結果の詳細"
+      className="mt-4 rounded-[var(--radius-md)] border border-[var(--color-border)]"
+      panelClassName="border-t border-[var(--color-border)] px-3 py-3"
+      summary="読み取り結果"
     >
       <dl className="grid gap-2 text-sm text-[var(--color-text-primary)]">
         <div className="flex justify-between gap-4">
           <dt className="text-[var(--color-text-secondary)]">読み取り画面</dt>
           <dd>{screenTypeLabel(draft.detectedScreenType)}</dd>
         </div>
-        <div className="flex justify-between gap-4">
-          <dt className="text-[var(--color-text-secondary)]">確認事項</dt>
-          <dd className="text-right">{warningSummary(draft.warningsJson)}</dd>
-        </div>
+        {warning ? (
+          <div className="flex justify-between gap-4">
+            <dt className="text-[var(--color-text-secondary)]">確認事項</dt>
+            <dd className="text-right">{warning}</dd>
+          </div>
+        ) : null}
       </dl>
     </Disclosure>
   );

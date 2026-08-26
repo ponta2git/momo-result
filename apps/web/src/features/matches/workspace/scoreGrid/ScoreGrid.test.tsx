@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -7,19 +7,27 @@ import type { IncidentKey, MatchFormValues } from "@/features/matches/workspace/
 import { emptyPlayers } from "@/features/matches/workspace/matchFormTypes";
 import { ScoreGrid } from "@/features/matches/workspace/scoreGrid/ScoreGrid";
 import { ScoreGridReviewToolbar } from "@/features/matches/workspace/scoreGrid/ScoreGridReviewToolbar";
+import type { ScoreGridProps } from "@/features/matches/workspace/scoreGrid/ScoreGridTypes";
 import { installMatchMediaController } from "@/test/doubles/dom";
 import type { MatchMediaController } from "@/test/doubles/dom";
 
 const noErrorPaths = new Set<string>();
+const noReview: ScoreGridProps["data"]["review"] = {
+  acknowledgedCellIds: [],
+  activeCellId: null,
+  items: [],
+};
 
 function ScoreGridHarness({
   errorPathSet = noErrorPaths,
   initialPlayers = emptyPlayers(),
   onPlayerChange,
+  review = noReview,
 }: {
   errorPathSet?: Set<string>;
   initialPlayers?: MatchFormValues["players"];
   onPlayerChange: (index: number, patch: Partial<MatchFormValues["players"][number]>) => void;
+  review?: ScoreGridProps["data"]["review"];
 }) {
   const [players, setPlayers] = useState(initialPlayers);
 
@@ -65,9 +73,53 @@ function ScoreGridHarness({
         lastSyncedPlayerIndex: null,
         originalPlayers: undefined,
         players,
-        review: { acknowledgedCellIds: [], activeCellId: null, items: [] },
+        review,
       }}
     />
+  );
+}
+
+function FinalAcknowledgementHarness() {
+  const [acknowledgedCellIds, setAcknowledgedCellIds] = useState<string[]>([]);
+  return (
+    <>
+      <ScoreGrid
+        actions={{
+          onAcknowledgeReviewCell: (cellId) => setAcknowledgedCellIds([cellId]),
+          onIncidentChange: () => undefined,
+          onPlayerChange: () => undefined,
+          onPlayOrderChange: () => undefined,
+          onRequestSubmitFocus: () =>
+            document.querySelector<HTMLButtonElement>("#review-submit")?.focus(),
+          onReviewCellFocus: () => undefined,
+        }}
+        data={{
+          errorPathSet: new Set(),
+          lastSyncedPlayerIndex: null,
+          originalPlayers: undefined,
+          players: emptyPlayers(),
+          review: {
+            acknowledgedCellIds,
+            activeCellId: "players.0.memberId",
+            items: [
+              {
+                cellId: "players.0.memberId",
+                confidence: 0.7,
+                field: "memberId",
+                label: "最後の確認項目",
+                message: "照合が必要",
+                row: 0,
+                sourceKind: "total_assets",
+                warningCount: 1,
+              },
+            ],
+          },
+        }}
+      />
+      <button id="review-submit" type="button">
+        確定前の確認へ進む
+      </button>
+    </>
   );
 }
 
@@ -176,6 +228,11 @@ describe("ScoreGrid", () => {
     render(<ScoreGridHarness onPlayerChange={onPlayerChange} />);
 
     const memberSelect = screen.getByLabelText("メンバー");
+    expect(
+      within(memberSelect)
+        .getAllByRole("option")
+        .map((option) => option.textContent?.trim()),
+    ).toEqual(["いーゆー", "ぽんた", "あかねまみ", "おーたか"]);
     await user.selectOptions(memberSelect, "member_eu");
 
     expect(onPlayerChange).toHaveBeenLastCalledWith(0, { memberId: "member_eu" });
@@ -192,6 +249,11 @@ describe("ScoreGrid", () => {
     const rankInput = screen.getByRole("textbox", { name: "ぽんた 順位" });
 
     expect(memberSelect).toHaveClass("min-h-11", "px-2", "min-w-[10rem]");
+    expect(
+      within(memberSelect)
+        .getAllByRole("option")
+        .map((option) => option.textContent?.trim()),
+    ).toEqual(["いーゆー", "ぽんた", "あかねまみ", "おーたか"]);
     expect(playOrderSelect).toHaveClass(
       "min-h-11",
       "px-2",
@@ -287,5 +349,70 @@ describe("ScoreGrid", () => {
     expect(onAcknowledge).toHaveBeenCalledTimes(1);
     await user.click(screen.getByRole("button", { name: "次の要確認セルへ" }));
     expect(onNext).toHaveBeenCalledTimes(1);
+  });
+
+  it("moves focus to a reachable unresolved item when the prior active item is reviewed", () => {
+    render(
+      <ScoreGridHarness
+        onPlayerChange={vi.fn()}
+        review={{
+          acknowledgedCellIds: ["players.0.memberId"],
+          activeCellId: "players.0.memberId",
+          items: [
+            {
+              cellId: "players.0.memberId",
+              confidence: 0.9,
+              field: "memberId",
+              label: "確認済みの項目",
+              message: "確認済み",
+              row: 0,
+              sourceKind: "total_assets",
+              warningCount: 1,
+            },
+            {
+              cellId: "players.1.memberId",
+              confidence: 0.7,
+              field: "memberId",
+              label: "次の未確認項目",
+              message: "照合が必要",
+              row: 1,
+              sourceKind: "total_assets",
+              warningCount: 1,
+            },
+          ],
+        }}
+      />,
+    );
+
+    const toolbar = screen.getByLabelText("OCR確認レール");
+    expect(within(toolbar).getByText("次の未確認項目")).toBeInTheDocument();
+    expect(within(toolbar).getByRole("button", { name: "この値で確認済み" })).toBeEnabled();
+  });
+
+  it("does not show an OCR toolbar when there is nothing left to review", () => {
+    render(
+      <ScoreGridReviewToolbar
+        activeItem={undefined}
+        activeReviewed={false}
+        remainingCount={0}
+        totalCount={2}
+        onAcknowledge={() => undefined}
+        onNext={() => undefined}
+        onPrevious={() => undefined}
+      />,
+    );
+
+    expect(screen.queryByLabelText("OCR確認レール")).not.toBeInTheDocument();
+    expect(screen.queryByText(/すべて確認/u)).not.toBeInTheDocument();
+  });
+
+  it("moves focus to the submit action before the final acknowledgement removes the toolbar", async () => {
+    const user = userEvent.setup();
+
+    render(<FinalAcknowledgementHarness />);
+    await user.click(screen.getByRole("button", { name: "この値で確認済み" }));
+
+    expect(screen.queryByLabelText("OCR確認レール")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "確定前の確認へ進む" })).toHaveFocus();
   });
 });

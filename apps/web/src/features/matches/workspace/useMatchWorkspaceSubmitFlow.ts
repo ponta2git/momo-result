@@ -2,6 +2,10 @@ import { useCallback } from "react";
 import type { Dispatch, SetStateAction } from "react";
 
 import type { MatchFormValues, WorkspaceMode } from "@/features/matches/workspace/matchFormTypes";
+import type {
+  MatchWorkspaceOperationError,
+  MatchWorkspaceOperationErrorKind,
+} from "@/features/matches/workspace/matchWorkspaceOperationError";
 import { useConfirmedDraftRedirect } from "@/features/matches/workspace/useConfirmedDraftRedirect";
 import { useMatchWorkspaceConfirmAction } from "@/features/matches/workspace/useMatchWorkspaceConfirmAction";
 import { useMatchWorkspaceMutations } from "@/features/matches/workspace/useMatchWorkspaceMutations";
@@ -13,6 +17,7 @@ export function useMatchWorkspaceSubmitFlow({
   notify,
   onPersistedSuccess,
   setConfirmOpen,
+  setOperationError,
   setValidationMessage,
   returnTo,
   useSampleDrafts,
@@ -23,6 +28,7 @@ export function useMatchWorkspaceSubmitFlow({
   notify: (message: string, tone?: WorkspaceNoticeTone) => void;
   onPersistedSuccess: () => void;
   setConfirmOpen: Dispatch<SetStateAction<boolean>>;
+  setOperationError: Dispatch<SetStateAction<MatchWorkspaceOperationError | null>>;
   setValidationMessage: Dispatch<SetStateAction<string>>;
   returnTo?: string | undefined;
   useSampleDrafts: boolean;
@@ -31,7 +37,11 @@ export function useMatchWorkspaceSubmitFlow({
   const confirmedDraft = useConfirmedDraftRedirect({
     notify,
     onBeforeRedirect: onPersistedSuccess,
-    setValidationMessage,
+    onStatusCheckError: (message) => {
+      setConfirmOpen(false);
+      setOperationError({ kind: "draftStatus", message });
+    },
+    onStatusCheckStart: () => setOperationError(null),
     returnTo,
     useSampleDrafts,
   });
@@ -41,7 +51,11 @@ export function useMatchWorkspaceSubmitFlow({
     mode,
     onConfirmConflict: confirmedDraft.handleConfirmConflict,
     onConfirmSuccess: () => setConfirmOpen(false),
-    onError: setValidationMessage,
+    onError: (kind, message) => {
+      if (kind === "confirm") setConfirmOpen(false);
+      setOperationError({ kind, message });
+    },
+    onOperationStart: (_kind: MatchWorkspaceOperationErrorKind) => setOperationError(null),
     onPersistedSuccess,
     returnTo,
   });
@@ -55,9 +69,10 @@ export function useMatchWorkspaceSubmitFlow({
     if (!values.matchDraftId) {
       return;
     }
+    setOperationError(null);
     setValidationMessage("");
-    await cancelDraftMutation.mutateAsync(values.matchDraftId);
-  }, [cancelDraftMutation, setValidationMessage, values.matchDraftId]);
+    await cancelDraftMutation.mutateAsync(values.matchDraftId).catch(() => undefined);
+  }, [cancelDraftMutation, setOperationError, setValidationMessage, values.matchDraftId]);
 
   return { cancelDraftConfirmed, confirmAction, confirmedDraft, mutations };
 }

@@ -33,6 +33,8 @@ describe("MatchesStatusRail", () => {
     expect(unfinishedButton).toBeDisabled();
     expect(selectedReviewButton).toHaveAttribute("aria-pressed", "true");
     expect(selectedReviewButton).toBeDisabled();
+    expect(unfinishedButton).toHaveClass("flex-col", "sm:flex-row");
+    expect(screen.getByText("未確定")).not.toHaveClass("truncate");
 
     await user.click(selectedReviewButton);
     expect(onSelectStatus).not.toHaveBeenCalled();
@@ -41,10 +43,19 @@ describe("MatchesStatusRail", () => {
     expect(onSelectStatus).toHaveBeenCalledWith("ocr_running");
   });
 
-  it("keeps subfilters in a stable layout for direct access", () => {
-    render(<MatchesStatusRail counts={counts} currentStatus="all" onSelectStatus={vi.fn()} />);
+  it("reveals unfinished subfilters only after unfinished is selected", () => {
+    const { rerender } = render(
+      <MatchesStatusRail counts={counts} currentStatus="all" onSelectStatus={vi.fn()} />,
+    );
 
     expect(screen.getByRole("button", { name: "すべて" })).toBeDisabled();
+    expect(screen.queryByRole("group", { name: "未確定の内訳" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /処理中3件/u })).not.toBeInTheDocument();
+
+    rerender(
+      <MatchesStatusRail counts={counts} currentStatus="incomplete" onSelectStatus={vi.fn()} />,
+    );
+
     expect(screen.getByRole("group", { name: "未確定の内訳" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /処理中3件/u })).toBeEnabled();
   });

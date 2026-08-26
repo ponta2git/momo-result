@@ -24,7 +24,6 @@ export function MatchWorkspaceHeader({ header }: MatchWorkspaceHeaderProps) {
           ) : null}
         </>
       }
-      eyebrow="試合記録"
       title={header.pageTitle}
     />
   );

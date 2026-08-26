@@ -6,8 +6,8 @@ import { PageHeader } from "@/shared/ui/layout/PageHeader";
 
 export function MatchDetailLoading() {
   return (
-    <PageFrame aria-busy="true" aria-label="試合詳細を読み込み中" className="gap-4" width="wide">
-      <PageHeader eyebrow="試合記録" title="試合結果を読み込み中" />
+    <PageFrame aria-busy="true" aria-label="試合詳細を読み込み中" width="wide">
+      <PageHeader title="試合結果を読み込み中" />
 
       <Card className="grid gap-3 bg-[var(--color-surface-subtle)]">
         <div className="flex flex-wrap gap-4">

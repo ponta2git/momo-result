@@ -4,11 +4,8 @@ export function MatchSeriesComparisonCta({ href }: { href: string }) {
   return (
     <div className="mt-4 flex flex-col gap-3 border-t border-[var(--color-border)] pt-4 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0">
-        <p className="text-sm font-semibold text-[var(--color-text-primary)]">
-          この試合の前後を見る
-        </p>
-        <p className="mt-1 text-xs leading-5 text-pretty text-[var(--color-text-secondary)]">
-          同じ作品・シーズン・マップの戦績を開き、この試合を選択した状態で推移と結果を表示します。
+        <p className="text-sm leading-5 text-pretty text-[var(--color-text-secondary)]">
+          同じ作品・シーズン・マップ内で、この試合前後の推移を比べます。
         </p>
       </div>
       <LinkButton className="shrink-0" to={href} variant="secondary">

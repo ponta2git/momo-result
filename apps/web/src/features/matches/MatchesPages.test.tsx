@@ -66,6 +66,12 @@ describe("MatchesListPage", () => {
     expect(screen.getByRole("columnheader", { name: "出力" })).toBeInTheDocument();
     expect(screen.queryByRole("columnheader", { name: "操作" })).not.toBeInTheDocument();
     expect(screen.queryByRole("columnheader", { name: "更新" })).not.toBeInTheDocument();
+    const listRegion = screen.getByRole("region", { name: "登録済みの試合" });
+    expect(within(listRegion).getByText("3件")).toBeInTheDocument();
+    expect(within(listRegion).getByRole("group", { name: "試合一覧の操作" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "OCR取り込み" })).toHaveClass(
+      "bg-[var(--color-surface)]",
+    );
     const matchInfoCell = screen.getAllByRole("rowheader").find((cell) => {
       const text = cell.textContent ?? "";
       return [
@@ -174,6 +180,8 @@ describe("MatchesListPage", () => {
 
     expect(await screen.findByRole("heading", { name: "試合一覧" })).toBeInTheDocument();
     expect(await screen.findByText("試合はまだありません")).toBeInTheDocument();
+    const emptyOcrAction = screen.getAllByRole("link", { name: "OCR取り込み" }).at(-1)!;
+    expect(emptyOcrAction).toHaveClass("bg-[var(--color-action)]");
     const filterSection = screen.getByRole("region", { name: "試合の表示条件" });
     expect(within(filterSection).getByRole("group", { name: "確定状況" })).toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "確定状況" })).not.toBeInTheDocument();
@@ -260,11 +268,16 @@ describe("MatchesListPage", () => {
     );
 
     expect(await screen.findByText("試合一覧を読み込めません")).toBeInTheDocument();
+    expect(screen.getByText("件数を取得できません")).toBeInTheDocument();
     expect(screen.queryByText("試合はまだありません")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "一覧を再読み込み" })).toHaveClass(
+      "bg-[var(--color-action)]",
+    );
 
     await user.click(screen.getByRole("button", { name: "一覧を再読み込み" }));
 
     expect(await screen.findByText("試合はまだありません")).toBeInTheDocument();
+    expect(screen.getByText("0件")).toBeInTheDocument();
     expect(attempts).toBe(2);
     expect(cursors).toEqual(["stale-cursor", null]);
     expect(screen.getByLabelText("current location")).not.toHaveTextContent("cursor=");
@@ -582,6 +595,90 @@ describe("MatchesListPage", () => {
         .forEach((button) => expect(button).toBeEnabled()),
     );
     expect(listRegion.querySelector("[inert]")).toBeNull();
+  });
+
+  it("keeps same-scope list operations available and reports a cached refresh failure locally", async () => {
+    setDevUser();
+    const refreshGate = createDeferred();
+    let attempts = 0;
+    const listResponse = {
+      items: [
+        {
+          createdAt: "2026-01-01T00:00:00.000Z",
+          gameTitleId: "gt_momotetsu_2",
+          heldEventId: "held-1",
+          id: "match-refresh-safe",
+          kind: "match" as const,
+          mapMasterId: "map_east",
+          matchId: "match-refresh-safe",
+          matchNoInEvent: 1,
+          ownerMemberId: "member_ponta",
+          playedAt: "2026-01-01T00:00:00.000Z",
+          ranks: [{ memberId: "member_ponta", playOrder: 1, rank: 1 }],
+          seasonMasterId: "season_current",
+          status: "confirmed" as const,
+          updatedAt: "2026-01-01T00:00:00.000Z",
+        },
+      ],
+      pagination: {
+        hasNextPage: false,
+        hasPreviousPage: false,
+        page: 1,
+        pageSize: 10,
+        totalItems: 1,
+        totalPages: 1,
+      },
+    };
+    server.use(
+      http.get("/api/matches", async () => {
+        attempts += 1;
+        if (attempts === 2) {
+          await refreshGate.promise;
+        }
+        if (attempts === 3) {
+          return HttpResponse.json({ detail: "refresh failed" }, { status: 500 });
+        }
+        return HttpResponse.json(listResponse);
+      }),
+    );
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/matches"]}>
+          <Routes>
+            <Route path="/matches" element={<MatchesListPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findAllByText("優勝 ぽんた")).not.toHaveLength(0);
+    const listRegion = screen.getByRole("region", { name: "登録済みの試合" });
+    await user.click(screen.getByRole("button", { name: "最新情報に更新" }));
+    await waitFor(() => expect(attempts).toBe(2));
+
+    expect(listRegion).toHaveAttribute("aria-busy", "true");
+    expect(listRegion.querySelector("[inert]")).toBeNull();
+    expect(screen.getByLabelText("並び順")).toBeEnabled();
+    expect(screen.getByLabelText("表示件数")).toBeEnabled();
+    screen
+      .getAllByRole("link", { name: "第1試合 東日本編の試合結果を見る" })
+      .forEach((link) => expect(link).not.toHaveAttribute("aria-disabled", "true"));
+
+    refreshGate.resolve();
+    await waitFor(() => expect(listRegion).not.toHaveAttribute("aria-busy"));
+    await user.click(screen.getByRole("button", { name: "最新情報に更新" }));
+
+    expect(await screen.findByText("一覧を更新できませんでした")).toBeInTheDocument();
+    expect(screen.getAllByText("優勝 ぽんた")).not.toHaveLength(0);
+    expect(screen.getByLabelText("並び順")).toBeEnabled();
+    expect(screen.getByLabelText("表示件数")).toBeEnabled();
+
+    await user.click(screen.getByRole("button", { name: "一覧を再読み込み" }));
+    await waitFor(() =>
+      expect(screen.queryByText("一覧を更新できませんでした")).not.toBeInTheDocument(),
+    );
+    expect(attempts).toBe(4);
   });
 
   it("checks a draft action before navigation and redirects to detail when already confirmed", async () => {
@@ -907,6 +1004,36 @@ describe("MatchesListPage", () => {
       expect(screen.getByLabelText("current location")).not.toHaveTextContent("handoffId="),
     );
   });
+
+  it("shows a held-event API failure beside the creation operation", async () => {
+    setDevUser();
+    server.use(
+      http.post("/api/held-events", () =>
+        HttpResponse.json({ detail: "temporarily unavailable" }, { status: 500 }),
+      ),
+    );
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/matches/new"]}>
+          <Routes>
+            <Route path="/matches/new" element={<MatchCreatePage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "試合の新規作成" })).toBeInTheDocument();
+    const eventDisclosure = screen.getByText("一覧にない開催履歴を追加する");
+    await user.click(eventDisclosure);
+    await user.click(screen.getByRole("button", { name: "作成して選択" }));
+
+    const failure = await screen.findByRole("heading", { name: "開催履歴を追加できませんでした" });
+    const notice = failure.closest("section");
+    expect(notice).toHaveTextContent("試合条件も変更していません");
+    expect(notice).toHaveTextContent("もう一度作成してください");
+    expect(screen.getByRole("button", { name: "作成して選択" })).toBeEnabled();
+  });
 });
 
 describe("MatchEditPage", () => {
@@ -1067,6 +1194,59 @@ describe("MatchEditPage", () => {
       "/matches?cursor=cursor-2",
     );
   });
+
+  it("makes retry the primary action when the saved match cannot be loaded", async () => {
+    setDevUser();
+    queryClient.setDefaultOptions({ queries: { retry: false } });
+    server.use(
+      http.get("/api/matches/:matchId", () =>
+        HttpResponse.json({ detail: "temporarily unavailable" }, { status: 500 }),
+      ),
+    );
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/matches/match-1/edit"]}>
+          <Routes>
+            <Route path="/matches/:matchId/edit" element={<MatchEditPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByText("試合編集を読み込めませんでした")).toBeInTheDocument();
+    const retry = screen.getByRole("button", { name: "試合編集を再読み込み" });
+    expect(retry).toHaveClass("bg-[var(--color-action)]");
+  });
+
+  it("keeps edited values and shows an update API failure in the execution area", async () => {
+    setDevUser();
+    server.use(
+      http.put("/api/matches/:matchId", () =>
+        HttpResponse.json({ detail: "temporarily unavailable" }, { status: 500 }),
+      ),
+    );
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/matches/match-1/edit"]}>
+          <Routes>
+            <Route path="/matches/:matchId/edit" element={<MatchEditPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "試合を編集" })).toBeInTheDocument();
+    const matchNumber = screen.getByLabelText("試合番号");
+    expect(matchNumber).toHaveValue("1");
+    await user.click(screen.getByRole("button", { name: "保存" }));
+
+    const failure = await screen.findByRole("heading", { name: "変更を保存できませんでした" });
+    expect(failure.closest("section")).toHaveTextContent("入力内容は保持しています");
+    expect(matchNumber).toHaveValue("1");
+    expect(screen.getByRole("button", { name: "保存" })).toBeEnabled();
+  });
 });
 
 describe("MatchDetailPage", () => {
@@ -1098,6 +1278,9 @@ describe("MatchDetailPage", () => {
     const resultLedgerRegion = screen.getByRole("region", { name: "順位・総資産" });
     expect(resultLedgerRegion).toHaveClass("max-w-4xl");
     expect(resultLedgerRegion).toContainElement(resultLedger);
+    const detailTable = screen.getByRole("table", { name: "試合結果" });
+    expect(detailTable.querySelectorAll("[data-member-sequence]")).toHaveLength(4);
+    expect(detailTable.querySelectorAll("[data-play-order]")).toHaveLength(4);
     expect(screen.getByRole("link", { name: "前後の戦績を見る" })).toHaveAttribute(
       "href",
       "/analytics/series?gameTitleId=gt_momotetsu_2&seasonMasterId=season_current&mapMasterId=map_east&focusMatchId=match-1&view=flow&returnTo=%2Fmatches%2Fmatch-1",
@@ -1347,8 +1530,9 @@ describe("MatchDetailPage", () => {
     expect(contextParams.get("matchId")).toBe("match-1");
   });
 
-  it("does not derive stale fallback badges when artifact context loading fails", async () => {
+  it("keeps the match result and retries a failed feature-context request locally", async () => {
     setDevUser();
+    let contextAttempts = 0;
     server.use(
       http.get("/api/matches/:matchId", () =>
         HttpResponse.json(
@@ -1362,9 +1546,15 @@ describe("MatchDetailPage", () => {
           }),
         ),
       ),
-      http.get("/api/analytics/series-comparison/v2/match-context", () =>
-        HttpResponse.json({ title: "series unavailable" }, { status: 500 }),
-      ),
+      http.get("/api/analytics/series-comparison/v2/match-context", () => {
+        contextAttempts += 1;
+        return contextAttempts === 1
+          ? HttpResponse.json({ title: "series unavailable" }, { status: 500 })
+          : HttpResponse.json({
+              ...makeSeriesAnalysisMatchContext(),
+              matchId: "match-1",
+            });
+      }),
     );
 
     render(
@@ -1378,11 +1568,17 @@ describe("MatchDetailPage", () => {
     );
 
     expect(await screen.findByRole("heading", { name: /第1試合の結果/u })).toBeInTheDocument();
-    expect(await screen.findByText("目立つ特徴はありません。")).toBeInTheDocument();
+    expect(await screen.findByText("試合の特徴を読み込めません")).toBeInTheDocument();
+    expect(screen.getByRole("list", { name: "試合の順位と成績" }).children).toHaveLength(4);
     expect(
-      await screen.findByText("この試合を含む保存済み分析を利用できません"),
-    ).toBeInTheDocument();
+      screen.queryByText("同じ条件の試合と比べて、表示対象の特徴はありません。"),
+    ).not.toBeInTheDocument();
     expect(screen.queryByText("接戦")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "特徴を再読み込み" }));
+
+    expect(await screen.findByText("接戦")).toBeInTheDocument();
+    expect(contextAttempts).toBe(2);
   });
 
   it("keeps primary match rows but hides stale analysis after a match revision mismatch", async () => {
@@ -1410,7 +1606,9 @@ describe("MatchDetailPage", () => {
     );
 
     expect(
-      await screen.findByText("この試合は分析後に更新されたため、次の計算完了後に特徴を表示します"),
+      await screen.findByText(
+        "この試合の更新後は、同じ条件の試合と比べた特徴を次の分析完了後に表示します。",
+      ),
     ).toBeInTheDocument();
     expect(screen.getByRole("list", { name: "試合の順位と成績" }).children).toHaveLength(4);
     expect(screen.getAllByText("比較データなし")).toHaveLength(4);

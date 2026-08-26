@@ -1,9 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import {
-  buildMatchFeatureBadges,
   nextMatchDetailSort,
   seriesComparisonHrefForMatch,
   sortMatchDetailPlayers,
@@ -12,14 +11,11 @@ import type {
   MatchDetailSortKey,
   MatchDetailSortState,
 } from "@/features/matches/matchDetailViewModel";
+import { useMatchFeatureAnalysis } from "@/features/matches/useMatchFeatureAnalysis";
 import { invalidateAfterMatchDeleted } from "@/shared/api/cacheInvalidation";
 import { runIdempotentMutation } from "@/shared/api/idempotency";
 import { deleteMatch } from "@/shared/api/matches";
-import {
-  formatApiError,
-  isAnalysisArtifactExpired,
-  normalizeUnknownApiError,
-} from "@/shared/api/problemDetails";
+import { formatApiError, normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import { isInitialQueryLoading, shouldShowBlockingQueryError } from "@/shared/api/queryErrorState";
 import {
   gameTitlesQueryOptions,
@@ -28,12 +24,7 @@ import {
   matchDetailQueryOptions,
   seasonMastersQueryOptions,
 } from "@/shared/api/queryOptions";
-import {
-  seriesAnalysisMatchContextQueryOptions,
-  seriesAnalysisStatusQueryOptions,
-} from "@/shared/api/seriesAnalysisQueryOptions";
 import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
-import { matchPerformanceContextFromArtifact } from "@/shared/domain/matchPerformanceContext";
 import {
   currentInternalLocation,
   sanitizeReturnTo,
@@ -51,7 +42,6 @@ export function useMatchDetailPageController() {
   const idempotencyKeys = useIdempotencyKeyStore();
   const [showConfirm, setShowConfirm] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const handledExpiredArtifacts = useRef(new Set<string>());
   const [sort, setSort] = useState<MatchDetailSortState>({
     key: "member",
     direction: "asc",
@@ -86,53 +76,7 @@ export function useMatchDetailPageController() {
   });
 
   const match = matchQuery.data;
-  const analysisStatusQuery = useQuery(seriesAnalysisStatusQueryOptions(match?.gameTitleId));
-  const currentArtifactId = analysisStatusQuery.data?.currentArtifact?.artifactId;
-  const matchContextQueryParams = useMemo(
-    () =>
-      match && currentArtifactId
-        ? {
-            artifactId: currentArtifactId,
-            gameTitleId: match.gameTitleId,
-            mapMasterId: match.mapMasterId,
-            matchId: match.matchId,
-            seasonMasterId: match.seasonMasterId,
-          }
-        : undefined,
-    [currentArtifactId, match],
-  );
-  const matchContextQuery = useQuery(
-    seriesAnalysisMatchContextQueryOptions(matchContextQueryParams),
-  );
-  const analysisContext = useMemo(() => {
-    if (
-      !match ||
-      !matchContextQuery.data ||
-      matchContextQuery.data.artifact.artifactId !== currentArtifactId ||
-      matchContextQuery.data.matchId !== match.matchId
-    ) {
-      return undefined;
-    }
-    return matchContextQuery.data;
-  }, [currentArtifactId, match, matchContextQuery.data]);
-
-  useEffect(() => {
-    const artifactId = matchContextQueryParams?.artifactId;
-    if (
-      !artifactId ||
-      handledExpiredArtifacts.current.has(artifactId) ||
-      !isAnalysisArtifactExpired(matchContextQuery.error)
-    ) {
-      return;
-    }
-    handledExpiredArtifacts.current.add(artifactId);
-    void analysisStatusQuery.refetch().then((result) => {
-      if (result.data?.currentArtifact?.artifactId === artifactId) {
-        return matchContextQuery.refetch();
-      }
-      return undefined;
-    });
-  }, [analysisStatusQuery, matchContextQuery, matchContextQueryParams?.artifactId]);
+  const analysis = useMatchFeatureAnalysis(match);
   const heldEvent = match
     ? (heldEventsQuery.data?.items ?? []).find((event) => event.id === match.heldEventId)
     : undefined;
@@ -148,37 +92,6 @@ export function useMatchDetailPageController() {
   const heldAt = heldEvent?.heldAt ?? match?.playedAt ?? "";
   const sourcePlayers = useMemo(() => match?.players ?? [], [match?.players]);
   const players = useMemo(() => sortMatchDetailPlayers(sourcePlayers, sort), [sourcePlayers, sort]);
-  const performanceContext = useMemo(
-    () => matchPerformanceContextFromArtifact(analysisContext),
-    [analysisContext],
-  );
-  const featureBadges = useMemo(
-    () => buildMatchFeatureBadges({ features: analysisContext?.match?.features }),
-    [analysisContext?.match?.features],
-  );
-  const analysisCalculationStatus = analysisStatusQuery.data?.calculation?.status;
-  const analysisContextLoading =
-    analysisStatusQuery.isPending ||
-    analysisStatusQuery.isFetching ||
-    analysisCalculationStatus === "queued" ||
-    analysisCalculationStatus === "running" ||
-    (matchContextQueryParams !== undefined &&
-      (matchContextQuery.isPending || matchContextQuery.isFetching));
-  const comparisonContextStatus =
-    performanceContext === undefined
-      ? analysisContextLoading
-        ? ("loading" as const)
-        : ("unavailable" as const)
-      : ("ready" as const);
-  const featureScopeLabel =
-    analysisContext?.inclusion.status === "included"
-      ? "同じ作品・シーズン・マップの保存済み分析成果物から表示"
-      : comparisonContextStatus === "loading"
-        ? "保存済み分析内の特徴を確認中。この試合の記録は先に表示しています"
-        : analysisContext?.inclusion.status === "match_changed_since_artifact"
-          ? "この試合は分析後に更新されたため、次の計算完了後に特徴を表示します"
-          : "この試合を含む保存済み分析を利用できません";
-
   const setSortKey = useCallback((key: MatchDetailSortKey) => {
     setSort((current) => nextMatchDetailSort(current, key));
   }, []);
@@ -211,27 +124,16 @@ export function useMatchDetailPageController() {
       gameTitlesQuery.refetch(),
       seasonsQuery.refetch(),
       mapsQuery.refetch(),
-      analysisStatusQuery.refetch(),
-      ...(matchContextQueryParams ? [matchContextQuery.refetch()] : []),
+      analysis.refreshAnalysis(),
     ]);
-  }, [
-    analysisStatusQuery,
-    gameTitlesQuery,
-    heldEventsQuery,
-    mapsQuery,
-    matchContextQuery,
-    matchContextQueryParams,
-    matchQuery,
-    seasonsQuery,
-  ]);
+  }, [analysis, gameTitlesQuery, heldEventsQuery, mapsQuery, matchQuery, seasonsQuery]);
   const refreshing =
     matchQuery.isFetching ||
     heldEventsQuery.isFetching ||
     gameTitlesQuery.isFetching ||
     seasonsQuery.isFetching ||
     mapsQuery.isFetching ||
-    analysisStatusQuery.isFetching ||
-    matchContextQuery.isFetching;
+    analysis.analysisRefreshing;
 
   if (detailLoading) {
     return { backHref: contextualReturnTo ?? "/matches", status: "loading" as const };
@@ -261,10 +163,9 @@ export function useMatchDetailPageController() {
       : contextualReturnTo?.startsWith("/matches")
         ? "試合一覧へ戻る"
         : "この開催へ戻る",
-    comparisonContextStatus,
+    comparisonContextStatus: analysis.comparisonContextStatus,
     errorMessage,
-    featureBadges,
-    featureScopeLabel,
+    featureView: analysis.featureView,
     gameTitle,
     heldAt,
     isDeletePending: deleteMutation.isPending,
@@ -277,7 +178,7 @@ export function useMatchDetailPageController() {
     map,
     match,
     players,
-    performanceContext,
+    performanceContext: analysis.performanceContext,
     season,
     setShowConfirm,
     setSortKey,

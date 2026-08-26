@@ -21,13 +21,8 @@ export function ScoreGridReviewToolbar({
   onNext: () => void;
   onPrevious: () => void;
 }) {
-  if (totalCount === 0) {
-    return (
-      <div className="mt-3 flex min-h-11 items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--color-success)]/50 bg-[var(--color-success)]/12 px-3 py-2 text-sm text-[var(--color-text-primary)]">
-        <Check aria-hidden="true" className="size-4 text-[var(--color-success)]" />
-        OCRで強調された確認項目はありません
-      </div>
-    );
+  if (totalCount === 0 || remainingCount === 0) {
+    return null;
   }
 
   return (
@@ -68,7 +63,6 @@ export function ScoreGridReviewToolbar({
       <div className="flex flex-wrap items-center gap-2">
         <Button
           aria-label="前の要確認セルへ"
-          disabled={remainingCount === 0}
           icon={<ChevronLeft aria-hidden="true" className="size-4" />}
           size="sm"
           variant="secondary"
@@ -78,7 +72,6 @@ export function ScoreGridReviewToolbar({
         </Button>
         <Button
           aria-label="次の要確認セルへ"
-          disabled={remainingCount === 0}
           icon={<ChevronRight aria-hidden="true" className="size-4" />}
           size="sm"
           variant="secondary"

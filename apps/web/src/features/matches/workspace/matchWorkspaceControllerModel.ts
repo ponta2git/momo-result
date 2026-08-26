@@ -1,3 +1,5 @@
+import { toMatchWorkspaceOperationErrorView } from "@/features/matches/workspace/matchWorkspaceOperationError";
+import type { MatchWorkspaceOperationError } from "@/features/matches/workspace/matchWorkspaceOperationError";
 import type { NormalizedApiError } from "@/shared/api/problemDetails";
 
 import type { MatchFormReducerState } from "./matchFormReducer";
@@ -27,6 +29,7 @@ type MatchWorkspaceControllerModelArgs = {
   isNavigatingToMasters: boolean;
   isOcrRunningBlocked: boolean;
   mode: WorkspaceMode;
+  operationError: MatchWorkspaceOperationError | null;
   preferredImageKind: SourceImageKind;
   returnTo: string | null | undefined;
   reviewState: ReturnType<typeof useMatchWorkspaceReviewState>;
@@ -83,6 +86,17 @@ function validationFeedback({
 export function buildMatchWorkspaceControllerModel(args: MatchWorkspaceControllerModelArgs) {
   const { validation, visibleErrorPathSet } = args.validationState;
   const { state, viewModel } = args;
+  const operationErrorView = args.operationError
+    ? toMatchWorkspaceOperationErrorView(args.operationError)
+    : null;
+  const validationErrorView = args.validationMessage
+    ? {
+        detail: args.validationMessage,
+        nextStep:
+          "入力内容は保存・確定されていません。表示された項目を修正して、もう一度実行してください。",
+        title: "入力内容を確認してください",
+      }
+    : null;
 
   return {
     baseErrors: args.baseErrors,
@@ -92,6 +106,7 @@ export function buildMatchWorkspaceControllerModel(args: MatchWorkspaceControlle
     },
     blockedNotice: args.isOcrRunningBlocked
       ? {
+          error: args.operationError?.kind === "draftStatus" ? operationErrorView : null,
           onRefreshReviewStatus: args.onRefreshReviewStatus,
           refreshingReviewStatus: args.refreshingReviewStatus,
         }
@@ -156,12 +171,16 @@ export function buildMatchWorkspaceControllerModel(args: MatchWorkspaceControlle
             onRestore: args.sessionDraft.restoreRecovery,
           }
         : null,
-      validationMessage: args.validationMessage,
       warnings: args.workspaceData?.warnings ?? [],
     },
     formActions: {
       actionLabel: args.mode === "edit" ? "保存" : "確定前の確認へ進む",
       disabled: args.workspaceLoading,
+      error:
+        args.operationError?.kind === "heldEventCreation" ||
+        args.operationError?.kind === "cancelDraft"
+          ? validationErrorView
+          : (operationErrorView ?? validationErrorView),
       message: validationFeedback({
         firstMessage: validation.firstMessage,
         success: validation.success,
@@ -181,7 +200,6 @@ export function buildMatchWorkspaceControllerModel(args: MatchWorkspaceControlle
       navigationAllowedRef: args.sessionDraft.navigationAllowedRef,
       onDiscard: args.sessionDraft.markCommitted,
     },
-    liveMessage: args.validationMessage,
     validationFocusRequest: args.validationFocusRequest,
     loadState: {
       editLoadFailureKind: args.editLoadFailureKind,
@@ -195,6 +213,8 @@ export function buildMatchWorkspaceControllerModel(args: MatchWorkspaceControlle
       createEventPending: args.createEventPending,
       errorPathSet: visibleErrorPathSet,
       eventDraftValue: args.eventDraftValue,
+      eventCreationError:
+        args.operationError?.kind === "heldEventCreation" ? operationErrorView : null,
       gameTitleItems: viewModel.gameTitleItems,
       heldEvents: viewModel.heldEvents,
       mapItems: viewModel.mapItems,
@@ -206,6 +226,7 @@ export function buildMatchWorkspaceControllerModel(args: MatchWorkspaceControlle
           confirmOpen: args.cancelDraftConfirmOpen,
           confirmPending: args.cancelDraftPending,
           disabled: args.isMutating,
+          error: args.operationError?.kind === "cancelDraft" ? operationErrorView : null,
           onConfirm: args.onCancelDraftConfirm,
           onOpenChange: args.onCancelDraftOpenChange,
           onTrigger: args.onCancelDraftTrigger,

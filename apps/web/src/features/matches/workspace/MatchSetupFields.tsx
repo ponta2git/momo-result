@@ -3,7 +3,7 @@ import type {
   MatchSetupActions,
   MatchSetupOptions,
 } from "@/features/matches/workspace/MatchSetupSection";
-import { workspaceInputMembers } from "@/shared/domain/members";
+import { canonicalResultMembers } from "@/shared/domain/members";
 import { formatDateTimeLong, toLocalDateTimeInputValue } from "@/shared/lib/dateTime";
 import { SelectField } from "@/shared/ui/forms/SelectField";
 import { TextField } from "@/shared/ui/forms/TextField";
@@ -129,7 +129,7 @@ export function MatchSetupFields({
         error={fieldError("ownerMemberId")}
         fieldClassName="lg:col-span-3"
         label="オーナー（必須）"
-        options={workspaceInputMembers.map((member) => ({
+        options={canonicalResultMembers.map((member) => ({
           label: member.displayName,
           value: member.memberId,
         }))}

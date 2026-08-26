@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { createEmptyMatchForm } from "@/features/matches/workspace/matchFormTypes";
@@ -42,5 +42,11 @@ describe("MatchSetupFields", () => {
       expect(errorId).toBeTruthy();
       expect(document.getElementById(errorId ?? "")).toHaveTextContent("未入力です");
     }
+
+    expect(
+      within(screen.getByLabelText("オーナー（必須）"))
+        .getAllByRole("option")
+        .map((option) => option.textContent?.trim()),
+    ).toEqual(["いーゆー", "ぽんた", "あかねまみ", "おーたか"]);
   });
 });

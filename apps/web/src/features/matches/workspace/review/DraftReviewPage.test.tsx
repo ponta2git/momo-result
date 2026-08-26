@@ -247,7 +247,7 @@ describe("DraftReviewPage", () => {
     expect(await screen.findAllByText(confirmedDraftMessages.confirmConflict)).toHaveLength(1);
   });
 
-  it("shows status check failures inside the confirmation dialog", async () => {
+  it("returns status check failures to persistent execution feedback", async () => {
     setDevUser();
     queryClient.setDefaultOptions({ queries: { retry: false, staleTime: 10_000 } });
     let draftDetailRequests = 0;
@@ -285,13 +285,87 @@ describe("DraftReviewPage", () => {
     await user.click(within(dialog).getByRole("button", { name: "確定する" }));
 
     await waitFor(() =>
-      expect(within(dialog).getByRole("alert")).toHaveTextContent(
-        confirmedDraftMessages.statusCheckFailed,
+      expect(
+        screen.queryByRole("dialog", { name: "この内容で確定しますか？" }),
+      ).not.toBeInTheDocument(),
+    );
+    const executionArea = screen.getByRole("region", { name: "入力内容の確定" });
+    expect(within(executionArea).getByRole("alert")).toHaveTextContent(
+      confirmedDraftMessages.statusCheckFailed,
+    );
+    expect(within(executionArea).getByRole("alert")).toHaveTextContent(
+      "もう一度確定を実行してください",
+    );
+  });
+
+  it("returns a confirmation API failure to persistent execution feedback", async () => {
+    setDevUser();
+    server.use(
+      http.post("/api/matches", () =>
+        HttpResponse.json({ detail: "temporarily unavailable" }, { status: 500 }),
       ),
     );
-    await waitFor(() =>
-      expect(within(dialog).getByRole("button", { name: "確定する" })).toBeEnabled(),
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/review/session-confirm-fails"]}>
+          <Routes>
+            <Route path="/review/:matchSessionId" element={<DraftReviewPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
     );
+
+    expect(await screen.findByRole("heading", { name: "OCR結果の確認" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "確定前の確認へ進む" }));
+    await user.click(await screen.findByRole("button", { name: "確定する" }));
+
+    expect(
+      await screen.findByRole("heading", { name: "試合を確定できませんでした" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("dialog", { name: "この内容で確定しますか？" }),
+    ).not.toBeInTheDocument();
+    const executionArea = screen.getByRole("region", { name: "入力内容の確定" });
+    expect(within(executionArea).getByRole("alert")).toHaveTextContent("入力内容は保持しています");
+    expect(within(executionArea).getByRole("button", { name: "確定前の確認へ進む" })).toBeEnabled();
+  });
+
+  it("returns a draft-delete API failure to persistent execution feedback", async () => {
+    setDevUser();
+    server.use(
+      http.post("/api/match-drafts/:draftId/cancel", () =>
+        HttpResponse.json({ detail: "temporarily unavailable" }, { status: 500 }),
+      ),
+    );
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/review/session-delete-fails"]}>
+          <Routes>
+            <Route path="/review/:matchSessionId" element={<DraftReviewPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "OCR結果の確認" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "確定前の記録を削除" }));
+    await user.click(await screen.findByRole("button", { name: "削除する" }));
+
+    expect(
+      await screen.findByRole("heading", { name: "確定前の記録を削除できませんでした" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: "確定前の記録を削除しますか？" }),
+    ).not.toBeInTheDocument();
+    const deleteFailure = screen
+      .getByRole("heading", { name: "確定前の記録を削除できませんでした" })
+      .closest("section");
+    expect(deleteFailure).toHaveAttribute("role", "alert");
+    expect(deleteFailure).toHaveTextContent("確定前の記録と入力内容は残っています");
+    const executionArea = screen.getByRole("region", { name: "入力内容の確定" });
+    expect(within(executionArea).queryByRole("alert")).not.toBeInTheDocument();
   });
 
   it("keeps the review form unavailable until the draft summary has loaded", async () => {

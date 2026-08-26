@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowLeft, Download, PenSquare, ScanLine } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Download, PenSquare, RefreshCw, ScanLine } from "lucide-react";
 
 import { MatchesFilterBar } from "@/features/matches/list/MatchesFilterBar";
 import { MatchesTable } from "@/features/matches/list/MatchesTable";
@@ -6,6 +6,7 @@ import { matchListPageSizeOptions } from "@/features/matches/list/matchListSearc
 import { MatchMobileCard } from "@/features/matches/list/MatchMobileCard";
 import { useMatchesListPageController } from "@/features/matches/list/useMatchesListPageController";
 import { Button } from "@/shared/ui/actions/Button";
+import { IconButton } from "@/shared/ui/actions/IconButton";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { PaginationControls } from "@/shared/ui/data/PaginationControls";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
@@ -42,14 +43,16 @@ export function MatchesListPage() {
     hasFilters,
     heldEvents,
     isManualRefreshing,
-    isStale,
     items,
     listScopeChanging,
+    listUpdating,
     masterLoadFailed,
+    matchesRefreshFailed,
     navigation,
     pagination,
     refresh,
     search,
+    sameScopeRefreshing,
     seasons,
     selectDraftAction,
     showMatchesError,
@@ -64,7 +67,7 @@ export function MatchesListPage() {
   const filterCandidates = { gameTitles, heldEvents, seasons };
   const rowActions = {
     checkingDraftIds,
-    disabled: isStale,
+    disabled: listScopeChanging,
     onDraftStatusCheckAction: selectDraftAction,
   };
 
@@ -94,6 +97,7 @@ export function MatchesListPage() {
               icon={<ScanLine className="size-4" />}
               size="sm"
               to={navigation.ocrHref}
+              variant="secondary"
             >
               OCR取り込み
             </LinkButton>
@@ -132,22 +136,40 @@ export function MatchesListPage() {
         actions={filterActions}
         candidates={filterCandidates}
         counts={summaryCounts}
-        onRefresh={refresh}
-        pending={isStale}
-        refreshing={isManualRefreshing}
-        resultCount={pagination?.totalItems}
+        pending={listScopeChanging}
         search={search}
         summaryLoading={summaryLoading}
         summaryMasked={summaryMasked}
       />
 
       <section
-        aria-busy={isStale || undefined}
+        aria-busy={listScopeChanging || sameScopeRefreshing || undefined}
         aria-label="登録済みの試合"
         className="relative grid min-h-[24rem] gap-4"
       >
-        <div className="flex min-w-0 justify-end">
-          <div className="flex w-full flex-wrap items-center justify-between gap-2 sm:w-auto sm:shrink-0 sm:justify-end">
+        <div className="flex min-w-0 flex-wrap items-center justify-between gap-2 border-b border-[var(--color-border)] pb-3">
+          <p className="text-sm font-semibold text-[var(--color-text-secondary)] tabular-nums">
+            {showMatchesLoading
+              ? "件数を確認中"
+              : showMatchesError
+                ? "件数を取得できません"
+                : `${(pagination?.totalItems ?? items.length).toLocaleString()}件`}
+          </p>
+          <div
+            aria-label="試合一覧の操作"
+            className="flex flex-wrap items-center justify-end gap-1"
+            role="group"
+          >
+            <IconButton
+              aria-label="最新情報に更新"
+              disabled={listScopeChanging && !isManualRefreshing}
+              icon={<RefreshCw />}
+              pending={isManualRefreshing}
+              pendingLabel="一覧を更新中"
+              tooltip={isManualRefreshing ? "更新中…" : "最新情報に更新"}
+              variant="quiet"
+              onClick={() => void refresh()}
+            />
             <LinkButton
               icon={<Download className="size-4" />}
               size="sm"
@@ -159,9 +181,29 @@ export function MatchesListPage() {
           </div>
         </div>
 
+        {matchesRefreshFailed ? (
+          <Notice
+            action={
+              <Button
+                pending={isManualRefreshing}
+                pendingLabel="一覧を再読み込み中"
+                size="sm"
+                variant="secondary"
+                onClick={() => void refresh()}
+              >
+                一覧を再読み込み
+              </Button>
+            }
+            title="一覧を更新できませんでした"
+            tone="warning"
+          >
+            <p>取得済みの試合は表示したままです。通信状態を確認して再読み込みしてください。</p>
+          </Notice>
+        ) : null}
+
         <StaleShield active={showMatchesLoading} fallback={<ListSkeleton />}>
           <StaleShield
-            active={isStale}
+            active={listUpdating}
             busyLabel="一覧を更新中"
             contentClassName="grid gap-4"
             fallback={<ListSkeleton />}
@@ -175,7 +217,6 @@ export function MatchesListPage() {
                     pending={isManualRefreshing}
                     pendingLabel="再読み込み中"
                     size="sm"
-                    variant="secondary"
                     onClick={() => void refresh()}
                   >
                     一覧を再読み込み
@@ -215,7 +256,7 @@ export function MatchesListPage() {
                 </div>
                 {pagination ? (
                   <PaginationControls
-                    disabled={isStale}
+                    disabled={listScopeChanging}
                     pageSizeOptions={[...matchListPageSizeOptions]}
                     pagination={pagination}
                     onPageChange={updatePage}

@@ -42,7 +42,7 @@ export function MatrixAxisHeader({
   return (
     <th
       className={cn(
-        "rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-2 py-1 text-left align-middle text-[11px] font-semibold text-[var(--color-text-secondary)]",
+        "px-2 py-1 text-left align-middle text-[11px] font-semibold text-[var(--color-text-secondary)]",
         className,
       )}
       {...props}
@@ -62,7 +62,7 @@ export function MatrixColumnHeader({
   return (
     <th
       className={cn(
-        "rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-2 py-2 text-center align-middle text-xs font-semibold break-words",
+        "px-2 py-2 text-center align-middle text-xs font-semibold break-words",
         className,
       )}
       {...props}
@@ -81,7 +81,7 @@ export function MatrixRowHeader({
   return (
     <th
       className={cn(
-        "rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-2 py-2 text-left align-middle text-sm font-semibold break-words",
+        "px-2 py-2 text-left align-middle text-sm font-semibold break-words",
         className,
       )}
       {...props}

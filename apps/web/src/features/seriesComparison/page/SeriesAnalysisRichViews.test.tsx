@@ -193,6 +193,18 @@ describe("rich series analysis views", () => {
     const playOrderMatrix = screen.getByRole("table", { name: "番手別成績" });
     expect(within(playOrderMatrix).getAllByRole("columnheader")).toHaveLength(5);
     expect(within(playOrderMatrix).getAllByRole("cell")).toHaveLength(4);
+    for (const header of [
+      ...within(playOrderMatrix).getAllByRole("columnheader"),
+      ...within(playOrderMatrix).getAllByRole("rowheader"),
+    ]) {
+      expect(header).not.toHaveClass(
+        "bg-[var(--color-surface-subtle)]",
+        "border-[var(--color-border)]",
+      );
+    }
+    expect(playOrderMatrix.querySelector('[data-play-order="1"] [aria-hidden="true"]')).toHaveStyle(
+      "background-color: var(--color-play-order-1)",
+    );
     const neutralPlayerLabel = playOrderMatrix.querySelector('[data-member-accent="neutral"]');
     expect(neutralPlayerLabel).not.toBeNull();
     expect(neutralPlayerLabel?.querySelector("[aria-hidden='true']")).toBeNull();
@@ -238,7 +250,12 @@ describe("rich series analysis views", () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByRole("table", { name: "直近順位ストリップ" })).toBeInTheDocument();
+    const recentRankStrip = screen.getByRole("table", { name: "直近順位ストリップ" });
+    expect(recentRankStrip).toHaveClass("mx-auto");
+    expect(recentRankStrip.parentElement?.parentElement).not.toHaveClass(
+      "border",
+      "rounded-[var(--radius-sm)]",
+    );
     const matchDigestHeading = screen.getByRole("heading", {
       level: 2,
       name: `直近${response.matchDigest.shownCount}戦と荒れ方`,
@@ -252,6 +269,7 @@ describe("rich series analysis views", () => {
         .map((link) => link.textContent?.trim()),
     ).toEqual(["第12戦", "第11戦"]);
     expect(screen.queryByText("カード表示")).not.toBeInTheDocument();
+    expect(screen.queryByText("このページ")).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { level: 3, name: "直近20戦" })).toBeInTheDocument();
     for (const rowHeader of within(
       screen.getByRole("table", { name: "直近順位ストリップ" }),
@@ -281,6 +299,15 @@ describe("rich series analysis views", () => {
     const momentumMatrix = screen.getByRole("table", { name: "ぽんたの順位の切り替わり" });
     expect(within(momentumMatrix).getAllByRole("row")).toHaveLength(5);
     expect(within(momentumMatrix).getAllByRole("cell")).toHaveLength(16);
+    for (const header of [
+      ...within(momentumMatrix).getAllByRole("columnheader"),
+      ...within(momentumMatrix).getAllByRole("rowheader"),
+    ]) {
+      expect(header).not.toHaveClass(
+        "bg-[var(--color-surface-subtle)]",
+        "border-[var(--color-border)]",
+      );
+    }
     expect(screen.getByLabelText("順位の切り替わりのセルの読み方")).toHaveTextContent(
       "同じ前戦順位から、その次戦順位になった割合",
     );
@@ -295,6 +322,15 @@ describe("rich series analysis views", () => {
       name: "開催内第1試合から第4試合の傾向",
     });
     expect(within(matchNoMatrix).getAllByRole("row")).toHaveLength(5);
+    for (const header of [
+      ...within(matchNoMatrix).getAllByRole("columnheader"),
+      ...within(matchNoMatrix).getAllByRole("rowheader"),
+    ]) {
+      expect(header).not.toHaveClass(
+        "bg-[var(--color-surface-subtle)]",
+        "border-[var(--color-border)]",
+      );
+    }
     expect(screen.getAllByText("1位–4位差")).toHaveLength(2);
     expect(screen.queryByText(/前の試合の順位から次の順位へ移った件数/u)).not.toBeInTheDocument();
   });

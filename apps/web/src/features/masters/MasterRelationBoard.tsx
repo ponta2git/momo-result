@@ -90,7 +90,7 @@ export function MasterRelationBoard({
   };
 
   return (
-    <section className="grid gap-6">
+    <section className="grid gap-8">
       <GameTitleList
         create={gameTitle.create}
         defaultLayoutFamily={gameTitle.defaultLayoutFamily}
@@ -104,7 +104,7 @@ export function MasterRelationBoard({
         stale={gameTitle.stale}
       />
 
-      <div className="border-t border-[var(--color-border)] pt-6">
+      <div>
         <div className="grid min-w-0 gap-6 xl:grid-cols-2 xl:gap-0">
           <div className="min-w-0 xl:pr-6">
             <ScopedMasterPanel

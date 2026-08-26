@@ -149,11 +149,7 @@ export function AnalysisTableOfContents({ view }: { view: AnalysisViewId }) {
   const definition = analysisViews.find((item) => item.id === view);
   if (!definition) return null;
   return (
-    <nav
-      aria-label={`${definition.label}の目次`}
-      className="flex min-w-0 items-center gap-3 py-1 text-xs"
-    >
-      <span className="shrink-0 font-semibold text-[var(--color-text-secondary)]">このページ</span>
+    <nav aria-label={`${definition.label}の目次`} className="min-w-0 py-1 text-xs">
       <ol className="flex min-w-0 flex-1 [scrollbar-width:thin] gap-x-3 overflow-x-auto">
         {definition.sections.map((section) => (
           <li className="shrink-0" key={section.id}>

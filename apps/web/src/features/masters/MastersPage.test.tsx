@@ -89,6 +89,9 @@ describe("MastersPage", () => {
     expect(tabs).not.toHaveClass("bg-[var(--color-surface)]");
     expect(surface).not.toContainElement(screen.getByRole("heading", { name: "設定管理" }));
     expect(screen.getByRole("heading", { name: "作品" })).toBeInTheDocument();
+    const gameTitleSection = screen.getByRole("heading", { name: "作品" }).closest("section");
+    expect(gameTitleSection?.parentElement).toHaveClass("gap-8");
+    expect(gameTitleSection?.nextElementSibling).not.toHaveClass("border-t", "pt-6");
     expect(screen.getByRole("heading", { name: "マップ" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "シーズン" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "事件簿" })).toBeInTheDocument();

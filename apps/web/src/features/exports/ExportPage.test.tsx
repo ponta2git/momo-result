@@ -132,7 +132,10 @@ describe("ExportPage", () => {
     expect(allScopePanel).toBeInTheDocument();
     expect(within(allScopePanel).queryByText("下書きや確認待ちの試合は含みません。")).toBeNull();
     expect(screen.getByRole("tabpanel", { name: "CSV" })).toBeInTheDocument();
-    expect(screen.getByText("すべての確定済み試合をCSVで書き出します。")).toBeInTheDocument();
+    const actionSummary = screen.getByText("すべての確定済み試合をCSVで書き出します。");
+    expect(actionSummary).toBeInTheDocument();
+    expect(actionSummary.parentElement?.parentElement).toHaveClass("pt-2");
+    expect(actionSummary.parentElement?.parentElement).not.toHaveClass("border-t");
   });
 
   it("keeps the exclusion notice visible for every export scope", async () => {

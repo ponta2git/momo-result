@@ -54,7 +54,7 @@ export function RecentRankStrips({
   }
 
   return (
-    <div className="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
+    <div className="min-w-0">
       <div
         aria-label="直近順位ストリップ横スクロール"
         className="w-full [scrollbar-width:thin] [scrollbar-color:var(--color-border)_transparent] [scrollbar-gutter:stable] overflow-x-auto pb-2"
@@ -62,7 +62,7 @@ export function RecentRankStrips({
       >
         <table
           aria-label="直近順位ストリップ"
-          className="w-max border-separate border-spacing-x-1 border-spacing-y-2"
+          className="mx-auto w-max border-separate border-spacing-x-1 border-spacing-y-2"
         >
           <thead>
             <tr>

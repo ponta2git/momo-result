@@ -44,6 +44,7 @@ test("completes the app smoke workflow with isolated scoped data", async ({
   const gameTitleName = `桃太郎電鉄2 E2E ${masterIdSuffix}`;
   const aliasName = `E2E-${masterIdSuffix}`;
   let heldEventId = "";
+  let heldEventLabelPrefix = "";
   let matchId = "";
   let uploadedDraftId = "";
 
@@ -86,7 +87,9 @@ test("completes the app smoke workflow with isolated scoped data", async ({
     await page.getByRole("button", { name: /^(?:最初の)?開催を作成$/u }).click();
     const createDialog = page.getByRole("dialog", { name: "新しい開催を作成" });
     await expect(createDialog).toBeVisible();
-    await createDialog.getByLabel("開催日時").fill(e2eRun.uniqueLocalDateTime());
+    const heldEventLocalDateTime = e2eRun.uniqueLocalDateTime();
+    heldEventLabelPrefix = heldEventLocalDateTime.replaceAll("-", "/").replace("T", " ");
+    await createDialog.getByLabel("開催日時").fill(heldEventLocalDateTime);
     await createDialog.getByRole("button", { exact: true, name: "開催を作成" }).click();
 
     const response = await createResponse;
@@ -96,12 +99,7 @@ test("completes the app smoke workflow with isolated scoped data", async ({
     e2eRun.trackHeldEvent(heldEventId);
     const heldEventDetailHref = withReturnTo(`/held-events/${heldEventId}`, "/held-events");
     await expect(page).toHaveURL(heldEventDetailHref);
-    await expect(page.getByText("確定済み", { exact: true })).toBeVisible();
-    await expect(page.getByText("0試合", { exact: true })).toBeVisible();
-    await expect(page.getByText("未完了", { exact: true })).toBeVisible();
-    await expect(page.getByText("0件", { exact: true })).toBeVisible();
-    await expect(page.getByText("次の番号", { exact: true })).toBeVisible();
-    await expect(page.getByText("第1試合", { exact: true })).toBeVisible();
+    await expect(page.getByText("確定済み 0試合 ・ 未完了 0件", { exact: true })).toBeVisible();
     await expect(
       page.getByRole("heading", { exact: true, level: 2, name: "第1試合を記録" }),
     ).toBeVisible();
@@ -140,7 +138,8 @@ test("completes the app smoke workflow with isolated scoped data", async ({
 
     await expect(page).toHaveURL(expectedOcrHref);
     await expect(page.getByRole("heading", { exact: true, name: "OCR取り込み" })).toBeVisible();
-    await expect(page.getByRole("combobox", { name: /開催（任意）/u })).toHaveValue(heldEventId);
+    await expect(page.getByText(/— 確定 0試合・未完了 0件$/u)).toBeVisible();
+    await expect(page.getByRole("button", { name: "開催（任意）を変更" })).toBeVisible();
     await expect(page.getByLabel("試合番号")).toHaveValue("1");
 
     const cancelOcrLink = page.getByRole("link", { exact: true, name: "取り込みをやめる" });
@@ -269,8 +268,10 @@ test("completes the app smoke workflow with isolated scoped data", async ({
     expect(mobileReviewGeometry.scrollWidth).toBeLessThanOrEqual(mobileReviewGeometry.innerWidth);
     await page.setViewportSize({ height: 900, width: 1440 });
 
-    await page.getByLabel(/開催履歴/u).selectOption(heldEventId);
-    await expect(page.getByLabel(/開催履歴/u)).toHaveValue(heldEventId);
+    await page.getByRole("button", { name: "開催履歴（必須）を変更" }).click();
+    const heldEventDialog = page.getByRole("dialog", { name: "開催履歴（必須）を選択" });
+    await selectDialogRadio(heldEventDialog, new RegExp(`^${heldEventLabelPrefix} —`, "u"));
+    await expect(page.getByText(new RegExp(`^${heldEventLabelPrefix} —`, "u"))).toBeVisible();
     await selectSeedMasters(page, { gameTitleId, mapMasterId, seasonMasterId });
 
     const confirmResponse = page.waitForResponse(
@@ -576,7 +577,9 @@ test("completes the app smoke workflow with isolated scoped data", async ({
     await expect(rankDialog.getByRole("columnheader", { name: "開催日時" })).toBeVisible();
     await expect(rankDialog).not.toContainText("event-12");
     await expect(rankDialog).not.toContainText("初戦後からの通算変化");
-    await expect(rankDialog.getByRole("cell", { name: "第1戦" })).toBeVisible();
+    await expect(
+      rankDialog.getByRole("rowheader", { name: "第1戦の試合結果を見る" }),
+    ).toBeVisible();
     await expect(rankDialog.getByText("0.05 改善")).toBeVisible();
     const rankHistoryMatchHref = withReturnTo(
       `/matches/${encodeURIComponent(matchId)}`,
@@ -763,9 +766,13 @@ test("completes the app smoke workflow with isolated scoped data", async ({
       return isMatchListResponse(response) && url.searchParams.get("heldEventId") === heldEventId;
     });
     await page.getByText("詳細条件", { exact: true }).click();
-    const heldEventSelect = page.getByRole("combobox", { name: "開催" });
-    await expect(heldEventSelect).toBeEnabled();
-    await heldEventSelect.selectOption(heldEventId);
+    const heldEventPicker = page.getByRole("button", { name: "開催を変更" });
+    await expect(heldEventPicker).toBeEnabled();
+    await heldEventPicker.click();
+    await selectDialogRadio(
+      page.getByRole("dialog", { name: "開催を選択" }),
+      new RegExp(`^${heldEventLabelPrefix} —`, "u"),
+    );
     expect((await heldEventResponse).ok()).toBe(true);
     await expect(page).toHaveURL(new RegExp(`[?&]heldEventId=${heldEventId}(?:&|$)`, "u"));
     const confirmedMatchRow = matchTableRow(page, matchId);
@@ -956,6 +963,16 @@ function matchDetailLink(page: Page, matchId: string) {
 
 function matchTableRow(page: Page, matchId: string) {
   return page.getByRole("row").filter({ has: matchDetailLink(page, matchId) });
+}
+
+async function selectDialogRadio(dialog: Locator, name: string | RegExp): Promise<void> {
+  const radio = dialog.getByRole("radio", { name });
+  if (await radio.isChecked()) {
+    await dialog.getByRole("button", { name: "ダイアログを閉じる" }).click();
+  } else {
+    await radio.press("Space");
+  }
+  await expect(dialog).toBeHidden();
 }
 
 async function selectSeedMasters(

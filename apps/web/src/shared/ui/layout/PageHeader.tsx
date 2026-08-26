@@ -21,10 +21,7 @@ export function PageHeader({
 }: PageHeaderProps) {
   return (
     <header
-      className={cn(
-        "grid min-w-0 gap-4 border-b border-[var(--color-border)] pb-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end",
-        className,
-      )}
+      className={cn("grid min-w-0 gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end", className)}
     >
       <div className="min-w-0">
         {eyebrow ? (

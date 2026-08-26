@@ -5,12 +5,34 @@ import type { ReactNode } from "react";
 import { cn } from "@/shared/ui/cn";
 
 type DisclosureTriggerVariant = "anchor" | "default" | "supporting";
+type DisclosurePresentation = "framed" | "inset" | "plain";
 
 const triggerVariantClass = {
   anchor: "bg-[var(--color-surface-subtle)] hover:bg-[var(--color-surface-selected)]",
   default: "",
   supporting: "font-medium text-[var(--color-text-secondary)] hover:bg-transparent",
 } as const satisfies Record<DisclosureTriggerVariant, string>;
+
+const presentationClass = {
+  framed: {
+    panel: "border-t border-[var(--color-border)]",
+    root: "rounded-[var(--radius-md)] border border-[var(--color-border)]",
+    trigger: "rounded-none",
+  },
+  inset: {
+    panel: "rounded-b-[var(--radius-sm)] bg-[var(--color-surface-subtle)]",
+    root: "",
+    trigger: "",
+  },
+  plain: {
+    panel: "",
+    root: "",
+    trigger: "",
+  },
+} as const satisfies Record<
+  DisclosurePresentation,
+  { panel: string; root: string; trigger: string }
+>;
 
 type DisclosureProps = {
   ariaLabel?: string | undefined;
@@ -22,6 +44,7 @@ type DisclosureProps = {
   onOpenChange?: ((open: boolean) => void) | undefined;
   open?: boolean | undefined;
   panelClassName?: string | undefined;
+  presentation?: DisclosurePresentation | undefined;
   summary: ReactNode;
   summaryClassName?: string | undefined;
   triggerClassName?: string | undefined;
@@ -38,6 +61,7 @@ export function Disclosure({
   onOpenChange,
   open,
   panelClassName,
+  presentation = "plain",
   summary,
   summaryClassName,
   triggerClassName,
@@ -46,7 +70,7 @@ export function Disclosure({
   return (
     <BaseCollapsible.Root
       aria-label={ariaLabel}
-      className={className}
+      className={cn(presentationClass[presentation].root, className)}
       defaultOpen={defaultOpen}
       open={open}
       onOpenChange={(nextOpen) => onOpenChange?.(nextOpen)}
@@ -56,6 +80,7 @@ export function Disclosure({
         className={cn(
           "group flex min-h-11 w-full min-w-0 items-center justify-between gap-3 rounded-[var(--radius-sm)] px-3 py-2 text-left text-sm font-semibold text-[var(--color-text-primary)] hover:bg-[var(--color-surface-subtle)] disabled:cursor-default disabled:opacity-70",
           triggerVariantClass[triggerVariant],
+          presentationClass[presentation].trigger,
           triggerClassName,
         )}
         disabled={disabled}
@@ -66,7 +91,10 @@ export function Disclosure({
           className="size-4 shrink-0 text-[var(--color-text-secondary)] transition-transform duration-[var(--motion-fast)] group-data-[panel-open]:rotate-180 motion-reduce:transition-none"
         />
       </BaseCollapsible.Trigger>
-      <BaseCollapsible.Panel className={panelClassName} keepMounted={keepMounted}>
+      <BaseCollapsible.Panel
+        className={cn(presentationClass[presentation].panel, panelClassName)}
+        keepMounted={keepMounted}
+      >
         {children}
       </BaseCollapsible.Panel>
     </BaseCollapsible.Root>

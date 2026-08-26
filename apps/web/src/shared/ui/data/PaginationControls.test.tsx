@@ -80,4 +80,20 @@ describe("PaginationControls", () => {
     expect(screen.getByRole("button", { name: "前のページへ" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "次のページへ" })).toBeDisabled();
   });
+
+  it("does not create another surface when embedded in a parent content plane", () => {
+    render(
+      <PaginationControls
+        ariaLabel="埋め込みページネーション"
+        pagination={middlePage}
+        placement="embedded"
+        variant="compact"
+        onPageChange={vi.fn()}
+      />,
+    );
+
+    const pagination = screen.getByRole("navigation", { name: "埋め込みページネーション" });
+    expect(pagination).toHaveClass("bg-transparent");
+    expect(pagination).not.toHaveClass("border");
+  });
 });

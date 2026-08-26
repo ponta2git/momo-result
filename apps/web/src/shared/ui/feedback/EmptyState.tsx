@@ -7,14 +7,25 @@ export type EmptyStateProps = {
   className?: string;
   description?: ReactNode;
   icon?: ReactNode;
+  placement?: "embedded" | "standalone";
   title: ReactNode;
 };
 
-export function EmptyState({ action, className, description, icon, title }: EmptyStateProps) {
+export function EmptyState({
+  action,
+  className,
+  description,
+  icon,
+  placement = "standalone",
+  title,
+}: EmptyStateProps) {
   return (
     <section
       className={cn(
-        "rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4",
+        "p-4",
+        placement === "standalone"
+          ? "rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)]"
+          : "bg-transparent",
         className,
       )}
     >

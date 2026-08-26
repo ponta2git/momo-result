@@ -44,7 +44,7 @@ export function FilterBar({
     <section
       aria-busy={busy || undefined}
       aria-label={ariaLabel}
-      className={cn("min-w-0 border-y border-[var(--color-border)] py-4", className)}
+      className={cn("min-w-0", className)}
     >
       <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4">
         <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
@@ -59,7 +59,7 @@ export function FilterBar({
 
         {details ? (
           <Disclosure
-            className="group border-t border-[var(--color-border)]"
+            className="group"
             keepMounted
             open={details.open}
             panelClassName={cn(
@@ -86,7 +86,7 @@ export function FilterBar({
         ) : null}
 
         {activeSummary || meta ? (
-          <div className="grid min-w-0 gap-2 border-t border-[var(--color-border)] pt-3 text-xs text-[var(--color-text-secondary)] sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+          <div className="grid min-w-0 gap-2 pt-1 text-xs text-[var(--color-text-secondary)] sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
             <div className="min-w-0 text-pretty">{activeSummary}</div>
             {meta ? <div className="min-w-0 tabular-nums sm:text-right">{meta}</div> : null}
           </div>

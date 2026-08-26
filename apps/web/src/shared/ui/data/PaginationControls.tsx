@@ -11,6 +11,7 @@ type PaginationControlsBaseProps = {
   className?: string;
   disabled?: boolean;
   pagination: PaginationState;
+  placement?: "embedded" | "standalone" | undefined;
   onPageChange: (page: number) => void;
 };
 
@@ -35,6 +36,7 @@ export function PaginationControls(props: PaginationControlsProps) {
     className,
     disabled = false,
     pagination,
+    placement = "standalone",
     onPageChange,
   } = props;
   const variant = props.variant ?? "full";
@@ -47,7 +49,10 @@ export function PaginationControls(props: PaginationControlsProps) {
     <nav
       aria-label={ariaLabel}
       className={cn(
-        "grid gap-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center",
+        "grid gap-3 p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center",
+        placement === "standalone"
+          ? "rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)]"
+          : "bg-transparent",
         className,
       )}
     >

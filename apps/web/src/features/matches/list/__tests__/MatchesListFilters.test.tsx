@@ -107,6 +107,31 @@ describe("MatchesListFilters", () => {
     });
   });
 
+  it("selects a held event from the shared descriptive dialog", async () => {
+    const user = userEvent.setup();
+    const onApply = vi.fn();
+
+    render(
+      <MatchesListFilters
+        actions={{ onApply, onClear: vi.fn() }}
+        candidates={candidates}
+        search={initialSearch}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "開催を変更" }));
+    expect(screen.getByRole("dialog", { name: "開催を選択" })).toHaveTextContent(
+      "確定 3試合・未完了 0件",
+    );
+    await user.click(screen.getByRole("radio", { name: /2026\/08\/09/u }));
+
+    expect(onApply).toHaveBeenCalledWith({
+      ...initialSearch,
+      cursor: "",
+      heldEventId: "held-1",
+    });
+  });
+
   it("describes all active details using the selected candidate labels", () => {
     expect(
       describeMatchListDetailFilters(candidates, {

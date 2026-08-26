@@ -1,7 +1,7 @@
 import type { SetupFormValues } from "@/features/ocrCapture/schema";
 import type { OcrSetupOptions } from "@/features/ocrCapture/useOcrSetupOptions";
 import { canonicalResultMembers } from "@/shared/domain/members";
-import { formatDateTimeLong } from "@/shared/lib/dateTime";
+import { HeldEventPickerField } from "@/shared/ui/forms/HeldEventPickerField";
 import { SelectField } from "@/shared/ui/forms/SelectField";
 import { TextField } from "@/shared/ui/forms/TextField";
 
@@ -34,26 +34,21 @@ export function SetupPanel({ value, onChange, enabled, options }: SetupPanelProp
 
   return (
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
-      <SelectField
+      <HeldEventPickerField
         disabled={!enabled}
+        emptyChoiceDescription="あとで確認画面から開催を設定できます。"
+        emptyChoiceLabel="開催を選ばず取り込む"
         error={heldEventsError}
-        fieldClassName="xl:col-span-3"
+        heldEvents={heldEvents}
+        className="xl:col-span-3"
         label="開催（任意）"
-        options={[
-          {
-            label: heldEvents.length === 0 ? heldEventsPlaceholder : "開催を選ばず取り込む",
-            value: "",
-          },
-          ...heldEvents.map((heldEvent) => ({
-            label: `${formatDateTimeLong(heldEvent.heldAt)}（確定${heldEvent.matchCount}・未完了${heldEvent.draftCount}）`,
-            value: heldEvent.id,
-          })),
-        ]}
+        name="ocr-held-event"
+        unavailableLabel={heldEventsPlaceholder}
         value={value.heldEventId ?? ""}
-        onChange={(event) => {
-          const selected = heldEvents.find((item) => item.id === event.currentTarget.value);
+        onValueChange={(heldEventId) => {
+          const selected = heldEvents.find((item) => item.id === heldEventId);
           patchValue({
-            heldEventId: event.currentTarget.value,
+            heldEventId,
             matchNoInEvent: selected?.nextMatchNo,
           });
         }}

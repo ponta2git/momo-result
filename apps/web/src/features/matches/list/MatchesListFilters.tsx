@@ -8,6 +8,7 @@ import type {
 } from "@/features/matches/list/matchListTypes";
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
 import { formatDateOnly } from "@/shared/lib/dateTime";
+import { HeldEventPickerField } from "@/shared/ui/forms/HeldEventPickerField";
 import { SelectField } from "@/shared/ui/forms/SelectField";
 
 type MatchesListFiltersProps = {
@@ -59,16 +60,6 @@ export function MatchesListFilters({
       }),
     [candidates.seasons, search.gameTitleId],
   );
-  const heldEventOptions = useMemo(
-    () => [
-      { label: "すべて", value: "" },
-      ...candidates.heldEvents.map((event) => ({
-        label: heldEventLabel(event),
-        value: event.id,
-      })),
-    ],
-    [candidates.heldEvents],
-  );
   const gameTitleOptions = useMemo(
     () => [
       { label: "すべて", value: "" },
@@ -100,14 +91,18 @@ export function MatchesListFilters({
 
   return (
     <>
-      <SelectField
+      <HeldEventPickerField
         disabled={pending}
+        emptyChoiceDescription="開催で絞り込みません。"
+        emptyChoiceLabel="すべての開催"
+        heldEvents={candidates.heldEvents}
         label="開催"
-        options={heldEventOptions}
+        name="match-list-held-event"
+        unavailableLabel="すべての開催"
         value={search.heldEventId}
         {...heldEventsErrorProps}
-        onChange={(event) => {
-          patchSearch({ heldEventId: event.currentTarget.value });
+        onValueChange={(heldEventId) => {
+          patchSearch({ heldEventId });
         }}
       />
       <SelectField

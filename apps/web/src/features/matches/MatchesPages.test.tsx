@@ -344,12 +344,9 @@ describe("MatchesListPage", () => {
     );
 
     expect(await screen.findByRole("heading", { name: "試合一覧" })).toBeInTheDocument();
-    const heldEventSelect = screen.getAllByLabelText("開催")[0] as HTMLSelectElement;
-    await waitFor(() =>
-      expect([...heldEventSelect.options].map((option) => option.value)).toEqual(["", "held-1"]),
-    );
-
-    await user.selectOptions(heldEventSelect, "held-1");
+    await user.click(screen.getByRole("button", { name: "詳細条件" }));
+    await user.click(await screen.findByRole("button", { name: "開催を変更" }));
+    await user.click(await screen.findByRole("radio", { name: /2026\/01\/01/u }));
 
     await waitFor(() =>
       expect(screen.getByLabelText("current location")).toHaveTextContent("heldEventId=held-1"),
@@ -957,7 +954,7 @@ describe("MatchesListPage", () => {
 
     expect(await screen.findByRole("heading", { name: "試合の新規作成" })).toBeInTheDocument();
     await waitFor(() => {
-      expect(screen.getByLabelText(/開催履歴/u)).toHaveValue("held-requested");
+      expect(screen.getByText(/確定 3試合・未完了 2件/u)).toBeInTheDocument();
       expect(screen.getByLabelText("試合番号")).toHaveValue("8");
     });
   });

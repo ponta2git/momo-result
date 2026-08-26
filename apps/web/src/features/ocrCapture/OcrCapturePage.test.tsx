@@ -341,7 +341,7 @@ describe("OcrCapturePage", () => {
     );
 
     expect(await screen.findAllByRole("option", { name: "ログイン後に読み込みます" })).toHaveLength(
-      4,
+      3,
     );
     expect(screen.getByLabelText(/作品/u)).toBeDisabled();
     expect(authRequests).toBe(0);
@@ -463,11 +463,13 @@ describe("OcrCapturePage", () => {
 
     renderCaptureRoute("/ocr/new?heldEventId=%20held-scoped%20");
 
-    expect(await screen.findByRole("option", { name: /確定3・未完了1/u })).toBeInTheDocument();
     await waitFor(() => {
-      expect(screen.getByLabelText(/開催（任意）/u)).toHaveValue("held-scoped");
+      expect(screen.getByText(/確定 3試合・未完了 1件/u)).toBeInTheDocument();
       expect(screen.getByLabelText("試合番号")).toHaveValue(7);
     });
+    await user.click(screen.getByRole("button", { name: "開催（任意）を変更" }));
+    expect(screen.getByRole("radio", { name: /確定 3試合・未完了 1件/u })).toBeChecked();
+    await user.click(screen.getByRole("button", { name: "ダイアログを閉じる" }));
     await user.upload(
       screen.getByLabelText("OCRの画像をアップロード"),
       new File(["image"], "assets.png", { type: "image/png" }),

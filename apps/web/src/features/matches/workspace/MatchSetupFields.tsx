@@ -4,7 +4,8 @@ import type {
   MatchSetupOptions,
 } from "@/features/matches/workspace/MatchSetupSection";
 import { canonicalResultMembers } from "@/shared/domain/members";
-import { formatDateTimeLong, toLocalDateTimeInputValue } from "@/shared/lib/dateTime";
+import { toLocalDateTimeInputValue } from "@/shared/lib/dateTime";
+import { HeldEventPickerField } from "@/shared/ui/forms/HeldEventPickerField";
 import { SelectField } from "@/shared/ui/forms/SelectField";
 import { TextField } from "@/shared/ui/forms/TextField";
 
@@ -23,25 +24,22 @@ export function MatchSetupFields({
 
   return (
     <div className="grid gap-3 lg:grid-cols-12">
-      <SelectField
+      <HeldEventPickerField
         data-validation-path="heldEventId"
+        emptyChoiceDescription="試合結果を保存するには開催の選択が必要です。"
+        emptyChoiceLabel="未選択"
         error={fieldError("heldEventId")}
-        fieldClassName="lg:col-span-5"
+        heldEvents={options.heldEvents}
+        className="lg:col-span-5"
         label="開催履歴（必須）"
-        options={[
-          { label: "未選択", value: "" },
-          ...options.heldEvents.map((event) => ({
-            label: `${formatDateTimeLong(event.heldAt)}（${event.matchCount}試合）`,
-            value: event.id,
-          })),
-        ]}
+        name="match-workspace-held-event"
+        required
+        unavailableLabel="未選択"
         value={values.heldEventId}
-        onChange={(event) => {
-          const selected = options.heldEvents.find(
-            (candidate) => candidate.id === event.currentTarget.value,
-          );
+        onValueChange={(heldEventId) => {
+          const selected = options.heldEvents.find((candidate) => candidate.id === heldEventId);
           actions.onPatchRoot({
-            heldEventId: event.currentTarget.value,
+            heldEventId,
             matchNoInEvent: selected?.nextMatchNo ?? 1,
             playedAt: selected?.heldAt ?? values.playedAt,
           });

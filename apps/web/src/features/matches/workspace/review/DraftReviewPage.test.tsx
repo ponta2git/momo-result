@@ -83,9 +83,9 @@ describe("DraftReviewPage", () => {
 
     expect(await screen.findByRole("heading", { name: "OCR結果の確認" })).toBeInTheDocument();
     expect(await screen.findByDisplayValue("あかねまみ")).toBeInTheDocument();
-    await waitFor(() =>
-      expect(screen.getByRole("combobox", { name: /開催履歴/u })).toHaveValue("held-1"),
-    );
+    await user.click(await screen.findByRole("button", { name: "開催履歴（必須）を変更" }));
+    expect(screen.getByRole("radio", { checked: true })).toHaveAttribute("value", "held-1");
+    await user.click(screen.getByRole("button", { name: "ダイアログを閉じる" }));
 
     await user.click(screen.getByRole("button", { name: "確定前の確認へ進む" }));
     expect(
@@ -523,11 +523,11 @@ describe("DraftReviewPage", () => {
     await user.click(screen.getByText("一覧にない開催履歴を追加する"));
     await user.click(screen.getByRole("button", { name: "作成して選択" }));
 
-    const heldEventSelect = screen.getByRole("combobox", {
-      name: /開催履歴/u,
-    }) as HTMLSelectElement;
-    await waitFor(() => expect(heldEventSelect).toHaveValue("held-created"));
-    expect([...heldEventSelect.options].map((option) => option.value)).toContain("held-created");
+    await waitFor(() =>
+      expect(screen.getByText(/2026\/01\/02 09:00 — 確定 0試合・未完了 0件/u)).toBeInTheDocument(),
+    );
+    await user.click(screen.getByRole("button", { name: "開催履歴（必須）を変更" }));
+    expect(screen.getByRole("radio", { checked: true })).toHaveAttribute("value", "held-created");
     expect(
       screen.getByText(
         `開催履歴（${formatDateTimeLong(createdHeldEvent.heldAt)}）を作成して選択しました。`,

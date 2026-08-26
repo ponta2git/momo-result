@@ -2,19 +2,11 @@ import { QueryClientProvider, useSuspenseQuery } from "@tanstack/react-query";
 import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
-import type { ReactNode } from "react";
 import { createMemoryRouter, RouterProvider } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
 import { AppShell } from "@/app/AppShell";
 import { createTestQueryClient } from "@/test/queryClient";
-
-vi.mock("motion/react", () => ({
-  AnimatePresence: () => <div data-testid="blocked-animation-lifecycle" />,
-  motion: {
-    div: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  },
-}));
 
 vi.mock("@/shared/auth/useAuth", () => ({
   useAuth: () => ({
@@ -31,10 +23,6 @@ vi.mock("@/shared/ui/feedback/ToastHost", () => ({
 
 vi.mock("@/shared/ui/layout/GlobalNav", () => ({
   GlobalNav: () => <nav aria-label="グローバルナビゲーション" />,
-}));
-
-vi.mock("@/shared/ui/motion/MotionProvider", () => ({
-  MotionProvider: ({ children }: { children: ReactNode }) => children,
 }));
 
 function StatefulRoute() {

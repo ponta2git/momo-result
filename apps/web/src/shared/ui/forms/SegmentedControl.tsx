@@ -1,10 +1,8 @@
-import { motion } from "motion/react";
-import { useCallback, useId, useMemo } from "react";
+import { useId } from "react";
 import type { ChangeEvent } from "react";
 
 import { cn } from "@/shared/ui/cn";
 import { SelectField } from "@/shared/ui/forms/SelectField";
-import { momoTransition } from "@/shared/ui/motion/variants";
 
 type SegmentedOption = {
   disabled?: boolean;
@@ -34,21 +32,14 @@ export function SegmentedControl({
   value,
 }: SegmentedControlProps) {
   const id = useId();
-  const selectOptions = useMemo(
-    () =>
-      options.map((option) => ({
-        disabled: disabled || option.disabled,
-        label: option.label,
-        value: option.value,
-      })),
-    [disabled, options],
-  );
-  const handleSelectChange = useCallback(
-    (event: ChangeEvent<HTMLSelectElement>) => {
-      onValueChange(event.currentTarget.value);
-    },
-    [onValueChange],
-  );
+  const selectOptions = options.map((option) => ({
+    disabled: disabled || option.disabled,
+    label: option.label,
+    value: option.value,
+  }));
+  const handleSelectChange = (event: ChangeEvent<HTMLSelectElement>) => {
+    onValueChange(event.currentTarget.value);
+  };
 
   if (asSelect) {
     return (
@@ -75,7 +66,6 @@ export function SegmentedControl({
         return (
           <SegmentedButton
             key={option.value}
-            indicatorId={`${id}-indicator`}
             option={option}
             className={optionClassName}
             disabled={disabled || option.disabled}
@@ -91,44 +81,32 @@ export function SegmentedControl({
 function SegmentedButton({
   className,
   disabled,
-  indicatorId,
   option,
   selected,
   onValueChange,
 }: {
   className?: string | undefined;
   disabled: boolean | undefined;
-  indicatorId: string;
   option: SegmentedOption;
   selected: boolean;
   onValueChange: (value: string) => void;
 }) {
-  const handleClick = useCallback(() => {
-    onValueChange(option.value);
-  }, [onValueChange, option.value]);
-
   return (
     <button
       aria-pressed={selected}
       className={cn(
-        "relative isolate min-h-11 min-w-[5ch] overflow-hidden rounded-[var(--radius-xs)] px-3 py-2 text-sm font-medium text-[var(--color-text-secondary)] transition-colors duration-[var(--motion-fast)] motion-reduce:transition-none sm:min-h-9 sm:py-1",
-        selected ? "text-[var(--color-text-primary)]" : "",
+        "min-h-11 min-w-[5ch] rounded-[var(--radius-xs)] px-3 py-2 text-sm font-medium text-[var(--color-text-secondary)] transition-colors duration-[var(--motion-fast)] motion-reduce:transition-none sm:min-h-9 sm:py-1",
+        selected
+          ? "bg-[var(--color-surface-selected)] text-[var(--color-text-primary)]"
+          : "hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]",
         "disabled:cursor-not-allowed disabled:opacity-50",
         className,
       )}
       disabled={disabled}
       type="button"
-      onClick={handleClick}
+      onClick={() => onValueChange(option.value)}
     >
-      {selected ? (
-        <motion.span
-          aria-hidden="true"
-          className="absolute inset-0 z-[var(--z-base)] rounded-[var(--radius-xs)] bg-[var(--color-surface-selected)]"
-          layoutId={indicatorId}
-          transition={momoTransition}
-        />
-      ) : null}
-      <span className="relative z-[var(--z-base)]">{option.label}</span>
+      {option.label}
     </button>
   );
 }

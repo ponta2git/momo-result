@@ -1,5 +1,5 @@
 import { QueryErrorResetBoundary } from "@tanstack/react-query";
-import { Suspense, useCallback, useLayoutEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useLayoutEffect, useState } from "react";
 import type { FocusEvent, MouseEvent, PointerEvent, ReactNode } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 
@@ -7,9 +7,12 @@ import { preloadRouteForPath } from "@/app/routeModules";
 import { RouteSuspenseFallback } from "@/app/RouteSuspenseFallback";
 import { useAuth } from "@/shared/auth/useAuth";
 import { RouteErrorBoundary } from "@/shared/ui/feedback/RouteErrorBoundary";
-import { ToastHost } from "@/shared/ui/feedback/ToastHost";
 import { GlobalNav } from "@/shared/ui/layout/GlobalNav";
-import { MotionProvider } from "@/shared/ui/motion/MotionProvider";
+
+const ToastHost = lazy(async () => {
+  const module = await import("@/shared/ui/feedback/ToastHost");
+  return { default: module.ToastHost };
+});
 
 function shouldPreloadAnchor(anchor: HTMLAnchorElement): boolean {
   if (anchor.target === "_blank" || anchor.hasAttribute("download")) {
@@ -103,7 +106,7 @@ export function AppShell() {
   }, []);
 
   return (
-    <MotionProvider>
+    <>
       <a
         className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[var(--z-tooltip)] focus:rounded-[var(--radius-sm)] focus:bg-[var(--color-surface)] focus:px-3 focus:py-2 focus:text-sm"
         href="#main-content"
@@ -150,7 +153,9 @@ export function AppShell() {
           )}
         </QueryErrorResetBoundary>
       </main>
-      <ToastHost />
-    </MotionProvider>
+      <Suspense fallback={null}>
+        <ToastHost />
+      </Suspense>
+    </>
   );
 }

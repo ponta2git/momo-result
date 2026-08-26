@@ -1,14 +1,13 @@
 import { CalendarDays, Plus } from "lucide-react";
-import { motion } from "motion/react";
 
 import { HeldEventsLedger } from "@/features/heldEvents/HeldEventsLedger";
 import * as heldEventViewModel from "@/features/heldEvents/heldEventViewModel";
 import { Button } from "@/shared/ui/actions/Button";
+import { cn } from "@/shared/ui/cn";
 import { PaginationControls } from "@/shared/ui/data/PaginationControls";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
-import { momoTransition } from "@/shared/ui/motion/variants";
 
 export function HeldEventsListCard({
   actions,
@@ -24,10 +23,11 @@ export function HeldEventsListCard({
       {data.loading ? (
         <HeldEventsLoading />
       ) : (
-        <motion.div
-          animate={{ opacity: data.refreshing ? 0.7 : 1 }}
-          className="grid min-w-0 gap-4"
-          transition={momoTransition}
+        <div
+          className={cn(
+            "grid min-w-0 gap-4 transition-opacity duration-[var(--motion-base)] motion-reduce:transition-none",
+            data.refreshing ? "opacity-70" : "opacity-100",
+          )}
         >
           {data.stale ? (
             <Notice
@@ -102,7 +102,7 @@ export function HeldEventsListCard({
               onPageSizeChange={actions.onPageSizeChange}
             />
           ) : null}
-        </motion.div>
+        </div>
       )}
     </div>
   );

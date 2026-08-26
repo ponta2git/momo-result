@@ -1,14 +1,12 @@
 import { AlertDialog as BaseAlertDialog } from "@base-ui/react/alert-dialog";
 import { Dialog as BaseDialog } from "@base-ui/react/dialog";
 import { LoaderCircle, X } from "lucide-react";
-import { motion } from "motion/react";
 import type { ReactElement, ReactNode } from "react";
 import { useState } from "react";
 
 import { buttonClassName } from "@/shared/ui/actions/Button";
 import { IconButton } from "@/shared/ui/actions/IconButton";
 import { cn } from "@/shared/ui/cn";
-import { momoPanelTransition, panelRevealVariants } from "@/shared/ui/motion/variants";
 
 type DialogBaseProps = {
   backdropClassName?: string | undefined;
@@ -128,16 +126,12 @@ export function Dialog({
           )}
           initialFocus={true}
         >
-          <motion.div
+          <div
             aria-busy={busy || undefined}
-            animate="visible"
             className={cn(
-              "momo-dialog-surface flex w-full overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-[var(--color-text-primary)] shadow-[var(--shadow-dialog)]",
+              "momo-dialog-surface momo-enter flex w-full overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-[var(--color-text-primary)] shadow-[var(--shadow-dialog)]",
               surfaceClassName,
             )}
-            initial="hidden"
-            transition={momoPanelTransition}
-            variants={panelRevealVariants}
           >
             <DialogContentFrame
               className={className}
@@ -147,7 +141,7 @@ export function Dialog({
             >
               {children}
             </DialogContentFrame>
-          </motion.div>
+          </div>
         </BaseDialog.Popup>
       </BaseDialog.Portal>
     </BaseDialog.Root>
@@ -217,13 +211,9 @@ export function AlertDialog({
       <BaseAlertDialog.Portal>
         <BaseAlertDialog.Backdrop className="fixed inset-0 z-[var(--z-dialog)] bg-[var(--momo-night-900)]/35" />
         <BaseAlertDialog.Popup className="momo-dialog-popup fixed inset-0 z-[var(--z-dialog)] mx-auto flex w-full max-w-[40rem] items-center justify-center overflow-hidden">
-          <motion.div
+          <div
             aria-busy={actualPending || undefined}
-            animate="visible"
-            className="momo-dialog-surface w-full overflow-y-auto rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-[var(--color-text-primary)] shadow-[var(--shadow-dialog)]"
-            initial="hidden"
-            transition={momoPanelTransition}
-            variants={panelRevealVariants}
+            className="momo-dialog-surface momo-enter w-full overflow-y-auto rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-[var(--color-text-primary)] shadow-[var(--shadow-dialog)]"
           >
             <div className="space-y-3">
               <BaseAlertDialog.Title className="text-lg font-semibold text-balance text-[var(--color-text-primary)]">
@@ -273,7 +263,7 @@ export function AlertDialog({
                 </button>
               </div>
             </div>
-          </motion.div>
+          </div>
         </BaseAlertDialog.Popup>
       </BaseAlertDialog.Portal>
     </BaseAlertDialog.Root>

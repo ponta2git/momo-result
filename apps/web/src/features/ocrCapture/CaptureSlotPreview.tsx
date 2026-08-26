@@ -1,9 +1,7 @@
-import { motion } from "motion/react";
 import type { DragEventHandler } from "react";
 
 import type { CaptureSlotState } from "@/features/ocrCapture/captureState";
 import { cn } from "@/shared/ui/cn";
-import { momoPanelTransition } from "@/shared/ui/motion/variants";
 
 const sourceLabels = {
   camera: "撮影",
@@ -26,20 +24,17 @@ export function CaptureSlotPreview({
   const hasImage = Boolean(slot.previewUrl);
 
   return (
-    <motion.div
+    <div
       key={slot.previewUrl ?? "empty"}
       aria-label={`${label}の16:9画像枠`}
-      animate={{ opacity: 1 }}
       className={cn(
-        "relative aspect-video w-full overflow-hidden rounded-[var(--radius-sm)] border border-[var(--color-border)]",
+        "momo-enter relative aspect-video w-full overflow-hidden rounded-[var(--radius-sm)] border border-[var(--color-border)]",
         hasImage ? "bg-[var(--momo-night-900)]" : "border-dashed bg-[var(--color-surface-subtle)]",
         hasImage &&
           (isWorking ? "cursor-not-allowed opacity-85" : "cursor-grab active:cursor-grabbing"),
       )}
       draggable={hasImage && !isWorking}
-      initial={{ opacity: 0 }}
       role="group"
-      transition={momoPanelTransition}
       onDragStartCapture={onDragStartCapture}
     >
       {slot.previewUrl ? (
@@ -63,6 +58,6 @@ export function CaptureSlotPreview({
           {label}の画像待ち
         </span>
       )}
-    </motion.div>
+    </div>
   );
 }

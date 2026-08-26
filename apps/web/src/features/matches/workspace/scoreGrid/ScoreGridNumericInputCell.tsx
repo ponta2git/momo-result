@@ -1,11 +1,9 @@
-import { AnimatePresence, motion } from "motion/react";
 import { memo, useCallback, useRef, useState } from "react";
 import type { ChangeEvent, KeyboardEvent } from "react";
 
 import type { ReviewFieldKey } from "@/features/matches/workspace/review/reviewWarningModel";
 import { InputControl } from "@/shared/ui/forms/Control";
 import type { ControlTone } from "@/shared/ui/forms/Control";
-import { momoTransition } from "@/shared/ui/motion/variants";
 
 export type PreferredImageKind = "incident_log" | "revenue" | "total_assets";
 export type RegisterCellRef = (cellId: string, node: HTMLElement | null) => void;
@@ -250,24 +248,18 @@ export const NumericInputCell = memo(function NumericInputCell({
       />
       {state?.showStateLabel ? (
         <div className="min-h-5 pt-1">
-          <AnimatePresence initial={false}>
-            {viewState.label ? (
-              <motion.p
-                key={viewState.label}
-                animate={{ opacity: 1, y: 0 }}
-                className="text-xs leading-4 text-[var(--color-text-secondary)]"
-                exit={{ opacity: 0, y: -2 }}
-                id={`${field.cellId}-status`}
-                initial={{ opacity: 0, y: 2 }}
-                transition={momoTransition}
-              >
-                {viewState.label}
-                {viewState.description ? (
-                  <span className="sr-only">：{viewState.description}</span>
-                ) : null}
-              </motion.p>
-            ) : null}
-          </AnimatePresence>
+          {viewState.label ? (
+            <p
+              key={viewState.label}
+              className="momo-enter text-xs leading-4 text-[var(--color-text-secondary)]"
+              id={`${field.cellId}-status`}
+            >
+              {viewState.label}
+              {viewState.description ? (
+                <span className="sr-only">：{viewState.description}</span>
+              ) : null}
+            </p>
+          ) : null}
         </div>
       ) : null}
     </>

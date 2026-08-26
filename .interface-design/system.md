@@ -17,17 +17,24 @@
 
 ## Reusable Patterns
 
-### Flat Data Table Header
+### Academic Data Table
 
 - 親 table と同じ surface 背景を使い、通常状態を淡色面で強調しない。
-- 小さな secondary text と semibold、列境界を示す下罫線で、data row より弱い階層にする。
-- 共通 `DataTable` または共通 header pattern を使い、sortable state は操作部分だけに閉じる。
+- 小さな secondary text と semibold、table 上端と header 下端の横罫線で、data row より弱い階層にする。
+- 本文行どうしの横罫線は引かず、最終行の下端だけを閉じる。外周の枠線、角丸、縦罫線を足さない。
+- pagination の有無にかかわらず、共通 `DataTable`、body row、header pattern を使う。sortable state は操作部分だけに閉じる。
 
 ### Table-only Page Surface
 
 - 一覧・管理画面が table だけでも、page header の次に通常 padding の `PageContentSurface` を置き、その内側に table を入れる。
-- content surface は page と data scope の余白を所有し、table wrapper だけが row / column の border と角丸を所有する。
+- content surface は page と data scope の余白を所有し、table は academic data table の横罫線だけを所有する。
 - loading、empty、error、pagination は同じ surface に従属させ、table と同化させる目的で `padding="none"` を使わない。
+
+### Descriptive Choice Dialog
+
+- 日時、件数、状態などを読み比べて開催や試合を一つ選ぶ場合は、現在値と変更 trigger を持つ共通 dialog field を使う。
+- dialog 内は説明付き native radio group とし、任意選択では「すべて」「選択しない」も同じ候補列に置く。
+- select、filter、edit、OCR、export で同じ対象を選ぶ場合は、用途固有の選択文法を作らず、この pattern を再利用する。
 
 ### Continuous Match Timeline
 

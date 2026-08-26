@@ -1,6 +1,7 @@
 import {
   AnalysisTableCell as TableCell,
   AnalysisTableHead as TableHead,
+  AnalysisTableRow as TableRow,
 } from "@/features/seriesComparison/charts/SeriesAnalysisMatrix";
 import {
   formatDateTime,
@@ -146,10 +147,7 @@ export function PlayOrderHistoryDrilldown({
           </thead>
           <tbody>
             {payload.seriesByPlayOrder.map((row) => (
-              <tr
-                className="border-b border-[var(--color-border)] last:border-b-0"
-                key={row.itemId}
-              >
+              <TableRow key={row.itemId}>
                 <TableCell>
                   <SeriesAnalysisMatchLink
                     ariaLabel={`${formatSeriesMatchIndex(row.matchIndex)}の試合結果を見る`}
@@ -181,7 +179,7 @@ export function PlayOrderHistoryDrilldown({
                     </span>
                   )}
                 </TableCell>
-              </tr>
+              </TableRow>
             ))}
           </tbody>
         </table>

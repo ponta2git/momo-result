@@ -39,6 +39,7 @@ describe("AdminAccountsPage", () => {
     ).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "表示名" })).toHaveClass(
       "bg-[var(--color-surface)]",
+      "border-y",
       "border-[var(--color-border-strong)]",
     );
     const surface = screen.getByRole("region", { name: "ログインアカウント一覧" });
@@ -51,10 +52,11 @@ describe("AdminAccountsPage", () => {
     expect(surface).not.toHaveClass("border");
     const table = screen.getByRole("table", { name: "ログイン可能なアカウントと権限" });
     expect(surface).toContainElement(table);
-    expect(table.parentElement?.parentElement).toHaveClass(
-      "rounded-[var(--radius-md)]",
-      "border",
-      "border-[var(--color-border)]",
+    expect(table.parentElement).toHaveClass("overflow-x-auto", "bg-[var(--color-surface)]");
+    expect(table.parentElement).not.toHaveClass("rounded-[var(--radius-md)]", "border");
+    expect(screen.getByRole("rowheader", { name: "ぽんた" }).parentElement).toHaveClass(
+      "last:[&>td]:border-b",
+      "last:[&>th]:border-b",
     );
     expect(surface).not.toContainElement(
       screen.getByRole("heading", { name: "ログインアカウント" }),

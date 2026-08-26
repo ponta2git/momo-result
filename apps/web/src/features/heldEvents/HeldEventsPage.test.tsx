@@ -105,13 +105,11 @@ describe("HeldEventsPage", () => {
     const table = await screen.findByRole("table", { name: "開催履歴" });
     const surface = screen.getByRole("region", { name: "開催履歴" });
     expect(surface).toContainElement(table);
-    expect(table.parentElement).toHaveClass(
-      "rounded-[var(--radius-md)]",
-      "border",
-      "border-[var(--color-border)]",
-    );
+    expect(table.parentElement).toHaveClass("overflow-x-auto", "bg-[var(--color-surface)]");
+    expect(table.parentElement).not.toHaveClass("rounded-[var(--radius-md)]", "border");
     expect(within(table).getByRole("columnheader", { name: "開催日時" })).toHaveClass(
       "bg-[var(--color-surface)]",
+      "border-y",
       "border-[var(--color-border-strong)]",
     );
     expect(within(table).getByRole("columnheader", { name: "確定済み" })).toBeInTheDocument();

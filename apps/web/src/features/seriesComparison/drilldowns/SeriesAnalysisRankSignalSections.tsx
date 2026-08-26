@@ -1,6 +1,10 @@
 import { Check, Minus } from "lucide-react";
 import type { ReactNode } from "react";
 
+import {
+  AnalysisTableHead,
+  AnalysisTableRow,
+} from "@/features/seriesComparison/charts/SeriesAnalysisMatrix";
 import { evidenceStrengthLabel } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
 import {
   formatRankSignalImportance,
@@ -265,13 +269,13 @@ function FoldDetails({ candidate }: { candidate: RankSignalCandidate }) {
         </thead>
         <tbody>
           {candidate.foldRows.map((row) => (
-            <tr className="border-b border-[var(--color-border)] last:border-b-0" key={row.fold}>
+            <AnalysisTableRow key={row.fold}>
               <FoldTableCell>開催{rankSignalFoldLabel(row.fold)}</FoldTableCell>
               <FoldTableCell>{row.heldEventCount}開催</FoldTableCell>
               <FoldTableCell>{row.comparisonCount}組</FoldTableCell>
               <FoldTableCell>{row.supported ? "支持" : "支持なし"}</FoldTableCell>
               <FoldTableCell>{formatRankSignalImportance(row.importance)}</FoldTableCell>
-            </tr>
+            </AnalysisTableRow>
           ))}
         </tbody>
       </table>
@@ -280,14 +284,7 @@ function FoldDetails({ candidate }: { candidate: RankSignalCandidate }) {
 }
 
 function FoldTableHead({ children }: { children: ReactNode }) {
-  return (
-    <th
-      className="border-b border-[var(--color-border)] px-3 py-2 text-xs font-medium text-[var(--color-text-secondary)]"
-      scope="col"
-    >
-      {children}
-    </th>
-  );
+  return <AnalysisTableHead>{children}</AnalysisTableHead>;
 }
 
 function FoldTableCell({ children }: { children: ReactNode }) {

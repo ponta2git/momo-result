@@ -59,6 +59,7 @@ describe("MatchesListPage", () => {
     expect(pageTitle).toHaveClass("text-2xl", "md:text-3xl", "text-balance");
     expect(screen.queryByLabelText("開催の振り返り")).not.toBeInTheDocument();
     expect(await screen.findAllByText("優勝 ぽんた")).toHaveLength(2);
+    expect(document.querySelector("article.momo-enter")).not.toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: /開催・試合/u })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "状態・次の操作" })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "順位" })).toBeInTheDocument();

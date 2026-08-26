@@ -6,7 +6,10 @@ import { AdminAccountRow } from "@/features/adminAccounts/AdminAccountRow";
 import { useAdminAccountsPageController } from "@/features/adminAccounts/useAdminAccountsPageController";
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
-import { dataTableHeaderCellClassName } from "@/shared/ui/data/DataTable";
+import {
+  dataTableHeaderCellClassName,
+  dataTableScrollAreaClassName,
+} from "@/shared/ui/data/DataTable";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
@@ -129,11 +132,11 @@ export function AdminAccountsPage() {
                 }
               />
             ) : (
-              <div className="overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)]">
-                <p className="border-b border-[var(--color-border)] px-3 py-2 text-xs text-[var(--color-text-secondary)] md:hidden">
+              <div className="min-w-0">
+                <p className="border-y border-[var(--color-border-strong)] px-3 py-2 text-xs text-[var(--color-text-secondary)] md:hidden">
                   権限と操作は横にスクロールして確認できます。
                 </p>
-                <div className="overflow-x-auto">
+                <div className={dataTableScrollAreaClassName}>
                   <table className="w-full min-w-[44rem] text-left text-sm">
                     <caption className="sr-only">ログイン可能なアカウントと権限</caption>
                     <thead>

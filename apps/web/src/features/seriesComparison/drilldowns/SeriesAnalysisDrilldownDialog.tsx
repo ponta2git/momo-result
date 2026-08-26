@@ -1,6 +1,7 @@
 import {
   AnalysisTableCell as TableCell,
   AnalysisTableHead as TableHead,
+  AnalysisTableRow as TableRow,
 } from "@/features/seriesComparison/charts/SeriesAnalysisMatrix";
 import { drilldownTitle } from "@/features/seriesComparison/drilldowns/SeriesAnalysisDrilldownPrimitives";
 import {
@@ -154,10 +155,7 @@ export function UnexpectedWinsDrilldown({
             </thead>
             <tbody>
               {payload.rows.map((row) => (
-                <tr
-                  className="border-b border-[var(--color-border)] last:border-b-0"
-                  key={row.matchId}
-                >
+                <TableRow key={row.matchId}>
                   <TableCell>
                     <SeriesAnalysisMatchLink
                       ariaLabel={`${formatSeriesMatchIndex(row.matchIndex)}の試合結果を見る`}
@@ -176,7 +174,7 @@ export function UnexpectedWinsDrilldown({
                   <TableCell>{row.evidence.cardStationCount}回</TableCell>
                   <TableCell>{row.evidence.cardShopCount}回</TableCell>
                   <TableCell>{row.evidence.ginjiCount}回</TableCell>
-                </tr>
+                </TableRow>
               ))}
             </tbody>
           </table>

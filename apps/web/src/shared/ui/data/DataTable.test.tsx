@@ -51,7 +51,16 @@ describe("DataTable", () => {
     );
     expect(screen.getByRole("columnheader", { name: "総資産" })).toHaveClass(
       "bg-[var(--color-surface)]",
+      "border-y",
       "border-[var(--color-border-strong)]",
+    );
+    const table = screen.getByRole("table", { name: "試合結果" });
+    expect(table.parentElement).toHaveClass("overflow-x-auto", "bg-[var(--color-surface)]");
+    expect(table.parentElement).not.toHaveClass("rounded-[var(--radius-md)]", "border");
+    expect(screen.getByRole("rowheader", { name: "いーゆー" })).not.toHaveClass("border-b");
+    expect(screen.getByRole("rowheader", { name: "いーゆー" }).parentElement).toHaveClass(
+      "last:[&>td]:border-b",
+      "last:[&>th]:border-b",
     );
 
     await user.click(screen.getByRole("button", { name: "総資産" }));

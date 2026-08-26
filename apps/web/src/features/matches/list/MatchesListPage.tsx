@@ -20,7 +20,7 @@ import { StaleShield } from "@/shared/ui/motion/StaleShield";
 function ListSkeleton() {
   return (
     <div className="min-h-[24rem]">
-      <div className="hidden rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3 lg:grid lg:gap-3">
+      <div className="hidden border-y border-[var(--color-border-strong)] bg-[var(--color-surface)] p-3 lg:grid lg:gap-3">
         <Skeleton className="min-h-10" />
         {["s1", "s2", "s3", "s4"].map((id) => (
           <Skeleton key={id} className="min-h-24" />
@@ -200,7 +200,9 @@ export function MatchesListPage() {
             </Notice>
           ) : null}
 
-          <StaleShield active={showMatchesLoading} fallback={<ListSkeleton />}>
+          {showMatchesLoading ? (
+            <ListSkeleton />
+          ) : (
             <StaleShield
               active={listUpdating}
               busyLabel="一覧を更新中"
@@ -267,7 +269,7 @@ export function MatchesListPage() {
                 </>
               )}
             </StaleShield>
-          </StaleShield>
+          )}
         </section>
       </PageContentSurface>
     </PageFrame>

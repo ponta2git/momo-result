@@ -2,6 +2,7 @@ import type { LoginAccountResponse, UpdateLoginAccountRequest } from "@/shared/a
 import { formatApiError } from "@/shared/api/problemDetails";
 import { memberDisplayName } from "@/shared/domain/members";
 import { Button } from "@/shared/ui/actions/Button";
+import { DataTableBodyRow } from "@/shared/ui/data/DataTable";
 import { AlertDialog } from "@/shared/ui/feedback/Dialog";
 import { StatusBadge } from "@/shared/ui/status/StatusBadge";
 
@@ -20,10 +21,7 @@ export function AdminAccountRow({
   const adminPending = pendingRequest?.isAdmin !== undefined;
 
   return (
-    <tr
-      aria-busy={Boolean(pendingRequest) || undefined}
-      className="border-t border-[var(--color-border)]"
-    >
+    <DataTableBodyRow aria-busy={Boolean(pendingRequest) || undefined}>
       <th
         className="sticky left-0 z-[var(--z-base)] bg-[var(--color-surface)] px-3 py-2 text-left font-semibold"
         scope="row"
@@ -67,7 +65,7 @@ export function AdminAccountRow({
           />
         </div>
       </td>
-    </tr>
+    </DataTableBodyRow>
   );
 }
 

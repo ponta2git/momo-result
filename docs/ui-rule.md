@@ -45,7 +45,7 @@
 - disclosure / collapsible は情報を開閉する操作であり、それ自体を選択状態や inset とみなさない。`Collapsible.Panel` に相当する展開内容は背景を所有せず、周囲の面をそのまま使う。feature や filter から panel 自体へ淡色背景を上書きしない。実際の状態、注意、独立した操作領域を内包する場合だけ、その内側の該当要素へ淡色背景を付ける。enabled trigger は文字階層や用途variantによらず同じ淡色hoverを持ち、行全体が操作可能であることを即時に返す。hoverは一時的なpointer feedbackに限り、展開中の固定背景やpanelの面へ転用せず、disabled triggerでは出さない。
 - `1位`、`2位`、分類名など、短く反復され、走査や識別を助けるラベルは局所的な標章として背景色、形、border を持ってよい。標章は文字だけでも意味が分かり、同じ種類で一貫した寸法と強度を持ち、clickable、selected、warning と誤認させない。広い面へ装飾を拡張せず、識別やリズムに寄与しない badge は足さない。
 - page canvas は、global navigation、戻り先、画面見出し、page-level action と content 間の余白を受け持つ。主要な作業・結果・data は白い content surface に置き、連続した1タスクまたは1 data scope につき原則1面とする。画面見出しは原則として content surface の外に置き、面をまたぐ下線を既定で持たせない。
-- table が主要内容の一覧・管理画面も page header から table を直結せず、通常の内余白を持つ content surface の内側に table を置く。table の row / column 境界は table wrapper が所有し、loading、empty、error、pagination は同じ data scope の面と余白に従属させる。`padding="none"` は、workspace や全面表示など child が外余白を所有する明確な理由がある場合だけ使う。
+- table が主要内容の一覧・管理画面も page header から table を直結せず、通常の内余白を持つ content surface の内側に table を置く。table は上端、header 下端、最終行下端の横罫線を所有し、外周の枠線と角丸は持たない。loading、empty、error、pagination は同じ data scope の面と余白に従属させる。`padding="none"` は、workspace や全面表示など child が外余白を所有する明確な理由がある場合だけ使う。
 - content surface の内側を通常 section ごとの白い card に分割しない。まず見出し、整列、列、関係的余白で構成し、同時に独立して扱う source / editor などの workspace、独立して反復する record、境界が操作の理解に必要な bounded panel に限って別面を許容する。empty、pagination、loading など親 scope に従属する状態・操作は、親の白面を重ねて作り直さない。
 - グルーピングは整列と余白から始める。divider は、隣接内容が余白と見出しだけでは同一群と誤認される場合、table の row / column、control、状態通知など境界自体が意味を持つ場合に限る。通常 section を上下線で挟まず、必要なら片側1本を使う。
 - 1つの視覚境界は1つの owner だけが描く。親 surface の外周と先頭・末尾 child、disclosure の root と panel、table wrapper と隣接 toolbar などへ同じ境界を重ねず、隣接する平行線や二重線を作らない。淡色背景、border、角丸を同じ要素へ慣習的に重ねず、境界を伝えるために必要な最小の手段を選ぶ。
@@ -60,7 +60,7 @@
 - 通常文を任意の位置で強制改行しない。ID、URL、外部 error など切れ目のない長い値だけへ局所的な wrap または scroll を指定し、全画面へ `overflow-wrap: anywhere` を継承させない。見出しの balance や本文の pretty wrap も、data label、定義値、control label へ一律適用せず、役割ごとに指定する。
 - 日時、金額、試合番号、状態名は共通 formatter / ViewModel を使う。件数と比較値には対象、単位、分母または基準を添え、整列する数値には tabular numerals を使う。
 - table は row / column header と identity を保つ。グラフは答える問いがある場合に使い、数値表現を併記し、比較軸、単位、スケールを揃える。モバイルへ再配置しても、プレーヤーと試合の対応、比較順、詳細への到達を失わせない。
-- 通常の data table header は、親の surface と同じ背景、本文より弱い小さな文字、列境界を示す下罫線で構成する。選択、状態、注意を表さない header へ淡色背景を付けず、共通 table primitive または共通 header pattern を使う。sortable header の選択表現は操作部分だけが所有し、行全体の背景へ広げない。
+- 通常の data table は、親の surface と同じ背景、本文より弱い小さな header 文字、table 上端と header 下端および最終行下端の横罫線で構成する。本文行どうしの横罫線、外周の枠線、角丸、通常 header の淡色背景は付けず、pagination の有無にかかわらず共通 table primitive、body row、header pattern を使う。sortable header の選択表現は操作部分だけが所有し、行全体の背景へ広げない。
 - 時系列の連続 timeline は順序付きリストと1列の marker 軸で構成し、connector は隣接する marker の中心間だけを結ぶ。軸を最初の marker より上、最後の marker より下へ伸ばさず、record の枠線や別の縦罫線を平行に重ねない。各 marker は順序を文字でも示し、record heading と対応させる。
 - disclosure、tab、dialog、navigation を見た目だけで取り替えない。panel は trigger との関係を保ち、周囲の位置・幅・focus を不必要に変えない。可視見出しを省略する場合も `section`、`aria-label` / `aria-labelledby`、field label、accessible control name で構造を残す。
 - 同格の disclosure を列で並べる場合、一つの展開で同じ行の別 trigger や操作が展開内容の下端へ追従しない。各列は自身の内容順を保ち、展開による高さ変化は当該列と後続の共通内容だけへ反映する。
@@ -81,6 +81,7 @@
 ### 3.2 選択・表示切替・表示範囲
 
 - 説明を読み比べて一つを選ぶ候補は、可視 legend を持つ native radio group と説明付きの選択行で表す。選択行全体を操作可能にし、選択状態は control、文字、形で示して色だけに依存しない。候補固有の別操作は選択 label の内側へ混ぜない。
+- 開催、試合など日時・件数・状態を読み比べる単一選択は、現在値と変更 trigger を持つ共通 dialog field を使う。任意選択の「すべて」「選択しない」も同じ radio group の候補として扱い、filter、OCR、作成・編集、出力の文脈ごとに別の選択文法を作らない。
 - 少数の短い mode 選択のうち、値だけを変えて周囲の内容領域を切り替えないものは segmented control を使う。同じ対象の view を切り替える場合、または選択ごとに直下の候補・結果・実行内容が一つの対応 panel として切り替わる場合は tab を使う。補助詳細の開閉は disclosure、多数の簡潔な候補は select または検索可能な選択を使う。見た目の都合で意味を交換せず、選択と即時実行を混同しない。
 - page-local な主要 tab は、設定管理を基準とする共通の filled presentation を使う。tab list 自体を枠や背景で囲わず、選択中の tab だけを selected surface、文字、`aria-selected` で示し、狭い幅では label を分断せず tab 単位で折り返す。同じ panel 内の下位 view は、より弱い underline presentation と局所的な横 scroll を使ってよく、上下2階層を同じ強さの fill で競合させない。
 - tab は同じ tab set として tab list、tab、対応する tab panel の関係を持ち、keyboard focus と選択状態を shared UI が所有する。focus 移動だけで即座に表示できる panel は自動 activation を使ってよいが、取得や高コスト処理を始める切替は、矢印キーで focus、Enter または Space で activation する。切替後の取得中も起点 tab の DOM と focus を維持し、stale content の `inert` 化で focus が document へ退避した場合は完了時に起点へ戻す。ただし、利用者が別の操作へ移した focus は奪わない。panel を伴わない排他条件は tab の外観へ寄せるために tab semantics を付けない。
@@ -148,7 +149,7 @@
 - empty state は現在実行可能で安全な主要操作を1件示し、二次操作は弱める。権限または前提条件で実行不能な導線を出さない。
 - 補助情報の取得失敗で、取得済みの主表示を置き換えない。完了結果が画面上で明らかな場合は祝福目的の toast を追加せず、局所的な feedback を優先する。
 - transient toast は viewport 上の主要操作、fixed / sticky action、入力中の control を覆わない位置を共通 host が所有する。画面固有の主要操作が下端にある場合は上端へ配置するなど、通知を閉じるまでタスクが停止する重なりを作らない。
-- motion は状態の因果または連続性を伝える場合だけ使う。既存 token、短い feedback、opacity / transform を使い、layout shift、stagger、常時 loop、engagement 目的の演出を避ける。
+- motion は状態の因果または連続性を伝える場合だけ使う。既存 token、短い feedback、opacity / transform を使い、layout shift、stagger、常時 loop、engagement 目的の演出を避ける。route 切替後の初回 content や一覧 row を、状態変化のない登場演出だけのために animate しない。
 - 非必須 motion は `prefers-reduced-motion` で無効化し、route content の表示を animation 完了まで block しない。
 
 ## 7. ナビゲーションと有限のタスクループ

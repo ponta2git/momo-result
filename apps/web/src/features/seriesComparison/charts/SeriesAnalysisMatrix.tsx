@@ -1,7 +1,7 @@
 import type { ComponentPropsWithoutRef, ReactNode } from "react";
 
 import { cn } from "@/shared/ui/cn";
-import { dataTableHeaderCellClassName } from "@/shared/ui/data/DataTable";
+import { DataTableBodyRow, dataTableHeaderCellClassName } from "@/shared/ui/data/DataTable";
 
 export const SERIES_RANKS = [1, 2, 3, 4] as const;
 
@@ -117,6 +117,18 @@ export function AnalysisTableCell({
     <td className={cn("px-3 py-2 tabular-nums", className)} {...props}>
       {children}
     </td>
+  );
+}
+
+export function AnalysisTableRow({
+  children,
+  className,
+  ...props
+}: ComponentPropsWithoutRef<"tr">) {
+  return (
+    <DataTableBodyRow className={className} {...props}>
+      {children}
+    </DataTableBodyRow>
   );
 }
 

@@ -2,6 +2,7 @@ import { RankTrendCharts } from "@/features/seriesComparison/charts/SeriesAnalys
 import {
   AnalysisTableCell,
   AnalysisTableHead,
+  AnalysisTableRow,
 } from "@/features/seriesComparison/charts/SeriesAnalysisMatrix";
 import {
   CrownShareBars,
@@ -86,10 +87,7 @@ export function OverviewView({ focusedItemIds, response, onDrilldown }: Analysis
             </thead>
             <tbody>
               {orderFixedMembers(response.metricsByPlayer).map((metric) => (
-                <tr
-                  className="border-b border-[var(--color-border)] last:border-b-0"
-                  key={metric.memberId}
-                >
+                <AnalysisTableRow key={metric.memberId}>
                   <AnalysisTableCell>
                     <strong>
                       <MemberSequenceLabel memberId={metric.memberId}>
@@ -116,7 +114,7 @@ export function OverviewView({ focusedItemIds, response, onDrilldown }: Analysis
                       詳細
                     </Button>
                   </AnalysisTableCell>
-                </tr>
+                </AnalysisTableRow>
               ))}
             </tbody>
           </table>

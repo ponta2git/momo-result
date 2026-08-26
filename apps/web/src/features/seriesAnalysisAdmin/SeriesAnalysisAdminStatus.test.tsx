@@ -40,7 +40,7 @@ describe("SeriesAnalysisAdminStatus", () => {
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
     expect(screen.getByText("成功").parentElement).toHaveClass("border-[var(--color-success)]/60");
     for (const header of within(screen.getByRole("table")).getAllByRole("columnheader")) {
-      expect(header).toHaveClass("bg-[var(--color-surface)]", "border-b");
+      expect(header).toHaveClass("bg-[var(--color-surface)]", "border-y");
       expect(header).not.toHaveClass("bg-[var(--color-surface-subtle)]");
     }
   });

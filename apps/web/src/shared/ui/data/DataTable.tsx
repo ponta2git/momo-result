@@ -1,6 +1,6 @@
 import { ArrowDown, ArrowUp } from "lucide-react";
 import { useMemo } from "react";
-import type { CSSProperties, ReactNode } from "react";
+import type { ComponentPropsWithoutRef, CSSProperties, ReactNode } from "react";
 
 import { cn } from "@/shared/ui/cn";
 
@@ -72,7 +72,21 @@ const densityClass = {
 } as const satisfies Record<DataTableDensity, string>;
 
 export const dataTableHeaderCellClassName =
-  "border-b border-[var(--color-border-strong)] bg-[var(--color-surface)] px-3 py-2 text-xs leading-5 font-semibold text-[var(--color-text-secondary)]";
+  "border-y border-[var(--color-border-strong)] bg-[var(--color-surface)] px-3 py-2 text-xs leading-5 font-semibold text-[var(--color-text-secondary)]";
+
+export const dataTableScrollAreaClassName = "min-w-0 overflow-x-auto bg-[var(--color-surface)]";
+
+export function DataTableBodyRow({ className, ...props }: ComponentPropsWithoutRef<"tr">) {
+  return (
+    <tr
+      className={cn(
+        "group transition-colors duration-[var(--motion-fast)] hover:bg-[var(--color-surface-subtle)] motion-reduce:transition-none last:[&>td]:border-b last:[&>td]:border-[var(--color-border-strong)] last:[&>th]:border-b last:[&>th]:border-[var(--color-border-strong)]",
+        className,
+      )}
+      {...props}
+    />
+  );
+}
 
 export function DataTable<Row>({
   caption,
@@ -99,12 +113,7 @@ export function DataTable<Row>({
   }, [columns]);
 
   return (
-    <div
-      className={cn(
-        "min-w-0 overflow-x-auto rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)]",
-        className,
-      )}
-    >
+    <div className={cn(dataTableScrollAreaClassName, className)}>
       <table
         className={cn(
           "w-full min-w-full border-separate border-spacing-0 text-sm leading-6",
@@ -176,10 +185,9 @@ export function DataTable<Row>({
         </thead>
         <tbody>
           {rows.map((row, rowIndex) => (
-            <tr
+            <DataTableBodyRow
               key={getRowKey(row, rowIndex)}
               aria-busy={isRowBusy?.(row) || undefined}
-              className="group transition-colors duration-[var(--motion-fast)] hover:bg-[var(--color-surface-subtle)] motion-reduce:transition-none last:[&_td]:border-b-0 last:[&_th]:border-b-0"
             >
               {columns.map((column) => {
                 const Cell = column.rowHeader ? "th" : "td";
@@ -187,7 +195,7 @@ export function DataTable<Row>({
                   <Cell
                     key={column.key}
                     className={cn(
-                      "border-b border-[var(--color-border)] text-[var(--color-text-primary)]",
+                      "text-[var(--color-text-primary)]",
                       densityClass[density],
                       alignClass[column.align ?? "left"],
                       verticalAlignClass[verticalAlign],
@@ -200,11 +208,14 @@ export function DataTable<Row>({
                   </Cell>
                 );
               })}
-            </tr>
+            </DataTableBodyRow>
           ))}
           {rows.length === 0 && emptyState ? (
             <tr>
-              <td className="p-3" colSpan={columns.length}>
+              <td
+                className="border-b border-[var(--color-border-strong)] p-3"
+                colSpan={columns.length}
+              >
                 {emptyState}
               </td>
             </tr>

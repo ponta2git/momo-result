@@ -1,6 +1,7 @@
 import {
   AnalysisTableCell as TableCell,
   AnalysisTableHead as TableHead,
+  AnalysisTableRow as TableRow,
 } from "@/features/seriesComparison/charts/SeriesAnalysisMatrix";
 import {
   formatDateTime,
@@ -104,10 +105,7 @@ export function RankHistoryDrilldown({
           </thead>
           <tbody>
             {payload.eventRows.map((row) => (
-              <tr
-                className="border-b border-[var(--color-border)] last:border-b-0"
-                key={row.heldEventId}
-              >
+              <TableRow key={row.heldEventId}>
                 <TableCell>{formatDateTime(row.firstPlayedAt)}</TableCell>
                 <TableCell>{row.ranks.join(" → ")}</TableCell>
                 <TableCell>{formatDecimal(row.eventAverageRank)}位</TableCell>
@@ -127,7 +125,7 @@ export function RankHistoryDrilldown({
                     magnitude={row.cumulativeAverageDelta}
                   />
                 </TableCell>
-              </tr>
+              </TableRow>
             ))}
           </tbody>
         </table>
@@ -146,10 +144,7 @@ export function RankHistoryDrilldown({
           </thead>
           <tbody>
             {payload.matchRows.map((row) => (
-              <tr
-                className="border-b border-[var(--color-border)] last:border-b-0"
-                key={row.itemId}
-              >
+              <TableRow key={row.itemId}>
                 <TableCell>
                   <SeriesAnalysisMatchLink
                     ariaLabel={`${formatSeriesMatchIndex(row.matchIndex)}の試合結果を見る`}
@@ -175,7 +170,7 @@ export function RankHistoryDrilldown({
                     </span>
                   </div>
                 </TableCell>
-              </tr>
+              </TableRow>
             ))}
           </tbody>
         </table>

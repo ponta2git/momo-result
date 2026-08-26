@@ -1,9 +1,4 @@
 import {
-  AnalysisTableCell as TableCell,
-  AnalysisTableHead as TableHead,
-  AnalysisTableRow as TableRow,
-} from "@/features/seriesComparison/charts/SeriesAnalysisMatrix";
-import {
   formatDateTime,
   formatDecimal,
   formatPercent,
@@ -15,6 +10,7 @@ import {
 } from "@/features/seriesComparison/SeriesAnalysisQualityAdvisory";
 import type { SeriesAnalysisDrilldownV3 } from "@/shared/api/seriesAnalysis";
 import { formatMatchNoInEvent, formatSeriesMatchIndex } from "@/shared/domain/matchLabels";
+import { DataTable } from "@/shared/ui/data/DataTable";
 import { FactList } from "@/shared/ui/data/FactList";
 import { PlayOrderMark, playOrderPresentation } from "@/shared/ui/data/PlayOrderMark";
 import { DataVizLineChart } from "@/shared/ui/dataViz/LineChart";
@@ -131,59 +127,79 @@ export function PlayOrderHistoryDrilldown({
         yAxisLabel="番手内の累積平均順位"
         yTicks={[...PLAY_ORDERS]}
       />
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[62rem] text-left text-sm">
-          <thead>
-            <tr>
-              <TableHead>試合</TableHead>
-              <TableHead>日時</TableHead>
-              <TableHead>開催内</TableHead>
-              <TableHead>番手</TableHead>
-              <TableHead>番手内</TableHead>
-              <TableHead>順位</TableHead>
-              <TableHead>番手別通算</TableHead>
-              <TableHead>変化</TableHead>
-            </tr>
-          </thead>
-          <tbody>
-            {payload.seriesByPlayOrder.map((row) => (
-              <TableRow key={row.itemId}>
-                <TableCell>
-                  <SeriesAnalysisMatchLink
-                    ariaLabel={`${formatSeriesMatchIndex(row.matchIndex)}の試合結果を見る`}
-                    matchId={row.matchId}
-                  >
-                    {formatSeriesMatchIndex(row.matchIndex)}
-                  </SeriesAnalysisMatchLink>
-                </TableCell>
-                <TableCell>{formatDateTime(row.playedAt)}</TableCell>
-                <TableCell>{formatMatchNoInEvent(row.matchNoInEvent)}</TableCell>
-                <TableCell>
-                  <PlayOrderMark playOrder={row.playOrder} />
-                </TableCell>
-                <TableCell>{row.occurrenceIndex}戦目</TableCell>
-                <TableCell>
-                  <RankBadge rank={row.rank} />
-                </TableCell>
-                <TableCell>{formatDecimal(row.cumulativeAverageRank)}位</TableCell>
-                <TableCell>
-                  {row.previousCumulativeAverageRank === null ? (
-                    <ChangeBadge direction="first_observation" magnitude={null} />
-                  ) : (
-                    <span className="inline-flex flex-wrap items-center gap-1">
-                      <span className="tabular-nums">
-                        {formatDecimal(row.previousCumulativeAverageRank)}位 →{" "}
-                        {formatDecimal(row.cumulativeAverageRank)}位
-                      </span>
-                      <ChangeBadge direction={row.changeDirection} magnitude={null} />
-                    </span>
-                  )}
-                </TableCell>
-              </TableRow>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <DataTable
+        caption={{ content: `${playerName}の番手別試合推移` }}
+        columns={[
+          {
+            cellClassName: "tabular-nums",
+            header: "試合",
+            key: "match",
+            renderCell: (row) => (
+              <SeriesAnalysisMatchLink
+                ariaLabel={`${formatSeriesMatchIndex(row.matchIndex)}の試合結果を見る`}
+                matchId={row.matchId}
+              >
+                {formatSeriesMatchIndex(row.matchIndex)}
+              </SeriesAnalysisMatchLink>
+            ),
+            rowHeader: true,
+          },
+          {
+            cellClassName: "tabular-nums",
+            header: "日時",
+            key: "played-at",
+            renderCell: (row) => formatDateTime(row.playedAt),
+          },
+          {
+            cellClassName: "tabular-nums",
+            header: "開催内",
+            key: "event-match",
+            renderCell: (row) => formatMatchNoInEvent(row.matchNoInEvent),
+          },
+          {
+            header: "番手",
+            key: "play-order",
+            renderCell: (row) => <PlayOrderMark playOrder={row.playOrder} />,
+          },
+          {
+            cellClassName: "tabular-nums",
+            header: "番手内",
+            key: "occurrence",
+            renderCell: (row) => `${row.occurrenceIndex}戦目`,
+          },
+          {
+            header: "順位",
+            key: "rank",
+            renderCell: (row) => <RankBadge rank={row.rank} />,
+          },
+          {
+            cellClassName: "tabular-nums",
+            header: "番手別通算",
+            key: "cumulative-average",
+            renderCell: (row) => `${formatDecimal(row.cumulativeAverageRank)}位`,
+          },
+          {
+            header: "変化",
+            key: "change",
+            renderCell: (row) =>
+              row.previousCumulativeAverageRank === null ? (
+                <ChangeBadge direction="first_observation" magnitude={null} />
+              ) : (
+                <span className="inline-flex flex-wrap items-center gap-1">
+                  <span className="tabular-nums">
+                    {formatDecimal(row.previousCumulativeAverageRank)}位 →{" "}
+                    {formatDecimal(row.cumulativeAverageRank)}位
+                  </span>
+                  <ChangeBadge direction={row.changeDirection} magnitude={null} />
+                </span>
+              ),
+          },
+        ]}
+        density="compact"
+        getRowKey={(row) => row.itemId}
+        minWidth="62rem"
+        rows={payload.seriesByPlayOrder}
+      />
     </div>
   );
 }

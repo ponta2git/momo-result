@@ -1,10 +1,5 @@
 import { RankTrendCharts } from "@/features/seriesComparison/charts/SeriesAnalysisFlowCharts";
 import {
-  AnalysisTableCell,
-  AnalysisTableHead,
-  AnalysisTableRow,
-} from "@/features/seriesComparison/charts/SeriesAnalysisMatrix";
-import {
   CrownShareBars,
   HeadToHeadMatrix,
   RankDistributionBars,
@@ -30,6 +25,7 @@ import {
 } from "@/features/seriesComparison/SeriesAnalysisQualityAdvisory";
 import { orderFixedMembers } from "@/shared/domain/members";
 import { Button } from "@/shared/ui/actions/Button";
+import { DataTable } from "@/shared/ui/data/DataTable";
 import { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
 
 export function OverviewView({ focusedItemIds, response, onDrilldown }: AnalysisViewProps) {
@@ -37,6 +33,7 @@ export function OverviewView({ focusedItemIds, response, onDrilldown }: Analysis
   const leaders = orderFixedMembers(
     response.players.filter((player) => response.summary.leaderMemberIds.includes(player.memberId)),
   );
+  const playerMetrics = orderFixedMembers(response.metricsByPlayer);
   return (
     <div
       aria-labelledby={analysisTabId("overview")}
@@ -71,54 +68,76 @@ export function OverviewView({ focusedItemIds, response, onDrilldown }: Analysis
             </dd>
           </div>
         </dl>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[52rem] text-left text-sm">
-            <thead>
-              <tr>
-                <AnalysisTableHead>プレーヤー</AnalysisTableHead>
-                <AnalysisTableHead>平均順位</AnalysisTableHead>
-                <AnalysisTableHead>順位のぶれ</AnalysisTableHead>
-                <AnalysisTableHead>入賞率</AnalysisTableHead>
-                <AnalysisTableHead>下位率</AnalysisTableHead>
-                <AnalysisTableHead>平均総資産</AnalysisTableHead>
-                <AnalysisTableHead>平均物件収益</AnalysisTableHead>
-                <AnalysisTableHead>推移</AnalysisTableHead>
-              </tr>
-            </thead>
-            <tbody>
-              {orderFixedMembers(response.metricsByPlayer).map((metric) => (
-                <AnalysisTableRow key={metric.memberId}>
-                  <AnalysisTableCell>
-                    <strong>
-                      <MemberSequenceLabel memberId={metric.memberId}>
-                        {metric.displayName}
-                      </MemberSequenceLabel>
-                    </strong>
-                  </AnalysisTableCell>
-                  <AnalysisTableCell>{formatDecimal(metric.rank.average)}位</AnalysisTableCell>
-                  <AnalysisTableCell>
-                    {formatDecimal(metric.rank.standardDeviation)}
-                  </AnalysisTableCell>
-                  <AnalysisTableCell>{formatPercent(metric.podium.rate)}</AnalysisTableCell>
-                  <AnalysisTableCell>{formatPercent(metric.lowerHalf.rate)}</AnalysisTableCell>
-                  <AnalysisTableCell>{formatManYen(metric.assets.average)}</AnalysisTableCell>
-                  <AnalysisTableCell>{formatManYen(metric.revenue.average)}</AnalysisTableCell>
-                  <AnalysisTableCell>
-                    <Button
-                      size="sm"
-                      variant="quiet"
-                      onClick={() =>
-                        onDrilldown({ memberId: metric.memberId, metricId: "rank.averageHistory" })
-                      }
-                    >
-                      詳細
-                    </Button>
-                  </AnalysisTableCell>
-                </AnalysisTableRow>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DataTable
+          caption={{ content: "プレーヤー別の順位と基礎比較" }}
+          columns={[
+            {
+              header: "プレーヤー",
+              key: "player",
+              renderCell: (metric) => (
+                <MemberSequenceLabel memberId={metric.memberId}>
+                  {metric.displayName}
+                </MemberSequenceLabel>
+              ),
+              rowHeader: true,
+            },
+            {
+              cellClassName: "tabular-nums",
+              header: "平均順位",
+              key: "average-rank",
+              renderCell: (metric) => `${formatDecimal(metric.rank.average)}位`,
+            },
+            {
+              cellClassName: "tabular-nums",
+              header: "順位のぶれ",
+              key: "rank-deviation",
+              renderCell: (metric) => formatDecimal(metric.rank.standardDeviation),
+            },
+            {
+              cellClassName: "tabular-nums",
+              header: "入賞率",
+              key: "podium-rate",
+              renderCell: (metric) => formatPercent(metric.podium.rate),
+            },
+            {
+              cellClassName: "tabular-nums",
+              header: "下位率",
+              key: "lower-half-rate",
+              renderCell: (metric) => formatPercent(metric.lowerHalf.rate),
+            },
+            {
+              cellClassName: "tabular-nums",
+              header: "平均総資産",
+              key: "average-assets",
+              renderCell: (metric) => formatManYen(metric.assets.average),
+            },
+            {
+              cellClassName: "tabular-nums",
+              header: "平均物件収益",
+              key: "average-revenue",
+              renderCell: (metric) => formatManYen(metric.revenue.average),
+            },
+            {
+              header: "推移",
+              key: "history",
+              renderCell: (metric) => (
+                <Button
+                  size="sm"
+                  variant="quiet"
+                  onClick={() =>
+                    onDrilldown({ memberId: metric.memberId, metricId: "rank.averageHistory" })
+                  }
+                >
+                  詳細
+                </Button>
+              ),
+            },
+          ]}
+          density="compact"
+          getRowKey={(metric) => metric.memberId}
+          minWidth="52rem"
+          rows={playerMetrics}
+        />
         <div className="mt-4">
           <RankDistributionBars focusedItemIds={focusedItemIds} response={response} />
         </div>

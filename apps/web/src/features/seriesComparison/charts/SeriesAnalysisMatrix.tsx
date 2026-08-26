@@ -1,11 +1,6 @@
 import type { ComponentPropsWithoutRef, ReactNode } from "react";
 
 import { cn } from "@/shared/ui/cn";
-import {
-  dataTableBodyCellClassName,
-  DataTableBodyRow,
-  dataTableHeaderCellClassName,
-} from "@/shared/ui/data/DataTable";
 
 export const SERIES_RANKS = [1, 2, 3, 4] as const;
 
@@ -20,10 +15,8 @@ export function AnalysisMatrix({
 }) {
   return (
     <div className="overflow-x-auto pb-1">
-      <table
-        aria-label={ariaLabel}
-        className={cn("w-full border-separate border-spacing-1", className)}
-      >
+      <table className={cn("w-full border-separate border-spacing-1", className)}>
+        <caption className="sr-only">{ariaLabel}</caption>
         {children}
       </table>
     </div>
@@ -97,42 +90,6 @@ export function MatrixCell({ children, className, ...props }: ComponentPropsWith
     <td className={cn("align-middle", className)} {...props}>
       {children}
     </td>
-  );
-}
-
-export function AnalysisTableHead({
-  children,
-  className,
-  ...props
-}: Omit<ComponentPropsWithoutRef<"th">, "scope">) {
-  return (
-    <th className={cn(dataTableHeaderCellClassName, className)} {...props} scope="col">
-      {children}
-    </th>
-  );
-}
-
-export function AnalysisTableCell({
-  children,
-  className,
-  ...props
-}: ComponentPropsWithoutRef<"td">) {
-  return (
-    <td className={cn(dataTableBodyCellClassName, "tabular-nums", className)} {...props}>
-      {children}
-    </td>
-  );
-}
-
-export function AnalysisTableRow({
-  children,
-  className,
-  ...props
-}: ComponentPropsWithoutRef<"tr">) {
-  return (
-    <DataTableBodyRow className={className} {...props}>
-      {children}
-    </DataTableBodyRow>
   );
 }
 

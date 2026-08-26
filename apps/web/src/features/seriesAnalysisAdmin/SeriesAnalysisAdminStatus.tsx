@@ -1,5 +1,3 @@
-import type { ReactNode } from "react";
-
 import type {
   SeriesAnalysisAdminOverview,
   SeriesAnalysisJobStatus,
@@ -7,12 +5,8 @@ import type {
   SeriesAnalysisSafeFailureCode,
   SeriesAnalysisTrigger,
 } from "@/shared/api/seriesAnalysis";
-import {
-  dataTableBodyCellClassName,
-  DataTableBodyRow,
-  dataTableHeaderCellClassName,
-  dataTableScrollAreaClassName,
-} from "@/shared/ui/data/DataTable";
+import { DataTable } from "@/shared/ui/data/DataTable";
+import type { DataTableColumn } from "@/shared/ui/data/DataTable";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 import { StatusBadge } from "@/shared/ui/status/StatusBadge";
@@ -95,50 +89,14 @@ export function RecentJobs({ jobs }: { jobs: SeriesAnalysisAdminOverview["recent
           実行履歴はありません。
         </p>
       ) : (
-        <div className={dataTableScrollAreaClassName}>
-          <table className="w-full min-w-[64rem] text-left text-sm">
-            <thead>
-              <tr>
-                <TableHead>作品</TableHead>
-                <TableHead>状態</TableHead>
-                <TableHead>発火</TableHead>
-                <TableHead>受理</TableHead>
-                <TableHead>開始</TableHead>
-                <TableHead>完了</TableHead>
-                <TableHead>所要</TableHead>
-                <TableHead>待機</TableHead>
-                <TableHead>試行</TableHead>
-                <TableHead>結果</TableHead>
-              </tr>
-            </thead>
-            <tbody>
-              {jobs.map((job) => (
-                <DataTableBodyRow key={job.jobId}>
-                  <TableCell>
-                    <strong>{job.gameTitleName}</strong>
-                  </TableCell>
-                  <TableCell>
-                    <AnalysisJobStatusBadge status={job.status} />
-                  </TableCell>
-                  <TableCell>{triggerLabel(job.trigger)}</TableCell>
-                  <TableCell>{formatDateTime(job.requestedAt)}</TableCell>
-                  <TableCell>{formatDateTime(job.startedAt)}</TableCell>
-                  <TableCell>{formatDateTime(job.finishedAt)}</TableCell>
-                  <TableCell>{formatDuration(job.elapsedMilliseconds)}</TableCell>
-                  <TableCell>{formatDuration(job.queueWaitMilliseconds)}</TableCell>
-                  <TableCell>
-                    {job.attemptCount}回 / retry {job.transientRetryCount}
-                  </TableCell>
-                  <TableCell>
-                    {job.safeFailureCode
-                      ? failureLabel(job.safeFailureCode)
-                      : resultLabel(job.resultDisposition)}
-                  </TableCell>
-                </DataTableBodyRow>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DataTable
+          caption={{ content: "全作品の直近3件の実行履歴" }}
+          columns={recentJobColumns}
+          density="compact"
+          getRowKey={(job) => job.jobId}
+          minWidth="64rem"
+          rows={jobs}
+        />
       )}
     </section>
   );
@@ -169,14 +127,6 @@ function AnalysisJobStatusBadge({
       tone={model.tone}
     />
   );
-}
-
-function TableHead({ children }: { children: ReactNode }) {
-  return <th className={dataTableHeaderCellClassName}>{children}</th>;
-}
-
-function TableCell({ children }: { children: ReactNode }) {
-  return <td className={`${dataTableBodyCellClassName} tabular-nums`}>{children}</td>;
 }
 
 export function AdminSkeleton() {
@@ -276,3 +226,66 @@ function formatDateTime(value: string | null | undefined): string {
 function formatInteger(value: number): string {
   return adminIntegerFormatter.format(value);
 }
+
+type RecentJob = SeriesAnalysisAdminOverview["recentJobs"][number];
+
+const recentJobColumns = [
+  {
+    header: "作品",
+    key: "game-title",
+    renderCell: (job) => job.gameTitleName,
+    rowHeader: true,
+  },
+  {
+    header: "状態",
+    key: "status",
+    renderCell: (job) => <AnalysisJobStatusBadge status={job.status} />,
+  },
+  {
+    header: "発火",
+    key: "trigger",
+    renderCell: (job) => triggerLabel(job.trigger),
+  },
+  {
+    cellClassName: "tabular-nums",
+    header: "受理",
+    key: "requested-at",
+    renderCell: (job) => formatDateTime(job.requestedAt),
+  },
+  {
+    cellClassName: "tabular-nums",
+    header: "開始",
+    key: "started-at",
+    renderCell: (job) => formatDateTime(job.startedAt),
+  },
+  {
+    cellClassName: "tabular-nums",
+    header: "完了",
+    key: "finished-at",
+    renderCell: (job) => formatDateTime(job.finishedAt),
+  },
+  {
+    cellClassName: "tabular-nums",
+    header: "所要",
+    key: "elapsed",
+    renderCell: (job) => formatDuration(job.elapsedMilliseconds),
+  },
+  {
+    cellClassName: "tabular-nums",
+    header: "待機",
+    key: "queue-wait",
+    renderCell: (job) => formatDuration(job.queueWaitMilliseconds),
+  },
+  {
+    cellClassName: "tabular-nums",
+    header: "試行",
+    key: "attempts",
+    renderCell: (job) => `${job.attemptCount}回 / retry ${job.transientRetryCount}`,
+  },
+  {
+    header: "結果",
+    key: "result",
+    renderCell: (job) =>
+      job.safeFailureCode ? failureLabel(job.safeFailureCode) : resultLabel(job.resultDisposition),
+  },
+] satisfies Array<DataTableColumn<RecentJob>>;

@@ -24,6 +24,7 @@ describe("DataTable", () => {
           },
           {
             align: "right",
+            cellClassName: "tabular-nums",
             header: "総資産",
             key: "score",
             renderCell: (row) => row.score,
@@ -49,6 +50,8 @@ describe("DataTable", () => {
       "aria-sort",
       "descending",
     );
+    expect(screen.getByRole("columnheader", { name: "総資産" })).toHaveAttribute("scope", "col");
+    expect(screen.getByRole("cell", { name: "100" })).toHaveClass("tabular-nums");
     expect(screen.getByRole("columnheader", { name: "総資産" })).toHaveClass(
       "bg-[var(--color-surface)]",
       "border-y",

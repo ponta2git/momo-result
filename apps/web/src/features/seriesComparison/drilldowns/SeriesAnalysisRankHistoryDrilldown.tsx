@@ -1,9 +1,4 @@
 import {
-  AnalysisTableCell as TableCell,
-  AnalysisTableHead as TableHead,
-  AnalysisTableRow as TableRow,
-} from "@/features/seriesComparison/charts/SeriesAnalysisMatrix";
-import {
   formatDateTime,
   formatDecimal,
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
@@ -14,6 +9,7 @@ import {
 } from "@/features/seriesComparison/SeriesAnalysisQualityAdvisory";
 import type { SeriesAnalysisDrilldownV3 } from "@/shared/api/seriesAnalysis";
 import { formatMatchNoInEvent, formatSeriesMatchIndex } from "@/shared/domain/matchLabels";
+import { DataTable } from "@/shared/ui/data/DataTable";
 import { FactList } from "@/shared/ui/data/FactList";
 import { DataVizLineChart } from "@/shared/ui/dataViz/LineChart";
 import { RankBadge } from "@/shared/ui/rank/RankBadge";
@@ -89,92 +85,122 @@ export function RankHistoryDrilldown({
         yAxisLabel="累積平均順位"
         yTicks={[1, 2, 3, 4]}
       />
-      <div className="overflow-x-auto">
-        <table
-          aria-label={`${playerName}の開催別平均順位`}
-          className="w-full min-w-[48rem] text-left text-sm"
-        >
-          <thead>
-            <tr>
-              <TableHead>開催日時</TableHead>
-              <TableHead>順位列</TableHead>
-              <TableHead>開催平均</TableHead>
-              <TableHead>開催内変化</TableHead>
-              <TableHead>通算平均の変化</TableHead>
-            </tr>
-          </thead>
-          <tbody>
-            {payload.eventRows.map((row) => (
-              <TableRow key={row.heldEventId}>
-                <TableCell>{formatDateTime(row.firstPlayedAt)}</TableCell>
-                <TableCell>{row.ranks.join(" → ")}</TableCell>
-                <TableCell>{formatDecimal(row.eventAverageRank)}位</TableCell>
-                <TableCell>
-                  <ChangeBadge
-                    direction={deltaDirection(row.eventRankDelta)}
-                    magnitude={row.eventRankDelta}
-                  />
-                </TableCell>
-                <TableCell>
-                  <span className="mr-2 tabular-nums">
-                    {formatDecimal(row.cumulativeAverageBefore)}位 →{" "}
-                    {formatDecimal(row.cumulativeAverageAfter)}位
-                  </span>
-                  <ChangeBadge
-                    direction={deltaDirection(row.cumulativeAverageDelta)}
-                    magnitude={row.cumulativeAverageDelta}
-                  />
-                </TableCell>
-              </TableRow>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[54rem] text-left text-sm">
-          <thead>
-            <tr>
-              <TableHead>試合</TableHead>
-              <TableHead>日時</TableHead>
-              <TableHead>開催内</TableHead>
-              <TableHead>順位</TableHead>
-              <TableHead>通算平均</TableHead>
-              <TableHead>変化</TableHead>
-            </tr>
-          </thead>
-          <tbody>
-            {payload.matchRows.map((row) => (
-              <TableRow key={row.itemId}>
-                <TableCell>
-                  <SeriesAnalysisMatchLink
-                    ariaLabel={`${formatSeriesMatchIndex(row.matchIndex)}の試合結果を見る`}
-                    matchId={row.matchId}
-                  >
-                    {formatSeriesMatchIndex(row.matchIndex)}
-                  </SeriesAnalysisMatchLink>
-                </TableCell>
-                <TableCell>{formatDateTime(row.playedAt)}</TableCell>
-                <TableCell>{formatMatchNoInEvent(row.matchNoInEvent)}</TableCell>
-                <TableCell>
-                  <RankBadge rank={row.rank} />
-                </TableCell>
-                <TableCell>{formatDecimal(row.cumulativeAverageRank)}位</TableCell>
-                <TableCell>
-                  <div className="grid gap-1">
-                    <ChangeBadge
-                      direction={row.changeDirection}
-                      magnitude={row.cumulativeAverageRankDelta}
-                    />
-                    <span className="text-[11px] text-[var(--color-text-secondary)]">
-                      順位 {rankDeltaLabel(row.rankDelta)}
-                    </span>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <DataTable
+        caption={{ content: `${playerName}の開催別平均順位` }}
+        columns={[
+          {
+            cellClassName: "tabular-nums",
+            header: "開催日時",
+            key: "event-date",
+            renderCell: (row) => formatDateTime(row.firstPlayedAt),
+            rowHeader: true,
+          },
+          {
+            cellClassName: "tabular-nums",
+            header: "順位列",
+            key: "ranks",
+            renderCell: (row) => row.ranks.join(" → "),
+          },
+          {
+            cellClassName: "tabular-nums",
+            header: "開催平均",
+            key: "event-average",
+            renderCell: (row) => `${formatDecimal(row.eventAverageRank)}位`,
+          },
+          {
+            header: "開催内変化",
+            key: "event-change",
+            renderCell: (row) => (
+              <ChangeBadge
+                direction={deltaDirection(row.eventRankDelta)}
+                magnitude={row.eventRankDelta}
+              />
+            ),
+          },
+          {
+            cellClassName: "tabular-nums",
+            header: "通算平均の変化",
+            key: "cumulative-change",
+            renderCell: (row) => (
+              <>
+                <span className="mr-2">
+                  {formatDecimal(row.cumulativeAverageBefore)}位 →{" "}
+                  {formatDecimal(row.cumulativeAverageAfter)}位
+                </span>
+                <ChangeBadge
+                  direction={deltaDirection(row.cumulativeAverageDelta)}
+                  magnitude={row.cumulativeAverageDelta}
+                />
+              </>
+            ),
+          },
+        ]}
+        density="compact"
+        getRowKey={(row) => row.heldEventId}
+        minWidth="48rem"
+        rows={payload.eventRows}
+      />
+      <DataTable
+        caption={{ content: `${playerName}の試合別平均順位推移` }}
+        columns={[
+          {
+            cellClassName: "tabular-nums",
+            header: "試合",
+            key: "match",
+            renderCell: (row) => (
+              <SeriesAnalysisMatchLink
+                ariaLabel={`${formatSeriesMatchIndex(row.matchIndex)}の試合結果を見る`}
+                matchId={row.matchId}
+              >
+                {formatSeriesMatchIndex(row.matchIndex)}
+              </SeriesAnalysisMatchLink>
+            ),
+            rowHeader: true,
+          },
+          {
+            cellClassName: "tabular-nums",
+            header: "日時",
+            key: "played-at",
+            renderCell: (row) => formatDateTime(row.playedAt),
+          },
+          {
+            cellClassName: "tabular-nums",
+            header: "開催内",
+            key: "event-match",
+            renderCell: (row) => formatMatchNoInEvent(row.matchNoInEvent),
+          },
+          {
+            header: "順位",
+            key: "rank",
+            renderCell: (row) => <RankBadge rank={row.rank} />,
+          },
+          {
+            cellClassName: "tabular-nums",
+            header: "通算平均",
+            key: "cumulative-average",
+            renderCell: (row) => `${formatDecimal(row.cumulativeAverageRank)}位`,
+          },
+          {
+            header: "変化",
+            key: "change",
+            renderCell: (row) => (
+              <div className="grid gap-1">
+                <ChangeBadge
+                  direction={row.changeDirection}
+                  magnitude={row.cumulativeAverageRankDelta}
+                />
+                <span className="text-[11px] text-[var(--color-text-secondary)]">
+                  順位 {rankDeltaLabel(row.rankDelta)}
+                </span>
+              </div>
+            ),
+          },
+        ]}
+        density="compact"
+        getRowKey={(row) => row.itemId}
+        minWidth="54rem"
+        rows={payload.matchRows}
+      />
     </div>
   );
 }

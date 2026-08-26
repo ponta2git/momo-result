@@ -40,18 +40,20 @@ describe("series analysis history drilldowns", () => {
     expect(screen.queryByText("十分")).not.toBeInTheDocument();
     expect(screen.getByText("0.05 改善")).toBeInTheDocument();
     expect(screen.getByText("順位 1位・改善")).toBeInTheDocument();
-    const eventHistory = screen.getByLabelText("ぽんたの開催別平均順位");
+    const eventHistory = screen.getByRole("table", { name: "ぽんたの開催別平均順位" });
     expect(eventHistory).toHaveTextContent("2026/08/08 21:00");
     expect(eventHistory).toHaveTextContent("2 → 2 → 1 → 1");
     expect(eventHistory).not.toHaveTextContent("event-12");
+    expect(within(eventHistory).getAllByRole("rowheader")).not.toHaveLength(0);
     expect(
       within(eventHistory).getByRole("columnheader", { name: "開催日時" }),
     ).toBeInTheDocument();
     expect(screen.getByText("直近開催での通算変化")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "第12戦の試合結果を見る" })).toHaveAttribute(
-      "href",
-      expect.stringContaining("/matches/match-12?returnTo="),
-    );
+    const matchHistory = screen.getByRole("table", { name: "ぽんたの試合別平均順位推移" });
+    expect(within(matchHistory).getAllByRole("rowheader")).not.toHaveLength(0);
+    expect(
+      within(matchHistory).getByRole("link", { name: "第12戦の試合結果を見る" }),
+    ).toHaveAttribute("href", expect.stringContaining("/matches/match-12?returnTo="));
   });
 
   it("shows the play-order graph and before-after magnitude", () => {
@@ -84,6 +86,10 @@ describe("series analysis history drilldowns", () => {
     expect(screen.getByText("最悪番手")).toBeInTheDocument();
     expect(screen.getByText(/全体同番手 1.75位・差 -0.25位/u)).toBeInTheDocument();
     expect(screen.getByText("改善")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "第12戦の試合結果を見る" })).toBeInTheDocument();
+    const history = screen.getByRole("table", { name: "ぽんたの番手別試合推移" });
+    expect(within(history).getAllByRole("rowheader")).not.toHaveLength(0);
+    expect(
+      within(history).getByRole("link", { name: "第12戦の試合結果を見る" }),
+    ).toBeInTheDocument();
   });
 });

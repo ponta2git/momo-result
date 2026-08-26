@@ -1,8 +1,3 @@
-import {
-  AnalysisTableCell as TableCell,
-  AnalysisTableHead as TableHead,
-  AnalysisTableRow as TableRow,
-} from "@/features/seriesComparison/charts/SeriesAnalysisMatrix";
 import { drilldownTitle } from "@/features/seriesComparison/drilldowns/SeriesAnalysisDrilldownPrimitives";
 import {
   PlayOrderHistoryDrilldown,
@@ -27,6 +22,7 @@ import type {
 } from "@/shared/api/seriesAnalysis";
 import { formatSeriesMatchIndex } from "@/shared/domain/matchLabels";
 import { Button } from "@/shared/ui/actions/Button";
+import { DataTable } from "@/shared/ui/data/DataTable";
 import { FactList } from "@/shared/ui/data/FactList";
 import { Dialog } from "@/shared/ui/feedback/Dialog";
 import { Notice } from "@/shared/ui/feedback/Notice";
@@ -136,49 +132,89 @@ export function UnexpectedWinsDrilldown({
           この比較範囲では、確認対象になった勝利はありません。
         </Notice>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[68rem] text-left text-sm">
-            <thead>
-              <tr>
-                <TableHead>試合</TableHead>
-                <TableHead>日時</TableHead>
-                <TableHead>期待順位</TableHead>
-                <TableHead>実順位</TableHead>
-                <TableHead>物件収益</TableHead>
-                <TableHead>目的地</TableHead>
-                <TableHead>プラス駅</TableHead>
-                <TableHead>マイナス駅</TableHead>
-                <TableHead>カード駅</TableHead>
-                <TableHead>カード売り場</TableHead>
-                <TableHead>スリの銀次</TableHead>
-              </tr>
-            </thead>
-            <tbody>
-              {payload.rows.map((row) => (
-                <TableRow key={row.matchId}>
-                  <TableCell>
-                    <SeriesAnalysisMatchLink
-                      ariaLabel={`${formatSeriesMatchIndex(row.matchIndex)}の試合結果を見る`}
-                      matchId={row.matchId}
-                    >
-                      {formatSeriesMatchIndex(row.matchIndex)}
-                    </SeriesAnalysisMatchLink>
-                  </TableCell>
-                  <TableCell>{formatDateTime(row.playedAt)}</TableCell>
-                  <TableCell>{formatDecimal(row.expectedRank)}位</TableCell>
-                  <TableCell>{row.actualRank}位</TableCell>
-                  <TableCell>{formatManYen(row.evidence.revenueManYen)}</TableCell>
-                  <TableCell>{row.evidence.destinationCount}回</TableCell>
-                  <TableCell>{row.evidence.plusStationCount}回</TableCell>
-                  <TableCell>{row.evidence.minusStationCount}回</TableCell>
-                  <TableCell>{row.evidence.cardStationCount}回</TableCell>
-                  <TableCell>{row.evidence.cardShopCount}回</TableCell>
-                  <TableCell>{row.evidence.ginjiCount}回</TableCell>
-                </TableRow>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DataTable
+          caption={{ content: "予測より上位だった勝利の根拠" }}
+          columns={[
+            {
+              cellClassName: "tabular-nums",
+              header: "試合",
+              key: "match",
+              renderCell: (row) => (
+                <SeriesAnalysisMatchLink
+                  ariaLabel={`${formatSeriesMatchIndex(row.matchIndex)}の試合結果を見る`}
+                  matchId={row.matchId}
+                >
+                  {formatSeriesMatchIndex(row.matchIndex)}
+                </SeriesAnalysisMatchLink>
+              ),
+              rowHeader: true,
+            },
+            {
+              cellClassName: "tabular-nums",
+              header: "日時",
+              key: "played-at",
+              renderCell: (row) => formatDateTime(row.playedAt),
+            },
+            {
+              cellClassName: "tabular-nums",
+              header: "期待順位",
+              key: "expected-rank",
+              renderCell: (row) => `${formatDecimal(row.expectedRank)}位`,
+            },
+            {
+              cellClassName: "tabular-nums",
+              header: "実順位",
+              key: "actual-rank",
+              renderCell: (row) => `${row.actualRank}位`,
+            },
+            {
+              cellClassName: "tabular-nums",
+              header: "物件収益",
+              key: "revenue",
+              renderCell: (row) => formatManYen(row.evidence.revenueManYen),
+            },
+            {
+              cellClassName: "tabular-nums",
+              header: "目的地",
+              key: "destination",
+              renderCell: (row) => `${row.evidence.destinationCount}回`,
+            },
+            {
+              cellClassName: "tabular-nums",
+              header: "プラス駅",
+              key: "plus-station",
+              renderCell: (row) => `${row.evidence.plusStationCount}回`,
+            },
+            {
+              cellClassName: "tabular-nums",
+              header: "マイナス駅",
+              key: "minus-station",
+              renderCell: (row) => `${row.evidence.minusStationCount}回`,
+            },
+            {
+              cellClassName: "tabular-nums",
+              header: "カード駅",
+              key: "card-station",
+              renderCell: (row) => `${row.evidence.cardStationCount}回`,
+            },
+            {
+              cellClassName: "tabular-nums",
+              header: "カード売り場",
+              key: "card-shop",
+              renderCell: (row) => `${row.evidence.cardShopCount}回`,
+            },
+            {
+              cellClassName: "tabular-nums",
+              header: "スリの銀次",
+              key: "ginji",
+              renderCell: (row) => `${row.evidence.ginjiCount}回`,
+            },
+          ]}
+          density="compact"
+          getRowKey={(row) => row.matchId}
+          minWidth="68rem"
+          rows={payload.rows}
+        />
       )}
     </div>
   );

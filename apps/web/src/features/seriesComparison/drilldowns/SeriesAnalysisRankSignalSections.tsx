@@ -1,11 +1,5 @@
 import { Check, Minus } from "lucide-react";
-import type { ReactNode } from "react";
 
-import {
-  AnalysisTableCell,
-  AnalysisTableHead,
-  AnalysisTableRow,
-} from "@/features/seriesComparison/charts/SeriesAnalysisMatrix";
 import { evidenceStrengthLabel } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
 import {
   formatRankSignalImportance,
@@ -16,6 +10,7 @@ import {
 import type { SeriesAnalysisDrilldownV3 } from "@/shared/api/seriesAnalysis";
 import { cn } from "@/shared/ui/cn";
 import { Disclosure } from "@/shared/ui/data/Collapsible";
+import { DataTable } from "@/shared/ui/data/DataTable";
 
 export type RankSignalPayload = Extract<
   SeriesAnalysisDrilldownV3["payload"],
@@ -245,7 +240,7 @@ function FoldDetails({ candidate }: { candidate: RankSignalCandidate }) {
     <Disclosure
       ariaLabel={`${rankSignalLabel(candidate.signal)}の開催別の数値`}
       className="mt-4 min-w-0"
-      panelClassName="w-full min-w-0 max-w-full overflow-x-auto p-3"
+      panelClassName="w-full min-w-0 max-w-full p-3"
       presentation="inset"
       summary={
         <span className="flex items-baseline justify-between gap-3">
@@ -257,37 +252,45 @@ function FoldDetails({ candidate }: { candidate: RankSignalCandidate }) {
       }
       triggerClassName="px-0"
     >
-      <table className="w-full min-w-[36rem] text-left text-sm">
-        <caption className="sr-only">{rankSignalLabel(candidate.signal)}の開催別テスト結果</caption>
-        <thead>
-          <tr>
-            <FoldTableHead>確認組</FoldTableHead>
-            <FoldTableHead>開催数</FoldTableHead>
-            <FoldTableHead>順位の2人組</FoldTableHead>
-            <FoldTableHead>判定</FoldTableHead>
-            <FoldTableHead>重要度</FoldTableHead>
-          </tr>
-        </thead>
-        <tbody>
-          {candidate.foldRows.map((row) => (
-            <AnalysisTableRow key={row.fold}>
-              <FoldTableCell>開催{rankSignalFoldLabel(row.fold)}</FoldTableCell>
-              <FoldTableCell>{row.heldEventCount}開催</FoldTableCell>
-              <FoldTableCell>{row.comparisonCount}組</FoldTableCell>
-              <FoldTableCell>{row.supported ? "支持" : "支持なし"}</FoldTableCell>
-              <FoldTableCell>{formatRankSignalImportance(row.importance)}</FoldTableCell>
-            </AnalysisTableRow>
-          ))}
-        </tbody>
-      </table>
+      <DataTable
+        caption={{ content: `${rankSignalLabel(candidate.signal)}の開催別テスト結果` }}
+        columns={[
+          {
+            cellClassName: "tabular-nums",
+            header: "確認組",
+            key: "fold",
+            renderCell: (row) => `開催${rankSignalFoldLabel(row.fold)}`,
+            rowHeader: true,
+          },
+          {
+            cellClassName: "tabular-nums",
+            header: "開催数",
+            key: "event-count",
+            renderCell: (row) => `${row.heldEventCount}開催`,
+          },
+          {
+            cellClassName: "tabular-nums",
+            header: "順位の2人組",
+            key: "comparison-count",
+            renderCell: (row) => `${row.comparisonCount}組`,
+          },
+          {
+            header: "判定",
+            key: "support",
+            renderCell: (row) => (row.supported ? "支持" : "支持なし"),
+          },
+          {
+            cellClassName: "tabular-nums",
+            header: "重要度",
+            key: "importance",
+            renderCell: (row) => formatRankSignalImportance(row.importance),
+          },
+        ]}
+        density="compact"
+        getRowKey={(row) => String(row.fold)}
+        minWidth="36rem"
+        rows={candidate.foldRows}
+      />
     </Disclosure>
   );
-}
-
-function FoldTableHead({ children }: { children: ReactNode }) {
-  return <AnalysisTableHead>{children}</AnalysisTableHead>;
-}
-
-function FoldTableCell({ children }: { children: ReactNode }) {
-  return <AnalysisTableCell>{children}</AnalysisTableCell>;
 }

@@ -48,7 +48,7 @@ describe("RankSignalDrilldown", () => {
     await user.click(screen.getByRole("button", { name: "物件収益の開催別の数値" }));
     const table = screen.getByRole("table", { name: "物件収益の開催別テスト結果" });
     expect(within(table).getAllByRole("row")).toHaveLength(6);
-    expect(within(table).getByRole("cell", { name: "開催A" })).toBeInTheDocument();
+    expect(within(table).getByRole("rowheader", { name: "開催A" })).toHaveAttribute("scope", "row");
   });
 
   it("gives a next action when no candidate is safe to adopt", () => {

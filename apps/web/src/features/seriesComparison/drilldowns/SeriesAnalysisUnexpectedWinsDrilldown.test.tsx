@@ -16,7 +16,8 @@ describe("UnexpectedWinsDrilldown", () => {
       </MemoryRouter>,
     );
 
-    const table = screen.getByRole("table");
+    const table = screen.getByRole("table", { name: "予測より上位だった勝利の根拠" });
+    expect(within(table).getAllByRole("rowheader")).not.toHaveLength(0);
     for (const heading of [
       "物件収益",
       "目的地",

@@ -39,9 +39,12 @@ describe("SeriesAnalysisAdminStatus", () => {
 
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
     expect(screen.getByText("成功").parentElement).toHaveClass("border-[var(--color-success)]/60");
-    for (const header of within(screen.getByRole("table")).getAllByRole("columnheader")) {
+    const table = screen.getByRole("table", { name: "全作品の直近3件の実行履歴" });
+    expect(within(table).getAllByRole("rowheader")).toHaveLength(overview.recentJobs.length);
+    for (const header of within(table).getAllByRole("columnheader")) {
       expect(header).toHaveClass("bg-[var(--color-surface)]", "border-y");
       expect(header).not.toHaveClass("bg-[var(--color-surface-subtle)]");
+      expect(header).toHaveAttribute("scope", "col");
     }
   });
 });

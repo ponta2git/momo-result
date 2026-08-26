@@ -33,6 +33,12 @@ describe("rich series analysis views", () => {
     ).toEqual(["順位と基礎比較", "平均順位首位の確からしさ", "直接対決", "順位の安定性"]);
     const overviewRegion = screen.getByRole("region", { name: "順位と基礎比較" });
     expect(overviewRegion).toBeInTheDocument();
+    const overviewTable = within(overviewRegion).getByRole("table", {
+      name: "プレーヤー別の順位と基礎比較",
+    });
+    expect(within(overviewTable).getAllByRole("rowheader")).toHaveLength(
+      response.metricsByPlayer.length,
+    );
     expect(within(overviewRegion).getByRole("columnheader", { name: "平均順位" })).toHaveClass(
       "bg-[var(--color-surface)]",
       "border-[var(--color-border-strong)]",
@@ -94,6 +100,9 @@ describe("rich series analysis views", () => {
     const revenueMatrix = screen.getByRole("table", {
       name: "ぽんたの物件収益順位と最終順位",
     });
+    expect(revenueMatrix.querySelector("caption")).toHaveTextContent(
+      "ぽんたの物件収益順位と最終順位",
+    );
     expect(within(revenueMatrix).getAllByRole("row")).toHaveLength(5);
     expect(within(revenueMatrix).getAllByRole("rowheader")).toHaveLength(4);
     expect(within(revenueMatrix).getAllByRole("cell")).toHaveLength(16);
@@ -251,6 +260,7 @@ describe("rich series analysis views", () => {
     );
 
     const recentRankStrip = screen.getByRole("table", { name: "直近順位ストリップ" });
+    expect(recentRankStrip.querySelector("caption")).toHaveTextContent("直近順位ストリップ");
     expect(recentRankStrip).toHaveClass("mx-auto");
     expect(recentRankStrip.parentElement?.parentElement).not.toHaveClass(
       "border",

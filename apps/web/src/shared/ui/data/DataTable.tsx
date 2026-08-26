@@ -15,6 +15,7 @@ export type DataTableCaption = {
 
 type DataTableColumnBase<Row> = {
   align?: DataTableAlign;
+  cellClassName?: string;
   header: ReactNode;
   key: string;
   minWidth?: string;
@@ -156,6 +157,7 @@ export function DataTable<Row>({
                   "sticky top-0 z-[var(--z-base)]",
                   alignClass[column.align ?? "left"],
                 )}
+                scope="col"
                 style={columnStyleByKey.get(column.key)}
               >
                 {column.sortable ? (
@@ -202,6 +204,7 @@ export function DataTable<Row>({
                       alignClass[column.align ?? "left"],
                       verticalAlignClass[verticalAlign],
                       column.rowHeader ? "font-semibold" : "",
+                      column.cellClassName,
                     )}
                     scope={column.rowHeader ? "row" : undefined}
                     style={columnStyleByKey.get(column.key)}

@@ -71,21 +71,30 @@ export const ScoreGridNumericEditor = memo(function ScoreGridNumericEditor({
   );
   const controlWidth: NumericInput.NumericInputCellField["controlWidth"] =
     commitKind === "incident" || field === "rank" ? "short" : "wide";
-  const inputField = { allowSign, ariaLabel, cellId, controlWidth, validationPath, value };
-  const interaction = {
-    col,
-    focusImageKind,
-    registerCellRef,
-    reviewField,
-    row,
-    onCommit: commitValue,
-    onKeyboard,
-    onPreferImageKindChange,
-    onReviewCellFocus,
-  };
-  const state = { error, originalValue, reviewed, reviewMessage, showStateLabel, synced };
 
   return (
-    <NumericInput.NumericInputCell field={inputField} interaction={interaction} state={state} />
+    <NumericInput.NumericInputCell
+      allowSign={allowSign}
+      ariaLabel={ariaLabel}
+      cellId={cellId}
+      col={col}
+      controlWidth={controlWidth}
+      error={error}
+      focusImageKind={focusImageKind}
+      originalValue={originalValue}
+      registerCellRef={registerCellRef}
+      reviewField={reviewField}
+      reviewed={reviewed}
+      reviewMessage={reviewMessage}
+      row={row}
+      showStateLabel={showStateLabel}
+      synced={synced}
+      validationPath={validationPath}
+      value={value}
+      onCommit={commitValue}
+      onKeyboard={onKeyboard}
+      onPreferImageKindChange={onPreferImageKindChange}
+      onReviewCellFocus={onReviewCellFocus}
+    />
   );
 });

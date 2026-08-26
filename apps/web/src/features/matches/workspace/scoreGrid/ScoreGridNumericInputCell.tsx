@@ -135,109 +135,123 @@ export type NumericInputCellState = {
   synced?: boolean | undefined;
 };
 
-export type NumericInputCellProps = {
-  field: NumericInputCellField;
-  interaction: NumericInputCellInteraction;
-  state?: NumericInputCellState | undefined;
-};
+export type NumericInputCellProps = NumericInputCellField &
+  NumericInputCellInteraction &
+  NumericInputCellState;
 
 export const NumericInputCell = memo(function NumericInputCell({
-  field,
-  interaction,
-  state,
+  allowSign,
+  ariaLabel,
+  cellId,
+  col,
+  controlWidth,
+  error = false,
+  focusImageKind,
+  originalValue,
+  registerCellRef,
+  reviewField,
+  reviewed = false,
+  reviewMessage,
+  row,
+  showStateLabel = false,
+  synced = false,
+  validationPath,
+  value,
+  onCommit,
+  onKeyboard,
+  onPreferImageKindChange,
+  onReviewCellFocus,
 }: NumericInputCellProps) {
   const [draftValue, setDraftValue] = useState<string | undefined>(undefined);
   const editStartValueRef = useRef<string | null>(null);
-  const fallbackValue = Number.isFinite(field.value) ? String(field.value) : "";
+  const fallbackValue = Number.isFinite(value) ? String(value) : "";
   const inputValue = draftValue ?? fallbackValue;
   const parsedDraftValue =
-    draftValue === undefined ? undefined : parseNumericValue(draftValue, field.allowSign);
-  const currentValue = parsedDraftValue ?? field.value;
-  const viewState: CellViewState = state?.showStateLabel
+    draftValue === undefined ? undefined : parseNumericValue(draftValue, allowSign);
+  const currentValue = parsedDraftValue ?? value;
+  const viewState: CellViewState = showStateLabel
     ? cellViewState({
         currentValue,
-        error: state.error ?? false,
-        originalValue: state.originalValue,
-        reviewMessage: state.reviewMessage,
-        reviewed: state.reviewed ?? false,
-        synced: state.synced ?? false,
+        error,
+        originalValue,
+        reviewMessage,
+        reviewed,
+        synced,
       })
     : { tone: "default" };
 
   const commitInputValue = useCallback(() => {
-    const parsed = parseNumericValue(inputValue, field.allowSign);
+    const parsed = parseNumericValue(inputValue, allowSign);
     if (parsed === undefined) {
       return;
     }
-    interaction.onCommit(parsed);
+    onCommit(parsed);
     setDraftValue(undefined);
-  }, [field.allowSign, inputValue, interaction]);
+  }, [allowSign, inputValue, onCommit]);
 
   const revertCell = useCallback(() => {
     const before = editStartValueRef.current ?? fallbackValue;
-    const parsed = parseNumericValue(before, field.allowSign);
+    const parsed = parseNumericValue(before, allowSign);
     setDraftValue(before);
     if (parsed !== undefined) {
-      interaction.onCommit(parsed);
+      onCommit(parsed);
     }
-  }, [fallbackValue, field.allowSign, interaction]);
+  }, [allowSign, fallbackValue, onCommit]);
 
   const handleChange = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => {
-      setDraftValue(normalizeNumericDraft(event.currentTarget.value, field.allowSign));
+      setDraftValue(normalizeNumericDraft(event.currentTarget.value, allowSign));
     },
-    [field.allowSign],
+    [allowSign],
   );
 
   const handleFocus = useCallback(() => {
     editStartValueRef.current = inputValue;
-    if (interaction.focusImageKind) {
-      interaction.onPreferImageKindChange?.(interaction.focusImageKind);
+    if (focusImageKind) {
+      onPreferImageKindChange?.(focusImageKind);
     }
-    if (interaction.reviewField) {
-      interaction.onReviewCellFocus?.(interaction.row, interaction.reviewField);
+    if (reviewField) {
+      onReviewCellFocus?.(row, reviewField);
     }
-  }, [inputValue, interaction]);
+  }, [focusImageKind, inputValue, onPreferImageKindChange, onReviewCellFocus, reviewField, row]);
 
   const handleKeyDown = useCallback(
     (event: KeyboardEvent<HTMLInputElement>) => {
-      if (interaction.col === undefined || !interaction.onKeyboard) {
+      if (col === undefined || !onKeyboard) {
         return;
       }
-      interaction.onKeyboard({
-        col: interaction.col,
+      onKeyboard({
+        col,
         event,
         onRevertCell: revertCell,
-        row: interaction.row,
+        row,
       });
     },
-    [interaction, revertCell],
+    [col, onKeyboard, revertCell, row],
   );
 
   const handleRef = useCallback(
     (node: HTMLInputElement | null) => {
-      interaction.registerCellRef?.(field.cellId, node);
+      registerCellRef?.(cellId, node);
     },
-    [field.cellId, interaction],
+    [cellId, registerCellRef],
   );
 
   return (
     <>
       <InputControl
-        ref={interaction.registerCellRef ? handleRef : undefined}
-        aria-label={field.ariaLabel}
-        aria-describedby={
-          state?.showStateLabel && viewState.label ? `${field.cellId}-status` : undefined
-        }
+        ref={registerCellRef ? handleRef : undefined}
+        aria-label={ariaLabel}
+        aria-describedby={showStateLabel && viewState.label ? `${cellId}-status` : undefined}
         className={
-          field.controlWidth === "short" ? "min-w-[6ch] tabular-nums" : "min-w-[12ch] tabular-nums"
+          controlWidth === "short" ? "min-w-[6ch] tabular-nums" : "min-w-[12ch] tabular-nums"
         }
-        data-validation-path={field.validationPath}
+        data-validation-path={validationPath}
         density="compact"
-        id={field.cellId}
+        id={cellId}
         inputMode="numeric"
-        invalid={state?.error ?? false}
-        textAlign={field.controlWidth === "short" ? "center" : "end"}
+        invalid={error}
+        textAlign={controlWidth === "short" ? "center" : "end"}
         tone={viewState.tone}
         type="text"
         value={inputValue}
@@ -246,13 +260,13 @@ export const NumericInputCell = memo(function NumericInputCell({
         onFocus={handleFocus}
         onKeyDown={handleKeyDown}
       />
-      {state?.showStateLabel ? (
+      {showStateLabel ? (
         <div className="min-h-5 pt-1">
           {viewState.label ? (
             <p
               key={viewState.label}
               className="momo-enter text-xs leading-4 text-[var(--color-text-secondary)]"
-              id={`${field.cellId}-status`}
+              id={`${cellId}-status`}
             >
               {viewState.label}
               {viewState.description ? (

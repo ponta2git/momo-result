@@ -2,8 +2,8 @@ import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import type { LinkProps } from "react-router-dom";
 
-import { buttonClassName } from "@/shared/ui/actions/Button";
-import type { ButtonSize, ButtonVariant } from "@/shared/ui/actions/Button";
+import { buttonClassName, DecorativeActionIcon } from "@/shared/ui/actions/actionRecipes";
+import type { ButtonSize, ButtonVariant } from "@/shared/ui/actions/actionRecipes";
 import { cn } from "@/shared/ui/cn";
 
 export type LinkButtonProps = Omit<LinkProps, "children" | "className"> & {
@@ -15,6 +15,7 @@ export type LinkButtonProps = Omit<LinkProps, "children" | "className"> & {
   variant?: ButtonVariant;
 };
 
+/** A navigation link presented with the shared text-action recipe. */
 export function LinkButton({
   children,
   className,
@@ -26,7 +27,7 @@ export function LinkButton({
 }: LinkButtonProps) {
   const content = (
     <>
-      {icon}
+      {icon ? <DecorativeActionIcon>{icon}</DecorativeActionIcon> : null}
       <span>{children}</span>
     </>
   );

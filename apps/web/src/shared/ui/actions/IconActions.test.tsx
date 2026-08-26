@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import { IconButton } from "@/shared/ui/actions/IconButton";
 import { IconLink } from "@/shared/ui/actions/IconLink";
+import { LinkButton } from "@/shared/ui/actions/LinkButton";
 
 describe("icon actions", () => {
   it("announces and disables an icon button while pending", () => {
@@ -25,7 +26,11 @@ describe("icon actions", () => {
   it("keeps icon navigation as a link and removes navigation when disabled", () => {
     const { rerender } = render(
       <MemoryRouter>
-        <IconLink aria-label="試合結果へ" icon={<ArrowRight />} to="/matches/1" />
+        <IconLink
+          aria-label="試合結果へ"
+          icon={<ArrowRight aria-label="右矢印" />}
+          to="/matches/1"
+        />
       </MemoryRouter>,
     );
 
@@ -40,5 +45,41 @@ describe("icon actions", () => {
     const disabledLink = screen.getByRole("link", { name: "試合結果へ" });
     expect(disabledLink).toHaveAttribute("aria-disabled", "true");
     expect(disabledLink).not.toHaveAttribute("href");
+  });
+
+  it("keeps derived icon-button state authoritative over unsafely forwarded attributes", () => {
+    const unsafeNativeProps = { "aria-busy": "false" } as const;
+    render(
+      // @ts-expect-error -- verifies the public API rejects this override while exercising the runtime guard for untyped callers.
+      <IconButton
+        {...unsafeNativeProps}
+        aria-label="一覧を更新"
+        icon={<RefreshCw />}
+        pending
+        pendingLabel="一覧を更新中"
+        type="submit"
+      />,
+    );
+
+    const button = screen.getByRole("button", { name: "一覧を更新中" });
+    expect(button).toHaveAttribute("aria-busy", "true");
+    expect(button).toBeDisabled();
+    expect(button).toHaveAttribute("type", "submit");
+  });
+
+  it("keeps supplied icons out of icon and text action names", () => {
+    render(
+      <MemoryRouter>
+        <IconButton aria-label="一覧を更新" icon={<RefreshCw aria-label="更新アイコン" />} />
+        <LinkButton icon={<ArrowRight aria-label="右矢印" />} to="/matches/1">
+          試合結果へ
+        </LinkButton>
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole("button", { name: "一覧を更新" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "試合結果へ" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /更新アイコン/u })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /右矢印/u })).not.toBeInTheDocument();
   });
 });

@@ -2,47 +2,23 @@ import { LoaderCircle } from "lucide-react";
 import type { ButtonHTMLAttributes, ReactNode, Ref } from "react";
 import { useFormStatus } from "react-dom";
 
-import { cn } from "@/shared/ui/cn";
+import { buttonClassName, DecorativeActionIcon } from "@/shared/ui/actions/actionRecipes";
+import type {
+  ButtonSize as ActionButtonSize,
+  ButtonVariant as ActionButtonVariant,
+} from "@/shared/ui/actions/actionRecipes";
 
-export type ButtonVariant = "primary" | "secondary" | "quiet" | "danger";
-export type ButtonSize = "sm" | "md" | "lg";
+export { buttonClassName } from "@/shared/ui/actions/actionRecipes";
+export type ButtonSize = ActionButtonSize;
+export type ButtonVariant = ActionButtonVariant;
 type ButtonType = "button" | "submit" | "reset";
 
-const variantClass = {
-  primary:
-    "border-[var(--color-action)] bg-[var(--color-action)] text-white hover:opacity-90 active:opacity-95 focus-visible:outline-[var(--color-action)]",
-  secondary:
-    "border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)]",
-  quiet:
-    "border-transparent bg-transparent text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]",
-  danger:
-    "border-[var(--color-danger)] bg-[var(--color-danger)] text-white hover:opacity-90 active:opacity-95 focus-visible:outline-[var(--color-danger)]",
-} as const satisfies Record<ButtonVariant, string>;
-
-const sizeClass = {
-  sm: "min-h-11 px-3 py-2 text-sm sm:min-h-9 sm:py-1",
-  md: "min-h-11 px-4 py-2 text-sm sm:min-h-10",
-  lg: "min-h-11 px-5 py-3 text-base",
-} as const satisfies Record<ButtonSize, string>;
-
-export function buttonClassName({
-  className,
-  size = "md",
-  variant = "primary",
-}: {
-  className?: string | undefined;
-  size?: ButtonSize | undefined;
-  variant?: ButtonVariant | undefined;
-}) {
-  return cn(
-    "momo-pressable inline-flex w-auto min-w-0 items-center justify-center gap-2 rounded-[var(--radius-sm)] border font-semibold whitespace-normal break-words disabled:cursor-not-allowed disabled:opacity-60",
-    sizeClass[size],
-    variantClass[variant],
-    className,
-  );
-}
-
-export type ButtonProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, "type"> & {
+export type ButtonProps = Omit<
+  ButtonHTMLAttributes<HTMLButtonElement>,
+  "aria-busy" | "disabled" | "type"
+> & {
+  "aria-busy"?: never;
+  disabled?: boolean | undefined;
   icon?: ReactNode;
   pending?: boolean;
   pendingLabel?: ReactNode;
@@ -75,56 +51,28 @@ export function Button({
   const buttonClasses = buttonClassName({ className, size, variant });
   const inner = (
     <>
-      {actualPending ? (
-        <LoaderCircle
-          aria-hidden="true"
-          className="size-4 animate-spin motion-reduce:animate-none"
-        />
-      ) : (
-        icon
-      )}
+      {actualPending || icon ? (
+        <DecorativeActionIcon>
+          {actualPending ? (
+            <LoaderCircle className="size-4 animate-spin motion-reduce:animate-none" />
+          ) : (
+            icon
+          )}
+        </DecorativeActionIcon>
+      ) : null}
       <span>{actualPending ? (pendingLabel ?? children) : children}</span>
     </>
   );
 
-  // 静的解析 (react/button-has-type) はリテラル `type` のみ受け入れるため、
-  // `ButtonType` の判別を JSX 側で行いリテラルとして埋める。
-  if (type === "submit") {
-    return (
-      <button
-        ref={ref}
-        aria-busy={actualPending || undefined}
-        className={buttonClasses}
-        disabled={isDisabled}
-        type="submit"
-        {...props}
-      >
-        {inner}
-      </button>
-    );
-  }
-  if (type === "reset") {
-    return (
-      <button
-        ref={ref}
-        aria-busy={actualPending || undefined}
-        className={buttonClasses}
-        disabled={isDisabled}
-        type="reset"
-        {...props}
-      >
-        {inner}
-      </button>
-    );
-  }
   return (
     <button
+      {...props}
       ref={ref}
       aria-busy={actualPending || undefined}
       className={buttonClasses}
       disabled={isDisabled}
-      type="button"
-      {...props}
+      // oxlint-disable-next-line react/button-has-type -- ButtonType is a closed literal union with a safe "button" default; one branch avoids three drift-prone JSX copies.
+      type={type}
     >
       {inner}
     </button>

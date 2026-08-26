@@ -1,10 +1,10 @@
 import { AlertDialog as BaseAlertDialog } from "@base-ui/react/alert-dialog";
 import { Dialog as BaseDialog } from "@base-ui/react/dialog";
-import { LoaderCircle, X } from "lucide-react";
+import { X } from "lucide-react";
 import type { ReactElement, ReactNode } from "react";
 import { useState } from "react";
 
-import { buttonClassName } from "@/shared/ui/actions/Button";
+import { Button } from "@/shared/ui/actions/Button";
 import { IconButton } from "@/shared/ui/actions/IconButton";
 import { cn } from "@/shared/ui/cn";
 
@@ -41,6 +41,12 @@ type AlertDialogProps = DialogBaseProps & {
 /** Keeps action-bearing dialog forms in one reading order without moving them outside the form. */
 export const dialogFooterClassName =
   "flex flex-wrap justify-end gap-2 border-t border-[var(--color-border)] pt-4";
+
+const dialogBackdropClassName = "fixed inset-0 z-[var(--z-dialog)] bg-[var(--color-backdrop)]/35";
+const dialogPopupClassName =
+  "momo-dialog-popup fixed inset-0 z-[var(--z-dialog)] mx-auto flex w-full max-w-[40rem] items-center justify-center overflow-hidden";
+const dialogSurfaceClassName =
+  "momo-dialog-surface momo-enter w-full rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-[var(--color-text-primary)] shadow-[var(--shadow-dialog)]";
 
 function defaultAlertErrorMessage(error: unknown) {
   if (error instanceof Error && error.message.trim()) {
@@ -113,25 +119,11 @@ export function Dialog({
     >
       {trigger ? <BaseDialog.Trigger render={trigger} /> : null}
       <BaseDialog.Portal>
-        <BaseDialog.Backdrop
-          className={cn(
-            "fixed inset-0 z-[var(--z-dialog)] bg-[var(--momo-night-900)]/35",
-            backdropClassName,
-          )}
-        />
-        <BaseDialog.Popup
-          className={cn(
-            "momo-dialog-popup fixed inset-0 z-[var(--z-dialog)] mx-auto flex w-full max-w-[40rem] items-center justify-center overflow-hidden",
-            popupClassName,
-          )}
-          initialFocus={true}
-        >
+        <BaseDialog.Backdrop className={cn(dialogBackdropClassName, backdropClassName)} />
+        <BaseDialog.Popup className={cn(dialogPopupClassName, popupClassName)} initialFocus={true}>
           <div
             aria-busy={busy || undefined}
-            className={cn(
-              "momo-dialog-surface momo-enter flex w-full overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-[var(--color-text-primary)] shadow-[var(--shadow-dialog)]",
-              surfaceClassName,
-            )}
+            className={cn(dialogSurfaceClassName, "flex overflow-hidden", surfaceClassName)}
           >
             <DialogContentFrame
               className={className}
@@ -149,6 +141,7 @@ export function Dialog({
 }
 
 export function AlertDialog({
+  backdropClassName,
   cancelLabel = "キャンセル",
   children,
   className,
@@ -161,6 +154,8 @@ export function AlertDialog({
   onOpenChange,
   open,
   pending = false,
+  popupClassName,
+  surfaceClassName,
   tone = "danger",
   title,
   trigger,
@@ -209,11 +204,11 @@ export function AlertDialog({
     >
       {trigger ? <BaseAlertDialog.Trigger render={trigger} /> : null}
       <BaseAlertDialog.Portal>
-        <BaseAlertDialog.Backdrop className="fixed inset-0 z-[var(--z-dialog)] bg-[var(--momo-night-900)]/35" />
-        <BaseAlertDialog.Popup className="momo-dialog-popup fixed inset-0 z-[var(--z-dialog)] mx-auto flex w-full max-w-[40rem] items-center justify-center overflow-hidden">
+        <BaseAlertDialog.Backdrop className={cn(dialogBackdropClassName, backdropClassName)} />
+        <BaseAlertDialog.Popup className={cn(dialogPopupClassName, popupClassName)}>
           <div
             aria-busy={actualPending || undefined}
-            className="momo-dialog-surface momo-enter w-full overflow-y-auto rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-[var(--color-text-primary)] shadow-[var(--shadow-dialog)]"
+            className={cn(dialogSurfaceClassName, "overflow-y-auto", surfaceClassName)}
           >
             <div className="space-y-3">
               <BaseAlertDialog.Title className="text-lg font-semibold text-balance text-[var(--color-text-primary)]">
@@ -236,31 +231,24 @@ export function AlertDialog({
               <div className="flex flex-wrap justify-end gap-2">
                 <BaseAlertDialog.Close
                   render={
-                    <button
+                    <Button
                       aria-label={typeof cancelLabel === "string" ? cancelLabel : "キャンセル"}
-                      className={buttonClassName({ variant: "secondary" })}
                       disabled={actualPending}
-                      type="button"
-                    />
+                      variant="secondary"
+                    >
+                      {cancelLabel}
+                    </Button>
                   }
+                />
+                <Button
+                  disabled={confirmDisabled}
+                  pending={actualPending}
+                  pendingLabel={confirmLabel}
+                  variant={tone === "danger" ? "danger" : "primary"}
+                  onClick={() => void handleConfirm()}
                 >
-                  {cancelLabel}
-                </BaseAlertDialog.Close>
-                <button
-                  aria-busy={actualPending}
-                  className={buttonClassName({ variant: tone === "danger" ? "danger" : "primary" })}
-                  disabled={actualPending || confirmDisabled}
-                  type="button"
-                  onClick={handleConfirm}
-                >
-                  {actualPending ? (
-                    <LoaderCircle
-                      aria-hidden="true"
-                      className="size-4 animate-spin motion-reduce:animate-none"
-                    />
-                  ) : null}
-                  <span>{confirmLabel}</span>
-                </button>
+                  {confirmLabel}
+                </Button>
               </div>
             </div>
           </div>

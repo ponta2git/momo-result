@@ -142,7 +142,7 @@ export function SourceImagePanel({
                   <>
                     <img
                       alt={`${sourceImageKindLabels[panel.activeState.kind]}の元画像`}
-                      className="h-[13rem] w-full rounded-[var(--radius-sm)] bg-[var(--momo-night-900)] object-contain"
+                      className="h-[13rem] w-full rounded-[var(--radius-sm)] bg-[var(--color-media-canvas)] object-contain"
                       src={panel.displayUrl}
                     />
                     <div className="mt-2 flex items-center justify-between gap-2">

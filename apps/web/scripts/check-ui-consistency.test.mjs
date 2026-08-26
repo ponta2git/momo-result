@@ -96,6 +96,10 @@ test("moves deterministic utility, token, color, spacing, and motion checks into
     violations.filter((violation) => violation.rule === "raw-arbitrary-color").length,
     4,
   );
+  assert.equal(
+    violations.filter((violation) => violation.rule === "direct-tailwind-palette").length,
+    2,
+  );
 });
 
 test("detects recursive cross-family aliases and forbidden UI boundaries", async () => {

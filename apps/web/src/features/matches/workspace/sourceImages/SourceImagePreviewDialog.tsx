@@ -22,7 +22,7 @@ export function SourceImagePreviewDialog({ kind, onClose, url }: SourceImagePrev
 
   return (
     <Dialog
-      backdropClassName="bg-[var(--momo-night-900)]/65"
+      backdropClassName="bg-[var(--color-backdrop)]/65"
       popupClassName="max-w-none p-0 px-3 py-6"
       open
       onOpenChange={handleOpenChange}

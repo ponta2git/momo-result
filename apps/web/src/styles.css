@@ -66,9 +66,13 @@
   --color-surface-hover: var(--ref-neutral-75);
   --color-surface-subtle: var(--ref-neutral-100);
   --color-surface-selected: var(--ref-neutral-200);
+  --color-surface-inverse: var(--ref-neutral-night);
+  --color-media-canvas: var(--ref-neutral-night);
+  --color-backdrop: var(--ref-neutral-night);
   --color-text-primary: var(--ref-neutral-900);
   --color-text-secondary: var(--ref-neutral-500);
   --color-text-muted: var(--ref-neutral-300);
+  --color-text-inverse: var(--ref-neutral-0);
   --color-border: var(--ref-neutral-border);
   --color-border-strong: var(--ref-neutral-border-strong);
   --color-action: var(--ref-action-700);
@@ -103,7 +107,6 @@
   --color-tray-incident: var(--ref-tray-incident);
   --color-tray-marker: var(--ref-tray-marker);
   --momo-night-900: var(--ref-neutral-night);
-
   --radius-xs: 4px;
   --radius-sm: 6px;
   --radius-md: 8px;

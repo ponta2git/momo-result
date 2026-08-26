@@ -17,12 +17,12 @@ const surfaceVariantClass = {
   quiet:
     "border-transparent bg-transparent text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]",
   danger:
-    "border-[var(--color-danger)] bg-[var(--color-danger)] text-white hover:opacity-90 active:opacity-95",
+    "border-[var(--color-danger)] bg-[var(--color-danger)] text-[var(--color-text-inverse)] hover:opacity-90 active:opacity-95",
 } as const satisfies Record<IconActionVariant, string>;
 
 const buttonVariantClass = {
   primary:
-    "border-[var(--color-action)] bg-[var(--color-action)] text-white hover:opacity-90 active:opacity-95 focus-visible:outline-[var(--color-action)]",
+    "border-[var(--color-action)] bg-[var(--color-action)] text-[var(--color-text-inverse)] hover:opacity-90 active:opacity-95 focus-visible:outline-[var(--color-action)]",
   secondary: cn(surfaceVariantClass.secondary, "text-[var(--color-text-primary)]"),
   quiet: surfaceVariantClass.quiet,
   danger: cn(surfaceVariantClass.danger, "focus-visible:outline-[var(--color-danger)]"),

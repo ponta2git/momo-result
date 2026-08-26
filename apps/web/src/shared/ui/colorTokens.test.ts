@@ -187,10 +187,17 @@ describe("semantic color tokens", () => {
 
     for (const token of ["--color-action", "--color-danger"]) {
       expect(
-        contrast(resolvedToken(token), resolvedToken("--color-surface")),
-        `white text on ${token} must meet AA`,
+        contrast(resolvedToken("--color-text-inverse"), resolvedToken(token)),
+        `inverse text on ${token} must meet AA`,
       ).toBeGreaterThanOrEqual(4.5);
     }
+    expect(
+      contrast(
+        resolvedToken("--color-text-inverse"),
+        resolvedToken("--color-surface-inverse"),
+      ),
+      "inverse text on inverse surfaces must meet AA",
+    ).toBeGreaterThanOrEqual(4.5);
 
     const markTokens = [
       ...[1, 2, 3, 4].map((value) => `--color-member-sequence-${value}`),

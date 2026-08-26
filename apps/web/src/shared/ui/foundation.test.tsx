@@ -283,6 +283,24 @@ describe("ui foundation", () => {
     expect(screen.queryByRole("button", { name: "削除確認" })).not.toBeInTheDocument();
   });
 
+  it("AlertDialog applies the same surface customization contract as Dialog", async () => {
+    render(
+      <AlertDialog
+        open
+        backdropClassName="test-backdrop"
+        popupClassName="test-popup"
+        surfaceClassName="test-surface"
+        title="表示契約を確認"
+        onConfirm={vi.fn()}
+      />,
+    );
+
+    const dialog = await screen.findByRole("alertdialog", { name: "表示契約を確認" });
+    expect(document.querySelector(".test-backdrop")).not.toBeNull();
+    expect(dialog).toHaveClass("test-popup");
+    expect(dialog.firstElementChild).toHaveClass("test-surface");
+  });
+
   it("AlertDialog shows pending feedback while confirm work is unresolved", async () => {
     const user = userEvent.setup();
     const deferred = createDeferred<void>();

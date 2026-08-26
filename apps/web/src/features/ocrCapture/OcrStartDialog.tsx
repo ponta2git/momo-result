@@ -58,7 +58,7 @@ function TraySummary({ plan }: { plan: OcrSubmissionPlan }) {
           >
             <span
               aria-hidden="true"
-              className={`flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-bold text-[var(--momo-night-900)] ${definition.accentClass}`}
+              className={`flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-bold text-[var(--color-text-primary)] ${definition.accentClass}`}
             >
               {selected ? <Check className="size-4" /> : definition.stationLabel}
             </span>

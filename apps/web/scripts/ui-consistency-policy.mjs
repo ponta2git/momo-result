@@ -24,7 +24,7 @@ const designTokenNamePattern =
   /^--(?:color|ease|font|motion|radius|shadow|z)-[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/u;
 
 const directTailwindPalettePattern =
-  /\b(?:bg|border|fill|outline|ring|stroke|text)-(?:amber|blue|cyan|emerald|fuchsia|gray|green|indigo|lime|neutral|orange|pink|purple|red|rose|sky|slate|stone|teal|violet|yellow|zinc)-/gu;
+  /\b(?:bg|border|fill|outline|ring|stroke|text)-(?:(?:black|white)(?:\/\d+)?\b|(?:amber|blue|cyan|emerald|fuchsia|gray|green|indigo|lime|neutral|orange|pink|purple|red|rose|sky|slate|stone|teal|violet|yellow|zinc)-)/gu;
 
 const rawColorValuePattern =
   /#[0-9a-f]{3,8}\b|(?:color|hsla?|lab|lch|oklab|oklch|rgba?)\([^)]*\)/giu;

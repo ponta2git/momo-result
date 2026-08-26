@@ -71,6 +71,9 @@ const densityClass = {
   compact: "px-3 py-2",
 } as const satisfies Record<DataTableDensity, string>;
 
+export const dataTableHeaderCellClassName =
+  "border-b border-[var(--color-border-strong)] bg-[var(--color-surface)] px-3 py-2 text-xs leading-5 font-semibold text-[var(--color-text-secondary)]";
+
 export function DataTable<Row>({
   caption,
   className,
@@ -138,7 +141,8 @@ export function DataTable<Row>({
                     : undefined
                 }
                 className={cn(
-                  "sticky top-0 z-[var(--z-base)] border-b border-[var(--color-border-strong)] bg-[var(--color-surface)] px-3 py-2 text-xs leading-5 font-semibold text-[var(--color-text-secondary)]",
+                  dataTableHeaderCellClassName,
+                  "sticky top-0 z-[var(--z-base)]",
                   alignClass[column.align ?? "left"],
                 )}
                 style={columnStyleByKey.get(column.key)}

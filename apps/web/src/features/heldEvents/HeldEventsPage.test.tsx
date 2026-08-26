@@ -4,12 +4,14 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { HeldEventsPage } from "@/features/heldEvents/HeldEventsPage";
 import { ToastHost } from "@/shared/ui/feedback/ToastHost";
 import { setDevUser } from "@/test/auth";
 import { createDeferred } from "@/test/deferred";
+import { installMatchMediaController } from "@/test/doubles/dom";
+import type { MatchMediaController } from "@/test/doubles/dom";
 import { makeHeldEventResponse } from "@/test/factories";
 import { setupMsw } from "@/test/msw/lifecycle";
 import { server } from "@/test/msw/server";
@@ -42,12 +44,18 @@ function renderPage(path = "/held-events") {
 }
 
 let queryClient: QueryClient;
+let matchMedia: MatchMediaController | undefined;
 let user: ReturnType<typeof userEvent.setup>;
 
 describe("HeldEventsPage", () => {
   beforeEach(() => {
     queryClient = createTestQueryClient();
     user = userEvent.setup();
+  });
+
+  afterEach(() => {
+    matchMedia?.restore();
+    matchMedia = undefined;
   });
 
   it("renders held events as a concise ledger with status and related links", async () => {
@@ -82,6 +90,21 @@ describe("HeldEventsPage", () => {
       "href",
       "/exports?heldEventId=held-1&format=csv&returnTo=%2Fheld-events",
     );
+  });
+
+  it("uses the common data table for the desktop ledger", async () => {
+    matchMedia = installMatchMediaController(true);
+
+    renderPage();
+
+    const table = await screen.findByRole("table", { name: "開催履歴" });
+    expect(within(table).getByRole("columnheader", { name: "開催日時" })).toHaveClass(
+      "bg-[var(--color-surface)]",
+      "border-[var(--color-border-strong)]",
+    );
+    expect(within(table).getByRole("columnheader", { name: "確定済み" })).toBeInTheDocument();
+    expect(within(table).getByRole("columnheader", { name: "未完了" })).toBeInTheDocument();
+    expect(within(table).getByRole("columnheader", { name: "操作" })).toBeInTheDocument();
   });
 
   it("starts OCR from only the latest held event and preserves the list location", async () => {

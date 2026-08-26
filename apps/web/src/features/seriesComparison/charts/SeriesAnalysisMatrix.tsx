@@ -1,6 +1,7 @@
 import type { ComponentPropsWithoutRef, ReactNode } from "react";
 
 import { cn } from "@/shared/ui/cn";
+import { dataTableHeaderCellClassName } from "@/shared/ui/data/DataTable";
 
 export const SERIES_RANKS = [1, 2, 3, 4] as const;
 
@@ -101,14 +102,7 @@ export function AnalysisTableHead({
   ...props
 }: Omit<ComponentPropsWithoutRef<"th">, "scope">) {
   return (
-    <th
-      className={cn(
-        "border-b border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-3 py-2 font-semibold text-[var(--color-text-secondary)]",
-        className,
-      )}
-      {...props}
-      scope="col"
-    >
+    <th className={cn(dataTableHeaderCellClassName, className)} {...props} scope="col">
       {children}
     </th>
   );

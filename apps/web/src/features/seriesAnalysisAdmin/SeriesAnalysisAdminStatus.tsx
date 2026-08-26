@@ -7,6 +7,7 @@ import type {
   SeriesAnalysisSafeFailureCode,
   SeriesAnalysisTrigger,
 } from "@/shared/api/seriesAnalysis";
+import { dataTableHeaderCellClassName } from "@/shared/ui/data/DataTable";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 import { StatusBadge } from "@/shared/ui/status/StatusBadge";
@@ -169,11 +170,7 @@ function AnalysisJobStatusBadge({
 }
 
 function TableHead({ children }: { children: ReactNode }) {
-  return (
-    <th className="border-b border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 font-semibold text-[var(--color-text-secondary)]">
-      {children}
-    </th>
-  );
+  return <th className={dataTableHeaderCellClassName}>{children}</th>;
 }
 
 function TableCell({ children }: { children: ReactNode }) {

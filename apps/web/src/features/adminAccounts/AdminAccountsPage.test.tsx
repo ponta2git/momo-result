@@ -37,6 +37,10 @@ describe("AdminAccountsPage", () => {
     expect(
       await screen.findByRole("table", { name: "ログイン可能なアカウントと権限" }),
     ).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "表示名" })).toHaveClass(
+      "bg-[var(--color-surface)]",
+      "border-[var(--color-border-strong)]",
+    );
     const surface = screen.getByRole("region", { name: "ログインアカウント一覧" });
     expect(surface).toHaveClass("bg-[var(--color-surface)]", "rounded-[var(--radius-md)]");
     expect(surface).not.toHaveClass("border");

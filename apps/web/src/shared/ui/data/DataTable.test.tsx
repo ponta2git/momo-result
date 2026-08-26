@@ -49,6 +49,10 @@ describe("DataTable", () => {
       "aria-sort",
       "descending",
     );
+    expect(screen.getByRole("columnheader", { name: "総資産" })).toHaveClass(
+      "bg-[var(--color-surface)]",
+      "border-[var(--color-border-strong)]",
+    );
 
     await user.click(screen.getByRole("button", { name: "総資産" }));
     expect(onSort).toHaveBeenCalledTimes(1);

@@ -5,6 +5,8 @@ import { AdminAccountCreateDialog } from "@/features/adminAccounts/AdminAccountC
 import { AdminAccountRow } from "@/features/adminAccounts/AdminAccountRow";
 import { useAdminAccountsPageController } from "@/features/adminAccounts/useAdminAccountsPageController";
 import { Button } from "@/shared/ui/actions/Button";
+import { cn } from "@/shared/ui/cn";
+import { dataTableHeaderCellClassName } from "@/shared/ui/data/DataTable";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
@@ -145,15 +147,20 @@ export function AdminAccountsPage() {
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[44rem] text-left text-sm">
                     <caption className="sr-only">ログイン可能なアカウントと権限</caption>
-                    <thead className="text-[var(--color-text-secondary)]">
+                    <thead>
                       <tr>
-                        <th className="sticky left-0 z-[var(--z-base)] bg-[var(--color-surface)] px-3 py-2">
+                        <th
+                          className={cn(
+                            dataTableHeaderCellClassName,
+                            "sticky left-0 z-[var(--z-base)]",
+                          )}
+                        >
                           表示名
                         </th>
-                        <th className="px-3 py-2">DiscordユーザーID</th>
-                        <th className="px-3 py-2">プレーヤー</th>
-                        <th className="px-3 py-2">権限</th>
-                        <th className="px-3 py-2">操作</th>
+                        <th className={dataTableHeaderCellClassName}>DiscordユーザーID</th>
+                        <th className={dataTableHeaderCellClassName}>プレーヤー</th>
+                        <th className={dataTableHeaderCellClassName}>権限</th>
+                        <th className={dataTableHeaderCellClassName}>操作</th>
                       </tr>
                     </thead>
                     <tbody>

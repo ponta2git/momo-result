@@ -31,7 +31,15 @@ describe("rich series analysis views", () => {
     expect(
       screen.getAllByRole("heading", { level: 2 }).map((heading) => heading.textContent),
     ).toEqual(["順位と基礎比較", "平均順位首位の確からしさ", "直接対決", "順位の安定性"]);
-    expect(screen.getByRole("region", { name: "順位と基礎比較" })).toBeInTheDocument();
+    const overviewRegion = screen.getByRole("region", { name: "順位と基礎比較" });
+    expect(overviewRegion).toBeInTheDocument();
+    expect(within(overviewRegion).getByRole("columnheader", { name: "平均順位" })).toHaveClass(
+      "bg-[var(--color-surface)]",
+      "border-[var(--color-border-strong)]",
+    );
+    expect(within(overviewRegion).getByRole("columnheader", { name: "平均順位" })).not.toHaveClass(
+      "bg-[var(--color-surface-subtle)]",
+    );
     expect(screen.getByRole("region", { name: "直接対決" })).toBeInTheDocument();
     const currentDifference = screen.getByLabelText("現在の順位差");
     expect(within(currentDifference).getByText("平均順位の先頭")).toBeInTheDocument();

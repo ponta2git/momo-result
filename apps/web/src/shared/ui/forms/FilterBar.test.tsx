@@ -11,7 +11,6 @@ describe("FilterBar", () => {
       <FilterBar
         busy
         action={<Button variant="quiet">更新</Button>}
-        activeSummary="確定済み・第12回・新しい順"
         ariaLabel="試合の表示条件"
         meta="24件"
         primary={
@@ -26,7 +25,6 @@ describe("FilterBar", () => {
 
     const surface = screen.getByRole("region", { name: "試合の表示条件" });
     expect(surface).toHaveAttribute("aria-busy", "true");
-    expect(surface).toHaveTextContent("確定済み・第12回・新しい順");
     expect(surface).toHaveTextContent("24件");
     expect(screen.getByRole("button", { name: "表示条件をリセット" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "更新" })).toBeInTheDocument();
@@ -57,6 +55,7 @@ describe("FilterBar", () => {
     const trigger = screen.getByRole("button", { name: /詳細条件/u });
     const panel = screen.getByLabelText("マップ").parentElement?.parentElement;
     expect(trigger).toHaveAttribute("aria-expanded", "false");
+    expect(trigger).toHaveTextContent("作品・シーズン・マップ");
     expect(panel).toHaveClass("bg-transparent");
     expect(panel).not.toHaveClass("bg-[var(--color-surface-subtle)]");
     expect(screen.getByLabelText("マップ")).toBeInTheDocument();

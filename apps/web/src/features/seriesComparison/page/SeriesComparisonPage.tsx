@@ -98,7 +98,6 @@ export function SeriesComparisonPage() {
               mapValue={filters.state.mapMasterId ?? ""}
               refreshing={resource.refreshing || status.refreshing}
               response={resource.data}
-              scopeLabel={filters.scopeLabel}
               seasonOptions={filters.seasonOptions}
               seasonValue={filters.state.seasonMasterId ?? ""}
               seriesOptions={filters.seriesOptions}

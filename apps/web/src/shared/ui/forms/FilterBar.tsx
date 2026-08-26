@@ -14,7 +14,6 @@ export type FilterBarDetails = {
 
 export type FilterBarProps = {
   action?: ReactNode | undefined;
-  activeSummary?: ReactNode | undefined;
   ariaLabel: string;
   busy?: boolean | undefined;
   className?: string | undefined;
@@ -26,12 +25,11 @@ export type FilterBarProps = {
 
 /**
  * Owns the cross-feature filter operation group: labeled scope, primary controls, one detail
- * disclosure, complete active summary, and stable reset/action placement. Query and
- * cache behavior deliberately remain with the feature composition.
+ * disclosure whose summary owns active hidden conditions, and stable reset/action placement.
+ * Query and cache behavior deliberately remain with the feature composition.
  */
 export function FilterBar({
   action,
-  activeSummary,
   ariaLabel,
   busy = false,
   className,
@@ -82,10 +80,9 @@ export function FilterBar({
           </Disclosure>
         ) : null}
 
-        {activeSummary || meta ? (
-          <div className="grid min-w-0 gap-2 pt-1 text-xs text-[var(--color-text-secondary)] sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
-            <div className="min-w-0 text-pretty">{activeSummary}</div>
-            {meta ? <div className="min-w-0 tabular-nums sm:text-right">{meta}</div> : null}
+        {meta ? (
+          <div className="min-w-0 pt-1 text-xs text-[var(--color-text-secondary)] tabular-nums sm:text-right">
+            {meta}
           </div>
         ) : null}
       </div>

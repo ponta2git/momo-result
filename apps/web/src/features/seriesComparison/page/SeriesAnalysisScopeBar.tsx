@@ -26,7 +26,6 @@ export function SeriesAnalysisScopeBar({
   onSeriesChange,
   refreshing,
   response,
-  scopeLabel,
   seasonOptions,
   seasonValue,
   seriesOptions,
@@ -41,7 +40,6 @@ export function SeriesAnalysisScopeBar({
   onSeriesChange: (value: string) => void;
   refreshing: boolean;
   response: SeriesAnalysisResourceSummary | undefined;
-  scopeLabel: string;
   seasonOptions: SelectOption[];
   seasonValue: string;
   seriesOptions: SelectOption[];
@@ -55,16 +53,24 @@ export function SeriesAnalysisScopeBar({
         quality.noTargetCount > 0 ? `対象なし ${quality.noTargetCount}項目` : null,
       ].filter((entry): entry is string => entry !== null)
     : [];
+  const detailFilterLabels = [
+    seasonValue
+      ? `シーズン ${seasonOptions.find((option) => option.value === seasonValue)?.label ?? "選択中"}`
+      : null,
+    mapValue
+      ? `マップ ${mapOptions.find((option) => option.value === mapValue)?.label ?? "選択中"}`
+      : null,
+  ].filter((entry): entry is string => entry !== null);
 
   const scopeSummary = (
     <span className="block min-w-0">
-      {open ? null : (
+      {detailFilterLabels.length > 0 ? (
         <span className="block truncate font-medium text-[var(--color-text-primary)]">
-          {scopeLabel}
+          {detailFilterLabels.join("・")}
         </span>
-      )}
+      ) : null}
       <span
-        className={`${open ? "" : "mt-0.5"} block text-[var(--color-text-secondary)] tabular-nums`}
+        className={`${detailFilterLabels.length > 0 ? "mt-0.5" : ""} block text-[var(--color-text-secondary)] tabular-nums`}
       >
         {response ? `${response.scope.matchCount}戦` : "対戦数を確認中"}
         {qualityAdvisories.length > 0 ? (

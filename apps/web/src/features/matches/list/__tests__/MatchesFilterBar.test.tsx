@@ -69,12 +69,12 @@ describe("MatchesFilterBar", () => {
 
     const surface = screen.getByRole("region", { name: "試合の表示条件" });
     expect(within(surface).getByLabelText("確定状況")).toHaveValue("needs_review");
-    expect(surface).toHaveTextContent(
-      "適用中: 確定状況 要確認のみ・並び順 更新が新しい順・作品 桃太郎電鉄2・シーズン 今シーズン",
-    );
+    expect(within(surface).getByLabelText("並び順")).toHaveValue("updated_desc");
+    expect(surface).not.toHaveTextContent("適用中:");
 
     const detailTrigger = within(surface).getByRole("button", { name: /^詳細条件/u });
     expect(detailTrigger).toHaveAttribute("aria-expanded", "true");
+    expect(detailTrigger).toHaveTextContent("作品 桃太郎電鉄2・シーズン 今シーズン");
     expect(within(surface).getByLabelText("開催")).toBeInTheDocument();
 
     const resetButton = within(surface).getByRole("button", {

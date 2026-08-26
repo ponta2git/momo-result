@@ -2,7 +2,6 @@ import {
   compatibleMapIds,
   compatibleSeasonIds,
   findSeriesAnalysisTitle,
-  seriesAnalysisScopeName,
 } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
 import type { SeriesAnalysisUrlState } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
 import type { SeriesAnalysisOptionsResponse } from "@/shared/api/seriesAnalysis";
@@ -24,9 +23,6 @@ export function buildSeriesAnalysisFilterOptions(
         value: map.mapMasterId,
       })) ?? []),
     ],
-    scopeLabel: [selectedTitle?.displayName, seriesAnalysisScopeName(options, state)]
-      .filter(Boolean)
-      .join("・"),
     seasonOptions: [
       { label: "全シーズン", value: "" },
       ...(selectedTitle?.seasons.map((season) => ({

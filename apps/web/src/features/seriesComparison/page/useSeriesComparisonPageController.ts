@@ -237,7 +237,6 @@ export function useSeriesComparisonPageController() {
       activeView,
       confirmedMatchCount: filterOptions.confirmedMatchCount,
       mapOptions: filterOptions.mapOptions,
-      scopeLabel: filterOptions.scopeLabel,
       seasonOptions: filterOptions.seasonOptions,
       seriesOptions: filterOptions.seriesOptions,
       state: normalizedState,

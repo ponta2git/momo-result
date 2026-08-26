@@ -14,7 +14,6 @@ const baseProps = {
   onSeasonChange: vi.fn(),
   onSeriesChange: vi.fn(),
   refreshing: false,
-  scopeLabel: "桃太郎電鉄2・総合",
   seasonOptions: [{ label: "今シーズン", value: "season-current" }],
   seasonValue: "season-current",
   seriesOptions: [{ label: "桃太郎電鉄2", value: "gt_momotetsu_2" }],
@@ -34,7 +33,7 @@ describe("SeriesAnalysisScopeBar", () => {
     );
 
     const surface = screen.getByRole("region", { name: "比較条件" });
-    expect(surface).toHaveTextContent("桃太郎電鉄2・総合");
+    expect(surface).toHaveTextContent("シーズン 今シーズン・マップ 東日本編");
     expect(surface).toHaveTextContent("12戦");
     expect(surface).toHaveTextContent("最終更新");
     expect(surface).not.toHaveTextContent(/十分|読み取り目安/u);
@@ -78,7 +77,7 @@ describe("SeriesAnalysisScopeBar", () => {
     const trigger = within(surface).getByRole("button", { name: /比較対象を変更/u });
     const mountedSeasonControl = within(surface).getByLabelText("シーズン");
     expect(trigger).toHaveAttribute("aria-expanded", "false");
-    expect(trigger).toHaveTextContent("桃太郎電鉄2・総合");
+    expect(trigger).toHaveTextContent("シーズン 今シーズン・マップ 東日本編");
     expect(trigger).toHaveTextContent("12戦");
     expect(within(surface).queryByRole("combobox", { name: "シーズン" })).not.toBeInTheDocument();
     expect(within(surface).queryByRole("combobox", { name: "マップ" })).not.toBeInTheDocument();
@@ -91,11 +90,27 @@ describe("SeriesAnalysisScopeBar", () => {
     await user.click(trigger);
     const seasonControl = within(surface).getByRole("combobox", { name: "シーズン" });
     expect(trigger).toHaveAttribute("aria-expanded", "true");
-    expect(trigger).not.toHaveTextContent("桃太郎電鉄2・総合");
+    expect(trigger).toHaveTextContent("シーズン 今シーズン・マップ 東日本編");
     expect(trigger).toHaveTextContent("12戦");
     expect(seasonControl.closest("[hidden]")).toBeNull();
     await user.selectOptions(seasonControl, "season-previous");
     expect(onSeasonChange).toHaveBeenCalledWith("season-previous");
+  });
+
+  it("omits a detail-filter summary when season and map use their defaults", () => {
+    render(
+      <SeriesAnalysisScopeBar
+        {...baseProps}
+        mapValue=""
+        response={makeSeriesAnalysisReview()}
+        seasonValue=""
+      />,
+    );
+
+    const trigger = screen.getByRole("button", { name: /比較対象を変更/u });
+    expect(trigger).not.toHaveTextContent("シーズン ");
+    expect(trigger).not.toHaveTextContent("マップ ");
+    expect(trigger).toHaveTextContent("12戦");
   });
 
   it("marks only an in-place update as pending", () => {

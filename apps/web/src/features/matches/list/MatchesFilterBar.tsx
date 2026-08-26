@@ -12,7 +12,6 @@ import type {
   MatchListFilterSelectionErrors,
   MatchListSearch,
   MatchListSort,
-  MatchListStatusFilter,
   MatchListSummaryCounts,
 } from "@/features/matches/list/matchListTypes";
 import { Button } from "@/shared/ui/actions/Button";
@@ -40,15 +39,6 @@ const sortOptions: Array<{ label: string; value: MatchListSort }> = [
   { label: "試合番号順", value: "match_no_asc" },
 ];
 
-const statusLabels = {
-  all: "すべて",
-  confirmed: "確定済",
-  incomplete: "未確定すべて",
-  needs_review: "要確認のみ",
-  ocr_running: "処理中",
-  pre_confirm: "対応待ち",
-} satisfies Record<MatchListStatusFilter, string>;
-
 export function MatchesFilterBar({
   actions,
   candidates,
@@ -67,13 +57,6 @@ export function MatchesFilterBar({
     hasDetailFilters || search.status !== "all" || search.sort !== "held_desc";
   const [detailOpen, setDetailOpen] = useState(hasDetailFilters);
   const disabled = pending;
-  const sortLabel =
-    sortOptions.find((option) => option.value === search.sort)?.label ?? search.sort;
-  const activeLabels = [
-    search.status === "all" ? undefined : `確定状況 ${statusLabels[search.status]}`,
-    search.sort === "held_desc" ? undefined : `並び順 ${sortLabel}`,
-    ...detailLabels,
-  ].filter((label): label is string => label !== undefined);
 
   function patchSearch(patch: Partial<MatchListSearch>) {
     actions.onApply({ ...search, ...patch, cursor: "" });
@@ -81,14 +64,6 @@ export function MatchesFilterBar({
 
   return (
     <FilterBar
-      activeSummary={
-        activeLabels.length > 0 ? (
-          <p>
-            <span className="font-semibold text-[var(--color-text-primary)]">適用中: </span>
-            {activeLabels.join("・")}
-          </p>
-        ) : undefined
-      }
       ariaLabel="試合の表示条件"
       busy={pending || summaryLoading || summaryMasked}
       details={{

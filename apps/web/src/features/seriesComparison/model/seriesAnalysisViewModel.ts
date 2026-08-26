@@ -119,22 +119,6 @@ export function seriesAnalysisQueryFromState(
   };
 }
 
-export function seriesAnalysisScopeName(
-  options: SeriesAnalysisOptionsResponse | undefined,
-  state: SeriesAnalysisUrlState,
-): string {
-  const title = findSeriesAnalysisTitle(options, state.gameTitleId);
-  if (!title) return "";
-  if (!state.seasonMasterId && !state.mapMasterId) return "総合";
-  const season = state.seasonMasterId
-    ? title.seasons.find((item) => item.seasonMasterId === state.seasonMasterId)?.displayName
-    : "全シーズン";
-  const map = state.mapMasterId
-    ? title.maps.find((item) => item.mapMasterId === state.mapMasterId)?.displayName
-    : "全マップ";
-  return `${season ?? "全シーズン"} / ${map ?? "全マップ"}`;
-}
-
 export function compatibleMapIds(
   options: SeriesAnalysisOptionsResponse | undefined,
   gameTitleId: string | undefined,

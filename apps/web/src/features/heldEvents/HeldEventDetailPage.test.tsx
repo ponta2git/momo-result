@@ -97,6 +97,11 @@ describe("HeldEventDetailPage", () => {
     renderPage();
 
     expect(await screen.findByRole("heading", { name: "この開催の戦績" })).toBeInTheDocument();
+    const surface = screen.getByRole("region", { name: "開催内容" });
+    expect(surface).toHaveClass("bg-[var(--color-surface)]", "rounded-[var(--radius-md)]");
+    expect(surface).not.toHaveClass("border");
+    expect(surface).toContainElement(screen.getByRole("heading", { name: "この開催の戦績" }));
+    expect(surface).not.toContainElement(screen.getByRole("heading", { name: /2026/u }));
     expect(await screen.findAllByText("桃太郎電鉄2 / 今シーズン / 東日本編")).toHaveLength(2);
     const primaryDraftAction = screen.getByRole("link", { name: "確認事項を直す" });
     expect(primaryDraftAction).toHaveAttribute(

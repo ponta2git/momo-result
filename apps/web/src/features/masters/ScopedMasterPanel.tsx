@@ -66,7 +66,7 @@ export function ScopedMasterPanel({
     </Button>
   );
   return (
-    <section className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+    <section className="min-w-0">
       <header className="flex items-baseline justify-between gap-3">
         <h3 className="text-lg font-semibold text-[var(--color-text-primary)]">{labels.title}</h3>
         {!loading && !loadBlocked ? (
@@ -100,9 +100,14 @@ export function ScopedMasterPanel({
             </Notice>
           ) : null}
           {list.items.length === 0 ? (
-            <EmptyState title="登録はまだありません" description={labels.emptyDescription} />
+            <EmptyState
+              className="px-0"
+              description={labels.emptyDescription}
+              placement="embedded"
+              title="登録はまだありません"
+            />
           ) : (
-            <ul className="divide-y divide-[var(--color-border)] border-y border-[var(--color-border)]">
+            <ul className="divide-y divide-[var(--color-border)]">
               {list.items.map((item) => {
                 const isPending = item.pending === true;
                 return (

@@ -7,6 +7,7 @@ import { masterTabs, useMastersPageController } from "@/features/masters/useMast
 import { cn } from "@/shared/ui/cn";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { TabsList, TabsPanel, TabsRoot, TabsTab } from "@/shared/ui/forms/Tabs";
+import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
 import { PageHeader } from "@/shared/ui/layout/PageHeader";
 
@@ -133,12 +134,6 @@ export function MastersPage() {
         </Notice>
       ) : null}
 
-      {operationError ? (
-        <Notice tone="danger" title="設定の変更に失敗しました">
-          {operationError}
-        </Notice>
-      ) : null}
-
       {returnDestination ? (
         <MasterReturnNotice
           handoffStatus={handoffStatus}
@@ -155,70 +150,81 @@ export function MastersPage() {
         />
       ) : null}
 
-      <TabsRoot
-        value={activeTab}
-        onValueChange={(value) => setActiveTab(value as typeof activeTab)}
-      >
-        <TabsList
-          activateOnFocus
-          aria-label="設定管理の表示切替"
-          className="flex flex-wrap gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-2"
+      <PageContentSurface aria-label="設定管理" role="region">
+        {operationError || hasInvalidReturnTo ? (
+          <div className="mb-6 grid gap-3">
+            {operationError ? (
+              <Notice tone="danger" title="設定の変更に失敗しました">
+                {operationError}
+              </Notice>
+            ) : null}
+            {hasInvalidReturnTo ? (
+              <Notice tone="warning" title="戻り先を確認できませんでした">
+                戻り先を確認できないため、試合一覧へ戻る導線だけを表示しています。
+              </Notice>
+            ) : null}
+          </div>
+        ) : null}
+
+        <TabsRoot
+          value={activeTab}
+          onValueChange={(value) => setActiveTab(value as typeof activeTab)}
         >
-          {masterTabs.map((tab) => (
-            <TabsTab
-              key={tab.id}
-              className={cn(
-                "min-h-11 rounded-[var(--radius-sm)] px-3 py-2 text-sm font-semibold transition-colors duration-[var(--motion-fast)] motion-reduce:transition-none sm:min-h-9 sm:py-2",
-                activeTab === tab.id
-                  ? "bg-[var(--color-surface-selected)] text-[var(--color-text-primary)]"
-                  : "text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-subtle)]",
-              )}
-              value={tab.id}
-            >
-              {tab.label}
-            </TabsTab>
-          ))}
-        </TabsList>
+          <TabsList
+            activateOnFocus
+            aria-label="設定管理の表示切替"
+            className="flex flex-wrap gap-2"
+          >
+            {masterTabs.map((tab) => (
+              <TabsTab
+                key={tab.id}
+                className={cn(
+                  "min-h-11 rounded-[var(--radius-sm)] px-3 py-2 text-sm font-semibold transition-colors duration-[var(--motion-fast)] motion-reduce:transition-none sm:min-h-9 sm:py-2",
+                  activeTab === tab.id
+                    ? "bg-[var(--color-surface-selected)] text-[var(--color-text-primary)]"
+                    : "text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-subtle)]",
+                )}
+                value={tab.id}
+              >
+                {tab.label}
+              </TabsTab>
+            ))}
+          </TabsList>
 
-        <TabsPanel className="mt-4" keepMounted value="catalog">
-          <MasterRelationBoard
-            gameTitle={gameTitleRelation}
-            map={mapRelation}
-            selectedGameTitleName={viewModel.selectedGameTitle?.name}
-            scopedDisabledReason={viewModel.scopedDisabledReason}
-            season={seasonRelation}
-          />
-        </TabsPanel>
+          <TabsPanel className="mt-6" keepMounted value="catalog">
+            <MasterRelationBoard
+              gameTitle={gameTitleRelation}
+              map={mapRelation}
+              selectedGameTitleName={viewModel.selectedGameTitle?.name}
+              scopedDisabledReason={viewModel.scopedDisabledReason}
+              season={seasonRelation}
+            />
+          </TabsPanel>
 
-        <TabsPanel className="mt-4" keepMounted value="aliases">
-          <MemberAliasPanel
-            aliases={memberAliases}
-            createAction={aliasCreateAction}
-            createError={aliasCreateState.error}
-            createFormKey={aliasCreateState.version}
-            onDelete={deleteMemberAlias}
-            onRetry={retryMemberAliases}
-            onUpdate={updateMemberAlias}
-            refreshing={memberAliasesRefreshing}
-            stale={memberAliasesStale}
-          />
-        </TabsPanel>
+          <TabsPanel className="mt-6" keepMounted value="aliases">
+            <MemberAliasPanel
+              aliases={memberAliases}
+              createAction={aliasCreateAction}
+              createError={aliasCreateState.error}
+              createFormKey={aliasCreateState.version}
+              onDelete={deleteMemberAlias}
+              onRetry={retryMemberAliases}
+              onUpdate={updateMemberAlias}
+              refreshing={memberAliasesRefreshing}
+              stale={memberAliasesStale}
+            />
+          </TabsPanel>
 
-        <TabsPanel className="mt-4" keepMounted value="incidents">
-          <IncidentMasterPanel
-            items={incidentMasters}
-            onRetry={retryIncidentMasters}
-            refreshing={incidentMastersRefreshing}
-            stale={incidentMastersStale}
-          />
-        </TabsPanel>
-      </TabsRoot>
-
-      {hasInvalidReturnTo ? (
-        <Notice tone="warning" title="戻り先を確認できませんでした">
-          戻り先を確認できないため、試合一覧へ戻る導線だけを表示しています。
-        </Notice>
-      ) : null}
+          <TabsPanel className="mt-6" keepMounted value="incidents">
+            <IncidentMasterPanel
+              items={incidentMasters}
+              onRetry={retryIncidentMasters}
+              refreshing={incidentMastersRefreshing}
+              stale={incidentMastersStale}
+            />
+          </TabsPanel>
+        </TabsRoot>
+      </PageContentSurface>
     </PageFrame>
   );
 }

@@ -207,7 +207,6 @@ export function useHeldEventsPageController() {
     },
     feedback: {
       errorMessage,
-      refreshFailed: shouldShowQueryError(heldEventsQuery) && hasCurrentScopeData,
     },
     header: {
       openCreate: () => updateCreateOpen(true),

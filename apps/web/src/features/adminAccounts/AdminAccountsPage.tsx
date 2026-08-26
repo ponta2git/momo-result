@@ -8,6 +8,7 @@ import { Button } from "@/shared/ui/actions/Button";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
+import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
 import { PageHeader } from "@/shared/ui/layout/PageHeader";
 
@@ -67,7 +68,12 @@ export function AdminAccountsPage() {
         }
       />
 
-      <section className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)]">
+      <PageContentSurface
+        aria-label="ログインアカウント一覧"
+        className="overflow-hidden"
+        padding="none"
+        role="region"
+      >
         {accountsLoading ? (
           <div className="grid gap-3 p-4" aria-label="ログインアカウントを読み込み中">
             <Skeleton className="min-h-10" />
@@ -114,7 +120,6 @@ export function AdminAccountsPage() {
             ) : null}
             {accounts.length === 0 ? (
               <EmptyState
-                className="border-0"
                 action={
                   <Button
                     icon={<UserPlus aria-hidden="true" className="size-4" />}
@@ -125,6 +130,7 @@ export function AdminAccountsPage() {
                 }
                 description="利用を許可するDiscordアカウントを登録します。"
                 icon={<ShieldCheck className="size-5" />}
+                placement="embedded"
                 title={
                   accountsStale
                     ? "前回取得時点ではログイン可能なアカウントがありません"
@@ -179,7 +185,7 @@ export function AdminAccountsPage() {
             )}
           </div>
         )}
-      </section>
+      </PageContentSurface>
 
       <AdminAccountCreateDialog
         action={createAction}

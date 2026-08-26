@@ -6,6 +6,7 @@ import { HeldEventsListCard } from "@/features/heldEvents/HeldEventsListCard";
 import { useHeldEventsPageController } from "@/features/heldEvents/useHeldEventsPageController";
 import { Button } from "@/shared/ui/actions/Button";
 import { Notice } from "@/shared/ui/feedback/Notice";
+import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
 import { PageHeader } from "@/shared/ui/layout/PageHeader";
 
@@ -41,37 +42,25 @@ export function HeldEventsPage() {
         title="開催履歴"
       />
 
-      {page.feedback.errorMessage && !page.create.open && !page.deleteDialog.target ? (
-        <Notice tone="danger" title="操作に失敗しました">
-          {page.feedback.errorMessage}
-        </Notice>
-      ) : null}
+      <PageContentSurface
+        aria-busy={page.table.data.refreshing || undefined}
+        aria-label="開催履歴"
+        className="overflow-hidden"
+        padding="none"
+        role="region"
+      >
+        {page.feedback.errorMessage && !page.create.open && !page.deleteDialog.target ? (
+          <Notice className="m-4 mb-0" tone="danger" title="操作に失敗しました">
+            {page.feedback.errorMessage}
+          </Notice>
+        ) : null}
 
-      {page.feedback.refreshFailed ? (
-        <Notice
-          tone="warning"
-          title="開催履歴を更新できませんでした"
-          action={
-            <Button
-              pending={page.header.refreshing}
-              pendingLabel="再取得中"
-              size="sm"
-              variant="secondary"
-              onClick={page.header.refresh}
-            >
-              開催履歴を再取得
-            </Button>
-          }
-        >
-          前回取得した開催履歴を表示しています。開催詳細への移動や出力は利用できますが、削除は最新状態を確認できるまで行えません。
-        </Notice>
-      ) : null}
-
-      <HeldEventsListCard
-        actions={page.table.actions}
-        data={page.table.data}
-        onCreate={page.header.openCreate}
-      />
+        <HeldEventsListCard
+          actions={page.table.actions}
+          data={page.table.data}
+          onCreate={page.header.openCreate}
+        />
+      </PageContentSurface>
 
       <CreateHeldEventDialog model={page.create} />
       <DeleteHeldEventDialog model={page.deleteDialog} />

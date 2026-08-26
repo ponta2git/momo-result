@@ -81,7 +81,7 @@ export function GameTitleList({
   });
 
   return (
-    <section className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+    <section className="min-w-0">
       <header>
         <h2 className="text-lg font-semibold text-[var(--color-text-primary)]">作品</h2>
         <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
@@ -99,7 +99,8 @@ export function GameTitleList({
 
       {items.length === 0 ? (
         <EmptyState
-          className="mt-3"
+          className="mt-3 px-0"
+          placement="embedded"
           title="作品はまだありません"
           description="作品を追加すると、マップとシーズンを登録できます。"
         />

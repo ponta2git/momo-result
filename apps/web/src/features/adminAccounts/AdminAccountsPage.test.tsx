@@ -37,6 +37,12 @@ describe("AdminAccountsPage", () => {
     expect(
       await screen.findByRole("table", { name: "ログイン可能なアカウントと権限" }),
     ).toBeInTheDocument();
+    const surface = screen.getByRole("region", { name: "ログインアカウント一覧" });
+    expect(surface).toHaveClass("bg-[var(--color-surface)]", "rounded-[var(--radius-md)]");
+    expect(surface).not.toHaveClass("border");
+    expect(surface).not.toContainElement(
+      screen.getByRole("heading", { name: "ログインアカウント" }),
+    );
     expect(screen.getByRole("rowheader", { name: "ぽんた" })).toBeInTheDocument();
     const createTrigger = screen.getByRole("button", { name: "アカウントを追加" });
     expect(createTrigger).toHaveClass("bg-[var(--color-surface)]");

@@ -94,9 +94,13 @@ describe("ExportPage", () => {
     renderPage();
 
     await screen.findByRole("heading", { name: "CSV/TSV出力" });
+    const surface = screen.getByRole("region", { name: "出力条件" });
     const scope = screen.getByRole("group", { name: "出力範囲" });
     const format = screen.getByRole("group", { name: "ファイル形式" });
 
+    expect(surface).toHaveClass("bg-[var(--color-surface)]", "rounded-[var(--radius-md)]");
+    expect(surface).not.toHaveClass("border");
+    expect(surface).not.toContainElement(screen.getByRole("heading", { name: "CSV/TSV出力" }));
     expect(screen.queryByText("出力条件")).not.toBeInTheDocument();
     expect(screen.queryByText("書き出し内容")).not.toBeInTheDocument();
     expect(screen.queryByText(/条件はURLに保存/u)).not.toBeInTheDocument();

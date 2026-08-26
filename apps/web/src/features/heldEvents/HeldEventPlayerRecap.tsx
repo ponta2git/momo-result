@@ -1,7 +1,6 @@
 import type { HeldEventPlayerRecap as PlayerRecap } from "@/features/heldEvents/heldEventDetailViewModel";
 import { formatAverageRank } from "@/features/heldEvents/heldEventDetailViewModel";
 import { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
-import { Card } from "@/shared/ui/layout/Card";
 import { RankTrail } from "@/shared/ui/rank/RankBadge";
 
 export function HeldEventPlayerRecap({ recaps }: { recaps: PlayerRecap[] }) {
@@ -10,8 +9,8 @@ export function HeldEventPlayerRecap({ recaps }: { recaps: PlayerRecap[] }) {
   }
 
   return (
-    <Card aria-labelledby="held-event-recap-heading" className="overflow-hidden p-0">
-      <div className="border-b border-[var(--color-border)] px-4 py-3">
+    <section aria-labelledby="held-event-recap-heading" className="min-w-0">
+      <div>
         <h2 id="held-event-recap-heading" className="momo-heading text-base font-semibold">
           この開催の戦績
         </h2>
@@ -19,12 +18,12 @@ export function HeldEventPlayerRecap({ recaps }: { recaps: PlayerRecap[] }) {
           勝数・平均順位と、試合順の順位推移です。
         </p>
       </div>
-      <div className="grid sm:grid-cols-2 xl:grid-cols-4">
+      <div className="mt-4 grid gap-x-6 gap-y-6 sm:grid-cols-2 xl:grid-cols-4">
         {recaps.map((recap) => (
           <section
             key={recap.memberId}
             aria-label={`${recap.displayName}の開催戦績`}
-            className="border-b border-[var(--color-border)] px-4 py-3 last:border-b-0 sm:border-r xl:border-b-0 xl:last:border-r-0 sm:[&:nth-child(2n)]:border-r-0 xl:[&:nth-child(2n)]:border-r sm:[&:nth-last-child(-n+2)]:border-b-0"
+            className="min-w-0"
           >
             <div className="flex items-baseline justify-between gap-3">
               <h3 className="min-w-0 font-semibold">
@@ -48,7 +47,7 @@ export function HeldEventPlayerRecap({ recaps }: { recaps: PlayerRecap[] }) {
                 </dd>
               </div>
             </dl>
-            <div className="mt-3 border-t border-[var(--color-border)] pt-2">
+            <div className="mt-3">
               <p className="momo-label text-[var(--color-text-secondary)]">順位推移</p>
               <div className="mt-1 overflow-x-auto pb-1">
                 <RankTrail
@@ -60,6 +59,6 @@ export function HeldEventPlayerRecap({ recaps }: { recaps: PlayerRecap[] }) {
           </section>
         ))}
       </div>
-    </Card>
+    </section>
   );
 }

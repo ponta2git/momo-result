@@ -43,7 +43,7 @@ export function MemberAliasPanel({
   }));
 
   return (
-    <section className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+    <section className="min-w-0">
       <header>
         <p className={labelClass}>読み取り用の名前</p>
         <h2 className="mt-1 text-lg font-semibold text-[var(--color-text-primary)]">
@@ -89,9 +89,9 @@ export function MemberAliasPanel({
         </div>
       </form>
 
-      <div className="mt-4 grid gap-x-4 gap-y-3 md:grid-cols-2 xl:grid-cols-4">
+      <div className="mt-4 grid gap-x-4 gap-y-6 md:grid-cols-2 xl:grid-cols-4">
         {aliasesByMember.map(({ member, aliases: memberAliases }) => (
-          <div className="min-w-0 border-t border-[var(--color-border)] pt-3" key={member.memberId}>
+          <div className="min-w-0" key={member.memberId}>
             <h3 className="min-w-0 text-sm font-semibold text-[var(--color-text-primary)]">
               <MemberSequenceLabel memberId={member.memberId}>
                 <span className="truncate">{member.displayName}</span>
@@ -100,7 +100,7 @@ export function MemberAliasPanel({
             {memberAliases.length === 0 ? (
               <p className="mt-3 text-sm text-[var(--color-text-secondary)]">別名なし</p>
             ) : (
-              <ul className="mt-3 divide-y divide-[var(--color-border)] border-y border-[var(--color-border)]">
+              <ul className="mt-3 divide-y divide-[var(--color-border)]">
                 {memberAliases.map((alias) => (
                   <li
                     className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 py-2"

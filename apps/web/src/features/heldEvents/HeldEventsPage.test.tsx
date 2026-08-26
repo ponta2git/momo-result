@@ -55,6 +55,10 @@ describe("HeldEventsPage", () => {
 
     expect(await screen.findByRole("heading", { name: "開催履歴" })).toBeInTheDocument();
     expect(await screen.findByText("最新")).toBeInTheDocument();
+    const surface = screen.getByRole("region", { name: "開催履歴" });
+    expect(surface).toHaveClass("bg-[var(--color-surface)]", "rounded-[var(--radius-md)]");
+    expect(surface).not.toHaveClass("border");
+    expect(surface).not.toContainElement(screen.getByRole("heading", { name: "開催履歴" }));
     expect(screen.getByText("確定済み")).toBeInTheDocument();
     expect(screen.getByText("0件")).toBeInTheDocument();
     expect(screen.queryByText("次の番号")).not.toBeInTheDocument();
@@ -183,7 +187,8 @@ describe("HeldEventsPage", () => {
     const detailLink = await screen.findByRole("link", { name: /の開催詳細$/u });
     await user.click(screen.getByRole("button", { name: "更新" }));
 
-    expect(await screen.findByText("開催履歴を更新できませんでした")).toBeInTheDocument();
+    const surface = screen.getByRole("region", { name: "開催履歴" });
+    expect(await within(surface).findByText("開催履歴を更新できませんでした")).toBeInTheDocument();
     expect(detailLink).toBeInTheDocument();
     expect(detailLink).toHaveAttribute("href", "/held-events/held-1?returnTo=%2Fheld-events");
     expect(screen.getByRole("button", { name: "開催を作成" })).toBeEnabled();
@@ -451,6 +456,41 @@ describe("HeldEventsPage", () => {
     await user.click(screen.getByRole("button", { name: "キャンセル" }));
     await waitFor(() =>
       expect(screen.queryByRole("dialog", { name: "新しい開催を作成" })).not.toBeInTheDocument(),
+    );
+  });
+
+  it("keeps a dismissed creation failure in the held-event owner surface", async () => {
+    server.use(
+      http.post("/api/held-events", () =>
+        HttpResponse.json(
+          {
+            code: "INTERNAL_ERROR",
+            detail: "開催日時を保存できませんでした。",
+            status: 500,
+            title: "Internal Server Error",
+            type: "about:blank",
+          },
+          { status: 500 },
+        ),
+      ),
+    );
+    renderPage();
+
+    expect(await screen.findByRole("link", { name: /の開催詳細$/u })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "開催を作成" }));
+    const dialog = screen.getByRole("dialog", { name: "新しい開催を作成" });
+    await user.click(within(dialog).getByRole("button", { name: "開催を作成" }));
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent(
+      "開催日時を保存できませんでした。",
+    );
+
+    await user.click(within(dialog).getByRole("button", { name: "キャンセル" }));
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog", { name: "新しい開催を作成" })).not.toBeInTheDocument(),
+    );
+    const surface = screen.getByRole("region", { name: "開催履歴" });
+    expect(within(surface).getByRole("alert")).toHaveTextContent(
+      "操作に失敗しました開催日時を保存できませんでした。",
     );
   });
 

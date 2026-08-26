@@ -1,6 +1,7 @@
 import { ArrowLeft } from "lucide-react";
 
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
+import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
 import { PageHeader } from "@/shared/ui/layout/PageHeader";
 
@@ -59,9 +60,11 @@ export function ExportWorkspace({
       ) : null}
       <PageHeader title="CSV/TSV出力" />
 
-      <section
+      <PageContentSurface
         aria-label="出力条件"
-        className="grid gap-4 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-[var(--color-text-primary)]"
+        className="grid gap-4"
+        padding="compact"
+        role="region"
       >
         <div className="grid gap-2">
           <p className="text-sm font-semibold text-[var(--color-text-primary)]">出力範囲</p>
@@ -97,7 +100,7 @@ export function ExportWorkspace({
             onResetConditions={onResetConditions}
           />
         ) : null}
-      </section>
+      </PageContentSurface>
     </PageFrame>
   );
 }

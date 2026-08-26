@@ -93,9 +93,10 @@ export function ExportCandidatePickerDialog({
             {pagination && pagination.totalPages > 1 ? (
               <PaginationControls
                 ariaLabel={`${label}候補のページネーション`}
-                className="shrink-0 rounded-none border-0 bg-transparent p-0"
+                className="shrink-0 p-0"
                 disabled={disabled || refreshing}
                 pagination={pagination}
+                placement="embedded"
                 variant="compact"
                 onPageChange={onPageChange}
               />

@@ -94,6 +94,7 @@ export function ExportCandidateSelect({
           action={action}
           className="momo-enter"
           description={view.message}
+          placement="embedded"
           title={view.title}
         />
         {view.supportIssue ? (

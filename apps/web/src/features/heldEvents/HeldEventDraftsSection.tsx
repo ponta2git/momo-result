@@ -12,7 +12,6 @@ import { formatMatchNoInEvent } from "@/shared/domain/matchLabels";
 import { withReturnTo } from "@/shared/navigation/returnTo";
 import { Button } from "@/shared/ui/actions/Button";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
-import { Card } from "@/shared/ui/layout/Card";
 import { StatusPill } from "@/shared/ui/status/StatusPill";
 
 export function HeldEventDraftsSection({
@@ -30,8 +29,8 @@ export function HeldEventDraftsSection({
   const primaryDraftId = drafts.find((draft) => heldEventDraftAction(draft).href)?.matchDraftId;
 
   return (
-    <Card aria-labelledby="held-event-drafts-heading" className="overflow-hidden p-0">
-      <div className="flex items-start gap-3 border-b border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-4 py-3">
+    <section aria-labelledby="held-event-drafts-heading" className="min-w-0">
+      <div className="flex items-start gap-3">
         <FileClock
           aria-hidden="true"
           className="mt-0.5 size-5 shrink-0 text-[var(--color-text-secondary)]"
@@ -45,7 +44,7 @@ export function HeldEventDraftsSection({
           </p>
         </div>
       </div>
-      <ul className="divide-y divide-[var(--color-border)]">
+      <ul className="mt-3 divide-y divide-[var(--color-border)]">
         {drafts.map((draft) => {
           const action = heldEventDraftAction(draft);
           const scopeLabel = heldEventDraftScopeLabel(draft, masterNames);
@@ -53,7 +52,7 @@ export function HeldEventDraftsSection({
           return (
             <li
               key={draft.matchDraftId}
-              className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+              className="flex flex-col gap-3 py-3 sm:flex-row sm:items-center sm:justify-between"
             >
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
@@ -94,6 +93,6 @@ export function HeldEventDraftsSection({
           );
         })}
       </ul>
-    </Card>
+    </section>
   );
 }

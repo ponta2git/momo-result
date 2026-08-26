@@ -18,7 +18,7 @@ export function IncidentMasterPanel({
   const hasExpectedCount = items.length === 6;
 
   return (
-    <section className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+    <section className="min-w-0">
       <header>
         <h2 className="text-lg font-semibold text-[var(--color-text-primary)]">事件簿</h2>
         <p className="mt-1 text-sm text-[var(--color-text-secondary)]">

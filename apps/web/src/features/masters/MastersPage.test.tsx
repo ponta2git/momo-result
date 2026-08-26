@@ -75,6 +75,14 @@ describe("MastersPage", () => {
     renderPage();
 
     expect(await screen.findByRole("heading", { name: "設定管理" })).toBeInTheDocument();
+    const surface = screen.getByRole("region", { name: "設定管理" });
+    const tabs = screen.getByRole("tablist", { name: "設定管理の表示切替" });
+    expect(surface).toHaveClass("bg-[var(--color-surface)]", "rounded-[var(--radius-md)]");
+    expect(surface).not.toHaveClass("border");
+    expect(surface).toContainElement(tabs);
+    expect(tabs).not.toHaveClass("border");
+    expect(tabs).not.toHaveClass("bg-[var(--color-surface)]");
+    expect(surface).not.toContainElement(screen.getByRole("heading", { name: "設定管理" }));
     expect(screen.getByRole("heading", { name: "作品" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "マップ" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "シーズン" })).toBeInTheDocument();
@@ -543,6 +551,15 @@ describe("MastersPage", () => {
     expect(screen.getByText(/現在の入力内容を保ったまま戻れます/u)).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "戻り先を確認" })).not.toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: "元の入力画面へ戻る" })).toHaveLength(1);
+  });
+
+  it("keeps an invalid return destination notice in the settings owner surface", async () => {
+    setDevUser();
+    renderPage("/admin/masters?returnTo=https%3A%2F%2Fexample.com%2Freview");
+
+    const surface = await screen.findByRole("region", { name: "設定管理" });
+    expect(within(surface).getByText("戻り先を確認できませんでした")).toBeInTheDocument();
+    expect(within(surface).getByText(/試合一覧へ戻る導線だけ/u)).toBeInTheDocument();
   });
 
   it("keeps the handoff return primary when the alias form is visible", async () => {

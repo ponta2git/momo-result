@@ -12,7 +12,6 @@ import { PaginationControls } from "@/shared/ui/data/PaginationControls";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
-import { Card } from "@/shared/ui/layout/Card";
 import { momoTransition } from "@/shared/ui/motion/variants";
 
 export function HeldEventsListCard({
@@ -25,12 +24,7 @@ export function HeldEventsListCard({
   onCreate: () => void;
 }) {
   return (
-    <Card
-      aria-busy={data.refreshing || undefined}
-      aria-label="開催履歴"
-      className="min-w-0 overflow-hidden p-0"
-      role="region"
-    >
+    <div className="min-w-0 overflow-hidden">
       {data.loading ? (
         <HeldEventsLoading />
       ) : (
@@ -39,6 +33,26 @@ export function HeldEventsListCard({
           className="min-w-0"
           transition={momoTransition}
         >
+          {data.stale ? (
+            <Notice
+              action={
+                <Button
+                  pending={data.refreshing}
+                  pendingLabel="再取得中"
+                  size="sm"
+                  variant="secondary"
+                  onClick={actions.onRetry}
+                >
+                  開催履歴を再取得
+                </Button>
+              }
+              className="m-4 mb-0"
+              tone="warning"
+              title="開催履歴を更新できませんでした"
+            >
+              前回取得した開催履歴を表示しています。開催詳細への移動や出力は利用できますが、削除は最新状態を確認できるまで行えません。
+            </Notice>
+          ) : null}
           {data.scopeChanging ? (
             <p
               className="border-b border-[var(--color-border)] px-4 py-2 text-xs text-[var(--color-text-secondary)]"
@@ -65,18 +79,17 @@ export function HeldEventsListCard({
               </Notice>
             </div>
           ) : data.rows.length === 0 ? (
-            <div className="p-4">
-              <EmptyState
-                description="開催を作ると、同じ日に行った試合を番号順にまとめられます。"
-                icon={<CalendarDays className="size-5" />}
-                title="開催履歴はまだありません"
-                action={
-                  <Button icon={<Plus aria-hidden="true" className="size-4" />} onClick={onCreate}>
-                    最初の開催を作成
-                  </Button>
-                }
-              />
-            </div>
+            <EmptyState
+              action={
+                <Button icon={<Plus aria-hidden="true" className="size-4" />} onClick={onCreate}>
+                  最初の開催を作成
+                </Button>
+              }
+              description="開催を作ると、同じ日に行った試合を番号順にまとめられます。"
+              icon={<CalendarDays className="size-5" />}
+              placement="embedded"
+              title="開催履歴はまだありません"
+            />
           ) : (
             <ol>
               {data.rows.map((event, index) => (
@@ -99,13 +112,14 @@ export function HeldEventsListCard({
               disabled={data.refreshing}
               pageSizeOptions={[...heldEventViewModel.heldEventPageSizeOptions]}
               pagination={data.pagination}
+              placement="embedded"
               onPageChange={actions.onPageChange}
               onPageSizeChange={actions.onPageSizeChange}
             />
           ) : null}
         </motion.div>
       )}
-    </Card>
+    </div>
   );
 }
 

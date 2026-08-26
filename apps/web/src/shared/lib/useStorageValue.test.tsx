@@ -20,10 +20,7 @@ function StorageProbe() {
 
 describe("useStorageValue", () => {
   it("treats blocked browser storage as unavailable", async () => {
-    vi.spyOn(window.Storage.prototype, "getItem").mockImplementation(() => {
-      throw new DOMException("blocked", "SecurityError");
-    });
-    vi.spyOn(window.Storage.prototype, "setItem").mockImplementation(() => {
+    const localStorageGetter = vi.spyOn(window, "localStorage", "get").mockImplementation(() => {
       throw new DOMException("blocked", "SecurityError");
     });
 
@@ -34,5 +31,6 @@ describe("useStorageValue", () => {
     await user.click(button);
 
     expect(button).toHaveTextContent("empty");
+    localStorageGetter.mockRestore();
   });
 });

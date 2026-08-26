@@ -8,6 +8,7 @@ import { GlobalNav } from "@/shared/ui/layout/GlobalNav";
 import type { GlobalNavItem } from "@/shared/ui/layout/GlobalNav";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
+import { SkipLink } from "@/shared/ui/layout/SkipLink";
 
 const loginNavItems = [
   { icon: <LogIn className="size-4" />, label: "ログイン", to: "/login" },
@@ -23,12 +24,7 @@ export function LoginPage() {
 
   return (
     <>
-      <a
-        className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[var(--z-tooltip)] focus:rounded-[var(--radius-sm)] focus:bg-[var(--color-surface)] focus:px-3 focus:py-2 focus:text-sm"
-        href="#main-content"
-      >
-        メインコンテンツへスキップ
-      </a>
+      <SkipLink />
       <GlobalNav
         brandTo="/login"
         environmentLabel={import.meta.env.DEV ? "DEV" : undefined}

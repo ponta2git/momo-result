@@ -7,6 +7,7 @@ import { AppGlobalNav } from "@/app/AppGlobalNav";
 import { RouteErrorBoundary } from "@/app/RouteErrorBoundary";
 import { preloadRouteForPath } from "@/app/routeModules";
 import { RouteSuspenseFallback } from "@/app/RouteSuspenseFallback";
+import { SkipLink } from "@/shared/ui/layout/SkipLink";
 
 const ToastHost = lazy(async () => {
   const module = await import("@/shared/ui/feedback/ToastHost");
@@ -105,12 +106,7 @@ export function AppShell() {
 
   return (
     <>
-      <a
-        className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[var(--z-tooltip)] focus:rounded-[var(--radius-sm)] focus:bg-[var(--color-surface)] focus:px-3 focus:py-2 focus:text-sm"
-        href="#main-content"
-      >
-        メインコンテンツへスキップ
-      </a>
+      <SkipLink />
       <div
         onClickCapture={handleNavigationClick}
         onFocusCapture={handlePreloadIntent}

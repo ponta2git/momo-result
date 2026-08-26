@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
 import {
@@ -9,7 +9,8 @@ import {
   toSeasonCandidates,
 } from "@/features/exports/exportCandidateData";
 import type { ExportCandidate, ExportScope } from "@/features/exports/exportTypes";
-import { buildCandidateView } from "@/features/exports/exportViewModel";
+import { buildCandidateSupportIssue, buildCandidateView } from "@/features/exports/exportViewModel";
+import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import { shouldShowQueryError } from "@/shared/api/queryErrorState";
 import {
   gameTitlesQueryOptions,
@@ -35,6 +36,7 @@ export function useExportCandidates({
   scope: ExportScope;
   selectedId: string;
 }) {
+  const queryClient = useQueryClient();
   const [heldEventPage, setHeldEventPage] = useState(1);
   const [matchCursor, setMatchCursor] = useState("");
   const [rememberedCandidate, setRememberedCandidate] = useState<RememberedCandidate | undefined>();
@@ -46,30 +48,46 @@ export function useExportCandidates({
     ...gameTitlesQueryOptions("exports"),
     enabled: scope === "match",
   });
+  const heldEventsOptions = heldEventsQueryOptions({
+    page: heldEventPage,
+    pageSize: CANDIDATE_PAGE_SIZE,
+  });
   const heldEventsQuery = useQuery({
-    ...heldEventsQueryOptions({ page: heldEventPage, pageSize: CANDIDATE_PAGE_SIZE }),
+    ...heldEventsOptions,
     enabled: scope === "heldEvent",
   });
+  const matchesOptions = matchExportCandidatesQueryOptions({
+    kind: "match",
+    ...(matchCursor ? { cursor: matchCursor } : {}),
+    pageSize: CANDIDATE_PAGE_SIZE,
+    sort: "held_desc",
+    status: "confirmed",
+  });
   const matchesQuery = useQuery({
-    ...matchExportCandidatesQueryOptions({
-      kind: "match",
-      ...(matchCursor ? { cursor: matchCursor } : {}),
-      pageSize: CANDIDATE_PAGE_SIZE,
-      sort: "held_desc",
-      status: "confirmed",
-    }),
+    ...matchesOptions,
     enabled: scope === "match",
   });
 
+  const hasCurrentHeldEventData =
+    queryClient.getQueryData(heldEventsOptions.queryKey) !== undefined;
+  const hasCurrentMatchData = queryClient.getQueryData(matchesOptions.queryKey) !== undefined;
   const seasons = seasonsQuery.data?.items ?? [];
   const gameTitles = gameTitlesQuery.data?.items ?? [];
+  const heldEvents =
+    hasCurrentHeldEventData || !shouldShowQueryError(heldEventsQuery)
+      ? (heldEventsQuery.data?.items ?? [])
+      : [];
+  const matches =
+    hasCurrentMatchData || !shouldShowQueryError(matchesQuery)
+      ? (matchesQuery.data?.items ?? [])
+      : [];
   const candidates =
     scope === "season"
       ? toSeasonCandidates(seasons)
       : scope === "heldEvent"
-        ? toHeldEventCandidates(heldEventsQuery.data?.items ?? [])
+        ? toHeldEventCandidates(heldEvents)
         : scope === "match"
-          ? toMatchCandidates(matchesQuery.data?.items ?? [], gameTitles, seasons)
+          ? toMatchCandidates(matches, gameTitles, seasons)
           : [];
   const rememberedSelection =
     rememberedCandidate?.scope === scope && rememberedCandidate.candidate.value === selectedId
@@ -100,52 +118,123 @@ export function useExportCandidates({
       : scope === "match"
         ? candidateFromMatchDetail(matchDetailQuery.data, gameTitles, seasons)
         : undefined);
+  const selectedDetailQuery =
+    scope === "heldEvent" ? heldEventDetailQuery : scope === "match" ? matchDetailQuery : undefined;
+  const selectedResolution = (() => {
+    if (scope === "season") {
+      return selectedId && !selectedIsOnCurrentPage
+        ? ("not-found" as const)
+        : ("resolved" as const);
+    }
+    if (!shouldResolveHeldEvent && !shouldResolveMatch) {
+      return "resolved" as const;
+    }
+    if (resolvedCandidate?.value === selectedId) {
+      return "resolved" as const;
+    }
+    if (selectedDetailQuery?.isFetching) {
+      return "resolving" as const;
+    }
+    if (selectedDetailQuery && shouldShowQueryError(selectedDetailQuery)) {
+      return normalizeUnknownApiError(selectedDetailQuery.error).status === 404
+        ? ("not-found" as const)
+        : ("load-failed" as const);
+    }
+    return "resolving" as const;
+  })();
+  const hasResolvedTarget = Boolean(selectedId && resolvedCandidate?.value === selectedId);
   const pagination =
     scope === "heldEvent"
-      ? heldEventsQuery.data?.pagination
+      ? hasCurrentHeldEventData
+        ? heldEventsQuery.data?.pagination
+        : undefined
       : scope === "match"
-        ? matchesQuery.data?.pagination
+        ? hasCurrentMatchData
+          ? matchesQuery.data?.pagination
+          : undefined
         : undefined;
   const loading =
     scope === "season"
       ? seasonsQuery.isLoading
       : scope === "heldEvent"
-        ? heldEventsQuery.isLoading
+        ? heldEventsQuery.isLoading && !hasResolvedTarget
         : scope === "match"
-          ? seasonsQuery.isLoading || gameTitlesQuery.isLoading || matchesQuery.isLoading
+          ? !hasResolvedTarget &&
+            (seasonsQuery.isLoading || gameTitlesQuery.isLoading || matchesQuery.isLoading)
           : false;
   const refreshing =
     scope === "season"
       ? seasonsQuery.isFetching && !seasonsQuery.isLoading
       : scope === "heldEvent"
-        ? (heldEventsQuery.isFetching && !heldEventsQuery.isLoading) ||
+        ? (heldEventsQuery.isFetching && (!heldEventsQuery.isLoading || hasResolvedTarget)) ||
           heldEventDetailQuery.isFetching
         : scope === "match"
           ? [seasonsQuery, gameTitlesQuery, matchesQuery].some(
-              (query) => query.isFetching && !query.isLoading,
+              (query) => query.isFetching && (!query.isLoading || hasResolvedTarget),
             ) || matchDetailQuery.isFetching
           : false;
-  const error =
+  const seasonError = shouldShowQueryError(seasonsQuery);
+  const gameTitleError = shouldShowQueryError(gameTitlesQuery);
+  const heldEventError = shouldShowQueryError(heldEventsQuery);
+  const matchError = shouldShowQueryError(matchesQuery);
+  const selectedDetailRefreshFailed = Boolean(
+    selectedDetailQuery &&
+    shouldShowQueryError(selectedDetailQuery) &&
+    resolvedCandidate?.value === selectedId,
+  );
+  const directoryError =
     scope === "season"
-      ? shouldShowQueryError(seasonsQuery)
+      ? seasonError
       : scope === "heldEvent"
-        ? shouldShowQueryError(heldEventsQuery)
+        ? heldEventError
         : scope === "match"
-          ? [seasonsQuery, gameTitlesQuery, matchesQuery].some(shouldShowQueryError)
+          ? matchError
           : false;
+  const hasCurrentDirectoryData =
+    scope === "season"
+      ? seasonsQuery.data !== undefined
+      : scope === "heldEvent"
+        ? hasCurrentHeldEventData
+        : scope === "match"
+          ? hasCurrentMatchData
+          : true;
+  const error = directoryError && !hasCurrentDirectoryData && !hasResolvedTarget;
+  const referencesGameTitle =
+    scope === "match" &&
+    (Boolean(matchDetailQuery.data?.gameTitleId) ||
+      matches.some(
+        (match) =>
+          match.kind === "match" && match.status === "confirmed" && Boolean(match.gameTitleId),
+      ));
+  const referencesSeason =
+    scope === "match" &&
+    (Boolean(matchDetailQuery.data?.seasonMasterId) ||
+      matches.some(
+        (match) =>
+          match.kind === "match" && match.status === "confirmed" && Boolean(match.seasonMasterId),
+      ));
+  const relevantGameTitleError = gameTitleError && referencesGameTitle;
+  const relevantSeasonError = seasonError && referencesSeason;
+  const supportIssue = buildCandidateSupportIssue({
+    directoryBlocking: error,
+    directoryError,
+    hasCurrentDirectoryData,
+    namesError: relevantGameTitleError || relevantSeasonError,
+    namesLoadFailed:
+      (relevantGameTitleError && gameTitlesQuery.data === undefined) ||
+      (relevantSeasonError && seasonsQuery.data === undefined),
+    selectedTargetRefreshFailed: selectedDetailRefreshFailed,
+  });
   const view = buildCandidateView({
     candidates,
     error,
     loading,
     pagination,
     resolvedCandidate,
-    resolvingSelected: shouldResolveHeldEvent
-      ? heldEventDetailQuery.isFetching
-      : shouldResolveMatch
-        ? matchDetailQuery.isFetching
-        : false,
+    selectedResolution,
     scope,
     selectedId,
+    supportIssue,
   });
 
   const reset = () => {
@@ -182,7 +271,9 @@ export function useExportCandidates({
       if (scope === "season") void seasonsQuery.refetch();
       if (scope === "heldEvent") {
         void heldEventsQuery.refetch();
-        if (shouldResolveHeldEvent) void heldEventDetailQuery.refetch();
+        if (shouldResolveHeldEvent && shouldShowQueryError(heldEventDetailQuery)) {
+          void heldEventDetailQuery.refetch();
+        }
       }
       if (scope === "match") {
         void Promise.all([
@@ -190,8 +281,14 @@ export function useExportCandidates({
           gameTitlesQuery.refetch(),
           matchesQuery.refetch(),
         ]);
-        if (shouldResolveMatch) void matchDetailQuery.refetch();
+        if (shouldResolveMatch && shouldShowQueryError(matchDetailQuery)) {
+          void matchDetailQuery.refetch();
+        }
       }
+    },
+    retrySelectedCandidate: () => {
+      if (shouldResolveHeldEvent) void heldEventDetailQuery.refetch();
+      if (shouldResolveMatch) void matchDetailQuery.refetch();
     },
     view,
   };

@@ -8,7 +8,6 @@ export const exportFormats = [
   { label: "CSV", value: "csv" },
   { label: "TSV", value: "tsv" },
 ] as const;
-
 export const exportScopes = [
   { description: "確定済みの全試合を書き出します。", label: "全試合", value: "all" },
   { description: "シーズンを選んで書き出します。", label: "シーズン", value: "season" },
@@ -16,8 +15,49 @@ export const exportScopes = [
   { description: "1試合だけ選んで書き出します。", label: "試合", value: "match" },
 ] as const;
 
+export type ExportCandidateSupportIssue = {
+  directory?: "load-failed" | "refresh-failed" | undefined;
+  names?: "load-failed" | "refresh-failed" | undefined;
+  selectedTarget?: "refresh-failed" | undefined;
+};
+
+export function buildCandidateSupportIssue(input: {
+  directoryBlocking: boolean;
+  directoryError: boolean;
+  hasCurrentDirectoryData: boolean;
+  namesError: boolean;
+  namesLoadFailed: boolean;
+  selectedTargetRefreshFailed: boolean;
+}): ExportCandidateSupportIssue | undefined {
+  const directory =
+    input.directoryError && !input.directoryBlocking
+      ? input.hasCurrentDirectoryData
+        ? "refresh-failed"
+        : "load-failed"
+      : undefined;
+  const names = input.namesError
+    ? input.namesLoadFailed
+      ? "load-failed"
+      : "refresh-failed"
+    : undefined;
+  if (!directory && !names && !input.selectedTargetRefreshFailed) return undefined;
+  return {
+    directory,
+    names,
+    selectedTarget: input.selectedTargetRefreshFailed ? "refresh-failed" : undefined,
+  };
+}
+
 export type ExportCandidateView =
-  | { kind: "empty"; actionHref: string; actionLabel: string; message: string; title: string }
+  | {
+      action:
+        | { href: string; kind: "link"; label: string }
+        | { kind: "scope"; label: string; scope: Extract<ExportScope, "all"> };
+      kind: "empty";
+      message: string;
+      supportIssue?: ExportCandidateSupportIssue | undefined;
+      title: string;
+    }
   | { kind: "error"; message: string }
   | { kind: "hidden" }
   | { kind: "loading" }
@@ -27,8 +67,8 @@ export type ExportCandidateView =
       pagination?: PaginationState | undefined;
       selectedId: string;
       selectedLabel: string;
-      selectedResolving?: boolean | undefined;
-      selectedUnknown: boolean;
+      selectionState: "load-failed" | "not-found" | "resolved" | "resolving";
+      supportIssue?: ExportCandidateSupportIssue | undefined;
     };
 
 export type ExportDownloadResultView =
@@ -68,56 +108,36 @@ export function buildCandidateView(input: {
   loading: boolean;
   pagination?: PaginationState | undefined;
   resolvedCandidate?: ExportCandidate | undefined;
-  resolvingSelected?: boolean | undefined;
+  selectedResolution?: "load-failed" | "not-found" | "resolved" | "resolving" | undefined;
   scope: ExportScope;
   selectedId: string;
+  supportIssue?: ExportCandidateSupportIssue | undefined;
 }): ExportCandidateView {
   if (input.scope === "all") return { kind: "hidden" };
   if (input.error) return { kind: "error", message: "候補を読み込めませんでした。" };
   if (input.loading) return { kind: "loading" };
 
-  if (input.candidates.length === 0 && input.selectedId) {
-    if (input.resolvedCandidate?.value === input.selectedId) {
-      return {
-        candidates: [],
-        kind: "ready",
-        pagination: input.pagination,
-        selectedId: input.selectedId,
-        selectedLabel: candidateDisplayLabel(input.resolvedCandidate),
-        selectedUnknown: false,
-      };
-    }
-    return {
-      candidates: [],
-      kind: "ready",
-      pagination: input.pagination,
-      selectedId: input.selectedId,
-      selectedLabel: input.resolvingSelected
-        ? "出力対象を確認しています"
-        : `指定された対象: ${input.selectedId}`,
-      selectedResolving: input.resolvingSelected,
-      selectedUnknown: !input.resolvingSelected,
-    };
-  }
-
-  if (input.candidates.length === 0) {
+  if (input.candidates.length === 0 && !input.selectedId) {
     if (input.scope === "season") {
       return {
-        actionHref: "/admin/masters",
-        actionLabel: "設定管理へ",
+        action: { kind: "scope", label: "全試合へ切り替え", scope: "all" },
         kind: "empty",
         message: "出力範囲に使えるシーズンがまだありません。",
+        supportIssue: input.supportIssue,
         title: "シーズン候補がありません",
       };
     }
     return {
-      actionHref: "/matches",
-      actionLabel: "試合一覧へ",
+      action:
+        input.scope === "heldEvent"
+          ? { href: "/held-events", kind: "link", label: "開催履歴へ" }
+          : { href: "/matches", kind: "link", label: "試合一覧へ" },
       kind: "empty",
       message:
         input.scope === "heldEvent"
           ? "出力範囲に使える開催履歴がまだありません。"
           : "確定済み試合がまだありません。",
+      supportIssue: input.supportIssue,
       title: input.scope === "heldEvent" ? "開催候補がありません" : "試合候補がありません",
     };
   }
@@ -130,7 +150,8 @@ export function buildCandidateView(input: {
       pagination: input.pagination,
       selectedId: input.selectedId,
       selectedLabel: candidateDisplayLabel(selected),
-      selectedUnknown: false,
+      selectionState: "resolved",
+      supportIssue: input.supportIssue,
     };
   }
 
@@ -141,21 +162,25 @@ export function buildCandidateView(input: {
       pagination: input.pagination,
       selectedId: input.selectedId,
       selectedLabel: candidateDisplayLabel(input.resolvedCandidate),
-      selectedUnknown: false,
+      selectionState: "resolved",
+      supportIssue: input.supportIssue,
     };
   }
 
   if (input.selectedId) {
+    const selectionState = input.selectedResolution ?? "not-found";
+    const scopeLabelText = scopeLabel(input.scope);
     return {
       candidates: input.candidates,
       kind: "ready",
       pagination: input.pagination,
       selectedId: input.selectedId,
-      selectedLabel: input.resolvingSelected
-        ? "出力対象を確認しています"
-        : `指定された対象: ${input.selectedId}`,
-      selectedResolving: input.resolvingSelected,
-      selectedUnknown: !input.resolvingSelected,
+      selectedLabel:
+        selectionState === "resolving"
+          ? `指定された${scopeLabelText}を確認しています`
+          : "出力対象が未確定です",
+      selectionState,
+      supportIssue: input.supportIssue,
     };
   }
 
@@ -166,7 +191,8 @@ export function buildCandidateView(input: {
     pagination: input.pagination,
     selectedId: first?.value ?? "",
     selectedLabel: first ? candidateDisplayLabel(first) : "",
-    selectedUnknown: false,
+    selectionState: "resolved",
+    supportIssue: input.supportIssue,
   };
 }
 
@@ -218,7 +244,11 @@ function summaryText(
   if (scope === "all") {
     return `すべての確定済み試合を${formatLabel}で書き出します。`;
   }
-  if (candidate.kind === "ready" && candidate.selectedLabel) {
+  if (
+    candidate.kind === "ready" &&
+    candidate.selectionState === "resolved" &&
+    candidate.selectedLabel
+  ) {
     return `${candidate.selectedLabel}を${formatLabel}で書き出します。`;
   }
   return `${scopeLabel(scope)}の出力対象を選択してください。`;
@@ -236,18 +266,16 @@ export function buildExportViewModel(input: {
   const formatLabel = input.urlState.format.toUpperCase();
   const candidateReady =
     input.urlState.scope === "all" ||
-    (input.candidate.kind === "ready" && input.candidate.selectedId.length > 0);
+    (input.candidate.kind === "ready" &&
+      input.candidate.selectionState === "resolved" &&
+      input.candidate.selectedId.length > 0);
   const isSlow = input.isPending && input.elapsedMs >= input.slowThresholdMs;
 
   return {
     actionLabel: `${actionSubject(input.urlState.scope)}を${formatLabel}でダウンロード`,
     candidate: input.candidate,
     candidateRefreshing: input.candidateRefreshing === true,
-    canDownload:
-      !input.isPending &&
-      !input.candidateRefreshing &&
-      input.urlState.errors.length === 0 &&
-      candidateReady,
+    canDownload: !input.isPending && input.urlState.errors.length === 0 && candidateReady,
     errors: input.urlState.errors,
     format: input.urlState.format,
     formatLabel,

@@ -12,9 +12,13 @@ function matchMetadata(
   gameTitles: GameTitleResponse[],
   seasons: SeasonMasterResponse[],
 ): string {
-  const gameTitle = gameTitles.find((item) => item.id === gameTitleId)?.name;
-  const season = seasons.find((item) => item.id === seasonMasterId)?.name;
-  return [gameTitle, season].filter(Boolean).join("・") || "タイトル・シーズン未設定";
+  const gameTitle = gameTitleId
+    ? (gameTitles.find((item) => item.id === gameTitleId)?.name ?? "作品名未取得")
+    : "作品未設定";
+  const season = seasonMasterId
+    ? (seasons.find((item) => item.id === seasonMasterId)?.name ?? "シーズン名未取得")
+    : "シーズン未設定";
+  return `${gameTitle}・${season}`;
 }
 
 export function toSeasonCandidates(seasons: SeasonMasterResponse[]): ExportCandidate[] {

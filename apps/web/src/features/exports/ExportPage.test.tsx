@@ -11,6 +11,7 @@ import { matchKeys } from "@/shared/api/queryKeys";
 import { setDevUser } from "@/test/auth";
 import { createDeferred } from "@/test/deferred";
 import { installAnchorClickMock } from "@/test/doubles/dom";
+import { makeHeldEventDetailResponse, makeMatchDetail } from "@/test/factories";
 import { setupMsw } from "@/test/msw/lifecycle";
 import { server } from "@/test/msw/server";
 import { createTestQueryClient } from "@/test/queryClient";
@@ -298,11 +299,15 @@ describe("ExportPage", () => {
     await user.click(screen.getByRole("button", { name: "シーズン" }));
 
     expect(await screen.findByText("シーズン候補がありません")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "設定管理へ" })).toHaveAttribute(
-      "href",
-      "/admin/masters",
-    );
-    expect(screen.getByRole("button", { name: "このシーズンをCSVでダウンロード" })).toBeDisabled();
+    const fallbackAction = screen.getByRole("button", { name: "全試合へ切り替え" });
+    expect(
+      screen.queryByRole("button", { name: "このシーズンをCSVでダウンロード" }),
+    ).not.toBeInTheDocument();
+
+    await user.click(fallbackAction);
+
+    expect(screen.getByRole("button", { name: "全試合" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "全試合をCSVでダウンロード" })).toBeEnabled();
   });
 
   it("retries only the candidate area after a candidate request fails", async () => {
@@ -320,10 +325,380 @@ describe("ExportPage", () => {
     renderPage({ path: "/exports?seasonMasterId=season-1&format=csv" });
 
     expect(await screen.findByText("候補を読み込めませんでした。")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "再読み込み" }));
+    const retry = screen.getByRole("button", { name: "再読み込み" });
+    expect(retry).toHaveClass("bg-[var(--color-action)]");
+    await user.click(retry);
 
     expect(await screen.findByLabelText("シーズン")).toHaveValue("season-1");
     expect(requests).toBe(2);
+  });
+
+  it.each([
+    {
+      detailPath: "/api/held-events/:heldEventId",
+      downloadName: "この開催をCSVでダウンロード",
+      missingId: "opaque-held-event-id",
+      path: "/exports?heldEventId=opaque-held-event-id&format=csv",
+      recoveryName: "開催を選び直す",
+      title: "指定された開催が見つかりません",
+    },
+    {
+      detailPath: "/api/matches/:matchId",
+      downloadName: "この試合をCSVでダウンロード",
+      missingId: "opaque-match-id",
+      path: "/exports?matchId=opaque-match-id&format=csv",
+      recoveryName: "試合を選び直す",
+      title: "指定された試合が見つかりません",
+    },
+  ])(
+    "keeps a missing scoped deep link non-downloadable without exposing its opaque ID ($title)",
+    async ({ detailPath, downloadName, missingId, path, recoveryName, title }) => {
+      server.use(
+        http.get(detailPath, () =>
+          HttpResponse.json(
+            { detail: "not found", status: 404, title: "Not Found" },
+            { status: 404 },
+          ),
+        ),
+      );
+
+      renderPage({ path });
+
+      expect(await screen.findByText(title)).toBeInTheDocument();
+      expect(document.body).not.toHaveTextContent(missingId);
+      expect(screen.queryByRole("button", { name: downloadName })).not.toBeInTheDocument();
+      expect(screen.getByRole("button", { name: recoveryName })).toHaveClass(
+        "bg-[var(--color-action)]",
+      );
+    },
+  );
+
+  it("retries a transient selected-match lookup failure in place", async () => {
+    let attempts = 0;
+    server.use(
+      http.get("/api/matches/:matchId", ({ params }) => {
+        if (params["matchId"] !== "match-retry") {
+          return HttpResponse.json(makeMatchDetail({ matchId: String(params["matchId"]) }));
+        }
+        attempts += 1;
+        return attempts === 1
+          ? HttpResponse.json({ detail: "temporarily unavailable" }, { status: 503 })
+          : HttpResponse.json(makeMatchDetail({ matchId: "match-retry", matchNoInEvent: 7 }));
+      }),
+    );
+
+    renderPage({ path: "/exports?matchId=match-retry&format=csv" });
+
+    expect(await screen.findByText("指定された試合を確認できませんでした")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "この試合をCSVでダウンロード" }),
+    ).not.toBeInTheDocument();
+    const retry = screen.getByRole("button", { name: "指定対象を再確認" });
+    expect(retry).toHaveClass("bg-[var(--color-action)]");
+    await user.click(retry);
+
+    expect(await screen.findByText(/第7試合.*CSVで書き出します。/u)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "この試合をCSVでダウンロード" })).toBeEnabled();
+    expect(attempts).toBe(2);
+  });
+
+  it.each([
+    {
+      changeName: "開催を変更",
+      detailPath: "/api/held-events/:heldEventId",
+      detailResponse: makeHeldEventDetailResponse({
+        heldAt: "2026-04-04T12:34:56.000Z",
+        id: "opaque-held-target",
+        matchCount: 4,
+        nextMatchNo: 5,
+      }),
+      downloadName: "この開催をCSVでダウンロード",
+      listPath: "/api/held-events",
+      listResponse: {
+        items: [
+          {
+            draftCount: 0,
+            heldAt: "2026-04-04T12:34:56.000Z",
+            id: "opaque-held-target",
+            matchCount: 4,
+            nextMatchNo: 5,
+          },
+        ],
+        pagination: {
+          hasNextPage: false,
+          hasPreviousPage: false,
+          page: 1,
+          pageSize: 20,
+          totalItems: 1,
+          totalPages: 1,
+        },
+        totalMatchCount: 4,
+      },
+      opaqueId: "opaque-held-target",
+      path: "/exports?heldEventId=opaque-held-target&format=csv",
+      summary: /4試合をCSVで書き出します。/u,
+    },
+    {
+      changeName: "試合を変更",
+      detailPath: "/api/matches/:matchId",
+      detailResponse: makeMatchDetail({
+        matchId: "opaque-match-target",
+        matchNoInEvent: 7,
+      }),
+      downloadName: "この試合をCSVでダウンロード",
+      listPath: "/api/matches",
+      listResponse: {
+        items: [
+          {
+            createdAt: "2026-04-04T13:00:00.000Z",
+            gameTitleId: "gt_momotetsu_2",
+            heldEventId: "held-1",
+            id: "opaque-match-target",
+            kind: "match",
+            matchId: "opaque-match-target",
+            matchNoInEvent: 7,
+            playedAt: "2026-04-04T12:34:56.000Z",
+            seasonMasterId: "season_current",
+            status: "confirmed",
+            updatedAt: "2026-04-04T13:00:00.000Z",
+          },
+        ],
+        pagination: {
+          hasNextPage: false,
+          hasPreviousPage: false,
+          lastCursor: null,
+          nextCursor: null,
+          page: 1,
+          pageSize: 20,
+          previousCursor: null,
+          totalItems: 1,
+          totalPages: 1,
+        },
+      },
+      opaqueId: "opaque-match-target",
+      path: "/exports?matchId=opaque-match-target&format=csv",
+      summary: /第7試合.*CSVで書き出します。/u,
+    },
+  ])(
+    "keeps a resolved deep-linked target usable when its candidate directory fails ($downloadName)",
+    async ({
+      changeName,
+      detailPath,
+      detailResponse,
+      downloadName,
+      listPath,
+      listResponse,
+      opaqueId,
+      path,
+      summary,
+    }) => {
+      const retryGate = createDeferred();
+      let attempts = 0;
+      server.use(
+        http.get(listPath, async () => {
+          attempts += 1;
+          if (attempts === 1) {
+            return HttpResponse.json({ detail: "temporarily unavailable" }, { status: 503 });
+          }
+          await retryGate.promise;
+          return HttpResponse.json(listResponse);
+        }),
+        http.get(detailPath, () => HttpResponse.json(detailResponse)),
+      );
+
+      renderPage({ path });
+
+      expect(await screen.findByText(summary)).toBeInTheDocument();
+      expect(screen.getByText("出力候補を読み込めませんでした")).toBeInTheDocument();
+      expect(
+        screen.getByText(
+          "指定された出力対象は確認できているため、このままダウンロードできます。別の対象へ変更するための候補一覧だけ取得できませんでした。",
+        ),
+      ).toBeInTheDocument();
+      expect(document.body).not.toHaveTextContent(opaqueId);
+      expect(screen.getByRole("button", { name: downloadName })).toBeEnabled();
+
+      const retry = screen.getByRole("button", { name: "出力候補を再取得" });
+      expect(retry).toHaveClass("bg-[var(--color-surface)]");
+      await user.click(retry);
+
+      expect(await screen.findByText("出力対象を確認しています。")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: downloadName })).toBeEnabled();
+
+      retryGate.resolve();
+      expect(await screen.findByRole("button", { name: changeName })).toBeInTheDocument();
+      await waitFor(() =>
+        expect(screen.queryByText("出力候補を読み込めませんでした")).not.toBeInTheDocument(),
+      );
+      expect(attempts).toBe(2);
+    },
+  );
+
+  it("marks both master names as unacquired when both master requests fail", async () => {
+    const gameTitleId = "opaque-game-title-id";
+    const seasonMasterId = "opaque-season-id";
+    server.use(
+      http.get("/api/game-titles", () =>
+        HttpResponse.json({ detail: "temporarily unavailable" }, { status: 503 }),
+      ),
+      http.get("/api/season-masters", () =>
+        HttpResponse.json({ detail: "temporarily unavailable" }, { status: 503 }),
+      ),
+      http.get("/api/matches", () =>
+        HttpResponse.json({
+          items: [
+            {
+              createdAt: "2026-04-04T13:00:00.000Z",
+              gameTitleId,
+              heldEventId: "held-1",
+              id: "match-master-failure",
+              kind: "match",
+              matchId: "match-master-failure",
+              matchNoInEvent: 2,
+              playedAt: "2026-04-04T12:34:56.000Z",
+              seasonMasterId,
+              status: "confirmed",
+              updatedAt: "2026-04-04T13:00:00.000Z",
+            },
+          ],
+          pagination: {
+            hasNextPage: false,
+            hasPreviousPage: false,
+            lastCursor: null,
+            nextCursor: null,
+            page: 1,
+            pageSize: 20,
+            previousCursor: null,
+            totalItems: 1,
+            totalPages: 1,
+          },
+        }),
+      ),
+    );
+
+    renderPage({ path: "/exports?matchId=match-master-failure&format=csv" });
+
+    expect(
+      await screen.findByText(/作品名未取得・シーズン名未取得.*CSVで書き出します。/u),
+    ).toBeInTheDocument();
+    expect(screen.getByText("候補の表示名を取得できませんでした")).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent(gameTitleId);
+    expect(document.body).not.toHaveTextContent(seasonMasterId);
+    expect(screen.getByRole("button", { name: "この試合をCSVでダウンロード" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "出力候補を再取得" })).toHaveClass(
+      "bg-[var(--color-surface)]",
+    );
+  });
+
+  it("keeps the acquired master name when only the other master request fails", async () => {
+    const gameTitleId = "opaque-game-title-id";
+    const seasonMasterId = "opaque-season-id";
+    server.use(
+      http.get("/api/game-titles", () =>
+        HttpResponse.json({
+          items: [
+            {
+              createdAt: "2026-01-01T00:00:00.000Z",
+              displayOrder: 1,
+              id: gameTitleId,
+              layoutFamily: "momotetsu_2",
+              name: "桃太郎電鉄2",
+            },
+          ],
+        }),
+      ),
+      http.get("/api/season-masters", () =>
+        HttpResponse.json({ detail: "temporarily unavailable" }, { status: 503 }),
+      ),
+      http.get("/api/matches", () =>
+        HttpResponse.json({
+          items: [
+            {
+              createdAt: "2026-04-04T13:00:00.000Z",
+              gameTitleId,
+              heldEventId: "held-1",
+              id: "match-one-master-failure",
+              kind: "match",
+              matchId: "match-one-master-failure",
+              matchNoInEvent: 3,
+              playedAt: "2026-04-04T12:34:56.000Z",
+              seasonMasterId,
+              status: "confirmed",
+              updatedAt: "2026-04-04T13:00:00.000Z",
+            },
+          ],
+          pagination: {
+            hasNextPage: false,
+            hasPreviousPage: false,
+            lastCursor: null,
+            nextCursor: null,
+            page: 1,
+            pageSize: 20,
+            previousCursor: null,
+            totalItems: 1,
+            totalPages: 1,
+          },
+        }),
+      ),
+    );
+
+    renderPage({ path: "/exports?matchId=match-one-master-failure&format=csv" });
+
+    expect(
+      await screen.findByText(/桃太郎電鉄2・シーズン名未取得.*CSVで書き出します。/u),
+    ).toBeInTheDocument();
+    expect(screen.getByText("候補の表示名を取得できませんでした")).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent(gameTitleId);
+    expect(document.body).not.toHaveTextContent(seasonMasterId);
+    expect(screen.getByRole("button", { name: "この試合をCSVでダウンロード" })).toBeEnabled();
+  });
+
+  it("preserves cached candidates and actions when a same-scope refresh fails", async () => {
+    let attempts = 0;
+    server.use(
+      http.get("/api/matches", ({ request }) => {
+        const url = new URL(request.url);
+        if (url.searchParams.get("kind") !== "match") return;
+        attempts += 1;
+        if (attempts === 2) {
+          return HttpResponse.json({ detail: "temporarily unavailable" }, { status: 503 });
+        }
+        return HttpResponse.json({
+          items: [
+            {
+              createdAt: "2026-01-01T09:00:00.000Z",
+              heldEventId: "held-1",
+              id: "match-1",
+              kind: "match",
+              matchId: "match-1",
+              matchNoInEvent: 1,
+              playedAt: "2026-01-01T09:00:00.000Z",
+              status: "confirmed",
+              updatedAt: "2026-01-01T09:00:00.000Z",
+            },
+          ],
+        });
+      }),
+    );
+
+    renderPage({ path: "/exports?matchId=match-1&format=csv" });
+    const change = await screen.findByRole("button", { name: "試合を変更" });
+    const download = screen.getByRole("button", { name: "この試合をCSVでダウンロード" });
+
+    await queryClient.invalidateQueries({
+      queryKey: matchKeys.exports({ kind: "match", status: "confirmed" }),
+    });
+
+    expect(await screen.findByText("出力候補を更新できませんでした")).toBeInTheDocument();
+    expect(change).toBeEnabled();
+    expect(download).toBeEnabled();
+    expect(screen.getByText(/第1試合.*CSVで書き出します。/u)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "出力候補を再取得" }));
+    await waitFor(() =>
+      expect(screen.queryByText("出力候補を更新できませんでした")).not.toBeInTheDocument(),
+    );
+    expect(attempts).toBe(3);
   });
 
   it("resets invalid deep-link conditions from the inline error", async () => {
@@ -337,8 +712,11 @@ describe("ExportPage", () => {
         "format は csv または tsv を指定してください。 出力範囲は1つだけ指定してください。",
       ),
     ).toBeInTheDocument();
+    const reset = screen.getByRole("button", { name: "初期条件へ戻す" });
+    expect(reset).toHaveClass("bg-[var(--color-action)]");
+    expect(screen.queryByRole("button", { name: /ダウンロード/u })).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "初期条件へ戻す" }));
+    await user.click(reset);
 
     expect(screen.queryByText("出力条件を確認")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "全試合" })).toHaveAttribute("aria-pressed", "true");
@@ -374,7 +752,7 @@ describe("ExportPage", () => {
     expect(screen.getByRole("button", { name: "もう一度試す" })).toBeInTheDocument();
   });
 
-  it("keeps scoped export actions disabled while candidate data is refreshing", async () => {
+  it("keeps a resolved download usable while candidate controls are refreshing", async () => {
     const refetchGate = createDeferred();
     let holdMatchRefetch = false;
 
@@ -416,7 +794,7 @@ describe("ExportPage", () => {
 
     expect(await screen.findByText("出力対象を確認しています。")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "試合を変更" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "この試合をCSVでダウンロード" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "この試合をCSVでダウンロード" })).toBeEnabled();
 
     refetchGate.resolve();
     await waitFor(() => {

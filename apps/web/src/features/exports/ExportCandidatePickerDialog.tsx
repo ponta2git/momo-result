@@ -14,6 +14,7 @@ type ReadyCandidateView = Extract<ExportCandidateView, { kind: "ready" }>;
 
 type ExportCandidatePickerDialogProps = {
   disabled?: boolean | undefined;
+  recovery?: boolean | undefined;
   refreshing?: boolean | undefined;
   scope: Extract<ExportScope, "heldEvent" | "match">;
   view: ReadyCandidateView;
@@ -27,6 +28,7 @@ function labelForScope(scope: ExportCandidatePickerDialogProps["scope"]): string
 
 export function ExportCandidatePickerDialog({
   disabled = false,
+  recovery = false,
   refreshing = false,
   scope,
   view,
@@ -58,13 +60,13 @@ export function ExportCandidatePickerDialog({
           title={`${label}を選択`}
           trigger={
             <Button
-              aria-label={`${label}を変更`}
+              aria-label={`${label}を${recovery ? "選び直す" : "変更"}`}
               className="min-h-11 shrink-0 px-3"
               disabled={disabled}
               icon={<ChevronDown aria-hidden="true" className="size-4" />}
-              variant="secondary"
+              variant={recovery ? "primary" : "secondary"}
             >
-              変更
+              {recovery ? "選び直す" : "変更"}
             </Button>
           }
           onOpenChange={setOpen}

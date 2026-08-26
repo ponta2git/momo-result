@@ -24,6 +24,7 @@ export function ExportPage({
       onCandidateChange={controller.onCandidateChange}
       onCandidatePageChange={controller.onCandidatePageChange}
       onCandidateRetry={controller.onCandidateRetry}
+      onSelectedCandidateRetry={controller.onSelectedCandidateRetry}
       onDownload={controller.onDownload}
       onFormatChange={controller.onFormatChange}
       onResetConditions={controller.onResetConditions}

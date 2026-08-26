@@ -136,6 +136,7 @@ export function useExportPageController({
     },
     onCandidatePageChange: candidates.setPage,
     onCandidateRetry: candidates.retry,
+    onSelectedCandidateRetry: candidates.retrySelectedCandidate,
     onDownload: () => mutation.mutate(),
     onFormatChange: (nextFormat: ExportFormat) =>
       updateSearch(nextFormat, urlState.scope, selectedId),

@@ -16,6 +16,7 @@ type ExportWorkspaceProps = {
   onCandidateChange: (value: string) => void;
   onCandidatePageChange: (page: number) => void;
   onCandidateRetry: () => void;
+  onSelectedCandidateRetry: () => void;
   onDownload: () => void;
   onFormatChange: (format: ExportFormat) => void;
   onResetConditions: () => void;
@@ -29,6 +30,7 @@ export function ExportWorkspace({
   onCandidateChange,
   onCandidatePageChange,
   onCandidateRetry,
+  onSelectedCandidateRetry,
   onDownload,
   onFormatChange,
   onResetConditions,
@@ -36,6 +38,11 @@ export function ExportWorkspace({
   returnTo,
   view,
 }: ExportWorkspaceProps) {
+  const showActionPanel =
+    view.errors.length > 0 ||
+    view.candidate.kind === "hidden" ||
+    (view.candidate.kind === "ready" && view.candidate.selectionState === "resolved");
+
   return (
     <PageFrame width="narrow">
       {returnTo ? (
@@ -69,6 +76,8 @@ export function ExportWorkspace({
           onChange={onCandidateChange}
           onPageChange={onCandidatePageChange}
           onRetry={onCandidateRetry}
+          onSelectedCandidateRetry={onSelectedCandidateRetry}
+          onScopeChange={onScopeChange}
         />
 
         <div className="grid gap-2">
@@ -80,12 +89,14 @@ export function ExportWorkspace({
           />
         </div>
 
-        <ExportActionPanel
-          isPending={isPending}
-          view={view}
-          onDownload={onDownload}
-          onResetConditions={onResetConditions}
-        />
+        {showActionPanel ? (
+          <ExportActionPanel
+            isPending={isPending}
+            view={view}
+            onDownload={onDownload}
+            onResetConditions={onResetConditions}
+          />
+        ) : null}
       </section>
     </PageFrame>
   );

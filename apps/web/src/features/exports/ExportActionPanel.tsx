@@ -37,7 +37,7 @@ export function ExportActionPanel({
       {view.errors.length > 0 ? (
         <Notice
           action={
-            <Button size="sm" variant="secondary" onClick={onResetConditions}>
+            <Button size="sm" onClick={onResetConditions}>
               初期条件へ戻す
             </Button>
           }
@@ -47,22 +47,24 @@ export function ExportActionPanel({
         >
           {view.errors.join(" ")}
         </Notice>
-      ) : null}
+      ) : (
+        <>
+          <Button
+            className="w-full sm:w-fit"
+            disabled={!view.canDownload}
+            icon={<Download aria-hidden="true" className="size-4" />}
+            pending={isPending}
+            pendingLabel="作成中…"
+            size="lg"
+            onClick={onDownload}
+          >
+            {view.actionLabel}
+          </Button>
 
-      <Button
-        className="w-full sm:w-fit"
-        disabled={!view.canDownload}
-        icon={<Download aria-hidden="true" className="size-4" />}
-        pending={isPending}
-        pendingLabel="作成中…"
-        size="lg"
-        onClick={onDownload}
-      >
-        {view.actionLabel}
-      </Button>
-
-      <ExportDownloadProgress isPending={isPending} isSlow={view.isSlow} />
-      <ExportDownloadResult result={view.result} onRetry={onDownload} />
+          <ExportDownloadProgress isPending={isPending} isSlow={view.isSlow} />
+          <ExportDownloadResult result={view.result} onRetry={onDownload} />
+        </>
+      )}
     </div>
   );
 }

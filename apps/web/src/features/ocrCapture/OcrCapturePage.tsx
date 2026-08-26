@@ -252,7 +252,7 @@ export function OcrCapturePage() {
                 ocrReadyCount === 0 || hasWorkingSlot || submission.isSubmitting || !setupReady
               }
               size="lg"
-              variant={trayFull ? "primary" : "secondary"}
+              variant="primary"
               onClick={handleStartOcr}
             >
               {ocrReadyCount === 0 ? "読み取りを開始" : `${ocrReadyCount}件で読み取りを開始`}

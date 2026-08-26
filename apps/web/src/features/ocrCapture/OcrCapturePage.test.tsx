@@ -98,7 +98,7 @@ describe("OcrCapturePage", () => {
     expect(pageFrame).not.toHaveClass("max-w-[120rem]");
     const startButton = screen.getByRole("button", { name: "読み取りを開始" });
     expect(startButton).toBeDisabled();
-    expect(startButton).toHaveClass("bg-[var(--color-surface)]");
+    expect(startButton).toHaveClass("bg-[var(--color-action)]");
     expect(screen.getByRole("button", { name: "カメラ開始" })).toHaveClass(
       "bg-[var(--color-action)]",
     );
@@ -109,7 +109,7 @@ describe("OcrCapturePage", () => {
     ).toEqual(["いーゆー", "ぽんた", "あかねまみ", "おーたか"]);
   });
 
-  it("promotes submission only after all three image types are selected", async () => {
+  it("keeps submission primary while images are being prepared", async () => {
     setDevUser();
     renderCaptureRoute();
 
@@ -117,13 +117,13 @@ describe("OcrCapturePage", () => {
     const input = screen.getByLabelText("OCRの画像をアップロード");
     await user.upload(input, new File(["assets"], "assets.png", { type: "image/png" }));
     expect(screen.getByRole("button", { name: "1件で読み取りを開始" })).toHaveClass(
-      "bg-[var(--color-surface)]",
+      "bg-[var(--color-action)]",
     );
 
     expect(screen.getByLabelText("次の撮影先は収益")).toBeInTheDocument();
     await user.upload(input, new File(["revenue"], "revenue.png", { type: "image/png" }));
     expect(screen.getByRole("button", { name: "2件で読み取りを開始" })).toHaveClass(
-      "bg-[var(--color-surface)]",
+      "bg-[var(--color-action)]",
     );
 
     expect(screen.getByLabelText("次の撮影先は事件簿")).toBeInTheDocument();

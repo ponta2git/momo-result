@@ -42,6 +42,7 @@ describe("CaptureSlotCard", () => {
       "true",
     );
     expect(screen.getByText("総資産の画像待ち")).toBeInTheDocument();
+    expect(screen.getAllByText("画像待ち")).toHaveLength(1);
     expect(screen.queryByText("01")).not.toBeInTheDocument();
   });
 

@@ -99,9 +99,6 @@ export function CaptureSlotCard({ actions, draft, presentation, slot }: CaptureS
           />
           <div className="min-w-0">
             <h3 className="font-semibold text-[var(--color-text-primary)]">{presentation.label}</h3>
-            <p className="text-xs text-[var(--color-text-secondary)]">
-              {hasImage ? "画像を配置済み" : "画像待ち"}
-            </p>
           </div>
         </div>
         <CaptureStatusBadge status={slot.status} />

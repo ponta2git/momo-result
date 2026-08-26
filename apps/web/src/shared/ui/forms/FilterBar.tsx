@@ -62,10 +62,7 @@ export function FilterBar({
             className="group"
             keepMounted
             open={details.open}
-            panelClassName={cn(
-              "grid gap-4 rounded-b-[var(--radius-sm)] bg-[var(--color-surface-subtle)] p-3",
-              details.panelClassName,
-            )}
+            panelClassName={cn("grid gap-4 p-3", details.panelClassName)}
             summary={
               <span className="min-w-0">
                 <span className="block text-sm font-semibold text-[var(--color-text-primary)]">

@@ -107,7 +107,7 @@ describe("ui foundation", () => {
     expect(screen.getByText("追加条件")).toBeInTheDocument();
   });
 
-  it("Disclosure does not turn an expanded panel into a pale surface", () => {
+  it("Disclosure keeps the expanded panel transparent", () => {
     render(
       <Disclosure defaultOpen presentation="inset" summary="補足">
         <p>補足内容</p>
@@ -115,6 +115,7 @@ describe("ui foundation", () => {
     );
 
     const panel = screen.getByText("補足内容").parentElement;
+    expect(panel).toHaveClass("bg-transparent");
     expect(panel).not.toHaveClass("bg-[var(--color-surface-subtle)]");
   });
 

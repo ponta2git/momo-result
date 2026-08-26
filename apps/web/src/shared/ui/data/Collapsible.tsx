@@ -92,7 +92,7 @@ export function Disclosure({
         />
       </BaseCollapsible.Trigger>
       <BaseCollapsible.Panel
-        className={cn(presentationClass[presentation].panel, panelClassName)}
+        className={cn(presentationClass[presentation].panel, panelClassName, "bg-transparent")}
         keepMounted={keepMounted}
       >
         {children}

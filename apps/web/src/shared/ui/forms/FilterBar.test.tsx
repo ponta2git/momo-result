@@ -55,7 +55,10 @@ describe("FilterBar", () => {
     );
 
     const trigger = screen.getByRole("button", { name: /詳細条件/u });
+    const panel = screen.getByLabelText("マップ").parentElement?.parentElement;
     expect(trigger).toHaveAttribute("aria-expanded", "false");
+    expect(panel).toHaveClass("bg-transparent");
+    expect(panel).not.toHaveClass("bg-[var(--color-surface-subtle)]");
     expect(screen.getByLabelText("マップ")).toBeInTheDocument();
 
     await user.click(trigger);

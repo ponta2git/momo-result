@@ -42,7 +42,7 @@
 - 順位は固定メンバー順やプレー順とは別の尺度であり、この4色順へ対応させない。rank は独立した意味トークンと `N位` の文字・形で示し、同じプレーヤーに付く member / play-order marker と取り違えない表現にする。任意のグラフ系列、操作、状態、傾向、装飾にも4色順を流用せず、4人の固定メンバーを表す系列だけを member sequence の用途に含める。
 - 操作、状態、順位、汎用グラフ系列、member sequence、play-order sequence は別の意味トークンを持つ。参照値の共有は上記2つの sequence 間だけに明示的に限定し、その他は同じトークンや値を alias しない。error、warning、success は sequence 色と明確に区別できる範囲で赤、黄、緑の色相を使ってよいが、ラベル、アイコン、形を併用し、sequence 色と同時に表示して取り違えがないことを検証する。区別できない組み合わせは neutral を基調にする。文字と面、control、focus、graph mark は実際の組み合わせで contrast と色覚多様性を検証する。
 - 淡色背景は、選択中または現在の scope、状態・通知・注意、入力や操作の inset、および compact な装飾ラベルに限定する。通常の要約、説明、見出し、重要情報は、重要という理由だけで淡色面へ置かない。面を追加するときは「何の選択・状態・操作領域・局所標識か」を答えられなければ使わない。
-- disclosure / collapsible は情報を開閉する操作であり、それ自体を選択状態や inset とみなさない。trigger と panel は既定で周囲と同じ面を使い、実際の状態、注意、独立した操作領域を内包する場合だけ、その内側の該当要素へ淡色背景を付ける。
+- disclosure / collapsible は情報を開閉する操作であり、それ自体を選択状態や inset とみなさない。`Collapsible.Panel` に相当する展開内容は背景を所有せず、周囲の面をそのまま使う。feature や filter から panel 自体へ淡色背景を上書きしない。実際の状態、注意、独立した操作領域を内包する場合だけ、その内側の該当要素へ淡色背景を付ける。trigger の hover / focus feedback は展開内容の面とは別に扱う。
 - `1位`、`2位`、分類名など、短く反復され、走査や識別を助けるラベルは局所的な標章として背景色、形、border を持ってよい。標章は文字だけでも意味が分かり、同じ種類で一貫した寸法と強度を持ち、clickable、selected、warning と誤認させない。広い面へ装飾を拡張せず、識別やリズムに寄与しない badge は足さない。
 - page canvas は、global navigation、戻り先、画面見出し、page-level action と content 間の余白を受け持つ。主要な作業・結果・data は白い content surface に置き、連続した1タスクまたは1 data scope につき原則1面とする。画面見出しは原則として content surface の外に置き、面をまたぐ下線を既定で持たせない。
 - content surface の内側を通常 section ごとの白い card に分割しない。まず見出し、整列、列、関係的余白で構成し、同時に独立して扱う source / editor などの workspace、独立して反復する record、境界が操作の理解に必要な bounded panel に限って別面を許容する。empty、pagination、loading など親 scope に従属する状態・操作は、親の白面を重ねて作り直さない。

@@ -27,11 +27,10 @@ type SeriesAnalysisContentProps = {
   onViewChange: (view: SeriesAnalysisViewId, options?: { replace?: boolean }) => void;
 };
 
+type SeriesAnalysisBundle = Extract<SeriesAnalysisDisplayBundle, { kind: "analysis" }>;
+
 export function SeriesAnalysisContent(props: SeriesAnalysisContentProps) {
-  const resource = props.bundle.kind === "review" ? props.bundle.review : props.bundle.aggregate;
-  // A drilldown belongs to one artifact/view and must reset before either identity can be mixed.
-  const contentIdentity = `${resource.artifact.artifactId}:${props.bundle.view}`;
-  return <ArtifactViewContent {...props} key={contentIdentity} />;
+  return <ArtifactViewContent {...props} />;
 }
 
 function ArtifactViewContent({
@@ -41,24 +40,16 @@ function ArtifactViewContent({
   onFocusMatch,
   onViewChange,
 }: SeriesAnalysisContentProps) {
-  const [drilldown, setDrilldown] = useState<SeriesAnalysisDrilldownSelection | null>(null);
   const resource = bundle.kind === "review" ? bundle.review : bundle.aggregate;
   const { matchContext, view: activeView } = bundle;
   const artifactId = resource.artifact.artifactId;
+  const contentIdentity = `${artifactId}:${activeView}`;
 
   useEffect(() => {
     const sectionId = decodeURIComponent(window.location.hash.slice(1));
     if (!sectionId) return;
     document.getElementById(sectionId)?.scrollIntoView?.({ block: "start" });
   }, [activeView, artifactId]);
-
-  const baseQuery: SeriesAnalysisQuery = {
-    artifactId,
-    gameTitleId: resource.artifact.gameTitleId,
-    mapMasterId: resource.scope.mapMasterId,
-    seasonMasterId: resource.scope.seasonMasterId,
-  };
-  const focusedItemIds = matchContext?.match?.focusedItemIds ?? [];
 
   return (
     <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4">
@@ -81,48 +72,76 @@ function ArtifactViewContent({
           role="tabpanel"
         >
           <AnalysisTabs activeView={bundle.view} onViewChange={onViewChange} />
-          {bundle.view === "overview" ? (
-            <OverviewView
-              focusedItemIds={focusedItemIds}
-              response={bundle.aggregate}
-              onDrilldown={setDrilldown}
-            />
-          ) : null}
-          {bundle.view === "drivers" ? (
-            <DriversView
-              focusedItemIds={focusedItemIds}
-              response={bundle.aggregate}
-              onDrilldown={setDrilldown}
-            />
-          ) : null}
-          {bundle.view === "flow" ? (
-            <FlowView
-              focusedItemIds={focusedItemIds}
-              response={bundle.aggregate}
-              onDrilldown={setDrilldown}
-              onFocusMatch={onFocusMatch}
-            />
-          ) : null}
-          {bundle.view === "context" ? (
-            <ContextView
-              focusedItemIds={focusedItemIds}
-              response={bundle.aggregate}
-              onDrilldown={setDrilldown}
-            />
-          ) : null}
+          <AnalysisViewContent
+            bundle={bundle}
+            key={contentIdentity}
+            onArtifactExpired={onArtifactExpired}
+            onFocusMatch={onFocusMatch}
+          />
         </div>
       )}
-      {bundle.kind === "analysis" ? (
-        <>
-          <MetricDefinitions response={bundle.aggregate} />
-          <SeriesAnalysisDrilldownDialog
-            baseQuery={baseQuery}
-            selection={drilldown}
-            onArtifactExpired={onArtifactExpired}
-            onClose={() => setDrilldown(null)}
-          />
-        </>
-      ) : null}
     </div>
+  );
+}
+
+function AnalysisViewContent({
+  bundle,
+  onArtifactExpired,
+  onFocusMatch,
+}: {
+  bundle: SeriesAnalysisBundle;
+  onArtifactExpired: () => void;
+  onFocusMatch: (matchId: string) => void;
+}) {
+  // A drilldown belongs to one artifact/view. This subtree remounts when either identity changes,
+  // while the tab lists remain mounted so their focus does not move back to the document.
+  const [drilldown, setDrilldown] = useState<SeriesAnalysisDrilldownSelection | null>(null);
+  const focusedItemIds = bundle.matchContext?.match?.focusedItemIds ?? [];
+  const baseQuery: SeriesAnalysisQuery = {
+    artifactId: bundle.aggregate.artifact.artifactId,
+    gameTitleId: bundle.aggregate.artifact.gameTitleId,
+    mapMasterId: bundle.aggregate.scope.mapMasterId,
+    seasonMasterId: bundle.aggregate.scope.seasonMasterId,
+  };
+
+  return (
+    <>
+      {bundle.view === "overview" ? (
+        <OverviewView
+          focusedItemIds={focusedItemIds}
+          response={bundle.aggregate}
+          onDrilldown={setDrilldown}
+        />
+      ) : null}
+      {bundle.view === "drivers" ? (
+        <DriversView
+          focusedItemIds={focusedItemIds}
+          response={bundle.aggregate}
+          onDrilldown={setDrilldown}
+        />
+      ) : null}
+      {bundle.view === "flow" ? (
+        <FlowView
+          focusedItemIds={focusedItemIds}
+          response={bundle.aggregate}
+          onDrilldown={setDrilldown}
+          onFocusMatch={onFocusMatch}
+        />
+      ) : null}
+      {bundle.view === "context" ? (
+        <ContextView
+          focusedItemIds={focusedItemIds}
+          response={bundle.aggregate}
+          onDrilldown={setDrilldown}
+        />
+      ) : null}
+      <MetricDefinitions response={bundle.aggregate} />
+      <SeriesAnalysisDrilldownDialog
+        baseQuery={baseQuery}
+        selection={drilldown}
+        onArtifactExpired={onArtifactExpired}
+        onClose={() => setDrilldown(null)}
+      />
+    </>
   );
 }

@@ -390,11 +390,13 @@ describe("app routing", () => {
 
   it("loads only the active review, then loads aggregate after switching views", async () => {
     setDevUser();
+    const aggregateResponseGate = createDeferred();
     const aggregateSearches: URLSearchParams[] = [];
     const reviewSearches: URLSearchParams[] = [];
     server.use(
-      http.get("/api/analytics/series-comparison/v2/aggregate", ({ request }) => {
+      http.get("/api/analytics/series-comparison/v2/aggregate", async ({ request }) => {
         aggregateSearches.push(new URL(request.url).searchParams);
+        await aggregateResponseGate.promise;
         return HttpResponse.json(makeSeriesAnalysisAggregate());
       }),
       http.get("/api/analytics/series-comparison/v2/review", ({ request }) => {
@@ -427,8 +429,13 @@ describe("app routing", () => {
     expect(reviewSearches).toHaveLength(1);
     expect(reviewSearches[0]?.get("artifactId")).toBe(analysisArtifact.artifactId);
 
-    await user.click(screen.getByRole("tab", { name: "分析する" }));
+    const analysisPurposeTab = screen.getByRole("tab", { name: "分析する" });
+    await user.click(analysisPurposeTab);
+    expect(await screen.findByText("比較条件を更新中")).toBeInTheDocument();
+    analysisPurposeTab.blur();
+    aggregateResponseGate.resolve();
     expect(await screen.findByRole("tabpanel", { name: "今の差" })).toBeInTheDocument();
+    expect(analysisPurposeTab).toHaveFocus();
     expect(screen.getByRole("heading", { name: "順位と基礎比較" })).toBeInTheDocument();
     expect(router.state.location.search).toContain("view=overview");
 

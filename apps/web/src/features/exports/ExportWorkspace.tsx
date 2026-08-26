@@ -7,8 +7,8 @@ import { PageHeader } from "@/shared/ui/layout/PageHeader";
 
 import { ExportActionPanel } from "./ExportActionPanel";
 import { ExportCandidateSelect } from "./ExportCandidateSelect";
-import { ExportFormatSegment } from "./ExportFormatSegment";
-import { ExportScopeSelector } from "./ExportScopeSelector";
+import { ExportFormatTabs } from "./ExportFormatTabs";
+import { ExportScopeTabs } from "./ExportScopeTabs";
 import type { ExportFormat, ExportScope } from "./exportTypes";
 import type { ExportViewModel } from "./exportViewModel";
 
@@ -66,40 +66,30 @@ export function ExportWorkspace({
         padding="compact"
         role="region"
       >
-        <div className="grid gap-2">
-          <p className="text-sm font-semibold text-[var(--color-text-primary)]">出力範囲</p>
-          <ExportScopeSelector disabled={isPending} scope={view.scope} onChange={onScopeChange} />
-        </div>
-
-        <ExportCandidateSelect
-          disabled={isPending || view.candidateRefreshing}
-          refreshing={view.candidateRefreshing}
-          scope={view.scope}
-          view={view.candidate}
-          onChange={onCandidateChange}
-          onPageChange={onCandidatePageChange}
-          onRetry={onCandidateRetry}
-          onSelectedCandidateRetry={onSelectedCandidateRetry}
-          onScopeChange={onScopeChange}
-        />
-
-        <div className="grid gap-2">
-          <p className="text-sm font-semibold text-[var(--color-text-primary)]">ファイル形式</p>
-          <ExportFormatSegment
-            disabled={isPending}
-            format={view.format}
-            onChange={onFormatChange}
+        <ExportScopeTabs disabled={isPending} scope={view.scope} onChange={onScopeChange}>
+          <ExportCandidateSelect
+            disabled={isPending || view.candidateRefreshing}
+            refreshing={view.candidateRefreshing}
+            scope={view.scope}
+            view={view.candidate}
+            onChange={onCandidateChange}
+            onPageChange={onCandidatePageChange}
+            onRetry={onCandidateRetry}
+            onSelectedCandidateRetry={onSelectedCandidateRetry}
+            onScopeChange={onScopeChange}
           />
-        </div>
+        </ExportScopeTabs>
 
-        {showActionPanel ? (
-          <ExportActionPanel
-            isPending={isPending}
-            view={view}
-            onDownload={onDownload}
-            onResetConditions={onResetConditions}
-          />
-        ) : null}
+        <ExportFormatTabs disabled={isPending} format={view.format} onChange={onFormatChange}>
+          {showActionPanel ? (
+            <ExportActionPanel
+              isPending={isPending}
+              view={view}
+              onDownload={onDownload}
+              onResetConditions={onResetConditions}
+            />
+          ) : null}
+        </ExportFormatTabs>
       </PageContentSurface>
     </PageFrame>
   );

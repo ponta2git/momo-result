@@ -1,9 +1,9 @@
 import { QueryClientProvider } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { ExportPage } from "@/features/exports/ExportPage";
@@ -28,6 +28,16 @@ let queryClient: QueryClient;
 let user: ReturnType<typeof userEvent.setup>;
 let anchorClick: ReturnType<typeof installAnchorClickMock>;
 
+function LocationProbe() {
+  const location = useLocation();
+  return (
+    <output
+      aria-label="current location"
+      data-location={`${location.pathname}${location.search}`}
+    />
+  );
+}
+
 function renderPage({ downloadTimeoutMs, path = "/exports", slowThresholdMs }: RenderOptions = {}) {
   setDevUser();
   return render(
@@ -41,6 +51,7 @@ function renderPage({ downloadTimeoutMs, path = "/exports", slowThresholdMs }: R
             path="/exports"
           />
         </Routes>
+        <LocationProbe />
       </MemoryRouter>
     </QueryClientProvider>,
   );
@@ -95,8 +106,8 @@ describe("ExportPage", () => {
 
     await screen.findByRole("heading", { name: "CSV/TSV出力" });
     const surface = screen.getByRole("region", { name: "出力条件" });
-    const scope = screen.getByRole("group", { name: "出力範囲" });
-    const format = screen.getByRole("group", { name: "ファイル形式" });
+    const scope = screen.getByRole("tablist", { name: "出力範囲" });
+    const format = screen.getByRole("tablist", { name: "ファイル形式" });
 
     expect(surface).toHaveClass("bg-[var(--color-surface)]", "rounded-[var(--radius-md)]");
     expect(surface).not.toHaveClass("border");
@@ -105,7 +116,61 @@ describe("ExportPage", () => {
     expect(screen.queryByText("書き出し内容")).not.toBeInTheDocument();
     expect(screen.queryByText(/条件はURLに保存/u)).not.toBeInTheDocument();
     expect(scope.compareDocumentPosition(format) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(within(scope).getByRole("tab", { name: "全試合" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(within(format).getByRole("tab", { name: "CSV" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    const allScopePanel = screen.getByRole("tabpanel", { name: "全試合" });
+    expect(allScopePanel).toBeInTheDocument();
+    expect(within(allScopePanel).getByText("下書きや確認待ちの試合は含みません。")).toBeVisible();
+    expect(screen.getByRole("tabpanel", { name: "CSV" })).toBeInTheDocument();
     expect(screen.getByText("すべての確定済み試合をCSVで書き出します。")).toBeInTheDocument();
+  });
+
+  it("activates instant format tabs on focus and waits for confirmation before loading a scope", async () => {
+    let seasonRequests = 0;
+    server.use(
+      http.get("/api/season-masters", () => {
+        seasonRequests += 1;
+        return HttpResponse.json({ items: [{ id: "season-1", name: "3年決戦" }] });
+      }),
+    );
+    renderPage();
+
+    await screen.findByRole("heading", { name: "CSV/TSV出力" });
+    const formatTabs = screen.getByRole("tablist", { name: "ファイル形式" });
+    await user.click(within(formatTabs).getByRole("tab", { name: "CSV" }));
+    await user.keyboard("{ArrowRight}");
+
+    expect(within(formatTabs).getByRole("tab", { name: "TSV" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(screen.getByRole("tabpanel", { name: "TSV" })).toBeInTheDocument();
+    expect(screen.getByText("すべての確定済み試合をTSVで書き出します。")).toBeInTheDocument();
+
+    const scopeTabs = screen.getByRole("tablist", { name: "出力範囲" });
+    await user.click(within(scopeTabs).getByRole("tab", { name: "全試合" }));
+    await user.keyboard("{ArrowRight}");
+
+    const seasonTab = within(scopeTabs).getByRole("tab", { name: "シーズン" });
+    expect(seasonTab).toHaveFocus();
+    expect(seasonTab).toHaveAttribute("aria-selected", "false");
+    expect(within(scopeTabs).getByRole("tab", { name: "全試合" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(seasonRequests).toBe(0);
+
+    await user.keyboard("{Enter}");
+
+    expect(seasonTab).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tabpanel", { name: "シーズン" })).toBeInTheDocument();
+    await waitFor(() => expect(seasonRequests).toBe(1));
   });
 
   it("keeps the source-page return link while export conditions change", async () => {
@@ -117,7 +182,7 @@ describe("ExportPage", () => {
     const backLink = screen.getByRole("link", { name: "前の画面へ戻る" });
     expect(backLink).toHaveAttribute("href", "/matches?status=confirmed&cursor=cursor-2");
 
-    await user.click(screen.getByRole("button", { name: "TSV" }));
+    await user.click(screen.getByRole("tab", { name: "TSV" }));
     expect(backLink).toHaveAttribute("href", "/matches?status=confirmed&cursor=cursor-2");
   });
 
@@ -164,6 +229,10 @@ describe("ExportPage", () => {
 
     renderPage({ path: "/exports?matchId=match-1&format=tsv" });
     await screen.findByRole("heading", { name: "CSV/TSV出力" });
+    expect(screen.getByRole("tab", { name: "試合" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "TSV" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tabpanel", { name: "試合" })).toBeInTheDocument();
+    expect(screen.getByRole("tabpanel", { name: "TSV" })).toBeInTheDocument();
     expect(await screen.findByRole("button", { name: "試合を変更" })).toBeInTheDocument();
     expect(screen.getAllByText(/第1試合/u)).not.toHaveLength(0);
     expect(screen.queryByText("draft-1")).not.toBeInTheDocument();
@@ -300,7 +369,7 @@ describe("ExportPage", () => {
 
     renderPage();
     await screen.findByRole("heading", { name: "CSV/TSV出力" });
-    await user.click(screen.getByRole("button", { name: "シーズン" }));
+    await user.click(screen.getByRole("tab", { name: "シーズン" }));
 
     expect(await screen.findByText("シーズン候補がありません")).toBeInTheDocument();
     const fallbackAction = screen.getByRole("button", { name: "全試合へ切り替え" });
@@ -310,7 +379,7 @@ describe("ExportPage", () => {
 
     await user.click(fallbackAction);
 
-    expect(screen.getByRole("button", { name: "全試合" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("tab", { name: "全試合" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("button", { name: "全試合をCSVでダウンロード" })).toBeEnabled();
   });
 
@@ -333,7 +402,7 @@ describe("ExportPage", () => {
     expect(retry).toHaveClass("bg-[var(--color-action)]");
     await user.click(retry);
 
-    expect(await screen.findByLabelText("シーズン")).toHaveValue("season-1");
+    expect(await screen.findByRole("combobox", { name: "シーズン" })).toHaveValue("season-1");
     expect(requests).toBe(2);
   });
 
@@ -723,7 +792,7 @@ describe("ExportPage", () => {
     await user.click(reset);
 
     expect(screen.queryByText("出力条件を確認")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "全試合" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("tab", { name: "全試合" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("button", { name: "全試合をCSVでダウンロード" })).toBeEnabled();
   });
 
@@ -824,13 +893,31 @@ describe("ExportPage", () => {
 
     renderPage();
     await screen.findByRole("heading", { name: "CSV/TSV出力" });
+    const location = screen.getByLabelText("current location");
+    const initialLocation = location.dataset["location"] ?? "";
     await user.click(screen.getByRole("button", { name: "全試合をCSVでダウンロード" }));
 
     expect(screen.getByRole("button", { name: "作成中…" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "CSV" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "全試合" })).toBeDisabled();
+    const csvTab = screen.getByRole("tab", { name: "CSV" });
+    const tsvTab = screen.getByRole("tab", { name: "TSV" });
+    const allScopeTab = screen.getByRole("tab", { name: "全試合" });
+    const seasonTab = screen.getByRole("tab", { name: "シーズン" });
+    expect(csvTab).toHaveAttribute("aria-disabled", "true");
+    expect(allScopeTab).toHaveAttribute("aria-disabled", "true");
     expect(screen.getByText("出力ファイルを作成しています")).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "試合一覧へ戻る" })).not.toBeInTheDocument();
+
+    await user.click(tsvTab);
+    await user.keyboard("{Enter}{ArrowRight}");
+    await user.click(seasonTab);
+    await user.keyboard("{Enter}{ArrowRight}");
+
+    expect(csvTab).toHaveAttribute("aria-selected", "true");
+    expect(tsvTab).toHaveAttribute("aria-selected", "false");
+    expect(allScopeTab).toHaveAttribute("aria-selected", "true");
+    expect(seasonTab).toHaveAttribute("aria-selected", "false");
+    expect(location).toHaveAttribute("data-location", initialLocation);
+
     await user.click(screen.getByRole("button", { name: "作成中…" }));
     expect(requests).toBe(1);
 

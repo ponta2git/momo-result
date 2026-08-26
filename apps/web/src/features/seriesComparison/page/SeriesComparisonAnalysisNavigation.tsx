@@ -1,6 +1,5 @@
 import type { SeriesAnalysisViewId } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
 import { isSeriesAnalysisViewId } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
-import { cn } from "@/shared/ui/cn";
 import { TabsList, TabsRoot, TabsTab } from "@/shared/ui/forms/Tabs";
 
 type AnalysisViewId = Exclude<SeriesAnalysisViewId, "review">;
@@ -73,25 +72,6 @@ export function analysisPanelId(view: AnalysisViewId): string {
   return `series-comparison-view-${view}`;
 }
 
-function tabClassName(active: boolean, emphasis: "primary" | "secondary"): string {
-  return cn(
-    "inline-flex min-h-11 min-w-0 items-center px-3 text-sm font-semibold transition-colors duration-[var(--motion-fast)] motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-[var(--color-action)]",
-    emphasis === "primary"
-      ? cn(
-          "rounded-[var(--radius-xs)] focus-visible:outline-offset-2 sm:text-base",
-          active
-            ? "bg-[var(--color-surface)] text-[var(--color-text-primary)]"
-            : "text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]",
-        )
-      : cn(
-          "-mb-px border-b-2 focus-visible:outline-offset-[-2px]",
-          active
-            ? "border-[var(--color-action)] text-[var(--color-text-primary)]"
-            : "border-transparent text-[var(--color-text-secondary)] hover:border-[var(--color-border-strong)] hover:text-[var(--color-text-primary)]",
-        ),
-  );
-}
-
 export function PurposeTabs({
   activeView,
   onViewChange,
@@ -112,13 +92,9 @@ export function PurposeTabs({
         }
       }}
     >
-      <TabsList
-        aria-label="戦績比較の目的"
-        className="inline-flex max-w-full min-w-0 rounded-[var(--radius-sm)] bg-[var(--color-surface-subtle)] p-1"
-      >
+      <TabsList activateOnFocus={false} aria-label="戦績比較の目的" variant="filled" wrap>
         <TabsTab
           aria-controls={purposePanelId("review")}
-          className={tabClassName(activePurpose === "review", "primary")}
           id={purposeTabId("review")}
           value="review"
         >
@@ -126,7 +102,6 @@ export function PurposeTabs({
         </TabsTab>
         <TabsTab
           aria-controls={purposePanelId("analysis")}
-          className={tabClassName(activePurpose === "analysis", "primary")}
           id={purposeTabId("analysis")}
           value="analysis"
         >
@@ -154,14 +129,10 @@ export function AnalysisTabs({
         }
       }}
     >
-      <TabsList
-        aria-label="分析の切り口"
-        className="flex min-w-0 overflow-x-auto overflow-y-hidden border-b border-[var(--color-border)]"
-      >
+      <TabsList activateOnFocus={false} aria-label="分析の切り口" variant="underline" wrap={false}>
         {analysisViews.map((item) => (
           <TabsTab
             aria-controls={analysisPanelId(item.id)}
-            className={cn(tabClassName(item.id === activeView, "secondary"), "shrink-0")}
             id={analysisTabId(item.id)}
             key={item.id}
             value={item.id}

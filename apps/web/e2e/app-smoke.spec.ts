@@ -83,7 +83,7 @@ test("completes the app smoke workflow with isolated scoped data", async ({
       (response) =>
         response.url().includes("/api/held-events") && response.request().method() === "POST",
     );
-    await page.getByRole("button", { exact: true, name: "開催を作成" }).click();
+    await page.getByRole("button", { name: /^(?:最初の)?開催を作成$/u }).click();
     const createDialog = page.getByRole("dialog", { name: "新しい開催を作成" });
     await expect(createDialog).toBeVisible();
     await createDialog.getByLabel("開催日時").fill(e2eRun.uniqueLocalDateTime());
@@ -494,6 +494,16 @@ test("completes the app smoke workflow with isolated scoped data", async ({
     await comparisonLink.click();
 
     await expect(page.getByRole("heading", { exact: true, name: "戦績比較" })).toBeVisible();
+    const purposeTabs = page.getByRole("tablist", { name: "戦績比較の目的" });
+    const analysisTabs = page.getByRole("tablist", { name: "分析の切り口" });
+    await expect(purposeTabs.getByRole("tab", { name: "分析する" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    await expect(analysisTabs.getByRole("tab", { name: "推移" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
     const scopeSurface = page.getByRole("region", { name: "比較条件" });
     await expect(scopeSurface).toContainText(`${analysisScope.matchCount}戦`);
     await expect(scopeSurface).not.toContainText("十分");
@@ -602,8 +612,12 @@ test("completes the app smoke workflow with isolated scoped data", async ({
     await rankSignalDialog.getByRole("button", { name: "ダイアログを閉じる" }).click();
 
     await page.setViewportSize({ height: 900, width: 1440 });
-    await page.getByRole("tab", { name: "次戦に備える" }).click();
+    const reviewPurposeTab = purposeTabs.getByRole("tab", { name: "次戦に備える" });
+    await reviewPurposeTab.click();
+    await expect(reviewPurposeTab).toHaveAttribute("aria-selected", "true");
     const nextMatchReview = page.getByRole("tabpanel", { name: "次戦に備える" });
+    await expect(nextMatchReview).toBeVisible();
+    await expect(reviewPurposeTab).toBeFocused();
     const actionHypothesisTarget = nextMatchReview.getByLabel("行動仮説の対象");
     await expect(actionHypothesisTarget.getByText("対象", { exact: true })).toBeVisible();
     await expect(actionHypothesisTarget.getByText("次の4戦", { exact: true })).toBeVisible();
@@ -785,6 +799,18 @@ test("completes the app smoke workflow with isolated scoped data", async ({
     await page.goto(`/exports?matchId=${encodeURIComponent(matchId)}&format=tsv`);
 
     await expect(page.getByRole("heading", { exact: true, name: "CSV/TSV出力" })).toBeVisible();
+    const exportScopeTabs = page.getByRole("tablist", { name: "出力範囲" });
+    const exportFormatTabs = page.getByRole("tablist", { name: "ファイル形式" });
+    await expect(exportScopeTabs.getByRole("tab", { exact: true, name: "試合" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    await expect(exportFormatTabs.getByRole("tab", { name: "TSV" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    await expect(page.getByRole("tabpanel", { exact: true, name: "試合" })).toBeVisible();
+    await expect(page.getByRole("tabpanel", { name: "TSV" })).toBeVisible();
     await expect(page.getByRole("button", { name: "試合を変更" })).toBeVisible();
     await expect(page.getByText(/第1試合.*TSVで書き出します。/u)).toBeVisible();
 

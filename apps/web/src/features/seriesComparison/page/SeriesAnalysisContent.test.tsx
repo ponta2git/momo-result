@@ -21,6 +21,31 @@ function analysisBundle(
 }
 
 describe("SeriesAnalysisContent", () => {
+  it("keeps focus on a nested analysis tab when the controlled view changes", async () => {
+    const user = userEvent.setup();
+    const queryClient = createTestQueryClient();
+    const aggregate = makeSeriesAnalysisAggregate();
+    const props = {
+      onArtifactExpired: vi.fn(),
+      onClearFocusedMatch: vi.fn(),
+      onFocusMatch: vi.fn(),
+      onViewChange: vi.fn(),
+    };
+    const view = (bundle: SeriesAnalysisDisplayBundle) => (
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter>
+          <SeriesAnalysisContent {...props} bundle={bundle} />
+        </MemoryRouter>
+      </QueryClientProvider>
+    );
+    const rendered = render(view(analysisBundle(aggregate, "overview")));
+
+    await user.click(screen.getByRole("tab", { name: "勝因候補" }));
+    rendered.rerender(view(analysisBundle(aggregate, "drivers")));
+
+    expect(screen.getByRole("tab", { name: "勝因候補" })).toHaveFocus();
+  });
+
   it("resets drilldown state when the artifact or analysis view identity changes", async () => {
     const user = userEvent.setup();
     const queryClient = createTestQueryClient();

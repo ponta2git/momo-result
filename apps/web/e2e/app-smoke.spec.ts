@@ -292,7 +292,11 @@ test("completes the app smoke workflow with isolated scoped data", async ({
     const resultLedger = resultLedgerCard.getByRole("list", { name: "試合の順位と成績" });
     await expect(resultLedger).toBeVisible();
     const resultLedgerCardBox = await measureElement(resultLedgerCard, "Result ledger card");
-    expect(resultLedgerCardBox.width).toBeLessThanOrEqual(896);
+    const resultContentSurfaceBox = await measureElement(
+      resultLedgerCard.locator(".."),
+      "Result content surface",
+    );
+    expect(resultContentSurfaceBox.width - resultLedgerCardBox.width).toBeLessThanOrEqual(48);
     const firstPlaceLedgerRow = resultLedgerCard
       .getByRole("listitem")
       .filter({ hasText: "ぽんた" });
@@ -304,7 +308,10 @@ test("completes the app smoke workflow with isolated scoped data", async ({
       firstPlaceLedgerRow.getByText("総資産", { exact: true }).locator(".."),
       "Result ledger total assets",
     );
-    expect(totalAssetsBox.x - rankBox.x).toBeLessThanOrEqual(480);
+    expect(totalAssetsBox.x).toBeGreaterThan(rankBox.x);
+    expect(totalAssetsBox.x + totalAssetsBox.width).toBeLessThanOrEqual(
+      resultLedgerCardBox.x + resultLedgerCardBox.width,
+    );
 
     await page.getByRole("link", { name: "この開催へ戻る" }).click();
     await expect(page).toHaveURL(`/held-events/${heldEventId}`);
@@ -689,9 +696,9 @@ test("completes the app smoke workflow with isolated scoped data", async ({
         url.searchParams.get("heldEventId") === null
       );
     });
-    const confirmedStatusButton = page.getByRole("button", { exact: true, name: "確定済" });
-    await expect(confirmedStatusButton).toBeEnabled();
-    await confirmedStatusButton.click();
+    const statusSelect = page.getByRole("combobox", { exact: true, name: "確定状況" });
+    await expect(statusSelect).toBeEnabled();
+    await statusSelect.selectOption("confirmed");
     expect((await statusResponse).ok()).toBe(true);
     await expect(page).toHaveURL(/[?&]status=confirmed(?:&|$)/u);
 

@@ -101,7 +101,7 @@ test("keeps shared UI operation contracts across responsive application flows", 
 
     await expect(page.getByRole("heading", { exact: true, name: "試合一覧" })).toBeVisible();
     const filterBar = page.getByRole("region", { name: "試合の表示条件" });
-    const statusFilter = filterBar.getByLabel("確定状況");
+    const statusFilter = filterBar.getByRole("combobox", { exact: true, name: "確定状況" });
     await expect(statusFilter).toBeVisible();
     await expect(statusFilter).toHaveValue("all");
     await expect(statusFilter.getByRole("option")).toHaveCount(6);

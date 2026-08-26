@@ -13,9 +13,13 @@ describe("RankSignalDrilldown", () => {
 
     render(<RankSignalDrilldown payload={response.payload} />);
 
-    expect(
-      within(screen.getByLabelText("順位を読む手掛かりの分析範囲")).getByText("5/5組で改善"),
-    ).toBeInTheDocument();
+    const analysisScope = screen.getByLabelText("順位を読む手掛かりの分析範囲");
+    expect(within(analysisScope).getByText("5/5組で改善")).toBeInTheDocument();
+    expect(analysisScope).toHaveClass("border-y");
+    expect(analysisScope).not.toHaveClass("rounded-[var(--radius-sm)]");
+    expect(within(analysisScope).getByText("別開催テスト").parentElement).not.toHaveClass(
+      "bg-[var(--color-surface-subtle)]",
+    );
     expect(screen.getByRole("heading", { name: "判断の順序" })).toBeInTheDocument();
     const usage = screen.getByLabelText("順位を読む手掛かりの使い方");
     expect(within(usage).getByText("候補を選ぶ")).toBeInTheDocument();

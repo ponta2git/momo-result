@@ -14,6 +14,7 @@ import {
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
 import type { RelativeIntensity, SeriesComparisonAggregateV3 } from "@/shared/api/seriesAnalysis";
 import { orderFixedMembers } from "@/shared/domain/members";
+import { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
 import { dataVizSeriesPresentation } from "@/shared/ui/dataViz/seriesPresentation";
 import { colorMix, rankColor } from "@/shared/ui/rank/rankPresentation";
 
@@ -26,10 +27,7 @@ export function RankDistributionBars({ focusedItemIds, response }: OverviewChart
   const titleId = useId();
   const players = orderFixedMembers(response.players);
   return (
-    <section
-      aria-labelledby={titleId}
-      className="grid gap-3 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3"
-    >
+    <section aria-labelledby={titleId} className="grid gap-3">
       <h3 className="text-sm font-semibold" id={titleId}>
         各順位の回数
       </h3>
@@ -56,15 +54,10 @@ export function RankDistributionBars({ focusedItemIds, response }: OverviewChart
               className="grid gap-1 sm:grid-cols-[8rem_minmax(0,1fr)_4rem] sm:items-center"
               key={player.memberId}
             >
-              <div
-                className="text-sm font-semibold break-words"
-                style={{
-                  borderLeftColor: dataVizSeriesPresentation(player.memberId).color,
-                  borderLeftWidth: 3,
-                  paddingLeft: 8,
-                }}
-              >
-                {player.displayName}
+              <div className="text-sm font-semibold break-words">
+                <MemberSequenceLabel memberId={player.memberId}>
+                  {player.displayName}
+                </MemberSequenceLabel>
               </div>
               <div
                 aria-label={`${player.displayName}の順位分布`}
@@ -159,12 +152,12 @@ export function CrownShareBars({ response }: { response: SeriesComparisonAggrega
             <div
               className="flex items-center justify-between gap-2 bg-[var(--color-surface)] px-3 py-2"
               key={player.memberId}
-              style={{
-                borderLeftColor: dataVizSeriesPresentation(player.memberId).color,
-                borderLeftWidth: 3,
-              }}
             >
-              <dt className="text-sm font-semibold break-words">{player.displayName}</dt>
+              <dt className="text-sm font-semibold break-words">
+                <MemberSequenceLabel memberId={player.memberId}>
+                  {player.displayName}
+                </MemberSequenceLabel>
+              </dt>
               <dd className="text-right text-sm font-semibold tabular-nums">
                 {formatPercent(share)}
               </dd>
@@ -184,14 +177,10 @@ export function HeadToHeadMatrix({ response }: { response: SeriesComparisonAggre
         <tr>
           <MatrixAxisHeader className="w-36" columnLabel="相手" rowLabel="本人" />
           {players.map((player) => (
-            <MatrixColumnHeader
-              key={player.memberId}
-              style={{
-                borderTopColor: dataVizSeriesPresentation(player.memberId).color,
-                borderTopWidth: 3,
-              }}
-            >
-              vs {player.displayName}
+            <MatrixColumnHeader key={player.memberId}>
+              <MemberSequenceLabel className="justify-center" memberId={player.memberId}>
+                vs {player.displayName}
+              </MemberSequenceLabel>
             </MatrixColumnHeader>
           ))}
         </tr>
@@ -199,13 +188,10 @@ export function HeadToHeadMatrix({ response }: { response: SeriesComparisonAggre
       <tbody>
         {players.map((subject) => (
           <tr key={subject.memberId}>
-            <MatrixRowHeader
-              style={{
-                borderLeftColor: dataVizSeriesPresentation(subject.memberId).color,
-                borderLeftWidth: 3,
-              }}
-            >
-              {subject.displayName}
+            <MatrixRowHeader>
+              <MemberSequenceLabel memberId={subject.memberId}>
+                {subject.displayName}
+              </MemberSequenceLabel>
             </MatrixRowHeader>
             {players.map((opponent) => {
               const entry = response.headToHead.entries.find(

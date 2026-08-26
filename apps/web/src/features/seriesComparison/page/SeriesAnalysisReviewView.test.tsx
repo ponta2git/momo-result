@@ -34,7 +34,7 @@ describe("ReviewView", () => {
     };
 
     const onViewChange = vi.fn();
-    render(
+    const view = render(
       <ReviewView
         loading={false}
         response={response}
@@ -43,14 +43,20 @@ describe("ReviewView", () => {
       />,
     );
 
-    expect(screen.getByText(primary.actionHypothesis).closest("article")).toHaveClass(
-      "border-[var(--color-analysis-emphasis)]/55",
+    expect(screen.getByText(primary.actionHypothesis).closest("article")).not.toHaveClass(
+      "bg-[var(--color-analysis-emphasis)]/6",
     );
+    expect(
+      [...view.container.querySelectorAll<HTMLElement>("[data-member-sequence]")].map(
+        (item) => item.dataset["memberSequence"],
+      ),
+    ).toEqual(["2"]);
 
-    const usage = screen.getByLabelText("行動仮説の使い方");
+    const usage = screen.getByLabelText("行動仮説の対象");
     expect(within(usage).getByText("対象")).toBeInTheDocument();
     expect(within(usage).getByText("次の4戦")).toBeInTheDocument();
-    expect(within(usage).getByText("使う場面")).toBeInTheDocument();
+    expect(within(usage).queryByText("使う場面")).not.toBeInTheDocument();
+    expect(screen.queryByText("発動条件に当てはまるとき")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "卓全体で出やすい論点" })).toHaveTextContent(
       "収益先行後の詰め方",
     );
@@ -63,7 +69,7 @@ describe("ReviewView", () => {
     await user.click(screen.getByRole("button", { name: "分類の読み方" }));
     const helpDialog = await screen.findByRole("dialog");
     expect(within(helpDialog).getByText("再現する")).toBeInTheDocument();
-    expect(within(helpDialog).getByText(/「やること」を行動候補にします/u)).toBeInTheDocument();
+    expect(within(helpDialog).getByText(/本人が次の試合で自己観察する場面/u)).toBeInTheDocument();
     await user.click(within(helpDialog).getByRole("button", { name: "ダイアログを閉じる" }));
 
     await user.click(screen.getAllByRole("button", { name: "根拠・注意・試合後の確認" })[0]!);

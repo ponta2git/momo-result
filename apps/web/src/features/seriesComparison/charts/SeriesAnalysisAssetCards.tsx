@@ -15,6 +15,7 @@ import { SeriesAnalysisQualityAdvisory } from "@/features/seriesComparison/Serie
 import type { SeriesComparisonAggregateV3 } from "@/shared/api/seriesAnalysis";
 import { orderFixedMembers } from "@/shared/domain/members";
 import { Disclosure } from "@/shared/ui/data/Collapsible";
+import { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
 import { DataVizQuadrantPlot } from "@/shared/ui/dataViz/QuadrantPlot";
 
 export function AssetComparisonCards({ response }: { response: SeriesComparisonAggregateV3 }) {
@@ -36,7 +37,11 @@ export function AssetComparisonCards({ response }: { response: SeriesComparisonA
             key={entry.memberId}
           >
             <div className="flex items-start justify-between gap-2 border-b border-[var(--color-border)] pb-3">
-              <h3 className="font-semibold">{entry.displayName}</h3>
+              <h3 className="font-semibold">
+                <MemberSequenceLabel memberId={entry.memberId}>
+                  {entry.displayName}
+                </MemberSequenceLabel>
+              </h3>
               <span className="grid justify-items-end gap-1 text-xs text-[var(--color-text-secondary)] tabular-nums">
                 <span>{entry.targetCount}戦</span>
                 <SeriesAnalysisQualityAdvisory status={entry.qualityStatus} />
@@ -139,9 +144,10 @@ export function AssetComparisonCards({ response }: { response: SeriesComparisonA
             </section>
             <Disclosure
               ariaLabel={`${entry.displayName}の資産傾向の詳しい根拠`}
-              className="mt-3 rounded-[var(--radius-xs)] border border-[var(--color-border)]"
-              panelClassName="border-t border-[var(--color-border)] p-2"
+              className="mt-3 border-y border-[var(--color-border)]"
+              panelClassName="border-t border-[var(--color-border)] py-3"
               summary="詳しい根拠"
+              triggerVariant="supporting"
             >
               <dl className="grid grid-cols-2 gap-2 text-xs">
                 <AssetDetailFact
@@ -202,7 +208,7 @@ export function AssetComparisonCards({ response }: { response: SeriesComparisonA
 
 function AssetDetailFact({ label, value }: { label: string; value: string }) {
   return (
-    <div className="min-w-0 rounded-[var(--radius-xs)] border border-[var(--color-border)] p-2">
+    <div className="min-w-0 border-l-2 border-[var(--color-border)] px-2 py-1">
       <dt className="text-[11px] text-[var(--color-text-secondary)]">{label}</dt>
       <dd className="mt-1 font-semibold break-words tabular-nums">{value}</dd>
     </div>
@@ -250,7 +256,7 @@ function AssetFact({
   value: string;
 }) {
   return (
-    <div className="min-w-0 self-start rounded-[var(--radius-xs)] border border-[var(--color-border)] p-2 text-center">
+    <div className="min-w-0 self-start border-l-2 border-[var(--color-border)] px-2 py-1 text-left">
       <p className="text-[11px] font-semibold text-[var(--color-text-secondary)]">{label}</p>
       {subLabel ? <p className="text-[11px] text-[var(--color-text-muted)]">{subLabel}</p> : null}
       <p className="mt-1 text-xs font-semibold break-words tabular-nums">{value}</p>

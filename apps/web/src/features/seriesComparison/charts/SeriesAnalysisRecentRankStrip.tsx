@@ -9,7 +9,7 @@ import { SeriesAnalysisQualityAdvisory } from "@/features/seriesComparison/Serie
 import type { SeriesComparisonAggregateV3 } from "@/shared/api/seriesAnalysis";
 import { formatSeriesMatchIndex } from "@/shared/domain/matchLabels";
 import { orderFixedMembers } from "@/shared/domain/members";
-import { dataVizSeriesPresentation } from "@/shared/ui/dataViz/seriesPresentation";
+import { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
 import { rankColor, rankForegroundColor } from "@/shared/ui/rank/rankPresentation";
 
 export function RecentRankStrips({
@@ -47,7 +47,7 @@ export function RecentRankStrips({
 
   if (axisRows.length === 0) {
     return (
-      <p className="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text-secondary)]">
+      <p className="border-y border-[var(--color-border)] py-3 text-sm text-[var(--color-text-secondary)]">
         直近順位の対象試合はありません。
       </p>
     );
@@ -106,16 +106,13 @@ export function RecentRankStrips({
               return (
                 <tr key={player.memberId}>
                   <th
-                    className="sticky left-0 z-[var(--z-base)] w-40 min-w-40 bg-[var(--color-surface-subtle)] py-1 pr-2 text-left align-middle"
+                    className="sticky left-0 z-[var(--z-base)] w-40 min-w-40 bg-[var(--color-surface-subtle)] py-1 pr-2 pl-2 text-left align-middle"
                     scope="row"
-                    style={{
-                      borderLeftColor: dataVizSeriesPresentation(player.memberId).color,
-                      borderLeftWidth: 3,
-                      paddingLeft: 8,
-                    }}
                   >
                     <span className="block text-sm leading-5 font-semibold break-words">
-                      {player.displayName}
+                      <MemberSequenceLabel memberId={player.memberId}>
+                        {player.displayName}
+                      </MemberSequenceLabel>
                     </span>
                     <span className="block text-[11px] font-normal text-[var(--color-text-secondary)] tabular-nums">
                       平均{formatDecimal(entry?.averageRank)}位・入賞

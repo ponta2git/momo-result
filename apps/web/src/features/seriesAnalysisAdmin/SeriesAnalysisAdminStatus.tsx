@@ -15,14 +15,11 @@ import type { StatusBadgeTone } from "@/shared/ui/status/StatusBadge";
 export function ExecutionStatus({ data }: { data: SeriesAnalysisAdminOverview }) {
   const execution = data.globalExecution;
   return (
-    <section
-      aria-live="polite"
-      className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)]"
-    >
-      <header className="border-b border-[var(--color-border)] px-4 py-3">
+    <section aria-live="polite" className="border-y border-[var(--color-border)]">
+      <header className="px-1 py-3">
         <h2 className="font-semibold">全体の実行状況</h2>
       </header>
-      <dl className="grid divide-y divide-[var(--color-border)] text-sm sm:grid-cols-4 sm:divide-x sm:divide-y-0">
+      <dl className="grid divide-y divide-[var(--color-border)] border-t border-[var(--color-border)] text-sm sm:grid-cols-4 sm:divide-x sm:divide-y-0">
         <StatusDatum label="実行中" value={`${execution.runningCount}件`} />
         <StatusDatum label="待機作品" value={`${execution.queuedTitleCount}作品`} />
         <StatusDatum label="展開中キャンペーン" value={`${execution.activeCampaignCount}件`} />
@@ -49,12 +46,12 @@ export function SelectedTitleStatus({
   if (!selected) return null;
   const status = selected.status;
   return (
-    <section className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)]">
-      <header className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--color-border)] px-4 py-3">
+    <section className="border-t border-[var(--color-border)] pt-5">
+      <header className="flex flex-wrap items-center justify-between gap-2 pb-3">
         <h2 className="font-semibold">{selected.gameTitleName}</h2>
         <AnalysisJobStatusBadge announceChanges status={status.calculation?.status ?? "not_run"} />
       </header>
-      <dl className="grid divide-y divide-[var(--color-border)] text-sm sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+      <dl className="grid divide-y divide-[var(--color-border)] border-y border-[var(--color-border)] text-sm sm:grid-cols-3 sm:divide-x sm:divide-y-0">
         <StatusDatum
           label="成果物"
           value={
@@ -69,7 +66,7 @@ export function SelectedTitleStatus({
         <StatusDatum label="最新の完了" value={formatDateTime(status.calculation?.finishedAt)} />
       </dl>
       {selected.pendingManualRun ? (
-        <Notice className="m-3" tone="info" title="追加の再計算が予約されています">
+        <Notice className="mt-3" tone="info" title="追加の再計算が予約されています">
           {selected.pendingManualRun.requestCount}件・最古{" "}
           {formatDateTime(selected.pendingManualRun.oldestRequestedAt)}
         </Notice>
@@ -80,8 +77,8 @@ export function SelectedTitleStatus({
 
 export function RecentJobs({ jobs }: { jobs: SeriesAnalysisAdminOverview["recentJobs"] }) {
   return (
-    <section className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)]">
-      <header className="border-b border-[var(--color-border)] px-4 py-3">
+    <section className="border-t border-[var(--color-border)] pt-5">
+      <header className="mb-3">
         <h2 className="font-semibold">直近3件</h2>
         <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
           全作品を横断した新しい順です。履歴は45日保持します。
@@ -92,7 +89,7 @@ export function RecentJobs({ jobs }: { jobs: SeriesAnalysisAdminOverview["recent
           実行履歴はありません。
         </p>
       ) : (
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto border-y border-[var(--color-border)]">
           <table className="w-full min-w-[64rem] text-left text-sm">
             <thead>
               <tr>
@@ -170,7 +167,7 @@ function AnalysisJobStatusBadge({
 
 function TableHead({ children }: { children: ReactNode }) {
   return (
-    <th className="bg-[var(--color-surface-subtle)] px-3 py-2 font-semibold text-[var(--color-text-secondary)]">
+    <th className="border-b border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 font-semibold text-[var(--color-text-secondary)]">
       {children}
     </th>
   );

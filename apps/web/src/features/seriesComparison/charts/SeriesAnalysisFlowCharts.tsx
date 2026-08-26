@@ -15,8 +15,8 @@ import {
 import type { SeriesComparisonAggregateV3 } from "@/shared/api/seriesAnalysis";
 import { formatSeriesMatchIndex } from "@/shared/domain/matchLabels";
 import { orderFixedMembers } from "@/shared/domain/members";
+import { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
 import { DataVizLineChart } from "@/shared/ui/dataViz/LineChart";
-import { dataVizSeriesPresentation } from "@/shared/ui/dataViz/seriesPresentation";
 import { rankBackgroundColor, rankBorderColor } from "@/shared/ui/rank/rankPresentation";
 
 export function RankTrendCharts({
@@ -166,15 +166,10 @@ export function MomentumMatrices({
               className="min-w-0 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3"
               key={entry.memberId}
             >
-              <h3
-                className="mb-3 font-semibold"
-                style={{
-                  borderLeftColor: dataVizSeriesPresentation(entry.memberId).color,
-                  borderLeftWidth: 3,
-                  paddingLeft: 8,
-                }}
-              >
-                {entry.displayName}
+              <h3 className="mb-3 font-semibold">
+                <MemberSequenceLabel memberId={entry.memberId}>
+                  {entry.displayName}
+                </MemberSequenceLabel>
               </h3>
               <dl className="mb-3 grid gap-2 text-xs sm:grid-cols-3">
                 <MomentumRateSummary label="下位の次に入賞" rate={entry.afterLower} />

@@ -23,7 +23,7 @@ export function SeriesComparisonPage() {
   if (options.loading) return <PageSkeleton />;
   if (page.clientUpgradeRequired) {
     return (
-      <PageFrame className="gap-4" width="wide">
+      <PageFrame width="wide">
         <PageHeader title="戦績比較" />
         <Notice tone="warning" title="画面の更新が必要です">
           <p>戦績分析の表示方法が更新されました。画面を再読み込みしてください。</p>
@@ -38,7 +38,7 @@ export function SeriesComparisonPage() {
   }
 
   return (
-    <PageFrame className="gap-4" width="wide">
+    <PageFrame width="wide">
       <PageHeader
         actions={
           page.returnTo ? (

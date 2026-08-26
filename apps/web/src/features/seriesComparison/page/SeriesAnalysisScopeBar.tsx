@@ -6,7 +6,6 @@ import type {
   SeriesComparisonReviewV3,
 } from "@/shared/api/seriesAnalysis";
 import { formatDateTimeLong } from "@/shared/lib/dateTime";
-import { useMediaQuery } from "@/shared/lib/useMediaQuery";
 import { Button } from "@/shared/ui/actions/Button";
 import { FilterBar } from "@/shared/ui/forms/FilterBar";
 import { SelectField } from "@/shared/ui/forms/SelectField";
@@ -48,11 +47,7 @@ export function SeriesAnalysisScopeBar({
   seriesOptions: SelectOption[];
   seriesValue: string;
 }) {
-  const wideViewport = useMediaQuery("(min-width: 768px)");
-  const responsiveViewportAvailable =
-    typeof window !== "undefined" && typeof window.matchMedia === "function";
-  const [openOverride, setOpenOverride] = useState<boolean>();
-  const open = openOverride ?? (!responsiveViewportAvailable || wideViewport);
+  const [open, setOpen] = useState(false);
   const quality = response?.dataQuality.summary;
   const qualityAdvisories = quality
     ? [
@@ -62,11 +57,15 @@ export function SeriesAnalysisScopeBar({
     : [];
 
   const scopeSummary = (
-    <div className="min-w-0">
-      <p className="truncate text-sm font-semibold text-[var(--color-text-primary)]">
-        {scopeLabel}
-      </p>
-      <p className="mt-0.5 text-xs text-[var(--color-text-secondary)] tabular-nums">
+    <span className="block min-w-0">
+      {open ? null : (
+        <span className="block truncate font-medium text-[var(--color-text-primary)]">
+          {scopeLabel}
+        </span>
+      )}
+      <span
+        className={`${open ? "" : "mt-0.5"} block text-[var(--color-text-secondary)] tabular-nums`}
+      >
         {response ? `${response.scope.matchCount}戦` : "対戦数を確認中"}
         {qualityAdvisories.length > 0 ? (
           <span className="ml-2 inline-flex items-center gap-1 font-semibold text-[var(--color-text-primary)]">
@@ -79,8 +78,8 @@ export function SeriesAnalysisScopeBar({
             {qualityAdvisories.join("・")}
           </span>
         ) : null}
-      </p>
-    </div>
+      </span>
+    </span>
   );
 
   return (
@@ -99,7 +98,6 @@ export function SeriesAnalysisScopeBar({
           表示を更新
         </Button>
       }
-      activeSummary={scopeSummary}
       ariaLabel="比較条件"
       busy={refreshing}
       details={{
@@ -120,26 +118,26 @@ export function SeriesAnalysisScopeBar({
           </>
         ),
         label: "比較対象を変更",
-        onOpenChange: setOpenOverride,
+        onOpenChange: setOpen,
         open,
         panelClassName: "md:grid-cols-2",
-        summary: "シーズン・マップ",
+        summary: scopeSummary,
       }}
-      meta={
-        <span>
-          {response
-            ? `最終更新 ${formatDateTimeLong(response.artifact.publishedAt)}`
-            : "分析結果を読み込みます"}
-        </span>
-      }
       primary={
-        <div className="sm:max-w-72">
-          <SelectField
-            label="対象作品"
-            options={seriesOptions}
-            value={seriesValue}
-            onChange={(event) => onSeriesChange(event.currentTarget.value)}
-          />
+        <div className="grid min-w-0 gap-2 sm:grid-cols-[minmax(14rem,18rem)_minmax(0,1fr)] sm:items-end">
+          <div>
+            <SelectField
+              label="対象作品"
+              options={seriesOptions}
+              value={seriesValue}
+              onChange={(event) => onSeriesChange(event.currentTarget.value)}
+            />
+          </div>
+          <span className="text-xs text-[var(--color-text-secondary)] tabular-nums sm:pb-2">
+            {response
+              ? `最終更新 ${formatDateTimeLong(response.artifact.publishedAt)}`
+              : "分析結果を読み込みます"}
+          </span>
         </div>
       }
     />

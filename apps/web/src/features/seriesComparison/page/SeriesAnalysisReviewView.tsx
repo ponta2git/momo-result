@@ -27,6 +27,7 @@ import type {
 import { orderFixedMembers } from "@/shared/domain/members";
 import { Button } from "@/shared/ui/actions/Button";
 import { Disclosure } from "@/shared/ui/data/Collapsible";
+import { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
 import { Dialog } from "@/shared/ui/feedback/Dialog";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
@@ -70,16 +71,13 @@ export function ReviewView({
       {response.commonPlaybookTopics.length > 0 ? (
         <Disclosure
           ariaLabel="卓全体で出やすい論点"
-          className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)]"
-          panelClassName="grid gap-2 border-t border-[var(--color-border)] p-3"
+          className="border-y border-[var(--color-border)]"
+          panelClassName="divide-y divide-[var(--color-border)] border-t border-[var(--color-border)]"
           summary={response.commonPlaybookTopics.map((topic) => topic.heading).join("・")}
-          triggerVariant="anchor"
+          triggerVariant="supporting"
         >
           {response.commonPlaybookTopics.map((topic) => (
-            <div
-              className="rounded-[var(--radius-sm)] border border-[var(--color-border)] px-3 py-2"
-              key={topic.topicId}
-            >
+            <div className="py-3" key={topic.topicId}>
               <p className="text-sm font-semibold">{topic.heading}</p>
               <p className="mt-1 text-sm text-[var(--color-text-secondary)]">{topic.detail}</p>
             </div>
@@ -87,14 +85,10 @@ export function ReviewView({
         </Disclosure>
       ) : null}
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <dl aria-label="行動仮説の使い方" className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+        <dl aria-label="行動仮説の対象" className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
           <div className="flex items-baseline gap-2">
             <dt className="text-xs font-semibold text-[var(--color-text-secondary)]">対象</dt>
             <dd className="font-semibold">次の4戦</dd>
-          </div>
-          <div className="flex items-baseline gap-2">
-            <dt className="text-xs font-semibold text-[var(--color-text-secondary)]">使う場面</dt>
-            <dd className="font-semibold">発動条件に当てはまるとき</dd>
           </div>
         </dl>
         <SeriesAnalysisReviewHelpDialog />
@@ -102,16 +96,20 @@ export function ReviewView({
       <div className="grid items-stretch gap-3 lg:grid-cols-4">
         {playbookByPlayer.map((entry) => (
           <section
-            className="grid min-w-0 grid-rows-[auto_1fr_auto] rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3"
+            className="grid min-w-0 grid-rows-[auto_1fr_auto] border-t border-[var(--color-border)] pt-3"
             key={entry.player.memberId}
           >
-            <h3 className="text-base font-semibold">{entry.player.displayName}</h3>
+            <h3 className="text-base font-semibold">
+              <MemberSequenceLabel memberId={entry.player.memberId}>
+                {entry.player.displayName}
+              </MemberSequenceLabel>
+            </h3>
             {entry.primaryCard ? (
               <div className="mt-3 min-h-0">
                 <PlaybookCard card={entry.primaryCard} emphasis onViewChange={onViewChange} />
               </div>
             ) : (
-              <div className="mt-3 flex h-full flex-col justify-between gap-3 rounded-[var(--radius-sm)] bg-[var(--color-surface-subtle)] p-3">
+              <div className="mt-3 flex h-full flex-col justify-between gap-3 border-y border-[var(--color-border)] py-3">
                 <p className="text-sm text-[var(--color-text-secondary)]">
                   今回は無理に作戦を変えず、現在の差を確認します。
                 </p>
@@ -124,8 +122,8 @@ export function ReviewView({
               {entry.secondaryCards.length > 0 ? (
                 <Disclosure
                   ariaLabel={`${entry.player.displayName}のほかの仮説`}
-                  className="rounded-[var(--radius-sm)] border border-[var(--color-border)]"
-                  panelClassName="grid gap-3 border-t border-[var(--color-border)] p-2"
+                  className="border-y border-[var(--color-border)]"
+                  panelClassName="grid gap-3 border-t border-[var(--color-border)] py-3"
                   summary={`ほかの仮説（${entry.secondaryCards.length}件）`}
                 >
                   {entry.secondaryCards.map((card) => (
@@ -152,7 +150,7 @@ function PlaybookCard({
 }) {
   return (
     <article
-      className={`flex h-full min-w-0 flex-col gap-3 rounded-[var(--radius-sm)] border p-3 ${emphasis ? "border-[var(--color-analysis-emphasis)]/55 bg-[var(--color-analysis-emphasis)]/6" : "border-[var(--color-border)]"}`}
+      className={`flex h-full min-w-0 flex-col gap-3 ${emphasis ? "" : "border-t border-[var(--color-border)] pt-3"}`}
     >
       <div className="flex flex-wrap items-center gap-2">
         <span className="rounded-[var(--radius-xs)] border border-[var(--color-border)] px-2 py-0.5 text-[11px] font-semibold">

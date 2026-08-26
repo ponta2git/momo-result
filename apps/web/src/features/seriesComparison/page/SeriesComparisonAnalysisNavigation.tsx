@@ -171,14 +171,14 @@ export function AnalysisTableOfContents({ view }: { view: AnalysisViewId }) {
   return (
     <nav
       aria-label={`${definition.label}の目次`}
-      className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-3 text-xs"
+      className="flex min-w-0 items-center gap-3 border-y border-[var(--color-border)] text-xs"
     >
-      <span className="font-semibold text-[var(--color-text-secondary)]">このページ</span>
-      <ol className="flex min-w-0 flex-wrap gap-x-3 gap-y-1">
+      <span className="shrink-0 font-semibold text-[var(--color-text-secondary)]">このページ</span>
+      <ol className="flex min-w-0 flex-1 [scrollbar-width:thin] gap-x-3 overflow-x-auto">
         {definition.sections.map((section) => (
-          <li key={section.id}>
+          <li className="shrink-0" key={section.id}>
             <a
-              className="inline-flex min-h-11 items-center text-[var(--color-text-secondary)] underline decoration-[var(--color-border-strong)] underline-offset-4 hover:text-[var(--color-text-primary)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-action)]"
+              className="inline-flex min-h-11 shrink-0 items-center whitespace-nowrap text-[var(--color-text-secondary)] underline decoration-[var(--color-border-strong)] underline-offset-4 hover:text-[var(--color-text-primary)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-action)]"
               href={`#${section.id}`}
             >
               {section.label}

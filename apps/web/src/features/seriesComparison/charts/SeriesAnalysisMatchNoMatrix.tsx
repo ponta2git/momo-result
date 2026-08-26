@@ -17,7 +17,7 @@ import type { SeriesComparisonAggregateV3 } from "@/shared/api/seriesAnalysis";
 import { formatMatchNoInEvent } from "@/shared/domain/matchLabels";
 import { orderFixedMembers } from "@/shared/domain/members";
 import { Disclosure } from "@/shared/ui/data/Collapsible";
-import { dataVizSeriesPresentation } from "@/shared/ui/dataViz/seriesPresentation";
+import { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
 
 type MatchNoEntry = SeriesComparisonAggregateV3["matchNoInEvent"]["entries"][number];
 
@@ -46,10 +46,10 @@ export function MatchNoInEventMatrix({ response }: { response: SeriesComparisonA
       />
       {additionalEntries.length > 0 ? (
         <Disclosure
-          className="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)]"
-          panelClassName="border-t border-[var(--color-border)] p-3"
+          className="border-y border-[var(--color-border)]"
+          panelClassName="border-t border-[var(--color-border)] py-3"
           summary="第5試合以降"
-          triggerVariant="anchor"
+          triggerVariant="supporting"
         >
           <MatchNoMatrix
             ariaLabel="開催内第5試合以降の傾向"
@@ -78,14 +78,10 @@ function MatchNoMatrix({
         <tr>
           <MatrixAxisHeader className="w-28" columnLabel="プレーヤー" rowLabel="試合順" />
           {players.map((player) => (
-            <MatrixColumnHeader
-              key={player.memberId}
-              style={{
-                borderTopColor: dataVizSeriesPresentation(player.memberId).color,
-                borderTopWidth: 3,
-              }}
-            >
-              {player.displayName}
+            <MatrixColumnHeader key={player.memberId}>
+              <MemberSequenceLabel className="justify-center" memberId={player.memberId}>
+                {player.displayName}
+              </MemberSequenceLabel>
             </MatrixColumnHeader>
           ))}
         </tr>

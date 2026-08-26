@@ -14,6 +14,7 @@ import {
 } from "@/features/seriesComparison/SeriesAnalysisQualityAdvisory";
 import { orderFixedMembers } from "@/shared/domain/members";
 import { Disclosure } from "@/shared/ui/data/Collapsible";
+import { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
 
 type Response = AnalysisViewProps["response"];
 type Outcome = Response["metricsByPlayer"][number]["revenueOutcome"]["top"];
@@ -27,11 +28,12 @@ export function RevenueOutcomeSection({
       <RevenueConversionMatrices focusedItemIds={focusedItemIds} response={response} />
       <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         {orderFixedMembers(response.metricsByPlayer).map((metric) => (
-          <article
-            className="rounded-[var(--radius-sm)] border border-[var(--color-border)] p-3"
-            key={metric.memberId}
-          >
-            <h3 className="font-semibold">{metric.displayName}</h3>
+          <article className="border-t border-[var(--color-border)] pt-3" key={metric.memberId}>
+            <h3 className="font-semibold">
+              <MemberSequenceLabel memberId={metric.memberId}>
+                {metric.displayName}
+              </MemberSequenceLabel>
+            </h3>
             <dl className="mt-3 grid grid-cols-2 gap-3 text-sm">
               <MetricValue
                 label="収益上位時の勝率"
@@ -80,11 +82,12 @@ export function DestinationOutcomeSection({ response }: { response: Response }) 
     <AnalysisSection id="metric-destination-outcome" title="目的地到着と順位">
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         {orderFixedMembers(response.metricsByPlayer).map((metric) => (
-          <article
-            className="rounded-[var(--radius-sm)] border border-[var(--color-border)] p-3"
-            key={metric.memberId}
-          >
-            <h3 className="font-semibold">{metric.displayName}</h3>
+          <article className="border-t border-[var(--color-border)] pt-3" key={metric.memberId}>
+            <h3 className="font-semibold">
+              <MemberSequenceLabel memberId={metric.memberId}>
+                {metric.displayName}
+              </MemberSequenceLabel>
+            </h3>
             <dl className="mt-3 grid gap-3 text-sm">
               <ConditionalOutcome
                 label="目的地到着が多い試合"

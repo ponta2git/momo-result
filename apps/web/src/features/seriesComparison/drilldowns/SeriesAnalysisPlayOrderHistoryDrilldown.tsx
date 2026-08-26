@@ -15,7 +15,9 @@ import {
 import type { SeriesAnalysisDrilldownV3 } from "@/shared/api/seriesAnalysis";
 import { formatMatchNoInEvent, formatSeriesMatchIndex } from "@/shared/domain/matchLabels";
 import { FactList } from "@/shared/ui/data/FactList";
+import { PlayOrderMark, playOrderPresentation } from "@/shared/ui/data/PlayOrderMark";
 import { DataVizLineChart } from "@/shared/ui/dataViz/LineChart";
+import { playOrderSeriesId } from "@/shared/ui/dataViz/seriesPresentation";
 import { RankBadge } from "@/shared/ui/rank/RankBadge";
 
 import { ChangeBadge, formatSignedDecimal } from "./SeriesAnalysisChangeBadge";
@@ -25,7 +27,7 @@ type PlayOrderHistoryPayload = Extract<
   { kind: "play_order_rank_history" }
 >;
 
-const PLAY_ORDERS = [1, 2, 3, 4];
+const PLAY_ORDERS = [1, 2, 3, 4] as const;
 
 export function PlayOrderHistoryDrilldown({
   payload,
@@ -78,17 +80,17 @@ export function PlayOrderHistoryDrilldown({
               ]
             : []),
         ]}
-        layout="segmented"
+        layout="inline"
       />
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {payload.rows.map((row) => (
-          <div
-            className="rounded-[var(--radius-sm)] border border-[var(--color-border)] p-3"
-            key={row.playOrder}
-          >
-            <p className="text-xs text-[var(--color-text-secondary)]">
-              {row.playOrder}番手・{row.targetCount}戦
-            </p>
+          <div className="border-t border-[var(--color-border)] pt-3" key={row.playOrder}>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <PlayOrderMark playOrder={row.playOrder} />
+              <span className="text-xs text-[var(--color-text-secondary)] tabular-nums">
+                {row.targetCount}戦
+              </span>
+            </div>
             <p className="mt-1 text-lg font-semibold tabular-nums">
               {formatDecimal(row.rankAverage)}位
             </p>
@@ -111,7 +113,7 @@ export function PlayOrderHistoryDrilldown({
         lowValueAtTop
         minimumYStep={0.5}
         series={PLAY_ORDERS.map((playOrder) => ({
-          id: `play-order-${playOrder}`,
+          id: playOrderSeriesId(playOrder),
           points: payload.seriesByPlayOrder
             .filter((row) => row.playOrder === playOrder)
             .map((row) => ({
@@ -121,12 +123,12 @@ export function PlayOrderHistoryDrilldown({
             })),
         }))}
         seriesIdentity={PLAY_ORDERS.map((playOrder) => ({
-          id: `play-order-${playOrder}`,
-          label: `${playOrder}番手`,
+          id: playOrderSeriesId(playOrder),
+          label: playOrderPresentation(playOrder).label,
         }))}
         xAxisLabel="対戦順"
         yAxisLabel="番手内の累積平均順位"
-        yTicks={PLAY_ORDERS}
+        yTicks={[...PLAY_ORDERS]}
       />
       <div className="overflow-x-auto">
         <table className="w-full min-w-[62rem] text-left text-sm">
@@ -155,7 +157,9 @@ export function PlayOrderHistoryDrilldown({
                 </TableCell>
                 <TableCell>{formatDateTime(row.playedAt)}</TableCell>
                 <TableCell>{formatMatchNoInEvent(row.matchNoInEvent)}</TableCell>
-                <TableCell>{row.playOrder}番手</TableCell>
+                <TableCell>
+                  <PlayOrderMark playOrder={row.playOrder} />
+                </TableCell>
                 <TableCell>{row.occurrenceIndex}戦目</TableCell>
                 <TableCell>
                   <RankBadge rank={row.rank} />

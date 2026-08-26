@@ -35,7 +35,7 @@ describe("rich series analysis views", () => {
     expect(screen.getByRole("region", { name: "直接対決" })).toBeInTheDocument();
     const currentDifference = screen.getByLabelText("現在の順位差");
     expect(within(currentDifference).getByText("平均順位の先頭")).toBeInTheDocument();
-    expect(within(currentDifference).getByText("先頭と最後尾の平均順位差")).toBeInTheDocument();
+    expect(within(currentDifference).getByText("先頭と最後尾の差")).toBeInTheDocument();
     expect(document.querySelector('[data-focused-metric="true"]')).toHaveAttribute(
       "aria-label",
       expect.stringMatching(/1位 6回 50%、この試合/u),
@@ -47,8 +47,8 @@ describe("rich series analysis views", () => {
     expect(document.body).not.toHaveTextContent(/member_ponta|property_focused|rank\.average/u);
 
     const crownRegion = screen.getByRole("region", { name: "平均順位首位の確からしさ" });
-    expect(within(crownRegion).getByText("先頭と次点の比率差")).toBeInTheDocument();
-    expect(within(crownRegion).getByText("12戦・8開催")).toBeInTheDocument();
+    expect(within(crownRegion).queryByText("先頭と次点の比率差")).not.toBeInTheDocument();
+    expect(within(crownRegion).getByText(/根拠 12戦・8開催/u)).toBeInTheDocument();
     expect(within(crownRegion).queryByText("十分")).not.toBeInTheDocument();
     expect(within(crownRegion).queryByText(/次戦の勝率や最終順位/u)).not.toBeInTheDocument();
     await user.click(

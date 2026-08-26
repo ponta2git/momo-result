@@ -17,7 +17,6 @@ import type { AnalysisViewProps } from "@/features/seriesComparison/page/SeriesA
 import {
   AnalysisReadingGuide,
   AnalysisSection,
-  memberNames,
 } from "@/features/seriesComparison/page/SeriesAnalysisViewPrimitives";
 import {
   analysisPanelId,
@@ -30,10 +29,13 @@ import {
 } from "@/features/seriesComparison/SeriesAnalysisQualityAdvisory";
 import { orderFixedMembers } from "@/shared/domain/members";
 import { Button } from "@/shared/ui/actions/Button";
-import { FactList } from "@/shared/ui/data/FactList";
+import { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
 
 export function OverviewView({ focusedItemIds, response, onDrilldown }: AnalysisViewProps) {
   const crownQualityAdvisory = qualityAdvisoryLabel(response.rankAnalysis.crownCertainty.status);
+  const leaders = orderFixedMembers(
+    response.players.filter((player) => response.summary.leaderMemberIds.includes(player.memberId)),
+  );
   return (
     <div
       aria-labelledby={analysisTabId("overview")}
@@ -43,24 +45,31 @@ export function OverviewView({ focusedItemIds, response, onDrilldown }: Analysis
     >
       <AnalysisTableOfContents view="overview" />
       <AnalysisSection id="metric-basic" title="順位と基礎比較">
-        <FactList
-          ariaLabel="現在の順位差"
-          className="mb-4"
-          columns={2}
-          items={[
-            {
-              id: "leader",
-              label: "平均順位の先頭",
-              value: memberNames(response.players, response.summary.leaderMemberIds),
-            },
-            {
-              id: "spread",
-              label: "先頭と最後尾の平均順位差",
-              value: `${formatDecimal(response.summary.averageRankSpread)}位`,
-            },
-          ]}
-          layout="segmented"
-        />
+        <dl
+          aria-label="現在の順位差"
+          className="mb-5 grid gap-4 border-b border-[var(--color-border)] pb-5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end"
+        >
+          <div>
+            <dt className="text-xs font-semibold text-[var(--color-text-secondary)]">
+              平均順位の先頭
+            </dt>
+            <dd className="mt-2 flex flex-wrap gap-x-4 gap-y-2 text-2xl font-semibold tracking-tight">
+              {leaders.length > 0
+                ? leaders.map((player) => (
+                    <MemberSequenceLabel key={player.memberId} memberId={player.memberId}>
+                      {player.displayName}
+                    </MemberSequenceLabel>
+                  ))
+                : "—"}
+            </dd>
+          </div>
+          <div className="sm:text-right">
+            <dt className="text-xs text-[var(--color-text-secondary)]">先頭と最後尾の差</dt>
+            <dd className="mt-1 text-xl font-semibold tabular-nums">
+              {formatDecimal(response.summary.averageRankSpread)}位
+            </dd>
+          </div>
+        </dl>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[52rem] text-left text-sm">
             <thead>
@@ -79,7 +88,11 @@ export function OverviewView({ focusedItemIds, response, onDrilldown }: Analysis
               {orderFixedMembers(response.metricsByPlayer).map((metric) => (
                 <tr className="border-t border-[var(--color-border)]" key={metric.memberId}>
                   <AnalysisTableCell>
-                    <strong>{metric.displayName}</strong>
+                    <strong>
+                      <MemberSequenceLabel memberId={metric.memberId}>
+                        {metric.displayName}
+                      </MemberSequenceLabel>
+                    </strong>
                   </AnalysisTableCell>
                   <AnalysisTableCell>{formatDecimal(metric.rank.average)}位</AnalysisTableCell>
                   <AnalysisTableCell>
@@ -110,39 +123,15 @@ export function OverviewView({ focusedItemIds, response, onDrilldown }: Analysis
         </div>
       </AnalysisSection>
       <AnalysisSection id="metric-crown-certainty" title="平均順位首位の確からしさ">
-        <FactList
-          ariaLabel="平均順位首位の確からしさの判断材料"
-          className="mb-4"
-          columns={2}
-          items={[
-            {
-              id: "comparison",
-              label: "比較する場所",
-              value: "先頭と次点の比率差",
-            },
-            {
-              id: "scope",
-              label: "根拠の範囲",
-              value: `${response.rankAnalysis.matchCount}戦・${response.rankAnalysis.heldEventCount}開催`,
-            },
-            ...(crownQualityAdvisory
-              ? [
-                  {
-                    id: "quality",
-                    label:
-                      response.rankAnalysis.crownCertainty.status === "reference" ? "注意" : "状態",
-                    value: (
-                      <SeriesAnalysisQualityAdvisory
-                        status={response.rankAnalysis.crownCertainty.status}
-                      />
-                    ),
-                  },
-                ]
-              : []),
-          ]}
-          layout="segmented"
-        />
         <CrownShareBars response={response} />
+        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-[var(--color-text-secondary)] tabular-nums">
+          <span>
+            根拠 {response.rankAnalysis.matchCount}戦・{response.rankAnalysis.heldEventCount}開催
+          </span>
+          {crownQualityAdvisory ? (
+            <SeriesAnalysisQualityAdvisory status={response.rankAnalysis.crownCertainty.status} />
+          ) : null}
+        </div>
         <div className="mt-4">
           <AnalysisReadingGuide
             ariaLabel="平均順位首位の確からしさの読み方"

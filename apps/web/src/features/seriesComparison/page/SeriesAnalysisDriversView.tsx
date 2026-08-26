@@ -33,6 +33,7 @@ import {
 import { SeriesAnalysisQualityAdvisory } from "@/features/seriesComparison/SeriesAnalysisQualityAdvisory";
 import { orderFixedMembers } from "@/shared/domain/members";
 import { Button } from "@/shared/ui/actions/Button";
+import { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
 
 export function DriversView({ focusedItemIds, response, onDrilldown }: AnalysisViewProps) {
   return (
@@ -48,7 +49,7 @@ export function DriversView({ focusedItemIds, response, onDrilldown }: AnalysisV
         <div className="mt-5">
           <AssetRevenueHistograms response={response} />
         </div>
-        <div className="mt-5 rounded-[var(--radius-sm)] border border-[var(--color-border)] p-3">
+        <div className="mt-5 border-t border-[var(--color-border)] pt-4">
           <h3 className="text-sm font-semibold">資産タイプの位置</h3>
           <div className="mt-3">
             <StrategyProfileQuadrant response={response} />
@@ -62,7 +63,7 @@ export function DriversView({ focusedItemIds, response, onDrilldown }: AnalysisV
         <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
           {response.highlights.map((highlight) => (
             <div
-              className="rounded-[var(--radius-sm)] border border-[var(--color-border)] p-3"
+              className="border-l-2 border-[var(--color-border)] px-3 py-2"
               key={highlight.highlightId}
             >
               <p className="text-xs text-[var(--color-text-secondary)]">
@@ -81,12 +82,13 @@ export function DriversView({ focusedItemIds, response, onDrilldown }: AnalysisV
       <AnalysisSection id="metric-rank-signals" title="順位を読む追加の手掛かり">
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           {orderFixedMembers(response.rankAnalysis.rankSignalsByPlayer).map((entry) => (
-            <article
-              className="rounded-[var(--radius-sm)] border border-[var(--color-border)] p-3"
-              key={entry.memberId}
-            >
+            <article className="border-t border-[var(--color-border)] pt-3" key={entry.memberId}>
               <div className="flex items-center justify-between gap-2">
-                <h3 className="font-semibold">{playerName(response.players, entry.memberId)}</h3>
+                <h3 className="font-semibold">
+                  <MemberSequenceLabel memberId={entry.memberId}>
+                    {playerName(response.players, entry.memberId)}
+                  </MemberSequenceLabel>
+                </h3>
                 <SeriesAnalysisQualityAdvisory status={entry.status} />
               </div>
               {entry.candidates.length === 0 ? (

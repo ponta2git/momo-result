@@ -21,6 +21,7 @@ import {
 } from "@/features/seriesComparison/page/SeriesComparisonAnalysisNavigation";
 import { orderFixedMembers } from "@/shared/domain/members";
 import { Button } from "@/shared/ui/actions/Button";
+import { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
 
 export function ContextView({ focusedItemIds, response, onDrilldown }: AnalysisViewProps) {
   return (
@@ -43,7 +44,9 @@ export function ContextView({ focusedItemIds, response, onDrilldown }: AnalysisV
                 onDrilldown({ memberId: entry.memberId, metricId: "playOrder.rankHistory" })
               }
             >
-              {entry.displayName}の番手別推移
+              <MemberSequenceLabel memberId={entry.memberId}>
+                {entry.displayName}の番手別推移
+              </MemberSequenceLabel>
             </Button>
           ))}
         </div>
@@ -54,12 +57,13 @@ export function ContextView({ focusedItemIds, response, onDrilldown }: AnalysisV
       <AnalysisSection id="metric-ginji" title="スリの銀次">
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           {orderFixedMembers(response.metricsByPlayer).map((metric) => (
-            <article
-              className="rounded-[var(--radius-sm)] border border-[var(--color-border)] p-3"
-              key={metric.memberId}
-            >
+            <article className="border-t border-[var(--color-border)] pt-3" key={metric.memberId}>
               <div className="flex justify-between gap-2">
-                <h3 className="font-semibold">{metric.displayName}</h3>
+                <h3 className="font-semibold">
+                  <MemberSequenceLabel memberId={metric.memberId}>
+                    {metric.displayName}
+                  </MemberSequenceLabel>
+                </h3>
                 <span className="text-xs text-[var(--color-text-secondary)] tabular-nums">
                   遭遇 {metric.ginji.encounterMatches}戦
                 </span>

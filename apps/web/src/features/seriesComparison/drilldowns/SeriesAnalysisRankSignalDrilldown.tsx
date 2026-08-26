@@ -60,9 +60,9 @@ function RankSignalSummary({
   return (
     <section
       aria-label="順位を読む手掛かりの分析範囲"
-      className="grid overflow-hidden rounded-[var(--radius-sm)] border border-[var(--color-border)] sm:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)]"
+      className="grid border-y border-[var(--color-border)] sm:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)]"
     >
-      <div className="bg-[var(--color-surface-subtle)] px-4 py-3">
+      <div className="py-3 sm:pr-5">
         <p className="text-xs text-[var(--color-text-secondary)]">別開催テスト</p>
         <p className="mt-0.5 text-xl font-semibold tabular-nums">
           {payload.improvedFoldCount}/{payload.method.foldCount}組で改善
@@ -73,7 +73,7 @@ function RankSignalSummary({
           </div>
         ) : null}
       </div>
-      <dl className="grid grid-cols-2 gap-x-6 gap-y-2 px-4 py-3 sm:items-center">
+      <dl className="grid grid-cols-2 gap-x-6 gap-y-2 border-t border-[var(--color-border)] py-3 sm:items-center sm:border-t-0 sm:border-l sm:pl-5">
         <div>
           <dt className="text-xs text-[var(--color-text-secondary)]">対象試合</dt>
           <dd className="mt-0.5 font-medium tabular-nums">{payload.matchCount}戦</dd>

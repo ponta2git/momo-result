@@ -14,8 +14,8 @@ export function MetricDefinitions({ response }: { response: SeriesComparisonAggr
   return (
     <Disclosure
       ariaLabel="指標の読み方"
-      className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)]"
-      panelClassName="border-t border-[var(--color-border)] p-3"
+      className="border-y border-[var(--color-border)]"
+      panelClassName="border-t border-[var(--color-border)] py-3"
       triggerVariant="supporting"
       summary={
         <span className="inline-flex items-center gap-2">
@@ -24,12 +24,9 @@ export function MetricDefinitions({ response }: { response: SeriesComparisonAggr
         </span>
       }
     >
-      <dl className="grid gap-2 sm:grid-cols-2">
+      <dl className="grid divide-y divide-[var(--color-border)] sm:grid-cols-2 sm:gap-x-6 sm:[&>*:nth-child(2)]:border-t-0">
         {response.metricDefinitions.map((definition) => (
-          <div
-            className="rounded-[var(--radius-sm)] border border-[var(--color-border)] px-3 py-2"
-            key={definition.metricId}
-          >
+          <div className="py-3" key={definition.metricId}>
             <dt className="text-sm font-semibold">{definition.label}</dt>
             <dd className="mt-1 text-xs text-[var(--color-text-secondary)]">
               {metricReadingCue(definition)}
@@ -60,15 +57,15 @@ export function AnalysisSection({
   return (
     <section
       aria-labelledby={headingId}
-      className="min-w-0 scroll-mt-24 overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)]"
+      className="min-w-0 scroll-mt-24 border-t border-[var(--color-border)] pt-5"
       id={id}
     >
-      <header className="border-b border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-3 py-3 sm:px-4">
-        <h2 className="text-base font-semibold" id={headingId}>
+      <header>
+        <h2 className="text-lg font-semibold tracking-tight" id={headingId}>
           {title}
         </h2>
       </header>
-      <div className="p-3 sm:p-4">{children}</div>
+      <div className="mt-4">{children}</div>
     </section>
   );
 }
@@ -114,9 +111,9 @@ export function AnalysisReadingGuide({
   return (
     <Disclosure
       ariaLabel={ariaLabel}
-      className="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)]"
-      panelClassName="border-t border-[var(--color-border)] p-3"
-      triggerVariant="anchor"
+      className="border-y border-[var(--color-border)]"
+      panelClassName="border-t border-[var(--color-border)] py-3"
+      triggerVariant="supporting"
       summary={
         <span className="inline-flex items-center gap-2">
           <BookOpenText aria-hidden="true" className="size-4" />

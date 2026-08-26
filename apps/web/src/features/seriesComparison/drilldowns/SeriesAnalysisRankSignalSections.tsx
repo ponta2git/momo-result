@@ -25,8 +25,8 @@ export function RankSignalValidationMethod({ payload }: { payload: RankSignalPay
   return (
     <Disclosure
       ariaLabel="別開催テストと採用基準"
-      className="min-w-0 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)]"
-      panelClassName="grid gap-5 border-t border-[var(--color-border)] p-4"
+      className="min-w-0 border-y border-[var(--color-border)]"
+      panelClassName="grid gap-5 border-t border-[var(--color-border)] py-4"
       summary={
         <span className="flex flex-col gap-0.5">
           <span>検証方法と採用基準</span>
@@ -35,7 +35,7 @@ export function RankSignalValidationMethod({ payload }: { payload: RankSignalPay
           </span>
         </span>
       }
-      triggerVariant="anchor"
+      triggerVariant="supporting"
     >
       <section aria-labelledby="rank-signal-validation-flow">
         <h4 className="text-sm font-semibold text-balance" id="rank-signal-validation-flow">
@@ -157,12 +157,12 @@ function CandidateCard({
   return (
     <article
       aria-label={`${candidateLabel}の検証結果`}
-      className="min-w-0 overflow-hidden rounded-[var(--radius-sm)] border border-[var(--color-border)]"
+      className="min-w-0 border-t border-[var(--color-border)] pt-4"
     >
-      <header className="border-b border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-4 py-3">
+      <header className="pb-3">
         <h4 className="font-semibold text-balance">{candidateLabel}</h4>
       </header>
-      <div className="p-4">
+      <div>
         <dl className="grid border-y border-[var(--color-border)] sm:grid-cols-3">
           <CandidateFact
             emphasis

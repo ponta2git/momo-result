@@ -15,7 +15,8 @@ import {
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
 import type { RelativeIntensity, SeriesComparisonAggregateV3 } from "@/shared/api/seriesAnalysis";
 import { orderFixedMembers } from "@/shared/domain/members";
-import { dataVizSeriesPresentation } from "@/shared/ui/dataViz/seriesPresentation";
+import { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
+import { PlayOrderMark } from "@/shared/ui/data/PlayOrderMark";
 import { colorMix } from "@/shared/ui/rank/rankPresentation";
 
 const PLAY_ORDERS = [1, 2, 3, 4] as const;
@@ -33,7 +34,9 @@ export function PlayOrderMatrix({
         <tr>
           <MatrixAxisHeader className="w-32" columnLabel="番手" rowLabel="プレーヤー" />
           {PLAY_ORDERS.map((playOrder) => (
-            <MatrixColumnHeader key={playOrder}>{playOrder}番手</MatrixColumnHeader>
+            <MatrixColumnHeader key={playOrder}>
+              <PlayOrderMark className="justify-center" playOrder={playOrder} />
+            </MatrixColumnHeader>
           ))}
         </tr>
       </thead>
@@ -42,13 +45,10 @@ export function PlayOrderMatrix({
           const cellByPlayOrder = new Map(entry.cells.map((cell) => [cell.playOrder, cell]));
           return (
             <tr key={entry.memberId}>
-              <MatrixRowHeader
-                style={{
-                  borderLeftColor: dataVizSeriesPresentation(entry.memberId).color,
-                  borderLeftWidth: 3,
-                }}
-              >
-                {entry.displayName}
+              <MatrixRowHeader>
+                <MemberSequenceLabel memberId={entry.memberId}>
+                  {entry.displayName}
+                </MemberSequenceLabel>
               </MatrixRowHeader>
               {PLAY_ORDERS.map((playOrder) => {
                 const cell = cellByPlayOrder.get(playOrder);
@@ -177,15 +177,10 @@ export function CardShopDestinationQuadrants({
           key={entry.memberId}
         >
           <div className="flex flex-wrap items-start justify-between gap-2">
-            <h3
-              className="font-semibold"
-              style={{
-                borderLeftColor: dataVizSeriesPresentation(entry.memberId).color,
-                borderLeftWidth: 3,
-                paddingLeft: 8,
-              }}
-            >
-              {entry.displayName}
+            <h3 className="font-semibold">
+              <MemberSequenceLabel memberId={entry.memberId}>
+                {entry.displayName}
+              </MemberSequenceLabel>
             </h3>
             <span className="text-xs text-[var(--color-text-secondary)] tabular-nums">
               売り場あり {entry.cardShopMatchCount}/{entry.denominator}戦・目的地なし
@@ -197,7 +192,7 @@ export function CardShopDestinationQuadrants({
               const focused = focusedItemIds.includes(quadrant.itemId);
               return (
                 <div
-                  className={`rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface)] p-2 ${focused ? "momo-enter ring-2 ring-[var(--color-action)] ring-offset-1 ring-offset-[var(--color-surface)]" : ""}`}
+                  className={`border-l-2 border-[var(--color-border)] px-2 py-1 ${focused ? "momo-enter ring-2 ring-[var(--color-action)] ring-offset-1 ring-offset-[var(--color-surface)]" : ""}`}
                   data-focused-metric={focused ? "true" : undefined}
                   key={quadrant.itemId}
                 >

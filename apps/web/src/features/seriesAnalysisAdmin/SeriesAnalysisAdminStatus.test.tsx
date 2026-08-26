@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -39,5 +39,9 @@ describe("SeriesAnalysisAdminStatus", () => {
 
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
     expect(screen.getByText("成功").parentElement).toHaveClass("border-[var(--color-success)]/60");
+    for (const header of within(screen.getByRole("table")).getAllByRole("columnheader")) {
+      expect(header).toHaveClass("bg-[var(--color-surface)]", "border-b");
+      expect(header).not.toHaveClass("bg-[var(--color-surface-subtle)]");
+    }
   });
 });

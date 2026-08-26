@@ -20,6 +20,7 @@ import { SeriesAnalysisQualityAdvisory } from "@/features/seriesComparison/Serie
 import { orderFixedMembers } from "@/shared/domain/members";
 import { Button } from "@/shared/ui/actions/Button";
 import { FactList } from "@/shared/ui/data/FactList";
+import { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
 
 export function FlowView({
   focusedItemIds,
@@ -65,12 +66,13 @@ export function FlowView({
       <AnalysisSection id="metric-unexpected-wins" title="事前予測より上位で終えた勝利">
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           {orderFixedMembers(response.rankAnalysis.unexpectedWinsByPlayer).map((entry) => (
-            <article
-              className="rounded-[var(--radius-sm)] border border-[var(--color-border)] p-3"
-              key={entry.memberId}
-            >
+            <article className="border-t border-[var(--color-border)] pt-3" key={entry.memberId}>
               <div className="flex justify-between gap-2">
-                <h3 className="font-semibold">{playerName(response.players, entry.memberId)}</h3>
+                <h3 className="font-semibold">
+                  <MemberSequenceLabel memberId={entry.memberId}>
+                    {playerName(response.players, entry.memberId)}
+                  </MemberSequenceLabel>
+                </h3>
                 <SeriesAnalysisQualityAdvisory status={entry.status} />
               </div>
               <p className="mt-2 text-sm tabular-nums">

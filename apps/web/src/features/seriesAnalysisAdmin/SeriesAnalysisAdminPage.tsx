@@ -31,7 +31,7 @@ export function SeriesAnalysisAdminPage() {
       value: title.gameTitleId,
     })) ?? [];
   return (
-    <PageFrame className="gap-4" width="wide">
+    <PageFrame width="wide">
       <PageHeader
         eyebrow="管理"
         title="戦績分析"
@@ -73,7 +73,10 @@ export function SeriesAnalysisAdminPage() {
         />
       ) : data ? (
         <>
-          <section className="grid gap-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 lg:grid-cols-[minmax(16rem,1fr)_auto_auto] lg:items-end">
+          <section
+            aria-label="再計算する対象"
+            className="grid gap-3 border-y border-[var(--color-border)] py-4 lg:grid-cols-[minmax(16rem,1fr)_auto_auto] lg:items-end"
+          >
             <SelectField
               label="対象作品"
               options={titleOptions}
@@ -104,12 +107,12 @@ export function SeriesAnalysisAdminPage() {
                 await page.actions.recalculateAll();
               }}
             />
+            {titleRecalculationReserved ? (
+              <p className="text-sm text-[var(--color-text-secondary)] lg:col-span-full">
+                この作品には未完了の手動再計算予約があります。完了後にもう一度予約できます。
+              </p>
+            ) : null}
           </section>
-          {titleRecalculationReserved ? (
-            <p className="text-sm text-[var(--color-text-secondary)]">
-              この作品には未完了の手動再計算予約があります。完了後にもう一度予約できます。
-            </p>
-          ) : null}
           <ExecutionStatus data={data} />
           <SelectedTitleStatus selected={selectedTitle} />
           <RecentJobs jobs={data.recentJobs} />

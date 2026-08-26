@@ -25,21 +25,20 @@ export function MatchDigestStrip({
 }) {
   return (
     <div className="grid gap-3">
-      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+      <dl className="grid divide-y divide-[var(--color-border)] border-y border-[var(--color-border)] sm:grid-cols-2 sm:divide-x sm:divide-y-0 xl:grid-cols-4">
         {flagOrder.map((flag) => (
-          <div
-            className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2"
-            key={flag}
-          >
-            <p className="text-xs text-[var(--color-text-secondary)]">{timelineFlagLabel(flag)}</p>
-            <p className="mt-0.5 text-sm font-semibold tabular-nums">
+          <div className="px-3 py-2" key={flag}>
+            <dt className="text-xs text-[var(--color-text-secondary)]">
+              {timelineFlagLabel(flag)}
+            </dt>
+            <dd className="mt-0.5 text-sm font-semibold tabular-nums">
               {response.matchDigest.flagCounts[flag] ?? 0}戦
-            </p>
+            </dd>
           </div>
         ))}
-      </div>
+      </dl>
       {response.matchDigest.recent.length === 0 ? (
-        <p className="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text-secondary)]">
+        <p className="border-y border-[var(--color-border)] py-3 text-sm text-[var(--color-text-secondary)]">
           対象試合はありません。
         </p>
       ) : (

@@ -18,9 +18,9 @@ import type { SeriesComparisonAggregateV3 } from "@/shared/api/seriesAnalysis";
 import { formatSeriesMatchIndex } from "@/shared/domain/matchLabels";
 import { orderFixedMembers } from "@/shared/domain/members";
 import { currentInternalLocation, withReturnTo } from "@/shared/navigation/returnTo";
+import { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
 import { DataVizHistogramChart } from "@/shared/ui/dataViz/HistogramChart";
 import { DataVizScatterPlot } from "@/shared/ui/dataViz/ScatterPlot";
-import { dataVizSeriesPresentation } from "@/shared/ui/dataViz/seriesPresentation";
 import { rankBackgroundColor, rankBorderColor } from "@/shared/ui/rank/rankPresentation";
 
 export function AssetRevenueHistograms({ response }: { response: SeriesComparisonAggregateV3 }) {
@@ -94,15 +94,10 @@ export function RevenueConversionMatrices({
               className="min-w-0 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3"
               key={entry.memberId}
             >
-              <h3
-                className="mb-3 text-sm font-semibold"
-                style={{
-                  borderLeftColor: dataVizSeriesPresentation(entry.memberId).color,
-                  borderLeftWidth: 3,
-                  paddingLeft: 8,
-                }}
-              >
-                {entry.displayName}
+              <h3 className="mb-3 text-sm font-semibold">
+                <MemberSequenceLabel memberId={entry.memberId}>
+                  {entry.displayName}
+                </MemberSequenceLabel>
               </h3>
               <AnalysisMatrix
                 ariaLabel={`${entry.displayName}の物件収益順位と最終順位`}

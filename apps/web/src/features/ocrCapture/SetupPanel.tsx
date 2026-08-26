@@ -1,7 +1,7 @@
 import type { SetupFormValues } from "@/features/ocrCapture/schema";
 import type { OcrSetupOptions } from "@/features/ocrCapture/useOcrSetupOptions";
 import { canonicalResultMembers } from "@/shared/domain/members";
-import { HeldEventPickerField } from "@/shared/ui/forms/HeldEventPickerField";
+import { HeldEventPickerField } from "@/shared/heldEvents/HeldEventPickerField";
 import { SelectField } from "@/shared/ui/forms/SelectField";
 import { TextField } from "@/shared/ui/forms/TextField";
 

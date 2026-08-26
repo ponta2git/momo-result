@@ -38,6 +38,7 @@ function heldEventOption(event: HeldEventResponse) {
   };
 }
 
+/** Adapts held-event DTO paging, copy, and selection semantics to the generic choice field. */
 export function HeldEventPickerField({
   disabled,
   emptyChoiceDescription,

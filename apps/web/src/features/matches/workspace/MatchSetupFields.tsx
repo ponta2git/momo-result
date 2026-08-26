@@ -4,8 +4,8 @@ import type {
   MatchSetupOptions,
 } from "@/features/matches/workspace/MatchSetupSection";
 import { canonicalResultMembers } from "@/shared/domain/members";
+import { HeldEventPickerField } from "@/shared/heldEvents/HeldEventPickerField";
 import { toLocalDateTimeInputValue } from "@/shared/lib/dateTime";
-import { HeldEventPickerField } from "@/shared/ui/forms/HeldEventPickerField";
 import { SelectField } from "@/shared/ui/forms/SelectField";
 import { TextField } from "@/shared/ui/forms/TextField";
 

@@ -9,10 +9,10 @@ import type { HeldEventMasterNames } from "@/features/heldEvents/heldEventDetail
 import type { HeldEventDraftResponse } from "@/shared/api/heldEvents";
 import { asDraftStatusOrUnknown, reviewStatusLabel } from "@/shared/domain/draftStatus";
 import { formatMatchNoInEvent } from "@/shared/domain/matchLabels";
+import { DraftStatusBadge } from "@/shared/matches/DraftStatusBadge";
 import { withReturnTo } from "@/shared/navigation/returnTo";
 import { Button } from "@/shared/ui/actions/Button";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
-import { StatusPill } from "@/shared/ui/status/StatusPill";
 
 export function HeldEventDraftsSection({
   drafts,
@@ -59,7 +59,7 @@ export function HeldEventDraftsSection({
                   <p className="font-semibold tabular-nums">
                     {formatMatchNoInEvent(draft.matchNoInEvent)}
                   </p>
-                  <StatusPill
+                  <DraftStatusBadge
                     label={reviewStatusLabel(draft.status)}
                     status={asDraftStatusOrUnknown(draft.status)}
                   />

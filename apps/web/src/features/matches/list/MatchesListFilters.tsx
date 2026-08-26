@@ -7,8 +7,8 @@ import type {
   MatchListSearch,
 } from "@/features/matches/list/matchListTypes";
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
+import { HeldEventPickerField } from "@/shared/heldEvents/HeldEventPickerField";
 import { formatDateOnly } from "@/shared/lib/dateTime";
-import { HeldEventPickerField } from "@/shared/ui/forms/HeldEventPickerField";
 import { SelectField } from "@/shared/ui/forms/SelectField";
 
 type MatchesListFiltersProps = {

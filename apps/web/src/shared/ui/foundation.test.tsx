@@ -16,7 +16,6 @@ import { SegmentedControl } from "@/shared/ui/forms/SegmentedControl";
 import { SelectField } from "@/shared/ui/forms/SelectField";
 import { TextField } from "@/shared/ui/forms/TextField";
 import { StaleShield } from "@/shared/ui/motion/StaleShield";
-import { StatusPill } from "@/shared/ui/status/StatusPill";
 import { createDeferred } from "@/test/deferred";
 
 describe("ui foundation", () => {
@@ -388,21 +387,6 @@ describe("ui foundation", () => {
     expect(screen.getByRole("button", { name: "表示中の集計値" }).parentElement).toHaveAttribute(
       "inert",
     );
-  });
-
-  it("StatusPill maps internal status to user-facing labels", () => {
-    render(
-      <>
-        <StatusPill status="ocr_running" />
-        <StatusPill status="ocr_failed" note="OCR失敗" />
-        <StatusPill status="confirmed" />
-      </>,
-    );
-
-    expect(screen.getByText("処理中")).toBeInTheDocument();
-    expect(screen.getByText("読み取り失敗")).toBeInTheDocument();
-    expect(screen.getByText("確定済")).toBeInTheDocument();
-    expect(screen.getByText("OCR失敗")).toBeInTheDocument();
   });
 
   it("SegmentedControl supports keyboard selection", async () => {

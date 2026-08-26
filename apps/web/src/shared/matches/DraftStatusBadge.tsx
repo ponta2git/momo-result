@@ -6,15 +6,13 @@ import type { DraftStatusOrUnknown } from "@/shared/domain/draftStatus";
 import { StatusBadge } from "@/shared/ui/status/StatusBadge";
 import type { StatusBadgeTone } from "@/shared/ui/status/StatusBadge";
 
-export type MatchStatus = DraftStatusOrUnknown;
-
-type StatusViewModel = {
+type DraftStatusPresentation = {
   busy?: boolean;
   icon: ReactNode;
   tone: StatusBadgeTone;
 };
 
-const statusViewModel: Record<MatchStatus, StatusViewModel> = {
+const draftStatusPresentation: Record<DraftStatusOrUnknown, DraftStatusPresentation> = {
   confirmed: {
     icon: <CircleCheck className="size-4" />,
     tone: "success",
@@ -42,35 +40,36 @@ const statusViewModel: Record<MatchStatus, StatusViewModel> = {
   },
 };
 
-export type StatusPillProps = {
+export type DraftStatusBadgeProps = {
   announceChanges?: boolean;
   className?: string;
   hideIcon?: boolean;
   label?: string;
   note?: string;
-  status: MatchStatus;
+  status: DraftStatusOrUnknown;
 };
 
-export function StatusPill({
+/** Maps match-draft domain status to the domain-free StatusBadge presentation contract. */
+export function DraftStatusBadge({
   announceChanges = false,
   className,
   hideIcon = false,
   label,
   note,
   status,
-}: StatusPillProps) {
-  const model = statusViewModel[status];
+}: DraftStatusBadgeProps) {
+  const presentation = draftStatusPresentation[status];
 
   return (
     <StatusBadge
       announceChanges={announceChanges}
-      busy={model.busy}
+      busy={presentation.busy}
       className={className}
       hideIcon={hideIcon}
-      icon={model.icon}
+      icon={presentation.icon}
       label={label ?? draftStatusLabels[status]}
       note={note}
-      tone={model.tone}
+      tone={presentation.tone}
     />
   );
 }

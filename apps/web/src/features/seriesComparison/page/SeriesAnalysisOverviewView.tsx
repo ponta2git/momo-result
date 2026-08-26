@@ -39,7 +39,7 @@ export function OverviewView({ focusedItemIds, response, onDrilldown }: Analysis
   return (
     <div
       aria-labelledby={analysisTabId("overview")}
-      className="grid gap-4"
+      className="grid gap-8"
       id={analysisPanelId("overview")}
       role="tabpanel"
     >
@@ -47,7 +47,7 @@ export function OverviewView({ focusedItemIds, response, onDrilldown }: Analysis
       <AnalysisSection id="metric-basic" title="順位と基礎比較">
         <dl
           aria-label="現在の順位差"
-          className="mb-5 grid gap-4 border-b border-[var(--color-border)] pb-5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end"
+          className="mb-6 grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end"
         >
           <div>
             <dt className="text-xs font-semibold text-[var(--color-text-secondary)]">
@@ -86,7 +86,10 @@ export function OverviewView({ focusedItemIds, response, onDrilldown }: Analysis
             </thead>
             <tbody>
               {orderFixedMembers(response.metricsByPlayer).map((metric) => (
-                <tr className="border-t border-[var(--color-border)]" key={metric.memberId}>
+                <tr
+                  className="border-b border-[var(--color-border)] last:border-b-0"
+                  key={metric.memberId}
+                >
                   <AnalysisTableCell>
                     <strong>
                       <MemberSequenceLabel memberId={metric.memberId}>

@@ -132,6 +132,7 @@ function NoArtifactFeedback({
       }
       description={copy.description}
       icon={<Clock3 className="size-5" />}
+      placement="embedded"
       title={copy.title}
     />
   );

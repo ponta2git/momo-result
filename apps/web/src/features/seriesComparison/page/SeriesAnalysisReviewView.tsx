@@ -64,15 +64,15 @@ export function ReviewView({
   return (
     <section
       aria-labelledby={purposeTabId("review")}
-      className="grid gap-4"
+      className="grid gap-6"
       id={purposePanelId("review")}
       role="tabpanel"
     >
       {response.commonPlaybookTopics.length > 0 ? (
         <Disclosure
           ariaLabel="卓全体で出やすい論点"
-          className="border-y border-[var(--color-border)]"
-          panelClassName="divide-y divide-[var(--color-border)] border-t border-[var(--color-border)]"
+          panelClassName="divide-y divide-[var(--color-border)] px-3"
+          presentation="inset"
           summary={response.commonPlaybookTopics.map((topic) => topic.heading).join("・")}
           triggerVariant="supporting"
         >
@@ -93,12 +93,9 @@ export function ReviewView({
         </dl>
         <SeriesAnalysisReviewHelpDialog />
       </div>
-      <div className="grid items-stretch gap-3 lg:grid-cols-4">
+      <div className="grid items-stretch gap-x-6 gap-y-8 md:grid-cols-2 xl:grid-cols-4">
         {playbookByPlayer.map((entry) => (
-          <section
-            className="grid min-w-0 grid-rows-[auto_1fr_auto] border-t border-[var(--color-border)] pt-3"
-            key={entry.player.memberId}
-          >
+          <section className="grid min-w-0 grid-rows-[auto_1fr_auto]" key={entry.player.memberId}>
             <h3 className="text-base font-semibold">
               <MemberSequenceLabel memberId={entry.player.memberId}>
                 {entry.player.displayName}
@@ -109,7 +106,7 @@ export function ReviewView({
                 <PlaybookCard card={entry.primaryCard} emphasis onViewChange={onViewChange} />
               </div>
             ) : (
-              <div className="mt-3 flex h-full flex-col justify-between gap-3 border-y border-[var(--color-border)] py-3">
+              <div className="mt-3 flex h-full flex-col justify-between gap-3">
                 <p className="text-sm text-[var(--color-text-secondary)]">
                   今回は無理に作戦を変えず、現在の差を確認します。
                 </p>
@@ -122,8 +119,8 @@ export function ReviewView({
               {entry.secondaryCards.length > 0 ? (
                 <Disclosure
                   ariaLabel={`${entry.player.displayName}のほかの仮説`}
-                  className="border-y border-[var(--color-border)]"
-                  panelClassName="grid gap-3 border-t border-[var(--color-border)] py-3"
+                  panelClassName="grid gap-4 p-3"
+                  presentation="inset"
                   summary={`ほかの仮説（${entry.secondaryCards.length}件）`}
                 >
                   {entry.secondaryCards.map((card) => (
@@ -149,9 +146,7 @@ function PlaybookCard({
   onViewChange: (view: SeriesAnalysisViewId, options?: { replace?: boolean }) => void;
 }) {
   return (
-    <article
-      className={`flex h-full min-w-0 flex-col gap-3 ${emphasis ? "" : "border-t border-[var(--color-border)] pt-3"}`}
-    >
+    <article className={`flex h-full min-w-0 flex-col gap-3 ${emphasis ? "" : "py-1"}`}>
       <div className="flex flex-wrap items-center gap-2">
         <span className="rounded-[var(--radius-xs)] border border-[var(--color-border)] px-2 py-0.5 text-[11px] font-semibold">
           {classificationLabel(card.classification)}

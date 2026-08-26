@@ -104,7 +104,10 @@ export function RankHistoryDrilldown({
           </thead>
           <tbody>
             {payload.eventRows.map((row) => (
-              <tr className="border-t border-[var(--color-border)]" key={row.heldEventId}>
+              <tr
+                className="border-b border-[var(--color-border)] last:border-b-0"
+                key={row.heldEventId}
+              >
                 <TableCell>{formatDateTime(row.firstPlayedAt)}</TableCell>
                 <TableCell>{row.ranks.join(" → ")}</TableCell>
                 <TableCell>{formatDecimal(row.eventAverageRank)}位</TableCell>
@@ -143,7 +146,10 @@ export function RankHistoryDrilldown({
           </thead>
           <tbody>
             {payload.matchRows.map((row) => (
-              <tr className="border-t border-[var(--color-border)]" key={row.itemId}>
+              <tr
+                className="border-b border-[var(--color-border)] last:border-b-0"
+                key={row.itemId}
+              >
                 <TableCell>
                   <SeriesAnalysisMatchLink
                     ariaLabel={`${formatSeriesMatchIndex(row.matchIndex)}の試合結果を見る`}

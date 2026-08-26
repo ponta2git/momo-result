@@ -14,8 +14,8 @@ export function MetricDefinitions({ response }: { response: SeriesComparisonAggr
   return (
     <Disclosure
       ariaLabel="指標の読み方"
-      className="border-y border-[var(--color-border)]"
-      panelClassName="border-t border-[var(--color-border)] py-3"
+      panelClassName="p-3"
+      presentation="inset"
       triggerVariant="supporting"
       summary={
         <span className="inline-flex items-center gap-2">
@@ -55,11 +55,7 @@ export function AnalysisSection({
 }) {
   const headingId = `${id}-heading`;
   return (
-    <section
-      aria-labelledby={headingId}
-      className="min-w-0 scroll-mt-24 border-t border-[var(--color-border)] pt-5"
-      id={id}
-    >
+    <section aria-labelledby={headingId} className="min-w-0 scroll-mt-24" id={id}>
       <header>
         <h2 className="text-lg font-semibold tracking-tight" id={headingId}>
           {title}
@@ -111,8 +107,8 @@ export function AnalysisReadingGuide({
   return (
     <Disclosure
       ariaLabel={ariaLabel}
-      className="border-y border-[var(--color-border)]"
-      panelClassName="border-t border-[var(--color-border)] py-3"
+      panelClassName="p-3"
+      presentation="inset"
       triggerVariant="supporting"
       summary={
         <span className="inline-flex items-center gap-2">

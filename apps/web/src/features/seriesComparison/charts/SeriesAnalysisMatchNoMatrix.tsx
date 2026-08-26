@@ -46,8 +46,8 @@ export function MatchNoInEventMatrix({ response }: { response: SeriesComparisonA
       />
       {additionalEntries.length > 0 ? (
         <Disclosure
-          className="border-y border-[var(--color-border)]"
-          panelClassName="border-t border-[var(--color-border)] py-3"
+          panelClassName="p-3"
+          presentation="inset"
           summary="第5試合以降"
           triggerVariant="supporting"
         >

@@ -27,7 +27,7 @@ export function ContextView({ focusedItemIds, response, onDrilldown }: AnalysisV
   return (
     <div
       aria-labelledby={analysisTabId("context")}
-      className="grid gap-4"
+      className="grid gap-8"
       id={analysisPanelId("context")}
       role="tabpanel"
     >
@@ -55,9 +55,9 @@ export function ContextView({ focusedItemIds, response, onDrilldown }: AnalysisV
         <CardShopDestinationQuadrants focusedItemIds={focusedItemIds} response={response} />
       </AnalysisSection>
       <AnalysisSection id="metric-ginji" title="スリの銀次">
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-x-6 gap-y-8 md:grid-cols-2 xl:grid-cols-4">
           {orderFixedMembers(response.metricsByPlayer).map((metric) => (
-            <article className="border-t border-[var(--color-border)] pt-3" key={metric.memberId}>
+            <article className="min-w-0" key={metric.memberId}>
               <div className="flex justify-between gap-2">
                 <h3 className="font-semibold">
                   <MemberSequenceLabel memberId={metric.memberId}>
@@ -92,7 +92,7 @@ export function ContextView({ focusedItemIds, response, onDrilldown }: AnalysisV
             </article>
           ))}
         </div>
-        <div className="mt-5 border-t border-[var(--color-border)] pt-4">
+        <div className="mt-8">
           <AnalysisSubsection id="metric-ginji-cumulative" title="累計遭遇回数">
             <GinjiCumulativeChart focusedItemIds={focusedItemIds} response={response} />
           </AnalysisSubsection>

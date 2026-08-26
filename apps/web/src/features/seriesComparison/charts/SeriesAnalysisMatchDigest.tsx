@@ -25,7 +25,7 @@ export function MatchDigestStrip({
 }) {
   return (
     <div className="grid gap-3">
-      <dl className="grid divide-y divide-[var(--color-border)] border-y border-[var(--color-border)] sm:grid-cols-2 sm:divide-x sm:divide-y-0 xl:grid-cols-4">
+      <dl className="grid divide-y divide-[var(--color-border)] sm:grid-cols-2 sm:divide-x sm:divide-y-0 xl:grid-cols-4">
         {flagOrder.map((flag) => (
           <div className="px-3 py-2" key={flag}>
             <dt className="text-xs text-[var(--color-text-secondary)]">
@@ -38,9 +38,7 @@ export function MatchDigestStrip({
         ))}
       </dl>
       {response.matchDigest.recent.length === 0 ? (
-        <p className="border-y border-[var(--color-border)] py-3 text-sm text-[var(--color-text-secondary)]">
-          対象試合はありません。
-        </p>
+        <p className="py-3 text-sm text-[var(--color-text-secondary)]">対象試合はありません。</p>
       ) : (
         <div className="[scrollbar-width:thin] [scrollbar-color:var(--color-border)_transparent] overflow-x-auto pb-1">
           <div className="flex min-w-max gap-3">

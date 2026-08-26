@@ -18,10 +18,7 @@ export function RankSignalDrilldown({ payload }: { payload: RankSignalPayload })
         <h3 className="text-sm font-semibold text-balance" id="rank-signal-reading-order">
           判断の順序
         </h3>
-        <ol
-          aria-label="順位を読む手掛かりの使い方"
-          className="mt-2 grid border-y border-[var(--color-border)] sm:grid-cols-2"
-        >
+        <ol aria-label="順位を読む手掛かりの使い方" className="mt-3 grid gap-4 sm:grid-cols-2">
           <GuideStep
             number="1"
             label="候補を選ぶ"
@@ -60,7 +57,7 @@ function RankSignalSummary({
   return (
     <section
       aria-label="順位を読む手掛かりの分析範囲"
-      className="grid border-y border-[var(--color-border)] sm:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)]"
+      className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)]"
     >
       <div className="py-3 sm:pr-5">
         <p className="text-xs text-[var(--color-text-secondary)]">別開催テスト</p>
@@ -73,7 +70,7 @@ function RankSignalSummary({
           </div>
         ) : null}
       </div>
-      <dl className="grid grid-cols-2 gap-x-6 gap-y-2 border-t border-[var(--color-border)] py-3 sm:items-center sm:border-t-0 sm:border-l sm:pl-5">
+      <dl className="grid grid-cols-2 gap-x-6 gap-y-2 sm:items-center sm:border-l sm:border-[var(--color-border)] sm:pl-5">
         <div>
           <dt className="text-xs text-[var(--color-text-secondary)]">対象試合</dt>
           <dd className="mt-0.5 font-medium tabular-nums">{payload.matchCount}戦</dd>
@@ -89,7 +86,7 @@ function RankSignalSummary({
 
 function GuideStep({ label, number, value }: { label: string; number: string; value: string }) {
   return (
-    <li className="grid grid-cols-[1.5rem_minmax(0,1fr)] gap-2 border-t border-[var(--color-border)] py-3 first:border-t-0 sm:border-t-0 sm:border-l sm:px-3 sm:first:border-l-0 sm:first:pl-0 sm:last:pr-0">
+    <li className="grid grid-cols-[1.5rem_minmax(0,1fr)] gap-2 sm:border-l sm:border-[var(--color-border)] sm:px-4 sm:first:border-l-0 sm:first:pl-0 sm:last:pr-0">
       <span
         className="flex size-6 items-center justify-center rounded-[var(--radius-xs)] bg-[var(--color-surface-selected)] text-xs font-medium text-[var(--color-text-primary)] tabular-nums"
         aria-hidden="true"

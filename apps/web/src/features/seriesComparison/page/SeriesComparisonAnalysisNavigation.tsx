@@ -75,11 +75,20 @@ export function analysisPanelId(view: AnalysisViewId): string {
 
 function tabClassName(active: boolean, emphasis: "primary" | "secondary"): string {
   return cn(
-    "-mb-px inline-flex min-h-11 min-w-0 items-center border-b-2 px-3 text-sm font-semibold transition-colors duration-[var(--motion-fast)] motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--color-action)]",
-    emphasis === "primary" && "sm:text-base",
-    active
-      ? "border-[var(--color-action)] text-[var(--color-text-primary)]"
-      : "border-transparent text-[var(--color-text-secondary)] hover:border-[var(--color-border-strong)] hover:text-[var(--color-text-primary)]",
+    "inline-flex min-h-11 min-w-0 items-center px-3 text-sm font-semibold transition-colors duration-[var(--motion-fast)] motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-[var(--color-action)]",
+    emphasis === "primary"
+      ? cn(
+          "rounded-[var(--radius-xs)] focus-visible:outline-offset-2 sm:text-base",
+          active
+            ? "bg-[var(--color-surface)] text-[var(--color-text-primary)]"
+            : "text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]",
+        )
+      : cn(
+          "-mb-px border-b-2 focus-visible:outline-offset-[-2px]",
+          active
+            ? "border-[var(--color-action)] text-[var(--color-text-primary)]"
+            : "border-transparent text-[var(--color-text-secondary)] hover:border-[var(--color-border-strong)] hover:text-[var(--color-text-primary)]",
+        ),
   );
 }
 
@@ -105,7 +114,7 @@ export function PurposeTabs({
     >
       <TabsList
         aria-label="戦績比較の目的"
-        className="flex min-w-0 border-b border-[var(--color-border)]"
+        className="inline-flex max-w-full min-w-0 rounded-[var(--radius-sm)] bg-[var(--color-surface-subtle)] p-1"
       >
         <TabsTab
           aria-controls={purposePanelId("review")}
@@ -171,7 +180,7 @@ export function AnalysisTableOfContents({ view }: { view: AnalysisViewId }) {
   return (
     <nav
       aria-label={`${definition.label}の目次`}
-      className="flex min-w-0 items-center gap-3 border-y border-[var(--color-border)] text-xs"
+      className="flex min-w-0 items-center gap-3 py-1 text-xs"
     >
       <span className="shrink-0 font-semibold text-[var(--color-text-secondary)]">このページ</span>
       <ol className="flex min-w-0 flex-1 [scrollbar-width:thin] gap-x-3 overflow-x-auto">

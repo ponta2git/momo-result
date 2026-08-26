@@ -26,9 +26,9 @@ export function RevenueOutcomeSection({
   return (
     <AnalysisSection id="metric-revenue-outcome" title="物件収益と最終順位">
       <RevenueConversionMatrices focusedItemIds={focusedItemIds} response={response} />
-      <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <div className="mt-4 grid gap-x-6 gap-y-8 md:grid-cols-2 xl:grid-cols-4">
         {orderFixedMembers(response.metricsByPlayer).map((metric) => (
-          <article className="border-t border-[var(--color-border)] pt-3" key={metric.memberId}>
+          <article className="min-w-0" key={metric.memberId}>
             <h3 className="font-semibold">
               <MemberSequenceLabel memberId={metric.memberId}>
                 {metric.displayName}
@@ -52,8 +52,13 @@ export function RevenueOutcomeSection({
                 value={formatPercent(metric.revenueOutcome.lowRevenue.podiumRate)}
               />
             </dl>
-            <Disclosure className="mt-3" summary="収益と順位の詳細">
-              <dl className="grid gap-2 pt-2 text-xs">
+            <Disclosure
+              className="mt-3"
+              panelClassName="p-3"
+              presentation="inset"
+              summary="収益と順位の詳細"
+            >
+              <dl className="grid gap-2 text-xs">
                 <MetricValue
                   label="収益順位だけでは説明しない順位差"
                   value={`${formatDecimal(metric.nonRevenue.rankDelta)}位`}
@@ -80,9 +85,9 @@ export function RevenueOutcomeSection({
 export function DestinationOutcomeSection({ response }: { response: Response }) {
   return (
     <AnalysisSection id="metric-destination-outcome" title="目的地到着と順位">
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-x-6 gap-y-8 md:grid-cols-2 xl:grid-cols-4">
         {orderFixedMembers(response.metricsByPlayer).map((metric) => (
-          <article className="border-t border-[var(--color-border)] pt-3" key={metric.memberId}>
+          <article className="min-w-0" key={metric.memberId}>
             <h3 className="font-semibold">
               <MemberSequenceLabel memberId={metric.memberId}>
                 {metric.displayName}
@@ -108,8 +113,13 @@ export function DestinationOutcomeSection({ response }: { response: Response }) 
                 winRate={metric.destinationOutcome.zeroDestination.winRate}
               />
             </dl>
-            <Disclosure className="mt-3" summary="目的地と順位の詳細">
-              <dl className="grid gap-2 pt-2 text-xs">
+            <Disclosure
+              className="mt-3"
+              panelClassName="p-3"
+              presentation="inset"
+              summary="目的地と順位の詳細"
+            >
+              <dl className="grid gap-2 text-xs">
                 <MetricValue
                   label="到着多寡による入賞率差"
                   value={formatPercent(metric.destination.conversionDelta)}

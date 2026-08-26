@@ -1,12 +1,15 @@
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
+import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
 
 export function PageSkeleton() {
   return (
     <PageFrame width="wide">
       <Skeleton className="min-h-24 rounded-[var(--radius-md)]" />
-      <Skeleton className="min-h-24 rounded-[var(--radius-md)]" />
-      <ComparisonSkeleton />
+      <PageContentSurface className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-6">
+        <Skeleton className="min-h-24 rounded-[var(--radius-md)]" />
+        <ComparisonSkeleton />
+      </PageContentSurface>
     </PageFrame>
   );
 }

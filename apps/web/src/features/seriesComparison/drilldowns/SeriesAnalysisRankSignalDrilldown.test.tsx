@@ -15,7 +15,8 @@ describe("RankSignalDrilldown", () => {
 
     const analysisScope = screen.getByLabelText("順位を読む手掛かりの分析範囲");
     expect(within(analysisScope).getByText("5/5組で改善")).toBeInTheDocument();
-    expect(analysisScope).toHaveClass("border-y");
+    expect(analysisScope).toHaveClass("grid", "gap-4");
+    expect(analysisScope).not.toHaveClass("border-y");
     expect(analysisScope).not.toHaveClass("rounded-[var(--radius-sm)]");
     expect(within(analysisScope).getByText("別開催テスト").parentElement).not.toHaveClass(
       "bg-[var(--color-surface-subtle)]",

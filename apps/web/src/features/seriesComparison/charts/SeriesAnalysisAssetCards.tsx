@@ -36,7 +36,7 @@ export function AssetComparisonCards({ response }: { response: SeriesComparisonA
             className="flex h-full min-w-0 flex-col rounded-[var(--radius-sm)] border border-[var(--color-border)] p-3"
             key={entry.memberId}
           >
-            <div className="flex items-start justify-between gap-2 border-b border-[var(--color-border)] pb-3">
+            <div className="flex items-start justify-between gap-2 pb-2">
               <h3 className="font-semibold">
                 <MemberSequenceLabel memberId={entry.memberId}>
                   {entry.displayName}
@@ -47,7 +47,7 @@ export function AssetComparisonCards({ response }: { response: SeriesComparisonA
                 <SeriesAnalysisQualityAdvisory status={entry.qualityStatus} />
               </span>
             </div>
-            <section className="min-h-36 border-b border-[var(--color-border)] py-3">
+            <section className="min-h-36 py-3">
               <h4 className="text-[11px] font-semibold text-[var(--color-text-secondary)]">
                 総資産の出方
               </h4>
@@ -76,7 +76,7 @@ export function AssetComparisonCards({ response }: { response: SeriesComparisonA
                 </ul>
               ) : null}
             </section>
-            <section className="min-h-20 border-b border-[var(--color-border)] py-3">
+            <section className="min-h-20 py-3">
               <h4 className="text-[11px] font-semibold text-[var(--color-text-secondary)]">
                 稼ぎ方の比重
               </h4>
@@ -87,7 +87,7 @@ export function AssetComparisonCards({ response }: { response: SeriesComparisonA
                 物件収益比率 {formatPercent(performance?.averageRevenueAssetRate)}
               </p>
             </section>
-            <section className="min-h-40 border-b border-[var(--color-border)] py-3">
+            <section className="min-h-40 py-3">
               <h4 className="text-[11px] font-semibold text-[var(--color-text-secondary)]">
                 主要根拠
               </h4>
@@ -106,7 +106,7 @@ export function AssetComparisonCards({ response }: { response: SeriesComparisonA
                 ))}
               </dl>
             </section>
-            <section className="border-b border-[var(--color-border)] py-3">
+            <section className="py-3">
               <h4 className="text-[11px] font-semibold text-[var(--color-text-secondary)]">
                 総資産レンジ
               </h4>
@@ -144,8 +144,9 @@ export function AssetComparisonCards({ response }: { response: SeriesComparisonA
             </section>
             <Disclosure
               ariaLabel={`${entry.displayName}の資産傾向の詳しい根拠`}
-              className="mt-3 border-y border-[var(--color-border)]"
-              panelClassName="border-t border-[var(--color-border)] py-3"
+              className="mt-3"
+              panelClassName="p-3"
+              presentation="inset"
               summary="詳しい根拠"
               triggerVariant="supporting"
             >

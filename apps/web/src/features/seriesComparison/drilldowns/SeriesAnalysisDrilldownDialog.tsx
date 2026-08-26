@@ -155,7 +155,10 @@ export function UnexpectedWinsDrilldown({
             </thead>
             <tbody>
               {payload.rows.map((row) => (
-                <tr className="border-t border-[var(--color-border)]" key={row.matchId}>
+                <tr
+                  className="border-b border-[var(--color-border)] last:border-b-0"
+                  key={row.matchId}
+                >
                   <TableCell>
                     <SeriesAnalysisMatchLink
                       ariaLabel={`${formatSeriesMatchIndex(row.matchIndex)}の試合結果を見る`}

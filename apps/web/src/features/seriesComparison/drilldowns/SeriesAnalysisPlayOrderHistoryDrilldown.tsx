@@ -82,9 +82,9 @@ export function PlayOrderHistoryDrilldown({
         ]}
         layout="inline"
       />
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-x-6 gap-y-5 sm:grid-cols-2 lg:grid-cols-4">
         {payload.rows.map((row) => (
-          <div className="border-t border-[var(--color-border)] pt-3" key={row.playOrder}>
+          <div className="min-w-0" key={row.playOrder}>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <PlayOrderMark playOrder={row.playOrder} />
               <span className="text-xs text-[var(--color-text-secondary)] tabular-nums">
@@ -146,7 +146,10 @@ export function PlayOrderHistoryDrilldown({
           </thead>
           <tbody>
             {payload.seriesByPlayOrder.map((row) => (
-              <tr className="border-t border-[var(--color-border)]" key={row.itemId}>
+              <tr
+                className="border-b border-[var(--color-border)] last:border-b-0"
+                key={row.itemId}
+              >
                 <TableCell>
                   <SeriesAnalysisMatchLink
                     ariaLabel={`${formatSeriesMatchIndex(row.matchIndex)}の試合結果を見る`}

@@ -15,18 +15,18 @@ import type { StatusBadgeTone } from "@/shared/ui/status/StatusBadge";
 export function ExecutionStatus({ data }: { data: SeriesAnalysisAdminOverview }) {
   const execution = data.globalExecution;
   return (
-    <section aria-live="polite" className="border-y border-[var(--color-border)]">
-      <header className="px-1 py-3">
+    <section aria-live="polite" className="min-w-0">
+      <header className="mb-3">
         <h2 className="font-semibold">全体の実行状況</h2>
       </header>
-      <dl className="grid divide-y divide-[var(--color-border)] border-t border-[var(--color-border)] text-sm sm:grid-cols-4 sm:divide-x sm:divide-y-0">
+      <dl className="grid divide-y divide-[var(--color-border)] text-sm sm:grid-cols-4 sm:divide-x sm:divide-y-0">
         <StatusDatum label="実行中" value={`${execution.runningCount}件`} />
         <StatusDatum label="待機作品" value={`${execution.queuedTitleCount}作品`} />
         <StatusDatum label="展開中キャンペーン" value={`${execution.activeCampaignCount}件`} />
         <StatusDatum label="最古の待機" value={formatDateTime(execution.oldestQueuedAt)} />
       </dl>
       {execution.latestActiveCampaign ? (
-        <p className="border-t border-[var(--color-border)] px-4 py-3 text-xs text-[var(--color-text-secondary)]">
+        <p className="mt-3 text-xs text-[var(--color-text-secondary)]">
           全作品操作: 展開 {execution.latestActiveCampaign.expandedCount}/
           {execution.latestActiveCampaign.targetCount}・完了{" "}
           {execution.latestActiveCampaign.terminalCount}・失敗{" "}
@@ -46,12 +46,12 @@ export function SelectedTitleStatus({
   if (!selected) return null;
   const status = selected.status;
   return (
-    <section className="border-t border-[var(--color-border)] pt-5">
+    <section className="min-w-0">
       <header className="flex flex-wrap items-center justify-between gap-2 pb-3">
         <h2 className="font-semibold">{selected.gameTitleName}</h2>
         <AnalysisJobStatusBadge announceChanges status={status.calculation?.status ?? "not_run"} />
       </header>
-      <dl className="grid divide-y divide-[var(--color-border)] border-y border-[var(--color-border)] text-sm sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+      <dl className="grid divide-y divide-[var(--color-border)] text-sm sm:grid-cols-3 sm:divide-x sm:divide-y-0">
         <StatusDatum
           label="成果物"
           value={
@@ -77,7 +77,7 @@ export function SelectedTitleStatus({
 
 export function RecentJobs({ jobs }: { jobs: SeriesAnalysisAdminOverview["recentJobs"] }) {
   return (
-    <section className="border-t border-[var(--color-border)] pt-5">
+    <section className="min-w-0">
       <header className="mb-3">
         <h2 className="font-semibold">直近3件</h2>
         <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
@@ -89,7 +89,7 @@ export function RecentJobs({ jobs }: { jobs: SeriesAnalysisAdminOverview["recent
           実行履歴はありません。
         </p>
       ) : (
-        <div className="overflow-x-auto border-y border-[var(--color-border)]">
+        <div className="overflow-x-auto rounded-[var(--radius-sm)] border border-[var(--color-border)]">
           <table className="w-full min-w-[64rem] text-left text-sm">
             <thead>
               <tr>
@@ -107,7 +107,10 @@ export function RecentJobs({ jobs }: { jobs: SeriesAnalysisAdminOverview["recent
             </thead>
             <tbody>
               {jobs.map((job) => (
-                <tr className="border-t border-[var(--color-border)]" key={job.jobId}>
+                <tr
+                  className="border-b border-[var(--color-border)] last:border-b-0"
+                  key={job.jobId}
+                >
                   <TableCell>
                     <strong>{job.gameTitleName}</strong>
                   </TableCell>

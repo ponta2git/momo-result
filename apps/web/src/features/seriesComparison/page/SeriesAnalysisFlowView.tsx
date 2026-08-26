@@ -33,7 +33,7 @@ export function FlowView({
   return (
     <div
       aria-labelledby={analysisTabId("flow")}
-      className="grid gap-4"
+      className="grid gap-8"
       id={analysisPanelId("flow")}
       role="tabpanel"
     >
@@ -64,9 +64,9 @@ export function FlowView({
         />
       </AnalysisSection>
       <AnalysisSection id="metric-unexpected-wins" title="事前予測より上位で終えた勝利">
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-x-6 gap-y-8 md:grid-cols-2 xl:grid-cols-4">
           {orderFixedMembers(response.rankAnalysis.unexpectedWinsByPlayer).map((entry) => (
-            <article className="border-t border-[var(--color-border)] pt-3" key={entry.memberId}>
+            <article className="min-w-0" key={entry.memberId}>
               <div className="flex justify-between gap-2">
                 <h3 className="font-semibold">
                   <MemberSequenceLabel memberId={entry.memberId}>
@@ -97,7 +97,7 @@ export function FlowView({
         <AnalysisSubsection id="metric-recent-form-recent" title={recentWindowTitle}>
           <RecentRankStrips focusedItemIds={focusedItemIds} response={response} />
         </AnalysisSubsection>
-        <div className="mt-6 border-t border-[var(--color-border)] pt-4">
+        <div className="mt-8">
           <AnalysisSubsection
             id="metric-recent-form-cumulative"
             meta={`${response.scope.matchCount}戦`}

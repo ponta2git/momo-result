@@ -47,7 +47,7 @@ export function RecentRankStrips({
 
   if (axisRows.length === 0) {
     return (
-      <p className="border-y border-[var(--color-border)] py-3 text-sm text-[var(--color-text-secondary)]">
+      <p className="py-3 text-sm text-[var(--color-text-secondary)]">
         直近順位の対象試合はありません。
       </p>
     );

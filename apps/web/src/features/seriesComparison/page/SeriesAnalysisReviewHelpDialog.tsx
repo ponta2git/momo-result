@@ -29,7 +29,7 @@ export function SeriesAnalysisReviewHelpDialog() {
             「信頼度低め」と警告された候補は結論ではなく、試す価値のある仮説として扱います。
           </p>
         </section>
-        <dl className="border-t border-[var(--color-border)] pt-3">
+        <dl>
           <HelpItem
             label="発動条件"
             value="自動検出や次戦予測ではなく、本人が次の試合で自己観察する場面です。"

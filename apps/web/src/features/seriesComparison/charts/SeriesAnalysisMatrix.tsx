@@ -103,7 +103,7 @@ export function AnalysisTableHead({
   return (
     <th
       className={cn(
-        "bg-[var(--color-surface-subtle)] px-3 py-2 font-semibold text-[var(--color-text-secondary)]",
+        "border-b border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-3 py-2 font-semibold text-[var(--color-text-secondary)]",
         className,
       )}
       {...props}

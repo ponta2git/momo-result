@@ -39,7 +39,7 @@ export function DriversView({ focusedItemIds, response, onDrilldown }: AnalysisV
   return (
     <div
       aria-labelledby={analysisTabId("drivers")}
-      className="grid gap-4"
+      className="grid gap-8"
       id={analysisPanelId("drivers")}
       role="tabpanel"
     >
@@ -49,7 +49,7 @@ export function DriversView({ focusedItemIds, response, onDrilldown }: AnalysisV
         <div className="mt-5">
           <AssetRevenueHistograms response={response} />
         </div>
-        <div className="mt-5 border-t border-[var(--color-border)] pt-4">
+        <div className="mt-6">
           <h3 className="text-sm font-semibold">資産タイプの位置</h3>
           <div className="mt-3">
             <StrategyProfileQuadrant response={response} />
@@ -80,9 +80,9 @@ export function DriversView({ focusedItemIds, response, onDrilldown }: AnalysisV
         </div>
       </AnalysisSection>
       <AnalysisSection id="metric-rank-signals" title="順位を読む追加の手掛かり">
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-x-6 gap-y-8 md:grid-cols-2 xl:grid-cols-4">
           {orderFixedMembers(response.rankAnalysis.rankSignalsByPlayer).map((entry) => (
-            <article className="border-t border-[var(--color-border)] pt-3" key={entry.memberId}>
+            <article className="min-w-0" key={entry.memberId}>
               <div className="flex items-center justify-between gap-2">
                 <h3 className="font-semibold">
                   <MemberSequenceLabel memberId={entry.memberId}>

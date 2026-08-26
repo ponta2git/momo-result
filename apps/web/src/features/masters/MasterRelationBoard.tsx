@@ -14,6 +14,7 @@ type MasterCreateBinding = {
   action: (formData: FormData) => void | Promise<void>;
   error?: string | undefined;
   formKey?: string | number | undefined;
+  pending?: boolean | undefined;
 };
 
 type GameTitleRelation = {

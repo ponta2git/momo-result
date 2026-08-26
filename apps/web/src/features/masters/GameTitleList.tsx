@@ -1,9 +1,13 @@
+import { Plus } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+
 import { MasterDeleteDialog, MasterEditDialog } from "@/features/masters/MasterActionDialogs";
 import { MasterResourceRefreshNotice } from "@/features/masters/MasterResourceRefreshNotice";
 import { layoutFamilies, layoutFamilyLabels } from "@/shared/api/enums";
 import type { LayoutFamily } from "@/shared/api/enums";
 import type { GameTitleResponse } from "@/shared/api/masters";
 import { Button } from "@/shared/ui/actions/Button";
+import { Dialog, dialogFooterClassName } from "@/shared/ui/feedback/Dialog";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { ChoiceList } from "@/shared/ui/forms/ChoiceList";
 import { SelectField } from "@/shared/ui/forms/SelectField";
@@ -15,6 +19,7 @@ type MasterCreateBinding = {
   action: (formData: FormData) => void | Promise<void>;
   error?: string | undefined;
   formKey?: string | number | undefined;
+  pending?: boolean | undefined;
 };
 
 type GameTitleListProps = {
@@ -82,11 +87,14 @@ export function GameTitleList({
 
   return (
     <section className="min-w-0">
-      <header>
-        <h2 className="text-lg font-semibold text-[var(--color-text-primary)]">作品</h2>
-        <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
-          作品を選ぶと、対応するマップとシーズンを編集できます。
-        </p>
+      <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h2 className="text-lg font-semibold text-[var(--color-text-primary)]">作品</h2>
+          <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
+            作品を選ぶと、対応するマップとシーズンを編集できます。
+          </p>
+        </div>
+        <GameTitleCreateDialog create={create} defaultLayoutFamily={defaultLayoutFamily} />
       </header>
 
       <MasterResourceRefreshNotice
@@ -114,8 +122,46 @@ export function GameTitleList({
           onValueChange={onSelect}
         />
       )}
+    </section>
+  );
+}
 
-      <form action={create.action} className="mt-4 grid gap-2" key={create.formKey}>
+function GameTitleCreateDialog({
+  create,
+  defaultLayoutFamily,
+}: {
+  create: MasterCreateBinding;
+  defaultLayoutFamily: LayoutFamily;
+}) {
+  const [open, setOpen] = useState(false);
+  const previousFormKey = useRef(create.formKey);
+
+  useEffect(() => {
+    if (previousFormKey.current !== create.formKey) {
+      previousFormKey.current = create.formKey;
+      setOpen(false);
+    }
+  }, [create.formKey]);
+
+  return (
+    <Dialog
+      busy={create.pending}
+      description="作品名と、OCRで使う読み取り方式を設定します。"
+      open={open}
+      title="作品を追加"
+      trigger={
+        <Button
+          className="shrink-0"
+          icon={<Plus aria-hidden="true" className="size-4" />}
+          size="sm"
+          variant="secondary"
+        >
+          作品を追加
+        </Button>
+      }
+      onOpenChange={setOpen}
+    >
+      <form action={create.action} className="grid gap-4 p-2" key={create.formKey}>
         <TextField
           error={create.error}
           label="作品名"
@@ -135,10 +181,15 @@ export function GameTitleList({
           }))}
         />
 
-        <Button pendingLabel="追加中" type="submit" variant="secondary">
-          作品を追加
-        </Button>
+        <div className={dialogFooterClassName}>
+          <Button disabled={create.pending} variant="secondary" onClick={() => setOpen(false)}>
+            キャンセル
+          </Button>
+          <Button pendingLabel="追加中" type="submit">
+            追加
+          </Button>
+        </div>
       </form>
-    </section>
+    </Dialog>
   );
 }

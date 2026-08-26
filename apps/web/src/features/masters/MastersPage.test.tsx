@@ -42,6 +42,11 @@ function renderPage(entry = "/admin/masters") {
   );
 }
 
+async function openGameTitleCreateDialog() {
+  await user.click(screen.getByRole("button", { name: "作品を追加" }));
+  return screen.getByRole("dialog", { name: "作品を追加" });
+}
+
 function createMasterReturnEntry() {
   const returnTo = "/review/session-1?totalAssets=draft-1";
   const handoffId = saveMasterHandoff(
@@ -363,11 +368,14 @@ describe("MastersPage", () => {
     renderPage();
 
     expect(await screen.findByRole("radio", { name: "桃太郎電鉄2" })).toBeChecked();
+    expect(screen.queryByPlaceholderText("例: 桃太郎電鉄2")).not.toBeInTheDocument();
 
-    await user.type(screen.getByPlaceholderText("例: 桃太郎電鉄2"), "桃太郎電鉄ワールド");
-    await user.click(screen.getByRole("button", { name: "作品を追加" }));
+    const dialog = await openGameTitleCreateDialog();
+    await user.type(within(dialog).getByPlaceholderText("例: 桃太郎電鉄2"), "桃太郎電鉄ワールド");
+    await user.click(within(dialog).getByRole("button", { name: "追加" }));
 
     expect(await screen.findByRole("radio", { name: "桃太郎電鉄ワールド" })).toBeChecked();
+    expect(screen.queryByRole("dialog", { name: "作品を追加" })).not.toBeInTheDocument();
   });
 
   it("invalidates consumer-facing master caches after creating a game title", async () => {
@@ -378,8 +386,9 @@ describe("MastersPage", () => {
 
     expect(await screen.findByRole("radio", { name: "桃太郎電鉄2" })).toBeChecked();
 
-    await user.type(screen.getByPlaceholderText("例: 桃太郎電鉄2"), "桃太郎電鉄ワールド");
-    await user.click(screen.getByRole("button", { name: "作品を追加" }));
+    const dialog = await openGameTitleCreateDialog();
+    await user.type(within(dialog).getByPlaceholderText("例: 桃太郎電鉄2"), "桃太郎電鉄ワールド");
+    await user.click(within(dialog).getByRole("button", { name: "追加" }));
 
     await waitFor(() => {
       expect(
@@ -410,21 +419,25 @@ describe("MastersPage", () => {
     renderPage();
     expect(await screen.findByRole("radio", { name: "桃太郎電鉄2" })).toBeChecked();
 
-    await user.type(screen.getByPlaceholderText("例: 桃太郎電鉄2"), "桃鉄DX");
-    await user.click(screen.getByRole("button", { name: "作品を追加" }));
+    const dialog = await openGameTitleCreateDialog();
+    await user.type(within(dialog).getByPlaceholderText("例: 桃太郎電鉄2"), "桃鉄DX");
+    await user.click(within(dialog).getByRole("button", { name: "追加" }));
 
     expect(await screen.findByText("(追加中…)")).toBeInTheDocument();
     expect(
       screen.getByText((_, node) => node?.textContent === "桃鉄DX(追加中…)"),
     ).toBeInTheDocument();
-    const pendingChoice = screen.getByRole("radio", { name: "桃鉄DX（追加中）" });
+    const pendingChoice = screen.getByRole("radio", { name: "桃鉄DX（追加中）", hidden: true });
     expect(pendingChoice).toBeDisabled();
     expect(pendingChoice).not.toBeChecked();
-    expect(screen.getByRole("radio", { name: "桃太郎電鉄2" })).toBeChecked();
-    expect(screen.getByRole("button", { name: "追加中" })).toBeDisabled();
+    expect(screen.getByRole("radio", { name: "桃太郎電鉄2", hidden: true })).toBeChecked();
+    expect(within(dialog).getByRole("button", { name: "追加中" })).toBeDisabled();
 
     responseGate.resolve();
     await waitFor(() => expect(screen.queryByText("(追加中…)")).not.toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog", { name: "作品を追加" })).not.toBeInTheDocument(),
+    );
   });
 
   it("shows the six fixed incident masters", async () => {
@@ -471,7 +484,10 @@ describe("MastersPage", () => {
     expect(gameTitleChoice.closest("label")).not.toContainElement(deleteButton);
     await user.click(editButton);
     expect(gameTitleChoice).toBeChecked();
+    const editDialog = screen.getByRole("dialog", { name: "作品を編集" });
     const nameInput = screen.getByDisplayValue("桃太郎電鉄2");
+    expect(editDialog).toContainElement(nameInput);
+    expect(nameInput.closest("form")).toHaveClass("p-2");
     await user.clear(nameInput);
     await user.type(nameInput, "桃太郎電鉄2 DX");
     await user.click(screen.getByRole("button", { name: "保存" }));

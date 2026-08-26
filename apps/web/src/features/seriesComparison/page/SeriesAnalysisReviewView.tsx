@@ -68,6 +68,15 @@ export function ReviewView({
       id={purposePanelId("review")}
       role="tabpanel"
     >
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <dl aria-label="行動仮説の対象" className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+          <div className="flex items-baseline gap-2">
+            <dt className="text-xs font-semibold text-[var(--color-text-secondary)]">対象</dt>
+            <dd className="font-semibold">次の4戦</dd>
+          </div>
+        </dl>
+        <SeriesAnalysisReviewHelpDialog />
+      </div>
       {response.commonPlaybookTopics.length > 0 ? (
         <section aria-labelledby="common-playbook-heading" className="grid gap-3">
           <h2 className="text-lg font-semibold" id="common-playbook-heading">
@@ -85,15 +94,6 @@ export function ReviewView({
           </div>
         </section>
       ) : null}
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <dl aria-label="行動仮説の対象" className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
-          <div className="flex items-baseline gap-2">
-            <dt className="text-xs font-semibold text-[var(--color-text-secondary)]">対象</dt>
-            <dd className="font-semibold">次の4戦</dd>
-          </div>
-        </dl>
-        <SeriesAnalysisReviewHelpDialog />
-      </div>
       <div className="grid items-start gap-x-6 gap-y-8 md:grid-cols-2 xl:grid-cols-4">
         {playbookByPlayer.map((entry) => (
           <section className="min-w-0" key={entry.player.memberId}>

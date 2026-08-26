@@ -58,6 +58,13 @@ describe("ReviewView", () => {
     expect(within(usage).queryByText("使う場面")).not.toBeInTheDocument();
     expect(screen.queryByText("発動条件に当てはまるとき")).not.toBeInTheDocument();
     const commonPlaybook = screen.getByRole("region", { name: "4人共通の行動仮説" });
+    const contextRow = usage.parentElement;
+    const reviewPanel = screen.getByRole("tabpanel");
+    expect(contextRow).not.toBeNull();
+    expect(within(contextRow!).getByRole("button", { name: "分類の読み方" })).toBeInTheDocument();
+    expect([...reviewPanel.children].indexOf(contextRow!)).toBeLessThan(
+      [...reviewPanel.children].indexOf(commonPlaybook),
+    );
     expect(within(commonPlaybook).getByText("収益先行後の詰め方")).toBeInTheDocument();
     expect(
       within(commonPlaybook).getByText(response.commonPlaybookTopics[0]!.detail),

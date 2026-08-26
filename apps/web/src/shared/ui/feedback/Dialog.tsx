@@ -61,8 +61,8 @@ function DialogContentFrame({
   dismissible?: boolean | undefined;
 }) {
   return (
-    <div className="flex h-full max-h-full min-h-0 flex-col gap-3">
-      <div className="flex items-start justify-between gap-3">
+    <div className="flex min-h-0 w-full flex-1 flex-col gap-3">
+      <div className="flex shrink-0 items-start justify-between gap-3">
         <div className="min-w-0">
           <BaseDialog.Title className="text-lg font-semibold text-balance text-[var(--color-text-primary)]">
             {title}
@@ -81,7 +81,7 @@ function DialogContentFrame({
           />
         ) : null}
       </div>
-      <div className={cn("min-h-0 min-w-0 flex-1", className)}>{children}</div>
+      <div className={cn("min-h-0 min-w-0 flex-1 overflow-y-auto", className)}>{children}</div>
     </div>
   );
 }
@@ -123,7 +123,7 @@ export function Dialog({
         />
         <BaseDialog.Popup
           className={cn(
-            "momo-dialog-popup fixed inset-0 z-[var(--z-dialog)] mx-auto flex w-full max-w-[40rem] items-center justify-center overflow-y-auto",
+            "momo-dialog-popup fixed inset-0 z-[var(--z-dialog)] mx-auto flex w-full max-w-[40rem] items-center justify-center overflow-hidden",
             popupClassName,
           )}
           initialFocus={true}
@@ -132,7 +132,7 @@ export function Dialog({
             aria-busy={busy || undefined}
             animate="visible"
             className={cn(
-              "momo-dialog-surface w-full overflow-y-auto rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-[var(--color-text-primary)] shadow-[var(--shadow-dialog)]",
+              "momo-dialog-surface flex w-full overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-[var(--color-text-primary)] shadow-[var(--shadow-dialog)]",
               surfaceClassName,
             )}
             initial="hidden"
@@ -216,7 +216,7 @@ export function AlertDialog({
       {trigger ? <BaseAlertDialog.Trigger render={trigger} /> : null}
       <BaseAlertDialog.Portal>
         <BaseAlertDialog.Backdrop className="fixed inset-0 z-[var(--z-dialog)] bg-[var(--momo-night-900)]/35" />
-        <BaseAlertDialog.Popup className="momo-dialog-popup fixed inset-0 z-[var(--z-dialog)] mx-auto flex w-full max-w-[40rem] items-center justify-center overflow-y-auto">
+        <BaseAlertDialog.Popup className="momo-dialog-popup fixed inset-0 z-[var(--z-dialog)] mx-auto flex w-full max-w-[40rem] items-center justify-center overflow-hidden">
           <motion.div
             aria-busy={actualPending || undefined}
             animate="visible"

@@ -8,7 +8,7 @@ type DisclosureTriggerVariant = "anchor" | "default" | "supporting";
 type DisclosurePresentation = "framed" | "inset" | "plain";
 
 const triggerVariantClass = {
-  anchor: "bg-[var(--color-surface-subtle)] hover:bg-[var(--color-surface-selected)]",
+  anchor: "",
   default: "",
   supporting: "font-medium text-[var(--color-text-secondary)] hover:bg-transparent",
 } as const satisfies Record<DisclosureTriggerVariant, string>;
@@ -20,7 +20,7 @@ const presentationClass = {
     trigger: "rounded-none",
   },
   inset: {
-    panel: "rounded-b-[var(--radius-sm)] bg-[var(--color-surface-subtle)]",
+    panel: "",
     root: "",
     trigger: "",
   },

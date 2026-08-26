@@ -19,13 +19,16 @@ export function memberSequencePresentation(memberId: string): MemberSequencePres
 
 /**
  * Pairs a fixed member's visible name with the canonical blue→red→yellow→green
- * scan accent. Play-order keeps its circular mark and explicit `プレー順N` label.
+ * scan accent. When play order owns that palette in the same comparison, callers
+ * keep the member label neutral and retain the explicit visible name.
  */
 export function MemberSequenceLabel({
+  accent = true,
   children,
   className,
   memberId,
 }: {
+  accent?: boolean | undefined;
   children: ReactNode;
   className?: string | undefined;
   memberId: string;
@@ -35,13 +38,16 @@ export function MemberSequenceLabel({
   return (
     <span
       className={cn("inline-flex min-w-0 items-center gap-2", className)}
+      data-member-accent={accent ? "visible" : "neutral"}
       data-member-sequence={presentation.sequence ?? "unknown"}
     >
-      <span
-        aria-hidden="true"
-        className="h-5 w-1 shrink-0 rounded-full"
-        style={{ backgroundColor: presentation.color }}
-      />
+      {accent ? (
+        <span
+          aria-hidden="true"
+          className="h-5 w-1 shrink-0 rounded-full"
+          style={{ backgroundColor: presentation.color }}
+        />
+      ) : null}
       <span className="min-w-0">{children}</span>
     </span>
   );

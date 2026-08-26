@@ -7,9 +7,11 @@ import { Button } from "@/shared/ui/actions/Button";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { cn } from "@/shared/ui/cn";
 import { Disclosure } from "@/shared/ui/data/Collapsible";
+import { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
 import { PaginationControls } from "@/shared/ui/data/PaginationControls";
 import { Dialog, AlertDialog } from "@/shared/ui/feedback/Dialog";
 import { Notice } from "@/shared/ui/feedback/Notice";
+import { ToastHost } from "@/shared/ui/feedback/ToastHost";
 import { SegmentedControl } from "@/shared/ui/forms/SegmentedControl";
 import { SelectField } from "@/shared/ui/forms/SelectField";
 import { TextField } from "@/shared/ui/forms/TextField";
@@ -105,6 +107,29 @@ describe("ui foundation", () => {
     expect(screen.getByText("追加条件")).toBeInTheDocument();
   });
 
+  it("Disclosure does not turn an expanded panel into a pale surface", () => {
+    render(
+      <Disclosure defaultOpen presentation="inset" summary="補足">
+        <p>補足内容</p>
+      </Disclosure>,
+    );
+
+    const panel = screen.getByText("補足内容").parentElement;
+    expect(panel).not.toHaveClass("bg-[var(--color-surface-subtle)]");
+  });
+
+  it("MemberSequenceLabel can leave identity neutral when play order owns the accent", () => {
+    render(
+      <MemberSequenceLabel accent={false} memberId="member_ponta">
+        ぽんた
+      </MemberSequenceLabel>,
+    );
+
+    const label = screen.getByText("ぽんた").parentElement;
+    expect(label).toHaveAttribute("data-member-accent", "neutral");
+    expect(label?.querySelector("[aria-hidden='true']")).toBeNull();
+  });
+
   it("Disclosure applies semantic trigger hierarchy variants", () => {
     const { rerender } = render(
       <Disclosure summary="主要な開示" triggerVariant="anchor">
@@ -113,8 +138,8 @@ describe("ui foundation", () => {
     );
 
     const anchorTrigger = screen.getByRole("button", { name: "主要な開示" });
-    expect(anchorTrigger).toHaveClass("bg-[var(--color-surface-subtle)]");
-    expect(anchorTrigger).toHaveClass("hover:bg-[var(--color-surface-selected)]");
+    expect(anchorTrigger).not.toHaveClass("bg-[var(--color-surface-subtle)]");
+    expect(anchorTrigger).not.toHaveClass("bg-[var(--color-surface-selected)]");
 
     rerender(
       <Disclosure summary="補助的な開示" triggerVariant="supporting">
@@ -156,8 +181,21 @@ describe("ui foundation", () => {
       }),
     ).toBeInTheDocument();
 
+    const dialog = screen.getByRole("dialog", { name: "試合を確定" });
+    expect(dialog).toHaveClass("overflow-hidden");
+    expect(dialog.firstElementChild).toHaveClass("overflow-hidden");
+    expect(screen.getByText("本文").parentElement).toHaveClass("overflow-y-auto");
+
     await user.click(screen.getByRole("button", { name: "ダイアログを閉じる" }));
     expect(screen.queryByRole("dialog", { name: "試合を確定" })).not.toBeInTheDocument();
+  });
+
+  it("keeps transient toasts away from bottom actions", () => {
+    render(<ToastHost />);
+
+    const viewport = screen.getByRole("region", { name: "Notifications" });
+    expect(viewport).toHaveClass("momo-safe-top", "momo-safe-right");
+    expect(viewport).not.toHaveClass("momo-safe-bottom");
   });
 
   it("Dialog can prevent dismissal while critical work is running", async () => {

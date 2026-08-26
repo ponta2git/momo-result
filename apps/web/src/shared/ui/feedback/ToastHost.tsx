@@ -28,7 +28,7 @@ function ToastRenderer() {
     <Toast.Portal>
       <Toast.Viewport
         aria-live="polite"
-        className="momo-safe-right momo-safe-bottom fixed z-[var(--z-toast)] flex w-[min(24rem,calc(100vw-1rem))] flex-col gap-2 p-2"
+        className="momo-safe-top momo-safe-right fixed z-[var(--z-toast)] flex w-[min(24rem,calc(100vw-1rem))] flex-col gap-2 p-2"
       >
         <AnimatePresence initial={false}>
           {toasts.map((toast) => (

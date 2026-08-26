@@ -256,11 +256,10 @@ describe("app routing", () => {
       await waitFor(() => {
         expect(router.state.location.pathname).toBe("/matches");
       });
-      expect(
-        within(screen.getByRole("navigation", { name: "グローバルナビゲーション" })).getByText(
-          "いーゆー",
-        ),
-      ).toBeInTheDocument();
+      const globalNavigation = await screen.findByRole("navigation", {
+        name: "グローバルナビゲーション",
+      });
+      expect(within(globalNavigation).getByText("いーゆー")).toBeInTheDocument();
       expect(screen.queryByRole("link", { name: "アカウント" })).not.toBeInTheDocument();
       expect(logoutRequests).toBe(0);
     } finally {

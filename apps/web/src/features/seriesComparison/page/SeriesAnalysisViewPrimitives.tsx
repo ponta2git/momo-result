@@ -7,26 +7,25 @@ import type {
   SeriesComparisonAggregateV3,
 } from "@/shared/api/seriesAnalysis";
 import { orderFixedMembers } from "@/shared/domain/members";
+import { Button } from "@/shared/ui/actions/Button";
 import { Disclosure } from "@/shared/ui/data/Collapsible";
 import type { FactListItem } from "@/shared/ui/data/FactList";
+import { Dialog } from "@/shared/ui/feedback/Dialog";
 
 export function MetricDefinitions({ response }: { response: SeriesComparisonAggregateV3 }) {
   return (
-    <Disclosure
-      ariaLabel="指標の読み方"
-      panelClassName="p-3"
-      presentation="inset"
-      triggerVariant="supporting"
-      summary={
-        <span className="inline-flex items-center gap-2">
-          <BookOpenText className="size-4" />
+    <Dialog
+      description="分析に共通する指標の比べ方を示します。"
+      title="指標の読み方"
+      trigger={
+        <Button icon={<BookOpenText className="size-4" />} size="sm" variant="quiet">
           指標の読み方
-        </span>
+        </Button>
       }
     >
-      <dl className="grid divide-y divide-[var(--color-border)] sm:grid-cols-2 sm:gap-x-6 sm:[&>*:nth-child(2)]:border-t-0">
+      <dl className="grid gap-x-6 sm:grid-cols-2">
         {response.metricDefinitions.map((definition) => (
-          <div className="py-3" key={definition.metricId}>
+          <div className="py-2" key={definition.metricId}>
             <dt className="text-sm font-semibold">{definition.label}</dt>
             <dd className="mt-1 text-xs text-[var(--color-text-secondary)]">
               {metricReadingCue(definition)}
@@ -34,7 +33,7 @@ export function MetricDefinitions({ response }: { response: SeriesComparisonAggr
           </div>
         ))}
       </dl>
-    </Disclosure>
+    </Dialog>
   );
 }
 

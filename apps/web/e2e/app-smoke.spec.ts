@@ -182,6 +182,10 @@ test("completes the app smoke workflow with isolated scoped data", async ({
     await expect(page.getByRole("heading", { exact: true, name: "OCR取り込み" })).toBeVisible();
     await selectSeedMasters(page, { gameTitleId, mapMasterId, seasonMasterId });
 
+    const cameraFrame = page.getByRole("group", { name: "総資産の16:9カメラ画像枠" });
+    const cameraFrameBox = await measureElement(cameraFrame, "OCR camera frame");
+    expect(cameraFrameBox.width / cameraFrameBox.height).toBeCloseTo(16 / 9, 2);
+
     const totalAssetsFrame = page.getByRole("group", { name: "総資産の16:9画像枠" });
     await expect(totalAssetsFrame).toBeVisible();
     const emptyFrameBox = await measureElement(totalAssetsFrame, "Empty OCR tray frame");
@@ -196,6 +200,13 @@ test("completes the app smoke workflow with isolated scoped data", async ({
     const selectedFrameBox = await measureElement(totalAssetsFrame, "Selected OCR tray frame");
     expect(selectedFrameBox.width).toBeCloseTo(emptyFrameBox.width, 1);
     expect(selectedFrameBox.height).toBeCloseTo(emptyFrameBox.height, 1);
+    const toastViewport = page.getByRole("region", { name: "Notifications" });
+    await expect(toastViewport).toContainText("総資産に画像を配置しました。");
+    const startButton = page.getByRole("button", { name: "1件で読み取りを開始" });
+    await startButton.scrollIntoViewIfNeeded();
+    const toastBox = await measureElement(toastViewport, "OCR placement toast");
+    const startButtonBox = await measureElement(startButton, "OCR start action");
+    expect(toastBox.y + toastBox.height).toBeLessThan(startButtonBox.y);
 
     const draftResponse = page.waitForResponse(
       (response) =>
@@ -504,6 +515,12 @@ test("completes the app smoke workflow with isolated scoped data", async ({
       "aria-selected",
       "true",
     );
+    const metricGuideTrigger = page.getByRole("button", { name: "指標の読み方" });
+    await expect(metricGuideTrigger).toBeVisible();
+    await metricGuideTrigger.click();
+    const metricGuideDialog = page.getByRole("dialog", { name: "指標の読み方" });
+    await expect(metricGuideDialog).toBeVisible();
+    await metricGuideDialog.getByRole("button", { name: "ダイアログを閉じる" }).click();
     const scopeSurface = page.getByRole("region", { name: "比較条件" });
     await expect(scopeSurface).toContainText(`${analysisScope.matchCount}戦`);
     await expect(scopeSurface).not.toContainText("十分");
@@ -523,7 +540,12 @@ test("completes the app smoke workflow with isolated scoped data", async ({
       selectedMatch.getByRole("list", { name: "選択中の試合の順位と成績" }),
     ).toContainText("ぽんた");
     await expect(page.locator('[data-focused-metric="true"]').first()).toBeVisible();
-    await expect(page.getByRole("heading", { name: "最近の試合と荒れ方" })).toBeVisible();
+    await expect(
+      page.getByRole("heading", {
+        name: `直近${aggregateFixture.matchDigest.shownCount}戦と荒れ方`,
+      }),
+    ).toBeVisible();
+    await expect(page.getByText("カード表示", { exact: true })).toHaveCount(0);
     await expect(page.getByRole("table", { name: "直近順位ストリップ" })).toBeVisible();
     const recentRankTile = page.getByRole("link", {
       name: /ぽんた、第1戦、1位、この試合。試合結果を見る/u,
@@ -609,6 +631,26 @@ test("completes the app smoke workflow with isolated scoped data", async ({
     await expect(
       rankSignalDialog.getByRole("listitem").filter({ hasText: "候補を作る" }),
     ).toContainText("4組を使用");
+    const pageScrollBeforeDisclosure = await page.evaluate(() => window.scrollY);
+    await rankSignalDialog.getByRole("button", { name: "物件収益の開催別の数値" }).click();
+    expect(await page.evaluate(() => window.scrollY)).toBe(pageScrollBeforeDisclosure);
+    expect(
+      await rankSignalDialog.evaluate((dialog) => {
+        const surface = dialog.firstElementChild;
+        const candidates = [dialog, surface, ...dialog.querySelectorAll("*")].filter(
+          (element): element is Element => element !== null,
+        );
+        const scrollOwners = candidates.filter(
+          (element) =>
+            ["auto", "scroll"].includes(window.getComputedStyle(element).overflowY) &&
+            element.scrollHeight > element.clientHeight + 1,
+        );
+        return {
+          bodyOverflow: window.getComputedStyle(document.body).overflow,
+          scrollOwnerCount: scrollOwners.length,
+        };
+      }),
+    ).toEqual({ bodyOverflow: "hidden", scrollOwnerCount: 1 });
     await rankSignalDialog.getByRole("button", { name: "ダイアログを閉じる" }).click();
 
     await page.setViewportSize({ height: 900, width: 1440 });

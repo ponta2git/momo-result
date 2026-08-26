@@ -67,7 +67,8 @@ describe("MatchesListPage", () => {
     expect(screen.queryByRole("columnheader", { name: "操作" })).not.toBeInTheDocument();
     expect(screen.queryByRole("columnheader", { name: "更新" })).not.toBeInTheDocument();
     const listRegion = screen.getByRole("region", { name: "登録済みの試合" });
-    expect(within(listRegion).getByText("3件")).toBeInTheDocument();
+    expect(within(listRegion).getByText("1-3件 / 全3件")).toBeInTheDocument();
+    expect(within(listRegion).queryByText("3件")).not.toBeInTheDocument();
     expect(within(listRegion).getByRole("group", { name: "試合一覧の操作" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "OCR取り込み" })).toHaveClass(
       "bg-[var(--color-surface)]",
@@ -267,7 +268,6 @@ describe("MatchesListPage", () => {
     );
 
     expect(await screen.findByText("試合一覧を読み込めません")).toBeInTheDocument();
-    expect(screen.getByText("件数を取得できません")).toBeInTheDocument();
     expect(screen.queryByText("試合はまだありません")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "一覧を再読み込み" })).toHaveClass(
       "bg-[var(--color-action)]",
@@ -276,7 +276,6 @@ describe("MatchesListPage", () => {
     await user.click(screen.getByRole("button", { name: "一覧を再読み込み" }));
 
     expect(await screen.findByText("試合はまだありません")).toBeInTheDocument();
-    expect(screen.getByText("0件")).toBeInTheDocument();
     expect(attempts).toBe(2);
     expect(cursors).toEqual(["stale-cursor", null]);
     expect(screen.getByLabelText("current location")).not.toHaveTextContent("cursor=");

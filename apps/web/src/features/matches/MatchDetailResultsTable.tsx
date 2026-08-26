@@ -47,7 +47,7 @@ export function MatchDetailResultsTable({
         header: "プレーヤー",
         minWidth: "10rem",
         renderCell: (player) => (
-          <MemberSequenceLabel memberId={player.memberId}>
+          <MemberSequenceLabel accent={false} memberId={player.memberId}>
             {memberDisplayName(player.memberId)}
           </MemberSequenceLabel>
         ),

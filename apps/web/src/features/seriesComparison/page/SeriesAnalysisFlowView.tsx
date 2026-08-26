@@ -19,7 +19,6 @@ import {
 import { SeriesAnalysisQualityAdvisory } from "@/features/seriesComparison/SeriesAnalysisQualityAdvisory";
 import { orderFixedMembers } from "@/shared/domain/members";
 import { Button } from "@/shared/ui/actions/Button";
-import { FactList } from "@/shared/ui/data/FactList";
 import { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
 
 export function FlowView({
@@ -30,6 +29,10 @@ export function FlowView({
 }: AnalysisViewProps & { onFocusMatch: (matchId: string) => void }) {
   const recentWindowSize = response.recentRanks[0]?.windowSize;
   const recentWindowTitle = recentWindowSize ? `直近${recentWindowSize}戦` : "直近順位";
+  const matchDigestTitle =
+    response.matchDigest.shownCount > 0
+      ? `直近${response.matchDigest.shownCount}戦と荒れ方`
+      : "直近の試合と荒れ方";
   return (
     <div
       aria-labelledby={analysisTabId("flow")}
@@ -38,25 +41,7 @@ export function FlowView({
       role="tabpanel"
     >
       <AnalysisTableOfContents view="flow" />
-      <AnalysisSection id="metric-match-digest" title="最近の試合と荒れ方">
-        <FactList
-          ariaLabel="最近の試合の対象範囲"
-          className="mb-4"
-          columns={2}
-          items={[
-            {
-              id: "shown",
-              label: "カード表示",
-              value: `直近${response.matchDigest.shownCount}戦`,
-            },
-            {
-              id: "total",
-              label: "期間内",
-              value: `全${response.matchDigest.totalCount}戦`,
-            },
-          ]}
-          layout="segmented"
-        />
+      <AnalysisSection id="metric-match-digest" title={matchDigestTitle}>
         <MatchDigestStrip
           focusedItemIds={focusedItemIds}
           response={response}

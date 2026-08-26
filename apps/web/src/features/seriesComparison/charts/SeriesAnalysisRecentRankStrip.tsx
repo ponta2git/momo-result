@@ -106,7 +106,7 @@ export function RecentRankStrips({
               return (
                 <tr key={player.memberId}>
                   <th
-                    className="sticky left-0 z-[var(--z-base)] w-40 min-w-40 bg-[var(--color-surface-subtle)] py-1 pr-2 pl-2 text-left align-middle"
+                    className="sticky left-0 z-[var(--z-base)] w-40 min-w-40 bg-[var(--color-surface)] py-1 pr-2 pl-2 text-left align-middle"
                     scope="row"
                   >
                     <span className="block text-sm leading-5 font-semibold break-words">

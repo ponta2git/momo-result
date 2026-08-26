@@ -71,7 +71,12 @@ function ArtifactViewContent({
           id={purposePanelId("analysis")}
           role="tabpanel"
         >
-          <AnalysisTabs activeView={bundle.view} onViewChange={onViewChange} />
+          <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+            <AnalysisTabs activeView={bundle.view} onViewChange={onViewChange} />
+            <div className="justify-self-start sm:justify-self-end">
+              <MetricDefinitions response={bundle.aggregate} />
+            </div>
+          </div>
           <AnalysisViewContent
             bundle={bundle}
             key={contentIdentity}
@@ -135,7 +140,6 @@ function AnalysisViewContent({
           onDrilldown={setDrilldown}
         />
       ) : null}
-      <MetricDefinitions response={bundle.aggregate} />
       <SeriesAnalysisDrilldownDialog
         baseQuery={baseQuery}
         selection={drilldown}

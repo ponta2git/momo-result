@@ -208,7 +208,11 @@ export function CameraCapture({
           onChange={(event) => setDeviceId(event.currentTarget.value)}
         />
       ) : null}
-      <div className="relative w-full max-w-[56rem] overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--momo-night-900)]">
+      <div
+        aria-label={`${slotLabel}の16:9カメラ画像枠`}
+        className="relative aspect-video w-full max-w-[56rem] overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--momo-night-900)]"
+        role="group"
+      >
         {active ? null : (
           <div className="pointer-events-none absolute inset-0 grid place-items-center px-6 text-center text-white/75">
             <div>
@@ -219,7 +223,7 @@ export function CameraCapture({
         )}
         <video
           ref={videoRef}
-          className="aspect-video max-h-[22rem] w-full object-contain"
+          className="size-full object-contain"
           muted
           playsInline
           aria-label={`${slotLabel}のカメラプレビュー`}

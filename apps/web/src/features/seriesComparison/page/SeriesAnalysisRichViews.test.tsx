@@ -185,6 +185,9 @@ describe("rich series analysis views", () => {
     const playOrderMatrix = screen.getByRole("table", { name: "番手別成績" });
     expect(within(playOrderMatrix).getAllByRole("columnheader")).toHaveLength(5);
     expect(within(playOrderMatrix).getAllByRole("cell")).toHaveLength(4);
+    const neutralPlayerLabel = playOrderMatrix.querySelector('[data-member-accent="neutral"]');
+    expect(neutralPlayerLabel).not.toBeNull();
+    expect(neutralPlayerLabel?.querySelector("[aria-hidden='true']")).toBeNull();
   });
 
   it("restores match-axis strips and the event-position matrix with result links", () => {
@@ -214,7 +217,20 @@ describe("rich series analysis views", () => {
     );
 
     expect(screen.getByRole("table", { name: "直近順位ストリップ" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", {
+        level: 2,
+        name: `直近${response.matchDigest.shownCount}戦と荒れ方`,
+      }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("カード表示")).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { level: 3, name: "直近20戦" })).toBeInTheDocument();
+    for (const rowHeader of within(
+      screen.getByRole("table", { name: "直近順位ストリップ" }),
+    ).getAllByRole("rowheader")) {
+      expect(rowHeader).toHaveClass("bg-[var(--color-surface)]");
+      expect(rowHeader).not.toHaveClass("bg-[var(--color-surface-subtle)]");
+    }
     const selectedRankLink = screen.getByRole("link", {
       name: /ぽんた、第12戦、4位、この試合。試合結果を見る/u,
     });
@@ -255,6 +271,7 @@ describe("rich series analysis views", () => {
   it("does not invent a recent-window size when the artifact has no recent ranks", () => {
     const response = makeSeriesAnalysisAggregate();
     response.recentRanks = [];
+    response.matchDigest.shownCount = 0;
     render(
       <MemoryRouter initialEntries={["/analytics/series?view=flow"]}>
         <FlowView
@@ -267,6 +284,9 @@ describe("rich series analysis views", () => {
     );
 
     expect(screen.getByRole("region", { name: "直近順位" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { level: 2, name: "直近の試合と荒れ方" }),
+    ).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "直近20戦" })).not.toBeInTheDocument();
     expect(screen.getByText("直近順位の対象試合はありません。")).toBeInTheDocument();
   });

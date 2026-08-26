@@ -58,7 +58,7 @@ export function OcrCapturePage() {
   const trayFull = selectedImageCount === slotDefinitions.length;
 
   return (
-    <PageFrame className="gap-4" width="workspace">
+    <PageFrame className="gap-4">
       <PageHeader
         actions={
           returnTo ? (

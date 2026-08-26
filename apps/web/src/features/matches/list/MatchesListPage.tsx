@@ -153,14 +153,7 @@ export function MatchesListPage() {
           aria-label="登録済みの試合"
           className="relative grid min-h-[24rem] gap-4"
         >
-          <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
-            <p className="text-sm font-semibold text-[var(--color-text-secondary)] tabular-nums">
-              {showMatchesLoading
-                ? "件数を確認中"
-                : showMatchesError
-                  ? "件数を取得できません"
-                  : `${(pagination?.totalItems ?? items.length).toLocaleString()}件`}
-            </p>
+          <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
             <div
               aria-label="試合一覧の操作"
               className="flex flex-wrap items-center justify-end gap-1"

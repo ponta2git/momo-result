@@ -93,6 +93,9 @@ describe("OcrCapturePage", () => {
     renderCaptureRoute();
 
     expect(await screen.findByRole("option", { name: "桃太郎電鉄2" })).toBeInTheDocument();
+    const pageFrame = screen.getByRole("heading", { name: "OCR取り込み" }).closest(".mx-auto");
+    expect(pageFrame).toHaveClass("max-w-[96rem]");
+    expect(pageFrame).not.toHaveClass("max-w-[120rem]");
     const startButton = screen.getByRole("button", { name: "読み取りを開始" });
     expect(startButton).toBeDisabled();
     expect(startButton).toHaveClass("bg-[var(--color-surface)]");

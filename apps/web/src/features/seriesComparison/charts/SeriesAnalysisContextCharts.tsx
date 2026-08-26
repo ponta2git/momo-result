@@ -46,7 +46,7 @@ export function PlayOrderMatrix({
           return (
             <tr key={entry.memberId}>
               <MatrixRowHeader>
-                <MemberSequenceLabel memberId={entry.memberId}>
+                <MemberSequenceLabel accent={false} memberId={entry.memberId}>
                   {entry.displayName}
                 </MemberSequenceLabel>
               </MatrixRowHeader>

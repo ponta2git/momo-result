@@ -69,20 +69,21 @@ export function ReviewView({
       role="tabpanel"
     >
       {response.commonPlaybookTopics.length > 0 ? (
-        <Disclosure
-          ariaLabel="卓全体で出やすい論点"
-          panelClassName="divide-y divide-[var(--color-border)] px-3"
-          presentation="inset"
-          summary={response.commonPlaybookTopics.map((topic) => topic.heading).join("・")}
-          triggerVariant="supporting"
-        >
-          {response.commonPlaybookTopics.map((topic) => (
-            <div className="py-3" key={topic.topicId}>
-              <p className="text-sm font-semibold">{topic.heading}</p>
-              <p className="mt-1 text-sm text-[var(--color-text-secondary)]">{topic.detail}</p>
-            </div>
-          ))}
-        </Disclosure>
+        <section aria-labelledby="common-playbook-heading" className="grid gap-3">
+          <h2 className="text-lg font-semibold" id="common-playbook-heading">
+            4人共通の行動仮説
+          </h2>
+          <div className="grid gap-4 sm:grid-cols-2">
+            {response.commonPlaybookTopics.map((topic) => (
+              <article key={topic.topicId}>
+                <h3 className="text-sm font-semibold">{topic.heading}</h3>
+                <p className="mt-1 text-sm leading-6 text-[var(--color-text-secondary)]">
+                  {topic.detail}
+                </p>
+              </article>
+            ))}
+          </div>
+        </section>
       ) : null}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <dl aria-label="行動仮説の対象" className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
@@ -93,9 +94,9 @@ export function ReviewView({
         </dl>
         <SeriesAnalysisReviewHelpDialog />
       </div>
-      <div className="grid items-stretch gap-x-6 gap-y-8 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid items-start gap-x-6 gap-y-8 md:grid-cols-2 xl:grid-cols-4">
         {playbookByPlayer.map((entry) => (
-          <section className="grid min-w-0 grid-rows-[auto_1fr_auto]" key={entry.player.memberId}>
+          <section className="min-w-0" key={entry.player.memberId}>
             <h3 className="text-base font-semibold">
               <MemberSequenceLabel memberId={entry.player.memberId}>
                 {entry.player.displayName}

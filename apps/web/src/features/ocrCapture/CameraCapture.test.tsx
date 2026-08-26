@@ -55,6 +55,14 @@ describe("CameraCapture", () => {
 
     const startButton = screen.getByRole("button", { name: "カメラ開始" });
     const captureButton = screen.getByRole("button", { name: "静止画を撮影" });
+    expect(screen.getByRole("group", { name: "総資産の16:9カメラ画像枠" })).toHaveClass(
+      "aspect-video",
+      "overflow-hidden",
+    );
+    expect(screen.getByLabelText("総資産のカメラプレビュー")).toHaveClass(
+      "size-full",
+      "object-contain",
+    );
     expect(startButton).toHaveClass("bg-[var(--color-action)]");
     expect(captureButton).toHaveClass("bg-[var(--color-surface)]");
     expect(captureButton).toBeDisabled();

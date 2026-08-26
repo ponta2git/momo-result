@@ -51,7 +51,6 @@ export function SeriesAnalysisDrilldownDialog({
 
   return (
     <Dialog
-      className="overflow-y-auto"
       description={query.data?.player.displayName ?? "比較に使った試合を確認します。"}
       open={selection !== null}
       popupClassName="max-w-[64rem]"

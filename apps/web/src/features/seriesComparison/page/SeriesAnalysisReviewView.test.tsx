@@ -6,7 +6,7 @@ import { ReviewView } from "@/features/seriesComparison/page/SeriesAnalysisRevie
 import { makeSeriesAnalysisReview } from "@/test/msw/seriesAnalysisFixtures";
 
 describe("ReviewView", () => {
-  it("keeps secondary hypotheses collapsed and moves shared explanations into dialogs", async () => {
+  it("shows common hypotheses directly, keeps secondary hypotheses local, and uses help dialogs", async () => {
     const user = userEvent.setup();
     const response = makeSeriesAnalysisReview();
     const firstEntry = response.playbookByPlayer[0];
@@ -57,10 +57,17 @@ describe("ReviewView", () => {
     expect(within(usage).getByText("次の4戦")).toBeInTheDocument();
     expect(within(usage).queryByText("使う場面")).not.toBeInTheDocument();
     expect(screen.queryByText("発動条件に当てはまるとき")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "卓全体で出やすい論点" })).toHaveTextContent(
-      "収益先行後の詰め方",
-    );
+    const commonPlaybook = screen.getByRole("region", { name: "4人共通の行動仮説" });
+    expect(within(commonPlaybook).getByText("収益先行後の詰め方")).toBeInTheDocument();
+    expect(
+      within(commonPlaybook).getByText(response.commonPlaybookTopics[0]!.detail),
+    ).toBeVisible();
+    expect(within(commonPlaybook).queryByRole("button")).not.toBeInTheDocument();
     expect(screen.queryByText("下位後は目的地を1回取って戻す。")).not.toBeInTheDocument();
+
+    const playerSection = screen.getByRole("heading", { name: "ぽんた" }).closest("section");
+    expect(playerSection?.parentElement).toHaveClass("items-start");
+    expect(playerSection).not.toHaveClass("grid-rows-[auto_1fr_auto]");
 
     await user.click(screen.getByRole("button", { name: "ぽんたのほかの仮説" }));
     expect(screen.getByText("下位後は目的地を1回取って戻す。")).toBeInTheDocument();

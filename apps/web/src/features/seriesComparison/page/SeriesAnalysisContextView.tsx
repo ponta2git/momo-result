@@ -44,7 +44,7 @@ export function ContextView({ focusedItemIds, response, onDrilldown }: AnalysisV
                 onDrilldown({ memberId: entry.memberId, metricId: "playOrder.rankHistory" })
               }
             >
-              <MemberSequenceLabel memberId={entry.memberId}>
+              <MemberSequenceLabel accent={false} memberId={entry.memberId}>
                 {entry.displayName}の番手別推移
               </MemberSequenceLabel>
             </Button>

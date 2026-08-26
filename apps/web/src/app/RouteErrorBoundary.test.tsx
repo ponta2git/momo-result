@@ -3,8 +3,8 @@ import userEvent from "@testing-library/user-event";
 import { lazy, Suspense } from "react";
 import { describe, expect, it, vi } from "vitest";
 
+import { RouteErrorBoundary } from "@/app/RouteErrorBoundary";
 import { loadLazyModule, reloadCurrentPage } from "@/shared/lib/moduleLoadError";
-import { RouteErrorBoundary } from "@/shared/ui/feedback/RouteErrorBoundary";
 
 vi.mock("@/shared/lib/moduleLoadError", async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>;

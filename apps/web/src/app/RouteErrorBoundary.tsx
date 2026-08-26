@@ -21,7 +21,7 @@ type RouteErrorBoundaryState = {
 };
 
 /**
- * ルート単位の ErrorBoundary。通常の query / render エラーは境界を解除して再試行し、
+ * アプリのルート単位の ErrorBoundary。通常の query / render エラーは境界を解除して再試行し、
  * 同じ React.lazy type では回復できない module 読み込み失敗だけは画面全体を再読み込みする。
  * `resetKey`（例: pathname）が変わった場合も自動リセットする。
  */

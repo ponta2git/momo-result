@@ -4,9 +4,9 @@ import type { FocusEvent, MouseEvent, PointerEvent, ReactNode } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 
 import { AppGlobalNav } from "@/app/AppGlobalNav";
+import { RouteErrorBoundary } from "@/app/RouteErrorBoundary";
 import { preloadRouteForPath } from "@/app/routeModules";
 import { RouteSuspenseFallback } from "@/app/RouteSuspenseFallback";
-import { RouteErrorBoundary } from "@/shared/ui/feedback/RouteErrorBoundary";
 
 const ToastHost = lazy(async () => {
   const module = await import("@/shared/ui/feedback/ToastHost");

@@ -25,16 +25,11 @@ export function HeldEventPlayerRecap({ recaps }: { recaps: PlayerRecap[] }) {
             aria-label={`${recap.displayName}の開催戦績`}
             className="min-w-0"
           >
-            <div className="flex items-baseline justify-between gap-3">
-              <h3 className="min-w-0 font-semibold">
-                <MemberSequenceLabel memberId={recap.memberId}>
-                  <span className="truncate">{recap.displayName}</span>
-                </MemberSequenceLabel>
-              </h3>
-              <span className="text-xs text-[var(--color-text-secondary)] tabular-nums">
-                {recap.matchCount}戦
-              </span>
-            </div>
+            <h3 className="min-w-0 font-semibold">
+              <MemberSequenceLabel memberId={recap.memberId}>
+                <span className="truncate">{recap.displayName}</span>
+              </MemberSequenceLabel>
+            </h3>
             <dl className="mt-3 grid grid-cols-2 gap-3">
               <div>
                 <dt className="momo-label text-[var(--color-text-secondary)]">勝数</dt>

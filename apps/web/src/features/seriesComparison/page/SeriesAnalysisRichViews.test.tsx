@@ -200,6 +200,20 @@ describe("rich series analysis views", () => {
 
   it("restores match-axis strips and the event-position matrix with result links", () => {
     const response = makeSeriesAnalysisAggregate();
+    const latestDigestMatch = response.matchDigest.recent[0];
+    if (!latestDigestMatch) throw new Error("match digest fixture is required");
+    response.matchDigest.recent = [
+      {
+        ...latestDigestMatch,
+        heldEventId: "event-11",
+        itemId: "match:match-11",
+        matchId: "match-11",
+        matchIndex: 11,
+        playedAt: "2026-08-07T12:00:00.000Z",
+      },
+      latestDigestMatch,
+    ];
+    response.matchDigest.shownCount = 2;
     const recent = response.recentRanks[0];
     if (!recent) throw new Error("recent rank fixture is required");
     recent.rows = Array.from({ length: 20 }, (_, index) => {
@@ -225,12 +239,18 @@ describe("rich series analysis views", () => {
     );
 
     expect(screen.getByRole("table", { name: "直近順位ストリップ" })).toBeInTheDocument();
+    const matchDigestHeading = screen.getByRole("heading", {
+      level: 2,
+      name: `直近${response.matchDigest.shownCount}戦と荒れ方`,
+    });
+    expect(matchDigestHeading).toBeInTheDocument();
+    const matchDigestSection = matchDigestHeading.closest("section");
+    expect(matchDigestSection).not.toBeNull();
     expect(
-      screen.getByRole("heading", {
-        level: 2,
-        name: `直近${response.matchDigest.shownCount}戦と荒れ方`,
-      }),
-    ).toBeInTheDocument();
+      within(matchDigestSection!)
+        .getAllByRole("link", { name: /試合結果を見る/u })
+        .map((link) => link.textContent?.trim()),
+    ).toEqual(["第12戦", "第11戦"]);
     expect(screen.queryByText("カード表示")).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { level: 3, name: "直近20戦" })).toBeInTheDocument();
     for (const rowHeader of within(
@@ -252,7 +272,10 @@ describe("rich series analysis views", () => {
       screen.getAllByRole("link", {
         name: /ぽんた、対戦順未設定、\d位.*試合結果を見る/u,
       }),
-    ).toHaveLength(19);
+    ).toHaveLength(18);
+    expect(
+      screen.getByRole("link", { name: /ぽんた、第11戦、3位.*試合結果を見る/u }),
+    ).toBeInTheDocument();
     expect(screen.getByText("行: 前戦")).toBeInTheDocument();
     expect(screen.getByText("列: 次戦")).toBeInTheDocument();
     const momentumMatrix = screen.getByRole("table", { name: "ぽんたの順位の切り替わり" });
@@ -272,7 +295,7 @@ describe("rich series analysis views", () => {
       name: "開催内第1試合から第4試合の傾向",
     });
     expect(within(matchNoMatrix).getAllByRole("row")).toHaveLength(5);
-    expect(screen.getByText("1位–4位差")).toBeInTheDocument();
+    expect(screen.getAllByText("1位–4位差")).toHaveLength(2);
     expect(screen.queryByText(/前の試合の順位から次の順位へ移った件数/u)).not.toBeInTheDocument();
   });
 

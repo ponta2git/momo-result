@@ -160,6 +160,14 @@ export function MatchesListPage() {
               className="flex flex-wrap items-center justify-end gap-1"
               role="group"
             >
+              <LinkButton
+                icon={<Download className="size-4" />}
+                size="sm"
+                to={navigation.exportHref}
+                variant="quiet"
+              >
+                CSV/TSVをまとめて出力
+              </LinkButton>
               <IconButton
                 aria-label="最新情報に更新"
                 disabled={listScopeChanging && !isManualRefreshing}
@@ -170,14 +178,6 @@ export function MatchesListPage() {
                 variant="quiet"
                 onClick={() => void refresh()}
               />
-              <LinkButton
-                icon={<Download className="size-4" />}
-                size="sm"
-                to={navigation.exportHref}
-                variant="quiet"
-              >
-                CSV/TSVをまとめて出力
-              </LinkButton>
             </div>
           </div>
 

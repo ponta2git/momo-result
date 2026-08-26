@@ -70,7 +70,12 @@ describe("MatchesListPage", () => {
     const listRegion = screen.getByRole("region", { name: "登録済みの試合" });
     expect(within(listRegion).getByText("1-3件 / 全3件")).toBeInTheDocument();
     expect(within(listRegion).queryByText("3件")).not.toBeInTheDocument();
-    expect(within(listRegion).getByRole("group", { name: "試合一覧の操作" })).toBeInTheDocument();
+    const listActions = within(listRegion).getByRole("group", { name: "試合一覧の操作" });
+    const bulkExport = within(listActions).getByRole("link", { name: "CSV/TSVをまとめて出力" });
+    const refresh = within(listActions).getByRole("button", { name: "最新情報に更新" });
+    expect(bulkExport.compareDocumentPosition(refresh) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
     expect(screen.getByRole("link", { name: "OCR取り込み" })).toHaveClass(
       "bg-[var(--color-surface)]",
     );

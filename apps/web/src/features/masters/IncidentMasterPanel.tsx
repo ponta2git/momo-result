@@ -20,8 +20,8 @@ export function IncidentMasterPanel({
   return (
     <section className="min-w-0">
       <header>
-        <h2 className="text-lg font-semibold text-[var(--color-text-primary)]">事件簿</h2>
-        <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
+        <h2 className="sr-only">事件簿</h2>
+        <p className="text-sm text-[var(--color-text-secondary)]">
           現在は6項目固定です。追加・編集はできません。
         </p>
       </header>

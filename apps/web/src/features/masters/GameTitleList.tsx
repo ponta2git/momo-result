@@ -161,7 +161,7 @@ function GameTitleCreateDialog({
       }
       onOpenChange={setOpen}
     >
-      <form action={create.action} className="grid gap-4 p-2" key={create.formKey}>
+      <form action={create.action} className="grid gap-4 py-2" key={create.formKey}>
         <TextField
           error={create.error}
           label="作品名"

@@ -42,7 +42,7 @@ export function MatchDigestStrip({
       ) : (
         <div className="[scrollbar-width:thin] [scrollbar-color:var(--color-border)_transparent] overflow-x-auto pb-1">
           <div className="flex min-w-max gap-3">
-            {response.matchDigest.recent.map((match) => {
+            {response.matchDigest.recent.toReversed().map((match) => {
               const focused = focusedItemIds.includes(match.itemId);
               return (
                 <article

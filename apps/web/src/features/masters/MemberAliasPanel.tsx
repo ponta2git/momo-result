@@ -12,8 +12,6 @@ import { AlertDialog, Dialog } from "@/shared/ui/feedback/Dialog";
 import { SelectField } from "@/shared/ui/forms/SelectField";
 import { TextField } from "@/shared/ui/forms/TextField";
 
-const labelClass = "text-xs font-semibold text-[var(--color-text-secondary)]";
-
 type MemberAliasPanelProps = {
   aliases: MemberAliasResponse[];
   createAction: (formData: FormData) => void | Promise<void>;
@@ -45,8 +43,7 @@ export function MemberAliasPanel({
   return (
     <section className="min-w-0">
       <header>
-        <p className={labelClass}>読み取り用の名前</p>
-        <h2 className="mt-1 text-lg font-semibold text-[var(--color-text-primary)]">
+        <h2 className="text-lg font-semibold text-[var(--color-text-primary)]">
           プレーヤー名の別名
         </h2>
         <p className="mt-1 text-sm text-[var(--color-text-secondary)]">

@@ -92,6 +92,10 @@ describe("MastersPage", () => {
     expect(screen.getByRole("heading", { name: "マップ" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "シーズン" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "事件簿" })).toBeInTheDocument();
+    expect(screen.queryByText("現在の作品")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("作品、読み取り方式、マップ、シーズン、名前の読み替えを整えます。"),
+    ).not.toBeInTheDocument();
   });
 
   it("starts independent master directory requests in parallel", async () => {
@@ -180,7 +184,7 @@ describe("MastersPage", () => {
     await waitFor(() =>
       expect(screen.queryByText("マップを読み込めません")).not.toBeInTheDocument(),
     );
-    expect(screen.getAllByText("登録はまだありません").length).toBeGreaterThan(0);
+    expect(screen.getByText("マップはまだありません")).toBeInTheDocument();
     expect(attempts).toBeGreaterThanOrEqual(2);
   });
 
@@ -206,7 +210,7 @@ describe("MastersPage", () => {
     const mapPanel = (await screen.findByRole("heading", { name: "マップ" })).closest("section");
     expect(mapPanel).not.toBeNull();
     expect(await within(mapPanel!).findByText("最新のマップを取得できません")).toBeInTheDocument();
-    expect(within(mapPanel!).getByText("登録はまだありません")).toBeInTheDocument();
+    expect(within(mapPanel!).getByText("マップはまだありません")).toBeInTheDocument();
     expect(within(mapPanel!).queryByText("マップを読み込めません")).not.toBeInTheDocument();
     const retryButton = within(mapPanel!).getByRole("button", { name: "マップを再読み込み" });
     expect(retryButton).toHaveClass("bg-[var(--color-surface)]");
@@ -218,7 +222,7 @@ describe("MastersPage", () => {
     await waitFor(() =>
       expect(within(mapPanel!).queryByText("最新のマップを取得できません")).not.toBeInTheDocument(),
     );
-    expect(within(mapPanel!).getByText("登録はまだありません")).toBeInTheDocument();
+    expect(within(mapPanel!).getByText("マップはまだありません")).toBeInTheDocument();
     expect(attempts).toBeGreaterThanOrEqual(2);
   });
 
@@ -487,7 +491,8 @@ describe("MastersPage", () => {
     const editDialog = screen.getByRole("dialog", { name: "作品を編集" });
     const nameInput = screen.getByDisplayValue("桃太郎電鉄2");
     expect(editDialog).toContainElement(nameInput);
-    expect(nameInput.closest("form")).toHaveClass("p-2");
+    expect(nameInput.closest("form")).toHaveClass("py-2");
+    expect(nameInput.closest("form")?.parentElement).toHaveClass("px-2");
     await user.clear(nameInput);
     await user.type(nameInput, "桃太郎電鉄2 DX");
     await user.click(screen.getByRole("button", { name: "保存" }));

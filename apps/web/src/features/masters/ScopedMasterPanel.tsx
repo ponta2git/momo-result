@@ -20,7 +20,6 @@ type ScopedMasterActions = {
 };
 
 type ScopedMasterLabels = {
-  emptyDescription: string;
   itemLabel: string;
   title: string;
 };
@@ -102,9 +101,8 @@ export function ScopedMasterPanel({
           {list.items.length === 0 ? (
             <EmptyState
               className="px-0"
-              description={labels.emptyDescription}
               placement="embedded"
-              title="登録はまだありません"
+              title={`${labels.itemLabel}はまだありません`}
             />
           ) : (
             <ul className="divide-y divide-[var(--color-border)]">

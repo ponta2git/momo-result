@@ -118,7 +118,9 @@ describe("HeldEventDetailPage", () => {
       "bg-[var(--color-surface)]",
     );
     expect(screen.getByRole("link", { name: "手入力" })).toHaveClass("bg-[var(--color-surface)]");
-    expect(screen.getByRole("region", { name: "ぽんたの開催戦績" })).toHaveTextContent("0勝");
+    const pontaRecap = screen.getByRole("region", { name: "ぽんたの開催戦績" });
+    expect(pontaRecap).toHaveTextContent("0勝");
+    expect(pontaRecap).not.toHaveTextContent("1戦");
     const results = screen.getByRole("list", { name: "第1試合の順位と総資産" });
     expect(within(results).getByText("1億2345万円")).toBeInTheDocument();
     expect(

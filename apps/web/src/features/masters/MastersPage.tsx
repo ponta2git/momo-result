@@ -123,11 +123,7 @@ export function MastersPage() {
 
   return (
     <PageFrame>
-      <PageHeader
-        eyebrow="管理"
-        title="設定管理"
-        description="作品、読み取り方式、マップ、シーズン、名前の読み替えを整えます。"
-      />
+      <PageHeader eyebrow="管理" title="設定管理" />
 
       {auth.error ? (
         <Notice tone="danger" title={auth.error.title}>
@@ -183,7 +179,6 @@ export function MastersPage() {
             <MasterRelationBoard
               gameTitle={gameTitleRelation}
               map={mapRelation}
-              selectedGameTitleName={viewModel.selectedGameTitle?.name}
               scopedDisabledReason={viewModel.scopedDisabledReason}
               season={seasonRelation}
             />

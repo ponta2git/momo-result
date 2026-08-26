@@ -67,6 +67,11 @@ describe("AdminAccountsPage", () => {
     await user.click(createTrigger);
 
     const dialog = screen.getByRole("dialog", { name: "アカウントを追加" });
+    expect(
+      within(dialog)
+        .getByRole("textbox", { name: /DiscordユーザーID/u })
+        .closest("form")?.parentElement,
+    ).toHaveClass("px-2");
 
     const playerSelect = within(dialog).getByRole("combobox", { name: "紐づくプレーヤー" });
     expect(

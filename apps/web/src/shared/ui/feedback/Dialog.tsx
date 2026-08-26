@@ -81,7 +81,7 @@ function DialogContentFrame({
           />
         ) : null}
       </div>
-      <div className={cn("min-h-0 min-w-0 flex-1 overflow-y-auto", className)}>{children}</div>
+      <div className={cn("min-h-0 min-w-0 flex-1 overflow-y-auto px-2", className)}>{children}</div>
     </div>
   );
 }

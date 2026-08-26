@@ -188,7 +188,7 @@ describe("ui foundation", () => {
     const dialog = screen.getByRole("dialog", { name: "試合を確定" });
     expect(dialog).toHaveClass("overflow-hidden");
     expect(dialog.firstElementChild).toHaveClass("overflow-hidden");
-    expect(screen.getByText("本文").parentElement).toHaveClass("overflow-y-auto");
+    expect(screen.getByText("本文").parentElement).toHaveClass("overflow-y-auto", "px-2");
 
     await user.click(screen.getByRole("button", { name: "ダイアログを閉じる" }));
     expect(screen.queryByRole("dialog", { name: "試合を確定" })).not.toBeInTheDocument();

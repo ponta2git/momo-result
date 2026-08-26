@@ -90,6 +90,14 @@ describe("MatchResultLedger", () => {
       expect.stringContaining("あかねまみ"),
       expect.stringContaining("おーたか"),
     ]);
+    expect(
+      screen
+        .getAllByRole("listitem")
+        .map((item) =>
+          item.querySelector("[data-member-sequence]")?.getAttribute("data-member-sequence"),
+        ),
+    ).toEqual(["1", "2", "3", "4"]);
+    expect(screen.getAllByText(/^[1-4]位$/u)).toHaveLength(4);
   });
 });
 

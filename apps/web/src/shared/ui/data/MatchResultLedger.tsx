@@ -2,8 +2,8 @@ import type { MatchPerformanceContextRow } from "@/shared/domain/matchPerformanc
 import { orderFixedMembers } from "@/shared/domain/members";
 import { formatManYen } from "@/shared/lib/formatters";
 import { cn } from "@/shared/ui/cn";
+import { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
 import { RankBadge } from "@/shared/ui/rank/RankBadge";
-import { colorMix, rankColor } from "@/shared/ui/rank/rankPresentation";
 
 type MatchResultLedgerRow = MatchPerformanceContextRow & {
   displayName: string;
@@ -36,19 +36,24 @@ export function MatchResultLedger({
         <li
           key={row.memberId}
           className="grid min-w-0 gap-3 border-b border-[var(--color-border)] p-3 last:border-b-0 sm:grid-cols-[4rem_minmax(9rem,16rem)_minmax(10rem,12rem)] sm:items-center sm:justify-center"
-          style={{ backgroundColor: colorMix(rankColor(row.rank), 0.05) }}
         >
           <div className="flex items-center gap-3 sm:block">
             <RankBadge rank={row.rank} size="md" />
-            <span className="font-semibold text-[var(--color-text-primary)] sm:hidden">
+            <MemberSequenceLabel
+              className="font-semibold text-[var(--color-text-primary)] sm:hidden"
+              memberId={row.memberId}
+            >
               {row.displayName}
-            </span>
+            </MemberSequenceLabel>
           </div>
 
           <div className="min-w-0">
-            <p className="hidden truncate font-semibold text-[var(--color-text-primary)] sm:block">
+            <MemberSequenceLabel
+              className="hidden font-semibold text-[var(--color-text-primary)] sm:inline-flex"
+              memberId={row.memberId}
+            >
               {row.displayName}
-            </p>
+            </MemberSequenceLabel>
             <div className="mt-1 flex min-w-0 flex-wrap gap-x-3 gap-y-1 text-xs text-[var(--color-text-secondary)]">
               <span>
                 物件収益{" "}

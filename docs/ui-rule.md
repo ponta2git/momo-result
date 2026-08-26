@@ -59,6 +59,8 @@
 - 通常文を任意の位置で強制改行しない。ID、URL、外部 error など切れ目のない長い値だけへ局所的な wrap または scroll を指定し、全画面へ `overflow-wrap: anywhere` を継承させない。見出しの balance や本文の pretty wrap も、data label、定義値、control label へ一律適用せず、役割ごとに指定する。
 - 日時、金額、試合番号、状態名は共通 formatter / ViewModel を使う。件数と比較値には対象、単位、分母または基準を添え、整列する数値には tabular numerals を使う。
 - table は row / column header と identity を保つ。グラフは答える問いがある場合に使い、数値表現を併記し、比較軸、単位、スケールを揃える。モバイルへ再配置しても、プレーヤーと試合の対応、比較順、詳細への到達を失わせない。
+- 通常の data table header は、親の surface と同じ背景、本文より弱い小さな文字、列境界を示す下罫線で構成する。選択、状態、注意を表さない header へ淡色背景を付けず、共通 table primitive または共通 header pattern を使う。sortable header の選択表現は操作部分だけが所有し、行全体の背景へ広げない。
+- 時系列の連続 timeline は順序付きリストと1列の marker 軸で構成し、connector は隣接する marker の中心間だけを結ぶ。軸を最初の marker より上、最後の marker より下へ伸ばさず、record の枠線や別の縦罫線を平行に重ねない。各 marker は順序を文字でも示し、record heading と対応させる。
 - disclosure、tab、dialog、navigation を見た目だけで取り替えない。panel は trigger との関係を保ち、周囲の位置・幅・focus を不必要に変えない。可視見出しを省略する場合も `section`、`aria-label` / `aria-labelledby`、field label、accessible control name で構造を残す。
 - 同格の disclosure を列で並べる場合、一つの展開で同じ行の別 trigger や操作が展開内容の下端へ追従しない。各列は自身の内容順を保ち、展開による高さ変化は当該列と後続の共通内容だけへ反映する。
 - 主要操作は常時発見可能にし、二次操作だけを段階的に開示する。

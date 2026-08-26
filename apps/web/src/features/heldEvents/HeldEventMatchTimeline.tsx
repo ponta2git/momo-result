@@ -51,15 +51,19 @@ export function HeldEventMatchTimeline({
           title="確定済みの試合はまだありません"
         />
       ) : (
-        <ol
-          aria-label="試合の流れ"
-          className="relative grid before:absolute before:top-8 before:bottom-8 before:left-4 before:w-px before:bg-[var(--color-border-strong)]"
-        >
-          {matches.map((match) => (
+        <ol aria-label="試合の流れ" className="grid">
+          {matches.map((match, index) => (
             <li
               key={match.matchId}
               className="relative grid grid-cols-[2rem_minmax(0,1fr)] gap-4 py-4"
             >
+              {index < matches.length - 1 ? (
+                <span
+                  aria-hidden="true"
+                  className="absolute top-8 -bottom-8 left-4 w-px bg-[var(--color-border-strong)]"
+                  data-timeline-connector
+                />
+              ) : null}
               <div aria-hidden="true" className="relative z-[var(--z-base)] flex justify-center">
                 <span className="flex size-8 items-center justify-center rounded-full border border-[var(--color-border-strong)] bg-[var(--color-surface)] text-xs font-semibold tabular-nums">
                   {match.matchNoInEvent}

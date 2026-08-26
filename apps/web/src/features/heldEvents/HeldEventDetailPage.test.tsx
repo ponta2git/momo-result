@@ -143,11 +143,9 @@ describe("HeldEventDetailPage", () => {
     const timelineHeading = screen.getByRole("heading", { name: "試合の流れ" });
     expect(timelineHeading).toHaveClass("text-base");
     expect(timelineHeading).not.toHaveClass("text-lg");
-    expect(screen.getByRole("list", { name: "試合の流れ" })).toHaveClass(
-      "before:top-8",
-      "before:bottom-8",
-      "before:bg-[var(--color-border-strong)]",
-    );
+    const timeline = screen.getByRole("list", { name: "試合の流れ" });
+    expect(timeline).not.toHaveClass("before:bottom-8");
+    expect(timeline.querySelector("[data-timeline-connector]")).toBeNull();
     expect(screen.getByRole("link", { name: "第1試合の結果を見る" })).toHaveAttribute(
       "href",
       "/matches/match-1?returnTo=%2Fheld-events%2Fheld-1",

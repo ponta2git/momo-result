@@ -1,54 +1,29 @@
-import {
-  Activity,
-  BarChart3,
-  CalendarDays,
-  Database,
-  Download,
-  LogIn,
-  LogOut,
-  ScanLine,
-  ShieldCheck,
-  Trophy,
-} from "lucide-react";
 import { useEffect, useRef } from "react";
 import type { ReactNode } from "react";
 import { Link, NavLink, useLocation } from "react-router-dom";
 
-import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
 
-type NavItem = {
+export type GlobalNavItem = {
   icon: ReactNode;
   label: string;
   to: string;
 };
 
-const defaultItems: NavItem[] = [
-  { icon: <Trophy className="size-4" />, label: "試合", to: "/matches" },
-  { icon: <BarChart3 className="size-4" />, label: "戦績比較", to: "/analytics/series" },
-  { icon: <ScanLine className="size-4" />, label: "OCR", to: "/ocr/new" },
-  { icon: <CalendarDays className="size-4" />, label: "開催", to: "/held-events" },
-  { icon: <Download className="size-4" />, label: "出力", to: "/exports" },
-];
-
-const adminItems: NavItem[] = [
-  { icon: <Activity className="size-4" />, label: "分析", to: "/admin/analysis" },
-  { icon: <Database className="size-4" />, label: "設定", to: "/admin/masters" },
-  { icon: <ShieldCheck className="size-4" />, label: "アカウント", to: "/admin/accounts" },
-];
+const emptyNavItems: readonly GlobalNavItem[] = [];
 
 type GlobalNavProps = {
-  authDisplayName?: string | undefined;
+  brandLabel?: ReactNode;
+  brandTo: string;
   className?: string;
-  isAuthenticated?: boolean;
-  isAdmin?: boolean;
-  isLogoutPending?: boolean;
-  logoutFailed?: boolean;
-  items?: NavItem[];
-  onLogout?: (() => void) | undefined;
+  endContent?: ReactNode;
+  environmentLabel?: string | undefined;
+  items: readonly GlobalNavItem[];
+  managementItems?: readonly GlobalNavItem[];
+  managementLabel?: string;
 };
 
-function NavItemLink({ item }: { item: NavItem }) {
+function NavItemLink({ item }: { item: GlobalNavItem }) {
   const anchorRef = useRef<HTMLAnchorElement>(null);
   const location = useLocation();
 
@@ -83,21 +58,15 @@ function NavItemLink({ item }: { item: NavItem }) {
 }
 
 export function GlobalNav({
-  authDisplayName,
+  brandLabel = "momo-result",
+  brandTo,
   className,
-  isAuthenticated = true,
-  isAdmin = false,
-  isLogoutPending = false,
-  logoutFailed = false,
-  items = defaultItems,
-  onLogout,
+  endContent,
+  environmentLabel,
+  items,
+  managementItems = emptyNavItems,
+  managementLabel = "管理",
 }: GlobalNavProps) {
-  const primaryItems = isAuthenticated
-    ? items
-    : [{ icon: <LogIn className="size-4" />, label: "ログイン", to: "/login" }];
-  const managementItems = isAuthenticated && isAdmin ? adminItems : [];
-  const canLogout = import.meta.env.DEV && Boolean(onLogout);
-
   return (
     <nav
       aria-label="グローバルナビゲーション"
@@ -111,65 +80,36 @@ export function GlobalNav({
           <div className="flex min-w-0 items-center gap-2 lg:col-start-1 lg:row-start-1">
             <Link
               className="momo-pressable inline-flex min-h-11 items-center rounded-[var(--radius-xs)] px-1 py-1 text-sm font-semibold text-[var(--color-text-primary)] hover:text-[var(--color-action)] lg:min-h-9"
-              to={isAuthenticated ? "/matches" : "/login"}
+              to={brandTo}
             >
-              momo-result
+              {brandLabel}
             </Link>
-            {import.meta.env.DEV ? (
+            {environmentLabel ? (
               <span className="rounded-[var(--radius-xs)] border border-[var(--color-border)] px-2 py-0.5 text-[11px] font-medium text-[var(--color-text-secondary)]">
-                DEV
+                {environmentLabel}
               </span>
             ) : null}
           </div>
-          {isAuthenticated ? (
-            <div className="ml-auto grid max-w-full min-w-0 justify-items-end gap-1 lg:col-start-3 lg:row-start-1">
-              <div className="flex max-w-full min-w-0 items-center justify-end gap-2">
-                <p className="hidden max-w-28 truncate text-xs text-[var(--color-text-secondary)] min-[24rem]:block">
-                  {authDisplayName ?? "ログイン中"}
-                </p>
-                {canLogout ? (
-                  <Button
-                    aria-describedby={logoutFailed ? "global-nav-logout-error" : undefined}
-                    aria-label={logoutFailed ? "ログアウトを再試行" : undefined}
-                    className="shrink-0"
-                    icon={<LogOut className="size-4" />}
-                    onClick={onLogout}
-                    pending={isLogoutPending}
-                    pendingLabel="ログアウト中"
-                    size="sm"
-                    variant={logoutFailed ? "primary" : "secondary"}
-                  >
-                    {logoutFailed ? "再試行" : "ログアウト"}
-                  </Button>
-                ) : null}
-              </div>
-              {logoutFailed && canLogout ? (
-                <p
-                  className="max-w-72 text-right text-xs leading-5 break-words text-[var(--color-danger)]"
-                  id="global-nav-logout-error"
-                  role="alert"
-                >
-                  <span className="font-semibold">ログアウトできませんでした。</span>
-                  ログイン状態と表示中の内容は保持しています。通信状態を確認して再試行してください。
-                </p>
-              ) : null}
-            </div>
+          {endContent ? (
+            <div className="ml-auto min-w-0 lg:col-start-3 lg:row-start-1">{endContent}</div>
           ) : null}
         </div>
         <div
           className="-mx-3 flex min-w-0 [scrollbar-width:none] items-center gap-2 overflow-x-auto px-3 pb-1 lg:col-start-2 lg:row-start-1 lg:mx-0 lg:flex-wrap lg:justify-center lg:overflow-visible lg:px-0 lg:pb-0 [&::-webkit-scrollbar]:hidden"
           data-nav-scroll
         >
-          {primaryItems.map((item) => (
+          {items.map((item) => (
             <NavItemLink key={item.to} item={item} />
           ))}
           {managementItems.length > 0 ? (
             <div
-              aria-label="管理"
+              aria-label={managementLabel}
               className="ml-1 flex min-w-0 shrink-0 items-center gap-2 border-l border-[var(--color-border)] pl-2"
               role="group"
             >
-              <span className="momo-label shrink-0 text-[var(--color-text-secondary)]">管理</span>
+              <span className="momo-label shrink-0 text-[var(--color-text-secondary)]">
+                {managementLabel}
+              </span>
               {managementItems.map((item) => (
                 <NavItemLink key={item.to} item={item} />
               ))}

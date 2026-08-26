@@ -8,21 +8,12 @@ import { describe, expect, it, vi } from "vitest";
 import { AppShell } from "@/app/AppShell";
 import { createTestQueryClient } from "@/test/queryClient";
 
-vi.mock("@/shared/auth/useAuth", () => ({
-  useAuth: () => ({
-    auth: { displayName: "テストユーザー", isAdmin: false },
-    isAuthenticated: true,
-    isLogoutPending: false,
-    logout: () => undefined,
-  }),
+vi.mock("@/app/AppGlobalNav", () => ({
+  AppGlobalNav: () => <nav aria-label="グローバルナビゲーション" />,
 }));
 
 vi.mock("@/shared/ui/feedback/ToastHost", () => ({
   ToastHost: () => null,
-}));
-
-vi.mock("@/shared/ui/layout/GlobalNav", () => ({
-  GlobalNav: () => <nav aria-label="グローバルナビゲーション" />,
 }));
 
 function StatefulRoute() {

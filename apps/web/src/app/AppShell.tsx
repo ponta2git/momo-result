@@ -3,11 +3,10 @@ import { lazy, Suspense, useCallback, useLayoutEffect, useState } from "react";
 import type { FocusEvent, MouseEvent, PointerEvent, ReactNode } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 
+import { AppGlobalNav } from "@/app/AppGlobalNav";
 import { preloadRouteForPath } from "@/app/routeModules";
 import { RouteSuspenseFallback } from "@/app/RouteSuspenseFallback";
-import { useAuth } from "@/shared/auth/useAuth";
 import { RouteErrorBoundary } from "@/shared/ui/feedback/RouteErrorBoundary";
-import { GlobalNav } from "@/shared/ui/layout/GlobalNav";
 
 const ToastHost = lazy(async () => {
   const module = await import("@/shared/ui/feedback/ToastHost");
@@ -62,7 +61,6 @@ function RouteQueryResetBridge({
 }
 
 export function AppShell() {
-  const auth = useAuth();
   const location = useLocation();
   const routeResetKey = location.pathname;
 
@@ -118,14 +116,7 @@ export function AppShell() {
         onFocusCapture={handlePreloadIntent}
         onPointerOverCapture={handlePreloadIntent}
       >
-        <GlobalNav
-          authDisplayName={auth.auth?.displayName}
-          isAuthenticated={auth.isAuthenticated}
-          isAdmin={auth.auth?.isAdmin ?? false}
-          isLogoutPending={auth.isLogoutPending}
-          logoutFailed={Boolean(auth.logoutError)}
-          onLogout={auth.logout}
-        />
+        <AppGlobalNav />
       </div>
       <main
         className="mx-auto flex min-h-[calc(100dvh-4rem)] w-full flex-col px-3 py-4 sm:px-4 sm:py-6"

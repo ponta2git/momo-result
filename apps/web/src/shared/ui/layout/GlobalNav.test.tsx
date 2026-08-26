@@ -1,90 +1,62 @@
 import { render, screen, within } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
+import { BarChart3, Database, Trophy } from "lucide-react";
 import { MemoryRouter } from "react-router-dom";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { GlobalNav } from "@/shared/ui/layout/GlobalNav";
 
+const items = [
+  { icon: <Trophy className="size-4" />, label: "試合", to: "/matches" },
+  { icon: <BarChart3 className="size-4" />, label: "戦績比較", to: "/analytics/series" },
+] as const;
+
+const managementItems = [
+  { icon: <Database className="size-4" />, label: "設定", to: "/admin/masters" },
+] as const;
+
 describe("GlobalNav", () => {
-  it("keeps short labels visible and every navigation target at least 44px square", () => {
+  it("renders caller-owned navigation content with mobile-safe targets", () => {
     render(
       <MemoryRouter initialEntries={["/matches"]}>
-        <GlobalNav authDisplayName="ぽんた" isAdmin />
+        <GlobalNav
+          brandTo="/matches"
+          endContent={<p>テストユーザー</p>}
+          environmentLabel="TEST"
+          items={items}
+          managementItems={managementItems}
+        />
       </MemoryRouter>,
     );
 
     expect(screen.getByRole("navigation", { name: "グローバルナビゲーション" })).toBeVisible();
-    for (const name of ["試合", "戦績比較", "OCR", "開催", "出力", "分析", "設定", "アカウント"]) {
+    expect(screen.getByRole("link", { name: "momo-result" })).toHaveAttribute("href", "/matches");
+    expect(screen.getByText("TEST")).toBeVisible();
+    expect(screen.getByText("テストユーザー")).toBeVisible();
+    for (const name of ["試合", "戦績比較", "設定"]) {
       const link = screen.getByRole("link", { name });
       expect(link).toHaveClass("min-h-11", "min-w-11");
       expect(within(link).getByText(name)).not.toHaveClass("sr-only");
+      expect(within(link).queryByRole("img")).not.toBeInTheDocument();
     }
   });
 
-  it("keeps the management group and its active destination discoverable", () => {
+  it("keeps the caller-named management group and active destination discoverable", () => {
     render(
       <MemoryRouter initialEntries={["/admin/masters"]}>
-        <GlobalNav authDisplayName="ぽんた" isAdmin />
+        <GlobalNav
+          brandTo="/matches"
+          items={items}
+          managementItems={managementItems}
+          managementLabel="管理機能"
+        />
       </MemoryRouter>,
     );
 
-    const management = screen.getByRole("group", { name: "管理" });
-    expect(within(management).getByText("管理")).toBeVisible();
+    const management = screen.getByRole("group", { name: "管理機能" });
+    expect(within(management).getByText("管理機能")).toBeVisible();
     expect(within(management).getByRole("link", { name: "設定" })).toHaveAttribute(
       "aria-current",
       "page",
     );
-  });
-
-  it("omits account-lock copy when no logout action is available", () => {
-    render(
-      <MemoryRouter initialEntries={["/matches"]}>
-        <GlobalNav authDisplayName="ぽんた" logoutFailed />
-      </MemoryRouter>,
-    );
-
-    expect(screen.queryByText("アカウント固定")).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "ログアウト" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
-  });
-
-  it("keeps logout out of the commercial navigation", () => {
-    vi.stubEnv("DEV", false);
-
-    try {
-      render(
-        <MemoryRouter initialEntries={["/matches"]}>
-          <GlobalNav authDisplayName="ぽんた" onLogout={vi.fn()} />
-        </MemoryRouter>,
-      );
-
-      expect(screen.queryByRole("button", { name: "ログアウト" })).not.toBeInTheDocument();
-      expect(screen.queryByText("アカウント固定")).not.toBeInTheDocument();
-    } finally {
-      vi.unstubAllEnvs();
-    }
-  });
-
-  it("keeps logout failure feedback and its retry action at the account control", async () => {
-    const user = userEvent.setup();
-    const onLogout = vi.fn();
-    render(
-      <MemoryRouter initialEntries={["/matches"]}>
-        <GlobalNav authDisplayName="ぽんた" logoutFailed onLogout={onLogout} />
-      </MemoryRouter>,
-    );
-
-    const alert = screen.getByRole("alert");
-    expect(alert).toHaveTextContent("ログアウトできませんでした。");
-    expect(alert).toHaveTextContent("ログイン状態と表示中の内容は保持しています。");
-    expect(alert).toHaveTextContent("通信状態を確認して再試行してください。");
-    expect(screen.getAllByRole("alert")).toHaveLength(1);
-
-    const retry = screen.getByRole("button", { name: "ログアウトを再試行" });
-    expect(retry).toHaveAttribute("aria-describedby", alert.id);
-    expect(retry).toHaveClass("bg-[var(--color-action)]");
-    await user.click(retry);
-
-    expect(onLogout).toHaveBeenCalledOnce();
   });
 });

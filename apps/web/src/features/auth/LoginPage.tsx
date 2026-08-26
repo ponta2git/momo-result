@@ -1,11 +1,17 @@
+import { LogIn } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 
 import { AuthPanel } from "@/shared/auth/AuthPanel";
 import { sanitizeAppRedirectPath } from "@/shared/auth/redirectPath";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { GlobalNav } from "@/shared/ui/layout/GlobalNav";
+import type { GlobalNavItem } from "@/shared/ui/layout/GlobalNav";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
+
+const loginNavItems = [
+  { icon: <LogIn className="size-4" />, label: "ログイン", to: "/login" },
+] as const satisfies readonly GlobalNavItem[];
 
 export function LoginPage() {
   const [searchParams] = useSearchParams();
@@ -23,7 +29,11 @@ export function LoginPage() {
       >
         メインコンテンツへスキップ
       </a>
-      <GlobalNav isAuthenticated={false} />
+      <GlobalNav
+        brandTo="/login"
+        environmentLabel={import.meta.env.DEV ? "DEV" : undefined}
+        items={loginNavItems}
+      />
       <main id="main-content">
         <PageFrame className="px-3 py-4 sm:px-4 sm:py-6">
           <PageContentSurface className="mx-auto max-w-[34rem] space-y-4">

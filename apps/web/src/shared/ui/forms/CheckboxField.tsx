@@ -1,18 +1,20 @@
 import { useId } from "react";
-import type { InputHTMLAttributes, ReactNode } from "react";
+import type { ComponentPropsWithRef, ReactNode } from "react";
 
 import { cn } from "@/shared/ui/cn";
 import { buildFieldDescribedBy } from "@/shared/ui/forms/Field";
 
 export type CheckboxFieldProps = {
+  "aria-describedby"?: string | undefined;
   description?: ReactNode | undefined;
   error?: ReactNode | undefined;
   fieldClassName?: string | undefined;
   label: ReactNode;
-} & Omit<InputHTMLAttributes<HTMLInputElement>, "aria-describedby" | "type">;
+} & Omit<ComponentPropsWithRef<"input">, "aria-describedby" | "aria-invalid" | "type">;
 
 /** Associates one native checkbox with its visible label, help, error, and disabled state. */
 export function CheckboxField({
+  "aria-describedby": ariaDescribedBy,
   className,
   description,
   disabled,
@@ -39,7 +41,7 @@ export function CheckboxField({
       >
         <input
           {...props}
-          aria-describedby={buildFieldDescribedBy(descriptionId, errorId)}
+          aria-describedby={buildFieldDescribedBy(descriptionId, errorId, ariaDescribedBy)}
           aria-invalid={error ? true : undefined}
           className={cn("size-4 shrink-0 accent-[var(--color-action)]", className)}
           disabled={disabled}

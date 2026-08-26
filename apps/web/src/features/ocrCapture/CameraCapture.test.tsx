@@ -1,8 +1,10 @@
 import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { StrictMode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CameraCapture } from "@/features/ocrCapture/CameraCapture";
+import { createDeferred } from "@/test/deferred";
 import {
   createMockMediaStream,
   installGetUserMediaMock,
@@ -127,6 +129,61 @@ describe("CameraCapture", () => {
     expect(screen.getByRole("button", { name: "カメラ使用中" })).toBeDisabled();
   });
 
+  it("discards and stops a permission result that resolves after capture is disabled", async () => {
+    const user = userEvent.setup();
+    const permission = createDeferred<MediaStream>();
+    const { stream, track } = createMockMediaStream();
+    getUserMedia = installGetUserMediaMock(() => permission.promise);
+    const onSelect = vi.fn();
+    const onValidationError = vi.fn();
+    const view = render(
+      <CameraCapture
+        slotLabel="総資産"
+        onSelect={onSelect}
+        onValidationError={onValidationError}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "カメラ開始" }));
+    view.rerender(
+      <CameraCapture
+        disabled
+        slotLabel="総資産"
+        onSelect={onSelect}
+        onValidationError={onValidationError}
+      />,
+    );
+
+    await act(async () => permission.resolve(stream));
+
+    expect(track.stop).toHaveBeenCalledTimes(1);
+    expect(videoSpies.play).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("総資産のカメラプレビュー")).toHaveProperty("srcObject", null);
+    expect(screen.getByRole("button", { name: "カメラ開始" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "静止画を撮影" })).toBeDisabled();
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(onValidationError).not.toHaveBeenCalled();
+  });
+
+  it("stops a late permission result after StrictMode unmount", async () => {
+    const user = userEvent.setup();
+    const permission = createDeferred<MediaStream>();
+    const { stream, track } = createMockMediaStream();
+    getUserMedia = installGetUserMediaMock(() => permission.promise);
+    const view = render(
+      <StrictMode>
+        <CameraCapture slotLabel="事件簿" onSelect={vi.fn()} onValidationError={vi.fn()} />
+      </StrictMode>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "カメラ開始" }));
+    view.unmount();
+    await act(async () => permission.resolve(stream));
+
+    expect(track.stop).toHaveBeenCalledTimes(1);
+    expect(videoSpies.play).not.toHaveBeenCalled();
+  });
+
   it("continues camera startup when device enumeration is blocked", async () => {
     const user = userEvent.setup();
     const { stream } = createMockMediaStream();
@@ -234,6 +291,92 @@ describe("CameraCapture", () => {
     const [file, source] = onSelect.mock.calls[0]!;
     expect(file).toBeInstanceOf(File);
     expect(source).toBe("camera");
+  });
+
+  it("keeps a restarted camera capture pending when an obsolete toBlob completes", async () => {
+    const user = userEvent.setup();
+    const first = createMockMediaStream();
+    const second = createMockMediaStream();
+    const streams = [first.stream, second.stream];
+    getUserMedia = installGetUserMediaMock(() => Promise.resolve(streams.shift()!));
+    const blobCallbacks: BlobCallback[] = [];
+    canvasSpies.toBlob.mockImplementation((callback: BlobCallback) => {
+      blobCallbacks.push(callback);
+    });
+    const onSelect = vi.fn();
+    const onValidationError = vi.fn();
+    const view = render(
+      <CameraCapture
+        slotLabel="総資産"
+        onSelect={onSelect}
+        onValidationError={onValidationError}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "カメラ開始" }));
+    await user.click(screen.getByRole("button", { name: "静止画を撮影" }));
+    expect(blobCallbacks).toHaveLength(1);
+
+    view.rerender(
+      <CameraCapture
+        disabled
+        slotLabel="総資産"
+        onSelect={onSelect}
+        onValidationError={onValidationError}
+      />,
+    );
+    view.rerender(
+      <CameraCapture
+        slotLabel="総資産"
+        onSelect={onSelect}
+        onValidationError={onValidationError}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: "カメラ開始" }));
+    await user.click(screen.getByRole("button", { name: "静止画を撮影" }));
+    expect(blobCallbacks).toHaveLength(2);
+
+    await act(async () => blobCallbacks[0]?.(new Blob(["obsolete"], { type: "image/png" })));
+
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(onValidationError).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "撮影中…" })).toBeDisabled();
+    expect(first.track.stop).toHaveBeenCalledTimes(1);
+    expect(second.track.stop).not.toHaveBeenCalled();
+
+    await act(async () => blobCallbacks[1]?.(new Blob(["current"], { type: "image/png" })));
+
+    expect(onSelect).toHaveBeenCalledTimes(1);
+    expect(onSelect.mock.calls[0]?.[1]).toBe("camera");
+    expect(screen.getByRole("button", { name: "静止画を撮影" })).toBeEnabled();
+  });
+
+  it("drops a toBlob completion and releases the preview after unmount", async () => {
+    const user = userEvent.setup();
+    const { stream, track } = createMockMediaStream();
+    getUserMedia = installGetUserMediaMock(() => Promise.resolve(stream));
+    let completeBlob: BlobCallback | undefined;
+    canvasSpies.toBlob.mockImplementation((callback: BlobCallback) => {
+      completeBlob = callback;
+    });
+    const onSelect = vi.fn();
+    const onValidationError = vi.fn();
+    const view = render(
+      <CameraCapture slotLabel="収益" onSelect={onSelect} onValidationError={onValidationError} />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "カメラ開始" }));
+    const preview = screen.getByLabelText("収益のカメラプレビュー") as HTMLVideoElement;
+    expect(preview.srcObject).toBe(stream);
+    await user.click(screen.getByRole("button", { name: "静止画を撮影" }));
+
+    view.unmount();
+    expect(track.stop).toHaveBeenCalledTimes(1);
+    expect(preview.srcObject).toBeNull();
+
+    await act(async () => completeBlob?.(new Blob(["late"], { type: "image/png" })));
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(onValidationError).not.toHaveBeenCalled();
   });
 });
 

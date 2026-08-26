@@ -20,6 +20,15 @@ const sharedActionPrimitiveFiles = new Set([
   "shared/ui/actions/LinkButton.tsx",
 ]);
 
+const designTokenNamePattern =
+  /^--(?:color|ease|font|motion|radius|shadow|z)-[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/u;
+
+const directTailwindPalettePattern =
+  /\b(?:bg|border|fill|outline|ring|stroke|text)-(?:amber|blue|cyan|emerald|fuchsia|gray|green|indigo|lime|neutral|orange|pink|purple|red|rose|sky|slate|stone|teal|violet|yellow|zinc)-/gu;
+
+const rawColorValuePattern =
+  /#[0-9a-f]{3,8}\b|(?:color|hsla?|lab|lch|oklab|oklch|rgba?)\([^)]*\)/giu;
+
 function violationId(rule, path, subject) {
   return `${rule}:${path}:${subject}`;
 }
@@ -67,8 +76,10 @@ function parseCustomProperties(styles) {
     const value = match[2];
     if (!name || value === undefined) continue;
     declarations.set(name, {
+      end: match.index + match[0].length,
       line: lineNumberAt(styles, match.index),
       name,
+      start: match.index,
       value,
     });
   }
@@ -229,6 +240,253 @@ function collectSemanticColorViolations(sources) {
     }
   }
 
+  return violations;
+}
+
+function collectPatternViolations(sources, { message, pattern, rule }) {
+  const violations = [];
+  for (const [path, source] of sources) {
+    pattern.lastIndex = 0;
+    for (const match of source.matchAll(pattern)) {
+      const line = lineNumberAt(source, match.index);
+      violations.push(
+        makeViolation({
+          line,
+          message,
+          path,
+          rule,
+          subject: `${match[0]}@${line}`,
+        }),
+      );
+    }
+  }
+  return violations;
+}
+
+function collectUtilityContractViolations(sources) {
+  return [
+    ...collectPatternViolations(sources, {
+      message: "use a semantic shadow token instead of a raw Tailwind shadow",
+      pattern: /\bshadow-(?:2xl|lg|md|sm|xl)\b/gu,
+      rule: "raw-tailwind-shadow",
+    }),
+    ...collectPatternViolations(sources, {
+      message: "use a semantic motion duration token instead of a numeric duration class",
+      pattern: /\bduration-[0-9]+\b/gu,
+      rule: "numeric-motion-duration",
+    }),
+    ...collectPatternViolations(sources, {
+      message: "transition only the properties that visibly change",
+      pattern: /\btransition-all\b/gu,
+      rule: "transition-all",
+    }),
+    ...collectPatternViolations(sources, {
+      message: "use a semantic z-index token",
+      pattern: /\bz-(?:0|[1-9][0-9]*)\b|\bz-\[calc\(/gu,
+      rule: "numeric-z-index",
+    }),
+    ...collectPatternViolations(sources, {
+      message: "structural spacing must use the 4px spacing scale",
+      pattern: /\b(?:gap(?:-[xy])?|[mp][trblxy]?|bottom|left|right|top)-(?:1\.5|2\.5)\b/gu,
+      rule: "nonconforming-spacing-scale",
+    }),
+    ...collectPatternViolations(sources, {
+      message: "structural spacing must use a design-system spacing token",
+      pattern:
+        /\b(?:bottom|gap(?:-[xy])?|inset(?:-[xy])?|left|[mp][trblxy]?|right|space-[xy]|top)-\[-?(?:\d+(?:\.\d+)?|\.\d+)px\]/gu,
+      rule: "arbitrary-pixel-spacing",
+    }),
+    ...collectPatternViolations(sources, {
+      message: "use a semantic color token instead of a direct palette color",
+      pattern: directTailwindPalettePattern,
+      rule: "direct-tailwind-palette",
+    }),
+  ];
+}
+
+function collectUndefinedDesignTokenViolations(sources) {
+  const declarations = parseCustomProperties(sources.get("styles.css") ?? "");
+  const violations = [];
+
+  for (const [path, source] of sources) {
+    for (const match of source.matchAll(/var\(\s*(--[a-z0-9-]+)/giu)) {
+      const token = match[1];
+      if (!token || !designTokenNamePattern.test(token) || declarations.has(token)) continue;
+      const line = lineNumberAt(source, match.index);
+      violations.push(
+        makeViolation({
+          line,
+          message: `references undefined design token ${token}`,
+          path,
+          rule: "undefined-design-token-reference",
+          subject: `${token}@${line}`,
+        }),
+      );
+    }
+  }
+
+  return violations;
+}
+
+function indexIsInRange(index, range) {
+  return index >= range.start && index < range.end;
+}
+
+function collectRawColorViolations(sources) {
+  const violations = [];
+  const styles = sources.get("styles.css") ?? "";
+  const declarations = [...parseCustomProperties(styles).values()];
+  const exemptDeclarationRanges = declarations.filter(
+    ({ name }) => name.startsWith("--ref-") || name.startsWith("--shadow-"),
+  );
+  const commentRanges = [...styles.matchAll(/\/\*[\s\S]*?\*\//gu)].map((match) => ({
+    end: match.index + match[0].length,
+    start: match.index,
+  }));
+
+  rawColorValuePattern.lastIndex = 0;
+  for (const match of styles.matchAll(rawColorValuePattern)) {
+    if (
+      exemptDeclarationRanges.some((range) => indexIsInRange(match.index, range)) ||
+      commentRanges.some((range) => indexIsInRange(match.index, range))
+    ) {
+      continue;
+    }
+    const line = lineNumberAt(styles, match.index);
+    violations.push(
+      makeViolation({
+        line,
+        message: "declare raw colors once as reference tokens and consume semantic color tokens",
+        path: "styles.css",
+        rule: "raw-arbitrary-color",
+        subject: `${match[0]}@${line}`,
+      }),
+    );
+  }
+
+  const arbitraryColorUtilityPattern =
+    /\b(?:bg|border|fill|outline|ring|stroke|text)-\[(?:#[0-9a-f]{3,8}|(?:color|hsla?|lab|lch|oklab|oklch|rgba?)\([^\]\r\n]+\))\]/giu;
+  const literalPresentationColorPattern =
+    /\b(?:background(?:Color)?|border(?:Bottom|Left|Right|Top)?Color|color|fill|outlineColor|stroke)\s*:\s*["'`](#[0-9a-f]{3,8}\b|(?:color|hsla?|lab|lch|oklab|oklch|rgba?)\([^"'`]+\))["'`]/giu;
+  const literalSvgColorPattern =
+    /\b(?:fill|stroke)\s*=\s*["'](#[0-9a-f]{3,8}\b|(?:color|hsla?|lab|lch|oklab|oklch|rgba?)\([^"']+\))["']/giu;
+
+  for (const [path, source] of sources) {
+    if (path === "styles.css") continue;
+    for (const pattern of [
+      arbitraryColorUtilityPattern,
+      literalPresentationColorPattern,
+      literalSvgColorPattern,
+    ]) {
+      pattern.lastIndex = 0;
+      for (const match of source.matchAll(pattern)) {
+        const line = lineNumberAt(source, match.index);
+        violations.push(
+          makeViolation({
+            line,
+            message: "use a semantic color token instead of an arbitrary literal color",
+            path,
+            rule: "raw-arbitrary-color",
+            subject: `${match[0]}@${line}`,
+          }),
+        );
+      }
+    }
+  }
+
+  return violations;
+}
+
+function collectClassStringCandidates(path, source) {
+  const sourceFile = ts.createSourceFile(
+    path,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TSX,
+  );
+  const candidates = [];
+  const visit = (node) => {
+    if (
+      ts.isJsxAttribute(node) &&
+      node.name.getText(sourceFile) === "className" &&
+      node.initializer
+    ) {
+      candidates.push({
+        start: node.initializer.getStart(sourceFile),
+        text: node.initializer.getText(sourceFile),
+      });
+      return;
+    }
+    if (
+      ts.isStringLiteral(node) ||
+      ts.isNoSubstitutionTemplateLiteral(node) ||
+      ts.isTemplateExpression(node)
+    ) {
+      candidates.push({ start: node.getStart(sourceFile), text: node.getText(sourceFile) });
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return candidates;
+}
+
+function collectReducedMotionViolations(sources) {
+  const violations = [];
+  for (const [path, source] of sources) {
+    if (!path.endsWith(".tsx")) continue;
+    for (const candidate of collectClassStringCandidates(path, source)) {
+      for (const match of candidate.text.matchAll(/\banimate-(?:bounce|ping|pulse|spin)\b/gu)) {
+        if (candidate.text.includes("motion-reduce:animate-none")) continue;
+        const line = lineNumberAt(source, candidate.start + match.index);
+        violations.push(
+          makeViolation({
+            line,
+            message: "looping animation must include motion-reduce:animate-none",
+            path,
+            rule: "reduced-motion-loop",
+            subject: `${match[0]}@${line}`,
+          }),
+        );
+      }
+      for (const match of candidate.text.matchAll(
+        /\btransition-(?:colors|opacity|transform)\b/gu,
+      )) {
+        if (candidate.text.includes("motion-reduce:transition-none")) continue;
+        const line = lineNumberAt(source, candidate.start + match.index);
+        violations.push(
+          makeViolation({
+            line,
+            message: "CSS transition must include motion-reduce:transition-none",
+            path,
+            rule: "reduced-motion-transition",
+            subject: `${match[0]}@${line}`,
+          }),
+        );
+      }
+    }
+  }
+  return violations;
+}
+
+function collectMotionTokenDurationViolations(sources) {
+  const path = "styles.css";
+  const styles = sources.get(path) ?? "";
+  const violations = [];
+  for (const match of styles.matchAll(/--motion-[a-z0-9-]+\s*:\s*([0-9]+)ms/gu)) {
+    if (Number(match[1]) <= 200) continue;
+    const line = lineNumberAt(styles, match.index);
+    violations.push(
+      makeViolation({
+        line,
+        message: "motion token must not exceed 200ms",
+        path,
+        rule: "motion-token-duration-limit",
+        subject: `${match[0]}@${line}`,
+      }),
+    );
+  }
   return violations;
 }
 
@@ -539,6 +797,11 @@ function deduplicateViolations(violations) {
 export function collectUiPolicyViolations(sources) {
   return deduplicateViolations([
     ...collectSemanticColorViolations(sources),
+    ...collectUtilityContractViolations(sources),
+    ...collectUndefinedDesignTokenViolations(sources),
+    ...collectRawColorViolations(sources),
+    ...collectReducedMotionViolations(sources),
+    ...collectMotionTokenDurationViolations(sources),
     ...collectLegacyPlayerTokenViolations(sources),
     ...collectDataVizPlayOrderViolations(sources),
     ...collectFeatureBoundaryViolations(sources),

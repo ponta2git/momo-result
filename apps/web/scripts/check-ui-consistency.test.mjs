@@ -20,6 +20,84 @@ test("accepts separated identities, shared choices, textual controls, and square
   assert.deepEqual(violations, []);
 });
 
+test("accepts defined token families, multiline reduced-motion classes, and dynamic SVG colors", () => {
+  const sources = new Map([
+    [
+      "styles.css",
+      `@theme {
+  --ref-action: #111111;
+  --color-action: var(--ref-action);
+  --radius-control: 4px;
+  --motion-fast: 120ms;
+  --shadow-raised: 0 1px 2px rgb(0 0 0 / 10%);
+  --z-overlay: 1;
+  --font-body: sans-serif;
+  --ease-standard: linear;
+}`,
+    ],
+    [
+      "features/example/ValidPolicy.tsx",
+      `const presentation = { color: "var(--color-action)" };
+const tokens = [
+  "var(--radius-control)",
+  "var(--motion-fast)",
+  "var(--shadow-raised)",
+  "var(--z-overlay)",
+  "var(--font-body)",
+  "var(--ease-standard)",
+];
+export function ValidPolicy() {
+  return (
+    <div
+      className={\`
+        transition-opacity
+        motion-reduce:transition-none
+        animate-spin
+        motion-reduce:animate-none
+      \`}
+      style={{ color: presentation.color }}
+    >
+      <svg fill={presentation.color} stroke={presentation.color} />
+      {tokens.join("")}
+    </div>
+  );
+}`,
+    ],
+  ]);
+
+  assert.deepEqual(collectUiPolicyViolations(sources), []);
+});
+
+test("moves deterministic utility, token, color, spacing, and motion checks into the collector", async () => {
+  const violations = collectUiPolicyViolations(await readFixture("policy-rules"));
+
+  assert.deepEqual(
+    new Set(violations.map((violation) => violation.rule)),
+    new Set([
+      "arbitrary-pixel-spacing",
+      "direct-tailwind-palette",
+      "motion-token-duration-limit",
+      "nonconforming-spacing-scale",
+      "numeric-motion-duration",
+      "numeric-z-index",
+      "raw-arbitrary-color",
+      "raw-tailwind-shadow",
+      "reduced-motion-loop",
+      "reduced-motion-transition",
+      "transition-all",
+      "undefined-design-token-reference",
+    ]),
+  );
+  assert.equal(
+    violations.filter((violation) => violation.rule === "undefined-design-token-reference").length,
+    7,
+  );
+  assert.equal(
+    violations.filter((violation) => violation.rule === "raw-arbitrary-color").length,
+    4,
+  );
+});
+
 test("detects recursive cross-family aliases and forbidden UI boundaries", async () => {
   const violations = collectUiPolicyViolations(await readFixture("invalid"));
   const rules = new Set(violations.map((violation) => violation.rule));

@@ -230,7 +230,7 @@ test("completes the app smoke workflow with isolated scoped data", async ({
     e2eRun.trackDraft(uploadedDraftId);
 
     await expectOk(await jobResponse, "create OCR job");
-    await expect(page).toHaveURL(/\/matches(?:\?.*)?$/u);
+    await expect(page).toHaveURL(/\/matches\?status=incomplete&sort=updated_desc$/u);
     const matchesPageTitle = page.getByRole("heading", { exact: true, name: "試合一覧" });
     await expect(matchesPageTitle).toBeVisible();
     expect(

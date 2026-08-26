@@ -525,7 +525,7 @@ describe("OcrCapturePage", () => {
     draftGate.resolve();
     expect(await screen.findByText("matches-page")).toBeInTheDocument();
     expect(screen.getByLabelText("current location")).toHaveTextContent(
-      "/matches?status=ocr_running&sort=updated_desc",
+      "/matches?status=incomplete&sort=updated_desc",
     );
   });
 

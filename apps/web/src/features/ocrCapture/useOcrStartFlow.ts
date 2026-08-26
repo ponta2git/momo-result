@@ -51,12 +51,12 @@ export type OcrStartDialogState =
   | { message: string; plan: OcrSubmissionPlan; status: "recoverable_failure" }
   | { message: string; plan: OcrSubmissionPlan; status: "handoff_required" };
 
-const matchesOcrRunningUrl = "/matches?status=ocr_running&sort=updated_desc";
+const incompleteMatchesUrl = "/matches?status=incomplete&sort=updated_desc";
 
 function ocrResultDestination(plan: OcrSubmissionPlan): string {
   return plan.setup.heldEventId
     ? `/held-events/${encodeURIComponent(plan.setup.heldEventId)}`
-    : matchesOcrRunningUrl;
+    : incompleteMatchesUrl;
 }
 
 export function useOcrStartFlow({
@@ -187,7 +187,7 @@ export function useOcrStartFlow({
     if (blocker.state === "blocked") {
       blocker.reset();
     }
-    const destination = "plan" in state ? ocrResultDestination(state.plan) : matchesOcrRunningUrl;
+    const destination = "plan" in state ? ocrResultDestination(state.plan) : incompleteMatchesUrl;
     setState({ status: "closed" });
     navigate(destination, { replace: true });
   }

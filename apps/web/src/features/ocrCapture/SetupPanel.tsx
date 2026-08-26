@@ -17,8 +17,8 @@ export function SetupPanel({ value, onChange, enabled, options }: SetupPanelProp
     gameTitles,
     gameTitlesError,
     gameTitlesPlaceholder,
-    heldEvents,
     heldEventsError,
+    heldEventPicker,
     heldEventsPlaceholder,
     mapMasters,
     mapMastersError,
@@ -38,15 +38,18 @@ export function SetupPanel({ value, onChange, enabled, options }: SetupPanelProp
         disabled={!enabled}
         emptyChoiceDescription="あとで確認画面から開催を設定できます。"
         emptyChoiceLabel="開催を選ばず取り込む"
-        error={heldEventsError}
-        heldEvents={heldEvents}
+        error={heldEventPicker.error ?? heldEventsError}
+        heldEvents={heldEventPicker.heldEvents}
         className="xl:col-span-3"
         label="開催（任意）"
         name="ocr-held-event"
+        pagination={heldEventPicker.pagination}
+        pending={heldEventPicker.pending}
+        selectedHeldEvent={heldEventPicker.selectedHeldEvent ?? options.selectedHeldEvent}
         unavailableLabel={heldEventsPlaceholder}
         value={value.heldEventId ?? ""}
-        onValueChange={(heldEventId) => {
-          const selected = heldEvents.find((item) => item.id === heldEventId);
+        onPageChange={heldEventPicker.onPageChange}
+        onValueChange={(heldEventId, selected) => {
           patchValue({
             heldEventId,
             matchNoInEvent: selected?.nextMatchNo,

@@ -18,6 +18,7 @@ import {
   mapMastersQueryOptions,
   seasonMastersQueryOptions,
 } from "@/shared/api/queryOptions";
+import { useHeldEventPickerDirectory } from "@/shared/api/useHeldEventPickerDirectory";
 
 type OcrSetupOptionsParams = {
   authAccountId?: string | undefined;
@@ -169,6 +170,11 @@ export function useOcrSetupOptions({
   const seasonMasters = seasonMastersQuery.data?.items ?? emptySeasonMasters;
   const selectedGameTitle = gameTitles.find((gameTitle) => gameTitle.id === value.gameTitleId);
   const selectedHeldEvent = heldEvents.find((event) => event.id === value.heldEventId);
+  const heldEventPicker = useHeldEventPickerDirectory({
+    enabled,
+    selectedEvent: selectedHeldEvent,
+    selectedId: value.heldEventId ?? "",
+  });
   const gameTitlesLoadFailed = shouldShowQueryError(gameTitlesQuery);
   const heldEventsLoadFailed = shouldShowQueryError(heldEventsQuery);
   const mapMastersLoadFailed = shouldShowQueryError(mapMastersQuery);
@@ -209,6 +215,7 @@ export function useOcrSetupOptions({
     void Promise.all([
       gameTitlesQuery.refetch(),
       heldEventsQuery.refetch(),
+      heldEventPicker.refetch(),
       preferredHeldEventQuery.refetch(),
       mapMastersQuery.refetch(),
       seasonMastersQuery.refetch(),
@@ -247,6 +254,7 @@ export function useOcrSetupOptions({
       loading: gameTitlesQuery.isLoading,
     }),
     heldEvents,
+    heldEventPicker,
     hasError,
     heldEventsError: heldEventContextUnavailable
       ? (queryErrorMessage(preferredHeldEventQuery.error ?? heldEventsQuery.error) ??

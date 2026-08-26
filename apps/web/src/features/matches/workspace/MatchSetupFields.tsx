@@ -28,16 +28,22 @@ export function MatchSetupFields({
         data-validation-path="heldEventId"
         emptyChoiceDescription="試合結果を保存するには開催の選択が必要です。"
         emptyChoiceLabel="未選択"
-        error={fieldError("heldEventId")}
-        heldEvents={options.heldEvents}
+        error={fieldError("heldEventId") ?? options.heldEventPicker?.error}
+        heldEvents={options.heldEventPicker?.heldEvents ?? options.heldEvents}
         className="lg:col-span-5"
         label="開催履歴（必須）"
         name="match-workspace-held-event"
+        pagination={options.heldEventPicker?.pagination}
+        pending={options.heldEventPicker?.pending}
         required
+        selectedHeldEvent={options.heldEventPicker?.selectedHeldEvent}
         unavailableLabel="未選択"
         value={values.heldEventId}
-        onValueChange={(heldEventId) => {
-          const selected = options.heldEvents.find((candidate) => candidate.id === heldEventId);
+        onPageChange={options.heldEventPicker?.onPageChange}
+        onValueChange={(heldEventId, pickerSelection) => {
+          const selected =
+            pickerSelection ??
+            options.heldEvents.find((candidate) => candidate.id === heldEventId);
           actions.onPatchRoot({
             heldEventId,
             matchNoInEvent: selected?.nextMatchNo ?? 1,

@@ -20,6 +20,7 @@ import { useMatchWorkspaceViewModel } from "@/features/matches/workspace/useMatc
 import { useWorkspaceHeldEventCreation } from "@/features/matches/workspace/useWorkspaceHeldEventCreation";
 import { useWorkspaceNotice } from "@/features/matches/workspace/useWorkspaceNotice";
 import { isInitialQueryLoading, shouldShowQueryError } from "@/shared/api/queryErrorState";
+import { useHeldEventPickerDirectory } from "@/shared/api/useHeldEventPickerDirectory";
 import { sanitizeReturnTo } from "@/shared/navigation/returnTo";
 
 export type MatchWorkspaceControllerParams = {
@@ -79,6 +80,10 @@ export function useMatchWorkspaceController({
     seasonMastersQuery,
     sourceImageQuery,
   } = queries;
+  const heldEventPicker = useHeldEventPickerDirectory({
+    selectedEvent: heldEventItems.find((event) => event.id === state.values.heldEventId),
+    selectedId: state.values.heldEventId,
+  });
   const createEventMutation = useWorkspaceHeldEventCreation({
     onError: (message) => local.setOperationError({ kind: "heldEventCreation", message }),
     onOperationStart: () => local.setOperationError(null),
@@ -258,6 +263,7 @@ export function useMatchWorkspaceController({
     editLoading: mode === "edit" && isInitialQueryLoading(matchDetailQuery),
     eventDraftValue: local.eventDraftValue,
     formHandlers,
+    heldEventPicker,
     isMutating,
     isNavigatingToMasters,
     isOcrRunningBlocked,

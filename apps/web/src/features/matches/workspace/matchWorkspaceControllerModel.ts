@@ -1,6 +1,7 @@
 import { toMatchWorkspaceOperationErrorView } from "@/features/matches/workspace/matchWorkspaceOperationError";
 import type { MatchWorkspaceOperationError } from "@/features/matches/workspace/matchWorkspaceOperationError";
 import type { NormalizedApiError } from "@/shared/api/problemDetails";
+import type { HeldEventPickerDirectory } from "@/shared/api/useHeldEventPickerDirectory";
 
 import type { MatchFormReducerState } from "./matchFormReducer";
 import type { MatchWorkspaceInitialData, WorkspaceMode } from "./matchFormTypes";
@@ -25,6 +26,7 @@ type MatchWorkspaceControllerModelArgs = {
   editLoading: boolean;
   eventDraftValue: string;
   formHandlers: ReturnType<typeof useMatchWorkspaceFormHandlers>;
+  heldEventPicker: HeldEventPickerDirectory;
   isMutating: boolean;
   isNavigatingToMasters: boolean;
   isOcrRunningBlocked: boolean;
@@ -216,6 +218,7 @@ export function buildMatchWorkspaceControllerModel(args: MatchWorkspaceControlle
       eventCreationError:
         args.operationError?.kind === "heldEventCreation" ? operationErrorView : null,
       gameTitleItems: viewModel.gameTitleItems,
+      heldEventPicker: args.heldEventPicker,
       heldEvents: viewModel.heldEvents,
       mapItems: viewModel.mapItems,
       seasonItems: viewModel.seasonItems,

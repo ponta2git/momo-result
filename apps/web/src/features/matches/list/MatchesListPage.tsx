@@ -42,6 +42,7 @@ export function MatchesListPage() {
     clearSearch,
     gameTitles,
     hasFilters,
+    heldEventPicker,
     heldEvents,
     isManualRefreshing,
     items,
@@ -67,7 +68,7 @@ export function MatchesListPage() {
     updatePageSize,
   } = useMatchesListPageController();
   const filterActions = { onApply: applySearch, onClear: clearSearch };
-  const filterCandidates = { gameTitles, heldEvents, seasons };
+  const filterCandidates = { gameTitles, heldEventPicker, heldEvents, seasons };
   const rowActions = {
     checkingDraftIds,
     disabled: listScopeChanging,

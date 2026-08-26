@@ -80,6 +80,7 @@ export function MatchesListFilters({
   const heldEventsErrorProps = selectionErrors?.heldEvents
     ? { error: selectionErrors.heldEvents }
     : {};
+  const heldEventPicker = candidates.heldEventPicker;
   const gameTitlesErrorProps = selectionErrors?.gameTitles
     ? { error: selectionErrors.gameTitles }
     : {};
@@ -95,12 +96,17 @@ export function MatchesListFilters({
         disabled={pending}
         emptyChoiceDescription="開催で絞り込みません。"
         emptyChoiceLabel="すべての開催"
-        heldEvents={candidates.heldEvents}
+        error={selectionErrors?.heldEvents ?? heldEventPicker?.error}
+        heldEvents={heldEventPicker?.heldEvents ?? candidates.heldEvents}
         label="開催"
         name="match-list-held-event"
+        pagination={heldEventPicker?.pagination}
+        pending={heldEventPicker?.pending}
+        selectedHeldEvent={heldEventPicker?.selectedHeldEvent}
         unavailableLabel="すべての開催"
         value={search.heldEventId}
-        {...heldEventsErrorProps}
+        {...(heldEventPicker ? {} : heldEventsErrorProps)}
+        onPageChange={heldEventPicker?.onPageChange}
         onValueChange={(heldEventId) => {
           patchSearch({ heldEventId });
         }}

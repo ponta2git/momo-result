@@ -77,7 +77,7 @@ export function ChoicePickerDialogField({
     >
       <div
         className={cn(
-          "flex min-h-11 min-w-0 items-center gap-3 rounded-[var(--radius-sm)] border bg-[var(--color-surface)] p-2 pl-3",
+          "flex min-h-11 min-w-0 items-center gap-2 rounded-[var(--radius-sm)] border bg-[var(--color-surface)] pr-1 pl-3 sm:min-h-10",
           error ? "border-[var(--color-danger)]" : "border-[var(--color-border)]",
         )}
       >
@@ -96,10 +96,11 @@ export function ChoicePickerDialogField({
               aria-describedby={buildFieldDescribedBy(errorId)}
               aria-invalid={error ? true : undefined}
               aria-label={`${label}を${recovery ? "選び直す" : "変更"}`}
-              className="min-h-11 shrink-0 px-3"
+              className="shrink-0 px-3"
               disabled={disabled}
               icon={<ChevronDown aria-hidden="true" className="size-4" />}
               id={triggerId}
+              size="sm"
               variant={recovery ? "primary" : "secondary"}
             >
               {recovery ? "選び直す" : "変更"}

@@ -57,4 +57,35 @@ describe("ChoicePickerDialogField", () => {
       document.getElementById(trigger.getAttribute("aria-describedby") ?? ""),
     ).toHaveTextContent("未入力です");
   });
+
+  it("keeps the dialog open while paging descriptive candidates", async () => {
+    const user = userEvent.setup();
+    const onPageChange = vi.fn();
+
+    render(
+      <ChoicePickerDialogField
+        label="開催"
+        name="held-event"
+        options={[{ description: "確定 4試合", label: "2026/08/21 23:30", value: "held-1" }]}
+        pagination={{
+          hasNextPage: true,
+          hasPreviousPage: false,
+          page: 1,
+          pageSize: 20,
+          totalItems: 63,
+          totalPages: 4,
+        }}
+        selectedLabel="すべての開催"
+        value=""
+        onPageChange={onPageChange}
+        onValueChange={vi.fn()}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "開催を変更" }));
+    await user.click(screen.getByRole("button", { name: "次のページへ" }));
+
+    expect(onPageChange).toHaveBeenCalledWith(2);
+    expect(screen.getByRole("dialog", { name: "開催を選択" })).toBeInTheDocument();
+  });
 });

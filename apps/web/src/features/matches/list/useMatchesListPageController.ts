@@ -45,6 +45,7 @@ import {
 import { cursorForPage } from "@/shared/lib/cursorPagination";
 import { sanitizeReturnTo, withReturnTo } from "@/shared/navigation/returnTo";
 import { showToast } from "@/shared/ui/feedback/Toast";
+import { useHeldEventPickerDirectory } from "@/shared/api/useHeldEventPickerDirectory";
 
 export function useMatchesListPageController() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -86,6 +87,13 @@ export function useMatchesListPageController() {
   }, [parentReturnTo, setSearchParams, startFilterTransition]);
 
   const heldEventsQuery = useQuery(heldEventDirectoryQueryOptions());
+  const selectedHeldEvent = (heldEventsQuery.data?.items ?? []).find(
+    (event) => event.id === activeSearch.heldEventId,
+  );
+  const heldEventPicker = useHeldEventPickerDirectory({
+    selectedEvent: selectedHeldEvent,
+    selectedId: activeSearch.heldEventId,
+  });
   const gameTitlesQuery = useQuery(gameTitlesQueryOptions("matches-list"));
   const seasonsQuery = useQuery(seasonMastersQueryOptions("matches-list", undefined));
   const mapsQuery = useQuery(mapMastersQueryOptions("matches-list", undefined));
@@ -172,6 +180,7 @@ export function useMatchesListPageController() {
         listRefresh,
         matchesSummaryQuery.refetch(),
         heldEventsQuery.refetch(),
+        heldEventPicker.refetch(),
         gameTitlesQuery.refetch(),
         seasonsQuery.refetch(),
         mapsQuery.refetch(),
@@ -227,6 +236,7 @@ export function useMatchesListPageController() {
     gameTitles: gameTitlesQuery.data?.items ?? [],
     hasFilters: hasMatchListFilters(activeSearch),
     heldEvents: heldEventsQuery.data?.items ?? [],
+    heldEventPicker,
     isManualRefreshing,
     items,
     listScopeChanging,

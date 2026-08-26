@@ -6,6 +6,7 @@ import type {
 } from "@/shared/api/masters";
 import type { MatchSummaryResponse } from "@/shared/api/matches";
 import type { DraftStatusLabel, DraftStatusOrUnknown } from "@/shared/domain/draftStatus";
+import type { PaginationState } from "@/shared/lib/pagination";
 
 export type MatchListStatus = DraftStatusOrUnknown;
 
@@ -44,6 +45,14 @@ export type MatchListFilterActions = {
 export type MatchListFilterCandidates = {
   gameTitles: GameTitleResponse[];
   heldEvents: HeldEventResponse[];
+  heldEventPicker?: {
+    error?: string | undefined;
+    heldEvents: HeldEventResponse[];
+    pagination?: PaginationState | undefined;
+    pending: boolean;
+    selectedHeldEvent?: HeldEventResponse | undefined;
+    onPageChange: (page: number) => void;
+  };
   seasons: SeasonMasterResponse[];
 };
 

@@ -37,6 +37,7 @@ export function MatchWorkspaceEditor({
   };
   const setupOptions = {
     gameTitleItems: setup.gameTitleItems,
+    heldEventPicker: setup.heldEventPicker,
     heldEvents: setup.heldEvents,
     mapItems: setup.mapItems,
     seasonItems: setup.seasonItems,

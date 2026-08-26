@@ -126,7 +126,7 @@ DB lock順とstaging transactionの規則は `docs/db-rule.md`、process責務�
 - `queued` / `running` で成功artifactがあれば旧表示と最終成功日時を維持し、更新または手動再計算中であることを区別する。
 - 初回計算中は分析値のないloading state、成果物なしの失敗は分析値のないerror stateを出す。失敗時も旧成功artifactがあれば維持する。
 - preemptionは失敗として表示せず `queued` と同じ扱いにする。対象match revision不一致では一次データを維持し、分析文脈だけを隠す。
-- active状態だけをbounded intervalでpollし、terminal / 非表示時は停止する。新artifact取得中は旧表示を保ち、latest resultだけへ原子的に切り替える。
+- Webは初回表示と利用者の明示的な更新操作で状態を取得し、interval、window focus、visibility / pageshow復帰、network reconnectによる自動再取得を行わない。新artifact取得中は旧表示を保ち、latest resultだけへ原子的に切り替える。
 - artifact切替時に古いdrilldown / match contextを混在させない。ancillary resource failureで主表示の切替を無期限に待たない。
 
 ### Admin

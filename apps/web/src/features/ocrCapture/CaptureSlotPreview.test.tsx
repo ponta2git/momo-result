@@ -6,7 +6,6 @@ import type { CaptureSlotState } from "@/features/ocrCapture/captureState";
 
 const emptySlot: CaptureSlotState = {
   kind: "total_assets",
-  pollAttempts: 0,
   status: "empty",
 };
 

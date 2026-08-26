@@ -23,7 +23,7 @@ type CaptureSlotCardProps = {
 type CaptureSlotActionsModel = {
   onClear: () => void;
   onDropImage: (sourceKind: SlotKind, targetKind: SlotKind) => void;
-  onManualRefresh: () => void;
+  onRefreshStatus: () => void;
   onMoveImage: (direction: -1 | 1) => void;
   onSelectCapture: () => void;
 };
@@ -130,7 +130,7 @@ export function CaptureSlotCard({ actions, draft, presentation, slot }: CaptureS
       <CaptureSlotFeedback
         mismatch={Boolean(mismatch)}
         slot={slot}
-        onManualRefresh={actions.onManualRefresh}
+        onRefreshStatus={actions.onRefreshStatus}
       />
 
       <DraftPreview draft={draft} />

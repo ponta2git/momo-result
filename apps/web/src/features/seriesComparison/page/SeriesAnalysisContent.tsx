@@ -31,8 +31,8 @@ type SeriesAnalysisBundle = Extract<SeriesAnalysisDisplayBundle, { kind: "analys
 
 /**
  * Artifact payloads are immutable and their display bundle preserves reference identity. Keeping
- * this boundary shallow means status polling can update feedback without rebuilding chart models
- * and SVG subtrees for an unchanged artifact and selection.
+ * this boundary shallow prevents unrelated page feedback from rebuilding chart models and SVG
+ * subtrees for an unchanged artifact and selection.
  */
 export const SeriesAnalysisContent = memo(function SeriesAnalysisContent(
   props: SeriesAnalysisContentProps,

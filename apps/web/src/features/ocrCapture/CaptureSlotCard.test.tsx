@@ -1,17 +1,18 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { CaptureSlotCard } from "@/features/ocrCapture/CaptureSlotCard";
 import type { CaptureSlotState } from "@/features/ocrCapture/captureState";
 
 function renderCard(slot: CaptureSlotState, captureTarget = false) {
-  return render(
+  const onRefreshStatus = vi.fn();
+  const view = render(
     <CaptureSlotCard
       actions={{
         onClear: vi.fn(),
         onDropImage: vi.fn(),
-        onManualRefresh: vi.fn(),
         onMoveImage: vi.fn(),
+        onRefreshStatus,
         onSelectCapture: vi.fn(),
       }}
       presentation={{
@@ -24,6 +25,7 @@ function renderCard(slot: CaptureSlotState, captureTarget = false) {
       slot={slot}
     />,
   );
+  return { ...view, onRefreshStatus };
 }
 
 describe("CaptureSlotCard", () => {
@@ -31,7 +33,6 @@ describe("CaptureSlotCard", () => {
     renderCard(
       {
         kind: "total_assets",
-        pollAttempts: 0,
         status: "empty",
       },
       true,
@@ -47,11 +48,10 @@ describe("CaptureSlotCard", () => {
   });
 
   it("locks destructive and classification actions while OCR is running", () => {
-    renderCard({
+    const { onRefreshStatus } = renderCard({
       file: new File(["image"], "assets.png", { type: "image/png" }),
       jobId: "job-1",
       kind: "total_assets",
-      pollAttempts: 0,
       previewUrl: "blob:assets",
       status: "running",
     });
@@ -64,5 +64,23 @@ describe("CaptureSlotCard", () => {
     expect(screen.getByRole("status")).toHaveTextContent("読み取り中");
     expect(screen.getByRole("status")).toHaveAttribute("aria-live", "polite");
     expect(screen.getByRole("status")).toHaveClass("border-[var(--color-status-info)]/60");
+    const refresh = screen.getByRole("button", { name: "状態を更新" });
+    fireEvent.click(refresh);
+    expect(onRefreshStatus).toHaveBeenCalledOnce();
+  });
+
+  it("prevents duplicate status updates while a request is in progress", () => {
+    const { onRefreshStatus } = renderCard({
+      jobId: "job-1",
+      kind: "total_assets",
+      status: "queued",
+      statusRefreshPending: true,
+    });
+
+    const refresh = screen.getByRole("button", { name: "更新中" });
+    expect(refresh).toBeDisabled();
+    expect(refresh).toHaveAttribute("aria-busy", "true");
+    fireEvent.click(refresh);
+    expect(onRefreshStatus).not.toHaveBeenCalled();
   });
 });

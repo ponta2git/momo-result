@@ -26,17 +26,18 @@ export type OcrCaptureDraftFlow = {
     targetKind: SlotKind,
     notify: (message: string) => void,
   ) => void;
-  handleManualRefresh: (kind: SlotKind) => void;
+  handleRefreshStatus: (kind: SlotKind) => void;
   handleMoveImage: (kind: SlotKind, direction: -1 | 1, notify: (message: string) => void) => void;
   handleResetAll: (notify: (message: string) => void) => void;
   setDraft: (kind: SlotKind, draft: OcrDraftResponse) => void;
+  setStatusRefreshPending: (kind: SlotKind, pending: boolean) => void;
   slots: CaptureSlotState[];
   updateSlot: (slot: CaptureSlotState) => void;
 };
 
 /**
- * 撮影スロット (3 枠) と OCR 下書きの一時状態を所有し、ユーザー操作 (追加/削除/入替/全消去/再描画)
- * を集約する。OCR ジョブ送信や再ポーリングは呼び出し側で扱い、本フックは UI 状態と画像リソース
+ * 撮影スロット (3 枠) と OCR 下書きの一時状態を所有し、ユーザー操作 (追加/削除/入替/全消去/状態更新)
+ * を集約する。OCR ジョブ送信や明示的な状態更新は呼び出し側で扱い、本フックは UI 状態と画像リソース
  * の解放だけに責任を限定する。
  */
 export function useOcrCaptureDraftFlow(): OcrCaptureDraftFlow {
@@ -62,6 +63,16 @@ export function useOcrCaptureDraftFlow(): OcrCaptureDraftFlow {
 
   const setDraft = useCallback((kind: SlotKind, draft: OcrDraftResponse) => {
     setDrafts((current) => ({ ...current, [kind]: draft }));
+  }, []);
+
+  const setStatusRefreshPending = useCallback((kind: SlotKind, pending: boolean) => {
+    setSlots((current) =>
+      current.map((slot) =>
+        slot.kind === kind && slot.statusRefreshPending !== pending
+          ? { ...slot, statusRefreshPending: pending }
+          : slot,
+      ),
+    );
   }, []);
 
   const handleAddImage = useCallback(
@@ -170,21 +181,19 @@ export function useOcrCaptureDraftFlow(): OcrCaptureDraftFlow {
     [handleDropImage],
   );
 
-  const handleManualRefresh = useCallback((kind: SlotKind) => {
-    const currentSlot = slotsRef.current.find((slot) => slot.kind === kind);
-    if (!currentSlot) return;
+  const handleRefreshStatus = useCallback((kind: SlotKind) => {
     setSlots((current) =>
-      current.map((slot) =>
-        slot.kind === kind
-          ? {
-              ...currentSlot,
-              pollingPausedReason: undefined,
-              pollAttempts: 0,
-              pollRefreshNonce: (currentSlot.pollRefreshNonce ?? 0) + 1,
-              transportError: undefined,
-            }
-          : slot,
-      ),
+      current.map((slot) => {
+        if (slot.kind !== kind || slot.statusRefreshPending) {
+          return slot;
+        }
+        return {
+          ...slot,
+          statusRefreshPending: true,
+          statusRefreshRequest: (slot.statusRefreshRequest ?? 0) + 1,
+          transportError: undefined,
+        };
+      }),
     );
   }, []);
 
@@ -193,10 +202,11 @@ export function useOcrCaptureDraftFlow(): OcrCaptureDraftFlow {
     handleAddImage,
     handleClear,
     handleDropImage,
-    handleManualRefresh,
+    handleRefreshStatus,
     handleMoveImage,
     handleResetAll,
     setDraft,
+    setStatusRefreshPending,
     slots,
     updateSlot,
   };

@@ -28,6 +28,7 @@
 
 - fatal error、cached data を保った refetch、認証待ち、disabled query、retry success を別ケースにする。
 - query key ごとの runtime data shape と、mutation 後の detail / list / selector cache の整合を検証する。
+- 時間経過、window focus、tab visibility、network reconnect では request 数が増えず、明示した更新 / 再試行だけが再取得することを QueryClient の既定値と production source checker で固定する。
 - API wrapper は status、Problem Details、credential / CSRF、retry / idempotency の外部契約を assertion にする。
 
 ### Form / Interaction

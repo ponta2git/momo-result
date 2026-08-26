@@ -1,4 +1,4 @@
-import { Activity, Play, RotateCw } from "lucide-react";
+import { Activity, Play, RefreshCw, RotateCw } from "lucide-react";
 
 import {
   AdminSkeleton,
@@ -34,6 +34,20 @@ export function SeriesAnalysisAdminPage() {
   return (
     <PageFrame width="wide">
       <PageHeader
+        actions={
+          data && !page.error ? (
+            <Button
+              icon={<RefreshCw aria-hidden="true" className="size-4" />}
+              pending={page.refreshing}
+              pendingLabel="状態を更新中"
+              size="sm"
+              variant="secondary"
+              onClick={page.actions.refresh}
+            >
+              状態を更新
+            </Button>
+          ) : null
+        }
         eyebrow="管理"
         title="戦績分析"
         description="保存済み分析の状態確認と、作品単位または全作品の再計算を行います。"

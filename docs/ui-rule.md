@@ -104,6 +104,7 @@
 ### 3.4 更新・再試行・初期化・破棄
 
 - 更新は、現在有効な表示条件のまま data を再取得する操作である。`ready → updating with stale content → ready` を基本とし、失敗しても取得済み内容を残して更新失敗を局所表示する。初回 loading へ戻さない。
+- data の更新は利用者が更新 / 再試行を実行したときだけ開始する。一定間隔、遅延 timer、別 tab からの復帰、window focus、network reconnect を更新操作の代わりにしない。初回表示、mutation 後の cache 整合、失効した immutable resource の bounded recovery は更新操作と区別する。
 - 再試行は、失敗した同じ操作を同じ入力と scope でやり直す回復操作である。`error → pending → success | error` を失敗箇所の近くで示し、入力、選択、scroll 位置を保つ。route retry は query と error boundary を同時に reset する。
 - 初期化は、利用者が変更できる値を明示された既定値へ戻す操作である。`customized → defaults` の対象 scope をラベルで示し、変更がない場合は主要操作にしない。初期化に伴う再取得は更新 feedback を併用するが、再試行や破棄とは呼ばない。
 - 破棄は、未確定または一時的な変更を取り除き、`dirty → clean` へ戻す操作である。失われる内容を先に示し、影響が大きい場合だけ確認を挟む。保存済み data の削除と未保存変更の破棄を同じ文言にしない。

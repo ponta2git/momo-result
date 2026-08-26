@@ -7,6 +7,7 @@ export function createTestQueryClient(): QueryClient {
         retry: false,
         staleTime: 0,
         gcTime: Number.POSITIVE_INFINITY,
+        refetchOnReconnect: false,
         refetchOnWindowFocus: false,
       },
       mutations: {

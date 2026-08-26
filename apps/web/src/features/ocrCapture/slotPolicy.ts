@@ -38,6 +38,7 @@ export function toUploadingSlot(slot: CaptureSlotState): CaptureSlotState {
     imageId: undefined,
     jobId: undefined,
     draftId: undefined,
-    pollAttempts: 0,
+    statusRefreshPending: undefined,
+    statusRefreshRequest: undefined,
   };
 }

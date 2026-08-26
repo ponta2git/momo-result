@@ -111,6 +111,7 @@ export function SeriesComparisonPage() {
               confirmedMatchCount={filters.confirmedMatchCount}
               hasError={status.hasError}
               loading={status.loading}
+              refreshing={resource.refreshing || status.refreshing}
               status={status.data}
               onRefresh={page.actions.refresh}
             />

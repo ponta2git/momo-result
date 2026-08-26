@@ -17,7 +17,6 @@ function selectedSlot(kind: SlotKind = "total_assets", fileName = "assets.png"):
   return {
     file: new File(["image"], fileName, { type: "image/png" }),
     kind,
-    pollAttempts: 0,
     previewUrl: "blob:assets",
     source: "upload",
     status: "selected",

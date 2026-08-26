@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { queryClient } from "@/app/queryClient";
 
 describe("app queryClient", () => {
-  it("keeps production server-state defaults explicit", () => {
+  it("keeps production cache and error defaults explicit", () => {
     expect(queryClient.getDefaultOptions()).toMatchObject({
       mutations: {
         retry: false,
@@ -14,6 +14,13 @@ describe("app queryClient", () => {
         staleTime: 10_000,
         throwOnError: false,
       },
+    });
+  });
+
+  it("does not refetch automatically on browser focus or reconnect", () => {
+    expect(queryClient.getDefaultOptions().queries).toMatchObject({
+      refetchOnReconnect: false,
+      refetchOnWindowFocus: false,
     });
   });
 });

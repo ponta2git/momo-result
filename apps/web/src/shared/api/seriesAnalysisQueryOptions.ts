@@ -34,11 +34,6 @@ export function seriesAnalysisStatusQueryOptions(gameTitleId: string | undefined
       return getSeriesAnalysisStatus(gameTitleId, { signal });
     },
     enabled: Boolean(gameTitleId),
-    refetchInterval: (query) => {
-      const status = query.state.data?.calculation?.status;
-      return status === "queued" || status === "running" ? 5_000 : false;
-    },
-    refetchIntervalInBackground: false,
   });
 }
 
@@ -114,15 +109,5 @@ export function seriesAnalysisAdminOverviewQueryOptions(
     queryFn: ({ signal }) => getSeriesAnalysisAdminOverview(gameTitleId, { signal }),
     enabled,
     placeholderData: keepPreviousData,
-    refetchInterval: (query) => {
-      const execution = query.state.data?.globalExecution;
-      return execution &&
-        (execution.runningCount > 0 ||
-          execution.queuedTitleCount > 0 ||
-          execution.activeCampaignCount > 0)
-        ? 5_000
-        : false;
-    },
-    refetchIntervalInBackground: false,
   });
 }

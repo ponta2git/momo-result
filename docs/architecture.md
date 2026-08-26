@@ -67,6 +67,7 @@
 - server state は TanStack Query の cache lifecycle に従い、Page/UI component から query 基盤を直接操作しない。
 - query key は cache 内の runtime data shape まで区別する。backend resource が同じでも raw response と ViewModel を同じ key に置かない。
 - fatal error、再取得、cached data、認証待ち、disabled query を別状態として扱う。mutation 後は表示中の resource と選択候補の cache をともに整合させる。
+- 初回表示、mutation 後の cache 整合、artifact 失効時の bounded recovery、利用者が実行した更新 / 再試行だけが server state の取得を開始する。interval、遅延 timer、window focus、tab visibility、network reconnect を起点に自動再取得しない。この契約は共通 QueryClient と client data policy checker で固定する。
 - React の concurrent / form API は cache、retry、認証、validation の既存契約を置き換えない範囲で使う。
 
 ### Form / React 19 / API Client

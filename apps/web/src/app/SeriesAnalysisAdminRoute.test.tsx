@@ -48,6 +48,27 @@ describe("SeriesAnalysisAdminPage", () => {
     );
   });
 
+  it("refreshes a loaded overview only from the explicit status action", async () => {
+    setDevUser();
+    let overviewRequests = 0;
+    server.use(
+      http.get("/api/admin/series-analysis/overview", () => {
+        overviewRequests += 1;
+        return HttpResponse.json(makeSeriesAnalysisAdminOverview());
+      }),
+    );
+
+    renderAdminPage("/admin/analysis?gameTitleId=gt_momotetsu_2");
+    const user = userEvent.setup();
+
+    const refresh = await screen.findByRole("button", { name: "状態を更新" });
+    expect(overviewRequests).toBe(1);
+
+    await user.click(refresh);
+
+    await waitFor(() => expect(overviewRequests).toBe(2));
+  });
+
   it("renders the job ledger and sends contract-valid idempotent recalculation requests", async () => {
     setDevUser();
     const titleRequests: Array<{ body: unknown; idempotencyKey: string | null }> = [];

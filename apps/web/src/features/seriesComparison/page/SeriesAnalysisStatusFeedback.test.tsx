@@ -22,11 +22,13 @@ function renderFeedback({
   confirmedMatchCount = 12,
   hasError = false,
   loading = false,
+  refreshing = false,
   status = makeSeriesAnalysisStatus(),
 }: {
   confirmedMatchCount?: number;
   hasError?: boolean;
   loading?: boolean;
+  refreshing?: boolean;
   status?: SeriesAnalysisStatusResponse | null | undefined;
 } = {}) {
   const onRefresh = vi.fn();
@@ -35,6 +37,7 @@ function renderFeedback({
       confirmedMatchCount={confirmedMatchCount}
       hasError={hasError}
       loading={loading}
+      refreshing={refreshing}
       status={status ?? undefined}
       onRefresh={onRefresh}
     />,
@@ -156,6 +159,33 @@ describe("SeriesAnalysisStatusFeedback", () => {
       expect(screen.getByRole("button", { name: "状態を再確認" })).toBeInTheDocument();
     },
   );
+
+  it("directs an active calculation to the manual status action", () => {
+    renderFeedback({
+      status: makeSeriesAnalysisStatus({
+        artifactFreshness: "unavailable",
+        calculation: calculation("running"),
+        currentArtifact: null,
+      }),
+    });
+
+    expect(
+      screen.getByText("計算完了後に「状態を再確認」を押すと表示します。"),
+    ).toBeInTheDocument();
+  });
+
+  it("prevents duplicate manual status requests while refreshing", () => {
+    renderFeedback({
+      refreshing: true,
+      status: makeSeriesAnalysisStatus({
+        artifactFreshness: "unavailable",
+        calculation: calculation("running"),
+        currentArtifact: null,
+      }),
+    });
+
+    expect(screen.getByRole("button", { name: "状態を確認中" })).toBeDisabled();
+  });
 
   it("distinguishes status-read failures with and without a cached artifact", async () => {
     const user = userEvent.setup();

@@ -11,12 +11,14 @@ export function SeriesAnalysisStatusFeedback({
   hasError,
   loading,
   onRefresh,
+  refreshing,
   status,
 }: {
   confirmedMatchCount: number;
   hasError: boolean;
   loading: boolean;
   onRefresh: () => void;
+  refreshing: boolean;
   status: SeriesAnalysisStatusResponse | undefined;
 }) {
   if (loading && !status) return null;
@@ -25,6 +27,7 @@ export function SeriesAnalysisStatusFeedback({
       <NoArtifactFeedback
         confirmedMatchCount={confirmedMatchCount}
         hasError={hasError}
+        refreshing={refreshing}
         status={status}
         onRefresh={onRefresh}
       />
@@ -34,7 +37,7 @@ export function SeriesAnalysisStatusFeedback({
     return (
       <Notice tone="warning" title="計算状態を確認できません">
         <p>取得済みの分析はそのまま表示します。</p>
-        <RefreshAction onRefresh={onRefresh} />
+        <RefreshAction refreshing={refreshing} onRefresh={onRefresh} />
       </Notice>
     );
   }
@@ -83,11 +86,13 @@ function NoArtifactFeedback({
   confirmedMatchCount,
   hasError,
   onRefresh,
+  refreshing,
   status,
 }: {
   confirmedMatchCount: number;
   hasError: boolean;
   onRefresh: () => void;
+  refreshing: boolean;
   status: SeriesAnalysisStatusResponse | undefined;
 }) {
   const calculationStatus = status?.calculation?.status;
@@ -98,7 +103,7 @@ function NoArtifactFeedback({
       }
     : calculationStatus === "queued" || calculationStatus === "running"
       ? {
-          description: "画面を開いたまま待つと、完了後に自動で表示します。",
+          description: "計算完了後に「状態を再確認」を押すと表示します。",
           title:
             calculationStatus === "queued"
               ? "戦績データの計算を待っています"
@@ -126,7 +131,12 @@ function NoArtifactFeedback({
   return (
     <EmptyState
       action={
-        <Button variant={hasError ? "primary" : "secondary"} onClick={onRefresh}>
+        <Button
+          pending={refreshing}
+          pendingLabel="状態を確認中"
+          variant={hasError ? "primary" : "secondary"}
+          onClick={onRefresh}
+        >
           状態を再確認
         </Button>
       }
@@ -138,10 +148,16 @@ function NoArtifactFeedback({
   );
 }
 
-function RefreshAction({ onRefresh }: { onRefresh: () => void }) {
+function RefreshAction({ onRefresh, refreshing }: { onRefresh: () => void; refreshing: boolean }) {
   return (
     <div className="mt-3">
-      <Button size="sm" variant="secondary" onClick={onRefresh}>
+      <Button
+        pending={refreshing}
+        pendingLabel="状態を確認中"
+        size="sm"
+        variant="secondary"
+        onClick={onRefresh}
+      >
         状態を再確認
       </Button>
     </div>

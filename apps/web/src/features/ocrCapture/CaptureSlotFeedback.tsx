@@ -8,28 +8,32 @@ const slotKindLabels = {
   total_assets: "総資産",
 } as const satisfies Record<SlotKind, string>;
 
-const pollingPausedMessage: Record<string, string> = {
-  timeout: "読み取り処理の自動確認を停止しました。状態を確認するには手動で更新してください。",
-  transient_errors: "状態確認リクエストが混雑しています。少し待ってから手動で更新してください。",
-};
-
 type CaptureSlotFeedbackProps = {
   mismatch: boolean;
   slot: CaptureSlotState;
-  onManualRefresh: () => void;
+  onRefreshStatus: () => void;
 };
 
-export function CaptureSlotFeedback({ mismatch, slot, onManualRefresh }: CaptureSlotFeedbackProps) {
+const refreshableStatuses = new Set<CaptureSlotState["status"]>(["queued", "running"]);
+
+export function CaptureSlotFeedback({ mismatch, slot, onRefreshStatus }: CaptureSlotFeedbackProps) {
+  const canRefreshStatus = Boolean(slot.jobId) && refreshableStatuses.has(slot.status);
+
   return (
     <>
       {mismatch ? <CaptureMismatchAlert detectedKind={slot.detectedKind} /> : null}
       {slot.transportError ? <CaptureTransportError error={slot.transportError} /> : null}
       {slot.jobFailure ? <CaptureJobFailure failure={slot.jobFailure} /> : null}
-      {slot.pollingPausedReason && !["succeeded", "failed", "cancelled"].includes(slot.status) ? (
-        <div className="mt-4 rounded-[var(--radius-md)] border border-[var(--color-warning)]/60 bg-[var(--color-warning)]/20 p-3 text-sm text-[var(--color-text-primary)]">
-          {pollingPausedMessage[slot.pollingPausedReason]}
-          <Button className="ml-3" variant="secondary" onClick={onManualRefresh}>
-            状態を確認
+      {canRefreshStatus ? (
+        <div className="mt-4 grid gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3 text-sm text-[var(--color-text-primary)] sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+          <p>読み取り状態は自動更新されません。必要なときに最新の状態を取得してください。</p>
+          <Button
+            pending={slot.statusRefreshPending === true}
+            pendingLabel="更新中"
+            variant="secondary"
+            onClick={onRefreshStatus}
+          >
+            状態を更新
           </Button>
         </div>
       ) : null}

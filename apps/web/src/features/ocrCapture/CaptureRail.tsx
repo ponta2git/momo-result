@@ -14,7 +14,7 @@ type CaptureRailProps = {
   onClear: (kind: SlotKind) => void;
   onDropImage: (sourceKind: SlotKind, targetKind: SlotKind) => void;
   onMoveImage: (kind: SlotKind, direction: -1 | 1) => void;
-  onManualRefresh: (kind: SlotKind) => void;
+  onRefreshStatus: (kind: SlotKind) => void;
   onSelectCaptureTarget: (kind: SlotKind) => void;
 };
 
@@ -26,7 +26,7 @@ export function CaptureRail({
   onClear,
   onDropImage,
   onMoveImage,
-  onManualRefresh,
+  onRefreshStatus,
   onSelectCaptureTarget,
 }: CaptureRailProps) {
   return (
@@ -42,7 +42,7 @@ export function CaptureRail({
         const actions = {
           onClear: () => onClear(definition.kind),
           onDropImage,
-          onManualRefresh: () => onManualRefresh(definition.kind),
+          onRefreshStatus: () => onRefreshStatus(definition.kind),
           onMoveImage: (direction: -1 | 1) => onMoveImage(definition.kind, direction),
           onSelectCapture: () => onSelectCaptureTarget(definition.kind),
         };

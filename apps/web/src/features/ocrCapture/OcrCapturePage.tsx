@@ -4,7 +4,7 @@ import { CameraCapture } from "@/features/ocrCapture/CameraCapture";
 import { CaptureRail } from "@/features/ocrCapture/CaptureRail";
 import { slotDefinitions } from "@/features/ocrCapture/captureState";
 import { ImageInput } from "@/features/ocrCapture/ImageInput";
-import { OcrJobSlotWatcher } from "@/features/ocrCapture/OcrJobSlotWatcher";
+import { OcrJobSlotStatusLoader } from "@/features/ocrCapture/OcrJobSlotStatusLoader";
 import { OcrStartDialog } from "@/features/ocrCapture/OcrStartDialog";
 import { SetupPanel } from "@/features/ocrCapture/SetupPanel";
 import { useOcrCapturePageController } from "@/features/ocrCapture/useOcrCapturePageController";
@@ -210,7 +210,7 @@ export function OcrCapturePage() {
               onClear={(kind) => flow.handleClear(kind, notify)}
               onDropImage={(source, target) => flow.handleDropImage(source, target, notify)}
               onMoveImage={(kind, direction) => flow.handleMoveImage(kind, direction, notify)}
-              onManualRefresh={flow.handleManualRefresh}
+              onRefreshStatus={flow.handleRefreshStatus}
               onSelectCaptureTarget={handleSelectCaptureTarget}
             />
           </aside>
@@ -285,12 +285,13 @@ export function OcrCapturePage() {
       />
 
       {flow.slots.map((slot) => (
-        <OcrJobSlotWatcher
+        <OcrJobSlotStatusLoader
           key={slot.kind}
           slot={slot}
           onUpdate={flow.updateSlot}
           onDraft={flow.setDraft}
           onDraftLoadError={handleDraftLoadError}
+          onRefreshingChange={flow.setStatusRefreshPending}
         />
       ))}
     </PageFrame>

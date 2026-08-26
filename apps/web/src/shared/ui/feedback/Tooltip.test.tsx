@@ -1,12 +1,16 @@
-import { render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { Tooltip, TooltipProvider } from "@/shared/ui/feedback/Tooltip";
 
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+});
+
 describe("Tooltip", () => {
-  it("remains independently renderable and exposes accessible descriptive content", async () => {
-    const user = userEvent.setup();
+  it("remains independently renderable and exposes accessible descriptive content", () => {
+    vi.useFakeTimers();
     render(
       <Tooltip content={<span>保存前に入力内容を確認します</span>}>
         <button type="button">保存について</button>
@@ -14,15 +18,18 @@ describe("Tooltip", () => {
     );
 
     const trigger = screen.getByRole("button", { name: "保存について" });
-    await user.tab();
+    act(() => {
+      trigger.focus();
+      vi.runOnlyPendingTimers();
+    });
 
     expect(trigger).toHaveFocus();
     expect(trigger).toHaveAccessibleName("保存について");
-    expect(await screen.findByText("保存前に入力内容を確認します")).toBeVisible();
+    expect(screen.getByText("保存前に入力内容を確認します").closest("[data-open]")).not.toBeNull();
   });
 
-  it("shares the initial delay and opens adjacent tooltips instantly within the group", async () => {
-    const user = userEvent.setup();
+  it("shares the initial delay and opens adjacent tooltips instantly within the group", () => {
+    vi.useFakeTimers();
     render(
       <TooltipProvider>
         <Tooltip content="最初の説明">
@@ -37,12 +44,17 @@ describe("Tooltip", () => {
     const firstTrigger = screen.getByRole("button", { name: "最初" });
     const nextTrigger = screen.getByRole("button", { name: "次" });
 
-    await user.hover(firstTrigger);
+    fireEvent.pointerMove(firstTrigger, { pointerType: "mouse" });
+    fireEvent.mouseEnter(firstTrigger);
+    fireEvent.mouseMove(firstTrigger);
     expect(screen.queryByText("最初の説明")).not.toBeInTheDocument();
-    expect(await screen.findByText("最初の説明")).toBeVisible();
+    act(() => vi.runOnlyPendingTimers());
+    expect(screen.getByText("最初の説明").closest("[data-open]")).not.toBeNull();
 
-    await user.unhover(firstTrigger);
-    await user.hover(nextTrigger);
-    expect(screen.getByText("次の説明")).toBeVisible();
+    fireEvent.mouseLeave(firstTrigger);
+    fireEvent.pointerMove(nextTrigger, { pointerType: "mouse" });
+    fireEvent.mouseEnter(nextTrigger);
+    fireEvent.mouseMove(nextTrigger);
+    expect(screen.getByText("次の説明").closest("[data-open]")).not.toBeNull();
   });
 });

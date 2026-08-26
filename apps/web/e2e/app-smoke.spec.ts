@@ -96,23 +96,28 @@ test("completes the app smoke workflow with isolated scoped data", async ({
     e2eRun.trackHeldEvent(heldEventId);
     const heldEventDetailHref = withReturnTo(`/held-events/${heldEventId}`, "/held-events");
     await expect(page).toHaveURL(heldEventDetailHref);
-    await expect(page.getByText("確定 0試合・未完了 0件。次は第1試合です。")).toBeVisible();
-    const manualLinks = await page.getByRole("link", { exact: true, name: "手入力" }).all();
-    expect(manualLinks).toHaveLength(2);
-    for (const manualLink of manualLinks) {
-      await expect(manualLink).toHaveAttribute(
-        "href",
-        withReturnTo(`/matches/new?heldEventId=${heldEventId}`, currentPagePath(page)),
-      );
-    }
-    const ocrLinks = await page.getByRole("link", { exact: true, name: "OCR取り込み" }).all();
-    expect(ocrLinks).toHaveLength(2);
-    for (const ocrLink of ocrLinks) {
-      await expect(ocrLink).toHaveAttribute(
-        "href",
-        withReturnTo(`/ocr/new?heldEventId=${heldEventId}`, currentPagePath(page)),
-      );
-    }
+    await expect(page.getByText("確定済み", { exact: true })).toBeVisible();
+    await expect(page.getByText("0試合", { exact: true })).toBeVisible();
+    await expect(page.getByText("未完了", { exact: true })).toBeVisible();
+    await expect(page.getByText("0件", { exact: true })).toBeVisible();
+    await expect(page.getByText("次の番号", { exact: true })).toBeVisible();
+    await expect(page.getByText("第1試合", { exact: true })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { exact: true, level: 2, name: "第1試合を記録" }),
+    ).toBeVisible();
+
+    const manualLink = page.getByRole("link", { exact: true, name: "手入力" });
+    await expect(manualLink).toHaveCount(1);
+    await expect(manualLink).toHaveAttribute(
+      "href",
+      withReturnTo(`/matches/new?heldEventId=${heldEventId}`, currentPagePath(page)),
+    );
+    const ocrLink = page.getByRole("link", { exact: true, name: "OCR取り込み" });
+    await expect(ocrLink).toHaveCount(1);
+    await expect(ocrLink).toHaveAttribute(
+      "href",
+      withReturnTo(`/ocr/new?heldEventId=${heldEventId}`, currentPagePath(page)),
+    );
   });
 
   await test.step("open OCR for this run's held event from held-event history", async () => {
@@ -591,7 +596,11 @@ test("completes the app smoke workflow with isolated scoped data", async ({
 
     await page.setViewportSize({ height: 900, width: 1440 });
     await page.getByRole("tab", { name: "次戦に備える" }).click();
-    await expect(page.getByLabel("行動仮説の使い方").getByText("次の4戦")).toBeVisible();
+    const nextMatchReview = page.getByRole("tabpanel", { name: "次戦に備える" });
+    const actionHypothesisTarget = nextMatchReview.getByLabel("行動仮説の対象");
+    await expect(actionHypothesisTarget.getByText("対象", { exact: true })).toBeVisible();
+    await expect(actionHypothesisTarget.getByText("次の4戦", { exact: true })).toBeVisible();
+    await expect(nextMatchReview.getByText("使う場面", { exact: true })).toHaveCount(0);
     await expect(selectedMatch).toBeVisible();
     await page.getByRole("button", { name: "根拠・注意・試合後の確認" }).click();
     const evidenceDialog = page.getByRole("dialog", { name: "根拠・注意・試合後の確認" });

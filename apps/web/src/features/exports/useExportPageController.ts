@@ -1,5 +1,5 @@
 import { useMutation } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
 import {
@@ -31,8 +31,8 @@ export function useExportPageController({
   const returnTo = sanitizeReturnTo(searchParams.get("returnTo"));
   const urlState = parseExportSearchParams(searchParams);
   const [lastResult, setLastResult] = useState<ExportDownloadResultView | undefined>();
-  const [downloadStartedAt, setDownloadStartedAt] = useState<number | null>(null);
-  const [elapsedMs, setElapsedMs] = useState(0);
+  const [isSlow, setIsSlow] = useState(false);
+  const slowTimerRef = useRef<number | undefined>(undefined);
   const selectedId = selectedIdForScope(urlState, urlState.scope);
   const candidates = useExportCandidates({ scope: urlState.scope, selectedId });
   const candidateView = candidates.view;
@@ -55,23 +55,18 @@ export function useExportPageController({
     }
   }, [candidateView, returnTo, setSearchParams, urlState]);
 
-  useEffect(() => {
-    if (downloadStartedAt === null) {
-      setElapsedMs(0);
-      return;
-    }
-    const intervalId = window.setInterval(() => {
-      setElapsedMs(Date.now() - downloadStartedAt);
-    }, 250);
-    return () => window.clearInterval(intervalId);
-  }, [downloadStartedAt]);
+  useEffect(
+    () => () => {
+      if (slowTimerRef.current !== undefined) {
+        window.clearTimeout(slowTimerRef.current);
+      }
+    },
+    [],
+  );
 
   const mutation = useMutation({
-    mutationFn: () => {
-      setDownloadStartedAt(Date.now());
-      setElapsedMs(0);
-      setLastResult(undefined);
-      return downloadExportMatches(
+    mutationFn: () =>
+      downloadExportMatches(
         {
           format: urlState.format,
           scope: urlState.scope,
@@ -80,9 +75,25 @@ export function useExportPageController({
           seasonMasterId: urlState.seasonMasterId,
         },
         { timeoutMs: downloadTimeoutMs },
-      );
+      ),
+    onMutate: () => {
+      if (slowTimerRef.current !== undefined) {
+        window.clearTimeout(slowTimerRef.current);
+      }
+      setIsSlow(false);
+      setLastResult(undefined);
+      slowTimerRef.current = window.setTimeout(() => {
+        slowTimerRef.current = undefined;
+        setIsSlow(true);
+      }, slowThresholdMs);
     },
-    onSettled: () => setDownloadStartedAt(null),
+    onSettled: () => {
+      if (slowTimerRef.current !== undefined) {
+        window.clearTimeout(slowTimerRef.current);
+        slowTimerRef.current = undefined;
+      }
+      setIsSlow(false);
+    },
     onSuccess: (outcome) => {
       if (outcome.kind === "download_started") {
         setLastResult({
@@ -120,10 +131,9 @@ export function useExportPageController({
   const view = buildExportViewModel({
     candidate: candidateView,
     candidateRefreshing: candidates.refreshing,
-    elapsedMs,
     isPending: mutation.isPending,
+    isSlow,
     lastResult,
-    slowThresholdMs,
     urlState,
   });
 

@@ -1,10 +1,10 @@
 import { QueryClientProvider } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { formatCompactDateTime } from "@/features/matches/list/matchListFormat";
 import { MatchCreatePage } from "@/features/matches/MatchCreatePage";
@@ -18,6 +18,8 @@ import {
 } from "@/shared/workflows/matchWorkspaceMasterHandoff";
 import { setDevUser } from "@/test/auth";
 import { createDeferred } from "@/test/deferred";
+import { installMatchMediaController } from "@/test/doubles/dom";
+import type { MatchMediaController } from "@/test/doubles/dom";
 import { makeFourPlayerResults, makeIncidents, makeMatchDetail } from "@/test/factories";
 import { makeMatchWorkspaceMasterHandoffValues } from "@/test/factories/draftReview";
 import { setupMsw } from "@/test/msw/lifecycle";
@@ -36,9 +38,15 @@ function LocationProbe() {
 
 describe("MatchesListPage", () => {
   let queryClient: QueryClient;
+  let matchMedia: MatchMediaController;
   beforeEach(() => {
     queryClient = createTestQueryClient();
+    matchMedia = installMatchMediaController(true);
     user = userEvent.setup();
+  });
+
+  afterEach(() => {
+    matchMedia.restore();
   });
 
   it("renders matches and links to detail", async () => {
@@ -58,7 +66,7 @@ describe("MatchesListPage", () => {
     const pageTitle = await screen.findByRole("heading", { name: "試合一覧" });
     expect(pageTitle).toHaveClass("text-2xl", "md:text-3xl", "text-balance");
     expect(screen.queryByLabelText("開催の振り返り")).not.toBeInTheDocument();
-    expect(await screen.findAllByText("優勝 ぽんた")).toHaveLength(2);
+    expect(await screen.findAllByText("優勝 ぽんた")).toHaveLength(1);
     expect(document.querySelector("article.momo-enter")).not.toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: /開催・試合/u })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "状態・次の操作" })).toBeInTheDocument();
@@ -103,7 +111,7 @@ describe("MatchesListPage", () => {
     const detailLinks = await screen.findAllByRole("link", {
       name: "第1試合 東日本編の試合結果を見る",
     });
-    expect(detailLinks).toHaveLength(2);
+    expect(detailLinks).toHaveLength(1);
     detailLinks.forEach((link) => {
       expect(link).toHaveAttribute("href", "/matches/match-1?returnTo=%2Fmatches");
       expect(link).toHaveClass("size-11");
@@ -111,10 +119,45 @@ describe("MatchesListPage", () => {
     const exportLinks = await screen.findAllByRole("link", {
       name: "第1試合をCSV/TSV出力",
     });
-    expect(exportLinks).toHaveLength(2);
+    expect(exportLinks).toHaveLength(1);
     exportLinks.forEach((link) =>
       expect(link).toHaveAttribute("href", "/exports?matchId=match-1&returnTo=%2Fmatches"),
     );
+  });
+
+  it("mounts only the result layout for the current breakpoint and switches on resize", async () => {
+    setDevUser();
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/matches"]}>
+          <Routes>
+            <Route path="/matches" element={<MatchesListPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByRole("table", { name: "登録済みの試合" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "第1試合 東日本編の試合結果を見る" }).closest("article"),
+    ).toBeNull();
+
+    act(() => matchMedia.setMatches(false));
+
+    await waitFor(() =>
+      expect(screen.queryByRole("table", { name: "登録済みの試合" })).not.toBeInTheDocument(),
+    );
+    expect(
+      screen.getByRole("link", { name: "第1試合 東日本編の試合結果を見る" }).closest("article"),
+    ).not.toBeNull();
+
+    act(() => matchMedia.setMatches(true));
+
+    expect(await screen.findByRole("table", { name: "登録済みの試合" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "第1試合 東日本編の試合結果を見る" }).closest("article"),
+    ).toBeNull();
   });
 
   it("commits detail navigation immediately while the detail payload is loading", async () => {
@@ -842,7 +885,7 @@ describe("MatchesListPage", () => {
     }
     await user.click(firstDraftAction);
 
-    await waitFor(() => expect(screen.getAllByRole("button", { name: "確認中…" })).toHaveLength(2));
+    await waitFor(() => expect(screen.getAllByRole("button", { name: "確認中…" })).toHaveLength(1));
     screen
       .getAllByRole("button", { name: "確認中…" })
       .forEach((button) => expect(button).toBeDisabled());

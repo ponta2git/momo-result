@@ -5,6 +5,7 @@ import { MatchesTable } from "@/features/matches/list/MatchesTable";
 import { matchListPageSizeOptions } from "@/features/matches/list/matchListSearchParams";
 import { MatchMobileCard } from "@/features/matches/list/MatchMobileCard";
 import { useMatchesListPageController } from "@/features/matches/list/useMatchesListPageController";
+import { useMediaQuery } from "@/shared/lib/useMediaQuery";
 import { Button } from "@/shared/ui/actions/Button";
 import { IconButton } from "@/shared/ui/actions/IconButton";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
@@ -17,25 +18,29 @@ import { PageFrame } from "@/shared/ui/layout/PageFrame";
 import { PageHeader } from "@/shared/ui/layout/PageHeader";
 import { StaleShield } from "@/shared/ui/motion/StaleShield";
 
-function ListSkeleton() {
+function ListSkeleton({ showDesktopTable }: { showDesktopTable: boolean }) {
   return (
     <div className="min-h-[24rem]">
-      <div className="hidden border-y border-[var(--color-border-strong)] bg-[var(--color-surface)] p-3 lg:grid lg:gap-3">
-        <Skeleton className="min-h-10" />
-        {["s1", "s2", "s3", "s4"].map((id) => (
-          <Skeleton key={id} className="min-h-24" />
-        ))}
-      </div>
-      <div className="grid gap-3 lg:hidden">
-        {["m1", "m2", "m3"].map((id) => (
-          <Skeleton key={id} className="min-h-56 rounded-[var(--radius-md)]" />
-        ))}
-      </div>
+      {showDesktopTable ? (
+        <div className="grid gap-3 border-y border-[var(--color-border-strong)] bg-[var(--color-surface)] p-3">
+          <Skeleton className="min-h-10" />
+          {["s1", "s2", "s3", "s4"].map((id) => (
+            <Skeleton key={id} className="min-h-24" />
+          ))}
+        </div>
+      ) : (
+        <div className="grid gap-3">
+          {["m1", "m2", "m3"].map((id) => (
+            <Skeleton key={id} className="min-h-56 rounded-[var(--radius-md)]" />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
 export function MatchesListPage() {
+  const showDesktopTable = useMediaQuery("(min-width: 1024px)");
   const {
     applySearch,
     checkingDraftIds,
@@ -202,13 +207,13 @@ export function MatchesListPage() {
           ) : null}
 
           {showMatchesLoading ? (
-            <ListSkeleton />
+            <ListSkeleton showDesktopTable={showDesktopTable} />
           ) : (
             <StaleShield
               active={listUpdating}
               busyLabel="一覧を更新中"
               contentClassName="grid gap-4"
-              fallback={<ListSkeleton />}
+              fallback={<ListSkeleton showDesktopTable={showDesktopTable} />}
               strategy={listScopeChanging ? "preserve-inert" : "preserve-interactive"}
             >
               {showMatchesError ? (
@@ -249,14 +254,15 @@ export function MatchesListPage() {
                 />
               ) : (
                 <>
-                  <div className="hidden lg:block">
+                  {showDesktopTable ? (
                     <MatchesTable items={items} rowActions={rowActions} />
-                  </div>
-                  <div className="grid gap-3 lg:hidden">
-                    {items.map((item) => (
-                      <MatchMobileCard key={item.id} item={item} rowActions={rowActions} />
-                    ))}
-                  </div>
+                  ) : (
+                    <div className="grid gap-3">
+                      {items.map((item) => (
+                        <MatchMobileCard key={item.id} item={item} rowActions={rowActions} />
+                      ))}
+                    </div>
+                  )}
                   {pagination ? (
                     <PaginationControls
                       disabled={listScopeChanging}

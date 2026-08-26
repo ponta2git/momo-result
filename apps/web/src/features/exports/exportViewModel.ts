@@ -257,10 +257,9 @@ function summaryText(
 export function buildExportViewModel(input: {
   candidate: ExportCandidateView;
   candidateRefreshing?: boolean | undefined;
-  elapsedMs: number;
   isPending: boolean;
+  isSlow: boolean;
   lastResult?: ExportDownloadResultView | undefined;
-  slowThresholdMs: number;
   urlState: ExportUrlState;
 }): ExportViewModel {
   const formatLabel = input.urlState.format.toUpperCase();
@@ -269,8 +268,6 @@ export function buildExportViewModel(input: {
     (input.candidate.kind === "ready" &&
       input.candidate.selectionState === "resolved" &&
       input.candidate.selectedId.length > 0);
-  const isSlow = input.isPending && input.elapsedMs >= input.slowThresholdMs;
-
   return {
     actionLabel: `${actionSubject(input.urlState.scope)}を${formatLabel}でダウンロード`,
     candidate: input.candidate,
@@ -279,7 +276,7 @@ export function buildExportViewModel(input: {
     errors: input.urlState.errors,
     format: input.urlState.format,
     formatLabel,
-    isSlow,
+    isSlow: input.isPending && input.isSlow,
     result: input.lastResult,
     scope: input.urlState.scope,
     selectedId: input.candidate.kind === "ready" ? input.candidate.selectedId : "",

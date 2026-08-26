@@ -57,9 +57,8 @@ describe("exportViewModel", () => {
         message: "",
         title: "",
       },
-      elapsedMs: 0,
       isPending: false,
-      slowThresholdMs: 10_000,
+      isSlow: false,
       urlState: {
         errors: [],
         format: "csv",
@@ -82,9 +81,8 @@ describe("exportViewModel", () => {
         selectionState: "resolved",
       },
       candidateRefreshing: true,
-      elapsedMs: 0,
       isPending: false,
-      slowThresholdMs: 10_000,
+      isSlow: false,
       urlState: {
         errors: [],
         format: "csv",
@@ -150,9 +148,8 @@ describe("exportViewModel", () => {
   it("shows slow state while a download is pending past threshold", () => {
     const view = buildExportViewModel({
       candidate: { kind: "hidden" },
-      elapsedMs: 10_000,
       isPending: true,
-      slowThresholdMs: 10_000,
+      isSlow: true,
       urlState: { errors: [], format: "csv", scope: "all" },
     });
 

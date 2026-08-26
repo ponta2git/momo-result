@@ -9,10 +9,10 @@ export const exportFormats = [
   { label: "TSV", value: "tsv" },
 ] as const;
 export const exportScopes = [
-  { description: "下書きや確認待ちの試合は含みません。", label: "全試合", value: "all" },
-  { description: "シーズンを選んで書き出します。", label: "シーズン", value: "season" },
-  { description: "開催を選んで書き出します。", label: "開催", value: "heldEvent" },
-  { description: "1試合だけ選んで書き出します。", label: "試合", value: "match" },
+  { label: "全試合", value: "all" },
+  { label: "シーズン", value: "season" },
+  { label: "開催", value: "heldEvent" },
+  { label: "試合", value: "match" },
 ] as const;
 
 export type ExportCandidateSupportIssue = {

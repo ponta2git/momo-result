@@ -131,6 +131,19 @@ describe("ExportPage", () => {
     expect(screen.getByText("すべての確定済み試合をCSVで書き出します。")).toBeInTheDocument();
   });
 
+  it("keeps the exclusion notice visible for every export scope", async () => {
+    renderPage();
+
+    await screen.findByRole("heading", { name: "CSV/TSV出力" });
+    const scopeTabs = screen.getByRole("tablist", { name: "出力範囲" });
+
+    for (const label of ["全試合", "シーズン", "開催", "試合"]) {
+      await user.click(within(scopeTabs).getByRole("tab", { name: label }));
+      const panel = screen.getByRole("tabpanel", { name: label });
+      expect(within(panel).getByText("下書きや確認待ちの試合は含みません。")).toBeVisible();
+    }
+  });
+
   it("activates instant format tabs on focus and waits for confirmation before loading a scope", async () => {
     let seasonRequests = 0;
     server.use(
@@ -146,9 +159,11 @@ describe("ExportPage", () => {
     await user.click(within(formatTabs).getByRole("tab", { name: "CSV" }));
     await user.keyboard("{ArrowRight}");
 
-    expect(within(formatTabs).getByRole("tab", { name: "TSV" })).toHaveAttribute(
-      "aria-selected",
-      "true",
+    await waitFor(() =>
+      expect(within(formatTabs).getByRole("tab", { name: "TSV" })).toHaveAttribute(
+        "aria-selected",
+        "true",
+      ),
     );
     expect(screen.getByRole("tabpanel", { name: "TSV" })).toBeInTheDocument();
     expect(screen.getByText("すべての確定済み試合をTSVで書き出します。")).toBeInTheDocument();

@@ -6,6 +6,8 @@ import { TabsList, TabsPanel, TabsRoot, TabsTab } from "@/shared/ui/forms/Tabs";
 import type { ExportScope } from "./exportTypes";
 import { exportScopes } from "./exportViewModel";
 
+const exportExclusionNotice = "下書きや確認待ちの試合は含みません。";
+
 type ExportScopeTabsProps = {
   children: ReactNode;
   disabled?: boolean;
@@ -52,11 +54,14 @@ export function ExportScopeTabs({
             value={item.value}
           >
             {scope === item.value ? (
-              item.value === "all" ? (
-                <p className="text-sm text-[var(--color-text-secondary)]">{item.description}</p>
-              ) : (
-                children
-              )
+              <>
+                {item.value === "all" ? null : children}
+                <p
+                  className={`${item.value === "all" ? "" : "mt-3 "}text-sm text-[var(--color-text-secondary)]`}
+                >
+                  {exportExclusionNotice}
+                </p>
+              </>
             ) : null}
           </TabsPanel>
         ))}

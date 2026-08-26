@@ -45,12 +45,11 @@ export function HeldEventsPage() {
       <PageContentSurface
         aria-busy={page.table.data.refreshing || undefined}
         aria-label="開催履歴"
-        className="overflow-hidden"
-        padding="none"
+        className="grid gap-4"
         role="region"
       >
         {page.feedback.errorMessage && !page.create.open && !page.deleteDialog.target ? (
-          <Notice className="m-4 mb-0" tone="danger" title="操作に失敗しました">
+          <Notice tone="danger" title="操作に失敗しました">
             {page.feedback.errorMessage}
           </Notice>
         ) : null}

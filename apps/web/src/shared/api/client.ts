@@ -27,24 +27,35 @@ export type ApiDownloadResult = {
 };
 
 const mutatingMethods = new Set<HttpMethod>(["POST", "PUT", "PATCH", "DELETE"]);
+export const devUserStorageKey = "momoresult.devUser";
+export const noDevUserSelectedValue = "__momo_no_dev_user_selected__";
 
 export function getBuildTimeDevUser(): string | undefined {
   return import.meta.env.DEV ? import.meta.env.VITE_DEV_USER : undefined;
 }
 
-export function getStoredDevUser(): string | undefined {
+function getStoredDevUserValue(): string | null | undefined {
   if (!import.meta.env.DEV || typeof window === "undefined") {
     return undefined;
   }
   try {
-    return window.localStorage.getItem("momoresult.devUser") ?? undefined;
+    return window.localStorage.getItem(devUserStorageKey);
   } catch {
     return undefined;
   }
 }
 
+export function getStoredDevUser(): string | undefined {
+  const value = getStoredDevUserValue();
+  return value === noDevUserSelectedValue ? undefined : (value ?? undefined);
+}
+
 export function resolveDevUser(): string | undefined {
-  return getBuildTimeDevUser() ?? getStoredDevUser();
+  const storedValue = getStoredDevUserValue();
+  if (storedValue === noDevUserSelectedValue) {
+    return undefined;
+  }
+  return storedValue ?? getBuildTimeDevUser();
 }
 
 function shouldAttachIdempotencyKey(method: HttpMethod, options: ApiRequestOptions): boolean {

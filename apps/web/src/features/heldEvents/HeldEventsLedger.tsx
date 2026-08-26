@@ -85,7 +85,6 @@ function HeldEventsTable({
   return (
     <DataTable
       caption={{ content: "開催履歴" }}
-      className="rounded-none border-0"
       columns={columns}
       getRowKey={(event) => event.id}
       minWidth="58rem"
@@ -104,7 +103,7 @@ function HeldEventsMobileList({
   returnTo,
 }: HeldEventsLedgerProps) {
   return (
-    <ol>
+    <ol className="overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)]">
       {events.map((event, index) => (
         <HeldEventRow
           key={event.id}

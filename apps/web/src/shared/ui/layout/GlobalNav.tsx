@@ -43,7 +43,6 @@ type GlobalNavProps = {
   authDisplayName?: string | undefined;
   className?: string;
   isAuthenticated?: boolean;
-  isAccountLocked?: boolean;
   isAdmin?: boolean;
   isLogoutPending?: boolean;
   logoutFailed?: boolean;
@@ -103,7 +102,6 @@ export function GlobalNav({
   authDisplayName,
   className,
   isAuthenticated = true,
-  isAccountLocked = false,
   isAdmin = false,
   isLogoutPending = false,
   logoutFailed = false,
@@ -114,6 +112,7 @@ export function GlobalNav({
     ? items
     : [{ icon: <LogIn className="size-4" />, label: "ログイン", to: "/login" }];
   const managementItems = isAuthenticated && isAdmin ? adminItems : [];
+  const canLogout = import.meta.env.DEV && Boolean(onLogout);
 
   return (
     <nav
@@ -144,11 +143,7 @@ export function GlobalNav({
                 <p className="hidden max-w-28 truncate text-xs text-[var(--color-text-secondary)] min-[24rem]:block">
                   {authDisplayName ?? "ログイン中"}
                 </p>
-                {isAccountLocked ? (
-                  <span className="shrink-0 rounded-[var(--radius-xs)] border border-[var(--color-border)] px-2 py-1 text-xs font-medium text-[var(--color-text-secondary)]">
-                    アカウント固定
-                  </span>
-                ) : (
+                {canLogout ? (
                   <Button
                     aria-describedby={logoutFailed ? "global-nav-logout-error" : undefined}
                     aria-label={logoutFailed ? "ログアウトを再試行" : undefined}
@@ -162,9 +157,9 @@ export function GlobalNav({
                   >
                     {logoutFailed ? "再試行" : "ログアウト"}
                   </Button>
-                )}
+                ) : null}
               </div>
-              {logoutFailed && !isAccountLocked ? (
+              {logoutFailed && canLogout ? (
                 <p
                   className="max-w-72 text-right text-xs leading-5 break-words text-[var(--color-danger)]"
                   id="global-nav-logout-error"

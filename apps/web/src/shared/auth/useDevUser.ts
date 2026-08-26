@@ -1,21 +1,25 @@
 import { useCallback } from "react";
 
-import { getBuildTimeDevUser } from "@/shared/api/client";
+import {
+  devUserStorageKey,
+  getBuildTimeDevUser,
+  noDevUserSelectedValue,
+} from "@/shared/api/client";
 import { useStorageValue } from "@/shared/lib/useStorageValue";
 
-const storageKey = "momoresult.devUser";
 const eventName = "momoresult-dev-user-change";
 
 export function useDevUser() {
   const buildTimeDevUser = getBuildTimeDevUser();
-  const [devUser, setStoredDevUser] = useStorageValue(storageKey, {
+  const [storedDevUser, setStoredDevUser] = useStorageValue(devUserStorageKey, {
     customEventName: eventName,
-    overrideValue: buildTimeDevUser,
   });
+  const devUser =
+    storedDevUser === noDevUserSelectedValue ? "" : storedDevUser || buildTimeDevUser || "";
 
   const setDevUser = useCallback(
     (value: string) => {
-      setStoredDevUser(value);
+      setStoredDevUser(value || noDevUserSelectedValue);
     },
     [setStoredDevUser],
   );
@@ -23,6 +27,5 @@ export function useDevUser() {
   return {
     devUser,
     setDevUser,
-    lockedByEnv: Boolean(buildTimeDevUser),
   };
 }

@@ -1,5 +1,5 @@
 import { QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { createMemoryRouter, RouterProvider } from "react-router-dom";
@@ -8,7 +8,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ErrorBoundary } from "@/app/ErrorBoundary";
 import { appRoutes } from "@/app/router";
 import { matchKeys } from "@/shared/api/queryKeys";
-import { setDevUser, testDevUserStorageKey } from "@/test/auth";
+import { setDevUser } from "@/test/auth";
 import { createDeferred } from "@/test/deferred";
 import { makeFourPlayerResults, makeMatchDetail } from "@/test/factories";
 import { setupMsw } from "@/test/msw/lifecycle";
@@ -224,7 +224,8 @@ describe("app routing", () => {
     });
   });
 
-  it("logs out locally without a backend request for a mutable dev override", async () => {
+  it("logs out from the local default account and lets the operator switch roles", async () => {
+    vi.stubEnv("VITE_DEV_USER", "account_ponta");
     let logoutRequests = 0;
     server.use(
       http.post("/api/auth/logout", () => {
@@ -232,101 +233,42 @@ describe("app routing", () => {
         return new HttpResponse(null, { status: 204 });
       }),
     );
-    setDevUser();
-    const { queryClient, router } = renderApp("/matches");
-
-    expect(await screen.findByRole("heading", { name: "試合一覧" })).toBeInTheDocument();
-    queryClient.setQueryData(matchKeys.detail("match-secret"), {
-      matchId: "match-secret",
-      privateNote: "previous session cache",
-    });
-    await user.click(screen.getByRole("button", { name: "ログアウト" }));
-
-    await waitFor(() => {
-      expect(window.localStorage.getItem(testDevUserStorageKey)).toBeNull();
-      expect(queryClient.getQueryData(matchKeys.detail("match-secret"))).toBeUndefined();
-      expect(router.state.location.pathname).toBe("/login");
-    });
-    expect(await screen.findByRole("heading", { name: "ログイン" })).toBeInTheDocument();
-    expect(logoutRequests).toBe(0);
-  });
-
-  it("retains the authenticated UI and session cache when backend logout fails, then clears both after retry", async () => {
-    vi.stubEnv("DEV", false);
-    let authenticated = true;
-    let logoutAttempts = 0;
-    server.use(
-      http.get("/api/auth/me", () =>
-        authenticated
-          ? HttpResponse.json({
-              accountId: "account_ponta",
-              csrfToken: "session-csrf",
-              displayName: "ぽんた",
-              isAdmin: true,
-              memberId: "member_ponta",
-            })
-          : HttpResponse.json(
-              {
-                code: "UNAUTHORIZED",
-                detail: "session ended",
-                status: 401,
-                title: "Unauthorized",
-                type: "about:blank",
-              },
-              { status: 401 },
-            ),
-      ),
-      http.post("/api/auth/logout", () => {
-        logoutAttempts += 1;
-        if (logoutAttempts === 1) {
-          return HttpResponse.json(
-            {
-              code: "TEMPORARILY_UNAVAILABLE",
-              detail: "logout temporarily unavailable",
-              status: 503,
-              title: "Temporary failure",
-              type: "about:blank",
-            },
-            { status: 503 },
-          );
-        }
-        authenticated = false;
-        return new HttpResponse(null, { status: 204 });
-      }),
-    );
-
     try {
       const { queryClient, router } = renderApp("/matches");
-      const sessionCacheKey = ["private-session-cache"] as const;
 
       expect(await screen.findByRole("heading", { name: "試合一覧" })).toBeInTheDocument();
-      queryClient.setQueryData(sessionCacheKey, { privateNote: "previous session cache" });
-      await user.click(screen.getByRole("button", { name: "ログアウト" }));
-
-      const alert = await screen.findByRole("alert");
-      expect(alert).toHaveTextContent("ログアウトできませんでした。");
-      expect(alert).toHaveTextContent("ログイン状態と表示中の内容は保持しています。");
-      expect(screen.getByRole("heading", { name: "試合一覧" })).toBeInTheDocument();
-      expect(router.state.location.pathname).toBe("/matches");
-      expect(queryClient.getQueryData(sessionCacheKey)).toEqual({
+      expect(screen.getByRole("link", { name: "アカウント" })).toBeInTheDocument();
+      queryClient.setQueryData(matchKeys.detail("match-secret"), {
+        matchId: "match-secret",
         privateNote: "previous session cache",
       });
-
-      await user.click(screen.getByRole("button", { name: "ログアウトを再試行" }));
+      await user.click(screen.getByRole("button", { name: "ログアウト" }));
 
       await waitFor(() => {
-        expect(queryClient.getQueryData(sessionCacheKey)).toBeUndefined();
+        expect(queryClient.getQueryData(matchKeys.detail("match-secret"))).toBeUndefined();
         expect(router.state.location.pathname).toBe("/login");
       });
       expect(await screen.findByRole("heading", { name: "ログイン" })).toBeInTheDocument();
-      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
-      expect(logoutAttempts).toBe(2);
+      const accountPicker = screen.getByRole("combobox", { name: "操作用アカウント" });
+      expect(accountPicker).toBeEnabled();
+      await user.selectOptions(accountPicker, "account_eu");
+
+      await waitFor(() => {
+        expect(router.state.location.pathname).toBe("/matches");
+      });
+      expect(
+        within(screen.getByRole("navigation", { name: "グローバルナビゲーション" })).getByText(
+          "いーゆー",
+        ),
+      ).toBeInTheDocument();
+      expect(screen.queryByRole("link", { name: "アカウント" })).not.toBeInTheDocument();
+      expect(logoutRequests).toBe(0);
     } finally {
       vi.unstubAllEnvs();
     }
   });
 
-  it("treats an already-ended backend session as a completed logout", async () => {
+  it("does not offer logout in the commercial navigation", async () => {
     vi.stubEnv("DEV", false);
     server.use(
       http.get("/api/auth/me", () =>
@@ -338,33 +280,15 @@ describe("app routing", () => {
           memberId: "member_ponta",
         }),
       ),
-      http.post("/api/auth/logout", () =>
-        HttpResponse.json(
-          {
-            code: "UNAUTHORIZED",
-            detail: "session ended",
-            status: 401,
-            title: "Unauthorized",
-            type: "about:blank",
-          },
-          { status: 401 },
-        ),
-      ),
     );
 
     try {
-      const { queryClient, router } = renderApp("/matches");
-      const sessionCacheKey = ["private-session-cache"] as const;
+      const { router } = renderApp("/matches");
 
       expect(await screen.findByRole("heading", { name: "試合一覧" })).toBeInTheDocument();
-      queryClient.setQueryData(sessionCacheKey, { privateNote: "previous session cache" });
-      await user.click(screen.getByRole("button", { name: "ログアウト" }));
-
-      await waitFor(() => {
-        expect(queryClient.getQueryData(sessionCacheKey)).toBeUndefined();
-        expect(router.state.location.pathname).toBe("/login");
-      });
-      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+      expect(router.state.location.pathname).toBe("/matches");
+      expect(screen.queryByRole("button", { name: "ログアウト" })).not.toBeInTheDocument();
+      expect(screen.queryByText("アカウント固定")).not.toBeInTheDocument();
     } finally {
       vi.unstubAllEnvs();
     }

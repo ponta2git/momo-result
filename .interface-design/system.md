@@ -23,6 +23,12 @@
 - 小さな secondary text と semibold、列境界を示す下罫線で、data row より弱い階層にする。
 - 共通 `DataTable` または共通 header pattern を使い、sortable state は操作部分だけに閉じる。
 
+### Table-only Page Surface
+
+- 一覧・管理画面が table だけでも、page header の次に通常 padding の `PageContentSurface` を置き、その内側に table を入れる。
+- content surface は page と data scope の余白を所有し、table wrapper だけが row / column の border と角丸を所有する。
+- loading、empty、error、pagination は同じ surface に従属させ、table と同化させる目的で `padding="none"` を使わない。
+
 ### Continuous Match Timeline
 
 - 順序付きリストの各 record に番号 marker を置き、1本の軸として読む。

@@ -20,13 +20,13 @@ export function HeldEventsListCard({
   onCreate: () => void;
 }) {
   return (
-    <div className="min-w-0 overflow-hidden">
+    <div className="grid min-w-0 gap-4">
       {data.loading ? (
         <HeldEventsLoading />
       ) : (
         <motion.div
           animate={{ opacity: data.refreshing ? 0.7 : 1 }}
-          className="min-w-0"
+          className="grid min-w-0 gap-4"
           transition={momoTransition}
         >
           {data.stale ? (
@@ -42,7 +42,6 @@ export function HeldEventsListCard({
                   開催履歴を再取得
                 </Button>
               }
-              className="m-4 mb-0"
               tone="warning"
               title="開催履歴を更新できませんでした"
             >
@@ -50,30 +49,25 @@ export function HeldEventsListCard({
             </Notice>
           ) : null}
           {data.scopeChanging ? (
-            <p
-              className="border-b border-[var(--color-border)] px-4 py-2 text-xs text-[var(--color-text-secondary)]"
-              role="status"
-            >
+            <p className="text-xs text-[var(--color-text-secondary)]" role="status">
               現在は{data.page}ページ目（{data.pageSize}件表示）です。{data.requestedPage}
               ページ目（{data.requestedPageSize}件表示）を読み込んでいます。
             </p>
           ) : null}
           {data.loadFailed ? (
-            <div className="p-4">
-              <Notice tone="danger" title="開催履歴を読み込めません">
-                <p>通信状態を確認して、もう一度お試しください。</p>
-                <div className="mt-3">
-                  <Button
-                    pending={data.refreshing}
-                    pendingLabel="再読み込み中"
-                    size="sm"
-                    onClick={actions.onRetry}
-                  >
-                    開催履歴を再読み込み
-                  </Button>
-                </div>
-              </Notice>
-            </div>
+            <Notice tone="danger" title="開催履歴を読み込めません">
+              <p>通信状態を確認して、もう一度お試しください。</p>
+              <div className="mt-3">
+                <Button
+                  pending={data.refreshing}
+                  pendingLabel="再読み込み中"
+                  size="sm"
+                  onClick={actions.onRetry}
+                >
+                  開催履歴を再読み込み
+                </Button>
+              </div>
+            </Notice>
           ) : data.rows.length === 0 ? (
             <EmptyState
               action={
@@ -99,7 +93,7 @@ export function HeldEventsListCard({
 
           {data.pagination && data.pagination.totalItems > 0 && !data.loadFailed ? (
             <PaginationControls
-              className="border-t border-[var(--color-border)] px-4 py-3"
+              className="p-0"
               disabled={data.refreshing}
               pageSizeOptions={[...heldEventViewModel.heldEventPageSizeOptions]}
               pagination={data.pagination}
@@ -116,7 +110,11 @@ export function HeldEventsListCard({
 
 function HeldEventsLoading() {
   return (
-    <div aria-label="開催履歴を読み込み中" className="grid gap-0" role="status">
+    <div
+      aria-label="開催履歴を読み込み中"
+      className="grid gap-0 overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)]"
+      role="status"
+    >
       {["first", "second", "third"].map((id) => (
         <div
           key={id}

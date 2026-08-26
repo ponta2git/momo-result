@@ -12,7 +12,7 @@ type DevUserPickerProps = {
 
 export function DevUserPicker({ embedded = false, force = false }: DevUserPickerProps) {
   const queryClient = useQueryClient();
-  const { devUser, setDevUser, lockedByEnv } = useDevUser();
+  const { devUser, setDevUser } = useDevUser();
 
   if (!import.meta.env.DEV && !force) {
     return null;
@@ -32,8 +32,6 @@ export function DevUserPicker({ embedded = false, force = false }: DevUserPicker
       )}
     >
       <SelectField
-        description={lockedByEnv ? "ローカル設定で固定されています。" : undefined}
-        disabled={lockedByEnv}
         label="操作用アカウント"
         options={[
           { label: "未選択", value: "" },

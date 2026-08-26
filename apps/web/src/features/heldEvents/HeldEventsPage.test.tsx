@@ -64,7 +64,12 @@ describe("HeldEventsPage", () => {
     expect(await screen.findByRole("heading", { name: "開催履歴" })).toBeInTheDocument();
     expect(await screen.findByText("最新")).toBeInTheDocument();
     const surface = screen.getByRole("region", { name: "開催履歴" });
-    expect(surface).toHaveClass("bg-[var(--color-surface)]", "rounded-[var(--radius-md)]");
+    expect(surface).toHaveClass(
+      "bg-[var(--color-surface)]",
+      "rounded-[var(--radius-md)]",
+      "p-4",
+      "sm:p-6",
+    );
     expect(surface).not.toHaveClass("border");
     expect(surface).not.toContainElement(screen.getByRole("heading", { name: "開催履歴" }));
     expect(screen.getByText("確定済み")).toBeInTheDocument();
@@ -98,6 +103,13 @@ describe("HeldEventsPage", () => {
     renderPage();
 
     const table = await screen.findByRole("table", { name: "開催履歴" });
+    const surface = screen.getByRole("region", { name: "開催履歴" });
+    expect(surface).toContainElement(table);
+    expect(table.parentElement).toHaveClass(
+      "rounded-[var(--radius-md)]",
+      "border",
+      "border-[var(--color-border)]",
+    );
     expect(within(table).getByRole("columnheader", { name: "開催日時" })).toHaveClass(
       "bg-[var(--color-surface)]",
       "border-[var(--color-border-strong)]",

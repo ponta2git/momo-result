@@ -36,16 +36,33 @@ describe("GlobalNav", () => {
     );
   });
 
-  it("replaces an unavailable logout action with an account-lock explanation", () => {
+  it("omits account-lock copy when no logout action is available", () => {
     render(
       <MemoryRouter initialEntries={["/matches"]}>
-        <GlobalNav authDisplayName="ぽんた" isAccountLocked logoutFailed />
+        <GlobalNav authDisplayName="ぽんた" logoutFailed />
       </MemoryRouter>,
     );
 
-    expect(screen.getByText("アカウント固定")).toBeVisible();
+    expect(screen.queryByText("アカウント固定")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "ログアウト" })).not.toBeInTheDocument();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("keeps logout out of the commercial navigation", () => {
+    vi.stubEnv("DEV", false);
+
+    try {
+      render(
+        <MemoryRouter initialEntries={["/matches"]}>
+          <GlobalNav authDisplayName="ぽんた" onLogout={vi.fn()} />
+        </MemoryRouter>,
+      );
+
+      expect(screen.queryByRole("button", { name: "ログアウト" })).not.toBeInTheDocument();
+      expect(screen.queryByText("アカウント固定")).not.toBeInTheDocument();
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   it("keeps logout failure feedback and its retry action at the account control", async () => {

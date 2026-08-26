@@ -70,42 +70,31 @@ export function AdminAccountsPage() {
         }
       />
 
-      <PageContentSurface
-        aria-label="ログインアカウント一覧"
-        className="overflow-hidden"
-        padding="none"
-        role="region"
-      >
+      <PageContentSurface aria-label="ログインアカウント一覧" className="grid gap-4" role="region">
         {accountsLoading ? (
-          <div className="grid gap-3 p-4" aria-label="ログインアカウントを読み込み中">
+          <div className="grid gap-3" aria-label="ログインアカウントを読み込み中">
             <Skeleton className="min-h-10" />
             <Skeleton className="min-h-16" />
             <Skeleton className="min-h-16" />
           </div>
         ) : accountsLoadFailed ? (
-          <div className="p-4">
-            <Notice tone="danger" title={accountsError?.title ?? "アカウントを読み込めません"}>
-              <p>{accountsError?.detail ?? "通信状態を確認して、もう一度お試しください。"}</p>
-              <div className="mt-3">
-                <Button
-                  pending={accountsRefreshing}
-                  pendingLabel="再読み込み中"
-                  size="sm"
-                  onClick={retryAccounts}
-                >
-                  アカウントを再読み込み
-                </Button>
-              </div>
-            </Notice>
-          </div>
-        ) : (
-          <div className="grid">
-            {accountsStale ? (
-              <Notice
-                className="m-4 mb-0"
-                tone="warning"
-                title="最新のアカウント情報を取得できません"
+          <Notice tone="danger" title={accountsError?.title ?? "アカウントを読み込めません"}>
+            <p>{accountsError?.detail ?? "通信状態を確認して、もう一度お試しください。"}</p>
+            <div className="mt-3">
+              <Button
+                pending={accountsRefreshing}
+                pendingLabel="再読み込み中"
+                size="sm"
+                onClick={retryAccounts}
               >
+                アカウントを再読み込み
+              </Button>
+            </div>
+          </Notice>
+        ) : (
+          <div className="grid gap-4">
+            {accountsStale ? (
+              <Notice tone="warning" title="最新のアカウント情報を取得できません">
                 <p>直前に取得した内容を表示しています。</p>
                 <div className="mt-3">
                   <Button
@@ -140,7 +129,7 @@ export function AdminAccountsPage() {
                 }
               />
             ) : (
-              <>
+              <div className="overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)]">
                 <p className="border-b border-[var(--color-border)] px-3 py-2 text-xs text-[var(--color-text-secondary)] md:hidden">
                   権限と操作は横にスクロールして確認できます。
                 </p>
@@ -188,7 +177,7 @@ export function AdminAccountsPage() {
                     </tbody>
                   </table>
                 </div>
-              </>
+              </div>
             )}
           </div>
         )}

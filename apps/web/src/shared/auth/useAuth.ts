@@ -24,7 +24,7 @@ async function clearSessionQueryCache(
 
 export function useAuth() {
   const queryClient = useQueryClient();
-  const { devUser, lockedByEnv, setDevUser } = useDevUser();
+  const { devUser, setDevUser } = useDevUser();
   const authQuery = useQuery(authQueryOptions(devUser));
   const isMissingDevUser = import.meta.env.DEV && !devUser;
   const isLoggedOut = authQuery.data === null;
@@ -33,7 +33,7 @@ export function useAuth() {
 
   const logoutMutation = useMutation({
     mutationFn: async () => {
-      if (import.meta.env.DEV && Boolean(devUser) && !lockedByEnv) {
+      if (import.meta.env.DEV && Boolean(devUser)) {
         return { clearsMutableDevOverride: true };
       }
       try {
@@ -59,7 +59,6 @@ export function useAuth() {
   return {
     auth: authQuery.data ?? undefined,
     error: normalizedError,
-    isAccountLocked: import.meta.env.DEV && lockedByEnv,
     isAuthenticated: authQuery.isSuccess && !isLoggedOut,
     isChecking,
     isForbidden: normalizedError?.status === 403,

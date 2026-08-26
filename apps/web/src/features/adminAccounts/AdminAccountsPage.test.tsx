@@ -42,8 +42,20 @@ describe("AdminAccountsPage", () => {
       "border-[var(--color-border-strong)]",
     );
     const surface = screen.getByRole("region", { name: "ログインアカウント一覧" });
-    expect(surface).toHaveClass("bg-[var(--color-surface)]", "rounded-[var(--radius-md)]");
+    expect(surface).toHaveClass(
+      "bg-[var(--color-surface)]",
+      "rounded-[var(--radius-md)]",
+      "p-4",
+      "sm:p-6",
+    );
     expect(surface).not.toHaveClass("border");
+    const table = screen.getByRole("table", { name: "ログイン可能なアカウントと権限" });
+    expect(surface).toContainElement(table);
+    expect(table.parentElement?.parentElement).toHaveClass(
+      "rounded-[var(--radius-md)]",
+      "border",
+      "border-[var(--color-border)]",
+    );
     expect(surface).not.toContainElement(
       screen.getByRole("heading", { name: "ログインアカウント" }),
     );

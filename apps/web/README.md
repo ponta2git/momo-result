@@ -26,9 +26,10 @@ In Vite dev mode, `/ocr/new` also shows `サンプル下書きで確認`. This o
 
 The API dev auth header is resolved in this order:
 
-1. `VITE_DEV_USER`
-2. `localStorage["momoresult.devUser"]`
-3. The in-page Dev User picker
+1. The selection stored by the in-page Dev User picker
+2. `VITE_DEV_USER` as the initial default when no local selection has been made
+
+Local logout records an explicit unselected state, so a configured `VITE_DEV_USER` does not prevent choosing another account for permission checks.
 
 Allowed local users use account IDs derived from API `DEV_MEMBER_IDS`: `account_ponta`, `account_akane_mami`, `account_otaka`, `account_eu`.
 

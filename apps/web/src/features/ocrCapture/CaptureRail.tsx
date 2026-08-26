@@ -31,12 +31,7 @@ export function CaptureRail({
 }: CaptureRailProps) {
   return (
     <section
-      className={cn(
-        "relative grid gap-3",
-        layout === "rail"
-          ? "xl:grid-cols-3"
-          : "before:absolute before:top-6 before:bottom-6 before:left-[1.875rem] before:w-px before:bg-[var(--color-border-strong)]",
-      )}
+      className={cn("grid gap-3", layout === "rail" ? "xl:grid-cols-3" : "")}
       aria-label="画像取り込み"
     >
       {slotDefinitions.map((definition, index) => {
@@ -58,7 +53,6 @@ export function CaptureRail({
           label: definition.label,
           nextLabel: slotDefinitions[index + 1]?.label,
           previousLabel: slotDefinitions[index - 1]?.label,
-          stationLabel: definition.stationLabel,
           total: slotDefinitions.length,
         };
 

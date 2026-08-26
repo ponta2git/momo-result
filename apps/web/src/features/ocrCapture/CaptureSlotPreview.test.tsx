@@ -15,7 +15,6 @@ describe("CaptureSlotPreview", () => {
     const onDragStartCapture = vi.fn();
     const { rerender } = render(
       <CaptureSlotPreview
-        isCaptureTarget
         isWorking={false}
         label="総資産"
         slot={emptySlot}
@@ -38,7 +37,6 @@ describe("CaptureSlotPreview", () => {
     };
     rerender(
       <CaptureSlotPreview
-        isCaptureTarget={false}
         isWorking={false}
         label="総資産"
         slot={selectedSlot}

@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { CaptureSlotCard } from "@/features/ocrCapture/CaptureSlotCard";
 import type { CaptureSlotState } from "@/features/ocrCapture/captureState";
 
-function renderCard(slot: CaptureSlotState) {
+function renderCard(slot: CaptureSlotState, captureTarget = false) {
   return render(
     <CaptureSlotCard
       actions={{
@@ -16,10 +16,9 @@ function renderCard(slot: CaptureSlotState) {
       }}
       presentation={{
         accentClass: "bg-[var(--color-tray-assets)]",
-        captureTarget: false,
+        captureTarget,
         index: 0,
         label: "総資産",
-        stationLabel: "01",
         total: 3,
       }}
       slot={slot}
@@ -28,6 +27,24 @@ function renderCard(slot: CaptureSlotState) {
 }
 
 describe("CaptureSlotCard", () => {
+  it("uses one local control to identify the selected capture target", () => {
+    renderCard(
+      {
+        kind: "total_assets",
+        pollAttempts: 0,
+        status: "empty",
+      },
+      true,
+    );
+
+    expect(screen.getByRole("button", { name: "撮影先に選択中" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.getByText("総資産の画像待ち")).toBeInTheDocument();
+    expect(screen.queryByText("01")).not.toBeInTheDocument();
+  });
+
   it("locks destructive and classification actions while OCR is running", () => {
     renderCard({
       file: new File(["image"], "assets.png", { type: "image/png" }),

@@ -71,8 +71,6 @@ export function useOcrCapturePageController() {
       return;
     }
     setCaptureTargetKind(kind);
-    const label = slotDefinitions.find((definition) => definition.kind === kind)?.label ?? kind;
-    showToast({ title: `次の撮影先を${label}に変更しました。`, tone: "info" });
   }
 
   function handleImageSelected(file: File, source: InputSource) {

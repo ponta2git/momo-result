@@ -34,7 +34,6 @@ type CaptureSlotPresentation = {
   label: string;
   nextLabel?: string | undefined;
   previousLabel?: string | undefined;
-  stationLabel: string;
   total: number;
   captureTarget: boolean;
 };
@@ -84,10 +83,7 @@ export function CaptureSlotCard({ actions, draft, presentation, slot }: CaptureS
   return (
     <section
       className={cn(
-        "relative overflow-hidden rounded-[var(--radius-md)] border bg-[var(--color-surface)] p-3 transition-colors duration-[var(--motion-fast)] motion-reduce:transition-none",
-        presentation.captureTarget
-          ? "border-[var(--color-action)]/55 bg-[var(--color-action)]/5"
-          : "border-[var(--color-border)]",
+        "relative overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3 transition-colors duration-[var(--motion-fast)] motion-reduce:transition-none",
         dragOver ? "border-[var(--color-action)] bg-[var(--color-action)]/10" : "",
       )}
       data-capture-target={presentation.captureTarget || undefined}
@@ -95,29 +91,16 @@ export function CaptureSlotCard({ actions, draft, presentation, slot }: CaptureS
       onDragLeave={() => setDragOver(false)}
       onDrop={handleDrop}
     >
-      <div className={`absolute inset-y-0 left-0 w-1 ${presentation.accentClass}`} />
       <div className="flex items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-3">
+        <div className="flex min-w-0 items-center gap-2">
           <span
-            className={cn(
-              "relative z-[var(--z-base)] grid size-9 shrink-0 place-items-center rounded-full border text-xs font-bold",
-              presentation.captureTarget
-                ? "border-[var(--color-action)] bg-[var(--color-action)] text-white"
-                : "border-[var(--color-tray-marker)]/35 bg-[var(--color-surface)] text-[var(--color-tray-marker)]",
-            )}
-          >
-            {presentation.stationLabel}
-          </span>
+            aria-hidden="true"
+            className={`h-6 w-1 shrink-0 rounded-full ${presentation.accentClass}`}
+          />
           <div className="min-w-0">
             <h3 className="font-semibold text-[var(--color-text-primary)]">{presentation.label}</h3>
             <p className="text-xs text-[var(--color-text-secondary)]">
-              {presentation.captureTarget
-                ? hasImage
-                  ? "次の撮影で差し替え"
-                  : "次の撮影先"
-                : hasImage
-                  ? "画像を配置済み"
-                  : "画像待ち"}
+              {hasImage ? "画像を配置済み" : "画像待ち"}
             </p>
           </div>
         </div>
@@ -126,7 +109,6 @@ export function CaptureSlotCard({ actions, draft, presentation, slot }: CaptureS
 
       <div className="mt-3 grid gap-3 sm:grid-cols-[minmax(8rem,10rem)_minmax(0,1fr)]">
         <CaptureSlotPreview
-          isCaptureTarget={presentation.captureTarget}
           isWorking={isWorking}
           label={presentation.label}
           slot={slot}

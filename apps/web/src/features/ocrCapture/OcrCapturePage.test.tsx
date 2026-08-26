@@ -192,6 +192,11 @@ describe("OcrCapturePage", () => {
 
     await user.click(within(incidentCard!).getByRole("button", { name: "撮影先にする" }));
     expect(screen.getByLabelText("次の撮影先は事件簿")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "撮影先に選択中" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.queryByText("次の撮影先を事件簿に変更しました。")).not.toBeInTheDocument();
 
     const input = screen.getByLabelText("OCRの画像をアップロード");
     await user.upload(input, new File(["first"], "incident-first.png", { type: "image/png" }));

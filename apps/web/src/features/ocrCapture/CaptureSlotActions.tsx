@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowRight, Camera, Trash2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, Camera, Check, Trash2 } from "lucide-react";
 
 import { Button } from "@/shared/ui/actions/Button";
 
@@ -37,12 +37,18 @@ export function CaptureSlotActions({
         aria-pressed={captureSelected}
         className="w-full"
         disabled={captureDisabled}
-        icon={<Camera aria-hidden="true" className="size-4" />}
+        icon={
+          captureSelected ? (
+            <Check aria-hidden="true" className="size-4" />
+          ) : (
+            <Camera aria-hidden="true" className="size-4" />
+          )
+        }
         size="sm"
-        variant={captureSelected ? "quiet" : "secondary"}
+        variant={captureSelected ? "secondary" : "quiet"}
         onClick={onSelectCapture}
       >
-        {captureSelected ? "次の撮影先" : captureLabel}
+        {captureSelected ? "撮影先に選択中" : captureLabel}
       </Button>
       <div className="flex flex-wrap gap-1">
         <Button

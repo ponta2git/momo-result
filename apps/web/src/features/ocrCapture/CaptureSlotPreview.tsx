@@ -11,7 +11,6 @@ const sourceLabels = {
 };
 
 type CaptureSlotPreviewProps = {
-  isCaptureTarget: boolean;
   isWorking: boolean;
   label: string;
   slot: CaptureSlotState;
@@ -19,7 +18,6 @@ type CaptureSlotPreviewProps = {
 };
 
 export function CaptureSlotPreview({
-  isCaptureTarget,
   isWorking,
   label,
   slot,
@@ -33,13 +31,8 @@ export function CaptureSlotPreview({
       aria-label={`${label}の16:9画像枠`}
       animate={{ opacity: 1 }}
       className={cn(
-        "relative aspect-video w-full overflow-hidden rounded-[var(--radius-sm)] border",
-        hasImage
-          ? "border-[var(--color-border)] bg-[var(--momo-night-900)]"
-          : "border-dashed bg-[var(--color-surface-subtle)]",
-        isCaptureTarget && !hasImage
-          ? "border-[var(--color-action)]"
-          : "border-[var(--color-border)]",
+        "relative aspect-video w-full overflow-hidden rounded-[var(--radius-sm)] border border-[var(--color-border)]",
+        hasImage ? "bg-[var(--momo-night-900)]" : "border-dashed bg-[var(--color-surface-subtle)]",
         hasImage &&
           (isWorking ? "cursor-not-allowed opacity-85" : "cursor-grab active:cursor-grabbing"),
       )}
@@ -67,7 +60,7 @@ export function CaptureSlotPreview({
         </>
       ) : (
         <span className="absolute inset-0 grid place-items-center px-2 text-center text-xs text-pretty text-[var(--color-text-secondary)]">
-          {isCaptureTarget ? "次に撮影されます" : `${label}の画像待ち`}
+          {label}の画像待ち
         </span>
       )}
     </motion.div>

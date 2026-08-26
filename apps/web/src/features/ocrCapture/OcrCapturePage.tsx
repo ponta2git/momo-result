@@ -160,21 +160,15 @@ export function OcrCapturePage() {
                 <p className={panelLeadClass}>ゲーム画面全体が入るようにカメラを合わせます。</p>
               </div>
               <div
-                className="flex items-center gap-2 rounded-full border border-[var(--color-action)]/35 bg-[var(--color-action)]/8 py-2 pr-3 pl-2 text-sm"
+                className="flex items-center gap-2 py-1 text-sm"
                 aria-label={`次の撮影先は${captureTarget.label}`}
               >
                 <span
                   aria-hidden="true"
-                  className={`grid size-7 place-items-center rounded-full text-xs font-bold text-[var(--momo-night-900)] ${captureTarget.accentClass}`}
-                >
-                  {captureTarget.stationLabel}
-                </span>
-                <span>
-                  <span className="text-xs text-[var(--color-text-secondary)]">次の撮影</span>{" "}
-                  <strong className="text-[var(--color-text-primary)]">
-                    {captureTarget.label}
-                  </strong>
-                </span>
+                  className={`h-5 w-1 rounded-full ${captureTarget.accentClass}`}
+                />
+                <span className="text-xs text-[var(--color-text-secondary)]">撮影先</span>
+                <strong className="text-[var(--color-text-primary)]">{captureTarget.label}</strong>
               </div>
             </div>
 

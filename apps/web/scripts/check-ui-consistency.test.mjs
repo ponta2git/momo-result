@@ -33,6 +33,10 @@ test("accepts defined token families, multiline reduced-motion classes, and dyna
   --z-overlay: 1;
   --font-body: sans-serif;
   --ease-standard: linear;
+}
+.transparent-presentation {
+  background-color: transparent;
+  color: currentColor;
 }`,
     ],
     [
@@ -55,8 +59,13 @@ export function ValidPolicy() {
         animate-spin
         motion-reduce:animate-none
       \`}
-      style={{ color: presentation.color }}
+      style={{
+        backgroundColor: "transparent",
+        color: presentation.color,
+        outlineColor: "currentColor",
+      }}
     >
+      <svg fill="none" stroke="currentColor" />
       <svg fill={presentation.color} stroke={presentation.color} />
       {tokens.join("")}
     </div>
@@ -94,7 +103,22 @@ test("moves deterministic utility, token, color, spacing, and motion checks into
   );
   assert.equal(
     violations.filter((violation) => violation.rule === "raw-arbitrary-color").length,
-    4,
+    7,
+  );
+  assert.deepEqual(
+    violations
+      .filter((violation) => violation.rule === "raw-arbitrary-color")
+      .map((violation) => violation.subject.split("@")[0])
+      .toSorted(),
+    [
+      "#123456",
+      'backgroundColor: "rebeccapurple"',
+      "bg-[#123456]",
+      'color: "#abcdef"',
+      'fill="#123456"',
+      'stroke="red"',
+      "white",
+    ],
   );
   assert.equal(
     violations.filter((violation) => violation.rule === "direct-tailwind-palette").length,

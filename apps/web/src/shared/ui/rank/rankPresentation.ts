@@ -7,7 +7,7 @@ export function rankColor(rank: number): string {
 }
 
 export function rankForegroundColor(rank: number): string {
-  return rank === 1 ? "var(--color-text-primary)" : "white";
+  return rank === 1 ? "var(--color-text-primary)" : "var(--color-text-inverse)";
 }
 
 export function colorMix(color: string, alpha: number): string {

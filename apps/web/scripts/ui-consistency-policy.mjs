@@ -29,6 +29,19 @@ const directTailwindPalettePattern =
 const rawColorValuePattern =
   /#[0-9a-f]{3,8}\b|(?:color|hsla?|lab|lch|oklab|oklch|rgba?)\([^)]*\)/giu;
 
+const allowedLiteralColorKeywords = new Set([
+  "context-fill",
+  "context-stroke",
+  "currentcolor",
+  "inherit",
+  "initial",
+  "none",
+  "revert",
+  "revert-layer",
+  "transparent",
+  "unset",
+]);
+
 function violationId(rule, path, subject) {
   return `${rule}:${path}:${subject}`;
 }
@@ -332,6 +345,10 @@ function indexIsInRange(index, range) {
   return index >= range.start && index < range.end;
 }
 
+function isAllowedLiteralColorKeyword(value) {
+  return allowedLiteralColorKeywords.has(value.toLowerCase());
+}
+
 function collectRawColorViolations(sources) {
   const violations = [];
   const styles = sources.get("styles.css") ?? "";
@@ -364,12 +381,35 @@ function collectRawColorViolations(sources) {
     );
   }
 
+  const literalCssNamedColorPattern =
+    /(?<![-\w])(?:background(?:-color)?|border(?:-(?:bottom|left|right|top))?-color|color|fill|outline-color|stroke)\s*:\s*([a-z][a-z-]*)\s*(?:!important\s*)?(?=[;}])/giu;
+  for (const match of styles.matchAll(literalCssNamedColorPattern)) {
+    const value = match[1];
+    if (
+      !value ||
+      isAllowedLiteralColorKeyword(value) ||
+      commentRanges.some((range) => indexIsInRange(match.index, range))
+    ) {
+      continue;
+    }
+    const line = lineNumberAt(styles, match.index);
+    violations.push(
+      makeViolation({
+        line,
+        message: "use a semantic color token instead of a CSS named color",
+        path: "styles.css",
+        rule: "raw-arbitrary-color",
+        subject: `${value}@${line}`,
+      }),
+    );
+  }
+
   const arbitraryColorUtilityPattern =
     /\b(?:bg|border|fill|outline|ring|stroke|text)-\[(?:#[0-9a-f]{3,8}|(?:color|hsla?|lab|lch|oklab|oklch|rgba?)\([^\]\r\n]+\))\]/giu;
   const literalPresentationColorPattern =
-    /\b(?:background(?:Color)?|border(?:Bottom|Left|Right|Top)?Color|color|fill|outlineColor|stroke)\s*:\s*["'`](#[0-9a-f]{3,8}\b|(?:color|hsla?|lab|lch|oklab|oklch|rgba?)\([^"'`]+\))["'`]/giu;
+    /\b(?:background(?:Color)?|border(?:Bottom|Left|Right|Top)?Color|color|fill|outlineColor|stroke)\s*:\s*["'`](#[0-9a-f]{3,8}\b|(?:color|hsla?|lab|lch|oklab|oklch|rgba?)\([^"'`]+\)|[a-z][a-z-]*)["'`]/giu;
   const literalSvgColorPattern =
-    /\b(?:fill|stroke)\s*=\s*["'](#[0-9a-f]{3,8}\b|(?:color|hsla?|lab|lch|oklab|oklch|rgba?)\([^"']+\))["']/giu;
+    /\b(?:fill|stroke)\s*=\s*["'](#[0-9a-f]{3,8}\b|(?:color|hsla?|lab|lch|oklab|oklch|rgba?)\([^"']+\)|[a-z][a-z-]*)["']/giu;
 
   for (const [path, source] of sources) {
     if (path === "styles.css") continue;
@@ -380,6 +420,8 @@ function collectRawColorViolations(sources) {
     ]) {
       pattern.lastIndex = 0;
       for (const match of source.matchAll(pattern)) {
+        const value = match[1];
+        if (value && isAllowedLiteralColorKeyword(value)) continue;
         const line = lineNumberAt(source, match.index);
         violations.push(
           makeViolation({

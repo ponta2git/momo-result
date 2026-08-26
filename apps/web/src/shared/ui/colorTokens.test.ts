@@ -192,10 +192,7 @@ describe("semantic color tokens", () => {
       ).toBeGreaterThanOrEqual(4.5);
     }
     expect(
-      contrast(
-        resolvedToken("--color-text-inverse"),
-        resolvedToken("--color-surface-inverse"),
-      ),
+      contrast(resolvedToken("--color-text-inverse"), resolvedToken("--color-surface-inverse")),
       "inverse text on inverse surfaces must meet AA",
     ).toBeGreaterThanOrEqual(4.5);
 

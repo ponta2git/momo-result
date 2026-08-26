@@ -73,14 +73,14 @@ describe("HeldEventDetailPage", () => {
                   {
                     memberId: "member_ponta",
                     playOrder: 1,
-                    rank: 1,
+                    rank: 2,
                     revenueManYen: 100,
                     totalAssetsManYen: 12_345,
                   },
                   {
                     memberId: "member_eu",
                     playOrder: 2,
-                    rank: 2,
+                    rank: 1,
                     revenueManYen: 90,
                     totalAssetsManYen: 9_000,
                   },
@@ -102,6 +102,8 @@ describe("HeldEventDetailPage", () => {
     expect(surface).not.toHaveClass("border");
     expect(surface).toContainElement(screen.getByRole("heading", { name: "この開催の戦績" }));
     expect(surface).not.toContainElement(screen.getByRole("heading", { name: /2026/u }));
+    expect(screen.getByText("確定済み 1試合 ・ 未完了 2件")).toBeInTheDocument();
+    expect(screen.queryByText("次の番号")).not.toBeInTheDocument();
     expect(await screen.findAllByText("桃太郎電鉄2 / 今シーズン / 東日本編")).toHaveLength(2);
     const primaryDraftAction = screen.getByRole("link", { name: "確認事項を直す" });
     expect(primaryDraftAction).toHaveAttribute(
@@ -116,7 +118,7 @@ describe("HeldEventDetailPage", () => {
       "bg-[var(--color-surface)]",
     );
     expect(screen.getByRole("link", { name: "手入力" })).toHaveClass("bg-[var(--color-surface)]");
-    expect(screen.getByRole("region", { name: "ぽんたの開催戦績" })).toHaveTextContent("1勝");
+    expect(screen.getByRole("region", { name: "ぽんたの開催戦績" })).toHaveTextContent("0勝");
     const results = screen.getByRole("list", { name: "第1試合の順位と総資産" });
     expect(within(results).getByText("1億2345万円")).toBeInTheDocument();
     expect(
@@ -133,7 +135,19 @@ describe("HeldEventDetailPage", () => {
       within(results)
         .getAllByText(/^[12]位$/u)
         .map((badge) => badge.textContent),
-    ).toEqual(["2位", "1位"]);
+    ).toEqual(["1位", "2位"]);
+    const matchRecord = screen.getByRole("article", { name: "第1試合の記録" });
+    expect(matchRecord).toHaveTextContent("オーナー ぽんた");
+    expect(matchRecord).not.toHaveTextContent("記録者");
+    expect(matchRecord).not.toHaveTextContent(/2026/u);
+    const timelineHeading = screen.getByRole("heading", { name: "試合の流れ" });
+    expect(timelineHeading).toHaveClass("text-base");
+    expect(timelineHeading).not.toHaveClass("text-lg");
+    expect(screen.getByRole("list", { name: "試合の流れ" })).toHaveClass(
+      "before:top-8",
+      "before:bottom-8",
+      "before:bg-[var(--color-border-strong)]",
+    );
     expect(screen.getByRole("link", { name: "第1試合の結果を見る" })).toHaveAttribute(
       "href",
       "/matches/match-1?returnTo=%2Fheld-events%2Fheld-1",
@@ -146,7 +160,12 @@ describe("HeldEventDetailPage", () => {
       "href",
       "/matches?heldEventId=held-1&sort=match_no_asc&returnTo=%2Fheld-events%2Fheld-1",
     );
-    expect(screen.getByText("第4試合")).toBeInTheDocument();
+    const relatedActions = screen.getByRole("navigation", { name: "この開催の関連操作" });
+    expect(screen.getByRole("heading", { name: /2026/u }).closest("header")).toContainElement(
+      relatedActions,
+    );
+    expect(surface).not.toContainElement(relatedActions);
+    expect(screen.getByRole("heading", { name: "第4試合を記録" })).toBeInTheDocument();
   });
 
   it("offers event-scoped capture actions before the first confirmed match", async () => {

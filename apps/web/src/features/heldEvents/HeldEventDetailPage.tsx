@@ -85,21 +85,43 @@ function HeldEventDetailReadyContent({
       </div>
 
       <PageHeader
+        actions={
+          <nav aria-label="この開催の関連操作" className="flex flex-wrap items-center gap-2">
+            <LinkButton
+              icon={<ListFilter aria-hidden="true" className="size-4" />}
+              size="sm"
+              to={withReturnTo(
+                `/matches?heldEventId=${encodedHeldEventId}&sort=match_no_asc`,
+                returnTo,
+              )}
+              variant="quiet"
+            >
+              試合検索で見る
+            </LinkButton>
+            <LinkButton
+              icon={<Download aria-hidden="true" className="size-4" />}
+              size="sm"
+              to={withReturnTo(`/exports?heldEventId=${encodedHeldEventId}&format=csv`, returnTo)}
+              variant="quiet"
+            >
+              CSV出力
+            </LinkButton>
+            <Button
+              aria-label="開催詳細を更新"
+              icon={<RefreshCw aria-hidden="true" className="size-4" />}
+              pending={refreshing}
+              pendingLabel="更新中"
+              size="sm"
+              variant="quiet"
+              onClick={refresh}
+            >
+              更新
+            </Button>
+          </nav>
+        }
+        description={`確定済み ${detail.matchCount}試合 ・ 未完了 ${detail.draftCount}件`}
         eyebrow="開催記録"
         title={formatHeldEventDateTime(detail.heldAt)}
-        actions={
-          <Button
-            aria-label="開催詳細を更新"
-            icon={<RefreshCw aria-hidden="true" className="size-4" />}
-            pending={refreshing}
-            pendingLabel="更新中"
-            size="sm"
-            variant="quiet"
-            onClick={refresh}
-          >
-            更新
-          </Button>
-        }
       />
 
       <PageContentSurface aria-label="開催内容" className="grid gap-6" role="region">
@@ -144,23 +166,6 @@ function HeldEventDetailReadyContent({
           </Notice>
         ) : null}
 
-        <dl className="grid min-w-0 gap-4 sm:grid-cols-3">
-          <div>
-            <dt className="momo-label text-[var(--color-text-secondary)]">確定済み</dt>
-            <dd className="mt-1 text-xl font-semibold tabular-nums">{detail.matchCount}試合</dd>
-          </div>
-          <div>
-            <dt className="momo-label text-[var(--color-text-secondary)]">未完了</dt>
-            <dd className="mt-1 text-xl font-semibold tabular-nums">{detail.draftCount}件</dd>
-          </div>
-          <div>
-            <dt className="momo-label text-[var(--color-text-secondary)]">次の番号</dt>
-            <dd className="mt-1 text-xl font-semibold tabular-nums">
-              {formatMatchNoInEvent(detail.nextMatchNo)}
-            </dd>
-          </div>
-        </dl>
-
         <section aria-labelledby="held-event-next-match-heading" className="grid gap-3">
           <h2
             className="momo-heading text-lg font-semibold text-[var(--color-text-primary)]"
@@ -189,33 +194,6 @@ function HeldEventDetailReadyContent({
         <HeldEventDraftsSection drafts={drafts} masterNames={masterNames} returnTo={returnTo} />
         <HeldEventPlayerRecap recaps={playerRecaps} />
         <HeldEventMatchTimeline masterNames={masterNames} matches={matches} returnTo={returnTo} />
-
-        <section className="grid gap-3 border-t border-[var(--color-border)] pt-4">
-          <h2 className="momo-heading text-base font-semibold text-[var(--color-text-primary)]">
-            開催全体の操作
-          </h2>
-          <nav aria-label="この開催の関連操作" className="flex flex-wrap gap-2">
-            <LinkButton
-              icon={<ListFilter aria-hidden="true" className="size-4" />}
-              size="sm"
-              to={withReturnTo(
-                `/matches?heldEventId=${encodedHeldEventId}&sort=match_no_asc`,
-                returnTo,
-              )}
-              variant="quiet"
-            >
-              試合検索で見る
-            </LinkButton>
-            <LinkButton
-              icon={<Download aria-hidden="true" className="size-4" />}
-              size="sm"
-              to={withReturnTo(`/exports?heldEventId=${encodedHeldEventId}&format=csv`, returnTo)}
-              variant="quiet"
-            >
-              CSV出力
-            </LinkButton>
-          </nav>
-        </section>
       </PageContentSurface>
     </PageFrame>
   );

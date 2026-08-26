@@ -505,8 +505,9 @@ describe("app routing", () => {
       await screen.findByRole("heading", { name: "戦績データの計算を待っています" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByText("画面を開いたまま待つと、完了後に自動で表示します。"),
+      screen.getByText("計算完了後に「状態を再確認」を押すと表示します。"),
     ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "状態を再確認" })).toBeEnabled();
     expect(aggregateRequests).toBe(0);
     expect(reviewRequests).toBe(0);
   });

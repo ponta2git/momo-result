@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   DataVizLegend,
+  createDataVizSeriesPresentationLookup,
   dataVizSeriesPresentation,
   playOrderSeriesId,
 } from "@/shared/ui/dataViz/seriesPresentation";
@@ -51,5 +52,20 @@ describe("dataVizSeriesPresentation", () => {
   it("keeps play-order series on the same hues through a separate semantic role", () => {
     expect(dataVizSeriesPresentation(playOrderSeriesId(2)).color).toBe("var(--color-play-order-2)");
     expect(dataVizSeriesPresentation("unrelated-series").color).toContain("--color-series-");
+  });
+
+  it("keeps play-order shapes stable and reuses render-local presentations", () => {
+    const playOrderIds = ([1, 2, 3, 4] as const).map(playOrderSeriesId);
+    expect(playOrderIds.map((id) => dataVizSeriesPresentation(id).shape)).toEqual([
+      "triangle",
+      "diamond",
+      "square",
+      "circle",
+    ]);
+
+    const presentationForSeries = createDataVizSeriesPresentationLookup(playOrderIds);
+    const firstPlayOrderId = playOrderSeriesId(1);
+    expect(presentationForSeries(firstPlayOrderId)).toBe(presentationForSeries(firstPlayOrderId));
+    expect(presentationForSeries("late-series")).toBe(presentationForSeries("late-series"));
   });
 });

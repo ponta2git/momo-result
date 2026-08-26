@@ -1,5 +1,5 @@
 import { render } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { DataVizLineChart } from "@/shared/ui/dataViz/LineChart";
 import { DataVizScatterPlot } from "@/shared/ui/dataViz/ScatterPlot";
@@ -72,5 +72,44 @@ describe("data visualizations at the analysis display bound", () => {
     expect(chart?.querySelector('[aria-label="第500戦を選択中"]')).toBeInTheDocument();
     expect(chart).toHaveTextContent("第500戦");
     expect(chart).toHaveTextContent("この試合");
+  });
+
+  it("excludes non-finite line values from the domain, path, focus, and marks", () => {
+    const formatValue = vi.fn(String);
+    const { container } = render(
+      <DataVizLineChart
+        ariaLabel="非有限値を含む折れ線"
+        focusItemIds={["trend:player-1:nan"]}
+        formatValue={formatValue}
+        series={[
+          {
+            id: "player-1",
+            points: [
+              { index: 1, itemId: "trend:player-1:1", value: 2 },
+              { index: 2, itemId: "trend:player-1:nan", value: Number.NaN },
+              { index: 3, itemId: "trend:player-1:infinity", value: Number.POSITIVE_INFINITY },
+              {
+                index: 4,
+                itemId: "trend:player-1:negative-infinity",
+                value: Number.NEGATIVE_INFINITY,
+              },
+              { index: 5, itemId: "trend:player-1:5", value: 4 },
+            ],
+          },
+        ]}
+        seriesIdentity={[{ id: "player-1", label: "プレーヤー1" }]}
+        yAxisLabel="値"
+      />,
+    );
+
+    const chart = container.querySelector('svg[aria-label="非有限値を含む折れ線"]');
+    const path = chart?.querySelector('path[data-series-id="player-1"][fill="none"]');
+    expect(path?.getAttribute("d")?.match(/[ML]/gu)).toHaveLength(2);
+    expect(path?.getAttribute("d")).not.toMatch(/Infinity|NaN/u);
+    expect(chart?.querySelectorAll('[data-series-id="player-1"][data-series-shape]')).toHaveLength(
+      2,
+    );
+    expect(chart?.querySelector('[aria-label$="を選択中"]')).not.toBeInTheDocument();
+    expect(formatValue.mock.calls.flat()).toEqual([0, 2, 4, 6]);
   });
 });

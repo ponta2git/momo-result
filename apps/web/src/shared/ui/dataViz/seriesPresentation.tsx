@@ -23,6 +23,7 @@ const seriesColors = [
 
 const dashPatterns = [undefined, "8 3", "2 3", "9 3 2 3", "12 4", "4 2"] as const;
 const pointShapes = ["circle", "square", "diamond", "triangle"] as const;
+const playOrderPointShapes = pointShapes.toReversed();
 
 export function playOrderSeriesId(playOrder: 1 | 2 | 3 | 4): string {
   return `play-order:${playOrder}`;
@@ -63,7 +64,7 @@ export function dataVizSeriesPresentation(seriesId: string): DataVizSeriesPresen
     return {
       color: playOrderPresentation(playOrder).color,
       dash: dashPatterns[playOrder],
-      shape: pointShapes.toReversed()[playOrder - 1] ?? "circle",
+      shape: playOrderPointShapes[playOrder - 1] ?? "circle",
     };
   }
 
@@ -78,6 +79,38 @@ export function dataVizSeriesPresentation(seriesId: string): DataVizSeriesPresen
   };
 }
 
+/**
+ * Builds a render-local lookup so charts with many points resolve a stable series identity once
+ * instead of repeating domain-ID parsing and hashing for every mark.
+ */
+export function createDataVizSeriesPresentationLookup(seriesIds: Iterable<string>) {
+  const presentations = new Map<string, DataVizSeriesPresentation>();
+  for (const seriesId of seriesIds) {
+    if (!presentations.has(seriesId)) {
+      presentations.set(seriesId, dataVizSeriesPresentation(seriesId));
+    }
+  }
+
+  return (seriesId: string): DataVizSeriesPresentation => {
+    const existing = presentations.get(seriesId);
+    if (existing) return existing;
+
+    const presentation = dataVizSeriesPresentation(seriesId);
+    presentations.set(seriesId, presentation);
+    return presentation;
+  };
+}
+
+type DataVizPointMarkProps = {
+  children?: ReactNode;
+  cx: number;
+  cy: number;
+  opacity?: number;
+  outlined?: boolean;
+  seriesId: string;
+  size?: number;
+};
+
 export function DataVizPointMark({
   children,
   cx,
@@ -86,16 +119,33 @@ export function DataVizPointMark({
   outlined = false,
   seriesId,
   size = 4,
-}: {
-  children?: ReactNode;
-  cx: number;
-  cy: number;
-  opacity?: number;
-  outlined?: boolean;
-  seriesId: string;
-  size?: number;
-}) {
-  const presentation = dataVizSeriesPresentation(seriesId);
+}: DataVizPointMarkProps) {
+  return (
+    <DataVizPointMarkWithPresentation
+      cx={cx}
+      cy={cy}
+      opacity={opacity}
+      outlined={outlined}
+      presentation={dataVizSeriesPresentation(seriesId)}
+      seriesId={seriesId}
+      size={size}
+    >
+      {children}
+    </DataVizPointMarkWithPresentation>
+  );
+}
+
+/** @internal Prefer DataVizPointMark unless the caller already owns a render-local lookup. */
+export function DataVizPointMarkWithPresentation({
+  children,
+  cx,
+  cy,
+  opacity = 1,
+  outlined = false,
+  presentation,
+  seriesId,
+  size = 4,
+}: DataVizPointMarkProps & { presentation: DataVizSeriesPresentation }) {
   const common = {
     "data-series-id": seriesId,
     "data-series-shape": presentation.shape,
@@ -146,10 +196,14 @@ export function DataVizLegend({
   series: readonly DataVizSeriesIdentity[];
   variant?: "line" | "point";
 }) {
+  const presentationForSeries = createDataVizSeriesPresentationLookup(
+    series.map((item) => item.id),
+  );
+
   return (
     <div className="flex w-full max-w-full min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[var(--color-text-secondary)]">
       {series.map((item) => {
-        const presentation = dataVizSeriesPresentation(item.id);
+        const presentation = presentationForSeries(item.id);
         return (
           <span className="inline-flex min-w-0 items-center gap-2" key={item.id}>
             {variant === "line" ? (
@@ -165,11 +219,23 @@ export function DataVizLegend({
                   y1="6"
                   y2="6"
                 />
-                <DataVizPointMark cx={14} cy={6} seriesId={item.id} size={2.25} />
+                <DataVizPointMarkWithPresentation
+                  cx={14}
+                  cy={6}
+                  presentation={presentation}
+                  seriesId={item.id}
+                  size={2.25}
+                />
               </svg>
             ) : (
               <svg aria-hidden="true" className="size-3 shrink-0" viewBox="0 0 12 12">
-                <DataVizPointMark cx={6} cy={6} seriesId={item.id} size={4} />
+                <DataVizPointMarkWithPresentation
+                  cx={6}
+                  cy={6}
+                  presentation={presentation}
+                  seriesId={item.id}
+                  size={4}
+                />
               </svg>
             )}
             <span className="min-w-0 font-medium break-words text-[var(--color-text-primary)]">

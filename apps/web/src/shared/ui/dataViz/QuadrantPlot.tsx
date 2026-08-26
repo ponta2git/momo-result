@@ -1,5 +1,9 @@
 import { finiteNumber } from "@/shared/ui/dataViz/scales";
-import { DataVizLegend, DataVizPointMark } from "@/shared/ui/dataViz/seriesPresentation";
+import {
+  DataVizLegend,
+  DataVizPointMarkWithPresentation,
+  createDataVizSeriesPresentationLookup,
+} from "@/shared/ui/dataViz/seriesPresentation";
 import type { DataVizSeriesIdentity } from "@/shared/ui/dataViz/seriesPresentation";
 
 export function DataVizQuadrantPlot({
@@ -38,6 +42,9 @@ export function DataVizQuadrantPlot({
   const maxX = middleX + xRadius;
   const chartWidth = width - padding.left - padding.right;
   const chartHeight = height - padding.top - padding.bottom;
+  const presentationForSeries = createDataVizSeriesPresentationLookup(
+    seriesIdentity.map((identity) => identity.id),
+  );
   const x = (value: number) => padding.left + ((value - minX) / (maxX - minX)) * chartWidth;
   const y = (value: number) =>
     padding.top + (1 - (value - yDomain[0]) / (yDomain[1] - yDomain[0])) * chartHeight;
@@ -81,15 +88,16 @@ export function DataVizQuadrantPlot({
             {cornerLabels.bottomRight}
           </CornerLabel>
           {plotted.map((point) => (
-            <DataVizPointMark
+            <DataVizPointMarkWithPresentation
               cx={x(point.x)}
               cy={y(point.y)}
               key={point.seriesId}
+              presentation={presentationForSeries(point.seriesId)}
               seriesId={point.seriesId}
               size={5}
             >
               <title>{point.label}</title>
-            </DataVizPointMark>
+            </DataVizPointMarkWithPresentation>
           ))}
           <text
             fill="var(--color-text-secondary)"

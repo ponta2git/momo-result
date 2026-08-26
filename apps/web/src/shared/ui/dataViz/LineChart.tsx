@@ -1,8 +1,8 @@
 import { finiteNumber, indexTicks, niceCeil, numberTicks } from "@/shared/ui/dataViz/scales";
 import {
   DataVizLegend,
-  DataVizPointMark,
-  dataVizSeriesPresentation,
+  DataVizPointMarkWithPresentation,
+  createDataVizSeriesPresentationLookup,
 } from "@/shared/ui/dataViz/seriesPresentation";
 import type { DataVizSeriesIdentity } from "@/shared/ui/dataViz/seriesPresentation";
 
@@ -43,10 +43,12 @@ export function DataVizLineChart({
   const width = 760;
   const height = 320;
   const padding = { bottom: 48, left: 76, right: 24, top: 28 };
-  const values = series
-    .flatMap((item) => item.points.map((point) => point.value))
-    .filter(finiteNumber);
-  const allIndexes = series.flatMap((item) => item.points.map((point) => point.index));
+  const plottedSeries = series.map((item) => ({
+    ...item,
+    points: item.points.filter((point) => finiteNumber(point.index) && finiteNumber(point.value)),
+  }));
+  const values = plottedSeries.flatMap((item) => item.points.map((point) => point.value));
+  const allIndexes = plottedSeries.flatMap((item) => item.points.map((point) => point.index));
   const maxIndex = Math.max(1, ...allIndexes);
   const minValue = domain?.[0] ?? Math.min(0, ...values);
   const observedMaximum = values.length === 0 ? minValue + 1 : Math.max(...values);
@@ -56,6 +58,10 @@ export function DataVizLineChart({
   const chartWidth = width - padding.left - padding.right;
   const chartHeight = height - padding.top - padding.bottom;
   const nameById = new Map(seriesIdentity.map((item) => [item.id, item.label]));
+  const focusItemIdSet = new Set(focusItemIds);
+  const presentationForSeries = createDataVizSeriesPresentationLookup(
+    series.map((item) => item.id),
+  );
   const x = (index: number) =>
     padding.left + ((index - 1) / Math.max(1, maxIndex - 1)) * chartWidth;
   const y = (value: number) => {
@@ -63,9 +69,9 @@ export function DataVizLineChart({
     return padding.top + (lowValueAtTop ? ratio : 1 - ratio) * chartHeight;
   };
   const ticks = yTicks ?? numberTicks(minValue, maxValue, 5, minimumYStep);
-  const focusedPoint = series
+  const focusedPoint = plottedSeries
     .flatMap((item) => item.points)
-    .find((point) => focusItemIds.includes(point.itemId));
+    .find((point) => focusItemIdSet.has(point.itemId));
 
   return (
     <figure className="grid max-w-full min-w-0 gap-2">
@@ -155,8 +161,8 @@ export function DataVizLineChart({
               {formatIndex(value)}
             </text>
           ))}
-          {series.map((item) => {
-            const presentation = dataVizSeriesPresentation(item.id);
+          {plottedSeries.map((item) => {
+            const presentation = presentationForSeries(item.id);
             const path = item.points
               .map(
                 (point, index) => `${index === 0 ? "M" : "L"} ${x(point.index)} ${y(point.value)}`,
@@ -175,24 +181,29 @@ export function DataVizLineChart({
                   strokeWidth="1.8"
                 />
                 {item.points.length <= 32
-                  ? item.points.map((point) => (
-                      <DataVizPointMark
-                        cx={x(point.index)}
-                        cy={y(point.value)}
-                        key={point.itemId}
-                        outlined={focusItemIds.includes(point.itemId)}
-                        seriesId={item.id}
-                        size={focusItemIds.includes(point.itemId) ? 4 : 2.5}
-                      />
-                    ))
+                  ? item.points.map((point) => {
+                      const focused = focusItemIdSet.has(point.itemId);
+                      return (
+                        <DataVizPointMarkWithPresentation
+                          cx={x(point.index)}
+                          cy={y(point.value)}
+                          key={point.itemId}
+                          outlined={focused}
+                          presentation={presentation}
+                          seriesId={item.id}
+                          size={focused ? 4 : 2.5}
+                        />
+                      );
+                    })
                   : item.points
-                      .filter((point) => focusItemIds.includes(point.itemId))
+                      .filter((point) => focusItemIdSet.has(point.itemId))
                       .map((point) => (
-                        <DataVizPointMark
+                        <DataVizPointMarkWithPresentation
                           cx={x(point.index)}
                           cy={y(point.value)}
                           key={point.itemId}
                           outlined
+                          presentation={presentation}
                           seriesId={item.id}
                           size={4}
                         />

@@ -1,5 +1,9 @@
 import { finiteNumber, niceCeil, numberTicks } from "@/shared/ui/dataViz/scales";
-import { DataVizLegend, DataVizPointMark } from "@/shared/ui/dataViz/seriesPresentation";
+import {
+  DataVizLegend,
+  DataVizPointMarkWithPresentation,
+  createDataVizSeriesPresentationLookup,
+} from "@/shared/ui/dataViz/seriesPresentation";
 import type { DataVizSeriesIdentity } from "@/shared/ui/dataViz/seriesPresentation";
 
 export type DataVizScatterPoint = {
@@ -54,6 +58,10 @@ export function DataVizScatterPlot({
   const ySpan = Math.max(yMinimumStep, maxY - minY);
   const chartWidth = width - padding.left - padding.right;
   const chartHeight = height - padding.top - padding.bottom;
+  const focusItemIdSet = new Set(focusItemIds);
+  const presentationForSeries = createDataVizSeriesPresentationLookup(
+    seriesIdentity.map((identity) => identity.id),
+  );
   const x = (value: number) => padding.left + ((value - minX) / xSpan) * chartWidth;
   const y = (value: number) => padding.top + (1 - (value - minY) / ySpan) * chartHeight;
 
@@ -124,18 +132,19 @@ export function DataVizScatterPlot({
             </g>
           ))}
           {plotted.map((point) => {
-            const focused = focusItemIds.includes(point.itemId);
+            const focused = focusItemIdSet.has(point.itemId);
             const mark = (
-              <DataVizPointMark
+              <DataVizPointMarkWithPresentation
                 cx={x(point.x)}
                 cy={y(point.y)}
                 opacity={focused ? 1 : focusItemIds.length > 0 ? 0.48 : 0.78}
                 outlined={focused}
+                presentation={presentationForSeries(point.seriesId)}
                 seriesId={point.seriesId}
                 size={focused ? 5 : 3.5}
               >
                 <title>{`${point.label}${focused ? "、この試合" : ""}`}</title>
-              </DataVizPointMark>
+              </DataVizPointMarkWithPresentation>
             );
             return point.href ? (
               <a

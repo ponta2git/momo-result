@@ -3,6 +3,17 @@ import { describe, expect, it } from "vitest";
 
 import { StaleShield } from "@/shared/ui/motion/StaleShield";
 
+function focusRestorationView(active: boolean) {
+  return (
+    <div>
+      <button type="button">外の操作</button>
+      <StaleShield active={active} fallback={<div>読み込み中</div>} strategy="preserve-inert">
+        <button type="button">表示中の操作</button>
+      </StaleShield>
+    </div>
+  );
+}
+
 describe("StaleShield", () => {
   it("replaces content for initial loading", () => {
     render(
@@ -46,5 +57,24 @@ describe("StaleShield", () => {
     const button = screen.getByRole("button", { name: "表示中の試合を開く" });
     expect(button.parentElement).not.toHaveAttribute("inert");
     expect(screen.getByRole("status")).toHaveTextContent("一覧を更新中");
+  });
+
+  it("restores focus dropped by inert without stealing focus moved outside", () => {
+    const rendered = render(focusRestorationView(false));
+    const insideButton = screen.getByRole("button", { name: "表示中の操作" });
+    const outsideButton = screen.getByRole("button", { name: "外の操作" });
+
+    insideButton.focus();
+    rendered.rerender(focusRestorationView(true));
+    insideButton.blur();
+    rendered.rerender(focusRestorationView(false));
+
+    expect(insideButton).toHaveFocus();
+
+    rendered.rerender(focusRestorationView(true));
+    outsideButton.focus();
+    rendered.rerender(focusRestorationView(false));
+
+    expect(outsideButton).toHaveFocus();
   });
 });

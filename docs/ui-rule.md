@@ -75,7 +75,9 @@
 ### 3.2 選択・表示切替・表示範囲
 
 - 説明を読み比べて一つを選ぶ候補は、可視 legend を持つ native radio group と説明付きの選択行で表す。選択行全体を操作可能にし、選択状態は control、文字、形で示して色だけに依存しない。候補固有の別操作は選択 label の内側へ混ぜない。
-- 少数の短い mode 切替は segmented control、同じ対象の view 切替は tab、補助詳細の開閉は disclosure、多数の簡潔な候補は select または検索可能な選択を使う。見た目の都合でこれらを交換せず、選択と即時実行を混同しない。
+- 少数の短い mode 選択のうち、値だけを変えて周囲の内容領域を切り替えないものは segmented control を使う。同じ対象の view を切り替える場合、または選択ごとに直下の候補・結果・実行内容が一つの対応 panel として切り替わる場合は tab を使う。補助詳細の開閉は disclosure、多数の簡潔な候補は select または検索可能な選択を使う。見た目の都合で意味を交換せず、選択と即時実行を混同しない。
+- page-local な主要 tab は、設定管理を基準とする共通の filled presentation を使う。tab list 自体を枠や背景で囲わず、選択中の tab だけを selected surface、文字、`aria-selected` で示し、狭い幅では label を分断せず tab 単位で折り返す。同じ panel 内の下位 view は、より弱い underline presentation と局所的な横 scroll を使ってよく、上下2階層を同じ強さの fill で競合させない。
+- tab は同じ tab set として tab list、tab、対応する tab panel の関係を持ち、keyboard focus と選択状態を shared UI が所有する。focus 移動だけで即座に表示できる panel は自動 activation を使ってよいが、取得や高コスト処理を始める切替は、矢印キーで focus、Enter または Space で activation する。切替後の取得中も起点 tab の DOM と focus を維持し、stale content の `inert` 化で focus が document へ退避した場合は完了時に起点へ戻す。ただし、利用者が別の操作へ移した focus は奪わない。panel を伴わない排他条件は tab の外観へ寄せるために tab semantics を付けない。
 - filter は表示対象の scope を変える操作であり、変更先の data surface の近くへ置く。主要条件、必要な場合だけ開く詳細条件、適用中の完全な条件、結果または件数、scope を示す一つの全解除を一つの操作群として対応させる。この「操作群」は意味と配置のまとまりであり、全体を card や淡色面で囲うことを要求しない。
 - 一覧では data surface を主役とし、filter は同じ content surface 内でそれを支える階層に置く。条件内では高頻度の主要条件、sort、必要時だけ開く詳細条件、適用中の要約と件数の順に強弱を付ける。少数で短く、高頻度に切り替える filter は直接選択を使ってよいが、多数または階層的な排他候補は select など一つの共通 control にまとめる。親状態と下位状態を同じ値に対する二重の選択状態として並べない。既定値や可視 control と同じ内容を要約で再び強調せず、要約は条件の確認と全解除に必要な強さへ留める。
 - filter の件数は取得できた範囲だけを事実として表示する。取得失敗や未取得を `0件` に置き換えず、件数不明であること、表示対象への影響、再取得操作を filter 群の近くで示す。

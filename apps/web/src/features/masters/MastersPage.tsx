@@ -4,7 +4,6 @@ import { MasterReturnNotice } from "@/features/masters/MasterReturnNotice";
 import { defaultLayoutFamily } from "@/features/masters/masterValidation";
 import { MemberAliasPanel } from "@/features/masters/MemberAliasPanel";
 import { masterTabs, useMastersPageController } from "@/features/masters/useMastersPageController";
-import { cn } from "@/shared/ui/cn";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { TabsList, TabsPanel, TabsRoot, TabsTab } from "@/shared/ui/forms/Tabs";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
@@ -170,22 +169,9 @@ export function MastersPage() {
           value={activeTab}
           onValueChange={(value) => setActiveTab(value as typeof activeTab)}
         >
-          <TabsList
-            activateOnFocus
-            aria-label="設定管理の表示切替"
-            className="flex flex-wrap gap-2"
-          >
+          <TabsList activateOnFocus aria-label="設定管理の表示切替">
             {masterTabs.map((tab) => (
-              <TabsTab
-                key={tab.id}
-                className={cn(
-                  "min-h-11 rounded-[var(--radius-sm)] px-3 py-2 text-sm font-semibold transition-colors duration-[var(--motion-fast)] motion-reduce:transition-none sm:min-h-9 sm:py-2",
-                  activeTab === tab.id
-                    ? "bg-[var(--color-surface-selected)] text-[var(--color-text-primary)]"
-                    : "text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-subtle)]",
-                )}
-                value={tab.id}
-              >
+              <TabsTab key={tab.id} value={tab.id}>
                 {tab.label}
               </TabsTab>
             ))}

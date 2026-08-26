@@ -1,5 +1,6 @@
 import { LoaderCircle } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
+import { useLayoutEffect, useRef } from "react";
 import type { ReactNode } from "react";
 
 import { cn } from "@/shared/ui/cn";
@@ -28,8 +29,39 @@ export function StaleShield({
   fallback,
   strategy = "replace",
 }: StaleShieldProps) {
+  const contentRef = useRef<HTMLDivElement>(null);
+  const focusToRestoreRef = useRef<HTMLElement | null>(null);
+  const interactionBlocked = strategy === "preserve-inert" && active;
+
+  useLayoutEffect(() => {
+    const content = contentRef.current;
+    if (!content || strategy === "replace") return;
+
+    if (interactionBlocked) {
+      const activeElement = content.ownerDocument.activeElement;
+      focusToRestoreRef.current =
+        activeElement instanceof HTMLElement && content.contains(activeElement)
+          ? activeElement
+          : null;
+      content.toggleAttribute("inert", true);
+      return;
+    }
+
+    content.toggleAttribute("inert", false);
+    const focusToRestore = focusToRestoreRef.current;
+    focusToRestoreRef.current = null;
+    if (!focusToRestore?.isConnected) return;
+
+    const activeElement = content.ownerDocument.activeElement;
+    const focusWasDropped =
+      activeElement === content.ownerDocument.body ||
+      activeElement === content.ownerDocument.documentElement;
+    if (focusWasDropped) {
+      focusToRestore.focus({ preventScroll: true });
+    }
+  }, [interactionBlocked, strategy]);
+
   if (strategy !== "replace") {
-    const interactionBlocked = strategy === "preserve-inert" && active;
     return (
       <div
         aria-busy={active || undefined}
@@ -39,7 +71,7 @@ export function StaleShield({
         <motion.div
           animate={{ opacity: active ? 0.62 : 1 }}
           className={cn("min-w-0", contentClassName)}
-          inert={interactionBlocked || undefined}
+          ref={contentRef}
           transition={momoPanelTransition}
         >
           {children}

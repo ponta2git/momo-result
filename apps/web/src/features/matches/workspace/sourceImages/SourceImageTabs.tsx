@@ -1,36 +1,17 @@
-import { useCallback } from "react";
-
 import {
   sourceImageKindLabels,
   sourceImageKinds,
 } from "@/features/matches/workspace/sourceImages/sourceImageTypes";
-import type { SourceImageKind } from "@/features/matches/workspace/sourceImages/sourceImageTypes";
-import { SegmentedControl } from "@/shared/ui/forms/SegmentedControl";
+import { TabsList, TabsTab } from "@/shared/ui/forms/Tabs";
 
-const sourceImageKindOptions = sourceImageKinds.map((kind) => ({
-  label: sourceImageKindLabels[kind],
-  value: kind,
-}));
-
-type SourceImageTabsProps = {
-  activeKind: SourceImageKind;
-  onChange: (kind: SourceImageKind) => void;
-};
-
-export function SourceImageTabs({ activeKind, onChange }: SourceImageTabsProps) {
-  const handleValueChange = useCallback(
-    (value: string) => {
-      onChange(value as SourceImageKind);
-    },
-    [onChange],
-  );
-
+export function SourceImageTabs() {
   return (
-    <SegmentedControl
-      label="元画像の種別"
-      options={sourceImageKindOptions}
-      value={activeKind}
-      onValueChange={handleValueChange}
-    />
+    <TabsList activateOnFocus={false} aria-label="元画像の種別">
+      {sourceImageKinds.map((kind) => (
+        <TabsTab key={kind} value={kind}>
+          {sourceImageKindLabels[kind]}
+        </TabsTab>
+      ))}
+    </TabsList>
   );
 }

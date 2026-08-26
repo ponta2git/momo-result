@@ -1,6 +1,10 @@
 import { SourceImagePreviewDialog } from "@/features/matches/workspace/sourceImages/SourceImagePreviewDialog";
 import { SourceImageTabs } from "@/features/matches/workspace/sourceImages/SourceImageTabs";
-import { sourceImageKindLabels } from "@/features/matches/workspace/sourceImages/sourceImageTypes";
+import {
+  parseSourceImageKind,
+  sourceImageKindLabels,
+  sourceImageKinds,
+} from "@/features/matches/workspace/sourceImages/sourceImageTypes";
 import type {
   SourceImageItem,
   SourceImageKind,
@@ -10,6 +14,7 @@ import { Button } from "@/shared/ui/actions/Button";
 import { Dialog } from "@/shared/ui/feedback/Dialog";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 import { SegmentedControl } from "@/shared/ui/forms/SegmentedControl";
+import { TabsPanel, TabsRoot } from "@/shared/ui/forms/Tabs";
 import { Card } from "@/shared/ui/layout/Card";
 
 type SourceImagePanelProps = {
@@ -81,71 +86,86 @@ export function SourceImagePanel({
         </p>
       ) : null}
 
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-        <SegmentedControl
-          className="shrink-0"
-          label="元画像の追従方法"
-          options={followModeOptions}
-          value={panel.followMode}
-          onValueChange={panel.handleFollowModeChange}
-        />
-        <SourceImageTabs
-          activeKind={panel.activeKind}
-          onChange={panel.handleSourceImageTabChange}
-        />
-      </div>
-
-      <div className="mt-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3">
-        {loading ? (
-          <SourceImageLoadingFrame detail="画像一覧を取得しています。" label="元画像を取得中" />
-        ) : null}
-
-        {!loading &&
-        panel.activeState?.status === "available" &&
-        (!panel.activeImage || panel.activeImage.status === "loading") ? (
-          <SourceImageLoadingFrame
-            detail="元画像を読み込んでいます。"
-            label={`${sourceImageKindLabels[panel.activeState.kind]}の元画像を読み込み中`}
+      <TabsRoot
+        value={panel.activeKind}
+        onValueChange={(value) => {
+          if (typeof value !== "string") return;
+          const kind = parseSourceImageKind(value);
+          if (kind) panel.handleSourceImageTabChange(kind);
+        }}
+      >
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+          <SegmentedControl
+            className="shrink-0"
+            label="元画像の追従方法"
+            options={followModeOptions}
+            value={panel.followMode}
+            onValueChange={panel.handleFollowModeChange}
           />
-        ) : null}
+          <SourceImageTabs />
+        </div>
 
-        {!loading &&
-        panel.activeState?.status === "available" &&
-        panel.activeImage?.status === "error" ? (
-          <div className="grid justify-items-start gap-3">
-            <p className="text-sm text-[var(--color-danger)]" role="alert">
-              元画像を読み込めませんでした。
-            </p>
-            <Button size="sm" variant="secondary" onClick={panel.handleActiveImageRetry}>
-              元画像を再読み込み
-            </Button>
-          </div>
-        ) : null}
+        {sourceImageKinds.map((kind) => (
+          <TabsPanel className="mt-3" keepMounted key={kind} value={kind}>
+            {panel.activeKind === kind ? (
+              <div className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3">
+                {loading ? (
+                  <SourceImageLoadingFrame
+                    detail="画像一覧を取得しています。"
+                    label="元画像を取得中"
+                  />
+                ) : null}
 
-        {!loading && panel.activeState?.status === "available" && panel.displayUrl ? (
-          <>
-            <img
-              alt={`${sourceImageKindLabels[panel.activeState.kind]}の元画像`}
-              className="h-[13rem] w-full rounded-[var(--radius-sm)] bg-[var(--momo-night-900)] object-contain"
-              src={panel.displayUrl}
-            />
-            <div className="mt-2 flex items-center justify-between gap-2">
-              <p className="text-xs text-[var(--color-text-secondary)]">
-                {panel.activeState.description}
-              </p>
-              <Button variant="secondary" onClick={panel.handlePreviewOpen}>
-                拡大
-              </Button>
-            </div>
-          </>
-        ) : null}
+                {!loading &&
+                panel.activeState?.status === "available" &&
+                (!panel.activeImage || panel.activeImage.status === "loading") ? (
+                  <SourceImageLoadingFrame
+                    detail="元画像を読み込んでいます。"
+                    label={`${sourceImageKindLabels[panel.activeState.kind]}の元画像を読み込み中`}
+                  />
+                ) : null}
 
-        {!loading && panel.activeState?.status === "missing" ? (
-          <p className="text-sm text-[var(--color-text-secondary)]">
-            {panel.activeState.description}
-          </p>
-        ) : null}
-      </div>
+                {!loading &&
+                panel.activeState?.status === "available" &&
+                panel.activeImage?.status === "error" ? (
+                  <div className="grid justify-items-start gap-3">
+                    <p className="text-sm text-[var(--color-danger)]" role="alert">
+                      元画像を読み込めませんでした。
+                    </p>
+                    <Button size="sm" variant="secondary" onClick={panel.handleActiveImageRetry}>
+                      元画像を再読み込み
+                    </Button>
+                  </div>
+                ) : null}
+
+                {!loading && panel.activeState?.status === "available" && panel.displayUrl ? (
+                  <>
+                    <img
+                      alt={`${sourceImageKindLabels[panel.activeState.kind]}の元画像`}
+                      className="h-[13rem] w-full rounded-[var(--radius-sm)] bg-[var(--momo-night-900)] object-contain"
+                      src={panel.displayUrl}
+                    />
+                    <div className="mt-2 flex items-center justify-between gap-2">
+                      <p className="text-xs text-[var(--color-text-secondary)]">
+                        {panel.activeState.description}
+                      </p>
+                      <Button variant="secondary" onClick={panel.handlePreviewOpen}>
+                        拡大
+                      </Button>
+                    </div>
+                  </>
+                ) : null}
+
+                {!loading && panel.activeState?.status === "missing" ? (
+                  <p className="text-sm text-[var(--color-text-secondary)]">
+                    {panel.activeState.description}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+          </TabsPanel>
+        ))}
+      </TabsRoot>
 
       {panel.previewKind && panel.previewUrl ? (
         <SourceImagePreviewDialog

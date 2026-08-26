@@ -48,6 +48,39 @@ describe("SourceImagePanel", () => {
     expect(screen.queryByText("保存できる元画像がありません。")).not.toBeInTheDocument();
   });
 
+  it("uses manually activated tabs with linked tab panels", async () => {
+    const user = userEvent.setup();
+    render(
+      <SourceImagePanel
+        loading={false}
+        matchDraftId={draftId}
+        preferredKind="total_assets"
+        sourceImages={[]}
+      />,
+    );
+
+    const tabList = screen.getByRole("tablist", { name: "元画像の種別" });
+    const totalAssetsTab = within(tabList).getByRole("tab", { name: "総資産" });
+    const revenueTab = within(tabList).getByRole("tab", { name: "収益" });
+    const totalAssetsPanel = screen.getByRole("tabpanel", { name: "総資産" });
+
+    expect(totalAssetsTab).toHaveAttribute("aria-selected", "true");
+    expect(totalAssetsTab).toHaveAttribute("aria-controls", totalAssetsPanel.id);
+    expect(totalAssetsPanel).toHaveAttribute("aria-labelledby", totalAssetsTab.id);
+
+    await user.click(totalAssetsTab);
+    await user.keyboard("{ArrowRight}");
+
+    expect(revenueTab).toHaveFocus();
+    expect(revenueTab).toHaveAttribute("aria-selected", "false");
+    expect(totalAssetsTab).toHaveAttribute("aria-selected", "true");
+
+    await user.keyboard("{Enter}");
+
+    expect(revenueTab).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tabpanel", { name: "収益" })).toBeInTheDocument();
+  });
+
   it("keeps a stable preview frame while the active source image is loading", async () => {
     installObjectUrlMock({ createObjectURL: () => "blob:source-image" });
     const responseGate = createDeferred<Response>();
@@ -105,7 +138,7 @@ describe("SourceImagePanel", () => {
     expect(capturedRequest.headers.get("X-Momo-Account-Id")).toBe("account_ponta");
   });
 
-  it("preloads available source images and reuses them when switching tabs", async () => {
+  it("loads only the active source image and reuses it after the first view", async () => {
     const user = userEvent.setup();
     const objectUrls = installObjectUrlMock({
       createObjectURL: (value) => (value instanceof Blob ? `blob:size-${value.size}` : "blob:0"),
@@ -142,18 +175,111 @@ describe("SourceImagePanel", () => {
       "src",
       "blob:size-1",
     );
-    await waitFor(() => expect(objectUrls.createObjectURL).toHaveBeenCalledTimes(3));
-    expect([...new Set(requestedKinds)].toSorted()).toEqual([
-      "incident_log",
-      "revenue",
-      "total_assets",
-    ]);
+    expect(objectUrls.createObjectURL).toHaveBeenCalledTimes(1);
+    expect(requestedKinds).toEqual(["total_assets"]);
 
-    await user.click(screen.getByRole("button", { name: "収益" }));
+    await user.click(screen.getByRole("tab", { name: "収益" }));
 
-    expect(screen.queryByLabelText("収益の元画像を読み込み中")).not.toBeInTheDocument();
-    expect(screen.getByRole("img", { name: "収益の元画像" })).toHaveAttribute("src", "blob:size-2");
-    expect(requestedKinds).toHaveLength(3);
+    expect(await screen.findByRole("img", { name: "収益の元画像" })).toHaveAttribute(
+      "src",
+      "blob:size-2",
+    );
+    expect(objectUrls.createObjectURL).toHaveBeenCalledTimes(2);
+    expect(requestedKinds).toEqual(["total_assets", "revenue"]);
+
+    await user.click(screen.getByRole("tab", { name: "総資産" }));
+
+    expect(screen.queryByLabelText("総資産の元画像を読み込み中")).not.toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "総資産の元画像" })).toHaveAttribute(
+      "src",
+      "blob:size-1",
+    );
+    expect(requestedKinds).toEqual(["total_assets", "revenue"]);
+  });
+
+  it("aborts an obsolete active-image request when another tab is selected", async () => {
+    const user = userEvent.setup();
+    const totalAssetsGate = createDeferred();
+    const objectUrls = installObjectUrlMock({ createObjectURL: () => "blob:active-image" });
+    let totalAssetsSignal: AbortSignal | undefined;
+    server.use(
+      http.get("/api/match-drafts/:draftId/source-images/:kind", async ({ params, request }) => {
+        if (params["kind"] === "total_assets") {
+          totalAssetsSignal = request.signal;
+          await totalAssetsGate.promise;
+        }
+        return sourceImageResponse();
+      }),
+    );
+
+    render(
+      <SourceImagePanel
+        loading={false}
+        matchDraftId={draftId}
+        preferredKind="total_assets"
+        sourceImages={sourceImages}
+      />,
+    );
+
+    await screen.findByLabelText("総資産の元画像を読み込み中");
+    await waitFor(() => expect(totalAssetsSignal).toBeDefined());
+    await user.click(screen.getByRole("tab", { name: "収益" }));
+
+    expect(await screen.findByRole("img", { name: "収益の元画像" })).toHaveAttribute(
+      "src",
+      "blob:active-image",
+    );
+    expect(totalAssetsSignal?.aborted).toBe(true);
+    expect(objectUrls.createObjectURL).toHaveBeenCalledTimes(1);
+
+    totalAssetsGate.resolve();
+  });
+
+  it("revokes cached object URLs when images disappear and when the panel unmounts", async () => {
+    const user = userEvent.setup();
+    const objectUrls = installObjectUrlMock({
+      createObjectURL: (value) => (value instanceof Blob ? `blob:size-${value.size}` : "blob:0"),
+    });
+    server.use(
+      http.get("/api/match-drafts/:draftId/source-images/:kind", ({ params }) => {
+        const body = String(params["kind"]) === "total_assets" ? "a" : "bb";
+        return new HttpResponse(body, {
+          headers: { "Content-Type": "image/png" },
+        });
+      }),
+    );
+
+    const view = render(
+      <SourceImagePanel
+        loading={false}
+        matchDraftId={draftId}
+        preferredKind="total_assets"
+        sourceImages={sourceImages}
+      />,
+    );
+
+    expect(await screen.findByRole("img", { name: "総資産の元画像" })).toHaveAttribute(
+      "src",
+      "blob:size-1",
+    );
+    await user.click(screen.getByRole("tab", { name: "収益" }));
+    expect(await screen.findByRole("img", { name: "収益の元画像" })).toHaveAttribute(
+      "src",
+      "blob:size-2",
+    );
+
+    view.rerender(
+      <SourceImagePanel
+        loading={false}
+        matchDraftId={draftId}
+        preferredKind="total_assets"
+        sourceImages={sourceImages.slice(1)}
+      />,
+    );
+    await waitFor(() => expect(objectUrls.revokeObjectURL).toHaveBeenCalledWith("blob:size-1"));
+
+    view.unmount();
+    expect(objectUrls.revokeObjectURL).toHaveBeenCalledWith("blob:size-2");
   });
 
   it("keeps a manually selected image fixed until automatic follow is restored", async () => {
@@ -181,7 +307,7 @@ describe("SourceImagePanel", () => {
     );
 
     expect(await screen.findByRole("img", { name: "総資産の元画像" })).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "収益" }));
+    await user.click(screen.getByRole("tab", { name: "収益" }));
     expect(screen.getByRole("button", { name: "固定" })).toHaveAttribute("aria-pressed", "true");
     expect(await screen.findByRole("img", { name: "収益の元画像" })).toBeInTheDocument();
 

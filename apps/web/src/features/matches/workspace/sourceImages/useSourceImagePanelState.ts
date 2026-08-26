@@ -81,64 +81,95 @@ export function useSourceImagePanelState({
       states.flatMap((state) => (state.status === "available" ? [state.url] : [])),
     );
 
+    for (const [url, controller] of imageLoadControllersRef.current) {
+      if (!availableUrls.has(url)) {
+        controller.abort();
+        imageLoadControllersRef.current.delete(url);
+      }
+    }
+    for (const [url, objectUrl] of imageObjectUrlsRef.current) {
+      if (!availableUrls.has(url)) {
+        URL.revokeObjectURL(objectUrl);
+        imageObjectUrlsRef.current.delete(url);
+      }
+    }
+
     setImageCache((current) => {
-      let next = current;
-      for (const url of Object.keys(current)) {
-        if (!availableUrls.has(url)) {
-          imageLoadControllersRef.current.get(url)?.abort();
-          imageLoadControllersRef.current.delete(url);
-          const objectUrl = imageObjectUrlsRef.current.get(url);
-          if (objectUrl) {
-            URL.revokeObjectURL(objectUrl);
-            imageObjectUrlsRef.current.delete(url);
-          }
-          if (next === current) {
-            next = { ...current };
-          }
-          delete next[url];
-        }
+      const staleUrls = Object.keys(current).filter((url) => !availableUrls.has(url));
+      if (staleUrls.length === 0) {
+        return current;
+      }
+      const next = { ...current };
+      for (const url of staleUrls) {
+        delete next[url];
       }
       return next;
     });
+  }, [states]);
 
-    for (const url of availableUrls) {
-      const cached = imageCacheRef.current[url];
-      if (cached?.status === "loading" || cached?.status === "ready") {
-        continue;
-      }
-      const controller = new AbortController();
-      imageLoadControllersRef.current.set(url, controller);
-      setImageCache((current) => {
-        const latest = current[url];
-        if (latest?.status === "loading" || latest?.status === "ready") {
-          return current;
-        }
-        return { ...current, [url]: { status: "loading", url } };
-      });
-
-      const preloadImage = async () => {
-        try {
-          const blob = await downloadMatchDraftSourceImage(url, controller.signal);
-          if (controller.signal.aborted) {
-            return;
-          }
-          const objectUrl = URL.createObjectURL(blob);
-          imageObjectUrlsRef.current.set(url, objectUrl);
-          setImageCache((current) => ({ ...current, [url]: { objectUrl, status: "ready", url } }));
-        } catch {
-          if (controller.signal.aborted) {
-            return;
-          }
-          setImageCache((current) => ({ ...current, [url]: { status: "error", url } }));
-        } finally {
-          if (imageLoadControllersRef.current.get(url) === controller) {
-            imageLoadControllersRef.current.delete(url);
-          }
-        }
-      };
-      void preloadImage();
+  useEffect(() => {
+    if (!activeImageUrl) {
+      return;
     }
-  }, [imageRetrySequence, states]);
+
+    const cached = imageCacheRef.current[activeImageUrl];
+    if (cached?.status === "ready" || cached?.status === "error") {
+      return;
+    }
+    const imageLoadControllers = imageLoadControllersRef.current;
+    if (imageLoadControllers.has(activeImageUrl)) {
+      return;
+    }
+
+    const controller = new AbortController();
+    imageLoadControllers.set(activeImageUrl, controller);
+    setImageCache((current) => {
+      const latest = current[activeImageUrl];
+      if (latest?.status === "ready" || latest?.status === "error") {
+        return current;
+      }
+      return { ...current, [activeImageUrl]: { status: "loading", url: activeImageUrl } };
+    });
+
+    const loadActiveImage = async () => {
+      try {
+        const blob = await downloadMatchDraftSourceImage(activeImageUrl, controller.signal);
+        if (controller.signal.aborted || imageLoadControllers.get(activeImageUrl) !== controller) {
+          return;
+        }
+        const objectUrl = URL.createObjectURL(blob);
+        const previousObjectUrl = imageObjectUrlsRef.current.get(activeImageUrl);
+        if (previousObjectUrl) {
+          URL.revokeObjectURL(previousObjectUrl);
+        }
+        imageObjectUrlsRef.current.set(activeImageUrl, objectUrl);
+        setImageCache((current) => ({
+          ...current,
+          [activeImageUrl]: { objectUrl, status: "ready", url: activeImageUrl },
+        }));
+      } catch {
+        if (controller.signal.aborted || imageLoadControllers.get(activeImageUrl) !== controller) {
+          return;
+        }
+        setImageCache((current) => ({
+          ...current,
+          [activeImageUrl]: { status: "error", url: activeImageUrl },
+        }));
+      } finally {
+        if (imageLoadControllers.get(activeImageUrl) === controller) {
+          imageLoadControllers.delete(activeImageUrl);
+        }
+      }
+    };
+    void loadActiveImage();
+
+    return () => {
+      if (imageLoadControllers.get(activeImageUrl) === controller) {
+        controller.abort();
+        imageLoadControllers.delete(activeImageUrl);
+      }
+    };
+  }, [activeImageUrl, imageRetrySequence]);
 
   useEffect(
     () => () => {
@@ -225,6 +256,11 @@ export function useSourceImagePanelState({
     }
     imageLoadControllersRef.current.get(activeImageUrl)?.abort();
     imageLoadControllersRef.current.delete(activeImageUrl);
+    const objectUrl = imageObjectUrlsRef.current.get(activeImageUrl);
+    if (objectUrl) {
+      URL.revokeObjectURL(objectUrl);
+      imageObjectUrlsRef.current.delete(activeImageUrl);
+    }
     setImageCache((current) => {
       if (!current[activeImageUrl]) {
         return current;

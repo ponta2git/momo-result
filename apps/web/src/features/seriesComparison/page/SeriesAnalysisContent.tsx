@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { memo, useEffect, useState } from "react";
 
 import type { SeriesAnalysisDrilldownSelection } from "@/features/seriesComparison/drilldowns/SeriesAnalysisDrilldownDialog";
 import { SeriesAnalysisDrilldownDialog } from "@/features/seriesComparison/drilldowns/SeriesAnalysisDrilldownDialog";
@@ -29,9 +29,16 @@ type SeriesAnalysisContentProps = {
 
 type SeriesAnalysisBundle = Extract<SeriesAnalysisDisplayBundle, { kind: "analysis" }>;
 
-export function SeriesAnalysisContent(props: SeriesAnalysisContentProps) {
+/**
+ * Artifact payloads are immutable and their display bundle preserves reference identity. Keeping
+ * this boundary shallow means status polling can update feedback without rebuilding chart models
+ * and SVG subtrees for an unchanged artifact and selection.
+ */
+export const SeriesAnalysisContent = memo(function SeriesAnalysisContent(
+  props: SeriesAnalysisContentProps,
+) {
   return <ArtifactViewContent {...props} />;
-}
+});
 
 function ArtifactViewContent({
   bundle,

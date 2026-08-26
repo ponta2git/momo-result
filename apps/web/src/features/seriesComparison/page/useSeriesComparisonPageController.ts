@@ -211,12 +211,23 @@ export function useSeriesComparisonPageController() {
     clearFocusedMatch();
   }, [bundleResolution, candidateArtifactId, clearFocusedMatch, normalizedState.focusMatchId]);
 
-  const refresh = () => {
-    void optionsQuery.refetch();
-    void statusQuery.refetch();
-    if (activeQueryParams) void activeQuery.refetch();
-    if (matchContextQueryParams) void matchContextQuery.refetch();
-  };
+  const refetchActiveResource = activeQuery.refetch;
+  const refetchMatchContext = matchContextQuery.refetch;
+  const refetchOptions = optionsQuery.refetch;
+  const refetchStatus = statusQuery.refetch;
+  const refresh = useCallback(() => {
+    void refetchOptions();
+    void refetchStatus();
+    if (activeQueryParams) void refetchActiveResource();
+    if (matchContextQueryParams) void refetchMatchContext();
+  }, [
+    activeQueryParams,
+    matchContextQueryParams,
+    refetchActiveResource,
+    refetchMatchContext,
+    refetchOptions,
+    refetchStatus,
+  ]);
   const clientUpgradeRequired = [
     optionsQuery.error,
     statusQuery.error,

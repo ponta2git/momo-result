@@ -72,7 +72,9 @@ const densityClass = {
 } as const satisfies Record<DataTableDensity, string>;
 
 export const dataTableHeaderCellClassName =
-  "border-y border-[var(--color-border-strong)] bg-[var(--color-surface)] px-3 py-2 text-xs leading-5 font-semibold text-[var(--color-text-secondary)]";
+  "border-y border-[var(--color-border-strong)] bg-[var(--color-surface)] px-3 py-2 align-middle text-xs leading-5 font-semibold text-[var(--color-text-secondary)]";
+
+export const dataTableBodyCellClassName = "px-3 py-2 align-middle";
 
 export const dataTableScrollAreaClassName = "min-w-0 overflow-x-auto bg-[var(--color-surface)]";
 
@@ -99,7 +101,7 @@ export function DataTable<Row>({
   minWidth,
   rows,
   isRowBusy,
-  verticalAlign = "top",
+  verticalAlign = "middle",
 }: DataTableProps<Row>) {
   const columnStyleByKey = useMemo(() => {
     return new Map<string, CSSProperties | undefined>(
@@ -213,7 +215,7 @@ export function DataTable<Row>({
           {rows.length === 0 && emptyState ? (
             <tr>
               <td
-                className="border-b border-[var(--color-border-strong)] p-3"
+                className="border-b border-[var(--color-border-strong)] p-3 align-middle"
                 colSpan={columns.length}
               >
                 {emptyState}

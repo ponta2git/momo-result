@@ -7,6 +7,12 @@ import { formatMatchNoInEvent } from "@/shared/domain/matchLabels";
 import { memberDisplayName, orderFixedMembers } from "@/shared/domain/members";
 import { formatDateTimeLong } from "@/shared/lib/dateTime";
 import { Button } from "@/shared/ui/actions/Button";
+import {
+  dataTableBodyCellClassName,
+  DataTableBodyRow,
+  dataTableHeaderCellClassName,
+  dataTableScrollAreaClassName,
+} from "@/shared/ui/data/DataTable";
 import { FactList } from "@/shared/ui/data/FactList";
 import { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
 import { Dialog, dialogFooterClassName } from "@/shared/ui/feedback/Dialog";
@@ -86,35 +92,35 @@ function MatchConfirmSummary({
 function PlayerLedger({ values }: { values: MatchFormValues }) {
   const orderedPlayers = orderFixedMembers(values.players);
   return (
-    <div className="mt-4 overflow-x-auto rounded-[var(--radius-sm)] border border-[var(--color-border)]">
+    <div className={`mt-4 ${dataTableScrollAreaClassName}`}>
       <table className="w-full min-w-[29rem] text-left text-sm">
         <caption className="sr-only">確定する4人分の結果</caption>
-        <thead className="bg-[var(--color-surface-subtle)] text-xs text-[var(--color-text-secondary)]">
+        <thead>
           <tr>
-            <th className="px-3 py-2 font-medium">順位</th>
-            <th className="px-3 py-2 font-medium">メンバー</th>
-            <th className="px-3 py-2 text-right font-medium">総資産（万円）</th>
-            <th className="px-3 py-2 text-right font-medium">収益（万円）</th>
+            <th className={dataTableHeaderCellClassName}>順位</th>
+            <th className={dataTableHeaderCellClassName}>メンバー</th>
+            <th className={`${dataTableHeaderCellClassName} text-right`}>総資産（万円）</th>
+            <th className={`${dataTableHeaderCellClassName} text-right`}>収益（万円）</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-[var(--color-border)]">
+        <tbody>
           {orderedPlayers.map((player) => (
-            <tr key={player.memberId}>
-              <td className="px-3 py-2">
+            <DataTableBodyRow key={player.memberId}>
+              <td className={dataTableBodyCellClassName}>
                 <RankBadge rank={player.rank} />
               </td>
-              <th className="px-3 py-2 text-left font-semibold" scope="row">
+              <th className={`${dataTableBodyCellClassName} text-left font-semibold`} scope="row">
                 <MemberSequenceLabel memberId={player.memberId}>
                   {memberDisplayName(player.memberId)}
                 </MemberSequenceLabel>
               </th>
-              <td className="px-3 py-2 text-right tabular-nums">
+              <td className={`${dataTableBodyCellClassName} text-right tabular-nums`}>
                 {player.totalAssetsManYen.toLocaleString()}
               </td>
-              <td className="px-3 py-2 text-right tabular-nums">
+              <td className={`${dataTableBodyCellClassName} text-right tabular-nums`}>
                 {player.revenueManYen.toLocaleString()}
               </td>
-            </tr>
+            </DataTableBodyRow>
           ))}
         </tbody>
       </table>

@@ -71,7 +71,7 @@ function NavItemLink({ item }: { item: NavItem }) {
       aria-label={item.label}
       className={({ isActive }) =>
         cn(
-          "relative isolate inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-2 overflow-hidden rounded-[var(--radius-sm)] border px-3 py-2 text-sm font-semibold transition-colors duration-[var(--motion-fast)] motion-reduce:transition-none lg:min-h-9 lg:min-w-0 lg:py-2",
+          "relative isolate inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-2 overflow-hidden rounded-[var(--radius-sm)] border px-3 py-2 text-sm font-semibold transition-colors duration-[var(--motion-fast)] motion-reduce:transition-none lg:min-h-9 lg:min-w-0 lg:py-1",
           isActive
             ? "border-[var(--color-action)]/60 text-[var(--color-text-primary)]"
             : "border-transparent text-[var(--color-text-secondary)] hover:border-[var(--color-border)] hover:bg-[var(--color-surface-subtle)]",

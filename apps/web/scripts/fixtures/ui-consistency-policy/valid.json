@@ -7,5 +7,6 @@
   "features/example/Page.tsx": "import { CheckboxField } from \"@/shared/ui/forms/CheckboxField\";\nexport function Page() { return <CheckboxField label=\"対象\" />; }\n",
   "features/example/InlineTextLink.tsx": "export function InlineTextLink() { return <Link to=\"/details\">詳細を見る</Link>; }\n",
   "features/example/InlineTextButton.tsx": "export function InlineTextButton() { return <button type=\"button\">補足を表示</button>; }\n",
-  "features/example/IconOnlySquare.tsx": "export function IconOnlySquare() { return <a aria-label=\"詳細を開く\" className=\"min-h-11 min-w-11\" href=\"/details\"><svg aria-hidden=\"true\" /></a>; }\n"
+  "features/example/IconOnlySquare.tsx": "export function IconOnlySquare() { return <a aria-label=\"詳細を開く\" className=\"min-h-11 min-w-11\" href=\"/details\"><svg aria-hidden=\"true\" /></a>; }\n",
+  "features/example/Table.tsx": "export function Table() { return <table><tbody><tr><td className=\"px-3 py-2 align-middle\">値</td></tr></tbody></table>; }\n"
 }

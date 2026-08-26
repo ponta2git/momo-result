@@ -20,7 +20,6 @@ import { useMatchWorkspaceViewModel } from "@/features/matches/workspace/useMatc
 import { useWorkspaceHeldEventCreation } from "@/features/matches/workspace/useWorkspaceHeldEventCreation";
 import { useWorkspaceNotice } from "@/features/matches/workspace/useWorkspaceNotice";
 import { isInitialQueryLoading, shouldShowQueryError } from "@/shared/api/queryErrorState";
-import { useHeldEventPickerDirectory } from "@/shared/api/useHeldEventPickerDirectory";
 import { sanitizeReturnTo } from "@/shared/navigation/returnTo";
 
 export type MatchWorkspaceControllerParams = {
@@ -48,6 +47,7 @@ export function useMatchWorkspaceController({
   const handoffSessionId = matchSessionId ?? matchDraftId ?? mode;
   const queries = useMatchWorkspaceQueries({
     gameTitleId: state.values.gameTitleId,
+    heldEventId: state.values.heldEventId,
     matchDraftId,
     matchDraftSourceImagesId: state.values.matchDraftId,
     matchId,
@@ -69,6 +69,7 @@ export function useMatchWorkspaceController({
     },
     draftDetailQuery,
     gameTitlesQuery,
+    heldEventPicker,
     heldEventItems,
     mapMastersQuery,
     memberAliasesQuery,
@@ -80,10 +81,6 @@ export function useMatchWorkspaceController({
     seasonMastersQuery,
     sourceImageQuery,
   } = queries;
-  const heldEventPicker = useHeldEventPickerDirectory({
-    selectedEvent: heldEventItems.find((event) => event.id === state.values.heldEventId),
-    selectedId: state.values.heldEventId,
-  });
   const createEventMutation = useWorkspaceHeldEventCreation({
     onError: (message) => local.setOperationError({ kind: "heldEventCreation", message }),
     onOperationStart: () => local.setOperationError(null),

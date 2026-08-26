@@ -31,8 +31,10 @@ test("detects recursive cross-family aliases and forbidden UI boundaries", async
       "data-viz-play-order-token",
       "feature-control-styles-import",
       "feature-raw-choice-input",
+      "global-font-shorthand",
       "interactive-touch-target",
       "legacy-player-token",
+      "raw-table-cell-alignment",
       "semantic-color-alias-cycle",
       "semantic-color-cross-family",
       "semantic-color-cross-family-value",
@@ -63,6 +65,18 @@ test("detects recursive cross-family aliases and forbidden UI boundaries", async
   assert.equal(
     violations.filter((violation) => violation.rule === "feature-raw-choice-input").length,
     2,
+  );
+  assert.ok(
+    violations.some(
+      (violation) =>
+        violation.rule === "raw-table-cell-alignment" && violation.path.endsWith("Table.tsx"),
+    ),
+  );
+  assert.ok(
+    violations.some(
+      (violation) =>
+        violation.rule === "global-font-shorthand" && violation.path.endsWith("styles.css"),
+    ),
   );
   assert.deepEqual(
     violations

@@ -42,10 +42,10 @@ import {
   matchListSummaryQueryOptions,
   seasonMastersQueryOptions,
 } from "@/shared/api/queryOptions";
+import { useHeldEventPickerDirectory } from "@/shared/api/useHeldEventPickerDirectory";
 import { cursorForPage } from "@/shared/lib/cursorPagination";
 import { sanitizeReturnTo, withReturnTo } from "@/shared/navigation/returnTo";
 import { showToast } from "@/shared/ui/feedback/Toast";
-import { useHeldEventPickerDirectory } from "@/shared/api/useHeldEventPickerDirectory";
 
 export function useMatchesListPageController() {
   const [searchParams, setSearchParams] = useSearchParams();

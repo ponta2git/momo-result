@@ -38,12 +38,15 @@ import {
   ocrDraftsBulkQueryOptions,
   seasonMastersQueryOptions,
 } from "@/shared/api/queryOptions";
+import { useHeldEventPickerDirectory } from "@/shared/api/useHeldEventPickerDirectory";
+import type { HeldEventPickerDirectory } from "@/shared/api/useHeldEventPickerDirectory";
 import { isOcrRunning } from "@/shared/domain/draftStatus";
 import { bySlot } from "@/shared/lib/slotMap";
 import type { SlotMap } from "@/shared/lib/slotMap";
 
 export type MatchWorkspaceQueriesParams = {
   gameTitleId: string;
+  heldEventId: string;
   matchDraftId: string | undefined;
   matchDraftSourceImagesId: string | undefined;
   matchId: string | undefined;
@@ -56,6 +59,7 @@ export type MatchWorkspaceQueriesParams = {
 export type MatchWorkspaceQueries = {
   draftDetailQuery: UseQueryResult<MatchDraftDetailResponse, Error>;
   gameTitlesQuery: UseSuspenseQueryResult<GameTitleListResponse, Error>;
+  heldEventPicker: HeldEventPickerDirectory;
   heldEventItems: HeldEventResponse[];
   legacyIds: SlotMap<string>;
   mapMastersQuery: UseQueryResult<MapMasterListResponse, Error>;
@@ -89,6 +93,7 @@ export function useMatchWorkspaceQueries(
 ): MatchWorkspaceQueries & { derived: MatchWorkspaceQueriesDerived } {
   const {
     gameTitleId,
+    heldEventId,
     matchDraftId,
     matchDraftSourceImagesId,
     matchId,
@@ -124,6 +129,10 @@ export function useMatchWorkspaceQueries(
     heldEventsQuery.data?.items ?? [],
     preferredHeldEventQuery.data,
   );
+  const heldEventPicker = useHeldEventPickerDirectory({
+    selectedEvent: heldEventItems.find((event) => event.id === heldEventId),
+    selectedId: heldEventId,
+  });
 
   const reviewDraftIds = useMemo<SlotMap<string>>(() => {
     const fromDetail = draftIdsFromDetail(draftDetailQuery.data);
@@ -218,6 +227,7 @@ export function useMatchWorkspaceQueries(
     },
     draftDetailQuery,
     gameTitlesQuery,
+    heldEventPicker,
     heldEventItems,
     legacyIds,
     mapMastersQuery,

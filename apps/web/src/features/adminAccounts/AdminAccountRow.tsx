@@ -2,7 +2,8 @@ import type { LoginAccountResponse, UpdateLoginAccountRequest } from "@/shared/a
 import { formatApiError } from "@/shared/api/problemDetails";
 import { memberDisplayName } from "@/shared/domain/members";
 import { Button } from "@/shared/ui/actions/Button";
-import { DataTableBodyRow } from "@/shared/ui/data/DataTable";
+import { cn } from "@/shared/ui/cn";
+import { dataTableBodyCellClassName, DataTableBodyRow } from "@/shared/ui/data/DataTable";
 import { AlertDialog } from "@/shared/ui/feedback/Dialog";
 import { StatusBadge } from "@/shared/ui/status/StatusBadge";
 
@@ -23,16 +24,19 @@ export function AdminAccountRow({
   return (
     <DataTableBodyRow aria-busy={Boolean(pendingRequest) || undefined}>
       <th
-        className="sticky left-0 z-[var(--z-base)] bg-[var(--color-surface)] px-3 py-2 text-left font-semibold"
+        className={cn(
+          dataTableBodyCellClassName,
+          "sticky left-0 z-[var(--z-base)] bg-[var(--color-surface)] text-left font-semibold",
+        )}
         scope="row"
       >
         {account.displayName}
       </th>
-      <td className="momo-data max-w-[14rem] truncate px-3 py-2 text-xs">
+      <td className={cn(dataTableBodyCellClassName, "momo-data max-w-[14rem] truncate text-xs")}>
         {account.discordUserId}
       </td>
-      <td className="px-3 py-2">{memberDisplayName(account.playerMemberId)}</td>
-      <td className="px-3 py-2">
+      <td className={dataTableBodyCellClassName}>{memberDisplayName(account.playerMemberId)}</td>
+      <td className={dataTableBodyCellClassName}>
         <div className="flex flex-wrap gap-2">
           <StatusBadge label={account.isAdmin ? "管理者" : "一般"} tone="neutral" />
           <StatusBadge
@@ -41,7 +45,7 @@ export function AdminAccountRow({
           />
         </div>
       </td>
-      <td className="px-3 py-2">
+      <td className={dataTableBodyCellClassName}>
         <div className="flex flex-wrap gap-2">
           <AccountActionConfirm
             disabled={isPending}

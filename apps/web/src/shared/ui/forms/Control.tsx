@@ -33,7 +33,7 @@ const toneClass = {
 } as const satisfies Record<ControlTone, string>;
 
 const baseControlClass =
-  "min-h-11 w-full min-w-0 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] py-2 text-base leading-6 text-[var(--color-text-primary)] hover:bg-[var(--color-surface-subtle)] disabled:cursor-not-allowed disabled:bg-[var(--color-surface-subtle)] disabled:text-[var(--color-text-muted)] disabled:opacity-70 sm:min-h-10 sm:text-sm";
+  "min-h-11 w-full min-w-0 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] py-2 text-base leading-6 text-[var(--color-text-primary)] hover:bg-[var(--color-surface-subtle)] disabled:cursor-not-allowed disabled:bg-[var(--color-surface-subtle)] disabled:text-[var(--color-text-muted)] disabled:opacity-70 sm:min-h-10 sm:text-sm sm:leading-5";
 const invalidControlClass = "border-[var(--color-danger)]/65 bg-[var(--color-danger)]/10";
 
 type ResolvedControlPresentation = {

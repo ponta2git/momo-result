@@ -5,12 +5,12 @@ import type { MatchFormValues } from "@/features/matches/workspace/matchFormType
 import { MatchSetupFields } from "@/features/matches/workspace/MatchSetupFields";
 import type { MatchWorkspaceOperationErrorView } from "@/features/matches/workspace/matchWorkspaceOperationError";
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
-import type { HeldEventPickerDirectory } from "@/shared/api/useHeldEventPickerDirectory";
 import type {
   GameTitleListResponse,
   MapMasterListResponse,
   SeasonMasterListResponse,
 } from "@/shared/api/masters";
+import type { HeldEventPickerDirectory } from "@/shared/api/useHeldEventPickerDirectory";
 import { formatMatchNoInEvent } from "@/shared/domain/matchLabels";
 import { formatDateTimeLong } from "@/shared/lib/dateTime";
 import { Button } from "@/shared/ui/actions/Button";

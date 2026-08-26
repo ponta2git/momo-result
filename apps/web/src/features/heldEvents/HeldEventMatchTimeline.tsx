@@ -24,7 +24,7 @@ export function HeldEventMatchTimeline({
 }) {
   return (
     <section aria-labelledby="held-event-timeline-heading" className="grid gap-3">
-      <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h2 id="held-event-timeline-heading" className="momo-heading text-base font-semibold">
             試合の流れ

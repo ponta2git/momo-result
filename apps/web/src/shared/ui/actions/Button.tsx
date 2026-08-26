@@ -20,7 +20,7 @@ const variantClass = {
 } as const satisfies Record<ButtonVariant, string>;
 
 const sizeClass = {
-  sm: "min-h-11 px-3 py-2 text-sm sm:min-h-9 sm:py-2",
+  sm: "min-h-11 px-3 py-2 text-sm sm:min-h-9 sm:py-1",
   md: "min-h-11 px-4 py-2 text-sm sm:min-h-10",
   lg: "min-h-11 px-5 py-3 text-base",
 } as const satisfies Record<ButtonSize, string>;
@@ -35,7 +35,7 @@ export function buttonClassName({
   variant?: ButtonVariant | undefined;
 }) {
   return cn(
-    "momo-pressable inline-flex w-auto min-w-0 items-center justify-center gap-2 rounded-[var(--radius-sm)] border leading-5 font-semibold whitespace-normal break-words disabled:cursor-not-allowed disabled:opacity-60",
+    "momo-pressable inline-flex w-auto min-w-0 items-center justify-center gap-2 rounded-[var(--radius-sm)] border font-semibold whitespace-normal break-words disabled:cursor-not-allowed disabled:opacity-60",
     sizeClass[size],
     variantClass[variant],
     className,

@@ -23,4 +23,18 @@ describe("FactList", () => {
     expect(within(facts).getByText("対象試合")).toBeVisible();
     expect(within(facts).getByText("24戦")).toHaveClass("tabular-nums");
   });
+
+  it("aligns compact label and value pairs on a shared text baseline", () => {
+    render(
+      <FactList
+        ariaLabel="開催情報"
+        items={[{ id: "owner", label: "オーナー", value: "ぽんた" }]}
+        layout="inline"
+      />,
+    );
+
+    const facts = screen.getByLabelText("開催情報");
+    expect(facts.firstElementChild).toHaveClass("items-baseline");
+    expect(within(facts).getByRole("definition")).not.toHaveClass("mt-0.5");
+  });
 });

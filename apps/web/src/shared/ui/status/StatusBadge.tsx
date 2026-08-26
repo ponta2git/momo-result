@@ -61,7 +61,7 @@ export function StatusBadge({
       role={announceChanges ? "status" : undefined}
     >
       {!hideIcon && statusIcon ? (
-        <span aria-hidden="true" className="shrink-0">
+        <span aria-hidden="true" className="inline-flex shrink-0 items-center justify-center">
           {statusIcon}
         </span>
       ) : null}

@@ -111,7 +111,7 @@ function SegmentedButton({
     <button
       aria-pressed={selected}
       className={cn(
-        "relative isolate min-h-11 min-w-[5ch] overflow-hidden rounded-[var(--radius-xs)] px-3 py-2 text-sm font-medium text-[var(--color-text-secondary)] transition-colors duration-[var(--motion-fast)] motion-reduce:transition-none sm:min-h-9 sm:py-2",
+        "relative isolate min-h-11 min-w-[5ch] overflow-hidden rounded-[var(--radius-xs)] px-3 py-2 text-sm font-medium text-[var(--color-text-secondary)] transition-colors duration-[var(--motion-fast)] motion-reduce:transition-none sm:min-h-9 sm:py-1",
         selected ? "text-[var(--color-text-primary)]" : "",
         "disabled:cursor-not-allowed disabled:opacity-50",
         className,

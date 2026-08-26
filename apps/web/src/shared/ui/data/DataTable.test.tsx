@@ -40,7 +40,7 @@ describe("DataTable", () => {
     );
 
     expect(screen.getByRole("table", { name: "試合結果" })).toBeInTheDocument();
-    expect(screen.getByRole("rowheader", { name: "いーゆー" })).toHaveClass("py-2");
+    expect(screen.getByRole("rowheader", { name: "いーゆー" })).toHaveClass("py-2", "align-middle");
     expect(screen.getByRole("rowheader", { name: "いーゆー" }).parentElement).toHaveAttribute(
       "aria-busy",
       "true",
@@ -53,6 +53,7 @@ describe("DataTable", () => {
       "bg-[var(--color-surface)]",
       "border-y",
       "border-[var(--color-border-strong)]",
+      "align-middle",
     );
     const table = screen.getByRole("table", { name: "試合結果" });
     expect(table.parentElement).toHaveClass("overflow-x-auto", "bg-[var(--color-surface)]");

@@ -4,10 +4,7 @@ import { useState } from "react";
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
 import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import { shouldShowQueryError } from "@/shared/api/queryErrorState";
-import {
-  heldEventDetailQueryOptions,
-  heldEventsQueryOptions,
-} from "@/shared/api/queryOptions";
+import { heldEventDetailQueryOptions, heldEventsQueryOptions } from "@/shared/api/queryOptions";
 
 export const heldEventPickerPageSize = 20;
 
@@ -42,8 +39,7 @@ export function useHeldEventPickerDirectory({
   const suppliedSelection = selectedEvent?.id === selectedId ? selectedEvent : undefined;
   const rememberedCurrentSelection =
     rememberedSelection?.id === selectedId ? rememberedSelection : undefined;
-  const resolvedWithoutDetail =
-    selectedOnPage ?? suppliedSelection ?? rememberedCurrentSelection;
+  const resolvedWithoutDetail = selectedOnPage ?? suppliedSelection ?? rememberedCurrentSelection;
   const selectedDetailQuery = useQuery(
     heldEventDetailQueryOptions(
       selectedId,

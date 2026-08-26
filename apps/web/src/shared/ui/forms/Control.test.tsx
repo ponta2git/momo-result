@@ -30,6 +30,8 @@ describe("InputControl", () => {
     expect(input).toHaveAttribute("aria-describedby", "amount-help");
     expect(input).toHaveClass(
       "min-h-11",
+      "sm:min-h-10",
+      "sm:leading-5",
       "border-[var(--color-danger)]/65",
       "bg-[var(--color-danger)]/10",
     );

@@ -2,6 +2,7 @@ import { Check, Minus } from "lucide-react";
 import type { ReactNode } from "react";
 
 import {
+  AnalysisTableCell,
   AnalysisTableHead,
   AnalysisTableRow,
 } from "@/features/seriesComparison/charts/SeriesAnalysisMatrix";
@@ -288,5 +289,5 @@ function FoldTableHead({ children }: { children: ReactNode }) {
 }
 
 function FoldTableCell({ children }: { children: ReactNode }) {
-  return <td className="px-3 py-2 tabular-nums">{children}</td>;
+  return <AnalysisTableCell>{children}</AnalysisTableCell>;
 }

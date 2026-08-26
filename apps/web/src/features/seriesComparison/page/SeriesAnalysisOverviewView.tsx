@@ -48,13 +48,13 @@ export function OverviewView({ focusedItemIds, response, onDrilldown }: Analysis
       <AnalysisSection id="metric-basic" title="順位と基礎比較">
         <dl
           aria-label="現在の順位差"
-          className="mb-6 grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end"
+          className="mb-6 grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start"
         >
           <div>
             <dt className="text-xs font-semibold text-[var(--color-text-secondary)]">
               平均順位の先頭
             </dt>
-            <dd className="mt-2 flex flex-wrap gap-x-4 gap-y-2 text-2xl font-semibold tracking-tight">
+            <dd className="mt-1 flex flex-wrap gap-x-4 gap-y-2 text-2xl font-semibold tracking-tight">
               {leaders.length > 0
                 ? leaders.map((player) => (
                     <MemberSequenceLabel key={player.memberId} memberId={player.memberId}>

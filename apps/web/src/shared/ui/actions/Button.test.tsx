@@ -30,6 +30,17 @@ describe("Button", () => {
     expect(screen.getByRole("button", { name: "閉じる" })).toHaveAttribute("type", "button");
   });
 
+  it("uses the shared compact control rail on wider screens", () => {
+    render(<Button size="sm">変更</Button>);
+
+    expect(screen.getByRole("button", { name: "変更" })).toHaveClass(
+      "min-h-11",
+      "sm:min-h-9",
+      "sm:py-1",
+      "text-sm",
+    );
+  });
+
   it("inherits pending state from its parent form for submit actions", async () => {
     const user = userEvent.setup();
     const deferred = createDeferred<void>();

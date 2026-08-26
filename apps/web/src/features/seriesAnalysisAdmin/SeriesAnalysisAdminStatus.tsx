@@ -7,7 +7,12 @@ import type {
   SeriesAnalysisSafeFailureCode,
   SeriesAnalysisTrigger,
 } from "@/shared/api/seriesAnalysis";
-import { dataTableHeaderCellClassName } from "@/shared/ui/data/DataTable";
+import {
+  dataTableBodyCellClassName,
+  DataTableBodyRow,
+  dataTableHeaderCellClassName,
+  dataTableScrollAreaClassName,
+} from "@/shared/ui/data/DataTable";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 import { StatusBadge } from "@/shared/ui/status/StatusBadge";
@@ -90,7 +95,7 @@ export function RecentJobs({ jobs }: { jobs: SeriesAnalysisAdminOverview["recent
           実行履歴はありません。
         </p>
       ) : (
-        <div className="overflow-x-auto rounded-[var(--radius-sm)] border border-[var(--color-border)]">
+        <div className={dataTableScrollAreaClassName}>
           <table className="w-full min-w-[64rem] text-left text-sm">
             <thead>
               <tr>
@@ -108,10 +113,7 @@ export function RecentJobs({ jobs }: { jobs: SeriesAnalysisAdminOverview["recent
             </thead>
             <tbody>
               {jobs.map((job) => (
-                <tr
-                  className="border-b border-[var(--color-border)] last:border-b-0"
-                  key={job.jobId}
-                >
+                <DataTableBodyRow key={job.jobId}>
                   <TableCell>
                     <strong>{job.gameTitleName}</strong>
                   </TableCell>
@@ -132,7 +134,7 @@ export function RecentJobs({ jobs }: { jobs: SeriesAnalysisAdminOverview["recent
                       ? failureLabel(job.safeFailureCode)
                       : resultLabel(job.resultDisposition)}
                   </TableCell>
-                </tr>
+                </DataTableBodyRow>
               ))}
             </tbody>
           </table>
@@ -174,7 +176,7 @@ function TableHead({ children }: { children: ReactNode }) {
 }
 
 function TableCell({ children }: { children: ReactNode }) {
-  return <td className="px-3 py-2 tabular-nums">{children}</td>;
+  return <td className={`${dataTableBodyCellClassName} tabular-nums`}>{children}</td>;
 }
 
 export function AdminSkeleton() {

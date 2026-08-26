@@ -27,7 +27,12 @@ export function PageHeader({
         {eyebrow ? (
           <p className="momo-label text-[var(--color-text-secondary)]">{eyebrow}</p>
         ) : null}
-        <h1 className="momo-heading mt-1 text-2xl font-semibold text-balance text-[var(--color-text-primary)] md:text-3xl">
+        <h1
+          className={cn(
+            "momo-heading text-2xl font-semibold text-balance text-[var(--color-text-primary)] md:text-3xl",
+            eyebrow ? "mt-1" : "",
+          )}
+        >
           {title}
         </h1>
         {description ? (

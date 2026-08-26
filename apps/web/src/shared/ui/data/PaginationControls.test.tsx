@@ -28,6 +28,10 @@ describe("PaginationControls", () => {
     );
 
     expect(screen.getByText("26-50件 / 全75件")).toBeInTheDocument();
+    expect(screen.getByRole("navigation", { name: "ページネーション" })).toHaveClass(
+      "sm:items-end",
+    );
+    expect(screen.getByText("26-50件 / 全75件")).toHaveClass("sm:min-h-9", "sm:items-center");
     await user.click(screen.getByRole("button", { name: "先頭ページへ" }));
     await user.selectOptions(screen.getByLabelText("表示件数"), "50");
     expect(onPageChange).toHaveBeenCalledWith(1);

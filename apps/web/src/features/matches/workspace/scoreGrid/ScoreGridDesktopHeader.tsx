@@ -15,8 +15,8 @@ export function ScoreGridDesktopHeader() {
               key={column.column}
               className={
                 column.kind === "member"
-                  ? "sticky left-0 z-[var(--z-sticky-raised)] bg-[var(--color-surface)] px-2 py-2"
-                  : "px-2 py-2"
+                  ? "sticky left-0 z-[var(--z-sticky-raised)] bg-[var(--color-surface)] px-2 py-2 align-middle"
+                  : "px-2 py-2 align-middle"
               }
             >
               {column.header}

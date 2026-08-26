@@ -467,6 +467,71 @@ function collectInteractiveTargetViolations(sources) {
   return violations;
 }
 
+function collectRawTableCellAlignmentViolations(sources) {
+  const violations = [];
+  for (const [path, source] of sources) {
+    if (!path.endsWith(".tsx")) continue;
+
+    const sourceFile = ts.createSourceFile(
+      path,
+      source,
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.TSX,
+    );
+    const visit = (node) => {
+      if (ts.isJsxElement(node) || ts.isJsxSelfClosingElement(node)) {
+        const openingElement = ts.isJsxElement(node) ? node.openingElement : node;
+        const tagName = openingElement.tagName.getText(sourceFile);
+        if (tagName === "td" || tagName === "th") {
+          const openingTag = openingElement.getText(sourceFile);
+          const hasAlignmentContract =
+            /\balign-(?:baseline|bottom|middle|top)\b/u.test(openingTag) ||
+            /\bdataTable(?:Body|Header)CellClassName\b/u.test(openingTag);
+          if (!hasAlignmentContract) {
+            const line =
+              sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line + 1;
+            violations.push(
+              makeViolation({
+                line,
+                message:
+                  "raw table cells must declare top, middle, bottom, or baseline alignment explicitly",
+                path,
+                rule: "raw-table-cell-alignment",
+                subject: `${tagName}@${line}`,
+              }),
+            );
+          }
+        }
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(sourceFile);
+  }
+  return violations;
+}
+
+function collectGlobalFontShorthandViolations(sources) {
+  const violations = [];
+  for (const [path, source] of sources) {
+    if (!path.endsWith("styles.css")) continue;
+    for (const match of source.matchAll(/\bfont\s*:/gu)) {
+      const line = lineNumberAt(source, match.index);
+      violations.push(
+        makeViolation({
+          line,
+          message:
+            "global styles must not use the font shorthand because it overrides component font size and line-height contracts",
+          path,
+          rule: "global-font-shorthand",
+          subject: `font@${line}`,
+        }),
+      );
+    }
+  }
+  return violations;
+}
+
 function deduplicateViolations(violations) {
   return [...new Map(violations.map((violation) => [violation.id, violation])).values()];
 }
@@ -479,6 +544,8 @@ export function collectUiPolicyViolations(sources) {
     ...collectFeatureBoundaryViolations(sources),
     ...collectAmbiguousMemberOrderViolations(sources),
     ...collectInteractiveTargetViolations(sources),
+    ...collectRawTableCellAlignmentViolations(sources),
+    ...collectGlobalFontShorthandViolations(sources),
   ]);
 }
 

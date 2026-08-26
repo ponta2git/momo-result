@@ -49,21 +49,23 @@ export function PaginationControls(props: PaginationControlsProps) {
     <nav
       aria-label={ariaLabel}
       className={cn(
-        "grid gap-3 p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center",
+        "grid gap-3 p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end",
         placement === "standalone"
           ? "rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)]"
           : "bg-transparent",
         className,
       )}
     >
-      <p className="text-sm font-semibold text-[var(--color-text-secondary)] tabular-nums">
+      <p className="text-sm font-semibold text-[var(--color-text-secondary)] tabular-nums sm:inline-flex sm:min-h-9 sm:items-center">
         {formatPaginationRange(pagination)}
       </p>
 
       <div
         className={cn(
-          "grid gap-3 sm:items-center",
-          variant === "full" ? "sm:grid-cols-[auto_auto]" : "sm:justify-end",
+          "grid gap-3",
+          variant === "full"
+            ? "sm:grid-cols-[auto_auto] sm:items-end"
+            : "sm:items-center sm:justify-end",
         )}
       >
         {props.variant === "compact" ? null : (

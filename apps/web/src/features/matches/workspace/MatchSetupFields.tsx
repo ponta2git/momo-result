@@ -42,8 +42,7 @@ export function MatchSetupFields({
         onPageChange={options.heldEventPicker?.onPageChange}
         onValueChange={(heldEventId, pickerSelection) => {
           const selected =
-            pickerSelection ??
-            options.heldEvents.find((candidate) => candidate.id === heldEventId);
+            pickerSelection ?? options.heldEvents.find((candidate) => candidate.id === heldEventId);
           actions.onPatchRoot({
             heldEventId,
             matchNoInEvent: selected?.nextMatchNo ?? 1,

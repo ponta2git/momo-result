@@ -60,7 +60,12 @@ export function FactList({
           <dt className="text-[11px] font-semibold text-[var(--color-text-secondary)]">
             {item.label}
           </dt>
-          <dd className="mt-0.5 min-w-0 text-sm font-semibold break-words tabular-nums">
+          <dd
+            className={cn(
+              "min-w-0 text-sm font-semibold break-words tabular-nums",
+              layout === "inline" ? "" : "mt-0.5",
+            )}
+          >
             {item.value}
           </dd>
         </div>

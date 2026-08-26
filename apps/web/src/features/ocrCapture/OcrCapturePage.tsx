@@ -191,7 +191,7 @@ export function OcrCapturePage() {
           </section>
 
           <aside className="grid gap-3 xl:sticky xl:top-20" aria-labelledby="ocr-tray-title">
-            <div className="flex items-end justify-between gap-3">
+            <div className="flex items-start justify-between gap-3">
               <div>
                 <h2 id="ocr-tray-title" className={panelTitleClass}>
                   分類トレイ

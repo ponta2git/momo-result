@@ -1,65 +1,7 @@
 import { toMatchWorkspaceOperationErrorView } from "@/features/matches/workspace/matchWorkspaceOperationError";
-import type { MatchWorkspaceOperationError } from "@/features/matches/workspace/matchWorkspaceOperationError";
-import type { NormalizedApiError } from "@/shared/api/problemDetails";
-import type { HeldEventPickerDirectory } from "@/shared/api/useHeldEventPickerDirectory";
 
-import type { MatchFormReducerState } from "./matchFormReducer";
-import type { MatchWorkspaceInitialData, WorkspaceMode } from "./matchFormTypes";
-import type { SourceImageItem, SourceImageKind } from "./sourceImages/sourceImageTypes";
-import type { useMatchWorkspaceFormHandlers } from "./useMatchWorkspaceFormHandlers";
-import type { useMatchWorkspaceReviewState } from "./useMatchWorkspaceReviewState";
-import type { useMatchWorkspaceSessionDraft } from "./useMatchWorkspaceSessionDraft";
-import type { useMatchWorkspaceValidation } from "./useMatchWorkspaceValidation";
-import type { useMatchWorkspaceViewModel } from "./useMatchWorkspaceViewModel";
-
-type MatchWorkspaceControllerModelArgs = {
-  baseErrors: NormalizedApiError[];
-  cancelDraftConfirmOpen: boolean;
-  cancelDraftPending: boolean;
-  cancelHref: string;
-  cancelLabel: string;
-  closeConfirm: () => void;
-  confirmAction: (formData: FormData) => void | Promise<void>;
-  confirmOpen: boolean;
-  createEventPending: boolean;
-  editLoadFailureKind: "notFound" | "transient" | null;
-  editLoading: boolean;
-  eventDraftValue: string;
-  formHandlers: ReturnType<typeof useMatchWorkspaceFormHandlers>;
-  heldEventPicker: HeldEventPickerDirectory;
-  isMutating: boolean;
-  isNavigatingToMasters: boolean;
-  isOcrRunningBlocked: boolean;
-  mode: WorkspaceMode;
-  operationError: MatchWorkspaceOperationError | null;
-  preferredImageKind: SourceImageKind;
-  returnTo: string | null | undefined;
-  reviewState: ReturnType<typeof useMatchWorkspaceReviewState>;
-  sessionDraft: ReturnType<typeof useMatchWorkspaceSessionDraft>;
-  sourceImageLoading: boolean;
-  sourceImages: SourceImageItem[] | undefined;
-  state: MatchFormReducerState;
-  useSampleDrafts: boolean;
-  validationState: ReturnType<typeof useMatchWorkspaceValidation>;
-  validationMessage: string;
-  validationFocusRequest: { path: string; sequence: number } | null;
-  viewModel: ReturnType<typeof useMatchWorkspaceViewModel>;
-  workspaceLoading: boolean;
-  workspaceData: MatchWorkspaceInitialData | null;
-  onCancelDraftConfirm: () => void | Promise<void>;
-  onCancelDraftOpenChange: (open: boolean) => void;
-  onCancelDraftTrigger: () => void;
-  onEventDraftChange: (value: string) => void;
-  onNavigateToMasters: () => void;
-  onPreferImageKindChange: (kind: SourceImageKind) => void;
-  onPrimaryAction: () => void;
-  onRetryBaseErrors: () => Promise<void>;
-  onRetryEdit: () => void;
-  onRefreshReviewStatus: () => Promise<void>;
-  retryingBaseErrors: boolean;
-  retryingEdit: boolean;
-  refreshingReviewStatus: boolean;
-};
+import type { WorkspaceMode } from "./matchFormTypes";
+import type { MatchWorkspaceControllerModelArgs } from "./matchWorkspaceControllerModelInput";
 
 function workspaceLoadingCopy(mode: WorkspaceMode) {
   if (mode === "review") {
@@ -86,14 +28,15 @@ function validationFeedback({
 }
 
 export function buildMatchWorkspaceControllerModel(args: MatchWorkspaceControllerModelArgs) {
-  const { validation, visibleErrorPathSet } = args.validationState;
-  const { state, viewModel } = args;
-  const operationErrorView = args.operationError
-    ? toMatchWorkspaceOperationErrorView(args.operationError)
+  const { handlers, state, validation, workspaceData } = args.form;
+  const { mode, useSampleDrafts, view } = args.workspace;
+  const { visibleErrorPathSet } = validation.result;
+  const operationErrorView = args.persistence.error
+    ? toMatchWorkspaceOperationErrorView(args.persistence.error)
     : null;
-  const validationErrorView = args.validationMessage
+  const validationErrorView = validation.message
     ? {
-        detail: args.validationMessage,
+        detail: validation.message,
         nextStep:
           "入力内容は保存・確定されていません。表示された項目を修正して、もう一度実行してください。",
         title: "入力内容を確認してください",
@@ -101,150 +44,170 @@ export function buildMatchWorkspaceControllerModel(args: MatchWorkspaceControlle
     : null;
 
   return {
-    baseErrors: args.baseErrors,
-    baseErrorActions: {
-      onRetry: args.onRetryBaseErrors,
-      retrying: args.retryingBaseErrors,
-    },
-    blockedNotice: args.isOcrRunningBlocked
-      ? {
-          error: args.operationError?.kind === "draftStatus" ? operationErrorView : null,
-          onRefreshReviewStatus: args.onRefreshReviewStatus,
-          refreshingReviewStatus: args.refreshingReviewStatus,
-        }
-      : null,
-    confirmDialog: args.confirmOpen
-      ? {
-          actions: {
-            confirmAction: args.confirmAction,
-            onCancel: args.closeConfirm,
-          },
-          pending: args.isMutating,
-          summary: {
-            gameTitleName: viewModel.selectedGameTitle?.name,
-            heldEvent: viewModel.selectedHeldEvent,
-            mapName: viewModel.selectedMap?.name,
-            seasonName: viewModel.selectedSeason?.name,
-          },
-          reviewSummary: {
-            changedCount: args.reviewState.changedCount,
-            totalCount: args.reviewState.items.length,
-            unresolvedCount: args.reviewState.unresolvedCount,
-          },
-          validationMessage: args.validationMessage,
-          values: state.values,
-        }
-      : null,
     editor: {
+      navigation: {
+        masters: args.navigation.masters,
+      },
+      persistence: {
+        cancellation: {
+          allowed: args.persistence.cancellation.allowed,
+          dialog: {
+            open: args.persistence.cancellation.confirmOpen,
+            pending: args.persistence.cancellation.pending,
+            onConfirm: args.persistence.cancellation.onConfirm,
+            onOpenChange: args.persistence.cancellation.onOpenChange,
+          },
+          disabled: args.persistence.busy,
+          error: args.persistence.error?.kind === "cancelDraft" ? operationErrorView : null,
+          onTrigger: args.persistence.cancellation.onTrigger,
+        },
+        recovery: args.persistence.recovery.recovery
+          ? {
+              savedAt: args.persistence.recovery.recovery.savedAt,
+              onDiscard: args.persistence.recovery.discardRecovery,
+              onRestore: args.persistence.recovery.restoreRecovery,
+            }
+          : null,
+        submit: {
+          action: {
+            label: mode === "edit" ? "保存" : "確定前の確認へ進む",
+            onRun: args.persistence.onPrimaryAction,
+          },
+          availability: {
+            disabled: args.loading.workspace.loading,
+            pending: args.persistence.busy,
+          },
+          feedback: {
+            error:
+              args.persistence.error?.kind === "heldEventCreation" ||
+              args.persistence.error?.kind === "cancelDraft"
+                ? validationErrorView
+                : (operationErrorView ?? validationErrorView),
+            message: validationFeedback({
+              firstMessage: validation.result.validation.firstMessage,
+              success: validation.result.validation.success,
+            }),
+          },
+        },
+      },
       scoreGrid: {
         actions: {
-          onIncidentChange: args.formHandlers.onIncidentChange,
-          onPlayerChange: args.formHandlers.onPlayerChange,
-          onPlayOrderChange: args.formHandlers.onPlayOrderChange,
-          onPreferImageKindChange: args.onPreferImageKindChange,
-          onAcknowledgeReviewCell: args.reviewState.acknowledgeCell,
-          onReviewCellFocus: args.reviewState.focusCell,
+          onAcknowledgeReviewCell: args.review.state.acknowledgeCell,
+          onIncidentChange: handlers.onIncidentChange,
+          onPlayerChange: handlers.onPlayerChange,
+          onPlayOrderChange: handlers.onPlayOrderChange,
+          onPreferImageKindChange: args.sourceImages.onPreferredKindChange,
+          onReviewCellFocus: args.review.state.focusCell,
         },
         data: {
           errorPathSet: visibleErrorPathSet,
           lastSyncedPlayerIndex: state.lastSyncedPlayerIndex,
-          originalPlayers: args.workspaceData?.originalPlayers,
+          originalPlayers: workspaceData?.originalPlayers,
           players: state.values.players,
           review: {
-            acknowledgedCellIds: args.reviewState.acknowledgedCellIds,
-            activeCellId: args.reviewState.activeCellId,
-            items: args.reviewState.items,
+            acknowledgedCellIds: args.review.state.acknowledgedCellIds,
+            activeCellId: args.review.state.activeCellId,
+            items: args.review.state.items,
           },
         },
       },
-      sourceImagePanel:
-        viewModel.hasSourceImagePanel && viewModel.matchDraftIdForImages
-          ? {
-              loading: args.sourceImageLoading,
-              matchDraftId: viewModel.matchDraftIdForImages,
-              preferredKind: args.preferredImageKind,
-              sourceImages: args.sourceImages,
-            }
-          : null,
-      sessionRecovery: args.sessionDraft.recovery
-        ? {
-            savedAt: args.sessionDraft.recovery.savedAt,
-            onDiscard: args.sessionDraft.discardRecovery,
-            onRestore: args.sessionDraft.restoreRecovery,
-          }
-        : null,
-      warnings: args.workspaceData?.warnings ?? [],
-    },
-    formActions: {
-      actionLabel: args.mode === "edit" ? "保存" : "確定前の確認へ進む",
-      disabled: args.workspaceLoading,
-      error:
-        args.operationError?.kind === "heldEventCreation" ||
-        args.operationError?.kind === "cancelDraft"
-          ? validationErrorView
-          : (operationErrorView ?? validationErrorView),
-      message: validationFeedback({
-        firstMessage: validation.firstMessage,
-        success: validation.success,
-      }),
-      pending: args.isMutating,
-      onPrimaryAction: args.onPrimaryAction,
-    },
-    header: {
-      cancelHref: args.cancelHref,
-      cancelLabel: args.cancelLabel,
-      pageDescription: viewModel.pageDescription,
-      pageTitle: viewModel.pageTitle,
-      useSampleDrafts: args.useSampleDrafts,
-    },
-    navigationGuard: {
-      dirty: args.sessionDraft.dirty,
-      navigationAllowedRef: args.sessionDraft.navigationAllowedRef,
-      onDiscard: args.sessionDraft.markCommitted,
-    },
-    validationFocusRequest: args.validationFocusRequest,
-    loadState: {
-      editLoadFailureKind: args.editLoadFailureKind,
-      editLoading: args.editLoading,
-      onRetryEdit: args.onRetryEdit,
-      retryingEdit: args.retryingEdit,
-      workspaceLoading: args.workspaceLoading,
-      workspaceLoadingCopy: workspaceLoadingCopy(args.mode),
-    },
-    setup: {
-      createEventPending: args.createEventPending,
-      errorPathSet: visibleErrorPathSet,
-      eventDraftValue: args.eventDraftValue,
-      eventCreationError:
-        args.operationError?.kind === "heldEventCreation" ? operationErrorView : null,
-      gameTitleItems: viewModel.gameTitleItems,
-      heldEventPicker: args.heldEventPicker,
-      heldEvents: viewModel.heldEvents,
-      mapItems: viewModel.mapItems,
-      seasonItems: viewModel.seasonItems,
-      values: state.values,
-      workspaceActions: {
-        cancelDraft: {
-          canCancel: viewModel.canCancelDraft,
-          confirmOpen: args.cancelDraftConfirmOpen,
-          confirmPending: args.cancelDraftPending,
-          disabled: args.isMutating,
-          error: args.operationError?.kind === "cancelDraft" ? operationErrorView : null,
-          onConfirm: args.onCancelDraftConfirm,
-          onOpenChange: args.onCancelDraftOpenChange,
-          onTrigger: args.onCancelDraftTrigger,
+      setup: {
+        eventCreation: {
+          action: {
+            pending: args.setup.eventCreation.pending,
+            onCreate: handlers.onCreateEvent,
+          },
+          feedback: {
+            error: args.persistence.error?.kind === "heldEventCreation" ? operationErrorView : null,
+          },
+          input: {
+            value: args.setup.eventCreation.draftValue,
+            onChange: args.setup.eventCreation.onDraftChange,
+          },
         },
-        mastersNavigation: {
-          show: (args.mode === "review" || args.mode === "create") && Boolean(args.returnTo),
-          pending: args.isNavigatingToMasters,
-          onClick: args.onNavigateToMasters,
+        fields: {
+          actions: {
+            onGameTitleChange: handlers.onGameTitleChange,
+            onPatchRoot: handlers.onPatchRoot,
+          },
+          options: {
+            gameTitleItems: view.gameTitleItems,
+            heldEventPicker: args.setup.heldEventPicker,
+            heldEvents: view.heldEvents,
+            mapItems: view.mapItems,
+            seasonItems: view.seasonItems,
+          },
+          validation: {
+            errorPathSet: visibleErrorPathSet,
+          },
+          values: state.values,
         },
       },
-      onCreateEvent: args.formHandlers.onCreateEvent,
-      onEventDraftChange: args.onEventDraftChange,
-      onGameTitleChange: args.formHandlers.onGameTitleChange,
-      onPatchRoot: args.formHandlers.onPatchRoot,
+      sourceImagePanel:
+        view.hasSourceImagePanel && view.matchDraftIdForImages
+          ? {
+              loading: args.sourceImages.loading,
+              matchDraftId: view.matchDraftIdForImages,
+              preferredKind: args.sourceImages.preferredKind,
+              sourceImages: args.sourceImages.items,
+            }
+          : null,
+      warnings: workspaceData?.warnings ?? [],
     },
+    loading: {
+      base: args.loading.base,
+      edit: args.loading.edit,
+      workspace: {
+        copy: workspaceLoadingCopy(mode),
+        loading: args.loading.workspace.loading,
+      },
+    },
+    navigation: {
+      guard: args.navigation.guard,
+      header: {
+        description: view.pageDescription,
+        exit: args.navigation.exit,
+        sample: useSampleDrafts,
+        title: view.pageTitle,
+      },
+    },
+    persistence: {
+      confirmation: args.persistence.confirmation.open
+        ? {
+            actions: {
+              onClose: args.persistence.confirmation.onClose,
+              onConfirm: args.persistence.confirmation.onConfirm,
+            },
+            feedback: {
+              validationMessage: validation.message,
+            },
+            pending: args.persistence.busy,
+            review: {
+              changedCount: args.review.state.changedCount,
+              totalCount: args.review.state.items.length,
+              unresolvedCount: args.review.state.unresolvedCount,
+            },
+            summary: {
+              gameTitleName: view.selectedGameTitle?.name,
+              heldEvent: view.selectedHeldEvent,
+              mapName: view.selectedMap?.name,
+              seasonName: view.selectedSeason?.name,
+            },
+            values: state.values,
+          }
+        : null,
+    },
+    review: {
+      blocked: args.review.blocked
+        ? {
+            feedback: {
+              error: args.persistence.error?.kind === "draftStatus" ? operationErrorView : null,
+            },
+            refresh: args.review.statusRefresh,
+          }
+        : null,
+    },
+    validationFocusRequest: validation.focusRequest,
   };
 }
 

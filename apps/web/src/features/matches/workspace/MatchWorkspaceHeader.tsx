@@ -1,30 +1,30 @@
-import type { MatchWorkspaceController } from "@/features/matches/workspace/useMatchWorkspaceController";
+import type { MatchWorkspaceControllerModel } from "@/features/matches/workspace/matchWorkspaceControllerModel";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { PageHeader } from "@/shared/ui/layout/PageHeader";
 
 type MatchWorkspaceHeaderProps = {
-  header: MatchWorkspaceController["header"];
+  model: MatchWorkspaceControllerModel["navigation"]["header"];
 };
 
-export function MatchWorkspaceHeader({ header }: MatchWorkspaceHeaderProps) {
+export function MatchWorkspaceHeader({ model }: MatchWorkspaceHeaderProps) {
   return (
     <PageHeader
       actions={
-        <LinkButton size="sm" to={header.cancelHref} variant="quiet">
-          {header.cancelLabel}
+        <LinkButton size="sm" to={model.exit.href} variant="quiet">
+          {model.exit.label}
         </LinkButton>
       }
       description={
         <>
-          {header.pageDescription}
-          {header.useSampleDrafts ? (
+          {model.description}
+          {model.sample ? (
             <span className="mt-2 block w-fit rounded-full border border-[var(--color-warning)]/65 bg-[var(--color-warning)]/18 px-3 py-1 text-sm font-semibold text-[var(--color-text-primary)]">
               サンプルの読み取り結果で表示中
             </span>
           ) : null}
         </>
       }
-      title={header.pageTitle}
+      title={model.title}
     />
   );
 }

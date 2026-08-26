@@ -1,20 +1,15 @@
 import { useCallback, useContext, useEffect } from "react";
-import type { RefObject } from "react";
 import { UNSAFE_DataRouterContext, useBlocker } from "react-router-dom";
 
+import type { MatchWorkspaceControllerModel } from "@/features/matches/workspace/matchWorkspaceControllerModel";
 import { AlertDialog } from "@/shared/ui/feedback/Dialog";
 
 type MatchWorkspaceNavigationGuardProps = {
-  dirty: boolean;
-  navigationAllowedRef: RefObject<boolean>;
-  onDiscard: () => void;
+  model: MatchWorkspaceControllerModel["navigation"]["guard"];
 };
 
-function MatchWorkspaceRouterGuard({
-  dirty,
-  navigationAllowedRef,
-  onDiscard,
-}: MatchWorkspaceNavigationGuardProps) {
+function MatchWorkspaceRouterGuard({ model }: MatchWorkspaceNavigationGuardProps) {
+  const { dirty, navigationAllowedRef, onDiscard } = model;
   const blocker = useBlocker(
     ({ currentLocation, nextLocation }) =>
       dirty &&
@@ -58,7 +53,7 @@ export function MatchWorkspaceNavigationGuard(props: MatchWorkspaceNavigationGua
 
   useEffect(() => {
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
-      if (!props.dirty || props.navigationAllowedRef.current) {
+      if (!props.model.dirty || props.model.navigationAllowedRef.current) {
         return;
       }
       event.preventDefault();
@@ -66,7 +61,7 @@ export function MatchWorkspaceNavigationGuard(props: MatchWorkspaceNavigationGua
     };
     window.addEventListener("beforeunload", handleBeforeUnload);
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-  }, [props.dirty, props.navigationAllowedRef]);
+  }, [props.model.dirty, props.model.navigationAllowedRef]);
 
-  return dataRouter ? <MatchWorkspaceRouterGuard {...props} /> : null;
+  return dataRouter ? <MatchWorkspaceRouterGuard model={props.model} /> : null;
 }

@@ -2,6 +2,7 @@ import { AlertTriangle, Check } from "lucide-react";
 import { useFormStatus } from "react-dom";
 
 import type { MatchFormValues } from "@/features/matches/workspace/matchFormTypes";
+import type { MatchWorkspaceControllerModel } from "@/features/matches/workspace/matchWorkspaceControllerModel";
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
 import { formatMatchNoInEvent } from "@/shared/domain/matchLabels";
 import { memberDisplayName, orderFixedMembers } from "@/shared/domain/members";
@@ -17,20 +18,6 @@ import { FactList } from "@/shared/ui/data/FactList";
 import { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
 import { Dialog, dialogFooterClassName } from "@/shared/ui/feedback/Dialog";
 import { RankBadge } from "@/shared/ui/rank/RankBadge";
-
-type MatchConfirmDialogProps = {
-  actions: MatchConfirmActions;
-  pending?: boolean | undefined;
-  reviewSummary: MatchConfirmReviewSummary;
-  summary: MatchConfirmSummaryProps;
-  validationMessage?: string | undefined;
-  values: MatchFormValues;
-};
-
-type MatchConfirmActions = {
-  confirmAction: (formData: FormData) => void | Promise<void>;
-  onCancel: () => void;
-};
 
 type MatchConfirmSummaryProps = {
   gameTitleName?: string | undefined;
@@ -168,40 +155,37 @@ function OcrReviewSummary({
 }
 
 export function MatchConfirmDialog({
-  actions,
-  pending = false,
-  reviewSummary,
-  summary,
-  validationMessage,
-  values,
-}: MatchConfirmDialogProps) {
+  model,
+}: {
+  model: NonNullable<MatchWorkspaceControllerModel["persistence"]["confirmation"]>;
+}) {
   return (
     <Dialog
-      busy={pending}
+      busy={model.pending}
       open
       description="確定前の確認"
       title="この内容で確定しますか？"
       onOpenChange={(open) => {
         if (!open) {
-          actions.onCancel();
+          model.actions.onClose();
         }
       }}
     >
-      <form action={actions.confirmAction} className="min-w-0">
-        <MatchConfirmSummary {...summary} values={values} />
-        <PlayerLedger values={values} />
-        <OcrReviewSummary {...reviewSummary} />
+      <form action={model.actions.onConfirm} className="min-w-0">
+        <MatchConfirmSummary {...model.summary} values={model.values} />
+        <PlayerLedger values={model.values} />
+        <OcrReviewSummary {...model.review} />
 
-        {validationMessage ? (
+        {model.feedback.validationMessage ? (
           <div
             className="mt-4 rounded-[var(--radius-sm)] border border-[var(--color-warning)]/65 bg-[var(--color-warning)]/18 px-3 py-2 text-sm text-[var(--color-text-primary)]"
             role="alert"
           >
-            {validationMessage}
+            {model.feedback.validationMessage}
           </div>
         ) : null}
 
-        <ConfirmActionButtons onCancel={actions.onCancel} />
+        <ConfirmActionButtons onCancel={model.actions.onClose} />
       </form>
     </Dialog>
   );

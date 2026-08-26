@@ -18,10 +18,26 @@ describe("MatchSetupFields", () => {
 
     render(
       <MatchSetupFields
-        actions={{ onGameTitleChange: vi.fn(), onPatchRoot: vi.fn() }}
-        errorPathSet={new Set(paths)}
-        options={{ gameTitleItems: [], heldEvents: [], mapItems: [], seasonItems: [] }}
-        values={createEmptyMatchForm("2026-01-01T09:00:00.000Z")}
+        model={{
+          actions: { onGameTitleChange: vi.fn(), onPatchRoot: vi.fn() },
+          options: {
+            gameTitleItems: [],
+            heldEventPicker: {
+              error: undefined,
+              heldEvents: [],
+              pagination: undefined,
+              pending: false,
+              refetch: vi.fn(async () => undefined),
+              selectedHeldEvent: undefined,
+              onPageChange: vi.fn(),
+            },
+            heldEvents: [],
+            mapItems: [],
+            seasonItems: [],
+          },
+          validation: { errorPathSet: new Set(paths) },
+          values: createEmptyMatchForm("2026-01-01T09:00:00.000Z"),
+        }}
       />,
     );
 

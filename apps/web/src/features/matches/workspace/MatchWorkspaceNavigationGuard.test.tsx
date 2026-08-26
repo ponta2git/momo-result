@@ -17,11 +17,7 @@ describe("MatchWorkspaceNavigationGuard", () => {
         <>
           <p>編集中</p>
           <Link to="/next">次の画面へ</Link>
-          <MatchWorkspaceNavigationGuard
-            dirty
-            navigationAllowedRef={navigationAllowedRef}
-            onDiscard={onDiscard}
-          />
+          <MatchWorkspaceNavigationGuard model={{ dirty: true, navigationAllowedRef, onDiscard }} />
         </>
       );
     }

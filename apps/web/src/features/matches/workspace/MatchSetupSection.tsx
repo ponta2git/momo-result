@@ -1,16 +1,8 @@
 import { Settings2, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
-import type { MatchFormValues } from "@/features/matches/workspace/matchFormTypes";
 import { MatchSetupFields } from "@/features/matches/workspace/MatchSetupFields";
-import type { MatchWorkspaceOperationErrorView } from "@/features/matches/workspace/matchWorkspaceOperationError";
-import type { HeldEventResponse } from "@/shared/api/heldEvents";
-import type {
-  GameTitleListResponse,
-  MapMasterListResponse,
-  SeasonMasterListResponse,
-} from "@/shared/api/masters";
-import type { HeldEventPickerDirectory } from "@/shared/api/useHeldEventPickerDirectory";
+import type { MatchWorkspaceControllerModel } from "@/features/matches/workspace/matchWorkspaceControllerModel";
 import { formatMatchNoInEvent } from "@/shared/domain/matchLabels";
 import { formatDateTimeLong } from "@/shared/lib/dateTime";
 import { Button } from "@/shared/ui/actions/Button";
@@ -20,60 +12,18 @@ import { AlertDialog } from "@/shared/ui/feedback/Dialog";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { TextField } from "@/shared/ui/forms/TextField";
 
-export type MatchSetupActions = {
-  onGameTitleChange: (gameTitleId: string) => void;
-  onPatchRoot: (patch: Partial<MatchFormValues>) => void;
-};
-
-type MatchSetupEventCreation = {
-  draftValue: string;
-  error: MatchWorkspaceOperationErrorView | null;
-  pending: boolean;
-  onCreate: () => void;
-  onDraftChange: (value: string) => void;
-};
-
-export type MatchSetupOptions = {
-  gameTitleItems: GameTitleListResponse["items"];
-  heldEventPicker?: HeldEventPickerDirectory | undefined;
-  heldEvents: HeldEventResponse[];
-  mapItems: MapMasterListResponse["items"];
-  seasonItems: SeasonMasterListResponse["items"];
-};
-
 type MatchSetupSectionProps = {
-  actions: MatchSetupActions;
-  errorPathSet: Set<string>;
-  eventCreation: MatchSetupEventCreation;
-  options: MatchSetupOptions;
-  values: MatchFormValues;
-  workspaceActions: {
-    cancelDraft: {
-      canCancel: boolean;
-      confirmOpen: boolean;
-      confirmPending: boolean;
-      disabled: boolean;
-      error: MatchWorkspaceOperationErrorView | null;
-      onConfirm: () => void | Promise<void>;
-      onOpenChange: (open: boolean) => void;
-      onTrigger: () => void;
-    };
-    mastersNavigation: {
-      onClick: () => void;
-      pending: boolean;
-      show: boolean;
-    };
-  };
+  cancellation: MatchWorkspaceControllerModel["editor"]["persistence"]["cancellation"];
+  mastersNavigation: MatchWorkspaceControllerModel["editor"]["navigation"]["masters"];
+  model: MatchWorkspaceControllerModel["editor"]["setup"];
 };
 
 export function MatchSetupSection({
-  actions,
-  errorPathSet,
-  eventCreation,
-  options,
-  values,
-  workspaceActions,
+  cancellation,
+  mastersNavigation,
+  model,
 }: MatchSetupSectionProps) {
+  const { options, values } = model.fields;
   const selectedHeldEvent = options.heldEvents.find((event) => event.id === values.heldEventId);
   const selectedGameTitle = options.gameTitleItems?.find((item) => item.id === values.gameTitleId);
   const selectedSeason = options.seasonItems?.find((item) => item.id === values.seasonMasterId);
@@ -81,7 +31,7 @@ export function MatchSetupSection({
   const contextComplete = Boolean(
     selectedHeldEvent && selectedGameTitle && selectedSeason && selectedMap && values.playedAt,
   );
-  const hasErrors = errorPathSet.size > 0;
+  const hasErrors = model.fields.validation.errorPathSet.size > 0;
   const [editorOpen, setEditorOpen] = useState(!contextComplete);
   useEffect(() => {
     if (hasErrors) {
@@ -134,12 +84,7 @@ export function MatchSetupSection({
         triggerClassName="rounded-none px-4 py-3"
         onOpenChange={setEditorOpen}
       >
-        <MatchSetupFields
-          actions={actions}
-          errorPathSet={errorPathSet}
-          options={options}
-          values={values}
-        />
+        <MatchSetupFields model={model.fields} />
 
         <Disclosure
           className="mt-4"
@@ -152,77 +97,73 @@ export function MatchSetupSection({
             <TextField
               label="開催日時"
               type="datetime-local"
-              value={eventCreation.draftValue}
-              onChange={(event) => eventCreation.onDraftChange(event.currentTarget.value)}
+              value={model.eventCreation.input.value}
+              onChange={(event) => model.eventCreation.input.onChange(event.currentTarget.value)}
             />
             <Button
-              disabled={!eventCreation.draftValue || eventCreation.pending}
-              pending={eventCreation.pending}
+              disabled={!model.eventCreation.input.value || model.eventCreation.action.pending}
+              pending={model.eventCreation.action.pending}
               pendingLabel="作成中…"
               variant="secondary"
-              onClick={eventCreation.onCreate}
+              onClick={model.eventCreation.action.onCreate}
             >
               作成して選択
             </Button>
           </div>
-          {eventCreation.error ? (
-            <Notice className="mt-2" title={eventCreation.error.title} tone="danger">
-              <p>{eventCreation.error.detail}</p>
-              <p className="mt-1">{eventCreation.error.nextStep}</p>
+          {model.eventCreation.feedback.error ? (
+            <Notice className="mt-2" title={model.eventCreation.feedback.error.title} tone="danger">
+              <p>{model.eventCreation.feedback.error.detail}</p>
+              <p className="mt-1">{model.eventCreation.feedback.error.nextStep}</p>
             </Notice>
           ) : null}
         </Disclosure>
 
-        {workspaceActions.mastersNavigation.show ||
-        workspaceActions.cancelDraft.canCancel ||
-        workspaceActions.cancelDraft.error ? (
+        {mastersNavigation.show || cancellation.allowed || cancellation.error ? (
           <div className="mt-6 grid gap-2">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
-                {workspaceActions.mastersNavigation.show ? (
+                {mastersNavigation.show ? (
                   <Button
                     icon={<Settings2 aria-hidden="true" className="size-4" />}
-                    pending={workspaceActions.mastersNavigation.pending}
+                    pending={mastersNavigation.pending}
                     pendingLabel="移動中…"
                     size="sm"
                     variant="quiet"
-                    onClick={workspaceActions.mastersNavigation.onClick}
+                    onClick={mastersNavigation.onNavigate}
                   >
                     設定管理へ
                   </Button>
                 ) : null}
               </div>
-              {workspaceActions.cancelDraft.canCancel ? (
+              {cancellation.allowed ? (
                 <AlertDialog
                   cancelLabel="キャンセル"
-                  confirmLabel={
-                    workspaceActions.cancelDraft.confirmPending ? "削除中…" : "削除する"
-                  }
+                  confirmLabel={cancellation.dialog.pending ? "削除中…" : "削除する"}
                   description="この確定前の記録を削除します。元に戻せません。"
-                  open={workspaceActions.cancelDraft.confirmOpen}
-                  pending={workspaceActions.cancelDraft.confirmPending}
+                  open={cancellation.dialog.open}
+                  pending={cancellation.dialog.pending}
                   title="確定前の記録を削除しますか？"
                   trigger={
                     <Button
                       className="text-[var(--color-danger)] hover:text-[var(--color-danger)]"
-                      disabled={workspaceActions.cancelDraft.disabled}
+                      disabled={cancellation.disabled}
                       icon={<Trash2 aria-hidden="true" className="size-4" />}
                       size="sm"
                       variant="quiet"
-                      onClick={workspaceActions.cancelDraft.onTrigger}
+                      onClick={cancellation.onTrigger}
                     >
                       確定前の記録を削除
                     </Button>
                   }
-                  onConfirm={workspaceActions.cancelDraft.onConfirm}
-                  onOpenChange={workspaceActions.cancelDraft.onOpenChange}
+                  onConfirm={cancellation.dialog.onConfirm}
+                  onOpenChange={cancellation.dialog.onOpenChange}
                 />
               ) : null}
             </div>
-            {workspaceActions.cancelDraft.error ? (
-              <Notice title={workspaceActions.cancelDraft.error.title} tone="danger">
-                <p>{workspaceActions.cancelDraft.error.detail}</p>
-                <p className="mt-1">{workspaceActions.cancelDraft.error.nextStep}</p>
+            {cancellation.error ? (
+              <Notice title={cancellation.error.title} tone="danger">
+                <p>{cancellation.error.detail}</p>
+                <p className="mt-1">{cancellation.error.nextStep}</p>
               </Notice>
             ) : null}
           </div>

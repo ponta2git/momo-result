@@ -13,15 +13,19 @@ describe("MatchConfirmDialog", () => {
 
     render(
       <MatchConfirmDialog
-        actions={{ confirmAction: vi.fn(), onCancel: vi.fn() }}
-        reviewSummary={{ changedCount: 2, totalCount: 3, unresolvedCount: 1 }}
-        summary={{
-          gameTitleName: "桃太郎電鉄2",
-          heldEvent: undefined,
-          mapName: "東日本",
-          seasonName: "シーズン1",
+        model={{
+          actions: { onClose: vi.fn(), onConfirm: vi.fn() },
+          feedback: { validationMessage: "" },
+          pending: false,
+          review: { changedCount: 2, totalCount: 3, unresolvedCount: 1 },
+          summary: {
+            gameTitleName: "桃太郎電鉄2",
+            heldEvent: undefined,
+            mapName: "東日本",
+            seasonName: "シーズン1",
+          },
+          values,
         }}
-        values={values}
       />,
     );
 

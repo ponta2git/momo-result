@@ -93,6 +93,68 @@ describe("DraftReviewPage", () => {
     ).toBeInTheDocument();
   });
 
+  it("keeps setup, player, incident, review, and persistence models wired to one submission", async () => {
+    setDevUser();
+    let submitted: unknown;
+    server.use(
+      http.post("/api/matches", async ({ request }) => {
+        submitted = await request.json();
+        return HttpResponse.json({
+          createdAt: "2026-01-01T00:00:00.000Z",
+          heldEventId: "held-1",
+          matchId: "match-grouped-model",
+          matchNoInEvent: 8,
+        });
+      }),
+    );
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/review/session-grouped-model"]}>
+          <Routes>
+            <Route path="/review/:matchSessionId" element={<DraftReviewPage />} />
+            <Route path="/matches/:matchId" element={<p>試合詳細</p>} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "OCR結果の確認" })).toBeInTheDocument();
+    const matchNumber = screen.getByLabelText("試合番号");
+    await user.clear(matchNumber);
+    await user.type(matchNumber, "8");
+
+    const assets = screen.getByLabelText("ぽんた 総資産（万円）");
+    await user.clear(assets);
+    await user.type(assets, "23456");
+    await user.tab();
+
+    const plusStations = screen.getByLabelText("ぽんた プラス駅");
+    await user.clear(plusStations);
+    await user.type(plusStations, "12");
+    await user.tab();
+
+    await user.click(screen.getByRole("button", { name: "確定前の確認へ進む" }));
+    const dialog = await screen.findByRole("dialog", { name: "この内容で確定しますか？" });
+    expect(within(dialog).getByText("第8試合")).toBeInTheDocument();
+    expect(within(dialog).getByRole("cell", { name: "23,456" })).toBeInTheDocument();
+
+    await user.click(within(dialog).getByRole("button", { name: "確定する" }));
+    await waitFor(() =>
+      expect(submitted).toMatchObject({
+        matchDraftId: "session-grouped-model",
+        matchNoInEvent: 8,
+        players: expect.arrayContaining([
+          expect.objectContaining({
+            incidents: expect.objectContaining({ plusStation: 12 }),
+            memberId: "member_ponta",
+            totalAssetsManYen: 23_456,
+          }),
+        ]),
+      }),
+    );
+  });
+
   it("redirects to the confirmed match when the draft is already confirmed on load", async () => {
     setDevUser();
     server.use(

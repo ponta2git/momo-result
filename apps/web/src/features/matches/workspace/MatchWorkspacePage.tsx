@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useEffect } from "react";
 
 import { MatchConfirmDialog } from "@/features/matches/workspace/MatchConfirmDialog";
 import type { WorkspaceMode } from "@/features/matches/workspace/matchFormTypes";
@@ -37,23 +37,7 @@ export function MatchWorkspacePage({
     mode,
     preferredHeldEventId,
   });
-  const primaryActionRef = useRef<HTMLButtonElement>(null);
-  const onRequestSubmitFocus = useCallback(() => {
-    primaryActionRef.current?.focus();
-  }, []);
-  const {
-    baseErrors,
-    baseErrorActions,
-    blockedNotice,
-    confirmDialog,
-    editor,
-    formActions,
-    header,
-    loadState,
-    navigationGuard,
-    setup,
-    validationFocusRequest,
-  } = controller;
+  const { editor, loading, navigation, persistence, review, validationFocusRequest } = controller;
 
   useEffect(() => {
     if (!validationFocusRequest) {
@@ -66,7 +50,7 @@ export function MatchWorkspacePage({
     target?.focus();
   }, [validationFocusRequest]);
 
-  if (loadState.editLoading) {
+  if (loading.edit.loading) {
     return (
       <MatchWorkspaceLoading
         description="保存済みの試合内容を取得しています。"
@@ -75,8 +59,8 @@ export function MatchWorkspacePage({
     );
   }
 
-  if (loadState.editLoadFailureKind) {
-    const notFound = loadState.editLoadFailureKind === "notFound";
+  if (loading.edit.failureKind) {
+    const notFound = loading.edit.failureKind === "notFound";
     const title = notFound ? "試合が見つかりませんでした" : "試合編集を読み込めませんでした";
     return (
       <PageFrame>
@@ -91,17 +75,17 @@ export function MatchWorkspacePage({
             {notFound ? null : (
               <div className="mt-3">
                 <Button
-                  pending={loadState.retryingEdit}
+                  pending={loading.edit.retrying}
                   pendingLabel="再読み込み中"
                   size="sm"
-                  onClick={loadState.onRetryEdit}
+                  onClick={loading.edit.onRetry}
                 >
                   試合編集を再読み込み
                 </Button>
               </div>
             )}
           </Notice>
-          <LinkButton to={header.cancelHref} variant="secondary">
+          <LinkButton to={navigation.header.exit.href} variant="secondary">
             前の画面へ戻る
           </LinkButton>
         </PageContentSurface>
@@ -109,24 +93,24 @@ export function MatchWorkspacePage({
     );
   }
 
-  if (loadState.workspaceLoading) {
+  if (loading.workspace.loading) {
     return (
       <MatchWorkspaceLoading
-        description={loadState.workspaceLoadingCopy.description}
-        title={loadState.workspaceLoadingCopy.title}
+        description={loading.workspace.copy.description}
+        title={loading.workspace.copy.title}
       />
     );
   }
 
   return (
     <PageFrame width="workspace">
-      <MatchWorkspaceHeader header={header} />
+      <MatchWorkspaceHeader model={navigation.header} />
 
       <PageContentSurface className="grid gap-6">
-        {baseErrors.length > 0 ? (
+        {loading.base.errors.length > 0 ? (
           <Notice tone="danger" title="画面データを読み込めません">
             <ul className="grid list-disc gap-1 pl-5 text-sm">
-              {baseErrors.map((error) => (
+              {loading.base.errors.map((error) => (
                 <li className="momo-break-token" key={`${error.status}-${error.detail}`}>
                   <span className="font-semibold">{error.title}</span>：{error.detail}
                 </li>
@@ -134,11 +118,11 @@ export function MatchWorkspacePage({
             </ul>
             <div className="mt-3">
               <Button
-                pending={baseErrorActions.retrying}
+                pending={loading.base.retrying}
                 pendingLabel="再読み込み中"
                 size="sm"
                 variant="secondary"
-                onClick={() => void baseErrorActions.onRetry()}
+                onClick={() => void loading.base.onRetry()}
               >
                 失敗したデータを再読み込み
               </Button>
@@ -146,21 +130,15 @@ export function MatchWorkspacePage({
           </Notice>
         ) : null}
 
-        {blockedNotice ? (
-          <MatchWorkspaceBlockedNotice {...blockedNotice} />
+        {review.blocked ? (
+          <MatchWorkspaceBlockedNotice model={review.blocked} />
         ) : (
-          <MatchWorkspaceEditor
-            editor={editor}
-            formActions={formActions}
-            primaryActionRef={primaryActionRef}
-            setup={setup}
-            onRequestSubmitFocus={onRequestSubmitFocus}
-          />
+          <MatchWorkspaceEditor model={editor} />
         )}
       </PageContentSurface>
 
-      {confirmDialog ? <MatchConfirmDialog {...confirmDialog} /> : null}
-      <MatchWorkspaceNavigationGuard {...navigationGuard} />
+      {persistence.confirmation ? <MatchConfirmDialog model={persistence.confirmation} /> : null}
+      <MatchWorkspaceNavigationGuard model={navigation.guard} />
     </PageFrame>
   );
 }

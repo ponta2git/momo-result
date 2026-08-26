@@ -8,39 +8,72 @@ import { createEmptyMatchForm } from "@/features/matches/workspace/matchFormType
 import { MatchSetupSection } from "@/features/matches/workspace/MatchSetupSection";
 import { MatchWorkspaceBlockedNotice } from "@/features/matches/workspace/MatchWorkspaceBlockedNotice";
 import { toMatchWorkspaceOperationErrorView } from "@/features/matches/workspace/matchWorkspaceOperationError";
+import type { MatchWorkspaceOperationErrorView } from "@/features/matches/workspace/matchWorkspaceOperationError";
+
+function setupSectionProps({
+  cancellationAllowed = false,
+  cancellationError = null,
+  eventError = null,
+}: {
+  cancellationAllowed?: boolean;
+  cancellationError?: MatchWorkspaceOperationErrorView | null;
+  eventError?: MatchWorkspaceOperationErrorView | null;
+} = {}) {
+  return {
+    cancellation: {
+      allowed: cancellationAllowed,
+      dialog: {
+        open: false,
+        pending: false,
+        onConfirm: vi.fn(),
+        onOpenChange: vi.fn(),
+      },
+      disabled: false,
+      error: cancellationError,
+      onTrigger: vi.fn(),
+    },
+    mastersNavigation: { pending: false, show: false, onNavigate: vi.fn() },
+    model: {
+      eventCreation: {
+        action: { pending: false, onCreate: vi.fn() },
+        feedback: { error: eventError },
+        input: { value: "2026-01-01T09:00", onChange: vi.fn() },
+      },
+      fields: {
+        actions: { onGameTitleChange: vi.fn(), onPatchRoot: vi.fn() },
+        options: {
+          gameTitleItems: [],
+          heldEventPicker: {
+            error: undefined,
+            heldEvents: [],
+            pagination: undefined,
+            pending: false,
+            refetch: vi.fn(async () => undefined),
+            selectedHeldEvent: undefined,
+            onPageChange: vi.fn(),
+          },
+          heldEvents: [],
+          mapItems: [],
+          seasonItems: [],
+        },
+        validation: { errorPathSet: new Set<string>() },
+        values: createEmptyMatchForm("2026-01-01T09:00:00.000Z"),
+      },
+    },
+  };
+}
 
 describe("match workspace operation feedback", () => {
   it("keeps a held-event creation failure inside its disclosure with impact and recovery", async () => {
     const user = userEvent.setup();
     render(
       <MatchSetupSection
-        actions={{ onGameTitleChange: vi.fn(), onPatchRoot: vi.fn() }}
-        errorPathSet={new Set()}
-        eventCreation={{
-          draftValue: "2026-01-01T09:00",
-          error: toMatchWorkspaceOperationErrorView({
+        {...setupSectionProps({
+          eventError: toMatchWorkspaceOperationErrorView({
             kind: "heldEventCreation",
             message: "開催履歴の作成に失敗しました。",
           }),
-          pending: false,
-          onCreate: vi.fn(),
-          onDraftChange: vi.fn(),
-        }}
-        options={{ gameTitleItems: [], heldEvents: [], mapItems: [], seasonItems: [] }}
-        values={createEmptyMatchForm("2026-01-01T09:00:00.000Z")}
-        workspaceActions={{
-          cancelDraft: {
-            canCancel: false,
-            confirmOpen: false,
-            confirmPending: false,
-            disabled: false,
-            error: null,
-            onConfirm: vi.fn(),
-            onOpenChange: vi.fn(),
-            onTrigger: vi.fn(),
-          },
-          mastersNavigation: { onClick: vi.fn(), pending: false, show: false },
-        }}
+        })}
       />,
     );
 
@@ -56,16 +89,18 @@ describe("match workspace operation feedback", () => {
   it("keeps a save failure in the execution area while leaving retry available", () => {
     render(
       <MatchFormActions
-        actionLabel="保存"
-        disabled={false}
-        error={toMatchWorkspaceOperationErrorView({
-          kind: "update",
-          message: "更新に失敗しました。",
-        })}
-        message="確定前の確認へ進めます"
-        pending={false}
+        model={{
+          action: { label: "保存", onRun: vi.fn() },
+          availability: { disabled: false, pending: false },
+          feedback: {
+            error: toMatchWorkspaceOperationErrorView({
+              kind: "update",
+              message: "更新に失敗しました。",
+            }),
+            message: "確定前の確認へ進めます",
+          },
+        }}
         primaryActionRef={null}
-        onPrimaryAction={vi.fn()}
       />,
     );
 
@@ -77,33 +112,13 @@ describe("match workspace operation feedback", () => {
   it("keeps a draft deletion failure beside the draft deletion action", () => {
     render(
       <MatchSetupSection
-        actions={{ onGameTitleChange: vi.fn(), onPatchRoot: vi.fn() }}
-        errorPathSet={new Set()}
-        eventCreation={{
-          draftValue: "",
-          error: null,
-          pending: false,
-          onCreate: vi.fn(),
-          onDraftChange: vi.fn(),
-        }}
-        options={{ gameTitleItems: [], heldEvents: [], mapItems: [], seasonItems: [] }}
-        values={createEmptyMatchForm("2026-01-01T09:00:00.000Z")}
-        workspaceActions={{
-          cancelDraft: {
-            canCancel: true,
-            confirmOpen: false,
-            confirmPending: false,
-            disabled: false,
-            error: toMatchWorkspaceOperationErrorView({
-              kind: "cancelDraft",
-              message: "削除に失敗しました。",
-            }),
-            onConfirm: vi.fn(),
-            onOpenChange: vi.fn(),
-            onTrigger: vi.fn(),
-          },
-          mastersNavigation: { onClick: vi.fn(), pending: false, show: false },
-        }}
+        {...setupSectionProps({
+          cancellationAllowed: true,
+          cancellationError: toMatchWorkspaceOperationErrorView({
+            kind: "cancelDraft",
+            message: "削除に失敗しました。",
+          }),
+        })}
       />,
     );
 
@@ -119,12 +134,15 @@ describe("match workspace operation feedback", () => {
     render(
       <MemoryRouter>
         <MatchWorkspaceBlockedNotice
-          error={toMatchWorkspaceOperationErrorView({
-            kind: "draftStatus",
-            message: "状態確認に失敗しました。",
-          })}
-          refreshingReviewStatus={false}
-          onRefreshReviewStatus={vi.fn()}
+          model={{
+            feedback: {
+              error: toMatchWorkspaceOperationErrorView({
+                kind: "draftStatus",
+                message: "状態確認に失敗しました。",
+              }),
+            },
+            refresh: { pending: false, onRefresh: vi.fn(async () => undefined) },
+          }}
         />
       </MemoryRouter>,
     );

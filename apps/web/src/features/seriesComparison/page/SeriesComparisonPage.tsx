@@ -28,7 +28,7 @@ export function SeriesComparisonPage() {
         <Notice tone="warning" title="画面の更新が必要です">
           <p>戦績分析の表示方法が更新されました。画面を再読み込みしてください。</p>
           <div className="mt-3">
-            <Button size="sm" variant="secondary" onClick={page.actions.reloadClient}>
+            <Button size="sm" onClick={page.actions.reloadClient}>
               画面を再読み込み
             </Button>
           </div>
@@ -71,7 +71,7 @@ export function SeriesComparisonPage() {
               pending={options.refreshing}
               pendingLabel="再読み込み中"
               size="sm"
-              variant="secondary"
+              variant={options.hasVisibleData ? "secondary" : "primary"}
               onClick={page.actions.refresh}
             >
               比較対象を再読み込み
@@ -118,7 +118,7 @@ export function SeriesComparisonPage() {
             <Notice tone="danger" title="戦績データを読み込めません">
               <p>分析結果を取得できませんでした。通信状態を確認して再読み込みしてください。</p>
               <div className="mt-3">
-                <Button size="sm" variant="secondary" onClick={page.actions.refresh}>
+                <Button size="sm" onClick={page.actions.refresh}>
                   戦績データを再読み込み
                 </Button>
               </div>

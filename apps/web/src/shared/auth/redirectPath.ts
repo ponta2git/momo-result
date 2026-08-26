@@ -20,12 +20,14 @@ export function sanitizeAppRedirectPath(value: string | null | undefined): strin
   }
 }
 
-export function buildLoginPath(nextPath: string): string {
+export function buildLoginPath(nextPath: string, reason?: "forbidden"): string {
   const safeNext = sanitizeAppRedirectPath(nextPath);
-  if (!safeNext) {
+  if (!safeNext && !reason) {
     return "/login";
   }
-  const params = new URLSearchParams({ next: safeNext });
+  const params = new URLSearchParams();
+  if (reason) params.set("reason", reason);
+  if (safeNext) params.set("next", safeNext);
   return `/login?${params.toString()}`;
 }
 

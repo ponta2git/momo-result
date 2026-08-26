@@ -4,14 +4,11 @@ import { MasterReturnNotice } from "@/features/masters/MasterReturnNotice";
 import { defaultLayoutFamily } from "@/features/masters/masterValidation";
 import { MemberAliasPanel } from "@/features/masters/MemberAliasPanel";
 import { masterTabs, useMastersPageController } from "@/features/masters/useMastersPageController";
-import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { TabsList, TabsPanel, TabsRoot, TabsTab } from "@/shared/ui/forms/Tabs";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
 import { PageHeader } from "@/shared/ui/layout/PageHeader";
-
-const sectionClass = "grid gap-4";
 
 export function MastersPage() {
   const controller = useMastersPageController();
@@ -26,28 +23,43 @@ export function MastersPage() {
     deleteSeasonMaster,
     gameTitleCreateAction,
     gameTitleCreateState,
+    gameTitlesRefreshing,
+    gameTitlesStale,
     hasInvalidReturnTo,
     hasPendingMutation,
     handoffStatus,
     incidentMasters,
+    incidentMastersRefreshing,
+    incidentMastersStale,
     isReturnNavigationPending,
     mapCreateAction,
     mapCreateState,
+    mapMastersHasData,
+    mapMastersLoadFailed,
     mapMastersLoading,
     mapMastersLoadError,
     mapMastersRefreshing,
+    mapMastersStale,
     memberAliases,
+    memberAliasesRefreshing,
+    memberAliasesStale,
     navigateWithTransition,
     operationError,
     optimisticGameTitles,
+    retryGameTitles,
+    retryIncidentMasters,
     retryMapMasters,
+    retryMemberAliases,
     retrySeasonMasters,
     returnDestination,
     seasonCreateAction,
     seasonCreateState,
+    seasonMastersHasData,
+    seasonMastersLoadFailed,
     seasonMastersLoading,
     seasonMastersLoadError,
     seasonMastersRefreshing,
+    seasonMastersStale,
     setActiveTab,
     setSelectedGameTitleId,
     updateGameTitle,
@@ -65,9 +77,12 @@ export function MastersPage() {
     defaultLayoutFamily,
     items: optimisticGameTitles,
     onDelete: deleteGameTitle,
+    onRetry: retryGameTitles,
     onSelect: setSelectedGameTitleId,
     onUpdate: updateGameTitle,
     selectedId: viewModel.selectedGameTitleId,
+    refreshing: gameTitlesRefreshing,
+    stale: gameTitlesStale,
   };
   const mapRelation = {
     create: {
@@ -76,12 +91,15 @@ export function MastersPage() {
       formKey: mapCreateState.version,
     },
     error: mapMastersLoadError,
+    hasData: mapMastersHasData,
     items: viewModel.selectedMapMasters,
+    loadFailed: mapMastersLoadFailed,
     loading: mapMastersLoading,
     onDelete: deleteMapMaster,
     onRetry: retryMapMasters,
     onUpdate: updateMapMaster,
     retrying: mapMastersRefreshing,
+    stale: mapMastersStale,
   };
   const seasonRelation = {
     create: {
@@ -90,32 +108,23 @@ export function MastersPage() {
       formKey: seasonCreateState.version,
     },
     error: seasonMastersLoadError,
+    hasData: seasonMastersHasData,
     items: viewModel.selectedSeasonMasters,
+    loadFailed: seasonMastersLoadFailed,
     loading: seasonMastersLoading,
     onDelete: deleteSeasonMaster,
     onRetry: retrySeasonMasters,
     onUpdate: updateSeasonMaster,
     retrying: seasonMastersRefreshing,
+    stale: seasonMastersStale,
   };
 
   return (
-    <PageFrame className={sectionClass}>
+    <PageFrame>
       <PageHeader
         eyebrow="管理"
         title="設定管理"
         description="作品、読み取り方式、マップ、シーズン、名前の読み替えを整えます。"
-        actions={
-          returnDestination ? (
-            <Button
-              pending={isReturnNavigationPending}
-              pendingLabel="移動中…"
-              variant="secondary"
-              onClick={() => navigateWithTransition(returnDestination ?? "/matches")}
-            >
-              戻る
-            </Button>
-          ) : null
-        }
       />
 
       {auth.error ? (
@@ -132,9 +141,15 @@ export function MastersPage() {
 
       {returnDestination ? (
         <MasterReturnNotice
-          destination={returnDestination}
           handoffStatus={handoffStatus}
           disabled={hasPendingMutation || isReturnNavigationPending}
+          disabledReason={
+            isReturnNavigationPending
+              ? "元の入力画面へ移動しています。"
+              : hasPendingMutation
+                ? "設定の追加・保存・削除が完了すると戻れます。"
+                : undefined
+          }
           pending={isReturnNavigationPending}
           onReturn={() => navigateWithTransition(returnDestination)}
         />
@@ -182,24 +197,26 @@ export function MastersPage() {
             createError={aliasCreateState.error}
             createFormKey={aliasCreateState.version}
             onDelete={deleteMemberAlias}
+            onRetry={retryMemberAliases}
             onUpdate={updateMemberAlias}
+            refreshing={memberAliasesRefreshing}
+            stale={memberAliasesStale}
           />
         </TabsPanel>
 
         <TabsPanel className="mt-4" keepMounted value="incidents">
-          <IncidentMasterPanel items={incidentMasters} />
+          <IncidentMasterPanel
+            items={incidentMasters}
+            onRetry={retryIncidentMasters}
+            refreshing={incidentMastersRefreshing}
+            stale={incidentMastersStale}
+          />
         </TabsPanel>
       </TabsRoot>
 
       {hasInvalidReturnTo ? (
         <Notice tone="warning" title="戻り先を確認できませんでした">
           戻り先を確認できないため、試合一覧へ戻る導線だけを表示しています。
-        </Notice>
-      ) : null}
-
-      {viewModel.shouldPromptGameTitleCreation ? (
-        <Notice tone="info" title="作品が必要です">
-          マップとシーズンは、作品を選ぶと追加できます。
         </Notice>
       ) : null}
     </PageFrame>

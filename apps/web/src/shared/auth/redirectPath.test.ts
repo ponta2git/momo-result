@@ -24,6 +24,9 @@ describe("redirectPath", () => {
 
   it("builds login paths only with sanitized next values", () => {
     expect(buildLoginPath("/exports?format=tsv")).toBe("/login?next=%2Fexports%3Fformat%3Dtsv");
+    expect(buildLoginPath("/exports?format=tsv#download", "forbidden")).toBe(
+      "/login?reason=forbidden&next=%2Fexports%3Fformat%3Dtsv%23download",
+    );
     expect(buildLoginPath("//example.com/login")).toBe("/login");
     expect(buildAuthLoginHref("/matches/match-1/edit")).toBe(
       "/api/auth/login?next=%2Fmatches%2Fmatch-1%2Fedit&silent=1",

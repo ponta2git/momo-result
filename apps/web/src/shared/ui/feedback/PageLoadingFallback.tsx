@@ -6,9 +6,9 @@ export type PageLoadingKind =
   | "catalog"
   | "comparison"
   | "detail"
+  | "form"
   | "generic"
   | "list"
-  | "split"
   | "workspace";
 
 export type PageLoadingFallbackProps = {
@@ -133,13 +133,22 @@ function PageLoadingSkeleton({ kind }: { kind: PageLoadingKind }) {
     );
   }
 
-  if (kind === "split") {
+  if (kind === "form") {
     return (
       <>
         <HeaderSkeleton />
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(20rem,28rem)]">
-          <Skeleton className="h-80 rounded-[var(--radius-md)]" />
-          <Skeleton className="h-80 rounded-[var(--radius-md)]" />
+        <div className="grid gap-4 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {Array.from({ length: 4 }, (_, index) => (
+              <Skeleton key={index} className="h-11" />
+            ))}
+          </div>
+          <Skeleton className="h-11 w-full" />
+          <Skeleton className="h-11 w-full max-w-64" />
+          <div className="grid gap-3 border-t border-[var(--color-border)] pt-4">
+            <Skeleton className="h-5 w-full max-w-md" />
+            <Skeleton className="h-11 w-full max-w-72" />
+          </div>
         </div>
         <LoadingLabel />
       </>

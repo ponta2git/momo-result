@@ -168,6 +168,9 @@ describe("SeriesAnalysisStatusFeedback", () => {
     cached.unmount();
     renderFeedback({ hasError: true, status: null });
     expect(screen.getByRole("heading", { name: "戦績データを取得できません" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "状態を再確認" })).toHaveClass(
+      "bg-[var(--color-action)]",
+    );
   });
 
   it("renders no status feedback for a current successful artifact or initial loading", () => {

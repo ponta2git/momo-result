@@ -47,10 +47,13 @@ export function useMasterResourceQueries(authScope: string, selectedGameTitleId:
 
   return {
     gameTitles,
+    gameTitlesQuery,
     incidentMasters: incidentMastersQuery.data,
+    incidentMastersQuery,
     mapMasters,
     mapMastersQuery,
     memberAliases,
+    memberAliasesQuery,
     seasonMasters,
     seasonMastersQuery,
   };

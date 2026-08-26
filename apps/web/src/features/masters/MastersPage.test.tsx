@@ -1,6 +1,6 @@
-import { QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider, QueryErrorResetBoundary } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { MemoryRouter, useLocation } from "react-router-dom";
@@ -9,11 +9,12 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { masterQueryKeys } from "@/features/masters/masterQueries";
 import { MastersPage } from "@/features/masters/MastersPage";
 import { masterKeys } from "@/shared/api/queryKeys";
+import { authQueryOptions } from "@/shared/auth/authQueries";
 import {
   createMatchWorkspaceMasterHandoffPayload,
   saveMasterHandoff,
 } from "@/shared/workflows/matchWorkspaceMasterHandoff";
-import { setDevUser } from "@/test/auth";
+import { setDevUser, testDevUserAccountId } from "@/test/auth";
 import { createDeferred } from "@/test/deferred";
 import { makeMatchWorkspaceMasterHandoffValues } from "@/test/factories";
 import { setupMsw } from "@/test/msw/lifecycle";
@@ -39,6 +40,28 @@ function renderPage(entry = "/admin/masters") {
       </MemoryRouter>
     </QueryClientProvider>,
   );
+}
+
+function createMasterReturnEntry() {
+  const returnTo = "/review/session-1?totalAssets=draft-1";
+  const handoffId = saveMasterHandoff(
+    createMatchWorkspaceMasterHandoffPayload({
+      matchSessionId: "session-1",
+      returnTo,
+      values: makeMatchWorkspaceMasterHandoffValues({
+        draftIds: { totalAssets: "draft-1" },
+        gameTitleId: "gt_momotetsu_2",
+        heldEventId: "event-1",
+        mapMasterId: "map_east",
+        matchNoInEvent: 1,
+        ownerMemberId: "member_ponta",
+        playedAt: "2026-01-01T00:00:00.000Z",
+        seasonMasterId: "season_current",
+      }),
+    }),
+  );
+
+  return `/admin/masters?returnTo=${encodeURIComponent(returnTo)}&handoffId=${handoffId}`;
 }
 
 describe("MastersPage", () => {
@@ -135,6 +158,9 @@ describe("MastersPage", () => {
     renderPage();
 
     expect(await screen.findByText("マップを読み込めません")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "マップを再読み込み" })).toHaveClass(
+      "bg-[var(--color-action)]",
+    );
     shouldFail = false;
     await user.click(screen.getByRole("button", { name: "マップを再読み込み" }));
 
@@ -143,6 +169,185 @@ describe("MastersPage", () => {
     );
     expect(screen.getAllByText("登録はまだありません").length).toBeGreaterThan(0);
     expect(attempts).toBeGreaterThanOrEqual(2);
+  });
+
+  it("keeps cached empty scoped masters visible with a secondary stale retry", async () => {
+    setDevUser();
+    queryClient.setQueryData(
+      masterQueryKeys.mapMasters(testDevUserAccountId, "gt_momotetsu_2"),
+      [],
+    );
+    let attempts = 0;
+    let shouldFail = true;
+    server.use(
+      http.get("/api/map-masters", () => {
+        attempts += 1;
+        return shouldFail
+          ? HttpResponse.json({ detail: "temporarily unavailable" }, { status: 500 })
+          : HttpResponse.json({ items: [] });
+      }),
+    );
+
+    renderPage();
+
+    const mapPanel = (await screen.findByRole("heading", { name: "マップ" })).closest("section");
+    expect(mapPanel).not.toBeNull();
+    expect(await within(mapPanel!).findByText("最新のマップを取得できません")).toBeInTheDocument();
+    expect(within(mapPanel!).getByText("登録はまだありません")).toBeInTheDocument();
+    expect(within(mapPanel!).queryByText("マップを読み込めません")).not.toBeInTheDocument();
+    const retryButton = within(mapPanel!).getByRole("button", { name: "マップを再読み込み" });
+    expect(retryButton).toHaveClass("bg-[var(--color-surface)]");
+    expect(within(mapPanel!).getByRole("button", { name: "追加" })).toBeEnabled();
+
+    shouldFail = false;
+    await user.click(retryButton);
+
+    await waitFor(() =>
+      expect(within(mapPanel!).queryByText("最新のマップを取得できません")).not.toBeInTheDocument(),
+    );
+    expect(within(mapPanel!).getByText("登録はまだありません")).toBeInTheDocument();
+    expect(attempts).toBeGreaterThanOrEqual(2);
+  });
+
+  it("keeps cached empty master directories visible with local secondary retries", async () => {
+    setDevUser();
+    await queryClient.fetchQuery(authQueryOptions(testDevUserAccountId));
+    const staleUpdatedAt = Date.now() - 2_000;
+    queryClient.setQueryData(masterQueryKeys.gameTitles(testDevUserAccountId), [], {
+      updatedAt: staleUpdatedAt,
+    });
+    queryClient.setQueryData(masterQueryKeys.incidentMasters(testDevUserAccountId), [], {
+      updatedAt: staleUpdatedAt,
+    });
+    queryClient.setQueryData(masterQueryKeys.memberAliases(testDevUserAccountId), [], {
+      updatedAt: staleUpdatedAt,
+    });
+    let shouldFail = true;
+    const attempts = {
+      aliases: 0,
+      gameTitles: 0,
+      incidents: 0,
+    };
+    server.use(
+      http.get("/api/game-titles", () => {
+        attempts.gameTitles += 1;
+        return shouldFail
+          ? HttpResponse.json({ detail: "temporarily unavailable" }, { status: 500 })
+          : HttpResponse.json({ items: [] });
+      }),
+      http.get("/api/incident-masters", () => {
+        attempts.incidents += 1;
+        return shouldFail
+          ? HttpResponse.json({ detail: "temporarily unavailable" }, { status: 500 })
+          : HttpResponse.json({ items: [] });
+      }),
+      http.get("/api/member-aliases", () => {
+        attempts.aliases += 1;
+        return shouldFail
+          ? HttpResponse.json({ detail: "temporarily unavailable" }, { status: 500 })
+          : HttpResponse.json({ items: [] });
+      }),
+    );
+
+    renderPage();
+
+    await waitFor(() => expect(attempts).toEqual({ aliases: 1, gameTitles: 1, incidents: 1 }));
+    await waitFor(() =>
+      expect(
+        queryClient.getQueryState(masterQueryKeys.gameTitles(testDevUserAccountId)),
+      ).toMatchObject({ status: "error" }),
+    );
+
+    expect(await screen.findByText("最新の作品を取得できません")).toBeInTheDocument();
+    expect(screen.getByText("作品はまだありません")).toBeInTheDocument();
+    const gameTitleRetry = screen.getByRole("button", { name: "作品を再読み込み" });
+    expect(gameTitleRetry).toHaveClass("bg-[var(--color-surface)]");
+    expect(screen.getByRole("button", { name: "作品を追加" })).toBeEnabled();
+
+    await user.click(screen.getByRole("tab", { name: "メンバー名寄せ" }));
+    expect(await screen.findByText("最新の別名を取得できません")).toBeInTheDocument();
+    expect(screen.getAllByText("別名なし")).toHaveLength(4);
+    const aliasPanel = screen
+      .getByRole("heading", { name: "プレーヤー名の別名" })
+      .closest("section");
+    expect(aliasPanel).not.toBeNull();
+    const aliasRetry = within(aliasPanel!).getByRole("button", { name: "別名を再読み込み" });
+    expect(aliasRetry).toHaveClass("bg-[var(--color-surface)]");
+    expect(within(aliasPanel!).getByRole("button", { name: "追加" })).toBeEnabled();
+
+    await user.click(screen.getByRole("tab", { name: "事件簿" }));
+    expect(await screen.findByText("最新の事件簿を取得できません")).toBeInTheDocument();
+    expect(screen.queryByText("事件簿の項目数を確認してください")).not.toBeInTheDocument();
+    const incidentPanel = screen.getByRole("heading", { name: "事件簿" }).closest("section");
+    expect(incidentPanel).not.toBeNull();
+    const incidentRetry = within(incidentPanel!).getByRole("button", {
+      name: "事件簿を再読み込み",
+    });
+    expect(incidentRetry).toHaveClass("bg-[var(--color-surface)]");
+
+    shouldFail = false;
+    await user.click(incidentRetry);
+    await user.click(screen.getByRole("tab", { name: "メンバー名寄せ" }));
+    await user.click(aliasRetry);
+    await user.click(screen.getByRole("tab", { name: "作品・マップ・シーズン" }));
+    await user.click(gameTitleRetry);
+
+    await waitFor(() => {
+      expect(screen.queryByText("最新の作品を取得できません")).not.toBeInTheDocument();
+      expect(screen.queryByText("最新の別名を取得できません")).not.toBeInTheDocument();
+      expect(screen.queryByText("最新の事件簿を取得できません")).not.toBeInTheDocument();
+    });
+    expect(attempts).toEqual({ aliases: 2, gameTitles: 2, incidents: 2 });
+  });
+
+  it("reports an alias refresh failure after the alias was created successfully", async () => {
+    setDevUser();
+    let failRefresh = false;
+    const aliases = [
+      {
+        alias: "NO11",
+        createdAt: "2026-01-01T00:00:00.000Z",
+        id: "alias-existing",
+        memberId: "member_ponta",
+      },
+    ];
+    server.use(
+      http.get("/api/member-aliases", () =>
+        failRefresh
+          ? HttpResponse.json({ detail: "temporarily unavailable" }, { status: 500 })
+          : HttpResponse.json({ items: aliases }),
+      ),
+      http.post("/api/member-aliases", async ({ request }) => {
+        const body = (await request.json()) as { alias: string; memberId: string };
+        aliases.push({
+          ...body,
+          createdAt: "2026-01-01T00:00:00.000Z",
+          id: "alias-created",
+        });
+        failRefresh = true;
+        return HttpResponse.json(aliases.at(-1));
+      }),
+    );
+
+    renderPage("/admin/masters?tab=aliases");
+
+    expect(await screen.findByText("NO11")).toBeInTheDocument();
+    await user.type(screen.getByPlaceholderText("例: NO11社長"), "ポン太");
+    await user.click(screen.getByRole("button", { name: "追加" }));
+
+    expect(await screen.findByText("最新の別名を取得できません")).toBeInTheDocument();
+    expect(screen.getByText("NO11")).toBeInTheDocument();
+    expect(screen.queryByText("別名の追加に失敗しました")).not.toBeInTheDocument();
+    const retryButton = screen.getByRole("button", { name: "別名を再読み込み" });
+    expect(retryButton).toHaveClass("bg-[var(--color-surface)]");
+
+    failRefresh = false;
+    await user.click(retryButton);
+
+    expect(await screen.findByText("ポン太")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.queryByText("最新の別名を取得できません")).not.toBeInTheDocument(),
+    );
   });
 
   it("creates a new game title and selects it", async () => {
@@ -266,6 +471,36 @@ describe("MastersPage", () => {
     expect(await screen.findByRole("radio", { name: "桃太郎電鉄2 DX" })).toBeChecked();
   });
 
+  it("keeps a failed master deletion in its dialog after the dialog closes", async () => {
+    setDevUser();
+    server.use(
+      http.delete("/api/game-titles/:id", () =>
+        HttpResponse.json(
+          {
+            code: "CONFLICT",
+            detail: "作品は試合から参照されています。",
+            status: 409,
+            title: "Conflict",
+            type: "about:blank",
+          },
+          { status: 409 },
+        ),
+      ),
+    );
+    renderPage();
+
+    await screen.findByRole("radio", { name: "桃太郎電鉄2" });
+    await user.click(screen.getByRole("button", { name: "作品を削除" }));
+    await user.click(screen.getByRole("button", { name: "削除" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("作品は試合から参照されています。");
+    await user.click(screen.getByRole("button", { name: "キャンセル" }));
+
+    await waitFor(() => expect(screen.queryByText("作品を削除しますか？")).not.toBeInTheDocument());
+    expect(screen.queryByText("作品は試合から参照されています。")).not.toBeInTheDocument();
+    expect(screen.queryByText("設定の変更に失敗しました")).not.toBeInTheDocument();
+  });
+
   it("creates and deletes member aliases", async () => {
     setDevUser();
     renderPage();
@@ -280,6 +515,11 @@ describe("MastersPage", () => {
       throw new Error("alias panel was not rendered");
     }
     const aliasPanelScreen = within(aliasPanel);
+    expect(
+      [...aliasPanel.querySelectorAll<HTMLElement>("[data-member-sequence]")].map(
+        (label) => label.dataset["memberSequence"],
+      ),
+    ).toEqual(["1", "2", "3", "4"]);
 
     await user.type(aliasPanelScreen.getByPlaceholderText("例: NO11社長"), "ポン太");
     await user.click(aliasPanelScreen.getByRole("button", { name: "追加" }));
@@ -297,40 +537,72 @@ describe("MastersPage", () => {
 
   it("shows return action with handoff notice when returnTo is provided", async () => {
     setDevUser();
+    renderPage(createMasterReturnEntry());
 
-    const handoffId = saveMasterHandoff(
-      createMatchWorkspaceMasterHandoffPayload({
-        matchSessionId: "session-1",
-        returnTo: "/review/session-1?totalAssets=draft-1",
-        values: makeMatchWorkspaceMasterHandoffValues({
-          draftIds: { totalAssets: "draft-1" },
-          gameTitleId: "gt_momotetsu_2",
-          heldEventId: "event-1",
-          mapMasterId: "map_east",
-          matchNoInEvent: 1,
-          ownerMemberId: "member_ponta",
-          playedAt: "2026-01-01T00:00:00.000Z",
-          seasonMasterId: "season_current",
-        }),
+    expect(await screen.findByRole("button", { name: "元の入力画面へ戻る" })).toBeInTheDocument();
+    expect(screen.getByText(/現在の入力内容を保ったまま戻れます/u)).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "戻り先を確認" })).not.toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "元の入力画面へ戻る" })).toHaveLength(1);
+  });
+
+  it("keeps the handoff return primary when the alias form is visible", async () => {
+    setDevUser();
+    renderPage(`${createMasterReturnEntry()}&tab=aliases`);
+
+    const returnButton = await screen.findByRole("button", { name: "元の入力画面へ戻る" });
+    const aliasHeading = await screen.findByRole("heading", { name: "プレーヤー名の別名" });
+    const aliasPanel = aliasHeading.closest("section");
+    if (!aliasPanel) {
+      throw new Error("alias panel was not rendered");
+    }
+    const addButton = within(aliasPanel).getByRole("button", { name: "追加" });
+
+    expect(returnButton).toHaveClass("bg-[var(--color-action)]");
+    expect(addButton).toHaveClass("bg-[var(--color-surface)]");
+  });
+
+  it("disables the only return action while a master edit is pending", async () => {
+    setDevUser();
+    const requestStarted = createDeferred();
+    const responseGate = createDeferred();
+    server.use(
+      http.patch("/api/game-titles/:id", async ({ request }) => {
+        const body = (await request.json()) as { layoutFamily: string; name: string };
+        requestStarted.resolve();
+        await responseGate.promise;
+        return HttpResponse.json({
+          ...body,
+          createdAt: "2026-01-01T00:00:00.000Z",
+          displayOrder: 1,
+          id: "gt_momotetsu_2",
+        });
       }),
     );
 
-    renderPage(
-      `/admin/masters?returnTo=${encodeURIComponent("/review/session-1?totalAssets=draft-1")}&handoffId=${handoffId}`,
-    );
+    renderPage(createMasterReturnEntry());
 
-    expect(await screen.findByRole("button", { name: "元の入力画面へ戻る" })).toBeInTheDocument();
+    const returnButton = await screen.findByRole("button", { name: "元の入力画面へ戻る" });
+    await screen.findByRole("radio", { name: "桃太郎電鉄2" });
+    await user.click(screen.getByRole("button", { name: "作品を編集" }));
+    const nameInput = screen.getByDisplayValue("桃太郎電鉄2");
+    await user.clear(nameInput);
+    await user.type(nameInput, "桃太郎電鉄2 DX");
+    await user.click(screen.getByRole("button", { name: "保存" }));
+
+    await requestStarted.promise;
+    expect(returnButton).toBeDisabled();
+    expect(screen.getByText("設定の追加・保存・削除が完了すると戻れます。")).toBeInTheDocument();
+
+    responseGate.resolve();
+    await waitFor(() => expect(returnButton).toBeEnabled());
     expect(
-      screen.getByText(/現在の入力内容を保ったまま戻れるようにしています/u),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "戻り先を確認" })).toHaveAttribute(
-      "href",
-      expect.stringContaining("handoffId="),
-    );
+      screen.queryByText("設定の追加・保存・削除が完了すると戻れます。"),
+    ).not.toBeInTheDocument();
   });
 
-  it("does not show cached load error after remount while refetch is running", async () => {
+  it("does not show cached load error after the route error boundary resets it", async () => {
     setDevUser();
+    await queryClient.fetchQuery(authQueryOptions(testDevUserAccountId));
     await queryClient
       .fetchQuery({
         queryKey: masterQueryKeys.gameTitles("account_ponta"),
@@ -360,12 +632,36 @@ describe("MastersPage", () => {
       }),
     );
 
-    renderPage();
+    let resetQueryErrors: (() => void) | undefined;
+    function MasterRouteHarness({ showPage }: { showPage: boolean }) {
+      return (
+        <QueryClientProvider client={queryClient}>
+          <QueryErrorResetBoundary>
+            {({ reset }) => {
+              resetQueryErrors = reset;
+              return showPage ? (
+                <MemoryRouter initialEntries={["/admin/masters"]}>
+                  <MastersPage />
+                </MemoryRouter>
+              ) : null;
+            }}
+          </QueryErrorResetBoundary>
+        </QueryClientProvider>
+      );
+    }
+
+    const view = render(<MasterRouteHarness showPage={false} />);
+    const resetRouteQueryErrors = resetQueryErrors;
+    if (!resetRouteQueryErrors) {
+      throw new Error("query error reset was not registered");
+    }
+    act(() => resetRouteQueryErrors());
+    view.rerender(<MasterRouteHarness showPage />);
 
     await requestStarted.promise;
     expect(screen.queryByText("作品を読み込めませんでした")).not.toBeInTheDocument();
     responseGate.resolve();
-    expect(await screen.findByText("復旧済み作品")).toBeInTheDocument();
+    expect(await screen.findByRole("radio", { name: "復旧済み作品" })).toBeChecked();
   });
 
   it("does not reuse list-response cache entries from OCR setup queries", async () => {

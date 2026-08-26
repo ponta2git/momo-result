@@ -3,7 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { createMemoryRouter, RouterProvider } from "react-router-dom";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ErrorBoundary } from "@/app/ErrorBoundary";
 import { appRoutes } from "@/app/router";
@@ -54,10 +54,13 @@ describe("app routing", () => {
     expect(await screen.findByRole("heading", { name: "ログイン" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "ログイン" })).toBeInTheDocument();
     expect(
-      screen.getByText(
+      screen.getByText("操作用アカウントを選ぶと、試合一覧、OCR、CSV/TSV出力を使えます。"),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(
         "別のDiscordアカウントを使う場合は、Discord側でログアウトするか、シークレットウィンドウで開きます。",
       ),
-    ).toBeInTheDocument();
+    ).not.toBeInTheDocument();
     expect(router.state.location.pathname).toBe("/login");
   });
 
@@ -91,6 +94,8 @@ describe("app routing", () => {
     const loadingState = await screen.findByLabelText("ログイン状態を確認中");
     expect(loadingState).toHaveAttribute("aria-busy", "true");
     expect(screen.getByText("ログイン状態を確認中…")).toBeInTheDocument();
+    expect(screen.getByText("momo-result")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "ログアウト" })).not.toBeInTheDocument();
 
     responseGate.resolve();
     expect(await screen.findByRole("heading", { name: "試合一覧" })).toBeInTheDocument();
@@ -102,6 +107,71 @@ describe("app routing", () => {
     expect(await screen.findByRole("heading", { name: "ログイン" })).toBeInTheDocument();
     expect(router.state.location.pathname).toBe("/login");
     expect(router.state.location.search).toContain("next=%2Fexports");
+  });
+
+  it("redirects a forbidden account to a login recovery path", async () => {
+    setDevUser("account-disabled");
+    const { router } = renderApp("/exports?format=tsv&matchId=match-1#download");
+
+    expect(await screen.findByRole("heading", { name: "ログイン" })).toBeInTheDocument();
+    expect(screen.getByText("アクセス権限がありません")).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe("/login");
+    const recoveryParams = new URLSearchParams(router.state.location.search);
+    expect(recoveryParams.get("reason")).toBe("forbidden");
+    expect(recoveryParams.get("next")).toBe("/exports?format=tsv&matchId=match-1#download");
+
+    await user.selectOptions(
+      screen.getByRole("combobox", { name: "操作用アカウント" }),
+      "account_ponta",
+    );
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe("/exports");
+      expect(router.state.location.search).toBe("?format=tsv&matchId=match-1");
+      expect(router.state.location.hash).toBe("#download");
+    });
+  });
+
+  it("uses the auth retry as the primary recovery action", async () => {
+    setDevUser();
+    let attempts = 0;
+    server.use(
+      http.get("/api/auth/me", () => {
+        attempts += 1;
+        return attempts === 1
+          ? HttpResponse.json(
+              {
+                code: "TEMPORARILY_UNAVAILABLE",
+                detail: "auth temporarily unavailable",
+                status: 500,
+                title: "Temporary failure",
+                type: "about:blank",
+              },
+              { status: 500 },
+            )
+          : HttpResponse.json({
+              accountId: "account_ponta",
+              csrfToken: "dev",
+              displayName: "ぽんた",
+              isAdmin: true,
+              memberId: "member_ponta",
+            });
+      }),
+    );
+
+    renderApp("/matches");
+
+    const retry = await screen.findByRole("button", { name: "再試行" });
+    expect(
+      screen.getByRole("heading", { level: 1, name: "ログイン状態を確認できません" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Temporary failure")).not.toBeInTheDocument();
+    expect(screen.queryByText("auth temporarily unavailable")).not.toBeInTheDocument();
+    expect(retry).toHaveClass("bg-[var(--color-action)]");
+    await user.click(retry);
+
+    expect(await screen.findByRole("heading", { name: "試合一覧" })).toBeInTheDocument();
+    expect(screen.queryByText("Temporary failure")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "再試行" })).not.toBeInTheDocument();
   });
 
   it("redirects /login to /matches when authenticated", async () => {
@@ -154,7 +224,14 @@ describe("app routing", () => {
     });
   });
 
-  it("logs out from the global nav in dev auth mode", async () => {
+  it("logs out locally without a backend request for a mutable dev override", async () => {
+    let logoutRequests = 0;
+    server.use(
+      http.post("/api/auth/logout", () => {
+        logoutRequests += 1;
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
     setDevUser();
     const { queryClient, router } = renderApp("/matches");
 
@@ -171,6 +248,126 @@ describe("app routing", () => {
       expect(router.state.location.pathname).toBe("/login");
     });
     expect(await screen.findByRole("heading", { name: "ログイン" })).toBeInTheDocument();
+    expect(logoutRequests).toBe(0);
+  });
+
+  it("retains the authenticated UI and session cache when backend logout fails, then clears both after retry", async () => {
+    vi.stubEnv("DEV", false);
+    let authenticated = true;
+    let logoutAttempts = 0;
+    server.use(
+      http.get("/api/auth/me", () =>
+        authenticated
+          ? HttpResponse.json({
+              accountId: "account_ponta",
+              csrfToken: "session-csrf",
+              displayName: "ぽんた",
+              isAdmin: true,
+              memberId: "member_ponta",
+            })
+          : HttpResponse.json(
+              {
+                code: "UNAUTHORIZED",
+                detail: "session ended",
+                status: 401,
+                title: "Unauthorized",
+                type: "about:blank",
+              },
+              { status: 401 },
+            ),
+      ),
+      http.post("/api/auth/logout", () => {
+        logoutAttempts += 1;
+        if (logoutAttempts === 1) {
+          return HttpResponse.json(
+            {
+              code: "TEMPORARILY_UNAVAILABLE",
+              detail: "logout temporarily unavailable",
+              status: 503,
+              title: "Temporary failure",
+              type: "about:blank",
+            },
+            { status: 503 },
+          );
+        }
+        authenticated = false;
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+
+    try {
+      const { queryClient, router } = renderApp("/matches");
+      const sessionCacheKey = ["private-session-cache"] as const;
+
+      expect(await screen.findByRole("heading", { name: "試合一覧" })).toBeInTheDocument();
+      queryClient.setQueryData(sessionCacheKey, { privateNote: "previous session cache" });
+      await user.click(screen.getByRole("button", { name: "ログアウト" }));
+
+      const alert = await screen.findByRole("alert");
+      expect(alert).toHaveTextContent("ログアウトできませんでした。");
+      expect(alert).toHaveTextContent("ログイン状態と表示中の内容は保持しています。");
+      expect(screen.getByRole("heading", { name: "試合一覧" })).toBeInTheDocument();
+      expect(router.state.location.pathname).toBe("/matches");
+      expect(queryClient.getQueryData(sessionCacheKey)).toEqual({
+        privateNote: "previous session cache",
+      });
+
+      await user.click(screen.getByRole("button", { name: "ログアウトを再試行" }));
+
+      await waitFor(() => {
+        expect(queryClient.getQueryData(sessionCacheKey)).toBeUndefined();
+        expect(router.state.location.pathname).toBe("/login");
+      });
+      expect(await screen.findByRole("heading", { name: "ログイン" })).toBeInTheDocument();
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+      expect(logoutAttempts).toBe(2);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it("treats an already-ended backend session as a completed logout", async () => {
+    vi.stubEnv("DEV", false);
+    server.use(
+      http.get("/api/auth/me", () =>
+        HttpResponse.json({
+          accountId: "account_ponta",
+          csrfToken: "session-csrf",
+          displayName: "ぽんた",
+          isAdmin: true,
+          memberId: "member_ponta",
+        }),
+      ),
+      http.post("/api/auth/logout", () =>
+        HttpResponse.json(
+          {
+            code: "UNAUTHORIZED",
+            detail: "session ended",
+            status: 401,
+            title: "Unauthorized",
+            type: "about:blank",
+          },
+          { status: 401 },
+        ),
+      ),
+    );
+
+    try {
+      const { queryClient, router } = renderApp("/matches");
+      const sessionCacheKey = ["private-session-cache"] as const;
+
+      expect(await screen.findByRole("heading", { name: "試合一覧" })).toBeInTheDocument();
+      queryClient.setQueryData(sessionCacheKey, { privateNote: "previous session cache" });
+      await user.click(screen.getByRole("button", { name: "ログアウト" }));
+
+      await waitFor(() => {
+        expect(queryClient.getQueryData(sessionCacheKey)).toBeUndefined();
+        expect(router.state.location.pathname).toBe("/login");
+      });
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   it("renders edit mode at /matches/:matchId/edit", async () => {
@@ -331,8 +528,12 @@ describe("app routing", () => {
     renderApp("/analytics/series");
 
     expect(await screen.findByText("収益先行時は目的地0回で終えない。")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /比較対象を変更/u }));
     await user.selectOptions(screen.getByRole("combobox", { name: "シーズン" }), "season_current");
     expect(await screen.findByText("戦績データを読み込めません")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "戦績データを再読み込み" })).toHaveClass(
+      "bg-[var(--color-action)]",
+    );
     await waitFor(() =>
       expect(screen.queryByText("収益先行時は目的地0回で終えない。")).not.toBeInTheDocument(),
     );
@@ -392,6 +593,7 @@ describe("app routing", () => {
     const { router } = renderApp("/analytics/series?view=overview");
 
     expect(await screen.findByRole("heading", { name: "戦績比較" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /比較対象を変更/u }));
     await user.selectOptions(screen.getByRole("combobox", { name: "シーズン" }), "season_current");
     await user.selectOptions(screen.getByRole("combobox", { name: "マップ" }), "map_east");
 
@@ -539,6 +741,9 @@ describe("app routing", () => {
 
     expect(await screen.findByText("対象作品を読み込めません")).toBeInTheDocument();
     expect(screen.queryByText("登録されている作品がありません")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "比較対象を再読み込み" })).toHaveClass(
+      "bg-[var(--color-action)]",
+    );
     await user.click(screen.getByRole("button", { name: "比較対象を再読み込み" }));
     expect(await screen.findByRole("combobox", { name: "対象作品" })).toBeInTheDocument();
     expect(attempts).toBe(2);
@@ -564,7 +769,9 @@ describe("app routing", () => {
     renderApp("/analytics/series");
 
     expect(await screen.findByText("画面の更新が必要です")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "画面を再読み込み" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "画面を再読み込み" })).toHaveClass(
+      "bg-[var(--color-action)]",
+    );
     expect(screen.queryByText("対象作品を読み込めません")).not.toBeInTheDocument();
   });
 });

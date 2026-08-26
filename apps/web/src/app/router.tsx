@@ -21,21 +21,22 @@ import {
   loadSeriesComparisonPage,
   loadSeriesAnalysisAdminPage,
 } from "@/app/routeModules";
+import { loadLazyModule } from "@/shared/lib/moduleLoadError";
 
-const AdminAccountsPage = lazy(loadAdminAccountsPage);
-const LoginPage = lazy(loadLoginPage);
-const DraftReviewPage = lazy(loadDraftReviewPage);
-const ExportPage = lazy(loadExportPage);
-const HeldEventDetailPage = lazy(loadHeldEventDetailPage);
-const HeldEventsPage = lazy(loadHeldEventsPage);
-const MastersPage = lazy(loadMastersPage);
-const MatchCreatePage = lazy(loadMatchCreatePage);
-const MatchDetailPage = lazy(loadMatchDetailPage);
-const MatchesListPage = lazy(loadMatchesListPage);
-const MatchEditPage = lazy(loadMatchEditPage);
-const OcrCapturePage = lazy(loadOcrCapturePage);
-const SeriesComparisonPage = lazy(loadSeriesComparisonPage);
-const SeriesAnalysisAdminPage = lazy(loadSeriesAnalysisAdminPage);
+const AdminAccountsPage = lazy(() => loadLazyModule(loadAdminAccountsPage));
+const LoginPage = lazy(() => loadLazyModule(loadLoginPage));
+const DraftReviewPage = lazy(() => loadLazyModule(loadDraftReviewPage));
+const ExportPage = lazy(() => loadLazyModule(loadExportPage));
+const HeldEventDetailPage = lazy(() => loadLazyModule(loadHeldEventDetailPage));
+const HeldEventsPage = lazy(() => loadLazyModule(loadHeldEventsPage));
+const MastersPage = lazy(() => loadLazyModule(loadMastersPage));
+const MatchCreatePage = lazy(() => loadLazyModule(loadMatchCreatePage));
+const MatchDetailPage = lazy(() => loadLazyModule(loadMatchDetailPage));
+const MatchesListPage = lazy(() => loadLazyModule(loadMatchesListPage));
+const MatchEditPage = lazy(() => loadLazyModule(loadMatchEditPage));
+const OcrCapturePage = lazy(() => loadLazyModule(loadOcrCapturePage));
+const SeriesComparisonPage = lazy(() => loadLazyModule(loadSeriesComparisonPage));
+const SeriesAnalysisAdminPage = lazy(() => loadLazyModule(loadSeriesAnalysisAdminPage));
 
 export const appRoutes: RouteObject[] = [
   {

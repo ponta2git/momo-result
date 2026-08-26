@@ -1,5 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query";
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 
 import {
   patchGameTitle,
@@ -16,7 +16,6 @@ import {
   invalidateMemberAliasCaches,
 } from "@/features/masters/masterResourceCache";
 import { parseLayoutFamily, normalizeName } from "@/features/masters/masterValidation";
-import { formatApiError } from "@/shared/api/problemDetails";
 
 export function useMasterEditCommands(input: {
   authScope: string;
@@ -27,16 +26,21 @@ export function useMasterEditCommands(input: {
 }) {
   const { authScope, queryClient, selectedGameTitleId, setOperationError, setSelectedGameTitleId } =
     input;
+  const [pendingMutationCount, setPendingMutationCount] = useState(0);
 
-  const deleteWithNotice = useCallback(
-    async (action: () => Promise<unknown>, fallback: string) => {
+  const trackMutation = useCallback(async <Result>(action: () => Promise<Result>) => {
+    setPendingMutationCount((count) => count + 1);
+    try {
+      return await action();
+    } finally {
+      setPendingMutationCount((count) => Math.max(0, count - 1));
+    }
+  }, []);
+
+  const deleteWithDialogFeedback = useCallback(
+    async (action: () => Promise<unknown>) => {
       setOperationError(undefined);
-      try {
-        await action();
-      } catch (error) {
-        setOperationError(formatApiError(error, fallback));
-        throw error;
-      }
+      await action();
     },
     [setOperationError],
   );
@@ -101,42 +105,55 @@ export function useMasterEditCommands(input: {
 
   return {
     deleteGameTitle: (id: string) =>
-      deleteWithNotice(async () => {
-        await removeGameTitle(id);
-        if (selectedGameTitleId === id) {
-          setSelectedGameTitleId("");
-        }
-        await invalidateMasterResourceCaches(queryClient, {
-          authScope,
-          resource: "game-titles",
-        });
-      }, "作品の削除に失敗しました"),
+      trackMutation(() =>
+        deleteWithDialogFeedback(async () => {
+          await removeGameTitle(id);
+          if (selectedGameTitleId === id) {
+            setSelectedGameTitleId("");
+          }
+          await invalidateMasterResourceCaches(queryClient, {
+            authScope,
+            resource: "game-titles",
+          });
+        }),
+      ),
     deleteMapMaster: (id: string) =>
-      deleteWithNotice(async () => {
-        await removeMapMaster(id);
-        await invalidateMasterResourceCaches(queryClient, {
-          authScope,
-          gameTitleId: selectedGameTitleId,
-          resource: "map-masters",
-        });
-      }, "マップの削除に失敗しました"),
+      trackMutation(() =>
+        deleteWithDialogFeedback(async () => {
+          await removeMapMaster(id);
+          await invalidateMasterResourceCaches(queryClient, {
+            authScope,
+            gameTitleId: selectedGameTitleId,
+            resource: "map-masters",
+          });
+        }),
+      ),
     deleteMemberAlias: (id: string) =>
-      deleteWithNotice(async () => {
-        await removeMemberAlias(id);
-        await invalidateMemberAliasCaches(queryClient, authScope);
-      }, "エイリアスの削除に失敗しました"),
+      trackMutation(() =>
+        deleteWithDialogFeedback(async () => {
+          await removeMemberAlias(id);
+          await invalidateMemberAliasCaches(queryClient, authScope);
+        }),
+      ),
     deleteSeasonMaster: (id: string) =>
-      deleteWithNotice(async () => {
-        await removeSeasonMaster(id);
-        await invalidateMasterResourceCaches(queryClient, {
-          authScope,
-          gameTitleId: selectedGameTitleId,
-          resource: "season-masters",
-        });
-      }, "シーズンの削除に失敗しました"),
-    updateGameTitle,
-    updateMapMaster,
-    updateMemberAlias,
-    updateSeasonMaster,
+      trackMutation(() =>
+        deleteWithDialogFeedback(async () => {
+          await removeSeasonMaster(id);
+          await invalidateMasterResourceCaches(queryClient, {
+            authScope,
+            gameTitleId: selectedGameTitleId,
+            resource: "season-masters",
+          });
+        }),
+      ),
+    editPending: pendingMutationCount > 0,
+    updateGameTitle: (id: string, request: { name: string; layoutFamily: string }) =>
+      trackMutation(() => updateGameTitle(id, request)),
+    updateMapMaster: (id: string, request: { name: string }) =>
+      trackMutation(() => updateMapMaster(id, request)),
+    updateMemberAlias: (id: string, request: { memberId: string; alias: string }) =>
+      trackMutation(() => updateMemberAlias(id, request)),
+    updateSeasonMaster: (id: string, request: { name: string }) =>
+      trackMutation(() => updateSeasonMaster(id, request)),
   };
 }

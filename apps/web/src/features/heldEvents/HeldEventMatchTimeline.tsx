@@ -1,11 +1,10 @@
-import { BarChart3, Camera, Keyboard, Trophy } from "lucide-react";
+import { BarChart3, Trophy } from "lucide-react";
 
 import {
   formatHeldEventShortDateTime,
   heldEventScopeLabel,
 } from "@/features/heldEvents/heldEventDetailViewModel";
 import type { HeldEventMasterNames } from "@/features/heldEvents/heldEventDetailViewModel";
-import { heldEventOcrCaptureHref } from "@/features/heldEvents/heldEventNavigation";
 import type { HeldEventMatchResponse } from "@/shared/api/heldEvents";
 import { formatMatchNoInEvent } from "@/shared/domain/matchLabels";
 import { memberDisplayName, orderFixedMembers } from "@/shared/domain/members";
@@ -13,21 +12,18 @@ import { formatManYen } from "@/shared/lib/formatters";
 import { seriesComparisonHrefForMatch } from "@/shared/navigation/matchLinks";
 import { withReturnTo } from "@/shared/navigation/returnTo";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
+import { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { Card } from "@/shared/ui/layout/Card";
 import { RankBadge } from "@/shared/ui/rank/RankBadge";
 
 export function HeldEventMatchTimeline({
-  heldEventId,
   masterNames,
   matches,
-  nextMatchNo,
   returnTo,
 }: {
-  heldEventId: string;
   masterNames: HeldEventMasterNames;
   matches: HeldEventMatchResponse[];
-  nextMatchNo: number;
   returnTo: string;
 }) {
   return (
@@ -37,9 +33,11 @@ export function HeldEventMatchTimeline({
           <h2 id="held-event-timeline-heading" className="momo-heading text-lg font-semibold">
             試合の流れ
           </h2>
-          <p className="momo-copy mt-1 text-sm text-[var(--color-text-secondary)]">
-            開催内の試合番号順です。各試合から詳細と同条件の戦績比較へ進めます。
-          </p>
+          {matches.length > 0 ? (
+            <p className="momo-copy mt-1 text-sm text-[var(--color-text-secondary)]">
+              各試合の順位と総資産を見比べ、結果詳細や同条件の戦績比較へ進めます。
+            </p>
+          ) : null}
         </div>
         {matches.length > 0 ? (
           <p className="shrink-0 text-sm font-semibold text-[var(--color-text-secondary)] tabular-nums">
@@ -52,27 +50,7 @@ export function HeldEventMatchTimeline({
         <EmptyState
           icon={<Trophy className="size-5" />}
           title="確定済みの試合はまだありません"
-          description={`次は${formatMatchNoInEvent(nextMatchNo)}です。OCR取り込みか手入力で、この開催の記録を始めます。`}
-          action={
-            <div className="flex flex-wrap gap-2">
-              <LinkButton
-                icon={<Camera aria-hidden="true" className="size-4" />}
-                to={heldEventOcrCaptureHref(heldEventId, returnTo)}
-              >
-                OCR取り込み
-              </LinkButton>
-              <LinkButton
-                icon={<Keyboard aria-hidden="true" className="size-4" />}
-                to={withReturnTo(
-                  `/matches/new?heldEventId=${encodeURIComponent(heldEventId)}`,
-                  returnTo,
-                )}
-                variant="secondary"
-              >
-                手入力
-              </LinkButton>
-            </div>
-          }
+          description="OCR取り込みまたは手入力で試合を確定すると、開催戦績の集計が始まります。"
         />
       ) : (
         <Card className="overflow-hidden p-0">
@@ -132,12 +110,14 @@ export function HeldEventMatchTimeline({
                     {orderFixedMembers(match.players ?? []).map((player) => (
                       <li
                         key={player.memberId}
-                        className="flex min-w-0 items-center gap-3 bg-[var(--color-surface-subtle)] px-3 py-3"
+                        className="flex min-w-0 items-center gap-3 bg-[var(--color-surface)] px-3 py-3"
                       >
                         <RankBadge rank={player.rank} />
                         <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold">
-                            {memberDisplayName(player.memberId)}
+                          <p className="min-w-0 text-sm font-semibold">
+                            <MemberSequenceLabel memberId={player.memberId}>
+                              <span className="truncate">{memberDisplayName(player.memberId)}</span>
+                            </MemberSequenceLabel>
                           </p>
                           <p className="truncate text-xs text-[var(--color-text-secondary)] tabular-nums">
                             {formatManYen(player.totalAssetsManYen)}

@@ -32,6 +32,22 @@ function renderAdminPage(initialEntry = "/admin/analysis") {
 }
 
 describe("SeriesAnalysisAdminPage", () => {
+  it("makes the sole recovery primary when the initial overview cannot load", async () => {
+    setDevUser();
+    server.use(
+      http.get("/api/admin/series-analysis/overview", () =>
+        HttpResponse.json({ detail: "temporarily unavailable" }, { status: 500 }),
+      ),
+    );
+
+    renderAdminPage();
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("HTTP 500");
+    expect(screen.getByRole("button", { name: "状態を再読み込み" })).toHaveClass(
+      "bg-[var(--color-action)]",
+    );
+  });
+
   it("renders the job ledger and sends contract-valid idempotent recalculation requests", async () => {
     setDevUser();
     const titleRequests: Array<{ body: unknown; idempotencyKey: string | null }> = [];
@@ -173,7 +189,12 @@ describe("SeriesAnalysisAdminPage", () => {
 
     renderAdminPage();
 
-    expect(await screen.findByText("管理者権限が必要です")).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "管理者権限が必要です" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "試合一覧へ戻る" })).toHaveClass(
+      "bg-[var(--color-action)]",
+    );
     expect(screen.queryByRole("button", { name: "この作品を再計算" })).not.toBeInTheDocument();
     expect(overviewRequests).toBe(0);
   });

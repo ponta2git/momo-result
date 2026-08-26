@@ -8,19 +8,30 @@ import {
 } from "@/shared/auth/redirectPath";
 import { useAuth } from "@/shared/auth/useAuth";
 import { Button } from "@/shared/ui/actions/Button";
+import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 import { Card } from "@/shared/ui/layout/Card";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
+import { PageHeader } from "@/shared/ui/layout/PageHeader";
 
 function StandaloneRouteMain({ children }: { children: ReactNode }) {
   return (
-    <main
-      className="mx-auto flex min-h-dvh w-full flex-col px-3 py-4 sm:px-4 sm:py-6"
-      id="main-content"
-    >
-      {children}
-    </main>
+    <>
+      <header className="border-b border-[var(--color-border)] bg-[var(--color-surface)]">
+        <div className="mx-auto flex min-h-14 w-full max-w-[75rem] items-center px-3 sm:px-4">
+          <span className="text-sm font-semibold text-[var(--color-text-primary)]">
+            momo-result
+          </span>
+        </div>
+      </header>
+      <main
+        className="mx-auto flex min-h-[calc(100dvh-3.5rem)] w-full flex-col px-3 py-4 sm:px-4 sm:py-6"
+        id="main-content"
+      >
+        {children}
+      </main>
+    </>
   );
 }
 
@@ -102,31 +113,28 @@ export function AuthenticatedRoute({ children }: { children: ReactNode }) {
   }
 
   if (auth.isForbidden) {
-    return (
-      <RouteGuardFrame standalone>
-        <Notice tone="danger" title="利用権限がありません">
-          このアカウントでは利用できません。管理者に確認してください。
-        </Notice>
-      </RouteGuardFrame>
-    );
+    const next = currentAppPath(location.pathname, location.search, location.hash);
+    return <Navigate to={buildLoginPath(next, "forbidden")} replace />;
   }
 
   if (auth.error) {
     return (
       <RouteGuardFrame standalone>
-        <Notice tone="danger" title={auth.error.title}>
-          {auth.error.detail}
+        <PageHeader title="ログイン状態を確認できません" />
+        <Notice
+          action={
+            <Button
+              pending={auth.isRefetching}
+              pendingLabel="再試行中…"
+              onClick={() => void auth.refetch()}
+            >
+              再試行
+            </Button>
+          }
+          tone="danger"
+        >
+          ログイン状態を確認できないため、この画面の表示を一時停止しています。通信状態を確認して、再試行してください。
         </Notice>
-        <div>
-          <Button
-            pending={auth.isRefetching}
-            pendingLabel="再試行中…"
-            variant="secondary"
-            onClick={() => void auth.refetch()}
-          >
-            再試行
-          </Button>
-        </div>
       </RouteGuardFrame>
     );
   }
@@ -144,9 +152,11 @@ export function AdminRoute({ children }: { children: ReactNode }) {
   if (!auth.auth?.isAdmin) {
     return (
       <PageFrame>
-        <Notice tone="danger" title="管理者権限が必要です">
-          この画面は管理者専用です。
-        </Notice>
+        <PageHeader title="管理者権限が必要です" />
+        <Notice tone="danger">この画面は管理者専用です。</Notice>
+        <LinkButton className="w-fit" to="/matches">
+          試合一覧へ戻る
+        </LinkButton>
       </PageFrame>
     );
   }

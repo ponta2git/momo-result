@@ -27,6 +27,7 @@ export function HeldEventDraftsSection({
   if (drafts.length === 0) {
     return null;
   }
+  const primaryDraftId = drafts.find((draft) => heldEventDraftAction(draft).href)?.matchDraftId;
 
   return (
     <Card aria-labelledby="held-event-drafts-heading" className="overflow-hidden p-0">
@@ -76,7 +77,12 @@ export function HeldEventDraftsSection({
                 ) : null}
               </div>
               {action.href ? (
-                <LinkButton className="shrink-0" size="sm" to={withReturnTo(action.href, returnTo)}>
+                <LinkButton
+                  className="shrink-0"
+                  size="sm"
+                  to={withReturnTo(action.href, returnTo)}
+                  variant={draft.matchDraftId === primaryDraftId ? "primary" : "secondary"}
+                >
                   {action.label}
                 </LinkButton>
               ) : (

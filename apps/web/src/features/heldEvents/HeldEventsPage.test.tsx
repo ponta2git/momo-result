@@ -63,6 +63,9 @@ describe("HeldEventsPage", () => {
     expect(screen.queryByText(/開催を開くと/u)).not.toBeInTheDocument();
     expect(screen.queryByText(/開催ごとに試合順/u)).not.toBeInTheDocument();
     expect(screen.queryByText("held-1")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "開催を作成" })).toHaveClass(
+      "bg-[var(--color-surface)]",
+    );
     expect(screen.getByRole("link", { name: /の開催詳細$/u })).toHaveAttribute(
       "href",
       "/held-events/held-1?returnTo=%2Fheld-events",
@@ -132,6 +135,10 @@ describe("HeldEventsPage", () => {
     renderPage();
 
     expect(await screen.findByText("開催履歴はまだありません")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "開催を作成" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "最初の開催を作成" })).toHaveClass(
+      "bg-[var(--color-action)]",
+    );
     expect(screen.queryByRole("link", { name: /の開催にOCR取り込み$/u })).not.toBeInTheDocument();
     expect(screen.queryByRole("navigation", { name: "ページネーション" })).not.toBeInTheDocument();
   });
@@ -152,10 +159,94 @@ describe("HeldEventsPage", () => {
     expect(await screen.findByText("開催履歴を読み込めません")).toBeInTheDocument();
     expect(screen.queryByText("開催履歴はまだありません")).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "開催履歴を再読み込み" }));
+    const retryButton = screen.getByRole("button", { name: "開催履歴を再読み込み" });
+    expect(retryButton).toHaveClass("bg-[var(--color-action)]");
+    await user.click(retryButton);
 
     expect(await screen.findByRole("link", { name: /の開催詳細$/u })).toBeInTheDocument();
     expect(attempts).toBe(2);
+  });
+
+  it("keeps the current ledger usable when a same-scope refresh fails", async () => {
+    let attempts = 0;
+    server.use(
+      http.get("/api/held-events", () => {
+        attempts += 1;
+        return attempts === 2
+          ? HttpResponse.json({ detail: "temporarily unavailable" }, { status: 500 })
+          : HttpResponse.json({ items: [makeHeldEventResponse()] });
+      }),
+    );
+
+    renderPage();
+
+    const detailLink = await screen.findByRole("link", { name: /の開催詳細$/u });
+    await user.click(screen.getByRole("button", { name: "更新" }));
+
+    expect(await screen.findByText("開催履歴を更新できませんでした")).toBeInTheDocument();
+    expect(detailLink).toBeInTheDocument();
+    expect(detailLink).toHaveAttribute("href", "/held-events/held-1?returnTo=%2Fheld-events");
+    expect(screen.getByRole("button", { name: "開催を作成" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /を削除$/u })).toBeDisabled();
+
+    await user.click(screen.getByRole("button", { name: "開催履歴を再取得" }));
+
+    await waitFor(() =>
+      expect(screen.queryByText("開催履歴を更新できませんでした")).not.toBeInTheDocument(),
+    );
+    expect(screen.getByRole("link", { name: /の開催詳細$/u })).toBeInTheDocument();
+    expect(attempts).toBe(3);
+  });
+
+  it("does not present prior-page rows as a failed newly selected page", async () => {
+    let pageTwoAttempts = 0;
+    server.use(
+      http.get("/api/held-events", ({ request }) => {
+        const page = Number(new URL(request.url).searchParams.get("page") ?? "1");
+        if (page === 2) {
+          pageTwoAttempts += 1;
+          if (pageTwoAttempts === 1) {
+            return HttpResponse.json({ detail: "temporarily unavailable" }, { status: 500 });
+          }
+        }
+        return HttpResponse.json({
+          items: [
+            makeHeldEventResponse({
+              heldAt: page === 1 ? "2026-01-02T03:04:00.000Z" : "2025-12-02T03:04:00.000Z",
+              id: page === 1 ? "held-page-1" : "held-page-2",
+            }),
+          ],
+          pagination: {
+            hasNextPage: page === 1,
+            hasPreviousPage: page === 2,
+            page,
+            pageSize: 10,
+            totalItems: 11,
+            totalPages: 2,
+          },
+          totalMatchCount: 0,
+        });
+      }),
+    );
+
+    renderPage();
+
+    expect(await screen.findByRole("link", { name: /の開催詳細$/u })).toHaveAttribute(
+      "href",
+      "/held-events/held-page-1?returnTo=%2Fheld-events",
+    );
+    await user.click(screen.getByRole("button", { name: "次のページへ" }));
+
+    expect(await screen.findByText("開催履歴を読み込めません")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /の開催詳細$/u })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "開催履歴を再読み込み" }));
+
+    expect(await screen.findByRole("link", { name: /の開催詳細$/u })).toHaveAttribute(
+      "href",
+      "/held-events/held-page-2?returnTo=%2Fheld-events%3Fpage%3D2",
+    );
+    expect(pageTwoAttempts).toBe(2);
   });
 
   it("corrects an out-of-range page before showing an empty-list state", async () => {
@@ -281,10 +372,20 @@ describe("HeldEventsPage", () => {
     await waitFor(() =>
       expect(screen.getByRole("region", { name: "開催履歴" })).toHaveAttribute("aria-busy", "true"),
     );
-    expect(screen.getByRole("link", { name: /の開催詳細$/u })).toHaveAttribute(
-      "href",
-      "/held-events/held-page-1?returnTo=%2Fheld-events%3Fpage%3D2",
+    const ledger = screen.getByRole("region", { name: "開催履歴" });
+    expect(within(ledger).getByRole("status")).toHaveTextContent(
+      "現在は1ページ目（10件表示）です。2ページ目（10件表示）を読み込んでいます。",
     );
+    const disabledDetail = within(ledger).getByRole("link", { name: /の開催詳細$/u });
+    expect(disabledDetail).toHaveAttribute("aria-disabled", "true");
+    expect(disabledDetail).not.toHaveAttribute("href");
+    for (const link of within(ledger).getAllByRole("link")) {
+      expect(link).toHaveAttribute("aria-disabled", "true");
+      expect(link).not.toHaveAttribute("href");
+    }
+    expect(within(ledger).getByRole("button", { name: /を削除$/u })).toBeDisabled();
+    await user.click(disabledDetail);
+    expect(screen.getByLabelText("current location")).toHaveTextContent("/held-events?page=2");
     expect(screen.getByText("最新")).toBeInTheDocument();
     expect(screen.getByRole("navigation", { name: "ページネーション" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "次のページへ" })).toBeDisabled();
@@ -298,6 +399,7 @@ describe("HeldEventsPage", () => {
       ),
     );
     expect(screen.getByRole("region", { name: "開催履歴" })).not.toHaveAttribute("aria-busy");
+    expect(within(ledger).queryByRole("status")).not.toBeInTheDocument();
     expect(screen.queryByText("最新")).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /の開催にOCR取り込み$/u })).not.toBeInTheDocument();
     expect(screen.getByText("2 / 2")).toBeInTheDocument();
@@ -442,5 +544,13 @@ describe("HeldEventsPage", () => {
 
     expect(await screen.findByRole("alert")).toHaveTextContent("held event has match drafts.");
     expect(screen.getByRole("button", { name: "削除する" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "キャンセル" }));
+
+    await waitFor(() =>
+      expect(screen.queryByText("開催履歴を削除しますか？")).not.toBeInTheDocument(),
+    );
+    expect(screen.queryByText("held event has match drafts.")).not.toBeInTheDocument();
+    expect(screen.queryByText("操作に失敗しました")).not.toBeInTheDocument();
   });
 });

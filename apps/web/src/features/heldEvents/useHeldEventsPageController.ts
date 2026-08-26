@@ -12,7 +12,11 @@ import { createHeldEvent, deleteHeldEvent } from "@/shared/api/heldEvents";
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
 import { runIdempotentMutation } from "@/shared/api/idempotency";
 import { formatApiError } from "@/shared/api/problemDetails";
-import { isInitialQueryLoading, shouldShowBlockingQueryError } from "@/shared/api/queryErrorState";
+import {
+  isInitialQueryLoading,
+  shouldShowBlockingQueryError,
+  shouldShowQueryError,
+} from "@/shared/api/queryErrorState";
 import { heldEventKeys } from "@/shared/api/queryKeys";
 import { heldEventsQueryOptions } from "@/shared/api/queryOptions";
 import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
@@ -23,6 +27,29 @@ import { showToast } from "@/shared/ui/feedback/Toast";
 const initialCreateHeldEventState = { version: 0 };
 const defaultPagination = { page: 1, pageSize: 10 };
 const pageSizeOptions = new Set<number>(heldEventPageSizeOptions);
+
+function withPaginationParams(
+  current: URLSearchParams,
+  next: { page: number; pageSize: number },
+): URLSearchParams {
+  const params = new URLSearchParams(current);
+  if (next.page === defaultPagination.page) {
+    params.delete("page");
+  } else {
+    params.set("page", String(next.page));
+  }
+  if (next.pageSize === defaultPagination.pageSize) {
+    params.delete("pageSize");
+  } else {
+    params.set("pageSize", String(next.pageSize));
+  }
+  return params;
+}
+
+function heldEventsReturnTo(params: URLSearchParams): string {
+  const search = params.toString();
+  return `/held-events${search ? `?${search}` : ""}`;
+}
 
 export function useHeldEventsPageController() {
   const queryClient = useQueryClient();
@@ -48,23 +75,14 @@ export function useHeldEventsPageController() {
 
   const updatePagination = useCallback(
     (next: { page: number; pageSize: number }) => {
-      const params = new URLSearchParams(searchParams);
-      if (next.page === defaultPagination.page) {
-        params.delete("page");
-      } else {
-        params.set("page", String(next.page));
-      }
-      if (next.pageSize === defaultPagination.pageSize) {
-        params.delete("pageSize");
-      } else {
-        params.set("pageSize", String(next.pageSize));
-      }
-      setSearchParams(params);
+      setSearchParams(withPaginationParams(searchParams, next));
     },
     [searchParams, setSearchParams],
   );
 
-  const heldEventsQuery = useQuery(heldEventsQueryOptions(paginationSearch));
+  const heldEventsOptions = heldEventsQueryOptions(paginationSearch);
+  const heldEventsQuery = useQuery(heldEventsOptions);
+  const hasCurrentScopeData = queryClient.getQueryData(heldEventsOptions.queryKey) !== undefined;
 
   const [createState, createAction, createPending] = useActionState<
     typeof initialCreateHeldEventState,
@@ -111,13 +129,21 @@ export function useHeldEventsPageController() {
       setErrorMessage("");
       showToast({ title: "開催履歴を削除しました。", tone: "success" });
     },
-    onError: (error) => {
-      setErrorMessage(formatApiError(error, "開催履歴の削除に失敗しました"));
-    },
   });
 
   const rows = heldEventsQuery.data?.items ?? emptyHeldEvents;
   const pagination = heldEventsQuery.data?.pagination;
+  const scopeChanging = Boolean(heldEventsQuery.isPlaceholderData && heldEventsQuery.isFetching);
+  const displayedPage = pagination?.page ?? paginationSearch.page;
+  const displayedPageSize = pagination?.pageSize ?? paginationSearch.pageSize;
+  const displayedReturnTo = scopeChanging
+    ? heldEventsReturnTo(
+        withPaginationParams(searchParams, {
+          page: displayedPage,
+          pageSize: displayedPageSize,
+        }),
+      )
+    : listReturnTo;
   const pageCorrectionPending = Boolean(
     pagination &&
     !heldEventsQuery.isPlaceholderData &&
@@ -181,6 +207,7 @@ export function useHeldEventsPageController() {
     },
     feedback: {
       errorMessage,
+      refreshFailed: shouldShowQueryError(heldEventsQuery) && hasCurrentScopeData,
     },
     header: {
       openCreate: () => updateCreateOpen(true),
@@ -196,13 +223,20 @@ export function useHeldEventsPageController() {
         onRequestDelete: setDeleteTarget,
       },
       data: {
-        loadFailed: shouldShowBlockingQueryError(heldEventsQuery),
+        loadFailed:
+          shouldShowBlockingQueryError(heldEventsQuery) ||
+          (shouldShowQueryError(heldEventsQuery) && !hasCurrentScopeData),
         loading: isInitialQueryLoading(heldEventsQuery) || pageCorrectionPending,
-        page: pagination?.page ?? paginationSearch.page,
+        page: displayedPage,
+        pageSize: displayedPageSize,
         pagination,
         refreshing: heldEventsQuery.isFetching,
-        returnTo: listReturnTo,
+        requestedPage: paginationSearch.page,
+        requestedPageSize: paginationSearch.pageSize,
+        returnTo: displayedReturnTo,
         rows,
+        scopeChanging,
+        stale: shouldShowQueryError(heldEventsQuery) && hasCurrentScopeData,
       },
     },
   };

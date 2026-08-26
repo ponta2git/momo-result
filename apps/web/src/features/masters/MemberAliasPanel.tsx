@@ -1,13 +1,14 @@
 import { Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
 
+import { MasterResourceRefreshNotice } from "@/features/masters/MasterResourceRefreshNotice";
 import type { MemberAliasResponse } from "@/shared/api/masters";
 import { formatApiError } from "@/shared/api/problemDetails";
 import { canonicalResultMembers, memberDisplayName } from "@/shared/domain/members";
 import { Button } from "@/shared/ui/actions/Button";
 import { IconButton } from "@/shared/ui/actions/IconButton";
+import { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
 import { AlertDialog, Dialog } from "@/shared/ui/feedback/Dialog";
-import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { SelectField } from "@/shared/ui/forms/SelectField";
 import { TextField } from "@/shared/ui/forms/TextField";
 
@@ -19,7 +20,10 @@ type MemberAliasPanelProps = {
   createError?: string | undefined;
   createFormKey?: string | number | undefined;
   onDelete: (id: string) => Promise<void> | void;
+  onRetry: () => void;
   onUpdate: (id: string, request: { memberId: string; alias: string }) => Promise<void>;
+  refreshing: boolean;
+  stale: boolean;
 };
 
 export function MemberAliasPanel({
@@ -28,7 +32,10 @@ export function MemberAliasPanel({
   createError,
   createFormKey,
   onDelete,
+  onRetry,
   onUpdate,
+  refreshing,
+  stale,
 }: MemberAliasPanelProps) {
   const aliasesByMember = canonicalResultMembers.map((member) => ({
     member,
@@ -46,6 +53,14 @@ export function MemberAliasPanel({
           画像から読み取られる表記を正式なプレーヤー名に紐づけます。
         </p>
       </header>
+
+      <MasterResourceRefreshNotice
+        className="mt-3"
+        onRetry={onRetry}
+        resourceLabel="別名"
+        retrying={refreshing}
+        stale={stale}
+      />
 
       <form
         action={createAction}
@@ -68,28 +83,27 @@ export function MemberAliasPanel({
           required
         />
         <div className="flex items-end">
-          <Button pendingLabel="追加中" type="submit">
+          <Button pendingLabel="追加中" type="submit" variant="secondary">
             追加
           </Button>
         </div>
       </form>
 
-      <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <div className="mt-4 grid gap-x-4 gap-y-3 md:grid-cols-2 xl:grid-cols-4">
         {aliasesByMember.map(({ member, aliases: memberAliases }) => (
-          <div
-            className="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3"
-            key={member.memberId}
-          >
-            <h3 className="text-sm font-semibold text-[var(--color-text-primary)]">
-              {member.displayName}
+          <div className="min-w-0 border-t border-[var(--color-border)] pt-3" key={member.memberId}>
+            <h3 className="min-w-0 text-sm font-semibold text-[var(--color-text-primary)]">
+              <MemberSequenceLabel memberId={member.memberId}>
+                <span className="truncate">{member.displayName}</span>
+              </MemberSequenceLabel>
             </h3>
             {memberAliases.length === 0 ? (
-              <EmptyState className="mt-2" title="未登録" description="別名は未登録です。" />
+              <p className="mt-3 text-sm text-[var(--color-text-secondary)]">別名なし</p>
             ) : (
-              <ul className="mt-2 grid gap-2">
+              <ul className="mt-3 divide-y divide-[var(--color-border)] border-y border-[var(--color-border)]">
                 {memberAliases.map((alias) => (
                   <li
-                    className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2"
+                    className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 py-2"
                     key={alias.id}
                   >
                     <span className="min-w-0 truncate text-sm font-semibold text-[var(--color-text-primary)]">

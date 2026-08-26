@@ -39,6 +39,15 @@ export function HeldEventsListCard({
           className="min-w-0"
           transition={momoTransition}
         >
+          {data.scopeChanging ? (
+            <p
+              className="border-b border-[var(--color-border)] px-4 py-2 text-xs text-[var(--color-text-secondary)]"
+              role="status"
+            >
+              現在は{data.page}ページ目（{data.pageSize}件表示）です。{data.requestedPage}
+              ページ目（{data.requestedPageSize}件表示）を読み込んでいます。
+            </p>
+          ) : null}
           {data.loadFailed ? (
             <div className="p-4">
               <Notice tone="danger" title="開催履歴を読み込めません">
@@ -48,7 +57,6 @@ export function HeldEventsListCard({
                     pending={data.refreshing}
                     pendingLabel="再読み込み中"
                     size="sm"
-                    variant="secondary"
                     onClick={actions.onRetry}
                   >
                     開催履歴を再読み込み
@@ -74,7 +82,8 @@ export function HeldEventsListCard({
               {data.rows.map((event, index) => (
                 <HeldEventRow
                   key={event.id}
-                  deleteDisabled={actions.deletePending}
+                  actionsDisabled={data.scopeChanging}
+                  deleteDisabled={actions.deletePending || data.stale || data.scopeChanging}
                   event={event}
                   latest={data.page === 1 && index === 0}
                   returnTo={data.returnTo}
@@ -101,12 +110,14 @@ export function HeldEventsListCard({
 }
 
 function HeldEventRow({
+  actionsDisabled,
   deleteDisabled,
   event,
   latest,
   onDelete,
   returnTo,
 }: {
+  actionsDisabled: boolean;
   deleteDisabled: boolean;
   event: HeldEventResponse;
   latest: boolean;
@@ -115,6 +126,15 @@ function HeldEventRow({
 }) {
   const encodedId = encodeURIComponent(event.id);
   const canDelete = event.matchCount === 0 && event.draftCount === 0;
+  const detailLabel = `${heldEventViewModel.formatDateTime(event.heldAt)}の開催詳細`;
+  const detailContent = (
+    <>
+      <span className="truncate tabular-nums">
+        {heldEventViewModel.formatDateTime(event.heldAt)}
+      </span>
+      <ArrowRight aria-hidden="true" className="size-4 shrink-0" />
+    </>
+  );
   return (
     <li className="border-b border-[var(--color-border)] last:border-b-0">
       <article className="grid gap-3 px-4 py-3 lg:grid-cols-[minmax(15rem,1fr)_minmax(12rem,16rem)_auto] lg:items-center">
@@ -125,20 +145,28 @@ function HeldEventRow({
             </span>
           ) : null}
           <h3 className="min-w-0">
-            <Link
-              aria-label={`${heldEventViewModel.formatDateTime(event.heldAt)}の開催詳細`}
-              className="momo-heading inline-flex min-h-11 min-w-0 items-center gap-2 text-base font-semibold text-[var(--color-text-primary)] underline-offset-4 hover:underline"
-              to={withReturnTo(`/held-events/${encodedId}`, returnTo)}
-            >
-              <span className="truncate tabular-nums">
-                {heldEventViewModel.formatDateTime(event.heldAt)}
+            {actionsDisabled ? (
+              <span
+                aria-disabled="true"
+                aria-label={detailLabel}
+                className="momo-heading inline-flex min-h-11 min-w-0 cursor-not-allowed items-center gap-2 text-base font-semibold text-[var(--color-text-primary)] opacity-60"
+                role="link"
+              >
+                {detailContent}
               </span>
-              <ArrowRight aria-hidden="true" className="size-4 shrink-0" />
-            </Link>
+            ) : (
+              <Link
+                aria-label={detailLabel}
+                className="momo-heading inline-flex min-h-11 min-w-0 items-center gap-2 text-base font-semibold text-[var(--color-text-primary)] underline-offset-4 hover:underline"
+                to={withReturnTo(`/held-events/${encodedId}`, returnTo)}
+              >
+                {detailContent}
+              </Link>
+            )}
           </h3>
         </div>
 
-        <dl className="grid grid-cols-2 divide-x divide-[var(--color-border)] overflow-hidden rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)]">
+        <dl className="grid grid-cols-2 divide-x divide-[var(--color-border)] overflow-hidden rounded-[var(--radius-sm)] border border-[var(--color-border)]">
           <div className="min-w-0 px-3 py-2">
             <dt className="momo-label text-[var(--color-text-secondary)]">確定済み</dt>
             <dd className="mt-1 text-sm font-semibold tabular-nums">{event.matchCount}試合</dd>
@@ -153,6 +181,7 @@ function HeldEventRow({
           {latest ? (
             <LinkButton
               aria-label={`${heldEventViewModel.formatDateTime(event.heldAt)}の開催にOCR取り込み`}
+              disabled={actionsDisabled}
               icon={<Camera aria-hidden="true" className="size-4" />}
               size="sm"
               to={heldEventOcrCaptureHref(event.id, returnTo)}
@@ -163,6 +192,7 @@ function HeldEventRow({
           ) : null}
           <LinkButton
             aria-label={`${heldEventViewModel.formatDateTime(event.heldAt)}の試合を検索`}
+            disabled={actionsDisabled}
             icon={<ListFilter aria-hidden="true" className="size-4" />}
             size="sm"
             to={withReturnTo(`/matches?heldEventId=${encodedId}&sort=match_no_asc`, returnTo)}
@@ -172,6 +202,7 @@ function HeldEventRow({
           </LinkButton>
           <LinkButton
             aria-label={`${heldEventViewModel.formatDateTime(event.heldAt)}をCSV出力`}
+            disabled={actionsDisabled}
             icon={<Download aria-hidden="true" className="size-4" />}
             size="sm"
             to={withReturnTo(`/exports?heldEventId=${encodedId}&format=csv`, returnTo)}

@@ -11,8 +11,9 @@ import {
   Trophy,
 } from "lucide-react";
 import { motion } from "motion/react";
+import { useEffect, useRef } from "react";
 import type { ReactNode } from "react";
-import { Link, NavLink } from "react-router-dom";
+import { Link, NavLink, useLocation } from "react-router-dom";
 
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
@@ -42,15 +43,31 @@ type GlobalNavProps = {
   authDisplayName?: string | undefined;
   className?: string;
   isAuthenticated?: boolean;
+  isAccountLocked?: boolean;
   isAdmin?: boolean;
   isLogoutPending?: boolean;
+  logoutFailed?: boolean;
   items?: NavItem[];
   onLogout?: (() => void) | undefined;
 };
 
 function NavItemLink({ item }: { item: NavItem }) {
+  const anchorRef = useRef<HTMLAnchorElement>(null);
+  const location = useLocation();
+
+  useEffect(() => {
+    const anchor = anchorRef.current;
+    if (
+      anchor?.getAttribute("aria-current") === "page" &&
+      typeof anchor.scrollIntoView === "function"
+    ) {
+      anchor.scrollIntoView({ block: "nearest", inline: "nearest" });
+    }
+  }, [item.to, location.pathname]);
+
   return (
     <NavLink
+      ref={anchorRef}
       to={item.to}
       aria-label={item.label}
       className={({ isActive }) =>
@@ -75,7 +92,7 @@ function NavItemLink({ item }: { item: NavItem }) {
           <span aria-hidden="true" className="relative z-[var(--z-base)]">
             {item.icon}
           </span>
-          <span className="relative z-[var(--z-base)] max-[26rem]:sr-only">{item.label}</span>
+          <span className="relative z-[var(--z-base)]">{item.label}</span>
         </>
       )}
     </NavLink>
@@ -86,8 +103,10 @@ export function GlobalNav({
   authDisplayName,
   className,
   isAuthenticated = true,
+  isAccountLocked = false,
   isAdmin = false,
   isLogoutPending = false,
+  logoutFailed = false,
   items = defaultItems,
   onLogout,
 }: GlobalNavProps) {
@@ -98,6 +117,7 @@ export function GlobalNav({
 
   return (
     <nav
+      aria-label="グローバルナビゲーション"
       className={cn(
         "sticky top-0 z-[var(--z-sticky)] border-b border-[var(--color-border)] bg-[var(--color-surface)]",
         className,
@@ -107,7 +127,7 @@ export function GlobalNav({
         <div className="flex min-w-0 items-center justify-between gap-2 lg:contents">
           <div className="flex min-w-0 items-center gap-2 lg:col-start-1 lg:row-start-1">
             <Link
-              className="momo-pressable inline-flex min-h-11 items-center rounded-[var(--radius-xs)] bg-[var(--color-surface-subtle)] px-2 py-1 text-sm font-semibold text-[var(--color-text-primary)] hover:bg-[var(--color-surface-selected)] lg:min-h-9"
+              className="momo-pressable inline-flex min-h-11 items-center rounded-[var(--radius-xs)] px-1 py-1 text-sm font-semibold text-[var(--color-text-primary)] hover:text-[var(--color-action)] lg:min-h-9"
               to={isAuthenticated ? "/matches" : "/login"}
             >
               momo-result
@@ -119,29 +139,58 @@ export function GlobalNav({
             ) : null}
           </div>
           {isAuthenticated ? (
-            <div className="ml-auto flex min-w-0 items-center gap-2 lg:col-start-3 lg:row-start-1 lg:justify-end">
-              <p className="max-w-28 truncate text-xs text-[var(--color-text-secondary)]">
-                {authDisplayName ?? "ログイン中"}
-              </p>
-              <Button
-                icon={<LogOut className="size-4" />}
-                onClick={onLogout}
-                pending={isLogoutPending}
-                pendingLabel="ログアウト中"
-                size="sm"
-                variant="secondary"
-              >
-                ログアウト
-              </Button>
+            <div className="ml-auto grid max-w-full min-w-0 justify-items-end gap-1 lg:col-start-3 lg:row-start-1">
+              <div className="flex max-w-full min-w-0 items-center justify-end gap-2">
+                <p className="hidden max-w-28 truncate text-xs text-[var(--color-text-secondary)] min-[24rem]:block">
+                  {authDisplayName ?? "ログイン中"}
+                </p>
+                {isAccountLocked ? (
+                  <span className="shrink-0 rounded-[var(--radius-xs)] border border-[var(--color-border)] px-2 py-1 text-xs font-medium text-[var(--color-text-secondary)]">
+                    アカウント固定
+                  </span>
+                ) : (
+                  <Button
+                    aria-describedby={logoutFailed ? "global-nav-logout-error" : undefined}
+                    aria-label={logoutFailed ? "ログアウトを再試行" : undefined}
+                    className="shrink-0"
+                    icon={<LogOut className="size-4" />}
+                    onClick={onLogout}
+                    pending={isLogoutPending}
+                    pendingLabel="ログアウト中"
+                    size="sm"
+                    variant={logoutFailed ? "primary" : "secondary"}
+                  >
+                    {logoutFailed ? "再試行" : "ログアウト"}
+                  </Button>
+                )}
+              </div>
+              {logoutFailed && !isAccountLocked ? (
+                <p
+                  className="max-w-72 text-right text-xs leading-5 break-words text-[var(--color-danger)]"
+                  id="global-nav-logout-error"
+                  role="alert"
+                >
+                  <span className="font-semibold">ログアウトできませんでした。</span>
+                  ログイン状態と表示中の内容は保持しています。通信状態を確認して再試行してください。
+                </p>
+              ) : null}
             </div>
           ) : null}
         </div>
-        <div className="-mx-3 flex min-w-0 [scrollbar-width:none] items-center gap-2 overflow-x-auto px-3 pb-1 lg:col-start-2 lg:row-start-1 lg:mx-0 lg:flex-wrap lg:justify-center lg:overflow-visible lg:px-0 lg:pb-0 [&::-webkit-scrollbar]:hidden">
+        <div
+          className="-mx-3 flex min-w-0 [scrollbar-width:none] items-center gap-2 overflow-x-auto px-3 pb-1 lg:col-start-2 lg:row-start-1 lg:mx-0 lg:flex-wrap lg:justify-center lg:overflow-visible lg:px-0 lg:pb-0 [&::-webkit-scrollbar]:hidden"
+          data-nav-scroll
+        >
           {primaryItems.map((item) => (
             <NavItemLink key={item.to} item={item} />
           ))}
           {managementItems.length > 0 ? (
-            <div className="ml-1 flex min-w-0 shrink-0 items-center gap-2 border-l border-[var(--color-border)] pl-2">
+            <div
+              aria-label="管理"
+              className="ml-1 flex min-w-0 shrink-0 items-center gap-2 border-l border-[var(--color-border)] pl-2"
+              role="group"
+            >
+              <span className="momo-label shrink-0 text-[var(--color-text-secondary)]">管理</span>
               {managementItems.map((item) => (
                 <NavItemLink key={item.to} item={item} />
               ))}

@@ -1,4 +1,5 @@
 import { MasterDeleteDialog, MasterEditDialog } from "@/features/masters/MasterActionDialogs";
+import { MasterResourceRefreshNotice } from "@/features/masters/MasterResourceRefreshNotice";
 import { layoutFamilies, layoutFamilyLabels } from "@/shared/api/enums";
 import type { LayoutFamily } from "@/shared/api/enums";
 import type { GameTitleResponse } from "@/shared/api/masters";
@@ -7,8 +8,6 @@ import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { ChoiceList } from "@/shared/ui/forms/ChoiceList";
 import { SelectField } from "@/shared/ui/forms/SelectField";
 import { TextField } from "@/shared/ui/forms/TextField";
-
-const labelClass = "text-xs font-semibold text-[var(--color-text-secondary)]";
 
 type GameTitleListItem = GameTitleResponse & { pending?: boolean };
 
@@ -22,20 +21,26 @@ type GameTitleListProps = {
   create: MasterCreateBinding;
   defaultLayoutFamily: LayoutFamily;
   items: GameTitleListItem[];
+  onRetry: () => void;
   onDelete: (id: string) => Promise<void> | void;
   onUpdate: (id: string, request: { name: string; layoutFamily: string }) => Promise<void>;
   onSelect: (id: string) => void;
   selectedGameTitleId: string;
+  refreshing: boolean;
+  stale: boolean;
 };
 
 export function GameTitleList({
   create,
   defaultLayoutFamily,
   items,
+  onRetry,
   onDelete,
   onUpdate,
   onSelect,
   selectedGameTitleId,
+  refreshing,
+  stale,
 }: GameTitleListProps) {
   const choices = items.map((item) => {
     const isPending = item.pending === true;
@@ -78,12 +83,19 @@ export function GameTitleList({
   return (
     <section className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
       <header>
-        <p className={labelClass}>作品</p>
-        <h2 className="mt-1 text-lg font-semibold text-[var(--color-text-primary)]">作品</h2>
+        <h2 className="text-lg font-semibold text-[var(--color-text-primary)]">作品</h2>
         <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
           作品を選ぶと、対応するマップとシーズンを編集できます。
         </p>
       </header>
+
+      <MasterResourceRefreshNotice
+        className="mt-3"
+        onRetry={onRetry}
+        resourceLabel="作品"
+        retrying={refreshing}
+        stale={stale}
+      />
 
       {items.length === 0 ? (
         <EmptyState
@@ -122,7 +134,7 @@ export function GameTitleList({
           }))}
         />
 
-        <Button pendingLabel="追加中" type="submit">
+        <Button pendingLabel="追加中" type="submit" variant="secondary">
           作品を追加
         </Button>
       </form>

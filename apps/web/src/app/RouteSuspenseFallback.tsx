@@ -31,7 +31,7 @@ export function routeLoadingPresentation(pathname: string): RouteLoadingPresenta
     return { kind: "catalog", width: "standard" };
   }
   if (pathname === "/exports") {
-    return { kind: "split", width: "narrow" };
+    return { kind: "form", width: "narrow" };
   }
   return { kind: "generic", width: "standard" };
 }

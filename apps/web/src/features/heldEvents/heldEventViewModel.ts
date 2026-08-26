@@ -38,10 +38,15 @@ export type HeldEventsListModel = {
   loadFailed: boolean;
   loading: boolean;
   page: number;
+  pageSize: number;
   pagination: HeldEventListResponse["pagination"] | undefined;
   refreshing: boolean;
+  requestedPage: number;
+  requestedPageSize: number;
   returnTo: string;
   rows: HeldEventResponse[];
+  scopeChanging: boolean;
+  stale: boolean;
 };
 
 export function currentLocalIsoMinute(): string {

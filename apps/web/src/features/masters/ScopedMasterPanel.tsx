@@ -27,10 +27,13 @@ type ScopedMasterLabels = {
 
 type ScopedMasterList = {
   error?: string | undefined;
+  hasData: boolean;
   items: ScopedMasterItem[];
+  loadFailed: boolean;
   loading?: boolean | undefined;
   onRetry: () => void;
   retrying?: boolean | undefined;
+  stale: boolean;
 };
 
 type ScopedMasterPanelProps = {
@@ -39,10 +42,7 @@ type ScopedMasterPanelProps = {
   disabledReason?: string | undefined;
   labels: ScopedMasterLabels;
   list: ScopedMasterList;
-  selectedGameTitleName?: string | undefined;
 };
-
-const labelClass = "text-xs font-semibold text-[var(--color-text-secondary)]";
 
 export function ScopedMasterPanel({
   actions,
@@ -50,16 +50,16 @@ export function ScopedMasterPanel({
   disabledReason,
   labels,
   list,
-  selectedGameTitleName,
 }: ScopedMasterPanelProps) {
   const loading = list.loading ?? false;
-  const loadBlocked = Boolean(list.error && list.items.length === 0);
+  const loadBlocked = list.loadFailed && !list.hasData;
+  const showStaleError = list.stale && list.hasData && Boolean(list.error);
   const retryAction = (
     <Button
       pending={Boolean(list.retrying)}
       pendingLabel="再読み込み中"
       size="sm"
-      variant="secondary"
+      variant={loadBlocked ? "primary" : "secondary"}
       onClick={list.onRetry}
     >
       {labels.itemLabel}を再読み込み
@@ -67,16 +67,13 @@ export function ScopedMasterPanel({
   );
   return (
     <section className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
-      <header>
-        <p className={labelClass}>{labels.itemLabel}</p>
-        <h2 className="mt-1 text-lg font-semibold text-[var(--color-text-primary)]">
-          {labels.title}
-        </h2>
-        <p className="mt-1 line-clamp-2 text-sm text-[var(--color-text-secondary)]">
-          {selectedGameTitleName
-            ? `選択中の作品: ${selectedGameTitleName}`
-            : "作品を選択すると一覧と追加フォームが有効になります。"}
-        </p>
+      <header className="flex items-baseline justify-between gap-3">
+        <h3 className="text-lg font-semibold text-[var(--color-text-primary)]">{labels.title}</h3>
+        {!loading && !loadBlocked ? (
+          <p className="shrink-0 text-xs text-[var(--color-text-secondary)] tabular-nums">
+            {list.items.length}件
+          </p>
+        ) : null}
       </header>
 
       {loading ? (
@@ -94,60 +91,60 @@ export function ScopedMasterPanel({
           <p>{list.error}</p>
           <div className="mt-3">{retryAction}</div>
         </Notice>
-      ) : list.items.length === 0 ? (
-        <EmptyState
-          className="mt-3"
-          title="登録はまだありません"
-          description={labels.emptyDescription}
-        />
       ) : (
         <div className="mt-3 grid gap-3">
-          {list.error ? (
+          {showStaleError ? (
             <Notice tone="warning" title={`最新の${labels.itemLabel}を取得できません`}>
               <p>直前に取得した内容を表示しています。</p>
               <div className="mt-3">{retryAction}</div>
             </Notice>
           ) : null}
-          <ul className="grid gap-2">
-            {list.items.map((item) => {
-              const isPending = item.pending === true;
-              return (
-                <li
-                  key={item.id}
-                  className={`grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-3 py-2 ${
-                    isPending ? "opacity-60" : ""
-                  }`}
-                  aria-busy={isPending || undefined}
-                >
-                  <div className="min-w-0">
-                    <p className="line-clamp-2 text-sm font-semibold text-[var(--color-text-primary)]">
-                      {item.name}
-                      {isPending ? (
-                        <span className="ml-2 text-xs font-normal text-[var(--color-text-secondary)]">
-                          (追加中…)
-                        </span>
-                      ) : null}
-                    </p>
-                  </div>
-                  {isPending ? null : (
-                    <div className="flex items-center">
-                      <MasterEditDialog
-                        initialName={item.name}
-                        label={labels.itemLabel}
-                        onSave={async (values) => actions.onUpdate(item.id, { name: values.name })}
-                        title={`${labels.itemLabel}を編集`}
-                      />
-                      <MasterDeleteDialog
-                        label={labels.itemLabel}
-                        name={item.name}
-                        onDelete={() => actions.onDelete(item.id)}
-                      />
+          {list.items.length === 0 ? (
+            <EmptyState title="登録はまだありません" description={labels.emptyDescription} />
+          ) : (
+            <ul className="divide-y divide-[var(--color-border)] border-y border-[var(--color-border)]">
+              {list.items.map((item) => {
+                const isPending = item.pending === true;
+                return (
+                  <li
+                    key={item.id}
+                    className={`grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 py-2 ${
+                      isPending ? "opacity-60" : ""
+                    }`}
+                    aria-busy={isPending || undefined}
+                  >
+                    <div className="min-w-0">
+                      <p className="line-clamp-2 text-sm font-semibold text-[var(--color-text-primary)]">
+                        {item.name}
+                        {isPending ? (
+                          <span className="ml-2 text-xs font-normal text-[var(--color-text-secondary)]">
+                            (追加中…)
+                          </span>
+                        ) : null}
+                      </p>
                     </div>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
+                    {isPending ? null : (
+                      <div className="flex items-center">
+                        <MasterEditDialog
+                          initialName={item.name}
+                          label={labels.itemLabel}
+                          onSave={async (values) =>
+                            actions.onUpdate(item.id, { name: values.name })
+                          }
+                          title={`${labels.itemLabel}を編集`}
+                        />
+                        <MasterDeleteDialog
+                          label={labels.itemLabel}
+                          name={item.name}
+                          onDelete={() => actions.onDelete(item.id)}
+                        />
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
         </div>
       )}
 

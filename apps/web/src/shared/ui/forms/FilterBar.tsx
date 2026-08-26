@@ -46,8 +46,8 @@ export function FilterBar({
       aria-label={ariaLabel}
       className={cn("min-w-0 border-y border-[var(--color-border)] py-4", className)}
     >
-      <div className="grid min-w-0 gap-4">
-        <div className="grid min-w-0 gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+      <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4">
+        <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
           <div className="min-w-0">{primary}</div>
           {resetAction || action ? (
             <div className="flex min-w-0 flex-wrap items-center justify-end gap-1">

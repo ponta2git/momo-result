@@ -70,9 +70,9 @@ export function heldEventScopeLabel(
   names: HeldEventMasterNames,
 ): string {
   return [
-    names.gameTitles.get(match.gameTitleId) ?? match.gameTitleId,
-    names.seasons.get(match.seasonMasterId) ?? match.seasonMasterId,
-    names.maps.get(match.mapMasterId) ?? match.mapMasterId,
+    names.gameTitles.get(match.gameTitleId) ?? "作品名未取得",
+    names.seasons.get(match.seasonMasterId) ?? "シーズン名未取得",
+    names.maps.get(match.mapMasterId) ?? "マップ名未取得",
   ].join(" / ");
 }
 
@@ -81,11 +81,11 @@ export function heldEventDraftScopeLabel(
   names: HeldEventMasterNames,
 ): string | undefined {
   const labels = [
-    draft.gameTitleId ? (names.gameTitles.get(draft.gameTitleId) ?? draft.gameTitleId) : undefined,
+    draft.gameTitleId ? (names.gameTitles.get(draft.gameTitleId) ?? "作品名未取得") : undefined,
     draft.seasonMasterId
-      ? (names.seasons.get(draft.seasonMasterId) ?? draft.seasonMasterId)
+      ? (names.seasons.get(draft.seasonMasterId) ?? "シーズン名未取得")
       : undefined,
-    draft.mapMasterId ? (names.maps.get(draft.mapMasterId) ?? draft.mapMasterId) : undefined,
+    draft.mapMasterId ? (names.maps.get(draft.mapMasterId) ?? "マップ名未取得") : undefined,
   ].filter(Boolean);
   return labels.length > 0 ? labels.join(" / ") : undefined;
 }

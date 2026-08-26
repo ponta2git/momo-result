@@ -26,35 +26,35 @@ export function useAdminAccountsPageController() {
 
   const accountsQuery = useQuery(adminLoginAccountsQueryOptions());
 
-  const [createState, createAction] = useActionState<typeof initialCreateAccountState, FormData>(
-    async (previous, formData) => {
-      const playerMemberId = String(formData.get("playerMemberId") ?? "");
-      const request: CreateLoginAccountRequest = {
-        discordUserId: String(formData.get("discordUserId") ?? ""),
-        displayName: String(formData.get("displayName") ?? ""),
-        isAdmin: formData.get("isAdmin") === "on",
-        loginEnabled: formData.get("loginEnabled") === "on",
-        ...(playerMemberId ? { playerMemberId } : {}),
-      };
+  const [createState, createAction, createPending] = useActionState<
+    typeof initialCreateAccountState,
+    FormData
+  >(async (previous, formData) => {
+    const playerMemberId = String(formData.get("playerMemberId") ?? "");
+    const request: CreateLoginAccountRequest = {
+      discordUserId: String(formData.get("discordUserId") ?? ""),
+      displayName: String(formData.get("displayName") ?? ""),
+      isAdmin: formData.get("isAdmin") === "on",
+      loginEnabled: formData.get("loginEnabled") === "on",
+      ...(playerMemberId ? { playerMemberId } : {}),
+    };
 
-      try {
-        await runIdempotentMutation(
-          idempotencyKeys,
-          "adminAccounts.createLoginAccount",
-          request,
-          (options) => createLoginAccount(request, options),
-        );
-        await invalidateAdminAccountCaches(queryClient);
-        return { error: "", version: previous.version + 1 };
-      } catch (error) {
-        return {
-          error: formatApiError(error, "ログインアカウントの作成に失敗しました"),
-          version: previous.version,
-        };
-      }
-    },
-    initialCreateAccountState,
-  );
+    try {
+      await runIdempotentMutation(
+        idempotencyKeys,
+        "adminAccounts.createLoginAccount",
+        request,
+        (options) => createLoginAccount(request, options),
+      );
+      await invalidateAdminAccountCaches(queryClient);
+      return { error: "", version: previous.version + 1 };
+    } catch (error) {
+      return {
+        error: formatApiError(error, "ログインアカウントの作成に失敗しました"),
+        version: previous.version,
+      };
+    }
+  }, initialCreateAccountState);
 
   const updateMutation = useMutation({
     mutationFn: ({
@@ -72,6 +72,7 @@ export function useAdminAccountsPageController() {
 
   const error = shouldShowQueryError(accountsQuery) ? accountsQuery.error : undefined;
   const normalizedError = error ? normalizeUnknownApiError(error) : undefined;
+  const hasAccountsData = accountsQuery.data !== undefined;
 
   return {
     accounts: accountsQuery.data?.items ?? [],
@@ -79,7 +80,9 @@ export function useAdminAccountsPageController() {
     accountsLoadFailed: shouldShowBlockingQueryError(accountsQuery),
     accountsLoading: isInitialQueryLoading(accountsQuery),
     accountsRefreshing: accountsQuery.isFetching,
+    accountsStale: Boolean(normalizedError && hasAccountsData),
     createAction,
+    createPending,
     createState,
     retryAccounts: () => void accountsQuery.refetch(),
     updateMutation,

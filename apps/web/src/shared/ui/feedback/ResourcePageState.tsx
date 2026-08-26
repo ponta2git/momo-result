@@ -5,6 +5,7 @@ import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
 import type { PageFrameWidth } from "@/shared/ui/layout/PageFrame";
+import { PageHeader } from "@/shared/ui/layout/PageHeader";
 
 type ResourcePageStateBase = {
   backHref: string;
@@ -34,6 +35,7 @@ export type ResourcePageStateProps = ResourceErrorState | ResourceNotFoundState;
 export function ResourcePageState(props: ResourcePageStateProps) {
   return (
     <PageFrame className="gap-4" width={props.width ?? "wide"}>
+      <PageHeader title={props.title} />
       <Notice
         action={
           props.kind === "error" ? (
@@ -41,7 +43,6 @@ export function ResourcePageState(props: ResourcePageStateProps) {
               pending={props.retrying ?? false}
               pendingLabel="再読み込み中"
               size="sm"
-              variant="secondary"
               onClick={props.onRetry}
             >
               {props.retryLabel}
@@ -49,14 +50,13 @@ export function ResourcePageState(props: ResourcePageStateProps) {
           ) : undefined
         }
         tone={props.kind === "not-found" ? "warning" : "danger"}
-        title={props.title}
       >
         <p>{props.description}</p>
       </Notice>
       <LinkButton
         icon={<ArrowLeft aria-hidden="true" className="size-4" />}
         to={props.backHref}
-        variant="secondary"
+        variant={props.kind === "not-found" ? "primary" : "secondary"}
       >
         {props.backLabel}
       </LinkButton>

@@ -10,6 +10,9 @@ export function LoginPage() {
   const [searchParams] = useSearchParams();
   const reason = searchParams.get("reason");
   const next = sanitizeAppRedirectPath(searchParams.get("next"));
+  const loginDescription = import.meta.env.DEV
+    ? "操作用アカウントを選ぶと、試合一覧、OCR、CSV/TSV出力を使えます。"
+    : "Discordでログインすると、試合一覧、OCR、CSV/TSV出力を使えます。";
 
   return (
     <>
@@ -26,7 +29,7 @@ export function LoginPage() {
             <header>
               <h1 className="text-2xl font-semibold text-[var(--color-text-primary)]">ログイン</h1>
               <p className="momo-copy mt-2 text-sm text-[var(--color-text-secondary)]">
-                Discordでログインすると、試合一覧、OCR、CSV/TSV出力を使えます。
+                {loginDescription}
               </p>
             </header>
 
@@ -43,9 +46,11 @@ export function LoginPage() {
               loginNextPath={next}
             />
 
-            <p className="momo-copy text-xs text-[var(--color-text-secondary)]">
-              別のDiscordアカウントを使う場合は、Discord側でログアウトするか、シークレットウィンドウで開きます。
-            </p>
+            {import.meta.env.DEV ? null : (
+              <p className="momo-copy text-xs text-[var(--color-text-secondary)]">
+                別のDiscordアカウントを使う場合は、Discord側でログアウトするか、シークレットウィンドウで開きます。
+              </p>
+            )}
           </section>
         </PageFrame>
       </main>

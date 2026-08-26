@@ -1,6 +1,6 @@
 import { QueryErrorResetBoundary } from "@tanstack/react-query";
-import { Suspense, useCallback } from "react";
-import type { FocusEvent, MouseEvent, PointerEvent } from "react";
+import { Suspense, useCallback, useLayoutEffect, useState } from "react";
+import type { FocusEvent, MouseEvent, PointerEvent, ReactNode } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 
 import { preloadRouteForPath } from "@/app/routeModules";
@@ -30,10 +30,38 @@ function shouldPreloadAnchor(anchor: HTMLAnchorElement): boolean {
   return true;
 }
 
+function RouteQueryResetBridge({
+  children,
+  pathname,
+  reset,
+  resetKey,
+}: {
+  children: ReactNode;
+  pathname: string;
+  reset: () => void;
+  resetKey: string;
+}) {
+  const [readyKey, setReadyKey] = useState(resetKey);
+
+  useLayoutEffect(() => {
+    if (readyKey === resetKey) {
+      return;
+    }
+    reset();
+    setReadyKey(resetKey);
+  }, [readyKey, reset, resetKey]);
+
+  if (readyKey !== resetKey) {
+    return <RouteSuspenseFallback pathname={pathname} />;
+  }
+
+  return children;
+}
+
 export function AppShell() {
   const auth = useAuth();
   const location = useLocation();
-  const routeResetKey = `${location.pathname}${location.search}${location.hash}`;
+  const routeResetKey = location.pathname;
 
   const handlePreloadIntent = useCallback(
     (event: FocusEvent<HTMLElement> | PointerEvent<HTMLElement>) => {
@@ -89,9 +117,11 @@ export function AppShell() {
       >
         <GlobalNav
           authDisplayName={auth.auth?.displayName}
+          isAccountLocked={auth.isAccountLocked}
           isAuthenticated={auth.isAuthenticated}
           isAdmin={auth.auth?.isAdmin ?? false}
           isLogoutPending={auth.isLogoutPending}
+          logoutFailed={Boolean(auth.logoutError)}
           onLogout={auth.logout}
         />
       </div>
@@ -104,14 +134,20 @@ export function AppShell() {
       >
         <QueryErrorResetBoundary>
           {({ reset }) => (
-            <RouteErrorBoundary onReset={reset} resetKey={routeResetKey}>
-              <Suspense fallback={<RouteSuspenseFallback pathname={location.pathname} />}>
-                {/* Route availability must not depend on an exit-animation lifecycle. */}
-                <div className="grid min-w-0">
-                  <Outlet />
-                </div>
-              </Suspense>
-            </RouteErrorBoundary>
+            <RouteQueryResetBridge
+              pathname={location.pathname}
+              reset={reset}
+              resetKey={routeResetKey}
+            >
+              <RouteErrorBoundary onReset={reset} resetKey={routeResetKey}>
+                <Suspense fallback={<RouteSuspenseFallback pathname={location.pathname} />}>
+                  {/* Route availability must not depend on an exit-animation lifecycle. */}
+                  <div className="grid min-w-0">
+                    <Outlet />
+                  </div>
+                </Suspense>
+              </RouteErrorBoundary>
+            </RouteQueryResetBridge>
           )}
         </QueryErrorResetBoundary>
       </main>

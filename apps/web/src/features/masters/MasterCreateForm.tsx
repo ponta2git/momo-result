@@ -40,7 +40,7 @@ export function MasterCreateForm({
         placeholder={placeholder}
         type="text"
       />
-      <Button disabled={disabled} pendingLabel={pendingLabel} type="submit" variant="primary">
+      <Button disabled={disabled} pendingLabel={pendingLabel} type="submit" variant="secondary">
         {buttonLabel}
       </Button>
     </form>

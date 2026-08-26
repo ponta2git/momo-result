@@ -1,6 +1,6 @@
 import { QueryClientProvider } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
@@ -42,7 +42,7 @@ describe("HeldEventDetailPage", () => {
       http.get("/api/held-events/:heldEventId", () =>
         HttpResponse.json(
           makeHeldEventDetailResponse({
-            draftCount: 1,
+            draftCount: 2,
             drafts: [
               {
                 gameTitleId: "gt_momotetsu_2",
@@ -52,6 +52,12 @@ describe("HeldEventDetailPage", () => {
                 seasonMasterId: "season_current",
                 status: "needs_review",
                 updatedAt: "2026-01-01T01:00:00.000Z",
+              },
+              {
+                matchDraftId: "draft-manual-2",
+                matchNoInEvent: 3,
+                status: "ocr_failed",
+                updatedAt: "2026-01-01T02:00:00.000Z",
               },
             ],
             matchCount: 1,
@@ -82,7 +88,7 @@ describe("HeldEventDetailPage", () => {
                 seasonMasterId: "season_current",
               },
             ],
-            nextMatchNo: 3,
+            nextMatchNo: 4,
           }),
         ),
       ),
@@ -92,10 +98,19 @@ describe("HeldEventDetailPage", () => {
 
     expect(await screen.findByRole("heading", { name: "この開催の戦績" })).toBeInTheDocument();
     expect(await screen.findAllByText("桃太郎電鉄2 / 今シーズン / 東日本編")).toHaveLength(2);
-    expect(screen.getByRole("link", { name: "確認事項を直す" })).toHaveAttribute(
+    const primaryDraftAction = screen.getByRole("link", { name: "確認事項を直す" });
+    expect(primaryDraftAction).toHaveAttribute(
       "href",
       "/review/draft-review-1?returnTo=%2Fheld-events%2Fheld-1",
     );
+    expect(primaryDraftAction).toHaveClass("bg-[var(--color-action)]");
+    expect(screen.getByRole("link", { name: "手入力で続ける" })).toHaveClass(
+      "bg-[var(--color-surface)]",
+    );
+    expect(screen.getByRole("link", { name: "OCR取り込み" })).toHaveClass(
+      "bg-[var(--color-surface)]",
+    );
+    expect(screen.getByRole("link", { name: "手入力" })).toHaveClass("bg-[var(--color-surface)]");
     expect(screen.getByRole("region", { name: "ぽんたの開催戦績" })).toHaveTextContent("1勝");
     const results = screen.getByRole("list", { name: "第1試合の順位と総資産" });
     expect(within(results).getByText("1億2345万円")).toBeInTheDocument();
@@ -104,6 +119,16 @@ describe("HeldEventDetailPage", () => {
         .getAllByRole("listitem")
         .map((item) => item.textContent),
     ).toEqual([expect.stringContaining("いーゆー"), expect.stringContaining("ぽんた")]);
+    expect(
+      [...results.querySelectorAll<HTMLElement>("[data-member-sequence]")].map(
+        (label) => label.dataset["memberSequence"],
+      ),
+    ).toEqual(["1", "2"]);
+    expect(
+      within(results)
+        .getAllByText(/^[12]位$/u)
+        .map((badge) => badge.textContent),
+    ).toEqual(["2位", "1位"]);
     expect(screen.getByRole("link", { name: "第1試合の結果を見る" })).toHaveAttribute(
       "href",
       "/matches/match-1?returnTo=%2Fheld-events%2Fheld-1",
@@ -116,7 +141,7 @@ describe("HeldEventDetailPage", () => {
       "href",
       "/matches?heldEventId=held-1&sort=match_no_asc&returnTo=%2Fheld-events%2Fheld-1",
     );
-    expect(screen.getByText("第3試合")).toBeInTheDocument();
+    expect(screen.getByText("第4試合")).toBeInTheDocument();
   });
 
   it("offers event-scoped capture actions before the first confirmed match", async () => {
@@ -125,14 +150,65 @@ describe("HeldEventDetailPage", () => {
     expect(
       await screen.findByRole("heading", { name: "確定済みの試合はまだありません" }),
     ).toBeInTheDocument();
-    expect(screen.getAllByRole("link", { name: "OCR取り込み" })[0]).toHaveAttribute(
+    const ocrLink = await screen.findByRole("link", { name: "OCR取り込み" });
+    expect(ocrLink).toHaveAttribute(
       "href",
       "/ocr/new?heldEventId=held-1&returnTo=%2Fheld-events%2Fheld-1",
     );
-    expect(screen.getAllByRole("link", { name: "手入力" })[0]).toHaveAttribute(
+    expect(ocrLink).toHaveClass("bg-[var(--color-action)]");
+    const manualLink = screen.getByRole("link", { name: "手入力" });
+    expect(manualLink).toHaveAttribute(
       "href",
       "/matches/new?heldEventId=held-1&returnTo=%2Fheld-events%2Fheld-1",
     );
+    expect(manualLink).toHaveClass("bg-[var(--color-surface)]");
+  });
+
+  it("keeps confirmed results as the focal content without promoting a new-match action", async () => {
+    server.use(
+      http.get("/api/held-events/:heldEventId", () =>
+        HttpResponse.json(
+          makeHeldEventDetailResponse({
+            matchCount: 1,
+            matches: [
+              {
+                gameTitleId: "gt_momotetsu_2",
+                mapMasterId: "map_east",
+                matchId: "match-confirmed-1",
+                matchNoInEvent: 1,
+                ownerMemberId: "member_ponta",
+                playedAt: "2026-01-01T00:00:00.000Z",
+                players: [
+                  {
+                    memberId: "member_ponta",
+                    playOrder: 1,
+                    rank: 1,
+                    revenueManYen: 100,
+                    totalAssetsManYen: 12_345,
+                  },
+                ],
+                seasonMasterId: "season_current",
+              },
+            ],
+            nextMatchNo: 2,
+          }),
+        ),
+      ),
+    );
+
+    renderPage();
+
+    expect(await screen.findByRole("heading", { name: "この開催の戦績" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "第1試合の結果を見る" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "OCR取り込み" })).toHaveClass(
+      "bg-[var(--color-surface)]",
+    );
+    expect(screen.getByRole("link", { name: "手入力" })).toHaveClass("bg-[var(--color-surface)]");
+    expect(
+      screen
+        .getAllByRole("link")
+        .filter((link) => link.classList.contains("bg-[var(--color-action)]")),
+    ).toHaveLength(0);
   });
 
   it("distinguishes a missing event from a transient load failure", async () => {
@@ -181,5 +257,163 @@ describe("HeldEventDetailPage", () => {
       await screen.findByRole("heading", { name: "確定済みの試合はまだありません" }),
     ).toBeInTheDocument();
     expect(attempts).toBe(2);
+  });
+
+  it("retains the detail and its safe operations when a manual refresh fails", async () => {
+    let attempts = 0;
+    server.use(
+      http.get("/api/held-events/:heldEventId", () => {
+        attempts += 1;
+        return attempts === 2
+          ? HttpResponse.json({ detail: "temporarily unavailable" }, { status: 500 })
+          : HttpResponse.json(makeHeldEventDetailResponse());
+      }),
+    );
+
+    renderPage();
+
+    expect(
+      await screen.findByRole("heading", { name: "確定済みの試合はまだありません" }),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "開催詳細を更新" }));
+
+    expect(await screen.findByText("開催詳細を更新できませんでした")).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "確定済みの試合はまだありません" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "OCR取り込み" })).toHaveAttribute(
+      "href",
+      "/ocr/new?heldEventId=held-1&returnTo=%2Fheld-events%2Fheld-1",
+    );
+
+    await user.click(screen.getByRole("button", { name: "開催詳細を再取得" }));
+
+    await waitFor(() =>
+      expect(screen.queryByText("開催詳細を更新できませんでした")).not.toBeInTheDocument(),
+    );
+    expect(attempts).toBe(3);
+  });
+
+  it("replaces stale detail with the deleted state when a refresh confirms a 404", async () => {
+    let attempts = 0;
+    server.use(
+      http.get("/api/held-events/:heldEventId", () => {
+        attempts += 1;
+        return attempts === 1
+          ? HttpResponse.json(makeHeldEventDetailResponse())
+          : HttpResponse.json(
+              {
+                code: "NOT_FOUND",
+                detail: "held event not found",
+                status: 404,
+                title: "Not Found",
+                type: "about:blank",
+              },
+              { status: 404 },
+            );
+      }),
+    );
+
+    renderPage();
+
+    expect(
+      await screen.findByRole("heading", { name: "確定済みの試合はまだありません" }),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "開催詳細を更新" }));
+
+    expect(await screen.findByText("開催履歴が見つかりません")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "OCR取り込み" })).not.toBeInTheDocument();
+  });
+
+  it("uses honest fallback labels and retries failed auxiliary master names in place", async () => {
+    let shouldFail = true;
+    server.use(
+      http.get("/api/game-titles", () =>
+        shouldFail
+          ? HttpResponse.json({ detail: "temporarily unavailable" }, { status: 500 })
+          : HttpResponse.json({
+              items: [
+                {
+                  createdAt: "2026-01-01T00:00:00.000Z",
+                  displayOrder: 1,
+                  id: "gt_momotetsu_2",
+                  layoutFamily: "momotetsu_2",
+                  name: "桃太郎電鉄2",
+                },
+              ],
+            }),
+      ),
+      http.get("/api/season-masters", () =>
+        shouldFail
+          ? HttpResponse.json({ detail: "temporarily unavailable" }, { status: 500 })
+          : HttpResponse.json({
+              items: [
+                {
+                  createdAt: "2026-01-01T00:00:00.000Z",
+                  displayOrder: 1,
+                  gameTitleId: "gt_momotetsu_2",
+                  id: "season_current",
+                  name: "今シーズン",
+                },
+              ],
+            }),
+      ),
+      http.get("/api/map-masters", () =>
+        shouldFail
+          ? HttpResponse.json({ detail: "temporarily unavailable" }, { status: 500 })
+          : HttpResponse.json({
+              items: [
+                {
+                  createdAt: "2026-01-01T00:00:00.000Z",
+                  displayOrder: 1,
+                  gameTitleId: "gt_momotetsu_2",
+                  id: "map_east",
+                  name: "東日本編",
+                },
+              ],
+            }),
+      ),
+      http.get("/api/held-events/:heldEventId", () =>
+        HttpResponse.json(
+          makeHeldEventDetailResponse({
+            matchCount: 1,
+            matches: [
+              {
+                gameTitleId: "gt_momotetsu_2",
+                mapMasterId: "map_east",
+                matchId: "match-1",
+                matchNoInEvent: 1,
+                ownerMemberId: "member_ponta",
+                playedAt: "2026-01-01T00:00:00.000Z",
+                players: [],
+                seasonMasterId: "season_current",
+              },
+            ],
+          }),
+        ),
+      ),
+    );
+
+    renderPage();
+
+    expect(await screen.findByText("表示名を取得できませんでした")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /取得済みの表示名はそのまま使い、取得できない箇所だけ「未取得」と表示しています。/u,
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("作品名未取得 / シーズン名未取得 / マップ名未取得"),
+    ).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/gt_|season_|map_/u);
+    expect(screen.getByRole("link", { name: "第1試合の結果を見る" })).toBeInTheDocument();
+
+    shouldFail = false;
+    await user.click(screen.getByRole("button", { name: "表示名を再取得" }));
+
+    expect(await screen.findByText("桃太郎電鉄2 / 今シーズン / 東日本編")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.queryByText("表示名を取得できませんでした")).not.toBeInTheDocument(),
+    );
   });
 });

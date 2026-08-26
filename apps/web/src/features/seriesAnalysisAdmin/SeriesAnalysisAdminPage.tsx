@@ -55,7 +55,7 @@ export function SeriesAnalysisAdminPage() {
               pending={page.refreshing}
               pendingLabel="再読み込み中"
               size="sm"
-              variant="secondary"
+              variant={data ? "secondary" : "primary"}
               onClick={page.actions.refresh}
             >
               状態を再読み込み

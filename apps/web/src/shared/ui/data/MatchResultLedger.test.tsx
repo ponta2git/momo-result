@@ -93,8 +93,9 @@ describe("MatchResultLedger", () => {
     expect(
       screen
         .getAllByRole("listitem")
-        .map((item) =>
-          item.querySelector("[data-member-sequence]")?.getAttribute("data-member-sequence"),
+        .map(
+          (item) =>
+            item.querySelector<HTMLElement>("[data-member-sequence]")?.dataset["memberSequence"],
         ),
     ).toEqual(["1", "2", "3", "4"]);
     expect(screen.getAllByText(/^[1-4]位$/u)).toHaveLength(4);

@@ -1,29 +1,15 @@
-import { ShieldCheck } from "lucide-react";
-import { useFormStatus } from "react-dom";
+import { ShieldCheck, UserPlus } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 
+import { AdminAccountCreateDialog } from "@/features/adminAccounts/AdminAccountCreateDialog";
+import { AdminAccountRow } from "@/features/adminAccounts/AdminAccountRow";
 import { useAdminAccountsPageController } from "@/features/adminAccounts/useAdminAccountsPageController";
-import type { LoginAccountResponse, UpdateLoginAccountRequest } from "@/shared/api/adminAccounts";
-import { formatApiError } from "@/shared/api/problemDetails";
-import { canonicalResultMembers, memberDisplayName } from "@/shared/domain/members";
 import { Button } from "@/shared/ui/actions/Button";
-import { AlertDialog } from "@/shared/ui/feedback/Dialog";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
-import { CheckboxField } from "@/shared/ui/forms/CheckboxField";
-import { Fieldset } from "@/shared/ui/forms/Fieldset";
-import { SelectField } from "@/shared/ui/forms/SelectField";
-import { TextField } from "@/shared/ui/forms/TextField";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
 import { PageHeader } from "@/shared/ui/layout/PageHeader";
-
-const accountPlayerOptions = [
-  { label: "試合参加者に紐づけない", value: "" },
-  ...canonicalResultMembers.map((member) => ({
-    label: member.displayName,
-    value: member.memberId,
-  })),
-];
 
 export function AdminAccountsPage() {
   const {
@@ -32,59 +18,54 @@ export function AdminAccountsPage() {
     accountsLoadFailed,
     accountsLoading,
     accountsRefreshing,
+    accountsStale,
     createAction,
+    createPending,
     createState,
     retryAccounts,
     updateMutation,
   } = useAdminAccountsPageController();
+  const [createOpen, setCreateOpen] = useState(false);
+  const createTriggerRef = useRef<HTMLButtonElement>(null);
+  const focusCreateTriggerAfterSuccessRef = useRef(false);
+  const previousCreateVersion = useRef(createState.version);
+
+  useEffect(() => {
+    if (createState.version !== previousCreateVersion.current) {
+      previousCreateVersion.current = createState.version;
+      focusCreateTriggerAfterSuccessRef.current = true;
+      setCreateOpen(false);
+    }
+  }, [createState.version]);
+
+  const hasAccounts = accounts.length > 0;
+
+  useEffect(() => {
+    if (!createOpen && hasAccounts && focusCreateTriggerAfterSuccessRef.current) {
+      focusCreateTriggerAfterSuccessRef.current = false;
+      createTriggerRef.current?.focus();
+    }
+  }, [createOpen, hasAccounts]);
 
   return (
-    <PageFrame className="gap-4">
+    <PageFrame>
       <PageHeader
         eyebrow="管理"
         title="ログインアカウント"
         description="Discordでログインできるアカウントと管理者権限を管理します。試合参加者とは別に扱います。"
+        actions={
+          hasAccounts ? (
+            <Button
+              ref={createTriggerRef}
+              icon={<UserPlus aria-hidden="true" className="size-4" />}
+              variant="secondary"
+              onClick={() => setCreateOpen(true)}
+            >
+              アカウントを追加
+            </Button>
+          ) : null
+        }
       />
-
-      {createState.error ? (
-        <Notice tone="danger" title="アカウントを追加できません">
-          {createState.error}
-        </Notice>
-      ) : null}
-
-      <section className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
-        <h2 className="mb-3 flex items-center gap-2 text-lg font-semibold">
-          <ShieldCheck className="size-5" />
-          アカウントを追加
-        </h2>
-        <form
-          key={createState.version}
-          action={createAction}
-          className="grid gap-3 md:grid-cols-[1fr_1fr_1fr_16rem_auto]"
-        >
-          <TextField
-            inputMode="numeric"
-            label="DiscordユーザーID"
-            name="discordUserId"
-            placeholder="例: 523484457705930752"
-            required
-          />
-          <TextField label="表示名" name="displayName" placeholder="例: 代理入力者" required />
-          <SelectField
-            defaultValue=""
-            label="紐づくプレーヤー"
-            name="playerMemberId"
-            options={accountPlayerOptions}
-          />
-          <Fieldset legend="権限">
-            <CheckboxField defaultChecked label="ログイン許可" name="loginEnabled" />
-            <CheckboxField label="管理者" name="isAdmin" />
-          </Fieldset>
-          <div className="flex items-end">
-            <CreateAccountSubmitButton />
-          </div>
-        </form>
-      </section>
 
       <section className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)]">
         {accountsLoading ? (
@@ -102,7 +83,6 @@ export function AdminAccountsPage() {
                   pending={accountsRefreshing}
                   pendingLabel="再読み込み中"
                   size="sm"
-                  variant="secondary"
                   onClick={retryAccounts}
                 >
                   アカウントを再読み込み
@@ -110,16 +90,9 @@ export function AdminAccountsPage() {
               </div>
             </Notice>
           </div>
-        ) : accounts.length === 0 ? (
-          <EmptyState
-            className="border-0"
-            description="DiscordユーザーIDと表示名を入力し、最初のアカウントを追加します。"
-            icon={<ShieldCheck className="size-5" />}
-            title="ログイン可能なアカウントはまだありません"
-          />
         ) : (
           <div className="grid">
-            {accountsError ? (
+            {accountsStale ? (
               <Notice
                 className="m-4 mb-0"
                 tone="warning"
@@ -139,142 +112,83 @@ export function AdminAccountsPage() {
                 </div>
               </Notice>
             ) : null}
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[44rem] text-left text-sm">
-                <caption className="sr-only">ログイン可能なアカウントと権限</caption>
-                <thead className="bg-[var(--color-surface-subtle)] text-[var(--color-text-secondary)]">
-                  <tr>
-                    <th className="px-3 py-2">表示名</th>
-                    <th className="px-3 py-2">DiscordユーザーID</th>
-                    <th className="px-3 py-2">プレーヤー</th>
-                    <th className="px-3 py-2">権限</th>
-                    <th className="px-3 py-2">操作</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {accounts.map((account) => {
-                    const rowPending =
-                      updateMutation.isPending &&
-                      updateMutation.variables?.accountId === account.accountId;
-                    return (
-                      <AccountRow
-                        account={account}
-                        isPending={updateMutation.isPending}
-                        key={account.accountId}
-                        pendingRequest={rowPending ? updateMutation.variables?.request : undefined}
-                        onPatch={async (request) => {
-                          await updateMutation.mutateAsync({
-                            accountId: account.accountId,
-                            request,
-                          });
-                        }}
-                      />
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+            {accounts.length === 0 ? (
+              <EmptyState
+                className="border-0"
+                action={
+                  <Button
+                    icon={<UserPlus aria-hidden="true" className="size-4" />}
+                    onClick={() => setCreateOpen(true)}
+                  >
+                    {accountsStale ? "アカウントを追加" : "最初のアカウントを追加"}
+                  </Button>
+                }
+                description="利用を許可するDiscordアカウントを登録します。"
+                icon={<ShieldCheck className="size-5" />}
+                title={
+                  accountsStale
+                    ? "前回取得時点ではログイン可能なアカウントがありません"
+                    : "ログイン可能なアカウントはまだありません"
+                }
+              />
+            ) : (
+              <>
+                <p className="border-b border-[var(--color-border)] px-3 py-2 text-xs text-[var(--color-text-secondary)] md:hidden">
+                  権限と操作は横にスクロールして確認できます。
+                </p>
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[44rem] text-left text-sm">
+                    <caption className="sr-only">ログイン可能なアカウントと権限</caption>
+                    <thead className="text-[var(--color-text-secondary)]">
+                      <tr>
+                        <th className="sticky left-0 z-[var(--z-base)] bg-[var(--color-surface)] px-3 py-2">
+                          表示名
+                        </th>
+                        <th className="px-3 py-2">DiscordユーザーID</th>
+                        <th className="px-3 py-2">プレーヤー</th>
+                        <th className="px-3 py-2">権限</th>
+                        <th className="px-3 py-2">操作</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {accounts.map((account) => {
+                        const rowPending =
+                          updateMutation.isPending &&
+                          updateMutation.variables?.accountId === account.accountId;
+                        return (
+                          <AdminAccountRow
+                            account={account}
+                            isPending={updateMutation.isPending}
+                            key={account.accountId}
+                            pendingRequest={
+                              rowPending ? updateMutation.variables?.request : undefined
+                            }
+                            onPatch={async (request) => {
+                              await updateMutation.mutateAsync({
+                                accountId: account.accountId,
+                                request,
+                              });
+                            }}
+                          />
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
           </div>
         )}
       </section>
+
+      <AdminAccountCreateDialog
+        action={createAction}
+        error={createState.error}
+        formKey={createState.version}
+        open={createOpen}
+        pending={createPending}
+        onOpenChange={setCreateOpen}
+      />
     </PageFrame>
-  );
-}
-
-function CreateAccountSubmitButton() {
-  const { pending } = useFormStatus();
-  return (
-    <Button pending={pending} pendingLabel="追加中" type="submit">
-      追加
-    </Button>
-  );
-}
-
-function AccountRow({
-  account,
-  isPending,
-  onPatch,
-  pendingRequest,
-}: {
-  account: LoginAccountResponse;
-  isPending: boolean;
-  onPatch: (request: UpdateLoginAccountRequest) => Promise<void>;
-  pendingRequest?: UpdateLoginAccountRequest | undefined;
-}) {
-  const loginPending = pendingRequest?.loginEnabled !== undefined;
-  const adminPending = pendingRequest?.isAdmin !== undefined;
-
-  return (
-    <tr
-      aria-busy={Boolean(pendingRequest) || undefined}
-      className="border-t border-[var(--color-border)]"
-    >
-      <th className="px-3 py-2 text-left font-semibold" scope="row">
-        {account.displayName}
-      </th>
-      <td className="momo-data max-w-[14rem] truncate px-3 py-2 text-xs">
-        {account.discordUserId}
-      </td>
-      <td className="px-3 py-2">{memberDisplayName(account.playerMemberId)}</td>
-      <td className="px-3 py-2">
-        {account.isAdmin ? "管理者" : "一般"} / {account.loginEnabled ? "許可" : "停止"}
-      </td>
-      <td className="flex flex-wrap gap-2 px-3 py-2">
-        <AccountActionConfirm
-          disabled={isPending}
-          title={account.loginEnabled ? "ログインを停止しますか？" : "ログインを許可しますか？"}
-          description={`${account.displayName} のログイン状態を変更します。変更後すぐに利用可否へ反映されます。`}
-          label={account.loginEnabled ? "ログイン停止" : "ログイン許可"}
-          confirmLabel={loginPending ? "更新中…" : account.loginEnabled ? "停止する" : "許可する"}
-          pending={loginPending}
-          onConfirm={() => onPatch({ loginEnabled: !account.loginEnabled })}
-        />
-        <AccountActionConfirm
-          disabled={isPending}
-          title={account.isAdmin ? "管理者権限を解除しますか？" : "管理者権限を付与しますか？"}
-          description={`${account.displayName} の管理者権限を変更します。設定管理とアカウント管理の操作範囲が変わります。`}
-          label={account.isAdmin ? "管理者解除" : "管理者にする"}
-          confirmLabel={adminPending ? "更新中…" : account.isAdmin ? "解除する" : "付与する"}
-          pending={adminPending}
-          onConfirm={() => onPatch({ isAdmin: !account.isAdmin })}
-        />
-      </td>
-    </tr>
-  );
-}
-
-function AccountActionConfirm({
-  confirmLabel,
-  description,
-  disabled,
-  label,
-  onConfirm,
-  pending = false,
-  title,
-}: {
-  confirmLabel: string;
-  description: string;
-  disabled: boolean;
-  label: string;
-  onConfirm: () => Promise<void> | void;
-  pending?: boolean;
-  title: string;
-}) {
-  return (
-    <AlertDialog
-      cancelLabel="キャンセル"
-      confirmLabel={confirmLabel}
-      description={description}
-      pending={pending}
-      formatError={(error) => formatApiError(error, "アカウント設定の更新に失敗しました")}
-      tone="primary"
-      title={title}
-      trigger={
-        <Button disabled={disabled} size="sm" variant="secondary">
-          {label}
-        </Button>
-      }
-      onConfirm={onConfirm}
-    />
   );
 }

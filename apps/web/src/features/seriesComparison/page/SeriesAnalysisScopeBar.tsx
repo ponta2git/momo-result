@@ -124,8 +124,8 @@ export function SeriesAnalysisScopeBar({
         summary: scopeSummary,
       }}
       primary={
-        <div className="grid min-w-0 gap-2 sm:grid-cols-[minmax(14rem,18rem)_minmax(0,1fr)] sm:items-end">
-          <div>
+        <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-2 sm:grid-cols-[minmax(14rem,18rem)_minmax(0,1fr)] sm:items-end">
+          <div className="min-w-0">
             <SelectField
               label="対象作品"
               options={seriesOptions}

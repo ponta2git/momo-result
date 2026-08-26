@@ -17,7 +17,7 @@ describe("RouteSuspenseFallback", () => {
     ["/held-events/event-1", { kind: "detail", width: "wide" }],
     ["/analytics/series", { kind: "comparison", width: "wide" }],
     ["/admin/analysis", { kind: "comparison", width: "wide" }],
-    ["/exports", { kind: "split", width: "narrow" }],
+    ["/exports", { kind: "form", width: "narrow" }],
     ["/admin/masters", { kind: "catalog", width: "standard" }],
   ] as const)("maps %s in the app layer", (pathname, presentation) => {
     expect(routeLoadingPresentation(pathname)).toEqual(presentation);
@@ -27,5 +27,14 @@ describe("RouteSuspenseFallback", () => {
     render(<RouteSuspenseFallback pathname="/matches/new" />);
 
     expect(screen.getByTestId("page-loading-fallback")).toHaveClass("max-w-[90rem]");
+  });
+
+  it("keeps the export fallback in the same single-column task order as the page", () => {
+    render(<RouteSuspenseFallback pathname="/exports" />);
+
+    const fallback = screen.getByTestId("page-loading-fallback");
+    const operationGroup = fallback.children.item(1);
+    expect(operationGroup).toHaveClass("grid", "gap-4", "rounded-[var(--radius-md)]");
+    expect(operationGroup).not.toHaveClass("lg:grid-cols-[minmax(0,1fr)_minmax(20rem,28rem)]");
   });
 });

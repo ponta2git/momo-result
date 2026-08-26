@@ -126,7 +126,7 @@ function NoArtifactFeedback({
   return (
     <EmptyState
       action={
-        <Button variant="secondary" onClick={onRefresh}>
+        <Button variant={hasError ? "primary" : "secondary"} onClick={onRefresh}>
           状態を再確認
         </Button>
       }

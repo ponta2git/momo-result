@@ -1,5 +1,6 @@
 import type { HeldEventPlayerRecap as PlayerRecap } from "@/features/heldEvents/heldEventDetailViewModel";
 import { formatAverageRank } from "@/features/heldEvents/heldEventDetailViewModel";
+import { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
 import { Card } from "@/shared/ui/layout/Card";
 import { RankTrail } from "@/shared/ui/rank/RankBadge";
 
@@ -26,7 +27,11 @@ export function HeldEventPlayerRecap({ recaps }: { recaps: PlayerRecap[] }) {
             className="border-b border-[var(--color-border)] px-4 py-3 last:border-b-0 sm:border-r xl:border-b-0 xl:last:border-r-0 sm:[&:nth-child(2n)]:border-r-0 xl:[&:nth-child(2n)]:border-r sm:[&:nth-last-child(-n+2)]:border-b-0"
           >
             <div className="flex items-baseline justify-between gap-3">
-              <h3 className="font-semibold">{recap.displayName}</h3>
+              <h3 className="min-w-0 font-semibold">
+                <MemberSequenceLabel memberId={recap.memberId}>
+                  <span className="truncate">{recap.displayName}</span>
+                </MemberSequenceLabel>
+              </h3>
               <span className="text-xs text-[var(--color-text-secondary)] tabular-nums">
                 {recap.matchCount}戦
               </span>

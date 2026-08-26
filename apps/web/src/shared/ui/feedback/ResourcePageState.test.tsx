@@ -25,6 +25,12 @@ describe("ResourcePageState", () => {
 
     await user.click(screen.getByRole("button", { name: "試合詳細を再読み込み" }));
     expect(onRetry).toHaveBeenCalledTimes(1);
+    expect(
+      screen.getByRole("heading", { level: 1, name: "試合詳細を読み込めませんでした" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "試合詳細を再読み込み" })).toHaveClass(
+      "bg-[var(--color-action)]",
+    );
     expect(screen.getByRole("link", { name: "試合一覧へ戻る" })).toHaveAttribute(
       "href",
       "/matches",
@@ -45,6 +51,14 @@ describe("ResourcePageState", () => {
     );
 
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
-    expect(screen.getByRole("status")).toHaveTextContent("開催履歴が見つかりません");
+    expect(
+      screen.getByRole("heading", { level: 1, name: "開催履歴が見つかりません" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "削除されたか、URLが正しくない可能性があります。",
+    );
+    expect(screen.getByRole("link", { name: "開催履歴へ戻る" })).toHaveClass(
+      "bg-[var(--color-action)]",
+    );
   });
 });

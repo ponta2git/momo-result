@@ -6,16 +6,20 @@ import { PageHeader } from "@/shared/ui/layout/PageHeader";
 
 export function HeldEventDetailLoading() {
   return (
-    <PageFrame aria-busy="true" aria-label="開催詳細を読み込み中" className="gap-4" width="wide">
+    <PageFrame aria-busy="true" aria-label="開催詳細を読み込み中" width="wide">
       <PageHeader eyebrow="開催記録" title="開催の記録を読み込み中" />
-      <Card className="grid grid-cols-3 gap-3 bg-[var(--color-surface-subtle)]">
+      <div className="grid grid-cols-3 gap-3 border-y border-[var(--color-border)] py-4">
         {["matches", "drafts", "next"].map((id) => (
           <div key={id} className="grid gap-2">
             <Skeleton className="h-3 w-16" />
             <Skeleton className="h-7 w-20" />
           </div>
         ))}
-      </Card>
+      </div>
+      <div className="grid gap-3">
+        <Skeleton className="h-6 w-32" />
+        <Skeleton className="h-11 w-56 max-w-full" />
+      </div>
       <Card className="overflow-hidden p-0">
         <div className="border-b border-[var(--color-border)] p-4">
           <Skeleton className="h-6 w-32" />

@@ -193,10 +193,10 @@ describe("ui foundation", () => {
     expect(screen.queryByRole("dialog", { name: "試合を確定" })).not.toBeInTheDocument();
   });
 
-  it("keeps transient toasts away from bottom actions", () => {
+  it("keeps transient toasts away from bottom actions", async () => {
     render(<ToastHost />);
 
-    const viewport = screen.getByRole("region", { name: "Notifications" });
+    const viewport = await screen.findByRole("region", { name: "Notifications" });
     expect(viewport).toHaveClass("momo-safe-top", "momo-safe-right");
     expect(viewport).not.toHaveClass("momo-safe-bottom");
   });

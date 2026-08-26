@@ -1,60 +1,70 @@
 import { Toast } from "@base-ui/react/toast";
+import { Component, lazy, Suspense } from "react";
+import type { ReactNode } from "react";
 
-import { IconButton } from "@/shared/ui/actions/IconButton";
 import { cn } from "@/shared/ui/cn";
 import { momoToastManager } from "@/shared/ui/feedback/Toast";
+import { toastToneClass, toastViewportClassName } from "@/shared/ui/feedback/toastPresentation";
 
-const toneClass: Record<string, string> = {
-  danger: "border-[var(--color-danger)]/60 bg-[var(--color-surface)]",
-  info: "border-[var(--color-border-strong)] bg-[var(--color-surface)]",
-  success: "border-[var(--color-success)]/60 bg-[var(--color-surface)]",
-  warning: "border-[var(--color-warning)]/80 bg-[var(--color-surface)]",
+const ToastRenderer = lazy(async () => {
+  const module = await import("@/shared/ui/feedback/ToastRenderer");
+  return { default: module.ToastRenderer };
+});
+
+type ToastRendererBoundaryState = {
+  failed: boolean;
 };
+
+class ToastRendererBoundary extends Component<{ children: ReactNode }, ToastRendererBoundaryState> {
+  override state: ToastRendererBoundaryState = { failed: false };
+
+  static getDerivedStateFromError(): ToastRendererBoundaryState {
+    return { failed: true };
+  }
+
+  override render() {
+    return this.state.failed ? <ToastRendererFallback /> : this.props.children;
+  }
+}
 
 export function ToastHost() {
   return (
     <Toast.Provider limit={4} toastManager={momoToastManager} timeout={4500}>
-      <ToastRenderer />
+      <ToastRendererBoundary>
+        <Suspense fallback={null}>
+          <ToastRenderer />
+        </Suspense>
+      </ToastRendererBoundary>
     </Toast.Provider>
   );
 }
 
-function ToastRenderer() {
+function ToastRendererFallback() {
   const { toasts } = Toast.useToastManager();
 
   return (
-    <Toast.Portal>
-      <Toast.Viewport
-        aria-live="polite"
-        className="momo-safe-top momo-safe-right fixed z-[var(--z-toast)] flex w-[min(24rem,calc(100vw-1rem))] flex-col gap-2 p-2"
-      >
-        {toasts.map((toast) => (
-          <div className="momo-enter" key={toast.id}>
-            <Toast.Root
-              className={cn(
-                "rounded-[var(--radius-lg)] border p-3 shadow-[var(--shadow-raised)]",
-                toneClass[toast.type ?? "info"] ?? toneClass["info"],
-              )}
-              toast={toast}
-            >
-              <Toast.Content>
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <Toast.Title className="text-sm font-semibold text-[var(--color-text-primary)]" />
-                    <Toast.Description className="mt-0.5 text-xs leading-5 text-[var(--color-text-secondary)]" />
-                  </div>
-                  <Toast.Close
-                    aria-label="通知を閉じる"
-                    render={
-                      <IconButton aria-label="通知を閉じる" icon="×" size="sm" variant="quiet" />
-                    }
-                  />
-                </div>
-              </Toast.Content>
-            </Toast.Root>
-          </div>
-        ))}
-      </Toast.Viewport>
-    </Toast.Portal>
+    <div
+      aria-label="Notifications"
+      aria-live="polite"
+      className={toastViewportClassName}
+      role="region"
+    >
+      {toasts.map((toast) => (
+        <div
+          className={cn(
+            "rounded-[var(--radius-lg)] border p-3 shadow-[var(--shadow-raised)]",
+            toastToneClass[toast.type ?? "info"] ?? toastToneClass["info"],
+          )}
+          key={toast.id}
+        >
+          <p className="text-sm font-semibold text-[var(--color-text-primary)]">{toast.title}</p>
+          {toast.description ? (
+            <p className="mt-0.5 text-xs leading-5 text-[var(--color-text-secondary)]">
+              {toast.description}
+            </p>
+          ) : null}
+        </div>
+      ))}
+    </div>
   );
 }

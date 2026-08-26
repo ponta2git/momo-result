@@ -92,7 +92,7 @@ export function ScoreGridMobileCards({
                   </span>
                 </span>
               }
-              triggerClassName="px-0 py-0 hover:bg-transparent"
+              triggerClassName="px-0 py-0"
               onOpenChange={(open) => {
                 if (open !== (expandedMobilePlayer === index)) {
                   onTogglePlayer(index);

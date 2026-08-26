@@ -10,7 +10,7 @@ type DisclosurePresentation = "framed" | "inset" | "plain";
 const triggerVariantClass = {
   anchor: "",
   default: "",
-  supporting: "font-medium text-[var(--color-text-secondary)] hover:bg-transparent",
+  supporting: "font-medium text-[var(--color-text-secondary)]",
 } as const satisfies Record<DisclosureTriggerVariant, string>;
 
 const presentationClass = {
@@ -78,7 +78,7 @@ export function Disclosure({
       <BaseCollapsible.Trigger
         aria-label={ariaLabel}
         className={cn(
-          "group flex min-h-11 w-full min-w-0 items-center justify-between gap-3 rounded-[var(--radius-sm)] px-3 py-2 text-left text-sm font-semibold text-[var(--color-text-primary)] hover:bg-[var(--color-surface-subtle)] disabled:cursor-default disabled:opacity-70",
+          "group flex min-h-11 w-full min-w-0 items-center justify-between gap-3 rounded-[var(--radius-sm)] px-3 py-2 text-left text-sm font-semibold text-[var(--color-text-primary)] hover:bg-[var(--color-surface-subtle)] disabled:cursor-default disabled:opacity-70 disabled:hover:bg-transparent",
           triggerVariantClass[triggerVariant],
           presentationClass[presentation].trigger,
           triggerClassName,

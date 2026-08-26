@@ -47,4 +47,15 @@ describe("SeriesAnalysisAdminStatus", () => {
       expect(header).toHaveAttribute("scope", "col");
     }
   });
+
+  it("uses the embedded empty-state contract when no recent jobs exist", () => {
+    render(<RecentJobs jobs={[]} />);
+
+    const emptyHeading = screen.getByRole("heading", {
+      level: 3,
+      name: "実行履歴はありません。",
+    });
+    expect(emptyHeading.closest("section")).toHaveClass("bg-transparent", "py-6");
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+  });
 });

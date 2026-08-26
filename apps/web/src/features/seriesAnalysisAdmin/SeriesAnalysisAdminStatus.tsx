@@ -7,6 +7,7 @@ import type {
 } from "@/shared/api/seriesAnalysis";
 import { DataTable } from "@/shared/ui/data/DataTable";
 import type { DataTableColumn } from "@/shared/ui/data/DataTable";
+import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 import { StatusBadge } from "@/shared/ui/status/StatusBadge";
@@ -85,9 +86,7 @@ export function RecentJobs({ jobs }: { jobs: SeriesAnalysisAdminOverview["recent
         </p>
       </header>
       {jobs.length === 0 ? (
-        <p className="px-4 py-6 text-sm text-[var(--color-text-secondary)]">
-          実行履歴はありません。
-        </p>
+        <EmptyState className="py-6" placement="embedded" title="実行履歴はありません。" />
       ) : (
         <DataTable
           caption={{ content: "全作品の直近3件の実行履歴" }}

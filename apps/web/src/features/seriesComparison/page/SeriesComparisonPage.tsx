@@ -7,7 +7,7 @@ import {
   ComparisonSkeleton,
   PageSkeleton,
 } from "@/features/seriesComparison/page/SeriesComparisonSkeletons";
-import { useSeriesComparisonPageController } from "@/features/seriesComparison/page/useSeriesComparisonPageController";
+import { useSeriesComparisonPageModel } from "@/features/seriesComparison/page/useSeriesComparisonPageModel";
 import { Button } from "@/shared/ui/actions/Button";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
@@ -18,7 +18,7 @@ import { PageHeader } from "@/shared/ui/layout/PageHeader";
 import { StaleShield } from "@/shared/ui/motion/StaleShield";
 
 export function SeriesComparisonPage() {
-  const page = useSeriesComparisonPageController();
+  const page = useSeriesComparisonPageModel();
   const { filters, focus, options, resource, status } = page;
 
   if (options.loading) return <PageSkeleton />;

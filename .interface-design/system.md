@@ -44,6 +44,13 @@
 - heading と lead、主情報と metadata など高さが変わる複合 record は上端を揃え、内容量の差で隣要素が上下へ移動しないようにする。
 - field を横に並べる form row だけは各 control の下端を揃えてよい。table editor の top alignment と chart axis の bottom alignment は、対応関係を保つ局所例外として明示する。
 
+### Section Action Cluster
+
+- 同じ対象や section 全体へ作用する操作は、本文の長さによって互いに離れないよう、section heading に対応する一つの action cluster へまとめる。操作群には対象が分かる accessible name を付ける。
+- 通常操作には既存の secondary 表現を使い、低頻度の破壊操作には quiet 表現と semantic danger text を組み合わせる。常時表示される section では、塗りつぶしの danger 表現を通常操作と競合させず、破壊操作の確認 dialog を維持する。
+- 操作が少数なら overflow menu に隠さず明示し、狭幅では個々の操作を分離せず action cluster 単位で折り返す。hit target と状態表現は shared action primitive に委ねる。
+- edit mode へ入ったら閲覧時の edit / delete cluster を隠し、その場の cancel / save へ置き換える。対象が存在しない empty state では add だけを示す。
+
 ### Continuous Match Timeline
 
 - 順序付きリストの各 record に番号 marker を置き、1本の軸として読む。

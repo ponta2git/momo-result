@@ -188,7 +188,7 @@ export function DataVizScatterPlot({
         </svg>
       </div>
       <p className="text-xs leading-5 text-[var(--color-text-secondary)]">
-        1点は1人が1試合で残した値です。選択試合は action 色の縁取りで示します。
+        1点は1人が1試合で残した値です。選択中の試合は、ほかの点と異なる輪郭で示します。
       </p>
       <DataVizLegend series={seriesIdentity} />
     </figure>

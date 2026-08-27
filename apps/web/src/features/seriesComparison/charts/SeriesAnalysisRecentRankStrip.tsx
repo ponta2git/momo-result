@@ -56,12 +56,12 @@ export function RecentRankStrips({
   return (
     <div className="min-w-0">
       <div
-        aria-label="直近順位ストリップ横スクロール"
+        aria-label="直近順位"
         className="w-full [scrollbar-width:thin] [scrollbar-color:var(--color-border)_transparent] [scrollbar-gutter:stable] overflow-x-auto pb-2"
         ref={scrollContainerRef}
       >
         <table className="mx-auto w-max border-separate border-spacing-x-1 border-spacing-y-2">
-          <caption className="sr-only">直近順位ストリップ</caption>
+          <caption className="sr-only">直近の試合順位</caption>
           <thead>
             <tr>
               <th

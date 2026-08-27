@@ -54,7 +54,7 @@ describe("app routing", () => {
     expect(await screen.findByRole("heading", { name: "ログイン" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "ログイン" })).toBeInTheDocument();
     expect(
-      screen.getByText("操作用アカウントを選ぶと、試合一覧、OCR、CSV/TSV出力を使えます。"),
+      screen.getByText("ログインすると、試合の記録・確認・比較・出力を利用できます。"),
     ).toBeInTheDocument();
     expect(
       screen.queryByText(

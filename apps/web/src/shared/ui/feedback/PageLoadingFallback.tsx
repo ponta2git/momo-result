@@ -15,6 +15,7 @@ export type PageLoadingKind =
 export type PageLoadingFallbackProps = {
   asMain?: boolean | undefined;
   kind?: PageLoadingKind | undefined;
+  loadingLabel?: string | undefined;
   width?: PageFrameWidth | undefined;
 };
 
@@ -22,10 +23,11 @@ export type PageLoadingFallbackProps = {
 export function PageLoadingFallback({
   asMain = false,
   kind = "generic",
+  loadingLabel = "読み込んでいます…",
   width = "standard",
 }: PageLoadingFallbackProps) {
   const className = `mx-auto flex w-full ${pageFrameWidthClass[width]} flex-col gap-4 px-4 py-8`;
-  const content = <PageLoadingSkeleton kind={kind} />;
+  const content = <PageLoadingSkeleton kind={kind} loadingLabel={loadingLabel} />;
 
   if (asMain) {
     return (
@@ -53,7 +55,13 @@ export function PageLoadingFallback({
   );
 }
 
-function PageLoadingSkeleton({ kind }: { kind: PageLoadingKind }) {
+function PageLoadingSkeleton({
+  kind,
+  loadingLabel,
+}: {
+  kind: PageLoadingKind;
+  loadingLabel: string;
+}) {
   if (kind === "list") {
     return (
       <>
@@ -68,7 +76,7 @@ function PageLoadingSkeleton({ kind }: { kind: PageLoadingKind }) {
           </div>
           <Skeleton className="h-80 rounded-[var(--radius-md)]" />
         </PageContentSurface>
-        <LoadingLabel />
+        <LoadingLabel label={loadingLabel} />
       </>
     );
   }
@@ -86,7 +94,7 @@ function PageLoadingSkeleton({ kind }: { kind: PageLoadingKind }) {
           </div>
           <Skeleton className="h-[26rem] rounded-[var(--radius-md)]" />
         </PageContentSurface>
-        <LoadingLabel />
+        <LoadingLabel label={loadingLabel} />
       </>
     );
   }
@@ -103,7 +111,7 @@ function PageLoadingSkeleton({ kind }: { kind: PageLoadingKind }) {
           </div>
           <Skeleton className="h-72 rounded-[var(--radius-md)]" />
         </PageContentSurface>
-        <LoadingLabel />
+        <LoadingLabel label={loadingLabel} />
       </>
     );
   }
@@ -122,7 +130,7 @@ function PageLoadingSkeleton({ kind }: { kind: PageLoadingKind }) {
           </div>
           <Skeleton className="h-80 rounded-[var(--radius-md)]" />
         </PageContentSurface>
-        <span className="sr-only">比較画面を読み込んでいます…</span>
+        <LoadingLabel label={loadingLabel} />
       </>
     );
   }
@@ -139,7 +147,7 @@ function PageLoadingSkeleton({ kind }: { kind: PageLoadingKind }) {
             ))}
           </div>
         </PageContentSurface>
-        <LoadingLabel />
+        <LoadingLabel label={loadingLabel} />
       </>
     );
   }
@@ -161,7 +169,7 @@ function PageLoadingSkeleton({ kind }: { kind: PageLoadingKind }) {
             <Skeleton className="h-11 w-full max-w-72" />
           </div>
         </PageContentSurface>
-        <LoadingLabel />
+        <LoadingLabel label={loadingLabel} />
       </>
     );
   }
@@ -173,7 +181,7 @@ function PageLoadingSkeleton({ kind }: { kind: PageLoadingKind }) {
         <Skeleton className="h-40 w-full rounded-[var(--radius-md)]" />
         <Skeleton className="h-32 w-full rounded-[var(--radius-md)]" />
       </PageContentSurface>
-      <LoadingLabel />
+      <LoadingLabel label={loadingLabel} />
     </>
   );
 }
@@ -188,6 +196,6 @@ function HeaderSkeleton() {
   );
 }
 
-function LoadingLabel() {
-  return <span className="sr-only">読み込んでいます…</span>;
+function LoadingLabel({ label }: { label: string }) {
+  return <span className="sr-only">{label}</span>;
 }

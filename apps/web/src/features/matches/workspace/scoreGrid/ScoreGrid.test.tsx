@@ -388,7 +388,7 @@ describe("ScoreGrid", () => {
       />,
     );
 
-    const toolbar = screen.getByLabelText("OCR確認レール");
+    const toolbar = screen.getByLabelText("OCRの確認項目");
     expect(within(toolbar).getByText("次の未確認項目")).toBeInTheDocument();
     expect(within(toolbar).getByRole("button", { name: "この値で確認済み" })).toBeEnabled();
   });
@@ -406,7 +406,7 @@ describe("ScoreGrid", () => {
       />,
     );
 
-    expect(screen.queryByLabelText("OCR確認レール")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("OCRの確認項目")).not.toBeInTheDocument();
     expect(screen.queryByText(/すべて確認/u)).not.toBeInTheDocument();
   });
 
@@ -416,7 +416,7 @@ describe("ScoreGrid", () => {
     render(<FinalAcknowledgementHarness />);
     await user.click(screen.getByRole("button", { name: "この値で確認済み" }));
 
-    expect(screen.queryByLabelText("OCR確認レール")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("OCRの確認項目")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "確定前の確認へ進む" })).toHaveFocus();
   });
 });

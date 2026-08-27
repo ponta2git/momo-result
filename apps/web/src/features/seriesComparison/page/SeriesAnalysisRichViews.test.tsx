@@ -259,8 +259,9 @@ describe("rich series analysis views", () => {
       </MemoryRouter>,
     );
 
-    const recentRankStrip = screen.getByRole("table", { name: "直近順位ストリップ" });
-    expect(recentRankStrip.querySelector("caption")).toHaveTextContent("直近順位ストリップ");
+    const recentRankStrip = screen.getByRole("table", { name: "直近の試合順位" });
+    expect(recentRankStrip.querySelector("caption")).toHaveTextContent("直近の試合順位");
+    expect(screen.getByLabelText("直近順位")).toContainElement(recentRankStrip);
     expect(recentRankStrip).toHaveClass("mx-auto");
     expect(recentRankStrip.parentElement?.parentElement).not.toHaveClass(
       "border",
@@ -282,7 +283,7 @@ describe("rich series analysis views", () => {
     expect(screen.queryByText("このページ")).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { level: 3, name: "直近20戦" })).toBeInTheDocument();
     for (const rowHeader of within(
-      screen.getByRole("table", { name: "直近順位ストリップ" }),
+      screen.getByRole("table", { name: "直近の試合順位" }),
     ).getAllByRole("rowheader")) {
       expect(rowHeader).toHaveClass("bg-[var(--color-surface)]");
       expect(rowHeader).not.toHaveClass("bg-[var(--color-surface-subtle)]");

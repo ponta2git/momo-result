@@ -27,7 +27,7 @@ export function ScoreGridReviewToolbar({
 
   return (
     <div
-      aria-label="OCR確認レール"
+      aria-label="OCRの確認項目"
       className="mt-3 grid gap-3 rounded-[var(--radius-sm)] border border-[var(--color-border-strong)] bg-[var(--color-surface-subtle)] p-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center"
     >
       <div className="min-w-0" aria-live="polite">

@@ -18,9 +18,7 @@ export function LoginPage() {
   const [searchParams] = useSearchParams();
   const reason = searchParams.get("reason");
   const next = sanitizeAppRedirectPath(searchParams.get("next"));
-  const loginDescription = import.meta.env.DEV
-    ? "操作用アカウントを選ぶと、試合一覧、OCR、CSV/TSV出力を使えます。"
-    : "Discordでログインすると、試合一覧、OCR、CSV/TSV出力を使えます。";
+  const loginDescription = "ログインすると、試合の記録・確認・比較・出力を利用できます。";
 
   return (
     <>

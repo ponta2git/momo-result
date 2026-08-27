@@ -39,6 +39,7 @@ describe("data visualizations at the analysis display bound", () => {
     const chart = container.querySelector('svg[aria-label="上限散布図"]');
     expect(chart?.querySelectorAll("[data-series-shape]")).toHaveLength(2_000);
     expect(chart).toHaveTextContent("プレーヤー4の第500戦、この試合");
+    expect(container).toHaveTextContent("選択中の試合は、ほかの点と異なる輪郭で示します。");
   });
 
   it("keeps every point in four 500-match line paths", () => {

@@ -6,7 +6,8 @@ type RouteSuspenseFallbackProps = {
   pathname: string;
 };
 
-type RouteLoadingPresentation = Required<Pick<PageLoadingFallbackProps, "kind" | "width">>;
+type RouteLoadingPresentation = Required<Pick<PageLoadingFallbackProps, "kind" | "width">> &
+  Pick<PageLoadingFallbackProps, "loadingLabel">;
 
 /** Keeps pathname-to-layout knowledge in the app layer rather than shared UI. */
 export function routeLoadingPresentation(pathname: string): RouteLoadingPresentation {
@@ -24,11 +25,18 @@ export function routeLoadingPresentation(pathname: string): RouteLoadingPresenta
   if (/^\/(?:matches|held-events)\/[^/]+$/u.test(pathname)) {
     return { kind: "detail", width: "wide" };
   }
-  if (pathname === "/analytics/series" || pathname === "/admin/analysis") {
-    return { kind: "comparison", width: "wide" };
+  if (pathname === "/analytics/series") {
+    return { kind: "comparison", loadingLabel: "戦績比較を読み込んでいます", width: "wide" };
+  }
+  if (pathname === "/admin/analysis") {
+    return {
+      kind: "comparison",
+      loadingLabel: "戦績分析管理を読み込んでいます",
+      width: "wide",
+    };
   }
   if (pathname === "/admin/masters") {
-    return { kind: "catalog", width: "standard" };
+    return { kind: "catalog", loadingLabel: "設定管理を読み込んでいます", width: "standard" };
   }
   if (pathname === "/exports") {
     return { kind: "form", width: "narrow" };

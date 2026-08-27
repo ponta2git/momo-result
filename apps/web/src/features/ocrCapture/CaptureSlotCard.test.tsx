@@ -83,4 +83,24 @@ describe("CaptureSlotCard", () => {
     fireEvent.click(refresh);
     expect(onRefreshStatus).not.toHaveBeenCalled();
   });
+
+  it("explains an OCR failure without exposing its internal code", () => {
+    renderCard({
+      jobFailure: {
+        code: "OCR_ENGINE_TIMEOUT",
+        message: "engine timed out after 30000ms",
+        retryable: true,
+        userAction: "画像を確認して、もう一度読み取りを開始してください。",
+      },
+      kind: "total_assets",
+      status: "failed",
+    });
+
+    expect(screen.getByRole("alert")).toHaveTextContent("画像を読み取れませんでした");
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "この分類の読み取り結果は作成されていません。",
+    );
+    expect(screen.queryByText("OCR_ENGINE_TIMEOUT")).not.toBeInTheDocument();
+    expect(screen.queryByText(/30000ms/u)).not.toBeInTheDocument();
+  });
 });

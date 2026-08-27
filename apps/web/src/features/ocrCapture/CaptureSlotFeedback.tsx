@@ -75,8 +75,11 @@ function CaptureJobFailure({ failure }: { failure: NonNullable<CaptureSlotState[
       className="mt-4 rounded-[var(--radius-md)] border border-[var(--color-danger)]/45 bg-[var(--color-danger)]/10 p-3 text-sm text-[var(--color-text-primary)]"
       role="alert"
     >
-      <strong>{failure.code}</strong>
-      <p className="mt-1">{failure.userAction ?? failure.message}</p>
+      <strong>画像を読み取れませんでした</strong>
+      <p className="mt-1">この分類の読み取り結果は作成されていません。</p>
+      <p className="mt-1">
+        {failure.userAction ?? "画像を確認して、もう一度読み取りを開始してください。"}
+      </p>
     </div>
   );
 }

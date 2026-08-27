@@ -63,9 +63,9 @@ export function HeldEventDetailUnavailable({
     <ResourcePageState
       backHref={backHref}
       backLabel="開催履歴へ戻る"
-      description="削除されたか、URLが正しくない可能性があります。"
+      description="指定された開催は削除されたか、存在しません。開催履歴から別の開催を選んでください。"
       kind="not-found"
-      title="開催履歴が見つかりません"
+      title="開催が見つかりません"
     />
   ) : onRetry ? (
     <ResourcePageState

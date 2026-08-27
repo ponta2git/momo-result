@@ -9,7 +9,7 @@ import {
 } from "@/shared/api/problemDetails";
 
 describe("problemDetails", () => {
-  it("normalizes ProblemDetails JSON", async () => {
+  it("retains raw ProblemDetails for branching without exposing its English detail", async () => {
     const error = await normalizeApiErrorResponse(
       Response.json(
         {
@@ -25,10 +25,12 @@ describe("problemDetails", () => {
 
     expect(error).toMatchObject({
       status: 403,
-      title: "Forbidden",
-      detail: "not allowed",
+      title: "操作を完了できませんでした",
+      detail: "この操作を行う権限がありません。",
       code: "FORBIDDEN",
+      problem: { detail: "not allowed" },
     });
+    expect(error.detail).not.toContain("not allowed");
   });
 
   it("normalizes text/plain errors", async () => {
@@ -41,15 +43,15 @@ describe("problemDetails", () => {
 
     expect(error).toMatchObject({
       status: 400,
-      title: "HTTP 400",
-      detail: "Invalid value for: body",
+      title: "通信に失敗しました",
+      detail: "応答を受け取れませんでした。",
     });
   });
 
   it("normalizes network failures", () => {
     expect(normalizeUnknownApiError(new Error("fetch failed"))).toMatchObject({
       title: "通信に失敗しました",
-      detail: "fetch failed",
+      detail: "応答を受け取れませんでした。",
     });
   });
 

@@ -14,7 +14,7 @@ import momo.api.domain.GameTitle
 import momo.api.domain.ids.GameTitleId
 import momo.api.http.HttpAssertions.{
   assertProblem,
-  assertProblemDetailEquals,
+  assertProblemSanitizedDetail,
   jsonField,
   optionalHeaderValue
 }
@@ -93,7 +93,7 @@ final class SeriesAnalysisHttpSpec extends MomoCatsEffectSuite with HttpAppTestF
         firstBody <- first.as[Json]
         replay <- httpApp.run(writePost(uri, body, Some("analysis-http-idempotency")))
         replayBody <- replay.as[Json]
-        _ <- assertProblemDetailEquals(
+        _ <- assertProblemSanitizedDetail(
           missing,
           Status.UnprocessableContent,
           "VALIDATION_FAILED",

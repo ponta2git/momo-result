@@ -43,19 +43,19 @@ describe("ResourcePageState", () => {
         <ResourcePageState
           backHref="/held-events"
           backLabel="開催履歴へ戻る"
-          description="削除されたか、URLが正しくない可能性があります。"
+          description="指定された開催は削除されたか、存在しません。開催履歴から別の開催を選んでください。"
           kind="not-found"
-          title="開催履歴が見つかりません"
+          title="開催が見つかりません"
         />
       </MemoryRouter>,
     );
 
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
     expect(
-      screen.getByRole("heading", { level: 1, name: "開催履歴が見つかりません" }),
+      screen.getByRole("heading", { level: 1, name: "開催が見つかりません" }),
     ).toBeInTheDocument();
     expect(screen.getByRole("status")).toHaveTextContent(
-      "削除されたか、URLが正しくない可能性があります。",
+      "指定された開催は削除されたか、存在しません。開催履歴から別の開催を選んでください。",
     );
     expect(screen.getByRole("link", { name: "開催履歴へ戻る" })).toHaveClass(
       "bg-[var(--color-action)]",

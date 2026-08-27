@@ -69,7 +69,7 @@ export function MatchWorkspacePage({
           <Notice tone={notFound ? "warning" : "danger"}>
             <p>
               {notFound
-                ? "削除されたか、URLが正しくない可能性があります。"
+                ? "指定された試合は削除されたか、存在しません。前の画面から別の試合を選んでください。"
                 : "通信状態を確認して、もう一度お試しください。"}
             </p>
             {notFound ? null : (

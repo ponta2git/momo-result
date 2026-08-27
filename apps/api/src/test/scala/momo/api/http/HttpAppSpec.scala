@@ -18,7 +18,7 @@ import momo.api.config.{AppConfig, AppEnv, ResourceLimitsConfig}
 import momo.api.domain.ids.AccountId
 import momo.api.http.HttpAssertions.{
   assertProblem,
-  assertProblemDetailEquals,
+  assertProblemSanitizedDetail,
   headerValue,
   jsonField,
   optionalHeaderValue
@@ -281,7 +281,7 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
         assertEquals(jsonField[Boolean](body, "loginEnabled"), false)
       }
       meResponse <- fixture.app.run(readCurrentSession)
-      _ <- assertProblemDetailEquals(
+      _ <- assertProblemSanitizedDetail(
         meResponse,
         Status.Unauthorized,
         "UNAUTHORIZED",
@@ -293,7 +293,7 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
   app.test("GET /api/admin/login-accounts is restricted to administrator accounts") { httpApp =>
     val request = readGet(uri"/api/admin/login-accounts", accountId = "account_akane_mami")
     httpApp.run(request).flatMap(response =>
-      assertProblemDetailEquals(
+      assertProblemSanitizedDetail(
         response,
         Status.Forbidden,
         "FORBIDDEN",
@@ -357,14 +357,14 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
     )
     for
       createResponse <- httpApp.run(create)
-      _ <- assertProblemDetailEquals(
+      _ <- assertProblemSanitizedDetail(
         createResponse,
         Status.UnprocessableContent,
         "VALIDATION_FAILED",
         "discordUserId must not be blank.",
       )
       updateResponse <- httpApp.run(update)
-      _ <- assertProblemDetailEquals(
+      _ <- assertProblemSanitizedDetail(
         updateResponse,
         Status.UnprocessableContent,
         "VALIDATION_FAILED",
@@ -379,7 +379,7 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
       Json.obj("loginEnabled" -> Json.fromBoolean(false)),
     )
     httpApp.run(request).flatMap(response =>
-      assertProblemDetailEquals(
+      assertProblemSanitizedDetail(
         response,
         Status.Conflict,
         "CONFLICT",
@@ -392,7 +392,7 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
     val request = readRequest(Method.POST, uri"/api/ocr-jobs")
       .withEntity(HttpRequestBodies.Matches.createOcrJob("missing", "auto"))
     httpApp.run(request).flatMap(response =>
-      assertProblemDetailEquals(
+      assertProblemSanitizedDetail(
         response,
         Status.Forbidden,
         "FORBIDDEN",
@@ -407,7 +407,7 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
       HttpRequestBodies.Matches.createOcrJob("missing", "auto"),
     )
     httpApp.run(request).flatMap(response =>
-      assertProblemDetailEquals(
+      assertProblemSanitizedDetail(
         response,
         Status.UnprocessableContent,
         "VALIDATION_FAILED",
@@ -418,7 +418,7 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
 
   app.test("protected endpoint without auth header returns 401") { httpApp =>
     httpApp.run(Request[IO](Method.GET, uri"/api/auth/me")).flatMap(response =>
-      assertProblemDetailEquals(
+      assertProblemSanitizedDetail(
         response,
         Status.Unauthorized,
         "UNAUTHORIZED",
@@ -437,7 +437,7 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
       requests.foldLeft(IO.unit) { (acc, uri) =>
         acc.flatMap(_ =>
           httpApp.run(Request[IO](Method.GET, uri)).flatMap(response =>
-            assertProblemDetailEquals(
+            assertProblemSanitizedDetail(
               response,
               Status.Unauthorized,
               "UNAUTHORIZED",
@@ -458,7 +458,7 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
     requests.foldLeft(IO.unit) { (result, uri) =>
       result.flatMap(_ =>
         httpApp.run(readGet(uri)).flatMap(response =>
-          assertProblemDetailEquals(
+          assertProblemSanitizedDetail(
             response,
             Status.UpgradeRequired,
             "ANALYSIS_CLIENT_UPGRADE_REQUIRED",
@@ -532,7 +532,7 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
       httpApp =>
         val request = readGet(uri"/api/held-events")
         httpApp.run(request).flatMap(response =>
-          assertProblemDetailEquals(
+          assertProblemSanitizedDetail(
             response,
             Status.Unauthorized,
             "UNAUTHORIZED",
@@ -548,7 +548,7 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
 
   prodHttpApp.test("prod /healthz/details is protected by session middleware") { httpApp =>
     httpApp.run(Request[IO](Method.GET, uri"/healthz/details")).flatMap(response =>
-      assertProblemDetailEquals(
+      assertProblemSanitizedDetail(
         response,
         Status.Unauthorized,
         "UNAUTHORIZED",

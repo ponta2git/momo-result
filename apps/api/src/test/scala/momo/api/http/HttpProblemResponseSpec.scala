@@ -23,7 +23,10 @@ final class HttpProblemResponseSpec extends MomoCatsEffectSuite:
         Some(org.http4s.MediaType.application.json),
       )
       assertEquals(json.hcursor.get[String]("code"), Right("INTERNAL_ERROR"))
-      assertEquals(json.hcursor.get[String]("detail"), Right("Unexpected server error."))
+      assertEquals(
+        json.hcursor.get[String]("detail"),
+        Right("予期しないエラーが発生しました。もう一度お試しください。"),
+      )
       assert(!body.contains(secret))
 
   test("analysis read saturation returns a bounded Retry-After header"):

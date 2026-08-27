@@ -23,6 +23,30 @@ const idempotencyPayloadMismatchMessage =
 const payloadTooLargeMessage =
   "送信内容が大きすぎます。入力を減らすか、画像アップロードを使ってください。";
 
+const problemDisplayMessages: Readonly<Record<string, string>> = {
+  ANALYSIS_ARTIFACT_EXPIRED:
+    "この分析結果は利用できなくなりました。最新の結果を読み込んでください。",
+  ANALYSIS_CLIENT_UPGRADE_REQUIRED: "最新の分析結果を使うため、ページを再読み込みしてください。",
+  ANALYSIS_NO_ELIGIBLE_TITLES: "分析できる作品がありません。",
+  ANALYSIS_READ_BUSY: "分析結果を読み込めません。少し待ってから、もう一度実行してください。",
+  ANALYSIS_SCOPE_NOT_FOUND: "指定された分析対象が見つかりませんでした。",
+  ANALYSIS_SCOPE_NOT_IN_ARTIFACT: "指定された条件の分析結果は、現在の結果に含まれていません。",
+  ANALYSIS_STATE_UNAVAILABLE:
+    "分析状態を読み込めません。少し待ってから、もう一度実行してください。",
+  BAD_REQUEST: "入力内容を確認してください。",
+  CONFLICT: "保存済みの状態が変わっています。内容を確認して、もう一度実行してください。",
+  DEPENDENCY_FAILED: "現在処理を完了できません。少し待ってから、もう一度実行してください。",
+  FORBIDDEN: "この操作を行う権限がありません。",
+  INTERNAL_ERROR: "予期しないエラーが発生しました。もう一度お試しください。",
+  NOT_FOUND: "指定されたデータが見つかりませんでした。",
+  SERVICE_UNAVAILABLE: "現在処理を完了できません。少し待ってから、もう一度実行してください。",
+  TOO_MANY_REQUESTS: "操作が集中しています。少し待ってから、もう一度実行してください。",
+  UNAUTHORIZED: "ログインが必要です。再度ログインしてください。",
+  UNSUPPORTED_MEDIA_TYPE:
+    "対応していないファイル形式です。PNG、JPEG、WebPの画像を選択してください。",
+  VALIDATION_FAILED: "入力内容を確認してください。",
+};
+
 function isProblemDetails(value: unknown): value is ProblemDetails {
   if (!value || typeof value !== "object") {
     return false;
@@ -47,8 +71,8 @@ export async function normalizeApiErrorResponse(response: Response): Promise<Nor
       return {
         kind: "api",
         status: body.status,
-        title: body.title,
-        detail: body.detail,
+        title: "操作を完了できませんでした",
+        detail: displayMessageForProblem(body, category),
         code: body.code,
         ...(category ? { category } : {}),
         problem: body,
@@ -56,13 +80,29 @@ export async function normalizeApiErrorResponse(response: Response): Promise<Nor
     }
   }
 
-  const text = await response.text().catch(() => "");
+  await response.text().catch(() => "");
   return {
     kind: "api",
     status: response.status,
-    title: `HTTP ${response.status}`,
-    detail: text || response.statusText || "通信に失敗しました。",
+    title: "通信に失敗しました",
+    detail: "応答を受け取れませんでした。",
   };
+}
+
+function displayMessageForProblem(
+  problem: Pick<ProblemDetails, "code" | "detail" | "status">,
+  category: NormalizedApiError["category"],
+): string {
+  if (category === "idempotency_in_progress") {
+    return idempotencyInProgressMessage;
+  }
+  if (category === "idempotency_payload_mismatch") {
+    return idempotencyPayloadMismatchMessage;
+  }
+  if (category === "payload_too_large") {
+    return payloadTooLargeMessage;
+  }
+  return problemDisplayMessages[String(problem.code)] ?? "操作を完了できませんでした。";
 }
 
 function categorizeProblem(
@@ -104,7 +144,7 @@ export function normalizeUnknownApiError(error: unknown): NormalizedApiError {
   return {
     kind: "api",
     title: "通信に失敗しました",
-    detail: error instanceof Error ? error.message : "応答を受け取れませんでした。",
+    detail: "応答を受け取れませんでした。",
   };
 }
 

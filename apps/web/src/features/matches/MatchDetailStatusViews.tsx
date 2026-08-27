@@ -79,7 +79,7 @@ export function MatchDetailLoadFailed({
     <ResourcePageState
       backHref={backHref}
       backLabel="前の画面へ戻る"
-      description="削除されたか、URLが正しくない可能性があります。"
+      description="指定された試合は削除されたか、存在しません。前の画面から別の試合を選んでください。"
       kind="not-found"
       title="試合が見つかりません"
     />

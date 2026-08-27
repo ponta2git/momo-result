@@ -22,7 +22,7 @@ import momo.api.endpoints.{
   SeasonMasterListResponse,
   SeasonMasterResponse
 }
-import momo.api.http.HttpAssertions.{assertProblem, assertProblemDetailEquals}
+import momo.api.http.HttpAssertions.{assertProblem, assertProblemSanitizedDetail}
 
 final class MasterEndpointsSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
 
@@ -112,7 +112,7 @@ final class MasterEndpointsSpec extends MomoCatsEffectSuite with HttpAppTestFixt
       accountId = "account_eu",
     )
     http.run(req).flatMap { r =>
-      assertProblemDetailEquals(
+      assertProblemSanitizedDetail(
         r,
         Status.Forbidden,
         "FORBIDDEN",
@@ -232,7 +232,7 @@ final class MasterEndpointsSpec extends MomoCatsEffectSuite with HttpAppTestFixt
     val req = readRequest(Method.POST, uri"/api/game-titles")
       .withEntity(HttpRequestBodies.Master.createGameTitle("title_world", "x", "world"))
     http.run(req).flatMap(r =>
-      assertProblemDetailEquals(
+      assertProblemSanitizedDetail(
         r,
         Status.Forbidden,
         "FORBIDDEN",
@@ -286,7 +286,7 @@ final class MasterEndpointsSpec extends MomoCatsEffectSuite with HttpAppTestFixt
   app.test("GET /api/game-titles without auth returns 401") { http =>
     val req = Request[IO](Method.GET, uri"/api/game-titles")
     http.run(req).flatMap { r =>
-      assertProblemDetailEquals(
+      assertProblemSanitizedDetail(
         r,
         Status.Unauthorized,
         "UNAUTHORIZED",

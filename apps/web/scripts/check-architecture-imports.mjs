@@ -183,13 +183,13 @@ for (const file of walk(root)) {
 
     if (isFeaturePage && specifier === "@tanstack/react-query") {
       violations.push(
-        `${relativePath}: feature Page components must keep TanStack Query in use* hooks/controllers`,
+        `${relativePath}: feature Page components must keep TanStack Query behind resource/page-model hooks`,
       );
     }
 
     if (!isFeaturePage && isFeatureUiComponent && specifier === "@tanstack/react-query") {
       violations.push(
-        `${relativePath}: feature UI components must keep TanStack Query in use* hooks/controllers`,
+        `${relativePath}: feature UI components must keep TanStack Query behind resource/page-model hooks`,
       );
     }
 

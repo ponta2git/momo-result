@@ -59,6 +59,7 @@
 - `apps/web/src` の依存方向は `app -> features -> shared` とする。逆方向 import と feature 間の実装詳細 import を禁止する。
 - `shared` は横断 API、生成型の facade、query 基盤、共有 UI、共通 domain helper を所有する。画面固有の状態・変換・UI は feature に置く。
 - Page は composition とページ状態に寄せ、取得、mutation、複雑な状態機械、純粋変換を分離する。
+- 複雑な Page は feature 固有の PageModel から resource、command、location、feedback など画面の意味を受け取り、TanStack Query の result や mutation object を直接受け取らない。PageModel 内は lifecycle と変更理由が異なる関心事だけを hook / 純粋変換へ分け、単なる転送層は作らない。
 - ファイル行数は責務混在を見つける signal とし、行数だけを理由に浅い module へ分割しない。
 - import 境界など決定的に検査できる規則は `apps/web/scripts/` の checker に固定する。本番コードから test 専用 module を参照しない。
 

@@ -1,11 +1,11 @@
 import type { Ref } from "react";
 
-import type { MatchWorkspaceControllerModel } from "@/features/matches/workspace/matchWorkspaceControllerModel";
+import type { MatchWorkspaceSubmitModel } from "@/features/matches/workspace/matchWorkspacePageModelTypes";
 import { Button } from "@/shared/ui/actions/Button";
 import { Notice } from "@/shared/ui/feedback/Notice";
 
 type MatchFormActionsProps = {
-  model: MatchWorkspaceControllerModel["editor"]["persistence"]["submit"];
+  model: MatchWorkspaceSubmitModel;
   primaryActionRef: Ref<HTMLButtonElement>;
 };
 

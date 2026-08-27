@@ -1,16 +1,12 @@
 import type { MatchFormValues } from "@/features/matches/workspace/matchFormTypes";
-import type { MatchWorkspaceControllerModel } from "@/features/matches/workspace/matchWorkspaceControllerModel";
+import type { MatchWorkspaceSetupFieldsModel } from "@/features/matches/workspace/matchWorkspacePageModelTypes";
 import { canonicalResultMembers } from "@/shared/domain/members";
 import { HeldEventPickerField } from "@/shared/heldEvents/HeldEventPickerField";
 import { toLocalDateTimeInputValue } from "@/shared/lib/dateTime";
 import { SelectField } from "@/shared/ui/forms/SelectField";
 import { TextField } from "@/shared/ui/forms/TextField";
 
-export function MatchSetupFields({
-  model,
-}: {
-  model: MatchWorkspaceControllerModel["editor"]["setup"]["fields"];
-}) {
+export function MatchSetupFields({ model }: { model: MatchWorkspaceSetupFieldsModel }) {
   const { actions, options, values } = model;
   const fieldError = (path: string) =>
     model.validation.errorPathSet.has(path) ? "未入力です" : undefined;

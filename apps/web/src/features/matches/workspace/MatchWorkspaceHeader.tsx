@@ -1,9 +1,9 @@
-import type { MatchWorkspaceControllerModel } from "@/features/matches/workspace/matchWorkspaceControllerModel";
+import type { MatchWorkspaceHeaderModel } from "@/features/matches/workspace/matchWorkspacePageModelTypes";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { PageHeader } from "@/shared/ui/layout/PageHeader";
 
 type MatchWorkspaceHeaderProps = {
-  model: MatchWorkspaceControllerModel["navigation"]["header"];
+  model: MatchWorkspaceHeaderModel;
 };
 
 export function MatchWorkspaceHeader({ model }: MatchWorkspaceHeaderProps) {

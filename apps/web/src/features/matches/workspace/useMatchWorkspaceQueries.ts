@@ -44,7 +44,7 @@ import { isOcrRunning } from "@/shared/domain/draftStatus";
 import { bySlot } from "@/shared/lib/slotMap";
 import type { SlotMap } from "@/shared/lib/slotMap";
 
-export type MatchWorkspaceQueriesParams = {
+type MatchWorkspaceQueriesParams = {
   gameTitleId: string;
   heldEventId: string;
   matchDraftId: string | undefined;
@@ -56,12 +56,11 @@ export type MatchWorkspaceQueriesParams = {
   useSampleDrafts: boolean;
 };
 
-export type MatchWorkspaceQueries = {
+type MatchWorkspaceQueries = {
   draftDetailQuery: UseQueryResult<MatchDraftDetailResponse, Error>;
   gameTitlesQuery: UseSuspenseQueryResult<GameTitleListResponse, Error>;
   heldEventPicker: HeldEventPickerDirectory;
   heldEventItems: HeldEventResponse[];
-  legacyIds: SlotMap<string>;
   mapMastersQuery: UseQueryResult<MapMasterListResponse, Error>;
   memberAliasesQuery: UseSuspenseQueryResult<MemberAliasListResponse, Error>;
   matchDetailQuery: UseQueryResult<MatchDetailResponse, Error>;
@@ -73,7 +72,7 @@ export type MatchWorkspaceQueries = {
   sourceImageQuery: UseQueryResult<MatchDraftSourceImageListResponse, Error>;
 };
 
-export type MatchWorkspaceQueriesDerived = {
+type MatchWorkspaceQueriesDerived = {
   baseErrors: NormalizedApiError[];
   editLoadFailureKind: "notFound" | "transient" | null;
   isOcrRunningBlocked: boolean;
@@ -85,7 +84,7 @@ export type MatchWorkspaceQueriesDerived = {
 };
 
 /**
- * MatchWorkspacePage が必要とするクエリと、その派生表示状態を一括で返す。
+ * MatchWorkspacePageModel が必要とするクエリと、その派生表示状態を一括で返す。
  * 純粋なクエリ宣言の集合体であり副作用は QueryClient へ閉じ込めている。
  */
 export function useMatchWorkspaceQueries(
@@ -181,26 +180,45 @@ export function useMatchWorkspaceQueries(
       .filter(shouldShowQueryError)
       .map((query) => normalizeUnknownApiError(query.error)),
   );
+  const mapMastersError = mapMastersQuery.error;
+  const refetchMapMasters = mapMastersQuery.refetch;
+  const seasonMastersError = seasonMastersQuery.error;
+  const refetchSeasonMasters = seasonMastersQuery.refetch;
+  const draftDetailError = draftDetailQuery.error;
+  const refetchDraftDetail = draftDetailQuery.refetch;
+  const ocrDraftsError = ocrDraftsQuery.error;
+  const refetchOcrDrafts = ocrDraftsQuery.refetch;
+  const sourceImageError = sourceImageQuery.error;
+  const refetchSourceImages = sourceImageQuery.refetch;
+  const preferredHeldEventError = preferredHeldEventQuery.error;
+  const refetchPreferredHeldEvent = preferredHeldEventQuery.refetch;
   const retryBaseQueries = useCallback(async () => {
     const retries: Array<Promise<unknown>> = [];
-    if (mapMastersQuery.error) retries.push(mapMastersQuery.refetch());
-    if (seasonMastersQuery.error) retries.push(seasonMastersQuery.refetch());
-    if (draftDetailQuery.error) retries.push(draftDetailQuery.refetch());
-    if (ocrDraftsQuery.error) retries.push(ocrDraftsQuery.refetch());
-    if (sourceImageQuery.error) retries.push(sourceImageQuery.refetch());
-    if (preferredHeldEventQuery.error) retries.push(preferredHeldEventQuery.refetch());
+    if (mapMastersError) retries.push(refetchMapMasters());
+    if (seasonMastersError) retries.push(refetchSeasonMasters());
+    if (draftDetailError) retries.push(refetchDraftDetail());
+    if (ocrDraftsError) retries.push(refetchOcrDrafts());
+    if (sourceImageError) retries.push(refetchSourceImages());
+    if (preferredHeldEventError) retries.push(refetchPreferredHeldEvent());
     await Promise.all(retries);
   }, [
-    draftDetailQuery,
-    mapMastersQuery,
-    ocrDraftsQuery,
-    preferredHeldEventQuery,
-    seasonMastersQuery,
-    sourceImageQuery,
+    draftDetailError,
+    mapMastersError,
+    ocrDraftsError,
+    preferredHeldEventError,
+    refetchDraftDetail,
+    refetchMapMasters,
+    refetchOcrDrafts,
+    refetchPreferredHeldEvent,
+    refetchSeasonMasters,
+    refetchSourceImages,
+    seasonMastersError,
+    sourceImageError,
   ]);
+  const refetchMatchDetail = matchDetailQuery.refetch;
   const retryEdit = useCallback(() => {
-    void matchDetailQuery.refetch();
-  }, [matchDetailQuery]);
+    void refetchMatchDetail();
+  }, [refetchMatchDetail]);
   const editLoadFailureKind =
     mode === "edit" && shouldShowBlockingQueryError(matchDetailQuery)
       ? normalizeUnknownApiError(matchDetailQuery.error).status === 404
@@ -229,7 +247,6 @@ export function useMatchWorkspaceQueries(
     gameTitlesQuery,
     heldEventPicker,
     heldEventItems,
-    legacyIds,
     mapMastersQuery,
     memberAliasesQuery,
     matchDetailQuery,

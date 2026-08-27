@@ -2,7 +2,11 @@ import { Settings2, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { MatchSetupFields } from "@/features/matches/workspace/MatchSetupFields";
-import type { MatchWorkspaceControllerModel } from "@/features/matches/workspace/matchWorkspaceControllerModel";
+import type {
+  MatchWorkspaceCancellationModel,
+  MatchWorkspaceMastersNavigationModel,
+  MatchWorkspaceSetupSectionModel,
+} from "@/features/matches/workspace/matchWorkspacePageModelTypes";
 import { formatMatchNoInEvent } from "@/shared/domain/matchLabels";
 import { formatDateTimeLong } from "@/shared/lib/dateTime";
 import { Button } from "@/shared/ui/actions/Button";
@@ -13,9 +17,9 @@ import { Notice } from "@/shared/ui/feedback/Notice";
 import { TextField } from "@/shared/ui/forms/TextField";
 
 type MatchSetupSectionProps = {
-  cancellation: MatchWorkspaceControllerModel["editor"]["persistence"]["cancellation"];
-  mastersNavigation: MatchWorkspaceControllerModel["editor"]["navigation"]["masters"];
-  model: MatchWorkspaceControllerModel["editor"]["setup"];
+  cancellation: MatchWorkspaceCancellationModel;
+  mastersNavigation: MatchWorkspaceMastersNavigationModel;
+  model: MatchWorkspaceSetupSectionModel;
 };
 
 export function MatchSetupSection({

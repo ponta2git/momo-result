@@ -45,7 +45,7 @@ export type MatchWorkspaceInitParams = {
  * モード別の初期化（edit: 既存試合 / create: 下書き / review: OCR 結果）を担う Hook。
  *
  * - 入力キー（mode + ids + 取得データの updatedAt 等）が変化したときのみ初期化する
- * - 初期化結果は呼び出し側 onInitialize コールバックで反映する
+ * - 初期化結果は呼び出し側の安定した onInitialize command で一括反映する
  * - 初期化済み状態は内部 ref で保持する（フラグの取得は isInitialized 戻り値）
  */
 export function useMatchWorkspaceInit({
@@ -74,7 +74,6 @@ export function useMatchWorkspaceInit({
     mode,
     sample: useSampleDrafts,
   });
-
   useEffect(() => {
     if (initializedKeyRef.current === initKey) {
       return;

@@ -1,6 +1,6 @@
 import { RotateCcw } from "lucide-react";
 
-import type { MatchWorkspaceControllerModel } from "@/features/matches/workspace/matchWorkspaceControllerModel";
+import type { MatchWorkspaceRecoveryModel } from "@/features/matches/workspace/matchWorkspacePageModelTypes";
 import { formatDateTimeLong } from "@/shared/lib/dateTime";
 import { Button } from "@/shared/ui/actions/Button";
 import { Notice } from "@/shared/ui/feedback/Notice";
@@ -9,11 +9,7 @@ function savedAtLabel(savedAt: string): string {
   return formatDateTimeLong(savedAt, "前回");
 }
 
-export function MatchWorkspaceRecoveryNotice({
-  model,
-}: {
-  model: NonNullable<MatchWorkspaceControllerModel["editor"]["persistence"]["recovery"]>;
-}) {
+export function MatchWorkspaceRecoveryNotice({ model }: { model: MatchWorkspaceRecoveryModel }) {
   return (
     <Notice
       action={

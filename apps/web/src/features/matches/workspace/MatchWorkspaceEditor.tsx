@@ -2,7 +2,7 @@ import { useCallback, useRef } from "react";
 
 import { MatchFormActions } from "@/features/matches/workspace/MatchFormActions";
 import { MatchSetupSection } from "@/features/matches/workspace/MatchSetupSection";
-import type { MatchWorkspaceControllerModel } from "@/features/matches/workspace/matchWorkspaceControllerModel";
+import type { MatchWorkspaceEditorModel } from "@/features/matches/workspace/matchWorkspacePageModelTypes";
 import { MatchWorkspaceRecoveryNotice } from "@/features/matches/workspace/MatchWorkspaceRecoveryNotice";
 import { ScoreGrid } from "@/features/matches/workspace/scoreGrid/ScoreGrid";
 import { SourceImagePanel } from "@/features/matches/workspace/sourceImages/SourceImagePanel";
@@ -10,7 +10,7 @@ import { cn } from "@/shared/ui/cn";
 import { Notice } from "@/shared/ui/feedback/Notice";
 
 type MatchWorkspaceEditorProps = {
-  model: MatchWorkspaceControllerModel["editor"];
+  model: MatchWorkspaceEditorModel;
 };
 
 export function MatchWorkspaceEditor({ model }: MatchWorkspaceEditorProps) {

@@ -1,13 +1,13 @@
 import { Link } from "react-router-dom";
 
-import type { MatchWorkspaceControllerModel } from "@/features/matches/workspace/matchWorkspaceControllerModel";
+import type { MatchWorkspaceBlockedReviewModel } from "@/features/matches/workspace/matchWorkspacePageModelTypes";
 import { Button } from "@/shared/ui/actions/Button";
 import { Notice } from "@/shared/ui/feedback/Notice";
 
 export function MatchWorkspaceBlockedNotice({
   model,
 }: {
-  model: NonNullable<MatchWorkspaceControllerModel["review"]["blocked"]>;
+  model: MatchWorkspaceBlockedReviewModel;
 }) {
   return (
     <section aria-labelledby="workspace-blocked-heading">

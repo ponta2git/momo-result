@@ -7,7 +7,7 @@ import { MatchWorkspaceEditor } from "@/features/matches/workspace/MatchWorkspac
 import { MatchWorkspaceHeader } from "@/features/matches/workspace/MatchWorkspaceHeader";
 import { MatchWorkspaceLoading } from "@/features/matches/workspace/MatchWorkspaceLoading";
 import { MatchWorkspaceNavigationGuard } from "@/features/matches/workspace/MatchWorkspaceNavigationGuard";
-import { useMatchWorkspaceController } from "@/features/matches/workspace/useMatchWorkspaceController";
+import { useMatchWorkspacePageModel } from "@/features/matches/workspace/useMatchWorkspacePageModel";
 import { Button } from "@/shared/ui/actions/Button";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { Notice } from "@/shared/ui/feedback/Notice";
@@ -30,14 +30,14 @@ export function MatchWorkspacePage({
   mode,
   preferredHeldEventId,
 }: MatchWorkspacePageProps) {
-  const controller = useMatchWorkspaceController({
+  const pageModel = useMatchWorkspacePageModel({
     matchDraftId,
     matchId,
     matchSessionId,
     mode,
     preferredHeldEventId,
   });
-  const { editor, loading, navigation, persistence, review, validationFocusRequest } = controller;
+  const { editor, loading, navigation, persistence, review, validationFocusRequest } = pageModel;
 
   useEffect(() => {
     if (!validationFocusRequest) {

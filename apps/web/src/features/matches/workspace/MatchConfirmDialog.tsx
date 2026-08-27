@@ -2,7 +2,7 @@ import { AlertTriangle, Check } from "lucide-react";
 import { useFormStatus } from "react-dom";
 
 import type { MatchFormValues } from "@/features/matches/workspace/matchFormTypes";
-import type { MatchWorkspaceControllerModel } from "@/features/matches/workspace/matchWorkspaceControllerModel";
+import type { MatchWorkspaceConfirmationDialogModel } from "@/features/matches/workspace/matchWorkspacePageModelTypes";
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
 import { formatMatchNoInEvent } from "@/shared/domain/matchLabels";
 import { memberDisplayName, orderFixedMembers } from "@/shared/domain/members";
@@ -154,11 +154,7 @@ function OcrReviewSummary({
   );
 }
 
-export function MatchConfirmDialog({
-  model,
-}: {
-  model: NonNullable<MatchWorkspaceControllerModel["persistence"]["confirmation"]>;
-}) {
+export function MatchConfirmDialog({ model }: { model: MatchWorkspaceConfirmationDialogModel }) {
   return (
     <Dialog
       busy={model.pending}

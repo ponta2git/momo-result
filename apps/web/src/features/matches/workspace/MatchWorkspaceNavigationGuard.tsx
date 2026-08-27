@@ -1,11 +1,11 @@
 import { useCallback, useContext, useEffect } from "react";
 import { UNSAFE_DataRouterContext, useBlocker } from "react-router-dom";
 
-import type { MatchWorkspaceControllerModel } from "@/features/matches/workspace/matchWorkspaceControllerModel";
+import type { MatchWorkspaceNavigationGuardModel } from "@/features/matches/workspace/matchWorkspacePageModelTypes";
 import { AlertDialog } from "@/shared/ui/feedback/Dialog";
 
 type MatchWorkspaceNavigationGuardProps = {
-  model: MatchWorkspaceControllerModel["navigation"]["guard"];
+  model: MatchWorkspaceNavigationGuardModel;
 };
 
 function MatchWorkspaceRouterGuard({ model }: MatchWorkspaceNavigationGuardProps) {

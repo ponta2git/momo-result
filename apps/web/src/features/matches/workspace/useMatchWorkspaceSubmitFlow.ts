@@ -34,28 +34,38 @@ export function useMatchWorkspaceSubmitFlow({
   useSampleDrafts: boolean;
   values: MatchFormValues;
 }) {
-  const confirmedDraft = useConfirmedDraftRedirect({
-    notify,
-    onBeforeRedirect: onPersistedSuccess,
-    onStatusCheckError: (message) => {
+  const handleStatusCheckError = useCallback(
+    (message: string) => {
       setConfirmOpen(false);
       setOperationError({ kind: "draftStatus", message });
     },
-    onStatusCheckStart: () => setOperationError(null),
+    [setConfirmOpen, setOperationError],
+  );
+  const handleOperationStart = useCallback(() => setOperationError(null), [setOperationError]);
+  const confirmedDraft = useConfirmedDraftRedirect({
+    notify,
+    onBeforeRedirect: onPersistedSuccess,
+    onStatusCheckError: handleStatusCheckError,
+    onStatusCheckStart: handleOperationStart,
     returnTo,
     useSampleDrafts,
   });
+  const handleConfirmSuccess = useCallback(() => setConfirmOpen(false), [setConfirmOpen]);
+  const handleMutationError = useCallback(
+    (kind: MatchWorkspaceOperationErrorKind, message: string) => {
+      if (kind === "confirm") setConfirmOpen(false);
+      setOperationError({ kind, message });
+    },
+    [setConfirmOpen, setOperationError],
+  );
   const mutations = useMatchWorkspaceMutations({
     heldEventId: values.heldEventId,
     matchId,
     mode,
     onConfirmConflict: confirmedDraft.handleConfirmConflict,
-    onConfirmSuccess: () => setConfirmOpen(false),
-    onError: (kind, message) => {
-      if (kind === "confirm") setConfirmOpen(false);
-      setOperationError({ kind, message });
-    },
-    onOperationStart: (_kind: MatchWorkspaceOperationErrorKind) => setOperationError(null),
+    onConfirmSuccess: handleConfirmSuccess,
+    onError: handleMutationError,
+    onOperationStart: handleOperationStart,
     onPersistedSuccess,
     returnTo,
   });
@@ -65,14 +75,15 @@ export function useMatchWorkspaceSubmitFlow({
     values,
   });
   const { cancelDraftMutation } = mutations;
+  const cancelDraft = cancelDraftMutation.mutateAsync;
   const cancelDraftConfirmed = useCallback(async () => {
     if (!values.matchDraftId) {
       return;
     }
     setOperationError(null);
     setValidationMessage("");
-    await cancelDraftMutation.mutateAsync(values.matchDraftId).catch(() => undefined);
-  }, [cancelDraftMutation, setOperationError, setValidationMessage, values.matchDraftId]);
+    await cancelDraft(values.matchDraftId).catch(() => undefined);
+  }, [cancelDraft, setOperationError, setValidationMessage, values.matchDraftId]);
 
   return { cancelDraftConfirmed, confirmAction, confirmedDraft, mutations };
 }

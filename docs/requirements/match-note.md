@@ -78,10 +78,12 @@
 ### 5.1 試合作成・確定
 
 - 手入力による試合作成とOCR下書きの確定では、最終確定前に任意のメモ入力欄を提供する。
+- 入力欄は4人分の結果入力に続き、最終確定操作より前の情報順序に置く。最終確定の操作panelへメモを内包して必須入力に見せたり、構造化された結果入力の途中へ割り込ませたりしない。
 - 入力欄は「試合メモ（任意）」の可視labelと、試合中の出来事や感想を対戦後に150字まで記録する欄であることが分かる短い説明を持つ。placeholderだけに用途や任意性を委ねない。
-- 入力欄は複数行、現在文字数と上限、上限超過時のfield errorを持つ。client-side制約だけを正本にせず、APIも同じ上限を検証する。
+- 入力欄は複数行とし、入力中に、LFへ正規化した本文のUnicode code point数を再計算して「現在文字数 / 150」を表示する。pasteやIME確定を含め、151文字以上になった時点で本文を切り捨てずにfield errorを示し、最終確認へ進む操作またはメモ保存を実行できないようにする。上限内へ戻した時点で操作可能な状態へ戻す。client-side制約だけを正本にせず、APIも同じ上限を検証する。
 - メモの有無を確定経路の識別子にしない。手入力とOCR下書きからの確定は、メモの有無にかかわらず `docs/requirements/base.md` の `matchDraftId` 契約と副作用を維持し、どちらのrequest変換でも入力したメモを落とさない。
-- メモを入力または変更した状態は未保存変更として扱い、flowの離脱、キャンセル、確定失敗で保存済みと表示しない。
+- メモを入力または変更した状態は未保存変更として扱い、flowの離脱、キャンセル、確定失敗で保存済みと表示しない。作成・確認flowが既存のsession内入力復元を提供する場合は、初回メモも同じ復元単位へ含めるが、server-side下書きにはしない。
+- 最終確認dialogでは、正規化後のメモがある場合だけ、編集できない確認項目として本文を再掲する。メモがない場合は「メモなし」を追加して確認項目を増やさない。
 - 確定成功後は、試合詳細に保存済み本文と最終更新情報を表示する。
 
 ### 5.2 確定後の編集owner
@@ -119,7 +121,7 @@
 
 ### 6.3 開催詳細
 
-- 開催詳細の確定試合timelineでは、メモがある試合だけ、対応する試合項目内に「試合メモ」としてcompactなpreviewを表示する。短いメモは全文を表示してよいが、長いメモを初期状態で全試合分展開してtimelineの見出し、順位、総資産、操作を押し流さない。
+- 開催詳細の確定試合timelineでは、メモがある試合だけ、対応する試合項目内に「試合メモ」としてcompactなpreviewを表示する。PCとmobileで文字数による別規則を持たず、実際の表示幅で本文が3行を超える場合だけ初期表示を3行に制限し、3行以内なら全文を表示する。表示幅が変わった場合は現在のoverflow有無を再評価する。
 - previewで全文を読めない場合は、同じ試合項目内で「メモ全文を表示」「メモを閉じる」を切り替え、改行を保った全文をその場で閲覧できるようにする。開閉controlは対象との関連と展開状態を支援技術へ伝える。省略記号だけ、hover、tooltip、別画面への移動を全文閲覧の唯一の手段にしない。
 - 開催詳細のメモは閲覧専用とし、inline editorやメモ専用編集操作を置かない。既存の試合詳細へのlinkは維持する。
 - メモがない試合に空欄や「メモなし」を反復しない。
@@ -128,7 +130,7 @@
 ## 7. Mutation / Failure Contract
 
 - 確定後のメモ追加、更新、削除は、構造化された試合結果更新とは独立したmutationとして扱う。このmutationは本文の有無、最終更新情報、version以外の試合項目を変更しない。成功するたびに、本文を削除した場合もversionを変更する。
-- 正規化後の本文が現在の保存状態と同じ更新は成功した変更として扱わず、versionや最終更新情報を進めない。
+- 更新時はexpected versionの一致を先に検証する。古いversionからのrequestは、正規化後の本文が偶然現在の本文と同じでも競合として扱う。versionが一致し、正規化後の本文も現在の保存状態と同じ場合だけno-opとし、versionや最終更新情報を進めない。
 - 編集可能な試合詳細の読み取りmodelは、本文または明示的なabsence、現在のversion、変更済みなら最終更新者と最終更新日時を一つのメモ状態として返す。開催詳細の閲覧projectionは本文またはabsenceだけを返し、編集用versionと最終更新情報を不要に公開しない。どちらもメモがない状態と取得失敗を混同しない。
 - 150文字超過、権限不足、対象試合なし、version競合を区別できる失敗として返す。内部ID、本文、内部例外を安全なerror detailの代わりにしない。
 - メモmutationの成功responseは保存した本文をechoせず、対象試合、更新後version、最終更新情報など結果確定に必要なmetadataだけを返す。Webは送信した正規化済み本文とresponseを同じ保存結果として反映するか、必要時だけ試合詳細を再取得する。
@@ -137,18 +139,21 @@
 - 一時的な保存失敗では既存の保存済み本文を維持し、未保存本文を保存済み表示へ反映しない。処理結果が未確定の通信失敗は同じidempotency key、本文、versionで再試行し、確定した失敗または利用者が本文を変更した後は同じkeyを流用しない。
 - mutation成功後は、試合詳細のメモ状態、開催詳細の閲覧projection、試合一覧のメモ有無が同じ保存状態を表すようにする。一方の閲覧用dataだけを更新し、他方へ旧本文または誤った有無を恒久的に残さない。
 - 試合削除と競合したメモ更新は対象なしとして失敗し、削除済み試合や孤立メモを復元しない。
-- HTTP field名、status、error envelopeはOpenAPIを正本とし、Web、API、DBの境界で同じ文字数、absence、versionの意味を検証する。
+- HTTP field名、status、error envelopeはOpenAPIを正本とする。WebとAPIで文字数とabsenceの意味を揃え、API、repository、DBでabsenceとversionの意味を揃える。
 
 ## 8. Compatibility / Feasibility Boundary
 
 - DB変更はmomo-dbでadditiveに行い、既存試合を本文なし、最終更新情報なし、決定的な初期versionを持つメモ状態として読めるようにする。保存済みメモを破棄するdown migrationを通常のrollback手段にしない。
-- DBは本文のabsence、150 Unicode code points以下、負でない内部version counter、本文・最終更新情報のshapeを制約できる範囲で保証する。wireではこのcounterをopaqueなversionとして扱う。Unicode whitespace判定と改行統一はAPI境界で一度だけ行い、consumerごとに異なる正規化をしない。
+- DBは本文のabsence、負でない内部version counter、本文・最終更新情報のshapeを制約できる範囲で保証する。150 Unicode code pointsの上限、Unicode whitespace判定、改行統一はAPI境界のvalidated valueが所有し、DBの文字数constraintとして重ねて実装しない。repositoryはvalidated valueだけを受け取り、wireではcounterをopaqueなversionとして扱う。
 - 試合作成・確定requestへのメモ追加と、試合一覧responseへのメモ有無追加はadditive変更とする。メモを送らない既存clientと既存試合を引き続き受理し、旧clientは一覧の追加fieldを無視できるようにする。OpenAPI、生成型、request変換、readerを同じ契約変更として更新する。
 - メモ専用mutationは、構造化された試合更新と分析再計算を一体で行う既存persistence経路へ流さない。本文とメモ状態だけを更新したこと、および分析用outboxを書かなかったことをDB-backed contract testで直接確認できる境界を持つ。
 - 既存のidempotency保存領域にはrequest hashと本文を含まない成功responseだけを保持し、メモ本文を重複保存しない。競合回復に必要な最新本文は試合詳細readから取得する。
 - 試合詳細、開催詳細、試合一覧は、API境界で正規化された同じ本文有無を基準にする。試合詳細は最終更新accountの表示名を読み取り時にhydrateし、開催詳細は本文だけ、試合一覧は有無だけをboundedなreadでまとめて取得する。いずれも試合ごとの追加requestを発生させない。
-- Web、API、DBで文字数判定を共有fixtureにより照合する。fixtureはLF / CRLF、空、Unicode whitespace、通常の日本語、BMP外文字、結合文字、150 / 151 code pointsを含む。
-- releaseはDB、API reader / writer、OpenAPI生成型、Webの順に進め、rollbackはWeb、API、DBの逆順を守る。旧Webは追加response fieldを無視できるようにする。すでに読み込まれた新Webが未対応APIへ保存を試みた場合も未保存本文を保ってreloadが必要なことを示し、構造化された試合更新へfallbackしない。
+- WebとAPIの文字数判定を共有fixtureにより照合する。fixtureはLF / CRLF、空、Unicode whitespace、通常の日本語、BMP外文字、結合文字、150 / 151 code pointsを含む。DB testはこの可変な入力方針を再判定せず、APIで検証済みの本文を欠損や変形なく保存できることと、version、外部key、本文・最終更新情報のshapeを検証する。
+- 本機能の初回releaseと、その場で必要になった切戻しは、利用者へ事前に示したmaintenance時間内に行い、その間の操作とbrowserに残ったWebを含むversion混在は動作保証の対象外とする。ここでのmaintenanceは利用者への通知による運用上の境界だけを指し、アクセス遮断、read-only化、mutation拒否、maintenance専用画面を実装しない。告知の開始・終了を現行workflowが自動化すると仮定しない。
+- DB schemaの正本である`momo-db`でadditive migrationを先に用意し、このrepositoryの`.momo-db-ref`をそのcommitへ更新する。CIがpinned migrationを適用する先は隔離された検証DBであり、本番DBへ適用した証拠にはしない。本番DBへの適用手順はprivate runbookを正本とし、migration適用済み状態を確認してからruntimeをdeployする。
+- 現行deploy workflowではAPIとWebを別々に順次deployせず、両方を含む同一のsmoke済みimmutable runtime imageをproduction承認境界からdeployする。release commandのDB contract preflightで必要columnがない場合はruntime切替前に失敗させ、deploy後のidentity確認とsmokeが成功してからmaintenance時間の終了を利用者へ通知する。
+- 通常rollbackは現行runtime rollback workflowで、過去に成功した同一runtimeのimageと設定を復元する。additiveなDB columnは残し、保存済みメモを失うdown migrationを通常rollbackへ含めない。DB migration自体が未完了または成否不明ならruntimeをdeployせず、DBを戻す必要が生じた場合は通常rollbackと分けて設計・承認する。
 
 ## 9. Analysis / Export Boundary
 
@@ -163,10 +168,10 @@
 
 | 観点 | 最低限確認すること |
 | --- | --- |
-| 作成・確定 | 手入力とOCR確定の双方で、request変換後もメモと確定経路の識別子を保持し、メモなし、改行あり、150文字を保存でき、151文字を部分確定せず拒否する |
-| 文字境界 | 共有fixtureにより、改行統一、Unicode whitespace、BMP外文字、結合文字、150 / 151 code pointsの判定がWeb、API、DBで矛盾しない |
+| 作成・確定 | 手入力とOCR確定の双方で、4人分の結果の後、確定操作より前に任意欄を表示し、request変換後もメモと確定経路の識別子を保持する。session内復元と、メモがある場合だけの最終確認を経て、メモなし、改行あり、150文字を保存できる。151文字は入力中に検出して本文を保持したまま修正でき、最終確認や保存へ進めず、部分確定しない |
+| 文字境界 | pasteとIME確定を含む入力中の表示・field error、および共有fixtureによる改行統一、Unicode whitespace、BMP外文字、結合文字、150 / 151 code pointsの判定がWebとAPIで一致する。DBはAPIで検証済みの150文字本文を欠損や変形なく保存する |
 | 詳細編集 | 追加、編集、キャンセル、未変更時のno-op、明示的な削除と確認、dirty状態からの移動、保存中、成功、失敗、再試行を試合詳細内で完了できる |
-| 画面責務 | 「試合結果を編集」と「メモを編集」を取り違えず、試合編集ではメモを変更せず、試合一覧では「メモあり」だけを判別でき、開催詳細ではcompactなpreviewから全文をその場で閲覧できるが編集できない |
+| 画面責務 | 「試合結果を編集」と「メモを編集」を取り違えず、試合編集ではメモを変更せず、試合一覧では「メモあり」だけを判別できる。開催詳細では表示幅ごとに3行overflowを正しく判定し、必要な場合だけcompactなpreviewから全文をその場で閲覧できるが編集できない |
 | 一覧表示 | メモがある確定済み試合だけにPCとモバイルで「メモあり」を表示し、本文、更新者、更新日時を一覧responseと画面へ出さず、未確定下書き、取得失敗、契約不一致をメモなしと誤認しない |
 | 整合性 | 構造化された試合編集がメモを保持し、構造化更新とメモ更新が並行しても互いの変更を消さず、試合削除後にメモが残らない |
 | 権限・来歴 | 有効accountだけが読み書きでき、最終更新者と日時が本文と同時に更新され、メモ更新だけで構造化された試合の更新metadataが変わらない |
@@ -176,6 +181,7 @@
 | 閲覧整合 | 保存後の試合詳細と開催詳細が同じ本文またはabsenceを返し、試合一覧の「メモあり」が追加・削除へ追従し、メモなしと取得失敗を混同しない |
 | 分析分離 | メモだけの追加、編集、削除でinput revision、source input checksum、再計算intent、outbox、job、artifactが変わらない |
 | 互換性 | migration前の全既存試合をメモなしで読め、旧clientの確定を受理し、rollbackで保存済みメモを破棄しない |
+| Release / rollback | pinnedしたmomo-db migrationを隔離DBへ適用したruntime gateが通り、必要columnがないDBではrelease preflightが失敗する。本番migrationの適用済み確認後、APIとWebを含む同一runtimeを通常workflowでdeployし、通常rollbackでは以前の成功runtimeを復元してadditive columnと保存済みメモを残す |
 | 出力 | 既存CSV / TSVの列順、行数、内容がメモの有無で変わらない |
 | 表示・安全性 | 改行、長文、HTML風文字列をplain textとして安全に表示し、本文をlogやerrorへ出さない |
 | 提供価値 | 初版リリース後、実利用者への定性的な確認により、150字の入力が気軽さを損なっていないことと、保存済みメモが後日の会話または振り返りに役立ったかを確認する。アプリ内の利用状況計測は受入条件にしない |

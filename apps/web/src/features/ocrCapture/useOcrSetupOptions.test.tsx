@@ -1,12 +1,18 @@
 import { QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
+import { http, HttpResponse } from "msw";
 import { useState } from "react";
 import { describe, expect, it } from "vitest";
 
+import { resolveHeldEventContext } from "@/features/ocrCapture/ocrSetupOptionResolution";
 import type { SetupFormValues } from "@/features/ocrCapture/schema";
 import { useOcrSetupOptions } from "@/features/ocrCapture/useOcrSetupOptions";
 import { heldEventKeys, masterKeys } from "@/shared/api/queryKeys";
+import { setupMsw } from "@/test/msw/lifecycle";
+import { server } from "@/test/msw/server";
 import { createTestQueryClient } from "@/test/queryClient";
+
+setupMsw();
 
 const gameTitle = {
   createdAt: "2026-01-01T00:00:00.000Z",
@@ -34,14 +40,18 @@ const seasonMaster = {
 
 function SetupOptionsHarness({ initialValue }: { initialValue: SetupFormValues }) {
   const [value, setValue] = useState(initialValue);
-  useOcrSetupOptions({
+  const options = useOcrSetupOptions({
     authAccountId: "account_ponta",
     enabled: true,
     onChange: setValue,
     value,
   });
 
-  return <output aria-label="setup value">{JSON.stringify(value)}</output>;
+  return (
+    <output aria-label="setup value" data-error={options.heldEventsError ?? ""}>
+      {JSON.stringify(value)}
+    </output>
+  );
 }
 
 function readSetupValue(): SetupFormValues {
@@ -49,6 +59,20 @@ function readSetupValue(): SetupFormValues {
 }
 
 describe("useOcrSetupOptions", () => {
+  it("distinguishes authoritative absence from a transient lookup failure", () => {
+    const base = {
+      detailFailed: true,
+      directoryFailed: false,
+      enabled: true,
+      fetching: false,
+      selected: false,
+      selectedId: "held-requested",
+    };
+
+    expect(resolveHeldEventContext({ ...base, detailErrorStatus: 404 })).toBe("notFound");
+    expect(resolveHeldEventContext({ ...base, detailErrorStatus: 500 })).toBe("failed");
+  });
+
   it("applies map and season fallbacks in one state transition", async () => {
     const queryClient = createTestQueryClient();
     queryClient.setQueryDefaults(masterKeys.all(), {
@@ -128,5 +152,89 @@ describe("useOcrSetupOptions", () => {
         matchNoInEvent: 8,
       }),
     );
+  });
+
+  it("preserves the selected held event when its detail request fails transiently", async () => {
+    const queryClient = createTestQueryClient();
+    queryClient.setQueryDefaults(masterKeys.all(), { staleTime: Number.POSITIVE_INFINITY });
+    queryClient.setQueryDefaults(heldEventKeys.all(), {
+      retry: false,
+      staleTime: Number.POSITIVE_INFINITY,
+    });
+    queryClient.setQueryData(masterKeys.gameTitles.list("account_ponta"), { items: [gameTitle] });
+    queryClient.setQueryData(masterKeys.mapMasters.list("account_ponta", gameTitle.id), {
+      items: [mapMaster],
+    });
+    queryClient.setQueryData(masterKeys.seasonMasters.list("account_ponta", gameTitle.id), {
+      items: [seasonMaster],
+    });
+    queryClient.setQueryData(heldEventKeys.scope("ocr-capture"), { items: [] });
+    server.use(
+      http.get("/api/held-events/held-requested", () =>
+        HttpResponse.json({ detail: "temporarily unavailable" }, { status: 500 }),
+      ),
+    );
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <SetupOptionsHarness
+          initialValue={{
+            gameTitleId: gameTitle.id,
+            heldEventId: "held-requested",
+            mapMasterId: mapMaster.id,
+            ownerMemberId: "member_ponta",
+            seasonMasterId: seasonMaster.id,
+          }}
+        />
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByLabelText("setup value")).toHaveAttribute(
+        "data-error",
+        "Internal Server Error",
+      ),
+    );
+    expect(readSetupValue().heldEventId).toBe("held-requested");
+  });
+
+  it("clears the selected held event only after an authoritative 404", async () => {
+    const queryClient = createTestQueryClient();
+    queryClient.setQueryDefaults(masterKeys.all(), { staleTime: Number.POSITIVE_INFINITY });
+    queryClient.setQueryDefaults(heldEventKeys.all(), {
+      retry: false,
+      staleTime: Number.POSITIVE_INFINITY,
+    });
+    queryClient.setQueryData(masterKeys.gameTitles.list("account_ponta"), { items: [gameTitle] });
+    queryClient.setQueryData(masterKeys.mapMasters.list("account_ponta", gameTitle.id), {
+      items: [mapMaster],
+    });
+    queryClient.setQueryData(masterKeys.seasonMasters.list("account_ponta", gameTitle.id), {
+      items: [seasonMaster],
+    });
+    queryClient.setQueryData(heldEventKeys.scope("ocr-capture"), { items: [] });
+    server.use(
+      http.get("/api/held-events/held-missing", () =>
+        HttpResponse.json({ detail: "not found" }, { status: 404 }),
+      ),
+    );
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <SetupOptionsHarness
+          initialValue={{
+            gameTitleId: gameTitle.id,
+            heldEventId: "held-missing",
+            mapMasterId: mapMaster.id,
+            matchNoInEvent: 9,
+            ownerMemberId: "member_ponta",
+            seasonMasterId: seasonMaster.id,
+          }}
+        />
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() => expect(readSetupValue().heldEventId).toBe(""));
+    expect(readSetupValue().matchNoInEvent).toBeUndefined();
   });
 });

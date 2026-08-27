@@ -1,9 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
-import type { UseQueryResult } from "@tanstack/react-query";
 import { useMemo } from "react";
 
 import type { getAuthMe } from "@/shared/api/auth";
-import type { listMemberAliases } from "@/shared/api/masters";
 import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import type { NormalizedApiError } from "@/shared/api/problemDetails";
 import { shouldShowQueryError } from "@/shared/api/queryErrorState";
@@ -25,15 +23,19 @@ export type OcrCaptureAuthSlice = {
 
 export type OcrCaptureQueries = {
   auth: OcrCaptureAuthSlice;
-  memberAliasDirectory: ReturnType<typeof buildMemberAliasDirectory>;
-  memberAliasesError: NormalizedApiError | undefined;
-  memberAliasesQuery: UseQueryResult<Awaited<ReturnType<typeof listMemberAliases>>>;
-  retryMemberAliases: () => void;
+  memberAliases: {
+    directory: ReturnType<typeof buildMemberAliasDirectory>;
+    feedback: {
+      error: NormalizedApiError | undefined;
+      refresh: () => void;
+      refreshing: boolean;
+    };
+  };
 };
 
 /**
- * OCR 取り込み画面が必要とするマスタ系クエリと、選択中作品から導出する OCR ヒントをまとめる。
- * 認証関連は `auth` スライスに整形し、ページ側は `auth.error` 等のフラットな値だけ参照する。
+ * Adapts authentication and member-alias queries to the OCR capture workflow's semantic data.
+ * TanStack Query results stay private so callers depend only on retry and feedback intent.
  */
 export function useOcrCaptureQueries(): OcrCaptureQueries {
   const { devUser } = useDevUser();
@@ -60,11 +62,15 @@ export function useOcrCaptureQueries(): OcrCaptureQueries {
       retry: () => void authQuery.refetch(),
       retrying: authQuery.isFetching,
     },
-    memberAliasDirectory,
-    memberAliasesError: shouldShowQueryError(memberAliasesQuery)
-      ? normalizeUnknownApiError(memberAliasesQuery.error)
-      : undefined,
-    memberAliasesQuery,
-    retryMemberAliases: () => void memberAliasesQuery.refetch(),
+    memberAliases: {
+      directory: memberAliasDirectory,
+      feedback: {
+        error: shouldShowQueryError(memberAliasesQuery)
+          ? normalizeUnknownApiError(memberAliasesQuery.error)
+          : undefined,
+        refresh: () => void memberAliasesQuery.refetch(),
+        refreshing: memberAliasesQuery.isFetching,
+      },
+    },
   };
 }

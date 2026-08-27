@@ -1,6 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect } from "react";
 
+import {
+  deriveValidSetupValue,
+  resolveHeldEventContext,
+  sameSetupValue,
+} from "@/features/ocrCapture/ocrSetupOptionResolution";
 import type { SetupFormValues } from "@/features/ocrCapture/schema";
 import { mergeHeldEventItems } from "@/shared/api/heldEventCache";
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
@@ -31,74 +36,6 @@ const emptyGameTitles: GameTitleResponse[] = [];
 const emptyHeldEvents: HeldEventResponse[] = [];
 const emptyMapMasters: MapMasterResponse[] = [];
 const emptySeasonMasters: SeasonMasterResponse[] = [];
-
-function sameSetupValue(left: SetupFormValues, right: SetupFormValues): boolean {
-  return (
-    left.gameTitleId === right.gameTitleId &&
-    left.heldEventId === right.heldEventId &&
-    left.mapMasterId === right.mapMasterId &&
-    left.matchNoInEvent === right.matchNoInEvent &&
-    left.ownerMemberId === right.ownerMemberId &&
-    left.seasonMasterId === right.seasonMasterId
-  );
-}
-
-function deriveValidSetupValue(args: {
-  gameTitles: GameTitleResponse[];
-  heldEvents: HeldEventResponse[];
-  heldEventsLoaded: boolean;
-  mapMasters: MapMasterResponse[];
-  seasonMasters: SeasonMasterResponse[];
-  value: SetupFormValues;
-}): SetupFormValues {
-  const { gameTitles, heldEvents, heldEventsLoaded, mapMasters, seasonMasters, value } = args;
-  let next = value;
-  const patch = (partial: Partial<SetupFormValues>) => {
-    next = { ...next, ...partial };
-  };
-
-  if (heldEventsLoaded && next.heldEventId) {
-    const selectedHeldEvent = heldEvents.find((event) => event.id === next.heldEventId);
-    if (!selectedHeldEvent) {
-      patch({ heldEventId: "", matchNoInEvent: undefined });
-    } else if (!next.matchNoInEvent || next.matchNoInEvent < 1) {
-      patch({ matchNoInEvent: selectedHeldEvent.nextMatchNo });
-    }
-  }
-
-  if (next.gameTitleId) {
-    const stillValid = gameTitles.some((gameTitle) => gameTitle.id === next.gameTitleId);
-    const first = gameTitles[0];
-    if (!stillValid && first) {
-      patch({ gameTitleId: first.id, mapMasterId: "", seasonMasterId: "" });
-    }
-  } else {
-    const fallback = gameTitles[0];
-    if (fallback) {
-      patch({ gameTitleId: fallback.id });
-    }
-  }
-
-  if (next.gameTitleId) {
-    const firstMap = mapMasters.find((item) => item.gameTitleId === next.gameTitleId);
-    const mapStillValid = mapMasters.some(
-      (item) => item.id === next.mapMasterId && item.gameTitleId === next.gameTitleId,
-    );
-    if (!mapStillValid && firstMap) {
-      patch({ mapMasterId: firstMap.id });
-    }
-
-    const firstSeason = seasonMasters.find((item) => item.gameTitleId === next.gameTitleId);
-    const seasonStillValid = seasonMasters.some(
-      (item) => item.id === next.seasonMasterId && item.gameTitleId === next.gameTitleId,
-    );
-    if (!seasonStillValid && firstSeason) {
-      patch({ seasonMasterId: firstSeason.id });
-    }
-  }
-
-  return next;
-}
 
 function queryErrorMessage(error: unknown): string | undefined {
   if (!error) {
@@ -177,17 +114,24 @@ export function useOcrSetupOptions({
   });
   const gameTitlesLoadFailed = shouldShowQueryError(gameTitlesQuery);
   const heldEventsLoadFailed = shouldShowQueryError(heldEventsQuery);
+  const preferredHeldEventLoadFailed = shouldShowQueryError(preferredHeldEventQuery);
   const mapMastersLoadFailed = shouldShowQueryError(mapMastersQuery);
   const seasonMastersLoadFailed = shouldShowQueryError(seasonMastersQuery);
-  const heldEventContextLoading = Boolean(
-    enabled &&
-    value.heldEventId &&
-    !selectedHeldEvent &&
-    (heldEventsQuery.isFetching || preferredHeldEventQuery.isFetching),
-  );
-  const heldEventContextUnavailable = Boolean(
-    enabled && value.heldEventId && !selectedHeldEvent && !heldEventContextLoading,
-  );
+  const preferredHeldEventStatus = preferredHeldEventLoadFailed
+    ? normalizeUnknownApiError(preferredHeldEventQuery.error).status
+    : undefined;
+  const heldEventContext = resolveHeldEventContext({
+    detailErrorStatus: preferredHeldEventStatus,
+    detailFailed: preferredHeldEventLoadFailed,
+    directoryFailed: heldEventsLoadFailed,
+    enabled,
+    fetching: heldEventsQuery.isFetching || preferredHeldEventQuery.isFetching,
+    selected: Boolean(selectedHeldEvent),
+    selectedId: value.heldEventId,
+  });
+  const heldEventContextLoading = heldEventContext === "pending";
+  const heldEventContextNotFound = heldEventContext === "notFound";
+  const heldEventContextFailed = heldEventContext === "failed";
   const loading =
     gameTitlesQuery.isLoading ||
     heldEventContextLoading ||
@@ -201,14 +145,16 @@ export function useOcrSetupOptions({
     enabled &&
     !loading &&
     !gameTitlesLoadFailed &&
-    !heldEventContextUnavailable &&
+    !heldEventContextNotFound &&
+    !heldEventContextFailed &&
     !mapMastersLoadFailed &&
     !seasonMastersLoadFailed &&
     Boolean(selectedGameTitle && value.mapMasterId && value.seasonMasterId && value.ownerMemberId);
   const hasError =
     gameTitlesLoadFailed ||
     heldEventsLoadFailed ||
-    heldEventContextUnavailable ||
+    heldEventContextNotFound ||
+    heldEventContextFailed ||
     mapMastersLoadFailed ||
     seasonMastersLoadFailed;
   const retry = () => {
@@ -225,8 +171,8 @@ export function useOcrSetupOptions({
   useEffect(() => {
     const next = deriveValidSetupValue({
       gameTitles,
+      heldEventNotFound: heldEventContextNotFound,
       heldEvents,
-      heldEventsLoaded: enabled && !heldEventContextLoading,
       mapMasters,
       seasonMasters,
       value,
@@ -235,10 +181,9 @@ export function useOcrSetupOptions({
       onChange(next);
     }
   }, [
-    enabled,
     gameTitles,
     heldEvents,
-    heldEventContextLoading,
+    heldEventContextNotFound,
     mapMasters,
     onChange,
     seasonMasters,
@@ -256,12 +201,14 @@ export function useOcrSetupOptions({
     heldEvents,
     heldEventPicker,
     hasError,
-    heldEventsError: heldEventContextUnavailable
-      ? (queryErrorMessage(preferredHeldEventQuery.error ?? heldEventsQuery.error) ??
-        "選択した開催を読み込めません。")
-      : heldEventsLoadFailed
-        ? queryErrorMessage(heldEventsQuery.error)
-        : undefined,
+    heldEventsError: heldEventContextNotFound
+      ? "選択した開催は見つかりませんでした。"
+      : heldEventContextFailed
+        ? (queryErrorMessage(preferredHeldEventQuery.error ?? heldEventsQuery.error) ??
+          "選択した開催を読み込めません。")
+        : heldEventsLoadFailed
+          ? queryErrorMessage(heldEventsQuery.error)
+          : undefined,
     heldEventsPlaceholder: gameTitlesPlaceholder({
       enabled,
       failed: heldEventsLoadFailed,

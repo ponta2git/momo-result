@@ -2,12 +2,11 @@ import { ArrowLeft, Trash2 } from "lucide-react";
 
 import { CameraCapture } from "@/features/ocrCapture/CameraCapture";
 import { CaptureRail } from "@/features/ocrCapture/CaptureRail";
-import { slotDefinitions } from "@/features/ocrCapture/captureState";
 import { ImageInput } from "@/features/ocrCapture/ImageInput";
 import { OcrJobSlotStatusLoader } from "@/features/ocrCapture/OcrJobSlotStatusLoader";
 import { OcrStartDialog } from "@/features/ocrCapture/OcrStartDialog";
 import { SetupPanel } from "@/features/ocrCapture/SetupPanel";
-import { useOcrCapturePageController } from "@/features/ocrCapture/useOcrCapturePageController";
+import { useOcrCapturePageModel } from "@/features/ocrCapture/useOcrCapturePageModel";
 import { AuthPanel } from "@/shared/auth/AuthPanel";
 import { Button } from "@/shared/ui/actions/Button";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
@@ -23,49 +22,17 @@ const panelTitleClass = "text-base font-semibold text-[var(--color-text-primary)
 const panelLeadClass = "mt-1 text-sm leading-5 text-[var(--color-text-secondary)]";
 
 export function OcrCapturePage() {
-  const {
-    auth,
-    captureTargetKind,
-    flow,
-    handleCloseStartDialog,
-    handleConfirmStart,
-    handleDraftLoadError,
-    handleImageSelected,
-    handleSelectCaptureTarget,
-    handleStartOcr,
-    handleValidationError,
-    handleViewMatches,
-    hasWorkingSlot,
-    memberAliasesFeedback,
-    notify,
-    ocrReadyCount,
-    ocrStartDialog,
-    returnTo,
-    selectedSlotLabels,
-    setSetup,
-    setup,
-    setupBlockedReason,
-    setupOptions,
-    setupReady,
-    submission,
-    submissionLocked,
-  } = useOcrCapturePageController();
-
-  const captureTarget = slotDefinitions.find((definition) => definition.kind === captureTargetKind);
-  if (!captureTarget) return null;
-  const selectedImageCount = flow.slots.filter((slot) => Boolean(slot.file)).length;
-  const cameraDisabled = submissionLocked || hasWorkingSlot;
-  const trayFull = selectedImageCount === slotDefinitions.length;
+  const { capture, feedback, navigation, setup, submission } = useOcrCapturePageModel();
 
   return (
     <PageFrame className="gap-4">
       <PageHeader
         actions={
-          returnTo ? (
+          navigation.returnTo ? (
             <LinkButton
               icon={<ArrowLeft aria-hidden="true" className="size-4" />}
               size="sm"
-              to={returnTo}
+              to={navigation.returnTo}
               variant="quiet"
             >
               取り込みをやめる
@@ -76,42 +43,50 @@ export function OcrCapturePage() {
       />
 
       <PageContentSurface className="grid gap-6">
-        {auth.error ? (
+        {feedback.auth.error ? (
           <div className="grid gap-3 rounded-[var(--radius-md)] border border-[var(--color-danger)]/50 bg-[var(--color-danger)]/8 p-4 md:grid-cols-[1fr_18rem] md:items-center">
-            <Notice className="border-0 bg-transparent p-0" tone="danger" title={auth.error.title}>
+            <Notice
+              className="border-0 bg-transparent p-0"
+              tone="danger"
+              title={feedback.auth.error.title}
+            >
               <p>
-                {auth.error.status === 403
+                {feedback.auth.error.status === 403
                   ? "この操作用アカウントでは利用できません。管理者に確認してください。"
-                  : auth.error.detail}
+                  : feedback.auth.error.detail}
               </p>
-              {auth.error.status === 403 ? null : (
+              {feedback.auth.error.status === 403 ? null : (
                 <div className="mt-3">
                   <Button
-                    pending={auth.retrying}
+                    pending={feedback.auth.retrying}
                     pendingLabel="確認中"
                     size="sm"
                     variant="secondary"
-                    onClick={auth.retry}
+                    onClick={feedback.auth.retry}
                   >
                     ログイン状態を再確認
                   </Button>
                 </div>
               )}
             </Notice>
-            <AuthPanel auth={auth.data} embedded forceDevPicker={auth.error.status === 401} />
+            <AuthPanel
+              auth={feedback.auth.data}
+              embedded
+              forceDevPicker={feedback.auth.error.status === 401}
+            />
           </div>
         ) : null}
 
-        {memberAliasesFeedback.error ? (
+        {feedback.memberAliases.error ? (
           <Notice tone="warning" title="プレーヤー名の読み替えを取得できません">
             <p>OCR取り込みは続けられますが、登録済みの別名を読み取り候補に反映できません。</p>
             <div className="mt-3">
               <Button
-                pending={memberAliasesFeedback.retrying}
+                pending={feedback.memberAliases.refreshing}
                 pendingLabel="再読み込み中"
                 size="sm"
                 variant="secondary"
-                onClick={memberAliasesFeedback.retry}
+                onClick={feedback.memberAliases.refresh}
               >
                 読み替え設定を再読み込み
               </Button>
@@ -126,28 +101,23 @@ export function OcrCapturePage() {
             </h2>
             <p className="text-xs text-[var(--color-text-muted)]">読み取り結果に引き継ぐ試合設定</p>
           </div>
-          {setupOptions.hasError ? (
+          {setup.choices.failed ? (
             <Notice className="mb-3" tone="warning" title="試合設定の選択肢を読み込めません">
               <p>読み込めなかった選択肢を再取得できます。</p>
               <div className="mt-3">
                 <Button
-                  pending={setupOptions.refreshing}
+                  pending={setup.choices.refreshing}
                   pendingLabel="再読み込み中"
                   size="sm"
                   variant="secondary"
-                  onClick={setupOptions.retry}
+                  onClick={setup.choices.refresh}
                 >
                   選択肢を再読み込み
                 </Button>
               </div>
             </Notice>
           ) : null}
-          <SetupPanel
-            value={setup}
-            onChange={setSetup}
-            enabled={auth.ready}
-            options={setupOptions}
-          />
+          <SetupPanel model={setup.panel} />
         </section>
 
         <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_28rem] xl:items-start">
@@ -161,30 +131,32 @@ export function OcrCapturePage() {
               </div>
               <div
                 className="flex items-center gap-2 py-1 text-sm"
-                aria-label={`次の撮影先は${captureTarget.label}`}
+                aria-label={`次の撮影先は${capture.camera.target.label}`}
               >
                 <span
                   aria-hidden="true"
-                  className={`h-5 w-1 rounded-full ${captureTarget.accentClass}`}
+                  className={`h-5 w-1 rounded-full ${capture.camera.target.accentClass}`}
                 />
                 <span className="text-xs text-[var(--color-text-secondary)]">撮影先</span>
-                <strong className="text-[var(--color-text-primary)]">{captureTarget.label}</strong>
+                <strong className="text-[var(--color-text-primary)]">
+                  {capture.camera.target.label}
+                </strong>
               </div>
             </div>
 
             <CameraCapture
-              actionVariant={trayFull ? "secondary" : "primary"}
-              disabled={cameraDisabled}
-              slotLabel={captureTarget.label}
-              onSelect={handleImageSelected}
-              onValidationError={handleValidationError}
+              actionVariant={capture.camera.actionVariant}
+              disabled={capture.camera.disabled}
+              slotLabel={capture.camera.target.label}
+              onSelect={capture.camera.selectImage}
+              onValidationError={capture.camera.reportValidationError}
               renderFallback={(prominent) => (
                 <ImageInput
-                  disabled={cameraDisabled}
+                  disabled={capture.camera.disabled}
                   prominent={prominent}
-                  slotLabel={captureTarget.label}
-                  onSelect={handleImageSelected}
-                  onValidationError={handleValidationError}
+                  slotLabel={capture.camera.target.label}
+                  onSelect={capture.camera.selectImage}
+                  onValidationError={capture.camera.reportValidationError}
                 />
               )}
             />
@@ -199,19 +171,19 @@ export function OcrCapturePage() {
                 <p className={panelLeadClass}>撮影先を選び、必要なら画像を入れ替えます。</p>
               </div>
               <span className="shrink-0 text-sm font-semibold text-[var(--color-text-secondary)]">
-                {selectedImageCount} / {slotDefinitions.length} 配置
+                {capture.selectedImageCount} / {capture.totalSlotCount} 配置
               </span>
             </div>
             <CaptureRail
-              captureTargetKind={captureTargetKind}
+              captureTargetKind={capture.tray.captureTargetKind}
               layout="stack"
-              slots={flow.slots}
-              drafts={flow.drafts}
-              onClear={(kind) => flow.handleClear(kind, notify)}
-              onDropImage={(source, target) => flow.handleDropImage(source, target, notify)}
-              onMoveImage={(kind, direction) => flow.handleMoveImage(kind, direction, notify)}
-              onRefreshStatus={flow.handleRefreshStatus}
-              onSelectCaptureTarget={handleSelectCaptureTarget}
+              slots={capture.tray.slots}
+              drafts={capture.tray.drafts}
+              onClear={capture.tray.clear}
+              onDropImage={capture.tray.drop}
+              onMoveImage={capture.tray.move}
+              onRefreshStatus={capture.tray.refreshStatus}
+              onSelectCaptureTarget={capture.tray.selectTarget}
             />
           </aside>
         </section>
@@ -226,21 +198,13 @@ export function OcrCapturePage() {
                 読み取りの準備
               </h2>
               <span className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-3 py-1 text-xs font-semibold text-[var(--color-text-primary)]">
-                {ocrReadyCount === 0 ? "画像未選択" : `${ocrReadyCount}件を送信`}
+                {submission.start.badgeLabel}
               </span>
             </div>
-            <p className={panelLeadClass}>
-              {selectedSlotLabels.length > 0
-                ? `${selectedSlotLabels.join("・")}を読み取ります。${
-                    ocrReadyCount < slotDefinitions.length
-                      ? "未配置の分類は確認画面で手入力できます。"
-                      : "3種類すべて揃っています。"
-                  }`
-                : "分類トレイを選び、まず1枚撮影してください。"}
-            </p>
-            {setupBlockedReason ? (
+            <p className={panelLeadClass}>{submission.start.description}</p>
+            {submission.start.blockedReason ? (
               <p className="mt-2 text-sm font-semibold text-[var(--color-review)]">
-                {setupBlockedReason}
+                {submission.start.blockedReason}
               </p>
             ) : null}
           </div>
@@ -248,22 +212,20 @@ export function OcrCapturePage() {
           <div className="flex flex-col gap-2 sm:items-end">
             <Button
               className="w-full sm:w-auto"
-              disabled={
-                ocrReadyCount === 0 || hasWorkingSlot || submission.isSubmitting || !setupReady
-              }
+              disabled={submission.start.disabled}
               size="lg"
               variant="primary"
-              onClick={handleStartOcr}
+              onClick={submission.start.run}
             >
-              {ocrReadyCount === 0 ? "読み取りを開始" : `${ocrReadyCount}件で読み取りを開始`}
+              {submission.start.buttonLabel}
             </Button>
             <AlertDialog
-              confirmLabel={`${selectedImageCount}件を削除`}
+              confirmLabel={`${capture.selectedImageCount}件を削除`}
               description="分類トレイに配置した画像をすべて外します。試合設定は残ります。"
               title="選択画像をすべて削除しますか？"
               trigger={
                 <Button
-                  disabled={selectedImageCount === 0 || cameraDisabled}
+                  disabled={capture.tray.resetDisabled}
                   icon={<Trash2 aria-hidden="true" className="size-4" />}
                   size="sm"
                   variant="quiet"
@@ -271,27 +233,27 @@ export function OcrCapturePage() {
                   すべて削除
                 </Button>
               }
-              onConfirm={() => flow.handleResetAll(notify)}
+              onConfirm={capture.tray.reset}
             />
           </div>
         </section>
       </PageContentSurface>
 
       <OcrStartDialog
-        state={ocrStartDialog}
-        onClose={handleCloseStartDialog}
-        onConfirm={handleConfirmStart}
-        onViewMatches={handleViewMatches}
+        state={submission.dialog.state}
+        onClose={submission.dialog.close}
+        onConfirm={submission.dialog.confirm}
+        onViewMatches={submission.dialog.viewMatches}
       />
 
-      {flow.slots.map((slot) => (
+      {submission.monitoring.slots.map((slot) => (
         <OcrJobSlotStatusLoader
           key={slot.kind}
           slot={slot}
-          onUpdate={flow.updateSlot}
-          onDraft={flow.setDraft}
-          onDraftLoadError={handleDraftLoadError}
-          onRefreshingChange={flow.setStatusRefreshPending}
+          onUpdate={submission.monitoring.updateSlot}
+          onDraft={submission.monitoring.recordDraft}
+          onDraftLoadError={submission.monitoring.reportDraftLoadError}
+          onRefreshingChange={submission.monitoring.setRefreshing}
         />
       ))}
     </PageFrame>

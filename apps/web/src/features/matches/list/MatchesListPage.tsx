@@ -4,7 +4,7 @@ import { MatchesFilterBar } from "@/features/matches/list/MatchesFilterBar";
 import { MatchesTable } from "@/features/matches/list/MatchesTable";
 import { matchListPageSizeOptions } from "@/features/matches/list/matchListSearchParams";
 import { MatchMobileCard } from "@/features/matches/list/MatchMobileCard";
-import { useMatchesListPageController } from "@/features/matches/list/useMatchesListPageController";
+import { useMatchesListPageModel } from "@/features/matches/list/useMatchesListPageModel";
 import { useMediaQuery } from "@/shared/lib/useMediaQuery";
 import { Button } from "@/shared/ui/actions/Button";
 import { IconButton } from "@/shared/ui/actions/IconButton";
@@ -41,44 +41,7 @@ function ListSkeleton({ showDesktopTable }: { showDesktopTable: boolean }) {
 
 export function MatchesListPage() {
   const showDesktopTable = useMediaQuery("(min-width: 1024px)");
-  const {
-    applySearch,
-    checkingDraftIds,
-    clearSearch,
-    gameTitles,
-    hasFilters,
-    heldEventPicker,
-    heldEvents,
-    isManualRefreshing,
-    items,
-    listScopeChanging,
-    listUpdating,
-    masterLoadFailed,
-    matchesRefreshFailed,
-    navigation,
-    pagination,
-    refresh,
-    retrySummary,
-    search,
-    sameScopeRefreshing,
-    seasons,
-    selectDraftAction,
-    showMatchesError,
-    showMatchesLoading,
-    summaryCounts,
-    summaryError,
-    summaryLoading,
-    summaryMasked,
-    updatePage,
-    updatePageSize,
-  } = useMatchesListPageController();
-  const filterActions = { onApply: applySearch, onClear: clearSearch };
-  const filterCandidates = { gameTitles, heldEventPicker, heldEvents, seasons };
-  const rowActions = {
-    checkingDraftIds,
-    disabled: listScopeChanging,
-    onDraftStatusCheckAction: selectDraftAction,
-  };
+  const { drafts, filters, list, navigation, summary } = useMatchesListPageModel();
 
   return (
     <PageFrame>
@@ -125,16 +88,16 @@ export function MatchesListPage() {
       />
 
       <PageContentSurface className="grid gap-6">
-        {masterLoadFailed ? (
+        {filters.loadFailed ? (
           <Notice tone="warning" title="絞り込み候補を一部読み込めません">
             <p>試合一覧は表示できます。開催、作品、シーズンの候補を再取得できます。</p>
             <div className="mt-3">
               <Button
-                pending={isManualRefreshing}
+                pending={list.refresh.pending}
                 pendingLabel="再読み込み中"
                 size="sm"
                 variant="secondary"
-                onClick={() => void refresh()}
+                onClick={() => void list.refresh.run()}
               >
                 候補を再読み込み
               </Button>
@@ -143,19 +106,19 @@ export function MatchesListPage() {
         ) : null}
 
         <MatchesFilterBar
-          actions={filterActions}
-          candidates={filterCandidates}
-          counts={summaryCounts}
-          onRetrySummary={retrySummary}
-          pending={listScopeChanging}
-          search={search}
-          summaryError={summaryError}
-          summaryLoading={summaryLoading}
-          summaryMasked={summaryMasked}
+          actions={filters.actions}
+          candidates={filters.candidates}
+          counts={summary.counts}
+          onRetrySummary={summary.retry}
+          pending={filters.pending}
+          search={filters.search}
+          summaryError={summary.loadFailed}
+          summaryLoading={summary.loading}
+          summaryMasked={summary.masked}
         />
 
         <section
-          aria-busy={listScopeChanging || sameScopeRefreshing || undefined}
+          aria-busy={list.scopeChanging || list.sameScopeRefreshing || undefined}
           aria-label="登録済みの試合"
           className="relative grid min-h-[24rem] gap-4"
         >
@@ -175,26 +138,26 @@ export function MatchesListPage() {
               </LinkButton>
               <IconButton
                 aria-label="最新情報に更新"
-                disabled={listScopeChanging && !isManualRefreshing}
+                disabled={list.scopeChanging && !list.refresh.pending}
                 icon={<RefreshCw />}
-                pending={isManualRefreshing}
+                pending={list.refresh.pending}
                 pendingLabel="一覧を更新中"
-                tooltip={isManualRefreshing ? "更新中…" : "最新情報に更新"}
+                tooltip={list.refresh.pending ? "更新中…" : "最新情報に更新"}
                 variant="quiet"
-                onClick={() => void refresh()}
+                onClick={() => void list.refresh.run()}
               />
             </div>
           </div>
 
-          {matchesRefreshFailed ? (
+          {list.refreshFailed ? (
             <Notice
               action={
                 <Button
-                  pending={isManualRefreshing}
+                  pending={list.refresh.pending}
                   pendingLabel="一覧を再読み込み中"
                   size="sm"
                   variant="secondary"
-                  onClick={() => void refresh()}
+                  onClick={() => void list.refresh.run()}
                 >
                   一覧を再読み込み
                 </Button>
@@ -206,34 +169,34 @@ export function MatchesListPage() {
             </Notice>
           ) : null}
 
-          {showMatchesLoading ? (
+          {list.loading ? (
             <ListSkeleton showDesktopTable={showDesktopTable} />
           ) : (
             <StaleShield
-              active={listUpdating}
+              active={list.updating}
               busyLabel="一覧を更新中"
               contentClassName="grid gap-4"
               fallback={<ListSkeleton showDesktopTable={showDesktopTable} />}
-              strategy={listScopeChanging ? "preserve-inert" : "preserve-interactive"}
+              strategy={list.scopeChanging ? "preserve-inert" : "preserve-interactive"}
             >
-              {showMatchesError ? (
+              {list.loadFailed ? (
                 <Notice tone="danger" title="試合一覧を読み込めません">
                   <p>通信状態を確認して、もう一度お試しください。</p>
                   <div className="mt-3">
                     <Button
-                      pending={isManualRefreshing}
+                      pending={list.refresh.pending}
                       pendingLabel="再読み込み中"
                       size="sm"
-                      onClick={() => void refresh()}
+                      onClick={() => void list.refresh.run()}
                     >
                       一覧を再読み込み
                     </Button>
                   </div>
                 </Notice>
-              ) : items.length === 0 ? (
+              ) : list.items.length === 0 ? (
                 <EmptyState
                   action={
-                    hasFilters ? undefined : (
+                    filters.hasActive ? undefined : (
                       <div className="flex flex-wrap gap-2">
                         <LinkButton to={navigation.ocrHref}>OCR取り込み</LinkButton>
                         <LinkButton to={navigation.manualCreateHref} variant="secondary">
@@ -244,33 +207,33 @@ export function MatchesListPage() {
                   }
                   className="min-h-[18rem]"
                   description={
-                    hasFilters
+                    filters.hasActive
                       ? "状態や開催条件を広げると、他の試合記録を確認できます。"
                       : "OCR取り込みか手入力で、最初の試合を登録します。"
                   }
                   icon={<AlertTriangle className="size-5" />}
                   placement="embedded"
-                  title={hasFilters ? "該当する試合はありません" : "試合はまだありません"}
+                  title={filters.hasActive ? "該当する試合はありません" : "試合はまだありません"}
                 />
               ) : (
                 <>
                   {showDesktopTable ? (
-                    <MatchesTable items={items} rowActions={rowActions} />
+                    <MatchesTable items={list.items} rowActions={drafts.rowActions} />
                   ) : (
                     <div className="grid gap-3">
-                      {items.map((item) => (
-                        <MatchMobileCard key={item.id} item={item} rowActions={rowActions} />
+                      {list.items.map((item) => (
+                        <MatchMobileCard key={item.id} item={item} rowActions={drafts.rowActions} />
                       ))}
                     </div>
                   )}
-                  {pagination ? (
+                  {list.pagination ? (
                     <PaginationControls
-                      disabled={listScopeChanging}
+                      disabled={list.scopeChanging}
                       pageSizeOptions={[...matchListPageSizeOptions]}
-                      pagination={pagination}
+                      pagination={list.pagination.value}
                       placement="embedded"
-                      onPageChange={updatePage}
-                      onPageSizeChange={updatePageSize}
+                      onPageChange={list.pagination.changePage}
+                      onPageSizeChange={list.pagination.changePageSize}
                     />
                   ) : null}
                 </>

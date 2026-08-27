@@ -80,7 +80,7 @@ export function SeriesAnalysisAdminPage() {
           <>
             <section
               aria-label="再計算する対象"
-              className="grid min-w-0 gap-3 lg:grid-cols-[minmax(16rem,1fr)_auto_auto] lg:items-end"
+              className="grid min-w-0 gap-3 lg:grid-cols-[minmax(16rem,32rem)_auto_auto] lg:items-end lg:justify-start"
             >
               <SelectField
                 label="対象作品"

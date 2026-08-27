@@ -1,6 +1,7 @@
+import { cn } from "@/shared/ui/cn";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
-import { pageFrameWidthClass } from "@/shared/ui/layout/PageFrame";
+import { pageFrameWidthClass, pageViewportGutterClass } from "@/shared/ui/layout/PageFrame";
 import type { PageFrameWidth } from "@/shared/ui/layout/PageFrame";
 
 export type PageLoadingKind =
@@ -26,7 +27,11 @@ export function PageLoadingFallback({
   loadingLabel = "読み込んでいます…",
   width = "standard",
 }: PageLoadingFallbackProps) {
-  const className = `mx-auto flex w-full ${pageFrameWidthClass[width]} flex-col gap-4 px-4 py-8`;
+  const className = cn(
+    "mx-auto flex w-full max-w-full min-w-0 flex-col gap-4",
+    pageFrameWidthClass[width],
+    asMain ? `${pageViewportGutterClass} py-4 sm:py-6` : "",
+  );
   const content = <PageLoadingSkeleton kind={kind} loadingLabel={loadingLabel} />;
 
   if (asMain) {

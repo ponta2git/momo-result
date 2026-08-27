@@ -16,11 +16,13 @@ export function routeLoadingPresentation(pathname: string): RouteLoadingPresenta
   }
   if (
     pathname === "/matches/new" ||
-    pathname === "/ocr/new" ||
     /^\/review\/[^/]+$/u.test(pathname) ||
     /^\/matches\/[^/]+\/edit$/u.test(pathname)
   ) {
     return { kind: "workspace", width: "workspace" };
+  }
+  if (pathname === "/ocr/new") {
+    return { kind: "workspace", width: "standard" };
   }
   if (/^\/(?:matches|held-events)\/[^/]+$/u.test(pathname)) {
     return { kind: "detail", width: "wide" };

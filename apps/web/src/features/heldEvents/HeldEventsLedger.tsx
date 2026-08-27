@@ -21,7 +21,7 @@ type HeldEventsLedgerProps = {
 };
 
 export function HeldEventsLedger(props: HeldEventsLedgerProps) {
-  const showDesktopTable = useMediaQuery("(min-width: 768px)");
+  const showDesktopTable = useMediaQuery("(min-width: 1024px)");
 
   return showDesktopTable ? <HeldEventsTable {...props} /> : <HeldEventsMobileList {...props} />;
 }

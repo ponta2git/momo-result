@@ -1,5 +1,3 @@
-import { FileClock } from "lucide-react";
-
 import {
   formatHeldEventShortDateTime,
   heldEventDraftAction,
@@ -30,20 +28,12 @@ export function HeldEventDraftsSection({
 
   return (
     <section aria-labelledby="held-event-drafts-heading" className="min-w-0">
-      <div className="flex items-start gap-3">
-        <FileClock
-          aria-hidden="true"
-          className="mt-0.5 size-5 shrink-0 text-[var(--color-text-secondary)]"
-        />
-        <div>
-          <h2 id="held-event-drafts-heading" className="momo-heading text-base font-semibold">
-            未確定下書き
-          </h2>
-          <p className="momo-copy mt-1 text-sm text-[var(--color-text-secondary)]">
-            この開催に紐づく読み取り・確認作業です。確定すると下の試合記録へ移ります。
-          </p>
-        </div>
-      </div>
+      <h2 id="held-event-drafts-heading" className="momo-heading text-base font-semibold">
+        未確定下書き
+      </h2>
+      <p className="momo-copy mt-1 text-sm text-[var(--color-text-secondary)]">
+        この開催に紐づく読み取り・確認作業です。確定すると下の試合記録へ移ります。
+      </p>
       <ul className="mt-3 divide-y divide-[var(--color-border)]">
         {drafts.map((draft) => {
           const action = heldEventDraftAction(draft);

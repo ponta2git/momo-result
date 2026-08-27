@@ -68,7 +68,7 @@ export function MatchesTable({ items, rowActions }: MatchesTableProps) {
       layout="fixed"
       minWidth="52rem"
       rows={items}
-      verticalAlign="middle"
+      verticalAlign="top"
     />
   );
 }

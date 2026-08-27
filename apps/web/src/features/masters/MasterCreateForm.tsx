@@ -30,17 +30,28 @@ export function MasterCreateForm({
   const pendingLabel = submitLabel ? `${submitLabel}中` : `${actionLabel}中`;
 
   return (
-    <form action={action} className="grid gap-2 md:grid-cols-[1fr_auto] md:items-end" key={formKey}>
+    <form
+      action={action}
+      className="grid gap-2 md:grid-cols-[1fr_auto] md:grid-rows-[auto_auto_auto]"
+      key={formKey}
+    >
       <TextField
         description={error ? undefined : disabledReason}
         disabled={disabled}
         error={error}
+        fieldClassName="md:row-span-3 md:grid md:grid-rows-subgrid"
         label={label}
         name={inputName}
         placeholder={placeholder}
         type="text"
       />
-      <Button disabled={disabled} pendingLabel={pendingLabel} type="submit" variant="secondary">
+      <Button
+        className="md:col-start-2 md:row-start-2"
+        disabled={disabled}
+        pendingLabel={pendingLabel}
+        type="submit"
+        variant="secondary"
+      >
         {buttonLabel}
       </Button>
     </form>

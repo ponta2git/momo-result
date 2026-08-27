@@ -95,7 +95,6 @@ export function HeldEventsListCard({
 
         {model.pagination && model.pagination.totalItems > 0 ? (
           <PaginationControls
-            className="p-0"
             disabled={model.refresh.pending}
             pageSizeOptions={[...heldEventViewModel.heldEventPageSizeOptions]}
             pagination={model.pagination}

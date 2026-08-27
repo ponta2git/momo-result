@@ -21,7 +21,7 @@ import { useMediaQuery } from "@/shared/lib/useMediaQuery";
 export function ScoreGrid({ actions, data }: ScoreGridProps) {
   const [expandedMobilePlayer, setExpandedMobilePlayer] = useState(0);
   const [pendingFocusCellId, setPendingFocusCellId] = useState<string | null>(null);
-  const isNarrowViewport = useMediaQuery("(max-width: 1023px)");
+  const isNarrowViewport = useMediaQuery("(max-width: 1119px)");
   const inputRefs = useRef(new Map<string, HTMLElement>());
   const {
     onAcknowledgeReviewCell,

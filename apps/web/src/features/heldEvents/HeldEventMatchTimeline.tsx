@@ -44,7 +44,6 @@ export function HeldEventMatchTimeline({
 
       {matches.length === 0 ? (
         <EmptyState
-          className="px-0"
           description="OCR取り込みまたは手入力で試合を確定すると、開催戦績の集計が始まります。"
           icon={<Trophy className="size-5" />}
           placement="embedded"

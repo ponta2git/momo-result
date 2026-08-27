@@ -15,6 +15,9 @@ export const pageFrameWidthClass = {
   workspace: "max-w-[120rem]",
 } as const satisfies Record<PageFrameWidth, string>;
 
+/** Keeps viewport-level content and navigation on the same responsive inline gutter. */
+export const pageViewportGutterClass = "px-3 sm:px-4";
+
 export function PageFrame({ className, width = "standard", ...props }: PageFrameProps) {
   return (
     <div

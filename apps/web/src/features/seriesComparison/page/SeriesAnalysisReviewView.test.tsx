@@ -73,8 +73,8 @@ describe("ReviewView", () => {
     expect(screen.queryByText("下位後は目的地を1回取って戻す。")).not.toBeInTheDocument();
 
     const playerSection = screen.getByRole("heading", { name: "ぽんた" }).closest("section");
-    expect(playerSection?.parentElement).toHaveClass("items-start");
-    expect(playerSection).not.toHaveClass("grid-rows-[auto_1fr_auto]");
+    expect(playerSection?.parentElement).not.toHaveClass("items-start");
+    expect(playerSection).toHaveClass("grid", "grid-rows-[auto_minmax(0,1fr)_auto]");
 
     await user.click(screen.getByRole("button", { name: "ぽんたのほかの仮説" }));
     expect(screen.getByText("下位後は目的地を1回取って戻す。")).toBeInTheDocument();

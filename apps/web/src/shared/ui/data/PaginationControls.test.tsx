@@ -98,6 +98,7 @@ describe("PaginationControls", () => {
 
     const pagination = screen.getByRole("navigation", { name: "埋め込みページネーション" });
     expect(pagination).toHaveClass("bg-transparent");
+    expect(pagination).not.toHaveClass("p-3");
     expect(pagination).not.toHaveClass("border");
   });
 });

@@ -10,6 +10,8 @@ describe("EmptyState", () => {
     const state = screen.getByText("まだ試合がありません").closest("section");
     expect(state).not.toBeNull();
     expect(state).toHaveClass("bg-transparent");
+    expect(state).toHaveClass("py-4");
+    expect(state).not.toHaveClass("px-4");
     expect(state).not.toHaveClass("border");
   });
 });

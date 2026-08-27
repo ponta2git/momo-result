@@ -99,11 +99,7 @@ export function ScopedMasterPanel({
             </Notice>
           ) : null}
           {list.items.length === 0 ? (
-            <EmptyState
-              className="px-0"
-              placement="embedded"
-              title={`${labels.itemLabel}はまだありません`}
-            />
+            <EmptyState placement="embedded" title={`${labels.itemLabel}はまだありません`} />
           ) : (
             <ul className="divide-y divide-[var(--color-border)]">
               {list.items.map((item) => {

@@ -22,10 +22,9 @@ export function EmptyState({
   return (
     <section
       className={cn(
-        "p-4",
         placement === "standalone"
-          ? "rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)]"
-          : "bg-transparent",
+          ? "rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4"
+          : "bg-transparent py-4",
         className,
       )}
     >

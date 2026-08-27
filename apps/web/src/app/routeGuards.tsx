@@ -9,24 +9,33 @@ import {
 import { useAuth } from "@/shared/auth/useAuth";
 import { Button } from "@/shared/ui/actions/Button";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
+import { cn } from "@/shared/ui/cn";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
-import { PageFrame } from "@/shared/ui/layout/PageFrame";
+import { PageFrame, pageViewportGutterClass } from "@/shared/ui/layout/PageFrame";
 import { PageHeader } from "@/shared/ui/layout/PageHeader";
 
 function StandaloneRouteMain({ children }: { children: ReactNode }) {
   return (
     <>
       <header className="border-b border-[var(--color-border)] bg-[var(--color-surface)]">
-        <div className="mx-auto flex min-h-14 w-full max-w-[96rem] items-center px-3 sm:px-4">
+        <div
+          className={cn(
+            "mx-auto flex min-h-14 w-full max-w-[96rem] items-center",
+            pageViewportGutterClass,
+          )}
+        >
           <span className="text-sm font-semibold text-[var(--color-text-primary)]">
             momo-result
           </span>
         </div>
       </header>
       <main
-        className="mx-auto flex min-h-[calc(100dvh-3.5rem)] w-full flex-col px-3 py-4 sm:px-4 sm:py-6"
+        className={cn(
+          "mx-auto flex min-h-[calc(100dvh-3.5rem)] w-full flex-col py-4 sm:py-6",
+          pageViewportGutterClass,
+        )}
         id="main-content"
       >
         {children}

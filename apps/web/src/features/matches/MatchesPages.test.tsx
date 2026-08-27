@@ -138,7 +138,7 @@ describe("MatchesListPage", () => {
     expect(matchInfoCell).toHaveTextContent("今シーズン");
     expect(matchInfoCell).toHaveTextContent("第1試合");
     expect(matchInfoCell).toHaveTextContent("東日本編");
-    expect(matchInfoCell).toHaveClass("align-middle");
+    expect(matchInfoCell).toHaveClass("align-top");
     expect(matchInfoCell.querySelector("a")).toBeNull();
     const detailLinks = await screen.findAllByRole("link", {
       name: "第1試合 東日本編の試合結果を見る",

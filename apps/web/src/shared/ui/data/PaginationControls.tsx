@@ -49,9 +49,9 @@ export function PaginationControls(props: PaginationControlsProps) {
     <nav
       aria-label={ariaLabel}
       className={cn(
-        "grid gap-3 p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end",
+        "grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end",
         placement === "standalone"
-          ? "rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)]"
+          ? "rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3"
           : "bg-transparent",
         className,
       )}

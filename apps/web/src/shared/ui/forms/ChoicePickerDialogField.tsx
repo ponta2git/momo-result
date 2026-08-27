@@ -125,7 +125,7 @@ export function ChoicePickerDialogField({
             {pagination && pagination.totalPages > 1 && onPageChange ? (
               <PaginationControls
                 ariaLabel={paginationAriaLabel ?? `${label}候補のページネーション`}
-                className="shrink-0 p-0"
+                className="shrink-0"
                 disabled={disabled || pending}
                 pagination={pagination}
                 placement="embedded"

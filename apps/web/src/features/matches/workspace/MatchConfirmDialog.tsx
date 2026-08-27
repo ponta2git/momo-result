@@ -79,38 +79,43 @@ function MatchConfirmSummary({
 function PlayerLedger({ values }: { values: MatchFormValues }) {
   const orderedPlayers = orderFixedMembers(values.players);
   return (
-    <div className={`mt-4 ${dataTableScrollAreaClassName}`}>
-      <table className="w-full min-w-[29rem] text-left text-sm">
-        <caption className="sr-only">確定する4人分の結果</caption>
-        <thead>
-          <tr>
-            <th className={dataTableHeaderCellClassName}>順位</th>
-            <th className={dataTableHeaderCellClassName}>メンバー</th>
-            <th className={`${dataTableHeaderCellClassName} text-right`}>総資産（万円）</th>
-            <th className={`${dataTableHeaderCellClassName} text-right`}>収益（万円）</th>
-          </tr>
-        </thead>
-        <tbody>
-          {orderedPlayers.map((player) => (
-            <DataTableBodyRow key={player.memberId}>
-              <td className={dataTableBodyCellClassName}>
-                <RankBadge rank={player.rank} />
-              </td>
-              <th className={`${dataTableBodyCellClassName} text-left font-semibold`} scope="row">
-                <MemberSequenceLabel memberId={player.memberId}>
-                  {memberDisplayName(player.memberId)}
-                </MemberSequenceLabel>
-              </th>
-              <td className={`${dataTableBodyCellClassName} text-right tabular-nums`}>
-                {player.totalAssetsManYen.toLocaleString()}
-              </td>
-              <td className={`${dataTableBodyCellClassName} text-right tabular-nums`}>
-                {player.revenueManYen.toLocaleString()}
-              </td>
-            </DataTableBodyRow>
-          ))}
-        </tbody>
-      </table>
+    <div className="mt-4">
+      <p className="mb-2 text-xs text-[var(--color-text-secondary)] sm:hidden">
+        4人分の結果は横にスクロールして確認できます。
+      </p>
+      <div className={dataTableScrollAreaClassName}>
+        <table className="w-full min-w-[29rem] text-left text-sm">
+          <caption className="sr-only">確定する4人分の結果</caption>
+          <thead>
+            <tr>
+              <th className={dataTableHeaderCellClassName}>順位</th>
+              <th className={dataTableHeaderCellClassName}>メンバー</th>
+              <th className={`${dataTableHeaderCellClassName} text-right`}>総資産（万円）</th>
+              <th className={`${dataTableHeaderCellClassName} text-right`}>収益（万円）</th>
+            </tr>
+          </thead>
+          <tbody>
+            {orderedPlayers.map((player) => (
+              <DataTableBodyRow key={player.memberId}>
+                <td className={dataTableBodyCellClassName}>
+                  <RankBadge rank={player.rank} />
+                </td>
+                <th className={`${dataTableBodyCellClassName} text-left font-semibold`} scope="row">
+                  <MemberSequenceLabel memberId={player.memberId}>
+                    {memberDisplayName(player.memberId)}
+                  </MemberSequenceLabel>
+                </th>
+                <td className={`${dataTableBodyCellClassName} text-right tabular-nums`}>
+                  {player.totalAssetsManYen.toLocaleString()}
+                </td>
+                <td className={`${dataTableBodyCellClassName} text-right tabular-nums`}>
+                  {player.revenueManYen.toLocaleString()}
+                </td>
+              </DataTableBodyRow>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

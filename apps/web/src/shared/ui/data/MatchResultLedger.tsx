@@ -34,7 +34,7 @@ export function MatchResultLedger({
       {orderedRows.map((row) => (
         <li
           key={row.memberId}
-          className="grid min-w-0 gap-3 border-b border-[var(--color-border)] p-3 last:border-b-0 sm:grid-cols-[4rem_minmax(12rem,1fr)_minmax(10rem,auto)] sm:items-center"
+          className="grid min-w-0 gap-3 border-b border-[var(--color-border)] p-3 last:border-b-0 sm:grid-cols-[4rem_minmax(12rem,1fr)_minmax(10rem,auto)] sm:items-start"
         >
           <div className="flex items-center gap-3 sm:block">
             <RankBadge rank={row.rank} size="md" />

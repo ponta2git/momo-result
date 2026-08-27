@@ -42,6 +42,14 @@ export function SetupPanel({ model }: SetupPanelProps) {
       />
 
       <SelectField
+        fieldClassName="xl:col-span-2"
+        label="オーナー"
+        options={fields.owner.options}
+        value={fields.owner.value}
+        onChange={(event) => intents.changeOwner(event.currentTarget.value)}
+      />
+
+      <SelectField
         disabled={fields.gameTitle.disabled}
         error={fields.gameTitle.error}
         fieldClassName="xl:col-span-2"
@@ -69,14 +77,6 @@ export function SetupPanel({ model }: SetupPanelProps) {
         options={fields.map.options}
         value={fields.map.value}
         onChange={(event) => intents.changeMap(event.currentTarget.value)}
-      />
-
-      <SelectField
-        fieldClassName="xl:col-span-2"
-        label="オーナー"
-        options={fields.owner.options}
-        value={fields.owner.value}
-        onChange={(event) => intents.changeOwner(event.currentTarget.value)}
       />
     </div>
   );

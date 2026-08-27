@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { Link, NavLink, useLocation } from "react-router-dom";
 
 import { cn } from "@/shared/ui/cn";
+import { pageViewportGutterClass } from "@/shared/ui/layout/PageFrame";
 
 export type GlobalNavItem = {
   icon: ReactNode;
@@ -75,11 +76,16 @@ export function GlobalNav({
         className,
       )}
     >
-      <div className="mx-auto grid w-full max-w-[120rem] min-w-0 grid-cols-1 gap-2 px-3 py-2 sm:px-4 lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:items-center lg:py-2">
+      <div
+        className={cn(
+          "mx-auto grid w-full max-w-[120rem] min-w-0 grid-cols-1 gap-2 py-2 lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:items-center lg:py-2 xl:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]",
+          pageViewportGutterClass,
+        )}
+      >
         <div className="flex min-w-0 items-center justify-between gap-2 lg:contents">
           <div className="flex min-w-0 items-center gap-2 lg:col-start-1 lg:row-start-1">
             <Link
-              className="inline-flex min-h-11 items-center rounded-[var(--radius-xs)] px-1 py-1 text-sm font-semibold text-[var(--color-text-primary)] hover:text-[var(--color-action)] lg:min-h-9"
+              className="-ml-1 inline-flex min-h-11 items-center rounded-[var(--radius-xs)] px-1 py-1 text-sm font-semibold text-[var(--color-text-primary)] hover:text-[var(--color-action)] lg:min-h-9"
               to={brandTo}
             >
               {brandLabel}

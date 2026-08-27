@@ -5,7 +5,7 @@ import { isModuleLoadError, reloadCurrentPage } from "@/shared/lib/moduleLoadErr
 import { Button } from "@/shared/ui/actions/Button";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
-import { PageFrame } from "@/shared/ui/layout/PageFrame";
+import { PageFrame, pageViewportGutterClass } from "@/shared/ui/layout/PageFrame";
 import { PageHeader } from "@/shared/ui/layout/PageHeader";
 
 type ErrorBoundaryProps = {
@@ -36,7 +36,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     if (this.state.error) {
       const reloadRequired = isModuleLoadError(this.state.error);
       return (
-        <main className="px-4 py-10 sm:py-16">
+        <main className={`${pageViewportGutterClass} py-10 sm:py-16`}>
           <PageFrame width="narrow">
             <PageHeader title="画面を表示できません" />
             <PageContentSurface>

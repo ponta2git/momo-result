@@ -7,7 +7,7 @@ import { Notice } from "@/shared/ui/feedback/Notice";
 import { GlobalNav } from "@/shared/ui/layout/GlobalNav";
 import type { GlobalNavItem } from "@/shared/ui/layout/GlobalNav";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
-import { PageFrame } from "@/shared/ui/layout/PageFrame";
+import { PageFrame, pageViewportGutterClass } from "@/shared/ui/layout/PageFrame";
 import { SkipLink } from "@/shared/ui/layout/SkipLink";
 
 const loginNavItems = [
@@ -29,7 +29,7 @@ export function LoginPage() {
         items={loginNavItems}
       />
       <main id="main-content">
-        <PageFrame className="px-3 py-4 sm:px-4 sm:py-6">
+        <PageFrame className={`${pageViewportGutterClass} py-4 sm:py-6`}>
           <PageContentSurface className="mx-auto max-w-[34rem] space-y-4">
             <header>
               <h1 className="text-2xl font-semibold text-[var(--color-text-primary)]">ログイン</h1>

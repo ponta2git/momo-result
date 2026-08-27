@@ -61,10 +61,11 @@ export function MemberAliasPanel({
 
       <form
         action={createAction}
-        className="mt-4 grid gap-3 md:grid-cols-[minmax(12rem,0.35fr)_minmax(12rem,1fr)_auto]"
+        className="mt-4 grid gap-3 md:grid-cols-[minmax(12rem,0.35fr)_minmax(12rem,1fr)_auto] md:grid-rows-[auto_auto_auto]"
         key={createFormKey}
       >
         <SelectField
+          fieldClassName="md:row-span-3 md:grid md:grid-rows-subgrid"
           label="プレーヤー"
           name="memberId"
           options={canonicalResultMembers.map((member) => ({
@@ -74,16 +75,20 @@ export function MemberAliasPanel({
         />
         <TextField
           error={createError}
+          fieldClassName="md:row-span-3 md:grid md:grid-rows-subgrid"
           label="別名"
           name="alias"
           placeholder="例: NO11社長"
           required
         />
-        <div className="flex items-end">
-          <Button pendingLabel="追加中" type="submit" variant="secondary">
-            追加
-          </Button>
-        </div>
+        <Button
+          className="md:col-start-3 md:row-start-2"
+          pendingLabel="追加中"
+          type="submit"
+          variant="secondary"
+        >
+          追加
+        </Button>
       </form>
 
       <div className="mt-4 grid gap-x-4 gap-y-6 md:grid-cols-2 xl:grid-cols-4">

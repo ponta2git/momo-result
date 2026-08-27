@@ -100,7 +100,7 @@ export function AdminAccountsPage() {
               />
             ) : (
               <div className="min-w-0">
-                <p className="border-y border-[var(--color-border-strong)] px-3 py-2 text-xs text-[var(--color-text-secondary)] md:hidden">
+                <p className="border-t border-[var(--color-border-strong)] px-3 py-2 text-xs text-[var(--color-text-secondary)] md:hidden">
                   権限と操作は横にスクロールして確認できます。
                 </p>
                 <div className={dataTableScrollAreaClassName}>

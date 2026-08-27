@@ -154,7 +154,7 @@ function MatchDetailReadyContent({ page }: { page: MatchDetailReadyPageModel }) 
           <div>
             <h2 className="text-base font-semibold text-[var(--color-text-primary)]">成績詳細</h2>
             <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">
-              列見出しで並び替えできます。
+              列見出しで並び替えできます。画面幅が狭い場合は横にスクロールして確認できます。
             </p>
           </div>
           <MatchDetailResultsTable

@@ -7,7 +7,9 @@ import { AppGlobalNav } from "@/app/AppGlobalNav";
 import { RouteErrorBoundary } from "@/app/RouteErrorBoundary";
 import { preloadRouteForPath } from "@/app/routeModules";
 import { RouteSuspenseFallback } from "@/app/RouteSuspenseFallback";
+import { cn } from "@/shared/ui/cn";
 import { ToastHost } from "@/shared/ui/feedback/ToastHost";
+import { pageViewportGutterClass } from "@/shared/ui/layout/PageFrame";
 import { SkipLink } from "@/shared/ui/layout/SkipLink";
 
 function shouldPreloadAnchor(anchor: HTMLAnchorElement): boolean {
@@ -111,7 +113,10 @@ export function AppShell() {
         <AppGlobalNav />
       </div>
       <main
-        className="mx-auto flex min-h-[calc(100dvh-4rem)] w-full flex-col px-3 py-4 sm:px-4 sm:py-6"
+        className={cn(
+          "mx-auto flex min-h-[calc(100dvh-4rem)] w-full flex-col py-4 sm:py-6",
+          pageViewportGutterClass,
+        )}
         id="main-content"
         onClickCapture={handleNavigationClick}
         onFocusCapture={handlePreloadIntent}

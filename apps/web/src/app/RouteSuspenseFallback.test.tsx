@@ -14,6 +14,7 @@ describe("RouteSuspenseFallback", () => {
 
   it.each([
     ["/matches/new", { kind: "workspace", width: "workspace" }],
+    ["/ocr/new", { kind: "workspace", width: "standard" }],
     ["/held-events/event-1", { kind: "detail", width: "wide" }],
     [
       "/analytics/series",
@@ -36,6 +37,13 @@ describe("RouteSuspenseFallback", () => {
     render(<RouteSuspenseFallback pathname="/matches/new" />);
 
     expect(screen.getByTestId("page-loading-fallback")).toHaveClass("max-w-[120rem]");
+  });
+
+  it("keeps embedded fallbacks inside the app shell gutter", () => {
+    render(<RouteSuspenseFallback pathname="/matches" />);
+
+    const fallback = screen.getByTestId("page-loading-fallback");
+    expect(fallback).not.toHaveClass("px-3", "px-4", "py-8");
   });
 
   it("keeps the export fallback in the same single-column task order as the page", () => {

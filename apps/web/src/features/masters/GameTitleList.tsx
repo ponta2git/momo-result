@@ -111,7 +111,7 @@ export function GameTitleList({
 
       {items.length === 0 ? (
         <EmptyState
-          className="mt-3 px-0"
+          className="mt-3"
           placement="embedded"
           title="作品はまだありません"
           description="作品を追加すると、マップとシーズンを登録できます。"

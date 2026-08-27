@@ -8,7 +8,7 @@
 - この repository は API / worker の query と、依存する DB 前提の contract test を所有する。
 - migration の存在と接続先への適用済み状態は別々に確認する。
 - Testcontainers、CI、E2E は `momo-db` の migration を適用した DB を使う。
-- row の業務意味と状態遷移は `docs/domain-rule.md`、分析 job / artifact は `docs/requirements/series-analysis-batch.md` を正本とする。
+- row の業務意味と状態遷移は `docs/domain-rule.md`、試合メモは `docs/requirements/match-note.md`、分析 job / artifact は `docs/requirements/series-analysis-batch.md` を正本とする。
 
 ## 2. Durable State Rules
 
@@ -16,7 +16,8 @@
 - OCR / 分析 job と成果物の状態は DB を正本とし、Redis を配送路に限定する。
 - 画像実体、bucket / public URL、credential、OCR raw text 全文を DB 契約にしない。非公開の opaque object key と検証・保持 metadata だけを保存する。
 - OCR job の terminal 遷移が下書き表示状態を変える場合は、両方を同じ transaction で更新する。read 時に job 履歴から状態を再構成しない。
-- 試合確定、確定済み試合の更新・削除と、対象作品の分析再計算 intent は同じ transaction で確定する。
+- 試合確定、確定済み試合の分析入力となる項目の更新、試合削除と、対象作品の分析再計算 intent は同じ transaction で確定する。初版の試合メモだけの更新では分析 input revision、再計算 intent、outbox を変更しない。
+- 試合メモの本文またはabsence、最終更新account、最終更新日時、concurrency version は同じwriteで確定する。メモ更新日時は構造化された試合の更新日時と分離する。構造化された試合更新はメモ状態を保持し、時刻をメモのconcurrency tokenにしない。
 - outbox writer は transaction 内で外部 I/O を行わず、commit 後にだけ typed effect を返す。dispatch 失敗は業務 transaction を巻き戻さない。
 - quota、idempotency、job claim、lease、fence、pointer 切替など競合する判断は、事前 read と write を分けず DB の同じ整合性境界へ閉じる。
 - 分析の入力 revision は単調増加値とし、時刻を concurrency token にしない。入力 version、algorithm version、artifact schema version を区別する。

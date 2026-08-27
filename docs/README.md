@@ -24,6 +24,7 @@
 | ローカル起動 / コマンド / Git | `docs/dev-rule.md` | — | テスト選択は `docs/test-rule.md` | package manifest、CI workflow、script | 対象の変更gate |
 | 戦績比較ページ | `docs/requirements/series-comparison.md` | `docs/requirements/series-analysis-batch.md` | reviewは `docs/requirements/series-review-playbook.md`、UIは `docs/ui-rule.md` | OpenAPI、artifact schema、Web source | analysis / Web gate |
 | 開催一覧・開催詳細 | `docs/requirements/held-event-detail.md` | — | base、architecture、test-rule | 対象API / Web source | 対象変更gate |
+| 試合メモ | `docs/requirements/match-note.md` | — | base、held-event-detail、series-analysis-batch、domain、UI | OpenAPI、momo-db migration、API / Web source | API / DB / Web gate |
 | docs 変更 | この文書 | 変更対象の正本、`docs/post-mortem/lessons.md` | 要求・運用の文書は変更対象に含むときだけ | 参照先のコード・schema・設定 | `git diff --check`, `pnpm public:safety:check` |
 
 この表は実装規約の導線を評価するもので、要求・運用文書全体の網羅性を主張しない。
@@ -45,6 +46,7 @@ AIは実装前に、(1) その規則のowner、(2) 必読と発火した条件�
 | 要求正本 | `docs/requirements/series-analysis-batch.md` | 戦績分析のjob、queue、artifact公開、API / Web pinning、状態表示、管理、version・release・検証の横断要求 |
 | 要求正本 | `docs/requirements/series-review-playbook.md` | 行動プレイブックの生成、選定、表現要求 |
 | 要求正本 | `docs/requirements/held-event-detail.md` | 開催一覧、開催詳細、試合記録・戦績比較への導線 |
+| 要求正本 | `docs/requirements/match-note.md` | 試合メモの入力、共有、更新、表示、分析・出力境界 |
 | 実装正本 | `docs/architecture.md` | API / web / Processing Worker runtime、OCR / 戦績分析能力の構造、依存方向、実装規約 |
 | UI正本 | `docs/ui-rule.md` | Web の意味表現、余白、操作、motion、状態表示、画面遷移の一貫性 |
 | ドメイン正本 | `docs/domain-rule.md` | 用語、状態遷移、不変条件、認証主体と試合参加者の区別 |

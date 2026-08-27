@@ -43,7 +43,8 @@ provider固有値、費用、実測、昇格・復旧手順は public docs へ�
 
 ### Automatic Triggers
 
-- 試合確定、確定済み試合の更新・削除は、影響作品の input revision と再計算 intent を同じ transaction で進める。
+- 試合確定、確定済み試合の分析入力となる項目の更新、試合削除は、影響作品の input revision と再計算 intent を同じ transaction で進める。
+- 初版の試合メモは分析入力に含めない。メモだけの作成、更新、削除は input revision を進めず、再計算 intent を作成しない。境界の詳細は `docs/requirements/match-note.md` を正本とする。
 - 作品 A から B へ移る更新は、変更前後の確定済み集合の和集合を対象とする。
 - 計算入力へ影響する master 変更は revision を進め、計算意味も変わる場合は algorithm version も進める。表示名・localeなど表示専用 metadata はAPIでhydrateし、revisionへ含めない。
 - algorithm / artifact schema 更新は受理時点の全登録作品、初回 backfill は確定試合を持つ作品を永続 snapshot する。

@@ -33,7 +33,6 @@ export function useHeldEventPickerDirectory({
   selectedId: string;
 }) {
   const [page, setPage] = useState(1);
-  const [rememberedSelection, setRememberedSelection] = useState<HeldEventResponse | undefined>();
   const directoryQuery = useQuery({
     ...heldEventsQueryOptions({ page, pageSize: heldEventPickerPageSize }),
     enabled,
@@ -41,9 +40,7 @@ export function useHeldEventPickerDirectory({
   const heldEvents = directoryQuery.data?.items ?? [];
   const selectedOnPage = heldEvents.find((event) => event.id === selectedId);
   const suppliedSelection = selectedEvent?.id === selectedId ? selectedEvent : undefined;
-  const rememberedCurrentSelection =
-    rememberedSelection?.id === selectedId ? rememberedSelection : undefined;
-  const resolvedWithoutDetail = selectedOnPage ?? suppliedSelection ?? rememberedCurrentSelection;
+  const resolvedWithoutDetail = selectedOnPage ?? suppliedSelection;
   const selectedDetailQuery = useQuery(
     heldEventDetailQueryOptions(
       selectedId,
@@ -78,7 +75,6 @@ export function useHeldEventPickerDirectory({
       if (directoryQuery.isFetching || nextPage < 1) return;
       const totalPages = directoryQuery.data?.pagination.totalPages;
       if (totalPages !== undefined && totalPages > 0 && nextPage > totalPages) return;
-      if (resolvedSelection?.id === selectedId) setRememberedSelection(resolvedSelection);
       setPage(nextPage);
     },
   };

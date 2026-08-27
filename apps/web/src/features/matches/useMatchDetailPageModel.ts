@@ -24,13 +24,8 @@ import {
   shouldShowBlockingQueryError,
   shouldShowQueryError,
 } from "@/shared/api/queryErrorState";
-import {
-  gameTitlesQueryOptions,
-  heldEventDirectoryQueryOptions,
-  mapMastersQueryOptions,
-  matchDetailQueryOptions,
-  seasonMastersQueryOptions,
-} from "@/shared/api/queryOptions";
+import { heldEventDirectoryQueryOptions, matchDetailQueryOptions } from "@/shared/api/queryOptions";
+import { useMasterNameDirectory } from "@/shared/api/useMasterNameDirectory";
 import {
   currentInternalLocation,
   sanitizeReturnTo,
@@ -52,9 +47,8 @@ export function useMatchDetailPageModel(): MatchDetailPageModel {
 
   const matchQuery = useQuery(matchDetailQueryOptions(matchId, matchId.trim().length > 0));
   const heldEventsQuery = useQuery(heldEventDirectoryQueryOptions());
-  const gameTitlesQuery = useQuery(gameTitlesQueryOptions("match-detail"));
-  const seasonsQuery = useQuery(seasonMastersQueryOptions("match-detail", undefined));
-  const mapsQuery = useQuery(mapMastersQueryOptions("match-detail", undefined));
+  const masters = useMasterNameDirectory();
+  const retryFailedMasters = masters.retryFailed;
 
   const {
     data: match,
@@ -70,24 +64,6 @@ export function useMatchDetailPageModel(): MatchDetailPageModel {
     isFetching: heldEventsIsFetching,
     refetch: refetchHeldEvents,
   } = heldEventsQuery;
-  const {
-    data: gameTitlesData,
-    error: gameTitlesError,
-    isFetching: gameTitlesIsFetching,
-    refetch: refetchGameTitles,
-  } = gameTitlesQuery;
-  const {
-    data: seasonsData,
-    error: seasonsError,
-    isFetching: seasonsIsFetching,
-    refetch: refetchSeasons,
-  } = seasonsQuery;
-  const {
-    data: mapsData,
-    error: mapsError,
-    isFetching: mapsIsFetching,
-    refetch: refetchMaps,
-  } = mapsQuery;
 
   const analysis = useMatchFeatureAnalysis(match);
   const deletion = useMatchDeletionCommand({
@@ -108,45 +84,21 @@ export function useMatchDetailPageModel(): MatchDetailPageModel {
     error: heldEventsError,
     isFetching: heldEventsIsFetching,
   });
-  const gameTitlesFailed = shouldShowQueryError({
-    error: gameTitlesError,
-    isFetching: gameTitlesIsFetching,
-  });
-  const seasonsFailed = shouldShowQueryError({
-    error: seasonsError,
-    isFetching: seasonsIsFetching,
-  });
-  const mapsFailed = shouldShowQueryError({ error: mapsError, isFetching: mapsIsFetching });
   const failedEnrichmentFields = [
     heldEventsFailed ? "開催日" : undefined,
-    gameTitlesFailed ? "作品名" : undefined,
-    seasonsFailed ? "シーズン名" : undefined,
-    mapsFailed ? "マップ名" : undefined,
+    masters.failed.gameTitles ? "作品名" : undefined,
+    masters.failed.seasons ? "シーズン名" : undefined,
+    masters.failed.maps ? "マップ名" : undefined,
   ].filter((field): field is string => Boolean(field));
   const enrichmentPending =
-    (heldEventsData === undefined && heldEventsIsFetching) ||
-    (gameTitlesData === undefined && gameTitlesIsFetching) ||
-    (seasonsData === undefined && seasonsIsFetching) ||
-    (mapsData === undefined && mapsIsFetching);
-  const enrichmentRefreshing =
-    heldEventsIsFetching || gameTitlesIsFetching || seasonsIsFetching || mapsIsFetching;
+    (heldEventsData === undefined && heldEventsIsFetching) || masters.initialPending;
+  const enrichmentRefreshing = heldEventsIsFetching || masters.refreshing;
   const retryEnrichment = useCallback(() => {
     const retries: Array<Promise<unknown>> = [];
     if (heldEventsFailed) retries.push(refetchHeldEvents());
-    if (gameTitlesFailed) retries.push(refetchGameTitles());
-    if (seasonsFailed) retries.push(refetchSeasons());
-    if (mapsFailed) retries.push(refetchMaps());
+    retries.push(retryFailedMasters());
     void Promise.all(retries);
-  }, [
-    gameTitlesFailed,
-    heldEventsFailed,
-    mapsFailed,
-    refetchGameTitles,
-    refetchHeldEvents,
-    refetchMaps,
-    refetchSeasons,
-    seasonsFailed,
-  ]);
+  }, [heldEventsFailed, refetchHeldEvents, retryFailedMasters]);
   const retryPrimary = useCallback(() => {
     void refetchMatch();
   }, [refetchMatch]);
@@ -183,9 +135,9 @@ export function useMatchDetailPageModel(): MatchDetailPageModel {
   }
 
   const heldEvent = (heldEventsData?.items ?? []).find((event) => event.id === match.heldEventId);
-  const gameTitle = (gameTitlesData?.items ?? []).find((item) => item.id === match.gameTitleId);
-  const season = (seasonsData?.items ?? []).find((item) => item.id === match.seasonMasterId);
-  const map = (mapsData?.items ?? []).find((item) => item.id === match.mapMasterId);
+  const gameTitle = masters.items.gameTitles.find((item) => item.id === match.gameTitleId);
+  const season = masters.items.seasons.find((item) => item.id === match.seasonMasterId);
+  const map = masters.items.maps.find((item) => item.id === match.mapMasterId);
   const enrichment: MatchDetailEnrichmentModel =
     failedEnrichmentFields.length > 0
       ? {
@@ -213,19 +165,19 @@ export function useMatchDetailPageModel(): MatchDetailPageModel {
     enrichment,
     identity: {
       gameTitle: resolvedEnrichmentName({
-        failed: gameTitlesFailed,
-        loading: gameTitlesData === undefined && gameTitlesIsFetching,
+        failed: masters.failed.gameTitles,
+        loading: masters.pending.gameTitles,
         name: gameTitle?.name,
       }),
       heldAt: heldEvent?.heldAt ?? match.playedAt,
       map: resolvedEnrichmentName({
-        failed: mapsFailed,
-        loading: mapsData === undefined && mapsIsFetching,
+        failed: masters.failed.maps,
+        loading: masters.pending.maps,
         name: map?.name,
       }),
       season: resolvedEnrichmentName({
-        failed: seasonsFailed,
-        loading: seasonsData === undefined && seasonsIsFetching,
+        failed: masters.failed.seasons,
+        loading: masters.pending.seasons,
         name: season?.name,
       }),
     },

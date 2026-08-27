@@ -1,6 +1,10 @@
 import { ArrowLeft, BarChart3 } from "lucide-react";
+import { useEffect } from "react";
 
-import { SeriesAnalysisContent } from "@/features/seriesComparison/page/SeriesAnalysisContent";
+import {
+  preloadSeriesAnalysisView,
+  SeriesAnalysisContent,
+} from "@/features/seriesComparison/page/SeriesAnalysisContent";
 import { SeriesAnalysisScopeBar } from "@/features/seriesComparison/page/SeriesAnalysisScopeBar";
 import { SeriesAnalysisStatusFeedback } from "@/features/seriesComparison/page/SeriesAnalysisStatusFeedback";
 import {
@@ -20,6 +24,10 @@ import { StaleShield } from "@/shared/ui/motion/StaleShield";
 export function SeriesComparisonPage() {
   const page = useSeriesComparisonPageModel();
   const { filters, focus, options, resource, status } = page;
+
+  useEffect(() => {
+    preloadSeriesAnalysisView(filters.activeView);
+  }, [filters.activeView]);
 
   if (options.loading) return <PageSkeleton />;
   if (page.clientUpgradeRequired) {

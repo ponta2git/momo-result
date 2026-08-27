@@ -8,6 +8,8 @@ import type {
 } from "@/features/matches/workspace/matchFormTypes";
 import { buildMatchWorkspacePageModel } from "@/features/matches/workspace/matchWorkspacePageModel";
 import type { MatchWorkspacePageModel } from "@/features/matches/workspace/matchWorkspacePageModelTypes";
+import { buildMatchWorkspaceSourceImages } from "@/features/matches/workspace/matchWorkspaceSourceImages";
+import { buildMatchWorkspaceView } from "@/features/matches/workspace/matchWorkspaceView";
 import { useMatchWorkspaceFormHandlers } from "@/features/matches/workspace/useMatchWorkspaceFormHandlers";
 import { useMatchWorkspaceInit } from "@/features/matches/workspace/useMatchWorkspaceInit";
 import { useMatchWorkspaceLifecycleEffects } from "@/features/matches/workspace/useMatchWorkspaceLifecycleEffects";
@@ -16,17 +18,19 @@ import { useMatchWorkspaceMasterHandoff } from "@/features/matches/workspace/use
 import { useMatchWorkspacePrimaryAction } from "@/features/matches/workspace/useMatchWorkspacePrimaryAction";
 import { useMatchWorkspaceQueries } from "@/features/matches/workspace/useMatchWorkspaceQueries";
 import { useMatchWorkspaceReviewSession } from "@/features/matches/workspace/useMatchWorkspaceReviewSession";
-import { useMatchWorkspaceSourceImages } from "@/features/matches/workspace/useMatchWorkspaceSourceImages";
 import { useMatchWorkspaceSubmitFlow } from "@/features/matches/workspace/useMatchWorkspaceSubmitFlow";
 import { useMatchWorkspaceValidation } from "@/features/matches/workspace/useMatchWorkspaceValidation";
-import { useMatchWorkspaceViewModel } from "@/features/matches/workspace/useMatchWorkspaceViewModel";
 import { useWorkspaceHeldEventCreation } from "@/features/matches/workspace/useWorkspaceHeldEventCreation";
 import { useWorkspaceNotice } from "@/features/matches/workspace/useWorkspaceNotice";
+import {
+  heldEventPatchById,
+  latestHeldEventPatch,
+} from "@/features/matches/workspace/workspaceViewModel";
 import { isInitialQueryLoading, shouldShowQueryError } from "@/shared/api/queryErrorState";
 import { useAuth } from "@/shared/auth/useAuth";
 import { sanitizeReturnTo } from "@/shared/navigation/returnTo";
 
-export type MatchWorkspacePageModelParams = {
+type MatchWorkspacePageModelParams = {
   matchDraftId?: string | undefined;
   matchId?: string | undefined;
   matchSessionId?: string | undefined;
@@ -34,7 +38,6 @@ export type MatchWorkspacePageModelParams = {
   preferredHeldEventId?: string | undefined;
 };
 
-/** Composes workspace resources and commands into the display contract consumed by the page. */
 export function useMatchWorkspacePageModel({
   matchDraftId,
   matchId,
@@ -114,7 +117,7 @@ export function useMatchWorkspacePageModel({
     showValidationErrors: local.showValidationErrors,
     values: state.values,
   });
-  const view = useMatchWorkspaceViewModel({
+  const view = buildMatchWorkspaceView({
     draftDetail: draftDetailQuery.data,
     gameTitleItems: gameTitlesQuery.data?.items,
     heldEventItems,
@@ -125,11 +128,21 @@ export function useMatchWorkspacePageModel({
     useSampleDrafts,
     values: state.values,
   });
+  const initialHeldEventPatch =
+    mode !== "edit" && !useSampleDrafts && !state.values.heldEventId
+      ? (heldEventPatchById(view.heldEvents, preferredHeldEventId) ??
+        latestHeldEventPatch(view.heldEvents))
+      : undefined;
+  const draftTrackingEnabled =
+    isInitialized &&
+    !hasHandoff &&
+    !preferredHeldEventPending &&
+    initialHeldEventPatch === undefined;
   const reviewSession = useMatchWorkspaceReviewSession({
     accountId,
     confirmedDraftLoaded: view.confirmedDraftLoaded,
     dispatch,
-    isInitialized,
+    draftTrackingEnabled,
     mode,
     notify,
     reviewKey: handoffSessionId,
@@ -178,10 +191,10 @@ export function useMatchWorkspacePageModel({
     searchParams,
     values: state.values,
   });
-  const sourceImages = useMatchWorkspaceSourceImages({
-    items: sourceImageQuery.data?.items,
-    matchDraftId: view.matchDraftIdForImages,
-  });
+  const sourceImages = buildMatchWorkspaceSourceImages(
+    sourceImageQuery.data?.items,
+    view.matchDraftIdForImages,
+  );
   const formActions = useMatchWorkspaceFormHandlers({
     createHeldEvent: createEventMutation.mutate,
     dispatch,

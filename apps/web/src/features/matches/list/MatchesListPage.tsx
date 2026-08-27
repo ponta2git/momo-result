@@ -93,11 +93,11 @@ export function MatchesListPage() {
             <p>試合一覧は表示できます。開催、作品、シーズンの候補を再取得できます。</p>
             <div className="mt-3">
               <Button
-                pending={list.refresh.pending}
+                pending={filters.refresh.pending}
                 pendingLabel="再読み込み中"
                 size="sm"
                 variant="secondary"
-                onClick={() => void list.refresh.run()}
+                onClick={filters.refresh.run}
               >
                 候補を再読み込み
               </Button>

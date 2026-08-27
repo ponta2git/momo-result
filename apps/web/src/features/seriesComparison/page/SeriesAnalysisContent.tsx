@@ -19,34 +19,34 @@ import { loadLazyModule } from "@/shared/lib/moduleLoadError";
 import { Dialog } from "@/shared/ui/feedback/Dialog";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 
-const OverviewView = lazy(() =>
+const loadOverviewView = () =>
   loadLazyModule(() =>
     import("@/features/seriesComparison/page/SeriesAnalysisOverviewView").then((module) => ({
       default: module.OverviewView,
     })),
-  ),
-);
-const DriversView = lazy(() =>
+  );
+const loadDriversView = () =>
   loadLazyModule(() =>
     import("@/features/seriesComparison/page/SeriesAnalysisDriversView").then((module) => ({
       default: module.DriversView,
     })),
-  ),
-);
-const FlowView = lazy(() =>
+  );
+const loadFlowView = () =>
   loadLazyModule(() =>
     import("@/features/seriesComparison/page/SeriesAnalysisFlowView").then((module) => ({
       default: module.FlowView,
     })),
-  ),
-);
-const ContextView = lazy(() =>
+  );
+const loadContextView = () =>
   loadLazyModule(() =>
     import("@/features/seriesComparison/page/SeriesAnalysisContextView").then((module) => ({
       default: module.ContextView,
     })),
-  ),
-);
+  );
+const OverviewView = lazy(loadOverviewView);
+const DriversView = lazy(loadDriversView);
+const FlowView = lazy(loadFlowView);
+const ContextView = lazy(loadContextView);
 const SeriesAnalysisDrilldownDialog = lazy(() =>
   loadLazyModule(() =>
     import("@/features/seriesComparison/drilldowns/SeriesAnalysisDrilldownDialog").then(
@@ -55,6 +55,20 @@ const SeriesAnalysisDrilldownDialog = lazy(() =>
   ),
 );
 const noFocusedItemIds: readonly string[] = [];
+
+export function preloadSeriesAnalysisView(view: SeriesAnalysisViewId): void {
+  const load =
+    view === "overview"
+      ? loadOverviewView
+      : view === "drivers"
+        ? loadDriversView
+        : view === "flow"
+          ? loadFlowView
+          : view === "context"
+            ? loadContextView
+            : undefined;
+  void load?.().catch(() => undefined);
+}
 
 type SeriesAnalysisContentProps = {
   bundle: SeriesAnalysisDisplayBundle;

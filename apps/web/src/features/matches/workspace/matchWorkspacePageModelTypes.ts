@@ -1,12 +1,6 @@
 import type { MatchFormValues } from "@/features/matches/workspace/matchFormTypes";
 import type { MatchWorkspaceOperationErrorView } from "@/features/matches/workspace/matchWorkspaceOperationError";
 import type {
-  MatchWorkspaceBaseLoadingCapability,
-  MatchWorkspaceEditLoadingCapability,
-  MatchWorkspaceReviewRefreshCapability,
-  MatchWorkspaceValidationFocusRequest,
-} from "@/features/matches/workspace/matchWorkspacePageCapabilities";
-import type {
   ScoreGridActions,
   ScoreGridData,
 } from "@/features/matches/workspace/scoreGrid/ScoreGridTypes";
@@ -20,6 +14,7 @@ import type {
   MapMasterResponse,
   SeasonMasterResponse,
 } from "@/shared/api/masters";
+import type { NormalizedApiError } from "@/shared/api/problemDetails";
 import type { HeldEventPickerDirectory } from "@/shared/api/useHeldEventPickerDirectory";
 
 export type MatchWorkspaceMastersNavigationModel = {
@@ -41,9 +36,18 @@ export type MatchWorkspaceHeaderModel = {
   title: string;
 };
 
-export type MatchWorkspaceLoadingModel = {
-  base: MatchWorkspaceBaseLoadingCapability;
-  edit: MatchWorkspaceEditLoadingCapability;
+type MatchWorkspaceLoadingModel = {
+  base: {
+    errors: NormalizedApiError[];
+    retrying: boolean;
+    onRetry: () => Promise<void>;
+  };
+  edit: {
+    failureKind: "notFound" | "transient" | null;
+    loading: boolean;
+    retrying: boolean;
+    onRetry: () => void;
+  };
   workspace: {
     copy: { description: string; title: string };
     loading: boolean;
@@ -146,7 +150,10 @@ export type MatchWorkspaceConfirmationDialogModel = {
 
 export type MatchWorkspaceBlockedReviewModel = {
   feedback: { error: MatchWorkspaceOperationErrorView | null };
-  refresh: MatchWorkspaceReviewRefreshCapability;
+  refresh: {
+    pending: boolean;
+    onRefresh: () => Promise<void>;
+  };
 };
 
 export type MatchWorkspacePageModel = {
@@ -158,5 +165,5 @@ export type MatchWorkspacePageModel = {
   };
   persistence: { confirmation: MatchWorkspaceConfirmationDialogModel | null };
   review: { blocked: MatchWorkspaceBlockedReviewModel | null };
-  validationFocusRequest: MatchWorkspaceValidationFocusRequest;
+  validationFocusRequest: { path: string; sequence: number } | null;
 };

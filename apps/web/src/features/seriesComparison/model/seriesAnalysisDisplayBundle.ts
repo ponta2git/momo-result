@@ -33,6 +33,35 @@ export type SeriesAnalysisBundleResolution =
   | { kind: "ready"; value: SeriesAnalysisDisplayBundle }
   | { kind: "waiting" };
 
+export function displaySeriesAnalysisBundleWithoutContext(
+  activeView: SeriesAnalysisViewId,
+  aggregate: SeriesComparisonAggregateV3 | undefined,
+  review: SeriesComparisonReviewV3 | undefined,
+): SeriesAnalysisDisplayBundle | undefined {
+  if (activeView === "review") {
+    return review ? { kind: "review", matchContext: undefined, review, view: "review" } : undefined;
+  }
+  return aggregate
+    ? { aggregate, kind: "analysis", matchContext: undefined, view: activeView }
+    : undefined;
+}
+
+export function sameSeriesAnalysisDisplayBundle(
+  current: SeriesAnalysisDisplayBundle | undefined,
+  next: SeriesAnalysisDisplayBundle,
+): boolean {
+  if (!current || current.kind !== next.kind || current.view !== next.view) return false;
+  if (current.kind === "review" && next.kind === "review") {
+    return current.review === next.review && current.matchContext === next.matchContext;
+  }
+  return (
+    current.kind === "analysis" &&
+    next.kind === "analysis" &&
+    current.aggregate === next.aggregate &&
+    current.matchContext === next.matchContext
+  );
+}
+
 export function seriesAnalysisFocusExclusionNotice(
   status: "match_changed_since_artifact" | "not_in_artifact" | "not_in_scope",
 ): string {

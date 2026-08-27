@@ -26,6 +26,7 @@ export type MatchesListPageModel = {
     hasActive: boolean;
     loadFailed: boolean;
     pending: boolean;
+    refresh: { pending: boolean; run: () => void };
     search: MatchListSearch;
   };
   list: {
@@ -99,6 +100,7 @@ export function useMatchesListPageModel(): MatchesListPageModel {
       hasActive: location.hasFilters,
       loadFailed: resource.filters.loadFailed,
       pending: resource.list.scopeChanging,
+      refresh: resource.filters.refresh,
       search: location.current,
     },
     list: {

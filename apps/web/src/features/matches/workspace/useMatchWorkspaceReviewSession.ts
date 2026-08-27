@@ -16,7 +16,7 @@ export function useMatchWorkspaceReviewSession({
   accountId,
   confirmedDraftLoaded,
   dispatch,
-  isInitialized,
+  draftTrackingEnabled,
   mode,
   notify,
   reviewKey,
@@ -26,7 +26,7 @@ export function useMatchWorkspaceReviewSession({
   accountId: string | undefined;
   confirmedDraftLoaded: boolean;
   dispatch: Dispatch<MatchFormAction>;
-  isInitialized: boolean;
+  draftTrackingEnabled: boolean;
   mode: WorkspaceMode;
   notify: (message: string, tone?: WorkspaceNoticeTone) => void;
   reviewKey: string;
@@ -52,7 +52,7 @@ export function useMatchWorkspaceReviewSession({
   const sessionDraft = useMatchWorkspaceSessionDraft({
     accountId,
     acknowledgedCellIds: reviewState.acknowledgedCellIds,
-    enabled: isInitialized && !confirmedDraftLoaded,
+    enabled: draftTrackingEnabled && !confirmedDraftLoaded,
     mode,
     onRestore: handleRestore,
     values,

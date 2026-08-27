@@ -1,5 +1,3 @@
-import { useMemo } from "react";
-
 import { confirmedDraftDestination } from "@/features/matches/confirmedDraftNavigation";
 import type { MatchFormValues, WorkspaceMode } from "@/features/matches/workspace/matchFormTypes";
 import { buildWorkspacePageCopy } from "@/features/matches/workspace/workspaceViewModel";
@@ -12,7 +10,12 @@ import type {
 import type { MatchDraftDetailResponse } from "@/shared/api/matchDrafts";
 import { isCancelableDraftStatus } from "@/shared/domain/draftStatus";
 
-export function useMatchWorkspaceViewModel({
+const noGameTitles: GameTitleResponse[] = [];
+const noHeldEvents: HeldEventResponse[] = [];
+const noMaps: MapMasterResponse[] = [];
+const noSeasons: SeasonMasterResponse[] = [];
+
+export function buildMatchWorkspaceView({
   draftDetail,
   gameTitleItems,
   heldEventItems,
@@ -33,11 +36,11 @@ export function useMatchWorkspaceViewModel({
   useSampleDrafts: boolean;
   values: MatchFormValues;
 }) {
-  const heldEvents = useMemo(() => heldEventItems ?? [], [heldEventItems]);
+  const heldEvents = heldEventItems ?? noHeldEvents;
   const pageCopy = buildWorkspacePageCopy({ mode, reviewStatus });
-  const gameTitles = gameTitleItems ?? [];
-  const maps = mapItems ?? [];
-  const seasons = seasonItems ?? [];
+  const gameTitles = gameTitleItems ?? noGameTitles;
+  const maps = mapItems ?? noMaps;
+  const seasons = seasonItems ?? noSeasons;
   const matchDraftIdForImages = values.matchDraftId;
   const confirmedDraftLoaded =
     mode !== "edit" && !useSampleDrafts && Boolean(confirmedDraftDestination(draftDetail));

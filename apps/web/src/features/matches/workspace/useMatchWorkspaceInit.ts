@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { draftToMatchForm } from "@/features/matches/workspace/draftToMatchForm";
 import { matchDetailToMatchForm } from "@/features/matches/workspace/matchDetailToMatchForm";
@@ -44,9 +44,9 @@ export type MatchWorkspaceInitParams = {
 /**
  * モード別の初期化（edit: 既存試合 / create: 下書き / review: OCR 結果）を担う Hook。
  *
- * - 入力キー（mode + ids + 取得データの updatedAt 等）が変化したときのみ初期化する
+ * - ワークスペースの identity（mode + ids）が変化したときのみ初期化する
  * - 初期化結果は呼び出し側の安定した onInitialize command で一括反映する
- * - 初期化済み状態は内部 ref で保持する（フラグの取得は isInitialized 戻り値）
+ * - effect の多重実行は ref で防ぎ、描画に使う初期化状態は state で公開する
  */
 export function useMatchWorkspaceInit({
   draftDetail,
@@ -66,8 +66,8 @@ export function useMatchWorkspaceInit({
   nowIsoFactory,
 }: MatchWorkspaceInitParams): { isInitialized: boolean } {
   const initializedKeyRef = useRef<string | null>(null);
+  const [initializedKey, setInitializedKey] = useState<string | null>(null);
   const initKey = JSON.stringify({
-    draftSummaryUpdatedAt: draftDetail?.updatedAt,
     hasLegacyDrafts: reviewDraftIdList.join(","),
     matchDraftId,
     matchId,
@@ -85,6 +85,7 @@ export function useMatchWorkspaceInit({
       }
       onInitialize(matchDetailToMatchForm(matchDetail), null);
       initializedKeyRef.current = initKey;
+      setInitializedKey(initKey);
       return;
     }
 
@@ -101,6 +102,7 @@ export function useMatchWorkspaceInit({
       );
       onInitialize(base, null);
       initializedKeyRef.current = initKey;
+      setInitializedKey(initKey);
       return;
     }
 
@@ -126,6 +128,7 @@ export function useMatchWorkspaceInit({
 
       onInitialize(prepared.values, prepared.initialData);
       initializedKeyRef.current = initKey;
+      setInitializedKey(initKey);
     }
   }, [
     draftDetail,
@@ -146,5 +149,5 @@ export function useMatchWorkspaceInit({
     nowIsoFactory,
   ]);
 
-  return { isInitialized: initializedKeyRef.current === initKey };
+  return { isInitialized: initializedKey === initKey };
 }

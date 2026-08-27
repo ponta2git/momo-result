@@ -41,7 +41,6 @@ const seasonMaster = {
 function SetupOptionsHarness({ initialValue }: { initialValue: SetupFormValues }) {
   const [value, setValue] = useState(initialValue);
   const options = useOcrSetupOptions({
-    authAccountId: "account_ponta",
     enabled: true,
     onChange: setValue,
     value,
@@ -78,11 +77,11 @@ describe("useOcrSetupOptions", () => {
     queryClient.setQueryDefaults(masterKeys.all(), {
       staleTime: Number.POSITIVE_INFINITY,
     });
-    queryClient.setQueryData(masterKeys.gameTitles.list("account_ponta"), { items: [gameTitle] });
-    queryClient.setQueryData(masterKeys.mapMasters.list("account_ponta", gameTitle.id), {
+    queryClient.setQueryData(masterKeys.gameTitles.list(), { items: [gameTitle] });
+    queryClient.setQueryData(masterKeys.mapMasters.list(gameTitle.id), {
       items: [mapMaster],
     });
-    queryClient.setQueryData(masterKeys.seasonMasters.list("account_ponta", gameTitle.id), {
+    queryClient.setQueryData(masterKeys.seasonMasters.list(gameTitle.id), {
       items: [seasonMaster],
     });
     queryClient.setQueryData(heldEventKeys.scope("ocr-capture"), { items: [] });
@@ -113,11 +112,11 @@ describe("useOcrSetupOptions", () => {
   it("fills the server-supplied next number for a requested held event", async () => {
     const queryClient = createTestQueryClient();
     queryClient.setQueryDefaults(["masters"], { staleTime: Number.POSITIVE_INFINITY });
-    queryClient.setQueryData(masterKeys.gameTitles.list("account_ponta"), { items: [gameTitle] });
-    queryClient.setQueryData(masterKeys.mapMasters.list("account_ponta", gameTitle.id), {
+    queryClient.setQueryData(masterKeys.gameTitles.list(), { items: [gameTitle] });
+    queryClient.setQueryData(masterKeys.mapMasters.list(gameTitle.id), {
       items: [mapMaster],
     });
-    queryClient.setQueryData(masterKeys.seasonMasters.list("account_ponta", gameTitle.id), {
+    queryClient.setQueryData(masterKeys.seasonMasters.list(gameTitle.id), {
       items: [seasonMaster],
     });
     queryClient.setQueryData(heldEventKeys.scope("ocr-capture"), {
@@ -161,11 +160,11 @@ describe("useOcrSetupOptions", () => {
       retry: false,
       staleTime: Number.POSITIVE_INFINITY,
     });
-    queryClient.setQueryData(masterKeys.gameTitles.list("account_ponta"), { items: [gameTitle] });
-    queryClient.setQueryData(masterKeys.mapMasters.list("account_ponta", gameTitle.id), {
+    queryClient.setQueryData(masterKeys.gameTitles.list(), { items: [gameTitle] });
+    queryClient.setQueryData(masterKeys.mapMasters.list(gameTitle.id), {
       items: [mapMaster],
     });
-    queryClient.setQueryData(masterKeys.seasonMasters.list("account_ponta", gameTitle.id), {
+    queryClient.setQueryData(masterKeys.seasonMasters.list(gameTitle.id), {
       items: [seasonMaster],
     });
     queryClient.setQueryData(heldEventKeys.scope("ocr-capture"), { items: [] });
@@ -205,11 +204,11 @@ describe("useOcrSetupOptions", () => {
       retry: false,
       staleTime: Number.POSITIVE_INFINITY,
     });
-    queryClient.setQueryData(masterKeys.gameTitles.list("account_ponta"), { items: [gameTitle] });
-    queryClient.setQueryData(masterKeys.mapMasters.list("account_ponta", gameTitle.id), {
+    queryClient.setQueryData(masterKeys.gameTitles.list(), { items: [gameTitle] });
+    queryClient.setQueryData(masterKeys.mapMasters.list(gameTitle.id), {
       items: [mapMaster],
     });
-    queryClient.setQueryData(masterKeys.seasonMasters.list("account_ponta", gameTitle.id), {
+    queryClient.setQueryData(masterKeys.seasonMasters.list(gameTitle.id), {
       items: [seasonMaster],
     });
     queryClient.setQueryData(heldEventKeys.scope("ocr-capture"), { items: [] });

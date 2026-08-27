@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import type { HeldEventListResponse, HeldEventResponse } from "@/shared/api/heldEvents";
 import { heldEventKeys } from "@/shared/api/queryKeys";
-import { heldEventsQueryOptions } from "@/shared/api/queryOptions";
+import { heldEventDetailQueryOptions, heldEventsQueryOptions } from "@/shared/api/queryOptions";
 import {
   heldEventPickerPageSize,
   useHeldEventPickerDirectory,
@@ -49,6 +49,10 @@ describe("useHeldEventPickerDirectory", () => {
       heldEventsQueryOptions({ page: 2, pageSize: heldEventPickerPageSize }).queryKey,
       pageResponse([secondPageEvent], 2, 63),
     );
+    queryClient.setQueryData(
+      heldEventDetailQueryOptions(firstSelection.id).queryKey,
+      firstSelection,
+    );
     const wrapper = ({ children }: { children: ReactNode }) => (
       <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
     );
@@ -66,5 +70,14 @@ describe("useHeldEventPickerDirectory", () => {
     await waitFor(() => expect(result.current.pagination?.page).toBe(2));
     expect(result.current.heldEvents).toEqual([secondPageEvent]);
     expect(result.current.selectedHeldEvent).toEqual(firstSelection);
+
+    const refreshedSelection = { ...firstSelection, matchCount: 5 };
+    act(() => {
+      queryClient.setQueryData(
+        heldEventDetailQueryOptions(firstSelection.id).queryKey,
+        refreshedSelection,
+      );
+    });
+    await waitFor(() => expect(result.current.selectedHeldEvent).toEqual(refreshedSelection));
   });
 });

@@ -16,9 +16,9 @@ export function MastersPage() {
     <PageFrame>
       <PageHeader eyebrow="管理" title="設定管理" />
 
-      {page.auth.error ? (
-        <Notice tone="danger" title={page.auth.error.title}>
-          {page.auth.error.detail}
+      {page.feedback.authError ? (
+        <Notice tone="danger" title={page.feedback.authError.title}>
+          {page.feedback.authError.detail}
         </Notice>
       ) : null}
 

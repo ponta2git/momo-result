@@ -8,6 +8,7 @@ import type { CaptureSlotState } from "@/features/ocrCapture/captureState";
 import { OcrJobSlotStatusLoader } from "@/features/ocrCapture/OcrJobSlotStatusLoader";
 import * as ocrDraftsApi from "@/shared/api/ocrDrafts";
 import type { OcrDraftResponse } from "@/shared/api/ocrDrafts";
+import { ocrDraftKeys } from "@/shared/api/queryKeys";
 import { createDeferred } from "@/test/deferred";
 import { setupMsw } from "@/test/msw/lifecycle";
 import { server } from "@/test/msw/server";
@@ -161,6 +162,110 @@ describe("OcrJobSlotStatusLoader", () => {
           transportError: expect.objectContaining({ detail: "try again later" }),
         }),
       ),
+    );
+  });
+
+  it("adopts a matching draft through the shared query cache without duplicate requests", async () => {
+    let draftRequestCount = 0;
+    const draft = ocrDraftResponse();
+    server.use(
+      http.get("/api/ocr-jobs/:jobId", () => HttpResponse.json(succeededJobResponse())),
+      http.get("/api/ocr-drafts/:draftId", () => {
+        draftRequestCount += 1;
+        return HttpResponse.json(draft);
+      }),
+    );
+    const slot: CaptureSlotState = {
+      kind: "total_assets",
+      jobId: "job-1",
+      status: "running",
+    };
+
+    const first = renderLoader({ slot });
+    const second = renderLoader({ slot });
+
+    await waitFor(() => expect(first.onDraft).toHaveBeenCalledWith("total_assets", draft));
+    await waitFor(() => expect(second.onDraft).toHaveBeenCalledWith("total_assets", draft));
+    expect(draftRequestCount).toBe(1);
+    expect(queryClient.getQueryData(ocrDraftKeys.detail("draft-1"))).toEqual(draft);
+    expect(first.onDraftLoadError).not.toHaveBeenCalled();
+    expect(second.onDraftLoadError).not.toHaveBeenCalled();
+  });
+
+  it("marks the slot failed without loading a draft when a succeeded job has no draft id", async () => {
+    let draftRequestCount = 0;
+    server.use(
+      http.get("/api/ocr-jobs/:jobId", () =>
+        HttpResponse.json({
+          ...runningJobResponse(),
+          detectedScreenType: "total_assets",
+          status: "succeeded",
+        }),
+      ),
+      http.get("/api/ocr-drafts/:draftId", () => {
+        draftRequestCount += 1;
+        return HttpResponse.json(ocrDraftResponse());
+      }),
+    );
+    const view = renderLoader({
+      slot: {
+        kind: "total_assets",
+        jobId: "job-1",
+        status: "running",
+      },
+    });
+
+    await waitFor(() =>
+      expect(view.onUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: "failed",
+          transportError: expect.objectContaining({
+            detail: "OCR draft id was not returned.",
+          }),
+        }),
+      ),
+    );
+    expect(draftRequestCount).toBe(0);
+    expect(view.onDraft).not.toHaveBeenCalled();
+    expect(view.onDraftLoadError).toHaveBeenCalledWith(
+      expect.objectContaining({ detail: "OCR draft id was not returned." }),
+    );
+  });
+
+  it.each([
+    ["job id", { jobId: "job-other" }],
+    ["draft id", { draftId: "draft-other" }],
+  ])("rejects a draft whose %s does not match the completed job", async (_label, identityPatch) => {
+    server.use(
+      http.get("/api/ocr-jobs/:jobId", () => HttpResponse.json(succeededJobResponse())),
+      http.get("/api/ocr-drafts/:draftId", () =>
+        HttpResponse.json({ ...ocrDraftResponse(), ...identityPatch }),
+      ),
+    );
+    const view = renderLoader({
+      slot: {
+        kind: "total_assets",
+        jobId: "job-1",
+        status: "running",
+      },
+    });
+
+    await waitFor(() =>
+      expect(view.onUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          draftId: "draft-1",
+          status: "failed",
+          transportError: expect.objectContaining({
+            detail: "OCR draft identity did not match the completed job.",
+          }),
+        }),
+      ),
+    );
+    expect(view.onDraft).not.toHaveBeenCalled();
+    expect(view.onDraftLoadError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        detail: "OCR draft identity did not match the completed job.",
+      }),
     );
   });
 

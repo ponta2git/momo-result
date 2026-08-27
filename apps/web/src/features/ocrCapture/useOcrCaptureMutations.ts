@@ -32,6 +32,10 @@ export type OcrCaptureMutations = {
   submit: (params: OcrCaptureSubmitParams) => Promise<OcrSubmissionResult | undefined>;
 };
 
+function currentIsoTimestamp(): string {
+  return new Date().toISOString();
+}
+
 /**
  * OCR 取り込み画面の「画像アップロード → OCR ジョブ作成」までの副作用を集約する。
  * 画像/設定の状態は呼び出し側の PageModel が引数で渡し、本フックは送信パイプラインと
@@ -40,7 +44,6 @@ export type OcrCaptureMutations = {
 export function useOcrCaptureMutations(hints: Record<string, unknown>): OcrCaptureMutations {
   const queryClient = useQueryClient();
   const idempotencyKeys = useIdempotencyKeyStore();
-  const createPlayedAtIso = useCallback(() => new Date().toISOString(), []);
   const inFlightRef = useRef(false);
   const [isSubmittingWorkflow, setIsSubmittingWorkflow] = useState(false);
 
@@ -106,7 +109,7 @@ export function useOcrCaptureMutations(hints: Record<string, unknown>): OcrCaptu
               request,
               (options) => createMatchDraft(request, options),
             ),
-          createPlayedAtIso,
+          createPlayedAtIso: currentIsoTimestamp,
           createUploadJob: ({ file, matchDraftId, slot }) => upload({ file, matchDraftId, slot }),
           onProgress,
           selectedGameTitle,
@@ -127,7 +130,7 @@ export function useOcrCaptureMutations(hints: Record<string, unknown>): OcrCaptu
         setIsSubmittingWorkflow(false);
       }
     },
-    [createPlayedAtIso, idempotencyKeys, queryClient, upload],
+    [idempotencyKeys, queryClient, upload],
   );
 
   return {

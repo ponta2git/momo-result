@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 
 import { buildMatchFeatureBadges } from "@/features/matches/matchDetailViewModel";
 import { buildMatchFeatureView } from "@/features/matches/matchFeatureViewModel";
@@ -22,19 +22,16 @@ export function useMatchFeatureAnalysis(match: MatchDetailResponse | undefined) 
     refetch: refetchStatus,
   } = statusQuery;
   const currentArtifactId = statusData?.currentArtifact?.artifactId;
-  const contextQueryParams = useMemo(
-    () =>
-      match && currentArtifactId
-        ? {
-            artifactId: currentArtifactId,
-            gameTitleId: match.gameTitleId,
-            mapMasterId: match.mapMasterId,
-            matchId: match.matchId,
-            seasonMasterId: match.seasonMasterId,
-          }
-        : undefined,
-    [currentArtifactId, match],
-  );
+  const contextQueryParams =
+    match && currentArtifactId
+      ? {
+          artifactId: currentArtifactId,
+          gameTitleId: match.gameTitleId,
+          mapMasterId: match.mapMasterId,
+          matchId: match.matchId,
+          seasonMasterId: match.seasonMasterId,
+        }
+      : undefined;
   const contextQuery = useQuery(seriesAnalysisMatchContextQueryOptions(contextQueryParams));
   const {
     data: contextData,
@@ -44,20 +41,17 @@ export function useMatchFeatureAnalysis(match: MatchDetailResponse | undefined) 
     isPending: contextIsPending,
     refetch: refetchContext,
   } = contextQuery;
-  const context = useMemo(() => {
-    if (
-      !match ||
-      !contextData ||
-      contextData.artifact.artifactId !== currentArtifactId ||
-      contextData.matchId !== match.matchId
-    ) {
-      return undefined;
-    }
-    return contextData;
-  }, [contextData, currentArtifactId, match]);
+  const context =
+    match &&
+    contextData &&
+    contextData?.artifact.artifactId === currentArtifactId &&
+    contextData.matchId === match.matchId
+      ? contextData
+      : undefined;
+  const requestedArtifactId = contextQueryParams?.artifactId;
 
   useEffect(() => {
-    const artifactId = contextQueryParams?.artifactId;
+    const artifactId = requestedArtifactId;
     if (
       !artifactId ||
       handledExpiredArtifacts.current.has(artifactId) ||
@@ -72,13 +66,10 @@ export function useMatchFeatureAnalysis(match: MatchDetailResponse | undefined) 
       }
       return undefined;
     });
-  }, [contextError, contextQueryParams?.artifactId, refetchContext, refetchStatus]);
+  }, [contextError, refetchContext, refetchStatus, requestedArtifactId]);
 
-  const performanceContext = useMemo(() => matchPerformanceContextFromArtifact(context), [context]);
-  const badges = useMemo(
-    () => buildMatchFeatureBadges({ features: context?.match?.features }),
-    [context?.match?.features],
-  );
+  const performanceContext = matchPerformanceContextFromArtifact(context);
+  const badges = buildMatchFeatureBadges({ features: context?.match?.features });
   const calculationStatus = statusData?.calculation?.status;
   const needsManualRefresh = calculationStatus === "queued" || calculationStatus === "running";
   const loading =
@@ -93,14 +84,14 @@ export function useMatchFeatureAnalysis(match: MatchDetailResponse | undefined) 
     void refetchStatus().then((result) => {
       if (
         contextIsError &&
-        contextQueryParams &&
-        result.data?.currentArtifact?.artifactId === contextQueryParams.artifactId
+        requestedArtifactId &&
+        result.data?.currentArtifact?.artifactId === requestedArtifactId
       ) {
         return refetchContext();
       }
       return undefined;
     });
-  }, [contextIsError, contextQueryParams, refetchContext, refetchStatus]);
+  }, [contextIsError, refetchContext, refetchStatus, requestedArtifactId]);
 
   return {
     analysisRefreshing: statusIsFetching || contextIsFetching,

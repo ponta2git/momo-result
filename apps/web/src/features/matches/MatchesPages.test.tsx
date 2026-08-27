@@ -1070,13 +1070,14 @@ describe("MatchesListPage", () => {
     expect(screen.getByLabelText("current location")).toHaveTextContent(/^\/other$/u);
   });
 
-  it("reports a directory failure from the coordinated manual refresh", async () => {
+  it("retries failed filter directories independently from the match list", async () => {
     setDevUser();
     let gameTitleAttempts = 0;
+    let failGameTitles = true;
     server.use(
       http.get("/api/game-titles", () => {
         gameTitleAttempts += 1;
-        if (gameTitleAttempts > 1) {
+        if (failGameTitles) {
           return HttpResponse.json({ detail: "directory refresh failed" }, { status: 500 });
         }
         return HttpResponse.json({
@@ -1103,19 +1104,23 @@ describe("MatchesListPage", () => {
       </QueryClientProvider>,
     );
 
-    expect(await screen.findAllByText("優勝 ぽんた")).not.toHaveLength(0);
+    expect(await screen.findByText("絞り込み候補を一部読み込めません")).toBeInTheDocument();
     expect(gameTitleAttempts).toBe(1);
+
+    failGameTitles = false;
+    await user.click(screen.getByRole("button", { name: "候補を再読み込み" }));
+
+    await waitFor(() =>
+      expect(screen.queryByText("絞り込み候補を一部読み込めません")).not.toBeInTheDocument(),
+    );
+    expect(gameTitleAttempts).toBe(2);
 
     await user.click(screen.getByRole("button", { name: "最新情報に更新" }));
 
-    expect(await screen.findByText("一覧を更新できませんでした")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "最新情報に更新" })).toBeEnabled(),
+    );
     expect(gameTitleAttempts).toBe(2);
-    expect(screen.getAllByText("優勝 ぽんた")).not.toHaveLength(0);
-
-    await user.selectOptions(screen.getByLabelText("並び順"), "updated_desc");
-    await waitFor(() => expect(screen.queryByText("一覧を更新できませんでした")).toBeNull());
-    await user.selectOptions(screen.getByLabelText("並び順"), "held_desc");
-    await waitFor(() => expect(screen.getByLabelText("並び順")).toHaveValue("held_desc"));
     expect(screen.queryByText("一覧を更新できませんでした")).not.toBeInTheDocument();
   });
 
@@ -1321,6 +1326,26 @@ describe("MatchesListPage", () => {
       "href",
       "/held-events/held-1",
     );
+  });
+
+  it("does not treat the initial held-event default as a user edit", async () => {
+    window.sessionStorage.clear();
+    setDevUser();
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/matches/new"]}>
+          <Routes>
+            <Route path="/matches/new" element={<MatchCreatePage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "試合の新規作成" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "開催履歴（必須）を変更" }));
+    expect(screen.getByRole("radio", { checked: true })).toHaveAttribute("value", "held-1");
+    expect(window.sessionStorage.length).toBe(0);
   });
 
   it("prefills the requested held event with its server-supplied next match number", async () => {
@@ -1741,6 +1766,55 @@ describe("MatchDetailPage", () => {
     );
   });
 
+  it("keeps a failed delete in the dialog and allows retrying it", async () => {
+    setDevUser();
+    let deleteAttempts = 0;
+    server.use(
+      http.delete("/api/matches/:matchId", ({ params }) => {
+        deleteAttempts += 1;
+        if (deleteAttempts === 1) {
+          return HttpResponse.json(
+            {
+              code: "INTERNAL_ERROR",
+              detail: "delete failed",
+              status: 500,
+              title: "Delete failed",
+              type: "about:blank",
+            },
+            { status: 500 },
+          );
+        }
+        return HttpResponse.json({ deleted: true, matchId: params["matchId"] });
+      }),
+    );
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/matches/match-1"]}>
+          <Routes>
+            <Route path="/matches/:matchId" element={<MatchDetailPage />} />
+            <Route path="/held-events/:heldEventId" element={<p>held-event-page</p>} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByRole("heading", { name: /第1試合の結果/u })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "削除" }));
+    await user.click(screen.getByRole("button", { name: "削除する" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("delete failed");
+    expect(screen.getByRole("heading", { name: "試合を削除しますか？" })).toBeInTheDocument();
+    const retry = screen.getByRole("button", { name: "削除する" });
+    expect(retry).toBeEnabled();
+
+    await user.click(retry);
+
+    expect(await screen.findByText("held-event-page")).toBeInTheDocument();
+    expect(deleteAttempts).toBe(2);
+    expect(screen.queryByRole("heading", { name: "試合を削除しますか？" })).not.toBeInTheDocument();
+  });
+
   it("distinguishes missing matches and retries transient detail failures", async () => {
     setDevUser();
     let attempts = 0;
@@ -2069,12 +2143,16 @@ describe("MatchDetailPage", () => {
     await waitFor(() =>
       expect(screen.getByLabelText("current location")).toHaveTextContent("/matches/match-2"),
     );
+    expect(await screen.findByRole("heading", { name: /第1試合の結果/u })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "試合を削除しますか？" })).not.toBeInTheDocument();
 
     await act(async () => deleteGate.resolve());
     await waitFor(() => expect(queryClient.isMutating()).toBe(0));
 
     expect(screen.getByLabelText("current location")).toHaveTextContent("/matches/match-2");
     expect(screen.queryByText("削除に失敗しました")).not.toBeInTheDocument();
+    expect(screen.queryByText("delete failed")).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "試合を削除しますか？" })).not.toBeInTheDocument();
   });
 
   it("returns to the originating filtered list after deleting a match", async () => {
@@ -2266,6 +2344,78 @@ describe("MatchDetailPage", () => {
     expect(contextParams.get("seasonMasterId")).toBe("season_current");
     expect(contextParams.get("mapMasterId")).toBe("map_east");
     expect(contextParams.get("matchId")).toBe("match-1");
+  });
+
+  it.each([
+    {
+      name: "refetches the same context when status still points to the expired artifact",
+      replace: false,
+    },
+    {
+      name: "moves to the replacement context when status points to a new artifact",
+      replace: true,
+    },
+  ])("$name", async ({ replace }) => {
+    setDevUser();
+    const replacementArtifact = {
+      ...analysisArtifact,
+      artifactId: "artifact-replacement",
+      inputRevision: "13",
+      publishedAt: "2026-08-09T03:00:00.000Z",
+    };
+    const recoveredArtifact = replace ? replacementArtifact : analysisArtifact;
+    let statusAttempts = 0;
+    const contextArtifactIds: string[] = [];
+    server.use(
+      http.get("/api/analytics/series-comparison/v2/status", () => {
+        statusAttempts += 1;
+        return HttpResponse.json(
+          makeSeriesAnalysisStatus({
+            currentArtifact: statusAttempts === 1 ? analysisArtifact : recoveredArtifact,
+            desired: {
+              algorithmVersion: recoveredArtifact.algorithmVersion,
+              artifactSchemaVersion: recoveredArtifact.artifactSchemaVersion,
+              inputRevision: recoveredArtifact.inputRevision,
+            },
+          }),
+        );
+      }),
+      http.get("/api/analytics/series-comparison/v2/match-context", ({ request }) => {
+        const artifactId = new URL(request.url).searchParams.get("artifactId") ?? "";
+        contextArtifactIds.push(artifactId);
+        if (contextArtifactIds.length === 1) {
+          return HttpResponse.json(
+            {
+              code: "ANALYSIS_ARTIFACT_EXPIRED",
+              detail: "The requested artifact is no longer retained.",
+              status: 410,
+              title: "Artifact expired",
+              type: "about:blank",
+            },
+            { status: 410 },
+          );
+        }
+        return HttpResponse.json({
+          ...makeSeriesAnalysisMatchContext(),
+          artifact: recoveredArtifact,
+          matchId: "match-1",
+        });
+      }),
+    );
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/matches/match-1"]}>
+          <Routes>
+            <Route path="/matches/:matchId" element={<MatchDetailPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByText("接戦")).toBeInTheDocument();
+    expect(statusAttempts).toBe(2);
+    expect(contextArtifactIds).toEqual([analysisArtifact.artifactId, recoveredArtifact.artifactId]);
   });
 
   it("checks analysis status only after manual update from a ready feature view", async () => {

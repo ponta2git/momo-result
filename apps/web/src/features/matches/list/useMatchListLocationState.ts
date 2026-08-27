@@ -1,6 +1,7 @@
 import {
   useCallback,
   useDeferredValue,
+  useEffect,
   useMemo,
   useOptimistic,
   useRef,
@@ -45,8 +46,11 @@ export function useMatchListLocationState(): MatchListLocationState {
   const [isTransitionPending, startTransition] = useTransition();
   const [current, setOptimisticSearch] = useOptimistic(routeSearch);
   const latestSearchRef = useRef(current);
-  latestSearchRef.current = current;
   const deferred = useDeferredValue(current);
+
+  useEffect(() => {
+    latestSearchRef.current = current;
+  }, [current]);
 
   const apply = useCallback(
     (nextSearch: MatchListSearch) => {

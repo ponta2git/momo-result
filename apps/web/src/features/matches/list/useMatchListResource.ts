@@ -20,14 +20,12 @@ import {
   shouldShowStaleShield,
 } from "@/shared/api/queryErrorState";
 import {
-  gameTitlesQueryOptions,
   heldEventDirectoryQueryOptions,
-  mapMastersQueryOptions,
   matchListQueryOptions,
   matchListSummaryQueryOptions,
-  seasonMastersQueryOptions,
 } from "@/shared/api/queryOptions";
 import { useHeldEventPickerDirectory } from "@/shared/api/useHeldEventPickerDirectory";
+import { useMasterNameDirectory } from "@/shared/api/useMasterNameDirectory";
 import type { PaginationState } from "@/shared/lib/pagination";
 
 const matchListStaleTimeMs = 10_000;
@@ -36,6 +34,7 @@ export type MatchListResource = {
   filters: {
     candidates: MatchListFilterCandidates;
     loadFailed: boolean;
+    refresh: { pending: boolean; run: () => void };
   };
   list: {
     items: MatchListItemView[];
@@ -107,9 +106,7 @@ export function useMatchListResource({
     selectedEvent: selectedHeldEvent,
     selectedId: currentSearch.heldEventId,
   });
-  const gameTitlesQuery = useQuery(gameTitlesQueryOptions("matches-list"));
-  const seasonsQuery = useQuery(seasonMastersQueryOptions("matches-list", undefined));
-  const mapsQuery = useQuery(mapMastersQueryOptions("matches-list", undefined));
+  const masters = useMasterNameDirectory();
   const matchesQuery = useQuery({
     ...matchListQueryOptions(buildMatchListApiQuery(deferredSearch)),
     staleTime: matchListStaleTimeMs,
@@ -118,12 +115,7 @@ export function useMatchListResource({
     matchListSummaryQueryOptions(buildMatchListSummaryQuery(deferredSearch)),
   );
   const currentSearchScope = buildMatchListSearchParams(currentSearch).toString();
-  const latestCurrentSearchScopeRef = useRef(currentSearchScope);
   const manualRefreshFailed = manualRefreshFailure?.targetScope === currentSearchScope;
-
-  useEffect(() => {
-    latestCurrentSearchScopeRef.current = currentSearchScope;
-  }, [currentSearchScope]);
 
   useEffect(() => {
     if (
@@ -146,12 +138,12 @@ export function useMatchListResource({
 
   const lookupMaps = useMemo(
     () => ({
-      gameTitlesById: new Map((gameTitlesQuery.data?.items ?? []).map((item) => [item.id, item])),
+      gameTitlesById: new Map(masters.items.gameTitles.map((item) => [item.id, item])),
       heldEventsById: new Map((heldEventsQuery.data?.items ?? []).map((item) => [item.id, item])),
-      mapsById: new Map((mapsQuery.data?.items ?? []).map((item) => [item.id, item])),
-      seasonsById: new Map((seasonsQuery.data?.items ?? []).map((item) => [item.id, item])),
+      mapsById: new Map(masters.items.maps.map((item) => [item.id, item])),
+      seasonsById: new Map(masters.items.seasons.map((item) => [item.id, item])),
     }),
-    [gameTitlesQuery.data, heldEventsQuery.data, mapsQuery.data, seasonsQuery.data],
+    [heldEventsQuery.data, masters.items.gameTitles, masters.items.maps, masters.items.seasons],
   );
   const items = useMemo(
     () =>
@@ -195,23 +187,16 @@ export function useMatchListResource({
       const refreshResults = await Promise.allSettled([
         listRefresh,
         summaryQuery.refetch({ throwOnError: true }),
-        heldEventsQuery.refetch({ throwOnError: true }),
-        heldEventPicker.refetch({ throwOnError: true }),
-        gameTitlesQuery.refetch({ throwOnError: true }),
-        seasonsQuery.refetch({ throwOnError: true }),
-        mapsQuery.refetch({ throwOnError: true }),
       ]);
       if (lifecycleGenerationRef.current !== refreshGeneration) return;
       const listRefreshSucceeded = refreshResults[0]?.status === "fulfilled";
-      let searchScopeUnchanged = latestCurrentSearchScopeRef.current === refreshStartScope;
-      if (currentSearch.cursor && listRefreshSucceeded && searchScopeUnchanged) {
-        searchScopeUnchanged = resetCursorIfUnchanged(currentSearch);
-      }
+      const cursorReset = Boolean(
+        currentSearch.cursor && listRefreshSucceeded && resetCursorIfUnchanged(currentSearch),
+      );
       if (refreshResults.some((result) => result.status === "rejected")) {
         setManualRefreshFailure({
           originScope: refreshStartScope,
-          targetScope:
-            listRefreshSucceeded && searchScopeUnchanged ? refreshScope : refreshStartScope,
+          targetScope: cursorReset ? refreshScope : refreshStartScope,
         });
       }
     } catch {
@@ -230,7 +215,7 @@ export function useMatchListResource({
   return {
     filters: {
       candidates: {
-        gameTitles: gameTitlesQuery.data?.items ?? [],
+        gameTitles: masters.items.gameTitles,
         heldEvents: heldEventsQuery.data?.items ?? [],
         heldEventPicker: {
           error: heldEventPicker.error,
@@ -240,13 +225,16 @@ export function useMatchListResource({
           selectedHeldEvent: heldEventPicker.selectedHeldEvent,
           onPageChange: heldEventPicker.onPageChange,
         },
-        seasons: seasonsQuery.data?.items ?? [],
+        seasons: masters.items.seasons,
       },
-      loadFailed:
-        shouldShowBlockingQueryError(heldEventsQuery) ||
-        shouldShowBlockingQueryError(gameTitlesQuery) ||
-        shouldShowBlockingQueryError(seasonsQuery) ||
-        shouldShowBlockingQueryError(mapsQuery),
+      loadFailed: shouldShowBlockingQueryError(heldEventsQuery) || masters.blockingLoadFailed,
+      refresh: {
+        pending: heldEventsQuery.isFetching || masters.refreshing,
+        run: () => {
+          if (shouldShowBlockingQueryError(heldEventsQuery)) void heldEventsQuery.refetch();
+          void masters.retryFailed();
+        },
+      },
     },
     list: {
       items,

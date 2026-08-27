@@ -1,5 +1,5 @@
 import { Plus } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 
 import { MasterDeleteDialog, MasterEditDialog } from "@/features/masters/MasterActionDialogs";
 import { MasterResourceRefreshNotice } from "@/features/masters/MasterResourceRefreshNotice";
@@ -94,7 +94,11 @@ export function GameTitleList({
             作品を選ぶと、対応するマップとシーズンを編集できます。
           </p>
         </div>
-        <GameTitleCreateDialog create={create} defaultLayoutFamily={defaultLayoutFamily} />
+        <GameTitleCreateDialog
+          key={create.formKey}
+          create={create}
+          defaultLayoutFamily={defaultLayoutFamily}
+        />
       </header>
 
       <MasterResourceRefreshNotice
@@ -134,14 +138,6 @@ function GameTitleCreateDialog({
   defaultLayoutFamily: LayoutFamily;
 }) {
   const [open, setOpen] = useState(false);
-  const previousFormKey = useRef(create.formKey);
-
-  useEffect(() => {
-    if (previousFormKey.current !== create.formKey) {
-      previousFormKey.current = create.formKey;
-      setOpen(false);
-    }
-  }, [create.formKey]);
 
   return (
     <Dialog
@@ -161,7 +157,7 @@ function GameTitleCreateDialog({
       }
       onOpenChange={setOpen}
     >
-      <form action={create.action} className="grid gap-4 py-2" key={create.formKey}>
+      <form action={create.action} className="grid gap-4 py-2">
         <TextField
           error={create.error}
           label="作品名"

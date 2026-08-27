@@ -2,9 +2,11 @@ import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
+  displaySeriesAnalysisBundleWithoutContext,
   matchesSeriesAnalysisResource,
   matchesSeriesAnalysisScope,
   resolveSeriesAnalysisDisplayBundle,
+  sameSeriesAnalysisDisplayBundle,
   seriesAnalysisScopeSignature,
 } from "@/features/seriesComparison/model/seriesAnalysisDisplayBundle";
 import type {
@@ -15,53 +17,20 @@ import type {
   SeriesAnalysisUrlState,
   SeriesAnalysisViewId,
 } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
+import { seriesAnalysisQueryFromState } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
 import { useSeriesAnalysisArtifactRecovery } from "@/features/seriesComparison/page/useSeriesAnalysisArtifactRecovery";
-import { useSeriesAnalysisQueryParams } from "@/features/seriesComparison/page/useSeriesAnalysisQueryParams";
 import { isAnalysisClientUpgradeRequired } from "@/shared/api/problemDetails";
 import {
   isInitialQueryLoading,
   shouldShowQueryError,
   shouldShowStaleShield,
 } from "@/shared/api/queryErrorState";
-import type {
-  SeriesComparisonAggregateV3,
-  SeriesComparisonReviewV3,
-} from "@/shared/api/seriesAnalysis";
 import {
   seriesAnalysisAggregateQueryOptions,
   seriesAnalysisMatchContextQueryOptions,
   seriesAnalysisReviewQueryOptions,
   seriesAnalysisStatusQueryOptions,
 } from "@/shared/api/seriesAnalysisQueryOptions";
-
-function sameDisplayBundle(
-  current: SeriesAnalysisDisplayBundle | undefined,
-  next: SeriesAnalysisDisplayBundle,
-): boolean {
-  if (!current || current.kind !== next.kind || current.view !== next.view) return false;
-  if (current.kind === "review" && next.kind === "review") {
-    return current.review === next.review && current.matchContext === next.matchContext;
-  }
-  return (
-    current.kind === "analysis" &&
-    next.kind === "analysis" &&
-    current.aggregate === next.aggregate &&
-    current.matchContext === next.matchContext
-  );
-}
-
-function displayBundleWithoutContext(
-  activeView: SeriesAnalysisViewId,
-  aggregate: SeriesComparisonAggregateV3 | undefined,
-  review: SeriesComparisonReviewV3 | undefined,
-): SeriesAnalysisDisplayBundle | undefined {
-  if (activeView === "review") {
-    return review ? { kind: "review", matchContext: undefined, review, view: "review" } : undefined;
-  }
-  return aggregate
-    ? { aggregate, kind: "analysis", matchContext: undefined, view: activeView }
-    : undefined;
-}
 
 /**
  * Owns the complete artifact lifecycle: active query selection, stale display retention,
@@ -76,7 +45,9 @@ export function useSeriesAnalysisResource({
   deferredState: SeriesAnalysisUrlState;
   state: SeriesAnalysisUrlState;
 }) {
-  const [displayBundle, setDisplayBundle] = useState<SeriesAnalysisDisplayBundle | undefined>();
+  const [lastSuccessfulBundle, setLastSuccessfulBundle] = useState<
+    SeriesAnalysisDisplayBundle | undefined
+  >();
   const statusQuery = useQuery(seriesAnalysisStatusQueryOptions(state.gameTitleId));
   const {
     data: statusData,
@@ -86,12 +57,21 @@ export function useSeriesAnalysisResource({
     refetch: refetchStatus,
   } = statusQuery;
   const publishedArtifactId = statusData?.currentArtifact?.artifactId;
-  const queryParams = useSeriesAnalysisQueryParams({
-    activeView,
-    artifactId: publishedArtifactId,
-    deferredState,
-    state,
-  });
+  const queryParams = useMemo(() => {
+    const context = seriesAnalysisQueryFromState(state, publishedArtifactId);
+    return {
+      aggregate:
+        activeView === "review"
+          ? undefined
+          : seriesAnalysisQueryFromState(deferredState, publishedArtifactId),
+      matchContext:
+        context && state.focusMatchId ? { ...context, matchId: state.focusMatchId } : undefined,
+      review:
+        activeView === "review"
+          ? seriesAnalysisQueryFromState(state, publishedArtifactId)
+          : undefined,
+    };
+  }, [activeView, deferredState, publishedArtifactId, state]);
   const aggregateQueryParams = queryParams.aggregate;
   const reviewQueryParams = queryParams.review;
   const aggregateQuery = useQuery(seriesAnalysisAggregateQueryOptions(aggregateQueryParams));
@@ -156,8 +136,10 @@ export function useSeriesAnalysisResource({
 
   useEffect(() => {
     if (bundleResolution.kind !== "ready") return;
-    setDisplayBundle((current) =>
-      sameDisplayBundle(current, bundleResolution.value) ? current : bundleResolution.value,
+    setLastSuccessfulBundle((current) =>
+      sameSeriesAnalysisDisplayBundle(current, bundleResolution.value)
+        ? current
+        : bundleResolution.value,
     );
   }, [bundleResolution]);
 
@@ -170,9 +152,15 @@ export function useSeriesAnalysisResource({
     ) {
       return;
     }
-    const fallback = displayBundleWithoutContext(activeView, candidateAggregate, candidateReview);
+    const fallback = displaySeriesAnalysisBundleWithoutContext(
+      activeView,
+      candidateAggregate,
+      candidateReview,
+    );
     if (fallback) {
-      setDisplayBundle((current) => (sameDisplayBundle(current, fallback) ? current : fallback));
+      setLastSuccessfulBundle((current) =>
+        sameSeriesAnalysisDisplayBundle(current, fallback) ? current : fallback,
+      );
     }
   }, [
     activeView,
@@ -195,7 +183,7 @@ export function useSeriesAnalysisResource({
     [activeView, refetchAggregate, refetchReview],
   );
   const currentDisplayBundle =
-    bundleResolution.kind === "ready" ? bundleResolution.value : displayBundle;
+    bundleResolution.kind === "ready" ? bundleResolution.value : lastSuccessfulBundle;
 
   useSeriesAnalysisArtifactRecovery({
     activeError,

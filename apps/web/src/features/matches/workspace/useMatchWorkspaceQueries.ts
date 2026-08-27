@@ -107,12 +107,8 @@ export function useMatchWorkspaceQueries(
   const preferredHeldEventQuery = useQuery(
     heldEventDetailQueryOptions(preferredHeldEventId, Boolean(preferredHeldEventId)),
   );
-  const mapMastersQuery = useQuery(
-    mapMastersQueryOptions("workspace", gameTitleId, Boolean(gameTitleId)),
-  );
-  const seasonMastersQuery = useQuery(
-    seasonMastersQueryOptions("workspace", gameTitleId, Boolean(gameTitleId)),
-  );
+  const mapMastersQuery = useQuery(mapMastersQueryOptions(gameTitleId, Boolean(gameTitleId)));
+  const seasonMastersQuery = useQuery(seasonMastersQueryOptions(gameTitleId, Boolean(gameTitleId)));
   const draftDetailQuery = useQuery(
     matchDraftDetailQueryOptions(matchDraftId, mode !== "edit" && !useSampleDrafts),
   );
@@ -120,7 +116,7 @@ export function useMatchWorkspaceQueries(
   const [heldEventsQuery, gameTitlesQuery, memberAliasesQuery] = useSuspenseQueries({
     queries: [
       heldEventDirectorySuspenseQueryOptions(),
-      gameTitlesQueryOptions("workspace"),
+      gameTitlesQueryOptions(),
       memberAliasesQueryOptions(),
     ],
   });

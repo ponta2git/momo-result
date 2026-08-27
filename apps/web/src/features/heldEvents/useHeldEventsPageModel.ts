@@ -246,12 +246,12 @@ export function useHeldEventsPageModel(): HeldEventsPageModel {
     create: {
       action: createAction,
       errorMessage,
+      formKey: createState.version,
       heldAtDraft,
       open: createOpen,
       pending: createPending,
       setHeldAtDraft,
       setOpen: updateCreateOpen,
-      state: createState,
     },
     deleteDialog: {
       cancel: cancelDelete,

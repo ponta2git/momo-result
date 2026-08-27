@@ -68,6 +68,7 @@ describe("shared query keys", () => {
     queryClient.setQueryData(matchKeys.draft.detail("draft-1"), { matchDraftId: "draft-1" });
     queryClient.setQueryData(matchKeys.draft.sourceImages("draft-1"), { items: [] });
     queryClient.setQueryData(ocrDraftKeys.bulk(["ocr-draft-1"]), { items: [] });
+    queryClient.setQueryData(ocrDraftKeys.detail("ocr-draft-1"), { draftId: "ocr-draft-1" });
     queryClient.setQueryData(heldEventKeys.scope("workspace"), { items: [] });
     queryClient.setQueryData(seriesAnalysisKeys.options(), { titles: [] });
     queryClient.setQueryData(seriesAnalysisKeys.status("gt-1"), { gameTitleId: "gt-1" });
@@ -89,6 +90,7 @@ describe("shared query keys", () => {
       true,
     );
     expect(queryClient.getQueryState(ocrDraftKeys.bulk(["ocr-draft-1"]))?.isInvalidated).toBe(true);
+    expect(queryClient.getQueryState(ocrDraftKeys.detail("ocr-draft-1"))?.isInvalidated).toBe(true);
     expect(queryClient.getQueryState(heldEventKeys.scope("workspace"))?.isInvalidated).toBe(true);
     expect(queryClient.getQueryState(seriesAnalysisKeys.options())?.isInvalidated).toBe(true);
     expect(queryClient.getQueryState(seriesAnalysisKeys.status("gt-1"))?.isInvalidated).toBe(true);

@@ -16,7 +16,7 @@ export function CreateHeldEventDialog({ model }: { model: HeldEventCreateFormMod
       title="新しい開催を作成"
       onOpenChange={model.setOpen}
     >
-      <form key={model.state.version} action={model.action} className="grid gap-4 pt-1">
+      <form key={model.formKey} action={model.action} className="grid gap-4 pt-1">
         {model.errorMessage ? (
           <Notice role="alert" tone="danger" title="開催を作成できません">
             {model.errorMessage}

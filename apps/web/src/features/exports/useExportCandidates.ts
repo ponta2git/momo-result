@@ -8,7 +8,7 @@ import {
   toMatchCandidates,
   toSeasonCandidates,
 } from "@/features/exports/exportCandidateData";
-import type { ExportCandidate, ExportScope } from "@/features/exports/exportTypes";
+import type { ExportScope } from "@/features/exports/exportTypes";
 import { buildCandidateSupportIssue, buildCandidateView } from "@/features/exports/exportViewModel";
 import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import { shouldShowQueryError } from "@/shared/api/queryErrorState";
@@ -24,11 +24,6 @@ import { cursorForPage } from "@/shared/lib/cursorPagination";
 
 const CANDIDATE_PAGE_SIZE = 20;
 
-type RememberedCandidate = {
-  candidate: ExportCandidate;
-  scope: Extract<ExportScope, "heldEvent" | "match">;
-};
-
 export function useExportCandidates({
   scope,
   selectedId,
@@ -39,13 +34,12 @@ export function useExportCandidates({
   const queryClient = useQueryClient();
   const [heldEventPage, setHeldEventPage] = useState(1);
   const [matchCursor, setMatchCursor] = useState("");
-  const [rememberedCandidate, setRememberedCandidate] = useState<RememberedCandidate | undefined>();
 
   const seasonsQuery = useQuery(
-    seasonMastersQueryOptions("exports", undefined, scope === "season" || scope === "match"),
+    seasonMastersQueryOptions(undefined, scope === "season" || scope === "match"),
   );
   const gameTitlesQuery = useQuery({
-    ...gameTitlesQueryOptions("exports"),
+    ...gameTitlesQueryOptions(),
     enabled: scope === "match",
   });
   const heldEventsOptions = heldEventsQueryOptions({
@@ -89,18 +83,11 @@ export function useExportCandidates({
         : scope === "match"
           ? toMatchCandidates(matches, gameTitles, seasons)
           : [];
-  const rememberedSelection =
-    rememberedCandidate?.scope === scope && rememberedCandidate.candidate.value === selectedId
-      ? rememberedCandidate.candidate
-      : undefined;
-  const selectedIsOnCurrentPage = candidates.some((candidate) => candidate.value === selectedId);
+  const selectedOnCurrentPage = candidates.find((candidate) => candidate.value === selectedId);
+  const selectedIsOnCurrentPage = selectedOnCurrentPage !== undefined;
   const shouldResolveHeldEvent =
-    scope === "heldEvent" &&
-    Boolean(selectedId) &&
-    !selectedIsOnCurrentPage &&
-    !rememberedSelection;
-  const shouldResolveMatch =
-    scope === "match" && Boolean(selectedId) && !selectedIsOnCurrentPage && !rememberedSelection;
+    scope === "heldEvent" && Boolean(selectedId) && !selectedIsOnCurrentPage;
+  const shouldResolveMatch = scope === "match" && Boolean(selectedId) && !selectedIsOnCurrentPage;
 
   const heldEventDetailQuery = useQuery(
     heldEventDetailQueryOptions(
@@ -112,7 +99,7 @@ export function useExportCandidates({
     matchDetailQueryOptions(scope === "match" ? selectedId : undefined, shouldResolveMatch),
   );
   const resolvedCandidate =
-    rememberedSelection ??
+    selectedOnCurrentPage ??
     (scope === "heldEvent"
       ? candidateFromHeldEventDetail(heldEventDetailQuery.data)
       : scope === "match"
@@ -240,27 +227,13 @@ export function useExportCandidates({
   const reset = () => {
     setHeldEventPage(1);
     setMatchCursor("");
-    setRememberedCandidate(undefined);
   };
 
   return {
     refreshing,
     reset,
-    selectCandidate: (nextSelectedId: string): boolean => {
-      if (refreshing) return false;
-      const nextCandidate = candidates.find((candidate) => candidate.value === nextSelectedId);
-      if (nextCandidate && (scope === "heldEvent" || scope === "match")) {
-        setRememberedCandidate({ candidate: nextCandidate, scope });
-      }
-      return true;
-    },
     setPage: (page: number) => {
       if (refreshing || page < 1) return;
-      if (scope === "heldEvent" || scope === "match") {
-        const currentCandidate =
-          candidates.find((candidate) => candidate.value === selectedId) ?? resolvedCandidate;
-        if (currentCandidate) setRememberedCandidate({ candidate: currentCandidate, scope });
-      }
       if (scope === "heldEvent") setHeldEventPage(page);
       if (scope === "match" && matchesQuery.data) {
         const cursor = cursorForPage(matchesQuery.data.pagination, page);

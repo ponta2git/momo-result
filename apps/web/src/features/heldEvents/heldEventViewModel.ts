@@ -11,12 +11,12 @@ export const heldEventPageSizeOptions = [10, 25, 50] as const;
 export type HeldEventCreateFormModel = {
   action: (formData: FormData) => void | Promise<void>;
   errorMessage: string;
+  formKey: number;
   heldAtDraft: string;
   open: boolean;
   pending: boolean;
   setHeldAtDraft: (value: string) => void;
   setOpen: (open: boolean) => void;
-  state: { version: number };
 };
 
 export type HeldEventDeleteDialogModel = {

@@ -4,7 +4,7 @@
  * Query key は API resource だけでなく、cache に保存する runtime shape も含める。
  * 例えば master の管理画面は配列を保存し、通常画面は API response object を保存するため、
  * 同じ resource でも `adminList` と `list` を別 key にする。
- * `list` / `scope` の引数は既存呼び出し互換の画面名で、同じ runtime shape なら key には含めない。
+ * 同じ runtime shape の参照系 master は画面をまたいで 1 つの cache を共有する。
  */
 export const heldEventKeys = {
   all: () => ["held-events"] as const,
@@ -24,8 +24,9 @@ export const ocrJobKeys = {
 };
 
 export const ocrDraftKeys = {
-  all: () => ["ocr-drafts-bulk"] as const,
-  bulk: (draftIds: readonly string[]) => ["ocr-drafts-bulk", draftIds] as const,
+  all: () => ["ocr-drafts"] as const,
+  bulk: (draftIds: readonly string[]) => ["ocr-drafts", "bulk", draftIds] as const,
+  detail: (draftId: string | undefined) => ["ocr-drafts", "detail", draftId] as const,
 };
 
 export const masterKeys = {
@@ -33,7 +34,7 @@ export const masterKeys = {
   gameTitles: {
     all: () => ["masters", "game-titles"] as const,
     adminList: (authScope: string) => ["masters", "game-titles", "admin-list", authScope] as const,
-    list: (_scope: string) => ["masters", "game-titles", "list-response"] as const,
+    list: () => ["masters", "game-titles", "list-response"] as const,
   },
   incidentMasters: {
     all: () => ["masters", "incident-masters"] as const,
@@ -44,7 +45,7 @@ export const masterKeys = {
     all: () => ["masters", "map-masters"] as const,
     adminList: (authScope: string, gameTitleId: string) =>
       ["masters", "map-masters", "admin-list", authScope, gameTitleId || "none"] as const,
-    list: (_scope: string, gameTitleId: string | undefined = undefined) =>
+    list: (gameTitleId: string | undefined = undefined) =>
       ["masters", "map-masters", "list-response", gameTitleId || "all"] as const,
   },
   memberAliases: {
@@ -57,7 +58,7 @@ export const masterKeys = {
     all: () => ["masters", "season-masters"] as const,
     adminList: (authScope: string, gameTitleId: string) =>
       ["masters", "season-masters", "admin-list", authScope, gameTitleId || "none"] as const,
-    list: (_scope: string, gameTitleId: string | undefined = undefined) =>
+    list: (gameTitleId: string | undefined = undefined) =>
       ["masters", "season-masters", "list-response", gameTitleId || "all"] as const,
   },
 };

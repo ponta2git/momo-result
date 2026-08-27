@@ -12,7 +12,7 @@ import {
 import { getMatchDraftDetail, listMatchDraftSourceImages } from "@/shared/api/matchDrafts";
 import { getMatch, getMatchListSummary, listMatches } from "@/shared/api/matches";
 import type { ListMatchesQuery } from "@/shared/api/matches";
-import { getOcrDraftsBulk } from "@/shared/api/ocrDrafts";
+import { getOcrDraft, getOcrDraftsBulk } from "@/shared/api/ocrDrafts";
 import {
   adminAccountKeys,
   heldEventKeys,
@@ -88,32 +88,24 @@ export function heldEventDetailQueryOptions(heldEventId: string | undefined, ena
   });
 }
 
-export function gameTitlesQueryOptions(scope: string) {
+export function gameTitlesQueryOptions() {
   return queryOptions({
-    queryKey: masterKeys.gameTitles.list(scope),
+    queryKey: masterKeys.gameTitles.list(),
     queryFn: ({ signal }) => listGameTitles({ signal }),
   });
 }
 
-export function mapMastersQueryOptions(
-  scope: string,
-  gameTitleId: string | undefined,
-  enabled = true,
-) {
+export function mapMastersQueryOptions(gameTitleId: string | undefined, enabled = true) {
   return queryOptions({
-    queryKey: masterKeys.mapMasters.list(scope, gameTitleId),
+    queryKey: masterKeys.mapMasters.list(gameTitleId),
     queryFn: ({ signal }) => listMapMasters(gameTitleId || undefined, { signal }),
     enabled,
   });
 }
 
-export function seasonMastersQueryOptions(
-  scope: string,
-  gameTitleId: string | undefined,
-  enabled = true,
-) {
+export function seasonMastersQueryOptions(gameTitleId: string | undefined, enabled = true) {
   return queryOptions({
-    queryKey: masterKeys.seasonMasters.list(scope, gameTitleId),
+    queryKey: masterKeys.seasonMasters.list(gameTitleId),
     queryFn: ({ signal }) => listSeasonMasters(gameTitleId || undefined, { signal }),
     enabled,
   });
@@ -207,5 +199,20 @@ export function ocrDraftsBulkQueryOptions(draftIds: string[], enabled = true) {
     queryFn: ({ signal }) => getOcrDraftsBulk(draftIds, { signal }),
     enabled: enabled && draftIds.length > 0,
     retry: false,
+  });
+}
+
+export function ocrDraftDetailQueryOptions(draftId: string | undefined, enabled = true) {
+  return queryOptions({
+    queryKey: ocrDraftKeys.detail(draftId),
+    queryFn: ({ signal }) => {
+      if (!draftId) {
+        throw new Error("OCR draft detail query is not ready");
+      }
+      return getOcrDraft(draftId, { signal });
+    },
+    enabled: enabled && Boolean(draftId),
+    retry: false,
+    staleTime: Number.POSITIVE_INFINITY,
   });
 }

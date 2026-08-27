@@ -26,7 +26,6 @@ import {
 import { useHeldEventPickerDirectory } from "@/shared/api/useHeldEventPickerDirectory";
 
 type OcrSetupOptionsParams = {
-  authAccountId?: string | undefined;
   enabled: boolean;
   onChange: (value: SetupFormValues) => void;
   value: SetupFormValues;
@@ -73,14 +72,8 @@ function scopedMastersPlaceholder(args: {
   return args.failed ? "読み込みに失敗" : args.loading ? "読み込み中…" : "未登録";
 }
 
-export function useOcrSetupOptions({
-  authAccountId,
-  enabled,
-  onChange,
-  value,
-}: OcrSetupOptionsParams) {
-  const authScope = authAccountId ?? "anonymous";
-  const gameTitlesQuery = useQuery({ ...gameTitlesQueryOptions(authScope), enabled });
+export function useOcrSetupOptions({ enabled, onChange, value }: OcrSetupOptionsParams) {
+  const gameTitlesQuery = useQuery({ ...gameTitlesQueryOptions(), enabled });
   const heldEventsQuery = useQuery({
     ...heldEventDirectoryQueryOptions(),
     enabled,
@@ -90,11 +83,11 @@ export function useOcrSetupOptions({
     enabled: enabled && Boolean(value.heldEventId),
   });
   const mapMastersQuery = useQuery({
-    ...mapMastersQueryOptions(authScope, value.gameTitleId, Boolean(value.gameTitleId)),
+    ...mapMastersQueryOptions(value.gameTitleId, Boolean(value.gameTitleId)),
     enabled: enabled && Boolean(value.gameTitleId),
   });
   const seasonMastersQuery = useQuery({
-    ...seasonMastersQueryOptions(authScope, value.gameTitleId, Boolean(value.gameTitleId)),
+    ...seasonMastersQueryOptions(value.gameTitleId, Boolean(value.gameTitleId)),
     enabled: enabled && Boolean(value.gameTitleId),
   });
 

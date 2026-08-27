@@ -1,7 +1,132 @@
-import type { WorkspaceMode } from "@/features/matches/workspace/matchFormTypes";
+import type { MatchFormReducerState } from "@/features/matches/workspace/matchFormReducer";
+import type {
+  MatchFormValues,
+  MatchWorkspaceInitialData,
+  WorkspaceMode,
+} from "@/features/matches/workspace/matchFormTypes";
 import { toMatchWorkspaceOperationErrorView } from "@/features/matches/workspace/matchWorkspaceOperationError";
-import type { MatchWorkspacePageModelInput } from "@/features/matches/workspace/matchWorkspacePageCapabilities";
+import type { MatchWorkspaceOperationError } from "@/features/matches/workspace/matchWorkspaceOperationError";
 import type { MatchWorkspacePageModel } from "@/features/matches/workspace/matchWorkspacePageModelTypes";
+import type { MatchWorkspaceSessionDraft } from "@/features/matches/workspace/matchWorkspaceSessionDraft";
+import type { ReviewItem } from "@/features/matches/workspace/review/reviewProgress";
+import type { ReviewFieldKey } from "@/features/matches/workspace/review/reviewWarningModel";
+import type {
+  SourceImageItem,
+  SourceImageKind,
+} from "@/features/matches/workspace/sourceImages/sourceImageTypes";
+import type { HeldEventResponse } from "@/shared/api/heldEvents";
+import type {
+  GameTitleResponse,
+  MapMasterResponse,
+  SeasonMasterResponse,
+} from "@/shared/api/masters";
+import type { HeldEventPickerDirectory } from "@/shared/api/useHeldEventPickerDirectory";
+import type { IncidentKey } from "@/shared/domain/incidents";
+
+type MatchWorkspacePageModelInput = {
+  draftSession: {
+    dirty: boolean;
+    navigationAllowedRef: { current: boolean };
+    recovery: MatchWorkspaceSessionDraft | null;
+    discardRecovery: () => void;
+    markCommitted: () => void;
+    restoreRecovery: () => void;
+  };
+  form: {
+    actions: {
+      onCreateEvent: () => void;
+      onGameTitleChange: (gameTitleId: string) => void;
+      onIncidentChange: (index: number, key: IncidentKey, value: number) => void;
+      onPatchRoot: (patch: Partial<MatchFormValues>) => void;
+      onPlayerChange: (index: number, patch: Partial<MatchFormValues["players"][number]>) => void;
+      onPlayOrderChange: (index: number, playOrder: number) => void;
+    };
+    focusRequest: MatchWorkspacePageModel["validationFocusRequest"];
+    state: MatchFormReducerState;
+    validation: {
+      validation: { firstMessage?: string | undefined; success: boolean };
+      visibleErrorPathSet: Set<string>;
+    };
+    validationMessage: string;
+    workspaceData: MatchWorkspaceInitialData | null;
+  };
+  loading: {
+    base: MatchWorkspacePageModel["loading"]["base"];
+    edit: MatchWorkspacePageModel["loading"]["edit"];
+    workspaceLoading: boolean;
+  };
+  navigation: {
+    exitHref: string;
+    masters: {
+      pending: boolean;
+      returnAvailable: boolean;
+      onNavigate: () => void;
+    };
+  };
+  persistence: {
+    busy: boolean;
+    cancellation: {
+      confirmOpen: boolean;
+      pending: boolean;
+      onConfirm: () => void | Promise<void>;
+      onOpenChange: (open: boolean) => void;
+      onTrigger: () => void;
+    };
+    confirmation: {
+      open: boolean;
+      onClose: () => void;
+      onConfirm: (formData: FormData) => void | Promise<void>;
+    };
+    error: MatchWorkspaceOperationError | null;
+    onPrimaryAction: () => void;
+  };
+  review: {
+    blocked: boolean;
+    state: {
+      acknowledgeCell: (cellId: string) => void;
+      acknowledgedCellIds: string[];
+      activeCellId: string | null;
+      changedCount: number;
+      focusCell: (row: number, field: ReviewFieldKey) => void;
+      items: ReviewItem[];
+      unresolvedCount: number;
+    };
+    statusRefresh: NonNullable<MatchWorkspacePageModel["review"]["blocked"]>["refresh"];
+  };
+  setup: {
+    eventCreation: {
+      draftValue: string;
+      pending: boolean;
+      onDraftChange: (value: string) => void;
+    };
+    heldEventPicker: HeldEventPickerDirectory;
+  };
+  sourceImages: {
+    items: SourceImageItem[] | undefined;
+    loading: boolean;
+    preferredKind: SourceImageKind;
+    onPreferredKindChange: (kind: SourceImageKind) => void;
+  };
+  workspace: {
+    mode: WorkspaceMode;
+    useSampleDrafts: boolean;
+    view: {
+      canCancelDraft: boolean;
+      gameTitleItems: GameTitleResponse[];
+      hasSourceImagePanel: boolean;
+      heldEvents: HeldEventResponse[];
+      mapItems: MapMasterResponse[];
+      matchDraftIdForImages: string | undefined;
+      pageDescription: string;
+      pageTitle: string;
+      seasonItems: SeasonMasterResponse[];
+      selectedGameTitle: GameTitleResponse | undefined;
+      selectedHeldEvent: HeldEventResponse | undefined;
+      selectedMap: MapMasterResponse | undefined;
+      selectedSeason: SeasonMasterResponse | undefined;
+    };
+  };
+};
 
 function workspaceLoadingCopy(mode: WorkspaceMode) {
   return mode === "review"
@@ -19,7 +144,6 @@ function validationFeedback(firstMessage: string | undefined, success: boolean):
   return success ? "確定前の確認へ進めます" : (firstMessage ?? "入力内容に不足があります");
 }
 
-/** Converts feature capabilities into the display-only contract consumed by MatchWorkspacePage. */
 export function buildMatchWorkspacePageModel(
   input: MatchWorkspacePageModelInput,
 ): MatchWorkspacePageModel {

@@ -89,23 +89,9 @@ export function useMastersPageModel() {
     gameTitles,
     mapMasters,
     seasonMasters,
-    selectedGameTitleId,
+    selectedGameTitleId: resourceQueries.selectedGameTitleId,
   });
   const { viewModel } = optimisticCatalog;
-
-  useEffect(() => {
-    if (gameTitles.length === 0) {
-      setSelectedGameTitleId("");
-      return;
-    }
-    const exists = gameTitles.some((item) => item.id === selectedGameTitleId);
-    if (!exists) {
-      const first = gameTitles[0];
-      if (first) {
-        setSelectedGameTitleId(first.id);
-      }
-    }
-  }, [gameTitles, selectedGameTitleId]);
 
   const createActions = useMasterCreateActions({
     addOptimisticGameTitle: optimisticCatalog.addOptimisticGameTitle,
@@ -156,7 +142,6 @@ export function useMastersPageModel() {
       refreshing: resourceQueries.memberAliasesQuery.isFetching,
       stale: memberAliasesHasError && resourceQueries.memberAliasesQuery.data !== undefined,
     },
-    auth,
     catalog: {
       gameTitle: {
         create: {
@@ -216,6 +201,7 @@ export function useMastersPageModel() {
       },
     },
     feedback: {
+      authError: auth.error,
       invalidReturnTo: returnRoute.hasInvalidReturnTo,
       operationError,
     },

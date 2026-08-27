@@ -109,7 +109,6 @@ export function useOcrCapturePageModel(): OcrCapturePageModel {
 
   const referenceData = useOcrCaptureQueries();
   const setupOptions = useOcrSetupOptions({
-    authAccountId: referenceData.auth.accountId,
     enabled: referenceData.auth.ready,
     onChange: setSetupValue,
     value: setupValue,

@@ -48,8 +48,6 @@ export function useMatchDeletionCommand(options: MatchDeletionCommandOptions): M
   const queryClient = useQueryClient();
   const idempotencyKeys = useIdempotencyKeyStore();
   const mountedRef = useRef(false);
-  const latestMatchIdRef = useRef(matchId);
-  latestMatchIdRef.current = matchId;
   const [open, setOpen] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const destination = deletionDestination(options);
@@ -68,17 +66,15 @@ export function useMatchDeletionCommand(options: MatchDeletionCommandOptions): M
         deleteMatch(targetMatchId, request),
       );
     },
-    onError: (error, { targetMatchId }) => {
-      if (!mountedRef.current || latestMatchIdRef.current !== targetMatchId) return;
-      setErrorMessage(formatApiError(error, "削除に失敗しました"));
+    onError: (error) => {
+      if (mountedRef.current) setErrorMessage(formatApiError(error, "削除に失敗しました"));
     },
-    onSuccess: async (_response, { destination: confirmedDestination, targetMatchId }) => {
-      const ownsDeletedDetail = mountedRef.current && latestMatchIdRef.current === targetMatchId;
+    onSuccess: async (_response, command) => {
       const invalidation = invalidateAfterMatchDeleted(queryClient);
-      if (ownsDeletedDetail) {
-        navigate(confirmedDestination, { flushSync: true, replace: true });
+      if (mountedRef.current) {
+        navigate(command.destination, { flushSync: true, replace: true });
       }
-      evictDeletedMatchDetail(queryClient, targetMatchId);
+      evictDeletedMatchDetail(queryClient, command.targetMatchId);
       await invalidation;
     },
   });

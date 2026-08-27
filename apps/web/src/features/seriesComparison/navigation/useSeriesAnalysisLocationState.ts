@@ -1,5 +1,5 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useState, useTransition } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useLocation, useSearchParams } from "react-router-dom";
 
 import {
   buildSeriesAnalysisSearchParams,
@@ -18,45 +18,42 @@ import { sanitizeReturnTo } from "@/shared/navigation/returnTo";
 
 /** Owns parsing, canonicalization, and intent-level updates for the series-analysis URL. */
 export function useSeriesAnalysisLocationState(options: SeriesAnalysisOptionsResponse | undefined) {
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const returnTo = sanitizeReturnTo(searchParams.get("returnTo"));
   const rawState = useMemo(() => parseSeriesAnalysisSearchParams(searchParams), [searchParams]);
-  const [optimisticState, setOptimisticState] = useState<SeriesAnalysisUrlState | null>(null);
   const [, startStateTransition] = useTransition();
   const urlState = useMemo(
     () => normalizeSeriesAnalysisSelection(options, rawState),
     [options, rawState],
   );
-  const state = useMemo(
-    () => normalizeSeriesAnalysisSelection(options, optimisticState ?? urlState),
-    [optimisticState, options, urlState],
-  );
+  const [pendingIntent, setPendingIntent] = useState<SeriesAnalysisUrlState | null>(null);
+  const state = pendingIntent ?? urlState;
   const deferredState = useDeferredValue(state);
   const urlSignature = useMemo(
     () => buildSeriesAnalysisSearchParams(urlState).toString(),
     [urlState],
   );
   const stateSignature = useMemo(() => buildSeriesAnalysisSearchParams(state).toString(), [state]);
+  const locationSettling = pendingIntent !== null && urlSignature !== stateSignature;
 
   useEffect(() => {
-    if (!options || optimisticState) return;
+    setPendingIntent(null);
+  }, [location.key]);
+
+  useEffect(() => {
+    if (!options || locationSettling) return;
     const next = buildSeriesAnalysisSearchParams(urlState);
     if (returnTo) next.set("returnTo", returnTo);
     if (next.toString() !== searchParams.toString()) {
       setSearchParams(next, { replace: true });
     }
-  }, [optimisticState, options, returnTo, searchParams, setSearchParams, urlState]);
-
-  useEffect(() => {
-    if (optimisticState && urlSignature === stateSignature) {
-      setOptimisticState(null);
-    }
-  }, [optimisticState, stateSignature, urlSignature]);
+  }, [locationSettling, options, returnTo, searchParams, setSearchParams, urlState]);
 
   const update = useCallback(
     (next: SeriesAnalysisUrlState, updateOptions: { replace?: boolean } = {}) => {
       const normalized = normalizeSeriesAnalysisSelection(options, next);
-      setOptimisticState(normalized);
+      setPendingIntent(normalized);
       startStateTransition(() => {
         const params = buildSeriesAnalysisSearchParams(normalized);
         if (returnTo) params.set("returnTo", returnTo);

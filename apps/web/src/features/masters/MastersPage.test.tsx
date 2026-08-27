@@ -388,8 +388,7 @@ describe("MastersPage", () => {
 
   it("invalidates consumer-facing master caches after creating a game title", async () => {
     setDevUser();
-    queryClient.setQueryData(masterKeys.gameTitles.list("workspace"), { items: [] });
-    queryClient.setQueryData(masterKeys.gameTitles.list("match-detail"), { items: [] });
+    queryClient.setQueryData(masterKeys.gameTitles.list(), { items: [] });
     renderPage();
 
     expect(await screen.findByRole("radio", { name: "桃太郎電鉄2" })).toBeChecked();
@@ -399,12 +398,7 @@ describe("MastersPage", () => {
     await user.click(within(dialog).getByRole("button", { name: "追加" }));
 
     await waitFor(() => {
-      expect(
-        queryClient.getQueryState(masterKeys.gameTitles.list("workspace"))?.isInvalidated,
-      ).toBe(true);
-      expect(
-        queryClient.getQueryState(masterKeys.gameTitles.list("match-detail"))?.isInvalidated,
-      ).toBe(true);
+      expect(queryClient.getQueryState(masterKeys.gameTitles.list())?.isInvalidated).toBe(true);
     });
   });
 
@@ -708,7 +702,7 @@ describe("MastersPage", () => {
 
   it("does not reuse list-response cache entries from OCR setup queries", async () => {
     setDevUser();
-    queryClient.setQueryData(masterKeys.gameTitles.list("account_ponta"), {
+    queryClient.setQueryData(masterKeys.gameTitles.list(), {
       items: [
         {
           id: "gt_cached_response",

@@ -1,4 +1,5 @@
 import { ArrowLeft } from "lucide-react";
+import { useParams } from "react-router-dom";
 
 import { MatchDetailIdentity } from "@/features/matches/MatchDetailIdentity";
 import type { MatchDetailReadyPageModel } from "@/features/matches/matchDetailPageModel";
@@ -22,6 +23,11 @@ import { PageFrame } from "@/shared/ui/layout/PageFrame";
 import { PageHeader } from "@/shared/ui/layout/PageHeader";
 
 export function MatchDetailPage() {
+  const { matchId = "" } = useParams<{ matchId: string }>();
+  return <MatchDetailScreen key={matchId} />;
+}
+
+function MatchDetailScreen() {
   const page = useMatchDetailPageModel();
 
   if (page.kind === "loading") {

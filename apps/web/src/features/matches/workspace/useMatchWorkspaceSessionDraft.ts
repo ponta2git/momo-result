@@ -43,8 +43,6 @@ export function useMatchWorkspaceSessionDraft({
     [accountId, mode, workspaceKey],
   );
   const storageKey = storageScope ? matchWorkspaceSessionDraftKey(storageScope) : null;
-  const latestValuesRef = useRef(values);
-  latestValuesRef.current = values;
   const navigationAllowedRef = useRef(false);
   const [committedKey, setCommittedKey] = useState<string | null>(null);
   const [sessionState, setSessionState] = useState<SessionState | null>(null);
@@ -60,7 +58,7 @@ export function useMatchWorkspaceSessionDraft({
       return;
     }
 
-    const initialValues = latestValuesRef.current;
+    const initialValues = values;
     const baselineValuesFingerprint = matchWorkspaceValuesFingerprint(initialValues, mode);
     const baselineDraftFingerprint = matchWorkspaceDraftFingerprint({
       acknowledgedCellIds: [],
@@ -79,7 +77,7 @@ export function useMatchWorkspaceSessionDraft({
       key: storageKey,
       recovery,
     });
-  }, [enabled, mode, sessionState?.key, storageKey, storageScope]);
+  }, [enabled, mode, sessionState?.key, storageKey, storageScope, values]);
 
   const currentFingerprint = useMemo(
     () => matchWorkspaceDraftFingerprint({ acknowledgedCellIds, mode, values }),

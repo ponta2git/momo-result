@@ -268,8 +268,8 @@ test("completes the app smoke workflow with isolated scoped data", async ({
     expect(mobileReviewGeometry.scrollWidth).toBeLessThanOrEqual(mobileReviewGeometry.innerWidth);
     await page.setViewportSize({ height: 900, width: 1440 });
 
-    await page.getByRole("button", { name: "開催履歴（必須）を変更" }).click();
-    const heldEventDialog = page.getByRole("dialog", { name: "開催履歴（必須）を選択" });
+    await page.getByRole("button", { name: "開催（必須）を変更" }).click();
+    const heldEventDialog = page.getByRole("dialog", { name: "開催（必須）を選択" });
     await selectDialogRadio(heldEventDialog, new RegExp(`^${heldEventLabelPrefix} —`, "u"));
     await expect(page.getByText(new RegExp(`^${heldEventLabelPrefix} —`, "u"))).toBeVisible();
     await selectSeedMasters(page, { gameTitleId, mapMasterId, seasonMasterId });
@@ -568,7 +568,7 @@ test("completes the app smoke workflow with isolated scoped data", async ({
       }),
     ).toBeVisible();
     await expect(page.getByText("カード表示", { exact: true })).toHaveCount(0);
-    await expect(page.getByRole("table", { name: "直近順位ストリップ" })).toBeVisible();
+    await expect(page.getByRole("table", { name: "直近の試合順位" })).toBeVisible();
     const recentRankTile = page.getByRole("link", {
       name: /ぽんた、第1戦、1位、この試合。試合結果を見る/u,
     });
@@ -592,7 +592,7 @@ test("completes the app smoke workflow with isolated scoped data", async ({
     await expect(selectedMatch).toBeVisible();
     await expect(page.locator('[data-focused-metric="true"]').first()).toBeVisible();
     await expect(page).toHaveURL(new RegExp(`focusMatchId=${encodeURIComponent(matchId)}`, "u"));
-    await page.getByRole("button", { name: "詳細" }).first().click();
+    await page.getByRole("button", { name: "順位推移を見る" }).first().click();
     const rankDialog = page.getByRole("dialog", { name: "平均順位の推移" });
     await expect(rankDialog.getByRole("img", { name: "ぽんたの累積平均順位の推移" })).toBeVisible();
     await expect(rankDialog.getByRole("columnheader", { name: "開催日時" })).toBeVisible();
@@ -692,7 +692,7 @@ test("completes the app smoke workflow with isolated scoped data", async ({
     await page.getByRole("button", { name: "根拠・注意・試合後の確認" }).click();
     const evidenceDialog = page.getByRole("dialog", { name: "根拠・注意・試合後の確認" });
     await expect(evidenceDialog.getByText("データ上の理由")).toBeVisible();
-    await expect(evidenceDialog.getByText(/対象 5戦／ぶれにくさ/u)).toBeVisible();
+    await expect(evidenceDialog.getByText("ぶれにくさ: 高め")).toBeVisible();
     await evidenceDialog.getByRole("button", { name: "ダイアログを閉じる" }).click();
 
     statusPhase = "failed";
@@ -705,7 +705,7 @@ test("completes the app smoke workflow with isolated scoped data", async ({
     await expect(page.getByText("分析データを再計算できませんでした")).toBeVisible();
     await expect(page.getByText(/更新のデータを表示しています/u)).toBeVisible();
 
-    await selectedMatch.getByRole("button", { name: "選択解除" }).click();
+    await selectedMatch.getByRole("button", { name: "この試合の選択を解除" }).click();
     await expect(selectedMatch).toHaveCount(0);
     await expect(page).not.toHaveURL(/focusMatchId=/u);
 

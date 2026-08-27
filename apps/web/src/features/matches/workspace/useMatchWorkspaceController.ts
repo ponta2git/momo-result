@@ -21,6 +21,7 @@ import { useMatchWorkspaceViewModel } from "@/features/matches/workspace/useMatc
 import { useWorkspaceHeldEventCreation } from "@/features/matches/workspace/useWorkspaceHeldEventCreation";
 import { useWorkspaceNotice } from "@/features/matches/workspace/useWorkspaceNotice";
 import { shouldShowQueryError } from "@/shared/api/queryErrorState";
+import { useAuth } from "@/shared/auth/useAuth";
 import { sanitizeReturnTo } from "@/shared/navigation/returnTo";
 
 export type MatchWorkspaceControllerParams = {
@@ -39,6 +40,8 @@ export function useMatchWorkspaceController({
   preferredHeldEventId,
 }: MatchWorkspaceControllerParams) {
   const [searchParams] = useSearchParams();
+  const auth = useAuth();
+  const accountId = auth.auth?.accountId;
   const contextualReturnTo = sanitizeReturnTo(searchParams.get("returnTo"));
   const { notify } = useWorkspaceNotice();
   const local = useMatchWorkspaceLocalState();
@@ -110,6 +113,7 @@ export function useMatchWorkspaceController({
   });
 
   const { returnTo: masterReturnTo } = useMasterHandoffRestore({
+    accountId,
     handoffSessionId,
     isInitialized,
     mode,
@@ -148,6 +152,7 @@ export function useMatchWorkspaceController({
   const { confirmedDraftLoaded, heldEvents, matchDraftIdForImages } = viewModel;
 
   const reviewSession = useMatchWorkspaceReviewSession({
+    accountId,
     confirmedDraftLoaded,
     dispatch,
     isInitialized,
@@ -190,6 +195,7 @@ export function useMatchWorkspaceController({
   });
 
   const handoffNavigation = useMatchWorkspaceHandoffNavigation({
+    accountId,
     handoffSessionId,
     notify,
     onBeforeNavigate: sessionDraft.allowNavigation,

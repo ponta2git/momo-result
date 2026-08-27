@@ -119,8 +119,30 @@ function buildHeaders(method: HttpMethod, options: ApiRequestOptions): Headers {
   return headers;
 }
 
-export async function apiRequest<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
+function isAbortError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "name" in error &&
+    (error as { name?: unknown }).name === "AbortError"
+  );
+}
+
+async function executeApiOperation<T>(operation: () => Promise<T>): Promise<T> {
   try {
+    return await operation();
+  } catch (error) {
+    // Fetch cancellation is control flow owned by the caller (for example TanStack Query).
+    // Replacing it with a display-oriented API error would make a cancelled request look failed.
+    if (isAbortError(error)) {
+      throw error;
+    }
+    throw normalizeUnknownApiError(error);
+  }
+}
+
+export async function apiRequest<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
+  return executeApiOperation(async () => {
     const requestPath = sameOriginRequestPath(path);
     const method = options.method ?? "GET";
     const headers = buildHeaders(method, options);
@@ -149,16 +171,14 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
     }
 
     return (await response.json()) as T;
-  } catch (error) {
-    throw normalizeUnknownApiError(error);
-  }
+  });
 }
 
 export async function apiDownload(
   path: string,
   options: Pick<ApiRequestOptions, "headers" | "signal"> = {},
 ): Promise<ApiDownloadResult> {
-  try {
+  return executeApiOperation(async () => {
     const requestPath = sameOriginRequestPath(path);
     const headers = buildHeaders("GET", options);
     const init: RequestInit = {
@@ -181,9 +201,7 @@ export async function apiDownload(
       fileName: fileNameFromDisposition(response.headers.get("Content-Disposition")),
       contentType: response.headers.get("Content-Type") ?? blob.type,
     };
-  } catch (error) {
-    throw normalizeUnknownApiError(error);
-  }
+  });
 }
 
 function fileNameFromDisposition(disposition: string | null): string {

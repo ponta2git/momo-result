@@ -3,8 +3,9 @@ import { z } from "zod";
 import { incidentDefinitions } from "@/shared/domain/incidents";
 import type { IncidentCountsByKey } from "@/shared/domain/incidents";
 
-export const handoffStoragePrefix = "momoresult.masterHandoff.";
-export const handoffSchemaVersion = 1;
+const legacyHandoffStoragePrefix = "momoresult.masterHandoff.";
+export const handoffStoragePrefix = "momoresult.masterHandoff.v2.";
+export const handoffSchemaVersion = 2;
 const handoffTtlMs = 2 * 60 * 60 * 1000;
 
 const handoffSourceSchema = z.enum(["draftReview", "matchWorkspace"]);
@@ -46,6 +47,7 @@ const handoffValuesSchema = z.object({
 });
 
 const masterHandoffPayloadSchema = z.object({
+  accountId: z.string().min(1),
   createdAt: z.string(),
   matchSessionId: z.string(),
   returnTo: z.string(),
@@ -71,6 +73,17 @@ export type MasterHandoffReadOptions = {
   storage?: MasterHandoffStorage;
 };
 
+function discardLegacyHandoffs(storage: MasterHandoffStorage): void {
+  const legacyKeys = Array.from({ length: storage.length }, (_, index) =>
+    storage.key(index),
+  ).filter((key): key is string =>
+    Boolean(key?.startsWith(legacyHandoffStoragePrefix) && !key.startsWith(handoffStoragePrefix)),
+  );
+  for (const key of legacyKeys) {
+    storage.removeItem(key);
+  }
+}
+
 function pruneDraftIds(
   values: MatchWorkspaceHandoffValues["draftIds"],
 ): MatchWorkspaceHandoffValues["draftIds"] {
@@ -92,14 +105,16 @@ export function browserSessionStorage(): MasterHandoffStorage | undefined {
     return undefined;
   }
   try {
-    return window.sessionStorage;
+    const storage = window.sessionStorage;
+    discardLegacyHandoffs(storage);
+    return storage;
   } catch {
     return undefined;
   }
 }
 
-export function storageKey(handoffId: string): string {
-  return `${handoffStoragePrefix}${handoffId}`;
+export function storageKey(accountId: string, handoffId: string): string {
+  return `${handoffStoragePrefix}${encodeURIComponent(accountId)}.${handoffId}`;
 }
 
 export function parsePayload(raw: string): MasterHandoffPayload | undefined {
@@ -119,12 +134,14 @@ export function isExpired(createdAt: string, nowMs: number): boolean {
 }
 
 export function createMatchWorkspaceHandoffPayload(input: {
+  accountId: string;
   createdAt?: string;
   matchSessionId: string;
   returnTo: string;
   values: MatchWorkspaceHandoffValues;
 }): MasterHandoffPayload {
   return {
+    accountId: input.accountId,
     createdAt: input.createdAt ?? new Date().toISOString(),
     matchSessionId: input.matchSessionId,
     returnTo: input.returnTo,

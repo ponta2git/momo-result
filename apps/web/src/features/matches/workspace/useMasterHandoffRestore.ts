@@ -12,6 +12,7 @@ import {
 import type { MasterHandoffPayload } from "@/shared/workflows/matchWorkspaceMasterHandoff";
 
 export type MasterHandoffRestoreParams = {
+  accountId: string | undefined;
   handoffSessionId: string;
   isInitialized: boolean;
   mode: WorkspaceMode;
@@ -33,6 +34,7 @@ export type MasterHandoffRestoreResult = {
  * - 復元結果は呼び出し側 onRestore コールバックで反映する
  */
 export function useMasterHandoffRestore({
+  accountId,
   handoffSessionId,
   isInitialized,
   mode,
@@ -51,7 +53,7 @@ export function useMasterHandoffRestore({
   );
 
   useEffect(() => {
-    if (mode !== "review" && mode !== "create") {
+    if ((mode !== "review" && mode !== "create") || !accountId) {
       return;
     }
     if (!isInitialized) {
@@ -69,11 +71,13 @@ export function useMasterHandoffRestore({
 
     const payload =
       loadMasterHandoff({
+        expectedAccountId: accountId,
         expectedMatchSessionId: handoffSessionId,
         expectedReturnTo: returnTo,
         handoffId,
       }) ??
       loadMasterHandoff({
+        expectedAccountId: accountId,
         expectedMatchSessionId: handoffSessionId,
         expectedReturnTo: location.pathname,
         handoffId,
@@ -81,10 +85,12 @@ export function useMasterHandoffRestore({
     const fallbackRecord = payload
       ? undefined
       : (findLatestMasterHandoff({
+          expectedAccountId: accountId,
           expectedMatchSessionId: handoffSessionId,
           expectedReturnTo: returnTo,
         }) ??
         findLatestMasterHandoff({
+          expectedAccountId: accountId,
           expectedMatchSessionId: handoffSessionId,
           expectedReturnTo: location.pathname,
         }));
@@ -97,7 +103,7 @@ export function useMasterHandoffRestore({
       onRestoreFailed();
     }
 
-    removeMasterHandoff(consumedHandoffId ?? null);
+    removeMasterHandoff(consumedHandoffId ?? null, { accountId });
     navigate(
       {
         pathname: location.pathname,
@@ -106,6 +112,7 @@ export function useMasterHandoffRestore({
       { replace: true },
     );
   }, [
+    accountId,
     isInitialized,
     location.pathname,
     handoffSessionId,

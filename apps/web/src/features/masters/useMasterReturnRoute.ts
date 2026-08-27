@@ -6,15 +6,20 @@ import {
   sanitizeReturnTo,
 } from "@/shared/workflows/matchWorkspaceMasterHandoff";
 
-export function useMasterReturnRoute() {
+export function useMasterReturnRoute(accountId: string | undefined) {
   const [searchParams] = useSearchParams();
   const rawReturnTo = searchParams.get("returnTo");
   const returnTo = sanitizeReturnTo(rawReturnTo);
   const hasInvalidReturnTo = Boolean(rawReturnTo && !returnTo);
   const handoffId = searchParams.get("handoffId");
-  const handoffStatus = returnTo
-    ? inspectMasterHandoff({ expectedReturnTo: returnTo, handoffId }).status
-    : "missing";
+  const handoffStatus =
+    returnTo && accountId
+      ? inspectMasterHandoff({
+          expectedAccountId: accountId,
+          expectedReturnTo: returnTo,
+          handoffId,
+        }).status
+      : "missing";
   const returnDestination =
     returnTo && handoffStatus === "available" && handoffId
       ? appendHandoffIdToReturnTo(returnTo, handoffId)

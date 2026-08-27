@@ -14,7 +14,7 @@ import {
   createMatchWorkspaceMasterHandoffPayload,
   saveMasterHandoff,
 } from "@/shared/workflows/matchWorkspaceMasterHandoff";
-import { setDevUser } from "@/test/auth";
+import { setDevUser, testDevUserAccountId } from "@/test/auth";
 import { createDeferred } from "@/test/deferred";
 import {
   makeHeldEventResponse,
@@ -724,6 +724,7 @@ describe("DraftReviewPage", () => {
 
     const handoffId = saveMasterHandoff(
       createMatchWorkspaceMasterHandoffPayload({
+        accountId: testDevUserAccountId,
         matchSessionId: "session-1",
         returnTo: "/review/session-1?sample=1",
         values: makeMatchWorkspaceMasterHandoffValues({

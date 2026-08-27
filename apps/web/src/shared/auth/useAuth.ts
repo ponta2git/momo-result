@@ -1,26 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { QueryClient, QueryKey } from "@tanstack/react-query";
 
 import { logout } from "@/shared/api/auth";
 import { clearCsrfToken } from "@/shared/api/csrfTokenStore";
 import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import { authMeQueryKeyFor, authQueryOptions } from "@/shared/auth/authQueries";
+import { clearPrincipalClientState } from "@/shared/auth/principalClientState";
 import { useDevUser } from "@/shared/auth/useDevUser";
-
-function isSameQueryKey(left: QueryKey, right: QueryKey): boolean {
-  return left.length === right.length && left.every((value, index) => value === right[index]);
-}
-
-async function clearSessionQueryCache(
-  queryClient: QueryClient,
-  currentAuthQueryKey: QueryKey,
-): Promise<void> {
-  await queryClient.cancelQueries();
-  queryClient.setQueryData(currentAuthQueryKey, null);
-  queryClient.removeQueries({
-    predicate: (query) => !isSameQueryKey(query.queryKey, currentAuthQueryKey),
-  });
-}
 
 export function useAuth() {
   const queryClient = useQueryClient();
@@ -52,7 +37,9 @@ export function useAuth() {
       if (clearsMutableDevOverride) {
         setDevUser("");
       }
-      await clearSessionQueryCache(queryClient, authMeQueryKeyFor(devUser));
+      await clearPrincipalClientState(queryClient, {
+        loggedOutAuthQueryKey: authMeQueryKeyFor(devUser),
+      });
     },
   });
 

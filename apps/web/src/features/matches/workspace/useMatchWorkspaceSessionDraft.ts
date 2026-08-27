@@ -9,7 +9,10 @@ import {
   removeMatchWorkspaceSessionDraft,
   saveMatchWorkspaceSessionDraft,
 } from "@/features/matches/workspace/matchWorkspaceSessionDraft";
-import type { MatchWorkspaceSessionDraft } from "@/features/matches/workspace/matchWorkspaceSessionDraft";
+import type {
+  MatchWorkspaceSessionDraft,
+  MatchWorkspaceSessionDraftScope,
+} from "@/features/matches/workspace/matchWorkspaceSessionDraft";
 
 type SessionState = {
   baselineDraftFingerprint: string;
@@ -19,6 +22,7 @@ type SessionState = {
 };
 
 export function useMatchWorkspaceSessionDraft({
+  accountId,
   acknowledgedCellIds,
   enabled,
   mode,
@@ -26,6 +30,7 @@ export function useMatchWorkspaceSessionDraft({
   values,
   workspaceKey,
 }: {
+  accountId: string | undefined;
   acknowledgedCellIds: readonly string[];
   enabled: boolean;
   mode: WorkspaceMode;
@@ -33,7 +38,11 @@ export function useMatchWorkspaceSessionDraft({
   values: MatchFormValues;
   workspaceKey: string;
 }) {
-  const storageKey = matchWorkspaceSessionDraftKey({ mode, workspaceKey });
+  const storageScope = useMemo<MatchWorkspaceSessionDraftScope | null>(
+    () => (accountId ? { accountId, mode, workspaceKey } : null),
+    [accountId, mode, workspaceKey],
+  );
+  const storageKey = storageScope ? matchWorkspaceSessionDraftKey(storageScope) : null;
   const latestValuesRef = useRef(values);
   latestValuesRef.current = values;
   const navigationAllowedRef = useRef(false);
@@ -47,7 +56,7 @@ export function useMatchWorkspaceSessionDraft({
   }, [storageKey]);
 
   useEffect(() => {
-    if (!enabled || sessionState?.key === storageKey) {
+    if (!enabled || !storageKey || !storageScope || sessionState?.key === storageKey) {
       return;
     }
 
@@ -58,11 +67,11 @@ export function useMatchWorkspaceSessionDraft({
       mode,
       values: initialValues,
     });
-    const stored = loadMatchWorkspaceSessionDraft(storageKey);
+    const stored = loadMatchWorkspaceSessionDraft(storageScope);
     const recovery =
       stored && stored.baselineFingerprint === baselineValuesFingerprint ? stored : null;
     if (stored && !recovery) {
-      removeMatchWorkspaceSessionDraft(storageKey);
+      removeMatchWorkspaceSessionDraft(storageScope);
     }
     setSessionState({
       baselineDraftFingerprint,
@@ -70,7 +79,7 @@ export function useMatchWorkspaceSessionDraft({
       key: storageKey,
       recovery,
     });
-  }, [enabled, mode, sessionState?.key, storageKey]);
+  }, [enabled, mode, sessionState?.key, storageKey, storageScope]);
 
   const currentFingerprint = useMemo(
     () => matchWorkspaceDraftFingerprint({ acknowledgedCellIds, mode, values }),
@@ -85,21 +94,22 @@ export function useMatchWorkspaceSessionDraft({
   );
 
   useEffect(() => {
-    if (!activeState || activeState.recovery) {
+    if (!activeState || activeState.recovery || !storageScope) {
       return;
     }
     if (!dirty) {
-      removeMatchWorkspaceSessionDraft(storageKey);
+      removeMatchWorkspaceSessionDraft(storageScope);
       return;
     }
-    saveMatchWorkspaceSessionDraft(storageKey, {
+    saveMatchWorkspaceSessionDraft(storageScope, {
+      accountId: storageScope.accountId,
       acknowledgedCellIds: [...acknowledgedCellIds],
       baselineFingerprint: activeState.baselineValuesFingerprint,
       savedAt: new Date().toISOString(),
       values,
-      version: 1,
+      version: 2,
     });
-  }, [acknowledgedCellIds, activeState, dirty, storageKey, values]);
+  }, [acknowledgedCellIds, activeState, dirty, storageKey, storageScope, values]);
 
   const restoreRecovery = useCallback(() => {
     const recovery = sessionState?.key === storageKey ? sessionState.recovery : null;
@@ -113,11 +123,13 @@ export function useMatchWorkspaceSessionDraft({
   }, [onRestore, sessionState, storageKey]);
 
   const discardRecovery = useCallback(() => {
-    removeMatchWorkspaceSessionDraft(storageKey);
+    if (storageScope) {
+      removeMatchWorkspaceSessionDraft(storageScope);
+    }
     setSessionState((current) =>
       current?.key === storageKey ? { ...current, recovery: null } : current,
     );
-  }, [storageKey]);
+  }, [storageKey, storageScope]);
 
   const allowNavigation = useCallback(() => {
     navigationAllowedRef.current = true;
@@ -125,9 +137,12 @@ export function useMatchWorkspaceSessionDraft({
 
   const markCommitted = useCallback(() => {
     navigationAllowedRef.current = true;
-    removeMatchWorkspaceSessionDraft(storageKey);
+    if (!storageKey || !storageScope) {
+      return;
+    }
+    removeMatchWorkspaceSessionDraft(storageScope);
     setCommittedKey(storageKey);
-  }, [storageKey]);
+  }, [storageKey, storageScope]);
 
   return {
     allowNavigation,

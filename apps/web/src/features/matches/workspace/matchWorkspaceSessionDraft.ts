@@ -3,7 +3,8 @@ import { z } from "zod";
 import type { MatchFormValues, WorkspaceMode } from "@/features/matches/workspace/matchFormTypes";
 import { fixedMemberIds } from "@/shared/domain/members";
 
-const storagePrefix = "momoresult.matchWorkspaceDraft.v1.";
+const legacyStoragePrefix = "momoresult.matchWorkspaceDraft.v1.";
+const storagePrefix = "momoresult.matchWorkspaceDraft.v2.";
 const memberIds = [...fixedMemberIds] as [string, ...string[]];
 
 const incidentSchema = z.object({
@@ -44,23 +45,41 @@ const matchFormValuesSchema = z.object({
 });
 
 const sessionDraftSchema = z.object({
+  accountId: z.string().min(1),
   acknowledgedCellIds: z.array(z.string()),
   baselineFingerprint: z.string(),
   savedAt: z.string(),
   values: matchFormValuesSchema,
-  version: z.literal(1),
+  version: z.literal(2),
 });
 
 export type MatchWorkspaceSessionDraft = Omit<z.infer<typeof sessionDraftSchema>, "values"> & {
   values: MatchFormValues;
 };
 
+export type MatchWorkspaceSessionDraftScope = {
+  accountId: string;
+  mode: WorkspaceMode;
+  workspaceKey: string;
+};
+
+function discardLegacySessionDrafts(storage: Storage): void {
+  const legacyKeys = Array.from({ length: storage.length }, (_, index) =>
+    storage.key(index),
+  ).filter((key): key is string => Boolean(key?.startsWith(legacyStoragePrefix)));
+  for (const key of legacyKeys) {
+    storage.removeItem(key);
+  }
+}
+
 function sessionStorageOrNull(): Storage | null {
   if (typeof window === "undefined") {
     return null;
   }
   try {
-    return window.sessionStorage;
+    const storage = window.sessionStorage;
+    discardLegacySessionDrafts(storage);
+    return storage;
   } catch {
     return null;
   }
@@ -91,47 +110,52 @@ export function matchWorkspaceDraftFingerprint(args: {
   });
 }
 
-export function matchWorkspaceSessionDraftKey(args: {
-  mode: WorkspaceMode;
-  workspaceKey: string;
-}): string {
-  return `${storagePrefix}${args.mode}.${encodeURIComponent(args.workspaceKey)}`;
+export function matchWorkspaceSessionDraftKey(scope: MatchWorkspaceSessionDraftScope): string {
+  return `${storagePrefix}${encodeURIComponent(scope.accountId)}.${scope.mode}.${encodeURIComponent(scope.workspaceKey)}`;
 }
 
-export function parseMatchWorkspaceSessionDraft(raw: string): MatchWorkspaceSessionDraft | null {
+export function parseMatchWorkspaceSessionDraft(
+  raw: string,
+  expectedAccountId: string,
+): MatchWorkspaceSessionDraft | null {
   try {
     const parsed = sessionDraftSchema.safeParse(JSON.parse(raw));
-    return parsed.success ? (parsed.data as MatchWorkspaceSessionDraft) : null;
+    return parsed.success && parsed.data.accountId === expectedAccountId
+      ? (parsed.data as MatchWorkspaceSessionDraft)
+      : null;
   } catch {
     return null;
   }
 }
 
-export function loadMatchWorkspaceSessionDraft(key: string): MatchWorkspaceSessionDraft | null {
+export function loadMatchWorkspaceSessionDraft(
+  scope: MatchWorkspaceSessionDraftScope,
+): MatchWorkspaceSessionDraft | null {
   const storage = sessionStorageOrNull();
-  const raw = storage?.getItem(key);
-  return raw ? parseMatchWorkspaceSessionDraft(raw) : null;
+  const raw = storage?.getItem(matchWorkspaceSessionDraftKey(scope));
+  return raw ? parseMatchWorkspaceSessionDraft(raw, scope.accountId) : null;
 }
 
 export function saveMatchWorkspaceSessionDraft(
-  key: string,
+  scope: MatchWorkspaceSessionDraftScope,
   draft: MatchWorkspaceSessionDraft,
 ): boolean {
   const storage = sessionStorageOrNull();
-  if (!storage) {
+  const parsed = sessionDraftSchema.safeParse(draft);
+  if (!storage || !parsed.success || parsed.data.accountId !== scope.accountId) {
     return false;
   }
   try {
-    storage.setItem(key, JSON.stringify(draft));
+    storage.setItem(matchWorkspaceSessionDraftKey(scope), JSON.stringify(parsed.data));
     return true;
   } catch {
     return false;
   }
 }
 
-export function removeMatchWorkspaceSessionDraft(key: string): void {
+export function removeMatchWorkspaceSessionDraft(scope: MatchWorkspaceSessionDraftScope): void {
   try {
-    sessionStorageOrNull()?.removeItem(key);
+    sessionStorageOrNull()?.removeItem(matchWorkspaceSessionDraftKey(scope));
   } catch {
     // Storage cleanup is best effort; the form remains usable when storage is unavailable.
   }

@@ -1,9 +1,8 @@
 import { IncidentMasterPanel } from "@/features/masters/IncidentMasterPanel";
 import { MasterRelationBoard } from "@/features/masters/MasterRelationBoard";
 import { MasterReturnNotice } from "@/features/masters/MasterReturnNotice";
-import { defaultLayoutFamily } from "@/features/masters/masterValidation";
 import { MemberAliasPanel } from "@/features/masters/MemberAliasPanel";
-import { masterTabs, useMastersPageController } from "@/features/masters/useMastersPageController";
+import { useMastersPageModel } from "@/features/masters/useMastersPageModel";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { TabsList, TabsPanel, TabsRoot, TabsTab } from "@/shared/ui/forms/Tabs";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
@@ -11,151 +10,37 @@ import { PageFrame } from "@/shared/ui/layout/PageFrame";
 import { PageHeader } from "@/shared/ui/layout/PageHeader";
 
 export function MastersPage() {
-  const controller = useMastersPageController();
-  const {
-    activeTab,
-    aliasCreateAction,
-    aliasCreateState,
-    auth,
-    deleteGameTitle,
-    deleteMapMaster,
-    deleteMemberAlias,
-    deleteSeasonMaster,
-    gameTitleCreateAction,
-    gameTitleCreatePending,
-    gameTitleCreateState,
-    gameTitlesRefreshing,
-    gameTitlesStale,
-    hasInvalidReturnTo,
-    hasPendingMutation,
-    handoffStatus,
-    incidentMasters,
-    incidentMastersRefreshing,
-    incidentMastersStale,
-    isReturnNavigationPending,
-    mapCreateAction,
-    mapCreateState,
-    mapMastersHasData,
-    mapMastersLoadFailed,
-    mapMastersLoading,
-    mapMastersLoadError,
-    mapMastersRefreshing,
-    mapMastersStale,
-    memberAliases,
-    memberAliasesRefreshing,
-    memberAliasesStale,
-    navigateWithTransition,
-    operationError,
-    optimisticGameTitles,
-    retryGameTitles,
-    retryIncidentMasters,
-    retryMapMasters,
-    retryMemberAliases,
-    retrySeasonMasters,
-    returnDestination,
-    seasonCreateAction,
-    seasonCreateState,
-    seasonMastersHasData,
-    seasonMastersLoadFailed,
-    seasonMastersLoading,
-    seasonMastersLoadError,
-    seasonMastersRefreshing,
-    seasonMastersStale,
-    setActiveTab,
-    setSelectedGameTitleId,
-    updateGameTitle,
-    updateMapMaster,
-    updateMemberAlias,
-    updateSeasonMaster,
-    viewModel,
-  } = controller;
-  const gameTitleRelation = {
-    create: {
-      action: gameTitleCreateAction,
-      error: gameTitleCreateState.error,
-      formKey: gameTitleCreateState.version,
-      pending: gameTitleCreatePending,
-    },
-    defaultLayoutFamily,
-    items: optimisticGameTitles,
-    onDelete: deleteGameTitle,
-    onRetry: retryGameTitles,
-    onSelect: setSelectedGameTitleId,
-    onUpdate: updateGameTitle,
-    selectedId: viewModel.selectedGameTitleId,
-    refreshing: gameTitlesRefreshing,
-    stale: gameTitlesStale,
-  };
-  const mapRelation = {
-    create: {
-      action: mapCreateAction,
-      error: mapCreateState.error,
-      formKey: mapCreateState.version,
-    },
-    error: mapMastersLoadError,
-    hasData: mapMastersHasData,
-    items: viewModel.selectedMapMasters,
-    loadFailed: mapMastersLoadFailed,
-    loading: mapMastersLoading,
-    onDelete: deleteMapMaster,
-    onRetry: retryMapMasters,
-    onUpdate: updateMapMaster,
-    retrying: mapMastersRefreshing,
-    stale: mapMastersStale,
-  };
-  const seasonRelation = {
-    create: {
-      action: seasonCreateAction,
-      error: seasonCreateState.error,
-      formKey: seasonCreateState.version,
-    },
-    error: seasonMastersLoadError,
-    hasData: seasonMastersHasData,
-    items: viewModel.selectedSeasonMasters,
-    loadFailed: seasonMastersLoadFailed,
-    loading: seasonMastersLoading,
-    onDelete: deleteSeasonMaster,
-    onRetry: retrySeasonMasters,
-    onUpdate: updateSeasonMaster,
-    retrying: seasonMastersRefreshing,
-    stale: seasonMastersStale,
-  };
+  const page = useMastersPageModel();
 
   return (
     <PageFrame>
       <PageHeader eyebrow="管理" title="設定管理" />
 
-      {auth.error ? (
-        <Notice tone="danger" title={auth.error.title}>
-          {auth.error.detail}
+      {page.auth.error ? (
+        <Notice tone="danger" title={page.auth.error.title}>
+          {page.auth.error.detail}
         </Notice>
       ) : null}
 
-      {returnDestination ? (
+      {page.navigation.destination ? (
         <MasterReturnNotice
-          handoffStatus={handoffStatus}
-          disabled={hasPendingMutation || isReturnNavigationPending}
-          disabledReason={
-            isReturnNavigationPending
-              ? "元の入力画面へ移動しています。"
-              : hasPendingMutation
-                ? "設定の追加・保存・削除が完了すると戻れます。"
-                : undefined
-          }
-          pending={isReturnNavigationPending}
-          onReturn={() => navigateWithTransition(returnDestination)}
+          handoffStatus={page.navigation.handoffStatus}
+          disabled={page.navigation.disabled}
+          disabledReason={page.navigation.disabledReason}
+          pending={page.navigation.pending}
+          onReturn={page.navigation.onReturn}
         />
       ) : null}
 
       <PageContentSurface aria-label="設定管理" role="region">
-        {operationError || hasInvalidReturnTo ? (
+        {page.feedback.operationError || page.feedback.invalidReturnTo ? (
           <div className="mb-6 grid gap-3">
-            {operationError ? (
+            {page.feedback.operationError ? (
               <Notice tone="danger" title="設定の変更に失敗しました">
-                {operationError}
+                {page.feedback.operationError}
               </Notice>
             ) : null}
-            {hasInvalidReturnTo ? (
+            {page.feedback.invalidReturnTo ? (
               <Notice tone="warning" title="戻り先を確認できませんでした">
                 戻り先を確認できないため、試合一覧へ戻る導線だけを表示しています。
               </Notice>
@@ -164,11 +49,11 @@ export function MastersPage() {
         ) : null}
 
         <TabsRoot
-          value={activeTab}
-          onValueChange={(value) => setActiveTab(value as typeof activeTab)}
+          value={page.tabs.active}
+          onValueChange={(value) => page.tabs.onChange(value as typeof page.tabs.active)}
         >
           <TabsList activateOnFocus aria-label="設定管理の表示切替">
-            {masterTabs.map((tab) => (
+            {page.tabs.items.map((tab) => (
               <TabsTab key={tab.id} value={tab.id}>
                 {tab.label}
               </TabsTab>
@@ -177,33 +62,33 @@ export function MastersPage() {
 
           <TabsPanel className="mt-6" keepMounted value="catalog">
             <MasterRelationBoard
-              gameTitle={gameTitleRelation}
-              map={mapRelation}
-              scopedDisabledReason={viewModel.scopedDisabledReason}
-              season={seasonRelation}
+              gameTitle={page.catalog.gameTitle}
+              map={page.catalog.map}
+              scopedDisabledReason={page.catalog.scopedDisabledReason}
+              season={page.catalog.season}
             />
           </TabsPanel>
 
           <TabsPanel className="mt-6" keepMounted value="aliases">
             <MemberAliasPanel
-              aliases={memberAliases}
-              createAction={aliasCreateAction}
-              createError={aliasCreateState.error}
-              createFormKey={aliasCreateState.version}
-              onDelete={deleteMemberAlias}
-              onRetry={retryMemberAliases}
-              onUpdate={updateMemberAlias}
-              refreshing={memberAliasesRefreshing}
-              stale={memberAliasesStale}
+              aliases={page.aliases.items}
+              createAction={page.aliases.createAction}
+              createError={page.aliases.createError}
+              createFormKey={page.aliases.createFormKey}
+              onDelete={page.aliases.onDelete}
+              onRetry={page.aliases.onRetry}
+              onUpdate={page.aliases.onUpdate}
+              refreshing={page.aliases.refreshing}
+              stale={page.aliases.stale}
             />
           </TabsPanel>
 
           <TabsPanel className="mt-6" keepMounted value="incidents">
             <IncidentMasterPanel
-              items={incidentMasters}
-              onRetry={retryIncidentMasters}
-              refreshing={incidentMastersRefreshing}
-              stale={incidentMastersStale}
+              items={page.incidents.items}
+              onRetry={page.incidents.onRetry}
+              refreshing={page.incidents.refreshing}
+              stale={page.incidents.stale}
             />
           </TabsPanel>
         </TabsRoot>

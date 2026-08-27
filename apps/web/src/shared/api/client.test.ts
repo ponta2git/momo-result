@@ -138,6 +138,17 @@ describe("apiRequest", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it("preserves fetch cancellation instead of presenting it as an API failure", async () => {
+    const cancellation = new DOMException("The operation was aborted.", "AbortError");
+    installFetchMock(async () => {
+      throw cancellation;
+    });
+
+    await expect(apiRequest("/api/example", { signal: new AbortController().signal })).rejects.toBe(
+      cancellation,
+    );
+  });
+
   it("normalizes same-origin absolute API URLs to paths", async () => {
     const fetchMock = installFetchMock(async () => Response.json({ ok: true }));
 
@@ -294,6 +305,19 @@ describe("apiRequest", () => {
       detail: "format must be one of: csv, tsv.",
       code: "VALIDATION_FAILED",
     });
+  });
+
+  it("preserves download cancellation instead of presenting it as an API failure", async () => {
+    const cancellation = new DOMException("The operation was aborted.", "AbortError");
+    installFetchMock(async () => {
+      throw cancellation;
+    });
+
+    await expect(
+      apiDownload("/api/exports/matches?format=csv", {
+        signal: new AbortController().signal,
+      }),
+    ).rejects.toBe(cancellation);
   });
 
   it("rejects protocol-relative download URLs", async () => {

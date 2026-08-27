@@ -51,6 +51,7 @@ function createMasterReturnEntry() {
   const returnTo = "/review/session-1?totalAssets=draft-1";
   const handoffId = saveMasterHandoff(
     createMatchWorkspaceMasterHandoffPayload({
+      accountId: testDevUserAccountId,
       matchSessionId: "session-1",
       returnTo,
       values: makeMatchWorkspaceMasterHandoffValues({
@@ -572,7 +573,7 @@ describe("MastersPage", () => {
     renderPage(createMasterReturnEntry());
 
     expect(await screen.findByRole("button", { name: "元の入力画面へ戻る" })).toBeInTheDocument();
-    expect(screen.getByText(/現在の入力内容を保ったまま戻れます/u)).toBeInTheDocument();
+    expect(await screen.findByText(/現在の入力内容を保ったまま戻れます/u)).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "戻り先を確認" })).not.toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: "元の入力画面へ戻る" })).toHaveLength(1);
   });

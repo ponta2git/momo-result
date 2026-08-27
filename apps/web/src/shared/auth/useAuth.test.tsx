@@ -67,6 +67,11 @@ describe("useAuth logout session cleanup", () => {
       ),
     );
     renderAuth();
+    window.sessionStorage.setItem(
+      "momoresult.matchWorkspaceDraft.v2.account_ponta.review.session-1",
+      "private draft",
+    );
+    window.sessionStorage.setItem("momoresult.masterHandoff.legacy-handoff", "legacy handoff");
 
     expect(await screen.findByText("ぽんた")).toBeInTheDocument();
     expect(getCsrfToken()).toBe("session-csrf");
@@ -76,6 +81,7 @@ describe("useAuth logout session cleanup", () => {
     expect(await screen.findByText("ログアウト済み")).toBeInTheDocument();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(getCsrfToken()).toBeUndefined();
+    expect(window.sessionStorage.length).toBe(0);
   });
 
   it("keeps the current session CSRF token when logout fails with 503", async () => {
@@ -104,6 +110,10 @@ describe("useAuth logout session cleanup", () => {
       ),
     );
     renderAuth();
+    window.sessionStorage.setItem(
+      "momoresult.matchWorkspaceDraft.v2.account_ponta.review.session-1",
+      "private draft",
+    );
 
     expect(await screen.findByText("ぽんた")).toBeInTheDocument();
     expect(getCsrfToken()).toBe("session-csrf");
@@ -113,5 +123,6 @@ describe("useAuth logout session cleanup", () => {
     await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("ログアウト失敗"));
     expect(screen.getByText("ぽんた")).toBeInTheDocument();
     expect(getCsrfToken()).toBe("session-csrf");
+    expect(window.sessionStorage.length).toBe(1);
   });
 });

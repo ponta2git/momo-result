@@ -2,6 +2,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useState, useTransition } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
+import { defaultLayoutFamily } from "@/features/masters/masterValidation";
 import { useMasterCreateActions } from "@/features/masters/useMasterCreateActions";
 import { useMasterEditCommands } from "@/features/masters/useMasterEditCommands";
 import { useMasterOptimisticCatalog } from "@/features/masters/useMasterOptimisticCatalog";
@@ -36,7 +37,11 @@ export function errorMessage(error: unknown): string | undefined {
   return normalized.detail || normalized.title;
 }
 
-export function useMastersPageController() {
+/**
+ * Composes settings resources and commands into display-ready page sections.
+ * Query and command hook implementation details stay behind this contract.
+ */
+export function useMastersPageModel() {
   const auth = useAuth();
   const authScope = auth.auth?.accountId ?? "anonymous";
   const queryClient = useQueryClient();
@@ -67,7 +72,7 @@ export function useMastersPageController() {
     [searchParams, setSearchParams],
   );
   const [operationError, setOperationError] = useState<string>();
-  const returnRoute = useMasterReturnRoute();
+  const returnRoute = useMasterReturnRoute(auth.auth?.accountId);
 
   useEffect(() => {
     if (!rawTab || isMasterTabId(rawTab)) {
@@ -140,50 +145,106 @@ export function useMastersPageController() {
   const seasonMastersHasError = shouldShowQueryError(resourceQueries.seasonMastersQuery);
 
   return {
-    activeTab,
+    aliases: {
+      createAction: createActions.aliasCreateAction,
+      createError: createActions.aliasCreateState.error,
+      createFormKey: createActions.aliasCreateState.version,
+      items: resourceQueries.memberAliases,
+      onDelete: editCommands.deleteMemberAlias,
+      onRetry: () => void resourceQueries.memberAliasesQuery.refetch(),
+      onUpdate: editCommands.updateMemberAlias,
+      refreshing: resourceQueries.memberAliasesQuery.isFetching,
+      stale: memberAliasesHasError && resourceQueries.memberAliasesQuery.data !== undefined,
+    },
     auth,
-    gameTitlesRefreshing: resourceQueries.gameTitlesQuery.isFetching,
-    gameTitlesStale: gameTitlesHasError && resourceQueries.gameTitlesQuery.data !== undefined,
-    hasPendingMutation,
-    incidentMasters: resourceQueries.incidentMasters,
-    incidentMastersRefreshing: resourceQueries.incidentMastersQuery.isFetching,
-    incidentMastersStale:
-      incidentMastersHasError && resourceQueries.incidentMastersQuery.data !== undefined,
-    isReturnNavigationPending,
-    mapMastersHasData,
-    mapMastersLoadFailed: shouldShowBlockingQueryError(resourceQueries.mapMastersQuery),
-    mapMastersLoading: isInitialQueryLoading(resourceQueries.mapMastersQuery),
-    mapMastersLoadError: mapMastersHasError
-      ? errorMessage(resourceQueries.mapMastersQuery.error)
-      : undefined,
-    mapMastersRefreshing: resourceQueries.mapMastersQuery.isFetching,
-    mapMastersStale: mapMastersHasError && mapMastersHasData,
-    memberAliasesRefreshing: resourceQueries.memberAliasesQuery.isFetching,
-    memberAliasesStale:
-      memberAliasesHasError && resourceQueries.memberAliasesQuery.data !== undefined,
-    retryGameTitles: () => void resourceQueries.gameTitlesQuery.refetch(),
-    retryIncidentMasters: () => void resourceQueries.incidentMastersQuery.refetch(),
-    retryMapMasters: () => void resourceQueries.mapMastersQuery.refetch(),
-    memberAliases: resourceQueries.memberAliases,
-    navigateWithTransition,
-    operationError,
-    optimisticGameTitles: optimisticCatalog.optimisticGameTitles,
-    retryMemberAliases: () => void resourceQueries.memberAliasesQuery.refetch(),
-    retrySeasonMasters: () => void resourceQueries.seasonMastersQuery.refetch(),
-    seasonMastersHasData,
-    seasonMastersLoadFailed: shouldShowBlockingQueryError(resourceQueries.seasonMastersQuery),
-    seasonMastersLoading: isInitialQueryLoading(resourceQueries.seasonMastersQuery),
-    seasonMastersLoadError: seasonMastersHasError
-      ? errorMessage(resourceQueries.seasonMastersQuery.error)
-      : undefined,
-    seasonMastersRefreshing: resourceQueries.seasonMastersQuery.isFetching,
-    seasonMastersStale: seasonMastersHasError && seasonMastersHasData,
-    selectedGameTitleId,
-    setActiveTab,
-    setSelectedGameTitleId,
-    viewModel,
-    ...createActions,
-    ...editCommands,
-    ...returnRoute,
+    catalog: {
+      gameTitle: {
+        create: {
+          action: createActions.gameTitleCreateAction,
+          error: createActions.gameTitleCreateState.error,
+          formKey: createActions.gameTitleCreateState.version,
+          pending: createActions.gameTitleCreatePending,
+        },
+        defaultLayoutFamily,
+        items: optimisticCatalog.optimisticGameTitles,
+        onDelete: editCommands.deleteGameTitle,
+        onRetry: () => void resourceQueries.gameTitlesQuery.refetch(),
+        onSelect: setSelectedGameTitleId,
+        onUpdate: editCommands.updateGameTitle,
+        refreshing: resourceQueries.gameTitlesQuery.isFetching,
+        selectedId: viewModel.selectedGameTitleId,
+        stale: gameTitlesHasError && resourceQueries.gameTitlesQuery.data !== undefined,
+      },
+      map: {
+        create: {
+          action: createActions.mapCreateAction,
+          error: createActions.mapCreateState.error,
+          formKey: createActions.mapCreateState.version,
+          pending: createActions.mapCreatePending,
+        },
+        error: mapMastersHasError ? errorMessage(resourceQueries.mapMastersQuery.error) : undefined,
+        hasData: mapMastersHasData,
+        items: viewModel.selectedMapMasters,
+        loadFailed: shouldShowBlockingQueryError(resourceQueries.mapMastersQuery),
+        loading: isInitialQueryLoading(resourceQueries.mapMastersQuery),
+        onDelete: editCommands.deleteMapMaster,
+        onRetry: () => void resourceQueries.mapMastersQuery.refetch(),
+        onUpdate: editCommands.updateMapMaster,
+        retrying: resourceQueries.mapMastersQuery.isFetching,
+        stale: mapMastersHasError && mapMastersHasData,
+      },
+      scopedDisabledReason: viewModel.scopedDisabledReason,
+      season: {
+        create: {
+          action: createActions.seasonCreateAction,
+          error: createActions.seasonCreateState.error,
+          formKey: createActions.seasonCreateState.version,
+          pending: createActions.seasonCreatePending,
+        },
+        error: seasonMastersHasError
+          ? errorMessage(resourceQueries.seasonMastersQuery.error)
+          : undefined,
+        hasData: seasonMastersHasData,
+        items: viewModel.selectedSeasonMasters,
+        loadFailed: shouldShowBlockingQueryError(resourceQueries.seasonMastersQuery),
+        loading: isInitialQueryLoading(resourceQueries.seasonMastersQuery),
+        onDelete: editCommands.deleteSeasonMaster,
+        onRetry: () => void resourceQueries.seasonMastersQuery.refetch(),
+        onUpdate: editCommands.updateSeasonMaster,
+        retrying: resourceQueries.seasonMastersQuery.isFetching,
+        stale: seasonMastersHasError && seasonMastersHasData,
+      },
+    },
+    feedback: {
+      invalidReturnTo: returnRoute.hasInvalidReturnTo,
+      operationError,
+    },
+    incidents: {
+      items: resourceQueries.incidentMasters,
+      onRetry: () => void resourceQueries.incidentMastersQuery.refetch(),
+      refreshing: resourceQueries.incidentMastersQuery.isFetching,
+      stale: incidentMastersHasError && resourceQueries.incidentMastersQuery.data !== undefined,
+    },
+    navigation: {
+      disabled: hasPendingMutation || isReturnNavigationPending,
+      disabledReason: isReturnNavigationPending
+        ? "元の入力画面へ移動しています。"
+        : hasPendingMutation
+          ? "設定の追加・保存・削除が完了すると戻れます。"
+          : undefined,
+      destination: returnRoute.returnDestination,
+      handoffStatus: returnRoute.handoffStatus,
+      pending: isReturnNavigationPending,
+      onReturn: () => {
+        if (returnRoute.returnDestination) {
+          navigateWithTransition(returnRoute.returnDestination);
+        }
+      },
+    },
+    tabs: {
+      active: activeTab,
+      items: masterTabs,
+      onChange: setActiveTab,
+    },
   };
 }

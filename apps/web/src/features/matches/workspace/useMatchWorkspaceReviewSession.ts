@@ -13,6 +13,7 @@ import { useMatchWorkspaceSessionDraft } from "@/features/matches/workspace/useM
 import type { WorkspaceNoticeTone } from "@/features/matches/workspace/useWorkspaceNotice";
 
 export function useMatchWorkspaceReviewSession({
+  accountId,
   confirmedDraftLoaded,
   dispatch,
   isInitialized,
@@ -22,6 +23,7 @@ export function useMatchWorkspaceReviewSession({
   values,
   workspaceData,
 }: {
+  accountId: string | undefined;
   confirmedDraftLoaded: boolean;
   dispatch: Dispatch<MatchFormAction>;
   isInitialized: boolean;
@@ -48,6 +50,7 @@ export function useMatchWorkspaceReviewSession({
     [dispatch, notify, restoreAcknowledgedCellIds, values.matchDraftId],
   );
   const sessionDraft = useMatchWorkspaceSessionDraft({
+    accountId,
     acknowledgedCellIds: reviewState.acknowledgedCellIds,
     enabled: isInitialized && !confirmedDraftLoaded,
     mode,

@@ -65,7 +65,7 @@ export function saveMasterHandoff(
   }
   try {
     const handoffId = (options.createId ?? defaultHandoffId)();
-    storage.setItem(storageKey(handoffId), JSON.stringify(payload));
+    storage.setItem(storageKey(payload.accountId, handoffId), JSON.stringify(payload));
     return handoffId;
   } catch {
     return undefined;
@@ -77,6 +77,7 @@ export type MatchWorkspaceMasterHandoffRouteResult =
   | { reason: "storage_unavailable"; status: "unavailable" };
 
 export function prepareMatchWorkspaceMasterHandoffRoute(input: {
+  accountId: string;
   createdAt?: string;
   createId?: () => string;
   matchSessionId: string;
@@ -105,6 +106,7 @@ export function prepareMatchWorkspaceMasterHandoffRoute(input: {
 
 export function inspectMasterHandoff(
   input: {
+    expectedAccountId: string;
     expectedMatchSessionId?: string | undefined;
     expectedReturnTo: string;
     handoffId: string | null | undefined;
@@ -117,12 +119,15 @@ export function inspectMasterHandoff(
   }
 
   try {
-    const raw = storage.getItem(storageKey(input.handoffId));
+    const raw = storage.getItem(storageKey(input.expectedAccountId, input.handoffId));
     if (!raw) {
       return { status: "missing" };
     }
     const payload = parsePayload(raw);
     if (!payload) {
+      return { status: "invalid" };
+    }
+    if (payload.accountId !== input.expectedAccountId) {
       return { status: "invalid" };
     }
     if (sanitizeReturnTo(payload.returnTo) !== sanitizeReturnTo(input.expectedReturnTo)) {
@@ -145,6 +150,7 @@ export function inspectMasterHandoff(
 
 export function loadMasterHandoff(
   input: {
+    expectedAccountId: string;
     expectedMatchSessionId?: string | undefined;
     expectedReturnTo: string;
     handoffId: string | null | undefined;
@@ -157,12 +163,15 @@ export function loadMasterHandoff(
   }
 
   try {
-    const raw = storage.getItem(storageKey(input.handoffId));
+    const raw = storage.getItem(storageKey(input.expectedAccountId, input.handoffId));
     if (!raw) {
       return undefined;
     }
     const payload = parsePayload(raw);
     if (!payload) {
+      return undefined;
+    }
+    if (payload.accountId !== input.expectedAccountId) {
       return undefined;
     }
     if (sanitizeReturnTo(payload.returnTo) !== sanitizeReturnTo(input.expectedReturnTo)) {
@@ -185,6 +194,7 @@ export function loadMasterHandoff(
 
 export function findLatestMasterHandoff(
   input: {
+    expectedAccountId: string;
     expectedMatchSessionId: string;
     expectedReturnTo: string;
     nowMs?: number;
@@ -197,13 +207,15 @@ export function findLatestMasterHandoff(
 
   const candidates: Array<{ handoffId: string; payload: MasterHandoffPayload }> = [];
   try {
+    const scopedPrefix = `${handoffStoragePrefix}${encodeURIComponent(input.expectedAccountId)}.`;
     for (let index = 0; index < storage.length; index += 1) {
       const key = storage.key(index);
-      if (!key?.startsWith(handoffStoragePrefix)) {
+      if (!key?.startsWith(scopedPrefix)) {
         continue;
       }
-      const handoffId = key.slice(handoffStoragePrefix.length);
+      const handoffId = key.slice(scopedPrefix.length);
       const loadInput: Parameters<typeof loadMasterHandoff>[0] = {
+        expectedAccountId: input.expectedAccountId,
         expectedMatchSessionId: input.expectedMatchSessionId,
         expectedReturnTo: input.expectedReturnTo,
         handoffId,
@@ -228,14 +240,14 @@ export function findLatestMasterHandoff(
 
 export function removeMasterHandoff(
   handoffId: string | null | undefined,
-  options: MasterHandoffReadOptions = {},
+  options: { accountId: string } & MasterHandoffReadOptions,
 ): void {
   const storage = options.storage ?? browserSessionStorage();
   if (!handoffId || !storage) {
     return;
   }
   try {
-    storage.removeItem(storageKey(handoffId));
+    storage.removeItem(storageKey(options.accountId, handoffId));
   } catch {
     // no-op: best effort cleanup
   }

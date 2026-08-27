@@ -16,7 +16,7 @@ import {
   createMatchWorkspaceMasterHandoffPayload,
   saveMasterHandoff,
 } from "@/shared/workflows/matchWorkspaceMasterHandoff";
-import { setDevUser } from "@/test/auth";
+import { setDevUser, testDevUserAccountId } from "@/test/auth";
 import { createDeferred } from "@/test/deferred";
 import { installMatchMediaController } from "@/test/doubles/dom";
 import type { MatchMediaController } from "@/test/doubles/dom";
@@ -1041,6 +1041,7 @@ describe("MatchesListPage", () => {
     setDevUser();
     const handoffId = saveMasterHandoff(
       createMatchWorkspaceMasterHandoffPayload({
+        accountId: testDevUserAccountId,
         matchSessionId: "foreign-session",
         returnTo: "/matches/new",
         values: makeMatchWorkspaceMasterHandoffValues({ matchNoInEvent: 9 }),

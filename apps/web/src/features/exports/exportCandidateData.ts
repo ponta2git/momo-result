@@ -6,6 +6,39 @@ import { formatMatchNoInEvent } from "@/shared/domain/matchLabels";
 import type { ExportCandidate } from "./exportTypes";
 import { formatDateTime } from "./exportViewModel";
 
+type ExportCandidateResolution = {
+  candidate: ExportCandidate | undefined;
+  state: "load-failed" | "not-found" | "resolved" | "resolving";
+};
+
+export function resolveExportCandidate(input: {
+  canonicalCandidate: ExportCandidate | undefined;
+  detailFailure: "load-failed" | "not-found" | null;
+  detailFetching: boolean;
+  selectedId: string;
+  shouldResolve: boolean;
+  snapshotCandidate: ExportCandidate | undefined;
+}): ExportCandidateResolution {
+  if (!input.shouldResolve) {
+    return { candidate: input.canonicalCandidate, state: "resolved" };
+  }
+  if (input.detailFailure === "not-found") {
+    return { candidate: undefined, state: "not-found" };
+  }
+
+  const candidate = input.canonicalCandidate ?? input.snapshotCandidate;
+  if (candidate?.value === input.selectedId) {
+    return { candidate, state: "resolved" };
+  }
+  if (input.detailFetching) {
+    return { candidate: undefined, state: "resolving" };
+  }
+  return {
+    candidate: undefined,
+    state: input.detailFailure ?? "resolving",
+  };
+}
+
 function matchMetadata(
   gameTitleId: string | undefined,
   seasonMasterId: string | undefined,

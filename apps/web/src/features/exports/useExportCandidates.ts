@@ -4,6 +4,7 @@ import { useState } from "react";
 import {
   candidateFromHeldEventDetail,
   candidateFromMatchDetail,
+  resolveExportCandidate,
   toHeldEventCandidates,
   toMatchCandidates,
   toSeasonCandidates,
@@ -112,42 +113,33 @@ export function useExportCandidates({
   const selectedDetailQuery =
     scope === "heldEvent" ? heldEventDetailQuery : scope === "match" ? matchDetailQuery : undefined;
   const shouldResolveSelectedTarget = shouldResolveHeldEvent || shouldResolveMatch;
-  const selectedDetailNotFound = Boolean(
-    shouldResolveSelectedTarget &&
-    selectedDetailQuery &&
-    shouldShowQueryError(selectedDetailQuery) &&
-    normalizeUnknownApiError(selectedDetailQuery.error).status === 404,
-  );
+  const selectedDetailFailure =
+    shouldResolveSelectedTarget && selectedDetailQuery && shouldShowQueryError(selectedDetailQuery)
+      ? normalizeUnknownApiError(selectedDetailQuery.error).status === 404
+        ? ("not-found" as const)
+        : ("load-failed" as const)
+      : null;
   const snapshotCandidate =
     selectionSnapshot?.scope === scope && selectionSnapshot.candidate.value === selectedId
       ? selectionSnapshot.candidate
       : undefined;
-  const resolvedCandidate = selectedDetailNotFound
-    ? undefined
-    : (canonicalResolvedCandidate ?? snapshotCandidate);
-  const selectedResolution = (() => {
-    if (scope === "season") {
-      return selectedId && !selectedIsOnCurrentPage
-        ? ("not-found" as const)
-        : ("resolved" as const);
-    }
-    if (!shouldResolveHeldEvent && !shouldResolveMatch) {
-      return "resolved" as const;
-    }
-    if (selectedDetailNotFound) {
-      return "not-found" as const;
-    }
-    if (resolvedCandidate?.value === selectedId) {
-      return "resolved" as const;
-    }
-    if (selectedDetailQuery?.isFetching) {
-      return "resolving" as const;
-    }
-    if (selectedDetailQuery && shouldShowQueryError(selectedDetailQuery)) {
-      return "load-failed" as const;
-    }
-    return "resolving" as const;
-  })();
+  const selected =
+    scope === "season"
+      ? {
+          candidate: selectedOnCurrentPage,
+          state:
+            selectedId && !selectedIsOnCurrentPage ? ("not-found" as const) : ("resolved" as const),
+        }
+      : resolveExportCandidate({
+          canonicalCandidate: canonicalResolvedCandidate,
+          detailFailure: selectedDetailFailure,
+          detailFetching: selectedDetailQuery?.isFetching === true,
+          selectedId,
+          shouldResolve: shouldResolveSelectedTarget,
+          snapshotCandidate,
+        });
+  const resolvedCandidate = selected.candidate;
+  const selectedResolution = selected.state;
   const hasResolvedTarget = Boolean(selectedId && resolvedCandidate?.value === selectedId);
   const pagination =
     scope === "heldEvent"
@@ -183,11 +175,7 @@ export function useExportCandidates({
   const heldEventError = shouldShowQueryError(heldEventsQuery);
   const matchError = shouldShowQueryError(matchesQuery);
   const selectedDetailRefreshFailed = Boolean(
-    selectedDetailQuery &&
-    shouldResolveSelectedTarget &&
-    shouldShowQueryError(selectedDetailQuery) &&
-    !selectedDetailNotFound &&
-    resolvedCandidate?.value === selectedId,
+    selectedDetailFailure === "load-failed" && resolvedCandidate?.value === selectedId,
   );
   const directoryError =
     scope === "season"

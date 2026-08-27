@@ -130,7 +130,6 @@ export function useMatchWorkspacePageModel({
     isInitialized &&
     !hasHandoff &&
     mode !== "edit" &&
-    !useSampleDrafts &&
     !state.values.heldEventId &&
     !preferredHeldEventPending
       ? (heldEventPatchById(view.heldEvents, preferredHeldEventId) ??

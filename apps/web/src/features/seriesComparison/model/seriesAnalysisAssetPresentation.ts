@@ -5,7 +5,7 @@ export function assetStyleLabel(value: string | null): string {
     case "high_risk_breakthrough":
       return "低資産と上位が同居する";
     case "close_collector":
-      return "接戦を拾って上位へ届く";
+      return "接戦時の上位率が高い";
     case "steady_accumulator":
       return "低資産で終える試合が少ない";
     case "upper_chaser":
@@ -22,7 +22,7 @@ export function assetShapeLabel(value: string | null): string {
     case "two_tailed":
       return "高資産と低資産の両側へ広がっています。";
     case "upper_side":
-      return "低資産を避け、高資産側へ寄っています。";
+      return "低資産の試合が少なく、高資産側に分布しています。";
     case "lower_tail":
       return "低資産側へ裾が伸びています。";
     case "thin_right_tail":
@@ -41,7 +41,7 @@ export function assetTagLabel(value: string): string {
     case "high_variance":
       return "振れ幅大";
     case "mobility_collecting":
-      return "目的地を重ねる";
+      return "目的地到着回数が多い";
     case "upper_chaser":
       return "2位追走";
     case "property_base":

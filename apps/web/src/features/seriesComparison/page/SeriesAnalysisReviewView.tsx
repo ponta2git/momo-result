@@ -80,7 +80,7 @@ export function ReviewView({
       {response.commonPlaybookTopics.length > 0 ? (
         <section aria-labelledby="common-playbook-heading" className="grid gap-3">
           <h2 className="text-lg font-semibold" id="common-playbook-heading">
-            4人共通の行動仮説
+            複数人共通の行動仮説
           </h2>
           <div className="grid gap-4 sm:grid-cols-2">
             {response.commonPlaybookTopics.map((topic) => (
@@ -169,7 +169,6 @@ function PlaybookCard({
         <Dialog
           description={[
             playbookCategoryLabel(card.category),
-            `対象${card.targetCount}戦`,
             lowEvidenceStrengthWarningLabel(card.evidenceStrength),
           ]
             .filter((entry): entry is string => entry !== null)
@@ -189,44 +188,44 @@ function PlaybookCard({
                 判断材料
               </h5>
               <div className="mt-1 grid gap-2">
-                {card.evidence.map((evidence) => (
-                  <p
-                    className="border-l-2 border-[var(--color-border)] px-3 py-2 tabular-nums"
-                    key={`${evidence.metricId}:${evidence.label ?? ""}:${evidence.targetCount}:${evidence.value ?? "null"}`}
-                  >
-                    {evidence.label ?? reviewEvidenceLabel(evidence.metricId)}:{" "}
-                    {formatEvidenceValue(evidence.value, evidence.unit)}
-                    <span className="ml-2 text-[var(--color-text-secondary)]">
-                      対象{evidence.targetCount ?? evidence.denominator ?? card.targetCount}戦
-                    </span>
-                    <SeriesAnalysisQualityAdvisory
-                      className="ml-2"
-                      status={
-                        evidence.qualityStatus ??
-                        (evidence.status === "hidden" || evidence.status === undefined
-                          ? card.qualityStatus
-                          : evidence.status)
-                      }
-                    />
-                    {evidence.method ? (
-                      <span className="mt-1 block text-xs text-[var(--color-text-secondary)]">
-                        開催単位bootstrap・効果 {formatDecimal(evidence.effectEstimate)}・95%区間{" "}
-                        {formatDecimal(evidence.confidenceLow)}〜
-                        {formatDecimal(evidence.confidenceHigh)}・開催安定性{" "}
-                        {formatPercent(evidence.stability)}
-                      </span>
-                    ) : evidence.stability !== undefined && evidence.stability !== null ? (
-                      <span className="mt-1 block text-xs text-[var(--color-text-secondary)]">
-                        開催安定性 {formatPercent(evidence.stability)}
-                      </span>
-                    ) : null}
-                  </p>
-                ))}
+                {card.evidence.map((evidence) => {
+                  const countLabel = evidenceCountLabel(evidence, card.targetCount);
+                  const qualityStatus = evidenceQualityStatus(evidence, card.qualityStatus);
+                  return (
+                    <p
+                      className="border-l-2 border-[var(--color-border)] px-3 py-2 tabular-nums"
+                      key={`${evidence.metricId}:${evidence.label ?? ""}:${evidence.targetCount}:${evidence.value ?? "null"}`}
+                    >
+                      {evidence.label ?? reviewEvidenceLabel(evidence.metricId)}:{" "}
+                      {formatEvidenceValue(evidence.value, evidence.unit)}
+                      {countLabel ? (
+                        <span className="ml-2 text-[var(--color-text-secondary)]">
+                          {countLabel}
+                        </span>
+                      ) : null}
+                      {qualityStatus ? (
+                        <SeriesAnalysisQualityAdvisory className="ml-2" status={qualityStatus} />
+                      ) : null}
+                      {evidence.method ? (
+                        <span className="mt-1 block text-xs text-[var(--color-text-secondary)]">
+                          開催単位の再標本化（bootstrap）による95%区間:{" "}
+                          {formatDecimal(evidence.confidenceLow)}〜
+                          {formatDecimal(evidence.confidenceHigh)}。開催を変えても傾向が残った割合:{" "}
+                          {formatPercent(evidence.stability)}。
+                        </span>
+                      ) : evidence.stability !== undefined && evidence.stability !== null ? (
+                        <span className="mt-1 block text-xs text-[var(--color-text-secondary)]">
+                          開催を変えても傾向が残った割合: {formatPercent(evidence.stability)}。
+                        </span>
+                      ) : null}
+                    </p>
+                  );
+                })}
               </div>
             </div>
             <PlaybookText label="試合後の検証" value={card.postMatchCheck} />
             <p className="text-xs text-[var(--color-text-secondary)] tabular-nums">
-              対象 {card.targetCount}戦／ぶれにくさ {evidenceStrengthLabel(card.stabilityBand)}
+              ぶれにくさ: {evidenceStrengthLabel(card.stabilityBand)}
             </p>
           </div>
         </Dialog>
@@ -244,6 +243,35 @@ function PlaybookCard({
       </div>
     </article>
   );
+}
+
+function evidenceCountLabel(
+  evidence: SeriesAnalysisPlaybookCard["evidence"][number],
+  cardTargetCount: number,
+): string | null {
+  if (evidence.targetCount !== undefined && evidence.targetCount !== cardTargetCount) {
+    return `対象${evidence.targetCount}戦`;
+  }
+  if (
+    evidence.denominator !== undefined &&
+    evidence.denominator !== null &&
+    evidence.denominator !== cardTargetCount
+  ) {
+    return `本人基準${evidence.denominator}戦`;
+  }
+  return null;
+}
+
+function evidenceQualityStatus(
+  evidence: SeriesAnalysisPlaybookCard["evidence"][number],
+  cardQualityStatus: SeriesAnalysisPlaybookCard["qualityStatus"],
+): SeriesAnalysisPlaybookCard["qualityStatus"] | null {
+  const status =
+    evidence.qualityStatus ??
+    (evidence.status === "hidden" || evidence.status === undefined
+      ? cardQualityStatus
+      : evidence.status);
+  return status === cardQualityStatus ? null : status;
 }
 
 function PlaybookText({ label, value }: { label: string; value: string }) {

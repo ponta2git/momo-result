@@ -19,8 +19,7 @@ pub(super) fn candidate_json(candidate: &Candidate) -> Value {
         "score"
     };
     let data_reason = format!(
-        "対象は{}件。条件内の値が本人の通常時と異なり、{}も入賞側と下位側で差が残った候補です。件数が少ない場合は、結論ではなく次戦で確かめる仮説として扱います。",
-        candidate.target_count,
+        "条件内の値が本人の通常時と異なり、{}も入賞側と下位側で差が残った候補です。件数が少ない場合は、結論ではなく次戦で確かめる仮説として扱います。",
         candidate.contrast.driver.label(),
     );
     json!({
@@ -82,7 +81,7 @@ pub(super) fn common_topic_json(topic: &CommonTopic) -> Value {
         "topicId": format!("common:{}", topic.category.code()),
         "category": topic.category.code(),
         "heading": topic.category.common_heading(),
-        "detail": format!("{}に同じ論点が出たため、個人カードには4人内で差が強い候補だけを残しています。", topic.candidate_count),
+        "detail": format!("{}人に共通する行動仮説です。", topic.player_ids.len()),
         "playerIds": topic.player_ids,
     })
 }

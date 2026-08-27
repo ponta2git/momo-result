@@ -57,7 +57,7 @@ describe("ReviewView", () => {
     expect(within(usage).getByText("次の4戦")).toBeInTheDocument();
     expect(within(usage).queryByText("使う場面")).not.toBeInTheDocument();
     expect(screen.queryByText("発動条件に当てはまるとき")).not.toBeInTheDocument();
-    const commonPlaybook = screen.getByRole("region", { name: "4人共通の行動仮説" });
+    const commonPlaybook = screen.getByRole("region", { name: "複数人共通の行動仮説" });
     const contextRow = usage.parentElement;
     const reviewPanel = screen.getByRole("tabpanel");
     expect(contextRow).not.toBeNull();
@@ -89,10 +89,11 @@ describe("ReviewView", () => {
     await user.click(screen.getAllByRole("button", { name: "根拠・注意・試合後の確認" })[0]!);
     const detailDialog = await screen.findByRole("dialog");
     expect(within(detailDialog).getByText("収益だけで安全と見ない。")).toBeInTheDocument();
-    expect(within(detailDialog).getByText(/対象 5戦／ぶれにくさ 高め/u)).toBeInTheDocument();
-    expect(within(detailDialog).getByText(/開催単位bootstrap/u)).toHaveTextContent(
-      "95%区間 0.31〜0.82・開催安定性 74%",
+    expect(within(detailDialog).getByText("ぶれにくさ: 高め")).toBeInTheDocument();
+    expect(within(detailDialog).getByText(/開催単位の再標本化/u)).toHaveTextContent(
+      "95%区間: 0.31〜0.82。開催を変えても傾向が残った割合: 74%。",
     );
+    expect(within(detailDialog).queryByText("対象5戦")).not.toBeInTheDocument();
   });
 
   it("warns only when a playbook or its evidence has low reliability", async () => {
@@ -112,5 +113,23 @@ describe("ReviewView", () => {
     expect(screen.queryByText(/信頼度高め|信頼度中/u)).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "根拠・注意・試合後の確認" }));
     expect(await screen.findByText("参考値")).toBeInTheDocument();
+  });
+
+  it("shows only an evidence-specific denominator", async () => {
+    const user = userEvent.setup();
+    const response = makeSeriesAnalysisReview();
+    const card = response.playbookByPlayer[0]?.primaryCard;
+    const evidence = card?.evidence[0];
+    if (!card || !evidence) throw new Error("primary evidence fixture is required");
+    evidence.denominator = 12;
+
+    render(
+      <ReviewView loading={false} response={response} showError={false} onViewChange={vi.fn()} />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "根拠・注意・試合後の確認" }));
+    const detailDialog = await screen.findByRole("dialog");
+    expect(within(detailDialog).getByText("本人基準12戦")).toBeInTheDocument();
+    expect(within(detailDialog).queryByText("対象5戦")).not.toBeInTheDocument();
   });
 });

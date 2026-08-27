@@ -128,7 +128,7 @@ export function OverviewView({ focusedItemIds, response, onDrilldown }: Analysis
                     onDrilldown({ memberId: metric.memberId, metricId: "rank.averageHistory" })
                   }
                 >
-                  詳細
+                  順位推移を見る
                 </Button>
               ),
             },

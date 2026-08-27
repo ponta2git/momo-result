@@ -100,13 +100,13 @@ describe("SeriesAnalysisContent", () => {
     );
     const rendered = render(view(analysisBundle(aggregate, "overview")));
 
-    await user.click((await screen.findAllByRole("button", { name: "詳細" }))[0]!);
+    await user.click(await screen.findByRole("button", { name: "順位推移を見る" }));
     expect(screen.getByRole("dialog")).toBeInTheDocument();
 
     rendered.rerender(view(analysisBundle(nextAggregate, "overview")));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
 
-    await user.click((await screen.findAllByRole("button", { name: "詳細" }))[0]!);
+    await user.click(await screen.findByRole("button", { name: "順位推移を見る" }));
     expect(screen.getByRole("dialog")).toBeInTheDocument();
 
     rendered.rerender(view(analysisBundle(nextAggregate, "drivers")));

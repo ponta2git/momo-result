@@ -45,7 +45,7 @@ export function ContextView({ focusedItemIds, response, onDrilldown }: AnalysisV
               }
             >
               <MemberSequenceLabel accent={false} memberId={entry.memberId}>
-                {entry.displayName}の番手別推移
+                {entry.displayName}の番手別推移を見る
               </MemberSequenceLabel>
             </Button>
           ))}

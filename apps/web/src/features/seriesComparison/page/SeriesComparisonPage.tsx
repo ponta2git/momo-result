@@ -166,7 +166,7 @@ export function SeriesComparisonPage() {
                       action={
                         filters.state.mapMasterId || filters.state.seasonMasterId ? (
                           <Button variant="secondary" onClick={page.actions.clearScope}>
-                            総合に戻す
+                            全シーズン・全マップに戻す
                           </Button>
                         ) : (
                           <LinkButton to="/matches">試合一覧を開く</LinkButton>

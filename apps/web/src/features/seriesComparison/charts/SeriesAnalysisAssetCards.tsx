@@ -78,7 +78,7 @@ export function AssetComparisonCards({ response }: { response: SeriesComparisonA
             </section>
             <section className="min-h-20 py-3">
               <h4 className="text-[11px] font-semibold text-[var(--color-text-secondary)]">
-                稼ぎ方の比重
+                総資産に占める物件収益の割合
               </h4>
               <p className="mt-1 text-sm font-semibold">
                 {profileLabel(performance?.strategyKind ?? null)}

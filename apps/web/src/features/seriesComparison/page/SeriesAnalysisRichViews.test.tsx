@@ -111,12 +111,12 @@ describe("rich series analysis views", () => {
     );
     expect(screen.getAllByText(/桃鉄型（物件重視）/u)).not.toHaveLength(0);
     expect(screen.getByText("総資産の出方")).toBeInTheDocument();
-    expect(screen.getByText("稼ぎ方の比重")).toBeInTheDocument();
+    expect(screen.getByText("総資産に占める物件収益の割合")).toBeInTheDocument();
     expect(screen.getByText("主要根拠")).toBeInTheDocument();
     expect(screen.getByText("総資産レンジ")).toBeInTheDocument();
     expect(screen.getByText("物件収益額")).toBeInTheDocument();
     expect(screen.getByText("補助傾向: 物件基盤")).toBeInTheDocument();
-    expect(screen.getByText("目的地を重ねる")).toBeInTheDocument();
+    expect(screen.getByText("目的地到着回数が多い")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "ぽんたの資産傾向の詳しい根拠" }));
     expect(screen.getByText("勝利時の2位差中央")).toBeInTheDocument();
     expect(screen.getByText(/大勝 8億円.*惜しい2位 2億円.*大敗 12億円/u)).toBeInTheDocument();
@@ -415,7 +415,7 @@ describe("rich series analysis views", () => {
     expect(within(selectedMatch).getByText("上位が接戦")).toBeInTheDocument();
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 
-    await user.click(within(selectedMatch).getByRole("button", { name: "選択解除" }));
+    await user.click(within(selectedMatch).getByRole("button", { name: "この試合の選択を解除" }));
     expect(onClear).toHaveBeenCalledOnce();
   });
 });

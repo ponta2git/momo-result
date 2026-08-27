@@ -24,7 +24,7 @@ export function SeriesAnalysisSelectedMatch({
     Object.assign({}, row, {
       displayName:
         context.match?.players.find((player) => player.memberId === row.memberId)?.displayName ??
-        "名前不明",
+        "プレーヤー名未取得",
     }),
   );
   return (
@@ -55,7 +55,7 @@ export function SeriesAnalysisSelectedMatch({
             variant="quiet"
             onClick={onClear}
           >
-            選択解除
+            この試合の選択を解除
           </Button>
         </div>
       </div>

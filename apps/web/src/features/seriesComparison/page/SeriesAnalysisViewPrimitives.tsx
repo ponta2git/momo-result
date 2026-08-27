@@ -138,7 +138,9 @@ export function MetricValue({ label, value }: { label: string; value: string }) 
 }
 
 export function playerName(players: SeriesAnalysisPlayer[], memberId: string): string {
-  return players.find((player) => player.memberId === memberId)?.displayName ?? "名前不明";
+  return (
+    players.find((player) => player.memberId === memberId)?.displayName ?? "プレーヤー名未取得"
+  );
 }
 
 export function memberNames(players: SeriesAnalysisPlayer[], memberIds: string[]): string {

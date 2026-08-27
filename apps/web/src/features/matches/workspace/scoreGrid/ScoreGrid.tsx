@@ -23,6 +23,15 @@ export function ScoreGrid({ actions, data }: ScoreGridProps) {
   const [pendingFocusCellId, setPendingFocusCellId] = useState<string | null>(null);
   const isNarrowViewport = useMediaQuery("(max-width: 1023px)");
   const inputRefs = useRef(new Map<string, HTMLElement>());
+  const {
+    onAcknowledgeReviewCell,
+    onIncidentChange,
+    onPlayerChange,
+    onPlayOrderChange,
+    onPreferImageKindChange,
+    onRequestSubmitFocus,
+    onReviewCellFocus,
+  } = actions;
 
   const originalByPlayOrder = useMemo(() => {
     if (!data.originalPlayers) {
@@ -98,12 +107,12 @@ export function ScoreGrid({ actions, data }: ScoreGridProps) {
 
   const acknowledgeActiveItem = useCallback(() => {
     if (activeItem) {
-      actions.onAcknowledgeReviewCell(activeItem.cellId);
+      onAcknowledgeReviewCell(activeItem.cellId);
       if (unresolvedItems.length === 1) {
-        actions.onRequestSubmitFocus();
+        onRequestSubmitFocus();
       }
     }
-  }, [actions, activeItem, unresolvedItems.length]);
+  }, [activeItem, onAcknowledgeReviewCell, onRequestSubmitFocus, unresolvedItems.length]);
 
   const handleKeyboard = useCallback<ScoreGridKeyboardHandler>(
     (args) => {
@@ -134,25 +143,25 @@ export function ScoreGrid({ actions, data }: ScoreGridProps) {
         horizontalEnterFromCol: 5,
         onFocusCell: focusCell,
         onRevertCell: args.onRevertCell,
-        onSubmitFocus: actions.onRequestSubmitFocus,
+        onSubmitFocus: onRequestSubmitFocus,
         position: { col: args.col, row: args.row },
         rowCount: data.players.length,
       });
     },
-    [actions.onRequestSubmitFocus, data.players.length, focusCell, getCellId],
+    [data.players.length, focusCell, getCellId, onRequestSubmitFocus],
   );
 
   const handlePlayerNumericCommit = useCallback<PlayerNumericCommit>(
     (index, field, value) =>
-      actions.onPlayerChange(index, {
+      onPlayerChange(index, {
         [field]: value,
       } as Partial<MatchFormValues["players"][number]>),
-    [actions],
+    [onPlayerChange],
   );
 
   const handleIncidentNumericCommit = useCallback<IncidentNumericCommit>(
-    (index, key, value) => actions.onIncidentChange(index, key, value),
-    [actions],
+    (index, key, value) => onIncidentChange(index, key, value),
+    [onIncidentChange],
   );
 
   const handleToggleMobilePlayer = useCallback((index: number) => {
@@ -198,10 +207,10 @@ export function ScoreGrid({ actions, data }: ScoreGridProps) {
             players={data.players}
             review={data.review}
             registerCellRef={registerCellRef}
-            onPlayerChange={actions.onPlayerChange}
-            onPlayOrderChange={actions.onPlayOrderChange}
-            onPreferImageKindChange={actions.onPreferImageKindChange}
-            onReviewCellFocus={actions.onReviewCellFocus}
+            onPlayerChange={onPlayerChange}
+            onPlayOrderChange={onPlayOrderChange}
+            onPreferImageKindChange={onPreferImageKindChange}
+            onReviewCellFocus={onReviewCellFocus}
           />
         </div>
       )}
@@ -218,10 +227,10 @@ export function ScoreGrid({ actions, data }: ScoreGridProps) {
           review={data.review}
           getCellId={getCellId}
           registerCellRef={registerCellRef}
-          onPlayerChange={actions.onPlayerChange}
-          onPlayOrderChange={actions.onPlayOrderChange}
-          onPreferImageKindChange={actions.onPreferImageKindChange}
-          onReviewCellFocus={actions.onReviewCellFocus}
+          onPlayerChange={onPlayerChange}
+          onPlayOrderChange={onPlayOrderChange}
+          onPreferImageKindChange={onPreferImageKindChange}
+          onReviewCellFocus={onReviewCellFocus}
           onTogglePlayer={handleToggleMobilePlayer}
         />
       ) : null}

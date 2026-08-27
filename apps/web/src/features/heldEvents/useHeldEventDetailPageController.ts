@@ -35,7 +35,32 @@ export function useHeldEventDetailPageController() {
   const seasonsQuery = useQuery(seasonMastersQueryOptions("held-event-detail", undefined));
   const mapsQuery = useQuery(mapMastersQueryOptions("held-event-detail", undefined));
 
-  const detail = detailQuery.data;
+  const {
+    data: detail,
+    error: detailError,
+    isError: detailIsError,
+    isFetching: detailIsFetching,
+    isLoading: detailIsLoading,
+    refetch: refetchDetail,
+  } = detailQuery;
+  const {
+    data: gameTitlesData,
+    error: gameTitlesError,
+    isFetching: gameTitlesIsFetching,
+    refetch: refetchGameTitles,
+  } = gameTitlesQuery;
+  const {
+    data: mapsData,
+    error: mapsError,
+    isFetching: mapsIsFetching,
+    refetch: refetchMaps,
+  } = mapsQuery;
+  const {
+    data: seasonsData,
+    error: seasonsError,
+    isFetching: seasonsIsFetching,
+    refetch: refetchSeasons,
+  } = seasonsQuery;
   const matches = useMemo(
     () =>
       (detail?.matches ?? []).toSorted((left, right) => left.matchNoInEvent - right.matchNoInEvent),
@@ -53,60 +78,72 @@ export function useHeldEventDetailPageController() {
   );
   const masterNames = useMemo<HeldEventMasterNames>(
     () => ({
-      gameTitles: nameMap(gameTitlesQuery.data?.items),
-      maps: nameMap(mapsQuery.data?.items),
-      seasons: nameMap(seasonsQuery.data?.items),
+      gameTitles: nameMap(gameTitlesData?.items),
+      maps: nameMap(mapsData?.items),
+      seasons: nameMap(seasonsData?.items),
     }),
-    [gameTitlesQuery.data?.items, mapsQuery.data?.items, seasonsQuery.data?.items],
+    [gameTitlesData?.items, mapsData?.items, seasonsData?.items],
   );
   const playerRecaps = useMemo(() => buildHeldEventPlayerRecaps(matches), [matches]);
+  const detailFailed = shouldShowQueryError({ error: detailError, isFetching: detailIsFetching });
+  const gameTitlesFailed = shouldShowQueryError({
+    error: gameTitlesError,
+    isFetching: gameTitlesIsFetching,
+  });
+  const seasonsFailed = shouldShowQueryError({
+    error: seasonsError,
+    isFetching: seasonsIsFetching,
+  });
+  const mapsFailed = shouldShowQueryError({ error: mapsError, isFetching: mapsIsFetching });
   const failedMasterNameQueries = [
-    shouldShowQueryError(gameTitlesQuery) ? "作品名" : undefined,
-    shouldShowQueryError(seasonsQuery) ? "シーズン名" : undefined,
-    shouldShowQueryError(mapsQuery) ? "マップ名" : undefined,
+    gameTitlesFailed ? "作品名" : undefined,
+    seasonsFailed ? "シーズン名" : undefined,
+    mapsFailed ? "マップ名" : undefined,
   ].filter((label): label is string => Boolean(label));
   const refresh = useCallback(() => {
-    void Promise.all([
-      detailQuery.refetch(),
-      gameTitlesQuery.refetch(),
-      seasonsQuery.refetch(),
-      mapsQuery.refetch(),
-    ]);
-  }, [detailQuery, gameTitlesQuery, mapsQuery, seasonsQuery]);
+    void Promise.all([refetchDetail(), refetchGameTitles(), refetchSeasons(), refetchMaps()]);
+  }, [refetchDetail, refetchGameTitles, refetchMaps, refetchSeasons]);
   const retryDetail = useCallback(() => {
-    void detailQuery.refetch();
-  }, [detailQuery]);
+    void refetchDetail();
+  }, [refetchDetail]);
   const retryMasterNames = useCallback(() => {
     const retries: Array<Promise<unknown>> = [];
-    if (shouldShowQueryError(gameTitlesQuery)) {
-      retries.push(gameTitlesQuery.refetch());
+    if (gameTitlesFailed) {
+      retries.push(refetchGameTitles());
     }
-    if (shouldShowQueryError(seasonsQuery)) {
-      retries.push(seasonsQuery.refetch());
+    if (seasonsFailed) {
+      retries.push(refetchSeasons());
     }
-    if (shouldShowQueryError(mapsQuery)) {
-      retries.push(mapsQuery.refetch());
+    if (mapsFailed) {
+      retries.push(refetchMaps());
     }
     void Promise.all(retries);
-  }, [gameTitlesQuery, mapsQuery, seasonsQuery]);
+  }, [gameTitlesFailed, mapsFailed, refetchGameTitles, refetchMaps, refetchSeasons, seasonsFailed]);
   const refreshing =
-    detailQuery.isFetching ||
-    gameTitlesQuery.isFetching ||
-    seasonsQuery.isFetching ||
-    mapsQuery.isFetching;
+    detailIsFetching || gameTitlesIsFetching || seasonsIsFetching || mapsIsFetching;
 
-  if (isInitialQueryLoading(detailQuery)) {
+  if (
+    isInitialQueryLoading({
+      data: detail,
+      isFetching: detailIsFetching,
+      isLoading: detailIsLoading,
+    })
+  ) {
     return { backHref, status: "loading" as const };
   }
 
-  if (
-    shouldShowQueryError(detailQuery) &&
-    normalizeUnknownApiError(detailQuery.error).status === 404
-  ) {
+  if (detailFailed && normalizeUnknownApiError(detailError).status === 404) {
     return { backHref, status: "notFound" as const };
   }
 
-  if (shouldShowBlockingQueryError(detailQuery)) {
+  if (
+    shouldShowBlockingQueryError({
+      data: detail,
+      error: detailError,
+      isError: detailIsError,
+      isFetching: detailIsFetching,
+    })
+  ) {
     return { backHref, refresh, refreshing, status: "loadFailed" as const };
   }
 
@@ -118,13 +155,12 @@ export function useHeldEventDetailPageController() {
     detail,
     backHref,
     drafts,
-    detailRefreshFailed: shouldShowQueryError(detailQuery),
-    detailRefreshing: detailQuery.isFetching,
+    detailRefreshFailed: detailFailed,
+    detailRefreshing: detailIsFetching,
     masterNames,
     masterNameLoadError:
       failedMasterNameQueries.length > 0 ? failedMasterNameQueries.join("・") : undefined,
-    masterNamesRefreshing:
-      gameTitlesQuery.isFetching || seasonsQuery.isFetching || mapsQuery.isFetching,
+    masterNamesRefreshing: gameTitlesIsFetching || seasonsIsFetching || mapsIsFetching,
     matches,
     playerRecaps,
     refresh,

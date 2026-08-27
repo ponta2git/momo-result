@@ -14,7 +14,14 @@ import { matchPerformanceContextFromArtifact } from "@/shared/domain/matchPerfor
 export function useMatchFeatureAnalysis(match: MatchDetailResponse | undefined) {
   const handledExpiredArtifacts = useRef(new Set<string>());
   const statusQuery = useQuery(seriesAnalysisStatusQueryOptions(match?.gameTitleId));
-  const currentArtifactId = statusQuery.data?.currentArtifact?.artifactId;
+  const {
+    data: statusData,
+    isError: statusIsError,
+    isFetching: statusIsFetching,
+    isPending: statusIsPending,
+    refetch: refetchStatus,
+  } = statusQuery;
+  const currentArtifactId = statusData?.currentArtifact?.artifactId;
   const contextQueryParams = useMemo(
     () =>
       match && currentArtifactId
@@ -29,69 +36,77 @@ export function useMatchFeatureAnalysis(match: MatchDetailResponse | undefined) 
     [currentArtifactId, match],
   );
   const contextQuery = useQuery(seriesAnalysisMatchContextQueryOptions(contextQueryParams));
+  const {
+    data: contextData,
+    error: contextError,
+    isError: contextIsError,
+    isFetching: contextIsFetching,
+    isPending: contextIsPending,
+    refetch: refetchContext,
+  } = contextQuery;
   const context = useMemo(() => {
     if (
       !match ||
-      !contextQuery.data ||
-      contextQuery.data.artifact.artifactId !== currentArtifactId ||
-      contextQuery.data.matchId !== match.matchId
+      !contextData ||
+      contextData.artifact.artifactId !== currentArtifactId ||
+      contextData.matchId !== match.matchId
     ) {
       return undefined;
     }
-    return contextQuery.data;
-  }, [contextQuery.data, currentArtifactId, match]);
+    return contextData;
+  }, [contextData, currentArtifactId, match]);
 
   useEffect(() => {
     const artifactId = contextQueryParams?.artifactId;
     if (
       !artifactId ||
       handledExpiredArtifacts.current.has(artifactId) ||
-      !isAnalysisArtifactExpired(contextQuery.error)
+      !isAnalysisArtifactExpired(contextError)
     ) {
       return;
     }
     handledExpiredArtifacts.current.add(artifactId);
-    void statusQuery.refetch().then((result) => {
+    void refetchStatus().then((result) => {
       if (result.data?.currentArtifact?.artifactId === artifactId) {
-        return contextQuery.refetch();
+        return refetchContext();
       }
       return undefined;
     });
-  }, [contextQuery, contextQueryParams?.artifactId, statusQuery]);
+  }, [contextError, contextQueryParams?.artifactId, refetchContext, refetchStatus]);
 
   const performanceContext = useMemo(() => matchPerformanceContextFromArtifact(context), [context]);
   const badges = useMemo(
     () => buildMatchFeatureBadges({ features: context?.match?.features }),
     [context?.match?.features],
   );
-  const calculationStatus = statusQuery.data?.calculation?.status;
+  const calculationStatus = statusData?.calculation?.status;
   const loading =
-    statusQuery.isPending ||
-    statusQuery.isFetching ||
+    statusIsPending ||
+    statusIsFetching ||
     calculationStatus === "queued" ||
     calculationStatus === "running" ||
-    (contextQueryParams !== undefined && (contextQuery.isPending || contextQuery.isFetching));
+    (contextQueryParams !== undefined && (contextIsPending || contextIsFetching));
   const failed =
     context === undefined &&
-    (statusQuery.isError || (contextQueryParams !== undefined && contextQuery.isError));
+    (statusIsError || (contextQueryParams !== undefined && contextIsError));
   const retryFeature = useCallback(() => {
-    void statusQuery.refetch().then((result) => {
+    void refetchStatus().then((result) => {
       if (
         contextQueryParams &&
         result.data?.currentArtifact?.artifactId === contextQueryParams.artifactId
       ) {
-        return contextQuery.refetch();
+        return refetchContext();
       }
       return undefined;
     });
-  }, [contextQuery, contextQueryParams, statusQuery]);
+  }, [contextQueryParams, refetchContext, refetchStatus]);
   const refreshAnalysis = useCallback(async () => {
-    await statusQuery.refetch();
-    if (contextQueryParams) await contextQuery.refetch();
-  }, [contextQuery, contextQueryParams, statusQuery]);
+    await refetchStatus();
+    if (contextQueryParams) await refetchContext();
+  }, [contextQueryParams, refetchContext, refetchStatus]);
 
   return {
-    analysisRefreshing: statusQuery.isFetching || contextQuery.isFetching,
+    analysisRefreshing: statusIsFetching || contextIsFetching,
     comparisonContextStatus:
       performanceContext === undefined ? (loading ? "loading" : "unavailable") : "ready",
     featureView: buildMatchFeatureView({

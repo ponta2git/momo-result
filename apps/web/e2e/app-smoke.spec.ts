@@ -199,13 +199,13 @@ test("completes the app smoke workflow with isolated scoped data", async ({
     const selectedFrameBox = await measureElement(totalAssetsFrame, "Selected OCR tray frame");
     expect(selectedFrameBox.width).toBeCloseTo(emptyFrameBox.width, 1);
     expect(selectedFrameBox.height).toBeCloseTo(emptyFrameBox.height, 1);
-    const toastViewport = page.getByRole("region", { name: "Notifications" });
-    await expect(toastViewport).toContainText("総資産に画像を配置しました。");
+    const trayFeedback = page.getByRole("status", { name: "分類トレイの操作結果" });
+    await expect(trayFeedback).toContainText("総資産に画像を配置しました。");
     const startButton = page.getByRole("button", { name: "1件で読み取りを開始" });
     await startButton.scrollIntoViewIfNeeded();
-    const toastBox = await measureElement(toastViewport, "OCR placement toast");
+    const feedbackBox = await measureElement(trayFeedback, "OCR tray feedback");
     const startButtonBox = await measureElement(startButton, "OCR start action");
-    expect(toastBox.y + toastBox.height).toBeLessThan(startButtonBox.y);
+    expect(feedbackBox.y + feedbackBox.height).toBeLessThan(startButtonBox.y);
 
     const draftResponse = page.waitForResponse(
       (response) =>

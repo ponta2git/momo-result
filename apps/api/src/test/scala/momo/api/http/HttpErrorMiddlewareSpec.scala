@@ -25,7 +25,10 @@ final class HttpErrorMiddlewareSpec extends MomoCatsEffectSuite:
     yield
       assertEquals(response.status, Status.ServiceUnavailable)
       assertEquals(json.hcursor.get[String]("code"), Right("DEPENDENCY_FAILED"))
-      assertEquals(json.hcursor.get[String]("detail"), Right("Database operation failed."))
+      assertEquals(
+        json.hcursor.get[String]("detail"),
+        Right("現在処理を完了できません。少し待ってから、もう一度実行してください。")
+      )
       assert(!body.contains("secret_table"))
   }
 

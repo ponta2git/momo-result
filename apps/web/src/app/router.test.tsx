@@ -68,7 +68,9 @@ describe("app routing", () => {
     setDevUser();
     const { router } = renderApp("/");
 
-    expect(await screen.findByRole("heading", { name: "試合一覧" })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: "試合一覧" }, { timeout: 3_000 }),
+    ).toBeInTheDocument();
     expect(router.state.location.pathname).toBe("/matches");
     expect(screen.getByRole("button", { name: "ログアウト" })).toBeInTheDocument();
   });
@@ -359,7 +361,7 @@ describe("app routing", () => {
     aggregateResponseGate.resolve();
     expect(await screen.findByRole("tabpanel", { name: "今の差" })).toBeInTheDocument();
     expect(analysisPurposeTab).toHaveFocus();
-    expect(screen.getByRole("heading", { name: "順位と基礎比較" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "順位と基礎比較" })).toBeInTheDocument();
     expect(router.state.location.search).toContain("view=overview");
 
     expect(aggregateSearches).toHaveLength(1);

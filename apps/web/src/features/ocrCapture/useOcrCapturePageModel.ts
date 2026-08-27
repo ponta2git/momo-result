@@ -11,6 +11,7 @@ import { defaultSetupValues, setupSchema } from "@/features/ocrCapture/schema";
 import type { SetupFormValues } from "@/features/ocrCapture/schema";
 import { isWorkingStatus } from "@/features/ocrCapture/slotPolicy";
 import { useOcrCaptureDraftFlow } from "@/features/ocrCapture/useOcrCaptureDraftFlow";
+import type { OcrCaptureDraftFeedback } from "@/features/ocrCapture/useOcrCaptureDraftFlow";
 import { useOcrCaptureMutations } from "@/features/ocrCapture/useOcrCaptureMutations";
 import { useOcrCaptureQueries } from "@/features/ocrCapture/useOcrCaptureQueries";
 import type { OcrCaptureAuthSlice } from "@/features/ocrCapture/useOcrCaptureQueries";
@@ -44,6 +45,7 @@ export type OcrCapturePageModel = {
     selectedImageCount: number;
     totalSlotCount: number;
     tray: {
+      actionFeedback: string | undefined;
       captureTargetKind: SlotKind;
       clear: (kind: SlotKind) => void;
       drafts: SlotMap<OcrDraftResponse>;
@@ -106,6 +108,7 @@ export function useOcrCapturePageModel(): OcrCapturePageModel {
     ...(requestedHeldEventId ? { heldEventId: requestedHeldEventId } : {}),
   }));
   const [captureTargetKind, setCaptureTargetKind] = useState<SlotKind>("total_assets");
+  const [captureActionFeedback, setCaptureActionFeedback] = useState<string>();
 
   const referenceData = useOcrCaptureQueries();
   const setupOptions = useOcrSetupOptions({
@@ -128,6 +131,16 @@ export function useOcrCapturePageModel(): OcrCapturePageModel {
     submission: captureSubmission,
     updateSlot: draftFlow.updateSlot,
   });
+  const draftFeedback = useMemo<OcrCaptureDraftFeedback>(
+    () => ({
+      reportFailure: (message) => {
+        setCaptureActionFeedback(undefined);
+        notify(message, "warning");
+      },
+      reportSuccess: setCaptureActionFeedback,
+    }),
+    [],
+  );
 
   const captureTarget = slotDefinitions.find((definition) => definition.kind === captureTargetKind);
   if (!captureTarget) {
@@ -154,14 +167,17 @@ export function useOcrCapturePageModel(): OcrCapturePageModel {
   const selectCaptureTarget = (kind: SlotKind) => {
     const slot = draftFlow.slots.find((candidate) => candidate.kind === kind);
     if (slot && isWorkingStatus(slot.status)) {
+      setCaptureActionFeedback(undefined);
       notify("読み取り中の分類は撮影先に変更できません。", "warning");
       return;
     }
     setCaptureTargetKind(kind);
+    const label = slotDefinitions.find((definition) => definition.kind === kind)?.label ?? kind;
+    setCaptureActionFeedback(`次の撮影先を${label}に変更しました。`);
   };
 
   const selectImage = (file: File, source: InputSource) => {
-    const added = draftFlow.handleAddImage(file, source, captureTargetKind, notify);
+    const added = draftFlow.handleAddImage(file, source, captureTargetKind, draftFeedback);
     if (!added) return;
 
     const nextEmpty = draftFlow.slots.find(
@@ -202,7 +218,7 @@ export function useOcrCapturePageModel(): OcrCapturePageModel {
       camera: {
         actionVariant: selectedImageCount === slotDefinitions.length ? "secondary" : "primary",
         disabled: cameraDisabled,
-        reportValidationError: notify,
+        reportValidationError: draftFeedback.reportFailure,
         selectImage,
         target: {
           accentClass: captureTarget.accentClass,
@@ -212,13 +228,15 @@ export function useOcrCapturePageModel(): OcrCapturePageModel {
       selectedImageCount,
       totalSlotCount: slotDefinitions.length,
       tray: {
+        actionFeedback: captureActionFeedback,
         captureTargetKind,
-        clear: (kind) => draftFlow.handleClear(kind, notify),
+        clear: (kind) => draftFlow.handleClear(kind, draftFeedback),
         drafts: draftFlow.drafts,
-        drop: (sourceKind, targetKind) => draftFlow.handleDropImage(sourceKind, targetKind, notify),
-        move: (kind, direction) => draftFlow.handleMoveImage(kind, direction, notify),
+        drop: (sourceKind, targetKind) =>
+          draftFlow.handleDropImage(sourceKind, targetKind, draftFeedback),
+        move: (kind, direction) => draftFlow.handleMoveImage(kind, direction, draftFeedback),
         refreshStatus: draftFlow.handleRefreshStatus,
-        reset: () => draftFlow.handleResetAll(notify),
+        reset: () => draftFlow.handleResetAll(draftFeedback),
         resetDisabled: selectedImageCount === 0 || cameraDisabled,
         selectTarget: selectCaptureTarget,
         slots: draftFlow.slots,

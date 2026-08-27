@@ -196,7 +196,9 @@ describe("OcrCapturePage", () => {
       "aria-pressed",
       "true",
     );
-    expect(screen.queryByText("次の撮影先を事件簿に変更しました。")).not.toBeInTheDocument();
+    expect(screen.getByRole("status", { name: "分類トレイの操作結果" })).toHaveTextContent(
+      "次の撮影先を事件簿に変更しました。",
+    );
 
     const input = screen.getByLabelText("OCRの画像をアップロード");
     await user.upload(input, new File(["first"], "incident-first.png", { type: "image/png" }));
@@ -204,6 +206,9 @@ describe("OcrCapturePage", () => {
       "src",
       "blob:incident-first.png",
     );
+    const trayFeedback = screen.getByRole("status", { name: "分類トレイの操作結果" });
+    expect(trayFeedback).toHaveTextContent("事件簿に画像を配置しました。");
+    expect(trayFeedback).not.toHaveTextContent("次の撮影先を事件簿に変更しました。");
     expect(screen.queryByAltText("総資産プレビュー")).not.toBeInTheDocument();
 
     await user.click(within(incidentCard!).getByRole("button", { name: "撮り直し先にする" }));
@@ -251,6 +256,9 @@ describe("OcrCapturePage", () => {
 
     await user.click(screen.getByRole("button", { name: "1件を破棄" }));
     expect(screen.queryByAltText("総資産プレビュー")).not.toBeInTheDocument();
+    expect(screen.getByRole("status", { name: "分類トレイの操作結果" })).toHaveTextContent(
+      "画像をすべて破棄しました。次の試合を撮影できます。",
+    );
   });
 
   it("blocks OCR start while dependent setup choices are still loading", async () => {
@@ -573,6 +581,9 @@ describe("OcrCapturePage", () => {
     await user.click(screen.getAllByRole("button", { name: "収益へ移動" })[0]!);
     expect(screen.getByAltText("総資産プレビュー")).toHaveAttribute("src", "blob:second.png");
     expect(screen.getByAltText("収益プレビュー")).toHaveAttribute("src", "blob:first.png");
+    expect(screen.getByRole("status", { name: "分類トレイの操作結果" })).toHaveTextContent(
+      "総資産と収益の画像を入れ替えました。",
+    );
 
     await startOcrAllowingPartialTray();
 

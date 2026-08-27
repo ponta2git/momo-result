@@ -12,23 +12,28 @@ import type { SlotKind } from "@/shared/api/enums";
 import type { OcrDraftResponse } from "@/shared/api/ocrDrafts";
 import type { SlotMap } from "@/shared/lib/slotMap";
 
+export type OcrCaptureDraftFeedback = {
+  reportFailure: (message: string) => void;
+  reportSuccess: (message: string) => void;
+};
+
 export type OcrCaptureDraftFlow = {
   drafts: SlotMap<OcrDraftResponse>;
   handleAddImage: (
     file: File,
     source: InputSource,
     targetKind: SlotKind,
-    notify: (message: string) => void,
+    feedback: OcrCaptureDraftFeedback,
   ) => boolean;
-  handleClear: (kind: SlotKind, notify: (message: string) => void) => void;
+  handleClear: (kind: SlotKind, feedback: OcrCaptureDraftFeedback) => void;
   handleDropImage: (
     sourceKind: SlotKind,
     targetKind: SlotKind,
-    notify: (message: string) => void,
+    feedback: OcrCaptureDraftFeedback,
   ) => void;
   handleRefreshStatus: (kind: SlotKind) => void;
-  handleMoveImage: (kind: SlotKind, direction: -1 | 1, notify: (message: string) => void) => void;
-  handleResetAll: (notify: (message: string) => void) => void;
+  handleMoveImage: (kind: SlotKind, direction: -1 | 1, feedback: OcrCaptureDraftFeedback) => void;
+  handleResetAll: (feedback: OcrCaptureDraftFeedback) => void;
   setDraft: (kind: SlotKind, draft: OcrDraftResponse) => void;
   setStatusRefreshPending: (kind: SlotKind, pending: boolean) => void;
   slots: CaptureSlotState[];
@@ -76,14 +81,14 @@ export function useOcrCaptureDraftFlow(): OcrCaptureDraftFlow {
   }, []);
 
   const handleAddImage = useCallback(
-    (file: File, source: InputSource, targetKind: SlotKind, notify: (message: string) => void) => {
+    (file: File, source: InputSource, targetKind: SlotKind, feedback: OcrCaptureDraftFeedback) => {
       const targetSlot = slotsRef.current.find((slot) => slot.kind === targetKind);
       if (!targetSlot) {
-        notify("撮影先を選び直してください。");
+        feedback.reportFailure("撮影先を選び直してください。");
         return false;
       }
       if (isWorkingStatus(targetSlot.status)) {
-        notify("読み取り中の分類には画像を配置できません。");
+        feedback.reportFailure("読み取り中の分類には画像を配置できません。");
         return false;
       }
       const previewUrl = URL.createObjectURL(file);
@@ -103,17 +108,21 @@ export function useOcrCaptureDraftFlow(): OcrCaptureDraftFlow {
       });
       const label =
         slotDefinitions.find((definition) => definition.kind === targetKind)?.label ?? targetKind;
-      notify(`${label}に${source === "camera" ? "撮影画像" : "画像"}を配置しました。`);
+      feedback.reportSuccess(
+        `${label}に${source === "camera" ? "撮影画像" : "画像"}を配置しました。`,
+      );
       return true;
     },
     [updateSlot],
   );
 
-  const handleClear = useCallback((kind: SlotKind, notify: (message: string) => void) => {
+  const handleClear = useCallback((kind: SlotKind, feedback: OcrCaptureDraftFeedback) => {
     const currentSlot = slotsRef.current.find((slot) => slot.kind === kind);
     if (currentSlot) {
       if (isWorkingStatus(currentSlot.status)) {
-        notify("読み取り中の画像は破棄できません。試合一覧で状態を確認してください。");
+        feedback.reportFailure(
+          "読み取り中の画像は破棄できません。試合一覧で状態を確認してください。",
+        );
         return;
       }
       releaseSlotResources(currentSlot);
@@ -126,12 +135,14 @@ export function useOcrCaptureDraftFlow(): OcrCaptureDraftFlow {
       delete next[kind];
       return next;
     });
-    notify("画像を破棄しました。");
+    feedback.reportSuccess("画像を破棄しました。");
   }, []);
 
-  const handleResetAll = useCallback((notify: (message: string) => void) => {
+  const handleResetAll = useCallback((feedback: OcrCaptureDraftFeedback) => {
     if (slotsRef.current.some((slot) => isWorkingStatus(slot.status))) {
-      notify("読み取り中の画像は破棄できません。試合一覧で状態を確認してください。");
+      feedback.reportFailure(
+        "読み取り中の画像は破棄できません。試合一覧で状態を確認してください。",
+      );
       return;
     }
     for (const slot of slotsRef.current) {
@@ -139,17 +150,19 @@ export function useOcrCaptureDraftFlow(): OcrCaptureDraftFlow {
     }
     setSlots(createInitialSlots());
     setDrafts({});
-    notify("画像をすべて破棄しました。次の試合を撮影できます。");
+    feedback.reportSuccess("画像をすべて破棄しました。次の試合を撮影できます。");
   }, []);
 
   const handleDropImage = useCallback(
-    (sourceKind: SlotKind, targetKind: SlotKind, notify: (message: string) => void) => {
+    (sourceKind: SlotKind, targetKind: SlotKind, feedback: OcrCaptureDraftFeedback) => {
       if (sourceKind === targetKind) return;
       const sourceSlot = slotsRef.current.find((slot) => slot.kind === sourceKind);
       const targetSlot = slotsRef.current.find((slot) => slot.kind === targetKind);
       if (!sourceSlot || !targetSlot || !sourceSlot.file) return;
       if (isWorkingStatus(sourceSlot.status) || isWorkingStatus(targetSlot.status)) {
-        notify("読み取り中は分類を変更できません。試合一覧で状態を確認してください。");
+        feedback.reportFailure(
+          "読み取り中は分類を変更できません。試合一覧で状態を確認してください。",
+        );
         return;
       }
       setSlots((current) =>
@@ -165,17 +178,21 @@ export function useOcrCaptureDraftFlow(): OcrCaptureDraftFlow {
         delete next[targetKind];
         return next;
       });
-      notify("画像の分類を入れ替えました。読み取り時は移動後の分類として扱います。");
+      const sourceLabel =
+        slotDefinitions.find((definition) => definition.kind === sourceKind)?.label ?? sourceKind;
+      const targetLabel =
+        slotDefinitions.find((definition) => definition.kind === targetKind)?.label ?? targetKind;
+      feedback.reportSuccess(`${sourceLabel}と${targetLabel}の画像を入れ替えました。`);
     },
     [],
   );
 
   const handleMoveImage = useCallback(
-    (kind: SlotKind, direction: -1 | 1, notify: (message: string) => void) => {
+    (kind: SlotKind, direction: -1 | 1, feedback: OcrCaptureDraftFeedback) => {
       const index = slotDefinitions.findIndex((definition) => definition.kind === kind);
       const targetKind = slotDefinitions[index + direction]?.kind;
       if (targetKind) {
-        handleDropImage(kind, targetKind, notify);
+        handleDropImage(kind, targetKind, feedback);
       }
     },
     [handleDropImage],

@@ -185,6 +185,15 @@ export function OcrCapturePage() {
               onRefreshStatus={capture.tray.refreshStatus}
               onSelectCaptureTarget={capture.tray.selectTarget}
             />
+            <p
+              aria-label="分類トレイの操作結果"
+              aria-atomic="true"
+              aria-live="polite"
+              className="min-h-5 text-xs leading-5 text-[var(--color-text-secondary)]"
+              role="status"
+            >
+              {capture.tray.actionFeedback}
+            </p>
           </aside>
         </section>
 

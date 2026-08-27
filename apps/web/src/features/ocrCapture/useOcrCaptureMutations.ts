@@ -29,13 +29,12 @@ export type OcrCaptureSubmitParams = {
 
 export type OcrCaptureMutations = {
   isSubmitting: boolean;
-  status: ReturnType<typeof useMutation>["status"];
   submit: (params: OcrCaptureSubmitParams) => Promise<OcrSubmissionResult | undefined>;
 };
 
 /**
  * OCR 取り込み画面の「画像アップロード → OCR ジョブ作成」までの副作用を集約する。
- * 画像/設定の状態は呼び出し側 (Page) が引数で渡し、本フックは送信パイプラインと
+ * 画像/設定の状態は呼び出し側の PageModel が引数で渡し、本フックは送信パイプラインと
  * matches キャッシュ無効化を担う。結果に応じた案内とナビゲーションは呼び出し側が行う。
  */
 export function useOcrCaptureMutations(hints: Record<string, unknown>): OcrCaptureMutations {
@@ -73,6 +72,7 @@ export function useOcrCaptureMutations(hints: Record<string, unknown>): OcrCaptu
       return { upload, job };
     },
   });
+  const { isPending: uploadPending, mutateAsync: upload } = uploadMutation;
 
   const submit = useCallback(
     async ({
@@ -107,8 +107,7 @@ export function useOcrCaptureMutations(hints: Record<string, unknown>): OcrCaptu
               (options) => createMatchDraft(request, options),
             ),
           createPlayedAtIso,
-          createUploadJob: ({ file, matchDraftId, slot }) =>
-            uploadMutation.mutateAsync({ file, matchDraftId, slot }),
+          createUploadJob: ({ file, matchDraftId, slot }) => upload({ file, matchDraftId, slot }),
           onProgress,
           selectedGameTitle,
           selectedHeldEvent,
@@ -128,12 +127,11 @@ export function useOcrCaptureMutations(hints: Record<string, unknown>): OcrCaptu
         setIsSubmittingWorkflow(false);
       }
     },
-    [createPlayedAtIso, idempotencyKeys, queryClient, uploadMutation],
+    [createPlayedAtIso, idempotencyKeys, queryClient, upload],
   );
 
   return {
-    isSubmitting: isSubmittingWorkflow || uploadMutation.isPending,
-    status: uploadMutation.status,
+    isSubmitting: isSubmittingWorkflow || uploadPending,
     submit,
   };
 }

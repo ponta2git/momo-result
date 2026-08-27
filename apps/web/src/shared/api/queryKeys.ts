@@ -63,10 +63,10 @@ export const masterKeys = {
 };
 
 export const matchKeys = {
-  all: () => ["matches"] as const,
-  list: (search: unknown) => ["matches", "list", search] as const,
-  summary: (params: unknown) => ["matches", "summary", params] as const,
-  exports: (params: unknown) => ["matches", "exports", params] as const,
+  collections: () => ["matches", "collections"] as const,
+  list: (search: unknown) => ["matches", "collections", "list", search] as const,
+  summary: (params: unknown) => ["matches", "collections", "summary", params] as const,
+  exports: (params: unknown) => ["matches", "collections", "exports", params] as const,
   detailRoot: () => ["matches", "detail"] as const,
   detail: (matchId: string | undefined) => ["matches", "detail", matchId] as const,
   draft: {

@@ -4,7 +4,7 @@ import { heldEventKeys, matchKeys, ocrDraftKeys, seriesAnalysisKeys } from "@/sh
 
 async function invalidateMatchCollections(queryClient: QueryClient): Promise<void> {
   await Promise.all([
-    queryClient.invalidateQueries({ queryKey: matchKeys.all() }),
+    queryClient.invalidateQueries({ queryKey: matchKeys.collections() }),
     queryClient.invalidateQueries({ queryKey: matchKeys.draft.all() }),
     queryClient.invalidateQueries({ queryKey: ocrDraftKeys.all() }),
   ]);
@@ -26,7 +26,11 @@ export async function invalidateAfterMatchConfirmed(queryClient: QueryClient): P
   ]);
 }
 
-export async function invalidateAfterMatchDeleted(queryClient: QueryClient): Promise<void> {
+export async function invalidateAfterMatchDeleted(
+  queryClient: QueryClient,
+  matchId: string,
+): Promise<void> {
+  queryClient.removeQueries({ exact: true, queryKey: matchKeys.detail(matchId) });
   await Promise.all([
     invalidateMatchCollections(queryClient),
     invalidateAnalysisState(queryClient),
@@ -53,8 +57,8 @@ export async function invalidateAfterMatchUpdated(
   matchId: string,
 ): Promise<void> {
   await Promise.all([
-    queryClient.invalidateQueries({ queryKey: matchKeys.detail(matchId) }),
-    queryClient.invalidateQueries({ queryKey: matchKeys.all() }),
+    queryClient.invalidateQueries({ exact: true, queryKey: matchKeys.detail(matchId) }),
+    queryClient.invalidateQueries({ queryKey: matchKeys.collections() }),
     queryClient.invalidateQueries({ queryKey: heldEventKeys.all() }),
     invalidateAnalysisState(queryClient),
   ]);

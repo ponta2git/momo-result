@@ -109,7 +109,7 @@ export function useMatchDetailPageModel(): MatchDetailPageModel {
       setDeleteErrorMessage(formatApiError(error, "削除に失敗しました"));
     },
     onSuccess: async () => {
-      await invalidateAfterMatchDeleted(queryClient);
+      await invalidateAfterMatchDeleted(queryClient, matchId);
       navigate(
         contextualReturnTo ??
           (match?.heldEventId

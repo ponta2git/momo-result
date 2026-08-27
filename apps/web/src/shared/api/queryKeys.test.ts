@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   invalidateAfterDraftCancelled,
   invalidateAfterMatchConfirmed,
+  invalidateAfterMatchDeleted,
   invalidateAfterMatchUpdated,
   invalidateAfterOcrSubmissionStarted,
 } from "@/shared/api/cacheInvalidation";
@@ -62,6 +63,7 @@ describe("shared query keys", () => {
   it("invalidates mutable analysis state but preserves pinned artifacts after confirmation", async () => {
     const queryClient = createTestQueryClient();
     queryClient.setQueryData(matchKeys.list({ status: "confirmed" }), { items: [] });
+    queryClient.setQueryData(matchKeys.detail("unrelated-match"), { matchId: "unrelated-match" });
     queryClient.setQueryData(matchKeys.draft.detail("draft-1"), { matchDraftId: "draft-1" });
     queryClient.setQueryData(matchKeys.draft.sourceImages("draft-1"), { items: [] });
     queryClient.setQueryData(ocrDraftKeys.bulk(["ocr-draft-1"]), { items: [] });
@@ -77,6 +79,9 @@ describe("shared query keys", () => {
 
     expect(queryClient.getQueryState(matchKeys.list({ status: "confirmed" }))?.isInvalidated).toBe(
       true,
+    );
+    expect(queryClient.getQueryState(matchKeys.detail("unrelated-match"))?.isInvalidated).toBe(
+      false,
     );
     expect(queryClient.getQueryState(matchKeys.draft.detail("draft-1"))?.isInvalidated).toBe(true);
     expect(queryClient.getQueryState(matchKeys.draft.sourceImages("draft-1"))?.isInvalidated).toBe(
@@ -98,6 +103,8 @@ describe("shared query keys", () => {
   it("invalidates match detail and mutable analysis state after match update", async () => {
     const queryClient = createTestQueryClient();
     queryClient.setQueryData(matchKeys.detail("match-1"), { matchId: "match-1" });
+    queryClient.setQueryData(matchKeys.detail("match-2"), { matchId: "match-2" });
+    queryClient.setQueryData(matchKeys.summary({ status: "confirmed" }), { total: 2 });
     queryClient.setQueryData(seriesAnalysisKeys.status("gt-1"), { gameTitleId: "gt-1" });
     queryClient.setQueryData(seriesAnalysisKeys.aggregate({ artifactId: "artifact-1" }), {
       artifact: { artifactId: "artifact-1" },
@@ -106,11 +113,30 @@ describe("shared query keys", () => {
     await invalidateAfterMatchUpdated(queryClient, "match-1");
 
     expect(queryClient.getQueryState(matchKeys.detail("match-1"))?.isInvalidated).toBe(true);
+    expect(queryClient.getQueryState(matchKeys.detail("match-2"))?.isInvalidated).toBe(false);
+    expect(
+      queryClient.getQueryState(matchKeys.summary({ status: "confirmed" }))?.isInvalidated,
+    ).toBe(true);
     expect(queryClient.getQueryState(seriesAnalysisKeys.status("gt-1"))?.isInvalidated).toBe(true);
     expect(
       queryClient.getQueryState(seriesAnalysisKeys.aggregate({ artifactId: "artifact-1" }))
         ?.isInvalidated,
     ).toBe(false);
+  });
+
+  it("removes only the deleted match detail and invalidates match collections", async () => {
+    const queryClient = createTestQueryClient();
+    queryClient.setQueryData(matchKeys.detail("match-1"), { matchId: "match-1" });
+    queryClient.setQueryData(matchKeys.detail("match-2"), { matchId: "match-2" });
+    queryClient.setQueryData(matchKeys.list({ status: "confirmed" }), { items: [] });
+
+    await invalidateAfterMatchDeleted(queryClient, "match-1");
+
+    expect(queryClient.getQueryState(matchKeys.detail("match-1"))).toBeUndefined();
+    expect(queryClient.getQueryState(matchKeys.detail("match-2"))?.isInvalidated).toBe(false);
+    expect(queryClient.getQueryState(matchKeys.list({ status: "confirmed" }))?.isInvalidated).toBe(
+      true,
+    );
   });
 
   it("does not invalidate analysis when OCR drafts start or are cancelled", async () => {

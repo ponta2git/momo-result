@@ -37,7 +37,9 @@ export async function invalidateMasterResourceCaches(
   await Promise.all([
     queryClient.invalidateQueries({ queryKey: adminResourceKey(target) }),
     queryClient.invalidateQueries({ queryKey: consumerResourceKey(target.resource) }),
-    queryClient.invalidateQueries({ queryKey: seriesAnalysisKeys.all() }),
+    queryClient.invalidateQueries({ queryKey: seriesAnalysisKeys.options() }),
+    queryClient.invalidateQueries({ queryKey: seriesAnalysisKeys.statusRoot() }),
+    queryClient.invalidateQueries({ queryKey: seriesAnalysisKeys.adminRoot() }),
   ]);
 }
 

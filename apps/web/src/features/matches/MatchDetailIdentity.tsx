@@ -2,24 +2,24 @@ import { formatMatchDetailDateOnly } from "@/features/matches/matchDetailViewMod
 import { formatMatchNoInEvent } from "@/shared/domain/matchLabels";
 
 export function MatchDetailIdentity({
-  gameTitleName,
+  gameTitle,
   heldAt,
-  mapName,
+  map,
   matchNoInEvent,
-  seasonName,
+  season,
 }: {
-  gameTitleName: string | undefined;
+  gameTitle: string;
   heldAt: string;
-  mapName: string | undefined;
+  map: string;
   matchNoInEvent: number;
-  seasonName: string | undefined;
+  season: string;
 }) {
   const matchLabel = formatMatchNoInEvent(matchNoInEvent);
   const items = [
     ["開催日", formatMatchDetailDateOnly(heldAt)],
-    ["作品", gameTitleName ?? "作品未設定"],
-    ["シーズン", seasonName ?? "シーズン未設定"],
-    ["マップ", mapName ?? "マップ未設定"],
+    ["作品", gameTitle],
+    ["シーズン", season],
+    ["マップ", map],
   ] as const;
 
   return (

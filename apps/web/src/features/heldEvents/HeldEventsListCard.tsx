@@ -10,95 +10,101 @@ import { Notice } from "@/shared/ui/feedback/Notice";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 
 export function HeldEventsListCard({
-  actions,
-  data,
+  model,
   onCreate,
 }: {
-  actions: heldEventViewModel.HeldEventsListActions;
-  data: heldEventViewModel.HeldEventsListModel;
+  model: heldEventViewModel.HeldEventsListModel;
   onCreate: () => void;
 }) {
+  if (model.kind === "loading") {
+    return <HeldEventsLoading />;
+  }
+
+  if (model.kind === "loadFailed") {
+    return (
+      <Notice tone="danger" title="開催履歴を読み込めません">
+        <p>通信状態を確認して、もう一度お試しください。</p>
+        <div className="mt-3">
+          <Button
+            pending={model.refresh.pending}
+            pendingLabel="再読み込み中"
+            size="sm"
+            onClick={model.refresh.run}
+          >
+            開催履歴を再読み込み
+          </Button>
+        </div>
+      </Notice>
+    );
+  }
+
   return (
     <div className="grid min-w-0 gap-4">
-      {data.loading ? (
-        <HeldEventsLoading />
-      ) : (
-        <div className={cn("grid min-w-0 gap-4", data.refreshing ? "opacity-70" : "opacity-100")}>
-          {data.stale ? (
-            <Notice
-              action={
-                <Button
-                  pending={data.refreshing}
-                  pendingLabel="再取得中"
-                  size="sm"
-                  variant="secondary"
-                  onClick={actions.onRetry}
-                >
-                  開催履歴を再取得
-                </Button>
-              }
-              tone="warning"
-              title="開催履歴を更新できませんでした"
-            >
-              前回取得した開催履歴を表示しています。開催詳細への移動や出力は利用できますが、削除は最新状態を確認できるまで行えません。
-            </Notice>
-          ) : null}
-          {data.scopeChanging ? (
-            <p className="text-xs text-[var(--color-text-secondary)]" role="status">
-              現在は{data.page}ページ目（{data.pageSize}件表示）です。{data.requestedPage}
-              ページ目（{data.requestedPageSize}件表示）を読み込んでいます。
-            </p>
-          ) : null}
-          {data.loadFailed ? (
-            <Notice tone="danger" title="開催履歴を読み込めません">
-              <p>通信状態を確認して、もう一度お試しください。</p>
-              <div className="mt-3">
-                <Button
-                  pending={data.refreshing}
-                  pendingLabel="再読み込み中"
-                  size="sm"
-                  onClick={actions.onRetry}
-                >
-                  開催履歴を再読み込み
-                </Button>
-              </div>
-            </Notice>
-          ) : data.rows.length === 0 ? (
-            <EmptyState
-              action={
-                <Button icon={<Plus aria-hidden="true" className="size-4" />} onClick={onCreate}>
-                  最初の開催を作成
-                </Button>
-              }
-              description="開催を作ると、同じ日に行った試合を番号順にまとめられます。"
-              icon={<CalendarDays className="size-5" />}
-              placement="embedded"
-              title="開催履歴はまだありません"
-            />
-          ) : (
-            <HeldEventsLedger
-              actionsDisabled={data.scopeChanging}
-              deleteDisabled={actions.deletePending || data.stale || data.scopeChanging}
-              events={data.rows}
-              firstRowIsLatest={data.page === 1}
-              returnTo={data.returnTo}
-              onDelete={actions.onRequestDelete}
-            />
-          )}
+      <div
+        className={cn("grid min-w-0 gap-4", model.refresh.pending ? "opacity-70" : "opacity-100")}
+      >
+        {model.freshness === "stale" ? (
+          <Notice
+            action={
+              <Button
+                pending={model.refresh.pending}
+                pendingLabel="再取得中"
+                size="sm"
+                variant="secondary"
+                onClick={model.refresh.run}
+              >
+                開催履歴を再取得
+              </Button>
+            }
+            tone="warning"
+            title="開催履歴を更新できませんでした"
+          >
+            前回取得した開催履歴を表示しています。開催詳細への移動や出力は利用できますが、削除は最新状態を確認できるまで行えません。
+          </Notice>
+        ) : null}
+        {model.scopeChanging ? (
+          <p className="text-xs text-[var(--color-text-secondary)]" role="status">
+            現在は{model.page}ページ目（{model.pageSize}件表示）です。{model.requestedPage}
+            ページ目（{model.requestedPageSize}件表示）を読み込んでいます。
+          </p>
+        ) : null}
+        {model.rows.length === 0 ? (
+          <EmptyState
+            action={
+              <Button icon={<Plus aria-hidden="true" className="size-4" />} onClick={onCreate}>
+                最初の開催を作成
+              </Button>
+            }
+            description="開催を作ると、同じ日に行った試合を番号順にまとめられます。"
+            icon={<CalendarDays className="size-5" />}
+            placement="embedded"
+            title="開催履歴はまだありません"
+          />
+        ) : (
+          <HeldEventsLedger
+            actionsDisabled={model.scopeChanging}
+            deleteDisabled={
+              model.deletePending || model.freshness === "stale" || model.scopeChanging
+            }
+            events={model.rows}
+            firstRowIsLatest={model.page === 1}
+            returnTo={model.returnTo}
+            onDelete={model.onRequestDelete}
+          />
+        )}
 
-          {data.pagination && data.pagination.totalItems > 0 && !data.loadFailed ? (
-            <PaginationControls
-              className="p-0"
-              disabled={data.refreshing}
-              pageSizeOptions={[...heldEventViewModel.heldEventPageSizeOptions]}
-              pagination={data.pagination}
-              placement="embedded"
-              onPageChange={actions.onPageChange}
-              onPageSizeChange={actions.onPageSizeChange}
-            />
-          ) : null}
-        </div>
-      )}
+        {model.pagination && model.pagination.totalItems > 0 ? (
+          <PaginationControls
+            className="p-0"
+            disabled={model.refresh.pending}
+            pageSizeOptions={[...heldEventViewModel.heldEventPageSizeOptions]}
+            pagination={model.pagination}
+            placement="embedded"
+            onPageChange={model.onPageChange}
+            onPageSizeChange={model.onPageSizeChange}
+          />
+        ) : null}
+      </div>
     </div>
   );
 }

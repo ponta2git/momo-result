@@ -3,7 +3,16 @@ import { useCallback, useMemo } from "react";
 import { useLocation, useParams, useSearchParams } from "react-router-dom";
 
 import { buildHeldEventPlayerRecaps } from "@/features/heldEvents/heldEventDetailViewModel";
-import type { HeldEventMasterNames } from "@/features/heldEvents/heldEventDetailViewModel";
+import type {
+  HeldEventMasterNames,
+  HeldEventPlayerRecap,
+} from "@/features/heldEvents/heldEventDetailViewModel";
+import { heldEventOcrCaptureHref } from "@/features/heldEvents/heldEventNavigation";
+import type {
+  HeldEventDetailResponse,
+  HeldEventDraftResponse,
+  HeldEventMatchResponse,
+} from "@/shared/api/heldEvents";
 import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import {
   isInitialQueryLoading,
@@ -16,13 +25,67 @@ import {
   mapMastersQueryOptions,
   seasonMastersQueryOptions,
 } from "@/shared/api/queryOptions";
-import { currentInternalLocation, sanitizeReturnTo } from "@/shared/navigation/returnTo";
+import {
+  currentInternalLocation,
+  sanitizeReturnTo,
+  withReturnTo,
+} from "@/shared/navigation/returnTo";
+
+type RefreshModel = {
+  pending: boolean;
+  run: () => void;
+};
+
+type HeldEventDetailEnrichmentModel =
+  | { kind: "complete" }
+  | { kind: "pending" }
+  | {
+      fields: string[];
+      kind: "warning";
+      refresh: RefreshModel;
+    };
+
+type HeldEventDetailFreshnessModel = { kind: "current" } | { kind: "stale"; refresh: RefreshModel };
+
+export type HeldEventDetailReadyPageModel = {
+  enrichment: HeldEventDetailEnrichmentModel;
+  event: {
+    detail: HeldEventDetailResponse;
+    drafts: HeldEventDraftResponse[];
+    emphasizeNewMatch: boolean;
+    masterNames: HeldEventMasterNames;
+    matches: HeldEventMatchResponse[];
+    playerRecaps: HeldEventPlayerRecap[];
+  };
+  freshness: HeldEventDetailFreshnessModel;
+  kind: "ready";
+  navigation: {
+    backHref: string;
+    exportHref: string;
+    manualEntryHref: string;
+    matchesHref: string;
+    ocrCaptureHref: string;
+    returnTo: string;
+  };
+  refresh: RefreshModel;
+};
+
+export type HeldEventDetailPageModel =
+  | { kind: "loading" }
+  | { kind: "notFound"; navigation: { backHref: string } }
+  | {
+      kind: "loadFailed";
+      navigation: { backHref: string };
+      refresh: RefreshModel;
+    }
+  | HeldEventDetailReadyPageModel;
 
 function nameMap(items: ReadonlyArray<{ id: string; name: string }> | undefined) {
   return new Map((items ?? []).map((item) => [item.id, item.name]));
 }
 
-export function useHeldEventDetailPageController() {
+/** Maps the held-event resource and optional master-name enrichment into one screen contract. */
+export function useHeldEventDetailPageModel(): HeldEventDetailPageModel {
   const { heldEventId = "" } = useParams<{ heldEventId: string }>();
   const location = useLocation();
   const [searchParams] = useSearchParams();
@@ -95,11 +158,17 @@ export function useHeldEventDetailPageController() {
     isFetching: seasonsIsFetching,
   });
   const mapsFailed = shouldShowQueryError({ error: mapsError, isFetching: mapsIsFetching });
-  const failedMasterNameQueries = [
+  const failedMasterNameFields = [
     gameTitlesFailed ? "作品名" : undefined,
     seasonsFailed ? "シーズン名" : undefined,
     mapsFailed ? "マップ名" : undefined,
-  ].filter((label): label is string => Boolean(label));
+  ].filter((field): field is string => Boolean(field));
+  const enrichmentPending =
+    (gameTitlesData === undefined && gameTitlesIsFetching) ||
+    (seasonsData === undefined && seasonsIsFetching) ||
+    (mapsData === undefined && mapsIsFetching);
+  const masterNamesRefreshing = gameTitlesIsFetching || seasonsIsFetching || mapsIsFetching;
+  const refreshing = detailIsFetching || masterNamesRefreshing;
   const refresh = useCallback(() => {
     void Promise.all([refetchDetail(), refetchGameTitles(), refetchSeasons(), refetchMaps()]);
   }, [refetchDetail, refetchGameTitles, refetchMaps, refetchSeasons]);
@@ -108,19 +177,11 @@ export function useHeldEventDetailPageController() {
   }, [refetchDetail]);
   const retryMasterNames = useCallback(() => {
     const retries: Array<Promise<unknown>> = [];
-    if (gameTitlesFailed) {
-      retries.push(refetchGameTitles());
-    }
-    if (seasonsFailed) {
-      retries.push(refetchSeasons());
-    }
-    if (mapsFailed) {
-      retries.push(refetchMaps());
-    }
+    if (gameTitlesFailed) retries.push(refetchGameTitles());
+    if (seasonsFailed) retries.push(refetchSeasons());
+    if (mapsFailed) retries.push(refetchMaps());
     void Promise.all(retries);
   }, [gameTitlesFailed, mapsFailed, refetchGameTitles, refetchMaps, refetchSeasons, seasonsFailed]);
-  const refreshing =
-    detailIsFetching || gameTitlesIsFetching || seasonsIsFetching || mapsIsFetching;
 
   if (
     isInitialQueryLoading({
@@ -129,45 +190,70 @@ export function useHeldEventDetailPageController() {
       isLoading: detailIsLoading,
     })
   ) {
-    return { backHref, status: "loading" as const };
+    return { kind: "loading" };
   }
 
   if (detailFailed && normalizeUnknownApiError(detailError).status === 404) {
-    return { backHref, status: "notFound" as const };
+    return { kind: "notFound", navigation: { backHref } };
   }
 
   if (
+    heldEventId.trim().length === 0 ||
     shouldShowBlockingQueryError({
       data: detail,
       error: detailError,
       isError: detailIsError,
       isFetching: detailIsFetching,
-    })
+    }) ||
+    !detail
   ) {
-    return { backHref, refresh, refreshing, status: "loadFailed" as const };
+    return {
+      kind: "loadFailed",
+      navigation: { backHref },
+      refresh: { pending: detailIsFetching, run: retryDetail },
+    };
   }
 
-  if (!detail || heldEventId.trim().length === 0) {
-    return { backHref, refresh, refreshing, status: "loadFailed" as const };
-  }
+  const encodedHeldEventId = encodeURIComponent(detail.id);
+  const enrichment: HeldEventDetailEnrichmentModel =
+    failedMasterNameFields.length > 0
+      ? {
+          fields: failedMasterNameFields,
+          kind: "warning",
+          refresh: { pending: masterNamesRefreshing, run: retryMasterNames },
+        }
+      : enrichmentPending
+        ? { kind: "pending" }
+        : { kind: "complete" };
 
   return {
-    detail,
-    backHref,
-    drafts,
-    detailRefreshFailed: detailFailed,
-    detailRefreshing: detailIsFetching,
-    masterNames,
-    masterNameLoadError:
-      failedMasterNameQueries.length > 0 ? failedMasterNameQueries.join("・") : undefined,
-    masterNamesRefreshing: gameTitlesIsFetching || seasonsIsFetching || mapsIsFetching,
-    matches,
-    playerRecaps,
-    refresh,
-    retryDetail,
-    retryMasterNames,
-    returnTo,
-    refreshing,
-    status: "ready" as const,
+    enrichment,
+    event: {
+      detail,
+      drafts,
+      emphasizeNewMatch: drafts.length === 0 && matches.length === 0,
+      masterNames,
+      matches,
+      playerRecaps,
+    },
+    freshness: detailFailed
+      ? {
+          kind: "stale",
+          refresh: { pending: detailIsFetching, run: retryDetail },
+        }
+      : { kind: "current" },
+    kind: "ready",
+    navigation: {
+      backHref,
+      exportHref: withReturnTo(`/exports?heldEventId=${encodedHeldEventId}&format=csv`, returnTo),
+      manualEntryHref: withReturnTo(`/matches/new?heldEventId=${encodedHeldEventId}`, returnTo),
+      matchesHref: withReturnTo(
+        `/matches?heldEventId=${encodedHeldEventId}&sort=match_no_asc`,
+        returnTo,
+      ),
+      ocrCaptureHref: heldEventOcrCaptureHref(detail.id, returnTo),
+      returnTo,
+    },
+    refresh: { pending: refreshing, run: refresh },
   };
 }

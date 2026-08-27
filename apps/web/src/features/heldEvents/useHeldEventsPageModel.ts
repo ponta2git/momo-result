@@ -8,6 +8,12 @@ import {
   heldEventPageSizeOptions,
   toIsoFromLocal,
 } from "@/features/heldEvents/heldEventViewModel";
+import type {
+  HeldEventCreateFormModel,
+  HeldEventDeleteDialogModel,
+  HeldEventsListModel,
+  HeldEventsListRefreshModel,
+} from "@/features/heldEvents/heldEventViewModel";
 import { createHeldEvent, deleteHeldEvent } from "@/shared/api/heldEvents";
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
 import { runIdempotentMutation } from "@/shared/api/idempotency";
@@ -27,6 +33,15 @@ import { showToast } from "@/shared/ui/feedback/Toast";
 const initialCreateHeldEventState = { version: 0 };
 const defaultPagination = { page: 1, pageSize: 10 };
 const pageSizeOptions = new Set<number>(heldEventPageSizeOptions);
+
+export type HeldEventsPageModel = {
+  create: HeldEventCreateFormModel;
+  deleteDialog: HeldEventDeleteDialogModel;
+  feedback: { errorMessage: string };
+  list: HeldEventsListModel;
+  openCreate: () => void;
+  refresh: HeldEventsListRefreshModel;
+};
 
 function withPaginationParams(
   current: URLSearchParams,
@@ -51,7 +66,8 @@ function heldEventsReturnTo(params: URLSearchParams): string {
   return `/held-events${search ? `?${search}` : ""}`;
 }
 
-export function useHeldEventsPageController() {
+/** Owns the complete held-event list screen without exposing query or mutation result objects. */
+export function useHeldEventsPageModel(): HeldEventsPageModel {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -83,6 +99,12 @@ export function useHeldEventsPageController() {
   const heldEventsOptions = heldEventsQueryOptions(paginationSearch);
   const heldEventsQuery = useQuery(heldEventsOptions);
   const hasCurrentScopeData = queryClient.getQueryData(heldEventsOptions.queryKey) !== undefined;
+  const {
+    data: heldEventsData,
+    isFetching: heldEventsIsFetching,
+    isPlaceholderData,
+    refetch: refetchHeldEvents,
+  } = heldEventsQuery;
 
   const [createState, createAction, createPending] = useActionState<
     typeof initialCreateHeldEventState,
@@ -130,10 +152,11 @@ export function useHeldEventsPageController() {
       showToast({ title: "開催履歴を削除しました。", tone: "success" });
     },
   });
+  const { isPending: deletePending, mutateAsync: deleteEventAsync } = deleteMutation;
 
-  const rows = heldEventsQuery.data?.items ?? emptyHeldEvents;
-  const pagination = heldEventsQuery.data?.pagination;
-  const scopeChanging = Boolean(heldEventsQuery.isPlaceholderData && heldEventsQuery.isFetching);
+  const rows = heldEventsData?.items ?? emptyHeldEvents;
+  const pagination = heldEventsData?.pagination;
+  const scopeChanging = Boolean(isPlaceholderData && heldEventsIsFetching);
   const displayedPage = pagination?.page ?? paginationSearch.page;
   const displayedPageSize = pagination?.pageSize ?? paginationSearch.pageSize;
   const displayedReturnTo = scopeChanging
@@ -145,30 +168,30 @@ export function useHeldEventsPageController() {
       )
     : listReturnTo;
   const pageCorrectionPending = Boolean(
-    pagination &&
-    !heldEventsQuery.isPlaceholderData &&
-    paginationSearch.page > Math.max(pagination.totalPages, 1),
+    pagination && !isPlaceholderData && paginationSearch.page > Math.max(pagination.totalPages, 1),
   );
 
   useEffect(() => {
-    if (!pagination || heldEventsQuery.isPlaceholderData) {
+    if (!pagination || isPlaceholderData) {
       return;
     }
     const lastPage = Math.max(pagination.totalPages, 1);
     if (paginationSearch.page > lastPage) {
       updatePagination({ page: lastPage, pageSize: paginationSearch.pageSize });
     }
-  }, [heldEventsQuery.isPlaceholderData, pagination, paginationSearch, updatePagination]);
+  }, [isPlaceholderData, pagination, paginationSearch, updatePagination]);
 
-  const refresh = () => {
-    void heldEventsQuery.refetch();
-  };
+  const refreshList = useCallback(() => {
+    void refetchHeldEvents();
+  }, [refetchHeldEvents]);
+  const refresh = { pending: heldEventsIsFetching, run: refreshList };
   const updateCreateOpen = useCallback((open: boolean) => {
     setCreateOpen(open);
     if (open) {
       setErrorMessage("");
     }
   }, []);
+  const openCreate = useCallback(() => updateCreateOpen(true), [updateCreateOpen]);
   const updatePage = useCallback(
     (page: number) => {
       updatePagination({ page, pageSize: paginationSearch.pageSize });
@@ -184,9 +207,40 @@ export function useHeldEventsPageController() {
   const cancelDelete = useCallback(() => {
     setDeleteTarget(null);
   }, []);
-  const confirmDelete = async (event: HeldEventResponse) => {
-    await deleteMutation.mutateAsync(event);
-  };
+  const confirmDelete = useCallback(
+    async (event: HeldEventResponse) => {
+      await deleteEventAsync(event);
+    },
+    [deleteEventAsync],
+  );
+
+  const loadFailed =
+    shouldShowBlockingQueryError(heldEventsQuery) ||
+    (shouldShowQueryError(heldEventsQuery) && !hasCurrentScopeData);
+  let list: HeldEventsListModel;
+  if (isInitialQueryLoading(heldEventsQuery) || pageCorrectionPending) {
+    list = { kind: "loading", refresh };
+  } else if (loadFailed) {
+    list = { kind: "loadFailed", refresh };
+  } else {
+    list = {
+      deletePending,
+      freshness: shouldShowQueryError(heldEventsQuery) && hasCurrentScopeData ? "stale" : "current",
+      kind: "ready",
+      onPageChange: updatePage,
+      onPageSizeChange: updatePageSize,
+      onRequestDelete: setDeleteTarget,
+      page: displayedPage,
+      pageSize: displayedPageSize,
+      pagination,
+      refresh,
+      requestedPage: paginationSearch.page,
+      requestedPageSize: paginationSearch.pageSize,
+      returnTo: displayedReturnTo,
+      rows,
+      scopeChanging,
+    };
+  }
 
   return {
     create: {
@@ -202,41 +256,12 @@ export function useHeldEventsPageController() {
     deleteDialog: {
       cancel: cancelDelete,
       confirm: confirmDelete,
-      pending: deleteMutation.isPending,
+      pending: deletePending,
       target: deleteTarget,
     },
-    feedback: {
-      errorMessage,
-    },
-    header: {
-      openCreate: () => updateCreateOpen(true),
-      refresh,
-      refreshing: heldEventsQuery.isFetching,
-    },
-    table: {
-      actions: {
-        deletePending: deleteMutation.isPending,
-        onPageChange: updatePage,
-        onPageSizeChange: updatePageSize,
-        onRetry: refresh,
-        onRequestDelete: setDeleteTarget,
-      },
-      data: {
-        loadFailed:
-          shouldShowBlockingQueryError(heldEventsQuery) ||
-          (shouldShowQueryError(heldEventsQuery) && !hasCurrentScopeData),
-        loading: isInitialQueryLoading(heldEventsQuery) || pageCorrectionPending,
-        page: displayedPage,
-        pageSize: displayedPageSize,
-        pagination,
-        refreshing: heldEventsQuery.isFetching,
-        requestedPage: paginationSearch.page,
-        requestedPageSize: paginationSearch.pageSize,
-        returnTo: displayedReturnTo,
-        rows,
-        scopeChanging,
-        stale: shouldShowQueryError(heldEventsQuery) && hasCurrentScopeData,
-      },
-    },
+    feedback: { errorMessage },
+    list,
+    openCreate,
+    refresh,
   };
 }

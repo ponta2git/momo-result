@@ -26,28 +26,31 @@ export type HeldEventDeleteDialogModel = {
   target: HeldEventResponse | null;
 };
 
-export type HeldEventsListActions = {
-  deletePending: boolean;
-  onPageChange: (page: number) => void;
-  onPageSizeChange: (pageSize: number) => void;
-  onRetry: () => void;
-  onRequestDelete: (event: HeldEventResponse) => void;
+export type HeldEventsListRefreshModel = {
+  pending: boolean;
+  run: () => void;
 };
 
-export type HeldEventsListModel = {
-  loadFailed: boolean;
-  loading: boolean;
-  page: number;
-  pageSize: number;
-  pagination: HeldEventListResponse["pagination"] | undefined;
-  refreshing: boolean;
-  requestedPage: number;
-  requestedPageSize: number;
-  returnTo: string;
-  rows: HeldEventResponse[];
-  scopeChanging: boolean;
-  stale: boolean;
-};
+export type HeldEventsListModel =
+  | { kind: "loading"; refresh: HeldEventsListRefreshModel }
+  | { kind: "loadFailed"; refresh: HeldEventsListRefreshModel }
+  | {
+      deletePending: boolean;
+      freshness: "current" | "stale";
+      kind: "ready";
+      onPageChange: (page: number) => void;
+      onPageSizeChange: (pageSize: number) => void;
+      onRequestDelete: (event: HeldEventResponse) => void;
+      page: number;
+      pageSize: number;
+      pagination: HeldEventListResponse["pagination"] | undefined;
+      refresh: HeldEventsListRefreshModel;
+      requestedPage: number;
+      requestedPageSize: number;
+      returnTo: string;
+      rows: HeldEventResponse[];
+      scopeChanging: boolean;
+    };
 
 export function currentLocalIsoMinute(): string {
   return toLocalDateTimeInputValue();

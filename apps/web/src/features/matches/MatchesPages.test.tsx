@@ -20,7 +20,12 @@ import { setDevUser, testDevUserAccountId } from "@/test/auth";
 import { createDeferred } from "@/test/deferred";
 import { installMatchMediaController } from "@/test/doubles/dom";
 import type { MatchMediaController } from "@/test/doubles/dom";
-import { makeFourPlayerResults, makeIncidents, makeMatchDetail } from "@/test/factories";
+import {
+  makeFourPlayerResults,
+  makeHeldEventResponse,
+  makeIncidents,
+  makeMatchDetail,
+} from "@/test/factories";
 import { makeMatchWorkspaceMasterHandoffValues } from "@/test/factories/draftReview";
 import { setupMsw } from "@/test/msw/lifecycle";
 import { makeSeriesAnalysisMatchContext } from "@/test/msw/seriesAnalysisFixtures";
@@ -1407,6 +1412,113 @@ describe("MatchDetailPage", () => {
 
     expect(await screen.findByRole("heading", { name: /第1試合の結果/u })).toBeInTheDocument();
     expect(attempts).toBe(2);
+  });
+
+  it("keeps the match visible and retries failed condition enrichment locally", async () => {
+    setDevUser();
+    let shouldFail = true;
+    const attempts = new Map<string, number>();
+    const count = (resource: string) => {
+      attempts.set(resource, (attempts.get(resource) ?? 0) + 1);
+    };
+    server.use(
+      http.get("/api/held-events", () => {
+        count("held-events");
+        return shouldFail
+          ? HttpResponse.json({ detail: "temporarily unavailable" }, { status: 500 })
+          : HttpResponse.json({
+              items: [
+                makeHeldEventResponse({
+                  heldAt: "2026-01-02T03:04:00.000Z",
+                  id: "held-1",
+                }),
+              ],
+            });
+      }),
+      http.get("/api/game-titles", () => {
+        count("game-titles");
+        return shouldFail
+          ? HttpResponse.json({ detail: "temporarily unavailable" }, { status: 500 })
+          : HttpResponse.json({
+              items: [
+                {
+                  createdAt: "2026-01-01T00:00:00.000Z",
+                  displayOrder: 1,
+                  id: "gt_momotetsu_2",
+                  layoutFamily: "momotetsu_2",
+                  name: "桃太郎電鉄2",
+                },
+              ],
+            });
+      }),
+      http.get("/api/season-masters", () => {
+        count("seasons");
+        return shouldFail
+          ? HttpResponse.json({ detail: "temporarily unavailable" }, { status: 500 })
+          : HttpResponse.json({
+              items: [
+                {
+                  createdAt: "2026-01-01T00:00:00.000Z",
+                  displayOrder: 1,
+                  gameTitleId: "gt_momotetsu_2",
+                  id: "season_current",
+                  name: "今シーズン",
+                },
+              ],
+            });
+      }),
+      http.get("/api/map-masters", () => {
+        count("maps");
+        return shouldFail
+          ? HttpResponse.json({ detail: "temporarily unavailable" }, { status: 500 })
+          : HttpResponse.json({
+              items: [
+                {
+                  createdAt: "2026-01-01T00:00:00.000Z",
+                  displayOrder: 1,
+                  gameTitleId: "gt_momotetsu_2",
+                  id: "map_east",
+                  name: "東日本編",
+                },
+              ],
+            });
+      }),
+    );
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/matches/match-1"]}>
+          <Routes>
+            <Route path="/matches/:matchId" element={<MatchDetailPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByRole("heading", { name: /第1試合の結果/u })).toBeInTheDocument();
+    const warning = await screen.findByText("開催条件を取得できませんでした");
+    expect(warning.closest("section")).toHaveTextContent(
+      "開催日・作品名・シーズン名・マップ名を取得できませんでした",
+    );
+    expect(screen.getByRole("list", { name: "試合の順位と成績" }).children).toHaveLength(4);
+    const identity = screen.getByRole("region", { name: "第1試合の開催条件" });
+    expect(within(identity).getAllByText("未取得")).toHaveLength(3);
+
+    shouldFail = false;
+    await user.click(screen.getByRole("button", { name: "開催条件を再取得" }));
+
+    expect(await within(identity).findByText("桃太郎電鉄2")).toBeInTheDocument();
+    expect(within(identity).getByText("今シーズン")).toBeInTheDocument();
+    expect(within(identity).getByText("東日本編")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.queryByText("開催条件を取得できませんでした")).not.toBeInTheDocument(),
+    );
+    expect(Object.fromEntries(attempts)).toEqual({
+      "game-titles": 2,
+      "held-events": 2,
+      maps: 2,
+      seasons: 2,
+    });
   });
 
   it("does not offer retry for a missing match", async () => {

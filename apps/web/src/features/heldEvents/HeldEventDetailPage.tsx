@@ -7,11 +7,10 @@ import {
 import { formatHeldEventDateTime } from "@/features/heldEvents/heldEventDetailViewModel";
 import { HeldEventDraftsSection } from "@/features/heldEvents/HeldEventDraftsSection";
 import { HeldEventMatchTimeline } from "@/features/heldEvents/HeldEventMatchTimeline";
-import { heldEventOcrCaptureHref } from "@/features/heldEvents/heldEventNavigation";
 import { HeldEventPlayerRecap } from "@/features/heldEvents/HeldEventPlayerRecap";
-import { useHeldEventDetailPageController } from "@/features/heldEvents/useHeldEventDetailPageController";
+import { useHeldEventDetailPageModel } from "@/features/heldEvents/useHeldEventDetailPageModel";
+import type { HeldEventDetailReadyPageModel } from "@/features/heldEvents/useHeldEventDetailPageModel";
 import { formatMatchNoInEvent } from "@/shared/domain/matchLabels";
-import { withReturnTo } from "@/shared/navigation/returnTo";
 import { Button } from "@/shared/ui/actions/Button";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { Notice } from "@/shared/ui/feedback/Notice";
@@ -19,57 +18,31 @@ import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
 import { PageHeader } from "@/shared/ui/layout/PageHeader";
 
-type HeldEventDetailReadyController = Extract<
-  ReturnType<typeof useHeldEventDetailPageController>,
-  { status: "ready" }
->;
-
 export function HeldEventDetailPage() {
-  const controller = useHeldEventDetailPageController();
+  const page = useHeldEventDetailPageModel();
 
-  if (controller.status === "loading") {
+  if (page.kind === "loading") {
     return <HeldEventDetailLoading />;
   }
-  if (controller.status === "notFound") {
-    return <HeldEventDetailUnavailable backHref={controller.backHref} notFound />;
+  if (page.kind === "notFound") {
+    return <HeldEventDetailUnavailable backHref={page.navigation.backHref} notFound />;
   }
-  if (controller.status === "loadFailed") {
+  if (page.kind === "loadFailed") {
     return (
       <HeldEventDetailUnavailable
-        backHref={controller.backHref}
-        retrying={controller.refreshing}
-        onRetry={controller.refresh}
+        backHref={page.navigation.backHref}
+        retrying={page.refresh.pending}
+        onRetry={page.refresh.run}
       />
     );
   }
 
-  return <HeldEventDetailReadyContent controller={controller} />;
+  return <HeldEventDetailReadyContent page={page} />;
 }
 
-function HeldEventDetailReadyContent({
-  controller,
-}: {
-  controller: HeldEventDetailReadyController;
-}) {
-  const {
-    backHref,
-    detail,
-    detailRefreshFailed,
-    detailRefreshing,
-    drafts,
-    masterNames,
-    masterNameLoadError,
-    masterNamesRefreshing,
-    matches,
-    playerRecaps,
-    refresh,
-    retryDetail,
-    retryMasterNames,
-    refreshing,
-    returnTo,
-  } = controller;
-  const encodedHeldEventId = encodeURIComponent(detail.id);
-  const emphasizeNewMatch = drafts.length === 0 && matches.length === 0;
+function HeldEventDetailReadyContent({ page }: { page: HeldEventDetailReadyPageModel }) {
+  const { enrichment, event, freshness, navigation, refresh } = page;
+  const { detail, drafts, emphasizeNewMatch, masterNames, matches, playerRecaps } = event;
 
   return (
     <PageFrame className="min-w-0" width="wide">
@@ -77,7 +50,7 @@ function HeldEventDetailReadyContent({
         <LinkButton
           icon={<ArrowLeft aria-hidden="true" className="size-4" />}
           size="sm"
-          to={backHref}
+          to={navigation.backHref}
           variant="quiet"
         >
           開催履歴へ戻る
@@ -90,10 +63,7 @@ function HeldEventDetailReadyContent({
             <LinkButton
               icon={<ListFilter aria-hidden="true" className="size-4" />}
               size="sm"
-              to={withReturnTo(
-                `/matches?heldEventId=${encodedHeldEventId}&sort=match_no_asc`,
-                returnTo,
-              )}
+              to={navigation.matchesHref}
               variant="quiet"
             >
               試合検索で見る
@@ -101,7 +71,7 @@ function HeldEventDetailReadyContent({
             <LinkButton
               icon={<Download aria-hidden="true" className="size-4" />}
               size="sm"
-              to={withReturnTo(`/exports?heldEventId=${encodedHeldEventId}&format=csv`, returnTo)}
+              to={navigation.exportHref}
               variant="quiet"
             >
               CSV出力
@@ -109,11 +79,11 @@ function HeldEventDetailReadyContent({
             <Button
               aria-label="開催詳細を更新"
               icon={<RefreshCw aria-hidden="true" className="size-4" />}
-              pending={refreshing}
+              pending={refresh.pending}
               pendingLabel="更新中"
               size="sm"
               variant="quiet"
-              onClick={refresh}
+              onClick={refresh.run}
             >
               更新
             </Button>
@@ -125,17 +95,17 @@ function HeldEventDetailReadyContent({
       />
 
       <PageContentSurface aria-label="開催内容" className="grid gap-6" role="region">
-        {detailRefreshFailed ? (
+        {freshness.kind === "stale" ? (
           <Notice
             tone="warning"
             title="開催詳細を更新できませんでした"
             action={
               <Button
-                pending={detailRefreshing}
+                pending={freshness.refresh.pending}
                 pendingLabel="再取得中"
                 size="sm"
                 variant="secondary"
-                onClick={retryDetail}
+                onClick={freshness.refresh.run}
               >
                 開催詳細を再取得
               </Button>
@@ -145,23 +115,23 @@ function HeldEventDetailReadyContent({
           </Notice>
         ) : null}
 
-        {masterNameLoadError ? (
+        {enrichment.kind === "warning" ? (
           <Notice
             tone="warning"
             title="表示名を取得できませんでした"
             action={
               <Button
-                pending={masterNamesRefreshing}
+                pending={enrichment.refresh.pending}
                 pendingLabel="再取得中"
                 size="sm"
                 variant="secondary"
-                onClick={retryMasterNames}
+                onClick={enrichment.refresh.run}
               >
                 表示名を再取得
               </Button>
             }
           >
-            {masterNameLoadError}
+            {enrichment.fields.join("・")}
             を更新できませんでした。取得済みの表示名はそのまま使い、取得できない箇所だけ「未取得」と表示しています。
           </Notice>
         ) : null}
@@ -176,14 +146,14 @@ function HeldEventDetailReadyContent({
           <div className="flex flex-wrap gap-2">
             <LinkButton
               icon={<Camera aria-hidden="true" className="size-4" />}
-              to={heldEventOcrCaptureHref(detail.id, returnTo)}
+              to={navigation.ocrCaptureHref}
               variant={emphasizeNewMatch ? "primary" : "secondary"}
             >
               OCR取り込み
             </LinkButton>
             <LinkButton
               icon={<Keyboard aria-hidden="true" className="size-4" />}
-              to={withReturnTo(`/matches/new?heldEventId=${encodedHeldEventId}`, returnTo)}
+              to={navigation.manualEntryHref}
               variant="secondary"
             >
               手入力
@@ -191,9 +161,17 @@ function HeldEventDetailReadyContent({
           </div>
         </section>
 
-        <HeldEventDraftsSection drafts={drafts} masterNames={masterNames} returnTo={returnTo} />
+        <HeldEventDraftsSection
+          drafts={drafts}
+          masterNames={masterNames}
+          returnTo={navigation.returnTo}
+        />
         <HeldEventPlayerRecap recaps={playerRecaps} />
-        <HeldEventMatchTimeline masterNames={masterNames} matches={matches} returnTo={returnTo} />
+        <HeldEventMatchTimeline
+          masterNames={masterNames}
+          matches={matches}
+          returnTo={navigation.returnTo}
+        />
       </PageContentSurface>
     </PageFrame>
   );

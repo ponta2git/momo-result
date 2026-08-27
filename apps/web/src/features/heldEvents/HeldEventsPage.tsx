@@ -3,7 +3,7 @@ import { CalendarPlus, RefreshCw } from "lucide-react";
 import { CreateHeldEventDialog } from "@/features/heldEvents/CreateHeldEventDialog";
 import { DeleteHeldEventDialog } from "@/features/heldEvents/DeleteHeldEventDialog";
 import { HeldEventsListCard } from "@/features/heldEvents/HeldEventsListCard";
-import { useHeldEventsPageController } from "@/features/heldEvents/useHeldEventsPageController";
+import { useHeldEventsPageModel } from "@/features/heldEvents/useHeldEventsPageModel";
 import { Button } from "@/shared/ui/actions/Button";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
@@ -11,7 +11,7 @@ import { PageFrame } from "@/shared/ui/layout/PageFrame";
 import { PageHeader } from "@/shared/ui/layout/PageHeader";
 
 export function HeldEventsPage() {
-  const page = useHeldEventsPageController();
+  const page = useHeldEventsPageModel();
 
   return (
     <PageFrame>
@@ -20,19 +20,19 @@ export function HeldEventsPage() {
           <>
             <Button
               icon={<RefreshCw aria-hidden="true" className="size-4" />}
-              pending={page.header.refreshing}
+              pending={page.refresh.pending}
               pendingLabel="更新中…"
               size="sm"
               variant="quiet"
-              onClick={page.header.refresh}
+              onClick={page.refresh.run}
             >
               更新
             </Button>
-            {page.table.data.rows.length > 0 ? (
+            {page.list.kind === "ready" && page.list.rows.length > 0 ? (
               <Button
                 icon={<CalendarPlus aria-hidden="true" className="size-4" />}
                 variant="secondary"
-                onClick={page.header.openCreate}
+                onClick={page.openCreate}
               >
                 開催を作成
               </Button>
@@ -43,7 +43,7 @@ export function HeldEventsPage() {
       />
 
       <PageContentSurface
-        aria-busy={page.table.data.refreshing || undefined}
+        aria-busy={page.refresh.pending || undefined}
         aria-label="開催履歴"
         className="grid gap-4"
         role="region"
@@ -54,11 +54,7 @@ export function HeldEventsPage() {
           </Notice>
         ) : null}
 
-        <HeldEventsListCard
-          actions={page.table.actions}
-          data={page.table.data}
-          onCreate={page.header.openCreate}
-        />
+        <HeldEventsListCard model={page.list} onCreate={page.openCreate} />
       </PageContentSurface>
 
       <CreateHeldEventDialog model={page.create} />

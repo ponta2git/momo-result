@@ -203,25 +203,38 @@ export type MatchMediaController = {
 export function installMatchMediaController(initialMatches: boolean): MatchMediaController {
   const originalMatchMedia = window.matchMedia;
   let matches = initialMatches;
-  const listeners = new Set<(event: MediaQueryListEvent) => void>();
+  const listeners = new Set<{
+    listener: (event: MediaQueryListEvent) => void;
+    query: string;
+  }>();
+  const matchesQuery = (query: string) =>
+    query.includes("prefers-reduced-motion") ? false : matches;
 
   window.matchMedia = vi.fn((query: string) => {
+    const addListener = (listener: (event: MediaQueryListEvent) => void) => {
+      listeners.add({ listener, query });
+    };
+    const removeListener = (listener: (event: MediaQueryListEvent) => void) => {
+      for (const entry of listeners) {
+        if (entry.listener === listener && entry.query === query) listeners.delete(entry);
+      }
+    };
     const media: MediaQueryList = {
       addEventListener: (_type: string, listener: EventListenerOrEventListenerObject) => {
-        listeners.add(listener as (event: MediaQueryListEvent) => void);
+        addListener(listener as (event: MediaQueryListEvent) => void);
       },
       addListener: (listener) => {
-        listeners.add(listener as (event: MediaQueryListEvent) => void);
+        addListener(listener as (event: MediaQueryListEvent) => void);
       },
       dispatchEvent: () => true,
-      matches,
+      matches: matchesQuery(query),
       media: query,
       onchange: null,
       removeEventListener: (_type: string, listener: EventListenerOrEventListenerObject) => {
-        listeners.delete(listener as (event: MediaQueryListEvent) => void);
+        removeListener(listener as (event: MediaQueryListEvent) => void);
       },
       removeListener: (listener) => {
-        listeners.delete(listener as (event: MediaQueryListEvent) => void);
+        removeListener(listener as (event: MediaQueryListEvent) => void);
       },
     };
     return media;
@@ -233,9 +246,9 @@ export function installMatchMediaController(initialMatches: boolean): MatchMedia
     },
     setMatches: (next) => {
       matches = next;
-      const event = { matches, media: "" } as MediaQueryListEvent;
-      for (const listener of listeners) {
-        listener(event);
+      for (const { listener, query } of listeners) {
+        if (query.includes("prefers-reduced-motion")) continue;
+        listener({ matches, media: query } as MediaQueryListEvent);
       }
     },
   };

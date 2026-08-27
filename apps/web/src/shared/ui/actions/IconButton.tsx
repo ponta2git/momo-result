@@ -1,9 +1,9 @@
-import { LoaderCircle } from "lucide-react";
 import type { ButtonHTMLAttributes, ReactNode, Ref } from "react";
 import { useFormStatus } from "react-dom";
 
 import { DecorativeActionIcon, iconActionClassName } from "@/shared/ui/actions/actionRecipes";
 import type { IconActionSize, IconActionVariant } from "@/shared/ui/actions/actionRecipes";
+import { SpinnerIcon } from "@/shared/ui/feedback/Spinner";
 import { Tooltip } from "@/shared/ui/feedback/Tooltip";
 
 export type IconButtonSize = IconActionSize;
@@ -55,13 +55,7 @@ export function IconButton({
       // oxlint-disable-next-line react/button-has-type -- the public type is a closed literal union with a safe "button" default.
       type={type}
     >
-      <DecorativeActionIcon iconOnly>
-        {actualPending ? (
-          <LoaderCircle className="animate-spin motion-reduce:animate-none" />
-        ) : (
-          icon
-        )}
-      </DecorativeActionIcon>
+      <DecorativeActionIcon iconOnly>{actualPending ? <SpinnerIcon /> : icon}</DecorativeActionIcon>
     </button>
   );
 

@@ -1,4 +1,3 @@
-import { LoaderCircle } from "lucide-react";
 import { useState } from "react";
 
 import type { AuthMeResponse } from "@/shared/api/auth";
@@ -6,6 +5,7 @@ import { DevUserPicker } from "@/shared/auth/DevUserPicker";
 import { buildAuthLoginHref } from "@/shared/auth/redirectPath";
 import { buttonClassName } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
+import { SpinnerIcon } from "@/shared/ui/feedback/Spinner";
 
 type AuthPanelProps = {
   auth: AuthMeResponse | undefined;
@@ -51,12 +51,7 @@ export function AuthPanel({
           })}
           onClick={() => setLoginPending(true)}
         >
-          {loginPending ? (
-            <LoaderCircle
-              aria-hidden="true"
-              className="size-4 animate-spin motion-reduce:animate-none"
-            />
-          ) : null}
+          {loginPending ? <SpinnerIcon /> : null}
           <span>{loginPending ? "Discordへ移動中…" : "Discordでログインする"}</span>
         </a>
       )}

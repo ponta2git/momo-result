@@ -1,10 +1,11 @@
-import { Check, LoaderCircle } from "lucide-react";
+import { Check } from "lucide-react";
 
 import { slotDefinitions } from "@/features/ocrCapture/captureState";
 import type { OcrStartDialogState, OcrSubmissionPlan } from "@/features/ocrCapture/useOcrStartFlow";
 import { Button } from "@/shared/ui/actions/Button";
 import { Dialog } from "@/shared/ui/feedback/Dialog";
 import { Notice } from "@/shared/ui/feedback/Notice";
+import { SpinnerIcon } from "@/shared/ui/feedback/Spinner";
 
 type OcrStartDialogProps = {
   onClose: () => void;
@@ -140,10 +141,7 @@ export function OcrStartDialog({ onClose, onConfirm, onViewMatches, state }: Ocr
       >
         <div className="grid gap-4 py-1">
           <div className="flex items-start gap-3 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3">
-            <LoaderCircle
-              aria-hidden="true"
-              className="mt-0.5 size-5 shrink-0 animate-spin text-[var(--color-action)] motion-reduce:animate-none"
-            />
+            <SpinnerIcon className="mt-0.5 text-[var(--color-action)]" size="lg" />
             <div className="min-w-0">
               <p className="font-semibold text-[var(--color-text-primary)]">{progress.label}</p>
               <p className="mt-1 text-sm leading-6 text-[var(--color-text-secondary)]">

@@ -1,7 +1,7 @@
-import { LoaderCircle } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { cn } from "@/shared/ui/cn";
+import { SpinnerIcon } from "@/shared/ui/feedback/Spinner";
 
 export type StatusBadgeTone = "attention" | "danger" | "info" | "neutral" | "success" | "warning";
 
@@ -42,11 +42,7 @@ export function StatusBadge({
   note,
   tone = "neutral",
 }: StatusBadgeProps) {
-  const statusIcon = busy ? (
-    <LoaderCircle className="size-4 animate-spin motion-reduce:animate-none" />
-  ) : (
-    icon
-  );
+  const statusIcon = busy ? <SpinnerIcon /> : icon;
 
   return (
     <span

@@ -7,6 +7,7 @@ import { ErrorBoundary } from "@/app/ErrorBoundary";
 import { queryClient } from "@/app/queryClient";
 import { router } from "@/app/router";
 import { TooltipProvider } from "@/shared/ui/feedback/Tooltip";
+import { AppMotionProvider } from "@/shared/ui/motion/AppMotionProvider";
 
 import "@/styles.css";
 
@@ -15,7 +16,9 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <ErrorBoundary>
-          <RouterProvider router={router} />
+          <AppMotionProvider>
+            <RouterProvider router={router} />
+          </AppMotionProvider>
         </ErrorBoundary>
       </TooltipProvider>
     </QueryClientProvider>

@@ -1,11 +1,14 @@
 import { Toast } from "@base-ui/react/toast";
+import { m, useReducedMotionConfig } from "motion/react";
 
 import { IconButton } from "@/shared/ui/actions/IconButton";
 import { cn } from "@/shared/ui/cn";
 import { toastToneClass, toastViewportClassName } from "@/shared/ui/feedback/toastPresentation";
+import { instantMotionTransition, politeMotionTransition } from "@/shared/ui/motion/transitions";
 
 export function ToastRenderer() {
   const { toasts } = Toast.useToastManager();
+  const reduceMotion = useReducedMotionConfig();
 
   return (
     <Toast.Portal>
@@ -17,6 +20,13 @@ export function ToastRenderer() {
                 "rounded-[var(--radius-lg)] border p-3 shadow-[var(--shadow-raised)]",
                 toastToneClass[toast.type ?? "info"] ?? toastToneClass["info"],
               )}
+              render={
+                <m.div
+                  animate={{ opacity: toast.transitionStatus === "ending" ? 0 : 1 }}
+                  initial={reduceMotion ? false : { opacity: 0 }}
+                  transition={reduceMotion ? instantMotionTransition : politeMotionTransition}
+                />
+              }
               toast={toast}
             >
               <Toast.Content>

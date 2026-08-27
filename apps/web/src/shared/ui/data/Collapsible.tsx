@@ -1,8 +1,10 @@
 import { Collapsible as BaseCollapsible } from "@base-ui/react/collapsible";
 import { ChevronDown } from "lucide-react";
+import { m } from "motion/react";
 import type { ReactNode } from "react";
 
 import { cn } from "@/shared/ui/cn";
+import { politeMotionTransition } from "@/shared/ui/motion/transitions";
 
 type DisclosureTriggerVariant = "anchor" | "default" | "supporting";
 type DisclosurePresentation = "framed" | "inset" | "plain";
@@ -84,13 +86,21 @@ export function Disclosure({
           triggerClassName,
         )}
         disabled={disabled}
-      >
-        <span className={cn("min-w-0 flex-1", summaryClassName)}>{summary}</span>
-        <ChevronDown
-          aria-hidden="true"
-          className="size-4 shrink-0 text-[var(--color-text-secondary)] transition-transform duration-[var(--motion-fast)] group-data-[panel-open]:rotate-180 motion-reduce:transition-none"
-        />
-      </BaseCollapsible.Trigger>
+        render={(triggerProps, state) => (
+          <button {...triggerProps} type="button">
+            <span className={cn("min-w-0 flex-1", summaryClassName)}>{summary}</span>
+            <m.span
+              aria-hidden="true"
+              animate={{ rotate: state.open ? 180 : 0 }}
+              className="inline-flex size-4 shrink-0 text-[var(--color-text-secondary)]"
+              initial={false}
+              transition={politeMotionTransition}
+            >
+              <ChevronDown className="size-4" />
+            </m.span>
+          </button>
+        )}
+      />
       <BaseCollapsible.Panel
         className={cn(presentationClass[presentation].panel, panelClassName, "bg-transparent")}
         keepMounted={keepMounted}

@@ -1,4 +1,3 @@
-import { LoaderCircle } from "lucide-react";
 import type { ButtonHTMLAttributes, ReactNode, Ref } from "react";
 import { useFormStatus } from "react-dom";
 
@@ -7,6 +6,7 @@ import type {
   ButtonSize as ActionButtonSize,
   ButtonVariant as ActionButtonVariant,
 } from "@/shared/ui/actions/actionRecipes";
+import { SpinnerIcon } from "@/shared/ui/feedback/Spinner";
 
 export { buttonClassName } from "@/shared/ui/actions/actionRecipes";
 export type ButtonSize = ActionButtonSize;
@@ -52,13 +52,7 @@ export function Button({
   const inner = (
     <>
       {actualPending || icon ? (
-        <DecorativeActionIcon>
-          {actualPending ? (
-            <LoaderCircle className="size-4 animate-spin motion-reduce:animate-none" />
-          ) : (
-            icon
-          )}
-        </DecorativeActionIcon>
+        <DecorativeActionIcon>{actualPending ? <SpinnerIcon /> : icon}</DecorativeActionIcon>
       ) : null}
       <span>{actualPending ? (pendingLabel ?? children) : children}</span>
     </>

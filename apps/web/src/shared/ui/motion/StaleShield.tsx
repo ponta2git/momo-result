@@ -1,8 +1,8 @@
-import { LoaderCircle } from "lucide-react";
 import { useLayoutEffect, useRef } from "react";
 import type { ReactNode } from "react";
 
 import { cn } from "@/shared/ui/cn";
+import { SpinnerIcon } from "@/shared/ui/feedback/Spinner";
 
 type StaleShieldProps = {
   active: boolean;
@@ -78,10 +78,7 @@ export function StaleShield({
               className="inline-flex min-h-8 items-center gap-2 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-xs font-semibold text-[var(--color-text-muted)] shadow-[var(--shadow-raised)]"
               role="status"
             >
-              <LoaderCircle
-                aria-hidden="true"
-                className="size-3.5 animate-spin motion-reduce:animate-none"
-              />
+              <SpinnerIcon size="sm" />
               {busyLabel}
             </span>
           </div>

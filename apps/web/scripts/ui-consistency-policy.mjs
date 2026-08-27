@@ -20,6 +20,19 @@ const sharedActionPrimitiveFiles = new Set([
   "shared/ui/actions/LinkButton.tsx",
 ]);
 
+const motionImportContracts = new Map([
+  ["shared/ui/data/Collapsible.tsx", new Set(["m"])],
+  ["shared/ui/feedback/Dialog.tsx", new Set(["m", "useReducedMotionConfig"])],
+  ["shared/ui/feedback/ToastRenderer.tsx", new Set(["m", "useReducedMotionConfig"])],
+  ["shared/ui/motion/AppMotionProvider.tsx", new Set(["domMin", "LazyMotion", "MotionConfig"])],
+  ["shared/ui/motion/transitions.ts", new Set(["Transition"])],
+]);
+
+const sharedLoadingLoopFiles = new Set([
+  "shared/ui/feedback/Skeleton.tsx",
+  "shared/ui/feedback/Spinner.tsx",
+]);
+
 const designTokenNamePattern =
   /^--(?:color|ease|font|motion|radius|shadow|z)-[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/u;
 
@@ -532,6 +545,143 @@ function collectMotionTokenDurationViolations(sources) {
   return violations;
 }
 
+function importedNames(importClause) {
+  const namedImports = /\{([^}]*)\}/u.exec(importClause)?.[1] ?? "";
+  return namedImports
+    .split(",")
+    .map(
+      (name) =>
+        name
+          .trim()
+          .replace(/^type\s+/u, "")
+          .split(/\s+as\s+/u)[0],
+    )
+    .filter(Boolean);
+}
+
+function collectMotionBoundaryViolations(sources) {
+  const violations = [];
+  for (const [path, source] of sources) {
+    let importsMotion = false;
+    for (const match of source.matchAll(
+      /import\s+(type\s+)?([^;]+?)\s+from\s+["'](motion(?:\/react)?|framer-motion)["']/gu,
+    )) {
+      importsMotion = true;
+      const packageName = match[3];
+      const line = lineNumberAt(source, match.index);
+      if (packageName !== "motion/react") {
+        violations.push(
+          makeViolation({
+            line,
+            message: "import Motion for React only through motion/react",
+            path,
+            rule: "motion-package-boundary",
+            subject: `${packageName}@${line}`,
+          }),
+        );
+      }
+
+      const allowedImports = motionImportContracts.get(path);
+      if (!allowedImports) {
+        violations.push(
+          makeViolation({
+            line,
+            message:
+              "declare Motion only in the approved provider, token, or leaf visual component",
+            path,
+            rule: "motion-import-boundary",
+            subject: `${packageName}@${line}`,
+          }),
+        );
+        continue;
+      }
+
+      for (const importedName of importedNames(match[2] ?? "")) {
+        if (allowedImports.has(importedName)) continue;
+        violations.push(
+          makeViolation({
+            line,
+            message: `${importedName} is outside this file's approved Motion feature contract`,
+            path,
+            rule: "motion-feature-boundary",
+            subject: `${importedName}@${line}`,
+          }),
+        );
+      }
+    }
+
+    if (!importsMotion) continue;
+    if (path !== "shared/ui/motion/transitions.ts") {
+      for (const match of source.matchAll(/\bduration\s*:\s*(?:\d+(?:\.\d+)?|\.\d+)/gu)) {
+        const line = lineNumberAt(source, match.index);
+        violations.push(
+          makeViolation({
+            line,
+            message: "use the shared Motion transition token instead of an inline duration",
+            path,
+            rule: "motion-duration-boundary",
+            subject: `${match[0]}@${line}`,
+          }),
+        );
+      }
+    }
+    for (const match of source.matchAll(
+      /\b(?:layout|layoutId|drag|whileDrag|whileInView|onAnimationComplete)\s*=/gu,
+    )) {
+      const line = lineNumberAt(source, match.index);
+      violations.push(
+        makeViolation({
+          line,
+          message:
+            "layout, gesture, viewport, and completion-driven Motion are outside the initial scope",
+          path,
+          rule: "motion-feature-boundary",
+          subject: `${match[0]}@${line}`,
+        }),
+      );
+    }
+  }
+  return violations;
+}
+
+function collectMotionEngineViolations(sources) {
+  const violations = [];
+  for (const [path, source] of sources) {
+    if (!path.endsWith(".tsx")) continue;
+    for (const candidate of collectClassStringCandidates(path, source)) {
+      for (const match of candidate.text.matchAll(
+        /\btransition-(?:colors|opacity|transform)\b/gu,
+      )) {
+        const line = lineNumberAt(source, candidate.start + match.index);
+        violations.push(
+          makeViolation({
+            line,
+            message: "use Motion for finite UI transitions instead of CSS transition utilities",
+            path,
+            rule: "finite-css-motion",
+            subject: `${match[0]}@${line}`,
+          }),
+        );
+      }
+      for (const match of candidate.text.matchAll(/\banimate-(?:bounce|ping|pulse|spin)\b/gu)) {
+        if (sharedLoadingLoopFiles.has(path)) continue;
+        const line = lineNumberAt(source, candidate.start + match.index);
+        violations.push(
+          makeViolation({
+            line,
+            message:
+              "keep indefinite loading loops inside the shared Spinner or Skeleton primitive",
+            path,
+            rule: "shared-loading-loop",
+            subject: `${match[0]}@${line}`,
+          }),
+        );
+      }
+    }
+  }
+  return violations;
+}
+
 function collectLegacyPlayerTokenViolations(sources) {
   const violations = [];
   for (const [path, source] of sources) {
@@ -844,6 +994,8 @@ export function collectUiPolicyViolations(sources) {
     ...collectRawColorViolations(sources),
     ...collectReducedMotionViolations(sources),
     ...collectMotionTokenDurationViolations(sources),
+    ...collectMotionBoundaryViolations(sources),
+    ...collectMotionEngineViolations(sources),
     ...collectLegacyPlayerTokenViolations(sources),
     ...collectDataVizPlayOrderViolations(sources),
     ...collectFeatureBoundaryViolations(sources),

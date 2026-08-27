@@ -20,7 +20,7 @@ test("accepts separated identities, shared choices, textual controls, and square
   assert.deepEqual(violations, []);
 });
 
-test("accepts defined token families, multiline reduced-motion classes, and dynamic SVG colors", () => {
+test("accepts defined token families, shared reduced-motion loops, and dynamic SVG colors", () => {
   const sources = new Map([
     [
       "styles.css",
@@ -40,7 +40,7 @@ test("accepts defined token families, multiline reduced-motion classes, and dyna
 }`,
     ],
     [
-      "features/example/ValidPolicy.tsx",
+      "shared/ui/feedback/Spinner.tsx",
       `const presentation = { color: "var(--color-action)" };
 const tokens = [
   "var(--radius-control)",
@@ -54,8 +54,6 @@ export function ValidPolicy() {
   return (
     <div
       className={\`
-        transition-opacity
-        motion-reduce:transition-none
         animate-spin
         motion-reduce:animate-none
       \`}
@@ -93,6 +91,8 @@ test("moves deterministic utility, token, color, spacing, and motion checks into
       "raw-tailwind-shadow",
       "reduced-motion-loop",
       "reduced-motion-transition",
+      "finite-css-motion",
+      "shared-loading-loop",
       "transition-all",
       "undefined-design-token-reference",
     ]),
@@ -123,6 +123,40 @@ test("moves deterministic utility, token, color, spacing, and motion checks into
   assert.equal(
     violations.filter((violation) => violation.rule === "direct-tailwind-palette").length,
     2,
+  );
+});
+
+test("enforces the approved Motion package, leaf imports, tokens, and feature scope", () => {
+  const sources = new Map([
+    ["styles.css", ""],
+    [
+      "features/example/BadMotion.tsx",
+      `import { AnimatePresence, motion } from "framer-motion";
+export function BadMotion() {
+  return (
+    <motion.div
+      animate={{ opacity: 1 }}
+      className="transition-opacity motion-reduce:transition-none animate-spin motion-reduce:animate-none"
+      duration={0.4}
+      layout
+      onAnimationComplete={() => undefined}
+    />
+  );
+}`,
+    ],
+  ]);
+
+  const rules = new Set(collectUiPolicyViolations(sources).map((violation) => violation.rule));
+
+  assert.deepEqual(
+    rules,
+    new Set([
+      "finite-css-motion",
+      "motion-feature-boundary",
+      "motion-import-boundary",
+      "motion-package-boundary",
+      "shared-loading-loop",
+    ]),
   );
 });
 

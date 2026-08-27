@@ -1,8 +1,9 @@
-import { Check, LoaderCircle } from "lucide-react";
+import { Check } from "lucide-react";
 import { useId } from "react";
 import type { ReactNode } from "react";
 
 import { cn } from "@/shared/ui/cn";
+import { SpinnerIcon } from "@/shared/ui/feedback/Spinner";
 
 export type ChoiceListOption<Value extends string = string> = {
   accessibleLabel?: string | undefined;
@@ -112,7 +113,7 @@ export function ChoiceList<Value extends string>({
                   )}
                 >
                   {option.pending ? (
-                    <LoaderCircle className="size-3.5 animate-spin motion-reduce:animate-none" />
+                    <SpinnerIcon size="sm" />
                   ) : selected ? (
                     <Check className="size-3.5" strokeWidth={3} />
                   ) : null}

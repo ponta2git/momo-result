@@ -109,5 +109,8 @@ export function seriesAnalysisAdminOverviewQueryOptions(
     queryFn: ({ signal }) => getSeriesAnalysisAdminOverview(gameTitleId, { signal }),
     enabled,
     placeholderData: keepPreviousData,
+    // The default response is seeded under its canonical title key before URL normalization.
+    // Keep that handoff fresh so canonicalizing the route does not issue the same request twice.
+    staleTime: 10_000,
   });
 }

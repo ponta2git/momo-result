@@ -3,7 +3,7 @@ import {
   DEFAULT_EXPORT_SLOW_THRESHOLD_MS,
 } from "@/features/exports/exportDownload";
 import { ExportWorkspace } from "@/features/exports/ExportWorkspace";
-import { useExportPageController } from "@/features/exports/useExportPageController";
+import { useExportPageModel } from "@/features/exports/useExportPageModel";
 
 type ExportPageProps = {
   downloadTimeoutMs?: number | undefined;
@@ -14,21 +14,7 @@ export function ExportPage({
   downloadTimeoutMs = DEFAULT_EXPORT_TIMEOUT_MS,
   slowThresholdMs = DEFAULT_EXPORT_SLOW_THRESHOLD_MS,
 }: ExportPageProps) {
-  const controller = useExportPageController({ downloadTimeoutMs, slowThresholdMs });
+  const model = useExportPageModel({ downloadTimeoutMs, slowThresholdMs });
 
-  return (
-    <ExportWorkspace
-      isPending={controller.isPending}
-      returnTo={controller.returnTo}
-      view={controller.view}
-      onCandidateChange={controller.onCandidateChange}
-      onCandidatePageChange={controller.onCandidatePageChange}
-      onCandidateRetry={controller.onCandidateRetry}
-      onSelectedCandidateRetry={controller.onSelectedCandidateRetry}
-      onDownload={controller.onDownload}
-      onFormatChange={controller.onFormatChange}
-      onResetConditions={controller.onResetConditions}
-      onScopeChange={controller.onScopeChange}
-    />
-  );
+  return <ExportWorkspace model={model} />;
 }

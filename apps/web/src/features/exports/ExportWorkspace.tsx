@@ -9,36 +9,14 @@ import { ExportActionPanel } from "./ExportActionPanel";
 import { ExportCandidateSelect } from "./ExportCandidateSelect";
 import { ExportFormatTabs } from "./ExportFormatTabs";
 import { ExportScopeTabs } from "./ExportScopeTabs";
-import type { ExportFormat, ExportScope } from "./exportTypes";
-import type { ExportViewModel } from "./exportViewModel";
+import type { ExportPageModel } from "./useExportPageModel";
 
 type ExportWorkspaceProps = {
-  isPending: boolean;
-  onCandidateChange: (value: string) => void;
-  onCandidatePageChange: (page: number) => void;
-  onCandidateRetry: () => void;
-  onSelectedCandidateRetry: () => void;
-  onDownload: () => void;
-  onFormatChange: (format: ExportFormat) => void;
-  onResetConditions: () => void;
-  onScopeChange: (scope: ExportScope) => void;
-  returnTo?: string | undefined;
-  view: ExportViewModel;
+  model: ExportPageModel;
 };
 
-export function ExportWorkspace({
-  isPending,
-  onCandidateChange,
-  onCandidatePageChange,
-  onCandidateRetry,
-  onSelectedCandidateRetry,
-  onDownload,
-  onFormatChange,
-  onResetConditions,
-  onScopeChange,
-  returnTo,
-  view,
-}: ExportWorkspaceProps) {
+export function ExportWorkspace({ model }: ExportWorkspaceProps) {
+  const { candidate, conditions, download, navigation, view } = model;
   const showActionPanel =
     view.errors.length > 0 ||
     view.candidate.kind === "hidden" ||
@@ -46,12 +24,12 @@ export function ExportWorkspace({
 
   return (
     <PageFrame width="narrow">
-      {returnTo ? (
+      {navigation.returnTo ? (
         <div>
           <LinkButton
             icon={<ArrowLeft aria-hidden="true" className="size-4" />}
             size="sm"
-            to={returnTo}
+            to={navigation.returnTo}
             variant="quiet"
           >
             前の画面へ戻る
@@ -66,27 +44,35 @@ export function ExportWorkspace({
         padding="compact"
         role="region"
       >
-        <ExportScopeTabs disabled={isPending} scope={view.scope} onChange={onScopeChange}>
+        <ExportScopeTabs
+          disabled={download.pending}
+          scope={view.scope}
+          onChange={conditions.changeScope}
+        >
           <ExportCandidateSelect
-            disabled={isPending || view.candidateRefreshing}
+            disabled={download.pending || view.candidateRefreshing}
             refreshing={view.candidateRefreshing}
             scope={view.scope}
             view={view.candidate}
-            onChange={onCandidateChange}
-            onPageChange={onCandidatePageChange}
-            onRetry={onCandidateRetry}
-            onSelectedCandidateRetry={onSelectedCandidateRetry}
-            onScopeChange={onScopeChange}
+            onChange={candidate.change}
+            onPageChange={candidate.changePage}
+            onRetry={candidate.retryDirectory}
+            onSelectedCandidateRetry={candidate.retrySelection}
+            onScopeChange={conditions.changeScope}
           />
         </ExportScopeTabs>
 
-        <ExportFormatTabs disabled={isPending} format={view.format} onChange={onFormatChange}>
+        <ExportFormatTabs
+          disabled={download.pending}
+          format={view.format}
+          onChange={conditions.changeFormat}
+        >
           {showActionPanel ? (
             <ExportActionPanel
-              isPending={isPending}
+              isPending={download.pending}
               view={view}
-              onDownload={onDownload}
-              onResetConditions={onResetConditions}
+              onDownload={download.start}
+              onResetConditions={conditions.reset}
             />
           ) : null}
         </ExportFormatTabs>

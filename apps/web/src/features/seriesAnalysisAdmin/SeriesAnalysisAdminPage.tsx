@@ -6,7 +6,7 @@ import {
   RecentJobs,
   SelectedTitleStatus,
 } from "@/features/seriesAnalysisAdmin/SeriesAnalysisAdminStatus";
-import { useSeriesAnalysisAdminController } from "@/features/seriesAnalysisAdmin/useSeriesAnalysisAdminController";
+import { useSeriesAnalysisAdminPageModel } from "@/features/seriesAnalysisAdmin/useSeriesAnalysisAdminPageModel";
 import { Button } from "@/shared/ui/actions/Button";
 import { AlertDialog } from "@/shared/ui/feedback/Dialog";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
@@ -17,28 +17,16 @@ import { PageFrame } from "@/shared/ui/layout/PageFrame";
 import { PageHeader } from "@/shared/ui/layout/PageHeader";
 
 export function SeriesAnalysisAdminPage() {
-  const page = useSeriesAnalysisAdminController();
-  const data = page.data;
-  const selectedTitleCandidate = data?.selectedTitle;
-  const selectedGameTitleId = page.gameTitleId ?? selectedTitleCandidate?.gameTitleId;
-  const selectedTitle =
-    selectedTitleCandidate && selectedTitleCandidate.gameTitleId === selectedGameTitleId
-      ? selectedTitleCandidate
-      : null;
-  const titleRecalculationReserved = Boolean(selectedTitle?.pendingManualRun);
-  const titleOptions =
-    data?.titleOptions.map((title) => ({
-      label: `${title.gameTitleName} (${title.confirmedMatchCount}戦)`,
-      value: title.gameTitleId,
-    })) ?? [];
+  const page = useSeriesAnalysisAdminPageModel();
+  const { data } = page.resource;
   return (
     <PageFrame width="wide">
       <PageHeader
         actions={
-          data && !page.error ? (
+          data && !page.feedback.resourceError ? (
             <Button
               icon={<RefreshCw aria-hidden="true" className="size-4" />}
-              pending={page.refreshing}
+              pending={page.resource.refreshing}
               pendingLabel="状態を更新中"
               size="sm"
               variant="secondary"
@@ -53,22 +41,22 @@ export function SeriesAnalysisAdminPage() {
         description="保存済み分析の状態確認と、作品単位または全作品の再計算を行います。"
       />
       <PageContentSurface className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-6">
-        {page.mutationError ? (
-          <Notice tone="danger" title={page.mutationError.title}>
-            {page.mutationError.detail}
+        {page.feedback.mutationError ? (
+          <Notice tone="danger" title={page.feedback.mutationError.title}>
+            {page.feedback.mutationError.detail}
           </Notice>
         ) : null}
-        {page.acceptanceMessage ? (
-          <Notice tone="success" title={page.acceptanceMessage.title}>
-            {page.acceptanceMessage.detail}
+        {page.feedback.acceptance ? (
+          <Notice tone="success" title={page.feedback.acceptance.title}>
+            {page.feedback.acceptance.detail}
           </Notice>
         ) : null}
-        {page.error ? (
-          <Notice tone={data ? "warning" : "danger"} title={page.error.title}>
-            <p>{page.error.detail}</p>
+        {page.feedback.resourceError ? (
+          <Notice tone={data ? "warning" : "danger"} title={page.feedback.resourceError.title}>
+            <p>{page.feedback.resourceError.detail}</p>
             <div className="mt-3">
               <Button
-                pending={page.refreshing}
+                pending={page.resource.refreshing}
                 pendingLabel="再読み込み中"
                 size="sm"
                 variant={data ? "secondary" : "primary"}
@@ -79,7 +67,7 @@ export function SeriesAnalysisAdminPage() {
             </div>
           </Notice>
         ) : null}
-        {page.loading && !data ? (
+        {page.resource.loading && !data ? (
           <AdminSkeleton />
         ) : data?.titleOptions.length === 0 ? (
           <EmptyState
@@ -96,23 +84,23 @@ export function SeriesAnalysisAdminPage() {
             >
               <SelectField
                 label="対象作品"
-                options={titleOptions}
-                value={selectedGameTitleId ?? ""}
+                options={page.selection.options}
+                value={page.selection.gameTitleId ?? ""}
                 onChange={(event) => page.actions.selectTitle(event.currentTarget.value)}
               />
               <Button
-                disabled={!selectedGameTitleId || titleRecalculationReserved}
+                disabled={!page.selection.gameTitleId || page.recalculation.titleReserved}
                 icon={<Play className="size-4" />}
-                pending={page.pendingTitle}
+                pending={page.recalculation.titlePending}
                 pendingLabel="受け付け中"
                 onClick={() => void page.actions.recalculateTitle()}
               >
-                {titleRecalculationReserved ? "再計算を予約済み" : "この作品を再計算"}
+                {page.recalculation.titleReserved ? "再計算を予約済み" : "この作品を再計算"}
               </Button>
               <AlertDialog
                 confirmLabel="全作品を再計算"
                 description={`${data.titleOptions.length}作品を対象として予約します。実行中の作品は完了後に再計算されます。`}
-                pending={page.pendingAll}
+                pending={page.recalculation.allPending}
                 title="全作品の再計算を予約しますか？"
                 tone="primary"
                 trigger={
@@ -124,14 +112,14 @@ export function SeriesAnalysisAdminPage() {
                   await page.actions.recalculateAll();
                 }}
               />
-              {titleRecalculationReserved ? (
+              {page.recalculation.titleReserved ? (
                 <p className="text-sm text-[var(--color-text-secondary)] lg:col-span-full">
                   この作品には未完了の手動再計算予約があります。完了後にもう一度予約できます。
                 </p>
               ) : null}
             </section>
             <ExecutionStatus data={data} />
-            <SelectedTitleStatus selected={selectedTitle} />
+            <SelectedTitleStatus selected={page.selection.selectedTitle} />
             <RecentJobs jobs={data.recentJobs} />
           </>
         ) : null}

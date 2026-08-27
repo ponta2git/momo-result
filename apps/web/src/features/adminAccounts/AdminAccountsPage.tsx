@@ -1,9 +1,8 @@
 import { ShieldCheck, UserPlus } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
 
 import { AdminAccountCreateDialog } from "@/features/adminAccounts/AdminAccountCreateDialog";
 import { AdminAccountRow } from "@/features/adminAccounts/AdminAccountRow";
-import { useAdminAccountsPageController } from "@/features/adminAccounts/useAdminAccountsPageController";
+import { useAdminAccountsPageModel } from "@/features/adminAccounts/useAdminAccountsPageModel";
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
 import {
@@ -18,40 +17,8 @@ import { PageFrame } from "@/shared/ui/layout/PageFrame";
 import { PageHeader } from "@/shared/ui/layout/PageHeader";
 
 export function AdminAccountsPage() {
-  const {
-    accounts,
-    accountsError,
-    accountsLoadFailed,
-    accountsLoading,
-    accountsRefreshing,
-    accountsStale,
-    createAction,
-    createPending,
-    createState,
-    retryAccounts,
-    updateMutation,
-  } = useAdminAccountsPageController();
-  const [createOpen, setCreateOpen] = useState(false);
-  const createTriggerRef = useRef<HTMLButtonElement>(null);
-  const focusCreateTriggerAfterSuccessRef = useRef(false);
-  const previousCreateVersion = useRef(createState.version);
-
-  useEffect(() => {
-    if (createState.version !== previousCreateVersion.current) {
-      previousCreateVersion.current = createState.version;
-      focusCreateTriggerAfterSuccessRef.current = true;
-      setCreateOpen(false);
-    }
-  }, [createState.version]);
-
-  const hasAccounts = accounts.length > 0;
-
-  useEffect(() => {
-    if (!createOpen && hasAccounts && focusCreateTriggerAfterSuccessRef.current) {
-      focusCreateTriggerAfterSuccessRef.current = false;
-      createTriggerRef.current?.focus();
-    }
-  }, [createOpen, hasAccounts]);
+  const page = useAdminAccountsPageModel();
+  const hasAccounts = page.list.kind === "ready" && page.list.items.length > 0;
 
   return (
     <PageFrame>
@@ -62,10 +29,10 @@ export function AdminAccountsPage() {
         actions={
           hasAccounts ? (
             <Button
-              ref={createTriggerRef}
+              ref={page.create.triggerRef}
               icon={<UserPlus aria-hidden="true" className="size-4" />}
               variant="secondary"
-              onClick={() => setCreateOpen(true)}
+              onClick={page.create.open}
             >
               アカウントを追加
             </Button>
@@ -74,21 +41,21 @@ export function AdminAccountsPage() {
       />
 
       <PageContentSurface aria-label="ログインアカウント一覧" className="grid gap-4" role="region">
-        {accountsLoading ? (
+        {page.list.kind === "loading" ? (
           <div className="grid gap-3" aria-label="ログインアカウントを読み込み中">
             <Skeleton className="min-h-10" />
             <Skeleton className="min-h-16" />
             <Skeleton className="min-h-16" />
           </div>
-        ) : accountsLoadFailed ? (
-          <Notice tone="danger" title={accountsError?.title ?? "アカウントを読み込めません"}>
-            <p>{accountsError?.detail ?? "通信状態を確認して、もう一度お試しください。"}</p>
+        ) : page.list.kind === "loadFailed" ? (
+          <Notice tone="danger" title={page.list.error?.title ?? "アカウントを読み込めません"}>
+            <p>{page.list.error?.detail ?? "通信状態を確認して、もう一度お試しください。"}</p>
             <div className="mt-3">
               <Button
-                pending={accountsRefreshing}
+                pending={page.list.refresh.pending}
                 pendingLabel="再読み込み中"
                 size="sm"
-                onClick={retryAccounts}
+                onClick={page.list.refresh.run}
               >
                 アカウントを再読み込み
               </Button>
@@ -96,37 +63,37 @@ export function AdminAccountsPage() {
           </Notice>
         ) : (
           <div className="grid gap-4">
-            {accountsStale ? (
+            {page.list.stale ? (
               <Notice tone="warning" title="最新のアカウント情報を取得できません">
                 <p>直前に取得した内容を表示しています。</p>
                 <div className="mt-3">
                   <Button
-                    pending={accountsRefreshing}
+                    pending={page.list.refresh.pending}
                     pendingLabel="再読み込み中"
                     size="sm"
                     variant="secondary"
-                    onClick={retryAccounts}
+                    onClick={page.list.refresh.run}
                   >
                     最新情報を再読み込み
                   </Button>
                 </div>
               </Notice>
             ) : null}
-            {accounts.length === 0 ? (
+            {page.list.items.length === 0 ? (
               <EmptyState
                 action={
                   <Button
                     icon={<UserPlus aria-hidden="true" className="size-4" />}
-                    onClick={() => setCreateOpen(true)}
+                    onClick={page.create.open}
                   >
-                    {accountsStale ? "アカウントを追加" : "最初のアカウントを追加"}
+                    {page.list.stale ? "アカウントを追加" : "最初のアカウントを追加"}
                   </Button>
                 }
                 description="利用を許可するDiscordアカウントを登録します。"
                 icon={<ShieldCheck className="size-5" />}
                 placement="embedded"
                 title={
-                  accountsStale
+                  page.list.stale
                     ? "前回取得時点ではログイン可能なアカウントがありません"
                     : "ログイン可能なアカウントはまだありません"
                 }
@@ -156,24 +123,15 @@ export function AdminAccountsPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {accounts.map((account) => {
-                        const rowPending =
-                          updateMutation.isPending &&
-                          updateMutation.variables?.accountId === account.accountId;
+                      {page.list.items.map((account) => {
+                        const pendingRequest = page.update.pendingRequestFor(account.accountId);
                         return (
                           <AdminAccountRow
                             account={account}
-                            isPending={updateMutation.isPending}
+                            isPending={page.update.pending}
                             key={account.accountId}
-                            pendingRequest={
-                              rowPending ? updateMutation.variables?.request : undefined
-                            }
-                            onPatch={async (request) => {
-                              await updateMutation.mutateAsync({
-                                accountId: account.accountId,
-                                request,
-                              });
-                            }}
+                            pendingRequest={pendingRequest}
+                            onPatch={(request) => page.update.run(account.accountId, request)}
                           />
                         );
                       })}
@@ -186,14 +144,7 @@ export function AdminAccountsPage() {
         )}
       </PageContentSurface>
 
-      <AdminAccountCreateDialog
-        action={createAction}
-        error={createState.error}
-        formKey={createState.version}
-        open={createOpen}
-        pending={createPending}
-        onOpenChange={setCreateOpen}
-      />
+      <AdminAccountCreateDialog model={page.create.dialog} />
     </PageFrame>
   );
 }

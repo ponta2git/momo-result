@@ -69,6 +69,23 @@ describe("SeriesAnalysisAdminPage", () => {
     await waitFor(() => expect(overviewRequests).toBe(2));
   });
 
+  it("canonicalizes the default title without fetching the same overview twice", async () => {
+    setDevUser();
+    let overviewRequests = 0;
+    server.use(
+      http.get("/api/admin/series-analysis/overview", () => {
+        overviewRequests += 1;
+        return HttpResponse.json(makeSeriesAnalysisAdminOverview());
+      }),
+    );
+
+    const router = renderAdminPage();
+
+    expect(await screen.findByRole("heading", { name: "全体の実行状況" })).toBeInTheDocument();
+    await waitFor(() => expect(router.state.location.search).toBe("?gameTitleId=gt_momotetsu_2"));
+    expect(overviewRequests).toBe(1);
+  });
+
   it("renders the job ledger and sends contract-valid idempotent recalculation requests", async () => {
     setDevUser();
     const titleRequests: Array<{ body: unknown; idempotencyKey: string | null }> = [];

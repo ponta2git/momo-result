@@ -4,6 +4,7 @@ import { useSearchParams } from "react-router-dom";
 
 import { runIdempotentMutation } from "@/shared/api/idempotency";
 import { normalizeDisplayApiError } from "@/shared/api/problemDetails";
+import { isInitialQueryLoading, shouldShowQueryError } from "@/shared/api/queryErrorState";
 import { seriesAnalysisKeys } from "@/shared/api/queryKeys";
 import {
   requestAllSeriesAnalysisRecalculation,
@@ -14,21 +15,31 @@ import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
 
 type AcceptanceMessage = { detail: string; title: string };
 
-export function useSeriesAnalysisAdminController() {
+/**
+ * Owns the route selection, server resource lifecycle, and recalculation commands for the page.
+ * The returned contract contains display-ready sections rather than TanStack Query results.
+ */
+export function useSeriesAnalysisAdminPageModel() {
   const queryClient = useQueryClient();
   const idempotencyKeys = useIdempotencyKeyStore();
   const [searchParams, setSearchParams] = useSearchParams();
   const gameTitleId = searchParams.get("gameTitleId")?.trim() || undefined;
   const [acceptanceMessage, setAcceptanceMessage] = useState<AcceptanceMessage | undefined>();
   const overviewQuery = useQuery(seriesAnalysisAdminOverviewQueryOptions(gameTitleId));
+  const overview = overviewQuery.data;
+  const canonicalGameTitleId = overview?.selectedTitle?.gameTitleId;
 
   useEffect(() => {
-    if (!gameTitleId && overviewQuery.data?.selectedTitle?.gameTitleId) {
+    if (!gameTitleId && canonicalGameTitleId && overview) {
+      queryClient.setQueryData(
+        seriesAnalysisAdminOverviewQueryOptions(canonicalGameTitleId).queryKey,
+        overview,
+      );
       const next = new URLSearchParams(searchParams);
-      next.set("gameTitleId", overviewQuery.data.selectedTitle.gameTitleId);
+      next.set("gameTitleId", canonicalGameTitleId);
       setSearchParams(next, { replace: true });
     }
-  }, [gameTitleId, overviewQuery.data?.selectedTitle?.gameTitleId, searchParams, setSearchParams]);
+  }, [canonicalGameTitleId, gameTitleId, overview, queryClient, searchParams, setSearchParams]);
 
   const invalidate = async () => {
     await Promise.all([
@@ -77,12 +88,18 @@ export function useSeriesAnalysisAdminController() {
   });
 
   const mutationError = titleMutation.error ?? allMutation.error;
+  const selectedGameTitleId = gameTitleId ?? canonicalGameTitleId;
+  const selectedTitleCandidate = overview?.selectedTitle;
+  const selectedTitle =
+    selectedTitleCandidate && selectedTitleCandidate.gameTitleId === selectedGameTitleId
+      ? selectedTitleCandidate
+      : null;
+
   return {
-    acceptanceMessage,
     actions: {
       recalculateAll: () => allMutation.mutateAsync(),
       recalculateTitle: () => {
-        const targetGameTitleId = gameTitleId ?? overviewQuery.data?.selectedTitle?.gameTitleId;
+        const targetGameTitleId = selectedGameTitleId;
         if (!targetGameTitleId) return Promise.resolve(undefined);
         return titleMutation.mutateAsync(targetGameTitleId);
       },
@@ -95,15 +112,33 @@ export function useSeriesAnalysisAdminController() {
         setSearchParams(next, { replace: true });
       },
     },
-    data: overviewQuery.data,
-    error: overviewQuery.isError ? normalizeDisplayApiError(overviewQuery.error) : undefined,
-    gameTitleId,
-    loading: overviewQuery.isPending,
-    mutationError: mutationError
-      ? normalizeDisplayApiError(mutationError, "再計算を受け付けられません")
-      : undefined,
-    pendingAll: allMutation.isPending,
-    pendingTitle: titleMutation.isPending,
-    refreshing: overviewQuery.isFetching,
+    feedback: {
+      acceptance: acceptanceMessage,
+      mutationError: mutationError
+        ? normalizeDisplayApiError(mutationError, "再計算を受け付けられません")
+        : undefined,
+      resourceError: shouldShowQueryError(overviewQuery)
+        ? normalizeDisplayApiError(overviewQuery.error)
+        : undefined,
+    },
+    recalculation: {
+      allPending: allMutation.isPending,
+      titlePending: titleMutation.isPending,
+      titleReserved: Boolean(selectedTitle?.pendingManualRun),
+    },
+    resource: {
+      data: overview,
+      loading: isInitialQueryLoading(overviewQuery),
+      refreshing: overviewQuery.isFetching,
+    },
+    selection: {
+      gameTitleId: selectedGameTitleId,
+      options:
+        overview?.titleOptions.map((title) => ({
+          label: `${title.gameTitleName} (${title.confirmedMatchCount}戦)`,
+          value: title.gameTitleId,
+        })) ?? [],
+      selectedTitle,
+    },
   };
 }

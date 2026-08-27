@@ -1,5 +1,6 @@
 import { useFormStatus } from "react-dom";
 
+import type { AdminAccountCreateDialogModel } from "@/features/adminAccounts/useAdminAccountsPageModel";
 import { canonicalResultMembers } from "@/shared/domain/members";
 import { Button } from "@/shared/ui/actions/Button";
 import { Dialog, dialogFooterClassName } from "@/shared/ui/feedback/Dialog";
@@ -17,28 +18,15 @@ const accountPlayerOptions = [
   })),
 ];
 
-export function AdminAccountCreateDialog({
-  action,
-  error,
-  formKey,
-  onOpenChange,
-  open,
-  pending,
-}: {
-  action: (formData: FormData) => void;
-  error: string;
-  formKey: number;
-  onOpenChange: (open: boolean) => void;
-  open: boolean;
-  pending: boolean;
-}) {
+export function AdminAccountCreateDialog({ model }: { model: AdminAccountCreateDialogModel }) {
+  const { action, error, formKey, open, pending, setOpen } = model;
   return (
     <Dialog
       busy={pending}
       description="Discordの利用者と、必要な場合だけ試合参加者・管理者権限を紐づけます。"
       open={open}
       title="アカウントを追加"
-      onOpenChange={onOpenChange}
+      onOpenChange={setOpen}
     >
       <form key={formKey} action={action} className="grid gap-4 pt-1">
         {error ? (
@@ -65,7 +53,7 @@ export function AdminAccountCreateDialog({
           <CheckboxField label="管理者" name="isAdmin" />
         </Fieldset>
         <div className={dialogFooterClassName}>
-          <Button disabled={pending} variant="secondary" onClick={() => onOpenChange(false)}>
+          <Button disabled={pending} variant="secondary" onClick={() => setOpen(false)}>
             キャンセル
           </Button>
           <CreateAccountSubmitButton />

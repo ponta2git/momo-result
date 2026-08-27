@@ -14,6 +14,7 @@ import momo.api.domain.{LoginAccount, Member}
 import momo.api.ports.queue.OcrJobQueuePublisher
 import momo.api.repositories.{
   ImageReferenceRepository,
+  MatchNotesRepository,
   OcrJobMaintenanceRepository,
   SessionAccountLookup
 }
@@ -102,6 +103,7 @@ private[bootstrap] object InMemoryApiRuntime:
       matchesBase <- InMemoryMatchesRepository.create[F]
       matches = InMemoryMatchesRepository
         .withConfirmedDraftCleanup[F](matchesBase, matchDrafts)
+      matchNotes: MatchNotesRepository[F] = matchesBase
       matchExports = matchesBase
       matchList = InMemoryMatchListReadModel[F](matches, matchDrafts)
       matchConfirmation = InMemoryMatchConfirmationRepository[F](
@@ -183,6 +185,7 @@ private[bootstrap] object InMemoryApiRuntime:
         heldEvents = heldEvents,
         heldEventDeletion = heldEventDeletion,
         matches = matches,
+        matchNotes = matchNotes,
         matchExports = matchExports,
         matchDrafts = matchDrafts,
         matchDraftCancellation = matchDraftCancellation,

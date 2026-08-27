@@ -95,7 +95,7 @@ object PostgresMatches extends PostgresMatchesReadSupport:
       (selectMatch ++ fr"WHERE id = $id").query[MatchRow].option.flatMap {
         case None => Option.empty[MatchRecord].pure[ConnectionIO]
         case Some(row) => loadPlayersBatch(List(id))
-            .map(byMid => byMid.get(id).map(p => toRecord(row, p)))
+            .flatMap(byMid => byMid.get(id).traverse(p => toRecord(row, p)))
       }
 
     override def list(filter: MatchesRepository.ListFilter): ConnectionIO[List[MatchRecord]] =
@@ -111,7 +111,8 @@ object PostgresMatches extends PostgresMatchesReadSupport:
         rows <- (selectMatch ++ where ++ fr"ORDER BY played_at DESC, created_at DESC" ++ limit)
           .query[MatchRow].to[List]
         byMid <- loadPlayersBatch(rows.map(_.id))
-      yield rows.flatMap(r => byMid.get(r.id).map(p => toRecord(r, p)))
+        records <- rows.traverse(r => byMid.get(r.id).traverse(p => toRecord(r, p)))
+      yield records.flatten
 
     override def listByHeldEvent(heldEventId: HeldEventId): ConnectionIO[List[MatchRecord]] =
       for
@@ -119,7 +120,8 @@ object PostgresMatches extends PostgresMatchesReadSupport:
         (selectMatch ++ fr"WHERE held_event_id = $heldEventId" ++ fr"ORDER BY match_no_in_event")
           .query[MatchRow].to[List]
         byMid <- loadPlayersBatch(rows.map(_.id))
-      yield rows.flatMap(r => byMid.get(r.id).map(p => toRecord(r, p)))
+        records <- rows.traverse(r => byMid.get(r.id).traverse(p => toRecord(r, p)))
+      yield records.flatten
 
     override def existsMatchNo(
         heldEventId: HeldEventId,

@@ -100,3 +100,23 @@ export function SelectControl({
     />
   );
 }
+
+export type TextareaControlProps = ControlPresentationProps &
+  Omit<ComponentPropsWithRef<"textarea">, "aria-invalid">;
+
+export function TextareaControl({
+  className,
+  density = "default",
+  invalid = false,
+  textAlign = "start",
+  tone = "default",
+  ...props
+}: TextareaControlProps) {
+  return (
+    <textarea
+      {...props}
+      aria-invalid={invalid || undefined}
+      className={controlClassName({ className, density, invalid, textAlign, tone })}
+    />
+  );
+}

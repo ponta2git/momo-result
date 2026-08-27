@@ -54,8 +54,9 @@ export type MatchDraftSummary = {
 
 export type WorkspaceMode = "review" | "create" | "edit";
 
-export type MatchFormValues = ConfirmMatchFormValues & {
+export type MatchFormValues = Omit<ConfirmMatchFormValues, "noteBody"> & {
   matchDraftId?: string;
+  noteBody: string;
 };
 
 export type MatchWorkspaceInitialData = {
@@ -91,5 +92,6 @@ export function createEmptyMatchForm(nowIso: string): MatchFormValues {
     playedAt: nowIso,
     players: emptyPlayers(),
     seasonMasterId: "",
+    noteBody: "",
   };
 }

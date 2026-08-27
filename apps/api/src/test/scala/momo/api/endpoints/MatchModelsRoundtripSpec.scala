@@ -200,7 +200,13 @@ final class MatchModelsRoundtripSpec extends FunSuite:
         ],
         "createdByAccountId": "account_a",
         "createdByMemberId": "member_a",
-        "createdAt": "2026-04-30T13:00:00Z"
+        "createdAt": "2026-04-30T13:00:00Z",
+        "note": {
+          "body": null,
+          "version": "0",
+          "updatedByDisplayName": null,
+          "updatedAt": null
+        }
       }
     """).getOrElse(Json.Null)
     assertEquals(response.asJson, expected)
@@ -228,7 +234,8 @@ final class MatchModelsRoundtripSpec extends FunSuite:
           { "memberId": "member_b", "rank": 2, "playOrder": 2 },
           { "memberId": "member_c", "rank": 3, "playOrder": 3 },
           { "memberId": "member_d", "rank": 4, "playOrder": 4 }
-        ]
+        ],
+        "hasNote": null
       }
     """).getOrElse(Json.Null)
     assertEquals(response.asJson, expected)

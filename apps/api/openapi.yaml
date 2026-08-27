@@ -2118,7 +2118,7 @@
             "content" : {
               "application/json" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/MatchDetailResponse"
+                  "$ref" : "#/components/schemas/UpdateMatchResponse"
                 }
               }
             }
@@ -2199,6 +2199,98 @@
               "application/json" : {
                 "schema" : {
                   "$ref" : "#/components/schemas/DeleteMatchResponse"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "headers" : {
+              "Retry-After" : {
+                "required" : false,
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            },
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/matches/{matchId}/note" : {
+      "put" : {
+        "tags" : [
+          "matches"
+        ],
+        "operationId" : "putApiMatchesMatchidNote",
+        "parameters" : [
+          {
+            "name" : "X-Momo-Account-Id",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "X-CSRF-Token",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "matchId",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "Idempotency-Key",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ReplaceMatchNoteRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ReplaceMatchNoteResponse"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid value for: body",
+            "content" : {
+              "text/plain" : {
+                "schema" : {
+                  "type" : "string"
                 }
               }
             }
@@ -4767,6 +4859,9 @@
             "items" : {
               "$ref" : "#/components/schemas/PlayerResultRequest"
             }
+          },
+          "noteBody" : {
+            "type" : "string"
           }
         }
       },
@@ -5254,6 +5349,9 @@
             "items" : {
               "$ref" : "#/components/schemas/HeldEventPlayerResultResponse"
             }
+          },
+          "noteBody" : {
+            "type" : "string"
           }
         }
       },
@@ -5539,7 +5637,8 @@
           "mapMasterId",
           "playedAt",
           "createdByAccountId",
-          "createdAt"
+          "createdAt",
+          "note"
         ],
         "properties" : {
           "matchId" : {
@@ -5593,6 +5692,9 @@
           },
           "createdAt" : {
             "type" : "string"
+          },
+          "note" : {
+            "$ref" : "#/components/schemas/MatchNoteResponse"
           }
         }
       },
@@ -5816,6 +5918,27 @@
           }
         }
       },
+      "MatchNoteResponse" : {
+        "title" : "MatchNoteResponse",
+        "type" : "object",
+        "required" : [
+          "version"
+        ],
+        "properties" : {
+          "body" : {
+            "type" : "string"
+          },
+          "version" : {
+            "type" : "string"
+          },
+          "updatedByDisplayName" : {
+            "type" : "string"
+          },
+          "updatedAt" : {
+            "type" : "string"
+          }
+        }
+      },
       "MatchRankEntry" : {
         "title" : "MatchRankEntry",
         "type" : "object",
@@ -5897,6 +6020,9 @@
             "items" : {
               "$ref" : "#/components/schemas/MatchRankEntry"
             }
+          },
+          "hasNote" : {
+            "type" : "boolean"
           }
         }
       },
@@ -6249,6 +6375,7 @@
               "UNSUPPORTED_MEDIA_TYPE",
               "PAYLOAD_TOO_LARGE",
               "CONFLICT",
+              "MATCH_NOTE_VERSION_CONFLICT",
               "IDEMPOTENCY_IN_PROGRESS",
               "IDEMPOTENCY_PAYLOAD_MISMATCH",
               "TOO_MANY_REQUESTS",
@@ -6263,6 +6390,37 @@
               "DEPENDENCY_FAILED",
               "INTERNAL_ERROR"
             ]
+          }
+        }
+      },
+      "ReplaceMatchNoteRequest" : {
+        "title" : "ReplaceMatchNoteRequest",
+        "type" : "object",
+        "required" : [
+          "expectedVersion"
+        ],
+        "properties" : {
+          "body" : {
+            "type" : "string"
+          },
+          "expectedVersion" : {
+            "type" : "string"
+          }
+        }
+      },
+      "ReplaceMatchNoteResponse" : {
+        "title" : "ReplaceMatchNoteResponse",
+        "type" : "object",
+        "required" : [
+          "matchId",
+          "version"
+        ],
+        "properties" : {
+          "matchId" : {
+            "type" : "string"
+          },
+          "version" : {
+            "type" : "string"
           }
         }
       },
@@ -7015,6 +7173,27 @@
             "items" : {
               "$ref" : "#/components/schemas/PlayerResultRequest"
             }
+          }
+        }
+      },
+      "UpdateMatchResponse" : {
+        "title" : "UpdateMatchResponse",
+        "type" : "object",
+        "required" : [
+          "matchId",
+          "heldEventId",
+          "matchNoInEvent"
+        ],
+        "properties" : {
+          "matchId" : {
+            "type" : "string"
+          },
+          "heldEventId" : {
+            "type" : "string"
+          },
+          "matchNoInEvent" : {
+            "type" : "integer",
+            "format" : "int32"
           }
         }
       },

@@ -4,6 +4,11 @@ import type { ConfirmMatchRequest } from "@/shared/api/matches";
 import { fixedMemberIds } from "@/shared/domain/members";
 
 const memberIds = [...fixedMemberIds] as [string, ...string[]];
+export const matchNoteMaximumCharacters = 150;
+
+export function normalizeMatchNote(value: string): string {
+  return value.replaceAll("\r\n", "\n").replaceAll("\r", "\n");
+}
 
 const incidentSchema = z.object({
   destination: z.number().int().min(0),
@@ -69,6 +74,15 @@ export const confirmMatchSchema = z
       incidentLog: z.string().optional(),
     }),
     players: z.array(playerSchema).length(4, "4人分の結果が必要です"),
+    noteBody: z
+      .string()
+      .default("")
+      .refine(
+        (value) => Array.from(normalizeMatchNote(value)).length <= matchNoteMaximumCharacters,
+        {
+          message: `試合メモは${matchNoteMaximumCharacters}字以内で入力してください`,
+        },
+      ),
   })
   .superRefine((value, ctx) => {
     const memberSet = new Set(value.players.map((player) => player.memberId));
@@ -94,10 +108,12 @@ export const confirmMatchSchema = z
     }
   })
   .transform((values): ConfirmMatchRequest => {
-    const { matchDraftId, ...rest } = values;
+    const { matchDraftId, noteBody, ...rest } = values;
+    const normalizedNote = normalizeMatchNote(noteBody);
     return {
       ...rest,
       ...(matchDraftId ? { matchDraftId } : {}),
+      ...(normalizedNote.trim().length > 0 ? { noteBody: normalizedNote } : {}),
       draftIds: pruneDraftIds(values.draftIds),
       playedAt: toIsoFromLocal(values.playedAt),
     };

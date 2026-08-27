@@ -148,6 +148,7 @@ final class InMemoryMatchListReadModel[F[_]: Monad](
           updatedAt = record.createdAt,
           ranks = record.players.byPlayOrder
             .map(p => MatchListRankEntry(p.memberId, p.rank, p.playOrder)),
+          hasNote = Some(record.note.body.isDefined),
         )
       }
 
@@ -170,6 +171,7 @@ final class InMemoryMatchListReadModel[F[_]: Monad](
           createdAt = draft.createdAt,
           updatedAt = draft.updatedAt,
           ranks = Nil,
+          hasNote = None,
         )
       }
 

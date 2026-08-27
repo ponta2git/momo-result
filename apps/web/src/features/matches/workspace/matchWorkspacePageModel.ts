@@ -145,6 +145,14 @@ export function buildMatchWorkspacePageModel(
 
   return {
     editor: {
+      note:
+        mode === "edit"
+          ? null
+          : {
+              error: validation.visibleErrorPathSet.has("noteBody"),
+              onChange: (value) => actions.onPatchRoot({ noteBody: value }),
+              value: state.values.noteBody,
+            },
       navigation: {
         masters: {
           pending: input.navigation.masters.pending,

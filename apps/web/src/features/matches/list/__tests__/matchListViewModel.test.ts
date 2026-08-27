@@ -81,6 +81,12 @@ function buildDraftItem(
 }
 
 describe("matchListViewModel", () => {
+  it("maps the confirmed-note presence marker without exposing note text", () => {
+    const item = toMatchListItemView(buildItem({ hasNote: true }), lookupMaps);
+    expect(item.hasNote).toBe(true);
+    expect(item).not.toHaveProperty("noteBody");
+  });
+
   it("maps draft rows to review actions and warning labels", () => {
     const item = toMatchListItemView(
       buildDraftItem({

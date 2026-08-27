@@ -43,13 +43,14 @@ export function useMatchWorkspaceMasterHandoff({
       dispatch({
         payload: {
           ...payload.values,
+          noteBody: values.noteBody,
           ...(values.matchDraftId ? { matchDraftId: values.matchDraftId } : {}),
         },
         type: "replace",
       });
       notify("設定管理から戻ったため、入力内容を復元しました。", "success");
     },
-    [dispatch, notify, values.matchDraftId],
+    [dispatch, notify, values.matchDraftId, values.noteBody],
   );
   const reportRestoreFailure = useCallback(
     () => notify("設定管理から戻りましたが、入力内容を復元できませんでした。", "warning"),

@@ -34,6 +34,7 @@ object ApiEndpoints:
     MatchesEndpoints.summary,
     MatchesEndpoints.get,
     MatchesEndpoints.update,
+    MatchesEndpoints.replaceNote,
     MatchesEndpoints.delete,
     SeriesComparisonEndpoints.options,
     SeriesComparisonEndpoints.aggregate,

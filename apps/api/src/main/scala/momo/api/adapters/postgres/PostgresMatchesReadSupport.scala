@@ -16,6 +16,9 @@ import momo.api.domain.{
   IncidentKind,
   ManYen,
   MatchNoInEvent,
+  MatchNote,
+  MatchNoteBody,
+  MatchNoteVersion,
   MatchRecord,
   PlayOrder,
   PlayerResult,
@@ -40,6 +43,10 @@ private[postgres] trait PostgresMatchesReadSupport:
       createdByMemberId: Option[MemberId],
       createdAt: Instant,
       updatedAt: Instant,
+      noteBody: Option[String],
+      noteVersion: Long,
+      noteUpdatedByAccountId: Option[AccountId],
+      noteUpdatedAt: Option[Instant],
   )
 
   protected final case class PlayerRow(
@@ -69,27 +76,39 @@ private[postgres] trait PostgresMatchesReadSupport:
            game_title_id, layout_family, season_master_id,
            owner_member_id, map_master_id, played_at,
            total_assets_draft_id, revenue_draft_id, incident_log_draft_id,
-           created_by_account_id, created_by_member_id, created_at, updated_at
+           created_by_account_id, created_by_member_id, created_at, updated_at,
+           note_body, note_version, note_updated_by_account_id, note_updated_at
          FROM matches"""
 
-  protected final def toRecord(m: MatchRow, players: FourPlayers): MatchRecord = MatchRecord(
-    id = m.id,
-    heldEventId = m.heldEventId,
-    matchNoInEvent = m.matchNoInEvent,
-    gameTitleId = m.gameTitleId,
-    layoutFamily = m.layoutFamily,
-    seasonMasterId = m.seasonMasterId,
-    ownerMemberId = m.ownerMemberId,
-    mapMasterId = m.mapMasterId,
-    playedAt = m.playedAt,
-    totalAssetsDraftId = m.totalAssetsDraftId,
-    revenueDraftId = m.revenueDraftId,
-    incidentLogDraftId = m.incidentLogDraftId,
-    players = players,
-    createdByAccountId = m.createdByAccountId,
-    createdByMemberId = m.createdByMemberId,
-    createdAt = m.createdAt,
-  )
+  protected final def toRecord(m: MatchRow, players: FourPlayers): ConnectionIO[MatchRecord] =
+    val decoded =
+      for
+        body <- m.noteBody.traverse(MatchNoteBody.fromRequiredString)
+        version <- MatchNoteVersion.fromLong(m.noteVersion)
+        note <- MatchNote.persisted(body, version, m.noteUpdatedByAccountId, m.noteUpdatedAt)
+      yield MatchRecord(
+        id = m.id,
+        heldEventId = m.heldEventId,
+        matchNoInEvent = m.matchNoInEvent,
+        gameTitleId = m.gameTitleId,
+        layoutFamily = m.layoutFamily,
+        seasonMasterId = m.seasonMasterId,
+        ownerMemberId = m.ownerMemberId,
+        mapMasterId = m.mapMasterId,
+        playedAt = m.playedAt,
+        totalAssetsDraftId = m.totalAssetsDraftId,
+        revenueDraftId = m.revenueDraftId,
+        incidentLogDraftId = m.incidentLogDraftId,
+        players = players,
+        createdByAccountId = m.createdByAccountId,
+        createdByMemberId = m.createdByMemberId,
+        createdAt = m.createdAt,
+        note = note,
+      )
+    decoded.leftMap(message =>
+      PostgresDataIntegrityException
+        .inconsistentRow("matches", m.id.value, message)
+    ).liftTo[ConnectionIO]
 
   /**
    * Batch-load all `match_players` and `match_incidents` rows for the given match ids in two SQL

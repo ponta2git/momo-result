@@ -7,6 +7,65 @@ import cats.syntax.all.*
 
 import momo.api.domain.ids.*
 
+final case class MatchNoteBody private (value: String) derives CanEqual
+
+object MatchNoteBody:
+  val MaximumCodePoints = 150
+
+  def fromString(raw: String): Either[String, Option[MatchNoteBody]] =
+    val normalized = raw.replace("\r\n", "\n").replace('\r', '\n')
+    val isBlank = normalized.codePoints()
+      .allMatch(codePoint => Character.isWhitespace(codePoint) || Character.isSpaceChar(codePoint))
+    if isBlank then Right(None)
+    else
+      val length = normalized.codePointCount(0, normalized.length)
+      Either.cond(
+        length <= MaximumCodePoints,
+        Some(MatchNoteBody(normalized)),
+        s"match note must be at most $MaximumCodePoints characters",
+      )
+
+  def fromRequiredString(raw: String): Either[String, MatchNoteBody] =
+    fromString(raw).flatMap(_.toRight("match note must not be blank"))
+
+final case class MatchNoteVersion private (value: Long) derives CanEqual:
+  def next: MatchNoteVersion = MatchNoteVersion(value + 1L)
+
+object MatchNoteVersion:
+  val Initial: MatchNoteVersion = MatchNoteVersion(0L)
+  def fromLong(value: Long): Either[String, MatchNoteVersion] =
+    Either.cond(value >= 0L, MatchNoteVersion(value), "match note version must be non-negative")
+  def fromWire(value: String): Either[String, MatchNoteVersion] =
+    value.toLongOption.toRight("match note version must be an integer").flatMap(fromLong)
+
+final case class MatchNote(
+    body: Option[MatchNoteBody],
+    version: MatchNoteVersion,
+    updatedByAccountId: Option[AccountId],
+    updatedAt: Option[Instant],
+) derives CanEqual
+
+object MatchNote:
+  val Empty: MatchNote = MatchNote(None, MatchNoteVersion.Initial, None, None)
+
+  def persisted(
+      body: Option[MatchNoteBody],
+      version: MatchNoteVersion,
+      updatedByAccountId: Option[AccountId],
+      updatedAt: Option[Instant],
+  ): Either[String, MatchNote] =
+    val metadataComplete = updatedByAccountId.isDefined && updatedAt.isDefined
+    val valid =
+      if version == MatchNoteVersion.Initial then
+        body.isEmpty && !metadataComplete &&
+        updatedByAccountId.isEmpty && updatedAt.isEmpty
+      else metadataComplete
+    Either.cond(
+      valid,
+      MatchNote(body, version, updatedByAccountId, updatedAt),
+      "match note version and attribution metadata are inconsistent",
+    )
+
 final case class IncidentCounts(
     destination: IncidentCount,
     plusStation: IncidentCount,
@@ -140,6 +199,7 @@ final case class MatchRecord(
     createdByAccountId: AccountId,
     createdByMemberId: Option[MemberId],
     createdAt: Instant,
+    note: MatchNote = MatchNote.Empty,
 )
 
 object MatchRecord:

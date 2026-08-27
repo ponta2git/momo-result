@@ -4,12 +4,17 @@ import cats.effect.{Ref, Sync}
 import cats.syntax.all.*
 
 import momo.api.domain.ids.*
-import momo.api.domain.{MatchNoInEvent, MatchRecord}
+import momo.api.domain.{MatchNoInEvent, MatchNote, MatchNoteBody, MatchNoteVersion, MatchRecord}
 import momo.api.errors.{AppError, AppException}
-import momo.api.repositories.{MatchExportsRepository, MatchesRepository}
+import momo.api.repositories.{
+  MatchExportsRepository,
+  MatchNotesRepository,
+  MatchesRepository,
+  ReplaceMatchNoteResult
+}
 
 final class InMemoryMatchesRepository[F[_]: Sync] private (ref: Ref[F, Map[MatchId, MatchRecord]])
-    extends MatchesRepository[F], MatchExportsRepository[F]:
+    extends MatchesRepository[F], MatchExportsRepository[F], MatchNotesRepository[F]:
   def create(record: MatchRecord): F[Unit] = ref.modify { current =>
     if current.contains(record.id) || containsMatchNo(current, record, excluding = None) then
       (current, Left(conflict(record)))
@@ -26,6 +31,25 @@ final class InMemoryMatchesRepository[F[_]: Sync] private (ref: Ref[F, Map[Match
 
   override def delete(id: MatchId): F[Boolean] = ref
     .modify(m => if m.contains(id) then (m - id, true) else (m, false))
+
+  override def replace(
+      matchId: MatchId,
+      expectedVersion: MatchNoteVersion,
+      body: Option[MatchNoteBody],
+      updatedBy: AccountId,
+      updatedAt: java.time.Instant,
+  ): F[ReplaceMatchNoteResult] = ref.modify { current =>
+    current.get(matchId) match
+      case None => (current, ReplaceMatchNoteResult.NotFound)
+      case Some(record) if record.note.version != expectedVersion =>
+        (current, ReplaceMatchNoteResult.VersionConflict)
+      case Some(record) if record.note.body == body =>
+        (current, ReplaceMatchNoteResult.Unchanged(record.note))
+      case Some(record) =>
+        val note =
+          MatchNote(Some(body).flatten, expectedVersion.next, Some(updatedBy), Some(updatedAt))
+        (current.updated(matchId, record.copy(note = note)), ReplaceMatchNoteResult.Updated(note))
+  }
 
   override def find(id: MatchId): F[Option[MatchRecord]] = ref.get.map(_.get(id))
 

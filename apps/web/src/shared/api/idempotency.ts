@@ -11,6 +11,7 @@ export const idempotencyOperations = [
   "masters.createMemberAlias",
   "masters.createSeasonMaster",
   "matchDetail.deleteMatch",
+  "matchDetail.replaceMatchNote",
   "matchWorkspace.cancelMatchDraft",
   "matchWorkspace.confirmMatch",
   "matchWorkspace.createHeldEvent",

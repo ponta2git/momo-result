@@ -73,15 +73,28 @@ object MatchesEndpoints:
 
   type UpdateInput = (String, Option[String], UpdateMatchRequest)
 
-  val update: CommonEndpoint.SecuredMutation[UpdateInput, MatchDetailResponse] = endpoint
+  val update: CommonEndpoint.SecuredMutation[UpdateInput, UpdateMatchResponse] = endpoint
     .put
     .in("api" / "matches" / path[String]("matchId"))
     .securityIn(CommonEndpoint.accountHeader.and(CommonEndpoint.csrfHeader))
     .in(CommonEndpoint.idempotencyKeyHeader)
     .in(jsonBody[UpdateMatchRequest])
     .errorOut(CommonEndpoint.errorOut)
-    .out(jsonBody[MatchDetailResponse])
+    .out(jsonBody[UpdateMatchResponse])
     .tag("matches")
+
+  type ReplaceNoteInput = (String, Option[String], ReplaceMatchNoteRequest)
+
+  val replaceNote: CommonEndpoint.SecuredMutation[ReplaceNoteInput, ReplaceMatchNoteResponse] =
+    endpoint
+      .put
+      .in("api" / "matches" / path[String]("matchId") / "note")
+      .securityIn(CommonEndpoint.accountHeader.and(CommonEndpoint.csrfHeader))
+      .in(CommonEndpoint.idempotencyKeyHeader)
+      .in(jsonBody[ReplaceMatchNoteRequest])
+      .errorOut(CommonEndpoint.errorOut)
+      .out(jsonBody[ReplaceMatchNoteResponse])
+      .tag("matches")
 
   type DeleteInput = (String, Option[String])
 

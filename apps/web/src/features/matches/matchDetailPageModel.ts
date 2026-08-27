@@ -53,6 +53,7 @@ export type MatchDetailReadyPageModel = {
     editHref: string;
     exportHref: string;
   };
+  note: { refetchMatch: () => Promise<{ data?: MatchDetailResponse | undefined }> };
   results: {
     players: NonNullable<MatchDetailResponse["players"]>;
     setSortKey: (key: MatchDetailSortKey) => void;

@@ -24,6 +24,9 @@ export function MatchListMatchIdentity({ item }: MatchListMatchIdentityProps) {
           {item.mapName ?? "マップ未設定"}
         </span>
       </p>
+      {item.hasNote ? (
+        <p className="text-xs font-medium text-[var(--color-text-secondary)]">メモあり</p>
+      ) : null}
     </div>
   );
 }

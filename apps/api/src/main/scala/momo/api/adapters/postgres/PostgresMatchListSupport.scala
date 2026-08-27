@@ -40,6 +40,7 @@ private[postgres] trait PostgresMatchListSupport:
       playedAt: Option[Instant],
       createdAt: Instant,
       updatedAt: Instant,
+      hasNote: Option[Boolean],
       heldAtSort: Instant,
   )
 
@@ -58,6 +59,7 @@ private[postgres] trait PostgresMatchListSupport:
       playedAt: Option[Instant],
       createdAt: Instant,
       updatedAt: Instant,
+      hasNote: Option[Boolean],
       heldAtSort: Instant,
       statusPriority: Int,
       matchNoIsNull: Boolean,
@@ -78,6 +80,7 @@ private[postgres] trait PostgresMatchListSupport:
       playedAt = playedAt,
       createdAt = createdAt,
       updatedAt = updatedAt,
+      hasNote = hasNote,
       heldAtSort = heldAtSort,
     )
 
@@ -131,6 +134,7 @@ private[postgres] trait PostgresMatchListSupport:
     m.played_at,
     m.created_at,
     m.updated_at,
+    (m.note_body IS NOT NULL) AS has_note,
     COALESCE(he.start_at, m.played_at, m.updated_at) AS held_at_sort
   FROM matches m
   LEFT JOIN held_events he ON he.id = m.held_event_id"""
@@ -150,6 +154,7 @@ private[postgres] trait PostgresMatchListSupport:
     d.played_at,
     d.created_at,
     d.updated_at,
+    NULL::boolean AS has_note,
     COALESCE(he.start_at, d.played_at, d.updated_at) AS held_at_sort
   FROM match_drafts d
   LEFT JOIN held_events he ON he.id = d.held_event_id"""
@@ -276,6 +281,7 @@ private[postgres] trait PostgresMatchListSupport:
       createdAt = row.createdAt,
       updatedAt = row.updatedAt,
       ranks = ranks,
+      hasNote = row.hasNote,
     )
 
   protected final def statusIn(column: StatusColumn, statuses: Set[MatchDraftStatus]): Fragment =

@@ -13,7 +13,15 @@ import momo.api.adapters.inmemory.{
   InMemorySeasonMastersRepository
 }
 import momo.api.domain.ids.*
-import momo.api.domain.{GameTitle, MatchNoInEvent, MatchRecord, PlayerResult}
+import momo.api.domain.{
+  GameTitle,
+  MatchNoInEvent,
+  MatchNote,
+  MatchNoteBody,
+  MatchNoteVersion,
+  MatchRecord,
+  PlayerResult
+}
 import momo.api.errors.{AppError, AppException}
 import momo.api.repositories.MatchesRepository
 import momo.api.testing.AppErrorAssertions.{assertAppError, assertRight}
@@ -36,7 +44,13 @@ final class UpdateMatchSpec extends MomoCatsEffectSuite:
     for
       fixture <- Fixture.create
       _ <- fixture.seedPrereqs()
-      _ <- fixture.matches.create(sampleMatch(matchId, matchNoInEvent = 1))
+      initialNote = MatchNote(
+        body = MatchNoteBody.fromRequiredString("保存済みメモ").toOption,
+        version = MatchNoteVersion.Initial.next,
+        updatedByAccountId = Some(AccountId.unsafeFromString("account_ponta")),
+        updatedAt = Some(createdAt),
+      )
+      _ <- fixture.matches.create(sampleMatch(matchId, matchNoInEvent = 1).copy(note = initialNote))
       result <- fixture.usecase.run(
         matchId,
         command(
@@ -62,6 +76,7 @@ final class UpdateMatchSpec extends MomoCatsEffectSuite:
         Some(OcrDraftId.unsafeFromString("draft-incident-old")),
       )
       assertEquals(found.map(_.matchNoInEvent.value), Some(2))
+      assertEquals(found.map(_.note), Some(initialNote))
 
   test("rejects duplicate match number for the same held event before updating"):
     for

@@ -19,6 +19,10 @@ export function toConfirmMatchRequest(values: MatchFormValues): MatchConfirmRequ
 }
 
 export function toUpdateMatchRequest(values: MatchFormValues): MatchUpdateRequest {
-  const { matchDraftId: _matchDraftId, ...request } = toConfirmMatchRequest(values);
+  const {
+    matchDraftId: _matchDraftId,
+    noteBody: _noteBody,
+    ...request
+  } = toConfirmMatchRequest(values);
   return request;
 }

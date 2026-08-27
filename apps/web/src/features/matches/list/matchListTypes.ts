@@ -87,6 +87,7 @@ export type MatchListItemView = {
   gameTitleId?: string;
   gameTitleName?: string;
   hasWarnings: boolean;
+  hasNote?: boolean;
   heldAt?: string;
   heldEventId?: string;
   id: string;

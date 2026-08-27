@@ -19,7 +19,10 @@ import momo.api.endpoints.{
   MatchListSummaryResponse,
   MatchSummaryResponse,
   MatchesEndpoints,
-  UpdateMatchRequest
+  ReplaceMatchNoteRequest,
+  ReplaceMatchNoteResponse,
+  UpdateMatchRequest,
+  UpdateMatchResponse
 }
 import momo.api.http.{EndpointSecurity, HttpOperation, IdempotencyReplay, SecuredEndpoint}
 import momo.api.usecases.matches.{
@@ -28,6 +31,7 @@ import momo.api.usecases.matches.{
   GetMatch,
   ListMatches,
   ListMatchesPagination,
+  ReplaceMatchNote,
   UpdateMatch
 }
 
@@ -37,6 +41,7 @@ object MatchModule:
       listMatches: ListMatches[F],
       getMatch: GetMatch[F],
       updateMatch: UpdateMatch[F],
+      replaceMatchNote: ReplaceMatchNote[F],
       deleteMatch: DeleteMatch[F],
       readRateLimiter: RateLimiter[F],
       idempotency: IdempotencyReplay.Guard[F],
@@ -124,7 +129,7 @@ object MatchModule:
     SecuredEndpoint.mutationLogic(security, MatchesEndpoints.update) { member =>
       {
         case (matchId, idemKey, request) =>
-          IdempotencyReplay.wrap[F, (String, UpdateMatchRequest), MatchDetailResponse](
+          IdempotencyReplay.wrap[F, (String, UpdateMatchRequest), UpdateMatchResponse](
             idempotency,
             idemKey,
             member,
@@ -133,8 +138,37 @@ object MatchModule:
             nowF,
             security.decode(BoundaryId.required("matchId", matchId)(MatchId.fromString)) { id =>
               security.decode(MatchCodec.toUpdateCommand(request))(command =>
-                security.respond(updateMatch.run(id, command))(MatchDetailResponse.from)
+                security.respond(updateMatch.run(id, command))(record =>
+                  UpdateMatchResponse(
+                    matchId = record.id.value,
+                    heldEventId = record.heldEventId.value,
+                    matchNoInEvent = record.matchNoInEvent.value,
+                  )
+                )
               )
+            },
+          )
+      }
+    },
+    SecuredEndpoint.mutationLogic(security, MatchesEndpoints.replaceNote) { member =>
+      {
+        case (matchId, idemKey, request) =>
+          IdempotencyReplay.wrap[F, (String, ReplaceMatchNoteRequest), ReplaceMatchNoteResponse](
+            idempotency,
+            idemKey,
+            member,
+            HttpOperation.ReplaceMatchNote,
+            (matchId, request),
+            nowF,
+            security.decode(BoundaryId.required("matchId", matchId)(MatchId.fromString)) { id =>
+              security.decode(MatchCodec.toReplaceNoteCommand(request)) { command =>
+                security.respond(replaceMatchNote.run(id, command, member.accountId))(note =>
+                  ReplaceMatchNoteResponse(
+                    matchId = matchId,
+                    version = note.version.value.toString,
+                  )
+                )
+              }
             },
           )
       }

@@ -34,6 +34,7 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
   private def seasonMasters = new PostgresSeasonMastersRepository[IO](transactor)
   private def heldEvents = new PostgresHeldEventsRepository[IO](transactor)
   private def matches = new PostgresMatchesRepository[IO](transactor)
+  private def matchNotes = new PostgresMatchNotesRepository[IO](transactor)
   private def matchExports = new PostgresMatchExportsRepository[IO](transactor)
   private def confirmations = new PostgresMatchConfirmationRepository[IO](transactor)
   private def createMatch(record: MatchRecord): IO[Unit] = confirmations
@@ -197,6 +198,74 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
     yield
       assertEquals(list.map(_.id.value), List("match_a", "match_b"))
       assertEquals(list.map(_.matchNoInEvent.value), List(1, 2))
+
+  test("note replacement is versioned without advancing analysis state or outbox"):
+    val record = sampleMatch("match_note_versioned", 1)
+    val accountId = AccountId.unsafeFromString("account_ponta")
+    val body = MatchNoteBody.fromRequiredString("終盤のカード交換が決め手").toOption.get
+    for
+      _ <- seedPrereqs
+      _ <- createMatch(record)
+      before <- sql"""
+        SELECT
+          analysis_revision,
+          (SELECT input_revision FROM series_analysis_title_states WHERE game_title_id = $gameTitleId),
+          (SELECT COUNT(*)::int FROM series_analysis_queue_outbox)
+        FROM matches WHERE id = ${record.id}
+      """.query[(Long, Long, Int)].unique.transact(transactor)
+      first <- matchNotes.replace(
+        record.id,
+        MatchNoteVersion.Initial,
+        Some(body),
+        accountId,
+        now.plusSeconds(1),
+      )
+      stale <- matchNotes.replace(
+        record.id,
+        MatchNoteVersion.Initial,
+        Some(body),
+        accountId,
+        now.plusSeconds(2),
+      )
+      noOp <- matchNotes.replace(
+        record.id,
+        MatchNoteVersion.Initial.next,
+        Some(body),
+        accountId,
+        now.plusSeconds(3),
+      )
+      deleted <- matchNotes.replace(
+        record.id,
+        MatchNoteVersion.Initial.next,
+        None,
+        accountId,
+        now.plusSeconds(4),
+      )
+      found <- matches.find(record.id)
+      after <- sql"""
+        SELECT
+          analysis_revision,
+          (SELECT input_revision FROM series_analysis_title_states WHERE game_title_id = $gameTitleId),
+          (SELECT COUNT(*)::int FROM series_analysis_queue_outbox)
+        FROM matches WHERE id = ${record.id}
+      """.query[(Long, Long, Int)].unique.transact(transactor)
+    yield
+      first match
+        case momo.api.repositories.ReplaceMatchNoteResult.Updated(note) =>
+          assertEquals(note.body.map(_.value), Some(body.value))
+        case other => fail(s"expected Updated, got $other")
+      assertEquals(stale, momo.api.repositories.ReplaceMatchNoteResult.VersionConflict)
+      noOp match
+        case momo.api.repositories.ReplaceMatchNoteResult.Unchanged(note) =>
+          assertEquals(note.version, MatchNoteVersion.Initial.next)
+        case other => fail(s"expected Unchanged, got $other")
+      deleted match
+        case momo.api.repositories.ReplaceMatchNoteResult.Updated(note) =>
+          assertEquals(note.body, None)
+        case other => fail(s"expected Updated, got $other")
+      assertEquals(found.flatMap(_.note.body).map(_.value), None)
+      assertEquals(found.map(_.note.version), Some(MatchNoteVersion.Initial.next.next))
+      assertEquals(after, before)
 
   test("export projection ranks full parent history but loads only selected children"):
     val laterSeasonId = SeasonMasterId.unsafeFromString("season_2024_later")

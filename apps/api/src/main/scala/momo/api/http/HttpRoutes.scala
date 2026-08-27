@@ -85,6 +85,7 @@ object HttpRoutes:
       listMatches: ListMatches[F],
       getMatch: GetMatch[F],
       updateMatch: UpdateMatch[F],
+      replaceMatchNote: ReplaceMatchNote[F],
       deleteMatch: DeleteMatch[F],
   )
 
@@ -203,6 +204,7 @@ object HttpRoutes:
         deps.matches.listMatches,
         deps.matches.getMatch,
         deps.matches.updateMatch,
+        deps.matches.replaceMatchNote,
         deps.matches.deleteMatch,
         deps.rateLimiters.readApi,
         idempotencyGuard,

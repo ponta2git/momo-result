@@ -36,4 +36,23 @@ describe("HeldEventMatchTimeline", () => {
     expect(records[1]?.querySelector("[data-timeline-connector]")).toBeInTheDocument();
     expect(records[2]?.querySelector("[data-timeline-connector]")).toBeNull();
   });
+
+  it("places the match note after the rank list as supporting context", () => {
+    render(
+      <MemoryRouter>
+        <HeldEventMatchTimeline
+          masterNames={{ gameTitles: new Map(), maps: new Map(), seasons: new Map() }}
+          matches={[{ ...match(1), noteBody: "終盤のカード交換で流れが変わった" }]}
+          returnTo="/held-events/held-1"
+        />
+      </MemoryRouter>,
+    );
+
+    const ranks = screen.getByRole("list", { name: "第1試合の順位と総資産" });
+    const noteLabel = screen.getByText("試合メモ");
+
+    expect(
+      ranks.compareDocumentPosition(noteLabel) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
 });

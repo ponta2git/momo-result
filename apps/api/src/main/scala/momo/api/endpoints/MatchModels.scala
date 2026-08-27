@@ -118,6 +118,7 @@ final case class ConfirmMatchRequest(
     playedAt: String,
     draftIds: ConfirmMatchDraftIds,
     players: List[PlayerResultRequest],
+    noteBody: Option[String] = None,
 ) derives Codec.AsObject
 
 final case class ConfirmMatchResponse(
@@ -155,6 +156,14 @@ final case class MatchSummaryResponse(
     createdAt: String,
     updatedAt: String,
     ranks: List[MatchRankEntry],
+    hasNote: Option[Boolean],
+) derives Codec.AsObject
+
+final case class MatchNoteResponse(
+    body: Option[String],
+    version: String,
+    updatedByDisplayName: Option[String],
+    updatedAt: Option[String],
 ) derives Codec.AsObject
 
 final case class MatchRankEntry(memberId: String, rank: Int, playOrder: Int) derives Codec.AsObject
@@ -208,7 +217,20 @@ final case class MatchDetailResponse(
     createdByAccountId: String,
     createdByMemberId: Option[String],
     createdAt: String,
+    note: MatchNoteResponse,
 ) derives Codec.AsObject
+
+final case class UpdateMatchResponse(
+    matchId: String,
+    heldEventId: String,
+    matchNoInEvent: Int,
+) derives Codec.AsObject
+
+final case class ReplaceMatchNoteRequest(body: Option[String], expectedVersion: String)
+    derives Codec.AsObject
+
+final case class ReplaceMatchNoteResponse(matchId: String, version: String)
+    derives Codec.AsObject
 
 object MatchSummaryResponse:
   def from(item: MatchListItem): MatchSummaryResponse = MatchSummaryResponse(
@@ -233,44 +255,55 @@ object MatchSummaryResponse:
         playOrder = p.playOrder.value,
       )
     ),
+    hasNote = item.hasNote,
   )
 
 object MatchDetailResponse:
   import momo.api.domain.MatchRecord
-  def from(r: MatchRecord): MatchDetailResponse = MatchDetailResponse(
-    matchId = r.id.value,
-    heldEventId = r.heldEventId.value,
-    matchNoInEvent = r.matchNoInEvent.value,
-    gameTitleId = r.gameTitleId.value,
-    layoutFamily = r.layoutFamily,
-    seasonMasterId = r.seasonMasterId.value,
-    ownerMemberId = r.ownerMemberId.value,
-    mapMasterId = r.mapMasterId.value,
-    playedAt = DateTimeFormatter.ISO_INSTANT.format(r.playedAt),
-    totalAssetsDraftId = r.totalAssetsDraftId.map(_.value),
-    revenueDraftId = r.revenueDraftId.map(_.value),
-    incidentLogDraftId = r.incidentLogDraftId.map(_.value),
-    players = r.players.byPlayOrder.map(p =>
-      PlayerResultResponse(
-        memberId = p.memberId.value,
-        playOrder = p.playOrder.value,
-        rank = p.rank.value,
-        totalAssetsManYen = p.totalAssetsManYen.value,
-        revenueManYen = p.revenueManYen.value,
-        incidents = IncidentCountsResponse(
-          destination = p.incidents.destination.value,
-          plusStation = p.incidents.plusStation.value,
-          minusStation = p.incidents.minusStation.value,
-          cardStation = p.incidents.cardStation.value,
-          cardShop = p.incidents.cardShop.value,
-          suriNoGinji = p.incidents.suriNoGinji.value,
-        ),
-      )
-    ),
-    createdByAccountId = r.createdByAccountId.value,
-    createdByMemberId = r.createdByMemberId.map(_.value),
-    createdAt = DateTimeFormatter.ISO_INSTANT.format(r.createdAt),
-  )
+  import momo.api.usecases.matches.MatchDetail
+  def from(record: MatchRecord): MatchDetailResponse = from(MatchDetail(record, None))
+  def from(detail: MatchDetail): MatchDetailResponse =
+    val r = detail.record
+    MatchDetailResponse(
+      matchId = r.id.value,
+      heldEventId = r.heldEventId.value,
+      matchNoInEvent = r.matchNoInEvent.value,
+      gameTitleId = r.gameTitleId.value,
+      layoutFamily = r.layoutFamily,
+      seasonMasterId = r.seasonMasterId.value,
+      ownerMemberId = r.ownerMemberId.value,
+      mapMasterId = r.mapMasterId.value,
+      playedAt = DateTimeFormatter.ISO_INSTANT.format(r.playedAt),
+      totalAssetsDraftId = r.totalAssetsDraftId.map(_.value),
+      revenueDraftId = r.revenueDraftId.map(_.value),
+      incidentLogDraftId = r.incidentLogDraftId.map(_.value),
+      players = r.players.byPlayOrder.map(p =>
+        PlayerResultResponse(
+          memberId = p.memberId.value,
+          playOrder = p.playOrder.value,
+          rank = p.rank.value,
+          totalAssetsManYen = p.totalAssetsManYen.value,
+          revenueManYen = p.revenueManYen.value,
+          incidents = IncidentCountsResponse(
+            destination = p.incidents.destination.value,
+            plusStation = p.incidents.plusStation.value,
+            minusStation = p.incidents.minusStation.value,
+            cardStation = p.incidents.cardStation.value,
+            cardShop = p.incidents.cardShop.value,
+            suriNoGinji = p.incidents.suriNoGinji.value,
+          ),
+        )
+      ),
+      createdByAccountId = r.createdByAccountId.value,
+      createdByMemberId = r.createdByMemberId.map(_.value),
+      createdAt = DateTimeFormatter.ISO_INSTANT.format(r.createdAt),
+      note = MatchNoteResponse(
+        body = r.note.body.map(_.value),
+        version = r.note.version.value.toString,
+        updatedByDisplayName = detail.noteUpdatedByDisplayName,
+        updatedAt = r.note.updatedAt.map(DateTimeFormatter.ISO_INSTANT.format),
+      ),
+    )
 
 final case class DeleteMatchResponse(matchId: String, deleted: Boolean) derives Codec.AsObject
 

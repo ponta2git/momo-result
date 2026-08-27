@@ -112,6 +112,11 @@ export type MatchWorkspaceSubmitModel = {
 };
 
 export type MatchWorkspaceEditorModel = {
+  note: {
+    error: boolean;
+    onChange: (value: string) => void;
+    value: string;
+  } | null;
   navigation: { masters: MatchWorkspaceMastersNavigationModel };
   persistence: {
     cancellation: MatchWorkspaceCancellationModel;

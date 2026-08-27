@@ -175,6 +175,22 @@ export function MatchConfirmDialog({ model }: { model: MatchWorkspaceConfirmatio
       <form action={model.actions.onConfirm} className="min-w-0">
         <MatchConfirmSummary {...model.summary} values={model.values} />
         <PlayerLedger values={model.values} />
+        {model.values.noteBody.trim().length > 0 ? (
+          <section
+            className="mt-4 border-t border-[var(--color-border)] pt-3"
+            aria-labelledby="confirm-match-note-heading"
+          >
+            <h3
+              className="text-xs font-semibold text-[var(--color-text-secondary)]"
+              id="confirm-match-note-heading"
+            >
+              試合メモ
+            </h3>
+            <p className="mt-1 text-sm leading-6 break-words whitespace-pre-wrap text-[var(--color-text-primary)]">
+              {model.values.noteBody}
+            </p>
+          </section>
+        ) : null}
         <OcrReviewSummary {...model.review} />
 
         {model.feedback.validationMessage ? (

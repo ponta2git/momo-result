@@ -36,6 +36,7 @@ export function toMatchListItemView(
     createdAt: item.createdAt,
     displayStatus: matchListDisplayStatus(status),
     hasWarnings: hasMatchListWarnings(status),
+    hasNote: item.hasNote === true,
     id: item.id,
     kind: item.kind === "match_draft" ? "match_draft" : "match",
     primaryAction: buildMatchListPrimaryAction(item, status),

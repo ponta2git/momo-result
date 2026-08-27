@@ -197,6 +197,7 @@ export function useMatchDetailPageModel(): MatchDetailPageModel {
         detailReturnTo,
       ),
     },
+    note: { refetchMatch },
     results: { players, setSortKey, sort },
   };
 }

@@ -9,6 +9,7 @@ import {
   MatchDetailLoading,
 } from "@/features/matches/MatchDetailStatusViews";
 import { MatchFeatureSection } from "@/features/matches/MatchFeatureSection";
+import { MatchNoteSection } from "@/features/matches/MatchNoteSection";
 import { MatchRecordMetadata } from "@/features/matches/MatchRecordMetadata";
 import { MatchSeriesComparisonCta } from "@/features/matches/MatchSeriesComparisonCta";
 import { useMatchDetailPageModel } from "@/features/matches/useMatchDetailPageModel";
@@ -52,7 +53,7 @@ function MatchDetailScreen() {
 }
 
 function MatchDetailReadyContent({ page }: { page: MatchDetailReadyPageModel }) {
-  const { analysis, deletion, enrichment, identity, match, navigation, results } = page;
+  const { analysis, deletion, enrichment, identity, match, navigation, note, results } = page;
   const ledgerRows = (
     analysis.performanceContext?.rows ??
     (match.players ?? []).map((player) => ({
@@ -163,6 +164,8 @@ function MatchDetailReadyContent({ page }: { page: MatchDetailReadyPageModel }) 
             sort={results.sort}
           />
         </section>
+
+        <MatchNoteSection match={match} refetchMatch={note.refetchMatch} />
 
         <MatchRecordMetadata
           confirmDelete={deletion.confirm}

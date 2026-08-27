@@ -7,6 +7,9 @@ export type MatchListResponse = components["schemas"]["MatchListResponse"];
 export type MatchListSummaryResponse = components["schemas"]["MatchListSummaryResponse"];
 export type MatchDetailResponse = components["schemas"]["MatchDetailResponse"];
 export type UpdateMatchRequest = components["schemas"]["UpdateMatchRequest"];
+export type UpdateMatchResponse = components["schemas"]["UpdateMatchResponse"];
+export type ReplaceMatchNoteRequest = components["schemas"]["ReplaceMatchNoteRequest"];
+export type ReplaceMatchNoteResponse = components["schemas"]["ReplaceMatchNoteResponse"];
 export type DeleteMatchResponse = components["schemas"]["DeleteMatchResponse"];
 export type ConfirmMatchRequest = components["schemas"]["ConfirmMatchRequest"];
 export type ConfirmMatchResponse = components["schemas"]["ConfirmMatchResponse"];
@@ -55,15 +58,31 @@ export async function getMatch(
   matchId: string,
   options: ApiSignalOptions = {},
 ): Promise<MatchDetailResponse> {
-  return apiRequest<MatchDetailResponse>(`/api/matches/${encodeURIComponent(matchId)}`, options);
+  const response = await apiRequest<MatchDetailResponse>(
+    `/api/matches/${encodeURIComponent(matchId)}`,
+    options,
+  );
+  return response.note ? response : { ...response, note: { version: "0" } };
 }
 
 export async function updateMatch(
   matchId: string,
   request: UpdateMatchRequest,
   options: IdempotencyRequestOptions,
-): Promise<MatchDetailResponse> {
-  return apiRequest<MatchDetailResponse>(`/api/matches/${encodeURIComponent(matchId)}`, {
+): Promise<UpdateMatchResponse> {
+  return apiRequest<UpdateMatchResponse>(`/api/matches/${encodeURIComponent(matchId)}`, {
+    method: "PUT",
+    body: request,
+    idempotency: { key: options.idempotencyKey },
+  });
+}
+
+export async function replaceMatchNote(
+  matchId: string,
+  request: ReplaceMatchNoteRequest,
+  options: IdempotencyRequestOptions,
+): Promise<ReplaceMatchNoteResponse> {
+  return apiRequest<ReplaceMatchNoteResponse>(`/api/matches/${encodeURIComponent(matchId)}/note`, {
     method: "PUT",
     body: request,
     idempotency: { key: options.idempotencyKey },

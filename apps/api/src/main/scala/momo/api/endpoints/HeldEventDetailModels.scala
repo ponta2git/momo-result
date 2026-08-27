@@ -33,6 +33,7 @@ final case class HeldEventMatchResponse(
     mapMasterId: String,
     playedAt: String,
     players: List[HeldEventPlayerResultResponse],
+    noteBody: Option[String],
 ) derives Codec.AsObject
 
 object HeldEventMatchResponse:
@@ -45,6 +46,7 @@ object HeldEventMatchResponse:
     mapMasterId = record.mapMasterId.value,
     playedAt = DateTimeFormatter.ISO_INSTANT.format(record.playedAt),
     players = record.players.byPlayOrder.map(HeldEventPlayerResultResponse.from),
+    noteBody = record.note.body.map(_.value),
   )
 
 final case class HeldEventDraftResponse(

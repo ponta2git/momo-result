@@ -45,6 +45,7 @@ private[bootstrap] object UseCaseRouteBundles:
     val heldEvents = repositories.heldEvents
     val heldEventDeletion = repositories.heldEventDeletion
     val matches = repositories.matches
+    val matchNotes = repositories.matchNotes
     val matchExports = repositories.matchExports
     val matchDrafts = repositories.matchDrafts
     val matchDraftCancellation = repositories.matchDraftCancellation
@@ -133,7 +134,8 @@ private[bootstrap] object UseCaseRouteBundles:
       seasonMasters,
       UseCaseWiring.exportMatchLimits(config.resourceLimits),
     )
-    val getMatch = GetMatch[F](matches)
+    val getMatch = GetMatch[F](matches, loginAccounts)
+    val replaceMatchNote = ReplaceMatchNote[F](matchNotes, clock.now)
     val updateMatch = UpdateMatch[F](
       heldEvents = heldEvents,
       matches = matches,
@@ -195,6 +197,7 @@ private[bootstrap] object UseCaseRouteBundles:
         listMatches = listMatches,
         getMatch = getMatch,
         updateMatch = updateMatch,
+        replaceMatchNote = replaceMatchNote,
         deleteMatch = deleteMatch,
       ),
       exportMatches = exportMatches,

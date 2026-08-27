@@ -63,3 +63,14 @@ export async function invalidateAfterMatchUpdated(
     invalidateAnalysisState(queryClient),
   ]);
 }
+
+export async function invalidateAfterMatchNoteReplaced(
+  queryClient: QueryClient,
+  matchId: string,
+): Promise<void> {
+  await Promise.all([
+    queryClient.invalidateQueries({ exact: true, queryKey: matchKeys.detail(matchId) }),
+    queryClient.invalidateQueries({ queryKey: matchKeys.collections() }),
+    queryClient.invalidateQueries({ queryKey: heldEventKeys.detailRoot() }),
+  ]);
+}

@@ -35,6 +35,8 @@ const problemDisplayMessages: Readonly<Record<string, string>> = {
     "分析状態を読み込めません。少し待ってから、もう一度実行してください。",
   BAD_REQUEST: "入力内容を確認してください。",
   CONFLICT: "保存済みの状態が変わっています。内容を確認して、もう一度実行してください。",
+  MATCH_NOTE_VERSION_CONFLICT:
+    "試合メモが別の利用者に更新されました。最新の内容を確認してください。",
   DEPENDENCY_FAILED: "現在処理を完了できません。少し待ってから、もう一度実行してください。",
   FORBIDDEN: "この操作を行う権限がありません。",
   INTERNAL_ERROR: "予期しないエラーが発生しました。もう一度お試しください。",

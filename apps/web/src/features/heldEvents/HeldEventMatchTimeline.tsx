@@ -2,6 +2,7 @@ import { BarChart3, Trophy } from "lucide-react";
 
 import { heldEventScopeLabel } from "@/features/heldEvents/heldEventDetailViewModel";
 import type { HeldEventMasterNames } from "@/features/heldEvents/heldEventDetailViewModel";
+import { HeldEventMatchNotePreview } from "@/features/heldEvents/HeldEventMatchNotePreview";
 import type { HeldEventMatchResponse } from "@/shared/api/heldEvents";
 import { formatMatchNoInEvent } from "@/shared/domain/matchLabels";
 import { memberDisplayName } from "@/shared/domain/members";
@@ -135,6 +136,8 @@ export function HeldEventMatchTimeline({
                       </li>
                     ))}
                 </ol>
+
+                {match.noteBody ? <HeldEventMatchNotePreview body={match.noteBody} /> : null}
               </article>
             </li>
           ))}

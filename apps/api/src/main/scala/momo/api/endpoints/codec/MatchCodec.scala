@@ -6,10 +6,20 @@ import java.time.format.DateTimeParseException
 import cats.syntax.all.*
 
 import momo.api.domain.ids.*
-import momo.api.domain.{IncidentCounts, PlayerResult}
-import momo.api.endpoints.{ConfirmMatchRequest, PlayerResultRequest, UpdateMatchRequest}
+import momo.api.domain.{IncidentCounts, MatchNoteBody, MatchNoteVersion, PlayerResult}
+import momo.api.endpoints.{
+  ConfirmMatchRequest,
+  PlayerResultRequest,
+  ReplaceMatchNoteRequest,
+  UpdateMatchRequest
+}
 import momo.api.errors.AppError
-import momo.api.usecases.matches.{ConfirmMatchCommand, MatchDraftRefs, UpdateMatchCommand}
+import momo.api.usecases.matches.{
+  ConfirmMatchCommand,
+  MatchDraftRefs,
+  ReplaceMatchNoteCommand,
+  UpdateMatchCommand
+}
 
 /** DTO ↔ usecase command conversions for `MatchesEndpoints`. */
 object MatchCodec:
@@ -55,6 +65,8 @@ object MatchCodec:
       incidentLogDraftId <- BoundaryId
         .optional("draftIds.incidentLog", request.draftIds.incidentLog)(OcrDraftId.fromString)
       players <- request.players.traverse(toPlayerResult)
+      noteBody <- request.noteBody.fold(Right(None))(MatchNoteBody.fromString)
+        .leftMap(AppError.ValidationFailed.apply)
     yield ConfirmMatchCommand(
       heldEventId = heldEventId,
       matchNoInEvent = request.matchNoInEvent,
@@ -70,7 +82,18 @@ object MatchCodec:
         incidentLog = incidentLogDraftId,
       ),
       players = players,
+      noteBody = noteBody,
     )
+
+  def toReplaceNoteCommand(
+      request: ReplaceMatchNoteRequest
+  ): Either[AppError, ReplaceMatchNoteCommand] =
+    for
+      body <- request.body.fold(Right(None))(MatchNoteBody.fromString)
+        .leftMap(AppError.ValidationFailed.apply)
+      version <- MatchNoteVersion.fromWire(request.expectedVersion)
+        .leftMap(AppError.ValidationFailed.apply)
+    yield ReplaceMatchNoteCommand(body, version)
 
   def toUpdateCommand(request: UpdateMatchRequest): Either[AppError, UpdateMatchCommand] =
     for

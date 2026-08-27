@@ -1,0 +1,46 @@
+import { useLayoutEffect, useRef, useState } from "react";
+
+import { Button } from "@/shared/ui/actions/Button";
+import { cn } from "@/shared/ui/cn";
+
+export function HeldEventMatchNotePreview({ body }: { body: string }) {
+  const textRef = useRef<HTMLParagraphElement>(null);
+  const [expanded, setExpanded] = useState(false);
+  const [overflowing, setOverflowing] = useState(false);
+
+  useLayoutEffect(() => {
+    const element = textRef.current;
+    if (!element) return;
+    const measure = () => setOverflowing(element.scrollHeight > element.clientHeight + 1);
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [body, expanded]);
+
+  return (
+    <div className="mt-4">
+      <p className="text-xs font-semibold text-[var(--color-text-secondary)]">試合メモ</p>
+      <p
+        ref={textRef}
+        className={cn(
+          "mt-1 whitespace-pre-wrap break-words text-sm leading-6 text-[var(--color-text-primary)]",
+          !expanded && "line-clamp-3",
+        )}
+      >
+        {body}
+      </p>
+      {overflowing || expanded ? (
+        <Button
+          className="mt-1"
+          size="sm"
+          variant="quiet"
+          onClick={() => setExpanded((value) => !value)}
+        >
+          {expanded ? "折りたたむ" : "続きを読む"}
+        </Button>
+      ) : null}
+    </div>
+  );
+}

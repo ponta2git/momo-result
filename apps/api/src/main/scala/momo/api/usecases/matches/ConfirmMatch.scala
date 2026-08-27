@@ -7,7 +7,14 @@ import cats.data.EitherT
 import cats.syntax.all.*
 
 import momo.api.domain.ids.*
-import momo.api.domain.{MatchPolicy, MatchRecord, PlayerResult}
+import momo.api.domain.{
+  MatchNote,
+  MatchNoteBody,
+  MatchNoteVersion,
+  MatchPolicy,
+  MatchRecord,
+  PlayerResult
+}
 import momo.api.errors.AppError
 import momo.api.repositories.{
   GameTitlesRepository,
@@ -40,6 +47,7 @@ final case class ConfirmMatchCommand(
     matchDraftId: Option[MatchDraftId],
     draftRefs: MatchDraftRefs,
     players: List[PlayerResult.Input],
+    noteBody: Option[MatchNoteBody] = None,
 )
 
 final class ConfirmMatch[F[_]: MonadThrow](
@@ -163,6 +171,14 @@ object ConfirmMatch:
     createdByAccountId = createdByAccountId,
     createdByMemberId = createdByMemberId,
     createdAt = createdAt,
+    note = command.noteBody.fold(MatchNote.Empty)(body =>
+      MatchNote(
+        Some(body),
+        MatchNoteVersion.Initial.next,
+        Some(createdByAccountId),
+        Some(createdAt)
+      )
+    ),
   )
 
   private def validateDraftForConfirm(

@@ -1858,6 +1858,43 @@ describe("MatchDetailPage", () => {
     );
   });
 
+  it("groups the note edit and delete actions in the section header", async () => {
+    setDevUser();
+    server.use(
+      http.get("/api/matches/:matchId", () =>
+        HttpResponse.json(
+          makeMatchDetail({
+            note: {
+              body: "終盤のカード交換で流れが変わった",
+              updatedAt: "2026-04-04T13:10:00.000Z",
+              updatedByDisplayName: "ぽんた",
+              version: "1",
+            },
+          }),
+        ),
+      ),
+    );
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/matches/match-1"]}>
+          <Routes>
+            <Route path="/matches/:matchId" element={<MatchDetailPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    const noteSection = await screen.findByRole("region", { name: "試合メモ" });
+    const actions = within(noteSection).getByRole("group", { name: "試合メモの操作" });
+    const edit = within(actions).getByRole("button", { name: "編集" });
+    const remove = within(actions).getByRole("button", { name: "メモを削除" });
+
+    expect(edit).toHaveClass("bg-[var(--color-surface)]");
+    expect(remove).toHaveClass("text-[var(--color-danger)]", "bg-transparent");
+    expect(within(noteSection).getAllByRole("button", { name: "メモを削除" })).toHaveLength(1);
+  });
+
   it("keeps a failed delete in the dialog and allows retrying it", async () => {
     setDevUser();
     let deleteAttempts = 0;

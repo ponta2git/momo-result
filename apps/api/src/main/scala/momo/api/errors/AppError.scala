@@ -41,6 +41,12 @@ object AppError:
     val code = "CONFLICT"
     val title = "Conflict"
 
+  final case class MatchNoteVersionConflict(
+      detail: String = "The match note was changed by another user. Reload the latest note."
+  ) extends AppError:
+    val code = "MATCH_NOTE_VERSION_CONFLICT"
+    val title = "Match Note Version Conflict"
+
   final case class IdempotencyInProgress(detail: String) extends AppError:
     val code = "IDEMPOTENCY_IN_PROGRESS"
     val title = "Idempotency Key In Progress"

@@ -18,6 +18,7 @@ object HttpOperation:
   val ListOcrDrafts = "GET /api/ocr-drafts"
 
   val CreateHeldEvent = "POST /api/held-events"
+  val ReplaceMatchNote = "PUT /api/matches/:id/note"
   val DeleteHeldEvent = "DELETE /api/held-events/:id"
 
   val CreateMatchDraft = "POST /api/match-drafts"

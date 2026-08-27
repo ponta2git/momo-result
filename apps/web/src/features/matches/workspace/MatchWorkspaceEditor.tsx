@@ -1,6 +1,7 @@
 import { useCallback, useRef } from "react";
 
 import { MatchFormActions } from "@/features/matches/workspace/MatchFormActions";
+import { MatchNoteField } from "@/features/matches/workspace/MatchNoteField";
 import { MatchSetupSection } from "@/features/matches/workspace/MatchSetupSection";
 import type { MatchWorkspaceEditorModel } from "@/features/matches/workspace/matchWorkspacePageModelTypes";
 import { MatchWorkspaceRecoveryNotice } from "@/features/matches/workspace/MatchWorkspaceRecoveryNotice";
@@ -53,6 +54,11 @@ export function MatchWorkspaceEditor({ model }: MatchWorkspaceEditorProps) {
       >
         <div className="order-2 min-w-0 2xl:order-none">
           <ScoreGrid actions={scoreGridActions} data={model.scoreGrid.data} />
+          {model.note ? (
+            <div className="mt-4">
+              <MatchNoteField {...model.note} />
+            </div>
+          ) : null}
         </div>
 
         <aside className="contents 2xl:sticky 2xl:top-4 2xl:grid 2xl:h-fit 2xl:gap-4">

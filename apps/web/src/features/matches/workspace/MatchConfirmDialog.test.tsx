@@ -10,6 +10,7 @@ describe("MatchConfirmDialog", () => {
     values.matchNoInEvent = 3;
     values.players[0]!.totalAssetsManYen = 12_345;
     values.players[0]!.revenueManYen = -678;
+    values.noteBody = "終盤のカード交換が決め手";
 
     render(
       <MatchConfirmDialog
@@ -43,5 +44,6 @@ describe("MatchConfirmDialog", () => {
         .map((row) => within(row).getByRole("rowheader").textContent),
     ).toEqual(["いーゆー", "ぽんた", "あかねまみ", "おーたか"]);
     expect(within(dialog).getByRole("button", { name: "確定する" })).toBeEnabled();
+    expect(within(dialog).getByText("終盤のカード交換が決め手")).toBeInTheDocument();
   });
 });

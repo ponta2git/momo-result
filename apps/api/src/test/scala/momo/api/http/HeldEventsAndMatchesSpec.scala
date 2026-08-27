@@ -407,6 +407,63 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
       assertEquals(jsonField[Int](body, "matchNoInEvent"), 1)
   }
 
+  app.test("match notes are shared, versioned, conflict-safe, and absent from mutation responses") {
+    httpApp =>
+      for
+        heldEventId <- createEvent(httpApp)
+        createRes <- httpApp.run(writePost(
+          uri"/api/matches",
+          confirmBody(heldEventId).deepMerge(
+            Json.obj("noteBody" -> Json.fromString("最初の共有メモ"))
+          ),
+        ))
+        createBody <- createRes.as[Json]
+        matchId = jsonField[String](createBody, "matchId")
+        detailRes <- httpApp.run(readGet(Uri.unsafeFromString(s"/api/matches/$matchId")))
+        detail <- detailRes.as[Json]
+        note = jsonField[Json](detail, "note")
+        _ = assertEquals(jsonField[String](note, "body"), "最初の共有メモ")
+        _ = assertEquals(jsonField[String](note, "version"), "1")
+        updateBody = Json.obj(
+          "body" -> Json.fromString("更新した共有メモ"),
+          "expectedVersion" -> Json.fromString("1"),
+        )
+        updateRes <- httpApp.run(
+          writePost(
+            Uri.unsafeFromString(s"/api/matches/$matchId/note"),
+            updateBody,
+            Some("match-note-update-1"),
+          ).withMethod(Method.PUT)
+        )
+        updateResponse <- updateRes.as[Json]
+        _ = assertEquals(updateRes.status, Status.Ok)
+        _ = assertEquals(updateResponse.hcursor.downField("body").succeeded, false)
+        staleRes <- httpApp.run(
+          writePost(
+            Uri.unsafeFromString(s"/api/matches/$matchId/note"),
+            updateBody,
+            Some("match-note-update-stale"),
+          ).withMethod(Method.PUT)
+        )
+        _ <- assertProblem(
+          staleRes,
+          Status.Conflict,
+          "MATCH_NOTE_VERSION_CONFLICT",
+          "changed by another user",
+        )
+        listRes <- httpApp.run(readGet(uri"/api/matches"))
+        list <- listRes.as[Json]
+        items = jsonField[List[Json]](list, "items")
+        heldRes <- httpApp.run(readGet(Uri.unsafeFromString(s"/api/held-events/$heldEventId")))
+        held <- heldRes.as[Json]
+      yield
+        assertEquals(jsonField[Boolean](items.head, "hasNote"), true)
+        assertEquals(
+          jsonField[String](jsonField[List[Json]](held, "matches").head, "noteBody"),
+          "更新した共有メモ",
+        )
+  }
+
   app.test("manual match recording and display work with OCR and Redis disabled") { httpApp =>
     for
       healthRes <- httpApp.run(Request[IO](Method.GET, uri"/healthz/details"))

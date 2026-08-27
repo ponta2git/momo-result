@@ -6,6 +6,8 @@ import { cn } from "@/shared/ui/cn";
 import { toastToneClass, toastViewportClassName } from "@/shared/ui/feedback/toastPresentation";
 import { instantMotionTransition, politeMotionTransition } from "@/shared/ui/motion/transitions";
 
+const toastVisible = { opacity: 1 } as const;
+
 export function ToastRenderer() {
   const { toasts } = Toast.useToastManager();
   const reduceMotion = useReducedMotionConfig();
@@ -22,7 +24,7 @@ export function ToastRenderer() {
               )}
               render={
                 <m.div
-                  animate={{ opacity: toast.transitionStatus === "ending" ? 0 : 1 }}
+                  animate={toastVisible}
                   initial={reduceMotion ? false : { opacity: 0 }}
                   transition={reduceMotion ? instantMotionTransition : politeMotionTransition}
                 />

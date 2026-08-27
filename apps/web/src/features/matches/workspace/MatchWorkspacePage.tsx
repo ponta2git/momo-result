@@ -130,7 +130,7 @@ export function MatchWorkspacePage({
           </Notice>
         ) : null}
 
-        {review.blocked ? (
+        {loading.workspace.blocked ? null : review.blocked ? (
           <MatchWorkspaceBlockedNotice model={review.blocked} />
         ) : (
           <MatchWorkspaceEditor model={editor} />

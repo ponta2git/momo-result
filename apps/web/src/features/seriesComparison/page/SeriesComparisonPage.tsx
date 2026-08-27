@@ -26,8 +26,9 @@ export function SeriesComparisonPage() {
   const { filters, focus, options, resource, status } = page;
 
   useEffect(() => {
+    if (page.clientUpgradeRequired || filters.seriesOptions.length === 0) return;
     preloadSeriesAnalysisView(filters.activeView);
-  }, [filters.activeView]);
+  }, [filters.activeView, filters.seriesOptions.length, page.clientUpgradeRequired]);
 
   if (options.loading) return <PageSkeleton />;
   if (page.clientUpgradeRequired) {

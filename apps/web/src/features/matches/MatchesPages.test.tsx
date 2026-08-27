@@ -1124,6 +1124,55 @@ describe("MatchesListPage", () => {
     expect(screen.queryByText("一覧を更新できませんでした")).not.toBeInTheDocument();
   });
 
+  it("retries the paged held-event filter directory", async () => {
+    setDevUser();
+    let failPicker = true;
+    let pickerAttempts = 0;
+    server.use(
+      http.get("/api/held-events", ({ request }) => {
+        const params = new URL(request.url).searchParams;
+        if (params.get("pageSize") !== "20") return;
+        pickerAttempts += 1;
+        if (failPicker) {
+          return HttpResponse.json({ detail: "picker unavailable" }, { status: 500 });
+        }
+        return HttpResponse.json({
+          items: [makeHeldEventResponse()],
+          pagination: {
+            hasNextPage: false,
+            hasPreviousPage: false,
+            page: 1,
+            pageSize: 20,
+            totalItems: 1,
+            totalPages: 1,
+          },
+          totalMatchCount: 1,
+        });
+      }),
+    );
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/matches"]}>
+          <Routes>
+            <Route path="/matches" element={<MatchesListPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByText("絞り込み候補を一部読み込めません")).toBeInTheDocument();
+    expect(pickerAttempts).toBe(1);
+
+    failPicker = false;
+    await user.click(screen.getByRole("button", { name: "候補を再読み込み" }));
+
+    await waitFor(() =>
+      expect(screen.queryByText("絞り込み候補を一部読み込めません")).not.toBeInTheDocument(),
+    );
+    expect(pickerAttempts).toBe(2);
+  });
+
   it("checks a draft action before navigation and redirects to detail when already confirmed", async () => {
     setDevUser();
     let draftDetailRequested = false;
@@ -1421,6 +1470,49 @@ describe("MatchesListPage", () => {
 
     expect(await screen.findByRole("heading", { name: "試合の新規作成" })).toBeInTheDocument();
     await waitFor(() => expect(requestedDraftId).toBe("draft-trimmed"));
+  });
+
+  it("initializes from a draft summary after its initial request is retried", async () => {
+    setDevUser();
+    let failDraftDetail = true;
+    server.use(
+      http.get("/api/match-drafts/draft-retry", () =>
+        failDraftDetail
+          ? HttpResponse.json({ detail: "draft unavailable" }, { status: 500 })
+          : HttpResponse.json({
+              createdAt: "2026-01-01T00:00:00.000Z",
+              gameTitleId: "gt_momotetsu_2",
+              heldEventId: "held-1",
+              mapMasterId: "map_east",
+              matchDraftId: "draft-retry",
+              matchNoInEvent: 7,
+              ownerMemberId: "member_ponta",
+              playedAt: "2026-01-01T00:00:00.000Z",
+              seasonMasterId: "season_current",
+              status: "needs_review",
+              updatedAt: "2026-01-01T00:00:00.000Z",
+            }),
+      ),
+    );
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/matches/new?matchDraftId=draft-retry"]}>
+          <Routes>
+            <Route path="/matches/new" element={<MatchCreatePage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByText("画面データを読み込めません")).toBeInTheDocument();
+    expect(screen.queryByLabelText("試合番号")).not.toBeInTheDocument();
+
+    failDraftDetail = false;
+    await user.click(screen.getByRole("button", { name: "失敗したデータを再読み込み" }));
+
+    await waitFor(() => expect(screen.getByLabelText("試合番号")).toHaveValue("7"));
+    expect(screen.queryByText("画面データを読み込めません")).not.toBeInTheDocument();
   });
 
   it("does not restore manual creation values from a foreign handoff session", async () => {

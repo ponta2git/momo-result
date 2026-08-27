@@ -8,8 +8,8 @@ import type {
 } from "@/features/matches/workspace/matchFormTypes";
 import { buildMatchWorkspacePageModel } from "@/features/matches/workspace/matchWorkspacePageModel";
 import type { MatchWorkspacePageModel } from "@/features/matches/workspace/matchWorkspacePageModelTypes";
-import { buildMatchWorkspaceSourceImages } from "@/features/matches/workspace/matchWorkspaceSourceImages";
 import { buildMatchWorkspaceView } from "@/features/matches/workspace/matchWorkspaceView";
+import { toSourceImageDescriptor } from "@/features/matches/workspace/sourceImages/sourceImageTypes";
 import { useMatchWorkspaceFormHandlers } from "@/features/matches/workspace/useMatchWorkspaceFormHandlers";
 import { useMatchWorkspaceInit } from "@/features/matches/workspace/useMatchWorkspaceInit";
 import { useMatchWorkspaceLifecycleEffects } from "@/features/matches/workspace/useMatchWorkspaceLifecycleEffects";
@@ -96,7 +96,6 @@ export function useMatchWorkspacePageModel({
   );
   const { isInitialized } = useMatchWorkspaceInit({
     draftDetail: draftDetailQuery.data ?? undefined,
-    draftDetailLoading: draftDetailQuery.isLoading,
     emptyFormFactory: local.emptyFormFactory,
     matchDetail: matchDetailQuery.data ?? undefined,
     matchDraftId,
@@ -104,7 +103,6 @@ export function useMatchWorkspacePageModel({
     memberAliases: memberAliasesQuery.data?.items ?? [],
     mode,
     ocrDrafts: ocrDraftsQuery.data ?? undefined,
-    ocrDraftsError: shouldShowQueryError(ocrDraftsQuery),
     onInitialize: initializeWorkspace,
     nowIsoFactory: local.nowIsoFactory,
     reviewDraftIdList,
@@ -129,7 +127,12 @@ export function useMatchWorkspacePageModel({
     values: state.values,
   });
   const initialHeldEventPatch =
-    mode !== "edit" && !useSampleDrafts && !state.values.heldEventId
+    isInitialized &&
+    !hasHandoff &&
+    mode !== "edit" &&
+    !useSampleDrafts &&
+    !state.values.heldEventId &&
+    !preferredHeldEventPending
       ? (heldEventPatchById(view.heldEvents, preferredHeldEventId) ??
         latestHeldEventPatch(view.heldEvents))
       : undefined;
@@ -170,13 +173,8 @@ export function useMatchWorkspacePageModel({
   useMatchWorkspaceLifecycleEffects({
     dispatch,
     draftDetail: draftDetailQuery.data,
-    hasHandoff,
-    heldEventId: state.values.heldEventId,
-    heldEvents: view.heldEvents,
-    isInitialized,
+    initialHeldEventPatch,
     mode,
-    preferredHeldEventId,
-    preferredHeldEventPending,
     redirectConfirmedDraft,
     useSampleDrafts,
   });
@@ -191,10 +189,13 @@ export function useMatchWorkspacePageModel({
     searchParams,
     values: state.values,
   });
-  const sourceImages = buildMatchWorkspaceSourceImages(
-    sourceImageQuery.data?.items,
-    view.matchDraftIdForImages,
-  );
+  const sourceImageDraftId = view.matchDraftIdForImages;
+  const sourceImages = sourceImageDraftId
+    ? (sourceImageQuery.data?.items ?? []).flatMap((item) => {
+        const descriptor = toSourceImageDescriptor(sourceImageDraftId, item);
+        return descriptor ? [descriptor] : [];
+      })
+    : [];
   const formActions = useMatchWorkspaceFormHandlers({
     createHeldEvent: createEventMutation.mutate,
     dispatch,
@@ -225,7 +226,20 @@ export function useMatchWorkspacePageModel({
   const refreshReviewStatus = useCallback(async () => {
     await Promise.all([refetchDraftDetail(), refetchOcrDrafts()]);
   }, [refetchDraftDetail, refetchOcrDrafts]);
-  const workspaceLoading = confirmedDraftRedirecting || view.confirmedDraftLoaded || !isInitialized;
+  const initializationSourceFailed =
+    mode !== "edit" &&
+    !useSampleDrafts &&
+    ((Boolean(matchDraftId) &&
+      draftDetailQuery.data === undefined &&
+      shouldShowQueryError(draftDetailQuery)) ||
+      (mode === "review" &&
+        reviewDraftIdList.length > 0 &&
+        ocrDraftsQuery.data === undefined &&
+        shouldShowQueryError(ocrDraftsQuery)));
+  const workspaceLoading =
+    confirmedDraftRedirecting ||
+    view.confirmedDraftLoaded ||
+    (!isInitialized && !initializationSourceFailed);
   const exitHref =
     contextualReturnTo ??
     (mode === "edit" && matchId
@@ -257,6 +271,7 @@ export function useMatchWorkspacePageModel({
         onRetry: derived.retryEdit,
       },
       workspaceLoading,
+      workspaceBlocked: initializationSourceFailed,
     },
     navigation: {
       exitHref,

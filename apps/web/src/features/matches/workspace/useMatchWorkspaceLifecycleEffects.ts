@@ -3,36 +3,21 @@ import type { Dispatch } from "react";
 
 import { confirmedDraftMessages } from "@/features/matches/confirmedDraftNavigation";
 import type { MatchFormAction } from "@/features/matches/workspace/matchFormReducer";
-import type { WorkspaceMode } from "@/features/matches/workspace/matchFormTypes";
-import {
-  heldEventPatchById,
-  latestHeldEventPatch,
-} from "@/features/matches/workspace/workspaceViewModel";
-import type { HeldEventResponse } from "@/shared/api/heldEvents";
+import type { MatchFormValues, WorkspaceMode } from "@/features/matches/workspace/matchFormTypes";
 import type { MatchDraftDetailResponse } from "@/shared/api/matchDrafts";
 
 export function useMatchWorkspaceLifecycleEffects({
   dispatch,
   draftDetail,
-  hasHandoff,
-  heldEventId,
-  heldEvents,
-  isInitialized,
+  initialHeldEventPatch,
   mode,
-  preferredHeldEventId,
-  preferredHeldEventPending,
   redirectConfirmedDraft,
   useSampleDrafts,
 }: {
   dispatch: Dispatch<MatchFormAction>;
   draftDetail: MatchDraftDetailResponse | undefined;
-  hasHandoff: boolean;
-  heldEventId: string;
-  heldEvents: HeldEventResponse[];
-  isInitialized: boolean;
+  initialHeldEventPatch: Partial<MatchFormValues> | undefined;
   mode: WorkspaceMode;
-  preferredHeldEventId: string | undefined;
-  preferredHeldEventPending: boolean;
   redirectConfirmedDraft: (
     detail: MatchDraftDetailResponse | undefined,
     message: string,
@@ -47,33 +32,10 @@ export function useMatchWorkspaceLifecycleEffects({
   }, [draftDetail, mode, redirectConfirmedDraft, useSampleDrafts]);
 
   useEffect(() => {
-    if (
-      !isInitialized ||
-      hasHandoff ||
-      mode === "edit" ||
-      heldEventId ||
-      heldEvents.length === 0 ||
-      preferredHeldEventPending
-    ) {
-      return;
-    }
-    const patch =
-      heldEventPatchById(heldEvents, preferredHeldEventId) ?? latestHeldEventPatch(heldEvents);
-    if (!patch) {
-      return;
-    }
+    if (!initialHeldEventPatch) return;
     dispatch({
-      patch,
+      patch: initialHeldEventPatch,
       type: "patch_root",
     });
-  }, [
-    dispatch,
-    hasHandoff,
-    heldEventId,
-    heldEvents,
-    isInitialized,
-    mode,
-    preferredHeldEventId,
-    preferredHeldEventPending,
-  ]);
+  }, [dispatch, initialHeldEventPatch]);
 }

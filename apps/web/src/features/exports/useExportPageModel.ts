@@ -127,7 +127,7 @@ export function useExportPageModel({
   return {
     candidate: {
       change: (nextSelectedId) => {
-        if (candidates.refreshing) return;
+        if (!candidates.selectCandidate(nextSelectedId)) return;
         updateSearch(urlState.format, urlState.scope, nextSelectedId);
       },
       changePage: candidates.setPage,

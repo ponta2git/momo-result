@@ -49,6 +49,7 @@ type MatchWorkspaceLoadingModel = {
     onRetry: () => void;
   };
   workspace: {
+    blocked: boolean;
     copy: { description: string; title: string };
     loading: boolean;
   };

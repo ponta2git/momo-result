@@ -8,18 +8,13 @@ import { toMatchWorkspaceOperationErrorView } from "@/features/matches/workspace
 import type { MatchWorkspaceOperationError } from "@/features/matches/workspace/matchWorkspaceOperationError";
 import type { MatchWorkspacePageModel } from "@/features/matches/workspace/matchWorkspacePageModelTypes";
 import type { MatchWorkspaceSessionDraft } from "@/features/matches/workspace/matchWorkspaceSessionDraft";
+import type { buildMatchWorkspaceView } from "@/features/matches/workspace/matchWorkspaceView";
 import type { ReviewItem } from "@/features/matches/workspace/review/reviewProgress";
 import type { ReviewFieldKey } from "@/features/matches/workspace/review/reviewWarningModel";
 import type {
   SourceImageItem,
   SourceImageKind,
 } from "@/features/matches/workspace/sourceImages/sourceImageTypes";
-import type { HeldEventResponse } from "@/shared/api/heldEvents";
-import type {
-  GameTitleResponse,
-  MapMasterResponse,
-  SeasonMasterResponse,
-} from "@/shared/api/masters";
 import type { HeldEventPickerDirectory } from "@/shared/api/useHeldEventPickerDirectory";
 import type { IncidentKey } from "@/shared/domain/incidents";
 
@@ -53,6 +48,7 @@ type MatchWorkspacePageModelInput = {
   loading: {
     base: MatchWorkspacePageModel["loading"]["base"];
     edit: MatchWorkspacePageModel["loading"]["edit"];
+    workspaceBlocked: boolean;
     workspaceLoading: boolean;
   };
   navigation: {
@@ -110,21 +106,7 @@ type MatchWorkspacePageModelInput = {
   workspace: {
     mode: WorkspaceMode;
     useSampleDrafts: boolean;
-    view: {
-      canCancelDraft: boolean;
-      gameTitleItems: GameTitleResponse[];
-      hasSourceImagePanel: boolean;
-      heldEvents: HeldEventResponse[];
-      mapItems: MapMasterResponse[];
-      matchDraftIdForImages: string | undefined;
-      pageDescription: string;
-      pageTitle: string;
-      seasonItems: SeasonMasterResponse[];
-      selectedGameTitle: GameTitleResponse | undefined;
-      selectedHeldEvent: HeldEventResponse | undefined;
-      selectedMap: MapMasterResponse | undefined;
-      selectedSeason: SeasonMasterResponse | undefined;
-    };
+    view: ReturnType<typeof buildMatchWorkspaceView>;
   };
 };
 
@@ -279,6 +261,7 @@ export function buildMatchWorkspacePageModel(
       base: input.loading.base,
       edit: input.loading.edit,
       workspace: {
+        blocked: input.loading.workspaceBlocked,
         copy: workspaceLoadingCopy(mode),
         loading: input.loading.workspaceLoading,
       },

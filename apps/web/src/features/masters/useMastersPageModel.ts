@@ -86,10 +86,11 @@ export function useMastersPageModel() {
   const resourceQueries = useMasterResourceQueries(authScope, selectedGameTitleId);
   const { gameTitles, mapMasters, seasonMasters } = resourceQueries;
   const optimisticCatalog = useMasterOptimisticCatalog({
+    fallbackSelectedGameTitleId: resourceQueries.selectedGameTitleId,
     gameTitles,
     mapMasters,
     seasonMasters,
-    selectedGameTitleId: resourceQueries.selectedGameTitleId,
+    selectedGameTitleId,
   });
   const { viewModel } = optimisticCatalog;
 

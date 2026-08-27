@@ -272,8 +272,10 @@ describe("ExportPage", () => {
     expect(anchorClick.clickedAnchors[0]?.download).toBe("momo-results-match-match-1.tsv");
   });
 
-  it("pages through held-event candidates in a selection dialog", async () => {
+  it("keeps the selected export target available while paging and revalidating it", async () => {
     const requestedPages: number[] = [];
+    const detailGate = createDeferred();
+    let detailRequested = false;
     const allEvents = Array.from({ length: 21 }, (_, index) => ({
       draftCount: 0,
       heldAt: new Date(Date.UTC(2026, 0, index + 1)).toISOString(),
@@ -301,6 +303,17 @@ describe("ExportPage", () => {
           totalMatchCount: allEvents.reduce((sum, event) => sum + event.matchCount, 0),
         });
       }),
+      http.get("/api/held-events/held-1", async () => {
+        detailRequested = true;
+        await detailGate.promise;
+        return HttpResponse.json(
+          makeHeldEventDetailResponse({
+            heldAt: "2026-01-01T00:00:00.000Z",
+            id: "held-1",
+            matchCount: 1,
+          }),
+        );
+      }),
     );
 
     renderPage({ path: "/exports?heldEventId=held-1&format=csv" });
@@ -314,10 +327,20 @@ describe("ExportPage", () => {
     const lastEvent = await screen.findByRole("radio", { name: /21試合/u });
     expect(requestedPages).toEqual([1, 2]);
     expect(screen.getByText("21-21件 / 全21件")).toBeInTheDocument();
+    await waitFor(() => expect(detailRequested).toBe(true));
+    expect(screen.getByText(/1試合をCSVで書き出します。/u)).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", {
+        name: "この開催をCSVでダウンロード",
+        hidden: true,
+      }),
+    ).toBeEnabled();
+    expect(lastEvent).toBeEnabled();
 
     await user.click(lastEvent);
     expect(screen.queryByRole("dialog", { name: "開催を選択" })).not.toBeInTheDocument();
     expect(screen.getByText(/21試合をCSVで書き出します。/u)).toBeInTheDocument();
+    detailGate.resolve();
   });
 
   it("resolves a match deep link outside the current candidate page", async () => {

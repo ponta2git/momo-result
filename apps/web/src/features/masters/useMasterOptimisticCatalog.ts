@@ -16,6 +16,7 @@ function appendOptimisticItem<T extends { id: string }>(state: T[], item: T): T[
 }
 
 export function useMasterOptimisticCatalog(input: {
+  fallbackSelectedGameTitleId: string;
   gameTitles: GameTitleResponse[];
   mapMasters: MapMasterResponse[];
   seasonMasters: SeasonMasterResponse[];
@@ -35,6 +36,11 @@ export function useMasterOptimisticCatalog(input: {
     OptimisticSeasonMaster[],
     OptimisticSeasonMaster
   >(input.seasonMasters, appendOptimisticItem);
+  const selectedGameTitleId = optimisticGameTitles.some(
+    (gameTitle) => gameTitle.id === input.selectedGameTitleId,
+  )
+    ? input.selectedGameTitleId
+    : input.fallbackSelectedGameTitleId;
 
   const viewModel = useMemo(
     () =>
@@ -42,14 +48,9 @@ export function useMasterOptimisticCatalog(input: {
         gameTitles: optimisticGameTitles,
         mapMasters: optimisticMapMasters,
         seasonMasters: optimisticSeasonMasters,
-        selectedGameTitleId: input.selectedGameTitleId,
+        selectedGameTitleId,
       }),
-    [
-      input.selectedGameTitleId,
-      optimisticGameTitles,
-      optimisticMapMasters,
-      optimisticSeasonMasters,
-    ],
+    [optimisticGameTitles, optimisticMapMasters, optimisticSeasonMasters, selectedGameTitleId],
   );
 
   return {

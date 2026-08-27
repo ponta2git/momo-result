@@ -13,7 +13,7 @@ import type { NormalizedApiError } from "@/shared/api/problemDetails";
 import { ocrDraftDetailQueryOptions } from "@/shared/api/queryOptions";
 import { useDistinctMarkerEffect } from "@/shared/lib/useDistinctMarkerEffect";
 
-export type OcrJobSlotSynchronizationOptions = {
+type OcrJobSlotStatusLoaderProps = {
   onDraft: (kind: SlotKind, draft: OcrDraftResponse) => void;
   onDraftLoadError?: ((error: NormalizedApiError) => void) | undefined;
   onRefreshingChange: (kind: SlotKind, refreshing: boolean) => void;
@@ -34,14 +34,13 @@ function slotFromJobResponse(slot: CaptureSlotState, response: OcrJobResponse): 
   };
 }
 
-/** Synchronizes one slot's explicit job refresh and immutable succeeded draft into local state. */
-export function useOcrJobSlotSynchronization({
+function useOcrJobSlotSynchronization({
   onDraft,
   onDraftLoadError,
   onRefreshingChange,
   onUpdate,
   slot,
-}: OcrJobSlotSynchronizationOptions): void {
+}: OcrJobSlotStatusLoaderProps): void {
   const job = useOcrJobStatus({
     jobId: slot.jobId,
     refreshRequest: slot.statusRefreshRequest,
@@ -125,4 +124,10 @@ export function useOcrJobSlotSynchronization({
       transportError: normalizeDisplayApiError(job.error, "読み取り状態を取得できませんでした"),
     });
   });
+}
+
+/** Keeps one keyed capture slot synchronized without coupling the parent list to query hooks. */
+export function OcrJobSlotStatusLoader(props: OcrJobSlotStatusLoaderProps) {
+  useOcrJobSlotSynchronization(props);
+  return null;
 }

@@ -227,11 +227,15 @@ export function useMatchListResource({
         },
         seasons: masters.items.seasons,
       },
-      loadFailed: shouldShowBlockingQueryError(heldEventsQuery) || masters.blockingLoadFailed,
+      loadFailed:
+        shouldShowBlockingQueryError(heldEventsQuery) ||
+        masters.blockingLoadFailed ||
+        Boolean(heldEventPicker.error),
       refresh: {
-        pending: heldEventsQuery.isFetching || masters.refreshing,
+        pending: heldEventsQuery.isFetching || heldEventPicker.pending || masters.refreshing,
         run: () => {
           if (shouldShowBlockingQueryError(heldEventsQuery)) void heldEventsQuery.refetch();
+          if (heldEventPicker.error) void heldEventPicker.refetch();
           void masters.retryFailed();
         },
       },

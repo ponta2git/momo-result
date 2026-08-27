@@ -8,7 +8,7 @@ import {
   toMatchCandidates,
   toSeasonCandidates,
 } from "@/features/exports/exportCandidateData";
-import type { ExportScope } from "@/features/exports/exportTypes";
+import type { ExportCandidate, ExportScope } from "@/features/exports/exportTypes";
 import { buildCandidateSupportIssue, buildCandidateView } from "@/features/exports/exportViewModel";
 import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import { shouldShowQueryError } from "@/shared/api/queryErrorState";
@@ -34,6 +34,10 @@ export function useExportCandidates({
   const queryClient = useQueryClient();
   const [heldEventPage, setHeldEventPage] = useState(1);
   const [matchCursor, setMatchCursor] = useState("");
+  const [selectionSnapshot, setSelectionSnapshot] = useState<{
+    candidate: ExportCandidate;
+    scope: ExportScope;
+  } | null>(null);
 
   const seasonsQuery = useQuery(
     seasonMastersQueryOptions(undefined, scope === "season" || scope === "match"),
@@ -98,7 +102,7 @@ export function useExportCandidates({
   const matchDetailQuery = useQuery(
     matchDetailQueryOptions(scope === "match" ? selectedId : undefined, shouldResolveMatch),
   );
-  const resolvedCandidate =
+  const canonicalResolvedCandidate =
     selectedOnCurrentPage ??
     (scope === "heldEvent"
       ? candidateFromHeldEventDetail(heldEventDetailQuery.data)
@@ -107,6 +111,20 @@ export function useExportCandidates({
         : undefined);
   const selectedDetailQuery =
     scope === "heldEvent" ? heldEventDetailQuery : scope === "match" ? matchDetailQuery : undefined;
+  const shouldResolveSelectedTarget = shouldResolveHeldEvent || shouldResolveMatch;
+  const selectedDetailNotFound = Boolean(
+    shouldResolveSelectedTarget &&
+    selectedDetailQuery &&
+    shouldShowQueryError(selectedDetailQuery) &&
+    normalizeUnknownApiError(selectedDetailQuery.error).status === 404,
+  );
+  const snapshotCandidate =
+    selectionSnapshot?.scope === scope && selectionSnapshot.candidate.value === selectedId
+      ? selectionSnapshot.candidate
+      : undefined;
+  const resolvedCandidate = selectedDetailNotFound
+    ? undefined
+    : (canonicalResolvedCandidate ?? snapshotCandidate);
   const selectedResolution = (() => {
     if (scope === "season") {
       return selectedId && !selectedIsOnCurrentPage
@@ -116,6 +134,9 @@ export function useExportCandidates({
     if (!shouldResolveHeldEvent && !shouldResolveMatch) {
       return "resolved" as const;
     }
+    if (selectedDetailNotFound) {
+      return "not-found" as const;
+    }
     if (resolvedCandidate?.value === selectedId) {
       return "resolved" as const;
     }
@@ -123,9 +144,7 @@ export function useExportCandidates({
       return "resolving" as const;
     }
     if (selectedDetailQuery && shouldShowQueryError(selectedDetailQuery)) {
-      return normalizeUnknownApiError(selectedDetailQuery.error).status === 404
-        ? ("not-found" as const)
-        : ("load-failed" as const);
+      return "load-failed" as const;
     }
     return "resolving" as const;
   })();
@@ -153,12 +172,11 @@ export function useExportCandidates({
     scope === "season"
       ? seasonsQuery.isFetching && !seasonsQuery.isLoading
       : scope === "heldEvent"
-        ? (heldEventsQuery.isFetching && (!heldEventsQuery.isLoading || hasResolvedTarget)) ||
-          heldEventDetailQuery.isFetching
+        ? heldEventsQuery.isFetching && (!heldEventsQuery.isLoading || hasResolvedTarget)
         : scope === "match"
           ? [seasonsQuery, gameTitlesQuery, matchesQuery].some(
               (query) => query.isFetching && (!query.isLoading || hasResolvedTarget),
-            ) || matchDetailQuery.isFetching
+            )
           : false;
   const seasonError = shouldShowQueryError(seasonsQuery);
   const gameTitleError = shouldShowQueryError(gameTitlesQuery);
@@ -166,7 +184,9 @@ export function useExportCandidates({
   const matchError = shouldShowQueryError(matchesQuery);
   const selectedDetailRefreshFailed = Boolean(
     selectedDetailQuery &&
+    shouldResolveSelectedTarget &&
     shouldShowQueryError(selectedDetailQuery) &&
+    !selectedDetailNotFound &&
     resolvedCandidate?.value === selectedId,
   );
   const directoryError =
@@ -227,13 +247,26 @@ export function useExportCandidates({
   const reset = () => {
     setHeldEventPage(1);
     setMatchCursor("");
+    setSelectionSnapshot(null);
+  };
+  const rememberCurrentSelection = () => {
+    if (resolvedCandidate?.value === selectedId) {
+      setSelectionSnapshot({ candidate: resolvedCandidate, scope });
+    }
   };
 
   return {
     refreshing,
     reset,
+    selectCandidate: (nextSelectedId: string) => {
+      if (refreshing) return false;
+      const candidate = candidates.find((item) => item.value === nextSelectedId);
+      if (candidate) setSelectionSnapshot({ candidate, scope });
+      return true;
+    },
     setPage: (page: number) => {
       if (refreshing || page < 1) return;
+      rememberCurrentSelection();
       if (scope === "heldEvent") setHeldEventPage(page);
       if (scope === "match" && matchesQuery.data) {
         const cursor = cursorForPage(matchesQuery.data.pagination, page);
@@ -241,6 +274,7 @@ export function useExportCandidates({
       }
     },
     retry: () => {
+      rememberCurrentSelection();
       if (scope === "season") void seasonsQuery.refetch();
       if (scope === "heldEvent") {
         void heldEventsQuery.refetch();

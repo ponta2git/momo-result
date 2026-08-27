@@ -25,14 +25,12 @@ type OcrDraftBulk = Awaited<ReturnType<typeof getOcrDraftsBulk>>;
 
 export type MatchWorkspaceInitParams = {
   draftDetail: DraftDetail | undefined;
-  draftDetailLoading: boolean;
   matchDetail: MatchDetail | undefined;
   matchDraftId: string | undefined;
   matchId: string | undefined;
   memberAliases: readonly MemberAliasRecord[];
   mode: WorkspaceMode;
   ocrDrafts: OcrDraftBulk | undefined;
-  ocrDraftsError: boolean;
   onInitialize: (values: MatchFormValues, workspaceData: MatchWorkspaceInitialData | null) => void;
   reviewDraftIdList: readonly string[];
   reviewDraftIds: SlotMap<string>;
@@ -50,14 +48,12 @@ export type MatchWorkspaceInitParams = {
  */
 export function useMatchWorkspaceInit({
   draftDetail,
-  draftDetailLoading,
   matchDetail,
   matchDraftId,
   matchId,
   memberAliases,
   mode,
   ocrDrafts,
-  ocrDraftsError,
   onInitialize,
   reviewDraftIdList,
   reviewDraftIds,
@@ -90,9 +86,7 @@ export function useMatchWorkspaceInit({
     }
 
     if (mode === "create") {
-      if (matchDraftId && draftDetailLoading) {
-        return;
-      }
+      if (matchDraftId && !draftDetail) return;
       const base = prefillFromDraftSummary(
         {
           ...emptyFormFactory(),
@@ -107,12 +101,8 @@ export function useMatchWorkspaceInit({
     }
 
     if (mode === "review") {
-      if (!useSampleDrafts && matchDraftId && draftDetailLoading) {
-        return;
-      }
-      if (!useSampleDrafts && reviewDraftIdList.length > 0 && !ocrDrafts && !ocrDraftsError) {
-        return;
-      }
+      if (!useSampleDrafts && matchDraftId && !draftDetail) return;
+      if (!useSampleDrafts && reviewDraftIdList.length > 0 && !ocrDrafts) return;
       const draftByKind = useSampleDrafts
         ? createSampleDraftMap()
         : draftsByKind(reviewDraftIds, ocrDrafts?.items);
@@ -132,14 +122,12 @@ export function useMatchWorkspaceInit({
     }
   }, [
     draftDetail,
-    draftDetailLoading,
     matchDetail,
     matchDraftId,
     matchId,
     memberAliases,
     mode,
     ocrDrafts,
-    ocrDraftsError,
     onInitialize,
     reviewDraftIdList,
     reviewDraftIds,

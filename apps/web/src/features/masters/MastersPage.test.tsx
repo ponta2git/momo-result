@@ -44,7 +44,7 @@ function renderPage(entry = "/admin/masters") {
 
 async function openGameTitleCreateDialog() {
   await user.click(screen.getByRole("button", { name: "作品を追加" }));
-  return screen.getByRole("dialog", { name: "作品を追加" });
+  return screen.findByRole("dialog", { name: "作品を追加" });
 }
 
 function createMasterReturnEntry() {
@@ -437,6 +437,60 @@ describe("MastersPage", () => {
 
     responseGate.resolve();
     await waitFor(() => expect(screen.queryByText("(追加中…)")).not.toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog", { name: "作品を追加" })).not.toBeInTheDocument(),
+    );
+  });
+
+  it("keeps the created game title selected while its canonical list is reloading", async () => {
+    setDevUser();
+    const refreshStarted = createDeferred();
+    const refreshGate = createDeferred();
+    const initialGameTitle = {
+      createdAt: "2026-01-01T00:00:00.000Z",
+      displayOrder: 1,
+      id: "gt_momotetsu_2",
+      layoutFamily: "momotetsu_2",
+      name: "桃太郎電鉄2",
+    };
+    let createdGameTitle: typeof initialGameTitle | undefined;
+    server.use(
+      http.get("/api/game-titles", async () => {
+        if (createdGameTitle) {
+          refreshStarted.resolve();
+          await refreshGate.promise;
+        }
+        return HttpResponse.json({
+          items: createdGameTitle ? [initialGameTitle, createdGameTitle] : [initialGameTitle],
+        });
+      }),
+      http.post("/api/game-titles", async ({ request }) => {
+        const body = (await request.json()) as {
+          id: string;
+          layoutFamily: string;
+          name: string;
+        };
+        createdGameTitle = {
+          ...body,
+          createdAt: "2026-01-01T00:00:00.000Z",
+          displayOrder: 2,
+        };
+        return HttpResponse.json(createdGameTitle);
+      }),
+    );
+
+    renderPage();
+    expect(await screen.findByRole("radio", { name: "桃太郎電鉄2" })).toBeChecked();
+
+    const dialog = await openGameTitleCreateDialog();
+    await user.type(within(dialog).getByPlaceholderText("例: 桃太郎電鉄2"), "桃鉄DX");
+    await user.click(within(dialog).getByRole("button", { name: "追加" }));
+
+    await refreshStarted.promise;
+    expect(screen.getByRole("radio", { name: "桃鉄DX（追加中）", hidden: true })).toBeChecked();
+
+    refreshGate.resolve();
+    expect(await screen.findByRole("radio", { name: "桃鉄DX" })).toBeChecked();
     await waitFor(() =>
       expect(screen.queryByRole("dialog", { name: "作品を追加" })).not.toBeInTheDocument(),
     );

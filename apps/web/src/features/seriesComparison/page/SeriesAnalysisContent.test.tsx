@@ -101,13 +101,17 @@ describe("SeriesAnalysisContent", () => {
     const rendered = render(view(analysisBundle(aggregate, "overview")));
 
     await user.click(await screen.findByRole("button", { name: "順位推移を見る" }));
-    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.getAllByRole("dialog")).toHaveLength(1);
+    expect(screen.getByRole("dialog", { name: "平均順位の推移" })).toHaveAccessibleDescription(
+      "比較に使った試合を確認します。",
+    );
+    expect(await screen.findByLabelText("詳細を読み込み中")).toBeInTheDocument();
 
     rendered.rerender(view(analysisBundle(nextAggregate, "overview")));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
 
     await user.click(await screen.findByRole("button", { name: "順位推移を見る" }));
-    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.getAllByRole("dialog")).toHaveLength(1);
 
     rendered.rerender(view(analysisBundle(nextAggregate, "drivers")));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());

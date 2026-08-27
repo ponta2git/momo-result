@@ -1,6 +1,8 @@
 import { lazy, memo, Suspense, useEffect, useState } from "react";
 
-import type { SeriesAnalysisDrilldownSelection } from "@/features/seriesComparison/drilldowns/SeriesAnalysisDrilldownDialog";
+import type { SeriesAnalysisDrilldownSelection } from "@/features/seriesComparison/drilldowns/SeriesAnalysisDrilldownContent";
+import { SeriesAnalysisDrilldownLoading } from "@/features/seriesComparison/drilldowns/SeriesAnalysisDrilldownLoading";
+import { drilldownTitle } from "@/features/seriesComparison/drilldowns/SeriesAnalysisDrilldownPrimitives";
 import type { SeriesAnalysisDisplayBundle } from "@/features/seriesComparison/model/seriesAnalysisDisplayBundle";
 import type { SeriesAnalysisViewId } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
 import { ReviewView } from "@/features/seriesComparison/page/SeriesAnalysisReviewView";
@@ -47,10 +49,10 @@ const OverviewView = lazy(loadOverviewView);
 const DriversView = lazy(loadDriversView);
 const FlowView = lazy(loadFlowView);
 const ContextView = lazy(loadContextView);
-const SeriesAnalysisDrilldownDialog = lazy(() =>
+const SeriesAnalysisDrilldownContent = lazy(() =>
   loadLazyModule(() =>
-    import("@/features/seriesComparison/drilldowns/SeriesAnalysisDrilldownDialog").then(
-      (module) => ({ default: module.SeriesAnalysisDrilldownDialog }),
+    import("@/features/seriesComparison/drilldowns/SeriesAnalysisDrilldownContent").then(
+      (module) => ({ default: module.SeriesAnalysisDrilldownContent }),
     ),
   ),
 );
@@ -201,14 +203,23 @@ function AnalysisViewContent({
         ) : null}
       </Suspense>
       {drilldown ? (
-        <Suspense fallback={<DrilldownLoading onClose={() => setDrilldown(null)} />}>
-          <SeriesAnalysisDrilldownDialog
-            baseQuery={baseQuery}
-            selection={drilldown}
-            onArtifactExpired={onArtifactExpired}
-            onClose={() => setDrilldown(null)}
-          />
-        </Suspense>
+        <Dialog
+          description="比較に使った試合を確認します。"
+          open
+          popupClassName="max-w-[64rem]"
+          title={drilldownTitle(drilldown.metricId)}
+          onOpenChange={(open) => {
+            if (!open) setDrilldown(null);
+          }}
+        >
+          <Suspense fallback={<SeriesAnalysisDrilldownLoading />}>
+            <SeriesAnalysisDrilldownContent
+              baseQuery={baseQuery}
+              selection={drilldown}
+              onArtifactExpired={onArtifactExpired}
+            />
+          </Suspense>
+        </Dialog>
       ) : null}
     </>
   );
@@ -227,24 +238,5 @@ function AnalysisViewLoading({ view }: { view: SeriesAnalysisBundle["view"] }) {
         <Skeleton className="min-h-64" />
       </div>
     </div>
-  );
-}
-
-function DrilldownLoading({ onClose }: { onClose: () => void }) {
-  return (
-    <Dialog
-      description="比較に使った試合を確認します。"
-      open
-      popupClassName="max-w-[64rem]"
-      title="分析の詳細"
-      onOpenChange={(open) => {
-        if (!open) onClose();
-      }}
-    >
-      <div aria-label="詳細を読み込み中" className="grid gap-3">
-        <Skeleton className="min-h-12" />
-        <Skeleton className="min-h-40" />
-      </div>
-    </Dialog>
   );
 }

@@ -2,7 +2,7 @@ import { render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 
-import { UnexpectedWinsDrilldown } from "@/features/seriesComparison/drilldowns/SeriesAnalysisDrilldownDialog";
+import { UnexpectedWinsDrilldown } from "@/features/seriesComparison/drilldowns/SeriesAnalysisDrilldownContent";
 import { makeSeriesAnalysisDrilldown } from "@/test/msw/seriesAnalysisFixtures";
 
 describe("UnexpectedWinsDrilldown", () => {

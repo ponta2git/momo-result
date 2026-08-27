@@ -1,4 +1,4 @@
-import { drilldownTitle } from "@/features/seriesComparison/drilldowns/SeriesAnalysisDrilldownPrimitives";
+import { SeriesAnalysisDrilldownLoading } from "@/features/seriesComparison/drilldowns/SeriesAnalysisDrilldownLoading";
 import {
   PlayOrderHistoryDrilldown,
   RankHistoryDrilldown,
@@ -24,57 +24,38 @@ import { formatSeriesMatchIndex } from "@/shared/domain/matchLabels";
 import { Button } from "@/shared/ui/actions/Button";
 import { DataTable } from "@/shared/ui/data/DataTable";
 import { FactList } from "@/shared/ui/data/FactList";
-import { Dialog } from "@/shared/ui/feedback/Dialog";
 import { Notice } from "@/shared/ui/feedback/Notice";
-import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 
 export type SeriesAnalysisDrilldownSelection = {
   memberId: string;
   metricId: SeriesAnalysisDrilldownMetricId;
 };
 
-export function SeriesAnalysisDrilldownDialog({
+export function SeriesAnalysisDrilldownContent({
   baseQuery,
   onArtifactExpired,
-  onClose,
   selection,
 }: {
   baseQuery: SeriesAnalysisQuery;
   onArtifactExpired: () => void;
-  onClose: () => void;
-  selection: SeriesAnalysisDrilldownSelection | null;
+  selection: SeriesAnalysisDrilldownSelection;
 }) {
   const query = useSeriesAnalysisDrilldown({ baseQuery, onArtifactExpired, selection });
 
-  return (
-    <Dialog
-      description={query.data?.player.displayName ?? "比較に使った試合を確認します。"}
-      open={selection !== null}
-      popupClassName="max-w-[64rem]"
-      title={selection ? drilldownTitle(selection.metricId) : "分析の詳細"}
-      onOpenChange={(open) => {
-        if (!open) onClose();
-      }}
-    >
-      {query.isPending ? (
-        <div aria-label="詳細を読み込み中" className="grid gap-3">
-          <Skeleton className="min-h-12" />
-          <Skeleton className="min-h-40" />
+  if (query.isPending) return <SeriesAnalysisDrilldownLoading />;
+  if (query.isError) {
+    return (
+      <Notice tone="danger" title="詳細を読み込めません">
+        <p>比較の詳細を取得できませんでした。</p>
+        <div className="mt-3">
+          <Button size="sm" variant="secondary" onClick={() => void query.refetch()}>
+            再読み込み
+          </Button>
         </div>
-      ) : query.isError ? (
-        <Notice tone="danger" title="詳細を読み込めません">
-          <p>比較の詳細を取得できませんでした。</p>
-          <div className="mt-3">
-            <Button size="sm" variant="secondary" onClick={() => void query.refetch()}>
-              再読み込み
-            </Button>
-          </div>
-        </Notice>
-      ) : query.data ? (
-        <DrilldownBody response={query.data} />
-      ) : null}
-    </Dialog>
-  );
+      </Notice>
+    );
+  }
+  return query.data ? <DrilldownBody response={query.data} /> : null;
 }
 
 function DrilldownBody({ response }: { response: SeriesAnalysisDrilldownV3 }) {

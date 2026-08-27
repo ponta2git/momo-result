@@ -191,6 +191,7 @@ describe("ui foundation", () => {
 
     await user.click(screen.getByRole("button", { name: "ダイアログを閉じる" }));
     expect(screen.queryByRole("dialog", { name: "試合を確定" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "開く" })).toHaveFocus();
   });
 
   it("keeps transient toasts away from bottom actions", async () => {

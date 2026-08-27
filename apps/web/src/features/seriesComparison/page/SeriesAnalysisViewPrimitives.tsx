@@ -1,7 +1,7 @@
 import { BookOpenText } from "lucide-react";
 import type { ReactNode } from "react";
 
-import type { SeriesAnalysisDrilldownSelection } from "@/features/seriesComparison/drilldowns/SeriesAnalysisDrilldownDialog";
+import type { SeriesAnalysisDrilldownSelection } from "@/features/seriesComparison/drilldowns/SeriesAnalysisDrilldownContent";
 import type {
   SeriesAnalysisPlayer,
   SeriesComparisonAggregateV3,

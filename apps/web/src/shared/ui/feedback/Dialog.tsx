@@ -1,12 +1,14 @@
 import { AlertDialog as BaseAlertDialog } from "@base-ui/react/alert-dialog";
 import { Dialog as BaseDialog } from "@base-ui/react/dialog";
 import { X } from "lucide-react";
+import { m, useReducedMotionConfig } from "motion/react";
 import type { ReactElement, ReactNode } from "react";
 import { useState } from "react";
 
 import { Button } from "@/shared/ui/actions/Button";
 import { IconButton } from "@/shared/ui/actions/IconButton";
 import { cn } from "@/shared/ui/cn";
+import { instantMotionTransition, politeMotionTransition } from "@/shared/ui/motion/transitions";
 
 type DialogBaseProps = {
   backdropClassName?: string | undefined;
@@ -47,6 +49,9 @@ const dialogPopupClassName =
   "momo-dialog-popup fixed inset-0 z-[var(--z-dialog)] mx-auto flex w-full max-w-[40rem] items-center justify-center overflow-hidden";
 const dialogSurfaceClassName =
   "momo-dialog-surface w-full rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-[var(--color-text-primary)] shadow-[var(--shadow-dialog)]";
+const dialogBackdropInitial = { opacity: 0 } as const;
+const dialogSurfaceInitial = { opacity: 0.96 } as const;
+const dialogVisible = { opacity: 1 } as const;
 
 function defaultAlertErrorMessage(error: unknown) {
   if (error instanceof Error && error.message.trim()) {
@@ -105,6 +110,8 @@ export function Dialog({
   trigger,
 }: DialogProps) {
   const canDismiss = dismissible && !busy;
+  const reduceMotion = useReducedMotionConfig();
+  const transition = reduceMotion ? instantMotionTransition : politeMotionTransition;
 
   return (
     <BaseDialog.Root
@@ -119,11 +126,23 @@ export function Dialog({
     >
       {trigger ? <BaseDialog.Trigger render={trigger} /> : null}
       <BaseDialog.Portal>
-        <BaseDialog.Backdrop className={cn(dialogBackdropClassName, backdropClassName)} />
+        <BaseDialog.Backdrop
+          className={cn(dialogBackdropClassName, backdropClassName)}
+          render={
+            <m.div
+              animate={dialogVisible}
+              initial={reduceMotion ? false : dialogBackdropInitial}
+              transition={transition}
+            />
+          }
+        />
         <BaseDialog.Popup className={cn(dialogPopupClassName, popupClassName)} initialFocus={true}>
-          <div
+          <m.div
             aria-busy={busy || undefined}
+            animate={dialogVisible}
             className={cn(dialogSurfaceClassName, "flex overflow-hidden", surfaceClassName)}
+            initial={reduceMotion ? false : dialogSurfaceInitial}
+            transition={transition}
           >
             <DialogContentFrame
               className={className}
@@ -133,7 +152,7 @@ export function Dialog({
             >
               {children}
             </DialogContentFrame>
-          </div>
+          </m.div>
         </BaseDialog.Popup>
       </BaseDialog.Portal>
     </BaseDialog.Root>
@@ -166,6 +185,8 @@ export function AlertDialog({
   const controlled = open !== undefined;
   const actualOpen = controlled ? open : internalOpen;
   const actualPending = pending || internalPending;
+  const reduceMotion = useReducedMotionConfig();
+  const transition = reduceMotion ? instantMotionTransition : politeMotionTransition;
   const setOpen = (nextOpen: boolean) => {
     if (!nextOpen && actualPending) {
       return;
@@ -204,11 +225,23 @@ export function AlertDialog({
     >
       {trigger ? <BaseAlertDialog.Trigger render={trigger} /> : null}
       <BaseAlertDialog.Portal>
-        <BaseAlertDialog.Backdrop className={cn(dialogBackdropClassName, backdropClassName)} />
+        <BaseAlertDialog.Backdrop
+          className={cn(dialogBackdropClassName, backdropClassName)}
+          render={
+            <m.div
+              animate={dialogVisible}
+              initial={reduceMotion ? false : dialogBackdropInitial}
+              transition={transition}
+            />
+          }
+        />
         <BaseAlertDialog.Popup className={cn(dialogPopupClassName, popupClassName)}>
-          <div
+          <m.div
             aria-busy={actualPending || undefined}
+            animate={dialogVisible}
             className={cn(dialogSurfaceClassName, "overflow-y-auto", surfaceClassName)}
+            initial={reduceMotion ? false : dialogSurfaceInitial}
+            transition={transition}
           >
             <div className="space-y-3">
               <BaseAlertDialog.Title className="text-lg font-semibold text-balance text-[var(--color-text-primary)]">
@@ -251,7 +284,7 @@ export function AlertDialog({
                 </Button>
               </div>
             </div>
-          </div>
+          </m.div>
         </BaseAlertDialog.Popup>
       </BaseAlertDialog.Portal>
     </BaseAlertDialog.Root>

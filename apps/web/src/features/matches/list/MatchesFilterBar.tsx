@@ -121,7 +121,7 @@ export function MatchesFilterBar({
             variant="quiet"
             onClick={actions.onClear}
           >
-            表示条件をリセット
+            初期条件へ戻す
           </Button>
         ) : undefined
       }

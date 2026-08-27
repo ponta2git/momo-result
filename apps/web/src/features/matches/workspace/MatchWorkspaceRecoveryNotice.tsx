@@ -21,7 +21,7 @@ export function MatchWorkspaceRecoveryNotice({ model }: { model: MatchWorkspaceR
             一時保存を復元
           </Button>
           <Button variant="secondary" onClick={model.onDiscard}>
-            復元せず破棄
+            一時保存を削除
           </Button>
         </div>
       }

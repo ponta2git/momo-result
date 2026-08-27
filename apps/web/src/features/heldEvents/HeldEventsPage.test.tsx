@@ -113,7 +113,7 @@ describe("HeldEventsPage", () => {
       "border-[var(--color-border-strong)]",
     );
     expect(within(table).getByRole("columnheader", { name: "確定済み" })).toBeInTheDocument();
-    expect(within(table).getByRole("columnheader", { name: "未完了" })).toBeInTheDocument();
+    expect(within(table).getByRole("columnheader", { name: "未確定下書き" })).toBeInTheDocument();
     expect(within(table).getByRole("columnheader", { name: "操作" })).toBeInTheDocument();
   });
 
@@ -440,7 +440,7 @@ describe("HeldEventsPage", () => {
     expect(within(ledger).queryByRole("status")).not.toBeInTheDocument();
     expect(screen.queryByText("最新")).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /の開催にOCR取り込み$/u })).not.toBeInTheDocument();
-    expect(screen.getByText("2 / 2")).toBeInTheDocument();
+    expect(screen.getByText("2／2")).toBeInTheDocument();
   });
 
   it("creates a held event in a dialog and continues to its detail page", async () => {
@@ -514,7 +514,7 @@ describe("HeldEventsPage", () => {
     const dialog = screen.getByRole("dialog", { name: "新しい開催を作成" });
     await user.click(within(dialog).getByRole("button", { name: "開催を作成" }));
     expect(await within(dialog).findByRole("alert")).toHaveTextContent(
-      "開催日時を保存できませんでした。",
+      "予期しないエラーが発生しました。もう一度お試しください。",
     );
 
     await user.click(within(dialog).getByRole("button", { name: "キャンセル" }));
@@ -523,7 +523,7 @@ describe("HeldEventsPage", () => {
     );
     const surface = screen.getByRole("region", { name: "開催履歴" });
     expect(within(surface).getByRole("alert")).toHaveTextContent(
-      "操作に失敗しました開催日時を保存できませんでした。",
+      "操作に失敗しました予期しないエラーが発生しました。もう一度お試しください。",
     );
   });
 
@@ -546,12 +546,12 @@ describe("HeldEventsPage", () => {
     const deleteButton = await screen.findByRole("button", { name: /を削除$/u });
     expect(deleteButton).toBeEnabled();
     await user.click(deleteButton);
-    expect(screen.getByText("開催履歴を削除しますか？")).toBeInTheDocument();
+    expect(screen.getByText("開催を削除しますか？")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "削除する" }));
 
     await screen.findByText("開催履歴はまだありません");
     expect(screen.queryByRole("list")).not.toBeInTheDocument();
-    expect(screen.getByText("開催履歴を削除しました。")).toBeInTheDocument();
+    expect(screen.getByText("開催を削除しました。")).toBeInTheDocument();
   });
 
   it("keeps deletion disabled for events with confirmed matches", async () => {
@@ -612,17 +612,17 @@ describe("HeldEventsPage", () => {
     const deleteButton = await screen.findByRole("button", { name: /を削除$/u });
     expect(deleteButton).toBeEnabled();
     await user.click(deleteButton);
-    expect(screen.getByText("開催履歴を削除しますか？")).toBeInTheDocument();
+    expect(screen.getByText("開催を削除しますか？")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "削除する" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("held event has match drafts.");
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "保存済みの状態が変わっています。内容を確認して、もう一度実行してください。",
+    );
     expect(screen.getByRole("button", { name: "削除する" })).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "キャンセル" }));
 
-    await waitFor(() =>
-      expect(screen.queryByText("開催履歴を削除しますか？")).not.toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.queryByText("開催を削除しますか？")).not.toBeInTheDocument());
     expect(screen.queryByText("held event has match drafts.")).not.toBeInTheDocument();
     expect(screen.queryByText("操作に失敗しました")).not.toBeInTheDocument();
   });

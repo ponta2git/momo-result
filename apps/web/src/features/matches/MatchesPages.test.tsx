@@ -108,7 +108,7 @@ describe("MatchesListPage", () => {
     expect(screen.queryByRole("columnheader", { name: "操作" })).not.toBeInTheDocument();
     expect(screen.queryByRole("columnheader", { name: "更新" })).not.toBeInTheDocument();
     const listRegion = screen.getByRole("region", { name: "登録済みの試合" });
-    expect(within(listRegion).getByText("1-3件 / 全3件")).toBeInTheDocument();
+    expect(within(listRegion).getByText("1〜3件／全3件")).toBeInTheDocument();
     expect(within(listRegion).queryByText("3件")).not.toBeInTheDocument();
     const listActions = within(listRegion).getByRole("group", { name: "試合一覧の操作" });
     const bulkExport = within(listActions).getByRole("link", { name: "CSV/TSVをまとめて出力" });
@@ -1392,7 +1392,7 @@ describe("MatchesListPage", () => {
     );
 
     expect(await screen.findByRole("heading", { name: "試合の新規作成" })).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "開催履歴（必須）を変更" }));
+    await user.click(screen.getByRole("button", { name: "開催（必須）を変更" }));
     expect(screen.getByRole("radio", { checked: true })).toHaveAttribute("value", "held-1");
     expect(window.sessionStorage.length).toBe(0);
   });
@@ -1438,7 +1438,7 @@ describe("MatchesListPage", () => {
 
     expect(await screen.findByRole("heading", { name: "試合の新規作成" })).toBeInTheDocument();
     await waitFor(() => {
-      expect(screen.getByText(/確定 3試合・未完了 2件/u)).toBeInTheDocument();
+      expect(screen.getByText(/確定済み3試合・未確定下書き2件/u)).toBeInTheDocument();
       expect(screen.getByLabelText("試合番号")).toHaveValue("8");
     });
   });
@@ -1580,11 +1580,11 @@ describe("MatchesListPage", () => {
     );
 
     expect(await screen.findByRole("heading", { name: "試合の新規作成" })).toBeInTheDocument();
-    const eventDisclosure = screen.getByText("一覧にない開催履歴を追加する");
+    const eventDisclosure = screen.getByText("一覧にない開催を追加する");
     await user.click(eventDisclosure);
     await user.click(screen.getByRole("button", { name: "作成して選択" }));
 
-    const failure = await screen.findByRole("heading", { name: "開催履歴を追加できませんでした" });
+    const failure = await screen.findByRole("heading", { name: "開催を追加できませんでした" });
     const notice = failure.closest("section");
     expect(notice).toHaveTextContent("試合条件も変更していません");
     expect(notice).toHaveTextContent("もう一度作成してください");
@@ -1895,7 +1895,9 @@ describe("MatchDetailPage", () => {
     await user.click(screen.getByRole("button", { name: "削除" }));
     await user.click(screen.getByRole("button", { name: "削除する" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("delete failed");
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "予期しないエラーが発生しました。もう一度お試しください。",
+    );
     expect(screen.getByRole("heading", { name: "試合を削除しますか？" })).toBeInTheDocument();
     const retry = screen.getByRole("button", { name: "削除する" });
     expect(retry).toBeEnabled();

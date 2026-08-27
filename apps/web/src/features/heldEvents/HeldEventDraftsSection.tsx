@@ -37,7 +37,7 @@ export function HeldEventDraftsSection({
         />
         <div>
           <h2 id="held-event-drafts-heading" className="momo-heading text-base font-semibold">
-            未完了の試合
+            未確定下書き
           </h2>
           <p className="momo-copy mt-1 text-sm text-[var(--color-text-secondary)]">
             この開催に紐づく読み取り・確認作業です。確定すると下の試合記録へ移ります。

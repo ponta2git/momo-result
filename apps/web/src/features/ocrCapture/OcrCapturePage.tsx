@@ -171,7 +171,7 @@ export function OcrCapturePage() {
                 <p className={panelLeadClass}>撮影先を選び、必要なら画像を入れ替えます。</p>
               </div>
               <span className="shrink-0 text-sm font-semibold text-[var(--color-text-secondary)]">
-                {capture.selectedImageCount} / {capture.totalSlotCount} 配置
+                配置済み{capture.selectedImageCount}件／全{capture.totalSlotCount}件
               </span>
             </div>
             <CaptureRail
@@ -220,9 +220,9 @@ export function OcrCapturePage() {
               {submission.start.buttonLabel}
             </Button>
             <AlertDialog
-              confirmLabel={`${capture.selectedImageCount}件を削除`}
-              description="分類トレイに配置した画像をすべて外します。試合設定は残ります。"
-              title="選択画像をすべて削除しますか？"
+              confirmLabel={`${capture.selectedImageCount}件を破棄`}
+              description="分類トレイから画像を外します。再度使うには、撮影またはファイル選択が必要です。試合設定は残ります。"
+              title="配置した画像をすべて破棄しますか？"
               trigger={
                 <Button
                   disabled={capture.tray.resetDisabled}
@@ -230,7 +230,7 @@ export function OcrCapturePage() {
                   size="sm"
                   variant="quiet"
                 >
-                  すべて削除
+                  画像の選択をすべて破棄
                 </Button>
               }
               onConfirm={capture.tray.reset}

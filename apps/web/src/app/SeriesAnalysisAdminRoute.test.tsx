@@ -42,7 +42,7 @@ describe("SeriesAnalysisAdminPage", () => {
 
     renderAdminPage();
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("HTTP 500");
+    expect(await screen.findByRole("alert")).toHaveTextContent("応答を受け取れませんでした。");
     expect(screen.getByRole("button", { name: "状態を再読み込み" })).toHaveClass(
       "bg-[var(--color-action)]",
     );
@@ -211,7 +211,7 @@ describe("SeriesAnalysisAdminPage", () => {
 
     expect(await screen.findByRole("button", { name: "再計算を予約済み" })).toBeDisabled();
     expect(
-      screen.getByText("この作品には未完了の手動再計算予約があります。", { exact: false }),
+      screen.getByText("この作品には処理待ちの手動再計算予約があります。", { exact: false }),
     ).toBeInTheDocument();
   });
 

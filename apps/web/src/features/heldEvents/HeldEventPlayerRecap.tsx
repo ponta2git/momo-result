@@ -15,7 +15,7 @@ export function HeldEventPlayerRecap({ recaps }: { recaps: PlayerRecap[] }) {
           この開催の戦績
         </h2>
         <p className="momo-copy mt-1 text-sm text-[var(--color-text-secondary)]">
-          勝数・平均順位と、試合順の順位推移です。
+          1位回数・平均順位と、試合順の順位推移です。
         </p>
       </div>
       <div className="mt-4 grid gap-x-6 gap-y-6 sm:grid-cols-2 xl:grid-cols-4">
@@ -32,8 +32,8 @@ export function HeldEventPlayerRecap({ recaps }: { recaps: PlayerRecap[] }) {
             </h3>
             <dl className="mt-3 grid grid-cols-2 gap-3">
               <div>
-                <dt className="momo-label text-[var(--color-text-secondary)]">勝数</dt>
-                <dd className="mt-1 text-lg font-semibold tabular-nums">{recap.wins}勝</dd>
+                <dt className="momo-label text-[var(--color-text-secondary)]">1位回数</dt>
+                <dd className="mt-1 text-lg font-semibold tabular-nums">{recap.wins}回</dd>
               </div>
               <div>
                 <dt className="momo-label text-[var(--color-text-secondary)]">平均順位</dt>

@@ -55,7 +55,7 @@ function pruneDraftIds(values: {
  */
 export const confirmMatchSchema = z
   .object({
-    heldEventId: z.string().min(1, "開催履歴を選択してください"),
+    heldEventId: z.string().min(1, "開催を選択してください"),
     matchNoInEvent: z.number().int().min(1, "試合番号は1以上です"),
     gameTitleId: z.string().min(1, "作品を選択してください"),
     seasonMasterId: z.string().min(1, "シーズンを選択してください"),

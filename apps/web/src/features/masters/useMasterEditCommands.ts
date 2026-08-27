@@ -50,7 +50,7 @@ export function useMasterEditCommands(input: {
       setOperationError(undefined);
       const layoutFamily = parseLayoutFamily(request.layoutFamily);
       if (!layoutFamily) {
-        setOperationError("作品種別を選択してください");
+        setOperationError("読み取り方式を選択してください");
         return;
       }
       await patchGameTitle(id, {

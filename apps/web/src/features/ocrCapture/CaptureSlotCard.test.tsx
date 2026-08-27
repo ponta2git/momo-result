@@ -56,7 +56,7 @@ describe("CaptureSlotCard", () => {
       status: "running",
     });
 
-    expect(screen.getByRole("button", { name: "画像を削除" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "画像を破棄" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "前の分類へ移動" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "次の分類へ移動" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "撮り直し先にする" })).toBeDisabled();

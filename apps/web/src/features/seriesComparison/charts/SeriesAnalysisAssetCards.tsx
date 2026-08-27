@@ -221,10 +221,10 @@ export function StrategyProfileQuadrant({ response }: { response: SeriesComparis
     <DataVizQuadrantPlot
       ariaLabel="物件収益比率と順位スコアの4象限"
       cornerLabels={{
-        bottomLeft: "遊戯王型（カード重視） / 下位",
-        bottomRight: "桃鉄型（物件重視） / 下位",
-        topLeft: "遊戯王型（カード重視） / 上位",
-        topRight: "桃鉄型（物件重視） / 上位",
+        bottomLeft: "遊戯王型（カード重視）／下位",
+        bottomRight: "桃鉄型（物件重視）／下位",
+        topLeft: "遊戯王型（カード重視）／上位",
+        topRight: "桃鉄型（物件重視）／上位",
       }}
       points={orderFixedMembers(response.performanceProfiles.entries).map((entry) => ({
         label: `${entry.displayName}、物件収益比率${formatPercent(entry.averageRevenueAssetRate)}、順位スコア${formatDecimal(entry.averageRankScore)}`,

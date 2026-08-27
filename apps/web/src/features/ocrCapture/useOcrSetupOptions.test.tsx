@@ -191,7 +191,7 @@ describe("useOcrSetupOptions", () => {
     await waitFor(() =>
       expect(screen.getByLabelText("setup value")).toHaveAttribute(
         "data-error",
-        "Internal Server Error",
+        "応答を受け取れませんでした。",
       ),
     );
     expect(readSetupValue().heldEventId).toBe("held-requested");

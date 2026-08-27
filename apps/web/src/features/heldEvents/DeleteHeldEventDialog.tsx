@@ -17,10 +17,10 @@ export function DeleteHeldEventDialog({ model }: DeleteHeldEventDialogProps) {
       cancelLabel="キャンセル"
       confirmLabel={model.pending ? "削除中…" : "削除する"}
       pending={model.pending}
-      formatError={(error) => formatApiError(error, "開催履歴の削除に失敗しました")}
-      description={`${formatDateTime(model.target.heldAt)} の開催履歴を削除します。この操作は取り消せません。`}
+      formatError={(error) => formatApiError(error, "開催の削除に失敗しました")}
+      description={`${formatDateTime(model.target.heldAt)}の開催を削除します。この操作は取り消せません。`}
       open
-      title="開催履歴を削除しますか？"
+      title="開催を削除しますか？"
       onConfirm={async () => {
         if (model.target) {
           await model.confirm(model.target);

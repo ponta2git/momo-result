@@ -71,17 +71,17 @@ describe("match workspace operation feedback", () => {
         {...setupSectionProps({
           eventError: toMatchWorkspaceOperationErrorView({
             kind: "heldEventCreation",
-            message: "開催履歴の作成に失敗しました。",
+            message: "開催の作成に失敗しました。",
           }),
         })}
       />,
     );
 
-    await user.click(screen.getByText("一覧にない開催履歴を追加する"));
-    const disclosure = screen.getByText("一覧にない開催履歴を追加する").closest("div");
+    await user.click(screen.getByText("一覧にない開催を追加する"));
+    const disclosure = screen.getByText("一覧にない開催を追加する").closest("div");
     if (!disclosure) throw new Error("expected held-event creation disclosure");
     expect(within(disclosure).getByRole("alert")).toHaveTextContent(
-      "開催履歴は追加されておらず、試合条件も変更していません",
+      "開催は追加されておらず、試合条件も変更していません",
     );
     expect(within(disclosure).getByRole("alert")).toHaveTextContent("もう一度作成してください");
   });

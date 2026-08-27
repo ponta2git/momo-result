@@ -243,13 +243,13 @@ describe("OcrCapturePage", () => {
       new File(["image"], "assets.png", { type: "image/png" }),
     );
 
-    await user.click(screen.getByRole("button", { name: "すべて削除" }));
+    await user.click(screen.getByRole("button", { name: "画像の選択をすべて破棄" }));
     expect(
-      await screen.findByRole("alertdialog", { name: "選択画像をすべて削除しますか？" }),
+      await screen.findByRole("alertdialog", { name: "配置した画像をすべて破棄しますか？" }),
     ).toBeInTheDocument();
     expect(screen.getByAltText("総資産プレビュー")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "1件を削除" }));
+    await user.click(screen.getByRole("button", { name: "1件を破棄" }));
     expect(screen.queryByAltText("総資産プレビュー")).not.toBeInTheDocument();
   });
 
@@ -464,11 +464,11 @@ describe("OcrCapturePage", () => {
     renderCaptureRoute("/ocr/new?heldEventId=%20held-scoped%20");
 
     await waitFor(() => {
-      expect(screen.getByText(/確定 3試合・未完了 1件/u)).toBeInTheDocument();
+      expect(screen.getByText(/確定済み3試合・未確定下書き1件/u)).toBeInTheDocument();
       expect(screen.getByLabelText("試合番号")).toHaveValue(7);
     });
     await user.click(screen.getByRole("button", { name: "開催（任意）を変更" }));
-    expect(screen.getByRole("radio", { name: /確定 3試合・未完了 1件/u })).toBeChecked();
+    expect(screen.getByRole("radio", { name: /確定済み3試合・未確定下書き1件/u })).toBeChecked();
     await user.click(screen.getByRole("button", { name: "ダイアログを閉じる" }));
     await user.upload(
       screen.getByLabelText("OCRの画像をアップロード"),

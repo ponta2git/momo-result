@@ -73,7 +73,7 @@ export function heldEventScopeLabel(
     names.gameTitles.get(match.gameTitleId) ?? "作品名未取得",
     names.seasons.get(match.seasonMasterId) ?? "シーズン名未取得",
     names.maps.get(match.mapMasterId) ?? "マップ名未取得",
-  ].join(" / ");
+  ].join("・");
 }
 
 export function heldEventDraftScopeLabel(
@@ -87,7 +87,7 @@ export function heldEventDraftScopeLabel(
       : undefined,
     draft.mapMasterId ? (names.maps.get(draft.mapMasterId) ?? "マップ名未取得") : undefined,
   ].filter(Boolean);
-  return labels.length > 0 ? labels.join(" / ") : undefined;
+  return labels.length > 0 ? labels.join("・") : undefined;
 }
 
 export function formatAverageRank(averageRank: number): string {

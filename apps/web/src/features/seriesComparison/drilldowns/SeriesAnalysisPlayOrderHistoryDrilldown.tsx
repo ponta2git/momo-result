@@ -92,7 +92,7 @@ export function PlayOrderHistoryDrilldown({
               {formatDecimal(row.rankAverage)}位
             </p>
             <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
-              入賞 {row.podiumCount}戦・{formatPercent(row.podiumRate)} / 下位 {row.lowerHalfCount}
+              入賞{row.podiumCount}戦・{formatPercent(row.podiumRate)}／下位{row.lowerHalfCount}
               戦・{formatPercent(row.lowerHalfRate)}
             </p>
             <p className="mt-1 text-xs text-[var(--color-text-secondary)] tabular-nums">

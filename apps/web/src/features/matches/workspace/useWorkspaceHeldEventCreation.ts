@@ -44,12 +44,12 @@ export function useWorkspaceHeldEventCreation({
         },
         type: "patch_root",
       });
-      notify(`開催履歴（${formatDateTimeLong(event.heldAt)}）を作成して選択しました。`, "success");
+      notify(`開催（${formatDateTimeLong(event.heldAt)}）を作成して選択しました。`, "success");
     },
     onError: (error) => {
       setOperationError({
         kind: "heldEventCreation",
-        message: formatApiError(error, "開催履歴の作成に失敗しました"),
+        message: formatApiError(error, "開催の作成に失敗しました"),
       });
     },
   });

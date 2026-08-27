@@ -102,9 +102,9 @@ describe("HeldEventDetailPage", () => {
     expect(surface).not.toHaveClass("border");
     expect(surface).toContainElement(screen.getByRole("heading", { name: "この開催の戦績" }));
     expect(surface).not.toContainElement(screen.getByRole("heading", { name: /2026/u }));
-    expect(screen.getByText("確定済み 1試合 ・ 未完了 2件")).toBeInTheDocument();
+    expect(screen.getByText("確定済み1試合・未確定下書き2件")).toBeInTheDocument();
     expect(screen.queryByText("次の番号")).not.toBeInTheDocument();
-    expect(await screen.findAllByText("桃太郎電鉄2 / 今シーズン / 東日本編")).toHaveLength(2);
+    expect(await screen.findAllByText("桃太郎電鉄2・今シーズン・東日本編")).toHaveLength(2);
     const primaryDraftAction = screen.getByRole("link", { name: "確認事項を直す" });
     expect(primaryDraftAction).toHaveAttribute(
       "href",
@@ -119,7 +119,7 @@ describe("HeldEventDetailPage", () => {
     );
     expect(screen.getByRole("link", { name: "手入力" })).toHaveClass("bg-[var(--color-surface)]");
     const pontaRecap = screen.getByRole("region", { name: "ぽんたの開催戦績" });
-    expect(pontaRecap).toHaveTextContent("0勝");
+    expect(pontaRecap).toHaveTextContent("1位回数0回");
     expect(pontaRecap).not.toHaveTextContent("1戦");
     const results = screen.getByRole("list", { name: "第1試合の順位と総資産" });
     expect(within(results).getByText("1億2345万円")).toBeInTheDocument();
@@ -253,7 +253,7 @@ describe("HeldEventDetailPage", () => {
 
     renderPage();
 
-    expect(await screen.findByText("開催履歴が見つかりません")).toBeInTheDocument();
+    expect(await screen.findByText("開催が見つかりません")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "開催履歴へ戻る" })).toHaveAttribute(
       "href",
       "/held-events",
@@ -345,7 +345,7 @@ describe("HeldEventDetailPage", () => {
     ).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "開催詳細を更新" }));
 
-    expect(await screen.findByText("開催履歴が見つかりません")).toBeInTheDocument();
+    expect(await screen.findByText("開催が見つかりません")).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "OCR取り込み" })).not.toBeInTheDocument();
   });
 
@@ -426,16 +426,14 @@ describe("HeldEventDetailPage", () => {
         /取得済みの表示名はそのまま使い、取得できない箇所だけ「未取得」と表示しています。/u,
       ),
     ).toBeInTheDocument();
-    expect(
-      screen.getByText("作品名未取得 / シーズン名未取得 / マップ名未取得"),
-    ).toBeInTheDocument();
+    expect(screen.getByText("作品名未取得・シーズン名未取得・マップ名未取得")).toBeInTheDocument();
     expect(document.body.textContent).not.toMatch(/gt_|season_|map_/u);
     expect(screen.getByRole("link", { name: "第1試合の結果を見る" })).toBeInTheDocument();
 
     shouldFail = false;
     await user.click(screen.getByRole("button", { name: "表示名を再取得" }));
 
-    expect(await screen.findByText("桃太郎電鉄2 / 今シーズン / 東日本編")).toBeInTheDocument();
+    expect(await screen.findByText("桃太郎電鉄2・今シーズン・東日本編")).toBeInTheDocument();
     await waitFor(() =>
       expect(screen.queryByText("表示名を取得できませんでした")).not.toBeInTheDocument(),
     );

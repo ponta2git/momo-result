@@ -88,7 +88,7 @@ describe("held event detail view model", () => {
     };
 
     expect(heldEventScopeLabel(match(1, 1, 2), names)).toBe(
-      "桃太郎電鉄2 / 今シーズン / マップ名未取得",
+      "桃太郎電鉄2・今シーズン・マップ名未取得",
     );
     expect(
       heldEventDraftScopeLabel(
@@ -98,7 +98,7 @@ describe("held event detail view model", () => {
         },
         names,
       ),
-    ).toBe("桃太郎電鉄2 / 今シーズン");
+    ).toBe("桃太郎電鉄2・今シーズン");
 
     expect(
       heldEventDraftScopeLabel(
@@ -109,6 +109,6 @@ describe("held event detail view model", () => {
         },
         names,
       ),
-    ).toBe("作品名未取得 / シーズン名未取得 / マップ名未取得");
+    ).toBe("作品名未取得・シーズン名未取得・マップ名未取得");
   });
 });

@@ -16,7 +16,7 @@ describe("DraftStatusBadge", () => {
     expect(screen.getByText("読み取り失敗").parentElement).toHaveClass(
       "border-[var(--color-danger)]/55",
     );
-    expect(screen.getByText("確定済").parentElement).toHaveClass(
+    expect(screen.getByText("確定済み").parentElement).toHaveClass(
       "border-[var(--color-success)]/60",
     );
     expect(screen.getByText("状態不明").parentElement).toHaveClass(

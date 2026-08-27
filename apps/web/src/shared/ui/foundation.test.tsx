@@ -76,7 +76,7 @@ describe("ui foundation", () => {
     );
 
     expect(screen.getByRole("navigation", { name: "ページネーション" })).toBeInTheDocument();
-    expect(screen.getByText("26-50件 / 全75件")).toBeInTheDocument();
+    expect(screen.getByText("26〜50件／全75件")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "前のページへ" }));
     await user.click(screen.getByRole("button", { name: "次のページへ" }));
     await user.selectOptions(screen.getByLabelText("表示件数"), "50");

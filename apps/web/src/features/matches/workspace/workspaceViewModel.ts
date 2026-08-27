@@ -14,12 +14,12 @@ export function buildWorkspacePageCopy(args: {
   }
   if (args.mode === "review") {
     return {
-      description: `読み取り結果を確認して、開催履歴と4人分の結果を確定します。現在の状態: ${reviewStatusLabel(args.reviewStatus)}`,
+      description: `読み取り結果を確認して、開催と4人分の結果を確定します。現在の状態: ${reviewStatusLabel(args.reviewStatus)}`,
       title: "OCR結果の確認",
     };
   }
   return {
-    description: "開催履歴と4人分の結果を入力して、確定前の確認へ進みます。",
+    description: "開催と4人分の結果を入力して、確定前の確認へ進みます。",
     title: "試合の新規作成",
   };
 }

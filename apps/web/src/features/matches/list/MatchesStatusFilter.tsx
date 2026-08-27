@@ -28,7 +28,7 @@ const statusOptions: StatusOption[] = [
   { countKey: "ocrRunningCount", label: "処理中", value: "ocr_running" },
   { countKey: "preConfirmCount", label: "対応待ち", value: "pre_confirm" },
   { countKey: "needsReviewCount", label: "要確認のみ", value: "needs_review" },
-  { label: "確定済", value: "confirmed" },
+  { label: "確定済み", value: "confirmed" },
 ];
 
 function optionLabel(option: StatusOption, counts: MatchListSummaryCounts | undefined) {

@@ -97,7 +97,7 @@ export function validateImageFile(file: File): string | undefined {
   }
 
   if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) {
-    return "PNG / JPEG / WebP の画像を選択してください。";
+    return "PNG・JPEG・WebPの画像を選択してください。";
   }
 
   return undefined;

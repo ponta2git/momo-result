@@ -59,7 +59,7 @@ function MatchConfirmSummary({
       items={[
         {
           id: "held-event",
-          label: "開催履歴",
+          label: "開催",
           value: heldEvent ? formatDateTimeLong(heldEvent.heldAt) : "未選択",
         },
         {
@@ -130,7 +130,7 @@ function OcrReviewSummary({
         <span className="font-semibold text-[var(--color-text-primary)]">OCR確認状況</span>
         <span className="text-[var(--color-text-secondary)]">修正 {changedCount}件</span>
         <span className="text-[var(--color-text-secondary)]">
-          確認済み {reviewedCount} / {totalCount}
+          確認済み{reviewedCount}件／全{totalCount}件
         </span>
       </div>
       {unresolvedCount > 0 ? (

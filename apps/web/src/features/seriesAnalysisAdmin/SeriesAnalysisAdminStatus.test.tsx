@@ -53,7 +53,7 @@ describe("SeriesAnalysisAdminStatus", () => {
 
     const emptyHeading = screen.getByRole("heading", {
       level: 3,
-      name: "実行履歴はありません。",
+      name: "実行履歴はありません",
     });
     expect(emptyHeading.closest("section")).toHaveClass("bg-transparent", "py-6");
     expect(screen.queryByRole("table")).not.toBeInTheDocument();

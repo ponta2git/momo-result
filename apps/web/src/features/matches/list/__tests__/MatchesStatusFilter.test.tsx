@@ -32,7 +32,7 @@ describe("MatchesStatusFilter", () => {
       "処理中（3件）",
       "対応待ち（5件）",
       "要確認のみ（2件）",
-      "確定済",
+      "確定済み",
     ]);
 
     await user.selectOptions(select, "ocr_running");

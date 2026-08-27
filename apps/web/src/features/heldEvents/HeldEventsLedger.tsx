@@ -59,10 +59,10 @@ function HeldEventsTable({
     },
     {
       align: "right",
-      header: "未完了",
+      header: "未確定下書き",
       key: "draftCount",
       renderCell: (event) => <span className="tabular-nums">{event.draftCount}件</span>,
-      width: "7rem",
+      width: "9rem",
     },
     {
       align: "right",
@@ -149,7 +149,7 @@ function HeldEventRow({
             <dd className="mt-1 text-sm font-semibold tabular-nums">{event.matchCount}試合</dd>
           </div>
           <div className="min-w-0 px-3 py-2">
-            <dt className="momo-label text-[var(--color-text-secondary)]">未完了</dt>
+            <dt className="momo-label text-[var(--color-text-secondary)]">未確定下書き</dt>
             <dd className="mt-1 text-sm font-semibold tabular-nums">{event.draftCount}件</dd>
           </div>
         </dl>

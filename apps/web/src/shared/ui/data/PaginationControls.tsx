@@ -117,7 +117,7 @@ export function PaginationControls(props: PaginationControlsProps) {
               variant === "full" ? "order-1 col-span-4 sm:order-none sm:col-span-1" : "",
             )}
           >
-            {currentPage.toLocaleString()} / {totalPages.toLocaleString()}
+            {currentPage.toLocaleString()}／{totalPages.toLocaleString()}
           </span>
           <IconButton
             aria-label="次のページへ"

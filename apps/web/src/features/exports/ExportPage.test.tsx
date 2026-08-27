@@ -321,12 +321,12 @@ describe("ExportPage", () => {
     await user.click(await screen.findByRole("button", { name: "開催を変更" }));
     expect(screen.getByRole("dialog", { name: "開催を選択" })).toBeInTheDocument();
     expectSingleCandidateScrollRegion("開催");
-    expect(screen.getByText("1-20件 / 全21件")).toBeInTheDocument();
+    expect(screen.getByText("1〜20件／全21件")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "次のページへ" }));
     const lastEvent = await screen.findByRole("radio", { name: /21試合/u });
     expect(requestedPages).toEqual([1, 2]);
-    expect(screen.getByText("21-21件 / 全21件")).toBeInTheDocument();
+    expect(screen.getByText("21〜21件／全21件")).toBeInTheDocument();
     await waitFor(() => expect(detailRequested).toBe(true));
     expect(screen.getByText(/1試合をCSVで書き出します。/u)).toBeInTheDocument();
     expect(

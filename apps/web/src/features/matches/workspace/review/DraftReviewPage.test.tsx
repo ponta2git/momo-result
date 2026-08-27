@@ -83,7 +83,7 @@ describe("DraftReviewPage", () => {
 
     expect(await screen.findByRole("heading", { name: "OCR結果の確認" })).toBeInTheDocument();
     expect(await screen.findByDisplayValue("あかねまみ")).toBeInTheDocument();
-    await user.click(await screen.findByRole("button", { name: "開催履歴（必須）を変更" }));
+    await user.click(await screen.findByRole("button", { name: "開催（必須）を変更" }));
     expect(screen.getByRole("radio", { checked: true })).toHaveAttribute("value", "held-1");
     await user.click(screen.getByRole("button", { name: "ダイアログを閉じる" }));
 
@@ -548,10 +548,10 @@ describe("DraftReviewPage", () => {
       </QueryClientProvider>,
     );
 
-    expect(await screen.findByText("一覧にない開催履歴を追加する")).toBeInTheDocument();
+    expect(await screen.findByText("一覧にない開催を追加する")).toBeInTheDocument();
     expect(screen.getByRole("button", { hidden: true, name: "作成して選択" })).not.toBeVisible();
 
-    await user.click(screen.getByText("一覧にない開催履歴を追加する"));
+    await user.click(screen.getByText("一覧にない開催を追加する"));
     expect(screen.getByRole("button", { name: "作成して選択" })).toBeVisible();
   });
 
@@ -581,18 +581,20 @@ describe("DraftReviewPage", () => {
       </QueryClientProvider>,
     );
 
-    await screen.findByText("一覧にない開催履歴を追加する");
-    await user.click(screen.getByText("一覧にない開催履歴を追加する"));
+    await screen.findByText("一覧にない開催を追加する");
+    await user.click(screen.getByText("一覧にない開催を追加する"));
     await user.click(screen.getByRole("button", { name: "作成して選択" }));
 
     await waitFor(() =>
-      expect(screen.getByText(/2026\/01\/02 09:00 — 確定 0試合・未完了 0件/u)).toBeInTheDocument(),
+      expect(
+        screen.getByText(/2026\/01\/02 09:00 — 確定済み0試合・未確定下書き0件/u),
+      ).toBeInTheDocument(),
     );
-    await user.click(screen.getByRole("button", { name: "開催履歴（必須）を変更" }));
+    await user.click(screen.getByRole("button", { name: "開催（必須）を変更" }));
     expect(screen.getByRole("radio", { checked: true })).toHaveAttribute("value", "held-created");
     expect(
       screen.getByText(
-        `開催履歴（${formatDateTimeLong(createdHeldEvent.heldAt)}）を作成して選択しました。`,
+        `開催（${formatDateTimeLong(createdHeldEvent.heldAt)}）を作成して選択しました。`,
       ),
     ).toBeInTheDocument();
   });

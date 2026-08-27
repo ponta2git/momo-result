@@ -31,7 +31,7 @@ describe("MatchConfirmDialog", () => {
 
     const dialog = await screen.findByRole("dialog", { name: "この内容で確定しますか？" });
     expect(within(dialog).getByText("修正 2件")).toBeInTheDocument();
-    expect(within(dialog).getByText("確認済み 2 / 3")).toBeInTheDocument();
+    expect(within(dialog).getByText("確認済み2件／全3件")).toBeInTheDocument();
     expect(within(dialog).getByText(/未確認の強調項目が1件あります/u)).toBeInTheDocument();
     expect(within(dialog).getByRole("cell", { name: "12,345" })).toBeInTheDocument();
     expect(within(dialog).getByRole("cell", { name: "-678" })).toBeInTheDocument();

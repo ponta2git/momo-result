@@ -84,7 +84,7 @@ export function ScoreGridMobileCards({
                       <PlayOrderMark playOrder={player.playOrder} />
                       <RankBadge rank={player.rank} />
                       <span>総資産 {player.totalAssetsManYen.toLocaleString()}万円</span>
-                      {unresolvedCount > 0 ? <span>・ 未確認 {unresolvedCount}</span> : null}
+                      {unresolvedCount > 0 ? <span>・未確認{unresolvedCount}件</span> : null}
                     </span>
                   </span>
                   <span className="shrink-0 text-xs text-[var(--color-text-secondary)]">

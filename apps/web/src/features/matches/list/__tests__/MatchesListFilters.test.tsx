@@ -121,7 +121,7 @@ describe("MatchesListFilters", () => {
 
     await user.click(screen.getByRole("button", { name: "開催を変更" }));
     expect(screen.getByRole("dialog", { name: "開催を選択" })).toHaveTextContent(
-      "確定 3試合・未完了 0件",
+      "確定済み3試合・未確定下書き0件",
     );
     await user.click(screen.getByRole("radio", { name: /2026\/08\/09/u }));
 

@@ -117,7 +117,7 @@ describe("apiRequest", () => {
       .mockResolvedValueOnce(Response.json({ ok: true }));
 
     await getAuthMe();
-    await expect(getAuthMe()).rejects.toMatchObject({ detail: "network down" });
+    await expect(getAuthMe()).rejects.toMatchObject({ detail: "応答を受け取れませんでした。" });
     await apiRequest("/api/example", { method: "POST", body: { ok: true } });
 
     const calls = fetchCallsOf(fetchMock);
@@ -132,7 +132,7 @@ describe("apiRequest", () => {
     await expect(
       apiRequest("https://evil.example/api/example", { method: "POST", body: { ok: true } }),
     ).rejects.toMatchObject({
-      detail: "API requests must use same-origin paths.",
+      detail: "応答を受け取れませんでした。",
     });
 
     expect(fetchMock).not.toHaveBeenCalled();
@@ -302,7 +302,7 @@ describe("apiRequest", () => {
 
     await expect(apiDownload("/api/exports/matches?format=x")).rejects.toMatchObject({
       status: 422,
-      detail: "format must be one of: csv, tsv.",
+      detail: "入力内容を確認してください。",
       code: "VALIDATION_FAILED",
     });
   });
@@ -324,7 +324,7 @@ describe("apiRequest", () => {
     const fetchMock = installFetchMock(async () => new Response("ok"));
 
     await expect(apiDownload("//evil.example/api/export")).rejects.toMatchObject({
-      detail: "API requests must use same-origin paths.",
+      detail: "応答を受け取れませんでした。",
     });
 
     expect(fetchMock).not.toHaveBeenCalled();

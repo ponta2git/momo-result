@@ -72,14 +72,14 @@ export function CaptureSlotActions({
           {moveForwardLabel ? `${moveForwardLabel}へ` : "次へ"}
         </Button>
         <Button
-          aria-label="画像を削除"
+          aria-label="画像を破棄"
           disabled={clearDisabled}
           icon={<Trash2 aria-hidden="true" className="size-4" />}
           size="sm"
           variant="quiet"
           onClick={onClear}
         >
-          削除
+          破棄
         </Button>
       </div>
     </div>

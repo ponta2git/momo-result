@@ -113,7 +113,7 @@ export function useOcrCaptureDraftFlow(): OcrCaptureDraftFlow {
     const currentSlot = slotsRef.current.find((slot) => slot.kind === kind);
     if (currentSlot) {
       if (isWorkingStatus(currentSlot.status)) {
-        notify("読み取り中の画像は削除できません。試合一覧で状態を確認してください。");
+        notify("読み取り中の画像は破棄できません。試合一覧で状態を確認してください。");
         return;
       }
       releaseSlotResources(currentSlot);
@@ -126,12 +126,12 @@ export function useOcrCaptureDraftFlow(): OcrCaptureDraftFlow {
       delete next[kind];
       return next;
     });
-    notify("画像を削除しました。");
+    notify("画像を破棄しました。");
   }, []);
 
   const handleResetAll = useCallback((notify: (message: string) => void) => {
     if (slotsRef.current.some((slot) => isWorkingStatus(slot.status))) {
-      notify("読み取り中の画像は削除できません。試合一覧で状態を確認してください。");
+      notify("読み取り中の画像は破棄できません。試合一覧で状態を確認してください。");
       return;
     }
     for (const slot of slotsRef.current) {
@@ -139,7 +139,7 @@ export function useOcrCaptureDraftFlow(): OcrCaptureDraftFlow {
     }
     setSlots(createInitialSlots());
     setDrafts({});
-    notify("画像をすべて削除しました。次の試合を撮影できます。");
+    notify("画像をすべて破棄しました。次の試合を撮影できます。");
   }, []);
 
   const handleDropImage = useCallback(

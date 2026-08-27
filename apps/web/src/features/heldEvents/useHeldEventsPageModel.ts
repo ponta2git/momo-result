@@ -134,11 +134,11 @@ export function useHeldEventsPageModel(): HeldEventsPageModel {
       setHeldAtDraft(currentLocalIsoMinute());
       setErrorMessage("");
       setCreateOpen(false);
-      showToast({ title: "開催履歴を作成しました。", tone: "success" });
+      showToast({ title: "開催を作成しました。", tone: "success" });
       navigate(withReturnTo(`/held-events/${encodeURIComponent(event.id)}`, listReturnTo));
       return { version: previous.version + 1 };
     } catch (error) {
-      setErrorMessage(formatApiError(error, "開催履歴の作成に失敗しました"));
+      setErrorMessage(formatApiError(error, "開催の作成に失敗しました"));
       return previous;
     }
   }, initialCreateHeldEventState);
@@ -149,7 +149,7 @@ export function useHeldEventsPageModel(): HeldEventsPageModel {
       await queryClient.invalidateQueries({ queryKey: heldEventKeys.all() });
       setDeleteTarget(null);
       setErrorMessage("");
-      showToast({ title: "開催履歴を削除しました。", tone: "success" });
+      showToast({ title: "開催を削除しました。", tone: "success" });
     },
   });
   const { isPending: deletePending, mutateAsync: deleteEventAsync } = deleteMutation;

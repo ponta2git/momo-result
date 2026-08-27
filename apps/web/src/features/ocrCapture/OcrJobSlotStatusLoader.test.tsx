@@ -159,7 +159,9 @@ describe("OcrJobSlotStatusLoader", () => {
       expect(onUpdate).toHaveBeenCalledWith(
         expect.objectContaining({
           status: "running",
-          transportError: expect.objectContaining({ detail: "try again later" }),
+          transportError: expect.objectContaining({
+            detail: "現在処理を完了できません。少し待ってから、もう一度実行してください。",
+          }),
         }),
       ),
     );
@@ -220,7 +222,7 @@ describe("OcrJobSlotStatusLoader", () => {
         expect.objectContaining({
           status: "failed",
           transportError: expect.objectContaining({
-            detail: "OCR draft id was not returned.",
+            detail: "応答を受け取れませんでした。",
           }),
         }),
       ),
@@ -228,7 +230,7 @@ describe("OcrJobSlotStatusLoader", () => {
     expect(draftRequestCount).toBe(0);
     expect(view.onDraft).not.toHaveBeenCalled();
     expect(view.onDraftLoadError).toHaveBeenCalledWith(
-      expect.objectContaining({ detail: "OCR draft id was not returned." }),
+      expect.objectContaining({ detail: "応答を受け取れませんでした。" }),
     );
   });
 
@@ -256,7 +258,7 @@ describe("OcrJobSlotStatusLoader", () => {
           draftId: "draft-1",
           status: "failed",
           transportError: expect.objectContaining({
-            detail: "OCR draft identity did not match the completed job.",
+            detail: "応答を受け取れませんでした。",
           }),
         }),
       ),
@@ -264,7 +266,7 @@ describe("OcrJobSlotStatusLoader", () => {
     expect(view.onDraft).not.toHaveBeenCalled();
     expect(view.onDraftLoadError).toHaveBeenCalledWith(
       expect.objectContaining({
-        detail: "OCR draft identity did not match the completed job.",
+        detail: "応答を受け取れませんでした。",
       }),
     );
   });
@@ -317,8 +319,8 @@ describe("OcrJobSlotStatusLoader", () => {
         expect.objectContaining({
           status: "failed",
           transportError: expect.objectContaining({
-            detail: "draft row is not available",
-            title: "OCR Draft Unavailable",
+            detail: "操作を完了できませんでした。",
+            title: "操作を完了できませんでした",
           }),
         }),
       ),
@@ -326,7 +328,7 @@ describe("OcrJobSlotStatusLoader", () => {
     expect(onDraft).not.toHaveBeenCalled();
     expect(onDraftLoadError).toHaveBeenCalledWith(
       expect.objectContaining({
-        detail: "draft row is not available",
+        detail: "操作を完了できませんでした。",
       }),
     );
   });

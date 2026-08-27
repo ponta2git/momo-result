@@ -75,7 +75,7 @@ export function toMatchCandidates(
     .filter((match) => match.kind === "match" && match.status === "confirmed" && match.matchId)
     .map((match) => ({
       description: matchMetadata(match.gameTitleId, match.seasonMasterId, gameTitles, seasons),
-      label: `${match.playedAt ? formatDateTime(match.playedAt) : "開催日時未設定"} / ${formatMatchNoInEvent(match.matchNoInEvent)}`,
+      label: `${match.playedAt ? formatDateTime(match.playedAt) : "開催日時未設定"}・${formatMatchNoInEvent(match.matchNoInEvent)}`,
       value: match.matchId ?? "",
     }));
 }
@@ -100,7 +100,7 @@ export function candidateFromMatchDetail(
   return match
     ? {
         description: matchMetadata(match.gameTitleId, match.seasonMasterId, gameTitles, seasons),
-        label: `${formatDateTime(match.playedAt)} / ${formatMatchNoInEvent(match.matchNoInEvent)}`,
+        label: `${formatDateTime(match.playedAt)}・${formatMatchNoInEvent(match.matchNoInEvent)}`,
         value: match.matchId,
       }
     : undefined;

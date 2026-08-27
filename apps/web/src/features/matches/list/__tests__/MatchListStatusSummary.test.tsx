@@ -34,13 +34,13 @@ describe("MatchListStatusSummary", () => {
           kind: "match",
           status: "confirmed",
           statusDescription: "",
-          statusLabel: "確定済",
+          statusLabel: "確定済み",
         }}
       />,
     );
 
     expect(screen.getByRole("status")).toBe(liveStatus);
-    expect(liveStatus).toHaveTextContent("確定済");
+    expect(liveStatus).toHaveTextContent("確定済み");
     expect(liveStatus).not.toHaveAttribute("aria-busy");
   });
 });

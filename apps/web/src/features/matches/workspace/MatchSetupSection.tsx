@@ -51,7 +51,7 @@ export function MatchSetupSection({
         selectedMap?.name,
       ]
         .filter(Boolean)
-        .join(" ・ ")
+        .join("・")
     : "必須条件を設定してください";
   return (
     <section>
@@ -94,7 +94,7 @@ export function MatchSetupSection({
           className="mt-4"
           keepMounted
           panelClassName="pt-2"
-          summary="一覧にない開催履歴を追加する"
+          summary="一覧にない開催を追加する"
           triggerClassName="px-2 text-xs text-[var(--color-text-secondary)]"
         >
           <div className="grid gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3 md:grid-cols-[1fr_auto] md:items-end">

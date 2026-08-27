@@ -21,7 +21,7 @@ export type DraftStatus = (typeof draftStatuses)[number];
 export type DraftStatusOrUnknown = DraftStatus | "unknown";
 
 export const draftStatusLabels = {
-  confirmed: "確定済",
+  confirmed: "確定済み",
   draft_ready: "確認待ち",
   needs_review: "要確認",
   ocr_failed: "読み取り失敗",

@@ -78,7 +78,7 @@ describe("validateMatchForm", () => {
     const result = validateMatchForm(values);
 
     expect(result.success).toBe(false);
-    expect(result.messages).toContain("開催履歴を選択してください");
+    expect(result.messages).toContain("開催を選択してください");
     expect(result.pathSet.has("heldEventId")).toBe(true);
     expect(result.firstPath).toBe("heldEventId");
   });
@@ -137,6 +137,6 @@ describe("validateMatchForm", () => {
     const result = validateMatchForm(values);
 
     expect(result.firstMessage).toBe(result.messages[0]);
-    expect(result.firstMessage).toBe("開催履歴を選択してください");
+    expect(result.firstMessage).toBe("開催を選択してください");
   });
 });

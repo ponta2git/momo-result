@@ -118,7 +118,7 @@ const warningCopyByCode: Record<string, string> = {
   MISSING_INCIDENT_COUNT: "事件数を読み取れませんでした。元画像を見て入力してください。",
   PLAYER_ORDER_UNDETECTED: "プレー順を特定できませんでした。色と事件簿を確認してください。",
   SUSPICIOUS_INCIDENT_COUNT: "事件数が通常より大きく見えます。元画像と照合してください。",
-  UNKNOWN_PLAYER_ALIAS: "プレイヤー名を特定できませんでした。メンバーを確認してください。",
+  UNKNOWN_PLAYER_ALIAS: "プレーヤー名を特定できませんでした。メンバーを確認してください。",
 };
 
 export function reviewWarningMessage(warning: OcrWarning): string {

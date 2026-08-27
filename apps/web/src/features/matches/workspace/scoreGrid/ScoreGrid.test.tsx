@@ -347,7 +347,7 @@ describe("ScoreGrid", () => {
       />,
     );
 
-    expect(screen.getByText("未確認 2 / 2")).toBeInTheDocument();
+    expect(screen.getByText("未確認2件／全2件")).toBeInTheDocument();
     expect(screen.getByText("既知エイリアスで解決")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "この値で確認済み" }));
     expect(onAcknowledge).toHaveBeenCalledTimes(1);

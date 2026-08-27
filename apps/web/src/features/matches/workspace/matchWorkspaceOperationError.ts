@@ -24,8 +24,8 @@ export function toMatchWorkspaceOperationErrorView(
       return {
         detail: error.message,
         nextStep:
-          "開催履歴は追加されておらず、試合条件も変更していません。通信状態と開催日時を確認して、もう一度作成してください。",
-        title: "開催履歴を追加できませんでした",
+          "開催は追加されておらず、試合条件も変更していません。通信状態と開催日時を確認して、もう一度作成してください。",
+        title: "開催を追加できませんでした",
       };
     case "update":
       return {

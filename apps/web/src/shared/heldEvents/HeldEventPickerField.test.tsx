@@ -31,7 +31,7 @@ describe("HeldEventPickerField", () => {
 
     await user.click(screen.getByRole("button", { name: "開催を変更" }));
     const eventChoice = screen.getByRole("radio", {
-      name: "2026/08/09 09:00 — 確定 3試合・未完了 1件",
+      name: "2026/08/09 09:00 — 確定済み3試合・未確定下書き1件",
     });
     expect(screen.getByRole("dialog", { name: "開催を選択" })).toHaveTextContent(
       "開催で絞り込みません。",
@@ -57,13 +57,15 @@ describe("HeldEventPickerField", () => {
       />,
     );
 
-    expect(screen.getByText("2026/08/09 09:00 — 確定 3試合・未完了 1件")).toBeInTheDocument();
+    expect(
+      screen.getByText("2026/08/09 09:00 — 確定済み3試合・未確定下書き1件"),
+    ).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "開催履歴を変更" }));
 
     expect(
       screen.getByRole("radio", {
-        name: "2026/08/09 09:00 — 確定 3試合・未完了 1件",
+        name: "2026/08/09 09:00 — 確定済み3試合・未確定下書き1件",
       }),
     ).toBeChecked();
   });

@@ -114,7 +114,7 @@ export function SeriesAnalysisAdminPage() {
               />
               {page.recalculation.titleReserved ? (
                 <p className="text-sm text-[var(--color-text-secondary)] lg:col-span-full">
-                  この作品には未完了の手動再計算予約があります。完了後にもう一度予約できます。
+                  この作品には処理待ちの手動再計算予約があります。完了後にもう一度予約できます。
                 </p>
               ) : null}
             </section>

@@ -33,7 +33,7 @@ export function ScoreGridReviewToolbar({
       <div className="min-w-0" aria-live="polite">
         <div className="flex flex-wrap items-center gap-2">
           <span className="rounded-[var(--radius-xs)] border border-[var(--color-review)]/70 bg-[var(--color-review)]/14 px-2 py-0.5 text-xs font-semibold text-[var(--color-text-primary)] tabular-nums">
-            未確認 {remainingCount} / {totalCount}
+            未確認{remainingCount}件／全{totalCount}件
           </span>
           {activeItem ? (
             <span className="truncate text-sm font-semibold text-[var(--color-text-primary)]">

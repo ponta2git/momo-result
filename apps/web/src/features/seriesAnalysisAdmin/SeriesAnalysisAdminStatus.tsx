@@ -23,16 +23,16 @@ export function ExecutionStatus({ data }: { data: SeriesAnalysisAdminOverview })
       <dl className="grid divide-y divide-[var(--color-border)] text-sm sm:grid-cols-4 sm:divide-x sm:divide-y-0">
         <StatusDatum label="実行中" value={`${execution.runningCount}件`} />
         <StatusDatum label="待機作品" value={`${execution.queuedTitleCount}作品`} />
-        <StatusDatum label="展開中キャンペーン" value={`${execution.activeCampaignCount}件`} />
+        <StatusDatum label="展開中の全作品操作" value={`${execution.activeCampaignCount}件`} />
         <StatusDatum label="最古の待機" value={formatDateTime(execution.oldestQueuedAt)} />
       </dl>
       {execution.latestActiveCampaign ? (
         <p className="mt-3 text-xs text-[var(--color-text-secondary)]">
-          全作品操作: 展開 {execution.latestActiveCampaign.expandedCount}/
-          {execution.latestActiveCampaign.targetCount}・完了{" "}
-          {execution.latestActiveCampaign.terminalCount}・失敗{" "}
-          {execution.latestActiveCampaign.failedCount}・スキップ{" "}
-          {execution.latestActiveCampaign.skippedCount}
+          全作品操作: 予約作成{execution.latestActiveCampaign.expandedCount}件／全
+          {execution.latestActiveCampaign.targetCount}作品・処理終了
+          {execution.latestActiveCampaign.terminalCount}件・失敗
+          {execution.latestActiveCampaign.failedCount}件・対象外
+          {execution.latestActiveCampaign.skippedCount}件
         </p>
       ) : null}
     </section>
@@ -86,7 +86,7 @@ export function RecentJobs({ jobs }: { jobs: SeriesAnalysisAdminOverview["recent
         </p>
       </header>
       {jobs.length === 0 ? (
-        <EmptyState className="py-6" placement="embedded" title="実行履歴はありません。" />
+        <EmptyState className="py-6" placement="embedded" title="実行履歴はありません" />
       ) : (
         <DataTable
           caption={{ content: "全作品の直近3件の実行履歴" }}
@@ -198,7 +198,7 @@ const failureLabels = {
   publication_failed: "公開処理エラー",
   resource_exhausted: "メモリ上限",
   temporary_storage_exhausted: "一時領域不足",
-  worker_crashed: "worker停止",
+  worker_crashed: "分析処理停止",
 } as const satisfies Record<SeriesAnalysisSafeFailureCode, string>;
 
 const resultLabels = {
@@ -279,7 +279,7 @@ const recentJobColumns = [
     cellClassName: "tabular-nums",
     header: "試行",
     key: "attempts",
-    renderCell: (job) => `${job.attemptCount}回 / retry ${job.transientRetryCount}`,
+    renderCell: (job) => `${job.attemptCount}回（再試行${job.transientRetryCount}回）`,
   },
   {
     header: "結果",

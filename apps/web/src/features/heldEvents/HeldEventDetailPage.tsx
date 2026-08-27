@@ -89,7 +89,7 @@ function HeldEventDetailReadyContent({ page }: { page: HeldEventDetailReadyPageM
             </Button>
           </nav>
         }
-        description={`確定済み ${detail.matchCount}試合 ・ 未完了 ${detail.draftCount}件`}
+        description={`確定済み${detail.matchCount}試合・未確定下書き${detail.draftCount}件`}
         eyebrow="開催記録"
         title={formatHeldEventDateTime(detail.heldAt)}
       />

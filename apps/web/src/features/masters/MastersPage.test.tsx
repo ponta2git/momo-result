@@ -574,7 +574,9 @@ describe("MastersPage", () => {
     await user.click(screen.getByRole("button", { name: "作品を削除" }));
     await user.click(screen.getByRole("button", { name: "削除" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("作品は試合から参照されています。");
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "保存済みの状態が変わっています。内容を確認して、もう一度実行してください。",
+    );
     await user.click(screen.getByRole("button", { name: "キャンセル" }));
 
     await waitFor(() => expect(screen.queryByText("作品を削除しますか？")).not.toBeInTheDocument());

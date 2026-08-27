@@ -42,7 +42,7 @@ describe("MatchSetupFields", () => {
     );
 
     const controls = [
-      screen.getByRole("button", { name: "開催履歴（必須）を変更" }),
+      screen.getByRole("button", { name: "開催（必須）を変更" }),
       screen.getByLabelText("試合番号"),
       screen.getByLabelText("開催日時（必須）"),
       screen.getByLabelText("作品（必須）"),

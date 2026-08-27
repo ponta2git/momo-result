@@ -24,7 +24,7 @@ type HeldEventPickerFieldProps = Omit<HTMLAttributes<HTMLDivElement>, "children"
 };
 
 function heldEventDescription(event: HeldEventResponse): string {
-  return `確定 ${event.matchCount}試合・未完了 ${event.draftCount}件`;
+  return `確定済み${event.matchCount}試合・未確定下書き${event.draftCount}件`;
 }
 
 function heldEventOption(event: HeldEventResponse) {

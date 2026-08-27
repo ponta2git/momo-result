@@ -55,7 +55,7 @@ export function useMasterCreateActions(input: {
     }
     const layoutFamily = parseLayoutFamily(String(formData.get("layoutFamily") ?? ""));
     if (!layoutFamily) {
-      return { ...prev, error: "作品種別を選択してください" };
+      return { ...prev, error: "読み取り方式を選択してください" };
     }
     const intent = { layoutFamily, name };
     const attempt = input.idempotencyKeys.begin("masters.createGameTitle", intent);

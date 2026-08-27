@@ -27,11 +27,11 @@ describe("PaginationControls", () => {
       />,
     );
 
-    expect(screen.getByText("26-50件 / 全75件")).toBeInTheDocument();
+    expect(screen.getByText("26〜50件／全75件")).toBeInTheDocument();
     expect(screen.getByRole("navigation", { name: "ページネーション" })).toHaveClass(
       "sm:items-end",
     );
-    expect(screen.getByText("26-50件 / 全75件")).toHaveClass("sm:min-h-9", "sm:items-center");
+    expect(screen.getByText("26〜50件／全75件")).toHaveClass("sm:min-h-9", "sm:items-center");
     await user.click(screen.getByRole("button", { name: "先頭ページへ" }));
     await user.selectOptions(screen.getByLabelText("表示件数"), "50");
     expect(onPageChange).toHaveBeenCalledWith(1);
@@ -79,8 +79,8 @@ describe("PaginationControls", () => {
       />,
     );
 
-    expect(screen.getByText("0件 / 全0件")).toBeInTheDocument();
-    expect(screen.getByText("1 / 1")).toBeInTheDocument();
+    expect(screen.getByText("0件／全0件")).toBeInTheDocument();
+    expect(screen.getByText("1／1")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "前のページへ" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "次のページへ" })).toBeDisabled();
   });

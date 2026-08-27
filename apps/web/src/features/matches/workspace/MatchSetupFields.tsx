@@ -20,7 +20,7 @@ export function MatchSetupFields({ model }: { model: MatchWorkspaceSetupFieldsMo
         error={fieldError("heldEventId") ?? options.heldEventPicker?.error}
         heldEvents={options.heldEventPicker?.heldEvents ?? options.heldEvents}
         className="lg:col-span-5"
-        label="開催履歴（必須）"
+        label="開催（必須）"
         name="match-workspace-held-event"
         pagination={options.heldEventPicker?.pagination}
         pending={options.heldEventPicker?.pending}

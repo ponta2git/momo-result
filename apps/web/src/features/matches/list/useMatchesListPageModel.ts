@@ -68,7 +68,7 @@ export function useMatchesListPageModel(): MatchesListPageModel {
     deferredSearch: location.deferred,
     listReturnTo: location.listReturnTo,
     locationSettling: location.settling,
-    resetCursor: () => location.apply({ ...location.current, cursor: "" }),
+    resetCursorIfUnchanged: location.resetCursorIfUnchanged,
   });
   const draftNavigation = useConfirmedDraftNavigationCommand(location.listReturnTo);
 

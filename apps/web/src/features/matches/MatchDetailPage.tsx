@@ -114,7 +114,11 @@ function MatchDetailReadyContent({ page }: { page: MatchDetailReadyPageModel }) 
             matchNoInEvent={match.matchNoInEvent}
             season={identity.season}
           />
-          <MatchFeatureSection view={analysis.featureView} />
+          <MatchFeatureSection
+            needsManualRefresh={analysis.needsManualRefresh}
+            refresh={analysis.refresh}
+            view={analysis.featureView}
+          />
         </div>
 
         <section aria-labelledby="match-result-ledger-heading" className="grid w-full gap-4">

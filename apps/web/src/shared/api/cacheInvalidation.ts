@@ -26,16 +26,16 @@ export async function invalidateAfterMatchConfirmed(queryClient: QueryClient): P
   ]);
 }
 
-export async function invalidateAfterMatchDeleted(
-  queryClient: QueryClient,
-  matchId: string,
-): Promise<void> {
-  queryClient.removeQueries({ exact: true, queryKey: matchKeys.detail(matchId) });
+export async function invalidateAfterMatchDeleted(queryClient: QueryClient): Promise<void> {
   await Promise.all([
     invalidateMatchCollections(queryClient),
     invalidateAnalysisState(queryClient),
     queryClient.invalidateQueries({ queryKey: heldEventKeys.all() }),
   ]);
+}
+
+export function evictDeletedMatchDetail(queryClient: QueryClient, matchId: string): void {
+  queryClient.removeQueries({ exact: true, queryKey: matchKeys.detail(matchId) });
 }
 
 export async function invalidateAfterDraftCancelled(queryClient: QueryClient): Promise<void> {

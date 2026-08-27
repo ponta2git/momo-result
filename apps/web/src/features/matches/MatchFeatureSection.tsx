@@ -1,11 +1,21 @@
+import type { MatchDetailRefreshModel } from "@/features/matches/matchDetailPageModel";
 import type { MatchFeatureBadge } from "@/features/matches/matchDetailViewModel";
 import type { MatchFeatureView } from "@/features/matches/matchFeatureViewModel";
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
 import { Notice } from "@/shared/ui/feedback/Notice";
 
-export function MatchFeatureSection({ view }: { view: MatchFeatureView }) {
+export function MatchFeatureSection({
+  needsManualRefresh,
+  refresh,
+  view,
+}: {
+  needsManualRefresh: boolean;
+  refresh: MatchDetailRefreshModel;
+  view: MatchFeatureView;
+}) {
   const ready = view.kind === "ready-empty" || view.kind === "with-items";
+  const canRefresh = view.kind !== "load-failed";
 
   return (
     <section aria-label="試合の特徴" className="grid gap-2">
@@ -70,6 +80,24 @@ export function MatchFeatureSection({ view }: { view: MatchFeatureView }) {
       ) : null}
       {view.kind === "unavailable" ? (
         <p className="text-xs text-[var(--color-text-secondary)]">{view.message}</p>
+      ) : null}
+      {needsManualRefresh && ready ? (
+        <p className="text-xs text-[var(--color-text-secondary)]" role="status">
+          新しい分析を計算しています。完了状況は更新して確認できます。
+        </p>
+      ) : null}
+      {canRefresh ? (
+        <div>
+          <Button
+            pending={refresh.pending}
+            pendingLabel="特徴を更新中"
+            size="sm"
+            variant="secondary"
+            onClick={refresh.run}
+          >
+            特徴を更新
+          </Button>
+        </div>
       ) : null}
     </section>
   );

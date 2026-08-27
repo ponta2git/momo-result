@@ -1,4 +1,11 @@
-import { useCallback, useDeferredValue, useMemo, useOptimistic, useTransition } from "react";
+import {
+  useCallback,
+  useDeferredValue,
+  useMemo,
+  useOptimistic,
+  useRef,
+  useTransition,
+} from "react";
 import { useSearchParams } from "react-router-dom";
 
 import {
@@ -18,6 +25,7 @@ export type MatchListLocationState = {
   hasFilters: boolean;
   listReturnTo: string;
   parentReturnTo: string | undefined;
+  resetCursorIfUnchanged: (expectedSearch: MatchListSearch) => boolean;
   settling: boolean;
 };
 
@@ -36,10 +44,13 @@ export function useMatchListLocationState(): MatchListLocationState {
   );
   const [isTransitionPending, startTransition] = useTransition();
   const [current, setOptimisticSearch] = useOptimistic(routeSearch);
+  const latestSearchRef = useRef(current);
+  latestSearchRef.current = current;
   const deferred = useDeferredValue(current);
 
   const apply = useCallback(
     (nextSearch: MatchListSearch) => {
+      latestSearchRef.current = nextSearch;
       startTransition(() => {
         setOptimisticSearch(nextSearch);
         const nextParams = buildMatchListSearchParams(nextSearch);
@@ -50,6 +61,15 @@ export function useMatchListLocationState(): MatchListLocationState {
     [parentReturnTo, setOptimisticSearch, setSearchParams],
   );
   const clear = useCallback(() => apply(defaultMatchListSearch), [apply]);
+  const resetCursorIfUnchanged = useCallback(
+    (expectedSearch: MatchListSearch) => {
+      const latestSearch = latestSearchRef.current;
+      if (searchSignature(latestSearch) !== searchSignature(expectedSearch)) return false;
+      apply({ ...latestSearch, cursor: "" });
+      return true;
+    },
+    [apply],
+  );
 
   const canonicalParams = buildMatchListSearchParams(routeSearch);
   if (parentReturnTo) canonicalParams.set("returnTo", parentReturnTo);
@@ -63,6 +83,7 @@ export function useMatchListLocationState(): MatchListLocationState {
     hasFilters: hasMatchListFilters(current),
     listReturnTo: `/matches${canonicalSearch ? `?${canonicalSearch}` : ""}`,
     parentReturnTo,
+    resetCursorIfUnchanged,
     settling: isTransitionPending || searchSignature(current) !== searchSignature(deferred),
   };
 }

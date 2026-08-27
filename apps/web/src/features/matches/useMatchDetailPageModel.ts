@@ -1,6 +1,6 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo, useState } from "react";
-import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useLocation, useParams, useSearchParams } from "react-router-dom";
 
 import { resolvedEnrichmentName } from "@/features/matches/matchDetailPageModel";
 import type {
@@ -16,11 +16,9 @@ import type {
   MatchDetailSortKey,
   MatchDetailSortState,
 } from "@/features/matches/matchDetailViewModel";
+import { useMatchDeletionCommand } from "@/features/matches/useMatchDeletionCommand";
 import { useMatchFeatureAnalysis } from "@/features/matches/useMatchFeatureAnalysis";
-import { invalidateAfterMatchDeleted } from "@/shared/api/cacheInvalidation";
-import { runIdempotentMutation } from "@/shared/api/idempotency";
-import { deleteMatch } from "@/shared/api/matches";
-import { formatApiError, normalizeUnknownApiError } from "@/shared/api/problemDetails";
+import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import {
   isInitialQueryLoading,
   shouldShowBlockingQueryError,
@@ -33,7 +31,6 @@ import {
   matchDetailQueryOptions,
   seasonMastersQueryOptions,
 } from "@/shared/api/queryOptions";
-import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
 import {
   currentInternalLocation,
   sanitizeReturnTo,
@@ -43,16 +40,11 @@ import {
 /** Owns the primary match resource and optional display enrichment for the detail screen. */
 export function useMatchDetailPageModel(): MatchDetailPageModel {
   const { matchId = "" } = useParams<{ matchId: string }>();
-  const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const contextualReturnTo = sanitizeReturnTo(searchParams.get("returnTo"));
   const fallbackBackHref = contextualReturnTo ?? "/matches";
   const detailReturnTo = currentInternalLocation(location);
-  const queryClient = useQueryClient();
-  const idempotencyKeys = useIdempotencyKeyStore();
-  const [deleteOpen, setDeleteOpen] = useState(false);
-  const [deleteErrorMessage, setDeleteErrorMessage] = useState<string | null>(null);
   const [sort, setSort] = useState<MatchDetailSortState>({
     key: "member",
     direction: "asc",
@@ -98,38 +90,18 @@ export function useMatchDetailPageModel(): MatchDetailPageModel {
   } = mapsQuery;
 
   const analysis = useMatchFeatureAnalysis(match);
-  const deleteMutation = useMutation({
-    mutationFn: async () => {
-      const payload = { matchId };
-      return runIdempotentMutation(idempotencyKeys, "matchDetail.deleteMatch", payload, (options) =>
-        deleteMatch(matchId, options),
-      );
-    },
-    onError: (error) => {
-      setDeleteErrorMessage(formatApiError(error, "削除に失敗しました"));
-    },
-    onSuccess: async () => {
-      await invalidateAfterMatchDeleted(queryClient, matchId);
-      navigate(
-        contextualReturnTo ??
-          (match?.heldEventId
-            ? `/held-events/${encodeURIComponent(match.heldEventId)}`
-            : "/matches"),
-        { replace: true },
-      );
-    },
+  const deletion = useMatchDeletionCommand({
+    contextualReturnTo,
+    heldEventId: match?.heldEventId,
+    matchId,
+    pathname: location.pathname,
   });
-  const { isPending: deletePending, mutateAsync: deleteMatchAsync } = deleteMutation;
 
   const sourcePlayers = useMemo(() => match?.players ?? [], [match?.players]);
   const players = useMemo(() => sortMatchDetailPlayers(sourcePlayers, sort), [sourcePlayers, sort]);
   const setSortKey = useCallback((key: MatchDetailSortKey) => {
     setSort((current) => nextMatchDetailSort(current, key));
   }, []);
-  const confirmDelete = useCallback(async () => {
-    setDeleteErrorMessage(null);
-    await deleteMatchAsync();
-  }, [deleteMatchAsync]);
 
   const matchFailed = shouldShowQueryError({ error: matchError, isFetching: matchIsFetching });
   const heldEventsFailed = shouldShowQueryError({
@@ -230,15 +202,14 @@ export function useMatchDetailPageModel(): MatchDetailPageModel {
     analysis: {
       comparisonContextStatus: analysis.comparisonContextStatus,
       featureView: analysis.featureView,
+      needsManualRefresh: analysis.needsManualRefresh,
       performanceContext: analysis.performanceContext,
+      refresh: {
+        pending: analysis.analysisRefreshing,
+        run: analysis.refreshAnalysis,
+      },
     },
-    deletion: {
-      confirm: confirmDelete,
-      errorMessage: deleteErrorMessage,
-      open: deleteOpen,
-      pending: deletePending,
-      setOpen: setDeleteOpen,
-    },
+    deletion,
     enrichment,
     identity: {
       gameTitle: resolvedEnrichmentName({

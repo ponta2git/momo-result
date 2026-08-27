@@ -2,6 +2,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  evictDeletedMatchDetail,
   invalidateAfterDraftCancelled,
   invalidateAfterMatchConfirmed,
   invalidateAfterMatchDeleted,
@@ -124,19 +125,24 @@ describe("shared query keys", () => {
     ).toBe(false);
   });
 
-  it("removes only the deleted match detail and invalidates match collections", async () => {
+  it("keeps detail stable during delete invalidation, then evicts only the deleted match", async () => {
     const queryClient = createTestQueryClient();
     queryClient.setQueryData(matchKeys.detail("match-1"), { matchId: "match-1" });
     queryClient.setQueryData(matchKeys.detail("match-2"), { matchId: "match-2" });
     queryClient.setQueryData(matchKeys.list({ status: "confirmed" }), { items: [] });
 
-    await invalidateAfterMatchDeleted(queryClient, "match-1");
+    await invalidateAfterMatchDeleted(queryClient);
 
-    expect(queryClient.getQueryState(matchKeys.detail("match-1"))).toBeUndefined();
+    expect(queryClient.getQueryState(matchKeys.detail("match-1"))?.isInvalidated).toBe(false);
     expect(queryClient.getQueryState(matchKeys.detail("match-2"))?.isInvalidated).toBe(false);
     expect(queryClient.getQueryState(matchKeys.list({ status: "confirmed" }))?.isInvalidated).toBe(
       true,
     );
+
+    evictDeletedMatchDetail(queryClient, "match-1");
+
+    expect(queryClient.getQueryState(matchKeys.detail("match-1"))).toBeUndefined();
+    expect(queryClient.getQueryState(matchKeys.detail("match-2"))?.isInvalidated).toBe(false);
   });
 
   it("does not invalidate analysis when OCR drafts start or are cancelled", async () => {

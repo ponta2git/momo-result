@@ -8,6 +8,10 @@ import { heldEventDetailQueryOptions, heldEventsQueryOptions } from "@/shared/ap
 
 export const heldEventPickerPageSize = 20;
 
+type HeldEventPickerRefetchOptions = {
+  throwOnError?: boolean;
+};
+
 function pickerErrorMessage(error: unknown): string {
   const normalized = normalizeUnknownApiError(error);
   return normalized.status === 401
@@ -65,9 +69,9 @@ export function useHeldEventPickerDirectory({
     pending:
       directoryQuery.isFetching ||
       Boolean(selectedId && !resolvedSelection && selectedDetailQuery.isFetching),
-    refetch: async () => {
-      await directoryQuery.refetch();
-      if (selectionFailed) await selectedDetailQuery.refetch();
+    refetch: async (options?: HeldEventPickerRefetchOptions) => {
+      await directoryQuery.refetch(options);
+      if (selectionFailed) await selectedDetailQuery.refetch(options);
     },
     selectedHeldEvent: resolvedSelection,
     onPageChange: (nextPage: number) => {

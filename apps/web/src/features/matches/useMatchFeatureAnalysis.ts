@@ -80,18 +80,19 @@ export function useMatchFeatureAnalysis(match: MatchDetailResponse | undefined) 
     [context?.match?.features],
   );
   const calculationStatus = statusData?.calculation?.status;
+  const needsManualRefresh = calculationStatus === "queued" || calculationStatus === "running";
   const loading =
     statusIsPending ||
     statusIsFetching ||
-    calculationStatus === "queued" ||
-    calculationStatus === "running" ||
+    needsManualRefresh ||
     (contextQueryParams !== undefined && (contextIsPending || contextIsFetching));
   const failed =
     context === undefined &&
     (statusIsError || (contextQueryParams !== undefined && contextIsError));
-  const retryFeature = useCallback(() => {
+  const refreshAnalysis = useCallback(() => {
     void refetchStatus().then((result) => {
       if (
+        contextIsError &&
         contextQueryParams &&
         result.data?.currentArtifact?.artifactId === contextQueryParams.artifactId
       ) {
@@ -99,11 +100,7 @@ export function useMatchFeatureAnalysis(match: MatchDetailResponse | undefined) 
       }
       return undefined;
     });
-  }, [contextQueryParams, refetchContext, refetchStatus]);
-  const refreshAnalysis = useCallback(async () => {
-    await refetchStatus();
-    if (contextQueryParams) await refetchContext();
-  }, [contextQueryParams, refetchContext, refetchStatus]);
+  }, [contextIsError, contextQueryParams, refetchContext, refetchStatus]);
 
   return {
     analysisRefreshing: statusIsFetching || contextIsFetching,
@@ -115,9 +112,10 @@ export function useMatchFeatureAnalysis(match: MatchDetailResponse | undefined) 
       included: context?.inclusion.status === "included",
       loading,
       matchChanged: context?.inclusion.status === "match_changed_since_artifact",
-      onRetry: retryFeature,
-      retrying: failed && loading,
+      onRetry: refreshAnalysis,
+      retrying: failed && (statusIsFetching || contextIsFetching),
     }),
+    needsManualRefresh,
     performanceContext,
     refreshAnalysis,
   } as const;

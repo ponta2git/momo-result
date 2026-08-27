@@ -20,19 +20,23 @@ export type MatchDetailEnrichmentModel =
       refresh: MatchDetailRefreshModel;
     };
 
+export type MatchDeletionModel = {
+  confirm: () => Promise<void>;
+  errorMessage: string | null;
+  open: boolean;
+  pending: boolean;
+  setOpen: (open: boolean) => void;
+};
+
 export type MatchDetailReadyPageModel = {
   analysis: {
     comparisonContextStatus: "loading" | "ready" | "unavailable";
     featureView: MatchFeatureView;
+    needsManualRefresh: boolean;
     performanceContext: ReturnType<typeof matchPerformanceContextFromArtifact>;
+    refresh: MatchDetailRefreshModel;
   };
-  deletion: {
-    confirm: () => Promise<void>;
-    errorMessage: string | null;
-    open: boolean;
-    pending: boolean;
-    setOpen: (open: boolean) => void;
-  };
+  deletion: MatchDeletionModel;
   enrichment: MatchDetailEnrichmentModel;
   identity: {
     gameTitle: string;

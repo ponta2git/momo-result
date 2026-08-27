@@ -148,13 +148,25 @@
 
 ## 6. 取得状態・フィードバック・モーション
 
-- 初回 loading は最終 layout に近い structural skeleton を使い、refetch は既存内容を保って更新中を示す。全面 skeleton へ戻さない。
+### 6.1 取得状態とフィードバック
+
+- 取得状態は、表示対象の意味上の同一性に基づいて「置き換える」か「維持する」かを決める。初回表示、または異なる pathname へ移動して新しい内容が未準備の場合は、最終 layout に近い structural skeleton を使う。
+- 同一 pathname 内の filter、scope、sort、page の変更と refetch では、既存内容を保って局所的に更新中を示し、全面 skeleton へ戻さない。表示中の内容が新しい条件では誤操作を招く場合は、対象範囲を操作不能にし、更新中であることを文字または status でも示す。
+- 一つの loading scope には、その時点で最も局所的かつ因果の近い表示を一つだけ置く。button の pending、spinner、skeleton、toast を同じ待機について重ねず、別 scope の待機は互いの取得済み内容を置き換えない。
 - error、not found、empty、stale data を別状態にし、更新と再試行は操作文法で定めた回復契約に従う。
 - empty state は現在実行可能で安全な主要操作を1件示し、二次操作は弱める。権限または前提条件で実行不能な導線を出さない。
 - 補助情報の取得失敗で、取得済みの主表示を置き換えない。完了結果が画面上で明らかな場合は祝福目的の toast を追加せず、局所的な feedback を優先する。
 - transient toast は viewport 上の主要操作、fixed / sticky action、入力中の control を覆わない位置を共通 host が所有する。画面固有の主要操作が下端にある場合は上端へ配置するなど、通知を閉じるまでタスクが停止する重なりを作らない。
-- motion は状態の因果または連続性を伝える場合だけ使う。既存 token、短い feedback、opacity / transform を使い、layout shift、stagger、常時 loop、engagement 目的の演出を避ける。route 切替後の初回 content や一覧 row を、状態変化のない登場演出だけのために animate しない。
-- 非必須 motion は `prefers-reduced-motion` で無効化し、route content の表示を animation 完了まで block しない。
+
+### 6.2 モーション
+
+- motion は、操作への即時 feedback、状態の因果、同じ対象の連続性を補助する場合だけ使う。文字、形、位置、accessible state だけで意味を成立させた上で、動いたこと自体を見せ場にせず、注意深く見れば変化を追いやすい程度に抑える。
+- 有限の motion は最短の共通 token を既定とし、主に opacity と transform を使う。値そのものの変化を伝える図表や数値は、その mark または値だけを補間してよい。周囲の layout shift、bounce / overshoot、stagger、視線を奪う移動を作らない。
+- 利用者の intent と application state は motion より先に反映し、操作可能性、data、route、open、focus、pending、error の変更を animation 完了まで待たせない。motion は中断または省略されても、同じ最終状態と回復操作へ到達できなければならない。
+- route content、Suspense の fallback と完成内容、初回 content、一覧 row を、登場または置換そのものの演出として animate しない。異なる pathname の loading は structural fallback、同一 pathname の更新は既存内容の維持と局所 feedback で表す。
+- 楽観更新の pending、confirmed、error は、文字、accessible state、disabled、局所 error / retry のうち必要な手段で静止状態でも区別する。同じ安定した identity の `pending -> confirmed` では局所的な属性だけを補間してよいが、追加・削除の presence motion は、rollback、server correction、同時 mutation を含む必要性と正しさを先に検証する。
+- viewport への進入を初回 motion の trigger にしない。図表は初めから完成値を描画し、その後、現在表示中の同じ対象に値変更が起きた場合だけ補間してよい。表示領域外で変わった値は完成値へ即時反映し、再進入時に再生しない。
+- 常時 loop は処理時間が不定な loading feedback に限り、完了後または対象外になった時点で停止する。非必須 motion は `prefers-reduced-motion` で無効化し、motion を除いても loading、進捗、完了、失敗を同じ精度で判断できるようにする。
 
 ## 7. ナビゲーションと有限のタスクループ
 

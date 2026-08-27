@@ -71,6 +71,28 @@
 - 初回表示、mutation 後の cache 整合、artifact 失効時の bounded recovery、利用者が実行した更新 / 再試行だけが server state の取得を開始する。interval、遅延 timer、window focus、tab visibility、network reconnect を起点に自動再取得しない。この契約は共通 QueryClient と client data policy checker で固定する。
 - React の concurrent / form API は cache、retry、認証、validation の既存契約を置き換えない範囲で使う。
 
+### Client Lifecycle / Suspense / Motion
+
+状態と表示補間の正本を次のように分離する。Motion は状態の視覚的な投影であり、application lifecycle の owner ではない。
+
+| 関心事 | owner |
+| --- | --- |
+| server data、cache、refetch | TanStack Query |
+| 楽観表示 | React `useOptimistic` または TanStack Query の mutation / cache のいずれか一方 |
+| pending | Action、Transition、mutation など、その処理を開始した lifecycle |
+| pathname、search params、navigation | React Router |
+| dialog / disclosure の open、focus、keyboard | Base UI と owning shared UI primitive |
+| DOM / SVG の補間、非対話的な exit snapshot | Motion |
+
+- 同じ楽観表示を React `useOptimistic` と TanStack Query cache の両方で表現しない。一つの表示箇所だけなら action / mutation の入力から局所 overlay を導出し、複数 consumer の server state を揃える必要がある場合だけ cache update と snapshot / rollback を使う。pending から server response へ同じ対象を引き継ぐ場合は、client で安定した identity を発行し、表示順や Motion の layout identity を data identity の代わりにしない。
+- Suspense は code / data readiness と fallback の presence を所有し、boundary は利用者に見せる loading sequence に合わせる。維持すべき dialog、tab list、toolbar、page surface は boundary の外に置き、その内部の未準備な body だけを fallback と置き換える。Motion や `AnimatePresence` で fallback と完成内容を crossfade せず、同じ primitive を loading 用と完成用に重複 mount して open / focus lifecycle を作り直さない。
+- 異なる pathname は新しい route identity として、未準備なら route の structural fallback を表示する。同一 pathname の query key、filter、scope、sort、page の変更では、通常 query、Transition、deferred value など所有する state layer の手段で既存内容を維持し、Motion に待機や切替を決めさせない。
+- 有限で局所的な motion の標準実装は Motion for React とする。導入時は app の一つの provider で同期 `LazyMotion`、`domAnimation`、`strict`、`m` component を構成し、`MotionConfig reducedMotion="user"` を基準にする。`motion` component、`domMax`、layout / shared layout、drag / pan は初期 scope に含めず、必要性、操作契約、bundle 差分、主要 device の実測を伴う別の architecture decision とする。
+- Motion の宣言は、変化する pixel と semantic state を所有する shared UI primitive または feature の末端 visual component に置く。PageModel、resource / command / query hook、router は Motion を import しない。`Fade`、`Slide`、`Scale` のように effect 名だけを隠す pass-through wrapper は作らず、複数用途の accessibility、state mapping、interruption を一つの小さい契約で隠せる場合だけ shared abstraction にする。
+- application code は Motion の完了 callback を、data、cache、route、open、focus、pending、error、操作可能性を進める唯一の条件にしない。callback が所有してよいのは、中断または未実行でも application state を誤らせない冪等な表示上の後始末に限る。exit のため一時保持する node は非対話的かつ accessibility tree の対象外とし、先に確定した state と focus を巻き戻さない。
+- 処理時間が不定な Spinner / Skeleton の loop だけは shared loading primitive 内の CSS を使ってよい。それ以外の新しい有限 motion は Motion に統一し、同じ transition に CSS、timer、Web Animations API、別の motion engine を混ぜない。Motion 導入時は既存の有限 CSS transition もこの境界へ移し、CSS loop の feature 直書きを shared loading primitive へ集約する。
+- `MotionConfig reducedMotion="user"` が transform / layout を無効にしても opacity や color は残り得るため、非必須の残存 motion は末端 component でも省略する。Motion の初回導入と feature bundle の変更では production build の bundle 差分を測り、使用 API と import 境界を checker で固定する。
+
 ### Form / React 19 / API Client
 
 - event 由来の値は handler 内で同期的に取り出し、request transform で route / prefill / hidden identifier を落とさない。

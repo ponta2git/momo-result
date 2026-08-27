@@ -37,6 +37,15 @@
 - route / prefill / hidden identifier と optional discriminator が parse / transform 後も残り、mode ごとの副作用が変わることを固定する。
 - event 値、連打、cancel、server error、再送を含める。implementation detail の関数呼出し回数を主 oracle にしない。
 
+### Loading / Optimistic Update / Motion
+
+- loading は、初回 suspend、異なる pathname の未準備、同一 pathname の filter / scope 変更、cached data を保った refetch、補助 data の失敗を別ケースにする。初回と異なる pathname では最終 layout に近い structural fallback、同一 pathname の変更と refetch では既存内容の維持、誤操作を招く stale scope では対象操作の無効化、各 scope では一つの loading feedback だけが現れることを検証する。
+- Suspense fallback と完成内容の切替に animation lifecycle がなく、route content、安定した surface、open / focus が Motion の完了を待たないことを確認する。dialog や disclosure は body が suspend または exit 中でも keyboard 契約と focus 復帰を保ち、非対話的な exit node が操作対象または accessibility tree に残らないことを検証する。
+- 楽観更新は pending、success、server correction、rollback、retry、同時 mutation を decision table にする。安定した identity、重複操作の抑止、局所 error、canonical data への収束を主 oracle とし、presence や opacity を状態の唯一の oracle にしない。
+- motion を伴う操作は、通常、途中で逆方向へ変更、unmount、連打、animation 完了 callback 未実行、`prefers-reduced-motion` の各条件で同じ application state と操作可能性へ収束することを、制御した state と clock で検証する。duration の経過だけを待つ test や screenshot 差分だけを主 oracle にしない。
+- viewport を使う図表は、初回と再進入では完成値、表示中の同一 identity の値変更だけが補間対象、表示領域外の更新は再進入時に再生されないことを固定する。IntersectionObserver と clock は test から制御し、実時間 scroll や sleep に依存しない。
+- Motion 導入時は checker で provider / feature bundle、`m` component、import layer、CSS loop の例外を固定し、`motion` component、`domMax`、Motion の layout / shared layout、drag / pan、`AnimatePresence mode="wait"`、有限 CSS motion の追加を検出する。
+
 ### Test Foundation / Doubles
 
 - fixture は生成型 / domain 型に追従させ、意味のある factory へ集約する。大量の inline payload や型 cast で契約を迂回しない。

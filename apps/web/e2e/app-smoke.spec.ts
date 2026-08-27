@@ -99,7 +99,7 @@ test("completes the app smoke workflow with isolated scoped data", async ({
     e2eRun.trackHeldEvent(heldEventId);
     const heldEventDetailHref = withReturnTo(`/held-events/${heldEventId}`, "/held-events");
     await expect(page).toHaveURL(heldEventDetailHref);
-    await expect(page.getByText("確定済み 0試合 ・ 未完了 0件", { exact: true })).toBeVisible();
+    await expect(page.getByText("確定済み0試合・未確定下書き0件", { exact: true })).toBeVisible();
     await expect(
       page.getByRole("heading", { exact: true, level: 2, name: "第1試合を記録" }),
     ).toBeVisible();
@@ -138,7 +138,7 @@ test("completes the app smoke workflow with isolated scoped data", async ({
 
     await expect(page).toHaveURL(expectedOcrHref);
     await expect(page.getByRole("heading", { exact: true, name: "OCR取り込み" })).toBeVisible();
-    await expect(page.getByText(/— 確定 0試合・未完了 0件$/u)).toBeVisible();
+    await expect(page.getByText(/— 確定済み0試合・未確定下書き0件$/u)).toBeVisible();
     await expect(page.getByRole("button", { name: "開催（任意）を変更" })).toBeVisible();
     await expect(page.getByLabel("試合番号")).toHaveValue("1");
 

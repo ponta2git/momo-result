@@ -144,14 +144,27 @@ jobs:
           printf 'candidate_sha=%s\n' "${candidate_sha}" >> "${GITHUB_OUTPUT}"
           printf 'run_attempt=%s\n' "${run_attempt}" >> "${GITHUB_OUTPUT}"
 
-      - name: Download candidate provenance
+      - name: Download candidate selection
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: analysis-candidate-metadata-${{ inputs.candidate_run_id }}-${{ steps.run.outputs.run_attempt }}
-          path: analysis-candidate-metadata
+          name: analysis-candidate-selection-${{ inputs.candidate_run_id }}-${{ steps.run.outputs.run_attempt }}
+          path: analysis-candidate-selection
           github-token: ${{ github.token }}
           repository: ${{ github.repository }}
           run-id: ${{ inputs.candidate_run_id }}
+
+      - name: Validate retry-stable candidate selection
+        id: selection
+        env:
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+          CANDIDATE_SHA: ${{ steps.run.outputs.candidate_sha }}
+          SELECTION_RUN_ATTEMPT: ${{ steps.run.outputs.run_attempt }}
+        run: |
+          scripts/ci/validate-analysis-candidate-selection.sh \
+            analysis-candidate-selection/selection.json \
+            analysis-candidate-selection/candidate.json \
+            "${CANDIDATE_RUN_ID}" "${SELECTION_RUN_ATTEMPT}" "${CANDIDATE_SHA}" \
+            >> "${GITHUB_OUTPUT}"
 
       - name: Validate candidate provenance and image artifact
         id: provenance
@@ -159,11 +172,15 @@ jobs:
           CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
           CANDIDATE_SHA: ${{ steps.run.outputs.candidate_sha }}
           GH_TOKEN: ${{ github.token }}
-          RUN_ATTEMPT: ${{ steps.run.outputs.run_attempt }}
+          METADATA_ARTIFACT_DIGEST: ${{ steps.selection.outputs.metadata_artifact_digest }}
+          METADATA_ARTIFACT_ID: ${{ steps.selection.outputs.metadata_artifact_id }}
+          METADATA_ARTIFACT_NAME: ${{ steps.selection.outputs.metadata_artifact_name }}
+          PRODUCER_RUN_ATTEMPT: ${{ steps.selection.outputs.producer_run_attempt }}
         run: |
-          metadata="analysis-candidate-metadata/candidate.json"
+          metadata="analysis-candidate-selection/candidate.json"
           scripts/ci/validate-analysis-candidate.sh \
-            "${metadata}" "${CANDIDATE_RUN_ID}" "${RUN_ATTEMPT}" "${CANDIDATE_SHA}" \
+            "${metadata}" "${CANDIDATE_RUN_ID}" \
+            "${PRODUCER_RUN_ATTEMPT}" "${CANDIDATE_SHA}" \
             >> "${GITHUB_OUTPUT}"
 
           expected_config_sha="$(jq -r '.configSha256' "${metadata}")"
@@ -172,6 +189,25 @@ jobs:
             echo "fly.analysis.toml changed after candidate validation." >&2
             exit 1
           }
+
+          metadata_artifact_json="${RUNNER_TEMP}/analysis-candidate-metadata-artifact.json"
+          gh api \
+            "repos/${GITHUB_REPOSITORY}/actions/artifacts/${METADATA_ARTIFACT_ID}" \
+            > "${metadata_artifact_json}"
+          jq -e \
+            --arg digest "${METADATA_ARTIFACT_DIGEST}" \
+            --arg name "${METADATA_ARTIFACT_NAME}" \
+            --argjson artifactId "${METADATA_ARTIFACT_ID}" \
+            --argjson runId "${CANDIDATE_RUN_ID}" '
+              .id == $artifactId and
+              .name == $name and
+              .digest == $digest and
+              .expired == false and
+              .workflow_run.id == $runId
+            ' "${metadata_artifact_json}" > /dev/null || {
+              echo "The producer metadata artifact no longer matches candidate selection." >&2
+              exit 1
+            }
 
           artifact_id="$(jq -r '.imageArtifactId' "${metadata}")"
           artifact_json="${RUNNER_TEMP}/analysis-candidate-artifact.json"

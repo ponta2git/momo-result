@@ -2,18 +2,199 @@ name: API
 
 on:
   workflow_call:
+    inputs:
+      test_http4s_patch:
+        description: Run the pinned http4s fork's focused test when its revision or builder changes
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
 
 jobs:
-  api:
+  http4s-patch:
+    name: Build pinned http4s patch
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 15
+    outputs:
+      version: ${{ steps.patch.outputs.version }}
+      artifact_id: ${{ steps.upload.outputs.artifact-id }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: "25"
+          cache: sbt
+
+      - name: Setup sbt
+        uses: sbt/setup-sbt@8feba82adc7f01ddcf8165b86f778bdb5b82cebc # v1.5.7
+
+      - name: Build fixed http4s fork artifacts
+        id: patch
+        run: |
+          HTTP4S_REPOSITORY=https://github.com/ponta2git/http4s.git \
+            HTTP4S_SCALA_VERSION=3.3.6 \
+            HTTP4S_RUN_TESTS=${{ inputs.test_http4s_patch && '1' || '0' }} \
+            HTTP4S_PATCH_OUTPUT_DIR="${RUNNER_TEMP}/http4s-patch" \
+            scripts/ci/build-http4s-patch.sh
+          printf 'version=%s\n' \
+            "$(cat "${RUNNER_TEMP}/http4s-patch/version.txt")" >> "${GITHUB_OUTPUT}"
+
+      - name: Package fixed http4s fork artifacts
+        env:
+          PATCH_VERSION: ${{ steps.patch.outputs.version }}
+        run: |
+          package_root="${RUNNER_TEMP}/http4s-local"
+          mkdir -p "${package_root}/org.http4s"
+          for module in core server ember-core ember-server; do
+            module_name="http4s-${module}_3"
+            source_root="${HOME}/.ivy2/local/org.http4s/${module_name}/${PATCH_VERSION}"
+            [[ -f "${source_root}/ivys/ivy.xml" ]]
+            [[ -f "${source_root}/jars/${module_name}.jar" ]]
+            mkdir -p "${package_root}/org.http4s/${module_name}"
+            cp -a "${source_root}" "${package_root}/org.http4s/${module_name}/"
+          done
+          tar -C "${package_root}" -czf "${RUNNER_TEMP}/http4s-patch.tar.gz" .
+
+      - name: Resolve artifact identity
+        id: artifact
+        run: printf 'name=api-http4s-patch-%s-%s\n' "${GITHUB_RUN_ID}" "${GITHUB_RUN_ATTEMPT}" >> "${GITHUB_OUTPUT}"
+
+      - name: Upload fixed http4s fork artifacts
+        id: upload
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: ${{ steps.artifact.outputs.name }}
+          path: ${{ runner.temp }}/http4s-patch.tar.gz
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
+
+  quality:
+    name: Format, lint, and OpenAPI
+    needs: http4s-patch
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      MOMO_HTTP4S_PATCHED_VERSION: ${{ needs.http4s-patch.outputs.version }}
     defaults:
       run:
         working-directory: apps/api
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: "25"
+          cache: sbt
+
+      - name: Setup sbt
+        uses: sbt/setup-sbt@8feba82adc7f01ddcf8165b86f778bdb5b82cebc # v1.5.7
+
+      - name: Download fixed http4s fork artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          artifact-ids: ${{ needs.http4s-patch.outputs.artifact_id }}
+          path: ${{ runner.temp }}/http4s-patch-artifact
+
+      - name: Install fixed http4s fork artifacts
+        run: |
+          mkdir -p "${HOME}/.ivy2/local"
+          tar -C "${HOME}/.ivy2/local" -xzf \
+            "${RUNNER_TEMP}/http4s-patch-artifact/http4s-patch.tar.gz"
+
+      - name: API quality gate
+        timeout-minutes: 10
+        run: sbt apiQuality
+
+  test:
+    name: Test and coverage
+    needs: http4s-patch
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      MOMO_HTTP4S_PATCHED_VERSION: ${{ needs.http4s-patch.outputs.version }}
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: "25"
+          cache: sbt
+
+      - name: Setup sbt
+        uses: sbt/setup-sbt@8feba82adc7f01ddcf8165b86f778bdb5b82cebc # v1.5.7
+
+      - name: Download fixed http4s fork artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          artifact-ids: ${{ needs.http4s-patch.outputs.artifact_id }}
+          path: ${{ runner.temp }}/http4s-patch-artifact
+
+      - name: Install fixed http4s fork artifacts
+        run: |
+          mkdir -p "${HOME}/.ivy2/local"
+          tar -C "${HOME}/.ivy2/local" -xzf \
+            "${RUNNER_TEMP}/http4s-patch-artifact/http4s-patch.tar.gz"
+
+      - name: Test
+        if: ${{ github.event_name != 'pull_request' }}
+        timeout-minutes: 10
+        run: sbt test
+
+      - name: Test with coverage report
+        if: ${{ github.event_name == 'pull_request' }}
+        timeout-minutes: 10
+        run: sbt apiCoverage
+
+      - name: Summarize coverage
+        if: ${{ always() && github.event_name == 'pull_request' }}
+        continue-on-error: true
+        timeout-minutes: 1
+        run: |
+          python3 ../../scripts/ci/write-coverage-summary.py api \
+            --root ../.. \
+            --out ../../coverage-summary/api \
+            --allow-missing
+          cat ../../coverage-summary/api/summary.md >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Upload coverage report
+        if: ${{ always() && github.event_name == 'pull_request' }}
+        continue-on-error: true
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: api-coverage-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            apps/api/target/scala-*/scoverage-report/
+            apps/api/target/scala-*/coverage-report/
+            coverage-summary/api/
+          if-no-files-found: ignore
+          retention-days: 30
+
+  external-services:
+    name: PostgreSQL and Redis
+    needs: http4s-patch
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      MOMO_HTTP4S_PATCHED_VERSION: ${{ needs.http4s-patch.outputs.version }}
+    defaults:
+      run:
+        working-directory: apps/api
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -46,81 +227,18 @@ jobs:
       - name: Setup sbt
         uses: sbt/setup-sbt@8feba82adc7f01ddcf8165b86f778bdb5b82cebc # v1.5.7
 
-      - name: Build fixed http4s Fork artifacts
-        working-directory: ${{ github.workspace }}
-        run: |
-          HTTP4S_REPOSITORY=https://github.com/ponta2git/http4s.git \
-            HTTP4S_SCALA_VERSION=3.3.6 \
-            HTTP4S_RUN_TESTS=1 \
-            HTTP4S_PATCH_OUTPUT_DIR="${RUNNER_TEMP}/http4s-patch" \
-            scripts/ci/build-http4s-patch.sh
-          printf 'MOMO_HTTP4S_PATCHED_VERSION=%s\n' \
-            "$(cat "${RUNNER_TEMP}/http4s-patch/version.txt")" >> "${GITHUB_ENV}"
-
-      - name: Format check
-        timeout-minutes: 5
-        run: sbt scalafmtCheckAll
-
-      - name: Lint check
-        timeout-minutes: 5
-        run: sbt "scalafixAll --check"
-
-      - name: Clean test compile
-        if: ${{ github.event_name != 'pull_request' }}
-        timeout-minutes: 10
-        run: sbt clean Test/compile
-
-      - name: Clean production compile
-        if: ${{ github.event_name == 'pull_request' }}
-        timeout-minutes: 10
-        run: sbt clean Compile/compile
-
-      - name: OpenAPI generation check
-        timeout-minutes: 5
-        run: sbt apiOpenApiCheck
-
-      - name: Verify synchronous Scala analysis is absent from the runtime artifact
-        timeout-minutes: 5
-        run: |
-          sbt stage
-          ../../scripts/ci/check-api-analysis-engine-absence.sh target/universal/stage
-
-      - name: Test
-        if: ${{ github.event_name != 'pull_request' }}
-        timeout-minutes: 10
-        run: sbt test
-
-      - name: Test with coverage report
-        if: ${{ github.event_name == 'pull_request' }}
-        timeout-minutes: 10
-        run: sbt apiTestWithCoverageReportOnly
-
-      - name: DB quality gate
-        timeout-minutes: 10
-        run: sbt apiDbQuality
-
-      - name: Redis quality gate
-        timeout-minutes: 5
-        run: sbt apiRedisQuality
-
-      - name: Summarize coverage
-        if: ${{ always() && github.event_name == 'pull_request' }}
-        timeout-minutes: 1
-        run: |
-          python3 ../../scripts/ci/write-coverage-summary.py api \
-            --root ../.. \
-            --out ../../coverage-summary/api \
-            --allow-missing
-          cat ../../coverage-summary/api/summary.md >> "${GITHUB_STEP_SUMMARY}"
-
-      - name: Upload coverage report
-        if: ${{ always() && github.event_name == 'pull_request' }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+      - name: Download fixed http4s fork artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: api-coverage
-          path: |
-            apps/api/target/scala-*/scoverage-report/
-            apps/api/target/scala-*/coverage-report/
-            coverage-summary/api/
-          if-no-files-found: ignore
-          retention-days: 30
+          artifact-ids: ${{ needs.http4s-patch.outputs.artifact_id }}
+          path: ${{ runner.temp }}/http4s-patch-artifact
+
+      - name: Install fixed http4s fork artifacts
+        run: |
+          mkdir -p "${HOME}/.ivy2/local"
+          tar -C "${HOME}/.ivy2/local" -xzf \
+            "${RUNNER_TEMP}/http4s-patch-artifact/http4s-patch.tar.gz"
+
+      - name: External-service quality gates
+        timeout-minutes: 15
+        run: sbt apiDbQuality apiRedisQuality

@@ -1,1 +1,0 @@
-processing-worker-preemption-smoke.sh

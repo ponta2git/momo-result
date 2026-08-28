@@ -40,7 +40,6 @@ export default defineConfig({
     baseURL,
     screenshot: "only-on-failure",
     trace: "retain-on-failure",
-    video: "retain-on-failure",
   },
   projects: [
     {

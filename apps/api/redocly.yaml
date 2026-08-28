@@ -1,0 +1,14 @@
+extends:
+  - spec
+
+rules:
+  no-ambiguous-paths: error
+  no-enum-type-mismatch: error
+  no-identical-paths: error
+  no-required-schema-properties-undefined: error
+  no-schema-type-mismatch: error
+  no-unresolved-refs: error
+  operation-operationId-unique: error
+  operation-parameters-unique: error
+  path-declaration-must-exist: error
+  path-parameters-defined: error

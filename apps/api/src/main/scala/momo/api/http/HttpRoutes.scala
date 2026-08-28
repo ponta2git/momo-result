@@ -4,6 +4,7 @@ import cats.effect.Async
 import cats.syntax.all.*
 import org.http4s.HttpApp as Http4sApp
 import org.http4s.server.Router
+import sttp.tapir.AnyEndpoint
 import sttp.tapir.server.ServerEndpoint
 import sttp.tapir.server.http4s.Http4sServerInterpreter
 
@@ -142,6 +143,11 @@ object HttpRoutes:
   )
 
   def routes[F[_]: Async](deps: Dependencies[F]): Http4sApp[F] =
+    routesWithEndpoints(deps)._1
+
+  private[api] def routesWithEndpoints[F[_]: Async](
+      deps: Dependencies[F]
+  ): (Http4sApp[F], List[AnyEndpoint]) =
     val security =
       EndpointSecurity[F](AuthPolicy[F](
         deps.config,
@@ -262,7 +268,7 @@ object HttpRoutes:
     val tapirRoutes = interpreter.toRoutes(endpoints)
     val sourceImageRoutes = interpreter.toRoutes(sourceImageEndpoints)
 
-    val authRoutes = interpreter.toRoutes(AuthModule.routes[F](
+    val authEndpoints = AuthModule.routes[F](
       config = deps.config,
       oauth = deps.auth.oauthClient,
       stateCodec = deps.auth.oauthStateCodec,
@@ -272,17 +278,24 @@ object HttpRoutes:
       rateLimiter = deps.auth.loginRateLimiter,
       callbackStateRateLimiter = deps.auth.authCallbackStateRateLimiter,
       providerBackoff = deps.auth.oauthProviderBackoff,
-    ))
+    )
+    val authRoutes = interpreter.toRoutes(authEndpoints)
 
-    RequestIdMiddleware[F](RequestDurationLoggingMiddleware[F](SecurityHeadersMiddleware[F](
-      deps.config.appEnv
-    )(HttpErrorMiddleware[F](
-      MaxBodySizeMiddleware.requestAndUpload[F](
-        deps.config.resourceLimits.requestMaxBytes,
-        deps.config.resourceLimits.uploadRequestMaxBytes,
-      )(
-        Router("/" -> (authRoutes <+> tapirRoutes <+> sourceImageRoutes))
-          .orNotFound
+    val app =
+      RequestIdMiddleware[F](RequestDurationLoggingMiddleware[F](SecurityHeadersMiddleware[F](
+        deps.config.appEnv
+      )(HttpErrorMiddleware[F](
+        MaxBodySizeMiddleware.requestAndUpload[F](
+          deps.config.resourceLimits.requestMaxBytes,
+          deps.config.resourceLimits.uploadRequestMaxBytes,
+        )(
+          Router("/" -> (authRoutes <+> tapirRoutes <+> sourceImageRoutes))
+            .orNotFound
+        )
+      ))))
+    val registeredEndpoints =
+      endpoints.map(_.endpoint) ::: sourceImageEndpoints.map(_.endpoint) ::: authEndpoints.map(
+        _.endpoint
       )
-    ))))
+    (app, registeredEndpoints)
 end HttpRoutes

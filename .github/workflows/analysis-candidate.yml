@@ -41,10 +41,7 @@ jobs:
           elif [[ "${BASE_SHA}" =~ ^0+$ ]]; then
             result=$'api=true\nweb=true\nanalysis=true\nruntime=true'
           else
-            git cat-file -e "${BASE_SHA}^{commit}"
-            git cat-file -e "${HEAD_SHA}^{commit}"
-            result="$(git diff --name-only -z "${BASE_SHA}" "${HEAD_SHA}" |
-              scripts/ci/classify-changes.sh)"
+            result="$(scripts/ci/classify-git-range.sh "${BASE_SHA}" "${HEAD_SHA}")"
           fi
           printf '%s\n' "${result}" >> "${GITHUB_OUTPUT}"
 
@@ -69,6 +66,8 @@ jobs:
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 2
+    env:
+      ANALYSIS_SELECTION_ARTIFACT_NAME: analysis-candidate-selection-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - name: Require complete candidate validation
         env:
@@ -94,3 +93,68 @@ jobs:
             [[ "${PUBLIC_SAFETY_RESULT}" == "skipped" ]] || exit 1
             [[ "${CANDIDATE_RESULT}" == "skipped" ]] || exit 1
           fi
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: needs.scope.outputs.analysis == 'true'
+        with:
+          persist-credentials: false
+
+      - name: Download exact producer metadata
+        if: needs.scope.outputs.analysis == 'true'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          artifact-ids: ${{ needs.candidate.outputs.metadata_artifact_id }}
+          path: analysis-candidate-producer-metadata
+
+      - name: Create retry-stable candidate selection
+        if: needs.scope.outputs.analysis == 'true'
+        env:
+          METADATA_ARTIFACT_DIGEST: ${{ needs.candidate.outputs.metadata_artifact_digest }}
+          METADATA_ARTIFACT_ID: ${{ needs.candidate.outputs.metadata_artifact_id }}
+          METADATA_ARTIFACT_NAME: ${{ needs.candidate.outputs.metadata_artifact_name }}
+          PRODUCER_RUN_ATTEMPT: ${{ needs.candidate.outputs.producer_run_attempt }}
+        run: |
+          producer_candidate="analysis-candidate-producer-metadata/candidate.json"
+          scripts/ci/validate-analysis-candidate.sh \
+            "${producer_candidate}" "${GITHUB_RUN_ID}" \
+            "${PRODUCER_RUN_ATTEMPT}" "${GITHUB_SHA}" > /dev/null
+          selection_dir="${ANALYSIS_SELECTION_ARTIFACT_NAME}"
+          mkdir -p "${selection_dir}"
+          cp "${producer_candidate}" "${selection_dir}/candidate.json"
+          candidate_sha256="$(sha256sum "${selection_dir}/candidate.json" | cut -d ' ' -f 1)"
+          metadata_artifact_digest="$(
+            scripts/ci/canonicalize-artifact-digest.sh "${METADATA_ARTIFACT_DIGEST}"
+          )"
+          jq -n \
+            --arg candidateSha256 "${candidate_sha256}" \
+            --arg commit "${GITHUB_SHA}" \
+            --arg metadataArtifactDigest "${metadata_artifact_digest}" \
+            --arg metadataArtifactId "${METADATA_ARTIFACT_ID}" \
+            --arg metadataArtifactName "${METADATA_ARTIFACT_NAME}" \
+            --arg producerRunAttempt "${PRODUCER_RUN_ATTEMPT}" \
+            --arg runId "${GITHUB_RUN_ID}" \
+            --arg selectionRunAttempt "${GITHUB_RUN_ATTEMPT}" '
+              {
+                schemaVersion: 1,
+                commit: $commit,
+                runId: $runId,
+                selectionRunAttempt: $selectionRunAttempt,
+                producerRunAttempt: $producerRunAttempt,
+                metadataArtifactName: $metadataArtifactName,
+                metadataArtifactId: $metadataArtifactId,
+                metadataArtifactDigest: $metadataArtifactDigest,
+                candidateSha256: $candidateSha256
+              }
+            ' > "${selection_dir}/selection.json"
+          scripts/ci/validate-analysis-candidate-selection.sh \
+            "${selection_dir}/selection.json" "${selection_dir}/candidate.json" \
+            "${GITHUB_RUN_ID}" "${GITHUB_RUN_ATTEMPT}" "${GITHUB_SHA}" > /dev/null
+
+      - name: Upload retry-stable candidate selection
+        if: needs.scope.outputs.analysis == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: ${{ env.ANALYSIS_SELECTION_ARTIFACT_NAME }}
+          path: ${{ env.ANALYSIS_SELECTION_ARTIFACT_NAME }}/
+          if-no-files-found: error
+          retention-days: 7

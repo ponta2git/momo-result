@@ -25,9 +25,7 @@ COPY apps/web/index.html apps/web/index.html
 COPY apps/web/tsconfig.json apps/web/tsconfig.json
 COPY apps/web/vite.config.ts apps/web/vite.config.ts
 COPY apps/web/public apps/web/public
-COPY apps/web/scripts apps/web/scripts
 COPY apps/web/src apps/web/src
-COPY apps/api/openapi.yaml apps/api/openapi.yaml
 RUN pnpm --filter web build
 
 FROM ${JAVA_JDK_IMAGE} AS api-deps

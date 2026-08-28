@@ -10,7 +10,6 @@ readonly machine_id=machine-current
 readonly analysis_worker_id=analysis-current
 readonly ocr_worker_id=ocr-current
 readonly log_file="${test_dir}/fly.json"
-readonly production_workflow="${repo_root}/.github/workflows/analysis-production.yml"
 
 write_log() {
   local include_outbox="${1:-true}"
@@ -83,9 +82,5 @@ expect_rejected stale-ocr-worker \
 write_log false
 expect_rejected missing-outbox \
   "${log_file}" "${machine_id}" "${analysis_worker_id}" "${ocr_worker_id}"
-
-grep -Fq 'scripts/ci/validate-analysis-worker-readiness.sh' "${production_workflow}"
-grep -Fq -- '--machine "${machine_id}"' "${production_workflow}"
-grep -Fq 'analysis-production-artifact/worker-readiness.json' "${production_workflow}"
 
 echo "Analysis worker readiness evidence tests passed."

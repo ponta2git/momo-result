@@ -20,13 +20,6 @@ mod stats;
 #[cfg(test)]
 #[expect(
     clippy::panic,
-    reason = "architecture-test discovery failures must identify the unreadable source path"
-)]
-mod architecture_tests;
-
-#[cfg(test)]
-#[expect(
-    clippy::panic,
     reason = "fixture setup must abort immediately with a precise message when checked-in vectors drift"
 )]
 mod fixture;

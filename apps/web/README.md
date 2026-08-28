@@ -39,6 +39,7 @@ Allowed local users use account IDs derived from API `DEV_MEMBER_IDS`: `account_
 pnpm --filter web generate:api
 pnpm --filter web format:check
 pnpm --filter web lint
+pnpm --filter web contract:check
 pnpm --filter web typecheck
 pnpm --filter web test:run
 pnpm --filter web build
@@ -46,6 +47,6 @@ pnpm --filter web build
 
 ## Troubleshooting
 
-- If OpenAPI generation fails on `apps/api/openapi.yaml`, the script copies it to `.cache/openapi.json` and retries.
+- If `contract:check` reports stale API types, run `generate:api` and commit the generated diff. Fix structural OpenAPI errors at the Tapir endpoint that owns the contract.
 - If OCR jobs remain queued locally, the OCR worker or queue integration may not be running. Unit tests use MSW to cover succeeded and failed UI states.
 - Uploads are pre-validated in the browser, but server-side magic-byte validation remains the source of truth.

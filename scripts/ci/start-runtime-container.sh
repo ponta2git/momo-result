@@ -26,6 +26,9 @@ fi
 if [[ -n "${IMAGE_UPLOAD_STORAGE_MAX_USED_PERCENT:-}" ]]; then
   runtime_env_args+=(-e "IMAGE_UPLOAD_STORAGE_MAX_USED_PERCENT=${IMAGE_UPLOAD_STORAGE_MAX_USED_PERCENT}")
 fi
+if [[ -n "${MUTATION_RATE_LIMIT_PER_MINUTE:-}" ]]; then
+  runtime_env_args+=(-e "MUTATION_RATE_LIMIT_PER_MINUTE=${MUTATION_RATE_LIMIT_PER_MINUTE}")
+fi
 
 docker run -d \
   --name "${container_name}" \

@@ -25,7 +25,7 @@ aggregate coverage は、PR review と推移確認の非 blocking report とす�
 
 - CI は同じ test 集合を通常実行と coverage 実行で二重に回さない。report を作る場合は通常 test を coverage 付き実行へ置き換える。
 - production deploy は coverage artifact の生成を待たず、同じ test 集合と変更対象の integration / smoke を release gate にする。
-- 対象 file、除外、丸め、report path は tool 設定と生成 script を正本とし、この文書へ値を写さない。
+- 対象 file、除外、report path は tool 設定と生成 script を正本とし、この文書へ値を写さない。
 - aggregate coverage は重要経路の証拠にしない。利用者影響が大きい module は、`docs/test-rule.md` の採用基準に従って decision table、property / contract test、または個別に妥当性を示した file / glob threshold を選ぶ。
 - file / glob threshold を blocking にする場合は、対象の利用者価値と検出する failure mode を個別に示し、coverage 数値が専用 test より適切な oracle であることを先に確認する。repository 全体の数値から自動導入しない。
 - external adapter、process isolation、resource、OCR accuracy は coverage 率ではなく専用の contract / smoke / dataset で評価する。

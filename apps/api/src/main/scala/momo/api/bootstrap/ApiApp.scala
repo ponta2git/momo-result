@@ -3,6 +3,7 @@ package momo.api.bootstrap
 import cats.effect.std.SecureRandom
 import cats.effect.{Async, Resource}
 import org.http4s.HttpApp as Http4sApp
+import sttp.tapir.AnyEndpoint
 
 import momo.api.auth.{CreatedSession, DiscordOAuthClient, JavaDiscordOAuthClient}
 import momo.api.config.{AppConfig, ResourceLimitsConfig}
@@ -21,6 +22,8 @@ object ApiApp:
       createSession: LoginAccount => F[CreatedSession],
       /** Fails when a supervised background runtime boundary can no longer make safe progress. */
       backgroundFailure: F[Nothing],
+      /** Compiled Tapir contracts registered in `app`; exposed inside the API for contract checks. */
+      private[api] val registeredEndpoints: List[AnyEndpoint],
   )
 
   def resource[F[_]: Async](config: AppConfig): Resource[F, Http4sApp[F]] = wired[F](config)

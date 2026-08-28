@@ -1,1 +1,0 @@
-processing-worker-image-smoke.sh

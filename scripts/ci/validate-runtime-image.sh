@@ -4,10 +4,28 @@ set -euo pipefail
 image_ref="${IMAGE_REF:?IMAGE_REF is required.}"
 origin_lock_token="${MOMO_ORIGIN_LOCK_TOKEN:?MOMO_ORIGIN_LOCK_TOKEN is required.}"
 
-docker run --rm \
+if ! docker run --rm \
   -e MOMO_ORIGIN_LOCK_TOKEN="${origin_lock_token}" \
   "${image_ref}" \
-  /bin/sh -c 'caddy_config="${MOMO_CADDY_OUTPUT_PATH:-/tmp/momo-result/caddy/Caddyfile}"; /opt/momo-result/bin/momo-runtime-tool render-caddy >/dev/null && caddy validate --config "${caddy_config}" --adapter caddyfile'
+  /bin/sh -ec '
+    caddy_config="${MOMO_CADDY_OUTPUT_PATH:-/tmp/momo-result/caddy/Caddyfile}"
+    /opt/momo-result/bin/momo-runtime-tool render-caddy >/dev/null
+    caddy validate --config "${caddy_config}" --adapter caddyfile >/dev/null
+    caddy adapt --config "${caddy_config}" --adapter caddyfile
+  ' | jq -e '
+    [.logging.logs[]] as $logs |
+    (($logs | length) >= 2) and
+    all($logs[];
+      .encoder.format == "filter" and
+      .encoder.wrap.format == "json" and
+      .encoder.fields["request>uri"].filter == "delete" and
+      .encoder.fields["request>headers"].filter == "delete" and
+      .encoder.fields.resp_headers.filter == "delete"
+    )
+  ' > /dev/null; then
+  echo "Runtime Caddy logs must redact request URIs, request headers, and response headers." >&2
+  exit 1
+fi
 
 docker run --rm "${image_ref}" test -d /opt/momo-result/api/lib
 docker run --rm "${image_ref}" test -x /opt/java/openjdk/bin/java

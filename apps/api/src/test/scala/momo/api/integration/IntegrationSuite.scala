@@ -24,7 +24,7 @@ abstract class IntegrationSuite extends CatsEffectSuite:
   override def munitIOTimeout = 30.seconds
 
   override def munitTests(): Seq[munit.Test] = super.munitTests()
-    .map(_.tag(TestTags.Integration).tag(TestTags.DbIntegration))
+    .map(_.tag(TestTags.DbIntegration))
 
   protected val dbFixture: Fixture[IntegrationDb.DbFixture] =
     new Fixture[IntegrationDb.DbFixture]("momo-it-db"):

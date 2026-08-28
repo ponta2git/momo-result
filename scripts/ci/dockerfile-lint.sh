@@ -19,17 +19,6 @@ if [[ "${#dockerfiles[@]}" -eq 0 ]]; then
   exit 1
 fi
 
-echo "Reporting all Dockerfile misconfiguration findings."
-for dockerfile in "${dockerfiles[@]}"; do
-  trivy config \
-    --exit-code 0 \
-    --format table \
-    --quiet \
-    --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL \
-    --skip-version-check \
-    "${dockerfile}"
-done
-
 echo "Enforcing the MEDIUM, HIGH, and CRITICAL Dockerfile gate."
 for dockerfile in "${dockerfiles[@]}"; do
   trivy config \

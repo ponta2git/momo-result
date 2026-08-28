@@ -1,4 +1,112 @@
+import { readdirSync } from "node:fs";
+
 import { defineConfig } from "oxlint";
+import type { DummyRuleMap } from "oxlint";
+
+type RestrictedImportsRule = NonNullable<DummyRuleMap["no-restricted-imports"]>;
+
+// The feature directory is the ownership SSoT; a newly added feature receives the same boundary.
+const featureNames = readdirSync(new URL("./src/features/", import.meta.url), {
+  withFileTypes: true,
+})
+  .filter((entry) => entry.isDirectory())
+  .map((entry) => entry.name)
+  .toSorted();
+
+const invalidMotionPaths = [
+  {
+    name: "framer-motion",
+    message: "Use the approved motion/react entry point.",
+  },
+  {
+    name: "motion",
+    message: "Use the approved motion/react entry point.",
+  },
+  {
+    name: "motion/react",
+    importNames: ["domAnimation", "domMax", "motion"],
+    message: "Use the approved domMin and m-based Motion boundary.",
+  },
+];
+
+const baseImportPatterns = [
+  {
+    group: ["../../*", "../../../*"],
+    message: "Use the @/ alias instead of a deep relative import.",
+  },
+  {
+    group: ["framer-motion/**"],
+    message: "Use the approved motion/react entry point.",
+  },
+];
+
+const productionTestPatterns = [
+  {
+    group: ["@/shared/api/msw/**", "@/test/**"],
+    message: "Production source must not import test support.",
+  },
+];
+
+const productionRestrictedPaths = [
+  ...invalidMotionPaths,
+  {
+    name: "@/shared/domain/members",
+    importNames: ["fixedMembers"],
+    message:
+      "Choose workspaceInputMembers, canonicalResultMembers, or orderFixedMembers explicitly.",
+  },
+];
+
+function featureRestrictedImports(
+  featureName: string,
+  restrictQueryLifecycle: boolean,
+): RestrictedImportsRule {
+  const otherFeaturePatterns = featureNames
+    .filter((candidate) => candidate !== featureName)
+    .flatMap((candidate) => [
+      `@/features/${candidate}`,
+      `@/features/${candidate}/**`,
+      `../${candidate}`,
+      `../${candidate}/**`,
+    ]);
+
+  return [
+    "error",
+    {
+      paths: [
+        ...productionRestrictedPaths,
+        {
+          name: "@/shared/api/generated",
+          message: "Use a shared API resource facade.",
+        },
+        ...(restrictQueryLifecycle
+          ? [
+              {
+                name: "@tanstack/react-query",
+                message: "Keep query lifecycle in a resource or page-model hook.",
+              },
+            ]
+          : []),
+      ],
+      patterns: [
+        ...baseImportPatterns,
+        ...productionTestPatterns,
+        {
+          group: ["@/app/**"],
+          message: "Feature code must not depend on the app layer.",
+        },
+        {
+          group: ["@base-ui/react", "@base-ui/react/**"],
+          message: "Use a shared UI primitive.",
+        },
+        {
+          group: otherFeaturePatterns,
+          message: `Feature '${featureName}' must not depend on another feature's implementation.`,
+        },
+      ],
+    },
+  ];
+}
 
 export default defineConfig({
   plugins: ["react", "import", "typescript", "unicorn", "oxc", "promise", "jsx-a11y"],
@@ -64,12 +172,8 @@ export default defineConfig({
     "no-restricted-imports": [
       "error",
       {
-        patterns: [
-          {
-            group: ["../../*", "../../../*"],
-            message: "深い相対パスは禁止。'@/' エイリアスを使うこと。",
-          },
-        ],
+        paths: invalidMotionPaths,
+        patterns: baseImportPatterns,
       },
     ],
   },
@@ -79,6 +183,75 @@ export default defineConfig({
   },
   ignorePatterns: ["dist/**", "coverage/**", "src/shared/api/generated.ts"],
   overrides: [
+    {
+      files: ["src/**/*.{ts,tsx}"],
+      excludeFiles: ["src/**/*.test.*", "src/test/**"],
+      rules: {
+        "no-restricted-imports": [
+          "error",
+          {
+            paths: productionRestrictedPaths,
+            patterns: [...baseImportPatterns, ...productionTestPatterns],
+          },
+        ],
+      },
+    },
+    {
+      files: ["src/app/**/*.{ts,tsx}"],
+      excludeFiles: ["src/app/routeModules.ts", "src/**/*.test.*"],
+      rules: {
+        "no-restricted-imports": [
+          "error",
+          {
+            paths: productionRestrictedPaths,
+            patterns: [
+              ...baseImportPatterns,
+              ...productionTestPatterns,
+              {
+                group: ["@/features/**", "../features/**"],
+                message: "Load feature modules through app/routeModules.ts.",
+              },
+            ],
+          },
+        ],
+      },
+    },
+    ...featureNames.flatMap((featureName) => [
+      {
+        files: [`src/features/${featureName}/**/*.{ts,tsx}`],
+        excludeFiles: ["src/**/*.test.*"],
+        rules: {
+          "no-restricted-imports": featureRestrictedImports(featureName, false),
+        },
+      },
+      {
+        files: [`src/features/${featureName}/**/*.tsx`],
+        excludeFiles: ["src/**/*.test.*"],
+        rules: {
+          "no-restricted-imports": featureRestrictedImports(featureName, true),
+        },
+      },
+    ]),
+    {
+      files: ["src/shared/**/*.{ts,tsx}"],
+      excludeFiles: ["src/**/*.test.*"],
+      rules: {
+        "no-restricted-imports": [
+          "error",
+          {
+            paths: productionRestrictedPaths,
+            patterns: [
+              ...baseImportPatterns,
+              ...productionTestPatterns,
+              {
+                group: ["@/app/**", "@/features/**"],
+                message: "Shared code must not depend on app or feature code.",
+              },
+            ],
+          },
+        ],
+      },
+    },
     {
       files: ["src/**/*.d.ts"],
       rules: {

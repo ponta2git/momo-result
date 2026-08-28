@@ -19,22 +19,29 @@ jobs:
       api: ${{ steps.changes.outputs.api }}
       web: ${{ steps.changes.outputs.web }}
       analysis: ${{ steps.changes.outputs.analysis }}
+      analysis_image: ${{ steps.changes.outputs.analysis_image }}
       runtime: ${{ steps.changes.outputs.runtime }}
+      http4s_patch: ${{ steps.changes.outputs.http4s_patch }}
+      workflow: ${{ steps.changes.outputs.workflow }}
+      actionlint: ${{ steps.changes.outputs.actionlint }}
+      go_tools: ${{ steps.changes.outputs.go_tools }}
+      policy_scripts: ${{ steps.changes.outputs.policy_scripts }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
+      - name: Check changed-file whitespace
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: git diff --check "${BASE_SHA}" "${HEAD_SHA}" --
       - name: Classify changed paths
         id: changes
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: |
-          git cat-file -e "${BASE_SHA}^{commit}"
-          git cat-file -e "${HEAD_SHA}^{commit}"
-          git diff --name-only -z "${BASE_SHA}" "${HEAD_SHA}" |
-            scripts/ci/classify-changes.sh >> "${GITHUB_OUTPUT}"
+        run: scripts/ci/classify-git-range.sh "${BASE_SHA}" "${HEAD_SHA}" >> "${GITHUB_OUTPUT}"
 
   public-safety:
     name: Public repository safety
@@ -42,13 +49,21 @@ jobs:
 
   workflow-lint:
     name: Workflow lint
+    needs: classify
+    if: needs.classify.outputs.workflow == 'true'
     uses: ./.github/workflows/workflow-lint.yml
+    with:
+      actionlint: ${{ needs.classify.outputs.actionlint == 'true' }}
+      go_tools: ${{ needs.classify.outputs.go_tools == 'true' }}
+      policy_scripts: ${{ needs.classify.outputs.policy_scripts == 'true' }}
 
   api:
     name: API
     needs: classify
     if: needs.classify.outputs.api == 'true'
     uses: ./.github/workflows/api.yml
+    with:
+      test_http4s_patch: ${{ needs.classify.outputs.http4s_patch == 'true' }}
 
   web:
     name: Web
@@ -61,6 +76,8 @@ jobs:
     needs: classify
     if: needs.classify.outputs.analysis == 'true'
     uses: ./.github/workflows/processing-worker.yml
+    with:
+      verify_image: ${{ needs.classify.outputs.analysis_image == 'true' }}
 
   runtime:
     name: Runtime smoke
@@ -89,6 +106,7 @@ jobs:
         env:
           CLASSIFY_RESULT: ${{ needs.classify.result }}
           PUBLIC_SAFETY_RESULT: ${{ needs.public-safety.result }}
+          WORKFLOW_LINT_EXPECTED: ${{ needs.classify.outputs.workflow }}
           WORKFLOW_LINT_RESULT: ${{ needs.workflow-lint.result }}
           API_EXPECTED: ${{ needs.classify.outputs.api }}
           API_RESULT: ${{ needs.api.result }}

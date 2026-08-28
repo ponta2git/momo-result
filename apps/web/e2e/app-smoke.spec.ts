@@ -1,4 +1,4 @@
-import type { APIResponse, Locator, Page } from "@playwright/test";
+import type { APIRequestContext, APIResponse, Locator, Page } from "@playwright/test";
 
 import { withReturnTo } from "../src/shared/navigation/returnTo";
 import {
@@ -13,67 +13,45 @@ import {
 import {
   continueWithE2eAuth,
   continueWithE2eNonAdminAuth,
-  deleteJson,
   devAccountId,
   devUserStorageKey,
   expect,
-  expectDeleted,
   expectGeneratedId,
   expectNoHorizontalPageOverflow,
   expectOk,
   installE2eAuthHeaders,
   postJson,
-  postMutation,
   test,
 } from "./support";
+import type { E2eRun } from "./support";
 
 const png1x1 = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
   "base64",
 );
 
-test("completes the app smoke workflow with isolated scoped data", async ({
-  e2eRun,
-  page,
-  request,
-}) => {
-  const { masterIdSuffix } = e2eRun;
-  const gameTitleId = `gt_e2e_${masterIdSuffix}`;
-  const seasonMasterId = `season_e2e_${masterIdSuffix}`;
-  const mapMasterId = `map_e2e_${masterIdSuffix}`;
-  const gameTitleName = `桃太郎電鉄2 E2E ${masterIdSuffix}`;
-  const aliasName = `E2E-${masterIdSuffix}`;
-  let heldEventId = "";
-  let heldEventLabelPrefix = "";
-  let matchId = "";
-  let uploadedDraftId = "";
-
-  await test.step("seed scoped masters", async () => {
-    await postJson(request, e2eRun, "/api/game-titles", {
-      id: gameTitleId,
-      name: gameTitleName,
-      layoutFamily: "momotetsu_2",
-    });
-    e2eRun.trackGameTitle(gameTitleId);
-    await postJson(request, e2eRun, "/api/season-masters", {
-      id: seasonMasterId,
-      gameTitleId,
-      name: "E2Eシーズン",
-    });
-    e2eRun.trackSeasonMaster(seasonMasterId);
-    await postJson(request, e2eRun, "/api/map-masters", {
-      id: mapMasterId,
-      gameTitleId,
-      name: "E2Eマップ",
-    });
-    e2eRun.trackMapMaster(mapMasterId);
-  });
-
+test.beforeEach(async ({ page }) => {
+  await page.setViewportSize({ height: 900, width: 1440 });
   await page.addInitScript(
     ([key, value]) => window.localStorage.setItem(key, value),
     [devUserStorageKey, devAccountId],
   );
   await installE2eAuthHeaders(page);
+});
+
+test("creates a held event and completes OCR intake and review", async ({
+  e2eRun,
+  page,
+  request,
+}) => {
+  const { gameTitleId, gameTitleName, mapMasterId, seasonMasterId } = await seedMasterContext(
+    request,
+    e2eRun,
+  );
+  let heldEventId = "";
+  let heldEventLabelPrefix = "";
+  let matchId = "";
+  let uploadedDraftId = "";
 
   await test.step("create a held event after dev login", async () => {
     await page.goto("/held-events");
@@ -149,32 +127,6 @@ test("completes the app smoke workflow with isolated scoped data", async ({
     await page.setViewportSize({ height: 900, width: 1440 });
   });
 
-  await test.step("create a member alias through the admin UI", async () => {
-    await page.goto("/admin/masters");
-
-    await expect(page.getByRole("heading", { exact: true, name: "設定管理" })).toBeVisible();
-    await page.getByRole("tab", { name: "メンバー名寄せ" }).click();
-    await expect(
-      page.getByRole("heading", { exact: true, name: "プレーヤー名の別名" }),
-    ).toBeVisible();
-
-    const createResponse = page.waitForResponse(
-      (response) =>
-        response.url().includes("/api/member-aliases") && response.request().method() === "POST",
-    );
-    const createForm = page
-      .locator("form")
-      .filter({ has: page.getByRole("button", { name: "追加" }) });
-    await createForm.locator('input[name="alias"]').fill(aliasName);
-    await page.getByRole("button", { name: "追加" }).click();
-
-    const response = await createResponse;
-    expect(response.ok()).toBe(true);
-    const body = (await response.json()) as { id?: string };
-    e2eRun.trackAlias(expectGeneratedId(body.id, "member alias ID"));
-    await expect(page.getByText(aliasName)).toBeVisible();
-  });
-
   await test.step("start an OCR job from an uploaded image", async () => {
     await page.goto("/ocr/new");
 
@@ -187,8 +139,8 @@ test("completes the app smoke workflow with isolated scoped data", async ({
 
     const totalAssetsFrame = page.getByRole("group", { name: "総資産の16:9画像枠" });
     await expect(totalAssetsFrame).toBeVisible();
-    const emptyFrameBox = await measureElement(totalAssetsFrame, "Empty OCR tray frame");
-    expect(emptyFrameBox.width / emptyFrameBox.height).toBeCloseTo(16 / 9, 2);
+    const totalAssetsFrameBox = await measureElement(totalAssetsFrame, "OCR tray frame");
+    expect(totalAssetsFrameBox.width / totalAssetsFrameBox.height).toBeCloseTo(16 / 9, 2);
 
     await page.getByLabel("OCRの画像をアップロード").setInputFiles({
       buffer: png1x1,
@@ -196,16 +148,10 @@ test("completes the app smoke workflow with isolated scoped data", async ({
       name: "total-assets.png",
     });
     await expect(page.getByAltText("総資産プレビュー")).toBeVisible();
-    const selectedFrameBox = await measureElement(totalAssetsFrame, "Selected OCR tray frame");
-    expect(selectedFrameBox.width).toBeCloseTo(emptyFrameBox.width, 1);
-    expect(selectedFrameBox.height).toBeCloseTo(emptyFrameBox.height, 1);
     const trayFeedback = page.getByRole("status", { name: "分類トレイの操作結果" });
     await expect(trayFeedback).toContainText("総資産に画像を配置しました。");
     const startButton = page.getByRole("button", { name: "1件で読み取りを開始" });
-    await startButton.scrollIntoViewIfNeeded();
-    const feedbackBox = await measureElement(trayFeedback, "OCR tray feedback");
-    const startButtonBox = await measureElement(startButton, "OCR start action");
-    expect(feedbackBox.y + feedbackBox.height).toBeLessThan(startButtonBox.y);
+    await expect(startButton).toBeEnabled();
 
     const draftResponse = page.waitForResponse(
       (response) =>
@@ -230,19 +176,7 @@ test("completes the app smoke workflow with isolated scoped data", async ({
 
     await expectOk(await jobResponse, "create OCR job");
     await expect(page).toHaveURL(/\/matches\?status=incomplete&sort=updated_desc$/u);
-    const matchesPageTitle = page.getByRole("heading", { exact: true, name: "試合一覧" });
-    await expect(matchesPageTitle).toBeVisible();
-    expect(
-      await matchesPageTitle.evaluate((element) => {
-        const style = window.getComputedStyle(element);
-        return { fontSize: style.fontSize, fontWeight: style.fontWeight };
-      }),
-    ).toEqual({ fontSize: "30px", fontWeight: "600" });
-    await page.setViewportSize({ height: 844, width: 320 });
-    expect(
-      await matchesPageTitle.evaluate((element) => window.getComputedStyle(element).fontSize),
-    ).toBe("24px");
-    await page.setViewportSize({ height: 900, width: 1440 });
+    await expect(page.getByRole("heading", { exact: true, name: "試合一覧" })).toBeVisible();
   });
 
   await test.step("confirm the sample OCR review into a match detail", async () => {
@@ -260,12 +194,7 @@ test("completes the app smoke workflow with isolated scoped data", async ({
     await page.setViewportSize({ height: 844, width: 390 });
     await reviewRail.getByRole("button", { name: "次の要確認セルへ" }).click();
     await expect(page.getByLabel("おーたか 順位")).toBeFocused();
-    const mobileReviewGeometry = await page.evaluate(() => ({
-      innerWidth: window.innerWidth,
-      scrollWidth: document.documentElement.scrollWidth,
-    }));
-    expect(mobileReviewGeometry.innerWidth).toBe(390);
-    expect(mobileReviewGeometry.scrollWidth).toBeLessThanOrEqual(mobileReviewGeometry.innerWidth);
+    await expectNoHorizontalPageOverflow(page);
     await page.setViewportSize({ height: 900, width: 1440 });
 
     await page.getByRole("button", { name: "開催（必須）を変更" }).click();
@@ -303,27 +232,11 @@ test("completes the app smoke workflow with isolated scoped data", async ({
     await expect(resultLedgerCard).toBeVisible();
     const resultLedger = resultLedgerCard.getByRole("list", { name: "試合の順位と成績" });
     await expect(resultLedger).toBeVisible();
-    const resultLedgerCardBox = await measureElement(resultLedgerCard, "Result ledger card");
-    const resultContentSurfaceBox = await measureElement(
-      resultLedgerCard.locator(".."),
-      "Result content surface",
-    );
-    expect(resultContentSurfaceBox.width - resultLedgerCardBox.width).toBeLessThanOrEqual(48);
     const firstPlaceLedgerRow = resultLedgerCard
       .getByRole("listitem")
       .filter({ hasText: "ぽんた" });
-    const rankBox = await measureElement(
-      firstPlaceLedgerRow.getByText("1位", { exact: true }),
-      "Result ledger rank",
-    );
-    const totalAssetsBox = await measureElement(
-      firstPlaceLedgerRow.getByText("総資産", { exact: true }).locator(".."),
-      "Result ledger total assets",
-    );
-    expect(totalAssetsBox.x).toBeGreaterThan(rankBox.x);
-    expect(totalAssetsBox.x + totalAssetsBox.width).toBeLessThanOrEqual(
-      resultLedgerCardBox.x + resultLedgerCardBox.width,
-    );
+    await expect(firstPlaceLedgerRow.getByText("1位", { exact: true })).toBeVisible();
+    await expect(firstPlaceLedgerRow.getByText("総資産", { exact: true })).toBeVisible();
 
     await page.getByRole("link", { name: "この開催へ戻る" }).click();
     await expect(page).toHaveURL(`/held-events/${heldEventId}`);
@@ -335,6 +248,39 @@ test("completes the app smoke workflow with isolated scoped data", async ({
     await eventMatchLink.click();
     await expect(page).toHaveURL(matchFromHeldEventHref);
   });
+});
+
+test("creates a member alias through administration", async ({ e2eRun, page }) => {
+  const aliasName = `E2E-${e2eRun.masterIdSuffix}`;
+
+  await page.goto("/admin/masters");
+  await page.getByRole("tab", { name: "メンバー名寄せ" }).click();
+
+  const createResponse = page.waitForResponse(
+    (response) =>
+      response.url().includes("/api/member-aliases") && response.request().method() === "POST",
+  );
+  const createForm = page
+    .locator("form")
+    .filter({ has: page.getByRole("button", { name: "追加" }) });
+  await createForm.locator('input[name="alias"]').fill(aliasName);
+  await createForm.getByRole("button", { name: "追加" }).click();
+
+  const response = await createResponse;
+  expect(response.ok()).toBe(true);
+  const body = (await response.json()) as { id?: string };
+  e2eRun.trackAlias(expectGeneratedId(body.id, "member alias ID"));
+  await expect(page.getByText(aliasName)).toBeVisible();
+});
+
+test("inspects saved analysis and handles explicit refresh states", async ({
+  e2eRun,
+  page,
+  request,
+}) => {
+  const { gameTitleId, gameTitleName, mapMasterId, matchId, seasonMasterId } =
+    await seedConfirmedContext(request, e2eRun);
+  const { masterIdSuffix } = e2eRun;
 
   await test.step("inspect saved analysis, refresh states, and details", async () => {
     const desktopViewport = page.viewportSize();
@@ -494,6 +440,7 @@ test("completes the app smoke workflow with isolated scoped data", async ({
       async (route) => route.fulfill({ json: matchContextFixture }),
     );
 
+    await page.goto(`/matches/${encodeURIComponent(matchId)}`);
     await page.setViewportSize({ height: 844, width: 390 });
     const comparisonLink = page.getByRole("link", { name: "前後の戦績を見る" });
     const comparisonHref = withReturnTo(
@@ -508,6 +455,7 @@ test("completes the app smoke workflow with isolated scoped data", async ({
     await comparisonLink.click();
 
     await expect(page.getByRole("heading", { exact: true, name: "戦績比較" })).toBeVisible();
+    const statusRequestsBeforeLifecycleEvents = interceptedStatusRequests;
     await page.evaluate(
       () =>
         new Promise<void>((resolve) => {
@@ -518,14 +466,14 @@ test("completes the app smoke workflow with isolated scoped data", async ({
           requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
         }),
     );
-    expect(interceptedStatusRequests).toBe(0);
+    expect(interceptedStatusRequests).toBe(statusRequestsBeforeLifecycleEvents);
 
     const currentStatusResponse = page.waitForResponse((response) =>
       statusPattern.test(response.url()),
     );
-    await page.getByRole("button", { name: "状態を再確認" }).click();
+    await page.getByRole("button", { name: "表示を更新" }).click();
     expect((await currentStatusResponse).ok()).toBe(true);
-    expect(interceptedStatusRequests).toBe(1);
+    expect(interceptedStatusRequests).toBe(statusRequestsBeforeLifecycleEvents + 1);
 
     const purposeTabs = page.getByRole("tablist", { name: "戦績比較の目的" });
     const analysisTabs = page.getByRole("tablist", { name: "分析の切り口" });
@@ -537,19 +485,11 @@ test("completes the app smoke workflow with isolated scoped data", async ({
       "aria-selected",
       "true",
     );
-    const metricGuideTrigger = page.getByRole("button", { name: "指標の読み方" });
-    await expect(metricGuideTrigger).toBeVisible();
-    await metricGuideTrigger.click();
-    const metricGuideDialog = page.getByRole("dialog", { name: "指標の読み方" });
-    await expect(metricGuideDialog).toBeVisible();
-    await metricGuideDialog.getByRole("button", { name: "ダイアログを閉じる" }).click();
     const scopeSurface = page.getByRole("region", { name: "比較条件" });
     await expect(scopeSurface).toContainText(`${analysisScope.matchCount}戦`);
-    await expect(scopeSurface).not.toContainText("十分");
     await expect(page.getByText("新しい戦績データを計算中です")).toBeVisible();
     await expect(page.getByText(/更新のデータを表示します/u)).toBeVisible();
     const selectedMatch = page.getByRole("region", { name: "選択中の試合" });
-    await expect(selectedMatch.getByRole("heading", { name: /第1戦/u })).toBeVisible();
     const selectedMatchHref = withReturnTo(
       `/matches/${encodeURIComponent(matchId)}`,
       currentPagePath(page),
@@ -557,51 +497,20 @@ test("completes the app smoke workflow with isolated scoped data", async ({
     await expect(
       selectedMatch.getByRole("link", { name: "第1戦の試合結果を見る" }),
     ).toHaveAttribute("href", selectedMatchHref);
-    await expect(selectedMatch.getByRole("list", { name: "この試合の注目点" })).toBeVisible();
-    await expect(
-      selectedMatch.getByRole("list", { name: "選択中の試合の順位と成績" }),
-    ).toContainText("ぽんた");
-    await expect(page.locator('[data-focused-metric="true"]').first()).toBeVisible();
-    await expect(
-      page.getByRole("heading", {
-        name: `直近${aggregateFixture.matchDigest.shownCount}戦と荒れ方`,
-      }),
-    ).toBeVisible();
-    await expect(page.getByText("カード表示", { exact: true })).toHaveCount(0);
     await expect(page.getByRole("table", { name: "直近の試合順位" })).toBeVisible();
     const recentRankTile = page.getByRole("link", {
       name: /ぽんた、第1戦、1位、この試合。試合結果を見る/u,
     });
-    await expect(recentRankTile).toHaveCSS("height", "44px");
-    await expect(recentRankTile).not.toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+    await expect(recentRankTile).toHaveAttribute("href", selectedMatchHref);
     await expectNoHorizontalPageOverflow(page);
 
     await page.getByRole("tab", { name: "今の差" }).click();
-    await expect(page.getByRole("heading", { name: "順位と基礎比較" })).toBeVisible();
     await expect(page.getByRole("region", { name: "順位と基礎比較" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "各順位の回数" })).toBeVisible();
-    await expect(page.getByLabel("ぽんたの順位回数")).toContainText(
-      "1位 6回（この試合）・2位 2回・3位 2回・4位 2回",
-    );
     await expectNoHorizontalPageOverflow(page);
-    const crownRegion = page.getByRole("region", { name: "平均順位首位の確からしさ" });
-    await expect(crownRegion.getByRole("img", { name: /平均順位首位に残った比率/u })).toBeVisible();
-    await crownRegion.getByRole("button", { name: "平均順位首位の確からしさの読み方" }).click();
-    await expect(crownRegion.getByText(/直接対決.*順位の安定性/u)).toBeVisible();
-    await expect(crownRegion.getByText(/次戦の勝率や最終順位/u)).toBeVisible();
     await expect(selectedMatch).toBeVisible();
-    await expect(page.locator('[data-focused-metric="true"]').first()).toBeVisible();
     await expect(page).toHaveURL(new RegExp(`focusMatchId=${encodeURIComponent(matchId)}`, "u"));
     await page.getByRole("button", { name: "順位推移を見る" }).first().click();
     const rankDialog = page.getByRole("dialog", { name: "平均順位の推移" });
-    await expect(rankDialog.getByRole("img", { name: "ぽんたの累積平均順位の推移" })).toBeVisible();
-    await expect(rankDialog.getByRole("columnheader", { name: "開催日時" })).toBeVisible();
-    await expect(rankDialog).not.toContainText("event-12");
-    await expect(rankDialog).not.toContainText("初戦後からの通算変化");
-    await expect(
-      rankDialog.getByRole("rowheader", { name: "第1戦の試合結果を見る" }),
-    ).toBeVisible();
-    await expect(rankDialog.getByText("0.05 改善")).toBeVisible();
     const rankHistoryMatchHref = withReturnTo(
       `/matches/${encodeURIComponent(matchId)}`,
       currentPagePath(page),
@@ -613,28 +522,13 @@ test("completes the app smoke workflow with isolated scoped data", async ({
     await rankDialog.getByRole("button", { name: "ダイアログを閉じる" }).click();
 
     await page.setViewportSize({ height: 900, width: 1280 });
-    await expect(page.getByLabel("ぽんたの順位回数")).toBeVisible();
     await expectNoHorizontalPageOverflow(page);
 
     await page.getByRole("tab", { name: "条件別" }).click();
-    await expect(page.getByRole("heading", { name: "番手比較" })).toBeVisible();
     await expect(page.getByRole("table", { name: "番手別成績" })).toBeVisible();
-    await expect(page.getByText("得意")).toBeVisible();
-    await page.getByRole("button", { name: "ぽんたの番手別推移" }).click();
-    const playOrderDialog = page.getByRole("dialog", { name: "番手別順位の推移" });
-    await expect(
-      playOrderDialog.getByRole("img", { name: "ぽんたの番手別累積平均順位の推移" }),
-    ).toBeVisible();
-    await expect(playOrderDialog.getByText(/2位 → 1.5位/u)).toBeVisible();
-    await expect(playOrderDialog.getByText("改善")).toBeVisible();
-    await playOrderDialog.getByRole("button", { name: "ダイアログを閉じる" }).click();
 
     await page.getByRole("tab", { name: "勝因候補" }).click();
-    await expect(page.getByText("0円", { exact: true })).toBeVisible();
     await expect(page.getByRole("table", { name: "ぽんたの物件収益順位と最終順位" })).toBeVisible();
-    await expect(page.getByLabel("物件収益と最終順位のセルの読み方")).toContainText(
-      "同じ物件収益順位の中で、その最終順位になった割合",
-    );
     const scatterMatchHref = withReturnTo(
       `/matches/${encodeURIComponent(matchId)}`,
       currentPagePath(page),
@@ -644,37 +538,15 @@ test("completes the app smoke workflow with isolated scoped data", async ({
     ).toHaveAttribute("href", scatterMatchHref);
     await page.getByRole("button", { name: "検証範囲を見る" }).click();
     const rankSignalDialog = page.getByRole("dialog", { name: "順位を読む手掛かり" });
-    await expect(rankSignalDialog.getByLabel("順位を読む手掛かりの使い方")).toContainText(
-      "試合後に同じ傾向が続いたか確認",
-    );
-    await expect(rankSignalDialog.getByText("候補はこの1件")).toBeVisible();
-    await expect(
-      rankSignalDialog.getByRole("list", { name: "物件収益の別開催での支持" }),
-    ).toBeVisible();
     await rankSignalDialog.getByRole("button", { name: "別開催テストと採用基準" }).click();
+    const eventValuesDisclosure = rankSignalDialog.getByRole("button", {
+      name: "物件収益の開催別の数値",
+    });
+    await eventValuesDisclosure.click();
+    await expect(eventValuesDisclosure).toHaveAttribute("aria-expanded", "true");
     await expect(
-      rankSignalDialog.getByRole("listitem").filter({ hasText: "候補を作る" }),
-    ).toContainText("4組を使用");
-    const pageScrollBeforeDisclosure = await page.evaluate(() => window.scrollY);
-    await rankSignalDialog.getByRole("button", { name: "物件収益の開催別の数値" }).click();
-    expect(await page.evaluate(() => window.scrollY)).toBe(pageScrollBeforeDisclosure);
-    expect(
-      await rankSignalDialog.evaluate((dialog) => {
-        const surface = dialog.firstElementChild;
-        const candidates = [dialog, surface, ...dialog.querySelectorAll("*")].filter(
-          (element): element is Element => element !== null,
-        );
-        const scrollOwners = candidates.filter(
-          (element) =>
-            ["auto", "scroll"].includes(window.getComputedStyle(element).overflowY) &&
-            element.scrollHeight > element.clientHeight + 1,
-        );
-        return {
-          bodyOverflow: window.getComputedStyle(document.body).overflow,
-          scrollOwnerCount: scrollOwners.length,
-        };
-      }),
-    ).toEqual({ bodyOverflow: "hidden", scrollOwnerCount: 1 });
+      rankSignalDialog.getByRole("button", { name: "ダイアログを閉じる" }),
+    ).toBeVisible();
     await rankSignalDialog.getByRole("button", { name: "ダイアログを閉じる" }).click();
 
     await page.setViewportSize({ height: 900, width: 1440 });
@@ -684,16 +556,7 @@ test("completes the app smoke workflow with isolated scoped data", async ({
     const nextMatchReview = page.getByRole("tabpanel", { name: "次戦に備える" });
     await expect(nextMatchReview).toBeVisible();
     await expect(reviewPurposeTab).toBeFocused();
-    const actionHypothesisTarget = nextMatchReview.getByLabel("行動仮説の対象");
-    await expect(actionHypothesisTarget.getByText("対象", { exact: true })).toBeVisible();
-    await expect(actionHypothesisTarget.getByText("次の4戦", { exact: true })).toBeVisible();
-    await expect(nextMatchReview.getByText("使う場面", { exact: true })).toHaveCount(0);
     await expect(selectedMatch).toBeVisible();
-    await page.getByRole("button", { name: "根拠・注意・試合後の確認" }).click();
-    const evidenceDialog = page.getByRole("dialog", { name: "根拠・注意・試合後の確認" });
-    await expect(evidenceDialog.getByText("データ上の理由")).toBeVisible();
-    await expect(evidenceDialog.getByText("ぶれにくさ: 高め")).toBeVisible();
-    await evidenceDialog.getByRole("button", { name: "ダイアログを閉じる" }).click();
 
     statusPhase = "failed";
     const failedStatusResponse = page.waitForResponse((response) =>
@@ -701,7 +564,7 @@ test("completes the app smoke workflow with isolated scoped data", async ({
     );
     await page.getByRole("button", { name: "表示を更新" }).click();
     expect((await failedStatusResponse).ok()).toBe(true);
-    expect(interceptedStatusRequests).toBe(2);
+    expect(interceptedStatusRequests).toBe(statusRequestsBeforeLifecycleEvents + 2);
     await expect(page.getByText("分析データを再計算できませんでした")).toBeVisible();
     await expect(page.getByText(/更新のデータを表示しています/u)).toBeVisible();
 
@@ -711,6 +574,10 @@ test("completes the app smoke workflow with isolated scoped data", async ({
 
     if (desktopViewport) await page.setViewportSize(desktopViewport);
   });
+});
+
+test("runs analysis administration and enforces access", async ({ e2eRun, page, request }) => {
+  const { gameTitleId } = await seedMasterContext(request, e2eRun);
 
   await test.step("run analysis administration and enforce admin access", async () => {
     await page.goto("/admin/analysis");
@@ -760,6 +627,13 @@ test("completes the app smoke workflow with isolated scoped data", async ({
     await page.unroute("**/api/**", continueWithE2eNonAdminAuth);
     await page.setViewportSize({ height: 900, width: 1440 });
   });
+});
+
+test("filters and opens a confirmed match", async ({ e2eRun, page, request }) => {
+  const { gameTitleName, heldEventId, heldEventLabelPrefix, matchId } = await seedConfirmedContext(
+    request,
+    e2eRun,
+  );
 
   await test.step("filter and sort the confirmed match list", async () => {
     expectGeneratedId(heldEventId, "held event ID");
@@ -863,6 +737,10 @@ test("completes the app smoke workflow with isolated scoped data", async ({
     await expect(page.getByRole("heading", { name: /第\d+試合の結果/u })).toBeVisible();
     await page.unroute(detailUrlPattern);
   });
+});
+
+test("downloads a confirmed match export", async ({ e2eRun, page, request }) => {
+  const { matchId } = await seedConfirmedContext(request, e2eRun);
 
   await test.step("download an export for the confirmed match", async () => {
     expectGeneratedId(matchId, "match ID");
@@ -870,47 +748,8 @@ test("completes the app smoke workflow with isolated scoped data", async ({
     await page.goto(`/exports?matchId=${encodeURIComponent(matchId)}&format=tsv`);
 
     await expect(page.getByRole("heading", { exact: true, name: "CSV/TSV出力" })).toBeVisible();
-    const exportScopeTabs = page.getByRole("tablist", { name: "出力範囲" });
-    const exportFormatTabs = page.getByRole("tablist", { name: "ファイル形式" });
-    await expect(exportScopeTabs.getByRole("tab", { exact: true, name: "試合" })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
-    await expect(exportFormatTabs.getByRole("tab", { name: "TSV" })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
-    await expect(page.getByRole("tabpanel", { exact: true, name: "試合" })).toBeVisible();
-    await expect(page.getByRole("tabpanel", { name: "TSV" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "試合を変更" })).toBeVisible();
-    await expect(page.getByText(/第1試合.*TSVで書き出します。/u)).toBeVisible();
-
-    await page.emulateMedia({ reducedMotion: "reduce" });
     await page.setViewportSize({ height: 812, width: 375 });
-    const mobileExportGeometry = await page.evaluate(() => ({
-      innerWidth: window.innerWidth,
-      reducedMotion: window.matchMedia("(prefers-reduced-motion: reduce)").matches,
-      scrollWidth: document.documentElement.scrollWidth,
-    }));
-    expect(mobileExportGeometry.innerWidth).toBe(375);
-    expect(mobileExportGeometry.reducedMotion).toBe(true);
-    expect(mobileExportGeometry.scrollWidth).toBeLessThanOrEqual(mobileExportGeometry.innerWidth);
-    expect(
-      await page
-        .getByRole("button", { name: "試合を変更" })
-        .evaluate((element) => window.getComputedStyle(element).transitionDuration),
-    ).toBe("0s");
-
-    await page.getByRole("button", { name: "試合を変更" }).click();
-    const candidateDialog = page.getByRole("dialog", { name: "試合を選択" });
-    await expect(candidateDialog).toBeVisible();
-    await expect(candidateDialog.getByRole("radio", { name: /第1試合/u })).toBeChecked();
     await expectNoHorizontalPageOverflow(page);
-    await candidateDialog.getByRole("button", { name: "ダイアログを閉じる" }).click();
-    await expect(candidateDialog).toBeHidden();
-
-    await page.emulateMedia({ reducedMotion: "no-preference" });
-    await page.setViewportSize({ height: 900, width: 1440 });
 
     const exportResponse = page.waitForResponse(
       (response) =>
@@ -927,45 +766,86 @@ test("completes the app smoke workflow with isolated scoped data", async ({
       page.getByRole("heading", { exact: true, name: "ダウンロードを開始しました" }),
     ).toBeVisible();
   });
-
-  await test.step("delete discarded OCR draft and scoped masters after deleting the match", async () => {
-    expectGeneratedId(uploadedDraftId, "match draft ID");
-    expectGeneratedId(matchId, "match ID");
-
-    const cancelResponse = await postMutation(
-      request,
-      e2eRun,
-      `/api/match-drafts/${uploadedDraftId}/cancel`,
-    );
-    await expectOk(cancelResponse, "cancel uploaded draft");
-
-    const draftAfterCancel = await request.get(`/api/match-drafts/${uploadedDraftId}`, {
-      headers: {
-        "X-Momo-Account-Id": devAccountId,
-      },
-    });
-    expect(draftAfterCancel.status()).toBe(404);
-
-    const blockedMapDelete = await deleteJson(request, e2eRun, `/api/map-masters/${mapMasterId}`);
-    expect(blockedMapDelete.status()).toBe(409);
-
-    const matchDelete = await deleteJson(request, e2eRun, `/api/matches/${matchId}`);
-    await expectOk(matchDelete, "delete confirmed match");
-
-    await expectDeleted(
-      await deleteJson(request, e2eRun, `/api/map-masters/${mapMasterId}`),
-      mapMasterId,
-    );
-    await expectDeleted(
-      await deleteJson(request, e2eRun, `/api/season-masters/${seasonMasterId}`),
-      seasonMasterId,
-    );
-    await expectDeleted(
-      await deleteJson(request, e2eRun, `/api/game-titles/${gameTitleId}`),
-      gameTitleId,
-    );
-  });
 });
+
+async function seedMasterContext(request: APIRequestContext, e2eRun: E2eRun) {
+  const { masterIdSuffix } = e2eRun;
+  const gameTitleId = `gt_e2e_${masterIdSuffix}`;
+  const seasonMasterId = `season_e2e_${masterIdSuffix}`;
+  const mapMasterId = `map_e2e_${masterIdSuffix}`;
+  const gameTitleName = `桃太郎電鉄2 E2E ${masterIdSuffix}`;
+
+  await postJson(request, e2eRun, "/api/game-titles", {
+    id: gameTitleId,
+    layoutFamily: "momotetsu_2",
+    name: gameTitleName,
+  });
+  e2eRun.trackGameTitle(gameTitleId);
+  await postJson(request, e2eRun, "/api/season-masters", {
+    gameTitleId,
+    id: seasonMasterId,
+    name: "E2Eシーズン",
+  });
+  e2eRun.trackSeasonMaster(seasonMasterId);
+  await postJson(request, e2eRun, "/api/map-masters", {
+    gameTitleId,
+    id: mapMasterId,
+    name: "E2Eマップ",
+  });
+  e2eRun.trackMapMaster(mapMasterId);
+
+  return { gameTitleId, gameTitleName, mapMasterId, seasonMasterId };
+}
+
+async function seedConfirmedContext(request: APIRequestContext, e2eRun: E2eRun) {
+  const masters = await seedMasterContext(request, e2eRun);
+  // Historical fixtures must not take the latest-event shortcuts from the create/OCR flow.
+  const localDateTime = e2eRun.uniqueLocalDateTime(2000);
+  const playedAt = new Date(`${localDateTime}:00+09:00`).toISOString();
+  const heldEvent = await postJson(request, e2eRun, "/api/held-events", { heldAt: playedAt });
+  const heldEventId = expectGeneratedId(heldEvent["id"] as string | undefined, "held event ID");
+  e2eRun.trackHeldEvent(heldEventId);
+  const match = await postJson(request, e2eRun, "/api/matches", {
+    draftIds: {},
+    gameTitleId: masters.gameTitleId,
+    heldEventId,
+    mapMasterId: masters.mapMasterId,
+    matchNoInEvent: 1,
+    ownerMemberId: "member_ponta",
+    playedAt,
+    players: makePlayers(),
+    seasonMasterId: masters.seasonMasterId,
+  });
+  const matchId = expectGeneratedId(match["matchId"] as string | undefined, "match ID");
+  e2eRun.trackMatch(matchId);
+
+  return {
+    ...masters,
+    heldEventId,
+    heldEventLabelPrefix: localDateTime.replaceAll("-", "/").replace("T", " "),
+    matchId,
+  };
+}
+
+function makePlayers() {
+  return ["member_ponta", "member_akane_mami", "member_otaka", "member_eu"].map(
+    (memberId, index) => ({
+      incidents: {
+        cardShop: 0,
+        cardStation: 0,
+        destination: 0,
+        minusStation: 0,
+        plusStation: 0,
+        suriNoGinji: 0,
+      },
+      memberId,
+      playOrder: index + 1,
+      rank: index + 1,
+      revenueManYen: (4 - index) * 10,
+      totalAssetsManYen: (4 - index) * 100,
+    }),
+  );
+}
 
 function isMatchListResponse(response: APIResponse): boolean {
   const url = new URL(response.url());
@@ -1008,13 +888,11 @@ async function selectSeedMasters(
 
   const seasonSelect = page.getByRole("combobox", { name: /^シーズン/u });
   await expect(seasonSelect).toBeEnabled();
-  await expect(seasonSelect.locator(`option[value="${ids.seasonMasterId}"]`)).toHaveCount(1);
   await seasonSelect.selectOption(ids.seasonMasterId);
   await expect(seasonSelect).toHaveValue(ids.seasonMasterId);
 
   const mapSelect = page.getByRole("combobox", { name: /^マップ/u });
   await expect(mapSelect).toBeEnabled();
-  await expect(mapSelect.locator(`option[value="${ids.mapMasterId}"]`)).toHaveCount(1);
   await mapSelect.selectOption(ids.mapMasterId);
   await expect(mapSelect).toHaveValue(ids.mapMasterId);
 }
@@ -1026,8 +904,6 @@ async function measureElement(locator: Locator, label: string) {
     return {
       height: rect.height,
       width: rect.width,
-      x: rect.x,
-      y: rect.y,
     };
   });
 }

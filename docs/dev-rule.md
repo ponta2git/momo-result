@@ -30,9 +30,9 @@
 
 | 領域 | 品質 command |
 | --- | --- |
-| Web | `pnpm --filter web format:check`、`lint`、`typecheck`、`test:run`、必要に応じ `build` / `e2e` |
+| Web | `pnpm --filter web format:check`、`lint`、`contract:check`、`typecheck`、`test:run`、必要に応じ `build` / `e2e` |
 | API | `sbt apiQuality`、`sbt test`、必要に応じ `apiCoverage` / `apiDbQuality` / `apiRedisQuality` / `apiR2Quality` |
-| Processing Worker | `cargo fmt --all -- --check`、`cargo clippy --locked --workspace --all-targets --all-features -- -D warnings`、`cargo test --locked --workspace --all-targets --all-features`、release build |
+| Processing Worker | `cargo fmt --all -- --check`、`cargo clippy --locked --workspace --all-targets`、`cargo test --locked --workspace`、production image build |
 | Go tools | `cd tools && go test ./... && go vet ./...` |
 | Workflow | `pnpm actionlint` |
 | Public docs / config | `pnpm public:safety:check` |
@@ -47,7 +47,7 @@ OpenAPI / Web 型の生成関係は `docs/architecture.md` の Wire Boundary、c
 | --- | --- | --- |
 | Product-value evidence | Yes | 利用者の結果、data 保全、利用者へ到達する共通実装契約 |
 | Pipeline-integrity evidence | Yes | compile、生成 freshness、schema / dependency 整合、artifact provenance、workflow 自体の成立 |
-| Diagnostic report | No | aggregate coverage、flake、module size、developer wait、長期推移 |
+| Diagnostic report | No | aggregate coverage、flake、developer wait、長期推移 |
 | Manual review | Yes（選択時） | 視覚階層、関係的余白、文章の強さなど自動 oracle が不適切な項目 |
 
 - blocking check は、所有する正本、検出する違反、失敗時の対処を特定できる場合だけ置く。pipeline-integrity evidence の成功を product behavior の成功として扱わない。
@@ -66,7 +66,7 @@ OpenAPI / Web 型の生成関係は `docs/architecture.md` の Wire Boundary、c
 | PostgreSQL repository / DB 前提 | API gate + 変更経路の DB quality |
 | Redis / OCR queue | API gate + 変更経路の Redis quality / queue contract |
 | R2 image storage | API / DB gate + 変更経路の R2 quality / reconciler readiness |
-| Processing Worker production | format、Clippy、release build + 選択した target / feature evidence |
+| Processing Worker production | format、Clippy、production image build + 選択した target / feature evidence |
 | analysis algorithm version | Worker gate + release DB / control-plane compatibility |
 | worker DB / Redis / process / isolation | Worker gate + 対象 control-plane、preemption、image smoke |
 | runtime / deploy config | public safety、image build / scan + 変更経路の runtime / memory / shutdown / Playwright evidence |

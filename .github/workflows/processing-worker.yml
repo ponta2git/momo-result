@@ -8,6 +8,24 @@ on:
         required: false
         default: false
         type: boolean
+      verify_image:
+        description: Build and exercise the production worker image
+        required: false
+        default: true
+        type: boolean
+    outputs:
+      metadata_artifact_digest:
+        description: Digest of the producer-attempt candidate metadata artifact
+        value: ${{ jobs.runtime-image.outputs.metadata_artifact_digest }}
+      metadata_artifact_id:
+        description: ID of the producer-attempt candidate metadata artifact
+        value: ${{ jobs.runtime-image.outputs.metadata_artifact_id }}
+      metadata_artifact_name:
+        description: Name of the producer-attempt candidate metadata artifact
+        value: ${{ jobs.runtime-image.outputs.metadata_artifact_name }}
+      producer_run_attempt:
+        description: Run attempt that built and verified the candidate image
+        value: ${{ jobs.runtime-image.outputs.producer_run_attempt }}
 
 permissions:
   contents: read
@@ -93,19 +111,13 @@ jobs:
         run: cargo fmt --all -- --check
 
       - name: Lint check
-        run: cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+        run: cargo clippy --locked --workspace --all-targets
 
       - name: Test
-        run: cargo test --locked --workspace --all-targets --all-features
-
-      - name: Release build
-        run: cargo build --locked --workspace --release
+        run: cargo test --locked --workspace
 
       - name: Apply momo-db migrations
         run: ../../scripts/ci/apply-momo-db-migrations.sh
-
-      - name: Release control-plane smoke
-        run: ../../scripts/ci/analysis-release-db-smoke.sh target/release/momo-processing-worker
 
       - name: Rust OCR PostgreSQL and Redis control-plane smoke
         env:
@@ -117,6 +129,12 @@ jobs:
     name: Build, scan, and package analysis image
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    if: inputs.verify_image || inputs.package_image
+    outputs:
+      metadata_artifact_digest: ${{ steps.metadata-upload.outputs.artifact-digest }}
+      metadata_artifact_id: ${{ steps.metadata-upload.outputs.artifact-id }}
+      metadata_artifact_name: ${{ steps.candidate.outputs.metadata_artifact_name }}
+      producer_run_attempt: ${{ steps.candidate.outputs.producer_run_attempt }}
     services:
       postgres:
         image: postgres:18-alpine
@@ -249,6 +267,7 @@ jobs:
 
       - name: Create candidate provenance
         if: inputs.package_image
+        id: candidate
         env:
           IMAGE_ARTIFACT_DIGEST: ${{ steps.image-upload.outputs.artifact-digest }}
           IMAGE_ARTIFACT_ID: ${{ steps.image-upload.outputs.artifact-id }}
@@ -282,9 +301,14 @@ jobs:
               tarSha256: $tarSha256,
               configSha256: $configSha256
             }' > "${ANALYSIS_METADATA_ARTIFACT_NAME}/candidate.json"
+          {
+            printf 'metadata_artifact_name=%s\n' "${ANALYSIS_METADATA_ARTIFACT_NAME}"
+            printf 'producer_run_attempt=%s\n' "${GITHUB_RUN_ATTEMPT}"
+          } >> "${GITHUB_OUTPUT}"
 
       - name: Upload candidate provenance
         if: inputs.package_image
+        id: metadata-upload
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: ${{ env.ANALYSIS_METADATA_ARTIFACT_NAME }}

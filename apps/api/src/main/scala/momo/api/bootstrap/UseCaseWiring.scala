@@ -173,7 +173,7 @@ private[bootstrap] object UseCaseWiring:
           authCallbackStateRateLimiter = services.authCallbackStateRateLimiter,
           oauthProviderBackoff = services.oauthProviderBackoff,
         )
-        val app = HttpRoutes.routes(HttpRoutes.Dependencies(
+        val (app, registeredEndpoints) = HttpRoutes.routesWithEndpoints(HttpRoutes.Dependencies(
           config = config,
           auth = authDependencies,
           upload = routeUseCases.upload,
@@ -199,5 +199,6 @@ private[bootstrap] object UseCaseWiring:
           repositories.loginAccounts,
           authServices.sessionService.create,
           Async[F].never[Nothing],
+          registeredEndpoints,
         )
       }

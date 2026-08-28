@@ -219,34 +219,6 @@ export async function postJson(
   return (await response.json()) as Record<string, unknown>;
 }
 
-export async function deleteJson(
-  request: APIRequestContext,
-  run: E2eRun,
-  path: string,
-): Promise<APIResponse> {
-  return request.delete(path, {
-    headers: mutationHeaders(run, `delete-${path}`),
-  });
-}
-
-export async function postMutation(
-  request: APIRequestContext,
-  run: E2eRun,
-  path: string,
-): Promise<APIResponse> {
-  return request.post(path, {
-    headers: mutationHeaders(run, `post-${path}`),
-  });
-}
-
-export async function expectDeleted(response: APIResponse, id: string): Promise<void> {
-  await expectOk(response, id);
-  expect((await response.json()) as { deleted?: boolean; id?: string }).toMatchObject({
-    deleted: true,
-    id,
-  });
-}
-
 export async function expectOk(response: APIResponse, label: string): Promise<void> {
   if (response.ok()) return;
   throw new Error(`${label} failed with ${response.status()}: ${await response.text()}`);

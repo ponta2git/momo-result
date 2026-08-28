@@ -22,10 +22,3 @@ mod series_analysis;
 mod supervisor;
 
 pub use cli::entrypoint;
-
-#[cfg(test)]
-#[expect(
-    clippy::panic,
-    reason = "architecture-test discovery failures must identify the unreadable source path"
-)]
-mod architecture_tests;

@@ -25,7 +25,7 @@ import momo.api.testing.{TestImages, TestTags}
  */
 final class R2SourceImageObjectStorageIntegrationSpec extends MomoCatsEffectSuite:
   test("put, head, get, delete, and post-delete head preserve the live R2 contract"
-    .tag(TestTags.Integration).tag(TestTags.R2Integration)):
+    .tag(TestTags.R2Integration)):
     val config = loadConfig().fold(fail(_), identity)
     val bytes = TestImages.png1x1
     val sha256 = Sha256Hex.digest(bytes)

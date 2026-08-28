@@ -58,13 +58,16 @@ object PostgresMatchNotes:
     }
 
   private def decode(row: StoredNote): ConnectionIO[MatchNote] =
-    val decoded = for
-      body <- row.body.traverse(MatchNoteBody.fromRequiredString)
-      version <- MatchNoteVersion.fromLong(row.version)
-      note <- MatchNote.persisted(body, version, row.updatedBy, row.updatedAt)
-    yield note
-    decoded.leftMap(message => PostgresDataIntegrityException
-      .inconsistentRow("matches", "note", message)).liftTo[ConnectionIO]
+    val decoded =
+      for
+        body <- row.body.traverse(MatchNoteBody.fromRequiredString)
+        version <- MatchNoteVersion.fromLong(row.version)
+        note <- MatchNote.persisted(body, version, row.updatedBy, row.updatedAt)
+      yield note
+    decoded.leftMap(message =>
+      PostgresDataIntegrityException
+        .inconsistentRow("matches", "note", message)
+    ).liftTo[ConnectionIO]
 
 final class PostgresMatchNotesRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
     extends MatchNotesRepository[F]:

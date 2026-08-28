@@ -13,7 +13,7 @@ abstract class RedisIntegrationSuite extends MomoCatsEffectSuite:
   override def munitIOTimeout = 60.seconds
 
   override def munitTests(): Seq[munit.Test] = super.munitTests()
-    .map(_.tag(TestTags.Integration).tag(TestTags.RedisIntegration))
+    .map(_.tag(TestTags.RedisIntegration))
 
   protected def redisUrlResource: Resource[IO, String] = redisContainer
     .map(container => s"redis://${container.getHost}:${container.getMappedPort(6379)}")

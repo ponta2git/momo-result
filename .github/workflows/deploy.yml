@@ -22,8 +22,10 @@ jobs:
     timeout-minutes: 3
     outputs:
       runtime: ${{ steps.changes.outputs.runtime }}
+      http4s_patch: ${{ steps.changes.outputs.http4s_patch }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: github.event_name != 'pull_request'
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -33,26 +35,22 @@ jobs:
           BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
           HEAD_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
         run: |
-          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+          if [[ "${GITHUB_EVENT_NAME}" == "pull_request" ]]; then
+            # The PR orchestrator invokes this workflow only after classifying
+            # the change as runtime-relevant.
+            result=$'api=false\nweb=false\nanalysis=false\nanalysis_image=false\nruntime=true\nhttp4s_patch=false'
+          elif [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
             [[ "${GITHUB_REF}" == "refs/heads/master" ]] || {
               echo "Manual runtime releases must run from master." >&2
               exit 1
             }
-            result=$'api=false\nweb=false\nanalysis=false\nruntime=true'
+            result=$'api=false\nweb=false\nanalysis=false\nanalysis_image=false\nruntime=true\nhttp4s_patch=true'
           elif [[ "${BASE_SHA}" =~ ^0+$ ]]; then
-            result=$'api=true\nweb=true\nanalysis=true\nruntime=true'
+            result=$'api=true\nweb=true\nanalysis=true\nanalysis_image=true\nruntime=true\nhttp4s_patch=true'
           else
-            git cat-file -e "${BASE_SHA}^{commit}"
-            git cat-file -e "${HEAD_SHA}^{commit}"
-            result="$(git diff --name-only -z "${BASE_SHA}" "${HEAD_SHA}" |
-              scripts/ci/classify-changes.sh)"
+            result="$(scripts/ci/classify-git-range.sh "${BASE_SHA}" "${HEAD_SHA}")"
           fi
           printf '%s\n' "${result}" >> "${GITHUB_OUTPUT}"
-          if [[ "${GITHUB_EVENT_NAME}" == "pull_request" ]] &&
-            ! grep -qx 'runtime=true' <<<"${result}"; then
-            echo "The PR orchestrator called runtime validation for a non-runtime change." >&2
-            exit 1
-          fi
 
   public-safety:
     needs: scope
@@ -63,6 +61,8 @@ jobs:
     needs: scope
     if: github.event_name != 'pull_request' && needs.scope.outputs.runtime == 'true'
     uses: ./.github/workflows/api.yml
+    with:
+      test_http4s_patch: ${{ needs.scope.outputs.http4s_patch == 'true' }}
 
   web:
     needs: scope
@@ -89,31 +89,87 @@ jobs:
         run: scripts/ci/dockerfile-lint.sh
 
   runtime-image:
-    name: Build, scan, and package runtime image
+    name: Build, scan, smoke, and package runtime image
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 75
     needs: scope
-    if: github.event_name != 'pull_request' && needs.scope.outputs.runtime == 'true'
+    if: needs.scope.outputs.runtime == 'true'
     outputs:
       artifact_digest: ${{ steps.image-upload.outputs.artifact-digest }}
       artifact_id: ${{ steps.image-upload.outputs.artifact-id }}
       artifact_name: ${{ steps.candidate.outputs.artifact_name }}
       image_ref: ${{ steps.candidate.outputs.image_ref }}
       run_attempt: ${{ steps.candidate.outputs.run_attempt }}
+
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_DB: momo_result
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+        ports:
+          - "5432:5432"
+        options: >-
+          --health-cmd "pg_isready -U postgres -d momo_result"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports:
+          - "6379:6379"
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/momo_result
+      DEV_MEMBER_IDS: member_ponta,member_akane_mami,member_otaka,member_eu
+      REDIS_URL: redis://127.0.0.1:6379/0
+
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - name: Set up Go runtime tool
-        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
-        with:
-          cache: false
-          go-version: 1.26.6
+      - name: Read pinned momo-db revision
+        id: momo-db
+        run: |
+          ref="$(tr -d '\r\n' < .momo-db-ref)"
+          [[ "${ref}" =~ ^[0-9a-f]{40}$ ]] || { echo "Invalid .momo-db-ref." >&2; exit 1; }
+          echo "ref=${ref}" >> "${GITHUB_OUTPUT}"
 
-      - name: Check runtime config
-        run: scripts/ci/check-runtime-config.sh
-        timeout-minutes: 2
+      - name: Checkout momo-db migrations
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository_owner }}/momo-db
+          ref: ${{ steps.momo-db.outputs.ref }}
+          path: _deps/momo-db
+          token: ${{ github.token }}
+          sparse-checkout: drizzle
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install web dependencies
+        run: pnpm install --frozen-lockfile
+        timeout-minutes: 5
+
+      - name: Install Playwright browser
+        run: pnpm --filter web exec playwright install --with-deps chromium
+        timeout-minutes: 10
+
+      - name: Apply momo-db migrations
+        run: scripts/ci/apply-momo-db-migrations.sh
+        timeout-minutes: 5
 
       - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
@@ -148,7 +204,76 @@ jobs:
         env:
           MOMO_ORIGIN_LOCK_TOKEN: ${{ env.CI_DUMMY_ORIGIN_LOCK_TOKEN }}
 
+      - name: Start runtime container
+        run: scripts/ci/start-runtime-container.sh
+        env:
+          IMAGE_UPLOAD_STORAGE_MAX_USED_PERCENT: "100"
+          IMAGE_UPLOAD_STORAGE_MIN_FREE_BYTES: "1"
+          MOMO_ORIGIN_LOCK_TOKEN: ${{ env.CI_DUMMY_ORIGIN_LOCK_TOKEN }}
+          MUTATION_RATE_LIMIT_PER_MINUTE: "240"
+          RUNTIME_CPU_LIMIT: "2"
+          RUNTIME_MEMORY_LIMIT: "512m"
+        timeout-minutes: 3
+
+      - name: Release DB contract preflight
+        run: docker exec momo-result-runtime /opt/momo-result/bin/momo-runtime-tool preflight
+        timeout-minutes: 1
+
+      - name: Runtime HTTP smoke
+        run: scripts/ci/runtime-smoke.sh
+        env:
+          MOMO_ORIGIN_LOCK_TOKEN: ${{ env.CI_DUMMY_ORIGIN_LOCK_TOKEN }}
+        timeout-minutes: 2
+
+      - name: Playwright E2E smoke
+        run: pnpm --filter web e2e:runtime
+        env:
+          PLAYWRIGHT_BASE_URL: http://127.0.0.1:8080
+        timeout-minutes: 10
+
+      - name: Runtime memory headroom smoke
+        if: github.event_name != 'pull_request'
+        run: scripts/ci/runtime-memory-smoke.sh
+        env:
+          MOMO_ORIGIN_LOCK_TOKEN: ${{ env.CI_DUMMY_ORIGIN_LOCK_TOKEN }}
+        timeout-minutes: 3
+
+      - name: Graceful runtime shutdown smoke
+        run: scripts/ci/runtime-shutdown-smoke.sh
+        timeout-minutes: 2
+
+      - name: Capture safe runtime diagnostics
+        if: failure()
+        run: >-
+          docker logs momo-result-runtime 2>&1 |
+          scripts/ci/summarize-runtime-logs.sh > runtime-container-summary.json || true
+
+      - name: Upload safe runtime diagnostics
+        if: failure()
+        continue-on-error: true
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: runtime-container-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
+          path: runtime-container-summary.json
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Upload Playwright report
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: playwright-report-${{ github.run_id }}-${{ github.run_attempt }}
+          path: apps/web/playwright-report/
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Stop runtime container
+        if: always()
+        run: docker rm -f momo-result-runtime || true
+
       - name: Record runtime image identity
+        if: github.event_name != 'pull_request'
         run: |
           mkdir -p "${IMAGE_ARTIFACT_NAME}"
           printf "%s\n" "${IMAGE_REF}" > "${IMAGE_ARTIFACT_NAME}/image-ref.txt"
@@ -171,6 +296,7 @@ jobs:
             > "${IMAGE_ARTIFACT_NAME}/http4s-patch.json"
 
       - name: Save runtime image
+        if: github.event_name != 'pull_request'
         run: |
           docker save "${IMAGE_REF}" | gzip -1 > "${IMAGE_ARTIFACT_NAME}/momo-result-image.tar.gz"
           sha256sum "${IMAGE_ARTIFACT_NAME}/momo-result-image.tar.gz" \
@@ -178,6 +304,7 @@ jobs:
         timeout-minutes: 10
 
       - name: Record runtime candidate provenance
+        if: github.event_name != 'pull_request'
         id: candidate
         run: |
           image_id="$(sed -n '1p' "${IMAGE_ARTIFACT_NAME}/image-id.txt")"
@@ -221,6 +348,7 @@ jobs:
           } >> "${GITHUB_OUTPUT}"
 
       - name: Upload runtime image
+        if: github.event_name != 'pull_request'
         id: image-upload
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
@@ -229,344 +357,6 @@ jobs:
           if-no-files-found: error
           retention-days: 7
           compression-level: 0
-
-  runtime-smoke-pr:
-    name: Runtime smoke and E2E (PR)
-    runs-on: ubuntu-latest
-    timeout-minutes: 75
-    needs: scope
-    if: github.event_name == 'pull_request' && needs.scope.outputs.runtime == 'true'
-
-    services:
-      postgres:
-        image: postgres:18-alpine
-        env:
-          POSTGRES_DB: momo_result
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_USER: postgres
-        ports:
-          - "5432:5432"
-        options: >-
-          --health-cmd "pg_isready -U postgres -d momo_result"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 20
-      redis:
-        image: redis:7-alpine
-        ports:
-          - "6379:6379"
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 20
-
-    env:
-      DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/momo_result
-      DEV_MEMBER_IDS: member_ponta,member_akane_mami,member_otaka,member_eu
-      REDIS_URL: redis://127.0.0.1:6379/0
-
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: Set up Go runtime tool
-        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
-        with:
-          cache: false
-          go-version: 1.26.6
-
-      - name: Read pinned momo-db revision
-        id: momo-db
-        run: |
-          ref="$(tr -d '\r\n' < .momo-db-ref)"
-          [[ "${ref}" =~ ^[0-9a-f]{40}$ ]] || { echo "Invalid .momo-db-ref." >&2; exit 1; }
-          echo "ref=${ref}" >> "${GITHUB_OUTPUT}"
-
-      - name: Checkout momo-db migrations
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: ${{ github.repository_owner }}/momo-db
-          ref: ${{ steps.momo-db.outputs.ref }}
-          path: _deps/momo-db
-          token: ${{ github.token }}
-          sparse-checkout: drizzle
-          persist-credentials: false
-
-      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
-
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: 24
-          cache: pnpm
-
-      - name: Install web dependencies
-        run: pnpm install --frozen-lockfile
-        timeout-minutes: 5
-
-      - name: Install Playwright browser
-        run: pnpm --filter web exec playwright install --with-deps chromium
-        timeout-minutes: 10
-
-      - name: Check runtime config
-        run: scripts/ci/check-runtime-config.sh
-        timeout-minutes: 2
-
-      - name: Apply momo-db migrations
-        run: scripts/ci/apply-momo-db-migrations.sh
-        timeout-minutes: 5
-
-      - name: Setup Docker Buildx
-        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
-
-      - name: Build runtime image
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
-        env:
-          DOCKER_BUILD_RECORD_UPLOAD: "false"
-          DOCKER_BUILD_SUMMARY: "false"
-        with:
-          cache-from: type=gha,scope=momo-result-runtime-v1
-          cache-to: type=gha,mode=max,scope=momo-result-runtime-v1,ignore-error=true
-          context: .
-          load: true
-          tags: ${{ env.IMAGE_REF }}
-        timeout-minutes: 45
-
-      - name: Scan runtime image
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
-        with:
-          image-ref: ${{ env.IMAGE_REF }}
-          version: v0.73.0
-          severity: HIGH,CRITICAL
-          ignore-unfixed: true
-          format: table
-          exit-code: "1"
-        env:
-          TRIVY_DISABLE_VEX_NOTICE: "true"
-
-      - name: Validate runtime executables
-        run: scripts/ci/validate-runtime-image.sh
-        env:
-          MOMO_ORIGIN_LOCK_TOKEN: ${{ env.CI_DUMMY_ORIGIN_LOCK_TOKEN }}
-
-      - name: Start runtime container
-        run: scripts/ci/start-runtime-container.sh
-        env:
-          IMAGE_UPLOAD_STORAGE_MAX_USED_PERCENT: "100"
-          IMAGE_UPLOAD_STORAGE_MIN_FREE_BYTES: "1"
-          MOMO_ORIGIN_LOCK_TOKEN: ${{ env.CI_DUMMY_ORIGIN_LOCK_TOKEN }}
-          RUNTIME_CPU_LIMIT: "2"
-          RUNTIME_MEMORY_LIMIT: "512m"
-        timeout-minutes: 3
-
-      - name: Release DB contract preflight
-        run: docker exec momo-result-runtime /opt/momo-result/bin/momo-runtime-tool preflight
-        timeout-minutes: 1
-
-      - name: Runtime HTTP smoke
-        run: scripts/ci/runtime-smoke.sh
-        env:
-          MOMO_ORIGIN_LOCK_TOKEN: ${{ env.CI_DUMMY_ORIGIN_LOCK_TOKEN }}
-        timeout-minutes: 2
-
-      - name: Playwright E2E smoke
-        run: pnpm --filter web e2e:runtime
-        env:
-          PLAYWRIGHT_BASE_URL: http://127.0.0.1:8080
-        timeout-minutes: 10
-
-      - name: Runtime memory headroom smoke
-        run: scripts/ci/runtime-memory-smoke.sh
-        env:
-          MOMO_ORIGIN_LOCK_TOKEN: ${{ env.CI_DUMMY_ORIGIN_LOCK_TOKEN }}
-        timeout-minutes: 3
-
-      - name: Graceful runtime shutdown smoke
-        run: scripts/ci/runtime-shutdown-smoke.sh
-        timeout-minutes: 2
-
-      - name: Capture safe runtime diagnostics
-        if: failure()
-        run: >-
-          docker logs momo-result-runtime 2>&1 |
-          scripts/ci/summarize-runtime-logs.sh > runtime-container-summary.json || true
-
-      - name: Upload safe runtime diagnostics
-        if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: runtime-container-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
-          path: runtime-container-summary.json
-          if-no-files-found: ignore
-          retention-days: 7
-
-      - name: Upload Playwright report
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: playwright-report
-          path: apps/web/playwright-report/
-          if-no-files-found: ignore
-          retention-days: 7
-
-      - name: Stop runtime container
-        if: always()
-        run: docker rm -f momo-result-runtime || true
-
-  runtime-smoke:
-    name: Runtime smoke and E2E
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    needs: runtime-image
-    if: github.event_name != 'pull_request'
-
-    services:
-      postgres:
-        image: postgres:18-alpine
-        env:
-          POSTGRES_DB: momo_result
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_USER: postgres
-        ports:
-          - "5432:5432"
-        options: >-
-          --health-cmd "pg_isready -U postgres -d momo_result"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 20
-      redis:
-        image: redis:7-alpine
-        ports:
-          - "6379:6379"
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 20
-
-    env:
-      DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/momo_result
-      DEV_MEMBER_IDS: member_ponta,member_akane_mami,member_otaka,member_eu
-      IMAGE_ARTIFACT_NAME: ${{ needs.runtime-image.outputs.artifact_name }}
-      IMAGE_REF: ${{ needs.runtime-image.outputs.image_ref }}
-      REDIS_URL: redis://127.0.0.1:6379/0
-      RUNTIME_CANDIDATE_RUN_ATTEMPT: ${{ needs.runtime-image.outputs.run_attempt }}
-
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: Read pinned momo-db revision
-        id: momo-db
-        run: |
-          ref="$(tr -d '\r\n' < .momo-db-ref)"
-          [[ "${ref}" =~ ^[0-9a-f]{40}$ ]] || { echo "Invalid .momo-db-ref." >&2; exit 1; }
-          echo "ref=${ref}" >> "${GITHUB_OUTPUT}"
-
-      - name: Checkout momo-db migrations
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: ${{ github.repository_owner }}/momo-db
-          ref: ${{ steps.momo-db.outputs.ref }}
-          path: _deps/momo-db
-          token: ${{ github.token }}
-          sparse-checkout: drizzle
-          persist-credentials: false
-
-      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
-
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: 24
-          cache: pnpm
-
-      - name: Install web dependencies
-        run: pnpm install --frozen-lockfile
-        timeout-minutes: 5
-
-      - name: Install Playwright browser
-        run: pnpm --filter web exec playwright install --with-deps chromium
-        timeout-minutes: 10
-
-      - name: Download runtime image
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          artifact-ids: ${{ needs.runtime-image.outputs.artifact_id }}
-          path: ${{ env.IMAGE_ARTIFACT_NAME }}
-
-      - name: Load runtime image
-        run: scripts/ci/load-runtime-image-artifact.sh
-        timeout-minutes: 10
-
-      - name: Apply momo-db migrations
-        run: scripts/ci/apply-momo-db-migrations.sh
-        timeout-minutes: 5
-
-      - name: Start runtime container
-        run: scripts/ci/start-runtime-container.sh
-        env:
-          IMAGE_UPLOAD_STORAGE_MAX_USED_PERCENT: "100"
-          IMAGE_UPLOAD_STORAGE_MIN_FREE_BYTES: "1"
-          MOMO_ORIGIN_LOCK_TOKEN: ${{ env.CI_DUMMY_ORIGIN_LOCK_TOKEN }}
-          RUNTIME_CPU_LIMIT: "2"
-          RUNTIME_MEMORY_LIMIT: "512m"
-        timeout-minutes: 3
-
-      - name: Release DB contract preflight
-        run: docker exec momo-result-runtime /opt/momo-result/bin/momo-runtime-tool preflight
-        timeout-minutes: 1
-
-      - name: Runtime HTTP smoke
-        run: scripts/ci/runtime-smoke.sh
-        env:
-          MOMO_ORIGIN_LOCK_TOKEN: ${{ env.CI_DUMMY_ORIGIN_LOCK_TOKEN }}
-        timeout-minutes: 2
-
-      - name: Playwright E2E smoke
-        run: pnpm --filter web e2e:runtime
-        env:
-          PLAYWRIGHT_BASE_URL: http://127.0.0.1:8080
-        timeout-minutes: 10
-
-      - name: Runtime memory headroom smoke
-        run: scripts/ci/runtime-memory-smoke.sh
-        env:
-          MOMO_ORIGIN_LOCK_TOKEN: ${{ env.CI_DUMMY_ORIGIN_LOCK_TOKEN }}
-        timeout-minutes: 3
-
-      - name: Graceful runtime shutdown smoke
-        run: scripts/ci/runtime-shutdown-smoke.sh
-        timeout-minutes: 2
-
-      - name: Capture safe runtime diagnostics
-        if: failure()
-        run: >-
-          docker logs momo-result-runtime 2>&1 |
-          scripts/ci/summarize-runtime-logs.sh > runtime-container-summary.json || true
-
-      - name: Upload safe runtime diagnostics
-        if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: runtime-container-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
-          path: runtime-container-summary.json
-          if-no-files-found: ignore
-          retention-days: 7
-
-      - name: Upload Playwright report
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: playwright-report
-          path: apps/web/playwright-report/
-          if-no-files-found: ignore
-          retention-days: 7
-
-      - name: Stop runtime container
-        if: always()
-        run: docker rm -f momo-result-runtime || true
 
   release-ready:
     runs-on: ubuntu-latest
@@ -577,7 +367,6 @@ jobs:
       - web
       - dockerfile-lint
       - runtime-image
-      - runtime-smoke
     if: github.event_name != 'pull_request'
     env:
       IMAGE_REF: ${{ needs.runtime-image.outputs.image_ref }}
@@ -620,6 +409,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Download smoke-tested image
@@ -747,6 +537,12 @@ jobs:
           path: runtime-deployment-metadata/deployment.json
           if-no-files-found: error
           retention-days: 30
+
+      - name: Reject a stale runtime release
+        run: |
+          GIT_TERMINAL_PROMPT=0 git fetch --no-tags origin refs/heads/master
+          scripts/ci/validate-current-runtime-release.sh \
+            "${GITHUB_SHA}" "$(git rev-parse FETCH_HEAD)"
 
       - name: Deploy to Fly.io
         env:

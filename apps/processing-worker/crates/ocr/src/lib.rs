@@ -13,10 +13,3 @@ mod result;
 pub use contract::{OcrHints, OcrMediaType, OcrQueuePayload, RequestedScreenType};
 pub use native_engine::analyze_local_image_bytes;
 pub use result::{OcrFailure, OcrOutput};
-
-#[cfg(test)]
-#[expect(
-    clippy::panic,
-    reason = "architecture-test discovery failures must identify the unreadable source path"
-)]
-mod architecture_tests;

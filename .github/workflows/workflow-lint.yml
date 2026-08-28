@@ -2,6 +2,19 @@ name: workflow-lint
 
 on:
   workflow_call:
+    inputs:
+      actionlint:
+        required: false
+        default: true
+        type: boolean
+      go_tools:
+        required: false
+        default: true
+        type: boolean
+      policy_scripts:
+        required: false
+        default: true
+        type: boolean
 
 permissions:
   contents: read
@@ -11,6 +24,7 @@ jobs:
     name: actionlint
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    if: inputs.actionlint
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -21,10 +35,20 @@ jobs:
         env:
           ACTIONLINT_BIN: ${{ runner.temp }}/actionlint
         run: scripts/ci/actionlint.sh
+
+  go-tools:
+    name: Go tools
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: inputs.go_tools
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Set up Go tools
         uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
-          cache: false
+          cache-dependency-path: tools/go.sum
           go-version: 1.26.6
       - name: Test Go and zero-install diagnostic tools
         run: |
@@ -34,18 +58,23 @@ jobs:
           go install golang.org/x/vuln/cmd/govulncheck@v1.6.0
           govulncheck ./...
           ./test-linux-memory-snapshot.sh
+
+  policy-scripts:
+    name: Policy scripts
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: inputs.policy_scripts
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
       - name: Test workflow policy scripts
         run: |
-          scripts/ci/test-classify-changes.sh
-          scripts/ci/test-check-pr-ready.sh
-          scripts/ci/test-canonicalize-artifact-digest.sh
-          scripts/ci/test-validate-analysis-candidate.sh
-          scripts/ci/test-validate-analysis-worker-readiness.sh
-          scripts/ci/test-load-analysis-candidate.sh
-          scripts/ci/test-load-runtime-image-artifact.sh
-          scripts/ci/test-resolve-pushed-runtime-image.sh
-          scripts/ci/runtime-workflow-contracts.sh
-          scripts/ci/test-validate-runtime-release-selection.sh
-          scripts/ci/test-runtime-memory-smoke.sh
-          scripts/ci/test-sanitize-analysis-report.sh
-          scripts/ci/test-validate-runtime-deployment.sh
+          bash -n scripts/ci/*.sh
+          node --test scripts/dev-local.test.mjs
+          for test_script in scripts/ci/test-*.sh; do
+            "${test_script}"
+          done

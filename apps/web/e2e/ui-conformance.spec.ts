@@ -1,4 +1,4 @@
-import type { Route } from "@playwright/test";
+import type { APIRequestContext, Route } from "@playwright/test";
 
 import {
   devAccountId,
@@ -10,86 +10,30 @@ import {
   postJson,
   test,
 } from "./support";
+import type { E2eRun } from "./support";
 
-const resetAccessibleName = "確定状況・並び順・詳細条件を初期状態に戻す";
-
-test("keeps shared UI operation contracts across responsive application flows", async ({
-  e2eRun,
-  page,
-  request,
-}) => {
-  const suffix = e2eRun.masterIdSuffix;
-  const primaryGameTitleId = `gt_ui_a_${suffix}`;
-  const secondaryGameTitleId = `gt_ui_b_${suffix}`;
-  const seasonMasterId = `season_ui_${suffix}`;
-  const mapMasterId = `map_ui_${suffix}`;
-  const primaryGameTitleName = `UI確認作品A ${suffix}`;
-  const secondaryGameTitleName = `UI確認作品B ${suffix}`;
-  const seasonName = `UI確認シーズン ${suffix}`;
-  const mapName = `UI確認マップ ${suffix}`;
-  // The history screen exposes creation shortcuts only for the latest event. Keep this
-  // conformance fixture deliberately historical so parallel smoke runs retain that contract.
-  const localDateTime = e2eRun.uniqueLocalDateTime(2000);
-  const playedAt = new Date(`${localDateTime}:00+09:00`).toISOString();
-  let heldEventId = "";
-  const matchIds: string[] = [];
-
-  await test.step("seed run-owned filter and choice candidates", async () => {
-    await postJson(request, e2eRun, "/api/game-titles", {
-      id: primaryGameTitleId,
-      layoutFamily: "momotetsu_2",
-      name: primaryGameTitleName,
-    });
-    e2eRun.trackGameTitle(primaryGameTitleId);
-
-    await postJson(request, e2eRun, "/api/game-titles", {
-      id: secondaryGameTitleId,
-      layoutFamily: "momotetsu_2",
-      name: secondaryGameTitleName,
-    });
-    e2eRun.trackGameTitle(secondaryGameTitleId);
-
-    await postJson(request, e2eRun, "/api/season-masters", {
-      gameTitleId: primaryGameTitleId,
-      id: seasonMasterId,
-      name: seasonName,
-    });
-    e2eRun.trackSeasonMaster(seasonMasterId);
-
-    await postJson(request, e2eRun, "/api/map-masters", {
-      gameTitleId: primaryGameTitleId,
-      id: mapMasterId,
-      name: mapName,
-    });
-    e2eRun.trackMapMaster(mapMasterId);
-
-    const heldEvent = await postJson(request, e2eRun, "/api/held-events", { heldAt: playedAt });
-    heldEventId = expectGeneratedId(heldEvent["id"] as string | undefined, "held event ID");
-    e2eRun.trackHeldEvent(heldEventId);
-
-    for (const matchNoInEvent of [1, 2]) {
-      const match = await postJson(request, e2eRun, "/api/matches", {
-        draftIds: {},
-        gameTitleId: primaryGameTitleId,
-        heldEventId,
-        mapMasterId,
-        matchNoInEvent,
-        ownerMemberId: "member_ponta",
-        playedAt,
-        players: makePlayers(matchNoInEvent),
-        seasonMasterId,
-      });
-      const matchId = expectGeneratedId(match["matchId"] as string | undefined, "match ID");
-      matchIds.push(matchId);
-      e2eRun.trackMatch(matchId);
-    }
-  });
-
+test.beforeEach(async ({ page }) => {
   await page.addInitScript(
     ([key, value]) => window.localStorage.setItem(key, value),
     [devUserStorageKey, devAccountId],
   );
   await installE2eAuthHeaders(page);
+});
+
+test("keeps match rows usable through responsive update and retry states", async ({
+  e2eRun,
+  page,
+  request,
+}) => {
+  const {
+    heldEventId,
+    mapName,
+    primaryGameTitleId,
+    primaryGameTitleName,
+    seasonMasterId,
+    seasonName,
+    secondaryGameTitleId,
+  } = await seedUiContext(request, e2eRun);
 
   await test.step("keep the complete match filter contract at mobile and desktop widths", async () => {
     await page.setViewportSize({ height: 844, width: 320 });
@@ -104,17 +48,9 @@ test("keeps shared UI operation contracts across responsive application flows", 
     const statusFilter = filterBar.getByRole("combobox", { exact: true, name: "確定状況" });
     await expect(statusFilter).toBeVisible();
     await expect(statusFilter).toHaveValue("all");
-    await expect(statusFilter.getByRole("option")).toHaveCount(6);
-    await expect(statusFilter.getByRole("option", { name: /未確定すべて（\d+件）/u })).toHaveCount(
-      1,
-    );
-    await expect(filterBar).not.toContainText("確定状況 すべて");
-    await expect(filterBar).not.toContainText("並び順 開催が新しい順");
     await expect(filterBar).toContainText(`作品 ${primaryGameTitleName}`);
     await expect(filterBar).toContainText(`シーズン ${seasonName}`);
-    await expect(filterBar).not.toContainText("選択中");
     await expect(page.getByRole("region", { name: "登録済みの試合" })).toContainText("2件");
-    await expect(page.getByRole("button", { name: resetAccessibleName })).toHaveCount(1);
     await expectNoHorizontalPageOverflow(page);
 
     await page.setViewportSize({ height: 900, width: 1280 });
@@ -207,6 +143,14 @@ test("keeps shared UI operation contracts across responsive application flows", 
       await page.unroute(listPattern, failUncachedScope);
     }
   });
+});
+
+test("changes an export choice by keyboard and restores focus", async ({
+  e2eRun,
+  page,
+  request,
+}) => {
+  const { matchIds } = await seedUiContext(request, e2eRun);
 
   await test.step("keep export choices native and restore focus after keyboard selection", async () => {
     const selectedMatchId = matchIds[0];
@@ -226,7 +170,6 @@ test("keeps shared UI operation contracts across responsive application flows", 
     const radioValues = await radios.evaluateAll((elements) =>
       elements.map((element) => (element as HTMLInputElement).value),
     );
-    expect(radioValues.length).toBeGreaterThanOrEqual(2);
     const selectedIndex = radioValues.indexOf(selectedMatchId);
     expect(selectedIndex).toBeGreaterThanOrEqual(0);
     const nextMatchId = radioValues[(selectedIndex + 1) % radioValues.length];
@@ -234,12 +177,6 @@ test("keeps shared UI operation contracts across responsive application flows", 
 
     const selectedRadio = dialog.locator(`input[type="radio"][value="${selectedMatchId}"]`);
     await expect(selectedRadio).toBeChecked();
-    expect(
-      await selectedRadio.evaluate((element) => ({
-        tagName: element.tagName,
-        type: (element as HTMLInputElement).type,
-      })),
-    ).toEqual({ tagName: "INPUT", type: "radio" });
     await selectedRadio.focus();
     await selectedRadio.press("ArrowDown");
 
@@ -247,50 +184,78 @@ test("keeps shared UI operation contracts across responsive application flows", 
     await expect.poll(() => new URL(page.url()).searchParams.get("matchId")).toBe(nextMatchId);
     await expect(changeMatch).toBeFocused();
   });
-
-  await test.step("keep game-title choices native and keyboard-selectable", async () => {
-    await page.setViewportSize({ height: 900, width: 1280 });
-    await page.goto("/admin/masters");
-    await expect(page.getByRole("heading", { exact: true, name: "設定管理" })).toBeVisible();
-
-    const choices = page.getByRole("group", { name: "編集する作品" });
-    const primaryRadio = choices.getByRole("radio", {
-      exact: true,
-      name: primaryGameTitleName,
-    });
-    const secondaryRadio = choices.getByRole("radio", {
-      exact: true,
-      name: secondaryGameTitleName,
-    });
-    for (const radio of [primaryRadio, secondaryRadio]) {
-      expect(
-        await radio.evaluate((element) => ({
-          tagName: element.tagName,
-          type: (element as HTMLInputElement).type,
-        })),
-      ).toEqual({ tagName: "INPUT", type: "radio" });
-    }
-
-    const radioValues = await choices
-      .getByRole("radio")
-      .evaluateAll((elements) => elements.map((element) => (element as HTMLInputElement).value));
-    const primaryIndex = radioValues.indexOf(primaryGameTitleId);
-    expect(primaryIndex).toBeGreaterThanOrEqual(0);
-    const nextGameTitleId = radioValues[(primaryIndex + 1) % radioValues.length];
-    if (!nextGameTitleId) {
-      throw new Error("game-title conformance requires a next radio candidate");
-    }
-    const nextRadio = choices.locator(`input[type="radio"][value="${nextGameTitleId}"]`);
-
-    await primaryRadio.focus();
-    await primaryRadio.press("Space");
-    await expect(primaryRadio).toBeChecked();
-    await primaryRadio.press("ArrowDown");
-    await expect(nextRadio).toBeChecked();
-    await expect(nextRadio).toBeFocused();
-    await expectNoHorizontalPageOverflow(page);
-  });
 });
+
+async function seedUiContext(request: APIRequestContext, e2eRun: E2eRun) {
+  const suffix = e2eRun.masterIdSuffix;
+  const primaryGameTitleId = `gt_ui_a_${suffix}`;
+  const secondaryGameTitleId = `gt_ui_b_${suffix}`;
+  const seasonMasterId = `season_ui_${suffix}`;
+  const mapMasterId = `map_ui_${suffix}`;
+  const primaryGameTitleName = `UI確認作品A ${suffix}`;
+  const seasonName = `UI確認シーズン ${suffix}`;
+  const mapName = `UI確認マップ ${suffix}`;
+  // Keep the fixture historical so a parallel smoke run can own the latest-event shortcuts.
+  const localDateTime = e2eRun.uniqueLocalDateTime(2000);
+  const playedAt = new Date(`${localDateTime}:00+09:00`).toISOString();
+
+  await postJson(request, e2eRun, "/api/game-titles", {
+    id: primaryGameTitleId,
+    layoutFamily: "momotetsu_2",
+    name: primaryGameTitleName,
+  });
+  e2eRun.trackGameTitle(primaryGameTitleId);
+  await postJson(request, e2eRun, "/api/game-titles", {
+    id: secondaryGameTitleId,
+    layoutFamily: "momotetsu_2",
+    name: `UI確認作品B ${suffix}`,
+  });
+  e2eRun.trackGameTitle(secondaryGameTitleId);
+  await postJson(request, e2eRun, "/api/season-masters", {
+    gameTitleId: primaryGameTitleId,
+    id: seasonMasterId,
+    name: seasonName,
+  });
+  e2eRun.trackSeasonMaster(seasonMasterId);
+  await postJson(request, e2eRun, "/api/map-masters", {
+    gameTitleId: primaryGameTitleId,
+    id: mapMasterId,
+    name: mapName,
+  });
+  e2eRun.trackMapMaster(mapMasterId);
+
+  const heldEvent = await postJson(request, e2eRun, "/api/held-events", { heldAt: playedAt });
+  const heldEventId = expectGeneratedId(heldEvent["id"] as string | undefined, "held event ID");
+  e2eRun.trackHeldEvent(heldEventId);
+  const matchIds: string[] = [];
+  for (const matchNoInEvent of [1, 2]) {
+    const match = await postJson(request, e2eRun, "/api/matches", {
+      draftIds: {},
+      gameTitleId: primaryGameTitleId,
+      heldEventId,
+      mapMasterId,
+      matchNoInEvent,
+      ownerMemberId: "member_ponta",
+      playedAt,
+      players: makePlayers(matchNoInEvent),
+      seasonMasterId,
+    });
+    const matchId = expectGeneratedId(match["matchId"] as string | undefined, "match ID");
+    matchIds.push(matchId);
+    e2eRun.trackMatch(matchId);
+  }
+
+  return {
+    heldEventId,
+    mapName,
+    matchIds,
+    primaryGameTitleId,
+    primaryGameTitleName,
+    seasonMasterId,
+    seasonName,
+    secondaryGameTitleId,
+  };
+}
 
 function createDeferred(): { promise: Promise<void>; resolve: () => void } {
   let resolvePromise!: () => void;

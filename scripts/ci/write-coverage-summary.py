@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import math
 import sys
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
@@ -54,22 +53,12 @@ def main() -> int:
                 "pct": round(metric.pct, 1),
                 "covered": metric.covered,
                 "total": metric.total,
-                "roundedBaseline": rounded_baseline(metric.pct),
             }
             for name, metric in metrics.items()
         },
     }
-    rounded_summary = {
-        "generatedAt": raw_summary["generatedAt"],
-        "subsystem": args.subsystem,
-        "status": status,
-        "metrics": {
-            name: value["roundedBaseline"] for name, value in raw_summary["metrics"].items()
-        },
-    }
 
     write_json(out_dir / "raw-summary.json", raw_summary)
-    write_json(out_dir / "rounded-baseline.json", rounded_summary)
     (out_dir / "summary.md").write_text(render_markdown(raw_summary), encoding="utf-8")
     return 0
 
@@ -132,12 +121,6 @@ def istanbul_metric(value: dict[str, Any]) -> Metric:
     return Metric(pct=float(value["pct"]), covered=int(value["covered"]), total=int(value["total"]))
 
 
-def rounded_baseline(pct: float) -> int:
-    if pct >= 99.5:
-        return 100
-    return int(math.floor(pct / 5) * 5)
-
-
 def read_json(path: Path) -> dict[str, Any]:
     if not path.exists():
         raise FileNotFoundError(f"Coverage report not found: {path}")
@@ -156,15 +139,15 @@ def render_markdown(summary: dict[str, Any]) -> str:
     lines = [
         title,
         "",
-        "| Metric | Raw | Rounded baseline candidate | Covered / Total |",
-        "|---|---:|---:|---:|",
+        "| Metric | Coverage | Covered / Total |",
+        "|---|---:|---:|",
     ]
     for name, metric in summary["metrics"].items():
         covered = metric["covered"]
         total = metric["total"]
         covered_total = "-" if covered is None or total is None else f"{covered} / {total}"
         lines.append(
-            f"| {name} | {metric['pct']:.1f}% | {metric['roundedBaseline']}% | {covered_total} |"
+            f"| {name} | {metric['pct']:.1f}% | {covered_total} |"
         )
     lines.append("")
     return "\n".join(lines)

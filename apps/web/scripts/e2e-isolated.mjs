@@ -2,21 +2,22 @@
 import { spawn } from "node:child_process";
 import { once } from "node:events";
 import { existsSync } from "node:fs";
-import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readdir, rm } from "node:fs/promises";
 import { createServer } from "node:net";
 import { homedir, tmpdir } from "node:os";
-import { basename, dirname, join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 configureDockerHost();
 const { GenericContainer, Wait } = await import("testcontainers");
 
-const POSTGRES_IMAGE = process.env["MOMO_E2E_POSTGRES_IMAGE"] ?? "postgres:16-alpine";
+const POSTGRES_IMAGE = process.env["MOMO_E2E_POSTGRES_IMAGE"] ?? "postgres:18-alpine";
 const REDIS_IMAGE = process.env["MOMO_E2E_REDIS_IMAGE"] ?? "redis:7-alpine";
 const POSTGRES_DB = "momo_result";
 const POSTGRES_USER = "postgres";
 const POSTGRES_PASSWORD = "postgres";
 const DEV_MEMBER_IDS = "member_ponta,member_akane_mami,member_otaka,member_eu";
+const E2E_MUTATION_RATE_LIMIT_PER_MINUTE = "240";
 const API_START_TIMEOUT_MS = 240_000;
 const PROCESS_STOP_TIMEOUT_MS = 10_000;
 
@@ -24,7 +25,70 @@ const scriptDir = dirname(fileURLToPath(import.meta.url));
 const webDir = resolve(scriptDir, "..");
 const repoRoot = resolve(webDir, "../..");
 const apiDir = resolve(repoRoot, "apps/api");
+const migrationScript = resolve(repoRoot, "scripts/ci/apply-momo-db-migrations.sh");
 const playwrightArgs = process.argv.slice(2);
+
+const toolEnvironmentNames = [
+  "ALL_PROXY",
+  "CI",
+  "COLORTERM",
+  "COMSPEC",
+  "COURSIER_CACHE",
+  "COURSIER_REPOSITORIES",
+  "CURL_CA_BUNDLE",
+  "DEVELOPER_DIR",
+  "FORCE_COLOR",
+  "GIT_SSL_CAINFO",
+  "HOME",
+  "HTTPS_PROXY",
+  "HTTP_PROXY",
+  "IVY_HOME",
+  "JAVA_HOME",
+  "JAVA_OPTS",
+  "JAVA_TOOL_OPTIONS",
+  "JDK_JAVA_OPTIONS",
+  "LANG",
+  "LC_ALL",
+  "LOGNAME",
+  "MAVEN_OPTS",
+  "NODE_EXTRA_CA_CERTS",
+  "NODE_OPTIONS",
+  "NO_COLOR",
+  "NO_PROXY",
+  "NPM_CONFIG_CAFILE",
+  "PATH",
+  "Path",
+  "PATHEXT",
+  "PLAYWRIGHT_BROWSERS_PATH",
+  "PLAYWRIGHT_WORKERS",
+  "PNPM_HOME",
+  "PWDEBUG",
+  "REQUESTS_CA_BUNDLE",
+  "SBT_HOME",
+  "SBT_OPTS",
+  "SCALA_HOME",
+  "SDKROOT",
+  "SSL_CERT_DIR",
+  "SSL_CERT_FILE",
+  "SystemRoot",
+  "TEMP",
+  "TERM",
+  "TMP",
+  "TMPDIR",
+  "TZ",
+  "USER",
+  "USERPROFILE",
+  "XDG_CACHE_HOME",
+  "XDG_CONFIG_HOME",
+  "XDG_DATA_HOME",
+  "XDG_RUNTIME_DIR",
+  "_JAVA_OPTIONS",
+  "all_proxy",
+  "https_proxy",
+  "http_proxy",
+  "no_proxy",
+  "npm_config_cafile",
+];
 
 const resources = {
   apiProcess: undefined,
@@ -55,9 +119,8 @@ async function run() {
   resources.imageTmpDir = await mkdtemp(join(tmpdir(), "momo-result-e2e-images-"));
 
   console.log("Starting isolated E2E dependencies with Testcontainers.");
-  resources.postgres = await startPostgres();
+  await startDependencies();
   await applyMigrations(resources.postgres);
-  resources.redis = await startRedis();
 
   const databaseUrl = `postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${resources.postgres.getHost()}:${resources.postgres.getMappedPort(
     5432,
@@ -78,6 +141,26 @@ async function run() {
     apiBaseUrl,
     webBaseUrl,
   });
+}
+
+async function startDependencies() {
+  const [postgresResult, redisResult] = await Promise.allSettled([startPostgres(), startRedis()]);
+  const failures = [];
+
+  if (postgresResult.status === "fulfilled") {
+    resources.postgres = postgresResult.value;
+  } else {
+    failures.push(postgresResult.reason);
+  }
+  if (redisResult.status === "fulfilled") {
+    resources.redis = redisResult.value;
+  } else {
+    failures.push(redisResult.reason);
+  }
+
+  if (failures.length > 0) {
+    throw new AggregateError(failures, "Failed to start isolated E2E dependencies.");
+  }
 }
 
 async function startPostgres() {
@@ -103,39 +186,21 @@ async function startRedis() {
 
 async function applyMigrations(postgres) {
   const migrationsDir = await resolveMigrationsDir();
-  const migrationFiles = (await readdir(migrationsDir))
-    .filter((name) => /^\d{4}_.+\.sql$/u.test(name))
-    .toSorted()
-    .map((name) => join(migrationsDir, name));
-
-  if (migrationFiles.length === 0) {
-    throw new Error(`No momo-db migration SQL files found in ${migrationsDir}.`);
-  }
-
-  console.log(`Applying ${migrationFiles.length} momo-db migrations from ${migrationsDir}.`);
-  await expectContainerExec(postgres, ["mkdir", "-p", "/tmp/momo-db-migrations"], "mkdir");
-
-  for (const migrationFile of migrationFiles) {
-    const target = `/tmp/momo-db-migrations/${basename(migrationFile)}`;
-    await postgres.copyContentToContainer([
-      {
-        content: await readFile(migrationFile),
-        target,
-      },
-    ]);
-    await expectContainerExec(
-      postgres,
-      [
-        "psql",
-        `postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@127.0.0.1:5432/${POSTGRES_DB}`,
-        "-v",
-        "ON_ERROR_STOP=1",
-        "-f",
-        target,
-      ],
-      basename(migrationFile),
-    );
-  }
+  await runCommand(migrationScript, [], {
+    cwd: repoRoot,
+    env: childEnvironment({
+      DATABASE_URL: `postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@127.0.0.1:5432/${POSTGRES_DB}`,
+      DOCKER_API_VERSION: process.env["DOCKER_API_VERSION"],
+      DOCKER_CERT_PATH: process.env["DOCKER_CERT_PATH"],
+      DOCKER_CONFIG: process.env["DOCKER_CONFIG"],
+      DOCKER_CONTEXT: process.env["DOCKER_CONTEXT"],
+      DOCKER_HOST: process.env["DOCKER_HOST"],
+      DOCKER_TLS_VERIFY: process.env["DOCKER_TLS_VERIFY"],
+      MOMO_DB_MIGRATIONS_DIR: migrationsDir,
+      POSTGRES_CONTAINER: postgres.getId(),
+    }),
+    label: "momo-db migrations",
+  });
 }
 
 async function resolveMigrationsDir() {
@@ -166,31 +231,23 @@ async function resolveMigrationsDir() {
   );
 }
 
-async function expectContainerExec(container, command, label) {
-  const result = await container.exec(command);
-  if (result.exitCode !== 0) {
-    throw new Error(
-      `${label} failed with exit code ${result.exitCode}\n${result.stdout}${result.stderr}`,
-    );
-  }
-}
-
 function startApi({ apiPort, databaseUrl, imageTmpDir, redisUrl }) {
   const logs = createRingBuffer(240);
   const child = spawn("sbt", ["run"], {
     cwd: apiDir,
     detached: process.platform !== "win32",
-    env: {
-      ...process.env,
+    env: childEnvironment({
       APP_ENV: "dev",
       DATABASE_URL: databaseUrl,
       DEV_MEMBER_IDS: process.env["DEV_MEMBER_IDS"] ?? DEV_MEMBER_IDS,
       HTTP_HOST: "127.0.0.1",
       HTTP_PORT: String(apiPort),
       IMAGE_TMP_DIR: imageTmpDir,
+      MOMO_HTTP4S_PATCHED_VERSION: process.env["MOMO_HTTP4S_PATCHED_VERSION"],
       MOMO_LOG_FORMAT: process.env["MOMO_LOG_FORMAT"] ?? "text",
+      MUTATION_RATE_LIMIT_PER_MINUTE: E2E_MUTATION_RATE_LIMIT_PER_MINUTE,
       REDIS_URL: redisUrl,
-    },
+    }),
     stdio: ["ignore", "pipe", "pipe"],
   });
 
@@ -239,12 +296,11 @@ function runPlaywright({ apiBaseUrl, webBaseUrl }) {
   return new Promise((resolveRun) => {
     const child = spawn("pnpm", ["exec", "playwright", "test", ...playwrightArgs], {
       cwd: webDir,
-      env: {
-        ...process.env,
+      env: childEnvironment({
         PLAYWRIGHT_BASE_URL: webBaseUrl,
         PLAYWRIGHT_SKIP_WEB_SERVER: "0",
         VITE_API_PROXY_TARGET: apiBaseUrl,
-      },
+      }),
       stdio: "inherit",
     });
     child.once("exit", (code, signal) => {
@@ -264,11 +320,13 @@ async function cleanup() {
   cleanupStarted = true;
 
   await stopProcessGroup(resources.apiProcess);
-  await stopContainer(resources.redis);
-  await stopContainer(resources.postgres);
-  if (resources.imageTmpDir) {
-    await rm(resources.imageTmpDir, { force: true, recursive: true });
-  }
+  await Promise.all([
+    stopContainer(resources.redis),
+    stopContainer(resources.postgres),
+    resources.imageTmpDir
+      ? rm(resources.imageTmpDir, { force: true, recursive: true })
+      : Promise.resolve(),
+  ]);
 }
 
 async function stopContainer(container) {
@@ -354,6 +412,34 @@ function findFreePort() {
 function delay(ms) {
   return new Promise((resolveDelay) => {
     setTimeout(resolveDelay, ms);
+  });
+}
+
+function childEnvironment(additions) {
+  const environment = {};
+  for (const name of toolEnvironmentNames) {
+    const value = process.env[name];
+    if (value !== undefined) environment[name] = value;
+  }
+  for (const [name, value] of Object.entries(additions)) {
+    if (value !== undefined) environment[name] = value;
+  }
+  return environment;
+}
+
+function runCommand(command, args, { cwd, env, label }) {
+  return new Promise((resolveCommand, rejectCommand) => {
+    const child = spawn(command, args, { cwd, env, stdio: "inherit" });
+    child.once("error", rejectCommand);
+    child.once("exit", (code, signal) => {
+      if (signal) {
+        rejectCommand(new Error(`${label} exited after signal ${signal}.`));
+      } else if (code === 0) {
+        resolveCommand();
+      } else {
+        rejectCommand(new Error(`${label} exited with code ${code ?? "unknown"}.`));
+      }
+    });
   });
 }
 

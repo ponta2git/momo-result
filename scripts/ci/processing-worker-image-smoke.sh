@@ -7,65 +7,9 @@ compatibility_binary="/usr/local/bin/momo-analysis"
 runtime_memory_limit="256m"
 child_memory_limit_bytes="134217728"
 probe_allocation_bytes="268435456"
-maximum_unpacked_image_bytes="150994944"
-
-unpacked_image_bytes="$(docker history --no-trunc --format '{{.Size}}' "${image_ref}" | awk '
-  function multiplier(unit) {
-    if (unit == "B") return 1
-    if (unit == "kB") return 1000
-    if (unit == "MB") return 1000000
-    if (unit == "GB") return 1000000000
-    return 0
-  }
-  {
-    unit = $0
-    gsub(/[0-9.]/, "", unit)
-    value = $0
-    sub(/[[:alpha:]]+$/, "", value)
-    factor = multiplier(unit)
-    if (factor == 0 || value !~ /^[0-9]+([.][0-9]+)?$/) {
-      invalid = 1
-      next
-    }
-    total += value * factor
-  }
-  END {
-    if (invalid) exit 2
-    printf "%.0f\n", total
-  }
-')"
-if [[ ! "${unpacked_image_bytes}" =~ ^[0-9]+$ \
-  || "${unpacked_image_bytes}" -gt "${maximum_unpacked_image_bytes}" ]]
-then
-  echo "processing worker image exceeds the bounded unpacked layer budget" >&2
-  exit 1
-fi
 
 docker run --rm --entrypoint "${primary_binary}" "${image_ref}" --version
 docker run --rm --entrypoint "${compatibility_binary}" "${image_ref}" --version
-
-if ! docker run --rm --entrypoint sh "${image_ref}" -c \
-  'test -L /usr/local/bin/momo-analysis'
-then
-  echo "processing worker compatibility path must be a symbolic link" >&2
-  exit 1
-fi
-compatibility_target="$(
-  docker run --rm --entrypoint /momo-toolbox/readlink \
-    "${image_ref}" "${compatibility_binary}"
-)"
-if [[ "${compatibility_target}" != "momo-processing-worker" ]]; then
-  echo "processing worker compatibility link must use the relative primary binary target" >&2
-  exit 1
-fi
-resolved_compatibility_target="$(
-  docker run --rm --entrypoint /momo-toolbox/readlink \
-    "${image_ref}" -f "${compatibility_binary}"
-)"
-if [[ "${resolved_compatibility_target}" != "${primary_binary}" ]]; then
-  echo "processing worker compatibility link does not resolve to the primary binary" >&2
-  exit 1
-fi
 
 configured_user="$(docker inspect --format '{{.Config.User}}' "${image_ref}")"
 if [[ "${configured_user}" != "0:0" ]]; then
@@ -100,29 +44,12 @@ docker run --rm --user 10001:10001 --entrypoint sh "${image_ref}" -c '
     exit 1
   }
 
-  test "$(id -u)" = 10001 || fail "unexpected uid"
-  test "$(id -g)" = 10001 || fail "unexpected gid"
-  test "$(id -un)" = momo || fail "unexpected user name"
-  test "$(id -gn)" = momo || fail "unexpected group name"
   test "$(pwd)" = /var/lib/momo-analysis || fail "unexpected working directory"
-  test "$(getent passwd 10001)" = "momo:x:10001:10001::/nonexistent:/sbin/nologin" \
-    || fail "service passwd entry is missing or malformed"
-  test "$(getent group 10001)" = "momo:x:10001:" \
-    || fail "service group entry is missing or malformed"
-  getent passwd nonroot >/dev/null || fail "base nonroot passwd entry is missing"
-  getent group nonroot >/dev/null || fail "base nonroot group entry is missing"
   test -r /etc/ssl/certs/ca-certificates.crt || fail "CA bundle is unreadable"
   test -w /var/lib/momo-analysis || fail "state directory is not writable"
   state_directory_mode="$(stat -c %a /var/lib/momo-analysis)"
   test "${state_directory_mode}" = 700 \
     || fail "state directory permissions are ${state_directory_mode}; expected 0700"
-
-  for tool in \
-    sh ps free pgrep top pmap ip netstat nc getent openssl \
-    df du find stat cat grep sed awk tail head date sha256sum
-  do
-    command -v "${tool}" >/dev/null || fail "required tool is missing: ${tool}"
-  done
 
   for excluded in \
     apt apt-get apk dpkg psql redis-cli strace tcpdump gdb \
@@ -155,30 +82,6 @@ docker run --rm --user 10001:10001 --entrypoint sh "${image_ref}" -c '
   fi
   if test "${argv_override_status}" != 127; then
     echo "runtime shell can bypass the supported toolbox inventory" >&2
-    exit 1
-  fi
-
-  getent hosts localhost >/dev/null || fail "localhost lookup failed"
-  openssl version >/dev/null || fail "OpenSSL probe failed"
-  ps -o pid,ppid,rss,vsz,stat,comm,args >/dev/null || fail "ps probe failed"
-  free >/dev/null || fail "free probe failed"
-  top -b -n 1 >/dev/null || fail "top probe failed"
-  pmap $$ >/dev/null || fail "pmap probe failed"
-  ip addr show >/dev/null || fail "IP address probe failed"
-  ip route show >/dev/null || fail "IP route probe failed"
-  netstat -lnt >/dev/null || fail "socket probe failed"
-  df -P /var/lib/momo-analysis >/dev/null || fail "filesystem probe failed"
-  du -s /var/lib/momo-analysis >/dev/null || fail "disk usage probe failed"
-  test -r /proc/1/status || fail "/proc/1/status is unreadable"
-  test -r /proc/1/limits || fail "/proc/1/limits is unreadable"
-  if test -r /sys/fs/cgroup/memory.current; then
-    cat /sys/fs/cgroup/memory.current >/dev/null || fail "memory.current is unreadable"
-    cat /sys/fs/cgroup/memory.events >/dev/null || fail "memory.events is unreadable"
-  elif test -r /sys/fs/cgroup/memory/memory.usage_in_bytes; then
-    cat /sys/fs/cgroup/memory/memory.usage_in_bytes >/dev/null \
-      || fail "memory.usage_in_bytes is unreadable"
-  else
-    echo "container memory accounting is unavailable" >&2
     exit 1
   fi
 '

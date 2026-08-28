@@ -1,1 +1,0 @@
-series-analysis-control-plane-smoke.sh

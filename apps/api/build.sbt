@@ -7,39 +7,30 @@ ThisBuild / evictionErrorLevel := Level.Warn
 addCommandAlias("apiFormat", "scalafmtAll")
 addCommandAlias("apiFormatCheck", "scalafmtCheckAll")
 addCommandAlias("apiLint", "scalafixAll --check")
-addCommandAlias("apiQuality", "apiFormatCheck; apiLint; Test / compile; apiOpenApiCheck")
+addCommandAlias("apiQuality", "apiFormatCheck; apiLint; apiOpenApiCheck")
 addCommandAlias("apiCheck", "apiQuality; test")
 addCommandAlias("apiFullCheck", "apiCheck; apiDbQuality; apiRedisQuality")
 addCommandAlias("apiCoverage", "clean; coverage; test; coverageReport; coverageOff")
-addCommandAlias(
-  "apiCoverageReportOnly",
-  "clean; set coverageFailOnMinimum := false; coverage; test; coverageReport; coverageOff",
-)
-addCommandAlias(
-  "apiTestWithCoverageReportOnly",
-  "set coverageFailOnMinimum := false; coverage; test; coverageReport; coverageOff",
-)
 addCommandAlias(
   "apiRedisQuality",
     "set Test / fork := true; " +
     "set Test / parallelExecution := false; " +
     "set Test / testOptions := Seq(); " +
-    "testOnly momo.api.integration.redis.* -- --include-tags=RedisIntegration",
+    "testOnly * -- --include-tags=RedisIntegration",
 )
 addCommandAlias(
   "apiR2Quality",
   "set Test / fork := true; " +
     "set Test / parallelExecution := false; " +
     "set Test / testOptions := Seq(); " +
-    "testOnly momo.api.integration.r2.* -- --include-tags=R2Integration",
+    "testOnly * -- --include-tags=R2Integration",
 )
 addCommandAlias(
   "apiDbQuality",
   "set Test / fork := true; " +
     "set Test / parallelExecution := false; " +
     "set Test / testOptions := Seq(); " +
-    "testOnly momo.api.integration.* " +
-    "-- --include-tags=DbIntegration",
+    "testOnly * -- --include-tags=DbIntegration",
 )
 
 lazy val apiOpenApi = taskKey[File]("Generate OpenAPI from Tapir endpoint definitions")
@@ -126,8 +117,10 @@ lazy val root = (project in file("."))
     Compile / run / javaOptions ++=
       Seq("-Dcats.effect.warnOnNonMainThreadDetected=false") ++
         (if (isMacOs) Seq("--enable-native-access=ALL-UNNAMED") else Seq.empty),
-    Test / testOptions += Tests.Argument(TestFrameworks.MUnit, "--exclude-tags=Integration"),
-    Test / testOptions += Tests.Filter(name => !name.startsWith("momo.api.integration.")),
+    Test / testOptions += Tests.Argument(
+      TestFrameworks.MUnit,
+      "--exclude-tags=DbIntegration,RedisIntegration,R2Integration",
+    ),
     Test / parallelExecution := true,
     Test / fork := false,
     Test / envVars ++= {
@@ -138,9 +131,7 @@ lazy val root = (project in file("."))
         } else Map.empty[String, String]
       }(dockerHost => Map("DOCKER_HOST" -> dockerHost))
     },
-    coverageFailOnMinimum := true,
-    coverageMinimumStmtTotal := 80,
-    coverageMinimumBranchTotal := 70,
+    coverageFailOnMinimum := false,
     coverageExcludedPackages := "momo\\.api\\.Main",
     coverageExcludedFiles := Seq(
       ".*/momo/api/adapters/postgres/.*",

@@ -275,6 +275,7 @@ describe("ExportPage", () => {
   it("keeps the selected export target available while paging and revalidating it", async () => {
     const requestedPages: number[] = [];
     const detailGate = createDeferred();
+    const pageGate = createDeferred();
     let detailRequested = false;
     const allEvents = Array.from({ length: 21 }, (_, index) => ({
       draftCount: 0,
@@ -284,12 +285,13 @@ describe("ExportPage", () => {
       nextMatchNo: index + 2,
     }));
     server.use(
-      http.get("/api/held-events", ({ request }) => {
+      http.get("/api/held-events", async ({ request }) => {
         const url = new URL(request.url);
         const page = Number(url.searchParams.get("page") ?? "1");
         const pageSize = Number(url.searchParams.get("pageSize") ?? "20");
         const offset = (page - 1) * pageSize;
         requestedPages.push(page);
+        if (page === 2) await pageGate.promise;
         return HttpResponse.json({
           items: allEvents.slice(offset, offset + pageSize),
           pagination: {
@@ -324,6 +326,15 @@ describe("ExportPage", () => {
     expect(screen.getByText("1〜20件／全21件")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "次のページへ" }));
+    expect(await screen.findByRole("status")).toHaveTextContent("開催候補を更新中");
+    expect(screen.getByText("1〜20件／全21件")).toBeInTheDocument();
+    expect(
+      screen.getByRole("navigation", { name: "開催候補のページネーション" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "ダイアログを閉じる" })).toBeEnabled();
+    expect(screen.queryByText("出力対象を確認しています。")).not.toBeInTheDocument();
+    pageGate.resolve();
+
     const lastEvent = await screen.findByRole("radio", { name: /21試合/u });
     expect(requestedPages).toEqual([1, 2]);
     expect(screen.getByText("21〜21件／全21件")).toBeInTheDocument();
@@ -345,13 +356,15 @@ describe("ExportPage", () => {
 
   it("resolves a match deep link outside the current candidate page", async () => {
     const requestedCursors: Array<string | null> = [];
+    const pageGate = createDeferred();
     server.use(
-      http.get("/api/matches", ({ request }) => {
+      http.get("/api/matches", async ({ request }) => {
         const url = new URL(request.url);
         const cursor = url.searchParams.get("cursor");
         requestedCursors.push(cursor);
         const page = cursor === "candidate-last" ? 2 : 1;
         const pageSize = Number(url.searchParams.get("pageSize") ?? "20");
+        if (page === 2) await pageGate.promise;
         const allMatches = Array.from({ length: 21 }, (_, index) => ({
           createdAt: "2026-01-01T00:00:00.000Z",
           heldEventId: "held-1",
@@ -405,6 +418,15 @@ describe("ExportPage", () => {
     await user.click(screen.getByRole("button", { name: "試合を変更" }));
     expectSingleCandidateScrollRegion("試合");
     await user.click(screen.getByRole("button", { name: "次のページへ" }));
+    expect(await screen.findByRole("status")).toHaveTextContent("試合候補を更新中");
+    expect(screen.getByText("1〜20件／全21件")).toBeInTheDocument();
+    expect(
+      screen.getByRole("navigation", { name: "試合候補のページネーション" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "ダイアログを閉じる" })).toBeEnabled();
+    expect(screen.queryByText("出力対象を確認しています。")).not.toBeInTheDocument();
+    pageGate.resolve();
+
     expect(await screen.findByRole("radio", { name: /第21試合/u })).toBeChecked();
     expect(requestedCursors).toEqual([null, "candidate-last"]);
   });

@@ -20,6 +20,7 @@ type ExportCandidateSelectProps = {
   onSelectedCandidateRetry: () => void;
   onScopeChange: (scope: ExportScope) => void;
   refreshing?: boolean;
+  scopeChanging?: boolean;
   scope: ExportScope;
   view: ExportCandidateView;
 };
@@ -39,6 +40,7 @@ export function ExportCandidateSelect({
   onSelectedCandidateRetry,
   onScopeChange,
   refreshing = false,
+  scopeChanging = false,
   scope,
   view,
 }: ExportCandidateSelectProps) {
@@ -115,6 +117,7 @@ export function ExportCandidateSelect({
           disabled={disabled}
           recovery={view.selectionState === "not-found"}
           refreshing={refreshing}
+          scopeChanging={scopeChanging}
           scope={scope}
           view={view}
           onChange={onChange}
@@ -152,7 +155,7 @@ export function ExportCandidateSelect({
   return (
     <div className="grid gap-2">
       {selector}
-      {refreshing ? (
+      {refreshing && !scopeChanging ? (
         <p className="text-sm text-[var(--color-text-secondary)]" role="status">
           出力対象を確認しています。
         </p>

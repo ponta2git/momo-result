@@ -50,8 +50,9 @@ export function ExportWorkspace({ model }: ExportWorkspaceProps) {
           onChange={conditions.changeScope}
         >
           <ExportCandidateSelect
-            disabled={download.pending || view.candidateRefreshing}
+            disabled={download.pending || (view.candidateRefreshing && !candidate.scopeChanging)}
             refreshing={view.candidateRefreshing}
+            scopeChanging={candidate.scopeChanging}
             scope={view.scope}
             view={view.candidate}
             onChange={candidate.change}

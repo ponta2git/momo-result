@@ -32,6 +32,7 @@ export type ExportPageModel = {
     changePage: (page: number) => void;
     retryDirectory: () => void;
     retrySelection: () => void;
+    scopeChanging: boolean;
   };
   conditions: {
     changeFormat: (format: ExportFormat) => void;
@@ -133,6 +134,7 @@ export function useExportPageModel({
       changePage: candidates.setPage,
       retryDirectory: candidates.retry,
       retrySelection: candidates.retrySelectedCandidate,
+      scopeChanging: candidates.scopeChanging,
     },
     conditions: {
       changeFormat: (nextFormat) => updateSearch(nextFormat, urlState.scope, selectedId),

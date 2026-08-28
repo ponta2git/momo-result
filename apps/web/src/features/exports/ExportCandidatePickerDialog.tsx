@@ -10,6 +10,7 @@ type ExportCandidatePickerDialogProps = {
   disabled?: boolean | undefined;
   recovery?: boolean | undefined;
   refreshing?: boolean | undefined;
+  scopeChanging?: boolean | undefined;
   scope: Extract<ExportScope, "heldEvent" | "match">;
   view: ReadyCandidateView;
   onChange: (value: string) => void;
@@ -24,6 +25,7 @@ export function ExportCandidatePickerDialog({
   disabled = false,
   recovery = false,
   refreshing = false,
+  scopeChanging = false,
   scope,
   view,
   onChange,
@@ -46,6 +48,7 @@ export function ExportCandidatePickerDialog({
       pagination={view.pagination}
       pending={refreshing}
       recovery={recovery}
+      scopeChanging={scopeChanging}
       selectedLabel={view.selectedLabel}
       value={view.selectedId}
       onPageChange={onPageChange}

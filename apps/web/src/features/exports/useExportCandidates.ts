@@ -141,15 +141,17 @@ export function useExportCandidates({
   const resolvedCandidate = selected.candidate;
   const selectedResolution = selected.state;
   const hasResolvedTarget = Boolean(selectedId && resolvedCandidate?.value === selectedId);
+  const scopeChanging =
+    scope === "heldEvent"
+      ? Boolean(heldEventsQuery.isPlaceholderData && heldEventsQuery.isFetching)
+      : scope === "match"
+        ? Boolean(matchesQuery.isPlaceholderData && matchesQuery.isFetching)
+        : false;
   const pagination =
     scope === "heldEvent"
-      ? hasCurrentHeldEventData
-        ? heldEventsQuery.data?.pagination
-        : undefined
+      ? heldEventsQuery.data?.pagination
       : scope === "match"
-        ? hasCurrentMatchData
-          ? matchesQuery.data?.pagination
-          : undefined
+        ? matchesQuery.data?.pagination
         : undefined;
   const loading =
     scope === "season"
@@ -246,6 +248,7 @@ export function useExportCandidates({
   return {
     refreshing,
     reset,
+    scopeChanging,
     selectCandidate: (nextSelectedId: string) => {
       if (refreshing) return false;
       const candidate = candidates.find((item) => item.value === nextSelectedId);

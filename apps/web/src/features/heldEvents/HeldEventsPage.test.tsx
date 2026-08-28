@@ -411,9 +411,8 @@ describe("HeldEventsPage", () => {
       expect(screen.getByRole("region", { name: "開催履歴" })).toHaveAttribute("aria-busy", "true"),
     );
     const ledger = screen.getByRole("region", { name: "開催履歴" });
-    expect(within(ledger).getByRole("status")).toHaveTextContent(
-      "現在は1ページ目（10件表示）です。2ページ目（10件表示）を読み込んでいます。",
-    );
+    expect(within(ledger).getByRole("status")).toHaveTextContent("開催履歴を更新中");
+    expect(within(ledger).queryByLabelText("開催履歴を読み込み中")).not.toBeInTheDocument();
     const disabledDetail = within(ledger).getByRole("link", { name: /の開催詳細$/u });
     expect(disabledDetail).toHaveAttribute("aria-disabled", "true");
     expect(disabledDetail).not.toHaveAttribute("href");

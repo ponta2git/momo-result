@@ -3,11 +3,11 @@ import { CalendarDays, Plus } from "lucide-react";
 import { HeldEventsLedger } from "@/features/heldEvents/HeldEventsLedger";
 import * as heldEventViewModel from "@/features/heldEvents/heldEventViewModel";
 import { Button } from "@/shared/ui/actions/Button";
-import { cn } from "@/shared/ui/cn";
 import { PaginationControls } from "@/shared/ui/data/PaginationControls";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
+import { StaleShield } from "@/shared/ui/motion/StaleShield";
 
 export function HeldEventsListCard({
   model,
@@ -39,72 +39,66 @@ export function HeldEventsListCard({
   }
 
   return (
-    <div className="grid min-w-0 gap-4">
-      <div
-        className={cn("grid min-w-0 gap-4", model.refresh.pending ? "opacity-70" : "opacity-100")}
-      >
-        {model.freshness === "stale" ? (
-          <Notice
-            action={
-              <Button
-                pending={model.refresh.pending}
-                pendingLabel="再取得中"
-                size="sm"
-                variant="secondary"
-                onClick={model.refresh.run}
-              >
-                開催履歴を再取得
-              </Button>
-            }
-            tone="warning"
-            title="開催履歴を更新できませんでした"
-          >
-            前回取得した開催履歴を表示しています。開催詳細への移動や出力は利用できますが、削除は最新状態を確認できるまで行えません。
-          </Notice>
-        ) : null}
-        {model.scopeChanging ? (
-          <p className="text-xs text-[var(--color-text-secondary)]" role="status">
-            現在は{model.page}ページ目（{model.pageSize}件表示）です。{model.requestedPage}
-            ページ目（{model.requestedPageSize}件表示）を読み込んでいます。
-          </p>
-        ) : null}
-        {model.rows.length === 0 ? (
-          <EmptyState
-            action={
-              <Button icon={<Plus aria-hidden="true" className="size-4" />} onClick={onCreate}>
-                最初の開催を作成
-              </Button>
-            }
-            description="開催を作ると、同じ日に行った試合を番号順にまとめられます。"
-            icon={<CalendarDays className="size-5" />}
-            placement="embedded"
-            title="開催履歴はまだありません"
-          />
-        ) : (
-          <HeldEventsLedger
-            actionsDisabled={model.scopeChanging}
-            deleteDisabled={
-              model.deletePending || model.freshness === "stale" || model.scopeChanging
-            }
-            events={model.rows}
-            firstRowIsLatest={model.page === 1}
-            returnTo={model.returnTo}
-            onDelete={model.onRequestDelete}
-          />
-        )}
+    <StaleShield
+      active={model.refresh.pending}
+      busyLabel="開催履歴を更新中"
+      contentClassName="grid min-w-0 gap-4"
+      fallback={<HeldEventsLoading />}
+      strategy={model.scopeChanging ? "preserve-inert" : "preserve-interactive"}
+    >
+      {model.freshness === "stale" ? (
+        <Notice
+          action={
+            <Button
+              pending={model.refresh.pending}
+              pendingLabel="再取得中"
+              size="sm"
+              variant="secondary"
+              onClick={model.refresh.run}
+            >
+              開催履歴を再取得
+            </Button>
+          }
+          tone="warning"
+          title="開催履歴を更新できませんでした"
+        >
+          前回取得した開催履歴を表示しています。開催詳細への移動や出力は利用できますが、削除は最新状態を確認できるまで行えません。
+        </Notice>
+      ) : null}
+      {model.rows.length === 0 ? (
+        <EmptyState
+          action={
+            <Button icon={<Plus aria-hidden="true" className="size-4" />} onClick={onCreate}>
+              最初の開催を作成
+            </Button>
+          }
+          description="開催を作ると、同じ日に行った試合を番号順にまとめられます。"
+          icon={<CalendarDays className="size-5" />}
+          placement="embedded"
+          title="開催履歴はまだありません"
+        />
+      ) : (
+        <HeldEventsLedger
+          actionsDisabled={model.scopeChanging}
+          deleteDisabled={model.deletePending || model.freshness === "stale" || model.scopeChanging}
+          events={model.rows}
+          firstRowIsLatest={model.page === 1}
+          returnTo={model.returnTo}
+          onDelete={model.onRequestDelete}
+        />
+      )}
 
-        {model.pagination && model.pagination.totalItems > 0 ? (
-          <PaginationControls
-            disabled={model.refresh.pending}
-            pageSizeOptions={[...heldEventViewModel.heldEventPageSizeOptions]}
-            pagination={model.pagination}
-            placement="embedded"
-            onPageChange={model.onPageChange}
-            onPageSizeChange={model.onPageSizeChange}
-          />
-        ) : null}
-      </div>
-    </div>
+      {model.pagination && model.pagination.totalItems > 0 ? (
+        <PaginationControls
+          disabled={model.scopeChanging}
+          pageSizeOptions={[...heldEventViewModel.heldEventPageSizeOptions]}
+          pagination={model.pagination}
+          placement="embedded"
+          onPageChange={model.onPageChange}
+          onPageSizeChange={model.onPageSizeChange}
+        />
+      ) : null}
+    </StaleShield>
   );
 }
 

@@ -45,8 +45,6 @@ export type HeldEventsListModel =
       pageSize: number;
       pagination: HeldEventListResponse["pagination"] | undefined;
       refresh: HeldEventsListRefreshModel;
-      requestedPage: number;
-      requestedPageSize: number;
       returnTo: string;
       rows: HeldEventResponse[];
       scopeChanging: boolean;

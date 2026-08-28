@@ -234,8 +234,6 @@ export function useHeldEventsPageModel(): HeldEventsPageModel {
       pageSize: displayedPageSize,
       pagination,
       refresh,
-      requestedPage: paginationSearch.page,
-      requestedPageSize: paginationSearch.pageSize,
       returnTo: displayedReturnTo,
       rows,
       scopeChanging,

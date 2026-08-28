@@ -1,5 +1,6 @@
 import type { APIRequestContext, APIResponse, Locator, Page } from "@playwright/test";
 
+import { formatDateTimeLong } from "../src/shared/lib/dateTime";
 import { withReturnTo } from "../src/shared/navigation/returnTo";
 import {
   analysisArtifact,
@@ -66,14 +67,15 @@ test("creates a held event and completes OCR intake and review", async ({
     const createDialog = page.getByRole("dialog", { name: "新しい開催を作成" });
     await expect(createDialog).toBeVisible();
     const heldEventLocalDateTime = e2eRun.uniqueLocalDateTime();
-    heldEventLabelPrefix = heldEventLocalDateTime.replaceAll("-", "/").replace("T", " ");
     await createDialog.getByLabel("開催日時").fill(heldEventLocalDateTime);
     await createDialog.getByRole("button", { exact: true, name: "開催を作成" }).click();
 
     const response = await createResponse;
     expect(response.ok()).toBe(true);
-    const body = (await response.json()) as { id?: string };
+    const body = (await response.json()) as { heldAt?: string; id?: string };
     heldEventId = expectGeneratedId(body.id, "held event ID");
+    expect(body.heldAt, "created held event timestamp").toEqual(expect.any(String));
+    heldEventLabelPrefix = formatDateTimeLong(body.heldAt);
     e2eRun.trackHeldEvent(heldEventId);
     const heldEventDetailHref = withReturnTo(`/held-events/${heldEventId}`, "/held-events");
     await expect(page).toHaveURL(heldEventDetailHref);

@@ -69,7 +69,11 @@ export function StaleShield({
         data-stale={active || undefined}
       >
         <div
-          className={cn("min-w-0", active ? "opacity-60" : "opacity-100", contentClassName)}
+          className={cn(
+            "min-w-0",
+            active ? "blur-[0.5px] opacity-60" : "opacity-100",
+            contentClassName,
+          )}
           ref={contentRef}
         >
           {children}

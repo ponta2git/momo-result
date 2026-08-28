@@ -67,6 +67,7 @@ describe("HeldEventDetailPage", () => {
                 mapMasterId: "map_east",
                 matchId: "match-1",
                 matchNoInEvent: 1,
+                noteBody: "終盤のカード交換で流れが変わった",
                 ownerMemberId: "member_ponta",
                 playedAt: "2026-01-01T00:00:00.000Z",
                 players: [
@@ -109,6 +110,8 @@ describe("HeldEventDetailPage", () => {
     expect(screen.getByRole("link", { name: "手入力" })).toBeInTheDocument();
     const results = screen.getByRole("list", { name: "第1試合の順位と総資産" });
     expect(within(results).getByText("1億2345万円")).toBeInTheDocument();
+    expect(screen.getByText("試合メモ")).toBeInTheDocument();
+    expect(screen.getByText("終盤のカード交換で流れが変わった")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "第1試合の結果を見る" })).toHaveAttribute(
       "href",
       "/matches/match-1?returnTo=%2Fheld-events%2Fheld-1",

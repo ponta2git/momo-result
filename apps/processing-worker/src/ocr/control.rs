@@ -1,6 +1,6 @@
 use std::{fmt, time::Duration};
 
-use serde_json::Value as JsonValue;
+use momo_ocr::OcrOutput;
 use thiserror::Error;
 use tokio_postgres::{Client, Transaction};
 
@@ -12,7 +12,9 @@ use crate::execution_slot::{
 use crate::outbox::ControlOutcome;
 use crate::series_analysis::control::TransactionEffects;
 
-use super::contract::{OcrMediaType, OcrQueuePayload, RequestedScreenType};
+use super::contract::{
+    OcrHints, OcrQueuePayload, RequestedScreenType, SourceImageClaims, ValidatedOcrDelivery,
+};
 
 mod candidate;
 mod recovery;
@@ -21,7 +23,6 @@ use candidate::{CandidateResult, OcrClaimCandidate, load_candidate};
 use recovery::recover_expired_holder;
 
 const MAXIMUM_DRAFT_JSON_BYTES: usize = 512 * 1024;
-const MAXIMUM_PROFILE_ID_BYTES: usize = 128;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct OcrControlConfig {
@@ -53,17 +54,25 @@ impl OcrControlConfig {
             retry_delay,
         })
     }
+
+    pub(crate) fn worker_id(&self) -> &str {
+        &self.worker_id
+    }
+
+    pub(crate) const fn lease_duration(&self) -> Duration {
+        self.lease_duration
+    }
+
+    pub(crate) const fn finalization_timeout(&self) -> Duration {
+        self.finalization_timeout
+    }
 }
 
 #[derive(Clone, Eq, PartialEq)]
 pub(crate) struct ClaimedOcrJob {
     pub(crate) job_id: String,
     pub(crate) draft_id: String,
-    pub(crate) source_image_id: String,
-    pub(crate) object_key: String,
-    pub(crate) sha256: String,
-    pub(crate) byte_length: u64,
-    pub(crate) media_type: OcrMediaType,
+    pub(crate) source_image: SourceImageClaims,
     pub(crate) expected_width: u32,
     pub(crate) expected_height: u32,
     pub(crate) requested_screen_type: RequestedScreenType,
@@ -170,11 +179,7 @@ impl OcrFailureCode {
 }
 
 pub(crate) struct OcrDraftCompletion {
-    pub(crate) detected_screen_type: RequestedScreenType,
-    pub(crate) profile_id: Option<String>,
-    pub(crate) payload: JsonValue,
-    pub(crate) warnings: JsonValue,
-    pub(crate) timings_milliseconds: JsonValue,
+    pub(crate) output: OcrOutput,
     pub(crate) duration_milliseconds: i32,
 }
 
@@ -220,9 +225,10 @@ impl OcrControlError {
 
 pub(crate) async fn claim_job(
     client: &mut Client,
-    payload: &OcrQueuePayload,
+    delivery: &ValidatedOcrDelivery,
     config: &OcrControlConfig,
 ) -> Result<ControlOutcome<OcrClaimResult>, OcrControlError> {
+    let payload = delivery.payload();
     let transaction = bounded_transaction(client, config.finalization_timeout).await?;
     let slot = lock_execution_slot(&transaction).await?;
     let mut draft_lock_job_ids = vec![String::from(payload.job_id())];
@@ -261,7 +267,7 @@ pub(crate) async fn claim_job(
             return Ok(recovery_effects.committed(OcrClaimResult::QueueContractMismatch));
         }
     };
-    if !candidate.matches(payload) {
+    if !candidate.matches(delivery) {
         fail_locked_queued_job(
             &transaction,
             payload.job_id(),
@@ -358,11 +364,7 @@ async fn acquire_candidate(
         transaction_effects.committed(OcrClaimResult::Claimed(ClaimedOcrJob {
             job_id: String::from(payload.job_id()),
             draft_id: candidate.draft_id,
-            source_image_id: candidate.source_image_id,
-            object_key: candidate.object_key,
-            sha256: candidate.sha256,
-            byte_length: candidate.byte_length,
-            media_type: candidate.media_type,
+            source_image: candidate.source_image,
             expected_width: candidate.width,
             expected_height: candidate.height,
             requested_screen_type: candidate.requested_screen_type,
@@ -439,13 +441,14 @@ pub(crate) async fn finish_success(
     client: &mut Client,
     claim: &ClaimedOcrJob,
     config: &OcrControlConfig,
+    hints: &OcrHints,
     completion: &OcrDraftCompletion,
 ) -> Result<(), OcrControlError> {
-    validate_completion(completion)?;
+    validate_completion(claim, hints, completion)?;
     let transaction = bounded_transaction(client, config.finalization_timeout).await?;
     lock_owned_job(&transaction, claim, config).await?;
     let requested_screen_type = claim.requested_screen_type.wire();
-    let detected_screen_type = completion.detected_screen_type.wire();
+    let detected_screen_type = completion.output.detected_screen_type.wire();
     transaction
         .execute(
             "INSERT INTO ocr_drafts (id, job_id, requested_screen_type, detected_screen_type,\x20\
@@ -462,10 +465,10 @@ pub(crate) async fn finish_success(
                 &claim.job_id,
                 &requested_screen_type,
                 &detected_screen_type,
-                &completion.profile_id,
-                &completion.payload,
-                &completion.warnings,
-                &completion.timings_milliseconds,
+                &completion.output.profile_id,
+                &completion.output.payload,
+                &completion.output.warnings,
+                &completion.output.timings_milliseconds,
             ],
         )
         .await?;
@@ -782,16 +785,17 @@ async fn lock_match_drafts_for_jobs(
     Ok(())
 }
 
-fn validate_completion(completion: &OcrDraftCompletion) -> Result<(), OcrControlError> {
-    let profile_valid = completion.profile_id.as_deref().is_none_or(|profile| {
-        !profile.is_empty()
-            && profile.len() <= MAXIMUM_PROFILE_ID_BYTES
-            && profile.bytes().all(|byte| (0x21..=0x7e).contains(&byte))
-    });
+fn validate_completion(
+    claim: &ClaimedOcrJob,
+    hints: &OcrHints,
+    completion: &OcrDraftCompletion,
+) -> Result<(), OcrControlError> {
+    let parent_elapsed = u32::try_from(completion.duration_milliseconds)
+        .map_err(|_conversion_error| OcrControlError::InvalidCompletion)?;
     let encoded_bytes = [
-        &completion.payload,
-        &completion.warnings,
-        &completion.timings_milliseconds,
+        &completion.output.payload,
+        &completion.output.warnings,
+        &completion.output.timings_milliseconds,
     ]
     .into_iter()
     .try_fold(0_usize, |total, value| {
@@ -799,11 +803,9 @@ fn validate_completion(completion: &OcrDraftCompletion) -> Result<(), OcrControl
             .ok()
             .and_then(|encoded| total.checked_add(encoded.len()))
     });
-    if completion.payload.is_object()
-        && completion.warnings.is_array()
-        && completion.timings_milliseconds.is_object()
-        && completion.duration_milliseconds >= 0
-        && profile_valid
+    if completion
+        .output
+        .satisfies_contract(claim.requested_screen_type, hints, parent_elapsed)
         && encoded_bytes.is_some_and(|bytes| bytes <= MAXIMUM_DRAFT_JSON_BYTES)
     {
         Ok(())

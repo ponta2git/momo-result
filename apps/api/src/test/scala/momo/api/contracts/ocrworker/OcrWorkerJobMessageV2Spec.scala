@@ -143,6 +143,7 @@ final class OcrWorkerJobMessageV2Spec extends FunSuite with JsonSchemaAssertions
   }
 
   test("rejects URL-like, absolute, ambiguous, or unsafe object keys") {
+    val canonicalJson = OcrWorkerJobMessageV2.fieldsAsJson(canonicalPayload())
     List(
       "/source-images/image.png",
       "https://example.invalid/image.png",
@@ -152,7 +153,13 @@ final class OcrWorkerJobMessageV2Spec extends FunSuite with JsonSchemaAssertions
       "source-images/../image.png",
       "source-images/image.png/",
       "source-images/画像.png",
-    ).foreach(key => assert(build(canonicalInput.copy(imageObjectKey = key)).isLeft, clues(key)))
+    ).foreach { key =>
+      assert(build(canonicalInput.copy(imageObjectKey = key)).isLeft, clues(key))
+      assertJsonSchemaInvalid(
+        streamPayloadV2SchemaPath,
+        canonicalJson.mapObject(_.add("imageObjectKey", Json.fromString(key))).noSpaces,
+      )
+    }
   }
 
   test("enforces verified image metadata and the exact 3 MiB boundary") {

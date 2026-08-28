@@ -1,7 +1,8 @@
-use std::future::Future;
+use std::{future::Future, pin::Pin, time::Duration};
 
+use futures_util::{StreamExt, stream::FuturesUnordered};
 use thiserror::Error;
-use tokio::sync::watch;
+use tokio::{sync::watch, time};
 
 use crate::{
     ocr::{
@@ -28,6 +29,7 @@ use crate::{
 struct EnabledConsumers {
     series_analysis: AnalysisConsumerConfig,
     ocr: OcrConsumerRuntimeConfig,
+    shutdown_drain_timeout: Duration,
 }
 
 #[derive(Clone)]
@@ -75,18 +77,36 @@ impl WorkerRuntimePlan {
 
         let series_analysis = AnalysisConsumerConfig::from_environment(analysis_activation)?;
         let ocr = OcrConsumerRuntimeConfig::from_environment(
+            ocr_mode,
             series_analysis.database_url.clone(),
             series_analysis.redis_url.clone(),
+            series_analysis.child_stop_grace,
         )?;
-        if matches!(ocr, OcrConsumerRuntimeConfig::Enabled(_))
-            != (ocr_mode == OcrConsumerMode::Enabled)
-        {
-            return Err(SupervisorError::ConfigurationChangedDuringLoad);
-        }
+        // A peer can have one dependency/heartbeat operation in flight before it observes
+        // shutdown, then must stop its child and durably finalize. Compose those already-validated
+        // bounds once here so callers cannot configure an independent supervisor timeout.
+        let analysis_shutdown_timeout = composed_shutdown_drain_timeout(
+            series_analysis
+                .redis_block
+                .max(series_analysis.heartbeat_interval),
+            series_analysis.child_stop_grace,
+            series_analysis.execution_limits.finalization_timeout,
+        )?;
+        let shutdown_drain_timeout = match &ocr {
+            OcrConsumerRuntimeConfig::Disabled => analysis_shutdown_timeout,
+            OcrConsumerRuntimeConfig::Enabled(ocr) => {
+                analysis_shutdown_timeout.max(composed_shutdown_drain_timeout(
+                    ocr.shutdown_dependency_or_heartbeat_bound(),
+                    series_analysis.child_stop_grace,
+                    ocr.shutdown_finalization_bound(),
+                )?)
+            }
+        };
         Ok(Self {
             enabled_consumers: Some(EnabledConsumers {
                 series_analysis,
                 ocr,
+                shutdown_drain_timeout,
             }),
         })
     }
@@ -117,7 +137,8 @@ impl WorkerRuntimePlan {
 ///
 /// # Errors
 ///
-/// Returns the first peer failure after signalling and awaiting every sibling peer.
+/// Returns the first peer failure after signalling every sibling and draining them within the
+/// timeout derived from their already-validated dependency, child-stop, and finalization bounds.
 pub(crate) async fn run(
     plan: WorkerRuntimePlan,
     shutdown: watch::Receiver<bool>,
@@ -125,21 +146,17 @@ pub(crate) async fn run(
     let Some(enabled_consumers) = plan.enabled_consumers else {
         return wait_until_shutdown(shutdown).await;
     };
-    match enabled_consumers.ocr {
+    let EnabledConsumers {
+        series_analysis,
+        ocr,
+        shutdown_drain_timeout,
+    } = enabled_consumers;
+    match ocr {
         OcrConsumerRuntimeConfig::Disabled => {
-            Box::pin(run_analysis_only(
-                enabled_consumers.series_analysis,
-                shutdown,
-            ))
-            .await
+            run_analysis_only(series_analysis, shutdown, shutdown_drain_timeout).await
         }
         OcrConsumerRuntimeConfig::Enabled(ocr) => {
-            Box::pin(run_combined(
-                enabled_consumers.series_analysis,
-                *ocr,
-                shutdown,
-            ))
-            .await
+            run_combined(series_analysis, *ocr, shutdown, shutdown_drain_timeout).await
         }
     }
 }
@@ -156,6 +173,7 @@ async fn wait_until_shutdown(mut shutdown: watch::Receiver<bool>) -> Result<(), 
 async fn run_analysis_only(
     series_analysis_config: AnalysisConsumerConfig,
     external_shutdown: watch::Receiver<bool>,
+    shutdown_drain_timeout: Duration,
 ) -> Result<(), SupervisorError> {
     let outbox_config = AnalysisOutboxRuntimeConfig::from(&series_analysis_config);
     let (post_commit_sink, outbox_wake) = PostCommitSink::channel(OutboxKind::SeriesAnalysis);
@@ -168,14 +186,15 @@ async fn run_analysis_only(
     };
     let outbox_coordinator = run_analysis_outbox(outbox_config, outbox_wake, shutdown_receiver);
 
-    Box::pin(supervise_two_tasks(
-        "analysis",
-        series_analysis_consumer,
-        "analysis_outbox",
-        outbox_coordinator,
+    supervise_peers(
+        [
+            runtime_peer("analysis", series_analysis_consumer),
+            runtime_peer("analysis_outbox", outbox_coordinator),
+        ],
         shutdown_sender,
         external_shutdown,
-    ))
+        shutdown_drain_timeout,
+    )
     .await
 }
 
@@ -184,6 +203,7 @@ async fn run_combined(
     series_analysis_config: AnalysisConsumerConfig,
     ocr_config: crate::ocr::consumer::OcrConsumerConfig,
     external_shutdown: watch::Receiver<bool>,
+    shutdown_drain_timeout: Duration,
 ) -> Result<(), SupervisorError> {
     use crate::ocr::IsolatedOcrChildLauncher;
 
@@ -192,6 +212,7 @@ async fn run_combined(
         series_analysis_config.child_cgroup.clone(),
         None,
         series_analysis_config.child_stop_grace,
+        ocr_config.child_liveness_timeout(),
     );
     let (post_commit_sink, outbox_wake) = PostCommitSink::channel(OutboxKind::SeriesAnalysis);
     let (shutdown_sender, shutdown_receiver) = watch::channel(false);
@@ -210,16 +231,16 @@ async fn run_combined(
     };
     let outbox_coordinator = run_analysis_outbox(outbox_config, outbox_wake, shutdown_receiver);
 
-    Box::pin(supervise_three_tasks(
-        "analysis",
-        series_analysis_consumer,
-        "ocr",
-        ocr_consumer,
-        "analysis_outbox",
-        outbox_coordinator,
+    supervise_peers(
+        [
+            runtime_peer("analysis", series_analysis_consumer),
+            runtime_peer("ocr", ocr_consumer),
+            runtime_peer("analysis_outbox", outbox_coordinator),
+        ],
         shutdown_sender,
         external_shutdown,
-    ))
+        shutdown_drain_timeout,
+    )
     .await
 }
 
@@ -261,36 +282,32 @@ async fn run_analysis_outbox(
         .map_err(SupervisorError::AnalysisOutboxCoordinator)
 }
 
-async fn supervise_two_tasks<First, Second>(
-    first_name: &'static str,
-    first: First,
-    second_name: &'static str,
-    second: Second,
+type RuntimePeer =
+    Pin<Box<dyn Future<Output = (&'static str, Result<(), SupervisorError>)> + Send>>;
+
+fn runtime_peer(
+    name: &'static str,
+    future: impl Future<Output = Result<(), SupervisorError>> + Send + 'static,
+) -> RuntimePeer {
+    Box::pin(async move { (name, future.await) })
+}
+
+async fn supervise_peers<const PEERS: usize>(
+    peers: [RuntimePeer; PEERS],
     shutdown_sender: watch::Sender<bool>,
     mut external_shutdown: watch::Receiver<bool>,
-) -> Result<(), SupervisorError>
-where
-    First: Future<Output = Result<(), SupervisorError>>,
-    Second: Future<Output = Result<(), SupervisorError>>,
-{
-    enum FirstExit {
-        First(Result<(), SupervisorError>),
-        Second(Result<(), SupervisorError>),
-        Shutdown,
-    }
-
-    tokio::pin!(first);
-    tokio::pin!(second);
-    let first_exit = if *external_shutdown.borrow() {
-        FirstExit::Shutdown
+    shutdown_drain_timeout: Duration,
+) -> Result<(), SupervisorError> {
+    let mut running = peers.into_iter().collect::<FuturesUnordered<_>>();
+    let first_exit = if *external_shutdown.borrow() || PEERS == 0 {
+        None
     } else {
         loop {
             tokio::select! {
-                result = &mut first => break FirstExit::First(result),
-                result = &mut second => break FirstExit::Second(result),
+                result = running.next() => break result,
                 changed = external_shutdown.changed() => {
                     if changed.is_err() || *external_shutdown.borrow() {
-                        break FirstExit::Shutdown;
+                        break None;
                     }
                 }
             }
@@ -298,102 +315,50 @@ where
     };
     signal_shutdown(&shutdown_sender);
 
-    match first_exit {
-        FirstExit::First(result) => {
-            let sibling = second.await;
-            log_secondary_failure(second_name, &sibling);
-            finish_unrequested_exit(first_name, result)
+    let drain = async {
+        match first_exit {
+            Some((peer, result)) => {
+                drain_secondary_peers(&mut running).await;
+                finish_unrequested_exit(peer, result)
+            }
+            None => drain_shutdown_peers(&mut running).await,
         }
-        FirstExit::Second(result) => {
-            let sibling = first.await;
-            log_secondary_failure(first_name, &sibling);
-            finish_unrequested_exit(second_name, result)
-        }
-        FirstExit::Shutdown => {
-            let (first_result, second_result) = tokio::join!(first, second);
-            first_result?;
-            second_result
+    };
+    let deadline = time::Instant::now()
+        .checked_add(shutdown_drain_timeout)
+        .ok_or(SupervisorError::ShutdownDrainBudgetBound)?;
+    match time::timeout_at(deadline, drain).await {
+        Ok(result) => result,
+        Err(_elapsed) => {
+            // Dropping every remaining peer future also drops any open database transaction and
+            // managed child handle. Their rollback/Drop contracts fail closed instead of letting
+            // an unresponsive peer keep the process alive beyond its validated cleanup budget.
+            drop(running);
+            Err(SupervisorError::ShutdownDrainTimeout)
         }
     }
 }
 
-#[expect(
-    clippy::too_many_arguments,
-    reason = "the three explicit peer names and futures keep lifecycle diagnostics unambiguous"
-)]
-#[cfg_attr(
-    all(not(target_os = "linux"), not(test)),
-    expect(dead_code, reason = "three-peer supervision runs only on Linux")
-)]
-async fn supervise_three_tasks<First, Second, Third>(
-    first_name: &'static str,
-    first: First,
-    second_name: &'static str,
-    second: Second,
-    third_name: &'static str,
-    third: Third,
-    shutdown_sender: watch::Sender<bool>,
-    mut external_shutdown: watch::Receiver<bool>,
-) -> Result<(), SupervisorError>
-where
-    First: Future<Output = Result<(), SupervisorError>>,
-    Second: Future<Output = Result<(), SupervisorError>>,
-    Third: Future<Output = Result<(), SupervisorError>>,
-{
-    enum FirstExit {
-        First(Result<(), SupervisorError>),
-        Second(Result<(), SupervisorError>),
-        Third(Result<(), SupervisorError>),
-        Shutdown,
+async fn drain_secondary_peers(running: &mut FuturesUnordered<RuntimePeer>) {
+    while let Some((peer, result)) = running.next().await {
+        log_secondary_failure(peer, &result);
     }
+}
 
-    tokio::pin!(first);
-    tokio::pin!(second);
-    tokio::pin!(third);
-    let first_exit = if *external_shutdown.borrow() {
-        FirstExit::Shutdown
-    } else {
-        loop {
-            tokio::select! {
-                result = &mut first => break FirstExit::First(result),
-                result = &mut second => break FirstExit::Second(result),
-                result = &mut third => break FirstExit::Third(result),
-                changed = external_shutdown.changed() => {
-                    if changed.is_err() || *external_shutdown.borrow() {
-                        break FirstExit::Shutdown;
-                    }
-                }
+async fn drain_shutdown_peers(
+    running: &mut FuturesUnordered<RuntimePeer>,
+) -> Result<(), SupervisorError> {
+    let mut first_failure = None;
+    while let Some((peer, result)) = running.next().await {
+        if let Err(error) = result {
+            if first_failure.is_none() {
+                first_failure = Some(error);
+            } else {
+                log_secondary_error(peer, &error);
             }
         }
-    };
-    signal_shutdown(&shutdown_sender);
-
-    match first_exit {
-        FirstExit::First(result) => {
-            let (second_result, third_result) = tokio::join!(second, third);
-            log_secondary_failure(second_name, &second_result);
-            log_secondary_failure(third_name, &third_result);
-            finish_unrequested_exit(first_name, result)
-        }
-        FirstExit::Second(result) => {
-            let (first_result, third_result) = tokio::join!(first, third);
-            log_secondary_failure(first_name, &first_result);
-            log_secondary_failure(third_name, &third_result);
-            finish_unrequested_exit(second_name, result)
-        }
-        FirstExit::Third(result) => {
-            let (first_result, second_result) = tokio::join!(first, second);
-            log_secondary_failure(first_name, &first_result);
-            log_secondary_failure(second_name, &second_result);
-            finish_unrequested_exit(third_name, result)
-        }
-        FirstExit::Shutdown => {
-            let (first_result, second_result, third_result) = tokio::join!(first, second, third);
-            first_result?;
-            second_result?;
-            third_result
-        }
     }
+    first_failure.map_or(Ok(()), Err)
 }
 
 fn signal_shutdown(shutdown_sender: &watch::Sender<bool>) {
@@ -412,13 +377,17 @@ fn finish_unrequested_exit(
 
 fn log_secondary_failure(peer: &'static str, result: &Result<(), SupervisorError>) {
     if let Err(error) = result {
-        tracing::error!(
-            event = "worker_supervisor_secondary_failure",
-            peer,
-            error = %error,
-            "runtime peer also failed while the supervisor was draining"
-        );
+        log_secondary_error(peer, error);
     }
+}
+
+fn log_secondary_error(peer: &'static str, error: &SupervisorError) {
+    tracing::error!(
+        event = "worker_supervisor_secondary_failure",
+        peer,
+        error = %error,
+        "runtime peer also failed while the supervisor was draining"
+    );
 }
 
 #[cfg(not(target_os = "linux"))]
@@ -426,8 +395,14 @@ fn run_combined(
     series_analysis_config: AnalysisConsumerConfig,
     ocr_config: crate::ocr::consumer::OcrConsumerConfig,
     shutdown: watch::Receiver<bool>,
+    shutdown_drain_timeout: Duration,
 ) -> std::future::Ready<Result<(), SupervisorError>> {
-    drop((series_analysis_config, ocr_config, shutdown));
+    drop((
+        series_analysis_config,
+        ocr_config,
+        shutdown,
+        shutdown_drain_timeout,
+    ));
     std::future::ready(Err(SupervisorError::UnsupportedPlatform))
 }
 
@@ -439,8 +414,6 @@ pub(crate) enum SupervisorError {
     OcrConfiguration(#[from] OcrRuntimeConfigError),
     #[error("Rust OCR v2 requires the shared series-analysis runtime to be enabled")]
     OcrRequiresSeriesAnalysisRuntime,
-    #[error("worker environment changed while its runtime plan was loading")]
-    ConfigurationChangedDuringLoad,
     #[error("series-analysis consumer failed: {0}")]
     SeriesAnalysis(SeriesAnalysisConsumerError),
     #[cfg_attr(
@@ -460,6 +433,10 @@ pub(crate) enum SupervisorError {
     AnalysisOutboxCoordinator(#[source] CoordinatorError<SeriesAnalysisOutboxError>),
     #[error("{peer} runtime peer exited without a shutdown request")]
     UnexpectedExit { peer: &'static str },
+    #[error("runtime shutdown drain budget exceeds a supported bound")]
+    ShutdownDrainBudgetBound,
+    #[error("runtime peers exceeded their bounded shutdown drain")]
+    ShutdownDrainTimeout,
     #[cfg_attr(
         target_os = "linux",
         expect(
@@ -471,6 +448,17 @@ pub(crate) enum SupervisorError {
     UnsupportedPlatform,
 }
 
+fn composed_shutdown_drain_timeout(
+    dependency_or_heartbeat: Duration,
+    child_stop: Duration,
+    finalization: Duration,
+) -> Result<Duration, SupervisorError> {
+    dependency_or_heartbeat
+        .checked_add(child_stop)
+        .and_then(|duration| duration.checked_add(finalization))
+        .ok_or(SupervisorError::ShutdownDrainBudgetBound)
+}
+
 #[cfg(test)]
 mod tests {
     use std::future;
@@ -478,6 +466,20 @@ mod tests {
     use tokio::sync::{oneshot, watch};
 
     use super::*;
+
+    const TEST_SHUTDOWN_DRAIN_TIMEOUT: Duration = Duration::from_secs(1);
+
+    struct DropSignal(Option<oneshot::Sender<()>>);
+
+    impl Drop for DropSignal {
+        fn drop(&mut self) {
+            if let Some(sender) = self.0.take() {
+                match sender.send(()) {
+                    Ok(()) | Err(()) => {}
+                }
+            }
+        }
+    }
 
     async fn stop_on_shutdown(
         mut shutdown: watch::Receiver<bool>,
@@ -495,19 +497,54 @@ mod tests {
         Ok(())
     }
 
+    async fn fail_on_shutdown(mut shutdown: watch::Receiver<bool>) -> Result<(), SupervisorError> {
+        while !*shutdown.borrow() {
+            if shutdown.changed().await.is_err() {
+                break;
+            }
+        }
+        Err(SupervisorError::OcrRequiresSeriesAnalysisRuntime)
+    }
+
+    async fn never_stops(signal: DropSignal) -> Result<(), SupervisorError> {
+        future::pending::<()>().await;
+        drop(signal);
+        Ok(())
+    }
+
+    #[test]
+    fn shutdown_budget_composes_existing_bounds_once_and_rejects_overflow() {
+        assert!(matches!(
+            composed_shutdown_drain_timeout(
+                Duration::from_secs(2),
+                Duration::from_secs(3),
+                Duration::from_secs(5),
+            ),
+            Ok(duration) if duration == Duration::from_secs(10)
+        ));
+        assert!(matches!(
+            composed_shutdown_drain_timeout(Duration::MAX, Duration::from_nanos(1), Duration::ZERO,),
+            Err(SupervisorError::ShutdownDrainBudgetBound)
+        ));
+    }
+
     #[tokio::test]
     async fn two_peer_supervision_stops_the_coordinator_after_consumer_exit() {
         let (_external_sender, external_shutdown) = watch::channel(false);
         let (shutdown_sender, shutdown_receiver) = watch::channel(false);
         let (observed_sender, observed_receiver) = oneshot::channel();
 
-        let result = supervise_two_tasks(
-            "analysis",
-            future::ready(Ok(())),
-            "analysis_outbox",
-            stop_on_shutdown(shutdown_receiver, observed_sender),
+        let result = supervise_peers(
+            [
+                runtime_peer("analysis", future::ready(Ok(()))),
+                runtime_peer(
+                    "analysis_outbox",
+                    stop_on_shutdown(shutdown_receiver, observed_sender),
+                ),
+            ],
             shutdown_sender,
             external_shutdown,
+            TEST_SHUTDOWN_DRAIN_TIMEOUT,
         )
         .await;
 
@@ -528,15 +565,21 @@ mod tests {
             CoordinatorError::<SeriesAnalysisOutboxError>::WakeChannelClosed,
         );
 
-        let result = supervise_three_tasks(
-            "analysis",
-            stop_on_shutdown(shutdown_receiver.clone(), analysis_observed_sender),
-            "ocr",
-            stop_on_shutdown(shutdown_receiver, ocr_observed_sender),
-            "analysis_outbox",
-            future::ready(Err(coordinator_failure)),
+        let result = supervise_peers(
+            [
+                runtime_peer(
+                    "analysis",
+                    stop_on_shutdown(shutdown_receiver.clone(), analysis_observed_sender),
+                ),
+                runtime_peer(
+                    "ocr",
+                    stop_on_shutdown(shutdown_receiver, ocr_observed_sender),
+                ),
+                runtime_peer("analysis_outbox", future::ready(Err(coordinator_failure))),
+            ],
             shutdown_sender,
             external_shutdown,
+            TEST_SHUTDOWN_DRAIN_TIMEOUT,
         )
         .await;
 
@@ -548,5 +591,85 @@ mod tests {
         ));
         assert!(analysis_observed_receiver.await.is_ok());
         assert!(ocr_observed_receiver.await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn external_shutdown_is_forwarded_and_every_peer_is_drained() {
+        let (external_sender, external_shutdown) = watch::channel(false);
+        assert!(external_sender.send(true).is_ok());
+        let (shutdown_sender, shutdown_receiver) = watch::channel(false);
+        let (first_observed_sender, first_observed_receiver) = oneshot::channel();
+        let (second_observed_sender, second_observed_receiver) = oneshot::channel();
+
+        let result = supervise_peers(
+            [
+                runtime_peer(
+                    "analysis",
+                    stop_on_shutdown(shutdown_receiver.clone(), first_observed_sender),
+                ),
+                runtime_peer(
+                    "analysis_outbox",
+                    stop_on_shutdown(shutdown_receiver, second_observed_sender),
+                ),
+            ],
+            shutdown_sender,
+            external_shutdown,
+            TEST_SHUTDOWN_DRAIN_TIMEOUT,
+        )
+        .await;
+
+        assert!(result.is_ok());
+        assert!(first_observed_receiver.await.is_ok());
+        assert!(second_observed_receiver.await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn peer_failure_during_external_shutdown_is_not_hidden() {
+        let (external_sender, external_shutdown) = watch::channel(false);
+        assert!(external_sender.send(true).is_ok());
+        let (shutdown_sender, shutdown_receiver) = watch::channel(false);
+        let (observed_sender, observed_receiver) = oneshot::channel();
+
+        let result = supervise_peers(
+            [
+                runtime_peer(
+                    "analysis",
+                    stop_on_shutdown(shutdown_receiver.clone(), observed_sender),
+                ),
+                runtime_peer("analysis_outbox", fail_on_shutdown(shutdown_receiver)),
+            ],
+            shutdown_sender,
+            external_shutdown,
+            TEST_SHUTDOWN_DRAIN_TIMEOUT,
+        )
+        .await;
+
+        assert!(matches!(
+            result,
+            Err(SupervisorError::OcrRequiresSeriesAnalysisRuntime)
+        ));
+        assert!(observed_receiver.await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn shutdown_timeout_drops_unresponsive_peer_futures() {
+        let (external_sender, external_shutdown) = watch::channel(false);
+        assert!(external_sender.send(true).is_ok());
+        let (shutdown_sender, _shutdown_receiver) = watch::channel(false);
+        let (drop_sender, drop_receiver) = oneshot::channel();
+
+        let result = supervise_peers(
+            [runtime_peer(
+                "unresponsive",
+                never_stops(DropSignal(Some(drop_sender))),
+            )],
+            shutdown_sender,
+            external_shutdown,
+            Duration::from_millis(10),
+        )
+        .await;
+
+        assert!(matches!(result, Err(SupervisorError::ShutdownDrainTimeout)));
+        assert!(drop_receiver.await.is_ok());
     }
 }

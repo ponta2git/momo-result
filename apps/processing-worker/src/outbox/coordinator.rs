@@ -59,6 +59,14 @@ impl DrainBatch {
             state: DrainBatchState::Idle { next_wake_at },
         }
     }
+
+    #[cfg(test)]
+    pub(crate) const fn idle_deadline(self) -> Option<Instant> {
+        match self.state {
+            DrainBatchState::Idle { next_wake_at } => next_wake_at,
+            DrainBatchState::Progress => None,
+        }
+    }
 }
 
 /// Domain adapter driven until its durable outbox has no immediately actionable work.

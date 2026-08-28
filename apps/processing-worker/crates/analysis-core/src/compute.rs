@@ -149,8 +149,7 @@ pub fn try_for_each_resource<E>(
     mut consume: impl FnMut(ComputedResource) -> Result<(), E>,
 ) -> Result<(), E> {
     let mut previous_analysis: Option<ScopeAnalysis<'_>> = None;
-    for scope in input.scopes() {
-        let player_matches = input.player_matches_for_scope(&scope);
+    for (scope, player_matches) in input.scopes() {
         let analysis = match previous_analysis.take() {
             Some(analysis) if analysis.references_same_player_matches_in_order(&player_matches) => {
                 analysis
@@ -158,8 +157,8 @@ pub fn try_for_each_resource<E>(
             Some(_) | None => ScopeAnalysis::new(player_matches),
         };
         let aggregate = aggregate(
-            input,
-            &scope,
+            input.game_title_id(),
+            scope,
             &analysis.player_matches,
             &analysis.member_ids,
             &analysis.player_matches_by_member,
@@ -176,7 +175,7 @@ pub fn try_for_each_resource<E>(
             source_match_revision: None,
         })?;
         let review = build_review(
-            &scope,
+            scope,
             &analysis.player_matches,
             &analysis.member_ids,
             &analysis.player_matches_by_member,
@@ -202,7 +201,7 @@ pub fn try_for_each_resource<E>(
                         metric,
                     },
                     payload: build_drilldown(
-                        &scope,
+                        scope,
                         member_matches,
                         &analysis.player_matches,
                         analysis.match_groups.len(),
@@ -223,7 +222,7 @@ pub fn try_for_each_resource<E>(
                     match_id: String::from(group.match_id),
                 },
                 payload: build_match_context(
-                    &scope,
+                    scope,
                     &group.player_matches,
                     &context_index,
                     &aggregate_item_ids,

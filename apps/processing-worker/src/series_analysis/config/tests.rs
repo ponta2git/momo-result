@@ -222,6 +222,15 @@ fn runtime_accepts_only_timing_that_preserves_lease_recovery_margin() {
 
         assert!(AnalysisConsumerConfig::from_environment(&initial_activation).is_ok());
 
+        EnvironmentGuard::set("MOMO_ANALYSIS_LEASE_DURATION_MS", "31000");
+        assert!(AnalysisConsumerConfig::from_environment(&initial_activation).is_ok());
+        EnvironmentGuard::set("MOMO_ANALYSIS_LEASE_DURATION_MS", "30000");
+        assert!(matches!(
+            AnalysisConsumerConfig::from_environment(&initial_activation),
+            Err(AnalysisConfigError::UnsafeLeaseRelationship)
+        ));
+
+        EnvironmentGuard::set("MOMO_ANALYSIS_LEASE_DURATION_MS", "60000");
         EnvironmentGuard::set("MOMO_ANALYSIS_REDIS_BLOCK_MS", "5001");
         assert!(matches!(
             AnalysisConsumerConfig::from_environment(&initial_activation),

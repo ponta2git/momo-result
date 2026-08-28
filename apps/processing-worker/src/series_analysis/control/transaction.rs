@@ -320,8 +320,22 @@ pub(super) async fn enqueue_delivery(
     let dedupe = format!("{job_id}:{reason}:{sequence}");
     transaction
         .execute(
-            "INSERT INTO series_analysis_queue_outbox (id, job_id, dedupe_key)\x20\
-             VALUES ($1,$2,$3) ON CONFLICT (dedupe_key) DO NOTHING",
+            "UPDATE series_analysis_queue_outbox q SET\x20\
+               next_attempt_at = j.available_at, updated_at = clock_timestamp()\x20\
+             FROM series_analysis_jobs j\x20\
+             WHERE j.id = $1 AND q.job_id = j.id\x20\
+               AND q.status IN ('pending', 'in_flight')\x20\
+               AND q.next_attempt_at < j.available_at",
+            &[&job_id],
+        )
+        .await?;
+    transaction
+        .execute(
+            "INSERT INTO series_analysis_queue_outbox\x20\
+               (id, job_id, dedupe_key, next_attempt_at)\x20\
+             VALUES ($1,$2,$3,(\x20\
+               SELECT available_at FROM series_analysis_jobs WHERE id = $2\x20\
+             )) ON CONFLICT (dedupe_key) DO NOTHING",
             &[&id, &job_id, &dedupe],
         )
         .await?;

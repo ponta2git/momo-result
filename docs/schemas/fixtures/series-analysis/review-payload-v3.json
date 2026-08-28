@@ -1,7 +1,7 @@
 {
   "schemaVersion": 3,
   "scope": { "kind": "overall", "matchCount": 12 },
-  "baseline": {},
+  "baseline": { "matchCount": 12, "playerCount": 1, "qualityStatus": "ok" },
   "commonPlaybookTopics": [],
   "playbookByPlayer": [
     {
@@ -57,5 +57,8 @@
       "secondaryCards": []
     }
   ],
-  "dataQuality": {}
+  "dataQuality": {
+    "items": [],
+    "summary": { "okCount": 0, "referenceCount": 0, "noTargetCount": 0 }
+  }
 }

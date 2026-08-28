@@ -17,7 +17,7 @@ use crate::{
 use super::super::{object_store::R2ObjectStore, queue};
 use super::{
     DeliveryDisposition, OcrChildLauncher, OcrConsumerConfig, OcrConsumerError,
-    PendingRecoveryPolicy, process_delivery,
+    PendingRecoveryPolicy, process_delivery, shutdown_requested,
 };
 
 #[expect(
@@ -37,9 +37,12 @@ pub(super) async fn consume_deliveries<L: OcrChildLauncher>(
     let mut recovery_cursor = queue::PendingRecoveryCursor::start();
     let mut recovery_schedule =
         PelRecoverySchedule::new(Instant::now(), config.pel_recovery_interval);
-    while !*shutdown.borrow() {
+    while !shutdown_requested(shutdown) {
         let delivery =
             next_delivery(redis, config, &mut recovery_cursor, &mut recovery_schedule).await?;
+        if shutdown_requested(shutdown) {
+            break;
+        }
         let Some(delivery) = delivery else {
             continue;
         };

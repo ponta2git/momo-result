@@ -27,6 +27,7 @@ pub(crate) mod control;
     )
 )]
 pub(crate) mod endurance;
+mod native_engine;
 #[cfg_attr(
     not(target_os = "linux"),
     expect(
@@ -48,6 +49,7 @@ mod runtime_config;
 pub(crate) use child_launcher::probe_isolated_child_lifecycle;
 #[cfg(target_os = "linux")]
 pub(crate) use child_launcher::{IsolatedOcrChildLauncher, analyze_isolated_local_image_bytes};
+pub(crate) use native_engine::analyze_local_image_bytes;
 pub(crate) use runtime_config::OcrRuntimeConfigError;
 pub(crate) use runtime_config::{
     OcrConsumerMode, OcrConsumerRuntimeConfig, consumer_mode_from_environment,

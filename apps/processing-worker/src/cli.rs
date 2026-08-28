@@ -124,6 +124,10 @@ enum Command {
     ChildOcr {
         #[arg(long)]
         tessdata_path: Option<PathBuf>,
+        #[arg(long)]
+        parent_liveness_fd: i32,
+        #[arg(long)]
+        parent_liveness_timeout_ms: u64,
     },
     #[command(hide = true)]
     ChildWait {
@@ -289,7 +293,19 @@ pub async fn entrypoint() -> ExitCode {
             }
             return exit_code(allocate_and_touch(*allocation_bytes));
         }
-        Command::ChildOcr { tessdata_path } => {
+        Command::ChildOcr {
+            tessdata_path,
+            parent_liveness_fd,
+            parent_liveness_timeout_ms,
+        } => {
+            if crate::process::start_parent_liveness_monitor(
+                *parent_liveness_fd,
+                Duration::from_millis(*parent_liveness_timeout_ms),
+            )
+            .is_err()
+            {
+                return exit_code(crate::process::CHILD_PARENT_LIVENESS_LOST_EXIT_CODE);
+            }
             return exit_code(crate::ocr::child::execute(tessdata_path.clone()));
         }
         Command::ChildCompute {
@@ -304,6 +320,14 @@ pub async fn entrypoint() -> ExitCode {
             parent_liveness_fd,
             parent_liveness_timeout_ms,
         } => {
+            if crate::process::start_parent_liveness_monitor(
+                *parent_liveness_fd,
+                Duration::from_millis(*parent_liveness_timeout_ms),
+            )
+            .is_err()
+            {
+                return exit_code(crate::process::CHILD_PARENT_LIVENESS_LOST_EXIT_CODE);
+            }
             if crate::process::wait_for_child_start_barrier().is_err() {
                 return exit_code(crate::process::CHILD_START_BARRIER_FAILED_EXIT_CODE);
             }
@@ -320,8 +344,6 @@ pub async fn entrypoint() -> ExitCode {
                         maximum_chunk_count: *maximum_chunk_count,
                         maximum_total_bytes: *maximum_total_bytes,
                         maximum_file_count: *maximum_file_count,
-                        parent_liveness_fd: *parent_liveness_fd,
-                        parent_liveness_timeout: Duration::from_millis(*parent_liveness_timeout_ms),
                     },
                 )
                 .await,
@@ -469,7 +491,7 @@ async fn run_ocr_pilot(
 ) -> Result<(), String> {
     let (bytes, hints) = read_ocr_pilot_input(image_path, layout_family).await?;
     let output =
-        momo_ocr::analyze_local_image_bytes(tessdata_path, &bytes, screen_type.into(), &hints)
+        crate::ocr::analyze_local_image_bytes(tessdata_path, &bytes, screen_type.into(), &hints)
             .map_err(|error| format!("OCR pilot failed: {error:?}"))?;
     write_ocr_pilot_output(&output)
 }

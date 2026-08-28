@@ -2,10 +2,13 @@ use image::DynamicImage;
 use serde::Serialize;
 
 use super::{
-    AliasResolver, OcrWarning, RecognitionSession, Rect, crop,
+    AliasResolver, OcrWarning, RecognitionPort, Rect, crop,
     geometry::GeometryError,
     preprocess::prepare_slot_name_variants,
-    recognition::{RecognitionError, RecognitionLanguage},
+    recognition::{
+        PageSegmentationMode, RecognitionError, RecognitionLanguage, recognize_color,
+        recognize_gray,
+    },
     scale_profile_rect,
 };
 
@@ -42,7 +45,7 @@ struct NameCandidate {
 pub(super) fn detect(
     image: &DynamicImage,
     aliases: &AliasResolver,
-    recognition: &mut RecognitionSession,
+    recognition: &mut dyn RecognitionPort,
 ) -> Result<PlayerOrderDetection, PlayerOrderError> {
     let mut slots = Vec::with_capacity(SLOT_XS.len());
     let mut warnings = Vec::new();
@@ -97,7 +100,7 @@ pub(super) fn detect(
 fn recognize_slot_name(
     image: &DynamicImage,
     aliases: &AliasResolver,
-    recognition: &mut RecognitionSession,
+    recognition: &mut dyn RecognitionPort,
 ) -> Result<(Option<String>, Option<f64>), RecognitionError> {
     let raw_candidates = recognize_raw_name(image, aliases, recognition)?;
     if let Some(candidate) = raw_candidates
@@ -123,11 +126,19 @@ fn recognize_slot_name(
 fn recognize_raw_name(
     image: &DynamicImage,
     aliases: &AliasResolver,
-    recognition: &mut RecognitionSession,
+    recognition: &mut dyn RecognitionPort,
 ) -> Result<Vec<NameCandidate>, RecognitionError> {
     let mut candidates = Vec::new();
-    for psm in [6_u8, 8] {
-        let recognized = recognition.recognize_color(image, RecognitionLanguage::General, psm)?;
+    for segmentation in [
+        PageSegmentationMode::SingleBlock,
+        PageSegmentationMode::SingleWord,
+    ] {
+        let recognized = recognize_color(
+            recognition,
+            image,
+            RecognitionLanguage::General,
+            segmentation,
+        )?;
         append_name_candidate(&mut candidates, aliases, &recognized);
     }
     Ok(candidates)
@@ -136,11 +147,19 @@ fn recognize_raw_name(
 fn recognize_name_variant(
     image: &image::GrayImage,
     aliases: &AliasResolver,
-    recognition: &mut RecognitionSession,
+    recognition: &mut dyn RecognitionPort,
 ) -> Result<Vec<NameCandidate>, RecognitionError> {
     let mut candidates = Vec::new();
-    for psm in [6_u8, 8] {
-        let recognized = recognition.recognize(image, RecognitionLanguage::General, psm)?;
+    for segmentation in [
+        PageSegmentationMode::SingleBlock,
+        PageSegmentationMode::SingleWord,
+    ] {
+        let recognized = recognize_gray(
+            recognition,
+            image,
+            RecognitionLanguage::General,
+            segmentation,
+        )?;
         append_name_candidate(&mut candidates, aliases, &recognized);
     }
     Ok(candidates)

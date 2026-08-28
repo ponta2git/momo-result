@@ -68,6 +68,7 @@ SET task_kind = NULL, owner = NULL, job_id = NULL, attempt_id = NULL,
     updated_at = clock_timestamp()
 WHERE slot_key = 'shared-heavy-work'
   AND (owner IS NULL OR owner IN ('ci-preemption-analysis-worker','ci-preemption-ocr-worker'));
+DELETE FROM ocr_queue_outbox WHERE job_id = 'ci-preemption-ocr-job';
 DELETE FROM ocr_drafts WHERE job_id = 'ci-preemption-ocr-job';
 DELETE FROM ocr_jobs WHERE id = 'ci-preemption-ocr-job';
 DELETE FROM source_images WHERE id = 'ci-preemption-source-image';
@@ -222,6 +223,27 @@ INSERT INTO ocr_jobs (
 ) VALUES (
   'ci-preemption-ocr-job', 'ci-preemption-draft', 'ci-preemption-source-image', NULL,
   'total_assets', 'queued', 'ci-preemption-source-image', 2, clock_timestamp()
+);
+INSERT INTO ocr_queue_outbox (
+  id, job_id, dedupe_key, stream_payload, schema_version, status,
+  attempt_count, next_attempt_at, delivered_at
+) VALUES (
+  'ocr-outbox-ci-preemption-ocr-job', 'ci-preemption-ocr-job',
+  'ocr-job:ci-preemption-ocr-job',
+  jsonb_build_object(
+    'schemaVersion', '2',
+    'jobId', 'ci-preemption-ocr-job',
+    'draftId', 'ci-preemption-draft',
+    'sourceImageId', 'ci-preemption-source-image',
+    'imageObjectKey', 'source-images/ci-preemption-source.png',
+    'sha256', repeat('ab', 32),
+    'byteLength', '68',
+    'mediaType', 'image/png',
+    'requestedScreenType', 'total_assets',
+    'attempt', '1',
+    'enqueuedAt', '2026-08-12T00:00:00Z'
+  ),
+  2, 'DELIVERED', 0, clock_timestamp(), clock_timestamp()
 );
 SQL
 

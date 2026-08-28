@@ -60,6 +60,19 @@ impl RequestedScreenType {
             Self::IncidentLog => "incident_log",
         }
     }
+
+    /// Parser profile that a successful result for this screen must identify.
+    ///
+    /// The isolated child emits this identifier and the parent uses the same capability-owned
+    /// mapping when it validates an untrusted success candidate.
+    #[must_use]
+    pub const fn expected_profile_id(self) -> &'static str {
+        match self {
+            Self::TotalAssets => "full-hd-total-assets-v1",
+            Self::Revenue => "full-hd-revenue-v1",
+            Self::IncidentLog => "full-hd-incident-log-v1",
+        }
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]

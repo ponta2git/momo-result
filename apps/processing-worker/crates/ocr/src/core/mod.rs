@@ -17,8 +17,11 @@ pub(crate) use domain::{DraftPayload, OcrField, OcrWarning, PlayerDraft};
 pub(crate) use geometry::{Rect, crop, scale_profile_rect};
 pub(crate) use incident::{CountRecognition, PsmAttempt};
 pub(crate) use money::{has_unit_bearing_money_text, parse_money_man_yen, parse_revenue_man_yen};
-pub(crate) use pipeline::{CoreOcrError, CoreOcrOutput, analyze};
-pub(crate) use recognition::{RecognitionError, RecognitionSession, RecognizedText};
+pub use pipeline::{OcrPhase, OcrPhaseEvent, analyze};
+pub use recognition::{
+    PageSegmentationMode, RecognitionError, RecognitionFrame, RecognitionLanguage, RecognitionPort,
+    RecognizedText,
+};
 
 #[cfg(test)]
 mod characterization_tests;

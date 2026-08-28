@@ -30,7 +30,7 @@ Redis は少なくとも1回配送する transport であり、job 状態の正�
 - transient retry の既知 PEL entry は claim 可能時刻に個別確認し、process 停止後は PEL recovery が回収する。即時 nack や新規 message による retry へ置き換えない。
 - claim 前に delivery count と idle を再確認し、bounded attempt を超えた entry だけを DLQ 判断へ進める。OCR execution timeout と PEL claim idle を同じ設定にしない。
 - payload field、型、上限、列挙値は v2 schema を正本とし、全 Redis value は string とする。未知 field、非 string value、schema 違反を拒否する。
-- payload は非公開 object の opaque key と、取得後の再検証に必要な ID / metadata だけを運ぶ。local path、URL、bucket、endpoint、credential を含めない。
+- payload は非公開 object の opaque key と、取得後の再検証に必要な ID / metadata だけを運ぶ。object key は相対的な slash 区切りとし、空・`.`・`..` segment、末尾 slash、local path、URL、bucket、endpoint、credential を含めない。
 - producer は upload metadata を確定してから enqueue intent を作り、consumer は取得 bytes の length、media type、checksum を OCR 前に再検証する。object key を filesystem path として連結しない。
 - `requestedScreenType` は明示し、legacy decode を除いて `auto` を受理しない。
 - `ocrHintsJson` は hints schema に従う省略可能な補助情報であり、画面種別、player、OCR 結果の正本にしない。

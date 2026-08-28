@@ -4,19 +4,25 @@ use regex::Regex;
 
 const MINUS_SIGNS: &str = "-−ー一–—‐";
 
-static MONEY_PATTERN: LazyLock<Option<Regex>> = LazyLock::new(|| {
-    Regex::new(
+static MONEY_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
+    static_regex(
         r"(?P<sign>[-−ー一–—‐])?\s*(?:(?P<oku>[0-9]+)\s*億\s*(?:(?P<oku_man>[0-9]+)\s*万\s*)?|(?P<man>[0-9]+)\s*万\s*|(?P<bare>[0-9]+)\s*)[円口幅]",
     )
-    .ok()
 });
-static PARTIAL_OKU_PATTERN: LazyLock<Option<Regex>> = LazyLock::new(|| {
-    Regex::new(r"(?P<sign>[-−ー一–—‐])?\s*(?P<oku>[0-9]+)\s*億\s*(?P<man>[0-9]{3,4})").ok()
+static PARTIAL_OKU_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
+    static_regex(r"(?P<sign>[-−ー一–—‐])?\s*(?P<oku>[0-9]+)\s*億\s*(?P<man>[0-9]{3,4})")
 });
-static DIGIT_FALLBACK_PATTERN: LazyLock<Option<Regex>> =
-    LazyLock::new(|| Regex::new(r"[0-9]{5,8}").ok());
-static MINUS_ONE_HUNDREDS_PATTERN: LazyLock<Option<Regex>> =
-    LazyLock::new(|| Regex::new(r"(?P<sign>[-−ー一–—‐])\s*[\]}]\s*(?P<rest>[0-9]{2})\s*万").ok());
+static DIGIT_FALLBACK_PATTERN: LazyLock<Regex> = LazyLock::new(|| static_regex(r"[0-9]{5,8}"));
+static MINUS_ONE_HUNDREDS_PATTERN: LazyLock<Regex> =
+    LazyLock::new(|| static_regex(r"(?P<sign>[-−ー一–—‐])\s*[\]}]\s*(?P<rest>[0-9]{2})\s*万"));
+
+#[expect(
+    clippy::expect_used,
+    reason = "invalid static regex literals are developer defects exercised by capability tests"
+)]
+fn static_regex(pattern: &'static str) -> Regex {
+    Regex::new(pattern).expect("static OCR money regex must compile")
+}
 
 #[derive(Clone, Copy)]
 struct Candidate {
@@ -40,16 +46,11 @@ pub(crate) fn parse_revenue_man_yen(value: &str) -> Option<i64> {
 
 pub(crate) fn has_unit_bearing_money_text(value: &str) -> bool {
     let normalized = normalize_units(value).replace([',', '，'], "");
-    MONEY_PATTERN
-        .as_ref()
-        .is_some_and(|pattern| pattern.is_match(&normalized))
+    MONEY_PATTERN.is_match(&normalized)
 }
 
 fn unit_candidates(value: &str) -> Vec<Candidate> {
-    let Some(pattern) = MONEY_PATTERN.as_ref() else {
-        return Vec::new();
-    };
-    pattern
+    MONEY_PATTERN
         .captures_iter(value)
         .filter_map(|captures| {
             let matched = captures.iter().next().flatten()?;
@@ -82,10 +83,7 @@ fn unit_candidates(value: &str) -> Vec<Candidate> {
 }
 
 fn partial_oku_candidates(value: &str) -> Vec<Candidate> {
-    let Some(pattern) = PARTIAL_OKU_PATTERN.as_ref() else {
-        return Vec::new();
-    };
-    pattern
+    PARTIAL_OKU_PATTERN
         .captures_iter(value)
         .filter_map(|captures| {
             let matched = captures.iter().next().flatten()?;
@@ -108,10 +106,7 @@ fn partial_oku_candidates(value: &str) -> Vec<Candidate> {
 }
 
 fn digit_fallback_candidates(value: &str) -> Vec<Candidate> {
-    let Some(pattern) = DIGIT_FALLBACK_PATTERN.as_ref() else {
-        return Vec::new();
-    };
-    pattern
+    DIGIT_FALLBACK_PATTERN
         .find_iter(value)
         .filter_map(|matched| {
             let bounded_left = value
@@ -183,15 +178,13 @@ fn normalize_units(value: &str) -> String {
             .replace(&format!("{sign} ら"), &format!("{sign} 5"));
     }
     normalized = normalized.replace("億/", "億7").replace("億／", "億7");
-    if let Some(pattern) = MINUS_ONE_HUNDREDS_PATTERN.as_ref() {
-        normalized = pattern
-            .replace_all(&normalized, |captures: &regex::Captures<'_>| {
-                let sign = captures.name("sign").map_or("", |matched| matched.as_str());
-                let rest = captures.name("rest").map_or("", |matched| matched.as_str());
-                format!("{sign}1{rest}万")
-            })
-            .into_owned();
-    }
+    normalized = MINUS_ONE_HUNDREDS_PATTERN
+        .replace_all(&normalized, |captures: &regex::Captures<'_>| {
+            let sign = captures.name("sign").map_or("", |matched| matched.as_str());
+            let rest = captures.name("rest").map_or("", |matched| matched.as_str());
+            format!("{sign}1{rest}万")
+        })
+        .into_owned();
     normalized
 }
 
@@ -281,5 +274,13 @@ mod tests {
     fn bounded_glyph_repairs_preserve_game_money_units() {
         assert_eq!(parse_money_man_yen("NO11社長 2億/600万円"), Some(27_600));
         assert_eq!(parse_money_man_yen("ぽんた社長 -] 00万円"), Some(-100));
+    }
+
+    #[test]
+    fn static_money_patterns_are_validated_as_code_invariants() {
+        assert!(MONEY_PATTERN.is_match("1万円"));
+        assert!(PARTIAL_OKU_PATTERN.is_match("1億2345"));
+        assert!(DIGIT_FALLBACK_PATTERN.is_match("12345"));
+        assert!(MINUS_ONE_HUNDREDS_PATTERN.is_match("-] 00万"));
     }
 }

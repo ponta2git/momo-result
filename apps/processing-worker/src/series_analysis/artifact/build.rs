@@ -30,6 +30,7 @@ struct ArtifactWriter<'a> {
     total_bytes: u64,
     encoding_duration: Duration,
     resources: Vec<ResourceManifest>,
+    payloads: payload::PayloadSetValidator,
 }
 
 impl<'a> ArtifactWriter<'a> {
@@ -44,6 +45,7 @@ impl<'a> ArtifactWriter<'a> {
             total_bytes: 0,
             encoding_duration: Duration::ZERO,
             resources: Vec::with_capacity(initial_capacity),
+            payloads: payload::PayloadSetValidator::new(),
         })
     }
 
@@ -59,7 +61,7 @@ impl<'a> ArtifactWriter<'a> {
         {
             return Err(ArtifactError::ResourceBound);
         }
-        payload::validate_computed(&resource)?;
+        self.payloads.add_computed(&resource)?;
         let scope_key = resource.scope.key();
         let item_key = resource_item_key(&resource.kind, &scope_key);
         let path = resource_file_name(&resource.kind, &scope_key, &item_key);
@@ -107,9 +109,10 @@ impl<'a> ArtifactWriter<'a> {
         Ok(())
     }
 
-    fn finish(mut self) -> (u64, Duration, Vec<ResourceManifest>) {
+    fn finish(mut self) -> Result<(u64, Duration, Vec<ResourceManifest>), ArtifactError> {
+        self.payloads.finish()?;
         self.resources.sort_by(ResourceManifest::canonical_cmp);
-        (self.total_bytes, self.encoding_duration, self.resources)
+        Ok((self.total_bytes, self.encoding_duration, self.resources))
     }
 }
 
@@ -158,14 +161,14 @@ pub(crate) fn build_artifact(
 
     let mut writer = ArtifactWriter::new(request, output_directory)?;
     try_for_each_resource(input, |resource| writer.write(resource))?;
-    let (total_bytes, mut encoding_duration, resources) = writer.finish();
+    let (total_bytes, mut encoding_duration, resources) = writer.finish()?;
 
     let manifest_encoding_started = Instant::now();
     let mut manifest = ArtifactManifest {
         manifest_version: MANIFEST_VERSION,
         artifact_id: request.artifact_id.clone(),
-        game_title_id: input.game_title_id.clone(),
-        input_revision: input.input_revision.to_string(),
+        game_title_id: String::from(input.game_title_id()),
+        input_revision: input.input_revision().to_string(),
         algorithm_version: request.algorithm_version.clone(),
         artifact_schema_version: ARTIFACT_SCHEMA_VERSION,
         source_input_checksum,
@@ -213,12 +216,12 @@ fn source_input_checksum(input: &NormalizedAnalysisInput) -> Result<String, Arti
     let mut buffer = Vec::with_capacity(512);
     digest.update_serialized(
         &SourceHeader {
-            game_title_id: &input.game_title_id,
-            input_revision: Decimal(input.input_revision),
+            game_title_id: input.game_title_id(),
+            input_revision: Decimal(input.input_revision()),
         },
         &mut buffer,
     )?;
-    for row in &input.player_matches {
+    for row in input.player_matches() {
         digest.update_serialized(&SourceRow::from(row), &mut buffer)?;
     }
     Ok(digest.finalize())

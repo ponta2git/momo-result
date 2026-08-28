@@ -4,8 +4,43 @@
   "player": { "memberId": "member-1" },
   "payload": {
     "kind": "rank_average_history",
-    "summary": { "targetCount": 1 },
-    "matchRows": [],
-    "eventRows": []
+    "summary": {
+      "targetCount": 1,
+      "currentAverageRank": 1.0,
+      "averageRankDeltaFromFirst": null,
+      "latestHeldEventAverageRankDelta": null,
+      "qualityStatus": "reference"
+    },
+    "matchRows": [
+      {
+        "itemId": "rank-history:match-1",
+        "matchIndex": 1,
+        "matchId": "match-1",
+        "playedAt": "2026-01-01T00:00:00.000000Z",
+        "heldEventId": "event-1",
+        "matchNoInEvent": 1,
+        "rank": 1,
+        "previousRank": null,
+        "rankDelta": null,
+        "cumulativeAverageRank": 1.0,
+        "cumulativeAverageRankDelta": null,
+        "changeDirection": "first_observation"
+      }
+    ],
+    "eventRows": [
+      {
+        "heldEventId": "event-1",
+        "firstPlayedAt": "2026-01-01T00:00:00.000000Z",
+        "matchCount": 1,
+        "ranks": [1],
+        "eventAverageRank": 1.0,
+        "eventAverageRankDelta": null,
+        "eventRankDelta": null,
+        "cumulativeAverageBefore": null,
+        "cumulativeAverageAfter": 1.0,
+        "cumulativeAverageDelta": null,
+        "changeDirection": "first_observation"
+      }
+    ]
   }
 }

@@ -162,15 +162,12 @@ impl AnalysisConsumerConfig {
         let pel_recovery_interval = duration_millis("MOMO_ANALYSIS_PEL_RECOVERY_INTERVAL_MS")?;
         let required_margin = heartbeat_interval
             .checked_mul(3)
-            .and_then(|value| value.checked_add(child_stop_grace));
+            .and_then(|value| value.checked_add(child_stop_grace))
+            .and_then(|value| value.checked_add(execution_limits.finalization_timeout));
         if required_margin.is_none_or(|required| required >= lease_duration) {
             return Err(AnalysisConfigError::UnsafeLeaseRelationship);
         }
-        if heartbeat_interval
-            .checked_add(execution_limits.finalization_timeout)
-            .is_none_or(|required| required >= lease_duration)
-            || redis_block > heartbeat_interval
-        {
+        if redis_block > heartbeat_interval {
             return Err(AnalysisConfigError::UnsafeLeaseRelationship);
         }
         let redis_stream = env::var("MOMO_REDIS_ANALYSIS_STREAM")

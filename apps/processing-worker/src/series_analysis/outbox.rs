@@ -22,6 +22,7 @@ const RUNTIME_BATCH_SIZE: usize = 10;
 const RUNTIME_CLAIM_TTL: Duration = Duration::from_secs(30);
 const RUNTIME_MAXIMUM_PUBLISH_BACKOFF: Duration = Duration::from_mins(1);
 const RUNTIME_SEMANTIC_REDELIVERY_AFTER: Duration = Duration::from_mins(5);
+const LOCK_CONTENTION_RETRY_DELAY: Duration = Duration::from_millis(250);
 
 /// Bounded policy required by the Series Analysis outbox state machine.
 ///
@@ -74,8 +75,13 @@ impl SeriesAnalysisOutboxConfig {
         {
             return Err(SeriesAnalysisOutboxError::InvalidConfiguration);
         }
-        i64::try_from(semantic_redelivery_after.as_millis())
-            .map_err(SeriesAnalysisOutboxError::DurationBound)?;
+        for duration in [
+            claim_ttl,
+            maximum_publish_backoff,
+            semantic_redelivery_after,
+        ] {
+            postgres_duration_milliseconds(duration)?;
+        }
         Ok(Self {
             stream,
             batch_size,
@@ -111,16 +117,8 @@ impl SeriesAnalysisOutboxDriver {
     }
 
     async fn drain_once(&mut self) -> Result<DrainBatch, SeriesAnalysisOutboxError> {
-        let wall_now = SystemTime::now();
-        let monotonic_now = Instant::now();
-        let redeliver_before = wall_now
-            .checked_sub(self.config.semantic_redelivery_after)
-            .ok_or(SeriesAnalysisOutboxError::TimeBound)?;
-        let claim_until = wall_now
-            .checked_add(self.config.claim_ttl)
-            .ok_or(SeriesAnalysisOutboxError::TimeBound)?;
-        let reconciled = self.reconcile_queued(wall_now, redeliver_before).await?;
-        let claims = self.claim_due(wall_now, claim_until).await?;
+        let reconciled = self.reconcile_queued().await?;
+        let claims = self.claim_due().await?;
         let claimed = claims.len();
         let mut delivered = 0_usize;
         let mut retried = 0_usize;
@@ -145,27 +143,31 @@ impl SeriesAnalysisOutboxDriver {
             return Ok(DrainBatch::progress());
         }
         let next = self
-            .next_deadline()
+            .next_delay()
             .await?
-            .map(|deadline| wall_deadline_to_monotonic(wall_now, monotonic_now, deadline));
-        Ok(DrainBatch::idle(next.transpose()?))
+            .map(bounded_idle_delay)
+            .map(monotonic_deadline)
+            .transpose()?;
+        Ok(DrainBatch::idle(next))
     }
 
-    async fn reconcile_queued(
-        &mut self,
-        now: SystemTime,
-        redeliver_before: SystemTime,
-    ) -> Result<u64, SeriesAnalysisOutboxError> {
+    async fn reconcile_queued(&mut self) -> Result<u64, SeriesAnalysisOutboxError> {
         let limit =
             i64::try_from(self.config.batch_size).map_err(SeriesAnalysisOutboxError::BatchBound)?;
+        let redelivery_milliseconds =
+            postgres_duration_milliseconds(self.config.semantic_redelivery_after)?;
         let transaction = self.database.transaction().await?;
         let inserted = transaction
             .execute(
                 r"
-                WITH candidates AS (
+                WITH timing AS (
+                  SELECT clock_timestamp() AS now
+                ), candidates AS (
                   SELECT j.id, j.input_revision
                   FROM series_analysis_jobs j
+                  CROSS JOIN timing
                   WHERE j.status = 'queued'
+                    AND j.available_at <= timing.now
                     AND j.lease_owner IS NULL
                     AND j.lease_attempt_id IS NULL
                     AND j.lease_fencing_token IS NULL
@@ -176,62 +178,73 @@ impl SeriesAnalysisOutboxDriver {
                       WHERE q.job_id = j.id
                         AND (
                           q.status IN ('pending', 'in_flight')
-                          OR (q.status = 'delivered' AND q.delivered_at >= $2)
+                          OR (
+                            q.status = 'delivered'
+                            AND q.delivered_at >= timing.now
+                              - ($1::bigint * interval '1 millisecond')
+                          )
                         )
                     )
                   ORDER BY j.available_at, j.requested_at, j.id
-                  LIMIT $3
-                  FOR UPDATE SKIP LOCKED
+                  LIMIT $2
+                  FOR UPDATE OF j SKIP LOCKED
                 )
                 INSERT INTO series_analysis_queue_outbox (id, job_id, dedupe_key, next_attempt_at)
                 SELECT
                   'analysis-reconcile-' || md5(
-                    id || ':' || input_revision::text || ':' || ($1::timestamptz)::text
+                    id || ':' || input_revision::text || ':' || timing.now::text
                   ),
                   id,
                   'reconcile:' || id || ':' || input_revision::text || ':'
-                    || ($1::timestamptz)::text,
-                  $1::timestamptz
+                    || timing.now::text,
+                  timing.now
                 FROM candidates
+                CROSS JOIN timing
                 ON CONFLICT (dedupe_key) DO NOTHING
                 ",
-                &[&now, &redeliver_before, &limit],
+                &[&redelivery_milliseconds, &limit],
             )
             .await?;
         transaction.commit().await?;
         Ok(inserted)
     }
 
-    async fn claim_due(
-        &mut self,
-        now: SystemTime,
-        claim_until: SystemTime,
-    ) -> Result<Vec<OutboxClaim>, SeriesAnalysisOutboxError> {
+    async fn claim_due(&mut self) -> Result<Vec<OutboxClaim>, SeriesAnalysisOutboxError> {
         let limit =
             i64::try_from(self.config.batch_size).map_err(SeriesAnalysisOutboxError::BatchBound)?;
+        let claim_ttl_milliseconds = postgres_duration_milliseconds(self.config.claim_ttl)?;
         let transaction = self.database.transaction().await?;
         let rows = transaction
             .query(
                 r"
-                WITH candidate AS (
-                  SELECT id
-                  FROM series_analysis_queue_outbox
-                  WHERE (status = 'pending' AND next_attempt_at <= $1)
-                     OR (status = 'in_flight' AND claim_expires_at < $1)
-                  ORDER BY next_attempt_at, created_at, id
-                  LIMIT $2
-                  FOR UPDATE SKIP LOCKED
+                WITH timing AS (
+                  SELECT clock_timestamp() AS now
+                ), candidate AS (
+                  SELECT q.id
+                  FROM series_analysis_queue_outbox q
+                  JOIN series_analysis_jobs j ON j.id = q.job_id
+                  CROSS JOIN timing
+                  WHERE j.available_at <= timing.now
+                    AND (
+                      (q.status = 'pending' AND q.next_attempt_at <= timing.now)
+                      OR (q.status = 'in_flight' AND q.claim_expires_at <= timing.now)
+                    )
+                  ORDER BY q.next_attempt_at, q.created_at, q.id
+                  LIMIT $1
+                  FOR UPDATE OF q SKIP LOCKED
                 )
                 UPDATE series_analysis_queue_outbox q
                 SET status = 'in_flight',
-                    claim_expires_at = $3,
-                    last_attempt_at = $1,
-                    updated_at = $1
+                    claim_expires_at = timing.now
+                      + ($2::bigint * interval '1 millisecond'),
+                    last_attempt_at = timing.now,
+                    updated_at = timing.now
                 FROM candidate
+                CROSS JOIN timing
                 WHERE q.id = candidate.id
                 RETURNING q.id, q.job_id, q.attempt_count, q.claim_expires_at
                 ",
-                &[&now, &limit, &claim_until],
+                &[&limit, &claim_ttl_milliseconds],
             )
             .await?;
         let claims = rows
@@ -251,9 +264,7 @@ impl SeriesAnalysisOutboxDriver {
             self.redis.xadd(&self.config.stream, "*", &fields).await;
         match published {
             Ok(message_id) => {
-                let delivered = self
-                    .mark_delivered(claim, &message_id, SystemTime::now())
-                    .await?;
+                let delivered = self.mark_delivered(claim, &message_id).await?;
                 if delivered {
                     Ok(PublishResult::Delivered)
                 } else {
@@ -265,13 +276,9 @@ impl SeriesAnalysisOutboxDriver {
                 }
             }
             Err(_publish_error) => {
-                let now = SystemTime::now();
                 let retry_delay =
                     delivery_retry_delay(claim.attempt_count, self.config.maximum_publish_backoff)?;
-                let next_attempt_at = now
-                    .checked_add(retry_delay)
-                    .ok_or(SeriesAnalysisOutboxError::TimeBound)?;
-                let released = self.release_for_retry(claim, next_attempt_at, now).await?;
+                let released = self.release_for_retry(claim, retry_delay).await?;
                 if released {
                     warn!(
                         event = "analysis_outbox_publish_deferred",
@@ -295,7 +302,6 @@ impl SeriesAnalysisOutboxDriver {
         &self,
         claim: &OutboxClaim,
         redis_message_id: &str,
-        now: SystemTime,
     ) -> Result<bool, SeriesAnalysisOutboxError> {
         let updated = self
             .database
@@ -305,14 +311,14 @@ impl SeriesAnalysisOutboxDriver {
                 SET status = 'delivered',
                     claim_expires_at = NULL,
                     redis_message_id = $3,
-                    delivered_at = $4,
+                    delivered_at = clock_timestamp(),
                     last_error = NULL,
-                    updated_at = $4
+                    updated_at = clock_timestamp()
                 WHERE id = $1
                   AND status = 'in_flight'
                   AND claim_expires_at = $2
                 ",
-                &[&claim.id, &claim.claim_expires_at, &redis_message_id, &now],
+                &[&claim.id, &claim.claim_expires_at, &redis_message_id],
             )
             .await?;
         Ok(updated == 1)
@@ -321,21 +327,36 @@ impl SeriesAnalysisOutboxDriver {
     async fn release_for_retry(
         &mut self,
         claim: &OutboxClaim,
-        next_attempt_at: SystemTime,
-        now: SystemTime,
+        retry_delay: Duration,
     ) -> Result<bool, SeriesAnalysisOutboxError> {
+        let retry_milliseconds = postgres_duration_milliseconds(retry_delay)?;
+        let semantic_redelivery_milliseconds =
+            postgres_duration_milliseconds(self.config.semantic_redelivery_after)?;
         let transaction = self.database.transaction().await?;
+        let boundary_exists = if claim.exhausts_delivery_attempts() {
+            lock_terminal_retry_boundary(&transaction, claim).await?
+        } else {
+            lock_retry_job(&transaction, claim).await?
+        };
+        if !boundary_exists {
+            transaction.rollback().await?;
+            return Ok(false);
+        }
         let released = transaction
             .query_opt(
                 r"
                 UPDATE series_analysis_queue_outbox
-                SET status = CASE WHEN attempt_count + 1 >= 3 THEN 'failed' ELSE 'pending' END,
+                SET status = CASE WHEN attempt_count + 1 >= $5 THEN 'failed' ELSE 'pending' END,
                     attempt_count = attempt_count + 1,
                     claim_expires_at = NULL,
-                    next_attempt_at = $3,
+                    next_attempt_at = GREATEST(
+                      clock_timestamp() + ($3::bigint * interval '1 millisecond'),
+                      (SELECT available_at FROM series_analysis_jobs WHERE id = $6)
+                    ),
                     last_error = $4,
-                    updated_at = $5
+                    updated_at = clock_timestamp()
                 WHERE id = $1
+                  AND job_id = $6
                   AND status = 'in_flight'
                   AND claim_expires_at = $2
                 RETURNING job_id, status
@@ -343,9 +364,10 @@ impl SeriesAnalysisOutboxDriver {
                 &[
                     &claim.id,
                     &claim.claim_expires_at,
-                    &next_attempt_at,
+                    &retry_milliseconds,
                     &QUEUE_PUBLISH_ERROR_CLASS,
-                    &now,
+                    &MAXIMUM_DELIVERY_ATTEMPTS,
+                    &claim.job_id,
                 ],
             )
             .await?
@@ -354,26 +376,33 @@ impl SeriesAnalysisOutboxDriver {
         if let Some(failure) = &released
             && failure.status == "failed"
         {
-            fail_undeliverable_job(&transaction, &failure.job_id, now).await?;
+            fail_undeliverable_job(
+                &transaction,
+                &failure.job_id,
+                semantic_redelivery_milliseconds,
+            )
+            .await?;
         }
         transaction.commit().await?;
         Ok(released.is_some())
     }
 
-    async fn next_deadline(&self) -> Result<Option<SystemTime>, SeriesAnalysisOutboxError> {
-        let redelivery_millis = i64::try_from(self.config.semantic_redelivery_after.as_millis())
-            .map_err(SeriesAnalysisOutboxError::DurationBound)?;
+    async fn next_delay(&self) -> Result<Option<Duration>, SeriesAnalysisOutboxError> {
+        let redelivery_millis =
+            postgres_duration_milliseconds(self.config.semantic_redelivery_after)?;
         let row = self
             .database
             .query_one(
                 r"
                 WITH semantic_deadlines AS (
-                  SELECT CASE
-                    WHEN COUNT(q.id) FILTER (WHERE q.status = 'delivered') = 0
-                      THEN j.available_at
-                    ELSE MAX(q.delivered_at) FILTER (WHERE q.status = 'delivered')
-                      + ($1::bigint * interval '1 millisecond')
-                  END AS wake_at
+                  SELECT GREATEST(
+                    j.available_at,
+                    COALESCE(
+                      MAX(q.delivered_at) FILTER (WHERE q.status = 'delivered')
+                        + ($1::bigint * interval '1 millisecond'),
+                      j.available_at
+                    )
+                  ) AS wake_at
                   FROM series_analysis_jobs j
                   LEFT JOIN series_analysis_queue_outbox q ON q.job_id = j.id
                   WHERE j.status = 'queued'
@@ -388,22 +417,103 @@ impl SeriesAnalysisOutboxDriver {
                     )
                   GROUP BY j.id, j.available_at
                 ), deadlines AS (
-                  SELECT MIN(next_attempt_at) AS wake_at
-                  FROM series_analysis_queue_outbox WHERE status = 'pending'
+                  SELECT MIN(GREATEST(q.next_attempt_at, j.available_at)) AS wake_at
+                  FROM series_analysis_queue_outbox q
+                  JOIN series_analysis_jobs j ON j.id = q.job_id
+                  WHERE q.status = 'pending'
                   UNION ALL
-                  SELECT MIN(claim_expires_at) AS wake_at
-                  FROM series_analysis_queue_outbox WHERE status = 'in_flight'
+                  SELECT MIN(GREATEST(q.claim_expires_at, j.available_at)) AS wake_at
+                  FROM series_analysis_queue_outbox q
+                  JOIN series_analysis_jobs j ON j.id = q.job_id
+                  WHERE q.status = 'in_flight'
                   UNION ALL
                   SELECT MIN(wake_at) AS wake_at FROM semantic_deadlines
                 )
-                SELECT MIN(wake_at) AS wake_at FROM deadlines
+                SELECT CASE WHEN MIN(wake_at) IS NULL THEN NULL ELSE GREATEST(
+                    CEIL(EXTRACT(EPOCH FROM (MIN(wake_at) - clock_timestamp())) * 1000),
+                    0
+                  )::bigint END AS delay_milliseconds
+                FROM deadlines
                 ",
                 &[&redelivery_millis],
             )
             .await?;
-        row.try_get("wake_at")
-            .map_err(SeriesAnalysisOutboxError::InvalidRecord)
+        let delay_milliseconds = row
+            .try_get::<_, Option<i64>>("delay_milliseconds")
+            .map_err(SeriesAnalysisOutboxError::InvalidRecord)?;
+        delay_milliseconds
+            .map(|value| {
+                u64::try_from(value)
+                    .map(Duration::from_millis)
+                    .map_err(|_error| SeriesAnalysisOutboxError::InvalidRecordValue)
+            })
+            .transpose()
     }
+}
+
+const fn bounded_idle_delay(delay: Duration) -> Duration {
+    if delay.is_zero() {
+        LOCK_CONTENTION_RETRY_DELAY
+    } else {
+        delay
+    }
+}
+
+async fn lock_retry_job(
+    transaction: &Transaction<'_>,
+    claim: &OutboxClaim,
+) -> Result<bool, SeriesAnalysisOutboxError> {
+    // Non-terminal retries update only the authoritative job schedule and its outbox delivery, so
+    // they retain the minimal job -> outbox lock prefix used by control-plane enqueue paths.
+    Ok(transaction
+        .query_opt(
+            "SELECT id FROM series_analysis_jobs WHERE id = $1 FOR UPDATE",
+            &[&claim.job_id],
+        )
+        .await?
+        .is_some())
+}
+
+async fn lock_terminal_retry_boundary(
+    transaction: &Transaction<'_>,
+    claim: &OutboxClaim,
+) -> Result<bool, SeriesAnalysisOutboxError> {
+    let preview = transaction
+        .query_opt(
+            "SELECT game_title_id FROM series_analysis_jobs WHERE id = $1",
+            &[&claim.job_id],
+        )
+        .await?;
+    let Some(preview) = preview else {
+        return Ok(false);
+    };
+    let game_title_id = preview
+        .try_get::<_, String>(0)
+        .map_err(SeriesAnalysisOutboxError::InvalidRecord)?;
+
+    // Exhaustion also updates title/request projections. Acquire the complete shared mutation
+    // prefix before revalidating the job and touching its outbox row: slot -> title -> job -> q.
+    let _locked_slot = crate::execution_slot::lock(transaction).await?;
+    let title_exists = transaction
+        .query_opt(
+            "SELECT game_title_id FROM series_analysis_title_states\x20\
+             WHERE game_title_id = $1 FOR UPDATE",
+            &[&game_title_id],
+        )
+        .await?
+        .is_some();
+    let job_exists = transaction
+        .query_opt(
+            "SELECT id FROM series_analysis_jobs\x20\
+             WHERE id = $1 AND game_title_id = $2 FOR UPDATE",
+            &[&claim.job_id, &game_title_id],
+        )
+        .await?
+        .is_some();
+    if job_exists && !title_exists {
+        return Err(SeriesAnalysisOutboxError::InvalidRecordValue);
+    }
+    Ok(job_exists)
 }
 
 impl OutboxDriver for SeriesAnalysisOutboxDriver {
@@ -415,8 +525,14 @@ impl OutboxDriver for SeriesAnalysisOutboxDriver {
 
     fn failure_kind(error: &Self::Error) -> DriverFailureKind {
         match error {
-            SeriesAnalysisOutboxError::Postgres(_) => DriverFailureKind::Recoverable,
+            SeriesAnalysisOutboxError::Postgres(_)
+            | SeriesAnalysisOutboxError::ExecutionSlot(
+                crate::execution_slot::ExecutionSlotError::Postgres(_),
+            ) => DriverFailureKind::Recoverable,
             SeriesAnalysisOutboxError::InvalidConfiguration
+            | SeriesAnalysisOutboxError::ExecutionSlot(
+                crate::execution_slot::ExecutionSlotError::InvalidState,
+            )
             | SeriesAnalysisOutboxError::InvalidRecord(_)
             | SeriesAnalysisOutboxError::InvalidRecordValue
             | SeriesAnalysisOutboxError::BatchBound(_)
@@ -428,6 +544,7 @@ impl OutboxDriver for SeriesAnalysisOutboxDriver {
     fn safe_error_kind(error: &Self::Error) -> &'static str {
         match error {
             SeriesAnalysisOutboxError::Postgres(_) => "postgres_operation",
+            SeriesAnalysisOutboxError::ExecutionSlot(error) => error.kind(),
             SeriesAnalysisOutboxError::InvalidConfiguration => "configuration",
             SeriesAnalysisOutboxError::InvalidRecord(_) => "invalid_record",
             SeriesAnalysisOutboxError::InvalidRecordValue => "invalid_record_value",
@@ -442,6 +559,8 @@ impl OutboxDriver for SeriesAnalysisOutboxDriver {
 pub(crate) enum SeriesAnalysisOutboxError {
     #[error("Series Analysis outbox PostgreSQL operation failed")]
     Postgres(#[from] tokio_postgres::Error),
+    #[error("Series Analysis outbox execution-slot lock failed")]
+    ExecutionSlot(#[from] crate::execution_slot::ExecutionSlotError),
     #[error("Series Analysis outbox configuration is invalid")]
     InvalidConfiguration,
     #[error("Series Analysis outbox row violates its database contract")]
@@ -462,6 +581,12 @@ struct OutboxClaim {
     job_id: String,
     attempt_count: i32,
     claim_expires_at: SystemTime,
+}
+
+impl OutboxClaim {
+    const fn exhausts_delivery_attempts(&self) -> bool {
+        self.attempt_count >= MAXIMUM_DELIVERY_ATTEMPTS - 1
+    }
 }
 
 #[derive(Debug)]
@@ -529,13 +654,12 @@ fn delivery_retry_delay(
     Ok(Duration::from_secs(seconds).min(maximum))
 }
 
-fn wall_deadline_to_monotonic(
-    wall_now: SystemTime,
-    monotonic_now: Instant,
-    wall_deadline: SystemTime,
-) -> Result<Instant, SeriesAnalysisOutboxError> {
-    let delay = wall_deadline.duration_since(wall_now).unwrap_or_default();
-    monotonic_now
+fn postgres_duration_milliseconds(duration: Duration) -> Result<i64, SeriesAnalysisOutboxError> {
+    i64::try_from(duration.as_millis()).map_err(SeriesAnalysisOutboxError::DurationBound)
+}
+
+fn monotonic_deadline(delay: Duration) -> Result<Instant, SeriesAnalysisOutboxError> {
+    Instant::now()
         .checked_add(delay)
         .ok_or(SeriesAnalysisOutboxError::TimeBound)
 }
@@ -543,68 +667,48 @@ fn wall_deadline_to_monotonic(
 async fn fail_undeliverable_job(
     transaction: &Transaction<'_>,
     job_id: &str,
-    now: SystemTime,
+    semantic_redelivery_milliseconds: i64,
 ) -> Result<(), SeriesAnalysisOutboxError> {
-    let failed = transaction
-        .query_opt(
-            r"
-            UPDATE series_analysis_jobs j
-            SET status = 'failed',
-                finished_at = $2,
-                safe_failure_code = 'dependency_retry_exhausted',
-                updated_at = $2
-            WHERE j.id = $1
-              AND j.status = 'queued'
-              AND NOT EXISTS (
-                SELECT 1 FROM series_analysis_queue_outbox q
-                WHERE q.job_id = j.id AND q.status IN ('pending', 'in_flight', 'delivered')
-              )
-            RETURNING game_title_id
-            ",
-            &[&job_id, &now],
-        )
-        .await?;
-    let Some(failed) = failed else {
+    let Some(game_title_id) =
+        mark_undeliverable_job(transaction, job_id, semantic_redelivery_milliseconds).await?
+    else {
         return Ok(());
     };
-    let game_title_id: String = failed
-        .try_get("game_title_id")
-        .map_err(SeriesAnalysisOutboxError::InvalidRecord)?;
     transaction
         .execute(
             r"
             UPDATE series_analysis_title_states
             SET pending_work = true,
                 last_failure_code = 'dependency_retry_exhausted',
-                last_failure_at = $2,
-                updated_at = $2
+                last_failure_at = clock_timestamp(),
+                updated_at = clock_timestamp()
             WHERE game_title_id = $1
             ",
-            &[&game_title_id, &now],
+            &[&game_title_id],
         )
         .await?;
     transaction
         .execute(
             r"
             UPDATE series_analysis_job_requests
-            SET status = 'fulfilled', fulfilled_at = $2
+            SET status = 'fulfilled', fulfilled_at = clock_timestamp()
             WHERE assigned_job_id = $1 AND status <> 'fulfilled'
             ",
-            &[&job_id, &now],
+            &[&job_id],
         )
         .await?;
     let campaign_rows = transaction
         .query(
             r"
             UPDATE series_analysis_campaign_targets t
-            SET status = 'failed', updated_at = $2
+            SET status = 'failed', updated_at = clock_timestamp()
             FROM series_analysis_job_requests r
             WHERE t.job_request_id = r.id
               AND r.assigned_job_id = $1
               AND t.status NOT IN ('succeeded', 'failed', 'skipped_title_deleted')
             RETURNING t.campaign_id
             ",
-            &[&job_id, &now],
+            &[&job_id],
         )
         .await?;
     let mut campaign_ids = campaign_rows
@@ -617,13 +721,14 @@ async fn fail_undeliverable_job(
     campaign_ids.sort();
     campaign_ids.dedup();
     for campaign_id in campaign_ids {
-        refresh_campaign(transaction, &campaign_id, now).await?;
+        refresh_campaign(transaction, &campaign_id).await?;
     }
     transaction
         .execute(
             r"
             UPDATE series_analysis_operation_requests o
-            SET status = 'terminal', finished_at = COALESCE(o.finished_at, $2)
+            SET status = 'terminal',
+                finished_at = COALESCE(o.finished_at, clock_timestamp())
             WHERE o.scope = 'title'
               AND o.status <> 'terminal'
               AND EXISTS (
@@ -637,16 +742,57 @@ async fn fail_undeliverable_job(
                   AND pending.status <> 'fulfilled'
               )
             ",
-            &[&job_id, &now],
+            &[&job_id],
         )
         .await?;
     Ok(())
 }
 
+async fn mark_undeliverable_job(
+    transaction: &Transaction<'_>,
+    job_id: &str,
+    semantic_redelivery_milliseconds: i64,
+) -> Result<Option<String>, SeriesAnalysisOutboxError> {
+    transaction
+        .query_opt(
+            r"
+            UPDATE series_analysis_jobs j
+            SET status = 'failed',
+                finished_at = clock_timestamp(),
+                safe_failure_code = 'dependency_retry_exhausted',
+                updated_at = clock_timestamp()
+            WHERE j.id = $1
+              AND j.status = 'queued'
+              -- A delivery remains a viable transport path only for the same bounded semantic
+              -- redelivery window used by reconciliation. Historical deliveries must not reset
+              -- the failed row's durable retry budget and keep the job queued forever.
+              AND NOT EXISTS (
+                SELECT 1 FROM series_analysis_queue_outbox q
+                WHERE q.job_id = j.id
+                  AND (
+                    q.status IN ('pending', 'in_flight')
+                    OR (
+                      q.status = 'delivered'
+                      AND q.delivered_at >= clock_timestamp()
+                        - ($2::bigint * interval '1 millisecond')
+                    )
+                  )
+              )
+            RETURNING game_title_id
+            ",
+            &[&job_id, &semantic_redelivery_milliseconds],
+        )
+        .await?
+        .map(|row| {
+            row.try_get("game_title_id")
+                .map_err(SeriesAnalysisOutboxError::InvalidRecord)
+        })
+        .transpose()
+}
+
 async fn refresh_campaign(
     transaction: &Transaction<'_>,
     campaign_id: &str,
-    now: SystemTime,
 ) -> Result<(), SeriesAnalysisOutboxError> {
     transaction
         .execute(
@@ -673,13 +819,14 @@ async fn refresh_campaign(
                   ELSE 'expanding'
                 END,
                 finished_at = CASE
-                  WHEN counts.terminal_count = c.target_count THEN COALESCE(c.finished_at, $2)
+                  WHEN counts.terminal_count = c.target_count
+                    THEN COALESCE(c.finished_at, clock_timestamp())
                   ELSE NULL
                 END
             FROM counts
             WHERE c.id = $1
             ",
-            &[&campaign_id, &now],
+            &[&campaign_id],
         )
         .await?;
     transaction
@@ -688,14 +835,15 @@ async fn refresh_campaign(
             UPDATE series_analysis_operation_requests o
             SET status = CASE WHEN c.status = 'terminal' THEN 'terminal' ELSE 'running' END,
                 finished_at = CASE
-                  WHEN c.status = 'terminal' THEN COALESCE(o.finished_at, c.finished_at, $2)
+                  WHEN c.status = 'terminal'
+                    THEN COALESCE(o.finished_at, c.finished_at, clock_timestamp())
                   ELSE NULL
                 END
             FROM series_analysis_campaigns c
             WHERE c.id = $1
               AND o.id = c.operation_request_id
             ",
-            &[&campaign_id, &now],
+            &[&campaign_id],
         )
         .await?;
     Ok(())

@@ -16,7 +16,7 @@ use sha2::{Digest as _, Sha256};
 use thiserror::Error;
 use url::Url;
 
-use super::contract::{OcrMediaType, OcrQueuePayload};
+use super::contract::{OcrMediaType, SourceImageClaims};
 
 const REGION: &str = "auto";
 const SHA256_METADATA_KEY: &str = "momo-sha256";
@@ -147,6 +147,7 @@ pub(crate) enum R2ObjectStoreConfigError {
 pub(crate) struct R2ObjectStore {
     client: Client,
     bucket: String,
+    download_timeout: Duration,
 }
 
 impl fmt::Debug for R2ObjectStore {
@@ -161,10 +162,11 @@ impl R2ObjectStore {
         Self {
             client: Client::from_conf(build_sdk_config(config)),
             bucket: config.bucket.clone(),
+            download_timeout: config.operation_timeout,
         }
     }
 
-    /// Downloads one private object and independently verifies every queue metadata claim.
+    /// Downloads one private object and independently verifies every validated integrity claim.
     ///
     /// # Errors
     ///
@@ -172,13 +174,24 @@ impl R2ObjectStore {
     /// failures, and any byte, checksum, media type, or `FullHD` integrity mismatch.
     pub(crate) async fn download(
         &self,
-        payload: &OcrQueuePayload,
+        claims: &SourceImageClaims,
+    ) -> Result<VerifiedSourceImage, OcrObjectStoreError> {
+        // The SDK's operation timeout ends when a streaming response is returned, so the adapter
+        // must keep the response body under the same end-to-end dependency bound.
+        tokio::time::timeout(self.download_timeout, self.download_once(claims))
+            .await
+            .map_err(|_elapsed| OcrObjectStoreError::Unavailable)?
+    }
+
+    async fn download_once(
+        &self,
+        claims: &SourceImageClaims,
     ) -> Result<VerifiedSourceImage, OcrObjectStoreError> {
         let output = self
             .client
             .get_object()
             .bucket(&self.bucket)
-            .key(payload.image_object_key())
+            .key(claims.object_key())
             .checksum_mode(ChecksumMode::Enabled)
             .send()
             .await
@@ -192,9 +205,9 @@ impl R2ObjectStore {
                 .map(String::from),
             checksum_sha256: output.checksum_sha256().map(String::from),
         };
-        validate_response_metadata(payload, &metadata)?;
-        let bytes = read_bounded(output.body, payload.byte_length()).await?;
-        verify_bytes(payload, &metadata, bytes)
+        validate_response_metadata(claims, &metadata)?;
+        let bytes = read_bounded(output.body, claims.byte_length()).await?;
+        verify_bytes(claims, &metadata, bytes)
     }
 }
 
@@ -323,14 +336,14 @@ fn classify_get_error(error: &SdkError<GetObjectError>) -> OcrObjectStoreError {
 }
 
 fn validate_response_metadata(
-    payload: &OcrQueuePayload,
+    claims: &SourceImageClaims,
     metadata: &DownloadMetadata,
 ) -> Result<(), OcrObjectStoreError> {
-    let expected_length = i64::try_from(payload.byte_length())
+    let expected_length = i64::try_from(claims.byte_length())
         .map_err(|_conversion_error| OcrObjectStoreError::Integrity)?;
     if metadata.content_length != Some(expected_length)
-        || metadata.content_type.as_deref() != Some(payload.media_type().wire())
-        || metadata.stored_sha256.as_deref() != Some(payload.sha256())
+        || metadata.content_type.as_deref() != Some(claims.media_type().wire())
+        || metadata.stored_sha256.as_deref() != Some(claims.sha256())
     {
         return Err(OcrObjectStoreError::Integrity);
     }
@@ -365,13 +378,13 @@ async fn read_bounded(
 }
 
 fn verify_bytes(
-    payload: &OcrQueuePayload,
+    claims: &SourceImageClaims,
     metadata: &DownloadMetadata,
     bytes: Vec<u8>,
 ) -> Result<VerifiedSourceImage, OcrObjectStoreError> {
     let digest = Sha256::digest(&bytes);
     let actual_sha256 = hex::encode(digest);
-    if actual_sha256 != payload.sha256()
+    if actual_sha256 != claims.sha256()
         || metadata
             .checksum_sha256
             .as_deref()
@@ -379,7 +392,7 @@ fn verify_bytes(
     {
         return Err(OcrObjectStoreError::Integrity);
     }
-    let expected_format = image_format(payload.media_type());
+    let expected_format = image_format(claims.media_type());
     let detected_format =
         image::guess_format(&bytes).map_err(|_error| OcrObjectStoreError::Integrity)?;
     if detected_format != expected_format {

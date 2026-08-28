@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use redis::{Value, streams::StreamId};
 
 use super::*;
-use crate::ocr::contract::parse_delivery;
+use crate::ocr::contract::{OcrQueuePayload, parse_delivery};
 
 const VALID_PAYLOAD: &str =
     include_str!("../../../../../docs/schemas/fixtures/ocr-worker/valid-queue-payload-v2.json");
@@ -145,28 +145,44 @@ fn downloaded_bytes_require_matching_hash_type_and_fullhd_dimensions() {
         checksum_sha256: Some(BASE64_STANDARD.encode(digest)),
     };
     let payload = payload_with_image_claims(&payload, bytes.len(), &sha256, "image/png");
-    let verified = verify_bytes(&payload, &metadata, bytes.clone());
+    let claims = SourceImageClaims::try_from_payload(&payload);
+    assert!(
+        claims.is_some(),
+        "a validated payload must produce source claims"
+    );
+    let Some(claims) = claims else {
+        return;
+    };
+    let verified = verify_bytes(&claims, &metadata, bytes.clone());
     assert_eq!(verified.as_ref().map(VerifiedSourceImage::width), Ok(1));
     assert_eq!(verified.as_ref().map(VerifiedSourceImage::height), Ok(1));
 
     let mut tampered = bytes;
     tampered.push(0);
     assert_eq!(
-        verify_bytes(&payload, &metadata, tampered),
+        verify_bytes(&claims, &metadata, tampered),
         Err(OcrObjectStoreError::Integrity)
     );
     let wrong_checksum = DownloadMetadata {
-        content_length: i64::try_from(payload.byte_length()).ok(),
-        content_type: Some(String::from(payload.media_type().wire())),
-        stored_sha256: Some(String::from(payload.sha256())),
+        content_length: i64::try_from(claims.byte_length()).ok(),
+        content_type: Some(String::from(claims.media_type().wire())),
+        stored_sha256: Some(String::from(claims.sha256())),
         checksum_sha256: Some(BASE64_STANDARD.encode([0_u8; 32])),
     };
     assert_eq!(
-        verify_bytes(&payload, &wrong_checksum, png_bytes()),
+        verify_bytes(&claims, &wrong_checksum, png_bytes()),
         Err(OcrObjectStoreError::Integrity)
     );
     let wrong_type =
         payload_with_image_claims(&payload, png_bytes().len(), payload.sha256(), "image/jpeg");
+    let wrong_type = SourceImageClaims::try_from_payload(&wrong_type);
+    assert!(
+        wrong_type.is_some(),
+        "the alternate valid media type must produce source claims"
+    );
+    let Some(wrong_type) = wrong_type else {
+        return;
+    };
     assert_eq!(
         verify_bytes(&wrong_type, &metadata, png_bytes()),
         Err(OcrObjectStoreError::Integrity)
@@ -180,13 +196,21 @@ fn downloaded_bytes_require_matching_hash_type_and_fullhd_dimensions() {
 #[test]
 fn response_metadata_must_match_every_queue_claim() {
     let payload = payload();
+    let claims = SourceImageClaims::try_from_payload(&payload);
+    assert!(
+        claims.is_some(),
+        "a validated payload must produce source claims"
+    );
+    let Some(claims) = claims else {
+        return;
+    };
     let metadata = DownloadMetadata {
         content_length: i64::try_from(payload.byte_length()).ok(),
         content_type: Some(String::from(payload.media_type().wire())),
         stored_sha256: Some(String::from(payload.sha256())),
         checksum_sha256: None,
     };
-    assert_eq!(validate_response_metadata(&payload, &metadata), Ok(()));
+    assert_eq!(validate_response_metadata(&claims, &metadata), Ok(()));
     for wrong in [
         DownloadMetadata {
             content_length: metadata.content_length.map(|length| length + 1),
@@ -208,7 +232,7 @@ fn response_metadata_must_match_every_queue_claim() {
         },
     ] {
         assert_eq!(
-            validate_response_metadata(&payload, &wrong),
+            validate_response_metadata(&claims, &wrong),
             Err(OcrObjectStoreError::Integrity)
         );
     }

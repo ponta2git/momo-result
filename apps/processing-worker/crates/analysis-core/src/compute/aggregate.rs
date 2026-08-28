@@ -3,7 +3,7 @@ use serde_json::{Value, json};
 use crate::{
     competition_rank::calculate_by_match as competition_ranks_by_match,
     contract::ScopeRef,
-    model::{AnalysisInput, PlayerMatchInput, PlayerMatchesByMember},
+    model::{PlayerMatchInput, PlayerMatchesByMember},
     outcome_model::OutcomeModelAnalysis,
 };
 
@@ -24,7 +24,7 @@ use super::{
 };
 
 pub(super) fn aggregate(
-    input: &AnalysisInput,
+    game_title_id: &str,
     scope: &ScopeRef,
     rows: &[&PlayerMatchInput],
     players: &[String],
@@ -93,7 +93,7 @@ pub(super) fn aggregate(
         "dataQuality": { "items": quality_items, "summary": quality_summary },
         "metricDefinitions": metric_definitions(),
         "source": {
-            "gameTitleId": input.game_title_id,
+            "gameTitleId": game_title_id,
         },
     })
 }

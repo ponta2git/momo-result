@@ -3,8 +3,10 @@ use std::{env, time::Duration};
 use thiserror::Error;
 
 use super::{
-    consumer::{OcrConsumerConfig, OcrConsumerError},
+    consumer::{OcrConsumerConfig, OcrConsumerError, OcrConsumerTiming},
+    control::OcrControlConfig,
     object_store::{R2ObjectStoreConfig, R2ObjectStoreConfigError},
+    queue::OcrQueueConfig,
 };
 
 const CONSUMER_MODE_ENV: &str = "MOMO_OCR_V2_CONSUMER_MODE";
@@ -22,21 +24,27 @@ pub(crate) enum OcrConsumerRuntimeConfig {
 
 impl OcrConsumerRuntimeConfig {
     pub(crate) fn from_environment(
+        mode: OcrConsumerMode,
         database_url: String,
         redis_url: String,
+        child_stop_grace: Duration,
     ) -> Result<Self, OcrRuntimeConfigError> {
-        Self::from_lookup(database_url, redis_url, |name| env::var(name).ok())
+        Self::from_lookup(mode, database_url, redis_url, child_stop_grace, |name| {
+            env::var(name).ok()
+        })
     }
 
     fn from_lookup<F>(
+        mode: OcrConsumerMode,
         database_url: String,
         redis_url: String,
+        child_stop_grace: Duration,
         mut lookup: F,
     ) -> Result<Self, OcrRuntimeConfigError>
     where
         F: FnMut(&'static str) -> Option<String>,
     {
-        match mode_from_lookup(&mut lookup)? {
+        match mode {
             OcrConsumerMode::Disabled => Ok(Self::Disabled),
             OcrConsumerMode::Enabled => {
                 let endpoint = required(&mut lookup, "SOURCE_IMAGE_R2_ENDPOINT")?;
@@ -50,24 +58,56 @@ impl OcrConsumerRuntimeConfig {
                     duration(&mut lookup, "MOMO_OCR_V2_R2_ATTEMPT_TIMEOUT_MS")?,
                     positive(&mut lookup, "MOMO_OCR_V2_R2_MAXIMUM_ATTEMPTS")?,
                 )?;
+                let stream = required(&mut lookup, "OCR_REDIS_V2_STREAM")?;
+                let group = required(&mut lookup, "MOMO_OCR_V2_REDIS_GROUP")?;
+                let dead_letter_stream = required(&mut lookup, "OCR_REDIS_V2_DEAD_LETTER_STREAM")?;
+                let worker_id = required(&mut lookup, "MOMO_OCR_V2_WORKER_ID")?;
+                let lease_duration = duration(&mut lookup, "MOMO_OCR_V2_LEASE_DURATION_MS")?;
+                let heartbeat_interval =
+                    duration(&mut lookup, "MOMO_OCR_V2_HEARTBEAT_INTERVAL_MS")?;
+                let finalization_timeout =
+                    duration(&mut lookup, "MOMO_OCR_V2_FINALIZATION_TIMEOUT_MS")?;
+                let retry_delay = duration(&mut lookup, "MOMO_OCR_V2_RETRY_DELAY_MS")?;
+                let redis_block = duration(&mut lookup, "MOMO_OCR_V2_REDIS_BLOCK_MS")?;
+                let pel_recovery_interval =
+                    duration(&mut lookup, "MOMO_OCR_V2_PEL_RECOVERY_INTERVAL_MS")?;
+                let claim_idle = duration(&mut lookup, "MOMO_OCR_V2_CLAIM_IDLE_MS")?;
+                let ocr_timeout = duration(&mut lookup, "MOMO_OCR_V2_TIMEOUT_MS")?;
+                let maximum_delivery_attempts =
+                    positive_usize(&mut lookup, "MOMO_OCR_V2_MAXIMUM_DELIVERY_ATTEMPTS")?;
+                let pending_scan_count =
+                    positive_usize(&mut lookup, "MOMO_OCR_V2_PENDING_SCAN_COUNT")?;
+                let queue = OcrQueueConfig::new(
+                    stream,
+                    group,
+                    dead_letter_stream,
+                    worker_id.clone(),
+                    claim_idle,
+                    redis_block,
+                    maximum_delivery_attempts,
+                    pending_scan_count,
+                )
+                .map_err(OcrConsumerError::from)?;
+                let control = OcrControlConfig::new(
+                    worker_id,
+                    lease_duration,
+                    finalization_timeout,
+                    retry_delay,
+                )
+                .map_err(OcrConsumerError::from)?;
+                let timing = OcrConsumerTiming::new(
+                    heartbeat_interval,
+                    pel_recovery_interval,
+                    ocr_timeout,
+                    child_stop_grace,
+                )?;
                 let config = OcrConsumerConfig::new(
                     database_url,
                     redis_url,
-                    required(&mut lookup, "OCR_REDIS_V2_STREAM")?,
-                    required(&mut lookup, "MOMO_OCR_V2_REDIS_GROUP")?,
-                    required(&mut lookup, "OCR_REDIS_V2_DEAD_LETTER_STREAM")?,
-                    required(&mut lookup, "MOMO_OCR_V2_WORKER_ID")?,
+                    queue,
+                    control,
                     object_store,
-                    duration(&mut lookup, "MOMO_OCR_V2_LEASE_DURATION_MS")?,
-                    duration(&mut lookup, "MOMO_OCR_V2_HEARTBEAT_INTERVAL_MS")?,
-                    duration(&mut lookup, "MOMO_OCR_V2_FINALIZATION_TIMEOUT_MS")?,
-                    duration(&mut lookup, "MOMO_OCR_V2_RETRY_DELAY_MS")?,
-                    duration(&mut lookup, "MOMO_OCR_V2_REDIS_BLOCK_MS")?,
-                    duration(&mut lookup, "MOMO_OCR_V2_PEL_RECOVERY_INTERVAL_MS")?,
-                    duration(&mut lookup, "MOMO_OCR_V2_CLAIM_IDLE_MS")?,
-                    duration(&mut lookup, "MOMO_OCR_V2_TIMEOUT_MS")?,
-                    positive_usize(&mut lookup, "MOMO_OCR_V2_MAXIMUM_DELIVERY_ATTEMPTS")?,
-                    positive_usize(&mut lookup, "MOMO_OCR_V2_PENDING_SCAN_COUNT")?,
+                    timing,
                 )?;
                 Ok(Self::Enabled(Box::new(config)))
             }
@@ -153,18 +193,33 @@ pub(crate) enum OcrRuntimeConfigError {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeMap;
+    use std::{cell::Cell, collections::BTreeMap};
 
     use super::*;
 
     #[test]
     fn ocr_consumer_defaults_to_disabled_when_mode_is_absent() {
+        assert!(matches!(
+            mode_from_lookup(&mut |_name| None),
+            Ok(OcrConsumerMode::Disabled)
+        ));
+        let reads = Cell::new(0_u32);
         let result = OcrConsumerRuntimeConfig::from_lookup(
+            OcrConsumerMode::Disabled,
             String::from("postgresql://localhost/test"),
             String::from("redis://localhost/"),
-            |_name| None,
+            Duration::from_secs(5),
+            |_name| {
+                reads.set(reads.get().saturating_add(1));
+                None
+            },
         );
         assert!(matches!(result, Ok(OcrConsumerRuntimeConfig::Disabled)));
+        assert_eq!(
+            reads.get(),
+            0,
+            "a preinterpreted disabled mode must not read OCR settings"
+        );
     }
 
     #[test]
@@ -194,14 +249,13 @@ mod tests {
 
     #[test]
     fn enabled_consumer_rejects_implicit_or_unsafe_modes_and_timing() {
-        let mut values = complete_values();
-        values.insert(CONSUMER_MODE_ENV, "auto");
+        let mut invalid_mode = |_name| Some(String::from("auto"));
         assert!(matches!(
-            build(&values),
+            mode_from_lookup(&mut invalid_mode),
             Err(OcrRuntimeConfigError::InvalidMode)
         ));
 
-        values.insert(CONSUMER_MODE_ENV, "enabled");
+        let mut values = complete_values();
         values.insert("MOMO_OCR_V2_CLAIM_IDLE_MS", "110000");
         assert!(matches!(
             build(&values),
@@ -215,8 +269,10 @@ mod tests {
         values: &BTreeMap<&'static str, &'static str>,
     ) -> Result<OcrConsumerRuntimeConfig, OcrRuntimeConfigError> {
         OcrConsumerRuntimeConfig::from_lookup(
+            OcrConsumerMode::Enabled,
             String::from("postgresql://localhost/test"),
             String::from("redis://localhost/"),
+            Duration::from_secs(5),
             |name| values.get(name).map(|value| String::from(*value)),
         )
     }
@@ -241,7 +297,7 @@ mod tests {
             ("MOMO_OCR_V2_RETRY_DELAY_MS", "1000"),
             ("MOMO_OCR_V2_REDIS_BLOCK_MS", "1000"),
             ("MOMO_OCR_V2_PEL_RECOVERY_INTERVAL_MS", "300000"),
-            ("MOMO_OCR_V2_CLAIM_IDLE_MS", "111000"),
+            ("MOMO_OCR_V2_CLAIM_IDLE_MS", "116000"),
             ("MOMO_OCR_V2_TIMEOUT_MS", "30000"),
             ("MOMO_OCR_V2_MAXIMUM_DELIVERY_ATTEMPTS", "2"),
             ("MOMO_OCR_V2_PENDING_SCAN_COUNT", "10"),

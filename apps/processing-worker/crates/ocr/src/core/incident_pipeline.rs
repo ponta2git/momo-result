@@ -4,13 +4,12 @@ use image::{DynamicImage, GrayImage};
 use serde_json::json;
 
 use super::{
-    CountRecognition, OcrField, OcrWarning, PlayerDraft, PsmAttempt, RecognitionSession, Rect,
-    crop,
+    CountRecognition, OcrField, OcrWarning, PlayerDraft, PsmAttempt, RecognitionPort, Rect, crop,
     incident::{is_pure_pipe_noise, parse_count, select_count_recognition, vote_count},
     pipeline::{CoreOcrError, ParsedScreen},
     player_order::PlayerOrderDetection,
     preprocess::{prepare_count_cell, prepare_digit_count_cells, prepare_fallback_count_cells},
-    recognition::RecognitionLanguage,
+    recognition::{PageSegmentationMode, RecognitionLanguage, recognize_gray},
     scale_profile_rect,
 };
 
@@ -55,7 +54,7 @@ pub(super) fn parse(
     image: &DynamicImage,
     layout_family_hint: Option<&str>,
     player_order: &PlayerOrderDetection,
-    recognition: &mut RecognitionSession,
+    recognition: &mut dyn RecognitionPort,
 ) -> Result<ParsedScreen, CoreOcrError> {
     let profiles = selected_profiles(layout_family_hint);
     let mut attempts = Vec::with_capacity(profiles.len());
@@ -77,7 +76,7 @@ pub(super) fn parse(
 fn parse_profile(
     image: &DynamicImage,
     profile: IncidentProfile,
-    recognition: &mut RecognitionSession,
+    recognition: &mut dyn RecognitionPort,
 ) -> Result<IncidentAttempt, CoreOcrError> {
     let mut player_counts: Vec<BTreeMap<String, OcrField<u32>>> =
         (0..4).map(|_| BTreeMap::new()).collect();
@@ -135,7 +134,7 @@ fn parse_profile(
 fn recognize_cell(
     image: &DynamicImage,
     incident_name: &str,
-    recognition: &mut RecognitionSession,
+    recognition: &mut dyn RecognitionPort,
 ) -> Result<CountRecognition, CoreOcrError> {
     let primary_image = prepare_count_cell(image);
     let primary = recognize_count_variant(&primary_image, recognition)?;
@@ -161,12 +160,20 @@ fn recognize_cell(
 
 fn recognize_count_variant(
     image: &GrayImage,
-    recognition: &mut RecognitionSession,
+    recognition: &mut dyn RecognitionPort,
 ) -> Result<CountRecognition, CoreOcrError> {
     let mut attempts = Vec::with_capacity(2);
     let mut snippets = Vec::new();
-    for psm in [10_u8, 13] {
-        let recognized = recognition.recognize(image, RecognitionLanguage::IncidentDigits, psm)?;
+    for segmentation in [
+        PageSegmentationMode::SingleChar,
+        PageSegmentationMode::RawLine,
+    ] {
+        let recognized = recognize_gray(
+            recognition,
+            image,
+            RecognitionLanguage::IncidentDigits,
+            segmentation,
+        )?;
         if !recognized.text.is_empty() && !snippets.contains(&recognized.text) {
             snippets.push(recognized.text.clone());
         }

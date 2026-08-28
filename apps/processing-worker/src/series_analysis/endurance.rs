@@ -20,6 +20,8 @@ use crate::{
 
 use super::{artifact::validate_artifact_directory, child_report};
 
+const SHADOW_CHILD_STOP_GRACE: Duration = Duration::from_secs(2);
+
 #[derive(Clone, Debug)]
 pub(crate) struct ShadowRequest {
     pub(crate) game_title_id: String,
@@ -270,26 +272,9 @@ async fn run_once(
         owned_directory.path(),
     );
     let started = Instant::now();
-    let mut child = ManagedAnalysisChild::spawn(&spec, child_cgroup).await?;
-    child.refresh_liveness()?;
-    child.sample_resident_bytes().await;
-    let outcome = loop {
-        if let Some(outcome) = child.try_wait()? {
-            break outcome;
-        }
-        if started.elapsed() >= request.calculation_timeout {
-            let _status = child.terminate(Duration::from_secs(2)).await?;
-            return Err(ShadowError::TimedOut);
-        }
-        if let Err(error) = child.refresh_liveness() {
-            if let Some(outcome) = child.try_wait()? {
-                break outcome;
-            }
-            return Err(error.into());
-        }
-        child.sample_resident_bytes().await;
-        time::sleep(Duration::from_millis(5)).await;
-    };
+    let mut child =
+        ManagedAnalysisChild::spawn(&spec, child_cgroup, SHADOW_CHILD_STOP_GRACE).await?;
+    let outcome = supervise_shadow_child(&mut child, started, request.calculation_timeout).await?;
     child.sample_resident_bytes().await;
     if outcome != AnalysisChildOutcome::Succeeded {
         return Err(ShadowError::ChildFailed);
@@ -347,6 +332,54 @@ async fn run_once(
         chunk_count,
         root_checksum,
     })
+}
+
+async fn supervise_shadow_child(
+    child: &mut ManagedAnalysisChild,
+    started: Instant,
+    calculation_timeout: Duration,
+) -> Result<AnalysisChildOutcome, ShadowError> {
+    if let Err(error) = child.refresh_liveness() {
+        return Err(terminate_after_supervision_error(child, error).await);
+    }
+    child.sample_resident_bytes().await;
+    let outcome = loop {
+        match child.try_wait() {
+            Ok(Some(outcome)) => break outcome,
+            Ok(None) => {}
+            Err(error) => {
+                return Err(terminate_after_supervision_error(child, error).await);
+            }
+        }
+        if started.elapsed() >= calculation_timeout {
+            let _status = child.terminate(SHADOW_CHILD_STOP_GRACE).await?;
+            return Err(ShadowError::TimedOut);
+        }
+        if let Err(error) = child.refresh_liveness() {
+            match child.try_wait() {
+                Ok(Some(outcome)) => break outcome,
+                Ok(None) => {
+                    return Err(terminate_after_supervision_error(child, error).await);
+                }
+                Err(wait_error) => {
+                    return Err(terminate_after_supervision_error(child, wait_error).await);
+                }
+            }
+        }
+        child.sample_resident_bytes().await;
+        time::sleep(Duration::from_millis(5)).await;
+    };
+    Ok(outcome)
+}
+
+async fn terminate_after_supervision_error(
+    child: &mut ManagedAnalysisChild,
+    supervision_error: ProcessError,
+) -> ShadowError {
+    match child.terminate(SHADOW_CHILD_STOP_GRACE).await {
+        Ok(_status) => ShadowError::Process(supervision_error),
+        Err(termination_error) => ShadowError::Process(termination_error),
+    }
 }
 
 fn shadow_child_spec(

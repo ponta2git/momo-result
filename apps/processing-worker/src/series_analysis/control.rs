@@ -83,10 +83,11 @@ pub(crate) struct ClaimedJob {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum ClaimResult {
     Claimed(ClaimedJob),
+    RecoveredCurrentJob,
     Busy,
     MissingOrTerminal,
     UnsupportedVersion(UnsupportedJobVersion),
-    NotYetAvailable,
+    NotYetAvailable { remaining_delay: Duration },
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -213,6 +214,8 @@ pub(crate) enum ControlError {
     Artifact(#[from] crate::series_analysis::artifact::ArtifactError),
     #[error("analysis artifact file read failed")]
     Io(#[from] std::io::Error),
+    #[error("analysis artifact validation task failed")]
+    ArtifactValidationTask(#[source] tokio::task::JoinError),
     #[error("analysis artifact metadata exceeds database bounds")]
     NumericConversion(#[from] std::num::TryFromIntError),
     #[error("analysis artifact metadata arithmetic exceeds database bounds")]
@@ -225,6 +228,8 @@ pub(crate) enum ControlError {
     InvalidMetadata,
     #[error("analysis artifact contains unparseable numeric metadata")]
     MetadataParse(#[from] std::num::ParseIntError),
+    #[error("authoritative analysis input violates its bounded structural contract")]
+    AuthoritativeInputContract,
 }
 
 impl ControlError {
@@ -237,13 +242,47 @@ impl ControlError {
             Self::OwnerLost => "fencing_owner_lost",
             Self::Artifact(_) => "artifact_validation",
             Self::Io(_) => "artifact_io",
+            Self::ArtifactValidationTask(_) => "artifact_validation_task",
             Self::NumericConversion(_) => "metadata_numeric_conversion",
             Self::NumericBound => "metadata_numeric_bound",
             Self::PublicationRowCount => "publication_row_count",
             Self::ChildArtifactMetrics => "child_artifact_metrics",
             Self::InvalidMetadata => "artifact_metadata",
             Self::MetadataParse(_) => "artifact_metadata_parse",
+            Self::AuthoritativeInputContract => "authoritative_input_contract",
         }
+    }
+
+    /// Returns whether a successful child produced a candidate that failed before publication.
+    ///
+    /// This classification is intentionally used only around `publish`: the same numeric error
+    /// variants can describe control-plane corruption elsewhere, while every numeric conversion
+    /// in that boundary derives from the already-decoded manifest and resource files.
+    #[must_use]
+    pub(crate) const fn is_artifact_candidate_failure(&self) -> bool {
+        matches!(
+            self,
+            Self::Artifact(_)
+                | Self::NumericConversion(_)
+                | Self::NumericBound
+                | Self::ChildArtifactMetrics
+                | Self::InvalidMetadata
+                | Self::MetadataParse(_)
+        )
+    }
+
+    /// Returns whether candidate processing itself lost a trusted runtime boundary.
+    ///
+    /// Unlike malformed child output, these failures do not prove that the candidate is bad:
+    /// `Io` occurs only while re-reading an already validated file for database staging, and a
+    /// join error means the blocking validator panicked or was cancelled. The caller must retain
+    /// the lease and delivery for recovery instead of persisting a business failure and `ACKing`.
+    #[must_use]
+    pub(crate) const fn is_candidate_processing_infrastructure_failure(&self) -> bool {
+        matches!(
+            self,
+            Self::Io(_) | Self::ArtifactValidationTask(_) | Self::AuthoritativeInputContract
+        )
     }
 }
 

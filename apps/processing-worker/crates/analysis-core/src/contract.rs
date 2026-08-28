@@ -1,4 +1,4 @@
-use std::{cmp::Ordering, collections::HashSet, ffi::OsStr, path::Path};
+use std::{cmp::Ordering, collections::HashSet};
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -9,6 +9,9 @@ use crate::canonical::{CanonicalError, FramedSha256};
 pub const ARTIFACT_SCHEMA_VERSION: u32 = 2;
 pub const MANIFEST_VERSION: u32 = 1;
 pub const QUEUE_SCHEMA_VERSION: u32 = 1;
+const MAXIMUM_SCHEMA_CHUNK_BYTES: u64 = 16 * 1024 * 1024;
+const MAXIMUM_SCHEMA_CHUNK_COUNT: u64 = 1_000_000;
+const MAXIMUM_SCHEMA_ITEM_COUNT: u64 = 1_000_000;
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
@@ -31,7 +34,7 @@ pub struct ArtifactManifest {
     pub resources: Vec<ResourceManifest>,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum ScopeRef {
     Overall,
@@ -51,8 +54,48 @@ pub enum ScopeRef {
     },
 }
 
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields, tag = "kind", rename_all = "snake_case")]
+enum ScopeRefWire {
+    Overall {},
+    Season {
+        #[serde(rename = "seasonMasterId")]
+        season_master_id: String,
+    },
+    Map {
+        #[serde(rename = "mapMasterId")]
+        map_master_id: String,
+    },
+    SeasonMap {
+        #[serde(rename = "seasonMasterId")]
+        season_master_id: String,
+        #[serde(rename = "mapMasterId")]
+        map_master_id: String,
+    },
+}
+
+impl<'de> Deserialize<'de> for ScopeRef {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        Ok(match ScopeRefWire::deserialize(deserializer)? {
+            ScopeRefWire::Overall {} => Self::Overall,
+            ScopeRefWire::Season { season_master_id } => Self::Season { season_master_id },
+            ScopeRefWire::Map { map_master_id } => Self::Map { map_master_id },
+            ScopeRefWire::SeasonMap {
+                season_master_id,
+                map_master_id,
+            } => Self::SeasonMap {
+                season_master_id,
+                map_master_id,
+            },
+        })
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
+#[serde(deny_unknown_fields, tag = "kind", rename_all = "snake_case")]
 pub enum ResourceManifest {
     Aggregate {
         #[serde(flatten)]
@@ -159,10 +202,12 @@ impl ArtifactManifest {
         validate_version(&self.algorithm_version)?;
         validate_checksum(&self.source_input_checksum)?;
         validate_checksum(&self.root_checksum)?;
+        let maximum_chunk_count = maximum_chunk_count.min(MAXIMUM_SCHEMA_CHUNK_COUNT);
         if u64::try_from(self.resources.len()).map_or(true, |count| count > maximum_chunk_count) {
             return Err(ContractError::ChunkCountExceeded);
         }
 
+        let maximum_chunk_bytes = maximum_chunk_bytes.min(MAXIMUM_SCHEMA_CHUNK_BYTES);
         let mut paths = HashSet::<&str>::new();
         let mut previous: Option<&ResourceManifest> = None;
         let mut has_overall_aggregate = false;
@@ -219,6 +264,7 @@ impl ResourceManifest {
             || common.encoded_bytes > maximum_chunk_bytes
             || common.decoded_bytes != common.encoded_bytes
             || common.decoded_bytes > maximum_chunk_bytes
+            || common.item_count > MAXIMUM_SCHEMA_ITEM_COUNT
             || !(1..=64).contains(&common.nesting_depth)
         {
             return Err(ContractError::InvalidChunkMetadata);
@@ -425,11 +471,17 @@ fn validate_checksum(value: &str) -> Result<(), ContractError> {
 }
 
 fn validate_file_name(value: &str) -> Result<(), ContractError> {
-    let path = Path::new(value);
-    if path.file_name().and_then(|name| name.to_str()) != Some(value)
-        || path.extension() != Some(OsStr::new("json"))
-        || value.len() > 255
-    {
+    let valid_suffix = ["aggregate-", "review-", "drilldown-", "match-context-"]
+        .into_iter()
+        .find_map(|prefix| value.strip_prefix(prefix))
+        .and_then(|remaining| remaining.strip_suffix(".json"))
+        .is_some_and(|remaining| {
+            !remaining.is_empty()
+                && remaining
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
+        });
+    if value.len() > 255 || !valid_suffix {
         return Err(ContractError::UnsafePath(String::from(value)));
     }
     Ok(())
@@ -487,5 +539,63 @@ mod tests {
             serde_json::from_value::<QueuePayload>(invalid).is_err(),
             "invalid-queue fixture unexpectedly satisfied the minimal payload contract"
         );
+    }
+
+    #[test]
+    fn artifact_decoder_matches_the_schema_closed_field_sets() {
+        let mut unknown_resource: Value = serde_json::from_str(VALID_ARTIFACT)
+            .unwrap_or_else(|error| panic!("valid artifact fixture is malformed: {error}"));
+        unknown_resource
+            .pointer_mut("/resources/0")
+            .and_then(Value::as_object_mut)
+            .unwrap_or_else(|| panic!("valid artifact fixture has no first resource"))
+            .insert(String::from("unexpected"), Value::Bool(true));
+        assert!(
+            serde_json::from_value::<ArtifactManifest>(unknown_resource).is_err(),
+            "resource additionalProperties=false must be enforced by the Rust decoder"
+        );
+
+        let mut unknown_scope: Value = serde_json::from_str(VALID_ARTIFACT)
+            .unwrap_or_else(|error| panic!("valid artifact fixture is malformed: {error}"));
+        unknown_scope
+            .pointer_mut("/resources/0/scope")
+            .and_then(Value::as_object_mut)
+            .unwrap_or_else(|| panic!("valid artifact fixture has no first scope"))
+            .insert(String::from("unexpected"), Value::Bool(true));
+        assert!(
+            serde_json::from_value::<ArtifactManifest>(unknown_scope).is_err(),
+            "scope additionalProperties=false must be enforced by the Rust decoder"
+        );
+    }
+
+    #[test]
+    fn artifact_validator_enforces_schema_limits_even_with_looser_runtime_limits() {
+        let mut path_manifest: ArtifactManifest = serde_json::from_str(VALID_ARTIFACT)
+            .unwrap_or_else(|error| panic!("valid artifact did not decode: {error}"));
+        let Some(ResourceManifest::Aggregate {
+            common: path_common,
+        }) = path_manifest.resources.first_mut()
+        else {
+            panic!("valid artifact fixture must begin with its aggregate");
+        };
+        path_common.path = String::from("unknown-prefix.json");
+        assert!(matches!(
+            path_manifest.validate(u64::MAX, u64::MAX),
+            Err(ContractError::UnsafePath(_))
+        ));
+
+        let mut count_manifest: ArtifactManifest = serde_json::from_str(VALID_ARTIFACT)
+            .unwrap_or_else(|error| panic!("valid artifact did not decode: {error}"));
+        let Some(ResourceManifest::Aggregate {
+            common: count_common,
+        }) = count_manifest.resources.first_mut()
+        else {
+            panic!("valid artifact fixture must begin with its aggregate");
+        };
+        count_common.item_count = MAXIMUM_SCHEMA_ITEM_COUNT + 1;
+        assert!(matches!(
+            count_manifest.validate(u64::MAX, u64::MAX),
+            Err(ContractError::InvalidChunkMetadata)
+        ));
     }
 }

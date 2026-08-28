@@ -1,4 +1,4 @@
-use std::time::Instant;
+use std::{pin::Pin, time::Instant};
 
 use tokio::{sync::watch, time};
 use tracing::{error, info, warn};
@@ -7,7 +7,7 @@ use crate::{
     outbox::ControlOutcome,
     postgres,
     process::{
-        AnalysisChildOutcome, AnalysisChildProcessSpec, ManagedAnalysisChild,
+        AnalysisChildOutcome, AnalysisChildProcessSpec, ManagedAnalysisChild, ProcessError,
         current_process_peak_resident_bytes,
     },
 };
@@ -23,6 +23,30 @@ use super::{
     metrics::{elapsed_metrics, signed_optional_quantity, signed_quantity},
     policy::{ChildAction, InterruptionAction, child_action, interruption_action},
 };
+
+#[derive(Debug)]
+pub(super) enum ChildSupervisionFailure {
+    Interrupted(AttemptInterruption),
+    CleanupUnverified(ProcessError),
+}
+
+fn classify_spawn_failure(error: ProcessError) -> ChildSupervisionFailure {
+    if error.spawn_cleanup_unverified() {
+        ChildSupervisionFailure::CleanupUnverified(error)
+    } else {
+        ChildSupervisionFailure::Interrupted(AttemptInterruption::WorkerCrashed)
+    }
+}
+
+fn resolve_interruption_after_cleanup(
+    intended: AttemptInterruption,
+    cleanup_result: Result<(), ProcessError>,
+) -> ChildSupervisionFailure {
+    match cleanup_result {
+        Ok(()) => ChildSupervisionFailure::Interrupted(intended),
+        Err(error) => ChildSupervisionFailure::CleanupUnverified(error),
+    }
+}
 
 pub(super) fn child_spec(
     config: &AnalysisConsumerConfig,
@@ -55,14 +79,19 @@ pub(super) async fn finish_attempt_result(
     claim: &ClaimedJob,
     attempt_directory: &std::path::Path,
     started: Instant,
-    result: Result<(AnalysisChildOutcome, AttemptMetrics), AttemptInterruption>,
+    result: Result<(AnalysisChildOutcome, AttemptMetrics), ChildSupervisionFailure>,
 ) -> Result<ControlOutcome<DeliveryDisposition>, ConsumerError> {
     match result {
         Ok(result) => {
             finish_child_outcome(control_client, config, claim, attempt_directory, result).await
         }
-        Err(interruption) => {
+        Err(ChildSupervisionFailure::Interrupted(interruption)) => {
             finish_interruption(control_client, config, claim, started, interruption).await
+        }
+        Err(ChildSupervisionFailure::CleanupUnverified(error)) => {
+            // This return intentionally precedes every control-plane transition: an unverified
+            // child boundary must retain its lease and Redis delivery for durable recovery.
+            Err(ConsumerError::Process(error))
         }
     }
 }
@@ -186,18 +215,10 @@ pub(super) async fn run_claimed_child(
     child_spec: &AnalysisChildProcessSpec,
     shutdown: &mut watch::Receiver<bool>,
     started: Instant,
-) -> Result<(AnalysisChildOutcome, AttemptMetrics), AttemptInterruption> {
-    let mut child = ManagedAnalysisChild::spawn(child_spec, &config.child_cgroup)
-        .await
-        .map_err(|error| {
-            error!(
-                event = "analysis_child_start_failed",
-                phase = "child_spawn",
-                error_kind = error.kind(),
-                "analysis child process could not start"
-            );
-            AttemptInterruption::WorkerCrashed
-        })?;
+) -> Result<(AnalysisChildOutcome, AttemptMetrics), ChildSupervisionFailure> {
+    calculation_time_remaining(started, config.execution_limits.calculation_timeout)
+        .map_err(ChildSupervisionFailure::Interrupted)?;
+    let mut child = spawn_claimed_child(config, child_spec).await?;
     if let Some(result) =
         refresh_child_liveness(&mut child, started, config.child_stop_grace).await?
     {
@@ -209,7 +230,14 @@ pub(super) async fn run_claimed_child(
     let mut sample_interval = time::interval(time::Duration::from_millis(100));
     sample_interval.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
     sample_interval.tick().await;
-    let deadline = time::sleep(config.execution_limits.calculation_timeout);
+    let remaining =
+        match calculation_time_remaining(started, config.execution_limits.calculation_timeout) {
+            Ok(remaining) => remaining,
+            Err(interruption) => {
+                return Err(terminate_for(&mut child, config.child_stop_grace, interruption).await);
+            }
+        };
+    let deadline = calculation_deadline(remaining)?;
     tokio::pin!(deadline);
 
     loop {
@@ -250,12 +278,14 @@ pub(super) async fn run_claimed_child(
                 }
             }
             _ = heartbeat_interval.tick() => {
-                if let Some(result) = handle_heartbeat(
+                if let Some(result) = supervise_child_heartbeat(
                     heartbeat_client,
                     config,
                     claim,
                     &mut child,
+                    shutdown,
                     started,
+                    deadline.as_mut(),
                 ).await? {
                     return Ok(finalize_child_result(child_spec, result));
                 }
@@ -276,6 +306,91 @@ pub(super) async fn run_claimed_child(
                     ).await);
                 }
             }
+        }
+    }
+}
+
+fn calculation_time_remaining(
+    started: Instant,
+    limit: time::Duration,
+) -> Result<time::Duration, AttemptInterruption> {
+    limit
+        .checked_sub(started.elapsed())
+        .filter(|remaining| !remaining.is_zero())
+        .ok_or(AttemptInterruption::TimedOut)
+}
+
+fn calculation_deadline(remaining: time::Duration) -> Result<time::Sleep, ChildSupervisionFailure> {
+    let deadline =
+        time::Instant::now()
+            .checked_add(remaining)
+            .ok_or(ChildSupervisionFailure::Interrupted(
+                AttemptInterruption::WorkerCrashed,
+            ))?;
+    Ok(time::sleep_until(deadline))
+}
+
+async fn spawn_claimed_child(
+    config: &AnalysisConsumerConfig,
+    child_spec: &AnalysisChildProcessSpec,
+) -> Result<ManagedAnalysisChild, ChildSupervisionFailure> {
+    ManagedAnalysisChild::spawn(child_spec, &config.child_cgroup, config.child_stop_grace)
+        .await
+        .map_err(|error| {
+            error!(
+                event = "analysis_child_start_failed",
+                phase = "child_spawn",
+                error_kind = error.kind(),
+                cleanup_unverified = error.spawn_cleanup_unverified(),
+                "analysis child process could not start"
+            );
+            classify_spawn_failure(error)
+        })
+}
+
+type HeartbeatOperationResult = Result<Result<HeartbeatResult, ControlError>, time::error::Elapsed>;
+
+async fn supervise_child_heartbeat(
+    heartbeat_client: &mut tokio_postgres::Client,
+    config: &AnalysisConsumerConfig,
+    claim: &ClaimedJob,
+    child: &mut ManagedAnalysisChild,
+    shutdown: &mut watch::Receiver<bool>,
+    started: Instant,
+    deadline: Pin<&mut time::Sleep>,
+) -> Result<Option<(AnalysisChildOutcome, AttemptMetrics)>, ChildSupervisionFailure> {
+    let heartbeat_result =
+        match supervise_heartbeat(heartbeat_client, claim, config, shutdown, deadline).await {
+            Ok(result) => result,
+            Err(interruption) => {
+                return Err(terminate_for(child, config.child_stop_grace, interruption).await);
+            }
+        };
+    handle_heartbeat_result(heartbeat_result, config, child, started).await
+}
+
+async fn supervise_heartbeat(
+    heartbeat_client: &mut tokio_postgres::Client,
+    claim: &ClaimedJob,
+    config: &AnalysisConsumerConfig,
+    shutdown: &mut watch::Receiver<bool>,
+    mut deadline: Pin<&mut time::Sleep>,
+) -> Result<HeartbeatOperationResult, AttemptInterruption> {
+    let heartbeat_operation = time::timeout(
+        config.heartbeat_interval,
+        heartbeat(heartbeat_client, claim, config),
+    );
+    tokio::pin!(heartbeat_operation);
+    loop {
+        tokio::select! {
+            biased;
+            result = shutdown.changed() => {
+                if result.is_err() || *shutdown.borrow() {
+                    return Err(AttemptInterruption::Shutdown);
+                }
+            }
+            () = &mut deadline => return Err(AttemptInterruption::TimedOut),
+            result = &mut heartbeat_operation => return Ok(result),
         }
     }
 }
@@ -359,19 +474,13 @@ fn finalize_child_result(
     }
 }
 
-async fn handle_heartbeat(
-    heartbeat_client: &mut tokio_postgres::Client,
+async fn handle_heartbeat_result(
+    heartbeat_result: HeartbeatOperationResult,
     config: &AnalysisConsumerConfig,
-    claim: &ClaimedJob,
     child: &mut ManagedAnalysisChild,
     started: Instant,
-) -> Result<Option<(AnalysisChildOutcome, AttemptMetrics)>, AttemptInterruption> {
-    match time::timeout(
-        config.heartbeat_interval,
-        heartbeat(heartbeat_client, claim, config),
-    )
-    .await
-    {
+) -> Result<Option<(AnalysisChildOutcome, AttemptMetrics)>, ChildSupervisionFailure> {
+    match heartbeat_result {
         Ok(Ok(HeartbeatResult::Continue)) => {
             refresh_child_liveness(child, started, config.child_stop_grace).await
         }
@@ -431,7 +540,7 @@ async fn refresh_child_liveness(
     child: &mut ManagedAnalysisChild,
     started: Instant,
     child_stop_grace: time::Duration,
-) -> Result<Option<(AnalysisChildOutcome, AttemptMetrics)>, AttemptInterruption> {
+) -> Result<Option<(AnalysisChildOutcome, AttemptMetrics)>, ChildSupervisionFailure> {
     match child.refresh_liveness() {
         Ok(()) => return Ok(None),
         Err(error) => {
@@ -458,20 +567,19 @@ async fn terminate_for(
     child: &mut ManagedAnalysisChild,
     grace: time::Duration,
     intended: AttemptInterruption,
-) -> AttemptInterruption {
-    match child.terminate(grace).await {
-        Ok(_) => intended,
-        Err(error) => {
-            error!(
-                event = "analysis_child_termination_failed",
-                phase = "child_termination",
-                intended_outcome = intended.wire(),
-                error_kind = error.kind(),
-                "analysis child termination or reap failed"
-            );
-            AttemptInterruption::WorkerCrashed
-        }
+) -> ChildSupervisionFailure {
+    let resolution =
+        resolve_interruption_after_cleanup(intended, child.terminate(grace).await.map(drop));
+    if let ChildSupervisionFailure::CleanupUnverified(error) = &resolution {
+        error!(
+            event = "analysis_child_termination_failed",
+            phase = "child_termination",
+            intended_outcome = intended.wire(),
+            error_kind = error.kind(),
+            "analysis child termination or reap failed"
+        );
     }
+    resolution
 }
 
 async fn finish_successful_child(
@@ -530,7 +638,7 @@ async fn finish_successful_child(
                 DeliveryDisposition::leave_pending_cold(),
             ))
         }
-        Ok(Err(error @ (ControlError::Artifact(_) | ControlError::ChildArtifactMetrics))) => {
+        Ok(Err(error)) if error.is_artifact_candidate_failure() => {
             metrics.record_staging(publication_started.elapsed());
             warn!(
                 event = "analysis_publication_failed",
@@ -542,6 +650,19 @@ async fn finish_successful_child(
             let outcome = finish_failure(control_client, claim, config, failure, metrics).await?;
             log_attempt_failure(failure, metrics, "artifact_validation");
             Ok(outcome.map(|()| DeliveryDisposition::Acknowledge))
+        }
+        Ok(Err(error)) if error.is_candidate_processing_infrastructure_failure() => {
+            metrics.record_finalization(publication_started.elapsed());
+            error!(
+                event = "analysis_publication_failed",
+                phase = "candidate_processing",
+                error_kind = error.kind(),
+                "analysis candidate processing lost a trusted runtime boundary"
+            );
+            // No control-plane transition and no ACK: a validator task failure or an I/O failure
+            // after validation says nothing authoritative about the child candidate. Lease
+            // recovery is the only safe path.
+            Err(ConsumerError::Control(error))
         }
         Ok(Err(error)) => {
             metrics.record_finalization(publication_started.elapsed());
@@ -635,7 +756,7 @@ fn log_attempt_failure(failure: AttemptFailure, metrics: &AttemptMetrics, phase:
     reason = "temporary child-report fixtures must expose their originating setup error"
 )]
 mod tests {
-    use std::time::Duration;
+    use std::{io, time::Duration};
 
     use tempfile::TempDir;
 
@@ -659,6 +780,100 @@ mod tests {
             maximum_file_count: 11,
             parent_liveness_timeout: Duration::from_secs(1),
         }
+    }
+
+    #[test]
+    fn spawn_failure_is_structural_only_when_a_created_child_may_remain() {
+        let pure_spawn_failure = classify_spawn_failure(ProcessError::Spawn(io::Error::other(
+            "fixture process was never created",
+        )));
+        assert!(matches!(
+            pure_spawn_failure,
+            ChildSupervisionFailure::Interrupted(AttemptInterruption::WorkerCrashed)
+        ));
+
+        let cleanup_unverified = classify_spawn_failure(ProcessError::SpawnCleanupUnverified {
+            setup_kind: "child_start_barrier",
+            cleanup_kind: "child_stop_timeout",
+        });
+        assert!(matches!(
+            cleanup_unverified,
+            ChildSupervisionFailure::CleanupUnverified(ProcessError::SpawnCleanupUnverified {
+                setup_kind: "child_start_barrier",
+                cleanup_kind: "child_stop_timeout",
+            })
+        ));
+        assert!(matches!(
+            classify_spawn_failure(ProcessError::MissingProcessId),
+            ChildSupervisionFailure::CleanupUnverified(ProcessError::MissingProcessId)
+        ));
+    }
+
+    #[test]
+    fn intended_policy_requires_verified_termination_and_reap() {
+        for intended in [
+            AttemptInterruption::TimedOut,
+            AttemptInterruption::Preempted,
+            AttemptInterruption::Shutdown,
+            AttemptInterruption::OwnerLost,
+            AttemptInterruption::WorkerCrashed,
+        ] {
+            assert!(matches!(
+                resolve_interruption_after_cleanup(intended, Ok(())),
+                ChildSupervisionFailure::Interrupted(actual) if actual == intended
+            ));
+        }
+
+        let cleanup_unverified = resolve_interruption_after_cleanup(
+            AttemptInterruption::TimedOut,
+            Err(ProcessError::StopTimeout),
+        );
+        assert!(matches!(
+            cleanup_unverified,
+            ChildSupervisionFailure::CleanupUnverified(ProcessError::StopTimeout)
+        ));
+    }
+
+    #[test]
+    fn candidate_file_failures_are_not_misreported_as_publication_dependency_failures() {
+        let metadata_parse = "not-a-revision".parse::<i64>();
+        assert!(metadata_parse.is_err());
+        let Some(metadata_parse) = metadata_parse.err() else {
+            return;
+        };
+        for error in [
+            ControlError::InvalidMetadata,
+            ControlError::MetadataParse(metadata_parse),
+            ControlError::ChildArtifactMetrics,
+        ] {
+            assert!(error.is_artifact_candidate_failure());
+        }
+        let host_io = ControlError::Io(io::Error::other("fixture staging read"));
+        assert!(!host_io.is_artifact_candidate_failure());
+        assert!(host_io.is_candidate_processing_infrastructure_failure());
+        assert!(!ControlError::PublicationRowCount.is_artifact_candidate_failure());
+        assert!(!ControlError::OwnerLost.is_artifact_candidate_failure());
+    }
+
+    #[test]
+    fn authoritative_input_corruption_is_propagated_without_candidate_failure_or_ack() {
+        let error = ControlError::AuthoritativeInputContract;
+
+        assert!(error.is_candidate_processing_infrastructure_failure());
+        assert!(!error.is_artifact_candidate_failure());
+    }
+
+    #[tokio::test]
+    async fn validator_task_failure_is_structural_not_a_bad_candidate() {
+        let join = tokio::spawn(async { panic!("validator fixture panic") }).await;
+        assert!(join.is_err());
+        let Some(join_error) = join.err() else {
+            return;
+        };
+        let error = ControlError::ArtifactValidationTask(join_error);
+
+        assert!(error.is_candidate_processing_infrastructure_failure());
+        assert!(!error.is_artifact_candidate_failure());
     }
 
     #[test]

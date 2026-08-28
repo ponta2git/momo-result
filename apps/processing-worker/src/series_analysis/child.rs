@@ -10,7 +10,6 @@ use crate::{
         CHILD_ARTIFACT_TOO_LARGE_EXIT_CODE, CHILD_CALCULATION_FAILED_EXIT_CODE,
         CHILD_DEPENDENCY_FAILED_EXIT_CODE, CHILD_INPUT_INVALID_EXIT_CODE,
         CHILD_SUPERSEDED_EXIT_CODE, current_process_peak_resident_bytes,
-        start_parent_liveness_monitor,
     },
 };
 
@@ -28,8 +27,6 @@ pub(crate) struct AnalysisChildExecutionConfig<'a> {
     pub(crate) maximum_chunk_count: u64,
     pub(crate) maximum_total_bytes: u64,
     pub(crate) maximum_file_count: u64,
-    pub(crate) parent_liveness_fd: i32,
-    pub(crate) parent_liveness_timeout: Duration,
 }
 
 /// Executes the read-only calculation side of one worker attempt.
@@ -103,8 +100,6 @@ async fn execute_inner(
     config: &AnalysisChildExecutionConfig<'_>,
     telemetry: &mut ChildTelemetry,
 ) -> Result<(), ChildFailure> {
-    start_parent_liveness_monitor(config.parent_liveness_fd, config.parent_liveness_timeout)
-        .map_err(|_liveness_error| ChildFailure::CalculationFailed)?;
     let read_database_url = env::var("MOMO_ANALYSIS_READ_DATABASE_URL")
         .ok()
         .filter(|value| !value.trim().is_empty())
@@ -132,7 +127,7 @@ async fn execute_inner(
         }
     };
     telemetry.metrics.input_milliseconds = milliseconds(input_started.elapsed());
-    telemetry.metrics.input_row_count = u64::try_from(input.player_matches.len())
+    telemetry.metrics.input_row_count = u64::try_from(input.player_matches().len())
         .map_err(|_error| ChildFailure::CalculationFailed)?;
     if input
         .resource_count()

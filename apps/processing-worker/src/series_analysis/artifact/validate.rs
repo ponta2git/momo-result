@@ -1,4 +1,9 @@
-use std::{collections::BTreeSet, fs, path::Path};
+use std::{
+    collections::BTreeSet,
+    fs::{self, File},
+    io::Read,
+    path::Path,
+};
 
 use serde_json::Value;
 
@@ -30,16 +35,8 @@ pub(crate) fn validate_artifact_directory(
         return Err(ArtifactError::UnsafeDirectory);
     }
     let manifest_path = directory.join(MANIFEST_FILE_NAME);
-    let manifest_metadata = fs::symlink_metadata(&manifest_path)?;
-    if !manifest_metadata.is_file() || manifest_metadata.file_type().is_symlink() {
-        return Err(ArtifactError::UnsafeDirectory);
-    }
-    if manifest_metadata.len() > maximum_chunk_bytes
-        || manifest_metadata.len() > maximum_total_bytes
-    {
-        return Err(ArtifactError::ResourceBound);
-    }
-    let manifest_bytes = fs::read(&manifest_path)?;
+    let manifest_bytes =
+        read_bounded_regular_file(&manifest_path, maximum_chunk_bytes.min(maximum_total_bytes))?;
     let manifest: ArtifactManifest = serde_json::from_value(parse_canonical_json(&manifest_bytes)?)
         .map_err(|error| ArtifactError::Canonical(CanonicalError::InvalidJson(error)))?;
     manifest.validate(maximum_chunk_count, maximum_chunk_bytes)?;
@@ -65,19 +62,18 @@ pub(crate) fn validate_artifact_directory(
         }
     }
     let mut total_bytes = u64::try_from(manifest_bytes.len())?;
+    let mut payloads = payload::PayloadSetValidator::new();
     for resource in &manifest.resources {
         let common = resource_common(resource);
         let path = directory.join(&common.path);
-        let resource_metadata = fs::symlink_metadata(&path)?;
-        if !resource_metadata.is_file() || resource_metadata.file_type().is_symlink() {
-            return Err(ArtifactError::UnsafeDirectory);
-        }
-        if resource_metadata.len() != common.encoded_bytes
-            || resource_metadata.len() > maximum_chunk_bytes
-        {
+        let remaining_total_bytes = maximum_total_bytes
+            .checked_sub(total_bytes)
+            .ok_or(ArtifactError::ResourceBound)?;
+        if common.encoded_bytes > remaining_total_bytes {
             return Err(ArtifactError::ResourceBound);
         }
-        let bytes = fs::read(path)?;
+        let bytes =
+            read_bounded_regular_file(&path, maximum_chunk_bytes.min(remaining_total_bytes))?;
         let length = u64::try_from(bytes.len())?;
         total_bytes = total_bytes
             .checked_add(length)
@@ -93,10 +89,33 @@ pub(crate) fn validate_artifact_directory(
         if nesting_depth(&value) != common.nesting_depth || common.decoded_bytes != length {
             return Err(ArtifactError::ResourceBound);
         }
-        payload::validate_manifest(resource, &value)?;
+        payloads.add_manifest(resource, &value)?;
     }
-    if total_bytes > maximum_total_bytes {
+    payloads.finish()?;
+    Ok(manifest)
+}
+
+fn read_bounded_regular_file(path: &Path, maximum_bytes: u64) -> Result<Vec<u8>, ArtifactError> {
+    let path_metadata = fs::symlink_metadata(path)?;
+    if !path_metadata.is_file() || path_metadata.file_type().is_symlink() {
+        return Err(ArtifactError::UnsafeDirectory);
+    }
+    if path_metadata.len() > maximum_bytes {
         return Err(ArtifactError::ResourceBound);
     }
-    Ok(manifest)
+    let file = File::open(path)?;
+    let opened_metadata = file.metadata()?;
+    if !opened_metadata.is_file() || opened_metadata.len() > maximum_bytes {
+        return Err(ArtifactError::ResourceBound);
+    }
+    let read_limit = maximum_bytes
+        .checked_add(1)
+        .ok_or(ArtifactError::ResourceBound)?;
+    let mut bytes = Vec::new();
+    file.take(read_limit).read_to_end(&mut bytes)?;
+    if u64::try_from(bytes.len())? > maximum_bytes {
+        Err(ArtifactError::ResourceBound)
+    } else {
+        Ok(bytes)
+    }
 }

@@ -1,179 +1,175 @@
-use std::path::PathBuf;
-
 use image::{DynamicImage, GrayImage};
-use tesseract::{OcrEngineMode, PageSegMode, Tesseract};
 use thiserror::Error;
 
-#[derive(Clone, Debug)]
-pub(crate) struct RecognizedText {
+/// Text returned by a native recognizer after capability-owned normalization.
+#[derive(Debug)]
+pub struct RecognizedText {
     pub(crate) text: String,
     pub(crate) confidence: Option<f64>,
 }
 
+impl RecognizedText {
+    /// Normalizes native whitespace without interpreting the OCR contents.
+    #[must_use]
+    pub fn new(text: &str, confidence: Option<f64>) -> Self {
+        Self {
+            text: normalize_text(text),
+            confidence,
+        }
+    }
+}
+
+/// Closed failure vocabulary exposed by the native recognition port.
 #[derive(Clone, Copy, Debug, Error, Eq, PartialEq)]
-pub(crate) enum RecognitionError {
-    #[error("Tesseract OCR engine could not initialize")]
+pub enum RecognitionError {
+    #[error("OCR engine could not initialize")]
     EngineUnavailable,
-    #[error("Tesseract OCR call failed")]
+    #[error("OCR recognition call failed")]
     RecognitionFailed,
-    #[error("Tesseract OCR dimensions exceeded the checked native boundary")]
+    #[error("OCR frame dimensions exceeded the checked native boundary")]
     Dimensions,
 }
 
-#[derive(Clone, Copy)]
-pub(crate) enum RecognitionLanguage {
+/// OCR model selected for one recognition request.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum RecognitionLanguage {
     General,
     IncidentDigits,
 }
 
-pub(crate) struct RecognitionSession {
-    tessdata_path: Option<PathBuf>,
-    general: Option<Tesseract>,
-    incident_digits: Option<Tesseract>,
+/// Finite segmentation modes used by the versioned OCR algorithm.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PageSegmentationMode {
+    SingleBlock,
+    SingleLine,
+    SingleWord,
+    SingleChar,
+    SparseText,
+    RawLine,
 }
 
-impl RecognitionSession {
-    pub(crate) fn new(tessdata_path: Option<PathBuf>) -> Result<Self, RecognitionError> {
-        let general = Some(initialize(
-            tessdata_path.as_deref(),
-            "jpn+eng",
-            RecognitionLanguage::General,
-        )?);
-        Ok(Self {
-            tessdata_path,
-            general,
-            incident_digits: None,
-        })
+/// Checked, tightly packed image frame passed to a native recognition adapter.
+///
+/// Construction stays inside the capability so an adapter cannot receive inconsistent dimensions
+/// or derive them from unchecked integer casts.
+#[derive(Clone, Copy, Debug)]
+pub struct RecognitionFrame<'a> {
+    bytes: &'a [u8],
+    width: i32,
+    height: i32,
+    bytes_per_pixel: i32,
+    bytes_per_line: i32,
+}
+
+impl RecognitionFrame<'_> {
+    #[must_use]
+    pub const fn bytes(&self) -> &[u8] {
+        self.bytes
     }
 
-    pub(crate) fn recognize(
-        &mut self,
-        image: &GrayImage,
-        language: RecognitionLanguage,
-        psm: u8,
-    ) -> Result<RecognizedText, RecognitionError> {
-        self.recognize_frame(
-            image.as_raw(),
-            image.width(),
-            image.height(),
-            1,
-            image.width(),
-            language,
-            psm,
-        )
+    #[must_use]
+    pub const fn width(&self) -> i32 {
+        self.width
     }
 
-    pub(crate) fn recognize_color(
-        &mut self,
-        image: &DynamicImage,
-        language: RecognitionLanguage,
-        psm: u8,
-    ) -> Result<RecognizedText, RecognitionError> {
-        let rgb = image.to_rgb8();
-        let bytes_per_line = rgb
-            .width()
-            .checked_mul(3)
-            .ok_or(RecognitionError::Dimensions)?;
-        self.recognize_frame(
-            rgb.as_raw(),
-            rgb.width(),
-            rgb.height(),
-            3,
-            bytes_per_line,
-            language,
-            psm,
-        )
+    #[must_use]
+    pub const fn height(&self) -> i32 {
+        self.height
     }
 
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "the checked native frame boundary requires explicit dimensions and OCR configuration"
-    )]
-    fn recognize_frame(
-        &mut self,
-        bytes: &[u8],
-        width: u32,
-        height: u32,
-        bytes_per_pixel: i32,
-        bytes_per_line: u32,
-        language: RecognitionLanguage,
-        psm: u8,
-    ) -> Result<RecognizedText, RecognitionError> {
-        let mut api = self.take_or_initialize(language)?;
-        api.set_page_seg_mode(page_segmentation_mode(psm)?);
-        let width = i32::try_from(width).map_err(|_error| RecognitionError::Dimensions)?;
-        let height = i32::try_from(height).map_err(|_error| RecognitionError::Dimensions)?;
-        let bytes_per_line =
-            i32::try_from(bytes_per_line).map_err(|_error| RecognitionError::Dimensions)?;
-        let mut api = api
-            .set_frame(bytes, width, height, bytes_per_pixel, bytes_per_line)
-            .map_err(|_error| RecognitionError::RecognitionFailed)?
-            .recognize()
-            .map_err(|_error| RecognitionError::RecognitionFailed)?;
-        let text = api
-            .get_text()
-            .map_err(|_error| RecognitionError::RecognitionFailed)?;
-        let confidence_raw = api.mean_text_conf();
-        self.put(language, api);
-        Ok(RecognizedText {
-            text: normalize_text(&text),
-            confidence: (confidence_raw >= 0).then(|| f64::from(confidence_raw) / 100.0),
-        })
+    #[must_use]
+    pub const fn bytes_per_pixel(&self) -> i32 {
+        self.bytes_per_pixel
     }
 
-    fn take_or_initialize(
-        &mut self,
-        language: RecognitionLanguage,
-    ) -> Result<Tesseract, RecognitionError> {
-        let slot = match language {
-            RecognitionLanguage::General => &mut self.general,
-            RecognitionLanguage::IncidentDigits => &mut self.incident_digits,
-        };
-        if let Some(api) = slot.take() {
-            return Ok(api);
-        }
-        let language_name = match language {
-            RecognitionLanguage::General => "jpn+eng",
-            RecognitionLanguage::IncidentDigits => "eng",
-        };
-        initialize(self.tessdata_path.as_deref(), language_name, language)
-    }
-
-    fn put(&mut self, language: RecognitionLanguage, api: Tesseract) {
-        match language {
-            RecognitionLanguage::General => self.general = Some(api),
-            RecognitionLanguage::IncidentDigits => self.incident_digits = Some(api),
-        }
+    #[must_use]
+    pub const fn bytes_per_line(&self) -> i32 {
+        self.bytes_per_line
     }
 }
 
-fn initialize(
-    tessdata_path: Option<&std::path::Path>,
-    language_name: &str,
+/// Native OCR boundary required by the deterministic image/parser capability.
+///
+/// Implementations own native library initialization and mutable engine reuse. The capability owns
+/// preprocessing, checked frame construction, typed language/mode selection, and interpretation.
+pub trait RecognitionPort {
+    /// Initializes the general OCR model after image decoding has succeeded.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`RecognitionError::EngineUnavailable`] when the native engine cannot start.
+    fn initialize(&mut self) -> Result<(), RecognitionError>;
+
+    /// Recognizes one checked frame.
+    ///
+    /// # Errors
+    ///
+    /// Returns a closed engine category without leaking native diagnostics.
+    fn recognize(
+        &mut self,
+        frame: RecognitionFrame<'_>,
+        language: RecognitionLanguage,
+        segmentation: PageSegmentationMode,
+    ) -> Result<RecognizedText, RecognitionError>;
+}
+
+pub(crate) fn recognize_gray(
+    recognition: &mut dyn RecognitionPort,
+    image: &GrayImage,
     language: RecognitionLanguage,
-) -> Result<Tesseract, RecognitionError> {
-    let path = tessdata_path.and_then(std::path::Path::to_str);
-    let api = Tesseract::new_with_oem(path, Some(language_name), OcrEngineMode::LstmOnly)
-        .map_err(|_error| RecognitionError::EngineUnavailable)?;
-    if matches!(language, RecognitionLanguage::IncidentDigits) {
-        api.set_variable("tessedit_char_whitelist", "0123456789OoIl|i")
-            .map_err(|_error| RecognitionError::EngineUnavailable)
-    } else {
-        Ok(api)
-    }
+    segmentation: PageSegmentationMode,
+) -> Result<RecognizedText, RecognitionError> {
+    let frame = checked_frame(
+        image.as_raw(),
+        image.width(),
+        image.height(),
+        1,
+        image.width(),
+    )?;
+    recognition.recognize(frame, language, segmentation)
 }
 
-const fn page_segmentation_mode(psm: u8) -> Result<PageSegMode, RecognitionError> {
-    match psm {
-        3 => Ok(PageSegMode::PsmAuto),
-        6 => Ok(PageSegMode::PsmSingleBlock),
-        7 => Ok(PageSegMode::PsmSingleLine),
-        8 => Ok(PageSegMode::PsmSingleWord),
-        10 => Ok(PageSegMode::PsmSingleChar),
-        11 => Ok(PageSegMode::PsmSparseText),
-        13 => Ok(PageSegMode::PsmRawLine),
-        _ => Err(RecognitionError::RecognitionFailed),
+pub(crate) fn recognize_color(
+    recognition: &mut dyn RecognitionPort,
+    image: &DynamicImage,
+    language: RecognitionLanguage,
+    segmentation: PageSegmentationMode,
+) -> Result<RecognizedText, RecognitionError> {
+    let rgb = image.to_rgb8();
+    let bytes_per_line = rgb
+        .width()
+        .checked_mul(3)
+        .ok_or(RecognitionError::Dimensions)?;
+    let frame = checked_frame(rgb.as_raw(), rgb.width(), rgb.height(), 3, bytes_per_line)?;
+    recognition.recognize(frame, language, segmentation)
+}
+
+fn checked_frame(
+    bytes: &[u8],
+    width: u32,
+    height: u32,
+    bytes_per_pixel: u8,
+    bytes_per_line: u32,
+) -> Result<RecognitionFrame<'_>, RecognitionError> {
+    let expected_bytes = usize::try_from(bytes_per_line)
+        .ok()
+        .and_then(|line| {
+            usize::try_from(height)
+                .ok()
+                .and_then(|rows| line.checked_mul(rows))
+        })
+        .ok_or(RecognitionError::Dimensions)?;
+    if width == 0 || height == 0 || bytes.len() != expected_bytes {
+        return Err(RecognitionError::Dimensions);
     }
+    Ok(RecognitionFrame {
+        bytes,
+        width: i32::try_from(width).map_err(|_error| RecognitionError::Dimensions)?,
+        height: i32::try_from(height).map_err(|_error| RecognitionError::Dimensions)?,
+        bytes_per_pixel: i32::from(bytes_per_pixel),
+        bytes_per_line: i32::try_from(bytes_per_line)
+            .map_err(|_error| RecognitionError::Dimensions)?,
+    })
 }
 
 fn normalize_text(value: &str) -> String {
@@ -182,4 +178,65 @@ fn normalize_text(value: &str) -> String {
         .split_whitespace()
         .collect::<Vec<_>>()
         .join(" ")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct CapturingRecognizer {
+        dimensions: Option<(i32, i32, i32, i32, usize)>,
+    }
+
+    impl RecognitionPort for CapturingRecognizer {
+        fn initialize(&mut self) -> Result<(), RecognitionError> {
+            Ok(())
+        }
+
+        fn recognize(
+            &mut self,
+            frame: RecognitionFrame<'_>,
+            _language: RecognitionLanguage,
+            _segmentation: PageSegmentationMode,
+        ) -> Result<RecognizedText, RecognitionError> {
+            self.dimensions = Some((
+                frame.width(),
+                frame.height(),
+                frame.bytes_per_pixel(),
+                frame.bytes_per_line(),
+                frame.bytes().len(),
+            ));
+            Ok(RecognizedText::new("  桃鉄　社長\n", Some(0.9)))
+        }
+    }
+
+    #[test]
+    fn checked_frame_and_text_normalization_are_capability_owned() {
+        let image = GrayImage::from_raw(2, 2, vec![0, 1, 2, 3]);
+        assert!(image.is_some(), "the test image shape must be valid");
+        let Some(image) = image else {
+            return;
+        };
+        let mut recognizer = CapturingRecognizer { dimensions: None };
+        let recognition_result = recognize_gray(
+            &mut recognizer,
+            &image,
+            RecognitionLanguage::General,
+            PageSegmentationMode::SingleLine,
+        );
+        assert!(
+            recognition_result.is_ok(),
+            "the checked image frame must be accepted"
+        );
+        assert_eq!(
+            recognizer.dimensions,
+            Some((2, 2, 1, 2, 4)),
+            "native adapters must receive an internally consistent frame"
+        );
+        assert_eq!(
+            recognition_result.ok().map(|value| value.text),
+            Some(String::from("桃鉄 社長")),
+            "native text normalization must remain deterministic"
+        );
+    }
 }

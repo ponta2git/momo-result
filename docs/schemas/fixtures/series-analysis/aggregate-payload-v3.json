@@ -2,25 +2,82 @@
   "schemaVersion": 3,
   "scope": { "kind": "overall", "matchCount": 0 },
   "players": [],
-  "summary": {},
+  "summary": {
+    "leaderMemberIds": [],
+    "averageRankSpread": null,
+    "rankSpreadSignal": "insufficient",
+    "totalGinjiCount": 0,
+    "quality": { "okCount": 0, "referenceCount": 0, "noTargetCount": 0 }
+  },
   "metricsByPlayer": [],
   "rankDistribution": [],
   "recentRanks": [],
-  "strategyScatter": {},
+  "strategyScatter": { "points": [] },
   "playOrderComparison": [],
   "revenueRankConversion": [],
   "trends": [],
-  "histograms": {},
-  "headToHead": [],
-  "momentumSwitch": {},
-  "performanceProfiles": {},
-  "assetStyleProfiles": {},
-  "cardShopDestination": {},
-  "matchDigest": [],
-  "matchNoInEvent": [],
-  "rankAnalysis": {},
+  "histograms": {
+    "assets": { "bins": [], "series": [] },
+    "revenue": { "bins": [], "series": [] }
+  },
+  "headToHead": { "entries": [] },
+  "momentumSwitch": [],
+  "performanceProfiles": {
+    "rankStandardDeviationMedian": null,
+    "averageRankScoreMedian": null,
+    "averageRevenueAssetRateMedian": null,
+    "entries": []
+  },
+  "assetStyleProfiles": {
+    "lowAssetThreshold": null,
+    "highAssetThreshold": null,
+    "blowoutWinThreshold": null,
+    "nearMissSecondThreshold": null,
+    "heavyLossThreshold": null,
+    "entries": []
+  },
+  "cardShopDestination": [],
+  "matchDigest": {
+    "totalCount": 0,
+    "shownCount": 0,
+    "hiddenCount": 0,
+    "flagCounts": {},
+    "recent": []
+  },
+  "matchNoInEvent": { "entries": [] },
+  "rankAnalysis": {
+    "modelVersion": "rank-bt-v1",
+    "status": "no_target",
+    "reasonCodes": ["insufficient_matches", "insufficient_events"],
+    "heldEventCount": 0,
+    "matchCount": 0,
+    "improvedFoldCount": 0,
+    "requiredImprovedFoldCount": 4,
+    "foldScores": [],
+    "defaultMemberId": null,
+    "rankSignalsByPlayer": [],
+    "unexpectedWinsByPlayer": [],
+    "crownCertainty": {
+      "status": "no_target",
+      "bootstrapIterations": 0,
+      "successfulIterations": 0,
+      "leaderChangeCount": 0,
+      "shares": []
+    }
+  },
   "highlights": [],
-  "dataQuality": {},
-  "metricDefinitions": [],
-  "source": {}
+  "dataQuality": {
+    "items": [],
+    "summary": { "okCount": 0, "referenceCount": 0, "noTargetCount": 0 }
+  },
+  "metricDefinitions": [
+    { "metricId": "rank.average", "label": "平均順位", "unit": "rank", "preferredDirection": "lower" },
+    { "metricId": "rank.distribution", "label": "順位分布", "unit": "count", "preferredDirection": "contextual" },
+    { "metricId": "assets.average", "label": "平均総資産", "unit": "man_yen", "preferredDirection": "higher" },
+    { "metricId": "revenue.average", "label": "平均物件収益", "unit": "man_yen", "preferredDirection": "higher" },
+    { "metricId": "podium.rate", "label": "入賞率", "unit": "rate", "preferredDirection": "higher" },
+    { "metricId": "ginji.encounterRate", "label": "銀次遭遇率", "unit": "rate", "preferredDirection": "lower" },
+    { "metricId": "destination.conversionDelta", "label": "目的地順位と最終順位の差", "unit": "rank", "preferredDirection": "higher" }
+  ],
+  "source": { "gameTitleId": "title-fixture" }
 }

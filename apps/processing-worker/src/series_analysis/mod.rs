@@ -1,4 +1,4 @@
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use momo_analysis_core::contract::{ARTIFACT_SCHEMA_VERSION, QueuePayload};
 use redis::{RedisError, aio::ConnectionManager};
@@ -96,12 +96,20 @@ enum DeliveryDisposition {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum PendingRecoveryPolicy {
     ColdOnly,
-    AtIdleThreshold,
+    Targeted { remaining_delay: Duration },
 }
 
 impl DeliveryDisposition {
     const fn leave_pending_cold() -> Self {
         Self::LeavePending(PendingRecoveryPolicy::ColdOnly)
+    }
+
+    const fn retry_shared_slot_busy() -> Self {
+        Self::retry_targeted_after(Duration::ZERO)
+    }
+
+    const fn retry_targeted_after(remaining_delay: Duration) -> Self {
+        Self::LeavePending(PendingRecoveryPolicy::Targeted { remaining_delay })
     }
 }
 
@@ -112,6 +120,11 @@ enum AttemptInterruption {
     Shutdown,
     OwnerLost,
     WorkerCrashed,
+}
+
+struct MaintenanceSchedules {
+    capability_refresh: IdleRefreshSchedule,
+    stale_attempt_cleanup_due: Option<Instant>,
 }
 
 impl AttemptInterruption {
@@ -173,7 +186,7 @@ pub(crate) async fn run(
     // A fresh startup must authenticate every configured database credential. The calculation
     // child opens its own read-only connection later, so this probe is intentionally not retained.
     drop(read_client);
-    startup_result(
+    let stale_attempt_cleanup_due = startup_result(
         cleanup_stale_attempt_directories(&config, &control_client).await,
         "temporary_storage_recovery",
     )?;
@@ -181,7 +194,10 @@ pub(crate) async fn run(
         register_capability(&heartbeat_client, &config.worker_id).await,
         "capability_registration",
     )?;
-    let capability_refresh = IdleRefreshSchedule::after_success(Instant::now());
+    let maintenance = MaintenanceSchedules {
+        capability_refresh: IdleRefreshSchedule::after_success(Instant::now()),
+        stale_attempt_cleanup_due,
+    };
 
     let redis_client = startup_result(
         redis::Client::open(config.redis_url.as_str()),
@@ -203,7 +219,7 @@ pub(crate) async fn run(
         &mut redis,
         &config,
         &post_commit_sink,
-        capability_refresh,
+        maintenance,
         &mut shutdown,
     )
     .await;
@@ -261,13 +277,23 @@ async fn consume_deliveries(
     redis: &mut ConnectionManager,
     config: &AnalysisConsumerConfig,
     post_commit_sink: &PostCommitSink,
-    mut capability_refresh: IdleRefreshSchedule,
+    maintenance: MaintenanceSchedules,
     shutdown: &mut watch::Receiver<bool>,
 ) -> Result<(), ConsumerError> {
+    let MaintenanceSchedules {
+        mut capability_refresh,
+        mut stale_attempt_cleanup_due,
+    } = maintenance;
     let mut recovery_cursor = AutoClaimCursor::start();
     let mut recovery_schedule =
         PelRecoverySchedule::new(Instant::now(), config.pel_recovery_interval);
     while !*shutdown.borrow() {
+        // A young stale directory contributes its own one-shot maturity deadline. Rechecking at
+        // the bounded delivery-loop cadence avoids both a permanent startup skip and a hot poll.
+        if stale_attempt_cleanup_due.is_some_and(|due_at| due_at <= Instant::now()) {
+            stale_attempt_cleanup_due =
+                cleanup_stale_attempt_directories(config, control_client).await?;
+        }
         if capability_refresh.is_due_at(Instant::now()) {
             register_capability(heartbeat_client, &config.worker_id).await?;
             capability_refresh.record_success_at(Instant::now());
@@ -343,22 +369,45 @@ async fn consume_deliveries(
                 }
             }
             DeliveryDisposition::LeavePending(policy) => {
-                if policy == PendingRecoveryPolicy::AtIdleThreshold {
-                    let Some(due_at) = delivery_received_at.checked_add(config.lease_duration)
-                    else {
-                        return Err(ConsumerError::DurationBound);
-                    };
-                    if !recovery_schedule.schedule_target(message_id.clone(), due_at) {
-                        warn!(
-                            event = "analysis_pel_target_schedule_full",
-                            recovery = "cold",
-                            "analysis pending delivery will wait for bounded cold recovery"
-                        );
-                    }
-                }
+                schedule_pending_recovery(
+                    &mut recovery_schedule,
+                    message_id,
+                    policy,
+                    delivery_received_at,
+                    config.lease_duration,
+                )?;
             }
             DeliveryDisposition::StopLoop => break,
         }
+    }
+    Ok(())
+}
+
+fn schedule_pending_recovery(
+    schedule: &mut PelRecoverySchedule,
+    message_id: String,
+    policy: PendingRecoveryPolicy,
+    delivery_received_at: Instant,
+    delivery_idle_threshold: Duration,
+) -> Result<(), ConsumerError> {
+    let PendingRecoveryPolicy::Targeted { remaining_delay } = policy else {
+        return Ok(());
+    };
+    // Anchor the DB-clock delay only after the claim result arrives, so transaction rollback and
+    // transport latency can make recovery conservative but never earlier than `available_at`.
+    let due_at = targeted_recovery_due_at(
+        delivery_received_at,
+        Instant::now(),
+        delivery_idle_threshold,
+        remaining_delay,
+    )
+    .ok_or(ConsumerError::DurationBound)?;
+    if !schedule.schedule_target(message_id, due_at) {
+        warn!(
+            event = "analysis_pel_target_schedule_full",
+            recovery = "cold",
+            "analysis pending delivery will wait for bounded cold recovery"
+        );
     }
     Ok(())
 }
@@ -388,6 +437,16 @@ async fn process_delivery(
             );
             return Ok(DeliveryDisposition::Acknowledge);
         }
+        ClaimResult::RecoveredCurrentJob => {
+            info!(
+                event = "analysis_delivery_resolved",
+                job_id = %payload.job_id,
+                disposition = "acknowledge",
+                reason = "expired_attempt_recovered",
+                "analysis delivery was resolved by durable lease-recovery state"
+            );
+            return Ok(DeliveryDisposition::Acknowledge);
+        }
         ClaimResult::UnsupportedVersion(version) => {
             warn!(
                 event = "analysis_delivery_deferred",
@@ -404,13 +463,11 @@ async fn process_delivery(
             );
             return Ok(DeliveryDisposition::leave_pending_cold());
         }
-        ClaimResult::NotYetAvailable => {
-            return Ok(DeliveryDisposition::leave_pending_cold());
+        ClaimResult::NotYetAvailable { remaining_delay } => {
+            return Ok(DeliveryDisposition::retry_targeted_after(remaining_delay));
         }
         ClaimResult::Busy => {
-            return Ok(DeliveryDisposition::LeavePending(
-                PendingRecoveryPolicy::AtIdleThreshold,
-            ));
+            return Ok(DeliveryDisposition::retry_shared_slot_busy());
         }
     };
     let span = info_span!(
@@ -458,6 +515,17 @@ fn submit_control_outcome<T>(
     Ok(outcome.value)
 }
 
+fn targeted_recovery_due_at(
+    delivery_received_at: Instant,
+    claim_resolved_at: Instant,
+    delivery_idle_threshold: Duration,
+    remaining_delay: Duration,
+) -> Option<Instant> {
+    let idle_due_at = delivery_received_at.checked_add(delivery_idle_threshold)?;
+    let available_due_at = claim_resolved_at.checked_add(remaining_delay)?;
+    Some(idle_due_at.max(available_due_at))
+}
+
 async fn process_claimed_delivery(
     control_client: &mut tokio_postgres::Client,
     heartbeat_client: &mut tokio_postgres::Client,
@@ -492,40 +560,57 @@ async fn process_claimed_delivery(
             return Ok(DeliveryDisposition::Acknowledge);
         }
     };
-    let child_spec = child_spec(config, claim, &attempt_directory)?;
-    let result = run_claimed_child(
-        heartbeat_client,
-        config,
-        claim,
-        &child_spec,
-        shutdown,
-        started,
-    )
+    let attempt_result = async {
+        let child_spec = child_spec(config, claim, &attempt_directory)?;
+        let result = run_claimed_child(
+            heartbeat_client,
+            config,
+            claim,
+            &child_spec,
+            shutdown,
+            started,
+        )
+        .await;
+        let outcome = finish_attempt_result(
+            control_client,
+            config,
+            claim,
+            &attempt_directory,
+            started,
+            result,
+        )
+        .await?;
+        submit_control_outcome(post_commit_sink, outcome)
+    }
     .await;
-    let outcome = finish_attempt_result(
-        control_client,
-        config,
-        claim,
-        &attempt_directory,
-        started,
-        result,
-    )
-    .await?;
-    let disposition = submit_control_outcome(post_commit_sink, outcome)?;
-    if let Err(cleanup_error) = tokio::fs::remove_dir_all(&attempt_directory).await {
+    cleanup_attempt_directory(&attempt_directory, attempt_result).await
+}
+
+/// Removes a completed attempt's non-authoritative files without hiding its control-plane result.
+async fn cleanup_attempt_directory<T>(
+    attempt_directory: &std::path::Path,
+    attempt_result: Result<T, ConsumerError>,
+) -> Result<T, ConsumerError> {
+    let cleanup_result = tokio::fs::remove_dir_all(attempt_directory).await;
+    if let Err(cleanup_error) = cleanup_result {
         error!(
             event = "analysis_attempt_cleanup_failed",
             phase = "temporary_storage_cleanup",
             error_kind = "temporary_storage_io",
             "analysis attempt directory cleanup failed"
         );
-        return Err(ConsumerError::Temporary(cleanup_error));
+        return match attempt_result {
+            Ok(_value) => Err(ConsumerError::Temporary(cleanup_error)),
+            Err(attempt_error) => Err(attempt_error),
+        };
     }
-    Ok(disposition)
+    attempt_result
 }
 
 #[cfg(test)]
 mod tests {
+    use std::error::Error as StdError;
+
     use super::*;
     use crate::outbox::{OutboxKind, PostCommitEffects};
 
@@ -543,5 +628,79 @@ mod tests {
         );
 
         assert!(matches!(result, Err(ConsumerError::PostCommitSink(_))));
+    }
+
+    #[test]
+    fn shared_slot_busy_keeps_the_delivery_for_targeted_recovery() {
+        assert_eq!(
+            DeliveryDisposition::retry_shared_slot_busy(),
+            DeliveryDisposition::LeavePending(PendingRecoveryPolicy::Targeted {
+                remaining_delay: Duration::ZERO,
+            })
+        );
+    }
+
+    #[test]
+    fn deferred_job_recovery_waits_for_both_redis_idle_and_database_availability() {
+        let received_at = Instant::now();
+        let resolved_at = received_at + Duration::from_secs(2);
+
+        assert_eq!(
+            targeted_recovery_due_at(
+                received_at,
+                resolved_at,
+                Duration::from_mins(1),
+                Duration::from_secs(90),
+            ),
+            Some(resolved_at + Duration::from_secs(90))
+        );
+        assert_eq!(
+            targeted_recovery_due_at(
+                received_at,
+                resolved_at,
+                Duration::from_mins(1),
+                Duration::from_secs(10),
+            ),
+            Some(received_at + Duration::from_mins(1))
+        );
+    }
+
+    #[test]
+    fn recovery_ack_cannot_pass_a_required_post_commit_effect() {
+        let (sink, receiver) = PostCommitSink::channel(OutboxKind::SeriesAnalysis);
+        drop(receiver);
+
+        let result = submit_control_outcome(
+            &sink,
+            ControlOutcome::new(
+                ClaimResult::RecoveredCurrentJob,
+                PostCommitEffects::wake(OutboxKind::SeriesAnalysis),
+            ),
+        );
+
+        assert!(matches!(result, Err(ConsumerError::PostCommitSink(_))));
+    }
+
+    #[tokio::test]
+    #[expect(
+        clippy::panic_in_result_fn,
+        reason = "filesystem cleanup evidence uses assertions while setup errors remain visible"
+    )]
+    async fn attempt_files_are_removed_when_control_plane_finalization_fails()
+    -> Result<(), Box<dyn StdError>> {
+        let root = tempfile::tempdir()?;
+        let attempt_directory = root.path().join("analysis-attempt-test");
+        tokio::fs::create_dir(&attempt_directory).await?;
+        tokio::fs::write(attempt_directory.join("candidate.json"), b"candidate").await?;
+
+        let result = cleanup_attempt_directory(
+            &attempt_directory,
+            Err::<(), _>(ConsumerError::DurationBound),
+        )
+        .await;
+
+        assert!(matches!(result, Err(ConsumerError::DurationBound)));
+        assert!(!attempt_directory.exists());
+        Ok(())
     }
 }

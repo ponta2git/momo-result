@@ -9,7 +9,9 @@ use redis::{
 };
 use thiserror::Error;
 
-use super::contract::{OcrQueueContractError, OcrQueuePayload, parse_delivery, recoverable_job_id};
+use super::contract::{
+    OcrQueueContractError, ValidatedOcrDelivery, parse_validated_delivery, recoverable_job_id,
+};
 
 const MAXIMUM_PENDING_SCAN_COUNT: usize = 100;
 const MAXIMUM_DELIVERY_ATTEMPTS: usize = 10;
@@ -71,6 +73,14 @@ impl OcrQueueConfig {
 
     pub(crate) const fn claim_idle(&self) -> Duration {
         self.claim_idle
+    }
+
+    pub(crate) const fn block(&self) -> Duration {
+        self.block
+    }
+
+    pub(crate) fn consumer(&self) -> &str {
+        &self.consumer
     }
 }
 
@@ -136,7 +146,7 @@ pub(crate) struct OcrQueueDelivery {
 
 #[derive(Debug)]
 pub(crate) enum OcrQueueDeliveryBody {
-    Job(Box<OcrQueuePayload>),
+    Job(Box<ValidatedOcrDelivery>),
     Malformed {
         recoverable_job_id: Option<String>,
         error: OcrQueueContractError,
@@ -348,7 +358,7 @@ fn decode_delivery(
     maximum_delivery_attempts: usize,
 ) -> OcrQueueDelivery {
     let message_id = delivery.id.clone();
-    let parsed = parse_delivery(delivery);
+    let parsed = parse_validated_delivery(delivery);
     let body = if prior_delivery_count.is_some_and(|count| count >= maximum_delivery_attempts) {
         OcrQueueDeliveryBody::MaximumAttempts {
             recoverable_job_id: recoverable_job_id(delivery),

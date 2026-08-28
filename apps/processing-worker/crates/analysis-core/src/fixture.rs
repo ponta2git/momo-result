@@ -128,15 +128,14 @@ fn shared_boundary_fixture_matches_normalized_input_and_overall_checksum() {
             .len(),
         fixture_count(&fixture, "/expected/matchCount")
     );
+    let normalized = input.normalized();
     assert_eq!(
-        input.scopes().len(),
+        normalized.scope_count(),
         fixture_count(&fixture, "/expected/scopeCount")
     );
-
-    let normalized = input.normalized();
     assert!(
         normalized
-            .player_matches
+            .player_matches()
             .get(..4)
             .unwrap_or_default()
             .iter()
@@ -144,21 +143,21 @@ fn shared_boundary_fixture_matches_normalized_input_and_overall_checksum() {
     );
     assert!(
         normalized
-            .player_matches
+            .player_matches()
             .get(4..8)
             .unwrap_or_default()
             .iter()
             .all(|row| row.match_id == "match-00-01")
     );
     let zero_denominator = normalized
-        .player_matches
+        .player_matches()
         .iter()
         .find(|row| row.match_id == "match-01-00" && row.member_id == "ponta")
         .unwrap_or_else(|| panic!("zero-denominator fixture row is missing"));
     assert_eq!(zero_denominator.total_assets_man_yen, 0);
     assert_eq!(zero_denominator.revenue_man_yen, 10);
     let negative_assets = normalized
-        .player_matches
+        .player_matches()
         .iter()
         .find(|row| row.match_id == "match-02-00" && row.member_id == "eu")
         .unwrap_or_else(|| panic!("negative-assets fixture row is missing"));

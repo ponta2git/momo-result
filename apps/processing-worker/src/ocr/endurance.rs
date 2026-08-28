@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use super::{
-    contract::{OcrQueuePayload, parse_delivery},
+    contract::{OcrQueuePayload, SourceImageClaims, parse_delivery},
     object_store::R2ObjectStoreConfig,
 };
 
@@ -208,6 +208,7 @@ struct ManifestObject {
 struct PreparedObject {
     label: String,
     payload: OcrQueuePayload,
+    source_image: SourceImageClaims,
 }
 
 /// Exercises private R2 verification and the production OCR child boundary without publishing OCR
@@ -309,9 +310,12 @@ fn prepare_objects(manifest: EnduranceManifest) -> Result<Vec<PreparedObject>, O
             };
             let payload =
                 parse_delivery(&delivery).map_err(|_error| OcrEnduranceError::Manifest)?;
+            let source_image =
+                SourceImageClaims::try_from_payload(&payload).ok_or(OcrEnduranceError::Manifest)?;
             Ok(PreparedObject {
                 label: object.label,
                 payload,
+                source_image,
             })
         })
         .collect()
@@ -358,7 +362,16 @@ async fn run_linux(
         vm_memory::VmMemorySampler::start(request.expected_runtime_memory_limit_bytes).await?;
 
     let store = R2ObjectStore::new(&request.object_store);
-    let launcher = IsolatedOcrChildLauncher::new(cgroup.clone(), None, request.stop_grace);
+    let parent_liveness_timeout = request
+        .ocr_timeout
+        .checked_add(request.stop_grace)
+        .ok_or(OcrEnduranceError::Configuration)?;
+    let launcher = IsolatedOcrChildLauncher::new(
+        cgroup.clone(),
+        None,
+        request.stop_grace,
+        parent_liveness_timeout,
+    );
     let mut failures = FailureCounts::default();
     let run_capacity =
         usize::try_from(request.runs).map_err(|_error| OcrEnduranceError::Configuration)?;
@@ -386,16 +399,33 @@ async fn run_linux(
 
         let total_started = Instant::now();
         let download_started = Instant::now();
-        let image = match store.download(&object.payload).await {
-            Ok(image) => image,
-            Err(error) => {
+        // The object adapter bounds the complete streamed response. The gate additionally applies
+        // its stricter per-run performance ceiling so a slow sample cannot stall later evidence.
+        let image = match time::timeout(
+            Duration::from_millis(request.thresholds.download_milliseconds),
+            store.download(&object.source_image),
+        )
+        .await
+        {
+            Err(_elapsed) => {
                 let download = elapsed_microseconds(download_started);
                 download_durations.push(download);
                 total_durations.push(elapsed_microseconds(total_started));
                 failures.download = failures.download.saturating_add(1);
-                failures.category(error.kind());
+                failures.category("object_download_timeout");
                 continue;
             }
+            Ok(result) => match result {
+                Ok(image) => image,
+                Err(error) => {
+                    let download = elapsed_microseconds(download_started);
+                    download_durations.push(download);
+                    total_durations.push(elapsed_microseconds(total_started));
+                    failures.download = failures.download.saturating_add(1);
+                    failures.category(error.kind());
+                    continue;
+                }
+            },
         };
         let download = elapsed_microseconds(download_started);
         download_durations.push(download);
@@ -410,7 +440,11 @@ async fn run_linux(
         *dimension_class_run_count = dimension_class_run_count.saturating_add(1);
 
         let ocr_started = Instant::now();
-        let mut child = match launcher.launch(&image, &object.payload) {
+        let mut child = match launcher.launch(
+            &image,
+            object.payload.requested_screen_type(),
+            object.payload.hints(),
+        ) {
             Ok(child) => child,
             Err(kind) => {
                 let ocr = elapsed_microseconds(ocr_started);
@@ -450,6 +484,10 @@ async fn run_linux(
         }
         match outcome {
             Err(kind) => {
+                child
+                    .terminate()
+                    .await
+                    .map_err(|_error| OcrEnduranceError::Cleanup)?;
                 failures.child_wait = failures.child_wait.saturating_add(1);
                 failures.category(process_failure_kind(kind));
             }
@@ -572,7 +610,7 @@ async fn run_linux(
     objects: Vec<PreparedObject>,
 ) -> Result<R2OcrEnduranceReport, OcrEnduranceError> {
     for object in objects {
-        drop((object.label, object.payload));
+        drop((object.label, object.payload, object.source_image));
     }
     std::future::ready(Err(OcrEnduranceError::UnsupportedPlatform)).await
 }

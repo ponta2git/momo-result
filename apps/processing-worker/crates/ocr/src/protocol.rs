@@ -1,4 +1,4 @@
-use std::{io::Read, mem::size_of};
+use std::mem::size_of;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
@@ -11,6 +11,9 @@ const PROTOCOL_VERSION: u8 = 1;
 const MAXIMUM_HEADER_BYTES: usize = 16 * 1024;
 /// Upper bound for the encoded image sent to one child attempt.
 const MAXIMUM_IMAGE_BYTES: usize = 3 * 1024 * 1024;
+/// Upper bound for one complete parent-to-child request frame.
+pub const MAXIMUM_REQUEST_FRAME_BYTES: usize =
+    1 + size_of::<u32>() + MAXIMUM_HEADER_BYTES + MAXIMUM_IMAGE_BYTES;
 /// Upper bound for one child response.
 pub const MAXIMUM_RESPONSE_BYTES: usize = 1024 * 1024;
 const MAXIMUM_PROFILE_ID_BYTES: usize = 128;
@@ -89,37 +92,43 @@ pub fn encode_request(
     Ok(framed)
 }
 
-/// Decodes one complete OCR request frame from the child transport.
+/// Decodes one complete OCR request frame from owned, bounded in-memory bytes.
 ///
-/// The decoder consumes exactly one frame and rejects trailing bytes. The caller owns the
-/// underlying stream and can therefore decide how process I/O failures map to lifecycle outcomes.
+/// The runtime adapter owns stream reads and supplies at most [`MAXIMUM_REQUEST_FRAME_BYTES`]. This
+/// decoder remains deterministic, rejects incomplete or trailing bytes, and reuses the frame
+/// allocation for the validated image body.
 ///
 /// # Errors
 ///
 /// Returns a closed transport or input-contract category.
-pub fn decode_request(start_marker: u8, mut input: impl Read) -> Result<OcrRequest, &'static str> {
-    let mut marker = [0_u8; 1];
-    input
-        .read_exact(&mut marker)
-        .map_err(|_error| "ocr_child_start_barrier")?;
-    if marker != [start_marker] {
+pub fn decode_request(start_marker: u8, mut frame: Vec<u8>) -> Result<OcrRequest, &'static str> {
+    if frame.len() > MAXIMUM_REQUEST_FRAME_BYTES {
+        return Err("ocr_child_input_frame");
+    }
+    let Some((&marker, framed_payload)) = frame.split_first() else {
+        return Err("ocr_child_start_barrier");
+    };
+    if marker != start_marker {
         return Err("ocr_child_start_barrier");
     }
-    let mut header_length = [0_u8; size_of::<u32>()];
-    input
-        .read_exact(&mut header_length)
+    let Some((header_length, after_header_length)) =
+        framed_payload.split_at_checked(size_of::<u32>())
+    else {
+        return Err("ocr_child_input_frame");
+    };
+    let header_length: [u8; size_of::<u32>()] = header_length
+        .try_into()
         .map_err(|_error| "ocr_child_input_frame")?;
     let header_length = usize::try_from(u32::from_be_bytes(header_length))
         .map_err(|_error| "ocr_child_input_frame")?;
     if header_length == 0 || header_length > MAXIMUM_HEADER_BYTES {
         return Err("ocr_child_input_frame");
     }
-    let mut header = vec![0_u8; header_length];
-    input
-        .read_exact(&mut header)
-        .map_err(|_error| "ocr_child_input_frame")?;
+    let Some((header, after_header)) = after_header_length.split_at_checked(header_length) else {
+        return Err("ocr_child_input_frame");
+    };
     let header: RequestHeader =
-        serde_json::from_slice(&header).map_err(|_error| "ocr_child_input_decode")?;
+        serde_json::from_slice(header).map_err(|_error| "ocr_child_input_decode")?;
     let requested_screen_type = RequestedScreenType::parse_wire(&header.requested_screen_type)
         .ok_or("ocr_child_input_contract")?;
     let image_length =
@@ -131,20 +140,17 @@ pub fn decode_request(start_marker: u8, mut input: impl Read) -> Result<OcrReque
     {
         return Err("ocr_child_input_contract");
     }
-    let mut image = vec![0_u8; image_length];
-    input
-        .read_exact(&mut image)
-        .map_err(|_error| "ocr_child_input_frame")?;
-    let mut trailing = [0_u8; 1];
-    if input
-        .read(&mut trailing)
-        .map_err(|_error| "ocr_child_input_frame")?
-        != 0
-    {
+    if after_header.len() != image_length {
         return Err("ocr_child_input_frame");
     }
+    let image_offset = frame
+        .len()
+        .checked_sub(after_header.len())
+        .ok_or("ocr_child_input_frame")?;
+    drop(frame.drain(..image_offset));
+    frame.truncate(image_length);
     Ok(OcrRequest {
-        image,
+        image: frame,
         requested_screen_type,
         hints: header.hints,
     })
@@ -223,8 +229,6 @@ pub fn decode_response(bytes: &[u8]) -> Result<Result<OcrOutput, OcrFailure>, &'
     reason = "protocol fixtures abort with precise context when a supposedly valid frame fails"
 )]
 mod tests {
-    use std::io::Cursor;
-
     use super::*;
 
     const START_MARKER: u8 = 0x4d;
@@ -238,23 +242,52 @@ mod tests {
             &OcrHints::default(),
         )
         .expect("valid request must encode");
-        let decoded =
-            decode_request(START_MARKER, Cursor::new(&frame)).expect("valid request must decode");
-        assert_eq!(decoded.image, b"bounded-image");
-        assert_eq!(decoded.requested_screen_type, RequestedScreenType::Revenue);
-
         let mut trailing = frame.clone();
         trailing.push(0);
-        assert!(decode_request(START_MARKER, Cursor::new(trailing)).is_err());
-        let mut wrong_marker = frame;
+        assert!(decode_request(START_MARKER, trailing).is_err());
+        let mut wrong_marker = frame.clone();
         if let Some(marker) = wrong_marker.first_mut() {
             *marker = 0;
         }
-        assert!(decode_request(START_MARKER, Cursor::new(wrong_marker)).is_err());
+        assert!(decode_request(START_MARKER, wrong_marker).is_err());
+
+        let frame_allocation = frame.as_ptr();
+        let decoded = decode_request(START_MARKER, frame).expect("valid request must decode");
+        assert_eq!(decoded.image, b"bounded-image");
+        assert_eq!(decoded.requested_screen_type, RequestedScreenType::Revenue);
+        assert_eq!(
+            decoded.image.as_ptr(),
+            frame_allocation,
+            "request decode must reuse the bounded frame allocation for its image"
+        );
     }
 
     #[test]
     fn response_envelope_is_closed_for_success_and_failure() {
+        let succeeded = OcrOutput {
+            detected_screen_type: RequestedScreenType::TotalAssets,
+            profile_id: Some(String::from("full-hd-total-assets-v1")),
+            payload: serde_json::json!({"players": []}),
+            warnings: serde_json::json!([]),
+            timings_milliseconds: serde_json::json!({"total": 1.0}),
+        };
+        let encoded = encode_response(Ok(&succeeded)).expect("success encodes");
+        let encoded_value = serde_json::from_slice::<JsonValue>(&encoded)
+            .expect("encoded success response must be JSON");
+        assert_eq!(
+            encoded_value,
+            serde_json::json!({
+                "outcome": "succeeded",
+                "detected_screen_type": "total_assets",
+                "profile_id": "full-hd-total-assets-v1",
+                "payload": {"players": []},
+                "warnings": [],
+                "timings_milliseconds": {"total": 1.0},
+            }),
+            "response serialization must retain the established version-1 wire field names"
+        );
+        assert_eq!(decode_response(&encoded), Ok(Ok(succeeded)));
+
         let failed = encode_response(Err(OcrFailure::DecodeFailed)).expect("failure encodes");
         assert!(matches!(
             decode_response(&failed),

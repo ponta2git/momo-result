@@ -15,7 +15,7 @@ use crate::{
         ExecutionSlotIdentity, ExecutionTaskKind, clear_stale_preemption, release_owned,
     },
     ocr::{
-        contract::{OcrQueuePayload, parse_delivery},
+        contract::{ValidatedOcrDelivery, parse_validated_delivery},
         queue::{
             OcrQueueConfig, OcrQueueDeliveryBody, PendingRecoveryCursor, acknowledge,
             dead_letter_and_acknowledge, ensure_consumer_group, read_new_delivery,
@@ -217,20 +217,8 @@ async fn verify_success_and_terminal_duplicate(primary: &mut Client) -> SmokeRes
     let payload = payload(&SUCCESS)?;
     let config = control_config("ocr-c2-worker-success")?;
     let claim = claimed(claim_job(primary, &payload, &config).await?)?;
-    finish_success(
-        primary,
-        &claim,
-        &config,
-        &OcrDraftCompletion {
-            detected_screen_type: RequestedScreenType::TotalAssets,
-            profile_id: Some(String::from("c2-smoke-profile")),
-            payload: json!({"screenType": "total_assets", "rows": []}),
-            warnings: json!([]),
-            timings_milliseconds: json!({"total": 1}),
-            duration_milliseconds: 1,
-        },
-    )
-    .await?;
+    let completion = tests::valid_completion(RequestedScreenType::TotalAssets);
+    finish_success(primary, &claim, &config, &OcrHints::default(), &completion).await?;
     let row = primary
         .query_one(
             "SELECT j.status, COUNT(d.id)::bigint FROM ocr_jobs j\x20\
@@ -252,20 +240,8 @@ async fn verify_success_with_warnings(primary: &mut Client) -> SmokeResult {
     let payload = payload(&SUCCESS_WITH_WARNINGS)?;
     let config = control_config("ocr-c2-worker-success-warnings")?;
     let claim = claimed(claim_job(primary, &payload, &config).await?)?;
-    finish_success(
-        primary,
-        &claim,
-        &config,
-        &OcrDraftCompletion {
-            detected_screen_type: RequestedScreenType::TotalAssets,
-            profile_id: Some(String::from("c2-smoke-profile")),
-            payload: json!({"screenType": "total_assets", "rows": []}),
-            warnings: json!([{"code": "LOW_CONFIDENCE"}]),
-            timings_milliseconds: json!({"total": 1}),
-            duration_milliseconds: 1,
-        },
-    )
-    .await?;
+    let completion = tests::completion_with_missing_amount_warning();
+    finish_success(primary, &claim, &config, &OcrHints::default(), &completion).await?;
     assert_match_draft_status(primary, &SUCCESS_WITH_WARNINGS, "needs_review").await?;
     Ok(())
 }
@@ -722,6 +698,19 @@ async fn insert_fixture(client: &Client, fixture: &Fixture) -> SmokeResult {
             &[&fixture.job_id, &fixture.draft_id, &fixture.source_image_id],
         )
         .await?;
+    let stream_payload = persisted_payload(fixture);
+    client
+        .execute(
+            "INSERT INTO ocr_queue_outbox (
+               id, job_id, dedupe_key, stream_payload, schema_version, status,
+               attempt_count, next_attempt_at, delivered_at
+             ) VALUES (
+               'ocr-outbox-' || $1, $1, 'ocr-job:' || $1, $2, 2, 'DELIVERED', 0,
+               clock_timestamp(), clock_timestamp()
+             )",
+            &[&fixture.job_id, &stream_payload],
+        )
+        .await?;
     Ok(())
 }
 
@@ -744,6 +733,10 @@ async fn cleanup_database(client: &Client) -> SmokeResult {
                'c2-smoke-match-draft-preempt','c2-smoke-match-draft-malformed',\x20\
                'c2-smoke-match-draft-analysis-recovery','c2-smoke-match-draft-transient');\x20\
              DELETE FROM ocr_drafts WHERE job_id IN (\x20\
+               'c2-smoke-job-takeover','c2-smoke-job-success','c2-smoke-job-success-warnings',\x20\
+               'c2-smoke-job-preempt','c2-smoke-job-malformed',\x20\
+               'c2-smoke-job-analysis-recovery','c2-smoke-job-transient');\x20\
+             DELETE FROM ocr_queue_outbox WHERE job_id IN (\x20\
                'c2-smoke-job-takeover','c2-smoke-job-success','c2-smoke-job-success-warnings',\x20\
                'c2-smoke-job-preempt','c2-smoke-job-malformed',\x20\
                'c2-smoke-job-analysis-recovery','c2-smoke-job-transient');\x20\
@@ -783,28 +776,42 @@ async fn assert_match_draft_status(
     Ok(())
 }
 
-fn payload(fixture: &Fixture) -> SmokeResult<OcrQueuePayload> {
-    let fields = HashMap::from([
-        ("schemaVersion", String::from("2")),
-        ("jobId", String::from(fixture.job_id)),
-        ("draftId", String::from(fixture.draft_id)),
-        ("sourceImageId", String::from(fixture.source_image_id)),
-        ("imageObjectKey", String::from(fixture.object_key)),
-        ("sha256", "ab".repeat(32)),
-        ("byteLength", String::from("68")),
-        ("mediaType", String::from("image/png")),
-        ("requestedScreenType", String::from("total_assets")),
-        ("attempt", String::from("1")),
-        ("enqueuedAt", String::from("2026-08-12T00:00:00Z")),
-    ]);
+fn payload(fixture: &Fixture) -> SmokeResult<ValidatedOcrDelivery> {
+    let fields = persisted_payload(fixture)
+        .as_object()
+        .ok_or("persisted OCR fixture is not an object")?
+        .iter()
+        .map(|(name, value)| {
+            value
+                .as_str()
+                .map(|value| (name.clone(), String::from(value)))
+                .ok_or("persisted OCR fixture field is not a string")
+        })
+        .collect::<Result<HashMap<_, _>, _>>()?;
     let delivery = StreamId {
         id: String::from("1-0"),
         map: fields
             .into_iter()
-            .map(|(name, value)| (String::from(name), Value::BulkString(value.into_bytes())))
+            .map(|(name, value)| (name, Value::BulkString(value.into_bytes())))
             .collect(),
     };
-    parse_delivery(&delivery).map_err(Into::into)
+    parse_validated_delivery(&delivery).map_err(Into::into)
+}
+
+fn persisted_payload(fixture: &Fixture) -> serde_json::Value {
+    json!({
+        "schemaVersion": "2",
+        "jobId": fixture.job_id,
+        "draftId": fixture.draft_id,
+        "sourceImageId": fixture.source_image_id,
+        "imageObjectKey": fixture.object_key,
+        "sha256": "ab".repeat(32),
+        "byteLength": "68",
+        "mediaType": "image/png",
+        "requestedScreenType": "total_assets",
+        "attempt": "1",
+        "enqueuedAt": "2026-08-12T00:00:00Z",
+    })
 }
 
 fn control_config(worker_id: &str) -> SmokeResult<OcrControlConfig> {

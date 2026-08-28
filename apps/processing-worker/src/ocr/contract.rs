@@ -1,4 +1,4 @@
-use std::str;
+use std::{collections::BTreeMap, str};
 
 pub(crate) use momo_ocr::{OcrHints, RequestedScreenType};
 pub(crate) use momo_ocr::{OcrMediaType, OcrQueuePayload};
@@ -26,6 +26,84 @@ const REQUIRED_FIELDS: [&str; 11] = [
 ];
 const OPTIONAL_FIELDS: [&str; 2] = ["ocrHintsJson", "requestId"];
 
+/// Integrity claims required to fetch one private source image.
+///
+/// Queue and database adapters validate their own wire/row shapes before producing this value, so
+/// the object-store adapter does not depend on either transport representation.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct SourceImageClaims {
+    object_key: String,
+    sha256: String,
+    byte_length: u64,
+    media_type: OcrMediaType,
+}
+
+/// One completely validated OCR queue delivery.
+///
+/// The capability payload contains only execution data. `wire_fields` deliberately retains the
+/// complete closed transport projection so a Redis delivery can be compared byte-for-byte with
+/// the immutable `PostgreSQL` outbox intent before any job is claimed.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct ValidatedOcrDelivery {
+    payload: OcrQueuePayload,
+    wire_fields: BTreeMap<&'static str, String>,
+}
+
+impl ValidatedOcrDelivery {
+    #[must_use]
+    pub(crate) const fn payload(&self) -> &OcrQueuePayload {
+        &self.payload
+    }
+}
+
+impl SourceImageClaims {
+    pub(crate) fn new(
+        object_key: String,
+        sha256: String,
+        byte_length: u64,
+        media_type: OcrMediaType,
+    ) -> Option<Self> {
+        if valid_object_key(&object_key)
+            && valid_sha256(&sha256)
+            && (1..=MAXIMUM_IMAGE_BYTES).contains(&byte_length)
+        {
+            Some(Self {
+                object_key,
+                sha256,
+                byte_length,
+                media_type,
+            })
+        } else {
+            None
+        }
+    }
+
+    pub(crate) fn try_from_payload(payload: &OcrQueuePayload) -> Option<Self> {
+        Self::new(
+            String::from(payload.image_object_key()),
+            String::from(payload.sha256()),
+            payload.byte_length(),
+            payload.media_type(),
+        )
+    }
+
+    pub(crate) fn object_key(&self) -> &str {
+        &self.object_key
+    }
+
+    pub(crate) fn sha256(&self) -> &str {
+        &self.sha256
+    }
+
+    pub(crate) const fn byte_length(&self) -> u64 {
+        self.byte_length
+    }
+
+    pub(crate) const fn media_type(&self) -> OcrMediaType {
+        self.media_type
+    }
+}
+
 #[derive(Clone, Copy, Debug, Error, Eq, PartialEq)]
 pub(crate) enum OcrQueueContractError {
     #[error("OCR v2 delivery violates the closed field set")]
@@ -48,6 +126,17 @@ pub(crate) enum OcrQueueContractError {
 pub(crate) fn parse_delivery(
     delivery: &StreamId,
 ) -> Result<OcrQueuePayload, OcrQueueContractError> {
+    parse_validated_delivery(delivery).map(|delivery| delivery.payload)
+}
+
+/// Decodes the exact closed Redis payload while retaining every validated wire field.
+///
+/// # Errors
+///
+/// Returns the same field-level contract error as [`parse_delivery`].
+pub(crate) fn parse_validated_delivery(
+    delivery: &StreamId,
+) -> Result<ValidatedOcrDelivery, OcrQueueContractError> {
     if delivery.map.len() < REQUIRED_FIELDS.len()
         || delivery.map.len() > REQUIRED_FIELDS.len() + OPTIONAL_FIELDS.len()
         || delivery.map.keys().any(|field| {
@@ -89,10 +178,13 @@ pub(crate) fn parse_delivery(
         .ok()
         .filter(|value| i32::try_from(*value).is_ok())
         .ok_or(OcrQueueContractError::InvalidField("attempt"))?;
-    OffsetDateTime::parse(&required_string(delivery, "enqueuedAt")?, &Rfc3339)
+    let enqueued_at = required_string(delivery, "enqueuedAt")?;
+    OffsetDateTime::parse(&enqueued_at, &Rfc3339)
         .map_err(|_parse_error| OcrQueueContractError::InvalidField("enqueuedAt"))?;
-    let hints = optional_string(delivery, "ocrHintsJson")?
-        .map_or_else(|| Ok(OcrHints::default()), |value| parse_hints(&value))?;
+    let hints_json = optional_string(delivery, "ocrHintsJson")?;
+    let hints = hints_json
+        .as_deref()
+        .map_or_else(|| Ok(OcrHints::default()), parse_hints)?;
     let request_id = optional_string(delivery, "requestId")?;
     if request_id
         .as_deref()
@@ -101,17 +193,70 @@ pub(crate) fn parse_delivery(
         return Err(OcrQueueContractError::InvalidField("requestId"));
     }
 
-    Ok(OcrQueuePayload::new(
-        job_id,
-        draft_id,
-        source_image_id,
-        image_object_key,
-        sha256,
-        byte_length,
-        media_type,
-        requested_screen_type,
-        hints,
-    ))
+    let mut wire_fields = BTreeMap::from([
+        ("schemaVersion", schema_version),
+        ("jobId", job_id.clone()),
+        ("draftId", draft_id.clone()),
+        ("sourceImageId", source_image_id.clone()),
+        ("imageObjectKey", image_object_key.clone()),
+        ("sha256", sha256.clone()),
+        ("byteLength", byte_length_value),
+        ("mediaType", String::from(media_type.wire())),
+        (
+            "requestedScreenType",
+            String::from(requested_screen_type.wire()),
+        ),
+        ("attempt", attempt_string),
+        ("enqueuedAt", enqueued_at),
+    ]);
+    if let Some(hints_json) = hints_json {
+        wire_fields.insert("ocrHintsJson", hints_json);
+    }
+    if let Some(request_id) = request_id {
+        wire_fields.insert("requestId", request_id);
+    }
+
+    Ok(ValidatedOcrDelivery {
+        payload: OcrQueuePayload::new(
+            job_id,
+            draft_id,
+            source_image_id,
+            image_object_key,
+            sha256,
+            byte_length,
+            media_type,
+            requested_screen_type,
+            hints,
+        ),
+        wire_fields,
+    })
+}
+
+/// Decodes the immutable `PostgreSQL` outbox payload through the same closed transport contract.
+///
+/// # Errors
+///
+/// Returns the same bounded field error as Redis decoding when the durable enqueue intent has
+/// drifted or been corrupted.
+pub(crate) fn parse_persisted_payload(
+    payload: &serde_json::Value,
+) -> Result<ValidatedOcrDelivery, OcrQueueContractError> {
+    let object = payload
+        .as_object()
+        .ok_or(OcrQueueContractError::ClosedFieldSet)?;
+    let delivery = StreamId {
+        id: String::new(),
+        map: object
+            .iter()
+            .map(|(field, value)| {
+                let value = value.as_str().map_or(Value::Nil, |value| {
+                    Value::BulkString(value.as_bytes().to_vec())
+                });
+                (field.clone(), value)
+            })
+            .collect(),
+    };
+    parse_validated_delivery(&delivery)
 }
 
 /// Extracts only a bounded job ID for terminal malformed-delivery handling.
@@ -280,6 +425,52 @@ mod tests {
             RequestedScreenType::IncidentLog
         );
         assert_eq!(payload.hints(), &OcrHints::default());
+
+        let persisted = serde_json::from_str::<serde_json::Value>(VALID_PAYLOAD);
+        let Ok(persisted) = persisted else {
+            panic!("shared OCR v2 fixture is not JSON");
+        };
+        assert_eq!(
+            parse_persisted_payload(&persisted),
+            parse_validated_delivery(&delivery)
+        );
+    }
+
+    #[test]
+    fn persisted_outbox_payload_rejects_non_string_and_open_fields() {
+        let Ok(mut non_string) = serde_json::from_str::<serde_json::Value>(VALID_PAYLOAD) else {
+            panic!("shared OCR v2 fixture is not JSON");
+        };
+        let Some(non_string_fields) = non_string.as_object_mut() else {
+            panic!("shared OCR v2 fixture is not an object");
+        };
+        assert!(
+            non_string_fields
+                .insert(String::from("attempt"), serde_json::json!(1))
+                .is_some(),
+            "shared fixture must contain attempt"
+        );
+        assert_eq!(
+            parse_persisted_payload(&non_string),
+            Err(OcrQueueContractError::NonStringField("attempt"))
+        );
+
+        let Ok(mut open) = serde_json::from_str::<serde_json::Value>(VALID_PAYLOAD) else {
+            panic!("shared OCR v2 fixture is not JSON");
+        };
+        let Some(open_fields) = open.as_object_mut() else {
+            panic!("shared OCR v2 fixture is not an object");
+        };
+        assert!(
+            open_fields
+                .insert(String::from("bucket"), serde_json::json!("private"))
+                .is_none(),
+            "shared fixture must not already contain bucket"
+        );
+        assert_eq!(
+            parse_persisted_payload(&open),
+            Err(OcrQueueContractError::ClosedFieldSet)
+        );
     }
 
     #[test]
@@ -315,6 +506,8 @@ mod tests {
     fn image_and_identifier_bounds_are_enforced_before_side_effects() {
         for (field, invalid) in [
             ("imageObjectKey", "/absolute/image.webp"),
+            ("imageObjectKey", "source-images//image.webp"),
+            ("imageObjectKey", "source-images/image.webp/"),
             ("imageObjectKey", "source-images/../image.webp"),
             ("imageObjectKey", "https://example.invalid/image.webp"),
             ("sha256", "AB"),

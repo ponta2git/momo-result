@@ -11,7 +11,7 @@ use tempfile::TempDir;
 use momo_analysis_core::{
     canonical::{canonicalize_value, sha256_prefixed},
     contract::{ArtifactManifest, ResourceManifest},
-    model::{AnalysisInput, IncidentCounts, PlayerMatchInput},
+    model::{AnalysisInput, IncidentCounts, NormalizedAnalysisInput, PlayerMatchInput},
     payload,
 };
 
@@ -65,7 +65,13 @@ fn build(
     request: &ArtifactBuildRequest,
     directory: &Path,
 ) -> Result<ArtifactManifest, ArtifactError> {
-    build_artifact(&input.into_normalized(), request, directory).map(|artifact| artifact.manifest)
+    build_artifact(&normalized(input), request, directory).map(|artifact| artifact.manifest)
+}
+
+fn normalized(input: AnalysisInput) -> NormalizedAnalysisInput {
+    input
+        .try_into_normalized()
+        .unwrap_or_else(|error| panic!("valid analysis input: {error}"))
 }
 
 fn rewrite_manifest(directory: &Path, manifest: &mut ArtifactManifest) {
@@ -202,6 +208,32 @@ fn rejects_a_missing_declared_file() {
     ));
 }
 
+#[test]
+fn rejects_the_total_bound_before_reading_a_resource_that_cannot_fit() {
+    let directory = TempDir::new().unwrap_or_else(|error| panic!("temp directory: {error}"));
+    let manifest = build(input(), &request(), directory.path())
+        .unwrap_or_else(|error| panic!("artifact build: {error}"));
+    let first_resource = manifest
+        .resources
+        .first()
+        .unwrap_or_else(|| panic!("artifact resource"));
+    fs::remove_file(directory.path().join(&resource_common(first_resource).path))
+        .unwrap_or_else(|error| panic!("remove resource: {error}"));
+    let manifest_bytes = fs::metadata(directory.path().join(MANIFEST_FILE_NAME))
+        .unwrap_or_else(|error| panic!("manifest metadata: {error}"))
+        .len();
+
+    let result = validate_artifact_directory(
+        directory.path(),
+        1_000,
+        16 * 1024 * 1024,
+        manifest_bytes,
+        1_001,
+    );
+
+    assert!(matches!(result, Err(ArtifactError::ResourceBound)));
+}
+
 #[cfg(unix)]
 #[test]
 fn rejects_a_declared_symlink() {
@@ -266,6 +298,47 @@ fn rejects_schema_drift_even_when_checksums_are_recomputed() {
     assert!(matches!(
         validate(directory.path()),
         Err(ArtifactError::Payload(payload::PayloadError::InvalidSchema))
+    ));
+}
+
+#[test]
+fn rejects_a_dangling_context_item_reference_after_parent_reread() {
+    let directory = TempDir::new().unwrap_or_else(|error| panic!("temp directory: {error}"));
+    let mut manifest = build(input(), &request(), directory.path())
+        .unwrap_or_else(|error| panic!("artifact build: {error}"));
+    let context = manifest
+        .resources
+        .iter_mut()
+        .find_map(|resource| match resource {
+            ResourceManifest::MatchContext { common, .. } => Some(common),
+            ResourceManifest::Aggregate { .. }
+            | ResourceManifest::Review { .. }
+            | ResourceManifest::Drilldown { .. } => None,
+        })
+        .unwrap_or_else(|| panic!("match-context resource"));
+    let resource_path = directory.path().join(&context.path);
+    let mut payload: Value = serde_json::from_slice(
+        &fs::read(&resource_path).unwrap_or_else(|error| panic!("read payload: {error}")),
+    )
+    .unwrap_or_else(|error| panic!("decode payload: {error}"));
+    *payload
+        .pointer_mut("/match/focusedItemIds/0")
+        .unwrap_or_else(|| panic!("focused item")) = Value::String(String::from("missing:item"));
+    let bytes = canonicalize_value(&payload)
+        .unwrap_or_else(|error| panic!("canonicalize payload: {error}"));
+    fs::write(&resource_path, &bytes).unwrap_or_else(|error| panic!("rewrite payload: {error}"));
+    context.encoded_bytes =
+        u64::try_from(bytes.len()).unwrap_or_else(|error| panic!("payload length: {error}"));
+    context.decoded_bytes = context.encoded_bytes;
+    context.nesting_depth = nesting_depth(&payload);
+    context.checksum = sha256_prefixed(&bytes);
+    rewrite_manifest(directory.path(), &mut manifest);
+
+    assert!(matches!(
+        validate(directory.path()),
+        Err(ArtifactError::Payload(
+            payload::PayloadError::ReferenceMismatch
+        ))
     ));
 }
 

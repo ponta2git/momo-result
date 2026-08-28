@@ -143,12 +143,25 @@ pub(crate) enum ProcessError {
     Wait(io::Error),
     #[error("failed to signal child process group: {0}")]
     Signal(io::Error),
+    #[error("child process stop deadline elapsed")]
+    StopTimeout,
+    #[error("child process stop duration exceeds a supported bound")]
+    StopTimeoutBound,
     #[error("child process did not expose a process id")]
     MissingProcessId,
     #[error("failed to establish or refresh child liveness: {0}")]
     Liveness(io::Error),
     #[error("failed to release the isolated child start barrier: {0}")]
     StartBarrier(io::Error),
+    #[cfg_attr(
+        all(not(target_os = "linux"), not(test)),
+        expect(dead_code, reason = "spawn setup cleanup runs only on Linux")
+    )]
+    #[error("spawned child cleanup was not verified after {setup_kind} ({cleanup_kind})")]
+    SpawnCleanupUnverified {
+        setup_kind: &'static str,
+        cleanup_kind: &'static str,
+    },
     #[error("managed child cgroup failed: {kind}")]
     Cgroup { kind: &'static str },
     #[cfg_attr(
@@ -196,9 +209,12 @@ impl ProcessError {
             Self::Spawn(_) => "child_spawn",
             Self::Wait(_) => "child_wait",
             Self::Signal(_) => "child_signal",
+            Self::StopTimeout => "child_stop_timeout",
+            Self::StopTimeoutBound => "child_stop_timeout_bound",
             Self::MissingProcessId => "child_process_id_missing",
             Self::Liveness(_) => "child_liveness",
             Self::StartBarrier(_) => "child_start_barrier",
+            Self::SpawnCleanupUnverified { .. } => "child_spawn_cleanup_unverified",
             Self::Cgroup { kind } => kind,
             Self::LivenessTimeoutBound => "child_liveness_timeout_bound",
             Self::LivenessTimeoutConversion(_) => "child_liveness_timeout_conversion",
@@ -208,6 +224,18 @@ impl ProcessError {
             Self::BootstrapExec(_) => "bootstrap_exec",
             Self::InvalidWorkerIdentity => "worker_identity",
         }
+    }
+
+    /// Returns whether `spawn` created a child whose cleanup could not be verified.
+    ///
+    /// Other spawn errors either precede process creation or preserve their setup failure only
+    /// after bounded termination, reap, and cgroup-empty verification succeeded.
+    #[must_use]
+    pub(crate) const fn spawn_cleanup_unverified(&self) -> bool {
+        matches!(
+            self,
+            Self::MissingProcessId | Self::SpawnCleanupUnverified { .. }
+        )
     }
 }
 
@@ -228,6 +256,7 @@ impl ManagedAnalysisChild {
     pub(crate) async fn spawn(
         spec: &AnalysisChildProcessSpec,
         cgroup: &ChildCgroup,
+        stop_grace: Duration,
     ) -> Result<Self, ProcessError> {
         use std::os::fd::AsRawFd;
         use std::os::unix::net::UnixStream;
@@ -236,6 +265,7 @@ impl ManagedAnalysisChild {
         use tokio::{io::AsyncWriteExt, process::Command};
 
         let executable = std::env::current_exe().map_err(ProcessError::CurrentExecutable)?;
+        child_stop_deadlines(stop_grace)?;
         let liveness_timeout_millis = u64::try_from(spec.parent_liveness_timeout.as_millis())?;
         if liveness_timeout_millis == 0 {
             return Err(ProcessError::LivenessTimeoutBound);
@@ -292,23 +322,23 @@ impl ManagedAnalysisChild {
             parent_liveness,
         };
         if let Err(error) = managed.cgroup.attach(process_id) {
-            let _cleanup_result = managed.terminate(Duration::from_secs(1)).await;
-            return Err(ProcessError::from(error));
+            let setup_error = ProcessError::from(error);
+            return Err(managed.resolve_setup_failure(setup_error, stop_grace).await);
         }
         let Some(mut start_barrier) = managed.child.stdin.take() else {
-            let _cleanup_result = managed.terminate(Duration::from_secs(1)).await;
-            return Err(ProcessError::StartBarrier(io::Error::new(
+            let setup_error = ProcessError::StartBarrier(io::Error::new(
                 io::ErrorKind::BrokenPipe,
                 "child start barrier was unavailable",
-            )));
+            ));
+            return Err(managed.resolve_setup_failure(setup_error, stop_grace).await);
         };
         if let Err(error) = start_barrier.write_all(&[CHILD_START_MARKER]).await {
-            let _cleanup_result = managed.terminate(Duration::from_secs(1)).await;
-            return Err(ProcessError::StartBarrier(error));
+            let setup_error = ProcessError::StartBarrier(error);
+            return Err(managed.resolve_setup_failure(setup_error, stop_grace).await);
         }
         if let Err(error) = start_barrier.shutdown().await {
-            let _cleanup_result = managed.terminate(Duration::from_secs(1)).await;
-            return Err(ProcessError::StartBarrier(error));
+            let setup_error = ProcessError::StartBarrier(error);
+            return Err(managed.resolve_setup_failure(setup_error, stop_grace).await);
         }
         drop(start_barrier);
         Ok(managed)
@@ -327,6 +357,7 @@ impl ManagedAnalysisChild {
     pub(crate) async fn spawn(
         _spec: &AnalysisChildProcessSpec,
         _cgroup: &ChildCgroup,
+        _stop_grace: Duration,
     ) -> Result<Self, ProcessError> {
         Err(ProcessError::UnsupportedPlatform)
     }
@@ -334,6 +365,16 @@ impl ManagedAnalysisChild {
     #[must_use]
     pub(crate) const fn peak_resident_bytes(&self) -> Option<u64> {
         self.peak_resident_bytes
+    }
+
+    #[cfg(target_os = "linux")]
+    async fn resolve_setup_failure(
+        &mut self,
+        setup_error: ProcessError,
+        stop_grace: Duration,
+    ) -> ProcessError {
+        let cleanup_result = self.terminate(stop_grace).await.map(drop);
+        resolve_spawn_setup_failure(setup_error, cleanup_result)
     }
 
     /// Refreshes the child's monotonic liveness deadline without blocking the worker runtime.
@@ -397,19 +438,37 @@ impl ManagedAnalysisChild {
     pub(crate) async fn terminate(&mut self, grace: Duration) -> Result<ExitStatus, ProcessError> {
         use tokio::time;
 
-        let status = if let Some(status) = self.child.try_wait().map_err(ProcessError::Wait)? {
-            status
-        } else {
-            terminate_process_group(self.process_id, libc::SIGTERM)?;
-            if let Ok(result) = time::timeout(grace, self.child.wait()).await {
-                result.map_err(ProcessError::Wait)?
-            } else {
-                terminate_process_group(self.process_id, libc::SIGKILL)?;
-                self.child.wait().await.map_err(ProcessError::Wait)?
+        let deadlines = child_stop_deadlines(grace)?;
+        let status = match self.child.try_wait() {
+            Ok(Some(status)) => Ok(status),
+            Ok(None) => match terminate_process_group(self.process_id, libc::SIGTERM) {
+                Ok(()) => match time::timeout_at(deadlines.soft, self.child.wait()).await {
+                    Ok(Ok(status)) => Ok(status),
+                    Ok(Err(_)) | Err(_) => {
+                        force_kill_and_reap_analysis_child(
+                            &mut self.child,
+                            self.process_id,
+                            deadlines.reap,
+                        )
+                        .await
+                    }
+                },
+                Err(_error) => {
+                    force_kill_and_reap_analysis_child(
+                        &mut self.child,
+                        self.process_id,
+                        deadlines.reap,
+                    )
+                    .await
+                }
+            },
+            Err(_error) => {
+                force_kill_and_reap_analysis_child(&mut self.child, self.process_id, deadlines.reap)
+                    .await
             }
         };
-        self.cgroup.ensure_empty()?;
-        Ok(status)
+        stop_remaining_process_group(self.process_id, &self.cgroup, deadlines.overall).await?;
+        status
     }
 
     /// Reports that managed process-group termination requires Unix.
@@ -421,6 +480,40 @@ impl ManagedAnalysisChild {
     pub(crate) async fn terminate(&mut self, _grace: Duration) -> Result<ExitStatus, ProcessError> {
         Err(ProcessError::UnsupportedPlatform)
     }
+}
+
+#[cfg(any(target_os = "linux", test))]
+fn resolve_spawn_setup_failure(
+    setup_error: ProcessError,
+    cleanup_result: Result<(), ProcessError>,
+) -> ProcessError {
+    let setup_kind = setup_error.kind();
+    match cleanup_result {
+        Ok(()) => setup_error,
+        Err(cleanup_error) => ProcessError::SpawnCleanupUnverified {
+            setup_kind,
+            cleanup_kind: cleanup_error.kind(),
+        },
+    }
+}
+
+#[cfg(unix)]
+impl Drop for ManagedAnalysisChild {
+    fn drop(&mut self) {
+        let leader_reaped = matches!(self.child.try_wait(), Ok(Some(_status)));
+        let cleanup_verified = self.cgroup.ensure_empty().is_ok();
+        if drop_requires_group_kill(leader_reaped, cleanup_verified) {
+            drop(terminate_process_group(self.process_id, libc::SIGKILL));
+            // Drop cannot await the verified cleanup loop, but the same cgroup-wide hard-stop pass
+            // prevents a setsid descendant from escaping the synchronous fail-closed fallback.
+            drop(self.cgroup.hard_kill());
+        }
+    }
+}
+
+#[cfg(unix)]
+const fn drop_requires_group_kill(leader_reaped: bool, cleanup_verified: bool) -> bool {
+    !leader_reaped || !cleanup_verified
 }
 
 /// Returns whether this host implements the complete production child-isolation contract.
@@ -723,7 +816,7 @@ pub(crate) fn configure_parent_death_signal(command: &mut tokio::process::Comman
 }
 
 #[cfg(unix)]
-fn configure_inherited_liveness(command: &mut tokio::process::Command, descriptor: i32) {
+pub(crate) fn configure_inherited_liveness(command: &mut tokio::process::Command, descriptor: i32) {
     // SAFETY: fcntl(F_GETFD/F_SETFD) is async-signal-safe, uses an already-open descriptor, and
     // performs no allocation or lock acquisition between fork and exec.
     unsafe {
@@ -840,14 +933,36 @@ fn configure_parent_death_signal_before_exec(expected_parent_pid: libc::pid_t) -
 
 #[cfg(unix)]
 pub(crate) fn terminate_process_group(process_id: u32, signal: i32) -> Result<(), ProcessError> {
-    let process_group = i32::try_from(process_id).map_err(|conversion_error| {
-        ProcessError::Signal(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            conversion_error,
-        ))
-    })?;
-    // SAFETY: kill with a negative pid targets the child-owned process group created at spawn.
-    let result = unsafe { libc::kill(-process_group, signal) };
+    let process_group = checked_process_id(process_id).map_err(ProcessError::Signal)?;
+    signal_target(-process_group, signal).map_err(ProcessError::Signal)
+}
+
+/// Sends a signal to one positive process ID, treating an already-exited process as success.
+///
+/// This checked safe wrapper keeps operating-system FFI inside the process adapter while allowing
+/// the cgroup adapter to implement the v1 hard-cleanup strategy.
+///
+/// # Errors
+///
+/// Returns an error for an invalid process ID or when the operating system rejects the signal.
+#[cfg(unix)]
+pub(crate) fn signal_process(process_id: u32, signal: i32) -> Result<(), io::Error> {
+    let process = checked_process_id(process_id)?;
+    signal_target(process, signal)
+}
+
+#[cfg(unix)]
+fn checked_process_id(process_id: u32) -> Result<libc::pid_t, io::Error> {
+    i32::try_from(process_id)
+        .ok()
+        .filter(|process_id| *process_id > 0)
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "invalid process id"))
+}
+
+#[cfg(unix)]
+fn signal_target(target: libc::pid_t, signal: i32) -> Result<(), io::Error> {
+    // SAFETY: kill receives a checked nonzero process or process-group identifier and no pointers.
+    let result = unsafe { libc::kill(target, signal) };
     if result == 0 {
         return Ok(());
     }
@@ -855,6 +970,379 @@ pub(crate) fn terminate_process_group(process_id: u32, signal: i32) -> Result<()
     if error.raw_os_error() == Some(libc::ESRCH) {
         Ok(())
     } else {
-        Err(ProcessError::Signal(error))
+        Err(error)
+    }
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct ChildStopDeadlines {
+    pub(crate) soft: tokio::time::Instant,
+    pub(crate) reap: tokio::time::Instant,
+    pub(crate) overall: tokio::time::Instant,
+}
+
+/// Resolves the TERM, hard-reap, and overall cleanup deadlines within one stop budget.
+///
+/// # Errors
+///
+/// Returns an error when the configured duration cannot be represented by the monotonic clock.
+#[cfg(unix)]
+pub(crate) fn child_stop_deadlines(grace: Duration) -> Result<ChildStopDeadlines, ProcessError> {
+    if grace.is_zero() {
+        return Err(ProcessError::StopTimeoutBound);
+    }
+    let started = tokio::time::Instant::now();
+    let overall = started
+        .checked_add(grace)
+        .ok_or(ProcessError::StopTimeoutBound)?;
+    let half = grace / 2;
+    let soft = started
+        .checked_add(half)
+        .ok_or(ProcessError::StopTimeoutBound)?;
+    let reap = started
+        .checked_add(
+            half.checked_add(grace / 4)
+                .ok_or(ProcessError::StopTimeoutBound)?,
+        )
+        .ok_or(ProcessError::StopTimeoutBound)?;
+    Ok(ChildStopDeadlines {
+        soft,
+        reap,
+        overall,
+    })
+}
+
+#[cfg(unix)]
+async fn force_kill_and_reap_analysis_child(
+    child: &mut tokio::process::Child,
+    process_id: u32,
+    deadline: tokio::time::Instant,
+) -> Result<ExitStatus, ProcessError> {
+    let signal_result = terminate_process_group(process_id, libc::SIGKILL);
+    match tokio::time::timeout_at(deadline, child.wait()).await {
+        Ok(Ok(status)) => Ok(status),
+        Ok(Err(error)) => Err(ProcessError::Wait(error)),
+        Err(_elapsed) => match signal_result {
+            Ok(()) => Err(ProcessError::StopTimeout),
+            Err(error) => Err(error),
+        },
+    }
+}
+
+/// Hard-stops every remaining member of a managed child's cgroup and waits for it to become empty.
+///
+/// The process-group signal is a best-effort fast path. The cgroup is the authoritative cleanup
+/// boundary because a descendant can call `setsid`, leave the original process group, and remain in
+/// the dedicated cgroup after its leader disappears.
+///
+/// Returns whether cleanup found a remaining process.
+///
+/// # Errors
+///
+/// Returns an error when cgroup inspection, signalling, or bounded cleanup fails.
+#[cfg(unix)]
+pub(crate) async fn stop_remaining_process_group(
+    process_id: u32,
+    cgroup: &ChildCgroup,
+    deadline: tokio::time::Instant,
+) -> Result<bool, ProcessError> {
+    match cgroup.ensure_empty() {
+        Ok(()) => return Ok(false),
+        Err(CgroupError::UnexpectedProcess) => {}
+        Err(error) => return Err(ProcessError::from(error)),
+    }
+
+    drop(terminate_process_group(process_id, libc::SIGKILL));
+    let wait_until_empty = async {
+        loop {
+            cgroup.hard_kill().map_err(ProcessError::from)?;
+            match cgroup.ensure_empty() {
+                Ok(()) if tokio::time::Instant::now() <= deadline => return Ok(()),
+                Ok(()) => return Err(ProcessError::StopTimeout),
+                Err(CgroupError::UnexpectedProcess) => {
+                    tokio::time::sleep(Duration::from_millis(10)).await;
+                }
+                Err(error) => return Err(ProcessError::from(error)),
+            }
+        }
+    };
+    match tokio::time::timeout_at(deadline, wait_until_empty).await {
+        Ok(result) => result?,
+        Err(_elapsed) => return Err(ProcessError::StopTimeout),
+    }
+    Ok(true)
+}
+
+#[cfg(test)]
+mod child_cleanup_tests {
+    use std::io;
+
+    #[cfg(unix)]
+    use std::time::Duration;
+
+    #[cfg(unix)]
+    use super::child_stop_deadlines;
+    use super::{ProcessError, resolve_spawn_setup_failure};
+
+    #[test]
+    fn verified_spawn_cleanup_preserves_the_original_setup_failure() {
+        let resolved = resolve_spawn_setup_failure(
+            ProcessError::StartBarrier(io::Error::new(
+                io::ErrorKind::BrokenPipe,
+                "fixture setup failure",
+            )),
+            Ok(()),
+        );
+
+        assert!(matches!(resolved, ProcessError::StartBarrier(_)));
+        assert!(!resolved.spawn_cleanup_unverified());
+    }
+
+    #[test]
+    fn failed_spawn_cleanup_reports_both_failure_boundaries() {
+        let resolved = resolve_spawn_setup_failure(
+            ProcessError::StartBarrier(io::Error::new(
+                io::ErrorKind::BrokenPipe,
+                "fixture setup failure",
+            )),
+            Err(ProcessError::StopTimeout),
+        );
+
+        assert!(resolved.spawn_cleanup_unverified());
+        assert!(matches!(
+            resolved,
+            ProcessError::SpawnCleanupUnverified {
+                setup_kind: "child_start_barrier",
+                cleanup_kind: "child_stop_timeout",
+            }
+        ));
+    }
+
+    #[test]
+    fn only_post_spawn_uncertainty_is_classified_as_unverified_cleanup() {
+        let missing_process_id = ProcessError::MissingProcessId;
+        let pure_spawn_failure =
+            ProcessError::Spawn(io::Error::other("fixture process was never created"));
+
+        assert!(missing_process_id.spawn_cleanup_unverified());
+        assert!(!pure_spawn_failure.spawn_cleanup_unverified());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn stop_deadline_reserves_budget_for_reap_and_cgroup_cleanup() {
+        let result = child_stop_deadlines(Duration::from_secs(8));
+        assert!(result.is_ok());
+        let Some(deadlines) = result.ok() else {
+            return;
+        };
+
+        assert_eq!(deadlines.reap - deadlines.soft, Duration::from_secs(2));
+        assert_eq!(deadlines.overall - deadlines.reap, Duration::from_secs(2));
+        assert!(matches!(
+            child_stop_deadlines(Duration::ZERO),
+            Err(ProcessError::StopTimeoutBound)
+        ));
+    }
+}
+
+#[cfg(all(test, target_os = "linux"))]
+mod tests {
+    use std::{
+        error::Error,
+        fs,
+        io::{self, BufRead, BufReader},
+        os::unix::process::CommandExt,
+        process::{Command, Stdio},
+        thread,
+        time::{Duration, Instant},
+    };
+
+    use tokio::process::Command as TokioCommand;
+
+    use super::{drop_requires_group_kill, stop_remaining_process_group, terminate_process_group};
+    use crate::cgroup::{CGROUP_DIRECTORY_NAME, CgroupHierarchy, ChildCgroup};
+
+    #[test]
+    fn drop_kills_when_leader_or_cgroup_cleanup_is_unverified() {
+        assert!(!drop_requires_group_kill(true, true));
+        assert!(drop_requires_group_kill(false, true));
+        assert!(drop_requires_group_kill(true, false));
+    }
+
+    #[test]
+    fn process_group_can_be_stopped_after_its_leader_was_reaped() -> Result<(), Box<dyn Error>> {
+        let mut leader = Command::new("/bin/sh")
+            .args(["-c", "sleep 30 & printf '%s\\n' \"$!\""])
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .process_group(0)
+            .spawn()?;
+        let process_group = leader.id();
+        let stdout = leader
+            .stdout
+            .take()
+            .ok_or_else(|| io::Error::other("process-group fixture did not expose stdout"))?;
+        let mut descendant = String::new();
+        BufReader::new(stdout).read_line(&mut descendant)?;
+        let descendant = descendant.trim().parse::<u32>()?;
+
+        let status = leader.wait()?;
+        assert!(status.success(), "process-group fixture leader failed");
+        assert!(
+            process_is_running(descendant),
+            "fixture descendant exited early"
+        );
+
+        terminate_process_group(process_group, libc::SIGKILL)?;
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while process_is_running(descendant) {
+            assert!(
+                Instant::now() < deadline,
+                "descendant remained alive after its reaped leader's group was killed"
+            );
+            thread::sleep(Duration::from_millis(25));
+        }
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn cgroup_hard_stop_reaches_a_process_that_escaped_the_original_group_with_setsid()
+    -> Result<(), Box<dyn Error>> {
+        let temporary = tempfile::tempdir()?;
+        let directory = temporary.path().join(CGROUP_DIRECTORY_NAME);
+        fs::create_dir(&directory)?;
+        fs::write(directory.join("cgroup.procs"), "")?;
+        fs::write(directory.join("memory.limit_in_bytes"), "201326592\n")?;
+        fs::write(directory.join("memory.usage_in_bytes"), "4096\n")?;
+        fs::write(directory.join("memory.max_usage_in_bytes"), "8192\n")?;
+        fs::write(directory.join("memory.failcnt"), "0\n")?;
+        fs::write(
+            directory.join("memory.oom_control"),
+            "oom_kill_disable 0\nunder_oom 0\noom_kill 0\n",
+        )?;
+        let cgroup =
+            ChildCgroup::open_fixture(CgroupHierarchy::V1, directory.clone(), 201_326_592)?;
+
+        let mut leader = TokioCommand::new("/bin/sleep")
+            .arg("30")
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .kill_on_drop(true)
+            .process_group(0)
+            .spawn()?;
+        let leader_id = leader
+            .id()
+            .ok_or_else(|| io::Error::other("fixture leader did not expose a process id"))?;
+        let leader_group = i32::try_from(leader_id)?;
+        let mut escaped_command = TokioCommand::new("/bin/sleep");
+        escaped_command
+            .arg("30")
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .kill_on_drop(true);
+        configure_setsid_escape(&mut escaped_command, leader_group);
+        let mut escaped = escaped_command.spawn()?;
+        let escaped_id = escaped
+            .id()
+            .ok_or_else(|| io::Error::other("fixture member did not expose a process id"))?;
+        let escape_deadline = Instant::now() + Duration::from_secs(5);
+        while process_group_id(escaped_id) != Some(escaped_id) {
+            if Instant::now() >= escape_deadline {
+                return Err(io::Error::other(
+                    "fixture member did not leave the original process group with setsid",
+                )
+                .into());
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        assert_ne!(
+            process_group_id(escaped_id),
+            Some(leader_id),
+            "setsid fixture must escape the original process group"
+        );
+
+        // A regular file models the v1 membership snapshot. The process and setsid transition are
+        // real Linux operations; this helper only mirrors the kernel removing a dead member from
+        // cgroup.procs so the production bounded empty check can complete without root privileges.
+        fs::write(directory.join("cgroup.procs"), escaped_id.to_string())?;
+        let membership = directory.join("cgroup.procs");
+        let membership_release = tokio::task::spawn_blocking(move || -> io::Result<()> {
+            let deadline = Instant::now() + Duration::from_secs(5);
+            while process_is_running(escaped_id) {
+                if Instant::now() >= deadline {
+                    return Err(io::Error::other(
+                        "setsid fixture remained alive after cgroup hard cleanup",
+                    ));
+                }
+                thread::sleep(Duration::from_millis(10));
+            }
+            fs::write(membership, "")
+        });
+
+        let found_remaining_process = stop_remaining_process_group(
+            leader_id,
+            &cgroup,
+            tokio::time::Instant::now() + Duration::from_secs(5),
+        )
+        .await?;
+        membership_release.await.map_err(io::Error::other)??;
+        let _leader_status = leader.wait().await?;
+        let _escaped_status = escaped.wait().await?;
+
+        assert!(
+            found_remaining_process,
+            "hard cleanup must report the escaped cgroup member"
+        );
+        cgroup.ensure_empty()?;
+        assert!(
+            !process_is_running(escaped_id),
+            "escaped cgroup member must be stopped"
+        );
+        Ok(())
+    }
+
+    fn process_is_running(process_id: u32) -> bool {
+        fs::read_to_string(format!("/proc/{process_id}/stat"))
+            .ok()
+            .is_some_and(|status| {
+                status
+                    .split_whitespace()
+                    .nth(2)
+                    .is_some_and(|state| state != "Z")
+            })
+    }
+
+    fn process_group_id(process_id: u32) -> Option<u32> {
+        fs::read_to_string(format!("/proc/{process_id}/stat"))
+            .ok()?
+            .split_whitespace()
+            .nth(4)?
+            .parse::<u32>()
+            .ok()
+    }
+
+    fn configure_setsid_escape(command: &mut TokioCommand, original_group: libc::pid_t) {
+        // SAFETY: the closure calls only async-signal-safe process-group/session syscalls before
+        // exec, using a checked positive group owned by another fixture child in the same session.
+        unsafe {
+            command.pre_exec(move || join_then_escape_process_group(original_group));
+        }
+    }
+
+    fn join_then_escape_process_group(original_group: libc::pid_t) -> io::Result<()> {
+        // SAFETY: pid 0 targets the calling pre-exec child and the checked group belongs to a
+        // sibling fixture process in the same session.
+        if unsafe { libc::setpgid(0, original_group) } != 0 {
+            return Err(io::Error::last_os_error());
+        }
+        // SAFETY: after joining a different process group the caller is not its group leader, so
+        // setsid can create an isolated session without accessing memory or shared Rust state.
+        if unsafe { libc::setsid() } < 0 {
+            return Err(io::Error::last_os_error());
+        }
+        Ok(())
     }
 }

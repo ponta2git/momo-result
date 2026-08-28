@@ -22,32 +22,80 @@ pub(crate) async fn recover_expired_analysis_holder(
     let job_id = &holder.job_id;
     let attempt_id = &holder.attempt_id;
     let fencing_token = holder.fencing_token;
-    let owner_lost = AttemptOutcome::OwnerLost.wire();
-    transaction
-        .execute(
-            "UPDATE series_analysis_job_attempts SET status = 'terminal', outcome = $1,\x20\
-               finished_at = clock_timestamp()\x20\
-             WHERE id = $2 AND status = 'running' AND fencing_token = $3",
-            &[&owner_lost, &attempt_id, &fencing_token],
-        )
-        .await?;
-    let job = transaction
+    let job_preview = transaction
         .query_opt(
-            "SELECT lease_recovery_count, game_title_id, input_revision, algorithm_version,\x20\
-                    artifact_schema_version, attempt_count\x20\
-             FROM series_analysis_jobs\x20\
-             WHERE id = $1 AND status = 'running' FOR UPDATE",
+            "SELECT game_title_id FROM series_analysis_jobs WHERE id = $1",
             &[&job_id],
         )
         .await?;
+    let Some(job_preview) = job_preview else {
+        if !clear_expired_slot(transaction, holder).await? {
+            return Err(ControlError::OwnerLost);
+        }
+        return Ok(TransactionEffects::empty());
+    };
+    let game_title_id = job_preview.try_get::<_, String>(0)?;
+    let title_exists = transaction
+        .query_opt(
+            "SELECT game_title_id FROM series_analysis_title_states\x20\
+             WHERE game_title_id = $1 FOR UPDATE",
+            &[&game_title_id],
+        )
+        .await?
+        .is_some();
+    let job_row = transaction
+        .query_opt(
+            "SELECT COALESCE(lease_owner = $2 AND lease_attempt_id = $3\x20\
+                        AND lease_fencing_token = $4\x20\
+                        AND lease_expires_at <= clock_timestamp(), false),\x20\
+                    lease_recovery_count, game_title_id, input_revision, algorithm_version,\x20\
+                    artifact_schema_version, attempt_count\x20\
+             FROM series_analysis_jobs\x20\
+             WHERE id = $1 AND game_title_id = $5 AND status = 'running' FOR UPDATE",
+            &[
+                &job_id,
+                &holder.owner,
+                &attempt_id,
+                &fencing_token,
+                &game_title_id,
+            ],
+        )
+        .await?;
     let mut effects = TransactionEffects::empty();
-    if let Some(job) = job {
+    if let Some(job_row) = job_row {
+        if !title_exists {
+            return Err(ControlError::OwnerLost);
+        }
+        let recoverable = job_row.try_get::<_, bool>(0)?;
+        if !recoverable {
+            return Err(ControlError::OwnerLost);
+        }
+        let job = decode_expired_job(&job_row)?;
+        let owner_lost = AttemptOutcome::OwnerLost.wire();
+        let attempt_updated = transaction
+            .execute(
+                "UPDATE series_analysis_job_attempts SET status = 'terminal', outcome = $1,\x20\
+                   finished_at = clock_timestamp()\x20\
+                 WHERE id = $2 AND job_id = $3 AND owner = $4 AND status = 'running'\x20\
+                   AND fencing_token = $5",
+                &[
+                    &owner_lost,
+                    &attempt_id,
+                    &job_id,
+                    &holder.owner,
+                    &fencing_token,
+                ],
+            )
+            .await?;
+        if attempt_updated != 1 {
+            return Err(ControlError::OwnerLost);
+        }
         recover_expired_job(
             transaction,
             job_id,
             attempt_id,
             fencing_token,
-            &job,
+            job,
             &mut effects,
         )
         .await?;
@@ -70,14 +118,14 @@ struct ExpiredJob {
 fn decode_expired_job(row: &Row) -> Result<ExpiredJob, ControlError> {
     Ok(ExpiredJob {
         next_recovery_count: row
-            .try_get::<_, i32>(0)?
+            .try_get::<_, i32>(1)?
             .checked_add(1)
             .ok_or(ControlError::NumericBound)?,
-        game_title_id: row.try_get(1)?,
-        input_revision: row.try_get(2)?,
-        algorithm_version: row.try_get(3)?,
-        artifact_schema_version: row.try_get(4)?,
-        attempt_no: row.try_get(5)?,
+        game_title_id: row.try_get(2)?,
+        input_revision: row.try_get(3)?,
+        algorithm_version: row.try_get(4)?,
+        artifact_schema_version: row.try_get(5)?,
+        attempt_no: row.try_get(6)?,
     })
 }
 
@@ -86,10 +134,9 @@ async fn recover_expired_job(
     job_id: &str,
     attempt_id: &str,
     fencing_token: i64,
-    row: &Row,
+    job: ExpiredJob,
     effects: &mut TransactionEffects,
 ) -> Result<(), ControlError> {
-    let job = decode_expired_job(row)?;
     if job.next_recovery_count <= 3 {
         requeue_expired_job(
             transaction,

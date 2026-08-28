@@ -35,6 +35,18 @@ pub(crate) async fn claim_job(
     let (candidate, effects) = match prepare_claim(&transaction, job_id, lease_milliseconds).await?
     {
         ClaimPreparation::Ready { candidate, effects } => (candidate, effects),
+        ClaimPreparation::RecoveredExpiredHolder {
+            effects,
+            current_delivery_resolved,
+        } => {
+            transaction.commit().await?;
+            let result = if current_delivery_resolved {
+                ClaimResult::RecoveredCurrentJob
+            } else {
+                ClaimResult::Busy
+            };
+            return Ok(effects.committed(result));
+        }
         ClaimPreparation::Rejected(result) => {
             transaction.rollback().await?;
             return Ok(ControlOutcome::without_effects(result));
@@ -90,7 +102,7 @@ pub(crate) async fn claim_job(
     })))
 }
 
-struct ClaimCandidate {
+pub(super) struct ClaimCandidate {
     game_title_id: String,
     input_revision: i64,
     algorithm_version: String,
@@ -99,15 +111,19 @@ struct ClaimCandidate {
     slot_fencing_token: i64,
 }
 
-enum ClaimPreparation {
+pub(super) enum ClaimPreparation {
     Ready {
         candidate: ClaimCandidate,
         effects: TransactionEffects,
     },
+    RecoveredExpiredHolder {
+        effects: TransactionEffects,
+        current_delivery_resolved: bool,
+    },
     Rejected(ClaimResult),
 }
 
-async fn prepare_claim(
+pub(super) async fn prepare_claim(
     transaction: &Transaction<'_>,
     job_id: &str,
     stale_preemption_milliseconds: i64,
@@ -128,7 +144,15 @@ async fn prepare_claim(
         if !holder.expired || holder.task_kind == ExecutionTaskKind::Ocr {
             return Ok(ClaimPreparation::Rejected(ClaimResult::Busy));
         }
-        effects.merge(recover_expired_analysis_holder(transaction, holder).await?);
+        let recovery_effects = recover_expired_analysis_holder(transaction, holder).await?;
+        let current_delivery_resolved =
+            recovery_resolves_delivery(transaction, &holder.job_id, job_id, recovery_effects)
+                .await?;
+        effects.merge(recovery_effects);
+        return Ok(ClaimPreparation::RecoveredExpiredHolder {
+            current_delivery_resolved,
+            effects,
+        });
     }
     if slot.preempt_requested_by.is_some()
         && !clear_stale_preemption(transaction, stale_preemption_milliseconds).await?
@@ -149,7 +173,9 @@ async fn prepare_claim(
     let job = transaction
         .query_opt(
             "SELECT input_revision, algorithm_version, artifact_schema_version, status,\x20\
-                    available_at <= clock_timestamp(), attempt_count\x20\
+                    GREATEST(\x20\
+                      CEIL(EXTRACT(EPOCH FROM (available_at - clock_timestamp())) * 1000), 0\x20\
+                    )::bigint AS remaining_delay_milliseconds, attempt_count\x20\
              FROM series_analysis_jobs WHERE id = $1 FOR UPDATE",
             &[&job_id],
         )
@@ -160,8 +186,13 @@ async fn prepare_claim(
     if job.try_get::<_, String>(3)? != "queued" {
         return Ok(ClaimPreparation::Rejected(ClaimResult::MissingOrTerminal));
     }
-    if !job.try_get::<_, bool>(4)? {
-        return Ok(ClaimPreparation::Rejected(ClaimResult::NotYetAvailable));
+    let remaining_delay_milliseconds = job.try_get::<_, i64>(4)?;
+    if remaining_delay_milliseconds > 0 {
+        return Ok(ClaimPreparation::Rejected(ClaimResult::NotYetAvailable {
+            remaining_delay: std::time::Duration::from_millis(u64::try_from(
+                remaining_delay_milliseconds,
+            )?),
+        }));
     }
     Ok(ClaimPreparation::Ready {
         candidate: ClaimCandidate {
@@ -174,6 +205,40 @@ async fn prepare_claim(
         },
         effects,
     })
+}
+
+async fn recovery_resolves_delivery(
+    transaction: &Transaction<'_>,
+    holder_job_id: &str,
+    delivery_job_id: &str,
+    recovery_effects: TransactionEffects,
+) -> Result<bool, ControlError> {
+    if holder_job_id != delivery_job_id {
+        return Ok(false);
+    }
+    let status = transaction
+        .query_opt(
+            "SELECT status FROM series_analysis_jobs WHERE id = $1",
+            &[&delivery_job_id],
+        )
+        .await?
+        .map(|row| row.try_get::<_, String>(0))
+        .transpose()?;
+    Ok(recovered_job_state_resolves_delivery(
+        status.as_deref(),
+        recovery_effects,
+    ))
+}
+
+fn recovered_job_state_resolves_delivery(
+    status: Option<&str>,
+    recovery_effects: TransactionEffects,
+) -> bool {
+    match status {
+        None | Some("succeeded" | "failed") => true,
+        Some("queued") => recovery_effects != TransactionEffects::empty(),
+        Some(_) => false,
+    }
 }
 
 async fn acquire_execution_slot(
@@ -294,4 +359,38 @@ async fn mark_associated_requests_running(
         )
         .await?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn recovered_current_delivery_requires_terminal_state_or_durable_replacement() {
+        let no_effects = TransactionEffects::empty();
+        let mut replacement = TransactionEffects::empty();
+        replacement.record_series_analysis();
+
+        assert!(recovered_job_state_resolves_delivery(None, no_effects));
+        assert!(recovered_job_state_resolves_delivery(
+            Some("failed"),
+            no_effects
+        ));
+        assert!(recovered_job_state_resolves_delivery(
+            Some("succeeded"),
+            no_effects
+        ));
+        assert!(recovered_job_state_resolves_delivery(
+            Some("queued"),
+            replacement
+        ));
+        assert!(!recovered_job_state_resolves_delivery(
+            Some("queued"),
+            no_effects
+        ));
+        assert!(!recovered_job_state_resolves_delivery(
+            Some("running"),
+            replacement
+        ));
+    }
 }

@@ -20,6 +20,11 @@ use super::{
     transaction::{bounded_transaction, lock_owned},
 };
 
+mod authoritative_input;
+
+#[cfg(test)]
+pub(super) use authoritative_input::validate_manifest as validate_authoritative_manifest;
+
 /// Validates and atomically publishes a complete artifact for an owned attempt.
 ///
 /// # Errors
@@ -57,9 +62,7 @@ pub(crate) async fn publish(
                 .await
                 .map(|outcome| outcome.map(|()| PublicationResult::Superseded));
         }
-        if staged {
-            validate_staged_artifact(&transaction, claim, &manifest).await?;
-        }
+        validate_candidate(&transaction, claim, &manifest, staged).await?;
         match existing_artifact(
             &transaction,
             claim,
@@ -137,6 +140,19 @@ pub(crate) async fn publish(
     }
 }
 
+async fn validate_candidate(
+    transaction: &Transaction<'_>,
+    claim: &ClaimedJob,
+    manifest: &ArtifactManifest,
+    staged: bool,
+) -> Result<(), ControlError> {
+    authoritative_input::validate_manifest(transaction, &claim.game_title_id, manifest).await?;
+    if staged {
+        validate_staged_artifact(transaction, claim, manifest).await?;
+    }
+    Ok(())
+}
+
 async fn commit_successful_publication(
     transaction: Transaction<'_>,
     claim: &ClaimedJob,
@@ -177,7 +193,7 @@ async fn prepare_staging(
     metrics: &mut AttemptMetrics,
 ) -> Result<(ArtifactManifest, bool), ControlError> {
     let started = Instant::now();
-    let manifest = validated_manifest(config, claim, artifact_directory)?;
+    let manifest = validated_manifest(config, claim, artifact_directory).await?;
     validate_manifest_metrics(metrics, &manifest)?;
     let staged = requires_staging(client, claim).await?;
     let result = if staged {

@@ -1,5 +1,6 @@
 use std::{
     env, fs, io,
+    io::Read,
     path::{Component, Path, PathBuf},
 };
 
@@ -207,6 +208,12 @@ impl ChildCgroup {
             .write(true)
             .open(cgroup.processes_path())
             .map_err(controller_open_error)?;
+        if hierarchy == CgroupHierarchy::V2 {
+            fs::OpenOptions::new()
+                .write(true)
+                .open(cgroup.kill_path())
+                .map_err(controller_open_error)?;
+        }
         cgroup.snapshot()?;
         Ok(cgroup)
     }
@@ -237,6 +244,41 @@ impl ChildCgroup {
         } else {
             Err(CgroupError::UnexpectedProcess)
         }
+    }
+
+    /// Runs one authoritative hard-stop pass over every process currently in this cgroup.
+    ///
+    /// Cgroup v2 provides an atomic subtree kill. Cgroup v1 requires signalling the bounded
+    /// `cgroup.procs` snapshot; callers that need verified cleanup must repeat this pass until the
+    /// group is empty because a member can fork while the snapshot is being processed.
+    ///
+    /// Returns whether the pass observed at least one process.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when membership cannot be read or a member cannot be killed.
+    #[cfg(unix)]
+    pub(crate) fn hard_kill(&self) -> Result<bool, CgroupError> {
+        let process_ids = read_process_ids(&self.processes_path())?;
+        if process_ids.is_empty() {
+            return Ok(false);
+        }
+
+        match self.hierarchy {
+            CgroupHierarchy::V1 => {
+                for process_id in process_ids {
+                    crate::process::signal_process(process_id, libc::SIGKILL)?;
+                }
+            }
+            CgroupHierarchy::V2 => {
+                let mut kill = fs::OpenOptions::new()
+                    .write(true)
+                    .open(self.kill_path())
+                    .map_err(controller_open_error)?;
+                io::Write::write_all(&mut kill, b"1")?;
+            }
+        }
+        Ok(true)
     }
 
     pub(crate) fn snapshot(&self) -> Result<CgroupMemorySnapshot, CgroupError> {
@@ -291,8 +333,12 @@ impl ChildCgroup {
         self.directory.join("cgroup.procs")
     }
 
+    fn kill_path(&self) -> PathBuf {
+        self.directory.join("cgroup.kill")
+    }
+
     #[cfg(test)]
-    fn open_fixture(
+    pub(crate) fn open_fixture(
         hierarchy: CgroupHierarchy,
         directory: PathBuf,
         expected_limit_bytes: u64,
@@ -425,6 +471,11 @@ fn prepare_v2(
     }
     delegate_process_attachment(&delegation, service_user_id, service_group_id)?;
     delegate_process_attachment(&directory, service_user_id, service_group_id)?;
+    delegate_controller_write(
+        &directory.join("cgroup.kill"),
+        service_user_id,
+        service_group_id,
+    )?;
     Ok(PreparedChildCgroup {
         hierarchy: CgroupHierarchy::V2,
         directory,
@@ -464,11 +515,23 @@ fn delegate_process_attachment(
     service_user_id: u32,
     service_group_id: u32,
 ) -> Result<(), CgroupError> {
+    delegate_controller_write(
+        &directory.join("cgroup.procs"),
+        service_user_id,
+        service_group_id,
+    )
+}
+
+#[cfg(target_os = "linux")]
+fn delegate_controller_write(
+    path: &Path,
+    service_user_id: u32,
+    service_group_id: u32,
+) -> Result<(), CgroupError> {
     use std::os::unix::fs::{MetadataExt, chown};
 
-    let processes = directory.join("cgroup.procs");
-    chown(&processes, Some(service_user_id), Some(service_group_id))?;
-    let metadata = fs::metadata(&processes)?;
+    chown(path, Some(service_user_id), Some(service_group_id))?;
+    let metadata = fs::metadata(path)?;
     if metadata.uid() != service_user_id || metadata.gid() != service_group_id {
         return Err(CgroupError::DelegationFailed);
     }
@@ -623,7 +686,21 @@ fn bounded_read(path: &Path) -> Result<String, CgroupError> {
     if !metadata.is_file() || metadata.len() > MAXIMUM_CONTROLLER_FILE_BYTES {
         return Err(CgroupError::ControllerUnavailable);
     }
-    fs::read_to_string(path).map_err(CgroupError::Io)
+    let file = fs::File::open(path).map_err(controller_open_error)?;
+    read_bounded_controller(file)
+}
+
+fn read_bounded_controller(reader: impl Read) -> Result<String, CgroupError> {
+    let mut contents = String::new();
+    reader
+        .take(MAXIMUM_CONTROLLER_FILE_BYTES + 1)
+        .read_to_string(&mut contents)?;
+    let read_bytes =
+        u64::try_from(contents.len()).map_err(|_error| CgroupError::ControllerUnavailable)?;
+    if read_bytes > MAXIMUM_CONTROLLER_FILE_BYTES {
+        return Err(CgroupError::ControllerUnavailable);
+    }
+    Ok(contents)
 }
 
 fn controller_open_error(error: io::Error) -> CgroupError {
@@ -667,6 +744,8 @@ mod tests {
                 .expect("v1 event fixture must be written");
             }
             CgroupHierarchy::V2 => {
+                fs::write(directory.join("cgroup.kill"), "")
+                    .expect("v2 kill fixture must be written");
                 fs::write(directory.join("memory.max"), "201326592\n")
                     .expect("v2 limit fixture must be written");
                 fs::write(directory.join("memory.current"), "4096\n")
@@ -730,6 +809,25 @@ mod tests {
         ));
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn v2_hard_kill_uses_the_cgroup_wide_controller() {
+        let (_temporary, directory) = fixture(CgroupHierarchy::V2);
+        let cgroup = ChildCgroup::open_fixture(CgroupHierarchy::V2, directory.clone(), 201_326_592)
+            .expect("valid cgroup fixture must open");
+        fs::write(directory.join("cgroup.procs"), "91\n").expect("process fixture must be written");
+
+        assert!(
+            cgroup.hard_kill().expect("hard kill must be written"),
+            "non-empty v2 group must report cleanup work"
+        );
+        assert_eq!(
+            bounded_read(&directory.join("cgroup.kill"))
+                .expect("kill controller fixture must be readable"),
+            "1"
+        );
+    }
+
     #[test]
     fn production_path_rejects_aliases_and_parent_components() {
         assert!(production_cgroup_path(Path::new(
@@ -741,5 +839,15 @@ mod tests {
         assert!(!safe_absolute_path(Path::new(
             "/sys/fs/cgroup/../momo-heavy-child"
         )));
+    }
+
+    #[test]
+    fn controller_read_enforces_the_actual_byte_limit() {
+        let oversized = io::Cursor::new(vec![b'x'; 65_537]);
+
+        assert!(matches!(
+            read_bounded_controller(oversized),
+            Err(CgroupError::ControllerUnavailable)
+        ));
     }
 }

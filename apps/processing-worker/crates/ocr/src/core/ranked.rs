@@ -4,12 +4,12 @@ use image::{DynamicImage, GrayImage};
 use serde_json::json;
 
 use super::{
-    AliasResolver, OcrField, OcrWarning, PlayerDraft, PlayerIdentity, RecognitionSession, Rect,
-    crop, has_unit_bearing_money_text, names_match, parse_money_man_yen, parse_revenue_man_yen,
+    AliasResolver, OcrField, OcrWarning, PlayerDraft, PlayerIdentity, RecognitionPort, Rect, crop,
+    has_unit_bearing_money_text, names_match, parse_money_man_yen, parse_revenue_man_yen,
     pipeline::{CoreOcrError, ParsedScreen},
     player_order::PlayerOrderDetection,
     preprocess::prepare_ranked_row_variants,
-    recognition::RecognitionLanguage,
+    recognition::{PageSegmentationMode, RecognitionLanguage, recognize_color, recognize_gray},
     scale_profile_rect,
 };
 use crate::contract::RequestedScreenType;
@@ -26,7 +26,7 @@ pub(super) fn parse(
     screen_type: RequestedScreenType,
     aliases: &AliasResolver,
     player_order: &PlayerOrderDetection,
-    recognition: &mut RecognitionSession,
+    recognition: &mut dyn RecognitionPort,
 ) -> Result<ParsedScreen, CoreOcrError> {
     let mut players = Vec::with_capacity(ROWS.len());
     let mut warnings = Vec::new();
@@ -92,7 +92,7 @@ pub(super) fn parse(
 
 fn recognize_row(
     image: &DynamicImage,
-    recognition: &mut RecognitionSession,
+    recognition: &mut dyn RecognitionPort,
 ) -> Result<RankedRecognition, CoreOcrError> {
     let variants = prepare_ranked_row_variants(image);
     let mut snippets = Vec::new();
@@ -100,7 +100,10 @@ fn recognize_row(
     if let Some(primary) = variants.first() {
         append_grayscale_recognitions(
             primary,
-            &[6, 7],
+            &[
+                PageSegmentationMode::SingleBlock,
+                PageSegmentationMode::SingleLine,
+            ],
             recognition,
             &mut snippets,
             &mut confidences,
@@ -112,14 +115,26 @@ fn recognize_row(
         }
         append_grayscale_recognitions(
             variant,
-            &[6, 7],
+            &[
+                PageSegmentationMode::SingleBlock,
+                PageSegmentationMode::SingleLine,
+            ],
             recognition,
             &mut snippets,
             &mut confidences,
         )?;
     }
     if !has_money_and_name(&snippets) {
-        append_color_recognitions(image, &[6, 7], recognition, &mut snippets, &mut confidences)?;
+        append_color_recognitions(
+            image,
+            &[
+                PageSegmentationMode::SingleBlock,
+                PageSegmentationMode::SingleLine,
+            ],
+            recognition,
+            &mut snippets,
+            &mut confidences,
+        )?;
     }
     if !has_money_and_name(&snippets) {
         for variant in &variants {
@@ -128,7 +143,7 @@ fn recognize_row(
             }
             append_grayscale_recognitions(
                 variant,
-                &[11],
+                &[PageSegmentationMode::SparseText],
                 recognition,
                 &mut snippets,
                 &mut confidences,
@@ -143,13 +158,18 @@ fn recognize_row(
 
 fn append_color_recognitions(
     image: &DynamicImage,
-    psms: &[u8],
-    recognition: &mut RecognitionSession,
+    segmentations: &[PageSegmentationMode],
+    recognition: &mut dyn RecognitionPort,
     snippets: &mut Vec<String>,
     confidences: &mut Vec<f64>,
 ) -> Result<(), CoreOcrError> {
-    for psm in psms {
-        let recognized = recognition.recognize_color(image, RecognitionLanguage::General, *psm)?;
+    for segmentation in segmentations {
+        let recognized = recognize_color(
+            recognition,
+            image,
+            RecognitionLanguage::General,
+            *segmentation,
+        )?;
         append_recognition(recognized, snippets, confidences);
         if has_money_and_name(snippets) {
             break;
@@ -160,13 +180,18 @@ fn append_color_recognitions(
 
 fn append_grayscale_recognitions(
     image: &GrayImage,
-    psms: &[u8],
-    recognition: &mut RecognitionSession,
+    segmentations: &[PageSegmentationMode],
+    recognition: &mut dyn RecognitionPort,
     snippets: &mut Vec<String>,
     confidences: &mut Vec<f64>,
 ) -> Result<(), CoreOcrError> {
-    for psm in psms {
-        let recognized = recognition.recognize(image, RecognitionLanguage::General, *psm)?;
+    for segmentation in segmentations {
+        let recognized = recognize_gray(
+            recognition,
+            image,
+            RecognitionLanguage::General,
+            *segmentation,
+        )?;
         append_recognition(recognized, snippets, confidences);
         if has_money_and_name(snippets) {
             break;

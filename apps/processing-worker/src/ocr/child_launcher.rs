@@ -11,13 +11,20 @@ use super::consumer::OcrChildProcessFailure;
 
 #[cfg(target_os = "linux")]
 use super::{
-    consumer::{OcrChildHandle, OcrChildLauncher, OcrChildTerminationFuture, OcrChildWaitFuture},
-    contract::OcrQueuePayload,
+    consumer::{
+        OcrChildHandle, OcrChildLauncher, OcrChildLiveness, OcrChildTerminationFuture,
+        OcrChildWaitFuture,
+    },
     object_store::VerifiedSourceImage,
 };
 
 #[cfg(target_os = "linux")]
-use std::{env, io, path::PathBuf, process::Stdio};
+use std::{
+    env, io,
+    os::{fd::AsRawFd, unix::net::UnixStream},
+    path::PathBuf,
+    process::Stdio,
+};
 #[cfg(target_os = "linux")]
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
@@ -32,6 +39,7 @@ pub(crate) struct IsolatedOcrChildLauncher {
     cgroup: crate::cgroup::ChildCgroup,
     tessdata_path: Option<PathBuf>,
     stop_grace: Duration,
+    parent_liveness_timeout: Duration,
 }
 
 #[cfg(target_os = "linux")]
@@ -39,14 +47,11 @@ impl OcrChildLauncher for IsolatedOcrChildLauncher {
     fn launch(
         &self,
         image: &VerifiedSourceImage,
-        payload: &OcrQueuePayload,
+        requested_screen_type: RequestedScreenType,
+        hints: &OcrHints,
     ) -> Result<Box<dyn OcrChildHandle>, &'static str> {
-        self.launch_image_bytes(
-            image.bytes(),
-            payload.requested_screen_type(),
-            payload.hints(),
-        )
-        .map(|child| -> Box<dyn OcrChildHandle> { Box::new(child) })
+        self.launch_image_bytes(image.bytes(), requested_screen_type, hints)
+            .map(|child| -> Box<dyn OcrChildHandle> { Box::new(child) })
     }
 }
 
@@ -56,11 +61,13 @@ impl IsolatedOcrChildLauncher {
         cgroup: crate::cgroup::ChildCgroup,
         tessdata_path: Option<PathBuf>,
         stop_grace: Duration,
+        parent_liveness_timeout: Duration,
     ) -> Self {
         Self {
             cgroup,
             tessdata_path,
             stop_grace,
+            parent_liveness_timeout,
         }
     }
 
@@ -70,9 +77,14 @@ impl IsolatedOcrChildLauncher {
         requested_screen_type: RequestedScreenType,
         hints: &OcrHints,
     ) -> Result<ManagedOcrChild, &'static str> {
-        if self.stop_grace.is_zero() {
+        if self.stop_grace.is_zero() || self.parent_liveness_timeout.is_zero() {
             return Err("ocr_child_configuration");
         }
+        let parent_liveness_timeout_milliseconds =
+            u64::try_from(self.parent_liveness_timeout.as_millis())
+                .ok()
+                .filter(|milliseconds| *milliseconds > 0)
+                .ok_or("ocr_child_configuration")?;
         let framed = momo_ocr::protocol::encode_request(
             crate::process::CHILD_START_MARKER,
             image,
@@ -82,9 +94,19 @@ impl IsolatedOcrChildLauncher {
         self.cgroup.ensure_empty().map_err(|error| error.kind())?;
         let memory_before = self.cgroup.snapshot().map_err(|error| error.kind())?;
         let executable = env::current_exe().map_err(|_error| "ocr_child_executable")?;
+        let (parent_liveness, child_liveness) =
+            UnixStream::pair().map_err(|_error| "ocr_child_liveness")?;
+        parent_liveness
+            .set_nonblocking(true)
+            .map_err(|_error| "ocr_child_liveness")?;
+        let child_liveness_fd = child_liveness.as_raw_fd();
         let mut command = Command::new(executable);
         command
             .arg("child-ocr")
+            .arg("--parent-liveness-fd")
+            .arg(child_liveness_fd.to_string())
+            .arg("--parent-liveness-timeout-ms")
+            .arg(parent_liveness_timeout_milliseconds.to_string())
             .env_clear()
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -96,7 +118,9 @@ impl IsolatedOcrChildLauncher {
         }
         preserve_native_runtime_environment(&mut command);
         crate::process::configure_parent_death_signal(&mut command);
+        crate::process::configure_inherited_liveness(&mut command, child_liveness_fd);
         let mut child = command.spawn().map_err(|_error| "ocr_child_spawn")?;
+        drop(child_liveness);
         let process_id = child.id().ok_or("ocr_child_process_id")?;
         let stdin = child.stdin.take();
         let stdout = child.stdout.take();
@@ -124,7 +148,9 @@ impl IsolatedOcrChildLauncher {
             stop_grace: self.stop_grace,
             writer,
             reader,
+            parent_liveness,
             start_error,
+            cleanup_complete: false,
         })
     }
 }
@@ -138,17 +164,45 @@ struct ManagedOcrChild {
     stop_grace: Duration,
     writer: Option<JoinHandle<Result<(), io::Error>>>,
     reader: Option<JoinHandle<Result<Vec<u8>, io::Error>>>,
+    parent_liveness: UnixStream,
     start_error: Option<&'static str>,
+    cleanup_complete: bool,
 }
 
 #[cfg(target_os = "linux")]
 impl OcrChildHandle for ManagedOcrChild {
+    fn liveness(&self) -> Result<Box<dyn OcrChildLiveness>, &'static str> {
+        self.parent_liveness
+            .try_clone()
+            .map(|stream| -> Box<dyn OcrChildLiveness> {
+                Box::new(ParentLivenessHandle { stream })
+            })
+            .map_err(|_error| "ocr_child_liveness")
+    }
+
     fn wait(&mut self) -> OcrChildWaitFuture<'_> {
         Box::pin(self.wait_inner())
     }
 
     fn terminate(&mut self) -> OcrChildTerminationFuture<'_> {
         Box::pin(self.terminate_inner())
+    }
+}
+
+#[cfg(target_os = "linux")]
+struct ParentLivenessHandle {
+    stream: UnixStream,
+}
+
+#[cfg(target_os = "linux")]
+impl OcrChildLiveness for ParentLivenessHandle {
+    fn refresh(&mut self) -> Result<(), &'static str> {
+        match io::Write::write(&mut self.stream, &[1]) {
+            Ok(1) => Ok(()),
+            Ok(_) => Err("ocr_child_liveness"),
+            Err(error) if error.kind() == io::ErrorKind::WouldBlock => Ok(()),
+            Err(_error) => Err("ocr_child_liveness"),
+        }
     }
 }
 
@@ -163,21 +217,53 @@ impl ManagedOcrChild {
                 .map_err(OcrChildProcessFailure::ProcessBoundary)?;
             return Err(OcrChildProcessFailure::ProcessBoundary(kind));
         }
-        let status = match self.child.as_mut() {
-            Some(child) => child
-                .wait()
-                .await
-                .map_err(|_error| OcrChildProcessFailure::ProcessBoundary("ocr_child_wait"))?,
+        let wait_result = match self.child.as_mut() {
+            Some(child) => child.wait().await,
             None => return Err(OcrChildProcessFailure::ProcessBoundary("ocr_child_state")),
         };
+        let status = match wait_result {
+            Ok(status) => status,
+            Err(_wait_error) => {
+                self.terminate_inner()
+                    .await
+                    .map_err(OcrChildProcessFailure::ProcessBoundary)?;
+                return Err(OcrChildProcessFailure::ProcessBoundary("ocr_child_wait"));
+            }
+        };
         drop(self.child.take());
-        let memory_after = self
-            .cgroup
-            .snapshot()
-            .map_err(|error| OcrChildProcessFailure::ProcessBoundary(error.kind()))?;
-        self.cgroup
-            .ensure_empty()
-            .map_err(|error| OcrChildProcessFailure::ProcessBoundary(error.kind()))?;
+        let cleanup_deadline = crate::process::child_stop_deadlines(self.stop_grace)
+            .map_err(|error| OcrChildProcessFailure::ProcessBoundary(error.kind()))?
+            .overall;
+        let memory_after = self.cgroup.snapshot();
+        let remaining_process = crate::process::stop_remaining_process_group(
+            self.process_id,
+            &self.cgroup,
+            cleanup_deadline,
+        )
+        .await;
+        let remaining_process = match remaining_process {
+            Ok(value) => {
+                self.cleanup_complete = true;
+                value
+            }
+            Err(error) => {
+                self.abort_io_tasks().await;
+                return Err(OcrChildProcessFailure::ProcessBoundary(error.kind()));
+            }
+        };
+        let memory_after = match memory_after {
+            Ok(value) => value,
+            Err(error) => {
+                self.abort_io_tasks().await;
+                return Err(OcrChildProcessFailure::ProcessBoundary(error.kind()));
+            }
+        };
+        if remaining_process {
+            self.abort_io_tasks().await;
+            return Err(OcrChildProcessFailure::ProcessBoundary(
+                "cgroup_unexpected_process",
+            ));
+        }
         if memory_after.oom_kill_count > self.oom_kill_count_before {
             self.abort_io_tasks().await;
             return Err(OcrChildProcessFailure::ResourceExhausted);
@@ -186,44 +272,68 @@ impl ManagedOcrChild {
             self.abort_io_tasks().await;
             return Err(OcrChildProcessFailure::ProcessBoundary("ocr_child_exit"));
         }
-        self.finish_writer()
-            .await
-            .map_err(OcrChildProcessFailure::ProcessBoundary)?;
-        let response = self
-            .finish_reader()
-            .await
-            .map_err(OcrChildProcessFailure::ProcessBoundary)?;
+        if let Err(kind) = self.finish_writer().await {
+            self.abort_io_tasks().await;
+            return Err(OcrChildProcessFailure::ProcessBoundary(kind));
+        }
+        let response = match self.finish_reader().await {
+            Ok(response) => response,
+            Err(kind) => {
+                self.abort_io_tasks().await;
+                return Err(OcrChildProcessFailure::ProcessBoundary(kind));
+            }
+        };
         momo_ocr::protocol::decode_response(&response)
             .map_err(OcrChildProcessFailure::ProcessBoundary)
     }
 
     async fn terminate_inner(&mut self) -> Result<(), &'static str> {
+        let deadlines =
+            crate::process::child_stop_deadlines(self.stop_grace).map_err(|error| error.kind())?;
+        let mut termination_failure = None;
         if let Some(child) = self.child.as_mut() {
             match child.try_wait() {
                 Ok(Some(_status)) => {}
                 Ok(None) => {
                     let _terminate_result =
                         crate::process::terminate_process_group(self.process_id, libc::SIGTERM);
-                    match time::timeout(self.stop_grace, child.wait()).await {
+                    match time::timeout_at(deadlines.soft, child.wait()).await {
                         Ok(Ok(_status)) => {}
                         Ok(Err(_wait_error)) => {
-                            force_kill_and_reap(child, self.process_id, self.stop_grace).await?;
-                            return Err("ocr_child_wait");
+                            termination_failure =
+                                force_kill_and_reap(child, self.process_id, deadlines.reap)
+                                    .await
+                                    .err()
+                                    .or(Some("ocr_child_wait"));
                         }
                         Err(_elapsed) => {
-                            force_kill_and_reap(child, self.process_id, self.stop_grace).await?;
+                            termination_failure =
+                                force_kill_and_reap(child, self.process_id, deadlines.reap)
+                                    .await
+                                    .err();
                         }
                     }
                 }
                 Err(_wait_error) => {
-                    force_kill_and_reap(child, self.process_id, self.stop_grace).await?;
-                    return Err("ocr_child_wait");
+                    termination_failure =
+                        force_kill_and_reap(child, self.process_id, deadlines.reap)
+                            .await
+                            .err()
+                            .or(Some("ocr_child_wait"));
                 }
             }
         }
         drop(self.child.take());
         self.abort_io_tasks().await;
-        self.cgroup.ensure_empty().map_err(|error| error.kind())
+        crate::process::stop_remaining_process_group(
+            self.process_id,
+            &self.cgroup,
+            deadlines.overall,
+        )
+        .await
+        .map_err(|error| error.kind())?;
+        self.cleanup_complete = true;
+        termination_failure.map_or(Ok(()), Err)
     }
 
     async fn finish_writer(&mut self) -> Result<(), &'static str> {
@@ -256,14 +366,14 @@ impl ManagedOcrChild {
 async fn force_kill_and_reap(
     child: &mut tokio::process::Child,
     process_id: u32,
-    grace: Duration,
+    deadline: time::Instant,
 ) -> Result<(), &'static str> {
     let signal_result = crate::process::terminate_process_group(process_id, libc::SIGKILL);
-    match time::timeout(grace, child.wait()).await {
+    match time::timeout_at(deadline, child.wait()).await {
         Ok(Ok(_status)) => Ok(()),
         Ok(Err(_wait_error)) => Err("ocr_child_wait"),
         Err(_elapsed) => match signal_result {
-            Ok(()) => Err("ocr_child_kill_timeout"),
+            Ok(()) => Err("child_stop_timeout"),
             Err(error) => Err(error.kind()),
         },
     }
@@ -272,11 +382,15 @@ async fn force_kill_and_reap(
 #[cfg(target_os = "linux")]
 impl Drop for ManagedOcrChild {
     fn drop(&mut self) {
-        if self.child.is_some() {
+        if !self.cleanup_complete {
             drop(crate::process::terminate_process_group(
                 self.process_id,
                 libc::SIGKILL,
             ));
+            // A child can leave its original process group with setsid while remaining in the
+            // dedicated cgroup. Drop cannot await verification, so run the same authoritative
+            // cgroup-wide hard-stop pass as a synchronous fail-closed fallback.
+            drop(self.cgroup.hard_kill());
         }
         if let Some(writer) = &self.writer {
             writer.abort();
@@ -340,7 +454,11 @@ pub(crate) async fn probe_isolated_child_lifecycle(
             return Err("ocr_child_probe_configuration");
         }
         let cgroup = child_cgroup_from_environment("ocr_child_probe_configuration")?;
-        let launcher = IsolatedOcrChildLauncher::new(cgroup, None, stop_grace);
+        let parent_liveness_timeout = timeout
+            .checked_add(stop_grace)
+            .ok_or("ocr_child_probe_configuration")?;
+        let launcher =
+            IsolatedOcrChildLauncher::new(cgroup, None, stop_grace, parent_liveness_timeout);
         let input = b"not-an-image";
         let mut cancelled_child = launcher.launch_image_bytes(
             input,
@@ -355,7 +473,11 @@ pub(crate) async fn probe_isolated_child_lifecycle(
             &OcrHints::default(),
         )?;
         let result = match time::timeout(timeout, completed_child.wait_inner()).await {
-            Ok(result) => result.map_err(process_failure_kind)?,
+            Ok(Ok(result)) => result,
+            Ok(Err(failure)) => {
+                completed_child.terminate_inner().await?;
+                return Err(process_failure_kind(failure));
+            }
             Err(_elapsed) => {
                 completed_child.terminate_inner().await?;
                 return Err("ocr_child_probe_timeout");
@@ -393,10 +515,18 @@ pub(crate) async fn analyze_isolated_local_image_bytes(
         return Err("ocr_child_pilot_configuration");
     }
     let cgroup = child_cgroup_from_environment("ocr_child_pilot_configuration")?;
-    let launcher = IsolatedOcrChildLauncher::new(cgroup, tessdata_path, stop_grace);
+    let parent_liveness_timeout = timeout
+        .checked_add(stop_grace)
+        .ok_or("ocr_child_pilot_configuration")?;
+    let launcher =
+        IsolatedOcrChildLauncher::new(cgroup, tessdata_path, stop_grace, parent_liveness_timeout);
     let mut child = launcher.launch_image_bytes(image, requested_screen_type, hints)?;
     match time::timeout(timeout, child.wait_inner()).await {
-        Ok(result) => result.map_err(process_failure_kind),
+        Ok(Ok(result)) => Ok(result),
+        Ok(Err(failure)) => {
+            child.terminate_inner().await?;
+            Err(process_failure_kind(failure))
+        }
         Err(_elapsed) => {
             child.terminate_inner().await?;
             Err("ocr_child_pilot_timeout")

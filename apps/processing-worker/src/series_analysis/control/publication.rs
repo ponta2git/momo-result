@@ -4,6 +4,7 @@ use momo_analysis_core::{
     canonical::sha256_prefixed,
     contract::{ArtifactManifest, CommonResource, ResourceManifest},
 };
+use tokio::io::AsyncReadExt;
 use tokio_postgres::{Client, Transaction, binary_copy::BinaryCopyInWriter, types::Type};
 use tracing::{error, info};
 
@@ -21,30 +22,47 @@ use super::{
     },
 };
 
-pub(super) fn validated_manifest(
+pub(super) async fn validated_manifest(
     config: &AnalysisConsumerConfig,
     claim: &ClaimedJob,
     artifact_directory: &Path,
 ) -> Result<ArtifactManifest, ControlError> {
     let limits = &config.execution_limits;
-    let manifest = validate_artifact_directory(
-        artifact_directory,
-        limits.chunk_count_limit.get(),
-        limits.chunk_bytes_limit.get(),
-        limits.temporary_bytes_limit.get(),
-        limits.temporary_file_count_limit.get(),
-    )?;
-    let manifest_revision = manifest.input_revision.parse::<i64>()?;
-    let manifest_schema = i32::try_from(manifest.artifact_schema_version)?;
-    if manifest.artifact_id != artifact_id_for_attempt(&claim.attempt_id)
-        || manifest.game_title_id != claim.game_title_id
-        || manifest_revision != claim.input_revision
-        || manifest.algorithm_version != claim.algorithm_version
-        || manifest_schema != claim.artifact_schema_version
-    {
-        return Err(ControlError::InvalidMetadata);
-    }
-    Ok(manifest)
+    let artifact_directory = artifact_directory.to_path_buf();
+    let maximum_chunk_count = limits.chunk_count_limit.get();
+    let maximum_chunk_bytes = limits.chunk_bytes_limit.get();
+    let maximum_total_bytes = limits.temporary_bytes_limit.get();
+    let maximum_file_count = limits.temporary_file_count_limit.get();
+    let expected_artifact_id = artifact_id_for_attempt(&claim.attempt_id);
+    let expected_game_title_id = claim.game_title_id.clone();
+    let expected_input_revision = claim.input_revision;
+    let expected_algorithm_version = claim.algorithm_version.clone();
+    let expected_artifact_schema_version = claim.artifact_schema_version;
+    // Validation performs bounded synchronous file reads and JSON decoding. Keeping that work off
+    // the current-thread runtime lets the enclosing finalization timeout and sibling coordinators
+    // continue. The task is read-only, so timeout cancellation cannot publish or mutate a candidate.
+    tokio::task::spawn_blocking(move || {
+        let manifest = validate_artifact_directory(
+            &artifact_directory,
+            maximum_chunk_count,
+            maximum_chunk_bytes,
+            maximum_total_bytes,
+            maximum_file_count,
+        )?;
+        let manifest_revision = manifest.input_revision.parse::<i64>()?;
+        let manifest_schema = i32::try_from(manifest.artifact_schema_version)?;
+        if manifest.artifact_id != expected_artifact_id
+            || manifest.game_title_id != expected_game_title_id
+            || manifest_revision != expected_input_revision
+            || manifest.algorithm_version != expected_algorithm_version
+            || manifest_schema != expected_artifact_schema_version
+        {
+            return Err(ControlError::InvalidMetadata);
+        }
+        Ok(manifest)
+    })
+    .await
+    .map_err(ControlError::ArtifactValidationTask)?
 }
 
 pub(super) enum ExistingArtifact {
@@ -514,7 +532,25 @@ struct ResourceCopyRow<'a> {
 
 impl<'a> ResourceCopyRow<'a> {
     async fn load(directory: &Path, common: &'a CommonResource) -> Result<Self, ControlError> {
-        let payload = tokio::fs::read(directory.join(&common.path)).await?;
+        let path = directory.join(&common.path);
+        let path_metadata = tokio::fs::symlink_metadata(&path).await?;
+        if !path_metadata.is_file()
+            || path_metadata.file_type().is_symlink()
+            || path_metadata.len() != common.encoded_bytes
+        {
+            return Err(ControlError::InvalidMetadata);
+        }
+        let file = tokio::fs::File::open(path).await?;
+        let opened_metadata = file.metadata().await?;
+        if !opened_metadata.is_file() || opened_metadata.len() != common.encoded_bytes {
+            return Err(ControlError::InvalidMetadata);
+        }
+        let read_limit = common
+            .encoded_bytes
+            .checked_add(1)
+            .ok_or(ControlError::NumericBound)?;
+        let mut payload = Vec::new();
+        file.take(read_limit).read_to_end(&mut payload).await?;
         if u64::try_from(payload.len())? != common.encoded_bytes
             || sha256_prefixed(&payload) != common.checksum
         {

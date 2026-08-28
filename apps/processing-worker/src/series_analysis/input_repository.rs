@@ -1,15 +1,13 @@
 use futures_util::TryStreamExt;
 use momo_analysis_core::model::{
-    AnalysisInput, IncidentCounts, NormalizedAnalysisInput, PlayerMatchInput,
+    AnalysisInput, IncidentCounts, MAXIMUM_INPUT_ID_BYTES, MAXIMUM_PLAYER_MATCH_ROWS,
+    NormalizedAnalysisInput, PlayerMatchInput,
 };
 use thiserror::Error;
 use tokio_postgres::{Client, IsolationLevel, Row};
 
-// This is deliberately well above the release resource fixture (500 matches / 2,000 rows).
-// The child process hard limit remains the authoritative memory bound for unexpectedly large
-// snapshots; this row cap prevents unbounded input independently of a deployment-specific limit.
-const MAXIMUM_INPUT_ROWS: usize = 100_000;
-const MAXIMUM_INPUT_ID_BYTES: usize = 128;
+// The query asks for one sentinel row beyond the capability-owned bound. The database adapter
+// therefore prevents an oversized snapshot from being materialized before domain validation.
 const ANALYSIS_INPUT_QUERY: &str = r#"SELECT
        m.id, m.analysis_revision,
        to_char(m.played_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),
@@ -85,7 +83,7 @@ pub(super) async fn load_analysis_input(
 
     let expected_player_match_count = validate_input_shape(&transaction, game_title_id).await?;
 
-    let query_limit = i64::try_from(MAXIMUM_INPUT_ROWS)
+    let query_limit = i64::try_from(MAXIMUM_PLAYER_MATCH_ROWS)
         .map_err(|_conversion_error| {
             InputRepositoryError::InputContract("input row bound is unsupported")
         })?
@@ -113,8 +111,8 @@ pub(super) async fn load_analysis_input(
         input_revision,
         player_matches,
     }
-    .into_normalized();
-    validate_player_matches(&input.player_matches)?;
+    .try_into_normalized()
+    .map_err(|error| InputRepositoryError::InputContract(error.reason()))?;
     transaction.commit().await?;
     Ok(input)
 }
@@ -147,9 +145,8 @@ async fn validate_input_shape(
     ];
     let supported_player_match_count = usize::try_from(player_match_count)
         .ok()
-        .filter(|count| *count <= MAXIMUM_INPUT_ROWS);
+        .filter(|count| *count <= MAXIMUM_PLAYER_MATCH_ROWS);
     if supported_player_match_count.is_none()
-        || !valid_input_id(game_title_id)
         || maximum_lengths.into_iter().any(|length| {
             usize::try_from(length).map_or(true, |value| value > MAXIMUM_INPUT_ID_BYTES)
         })
@@ -186,152 +183,4 @@ fn player_match_from_database(row: &Row) -> Result<PlayerMatchInput, tokio_postg
             suri_no_ginji: row.try_get(17)?,
         },
     })
-}
-
-fn validate_player_matches(
-    player_matches: &[PlayerMatchInput],
-) -> Result<(), InputRepositoryError> {
-    if player_matches.len() > MAXIMUM_INPUT_ROWS {
-        return Err(InputRepositoryError::InputContract(
-            "input row count exceeds the numeric safety bound",
-        ));
-    }
-    for player_match in player_matches {
-        if ![
-            player_match.match_id.as_str(),
-            player_match.held_event_id.as_str(),
-            player_match.season_master_id.as_str(),
-            player_match.map_master_id.as_str(),
-            player_match.member_id.as_str(),
-        ]
-        .into_iter()
-        .all(valid_input_id)
-            || !(1..=4).contains(&player_match.rank)
-            || !(1..=4).contains(&player_match.play_order)
-            || player_match.match_revision < 0
-            || [
-                player_match.incidents.destination,
-                player_match.incidents.plus_station,
-                player_match.incidents.minus_station,
-                player_match.incidents.card_station,
-                player_match.incidents.card_shop,
-                player_match.incidents.suri_no_ginji,
-            ]
-            .into_iter()
-            .any(|count| count < 0)
-        {
-            return Err(InputRepositoryError::InputContract("invalid row value"));
-        }
-    }
-    for player_matches_in_match in
-        player_matches.chunk_by(|left, right| left.match_id == right.match_id)
-    {
-        if player_matches_in_match.len() != 4 {
-            return Err(InputRepositoryError::InputContract(
-                "match must contain four players",
-            ));
-        }
-        let Some(first) = player_matches_in_match.first() else {
-            return Err(InputRepositoryError::InputContract(
-                "match must contain four players",
-            ));
-        };
-        let distinct_members =
-            player_matches_in_match
-                .iter()
-                .enumerate()
-                .all(|(index, player_match)| {
-                    !player_matches_in_match
-                        .iter()
-                        .take(index)
-                        .any(|previous| previous.member_id == player_match.member_id)
-                });
-        let complete_ranks = (1..=4).all(|rank| {
-            player_matches_in_match
-                .iter()
-                .any(|player_match| player_match.rank == rank)
-        });
-        let complete_orders = (1..=4).all(|order| {
-            player_matches_in_match
-                .iter()
-                .any(|player_match| player_match.play_order == order)
-        });
-        let consistent_match = player_matches_in_match.iter().all(|player_match| {
-            player_match.match_revision == first.match_revision
-                && player_match.played_at == first.played_at
-                && player_match.held_event_id == first.held_event_id
-                && player_match.match_no_in_event == first.match_no_in_event
-                && player_match.season_master_id == first.season_master_id
-                && player_match.map_master_id == first.map_master_id
-        });
-        if !distinct_members || !complete_ranks || !complete_orders || !consistent_match {
-            return Err(InputRepositoryError::InputContract(
-                "match players, ranks, play orders, or metadata are inconsistent",
-            ));
-        }
-    }
-    Ok(())
-}
-
-fn valid_input_id(value: &str) -> bool {
-    !value.is_empty()
-        && value.len() <= MAXIMUM_INPUT_ID_BYTES
-        && value.bytes().enumerate().all(|(index, byte)| {
-            byte.is_ascii_alphanumeric() || (index > 0 && b"._:-".contains(&byte))
-        })
-}
-
-#[cfg(test)]
-#[expect(
-    clippy::panic,
-    reason = "invalid hand-built validation fixtures must fail with a precise test message"
-)]
-mod tests {
-    use super::*;
-
-    fn valid_player_matches() -> Vec<PlayerMatchInput> {
-        (1..=4)
-            .map(|player| PlayerMatchInput {
-                match_id: String::from("match-1"),
-                match_revision: 1,
-                played_at: String::from("2026-08-10T00:00:00.000000Z"),
-                held_event_id: String::from("event-1"),
-                match_no_in_event: 1,
-                season_master_id: String::from("season-1"),
-                map_master_id: String::from("map-1"),
-                member_id: format!("member-{player}"),
-                play_order: player,
-                rank: player,
-                total_assets_man_yen: 1_000,
-                revenue_man_yen: 100,
-                incidents: IncidentCounts::default(),
-            })
-            .collect()
-    }
-
-    #[test]
-    fn input_validation_rejects_duplicate_players_and_inconsistent_match_metadata() {
-        let valid = valid_player_matches();
-        assert!(validate_player_matches(&valid).is_ok());
-
-        let mut duplicate_player = valid.clone();
-        duplicate_player
-            .get_mut(3)
-            .unwrap_or_else(|| panic!("fourth player row"))
-            .member_id = String::from("member-1");
-        assert!(matches!(
-            validate_player_matches(&duplicate_player),
-            Err(InputRepositoryError::InputContract(_))
-        ));
-
-        let mut inconsistent_match = valid;
-        inconsistent_match
-            .get_mut(3)
-            .unwrap_or_else(|| panic!("fourth player row"))
-            .season_master_id = String::from("season-2");
-        assert!(matches!(
-            validate_player_matches(&inconsistent_match),
-            Err(InputRepositoryError::InputContract(_))
-        ));
-    }
 }

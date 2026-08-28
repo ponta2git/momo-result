@@ -1,15 +1,19 @@
 //! OCR capability boundary shared by the processing runtime and the isolated OCR child.
 //!
-//! This crate owns OCR-domain values and, as the native implementation is extracted, the
-//! versioned parent/child protocol and Tesseract backend. Queue transport, process lifecycle,
-//! persistence, retry, and publication policy remain in the outer `momo-processing-worker` crate.
+//! This crate owns OCR-domain values, deterministic image interpretation, the versioned
+//! parent/child protocol, and a checked native-recognition port. Queue transport, native-engine
+//! lifecycle, clocks, filesystems, persistence, retry, and publication policy remain in the outer
+//! `momo-processing-worker` crate.
 
 mod contract;
 mod core;
-mod native_engine;
+mod output_contract;
 pub mod protocol;
 mod result;
 
 pub use contract::{OcrHints, OcrMediaType, OcrQueuePayload, RequestedScreenType};
-pub use native_engine::analyze_local_image_bytes;
-pub use result::{OcrFailure, OcrOutput};
+pub use core::{
+    OcrPhase, OcrPhaseEvent, PageSegmentationMode, RecognitionError, RecognitionFrame,
+    RecognitionLanguage, RecognitionPort, RecognizedText, analyze as analyze_image_bytes,
+};
+pub use result::{InvalidOcrTimings, OcrAnalysis, OcrFailure, OcrOutput, OcrTimings};

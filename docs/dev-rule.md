@@ -53,6 +53,7 @@ OpenAPI / Web 型の生成関係は `docs/architecture.md` の Wire Boundary、c
 - blocking check は、所有する正本、検出する違反、失敗時の対処を特定できる場合だけ置く。pipeline-integrity evidence の成功を product behavior の成功として扱わない。
 - manual review は、利用者影響があり自動 oracle が適切でない場合だけ選び、確認対象と結果を PR に残す。近似的な checker を追加して代用しない。
 - lint / checker は syntax-aware な既存 tool と設定を優先する。独自 script は、既存 tool で表現できず、利用者価値または pipeline integrity への影響が大きく、positive / negative fixture で誤検出と未検出を管理できる場合だけ採用する。
+- production build が source detection、tree-shaking、minification などで output を選別し、runtime が識別子を動的に組み立てる場合、canonical build は consumer が必要とする識別子が最終 artifact に残ることを直接検証する。source 定義、compile、unit test の成功を artifact 保持の代用にせず、build が参照する checker、manifest、fixture は host と container の全 build input に含める。
 - check が速いことは採用・維持の理由にしない。廃止時も同等 check の機械的な追加を要求せず、守っていた価値と証拠を `docs/test-rule.md` の基準で再評価する。
 - 一つの command に複数 check をまとめても各結果の役割を区別する。Diagnostic report の欠測や閾値超過を blocking command の失敗へ畳み込まない。
 

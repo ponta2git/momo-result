@@ -268,6 +268,27 @@ public repository に置くため、具体的な障害位置、再現手順、en
 - `docs/dev-rule.md` の CI Gates / Release
 - `docs/test-rule.md` の External Service Evidence Catalog
 
+### L12 source の token を production asset に存在するとみなさない
+
+**該当条件**
+
+- runtime の値から CSS token、custom property、utility class などの識別子を組み立てる。
+- source detection、tree-shaking、minification で未使用 output を除く build tool を使う。
+- stylesheet の定義、unit test、development 表示を production build の証拠にしようとしている。
+
+**確認**
+
+- consumer が必要とする識別子が、変換後の production asset にすべて残ることを直接確認したか。
+- source 上の定義や文字列 mapping の成功を、最終 CSS と browser paint の成功として扱っていないか。
+- build checker を置く場合、canonical build と container build の両方が同じ checker と入力を使うか。
+- browser evidence は exact 色値や DOM 構造ではなく、定義済み paint、系列の識別可能性、非色 signifier を観測しているか。
+
+**参照先**
+
+- `docs/test-rule.md` の UI Conformance
+- `docs/dev-rule.md` の Change Gates
+- `docs/ui-rule.md` の「検証」
+
 ## 更新ルール
 
 - 新しい教訓を追加する前に、恒久ルールとして移すべき内容がないか確認する。

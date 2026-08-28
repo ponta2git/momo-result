@@ -92,6 +92,7 @@
 
 - UI の意味、visual review、component / Playwright の役割分担は `docs/ui-rule.md` の「検証」を正本とする。
 - 自動 test は keyboard、accessible name、status announcement、local error、pending 中の重複操作など、利用者が操作または観測できる結果を主 oracle にする。階層、読み幅、関係的余白、目的・現在地・主要操作の発見可能性は visual review で判断する。
+- source detection、tree-shaking、minification などで production CSS が変換され、runtime が token、class、custom property の識別子を動的に選ぶ場合は、必要な識別子が最終 asset に残ることを production build 後の asset またはその asset を読む browser で直接確認する。変換前 stylesheet の定義、識別子文字列を返す unit test、development server の表示を代用証拠にしない。browser evidence を選ぶ場合は exact 色値や DOM 構造ではなく、consumer が必要とする定義済み paint、識別可能性、非色 signifier を oracle にする。
 
 ## 5. API Evidence Catalog
 

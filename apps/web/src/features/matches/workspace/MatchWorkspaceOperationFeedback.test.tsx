@@ -49,6 +49,7 @@ function setupSectionProps({
             pagination: undefined,
             pending: false,
             refetch: vi.fn(async () => undefined),
+            scopeChanging: false,
             selectedHeldEvent: undefined,
             onPageChange: vi.fn(),
           },

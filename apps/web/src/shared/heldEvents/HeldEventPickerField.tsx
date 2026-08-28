@@ -16,6 +16,7 @@ type HeldEventPickerFieldProps = Omit<HTMLAttributes<HTMLDivElement>, "children"
   pagination?: PaginationState | undefined;
   pending?: boolean | undefined;
   required?: boolean | undefined;
+  scopeChanging?: boolean | undefined;
   selectedHeldEvent?: HeldEventResponse | undefined;
   unavailableLabel?: string | undefined;
   value: string;
@@ -50,6 +51,7 @@ export function HeldEventPickerField({
   pagination,
   pending,
   required,
+  scopeChanging,
   selectedHeldEvent,
   unavailableLabel,
   value,
@@ -92,6 +94,7 @@ export function HeldEventPickerField({
       paginationAriaLabel="開催候補のページネーション"
       pending={pending}
       required={required}
+      scopeChanging={scopeChanging}
       selectedLabel={selectedLabel}
       value={value}
       onPageChange={onPageChange}

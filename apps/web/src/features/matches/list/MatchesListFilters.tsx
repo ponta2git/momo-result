@@ -102,6 +102,7 @@ export function MatchesListFilters({
         name="match-list-held-event"
         pagination={heldEventPicker?.pagination}
         pending={heldEventPicker?.pending}
+        scopeChanging={heldEventPicker?.scopeChanging}
         selectedHeldEvent={heldEventPicker?.selectedHeldEvent}
         unavailableLabel="すべての開催"
         value={search.heldEventId}

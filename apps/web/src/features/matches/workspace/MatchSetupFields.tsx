@@ -25,6 +25,7 @@ export function MatchSetupFields({ model }: { model: MatchWorkspaceSetupFieldsMo
         pagination={options.heldEventPicker?.pagination}
         pending={options.heldEventPicker?.pending}
         required
+        scopeChanging={options.heldEventPicker?.scopeChanging}
         selectedHeldEvent={options.heldEventPicker?.selectedHeldEvent}
         unavailableLabel="未選択"
         value={values.heldEventId}

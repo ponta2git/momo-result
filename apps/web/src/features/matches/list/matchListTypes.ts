@@ -50,6 +50,7 @@ export type MatchListFilterCandidates = {
     heldEvents: HeldEventResponse[];
     pagination?: PaginationState | undefined;
     pending: boolean;
+    scopeChanging: boolean;
     selectedHeldEvent?: HeldEventResponse | undefined;
     onPageChange: (page: number) => void;
   };

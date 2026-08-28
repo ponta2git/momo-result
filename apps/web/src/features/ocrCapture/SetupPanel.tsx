@@ -23,6 +23,7 @@ export function SetupPanel({ model }: SetupPanelProps) {
         name="ocr-held-event"
         pagination={fields.heldEvent.pagination}
         pending={fields.heldEvent.pending}
+        scopeChanging={fields.heldEvent.scopeChanging}
         selectedHeldEvent={fields.heldEvent.selectedHeldEvent}
         unavailableLabel={fields.heldEvent.unavailableLabel}
         value={fields.heldEvent.value}

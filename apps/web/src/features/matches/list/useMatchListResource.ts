@@ -222,6 +222,7 @@ export function useMatchListResource({
           heldEvents: heldEventPicker.heldEvents,
           pagination: heldEventPicker.pagination,
           pending: heldEventPicker.pending,
+          scopeChanging: heldEventPicker.scopeChanging,
           selectedHeldEvent: heldEventPicker.selectedHeldEvent,
           onPageChange: heldEventPicker.onPageChange,
         },

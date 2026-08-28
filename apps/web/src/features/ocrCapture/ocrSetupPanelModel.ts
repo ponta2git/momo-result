@@ -25,6 +25,7 @@ export type OcrSetupPanelModel = {
       heldEvents: HeldEventResponse[];
       pagination: PaginationState | undefined;
       pending: boolean;
+      scopeChanging: boolean;
       selectedHeldEvent: HeldEventResponse | undefined;
       unavailableLabel: string;
       value: string;
@@ -92,6 +93,7 @@ export function buildOcrSetupPanelModel({
         heldEvents: options.heldEventPicker.heldEvents,
         pagination: options.heldEventPicker.pagination,
         pending: options.heldEventPicker.pending,
+        scopeChanging: options.heldEventPicker.scopeChanging,
         selectedHeldEvent: options.heldEventPicker.selectedHeldEvent ?? options.selectedHeldEvent,
         unavailableLabel: options.heldEventsPlaceholder,
         value: value.heldEventId ?? "",

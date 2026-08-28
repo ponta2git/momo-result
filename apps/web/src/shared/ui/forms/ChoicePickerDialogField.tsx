@@ -10,6 +10,7 @@ import { Dialog } from "@/shared/ui/feedback/Dialog";
 import { ChoiceList } from "@/shared/ui/forms/ChoiceList";
 import type { ChoiceListOption } from "@/shared/ui/forms/ChoiceList";
 import { buildFieldDescribedBy, Field } from "@/shared/ui/forms/Field";
+import { StaleShield } from "@/shared/ui/motion/StaleShield";
 
 type ChoicePickerDialogFieldProps = Omit<
   HTMLAttributes<HTMLDivElement>,
@@ -26,6 +27,7 @@ type ChoicePickerDialogFieldProps = Omit<
   pending?: boolean | undefined;
   recovery?: boolean | undefined;
   required?: boolean | undefined;
+  scopeChanging?: boolean | undefined;
   selectedLabel: ReactNode;
   value?: string | undefined;
   onPageChange?: ((page: number) => void) | undefined;
@@ -35,6 +37,8 @@ type ChoicePickerDialogFieldProps = Omit<
 /**
  * A descriptive single-choice field whose candidates need more context than a native select can
  * expose. The field owns the visible current value, dialog, radio semantics, and optional paging.
+ * A read-only candidate request never owns dialog dismissal; scopeChanging keeps the previous
+ * page mounted but inert until the requested page is ready.
  */
 export function ChoicePickerDialogField({
   className,
@@ -49,6 +53,7 @@ export function ChoicePickerDialogField({
   pending = false,
   recovery = false,
   required = false,
+  scopeChanging = false,
   selectedLabel,
   value,
   onPageChange,
@@ -85,7 +90,6 @@ export function ChoicePickerDialogField({
           {selectedLabel}
         </p>
         <Dialog
-          busy={pending}
           className="flex min-h-0 flex-col"
           open={open}
           popupClassName="overflow-y-hidden"
@@ -108,7 +112,14 @@ export function ChoicePickerDialogField({
           }
           onOpenChange={setOpen}
         >
-          <div className="flex min-h-0 flex-1 flex-col gap-3">
+          <StaleShield
+            active={scopeChanging}
+            busyLabel={`${label}候補を更新中`}
+            className="flex min-h-0 flex-1 flex-col"
+            contentClassName="flex min-h-0 flex-1 flex-col gap-3"
+            fallback={null}
+            strategy="preserve-inert"
+          >
             <ChoiceList
               className="flex min-h-0 flex-col"
               disabled={disabled}
@@ -117,7 +128,7 @@ export function ChoicePickerDialogField({
               listClassName="max-h-[min(24rem,55dvh)] min-h-0 flex-1 overflow-y-auto overscroll-contain"
               name={name}
               options={options}
-              pending={pending}
+              pending={pending && !scopeChanging}
               value={value}
               onValueChange={selectChoice}
             />
@@ -133,7 +144,7 @@ export function ChoicePickerDialogField({
                 onPageChange={onPageChange}
               />
             ) : null}
-          </div>
+          </StaleShield>
         </Dialog>
       </div>
     </Field>

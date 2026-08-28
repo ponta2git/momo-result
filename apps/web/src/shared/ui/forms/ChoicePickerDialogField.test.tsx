@@ -62,7 +62,7 @@ describe("ChoicePickerDialogField", () => {
     const user = userEvent.setup();
     const onPageChange = vi.fn();
 
-    render(
+    const rendered = render(
       <ChoicePickerDialogField
         label="開催"
         name="held-event"
@@ -87,5 +87,38 @@ describe("ChoicePickerDialogField", () => {
 
     expect(onPageChange).toHaveBeenCalledWith(2);
     expect(screen.getByRole("dialog", { name: "開催を選択" })).toBeInTheDocument();
+
+    rendered.rerender(
+      <ChoicePickerDialogField
+        label="開催"
+        name="held-event"
+        options={[{ description: "確定 4試合", label: "2026/08/21 23:30", value: "held-1" }]}
+        pagination={{
+          hasNextPage: true,
+          hasPreviousPage: false,
+          page: 1,
+          pageSize: 20,
+          totalItems: 63,
+          totalPages: 4,
+        }}
+        pending
+        scopeChanging
+        selectedLabel="すべての開催"
+        value=""
+        onPageChange={onPageChange}
+        onValueChange={vi.fn()}
+      />,
+    );
+
+    const dialog = screen.getByRole("dialog", { name: "開催を選択" });
+    expect(screen.getByText("2026/08/21 23:30").closest("[inert]")).not.toBeNull();
+    expect(
+      screen.getByRole("navigation", { name: "開催候補のページネーション" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("開催候補を更新中");
+    expect(screen.getByRole("button", { name: "ダイアログを閉じる" })).toBeEnabled();
+
+    await user.click(screen.getByRole("button", { name: "ダイアログを閉じる" }));
+    expect(dialog).not.toBeInTheDocument();
   });
 });

@@ -116,8 +116,9 @@ export function ChoicePickerDialogField({
             active={scopeChanging}
             busyLabel={`${label}候補を更新中`}
             className="flex min-h-0 flex-1 flex-col"
-            contentClassName="flex min-h-0 flex-1 flex-col gap-3"
+            contentClassName="flex min-h-0 flex-1 flex-col gap-3 pt-2"
             fallback={null}
+            statusClassName="top-0 justify-end"
             strategy="preserve-inert"
           >
             <ChoiceList
@@ -137,7 +138,7 @@ export function ChoicePickerDialogField({
               <PaginationControls
                 ariaLabel={paginationAriaLabel ?? `${label}候補のページネーション`}
                 className="shrink-0"
-                disabled={disabled || pending}
+                disabled={disabled || (pending && !scopeChanging)}
                 pagination={pagination}
                 placement="embedded"
                 variant="compact"

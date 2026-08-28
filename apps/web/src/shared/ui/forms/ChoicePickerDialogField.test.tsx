@@ -116,6 +116,7 @@ describe("ChoicePickerDialogField", () => {
       screen.getByRole("navigation", { name: "開催候補のページネーション" }),
     ).toBeInTheDocument();
     expect(screen.getByRole("status")).toHaveTextContent("開催候補を更新中");
+    expect(screen.getByRole("button", { name: "次のページへ" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "ダイアログを閉じる" })).toBeEnabled();
 
     await user.click(screen.getByRole("button", { name: "ダイアログを閉じる" }));

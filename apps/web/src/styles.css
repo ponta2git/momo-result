@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-@theme {
+@theme static {
   --font-sans: var(--font-momo-ui);
   --font-display: var(--font-momo-heading);
   --font-momo-ui:

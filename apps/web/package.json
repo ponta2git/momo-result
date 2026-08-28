@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && node ./scripts/check-built-theme.mjs",
     "e2e": "node ./scripts/e2e-isolated.mjs",
     "e2e:target": "playwright test",
     "e2e:runtime": "PLAYWRIGHT_SKIP_WEB_SERVER=1 playwright test",

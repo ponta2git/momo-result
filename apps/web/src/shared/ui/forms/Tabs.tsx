@@ -1,7 +1,8 @@
 import { Tabs as BaseTabs } from "@base-ui/react/tabs";
 import { m, useReducedMotionConfig } from "motion/react";
+import type { MotionStyle } from "motion/react";
 import { createContext, useContext } from "react";
-import type { ComponentPropsWithoutRef, Ref } from "react";
+import type { ComponentPropsWithoutRef, CSSProperties, Ref } from "react";
 
 import { cn } from "@/shared/ui/cn";
 import { instantMotionTransition, politeMotionTransition } from "@/shared/ui/motion/transitions";
@@ -42,6 +43,14 @@ const TabsVariantContext = createContext<TabsVariant>("filled");
 export const TabsRoot = BaseTabs.Root;
 export const TabsPanel = BaseTabs.Panel;
 
+function activeIndicatorStyle(style: CSSProperties | undefined): MotionStyle {
+  return {
+    ...style,
+    transform: "translateX(var(--active-tab-left, 0px))",
+    width: "var(--active-tab-width, 0px)",
+  } as MotionStyle;
+}
+
 function UnderlineSelectionIndicator() {
   const reduceMotion = useReducedMotionConfig();
 
@@ -61,6 +70,7 @@ function UnderlineSelectionIndicator() {
             initial={false}
             ref={props.ref}
             role={props.role}
+            style={activeIndicatorStyle(props.style)}
             suppressHydrationWarning={props.suppressHydrationWarning}
             transition={reduceMotion ? instantMotionTransition : politeMotionTransition}
           />

@@ -207,12 +207,12 @@ export function useSeriesAnalysisResource({
       ? currentDisplayBundle.review
       : currentDisplayBundle?.aggregate;
   const displayMatchesCurrentScope = matchesSeriesAnalysisScope(displayedResource, state);
-  const visibleBundle =
-    (displayMatchesActivePurpose && displayMatchesCurrentScope) || bundleFetching
-      ? currentDisplayBundle
-      : undefined;
   const scopeSettling =
     seriesAnalysisScopeSignature(state) !== seriesAnalysisScopeSignature(deferredState);
+  const visibleBundle =
+    (displayMatchesActivePurpose && displayMatchesCurrentScope) || bundleFetching || scopeSettling
+      ? currentDisplayBundle
+      : undefined;
   const resourceShielded = shouldShowStaleShield({
     hasVisibleData: visibleBundle !== undefined,
     isPlaceholderData: activePlaceholder,

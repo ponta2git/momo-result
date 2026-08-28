@@ -540,6 +540,42 @@ describe("app routing", () => {
     });
   });
 
+  it("keeps analysis tab identity while a new comparison scope is loading", async () => {
+    setDevUser();
+    const scopedAggregateResponseGate = createDeferred();
+    server.use(
+      http.get("/api/analytics/series-comparison/v2/aggregate", async ({ request }) => {
+        const seasonMasterId = new URL(request.url).searchParams.get("seasonMasterId");
+        if (!seasonMasterId) return HttpResponse.json(makeSeriesAnalysisAggregate());
+
+        await scopedAggregateResponseGate.promise;
+        const aggregate = makeSeriesAnalysisAggregate();
+        return HttpResponse.json({
+          ...aggregate,
+          scope: {
+            displayName: "今シーズン",
+            kind: "season" as const,
+            matchCount: aggregate.scope.matchCount,
+            seasonMasterId,
+          },
+        });
+      }),
+    );
+
+    renderApp("/analytics/series?view=overview");
+
+    const activeTab = await screen.findByRole("tab", { name: "今の差" });
+    await user.click(screen.getByRole("button", { name: /比較対象を変更/u }));
+    await user.selectOptions(screen.getByRole("combobox", { name: "シーズン" }), "season_current");
+
+    expect(await screen.findByText("比較条件を更新中")).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "今の差" })).toBe(activeTab);
+
+    scopedAggregateResponseGate.resolve();
+    await waitFor(() => expect(screen.queryByText("比較条件を更新中")).not.toBeInTheDocument());
+    expect(screen.getByRole("tab", { name: "今の差" })).toBe(activeTab);
+  });
+
   it("refreshes status once and moves to the replacement artifact after a 410", async () => {
     setDevUser();
     const replacementArtifact = {

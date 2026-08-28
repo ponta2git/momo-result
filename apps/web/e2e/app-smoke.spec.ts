@@ -487,6 +487,13 @@ test("inspects saved analysis and handles explicit refresh states", async ({
       "aria-selected",
       "true",
     );
+    await expect
+      .poll(async () =>
+        analysisTabs
+          .locator('[role="presentation"]')
+          .evaluate((element) => element.getBoundingClientRect().width),
+      )
+      .toBeGreaterThan(0);
     const scopeSurface = page.getByRole("region", { name: "比較条件" });
     await expect(scopeSurface).toContainText(`${analysisScope.matchCount}戦`);
     await expect(page.getByText("新しい戦績データを計算中です")).toBeVisible();

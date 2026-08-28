@@ -9,7 +9,7 @@
 | 境界 | 責務 | 正本 |
 | --- | --- | --- |
 | Web | SPA、入力、表示、画面状態 | `apps/web/src/` |
-| API | HTTP、認証、usecase、DB / queue adapter | Tapir endpoint、`apps/api/openapi.yaml`、`apps/api/` |
+| API | HTTP、認証、usecase、DB / queue adapter | Tapir endpoint、`apps/api/` |
 | Processing Worker | OCR / 分析の非同期実行、lease、外部I/O | `apps/processing-worker/` |
 | DB | 業務状態、job、outbox、成果物 | `../momo-db` migration |
 | Redis Streams | job の配送 | schema と queue 契約文書 |
@@ -23,7 +23,9 @@
 
 ### Wire Boundary
 
-- HTTP 契約は Tapir endpoint を正本とし、生成 OpenAPI は Web 型生成入力として同期する。手書き route が必要でも path / query / header を二重管理しない。
+- HTTP 契約は Tapir endpoint を正本とする。手書き route が必要でも path / query / header を二重管理しない。
+- `apps/api/openapi.yaml` は内部 Web codegen 用の追跡する派生物であり、契約や公開 API documentation の正本ではない。Tapir から一時生成した spec を consumer に必要な構造規則で lint し、tracked artifact と一致させ、その artifact から Web 型を生成する。手編集で差分を解消しない。
+- OpenAPI lint は unresolved reference、path / parameter、schema、operation identity など構造整合性に限定する。field の公開可否、認証、業務意味は endpoint、DTO、要求・domain 規約で決め、legacy 名や source 断片の文字列検査を契約にしない。
 - HTTP 層は入力・認証・エラー変換に閉じ、DB、Redis、業務分岐を直接持たない。
 - raw ID、設定値、wire value は境界で検証済み型へ変換する。usecase へ未検証値や wire DTO を渡さない。
 - optional field が mode や副作用を変える場合は discriminator として要件または domain 文書にも意味を残す。
@@ -61,14 +63,14 @@
 - Page は composition とページ状態に寄せ、取得、mutation、複雑な状態機械、純粋変換を分離する。
 - 複雑な Page は feature 固有の PageModel から resource、command、location、feedback など画面の意味を受け取り、TanStack Query の result や mutation object を直接受け取らない。PageModel 内は lifecycle と変更理由が異なる関心事だけを hook / 純粋変換へ分け、単なる転送層は作らない。
 - ファイル行数は責務混在を見つける signal とし、行数だけを理由に浅い module へ分割しない。
-- import 境界など決定的に検査できる規則は `apps/web/scripts/` の checker に固定する。本番コードから test 専用 module を参照しない。
+- 本節を依存方向の正本とする。違反が利用者価値へ影響し、module graph から低誤検出で判定できる import 規則だけを、既存 lint または保守された dependency tool へ投影する。正規 parser を持たない独自 source scanner を正本にしない。本番コードから test 専用 module を参照しない。
 
 ### Server State
 
 - server state は TanStack Query の cache lifecycle に従い、Page/UI component から query 基盤を直接操作しない。
 - query key は cache 内の runtime data shape まで区別する。backend resource が同じでも raw response と ViewModel を同じ key に置かない。
 - fatal error、再取得、cached data、認証待ち、disabled query を別状態として扱う。mutation 後は表示中の resource と選択候補の cache をともに整合させる。
-- 初回表示、mutation 後の cache 整合、artifact 失効時の bounded recovery、利用者が実行した更新 / 再試行だけが server state の取得を開始する。interval、遅延 timer、window focus、tab visibility、network reconnect を起点に自動再取得しない。この契約は共通 QueryClient と client data policy checker で固定する。
+- 初回表示、mutation 後の cache 整合、artifact 失効時の bounded recovery、利用者が実行した更新 / 再試行だけが server state の取得を開始する。interval、遅延 timer、window focus、tab visibility、network reconnect を起点に自動再取得しない。この契約は共通 QueryClient に集約し、feature ごとに再実装しない。
 - React の concurrent / form API は cache、retry、認証、validation の既存契約を置き換えない範囲で使う。
 
 ### Client Lifecycle / Suspense / Motion
@@ -92,7 +94,7 @@
 - application code は Motion の完了 callback を、data、cache、route、open、focus、pending、error、操作可能性を進める唯一の条件にしない。callback が所有してよいのは、中断または未実行でも application state を誤らせない冪等な表示上の後始末に限る。exit のため一時保持する node は非対話的かつ accessibility tree の対象外とし、先に確定した state と focus を巻き戻さない。
 - presence による一時保持は、shared dialog と toast が通常の close / remove 後に非対話的な exit snapshot を描く場合だけ許可する。親 subtree、route、artifact、view の identity が失われた場合は exit を省略してよく、表示補間のためにそれらの lifecycle を遅らせない。
 - 処理時間が不定な Spinner / Skeleton の loop だけは shared loading primitive 内の CSS を使ってよい。それ以外の新しい有限 motion は Motion に統一し、同じ transition に CSS、timer、Web Animations API、別の motion engine を混ぜない。Motion 導入時は既存の有限 CSS transition もこの境界へ移し、CSS loop の feature 直書きを shared loading primitive へ集約する。
-- `MotionConfig reducedMotion="user"` が transform / layout を無効にしても opacity や color は残り得るため、非必須の残存 motion は末端 component でも省略する。Motion の初回導入と feature bundle の変更では production build の bundle 差分を測り、使用 API と import 境界を checker で固定する。
+- `MotionConfig reducedMotion="user"` が transform / layout を無効にしても opacity や color は残り得るため、非必須の残存 motion は末端 component でも省略する。Motion の初回導入と feature bundle の変更では production build の bundle 差分を測る。使用 API と import 境界は、標準 lint で一意に判定できる範囲だけを静的検査へ投影する。
 
 ### Form / React 19 / API Client
 
@@ -103,7 +105,7 @@
 
 - Web の API 型は生成物を直接 feature へ漏らさず、`shared/api` の用途別 facade を介す。
 - credential、CSRF、Problem Details、idempotency は共通 client で扱う。同一 mutation の retry は同じ操作 key を再利用し、payload が変われば新しい key にする。
-- UI の意味表現と操作契約は `docs/ui-rule.md` を正本とし、shared UI と semantic token から外れる実装は checker で検出する。
+- UI の意味表現と操作契約は `docs/ui-rule.md` を正本とする。shared UI と semantic token から外れる実装は、利用者に現れる意味・状態・操作への影響で review し、source 表記だけを一律の適合判定にしない。
 
 ## 4. Processing Worker
 

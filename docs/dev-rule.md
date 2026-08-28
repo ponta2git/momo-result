@@ -37,46 +37,69 @@
 | Workflow | `pnpm actionlint` |
 | Public docs / config | `pnpm public:safety:check` |
 
-生成 OpenAPI / Web 型、coverage threshold、lint 設定、smoke の引数は、それぞれ生成 script、build 設定、`scripts/ci/` を正本とする。文書中の command が実装とずれた場合は実装を直すか、この表を更新し、別名 command を増やさない。
+OpenAPI / Web 型の生成、coverage 対象、lint 設定、smoke の引数は、それぞれ生成 script、build 設定、`scripts/ci/` を実行上の正本とする。Tapir endpoint から生成する OpenAPI と Web 型は派生物であり、意味の正本にはしない。文書中の command が実装とずれた場合は実装を直すか、この表を更新し、別名 command を増やさない。
 
 ## 4. Change Gates
 
+各 check は次のいずれか一つの役割を持つ。複数の目的を暗黙に背負わせず、結果の意味を PR 上で区別する。
+
+| 役割 | blocking | 判定対象 |
+| --- | --- | --- |
+| Product-value evidence | Yes | 利用者の結果、data 保全、利用者へ到達する共通実装契約 |
+| Pipeline-integrity evidence | Yes | compile、生成 freshness、schema / dependency 整合、artifact provenance、workflow 自体の成立 |
+| Diagnostic report | No | aggregate coverage、flake、module size、developer wait、長期推移 |
+| Manual review | 別途判断 | 視覚階層、関係的余白、文章の強さなど自動 oracle が不適切な項目 |
+
+- blocking check は、所有する正本、検出する違反、失敗時の対処を特定できる場合だけ置く。pipeline-integrity evidence の成功を product behavior の成功として扱わない。
+- lint / checker は syntax-aware な既存 tool と設定を優先する。独自 script は、既存 tool で表現できず、利用者価値または pipeline integrity への影響が大きく、positive / negative fixture で誤検出と未検出を管理できる場合だけ採用する。
+- check が速いことは採用・維持の理由にしない。廃止時も同等 check の機械的な追加を要求せず、守っていた価値と証拠を `docs/test-rule.md` の基準で再評価する。
+- blocking gate の green は、宣言した検査範囲で違反を観測しなかったことを意味する。規約全体または利用者価値全体の保証へ拡張しない。
+
 | 変更 | 必須 gate |
 | --- | --- |
-| Web production | format、lint、typecheck、unit / component test |
-| Web API contract | Web gate + OpenAPI / API 型生成 |
+| Web production | format、lint、typecheck + 選択した unit / component evidence |
+| Web API contract | Web gate + Tapir 由来 OpenAPI の生成・構造 lint・freshness + Web 型生成 / typecheck |
 | Web build / runtime | Web gate + build |
-| ログイン後の主要 UI flow | Web gate + Playwright |
-| API endpoint / usecase / domain / codec | API quality + unit test、対象なら coverage |
-| PostgreSQL repository / DB 前提 | API gate + DB quality |
-| Redis / OCR queue | API gate + Redis quality + queue 契約の required tests |
-| R2 image storage | API / DB gate + R2 quality + reconciler readiness |
-| Processing Worker production | format、Clippy、全 target / feature test、release build |
+| login、試合記録、OCR、比較、export の主要 UI flow | Web gate + 影響する利用者契約の Playwright |
+| API endpoint / usecase / domain / codec | API quality + 選択した unit / contract evidence |
+| PostgreSQL repository / DB 前提 | API gate + 変更経路の DB quality |
+| Redis / OCR queue | API gate + 変更経路の Redis quality / queue contract |
+| R2 image storage | API / DB gate + 変更経路の R2 quality / reconciler readiness |
+| Processing Worker production | format、Clippy、release build + 選択した target / feature evidence |
 | analysis algorithm version | Worker gate + release DB / control-plane compatibility |
-| worker DB / Redis / process / isolation | Worker gate +対象 control-plane、preemption、image smoke |
+| worker DB / Redis / process / isolation | Worker gate + 対象 control-plane、preemption、image smoke |
 | runtime / deploy config | public safety、image build / scan、runtime / memory / shutdown smoke、runtime Playwright |
 | Go deploy / ops tool | Go test / vet、shell collector を変えた場合は対応 script test |
 | docs only | `git diff --check`、`pnpm public:safety:check` |
 
-選択基準と oracle は `docs/test-rule.md`、現在の gate 構成は CI workflow を正本とする。変更分類を弱めて gate を避けない。
+表は変更時に選ぶ evidence の種類を示し、新しい test case の自動追加や各層での重複を要求しない。選択基準と oracle は `docs/test-rule.md`、現在の job 構成とまとめて実行する suite は CI workflow を実行上の正本とする。変更分類を弱めて gate を避けない。
 
-## 5. CI Gates / Release
+## 5. Developer Wait / Parallel Execution
+
+- 品質を保つ範囲で developer 待ち時間を最小化する。独立した job / test は並列実行し、同じ test 集合の通常実行と coverage 実行、重複 setup、不要な build を critical path に重ねない。
+- shared DB / schema、順序、resource 競合など直列性が意味を持つ gate だけを直列化し、理由と scope を設定の近くへ残す。実装都合の共有 fixture は隔離して並列化を優先する。
+- merge-ready duration は workflow / job timestamp から非 blocking に集計できる。first actionable failure は最初の failed step を暫定 proxy とし、flake、setup、provider failure、cancel、再実行を区別できるか評価してから導入する。
+- 数値予算は必須としない。設定する場合は代表期間の推計と変動幅を根拠にし、計測定義と同じ変更で導入する。local は代表環境で推計し、個人 telemetry を収集しない。
+
+## 6. CI Gates / Release
 
 - CI は変更範囲を fail closed で分類し、対象 subsystem の gate を通す。workflow、service、timeout、artifact path の一覧は docs へ写さない。
+- PR では compile / lint / generation などの pipeline integrity、選択した S / M evidence、変更境界に応じた DB / Redis contract、影響する主要 user flow を優先する。endurance、resource limit、live provider は、PR でしか検出できない変更を除き release evidence へ分離する。
+- retry-pass は green として扱ってよいが、test ID、最初の失敗、attempt 数を PR summary に表示し、trace / log を artifact に残す。retry の存在で最初の failure を隠さない。
 - release 候補は一度だけ build し、commit、設定、immutable artifact identity、digest、producer attempt を記録する。後続 smoke / deploy / rollback は同じ候補を使う。
 - 外部 action / provider の値は境界で検証・正規化し、consumer 用の表現を推測しない。workflow 再実行時も current attempt から候補 identity を再計算しない。
 - mutable tag や cache hit を provenance / 検証成功の根拠にしない。
-- analysis candidate 作成と production 昇格、backfill、audit は別操作とする。人間向け手順は `private/ops/runbook.md` を正本とする。
+- analysis candidate 作成と production 昇格、backfill、audit は別操作とする。人間の承認、復旧判断、操作順は `private/ops/runbook.md` を正本とし、public な test contract へ複製しない。
 - 公開 edge、内部 health、機能応答、resource / performance は別の観測点・証拠として扱う。gate のために security policy を弱めない。
 - 共有 credential の rotation は、更新前に全 consumer と secret store を列挙し、同じ保守単位で更新する。各 consumer が更新後の credential で新規接続し、必要な runtime peer が ready になった証拠を揃えるまで完了としない。
 
-## 6. Production rollback verification
+## 7. Production rollback verification
 
 - rollback 対象は immutable provenance を再検証できる成功済み候補に限る。来歴を推測で復元しない。
 - 通常 deploy と同じ排他・承認・validator 境界を使い、target 世代で必須だった core check を確認する。
-- 変更対象の UI、API、usecase、engine を列挙し、差分と回帰 test が全実行経路を覆うことを確認する。
+- 変更対象の UI、API、usecase、engine と、利用者影響のある production 経路を列挙し、選択した回帰 evidence がその経路を直接通すことを確認する。対象外の経路は確認済みと扱わない。
 - deploy 成功、health、機能応答、性能回復を別々に判定する。観測不能な項目は未検証と報告する。
 
-## 7. Git
+## 8. Git
 
 branch / commit の形式は `<type>/<short-description>` / `<type>: <概要>` とし、type は `feat`、`fix`、`refactor`、`test`、`docs`、`chore` から選ぶ。PR は変更理由と gate が一つの単位で確認できる大きさに保ち、squash merge を基本とする。

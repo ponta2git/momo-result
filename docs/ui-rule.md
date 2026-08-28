@@ -2,7 +2,7 @@
 
 目的: momo-result の全画面で、同じ意味・状態・操作を一貫して表し、記録、確認、比較、出力を迷わず完了できるようにする。
 
-本書は Web の横断的な意味表現、視覚階層、操作文法、安全性、状態表示の正本である。業務用語・状態遷移は `docs/domain-rule.md`、画面固有の目的・順序・指標は対象要求、実装境界は `docs/architecture.md`、検証方針は `docs/test-rule.md`、実行コマンドは `docs/dev-rule.md` を正本とする。コンポーネント、トークン、フォーマッターの現在値は実装と checker を正本とし、本書へ複製しない。
+本書は Web の横断的な意味表現、視覚階層、操作文法、安全性、状態表示の正本である。業務用語・状態遷移は `docs/domain-rule.md`、画面固有の目的・順序・指標は対象要求、実装境界は `docs/architecture.md`、検証方針は `docs/test-rule.md`、実行コマンドは `docs/dev-rule.md` を正本とする。コンポーネント、トークン、フォーマッターの現在値は実装を正本とし、本書へ複製しない。lint、test、checker は本書への適合を限定された範囲で観測する証拠であり、UI 規則の正本ではない。
 
 規則が競合する場合は、正確性・データ保全・利用者の制御、アクセシビリティとタスク完遂、意味の一貫性、視覚上の洗練の順で判断する。統一感とは同じ意味が同じ原則で働くことであり、異なる文脈を同じ外形へ押し込むことではない。
 
@@ -187,10 +187,12 @@
 
 ## 9. 検証
 
-- UI checker は raw palette、undefined token、arbitrary spacing、small hit target、motion、reduced-motion など決定可能な規則を検査する。
-- component test は state matrix、keyboard、focus、accessible name、local error、pending 中の重複操作を実操作で固定する。
-- 主要 flow は Playwright で、対応する最小幅、代表的なモバイル、タブレット、PC の主要状態を確認し、URL、request、保存、download、主要結果を主 oracle とする。意図しない横 scroll、safe area、focus 復帰、dialog / disclosure の位置変化も確認する。
+- 静的検査は、未定義 token、禁止 import、構文上確定する依存境界など、標準 lint / build が低誤検出で判定でき、違反が利用者価値へ影響する規則に限定する。UI 全体の適合を一つの独自 source checker で保証したと扱わない。
+- raw value の有無、一定間隔の倍数、shadow や `z-index` の書式、近似色、表の alignment といった表層規則は、それ単独では blocking gate にしない。本書の意味、階層、操作、アクセシビリティへ実害が現れる場合に、実装規約または visual review で扱う。
+- component test は、shared primitive と利用者価値が現れる component を中心に、選択した state matrix、keyboard、focus、accessible name、local error、pending 中の重複操作、reduced motion 時の挙動を実操作で固定する。rendered size が必要な hit target は代表 flow の browser / visual evidence で確認し、各 component へ同じ case を複製しない。
+- 固定メンバー、プレー順、状態・意味 token のように複数画面が消費する対応関係は、共通の型・定義を実装上の正本とし、その consumer 契約を unit / component test で代表確認する。各画面の source 文字列を横断走査しない。
+- 主要 flow は Playwright で、変更が影響する layout mode の代表 viewport と主要状態を確認し、URL、request、保存、download、主要結果を主 oracle とする。responsive behavior を変える場合は対応する最小幅を含め、意図しない横 scroll、safe area、focus 復帰、dialog / disclosure の位置変化も確認する。同じ layout mode の近接幅を一律に重複実行しない。
 - screenshot は補助とし、視覚レビューでは hierarchy、読み幅、関係的余白、product specificity、restraint、structural fit を確認する。初見点検と cognitive walkthrough で、目的、現在地、主要操作を説明できるか確認する。
 - 各利用段階の代表画面は、3秒見た利用者が「いま見る対象」と「次の1操作」を説明できることを確認する。grayscale / blur でも主役が残ること、固定メンバーとプレー順が同じ色順を共有しても色なしで役割を区別できること、順位がどちらの sequence にも見えないこと、通常状態で信頼性の注意が出ないこと、同じ事実や内部都合を反復していないことも確認する。
 - OCR 結果修正と手入力は、現行 baseline に対して画像と field の対応理解、修正完了時間、誤修正、操作数を比較し、同等以上であることを確認する。
-- UI 変更の完了時は、対象要求、実行正本、checker、component test、必要な Playwright が同じ規則を検証していることを確認する。
+- UI 変更の完了時は、対象要求と本書から守る利用者価値を特定し、静的検査、component test、Playwright、visual review から必要な最小の証拠を選ぶ。すべての規則をすべての手段で重複検証しない。

@@ -11,12 +11,12 @@
 | job、artifact、version、公開・復旧 | 本書 |
 | runtime / parent-child | `docs/architecture.md` |
 | DB / migration | `docs/db-rule.md` と `../momo-db` |
-| artifact / queue / HTTP shape | JSON Schema、共有fixture、Tapir endpoint、`apps/api/openapi.yaml` |
+| artifact / queue / HTTP shape | JSON Schema、共有fixture、Tapir endpoint。`apps/api/openapi.yaml` / Web型は派生物 |
 | UI / test / command | `docs/ui-rule.md`、`docs/test-rule.md`、`docs/dev-rule.md` |
 
 本書は指標の数式、推薦候補、画面構成、wire fieldを複製しない。
 
-artifact resourceのJSON本文は共有fixtureとproducer / reader validatorを正本とする。Tapir / OpenAPIはHTTP envelopeと取得経路を表し、raw JSON本文の全ネストを代替しない。
+artifact resource の JSON 本文は共有 fixture と producer / reader validator を正本とする。Tapir endpoint は HTTP envelope と取得経路の正本であり、生成 OpenAPI はその派生物とする。どちらも raw JSON 本文の全ネストを代替しない。
 
 provider固有値、費用、実測、昇格・復旧手順は public docs へ置かず、private release evidence / runbook を正本とする。
 

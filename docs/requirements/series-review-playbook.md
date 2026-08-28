@@ -9,7 +9,7 @@
 | プレイブックの候補、選定、文面、表示 | 本書 |
 | 基礎指標、scope、詳細分析 | `docs/requirements/series-comparison.md` |
 | 非同期計算、artifact、状態、公開・復旧 | `docs/requirements/series-analysis-batch.md` |
-| HTTP / artifact shape | OpenAPI、JSON Schema、共有fixture |
+| HTTP / artifact shape | Tapir endpoint、JSON Schema、共有fixture。OpenAPI / Web型は派生物 |
 | 開催単位の事実表示 | `docs/requirements/held-event-detail.md` |
 
 本書は基礎指標の数式、job / artifact lifecycle、endpoint path、DTO field、component構成を複製しない。

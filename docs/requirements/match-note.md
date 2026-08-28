@@ -11,7 +11,7 @@
 | 開催詳細の情報設計 | `docs/requirements/held-event-detail.md` |
 | 戦績分析の入力 revision と再計算 | `docs/requirements/series-analysis-batch.md` |
 | UIの共通操作、状態、アクセシビリティ | `docs/ui-rule.md` |
-| HTTP wire、DB shape、実装境界 | OpenAPI、momo-db migration、`docs/architecture.md`、`docs/db-rule.md` |
+| HTTP wire、DB shape、実装境界 | Tapir endpoint、momo-db migration、`docs/architecture.md`、`docs/db-rule.md`。OpenAPI / Web型は派生物 |
 
 本書は特定のテーブル構造やendpoint pathを定めない。実装契約は、ここで定めるメモ専用更新と分析入力更新の分離を保ったうえで各実行正本に置く。
 
@@ -139,7 +139,7 @@
 - 一時的な保存失敗では既存の保存済み本文を維持し、未保存本文を保存済み表示へ反映しない。処理結果が未確定の通信失敗は同じidempotency key、本文、versionで再試行し、確定した失敗または利用者が本文を変更した後は同じkeyを流用しない。
 - mutation成功後は、試合詳細のメモ状態、開催詳細の閲覧projection、試合一覧のメモ有無が同じ保存状態を表すようにする。一方の閲覧用dataだけを更新し、他方へ旧本文または誤った有無を恒久的に残さない。
 - 試合削除と競合したメモ更新は対象なしとして失敗し、削除済み試合や孤立メモを復元しない。
-- HTTP field名、status、error envelopeはOpenAPIを正本とする。WebとAPIで文字数とabsenceの意味を揃え、API、repository、DBでabsenceとversionの意味を揃える。
+- HTTP field 名、status、error envelope は Tapir endpoint を正本とし、生成 OpenAPI と Web 型へ同期する。Web と API で文字数と absence の意味を揃え、API、repository、DB で absence と version の意味を揃える。
 
 ## 8. Compatibility / Feasibility Boundary
 

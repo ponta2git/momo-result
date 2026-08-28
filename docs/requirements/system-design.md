@@ -33,7 +33,7 @@
 - JSON mutationは同一操作のretryを冪等にし、処理中とpayload不一致を別の競合として扱う。
 - request、response、exportは件数・byte数・複雑性の上限を持ち、上限超過を明示的に拒否する。
 
-具体的なframework、API shape、status code、上限値はsource、OpenAPI、runtime設定を正本とする。
+具体的な framework、API shape、status code、上限値は endpoint / source と runtime 設定を正本とする。生成 OpenAPI と Web 型は内部 consumer 向けの派生物として同期する。
 
 ## 3. Asynchronous Processing
 

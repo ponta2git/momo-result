@@ -9,7 +9,7 @@
 | 本ページのscope、指標の意味、表示上の判断 | 本書 |
 | 「次戦に備える」の行動プレイブック | `docs/requirements/series-review-playbook.md` |
 | 非同期計算、artifact、状態、管理、公開・復旧 | `docs/requirements/series-analysis-batch.md` |
-| HTTP / artifact shape | OpenAPI、JSON Schema、共有fixture |
+| HTTP / artifact shape | Tapir endpoint、JSON Schema、共有fixture。OpenAPI / Web型は派生物 |
 | UI共通規約、test、command | `docs/ui-rule.md`、`docs/test-rule.md`、`docs/dev-rule.md` |
 
 endpoint path、DTO field、component構成、query cache key、閾値の配置場所は実装・schemaを正本とし、本書へ複製しない。

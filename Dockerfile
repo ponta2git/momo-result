@@ -25,6 +25,7 @@ COPY apps/web/index.html apps/web/index.html
 COPY apps/web/tsconfig.json apps/web/tsconfig.json
 COPY apps/web/vite.config.ts apps/web/vite.config.ts
 COPY apps/web/public apps/web/public
+COPY apps/web/scripts/check-built-theme.mjs apps/web/scripts/check-built-theme.mjs
 COPY apps/web/src apps/web/src
 RUN pnpm --filter web build
 

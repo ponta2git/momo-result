@@ -44,7 +44,7 @@
 - 楽観更新は pending、success、server correction、rollback、retry、同時 mutation を decision table にする。安定した identity、重複操作の抑止、局所 error、canonical data への収束を主 oracle とし、presence や opacity を状態の唯一の oracle にしない。
 - motion を伴う操作は、通常、途中で逆方向へ変更、unmount、連打、animation 完了 callback 未実行、`prefers-reduced-motion` の各条件で同じ application state と操作可能性へ収束することを、制御した state と clock で検証する。duration の経過だけを待つ test や screenshot 差分だけを主 oracle にしない。
 - viewport を使う図表は、初回と再進入では完成値、表示中の同一 identity の値変更だけが補間対象、表示領域外の更新は再進入時に再生されないことを固定する。IntersectionObserver と clock は test から制御し、実時間 scroll や sleep に依存しない。
-- Motion 導入時は checker で provider / feature bundle、`m` component、import layer、CSS loop の例外を固定し、`motion` component、`domAnimation` / `domMax`、Motion の layout / shared layout、drag / pan、初期 scope での `AnimatePresence`、有限 CSS motion の追加を検出する。
+- Motion 導入時は checker で provider / feature bundle、`m` component、import layer、CSS loop の例外を固定し、`motion` component、`domAnimation` / `domMax`、Motion の layout / shared layout、drag / pan、shared dialog / toast の非対話的 exit 以外の `AnimatePresence`、有限 CSS motion の追加を検出する。
 
 ### Test Foundation / Doubles
 

@@ -22,8 +22,16 @@ const sharedActionPrimitiveFiles = new Set([
 
 const motionImportContracts = new Map([
   ["shared/ui/data/Collapsible.tsx", new Set(["m"])],
-  ["shared/ui/feedback/Dialog.tsx", new Set(["m", "useReducedMotionConfig"])],
-  ["shared/ui/feedback/ToastRenderer.tsx", new Set(["m", "useReducedMotionConfig"])],
+  [
+    "shared/ui/feedback/Dialog.tsx",
+    new Set(["AnimatePresence", "m", "useIsPresent", "useReducedMotionConfig"]),
+  ],
+  ["shared/ui/feedback/ProgressBar.tsx", new Set(["m", "useReducedMotionConfig"])],
+  [
+    "shared/ui/feedback/ToastRenderer.tsx",
+    new Set(["AnimatePresence", "m", "useIsPresent", "useReducedMotionConfig"]),
+  ],
+  ["shared/ui/forms/Tabs.tsx", new Set(["m", "useReducedMotionConfig"])],
   ["shared/ui/motion/AppMotionProvider.tsx", new Set(["domMin", "LazyMotion", "MotionConfig"])],
   ["shared/ui/motion/transitions.ts", new Set(["Transition"])],
 ]);

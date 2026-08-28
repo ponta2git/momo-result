@@ -160,6 +160,45 @@ export function BadMotion() {
   );
 });
 
+test("allows presence only in the approved non-interactive exit primitives", () => {
+  const sources = new Map([
+    ["styles.css", ""],
+    [
+      "shared/ui/feedback/Dialog.tsx",
+      `import { AnimatePresence, m, useIsPresent, useReducedMotionConfig } from "motion/react";
+export function Dialog() {
+  const present = useIsPresent();
+  const reduce = useReducedMotionConfig();
+  return <AnimatePresence>{present ? <m.div animate={{ opacity: reduce ? 1 : 0 }} /> : null}</AnimatePresence>;
+}`,
+    ],
+    [
+      "features/example/Presence.tsx",
+      `import { AnimatePresence } from "motion/react";
+export function Presence() { return <AnimatePresence />; }`,
+    ],
+  ]);
+
+  const violations = collectUiPolicyViolations(sources);
+
+  assert.equal(
+    violations.some(
+      (violation) =>
+        violation.path === "shared/ui/feedback/Dialog.tsx" &&
+        violation.rule === "motion-feature-boundary",
+    ),
+    false,
+  );
+  assert.equal(
+    violations.some(
+      (violation) =>
+        violation.path === "features/example/Presence.tsx" &&
+        violation.rule === "motion-import-boundary",
+    ),
+    true,
+  );
+});
+
 test("detects recursive cross-family aliases and forbidden UI boundaries", async () => {
   const violations = collectUiPolicyViolations(await readFixture("invalid"));
   const rules = new Set(violations.map((violation) => violation.rule));

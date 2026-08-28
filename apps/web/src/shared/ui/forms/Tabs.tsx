@@ -1,8 +1,10 @@
 import { Tabs as BaseTabs } from "@base-ui/react/tabs";
+import { m, useReducedMotionConfig } from "motion/react";
 import { createContext, useContext } from "react";
 import type { ComponentPropsWithoutRef, Ref } from "react";
 
 import { cn } from "@/shared/ui/cn";
+import { instantMotionTransition, politeMotionTransition } from "@/shared/ui/motion/transitions";
 
 export type TabsVariant = "filled" | "underline";
 
@@ -40,6 +42,34 @@ const TabsVariantContext = createContext<TabsVariant>("filled");
 export const TabsRoot = BaseTabs.Root;
 export const TabsPanel = BaseTabs.Panel;
 
+function UnderlineSelectionIndicator() {
+  const reduceMotion = useReducedMotionConfig();
+
+  return (
+    <BaseTabs.Indicator
+      className="pointer-events-none absolute -bottom-px left-0 h-0.5 bg-[var(--color-action)]"
+      render={(props, state) => {
+        const target =
+          state.activeTabPosition && state.activeTabSize
+            ? { width: state.activeTabSize.width, x: state.activeTabPosition.left }
+            : undefined;
+        return (
+          <m.span
+            {...(target ? { animate: target } : {})}
+            className={props.className}
+            hidden={props.hidden}
+            initial={false}
+            ref={props.ref}
+            role={props.role}
+            suppressHydrationWarning={props.suppressHydrationWarning}
+            transition={reduceMotion ? instantMotionTransition : politeMotionTransition}
+          />
+        );
+      }}
+    />
+  );
+}
+
 /**
  * Owns the shared visual grammar for a related set of views. Feature code still
  * supplies the accessible name and decides whether arrow-key focus activates a tab.
@@ -60,7 +90,7 @@ export function TabsList({
         {...props}
         ref={ref}
         className={cn(
-          "flex max-w-full min-w-0",
+          "relative flex max-w-full min-w-0",
           shouldWrap ? "flex-wrap" : "flex-nowrap overflow-x-auto overflow-y-hidden",
           variant === "filled"
             ? "gap-2"
@@ -69,6 +99,7 @@ export function TabsList({
         )}
       >
         {children}
+        {variant === "underline" ? <UnderlineSelectionIndicator /> : null}
       </BaseTabs.List>
     </TabsVariantContext.Provider>
   );
@@ -100,7 +131,7 @@ export function TabsTab({ className, ref, ...props }: TabsTabProps) {
             : cn(
                 "-mb-px border-b-2 focus-visible:outline-offset-[-2px]",
                 state.active
-                  ? "border-[var(--color-action)] text-[var(--color-text-primary)]"
+                  ? "border-transparent text-[var(--color-text-primary)]"
                   : cn(
                       "border-transparent text-[var(--color-text-secondary)]",
                       state.disabled

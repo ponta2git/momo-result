@@ -100,6 +100,7 @@ describe("Tabs", () => {
     const second = screen.getByRole("tab", { name: "次" });
 
     expect(list).toHaveClass(
+      "relative",
       "flex-nowrap",
       "overflow-x-auto",
       "border-b",
@@ -107,10 +108,15 @@ describe("Tabs", () => {
     );
     expect(first).toHaveClass(
       "border-b-2",
-      "border-[var(--color-action)]",
+      "border-transparent",
       "text-[var(--color-text-primary)]",
     );
     expect(second).toHaveClass("border-transparent", "text-[var(--color-text-secondary)]");
+    expect(list.querySelector('[role="presentation"]')).toHaveClass(
+      "absolute",
+      "h-0.5",
+      "bg-[var(--color-action)]",
+    );
   });
 
   it("allows a caller to override the variant-specific wrapping default", () => {

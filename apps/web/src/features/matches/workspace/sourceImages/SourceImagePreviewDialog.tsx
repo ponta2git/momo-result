@@ -7,13 +7,19 @@ import { Dialog } from "@/shared/ui/feedback/Dialog";
 type SourceImagePreviewDialogProps = {
   kind: SourceImageKind;
   onClose: () => void;
+  open: boolean;
   url: string;
 };
 
-export function SourceImagePreviewDialog({ kind, onClose, url }: SourceImagePreviewDialogProps) {
+export function SourceImagePreviewDialog({
+  kind,
+  onClose,
+  open,
+  url,
+}: SourceImagePreviewDialogProps) {
   const handleOpenChange = useCallback(
-    (open: boolean) => {
-      if (!open) {
+    (nextOpen: boolean) => {
+      if (!nextOpen) {
         onClose();
       }
     },
@@ -24,7 +30,7 @@ export function SourceImagePreviewDialog({ kind, onClose, url }: SourceImagePrev
     <Dialog
       backdropClassName="bg-[var(--color-backdrop)]/65"
       popupClassName="max-w-none p-0 px-3 py-6"
-      open
+      open={open}
       onOpenChange={handleOpenChange}
       surfaceClassName="max-w-4xl"
       title={`${sourceImageKindLabels[kind]}の拡大表示`}

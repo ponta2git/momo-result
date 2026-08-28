@@ -165,11 +165,18 @@ test("allows presence only in the approved non-interactive exit primitives", () 
     ["styles.css", ""],
     [
       "shared/ui/feedback/Dialog.tsx",
-      `import { AnimatePresence, m, useIsPresent, useReducedMotionConfig } from "motion/react";
+      `import { AnimatePresence, useReducedMotionConfig } from "motion/react";
 export function Dialog() {
-  const present = useIsPresent();
   const reduce = useReducedMotionConfig();
-  return <AnimatePresence>{present ? <m.div animate={{ opacity: reduce ? 1 : 0 }} /> : null}</AnimatePresence>;
+  return <AnimatePresence>{reduce ? null : <div />}</AnimatePresence>;
+}`,
+    ],
+    [
+      "shared/ui/feedback/DialogLayer.tsx",
+      `import { m, useIsPresent } from "motion/react";
+export function DialogLayer() {
+  const present = useIsPresent();
+  return present ? <m.div animate={{ opacity: 1 }} /> : null;
 }`,
     ],
     [

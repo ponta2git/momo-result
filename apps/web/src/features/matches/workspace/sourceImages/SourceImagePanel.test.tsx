@@ -354,6 +354,10 @@ describe("SourceImagePanel", () => {
     await user.click(within(dialog).getByRole("button", { name: "ダイアログを閉じる" }));
 
     expect(screen.queryByRole("dialog", { name: "総資産の拡大表示" })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "拡大" }));
+    expect(await screen.findAllByRole("dialog", { name: "総資産の拡大表示" })).toHaveLength(1);
+    expect(document.querySelectorAll(".momo-dialog-popup")).toHaveLength(1);
   });
 
   it("downloads a zip archive immediately when all source images are available", async () => {
@@ -436,6 +440,7 @@ describe("SourceImagePanel", () => {
     const confirmDialog = await screen.findByRole("dialog", {
       name: "元画像がすべてそろっていません",
     });
+    expect(document.querySelectorAll(".momo-dialog-popup")).toHaveLength(1);
     await user.click(within(confirmDialog).getByRole("button", { name: "保存する" }));
 
     await waitFor(() => expect(anchorClick.click).toHaveBeenCalledTimes(1));

@@ -192,6 +192,10 @@ describe("ui foundation", () => {
     await user.click(screen.getByRole("button", { name: "ダイアログを閉じる" }));
     expect(screen.queryByRole("dialog", { name: "試合を確定" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "開く" })).toHaveFocus();
+
+    await user.click(screen.getByRole("button", { name: "開く" }));
+    expect(screen.getAllByRole("dialog", { name: "試合を確定" })).toHaveLength(1);
+    expect(document.querySelectorAll(".momo-dialog-popup")).toHaveLength(1);
   });
 
   it("keeps transient toasts away from bottom actions", async () => {

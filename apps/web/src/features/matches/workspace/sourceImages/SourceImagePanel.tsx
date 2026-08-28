@@ -170,34 +170,33 @@ export function SourceImagePanel({
       {panel.previewKind && panel.previewUrl ? (
         <SourceImagePreviewDialog
           kind={panel.previewKind}
+          open={panel.previewOpen}
           url={panel.previewUrl}
           onClose={panel.handlePreviewClose}
         />
       ) : null}
 
-      {panel.archiveConfirmOpen ? (
-        <Dialog
-          open
-          title="元画像がすべてそろっていません"
-          onOpenChange={panel.handleArchiveDialogOpenChange}
-        >
-          <p className="text-sm leading-6 text-pretty text-[var(--color-text-secondary)]">
-            {`保存できる元画像は${panel.expectedImageCount}枚中${panel.availableImageCount}枚です。不足している画像はZIPに含まれません。このまま保存しますか？`}
-          </p>
-          <div className="mt-4 flex flex-wrap justify-end gap-2">
-            <Button variant="secondary" onClick={panel.handleArchiveCancel}>
-              キャンセル
-            </Button>
-            <Button
-              pending={panel.archiveSaving}
-              pendingLabel={archivePendingLabel}
-              onClick={panel.handleArchiveSaveConfirmed}
-            >
-              保存する
-            </Button>
-          </div>
-        </Dialog>
-      ) : null}
+      <Dialog
+        open={panel.archiveConfirmOpen}
+        title="元画像がすべてそろっていません"
+        onOpenChange={panel.handleArchiveDialogOpenChange}
+      >
+        <p className="text-sm leading-6 text-pretty text-[var(--color-text-secondary)]">
+          {`保存できる元画像は${panel.expectedImageCount}枚中${panel.availableImageCount}枚です。不足している画像はZIPに含まれません。このまま保存しますか？`}
+        </p>
+        <div className="mt-4 flex flex-wrap justify-end gap-2">
+          <Button variant="secondary" onClick={panel.handleArchiveCancel}>
+            キャンセル
+          </Button>
+          <Button
+            pending={panel.archiveSaving}
+            pendingLabel={archivePendingLabel}
+            onClick={panel.handleArchiveSaveConfirmed}
+          >
+            保存する
+          </Button>
+        </div>
+      </Dialog>
     </Card>
   );
 }

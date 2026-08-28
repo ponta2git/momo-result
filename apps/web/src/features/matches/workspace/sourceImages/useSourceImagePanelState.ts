@@ -42,7 +42,10 @@ export function useSourceImagePanelState({
   const states = useMemo(() => toSourceImageStates(sourceImages), [sourceImages]);
   const [activeKind, setActiveKind] = useState<SourceImageKind>(preferredKind ?? "total_assets");
   const [followMode, setFollowMode] = useState<"auto" | "fixed">("auto");
-  const [previewKind, setPreviewKind] = useState<SourceImageKind | null>(null);
+  const [previewDialog, setPreviewDialog] = useState<{
+    kind: SourceImageKind;
+    open: boolean;
+  } | null>(null);
   const [imageCache, setImageCache] = useState<SourceImageCache>({});
   const [imageRetrySequence, setImageRetrySequence] = useState(0);
   const [archiveConfirmOpen, setArchiveConfirmOpen] = useState(false);
@@ -71,6 +74,7 @@ export function useSourceImagePanelState({
     activeImage?.status === "ready" && activeImage.url === activeImageUrl
       ? activeImage.objectUrl
       : undefined;
+  const previewKind = previewDialog?.kind ?? null;
   const previewUrl = previewKind === activeKind ? displayUrl : undefined;
   const availableImageCount = states.filter((state) => state.status === "available").length;
   const expectedImageCount = sourceImageKinds.length;
@@ -241,13 +245,13 @@ export function useSourceImagePanelState({
         return;
       }
       previewTriggerRef.current = event.currentTarget;
-      setPreviewKind(activeState.kind);
+      setPreviewDialog({ kind: activeState.kind, open: true });
     },
     [activeState],
   );
 
   const handlePreviewClose = useCallback(() => {
-    setPreviewKind(null);
+    setPreviewDialog((current) => (current ? { ...current, open: false } : null));
     previewTriggerRef.current?.focus();
   }, []);
   const handleActiveImageRetry = useCallback(() => {
@@ -294,6 +298,7 @@ export function useSourceImagePanelState({
     handlePreviewOpen,
     handleSourceImageTabChange,
     previewKind,
+    previewOpen: previewDialog?.open ?? false,
     previewUrl,
   };
 }

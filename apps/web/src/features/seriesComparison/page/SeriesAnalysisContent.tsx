@@ -81,6 +81,10 @@ type SeriesAnalysisContentProps = {
 };
 
 type SeriesAnalysisBundle = Extract<SeriesAnalysisDisplayBundle, { kind: "analysis" }>;
+type DrilldownDialogState = {
+  open: boolean;
+  selection: SeriesAnalysisDrilldownSelection;
+};
 
 /**
  * Artifact payloads are immutable and their display bundle preserves reference identity. Keeping
@@ -160,7 +164,10 @@ function AnalysisViewContent({
 }) {
   // A drilldown belongs to one artifact/view. This subtree remounts when either identity changes,
   // while the tab lists remain mounted so their focus does not move back to the document.
-  const [drilldown, setDrilldown] = useState<SeriesAnalysisDrilldownSelection | null>(null);
+  const [drilldown, setDrilldown] = useState<DrilldownDialogState | null>(null);
+  const openDrilldown = (selection: SeriesAnalysisDrilldownSelection) => {
+    setDrilldown({ open: true, selection });
+  };
   const focusedItemIds = bundle.matchContext?.match?.focusedItemIds ?? noFocusedItemIds;
   const baseQuery: SeriesAnalysisQuery = {
     artifactId: bundle.aggregate.artifact.artifactId,
@@ -176,21 +183,21 @@ function AnalysisViewContent({
           <OverviewView
             focusedItemIds={focusedItemIds}
             response={bundle.aggregate}
-            onDrilldown={setDrilldown}
+            onDrilldown={openDrilldown}
           />
         ) : null}
         {bundle.view === "drivers" ? (
           <DriversView
             focusedItemIds={focusedItemIds}
             response={bundle.aggregate}
-            onDrilldown={setDrilldown}
+            onDrilldown={openDrilldown}
           />
         ) : null}
         {bundle.view === "flow" ? (
           <FlowView
             focusedItemIds={focusedItemIds}
             response={bundle.aggregate}
-            onDrilldown={setDrilldown}
+            onDrilldown={openDrilldown}
             onFocusMatch={onFocusMatch}
           />
         ) : null}
@@ -198,24 +205,26 @@ function AnalysisViewContent({
           <ContextView
             focusedItemIds={focusedItemIds}
             response={bundle.aggregate}
-            onDrilldown={setDrilldown}
+            onDrilldown={openDrilldown}
           />
         ) : null}
       </Suspense>
       {drilldown ? (
         <Dialog
           description="比較に使った試合を確認します。"
-          open
+          open={drilldown.open}
           popupClassName="max-w-[64rem]"
-          title={drilldownTitle(drilldown.metricId)}
+          title={drilldownTitle(drilldown.selection.metricId)}
           onOpenChange={(open) => {
-            if (!open) setDrilldown(null);
+            if (!open) {
+              setDrilldown((current) => (current ? { ...current, open: false } : null));
+            }
           }}
         >
           <Suspense fallback={<SeriesAnalysisDrilldownLoading />}>
             <SeriesAnalysisDrilldownContent
               baseQuery={baseQuery}
-              selection={drilldown}
+              selection={drilldown.selection}
               onArtifactExpired={onArtifactExpired}
             />
           </Suspense>

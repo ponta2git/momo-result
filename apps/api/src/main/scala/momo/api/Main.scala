@@ -19,12 +19,12 @@ object Main extends IOApp:
       ApiApp.wired[IO](config).flatMap(runtime =>
         EmberServerBuilder.default[IO].withHost(host).withPort(port).withHttp2
           .withHttpApp(RuntimeHttp2ProbeMiddleware[IO](runtime.app)).build
-          .tupleLeft(runtime.backgroundFailure)
-      ).use { case (backgroundFailure, _) =>
+          .as(runtime.backgroundFailure)
+      ).use { backgroundFailure =>
         val startedMessage = "momo_result_api_started " + s"host=${config.httpHost} " +
           s"port=${config.httpPort} " + s"env=${config.appEnv} http2=true"
         IO.delay(logger.info(startedMessage)) *>
-          awaitRuntimeFailure(backgroundFailure)
+          backgroundFailure
             .guarantee(IO.delay(logger.info("momo_result_api_stopping")))
       }
     }
@@ -41,6 +41,3 @@ object Main extends IOApp:
       .toRight(new IllegalArgumentException(s"HTTP_PORT is not a valid bind port: ${config.httpPort
           .toString}")),
   ).mapN((_, _)).liftTo[IO]
-
-  private[api] def awaitRuntimeFailure(backgroundFailure: IO[Nothing]): IO[Unit] =
-    IO.race(IO.never[Unit], backgroundFailure).void

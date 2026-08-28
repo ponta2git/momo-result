@@ -34,7 +34,7 @@ private[bootstrap] object InMemoryApiRuntime:
   def resource[F[_]: Async: SecureRandom](
       config: AppConfig,
       oauthClient: DiscordOAuthClient[F],
-  ): Resource[F, ApiApp.Runtime[F]] = RuntimeInfrastructure
+  ): Resource[F, ApiApp.WiredRuntime[F]] = RuntimeInfrastructure
     .resource[F](config, Clock[F].realTimeInstant)
     .flatMap { infrastructure =>
       given LoggerFactory[F] = Slf4jFactory.create[F]

@@ -9,7 +9,6 @@ import doobie.implicits.*
 import doobie.postgres.implicits.*
 
 import momo.api.adapters.postgres.PostgresMeta.given
-import momo.api.db.Database
 import momo.api.domain.*
 import momo.api.domain.ids.*
 import momo.api.repositories.*
@@ -142,7 +141,7 @@ end PostgresGameTitles
 final class PostgresGameTitlesRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
     extends GameTitlesRepository[F]:
   private val delegate: GameTitlesRepository[F] = GameTitlesRepository
-    .fromAlg(PostgresGameTitles.alg, Database.transactK(transactor))
+    .fromAlg(PostgresGameTitles.alg, transactor.trans)
 
   export delegate.*
 end PostgresGameTitlesRepository

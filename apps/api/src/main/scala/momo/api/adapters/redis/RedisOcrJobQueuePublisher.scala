@@ -9,51 +9,32 @@ import dev.profunktor.redis4cats.RedisCommands
 import momo.api.contracts.ocrworker.OcrWorkerJobMessageV2
 import momo.api.ports.queue.{OcrJobEnqueueRequest, OcrJobQueueHealthCheck, OcrJobQueuePublisher}
 
-trait RedisStreamClient[F[_]]:
-  def xadd(stream: String, fields: Map[String, String]): F[String]
-  def xlen(stream: String): F[Long]
-  def ping: F[Unit]
-
 final class RedisOcrJobQueuePublisher[F[_]: MonadThrow] private (
     stream: String,
-    client: RedisStreamClient[F],
+    commands: RedisCommands[F, String, String],
 ) extends OcrJobQueuePublisher[F]:
   override def publish(request: OcrJobEnqueueRequest): F[String] =
     OcrWorkerJobMessageV2.fromEnqueueRequest(request)
       .leftMap(reason => new IllegalArgumentException(s"invalid OCR v2 queue payload: $reason"))
-      .liftTo[F].flatMap(message => client.xadd(stream, message.fields))
+      .liftTo[F].flatMap(message => commands.unsafe(_.xadd(stream, message.fields.asJava)))
 
 object RedisOcrJobQueuePublisher:
-  def apply[F[_]: MonadThrow](
-      stream: String,
-      client: RedisStreamClient[F],
-  ): RedisOcrJobQueuePublisher[F] =
-    new RedisOcrJobQueuePublisher(stream, client)
-
   def fromCommands[F[_]: MonadThrow](
       stream: String,
       commands: RedisCommands[F, String, String],
   ): RedisOcrJobQueuePublisher[F] =
-    RedisOcrJobQueuePublisher(stream, Redis4CatsStreamClient(commands))
+    RedisOcrJobQueuePublisher(stream, commands)
 
   def healthProbeFromCommands[F[_]: Functor](
       deadLetterStream: String,
       commands: RedisCommands[F, String, String],
   ): OcrJobQueueHealthCheck[F] =
-    RedisOcrJobQueueHealthCheck(deadLetterStream, Redis4CatsStreamClient(commands))
-
-private final class Redis4CatsStreamClient[F[_]: Functor](
-    commands: RedisCommands[F, String, String]
-) extends RedisStreamClient[F]:
-  override def xadd(stream: String, fields: Map[String, String]): F[String] = commands
-    .unsafe(_.xadd(stream, fields.asJava))
-  override def xlen(stream: String): F[Long] = commands.unsafe[java.lang.Long](_.xlen(stream))
-    .map(_.longValue)
-  override def ping: F[Unit] = commands.ping.void
+    RedisOcrJobQueueHealthCheck(deadLetterStream, commands)
 
 private final class RedisOcrJobQueueHealthCheck[F[_]](
     deadLetterStream: String,
-    client: RedisStreamClient[F],
-) extends OcrJobQueueHealthCheck[F]:
-  override def ping: F[Unit] = client.ping
-  override def deadLetterLength: F[Long] = client.xlen(deadLetterStream)
+    commands: RedisCommands[F, String, String],
+)(using Functor[F]) extends OcrJobQueueHealthCheck[F]:
+  override def ping: F[Unit] = commands.ping.void
+  override def deadLetterLength: F[Long] = commands
+    .unsafe[java.lang.Long](_.xlen(deadLetterStream)).map(_.longValue)

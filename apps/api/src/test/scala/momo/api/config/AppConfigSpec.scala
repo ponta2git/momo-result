@@ -84,8 +84,12 @@ class AppConfigSpec extends CatsEffectSuite:
   test("toJdbcUrl rejects malformed DATABASE_URL without echoing credentials") {
     val result =
       DatabaseUrlConfig.toJdbcUrl("postgres://user:secret with spaces@db.example.com/mydb")
-    assert(result.left.exists(_.getMessage == "DATABASE_URL must be a valid Postgres URL."))
-    assert(!result.left.exists(_.getMessage.contains("secret")))
+    result match
+      case Right(value) => fail(s"expected malformed DATABASE_URL to fail: $value")
+      case Left(error) =>
+        assertEquals(error.getMessage, "DATABASE_URL must be a valid Postgres URL.")
+        assert(Option(error.getCause).isEmpty)
+        assert(!error.toString.contains("secret"))
   }
 
   test("ensureProdSslMode: appends sslmode=require in prod when missing") {
@@ -262,6 +266,34 @@ class AppConfigSpec extends CatsEffectSuite:
           assertEquals(r2.failedRecordRetention.toMinutes, 120L)
           assertEquals(r2.reconciliationBatchSize, 200)
           assert(!storage.toString.contains(secret))
+    }
+  }
+
+  test("configuration string representations redact credentials and infrastructure locations") {
+    load(prodEnv).map { result =>
+      val config = result.fold(error => fail(error.getMessage), identity)
+      val rendered = List(
+        config.toString,
+        config.auth.toString,
+        config.database.fold("")(_.toString),
+        config.redis.fold("")(_.toString),
+        config.sourceImageStorage.toString,
+      ).mkString("\n")
+
+      List(
+        "u:p",
+        "db.example.com",
+        "default:secret",
+        "redis.example.com",
+        "client-id",
+        "client-secret",
+        "state-signing-key",
+        "example.invalid",
+        "momo-test",
+        "test-access-key",
+        "test-secret-key",
+      ).foreach(secret => assert(!rendered.contains(secret), s"configuration exposed $secret"))
+      assert(rendered.contains("[REDACTED]"))
     }
   }
 
@@ -490,7 +522,9 @@ class AppConfigSpec extends CatsEffectSuite:
     (
       load(prodEnv + ("AUTH_CALLBACK_REDIRECT_PATH" -> "https://evil.example/")),
       load(prodEnv + ("AUTH_CALLBACK_REDIRECT_PATH" -> "//evil.example/")),
-    ).mapN { (absolute, schemeRelative) =>
+      load(prodEnv + ("AUTH_CALLBACK_REDIRECT_PATH" -> "/\\evil.example/")),
+      load(prodEnv + ("AUTH_CALLBACK_REDIRECT_PATH" -> "/safe\u0000unsafe")),
+    ).mapN { (absolute, schemeRelative, backslashRelative, controlCharacter) =>
       assert(
         absolute.left.exists(_.getMessage.contains("AUTH_CALLBACK_REDIRECT_PATH")),
         s"expected absolute redirect path to fail: $absolute",
@@ -498,6 +532,14 @@ class AppConfigSpec extends CatsEffectSuite:
       assert(
         schemeRelative.left.exists(_.getMessage.contains("AUTH_CALLBACK_REDIRECT_PATH")),
         s"expected scheme-relative redirect path to fail: $schemeRelative",
+      )
+      assert(
+        backslashRelative.left.exists(_.getMessage.contains("AUTH_CALLBACK_REDIRECT_PATH")),
+        s"expected backslash-relative redirect path to fail: $backslashRelative",
+      )
+      assert(
+        controlCharacter.left.exists(_.getMessage.contains("AUTH_CALLBACK_REDIRECT_PATH")),
+        s"expected control character redirect path to fail: $controlCharacter",
       )
     }
   }

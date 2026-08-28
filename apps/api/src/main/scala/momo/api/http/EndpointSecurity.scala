@@ -13,58 +13,45 @@ private[http] final class EndpointSecurity[F[_]: Async](
     policy: AuthPolicy[F],
     incidentLogger: AppError => F[Unit],
 ):
-  def authorizeRead[A](accountHeader: Option[String], request: ServerRequest)(
-      authorized: AuthenticatedAccount => F[Either[ProblemDetails.ProblemResponse, A]]
-  ): F[Either[ProblemDetails.ProblemResponse, A]] =
-    policy.authenticate(AuthRequestContext(accountHeader, None, request)).flatMap {
-      case Left(error) => Async[F].pure(Left(error))
-      case Right(member) => authorized(member)
-    }
+  def authorizeRead(
+      accountHeader: Option[String],
+      request: ServerRequest,
+  ): F[Either[ProblemDetails.ProblemResponse, AuthenticatedAccount]] =
+    policy.authenticate(AuthRequestContext(accountHeader, None, request))
 
-  def authorizeMutation[A](
+  def authorizeMutation(
       accountHeader: Option[String],
       csrfToken: Option[String],
       request: ServerRequest,
-  )(
-      authorized: AuthenticatedAccount => F[Either[ProblemDetails.ProblemResponse, A]]
-  ): F[Either[ProblemDetails.ProblemResponse, A]] =
-    policy.authenticate(AuthRequestContext(accountHeader, csrfToken, request)).flatMap {
-      case Left(error) => Async[F].pure(Left(error))
-      case Right(member) => authorized(member)
-    }
+  ): F[Either[ProblemDetails.ProblemResponse, AuthenticatedAccount]] =
+    policy.authenticate(AuthRequestContext(accountHeader, csrfToken, request))
 
-  def authorizeAdminMutation[A](
+  def authorizeAdminMutation(
       accountHeader: Option[String],
       csrfToken: Option[String],
       request: ServerRequest,
-  )(
-      authorized: AuthenticatedAccount => F[Either[ProblemDetails.ProblemResponse, A]]
-  ): F[Either[ProblemDetails.ProblemResponse, A]] =
-    authorizeMutation(accountHeader, csrfToken, request) { account =>
-      if account.isAdmin then authorized(account)
-      else Async[F].pure(Left(toProblem(AppError.Forbidden("Administrator access is required."))))
-    }
+  ): F[Either[ProblemDetails.ProblemResponse, AuthenticatedAccount]] = requireAdmin(
+    authorizeMutation(accountHeader, csrfToken, request)
+  )
 
-  def authorizeAdminRead[A](accountHeader: Option[String], request: ServerRequest)(
-      authorized: AuthenticatedAccount => F[Either[ProblemDetails.ProblemResponse, A]]
-  ): F[Either[ProblemDetails.ProblemResponse, A]] = authorizeRead(accountHeader, request) { account =>
-    if account.isAdmin then authorized(account)
-    else Async[F].pure(Left(toProblem(AppError.Forbidden("Administrator access is required."))))
-  }
-
-  def authorizeMasterManagementMutation[A](
+  def authorizeAdminRead(
       accountHeader: Option[String],
-      csrfToken: Option[String],
       request: ServerRequest,
-  )(
-      authorized: AuthenticatedAccount => F[Either[ProblemDetails.ProblemResponse, A]]
-  ): F[Either[ProblemDetails.ProblemResponse, A]] = authorizeAdminMutation(
-    accountHeader,
-    csrfToken,
-    request,
-  )(authorized)
+  ): F[Either[ProblemDetails.ProblemResponse, AuthenticatedAccount]] = requireAdmin(
+    authorizeRead(accountHeader, request)
+  )
 
-  def toProblem(error: AppError): ProblemDetails.ProblemResponse = ProblemDetails.from(error)
+  private def requireAdmin(
+      authenticated: F[Either[ProblemDetails.ProblemResponse, AuthenticatedAccount]]
+  ): F[Either[ProblemDetails.ProblemResponse, AuthenticatedAccount]] = authenticated.map(
+    _.flatMap(account =>
+      Either.cond(
+        account.isAdmin,
+        account,
+        problem(AppError.Forbidden("Administrator access is required.")),
+      )
+    )
+  )
 
   def toProblemF(error: AppError): F[ProblemDetails.ProblemResponse] = logIncident(error)
     .as(ProblemDetails.from(error))
@@ -84,6 +71,8 @@ private[http] final class EndpointSecurity[F[_]: Async](
 
   private def logIncident(error: AppError): F[Unit] =
     if HttpIncidentPolicy.shouldLog(error) then incidentLogger(error) else Async[F].unit
+
+  private def problem(error: AppError): ProblemDetails.ProblemResponse = ProblemDetails.from(error)
 
 object EndpointSecurity:
   private val logger = LoggerFactory.getLogger("momo.api.http.EndpointSecurity")

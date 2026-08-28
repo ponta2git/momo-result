@@ -45,7 +45,7 @@ private[bootstrap] object PostgresApiRuntime:
       config: AppConfig,
       db: DatabaseConfig,
       oauthClient: DiscordOAuthClient[F],
-  ): Resource[F, ApiApp.Runtime[F]] = (
+  ): Resource[F, ApiApp.WiredRuntime[F]] = (
     Database.transactor[F](db),
     RuntimeInfrastructure.resource[F](config, Clock[F].realTimeInstant),
   ).tupled.flatMap { (transactor, infrastructure) =>
@@ -219,8 +219,10 @@ private[bootstrap] object PostgresApiRuntime:
                 rateLimiters = infrastructure.rateLimiters,
               ),
             )
-          yield runtime.copy(
-            backgroundFailure = backgroundFailure.get.flatMap(Async[F].raiseError[Nothing])
+          yield runtime.copy(runtime =
+            runtime.runtime.copy(
+              backgroundFailure = backgroundFailure.get.flatMap(Async[F].raiseError[Nothing])
+            )
           )
         }
       }

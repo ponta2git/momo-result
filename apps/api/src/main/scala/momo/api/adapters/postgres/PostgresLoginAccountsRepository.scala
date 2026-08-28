@@ -10,7 +10,6 @@ import doobie.postgres.implicits.*
 import doobie.postgres.sqlstate
 
 import momo.api.adapters.postgres.PostgresMeta.given
-import momo.api.db.Database
 import momo.api.domain.LoginAccount
 import momo.api.domain.ids.{AccountId, UserId}
 import momo.api.errors.{AppError, AppException}
@@ -174,7 +173,7 @@ end PostgresLoginAccountAdministration
 final class PostgresLoginAccountsRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
     extends LoginAccountsRepository[F]:
   private val delegate: LoginAccountsRepository[F] = LoginAccountsRepository
-    .fromAlg(PostgresLoginAccounts.alg, Database.transactK(transactor))
+    .fromAlg(PostgresLoginAccounts.alg, transactor.trans)
 
   export delegate.*
 end PostgresLoginAccountsRepository
@@ -182,11 +181,10 @@ end PostgresLoginAccountsRepository
 final class PostgresLoginAccountAdministrationRepository[F[_]: MonadCancelThrow](
     transactor: Transactor[F]
 ) extends LoginAccountAdministrationRepository[F]:
-  private val transactK = Database.transactK(transactor)
-
   override def updateAndRevokeSessionsWhenDisabled(
       id: AccountId,
       data: UpdateLoginAccountData,
   ): F[LoginAccountAdministrationUpdateResult] =
-    transactK(PostgresLoginAccountAdministration.updateAndRevokeSessionsWhenDisabled(id, data))
+    PostgresLoginAccountAdministration
+      .updateAndRevokeSessionsWhenDisabled(id, data).transact(transactor)
 end PostgresLoginAccountAdministrationRepository

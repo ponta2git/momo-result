@@ -12,7 +12,6 @@ import doobie.postgres.implicits.*
 import doobie.postgres.sqlstate
 
 import momo.api.adapters.postgres.PostgresMeta.given
-import momo.api.db.Database
 import momo.api.domain.ids.HeldEventId
 import momo.api.domain.{HeldEvent, MatchDraftStatus, PageRequest, PagedResult}
 import momo.api.errors.{AppError, AppException}
@@ -88,7 +87,12 @@ object PostgresHeldEventDeletion:
   private def isForeignKeyViolation(state: SqlState): Boolean = state.value ==
     sqlstate.class23.FOREIGN_KEY_VIOLATION.value
 
-  private type DeletionState = (Boolean, Boolean, Boolean, Boolean)
+  private final case class DeletionState(
+      found: Boolean,
+      hasMatches: Boolean,
+      hasDrafts: Boolean,
+      deleted: Boolean,
+  )
 
   private def deleteDiscardedDrafts(id: HeldEventId): ConnectionIO[Int] = sql"""
     DELETE FROM match_drafts
@@ -124,10 +128,10 @@ object PostgresHeldEventDeletion:
           (SELECT has_drafts FROM reference_state) AS has_drafts,
           EXISTS(SELECT 1 FROM deleted) AS deleted
       """.query[DeletionState].unique.map {
-        case (_, _, _, true) => HeldEventDeletionResult.Deleted
-        case (false, _, _, false) => HeldEventDeletionResult.NotFound
-        case (true, true, _, false) => HeldEventDeletionResult.HasConfirmedMatches
-        case (true, false, true, false) => HeldEventDeletionResult.HasMatchDrafts
+        case state if state.deleted => HeldEventDeletionResult.Deleted
+        case state if !state.found => HeldEventDeletionResult.NotFound
+        case state if state.hasMatches => HeldEventDeletionResult.HasConfirmedMatches
+        case state if state.hasDrafts => HeldEventDeletionResult.HasMatchDrafts
         case _ => HeldEventDeletionResult.Referenced
       }.exceptSomeSqlState {
         case state if isForeignKeyViolation(state) =>
@@ -135,14 +139,10 @@ object PostgresHeldEventDeletion:
       }
 end PostgresHeldEventDeletion
 
-/**
- * Backwards-compatible class facade so existing wiring (`new PostgresHeldEventsRepository(xa)`)
- * keeps working while new callers may consume [[PostgresHeldEvents.alg]] in `ConnectionIO`.
- */
 final class PostgresHeldEventsRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
     extends HeldEventsRepository[F]:
   private val delegate: HeldEventsRepository[F] = HeldEventsRepository
-    .fromAlg(PostgresHeldEvents.alg, Database.transactK(transactor))
+    .fromAlg(PostgresHeldEvents.alg, transactor.trans)
 
   export delegate.*
 end PostgresHeldEventsRepository
@@ -150,7 +150,7 @@ end PostgresHeldEventsRepository
 final class PostgresHeldEventDeletionRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
     extends HeldEventDeletionRepository[F]:
   private val delegate: HeldEventDeletionRepository[F] = HeldEventDeletionRepository
-    .fromAlg(PostgresHeldEventDeletion.alg, Database.transactK(transactor))
+    .fromAlg(PostgresHeldEventDeletion.alg, transactor.trans)
 
   export delegate.*
 end PostgresHeldEventDeletionRepository

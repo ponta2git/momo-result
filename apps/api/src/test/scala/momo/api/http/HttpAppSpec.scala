@@ -33,7 +33,7 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
   private val prodHttpApp = ResourceFunFixture(prodHttpAppResource("momo-api-prod-http"))
   private val sessionBackedApp = ResourceFunFixture(
     tempDirectory("momo-api-session-auth").flatMap { dir =>
-      ApiApp.wired[IO](AppConfig(
+      ApiApp.wiredWithHandles[IO](AppConfig(
         appEnv = AppEnv.Test,
         httpHost = "127.0.0.1",
         httpPort = 0,
@@ -41,16 +41,17 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
         devMemberIds = List("member_ponta", "member_akane_mami", "member_otaka", "member_eu"),
       )).evalMap { wired =>
         for
-          account <- wired.loginAccounts.find(AccountId.unsafeFromString("account_ponta")).flatMap {
-            case Some(value) => IO.pure(value)
-            case None => IO.raiseError(new IllegalStateException("account_ponta is missing"))
-          }
-          created <- wired.createSession(account)
+          account <-
+            wired.handles.loginAccounts.find(AccountId.unsafeFromString("account_ponta")).flatMap {
+              case Some(value) => IO.pure(value)
+              case None => IO.raiseError(new IllegalStateException("account_ponta is missing"))
+            }
+          created <- wired.handles.createSession(account)
           tokens <- IO
             .fromOption(SessionCookieCodec.decode(created.cookieValue))(new IllegalStateException(
               "session cookie could not be decoded"
             ))
-        yield SessionBackedHttpApp(wired.app, created.cookieValue, tokens.csrfToken)
+        yield SessionBackedHttpApp(wired.runtime.app, created.cookieValue, tokens.csrfToken)
       }
     }
   )

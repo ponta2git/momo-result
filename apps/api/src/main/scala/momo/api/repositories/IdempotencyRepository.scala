@@ -43,8 +43,7 @@ enum IdempotencyReservation derives CanEqual:
   case AccountLimitExceeded
 
 /**
- * Pure algebra for the `idempotency_keys` table. Mirrors the `HeldEventsAlg` shape so the same
- * `fromAlg` / `liftIdentity` patterns work.
+ * Pure algebra for the `idempotency_keys` table.
  *
  * `F0` is the adapter-local effect for database-backed implementations and the user effect `F` for
  * the in-memory adapter.
@@ -89,27 +88,7 @@ trait IdempotencyAlg[F0[_]]:
 end IdempotencyAlg
 
 /** Transactional facade over [[IdempotencyAlg]], parameterised by the user effect `F`. */
-trait IdempotencyRepository[F[_]]:
-  def lookup(key: String, accountId: AccountId, endpoint: String): F[Option[IdempotencyRecord]]
-  def reserveWithinAccountLimit(
-      entry: IdempotencyRecord,
-      now: Instant,
-      activeKeyLimitPerAccount: Int,
-  ): F[IdempotencyReservation]
-  def complete(
-      key: String,
-      accountId: AccountId,
-      endpoint: String,
-      requestHash: Vector[Byte],
-      response: IdempotencyResponse,
-  ): F[Unit]
-  def abandon(
-      key: String,
-      accountId: AccountId,
-      endpoint: String,
-      requestHash: Vector[Byte],
-  ): F[Unit]
-  def cleanup(now: Instant): F[Int]
+trait IdempotencyRepository[F[_]] extends IdempotencyAlg[F]
 
 object IdempotencyRepository:
 
@@ -142,8 +121,4 @@ object IdempotencyRepository:
       ): F[Unit] = liftK(alg.abandon(key, accountId, endpoint, requestHash))
       def cleanup(now: Instant): F[Int] = liftK(alg.cleanup(now))
 
-  /** InMemory facade: the algebra already runs in `F`, so the lift is identity. */
-  def liftIdentity[F[_]](alg: IdempotencyAlg[F]): IdempotencyRepository[F] =
-    new IdempotencyRepository[F]:
-      export alg.*
 end IdempotencyRepository

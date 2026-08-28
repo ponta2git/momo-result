@@ -2,7 +2,7 @@ package momo.api.usecases.matchdrafts
 
 import java.time.Instant
 
-import cats.MonadThrow
+import cats.Monad
 import cats.data.EitherT
 import cats.syntax.all.*
 
@@ -17,8 +17,7 @@ import momo.api.repositories.{
   MatchDraftsRepository,
   SeasonMastersRepository
 }
-import momo.api.usecases.common.UseCaseField
-import momo.api.usecases.syntax.MatchDraftForeignKeyValidation
+import momo.api.usecases.common.{MatchReferenceValidation, UseCaseField}
 import momo.api.usecases.syntax.UseCaseSyntax.*
 
 final case class UpdateMatchDraftCommand(
@@ -33,7 +32,7 @@ final case class UpdateMatchDraftCommand(
     status: Option[MatchDraftStatus],
 )
 
-final class UpdateMatchDraft[F[_]: MonadThrow](
+final class UpdateMatchDraft[F[_]: Monad](
     heldEvents: HeldEventsRepository[F],
     gameTitles: GameTitlesRepository[F],
     mapMasters: MapMastersRepository[F],
@@ -41,6 +40,9 @@ final class UpdateMatchDraft[F[_]: MonadThrow](
     matchDrafts: MatchDraftsRepository[F],
     now: F[Instant],
 ):
+  private val referenceValidation =
+    MatchReferenceValidation(heldEvents, gameTitles, mapMasters, seasonMasters)
+
   def run(
       draftId: MatchDraftId,
       command: UpdateMatchDraftCommand,
@@ -104,7 +106,7 @@ final class UpdateMatchDraft[F[_]: MonadThrow](
   private def nextReferences(
       command: UpdateMatchDraftCommand,
       existing: MatchDraft,
-  ): MatchDraftForeignKeyValidation.Input = MatchDraftForeignKeyValidation.Input(
+  ): MatchReferenceValidation.Input = MatchReferenceValidation.Input(
     heldEventId = command.heldEventId.orElse(existing.heldEventId),
     gameTitleId = command.gameTitleId.orElse(existing.gameTitleId),
     mapMasterId = command.mapMasterId.orElse(existing.mapMasterId),
@@ -112,6 +114,5 @@ final class UpdateMatchDraft[F[_]: MonadThrow](
   )
 
   private def validateForeignKeys(
-      input: MatchDraftForeignKeyValidation.Input
-  ): EitherT[F, AppError, Unit] = MatchDraftForeignKeyValidation
-    .validate(heldEvents, gameTitles, mapMasters, seasonMasters)(input)
+      input: MatchReferenceValidation.Input
+  ): EitherT[F, AppError, Unit] = referenceValidation.validateOptional(input)

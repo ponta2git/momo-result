@@ -24,34 +24,39 @@ object ExportModule:
       allRateLimiter: RateLimiter[F],
       security: EndpointSecurity[F],
   ): List[ServerEndpoint[Any, F]] = List(SecuredEndpoint
-    .readLogic(security, ExportEndpoints.matches) { member =>
-      {
-        case (format, seasonMasterId, heldEventId, matchId) =>
-          val decoded =
-            for
-              exportFormat <- ExportCodec.parseFormat(format)
-              scope <- ExportCodec.parseScope(seasonMasterId, heldEventId, matchId)
-            yield (exportFormat, scope)
-          security.decode(decoded) { case (exportFormat, scope) =>
-            selectedRateLimiter(scope, rateLimiter, allRateLimiter)
-              .allow(rateLimitKey(scope, member.accountId.value)).flatMap {
-                case false => exportRateLimited(member.accountId.value, scope)
-                case true => exportMatches.run(exportFormat, scope)
-                    .flatMap {
-                      case Left(error) =>
-                        logRejected(member.accountId.value, exportFormat.wire, scope, error) *>
-                          security.toProblemF(error).map(Left(_))
-                      case Right(file) =>
-                        val bodyBytes = file.body.getBytes(StandardCharsets.UTF_8).length
-                        val event = s"match_export_completed accountId=${member.accountId.value} " +
-                          s"format=${exportFormat.wire} scope=${scope.filePart} " +
-                          s"bodyBytes=${bodyBytes.toString}"
-                        HttpDownloadHeaders.attachment(file.fileName) match
-                          case Left(error) => security.toProblemF(error).map(Left(_))
-                          case Right(disposition) => Async[F].delay(logger.info(event)) *>
-                              Async[F].pure(Right((disposition, file.contentType, file.body)))
-                    }
-              }
+    .readLogic(security, ExportEndpoints.matches) { member => input =>
+      val decoded =
+        for
+          exportFormat <- ExportCodec.parseFormat(input.format)
+          scope <- ExportCodec.parseScope(
+            seasonMasterId = input.seasonMasterId,
+            heldEventId = input.heldEventId,
+            matchId = input.matchId,
+          )
+        yield (exportFormat, scope)
+      security.decode(decoded) { case (exportFormat, scope) =>
+        selectedRateLimiter(scope, rateLimiter, allRateLimiter)
+          .allow(rateLimitKey(scope, member.accountId.value)).flatMap {
+            case false => exportRateLimited(member.accountId.value, scope)
+            case true => exportMatches.run(exportFormat, scope)
+                .flatMap {
+                  case Left(error) =>
+                    logRejected(member.accountId.value, exportFormat.wire, scope, error) *>
+                      security.toProblemF(error).map(Left(_))
+                  case Right(file) =>
+                    val bodyBytes = file.body.getBytes(StandardCharsets.UTF_8).length
+                    val event = s"match_export_completed accountId=${member.accountId.value} " +
+                      s"format=${exportFormat.wire} scope=${scope.filePart} " +
+                      s"bodyBytes=${bodyBytes.toString}"
+                    HttpDownloadHeaders.attachment(file.fileName) match
+                      case Left(error) => security.toProblemF(error).map(Left(_))
+                      case Right(disposition) => Async[F].delay(logger.info(event)) *>
+                          Async[F].pure(Right(ExportEndpoints.MatchExportOutput(
+                            contentDisposition = disposition,
+                            contentType = file.contentType,
+                            body = file.body,
+                          )))
+                }
           }
       }
     })

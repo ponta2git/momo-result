@@ -8,4 +8,6 @@ private[http] object HttpMethodPredicates:
 
   def isPost(method: Method): Boolean = method.name == Method.POST.name
 
-  def isMutating(method: Method): Boolean = MutatingMethodNames.contains(method.name)
+  def isMutating(method: Method): Boolean = isMutating(method.name)
+
+  def isMutating(methodName: String): Boolean = MutatingMethodNames.contains(methodName)

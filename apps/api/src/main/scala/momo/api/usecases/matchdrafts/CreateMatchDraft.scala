@@ -2,7 +2,7 @@ package momo.api.usecases.matchdrafts
 
 import java.time.Instant
 
-import cats.MonadThrow
+import cats.Monad
 import cats.data.EitherT
 import cats.syntax.all.*
 
@@ -16,9 +16,7 @@ import momo.api.repositories.{
   MatchDraftsRepository,
   SeasonMastersRepository
 }
-import momo.api.usecases.common.UseCaseField
-import momo.api.usecases.syntax.MatchDraftForeignKeyValidation
-import momo.api.usecases.syntax.UseCaseSyntax.*
+import momo.api.usecases.common.{MatchReferenceValidation, UseCaseField}
 
 final case class CreateMatchDraftCommand(
     heldEventId: Option[HeldEventId],
@@ -32,7 +30,7 @@ final case class CreateMatchDraftCommand(
     status: Option[MatchDraftStatus],
 )
 
-final class CreateMatchDraft[F[_]: MonadThrow](
+final class CreateMatchDraft[F[_]: Monad](
     heldEvents: HeldEventsRepository[F],
     gameTitles: GameTitlesRepository[F],
     mapMasters: MapMastersRepository[F],
@@ -41,6 +39,9 @@ final class CreateMatchDraft[F[_]: MonadThrow](
     now: F[Instant],
     nextId: F[MatchDraftId],
 ):
+  private val referenceValidation =
+    MatchReferenceValidation(heldEvents, gameTitles, mapMasters, seasonMasters)
+
   def run(
       command: CreateMatchDraftCommand,
       createdBy: AccountId,
@@ -80,7 +81,7 @@ final class CreateMatchDraft[F[_]: MonadThrow](
         updatedAt = at,
       ).left.map(err => AppError.ValidationFailed(err.message))
     )
-    _ <- matchDrafts.create(draft).recoverAppError
+    _ <- EitherT(matchDrafts.create(draft))
   yield draft).value
 
   private def validateMatchNo(
@@ -100,8 +101,8 @@ final class CreateMatchDraft[F[_]: MonadThrow](
     )
 
   private def validateForeignKeys(command: CreateMatchDraftCommand): EitherT[F, AppError, Unit] =
-    MatchDraftForeignKeyValidation.validate(heldEvents, gameTitles, mapMasters, seasonMasters)(
-      MatchDraftForeignKeyValidation.Input(
+    referenceValidation.validateOptional(
+      MatchReferenceValidation.Input(
         heldEventId = command.heldEventId,
         gameTitleId = command.gameTitleId,
         mapMasterId = command.mapMasterId,

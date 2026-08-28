@@ -13,10 +13,11 @@ private[http] object HttpProblemResponse:
   def fromError[F[_]](error: AppError): Response[F] = fromProblem(ProblemDetails.from(error))
 
   def fromProblem[F[_]](problem: ProblemDetails.ProblemResponse): Response[F] =
-    val (status, retryAfter, body) = problem
-    val response = Response[F](Status.fromInt(status.code).getOrElse(Status.InternalServerError))
-      .withEntity(body.asJson)
+    val response = Response[F](
+      Status.fromInt(problem.status.code).getOrElse(Status.InternalServerError)
+    )
+      .withEntity(problem.body.asJson)
       .putHeaders(`Content-Type`(MediaType.application.json))
-    retryAfter.fold(response)(value =>
+    problem.retryAfter.fold(response)(value =>
       response.putHeaders(Header.Raw(CIString("Retry-After"), value))
     )

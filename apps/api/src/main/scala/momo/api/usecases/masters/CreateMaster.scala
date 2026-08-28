@@ -2,7 +2,7 @@ package momo.api.usecases.masters
 
 import java.time.Instant
 
-import cats.MonadThrow
+import cats.Monad
 import cats.data.EitherT
 
 import momo.api.domain.ids.*
@@ -14,7 +14,7 @@ import momo.api.usecases.syntax.UseCaseSyntax.*
 
 final case class CreateGameTitleCommand(id: GameTitleId, name: String, layoutFamily: String)
 
-final class CreateGameTitle[F[_]: MonadThrow](titles: GameTitlesRepository[F], now: F[Instant]):
+final class CreateGameTitle[F[_]: Monad](titles: GameTitlesRepository[F], now: F[Instant]):
   def run(command: CreateGameTitleCommand): F[Either[AppError, GameTitle]] =
     val validated =
       for
@@ -24,7 +24,7 @@ final class CreateGameTitle[F[_]: MonadThrow](titles: GameTitlesRepository[F], n
       yield (GameTitleId.unsafeFromString(id), name, layoutFamily)
 
     validated match
-      case Left(err) => MonadThrow[F].pure(Left(err))
+      case Left(err) => Monad[F].pure(Left(err))
       case Right((id, name, layoutFamily)) => (for
           created <- EitherT.liftF[F, AppError, Instant](now)
           title = GameTitle(
@@ -34,12 +34,12 @@ final class CreateGameTitle[F[_]: MonadThrow](titles: GameTitlesRepository[F], n
             displayOrder = 0,
             createdAt = created,
           )
-          inserted <- titles.createWithNextDisplayOrder(title).recoverAppError
+          inserted <- EitherT(titles.createWithNextDisplayOrder(title))
         yield inserted).value
 
 final case class CreateMapMasterCommand(id: MapMasterId, gameTitleId: GameTitleId, name: String)
 
-final class CreateMapMaster[F[_]: MonadThrow](
+final class CreateMapMaster[F[_]: Monad](
     titles: GameTitlesRepository[F],
     maps: MapMastersRepository[F],
     now: F[Instant],
@@ -53,7 +53,7 @@ final class CreateMapMaster[F[_]: MonadThrow](
       yield (MapMasterId.unsafeFromString(id), GameTitleId.unsafeFromString(gameTitleId), name)
 
     validated match
-      case Left(err) => MonadThrow[F].pure(Left(err))
+      case Left(err) => Monad[F].pure(Left(err))
       case Right((id, gameTitleId, name)) => (for
           _ <- titles.find(gameTitleId).orNotFound("game_title", gameTitleId.value)
           created <- EitherT.liftF[F, AppError, Instant](now)
@@ -64,7 +64,7 @@ final class CreateMapMaster[F[_]: MonadThrow](
             displayOrder = 0,
             createdAt = created,
           )
-          inserted <- maps.createWithNextDisplayOrder(mapMaster).recoverAppError
+          inserted <- EitherT(maps.createWithNextDisplayOrder(mapMaster))
         yield inserted).value
 
 final case class CreateSeasonMasterCommand(
@@ -73,7 +73,7 @@ final case class CreateSeasonMasterCommand(
     name: String,
 )
 
-final class CreateSeasonMaster[F[_]: MonadThrow](
+final class CreateSeasonMaster[F[_]: Monad](
     titles: GameTitlesRepository[F],
     seasons: SeasonMastersRepository[F],
     now: F[Instant],
@@ -87,7 +87,7 @@ final class CreateSeasonMaster[F[_]: MonadThrow](
       yield (SeasonMasterId.unsafeFromString(id), GameTitleId.unsafeFromString(gameTitleId), name)
 
     validated match
-      case Left(err) => MonadThrow[F].pure(Left(err))
+      case Left(err) => Monad[F].pure(Left(err))
       case Right((id, gameTitleId, name)) => (for
           _ <- titles.find(gameTitleId).orNotFound("game_title", gameTitleId.value)
           created <- EitherT.liftF[F, AppError, Instant](now)
@@ -98,5 +98,5 @@ final class CreateSeasonMaster[F[_]: MonadThrow](
             displayOrder = 0,
             createdAt = created,
           )
-          inserted <- seasons.createWithNextDisplayOrder(seasonMaster).recoverAppError
+          inserted <- EitherT(seasons.createWithNextDisplayOrder(seasonMaster))
         yield inserted).value

@@ -14,12 +14,7 @@ trait OcrJobsAlg[F0[_]]:
   def cancelQueued(jobId: OcrJobId, now: Instant): F0[Boolean]
   def cancelQueuedByDraftIds(draftIds: List[OcrDraftId], now: Instant): F0[Int]
 
-trait OcrJobsRepository[F[_]]:
-  def find(jobId: OcrJobId): F[Option[OcrJob]]
-  def countActive: F[Long]
-  def markFailed(jobId: OcrJobId, failure: OcrFailure, now: Instant): F[Unit]
-  def cancelQueued(jobId: OcrJobId, now: Instant): F[Boolean]
-  def cancelQueuedByDraftIds(draftIds: List[OcrDraftId], now: Instant): F[Int]
+trait OcrJobsRepository[F[_]] extends OcrJobsAlg[F]
 
 object OcrJobsRepository:
   def fromAlg[F0[_], F[_]](alg: OcrJobsAlg[F0], liftK: F0 ~> F): OcrJobsRepository[F] =

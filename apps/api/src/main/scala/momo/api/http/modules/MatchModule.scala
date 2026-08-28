@@ -73,53 +73,42 @@ object MatchModule:
           )
       }
     },
-    SecuredEndpoint.readLogic(security, MatchesEndpoints.list) { member =>
-      {
-        case (
-              heldEventId,
-              gameTitleId,
-              seasonMasterId,
-              status,
-              kind,
-              pageSize,
-              cursor,
-              sort,
-            ) =>
-          ReadRateLimit.enforce(readRateLimiter, member.accountId.value, HttpOperation.ListMatches) {
-            security.decode(MatchListCodec.toListCommand(
-              heldEventId,
-              gameTitleId,
-              seasonMasterId,
-              status,
-              kind,
-              pageSize,
-              cursor,
-              sort,
-            ))(command =>
-              security.respond(listMatches.run(command, member.accountId))(result =>
-                MatchListResponse(
-                  items = result.items.map(MatchSummaryResponse.from),
-                  pagination = paginationResponse(result.pagination),
-                )
-              )
+    SecuredEndpoint.readLogic(security, MatchesEndpoints.list) { member => input =>
+      ReadRateLimit.enforce(readRateLimiter, member.accountId.value, HttpOperation.ListMatches) {
+        security.decode(MatchListCodec.toListCommand(
+          heldEventId = input.heldEventId,
+          gameTitleId = input.gameTitleId,
+          seasonMasterId = input.seasonMasterId,
+          status = input.status,
+          kind = input.kind,
+          pageSize = input.pageSize,
+          cursor = input.cursor,
+          sort = input.sort,
+        ))(command =>
+          security.respond(listMatches.run(command, member.accountId))(result =>
+            MatchListResponse(
+              items = result.items.map(MatchSummaryResponse.from),
+              pagination = paginationResponse(result.pagination),
             )
-          }
+          )
+        )
       }
     },
-    SecuredEndpoint.readLogic(security, MatchesEndpoints.summary) { member =>
-      {
-        case (heldEventId, gameTitleId, seasonMasterId) =>
-          ReadRateLimit
-            .enforce(readRateLimiter, member.accountId.value, HttpOperation.SummarizeMatches) {
-              security.decode(
-                MatchListCodec.parseSummaryFilter(heldEventId, gameTitleId, seasonMasterId)
-              ) { case (parsedHeldEventId, parsedGameTitleId, parsedSeasonMasterId) =>
-                security.respond(
-                  listMatches.summarize(parsedHeldEventId, parsedGameTitleId, parsedSeasonMasterId)
-                )(MatchListSummaryResponse.from)
-              }
-            }
-      }
+    SecuredEndpoint.readLogic(security, MatchesEndpoints.summary) { member => input =>
+      ReadRateLimit
+        .enforce(readRateLimiter, member.accountId.value, HttpOperation.SummarizeMatches) {
+          security.decode(
+            MatchListCodec.parseSummaryFilter(
+              heldEventId = input.heldEventId,
+              gameTitleId = input.gameTitleId,
+              seasonMasterId = input.seasonMasterId,
+            )
+          ) { case (parsedHeldEventId, parsedGameTitleId, parsedSeasonMasterId) =>
+            security.respond(
+              listMatches.summarize(parsedHeldEventId, parsedGameTitleId, parsedSeasonMasterId)
+            )(MatchListSummaryResponse.from)
+          }
+        }
     },
     SecuredEndpoint.readLogic(security, MatchesEndpoints.get) { _ => matchId =>
       security.decode(

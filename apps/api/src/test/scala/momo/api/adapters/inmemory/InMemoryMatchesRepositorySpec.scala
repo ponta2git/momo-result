@@ -7,6 +7,7 @@ import cats.effect.IO
 import momo.api.MomoCatsEffectSuite
 import momo.api.domain.MatchRecord
 import momo.api.domain.ids.*
+import momo.api.errors.AppError
 import momo.api.testing.AppErrorAssertions.assertAppException
 import momo.api.usecases.testing.MatchFixtures
 
@@ -33,10 +34,10 @@ final class InMemoryMatchesRepositorySpec extends MomoCatsEffectSuite:
     for
       matches <- InMemoryMatchesRepository.create[IO]
       missing = record("match-in-memory-missing", 1)
-      result <- matches.update(missing, now.plusSeconds(60)).attempt
+      result <- matches.update(missing, now.plusSeconds(60))
       found <- matches.find(missing.id)
     yield
-      assertAppException(result, "NOT_FOUND", "match was not found")
+      assertEquals(result, Left(AppError.NotFound("match", missing.id.value)))
       assertEquals(found, None)
 
   test("update rejects duplicate match number and preserves the existing record"):
@@ -46,10 +47,15 @@ final class InMemoryMatchesRepositorySpec extends MomoCatsEffectSuite:
       second = record("match-in-memory-2", 2)
       _ <- matches.create(first)
       _ <- matches.create(second)
-      result <- matches.update(first.copy(matchNoInEvent = second.matchNoInEvent), now).attempt
+      result <- matches.update(first.copy(matchNoInEvent = second.matchNoInEvent), now)
       found <- matches.find(first.id)
     yield
-      assertAppException(result, "CONFLICT", "already exists for held event")
+      assertEquals(
+        result,
+        Left(AppError.Conflict(
+          "matchNoInEvent 2 already exists for held event held-in-memory-matches."
+        )),
+      )
       assertEquals(found.map(_.matchNoInEvent), Some(first.matchNoInEvent))
 
   private def record(id: String, matchNoInEvent: Int): MatchRecord = MatchFixtures.matchRecord(

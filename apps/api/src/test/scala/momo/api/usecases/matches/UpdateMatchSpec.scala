@@ -22,7 +22,7 @@ import momo.api.domain.{
   MatchRecord,
   PlayerResult
 }
-import momo.api.errors.{AppError, AppException}
+import momo.api.errors.AppError
 import momo.api.repositories.MatchesRepository
 import momo.api.testing.AppErrorAssertions.{assertAppError, assertRight}
 import momo.api.usecases.testing.MatchFixtures
@@ -217,8 +217,10 @@ final class UpdateMatchSpec extends MomoCatsEffectSuite:
 
   private final class MatchesRepositoryWithUpdateConflict(delegate: MatchesRepository[IO])
       extends MatchesRepository[IO]:
-    override def update(record: MatchRecord, updatedAt: Instant): IO[Unit] = IO
-      .raiseError(new AppException(AppError.Conflict("repository conflict")))
+    override def update(
+        record: MatchRecord,
+        updatedAt: Instant,
+    ): IO[Either[AppError, Unit]] = IO.pure(Left(AppError.Conflict("repository conflict")))
     override def delete(id: MatchId): IO[Boolean] = delegate.delete(id)
     override def find(id: MatchId): IO[Option[MatchRecord]] = delegate.find(id)
     override def list(filter: MatchesRepository.ListFilter): IO[List[MatchRecord]] = delegate

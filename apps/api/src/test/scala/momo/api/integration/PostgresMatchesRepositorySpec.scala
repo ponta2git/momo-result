@@ -11,7 +11,7 @@ import momo.api.adapters.postgres.*
 import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.domain.*
 import momo.api.domain.ids.*
-import momo.api.errors.{AppError, AppException}
+import momo.api.errors.AppError
 import momo.api.repositories.{
   MatchConfirmationResult,
   MatchDraftConfirmation,
@@ -38,7 +38,8 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
   private def matchExports = new PostgresMatchExportsRepository[IO](transactor)
   private def confirmations = new PostgresMatchConfirmationRepository[IO](transactor)
   private def createMatch(record: MatchRecord): IO[Unit] = confirmations
-    .confirm(record, None, record.createdAt).map(_ => ())
+    .confirm(record, None, record.createdAt)
+    .flatMap(_.leftMap(error => new AssertionError(error.toString)).liftTo[IO]).void
 
   /** Insert a complete prerequisite graph: game/map/season/held_event. */
   private def seedPrereqs: IO[Unit] =
@@ -360,11 +361,8 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
     val rec = sampleMatch("match_missing_update", 1)
     for
       _ <- seedPrereqs
-      result <- matches.update(rec, now.plusSeconds(60)).attempt
-    yield result match
-      case Left(error: AppException) =>
-        assertEquals(error.error, AppError.NotFound("match", rec.id.value))
-      case other => fail(s"expected AppException(NotFound), got $other")
+      result <- matches.update(rec, now.plusSeconds(60))
+    yield assertEquals(result, Left(AppError.NotFound("match", rec.id.value)))
 
   test("statsByHeldEvents returns count and maximum match number including gaps"):
     val missing = HeldEventId.unsafeFromString("missing_event")
@@ -385,18 +383,74 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
     for
       _ <- seedPrereqs
       inserted <- confirmations.confirm(rec1, None, now)
-      result <- confirmations.confirm(rec2, None, now).attempt
+      result <- confirmations.confirm(rec2, None, now)
     yield
-      assertEquals(inserted, MatchConfirmationResult.Confirmed)
-      result match
-        case Left(error: AppException) =>
-          assertEquals(
-            error.error,
-            AppError.Conflict(
-              "matchNoInEvent 1 already exists for held event held_2026_04_30."
-            ),
-          )
-        case other => fail(s"expected AppException(Conflict), got $other")
+      assertEquals(inserted, Right(MatchConfirmationResult.Confirmed))
+      assertEquals(
+        result,
+        Left(AppError.Conflict(
+          "matchNoInEvent 1 already exists for held event held_2026_04_30."
+        )),
+      )
+
+  test("confirmation rolls back draft and source-image changes when match insertion conflicts"):
+    val existing = sampleMatch("match_confirm_rollback_existing", 1)
+    val conflicting = sampleMatch("match_confirm_rollback_conflicting", 1)
+    val draftId = MatchDraftId.unsafeFromString("match-draft-confirm-rollback")
+    val imageId = ImageId.unsafeFromString("image-confirm-rollback")
+    val snapshot = MatchDraftConfirmation(
+      draftId = draftId,
+      updatedAt = now,
+      totalAssetsDraftId = None,
+      revenueDraftId = None,
+      incidentLogDraftId = None,
+    )
+    val persistedState = sql"""
+      SELECT d.status,
+             d.confirmed_match_id,
+             d.source_images_retained_until,
+             d.source_images_deleted_at,
+             s.status,
+             s.delete_pending_at,
+             (SELECT COUNT(*)::int FROM matches),
+             (SELECT COUNT(*)::int FROM series_analysis_queue_outbox)
+      FROM match_drafts d
+      JOIN source_images s ON s.id = d.total_assets_image_id
+      WHERE d.id = $draftId
+    """.query[
+      (
+          MatchDraftStatus,
+          Option[MatchId],
+          Option[Instant],
+          Option[Instant],
+          String,
+          Option[Instant],
+          Int,
+          Int,
+      )
+    ].unique.transact(transactor)
+    for
+      _ <- seedPrereqs
+      _ <- createMatch(existing)
+      _ <- insertSourceImage(imageId)
+      _ <- insertMatchDraft(draftId, now, Some(imageId))
+      before <- persistedState
+      result <- confirmations.confirm(conflicting, Some(snapshot), now.plusSeconds(2))
+      after <- persistedState
+      conflictingMatch <- matches.find(conflicting.id)
+    yield
+      assertEquals(
+        result,
+        Left(AppError.Conflict(
+          "matchNoInEvent 1 already exists for held event held_2026_04_30."
+        )),
+      )
+      assertEquals(after, before)
+      assertEquals(
+        after,
+        (MatchDraftStatus.DraftReady, None, None, None, "AVAILABLE", None, 1, 1),
+      )
+      assertEquals(conflictingMatch, None)
 
   test("confirmation from draft persists match and confirmed draft link"):
     val draftId = MatchDraftId.unsafeFromString("match-draft-confirm-success")
@@ -431,7 +485,7 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
       """.query[(Long, Boolean, Long, String, String, String, Boolean, String)].unique
         .transact(transactor)
     yield
-      assertEquals(confirmed, MatchConfirmationResult.Confirmed)
+      assertEquals(confirmed, Right(MatchConfirmationResult.Confirmed))
       assertEquals(found.map(_.id), Some(rec.id))
       assertEquals(status, (MatchDraftStatus.Confirmed, Some(rec.id)))
       assertEquals(
@@ -463,7 +517,7 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
         WHERE d.id = $draftId
       """.query[(Option[Instant], String, Option[Instant])].unique.transact(transactor)
     yield
-      assertEquals(confirmed, MatchConfirmationResult.Confirmed)
+      assertEquals(confirmed, Right(MatchConfirmationResult.Confirmed))
       assertEquals(lifecycle, (Some(confirmedAt), "DELETE_PENDING", Some(confirmedAt)))
 
   test("delete removes the confirmed draft that produced the match"):
@@ -484,7 +538,7 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
       found <- matches.find(rec.id)
       draftStillExists <- draftExists(draftId)
     yield
-      assertEquals(confirmed, MatchConfirmationResult.Confirmed)
+      assertEquals(confirmed, Right(MatchConfirmationResult.Confirmed))
       assertEquals(deleted, true)
       assertEquals(found, None)
       assertEquals(draftStillExists, false)
@@ -507,7 +561,7 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
       found <- matches.find(rec.id)
       status <- draftStatus(draftId)
     yield
-      assertEquals(confirmed, MatchConfirmationResult.DraftSnapshotMismatch)
+      assertEquals(confirmed, Right(MatchConfirmationResult.DraftSnapshotMismatch))
       assertEquals(found, None)
       assertEquals(status, (MatchDraftStatus.DraftReady, Option.empty[MatchId]))
 
@@ -531,8 +585,8 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
       foundSecond <- matches.find(secondRecord.id)
       status <- draftStatus(draftId)
     yield
-      assertEquals(first, MatchConfirmationResult.Confirmed)
-      assertEquals(second, MatchConfirmationResult.DraftSnapshotMismatch)
+      assertEquals(first, Right(MatchConfirmationResult.Confirmed))
+      assertEquals(second, Right(MatchConfirmationResult.DraftSnapshotMismatch))
       assertEquals(foundFirst.map(_.id), Some(firstRecord.id))
       assertEquals(foundSecond, None)
       assertEquals(status, (MatchDraftStatus.Confirmed, Some(firstRecord.id)))

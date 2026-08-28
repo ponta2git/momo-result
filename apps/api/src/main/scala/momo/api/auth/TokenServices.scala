@@ -30,8 +30,8 @@ object SessionCookieCodec:
 object SessionTokenHash:
   def sha256[F[_]: Sync](value: String): F[String] = Sync[F].delay(sha256Unsafe(value))
 
-  def matches[F[_]: Sync](value: String): F[String => Boolean] = sha256(value)
-    .map(hash => expected => constantTimeEquals(hash, expected))
+  def matches[F[_]: Sync](value: String, expected: String): F[Boolean] = sha256(value)
+    .map(hash => constantTimeEquals(hash, expected))
 
   def matchesUnsafe(value: String, expected: String): Boolean =
     constantTimeEquals(sha256Unsafe(value), expected)

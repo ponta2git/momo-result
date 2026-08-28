@@ -15,7 +15,17 @@ final case class ProblemDetails(
 ) derives Codec.AsObject
 
 object ProblemDetails:
-  type ProblemResponse = (StatusCode, Option[String], ProblemDetails)
+  /**
+   * HTTP presentation of an application error.
+   *
+   * Keeping the status and retry metadata with the body prevents callers from depending on the
+   * positional shape of Tapir's composite output.
+   */
+  final case class ProblemResponse(
+      status: StatusCode,
+      retryAfter: Option[String],
+      body: ProblemDetails,
+  )
 
   private val ProblemCodes = List(
     "BAD_REQUEST",
@@ -45,17 +55,19 @@ object ProblemDetails:
   given Schema[ProblemDetails] = Schema.derived[ProblemDetails]
     .modify(_.code)(_.validate(Validator.enumeration(ProblemCodes, v => Some(v))))
 
-  def from(error: AppError): ProblemResponse = (
-    statusOf(error),
-    retryAfter(error),
-    ProblemDetails(
-      `type` = s"https://momo-result.local/problems/${error.code.toLowerCase}",
-      title = error.title,
-      status = statusOf(error).code,
-      detail = publicDetail(error),
-      code = error.code,
-    ),
-  )
+  def from(error: AppError): ProblemResponse =
+    val status = statusOf(error)
+    ProblemResponse(
+      status = status,
+      retryAfter = retryAfter(error),
+      body = ProblemDetails(
+        `type` = s"https://momo-result.local/problems/${error.code.toLowerCase}",
+        title = error.title,
+        status = status.code,
+        detail = publicDetail(error),
+        code = error.code,
+      ),
+    )
 
   private def retryAfter(error: AppError): Option[String] = error match
     case busy: AppError.AnalysisReadBusy => Some(busy.retryAfterSeconds.toString)

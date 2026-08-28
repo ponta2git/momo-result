@@ -46,7 +46,7 @@ trait HttpAppTestFixtures:
 
   protected def seededWiredHttpAppResource(
       prefix: String,
-      seed: ApiApp.Runtime[IO] => IO[Unit],
+      seed: ApiApp.RuntimeHandles[IO] => IO[Unit],
   ): Resource[IO, TestHttpApp] = wiredHttpAppResourceWith(prefix, identity, seed)
 
   protected def devReadHeader(accountId: String): Header.Raw = Header
@@ -158,9 +158,10 @@ trait HttpAppTestFixtures:
   private def wiredHttpAppResourceWith(
       prefix: String,
       configure: AppConfig => AppConfig,
-      seed: ApiApp.Runtime[IO] => IO[Unit],
+      seed: ApiApp.RuntimeHandles[IO] => IO[Unit],
   ): Resource[IO, TestHttpApp] = tempDirectory(prefix).flatMap { dir =>
-    ApiApp.wired[IO](configure(defaultConfig(dir, AppEnv.Test))).evalTap(seed).map(_.app)
+    ApiApp.wiredWithHandles[IO](configure(defaultConfig(dir, AppEnv.Test)))
+      .evalTap(wired => seed(wired.handles)).map(_.runtime.app)
   }
 
   private def devWriteHeaders(

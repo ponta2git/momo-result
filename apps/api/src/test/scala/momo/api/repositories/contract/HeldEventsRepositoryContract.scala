@@ -7,7 +7,7 @@ import munit.CatsEffectSuite
 
 import momo.api.domain.ids.HeldEventId
 import momo.api.domain.{HeldEvent, PageRequest}
-import momo.api.errors.{AppError, AppException}
+import momo.api.errors.AppError
 import momo.api.repositories.HeldEventsRepository
 
 /**
@@ -38,20 +38,22 @@ trait HeldEventsRepositoryContract:
     val event = HeldEvent(HeldEventId.unsafeFromString("held_2026_04_30"), baseInstant)
     for
       repo <- freshRepo
-      _ <- repo.create(event)
+      created <- repo.create(event)
       got <- repo.find(event.id)
-    yield assertEquals(got, Some(event))
+    yield
+      assertEquals(created, Right(()))
+      assertEquals(got, Some(event))
 
   test("create rejects duplicate held event ids as a conflict"):
     val event = HeldEvent(HeldEventId.unsafeFromString("held_duplicate"), baseInstant)
     for
       repo <- freshRepo
       _ <- repo.create(event)
-      duplicate <- repo.create(event).attempt
-    yield duplicate match
-      case Left(error: AppException) =>
-        assertEquals(error.error, AppError.Conflict("held event already exists: held_duplicate"))
-      case other => fail(s"expected AppException(Conflict), got $other")
+      duplicate <- repo.create(event)
+    yield assertEquals(
+      duplicate,
+      Left(AppError.Conflict("held event already exists: held_duplicate")),
+    )
 
   test("listPage applies ordering and offset pagination and returns total count"):
     val older = HeldEvent(HeldEventId.unsafeFromString("held_alpha"), at(0))

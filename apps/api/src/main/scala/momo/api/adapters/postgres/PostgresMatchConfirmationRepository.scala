@@ -22,7 +22,8 @@ import momo.api.errors.{AppError, AppException}
 import momo.api.repositories.{
   MatchConfirmationRepository,
   MatchConfirmationResult,
-  MatchDraftConfirmation
+  MatchDraftConfirmation,
+  RepositoryResult
 }
 
 final class PostgresMatchConfirmationRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
@@ -45,7 +46,7 @@ final class PostgresMatchConfirmationRepository[F[_]: MonadCancelThrow](transact
       record: MatchRecord,
       draft: Option[MatchDraftConfirmation],
       updatedAt: Instant,
-  ): F[MatchConfirmationResult] =
+  ): F[Either[AppError, MatchConfirmationResult]] =
     val program = draft match
       case None => insert(record, updatedAt).as(MatchConfirmationResult.Confirmed)
       case Some(expected) =>
@@ -73,7 +74,7 @@ final class PostgresMatchConfirmationRepository[F[_]: MonadCancelThrow](transact
         yield
           if updatedImages.nonEmpty then MatchConfirmationResult.Confirmed
           else MatchConfirmationResult.DraftSnapshotMismatch
-    program.transact(transactor)
+    RepositoryResult.capture(program.transact(transactor))
 
   private def insert(record: MatchRecord, updatedAt: Instant): ConnectionIO[Unit] =
     (insertMatchCascade(record, updatedAt) *> enqueueMatchMutation(List(record.gameTitleId)))

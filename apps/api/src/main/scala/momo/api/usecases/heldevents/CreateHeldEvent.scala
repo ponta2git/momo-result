@@ -2,23 +2,22 @@ package momo.api.usecases.heldevents
 
 import java.time.Instant
 
-import cats.MonadThrow
+import cats.Monad
 import cats.data.EitherT
 
 import momo.api.domain.HeldEvent
 import momo.api.domain.ids.*
 import momo.api.errors.AppError
 import momo.api.repositories.HeldEventsRepository
-import momo.api.usecases.syntax.UseCaseSyntax.*
 
 final case class CreateHeldEventCommand(heldAt: Instant)
 
-final class CreateHeldEvent[F[_]: MonadThrow](
+final class CreateHeldEvent[F[_]: Monad](
     events: HeldEventsRepository[F],
     nextId: F[HeldEventId],
 ):
   def run(command: CreateHeldEventCommand): F[Either[AppError, HeldEvent]] = (for
     id <- EitherT.liftF(nextId)
     event = HeldEvent(id = id, heldAt = command.heldAt)
-    _ <- events.create(event).recoverAppError
+    _ <- EitherT(events.create(event))
   yield event).value

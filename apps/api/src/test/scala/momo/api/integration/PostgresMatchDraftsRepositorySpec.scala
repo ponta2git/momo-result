@@ -9,7 +9,7 @@ import doobie.postgres.implicits.*
 import momo.api.adapters.postgres.PostgresMatchDraftsRepository
 import momo.api.domain.ids.{AccountId, HeldEventId, ImageId, MatchDraftId, MemberId, OcrDraftId}
 import momo.api.domain.{MatchDraft, MatchDraftStatus, ScreenType}
-import momo.api.errors.{AppError, AppException}
+import momo.api.errors.AppError
 import momo.api.repositories.{
   MatchDraftAttachmentResult,
   MatchDraftOcrFailureResult,
@@ -28,13 +28,11 @@ final class PostgresMatchDraftsRepositorySpec extends IntegrationSuite:
     val draft = editableDraft(draftId, MatchDraftStatus.DraftReady)
     for
       _ <- repo.create(draft)
-      duplicate <- repo.create(draft).attempt
-    yield duplicate match
-      case Left(error: AppException) => assertEquals(
-          error.error,
-          AppError.Conflict("match draft already exists: match-draft-duplicate-create"),
-        )
-      case other => fail(s"expected AppException(Conflict), got $other")
+      duplicate <- repo.create(draft)
+    yield assertEquals(
+      duplicate,
+      Left(AppError.Conflict("match draft already exists: match-draft-duplicate-create")),
+    )
 
   test("update refuses to overwrite a terminal draft"):
     val draftId = MatchDraftId.unsafeFromString("match-draft-terminal-update")

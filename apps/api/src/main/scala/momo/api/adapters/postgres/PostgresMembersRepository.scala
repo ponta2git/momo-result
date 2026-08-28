@@ -8,7 +8,6 @@ import doobie.implicits.*
 import doobie.postgres.implicits.*
 
 import momo.api.adapters.postgres.PostgresMeta.given
-import momo.api.db.Database
 import momo.api.domain.Member
 import momo.api.domain.ids.{MemberId, UserId}
 import momo.api.repositories.{MembersAlg, MembersRepository}
@@ -41,11 +40,10 @@ object PostgresMembers:
 
 end PostgresMembers
 
-/** Backwards-compatible class facade. */
 final class PostgresMembersRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
     extends MembersRepository[F]:
   private val delegate: MembersRepository[F] = MembersRepository
-    .fromAlg(PostgresMembers.alg, Database.transactK(transactor))
+    .fromAlg(PostgresMembers.alg, transactor.trans)
 
   export delegate.*
 end PostgresMembersRepository

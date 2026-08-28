@@ -30,7 +30,13 @@ final case class R2SourceImageStorageConfig(
     staleStateAge: FiniteDuration,
     failedRecordRetention: FiniteDuration,
     reconciliationBatchSize: Int,
-)
+):
+  override def toString: String =
+    s"R2SourceImageStorageConfig(endpoint=[REDACTED], region=$region, bucket=[REDACTED], " +
+      s"credentials=[REDACTED], operationTimeout=$operationTimeout, " +
+      s"attemptTimeout=$attemptTimeout, maximumAttempts=$maximumAttempts, " +
+      s"staleStateAge=$staleStateAge, failedRecordRetention=$failedRecordRetention, " +
+      s"reconciliationBatchSize=$reconciliationBatchSize)"
 
 private[config] object SourceImageStorageConfigLoader:
   private val ModeEnv = "SOURCE_IMAGE_STORAGE_MODE"

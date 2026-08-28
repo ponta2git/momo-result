@@ -152,9 +152,9 @@ final class IdempotencyIntegrationSpec extends MomoCatsEffectSuite with HttpAppT
       )
       _ <- first.cancel
     yield second match
-      case Left((status, _, problem)) =>
-        assertEquals(status, sttp.model.StatusCode.Conflict)
-        assertEquals(problem.code, "IDEMPOTENCY_IN_PROGRESS")
+      case Left(problem) =>
+        assertEquals(problem.status, sttp.model.StatusCode.Conflict)
+        assertEquals(problem.body.code, "IDEMPOTENCY_IN_PROGRESS")
       case Right(value) => fail(s"expected in-progress problem, got replay: $value")
   }
 
@@ -232,9 +232,9 @@ final class IdempotencyIntegrationSpec extends MomoCatsEffectSuite with HttpAppT
     yield
       assertEquals(first, Right(stored))
       second match
-        case Left((status, _, problem)) =>
-          assertEquals(status, sttp.model.StatusCode.InternalServerError)
-          assertEquals(problem.code, "INTERNAL_ERROR")
+        case Left(problem) =>
+          assertEquals(problem.status, sttp.model.StatusCode.InternalServerError)
+          assertEquals(problem.body.code, "INTERNAL_ERROR")
         case Right(value) => fail(s"expected stored response decode failure, got replay: $value")
   }
 

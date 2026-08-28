@@ -11,3 +11,10 @@ final class HttpMethodPredicatesSpec extends FunSuite:
     assert(HttpMethodPredicates.isMutating(Method.DELETE))
     assert(!HttpMethodPredicates.isMutating(Method.GET))
     assert(!HttpMethodPredicates.isMutating(Method.HEAD))
+
+  test("recognizes mutating method names from non-http4s request adapters"):
+    assert(HttpMethodPredicates.isMutating("POST"))
+    assert(HttpMethodPredicates.isMutating("PUT"))
+    assert(HttpMethodPredicates.isMutating("PATCH"))
+    assert(HttpMethodPredicates.isMutating("DELETE"))
+    assert(!HttpMethodPredicates.isMutating("GET"))

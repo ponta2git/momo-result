@@ -41,10 +41,13 @@ private[bootstrap] object OutboxWakingRepositories:
   ): MatchesRepository[F] =
     val wake = WakeAfterCommit(sink, onSinkClosed)
     new MatchesRepository[F]:
-      override def update(record: MatchRecord, updatedAt: Instant): F[Unit] = wake(
+      override def update(
+          record: MatchRecord,
+          updatedAt: Instant,
+      ): F[Either[AppError, Unit]] = wake(
         delegate.update(record, updatedAt),
         OutboxKind.SeriesAnalysis,
-      )(_ => true)
+      )(_.isRight)
 
       override def delete(id: MatchId): F[Boolean] = wake(
         delegate.delete(id),
@@ -86,10 +89,10 @@ private[bootstrap] object OutboxWakingRepositories:
           record: MatchRecord,
           draft: Option[MatchDraftConfirmation],
           updatedAt: Instant,
-      ): F[MatchConfirmationResult] = wake(
+      ): F[Either[AppError, MatchConfirmationResult]] = wake(
         delegate.confirm(record, draft, updatedAt),
         OutboxKind.SeriesAnalysis,
-      )(_ == MatchConfirmationResult.Confirmed)
+      )(_.contains(MatchConfirmationResult.Confirmed))
 
   def seriesAnalysis[F[_]: Async: LoggerFactory](
       delegate: SeriesAnalysisRepository[F],

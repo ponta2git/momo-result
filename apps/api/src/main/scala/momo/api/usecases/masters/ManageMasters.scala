@@ -4,7 +4,7 @@ import java.time.Instant
 
 import cats.data.EitherT
 import cats.syntax.all.*
-import cats.{Functor, MonadThrow}
+import cats.{Functor, Monad}
 
 import momo.api.domain.ids.*
 import momo.api.domain.{GameTitle, MapMaster, MemberAlias, SeasonMaster}
@@ -24,48 +24,48 @@ final case class UpdateGameTitleCommand(id: GameTitleId, name: String, layoutFam
 final case class UpdateMapMasterCommand(id: MapMasterId, name: String)
 final case class UpdateSeasonMasterCommand(id: SeasonMasterId, name: String)
 
-final class UpdateGameTitle[F[_]: MonadThrow](titles: GameTitlesRepository[F]):
+final class UpdateGameTitle[F[_]: Monad](titles: GameTitlesRepository[F]):
   def run(command: UpdateGameTitleCommand): F[Either[AppError, GameTitle]] = (for
     existing <- titles.find(command.id).orNotFound("game title", command.id.value)
     name <- EitherT.fromEither[F](UseCaseField.nonBlank("name", command.name))
     layoutFamily <- EitherT
       .fromEither[F](UseCaseField.stableKey("layoutFamily", command.layoutFamily))
     updated = existing.copy(name = name, layoutFamily = layoutFamily)
-    _ <- titles.update(updated).recoverAppError
+    _ <- EitherT(titles.update(updated))
   yield updated).value
 
-final class DeleteGameTitle[F[_]: MonadThrow](titles: GameTitlesRepository[F]):
+final class DeleteGameTitle[F[_]: Monad](titles: GameTitlesRepository[F]):
   def run(id: GameTitleId): F[Either[AppError, Unit]] = (for
     _ <- titles.find(id).orNotFound("game title", id.value)
-    _ <- titles.delete(id).recoverAppError
+    _ <- EitherT(titles.delete(id))
   yield ()).value
 
-final class UpdateMapMaster[F[_]: MonadThrow](maps: MapMastersRepository[F]):
+final class UpdateMapMaster[F[_]: Monad](maps: MapMastersRepository[F]):
   def run(command: UpdateMapMasterCommand): F[Either[AppError, MapMaster]] = (for
     existing <- maps.find(command.id).orNotFound("map master", command.id.value)
     name <- EitherT.fromEither[F](UseCaseField.nonBlank("name", command.name))
     updated = existing.copy(name = name)
-    _ <- maps.update(updated).recoverAppError
+    _ <- EitherT(maps.update(updated))
   yield updated).value
 
-final class DeleteMapMaster[F[_]: MonadThrow](maps: MapMastersRepository[F]):
+final class DeleteMapMaster[F[_]: Monad](maps: MapMastersRepository[F]):
   def run(id: MapMasterId): F[Either[AppError, Unit]] = (for
     _ <- maps.find(id).orNotFound("map master", id.value)
-    _ <- maps.delete(id).recoverAppError
+    _ <- EitherT(maps.delete(id))
   yield ()).value
 
-final class UpdateSeasonMaster[F[_]: MonadThrow](seasons: SeasonMastersRepository[F]):
+final class UpdateSeasonMaster[F[_]: Monad](seasons: SeasonMastersRepository[F]):
   def run(command: UpdateSeasonMasterCommand): F[Either[AppError, SeasonMaster]] = (for
     existing <- seasons.find(command.id).orNotFound("season master", command.id.value)
     name <- EitherT.fromEither[F](UseCaseField.nonBlank("name", command.name))
     updated = existing.copy(name = name)
-    _ <- seasons.update(updated).recoverAppError
+    _ <- EitherT(seasons.update(updated))
   yield updated).value
 
-final class DeleteSeasonMaster[F[_]: MonadThrow](seasons: SeasonMastersRepository[F]):
+final class DeleteSeasonMaster[F[_]: Monad](seasons: SeasonMastersRepository[F]):
   def run(id: SeasonMasterId): F[Either[AppError, Unit]] = (for
     _ <- seasons.find(id).orNotFound("season master", id.value)
-    _ <- seasons.delete(id).recoverAppError
+    _ <- EitherT(seasons.delete(id))
   yield ()).value
 
 final class ListGameTitles[F[_]](titles: GameTitlesRepository[F]):
@@ -87,7 +87,7 @@ final class ListMemberAliases[F[_]: Functor](aliases: MemberAliasesRepository[F]
   def run(memberId: Option[MemberId]): F[Either[AppError, List[MemberAlias]]] = aliases
     .list(memberId).map(_.asRight[AppError])
 
-final class CreateMemberAlias[F[_]: MonadThrow](
+final class CreateMemberAlias[F[_]: Monad](
     aliases: MemberAliasesRepository[F],
     members: MembersRepository[F],
     now: F[Instant],
@@ -99,10 +99,10 @@ final class CreateMemberAlias[F[_]: MonadThrow](
     id <- EitherT.liftF(nextId)
     createdAt <- EitherT.liftF(now)
     row = MemberAlias(id = id, memberId = command.memberId, alias = alias, createdAt = createdAt)
-    _ <- aliases.create(row).recoverAppError
+    _ <- EitherT(aliases.create(row))
   yield row).value
 
-final class UpdateMemberAlias[F[_]: MonadThrow](
+final class UpdateMemberAlias[F[_]: Monad](
     aliases: MemberAliasesRepository[F],
     members: MembersRepository[F],
 ):
@@ -111,13 +111,13 @@ final class UpdateMemberAlias[F[_]: MonadThrow](
     alias <- EitherT.fromEither[F](validateAlias(command.alias))
     _ <- members.find(command.memberId).orNotFound("member", command.memberId.value)
     updated = existing.copy(memberId = command.memberId, alias = alias)
-    _ <- aliases.update(updated).recoverAppError
+    _ <- EitherT(aliases.update(updated))
   yield updated).value
 
-final class DeleteMemberAlias[F[_]: MonadThrow](aliases: MemberAliasesRepository[F]):
+final class DeleteMemberAlias[F[_]: Monad](aliases: MemberAliasesRepository[F]):
   def run(id: MemberAliasId): F[Either[AppError, Unit]] = (for
     _ <- aliases.find(id).orNotFound("member alias", id.value)
-    _ <- aliases.delete(id).recoverAppError
+    _ <- EitherT(aliases.delete(id))
   yield ()).value
 
 private def validateAlias(value: String): Either[AppError, String] =

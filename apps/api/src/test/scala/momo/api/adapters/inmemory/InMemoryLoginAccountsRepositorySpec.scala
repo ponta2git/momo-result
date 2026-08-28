@@ -13,7 +13,6 @@ import momo.api.repositories.{
   LoginAccountAdministrationUpdateResult,
   UpdateLoginAccountData
 }
-import momo.api.testing.AppErrorAssertions.assertAppException
 
 final class InMemoryLoginAccountsRepositorySpec extends MomoCatsEffectSuite:
   private val now = Instant.parse("2026-05-15T02:00:00Z")
@@ -25,18 +24,22 @@ final class InMemoryLoginAccountsRepositorySpec extends MomoCatsEffectSuite:
       accounts <- InMemoryLoginAccountsRepository.create[IO](Nil)
       _ <- accounts.create(createData(primaryId, primaryDiscordId))
       duplicateId <- accounts
-        .create(createData(primaryId, UserId.unsafeFromString("223456789012345678"))).attempt
+        .create(createData(primaryId, UserId.unsafeFromString("223456789012345678")))
       duplicateDiscord <- accounts
-        .create(createData(AccountId.unsafeFromString("account-other"), primaryDiscordId)).attempt
+        .create(createData(AccountId.unsafeFromString("account-other"), primaryDiscordId))
       listed <- accounts.list
     yield
-      assertAppException(
+      assertEquals(
         duplicateId,
-        AppError.Conflict("login account already exists for discord user 223456789012345678."),
+        Left(AppError.Conflict(
+          "login account already exists for discord user 223456789012345678."
+        )),
       )
-      assertAppException(
+      assertEquals(
         duplicateDiscord,
-        AppError.Conflict("login account already exists for discord user 123456789012345678."),
+        Left(AppError.Conflict(
+          "login account already exists for discord user 123456789012345678."
+        )),
       )
       assertEquals(listed.map(_.id), List(primaryId))
 

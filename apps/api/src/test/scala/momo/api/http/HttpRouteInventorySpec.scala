@@ -17,7 +17,7 @@ final class HttpRouteInventorySpec extends MomoCatsEffectSuite:
 
   private def assertRuntimeInventory(appEnv: AppEnv, prefix: String): IO[Unit] =
     tempDirectory(prefix).flatMap { imageDirectory =>
-      ApiApp.wired[IO](AppConfig(
+      ApiApp.wiredWithHandles[IO](AppConfig(
         appEnv = appEnv,
         httpHost = "127.0.0.1",
         httpPort = 0,
@@ -26,7 +26,7 @@ final class HttpRouteInventorySpec extends MomoCatsEffectSuite:
       ))
     }.use { runtime =>
       IO {
-        val registered = inventory(runtime.registeredEndpoints)
+        val registered = inventory(runtime.handles.registeredEndpoints)
         assertEquals(registered, registered.distinct)
         assertEquals(registered, inventory(ApiEndpoints.all))
       }

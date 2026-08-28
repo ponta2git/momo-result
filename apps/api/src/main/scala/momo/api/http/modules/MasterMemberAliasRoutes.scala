@@ -41,7 +41,7 @@ private[modules] object MasterMemberAliasRoutes:
           )(items => MemberAliasListResponse(items.map(MemberAliasResponse.from)))
         }
     },
-    SecuredEndpoint.masterMutationLogic(security, MemberAliasesEndpoints.create) { member =>
+    SecuredEndpoint.adminMutationLogic(security, MemberAliasesEndpoints.create) { member =>
       {
         case (idemKey, request) =>
           IdempotencyReplay.wrap[F, CreateMemberAliasRequest, MemberAliasResponse](
@@ -59,7 +59,7 @@ private[modules] object MasterMemberAliasRoutes:
           )
       }
     },
-    SecuredEndpoint.masterMutationLogic(security, MemberAliasesEndpoints.update) { member =>
+    SecuredEndpoint.adminMutationLogic(security, MemberAliasesEndpoints.update) { member =>
       {
         case (id, idemKey, request) =>
           IdempotencyReplay.wrap[F, (String, UpdateMemberAliasRequest), MemberAliasResponse](
@@ -75,7 +75,7 @@ private[modules] object MasterMemberAliasRoutes:
           )
       }
     },
-    SecuredEndpoint.masterMutationLogic(security, MemberAliasesEndpoints.delete) { member =>
+    SecuredEndpoint.adminMutationLogic(security, MemberAliasesEndpoints.delete) { member =>
       {
         case (id, idemKey) =>
           IdempotencyReplay.wrap[F, String, DeleteMasterResponse](

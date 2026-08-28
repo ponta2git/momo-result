@@ -9,9 +9,9 @@ import doobie.implicits.*
 import doobie.postgres.implicits.*
 
 import momo.api.adapters.postgres.PostgresMeta.given
-import momo.api.db.Database
 import momo.api.domain.*
 import momo.api.domain.ids.*
+import momo.api.errors.AppError
 import momo.api.repositories.*
 
 /**
@@ -99,19 +99,18 @@ end PostgresMemberAliases
 
 final class PostgresMemberAliasesRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
     extends MemberAliasesRepository[F]:
-  private val transactK = Database.transactK(transactor)
-
   override def list(memberId: Option[MemberId]): F[List[MemberAlias]] =
-    transactK(PostgresMemberAliases.alg.list(memberId))
+    PostgresMemberAliases.alg.list(memberId).transact(transactor)
 
   override def find(id: MemberAliasId): F[Option[MemberAlias]] =
-    transactK(PostgresMemberAliases.alg.find(id))
+    PostgresMemberAliases.alg.find(id).transact(transactor)
 
-  override def create(alias: MemberAlias): F[Unit] =
-    transactK(PostgresMemberAliases.alg.create(alias))
+  override def create(alias: MemberAlias): F[Either[AppError, Unit]] = RepositoryResult
+    .capture(PostgresMemberAliases.alg.create(alias).transact(transactor))
 
-  override def update(alias: MemberAlias): F[Unit] =
-    transactK(PostgresMemberAliases.alg.update(alias))
+  override def update(alias: MemberAlias): F[Either[AppError, Unit]] = RepositoryResult
+    .capture(PostgresMemberAliases.alg.update(alias).transact(transactor))
 
-  override def delete(id: MemberAliasId): F[Unit] = transactK(PostgresMemberAliases.alg.delete(id))
+  override def delete(id: MemberAliasId): F[Either[AppError, Unit]] = RepositoryResult
+    .capture(PostgresMemberAliases.alg.delete(id).transact(transactor))
 end PostgresMemberAliasesRepository

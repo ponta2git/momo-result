@@ -7,8 +7,8 @@ import cats.effect.IO
 import momo.api.MomoCatsEffectSuite
 import momo.api.domain.ids.*
 import momo.api.domain.{MatchDraft, MatchDraftStatus, MatchNoInEvent, MatchRecord}
-import momo.api.repositories.MatchDraftConfirmation
-import momo.api.testing.AppErrorAssertions.assertAppException
+import momo.api.errors.AppError
+import momo.api.repositories.{MatchConfirmationResult, MatchDraftConfirmation}
 import momo.api.usecases.testing.MatchFixtures
 
 final class InMemoryMatchConfirmationRepositorySpec extends MomoCatsEffectSuite:
@@ -32,16 +32,49 @@ final class InMemoryMatchConfirmationRepositorySpec extends MomoCatsEffectSuite:
       _ <- matches.create(existing)
       result <- confirmations
         .confirm(duplicate, Some(MatchDraftConfirmation.from(currentDraft)), now.plusSeconds(60))
-        .attempt
       storedDraft <- matchDrafts.find(draftId)
       existingFound <- matches.find(existing.id)
       duplicateFound <- matches.find(duplicate.id)
     yield
-      assertAppException(result, "CONFLICT", "already exists for held event")
+      assertEquals(
+        result,
+        Left(AppError.Conflict(
+          "matchNoInEvent 1 already exists for held event held-in-memory-confirmation."
+        )),
+      )
       assertEquals(storedDraft.map(_.status), Some(MatchDraftStatus.DraftReady))
       assertEquals(storedDraft.flatMap(_.confirmedMatchId), None)
       assertEquals(existingFound.map(_.id), Some(existing.id))
       assertEquals(duplicateFound, None)
+
+  test("confirm rejects a snapshot changed between the preflight read and atomic transition"):
+    for
+      matches <- InMemoryMatchesRepository.create[IO]
+      matchDrafts <- InMemoryMatchDraftsRepository.create[IO]
+      currentDraft = draft()
+      concurrentlyUpdated = currentDraft.withCommon(_.copy(layoutFamily = Some("changed")))
+      recordToConfirm = record("match-in-memory-stale-snapshot", 1)
+      createAfterConcurrentUpdate = (record: MatchRecord) =>
+        matchDrafts.update(concurrentlyUpdated, now.plusSeconds(30)).void *> matches.create(record)
+      confirmations = InMemoryMatchConfirmationRepository[IO](
+        matches,
+        createAfterConcurrentUpdate,
+        matchDrafts,
+      )
+      _ <- matchDrafts.create(currentDraft)
+      result <- confirmations.confirm(
+        recordToConfirm,
+        Some(MatchDraftConfirmation.from(currentDraft)),
+        now.plusSeconds(60),
+      )
+      storedDraft <- matchDrafts.find(draftId)
+      storedMatch <- matches.find(recordToConfirm.id)
+    yield
+      assertEquals(result, Right(MatchConfirmationResult.DraftSnapshotMismatch))
+      assertEquals(storedDraft.map(_.layoutFamily), Some(Some("changed")))
+      assertEquals(storedDraft.map(_.updatedAt), Some(now.plusSeconds(30)))
+      assertEquals(storedDraft.flatMap(_.confirmedMatchId), None)
+      assertEquals(storedMatch, None)
 
   private def draft(): MatchDraft = MatchDraft.fromInputs(
     id = draftId,

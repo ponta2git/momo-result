@@ -1,9 +1,10 @@
 package momo.api.repositories
 
-import cats.~>
+import cats.{~>, MonadThrow}
 
 import momo.api.domain.ids.*
 import momo.api.domain.{MatchNoInEvent, MatchRecord}
+import momo.api.errors.AppError
 
 trait MatchesAlg[F0[_]]:
   def update(record: MatchRecord, updatedAt: java.time.Instant): F0[Unit]
@@ -21,8 +22,9 @@ trait MatchesAlg[F0[_]]:
       heldEventIds: List[HeldEventId]
   ): F0[Map[HeldEventId, MatchesRepository.HeldEventStats]]
 
+/** Usecase-facing facade: expected update rejections are values; unexpected failures remain in F. */
 trait MatchesRepository[F[_]]:
-  def update(record: MatchRecord, updatedAt: java.time.Instant): F[Unit]
+  def update(record: MatchRecord, updatedAt: java.time.Instant): F[Either[AppError, Unit]]
   def delete(id: MatchId): F[Boolean]
   def find(id: MatchId): F[Option[MatchRecord]]
   def list(filter: MatchesRepository.ListFilter): F[List[MatchRecord]]
@@ -48,10 +50,15 @@ object MatchesRepository:
       limit: Option[Int] = None,
   )
 
-  def fromAlg[F0[_], F[_]](alg: MatchesAlg[F0], liftK: F0 ~> F): MatchesRepository[F] =
+  def fromAlg[F0[_], F[_]: MonadThrow](
+      alg: MatchesAlg[F0],
+      liftK: F0 ~> F,
+  ): MatchesRepository[F] =
     new MatchesRepository[F]:
-      def update(record: MatchRecord, updatedAt: java.time.Instant): F[Unit] =
-        liftK(alg.update(record, updatedAt))
+      def update(
+          record: MatchRecord,
+          updatedAt: java.time.Instant,
+      ): F[Either[AppError, Unit]] = RepositoryResult.capture(liftK(alg.update(record, updatedAt)))
       def delete(id: MatchId): F[Boolean] = liftK(alg.delete(id))
       def find(id: MatchId): F[Option[MatchRecord]] = liftK(alg.find(id))
       def list(filter: ListFilter): F[List[MatchRecord]] = liftK(alg.list(filter))

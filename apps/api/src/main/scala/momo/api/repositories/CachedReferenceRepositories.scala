@@ -9,33 +9,52 @@ import momo.api.domain.ids.*
 import momo.api.domain.{GameTitle, IncidentMaster, MapMaster, Member, MemberAlias, SeasonMaster}
 
 private final case class ReferenceCacheEntry[A](loadedAt: FiniteDuration, value: A)
+private final case class ReferenceCacheState[A](
+    generation: Long,
+    entry: Option[ReferenceCacheEntry[A]]
+)
 
 private final class ReferenceCache[F[_]: Clock: Sync, A](
-    ref: Ref[F, Option[ReferenceCacheEntry[A]]],
+    ref: Ref[F, ReferenceCacheState[A]],
     ttl: FiniteDuration,
     load: F[A],
 ):
   def get: F[A] =
     for
       now <- Clock[F].monotonic
-      cached <- ref.get
-      value <- cached match
+      access <- ref.access
+      (snapshot, store) = access
+      value <- snapshot.entry match
         case Some(entry) if now - entry.loadedAt <= ttl => entry.value.pure[F]
-        case _ => reload
+        case _ => reload(snapshot, store)
     yield value
 
-  def invalidate: F[Unit] = ref.set(None)
+  def invalidate: F[Unit] = ref.update(state =>
+    ReferenceCacheState(state.generation + 1L, entry = None)
+  )
 
-  private def reload: F[A] =
+  def invalidateAfterSuccess[E, B](effect: F[Either[E, B]]): F[Either[E, B]] =
+    Sync[F].uncancelable { poll =>
+      // Cancellation can race a committed delegate write, so it invalidates conservatively.
+      Sync[F].onCancel(poll(effect), invalidate)
+        .flatTap(_.traverse_(_ => invalidate))
+    }
+
+  private def reload(
+      snapshot: ReferenceCacheState[A],
+      store: ReferenceCacheState[A] => F[Boolean],
+  ): F[A] =
     for
       value <- load
       now <- Clock[F].monotonic
-      _ <- ref.set(Some(ReferenceCacheEntry(now, value)))
-    yield value
+      stored <- store(snapshot.copy(entry = Some(ReferenceCacheEntry(now, value))))
+      result <- if stored then value.pure[F] else get
+    yield result
 
 private object ReferenceCache:
   def create[F[_]: Clock: Sync, A](ttl: FiniteDuration, load: F[A]): F[ReferenceCache[F, A]] =
-    Ref.of[F, Option[ReferenceCacheEntry[A]]](None).map(ref => ReferenceCache(ref, ttl, load))
+    Ref.of[F, ReferenceCacheState[A]](ReferenceCacheState(0L, None))
+      .map(ref => ReferenceCache(ref, ttl, load))
 
 object CachedReferenceRepositories:
   val DefaultTtl: FiniteDuration = 30.seconds
@@ -63,10 +82,10 @@ object CachedReferenceRepositories:
     new GameTitlesRepository[F]:
       def list: F[List[GameTitle]] = cache.get
       def find(id: GameTitleId): F[Option[GameTitle]] = cache.get.map(_.find(_.id == id))
-      def createWithNextDisplayOrder(title: GameTitle): F[GameTitle] =
-        delegate.createWithNextDisplayOrder(title) <* cache.invalidate
-      def update(title: GameTitle): F[Unit] = delegate.update(title) <* cache.invalidate
-      def delete(id: GameTitleId): F[Unit] = delegate.delete(id) <* cache.invalidate
+      def createWithNextDisplayOrder(title: GameTitle) = cache
+        .invalidateAfterSuccess(delegate.createWithNextDisplayOrder(title))
+      def update(title: GameTitle) = cache.invalidateAfterSuccess(delegate.update(title))
+      def delete(id: GameTitleId) = cache.invalidateAfterSuccess(delegate.delete(id))
   }
 
   def mapMasters[F[_]: Clock: Sync](
@@ -81,10 +100,10 @@ object CachedReferenceRepositories:
       def list(gameTitleId: Option[GameTitleId]): F[List[MapMaster]] =
         cache.get.map(rows => gameTitleId.fold(rows)(id => rows.filter(_.gameTitleId == id)))
       def find(id: MapMasterId): F[Option[MapMaster]] = cache.get.map(_.find(_.id == id))
-      def createWithNextDisplayOrder(map: MapMaster): F[MapMaster] =
-        delegate.createWithNextDisplayOrder(map) <* cache.invalidate
-      def update(map: MapMaster): F[Unit] = delegate.update(map) <* cache.invalidate
-      def delete(id: MapMasterId): F[Unit] = delegate.delete(id) <* cache.invalidate
+      def createWithNextDisplayOrder(map: MapMaster) = cache
+        .invalidateAfterSuccess(delegate.createWithNextDisplayOrder(map))
+      def update(map: MapMaster) = cache.invalidateAfterSuccess(delegate.update(map))
+      def delete(id: MapMasterId) = cache.invalidateAfterSuccess(delegate.delete(id))
   }
 
   def seasonMasters[F[_]: Clock: Sync](
@@ -99,10 +118,10 @@ object CachedReferenceRepositories:
       def list(gameTitleId: Option[GameTitleId]): F[List[SeasonMaster]] =
         cache.get.map(rows => gameTitleId.fold(rows)(id => rows.filter(_.gameTitleId == id)))
       def find(id: SeasonMasterId): F[Option[SeasonMaster]] = cache.get.map(_.find(_.id == id))
-      def createWithNextDisplayOrder(season: SeasonMaster): F[SeasonMaster] =
-        delegate.createWithNextDisplayOrder(season) <* cache.invalidate
-      def update(season: SeasonMaster): F[Unit] = delegate.update(season) <* cache.invalidate
-      def delete(id: SeasonMasterId): F[Unit] = delegate.delete(id) <* cache.invalidate
+      def createWithNextDisplayOrder(season: SeasonMaster) = cache
+        .invalidateAfterSuccess(delegate.createWithNextDisplayOrder(season))
+      def update(season: SeasonMaster) = cache.invalidateAfterSuccess(delegate.update(season))
+      def delete(id: SeasonMasterId) = cache.invalidateAfterSuccess(delegate.delete(id))
   }
 
   def incidentMasters[F[_]: Clock: Sync](
@@ -129,8 +148,8 @@ object CachedReferenceRepositories:
       def list(memberId: Option[MemberId]): F[List[MemberAlias]] =
         cache.get.map(rows => memberId.fold(rows)(id => rows.filter(_.memberId == id)))
       def find(id: MemberAliasId): F[Option[MemberAlias]] = cache.get.map(_.find(_.id == id))
-      def create(alias: MemberAlias): F[Unit] = delegate.create(alias) <* cache.invalidate
-      def update(alias: MemberAlias): F[Unit] = delegate.update(alias) <* cache.invalidate
-      def delete(id: MemberAliasId): F[Unit] = delegate.delete(id) <* cache.invalidate
+      def create(alias: MemberAlias) = cache.invalidateAfterSuccess(delegate.create(alias))
+      def update(alias: MemberAlias) = cache.invalidateAfterSuccess(delegate.update(alias))
+      def delete(id: MemberAliasId) = cache.invalidateAfterSuccess(delegate.delete(id))
   }
 end CachedReferenceRepositories

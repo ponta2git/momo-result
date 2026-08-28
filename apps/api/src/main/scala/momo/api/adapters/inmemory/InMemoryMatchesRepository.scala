@@ -21,13 +21,16 @@ final class InMemoryMatchesRepository[F[_]: Sync] private (ref: Ref[F, Map[Match
     else (current.updated(record.id, record), Right(()))
   }.flatMap(complete)
 
-  override def update(record: MatchRecord, updatedAt: java.time.Instant): F[Unit] = ref
-    .modify { current =>
-      if !current.contains(record.id) then (current, Left(notFound(record.id)))
-      else if containsMatchNo(current, record, excluding = Some(record.id)) then
-        (current, Left(conflict(record)))
-      else (current.updated(record.id, record), Right(()))
-    }.flatMap(complete)
+  override def update(
+      record: MatchRecord,
+      updatedAt: java.time.Instant,
+  ): F[Either[AppError, Unit]] = ref.modify { current =>
+    if !current.contains(record.id) then
+      (current, Left(AppError.NotFound("match", record.id.value)))
+    else if containsMatchNo(current, record, excluding = Some(record.id)) then
+      (current, Left(conflictError(record)))
+    else (current.updated(record.id, record), Right(()))
+  }
 
   override def delete(id: MatchId): F[Boolean] = ref
     .modify(m => if m.contains(id) then (m - id, true) else (m, false))
@@ -129,11 +132,12 @@ final class InMemoryMatchesRepository[F[_]: Sync] private (ref: Ref[F, Map[Match
   )
 
   private def conflict(record: MatchRecord): AppException =
-    new AppException(AppError.Conflict(s"matchNoInEvent ${record.matchNoInEvent.value
-        .toString} already exists for held event ${record.heldEventId.value}."))
+    new AppException(conflictError(record))
 
-  private def notFound(id: MatchId): AppException =
-    new AppException(AppError.NotFound("match", id.value))
+  private def conflictError(record: MatchRecord): AppError = AppError.Conflict(
+    s"matchNoInEvent ${record.matchNoInEvent.value.toString} already exists for held event ${record
+        .heldEventId.value}."
+  )
 
   private def complete(result: Either[AppException, Unit]): F[Unit] = result match
     case Right(()) => Sync[F].unit
@@ -167,8 +171,10 @@ object InMemoryMatchesRepository:
       matches: InMemoryMatchesRepository[F],
       matchDrafts: InMemoryMatchDraftsRepository[F],
   ): MatchesRepository[F] = new MatchesRepository[F]:
-    override def update(record: MatchRecord, updatedAt: java.time.Instant): F[Unit] = matches
-      .update(record, updatedAt)
+    override def update(
+        record: MatchRecord,
+        updatedAt: java.time.Instant,
+    ): F[Either[AppError, Unit]] = matches.update(record, updatedAt)
 
     override def delete(id: MatchId): F[Boolean] = matches.delete(id).flatTap {
       case true => matchDrafts.deleteConfirmedByMatchId(id).void

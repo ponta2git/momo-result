@@ -5,7 +5,18 @@ import sttp.tapir.generic.auto.*
 import sttp.tapir.json.circe.*
 
 object OcrJobEndpoints:
-  type CreateInput = (Option[String], Option[String], CreateOcrJobRequest)
+  final case class CreateInput(
+      idempotencyKey: Option[String],
+      requestId: Option[String],
+      request: CreateOcrJobRequest,
+  )
+
+  private val createInput: EndpointInput[CreateInput] = CommonEndpoint
+    .idempotencyKeyHeader
+    .and(CommonEndpoint.requestIdHeader)
+    .and(jsonBody[CreateOcrJobRequest])
+    .mapTo[CreateInput]
+
   type CancelInput = (String, Option[String])
 
   val create: CommonEndpoint.SecuredMutation[
@@ -15,9 +26,7 @@ object OcrJobEndpoints:
     .post
     .in("api" / "ocr-jobs")
     .securityIn(CommonEndpoint.accountHeader.and(CommonEndpoint.csrfHeader))
-    .in(CommonEndpoint.idempotencyKeyHeader)
-    .in(CommonEndpoint.requestIdHeader)
-    .in(jsonBody[CreateOcrJobRequest])
+    .in(createInput)
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[CreateOcrJobResponse])
     .tag("ocr")

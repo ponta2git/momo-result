@@ -63,14 +63,14 @@ object MatchDraftModule:
             HttpOperation.CreateMatchDraft,
             request,
             nowF,
-            MatchDraftCodec.parseInstantOption[F](request.playedAt).flatMap {
-              case Left(error) => security.toProblemF(error).map(Left(_))
-              case Right(playedAt) => MatchDraftCodec.toCreateCommand(request, playedAt) match
-                  case Left(error) => security.toProblemF(error).map(Left(_))
-                  case Right(command) => security.respond(
-                      createMatchDraft.run(command, member.accountId, member.playerMemberId)
-                    )(MatchDraftResponse.from)
-            },
+            security.decode(
+              MatchDraftCodec.parseInstantOption(request.playedAt)
+                .flatMap(MatchDraftCodec.toCreateCommand(request, _))
+            )(command =>
+              security.respond(
+                createMatchDraft.run(command, member.accountId, member.playerMemberId)
+              )(MatchDraftResponse.from)
+            ),
           )
       }
     },
@@ -84,15 +84,14 @@ object MatchDraftModule:
             HttpOperation.UpdateMatchDraft,
             (draftId, request),
             nowF,
-            MatchDraftCodec.parseInstantOption[F](request.playedAt).flatMap {
-              case Left(error) => security.toProblemF(error).map(Left(_))
-              case Right(playedAt) => security
-                  .decode(BoundaryId.required("matchDraftId", draftId)(MatchDraftId.fromString)) {
-                    id =>
-                      security.decode(MatchDraftCodec.toUpdateCommand(request, playedAt)) { command =>
-                        security.respond(updateMatchDraft.run(id, command))(MatchDraftResponse.from)
-                      }
-                  }
+            security.decode(
+              for
+                id <- BoundaryId.required("matchDraftId", draftId)(MatchDraftId.fromString)
+                playedAt <- MatchDraftCodec.parseInstantOption(request.playedAt)
+                command <- MatchDraftCodec.toUpdateCommand(request, playedAt)
+              yield (id, command)
+            ) { case (id, command) =>
+              security.respond(updateMatchDraft.run(id, command))(MatchDraftResponse.from)
             },
           )
       }
@@ -153,70 +152,70 @@ object MatchDraftModule:
                   case Right(archive) =>
                     HttpDownloadHeaders.attachment(archive.fileName) match
                       case Left(error) => security.toProblemF(error).map(Left(_))
-                      case Right(disposition) => Async[F].pure(Right((
-                          archive.contentType,
-                          disposition,
-                          HttpDownloadHeaders.PrivateNoStore,
-                          HttpDownloadHeaders.Nosniff,
-                          SourceImageTransferLogging.observe(
-                            archive.body,
-                            SourceImageTransferContext(
-                              requestId = requestId,
-                              event = "source_image_archive_transfer_completed",
-                              fields =
-                                s"accountId=${member.accountId.value} draftId=${id.value} " +
-                                  s"imageCount=${archive.imageCount.toString} " +
-                                  s"expectedArchiveBytes=${archive.archiveBytes.toString}",
+                      case Right(disposition) => Async[F].pure(Right(
+                          MatchDraftEndpoints.SourceImageArchiveStreamOutput(
+                            contentType = archive.contentType,
+                            contentDisposition = disposition,
+                            cacheControl = HttpDownloadHeaders.PrivateNoStore,
+                            contentTypeOptions = HttpDownloadHeaders.Nosniff,
+                            body = SourceImageTransferLogging.observe(
+                              archive.body,
+                              SourceImageTransferContext(
+                                requestId = requestId,
+                                event = "source_image_archive_transfer_completed",
+                                fields =
+                                  s"accountId=${member.accountId.value} draftId=${id.value} " +
+                                    s"imageCount=${archive.imageCount.toString} " +
+                                    s"expectedArchiveBytes=${archive.archiveBytes.toString}",
+                              ),
                             ),
-                          ),
-                        )))
+                          )
+                        ))
                 }
             }
         )
     },
-    SecuredEndpoint.readLogic(security, MatchDraftEndpoints.getSourceImageStream[F]) { member =>
-      {
-        case (draftId, kind, rawRequestId) =>
-          val requestId = normalizedRequestId(rawRequestId)
-          val decoded =
-            for
-              id <- BoundaryId.required("matchDraftId", draftId)(MatchDraftId.fromString)
-              parsedKind <- MatchDraftCodec.parseSourceImageKind(kind)
-            yield (id, parsedKind)
-          security.decode(decoded) { case (id, parsedKind) =>
-            sourceImageDownloadRateLimiter.allow(s"source-image-download:${member.accountId.value}")
-              .flatMap {
-                case false => sourceImageRateLimited[F, MatchDraftEndpoints.SourceImageStreamOutput[
-                    F
-                  ]](
-                    route = "image",
-                    accountId = member.accountId.value,
-                    draftId = id.value,
-                    detail = Some(parsedKind.wire),
-                  )
-                case true => getMatchDraftSourceImages.stream(id, parsedKind).flatMap {
-                    case Left(error) => security.toProblemF(error).map(Left(_))
-                    case Right(image) =>
-                      Async[F].pure(Right((
-                        image.contentType,
-                        HttpDownloadHeaders.PrivateNoStore,
-                        HttpDownloadHeaders.Nosniff,
-                        SourceImageTransferLogging.observe(
-                          image.body,
-                          SourceImageTransferContext(
-                            requestId = requestId,
-                            event = "source_image_transfer_completed",
-                            fields =
-                              s"accountId=${member.accountId.value} draftId=${id.value} " +
-                                s"kind=${parsedKind.wire} " +
-                                s"expectedBodyBytes=${image.bodyBytes.toString}",
-                          ),
+    SecuredEndpoint.readLogic(security, MatchDraftEndpoints.getSourceImageStream[F]) {
+      member => input =>
+        val requestId = normalizedRequestId(input.requestId)
+        val decoded =
+          for
+            id <- BoundaryId.required("matchDraftId", input.draftId)(MatchDraftId.fromString)
+            parsedKind <- MatchDraftCodec.parseSourceImageKind(input.kind)
+          yield (id, parsedKind)
+        security.decode(decoded) { case (id, parsedKind) =>
+          sourceImageDownloadRateLimiter.allow(s"source-image-download:${member.accountId.value}")
+            .flatMap {
+              case false => sourceImageRateLimited[F, MatchDraftEndpoints.SourceImageStreamOutput[
+                  F
+                ]](
+                  route = "image",
+                  accountId = member.accountId.value,
+                  draftId = id.value,
+                  detail = Some(parsedKind.wire),
+                )
+              case true => getMatchDraftSourceImages.stream(id, parsedKind).flatMap {
+                  case Left(error) => security.toProblemF(error).map(Left(_))
+                  case Right(image) =>
+                    Async[F].pure(Right(MatchDraftEndpoints.SourceImageStreamOutput(
+                      contentType = image.contentType,
+                      cacheControl = HttpDownloadHeaders.PrivateNoStore,
+                      contentTypeOptions = HttpDownloadHeaders.Nosniff,
+                      body = SourceImageTransferLogging.observe(
+                        image.body,
+                        SourceImageTransferContext(
+                          requestId = requestId,
+                          event = "source_image_transfer_completed",
+                          fields =
+                            s"accountId=${member.accountId.value} draftId=${id.value} " +
+                              s"kind=${parsedKind.wire} " +
+                              s"expectedBodyBytes=${image.bodyBytes.toString}",
                         ),
-                      )))
-                  }
-              }
-          }
-      }
+                      ),
+                    )))
+                }
+            }
+        }
     },
   )
 

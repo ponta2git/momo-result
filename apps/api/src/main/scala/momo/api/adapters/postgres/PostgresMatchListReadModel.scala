@@ -8,7 +8,6 @@ import doobie.postgres.implicits.*
 import doobie.util.fragments
 
 import momo.api.adapters.postgres.PostgresMeta.given
-import momo.api.db.Database
 import momo.api.domain.matchlist.MatchListProjection
 import momo.api.domain.{
   MatchDraftStatus,
@@ -189,11 +188,10 @@ object PostgresMatchList extends PostgresMatchListSupport:
       else pageSize
 end PostgresMatchList
 
-/** Backwards-compatible class facade. */
 final class PostgresMatchListReadModel[F[_]: MonadCancelThrow](transactor: Transactor[F])
     extends MatchListReadModel[F]:
   private val delegate: MatchListReadModel[F] = MatchListReadModel
-    .fromAlg(PostgresMatchList.alg, Database.transactK(transactor))
+    .fromAlg(PostgresMatchList.alg, transactor.trans)
 
   export delegate.*
 end PostgresMatchListReadModel

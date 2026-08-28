@@ -9,7 +9,6 @@ import doobie.implicits.*
 import doobie.postgres.implicits.*
 
 import momo.api.adapters.postgres.PostgresMeta.given
-import momo.api.db.Database
 import momo.api.domain.*
 import momo.api.domain.ids.*
 import momo.api.errors.AppError
@@ -93,7 +92,7 @@ end PostgresMapMasters
 final class PostgresMapMastersRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
     extends MapMastersRepository[F]:
   private val delegate: MapMastersRepository[F] = MapMastersRepository
-    .fromAlg(PostgresMapMasters.alg, Database.transactK(transactor))
+    .fromAlg(PostgresMapMasters.alg, transactor.trans)
 
   export delegate.*
 end PostgresMapMastersRepository

@@ -1,7 +1,5 @@
 package momo.api.bootstrap
 
-import java.time.Instant
-
 import cats.Apply
 import cats.effect.std.{Random, SecureRandom}
 import cats.effect.{Async, Clock, Sync}
@@ -28,11 +26,6 @@ import momo.api.usecases.images.*
 import momo.api.usecases.ocr.*
 
 private[bootstrap] object UseCaseWiring:
-  private[bootstrap] final case class RuntimeClock[F[_]](now: F[Instant])
-
-  private[bootstrap] object RuntimeClock:
-    def live[F[_]: Clock]: RuntimeClock[F] = RuntimeClock(Clock[F].realTimeInstant)
-
   private[bootstrap] final case class RuntimeIds[F[_]](
       nextOcrJobId: F[OcrJobId],
       nextOcrDraftId: F[OcrDraftId],
@@ -73,11 +66,11 @@ private[bootstrap] object UseCaseWiring:
         sessions: AppSessionsRepository[F],
         sessionAccounts: SessionAccountLookup[F],
         config: AuthConfig,
-        clock: RuntimeClock[F],
+        now: F[java.time.Instant],
     ): RuntimeAuthServices[F] = RuntimeAuthServices(
-      sessionService = SessionService[F](sessions, config, clock.now, sessionAccounts),
+      sessionService = SessionService[F](sessions, config, now, sessionAccounts),
       csrfTokenService = CsrfTokenService(),
-      oauthStateCodec = OAuthStateCodec[F](config, clock.now),
+      oauthStateCodec = OAuthStateCodec[F](config, now),
     )
 
   private[bootstrap] def imageStorageAdmissionConfig(
@@ -141,22 +134,22 @@ private[bootstrap] object UseCaseWiring:
       storage: RuntimeStorage[F],
       repositories: RuntimeRepositories[F],
       services: RuntimeServices[F],
-  ): F[ApiApp.Runtime[F]] =
-    val clock = RuntimeClock.live[F]
+  ): F[ApiApp.WiredRuntime[F]] =
+    val now = Clock[F].realTimeInstant
     val ids = RuntimeIds.fresh[F]
     val authServices =
       RuntimeAuthServices.from[F](
         repositories.appSessions,
         repositories.sessionAccounts,
         config.auth,
-        clock,
+        now,
       )
     val routeUseCases = UseCaseRouteBundles.from[F](
       config = config,
       storage = storage,
       repositories = repositories,
       services = services,
-      clock = clock,
+      now = now,
       ids = ids,
     )
 
@@ -188,17 +181,20 @@ private[bootstrap] object UseCaseWiring:
           rateLimiters = services.rateLimiters,
           idempotency = repositories.idempotency,
           healthDetails = services.healthDetails,
-          nowF = clock.now,
+          nowF = now,
         ))
-        ApiApp.Runtime(
-          app,
-          repositories.gameTitles,
-          repositories.mapMasters,
-          repositories.seasonMasters,
-          repositories.idempotency,
-          repositories.loginAccounts,
-          authServices.sessionService.create,
-          Async[F].never[Nothing],
-          registeredEndpoints,
+        ApiApp.WiredRuntime(
+          runtime = ApiApp.Runtime(
+            app = app,
+            backgroundFailure = Async[F].never[Nothing],
+          ),
+          handles = ApiApp.RuntimeHandles(
+            gameTitles = repositories.gameTitles,
+            mapMasters = repositories.mapMasters,
+            seasonMasters = repositories.seasonMasters,
+            loginAccounts = repositories.loginAccounts,
+            createSession = authServices.sessionService.create,
+            registeredEndpoints = registeredEndpoints,
+          ),
         )
       }

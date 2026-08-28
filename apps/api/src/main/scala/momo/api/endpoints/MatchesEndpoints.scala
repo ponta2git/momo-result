@@ -17,47 +17,57 @@ object MatchesEndpoints:
     .out(jsonBody[ConfirmMatchResponse])
     .tag("matches")
 
-  type ListInput = (
-      Option[String],
-      Option[String],
-      Option[String],
-      Option[String],
-      Option[String],
-      Option[Int],
-      Option[String],
-      Option[String],
+  final case class ListInput(
+      heldEventId: Option[String],
+      gameTitleId: Option[String],
+      seasonMasterId: Option[String],
+      status: Option[String],
+      kind: Option[String],
+      pageSize: Option[Int],
+      cursor: Option[String],
+      sort: Option[String],
   )
+
+  private val listInput: EndpointInput[ListInput] = query[Option[String]]("heldEventId")
+    .and(query[Option[String]]("gameTitleId"))
+    .and(query[Option[String]]("seasonMasterId"))
+    .and(query[Option[String]]("status"))
+    .and(query[Option[String]]("kind"))
+    .and(query[Option[Int]]("pageSize").description("1..200; defaults to 100."))
+    .and(query[Option[String]]("cursor").description(
+      "Opaque cursor returned by this endpoint. Omit it to refresh the count snapshot."
+    ))
+    .and(query[Option[String]]("sort").description(
+      "status_priority, updated_desc, held_desc, held_asc, or match_no_asc."
+    ))
+    .mapTo[ListInput]
 
   val list: CommonEndpoint.SecuredRead[ListInput, MatchListResponse] = endpoint
     .get
     .in("api" / "matches")
     .securityIn(CommonEndpoint.accountHeader)
-    .in(query[Option[String]]("heldEventId"))
-    .in(query[Option[String]]("gameTitleId"))
-    .in(query[Option[String]]("seasonMasterId"))
-    .in(query[Option[String]]("status"))
-    .in(query[Option[String]]("kind"))
-    .in(query[Option[Int]]("pageSize").description("1..200; defaults to 100."))
-    .in(query[Option[String]]("cursor").description(
-      "Opaque cursor returned by this endpoint. Omit it to refresh the count snapshot."
-    ))
-    .in(query[Option[String]]("sort").description(
-      "status_priority, updated_desc, held_desc, held_asc, or match_no_asc."
-    ))
+    .in(listInput)
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[MatchListResponse])
     .tag("matches")
 
-  type SummaryInput = (Option[String], Option[String], Option[String])
+  final case class SummaryInput(
+      heldEventId: Option[String],
+      gameTitleId: Option[String],
+      seasonMasterId: Option[String],
+  )
+
+  private val summaryInput: EndpointInput[SummaryInput] = query[Option[String]]("heldEventId")
+    .and(query[Option[String]]("gameTitleId"))
+    .and(query[Option[String]]("seasonMasterId"))
+    .mapTo[SummaryInput]
 
   val summary: CommonEndpoint.SecuredRead[SummaryInput, MatchListSummaryResponse] =
     endpoint
       .get
       .in("api" / "matches" / "summary")
       .securityIn(CommonEndpoint.accountHeader)
-      .in(query[Option[String]]("heldEventId"))
-      .in(query[Option[String]]("gameTitleId"))
-      .in(query[Option[String]]("seasonMasterId"))
+      .in(summaryInput)
       .errorOut(CommonEndpoint.errorOut)
       .out(jsonBody[MatchListSummaryResponse])
       .tag("matches")

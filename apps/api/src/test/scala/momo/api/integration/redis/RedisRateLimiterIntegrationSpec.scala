@@ -6,6 +6,7 @@ import java.util.UUID
 import scala.concurrent.duration.*
 
 import cats.effect.IO
+import cats.syntax.all.*
 import dev.profunktor.redis4cats.Redis
 import dev.profunktor.redis4cats.data.RedisCodec
 import dev.profunktor.redis4cats.effect.Log.NoOp.*
@@ -63,17 +64,60 @@ final class RedisRateLimiterIntegrationSpec extends RedisIntegrationSuite:
       Redis[IO].simple(redisUrl, RedisCodec.Utf8).use { firstCommands =>
         Redis[IO].simple(redisUrl, RedisCodec.Utf8).use { secondCommands =>
           val firstBackoff =
-            RedisOAuthProviderBackoff.fromCommands(firstCommands, namespace, 1, 60.seconds, now)
+            RedisOAuthProviderBackoff.fromCommands(firstCommands, namespace, 2, 60.seconds, now)
           val secondBackoff =
-            RedisOAuthProviderBackoff.fromCommands(secondCommands, namespace, 1, 60.seconds, now)
+            RedisOAuthProviderBackoff.fromCommands(secondCommands, namespace, 2, 60.seconds, now)
+          val failuresKey = s"momo:oauth-provider:$namespace:failures"
+          val backoffKey = s"momo:oauth-provider:$namespace:backoff"
           for
             initiallyBlocked <- secondBackoff.isBlocked
+            firstOpened <- firstBackoff.recordFailure(AppError.DependencyFailed("provider failed"))
+            failureTtl <- firstCommands.ttl(failuresKey)
             opened <- firstBackoff.recordFailure(AppError.DependencyFailed("provider failed"))
             blocked <- secondBackoff.isBlocked
+            backoffTtl <- firstCommands.ttl(backoffKey)
+            failuresAfterOpen <- firstCommands.get(failuresKey)
           yield
             assert(!initiallyBlocked)
+            assert(!firstOpened)
+            assert(failureTtl.exists(_.toSeconds > 0L))
             assert(opened)
             assert(blocked)
+            assert(backoffTtl.exists(_.toSeconds > 0L))
+            assertEquals(failuresAfterOpen, None)
+        }
+      }
+    }
+
+  test("RedisOAuthProviderBackoff opens and clears failures atomically under concurrent failures"):
+    redisUrlResource.use { redisUrl =>
+      val namespace = s"oauth-provider-concurrent-${UUID.randomUUID().toString}"
+      val now = IO.pure(Instant.parse("2026-05-14T00:00:00Z"))
+      val failure = AppError.DependencyFailed("provider failed")
+      val failuresKey = s"momo:oauth-provider:$namespace:failures"
+      val backoffKey = s"momo:oauth-provider:$namespace:backoff"
+
+      Redis[IO].simple(redisUrl, RedisCodec.Utf8).use { firstCommands =>
+        Redis[IO].simple(redisUrl, RedisCodec.Utf8).use { secondCommands =>
+          val first = RedisOAuthProviderBackoff
+            .fromCommands(firstCommands, namespace, 1, 60.seconds, now)
+          val second = RedisOAuthProviderBackoff
+            .fromCommands(secondCommands, namespace, 1, 60.seconds, now)
+          for
+            opened <- (first.recordFailure(failure), second.recordFailure(failure)).parTupled
+            blocked <- first.isBlocked
+            reopened <- first.recordFailure(failure)
+            _ <- first.recordSuccess
+            blockedAfterConcurrentSuccess <- first.isBlocked
+            backoffTtl <- firstCommands.ttl(backoffKey)
+            failures <- firstCommands.get(failuresKey)
+          yield
+            assertEquals(List(opened._1, opened._2).count(identity), 1)
+            assert(blocked)
+            assert(!reopened)
+            assert(blockedAfterConcurrentSuccess)
+            assert(backoffTtl.exists(_.toSeconds > 0L))
+            assertEquals(failures, None)
         }
       }
     }

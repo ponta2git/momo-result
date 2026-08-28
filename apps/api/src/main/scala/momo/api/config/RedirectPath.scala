@@ -7,6 +7,6 @@ object RedirectPath:
   def sanitize(value: String): Option[String] = Option.when(isSafe(value))(value)
 
   def isSafe(value: String): Boolean = value.startsWith("/") && !value.startsWith("//") &&
-    !value.exists(ch => ch == '\r' || ch == '\n')
+    !value.exists(ch => ch == '\\' || Character.isISOControl(ch))
 
   def encodeQueryValue(value: String): String = URLEncoder.encode(value, StandardCharsets.UTF_8)

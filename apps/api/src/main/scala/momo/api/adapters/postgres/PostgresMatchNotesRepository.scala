@@ -9,7 +9,6 @@ import doobie.implicits.*
 import doobie.postgres.implicits.*
 
 import momo.api.adapters.postgres.PostgresMeta.given
-import momo.api.db.Database
 import momo.api.domain.ids.{AccountId, MatchId}
 import momo.api.domain.{MatchNote, MatchNoteBody, MatchNoteVersion}
 import momo.api.repositories.{MatchNotesRepository, ReplaceMatchNoteResult}
@@ -77,6 +76,5 @@ final class PostgresMatchNotesRepository[F[_]: MonadCancelThrow](transactor: Tra
       body: Option[MatchNoteBody],
       updatedBy: AccountId,
       updatedAt: Instant,
-  ): F[ReplaceMatchNoteResult] = Database.transactK(transactor)(
-    PostgresMatchNotes.replace(matchId, expectedVersion, body, updatedBy, updatedAt)
-  )
+  ): F[ReplaceMatchNoteResult] = PostgresMatchNotes
+    .replace(matchId, expectedVersion, body, updatedBy, updatedAt).transact(transactor)

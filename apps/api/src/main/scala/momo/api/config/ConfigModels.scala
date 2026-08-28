@@ -2,14 +2,18 @@ package momo.api.config
 
 import scala.concurrent.duration.*
 
-final case class DatabaseConfig(jdbcUrl: String, user: String, password: String, poolSize: Int)
+final case class DatabaseConfig(jdbcUrl: String, user: String, password: String, poolSize: Int):
+  override def toString: String =
+    s"DatabaseConfig(jdbcUrl=[REDACTED], user=[REDACTED], password=[REDACTED], poolSize=$poolSize)"
 
 final case class RedisConfig(
     url: String,
     v2Stream: String = RedisConfig.DefaultV2Stream,
     v2DeadLetterStream: String = RedisConfig.DefaultV2DeadLetterStream,
     analysisStream: String = RedisConfig.DefaultAnalysisStream,
-)
+):
+  override def toString: String =
+    s"RedisConfig(url=[REDACTED], v2Stream=$v2Stream, v2DeadLetterStream=$v2DeadLetterStream, analysisStream=$analysisStream)"
 
 final case class SeriesAnalysisReadConfig(
     maxEncodedBytes: Long,
@@ -75,6 +79,16 @@ final case class AuthConfig(
     useSecureCookies: Boolean,
 ):
   val discordScope: String = "identify"
+
+  override def toString: String =
+    val discordConfigured = discordClientId.nonEmpty && discordClientSecret.nonEmpty &&
+      discordRedirectUri.nonEmpty
+    s"AuthConfig(discordConfigured=$discordConfigured, credentials=[REDACTED], " +
+      s"sessionCookieName=$sessionCookieName, stateCookieName=$stateCookieName, " +
+      s"sessionTtl=$sessionTtl, stateTtl=$stateTtl, rateLimitPerMinute=$rateLimitPerMinute, " +
+      s"callbackStateRateLimitPerMinute=$callbackStateRateLimitPerMinute, " +
+      s"providerFailureThreshold=$providerFailureThreshold, providerBackoff=$providerBackoff, " +
+      s"useSecureCookies=$useSecureCookies)"
 
 enum AppEnv derives CanEqual:
   case Dev, Test, Prod

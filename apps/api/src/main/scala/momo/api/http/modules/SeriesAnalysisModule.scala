@@ -43,81 +43,77 @@ object SeriesAnalysisModule:
       )
     },
     SecuredEndpoint.readLogic(security, SeriesAnalysisEndpoints.aggregate) { member => input =>
-      val (titleId, artifactId, seasonId, mapId) = input
       readChunk(
         readRateLimiter,
         member.accountId.value,
         HttpOperation.GetSeriesAnalysisAggregate,
         getChunk,
         SeriesAnalysisCodec.chunk(
-          SeriesAnalysisChunkKind.Aggregate,
-          titleId,
-          artifactId,
-          seasonId,
-          mapId,
-          None,
-          None,
-          None,
+          kind = SeriesAnalysisChunkKind.Aggregate,
+          rawGameTitleId = input.gameTitleId,
+          rawArtifactId = input.artifactId,
+          seasonMasterId = input.seasonMasterId,
+          mapMasterId = input.mapMasterId,
+          rawMemberId = None,
+          rawMetricId = None,
+          rawMatchId = None,
         ),
         security,
       )
     },
     SecuredEndpoint.readLogic(security, SeriesAnalysisEndpoints.review) { member => input =>
-      val (titleId, artifactId, seasonId, mapId) = input
       readChunk(
         readRateLimiter,
         member.accountId.value,
         HttpOperation.GetSeriesAnalysisReview,
         getChunk,
         SeriesAnalysisCodec.chunk(
-          SeriesAnalysisChunkKind.Review,
-          titleId,
-          artifactId,
-          seasonId,
-          mapId,
-          None,
-          None,
-          None,
+          kind = SeriesAnalysisChunkKind.Review,
+          rawGameTitleId = input.gameTitleId,
+          rawArtifactId = input.artifactId,
+          seasonMasterId = input.seasonMasterId,
+          mapMasterId = input.mapMasterId,
+          rawMemberId = None,
+          rawMetricId = None,
+          rawMatchId = None,
         ),
         security,
       )
     },
     SecuredEndpoint.readLogic(security, SeriesAnalysisEndpoints.drilldown) { member => input =>
-      val (titleId, artifactId, memberId, metricId, seasonId, mapId) = input
       readChunk(
         readRateLimiter,
         member.accountId.value,
         HttpOperation.GetSeriesAnalysisDrilldown,
         getChunk,
         SeriesAnalysisCodec.chunk(
-          SeriesAnalysisChunkKind.Drilldown,
-          titleId,
-          artifactId,
-          seasonId,
-          mapId,
-          rawMemberId = Some(memberId),
-          rawMetricId = Some(metricId),
+          kind = SeriesAnalysisChunkKind.Drilldown,
+          rawGameTitleId = input.gameTitleId,
+          rawArtifactId = input.artifactId,
+          seasonMasterId = input.seasonMasterId,
+          mapMasterId = input.mapMasterId,
+          rawMemberId = Some(input.memberId),
+          rawMetricId = Some(input.metricId),
           rawMatchId = None,
         ),
         security,
       )
     },
     SecuredEndpoint.readLogic(security, SeriesAnalysisEndpoints.matchContext) { member => input =>
-      val (titleId, artifactId, matchId, seasonId, mapId) = input
       readChunk(
         readRateLimiter,
         member.accountId.value,
         HttpOperation.GetSeriesAnalysisMatchContext,
         getChunk,
         SeriesAnalysisCodec.chunk(
-          SeriesAnalysisChunkKind.MatchContext,
-          titleId,
-          artifactId,
-          seasonId,
-          mapId,
+          kind = SeriesAnalysisChunkKind.MatchContext,
+          rawGameTitleId = input.gameTitleId,
+          rawArtifactId = input.artifactId,
+          seasonMasterId = input.seasonMasterId,
+          mapMasterId = input.mapMasterId,
           rawMemberId = None,
           rawMetricId = None,
-          rawMatchId = Some(matchId),
+          rawMatchId = Some(input.matchId),
         ),
         security,
       )

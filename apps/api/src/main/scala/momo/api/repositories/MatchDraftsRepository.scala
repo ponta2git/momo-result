@@ -2,10 +2,11 @@ package momo.api.repositories
 
 import java.time.Instant
 
-import cats.~>
+import cats.{~>, MonadThrow}
 
 import momo.api.domain.ids.*
 import momo.api.domain.{MatchDraft, MatchDraftStatus, ScreenType}
+import momo.api.errors.AppError
 
 trait MatchDraftsAlg[F0[_]]:
   def create(draft: MatchDraft): F0[Unit]
@@ -30,8 +31,9 @@ trait MatchDraftsAlg[F0[_]]:
       updatedAt: Instant,
   ): F0[MatchDraftSourceImageRetentionResult]
 
+/** Usecase-facing facade: expected create rejections are values; unexpected failures remain in F. */
 trait MatchDraftsRepository[F[_]]:
-  def create(draft: MatchDraft): F[Unit]
+  def create(draft: MatchDraft): F[Either[AppError, Unit]]
   def update(draft: MatchDraft, updatedAt: Instant): F[MatchDraftUpdateResult]
   def find(id: MatchDraftId): F[Option[MatchDraft]]
   def list(filter: MatchDraftsRepository.ListFilter): F[List[MatchDraft]]
@@ -91,9 +93,13 @@ object MatchDraftsRepository:
       limit: Option[Int] = None,
   )
 
-  def fromAlg[F0[_], F[_]](alg: MatchDraftsAlg[F0], liftK: F0 ~> F): MatchDraftsRepository[F] =
+  def fromAlg[F0[_], F[_]: MonadThrow](
+      alg: MatchDraftsAlg[F0],
+      liftK: F0 ~> F,
+  ): MatchDraftsRepository[F] =
     new MatchDraftsRepository[F]:
-      def create(draft: MatchDraft): F[Unit] = liftK(alg.create(draft))
+      def create(draft: MatchDraft): F[Either[AppError, Unit]] = RepositoryResult
+        .capture(liftK(alg.create(draft)))
       def update(draft: MatchDraft, updatedAt: Instant): F[MatchDraftUpdateResult] =
         liftK(alg.update(draft, updatedAt))
       def find(id: MatchDraftId): F[Option[MatchDraft]] = liftK(alg.find(id))

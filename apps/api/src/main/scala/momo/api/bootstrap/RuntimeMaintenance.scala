@@ -32,44 +32,45 @@ private[bootstrap] object RuntimeMaintenance:
       now: F[java.time.Instant],
   ): Resource[F, Unit] =
     val logger = LoggerFactory[F].getLogger
-    SourceImageOrphanReaper.resource[F](
+    val imageOrphanReaper = SourceImageOrphanReaper.resource[F](
       cleaner = imageOrphanCleaner,
       interval = config.resourceLimits.imageOrphanReaperInterval,
-    ).flatMap(_ =>
-      StaleOcrJobReaper.resource[F](
-        jobs = ocrMaintenance,
-        staleAfter = config.resourceLimits.staleOcrJobAfter,
-        interval = config.resourceLimits.staleOcrJobReaperInterval,
-        now = now,
-      )
-    ).flatMap(_ =>
-      ExpiredSessionPruner.resource[F](
-        sessions = appSessions,
-        interval = config.resourceLimits.sessionPruneInterval,
-        now = now,
-      )
-    ).flatMap(_ =>
-      PeriodicMaintenance
-        .resource("idempotency_key_pruner", config.resourceLimits.sessionPruneInterval)(
-          now.flatMap(idempotency.cleanup)
-            .flatMap(deleted => logger.info(s"idempotency_key_pruner deleted=${deleted.toString}"))
-        )
-    ).flatMap(_ =>
-      seriesAnalysisMaintenance.fold(Resource.unit[F]) { maintenance =>
-        PeriodicMaintenance
-          .resource(
-            "series_analysis_history_pruner",
-            config.resourceLimits.sessionPruneInterval,
-          )(
-            now.flatMap(current =>
-              maintenance.cleanupHistory(
-                current.minus(45, ChronoUnit.DAYS),
-                current.minus(1, ChronoUnit.DAYS),
-                limitPerTable = 500,
-              )
-            ).flatMap(counts =>
-              logger.info(s"series_analysis_history_pruner deleted=${counts.total.toString}")
-            )
-          )
-      }
     )
+    val staleOcrJobReaper = StaleOcrJobReaper.resource[F](
+      jobs = ocrMaintenance,
+      staleAfter = config.resourceLimits.staleOcrJobAfter,
+      interval = config.resourceLimits.staleOcrJobReaperInterval,
+      now = now,
+    )
+    val expiredSessionPruner = ExpiredSessionPruner.resource[F](
+      sessions = appSessions,
+      interval = config.resourceLimits.sessionPruneInterval,
+      now = now,
+    )
+    val idempotencyKeyPruner = PeriodicMaintenance.resource(
+      "idempotency_key_pruner",
+      config.resourceLimits.sessionPruneInterval,
+    )(
+      now.flatMap(idempotency.cleanup)
+        .flatMap(deleted => logger.info(s"idempotency_key_pruner deleted=${deleted.toString}"))
+    )
+    val seriesAnalysisHistoryPruner = seriesAnalysisMaintenance.fold(Resource.unit[F]) {
+      maintenance =>
+        PeriodicMaintenance.resource(
+          "series_analysis_history_pruner",
+          config.resourceLimits.sessionPruneInterval,
+        )(
+          now.flatMap(current =>
+            maintenance.cleanupHistory(
+              current.minus(45, ChronoUnit.DAYS),
+              current.minus(1, ChronoUnit.DAYS),
+              limitPerTable = 500,
+            )
+          ).flatMap(counts =>
+            logger.info(s"series_analysis_history_pruner deleted=${counts.total.toString}")
+          )
+        )
+    }
+
+    imageOrphanReaper *> staleOcrJobReaper *> expiredSessionPruner *> idempotencyKeyPruner *>
+      seriesAnalysisHistoryPruner

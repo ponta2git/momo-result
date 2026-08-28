@@ -9,7 +9,6 @@ import doobie.postgres.implicits.*
 import doobie.util.fragments
 
 import momo.api.adapters.postgres.PostgresMeta.given
-import momo.api.db.Database
 import momo.api.domain.FourPlayers
 import momo.api.domain.ids.*
 import momo.api.repositories.{MatchExportsAlg, MatchExportsRepository}
@@ -117,7 +116,7 @@ end PostgresMatchExports
 final class PostgresMatchExportsRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
     extends MatchExportsRepository[F]:
   private val delegate = MatchExportsRepository
-    .fromAlg(PostgresMatchExports.alg, Database.transactK(transactor))
+    .fromAlg(PostgresMatchExports.alg, transactor.trans)
 
   export delegate.*
 

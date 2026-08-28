@@ -5,6 +5,7 @@ import cats.syntax.all.*
 
 import momo.api.domain.*
 import momo.api.domain.ids.*
+import momo.api.errors.AppError
 import momo.api.repositories.*
 
 final class InMemoryMapMastersRepository[F[_]: Sync] private (
@@ -18,7 +19,9 @@ final class InMemoryMapMastersRepository[F[_]: Sync] private (
     items.toList.sortBy(x => (x.gameTitleId.value, x.displayOrder, x.createdAt, x.id.value))
   }
   override def find(id: MapMasterId): F[Option[MapMaster]] = ref.get.map(_.get(id))
-  override def createWithNextDisplayOrder(map: MapMaster): F[MapMaster] = ref.modify { items =>
+  override def createWithNextDisplayOrder(
+      map: MapMaster
+  ): F[Either[AppError, MapMaster]] = ref.modify { items =>
     if containsMapConflict(items, map, excluding = None) then
       (items, Left(masterConflict(s"map_master already exists: ${map.id.value} or ${map.name}")))
     else
@@ -26,20 +29,23 @@ final class InMemoryMapMastersRepository[F[_]: Sync] private (
         .maxOption.getOrElse(0) + 1
       val created = map.copy(displayOrder = nextOrder)
       (items.updated(created.id, created), Right(created))
-  }.flatMap(complete)
-  override def update(map: MapMaster): F[Unit] = ref.modify { items =>
+  }
+  override def update(map: MapMaster): F[Either[AppError, Unit]] = ref.modify { items =>
     if !items.contains(map.id) then (items, Left(notFound("map master", map.id.value)))
     else if containsMapConflict(items, map, excluding = Some(map.id)) then
       (items, Left(masterConflict(s"map_master already exists: ${map.id.value} or ${map.name}")))
     else (items.updated(map.id, map), Right(()))
-  }.flatMap(completeUnit)
-  override def delete(id: MapMasterId): F[Unit] = ref.get.flatMap { items =>
-    if !items.contains(id) then Sync[F].raiseError(notFound("map master", id.value))
+  }
+  override def delete(id: MapMasterId): F[Either[AppError, Unit]] = ref.get.flatMap { items =>
+    if !items.contains(id) then Left(notFound("map master", id.value)).pure[F]
     else
-      beforeDelete(id) *> ref.modify { current =>
-        if current.contains(id) then (current - id, Right(()))
-        else (current, Left(notFound("map master", id.value)))
-      }.flatMap(completeUnit)
+      RepositoryResult.capture(beforeDelete(id)).flatMap {
+        case Left(error) => Left(error).pure[F]
+        case Right(()) => ref.modify { current =>
+            if current.contains(id) then (current - id, Right(()))
+            else (current, Left(notFound("map master", id.value)))
+          }
+      }
   }
 
   private def containsMapConflict(

@@ -25,7 +25,11 @@ final case class R2SourceImageObjectStorageConfig private (
     apiCallTimeout: Duration,
     apiCallAttemptTimeout: Duration,
     maxAttempts: Int,
-)
+):
+  override def toString: String =
+    s"R2SourceImageObjectStorageConfig(endpoint=[REDACTED], region=$region, " +
+      s"bucket=[REDACTED], credentials=[REDACTED], apiCallTimeout=$apiCallTimeout, " +
+      s"apiCallAttemptTimeout=$apiCallAttemptTimeout, maxAttempts=$maxAttempts)"
 
 object R2SourceImageObjectStorageConfig:
   def create(

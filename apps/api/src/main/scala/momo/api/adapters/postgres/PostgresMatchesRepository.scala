@@ -15,7 +15,6 @@ import doobie.util.fragments
 import momo.api.adapters.postgres.PostgresMatchInsertOps.replaceMatchChildren
 import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.adapters.postgres.PostgresSeriesAnalysisMutationOps.enqueueMatchMutation
-import momo.api.db.Database
 import momo.api.domain.ids.*
 import momo.api.domain.{MatchNoInEvent, MatchRecord}
 import momo.api.errors.{AppError, AppException}
@@ -170,11 +169,10 @@ object PostgresMatches extends PostgresMatchesReadSupport:
         }
 end PostgresMatches
 
-/** Backwards-compatible class facade. */
 final class PostgresMatchesRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
     extends MatchesRepository[F]:
   private val delegate: MatchesRepository[F] = MatchesRepository
-    .fromAlg(PostgresMatches.alg, Database.transactK(transactor))
+    .fromAlg(PostgresMatches.alg, transactor.trans)
 
   export delegate.*
 end PostgresMatchesRepository

@@ -2,8 +2,6 @@ package momo.api.db
 
 import cats.effect.{Async, MonadCancelThrow, Resource}
 import cats.syntax.all.*
-import cats.~>
-import doobie.ConnectionIO
 import doobie.hikari.HikariTransactor
 import doobie.implicits.*
 import doobie.util.ExecutionContexts
@@ -12,17 +10,6 @@ import doobie.util.transactor.Transactor
 import momo.api.config.DatabaseConfig
 
 object Database:
-
-  /**
-   * Natural transformation `ConnectionIO ~> F` produced by a [[Transactor]].
-   *
-   * Each evaluation runs its argument inside a fresh JDBC transaction. Repository algebras remain
-   * transaction-agnostic while the repository facade owns the transaction boundary.
-   */
-  def transactK[F[_]: MonadCancelThrow](xa: Transactor[F]): ConnectionIO ~> F =
-    new (ConnectionIO ~> F):
-      def apply[A](fa: ConnectionIO[A]): F[A] = xa.trans.apply(fa)
-
   /**
    * Build a HikariTransactor[F] from a DatabaseConfig.
    *

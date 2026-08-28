@@ -117,6 +117,10 @@ final class R2SourceImageObjectStorageSpec extends MomoCatsEffectSuite:
     assert(excessiveRetries.isLeft)
     assert(!credentials.toString.contains("access"))
     assert(!credentials.toString.contains("secret"))
+    val rendered = valid.fold(fail(_), _.toString)
+    assert(!rendered.contains("account.r2.cloudflarestorage.com"))
+    assert(!rendered.contains(bucket))
+    assert(rendered.contains("[REDACTED]"))
 
   private final case class StoredObject(
       contentType: String,

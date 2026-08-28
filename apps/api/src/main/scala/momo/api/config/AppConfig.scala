@@ -18,7 +18,14 @@ final case class AppConfig(
     seriesAnalysisRead: SeriesAnalysisReadConfig = SeriesAnalysisReadConfig.defaults,
     database: Option[DatabaseConfig] = None,
     redis: Option[RedisConfig] = None,
-)
+):
+  override def toString: String =
+    val sourceImageStorageMode = sourceImageStorage match
+      case SourceImageStorageConfig.Local => "local"
+      case SourceImageStorageConfig.R2(_) => "r2"
+    s"AppConfig(appEnv=$appEnv, httpPort=$httpPort, " +
+      s"databaseConfigured=${database.nonEmpty}, redisConfigured=${redis.nonEmpty}, " +
+      s"sourceImageStorageMode=$sourceImageStorageMode)"
 
 object AppConfig:
   private val DefaultDevMemberIds: List[String] =

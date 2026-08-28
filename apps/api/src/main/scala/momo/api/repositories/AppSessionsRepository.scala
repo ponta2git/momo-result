@@ -31,13 +31,7 @@ trait AppSessionsAlg[F0[_]]:
   def deleteExpired(now: Instant): F0[Int]
 
 /** Repository for server-side Discord OAuth sessions and their lifecycle operations. */
-trait AppSessionsRepository[F[_]]:
-  def find(idHash: String): F[Option[AppSession]]
-  def upsert(session: AppSession): F[Unit]
-  def delete(idHash: String): F[Unit]
-  def deleteByAccount(accountId: AccountId): F[Int]
-  def renew(idHash: String, lastSeenAt: Instant, expiresAt: Instant): F[Unit]
-  def deleteExpired(now: Instant): F[Int]
+trait AppSessionsRepository[F[_]] extends AppSessionsAlg[F]
 
 object AppSessionsRepository:
   def fromAlg[F0[_], F[_]](alg: AppSessionsAlg[F0], liftK: F0 ~> F): AppSessionsRepository[F] =

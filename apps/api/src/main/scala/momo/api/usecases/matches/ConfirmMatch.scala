@@ -2,7 +2,7 @@ package momo.api.usecases.matches
 
 import java.time.Instant
 
-import cats.MonadThrow
+import cats.Monad
 import cats.data.EitherT
 import cats.syntax.all.*
 
@@ -27,6 +27,7 @@ import momo.api.repositories.{
   MatchesRepository,
   SeasonMastersRepository
 }
+import momo.api.usecases.common.MatchReferenceValidation
 import momo.api.usecases.matchdrafts.PurgeSourceImages
 import momo.api.usecases.syntax.UseCaseSyntax.*
 
@@ -50,7 +51,7 @@ final case class ConfirmMatchCommand(
     noteBody: Option[MatchNoteBody] = None,
 )
 
-final class ConfirmMatch[F[_]: MonadThrow](
+final class ConfirmMatch[F[_]: Monad](
     heldEvents: HeldEventsRepository[F],
     matches: MatchesRepository[F],
     matchDrafts: MatchDraftsRepository[F],
@@ -64,6 +65,9 @@ final class ConfirmMatch[F[_]: MonadThrow](
     allowedMemberIds: F[Set[MemberId]],
 ):
   import ConfirmMatch.*
+
+  private val referenceValidation =
+    MatchReferenceValidation(heldEvents, gameTitles, mapMasters, seasonMasters)
 
   def run(
       command: ConfirmMatchCommand,
@@ -85,25 +89,11 @@ final class ConfirmMatch[F[_]: MonadThrow](
         allowed,
       ).leftMap(errors => AppError.ValidationFailed(MatchPolicy.toMessage(errors)))
     )
-    _ <- heldEvents.find(command.heldEventId).orNotFound("held event", command.heldEventId.value)
-      .void
-    title <- gameTitles.find(command.gameTitleId)
-      .orNotFound("game title", command.gameTitleId.value)
-    mapMaster <- mapMasters.find(command.mapMasterId)
-      .orNotFound("map master", command.mapMasterId.value)
-    _ <- EitherT.fromEither[F](
-      if mapMaster.gameTitleId == title.id then Right(())
-      else
-        Left(AppError.ValidationFailed(s"mapMasterId ${mapMaster
-            .id} does not belong to gameTitleId ${title.id}."))
-    )
-    season <- seasonMasters.find(command.seasonMasterId)
-      .orNotFound("season master", command.seasonMasterId.value)
-    _ <- EitherT.fromEither[F](
-      if season.gameTitleId == title.id then Right(())
-      else
-        Left(AppError.ValidationFailed(s"seasonMasterId ${season
-            .id} does not belong to gameTitleId ${title.id}."))
+    title <- referenceValidation.validateRequired(
+      command.heldEventId,
+      command.gameTitleId,
+      command.mapMasterId,
+      command.seasonMasterId,
     )
     duplicate <- EitherT.liftF(matches.existsMatchNo(command.heldEventId, validated.matchNoInEvent))
     _ <- EitherT.fromEither[F](
@@ -131,8 +121,9 @@ final class ConfirmMatch[F[_]: MonadThrow](
             EitherT.fromEither[F](validateDraftForConfirm(draft, command.draftRefs))
               .map(_ => Some(draft))
           }
-    confirmation <- confirmations
-      .confirm(record, maybeDraft.map(MatchDraftConfirmation.from), createdAt).recoverAppError
+    confirmation <- EitherT(
+      confirmations.confirm(record, maybeDraft.map(MatchDraftConfirmation.from), createdAt)
+    )
     _ <- EitherT.fromEither[F](
       confirmation match
         case MatchConfirmationResult.Confirmed => Right(())

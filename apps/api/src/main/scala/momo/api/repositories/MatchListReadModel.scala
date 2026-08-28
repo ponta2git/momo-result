@@ -18,10 +18,7 @@ trait MatchListAlg[F0[_]]:
   def listDraftsByHeldEvent(heldEventId: HeldEventId): F0[List[MatchListItem]]
   def summarize(filter: MatchListReadModel.SummaryFilter): F0[MatchListSummary]
 
-trait MatchListReadModel[F[_]]:
-  def list(filter: MatchListReadModel.Filter): F[MatchListReadModel.CursorPage[MatchListItem]]
-  def listDraftsByHeldEvent(heldEventId: HeldEventId): F[List[MatchListItem]]
-  def summarize(filter: MatchListReadModel.SummaryFilter): F[MatchListSummary]
+trait MatchListReadModel[F[_]] extends MatchListAlg[F]
 
 object MatchListReadModel:
   enum CursorDirection derives CanEqual:

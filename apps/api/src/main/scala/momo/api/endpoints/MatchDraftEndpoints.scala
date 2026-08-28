@@ -60,29 +60,50 @@ object MatchDraftEndpoints:
     .out(jsonBody[MatchDraftSourceImageListResponse])
     .tag("match-drafts")
 
-  type SourceImageStreamOutput[F[_]] = (String, String, String, Stream[F, Byte])
+  final case class SourceImageInput(
+      draftId: String,
+      kind: String,
+      requestId: Option[String],
+  )
+
+  final case class SourceImageStreamOutput[F[_]](
+      contentType: String,
+      cacheControl: String,
+      contentTypeOptions: String,
+      body: Stream[F, Byte],
+  )
+
+  private val sourceImageInput: EndpointInput[SourceImageInput] = (
+    "api" / "match-drafts" / path[String]("draftId") / "source-images" / path[String]("kind")
+  ).and(CommonEndpoint.requestIdHeader).mapTo[SourceImageInput]
 
   def getSourceImageStream[F[_]]
       : Endpoint[
         Option[String],
-        (String, String, Option[String]),
+        SourceImageInput,
         ProblemDetails.ProblemResponse,
         SourceImageStreamOutput[F],
         Fs2Streams[F]
       ] =
     endpoint
       .get
-      .in("api" / "match-drafts" / path[String]("draftId") / "source-images" / path[String]("kind"))
+      .in(sourceImageInput)
       .securityIn(CommonEndpoint.accountHeader)
-      .in(CommonEndpoint.requestIdHeader)
       .errorOut(CommonEndpoint.errorOut)
       .out(header[String]("Content-Type"))
       .out(header[String]("Cache-Control"))
       .out(header[String]("X-Content-Type-Options"))
       .out(streamBinaryBody(Fs2Streams[F])(CodecFormat.OctetStream()))
+      .mapOutTo[SourceImageStreamOutput[F]]
       .tag("match-drafts")
 
-  type SourceImageArchiveStreamOutput[F[_]] = (String, String, String, String, Stream[F, Byte])
+  final case class SourceImageArchiveStreamOutput[F[_]](
+      contentType: String,
+      contentDisposition: String,
+      cacheControl: String,
+      contentTypeOptions: String,
+      body: Stream[F, Byte],
+  )
 
   def downloadSourceImagesStream[F[_]]
       : Endpoint[
@@ -103,4 +124,5 @@ object MatchDraftEndpoints:
       .out(header[String]("Cache-Control"))
       .out(header[String]("X-Content-Type-Options"))
       .out(streamBinaryBody(Fs2Streams[F])(CodecFormat.Zip()))
+      .mapOutTo[SourceImageArchiveStreamOutput[F]]
       .tag("match-drafts")

@@ -22,7 +22,7 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
 
   private val app = ResourceFunFixture(seededWiredHttpAppResource("momo-api-held", seedMasters))
 
-  private def seedMasters(wired: ApiApp.Runtime[IO]): IO[Unit] =
+  private def seedMasters(wired: ApiApp.RuntimeHandles[IO]): IO[Unit] =
     val now = Instant.parse("2024-01-01T00:00:00Z")
     for
       _ <- wired.gameTitles.createWithNextDisplayOrder(

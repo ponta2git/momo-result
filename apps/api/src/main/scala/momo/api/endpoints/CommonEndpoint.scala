@@ -23,6 +23,7 @@ object CommonEndpoint:
   val errorOut: EndpointOutput[ProblemResponse] = statusCode
     .and(header[Option[String]]("Retry-After"))
     .and(jsonBody[ProblemDetails])
+    .mapTo[ProblemResponse]
 
   /**
    * Dev/Test account shortcut header. Production ignores externally supplied account ids and

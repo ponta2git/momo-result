@@ -18,7 +18,7 @@ import momo.api.adapters.inmemory.{
 import momo.api.adapters.storage.local.LocalFsImageStore
 import momo.api.domain.ids.*
 import momo.api.domain.{GameTitle, MatchRecord, PlayerResult, StoredImage}
-import momo.api.errors.{AppError, AppException}
+import momo.api.errors.AppError
 import momo.api.ports.storage.ImageStorage
 import momo.api.repositories.{
   MatchConfirmationRepository,
@@ -253,8 +253,8 @@ final class ConfirmMatchSpec extends MomoCatsEffectSuite:
         record: MatchRecord,
         draft: Option[MatchDraftConfirmation],
         updatedAt: Instant,
-    ): IO[MatchConfirmationResult] =
-      IO.raiseError(new AppException(AppError.Conflict("confirmation conflict")))
+    ): IO[Either[AppError, MatchConfirmationResult]] =
+      IO.pure(Left(AppError.Conflict("confirmation conflict")))
 
   private object UnavailableImageStorage extends ImageStorage[IO]:
     override def save(

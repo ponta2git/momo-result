@@ -8,7 +8,6 @@ import doobie.implicits.*
 import doobie.postgres.implicits.*
 
 import momo.api.adapters.postgres.PostgresMeta.given
-import momo.api.db.Database
 import momo.api.domain.ids.*
 import momo.api.domain.{
   FailureCode,
@@ -234,11 +233,10 @@ object PostgresOcrJobs:
         yield cancelledDraftIds.size
 end PostgresOcrJobs
 
-/** Backwards-compatible class facade. */
 final class PostgresOcrJobsRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
     extends OcrJobsRepository[F]:
   private val delegate: OcrJobsRepository[F] = OcrJobsRepository
-    .fromAlg(PostgresOcrJobs.alg, Database.transactK(transactor))
+    .fromAlg(PostgresOcrJobs.alg, transactor.trans)
 
   export delegate.*
 end PostgresOcrJobsRepository

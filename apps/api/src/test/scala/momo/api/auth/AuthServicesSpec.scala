@@ -6,10 +6,11 @@ import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
 import java.time.Instant
 import java.util.Optional
-import java.util.concurrent.{CompletableFuture, Executor, Flow}
+import java.util.concurrent.{CompletableFuture, CountDownLatch, Executor, Flow, TimeUnit}
 import javax.net.ssl.{SSLContext, SSLParameters, SSLSession}
 
 import scala.concurrent.duration.*
+import scala.util.Failure
 
 import cats.effect.IO
 
@@ -193,6 +194,27 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
     }
   }
 
+  test("JavaDiscordOAuthClient interrupts a blocking provider request when canceled") {
+    val entered = CountDownLatch(1)
+    val interrupted = CountDownLatch(1)
+    val client = JavaDiscordOAuthClient[IO](
+      config.copy(
+        discordClientId = Some("client-id"),
+        discordClientSecret = Some("client-secret"),
+        discordRedirectUri = Some("https://example.com/api/auth/callback"),
+      ),
+      InterruptibleHttpClient(entered, interrupted),
+    )
+
+    for
+      fiber <- client.fetchUser("code").start
+      requestEntered <- IO.blocking(entered.await(1L, TimeUnit.SECONDS))
+      _ = assert(requestEntered, "provider request did not enter HttpClient.send")
+      _ <- fiber.cancel
+      interruptionObserved <- IO.blocking(interrupted.await(1L, TimeUnit.SECONDS))
+    yield assert(interruptionObserved, "cancel did not interrupt HttpClient.send")
+  }
+
   test("CsrfTokenService verifies the hashed session csrf secret"):
     for csrfHash <- SessionTokenHash.sha256[IO]("secret") yield
       val session = AppSession(
@@ -339,6 +361,10 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
       blockedAfterFirst <- backoff.isBlocked
       secondOpened <- backoff.recordFailure(AppError.DependencyFailed("provider failed"))
       blockedAfterSecond <- backoff.isBlocked
+      _ <- nowRef.set(Instant.parse("2026-01-01T00:00:30Z"))
+      reopenedWhileBlocked <- backoff.recordFailure(AppError.DependencyFailed("provider failed"))
+      _ <- backoff.recordSuccess
+      blockedAfterConcurrentSuccess <- backoff.isBlocked
       _ <- nowRef.set(Instant.parse("2026-01-01T00:01:01Z"))
       blockedAfterCooldown <- backoff.isBlocked
     yield
@@ -347,6 +373,8 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
       assert(!blockedAfterFirst)
       assert(secondOpened)
       assert(blockedAfterSecond)
+      assert(!reopenedWhileBlocked)
+      assert(blockedAfterConcurrentSuccess)
       assert(!blockedAfterCooldown)
   }
 
@@ -421,6 +449,46 @@ final class AuthServicesSpec extends MomoCatsEffectSuite:
     ): CompletableFuture[HttpResponse[T]] =
       val _ = pushPromiseHandler
       CompletableFuture.completedFuture(send(request, responseBodyHandler))
+
+  private final case class InterruptibleHttpClient(
+      entered: CountDownLatch,
+      interrupted: CountDownLatch,
+  ) extends HttpClient:
+    override def cookieHandler(): Optional[CookieHandler] = Optional.empty()
+    override def connectTimeout(): Optional[java.time.Duration] = Optional.empty()
+    override def followRedirects(): HttpClient.Redirect = HttpClient.Redirect.NEVER
+    override def proxy(): Optional[ProxySelector] = Optional.empty()
+    override def sslContext(): SSLContext = SSLContext.getDefault
+    override def sslParameters(): SSLParameters = SSLParameters()
+    override def authenticator(): Optional[Authenticator] = Optional.empty()
+    override def version(): HttpClient.Version = HttpClient.Version.HTTP_1_1
+    override def executor(): Optional[Executor] = Optional.empty()
+    override def send[T](
+        request: HttpRequest,
+        responseBodyHandler: HttpResponse.BodyHandler[T],
+    ): HttpResponse[T] =
+      val _ = (request, responseBodyHandler)
+      entered.countDown()
+      try
+        CountDownLatch(1).await()
+        Failure[HttpResponse[T]](new AssertionError("unreachable")).get
+      catch
+        case error: InterruptedException =>
+          interrupted.countDown()
+          Failure[HttpResponse[T]](error).get
+    override def sendAsync[T](
+        request: HttpRequest,
+        responseBodyHandler: HttpResponse.BodyHandler[T],
+    ): CompletableFuture[HttpResponse[T]] = CompletableFuture.failedFuture(
+      new UnsupportedOperationException("sendAsync is not used by this test")
+    )
+    override def sendAsync[T](
+        request: HttpRequest,
+        responseBodyHandler: HttpResponse.BodyHandler[T],
+        pushPromiseHandler: HttpResponse.PushPromiseHandler[T],
+    ): CompletableFuture[HttpResponse[T]] = CompletableFuture.failedFuture(
+      new UnsupportedOperationException("sendAsync is not used by this test")
+    )
 
   private final case class StaticResponseInfo(status: Int) extends HttpResponse.ResponseInfo:
     override def statusCode(): Int = status

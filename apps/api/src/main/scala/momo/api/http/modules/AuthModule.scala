@@ -23,7 +23,7 @@ import momo.api.config.{AppConfig, AppEnv, RedirectPath}
 import momo.api.domain.ids.AccountId
 import momo.api.endpoints.{AuthEndpoints, AuthMeResponse, AuthPaths, ProblemDetails}
 import momo.api.errors.AppError
-import momo.api.http.{ClientIp, CsrfMiddleware}
+import momo.api.http.{AuthPolicy, ClientIp}
 import momo.api.repositories.LoginAccountsRepository
 
 object AuthModule:
@@ -48,32 +48,32 @@ object AuthModule:
       config.auth.callbackRedirectPath,
     )
     List(
-      AuthEndpoints.login.serverLogic { case (silentParam, nextParam, request) =>
+      AuthEndpoints.login.serverLogic { input =>
         login(
-          silent = silentParam.contains("1"),
-          next = nextParam.flatMap(RedirectPath.sanitize),
-          clientKey = ClientIp.of(request),
+          silent = input.silent.contains("1"),
+          next = input.next.flatMap(RedirectPath.sanitize),
+          clientKey = ClientIp.of(input.request),
           config = config,
           oauth = oauth,
           stateCodec = stateCodec,
           rateLimiter = rateLimiter,
         )
       },
-      AuthEndpoints.callback.serverLogic { case (code, state, oauthError, cookies, request) =>
+      AuthEndpoints.callback.serverLogic { input =>
         callback(
-          code = code,
-          state = state,
-          oauthError = oauthError,
-          cookies = cookies,
-          clientKey = ClientIp.of(request),
+          code = input.code,
+          state = input.state,
+          oauthError = input.oauthError,
+          cookies = input.cookies,
+          clientKey = ClientIp.of(input.request),
           config = config,
           completeOAuthCallback = completeOAuthCallback,
           rateLimiter = rateLimiter,
         )
       },
       AuthEndpoints.logout
-        .serverSecurityLogic { case (csrfToken, cookies) =>
-          authenticateLogout(config, sessions, csrf, csrfToken, cookies)
+        .serverSecurityLogic { input =>
+          authenticateLogout(config, sessions, csrf, input.csrfToken, input.cookies)
         }
         .serverLogic(authenticated =>
           _ =>
@@ -81,8 +81,8 @@ object AuthModule:
               .as(Right(List(clearSessionCookie(config))))
         ),
       AuthEndpoints.me
-        .serverSecurityLogic { case (accountHeader, cookies) =>
-          authenticateMe(config, sessions, csrf, accounts, accountHeader, cookies)
+        .serverSecurityLogic { input =>
+          authenticateMe(config, sessions, csrf, accounts, input.accountHeader, input.cookies)
         }
         .serverLogic(authMe => _ => Async[F].pure(Right(authMe))),
     )
@@ -102,7 +102,7 @@ object AuthModule:
         for
           state <- stateCodec.create(silent, next)
           location <- oauth.authorizationUrl(state, if silent then Some("none") else None)
-        yield Right((location, List(stateCookie(config, state))))
+        yield Right(AuthEndpoints.RedirectOutput(location, List(stateCookie(config, state))))
     }
 
   private def callback[F[_]: Async](
@@ -133,15 +133,18 @@ object AuthModule:
       decision: OAuthCallbackDecision,
   ): F[Either[AuthEndpoints.AuthProblemResponse, AuthEndpoints.RedirectOutput]] = decision match
     case OAuthCallbackDecision.Completed(redirectPath, session) =>
-      Async[F].pure(Right((
-        redirectPath,
-        List(
+      Async[F].pure(Right(AuthEndpoints.RedirectOutput(
+        location = redirectPath,
+        cookies = List(
           sessionCookie(config, session.cookieValue),
           clearStateCookie(config),
         ),
       )))
     case OAuthCallbackDecision.ProviderDeniedSilent(next) =>
-      Async[F].pure(Right((interactiveLoginPath(next), List(clearStateCookie(config)))))
+      Async[F].pure(Right(AuthEndpoints.RedirectOutput(
+        interactiveLoginPath(next),
+        List(clearStateCookie(config)),
+      )))
     case OAuthCallbackDecision.Rejected(reason, error) =>
       callbackProblem(config, reason, error)
 
@@ -181,7 +184,7 @@ object AuthModule:
                     displayName = account.displayName,
                     isAdmin = account.isAdmin,
                     memberId = account.playerMemberId.map(_.value),
-                    csrfToken = Some(CsrfMiddleware.DevToken),
+                    csrfToken = Some(AuthPolicy.DevelopmentCsrfToken),
                   ))
                 case Some(_) =>
                   Left(authProblem(
@@ -237,8 +240,8 @@ object AuthModule:
       error: AppError,
       cookies: List[CookieWithMeta],
   ): AuthEndpoints.AuthProblemResponse =
-    val (status, _, details) = ProblemDetails.from(error)
-    (status, details, cookies)
+    val problem = ProblemDetails.from(error)
+    AuthEndpoints.AuthProblemResponse(problem.status, problem.body, cookies)
 
   private def interactiveLoginPath(next: Option[String]): String = next match
     case None => AuthPaths.LoginPath

@@ -2,7 +2,6 @@ package momo.api.endpoints.codec
 
 import java.time.Instant
 
-import cats.effect.Async
 import cats.syntax.all.*
 
 import momo.api.domain.MatchDraftStatus
@@ -17,12 +16,11 @@ import momo.api.usecases.matchdrafts.{
 
 /** DTO ↔ usecase command conversions for `MatchDraftEndpoints`. */
 object MatchDraftCodec:
-  def parseInstantOption[F[_]: Async](value: Option[String]): F[Either[AppError, Option[Instant]]] =
+  def parseInstantOption(value: Option[String]): Either[AppError, Option[Instant]] =
     value match
-      case None => Async[F].pure(Right(None))
+      case None => Right(None)
       case Some(raw) => Either.catchOnly[Exception](Instant.parse(raw))
           .leftMap(_ => AppError.ValidationFailed("playedAt must be ISO8601 instant.")).map(Some(_))
-          .pure[F]
 
   private def parseStatusOption(value: Option[String]): Either[AppError, Option[MatchDraftStatus]] =
     value match

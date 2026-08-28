@@ -1,11 +1,10 @@
 package momo.api.usecases.syntax
 
+import cats.Functor
 import cats.data.EitherT
-import cats.syntax.applicativeError.*
 import cats.syntax.functor.*
-import cats.{Functor, MonadThrow}
 
-import momo.api.errors.{AppError, AppException}
+import momo.api.errors.AppError
 
 /**
  * Small, opinionated combinators for usecase composition.
@@ -27,15 +26,5 @@ object UseCaseSyntax:
     /** Convert a missing value into [[AppError.NotFound]]. */
     def orNotFound(resource: String, id: String)(using F: Functor[F]): EitherT[F, AppError, A] =
       orError(AppError.NotFound(resource, id))
-
-  extension [F[_], A](fa: F[A])
-    /** Convert expected repository-domain failures into the usecase error channel. */
-    def recoverAppError(using F: MonadThrow[F]): EitherT[F, AppError, A] = EitherT {
-      F.flatMap(fa.attempt) {
-        case Right(value) => F.pure(Right(value))
-        case Left(app: AppException) => F.pure(Left(app.error))
-        case Left(error) => F.raiseError[Either[AppError, A]](error)
-      }
-    }
 
 end UseCaseSyntax

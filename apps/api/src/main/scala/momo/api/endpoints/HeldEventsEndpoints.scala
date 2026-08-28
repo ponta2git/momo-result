@@ -7,17 +7,24 @@ import sttp.tapir.json.circe.*
 object HeldEventsEndpoints:
   type GetInput = String
 
-  val list: CommonEndpoint.SecuredRead[
-    (Option[String], Option[Int], Option[Int], Option[Int]),
-    HeldEventListResponse,
-  ] = endpoint
+  final case class ListInput(
+      searchQuery: Option[String],
+      limit: Option[Int],
+      page: Option[Int],
+      pageSize: Option[Int],
+  )
+
+  private val listInput: EndpointInput[ListInput] = query[Option[String]]("q")
+    .and(query[Option[Int]]("limit").description("1..100; defaults to 20."))
+    .and(query[Option[Int]]("page").description("1-based page number; defaults to 1."))
+    .and(query[Option[Int]]("pageSize").description("1..100; overrides limit when present."))
+    .mapTo[ListInput]
+
+  val list: CommonEndpoint.SecuredRead[ListInput, HeldEventListResponse] = endpoint
     .get
     .in("api" / "held-events")
     .securityIn(CommonEndpoint.accountHeader)
-    .in(query[Option[String]]("q"))
-    .in(query[Option[Int]]("limit").description("1..100; defaults to 20."))
-    .in(query[Option[Int]]("page").description("1-based page number; defaults to 1."))
-    .in(query[Option[Int]]("pageSize").description("1..100; overrides limit when present."))
+    .in(listInput)
     .errorOut(CommonEndpoint.errorOut)
     .out(jsonBody[HeldEventListResponse])
     .tag("held-events")

@@ -4,7 +4,7 @@ import java.net.http.{HttpClient, HttpRequest, HttpResponse}
 import java.net.{URI, URLEncoder}
 import java.nio.charset.StandardCharsets
 
-import cats.effect.{Async, Resource, Sync}
+import cats.effect.{Async, Resource}
 import cats.syntax.all.*
 import io.circe.Decoder
 import io.circe.parser.decode
@@ -46,7 +46,7 @@ final class JavaDiscordOAuthClient[F[_]: Async](config: AuthConfig, client: Http
       case Right(accessToken) => fetchUserInfo(accessToken)
     }
 
-  private def exchangeToken(code: String): F[Either[AppError, String]] = Async[F].blocking {
+  private def exchangeToken(code: String): F[Either[AppError, String]] = Async[F].interruptible {
     Either.catchNonFatal {
       val body = formEncode(Map(
         "client_id" -> config.discordClientId.getOrElse(""),
@@ -73,7 +73,7 @@ final class JavaDiscordOAuthClient[F[_]: Async](config: AuthConfig, client: Http
   }
 
   private def fetchUserInfo(accessToken: String): F[Either[AppError, DiscordUser]] = Async[F]
-    .blocking {
+    .interruptible {
       Either.catchNonFatal {
         val request = HttpRequest.newBuilder(URI.create(userUrl))
           .header("Authorization", s"Bearer $accessToken").timeout(RequestTimeout).GET().build()
@@ -126,5 +126,5 @@ object JavaDiscordOAuthClient:
 
   def resource[F[_]: Async](config: AuthConfig): Resource[F, JavaDiscordOAuthClient[F]] = Resource
     .fromAutoCloseable(
-      Sync[F].delay(HttpClient.newBuilder().connectTimeout(ConnectTimeout).build())
+      Async[F].blocking(HttpClient.newBuilder().connectTimeout(ConnectTimeout).build())
     ).map(new JavaDiscordOAuthClient[F](config, _))

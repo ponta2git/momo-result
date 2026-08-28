@@ -65,11 +65,13 @@ final class SessionService[F[_]: Sync: SecureRandom](
       )
       current <- EitherT.liftF(now)
       idHash <- EitherT.liftF(SessionTokenHash.sha256[F](tokens.sessionToken))
-      csrfMatches <- EitherT.liftF(SessionTokenHash.matches[F](tokens.csrfToken))
       sessionAccount <- EitherT.fromOptionF(sessionAccounts.find(idHash), AppError.Unauthorized())
       session = sessionAccount.session
+      csrfMatches <- EitherT.liftF(
+        SessionTokenHash.matches[F](tokens.csrfToken, session.csrfSecretHash)
+      )
       _ <- EitherT(rejectExpired(session, current))
-      _ <- EitherT.cond[F](csrfMatches(session.csrfSecretHash), (), AppError.Unauthorized())
+      _ <- EitherT.cond[F](csrfMatches, (), AppError.Unauthorized())
       account <- EitherT(loadEnabledAccount(session, sessionAccount.account.some))
       authenticated <-
         EitherT.liftF(completeAuthentication(session, account, tokens.csrfToken, current))

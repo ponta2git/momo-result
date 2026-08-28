@@ -12,7 +12,6 @@ import io.circe.Json
 import io.circe.syntax.*
 
 import momo.api.adapters.postgres.PostgresMeta.given
-import momo.api.db.Database
 import momo.api.domain.ids.AccountId
 import momo.api.repositories.{
   IdempotencyAlg,
@@ -186,7 +185,7 @@ end PostgresIdempotency
 final class PostgresIdempotencyRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
     extends IdempotencyRepository[F]:
   private val delegate: IdempotencyRepository[F] = IdempotencyRepository
-    .fromAlg(PostgresIdempotency.alg, Database.transactK(transactor))
+    .fromAlg(PostgresIdempotency.alg, transactor.trans)
 
   export delegate.*
 end PostgresIdempotencyRepository

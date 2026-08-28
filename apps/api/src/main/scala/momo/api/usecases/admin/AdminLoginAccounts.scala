@@ -2,7 +2,7 @@ package momo.api.usecases.admin
 
 import java.time.Instant
 
-import cats.MonadThrow
+import cats.Monad
 import cats.data.EitherT
 import cats.syntax.all.*
 
@@ -37,7 +37,7 @@ final case class UpdateLoginAccountCommand(
 final class ListLoginAccounts[F[_]](accounts: LoginAccountsRepository[F]):
   def run: F[List[LoginAccount]] = accounts.list
 
-final class CreateLoginAccount[F[_]: MonadThrow](
+final class CreateLoginAccount[F[_]: Monad](
     accounts: LoginAccountsRepository[F],
     members: MembersRepository[F],
     now: F[Instant],
@@ -53,7 +53,7 @@ final class CreateLoginAccount[F[_]: MonadThrow](
     )
     id <- EitherT.liftF(nextId)
     at <- EitherT.liftF(now)
-    created <- accounts.create(CreateLoginAccountData(
+    created <- EitherT(accounts.create(CreateLoginAccountData(
       id = id,
       discordUserId = discordUserId,
       displayName = displayName,
@@ -62,10 +62,10 @@ final class CreateLoginAccount[F[_]: MonadThrow](
       isAdmin = command.isAdmin,
       createdAt = at,
       updatedAt = at,
-    )).recoverAppError
+    )))
   yield created).value
 
-final class UpdateLoginAccount[F[_]: MonadThrow](
+final class UpdateLoginAccount[F[_]: Monad](
     administration: LoginAccountAdministrationRepository[F],
     members: MembersRepository[F],
     now: F[Instant],

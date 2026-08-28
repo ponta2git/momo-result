@@ -11,7 +11,6 @@ import doobie.postgres.implicits.*
 import io.circe.{parser, Json}
 
 import momo.api.adapters.postgres.PostgresMeta.given
-import momo.api.db.Database
 import momo.api.domain.ids.*
 import momo.api.domain.{OcrDraft, ScreenType}
 import momo.api.repositories.{OcrDraftsAlg, OcrDraftsRepository}
@@ -91,11 +90,10 @@ object PostgresOcrDrafts:
         """.query[Row].to[List].map(_.iterator.map(row => row.id -> toDraft(row)).toMap)
 end PostgresOcrDrafts
 
-/** Backwards-compatible class facade. */
 final class PostgresOcrDraftsRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
     extends OcrDraftsRepository[F]:
   private val delegate: OcrDraftsRepository[F] = OcrDraftsRepository
-    .fromAlg(PostgresOcrDrafts.alg, Database.transactK(transactor))
+    .fromAlg(PostgresOcrDrafts.alg, transactor.trans)
 
   export delegate.*
 end PostgresOcrDraftsRepository

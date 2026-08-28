@@ -48,41 +48,38 @@ object OcrModule:
       nowF: F[Instant],
       security: EndpointSecurity[F],
   ): List[ServerEndpoint[Any, F]] = List(
-    SecuredEndpoint.mutationLogic(security, OcrJobEndpoints.create) { member =>
-      {
-        case (idemKey, requestId, request) =>
-          IdempotencyReplay.wrap[F, CreateOcrJobRequest, CreateOcrJobResponse](
-            idempotency,
-            idemKey,
-            member,
-            HttpOperation.CreateOcrJob,
-            request,
-            nowF,
-            security.decode(OcrJobCodec.toCreateCommand(request))(command =>
-              createRateLimiter.allow(s"ocr-job-create:${member.accountId.value}").flatMap {
+    SecuredEndpoint.mutationLogic(security, OcrJobEndpoints.create) { member => input =>
+      IdempotencyReplay.wrap[F, CreateOcrJobRequest, CreateOcrJobResponse](
+        idempotency,
+        input.idempotencyKey,
+        member,
+        HttpOperation.CreateOcrJob,
+        input.request,
+        nowF,
+        security.decode(OcrJobCodec.toCreateCommand(input.request))(command =>
+          createRateLimiter.allow(s"ocr-job-create:${member.accountId.value}").flatMap {
+            case false => ocrCreateRateLimited(
+                scope = "account",
+                accountId = member.accountId.value,
+                detail = "Too many OCR jobs. Try again later.",
+              )
+            case true => globalCreateRateLimiter.allow("global").flatMap {
                 case false => ocrCreateRateLimited(
-                    scope = "account",
+                    scope = "global",
                     accountId = member.accountId.value,
-                    detail = "Too many OCR jobs. Try again later.",
+                    detail = "Too many OCR jobs are being created. Try again later.",
                   )
-                case true => globalCreateRateLimiter.allow("global").flatMap {
-                    case false => ocrCreateRateLimited(
-                        scope = "global",
-                        accountId = member.accountId.value,
-                        detail = "Too many OCR jobs are being created. Try again later.",
-                      )
-                    case true => respondCreate(
-                        createOcrJob.run(command, requestId),
-                        accountId = member.accountId.value,
-                        request = request,
-                        requestId = requestId,
-                        security = security,
-                      )
-                  }
+                case true => respondCreate(
+                    createOcrJob.run(command, input.requestId),
+                    accountId = member.accountId.value,
+                    request = input.request,
+                    requestId = input.requestId,
+                    security = security,
+                  )
               }
-            ),
-          )
-      }
+          }
+        ),
+      )
     },
     SecuredEndpoint.readLogic(security, OcrJobEndpoints.get) { member => jobId =>
       ReadRateLimit.enforce(readRateLimiter, member.accountId.value, HttpOperation.GetOcrJob) {

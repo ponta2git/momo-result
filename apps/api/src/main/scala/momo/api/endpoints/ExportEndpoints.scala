@@ -3,20 +3,34 @@ package momo.api.endpoints
 import sttp.tapir.*
 
 object ExportEndpoints:
-  type MatchExportInput = (String, Option[String], Option[String], Option[String])
+  final case class MatchExportInput(
+      format: String,
+      seasonMasterId: Option[String],
+      heldEventId: Option[String],
+      matchId: Option[String],
+  )
 
-  type MatchExportOutput = (String, String, String)
+  final case class MatchExportOutput(
+      contentDisposition: String,
+      contentType: String,
+      body: String,
+  )
+
+  private val matchExportInput: EndpointInput[MatchExportInput] = query[String]("format")
+    .and(query[Option[String]]("seasonMasterId"))
+    .and(query[Option[String]]("heldEventId"))
+    .and(query[Option[String]]("matchId"))
+    .mapTo[MatchExportInput]
+
+  private val matchExportOutput: EndpointOutput[MatchExportOutput] = header[String](
+    "Content-Disposition"
+  ).and(header[String]("Content-Type")).and(stringBody).mapTo[MatchExportOutput]
 
   val matches: CommonEndpoint.SecuredRead[MatchExportInput, MatchExportOutput] = endpoint
     .get
     .in("api" / "exports" / "matches")
     .securityIn(CommonEndpoint.accountHeader)
-    .in(query[String]("format"))
-    .in(query[Option[String]]("seasonMasterId"))
-    .in(query[Option[String]]("heldEventId"))
-    .in(query[Option[String]]("matchId"))
+    .in(matchExportInput)
     .errorOut(CommonEndpoint.errorOut)
-    .out(header[String]("Content-Disposition"))
-    .out(header[String]("Content-Type"))
-    .out(stringBody)
+    .out(matchExportOutput)
     .tag("exports")

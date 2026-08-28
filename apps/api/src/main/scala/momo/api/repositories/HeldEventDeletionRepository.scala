@@ -14,8 +14,7 @@ enum HeldEventDeletionResult derives CanEqual:
 trait HeldEventDeletionAlg[F0[_]]:
   def deleteIfUnreferenced(id: HeldEventId): F0[HeldEventDeletionResult]
 
-trait HeldEventDeletionRepository[F[_]]:
-  def deleteIfUnreferenced(id: HeldEventId): F[HeldEventDeletionResult]
+trait HeldEventDeletionRepository[F[_]] extends HeldEventDeletionAlg[F]
 
 object HeldEventDeletionRepository:
   def fromAlg[F0[_], F[_]](
@@ -25,7 +24,4 @@ object HeldEventDeletionRepository:
     def deleteIfUnreferenced(id: HeldEventId): F[HeldEventDeletionResult] =
       liftK(alg.deleteIfUnreferenced(id))
 
-  def liftIdentity[F[_]](alg: HeldEventDeletionAlg[F]): HeldEventDeletionRepository[F] =
-    new HeldEventDeletionRepository[F]:
-      export alg.*
 end HeldEventDeletionRepository

@@ -5,6 +5,7 @@ import cats.syntax.all.*
 
 import momo.api.domain.*
 import momo.api.domain.ids.*
+import momo.api.errors.AppError
 import momo.api.repositories.*
 
 final class InMemorySeasonMastersRepository[F[_]: Sync] private (
@@ -18,21 +19,21 @@ final class InMemorySeasonMastersRepository[F[_]: Sync] private (
     items.toList.sortBy(x => (x.gameTitleId.value, x.displayOrder, x.createdAt, x.id.value))
   }
   override def find(id: SeasonMasterId): F[Option[SeasonMaster]] = ref.get.map(_.get(id))
-  override def createWithNextDisplayOrder(season: SeasonMaster): F[SeasonMaster] = ref
-    .modify { items =>
-      if containsSeasonConflict(items, season, excluding = None) then
-        (
-          items,
-          Left(masterConflict(s"season_master already exists: ${season.id.value} or ${season
-              .name}")),
-        )
-      else
-        val nextOrder = items.values.filter(_.gameTitleId == season.gameTitleId).map(_.displayOrder)
-          .maxOption.getOrElse(0) + 1
-        val created = season.copy(displayOrder = nextOrder)
-        (items.updated(created.id, created), Right(created))
-    }.flatMap(complete)
-  override def update(season: SeasonMaster): F[Unit] = ref.modify { items =>
+  override def createWithNextDisplayOrder(
+      season: SeasonMaster
+  ): F[Either[AppError, SeasonMaster]] = ref.modify { items =>
+    if containsSeasonConflict(items, season, excluding = None) then
+      (
+        items,
+        Left(masterConflict(s"season_master already exists: ${season.id.value} or ${season.name}")),
+      )
+    else
+      val nextOrder = items.values.filter(_.gameTitleId == season.gameTitleId).map(_.displayOrder)
+        .maxOption.getOrElse(0) + 1
+      val created = season.copy(displayOrder = nextOrder)
+      (items.updated(created.id, created), Right(created))
+  }
+  override def update(season: SeasonMaster): F[Either[AppError, Unit]] = ref.modify { items =>
     if !items.contains(season.id) then (items, Left(notFound("season master", season.id.value)))
     else if containsSeasonConflict(items, season, excluding = Some(season.id)) then
       (
@@ -40,14 +41,17 @@ final class InMemorySeasonMastersRepository[F[_]: Sync] private (
         Left(masterConflict(s"season_master already exists: ${season.id.value} or ${season.name}")),
       )
     else (items.updated(season.id, season), Right(()))
-  }.flatMap(completeUnit)
-  override def delete(id: SeasonMasterId): F[Unit] = ref.get.flatMap { items =>
-    if !items.contains(id) then Sync[F].raiseError(notFound("season master", id.value))
+  }
+  override def delete(id: SeasonMasterId): F[Either[AppError, Unit]] = ref.get.flatMap { items =>
+    if !items.contains(id) then Left(notFound("season master", id.value)).pure[F]
     else
-      beforeDelete(id) *> ref.modify { current =>
-        if current.contains(id) then (current - id, Right(()))
-        else (current, Left(notFound("season master", id.value)))
-      }.flatMap(completeUnit)
+      RepositoryResult.capture(beforeDelete(id)).flatMap {
+        case Left(error) => Left(error).pure[F]
+        case Right(()) => ref.modify { current =>
+            if current.contains(id) then (current - id, Right(()))
+            else (current, Left(notFound("season master", id.value)))
+          }
+      }
   }
 
   private def containsSeasonConflict(

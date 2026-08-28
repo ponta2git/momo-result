@@ -27,19 +27,19 @@ final class InMemoryOAuthProviderBackoff[F[_]: Sync] private (
   override def recordFailure(error: AppError): F[Boolean] = error match
     case _: AppError.DependencyFailed => now.flatMap { current =>
         ref.modify { state =>
-          val activeState = state.blockedUntil match
-            case Some(until) if until.isAfter(current) => state
-            case Some(_) => State.empty
-            case None => state
-          val nextFailures = activeState.failures + 1
-          if nextFailures >= failureThreshold then
-            State(0, Some(current.plusSeconds(backoff.toSeconds))) -> true
-          else activeState.copy(failures = nextFailures) -> false
+          state.blockedUntil match
+            case Some(until) if until.isAfter(current) => state -> false
+            case _ =>
+              val activeState = if state.blockedUntil.isDefined then State.empty else state
+              val nextFailures = activeState.failures + 1
+              if nextFailures >= failureThreshold then
+                State(0, Some(current.plusSeconds(backoff.toSeconds))) -> true
+              else activeState.copy(failures = nextFailures) -> false
         }
       }
     case _ => recordSuccess.as(false)
 
-  override def recordSuccess: F[Unit] = ref.set(State.empty)
+  override def recordSuccess: F[Unit] = ref.update(state => state.copy(failures = 0))
 
 object InMemoryOAuthProviderBackoff:
   final case class State(failures: Int, blockedUntil: Option[Instant])

@@ -7,22 +7,16 @@ import cats.syntax.all.*
 
 import momo.api.domain.ids.*
 import momo.api.domain.{MatchDraft, MatchDraftStatus, ScreenType}
-import momo.api.errors.{AppError, AppException}
+import momo.api.errors.AppError
 import momo.api.repositories.*
 
 final class InMemoryMatchDraftsRepository[F[_]: Sync] private (
     ref: Ref[F, Map[MatchDraftId, MatchDraft]]
 ) extends MatchDraftsRepository[F]:
-  override def create(draft: MatchDraft): F[Unit] = ref.modify { current =>
+  override def create(draft: MatchDraft): F[Either[AppError, Unit]] = ref.modify { current =>
     if current.contains(draft.id) then
-      (
-        current,
-        Left(new AppException(AppError.Conflict(s"match draft already exists: ${draft.id.value}"))),
-      )
+      (current, Left(AppError.Conflict(s"match draft already exists: ${draft.id.value}")))
     else (current + (draft.id -> draft), Right(()))
-  }.flatMap {
-    case Right(()) => Sync[F].unit
-    case Left(error) => Sync[F].raiseError(error)
   }
 
   override def update(draft: MatchDraft, updatedAt: Instant): F[MatchDraftUpdateResult] =
@@ -65,18 +59,18 @@ final class InMemoryMatchDraftsRepository[F[_]: Sync] private (
     }.toMap
   }
 
-  private[inmemory] def markConfirmedUnchecked(
-      draftId: MatchDraftId,
+  private[inmemory] def markConfirmedIfSnapshotMatches(
+      expected: MatchDraftConfirmation,
       confirmedMatchId: MatchId,
       updatedAt: Instant,
   ): F[Boolean] = ref.modify { current =>
-    current.get(draftId) match
-      case Some(e: MatchDraft.Editable) =>
+    current.get(expected.draftId) match
+      case Some(e: MatchDraft.Editable) if MatchDraftConfirmation.from(e) == expected =>
         val next = MatchDraft.Confirmed(
           common = e.common.copy(updatedAt = updatedAt),
           confirmedMatchIdValue = confirmedMatchId,
         )
-        (current + (draftId -> next), true)
+        (current + (expected.draftId -> next), true)
       case _ => (current, false)
   }
 

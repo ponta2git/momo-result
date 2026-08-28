@@ -8,11 +8,6 @@ import momo.api.domain.FourPlayers
 import momo.api.domain.ids.*
 
 trait MatchExportsAlg[F0[_]]:
-  def project(
-      selection: MatchExportsRepository.Selection
-  ): F0[List[MatchExportsRepository.ProjectedMatch]]
-
-trait MatchExportsRepository[F[_]]:
   /**
    * Returns at most `selection.limit` recent matches, ordered by the stable export order. Sequence
    * values are evaluated against all matches in the corresponding season and game title before
@@ -20,7 +15,9 @@ trait MatchExportsRepository[F[_]]:
    */
   def project(
       selection: MatchExportsRepository.Selection
-  ): F[List[MatchExportsRepository.ProjectedMatch]]
+  ): F0[List[MatchExportsRepository.ProjectedMatch]]
+
+trait MatchExportsRepository[F[_]] extends MatchExportsAlg[F]
 
 object MatchExportsRepository:
   final case class Selection(

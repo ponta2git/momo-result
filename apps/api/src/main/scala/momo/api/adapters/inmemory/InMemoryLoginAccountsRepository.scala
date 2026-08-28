@@ -5,6 +5,7 @@ import cats.syntax.all.*
 
 import momo.api.domain.*
 import momo.api.domain.ids.*
+import momo.api.errors.AppError
 import momo.api.repositories.*
 
 final class InMemoryLoginAccountsRepository[F[_]: Sync] private (
@@ -15,7 +16,7 @@ final class InMemoryLoginAccountsRepository[F[_]: Sync] private (
   override def find(id: AccountId): F[Option[LoginAccount]] = ref.get.map(_.get(id))
   override def findByDiscordUserId(userId: UserId): F[Option[LoginAccount]] = ref.get
     .map(_.values.find(_.discordUserId == userId))
-  override def create(account: CreateLoginAccountData): F[LoginAccount] =
+  override def create(account: CreateLoginAccountData): F[Either[AppError, LoginAccount]] =
     val created = LoginAccount(
       account.id,
       account.discordUserId,
@@ -36,7 +37,7 @@ final class InMemoryLoginAccountsRepository[F[_]: Sync] private (
               .discordUserId.value}.")),
         )
       else (accounts.updated(created.id, created), Right(created))
-    }.flatMap(complete)
+    }
   private[inmemory] def updateUnchecked(
       id: AccountId,
       data: UpdateLoginAccountData,

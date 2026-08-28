@@ -9,7 +9,6 @@ import doobie.implicits.*
 import doobie.postgres.implicits.*
 
 import momo.api.adapters.postgres.PostgresMeta.given
-import momo.api.db.Database
 import momo.api.domain.ids.AccountId
 import momo.api.repositories.{AppSession, AppSessionsAlg, AppSessionsRepository}
 
@@ -82,11 +81,10 @@ object PostgresAppSessions:
       sql"DELETE FROM app_sessions WHERE expires_at < $now".update.run
 end PostgresAppSessions
 
-/** Backwards-compatible class facade. */
 final class PostgresAppSessionsRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
     extends AppSessionsRepository[F]:
   private val delegate: AppSessionsRepository[F] = AppSessionsRepository
-    .fromAlg(PostgresAppSessions.alg, Database.transactK(transactor))
+    .fromAlg(PostgresAppSessions.alg, transactor.trans)
 
   export delegate.*
 end PostgresAppSessionsRepository

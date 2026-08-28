@@ -9,7 +9,6 @@ import doobie.implicits.*
 import doobie.postgres.implicits.*
 
 import momo.api.adapters.postgres.PostgresMeta.given
-import momo.api.db.Database
 import momo.api.domain.*
 import momo.api.domain.ids.*
 import momo.api.errors.AppError
@@ -93,7 +92,7 @@ end PostgresSeasonMasters
 final class PostgresSeasonMastersRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
     extends SeasonMastersRepository[F]:
   private val delegate: SeasonMastersRepository[F] = SeasonMastersRepository
-    .fromAlg(PostgresSeasonMasters.alg, Database.transactK(transactor))
+    .fromAlg(PostgresSeasonMasters.alg, transactor.trans)
 
   export delegate.*
 end PostgresSeasonMastersRepository

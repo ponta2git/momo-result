@@ -11,7 +11,6 @@ import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.domain.*
 import momo.api.domain.ids.*
 import momo.api.errors.AppError
-import momo.api.testing.AppErrorAssertions.assertAppException
 import momo.api.usecases.masters.*
 
 final class PostgresMasterRepositoriesSpec extends IntegrationSuite:
@@ -208,23 +207,23 @@ final class PostgresMasterRepositoriesSpec extends IntegrationSuite:
       createdAt = now,
     )
     for
-      updateTitle <- gameTitles.update(missingTitle).attempt
-      deleteTitle <- gameTitles.delete(missingTitle.id).attempt
-      updateMap <- mapMasters.update(missingMap).attempt
-      deleteMap <- mapMasters.delete(missingMap.id).attempt
-      updateSeason <- seasonMasters.update(missingSeason).attempt
-      deleteSeason <- seasonMasters.delete(missingSeason.id).attempt
-      updateAlias <- memberAliases.update(missingAlias).attempt
-      deleteAlias <- memberAliases.delete(missingAlias.id).attempt
+      updateTitle <- gameTitles.update(missingTitle)
+      deleteTitle <- gameTitles.delete(missingTitle.id)
+      updateMap <- mapMasters.update(missingMap)
+      deleteMap <- mapMasters.delete(missingMap.id)
+      updateSeason <- seasonMasters.update(missingSeason)
+      deleteSeason <- seasonMasters.delete(missingSeason.id)
+      updateAlias <- memberAliases.update(missingAlias)
+      deleteAlias <- memberAliases.delete(missingAlias.id)
     yield
-      assertAppException(updateTitle, AppError.NotFound("game title", missingTitle.id.value))
-      assertAppException(deleteTitle, AppError.NotFound("game title", missingTitle.id.value))
-      assertAppException(updateMap, AppError.NotFound("map master", missingMap.id.value))
-      assertAppException(deleteMap, AppError.NotFound("map master", missingMap.id.value))
-      assertAppException(updateSeason, AppError.NotFound("season master", missingSeason.id.value))
-      assertAppException(deleteSeason, AppError.NotFound("season master", missingSeason.id.value))
-      assertAppException(updateAlias, AppError.NotFound("member alias", missingAlias.id.value))
-      assertAppException(deleteAlias, AppError.NotFound("member alias", missingAlias.id.value))
+      assertEquals(updateTitle, Left(AppError.NotFound("game title", missingTitle.id.value)))
+      assertEquals(deleteTitle, Left(AppError.NotFound("game title", missingTitle.id.value)))
+      assertEquals(updateMap, Left(AppError.NotFound("map master", missingMap.id.value)))
+      assertEquals(deleteMap, Left(AppError.NotFound("map master", missingMap.id.value)))
+      assertEquals(updateSeason, Left(AppError.NotFound("season master", missingSeason.id.value)))
+      assertEquals(deleteSeason, Left(AppError.NotFound("season master", missingSeason.id.value)))
+      assertEquals(updateAlias, Left(AppError.NotFound("member alias", missingAlias.id.value)))
+      assertEquals(deleteAlias, Left(AppError.NotFound("member alias", missingAlias.id.value)))
 
   test("member aliases create, list, update, reject duplicates, and delete"):
     val create = new CreateMemberAlias[IO](
@@ -251,7 +250,7 @@ final class PostgresMasterRepositoriesSpec extends IntegrationSuite:
         memberId = MemberId.unsafeFromString("member_otaka"),
         alias = "ポン太社長",
         createdAt = now,
-      )).attempt
+      ))
       list <- memberAliases.list(Some(MemberId.unsafeFromString("member_ponta")))
       updated <- update.run(UpdateMemberAliasCommand(
         MemberAliasId.unsafeFromString("alias-ponta"),
@@ -264,7 +263,10 @@ final class PostgresMasterRepositoriesSpec extends IntegrationSuite:
     yield
       assertEquals(created.map(_.alias), Right("ポン太社長"))
       assertEquals(duplicate, Left(AppError.Conflict("member alias already exists: ポン太社長")))
-      assertAppException(duplicateDirect, AppError.Conflict("member alias already exists: ポン太社長"))
+      assertEquals(
+        duplicateDirect,
+        Left(AppError.Conflict("member alias already exists: ポン太社長")),
+      )
       assertEquals(list.map(_.id.value), List("alias-ponta"))
       assertEquals(updated.map(_.memberId), Right(MemberId.unsafeFromString("member_otaka")))
       assertEquals(found.map(_.alias), Some("おたか社長"))
@@ -290,7 +292,10 @@ final class PostgresMasterRepositoriesSpec extends IntegrationSuite:
         memberId = MemberId.unsafeFromString("member_otaka"),
         alias = "ポン太社長",
         createdAt = now,
-      )).attempt
-    yield assertAppException(duplicate, AppError.Conflict("member alias already exists: ポン太社長"))
+      ))
+    yield assertEquals(
+      duplicate,
+      Left(AppError.Conflict("member alias already exists: ポン太社長")),
+    )
 
 end PostgresMasterRepositoriesSpec

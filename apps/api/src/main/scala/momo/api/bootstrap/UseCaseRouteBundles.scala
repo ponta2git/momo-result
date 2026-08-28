@@ -34,7 +34,7 @@ private[bootstrap] object UseCaseRouteBundles:
       storage: UseCaseWiring.RuntimeStorage[F],
       repositories: UseCaseWiring.RuntimeRepositories[F],
       services: UseCaseWiring.RuntimeServices[F],
-      clock: UseCaseWiring.RuntimeClock[F],
+      now: F[java.time.Instant],
       ids: UseCaseWiring.RuntimeIds[F],
   ): UseCaseRouteBundles[F] =
     val imageStorage = storage.imageStorage
@@ -69,7 +69,7 @@ private[bootstrap] object UseCaseRouteBundles:
       matchDrafts = matchDrafts,
       queueSubmitter = ocrQueueSubmitter,
       admissionGuard = ocrAdmissionGuard,
-      now = clock.now,
+      now = now,
       nextJobId = ids.nextOcrJobId,
       nextDraftId = ids.nextOcrDraftId,
       memberAliases = memberAliases,
@@ -78,7 +78,7 @@ private[bootstrap] object UseCaseRouteBundles:
     val getOcrJob = GetOcrJob[F](jobs)
     val getOcrDraft = GetOcrDraft[F](drafts)
     val getOcrDraftsBulk = GetOcrDraftsBulk[F](drafts)
-    val cancelOcrJob = CancelOcrJob[F](jobs, clock.now)
+    val cancelOcrJob = CancelOcrJob[F](jobs, now)
     val listHeldEvents = ListHeldEvents[F](heldEvents, matches, matchDrafts)
     val getHeldEventDetail = GetHeldEventDetail[F](heldEvents, matches, matchList)
     val createHeldEvent = CreateHeldEvent[F](heldEvents, ids.nextHeldEventId)
@@ -89,7 +89,7 @@ private[bootstrap] object UseCaseRouteBundles:
       mapMasters = mapMasters,
       seasonMasters = seasonMasters,
       matchDrafts = matchDrafts,
-      now = clock.now,
+      now = now,
       nextId = ids.nextMatchDraftId,
     )
     val getMatchDraft = GetMatchDraft[F](matchDrafts)
@@ -99,10 +99,10 @@ private[bootstrap] object UseCaseRouteBundles:
       mapMasters = mapMasters,
       seasonMasters = seasonMasters,
       matchDrafts = matchDrafts,
-      now = clock.now,
+      now = now,
     )
     val cancelMatchDraft =
-      CancelMatchDraft[F](matchDraftCancellation, sourceImageRetention, clock.now)
+      CancelMatchDraft[F](matchDraftCancellation, sourceImageRetention, now)
     val getMatchDraftSourceImages = GetMatchDraftSourceImages[F](
       matchDrafts,
       imageStorage,
@@ -117,7 +117,7 @@ private[bootstrap] object UseCaseRouteBundles:
       gameTitles = gameTitles,
       mapMasters = mapMasters,
       seasonMasters = seasonMasters,
-      now = clock.now,
+      now = now,
       nextId = ids.nextMatchId,
       allowedMemberIds = members.list.map(_.map(_.id).toSet),
     )
@@ -135,14 +135,14 @@ private[bootstrap] object UseCaseRouteBundles:
       UseCaseWiring.exportMatchLimits(config.resourceLimits),
     )
     val getMatch = GetMatch[F](matches, loginAccounts)
-    val replaceMatchNote = ReplaceMatchNote[F](matchNotes, clock.now)
+    val replaceMatchNote = ReplaceMatchNote[F](matchNotes, now)
     val updateMatch = UpdateMatch[F](
       heldEvents = heldEvents,
       matches = matches,
       gameTitles = gameTitles,
       mapMasters = mapMasters,
       seasonMasters = seasonMasters,
-      now = clock.now,
+      now = now,
       allowedMemberIds = members.list.map(_.map(_.id).toSet),
     )
     val deleteMatch = DeleteMatch[F](matches)
@@ -151,9 +151,9 @@ private[bootstrap] object UseCaseRouteBundles:
     val listMapMasters = ListMapMasters[F](mapMasters)
     val listSeasonMasters = ListSeasonMasters[F](seasonMasters)
     val listIncidentMasters = ListIncidentMasters[F](incidentMasters)
-    val createGameTitle = CreateGameTitle[F](gameTitles, clock.now)
-    val createMapMaster = CreateMapMaster[F](gameTitles, mapMasters, clock.now)
-    val createSeasonMaster = CreateSeasonMaster[F](gameTitles, seasonMasters, clock.now)
+    val createGameTitle = CreateGameTitle[F](gameTitles, now)
+    val createMapMaster = CreateMapMaster[F](gameTitles, mapMasters, now)
+    val createSeasonMaster = CreateSeasonMaster[F](gameTitles, seasonMasters, now)
     val updateGameTitle = UpdateGameTitle[F](gameTitles)
     val updateMapMaster = UpdateMapMaster[F](mapMasters)
     val updateSeasonMaster = UpdateSeasonMaster[F](seasonMasters)
@@ -162,13 +162,13 @@ private[bootstrap] object UseCaseRouteBundles:
     val deleteSeasonMaster = DeleteSeasonMaster[F](seasonMasters)
     val listMemberAliases = ListMemberAliases[F](memberAliases)
     val createMemberAlias =
-      CreateMemberAlias[F](memberAliases, members, clock.now, ids.nextMemberAliasId)
+      CreateMemberAlias[F](memberAliases, members, now, ids.nextMemberAliasId)
     val updateMemberAlias = UpdateMemberAlias[F](memberAliases, members)
     val deleteMemberAlias = DeleteMemberAlias[F](memberAliases)
     val listLoginAccounts = ListLoginAccounts[F](loginAccounts)
     val createLoginAccount =
-      CreateLoginAccount[F](loginAccounts, members, clock.now, ids.nextLoginAccountId)
-    val updateLoginAccount = UpdateLoginAccount[F](loginAccountAdministration, members, clock.now)
+      CreateLoginAccount[F](loginAccounts, members, now, ids.nextLoginAccountId)
+    val updateLoginAccount = UpdateLoginAccount[F](loginAccountAdministration, members, now)
 
     UseCaseRouteBundles(
       upload = HttpRoutes.UploadUseCases(uploadImage),

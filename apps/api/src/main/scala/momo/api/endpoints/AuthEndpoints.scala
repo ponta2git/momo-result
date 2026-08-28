@@ -8,28 +8,63 @@ import sttp.tapir.json.circe.*
 import sttp.tapir.model.ServerRequest
 
 object AuthEndpoints:
-  type AuthProblemResponse = (StatusCode, ProblemDetails, List[CookieWithMeta])
-  type RedirectOutput = (String, List[CookieWithMeta])
-  type LoginInput = (Option[String], Option[String], ServerRequest)
-  type CallbackInput =
-    (Option[String], Option[String], Option[String], List[SttpCookie], ServerRequest)
-  type LogoutSecurityInput = (Option[String], List[SttpCookie])
-  type MeSecurityInput = (Option[String], List[SttpCookie])
+  final case class AuthProblemResponse(
+      status: StatusCode,
+      body: ProblemDetails,
+      cookies: List[CookieWithMeta],
+  )
+  final case class RedirectOutput(location: String, cookies: List[CookieWithMeta])
+  final case class LoginInput(
+      silent: Option[String],
+      next: Option[String],
+      request: ServerRequest,
+  )
+  final case class CallbackInput(
+      code: Option[String],
+      state: Option[String],
+      oauthError: Option[String],
+      cookies: List[SttpCookie],
+      request: ServerRequest,
+  )
+  final case class LogoutSecurityInput(csrfToken: Option[String], cookies: List[SttpCookie])
+  final case class MeSecurityInput(accountHeader: Option[String], cookies: List[SttpCookie])
 
-  private val errorOut = statusCode.and(jsonBody[ProblemDetails]).and(setCookies)
+  private val errorOut: EndpointOutput[AuthProblemResponse] = statusCode
+    .and(jsonBody[ProblemDetails])
+    .and(setCookies)
+    .mapTo[AuthProblemResponse]
+  private val redirectOut: EndpointOutput[RedirectOutput] = header[String](HeaderNames.Location)
+    .and(setCookies)
+    .mapTo[RedirectOutput]
   private val request = extractFromRequest(identity[ServerRequest])
+  private val loginInput: EndpointInput[LoginInput] = query[Option[String]](AuthPaths.SilentQuery)
+    .and(query[Option[String]](AuthPaths.NextQuery))
+    .and(request)
+    .mapTo[LoginInput]
+  private val callbackInput: EndpointInput[CallbackInput] = query[Option[String]](
+    AuthPaths.CodeQuery
+  ).and(query[Option[String]](AuthPaths.StateQuery))
+    .and(query[Option[String]](AuthPaths.ErrorQuery))
+    .and(cookies)
+    .and(request)
+    .mapTo[CallbackInput]
+  private val logoutSecurityInput: EndpointInput[LogoutSecurityInput] = CommonEndpoint
+    .csrfHeader
+    .and(cookies)
+    .mapTo[LogoutSecurityInput]
+  private val meSecurityInput: EndpointInput[MeSecurityInput] = CommonEndpoint
+    .accountHeader
+    .and(cookies)
+    .mapTo[MeSecurityInput]
 
   val login: PublicEndpoint[LoginInput, AuthProblemResponse, RedirectOutput, Any] =
     endpoint
       .get
       .in(AuthPaths.Api / AuthPaths.Auth / AuthPaths.Login)
-      .in(query[Option[String]](AuthPaths.SilentQuery))
-      .in(query[Option[String]](AuthPaths.NextQuery))
-      .in(request)
+      .in(loginInput)
       .errorOut(errorOut)
       .out(statusCode(StatusCode.Found))
-      .out(header[String](HeaderNames.Location))
-      .out(setCookies)
+      .out(redirectOut)
       .tag("auth")
       .description("Start Discord OAuth login.")
 
@@ -41,15 +76,10 @@ object AuthEndpoints:
   ] = endpoint
     .get
     .in(AuthPaths.Api / AuthPaths.Auth / AuthPaths.Callback)
-    .in(query[Option[String]](AuthPaths.CodeQuery))
-    .in(query[Option[String]](AuthPaths.StateQuery))
-    .in(query[Option[String]](AuthPaths.ErrorQuery))
-    .in(cookies)
-    .in(request)
+    .in(callbackInput)
     .errorOut(errorOut)
     .out(statusCode(StatusCode.Found))
-    .out(header[String](HeaderNames.Location))
-    .out(setCookies)
+    .out(redirectOut)
     .tag("auth")
     .description("Complete Discord OAuth login.")
 
@@ -57,7 +87,7 @@ object AuthEndpoints:
     endpoint
       .post
       .in(AuthPaths.Api / AuthPaths.Auth / AuthPaths.Logout)
-      .securityIn(CommonEndpoint.csrfHeader.and(cookies))
+      .securityIn(logoutSecurityInput)
       .errorOut(errorOut)
       .out(statusCode(StatusCode.NoContent))
       .out(setCookies)
@@ -66,7 +96,7 @@ object AuthEndpoints:
   val me: Endpoint[MeSecurityInput, Unit, AuthProblemResponse, AuthMeResponse, Any] = endpoint
     .get
     .in(AuthPaths.Api / AuthPaths.Auth / AuthPaths.Me)
-    .securityIn(CommonEndpoint.accountHeader.and(cookies))
+    .securityIn(meSecurityInput)
     .errorOut(errorOut)
     .out(jsonBody[AuthMeResponse])
     .tag("auth")

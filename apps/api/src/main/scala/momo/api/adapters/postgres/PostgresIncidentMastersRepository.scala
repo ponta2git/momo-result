@@ -8,7 +8,6 @@ import doobie.implicits.*
 import doobie.postgres.implicits.*
 
 import momo.api.adapters.postgres.PostgresMeta.given
-import momo.api.db.Database
 import momo.api.domain.*
 import momo.api.domain.ids.IncidentMasterId
 import momo.api.repositories.*
@@ -41,7 +40,7 @@ end PostgresIncidentMasters
 final class PostgresIncidentMastersRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
     extends IncidentMastersRepository[F]:
   private val delegate: IncidentMastersRepository[F] = IncidentMastersRepository
-    .fromAlg(PostgresIncidentMasters.alg, Database.transactK(transactor))
+    .fromAlg(PostgresIncidentMasters.alg, transactor.trans)
 
   export delegate.*
 end PostgresIncidentMastersRepository

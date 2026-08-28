@@ -4,6 +4,7 @@ import java.time.Instant
 
 import momo.api.domain.ids.{MatchDraftId, OcrDraftId}
 import momo.api.domain.{MatchDraft, MatchRecord}
+import momo.api.errors.AppError
 
 final case class MatchDraftConfirmation(
     draftId: MatchDraftId,
@@ -11,7 +12,7 @@ final case class MatchDraftConfirmation(
     totalAssetsDraftId: Option[OcrDraftId],
     revenueDraftId: Option[OcrDraftId],
     incidentLogDraftId: Option[OcrDraftId],
-)
+) derives CanEqual
 
 object MatchDraftConfirmation:
   def from(draft: MatchDraft): MatchDraftConfirmation = MatchDraftConfirmation(
@@ -26,9 +27,10 @@ enum MatchConfirmationResult derives CanEqual:
   case Confirmed
   case DraftSnapshotMismatch
 
+/** Atomic confirmation port. Business rejections are values; unexpected failures remain in F. */
 trait MatchConfirmationRepository[F[_]]:
   def confirm(
       record: MatchRecord,
       draft: Option[MatchDraftConfirmation],
       updatedAt: Instant,
-  ): F[MatchConfirmationResult]
+  ): F[Either[AppError, MatchConfirmationResult]]

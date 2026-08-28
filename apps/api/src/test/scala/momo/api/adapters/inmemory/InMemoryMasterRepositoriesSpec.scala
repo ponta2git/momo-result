@@ -8,7 +8,6 @@ import momo.api.MomoCatsEffectSuite
 import momo.api.domain.ids.*
 import momo.api.domain.{GameTitle, MapMaster, MemberAlias, SeasonMaster}
 import momo.api.errors.AppError
-import momo.api.testing.AppErrorAssertions.assertAppException
 
 final class InMemoryMasterRepositoriesSpec extends MomoCatsEffectSuite:
   private val now = Instant.parse("2026-05-15T01:00:00Z")
@@ -31,23 +30,23 @@ final class InMemoryMasterRepositoriesSpec extends MomoCatsEffectSuite:
       maps <- InMemoryMapMastersRepository.create[IO]
       seasons <- InMemorySeasonMastersRepository.create[IO]
       aliases <- InMemoryMemberAliasesRepository.create[IO]
-      updateTitle <- titles.update(missingTitle).attempt
-      deleteTitle <- titles.delete(titleId).attempt
-      updateMap <- maps.update(missingMap).attempt
-      deleteMap <- maps.delete(mapId).attempt
-      updateSeason <- seasons.update(missingSeason).attempt
-      deleteSeason <- seasons.delete(seasonId).attempt
-      updateAlias <- aliases.update(missingAlias).attempt
-      deleteAlias <- aliases.delete(missingAlias.id).attempt
+      updateTitle <- titles.update(missingTitle)
+      deleteTitle <- titles.delete(titleId)
+      updateMap <- maps.update(missingMap)
+      deleteMap <- maps.delete(mapId)
+      updateSeason <- seasons.update(missingSeason)
+      deleteSeason <- seasons.delete(seasonId)
+      updateAlias <- aliases.update(missingAlias)
+      deleteAlias <- aliases.delete(missingAlias.id)
     yield
-      assertAppException(updateTitle, AppError.NotFound("game title", titleId.value))
-      assertAppException(deleteTitle, AppError.NotFound("game title", titleId.value))
-      assertAppException(updateMap, AppError.NotFound("map master", mapId.value))
-      assertAppException(deleteMap, AppError.NotFound("map master", mapId.value))
-      assertAppException(updateSeason, AppError.NotFound("season master", seasonId.value))
-      assertAppException(deleteSeason, AppError.NotFound("season master", seasonId.value))
-      assertAppException(updateAlias, AppError.NotFound("member alias", missingAlias.id.value))
-      assertAppException(deleteAlias, AppError.NotFound("member alias", missingAlias.id.value))
+      assertEquals(updateTitle, Left(AppError.NotFound("game title", titleId.value)))
+      assertEquals(deleteTitle, Left(AppError.NotFound("game title", titleId.value)))
+      assertEquals(updateMap, Left(AppError.NotFound("map master", mapId.value)))
+      assertEquals(deleteMap, Left(AppError.NotFound("map master", mapId.value)))
+      assertEquals(updateSeason, Left(AppError.NotFound("season master", seasonId.value)))
+      assertEquals(deleteSeason, Left(AppError.NotFound("season master", seasonId.value)))
+      assertEquals(updateAlias, Left(AppError.NotFound("member alias", missingAlias.id.value)))
+      assertEquals(deleteAlias, Left(AppError.NotFound("member alias", missingAlias.id.value)))
 
   test("master creates reject duplicate repository identities"):
     for
@@ -58,34 +57,35 @@ final class InMemoryMasterRepositoriesSpec extends MomoCatsEffectSuite:
       _ <- titles.createWithNextDisplayOrder(gameTitle(titleId, "World"))
       duplicateTitle <- titles
         .createWithNextDisplayOrder(gameTitle(GameTitleId.unsafeFromString("title_other"), "World"))
-        .attempt
       _ <- maps.createWithNextDisplayOrder(mapMaster(mapId, titleId, "East"))
       duplicateMap <- maps
         .createWithNextDisplayOrder(
           mapMaster(MapMasterId.unsafeFromString("map_other"), titleId, "East")
-        ).attempt
+        )
       _ <- seasons.createWithNextDisplayOrder(seasonMaster(seasonId, titleId, "Spring"))
       duplicateSeason <- seasons
         .createWithNextDisplayOrder(
           seasonMaster(SeasonMasterId.unsafeFromString("season_other"), titleId, "Spring")
         )
-        .attempt
       _ <- aliases.create(MemberAlias(aliasId1, memberId, "ポン太社長", now))
-      duplicateAlias <- aliases.create(MemberAlias(aliasId2, otherMemberId, "ポン太社長", now)).attempt
+      duplicateAlias <- aliases.create(MemberAlias(aliasId2, otherMemberId, "ポン太社長", now))
     yield
-      assertAppException(
+      assertEquals(
         duplicateTitle,
-        AppError.Conflict("game_title already exists: title_other or World"),
+        Left(AppError.Conflict("game_title already exists: title_other or World")),
       )
-      assertAppException(
+      assertEquals(
         duplicateMap,
-        AppError.Conflict("map_master already exists: map_other or East"),
+        Left(AppError.Conflict("map_master already exists: map_other or East")),
       )
-      assertAppException(
+      assertEquals(
         duplicateSeason,
-        AppError.Conflict("season_master already exists: season_other or Spring"),
+        Left(AppError.Conflict("season_master already exists: season_other or Spring")),
       )
-      assertAppException(duplicateAlias, AppError.Conflict("member alias already exists: ポン太社長"))
+      assertEquals(
+        duplicateAlias,
+        Left(AppError.Conflict("member alias already exists: ポン太社長")),
+      )
 
   test("master updates reject duplicate repository identities"):
     for
@@ -97,13 +97,13 @@ final class InMemoryMasterRepositoriesSpec extends MomoCatsEffectSuite:
       _ <- titles
         .createWithNextDisplayOrder(gameTitle(GameTitleId.unsafeFromString("title_other"), "Japan"))
       duplicateTitle <- titles
-        .update(gameTitle(GameTitleId.unsafeFromString("title_other"), "World")).attempt
+        .update(gameTitle(GameTitleId.unsafeFromString("title_other"), "World"))
       _ <- maps.createWithNextDisplayOrder(mapMaster(mapId, titleId, "East"))
       _ <- maps.createWithNextDisplayOrder(
         mapMaster(MapMasterId.unsafeFromString("map_other"), titleId, "West")
       )
       duplicateMap <- maps
-        .update(mapMaster(MapMasterId.unsafeFromString("map_other"), titleId, "East")).attempt
+        .update(mapMaster(MapMasterId.unsafeFromString("map_other"), titleId, "East"))
       _ <- seasons.createWithNextDisplayOrder(seasonMaster(seasonId, titleId, "Spring"))
       _ <- seasons
         .createWithNextDisplayOrder(
@@ -111,24 +111,26 @@ final class InMemoryMasterRepositoriesSpec extends MomoCatsEffectSuite:
         )
       duplicateSeason <- seasons
         .update(seasonMaster(SeasonMasterId.unsafeFromString("season_other"), titleId, "Spring"))
-        .attempt
       _ <- aliases.create(MemberAlias(aliasId1, memberId, "ポン太社長", now))
       _ <- aliases.create(MemberAlias(aliasId2, otherMemberId, "おたか社長", now))
-      duplicateAlias <- aliases.update(MemberAlias(aliasId2, otherMemberId, "ポン太社長", now)).attempt
+      duplicateAlias <- aliases.update(MemberAlias(aliasId2, otherMemberId, "ポン太社長", now))
     yield
-      assertAppException(
+      assertEquals(
         duplicateTitle,
-        AppError.Conflict("game_title already exists: title_other or World"),
+        Left(AppError.Conflict("game_title already exists: title_other or World")),
       )
-      assertAppException(
+      assertEquals(
         duplicateMap,
-        AppError.Conflict("map_master already exists: map_other or East"),
+        Left(AppError.Conflict("map_master already exists: map_other or East")),
       )
-      assertAppException(
+      assertEquals(
         duplicateSeason,
-        AppError.Conflict("season_master already exists: season_other or Spring"),
+        Left(AppError.Conflict("season_master already exists: season_other or Spring")),
       )
-      assertAppException(duplicateAlias, AppError.Conflict("member alias already exists: ポン太社長"))
+      assertEquals(
+        duplicateAlias,
+        Left(AppError.Conflict("member alias already exists: ポン太社長")),
+      )
 
   private def gameTitle(id: GameTitleId, name: String): GameTitle =
     GameTitle(id, name, "world", 1, now)

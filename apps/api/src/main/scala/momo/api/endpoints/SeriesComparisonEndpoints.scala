@@ -2,18 +2,18 @@ package momo.api.endpoints
 
 import sttp.tapir.*
 
-import momo.api.endpoints.ProblemDetails.ProblemResponse
+import momo.api.endpoints.CommonEndpoint.SecuredRead
 
 /** Fixed compatibility tombstones for clients that still call the removed synchronous API. */
 object SeriesComparisonEndpoints:
-  private type SecuredRead = Endpoint[Option[String], Unit, ProblemResponse, Unit, Any]
+  private type TombstoneEndpoint = SecuredRead[Unit, Unit]
 
-  val options: SecuredRead = tombstone("options")
-  val aggregate: SecuredRead = tombstone()
-  val review: SecuredRead = tombstone("review")
-  val drilldown: SecuredRead = tombstone("drilldown")
+  val options: TombstoneEndpoint = tombstone("options")
+  val aggregate: TombstoneEndpoint = tombstone()
+  val review: TombstoneEndpoint = tombstone("review")
+  val drilldown: TombstoneEndpoint = tombstone("drilldown")
 
-  private def tombstone(suffix: String*): SecuredRead =
+  private def tombstone(suffix: String*): TombstoneEndpoint =
     val base = endpoint
       .securityIn(CommonEndpoint.accountHeader)
       .get

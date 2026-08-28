@@ -49,15 +49,18 @@ final class OutboxWakingRepositoriesSpec extends MomoCatsEffectSuite:
 
   test("match update and actual deletion wake analysis while false deletion does not"):
     for
+      updateResult <- Ref.of[IO, Either[AppError, Unit]](Right(()))
       deleteResult <- Ref.of[IO, Boolean](true)
       sink <- RecordingSink.create
       closed <- Ref.of[IO, Int](0)
       repository = OutboxWakingRepositories.matches(
-        matchesRepository(deleteResult),
+        matchesRepository(updateResult, deleteResult),
         sink,
         closed.update(_ + 1),
       )
       _ <- repository.update(matchRecord, now)
+      _ <- updateResult.set(Left(AppError.Conflict("rejected")))
+      rejected <- repository.update(matchRecord, now)
       deleted <- repository.delete(matchRecord.id)
       _ <- deleteResult.set(false)
       missing <- repository.delete(matchRecord.id)
@@ -65,6 +68,7 @@ final class OutboxWakingRepositoriesSpec extends MomoCatsEffectSuite:
     yield
       assert(deleted)
       assert(!missing)
+      assertEquals(rejected, Left(AppError.Conflict("rejected")))
       assertEquals(
         effects,
         List.fill(2)(PostCommitEffects.wake(OutboxKind.SeriesAnalysis)),
@@ -72,7 +76,9 @@ final class OutboxWakingRepositoriesSpec extends MomoCatsEffectSuite:
 
   test("confirmation and recalculation wake only on accepted state transitions"):
     for
-      confirmationResult <- Ref.of[IO, MatchConfirmationResult](MatchConfirmationResult.Confirmed)
+      confirmationResult <- Ref.of[IO, Either[AppError, MatchConfirmationResult]](
+        Right(MatchConfirmationResult.Confirmed)
+      )
       recalculationResult <- Ref.of[IO, Either[AppError, SeriesAnalysisRecalculationAccepted]](
         Right(acceptedRecalculation)
       )
@@ -89,16 +95,20 @@ final class OutboxWakingRepositoriesSpec extends MomoCatsEffectSuite:
         closed.update(_ + 1),
       )
       _ <- confirmations.confirm(matchRecord, None, now)
-      _ <- confirmationResult.set(MatchConfirmationResult.DraftSnapshotMismatch)
+      _ <- confirmationResult.set(Right(MatchConfirmationResult.DraftSnapshotMismatch))
       _ <- confirmations.confirm(matchRecord, None, now)
+      _ <- confirmationResult.set(Left(AppError.Conflict("rejected")))
+      rejectedConfirmation <- confirmations.confirm(matchRecord, None, now)
       _ <- analysis.requestTitleRecalculation(titleId, accountId, "title-key")
       _ <- recalculationResult.set(Left(AppError.Conflict("rejected")))
       _ <- analysis.requestAllRecalculation(accountId, "all-key")
       effects <- sink.effects
-    yield assertEquals(
-      effects,
-      List.fill(2)(PostCommitEffects.wake(OutboxKind.SeriesAnalysis)),
-    )
+    yield
+      assertEquals(rejectedConfirmation, Left(AppError.Conflict("rejected")))
+      assertEquals(
+        effects,
+        List.fill(2)(PostCommitEffects.wake(OutboxKind.SeriesAnalysis)),
+      )
 
   test("a closed sink escalates runtime failure without changing the committed result"):
     for
@@ -137,17 +147,29 @@ final class OutboxWakingRepositoriesSpec extends MomoCatsEffectSuite:
     override def store(plan: OcrJobCreationPlan): IO[OcrJobCreationStore.OcrJobCreationResult] =
       result.get
 
-  private def matchesRepository(deleteResult: Ref[IO, Boolean]): MatchesRepository[IO] =
+  private def matchesRepository(
+      updateResult: Ref[IO, Either[AppError, Unit]],
+      deleteResult: Ref[IO, Boolean],
+  ): MatchesRepository[IO] =
     new StubMatchesRepository:
-      override def update(record: MatchRecord, updatedAt: Instant): IO[Unit] = IO.unit
+      override def update(
+          record: MatchRecord,
+          updatedAt: Instant,
+      ): IO[Either[AppError, Unit]] = updateResult.get
       override def delete(id: MatchId): IO[Boolean] = deleteResult.get
 
   private def failingMatchesRepository: MatchesRepository[IO] = new StubMatchesRepository:
-    override def update(record: MatchRecord, updatedAt: Instant): IO[Unit] =
+    override def update(
+        record: MatchRecord,
+        updatedAt: Instant,
+    ): IO[Either[AppError, Unit]] =
       IO.raiseError(new IllegalStateException("transaction rolled back"))
 
   private abstract class StubMatchesRepository extends MatchesRepository[IO]:
-    override def update(record: MatchRecord, updatedAt: Instant): IO[Unit] = IO.unit
+    override def update(
+        record: MatchRecord,
+        updatedAt: Instant,
+    ): IO[Either[AppError, Unit]] = IO.pure(Right(()))
     override def delete(id: MatchId): IO[Boolean] = IO.pure(false)
     override def find(id: MatchId): IO[Option[MatchRecord]] = IO.pure(None)
     override def list(filter: MatchesRepository.ListFilter): IO[List[MatchRecord]] = IO.pure(Nil)
@@ -166,13 +188,13 @@ final class OutboxWakingRepositoriesSpec extends MomoCatsEffectSuite:
     ): IO[Map[HeldEventId, MatchesRepository.HeldEventStats]] = IO.pure(Map.empty)
 
   private def confirmationRepository(
-      result: Ref[IO, MatchConfirmationResult]
+      result: Ref[IO, Either[AppError, MatchConfirmationResult]]
   ): MatchConfirmationRepository[IO] = new MatchConfirmationRepository[IO]:
     override def confirm(
         record: MatchRecord,
         draft: Option[MatchDraftConfirmation],
         updatedAt: Instant,
-    ): IO[MatchConfirmationResult] = result.get
+    ): IO[Either[AppError, MatchConfirmationResult]] = result.get
 
   private def seriesAnalysisRepository(
       result: Ref[IO, Either[AppError, SeriesAnalysisRecalculationAccepted]]

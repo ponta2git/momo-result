@@ -4,14 +4,10 @@ import sttp.model.StatusCode
 import sttp.tapir.*
 import sttp.tapir.json.circe.*
 
-import momo.api.endpoints.ProblemDetails.ProblemResponse
+import momo.api.endpoints.CommonEndpoint.{SecuredMutation, SecuredRead}
 import momo.api.endpoints.SeriesAnalysisApiSchemas.given
 
 object SeriesAnalysisEndpoints:
-  private type SecuredRead[I, O] = Endpoint[Option[String], I, ProblemResponse, O, Any]
-  private type SecuredMutation[I, O] =
-    Endpoint[(Option[String], Option[String]), I, ProblemResponse, O, Any]
-
   private val noStore = header("Cache-Control", "private, no-store")
   private val rawJsonBody: EndpointIO.Body[Array[Byte], Array[Byte]] = EndpointIO.Body(
     RawBodyType.ByteArrayBody,
@@ -38,9 +34,50 @@ object SeriesAnalysisEndpoints:
     .out(noStore)
     .tag("analytics")
 
-  type ScopedArtifactInput = (String, String, Option[String], Option[String])
-  type DrilldownInput = (String, String, String, String, Option[String], Option[String])
-  type MatchContextInput = (String, String, String, Option[String], Option[String])
+  final case class ScopedArtifactInput(
+      gameTitleId: String,
+      artifactId: String,
+      seasonMasterId: Option[String],
+      mapMasterId: Option[String],
+  )
+
+  final case class DrilldownInput(
+      gameTitleId: String,
+      artifactId: String,
+      memberId: String,
+      metricId: String,
+      seasonMasterId: Option[String],
+      mapMasterId: Option[String],
+  )
+
+  final case class MatchContextInput(
+      gameTitleId: String,
+      artifactId: String,
+      matchId: String,
+      seasonMasterId: Option[String],
+      mapMasterId: Option[String],
+  )
+
+  private val scopedArtifactInput: EndpointInput[ScopedArtifactInput] = query[String]("gameTitleId")
+    .and(query[String]("artifactId"))
+    .and(query[Option[String]]("seasonMasterId"))
+    .and(query[Option[String]]("mapMasterId"))
+    .mapTo[ScopedArtifactInput]
+
+  private val drilldownInput: EndpointInput[DrilldownInput] = query[String]("gameTitleId")
+    .and(query[String]("artifactId"))
+    .and(query[String]("memberId"))
+    .and(query[String]("metricId"))
+    .and(query[Option[String]]("seasonMasterId"))
+    .and(query[Option[String]]("mapMasterId"))
+    .mapTo[DrilldownInput]
+
+  private val matchContextInput: EndpointInput[MatchContextInput] = query[String]("gameTitleId")
+    .and(query[String]("artifactId"))
+    .and(query[String]("matchId"))
+    .and(query[Option[String]]("seasonMasterId"))
+    .and(query[Option[String]]("mapMasterId"))
+    .mapTo[MatchContextInput]
 
   val aggregate: SecuredRead[ScopedArtifactInput, Array[Byte]] = artifactEndpoint("aggregate")
   val review: SecuredRead[ScopedArtifactInput, Array[Byte]] = artifactEndpoint("review")
@@ -49,12 +86,7 @@ object SeriesAnalysisEndpoints:
     .securityIn(CommonEndpoint.accountHeader)
     .get
     .in("api" / "analytics" / "series-comparison" / "v2" / "drilldown")
-    .in(query[String]("gameTitleId"))
-    .in(query[String]("artifactId"))
-    .in(query[String]("memberId"))
-    .in(query[String]("metricId"))
-    .in(query[Option[String]]("seasonMasterId"))
-    .in(query[Option[String]]("mapMasterId"))
+    .in(drilldownInput)
     .errorOut(CommonEndpoint.errorOut)
     .out(rawJsonBody)
     .out(noStore)
@@ -64,11 +96,7 @@ object SeriesAnalysisEndpoints:
     .securityIn(CommonEndpoint.accountHeader)
     .get
     .in("api" / "analytics" / "series-comparison" / "v2" / "match-context")
-    .in(query[String]("gameTitleId"))
-    .in(query[String]("artifactId"))
-    .in(query[String]("matchId"))
-    .in(query[Option[String]]("seasonMasterId"))
-    .in(query[Option[String]]("mapMasterId"))
+    .in(matchContextInput)
     .errorOut(CommonEndpoint.errorOut)
     .out(rawJsonBody)
     .out(noStore)
@@ -93,7 +121,7 @@ object SeriesAnalysisEndpoints:
       .securityIn(CommonEndpoint.accountHeader.and(CommonEndpoint.csrfHeader))
       .post
       .in("api" / "admin" / "series-analysis" / "recalculations")
-      .in(header[Option[String]]("Idempotency-Key"))
+      .in(CommonEndpoint.idempotencyKeyHeader)
       .in(jsonBody[SeriesAnalysisRecalculationRequest])
       .errorOut(CommonEndpoint.errorOut)
       .out(statusCode(StatusCode.Accepted))
@@ -107,7 +135,7 @@ object SeriesAnalysisEndpoints:
       .securityIn(CommonEndpoint.accountHeader.and(CommonEndpoint.csrfHeader))
       .post
       .in("api" / "admin" / "series-analysis" / "recalculations" / "all")
-      .in(header[Option[String]]("Idempotency-Key"))
+      .in(CommonEndpoint.idempotencyKeyHeader)
       .in(jsonBody[SeriesAnalysisAllRecalculationRequest])
       .errorOut(CommonEndpoint.errorOut)
       .out(statusCode(StatusCode.Accepted))
@@ -121,10 +149,7 @@ object SeriesAnalysisEndpoints:
     .securityIn(CommonEndpoint.accountHeader)
     .get
     .in("api" / "analytics" / "series-comparison" / "v2" / path)
-    .in(query[String]("gameTitleId"))
-    .in(query[String]("artifactId"))
-    .in(query[Option[String]]("seasonMasterId"))
-    .in(query[Option[String]]("mapMasterId"))
+    .in(scopedArtifactInput)
     .errorOut(CommonEndpoint.errorOut)
     .out(rawJsonBody)
     .out(noStore)

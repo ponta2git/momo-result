@@ -34,24 +34,26 @@ object HeldEventModule:
       nowF: F[Instant],
       security: EndpointSecurity[F],
   ): List[ServerEndpoint[Any, F]] = List(
-    SecuredEndpoint.readLogic(security, HeldEventsEndpoints.list) { _ =>
-      {
-        case (q, limit, page, pageSize) =>
-          security.respond(listHeldEvents.run(q, limit, page, pageSize))(result =>
-            HeldEventListResponse(
-              items = result.items.map(item =>
-                HeldEventResponse.from(
-                  item.event,
-                  item.matchCount,
-                  item.draftCount,
-                  item.nextMatchNo,
-                )
-              ),
-              pagination = PaginationResponse.from(result.pagination),
-              totalMatchCount = result.totalMatchCount,
+    SecuredEndpoint.readLogic(security, HeldEventsEndpoints.list) { _ => input =>
+      security.respond(listHeldEvents.run(
+        query = input.searchQuery,
+        limit = input.limit,
+        page = input.page,
+        pageSize = input.pageSize,
+      ))(result =>
+        HeldEventListResponse(
+          items = result.items.map(item =>
+            HeldEventResponse.from(
+              item.event,
+              item.matchCount,
+              item.draftCount,
+              item.nextMatchNo,
             )
-          )
-      }
+          ),
+          pagination = PaginationResponse.from(result.pagination),
+          totalMatchCount = result.totalMatchCount,
+        )
+      )
     },
     SecuredEndpoint.readLogic(security, HeldEventsEndpoints.get) { _ => heldEventId =>
       security.decode(BoundaryId.required(

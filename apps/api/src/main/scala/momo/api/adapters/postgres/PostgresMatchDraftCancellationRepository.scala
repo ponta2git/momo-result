@@ -8,7 +8,6 @@ import doobie.*
 import doobie.implicits.*
 
 import momo.api.adapters.postgres.PostgresMeta.given
-import momo.api.db.Database
 import momo.api.domain.MatchDraftStatus
 import momo.api.domain.ids.*
 import momo.api.repositories.{MatchDraftCancellationRepository, MatchDraftCancellationResult}
@@ -64,11 +63,10 @@ end PostgresMatchDraftCancellation
 final class PostgresMatchDraftCancellationRepository[F[_]: MonadCancelThrow](
     transactor: Transactor[F]
 ) extends MatchDraftCancellationRepository[F]:
-  private val transactK = Database.transactK(transactor)
-
   override def cancelDraftAndQueuedOcrJobs(
       draftId: MatchDraftId,
       updatedAt: Instant,
   ): F[MatchDraftCancellationResult] =
-    transactK(PostgresMatchDraftCancellation.cancelDraftAndQueuedOcrJobs(draftId, updatedAt))
+    PostgresMatchDraftCancellation
+      .cancelDraftAndQueuedOcrJobs(draftId, updatedAt).transact(transactor)
 end PostgresMatchDraftCancellationRepository

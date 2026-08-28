@@ -20,9 +20,8 @@ private[config] object DatabaseUrlConfig:
       ))
     else
       Either.catchNonFatal(URI.create(raw.replaceFirst("^postgres(ql)?://", "postgresql://")))
-        .leftMap(error =>
-          new IllegalArgumentException("DATABASE_URL must be a valid Postgres URL.", error)
-        ).flatMap { uri =>
+        .leftMap(_ => new IllegalArgumentException("DATABASE_URL must be a valid Postgres URL."))
+        .flatMap { uri =>
           Option(uri.getScheme).filter(_ == "postgresql").toRight(new IllegalArgumentException(
             "DATABASE_URL must use jdbc:postgresql://, postgres://, or postgresql://"
           )).flatMap(_ =>

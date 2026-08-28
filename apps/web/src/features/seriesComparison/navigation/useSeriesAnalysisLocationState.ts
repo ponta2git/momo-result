@@ -1,5 +1,12 @@
-import { useCallback, useDeferredValue, useEffect, useMemo, useState, useTransition } from "react";
-import { useLocation, useNavigationType, useSearchParams } from "react-router-dom";
+import {
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useOptimistic,
+  useTransition,
+} from "react";
+import { useSearchParams } from "react-router-dom";
 
 import {
   buildSeriesAnalysisSearchParams,
@@ -18,8 +25,6 @@ import { sanitizeReturnTo } from "@/shared/navigation/returnTo";
 
 /** Owns parsing, canonicalization, and intent-level updates for the series-analysis URL. */
 export function useSeriesAnalysisLocationState(options: SeriesAnalysisOptionsResponse | undefined) {
-  const location = useLocation();
-  const navigationType = useNavigationType();
   const [searchParams, setSearchParams] = useSearchParams();
   const returnTo = sanitizeReturnTo(searchParams.get("returnTo"));
   const rawState = useMemo(() => parseSeriesAnalysisSearchParams(searchParams), [searchParams]);
@@ -28,26 +33,14 @@ export function useSeriesAnalysisLocationState(options: SeriesAnalysisOptionsRes
     () => normalizeSeriesAnalysisSelection(options, rawState),
     [options, rawState],
   );
-  const [pendingIntent, setPendingIntent] = useState<{
-    originLocationKey: string;
-    state: SeriesAnalysisUrlState;
-  } | null>(null);
-  const state = pendingIntent?.state ?? urlState;
+  const [state, setOptimisticState] = useOptimistic(urlState);
   const deferredState = useDeferredValue(state);
   const urlSignature = useMemo(
     () => buildSeriesAnalysisSearchParams(urlState).toString(),
     [urlState],
   );
   const stateSignature = useMemo(() => buildSeriesAnalysisSearchParams(state).toString(), [state]);
-  const locationSettling = pendingIntent !== null && urlSignature !== stateSignature;
-
-  useEffect(() => {
-    if (!pendingIntent) return;
-    const reachedExpectedLocation = urlSignature === stateSignature;
-    const userTraversedHistory =
-      navigationType === "POP" && location.key !== pendingIntent.originLocationKey;
-    if (reachedExpectedLocation || userTraversedHistory) setPendingIntent(null);
-  }, [location.key, navigationType, pendingIntent, stateSignature, urlSignature]);
+  const locationSettling = urlSignature !== stateSignature;
 
   useEffect(() => {
     if (!options || locationSettling) return;
@@ -61,14 +54,14 @@ export function useSeriesAnalysisLocationState(options: SeriesAnalysisOptionsRes
   const update = useCallback(
     (next: SeriesAnalysisUrlState, updateOptions: { replace?: boolean } = {}) => {
       const normalized = normalizeSeriesAnalysisSelection(options, next);
-      setPendingIntent({ originLocationKey: location.key, state: normalized });
       startStateTransition(() => {
+        setOptimisticState(normalized);
         const params = buildSeriesAnalysisSearchParams(normalized);
         if (returnTo) params.set("returnTo", returnTo);
         setSearchParams(params, { replace: updateOptions.replace ?? true });
       });
     },
-    [location.key, options, returnTo, setSearchParams],
+    [options, returnTo, setOptimisticState, setSearchParams],
   );
 
   const updateGameTitle = useCallback(

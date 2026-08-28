@@ -2,8 +2,8 @@ import { ArrowRight, Camera, Download, ListFilter, Trash2 } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { heldEventOcrCaptureHref } from "@/features/heldEvents/heldEventNavigation";
-import * as heldEventViewModel from "@/features/heldEvents/heldEventViewModel";
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
+import { formatDateTimeLong } from "@/shared/lib/dateTime";
 import { useMediaQuery } from "@/shared/lib/useMediaQuery";
 import { withReturnTo } from "@/shared/navigation/returnTo";
 import { Button } from "@/shared/ui/actions/Button";
@@ -177,12 +177,10 @@ function HeldEventIdentity({
   latest: boolean;
   returnTo: string;
 }) {
-  const detailLabel = `${heldEventViewModel.formatDateTime(event.heldAt)}の開催詳細`;
+  const detailLabel = `${formatDateTimeLong(event.heldAt)}の開催詳細`;
   const detailContent = (
     <>
-      <span className="truncate tabular-nums">
-        {heldEventViewModel.formatDateTime(event.heldAt)}
-      </span>
+      <span className="truncate tabular-nums">{formatDateTimeLong(event.heldAt)}</span>
       <ArrowRight aria-hidden="true" className="size-4 shrink-0" />
     </>
   );
@@ -236,7 +234,7 @@ function HeldEventActions({
     <div className="flex min-w-0 flex-wrap items-center gap-2 md:justify-end">
       {latest ? (
         <LinkButton
-          aria-label={`${heldEventViewModel.formatDateTime(event.heldAt)}の開催にOCR取り込み`}
+          aria-label={`${formatDateTimeLong(event.heldAt)}の開催にOCR取り込み`}
           disabled={actionsDisabled}
           icon={<Camera aria-hidden="true" className="size-4" />}
           size="sm"
@@ -247,7 +245,7 @@ function HeldEventActions({
         </LinkButton>
       ) : null}
       <LinkButton
-        aria-label={`${heldEventViewModel.formatDateTime(event.heldAt)}の試合を検索`}
+        aria-label={`${formatDateTimeLong(event.heldAt)}の試合を検索`}
         disabled={actionsDisabled}
         icon={<ListFilter aria-hidden="true" className="size-4" />}
         size="sm"
@@ -257,7 +255,7 @@ function HeldEventActions({
         試合検索
       </LinkButton>
       <LinkButton
-        aria-label={`${heldEventViewModel.formatDateTime(event.heldAt)}をCSV出力`}
+        aria-label={`${formatDateTimeLong(event.heldAt)}をCSV出力`}
         disabled={actionsDisabled}
         icon={<Download aria-hidden="true" className="size-4" />}
         size="sm"
@@ -268,7 +266,7 @@ function HeldEventActions({
       </LinkButton>
       {canDelete ? (
         <Button
-          aria-label={`${heldEventViewModel.formatDateTime(event.heldAt)}を削除`}
+          aria-label={`${formatDateTimeLong(event.heldAt)}を削除`}
           disabled={deleteDisabled}
           icon={<Trash2 aria-hidden="true" className="size-4" />}
           size="sm"

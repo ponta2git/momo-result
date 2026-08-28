@@ -6,7 +6,6 @@ import { slotKinds } from "@/shared/api/enums";
 import type { MatchDraftDetailResponse } from "@/shared/api/matchDrafts";
 import type { OcrDraftResponse } from "@/shared/api/ocrDrafts";
 import type { NormalizedApiError } from "@/shared/api/problemDetails";
-import { toIsoFromLocalDateTime, toLocalDateTimeInputValue } from "@/shared/lib/dateTime";
 import { trimSearchParam } from "@/shared/lib/searchParams";
 import { bySlot } from "@/shared/lib/slotMap";
 import type { SlotMap } from "@/shared/lib/slotMap";
@@ -36,18 +35,6 @@ export function draftIdsFromDetail(detail: MatchDraftDetailResponse | undefined)
     ["revenue", detail.revenueDraftId],
     ["incident_log", detail.incidentLogDraftId],
   ]);
-}
-
-export function toIsoFromLocal(value: string): string {
-  return toIsoFromLocalDateTime(value);
-}
-
-/**
- * `<input type="datetime-local">` 用に、現在のローカル時刻を `YYYY-MM-DDTHH:mm` 形式で返す。
- * `useEffect` で初期化しないで済むよう、純粋関数として分離。
- */
-export function currentLocalIsoMinute(now: Date = new Date()): string {
-  return toLocalDateTimeInputValue(now);
 }
 
 export function dedupeWorkspaceErrors(errors: readonly NormalizedApiError[]): NormalizedApiError[] {

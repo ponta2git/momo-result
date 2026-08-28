@@ -4,13 +4,11 @@ import { describe, expect, it } from "vitest";
 import { createEmptyMatchForm } from "@/features/matches/workspace/matchFormTypes";
 import { createSampleDraft } from "@/features/matches/workspace/review/sampleDrafts";
 import {
-  currentLocalIsoMinute,
   dedupeWorkspaceErrors,
   draftIdsFromDetail,
   draftIdsFromParams,
   draftsByKind,
   prefillFromDraftSummary,
-  toIsoFromLocal,
 } from "@/features/matches/workspace/workspaceDerivations";
 import type { MatchDraftDetailResponse } from "@/shared/api/matchDrafts";
 
@@ -114,46 +112,6 @@ describe("draftIdsFromDetail", () => {
     expect(draftIdsFromDetail(detail({ totalAssetsDraftId: "ta-1" }))).toEqual({
       total_assets: "ta-1",
     });
-  });
-});
-
-describe("toIsoFromLocal", () => {
-  it("returns a UTC ISO string for valid local datetime input", () => {
-    const result = toIsoFromLocal("2026-01-01T09:00");
-
-    expect(result).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/u);
-    expect(new Date(result).toISOString()).toBe(result);
-  });
-
-  it("preserves an already-ISO string with explicit UTC marker", () => {
-    expect(toIsoFromLocal("2026-01-01T09:00:00.000Z")).toBe("2026-01-01T09:00:00.000Z");
-  });
-
-  it("returns the input unchanged when it does not parse as a date", () => {
-    expect(toIsoFromLocal("not a date")).toBe("not a date");
-    expect(toIsoFromLocal("")).toBe("");
-  });
-});
-
-describe("currentLocalIsoMinute", () => {
-  it("formats a value as YYYY-MM-DDTHH:mm (minute precision, no seconds, no timezone)", () => {
-    const result = currentLocalIsoMinute(new Date("2026-05-04T12:34:00Z"));
-
-    expect(result).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/u);
-    expect(result).toHaveLength(16);
-  });
-
-  it("uses local time (offset-corrected) so the result reads as a wall-clock minute", () => {
-    const fixed = new Date("2026-05-04T12:34:00Z");
-    const offsetMs = fixed.getTimezoneOffset() * 60_000;
-    const expected = new Date(fixed.getTime() - offsetMs).toISOString().slice(0, 16);
-
-    expect(currentLocalIsoMinute(fixed)).toBe(expected);
-  });
-
-  it("defaults to the current Date when no argument is passed", () => {
-    const result = currentLocalIsoMinute();
-    expect(result).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/u);
   });
 });
 

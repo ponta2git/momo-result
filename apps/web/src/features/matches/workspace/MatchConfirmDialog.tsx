@@ -1,5 +1,4 @@
 import { AlertTriangle, Check } from "lucide-react";
-import { useFormStatus } from "react-dom";
 
 import type { MatchFormValues } from "@/features/matches/workspace/matchFormTypes";
 import type { MatchWorkspaceConfirmationDialogModel } from "@/features/matches/workspace/matchWorkspacePageModelTypes";
@@ -32,14 +31,13 @@ type MatchConfirmReviewSummary = {
   unresolvedCount: number;
 };
 
-function ConfirmActionButtons({ onCancel }: { onCancel: () => void }) {
-  const { pending } = useFormStatus();
+function ConfirmActionButtons({ onCancel, pending }: { onCancel: () => void; pending: boolean }) {
   return (
     <div className={`mt-6 ${dialogFooterClassName}`}>
       <Button variant="secondary" disabled={pending} onClick={onCancel} type="button">
         戻って修正
       </Button>
-      <Button disabled={pending} pendingLabel="確定中…" type="submit">
+      <Button pending={pending} pendingLabel="確定中…" type="submit">
         確定する
       </Button>
     </div>
@@ -202,7 +200,7 @@ export function MatchConfirmDialog({ model }: { model: MatchWorkspaceConfirmatio
           </div>
         ) : null}
 
-        <ConfirmActionButtons onCancel={model.actions.onClose} />
+        <ConfirmActionButtons pending={model.pending} onCancel={model.actions.onClose} />
       </form>
     </Dialog>
   );

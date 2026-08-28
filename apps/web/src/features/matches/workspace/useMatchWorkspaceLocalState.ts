@@ -8,7 +8,7 @@ import { createEmptyMatchForm } from "@/features/matches/workspace/matchFormType
 import type { MatchWorkspaceInitialData } from "@/features/matches/workspace/matchFormTypes";
 import type { MatchWorkspaceOperationError } from "@/features/matches/workspace/matchWorkspaceOperationError";
 import type { SourceImageKind } from "@/features/matches/workspace/sourceImages/sourceImageTypes";
-import { currentLocalIsoMinute } from "@/features/matches/workspace/workspaceDerivations";
+import { toLocalDateTimeInputValue } from "@/shared/lib/dateTime";
 
 export function useMatchWorkspaceLocalState() {
   const [validationMessage, setValidationMessage] = useState("");
@@ -20,7 +20,7 @@ export function useMatchWorkspaceLocalState() {
     path: string;
     sequence: number;
   } | null>(null);
-  const [eventDraftValue, setEventDraftValue] = useState<string>(currentLocalIsoMinute);
+  const [eventDraftValue, setEventDraftValue] = useState<string>(toLocalDateTimeInputValue);
   const [workspaceData, setWorkspaceData] = useState<MatchWorkspaceInitialData | null>(null);
   const [preferredImageKind, setPreferredImageKind] = useState<SourceImageKind>("total_assets");
   const nowIsoFactory = useCallback(() => new Date().toISOString(), []);

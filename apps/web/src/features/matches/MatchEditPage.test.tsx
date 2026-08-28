@@ -3,7 +3,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { Link, MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { MatchEditPage } from "@/features/matches/MatchEditPage";
@@ -177,6 +177,47 @@ describe("MatchEditPage", () => {
     );
   });
 
+  it("loads the next match instead of retaining edited state when the route id changes", async () => {
+    setDevUser();
+    const secondMatchGate = createDeferred();
+    server.use(
+      http.get("/api/matches/:matchId", async ({ params }) => {
+        const matchId = String(params["matchId"]);
+        if (matchId === "match-2") {
+          await secondMatchGate.promise;
+        }
+        return HttpResponse.json(
+          makeMatchDetail({ matchId, matchNoInEvent: matchId === "match-2" ? 2 : 1 }),
+        );
+      }),
+    );
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/matches/match-1/edit"]}>
+          <Link to="/matches/match-2/edit">別の試合を編集</Link>
+          <Routes>
+            <Route path="/matches/:matchId/edit" element={<MatchEditPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "試合を編集" })).toBeInTheDocument();
+    const matchNumber = screen.getByLabelText("試合番号");
+    await user.clear(matchNumber);
+    await user.type(matchNumber, "9");
+
+    await user.click(screen.getByRole("link", { name: "別の試合を編集" }));
+
+    expect(await screen.findByLabelText("試合編集を読み込み中")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "試合を編集" })).not.toBeInTheDocument();
+
+    secondMatchGate.resolve();
+    expect(await screen.findByRole("heading", { name: "試合を編集" })).toBeInTheDocument();
+    expect(screen.getByLabelText("試合番号")).toHaveValue("2");
+  });
+
   it("offers retry when the saved match cannot be loaded", async () => {
     setDevUser();
     queryClient.setDefaultOptions({ queries: { retry: false } });
@@ -198,6 +239,29 @@ describe("MatchEditPage", () => {
 
     expect(await screen.findByText("試合編集を読み込めませんでした")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "試合編集を再読み込み" })).toBeEnabled();
+  });
+
+  it("distinguishes a missing match from a retryable edit load failure", async () => {
+    setDevUser();
+    queryClient.setDefaultOptions({ queries: { retry: false } });
+    server.use(
+      http.get("/api/matches/:matchId", () =>
+        HttpResponse.json({ detail: "match not found" }, { status: 404 }),
+      ),
+    );
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/matches/missing/edit"]}>
+          <Routes>
+            <Route path="/matches/:matchId/edit" element={<MatchEditPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByText("試合が見つかりませんでした")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "試合編集を再読み込み" })).not.toBeInTheDocument();
   });
 
   it("keeps edited values and shows an update API failure in the execution area", async () => {

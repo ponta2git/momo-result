@@ -27,7 +27,6 @@ import {
 import { defaultMemberAliasDirectory } from "@/shared/domain/memberDirectory";
 import type { MemberAliasDirectory } from "@/shared/domain/memberDirectory";
 import { workspaceInputMembers } from "@/shared/domain/members";
-import { pipe } from "@/shared/lib/pipe";
 
 export type ReviewPlayer = OriginalPlayerSnapshot;
 type ReviewFieldEvidence = ReturnType<typeof buildFieldEvidence>;
@@ -184,7 +183,7 @@ export function mergeDrafts(
     memberDirectory,
     attachedWarnings,
   );
-  const players = pipe(builtPlayers.players, padToFour, sortByAssetsDesc);
+  const players = sortByAssetsDesc(padToFour(builtPlayers.players));
   const unattachedWarnings = [parsed.totalAssets, parsed.revenue, parsed.incidentLog]
     .flatMap((draft) => draft?.warnings ?? [])
     .filter((warning) => !attachedWarnings.has(warning))

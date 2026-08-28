@@ -48,12 +48,6 @@ export function useMatchWorkspaceSessionDraft({
   const [sessionState, setSessionState] = useState<SessionState | null>(null);
 
   useEffect(() => {
-    navigationAllowedRef.current = false;
-    setCommittedKey(null);
-    setSessionState(null);
-  }, [storageKey]);
-
-  useEffect(() => {
     if (!enabled || !storageKey || !storageScope || sessionState?.key === storageKey) {
       return;
     }

@@ -27,7 +27,6 @@ export type MatchWorkspaceInitParams = {
   draftDetail: DraftDetail | undefined;
   matchDetail: MatchDetail | undefined;
   matchDraftId: string | undefined;
-  matchId: string | undefined;
   memberAliases: readonly MemberAliasRecord[];
   mode: WorkspaceMode;
   ocrDrafts: OcrDraftBulk | undefined;
@@ -42,7 +41,8 @@ export type MatchWorkspaceInitParams = {
 /**
  * モード別の初期化（edit: 既存試合 / create: 下書き / review: OCR 結果）を担う Hook。
  *
- * - ワークスペースの identity（mode + ids）が変化したときのみ初期化する
+ * - semantic workspace の切替は owning component の key で分離する
+ * - 同じ workspace 内で OCR source IDs が変化したときだけ再初期化する
  * - 初期化結果は呼び出し側の安定した onInitialize command で一括反映する
  * - effect の多重実行は ref で防ぎ、描画に使う初期化状態は state で公開する
  */
@@ -50,7 +50,6 @@ export function useMatchWorkspaceInit({
   draftDetail,
   matchDetail,
   matchDraftId,
-  matchId,
   memberAliases,
   mode,
   ocrDrafts,
@@ -61,17 +60,11 @@ export function useMatchWorkspaceInit({
   emptyFormFactory,
   nowIsoFactory,
 }: MatchWorkspaceInitParams): { isInitialized: boolean } {
-  const initializedKeyRef = useRef<string | null>(null);
-  const [initializedKey, setInitializedKey] = useState<string | null>(null);
-  const initKey = JSON.stringify({
-    hasLegacyDrafts: reviewDraftIdList.join(","),
-    matchDraftId,
-    matchId,
-    mode,
-    sample: useSampleDrafts,
-  });
+  const initializedSourceKeyRef = useRef<string | null>(null);
+  const [initializedSourceKey, setInitializedSourceKey] = useState<string | null>(null);
+  const sourceKey = JSON.stringify(reviewDraftIdList);
   useEffect(() => {
-    if (initializedKeyRef.current === initKey) {
+    if (initializedSourceKeyRef.current === sourceKey) {
       return;
     }
 
@@ -80,8 +73,8 @@ export function useMatchWorkspaceInit({
         return;
       }
       onInitialize(matchDetailToMatchForm(matchDetail), null);
-      initializedKeyRef.current = initKey;
-      setInitializedKey(initKey);
+      initializedSourceKeyRef.current = sourceKey;
+      setInitializedSourceKey(sourceKey);
       return;
     }
 
@@ -95,8 +88,8 @@ export function useMatchWorkspaceInit({
         draftDetail ?? undefined,
       );
       onInitialize(base, null);
-      initializedKeyRef.current = initKey;
-      setInitializedKey(initKey);
+      initializedSourceKeyRef.current = sourceKey;
+      setInitializedSourceKey(sourceKey);
       return;
     }
 
@@ -117,14 +110,13 @@ export function useMatchWorkspaceInit({
       });
 
       onInitialize(prepared.values, prepared.initialData);
-      initializedKeyRef.current = initKey;
-      setInitializedKey(initKey);
+      initializedSourceKeyRef.current = sourceKey;
+      setInitializedSourceKey(sourceKey);
     }
   }, [
     draftDetail,
     matchDetail,
     matchDraftId,
-    matchId,
     memberAliases,
     mode,
     ocrDrafts,
@@ -133,9 +125,9 @@ export function useMatchWorkspaceInit({
     reviewDraftIds,
     useSampleDrafts,
     emptyFormFactory,
-    initKey,
     nowIsoFactory,
+    sourceKey,
   ]);
 
-  return { isInitialized: initializedKey === initKey };
+  return { isInitialized: initializedSourceKey === sourceKey };
 }

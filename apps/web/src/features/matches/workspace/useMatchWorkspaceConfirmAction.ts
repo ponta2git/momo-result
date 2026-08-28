@@ -16,7 +16,7 @@ export function useMatchWorkspaceConfirmAction({
   ensureDraftIsOpenForConfirm: (draftId: string | undefined) => Promise<boolean>;
   values: MatchFormValues;
 }) {
-  const [, confirmAction] = useActionState<null, FormData>(async () => {
+  const [, action, pending] = useActionState<null, FormData>(async () => {
     const request = toConfirmMatchRequest(values);
     const canConfirm = await ensureDraftIsOpenForConfirm(request.matchDraftId);
     if (!canConfirm) {
@@ -27,5 +27,5 @@ export function useMatchWorkspaceConfirmAction({
     return null;
   }, null);
 
-  return confirmAction;
+  return { action, pending };
 }

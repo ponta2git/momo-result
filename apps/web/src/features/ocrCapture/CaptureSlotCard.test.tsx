@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { CaptureSlotCard } from "@/features/ocrCapture/CaptureSlotCard";
 import type { CaptureSlotState } from "@/features/ocrCapture/captureState";
 
-function renderCard(slot: CaptureSlotState, captureTarget = false) {
+function renderCard(slot: CaptureSlotState, captureTarget = false, statusRefreshing = false) {
   const onRefreshStatus = vi.fn();
   const view = render(
     <CaptureSlotCard
@@ -22,6 +22,7 @@ function renderCard(slot: CaptureSlotState, captureTarget = false) {
         label: "総資産",
         total: 3,
       }}
+      statusRefreshing={statusRefreshing}
       slot={slot}
     />,
   );
@@ -69,12 +70,15 @@ describe("CaptureSlotCard", () => {
   });
 
   it("prevents duplicate status updates while a request is in progress", () => {
-    const { onRefreshStatus } = renderCard({
-      jobId: "job-1",
-      kind: "total_assets",
-      status: "queued",
-      statusRefreshPending: true,
-    });
+    const { onRefreshStatus } = renderCard(
+      {
+        jobId: "job-1",
+        kind: "total_assets",
+        status: "queued",
+      },
+      false,
+      true,
+    );
 
     const refresh = screen.getByRole("button", { name: "更新中" });
     expect(refresh).toBeDisabled();

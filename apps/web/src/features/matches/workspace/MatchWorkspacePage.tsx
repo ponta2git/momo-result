@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 
 import { MatchConfirmDialog } from "@/features/matches/workspace/MatchConfirmDialog";
 import type { WorkspaceMode } from "@/features/matches/workspace/matchFormTypes";
@@ -8,6 +9,8 @@ import { MatchWorkspaceHeader } from "@/features/matches/workspace/MatchWorkspac
 import { MatchWorkspaceLoading } from "@/features/matches/workspace/MatchWorkspaceLoading";
 import { MatchWorkspaceNavigationGuard } from "@/features/matches/workspace/MatchWorkspaceNavigationGuard";
 import { useMatchWorkspacePageModel } from "@/features/matches/workspace/useMatchWorkspacePageModel";
+import { draftIdsFromParams } from "@/features/matches/workspace/workspaceDerivations";
+import { useAuth } from "@/shared/auth/useAuth";
 import { Button } from "@/shared/ui/actions/Button";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { Notice } from "@/shared/ui/feedback/Notice";
@@ -23,14 +26,51 @@ type MatchWorkspacePageProps = {
   preferredHeldEventId?: string;
 };
 
-export function MatchWorkspacePage({
+/** Identifies local state that must not cross workspace or OCR-input boundaries. */
+function matchWorkspaceIdentityKey(
+  props: MatchWorkspacePageProps,
+  searchParams: URLSearchParams,
+  accountId: string | undefined,
+): string {
+  const useSampleDrafts = props.mode === "review" && searchParams.get("sample") === "1";
+  const legacyDraftIds =
+    props.mode === "review" && !useSampleDrafts ? draftIdsFromParams(searchParams) : {};
+  return JSON.stringify({
+    accountId: accountId ?? null,
+    legacyDraftIds,
+    matchDraftId: props.matchDraftId ?? null,
+    matchId: props.matchId ?? null,
+    matchSessionId: props.matchSessionId ?? null,
+    mode: props.mode,
+    useSampleDrafts,
+  });
+}
+
+export function MatchWorkspacePage(props: MatchWorkspacePageProps) {
+  const [searchParams] = useSearchParams();
+  const { auth, isChecking } = useAuth();
+  if (isChecking) {
+    return <MatchWorkspaceLoading />;
+  }
+  return (
+    <MatchWorkspacePageContent
+      key={matchWorkspaceIdentityKey(props, searchParams, auth?.accountId)}
+      accountId={auth?.accountId}
+      {...props}
+    />
+  );
+}
+
+function MatchWorkspacePageContent({
+  accountId,
   matchDraftId,
   matchId,
   matchSessionId,
   mode,
   preferredHeldEventId,
-}: MatchWorkspacePageProps) {
+}: MatchWorkspacePageProps & { accountId: string | undefined }) {
   const pageModel = useMatchWorkspacePageModel({
+    accountId,
     matchDraftId,
     matchId,
     matchSessionId,

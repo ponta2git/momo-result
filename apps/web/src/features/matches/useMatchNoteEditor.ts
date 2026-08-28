@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import {
   matchNoteMaximumCharacters,
@@ -27,18 +27,15 @@ export function useMatchNoteEditor({ match, refetchMatch }: MatchNoteEditorOptio
   const idempotencyKeys = useIdempotencyKeyStore();
   const navigationAllowedRef = useRef(false);
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(match.note.body ?? "");
+  const [editingDraft, setEditingDraft] = useState("");
   const [conflict, setConflict] = useState<MatchNoteConflictState | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const draft = editing ? editingDraft : (match.note.body ?? "");
   const normalizedDraft = normalizeMatchNote(draft);
   const count = Array.from(normalizedDraft).length;
   const tooLong = count > matchNoteMaximumCharacters;
   const dirty = editing && normalizedDraft !== (match.note.body ?? "");
-
-  useEffect(() => {
-    if (!editing) setDraft(match.note.body ?? "");
-  }, [editing, match.note.body]);
 
   const mutation = useMutation({
     mutationFn: async ({ body, expectedVersion }: { body?: string; expectedVersion: string }) => {
@@ -75,7 +72,7 @@ export function useMatchNoteEditor({ match, refetchMatch }: MatchNoteEditorOptio
         return;
       }
       setConflict({ draft: variables.body, latest: latest.data.note });
-      setDraft(variables.body);
+      setEditingDraft(variables.body);
     },
     onSuccess: async () => {
       navigationAllowedRef.current = true;
@@ -89,7 +86,7 @@ export function useMatchNoteEditor({ match, refetchMatch }: MatchNoteEditorOptio
   });
 
   const cancel = () => {
-    setDraft(match.note.body ?? "");
+    setEditingDraft("");
     setConflict(null);
     setErrorMessage(null);
     setEditing(false);
@@ -122,8 +119,11 @@ export function useMatchNoteEditor({ match, refetchMatch }: MatchNoteEditorOptio
     remove,
     save,
     setDeleteOpen,
-    setDraft,
-    startEditing: () => setEditing(true),
+    setDraft: setEditingDraft,
+    startEditing: () => {
+      setEditingDraft(match.note.body ?? "");
+      setEditing(true);
+    },
     tooLong,
   };
 }

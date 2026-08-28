@@ -30,8 +30,6 @@ export type CaptureSlotState = {
   status: SlotStatus;
   transportError?: NormalizedApiError | undefined;
   jobFailure?: OcrFailureResponse | undefined;
-  statusRefreshPending?: boolean | undefined;
-  statusRefreshRequest?: number | undefined;
 };
 
 export const slotDefinitions: Array<{

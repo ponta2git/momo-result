@@ -1,7 +1,4 @@
-import { useQueryClient } from "@tanstack/react-query";
-
-import { clearPrincipalClientState } from "@/shared/auth/principalClientState";
-import { useDevUser } from "@/shared/auth/useDevUser";
+import { usePrincipalSwitchCommand } from "@/shared/auth/usePrincipalSwitchCommand";
 import { canonicalResultMembers } from "@/shared/domain/members";
 import { cn } from "@/shared/ui/cn";
 import { SelectField } from "@/shared/ui/forms/SelectField";
@@ -12,12 +9,7 @@ type DevUserPickerProps = {
 };
 
 export function DevUserPicker({ embedded = false, force = false }: DevUserPickerProps) {
-  const queryClient = useQueryClient();
-  const { devUser, setDevUser } = useDevUser();
-  const changeDevUser = async (next: string) => {
-    await clearPrincipalClientState(queryClient);
-    setDevUser(next);
-  };
+  const { currentPrincipal, switchPrincipal } = usePrincipalSwitchCommand();
 
   if (!import.meta.env.DEV && !force) {
     return null;
@@ -45,11 +37,9 @@ export function DevUserPicker({ embedded = false, force = false }: DevUserPicker
             value: account.accountId,
           })),
         ]}
-        value={devUser}
+        value={currentPrincipal}
         onChange={(event) => {
-          const next = event.currentTarget.value;
-          if (next === devUser) return;
-          void changeDevUser(next);
+          void switchPrincipal(event.currentTarget.value);
         }}
       />
     </div>

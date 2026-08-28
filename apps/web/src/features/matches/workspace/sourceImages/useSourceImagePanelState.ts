@@ -28,6 +28,8 @@ type LoadedSourceImage =
 
 type SourceImageCache = Record<string, LoadedSourceImage>;
 
+type SourceImageSelection = { mode: "auto" } | { kind: SourceImageKind; mode: "fixed" };
+
 export function useSourceImagePanelState({
   loading,
   matchDraftId,
@@ -40,8 +42,7 @@ export function useSourceImagePanelState({
   sourceImages: SourceImageItem[] | undefined;
 }) {
   const states = useMemo(() => toSourceImageStates(sourceImages), [sourceImages]);
-  const [activeKind, setActiveKind] = useState<SourceImageKind>(preferredKind ?? "total_assets");
-  const [followMode, setFollowMode] = useState<"auto" | "fixed">("auto");
+  const [selection, setSelection] = useState<SourceImageSelection>({ mode: "auto" });
   const [previewDialog, setPreviewDialog] = useState<{
     kind: SourceImageKind;
     open: boolean;
@@ -60,13 +61,8 @@ export function useSourceImagePanelState({
     imageCacheRef.current = imageCache;
   }, [imageCache]);
 
-  useEffect(() => {
-    if (!preferredKind || followMode === "fixed") {
-      return;
-    }
-    setActiveKind(preferredKind);
-  }, [followMode, preferredKind]);
-
+  const activeKind =
+    selection.mode === "fixed" ? selection.kind : (preferredKind ?? "total_assets");
   const activeState = states.find((state) => state.kind === activeKind);
   const activeImageUrl = activeState?.status === "available" ? activeState.url : undefined;
   const activeImage = activeImageUrl ? imageCache[activeImageUrl] : undefined;
@@ -224,19 +220,14 @@ export function useSourceImagePanelState({
   }, [saveArchive]);
 
   const handleSourceImageTabChange = useCallback((kind: SourceImageKind) => {
-    setActiveKind(kind);
-    setFollowMode("fixed");
+    setSelection({ kind, mode: "fixed" });
   }, []);
 
   const handleFollowModeChange = useCallback(
     (nextMode: string) => {
-      const normalizedMode = nextMode === "fixed" ? "fixed" : "auto";
-      setFollowMode(normalizedMode);
-      if (normalizedMode === "auto" && preferredKind) {
-        setActiveKind(preferredKind);
-      }
+      setSelection(nextMode === "fixed" ? { kind: activeKind, mode: "fixed" } : { mode: "auto" });
     },
-    [preferredKind],
+    [activeKind],
   );
 
   const handlePreviewOpen = useCallback(
@@ -287,7 +278,7 @@ export function useSourceImagePanelState({
     availableImageCount,
     displayUrl,
     expectedImageCount,
-    followMode,
+    followMode: selection.mode,
     handleArchiveCancel: () => setArchiveConfirmOpen(false),
     handleArchiveDialogOpenChange: setArchiveConfirmOpen,
     handleArchiveSaveConfirmed,

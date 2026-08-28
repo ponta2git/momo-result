@@ -3,9 +3,15 @@ import { useEffect } from "react";
 
 import type { SeriesAnalysisDrilldownSelection } from "@/features/seriesComparison/drilldowns/SeriesAnalysisDrilldownContent";
 import { isAnalysisArtifactExpired } from "@/shared/api/problemDetails";
-import type { SeriesAnalysisQuery } from "@/shared/api/seriesAnalysis";
+import type { SeriesAnalysisDrilldownV3, SeriesAnalysisQuery } from "@/shared/api/seriesAnalysis";
 import { seriesAnalysisDrilldownQueryOptions } from "@/shared/api/seriesAnalysisQueryOptions";
 
+export type SeriesAnalysisDrilldownResource =
+  | { kind: "loading" }
+  | { kind: "failed"; retry: () => void }
+  | { data: SeriesAnalysisDrilldownV3; kind: "ready" };
+
+/** Owns drilldown query lifecycle and exposes only display-relevant resource states. */
 export function useSeriesAnalysisDrilldown({
   baseQuery,
   onArtifactExpired,
@@ -13,14 +19,15 @@ export function useSeriesAnalysisDrilldown({
 }: {
   baseQuery: SeriesAnalysisQuery;
   onArtifactExpired: () => void;
-  selection: SeriesAnalysisDrilldownSelection | null;
-}) {
-  const queryInput = selection ? { ...baseQuery, ...selection } : undefined;
-  const query = useQuery(seriesAnalysisDrilldownQueryOptions(queryInput, selection !== null));
+  selection: SeriesAnalysisDrilldownSelection;
+}): SeriesAnalysisDrilldownResource {
+  const query = useQuery(seriesAnalysisDrilldownQueryOptions({ ...baseQuery, ...selection }));
 
   useEffect(() => {
     if (isAnalysisArtifactExpired(query.error)) onArtifactExpired();
   }, [onArtifactExpired, query.error]);
 
-  return query;
+  if (query.isPending) return { kind: "loading" };
+  if (query.isError) return { kind: "failed", retry: () => void query.refetch() };
+  return { data: query.data, kind: "ready" };
 }

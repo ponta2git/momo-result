@@ -35,7 +35,7 @@ export function useWorkspaceHeldEventCreation({
       );
     },
     onSuccess: async (event) => {
-      await syncHeldEventCreatedCache(queryClient, "workspace", event);
+      await syncHeldEventCreatedCache(queryClient, event);
       dispatch({
         patch: {
           heldEventId: event.id,

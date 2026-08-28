@@ -51,7 +51,7 @@ export function heldEventDirectorySuspenseQueryOptions() {
 
 function heldEventDirectoryQueryDefinition() {
   return queryOptions({
-    queryKey: heldEventKeys.scope("directory"),
+    queryKey: heldEventKeys.directory(),
     queryFn: ({ signal }) => listHeldEvents(heldEventDirectoryQuery, { signal }),
   });
 }

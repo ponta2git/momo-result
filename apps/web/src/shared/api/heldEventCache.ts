@@ -57,23 +57,23 @@ function totalMatches(items: HeldEventResponse[]): number {
   return items.reduce((sum, item) => sum + item.matchCount, 0);
 }
 
+/** Upserts the shared directory; paginated list membership remains server-owned and is invalidated. */
 export async function syncHeldEventCreatedCache(
   queryClient: QueryClient,
-  scope: string,
   event: HeldEventResponse,
 ): Promise<void> {
-  queryClient.setQueryData<HeldEventListResponse>(heldEventKeys.scope(scope), (current) =>
+  queryClient.setQueryData<HeldEventListResponse>(heldEventKeys.directory(), (current) =>
     upsertHeldEventList(current, event),
   );
   await queryClient.invalidateQueries({ queryKey: heldEventKeys.all() });
 }
 
+/** Removes from the shared directory; paginated list membership remains server-owned and is invalidated. */
 export async function syncHeldEventDeletedCache(
   queryClient: QueryClient,
-  scope: string,
   heldEventId: string,
 ): Promise<void> {
-  queryClient.setQueryData<HeldEventListResponse>(heldEventKeys.scope(scope), (current) =>
+  queryClient.setQueryData<HeldEventListResponse>(heldEventKeys.directory(), (current) =>
     removeHeldEventFromList(current, heldEventId),
   );
   await queryClient.invalidateQueries({ queryKey: heldEventKeys.all() });

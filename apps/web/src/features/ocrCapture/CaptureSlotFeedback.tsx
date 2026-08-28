@@ -10,13 +10,19 @@ const slotKindLabels = {
 
 type CaptureSlotFeedbackProps = {
   mismatch: boolean;
+  refreshing: boolean;
   slot: CaptureSlotState;
   onRefreshStatus: () => void;
 };
 
 const refreshableStatuses = new Set<CaptureSlotState["status"]>(["queued", "running"]);
 
-export function CaptureSlotFeedback({ mismatch, slot, onRefreshStatus }: CaptureSlotFeedbackProps) {
+export function CaptureSlotFeedback({
+  mismatch,
+  refreshing,
+  slot,
+  onRefreshStatus,
+}: CaptureSlotFeedbackProps) {
   const canRefreshStatus = Boolean(slot.jobId) && refreshableStatuses.has(slot.status);
 
   return (
@@ -28,7 +34,7 @@ export function CaptureSlotFeedback({ mismatch, slot, onRefreshStatus }: Capture
         <div className="mt-4 grid gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3 text-sm text-[var(--color-text-primary)] sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
           <p>読み取り状態は自動更新されません。必要なときに最新の状態を取得してください。</p>
           <Button
-            pending={slot.statusRefreshPending === true}
+            pending={refreshing}
             pendingLabel="更新中"
             variant="secondary"
             onClick={onRefreshStatus}

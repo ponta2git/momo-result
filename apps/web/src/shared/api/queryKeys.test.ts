@@ -44,11 +44,19 @@ describe("shared query keys", () => {
     );
   });
 
-  it("shares the fixed held-event directory key across query modes", () => {
+  it("keeps directory and paginated held-event list identities distinct", () => {
+    const pageListQuery = { page: 2, pageSize: 25 };
     expect(heldEventDirectoryQueryOptions().queryKey).toEqual(
       heldEventDirectorySuspenseQueryOptions().queryKey,
     );
-    expect(heldEventDirectoryQueryOptions().queryKey).toEqual(heldEventKeys.scope("workspace"));
+    expect(heldEventDirectoryQueryOptions().queryKey).toEqual(heldEventKeys.directory());
+    expect(heldEventKeys.directory()).toEqual(["held-events", "list-response"]);
+    expect(heldEventKeys.list(pageListQuery)).toEqual([
+      "held-events",
+      "list-response",
+      pageListQuery,
+    ]);
+    expect(heldEventKeys.list(pageListQuery)).not.toEqual(heldEventKeys.directory());
   });
 
   it("uses the unfiltered member-alias directory key", () => {
@@ -69,7 +77,7 @@ describe("shared query keys", () => {
     queryClient.setQueryData(matchKeys.draft.sourceImages("draft-1"), { items: [] });
     queryClient.setQueryData(ocrDraftKeys.bulk(["ocr-draft-1"]), { items: [] });
     queryClient.setQueryData(ocrDraftKeys.detail("ocr-draft-1"), { draftId: "ocr-draft-1" });
-    queryClient.setQueryData(heldEventKeys.scope("workspace"), { items: [] });
+    queryClient.setQueryData(heldEventKeys.directory(), { items: [] });
     queryClient.setQueryData(seriesAnalysisKeys.options(), { titles: [] });
     queryClient.setQueryData(seriesAnalysisKeys.status("gt-1"), { gameTitleId: "gt-1" });
     queryClient.setQueryData(seriesAnalysisKeys.adminOverview("gt-1"), { recentJobs: [] });
@@ -91,7 +99,7 @@ describe("shared query keys", () => {
     );
     expect(queryClient.getQueryState(ocrDraftKeys.bulk(["ocr-draft-1"]))?.isInvalidated).toBe(true);
     expect(queryClient.getQueryState(ocrDraftKeys.detail("ocr-draft-1"))?.isInvalidated).toBe(true);
-    expect(queryClient.getQueryState(heldEventKeys.scope("workspace"))?.isInvalidated).toBe(true);
+    expect(queryClient.getQueryState(heldEventKeys.directory())?.isInvalidated).toBe(true);
     expect(queryClient.getQueryState(seriesAnalysisKeys.options())?.isInvalidated).toBe(true);
     expect(queryClient.getQueryState(seriesAnalysisKeys.status("gt-1"))?.isInvalidated).toBe(true);
     expect(queryClient.getQueryState(seriesAnalysisKeys.adminOverview("gt-1"))?.isInvalidated).toBe(

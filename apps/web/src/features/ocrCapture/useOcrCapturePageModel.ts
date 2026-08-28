@@ -56,6 +56,7 @@ export type OcrCapturePageModel = {
       resetDisabled: boolean;
       selectTarget: (kind: SlotKind) => void;
       slots: CaptureSlotState[];
+      statusRefreshing: SlotMap<boolean>;
     };
   };
   feedback: {
@@ -73,13 +74,6 @@ export type OcrCapturePageModel = {
       confirm: () => Promise<void>;
       state: OcrStartDialogState;
       viewMatches: () => void;
-    };
-    monitoring: {
-      recordDraft: (kind: SlotKind, draft: OcrDraftResponse) => void;
-      reportDraftLoadError: (error: NormalizedApiError) => void;
-      setRefreshing: (kind: SlotKind, refreshing: boolean) => void;
-      slots: CaptureSlotState[];
-      updateSlot: (slot: CaptureSlotState) => void;
     };
     start: {
       badgeLabel: string;
@@ -125,7 +119,9 @@ export function useOcrCapturePageModel(): OcrCapturePageModel {
     if (layoutFamily) input.layoutFamily = layoutFamily;
     return buildOcrHints(input, referenceData.memberAliases.directory);
   }, [referenceData.memberAliases.directory, setupOptions.selectedGameTitle]);
-  const draftFlow = useOcrCaptureDraftFlow();
+  const draftFlow = useOcrCaptureDraftFlow({
+    onDraftLoadError: (error) => notify(error.detail || error.title, "warning"),
+  });
   const captureSubmission = useOcrCaptureMutations(hints);
   const startFlow = useOcrStartFlow({
     submission: captureSubmission,
@@ -240,6 +236,7 @@ export function useOcrCapturePageModel(): OcrCapturePageModel {
         resetDisabled: selectedImageCount === 0 || cameraDisabled,
         selectTarget: selectCaptureTarget,
         slots: draftFlow.slots,
+        statusRefreshing: draftFlow.statusRefreshing,
       },
     },
     feedback: {
@@ -266,13 +263,6 @@ export function useOcrCapturePageModel(): OcrCapturePageModel {
         confirm: startFlow.confirm,
         state: startFlow.state,
         viewMatches: startFlow.viewMatches,
-      },
-      monitoring: {
-        recordDraft: draftFlow.setDraft,
-        reportDraftLoadError: (error) => notify(error.detail || error.title, "warning"),
-        setRefreshing: draftFlow.setStatusRefreshPending,
-        slots: draftFlow.slots,
-        updateSlot: draftFlow.updateSlot,
       },
       start: {
         badgeLabel: readySlots.length === 0 ? "画像未選択" : `${readySlots.length}件を送信`,

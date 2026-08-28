@@ -108,6 +108,33 @@ function featureRestrictedImports(
   ];
 }
 
+function sharedRestrictedImports(restrictQueryLifecycle: boolean): RestrictedImportsRule {
+  return [
+    "error",
+    {
+      paths: [
+        ...productionRestrictedPaths,
+        ...(restrictQueryLifecycle
+          ? [
+              {
+                name: "@tanstack/react-query",
+                message: "Keep query lifecycle in a shared resource or command hook.",
+              },
+            ]
+          : []),
+      ],
+      patterns: [
+        ...baseImportPatterns,
+        ...productionTestPatterns,
+        {
+          group: ["@/app/**", "@/features/**"],
+          message: "Shared code must not depend on app or feature code.",
+        },
+      ],
+    },
+  ];
+}
+
 export default defineConfig({
   plugins: ["react", "import", "typescript", "unicorn", "oxc", "promise", "jsx-a11y"],
   categories: {
@@ -157,6 +184,7 @@ export default defineConfig({
     "import/no-unassigned-import": "off",
 
     "react/react-in-jsx-scope": "off",
+    "react/rules-of-hooks": "error",
     "react/jsx-no-constructed-context-values": "error",
     "react/no-unstable-nested-components": ["error", { allowAsProps: true }],
     "react/button-has-type": "error",
@@ -236,20 +264,14 @@ export default defineConfig({
       files: ["src/shared/**/*.{ts,tsx}"],
       excludeFiles: ["src/**/*.test.*"],
       rules: {
-        "no-restricted-imports": [
-          "error",
-          {
-            paths: productionRestrictedPaths,
-            patterns: [
-              ...baseImportPatterns,
-              ...productionTestPatterns,
-              {
-                group: ["@/app/**", "@/features/**"],
-                message: "Shared code must not depend on app or feature code.",
-              },
-            ],
-          },
-        ],
+        "no-restricted-imports": sharedRestrictedImports(false),
+      },
+    },
+    {
+      files: ["src/shared/**/*.tsx"],
+      excludeFiles: ["src/**/*.test.*"],
+      rules: {
+        "no-restricted-imports": sharedRestrictedImports(true),
       },
     },
     {

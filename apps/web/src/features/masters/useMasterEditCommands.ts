@@ -2,20 +2,20 @@ import type { QueryClient } from "@tanstack/react-query";
 import { useCallback, useState } from "react";
 
 import {
-  patchGameTitle,
-  patchMapMaster,
-  patchMemberAlias,
-  patchSeasonMaster,
-  removeGameTitle,
-  removeMapMaster,
-  removeMemberAlias,
-  removeSeasonMaster,
-} from "@/features/masters/masterCommands";
-import {
   invalidateMasterResourceCaches,
   invalidateMemberAliasCaches,
 } from "@/features/masters/masterResourceCache";
 import { parseLayoutFamily, normalizeName } from "@/features/masters/masterValidation";
+import {
+  deleteGameTitle,
+  deleteMapMaster,
+  deleteMemberAlias,
+  deleteSeasonMaster,
+  updateGameTitle as updateGameTitleResource,
+  updateMapMaster as updateMapMasterResource,
+  updateMemberAlias as updateMemberAliasResource,
+  updateSeasonMaster as updateSeasonMasterResource,
+} from "@/shared/api/masters";
 
 export function useMasterEditCommands(input: {
   authScope: string;
@@ -53,7 +53,7 @@ export function useMasterEditCommands(input: {
         setOperationError("読み取り方式を選択してください");
         return;
       }
-      await patchGameTitle(id, {
+      await updateGameTitleResource(id, {
         name: normalizeName(request.name),
         layoutFamily,
       });
@@ -68,7 +68,7 @@ export function useMasterEditCommands(input: {
   const updateMapMaster = useCallback(
     async (id: string, request: { name: string }) => {
       setOperationError(undefined);
-      await patchMapMaster(id, { name: normalizeName(request.name) });
+      await updateMapMasterResource(id, { name: normalizeName(request.name) });
       await invalidateMasterResourceCaches(queryClient, {
         authScope,
         gameTitleId: selectedGameTitleId,
@@ -81,7 +81,7 @@ export function useMasterEditCommands(input: {
   const updateSeasonMaster = useCallback(
     async (id: string, request: { name: string }) => {
       setOperationError(undefined);
-      await patchSeasonMaster(id, { name: normalizeName(request.name) });
+      await updateSeasonMasterResource(id, { name: normalizeName(request.name) });
       await invalidateMasterResourceCaches(queryClient, {
         authScope,
         gameTitleId: selectedGameTitleId,
@@ -94,7 +94,7 @@ export function useMasterEditCommands(input: {
   const updateMemberAlias = useCallback(
     async (id: string, request: { memberId: string; alias: string }) => {
       setOperationError(undefined);
-      await patchMemberAlias(id, {
+      await updateMemberAliasResource(id, {
         memberId: normalizeName(request.memberId),
         alias: normalizeName(request.alias),
       });
@@ -107,7 +107,7 @@ export function useMasterEditCommands(input: {
     deleteGameTitle: (id: string) =>
       trackMutation(() =>
         deleteWithDialogFeedback(async () => {
-          await removeGameTitle(id);
+          await deleteGameTitle(id);
           if (selectedGameTitleId === id) {
             setSelectedGameTitleId("");
           }
@@ -120,7 +120,7 @@ export function useMasterEditCommands(input: {
     deleteMapMaster: (id: string) =>
       trackMutation(() =>
         deleteWithDialogFeedback(async () => {
-          await removeMapMaster(id);
+          await deleteMapMaster(id);
           await invalidateMasterResourceCaches(queryClient, {
             authScope,
             gameTitleId: selectedGameTitleId,
@@ -131,14 +131,14 @@ export function useMasterEditCommands(input: {
     deleteMemberAlias: (id: string) =>
       trackMutation(() =>
         deleteWithDialogFeedback(async () => {
-          await removeMemberAlias(id);
+          await deleteMemberAlias(id);
           await invalidateMemberAliasCaches(queryClient, authScope);
         }),
       ),
     deleteSeasonMaster: (id: string) =>
       trackMutation(() =>
         deleteWithDialogFeedback(async () => {
-          await removeSeasonMaster(id);
+          await deleteSeasonMaster(id);
           await invalidateMasterResourceCaches(queryClient, {
             authScope,
             gameTitleId: selectedGameTitleId,

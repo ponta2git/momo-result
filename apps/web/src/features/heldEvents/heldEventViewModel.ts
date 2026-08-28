@@ -1,9 +1,4 @@
 import type { HeldEventListResponse, HeldEventResponse } from "@/shared/api/heldEvents";
-import {
-  formatDateTimeLong,
-  toIsoFromLocalDateTime,
-  toLocalDateTimeInputValue,
-} from "@/shared/lib/dateTime";
 
 export const emptyHeldEvents: HeldEventResponse[] = [];
 export const heldEventPageSizeOptions = [10, 25, 50] as const;
@@ -49,15 +44,3 @@ export type HeldEventsListModel =
       rows: HeldEventResponse[];
       scopeChanging: boolean;
     };
-
-export function currentLocalIsoMinute(): string {
-  return toLocalDateTimeInputValue();
-}
-
-export function toIsoFromLocal(value: string): string {
-  return toIsoFromLocalDateTime(value);
-}
-
-export function formatDateTime(value: string): string {
-  return formatDateTimeLong(value);
-}

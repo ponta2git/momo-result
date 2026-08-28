@@ -25,11 +25,21 @@ export {
   createMatchWorkspaceMasterHandoffPayload,
 } from "@/shared/workflows/matchWorkspaceMasterHandoffPayload";
 
-export type HandoffInspectResult =
-  | { status: "available" }
-  | { status: "expired" }
-  | { status: "invalid" }
-  | { status: "missing" };
+type HandoffStatus = "available" | "expired" | "invalid" | "missing";
+
+export type HandoffInspectResult = { status: HandoffStatus };
+
+type MasterHandoffLookupInput = {
+  expectedAccountId: string;
+  expectedMatchSessionId?: string | undefined;
+  expectedReturnTo: string;
+  handoffId: string | null | undefined;
+  nowMs?: number;
+} & MasterHandoffReadOptions;
+
+type MasterHandoffLookupResult =
+  | { payload: MasterHandoffPayload; status: "available" }
+  | { status: Exclude<HandoffStatus, "available"> };
 
 export { sanitizeReturnTo } from "@/shared/navigation/returnTo";
 
@@ -104,15 +114,18 @@ export function prepareMatchWorkspaceMasterHandoffRoute(input: {
   };
 }
 
-export function inspectMasterHandoff(
-  input: {
-    expectedAccountId: string;
-    expectedMatchSessionId?: string | undefined;
-    expectedReturnTo: string;
-    handoffId: string | null | undefined;
-    nowMs?: number;
-  } & MasterHandoffReadOptions,
-): HandoffInspectResult {
+export function inspectMasterHandoff(input: MasterHandoffLookupInput): HandoffInspectResult {
+  return { status: readMasterHandoff(input).status };
+}
+
+export function loadMasterHandoff(
+  input: MasterHandoffLookupInput,
+): MasterHandoffPayload | undefined {
+  const result = readMasterHandoff(input);
+  return result.status === "available" ? result.payload : undefined;
+}
+
+function readMasterHandoff(input: MasterHandoffLookupInput): MasterHandoffLookupResult {
   const storage = input.storage ?? browserSessionStorage();
   if (!input.handoffId || !storage) {
     return { status: "missing" };
@@ -142,53 +155,9 @@ export function inspectMasterHandoff(
     if (isExpired(payload.createdAt, input.nowMs ?? Date.now())) {
       return { status: "expired" };
     }
-    return { status: "available" };
+    return { payload, status: "available" };
   } catch {
     return { status: "invalid" };
-  }
-}
-
-export function loadMasterHandoff(
-  input: {
-    expectedAccountId: string;
-    expectedMatchSessionId?: string | undefined;
-    expectedReturnTo: string;
-    handoffId: string | null | undefined;
-    nowMs?: number;
-  } & MasterHandoffReadOptions,
-): MasterHandoffPayload | undefined {
-  const storage = input.storage ?? browserSessionStorage();
-  if (!input.handoffId || !storage) {
-    return undefined;
-  }
-
-  try {
-    const raw = storage.getItem(storageKey(input.expectedAccountId, input.handoffId));
-    if (!raw) {
-      return undefined;
-    }
-    const payload = parsePayload(raw);
-    if (!payload) {
-      return undefined;
-    }
-    if (payload.accountId !== input.expectedAccountId) {
-      return undefined;
-    }
-    if (sanitizeReturnTo(payload.returnTo) !== sanitizeReturnTo(input.expectedReturnTo)) {
-      return undefined;
-    }
-    if (
-      input.expectedMatchSessionId !== undefined &&
-      payload.matchSessionId !== input.expectedMatchSessionId
-    ) {
-      return undefined;
-    }
-    if (isExpired(payload.createdAt, input.nowMs ?? Date.now())) {
-      return undefined;
-    }
-    return payload;
-  } catch {
-    return undefined;
   }
 }
 

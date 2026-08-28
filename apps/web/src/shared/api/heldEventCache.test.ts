@@ -44,14 +44,16 @@ describe("held event cache contract", () => {
     expect(result.items).toEqual([newerEvent, olderEvent]);
   });
 
-  it("updates the scoped list and invalidates all held event caches after create", async () => {
+  it("updates the shared directory and invalidates page-list caches after create", async () => {
     const queryClient = createTestQueryClient();
-    queryClient.setQueryData(heldEventKeys.scope("workspace"), { items: [olderEvent] });
-    queryClient.setQueryData(heldEventKeys.scope("held-events-page"), { items: [olderEvent] });
+    const pageListKey = heldEventKeys.list({ page: 1, pageSize: 25 });
+    const pageList = { items: [olderEvent] };
+    queryClient.setQueryData(heldEventKeys.directory(), { items: [olderEvent] });
+    queryClient.setQueryData(pageListKey, pageList);
 
-    await syncHeldEventCreatedCache(queryClient, "workspace", newerEvent);
+    await syncHeldEventCreatedCache(queryClient, newerEvent);
 
-    expect(queryClient.getQueryData(heldEventKeys.scope("workspace"))).toEqual({
+    expect(queryClient.getQueryData(heldEventKeys.directory())).toEqual({
       items: [newerEvent, olderEvent],
       pagination: {
         hasNextPage: false,
@@ -63,22 +65,21 @@ describe("held event cache contract", () => {
       },
       totalMatchCount: 1,
     });
-    expect(queryClient.getQueryState(heldEventKeys.scope("workspace"))?.isInvalidated).toBe(true);
-    expect(queryClient.getQueryState(heldEventKeys.scope("held-events-page"))?.isInvalidated).toBe(
-      true,
-    );
+    expect(queryClient.getQueryData(pageListKey)).toBe(pageList);
+    expect(queryClient.getQueryState(heldEventKeys.directory())?.isInvalidated).toBe(true);
+    expect(queryClient.getQueryState(pageListKey)?.isInvalidated).toBe(true);
   });
 
-  it("updates the scoped list and invalidates all held event caches after delete", async () => {
+  it("updates the shared directory and invalidates page-list caches after delete", async () => {
     const queryClient = createTestQueryClient();
-    queryClient.setQueryData(heldEventKeys.scope("held-events-page"), {
-      items: [newerEvent, olderEvent],
-    });
-    queryClient.setQueryData(heldEventKeys.scope("workspace"), { items: [newerEvent, olderEvent] });
+    const pageListKey = heldEventKeys.list({ page: 2, pageSize: 25 });
+    const pageList = { items: [newerEvent] };
+    queryClient.setQueryData(heldEventKeys.directory(), { items: [newerEvent, olderEvent] });
+    queryClient.setQueryData(pageListKey, pageList);
 
-    await syncHeldEventDeletedCache(queryClient, "held-events-page", newerEvent.id);
+    await syncHeldEventDeletedCache(queryClient, newerEvent.id);
 
-    expect(queryClient.getQueryData(heldEventKeys.scope("held-events-page"))).toEqual({
+    expect(queryClient.getQueryData(heldEventKeys.directory())).toEqual({
       items: [olderEvent],
       pagination: {
         hasNextPage: false,
@@ -90,9 +91,8 @@ describe("held event cache contract", () => {
       },
       totalMatchCount: 1,
     });
-    expect(queryClient.getQueryState(heldEventKeys.scope("held-events-page"))?.isInvalidated).toBe(
-      true,
-    );
-    expect(queryClient.getQueryState(heldEventKeys.scope("workspace"))?.isInvalidated).toBe(true);
+    expect(queryClient.getQueryData(pageListKey)).toBe(pageList);
+    expect(queryClient.getQueryState(heldEventKeys.directory())?.isInvalidated).toBe(true);
+    expect(queryClient.getQueryState(pageListKey)?.isInvalidated).toBe(true);
   });
 });

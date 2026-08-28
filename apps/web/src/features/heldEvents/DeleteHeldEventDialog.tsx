@@ -1,6 +1,6 @@
-import { formatDateTime } from "@/features/heldEvents/heldEventViewModel";
 import type { HeldEventDeleteDialogModel } from "@/features/heldEvents/heldEventViewModel";
 import { formatApiError } from "@/shared/api/problemDetails";
+import { formatDateTimeLong } from "@/shared/lib/dateTime";
 import { AlertDialog } from "@/shared/ui/feedback/Dialog";
 
 type DeleteHeldEventDialogProps = {
@@ -18,7 +18,7 @@ export function DeleteHeldEventDialog({ model }: DeleteHeldEventDialogProps) {
       confirmLabel={model.pending ? "削除中…" : "削除する"}
       pending={model.pending}
       formatError={(error) => formatApiError(error, "開催の削除に失敗しました")}
-      description={`${formatDateTime(model.target.heldAt)}の開催を削除します。この操作は取り消せません。`}
+      description={`${formatDateTimeLong(model.target.heldAt)}の開催を削除します。この操作は取り消せません。`}
       open
       title="開催を削除しますか？"
       onConfirm={async () => {

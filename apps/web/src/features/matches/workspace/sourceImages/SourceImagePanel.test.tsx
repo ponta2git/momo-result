@@ -282,7 +282,7 @@ describe("SourceImagePanel", () => {
     expect(objectUrls.revokeObjectURL).toHaveBeenCalledWith("blob:size-2");
   });
 
-  it("keeps a manually selected image fixed until automatic follow is restored", async () => {
+  it("follows the current preferred image until a manual selection is fixed", async () => {
     const user = userEvent.setup();
     installObjectUrlMock({
       createObjectURL: (value) => (value instanceof Blob ? `blob:size-${value.size}` : "blob:0"),
@@ -307,10 +307,6 @@ describe("SourceImagePanel", () => {
     );
 
     expect(await screen.findByRole("img", { name: "総資産の元画像" })).toBeInTheDocument();
-    await user.click(screen.getByRole("tab", { name: "収益" }));
-    expect(screen.getByRole("button", { name: "固定" })).toHaveAttribute("aria-pressed", "true");
-    expect(await screen.findByRole("img", { name: "収益の元画像" })).toBeInTheDocument();
-
     view.rerender(
       <SourceImagePanel
         loading={false}
@@ -319,10 +315,24 @@ describe("SourceImagePanel", () => {
         sourceImages={sourceImages}
       />,
     );
+    expect(await screen.findByRole("img", { name: "事件簿の元画像" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: "収益" }));
+    expect(screen.getByRole("button", { name: "固定" })).toHaveAttribute("aria-pressed", "true");
+    expect(await screen.findByRole("img", { name: "収益の元画像" })).toBeInTheDocument();
+
+    view.rerender(
+      <SourceImagePanel
+        loading={false}
+        matchDraftId={draftId}
+        preferredKind="total_assets"
+        sourceImages={sourceImages}
+      />,
+    );
     expect(screen.getByRole("img", { name: "収益の元画像" })).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "自動追従" }));
-    expect(await screen.findByRole("img", { name: "事件簿の元画像" })).toBeInTheDocument();
+    expect(await screen.findByRole("img", { name: "総資産の元画像" })).toBeInTheDocument();
   });
 
   it("opens the source image preview in a modal dialog", async () => {

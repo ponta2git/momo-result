@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import type { ConfirmMatchRequest } from "@/shared/api/matches";
 import { fixedMemberIds } from "@/shared/domain/members";
+import { toIsoFromLocalDateTime } from "@/shared/lib/dateTime";
 
 const memberIds = [...fixedMemberIds] as [string, ...string[]];
 export const matchNoteMaximumCharacters = 150;
@@ -34,11 +35,6 @@ const playedAtSchema = z
   .refine((value) => !Number.isNaN(new Date(value).getTime()), {
     message: "開催日時を正しく入力してください",
   });
-
-function toIsoFromLocal(value: string): string {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toISOString();
-}
 
 function pruneDraftIds(values: {
   totalAssets?: string | undefined;
@@ -115,7 +111,7 @@ export const confirmMatchSchema = z
       ...(matchDraftId ? { matchDraftId } : {}),
       ...(normalizedNote.trim().length > 0 ? { noteBody: normalizedNote } : {}),
       draftIds: pruneDraftIds(values.draftIds),
-      playedAt: toIsoFromLocal(values.playedAt),
+      playedAt: toIsoFromLocalDateTime(values.playedAt),
     };
   });
 

@@ -8,7 +8,7 @@ import type {
   MatchWorkspaceInitialData,
 } from "@/features/matches/workspace/matchFormTypes";
 import type { ReviewFieldKey } from "@/features/matches/workspace/review/reviewWarningModel";
-import { toIsoFromLocal } from "@/features/matches/workspace/workspaceDerivations";
+import { toIsoFromLocalDateTime } from "@/shared/lib/dateTime";
 
 export function useMatchWorkspaceFormHandlers({
   createHeldEvent,
@@ -27,7 +27,7 @@ export function useMatchWorkspaceFormHandlers({
 }) {
   const onCreateEvent = useCallback(() => {
     createHeldEvent({
-      heldAt: toIsoFromLocal(eventDraftValue),
+      heldAt: toIsoFromLocalDateTime(eventDraftValue),
     });
   }, [createHeldEvent, eventDraftValue]);
 

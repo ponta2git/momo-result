@@ -2,7 +2,6 @@ import { lazy, memo, Suspense, useEffect, useState } from "react";
 
 import type { SeriesAnalysisDrilldownSelection } from "@/features/seriesComparison/drilldowns/SeriesAnalysisDrilldownContent";
 import { SeriesAnalysisDrilldownLoading } from "@/features/seriesComparison/drilldowns/SeriesAnalysisDrilldownLoading";
-import { drilldownTitle } from "@/features/seriesComparison/drilldowns/SeriesAnalysisDrilldownPrimitives";
 import type { SeriesAnalysisDisplayBundle } from "@/features/seriesComparison/model/seriesAnalysisDisplayBundle";
 import type { SeriesAnalysisViewId } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
 import { ReviewView } from "@/features/seriesComparison/page/SeriesAnalysisReviewView";
@@ -16,7 +15,10 @@ import {
   purposeTabId,
   PurposeTabs,
 } from "@/features/seriesComparison/page/SeriesComparisonAnalysisNavigation";
-import type { SeriesAnalysisQuery } from "@/shared/api/seriesAnalysis";
+import type {
+  SeriesAnalysisDrilldownMetricId,
+  SeriesAnalysisQuery,
+} from "@/shared/api/seriesAnalysis";
 import { loadLazyModule } from "@/shared/lib/moduleLoadError";
 import { Dialog } from "@/shared/ui/feedback/Dialog";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
@@ -57,6 +59,19 @@ const SeriesAnalysisDrilldownContent = lazy(() =>
   ),
 );
 const noFocusedItemIds: readonly string[] = [];
+
+function drilldownTitle(metricId: SeriesAnalysisDrilldownMetricId): string {
+  switch (metricId) {
+    case "rank.averageHistory":
+      return "平均順位の推移";
+    case "playOrder.rankHistory":
+      return "番手別順位の推移";
+    case "rankAnalysis.rankSignals":
+      return "順位を読む手掛かり";
+    case "rankAnalysis.unexpectedWins":
+      return "予測より上位だった勝利";
+  }
+}
 
 export function preloadSeriesAnalysisView(view: SeriesAnalysisViewId): void {
   const load =

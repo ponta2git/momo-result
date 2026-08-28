@@ -1,12 +1,14 @@
 import { QueryClientProvider } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
-import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
+import { Link, MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { MatchCreatePage } from "@/features/matches/MatchCreatePage";
+import type { AuthMeResponse } from "@/shared/api/auth";
+import { authMeQueryKeyFor } from "@/shared/auth/authQueries";
 import { ToastHost } from "@/shared/ui/feedback/ToastHost";
 import {
   createMatchWorkspaceMasterHandoffPayload,
@@ -160,6 +162,87 @@ describe("MatchCreatePage", () => {
       expect(screen.getByText(/確定済み3試合・未確定下書き2件/u)).toBeInTheDocument();
       expect(screen.getByLabelText("試合番号")).toHaveValue("8");
     });
+  });
+
+  it("preserves user input when only preferred-event and return context change", async () => {
+    setDevUser();
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/matches/new"]}>
+          <Link to="/matches/new?heldEventId=held-requested&returnTo=%2Fmatches">
+            作成コンテキストを更新
+          </Link>
+          <Routes>
+            <Route
+              path="/matches/new"
+              element={
+                <>
+                  <LocationProbe />
+                  <MatchCreatePage />
+                </>
+              }
+            />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "試合の新規作成" })).toBeInTheDocument();
+    const matchNumber = screen.getByLabelText("試合番号");
+    await user.clear(matchNumber);
+    await user.type(matchNumber, "9");
+
+    await user.click(screen.getByRole("link", { name: "作成コンテキストを更新" }));
+
+    await waitFor(() =>
+      expect(screen.getByLabelText("current location")).toHaveTextContent(
+        "heldEventId=held-requested",
+      ),
+    );
+    expect(screen.getByLabelText("試合番号")).toHaveValue("9");
+  });
+
+  it("keys local form state by authenticated principal identity", async () => {
+    setDevUser();
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/matches/new"]}>
+          <Routes>
+            <Route path="/matches/new" element={<MatchCreatePage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "試合の新規作成" })).toBeInTheDocument();
+    await waitFor(() =>
+      expect(queryClient.getQueryData(authMeQueryKeyFor(testDevUserAccountId))).toMatchObject({
+        accountId: testDevUserAccountId,
+      }),
+    );
+    const initialMatchNumber = (screen.getByLabelText("試合番号") as HTMLInputElement).value;
+    const matchNumber = screen.getByLabelText("試合番号");
+    await user.clear(matchNumber);
+    await user.type(matchNumber, "9");
+
+    await act(async () => {
+      queryClient.setQueryData<AuthMeResponse>(
+        authMeQueryKeyFor(testDevUserAccountId),
+        (current) => (current ? { ...current, displayName: "更新された表示名" } : current),
+      );
+    });
+    expect(screen.getByLabelText("試合番号")).toHaveValue("9");
+
+    await act(async () => {
+      queryClient.setQueryData<AuthMeResponse>(
+        authMeQueryKeyFor(testDevUserAccountId),
+        (current) => (current ? { ...current, accountId: "account_eu" } : current),
+      );
+    });
+
+    await waitFor(() => expect(screen.getByLabelText("試合番号")).toHaveValue(initialMatchNumber));
   });
 
   it("trims match draft deep link ids before loading draft details", async () => {

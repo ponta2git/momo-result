@@ -6,9 +6,9 @@ import { http, HttpResponse } from "msw";
 import { MemoryRouter, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { MatchesListPage } from "@/features/matches/list/MatchesListPage";
 import { formatCompactDateTime } from "@/features/matches/list/matchListFormat";
 import { MatchDetailPage } from "@/features/matches/MatchDetailPage";
-import { MatchesListPage } from "@/features/matches/MatchesListPage";
 import { setDevUser } from "@/test/auth";
 import { createDeferred } from "@/test/deferred";
 import { installMatchMediaController } from "@/test/doubles/dom";

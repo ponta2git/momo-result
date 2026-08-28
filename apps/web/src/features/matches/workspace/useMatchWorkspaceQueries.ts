@@ -1,5 +1,4 @@
 import { useQuery, useSuspenseQueries } from "@tanstack/react-query";
-import type { UseQueryResult, UseSuspenseQueryResult } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
 
 import type { WorkspaceMode } from "@/features/matches/workspace/matchFormTypes";
@@ -12,20 +11,24 @@ import { slotKinds } from "@/shared/api/enums";
 import { mergeHeldEventItems } from "@/shared/api/heldEventCache";
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
 import type {
-  GameTitleListResponse,
-  MapMasterListResponse,
-  MemberAliasListResponse,
-  SeasonMasterListResponse,
+  GameTitleResponse,
+  MapMasterResponse,
+  MemberAliasResponse,
+  SeasonMasterResponse,
 } from "@/shared/api/masters";
 import type {
   MatchDraftDetailResponse,
-  MatchDraftSourceImageListResponse,
+  MatchDraftSourceImageResponse,
 } from "@/shared/api/matchDrafts";
 import type { MatchDetailResponse } from "@/shared/api/matches";
 import type { OcrDraftListResponse } from "@/shared/api/ocrDrafts";
 import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import type { NormalizedApiError } from "@/shared/api/problemDetails";
-import { shouldShowBlockingQueryError, shouldShowQueryError } from "@/shared/api/queryErrorState";
+import {
+  isInitialQueryLoading,
+  shouldShowBlockingQueryError,
+  shouldShowQueryError,
+} from "@/shared/api/queryErrorState";
 import {
   gameTitlesQueryOptions,
   heldEventDetailQueryOptions,
@@ -57,39 +60,50 @@ type MatchWorkspaceQueriesParams = {
 };
 
 type MatchWorkspaceQueries = {
-  draftDetailQuery: UseQueryResult<MatchDraftDetailResponse, Error>;
-  gameTitlesQuery: UseSuspenseQueryResult<GameTitleListResponse, Error>;
   heldEventPicker: HeldEventPickerDirectory;
-  heldEventItems: HeldEventResponse[];
-  mapMastersQuery: UseQueryResult<MapMasterListResponse, Error>;
-  memberAliasesQuery: UseSuspenseQueryResult<MemberAliasListResponse, Error>;
-  matchDetailQuery: UseQueryResult<MatchDetailResponse, Error>;
-  ocrDraftsQuery: UseQueryResult<OcrDraftListResponse, Error>;
-  preferredHeldEventPending: boolean;
-  reviewDraftIdList: string[];
-  reviewDraftIds: SlotMap<string>;
-  seasonMastersQuery: UseQueryResult<SeasonMasterListResponse, Error>;
-  sourceImageQuery: UseQueryResult<MatchDraftSourceImageListResponse, Error>;
-};
-
-type MatchWorkspaceQueriesDerived = {
-  baseErrors: NormalizedApiError[];
-  editLoadFailureKind: "notFound" | "transient" | null;
-  isOcrRunningBlocked: boolean;
-  retryBaseQueries: () => Promise<void>;
-  retryEdit: () => void;
-  retryingBaseQueries: boolean;
-  refreshingReviewStatus: boolean;
-  reviewStatus: string | undefined;
+  load: {
+    base: {
+      errors: NormalizedApiError[];
+      retrying: boolean;
+      onRetry: () => Promise<void>;
+    };
+    edit: {
+      failureKind: "notFound" | "transient" | null;
+      loading: boolean;
+      retrying: boolean;
+      onRetry: () => void;
+    };
+    initializationFailed: boolean;
+    preferredHeldEventPending: boolean;
+    sourceImagesLoading: boolean;
+  };
+  resources: {
+    draftDetail: MatchDraftDetailResponse | undefined;
+    gameTitleItems: GameTitleResponse[] | undefined;
+    heldEventItems: HeldEventResponse[];
+    mapItems: MapMasterResponse[] | undefined;
+    matchDetail: MatchDetailResponse | undefined;
+    memberAliases: MemberAliasResponse[];
+    ocrDrafts: OcrDraftListResponse | undefined;
+    seasonItems: SeasonMasterResponse[] | undefined;
+    sourceImageItems: MatchDraftSourceImageResponse[] | undefined;
+  };
+  review: {
+    blocked: boolean;
+    draftIdList: string[];
+    draftIds: SlotMap<string>;
+    refresh: { pending: boolean; onRefresh: () => Promise<void> };
+    status: string | undefined;
+  };
 };
 
 /**
- * MatchWorkspacePageModel が必要とするクエリと、その派生表示状態を一括で返す。
- * 純粋なクエリ宣言の集合体であり副作用は QueryClient へ閉じ込めている。
+ * Match workspace の remote state lifecycle を所有する。
+ * Consumer には取得済み resource と workflow 単位の load / retry 契約だけを公開する。
  */
 export function useMatchWorkspaceQueries(
   params: MatchWorkspaceQueriesParams,
-): MatchWorkspaceQueries & { derived: MatchWorkspaceQueriesDerived } {
+): MatchWorkspaceQueries {
   const {
     gameTitleId,
     heldEventId,
@@ -211,6 +225,9 @@ export function useMatchWorkspaceQueries(
     seasonMastersError,
     sourceImageError,
   ]);
+  const refreshReviewStatus = useCallback(async () => {
+    await Promise.all([refetchDraftDetail(), refetchOcrDrafts()]);
+  }, [refetchDraftDetail, refetchOcrDrafts]);
   const refetchMatchDetail = matchDetailQuery.refetch;
   const retryEdit = useCallback(() => {
     void refetchMatchDetail();
@@ -221,38 +238,60 @@ export function useMatchWorkspaceQueries(
         ? ("notFound" as const)
         : ("transient" as const)
       : null;
+  const initializationFailed =
+    mode !== "edit" &&
+    !useSampleDrafts &&
+    ((Boolean(matchDraftId) &&
+      draftDetailQuery.data === undefined &&
+      shouldShowQueryError(draftDetailQuery)) ||
+      (mode === "review" &&
+        reviewDraftIdList.length > 0 &&
+        ocrDraftsQuery.data === undefined &&
+        shouldShowQueryError(ocrDraftsQuery)));
 
   return {
-    derived: {
-      baseErrors,
-      editLoadFailureKind,
-      isOcrRunningBlocked,
-      retryBaseQueries,
-      retryEdit,
-      retryingBaseQueries:
-        mapMastersQuery.isFetching ||
-        seasonMastersQuery.isFetching ||
-        draftDetailQuery.isFetching ||
-        ocrDraftsQuery.isFetching ||
-        sourceImageQuery.isFetching ||
-        preferredHeldEventQuery.isFetching,
-      refreshingReviewStatus,
-      reviewStatus,
-    },
-    draftDetailQuery,
-    gameTitlesQuery,
     heldEventPicker,
-    heldEventItems,
-    mapMastersQuery,
-    memberAliasesQuery,
-    matchDetailQuery,
-    ocrDraftsQuery,
-    preferredHeldEventPending: Boolean(
-      preferredHeldEventId && !preferredHeldEventQuery.data && preferredHeldEventQuery.isFetching,
-    ),
-    reviewDraftIdList,
-    reviewDraftIds,
-    seasonMastersQuery,
-    sourceImageQuery,
+    load: {
+      base: {
+        errors: baseErrors,
+        retrying:
+          mapMastersQuery.isFetching ||
+          seasonMastersQuery.isFetching ||
+          draftDetailQuery.isFetching ||
+          ocrDraftsQuery.isFetching ||
+          sourceImageQuery.isFetching ||
+          preferredHeldEventQuery.isFetching,
+        onRetry: retryBaseQueries,
+      },
+      edit: {
+        failureKind: editLoadFailureKind,
+        loading: mode === "edit" && isInitialQueryLoading(matchDetailQuery),
+        retrying: matchDetailQuery.isFetching,
+        onRetry: retryEdit,
+      },
+      initializationFailed,
+      preferredHeldEventPending: Boolean(
+        preferredHeldEventId && !preferredHeldEventQuery.data && preferredHeldEventQuery.isFetching,
+      ),
+      sourceImagesLoading: sourceImageQuery.isLoading,
+    },
+    resources: {
+      draftDetail: draftDetailQuery.data,
+      gameTitleItems: gameTitlesQuery.data.items,
+      heldEventItems,
+      mapItems: mapMastersQuery.data?.items,
+      matchDetail: matchDetailQuery.data,
+      memberAliases: memberAliasesQuery.data.items ?? [],
+      ocrDrafts: ocrDraftsQuery.data,
+      seasonItems: seasonMastersQuery.data?.items,
+      sourceImageItems: sourceImageQuery.data?.items,
+    },
+    review: {
+      blocked: isOcrRunningBlocked,
+      draftIdList: reviewDraftIdList,
+      draftIds: reviewDraftIds,
+      refresh: { pending: refreshingReviewStatus, onRefresh: refreshReviewStatus },
+      status: reviewStatus,
+    },
   };
 }

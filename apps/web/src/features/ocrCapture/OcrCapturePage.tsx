@@ -3,7 +3,6 @@ import { ArrowLeft, Trash2 } from "lucide-react";
 import { CameraCapture } from "@/features/ocrCapture/CameraCapture";
 import { CaptureRail } from "@/features/ocrCapture/CaptureRail";
 import { ImageInput } from "@/features/ocrCapture/ImageInput";
-import { OcrJobSlotStatusLoader } from "@/features/ocrCapture/OcrJobSlotStatusLoader";
 import { OcrStartDialog } from "@/features/ocrCapture/OcrStartDialog";
 import { SetupPanel } from "@/features/ocrCapture/SetupPanel";
 import { useOcrCapturePageModel } from "@/features/ocrCapture/useOcrCapturePageModel";
@@ -179,6 +178,7 @@ export function OcrCapturePage() {
               layout="stack"
               slots={capture.tray.slots}
               drafts={capture.tray.drafts}
+              statusRefreshing={capture.tray.statusRefreshing}
               onClear={capture.tray.clear}
               onDropImage={capture.tray.drop}
               onMoveImage={capture.tray.move}
@@ -254,17 +254,6 @@ export function OcrCapturePage() {
         onConfirm={submission.dialog.confirm}
         onViewMatches={submission.dialog.viewMatches}
       />
-
-      {submission.monitoring.slots.map((slot) => (
-        <OcrJobSlotStatusLoader
-          key={slot.kind}
-          slot={slot}
-          onUpdate={submission.monitoring.updateSlot}
-          onDraft={submission.monitoring.recordDraft}
-          onDraftLoadError={submission.monitoring.reportDraftLoadError}
-          onRefreshingChange={submission.monitoring.setRefreshing}
-        />
-      ))}
     </PageFrame>
   );
 }

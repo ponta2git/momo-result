@@ -11,6 +11,7 @@ type CaptureRailProps = {
   layout?: "rail" | "stack";
   slots: CaptureSlotState[];
   drafts: SlotMap<OcrDraftResponse>;
+  statusRefreshing: SlotMap<boolean>;
   onClear: (kind: SlotKind) => void;
   onDropImage: (sourceKind: SlotKind, targetKind: SlotKind) => void;
   onMoveImage: (kind: SlotKind, direction: -1 | 1) => void;
@@ -23,6 +24,7 @@ export function CaptureRail({
   layout = "rail",
   slots,
   drafts,
+  statusRefreshing,
   onClear,
   onDropImage,
   onMoveImage,
@@ -62,6 +64,7 @@ export function CaptureRail({
               actions={actions}
               draft={drafts[definition.kind]}
               presentation={presentation}
+              statusRefreshing={statusRefreshing[definition.kind] ?? false}
               slot={slot}
             />
           </div>

@@ -1,7 +1,7 @@
 import { render, screen, within } from "@testing-library/react";
 import { BarChart3, Database, Trophy } from "lucide-react";
 import { MemoryRouter } from "react-router-dom";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { GlobalNav } from "@/shared/ui/layout/GlobalNav";
 
@@ -57,5 +57,31 @@ describe("GlobalNav", () => {
       "aria-current",
       "page",
     );
+  });
+
+  it("brings the active destination into the navigation viewport", () => {
+    const scrollIntoView = vi.fn();
+    const original = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "scrollIntoView");
+    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+      configurable: true,
+      value: scrollIntoView,
+    });
+
+    try {
+      render(
+        <MemoryRouter initialEntries={["/admin/masters"]}>
+          <GlobalNav brandTo="/matches" items={items} managementItems={managementItems} />
+        </MemoryRouter>,
+      );
+
+      expect(scrollIntoView).toHaveBeenCalledTimes(1);
+      expect(scrollIntoView).toHaveBeenCalledWith({ block: "nearest", inline: "nearest" });
+    } finally {
+      if (original) {
+        Object.defineProperty(HTMLElement.prototype, "scrollIntoView", original);
+      } else {
+        Reflect.deleteProperty(HTMLElement.prototype, "scrollIntoView");
+      }
+    }
   });
 });

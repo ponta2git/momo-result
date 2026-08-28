@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useRef } from "react";
 
 import type { InputSource } from "@/features/ocrCapture/captureState";
 import { validateImageFile } from "@/features/ocrCapture/captureState";
@@ -20,15 +20,6 @@ export function ImageInput({
   onValidationError,
 }: ImageInputProps) {
   const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    const input = inputRef.current;
-    return () => {
-      if (input) {
-        input.value = "";
-      }
-    };
-  }, []);
 
   return (
     <div className="flex flex-wrap gap-2">

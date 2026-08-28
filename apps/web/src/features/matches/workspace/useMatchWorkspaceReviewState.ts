@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import type {
   MatchFormValues,
@@ -13,21 +13,14 @@ import type { ReviewFieldKey } from "@/features/matches/workspace/review/reviewW
 import { incidentDefinitions } from "@/shared/domain/incidents";
 
 export function useMatchWorkspaceReviewState({
-  reviewKey,
   values,
   workspaceData,
 }: {
-  reviewKey: string;
   values: MatchFormValues;
   workspaceData: MatchWorkspaceInitialData | null;
 }) {
   const [acknowledgedCellIds, setAcknowledgedCellIds] = useState<string[]>([]);
   const [activeCellId, setActiveCellId] = useState<string | null>(null);
-
-  useEffect(() => {
-    setAcknowledgedCellIds([]);
-    setActiveCellId(null);
-  }, [reviewKey]);
 
   const items = useMemo(
     () =>

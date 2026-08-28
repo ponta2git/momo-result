@@ -8,6 +8,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { confirmedDraftMessages } from "@/features/matches/confirmedDraftNavigation";
 import { DraftReviewPage } from "@/features/matches/workspace/DraftReviewPage";
+import { matchWorkspaceSessionDraftKey } from "@/features/matches/workspace/matchWorkspaceSessionDraft";
 import { formatDateTimeLong } from "@/shared/lib/dateTime";
 import { ToastHost } from "@/shared/ui/feedback/ToastHost";
 import {
@@ -247,6 +248,62 @@ describe("DraftReviewPage", () => {
     expect(await screen.findAllByText(confirmedDraftMessages.confirmConflict)).toHaveLength(1);
   });
 
+  it("keeps the confirmation dialog busy while the latest draft status is unresolved", async () => {
+    setDevUser();
+    queryClient.setDefaultOptions({ queries: { retry: false, staleTime: 10_000 } });
+    const preflightStarted = createDeferred();
+    const preflightGate = createDeferred();
+    let draftDetailRequests = 0;
+    server.use(
+      http.get("/api/match-drafts/:draftId", async ({ params }) => {
+        draftDetailRequests += 1;
+        if (draftDetailRequests >= 2) {
+          preflightStarted.resolve();
+          await preflightGate.promise;
+        }
+        return HttpResponse.json(matchDraftDetailResponse(String(params["draftId"])));
+      }),
+      http.post("/api/matches", () =>
+        HttpResponse.json({
+          createdAt: "2026-01-01T00:00:00.000Z",
+          heldEventId: "held-1",
+          matchId: "match-after-preflight",
+          matchNoInEvent: 3,
+        }),
+      ),
+    );
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/review/draft-pending-preflight"]}>
+          <Routes>
+            <Route path="/review/:matchSessionId" element={<DraftReviewPage />} />
+            <Route path="/matches/:matchId" element={<p>試合詳細</p>} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "OCR結果の確認" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "確定前の確認へ進む" }));
+    const dialog = await screen.findByRole("dialog", { name: "この内容で確定しますか？" });
+    await user.click(within(dialog).getByRole("button", { name: "確定する" }));
+    await preflightStarted.promise;
+
+    expect(within(dialog).getByRole("button", { name: "戻って修正" })).toBeDisabled();
+    const pendingConfirmButton = within(dialog).getByRole("button", { name: "確定中…" });
+    expect(pendingConfirmButton).toBeDisabled();
+    expect(pendingConfirmButton).toHaveAttribute("aria-busy", "true");
+    expect(
+      within(dialog).queryByRole("button", { name: "ダイアログを閉じる" }),
+    ).not.toBeInTheDocument();
+    await user.keyboard("{Escape}");
+    expect(dialog).toBeInTheDocument();
+
+    preflightGate.resolve();
+    expect(await screen.findByText("試合詳細")).toBeInTheDocument();
+  });
+
   it("redirects after a confirm conflict when the draft was confirmed concurrently", async () => {
     setDevUser();
     queryClient.setDefaultOptions({ queries: { retry: false, staleTime: 10_000 } });
@@ -390,7 +447,11 @@ describe("DraftReviewPage", () => {
     ).not.toBeInTheDocument();
     const executionArea = screen.getByRole("region", { name: "入力内容の確定" });
     expect(within(executionArea).getByRole("alert")).toHaveTextContent("入力内容は保持しています");
-    expect(within(executionArea).getByRole("button", { name: "確定前の確認へ進む" })).toBeEnabled();
+    await waitFor(() =>
+      expect(
+        within(executionArea).getByRole("button", { name: "確定前の確認へ進む" }),
+      ).toBeEnabled(),
+    );
   });
 
   it("returns a draft-delete API failure to persistent execution feedback", async () => {
@@ -533,6 +594,81 @@ describe("DraftReviewPage", () => {
 
     responseGate.resolve();
     expect(await screen.findByRole("heading", { name: "OCR結果の確認" })).toBeInTheDocument();
+  });
+
+  it("resets review progress while keeping each review session draft isolated", async () => {
+    setDevUser();
+    const firstSessionDraftKey = matchWorkspaceSessionDraftKey({
+      accountId: testDevUserAccountId,
+      mode: "review",
+      workspaceKey: "session-1",
+    });
+    const secondSessionDraftKey = matchWorkspaceSessionDraftKey({
+      accountId: testDevUserAccountId,
+      mode: "review",
+      workspaceKey: "session-2",
+    });
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/review/session-1?sample=1"]}>
+          <Link to="/review/session-2?sample=1">別の確認へ</Link>
+          <Routes>
+            <Route path="/review/:matchSessionId" element={<DraftReviewPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    await screen.findByText("サンプルの読み取り結果で表示中");
+    const initialReviewProgress = screen.getByText(/未確認\d+件／全\d+件/u).textContent;
+    const initialMatchNumber = (screen.getByLabelText("試合番号") as HTMLInputElement).value;
+    await user.click(screen.getByRole("button", { name: "この値で確認済み" }));
+    expect(screen.queryByText(initialReviewProgress ?? "")).not.toBeInTheDocument();
+
+    const matchNumber = screen.getByLabelText("試合番号");
+    await user.clear(matchNumber);
+    await user.type(matchNumber, "9");
+    await user.tab();
+    await waitFor(() => expect(window.sessionStorage.getItem(firstSessionDraftKey)).not.toBeNull());
+
+    await user.click(screen.getByRole("link", { name: "別の確認へ" }));
+
+    await waitFor(() => expect(screen.getByLabelText("試合番号")).toHaveValue(initialMatchNumber));
+    expect(screen.getByText(initialReviewProgress ?? "")).toBeInTheDocument();
+    expect(screen.queryByText("前回の一時保存があります")).not.toBeInTheDocument();
+    expect(window.sessionStorage.getItem(firstSessionDraftKey)).not.toBeNull();
+    expect(window.sessionStorage.getItem(secondSessionDraftKey)).toBeNull();
+  });
+
+  it("preserves review input when handoff and return context change in place", async () => {
+    setDevUser();
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/review/session-1?sample=1"]}>
+          <Link to="/review/session-1?sample=1&handoffId=missing&returnTo=%2Fmatches">
+            復元コンテキストを反映
+          </Link>
+          <Routes>
+            <Route path="/review/:matchSessionId" element={<DraftReviewPage />} />
+          </Routes>
+          <ToastHost />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    await screen.findByText("サンプルの読み取り結果で表示中");
+    const matchNumber = screen.getByLabelText("試合番号");
+    await user.clear(matchNumber);
+    await user.type(matchNumber, "9");
+
+    await user.click(screen.getByRole("link", { name: "復元コンテキストを反映" }));
+
+    expect(
+      await screen.findByText("設定管理から戻りましたが、入力内容を復元できませんでした。"),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("試合番号")).toHaveValue("9");
   });
 
   it("keeps held event creation collapsed until requested", async () => {

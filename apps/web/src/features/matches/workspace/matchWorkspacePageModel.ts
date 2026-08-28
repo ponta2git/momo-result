@@ -72,6 +72,7 @@ type MatchWorkspacePageModelInput = {
       open: boolean;
       onClose: () => void;
       onConfirm: (formData: FormData) => void | Promise<void>;
+      pending: boolean;
     };
     error: MatchWorkspaceOperationError | null;
     onPrimaryAction: () => void;
@@ -298,7 +299,7 @@ export function buildMatchWorkspacePageModel(
               onConfirm: input.persistence.confirmation.onConfirm,
             },
             feedback: { validationMessage },
-            pending: input.persistence.busy,
+            pending: input.persistence.confirmation.pending,
             review: {
               changedCount: input.review.state.changedCount,
               totalCount: input.review.state.items.length,

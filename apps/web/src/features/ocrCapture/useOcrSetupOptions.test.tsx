@@ -84,7 +84,7 @@ describe("useOcrSetupOptions", () => {
     queryClient.setQueryData(masterKeys.seasonMasters.list(gameTitle.id), {
       items: [seasonMaster],
     });
-    queryClient.setQueryData(heldEventKeys.scope("ocr-capture"), { items: [] });
+    queryClient.setQueryData(heldEventKeys.directory(), { items: [] });
 
     render(
       <QueryClientProvider client={queryClient}>
@@ -119,7 +119,7 @@ describe("useOcrSetupOptions", () => {
     queryClient.setQueryData(masterKeys.seasonMasters.list(gameTitle.id), {
       items: [seasonMaster],
     });
-    queryClient.setQueryData(heldEventKeys.scope("ocr-capture"), {
+    queryClient.setQueryData(heldEventKeys.directory(), {
       items: [
         {
           draftCount: 2,
@@ -167,7 +167,7 @@ describe("useOcrSetupOptions", () => {
     queryClient.setQueryData(masterKeys.seasonMasters.list(gameTitle.id), {
       items: [seasonMaster],
     });
-    queryClient.setQueryData(heldEventKeys.scope("ocr-capture"), { items: [] });
+    queryClient.setQueryData(heldEventKeys.directory(), { items: [] });
     server.use(
       http.get("/api/held-events/held-requested", () =>
         HttpResponse.json({ detail: "temporarily unavailable" }, { status: 500 }),
@@ -211,7 +211,7 @@ describe("useOcrSetupOptions", () => {
     queryClient.setQueryData(masterKeys.seasonMasters.list(gameTitle.id), {
       items: [seasonMaster],
     });
-    queryClient.setQueryData(heldEventKeys.scope("ocr-capture"), { items: [] });
+    queryClient.setQueryData(heldEventKeys.directory(), { items: [] });
     server.use(
       http.get("/api/held-events/held-missing", () =>
         HttpResponse.json({ detail: "not found" }, { status: 404 }),

@@ -90,6 +90,15 @@ describe("confirmMatchSchema", () => {
     expect(result.matchDraftId).toBe("match-draft-1");
   });
 
+  it("normalizes datetime-local input at the request boundary", () => {
+    const result = confirmMatchSchema.parse({
+      ...valid,
+      playedAt: "2026-01-01T09:00",
+    });
+
+    expect(new Date(result.playedAt).toISOString()).toBe(result.playedAt);
+  });
+
   it("rejects invalid playedAt values", () => {
     const result = confirmMatchSchema.safeParse({
       ...valid,

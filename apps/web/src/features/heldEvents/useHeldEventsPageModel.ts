@@ -3,10 +3,8 @@ import { useActionState, useCallback, useEffect, useMemo, useState } from "react
 import { useNavigate, useSearchParams } from "react-router-dom";
 
 import {
-  currentLocalIsoMinute,
   emptyHeldEvents,
   heldEventPageSizeOptions,
-  toIsoFromLocal,
 } from "@/features/heldEvents/heldEventViewModel";
 import type {
   HeldEventCreateFormModel,
@@ -26,6 +24,7 @@ import {
 import { heldEventKeys } from "@/shared/api/queryKeys";
 import { heldEventsQueryOptions } from "@/shared/api/queryOptions";
 import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
+import { toIsoFromLocalDateTime, toLocalDateTimeInputValue } from "@/shared/lib/dateTime";
 import { parsePositiveIntSearchParam } from "@/shared/lib/searchParams";
 import { withReturnTo } from "@/shared/navigation/returnTo";
 import { showToast } from "@/shared/ui/feedback/Toast";
@@ -83,7 +82,7 @@ export function useHeldEventsPageModel(): HeldEventsPageModel {
       pageSize: pageSizeOptions.has(pageSize) ? pageSize : defaultPagination.pageSize,
     };
   }, [searchParams]);
-  const [heldAtDraft, setHeldAtDraft] = useState(currentLocalIsoMinute);
+  const [heldAtDraft, setHeldAtDraft] = useState(toLocalDateTimeInputValue);
   const [errorMessage, setErrorMessage] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<HeldEventResponse | null>(null);
@@ -117,7 +116,7 @@ export function useHeldEventsPageModel(): HeldEventsPageModel {
     }
 
     try {
-      const request = { heldAt: toIsoFromLocal(heldAt) };
+      const request = { heldAt: toIsoFromLocalDateTime(heldAt) };
       const event = await runIdempotentMutation(
         idempotencyKeys,
         "heldEvents.createHeldEvent",
@@ -131,7 +130,7 @@ export function useHeldEventsPageModel(): HeldEventsPageModel {
         drafts: [],
         matches: [],
       });
-      setHeldAtDraft(currentLocalIsoMinute());
+      setHeldAtDraft(toLocalDateTimeInputValue());
       setErrorMessage("");
       setCreateOpen(false);
       showToast({ title: "開催を作成しました。", tone: "success" });

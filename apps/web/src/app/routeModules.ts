@@ -38,7 +38,7 @@ export const loadMatchDetailPage = () =>
   }));
 
 export const loadMatchesListPage = () =>
-  import("@/features/matches/MatchesListPage").then((module) => ({
+  import("@/features/matches/list/MatchesListPage").then((module) => ({
     default: module.MatchesListPage,
   }));
 

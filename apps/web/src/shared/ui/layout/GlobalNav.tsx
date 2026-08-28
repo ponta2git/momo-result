@@ -25,22 +25,8 @@ type GlobalNavProps = {
 };
 
 function NavItemLink({ item }: { item: GlobalNavItem }) {
-  const anchorRef = useRef<HTMLAnchorElement>(null);
-  const location = useLocation();
-
-  useEffect(() => {
-    const anchor = anchorRef.current;
-    if (
-      anchor?.getAttribute("aria-current") === "page" &&
-      typeof anchor.scrollIntoView === "function"
-    ) {
-      anchor.scrollIntoView({ block: "nearest", inline: "nearest" });
-    }
-  }, [item.to, location.pathname]);
-
   return (
     <NavLink
-      ref={anchorRef}
       to={item.to}
       aria-label={item.label}
       className={({ isActive }) =>
@@ -68,6 +54,16 @@ export function GlobalNav({
   managementItems = emptyNavItems,
   managementLabel = "管理",
 }: GlobalNavProps) {
+  const location = useLocation();
+  const navItemsRef = useRef<HTMLDivElement>(null);
+  const destinationSignature = [...items, ...managementItems].map((item) => item.to).join("\0");
+
+  useEffect(() => {
+    const activeLink =
+      navItemsRef.current?.querySelector<HTMLAnchorElement>('a[aria-current="page"]');
+    activeLink?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+  }, [destinationSignature, location.pathname]);
+
   return (
     <nav
       aria-label="グローバルナビゲーション"
@@ -101,6 +97,7 @@ export function GlobalNav({
           ) : null}
         </div>
         <div
+          ref={navItemsRef}
           className="-mx-3 flex min-w-0 [scrollbar-width:none] items-center gap-2 overflow-x-auto px-3 pb-1 lg:col-start-2 lg:row-start-1 lg:mx-0 lg:flex-wrap lg:justify-center lg:overflow-visible lg:px-0 lg:pb-0 [&::-webkit-scrollbar]:hidden"
           data-nav-scroll
         >

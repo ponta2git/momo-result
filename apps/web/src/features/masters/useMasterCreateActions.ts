@@ -2,12 +2,6 @@ import type { QueryClient } from "@tanstack/react-query";
 import { useActionState } from "react";
 
 import {
-  postGameTitle,
-  postMapMaster,
-  postMemberAlias,
-  postSeasonMaster,
-} from "@/features/masters/masterCommands";
-import {
   createGameTitleId,
   createMapMasterId,
   createSeasonMasterId,
@@ -25,6 +19,12 @@ import type {
 } from "@/features/masters/useMasterOptimisticCatalog";
 import type { IdempotencyKeyStore } from "@/shared/api/idempotency";
 import { runIdempotentMutation, runIdempotentOperationAttempt } from "@/shared/api/idempotency";
+import {
+  createGameTitle,
+  createMapMaster,
+  createMemberAlias,
+  createSeasonMaster,
+} from "@/shared/api/masters";
 import { formatApiError } from "@/shared/api/problemDetails";
 
 export type CreateState = { error?: string | undefined; version: number };
@@ -76,7 +76,7 @@ export function useMasterCreateActions(input: {
         name,
       };
       const created = await runIdempotentOperationAttempt(attempt, (options) =>
-        postGameTitle(request, options),
+        createGameTitle(request, options),
       );
       input.setSelectedGameTitleId(created.id);
       await invalidateMasterResourceCaches(input.queryClient, {
@@ -114,7 +114,9 @@ export function useMasterCreateActions(input: {
           gameTitleId,
           name,
         };
-        await runIdempotentOperationAttempt(attempt, (options) => postMapMaster(request, options));
+        await runIdempotentOperationAttempt(attempt, (options) =>
+          createMapMaster(request, options),
+        );
         await invalidateMasterResourceCaches(input.queryClient, {
           authScope: input.authScope,
           gameTitleId,
@@ -155,7 +157,9 @@ export function useMasterCreateActions(input: {
         gameTitleId,
         name,
       };
-      await runIdempotentOperationAttempt(attempt, (options) => postSeasonMaster(request, options));
+      await runIdempotentOperationAttempt(attempt, (options) =>
+        createSeasonMaster(request, options),
+      );
       await invalidateMasterResourceCaches(input.queryClient, {
         authScope: input.authScope,
         gameTitleId,
@@ -182,7 +186,7 @@ export function useMasterCreateActions(input: {
         input.idempotencyKeys,
         "masters.createMemberAlias",
         request,
-        (options) => postMemberAlias(request, options),
+        (options) => createMemberAlias(request, options),
       );
       await invalidateMemberAliasCaches(input.queryClient, input.authScope);
       return { error: undefined, version: prev.version + 1 };

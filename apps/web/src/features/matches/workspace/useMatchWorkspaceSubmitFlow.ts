@@ -69,7 +69,7 @@ export function useMatchWorkspaceSubmitFlow({
     onPersistedSuccess,
     returnTo,
   });
-  const confirmAction = useMatchWorkspaceConfirmAction({
+  const confirmation = useMatchWorkspaceConfirmAction({
     confirmMutation: mutations.confirmMutation,
     ensureDraftIsOpenForConfirm: confirmedDraft.ensureDraftIsOpenForConfirm,
     values,
@@ -85,5 +85,5 @@ export function useMatchWorkspaceSubmitFlow({
     await cancelDraft(values.matchDraftId).catch(() => undefined);
   }, [cancelDraft, setOperationError, setValidationMessage, values.matchDraftId]);
 
-  return { cancelDraftConfirmed, confirmAction, confirmedDraft, mutations };
+  return { cancelDraftConfirmed, confirmation, confirmedDraft, mutations };
 }

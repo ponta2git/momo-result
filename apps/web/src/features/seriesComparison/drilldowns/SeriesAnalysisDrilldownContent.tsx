@@ -1,8 +1,6 @@
 import { SeriesAnalysisDrilldownLoading } from "@/features/seriesComparison/drilldowns/SeriesAnalysisDrilldownLoading";
-import {
-  PlayOrderHistoryDrilldown,
-  RankHistoryDrilldown,
-} from "@/features/seriesComparison/drilldowns/SeriesAnalysisHistoryDrilldowns";
+import { PlayOrderHistoryDrilldown } from "@/features/seriesComparison/drilldowns/SeriesAnalysisPlayOrderHistoryDrilldown";
+import { RankHistoryDrilldown } from "@/features/seriesComparison/drilldowns/SeriesAnalysisRankHistoryDrilldown";
 import { RankSignalDrilldown } from "@/features/seriesComparison/drilldowns/SeriesAnalysisRankSignalDrilldown";
 import { useSeriesAnalysisDrilldown } from "@/features/seriesComparison/drilldowns/useSeriesAnalysisDrilldown";
 import {
@@ -40,22 +38,22 @@ export function SeriesAnalysisDrilldownContent({
   onArtifactExpired: () => void;
   selection: SeriesAnalysisDrilldownSelection;
 }) {
-  const query = useSeriesAnalysisDrilldown({ baseQuery, onArtifactExpired, selection });
+  const resource = useSeriesAnalysisDrilldown({ baseQuery, onArtifactExpired, selection });
 
-  if (query.isPending) return <SeriesAnalysisDrilldownLoading />;
-  if (query.isError) {
+  if (resource.kind === "loading") return <SeriesAnalysisDrilldownLoading />;
+  if (resource.kind === "failed") {
     return (
       <Notice tone="danger" title="詳細を読み込めません">
         <p>比較の詳細を取得できませんでした。</p>
         <div className="mt-3">
-          <Button size="sm" variant="secondary" onClick={() => void query.refetch()}>
+          <Button size="sm" variant="secondary" onClick={resource.retry}>
             再読み込み
           </Button>
         </div>
       </Notice>
     );
   }
-  return query.data ? <DrilldownBody response={query.data} /> : null;
+  return <DrilldownBody response={resource.data} />;
 }
 
 function DrilldownBody({ response }: { response: SeriesAnalysisDrilldownV3 }) {

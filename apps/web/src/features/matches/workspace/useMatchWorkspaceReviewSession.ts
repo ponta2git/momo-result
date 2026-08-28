@@ -33,7 +33,7 @@ export function useMatchWorkspaceReviewSession({
   values: MatchFormValues;
   workspaceData: MatchWorkspaceInitialData | null;
 }) {
-  const reviewState = useMatchWorkspaceReviewState({ reviewKey, values, workspaceData });
+  const reviewState = useMatchWorkspaceReviewState({ values, workspaceData });
   const { restoreAcknowledgedCellIds } = reviewState;
   const handleRestore = useCallback(
     (draft: MatchWorkspaceSessionDraft) => {

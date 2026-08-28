@@ -17,6 +17,7 @@ type CaptureSlotCardProps = {
   actions: CaptureSlotActionsModel;
   draft?: OcrDraftResponse | undefined;
   presentation: CaptureSlotPresentation;
+  statusRefreshing: boolean;
   slot: CaptureSlotState;
 };
 
@@ -38,7 +39,13 @@ type CaptureSlotPresentation = {
   captureTarget: boolean;
 };
 
-export function CaptureSlotCard({ actions, draft, presentation, slot }: CaptureSlotCardProps) {
+export function CaptureSlotCard({
+  actions,
+  draft,
+  presentation,
+  statusRefreshing,
+  slot,
+}: CaptureSlotCardProps) {
   const mismatch = slot.detectedKind && slot.detectedKind !== slot.kind;
   const hasImage = Boolean(slot.previewUrl);
   const isWorking = isWorkingStatus(slot.status);
@@ -129,6 +136,7 @@ export function CaptureSlotCard({ actions, draft, presentation, slot }: CaptureS
 
       <CaptureSlotFeedback
         mismatch={Boolean(mismatch)}
+        refreshing={statusRefreshing}
         slot={slot}
         onRefreshStatus={actions.onRefreshStatus}
       />

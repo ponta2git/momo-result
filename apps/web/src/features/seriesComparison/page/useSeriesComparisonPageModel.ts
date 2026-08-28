@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { seriesAnalysisFocusExclusionNotice } from "@/features/seriesComparison/model/seriesAnalysisDisplayBundle";
 import { buildSeriesAnalysisFilterOptions } from "@/features/seriesComparison/model/seriesAnalysisFilterOptions";
@@ -12,7 +12,6 @@ import { seriesAnalysisOptionsQueryOptions } from "@/shared/api/seriesAnalysisQu
 /** Composes location, option, and artifact owners into the display-ready page contract. */
 export function useSeriesComparisonPageModel() {
   const [focusNotice, setFocusNotice] = useState<string | undefined>();
-  const handledExcludedFocus = useRef(new Set<string>());
   const optionsQuery = useQuery(seriesAnalysisOptionsQueryOptions());
   const {
     data: optionsData,
@@ -47,9 +46,6 @@ export function useSeriesComparisonPageModel() {
     if (analysis.resolution.kind !== "excluded" || !focusMatchId || !analysis.candidateArtifactId) {
       return;
     }
-    const key = `${analysis.candidateArtifactId}:${focusMatchId}:${analysis.resolution.status}`;
-    if (handledExcludedFocus.current.has(key)) return;
-    handledExcludedFocus.current.add(key);
     setFocusNotice(seriesAnalysisFocusExclusionNotice(analysis.resolution.status));
     clearFocusedMatch();
   }, [

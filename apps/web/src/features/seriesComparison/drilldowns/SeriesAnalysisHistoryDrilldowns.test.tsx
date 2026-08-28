@@ -2,10 +2,8 @@ import { render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 
-import {
-  PlayOrderHistoryDrilldown,
-  RankHistoryDrilldown,
-} from "@/features/seriesComparison/drilldowns/SeriesAnalysisHistoryDrilldowns";
+import { PlayOrderHistoryDrilldown } from "@/features/seriesComparison/drilldowns/SeriesAnalysisPlayOrderHistoryDrilldown";
+import { RankHistoryDrilldown } from "@/features/seriesComparison/drilldowns/SeriesAnalysisRankHistoryDrilldown";
 import { makeSeriesAnalysisDrilldown } from "@/test/msw/seriesAnalysisFixtures";
 
 describe("series analysis history drilldowns", () => {

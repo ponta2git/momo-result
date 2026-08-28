@@ -26,11 +26,10 @@ import {
   heldEventPatchById,
   latestHeldEventPatch,
 } from "@/features/matches/workspace/workspaceViewModel";
-import { isInitialQueryLoading, shouldShowQueryError } from "@/shared/api/queryErrorState";
-import { useAuth } from "@/shared/auth/useAuth";
 import { sanitizeReturnTo } from "@/shared/navigation/returnTo";
 
 type MatchWorkspacePageModelParams = {
+  accountId?: string | undefined;
   matchDraftId?: string | undefined;
   matchId?: string | undefined;
   matchSessionId?: string | undefined;
@@ -39,6 +38,7 @@ type MatchWorkspacePageModelParams = {
 };
 
 export function useMatchWorkspacePageModel({
+  accountId,
   matchDraftId,
   matchId,
   matchSessionId,
@@ -46,7 +46,6 @@ export function useMatchWorkspacePageModel({
   preferredHeldEventId,
 }: MatchWorkspacePageModelParams): MatchWorkspacePageModel {
   const [searchParams] = useSearchParams();
-  const accountId = useAuth().auth?.accountId;
   const contextualReturnTo = sanitizeReturnTo(searchParams.get("returnTo"));
   const { notify } = useWorkspaceNotice();
   const local = useMatchWorkspaceLocalState();
@@ -54,7 +53,12 @@ export function useMatchWorkspacePageModel({
   const useSampleDrafts = mode === "review" && searchParams.get("sample") === "1";
   const hasHandoff = searchParams.has("handoffId");
   const handoffSessionId = matchSessionId ?? matchDraftId ?? mode;
-  const queries = useMatchWorkspaceQueries({
+  const {
+    heldEventPicker,
+    load,
+    resources,
+    review: remoteReview,
+  } = useMatchWorkspaceQueries({
     gameTitleId: state.values.gameTitleId,
     heldEventId: state.values.heldEventId,
     matchDraftId,
@@ -66,20 +70,16 @@ export function useMatchWorkspacePageModel({
     useSampleDrafts,
   });
   const {
-    derived,
-    draftDetailQuery,
-    gameTitlesQuery,
+    draftDetail,
+    gameTitleItems,
     heldEventItems,
-    mapMastersQuery,
-    memberAliasesQuery,
-    matchDetailQuery,
-    ocrDraftsQuery,
-    preferredHeldEventPending,
-    reviewDraftIdList,
-    reviewDraftIds,
-    seasonMastersQuery,
-    sourceImageQuery,
-  } = queries;
+    mapItems,
+    matchDetail,
+    memberAliases,
+    ocrDrafts,
+    seasonItems,
+    sourceImageItems,
+  } = resources;
 
   const createEventMutation = useWorkspaceHeldEventCreation({
     dispatch,
@@ -95,18 +95,17 @@ export function useMatchWorkspacePageModel({
     [dispatch, setWorkspaceData],
   );
   const { isInitialized } = useMatchWorkspaceInit({
-    draftDetail: draftDetailQuery.data ?? undefined,
+    draftDetail,
     emptyFormFactory: local.emptyFormFactory,
-    matchDetail: matchDetailQuery.data ?? undefined,
+    matchDetail,
     matchDraftId,
-    matchId,
-    memberAliases: memberAliasesQuery.data?.items ?? [],
+    memberAliases,
     mode,
-    ocrDrafts: ocrDraftsQuery.data ?? undefined,
+    ocrDrafts,
     onInitialize: initializeWorkspace,
     nowIsoFactory: local.nowIsoFactory,
-    reviewDraftIdList,
-    reviewDraftIds,
+    reviewDraftIdList: remoteReview.draftIdList,
+    reviewDraftIds: remoteReview.draftIds,
     useSampleDrafts,
   });
 
@@ -116,13 +115,13 @@ export function useMatchWorkspacePageModel({
     values: state.values,
   });
   const view = buildMatchWorkspaceView({
-    draftDetail: draftDetailQuery.data,
-    gameTitleItems: gameTitlesQuery.data?.items,
+    draftDetail,
+    gameTitleItems,
     heldEventItems,
-    mapItems: mapMastersQuery.data?.items,
+    mapItems,
     mode,
-    reviewStatus: derived.reviewStatus,
-    seasonItems: seasonMastersQuery.data?.items,
+    reviewStatus: remoteReview.status,
+    seasonItems,
     useSampleDrafts,
     values: state.values,
   });
@@ -131,14 +130,14 @@ export function useMatchWorkspacePageModel({
     !hasHandoff &&
     mode !== "edit" &&
     !state.values.heldEventId &&
-    !preferredHeldEventPending
+    !load.preferredHeldEventPending
       ? (heldEventPatchById(view.heldEvents, preferredHeldEventId) ??
         latestHeldEventPatch(view.heldEvents))
       : undefined;
   const draftTrackingEnabled =
     isInitialized &&
     !hasHandoff &&
-    !preferredHeldEventPending &&
+    !load.preferredHeldEventPending &&
     initialHeldEventPatch === undefined;
   const reviewSession = useMatchWorkspaceReviewSession({
     accountId,
@@ -171,7 +170,7 @@ export function useMatchWorkspacePageModel({
 
   useMatchWorkspaceLifecycleEffects({
     dispatch,
-    draftDetail: draftDetailQuery.data,
+    draftDetail,
     initialHeldEventPatch,
     mode,
     redirectConfirmedDraft,
@@ -190,7 +189,7 @@ export function useMatchWorkspacePageModel({
   });
   const sourceImageDraftId = view.matchDraftIdForImages;
   const sourceImages = sourceImageDraftId
-    ? (sourceImageQuery.data?.items ?? []).flatMap((item) => {
+    ? (sourceImageItems ?? []).flatMap((item) => {
         const descriptor = toSourceImageDescriptor(sourceImageDraftId, item);
         return descriptor ? [descriptor] : [];
       })
@@ -220,25 +219,10 @@ export function useMatchWorkspacePageModel({
     update: mutations.updateMutation.mutate,
     values: state.values,
   });
-  const refetchDraftDetail = draftDetailQuery.refetch;
-  const refetchOcrDrafts = ocrDraftsQuery.refetch;
-  const refreshReviewStatus = useCallback(async () => {
-    await Promise.all([refetchDraftDetail(), refetchOcrDrafts()]);
-  }, [refetchDraftDetail, refetchOcrDrafts]);
-  const initializationSourceFailed =
-    mode !== "edit" &&
-    !useSampleDrafts &&
-    ((Boolean(matchDraftId) &&
-      draftDetailQuery.data === undefined &&
-      shouldShowQueryError(draftDetailQuery)) ||
-      (mode === "review" &&
-        reviewDraftIdList.length > 0 &&
-        ocrDraftsQuery.data === undefined &&
-        shouldShowQueryError(ocrDraftsQuery)));
   const workspaceLoading =
     confirmedDraftRedirecting ||
     view.confirmedDraftLoaded ||
-    (!isInitialized && !initializationSourceFailed);
+    (!isInitialized && !load.initializationFailed);
   const exitHref =
     contextualReturnTo ??
     (mode === "edit" && matchId
@@ -258,19 +242,10 @@ export function useMatchWorkspacePageModel({
       workspaceData: local.workspaceData,
     },
     loading: {
-      base: {
-        errors: derived.baseErrors,
-        retrying: derived.retryingBaseQueries,
-        onRetry: derived.retryBaseQueries,
-      },
-      edit: {
-        failureKind: derived.editLoadFailureKind,
-        loading: mode === "edit" && isInitialQueryLoading(matchDetailQuery),
-        retrying: matchDetailQuery.isFetching,
-        onRetry: derived.retryEdit,
-      },
+      base: load.base,
+      edit: load.edit,
       workspaceLoading,
-      workspaceBlocked: initializationSourceFailed,
+      workspaceBlocked: load.initializationFailed,
     },
     navigation: {
       exitHref,
@@ -281,7 +256,7 @@ export function useMatchWorkspacePageModel({
       },
     },
     persistence: {
-      busy: mutations.isMutating,
+      busy: mutations.isMutating || submitFlow.confirmation.pending,
       cancellation: {
         confirmOpen: local.cancelDraftConfirmOpen,
         pending: mutations.cancelDraftMutation.isPending,
@@ -292,18 +267,16 @@ export function useMatchWorkspacePageModel({
       confirmation: {
         open: local.confirmOpen,
         onClose: () => local.setConfirmOpen(false),
-        onConfirm: submitFlow.confirmAction,
+        onConfirm: submitFlow.confirmation.action,
+        pending: submitFlow.confirmation.pending,
       },
       error: local.operationError,
       onPrimaryAction,
     },
     review: {
-      blocked: derived.isOcrRunningBlocked,
+      blocked: remoteReview.blocked,
       state: reviewState,
-      statusRefresh: {
-        pending: derived.refreshingReviewStatus,
-        onRefresh: refreshReviewStatus,
-      },
+      statusRefresh: remoteReview.refresh,
     },
     setup: {
       eventCreation: {
@@ -311,11 +284,11 @@ export function useMatchWorkspacePageModel({
         pending: createEventMutation.isPending,
         onDraftChange: local.setEventDraftValue,
       },
-      heldEventPicker: queries.heldEventPicker,
+      heldEventPicker,
     },
     sourceImages: {
       items: sourceImages,
-      loading: sourceImageQuery.isLoading,
+      loading: load.sourceImagesLoading,
       preferredKind: local.preferredImageKind,
       onPreferredKindChange: local.setPreferredImageKind,
     },

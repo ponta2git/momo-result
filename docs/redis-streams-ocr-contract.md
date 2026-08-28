@@ -15,7 +15,7 @@
 
 | 契約 | Owner / 正本 |
 | --- | --- |
-| v2 payload | API producer、Rust consumer、JSON Schema、共有 fixture |
+| v2 payload | JSON Schema。API producer / Rust consumer は実装、共有 fixture は契約証拠 |
 | durable enqueue intent | DB outbox |
 | OCR job / draft state | DB |
 | stream delivery / PEL / DLQ | Redis |
@@ -87,7 +87,7 @@ DELIVERED -> PENDING            (queued jobのsemantic redelivery)
 
 ## 6. Compatibility
 
-後方互換として扱えるのは、consumer が無視または default 化できる optional field / warning の追加と、DB の nullable / default 付き追加である。ただし schema と producer / consumer contract test は同時更新する。
+後方互換として扱えるのは、consumer が無視または default 化できる optional field / warning の追加と、DB の nullable / default 付き追加である。ただし schema と producer / consumer は同時更新し、選択した contract evidence で互換性を観測する。
 
 required field の削除・rename、型・意味・単位の変更、既存 enum 値の削除、ACK順序、DB正本性、terminal条件の変更は非互換とする。非互換変更は新しい schema version と stream を追加し、同じ stream の in-place変更や曖昧な dual write を行わない。
 
@@ -95,7 +95,9 @@ required field の削除・rename、型・意味・単位の変更、既存 enum
 
 ## 7. Verification
 
-- 共有 canonical fixture を JSON Schema、Scala serializer / decoder、Rust serializer / decoder のすべてへ通す。各言語で都合のよい fixture を作らない。
+test の採用・維持・削除は `docs/test-rule.md` に従う。以下は、変更した OCR queue contract に対して選ぶ production boundary と oracle の catalog である。変更に該当する項目だけを選び、一項目ごとに独立した test case を追加しない。
+
+- 共有 valid fixture を JSON Schema、Scala serializer / decoder、Rust serializer / decoder のすべてへ通す。各言語で都合のよい fixture を作らない。
 - producer transaction、post-commit wake、claim fencing、publish 後 DB failure、retry、semantic redeliveryを実 PostgreSQL と制御可能 clock で検証する。
 - blocking read、PEL recovery、delivery count、claim、DLQ、ACKを隔離した実 Redis で検証する。
 - consumer は duplicate、terminal / running、malformed、stale fence、transient failure、terminal write failure、DLQ failure を直接通す。

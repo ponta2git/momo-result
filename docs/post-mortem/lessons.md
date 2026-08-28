@@ -12,8 +12,9 @@ public repository に置くため、具体的な障害位置、再現手順、en
 - ドメイン用語・状態遷移: `docs/domain-rule.md`
 - DB共有・migration: `docs/db-rule.md`
 - Redis Streams / OCR queue 契約: `docs/redis-streams-ocr-contract.md`
-- テスト層・品質ゲート: `docs/test-rule.md`
-- 検証コマンド: `docs/dev-rule.md`
+- evidence の選択・oracle: `docs/test-rule.md`
+- test size・parallelism・coverage・CI artifact: `docs/test-architecture.md`
+- quality gate・検証コマンド: `docs/dev-rule.md`
 
 ## 使い方
 
@@ -46,7 +47,7 @@ public repository に置くため、具体的な障害位置、再現手順、en
 **参照先**
 
 - `docs/db-rule.md`
-- `docs/test-rule.md` の DB-backed API / API テスト
+- `docs/test-rule.md` の API Evidence Catalog / DB-backed API
 - `docs/dev-rule.md`
 
 ### L2 テストは失敗した実行経路を直接通す
@@ -88,7 +89,7 @@ public repository に置くため、具体的な障害位置、再現手順、en
 **参照先**
 
 - `docs/architecture.md` の Server State
-- `docs/test-rule.md` の Query / API error
+- `docs/test-rule.md` の Query / API Error
 
 ### L4 Form / request transform は workflow identifier を落とす
 
@@ -108,8 +109,8 @@ public repository に置くため、具体的な障害位置、再現手順、en
 
 **参照先**
 
-- `docs/architecture.md` の Form / React 19 と API Client
-- `docs/domain-rule.md` の Match Confirmation Modes
+- `docs/architecture.md` の Form / React 19 / API Client
+- `docs/domain-rule.md` の Draft / Match Confirmation Modes
 - `docs/test-rule.md` の Form / Interaction
 
 ### L5 Test double と oracle は通るだけのテストを作る
@@ -128,7 +129,7 @@ public repository に置くため、具体的な障害位置、再現手順、en
 
 **参照先**
 
-- `docs/test-rule.md` の Test Foundation / Doubles と Coverage / C2
+- `docs/test-rule.md` の Test Foundation / Doubles と Coverage / Decision Coverage
 - `docs/architecture.md` の Web
 - `apps/web/src/test/factories/`
 - `apps/web/src/test/msw/handlers.ts` の `resetMswStores`
@@ -149,7 +150,7 @@ public repository に置くため、具体的な障害位置、再現手順、en
 
 **参照先**
 
-- `docs/architecture.md` の Server State と Form / React 19
+- `docs/architecture.md` の Server State と Form / React 19 / API Client
 - `docs/test-rule.md` の Query / API Error、Form / Interaction、Locator / E2E
 
 ### L7 契約変更はコードだけでは伝わらない
@@ -163,7 +164,7 @@ public repository に置くため、具体的な障害位置、再現手順、en
 
 - 実装前に読むべき意味論は、要件・ドメイン・アーキテクチャ・DB・Redis契約のいずれかへ置いたか。
 - mode discriminator と副作用は、field の存在だけでなく文章で説明されているか。
-- 外部境界を変えた場合、生成物・contract test・境界テストを更新したか。
+- 外部境界を変えた場合、生成物を更新し、`docs/test-rule.md` で選んだ contract / integration evidence が変更した意味を観測できるか。
 - `lessons.md` に恒久ルールを書き足して終わらせていないか。
 
 **参照先**
@@ -203,7 +204,7 @@ public repository に置くため、具体的な障害位置、再現手順、en
 - `docs/requirements/series-comparison.md` の Read / Failure Behavior
 - `docs/requirements/series-analysis-batch.md` の Correctness / Resource / OCR
 - `docs/requirements/series-review-playbook.md` の Detail / Artifact Boundary
-- `docs/test-rule.md` の Performance-sensitive analytics
+- `docs/test-rule.md` の Performance-sensitive Analytics
 - `docs/dev-rule.md` の Production rollback verification
 
 ### L9 Release来歴の外部wire表現を推測しない
@@ -217,15 +218,15 @@ public repository に置くため、具体的な障害位置、再現手順、en
 
 - 外部wire値を境界で検証・正規化し、内部表現を一意にしたか。
 - fixtureは公開契約の実際の型・形式を表し、都合のよい接頭辞や型を仮定していないか。
-- producerの正規化結果をconsumer validatorへ渡すcontract testがあるか。
+- producerの正規化結果をconsumer validatorへ渡すことを、選択した contract evidence で観測できるか。
 - 候補生成の成功だけで昇格可能と判断せず、本番変更前の来歴解決がfail-closedで完走するか。
 - 部分再実行でproducer attemptとconsumer attemptが異なる場合も、候補identityをcurrent attemptから再計算せず、実artifact IDとsource attemptを保持したか。
 - release evidenceやhealth checkを変更したとき、通常deploy、再実行、rollbackなど全consumerを列挙し、現在世代と旧target世代の両方を直接通したか。
 
 **参照先**
 
-- `docs/dev-rule.md` の CI Gates
-- `docs/test-rule.md` の External Services
+- `docs/dev-rule.md` の CI Gates / Release
+- `docs/test-rule.md` の External Service Evidence Catalog
 
 ### L10 開発hostで通ることをproduction runtimeの証拠にしない
 
@@ -240,12 +241,12 @@ public repository に置くため、具体的な障害位置、再現手順、en
 - production target OSで、必要なnative dependencyを明示したlint / build / testを通したか。
 - local adapterもproductionと同じDB row、object key、状態遷移の不変条件を満たすか。
 - retry後に前attemptのfixtureが残っても、test-owned IDで正しいresourceだけを操作するか。
-- release gateの失敗を個別に迂回せず、検出した契約差を直接固定する回帰テストを置いたか。
+- release gateの失敗を個別に迂回せず、検出した契約差を `docs/test-rule.md` で再評価し、採用した回帰 evidence がその差を直接観測するか。
 
 **参照先**
 
 - `docs/architecture.md` の OCR Capability / Worker Role
-- `docs/test-rule.md` の Locator / E2E、DB-backed API、Analysis Capability / Worker Role Rules
+- `docs/test-rule.md` の Locator / E2E、DB-backed API、Analysis Capability / Worker Evidence Catalog
 
 ### L11 共有credentialのrotationは既存connectionが不整合を隠す
 
@@ -265,7 +266,7 @@ public repository に置くため、具体的な障害位置、再現手順、en
 **参照先**
 
 - `docs/dev-rule.md` の CI Gates / Release
-- `docs/test-rule.md` の External Services
+- `docs/test-rule.md` の External Service Evidence Catalog
 
 ## 更新ルール
 
@@ -279,5 +280,5 @@ public repository に置くため、具体的な障害位置、再現手順、en
 
 - どのカードが該当したか。
 - どの正本文書に従ったか。
-- どのテスト・コマンドで検証したか。
+- どの evidence・コマンドで検証したか。
 - 未検証の外部依存・DB/integration 経路・残リスクがあるか。

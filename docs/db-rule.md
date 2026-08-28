@@ -5,7 +5,7 @@
 ## 1. Ownership
 
 - schema、migration、seed は `../momo-db` が所有する。この repository に migration SQL を複製しない。
-- この repository は API / worker の query と、依存する DB 前提の contract test を所有する。
+- この repository は API / worker の query と、選択した DB contract evidence を所有する。
 - migration の存在と接続先への適用済み状態は別々に確認する。
 - Testcontainers、CI、E2E は `momo-db` の migration を適用した DB を使う。
 - row の業務意味と状態遷移は `docs/domain-rule.md`、試合メモは `docs/requirements/match-note.md`、分析 job / artifact は `docs/requirements/series-analysis-batch.md` を正本とする。
@@ -26,9 +26,9 @@
 
 ## 3. Consumer Contract
 
-DB-backed API / worker を変更するときは、次を同じ変更内で満たす。
+test の採用・維持・削除は `docs/test-rule.md` に従う。DB contract を品質証拠に選んだ場合は、本節を production boundary と oracle の正本とし、変更に該当する項目を同じ単位で満たす。一項目ごとに新しい test case を要求する一覧ではない。
 
-- 依存する table、column、seed、nullable、default、index、constraint を特定し、新しい前提を contract test に追加する。
+- 依存する table、column、seed、nullable、default、index、constraint を特定し、選択した contract evidence が新しい前提を観測できることを確認する。既存 evidence で観測できなければ、利用者影響に応じて追加または置換する。
 - 変更した query / repository を migration 適用済みの実 PostgreSQL で実行する。未実行または skip は DB 挙動を未検証として報告する。
 - 複数 table の write は statement / lock 順と、保存後の関連 row を integration test で確認する。
 - lease、fence、slot、pointer、cleanup 競合は複数接続で stale owner と rollback を直接通す。
@@ -40,7 +40,7 @@ DB-backed API / worker を変更するときは、次を同じ変更内で満た
 - dynamic SQL は列挙された fragment から選び、外部入力を SQL text へ連結しない。
 - keyset pagination は filter と同じ query に stable tie-breaker を含める。exact count を引き継ぐ場合は snapshot 値であることを契約化する。
 
-集合演算、window / JSON 演算、dynamic fragment、`ON CONFLICT`、lock、guard 付き update、nullable FK、複数 table の filter / order / limit は DB 固有の挙動が強いため、実 PostgreSQL test を必須とする。
+集合演算、window / JSON 演算、dynamic fragment、`ON CONFLICT`、lock、guard 付き update、nullable FK、複数 table の filter / order / limit が、選択した consumer contract の結果を左右する場合は、double ではなく実 PostgreSQL を検証境界にする。
 
 ## 4. Migration / Deployment
 

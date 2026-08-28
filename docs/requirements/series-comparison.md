@@ -9,7 +9,7 @@
 | 本ページのscope、指標の意味、表示上の判断 | 本書 |
 | 「次戦に備える」の行動プレイブック | `docs/requirements/series-review-playbook.md` |
 | 非同期計算、artifact、状態、管理、公開・復旧 | `docs/requirements/series-analysis-batch.md` |
-| HTTP / artifact shape | Tapir endpoint、JSON Schema、共有fixture。OpenAPI / Web型は派生物 |
+| HTTP / artifact shape | Tapir endpoint、JSON Schema |
 | UI共通規約、test、command | `docs/ui-rule.md`、`docs/test-rule.md`、`docs/dev-rule.md` |
 
 endpoint path、DTO field、component構成、query cache key、閾値の配置場所は実装・schemaを正本とし、本書へ複製しない。
@@ -171,12 +171,14 @@ highlightは既存指標から決定論的に選び、銀次被害後の成績�
 - 定義済みの対象なし・件数不足はtypedな正常結果とし、予期しないscope計算失敗で部分artifactを公開しない。
 - ancillary resourceの取得失敗で取得済み主表示を消さない。expired artifactはstatusを更新して一度だけ最新へretryし、同期計算や別scopeへfallbackしない。
 
-## 8. Acceptance Evidence
+## 8. Acceptance Criteria
 
-| 領域 | 必要な証拠 |
+本節に対する evidence の選定と実行は `docs/README.md` 1節の順序に従う。
+
+| 領域 | 受入条件 |
 | --- | --- |
 | scope / URL | 無効・削除・追加scope、旧URL正規化、browser back、選択試合解除 |
-| 指標 | 分母、同値、負値、境界、安定順、手計算可能なgolden / property |
+| 指標 | 分母、同値、負値、境界、安定順が本文で定めた意味と値を保つ |
 | 高度分析 | solver、fold漏洩なし、決定性、品質境界、局所非採用と予期しない失敗の区別 |
 | artifact連携 | 同一artifact pinning、bounded chunk、revision不一致、latest-wins、fallback禁止 |
 | UI | 4人比較、mobile、table semantics、graph非色依存、空・参考・失敗状態、根拠試合往復 |

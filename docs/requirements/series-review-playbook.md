@@ -9,7 +9,7 @@
 | プレイブックの候補、選定、文面、表示 | 本書 |
 | 基礎指標、scope、詳細分析 | `docs/requirements/series-comparison.md` |
 | 非同期計算、artifact、状態、公開・復旧 | `docs/requirements/series-analysis-batch.md` |
-| HTTP / artifact shape | Tapir endpoint、JSON Schema、共有fixture。OpenAPI / Web型は派生物 |
+| HTTP / artifact shape | Tapir endpoint、JSON Schema |
 | 開催単位の事実表示 | `docs/requirements/held-event-detail.md` |
 
 本書は基礎指標の数式、job / artifact lifecycle、endpoint path、DTO field、component構成を複製しない。
@@ -143,11 +143,13 @@ abs(shrunkSymptom)
 - 定義済みの候補なし・件数不足は空playbookを含む正常成果物とする。予期しない推薦失敗は作品artifact全体を失敗させ、部分公開しない。
 - review resourceの取得失敗で、他viewの取得済み表示を消さない。
 
-## 7. Acceptance Evidence
+## 7. Acceptance Criteria
 
-| 領域 | 必要な証拠 |
+本節に対する evidence の選定と実行は `docs/README.md` 1節の順序に従う。
+
+| 領域 | 受入条件 |
 | --- | --- |
-| 生成 | category別golden、症状・差分、縮小、品質境界、決定的な順序 |
+| 生成 | category ごとの症状・差分、縮小、品質境界、決定的な順序が本文で定めた出力を保つ |
 | 選定 | 最大3件、category重複なし、4人内特徴、共通化、候補0件 |
 | 表現 | 必須項目、未保存データ・因果・能力断定なし、表示labelのみ |
 | 往復 | review URL復元、詳細link、browser back、scope維持 |

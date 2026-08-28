@@ -33,7 +33,7 @@
 - JSON mutationは同一操作のretryを冪等にし、処理中とpayload不一致を別の競合として扱う。
 - request、response、exportは件数・byte数・複雑性の上限を持ち、上限超過を明示的に拒否する。
 
-具体的な framework、API shape、status code、上限値は endpoint / source と runtime 設定を正本とする。生成 OpenAPI と Web 型は内部 consumer 向けの派生物として同期する。
+具体的な framework、API shape、status code、上限値は endpoint / source と runtime 設定を正本とする。
 
 ## 3. Asynchronous Processing
 
@@ -87,7 +87,7 @@
 - secret、session / CSRF / OAuth token、接続URL、画像内容、OCR raw text、分析成果物本文、例外全文をlog / responseへ出さない。
 - security gateを通すためにedge policyや認証要件を弱めない。
 
-上限値とfailure thresholdは通常利用を妨げない余裕を持たせ、runtime設定と検証を正本とする。
+上限値と failure threshold は通常利用を妨げない余裕を持たせ、runtime 設定を正本とし、境界値の検証で確認する。
 
 ## 8. Observability / Recovery
 
@@ -109,16 +109,18 @@
 - 最新安定版のChrome、Firefox、Safari、Edgeを対象とし、通常操作はmobileでも破綻させない。
 - keyboard、label、focus、contrastを含むWCAG AA相当を目標にする。画像upload / exportはPC主対象としてよいが、意味と安全性をdevice間で変えない。
 
-## 10. Acceptance Evidence
+## 10. Acceptance Criteria
 
-| 変更 | 必要な証拠 |
+本節に対する evidence の選定と実行は `docs/README.md` 1節の順序に従う。
+
+| 変更境界 | 受入に必要な観測 |
 | --- | --- |
-| Web / API contract | generated OpenAPI / type、unit / component、主要Playwright |
-| DB / queue / object | migration適用済み実service、transaction / recovery / wire contract |
-| worker / native / isolation | production相当image、process / cgroup / timeout / preemption smoke |
-| runtime / protocol | image build / scan、各hopのprotocol、health、shutdown、主要E2E |
-| security / limits | boundary value、concurrency、retry、dependency failure、secret非露出 |
-| performance | production相当resource、代表・上限・連続実行、process別のmemory / latency |
-| release / rollback | immutable provenance、同一candidate、通常deploy / rollback双方のvalidator |
+| Web / API contract | Tapir endpoint、生成 artifact、Web consumer が同じ契約を表し、代表 user flow の request / response が意図した結果へ到達する |
+| DB / queue / object | migration 適用済みの production boundary で transaction、recovery、wire の意味が保たれる |
+| worker / native / isolation | production 相当 image で native dependency、process / cgroup、timeout、preemption の契約が成立する |
+| runtime / protocol | 配置対象 image が各 hop の protocol、health、shutdown、主要 user flow を保ち、既知の重大な image 脆弱性を含まない |
+| security / limits | boundary、concurrency、retry、dependency failure が安全に失敗し、secret を露出しない |
+| performance | production 相当 resource で代表・上限・連続実行時の process 別 memory / latency 要求を満たす |
+| release / rollback | 同じ immutable candidate と provenance を通常 deploy / rollback の双方で検証し、対象世代を復元できる |
 
 外部境界を未実行またはskipした場合は、その挙動を未検証として報告する。

@@ -11,7 +11,7 @@
 | 開催詳細の情報設計 | `docs/requirements/held-event-detail.md` |
 | 戦績分析の入力 revision と再計算 | `docs/requirements/series-analysis-batch.md` |
 | UIの共通操作、状態、アクセシビリティ | `docs/ui-rule.md` |
-| HTTP wire、DB shape、実装境界 | Tapir endpoint、momo-db migration、`docs/architecture.md`、`docs/db-rule.md`。OpenAPI / Web型は派生物 |
+| HTTP wire、DB shape、実装境界 | Tapir endpoint、momo-db migration、`docs/architecture.md`、`docs/db-rule.md` |
 
 本書は特定のテーブル構造やendpoint pathを定めない。実装契約は、ここで定めるメモ専用更新と分析入力更新の分離を保ったうえで各実行正本に置く。
 
@@ -139,17 +139,17 @@
 - 一時的な保存失敗では既存の保存済み本文を維持し、未保存本文を保存済み表示へ反映しない。処理結果が未確定の通信失敗は同じidempotency key、本文、versionで再試行し、確定した失敗または利用者が本文を変更した後は同じkeyを流用しない。
 - mutation成功後は、試合詳細のメモ状態、開催詳細の閲覧projection、試合一覧のメモ有無が同じ保存状態を表すようにする。一方の閲覧用dataだけを更新し、他方へ旧本文または誤った有無を恒久的に残さない。
 - 試合削除と競合したメモ更新は対象なしとして失敗し、削除済み試合や孤立メモを復元しない。
-- HTTP field 名、status、error envelope は Tapir endpoint を正本とし、生成 OpenAPI と Web 型へ同期する。Web と API で文字数と absence の意味を揃え、API、repository、DB で absence と version の意味を揃える。
+- HTTP field 名、status、error envelope は Tapir endpoint で定義する。Web と API で文字数と absence の意味を揃え、API、repository、DB で absence と version の意味を揃える。
 
 ## 8. Compatibility / Feasibility Boundary
 
 - DB変更はmomo-dbでadditiveに行い、既存試合を本文なし、最終更新情報なし、決定的な初期versionを持つメモ状態として読めるようにする。保存済みメモを破棄するdown migrationを通常のrollback手段にしない。
 - DBは本文のabsence、負でない内部version counter、本文・最終更新情報のshapeを制約できる範囲で保証する。150 Unicode code pointsの上限、Unicode whitespace判定、改行統一はAPI境界のvalidated valueが所有し、DBの文字数constraintとして重ねて実装しない。repositoryはvalidated valueだけを受け取り、wireではcounterをopaqueなversionとして扱う。
 - 試合作成・確定requestへのメモ追加と、試合一覧responseへのメモ有無追加はadditive変更とする。メモを送らない既存clientと既存試合を引き続き受理し、旧clientは一覧の追加fieldを無視できるようにする。OpenAPI、生成型、request変換、readerを同じ契約変更として更新する。
-- メモ専用mutationは、構造化された試合更新と分析再計算を一体で行う既存persistence経路へ流さない。本文とメモ状態だけを更新したこと、および分析用outboxを書かなかったことをDB-backed contract testで直接確認できる境界を持つ。
+- メモ専用mutationは、構造化された試合更新と分析再計算を一体で行う既存persistence経路へ流さない。本文とメモ状態だけを更新したこと、および分析用outboxを書かなかったことをDB-backed evidenceで直接観測できる境界を持つ。
 - 既存のidempotency保存領域にはrequest hashと本文を含まない成功responseだけを保持し、メモ本文を重複保存しない。競合回復に必要な最新本文は試合詳細readから取得する。
 - 試合詳細、開催詳細、試合一覧は、API境界で正規化された同じ本文有無を基準にする。試合詳細は最終更新accountの表示名を読み取り時にhydrateし、開催詳細は本文だけ、試合一覧は有無だけをboundedなreadでまとめて取得する。いずれも試合ごとの追加requestを発生させない。
-- WebとAPIの文字数判定を共有fixtureにより照合する。fixtureはLF / CRLF、空、Unicode whitespace、通常の日本語、BMP外文字、結合文字、150 / 151 code pointsを含む。DB testはこの可変な入力方針を再判定せず、APIで検証済みの本文を欠損や変形なく保存できることと、version、外部key、本文・最終更新情報のshapeを検証する。
+- WebとAPIの文字数判定は同じ契約例を共有する。契約例はLF / CRLF、空、Unicode whitespace、通常の日本語、BMP外文字、結合文字、150 / 151 code pointsを含む。DB evidenceはこの可変な入力方針を再判定せず、APIで検証済みの本文を欠損や変形なく保存できることと、version、外部key、本文・最終更新情報のshapeを観測する。
 - 本機能の初回releaseと、その場で必要になった切戻しは、利用者へ事前に示したmaintenance時間内に行い、その間の操作とbrowserに残ったWebを含むversion混在は動作保証の対象外とする。ここでのmaintenanceは利用者への通知による運用上の境界だけを指し、アクセス遮断、read-only化、mutation拒否、maintenance専用画面を実装しない。告知の開始・終了を現行workflowが自動化すると仮定しない。
 - DB schemaの正本である`momo-db`でadditive migrationを先に用意し、このrepositoryの`.momo-db-ref`をそのcommitへ更新する。CIがpinned migrationを適用する先は隔離された検証DBであり、本番DBへ適用した証拠にはしない。本番DBへの適用手順はprivate runbookを正本とし、migration適用済み状態を確認してからruntimeをdeployする。
 - 現行deploy workflowではAPIとWebを別々に順次deployせず、両方を含む同一のsmoke済みimmutable runtime imageをproduction承認境界からdeployする。release commandのDB contract preflightで必要columnがない場合はruntime切替前に失敗させ、deploy後のidentity確認とsmokeが成功してからmaintenance時間の終了を利用者へ通知する。
@@ -164,12 +164,14 @@
 - 既存CSV / TSVは1行1プレーヤーの契約と列順を維持し、試合単位のメモを4行へ複製しない。
 - 将来メモを分析に使う場合は、対象scope、前処理、品質、不適切入力、入力 revision、algorithm version、artifact schema、既存試合のbackfill / 再計算、利用者への説明を別要求で定める。初版の保存開始を、分析利用への黙示的な同意や実装済み能力として扱わない。
 
-## 10. Acceptance Evidence
+## 10. Acceptance Criteria
 
-| 観点 | 最低限確認すること |
+本節に対する evidence の選定と実行は `docs/README.md` 1節の順序に従う。
+
+| 観点 | 受入条件 |
 | --- | --- |
 | 作成・確定 | 手入力とOCR確定の双方で、4人分の結果の後、確定操作より前に任意欄を表示し、request変換後もメモと確定経路の識別子を保持する。session内復元と、メモがある場合だけの最終確認を経て、メモなし、改行あり、150文字を保存できる。151文字は入力中に検出して本文を保持したまま修正でき、最終確認や保存へ進めず、部分確定しない |
-| 文字境界 | pasteとIME確定を含む入力中の表示・field error、および共有fixtureによる改行統一、Unicode whitespace、BMP外文字、結合文字、150 / 151 code pointsの判定がWebとAPIで一致する。DBはAPIで検証済みの150文字本文を欠損や変形なく保存する |
+| 文字境界 | pasteとIME確定を含む入力中の表示・field error、および共通契約例に対する改行統一、Unicode whitespace、BMP外文字、結合文字、150 / 151 code pointsの判定がWebとAPIで一致する。DBはAPIで検証済みの150文字本文を欠損や変形なく保存する |
 | 詳細編集 | 追加、編集、キャンセル、未変更時のno-op、明示的な削除と確認、dirty状態からの移動、保存中、成功、失敗、再試行を試合詳細内で完了できる |
 | 画面責務 | 「試合結果を編集」と「メモを編集」を取り違えず、試合編集ではメモを変更せず、試合一覧では「メモあり」だけを判別できる。開催詳細では表示幅ごとに3行overflowを正しく判定し、必要な場合だけcompactなpreviewから全文をその場で閲覧できるが編集できない |
 | 一覧表示 | メモがある確定済み試合だけにPCとモバイルで「メモあり」を表示し、本文、更新者、更新日時を一覧responseと画面へ出さず、未確定下書き、取得失敗、契約不一致をメモなしと誤認しない |

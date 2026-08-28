@@ -11,12 +11,12 @@
 | job、artifact、version、公開・復旧 | 本書 |
 | runtime / parent-child | `docs/architecture.md` |
 | DB / migration | `docs/db-rule.md` と `../momo-db` |
-| artifact / queue / HTTP shape | JSON Schema、共有fixture、Tapir endpoint。`apps/api/openapi.yaml` / Web型は派生物 |
+| artifact / queue / HTTP shape | JSON Schema、Tapir endpoint。本書の Artifact Contract |
 | UI / test / command | `docs/ui-rule.md`、`docs/test-rule.md`、`docs/dev-rule.md` |
 
 本書は指標の数式、推薦候補、画面構成、wire fieldを複製しない。
 
-artifact resource の JSON 本文は共有 fixture と producer / reader validator を正本とする。Tapir endpoint は HTTP envelope と取得経路の正本であり、生成 OpenAPI はその派生物とする。どちらも raw JSON 本文の全ネストを代替しない。
+artifact resource の JSON 本文は本書の Artifact Contract を意味の正本とし、shape、limit、canonicalization の機械可読な正本は本書の Artifact Contract で特定する。producer / reader validator はそれらを実装する。Tapir endpoint は HTTP envelope と取得経路だけを表し、raw JSON 本文の全ネストを代替しない。
 
 provider固有値、費用、実測、昇格・復旧手順は public docs へ置かず、private release evidence / runbook を正本とする。
 
@@ -98,7 +98,7 @@ DB lock順とstaging transactionの規則は `docs/db-rule.md`、process責務�
 - 1作品の成果物はoverallと、確定試合が実在するseason、map、season×mapだけを含む。空の直積scopeを作らない。
 - aggregate、review、drilldown、match contextは同じ入力から計算し、高負荷な中間結果を再利用する。
 - match contextは対象試合revisionと作品所属を保存する。読み取り時に一致しなければ古い派生分析を返さない。
-- artifact / manifest / chunkのshapeと上限はJSON Schema、normal / invalid / canonicalization fixtureを正本とする。
+- artifact / manifest / chunk の shape と上限は JSON Schema、canonicalization の具体例は `docs/schemas/fixtures/series-analysis/canonicalization-v1.json` を正本とする。normal / invalid fixture と validator は契約証拠とする。
 - source input checksumは表示専用metadataを除く入力を決定順にhashし、semantic checksumはresource / scope / item / canonical payloadを決定順にhashする。run ID、日時、表示名、処理時間を含めない。
 - canonicalization規則の変更はartifact schema version変更として扱い、producer / validator / readerの共有fixtureを同時更新する。
 - 非有限値、負の0、overflow、欠損cell、重複ID、未決定順を拒否する。対象なし、分母0、件数不足、定義済みmodel非採用はtyped qualityを持つ正常成果物とする。
@@ -160,17 +160,19 @@ OCR同居を有効化する場合は、共通parent-child境界、単一slot、�
 - 単一世代の保守切替を切り戻す場合は、サービスを停止したままDB snapshotと旧immutable releaseを同じ世代へ戻す。新旧のdesired version、job、artifactを部分的に組み合わせた状態では再開しない。
 - release候補はmigration、reader / worker compatibility、immutable provenance、resource hard limit、timeout、artifact / API上限を確認してから昇格する。
 
-## 9. Acceptance Evidence
+## 9. Acceptance Criteria
 
-| 変更領域 | 必要な証拠 |
+本節に対する evidence の選定と実行は `docs/README.md` 1節の順序に従う。
+
+| 変更領域 | 受入条件 / production boundary |
 | --- | --- |
 | revision / trigger / campaign | 同一transaction、A→B移動、同時mutation、target snapshot、idempotency、crash recovery |
 | job / queue / outbox | coalescing、unsupported version、duplicate delivery、append後DB失敗、terminal write before ACK、retry上限 |
 | slot / lease / child / preemption | 複数worker、stale fence、owner喪失、timeout、OOM、process group回収、一方向preemption |
-| calculation / artifact | golden、高精度参照、property、canonical fixture、上限、部分公開拒否、current維持 |
+| calculation / artifact | 文書化した数式・性質・canonicalization、上限、部分公開拒否、current 維持 |
 | API / Web | bounded read、artifact pinning、expired retry、revision mismatch、状態decision table、意味再計算禁止 |
 | admin / retention | auth / CSRF / idempotency、target snapshot、未充足run、直近3件、45日cleanup |
 | compatibility / release | reader-first、または停止を伴う単一世代切替の再開条件、version capability、reload導線、rollback後current維持、旧engine不在 |
-| resource | 上限fixture、本番同等runtime、worker / API / browser別測定、timeout設定、private evidence |
+| resource | 定義した上限負荷を production 同等 runtime で処理し、worker / API / browser 別の resource と timeout 要求を満たす。実測は private evidence に置く |
 
 外部DB、Redis、Linux process、browser、resource gateをskipした場合、その境界は未検証として報告する。完了前に `docs/post-mortem/lessons.md` の該当カードを確認する。

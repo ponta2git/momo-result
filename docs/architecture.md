@@ -1,6 +1,6 @@
 # アーキテクチャ規約
 
-目的: API、Web、Processing Worker の責務と依存方向を判断する。現在の型、設定、payload、コマンドは実装を正本とし、この文書へ複製しない。
+目的: API、Web、Processing Worker の責務と依存方向を判断する。現在の型、設定、コマンドは実装、wire payload の shape / limit は対応する endpoint または schema を正本とし、この文書へ複製しない。
 
 業務意味は `docs/domain-rule.md`、DB は `docs/db-rule.md`、OCR queue は `docs/redis-streams-ocr-contract.md`、戦績分析の横断要求は `docs/requirements/series-analysis-batch.md`、UI は `docs/ui-rule.md` を参照する。
 
@@ -24,7 +24,7 @@
 ### Wire Boundary
 
 - HTTP 契約は Tapir endpoint を正本とする。手書き route が必要でも path / query / header を二重管理しない。
-- `apps/api/openapi.yaml` は内部 Web codegen 用の追跡する派生物であり、契約や公開 API documentation の正本ではない。Tapir から一時生成した spec を consumer に必要な構造規則で lint し、tracked artifact と一致させ、その artifact から Web 型を生成する。手編集で差分を解消しない。
+- `apps/api/openapi.yaml` は内部 Web codegen 用の追跡する派生物であり、契約や公開 API documentation の正本ではない。Tapir から一時生成した spec を保守された OpenAPI-aware linter で構造検証し、tracked artifact と一致させ、その artifact から Web 型を生成する。手編集で差分を解消しない。
 - OpenAPI lint は unresolved reference、path / parameter、schema、operation identity など構造整合性に限定する。field の公開可否、認証、業務意味は endpoint、DTO、要求・domain 規約で決め、legacy 名や source 断片の文字列検査を契約にしない。
 - HTTP 層は入力・認証・エラー変換に閉じ、DB、Redis、業務分岐を直接持たない。
 - raw ID、設定値、wire value は境界で検証済み型へ変換する。usecase へ未検証値や wire DTO を渡さない。
@@ -63,7 +63,7 @@
 - Page は composition とページ状態に寄せ、取得、mutation、複雑な状態機械、純粋変換を分離する。
 - 複雑な Page は feature 固有の PageModel から resource、command、location、feedback など画面の意味を受け取り、TanStack Query の result や mutation object を直接受け取らない。PageModel 内は lifecycle と変更理由が異なる関心事だけを hook / 純粋変換へ分け、単なる転送層は作らない。
 - ファイル行数は責務混在を見つける signal とし、行数だけを理由に浅い module へ分割しない。
-- 本節を依存方向の正本とする。違反が利用者価値へ影響し、module graph から低誤検出で判定できる import 規則だけを、既存 lint または保守された dependency tool へ投影する。正規 parser を持たない独自 source scanner を正本にしない。本番コードから test 専用 module を参照しない。
+- 本節を依存方向の正本とする。静的 gate へ投影する場合は `docs/dev-rule.md` の採用基準に従い、module graph から判定できる import 規則だけを syntax-aware な tool で検査する。本番コードから test 専用 module を参照しない。
 
 ### Server State
 

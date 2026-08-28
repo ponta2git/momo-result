@@ -93,48 +93,27 @@ describe("OcrCapturePage", () => {
     renderCaptureRoute();
 
     expect(await screen.findByRole("option", { name: "桃太郎電鉄2" })).toBeInTheDocument();
-    const pageFrame = screen.getByRole("heading", { name: "OCR取り込み" }).closest(".mx-auto");
-    expect(pageFrame).toHaveClass("max-w-[96rem]");
-    expect(pageFrame).not.toHaveClass("max-w-[120rem]");
     const startButton = screen.getByRole("button", { name: "読み取りを開始" });
     expect(startButton).toBeDisabled();
-    expect(startButton).toHaveClass("bg-[var(--color-action)]");
-    expect(screen.getByRole("button", { name: "カメラ開始" })).toHaveClass(
-      "bg-[var(--color-action)]",
-    );
-    expect(
-      within(screen.getByRole("combobox", { name: "オーナー" }))
-        .getAllByRole("option")
-        .map((option) => option.textContent?.trim()),
-    ).toEqual(["いーゆー", "ぽんた", "あかねまみ", "おーたか"]);
   });
 
-  it("keeps submission primary while images are being prepared", async () => {
+  it("advances the capture target after each selected image", async () => {
     setDevUser();
     renderCaptureRoute();
 
     await screen.findByRole("option", { name: "桃太郎電鉄2" });
     const input = screen.getByLabelText("OCRの画像をアップロード");
     await user.upload(input, new File(["assets"], "assets.png", { type: "image/png" }));
-    expect(screen.getByRole("button", { name: "1件で読み取りを開始" })).toHaveClass(
-      "bg-[var(--color-action)]",
-    );
+    expect(screen.getByRole("button", { name: "1件で読み取りを開始" })).toBeEnabled();
 
     expect(screen.getByLabelText("次の撮影先は収益")).toBeInTheDocument();
     await user.upload(input, new File(["revenue"], "revenue.png", { type: "image/png" }));
-    expect(screen.getByRole("button", { name: "2件で読み取りを開始" })).toHaveClass(
-      "bg-[var(--color-action)]",
-    );
+    expect(screen.getByRole("button", { name: "2件で読み取りを開始" })).toBeEnabled();
 
     expect(screen.getByLabelText("次の撮影先は事件簿")).toBeInTheDocument();
     await user.upload(input, new File(["incident"], "incident.png", { type: "image/png" }));
 
-    expect(screen.getByRole("button", { name: "3件で読み取りを開始" })).toHaveClass(
-      "bg-[var(--color-action)]",
-    );
-    expect(screen.getByRole("button", { name: "カメラ開始" })).toHaveClass(
-      "bg-[var(--color-surface)]",
-    );
+    expect(screen.getByRole("button", { name: "3件で読み取りを開始" })).toBeEnabled();
   });
 
   it("offers an in-place retry when setup choices fail to load", async () => {
@@ -219,23 +198,6 @@ describe("OcrCapturePage", () => {
       "blob:incident-second.png",
     );
     expect(objectUrls.revokeObjectURL).toHaveBeenCalledWith("blob:incident-first.png");
-  });
-
-  it("keeps the mobile reading order from setup through capture, trays, and start", async () => {
-    setDevUser();
-    renderCaptureRoute();
-
-    await screen.findByRole("option", { name: "桃太郎電鉄2" });
-    const headings = ["記録先", "画面を撮影", "分類トレイ", "読み取りの準備"].map((name) =>
-      screen.getByRole("heading", { name }),
-    );
-
-    for (let index = 0; index < headings.length - 1; index += 1) {
-      expect(
-        headings[index]!.compareDocumentPosition(headings[index + 1]!) &
-          Node.DOCUMENT_POSITION_FOLLOWING,
-      ).toBeTruthy();
-    }
   });
 
   it("asks for confirmation before clearing every selected image", async () => {

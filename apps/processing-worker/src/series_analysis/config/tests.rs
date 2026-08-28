@@ -78,6 +78,15 @@ fn clear() {
     }
 }
 
+fn with_isolated_environment<T>(test: impl FnOnce() -> T) -> T {
+    let _lock = ENV_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let _guard = EnvironmentGuard::capture();
+    clear();
+    test()
+}
+
 fn valid_enabled_environment() {
     EnvironmentGuard::set(PUBLICATION_MODE_ENV, "enabled");
     EnvironmentGuard::set("MOMO_ANALYSIS_RUNTIME_MEMORY_LIMIT_BYTES", "268435456");
@@ -138,13 +147,7 @@ fn valid_runtime_environment() -> tempfile::TempDir {
 
 #[test]
 fn publication_is_disabled_without_limit_configuration() {
-    let _lock = ENV_LOCK
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
-    let _guard = EnvironmentGuard::capture();
-    clear();
-
-    let config = AnalysisActivationConfig::from_environment();
+    let config = with_isolated_environment(AnalysisActivationConfig::from_environment);
 
     assert_eq!(
         config,
@@ -157,14 +160,10 @@ fn publication_is_disabled_without_limit_configuration() {
 
 #[test]
 fn publication_fails_closed_when_a_limit_is_missing() {
-    let _lock = ENV_LOCK
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
-    let _guard = EnvironmentGuard::capture();
-    clear();
-    EnvironmentGuard::set(PUBLICATION_MODE_ENV, "enabled");
-
-    let config = AnalysisActivationConfig::from_environment();
+    let config = with_isolated_environment(|| {
+        EnvironmentGuard::set(PUBLICATION_MODE_ENV, "enabled");
+        AnalysisActivationConfig::from_environment()
+    });
 
     assert_eq!(
         config,
@@ -176,29 +175,21 @@ fn publication_fails_closed_when_a_limit_is_missing() {
 
 #[test]
 fn publication_rejects_an_unsafe_memory_relationship() {
-    let _lock = ENV_LOCK
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
-    let _guard = EnvironmentGuard::capture();
-    clear();
-    valid_enabled_environment();
-    EnvironmentGuard::set("MOMO_ANALYSIS_PARENT_HEADROOM_BYTES", "134217729");
-
-    let config = AnalysisActivationConfig::from_environment();
+    let config = with_isolated_environment(|| {
+        valid_enabled_environment();
+        EnvironmentGuard::set("MOMO_ANALYSIS_PARENT_HEADROOM_BYTES", "134217729");
+        AnalysisActivationConfig::from_environment()
+    });
 
     assert_eq!(config, Err(AnalysisConfigError::UnsafeMemoryRelationship));
 }
 
 #[test]
 fn publication_accepts_a_complete_bounded_configuration() {
-    let _lock = ENV_LOCK
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
-    let _guard = EnvironmentGuard::capture();
-    clear();
-    valid_enabled_environment();
-
-    let config = AnalysisActivationConfig::from_environment();
+    let config = with_isolated_environment(|| {
+        valid_enabled_environment();
+        AnalysisActivationConfig::from_environment()
+    });
 
     assert!(matches!(
         config,
@@ -223,30 +214,27 @@ fn temporary_root_must_be_a_dedicated_absolute_path() {
 
 #[test]
 fn runtime_accepts_only_timing_that_preserves_lease_recovery_margin() {
-    let _lock = ENV_LOCK
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
-    let _guard = EnvironmentGuard::capture();
-    clear();
-    valid_enabled_environment();
-    let _cgroup = valid_runtime_environment();
-    let initial_activation = AnalysisActivationConfig::from_environment()
-        .unwrap_or_else(|error| panic!("valid analysis execution limits: {error}"));
+    with_isolated_environment(|| {
+        valid_enabled_environment();
+        let _cgroup = valid_runtime_environment();
+        let initial_activation = AnalysisActivationConfig::from_environment()
+            .unwrap_or_else(|error| panic!("valid analysis execution limits: {error}"));
 
-    assert!(AnalysisConsumerConfig::from_environment(&initial_activation).is_ok());
+        assert!(AnalysisConsumerConfig::from_environment(&initial_activation).is_ok());
 
-    EnvironmentGuard::set("MOMO_ANALYSIS_REDIS_BLOCK_MS", "5001");
-    assert!(matches!(
-        AnalysisConsumerConfig::from_environment(&initial_activation),
-        Err(AnalysisConfigError::UnsafeLeaseRelationship)
-    ));
+        EnvironmentGuard::set("MOMO_ANALYSIS_REDIS_BLOCK_MS", "5001");
+        assert!(matches!(
+            AnalysisConsumerConfig::from_environment(&initial_activation),
+            Err(AnalysisConfigError::UnsafeLeaseRelationship)
+        ));
 
-    EnvironmentGuard::set("MOMO_ANALYSIS_REDIS_BLOCK_MS", "5000");
-    EnvironmentGuard::set("MOMO_ANALYSIS_FINALIZATION_TIMEOUT_MS", "56000");
-    let activation_with_long_finalization = AnalysisActivationConfig::from_environment()
-        .unwrap_or_else(|error| panic!("valid analysis memory limits: {error}"));
-    assert!(matches!(
-        AnalysisConsumerConfig::from_environment(&activation_with_long_finalization),
-        Err(AnalysisConfigError::UnsafeLeaseRelationship)
-    ));
+        EnvironmentGuard::set("MOMO_ANALYSIS_REDIS_BLOCK_MS", "5000");
+        EnvironmentGuard::set("MOMO_ANALYSIS_FINALIZATION_TIMEOUT_MS", "56000");
+        let activation_with_long_finalization = AnalysisActivationConfig::from_environment()
+            .unwrap_or_else(|error| panic!("valid analysis memory limits: {error}"));
+        assert!(matches!(
+            AnalysisConsumerConfig::from_environment(&activation_with_long_finalization),
+            Err(AnalysisConfigError::UnsafeLeaseRelationship)
+        ));
+    });
 }

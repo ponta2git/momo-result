@@ -62,14 +62,15 @@ object IntegrationDb:
   def acquire: IO[DbFixture] = IO.blocking(sharedFixture)
 
   /**
-   * Build a HikariCP-backed transactor for tests. Uses a tiny pool to keep concurrency predictable.
+   * Build a HikariCP-backed transactor for tests. Three connections cover a lock holder, waiter,
+   * and independent lock observer without making contention tests depend on elapsed time.
    */
   private def transactorResource(settings: Settings): Resource[IO, HikariTransactor[IO]] =
     val cfg = new HikariConfig()
     cfg.setJdbcUrl(settings.jdbcUrl)
     cfg.setUsername(settings.user)
     cfg.setPassword(settings.password)
-    cfg.setMaximumPoolSize(2)
+    cfg.setMaximumPoolSize(3)
     cfg.setMinimumIdle(0)
     cfg.setPoolName("momo-result-it")
     HikariTransactor.fromHikariConfig[IO](cfg)

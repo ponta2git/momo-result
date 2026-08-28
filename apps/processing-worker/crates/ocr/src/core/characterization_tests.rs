@@ -102,8 +102,7 @@ struct SelectionCase {
 }
 
 #[test]
-fn rust_geometry_and_preprocessing_match_the_pre_port_characterization()
--> Result<(), Box<dyn Error>> {
+fn shared_geometry_and_preprocessing_vectors_match() -> Result<(), Box<dyn Error>> {
     let fixture = fixture()?;
     assert_eq!(fixture.schema_version, 1);
     for case in fixture.geometry_cases {
@@ -139,7 +138,7 @@ fn rust_geometry_and_preprocessing_match_the_pre_port_characterization()
 }
 
 #[test]
-fn rust_domain_parsers_match_the_pre_port_characterization() -> Result<(), Box<dyn Error>> {
+fn shared_domain_parser_vectors_match() -> Result<(), Box<dyn Error>> {
     let fixture = fixture()?;
     for case in fixture.money_cases {
         let actual = if case.revenue {
@@ -156,7 +155,7 @@ fn rust_domain_parsers_match_the_pre_port_characterization() -> Result<(), Box<d
 }
 
 #[test]
-fn rust_incident_voting_matches_the_pre_port_characterization() -> Result<(), Box<dyn Error>> {
+fn shared_incident_recognition_vectors_match() -> Result<(), Box<dyn Error>> {
     let fixture = fixture()?;
     for case in fixture.vote_cases {
         let attempts: Vec<PsmAttempt> = case

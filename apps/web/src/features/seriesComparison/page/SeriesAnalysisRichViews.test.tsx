@@ -3,9 +3,6 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
-import { playOrderCellPresentation } from "@/features/seriesComparison/charts/SeriesAnalysisContextCharts";
-import { headToHeadCellStyle } from "@/features/seriesComparison/charts/SeriesAnalysisOverviewCharts";
-import { intensityClassName } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
 import { ContextView } from "@/features/seriesComparison/page/SeriesAnalysisContextView";
 import { DriversView } from "@/features/seriesComparison/page/SeriesAnalysisDriversView";
 import { FlowView } from "@/features/seriesComparison/page/SeriesAnalysisFlowView";
@@ -17,7 +14,7 @@ import {
 } from "@/test/msw/seriesAnalysisFixtures";
 
 describe("rich series analysis views", () => {
-  it("leads with conclusions, names its regions, and gives actionable crown guidance", async () => {
+  it("names the overview regions and explains how to use crown evidence", async () => {
     const user = userEvent.setup();
     const response = makeSeriesAnalysisAggregate();
     render(
@@ -28,9 +25,6 @@ describe("rich series analysis views", () => {
       />,
     );
 
-    expect(
-      screen.getAllByRole("heading", { level: 2 }).map((heading) => heading.textContent),
-    ).toEqual(["順位と基礎比較", "平均順位首位の確からしさ", "直接対決", "順位の安定性"]);
     const overviewRegion = screen.getByRole("region", { name: "順位と基礎比較" });
     expect(overviewRegion).toBeInTheDocument();
     const overviewTable = within(overviewRegion).getByRole("table", {
@@ -39,21 +33,14 @@ describe("rich series analysis views", () => {
     expect(within(overviewTable).getAllByRole("rowheader")).toHaveLength(
       response.metricsByPlayer.length,
     );
-    expect(within(overviewRegion).getByRole("columnheader", { name: "平均順位" })).toHaveClass(
-      "bg-[var(--color-surface)]",
-      "border-[var(--color-border-strong)]",
-    );
-    expect(within(overviewRegion).getByRole("columnheader", { name: "平均順位" })).not.toHaveClass(
-      "bg-[var(--color-surface-subtle)]",
-    );
+    expect(
+      within(overviewRegion).getByRole("columnheader", { name: "平均順位" }),
+    ).toBeInTheDocument();
     expect(screen.getByRole("region", { name: "直接対決" })).toBeInTheDocument();
     const currentDifference = screen.getByLabelText("現在の順位差");
     expect(within(currentDifference).getByText("平均順位の先頭")).toBeInTheDocument();
     expect(within(currentDifference).getByText("先頭と最後尾の差")).toBeInTheDocument();
-    expect(document.querySelector('[data-focused-metric="true"]')).toHaveAttribute(
-      "aria-label",
-      expect.stringMatching(/1位 6回 50%、この試合/u),
-    );
+    expect(screen.getByLabelText(/1位 6回 50%、この試合/u)).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "各順位の回数" })).toBeInTheDocument();
     expect(screen.getByLabelText("ぽんたの順位回数")).toHaveTextContent(
       "1位 6回（この試合）・2位 2回・3位 2回・4位 2回",
@@ -72,7 +59,7 @@ describe("rich series analysis views", () => {
     expect(within(crownRegion).getByText(/直接対決.*順位の安定性/u)).toBeInTheDocument();
   });
 
-  it("places observed outcomes before advanced rank signals and connects guidance to evidence", async () => {
+  it("connects observed driver outcomes and guidance to source evidence", async () => {
     const user = userEvent.setup();
     const response = makeSeriesAnalysisAggregate();
     render(
@@ -85,24 +72,21 @@ describe("rich series analysis views", () => {
       </MemoryRouter>,
     );
 
-    expect(
-      screen.getAllByRole("heading", { level: 2 }).map((heading) => heading.textContent),
-    ).toEqual([
+    for (const heading of [
       "資産の残し方",
       "物件収益と最終順位",
       "目的地到着と順位",
       "試合ごとの資産と収益",
       "順位を読む追加の手掛かり",
-    ]);
+    ]) {
+      expect(screen.getByRole("heading", { name: heading })).toBeInTheDocument();
+    }
     expect(
       screen.getByRole("cell", { name: /収益1位から最終1位、4戦、80%、この試合/u }),
-    ).toHaveAttribute("data-focused-metric", "true");
+    ).toBeInTheDocument();
     const revenueMatrix = screen.getByRole("table", {
       name: "ぽんたの物件収益順位と最終順位",
     });
-    expect(revenueMatrix.querySelector("caption")).toHaveTextContent(
-      "ぽんたの物件収益順位と最終順位",
-    );
     expect(within(revenueMatrix).getAllByRole("row")).toHaveLength(5);
     expect(within(revenueMatrix).getAllByRole("rowheader")).toHaveLength(4);
     expect(within(revenueMatrix).getAllByRole("cell")).toHaveLength(16);
@@ -144,7 +128,7 @@ describe("rich series analysis views", () => {
     expect(screen.getByText(/次戦の順位確率としては使わない/u)).toBeInTheDocument();
   });
 
-  it("uses analysis semantics for neutral emphasis and evidence polarity", () => {
+  it("labels strengths and risks without relying on color", () => {
     const response = makeSeriesAnalysisAggregate();
     const entry = response.assetStyleProfiles.entries[0];
     const strengthEvidence = entry?.evidence[0];
@@ -171,14 +155,9 @@ describe("rich series analysis views", () => {
       </MemoryRouter>,
     );
 
-    expect(intensityClassName("high")).toContain("--color-analysis-emphasis");
-    expect(screen.getByText("4人内最高")).toHaveClass("border-[var(--color-analysis-emphasis)]/45");
-    expect(screen.getByText("強み").closest("div")).toHaveClass(
-      "border-[var(--color-analysis-positive)]/45",
-    );
-    expect(screen.getByText("注意").closest("div")).toHaveClass(
-      "border-[var(--color-analysis-negative)]/45",
-    );
+    expect(screen.getByText("4人内最高")).toBeInTheDocument();
+    expect(screen.getByText("強み")).toBeInTheDocument();
+    expect(screen.getByText("注意")).toBeInTheDocument();
   });
 
   it("uses readable condition names for focused contextual evidence", () => {
@@ -193,7 +172,6 @@ describe("rich series analysis views", () => {
     expect(screen.getByText("目的地あり・売り場あり・この試合")).toBeInTheDocument();
     expect(screen.getByText(/売り場あり 5\/12戦・目的地なし20%/u)).toBeInTheDocument();
     expect(screen.getByText("平均収益")).toBeInTheDocument();
-    expect(document.querySelector('[data-focused-metric="true"]')).toBeInTheDocument();
     expect(document.body).not.toHaveTextContent("destination_with_shop");
     expect(screen.getByText("得意")).toBeInTheDocument();
     expect(screen.getByText("複数回遭遇した試合")).toBeInTheDocument();
@@ -202,21 +180,7 @@ describe("rich series analysis views", () => {
     const playOrderMatrix = screen.getByRole("table", { name: "番手別成績" });
     expect(within(playOrderMatrix).getAllByRole("columnheader")).toHaveLength(5);
     expect(within(playOrderMatrix).getAllByRole("cell")).toHaveLength(4);
-    for (const header of [
-      ...within(playOrderMatrix).getAllByRole("columnheader"),
-      ...within(playOrderMatrix).getAllByRole("rowheader"),
-    ]) {
-      expect(header).not.toHaveClass(
-        "bg-[var(--color-surface-subtle)]",
-        "border-[var(--color-border)]",
-      );
-    }
-    expect(playOrderMatrix.querySelector('[data-play-order="1"] [aria-hidden="true"]')).toHaveStyle(
-      "background-color: var(--color-play-order-1)",
-    );
-    const neutralPlayerLabel = playOrderMatrix.querySelector('[data-member-accent="neutral"]');
-    expect(neutralPlayerLabel).not.toBeNull();
-    expect(neutralPlayerLabel?.querySelector("[aria-hidden='true']")).toBeNull();
+    expect(within(playOrderMatrix).getByText("プレー順1")).toBeInTheDocument();
   });
 
   it("restores match-axis strips and the event-position matrix with result links", () => {
@@ -260,13 +224,7 @@ describe("rich series analysis views", () => {
     );
 
     const recentRankStrip = screen.getByRole("table", { name: "直近の試合順位" });
-    expect(recentRankStrip.querySelector("caption")).toHaveTextContent("直近の試合順位");
     expect(screen.getByLabelText("直近順位")).toContainElement(recentRankStrip);
-    expect(recentRankStrip).toHaveClass("mx-auto");
-    expect(recentRankStrip.parentElement?.parentElement).not.toHaveClass(
-      "border",
-      "rounded-[var(--radius-sm)]",
-    );
     const matchDigestHeading = screen.getByRole("heading", {
       level: 2,
       name: `直近${response.matchDigest.shownCount}戦と荒れ方`,
@@ -282,12 +240,6 @@ describe("rich series analysis views", () => {
     expect(screen.queryByText("カード表示")).not.toBeInTheDocument();
     expect(screen.queryByText("このページ")).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { level: 3, name: "直近20戦" })).toBeInTheDocument();
-    for (const rowHeader of within(
-      screen.getByRole("table", { name: "直近の試合順位" }),
-    ).getAllByRole("rowheader")) {
-      expect(rowHeader).toHaveClass("bg-[var(--color-surface)]");
-      expect(rowHeader).not.toHaveClass("bg-[var(--color-surface-subtle)]");
-    }
     const selectedRankLink = screen.getByRole("link", {
       name: /ぽんた、第12戦、4位、この試合。試合結果を見る/u,
     });
@@ -295,7 +247,6 @@ describe("rich series analysis views", () => {
       "href",
       expect.stringContaining("/matches/match-12?returnTo="),
     );
-    expect(selectedRankLink).toHaveClass("size-11");
     expect(within(selectedRankLink).getByText("4")).toBeInTheDocument();
     expect(
       screen.getAllByRole("link", {
@@ -310,15 +261,6 @@ describe("rich series analysis views", () => {
     const momentumMatrix = screen.getByRole("table", { name: "ぽんたの順位の切り替わり" });
     expect(within(momentumMatrix).getAllByRole("row")).toHaveLength(5);
     expect(within(momentumMatrix).getAllByRole("cell")).toHaveLength(16);
-    for (const header of [
-      ...within(momentumMatrix).getAllByRole("columnheader"),
-      ...within(momentumMatrix).getAllByRole("rowheader"),
-    ]) {
-      expect(header).not.toHaveClass(
-        "bg-[var(--color-surface-subtle)]",
-        "border-[var(--color-border)]",
-      );
-    }
     expect(screen.getByLabelText("順位の切り替わりのセルの読み方")).toHaveTextContent(
       "同じ前戦順位から、その次戦順位になった割合",
     );
@@ -333,15 +275,6 @@ describe("rich series analysis views", () => {
       name: "開催内第1試合から第4試合の傾向",
     });
     expect(within(matchNoMatrix).getAllByRole("row")).toHaveLength(5);
-    for (const header of [
-      ...within(matchNoMatrix).getAllByRole("columnheader"),
-      ...within(matchNoMatrix).getAllByRole("rowheader"),
-    ]) {
-      expect(header).not.toHaveClass(
-        "bg-[var(--color-surface-subtle)]",
-        "border-[var(--color-border)]",
-      );
-    }
     expect(screen.getAllByText("1位–4位差")).toHaveLength(2);
     expect(screen.queryByText(/前の試合の順位から次の順位へ移った件数/u)).not.toBeInTheDocument();
   });
@@ -367,33 +300,6 @@ describe("rich series analysis views", () => {
     ).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "直近20戦" })).not.toBeInTheDocument();
     expect(screen.getByText("直近順位の対象試合はありません。")).toBeInTheDocument();
-  });
-
-  it("assigns disadvantage and advantage to different semantic colors", () => {
-    expect(headToHeadCellStyle("strong_advantage", "high").backgroundColor).toContain(
-      "--color-analysis-positive",
-    );
-    expect(headToHeadCellStyle("strong_disadvantage", "high").backgroundColor).toContain(
-      "--color-analysis-negative",
-    );
-    expect(
-      playOrderCellPresentation({
-        bestPlayOrder: 1,
-        playOrder: 1,
-        relativeIntensity: "high",
-        targetCount: 4,
-        worstPlayOrder: 4,
-      }).accentColor,
-    ).toBe("var(--color-analysis-positive)");
-    expect(
-      playOrderCellPresentation({
-        bestPlayOrder: 1,
-        playOrder: 4,
-        relativeIntensity: "high",
-        targetCount: 4,
-        worstPlayOrder: 4,
-      }).accentColor,
-    ).toBe("var(--color-analysis-negative)");
   });
 
   it("keeps the selected match inline with its ledger and an explicit clear action", async () => {

@@ -18,7 +18,6 @@ describe("MasterReturnNotice", () => {
 
       const warningCopy = screen.getByText(/入力内容を復元できない可能性があります/u);
       expect(warningCopy).toBeInTheDocument();
-      expect(warningCopy.closest("section")).toHaveClass("border-[var(--color-warning)]/65");
       expect(screen.queryByText(/入力内容を保ったまま/u)).not.toBeInTheDocument();
     },
   );

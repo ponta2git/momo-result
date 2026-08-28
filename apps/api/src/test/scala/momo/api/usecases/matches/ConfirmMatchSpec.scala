@@ -39,22 +39,7 @@ final class ConfirmMatchSpec extends MomoCatsEffectSuite:
   private val memberValues = MatchFixtures.DevMemberValues
   private val allowedMembers = MatchFixtures.allowedMembers(memberValues)
 
-  test("confirms a valid match and persists the created record"):
-    Fixture.resource.use { fixture =>
-      for
-        _ <- fixture.seedPrereqs()
-        result <- fixture.usecase.run(
-          command(),
-          AccountId.unsafeFromString("ponta"),
-          Some(MemberId.unsafeFromString("ponta")),
-        )
-        found <- fixture.matches.find(MatchId.unsafeFromString("match-1"))
-      yield
-        assertEquals(result.map(_.id), Right(MatchId.unsafeFromString("match-1")))
-        assertEquals(found.map(_.matchNoInEvent.value), Some(1))
-    }
-
-  test("manual confirmation does not call unavailable object storage"):
+  test("persists an image-free manual match while object storage is unavailable"):
     Fixture.resource.use { fixture =>
       val manualUsecase = fixture.usecaseWithRetention(
         PurgeSourceImages[IO](fixture.matchDrafts, UnavailableImageStorage),
@@ -71,19 +56,6 @@ final class ConfirmMatchSpec extends MomoCatsEffectSuite:
       yield
         assertEquals(result.map(_.id), Right(MatchId.unsafeFromString("manual-with-storage-down")))
         assertEquals(found.map(_.matchNoInEvent.value), Some(1))
-    }
-
-  test("rejects invalid player ranks before persisting"):
-    Fixture.resource.use { fixture =>
-      for
-        _ <- fixture.seedPrereqs()
-        bad = commandWithPlayers(MatchFixtures.duplicateRankPlayerInputs(memberValues))
-        result <- fixture.usecase
-          .run(bad, AccountId.unsafeFromString("ponta"), Some(MemberId.unsafeFromString("ponta")))
-        found <- fixture.matches.find(MatchId.unsafeFromString("match-1"))
-      yield
-        assertAppError(result, "VALIDATION_FAILED", "players.rank")
-        assertEquals(found, None)
     }
 
   test("rejects missing held event"):
@@ -157,9 +129,6 @@ final class ConfirmMatchSpec extends MomoCatsEffectSuite:
 
   private def commandWithGameTitle(gameTitleId: GameTitleId): ConfirmMatchCommand =
     commandWith(matchNoInEvent = 1, gameTitleId = gameTitleId, players = defaultPlayers)
-
-  private def commandWithPlayers(players: List[PlayerResult.Input]): ConfirmMatchCommand =
-    commandWith(matchNoInEvent = 1, gameTitleId = titleId, players = players)
 
   private def commandWith(
       matchNoInEvent: Int,

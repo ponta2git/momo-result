@@ -21,7 +21,7 @@ function analysisBundle(
 }
 
 describe("SeriesAnalysisContent", () => {
-  it("keeps the shared metric guide above every analysis view and opens it as a dialog", async () => {
+  it("opens the shared metric guide from an analysis view", async () => {
     const user = userEvent.setup();
     const queryClient = createTestQueryClient();
     const aggregate = makeSeriesAnalysisAggregate();
@@ -40,11 +40,6 @@ describe("SeriesAnalysisContent", () => {
     );
 
     const guideTrigger = screen.getByRole("button", { name: "指標の読み方" });
-    const flowPanel = screen.getByRole("tabpanel", { name: "推移" });
-    expect(
-      guideTrigger.compareDocumentPosition(flowPanel) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
-
     await user.click(guideTrigger);
     expect(await screen.findByRole("dialog", { name: "指標の読み方" })).toBeInTheDocument();
   });
@@ -98,7 +93,6 @@ describe("SeriesAnalysisContent", () => {
 
     await user.click(screen.getByRole("button", { name: "順位推移を見る" }));
     expect(await screen.findAllByRole("dialog", { name: "平均順位の推移" })).toHaveLength(1);
-    expect(document.querySelectorAll(".momo-dialog-popup")).toHaveLength(1);
   });
 
   it("resets drilldown state when the artifact or analysis view identity changes", async () => {

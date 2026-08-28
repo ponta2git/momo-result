@@ -17,7 +17,7 @@ function MaybeBroken({ shouldThrow }: { shouldThrow: () => boolean }) {
 }
 
 describe("RouteErrorBoundary", () => {
-  it("uses the retry as the terminal page's primary recovery action", async () => {
+  it("retries a recoverable route render failure in place", async () => {
     const user = userEvent.setup();
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
     let shouldThrow = true;
@@ -36,7 +36,6 @@ describe("RouteErrorBoundary", () => {
       expect(
         screen.getByRole("heading", { level: 1, name: "画面の読み込みに失敗しました" }),
       ).toBeInTheDocument();
-      expect(retry).toHaveClass("bg-[var(--color-action)]");
 
       await user.click(retry);
 

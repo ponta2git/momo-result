@@ -76,6 +76,7 @@ final class OcrWorkerJobMessageV2Spec extends FunSuite with JsonSchemaAssertions
     val payload =
       build(canonicalInput.copy(hints = hints, requestId = None)).fold(fail(_), identity)
 
+    assertOcrWorkerJobMessageV2SchemaValid(payload)
     assert(payload.fields.contains(OcrWorkerJobMessageV2.HintsKey))
     assert(!payload.fields.contains(OcrWorkerJobMessageV2.RequestIdKey))
     assertEquals(

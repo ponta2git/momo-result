@@ -63,7 +63,6 @@ describe("CaptureSlotCard", () => {
     expect(screen.getByText("読み取り中は分類を固定")).toBeInTheDocument();
     expect(screen.getByRole("status")).toHaveTextContent("読み取り中");
     expect(screen.getByRole("status")).toHaveAttribute("aria-live", "polite");
-    expect(screen.getByRole("status")).toHaveClass("border-[var(--color-status-info)]/60");
     const refresh = screen.getByRole("button", { name: "状態を更新" });
     fireEvent.click(refresh);
     expect(onRefreshStatus).toHaveBeenCalledOnce();

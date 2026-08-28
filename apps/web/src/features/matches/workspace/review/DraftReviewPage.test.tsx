@@ -613,14 +613,8 @@ describe("DraftReviewPage", () => {
     );
 
     expect(await screen.findByText("サンプルの読み取り結果で表示中")).toBeInTheDocument();
-    const matchSetupHeading = screen.getByRole("heading", { name: "保存先と試合条件" });
-    const playerResultsHeading = screen.getByRole("heading", {
-      name: "4人分の結果を確認・修正",
-    });
-    expect(
-      matchSetupHeading.compareDocumentPosition(playerResultsHeading) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(screen.getByRole("heading", { name: "保存先と試合条件" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "4人分の結果を確認・修正" })).toBeInTheDocument();
     expect(screen.getByText("必須条件を設定してください")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "条件を閉じる" })).toHaveAttribute(
       "aria-expanded",

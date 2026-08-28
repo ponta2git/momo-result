@@ -5,6 +5,7 @@ import java.util.concurrent.atomic.AtomicReference
 import scala.concurrent.duration.DurationInt
 
 import cats.effect.IO
+import doobie.implicits.*
 import munit.{AnyFixture, CatsEffectSuite}
 
 import momo.api.testing.TestTags
@@ -46,5 +47,27 @@ abstract class IntegrationSuite extends CatsEffectSuite:
 
   protected def transactor: doobie.Transactor[IO] = dbFixture().transactor
   protected def dataSource: javax.sql.DataSource = dbFixture().transactor.kernel
+
+  /** Wait until PostgreSQL, rather than elapsed wall time, confirms a backend is lock-blocked. */
+  protected def awaitBackendBlockedBy(blockerPid: Int): IO[Unit] =
+    val observe = sql"""
+      SELECT EXISTS (
+        SELECT 1
+        FROM pg_stat_activity
+        WHERE $blockerPid = ANY(pg_blocking_pids(pid))
+      )
+    """.query[Boolean].unique.transact(transactor)
+
+    def poll: IO[Unit] = observe.flatMap {
+      case true => IO.unit
+      case false => IO.cede *> IO.defer(poll)
+    }
+
+    poll.timeoutTo(
+      5.seconds,
+      IO.raiseError(
+        new AssertionError(s"no backend became blocked by PostgreSQL backend $blockerPid")
+      ),
+    )
 end IntegrationSuite
 // scalafix:on DisableSyntax.noUnsafeRunSync

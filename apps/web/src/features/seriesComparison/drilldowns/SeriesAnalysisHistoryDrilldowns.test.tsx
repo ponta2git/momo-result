@@ -2,7 +2,6 @@ import { render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 
-import { ChangeBadge } from "@/features/seriesComparison/drilldowns/SeriesAnalysisChangeBadge";
 import {
   PlayOrderHistoryDrilldown,
   RankHistoryDrilldown,
@@ -10,18 +9,6 @@ import {
 import { makeSeriesAnalysisDrilldown } from "@/test/msw/seriesAnalysisFixtures";
 
 describe("series analysis history drilldowns", () => {
-  it("maps improvement and decline to analysis polarity", () => {
-    render(
-      <>
-        <ChangeBadge direction="improved" magnitude={-0.5} />
-        <ChangeBadge direction="declined" magnitude={0.5} />
-      </>,
-    );
-
-    expect(screen.getByText("0.5 改善")).toHaveClass("border-[var(--color-analysis-positive)]/45");
-    expect(screen.getByText("0.5 後退")).toHaveClass("border-[var(--color-analysis-negative)]/45");
-  });
-
   it("shows the rank graph, concrete changes, and source-match links", () => {
     const response = makeSeriesAnalysisDrilldown("rank.averageHistory");
     if (response.payload.kind !== "rank_average_history") throw new Error("unexpected fixture");
@@ -71,16 +58,13 @@ describe("series analysis history drilldowns", () => {
       </MemoryRouter>,
     );
 
-    const chart = screen.getByRole("img", { name: "ぽんたの番手別累積平均順位の推移" });
-    expect(chart).toBeInTheDocument();
-    expect(chart.querySelector('[data-series-id="play-order:1"]')).toBeInTheDocument();
-    expect(chart.querySelector('[data-series-id="play-order:4"]')).toBeInTheDocument();
-    const chartFigure = chart.closest("figure");
-    if (!chartFigure) throw new Error("Expected the play-order chart figure");
-    expect(chartFigure.lastElementChild).toHaveTextContent("プレー順1プレー順2プレー順3プレー順4");
-    expect(chartFigure.lastElementChild).not.toHaveTextContent(/1番手|4番手/u);
+    expect(
+      screen.getByRole("img", { name: "ぽんたの番手別累積平均順位の推移" }),
+    ).toBeInTheDocument();
     expect(screen.getByLabelText("ぽんたの番手別順位推移の要約")).toBeInTheDocument();
-    expect(document.querySelector('[data-play-order="1"]')).toHaveTextContent("プレー順1");
+    for (const playOrder of [1, 2, 3, 4]) {
+      expect(screen.getAllByText(`プレー順${playOrder}`).length).toBeGreaterThan(0);
+    }
     expect(screen.getByText(/2位 → 1.5位/u)).toBeInTheDocument();
     expect(screen.getByText("最良番手")).toBeInTheDocument();
     expect(screen.getByText("最悪番手")).toBeInTheDocument();

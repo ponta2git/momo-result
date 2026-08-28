@@ -152,19 +152,17 @@ async fn real_postgres_keeps_staging_separate_from_fenced_publication() -> Smoke
         new_directory.path(),
     )
     .await?;
-    secondary
-        .batch_execute(&format!(
-            "UPDATE worker_execution_slots SET lease_expires_at = clock_timestamp() + interval '2 seconds'\x20\
-             WHERE slot_key = 'shared-heavy-work' AND owner = '{NEW_WORKER_ID}';\x20\
-             UPDATE series_analysis_jobs SET lease_expires_at = clock_timestamp() + interval '2 seconds'\x20\
-             WHERE id = '{JOB_ID}' AND lease_owner = '{NEW_WORKER_ID}';"
-        ))
-        .await?;
     let transaction = primary.transaction().await?;
     lock_owned_by(&transaction, &new_claim, NEW_WORKER_ID).await?;
     validate_staged_artifact(&transaction, &new_claim, &new_manifest).await?;
     publish_staged_artifact(&transaction, &new_claim, &new_manifest).await?;
-    tokio::time::sleep(Duration::from_millis(2_100)).await;
+    transaction
+        .execute(
+            "UPDATE series_analysis_jobs SET lease_expires_at = clock_timestamp() - interval '1 second'\x20\
+             WHERE id = $1 AND lease_owner = $2",
+            &[&JOB_ID, &NEW_WORKER_ID],
+        )
+        .await?;
     let mut rejected_effects = TransactionEffects::empty();
     assert!(matches!(
         finish_success(

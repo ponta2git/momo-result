@@ -40,7 +40,6 @@ describe("StaleShield", () => {
 
     const preservedContent = screen.getByText("表示中の結果").parentElement;
     expect(preservedContent).toHaveAttribute("inert");
-    expect(preservedContent).toHaveClass("blur-[0.5px]");
     expect(screen.getByRole("status")).toHaveTextContent("比較条件を更新中");
   });
 

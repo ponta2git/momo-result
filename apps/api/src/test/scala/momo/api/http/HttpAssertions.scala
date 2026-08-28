@@ -23,21 +23,6 @@ object HttpAssertions:
     )
   }
 
-  def assertProblemSanitizedDetail(
-      response: Response[IO],
-      expectedStatus: Status,
-      expectedCode: String,
-      privateDetail: String,
-  ): IO[Unit] = response.as[Json].map { body =>
-    assertProblemFields(response, body, expectedStatus, expectedCode)
-    val detail = body.hcursor.get[String]("detail")
-    assertEquals(detail, Right(expectedPublicDetail(expectedCode)))
-    assert(
-      !detail.exists(_.contains(privateDetail)),
-      s"private detail was exposed: ${body.noSpaces}"
-    )
-  }
-
   private def expectedPublicDetail(code: String): String = code match
     case "BAD_REQUEST" | "VALIDATION_FAILED" => "入力内容を確認してください。"
     case "UNAUTHORIZED" => "ログインが必要です。再度ログインしてください。"

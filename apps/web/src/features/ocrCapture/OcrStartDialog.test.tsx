@@ -37,7 +37,7 @@ function renderSubmitting(state: Extract<OcrStartDialogState, { status: "submitt
 }
 
 describe("OcrStartDialog", () => {
-  it("shows only indeterminate feedback while preparing the draft", () => {
+  it("shows indeterminate feedback while preparing the draft", () => {
     renderSubmitting({
       plan,
       progress: { phase: "creating_draft", total: 3 },
@@ -45,7 +45,6 @@ describe("OcrStartDialog", () => {
     });
 
     expect(screen.getByText("試合の記録を準備しています")).toBeInTheDocument();
-    expect(document.querySelectorAll(".animate-spin")).toHaveLength(1);
     expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
   });
 
@@ -57,7 +56,6 @@ describe("OcrStartDialog", () => {
     });
 
     expect(screen.getByText("2/3件目・収益を送信しています")).toBeInTheDocument();
-    expect(document.querySelector(".animate-spin")).toBeNull();
     const progress = screen.getByRole("progressbar", { name: "画像送信の進捗" });
     expect(progress).toHaveAttribute("aria-valuenow", "1");
     expect(progress).toHaveAttribute("aria-valuetext", "3件中1件の送信処理が完了");

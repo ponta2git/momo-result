@@ -13,8 +13,7 @@ addCommandAlias("apiFullCheck", "apiCheck; apiDbQuality; apiRedisQuality")
 addCommandAlias("apiCoverage", "clean; coverage; test; coverageReport; coverageOff")
 addCommandAlias(
   "apiRedisQuality",
-    "set Test / fork := true; " +
-    "set Test / parallelExecution := false; " +
+  "set Test / fork := true; " +
     "set Test / testOptions := Seq(); " +
     "testOnly * -- --include-tags=RedisIntegration",
 )

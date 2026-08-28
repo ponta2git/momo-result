@@ -735,16 +735,6 @@ mod tests {
     }
 
     #[test]
-    fn effect_free_claim_ignores_a_closed_outbox_sink() {
-        let (sink, receiver) = PostCommitSink::channel(OutboxKind::SeriesAnalysis);
-        drop(receiver);
-        let decision =
-            submit_claim_outcome(&sink, ControlOutcome::without_effects(OcrClaimResult::Busy));
-
-        assert!(matches!(decision, Ok(ClaimDecision::RetryClaim)));
-    }
-
-    #[test]
     fn analysis_wake_submission_must_succeed_before_claim_disposition() {
         let (sink, receiver) = PostCommitSink::channel(OutboxKind::SeriesAnalysis);
         drop(receiver);

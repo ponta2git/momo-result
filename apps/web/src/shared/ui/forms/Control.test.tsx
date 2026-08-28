@@ -28,37 +28,9 @@ describe("InputControl", () => {
     expect(input).toBeDisabled();
     expect(input).toHaveAttribute("aria-invalid", "true");
     expect(input).toHaveAttribute("aria-describedby", "amount-help");
-    expect(input).toHaveClass(
-      "min-h-11",
-      "sm:min-h-10",
-      "sm:leading-5",
-      "border-[var(--color-danger)]/65",
-      "bg-[var(--color-danger)]/10",
-    );
 
     await user.type(input, "3");
     expect(onChange).not.toHaveBeenCalled();
-  });
-
-  it("supports only the compact layout and semantic state variants needed by data entry", () => {
-    render(
-      <InputControl
-        aria-label="同期値"
-        className="min-w-[12ch] tabular-nums"
-        density="compact"
-        textAlign="end"
-        tone="action"
-      />,
-    );
-
-    expect(screen.getByRole("textbox", { name: "同期値" })).toHaveClass(
-      "min-h-11",
-      "px-2",
-      "text-right",
-      "min-w-[12ch]",
-      "tabular-nums",
-      "border-[var(--color-action)]/55",
-    );
   });
 });
 
@@ -68,14 +40,7 @@ describe("SelectControl", () => {
     const onChange = vi.fn();
 
     render(
-      <SelectControl
-        aria-label="プレー順"
-        defaultValue="1"
-        density="compact"
-        textAlign="center"
-        tone="review"
-        onChange={onChange}
-      >
+      <SelectControl aria-label="プレー順" defaultValue="1" onChange={onChange}>
         <option value="1">1</option>
         <option value="2">2</option>
       </SelectControl>,
@@ -83,12 +48,6 @@ describe("SelectControl", () => {
 
     const select = screen.getByRole("combobox", { name: "プレー順" });
     expect(select).not.toHaveAttribute("aria-invalid");
-    expect(select).toHaveClass(
-      "min-h-11",
-      "px-2",
-      "text-center",
-      "border-[var(--color-review)]/75",
-    );
 
     await user.selectOptions(select, "2");
     expect(select).toHaveValue("2");
@@ -109,7 +68,6 @@ describe("SelectControl", () => {
     const select = screen.getByRole("combobox", { name: "無効な選択" });
     expect(select).toBeDisabled();
     expect(select).toHaveAttribute("aria-invalid", "true");
-    expect(select).toHaveClass("min-h-11", "disabled:cursor-not-allowed");
 
     await user.selectOptions(select, "2");
     expect(select).toHaveValue("1");

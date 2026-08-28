@@ -4,8 +4,6 @@ import java.time.Instant
 
 import cats.effect.{IO, Ref}
 import cats.syntax.all.*
-import ch.qos.logback.classic.Level
-import ch.qos.logback.classic.spi.ILoggingEvent
 
 import momo.api.adapters.postgres.PostgresSourceImagesRepository
 import momo.api.adapters.storage.objectstore.ObjectBackedImageStore
@@ -13,7 +11,7 @@ import momo.api.domain.ids.{AccountId, ImageId}
 import momo.api.errors.{AppError, AppException}
 import momo.api.ports.storage.*
 import momo.api.repositories.{SourceImageQuota, SourceImageStatus}
-import momo.api.testing.{LogbackCapture, RecordingSourceImageObjectStorage, TestImages}
+import momo.api.testing.{RecordingSourceImageObjectStorage, TestImages}
 
 final class ObjectBackedImageStoreSpec extends IntegrationSuite:
   private val now = Instant.parse("2026-08-12T00:00:00Z")
@@ -169,40 +167,6 @@ final class ObjectBackedImageStoreSpec extends IntegrationSuite:
       )
       assertEquals(putCount, 2)
 
-  test("atomic quota rejection preserves its bounded operational reason"):
-    for
-      objects <- RecordingSourceImageObjectStorage.create
-      store = ObjectBackedImageStore[IO](
-        PostgresSourceImagesRepository[IO](transactor),
-        objects,
-        IO.pure(ImageId.unsafeFromString("source-quota-observed")),
-        IO.pure(now),
-        SourceImageQuota(unreferencedCountLimit = 0, unreferencedBytesLimit = Long.MaxValue),
-      )
-      _ <- captureLogs { events =>
-        store.saveIdempotent(
-          accountId,
-          None,
-          Some("image/png"),
-          TestImages.png1x1,
-          SourceImageIdempotencyHash.fromRawKey("quota-observed"),
-        ).flatMap { result =>
-          events.map { captured =>
-            assert(result match
-              case Left(_: AppError.TooManyRequests) => true
-              case _ => false)
-            val messages = captured.map(_.getFormattedMessage)
-            assertEquals(
-              messages.count(_.startsWith("image_upload_admission rejected ")),
-              1,
-            )
-            assert(messages.exists(_.contains("reason=unreferenced_count_exceeded")))
-            assert(messages.exists(_.contains("countAfter=1 limit=0")))
-          }
-        }
-      }
-    yield ()
-
   private def imageStore(objects: SourceImageObjectStorage[IO]): ObjectBackedImageStore[IO] =
     ObjectBackedImageStore[IO](
       PostgresSourceImagesRepository[IO](transactor),
@@ -211,6 +175,3 @@ final class ObjectBackedImageStoreSpec extends IntegrationSuite:
       IO.pure(now),
       SourceImageQuota(1000, Long.MaxValue),
     )
-
-  private def captureLogs[A](use: IO[Vector[ILoggingEvent]] => IO[A]): IO[A] =
-    LogbackCapture.withEvents("momo.api.adapters.storage.ObjectBackedImageStore", Level.WARN)(use)

@@ -1,7 +1,6 @@
 package momo.api.integration
+import java.sql.Connection
 import java.time.Instant
-
-import scala.concurrent.duration.*
 
 import cats.effect.{Deferred, IO, Resource}
 import doobie.implicits.*
@@ -184,14 +183,14 @@ final class PostgresOcrJobCreationStoreSpec extends IntegrationSuite with JsonSc
   test("store waits for a concurrent deletion transition and rejects its committed state"):
     for
       _ <- prepareSourceImage
-      deletionLocked <- Deferred[IO, Unit]
+      deletionLocked <- Deferred[IO, Int]
       releaseDeletion <- Deferred[IO, Unit]
       deletion <- holdDeletionTransition(deletionLocked, releaseDeletion).start
-      _ <- deletionLocked.get
+      deletionBackend <- deletionLocked.get
       resultReady <- Deferred[IO, OcrJobCreationStore.OcrJobCreationResult]
       creation <- repo.store(plan(job, draft, None, activeJobLimit = 12))
         .flatTap(resultReady.complete).start
-      _ <- IO.sleep(100.millis)
+      _ <- awaitBackendBlockedBy(deletionBackend)
       beforeCommit <- resultReady.tryGet
       _ <- releaseDeletion.complete(())
       result <- creation.joinWithNever
@@ -210,14 +209,14 @@ final class PostgresOcrJobCreationStoreSpec extends IntegrationSuite with JsonSc
   test("orphan deletion waits for the source lock and observes the committed OCR reference"):
     for
       _ <- prepareSourceImage
-      sourceLocked <- Deferred[IO, Unit]
+      sourceLocked <- Deferred[IO, Int]
       releaseJob <- Deferred[IO, Unit]
       jobTransaction <- holdOcrReferenceTransaction(sourceLocked, releaseJob).start
-      _ <- sourceLocked.get
+      jobBackend <- sourceLocked.get
       deletionReady <- Deferred[IO, SourceImageDeleteResult]
       deletionFiber <- sourceImages.beginDeleteUnreferenced(imageId, now.plusSeconds(1))
         .flatTap(deletionReady.complete).start
-      _ <- IO.sleep(100.millis)
+      _ <- awaitBackendBlockedBy(jobBackend)
       beforeCommit <- deletionReady.tryGet
       _ <- releaseJob.complete(())
       deletion <- deletionFiber.joinWithNever
@@ -247,7 +246,7 @@ final class PostgresOcrJobCreationStoreSpec extends IntegrationSuite with JsonSc
       sourceImages.markAvailable(imageId, None, now).void
 
   private def holdDeletionTransition(
-      locked: Deferred[IO, Unit],
+      locked: Deferred[IO, Int],
       release: Deferred[IO, Unit],
   ): IO[Unit] = Resource.fromAutoCloseable(IO.blocking(dataSource.getConnection)).use {
     connection =>
@@ -266,12 +265,13 @@ final class PostgresOcrJobCreationStoreSpec extends IntegrationSuite with JsonSc
             fail("test deletion transition did not lock one image")
         finally statement.close()
       }
-      (transition *> locked.complete(()) *> release.get *> IO.blocking(connection.commit()))
+      (transition *> backendPid(connection).flatMap(locked.complete) *> release.get *>
+        IO.blocking(connection.commit()))
         .onError(_ => IO.blocking(connection.rollback()))
   }
 
   private def holdOcrReferenceTransaction(
-      locked: Deferred[IO, Unit],
+      locked: Deferred[IO, Int],
       release: Deferred[IO, Unit],
   ): IO[Unit] = Resource.fromAutoCloseable(IO.blocking(dataSource.getConnection)).use {
     connection =>
@@ -306,8 +306,20 @@ final class PostgresOcrJobCreationStoreSpec extends IntegrationSuite with JsonSc
             fail("test OCR reference was not inserted")
         finally insert.close()
       }
-      (insertReference *> locked.complete(()) *> release.get *> IO.blocking(connection.commit()))
+      (insertReference *> backendPid(connection).flatMap(locked.complete) *> release.get *>
+        IO.blocking(connection.commit()))
         .onError(_ => IO.blocking(connection.rollback()))
+  }
+
+  private def backendPid(connection: Connection): IO[Int] = IO.blocking {
+    val statement = connection.createStatement()
+    try
+      val rows = statement.executeQuery("SELECT pg_backend_pid()")
+      try
+        if !rows.next() then fail("test backend PID was unavailable")
+        rows.getInt(1)
+      finally rows.close()
+    finally statement.close()
   }
 
   private def assertActiveLimit(

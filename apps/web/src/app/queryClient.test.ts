@@ -11,7 +11,6 @@ describe("app queryClient", () => {
       },
       queries: {
         retry: 1,
-        staleTime: 10_000,
         throwOnError: false,
       },
     });

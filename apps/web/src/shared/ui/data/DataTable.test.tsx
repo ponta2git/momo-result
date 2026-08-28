@@ -9,7 +9,7 @@ type Row = { id: string; name: string; score: number };
 const rows: Row[] = [{ id: "member-1", name: "いーゆー", score: 100 }];
 
 describe("DataTable", () => {
-  it("provides a caption, row identity, sort state, density, and row busy feedback", async () => {
+  it("provides a caption, row identity, sort state, and row busy feedback", async () => {
     const user = userEvent.setup();
     const onSort = vi.fn();
     render(
@@ -24,7 +24,6 @@ describe("DataTable", () => {
           },
           {
             align: "right",
-            cellClassName: "tabular-nums",
             header: "総資産",
             key: "score",
             renderCell: (row) => row.score,
@@ -33,7 +32,6 @@ describe("DataTable", () => {
             onSort,
           },
         ]}
-        density="compact"
         getRowKey={(row) => row.id}
         isRowBusy={() => true}
         rows={rows}
@@ -41,7 +39,6 @@ describe("DataTable", () => {
     );
 
     expect(screen.getByRole("table", { name: "試合結果" })).toBeInTheDocument();
-    expect(screen.getByRole("rowheader", { name: "いーゆー" })).toHaveClass("py-2", "align-middle");
     expect(screen.getByRole("rowheader", { name: "いーゆー" }).parentElement).toHaveAttribute(
       "aria-busy",
       "true",
@@ -51,21 +48,7 @@ describe("DataTable", () => {
       "descending",
     );
     expect(screen.getByRole("columnheader", { name: "総資産" })).toHaveAttribute("scope", "col");
-    expect(screen.getByRole("cell", { name: "100" })).toHaveClass("tabular-nums");
-    expect(screen.getByRole("columnheader", { name: "総資産" })).toHaveClass(
-      "bg-[var(--color-surface)]",
-      "border-y",
-      "border-[var(--color-border-strong)]",
-      "align-middle",
-    );
-    const table = screen.getByRole("table", { name: "試合結果" });
-    expect(table.parentElement).toHaveClass("overflow-x-auto", "bg-[var(--color-surface)]");
-    expect(table.parentElement).not.toHaveClass("rounded-[var(--radius-md)]", "border");
-    expect(screen.getByRole("rowheader", { name: "いーゆー" })).not.toHaveClass("border-b");
-    expect(screen.getByRole("rowheader", { name: "いーゆー" }).parentElement).toHaveClass(
-      "last:[&>td]:border-b",
-      "last:[&>th]:border-b",
-    );
+    expect(screen.getByRole("cell", { name: "100" })).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "総資産" }));
     expect(onSort).toHaveBeenCalledTimes(1);

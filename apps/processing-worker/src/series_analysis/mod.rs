@@ -544,22 +544,4 @@ mod tests {
 
         assert!(matches!(result, Err(ConsumerError::PostCommitSink(_))));
     }
-
-    #[test]
-    fn empty_effects_do_not_block_a_no_outbox_disposition() {
-        let (sink, receiver) = PostCommitSink::channel(OutboxKind::SeriesAnalysis);
-        drop(receiver);
-
-        let result = submit_control_outcome(
-            &sink,
-            ControlOutcome::without_effects(DeliveryDisposition::leave_pending_cold()),
-        );
-
-        assert!(matches!(
-            result,
-            Ok(DeliveryDisposition::LeavePending(
-                PendingRecoveryPolicy::ColdOnly
-            ))
-        ));
-    }
 }

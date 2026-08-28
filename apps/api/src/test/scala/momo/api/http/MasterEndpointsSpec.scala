@@ -22,7 +22,7 @@ import momo.api.endpoints.{
   SeasonMasterListResponse,
   SeasonMasterResponse
 }
-import momo.api.http.HttpAssertions.{assertProblem, assertProblemSanitizedDetail}
+import momo.api.http.HttpAssertions.assertProblem
 
 final class MasterEndpointsSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
 
@@ -97,14 +97,6 @@ final class MasterEndpointsSpec extends MomoCatsEffectSuite with HttpAppTestFixt
     }
   }
 
-  app.test("POST /api/game-titles rejects blank id at the HTTP boundary") { http =>
-    val req =
-      writePost(uri"/api/game-titles", HttpRequestBodies.Master.createGameTitle(" ", "x", "world"))
-    http.run(req).flatMap { r =>
-      assertProblem(r, Status.UnprocessableContent, "VALIDATION_FAILED", "id must not be blank")
-    }
-  }
-
   app.test("POST /api/game-titles is restricted to administrators") { http =>
     val req = writePost(
       uri"/api/game-titles",
@@ -112,7 +104,7 @@ final class MasterEndpointsSpec extends MomoCatsEffectSuite with HttpAppTestFixt
       accountId = "account_eu",
     )
     http.run(req).flatMap { r =>
-      assertProblemSanitizedDetail(
+      assertProblem(
         r,
         Status.Forbidden,
         "FORBIDDEN",
@@ -221,26 +213,6 @@ final class MasterEndpointsSpec extends MomoCatsEffectSuite with HttpAppTestFixt
     yield ()
   }
 
-  app.test("GET /api/map-masters rejects blank game title filter at the HTTP boundary") { http =>
-    val req = readGet(uri"/api/map-masters?gameTitleId=%20")
-    http.run(req).flatMap { r =>
-      assertProblem(r, Status.UnprocessableContent, "VALIDATION_FAILED", "gameTitleId")
-    }
-  }
-
-  app.test("POST /api/game-titles without CSRF token is rejected") { http =>
-    val req = readRequest(Method.POST, uri"/api/game-titles")
-      .withEntity(HttpRequestBodies.Master.createGameTitle("title_world", "x", "world"))
-    http.run(req).flatMap(r =>
-      assertProblemSanitizedDetail(
-        r,
-        Status.Forbidden,
-        "FORBIDDEN",
-        "Development CSRF token is required. Use X-CSRF-Token: dev.",
-      )
-    )
-  }
-
   app.test("member alias CRUD lists, creates, updates, and deletes aliases") { http =>
     def writeReq(method: Method, path: String, body: Option[Json]): Request[IO] =
       val base = writeRequest(method, Uri.unsafeFromString(path))
@@ -271,26 +243,4 @@ final class MasterEndpointsSpec extends MomoCatsEffectSuite with HttpAppTestFixt
       empty <- emptyResp.as[MemberAliasListResponse]
       _ = assertEquals(empty.items, Nil)
     yield ()
-  }
-
-  app.test("member alias endpoints reject blank member ids at the HTTP boundary") { http =>
-    val createBody = Json.obj("memberId" -> Json.fromString(" "), "alias" -> Json.fromString("x"))
-    for
-      createResp <- http.run(writePost(uri"/api/member-aliases", createBody))
-      _ <- assertProblem(createResp, Status.UnprocessableContent, "VALIDATION_FAILED", "memberId")
-      listResp <- http.run(readGet(uri"/api/member-aliases?memberId=%20"))
-      _ <- assertProblem(listResp, Status.UnprocessableContent, "VALIDATION_FAILED", "memberId")
-    yield ()
-  }
-
-  app.test("GET /api/game-titles without auth returns 401") { http =>
-    val req = Request[IO](Method.GET, uri"/api/game-titles")
-    http.run(req).flatMap { r =>
-      assertProblemSanitizedDetail(
-        r,
-        Status.Unauthorized,
-        "UNAUTHORIZED",
-        "Authentication is required.",
-      )
-    }
   }

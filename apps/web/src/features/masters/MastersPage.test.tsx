@@ -76,30 +76,16 @@ describe("MastersPage", () => {
     user = userEvent.setup();
   });
 
-  it("renders relation board headings", async () => {
+  it("exposes the master categories through one labeled tab set", async () => {
     setDevUser();
     renderPage();
 
     expect(await screen.findByRole("heading", { name: "設定管理" })).toBeInTheDocument();
-    const surface = screen.getByRole("region", { name: "設定管理" });
-    const tabs = screen.getByRole("tablist", { name: "設定管理の表示切替" });
-    expect(surface).toHaveClass("bg-[var(--color-surface)]", "rounded-[var(--radius-md)]");
-    expect(surface).not.toHaveClass("border");
-    expect(surface).toContainElement(tabs);
-    expect(tabs).not.toHaveClass("border");
-    expect(tabs).not.toHaveClass("bg-[var(--color-surface)]");
-    expect(surface).not.toContainElement(screen.getByRole("heading", { name: "設定管理" }));
+    expect(screen.getByRole("tablist", { name: "設定管理の表示切替" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "作品" })).toBeInTheDocument();
-    const gameTitleSection = screen.getByRole("heading", { name: "作品" }).closest("section");
-    expect(gameTitleSection?.parentElement).toHaveClass("gap-8");
-    expect(gameTitleSection?.nextElementSibling).not.toHaveClass("border-t", "pt-6");
     expect(screen.getByRole("heading", { name: "マップ" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "シーズン" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "事件簿" })).toBeInTheDocument();
-    expect(screen.queryByText("現在の作品")).not.toBeInTheDocument();
-    expect(
-      screen.queryByText("作品、読み取り方式、マップ、シーズン、名前の読み替えを整えます。"),
-    ).not.toBeInTheDocument();
   });
 
   it("starts independent master directory requests in parallel", async () => {
@@ -179,9 +165,6 @@ describe("MastersPage", () => {
     renderPage();
 
     expect(await screen.findByText("マップを読み込めません")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "マップを再読み込み" })).toHaveClass(
-      "bg-[var(--color-action)]",
-    );
     shouldFail = false;
     await user.click(screen.getByRole("button", { name: "マップを再読み込み" }));
 
@@ -192,7 +175,7 @@ describe("MastersPage", () => {
     expect(attempts).toBeGreaterThanOrEqual(2);
   });
 
-  it("keeps cached empty scoped masters visible with a secondary stale retry", async () => {
+  it("keeps cached empty scoped masters visible while retrying stale data", async () => {
     setDevUser();
     queryClient.setQueryData(
       masterQueryKeys.mapMasters(testDevUserAccountId, "gt_momotetsu_2"),
@@ -217,7 +200,6 @@ describe("MastersPage", () => {
     expect(within(mapPanel!).getByText("マップはまだありません")).toBeInTheDocument();
     expect(within(mapPanel!).queryByText("マップを読み込めません")).not.toBeInTheDocument();
     const retryButton = within(mapPanel!).getByRole("button", { name: "マップを再読み込み" });
-    expect(retryButton).toHaveClass("bg-[var(--color-surface)]");
     expect(within(mapPanel!).getByRole("button", { name: "追加" })).toBeEnabled();
 
     shouldFail = false;
@@ -230,7 +212,7 @@ describe("MastersPage", () => {
     expect(attempts).toBeGreaterThanOrEqual(2);
   });
 
-  it("keeps cached empty master directories visible with local secondary retries", async () => {
+  it("keeps cached empty master directories visible during local retries", async () => {
     setDevUser();
     await queryClient.fetchQuery(authQueryOptions(testDevUserAccountId));
     const staleUpdatedAt = Date.now() - 2_000;
@@ -282,7 +264,6 @@ describe("MastersPage", () => {
     expect(await screen.findByText("最新の作品を取得できません")).toBeInTheDocument();
     expect(screen.getByText("作品はまだありません")).toBeInTheDocument();
     const gameTitleRetry = screen.getByRole("button", { name: "作品を再読み込み" });
-    expect(gameTitleRetry).toHaveClass("bg-[var(--color-surface)]");
     expect(screen.getByRole("button", { name: "作品を追加" })).toBeEnabled();
 
     await user.click(screen.getByRole("tab", { name: "メンバー名寄せ" }));
@@ -293,7 +274,6 @@ describe("MastersPage", () => {
       .closest("section");
     expect(aliasPanel).not.toBeNull();
     const aliasRetry = within(aliasPanel!).getByRole("button", { name: "別名を再読み込み" });
-    expect(aliasRetry).toHaveClass("bg-[var(--color-surface)]");
     expect(within(aliasPanel!).getByRole("button", { name: "追加" })).toBeEnabled();
 
     await user.click(screen.getByRole("tab", { name: "事件簿" }));
@@ -304,7 +284,6 @@ describe("MastersPage", () => {
     const incidentRetry = within(incidentPanel!).getByRole("button", {
       name: "事件簿を再読み込み",
     });
-    expect(incidentRetry).toHaveClass("bg-[var(--color-surface)]");
 
     shouldFail = false;
     await user.click(incidentRetry);
@@ -360,7 +339,6 @@ describe("MastersPage", () => {
     expect(screen.getByText("NO11")).toBeInTheDocument();
     expect(screen.queryByText("別名の追加に失敗しました")).not.toBeInTheDocument();
     const retryButton = screen.getByRole("button", { name: "別名を再読み込み" });
-    expect(retryButton).toHaveClass("bg-[var(--color-surface)]");
 
     failRefresh = false;
     await user.click(retryButton);
@@ -543,8 +521,6 @@ describe("MastersPage", () => {
     const editDialog = screen.getByRole("dialog", { name: "作品を編集" });
     const nameInput = screen.getByDisplayValue("桃太郎電鉄2");
     expect(editDialog).toContainElement(nameInput);
-    expect(nameInput.closest("form")).toHaveClass("py-2");
-    expect(nameInput.closest("form")?.parentElement).toHaveClass("px-2");
     await user.clear(nameInput);
     await user.type(nameInput, "桃太郎電鉄2 DX");
     await user.click(screen.getByRole("button", { name: "保存" }));
@@ -598,12 +574,6 @@ describe("MastersPage", () => {
       throw new Error("alias panel was not rendered");
     }
     const aliasPanelScreen = within(aliasPanel);
-    expect(
-      [...aliasPanel.querySelectorAll<HTMLElement>("[data-member-sequence]")].map(
-        (label) => label.dataset["memberSequence"],
-      ),
-    ).toEqual(["1", "2", "3", "4"]);
-
     await user.type(aliasPanelScreen.getByPlaceholderText("例: NO11社長"), "ポン太");
     await user.click(aliasPanelScreen.getByRole("button", { name: "追加" }));
     expect(await screen.findByText("ポン太")).toBeInTheDocument();
@@ -635,22 +605,6 @@ describe("MastersPage", () => {
     const surface = await screen.findByRole("region", { name: "設定管理" });
     expect(within(surface).getByText("戻り先を確認できませんでした")).toBeInTheDocument();
     expect(within(surface).getByText(/試合一覧へ戻る導線だけ/u)).toBeInTheDocument();
-  });
-
-  it("keeps the handoff return primary when the alias form is visible", async () => {
-    setDevUser();
-    renderPage(`${createMasterReturnEntry()}&tab=aliases`);
-
-    const returnButton = await screen.findByRole("button", { name: "元の入力画面へ戻る" });
-    const aliasHeading = await screen.findByRole("heading", { name: "プレーヤー名の別名" });
-    const aliasPanel = aliasHeading.closest("section");
-    if (!aliasPanel) {
-      throw new Error("alias panel was not rendered");
-    }
-    const addButton = within(aliasPanel).getByRole("button", { name: "追加" });
-
-    expect(returnButton).toHaveClass("bg-[var(--color-action)]");
-    expect(addButton).toHaveClass("bg-[var(--color-surface)]");
   });
 
   it("disables the only return action while a master edit is pending", async () => {

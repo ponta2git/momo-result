@@ -28,10 +28,7 @@ describe("PaginationControls", () => {
     );
 
     expect(screen.getByText("26〜50件／全75件")).toBeInTheDocument();
-    expect(screen.getByRole("navigation", { name: "ページネーション" })).toHaveClass(
-      "sm:items-end",
-    );
-    expect(screen.getByText("26〜50件／全75件")).toHaveClass("sm:min-h-9", "sm:items-center");
+    expect(screen.getByRole("navigation", { name: "ページネーション" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "先頭ページへ" }));
     await user.selectOptions(screen.getByLabelText("表示件数"), "50");
     expect(onPageChange).toHaveBeenCalledWith(1);
@@ -83,22 +80,5 @@ describe("PaginationControls", () => {
     expect(screen.getByText("1／1")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "前のページへ" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "次のページへ" })).toBeDisabled();
-  });
-
-  it("does not create another surface when embedded in a parent content plane", () => {
-    render(
-      <PaginationControls
-        ariaLabel="埋め込みページネーション"
-        pagination={middlePage}
-        placement="embedded"
-        variant="compact"
-        onPageChange={vi.fn()}
-      />,
-    );
-
-    const pagination = screen.getByRole("navigation", { name: "埋め込みページネーション" });
-    expect(pagination).toHaveClass("bg-transparent");
-    expect(pagination).not.toHaveClass("p-3");
-    expect(pagination).not.toHaveClass("border");
   });
 });

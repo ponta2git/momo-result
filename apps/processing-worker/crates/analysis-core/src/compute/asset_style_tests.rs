@@ -25,7 +25,7 @@ fn medians() -> AssetStyleMedians {
 }
 
 #[test]
-fn historical_primary_kind_priority_is_fixed() {
+fn primary_kind_uses_the_contract_priority() {
     let medians = medians();
     let cases = [
         (
@@ -93,7 +93,7 @@ fn historical_primary_kind_priority_is_fixed() {
 }
 
 #[test]
-fn historical_shape_and_tag_order_are_fixed() {
+fn shape_and_tags_follow_the_contract_order() {
     let medians = medians();
     let metrics = AssetStyleMetrics {
         high_asset_rate: Some(0.20),

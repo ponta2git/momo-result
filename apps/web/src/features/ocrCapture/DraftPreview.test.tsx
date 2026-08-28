@@ -20,13 +20,11 @@ function makeDraft(warningsJson: unknown): OcrDraftResponse {
 }
 
 describe("DraftPreview", () => {
-  it("uses a neutral disclosure and omits zero-warning reassurance copy", async () => {
+  it("omits reassurance copy when no warning needs attention", async () => {
     const user = userEvent.setup();
-    const { container } = render(<DraftPreview draft={makeDraft([])} />);
+    render(<DraftPreview draft={makeDraft([])} />);
 
     const trigger = screen.getByRole("button", { name: "読み取り結果" });
-    expect(container.firstElementChild).toHaveClass("border-[var(--color-border)]");
-    expect(container.firstElementChild).not.toHaveClass("bg-[var(--color-success)]/10");
     await user.click(trigger);
 
     expect(screen.getByText("総資産")).toBeInTheDocument();

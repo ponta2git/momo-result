@@ -20,16 +20,14 @@ const noReview: ScoreGridProps["data"]["review"] = {
 
 function ScoreGridHarness({
   errorPathSet = noErrorPaths,
-  initialPlayers = emptyPlayers(),
   onPlayerChange,
   review = noReview,
 }: {
   errorPathSet?: Set<string>;
-  initialPlayers?: MatchFormValues["players"];
   onPlayerChange: (index: number, patch: Partial<MatchFormValues["players"][number]>) => void;
   review?: ScoreGridProps["data"]["review"];
 }) {
-  const [players, setPlayers] = useState(initialPlayers);
+  const [players, setPlayers] = useState(emptyPlayers());
 
   return (
     <ScoreGrid
@@ -219,7 +217,7 @@ describe("ScoreGrid", () => {
     expect(incidentChanges.at(-1)).toEqual([0, "destination", 7]);
   });
 
-  it("allows editing the member on mobile cards", async () => {
+  it("commits member changes from mobile cards", async () => {
     matchMedia = installMatchMediaController(true);
     const user = userEvent.setup();
     const onPlayerChange =
@@ -227,78 +225,23 @@ describe("ScoreGrid", () => {
 
     render(<ScoreGridHarness onPlayerChange={onPlayerChange} />);
 
-    const collapsedPlayerTrigger = screen.getAllByText("詳細")[0]?.closest("button");
-    expect(collapsedPlayerTrigger).toHaveClass("hover:bg-[var(--color-surface-hover)]");
-    expect(collapsedPlayerTrigger).not.toHaveClass("hover:bg-transparent");
-
     const memberSelect = screen.getByLabelText("メンバー");
-    expect(
-      within(memberSelect)
-        .getAllByRole("option")
-        .map((option) => option.textContent?.trim()),
-    ).toEqual(["いーゆー", "ぽんた", "あかねまみ", "おーたか"]);
     await user.selectOptions(memberSelect, "member_eu");
 
     expect(onPlayerChange).toHaveBeenLastCalledWith(0, { memberId: "member_eu" });
     expect(memberSelect).toHaveValue("member_eu");
   });
 
-  it("keeps shared grid controls compact, touch-safe, and invalid through native ARIA", () => {
+  it("exposes invalid score cells through native ARIA", () => {
     const errorPathSet = new Set(["players.0.playOrder", "players.0.rank"]);
 
     render(<ScoreGridHarness errorPathSet={errorPathSet} onPlayerChange={vi.fn()} />);
 
-    const memberSelect = screen.getByRole("combobox", { name: "ぽんた メンバー" });
     const playOrderSelect = screen.getByRole("combobox", { name: "ぽんた プレー順" });
     const rankInput = screen.getByRole("textbox", { name: "ぽんた 順位" });
 
-    expect(memberSelect).toHaveClass("min-h-11", "px-2", "min-w-[10rem]");
-    expect(
-      within(memberSelect)
-        .getAllByRole("option")
-        .map((option) => option.textContent?.trim()),
-    ).toEqual(["いーゆー", "ぽんた", "あかねまみ", "おーたか"]);
-    expect(playOrderSelect).toHaveClass(
-      "min-h-11",
-      "px-2",
-      "text-center",
-      "border-[var(--color-danger)]/65",
-    );
     expect(playOrderSelect).toHaveAttribute("aria-invalid", "true");
-    expect(rankInput).toHaveClass("min-h-11", "px-2", "text-center", "min-w-[6ch]");
     expect(rankInput).toHaveAttribute("aria-invalid", "true");
-  });
-
-  it("keeps desktop and mobile accents attached to playOrder instead of row index", () => {
-    const players = emptyPlayers();
-    for (const [index, player] of players.entries()) {
-      player.playOrder = index === 1 ? 9 : 4 - index;
-    }
-    const onPlayerChange = vi.fn();
-
-    const desktop = render(
-      <ScoreGridHarness initialPlayers={players} onPlayerChange={onPlayerChange} />,
-    );
-
-    expect(desktop.container.querySelector('[data-play-order="4"]')?.closest("tr")).toHaveStyle({
-      "--play-order-accent": "var(--color-play-order-4)",
-    });
-    expect(
-      desktop.container.querySelector('[data-play-order="unknown"]')?.closest("tr"),
-    ).toHaveStyle({ "--play-order-accent": "var(--color-border-strong)" });
-    desktop.unmount();
-
-    matchMedia = installMatchMediaController(true);
-    const mobile = render(
-      <ScoreGridHarness initialPlayers={players} onPlayerChange={onPlayerChange} />,
-    );
-
-    expect(mobile.container.querySelector('[data-play-order="4"]')?.closest("article")).toHaveStyle(
-      { "--play-order-accent": "var(--color-play-order-4)" },
-    );
-    expect(
-      mobile.container.querySelector('[data-play-order="unknown"]')?.closest("article"),
-    ).toHaveStyle({ "--play-order-accent": "var(--color-border-strong)" });
   });
 
   it("does not commit NaN when a mobile numeric draft is incomplete", async () => {

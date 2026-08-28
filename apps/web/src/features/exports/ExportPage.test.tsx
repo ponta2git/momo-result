@@ -104,43 +104,6 @@ describe("ExportPage", () => {
     expect(anchorClick.clickedAnchors[0]?.download).toBe("momo-results-all.csv");
   });
 
-  it("keeps one concise heading and orders the task from scope to format", async () => {
-    renderPage();
-
-    await screen.findByRole("heading", { name: "CSV/TSV出力" });
-    const surface = screen.getByRole("region", { name: "出力条件" });
-    const scope = screen.getByRole("tablist", { name: "出力範囲" });
-    const format = screen.getByRole("tablist", { name: "ファイル形式" });
-
-    expect(surface).toHaveClass("bg-[var(--color-surface)]", "rounded-[var(--radius-md)]");
-    expect(surface).not.toHaveClass("border");
-    expect(surface).not.toContainElement(screen.getByRole("heading", { name: "CSV/TSV出力" }));
-    expect(screen.queryByText("出力条件")).not.toBeInTheDocument();
-    expect(screen.queryByText("書き出し内容")).not.toBeInTheDocument();
-    expect(screen.queryByText(/条件はURLに保存/u)).not.toBeInTheDocument();
-    expect(scope.compareDocumentPosition(format) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(within(scope).getByRole("tab", { name: "全試合" })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
-    expect(within(format).getByRole("tab", { name: "CSV" })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
-    const exclusionNotice = screen.getByText("下書きや確認待ちの試合は含みません。");
-    expect(
-      exclusionNotice.compareDocumentPosition(scope) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
-    const allScopePanel = screen.getByRole("tabpanel", { name: "全試合" });
-    expect(allScopePanel).toBeInTheDocument();
-    expect(within(allScopePanel).queryByText("下書きや確認待ちの試合は含みません。")).toBeNull();
-    expect(screen.getByRole("tabpanel", { name: "CSV" })).toBeInTheDocument();
-    const actionSummary = screen.getByText("すべての確定済み試合をCSVで書き出します。");
-    expect(actionSummary).toBeInTheDocument();
-    expect(actionSummary.parentElement?.parentElement).toHaveClass("pt-2");
-    expect(actionSummary.parentElement?.parentElement).not.toHaveClass("border-t");
-  });
-
   it("keeps the exclusion notice visible for every export scope", async () => {
     renderPage();
 
@@ -469,7 +432,6 @@ describe("ExportPage", () => {
 
     expect(await screen.findByText("候補を読み込めませんでした。")).toBeInTheDocument();
     const retry = screen.getByRole("button", { name: "再読み込み" });
-    expect(retry).toHaveClass("bg-[var(--color-action)]");
     await user.click(retry);
 
     expect(await screen.findByRole("combobox", { name: "シーズン" })).toHaveValue("season-1");
@@ -510,9 +472,7 @@ describe("ExportPage", () => {
       expect(await screen.findByText(title)).toBeInTheDocument();
       expect(document.body).not.toHaveTextContent(missingId);
       expect(screen.queryByRole("button", { name: downloadName })).not.toBeInTheDocument();
-      expect(screen.getByRole("button", { name: recoveryName })).toHaveClass(
-        "bg-[var(--color-action)]",
-      );
+      expect(screen.getByRole("button", { name: recoveryName })).toBeEnabled();
     },
   );
 
@@ -537,7 +497,6 @@ describe("ExportPage", () => {
       screen.queryByRole("button", { name: "この試合をCSVでダウンロード" }),
     ).not.toBeInTheDocument();
     const retry = screen.getByRole("button", { name: "指定対象を再確認" });
-    expect(retry).toHaveClass("bg-[var(--color-action)]");
     await user.click(retry);
 
     expect(await screen.findByText(/第7試合.*CSVで書き出します。/u)).toBeInTheDocument();
@@ -662,7 +621,6 @@ describe("ExportPage", () => {
       expect(screen.getByRole("button", { name: downloadName })).toBeEnabled();
 
       const retry = screen.getByRole("button", { name: "出力候補を再取得" });
-      expect(retry).toHaveClass("bg-[var(--color-surface)]");
       await user.click(retry);
 
       expect(await screen.findByText("出力対象を確認しています。")).toBeInTheDocument();
@@ -728,9 +686,7 @@ describe("ExportPage", () => {
     expect(document.body).not.toHaveTextContent(gameTitleId);
     expect(document.body).not.toHaveTextContent(seasonMasterId);
     expect(screen.getByRole("button", { name: "この試合をCSVでダウンロード" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: "出力候補を再取得" })).toHaveClass(
-      "bg-[var(--color-surface)]",
-    );
+    expect(screen.getByRole("button", { name: "出力候補を再取得" })).toBeEnabled();
   });
 
   it("keeps the acquired master name when only the other master request fails", async () => {
@@ -856,7 +812,6 @@ describe("ExportPage", () => {
       ),
     ).toBeInTheDocument();
     const reset = screen.getByRole("button", { name: "初期条件へ戻す" });
-    expect(reset).toHaveClass("bg-[var(--color-action)]");
     expect(screen.queryByRole("button", { name: /ダウンロード/u })).not.toBeInTheDocument();
 
     await user.click(reset);

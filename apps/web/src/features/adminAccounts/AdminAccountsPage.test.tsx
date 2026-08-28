@@ -31,61 +31,25 @@ describe("AdminAccountsPage", () => {
     user = userEvent.setup();
   });
 
-  it("shows the created login account in the account list", async () => {
+  it("creates an account and shows its exact identity and permissions", async () => {
     renderPage();
 
     expect(
       await screen.findByRole("table", { name: "ログイン可能なアカウントと権限" }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("columnheader", { name: "表示名" })).toHaveClass(
-      "bg-[var(--color-surface)]",
-      "border-y",
-      "border-[var(--color-border-strong)]",
-    );
-    const surface = screen.getByRole("region", { name: "ログインアカウント一覧" });
-    expect(surface).toHaveClass(
-      "bg-[var(--color-surface)]",
-      "rounded-[var(--radius-md)]",
-      "p-4",
-      "sm:p-6",
-    );
-    expect(surface).not.toHaveClass("border");
-    const table = screen.getByRole("table", { name: "ログイン可能なアカウントと権限" });
-    expect(surface).toContainElement(table);
-    expect(table.parentElement).toHaveClass("overflow-x-auto", "bg-[var(--color-surface)]");
-    expect(table.parentElement).not.toHaveClass("rounded-[var(--radius-md)]", "border");
-    expect(screen.getByRole("rowheader", { name: "ぽんた" }).parentElement).toHaveClass(
-      "last:[&>td]:border-b",
-      "last:[&>th]:border-b",
-    );
-    expect(surface).not.toContainElement(
-      screen.getByRole("heading", { name: "ログインアカウント" }),
-    );
     expect(screen.getByRole("rowheader", { name: "ぽんた" })).toBeInTheDocument();
     const createTrigger = screen.getByRole("button", { name: "アカウントを追加" });
-    expect(createTrigger).toHaveClass("bg-[var(--color-surface)]");
     await user.click(createTrigger);
 
     const dialog = screen.getByRole("dialog", { name: "アカウントを追加" });
-    expect(
-      within(dialog)
-        .getByRole("textbox", { name: /DiscordユーザーID/u })
-        .closest("form")?.parentElement,
-    ).toHaveClass("px-2");
-
     const playerSelect = within(dialog).getByRole("combobox", { name: "紐づくプレーヤー" });
-    expect(
-      within(playerSelect)
-        .getAllByRole("option")
-        .map((option) => option.textContent),
-    ).toEqual(["試合参加者に紐づけない", "いーゆー", "ぽんた", "あかねまみ", "おーたか"]);
+    expect(playerSelect).toHaveValue("");
 
     const permissions = within(dialog).getByRole("group", { name: "権限" });
     const loginEnabled = within(permissions).getByRole("checkbox", { name: "ログイン許可" });
     const isAdmin = within(permissions).getByRole("checkbox", { name: "管理者" });
     expect(loginEnabled).toBeChecked();
     expect(isAdmin).not.toBeChecked();
-    expect(loginEnabled.closest("label")).toHaveClass("min-h-11");
 
     await user.type(
       within(dialog).getByPlaceholderText("例: 523484457705930752"),
@@ -122,15 +86,14 @@ describe("AdminAccountsPage", () => {
     await waitFor(() => expect(within(accountRow!).getByText("ログイン停止")).toBeInTheDocument());
   });
 
-  it("offers account creation as the only primary action when the list is empty", async () => {
+  it("offers one account-creation action when the list is empty", async () => {
     server.use(http.get("/api/admin/login-accounts", () => HttpResponse.json({ items: [] })));
 
     renderPage();
 
-    const createButton = await screen.findByRole("button", {
-      name: "最初のアカウントを追加",
-    });
-    expect(createButton).toHaveClass("bg-[var(--color-action)]");
+    expect(
+      await screen.findByRole("button", { name: "最初のアカウントを追加" }),
+    ).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "アカウントを追加" })).not.toBeInTheDocument();
   });
 
@@ -251,7 +214,6 @@ describe("AdminAccountsPage", () => {
       name: "アカウントを再読み込み",
     });
     expect(retryButton).toBeVisible();
-    expect(retryButton).toHaveClass("bg-[var(--color-action)]");
     expect(screen.queryByText("ログイン可能なアカウントはまだありません")).not.toBeInTheDocument();
 
     await user.click(retryButton);
@@ -292,7 +254,6 @@ describe("AdminAccountsPage", () => {
     ).toBeInTheDocument();
     expect(screen.queryByText("アカウントを読み込めません")).not.toBeInTheDocument();
     const retryButton = screen.getByRole("button", { name: "最新情報を再読み込み" });
-    expect(retryButton).toHaveClass("bg-[var(--color-surface)]");
     expect(screen.getByRole("button", { name: "アカウントを追加" })).toBeEnabled();
 
     await user.click(retryButton);

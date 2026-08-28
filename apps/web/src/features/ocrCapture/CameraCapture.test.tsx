@@ -55,27 +55,13 @@ describe("CameraCapture", () => {
       />,
     );
 
-    const startButton = screen.getByRole("button", { name: "カメラ開始" });
     const captureButton = screen.getByRole("button", { name: "静止画を撮影" });
-    expect(screen.getByRole("group", { name: "総資産の16:9カメラ画像枠" })).toHaveClass(
-      "aspect-video",
-      "overflow-hidden",
-    );
-    expect(screen.getByLabelText("総資産のカメラプレビュー")).toHaveClass(
-      "size-full",
-      "object-contain",
-    );
-    expect(startButton).toHaveClass("bg-[var(--color-action)]");
-    expect(captureButton).toHaveClass("bg-[var(--color-surface)]");
     expect(captureButton).toBeDisabled();
     expect(screen.getByRole("button", { name: "停止" })).toBeDisabled();
 
     await user.click(screen.getByRole("button", { name: "カメラ開始" }));
 
-    expect(screen.getByRole("button", { name: "カメラ使用中" })).toHaveClass(
-      "bg-[var(--color-surface)]",
-    );
-    expect(captureButton).toHaveClass("bg-[var(--color-action)]");
+    expect(screen.getByRole("button", { name: "カメラ使用中" })).toBeDisabled();
     expect(captureButton).toBeEnabled();
     expect(screen.getByRole("button", { name: "停止" })).toBeEnabled();
 
@@ -242,14 +228,11 @@ describe("CameraCapture", () => {
     await user.click(screen.getByRole("button", { name: "カメラ開始" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("カメラを利用できません");
-    expect(screen.getByRole("button", { name: "カメラ開始" })).toHaveClass(
-      "bg-[var(--color-surface)]",
-    );
     expect(screen.getByText("ファイル追加を表示")).toBeInTheDocument();
     expect(screen.queryByText("ファイル追加を控えめに表示")).not.toBeInTheDocument();
   });
 
-  it("keeps camera and fallback actions secondary once the tray is complete", async () => {
+  it("does not promote the file fallback after a completed tray rejects camera access", async () => {
     const user = userEvent.setup();
     getUserMedia = installGetUserMediaMock(() =>
       Promise.reject(new DOMException("blocked", "NotAllowedError")),
@@ -268,9 +251,6 @@ describe("CameraCapture", () => {
     );
 
     const startButton = screen.getByRole("button", { name: "カメラ開始" });
-    const captureButton = screen.getByRole("button", { name: "静止画を撮影" });
-    expect(startButton).toHaveClass("bg-[var(--color-surface)]");
-    expect(captureButton).toHaveClass("bg-[var(--color-surface)]");
     await user.click(startButton);
     expect(await screen.findByRole("alert")).toHaveTextContent("ファイル追加を控えめに表示");
     expect(screen.queryByText("ファイル追加を表示")).not.toBeInTheDocument();

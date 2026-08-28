@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { ProgressBar } from "@/shared/ui/feedback/ProgressBar";
 
 describe("ProgressBar", () => {
-  it("keeps visual and accessible determinate values in sync", () => {
+  it("updates determinate accessibility values", () => {
     const view = render(
       <ProgressBar
         aria-label="画像送信の進捗"
@@ -30,7 +30,6 @@ describe("ProgressBar", () => {
     );
     expect(progress).toHaveAttribute("aria-valuenow", "3");
     expect(progress).toHaveAttribute("aria-valuetext", "3件中3件の送信処理が完了");
-    expect(progress.querySelectorAll("[data-progress-indicator]")).toHaveLength(1);
   });
 
   it("clamps invalid values without exposing an invalid progress range", () => {

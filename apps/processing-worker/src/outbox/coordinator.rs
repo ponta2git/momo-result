@@ -339,7 +339,7 @@ mod tests {
     };
 
     use thiserror::Error;
-    use tokio::sync::Notify;
+    use tokio::sync::{Notify, mpsc};
 
     use super::*;
     use crate::outbox::{OutboxKind, PostCommitEffects, PostCommitSink};
@@ -348,14 +348,20 @@ mod tests {
     struct ManualClock {
         now: Arc<Mutex<Instant>>,
         advanced: Arc<Notify>,
+        sleep_events: mpsc::UnboundedSender<Instant>,
     }
 
     impl ManualClock {
-        fn at(now: Instant) -> Self {
-            Self {
-                now: Arc::new(Mutex::new(now)),
-                advanced: Arc::new(Notify::new()),
-            }
+        fn at(now: Instant) -> (Self, mpsc::UnboundedReceiver<Instant>) {
+            let (sleep_events, observed_sleeps) = mpsc::unbounded_channel();
+            (
+                Self {
+                    now: Arc::new(Mutex::new(now)),
+                    advanced: Arc::new(Notify::new()),
+                    sleep_events,
+                },
+                observed_sleeps,
+            )
         }
 
         fn advance(&self, duration: Duration) {
@@ -387,6 +393,10 @@ mod tests {
                     if clock.now() >= deadline {
                         return;
                     }
+                    assert!(
+                        clock.sleep_events.send(deadline).is_ok(),
+                        "sleep observer must remain connected"
+                    );
                     advanced.await;
                 }
             }
@@ -400,20 +410,22 @@ mod tests {
     }
 
     struct ScriptedDriver {
-        calls: Arc<Mutex<usize>>,
+        drain_events: mpsc::UnboundedSender<()>,
         batches: VecDeque<Result<DrainBatch, ScriptedError>>,
     }
 
     impl ScriptedDriver {
-        fn new(batches: impl IntoIterator<Item = Result<DrainBatch, ScriptedError>>) -> Self {
-            Self {
-                calls: Arc::new(Mutex::new(0)),
-                batches: batches.into_iter().collect(),
-            }
-        }
-
-        fn calls(&self) -> Arc<Mutex<usize>> {
-            Arc::clone(&self.calls)
+        fn new(
+            batches: impl IntoIterator<Item = Result<DrainBatch, ScriptedError>>,
+        ) -> (Self, mpsc::UnboundedReceiver<()>) {
+            let (drain_events, observed_drains) = mpsc::unbounded_channel();
+            (
+                Self {
+                    drain_events,
+                    batches: batches.into_iter().collect(),
+                },
+                observed_drains,
+            )
         }
     }
 
@@ -425,13 +437,12 @@ mod tests {
                 .batches
                 .pop_front()
                 .unwrap_or(Ok(DrainBatch::idle(None)));
-            let calls = Arc::clone(&self.calls);
+            let drain_events = self.drain_events.clone();
             async move {
-                let mut count = calls
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
-                *count = count.saturating_add(1);
-                drop(count);
+                assert!(
+                    drain_events.send(()).is_ok(),
+                    "drain observer must remain connected"
+                );
                 batch
             }
         }
@@ -445,41 +456,54 @@ mod tests {
         }
     }
 
-    fn call_count(calls: &Mutex<usize>) -> usize {
-        *calls
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    async fn observe_drain(events: &mut mpsc::UnboundedReceiver<()>) {
+        let event = tokio::time::timeout(Duration::from_secs(5), events.recv()).await;
+        assert!(
+            event.is_ok(),
+            "timed out waiting for the coordinator to request a drain"
+        );
+        assert_eq!(
+            event.ok().flatten(),
+            Some(()),
+            "coordinator did not request the expected drain"
+        );
     }
 
-    async fn wait_for_calls(calls: &Mutex<usize>, expected: usize) {
-        for _attempt in 0..100 {
-            if call_count(calls) >= expected {
-                return;
-            }
-            tokio::task::yield_now().await;
-        }
-        assert_eq!(call_count(calls), expected);
+    async fn observe_sleep(events: &mut mpsc::UnboundedReceiver<Instant>) -> Option<Instant> {
+        let event = tokio::time::timeout(Duration::from_secs(5), events.recv()).await;
+        assert!(
+            event.is_ok(),
+            "timed out waiting for the coordinator to enter deadline sleep"
+        );
+        event.ok().flatten()
     }
 
     #[tokio::test]
-    async fn startup_drains_once_then_signal_wakes_without_periodic_calls() {
-        let driver = ScriptedDriver::new([Ok(DrainBatch::idle(None)), Ok(DrainBatch::idle(None))]);
-        let calls = driver.calls();
+    async fn startup_drains_once_then_waits_for_a_signal_without_periodic_calls() {
+        let start = Instant::now();
+        let (clock, mut sleeps) = ManualClock::at(start);
+        let deadline = start.checked_add(Duration::from_mins(1)).unwrap_or(start);
+        let (driver, mut drains) = ScriptedDriver::new([
+            Ok(DrainBatch::idle(Some(deadline))),
+            Ok(DrainBatch::idle(None)),
+        ]);
         let (sink, wake) = PostCommitSink::channel(OutboxKind::SeriesAnalysis);
         let (shutdown_sender, shutdown) = watch::channel(false);
-        let task = tokio::spawn(run(driver, wake, shutdown));
+        let task = tokio::spawn(run_with_clock(driver, wake, shutdown, clock.clone()));
 
-        wait_for_calls(&calls, 1).await;
-        for _attempt in 0..10 {
-            tokio::task::yield_now().await;
-        }
-        assert_eq!(call_count(&calls), 1);
+        observe_drain(&mut drains).await;
+        assert_eq!(observe_sleep(&mut sleeps).await, Some(deadline));
+        clock.advance(Duration::from_secs(59));
+        assert_eq!(observe_sleep(&mut sleeps).await, Some(deadline));
+        assert_eq!(
+            drains.try_recv(),
+            Err(mpsc::error::TryRecvError::Empty),
+            "idle coordinator must not poll before its explicit deadline"
+        );
 
         let effect = PostCommitEffects::wake(OutboxKind::SeriesAnalysis);
         assert_eq!(sink.submit(effect), Ok(()));
-        assert_eq!(sink.submit(effect), Ok(()));
-        wait_for_calls(&calls, 2).await;
-        assert_eq!(call_count(&calls), 2);
+        observe_drain(&mut drains).await;
 
         assert_eq!(shutdown_sender.send(true), Ok(()));
         assert!(matches!(task.await, Ok(Ok(()))));
@@ -488,26 +512,28 @@ mod tests {
     #[tokio::test]
     async fn earliest_one_shot_deadline_wakes_an_idle_driver() {
         let start = Instant::now();
-        let clock = ManualClock::at(start);
+        let (clock, mut sleeps) = ManualClock::at(start);
         let deadline = start.checked_add(Duration::from_secs(10)).unwrap_or(start);
-        let driver = ScriptedDriver::new([
+        let (driver, mut drains) = ScriptedDriver::new([
             Ok(DrainBatch::idle(Some(deadline))),
             Ok(DrainBatch::idle(None)),
         ]);
-        let calls = driver.calls();
         let (_sink, wake) = PostCommitSink::channel(OutboxKind::SeriesAnalysis);
         let (shutdown_sender, shutdown) = watch::channel(false);
         let task = tokio::spawn(run_with_clock(driver, wake, shutdown, clock.clone()));
 
-        wait_for_calls(&calls, 1).await;
+        observe_drain(&mut drains).await;
+        assert_eq!(observe_sleep(&mut sleeps).await, Some(deadline));
         clock.advance(Duration::from_secs(9));
-        for _attempt in 0..10 {
-            tokio::task::yield_now().await;
-        }
-        assert_eq!(call_count(&calls), 1);
+        assert_eq!(observe_sleep(&mut sleeps).await, Some(deadline));
+        assert_eq!(
+            drains.try_recv(),
+            Err(mpsc::error::TryRecvError::Empty),
+            "driver must remain idle before the deadline"
+        );
 
         clock.advance(Duration::from_secs(1));
-        wait_for_calls(&calls, 2).await;
+        observe_drain(&mut drains).await;
         assert_eq!(shutdown_sender.send(true), Ok(()));
         assert!(matches!(task.await, Ok(Ok(()))));
     }
@@ -515,36 +541,41 @@ mod tests {
     #[tokio::test]
     async fn recoverable_failure_holds_wake_until_backoff_deadline() {
         let start = Instant::now();
-        let clock = ManualClock::at(start);
-        let driver = ScriptedDriver::new([
+        let (clock, mut sleeps) = ManualClock::at(start);
+        let retry_at = start.checked_add(Duration::from_secs(1)).unwrap_or(start);
+        let (driver, mut drains) = ScriptedDriver::new([
             Err(ScriptedError {
                 kind: DriverFailureKind::Recoverable,
             }),
             Ok(DrainBatch::idle(None)),
         ]);
-        let calls = driver.calls();
         let (sink, wake) = PostCommitSink::channel(OutboxKind::SeriesAnalysis);
         let (shutdown_sender, shutdown) = watch::channel(false);
         let task = tokio::spawn(run_with_clock(driver, wake, shutdown, clock.clone()));
 
-        wait_for_calls(&calls, 1).await;
+        observe_drain(&mut drains).await;
+        assert_eq!(observe_sleep(&mut sleeps).await, Some(retry_at));
         assert_eq!(
             sink.submit(PostCommitEffects::wake(OutboxKind::SeriesAnalysis)),
             Ok(())
         );
-        for _attempt in 0..10 {
-            tokio::task::yield_now().await;
-        }
-        assert_eq!(call_count(&calls), 1);
+        assert_eq!(observe_sleep(&mut sleeps).await, Some(retry_at));
+        assert_eq!(
+            drains.try_recv(),
+            Err(mpsc::error::TryRecvError::Empty),
+            "wake must not bypass backoff"
+        );
 
         clock.advance(Duration::from_millis(999));
-        for _attempt in 0..10 {
-            tokio::task::yield_now().await;
-        }
-        assert_eq!(call_count(&calls), 1);
+        assert_eq!(observe_sleep(&mut sleeps).await, Some(retry_at));
+        assert_eq!(
+            drains.try_recv(),
+            Err(mpsc::error::TryRecvError::Empty),
+            "driver must remain idle before backoff expires"
+        );
 
         clock.advance(Duration::from_millis(1));
-        wait_for_calls(&calls, 2).await;
+        observe_drain(&mut drains).await;
         assert_eq!(shutdown_sender.send(true), Ok(()));
         assert!(matches!(task.await, Ok(Ok(()))));
     }
@@ -564,7 +595,7 @@ mod tests {
 
     #[tokio::test]
     async fn structural_driver_failure_stops_the_coordinator() {
-        let driver = ScriptedDriver::new([Err(ScriptedError {
+        let (driver, _drains) = ScriptedDriver::new([Err(ScriptedError {
             kind: DriverFailureKind::Structural,
         })]);
         let (_sink, wake) = PostCommitSink::channel(OutboxKind::SeriesAnalysis);

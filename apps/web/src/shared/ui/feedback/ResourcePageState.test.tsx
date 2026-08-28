@@ -28,9 +28,6 @@ describe("ResourcePageState", () => {
     expect(
       screen.getByRole("heading", { level: 1, name: "試合詳細を読み込めませんでした" }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "試合詳細を再読み込み" })).toHaveClass(
-      "bg-[var(--color-action)]",
-    );
     expect(screen.getByRole("link", { name: "試合一覧へ戻る" })).toHaveAttribute(
       "href",
       "/matches",
@@ -57,8 +54,9 @@ describe("ResourcePageState", () => {
     expect(screen.getByRole("status")).toHaveTextContent(
       "指定された開催は削除されたか、存在しません。開催履歴から別の開催を選んでください。",
     );
-    expect(screen.getByRole("link", { name: "開催履歴へ戻る" })).toHaveClass(
-      "bg-[var(--color-action)]",
+    expect(screen.getByRole("link", { name: "開催履歴へ戻る" })).toHaveAttribute(
+      "href",
+      "/held-events",
     );
   });
 });

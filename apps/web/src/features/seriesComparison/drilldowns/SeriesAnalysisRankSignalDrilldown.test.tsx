@@ -15,12 +15,7 @@ describe("RankSignalDrilldown", () => {
 
     const analysisScope = screen.getByLabelText("順位を読む手掛かりの分析範囲");
     expect(within(analysisScope).getByText("5/5組で改善")).toBeInTheDocument();
-    expect(analysisScope).toHaveClass("grid", "gap-4");
-    expect(analysisScope).not.toHaveClass("border-y");
-    expect(analysisScope).not.toHaveClass("rounded-[var(--radius-sm)]");
-    expect(within(analysisScope).getByText("別開催テスト").parentElement).not.toHaveClass(
-      "bg-[var(--color-surface-subtle)]",
-    );
+    expect(within(analysisScope).getByText("別開催テスト")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "判断の順序" })).toBeInTheDocument();
     const usage = screen.getByLabelText("順位を読む手掛かりの使い方");
     expect(within(usage).getByText("候補を選ぶ")).toBeInTheDocument();
@@ -32,9 +27,7 @@ describe("RankSignalDrilldown", () => {
 
     const support = screen.getByRole("list", { name: "物件収益の別開催での支持" });
     expect(within(support).getAllByRole("listitem")).toHaveLength(5);
-    for (const supported of within(support).getAllByText("支持")) {
-      expect(supported).toHaveClass("text-[var(--color-analysis-positive)]");
-    }
+    expect(within(support).getAllByText("支持")).toHaveLength(5);
 
     await user.click(screen.getByRole("button", { name: "別開催テストと採用基準" }));
     expect(screen.getByRole("heading", { name: "検証の流れ" })).toBeInTheDocument();

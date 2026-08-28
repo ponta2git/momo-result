@@ -40,8 +40,8 @@ describe("MatchResultLedger", () => {
 
     expect(screen.getByRole("list", { name: "試合の順位と成績" })).toBeInTheDocument();
     expect(screen.getByText("2.00 → 1.97")).toBeInTheDocument();
-    expect(screen.getByText("0.03改善")).toHaveClass("border-[var(--color-analysis-positive)]/45");
-    expect(screen.getByText("0.05後退")).toHaveClass("border-[var(--color-analysis-negative)]/35");
+    expect(screen.getByText("0.03改善")).toBeInTheDocument();
+    expect(screen.getByText("0.05後退")).toBeInTheDocument();
     expect(screen.getByText("収益順位 1.5位")).toBeInTheDocument();
     expect(screen.getByText("物件収益比率 50.0%")).toBeInTheDocument();
     expect(screen.queryByText("+0.03")).not.toBeInTheDocument();
@@ -90,14 +90,6 @@ describe("MatchResultLedger", () => {
       expect.stringContaining("ぽんた"),
       expect.stringContaining("いーゆー"),
     ]);
-    expect(
-      screen
-        .getAllByRole("listitem")
-        .map(
-          (item) =>
-            item.querySelector<HTMLElement>("[data-member-sequence]")?.dataset["memberSequence"],
-        ),
-    ).toEqual(["4", "3", "2", "1"]);
     expect(screen.getAllByText(/^[1-4]位$/u)).toHaveLength(4);
   });
 });

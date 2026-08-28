@@ -13,13 +13,15 @@ import momo.api.errors.{AppError, AppException}
 import momo.api.testing.LogbackCapture
 
 final class HttpErrorMiddlewareSpec extends MomoCatsEffectSuite:
-  test("maps database exceptions to sanitized dependency ProblemDetails") {
+  test("maps and logs database exceptions without exposing dependency details") {
+    val secret = "postgres://user:secret@db.example.com/momo"
     val app = HttpErrorMiddleware[IO](HttpRoutes.of[IO] { case _ =>
-      IO.raiseError(new SQLException("relation secret_table missing"))
+      IO.raiseError(new SQLException(s"relation secret_table missing $secret"))
     }.orNotFound)
 
     for
-      response <- app.run(Request[IO](uri = Uri.unsafeFromString("/boom")))
+      (response, events) <-
+        captureHttpErrorLogs(app.run(Request[IO](uri = Uri.unsafeFromString("/boom"))))
       body <- response.as[String]
       json <- IO.fromEither(parse(body))
     yield
@@ -30,18 +32,7 @@ final class HttpErrorMiddlewareSpec extends MomoCatsEffectSuite:
         Right("現在処理を完了できません。少し待ってから、もう一度実行してください。")
       )
       assert(!body.contains("secret_table"))
-  }
-
-  test("logs dependency exceptions without leaking exception messages") {
-    val secret = "postgres://user:secret@db.example.com/momo"
-    val app = HttpErrorMiddleware[IO](HttpRoutes.of[IO] { case _ =>
-      IO.raiseError(new SQLException(s"relation secret_table missing $secret"))
-    }.orNotFound)
-
-    for
-      (_, events) <- captureHttpErrorLogs(app.run(Request[IO](uri = Uri.unsafeFromString("/boom"))))
-      rendered = events.map(_.getFormattedMessage).mkString("\n")
-    yield
+      val rendered = events.map(_.getFormattedMessage).mkString("\n")
       assert(rendered.contains("java.sql.SQLException"))
       assert(!rendered.contains("secret_table"))
       assert(!rendered.contains(secret))

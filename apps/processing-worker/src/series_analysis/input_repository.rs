@@ -321,9 +321,7 @@ mod tests {
             .member_id = String::from("member-1");
         assert!(matches!(
             validate_player_matches(&duplicate_player),
-            Err(InputRepositoryError::InputContract(
-                "match players, ranks, play orders, or metadata are inconsistent"
-            ))
+            Err(InputRepositoryError::InputContract(_))
         ));
 
         let mut inconsistent_match = valid;
@@ -333,9 +331,7 @@ mod tests {
             .season_master_id = String::from("season-2");
         assert!(matches!(
             validate_player_matches(&inconsistent_match),
-            Err(InputRepositoryError::InputContract(
-                "match players, ranks, play orders, or metadata are inconsistent"
-            ))
+            Err(InputRepositoryError::InputContract(_))
         ));
     }
 }

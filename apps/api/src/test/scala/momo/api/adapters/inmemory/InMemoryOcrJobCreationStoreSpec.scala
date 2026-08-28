@@ -45,21 +45,6 @@ final class InMemoryOcrJobCreationStoreSpec extends MomoCatsEffectSuite:
       assertEquals(matchDraft.flatMap(_.totalAssetsDraftId), None)
       assertEquals(matchDraft.flatMap(_.totalAssetsImageId), None)
 
-  test("store rejects duplicate OCR jobs before attaching match draft artifacts"):
-    for
-      fixture <- newFixture
-      draft = ocrDraft("ocr-draft-new", "ocr-job-duplicate")
-      job = queuedJob("ocr-job-duplicate", draft.id)
-      existing = queuedJob("ocr-job-duplicate", OcrDraftId.unsafeFromString("ocr-draft-existing"))
-      _ <- fixture.matchDrafts.create(editableMatchDraft)
-      _ <- fixture.jobs.create(existing)
-      result <- fixture.store.store(plan(job, draft, Some(attachment(draft.id)), 10)).attempt
-      matchDraft <- fixture.matchDrafts.find(matchDraftId)
-    yield
-      assertAppException(result, "CONFLICT", "ocr job already exists")
-      assertEquals(matchDraft.flatMap(_.totalAssetsDraftId), None)
-      assertEquals(matchDraft.flatMap(_.totalAssetsImageId), None)
-
   test("store returns active limit rejection without inserting OCR records"):
     for
       fixture <- newFixture

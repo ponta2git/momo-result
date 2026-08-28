@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -29,33 +29,24 @@ describe("SeriesAnalysisAdminStatus", () => {
     expect(status).toHaveTextContent("計算中");
     expect(status).toHaveAttribute("aria-busy", "true");
     expect(status).toHaveAttribute("aria-live", "polite");
-    expect(status).toHaveClass("border-[var(--color-status-info)]/60");
   });
 
-  it("keeps historical job badges static", () => {
+  it("does not announce historical job statuses as live updates", () => {
     const overview = makeSeriesAnalysisAdminOverview();
 
     render(<RecentJobs jobs={overview.recentJobs} />);
 
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
-    expect(screen.getByText("成功").parentElement).toHaveClass("border-[var(--color-success)]/60");
-    const table = screen.getByRole("table", { name: "全作品の直近3件の実行履歴" });
-    expect(within(table).getAllByRole("rowheader")).toHaveLength(overview.recentJobs.length);
-    for (const header of within(table).getAllByRole("columnheader")) {
-      expect(header).toHaveClass("bg-[var(--color-surface)]", "border-y");
-      expect(header).not.toHaveClass("bg-[var(--color-surface-subtle)]");
-      expect(header).toHaveAttribute("scope", "col");
-    }
+    expect(screen.getByText("成功")).toBeInTheDocument();
+    expect(screen.getByRole("table", { name: "全作品の直近3件の実行履歴" })).toBeInTheDocument();
   });
 
   it("uses the embedded empty-state contract when no recent jobs exist", () => {
     render(<RecentJobs jobs={[]} />);
 
-    const emptyHeading = screen.getByRole("heading", {
-      level: 3,
-      name: "実行履歴はありません",
-    });
-    expect(emptyHeading.closest("section")).toHaveClass("bg-transparent", "py-6");
+    expect(
+      screen.getByRole("heading", { level: 3, name: "実行履歴はありません" }),
+    ).toBeInTheDocument();
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
   });
 });

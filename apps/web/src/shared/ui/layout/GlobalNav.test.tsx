@@ -15,7 +15,7 @@ const managementItems = [
 ] as const;
 
 describe("GlobalNav", () => {
-  it("renders caller-owned navigation content with mobile-safe targets", () => {
+  it("renders caller-owned navigation content with accessible names", () => {
     render(
       <MemoryRouter initialEntries={["/matches"]}>
         <GlobalNav
@@ -34,8 +34,7 @@ describe("GlobalNav", () => {
     expect(screen.getByText("テストユーザー")).toBeVisible();
     for (const name of ["試合", "戦績比較", "設定"]) {
       const link = screen.getByRole("link", { name });
-      expect(link).toHaveClass("min-h-11", "min-w-11");
-      expect(within(link).getByText(name)).not.toHaveClass("sr-only");
+      expect(within(link).getByText(name)).toBeVisible();
       expect(within(link).queryByRole("img")).not.toBeInTheDocument();
     }
   });

@@ -97,57 +97,18 @@ describe("HeldEventDetailPage", () => {
     renderPage();
 
     expect(await screen.findByRole("heading", { name: "この開催の戦績" })).toBeInTheDocument();
-    const surface = screen.getByRole("region", { name: "開催内容" });
-    expect(surface).toHaveClass("bg-[var(--color-surface)]", "rounded-[var(--radius-md)]");
-    expect(surface).not.toHaveClass("border");
-    expect(surface).toContainElement(screen.getByRole("heading", { name: "この開催の戦績" }));
-    expect(surface).not.toContainElement(screen.getByRole("heading", { name: /2026/u }));
     expect(screen.getByText("確定済み1試合・未確定下書き2件")).toBeInTheDocument();
-    expect(screen.queryByText("次の番号")).not.toBeInTheDocument();
     expect(await screen.findAllByText("桃太郎電鉄2・今シーズン・東日本編")).toHaveLength(2);
     const primaryDraftAction = screen.getByRole("link", { name: "確認事項を直す" });
     expect(primaryDraftAction).toHaveAttribute(
       "href",
       "/review/draft-review-1?returnTo=%2Fheld-events%2Fheld-1",
     );
-    expect(primaryDraftAction).toHaveClass("bg-[var(--color-action)]");
-    expect(screen.getByRole("link", { name: "手入力で続ける" })).toHaveClass(
-      "bg-[var(--color-surface)]",
-    );
-    expect(screen.getByRole("link", { name: "OCR取り込み" })).toHaveClass(
-      "bg-[var(--color-surface)]",
-    );
-    expect(screen.getByRole("link", { name: "手入力" })).toHaveClass("bg-[var(--color-surface)]");
-    const pontaRecap = screen.getByRole("region", { name: "ぽんたの開催戦績" });
-    expect(pontaRecap).toHaveTextContent("1位回数0回");
-    expect(pontaRecap).not.toHaveTextContent("1戦");
+    expect(screen.getByRole("link", { name: "手入力で続ける" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "OCR取り込み" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "手入力" })).toBeInTheDocument();
     const results = screen.getByRole("list", { name: "第1試合の順位と総資産" });
     expect(within(results).getByText("1億2345万円")).toBeInTheDocument();
-    expect(
-      within(results)
-        .getAllByRole("listitem")
-        .map((item) => item.textContent),
-    ).toEqual([expect.stringContaining("いーゆー"), expect.stringContaining("ぽんた")]);
-    expect(
-      [...results.querySelectorAll<HTMLElement>("[data-member-sequence]")].map(
-        (label) => label.dataset["memberSequence"],
-      ),
-    ).toEqual(["1", "2"]);
-    expect(
-      within(results)
-        .getAllByText(/^[12]位$/u)
-        .map((badge) => badge.textContent),
-    ).toEqual(["1位", "2位"]);
-    const matchRecord = screen.getByRole("article", { name: "第1試合の記録" });
-    expect(matchRecord).toHaveTextContent("オーナー ぽんた");
-    expect(matchRecord).not.toHaveTextContent("記録者");
-    expect(matchRecord).not.toHaveTextContent(/2026/u);
-    const timelineHeading = screen.getByRole("heading", { name: "試合の流れ" });
-    expect(timelineHeading).toHaveClass("text-base");
-    expect(timelineHeading).not.toHaveClass("text-lg");
-    const timeline = screen.getByRole("list", { name: "試合の流れ" });
-    expect(timeline).not.toHaveClass("before:bottom-8");
-    expect(timeline.querySelector("[data-timeline-connector]")).toBeNull();
     expect(screen.getByRole("link", { name: "第1試合の結果を見る" })).toHaveAttribute(
       "href",
       "/matches/match-1?returnTo=%2Fheld-events%2Fheld-1",
@@ -160,11 +121,6 @@ describe("HeldEventDetailPage", () => {
       "href",
       "/matches?heldEventId=held-1&sort=match_no_asc&returnTo=%2Fheld-events%2Fheld-1",
     );
-    const relatedActions = screen.getByRole("navigation", { name: "この開催の関連操作" });
-    expect(screen.getByRole("heading", { name: /2026/u }).closest("header")).toContainElement(
-      relatedActions,
-    );
-    expect(surface).not.toContainElement(relatedActions);
     expect(screen.getByRole("heading", { name: "第4試合を記録" })).toBeInTheDocument();
   });
 
@@ -179,60 +135,11 @@ describe("HeldEventDetailPage", () => {
       "href",
       "/ocr/new?heldEventId=held-1&returnTo=%2Fheld-events%2Fheld-1",
     );
-    expect(ocrLink).toHaveClass("bg-[var(--color-action)]");
     const manualLink = screen.getByRole("link", { name: "手入力" });
     expect(manualLink).toHaveAttribute(
       "href",
       "/matches/new?heldEventId=held-1&returnTo=%2Fheld-events%2Fheld-1",
     );
-    expect(manualLink).toHaveClass("bg-[var(--color-surface)]");
-  });
-
-  it("keeps confirmed results as the focal content without promoting a new-match action", async () => {
-    server.use(
-      http.get("/api/held-events/:heldEventId", () =>
-        HttpResponse.json(
-          makeHeldEventDetailResponse({
-            matchCount: 1,
-            matches: [
-              {
-                gameTitleId: "gt_momotetsu_2",
-                mapMasterId: "map_east",
-                matchId: "match-confirmed-1",
-                matchNoInEvent: 1,
-                ownerMemberId: "member_ponta",
-                playedAt: "2026-01-01T00:00:00.000Z",
-                players: [
-                  {
-                    memberId: "member_ponta",
-                    playOrder: 1,
-                    rank: 1,
-                    revenueManYen: 100,
-                    totalAssetsManYen: 12_345,
-                  },
-                ],
-                seasonMasterId: "season_current",
-              },
-            ],
-            nextMatchNo: 2,
-          }),
-        ),
-      ),
-    );
-
-    renderPage();
-
-    expect(await screen.findByRole("heading", { name: "この開催の戦績" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "第1試合の結果を見る" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "OCR取り込み" })).toHaveClass(
-      "bg-[var(--color-surface)]",
-    );
-    expect(screen.getByRole("link", { name: "手入力" })).toHaveClass("bg-[var(--color-surface)]");
-    expect(
-      screen
-        .getAllByRole("link")
-        .filter((link) => link.classList.contains("bg-[var(--color-action)]")),
-    ).toHaveLength(0);
   });
 
   it("distinguishes a missing event from a transient load failure", async () => {

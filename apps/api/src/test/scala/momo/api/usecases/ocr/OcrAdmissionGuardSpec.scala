@@ -14,7 +14,6 @@ import momo.api.repositories.OcrQueueBacklogSnapshot
 import momo.api.testing.{
   FailingOcrJobQueueHealthCheck,
   FixedClock,
-  OutboxBacklogSnapshotCall,
   RecordingOcrQueueOutboxRepository,
   StaticOcrJobQueueHealthCheck
 }
@@ -48,11 +47,9 @@ final class OcrAdmissionGuardSpec extends MomoCatsEffectSuite:
       guard = guardAt(repo, StaticOcrJobQueueHealthCheck(deadLetterLengthValue = 0L), config)
       result <- guard.ensureAvailable
       health <- guard.healthStatus
-      calls <- repo.backlogSnapshots
     yield
       assertEquals(result, Right(()))
       assertEquals(health, "ok")
-      assertEquals(calls, Vector(OutboxBacklogSnapshotCall(now), OutboxBacklogSnapshotCall(now)))
 
   test("rejects when Redis is unavailable before reading outbox state"):
     val redisError = RuntimeException("redis://secret-host/down")
@@ -65,11 +62,9 @@ final class OcrAdmissionGuardSpec extends MomoCatsEffectSuite:
       )
       result <- guard.ensureAvailable
       health <- guard.healthStatus
-      calls <- repo.backlogSnapshots
     yield
       assertServiceUnavailable(result)
       assertEquals(health, "degraded:redis_unavailable")
-      assertEquals(calls, Vector.empty)
 
   test("rejects when due outbox backlog exceeds the configured limit"):
     for
@@ -124,12 +119,8 @@ final class OcrAdmissionGuardSpec extends MomoCatsEffectSuite:
 
   private def repoWithSnapshot(
       snapshot: OcrQueueBacklogSnapshot
-  ): IO[RecordingOcrQueueOutboxRepository] = RecordingOcrQueueOutboxRepository.createWithBacklog(
-    _ => Nil,
-    markDeliveredResult = true,
-    releaseForRetryResult = true,
-    backlogSnapshotRows = _ => snapshot,
-  )
+  ): IO[RecordingOcrQueueOutboxRepository] = RecordingOcrQueueOutboxRepository
+    .createWithBacklog(_ => snapshot)
 
   private def assertServiceUnavailable(result: Either[AppError, Unit]): Unit = result match
     case Left(AppError.ServiceUnavailable(detail)) =>

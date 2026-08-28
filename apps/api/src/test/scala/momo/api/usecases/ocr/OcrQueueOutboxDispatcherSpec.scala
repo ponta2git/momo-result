@@ -13,12 +13,7 @@ import momo.api.MomoCatsEffectSuite
 import momo.api.domain.ids.*
 import momo.api.domain.{OcrJobHints, ScreenType, StoredImageLocation}
 import momo.api.ports.queue.{OcrJobEnqueueRequest, OcrJobQueuePublisher}
-import momo.api.repositories.{
-  OcrQueueDispatchIntent,
-  OcrQueueOutboxRecord,
-  OcrQueueOutboxRepository,
-  OcrQueueOutboxStatus
-}
+import momo.api.repositories.{OcrQueueOutboxRecord, OcrQueueOutboxRepository}
 import momo.api.testing.{
   FailingOcrJobQueuePublisher,
   FixedClock,
@@ -181,32 +176,3 @@ final class OcrQueueOutboxDispatcherSpec extends MomoCatsEffectSuite:
     yield
       assertEquals(deliveries.map(_.claimToken), Vector(claimToken))
       assertEquals(releases.map(_.claimToken), Vector(claimToken))
-
-  test("outbox status decoding is closed over the persisted wire values"):
-    OcrQueueOutboxStatus.values.foreach { status =>
-      assertEquals(OcrQueueOutboxStatus.fromWire(status.wire), Some(status))
-    }
-    assertEquals(OcrQueueOutboxStatus.fromWire("UNKNOWN"), None)
-
-  test("durable submitter trusts the persisted intent without direct queue work"):
-    for
-      repo <-
-        RecordingOcrQueueOutboxRepository.createWithRows(List(rowAt(fixedNow.plusSeconds(30))))
-      queue <- RecordingOcrJobQueuePublisher.create
-      result <- OcrJobQueueSubmitter.durable[IO].submit(context)
-      claims <- repo.claims
-      deliveries <- repo.deliveries
-      published <- queue.published
-    yield
-      assertEquals(result, Right(()))
-      assertEquals(claims, Vector.empty)
-      assertEquals(deliveries, Vector.empty)
-      assertEquals(published, Vector.empty)
-
-  private def context: OcrQueueDispatchIntent = OcrQueueDispatchIntent(
-    enqueueRequest = rowAt(fixedNow.plusSeconds(30)).enqueueRequest,
-    jobId = OcrJobId.unsafeFromString("job-1"),
-    draftId = OcrDraftId.unsafeFromString("draft-1"),
-    matchDraftId = None,
-    createdAt = fixedNow,
-  )

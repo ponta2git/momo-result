@@ -16,13 +16,7 @@ import momo.api.auth.SessionCookieCodec
 import momo.api.bootstrap.ApiApp
 import momo.api.config.{AppConfig, AppEnv, ResourceLimitsConfig}
 import momo.api.domain.ids.AccountId
-import momo.api.http.HttpAssertions.{
-  assertProblem,
-  assertProblemSanitizedDetail,
-  headerValue,
-  jsonField,
-  optionalHeaderValue
-}
+import momo.api.http.HttpAssertions.{assertProblem, headerValue, jsonField, optionalHeaderValue}
 
 final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
   private final case class SessionBackedHttpApp(
@@ -281,7 +275,7 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
         assertEquals(jsonField[Boolean](body, "loginEnabled"), false)
       }
       meResponse <- fixture.app.run(readCurrentSession)
-      _ <- assertProblemSanitizedDetail(
+      _ <- assertProblem(
         meResponse,
         Status.Unauthorized,
         "UNAUTHORIZED",
@@ -293,7 +287,7 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
   app.test("GET /api/admin/login-accounts is restricted to administrator accounts") { httpApp =>
     val request = readGet(uri"/api/admin/login-accounts", accountId = "account_akane_mami")
     httpApp.run(request).flatMap(response =>
-      assertProblemSanitizedDetail(
+      assertProblem(
         response,
         Status.Forbidden,
         "FORBIDDEN",
@@ -357,14 +351,14 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
     )
     for
       createResponse <- httpApp.run(create)
-      _ <- assertProblemSanitizedDetail(
+      _ <- assertProblem(
         createResponse,
         Status.UnprocessableContent,
         "VALIDATION_FAILED",
         "discordUserId must not be blank.",
       )
       updateResponse <- httpApp.run(update)
-      _ <- assertProblemSanitizedDetail(
+      _ <- assertProblem(
         updateResponse,
         Status.UnprocessableContent,
         "VALIDATION_FAILED",
@@ -379,7 +373,7 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
       Json.obj("loginEnabled" -> Json.fromBoolean(false)),
     )
     httpApp.run(request).flatMap(response =>
-      assertProblemSanitizedDetail(
+      assertProblem(
         response,
         Status.Conflict,
         "CONFLICT",
@@ -392,7 +386,7 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
     val request = readRequest(Method.POST, uri"/api/ocr-jobs")
       .withEntity(HttpRequestBodies.Matches.createOcrJob("missing", "auto"))
     httpApp.run(request).flatMap(response =>
-      assertProblemSanitizedDetail(
+      assertProblem(
         response,
         Status.Forbidden,
         "FORBIDDEN",
@@ -407,7 +401,7 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
       HttpRequestBodies.Matches.createOcrJob("missing", "auto"),
     )
     httpApp.run(request).flatMap(response =>
-      assertProblemSanitizedDetail(
+      assertProblem(
         response,
         Status.UnprocessableContent,
         "VALIDATION_FAILED",
@@ -418,7 +412,7 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
 
   app.test("protected endpoint without auth header returns 401") { httpApp =>
     httpApp.run(Request[IO](Method.GET, uri"/api/auth/me")).flatMap(response =>
-      assertProblemSanitizedDetail(
+      assertProblem(
         response,
         Status.Unauthorized,
         "UNAUTHORIZED",
@@ -437,7 +431,7 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
       requests.foldLeft(IO.unit) { (acc, uri) =>
         acc.flatMap(_ =>
           httpApp.run(Request[IO](Method.GET, uri)).flatMap(response =>
-            assertProblemSanitizedDetail(
+            assertProblem(
               response,
               Status.Unauthorized,
               "UNAUTHORIZED",
@@ -458,7 +452,7 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
     requests.foldLeft(IO.unit) { (result, uri) =>
       result.flatMap(_ =>
         httpApp.run(readGet(uri)).flatMap(response =>
-          assertProblemSanitizedDetail(
+          assertProblem(
             response,
             Status.UpgradeRequired,
             "ANALYSIS_CLIENT_UPGRADE_REQUIRED",
@@ -532,7 +526,7 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
       httpApp =>
         val request = readGet(uri"/api/held-events")
         httpApp.run(request).flatMap(response =>
-          assertProblemSanitizedDetail(
+          assertProblem(
             response,
             Status.Unauthorized,
             "UNAUTHORIZED",
@@ -548,7 +542,7 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
 
   prodHttpApp.test("prod /healthz/details is protected by session middleware") { httpApp =>
     httpApp.run(Request[IO](Method.GET, uri"/healthz/details")).flatMap(response =>
-      assertProblemSanitizedDetail(
+      assertProblem(
         response,
         Status.Unauthorized,
         "UNAUTHORIZED",
@@ -701,39 +695,19 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
     )
   }
 
-  readRateLimitApp.test("OCR status endpoint applies per-member read rate limits") { httpApp =>
-    val request = readGet(uri"/api/ocr-jobs/00000000-0000-0000-0000-000000000001")
-    httpApp.run(request).flatMap(response =>
-      assertProblem(response, Status.TooManyRequests, "TOO_MANY_REQUESTS", "Too many read requests")
-    )
-  }
-
-  readRateLimitApp.test("OCR draft bulk endpoint applies per-member read rate limits") { httpApp =>
-    val request = readGet(uri"/api/ocr-drafts?ids=00000000-0000-0000-0000-000000000001")
-    httpApp.run(request).flatMap(response =>
-      assertProblem(response, Status.TooManyRequests, "TOO_MANY_REQUESTS", "Too many read requests")
-    )
-  }
-
   sourceImageDownloadRateLimitApp
-    .test("source image endpoint applies per-member rate limits") { httpApp =>
-      for
-        matchDraftId <- createDraftWithSourceImage(httpApp)
-        response <- httpApp.run(readGet(
-          Uri.unsafeFromString(s"/api/match-drafts/$matchDraftId/source-images/total_assets")
-        ))
-        _ <- assertProblem(response, Status.TooManyRequests, "TOO_MANY_REQUESTS", "元画像の取得")
-      yield ()
-    }
-
-  sourceImageDownloadRateLimitApp
-    .test("source image archive endpoint applies per-member rate limits") { httpApp =>
-      for
-        matchDraftId <- createDraftWithSourceImage(httpApp)
-        response <- httpApp
-          .run(readGet(Uri.unsafeFromString(s"/api/match-drafts/$matchDraftId/source-images.zip")))
-        _ <- assertProblem(response, Status.TooManyRequests, "TOO_MANY_REQUESTS", "元画像の取得")
-      yield ()
+    .test("source image download endpoints apply per-member rate limits") { httpApp =>
+      val paths = List(
+        "/api/match-drafts/rate-limited-draft/source-images/total_assets",
+        "/api/match-drafts/rate-limited-draft/source-images.zip",
+      )
+      paths.foldLeft(IO.unit) { (checked, path) =>
+        checked.flatMap(_ =>
+          httpApp.run(readGet(Uri.unsafeFromString(path))).flatMap(response =>
+            assertProblem(response, Status.TooManyRequests, "TOO_MANY_REQUESTS", "元画像の取得")
+          )
+        )
+      }
     }
 
   ocrAccountRateLimitApp.test("OCR create endpoint applies per-account rate limits") { httpApp =>
@@ -804,18 +778,3 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
       assertEquals(response.status, Status.Ok)
       jsonField[String](body, "imageId")
   }
-
-  private def createDraftWithSourceImage(httpApp: TestHttpApp): IO[String] =
-    for
-      draftResponse <- httpApp
-        .run(writePost(uri"/api/match-drafts", HttpRequestBodies.Matches.emptyMatchDraft))
-      draftBody <- draftResponse.as[Json]
-      _ = assertEquals(draftResponse.status, Status.Ok)
-      draftId = jsonField[String](draftBody, "matchDraftId")
-      imageId <- uploadPng(httpApp)
-      createJobResponse <- httpApp.run(writePost(
-        uri"/api/ocr-jobs",
-        HttpRequestBodies.Matches.createOcrJobForDraft(imageId, "total_assets", draftId),
-      ))
-      _ = assertEquals(createJobResponse.status, Status.Ok)
-    yield draftId

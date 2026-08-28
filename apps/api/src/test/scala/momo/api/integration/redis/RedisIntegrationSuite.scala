@@ -15,15 +15,23 @@ abstract class RedisIntegrationSuite extends MomoCatsEffectSuite:
   override def munitTests(): Seq[munit.Test] = super.munitTests()
     .map(_.tag(TestTags.RedisIntegration))
 
-  protected def redisUrlResource: Resource[IO, String] = redisContainer
-    .map(container => s"redis://${container.getHost}:${container.getMappedPort(6379)}")
+  protected def redisUrlResource: Resource[IO, String] = Resource
+    .eval(RedisIntegrationSuite.redisUrl)
 
-  private def redisContainer: Resource[IO, GenericContainer[?]] = Resource.make {
-    IO.blocking {
-      val container = new GenericContainer(DockerImageName.parse("redis:7-alpine"))
-      container.addExposedPort(6379)
-      container.start()
-      container
-    }
-  }(container => IO.blocking(container.stop()))
+end RedisIntegrationSuite
+
+private object RedisIntegrationSuite:
+  def redisUrl: IO[String] = IO.blocking {
+    val container = sharedContainer
+    s"redis://${container.getHost}:${container.getMappedPort(6379)}"
+  }
+
+  /** One isolated service per forked gate; every test owns a unique key or stream namespace. */
+  private lazy val sharedContainer: GenericContainer[?] =
+    val container = new GenericContainer(DockerImageName.parse("redis:7-alpine"))
+    container.addExposedPort(6379)
+    container.start()
+    val _ = sys.addShutdownHook(container.stop())
+    container
+
 end RedisIntegrationSuite

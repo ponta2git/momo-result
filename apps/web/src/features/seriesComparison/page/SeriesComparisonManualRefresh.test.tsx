@@ -3,7 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { MemoryRouter } from "react-router-dom";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { SeriesAnalysisDisplayBundle } from "@/features/seriesComparison/model/seriesAnalysisDisplayBundle";
 import { SeriesAnalysisContent } from "@/features/seriesComparison/page/SeriesAnalysisContent";
@@ -18,22 +18,17 @@ import {
 import { server } from "@/test/msw/server";
 import { createTestQueryClient } from "@/test/queryClient";
 
-const { flowViewRender } = vi.hoisted(() => ({ flowViewRender: vi.fn() }));
-
 vi.mock("@/features/seriesComparison/page/SeriesAnalysisFlowView", () => ({
-  FlowView: (props: unknown) => {
-    flowViewRender(props);
-    return <div aria-label="artifact由来の可視化" role="region" />;
-  },
+  FlowView: ({ focusedItemIds }: { focusedItemIds: string[] }) => (
+    <div aria-label="artifact由来の可視化" role="region">
+      {focusedItemIds.length === 0 ? "選択中の試合なし" : focusedItemIds.join(",")}
+    </div>
+  ),
 }));
 
 setupMsw();
 
 describe("SeriesComparisonPage manual refresh", () => {
-  beforeEach(() => {
-    flowViewRender.mockClear();
-  });
-
   it("uses no automatic interval and updates status only after explicit refresh", async () => {
     const user = userEvent.setup();
     const nextStatusResponse = createDeferred();
@@ -81,7 +76,7 @@ describe("SeriesComparisonPage manual refresh", () => {
     expect(statusRequests).toBe(2);
   });
 
-  it("renders the artifact subtree when the selected match changes", () => {
+  it("updates visible analysis evidence when the selected match changes", () => {
     const queryClient = createTestQueryClient();
     const aggregate = makeSeriesAnalysisAggregate();
     const bundle: SeriesAnalysisDisplayBundle = {
@@ -104,10 +99,14 @@ describe("SeriesComparisonPage manual refresh", () => {
       </QueryClientProvider>
     );
     const rendered = render(view(bundle));
-    expect(flowViewRender).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("region", { name: "artifact由来の可視化" })).toHaveTextContent(
+      "選択中の試合なし",
+    );
 
     rendered.rerender(view({ ...bundle, matchContext: makeSeriesAnalysisMatchContext() }));
 
-    expect(flowViewRender).toHaveBeenCalledTimes(2);
+    expect(screen.getByRole("region", { name: "artifact由来の可視化" })).toHaveTextContent(
+      "match:match-12",
+    );
   });
 });

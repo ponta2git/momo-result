@@ -32,7 +32,7 @@ function renderAdminPage(initialEntry = "/admin/analysis") {
 }
 
 describe("SeriesAnalysisAdminPage", () => {
-  it("makes the sole recovery primary when the initial overview cannot load", async () => {
+  it("offers recovery when the initial overview cannot load", async () => {
     setDevUser();
     server.use(
       http.get("/api/admin/series-analysis/overview", () =>
@@ -43,9 +43,7 @@ describe("SeriesAnalysisAdminPage", () => {
     renderAdminPage();
 
     expect(await screen.findByRole("alert")).toHaveTextContent("応答を受け取れませんでした。");
-    expect(screen.getByRole("button", { name: "状態を再読み込み" })).toHaveClass(
-      "bg-[var(--color-action)]",
-    );
+    expect(screen.getByRole("button", { name: "状態を再読み込み" })).toBeInTheDocument();
   });
 
   it("refreshes a loaded overview only from the explicit status action", async () => {
@@ -230,8 +228,9 @@ describe("SeriesAnalysisAdminPage", () => {
     expect(
       await screen.findByRole("heading", { level: 1, name: "管理者権限が必要です" }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "試合一覧へ戻る" })).toHaveClass(
-      "bg-[var(--color-action)]",
+    expect(screen.getByRole("link", { name: "試合一覧へ戻る" })).toHaveAttribute(
+      "href",
+      "/matches",
     );
     expect(screen.queryByRole("button", { name: "この作品を再計算" })).not.toBeInTheDocument();
     expect(overviewRequests).toBe(0);

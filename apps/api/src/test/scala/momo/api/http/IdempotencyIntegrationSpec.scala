@@ -1,6 +1,7 @@
 package momo.api.http
 
 import cats.effect.{Deferred, IO, Ref}
+import cats.syntax.all.*
 import io.circe.Json
 import org.http4s.circe.*
 import org.http4s.implicits.*
@@ -237,23 +238,6 @@ final class IdempotencyIntegrationSpec extends MomoCatsEffectSuite with HttpAppT
         case Right(value) => fail(s"expected stored response decode failure, got replay: $value")
   }
 
-  app.test("idempotency: different keys produce two separate entities") { httpApp =>
-    for
-      first <- httpApp.run(heldEventReq(Some("key-3a"), "2024-04-01T00:00:00Z"))
-      _ = assertEquals(first.status, Status.Ok)
-      firstBody <- first.as[Json]
-      second <- httpApp.run(heldEventReq(Some("key-3b"), "2024-04-02T00:00:00Z"))
-      _ = assertEquals(second.status, Status.Ok)
-      secondBody <- second.as[Json]
-      listRes <- httpApp.run(readGet(uri"/api/held-events?limit=50"))
-      listBody <- listRes.as[Json]
-    yield
-      val createdIds = Set(jsonField[String](firstBody, "id"), jsonField[String](secondBody, "id"))
-      val items = jsonField[List[Json]](listBody, "items")
-      assertEquals(items.size, 2)
-      assertEquals(items.map(jsonField[String](_, "id")).toSet, createdIds)
-  }
-
   app.test("idempotency: delete endpoints replay terminal success instead of re-running") {
     httpApp =>
       for
@@ -295,22 +279,16 @@ final class IdempotencyIntegrationSpec extends MomoCatsEffectSuite with HttpAppT
     yield assertEquals(jsonField[String](draft2GetBody, "status"), "draft_ready")
   }
 
-  app.test("idempotency: missing key still works (creates entity normally)") { httpApp =>
-    for
-      first <- httpApp.run(heldEventReq(None, "2024-05-01T00:00:00Z"))
-      _ = assertEquals(first.status, Status.Ok)
-      second <- httpApp.run(heldEventReq(None, "2024-05-01T00:00:00Z"))
-    yield assertEquals(second.status, Status.Ok)
-  }
-
-  app.test("idempotency: invalid key characters are rejected before side effects") { httpApp =>
-    httpApp.run(heldEventReq(Some("bad key"), "2024-06-01T00:00:00Z")).flatMap { response =>
-      assertProblem(response, Status.UnprocessableContent, "VALIDATION_FAILED", "Idempotency-Key")
-    }
-  }
-
-  app.test("idempotency: keys longer than 128 characters are rejected") { httpApp =>
-    httpApp.run(heldEventReq(Some("a" * 129), "2024-07-01T00:00:00Z")).flatMap { response =>
-      assertProblem(response, Status.UnprocessableContent, "VALIDATION_FAILED", "Idempotency-Key")
-    }
+  app.test("idempotency: malformed and oversized keys are rejected before side effects") {
+    httpApp =>
+      List("bad key", "a" * 129).traverse_ { key =>
+        httpApp.run(heldEventReq(Some(key), "2024-06-01T00:00:00Z")).flatMap { response =>
+          assertProblem(
+            response,
+            Status.UnprocessableContent,
+            "VALIDATION_FAILED",
+            "Idempotency-Key",
+          )
+        }
+      }
   }

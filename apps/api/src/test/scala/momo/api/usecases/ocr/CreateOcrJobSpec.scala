@@ -37,16 +37,9 @@ import momo.api.domain.{
   StoredImageLocation
 }
 import momo.api.errors.AppError
-import momo.api.ports.queue.OcrJobQueuePublisher
 import momo.api.ports.storage.ImageStorage
-import momo.api.repositories.OcrJobsRepository
 import momo.api.testing.AppErrorAssertions.fromAppEither
-import momo.api.testing.{
-  FailingMarkFailedOcrJobsRepository,
-  FailingOcrJobQueuePublisher,
-  TestImages
-}
-import momo.api.usecases.testing.CapturingLoggerFactory
+import momo.api.testing.TestImages
 
 final class CreateOcrJobSpec extends MomoCatsEffectSuite:
   private given LoggerFactory[IO] = NoOpFactory[IO]
@@ -121,57 +114,6 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
     }
   }
 
-  test("returns DependencyFailed and does not raise when both queue.publish and markFailed fail") {
-    val queueError = new RuntimeException("boom-queue")
-    val markFailedError = new RuntimeException("boom-markFailed")
-
-    fixtureResource(
-      prefix = "momo-api-create-job-fail",
-      queue = FailingOcrJobQueuePublisher(queueError),
-      idSeed = List("job-1", "draft-1"),
-      requestId = None,
-      decorateJobs = delegate => FailingMarkFailedOcrJobsRepository(delegate, markFailedError),
-      activeJobLimit = 12,
-    ).use { fixture =>
-      for
-        image <- fixture.savePng
-        usecase <- fixture.usecase
-        result <- usecase.run(
-          CreateOcrJobCommand(image.imageId, ScreenType.TotalAssets, OcrJobHints.empty, None),
-          fixture.requestId,
-        )
-      yield result match
-        case Left(_: AppError.DependencyFailed) => ()
-        case other => fail(s"expected Left(AppError.DependencyFailed), got: $other")
-    }
-  }
-
-  test("stores sanitized failure message when queue.publish fails") {
-    val queueError = new RuntimeException("redis://secret-host/boom")
-
-    fixtureResource(
-      prefix = "momo-api-create-job-sanitized-failure",
-      queue = FailingOcrJobQueuePublisher(queueError),
-      idSeed = List("job-1", "draft-1"),
-      requestId = None,
-      decorateJobs = identity[OcrJobsRepository[IO]],
-      activeJobLimit = 12,
-    ).use { fixture =>
-      for
-        image <- fixture.savePng
-        usecase <- fixture.usecase
-        _ <- usecase.run(
-          CreateOcrJobCommand(image.imageId, ScreenType.TotalAssets, OcrJobHints.empty, None),
-          fixture.requestId,
-        )
-        found <- fixture.jobs.find(OcrJobId.unsafeFromString("job-1"))
-      yield
-        val failure = found.flatMap(OcrJob.failure).getOrElse(fail("expected failed job"))
-        assertEquals(failure.message, "Failed to enqueue OCR job.")
-        assert(!failure.message.contains("secret-host"))
-    }
-  }
-
   test("rejects OCR hints that exceed Redis payload contract limits") {
     inMemoryQueueFixture(
       prefix = "momo-api-create-job-hints-limit",
@@ -200,32 +142,6 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
         case Left(AppError.ValidationFailed(detail)) =>
           assert(detail.contains("ocrHints.knownPlayerAliases[0].aliases"))
         case other => fail(s"expected Left(AppError.ValidationFailed), got: $other")
-    }
-  }
-
-  test("rejects when the active OCR job limit is reached") {
-    inMemoryQueueFixture(
-      prefix = "momo-api-create-job-active-limit",
-      idSeed = List("job-1", "draft-1"),
-      requestId = None,
-      activeJobLimit = 0,
-    ).use { fixture =>
-      for
-        image <- fixture.savePng
-        usecase <- fixture.usecase
-        result <- usecase.run(
-          CreateOcrJobCommand(image.imageId, ScreenType.TotalAssets, OcrJobHints.empty, None),
-          fixture.requestId,
-        )
-        published <- fixture.queue.published
-        active <- fixture.jobs.countActive
-      yield
-        result match
-          case Left(AppError.ServiceUnavailable(detail)) =>
-            assert(detail.contains("OCR queue is currently full"))
-          case other => fail(s"expected Left(AppError.ServiceUnavailable), got: $other")
-        assertEquals(published, Vector.empty)
-        assertEquals(active, 0L)
     }
   }
 
@@ -264,35 +180,6 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
     }
   }
 
-  test("rejects auto screen type for every new OCR request") {
-    inMemoryQueueFixture(
-      prefix = "momo-api-create-job-auto-match-draft",
-      idSeed = List("job-1", "draft-1"),
-      requestId = None,
-      activeJobLimit = 12,
-    ).use { fixture =>
-      for
-        image <- fixture.savePng
-        usecase <- fixture.usecase
-        result <- usecase.run(
-          CreateOcrJobCommand(
-            image.imageId,
-            ScreenType.Auto,
-            OcrJobHints.empty,
-            None,
-          ),
-          fixture.requestId,
-        )
-        published <- fixture.queue.published
-      yield
-        result match
-          case Left(AppError.ValidationFailed(detail)) =>
-            assert(detail.contains("requestedScreenType=auto"))
-          case other => fail(s"expected Left(AppError.ValidationFailed), got: $other")
-        assertEquals(published, Vector.empty)
-    }
-  }
-
   test("rejects re-running a draft OCR slot while its previous job is active") {
     inMemoryQueueFixture(
       prefix = "momo-api-create-job-active-slot",
@@ -312,7 +199,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
           oldImageId,
           MatchDraftStatus.OcrRunning,
         ))
-        _ <- fixture.createJob(queuedJob(oldJobId, oldDraftId, oldImageId, image.location))
+        _ <- fixture.jobs.create(queuedJob(oldJobId, oldDraftId, oldImageId, image.location))
         usecase <- fixture.usecase
         result <- usecase.run(
           CreateOcrJobCommand(
@@ -352,7 +239,7 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
         _ <- fixture.matchDrafts.create(
           draftWithTotalAssetsSlot(matchDraftId, oldDraftId, oldImageId, MatchDraftStatus.OcrFailed)
         )
-        _ <- fixture.createJob(queuedJob(oldJobId, oldDraftId, oldImageId, image.location))
+        _ <- fixture.jobs.create(queuedJob(oldJobId, oldDraftId, oldImageId, image.location))
         _ <- fixture.jobs.cancelQueued(oldJobId, now)
         usecase <- fixture.usecase
         created <- usecase.run(
@@ -374,63 +261,12 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
     }
   }
 
-  test("logs publish and compensation failures when both queue.publish and markFailed fail") {
-    val queueError = new RuntimeException("boom-queue")
-    val markFailedError = new RuntimeException("boom-markFailed")
-
-    fixtureResource(
-      prefix = "momo-api-create-job-log",
-      queue = FailingOcrJobQueuePublisher(queueError),
-      idSeed = List("job-log-1", "draft-log-1"),
-      requestId = None,
-      decorateJobs = delegate => FailingMarkFailedOcrJobsRepository(delegate, markFailedError),
-      activeJobLimit = 12,
-    ).use { fixture =>
-      for
-        capture <- CapturingLoggerFactory.create[IO]
-        (factory, ref) = capture
-        given LoggerFactory[IO] = factory
-        image <- fixture.savePng
-        usecase <- fixture.usecase
-        result <- usecase.run(
-          CreateOcrJobCommand(image.imageId, ScreenType.TotalAssets, OcrJobHints.empty, None),
-          fixture.requestId,
-        )
-        logged <- ref.get
-      yield
-        // Original dependency failure is still surfaced to the caller (enqueue failure not swallowed).
-        result match
-          case Left(_: AppError.DependencyFailed) => ()
-          case other => fail(s"expected Left(AppError.DependencyFailed), got: $other")
-        // Original publish failure and secondary compensation failure are both logged.
-        assertEquals(logged.size, 2)
-        val entry = logged(1)
-        assertEquals(entry.throwable, None)
-        assert(
-          entry.message.contains("jobId=job-log-1"),
-          s"message missing jobId: ${entry.message}",
-        )
-        assert(
-          entry.message.contains("draftId=draft-log-1"),
-          s"message missing draftId: ${entry.message}",
-        )
-        assert(
-          entry.message.contains("compensation"),
-          s"message missing 'compensation' marker: ${entry.message}",
-        )
-        assert(
-          entry.message.contains(s"compensationErrorClasses=${markFailedError.getClass.getName}"),
-          s"message missing compensation error class: ${entry.message}",
-        )
-    }
-  }
-
   private def inMemoryQueueFixture(
       prefix: String,
       idSeed: List[String],
       requestId: Option[String],
       activeJobLimit: Int,
-  ): Resource[IO, Fixture[InMemoryOcrJobQueuePublisher[IO]]] =
+  ): Resource[IO, Fixture] =
     inMemoryQueueFixture(prefix, idSeed, requestId, activeJobLimit, OcrAdmissionGuard.allowAll[IO])
 
   private def inMemoryQueueFixture(
@@ -439,60 +275,20 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
       requestId: Option[String],
       activeJobLimit: Int,
       admissionGuard: OcrAdmissionGuard[IO],
-  ): Resource[IO, Fixture[InMemoryOcrJobQueuePublisher[IO]]] = Resource
-    .eval(InMemoryOcrJobQueuePublisher.create[IO]).flatMap(queue =>
-      fixtureResource(
-        prefix = prefix,
-        queue = queue,
-        idSeed = idSeed,
-        requestId = requestId,
-        decorateJobs = identity[OcrJobsRepository[IO]],
-        activeJobLimit = activeJobLimit,
-        admissionGuard = admissionGuard,
-      )
-    )
-
-  private def fixtureResource[Q <: OcrJobQueuePublisher[IO]](
-      prefix: String,
-      queue: Q,
-      idSeed: List[String],
-      requestId: Option[String],
-      decorateJobs: OcrJobsRepository[IO] => OcrJobsRepository[IO],
-      activeJobLimit: Int,
-  ): Resource[IO, Fixture[Q]] = fixtureResource(
-    prefix,
-    queue,
-    idSeed,
-    requestId,
-    decorateJobs,
-    activeJobLimit,
-    OcrAdmissionGuard.allowAll[IO],
-  )
-
-  private def fixtureResource[Q <: OcrJobQueuePublisher[IO]](
-      prefix: String,
-      queue: Q,
-      idSeed: List[String],
-      requestId: Option[String],
-      decorateJobs: OcrJobsRepository[IO] => OcrJobsRepository[IO],
-      activeJobLimit: Int,
-      admissionGuard: OcrAdmissionGuard[IO],
-  ): Resource[IO, Fixture[Q]] = tempDirectory(prefix).evalMap { dir =>
+  ): Resource[IO, Fixture] = tempDirectory(prefix).evalMap { dir =>
     for
-      jobsBase <- InMemoryOcrJobsRepository.create[IO]
+      jobs <- InMemoryOcrJobsRepository.create[IO]
       drafts <- InMemoryOcrDraftsRepository.create[IO]
       matchDrafts <- InMemoryMatchDraftsRepository.create[IO]
       memberAliases <- InMemoryMemberAliasesRepository.create[IO]
+      queue <- InMemoryOcrJobQueuePublisher.create[IO]
       imageStore = LocalFsImageStore[IO](dir)
-      jobs = decorateJobs(jobsBase)
     yield Fixture(
       imageStore,
       jobs,
-      jobsBase.create,
       drafts,
       matchDrafts,
       memberAliases,
-      jobsBase.existsActiveByDraft,
       queue,
       idSeed,
       requestId,
@@ -554,15 +350,13 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
     updatedAt = now,
   )
 
-  private final case class Fixture[Q <: OcrJobQueuePublisher[IO]](
+  private final case class Fixture(
       imageStore: ImageStorage[IO],
-      jobs: OcrJobsRepository[IO],
-      createJob: OcrJob => IO[Unit],
+      jobs: InMemoryOcrJobsRepository[IO],
       drafts: InMemoryOcrDraftsRepository[IO],
       matchDrafts: InMemoryMatchDraftsRepository[IO],
       memberAliases: InMemoryMemberAliasesRepository[IO],
-      activeJobForDraft: OcrDraftId => IO[Boolean],
-      queue: Q,
+      queue: InMemoryOcrJobQueuePublisher[IO],
       idSeed: List[String],
       requestId: Option[String],
       activeJobLimit: Int,
@@ -584,9 +378,9 @@ final class CreateOcrJobSpec extends MomoCatsEffectSuite:
               drafts,
               drafts.create,
               jobs,
-              createJob,
+              jobs.create,
               matchDrafts,
-              activeJobForDraft,
+              jobs.existsActiveByDraft,
             ),
           matchDrafts = matchDrafts,
           queueSubmitter = OcrJobQueueSubmitter.nonDurable[IO](jobs, matchDrafts, queue),

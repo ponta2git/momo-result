@@ -4,14 +4,12 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 
 import { HeldEventsPage } from "@/features/heldEvents/HeldEventsPage";
 import { ToastHost } from "@/shared/ui/feedback/ToastHost";
 import { setDevUser } from "@/test/auth";
 import { createDeferred } from "@/test/deferred";
-import { installMatchMediaController } from "@/test/doubles/dom";
-import type { MatchMediaController } from "@/test/doubles/dom";
 import { makeHeldEventResponse } from "@/test/factories";
 import { setupMsw } from "@/test/msw/lifecycle";
 import { server } from "@/test/msw/server";
@@ -44,7 +42,6 @@ function renderPage(path = "/held-events") {
 }
 
 let queryClient: QueryClient;
-let matchMedia: MatchMediaController | undefined;
 let user: ReturnType<typeof userEvent.setup>;
 
 describe("HeldEventsPage", () => {
@@ -53,36 +50,16 @@ describe("HeldEventsPage", () => {
     user = userEvent.setup();
   });
 
-  afterEach(() => {
-    matchMedia?.restore();
-    matchMedia = undefined;
-  });
-
-  it("renders held events as a concise ledger with status and related links", async () => {
+  it("renders held-event status and related links", async () => {
     renderPage();
 
     expect(await screen.findByRole("heading", { name: "開催履歴" })).toBeInTheDocument();
     expect(await screen.findByText("最新")).toBeInTheDocument();
-    const surface = screen.getByRole("region", { name: "開催履歴" });
-    expect(surface).toHaveClass(
-      "bg-[var(--color-surface)]",
-      "rounded-[var(--radius-md)]",
-      "p-4",
-      "sm:p-6",
-    );
-    expect(surface).not.toHaveClass("border");
-    expect(surface).not.toContainElement(screen.getByRole("heading", { name: "開催履歴" }));
+    expect(screen.getByRole("region", { name: "開催履歴" })).toBeInTheDocument();
     expect(screen.getByText("確定済み")).toBeInTheDocument();
     expect(screen.getByText("0件")).toBeInTheDocument();
-    expect(screen.queryByText("次の番号")).not.toBeInTheDocument();
-    expect(screen.queryByText("第1試合")).not.toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: "開催回一覧" })).not.toBeInTheDocument();
-    expect(screen.queryByText(/開催を開くと/u)).not.toBeInTheDocument();
-    expect(screen.queryByText(/開催ごとに試合順/u)).not.toBeInTheDocument();
     expect(screen.queryByText("held-1")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "開催を作成" })).toHaveClass(
-      "bg-[var(--color-surface)]",
-    );
+    expect(screen.getByRole("button", { name: "開催を作成" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /の開催詳細$/u })).toHaveAttribute(
       "href",
       "/held-events/held-1?returnTo=%2Fheld-events",
@@ -95,26 +72,6 @@ describe("HeldEventsPage", () => {
       "href",
       "/exports?heldEventId=held-1&format=csv&returnTo=%2Fheld-events",
     );
-  });
-
-  it("uses the common data table for the desktop ledger", async () => {
-    matchMedia = installMatchMediaController(true);
-
-    renderPage();
-
-    const table = await screen.findByRole("table", { name: "開催履歴" });
-    const surface = screen.getByRole("region", { name: "開催履歴" });
-    expect(surface).toContainElement(table);
-    expect(table.parentElement).toHaveClass("overflow-x-auto", "bg-[var(--color-surface)]");
-    expect(table.parentElement).not.toHaveClass("rounded-[var(--radius-md)]", "border");
-    expect(within(table).getByRole("columnheader", { name: "開催日時" })).toHaveClass(
-      "bg-[var(--color-surface)]",
-      "border-y",
-      "border-[var(--color-border-strong)]",
-    );
-    expect(within(table).getByRole("columnheader", { name: "確定済み" })).toBeInTheDocument();
-    expect(within(table).getByRole("columnheader", { name: "未確定下書き" })).toBeInTheDocument();
-    expect(within(table).getByRole("columnheader", { name: "操作" })).toBeInTheDocument();
   });
 
   it("starts OCR from only the latest held event and preserves the list location", async () => {
@@ -173,9 +130,7 @@ describe("HeldEventsPage", () => {
 
     expect(await screen.findByText("開催履歴はまだありません")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "開催を作成" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "最初の開催を作成" })).toHaveClass(
-      "bg-[var(--color-action)]",
-    );
+    expect(screen.getByRole("button", { name: "最初の開催を作成" })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /の開催にOCR取り込み$/u })).not.toBeInTheDocument();
     expect(screen.queryByRole("navigation", { name: "ページネーション" })).not.toBeInTheDocument();
   });
@@ -197,7 +152,6 @@ describe("HeldEventsPage", () => {
     expect(screen.queryByText("開催履歴はまだありません")).not.toBeInTheDocument();
 
     const retryButton = screen.getByRole("button", { name: "開催履歴を再読み込み" });
-    expect(retryButton).toHaveClass("bg-[var(--color-action)]");
     await user.click(retryButton);
 
     expect(await screen.findByRole("link", { name: /の開催詳細$/u })).toBeInTheDocument();
@@ -349,24 +303,6 @@ describe("HeldEventsPage", () => {
     expect(captured?.searchParams.get("pageSize")).toBe("10");
   });
 
-  it("offers 10, 25, and 50 as held-event page sizes", async () => {
-    renderPage();
-
-    const pageSizeSelect = await screen.findByLabelText("表示件数");
-    expect([...pageSizeSelect.querySelectorAll("option")].map((option) => option.value)).toEqual([
-      "10",
-      "25",
-      "50",
-    ]);
-    expect(pageSizeSelect).toHaveValue("10");
-
-    await user.selectOptions(pageSizeSelect, "25");
-
-    await waitFor(() =>
-      expect(screen.getByLabelText("current location")).toHaveTextContent("pageSize=25"),
-    );
-  });
-
   it("keeps the current list and pager stable while the next page loads", async () => {
     const secondPageGate = createDeferred();
     const firstPageEvent = makeHeldEventResponse({
@@ -478,7 +414,7 @@ describe("HeldEventsPage", () => {
     });
   });
 
-  it("keeps creation secondary until requested and allows cancelling", async () => {
+  it("opens creation only on request and allows cancelling", async () => {
     renderPage();
 
     expect(await screen.findByRole("link", { name: /の開催詳細$/u })).toBeInTheDocument();

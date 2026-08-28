@@ -5,7 +5,6 @@ use redis::{
     streams::{StreamId, StreamPendingReply, StreamRangeReply},
 };
 use serde_json::json;
-use tokio::time;
 use tokio_postgres::Client;
 
 use momo_analysis_core::contract::ARTIFACT_SCHEMA_VERSION;
@@ -587,7 +586,18 @@ async fn verify_redis_failure_order(primary: &mut Client, redis_url: &str) -> Sm
             ..
         }
     ));
-    time::sleep(Duration::from_millis(25)).await;
+    let aged: Vec<String> = redis::cmd("XCLAIM")
+        .arg(stream)
+        .arg(group)
+        .arg("ocr-c2-consumer")
+        .arg(0)
+        .arg(&poison.message_id)
+        .arg("IDLE")
+        .arg(25)
+        .arg("JUSTID")
+        .query_async(&mut redis)
+        .await?;
+    assert_eq!(aged, vec![poison.message_id.clone()]);
     let mut recovery_cursor = PendingRecoveryCursor::start();
     let exhausted = recover_cold_page(&mut redis, &queue, &mut recovery_cursor)
         .await?
@@ -601,10 +611,59 @@ async fn verify_redis_failure_order(primary: &mut Client, redis_url: &str) -> Sm
     let pending_after_dlq: StreamPendingReply = redis.xpending(stream, group).await?;
     assert_eq!(pending_after_dlq.count(), 0);
     let dead_letters: StreamRangeReply = redis.xrange_all(dead).await?;
-    assert_eq!(dead_letters.ids.len(), 1);
-    assert!(!format!("{dead_letters:?}").contains("must-not-enter-dlq"));
+    assert_dead_letter_fields(only_dead_letter(&dead_letters)?, &poison.message_id);
     let _: usize = redis.del(&[stream, dead]).await?;
     Ok(())
+}
+
+fn only_dead_letter(dead_letters: &StreamRangeReply) -> SmokeResult<&StreamId> {
+    match dead_letters.ids.as_slice() {
+        [dead_letter] => Ok(dead_letter),
+        entries => Err(smoke_error(format!(
+            "expected one OCR DLQ entry, found {}",
+            entries.len()
+        ))
+        .into()),
+    }
+}
+
+fn assert_dead_letter_fields(dead_letter: &StreamId, source_id: &str) {
+    assert_eq!(
+        dead_letter
+            .map
+            .keys()
+            .map(String::as_str)
+            .collect::<std::collections::BTreeSet<_>>(),
+        std::collections::BTreeSet::from([
+            "deadLetterContractError",
+            "deadLetterDeliveries",
+            "deadLetterMessage",
+            "deadLetterReason",
+            "deadLetterSourceId",
+        ])
+    );
+    assert_eq!(
+        dead_letter.get::<String>("deadLetterReason").as_deref(),
+        Some("QUEUE_FAILURE")
+    );
+    assert_eq!(
+        dead_letter
+            .get::<String>("deadLetterContractError")
+            .as_deref(),
+        Some("closed_field_set")
+    );
+    assert_eq!(
+        dead_letter.get::<String>("deadLetterSourceId").as_deref(),
+        Some(source_id)
+    );
+    assert_eq!(
+        dead_letter.get::<String>("deadLetterDeliveries").as_deref(),
+        Some("1")
+    );
+    assert_eq!(
+        dead_letter.get::<String>("deadLetterMessage").as_deref(),
+        Some("OCR queue delivery exceeded its bounded attempts.")
+    );
 }
 
 async fn prepare_database(client: &Client) -> SmokeResult {

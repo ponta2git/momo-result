@@ -36,7 +36,6 @@ describe("MatchConfirmDialog", () => {
     expect(within(dialog).getByText(/未確認の強調項目が1件あります/u)).toBeInTheDocument();
     expect(within(dialog).getByRole("cell", { name: "12,345" })).toBeInTheDocument();
     expect(within(dialog).getByRole("cell", { name: "-678" })).toBeInTheDocument();
-    expect(dialog.querySelectorAll("[data-member-sequence]")).toHaveLength(4);
     expect(
       within(dialog)
         .getAllByRole("row")

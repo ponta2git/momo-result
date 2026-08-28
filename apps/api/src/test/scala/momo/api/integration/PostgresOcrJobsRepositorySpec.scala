@@ -3,8 +3,6 @@ package momo.api.integration
 import java.sql.Connection
 import java.time.Instant
 
-import scala.concurrent.duration.DurationInt
-
 import cats.effect.{Deferred, IO, Resource}
 import cats.syntax.all.*
 import doobie.ConnectionIO
@@ -192,12 +190,14 @@ final class PostgresOcrJobsRepositorySpec extends IntegrationSuite:
           proceed = IO.unit,
         )
         for
+          blockerBackend <- runOn(connectionA, sql"SELECT pg_backend_pid()".query[Int].unique)
           fiberA <- terminalA.start
           _ <- lockedA.get
           fiberB <- terminalB.start
           _ <- attemptingB.get
-          blocked <- IO.race(lockedB.get, IO.sleep(100.millis))
-          _ = assertEquals(blocked, Right(()))
+          _ <- awaitBackendBlockedBy(blockerBackend)
+          blocked <- lockedB.tryGet
+          _ = assertEquals(blocked, None)
           _ <- releaseA.complete(())
           _ <- fiberA.joinWithNever
           _ <- fiberB.joinWithNever

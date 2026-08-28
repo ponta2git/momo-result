@@ -17,7 +17,7 @@ function MaybeBroken({ shouldThrow }: { shouldThrow: () => boolean }) {
 }
 
 describe("ErrorBoundary", () => {
-  it("uses the redisplay action as the global terminal recovery anchor", async () => {
+  it("redisplays the application after a recoverable render failure", async () => {
     const user = userEvent.setup();
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
     let shouldThrow = true;
@@ -33,7 +33,6 @@ describe("ErrorBoundary", () => {
       expect(
         screen.getByRole("heading", { level: 1, name: "画面を表示できません" }),
       ).toBeInTheDocument();
-      expect(redisplay).toHaveClass("bg-[var(--color-action)]");
 
       shouldThrow = false;
       await user.click(redisplay);

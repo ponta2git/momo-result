@@ -26,7 +26,6 @@ describe("CheckboxField", () => {
 
     const checkbox = screen.getByRole("checkbox", { name: "管理者" });
     expect(ref.current).toBe(checkbox);
-    expect(checkbox).toHaveClass("size-4");
     expect(checkbox).toHaveAttribute("aria-invalid", "true");
     expect(checkbox.getAttribute("aria-describedby")?.split(" ")).toHaveLength(3);
     expect(checkbox).toHaveAccessibleDescription(

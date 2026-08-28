@@ -32,7 +32,7 @@ function archiveResponse(): Response {
 }
 
 describe("SourceImagePanel", () => {
-  it("keeps a stable preview frame while the source image list is loading", () => {
+  it("announces source-image list loading without presenting a false empty state", () => {
     render(
       <SourceImagePanel
         loading
@@ -81,7 +81,7 @@ describe("SourceImagePanel", () => {
     expect(screen.getByRole("tabpanel", { name: "収益" })).toBeInTheDocument();
   });
 
-  it("keeps a stable preview frame while the active source image is loading", async () => {
+  it("replaces the active-image loading status with the available preview", async () => {
     installObjectUrlMock({ createObjectURL: () => "blob:source-image" });
     const responseGate = createDeferred<Response>();
     server.use(
@@ -357,7 +357,6 @@ describe("SourceImagePanel", () => {
 
     await user.click(screen.getByRole("button", { name: "拡大" }));
     expect(await screen.findAllByRole("dialog", { name: "総資産の拡大表示" })).toHaveLength(1);
-    expect(document.querySelectorAll(".momo-dialog-popup")).toHaveLength(1);
   });
 
   it("downloads a zip archive immediately when all source images are available", async () => {
@@ -440,7 +439,6 @@ describe("SourceImagePanel", () => {
     const confirmDialog = await screen.findByRole("dialog", {
       name: "元画像がすべてそろっていません",
     });
-    expect(document.querySelectorAll(".momo-dialog-popup")).toHaveLength(1);
     await user.click(within(confirmDialog).getByRole("button", { name: "保存する" }));
 
     await waitFor(() => expect(anchorClick.click).toHaveBeenCalledTimes(1));

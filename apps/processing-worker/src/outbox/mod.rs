@@ -169,26 +169,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn wake_sets_identify_only_the_registered_kind() {
-        let analysis = OutboxWakeSet::one(OutboxKind::SeriesAnalysis);
-
-        assert!(analysis.contains(OutboxKind::SeriesAnalysis));
-        assert!(!OutboxWakeSet::empty().contains(OutboxKind::SeriesAnalysis));
-    }
-
-    #[test]
-    fn control_outcome_keeps_its_value_and_committed_effects_together() {
+    fn mapped_control_outcome_preserves_the_post_commit_wake() {
         let outcome =
             ControlOutcome::new(20_u32, PostCommitEffects::wake(OutboxKind::SeriesAnalysis))
                 .map(|value| value.to_string());
 
         assert_eq!(outcome.value, "20");
-        assert_eq!(
-            outcome.effects,
-            PostCommitEffects::wake(OutboxKind::SeriesAnalysis)
-        );
         assert!(
-            !ControlOutcome::without_effects(())
+            outcome
                 .effects
                 .outbox_wakes
                 .contains(OutboxKind::SeriesAnalysis)

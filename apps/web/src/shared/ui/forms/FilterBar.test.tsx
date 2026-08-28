@@ -6,7 +6,7 @@ import { Button } from "@/shared/ui/actions/Button";
 import { FilterBar } from "@/shared/ui/forms/FilterBar";
 
 describe("FilterBar", () => {
-  it("keeps one labeled filter surface with summary, reset, and action", () => {
+  it("keeps one labeled filter region with summary, reset, and action", () => {
     render(
       <FilterBar
         busy
@@ -53,13 +53,8 @@ describe("FilterBar", () => {
     );
 
     const trigger = screen.getByRole("button", { name: /詳細条件/u });
-    const panel = screen.getByLabelText("マップ").parentElement?.parentElement;
     expect(trigger).toHaveAttribute("aria-expanded", "false");
     expect(trigger).toHaveTextContent("作品・シーズン・マップ");
-    expect(trigger).toHaveClass("hover:bg-[var(--color-surface-hover)]");
-    expect(trigger).not.toHaveClass("hover:bg-transparent");
-    expect(panel).toHaveClass("bg-transparent");
-    expect(panel).not.toHaveClass("bg-[var(--color-surface-subtle)]");
     expect(screen.getByLabelText("マップ")).toBeInTheDocument();
 
     await user.click(trigger);

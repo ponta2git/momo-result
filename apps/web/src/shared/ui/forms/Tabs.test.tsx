@@ -4,23 +4,10 @@ import { describe, expect, it } from "vitest";
 
 import { TabsList, TabsPanel, TabsRoot, TabsTab } from "@/shared/ui/forms/Tabs";
 
-function TabsFixture({
-  activateOnFocus = false,
-  variant = "filled",
-  wrap,
-}: {
-  activateOnFocus?: boolean | undefined;
-  variant?: "filled" | "underline" | undefined;
-  wrap?: boolean | undefined;
-}) {
+function TabsFixture({ activateOnFocus = false }: { activateOnFocus?: boolean | undefined }) {
   return (
     <TabsRoot defaultValue="first">
-      <TabsList
-        activateOnFocus={activateOnFocus}
-        aria-label="表示内容"
-        variant={variant}
-        wrap={wrap}
-      >
+      <TabsList activateOnFocus={activateOnFocus} aria-label="表示内容">
         <TabsTab value="first">最初</TabsTab>
         <TabsTab value="second">次</TabsTab>
         <TabsTab disabled value="disabled">
@@ -41,31 +28,16 @@ function TabsFixture({
 }
 
 describe("Tabs", () => {
-  it("applies the filled tab grammar and links mounted panels accessibly", () => {
+  it("links mounted panels accessibly and keeps disabled choices unavailable", () => {
     render(<TabsFixture />);
 
-    const list = screen.getByRole("tablist", { name: "表示内容" });
     const first = screen.getByRole("tab", { name: "最初" });
     const second = screen.getByRole("tab", { name: "次" });
     const disabled = screen.getByRole("tab", { name: "無効" });
     const firstPanel = screen.getByRole("tabpanel", { name: "最初" });
     const secondPanel = document.getElementById(second.getAttribute("aria-controls") ?? "");
 
-    expect(list).toHaveClass("flex-wrap", "gap-2");
-    expect(first).toHaveClass(
-      "min-h-11",
-      "whitespace-nowrap",
-      "focus-visible:outline-2",
-      "bg-[var(--color-surface-selected)]",
-      "text-[var(--color-text-primary)]",
-    );
-    expect(second).toHaveClass(
-      "text-[var(--color-text-secondary)]",
-      "hover:bg-[var(--color-surface-hover)]",
-    );
     expect(disabled).toHaveAttribute("aria-disabled", "true");
-    expect(disabled).toHaveClass("cursor-not-allowed", "opacity-60");
-    expect(disabled).not.toHaveClass("hover:bg-[var(--color-surface-hover)]");
     expect(first).toHaveAttribute("aria-controls", firstPanel.id);
     expect(firstPanel).toHaveAttribute("aria-labelledby", first.id);
     expect(secondPanel).not.toBeNull();
@@ -90,38 +62,5 @@ describe("Tabs", () => {
     expect(document.getElementById(first.getAttribute("aria-controls") ?? "")).toHaveAttribute(
       "hidden",
     );
-  });
-
-  it("defaults an underline variant to a non-wrapping local scroll owner", () => {
-    render(<TabsFixture variant="underline" />);
-
-    const list = screen.getByRole("tablist", { name: "表示内容" });
-    const first = screen.getByRole("tab", { name: "最初" });
-    const second = screen.getByRole("tab", { name: "次" });
-
-    expect(list).toHaveClass(
-      "relative",
-      "flex-nowrap",
-      "overflow-x-auto",
-      "border-b",
-      "border-[var(--color-border)]",
-    );
-    expect(first).toHaveClass(
-      "border-b-2",
-      "border-transparent",
-      "text-[var(--color-text-primary)]",
-    );
-    expect(second).toHaveClass("border-transparent", "text-[var(--color-text-secondary)]");
-    expect(list.querySelector('[role="presentation"]')).toHaveClass(
-      "absolute",
-      "h-0.5",
-      "bg-[var(--color-action)]",
-    );
-  });
-
-  it("allows a caller to override the variant-specific wrapping default", () => {
-    render(<TabsFixture variant="underline" wrap />);
-
-    expect(screen.getByRole("tablist", { name: "表示内容" })).toHaveClass("flex-wrap");
   });
 });

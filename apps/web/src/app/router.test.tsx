@@ -133,7 +133,7 @@ describe("app routing", () => {
     });
   });
 
-  it("uses the auth retry as the primary recovery action", async () => {
+  it("recovers the requested route after retrying authentication", async () => {
     setDevUser();
     let attempts = 0;
     server.use(
@@ -168,7 +168,6 @@ describe("app routing", () => {
     ).toBeInTheDocument();
     expect(screen.queryByText("Temporary failure")).not.toBeInTheDocument();
     expect(screen.queryByText("auth temporarily unavailable")).not.toBeInTheDocument();
-    expect(retry).toHaveClass("bg-[var(--color-action)]");
     await user.click(retry);
 
     expect(await screen.findByRole("heading", { name: "試合一覧" })).toBeInTheDocument();
@@ -463,9 +462,6 @@ describe("app routing", () => {
     await user.click(screen.getByRole("button", { name: /比較対象を変更/u }));
     await user.selectOptions(screen.getByRole("combobox", { name: "シーズン" }), "season_current");
     expect(await screen.findByText("戦績データを読み込めません")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "戦績データを再読み込み" })).toHaveClass(
-      "bg-[var(--color-action)]",
-    );
     await waitFor(() =>
       expect(screen.queryByText("収益先行時は目的地0回で終えない。")).not.toBeInTheDocument(),
     );
@@ -674,9 +670,6 @@ describe("app routing", () => {
 
     expect(await screen.findByText("対象作品を読み込めません")).toBeInTheDocument();
     expect(screen.queryByText("登録されている作品がありません")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "比較対象を再読み込み" })).toHaveClass(
-      "bg-[var(--color-action)]",
-    );
     await user.click(screen.getByRole("button", { name: "比較対象を再読み込み" }));
     expect(await screen.findByRole("combobox", { name: "対象作品" })).toBeInTheDocument();
     expect(attempts).toBe(2);
@@ -702,9 +695,7 @@ describe("app routing", () => {
     renderApp("/analytics/series");
 
     expect(await screen.findByText("画面の更新が必要です")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "画面を再読み込み" })).toHaveClass(
-      "bg-[var(--color-action)]",
-    );
+    expect(screen.getByRole("button", { name: "画面を再読み込み" })).toBeInTheDocument();
     expect(screen.queryByText("対象作品を読み込めません")).not.toBeInTheDocument();
   });
 });

@@ -12,12 +12,7 @@ import org.typelevel.ci.CIString
 import momo.api.MomoCatsEffectSuite
 import momo.api.domain.GameTitle
 import momo.api.domain.ids.GameTitleId
-import momo.api.http.HttpAssertions.{
-  assertProblem,
-  assertProblemSanitizedDetail,
-  jsonField,
-  optionalHeaderValue
-}
+import momo.api.http.HttpAssertions.{assertProblem, jsonField, optionalHeaderValue}
 
 final class SeriesAnalysisHttpSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
   private val titleId = GameTitleId.unsafeFromString("title-http-analysis")
@@ -93,7 +88,7 @@ final class SeriesAnalysisHttpSpec extends MomoCatsEffectSuite with HttpAppTestF
         firstBody <- first.as[Json]
         replay <- httpApp.run(writePost(uri, body, Some("analysis-http-idempotency")))
         replayBody <- replay.as[Json]
-        _ <- assertProblemSanitizedDetail(
+        _ <- assertProblem(
           missing,
           Status.UnprocessableContent,
           "VALIDATION_FAILED",

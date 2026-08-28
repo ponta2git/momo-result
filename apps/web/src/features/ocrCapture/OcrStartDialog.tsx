@@ -5,6 +5,7 @@ import type { OcrStartDialogState, OcrSubmissionPlan } from "@/features/ocrCaptu
 import { Button } from "@/shared/ui/actions/Button";
 import { Dialog } from "@/shared/ui/feedback/Dialog";
 import { Notice } from "@/shared/ui/feedback/Notice";
+import { ProgressBar } from "@/shared/ui/feedback/ProgressBar";
 import { SpinnerIcon } from "@/shared/ui/feedback/Spinner";
 
 type OcrStartDialogProps = {
@@ -112,18 +113,24 @@ function progressView(state: Extract<OcrStartDialogState, { status: "submitting"
   const { progress } = state;
   const total = progress?.total ?? state.plan.slots.length;
   if (!progress || progress.phase === "creating_draft") {
-    return { label: "試合の記録を準備しています", value: 0, total };
+    return { kind: "preparing", label: "試合の記録を準備しています" } as const;
   }
   if (progress.phase === "finalizing") {
-    return { label: "読み取りの受け付けを確認しています", value: progress.completed, total };
+    return {
+      kind: "determinate",
+      label: "読み取りの受け付けを確認しています",
+      value: progress.completed,
+      total,
+    } as const;
   }
   const slotLabel =
     slotDefinitions.find((definition) => definition.kind === progress.slotKind)?.label ?? "画像";
   return {
+    kind: "determinate",
     label: `${progress.current}/${progress.total}件目・${slotLabel}を送信しています`,
     value: progress.current - 1,
     total,
-  };
+  } as const;
 }
 
 export function OcrStartDialog({ onClose, onConfirm, onViewMatches, state }: OcrStartDialogProps) {
@@ -141,7 +148,11 @@ export function OcrStartDialog({ onClose, onConfirm, onViewMatches, state }: Ocr
       >
         <div className="grid gap-4 py-1">
           <div className="flex items-start gap-3 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3">
-            <SpinnerIcon className="mt-0.5 text-[var(--color-action)]" size="lg" />
+            <span aria-hidden="true" className="mt-0.5 flex size-5 shrink-0">
+              {progress.kind === "preparing" ? (
+                <SpinnerIcon className="text-[var(--color-action)]" size="lg" />
+              ) : null}
+            </span>
             <div className="min-w-0">
               <p className="font-semibold text-[var(--color-text-primary)]">{progress.label}</p>
               <p className="mt-1 text-sm leading-6 text-[var(--color-text-secondary)]">
@@ -149,12 +160,14 @@ export function OcrStartDialog({ onClose, onConfirm, onViewMatches, state }: Ocr
               </p>
             </div>
           </div>
-          <progress
-            aria-label="画像送信の進捗"
-            className="h-2 w-full accent-[var(--color-action)]"
-            max={Math.max(progress.total, 1)}
-            value={progress.value}
-          />
+          {progress.kind === "determinate" ? (
+            <ProgressBar
+              aria-label="画像送信の進捗"
+              aria-valuetext={`${progress.total}件中${progress.value}件の送信処理が完了`}
+              max={progress.total}
+              value={progress.value}
+            />
+          ) : null}
         </div>
       </Dialog>
     );

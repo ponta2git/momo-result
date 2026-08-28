@@ -90,7 +90,7 @@ export function ChoicePickerDialogField({
           {selectedLabel}
         </p>
         <Dialog
-          className="flex min-h-0 flex-col"
+          className="flex min-h-0 flex-col overflow-y-hidden"
           open={open}
           popupClassName="overflow-y-hidden"
           surfaceClassName="flex flex-col overflow-y-hidden"

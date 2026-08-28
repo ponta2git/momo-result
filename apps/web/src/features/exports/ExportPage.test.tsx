@@ -67,6 +67,9 @@ function expectSingleCandidateScrollRegion(label: "開催" | "試合") {
   const candidateList = candidateGroup.querySelector(":scope > div");
   expect(candidateGroup).not.toHaveClass("overflow-y-auto");
   expect(candidateList).toHaveClass("overflow-y-auto", "overscroll-contain");
+  const scrollRegions = dialog.querySelectorAll(".overflow-y-auto");
+  expect(scrollRegions).toHaveLength(1);
+  expect(scrollRegions.item(0)).toBe(candidateList);
 }
 
 describe("ExportPage", () => {

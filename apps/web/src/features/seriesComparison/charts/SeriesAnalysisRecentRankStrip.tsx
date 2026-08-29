@@ -1,4 +1,5 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useLayoutEffect, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 
 import {
   formatDecimal,
@@ -19,6 +20,12 @@ export function RecentRankStrips({
   response: SeriesComparisonAggregateV3;
 }) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const pinnedToLatestRef = useRef(true);
+  const [scrollMetrics, setScrollMetrics] = useState({
+    clientWidth: 0,
+    scrollLeft: 0,
+    scrollWidth: 0,
+  });
   const entryByMemberId = new Map(response.recentRanks.map((entry) => [entry.memberId, entry]));
   const orderedEntries = response.players.map((player) => ({
     entry: entryByMemberId.get(player.memberId),
@@ -38,11 +45,63 @@ export function RecentRankStrips({
     matchIndexById.set(match.matchId, match.matchIndex);
   }
   const latestPointKey = axisRows.map((row) => row.matchId).join(":");
+  const maximumScrollLeft = Math.max(scrollMetrics.scrollWidth - scrollMetrics.clientWidth, 0);
+  const scrollbarThumbWidth =
+    scrollMetrics.scrollWidth > 0
+      ? `${Math.min((scrollMetrics.clientWidth / scrollMetrics.scrollWidth) * 100, 100)}%`
+      : "100%";
 
-  useEffect(() => {
+  const syncScrollMetrics = useCallback(() => {
     const element = scrollContainerRef.current;
-    if (element) element.scrollLeft = element.scrollWidth;
-  }, [latestPointKey]);
+    if (!element) return;
+    const next = {
+      clientWidth: element.clientWidth,
+      scrollLeft: element.scrollLeft,
+      scrollWidth: element.scrollWidth,
+    };
+    setScrollMetrics((current) =>
+      current.clientWidth === next.clientWidth &&
+      current.scrollLeft === next.scrollLeft &&
+      current.scrollWidth === next.scrollWidth
+        ? current
+        : next,
+    );
+  }, []);
+
+  useLayoutEffect(() => {
+    const element = scrollContainerRef.current;
+    if (!element) return;
+
+    pinnedToLatestRef.current = true;
+    const alignLatest = () => {
+      element.scrollLeft = element.scrollWidth;
+      syncScrollMetrics();
+    };
+    const handleScroll = () => {
+      pinnedToLatestRef.current =
+        element.scrollWidth - element.clientWidth - element.scrollLeft <= 1;
+      syncScrollMetrics();
+    };
+    const handleResize = () => {
+      if (pinnedToLatestRef.current) element.scrollLeft = element.scrollWidth;
+      syncScrollMetrics();
+    };
+
+    alignLatest();
+    element.addEventListener("scroll", handleScroll, { passive: true });
+    if (typeof ResizeObserver === "undefined") {
+      return () => element.removeEventListener("scroll", handleScroll);
+    }
+
+    const observer = new ResizeObserver(handleResize);
+    observer.observe(element);
+    const table = element.firstElementChild;
+    if (table) observer.observe(table);
+    return () => {
+      observer.disconnect();
+      element.removeEventListener("scroll", handleScroll);
+    };
+  }, [latestPointKey, syncScrollMetrics]);
 
   if (axisRows.length === 0) {
     return (
@@ -56,8 +115,10 @@ export function RecentRankStrips({
     <div className="min-w-0">
       <div
         aria-label="直近順位"
-        className="w-full [scrollbar-width:thin] [scrollbar-color:var(--color-border)_transparent] [scrollbar-gutter:stable] overflow-x-auto pb-2"
+        className="w-full [scrollbar-width:none] overflow-x-auto pb-2 [&::-webkit-scrollbar]:hidden"
+        onScroll={syncScrollMetrics}
         ref={scrollContainerRef}
+        role="region"
       >
         <table className="mx-auto w-max border-separate border-spacing-x-1 border-spacing-y-2">
           <caption className="sr-only">直近の試合順位</caption>
@@ -163,6 +224,31 @@ export function RecentRankStrips({
           </tbody>
         </table>
       </div>
+      <input
+        aria-label="直近順位を横スクロール"
+        aria-valuetext={
+          maximumScrollLeft > 0
+            ? `${Math.round((scrollMetrics.scrollLeft / maximumScrollLeft) * 100)}%`
+            : "すべて表示"
+        }
+        className="h-3 w-full cursor-ew-resize appearance-none bg-transparent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-action)] disabled:cursor-default disabled:opacity-100 [&::-webkit-slider-runnable-track]:h-2 [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-runnable-track]:bg-[var(--color-surface-selected)] [&::-webkit-slider-thumb]:-mt-0.5 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-[var(--recent-rank-scroll-thumb-width)] [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-solid [&::-webkit-slider-thumb]:border-[var(--color-surface)] [&::-webkit-slider-thumb]:bg-[var(--color-text-muted)]"
+        disabled={maximumScrollLeft === 0}
+        max={Math.max(maximumScrollLeft, 1)}
+        min={0}
+        onChange={(event) => {
+          const element = scrollContainerRef.current;
+          if (!element) return;
+          element.scrollLeft = Number(event.currentTarget.value);
+          syncScrollMetrics();
+        }}
+        style={
+          {
+            "--recent-rank-scroll-thumb-width": scrollbarThumbWidth,
+          } as CSSProperties
+        }
+        type="range"
+        value={Math.min(scrollMetrics.scrollLeft, maximumScrollLeft)}
+      />
     </div>
   );
 }

@@ -456,7 +456,7 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
         Left(AppError.AnalysisArtifactExpired()),
       )
 
-  test("transitional reader keeps a legacy desired artifact readable"):
+  test("exact reader fails closed when the active release still points to a legacy artifact"):
     val payload = Files.readAllBytes(
       repositoryFile("docs/schemas/fixtures/series-analysis/aggregate-payload-v3.json")
     )
@@ -491,12 +491,8 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
         SeriesAnalysisScope.Overall,
       ))
     yield
-      status match
-        case Right(value) =>
-          assertEquals(value.artifactFreshness, "current")
-          assertEquals(value.currentArtifact.map(_.artifactId), Some(artifactId))
-        case Left(error) => fail(s"expected transitional legacy status, got $error")
-      assertHydratedAggregate(chunk, artifactId)
+      assertEquals(status, Left(AppError.AnalysisStateUnavailable()))
+      assertEquals(chunk, Left(AppError.AnalysisArtifactExpired()))
 
   private def insertPublishedArtifact(
       artifactId: String,

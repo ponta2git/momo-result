@@ -1,4 +1,5 @@
 import type { components } from "@/shared/api/generated";
+import type { ContractValidator } from "@/shared/api/seriesAnalysisContractDecoder";
 
 export type SeriesAnalysisArtifactResponseByKind = {
   aggregate: components["schemas"]["SeriesAnalysisAggregateResponse"];
@@ -7,13 +8,13 @@ export type SeriesAnalysisArtifactResponseByKind = {
   review: components["schemas"]["SeriesAnalysisReviewResponse"];
 };
 
-export const seriesAnalysisArtifactSchemaLoaders = {
+export const seriesAnalysisArtifactValidatorLoaders = {
   aggregate: async () =>
-    (await import("./series-analysis-aggregate-response.schema.generated.json")).default,
+    (await import("./series-analysis-validators.generated")).validateSeriesAnalysisAggregate,
   drilldown: async () =>
-    (await import("./series-analysis-drilldown-response.schema.generated.json")).default,
+    (await import("./series-analysis-validators.generated")).validateSeriesAnalysisDrilldown,
   matchContext: async () =>
-    (await import("./series-analysis-match-context-response.schema.generated.json")).default,
+    (await import("./series-analysis-validators.generated")).validateSeriesAnalysisMatchContext,
   review: async () =>
-    (await import("./series-analysis-review-response.schema.generated.json")).default,
-} satisfies Record<keyof SeriesAnalysisArtifactResponseByKind, () => Promise<unknown>>;
+    (await import("./series-analysis-validators.generated")).validateSeriesAnalysisReview,
+} satisfies Record<keyof SeriesAnalysisArtifactResponseByKind, () => Promise<ContractValidator>>;

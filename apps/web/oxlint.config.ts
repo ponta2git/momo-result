@@ -209,7 +209,12 @@ export default defineConfig({
     browser: true,
     builtin: true,
   },
-  ignorePatterns: ["dist/**", "coverage/**", "src/shared/api/generated.ts"],
+  ignorePatterns: [
+    "dist/**",
+    "coverage/**",
+    "src/shared/api/generated.ts",
+    "src/shared/api/generatedContracts/series-analysis-validators.generated.*",
+  ],
   overrides: [
     {
       files: ["src/**/*.{ts,tsx}"],

@@ -4,6 +4,7 @@ import type {
   SeriesAnalysisRecalculationAccepted,
 } from "@/shared/api/seriesAnalysisAdminTypes";
 import { decodeSeriesAnalysisContract } from "@/shared/api/seriesAnalysisContractDecoder";
+import type { ContractValidatorLoader } from "@/shared/api/seriesAnalysisContractDecoder";
 import type {
   SeriesAnalysisOptionsResponse,
   SeriesAnalysisStatusResponse,
@@ -18,18 +19,31 @@ type EnvelopeResponseByName = {
 
 type EnvelopeName = keyof EnvelopeResponseByName;
 
-async function envelopeSchema(name: EnvelopeName): Promise<unknown> {
-  const document = (
-    await import("@/shared/api/generatedContracts/series-analysis-envelope.schema.generated.json")
-  ).default;
-  return { ...document, $ref: `#/$defs/${name}` };
-}
+const envelopeValidatorLoaders = {
+  SeriesAnalysisAdminOverviewResponse: async () =>
+    (await import("@/shared/api/generatedContracts/series-analysis-validators.generated"))
+      .validateSeriesAnalysisAdminOverviewResponse,
+  SeriesAnalysisOptionsResponse: async () =>
+    (await import("@/shared/api/generatedContracts/series-analysis-validators.generated"))
+      .validateSeriesAnalysisOptionsResponse,
+  SeriesAnalysisRecalculationAcceptedResponse: async () =>
+    (await import("@/shared/api/generatedContracts/series-analysis-validators.generated"))
+      .validateSeriesAnalysisRecalculationAcceptedResponse,
+  SeriesAnalysisStatusResponse: async () =>
+    (await import("@/shared/api/generatedContracts/series-analysis-validators.generated"))
+      .validateSeriesAnalysisStatusResponse,
+} satisfies Record<EnvelopeName, ContractValidatorLoader>;
 
 function decodeEnvelope<K extends EnvelopeName>(
   name: K,
   value: unknown,
 ): Promise<EnvelopeResponseByName[K]> {
-  return decodeSeriesAnalysisContract(`envelope:${name}`, name, () => envelopeSchema(name), value);
+  return decodeSeriesAnalysisContract(
+    `envelope:${name}`,
+    name,
+    envelopeValidatorLoaders[name],
+    value,
+  );
 }
 
 export function decodeSeriesAnalysisOptions(

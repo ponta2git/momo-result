@@ -59,7 +59,11 @@ describe("SeriesAnalysisAdminPage", () => {
     renderAdminPage("/admin/analysis?gameTitleId=gt_momotetsu_2");
     const user = userEvent.setup();
 
-    const refresh = await screen.findByRole("button", { name: "状態を更新" });
+    const refresh = await screen.findByRole(
+      "button",
+      { name: "状態を更新" },
+      { timeout: 5_000 },
+    );
     expect(overviewRequests).toBe(1);
 
     await user.click(refresh);

@@ -1,4 +1,4 @@
-import { seriesAnalysisArtifactSchemaLoaders } from "@/shared/api/generatedContracts/series-analysis-artifact-contracts.generated";
+import { seriesAnalysisArtifactValidatorLoaders } from "@/shared/api/generatedContracts/series-analysis-artifact-contracts.generated";
 import type { SeriesAnalysisArtifactResponseByKind } from "@/shared/api/generatedContracts/series-analysis-artifact-contracts.generated";
 import { decodeSeriesAnalysisContract } from "@/shared/api/seriesAnalysisContractDecoder";
 
@@ -11,7 +11,7 @@ export function decodeSeriesAnalysisArtifact<K extends ArtifactResourceKind>(
   return decodeSeriesAnalysisContract(
     `artifact:${kind}`,
     kind,
-    seriesAnalysisArtifactSchemaLoaders[kind],
+    seriesAnalysisArtifactValidatorLoaders[kind],
     value,
   );
 }

@@ -1,0 +1,10 @@
+import type { ContractValidator } from "@/shared/api/seriesAnalysisContractDecoder";
+
+export const validateSeriesAnalysisAggregate: ContractValidator;
+export const validateSeriesAnalysisDrilldown: ContractValidator;
+export const validateSeriesAnalysisMatchContext: ContractValidator;
+export const validateSeriesAnalysisReview: ContractValidator;
+export const validateSeriesAnalysisAdminOverviewResponse: ContractValidator;
+export const validateSeriesAnalysisOptionsResponse: ContractValidator;
+export const validateSeriesAnalysisRecalculationAcceptedResponse: ContractValidator;
+export const validateSeriesAnalysisStatusResponse: ContractValidator;

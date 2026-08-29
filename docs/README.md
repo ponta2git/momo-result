@@ -16,7 +16,7 @@
 | UI文字列 / UX Writing / 日本語表記 | `docs/ui-rule.md` の「製品の方向性と意味」「現在地・視覚階層・情報表現」 | 対象画面の要求正本、`docs/test-rule.md`, `docs/dev-rule.md` | 用語は `docs/domain-rule.md` | 対象UIと formatter / ViewModel | `docs/test-rule.md` |
 | 製品横断の Product Experience / IA | `docs/ui-rule.md` の「製品の方向性と意味」「ナビゲーションと有限のタスクループ」 | 対象画面の要求正本、`docs/test-rule.md`, `docs/dev-rule.md` | `docs/domain-rule.md`、`docs/post-mortem/lessons.md` の該当カード | 対象route / component | `docs/test-rule.md` |
 | API / usecase | `docs/architecture.md` の API | `docs/test-rule.md`, `docs/dev-rule.md` | `docs/domain-rule.md`、`docs/db-rule.md`、`docs/redis-streams-ocr-contract.md`、該当する分析要求 | Tapir endpoint、API source | `docs/test-rule.md` の API Evidence Catalog、`docs/dev-rule.md` の Change Gates |
-| DB / repository | `docs/db-rule.md` | `docs/test-rule.md`, `docs/dev-rule.md` | `docs/domain-rule.md`、`docs/redis-streams-ocr-contract.md`、該当する分析要求 | `../momo-db` migration、repository / query source | `docs/test-rule.md` の DB-backed API、`docs/dev-rule.md` の Change Gates |
+| DB / repository | `docs/db-rule.md` | `docs/test-rule.md`, `docs/dev-rule.md` | `../momo-db` の schema / migration / Drizzle 設定・script / migration state を変える場合は `../momo-db/docs/development.md`、ほかに `docs/domain-rule.md`、`docs/redis-streams-ocr-contract.md`、該当する分析要求 | `../momo-db` migration、repository / query source | `docs/test-rule.md` の DB-backed API、`docs/dev-rule.md` の Change Gates |
 | Redis / OCR queue | `docs/redis-streams-ocr-contract.md` | `docs/schemas/ocr-*.schema.json`、`docs/db-rule.md`, `docs/test-rule.md`, `docs/dev-rule.md` | `docs/architecture.md` の OCR Capability / Worker Role | `docs/schemas/ocr-*.schema.json`、API producer / Rust consumer source | `docs/test-rule.md` の Processing Worker Evidence Catalog、`docs/dev-rule.md` の Change Gates |
 | OCR capability / worker role | `docs/architecture.md` の OCR Capability / Worker Role | `docs/redis-streams-ocr-contract.md`、`docs/test-rule.md`, `docs/dev-rule.md` | DB前提は `docs/db-rule.md` | `apps/processing-worker/`、OCR schema | `docs/test-rule.md` の Processing Worker Evidence Catalog、`docs/dev-rule.md` の Change Gates |
 | Analysis capability / worker role / job / artifact / API | `docs/requirements/series-analysis-batch.md` | `docs/test-rule.md`, `docs/dev-rule.md` | `docs/db-rule.md`、`docs/architecture.md`、`docs/ui-rule.md`、該当する指標・review要求 | artifact / queue schema、Tapir endpoint、`apps/processing-worker/`、Web source | `docs/test-rule.md` の Analysis Capability / Worker Evidence Catalog、`docs/dev-rule.md` の Change Gates |
@@ -55,7 +55,7 @@ AIは実装前に、(1) その規則のowner、(2) 必読と発火した条件�
 | 実装正本 | `docs/architecture.md` | API / web / Processing Worker runtime、OCR / 戦績分析能力の構造、依存方向、実装規約 |
 | UI正本 | `docs/ui-rule.md` | Web の意味表現、余白、操作、motion、状態表示、画面遷移の一貫性 |
 | ドメイン正本 | `docs/domain-rule.md` | 用語、状態遷移、不変条件、認証主体と試合参加者の区別 |
-| DB正本 | `docs/db-rule.md` | 共有DB所有権、migration前提、consumer contract |
+| DB正本 | `docs/db-rule.md` | momo-result の共有DB所有権、migration前提、consumer contract。momo-db の変更手順は `../momo-db/docs/development.md` |
 | Queue正本 | `docs/redis-streams-ocr-contract.md` | Redis Streams、outbox、payload、ack / retry 契約 |
 | Schema正本 | `docs/schemas/*.schema.json` | Redis payload、OCR hints、戦績分析 artifact / queue の機械可読契約 |
 | 契約 fixture | `docs/schemas/fixtures/` | 言語間で共有する契約例・品質証拠。責務を持つ文書が明示した canonical fixture だけは、その具体例の正本 |

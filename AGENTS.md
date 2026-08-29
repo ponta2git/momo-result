@@ -5,6 +5,8 @@
 **必要な文書だけを読む。全ドキュメントを事前に一括で読まない。分析済みの内容は再利用し、不要な文書の再読はしない。**
 最初に `docs/README.md` を見て、変更対象に必要な文書だけを選ぶ。
 
+`../momo-db` の schema、migration、Drizzle 設定・script、または DB の migration state を変更する場合は、実装や DB 操作より先に `../momo-db/docs/development.md` を最初から最後まで読み、その手順に従う。checkout または文書が存在しない場合や、この repository の規約と矛盾する場合は作業を止めて確認する。
+
 ---
 
 ## 2. Public / Private 境界

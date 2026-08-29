@@ -10,13 +10,13 @@ use tempfile::TempDir;
 
 use momo_analysis_core::{
     canonical::{canonicalize_value, sha256_prefixed},
-    contract::{ArtifactManifest, ResourceManifest},
+    contract::{ARTIFACT_VALIDATION_CONTRACT_ID, ArtifactManifest, ResourceManifest},
     model::{AnalysisInput, IncidentCounts, NormalizedAnalysisInput, PlayerMatchInput},
     payload,
 };
 
 use super::{
-    ArtifactBuildRequest, ArtifactError, build_artifact,
+    ArtifactBuildRequest, ArtifactError, ValidatedArtifact, build_artifact,
     shared::{MANIFEST_FILE_NAME, nesting_depth, resource_common},
     validate_artifact_directory,
 };
@@ -56,7 +56,7 @@ fn request() -> ArtifactBuildRequest {
     }
 }
 
-fn validate(directory: &Path) -> Result<ArtifactManifest, ArtifactError> {
+fn validate(directory: &Path) -> Result<ValidatedArtifact, ArtifactError> {
     validate_artifact_directory(directory, 1_000, 16 * 1024 * 1024, 64 * 1024 * 1024, 1_001)
 }
 
@@ -93,7 +93,11 @@ fn builds_and_stream_validates_a_complete_artifact() {
         .unwrap_or_else(|error| panic!("artifact build: {error}"));
     let validated =
         validate(directory.path()).unwrap_or_else(|error| panic!("artifact validation: {error}"));
-    assert_eq!(validated, manifest);
+    assert_eq!(validated.manifest(), &manifest);
+    assert_eq!(
+        validated.validation_contract_id(),
+        ARTIFACT_VALIDATION_CONTRACT_ID
+    );
     assert_eq!(manifest.artifact_id, "artifact-test-1");
     assert_eq!(manifest.game_title_id, "title-artifact");
     assert_eq!(manifest.input_revision, "2");

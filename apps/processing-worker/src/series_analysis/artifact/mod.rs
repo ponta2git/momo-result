@@ -12,7 +12,7 @@ mod shared;
 mod validate;
 
 pub(crate) use build::build_artifact;
-pub(crate) use validate::validate_artifact_directory;
+pub(crate) use validate::{ValidatedArtifact, validate_artifact_directory};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct ArtifactBuildRequest {

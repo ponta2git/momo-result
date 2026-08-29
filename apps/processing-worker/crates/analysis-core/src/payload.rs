@@ -1262,6 +1262,27 @@ mod tests {
     }
 
     #[test]
+    fn rust_owner_rejects_semantic_card_count_accepted_by_the_portable_shape() {
+        let mut review: Value = serde_json::from_str(include_str!(concat!(
+            "../../../../../docs/schemas/fixtures/series-analysis/",
+            "review-payload-v3.json"
+        )))
+        .unwrap_or_else(|error| panic!("review fixture is not JSON: {error}"));
+        *review
+            .pointer_mut("/playbookByPlayer/0/primaryCard/targetCount")
+            .unwrap_or_else(|| panic!("review primary card targetCount")) = Value::from(2);
+
+        assert!(
+            schema::validate_review(&review).is_ok(),
+            "the generated reader shape deliberately does not own this semantic minimum"
+        );
+        assert!(matches!(
+            validate_review(&review, &ScopeRef::Overall, 1),
+            Err(PayloadError::InvalidSchema)
+        ));
+    }
+
+    #[test]
     fn complete_computed_resource_set_passes_the_shared_validator() {
         for match_count in [0, 32] {
             let resources = compute_all(&input(match_count));

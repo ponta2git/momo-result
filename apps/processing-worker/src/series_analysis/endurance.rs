@@ -286,15 +286,16 @@ async fn run_once(
     }
     let elapsed_milliseconds = u64::try_from(started.elapsed().as_millis())?;
     let sampled_child_peak_bytes = child.peak_resident_bytes();
-    let manifest = validate_artifact_directory(
+    let validated = validate_artifact_directory(
         owned_directory.path(),
         request.maximum_chunk_count,
         request.maximum_chunk_bytes,
         request.maximum_total_bytes,
         request.maximum_file_count,
     )?;
+    let manifest = validated.manifest();
     let (artifact_payload_bytes, artifact_temporary_bytes) =
-        validate_artifact_evidence(owned_directory.path(), &manifest, &child_report)?;
+        validate_artifact_evidence(owned_directory.path(), manifest, &child_report)?;
     let maximum_chunk_bytes = manifest
         .resources
         .iter()
@@ -305,7 +306,7 @@ async fn run_once(
         observed_child_peak(sampled_child_peak_bytes, child_report.peak_resident_bytes)?;
     let chunk_count = manifest.resources.len();
     let root_checksum = manifest.root_checksum.clone();
-    drop(manifest);
+    drop(validated);
     drop(child);
     owned_directory.remove().await?;
     let worker_peak_bytes = current_process_peak_resident_bytes()

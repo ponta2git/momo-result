@@ -119,6 +119,14 @@ jobs:
       - name: Apply momo-db migrations
         run: ../../scripts/ci/apply-momo-db-migrations.sh
 
+      - name: Rust Analysis PostgreSQL and Redis control-plane smoke
+        env:
+          ANALYSIS_CONTROL_SMOKE_DATABASE_URL: ${{ env.DATABASE_URL }}
+          ANALYSIS_OUTBOX_SMOKE_DATABASE_URL: ${{ env.DATABASE_URL }}
+          ANALYSIS_OUTBOX_SMOKE_REDIS_URL: ${{ env.REDIS_URL }}
+          ANALYSIS_SMOKE_SERVICES_ARE_ISOLATED: "true"
+        run: ../../scripts/ci/analysis-rust-control-plane-smoke.sh
+
       - name: Rust OCR PostgreSQL and Redis control-plane smoke
         env:
           OCR_CONTROL_SMOKE_DATABASE_URL: ${{ env.DATABASE_URL }}
@@ -159,6 +167,7 @@ jobs:
           --health-timeout 5s
           --health-retries 20
     env:
+      ANALYSIS_SMOKE_SERVICES_ARE_ISOLATED: "true"
       ANALYSIS_IMAGE_ARTIFACT_NAME: analysis-worker-image-${{ github.run_id }}-${{ github.run_attempt }}
       ANALYSIS_METADATA_ARTIFACT_NAME: analysis-candidate-metadata-${{ github.run_id }}-${{ github.run_attempt }}
       ANALYSIS_IMAGE_REF: ${{ inputs.package_image && format('registry.fly.io/momo-result-analysis:{0}-{1}-{2}', github.sha, github.run_id, github.run_attempt) || 'momo-analysis-worker:test' }}
@@ -219,6 +228,7 @@ jobs:
       - name: Worker PostgreSQL and Redis control-plane smoke through the runtime image
         env:
           ANALYSIS_WORKER_IMAGE: ${{ env.ANALYSIS_IMAGE_REF }}
+          ANALYSIS_SMOKE_REDIS_STREAM: momo:analysis:control-plane-smoke:${{ github.run_id }}-${{ github.run_attempt }}
         run: scripts/ci/series-analysis-control-plane-smoke.sh
 
       - name: Combined analysis and OCR preemption smoke

@@ -863,6 +863,14 @@ mod tests {
         assert!(!error.is_artifact_candidate_failure());
     }
 
+    #[test]
+    fn unsupported_claimed_validation_contract_is_not_persisted_as_a_candidate_failure() {
+        let error = ControlError::UnsupportedValidationContract;
+
+        assert!(error.is_candidate_processing_infrastructure_failure());
+        assert!(!error.is_artifact_candidate_failure());
+    }
+
     #[tokio::test]
     async fn validator_task_failure_is_structural_not_a_bad_candidate() {
         let join = tokio::spawn(async { panic!("validator fixture panic") }).await;

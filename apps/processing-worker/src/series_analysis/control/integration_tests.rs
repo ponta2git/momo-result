@@ -8,7 +8,7 @@
 use std::{error::Error, fs, future::Future, pin::Pin, time::Duration};
 
 use momo_analysis_core::{
-    contract::{ARTIFACT_SCHEMA_VERSION, ArtifactManifest, ResourceManifest},
+    contract::{ARTIFACT_SCHEMA_VERSION, ARTIFACT_VALIDATION_CONTRACT_ID, ResourceManifest},
     model::{AnalysisInput, IncidentCounts, PlayerMatchInput},
 };
 use tempfile::TempDir;
@@ -26,7 +26,9 @@ use super::{
     recovery::recover_expired_analysis_holder,
     transaction::{artifact_id_for_attempt, enqueue_delivery, lock_owned_by},
 };
-use crate::series_analysis::artifact::{ArtifactBuildRequest, build_artifact};
+use crate::series_analysis::artifact::{
+    ArtifactBuildRequest, ValidatedArtifact, build_artifact, validate_artifact_directory,
+};
 
 type SmokeResult<T = ()> = Result<T, Box<dyn Error + Send + Sync>>;
 
@@ -80,7 +82,12 @@ async fn real_postgres_keeps_staging_separate_from_fenced_publication() -> Smoke
         Err(ControlError::InvalidMetadata)
     ));
     transaction.rollback().await?;
-    assert_artifact_shape(&secondary, &corrupt_manifest.artifact_id, "0|0|0").await?;
+    assert_artifact_shape(
+        &secondary,
+        &corrupt_manifest.manifest().artifact_id,
+        "0|0|0",
+    )
+    .await?;
 
     let old_directory = TempDir::new()?;
     let old_manifest = build_manifest(&old_claim, old_directory.path())?;
@@ -92,10 +99,11 @@ async fn real_postgres_keeps_staging_separate_from_fenced_publication() -> Smoke
         old_directory.path(),
     )
     .await?;
-    assert_artifact_shape(&secondary, &old_manifest.artifact_id, "1|0|4").await?;
+    assert_artifact_shape(&secondary, &old_manifest.manifest().artifact_id, "1|0|4").await?;
 
     drop(primary);
     let unavailable_path = old_manifest
+        .manifest()
         .resources
         .iter()
         .rev()
@@ -121,26 +129,32 @@ async fn real_postgres_keeps_staging_separate_from_fenced_publication() -> Smoke
     fs::rename(saved_path, unavailable_path)?;
     reconciliation?;
     let mut primary = crate::postgres::connect(&database_url).await?;
-    assert_artifact_shape(&secondary, &old_manifest.artifact_id, "1|0|4").await?;
+    assert_artifact_shape(&secondary, &old_manifest.manifest().artifact_id, "1|0|4").await?;
 
-    secondary
+    let Err(sealed_mutation_error) = secondary
         .execute(
             "UPDATE series_analysis_scope_aggregate_artifacts\x20\
-             SET checksum = 'sha256:' || repeat('0', 64)\x20\
+             SET payload = set_byte(payload, 0, (get_byte(payload, 0) + 1) % 256)\x20\
              WHERE artifact_id = $1 AND scope_key = (\x20\
                SELECT scope_key FROM series_analysis_scope_aggregate_artifacts\x20\
                WHERE artifact_id = $1 ORDER BY scope_key LIMIT 1\x20\
              )",
-            &[&old_manifest.artifact_id],
+            &[&old_manifest.manifest().artifact_id],
         )
-        .await?;
-    let transaction = primary.transaction().await?;
-    lock_owned_by(&transaction, &old_claim, OLD_WORKER_ID).await?;
-    assert!(matches!(
-        validate_staged_artifact(&transaction, &old_claim, &old_manifest).await,
-        Err(ControlError::InvalidMetadata)
-    ));
-    transaction.rollback().await?;
+        .await
+    else {
+        return Err("an attested staging payload remained mutable before publication".into());
+    };
+    assert_eq!(
+        sealed_mutation_error
+            .as_db_error()
+            .map(tokio_postgres::error::DbError::message),
+        Some("attested series analysis artifact payloads are immutable")
+    );
+    let publication = primary.transaction().await?;
+    lock_owned_by(&publication, &old_claim, OLD_WORKER_ID).await?;
+    validate_staged_artifact(&publication, &old_claim, &old_manifest).await?;
+    publication.rollback().await?;
     assert_current(&secondary, None).await?;
 
     reconcile_staging(
@@ -151,6 +165,8 @@ async fn real_postgres_keeps_staging_separate_from_fenced_publication() -> Smoke
         old_directory.path(),
     )
     .await?;
+    seed_unattested_legacy_current(&mut secondary, &old_manifest).await?;
+    assert_artifact_pointers(&secondary, Some(&old_manifest.manifest().artifact_id), None).await?;
     expire_old_lease_and_prepare_retry(&secondary).await?;
     let transaction = primary.transaction().await?;
     assert!(matches!(
@@ -158,7 +174,7 @@ async fn real_postgres_keeps_staging_separate_from_fenced_publication() -> Smoke
         Err(ControlError::OwnerLost)
     ));
     transaction.rollback().await?;
-    assert_current(&secondary, None).await?;
+    assert_current(&secondary, Some(&old_manifest.manifest().artifact_id)).await?;
 
     let new_claim = claim(NEW_ATTEMPT_ID, 2, NEW_FENCE)?;
     let new_directory = TempDir::new()?;
@@ -188,7 +204,7 @@ async fn real_postgres_keeps_staging_separate_from_fenced_publication() -> Smoke
             &new_claim,
             NEW_WORKER_ID,
             &AttemptMetrics::default(),
-            &new_manifest.root_checksum,
+            &new_manifest.manifest().root_checksum,
             ResultDisposition::Published,
             &mut rejected_effects,
         )
@@ -197,8 +213,8 @@ async fn real_postgres_keeps_staging_separate_from_fenced_publication() -> Smoke
     ));
     transaction.rollback().await?;
     assert_eq!(rejected_effects, TransactionEffects::empty());
-    assert_current(&secondary, None).await?;
-    assert_artifact_shape(&secondary, &new_manifest.artifact_id, "1|0|4").await?;
+    assert_current(&secondary, Some(&old_manifest.manifest().artifact_id)).await?;
+    assert_artifact_shape(&secondary, &new_manifest.manifest().artifact_id, "1|0|4").await?;
 
     secondary
         .batch_execute(&format!(
@@ -211,6 +227,21 @@ async fn real_postgres_keeps_staging_separate_from_fenced_publication() -> Smoke
     let publication = primary.transaction().await?;
     lock_owned_by(&publication, &new_claim, NEW_WORKER_ID).await?;
     validate_staged_artifact(&publication, &new_claim, &new_manifest).await?;
+    let new_artifact_id = &new_manifest.manifest().artifact_id;
+    let mutation_parameters: [&(dyn tokio_postgres::types::ToSql + Sync); 1] = [new_artifact_id];
+    let concurrent_mutation = secondary.execute(
+        "UPDATE series_analysis_scope_aggregate_artifacts\x20\
+         SET item_count = item_count + 1\x20\
+         WHERE artifact_id = $1",
+        &mutation_parameters,
+    );
+    tokio::pin!(concurrent_mutation);
+    assert!(
+        tokio::time::timeout(Duration::from_millis(100), concurrent_mutation.as_mut())
+            .await
+            .is_err(),
+        "a child mutation must wait while publication holds the parent lock"
+    );
     publish_staged_artifact(&publication, &new_claim, &new_manifest).await?;
     let mut effects = TransactionEffects::empty();
     finish_success(
@@ -218,39 +249,42 @@ async fn real_postgres_keeps_staging_separate_from_fenced_publication() -> Smoke
         &new_claim,
         NEW_WORKER_ID,
         &AttemptMetrics::default(),
-        &new_manifest.root_checksum,
+        &new_manifest.manifest().root_checksum,
         ResultDisposition::Published,
         &mut effects,
     )
     .await?;
     publication.commit().await?;
+    let Err(mutation_error) = concurrent_mutation.await else {
+        return Err("a child mutation succeeded after its parent was published".into());
+    };
+    assert_eq!(
+        mutation_error
+            .as_db_error()
+            .map(tokio_postgres::error::DbError::message),
+        Some("attested series analysis artifact payloads are immutable")
+    );
     assert_eq!(effects, TransactionEffects::empty());
-    assert_current(&secondary, Some(&new_manifest.artifact_id)).await?;
-    assert_artifact_shape(&secondary, &new_manifest.artifact_id, "0|1|4").await?;
-    assert!(!requires_staging(&secondary, &new_claim).await?);
-    assert_artifact_shape(&secondary, &old_manifest.artifact_id, "1|0|4").await?;
+    assert_artifact_pointers(&secondary, Some(&new_manifest.manifest().artifact_id), None).await?;
+    assert_artifact_shape(&secondary, &new_manifest.manifest().artifact_id, "0|1|4").await?;
+    assert_validation_contract(&secondary, &new_manifest).await?;
+    assert!(!requires_staging(&secondary, &new_claim, &new_manifest).await?);
+    assert_artifact_shape(&secondary, &old_manifest.manifest().artifact_id, "0|1|4").await?;
 
-    secondary
-        .execute(
-            "UPDATE series_analysis_artifacts SET created_at = clock_timestamp() - interval '2 days'\x20\
-             WHERE id = $1 AND status = 'staging'",
-            &[&old_manifest.artifact_id],
-        )
-        .await?;
     let cleaned = secondary
         .execute(
             "DELETE FROM series_analysis_artifacts a\x20\
-             WHERE a.id = $1 AND a.status = 'staging'\x20\
-               AND a.created_at < clock_timestamp() - interval '1 day'\x20\
+             WHERE a.id = $1 AND a.status = 'published'\x20\
+               AND a.published_at < clock_timestamp() - interval '1 day'\x20\
                AND NOT EXISTS (\x20\
                  SELECT 1 FROM series_analysis_title_states s\x20\
                  WHERE a.id IN (s.current_artifact_id, s.previous_artifact_id)\x20\
                )",
-            &[&old_manifest.artifact_id],
+            &[&old_manifest.manifest().artifact_id],
         )
         .await?;
     assert_eq!(cleaned, 1);
-    assert_current(&secondary, Some(&new_manifest.artifact_id)).await?;
+    assert_current(&secondary, Some(&new_manifest.manifest().artifact_id)).await?;
 
     cleanup_database(&secondary).await?;
     prepare_owned_attempt(&secondary).await?;
@@ -269,6 +303,7 @@ fn claim(attempt_id: &str, attempt_no: i32, fencing_token: i64) -> SmokeResult<C
         input_revision: 1,
         algorithm_version: String::from(ALGORITHM_VERSION),
         artifact_schema_version: i32::try_from(ARTIFACT_SCHEMA_VERSION)?,
+        validation_contract_id: Some(String::from(ARTIFACT_VALIDATION_CONTRACT_ID)),
         attempt_id: String::from(attempt_id),
         attempt_no,
         fencing_token,
@@ -278,7 +313,7 @@ fn claim(attempt_id: &str, attempt_no: i32, fencing_token: i64) -> SmokeResult<C
 fn build_manifest(
     claim: &ClaimedJob,
     directory: &std::path::Path,
-) -> SmokeResult<ArtifactManifest> {
+) -> SmokeResult<ValidatedArtifact> {
     let input = analysis_input().try_into_normalized()?;
     let built = build_artifact(
         &input,
@@ -292,7 +327,12 @@ fn build_manifest(
         },
         directory,
     )?;
-    Ok(built.manifest)
+    let validated =
+        validate_artifact_directory(directory, 1_000, 16 * 1024 * 1024, 64 * 1024 * 1024, 1_001)?;
+    if validated.manifest() != &built.manifest {
+        return Err("the reopened artifact differs from the built manifest".into());
+    }
+    Ok(validated)
 }
 
 fn analysis_input() -> AnalysisInput {
@@ -327,8 +367,9 @@ fn analysis_input() -> AnalysisInput {
 async fn assert_authoritative_snapshot_rejects_omissions(
     client: &mut Client,
     claim: &ClaimedJob,
-    manifest: &ArtifactManifest,
+    artifact: &ValidatedArtifact,
 ) -> SmokeResult {
+    let manifest = artifact.manifest();
     let transaction = client.transaction().await?;
     lock_owned_by(&transaction, claim, OLD_WORKER_ID).await?;
     validate_authoritative_manifest(&transaction, &claim.game_title_id, manifest).await?;
@@ -373,9 +414,10 @@ async fn assert_authoritative_snapshot_rejects_omissions(
 }
 
 fn corrupt_last_match_context(
-    manifest: &ArtifactManifest,
+    artifact: &ValidatedArtifact,
     directory: &std::path::Path,
 ) -> SmokeResult {
+    let manifest = artifact.manifest();
     let common = manifest
         .resources
         .iter()
@@ -400,11 +442,11 @@ fn corrupt_last_match_context(
 async fn stage_and_commit(
     client: &mut Client,
     claim: &ClaimedJob,
-    manifest: &ArtifactManifest,
+    artifact: &ValidatedArtifact,
     directory: &std::path::Path,
 ) -> Result<(), ControlError> {
     let transaction = client.transaction().await?;
-    stage_artifact(&transaction, claim, manifest, directory).await?;
+    stage_artifact(&transaction, claim, artifact, directory).await?;
     transaction.commit().await?;
     Ok(())
 }
@@ -413,11 +455,11 @@ async fn stage_with_control_lock_probe(
     staging_client: &mut Client,
     probe_client: &mut Client,
     claim: &ClaimedJob,
-    manifest: &ArtifactManifest,
+    artifact: &ValidatedArtifact,
     directory: &std::path::Path,
 ) -> SmokeResult {
     let staging = staging_client.transaction().await?;
-    stage_artifact(&staging, claim, manifest, directory).await?;
+    stage_artifact(&staging, claim, artifact, directory).await?;
     let probe = probe_client.transaction().await?;
     probe
         .query_one(
@@ -473,23 +515,28 @@ async fn prepare_owned_attempt(client: &Client) -> SmokeResult {
                ('{MATCH_ID}', 'member_eu', 4, 4, 4000, 400);\x20\
              UPDATE series_analysis_title_states SET input_revision = 1,\x20\
                algorithm_version = '{ALGORITHM_VERSION}', artifact_schema_version = {ARTIFACT_SCHEMA_VERSION},\x20\
+               validation_contract_id = '{ARTIFACT_VALIDATION_CONTRACT_ID}',\x20\
                pending_work = true WHERE game_title_id = '{TITLE_ID}';\x20\
              INSERT INTO series_analysis_jobs (\x20\
                id, game_title_id, input_revision, algorithm_version, artifact_schema_version,\x20\
+               validation_contract_id,\x20\
                status, trigger, started_at, lease_owner, lease_attempt_id,\x20\
-               lease_fencing_token, lease_expires_at, attempt_count\x20\
+               lease_fencing_token, lease_expires_at, lease_validation_contract_id, attempt_count\x20\
              ) VALUES (\x20\
                '{JOB_ID}', '{TITLE_ID}', 1, '{ALGORITHM_VERSION}', {ARTIFACT_SCHEMA_VERSION},\x20\
+               '{ARTIFACT_VALIDATION_CONTRACT_ID}',\x20\
                'running', 'manual', clock_timestamp(), '{OLD_WORKER_ID}', '{OLD_ATTEMPT_ID}',\x20\
-               {OLD_FENCE}, clock_timestamp() + interval '10 minutes', 1\x20\
+               {OLD_FENCE}, clock_timestamp() + interval '10 minutes',\x20\
+               '{ARTIFACT_VALIDATION_CONTRACT_ID}', 1\x20\
              );\x20\
              INSERT INTO series_analysis_job_attempts (\x20\
                id, job_id, attempt_no, owner, fencing_token, input_revision, algorithm_version,\x20\
-               artifact_schema_version, status, effective_config_version,\x20\
+               artifact_schema_version, validation_contract_id, status, effective_config_version,\x20\
                calculation_timeout_milliseconds\x20\
              ) VALUES (\x20\
                '{OLD_ATTEMPT_ID}', '{JOB_ID}', 1, '{OLD_WORKER_ID}', {OLD_FENCE}, 1,\x20\
-               '{ALGORITHM_VERSION}', {ARTIFACT_SCHEMA_VERSION}, 'running', 'staging-smoke', 60000\x20\
+               '{ALGORITHM_VERSION}', {ARTIFACT_SCHEMA_VERSION},\x20\
+               '{ARTIFACT_VALIDATION_CONTRACT_ID}', 'running', 'staging-smoke', 60000\x20\
              );\x20\
              UPDATE worker_execution_slots SET task_kind = 'analysis', owner = '{OLD_WORKER_ID}',\x20\
                job_id = '{JOB_ID}', attempt_id = '{OLD_ATTEMPT_ID}', holder_preemptible = true,\x20\
@@ -558,7 +605,8 @@ async fn assert_claim_reports_database_availability_delay(client: &mut Client) -
              WHERE slot_key = 'shared-heavy-work' AND job_id = '{JOB_ID}';\x20\
              UPDATE series_analysis_jobs SET status = 'queued', available_at = clock_timestamp() + interval '1 hour',\x20\
                started_at = NULL, lease_owner = NULL, lease_attempt_id = NULL,\x20\
-               lease_fencing_token = NULL, lease_expires_at = NULL, updated_at = clock_timestamp()\x20\
+               lease_fencing_token = NULL, lease_expires_at = NULL,\x20\
+               lease_validation_contract_id = NULL, updated_at = clock_timestamp()\x20\
              WHERE id = '{JOB_ID}';"
         ))
         .await?;
@@ -838,11 +886,12 @@ async fn expire_old_lease_and_prepare_retry(client: &Client) -> SmokeResult {
              WHERE id = '{JOB_ID}' AND status = 'running';\x20\
              INSERT INTO series_analysis_job_attempts (\x20\
                id, job_id, attempt_no, owner, fencing_token, input_revision, algorithm_version,\x20\
-               artifact_schema_version, status, effective_config_version,\x20\
+               artifact_schema_version, validation_contract_id, status, effective_config_version,\x20\
                calculation_timeout_milliseconds\x20\
              ) VALUES (\x20\
                '{NEW_ATTEMPT_ID}', '{JOB_ID}', 2, '{NEW_WORKER_ID}', {NEW_FENCE}, 1,\x20\
-               '{ALGORITHM_VERSION}', {ARTIFACT_SCHEMA_VERSION}, 'running', 'staging-smoke', 60000\x20\
+               '{ALGORITHM_VERSION}', {ARTIFACT_SCHEMA_VERSION},\x20\
+               '{ARTIFACT_VALIDATION_CONTRACT_ID}', 'running', 'staging-smoke', 60000\x20\
              );\x20\
              UPDATE worker_execution_slots SET owner = '{NEW_WORKER_ID}',\x20\
                attempt_id = '{NEW_ATTEMPT_ID}', lease_expires_at = clock_timestamp() + interval '10 minutes',\x20\
@@ -872,6 +921,72 @@ async fn assert_artifact_shape(client: &Client, artifact_id: &str, expected: &st
         row.try_get::<_, String>(2)?,
     );
     assert_eq!(actual, expected);
+    Ok(())
+}
+
+async fn assert_validation_contract(client: &Client, artifact: &ValidatedArtifact) -> SmokeResult {
+    let stored = client
+        .query_one(
+            "SELECT validation_contract_id FROM series_analysis_artifacts WHERE id = $1",
+            &[&artifact.manifest().artifact_id],
+        )
+        .await?
+        .try_get::<_, Option<String>>(0)?;
+    assert_eq!(stored.as_deref(), Some(artifact.validation_contract_id()));
+    Ok(())
+}
+
+async fn seed_unattested_legacy_current(
+    client: &mut Client,
+    artifact: &ValidatedArtifact,
+) -> SmokeResult {
+    let artifact_id = &artifact.manifest().artifact_id;
+    let transaction = client.transaction().await?;
+    // The isolated smoke must represent a pointer that predates the attestation migration. New
+    // runtime writes cannot create this state because the pointer guard now rejects it.
+    transaction
+        .batch_execute("SET LOCAL session_replication_role = replica")
+        .await?;
+    transaction
+        .execute(
+            "UPDATE series_analysis_artifacts SET\x20\
+               validation_contract_id = NULL, status = 'published',\x20\
+               published_at = clock_timestamp() - interval '2 days'\x20\
+             WHERE id = $1 AND status = 'staging'",
+            &[artifact_id],
+        )
+        .await?;
+    transaction
+        .execute(
+            "UPDATE series_analysis_title_states SET current_artifact_id = $1\x20\
+             WHERE game_title_id = $2",
+            &[artifact_id, &TITLE_ID],
+        )
+        .await?;
+    transaction.commit().await?;
+    Ok(())
+}
+
+async fn assert_artifact_pointers(
+    client: &Client,
+    expected_current: Option<&str>,
+    expected_previous: Option<&str>,
+) -> SmokeResult {
+    let row = client
+        .query_one(
+            "SELECT current_artifact_id, previous_artifact_id\x20\
+             FROM series_analysis_title_states WHERE game_title_id = $1",
+            &[&TITLE_ID],
+        )
+        .await?;
+    assert_eq!(
+        row.try_get::<_, Option<String>>(0)?.as_deref(),
+        expected_current
+    );
+    assert_eq!(
+        row.try_get::<_, Option<String>>(1)?.as_deref(),
+        expected_previous
+    );
     Ok(())
 }
 

@@ -1,6 +1,6 @@
 use tokio_postgres::{Client, Transaction};
 
-use momo_analysis_core::contract::ARTIFACT_SCHEMA_VERSION;
+use momo_analysis_core::contract::{ARTIFACT_SCHEMA_VERSION, ARTIFACT_VALIDATION_CONTRACT_ID};
 
 use crate::{
     execution_slot::{
@@ -53,14 +53,13 @@ pub(crate) async fn claim_job(
         }
     };
     let expected_schema = i32::try_from(ARTIFACT_SCHEMA_VERSION)?;
-    if candidate.algorithm_version != ALGORITHM_VERSION
-        || candidate.artifact_schema_version != expected_schema
-    {
+    if !supports_candidate(&candidate, expected_schema) {
         transaction.rollback().await?;
         return Ok(ControlOutcome::without_effects(
             ClaimResult::UnsupportedVersion(UnsupportedJobVersion {
                 algorithm_version: candidate.algorithm_version,
                 artifact_schema_version: candidate.artifact_schema_version,
+                validation_contract_id: candidate.validation_contract_id,
             }),
         ));
     }
@@ -96,6 +95,7 @@ pub(crate) async fn claim_job(
         input_revision: candidate.input_revision,
         algorithm_version: candidate.algorithm_version,
         artifact_schema_version: candidate.artifact_schema_version,
+        validation_contract_id: candidate.validation_contract_id,
         attempt_id,
         attempt_no,
         fencing_token,
@@ -107,6 +107,7 @@ pub(super) struct ClaimCandidate {
     input_revision: i64,
     algorithm_version: String,
     artifact_schema_version: i32,
+    validation_contract_id: Option<String>,
     attempt_count: i32,
     slot_fencing_token: i64,
 }
@@ -172,7 +173,8 @@ pub(super) async fn prepare_claim(
     }
     let job = transaction
         .query_opt(
-            "SELECT input_revision, algorithm_version, artifact_schema_version, status,\x20\
+            "SELECT input_revision, algorithm_version, artifact_schema_version,\x20\
+                    validation_contract_id, status,\x20\
                     GREATEST(\x20\
                       CEIL(EXTRACT(EPOCH FROM (available_at - clock_timestamp())) * 1000), 0\x20\
                     )::bigint AS remaining_delay_milliseconds, attempt_count\x20\
@@ -183,10 +185,10 @@ pub(super) async fn prepare_claim(
     let Some(job) = job else {
         return Ok(ClaimPreparation::Rejected(ClaimResult::MissingOrTerminal));
     };
-    if job.try_get::<_, String>(3)? != "queued" {
+    if job.try_get::<_, String>(4)? != "queued" {
         return Ok(ClaimPreparation::Rejected(ClaimResult::MissingOrTerminal));
     }
-    let remaining_delay_milliseconds = job.try_get::<_, i64>(4)?;
+    let remaining_delay_milliseconds = job.try_get::<_, i64>(5)?;
     if remaining_delay_milliseconds > 0 {
         return Ok(ClaimPreparation::Rejected(ClaimResult::NotYetAvailable {
             remaining_delay: std::time::Duration::from_millis(u64::try_from(
@@ -200,11 +202,21 @@ pub(super) async fn prepare_claim(
             input_revision: job.try_get(0)?,
             algorithm_version: job.try_get(1)?,
             artifact_schema_version: job.try_get(2)?,
-            attempt_count: job.try_get(5)?,
+            validation_contract_id: job.try_get(3)?,
+            attempt_count: job.try_get(6)?,
             slot_fencing_token: slot.fencing_token,
         },
         effects,
     })
+}
+
+fn supports_candidate(candidate: &ClaimCandidate, expected_schema: i32) -> bool {
+    candidate.algorithm_version == ALGORITHM_VERSION
+        && candidate.artifact_schema_version == expected_schema
+        && candidate
+            .validation_contract_id
+            .as_deref()
+            .is_none_or(|contract| contract == ARTIFACT_VALIDATION_CONTRACT_ID)
 }
 
 async fn recovery_resolves_delivery(
@@ -287,13 +299,15 @@ async fn persist_claim(
                status = 'running', started_at = clock_timestamp(), finished_at = NULL,\x20\
                lease_owner = $1, lease_attempt_id = $2, lease_fencing_token = $3,\x20\
                lease_expires_at = clock_timestamp() + ($4::bigint * interval '1 millisecond'),\x20\
-               attempt_count = $5, updated_at = clock_timestamp()\x20\
-             WHERE id = $6 AND status = 'queued'",
+               lease_validation_contract_id = $5, attempt_count = $6,\x20\
+               updated_at = clock_timestamp()\x20\
+             WHERE id = $7 AND status = 'queued'",
             &[
                 &config.worker_id,
                 &attempt.attempt_id,
                 &attempt.fencing_token,
                 &attempt.lease_milliseconds,
+                &attempt.candidate.validation_contract_id,
                 &attempt.attempt_no,
                 &attempt.job_id,
             ],
@@ -306,9 +320,9 @@ async fn persist_claim(
         .execute(
             "INSERT INTO series_analysis_job_attempts (\x20\
                id, job_id, attempt_no, owner, fencing_token, input_revision,\x20\
-               algorithm_version, artifact_schema_version, status,\x20\
+               algorithm_version, artifact_schema_version, validation_contract_id, status,\x20\
                effective_config_version, calculation_timeout_milliseconds, started_at\x20\
-             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'running', $9, $10, clock_timestamp())",
+             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'running', $10, $11, clock_timestamp())",
             &[
                 &attempt.attempt_id,
                 &attempt.job_id,
@@ -318,6 +332,7 @@ async fn persist_claim(
                 &attempt.candidate.input_revision,
                 &attempt.candidate.algorithm_version,
                 &attempt.candidate.artifact_schema_version,
+                &attempt.candidate.validation_contract_id,
                 &config.effective_config_version,
                 &attempt.timeout_milliseconds,
             ],
@@ -364,6 +379,210 @@ async fn mark_associated_requests_running(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn candidate(validation_contract_id: Option<&str>) -> ClaimCandidate {
+        ClaimCandidate {
+            game_title_id: String::from("title-1"),
+            input_revision: 1,
+            algorithm_version: String::from(ALGORITHM_VERSION),
+            artifact_schema_version: i32::try_from(ARTIFACT_SCHEMA_VERSION).unwrap_or(i32::MAX),
+            validation_contract_id: validation_contract_id.map(String::from),
+            attempt_count: 0,
+            slot_fencing_token: 0,
+        }
+    }
+
+    #[test]
+    fn claim_accepts_legacy_null_or_the_exact_validation_contract_only() {
+        let schema = i32::try_from(ARTIFACT_SCHEMA_VERSION).unwrap_or(i32::MAX);
+
+        assert!(supports_candidate(&candidate(None), schema));
+        assert!(supports_candidate(
+            &candidate(Some(ARTIFACT_VALIDATION_CONTRACT_ID)),
+            schema
+        ));
+        assert!(!supports_candidate(
+            &candidate(Some("unknown-validation-contract")),
+            schema
+        ));
+    }
+
+    #[tokio::test]
+    #[ignore = "requires explicitly isolated ANALYSIS_CONTROL_SMOKE_DATABASE_URL"]
+    #[expect(
+        clippy::panic_in_result_fn,
+        clippy::too_many_lines,
+        reason = "the isolated database test keeps the rollback claim fence explicit"
+    )]
+    async fn real_postgres_keeps_exact_jobs_queued_when_an_old_binary_omits_the_lease_contract()
+    -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        const TITLE_ID: &str = "analysis-validation-lease-fence-title";
+        const JOB_ID: &str = "analysis-validation-lease-fence-job";
+        let database_url = std::env::var("ANALYSIS_CONTROL_SMOKE_DATABASE_URL")?;
+        let schema = i32::try_from(ARTIFACT_SCHEMA_VERSION)?;
+        let mut client = crate::postgres::connect(&database_url).await?;
+        let transaction = client.transaction().await?;
+        transaction
+            .execute(
+                "INSERT INTO game_titles (id, name, layout_family, display_order)\x20\
+                 VALUES ($1, 'validation lease fence', 'momotetsu2', 9998)",
+                &[&TITLE_ID],
+            )
+            .await?;
+        transaction
+            .execute(
+                "UPDATE series_analysis_title_states SET algorithm_version = $2,\x20\
+                   artifact_schema_version = $3, validation_contract_id = $4\x20\
+                 WHERE game_title_id = $1",
+                &[
+                    &TITLE_ID,
+                    &ALGORITHM_VERSION,
+                    &schema,
+                    &ARTIFACT_VALIDATION_CONTRACT_ID,
+                ],
+            )
+            .await?;
+        transaction
+            .execute(
+                "INSERT INTO series_analysis_jobs (id, game_title_id, input_revision,\x20\
+                   algorithm_version, artifact_schema_version, validation_contract_id,\x20\
+                   status, trigger, requested_at, available_at)\x20\
+                 VALUES ($1, $2, 0, $3, $4, $5, 'queued', 'manual',\x20\
+                   clock_timestamp(), clock_timestamp())",
+                &[
+                    &JOB_ID,
+                    &TITLE_ID,
+                    &ALGORITHM_VERSION,
+                    &schema,
+                    &ARTIFACT_VALIDATION_CONTRACT_ID,
+                ],
+            )
+            .await?;
+
+        transaction
+            .batch_execute("SAVEPOINT old_binary_claim")
+            .await?;
+        let old_claim = transaction
+            .execute(
+                "UPDATE series_analysis_jobs SET status = 'running',\x20\
+                   started_at = clock_timestamp(), lease_owner = 'legacy-worker',\x20\
+                   lease_attempt_id = 'legacy-attempt', lease_fencing_token = 1,\x20\
+                   lease_expires_at = clock_timestamp() + interval '1 minute', attempt_count = 1\x20\
+                 WHERE id = $1 AND status = 'queued'",
+                &[&JOB_ID],
+            )
+            .await;
+        let Err(old_claim_error) = old_claim else {
+            return Err("an old binary claimed an exact-contract job".into());
+        };
+        assert_eq!(
+            old_claim_error
+                .as_db_error()
+                .and_then(tokio_postgres::error::DbError::constraint),
+            Some("series_analysis_jobs_lease_validation_contract_check")
+        );
+        transaction
+            .batch_execute("ROLLBACK TO SAVEPOINT old_binary_claim")
+            .await?;
+
+        transaction.batch_execute("SAVEPOINT legacy_claim").await?;
+        transaction
+            .execute(
+                "UPDATE series_analysis_jobs SET validation_contract_id = NULL WHERE id = $1",
+                &[&JOB_ID],
+            )
+            .await?;
+        let legacy_claimed = transaction
+            .execute(
+                "UPDATE series_analysis_jobs SET status = 'running',\x20\
+                   started_at = clock_timestamp(), lease_owner = 'legacy-worker',\x20\
+                   lease_attempt_id = 'legacy-attempt', lease_fencing_token = 1,\x20\
+                   lease_expires_at = clock_timestamp() + interval '1 minute', attempt_count = 1\x20\
+                 WHERE id = $1 AND status = 'queued'",
+                &[&JOB_ID],
+            )
+            .await?;
+        assert_eq!(legacy_claimed, 1);
+        transaction
+            .batch_execute("ROLLBACK TO SAVEPOINT legacy_claim")
+            .await?;
+
+        let claimed = transaction
+            .execute(
+                "UPDATE series_analysis_jobs SET status = 'running',\x20\
+                   started_at = clock_timestamp(), lease_owner = 'current-worker',\x20\
+                   lease_attempt_id = 'current-attempt', lease_fencing_token = 2,\x20\
+                   lease_expires_at = clock_timestamp() - interval '1 minute',\x20\
+                   lease_validation_contract_id = $2, attempt_count = 1\x20\
+                 WHERE id = $1 AND status = 'queued'",
+                &[&JOB_ID, &ARTIFACT_VALIDATION_CONTRACT_ID],
+            )
+            .await?;
+        assert_eq!(claimed, 1);
+
+        // A rollback binary does not know the additive lease marker. The database must clear it
+        // before validating a running -> queued recovery, then still reject the rollback binary's
+        // subsequent queued -> running claim. Otherwise an exact-contract job is either stranded
+        // running forever or consumed by a worker that cannot honor its contract.
+        let recovered_by_old_binary = transaction
+            .execute(
+                "UPDATE series_analysis_jobs SET status = 'queued', started_at = NULL,\x20\
+                   lease_owner = NULL, lease_attempt_id = NULL, lease_fencing_token = NULL,\x20\
+                   lease_expires_at = NULL, available_at = clock_timestamp()\x20\
+                 WHERE id = $1 AND status = 'running'\x20\
+                   AND lease_expires_at < clock_timestamp()",
+                &[&JOB_ID],
+            )
+            .await?;
+        assert_eq!(recovered_by_old_binary, 1);
+        let recovered = transaction
+            .query_one(
+                "SELECT status, lease_validation_contract_id\x20\
+                 FROM series_analysis_jobs WHERE id = $1",
+                &[&JOB_ID],
+            )
+            .await?;
+        assert_eq!(recovered.try_get::<_, String>(0)?, "queued");
+        assert_eq!(recovered.try_get::<_, Option<String>>(1)?, None);
+
+        transaction
+            .batch_execute("SAVEPOINT old_binary_reclaim")
+            .await?;
+        let old_reclaim = transaction
+            .execute(
+                "UPDATE series_analysis_jobs SET status = 'running',\x20\
+                   started_at = clock_timestamp(), lease_owner = 'legacy-worker',\x20\
+                   lease_attempt_id = 'legacy-retry-attempt', lease_fencing_token = 3,\x20\
+                   lease_expires_at = clock_timestamp() + interval '1 minute', attempt_count = 2\x20\
+                 WHERE id = $1 AND status = 'queued'",
+                &[&JOB_ID],
+            )
+            .await;
+        let Err(old_reclaim_error) = old_reclaim else {
+            return Err("an old binary reclaimed a recovered exact-contract job".into());
+        };
+        assert_eq!(
+            old_reclaim_error
+                .as_db_error()
+                .and_then(tokio_postgres::error::DbError::constraint),
+            Some("series_analysis_jobs_lease_validation_contract_check")
+        );
+        transaction
+            .batch_execute("ROLLBACK TO SAVEPOINT old_binary_reclaim")
+            .await?;
+        assert_eq!(
+            transaction
+                .query_one(
+                    "SELECT status FROM series_analysis_jobs WHERE id = $1",
+                    &[&JOB_ID],
+                )
+                .await?
+                .try_get::<_, String>(0)?,
+            "queued"
+        );
+        transaction.rollback().await?;
+        Ok(())
+    }
 
     #[test]
     fn recovered_current_delivery_requires_terminal_state_or_durable_replacement() {

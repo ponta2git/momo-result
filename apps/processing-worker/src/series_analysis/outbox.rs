@@ -525,6 +525,7 @@ struct CampaignTarget {
     input_revision: i64,
     algorithm_version: String,
     artifact_schema_version: i32,
+    validation_contract_id: Option<String>,
     accepted_at: SystemTime,
     operation_id: String,
     trigger: String,
@@ -535,12 +536,16 @@ struct DesiredAnalysis {
     input_revision: i64,
     algorithm_version: String,
     artifact_schema_version: i32,
+    validation_contract_id: Option<String>,
 }
 
 #[derive(Debug)]
 struct ActiveAnalysisJob {
     id: String,
     status: String,
+    algorithm_version: String,
+    artifact_schema_version: i32,
+    validation_contract_id: Option<String>,
     started_at: Option<SystemTime>,
     attempt_id: Option<String>,
 }
@@ -598,7 +603,8 @@ async fn lock_desired_analysis(
     transaction
         .query_opt(
             r"
-            SELECT input_revision, algorithm_version, artifact_schema_version
+            SELECT input_revision, algorithm_version, artifact_schema_version,
+                   validation_contract_id
             FROM series_analysis_title_states
             WHERE game_title_id = $1
             FOR UPDATE
@@ -617,6 +623,9 @@ async fn lock_desired_analysis(
                 artifact_schema_version: row
                     .try_get("artifact_schema_version")
                     .map_err(SeriesAnalysisOutboxError::InvalidRecord)?,
+                validation_contract_id: row
+                    .try_get("validation_contract_id")
+                    .map_err(SeriesAnalysisOutboxError::InvalidRecord)?,
             })
         })
         .transpose()
@@ -629,7 +638,8 @@ async fn lock_active_analysis_job(
     transaction
         .query_opt(
             r"
-            SELECT id, status, started_at, lease_attempt_id
+            SELECT id, status, algorithm_version, artifact_schema_version,
+                   validation_contract_id, started_at, lease_attempt_id
             FROM series_analysis_jobs
             WHERE game_title_id = $1
               AND status IN ('queued', 'running')
@@ -645,6 +655,15 @@ async fn lock_active_analysis_job(
                     .map_err(SeriesAnalysisOutboxError::InvalidRecord)?,
                 status: row
                     .try_get("status")
+                    .map_err(SeriesAnalysisOutboxError::InvalidRecord)?,
+                algorithm_version: row
+                    .try_get("algorithm_version")
+                    .map_err(SeriesAnalysisOutboxError::InvalidRecord)?,
+                artifact_schema_version: row
+                    .try_get("artifact_schema_version")
+                    .map_err(SeriesAnalysisOutboxError::InvalidRecord)?,
+                validation_contract_id: row
+                    .try_get("validation_contract_id")
                     .map_err(SeriesAnalysisOutboxError::InvalidRecord)?,
                 started_at: row
                     .try_get("started_at")
@@ -665,8 +684,12 @@ async fn lock_pending_campaign_target(
         .query_opt(
             r"
             SELECT t.campaign_id, t.game_title_id, t.input_revision,
-                   t.algorithm_version, t.artifact_schema_version, t.accepted_at,
-                   c.operation_request_id, c.trigger
+                   t.algorithm_version, t.artifact_schema_version,
+                   t.validation_contract_id, t.accepted_at,
+                   c.operation_request_id, c.trigger,
+                   c.algorithm_version AS campaign_algorithm_version,
+                   c.artifact_schema_version AS campaign_artifact_schema_version,
+                   c.validation_contract_id AS campaign_validation_contract_id
             FROM series_analysis_campaign_targets t
             JOIN series_analysis_campaigns c ON c.id = t.campaign_id
             WHERE t.campaign_id = $1
@@ -678,6 +701,34 @@ async fn lock_pending_campaign_target(
         )
         .await?
         .map(|row| {
+            let trigger = row
+                .try_get::<_, String>("trigger")
+                .map_err(SeriesAnalysisOutboxError::InvalidRecord)?;
+            let algorithm_version = row
+                .try_get::<_, String>("algorithm_version")
+                .map_err(SeriesAnalysisOutboxError::InvalidRecord)?;
+            let artifact_schema_version = row
+                .try_get::<_, i32>("artifact_schema_version")
+                .map_err(SeriesAnalysisOutboxError::InvalidRecord)?;
+            let validation_contract_id = row
+                .try_get::<_, Option<String>>("validation_contract_id")
+                .map_err(SeriesAnalysisOutboxError::InvalidRecord)?;
+            let campaign_algorithm = row
+                .try_get::<_, String>("campaign_algorithm_version")
+                .map_err(SeriesAnalysisOutboxError::InvalidRecord)?;
+            let campaign_schema = row
+                .try_get::<_, i32>("campaign_artifact_schema_version")
+                .map_err(SeriesAnalysisOutboxError::InvalidRecord)?;
+            let campaign_validation_contract = row
+                .try_get::<_, Option<String>>("campaign_validation_contract_id")
+                .map_err(SeriesAnalysisOutboxError::InvalidRecord)?;
+            if campaign_requires_uniform_version(&trigger)?
+                && (algorithm_version != campaign_algorithm
+                    || artifact_schema_version != campaign_schema
+                    || validation_contract_id != campaign_validation_contract)
+            {
+                return Err(SeriesAnalysisOutboxError::InvalidRecordValue);
+            }
             Ok(CampaignTarget {
                 campaign_id: row
                     .try_get("campaign_id")
@@ -688,30 +739,38 @@ async fn lock_pending_campaign_target(
                 input_revision: row
                     .try_get("input_revision")
                     .map_err(SeriesAnalysisOutboxError::InvalidRecord)?,
-                algorithm_version: row
-                    .try_get("algorithm_version")
-                    .map_err(SeriesAnalysisOutboxError::InvalidRecord)?,
-                artifact_schema_version: row
-                    .try_get("artifact_schema_version")
-                    .map_err(SeriesAnalysisOutboxError::InvalidRecord)?,
+                algorithm_version,
+                artifact_schema_version,
+                validation_contract_id,
                 accepted_at: row
                     .try_get("accepted_at")
                     .map_err(SeriesAnalysisOutboxError::InvalidRecord)?,
                 operation_id: row
                     .try_get("operation_request_id")
                     .map_err(SeriesAnalysisOutboxError::InvalidRecord)?,
-                trigger: row
-                    .try_get("trigger")
-                    .map_err(SeriesAnalysisOutboxError::InvalidRecord)?,
+                trigger,
             })
         })
         .transpose()
 }
 
-fn campaign_assignment_decision(
-    active: Option<&ActiveAnalysisJob>,
-    accepted_at: SystemTime,
-) -> Result<CampaignAssignmentDecision<'_>, SeriesAnalysisOutboxError> {
+fn campaign_requires_uniform_version(trigger: &str) -> Result<bool, SeriesAnalysisOutboxError> {
+    match trigger {
+        // A manual all-title campaign summarizes heterogeneous title snapshots as `mixed` plus
+        // the maximum schema. Its targets, not the campaign summary, own the requested tuple.
+        "manual" => Ok(false),
+        "algorithm_update"
+        | "artifact_schema_update"
+        | "validation_contract_update"
+        | "initial_backfill" => Ok(true),
+        _ => Err(SeriesAnalysisOutboxError::InvalidRecordValue),
+    }
+}
+
+fn campaign_assignment_decision<'a>(
+    active: Option<&'a ActiveAnalysisJob>,
+    target: &CampaignTarget,
+) -> Result<CampaignAssignmentDecision<'a>, SeriesAnalysisOutboxError> {
     match active {
         None => Ok(CampaignAssignmentDecision::Create),
         Some(job) if job.status == "queued" => {
@@ -719,7 +778,10 @@ fn campaign_assignment_decision(
         }
         Some(job) if job.status == "running" => match (
             job.started_at
-                .is_some_and(|started_at| started_at >= accepted_at),
+                .is_some_and(|started_at| started_at >= target.accepted_at)
+                && job.algorithm_version == target.algorithm_version
+                && job.artifact_schema_version == target.artifact_schema_version
+                && job.validation_contract_id == target.validation_contract_id,
             job.attempt_id.as_deref(),
         ) {
             (true, Some(attempt_id)) => Ok(CampaignAssignmentDecision::JoinRunning {
@@ -749,10 +811,11 @@ async fn materialize_campaign_target(
             INSERT INTO series_analysis_job_requests (
               id, game_title_id, operation_request_id, campaign_id,
               input_revision, algorithm_version, artifact_schema_version,
+              validation_contract_id,
               trigger, force_run, status, assigned_job_id, assigned_attempt_id, accepted_at
             ) VALUES (
               $1, $2, $3, $4, $5, $6, $7,
-              $8, true, $9, $10, $11, $12
+              $8, $9, true, $10, $11, $12, $13
             )
             ",
             &[
@@ -763,6 +826,7 @@ async fn materialize_campaign_target(
                 &target.input_revision,
                 &target.algorithm_version,
                 &target.artifact_schema_version,
+                &target.validation_contract_id,
                 &target.trigger,
                 &assignment.request_status,
                 &assignment.job_id,
@@ -813,16 +877,17 @@ async fn assign_campaign_target(
     active: Option<&ActiveAnalysisJob>,
     new_job_id: &str,
 ) -> Result<CampaignAssignment, SeriesAnalysisOutboxError> {
-    match campaign_assignment_decision(active, target.accepted_at)? {
+    match campaign_assignment_decision(active, target)? {
         CampaignAssignmentDecision::Create => {
             transaction
                 .execute(
                     r"
                     INSERT INTO series_analysis_jobs (
                       id, game_title_id, input_revision, algorithm_version,
-                      artifact_schema_version, status, trigger, requested_at, available_at
+                      artifact_schema_version, validation_contract_id, status, trigger,
+                      requested_at, available_at
                     ) VALUES (
-                      $1, $2, $3, $4, $5, 'queued', $6, $7, $7
+                      $1, $2, $3, $4, $5, $6, 'queued', $7, $8, $8
                     )
                     ",
                     &[
@@ -831,6 +896,7 @@ async fn assign_campaign_target(
                         &desired.input_revision,
                         &desired.algorithm_version,
                         &desired.artifact_schema_version,
+                        &desired.validation_contract_id,
                         &target.trigger,
                         &target.accepted_at,
                     ],
@@ -852,6 +918,7 @@ async fn assign_campaign_target(
                     SET input_revision = $2,
                         algorithm_version = $3,
                         artifact_schema_version = $4,
+                        validation_contract_id = $5,
                         updated_at = clock_timestamp()
                     WHERE id = $1 AND status = 'queued'
                     ",
@@ -860,6 +927,7 @@ async fn assign_campaign_target(
                         &desired.input_revision,
                         &desired.algorithm_version,
                         &desired.artifact_schema_version,
+                        &desired.validation_contract_id,
                     ],
                 )
                 .await?;

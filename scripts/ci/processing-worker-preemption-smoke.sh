@@ -2,6 +2,9 @@
 set -euo pipefail
 
 image_ref="${1:?processing worker image reference is required}"
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# shellcheck source=analysis-smoke-safety.sh
+source "${repo_root}/scripts/ci/analysis-smoke-safety.sh"
 postgres_image="${POSTGRES_IMAGE:-postgres:18-alpine}"
 redis_image="${REDIS_IMAGE:-redis:7-alpine}"
 worker_container="momo-analysis-preemption-smoke-worker"
@@ -13,6 +16,18 @@ ocr_dead_stream="momo:ocr:v2:preemption-smoke:dead"
 analysis_job="ci-preemption-analysis-job"
 ocr_job="ci-preemption-ocr-job"
 title_id="ci-preemption-title"
+publication_contract="${repo_root}/docs/schemas/series-analysis-publication-contract-v1.json"
+algorithm_version="${analysis_smoke_algorithm_version}"
+artifact_schema_version="$(jq -er '
+  .artifactSchemaVersion |
+  select(type == "number" and . == floor and . >= 1)
+' "${publication_contract}")"
+validation_contract_id="$(jq -er '
+  .validationContractId |
+  select(type == "string" and test("^[a-z0-9][a-z0-9._-]{0,127}$"))
+' "${publication_contract}")"
+analysis_worker_id="ci-preemption-analysis-worker"
+analysis_capability_id="${analysis_worker_id}@${algorithm_version}@${artifact_schema_version}@${validation_contract_id}"
 run_root="$(mktemp -d "${TMPDIR:-/tmp}/momo-preemption-smoke.XXXXXX")"
 worker_log="${run_root}/worker.log"
 lock_log="${run_root}/lock.log"
@@ -36,6 +51,13 @@ if [[ -z "${WORKER_DATABASE_URL:-}" || -z "${WORKER_REDIS_URL:-}" ]]; then
   exit 1
 fi
 
+analysis_smoke_require_isolated_services
+analysis_smoke_require_same_postgres_database \
+  "${postgres_image}" \
+  "${DATABASE_URL}" \
+  "WORKER_DATABASE_URL" \
+  "${WORKER_DATABASE_URL}"
+
 psql_ci() {
   if [[ -n "${POSTGRES_CONTAINER:-}" ]]; then
     docker exec -i "${POSTGRES_CONTAINER}" \
@@ -58,16 +80,18 @@ redis_ci() {
 }
 
 cleanup_database() {
-  psql_ci >/dev/null <<'SQL'
-SET statement_timeout = '10s';
-SET lock_timeout = '5s';
+  psql_ci -v analysis_worker_id="${analysis_worker_id}" \
+    -v analysis_capability_id="${analysis_capability_id}" >/dev/null <<'SQL'
+BEGIN;
+SET LOCAL statement_timeout = '10s';
+SET LOCAL lock_timeout = '5s';
 UPDATE worker_execution_slots
 SET task_kind = NULL, owner = NULL, job_id = NULL, attempt_id = NULL,
     holder_preemptible = NULL, lease_expires_at = NULL,
     preempt_requested_by = NULL, preempt_requested_at = NULL,
     updated_at = clock_timestamp()
 WHERE slot_key = 'shared-heavy-work'
-  AND (owner IS NULL OR owner IN ('ci-preemption-analysis-worker','ci-preemption-ocr-worker'));
+  AND (owner IS NULL OR owner IN (:'analysis_worker_id','ci-preemption-ocr-worker'));
 DELETE FROM ocr_queue_outbox WHERE job_id = 'ci-preemption-ocr-job';
 DELETE FROM ocr_drafts WHERE job_id = 'ci-preemption-ocr-job';
 DELETE FROM ocr_jobs WHERE id = 'ci-preemption-ocr-job';
@@ -78,7 +102,7 @@ WHERE game_title_id = 'ci-preemption-title';
 DELETE FROM series_analysis_artifacts WHERE game_title_id = 'ci-preemption-title';
 DELETE FROM series_analysis_jobs WHERE id = 'ci-preemption-analysis-job';
 DELETE FROM series_analysis_worker_capabilities
-WHERE worker_id = 'ci-preemption-analysis-worker';
+WHERE worker_id IN (:'analysis_worker_id', :'analysis_capability_id');
 DELETE FROM match_incidents WHERE match_id = 'ci-preemption-match';
 DELETE FROM match_players WHERE match_id = 'ci-preemption-match';
 DELETE FROM matches WHERE id = 'ci-preemption-match';
@@ -86,6 +110,7 @@ DELETE FROM held_events WHERE id = 'ci-preemption-event';
 DELETE FROM season_masters WHERE id = 'ci-preemption-season';
 DELETE FROM map_masters WHERE id = 'ci-preemption-map';
 DELETE FROM game_titles WHERE id = 'ci-preemption-title';
+COMMIT;
 SQL
 }
 
@@ -105,14 +130,15 @@ cleanup() {
   set +e
   release_input_lock
   if [[ -n "${worker_pid}" ]]; then
-    docker stop --timeout 5 "${worker_container}" >/dev/null 2>&1
-    wait "${worker_pid}" 2>/dev/null
+    docker stop --timeout 5 "${worker_container}" >/dev/null 2>&1 || status=1
+    wait "${worker_pid}" 2>/dev/null || status=1
   fi
-  redis_ci DEL "${analysis_stream}" "${ocr_stream}" "${ocr_dead_stream}" >/dev/null 2>&1
-  cleanup_database >/dev/null 2>&1
+  redis_ci DEL "${analysis_stream}" "${ocr_stream}" "${ocr_dead_stream}" >/dev/null 2>&1 \
+    || status=1
+  cleanup_database >/dev/null 2>&1 || status=1
   case "${run_root}" in
     /tmp/*|/private/tmp/*|/var/folders/*|/private/var/folders/*)
-      rm -r -- "${run_root}"
+      rm -r -- "${run_root}" || status=1
       ;;
     *)
       echo "Refusing to clean an unexpected temporary path: ${run_root}" >&2
@@ -173,7 +199,9 @@ if [[ -n "${slot_owner}" ]]; then
   exit 1
 fi
 
-psql_ci >/dev/null <<'SQL'
+psql_ci -v algorithm_version="${algorithm_version}" \
+  -v artifact_schema_version="${artifact_schema_version}" \
+  -v validation_contract_id="${validation_contract_id}" >/dev/null <<'SQL'
 INSERT INTO game_titles (id, name, layout_family, display_order)
 VALUES ('ci-preemption-title', 'Preemption smoke', 'momotetsu2', 9901);
 INSERT INTO map_masters (id, game_title_id, name, display_order)
@@ -199,15 +227,18 @@ INSERT INTO match_players (
   ('ci-preemption-match', 'member_akane_mami', 3, 2, 3000, 600),
   ('ci-preemption-match', 'member_otaka', 4, 3, 2000, 400);
 UPDATE series_analysis_title_states
-SET input_revision = 1, pending_work = true, algorithm_version = 'series-analysis-v3',
-    artifact_schema_version = 2
+SET input_revision = 1, pending_work = true, algorithm_version = :'algorithm_version',
+    artifact_schema_version = :artifact_schema_version,
+    validation_contract_id = :'validation_contract_id'
 WHERE game_title_id = 'ci-preemption-title';
 INSERT INTO series_analysis_jobs (
   id, game_title_id, input_revision, algorithm_version,
-  artifact_schema_version, status, trigger, requested_at, available_at
+  artifact_schema_version, validation_contract_id,
+  status, trigger, requested_at, available_at
 ) VALUES (
-  'ci-preemption-analysis-job', 'ci-preemption-title', 1, 'series-analysis-v3',
-  2, 'queued', 'manual', clock_timestamp(), clock_timestamp()
+  'ci-preemption-analysis-job', 'ci-preemption-title', 1, :'algorithm_version',
+  :artifact_schema_version, :'validation_contract_id',
+  'queued', 'manual', clock_timestamp(), clock_timestamp()
 );
 INSERT INTO source_images (
   id, owner_account_id, object_key, idempotency_key_hash, status,
@@ -281,7 +312,7 @@ docker run --rm --name "${worker_container}" --privileged --cgroupns private \
   --env "MOMO_ANALYSIS_READ_DATABASE_URL=${WORKER_DATABASE_URL}" \
   --env "MOMO_REDIS_ANALYSIS_STREAM=${analysis_stream}" \
   --env "MOMO_ANALYSIS_REDIS_GROUP=${analysis_group}" \
-  --env MOMO_ANALYSIS_WORKER_ID=ci-preemption-analysis-worker \
+  --env "MOMO_ANALYSIS_WORKER_ID=${analysis_worker_id}" \
   --env MOMO_ANALYSIS_TEMPORARY_ROOT=/var/lib/momo-analysis \
   --env MOMO_ANALYSIS_CONFIG_VERSION=ci-preemption-v1 \
   --env MOMO_ANALYSIS_LEASE_DURATION_MS=10000 \
@@ -319,12 +350,32 @@ worker_pid=$!
 
 wait_for_log '"event":"analysis_worker_ready"' "analysis readiness"
 wait_for_log '"event":"ocr_rust_v2_worker_ready"' "OCR readiness"
+wait_for_sql_value "1" "
+  SELECT COUNT(*)::int
+  FROM series_analysis_worker_capabilities
+  WHERE worker_id = '${analysis_capability_id}'
+    AND algorithm_versions = jsonb_build_array('${algorithm_version}')
+    AND artifact_schema_versions = jsonb_build_array(${artifact_schema_version})
+    AND validation_contract_ids = jsonb_build_array('${validation_contract_id}')
+    AND draining = false;
+" "the scoped analysis capability registration"
 echo "Combined worker loops are ready."
 
 redis_ci XADD "${analysis_stream}" '*' schemaVersion 1 jobId "${analysis_job}" >/dev/null
-wait_for_sql_value "analysis|ci-preemption-analysis-worker" "
-  SELECT task_kind || '|' || owner
-  FROM worker_execution_slots WHERE slot_key = 'shared-heavy-work';
+wait_for_sql_value "analysis|${analysis_worker_id}|true" "
+  SELECT slot.task_kind || '|' || slot.owner || '|' || (
+    job.validation_contract_id = '${validation_contract_id}'
+    AND job.lease_validation_contract_id = '${validation_contract_id}'
+    AND EXISTS (
+      SELECT 1
+      FROM series_analysis_job_attempts attempt
+      WHERE attempt.id = job.lease_attempt_id
+        AND attempt.validation_contract_id = '${validation_contract_id}'
+    )
+  )::text
+  FROM worker_execution_slots slot
+  JOIN series_analysis_jobs job ON job.id = slot.job_id
+  WHERE slot.slot_key = 'shared-heavy-work';
 " "the running analysis holder"
 
 analysis_child="$(docker exec --user 10001:10001 "${worker_container}" \
@@ -385,6 +436,25 @@ wait_for_sql_value "succeeded|2|1|1" "
   WHERE job.id = 'ci-preemption-analysis-job'
   GROUP BY job.status, job.attempt_count;
 " "same-cgroup analysis recovery after preemption"
+
+publication_contract_shape="$(psql_ci -At -c "
+  SELECT
+    COUNT(*) FILTER (
+      WHERE attempt.validation_contract_id IS DISTINCT FROM job.validation_contract_id
+    )::int,
+    (SELECT COUNT(*)::int
+     FROM series_analysis_artifacts artifact
+     WHERE artifact.game_title_id = '${title_id}'
+       AND artifact.status = 'published'
+       AND artifact.validation_contract_id = '${validation_contract_id}')
+  FROM series_analysis_job_attempts attempt
+  JOIN series_analysis_jobs job ON job.id = attempt.job_id
+  WHERE job.id = '${analysis_job}';
+")"
+if [[ "${publication_contract_shape}" != "0|1" ]]; then
+  fail_with_log \
+    "Preemption recovery lost validation contract provenance: ${publication_contract_shape}"
+fi
 
 if ! docker inspect --format '{{.State.Running}}' "${worker_container}" | grep -qx true; then
   fail_with_log "The combined processing runtime did not survive child preemption."

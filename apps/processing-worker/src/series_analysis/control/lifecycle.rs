@@ -13,6 +13,7 @@ use super::{
     AttemptFailure, AttemptMetrics, AttemptOutcome, ClaimedJob, ControlError, DeliveryReason,
     HeartbeatResult, RequestOutcome, RequeueCause, SafeFailureCode, TransactionEffects,
     TransientRetryResult,
+    capability::refresh_heartbeat,
     transaction::{
         bounded_transaction, duration_milliseconds, enqueue_delivery, finish_attempt,
         fulfill_requests, lock_owned, refresh_operation_projections, release_slot,
@@ -56,6 +57,7 @@ pub(crate) async fn heartbeat(
                updated_at = clock_timestamp()\x20\
              WHERE id = $2 AND status = 'running' AND lease_owner = $3\x20\
                AND lease_attempt_id = $4 AND lease_fencing_token = $5\x20\
+               AND lease_validation_contract_id IS NOT DISTINCT FROM $6\x20\
                AND lease_expires_at > clock_timestamp()",
             &[
                 &lease_milliseconds,
@@ -63,6 +65,7 @@ pub(crate) async fn heartbeat(
                 &config.worker_id,
                 &claim.attempt_id,
                 &claim.fencing_token,
+                &claim.validation_contract_id,
             ],
         )
         .await?;
@@ -70,13 +73,7 @@ pub(crate) async fn heartbeat(
         transaction.rollback().await?;
         return Ok(HeartbeatResult::OwnerLost);
     }
-    transaction
-        .execute(
-            "UPDATE series_analysis_worker_capabilities\x20\
-             SET heartbeat_at = clock_timestamp() WHERE worker_id = $1",
-            &[&config.worker_id],
-        )
-        .await?;
+    refresh_heartbeat(&transaction, &config.worker_id).await?;
     transaction.commit().await?;
     Ok(if slot_renewal == SlotRenewal::PreemptRequested {
         HeartbeatResult::PreemptRequested
@@ -101,7 +98,7 @@ pub(crate) async fn supersede(
     lock_owned(&transaction, claim, config).await?;
     let desired = transaction
         .query_one(
-            "SELECT input_revision, algorithm_version, artifact_schema_version\x20\
+            "SELECT input_revision, algorithm_version, artifact_schema_version, validation_contract_id\x20\
              FROM series_analysis_title_states WHERE game_title_id = $1",
             &[&claim.game_title_id],
         )
@@ -109,19 +106,23 @@ pub(crate) async fn supersede(
     let desired_revision = desired.try_get::<_, i64>(0)?;
     let desired_algorithm = desired.try_get::<_, String>(1)?;
     let desired_schema = desired.try_get::<_, i32>(2)?;
+    let desired_validation_contract = desired.try_get::<_, Option<String>>(3)?;
     finish_attempt(&transaction, claim, AttemptOutcome::Superseded, metrics).await?;
     transaction
         .execute(
             "UPDATE series_analysis_jobs SET\x20\
                status = 'queued', input_revision = $1, algorithm_version = $2,\x20\
-               artifact_schema_version = $3, available_at = clock_timestamp(),\x20\
+               artifact_schema_version = $3, validation_contract_id = $4,\x20\
+               available_at = clock_timestamp(),\x20\
                started_at = NULL, lease_owner = NULL, lease_attempt_id = NULL,\x20\
-               lease_fencing_token = NULL, lease_expires_at = NULL, updated_at = clock_timestamp()\x20\
-             WHERE id = $4",
+               lease_fencing_token = NULL, lease_expires_at = NULL,\x20\
+               lease_validation_contract_id = NULL, updated_at = clock_timestamp()\x20\
+             WHERE id = $5",
             &[
                 &desired_revision,
                 &desired_algorithm,
                 &desired_schema,
+                &desired_validation_contract,
                 &claim.job_id,
             ],
         )
@@ -186,7 +187,8 @@ pub(super) async fn finish_terminal_failure(
                status = $1, finished_at = clock_timestamp(), safe_failure_code = $2,\x20\
                elapsed_milliseconds = $3, result_disposition = 'none', output_checksum = NULL,\x20\
                lease_owner = NULL, lease_attempt_id = NULL, lease_fencing_token = NULL,\x20\
-               lease_expires_at = NULL, updated_at = clock_timestamp()\x20\
+               lease_expires_at = NULL, lease_validation_contract_id = NULL,\x20\
+               updated_at = clock_timestamp()\x20\
             WHERE id = $4",
             &[
                 &outcome_wire,
@@ -248,7 +250,8 @@ pub(crate) async fn retry_transient_failure(
                    available_at = clock_timestamp() + ($2::bigint * interval '1 second'),\x20\
                    started_at = NULL, finished_at = NULL, safe_failure_code = NULL,\x20\
                    lease_owner = NULL, lease_attempt_id = NULL, lease_fencing_token = NULL,\x20\
-                   lease_expires_at = NULL, updated_at = clock_timestamp() WHERE id = $3",
+                   lease_expires_at = NULL, lease_validation_contract_id = NULL,\x20\
+                   updated_at = clock_timestamp() WHERE id = $3",
                 &[&next_retry, &delay_seconds, &claim.job_id],
             )
             .await?;
@@ -314,7 +317,8 @@ pub(crate) async fn requeue_interrupted(
             "UPDATE series_analysis_jobs SET status = 'queued', available_at = clock_timestamp(),\x20\
                started_at = NULL, finished_at = NULL, safe_failure_code = NULL,\x20\
                lease_owner = NULL, lease_attempt_id = NULL, lease_fencing_token = NULL,\x20\
-               lease_expires_at = NULL, updated_at = clock_timestamp() WHERE id = $1",
+               lease_expires_at = NULL, lease_validation_contract_id = NULL,\x20\
+               updated_at = clock_timestamp() WHERE id = $1",
             &[&claim.job_id],
         )
         .await?;

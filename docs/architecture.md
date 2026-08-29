@@ -47,6 +47,7 @@
 - wake は業務 payload を持たない coalescing signal とし、永続 outbox row の代わりにしない。
 - dispatcher は startup recovery、bounded drain、retry deadline、backoff を扱い、無条件の短周期 polling をしない。
 - append 後の DB 更新失敗や重複配送を許容し、claim / fence と冪等な consumer で収束させる。
+- 分析ではAPIをdurable intentのwriter、Processing Workerをcampaign展開からRedis append、delivery mark / retryまでの単一dispatcher ownerとする。APIはcommit後のpayloadless hintだけを送り、workerはhint喪失を低頻度のbounded recoveryで収束させる。
 
 ### Error / Auth
 
@@ -125,6 +126,8 @@
 - 子 process の resource 制限は実 runtime の cgroup で保証する。非対応 OS では job claim 前に fail closed にする。
 - 同時実行や publication は DB lease と fencing token で世代をまたいで保証する。process 内 semaphore や台数を正本にしない。
 - 子 process の成果物は上限、path、件数、schema、checksum を親が検証し、失敗時に部分公開しない。
+- 分析worker内のRust validatorをpayload意味、canonical encoding、resource集合・相互参照の単一ownerとする。parentは完全検証を通ったopaque artifactだけをversion付きで公開し、APIはそのimmutable publication attestation、生成schema、reader resource上限、request identityだけを独立に検証する。
+- 分析release controllerはactiveなalgorithm / artifact schema / validation contract singletonと全titleへのpromotionを所有する。API / workerのcapability registryを検査中だけ凍結し、互換判定とdesired-state切替の間へ別世代を割り込ませない。
 - 入力 version、algorithm version、artifact schema version を別の型として扱い、同じ入力と algorithm version では決定論的にする。
 - OCR だけが分析を preempt できる。共有実行枠、再queue、失敗回数、公開の詳細は `docs/requirements/series-analysis-batch.md` を正本とする。
 

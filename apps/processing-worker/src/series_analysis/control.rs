@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use momo_analysis_core::contract::ARTIFACT_VALIDATION_CONTRACT_ID;
 use thiserror::Error;
 
 use crate::outbox::{ControlOutcome, OutboxKind, PostCommitEffects};
@@ -75,9 +76,21 @@ pub(crate) struct ClaimedJob {
     pub(crate) input_revision: i64,
     pub(crate) algorithm_version: String,
     pub(crate) artifact_schema_version: i32,
+    pub(crate) validation_contract_id: Option<String>,
     pub(crate) attempt_id: String,
     pub(crate) attempt_no: i32,
     pub(crate) fencing_token: i64,
+}
+
+impl ClaimedJob {
+    /// Legacy jobs without a requested validator may be recalculated by the current validator,
+    /// while a non-null request is an exact contract fence.
+    #[must_use]
+    pub(crate) fn accepts_current_validation_contract(&self) -> bool {
+        self.validation_contract_id
+            .as_deref()
+            .is_none_or(|expected| expected == ARTIFACT_VALIDATION_CONTRACT_ID)
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -94,6 +107,7 @@ pub(crate) enum ClaimResult {
 pub(crate) struct UnsupportedJobVersion {
     pub(crate) algorithm_version: String,
     pub(crate) artifact_schema_version: i32,
+    pub(crate) validation_contract_id: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -230,6 +244,8 @@ pub(crate) enum ControlError {
     MetadataParse(#[from] std::num::ParseIntError),
     #[error("authoritative analysis input violates its bounded structural contract")]
     AuthoritativeInputContract,
+    #[error("analysis job requests an unsupported artifact validation contract")]
+    UnsupportedValidationContract,
 }
 
 impl ControlError {
@@ -250,6 +266,7 @@ impl ControlError {
             Self::InvalidMetadata => "artifact_metadata",
             Self::MetadataParse(_) => "artifact_metadata_parse",
             Self::AuthoritativeInputContract => "authoritative_input_contract",
+            Self::UnsupportedValidationContract => "unsupported_validation_contract",
         }
     }
 
@@ -274,14 +291,19 @@ impl ControlError {
     /// Returns whether candidate processing itself lost a trusted runtime boundary.
     ///
     /// Unlike malformed child output, these failures do not prove that the candidate is bad:
-    /// `Io` occurs only while re-reading an already validated file for database staging, and a
-    /// join error means the blocking validator panicked or was cancelled. The caller must retain
-    /// the lease and delivery for recovery instead of persisting a business failure and `ACKing`.
+    /// `Io` occurs only while re-reading an already validated file for database staging, a join
+    /// error means the blocking validator panicked or was cancelled, and an unsupported requested
+    /// validator proves the durable claim changed outside the supported control path. The caller
+    /// must retain the lease and delivery for recovery instead of persisting a business failure
+    /// and `ACKing`.
     #[must_use]
     pub(crate) const fn is_candidate_processing_infrastructure_failure(&self) -> bool {
         matches!(
             self,
-            Self::Io(_) | Self::ArtifactValidationTask(_) | Self::AuthoritativeInputContract
+            Self::Io(_)
+                | Self::ArtifactValidationTask(_)
+                | Self::AuthoritativeInputContract
+                | Self::UnsupportedValidationContract
         )
     }
 }

@@ -47,9 +47,10 @@ pub(crate) async fn recover_expired_analysis_holder(
         .query_opt(
             "SELECT COALESCE(lease_owner = $2 AND lease_attempt_id = $3\x20\
                         AND lease_fencing_token = $4\x20\
+                        AND lease_validation_contract_id IS NOT DISTINCT FROM validation_contract_id\x20\
                         AND lease_expires_at <= clock_timestamp(), false),\x20\
                     lease_recovery_count, game_title_id, input_revision, algorithm_version,\x20\
-                    artifact_schema_version, attempt_count\x20\
+                    artifact_schema_version, validation_contract_id, attempt_count\x20\
              FROM series_analysis_jobs\x20\
              WHERE id = $1 AND game_title_id = $5 AND status = 'running' FOR UPDATE",
             &[
@@ -112,6 +113,7 @@ struct ExpiredJob {
     input_revision: i64,
     algorithm_version: String,
     artifact_schema_version: i32,
+    validation_contract_id: Option<String>,
     attempt_no: i32,
 }
 
@@ -125,7 +127,8 @@ fn decode_expired_job(row: &Row) -> Result<ExpiredJob, ControlError> {
         input_revision: row.try_get(3)?,
         algorithm_version: row.try_get(4)?,
         artifact_schema_version: row.try_get(5)?,
-        attempt_no: row.try_get(6)?,
+        validation_contract_id: row.try_get(6)?,
+        attempt_no: row.try_get(7)?,
     })
 }
 
@@ -163,6 +166,7 @@ async fn requeue_expired_job(
             "UPDATE series_analysis_jobs SET status = 'queued', lease_recovery_count = $1,\x20\
                available_at = clock_timestamp(), started_at = NULL, lease_owner = NULL,\x20\
                lease_attempt_id = NULL, lease_fencing_token = NULL, lease_expires_at = NULL,\x20\
+               lease_validation_contract_id = NULL,\x20\
                updated_at = clock_timestamp() WHERE id = $2",
             &[&recovery_count, &job_id],
         )
@@ -206,7 +210,8 @@ async fn fail_expired_job(
             "UPDATE series_analysis_jobs SET status = 'failed', finished_at = clock_timestamp(),\x20\
                lease_recovery_count = 3, safe_failure_code = $1,\x20\
                lease_owner = NULL, lease_attempt_id = NULL, lease_fencing_token = NULL,\x20\
-               lease_expires_at = NULL, updated_at = clock_timestamp() WHERE id = $2",
+               lease_expires_at = NULL, lease_validation_contract_id = NULL,\x20\
+               updated_at = clock_timestamp() WHERE id = $2",
             &[&failure_code, &job_id],
         )
         .await?;
@@ -224,6 +229,7 @@ async fn fail_expired_job(
         input_revision: job.input_revision,
         algorithm_version: job.algorithm_version,
         artifact_schema_version: job.artifact_schema_version,
+        validation_contract_id: job.validation_contract_id,
         attempt_id: String::from(attempt_id),
         attempt_no: job.attempt_no,
         fencing_token,

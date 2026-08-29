@@ -51,6 +51,10 @@ pub(super) async fn lock_owned_by(
         .query_opt(
             "SELECT id FROM series_analysis_jobs WHERE id = $1 AND status = 'running'\x20\
                AND lease_owner = $2 AND lease_attempt_id = $3 AND lease_fencing_token = $4\x20\
+               AND input_revision = $5 AND algorithm_version = $6\x20\
+               AND artifact_schema_version = $7\x20\
+               AND validation_contract_id IS NOT DISTINCT FROM $8\x20\
+               AND lease_validation_contract_id IS NOT DISTINCT FROM $8\x20\
                AND lease_expires_at > clock_timestamp()\x20\
              FOR UPDATE",
             &[
@@ -58,6 +62,10 @@ pub(super) async fn lock_owned_by(
                 &worker_id,
                 &claim.attempt_id,
                 &claim.fencing_token,
+                &claim.input_revision,
+                &claim.algorithm_version,
+                &claim.artifact_schema_version,
+                &claim.validation_contract_id,
             ],
         )
         .await?;
@@ -65,13 +73,20 @@ pub(super) async fn lock_owned_by(
         .query_opt(
             "SELECT id FROM series_analysis_job_attempts\x20\
              WHERE id = $1 AND job_id = $2 AND attempt_no = $3 AND owner = $4\x20\
-               AND fencing_token = $5 AND status = 'running' FOR UPDATE",
+               AND fencing_token = $5 AND input_revision = $6 AND algorithm_version = $7\x20\
+               AND artifact_schema_version = $8\x20\
+               AND validation_contract_id IS NOT DISTINCT FROM $9\x20\
+               AND status = 'running' FOR UPDATE",
             &[
                 &claim.attempt_id,
                 &claim.job_id,
                 &claim.attempt_no,
                 &worker_id,
                 &claim.fencing_token,
+                &claim.input_revision,
+                &claim.algorithm_version,
+                &claim.artifact_schema_version,
+                &claim.validation_contract_id,
             ],
         )
         .await?;
@@ -160,7 +175,7 @@ pub(super) async fn schedule_follow_up(
     let trigger = pending.try_get::<_, String>(1)?;
     let desired = transaction
         .query_one(
-            "SELECT input_revision, algorithm_version, artifact_schema_version\x20\
+            "SELECT input_revision, algorithm_version, artifact_schema_version, validation_contract_id\x20\
              FROM series_analysis_title_states WHERE game_title_id = $1",
             &[&claim.game_title_id],
         )
@@ -168,6 +183,7 @@ pub(super) async fn schedule_follow_up(
     let desired_revision = desired.try_get::<_, i64>(0)?;
     let desired_algorithm = desired.try_get::<_, String>(1)?;
     let desired_schema = desired.try_get::<_, i32>(2)?;
+    let desired_validation_contract = desired.try_get::<_, Option<String>>(3)?;
     let next_job_id = stable_id(
         "analysis-job-followup",
         &[&claim.game_title_id, &request_id],
@@ -175,14 +191,16 @@ pub(super) async fn schedule_follow_up(
     transaction
         .execute(
             "INSERT INTO series_analysis_jobs (id, game_title_id, input_revision,\x20\
-               algorithm_version, artifact_schema_version, status, trigger, requested_at, available_at)\x20\
-             VALUES ($1,$2,$3,$4,$5,'queued',$6,clock_timestamp(),clock_timestamp())",
+               algorithm_version, artifact_schema_version, validation_contract_id, status,\x20\
+               trigger, requested_at, available_at)\x20\
+             VALUES ($1,$2,$3,$4,$5,$6,'queued',$7,clock_timestamp(),clock_timestamp())",
             &[
                 &next_job_id,
                 &claim.game_title_id,
                 &desired_revision,
                 &desired_algorithm,
                 &desired_schema,
+                &desired_validation_contract,
                 &trigger,
             ],
         )

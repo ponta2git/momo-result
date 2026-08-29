@@ -1,6 +1,8 @@
 use std::time::{Duration, Instant};
 
-use momo_analysis_core::contract::{ARTIFACT_SCHEMA_VERSION, QueuePayload};
+use momo_analysis_core::contract::{
+    ARTIFACT_SCHEMA_VERSION, ARTIFACT_VALIDATION_CONTRACT_ID, QueuePayload,
+};
 use redis::{RedisError, aio::ConnectionManager};
 use thiserror::Error;
 use tokio::sync::watch;
@@ -457,8 +459,10 @@ async fn process_delivery(
                 reason = "unsupported_version",
                 job_algorithm_version = %version.algorithm_version,
                 job_artifact_schema_version = version.artifact_schema_version,
+                job_validation_contract_id = version.validation_contract_id.as_deref().unwrap_or("legacy-null"),
                 supported_algorithm_version = ALGORITHM_VERSION,
                 supported_artifact_schema_version = ARTIFACT_SCHEMA_VERSION,
+                supported_validation_contract_id = ARTIFACT_VALIDATION_CONTRACT_ID,
                 "analysis delivery requires a compatible worker generation"
             );
             return Ok(DeliveryDisposition::leave_pending_cold());
@@ -481,6 +485,7 @@ async fn process_delivery(
         input_revision = claim.input_revision,
         algorithm_version = %claim.algorithm_version,
         artifact_schema_version = claim.artifact_schema_version,
+        validation_contract_id = claim.validation_contract_id.as_deref().unwrap_or("legacy-null"),
         fencing_token = claim.fencing_token,
     );
     async {

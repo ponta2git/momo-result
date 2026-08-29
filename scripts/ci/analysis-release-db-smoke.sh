@@ -5,13 +5,22 @@ binary="${1:-}"
 postgres_image="${POSTGRES_IMAGE:-postgres:18-alpine}"
 worker_image="${ANALYSIS_WORKER_IMAGE:-}"
 operation_key="ci-release-control-plane"
-algorithm_version="${ANALYSIS_ALGORITHM_VERSION:-series-analysis-v3}"
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# shellcheck source=analysis-smoke-safety.sh
+source "${repo_root}/scripts/ci/analysis-smoke-safety.sh"
+algorithm_version="${analysis_smoke_algorithm_version}"
 release_database_url="${RELEASE_DATABASE_URL:-${WORKER_DATABASE_URL:-${DATABASE_URL:-}}}"
-
-if [[ ! "${algorithm_version}" =~ ^series-analysis-v[0-9]+$ ]]; then
-  echo "ANALYSIS_ALGORITHM_VERSION must use the series-analysis-vN form." >&2
-  exit 1
-fi
+publication_contract="${repo_root}/docs/schemas/series-analysis-publication-contract-v1.json"
+artifact_schema_version="$(jq -er '
+  .artifactSchemaVersion |
+  select(type == "number" and . == floor and . >= 1)
+' "${publication_contract}")"
+validation_contract_id="$(jq -er '
+  .validationContractId |
+  select(type == "string" and test("^[a-z0-9][a-z0-9._-]{0,127}$"))
+' "${publication_contract}")"
+release_worker_id="worker-release-smoke"
+release_capability_id="${release_worker_id}@${algorithm_version}@${artifact_schema_version}@${validation_contract_id}"
 
 if [[ -z "${DATABASE_URL:-}" ]]; then
   echo "DATABASE_URL is required." >&2
@@ -22,6 +31,17 @@ if [[ -z "${worker_image}" && ! -x "${binary}" ]]; then
   echo "analysis worker binary is not executable: ${binary}" >&2
   exit 1
 fi
+
+analysis_smoke_require_isolated_services
+analysis_smoke_require_same_postgres_database \
+  "${postgres_image}" \
+  "${DATABASE_URL}" \
+  "the release command database URL" \
+  "${release_database_url}"
+
+# `release-promote --apply` intentionally leaves the release singleton and generated campaign in
+# place for series-analysis-control-plane-smoke.sh. This hand-off is safe only because the caller
+# has attested that PostgreSQL is disposable and isolated from every durable environment.
 
 run_release_command() {
   if [[ -n "${worker_image}" ]]; then
@@ -40,14 +60,86 @@ psql_ci() {
       psql -U "${POSTGRES_USER:-postgres}" -d "${POSTGRES_DB:-momo_result}" \
       -v ON_ERROR_STOP=1 "$@"
   else
-    docker run --rm --network host \
+    docker run --rm -i --network host \
       -e DATABASE_URL="${DATABASE_URL}" \
       "${postgres_image}" \
       psql "${DATABASE_URL}" -v ON_ERROR_STOP=1 "$@"
   fi
 }
 
-psql_ci -c "
+cleanup_fixture() {
+  local analysis_capability_id="ci-analysis-worker@${algorithm_version}@${artifact_schema_version}@${validation_contract_id}"
+  psql_ci -v analysis_capability_id="${analysis_capability_id}" \
+    -v release_worker_id="${release_worker_id}" \
+    -v release_capability_id="${release_capability_id}" >/dev/null <<'SQL'
+BEGIN;
+SET LOCAL statement_timeout = '10s';
+SET LOCAL lock_timeout = '5s';
+UPDATE worker_execution_slots
+SET task_kind = NULL, owner = NULL, job_id = NULL, attempt_id = NULL,
+    holder_preemptible = NULL, lease_expires_at = NULL,
+    preempt_requested_by = NULL, preempt_requested_at = NULL,
+    updated_at = clock_timestamp()
+WHERE slot_key = 'shared-heavy-work'
+  AND (owner IS NULL OR owner = 'ci-analysis-worker');
+UPDATE series_analysis_title_states
+SET current_artifact_id = NULL, previous_artifact_id = NULL
+WHERE game_title_id IN ('title-release-smoke-a', 'title-release-smoke-b');
+DELETE FROM series_analysis_artifacts
+WHERE game_title_id IN ('title-release-smoke-a', 'title-release-smoke-b');
+DELETE FROM series_analysis_operation_requests operation
+WHERE EXISTS (
+  SELECT 1
+  FROM series_analysis_campaigns campaign
+  JOIN series_analysis_campaign_targets target ON target.campaign_id = campaign.id
+  WHERE campaign.operation_request_id = operation.id
+    AND target.game_title_id IN ('title-release-smoke-a', 'title-release-smoke-b')
+)
+OR EXISTS (
+  SELECT 1
+  FROM series_analysis_job_requests request
+  WHERE request.operation_request_id = operation.id
+    AND request.game_title_id IN ('title-release-smoke-a', 'title-release-smoke-b')
+);
+DELETE FROM series_analysis_job_requests
+WHERE game_title_id IN ('title-release-smoke-a', 'title-release-smoke-b');
+DELETE FROM series_analysis_jobs
+WHERE game_title_id IN ('title-release-smoke-a', 'title-release-smoke-b');
+DELETE FROM series_analysis_reader_capabilities
+WHERE reader_id = 'reader-release-smoke';
+DELETE FROM series_analysis_worker_capabilities
+WHERE worker_id IN (
+  :'release_worker_id',
+  :'release_capability_id',
+  'ci-analysis-worker',
+  :'analysis_capability_id'
+);
+DELETE FROM match_incidents WHERE match_id = 'match-release-smoke-a';
+DELETE FROM match_players WHERE match_id = 'match-release-smoke-a';
+DELETE FROM matches WHERE id = 'match-release-smoke-a';
+DELETE FROM held_events WHERE id = 'event-release-smoke-a';
+DELETE FROM season_masters WHERE id = 'season-release-smoke-a';
+DELETE FROM map_masters WHERE id = 'map-release-smoke-a';
+DELETE FROM game_titles
+WHERE id IN ('title-release-smoke-a', 'title-release-smoke-b');
+COMMIT;
+SQL
+}
+
+cleanup_fixture
+
+cleanup_on_failure() {
+  local status=$?
+  if (( status != 0 )); then
+    cleanup_fixture >/dev/null 2>&1 || true
+  fi
+  return "${status}"
+}
+trap cleanup_on_failure EXIT
+
+psql_ci -v artifact_schema_version="${artifact_schema_version}" \
+  -v validation_contract_id="${validation_contract_id}" \
+  -v release_capability_id="${release_capability_id}" -c "
   INSERT INTO game_titles (id, name, layout_family, display_order)
   VALUES
     ('title-release-smoke-a', 'Release smoke A', 'momotetsu2', 901),
@@ -80,11 +172,74 @@ psql_ci -c "
     ('match-release-smoke-a', 'member_ponta', 'incident_destination', 2),
     ('match-release-smoke-a', 'member_eu', 'incident_suri_no_ginji', 1);
   INSERT INTO series_analysis_reader_capabilities (
-    reader_id, artifact_schema_versions
-  ) VALUES ('reader-release-smoke', '[2]');
+    reader_id, artifact_schema_versions, validation_contract_ids
+  ) VALUES (
+    'reader-release-smoke',
+    jsonb_build_array(:artifact_schema_version),
+    jsonb_build_array(:'validation_contract_id')
+  );
   INSERT INTO series_analysis_worker_capabilities (
     worker_id, algorithm_versions, artifact_schema_versions
-  ) VALUES ('worker-release-smoke', jsonb_build_array('${algorithm_version}'), '[2]');
+  ) VALUES (
+    :'release_capability_id',
+    jsonb_build_array('${algorithm_version}'),
+    jsonb_build_array(:artifact_schema_version)
+  );
+"
+
+if run_release_command release-promote \
+  --trigger algorithm-update \
+  --operation-key "${operation_key}"; then
+  echo "release promotion accepted a worker without a validation contract." >&2
+  exit 1
+fi
+
+psql_ci -c "
+  UPDATE series_analysis_worker_capabilities
+  SET validation_contract_ids = '[\"unknown-validation-contract\"]'::jsonb
+  WHERE worker_id = '${release_capability_id}';
+"
+if run_release_command release-promote \
+  --trigger algorithm-update \
+  --operation-key "${operation_key}"; then
+  echo "release promotion accepted a worker with an unknown validation contract." >&2
+  exit 1
+fi
+
+psql_ci -c "
+  UPDATE series_analysis_worker_capabilities
+  SET validation_contract_ids = jsonb_build_array('${validation_contract_id}')
+  WHERE worker_id = '${release_capability_id}';
+"
+
+psql_ci -c "
+  UPDATE series_analysis_reader_capabilities
+  SET validation_contract_ids = '[]'::jsonb
+  WHERE reader_id = 'reader-release-smoke';
+"
+if run_release_command release-promote \
+  --trigger algorithm-update \
+  --operation-key "${operation_key}"; then
+  echo "release promotion accepted a reader without a validation contract." >&2
+  exit 1
+fi
+
+psql_ci -c "
+  UPDATE series_analysis_reader_capabilities
+  SET validation_contract_ids = '[\"unknown-validation-contract\"]'::jsonb
+  WHERE reader_id = 'reader-release-smoke';
+"
+if run_release_command release-promote \
+  --trigger algorithm-update \
+  --operation-key "${operation_key}"; then
+  echo "release promotion accepted a reader with an unknown validation contract." >&2
+  exit 1
+fi
+
+psql_ci -c "
+  UPDATE series_analysis_reader_capabilities
+  SET validation_contract_ids = jsonb_build_array('${validation_contract_id}')
+  WHERE reader_id = 'reader-release-smoke';
 "
 
 dry_run="$(run_release_command release-promote \
@@ -130,9 +285,17 @@ applied_counts="$(psql_ci -At -c "
       WHERE status = 'pending'
         AND job_request_id IS NULL
         AND algorithm_version = '${algorithm_version}'
-        AND artifact_schema_version = 2);
+        AND artifact_schema_version = ${artifact_schema_version}
+        AND validation_contract_id = '${validation_contract_id}'),
+    (SELECT COUNT(*) FROM series_analysis_campaigns
+      WHERE validation_contract_id = '${validation_contract_id}'),
+    (SELECT COUNT(*) FROM series_analysis_campaign_targets
+      WHERE validation_contract_id = '${validation_contract_id}'),
+    (SELECT COUNT(*) FROM series_analysis_title_states
+      WHERE game_title_id IN ('title-release-smoke-a', 'title-release-smoke-b')
+        AND validation_contract_id = '${validation_contract_id}');
 ")"
-if [[ "${applied_counts}" != "1|1|2|0|0|0|2" ]]; then
+if [[ "${applied_counts}" != "1|1|2|0|0|0|2|1|2|2" ]]; then
   echo "release apply produced an unexpected control-plane shape: ${applied_counts}" >&2
   exit 1
 fi

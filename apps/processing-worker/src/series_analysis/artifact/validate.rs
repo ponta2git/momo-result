@@ -9,7 +9,7 @@ use serde_json::Value;
 
 use momo_analysis_core::{
     canonical::{CanonicalError, parse_canonical_json, sha256_prefixed},
-    contract::ArtifactManifest,
+    contract::{ARTIFACT_VALIDATION_CONTRACT_ID, ArtifactManifest},
     payload,
 };
 
@@ -17,6 +17,35 @@ use super::{
     ArtifactError,
     shared::{MANIFEST_FILE_NAME, nesting_depth, resource_common},
 };
+
+/// An artifact accepted by the complete Rust-owned publication validator.
+///
+/// The constructor is private to this module: publication code can only obtain this type by
+/// reopening the artifact directory and passing every bounded file, canonical, schema, semantic,
+/// and cross-resource check in [`validate_artifact_directory`].
+pub(crate) struct ValidatedArtifact {
+    manifest: ArtifactManifest,
+    validation_contract_id: &'static str,
+}
+
+impl ValidatedArtifact {
+    #[must_use]
+    pub(crate) const fn manifest(&self) -> &ArtifactManifest {
+        &self.manifest
+    }
+
+    #[must_use]
+    pub(crate) const fn validation_contract_id(&self) -> &'static str {
+        self.validation_contract_id
+    }
+
+    const fn new(manifest: ArtifactManifest) -> Self {
+        Self {
+            manifest,
+            validation_contract_id: ARTIFACT_VALIDATION_CONTRACT_ID,
+        }
+    }
+}
 
 /// Re-opens and validates every declared file without loading all chunks at once.
 ///
@@ -29,7 +58,7 @@ pub(crate) fn validate_artifact_directory(
     maximum_chunk_bytes: u64,
     maximum_total_bytes: u64,
     maximum_file_count: u64,
-) -> Result<ArtifactManifest, ArtifactError> {
+) -> Result<ValidatedArtifact, ArtifactError> {
     let metadata = fs::symlink_metadata(directory)?;
     if !metadata.is_dir() || metadata.file_type().is_symlink() {
         return Err(ArtifactError::UnsafeDirectory);
@@ -92,7 +121,7 @@ pub(crate) fn validate_artifact_directory(
         payloads.add_manifest(resource, &value)?;
     }
     payloads.finish()?;
-    Ok(manifest)
+    Ok(ValidatedArtifact::new(manifest))
 }
 
 fn read_bounded_regular_file(path: &Path, maximum_bytes: u64) -> Result<Vec<u8>, ArtifactError> {

@@ -37,6 +37,7 @@ provider固有値、費用、実測、昇格・復旧手順は public docs へ�
 | input revision | 作品の確定済み分析入力。作品単位で単調増加する |
 | algorithm version | 数式、特徴量、seed、閾値、候補選択など結果の意味 |
 | artifact schema version | 保存成果物の構造とreader互換性 |
+| validation contract ID | publication前に通したRust validator契約。artifact schemaと独立に識別する |
 | HTTP wire version | clientへ返すAPI契約。artifact schemaと独立 |
 
 文字列や timestamp の偶然の大小で version を比較しない。成果物、request、job は必要な version 組を明示する。
@@ -105,6 +106,8 @@ DB lock順とstaging transactionの規則は `docs/db-rule.md`、process責務�
 - artifactはstable IDと意味code、権威ある配列順を持つ。可変表示名はAPIでhydrateし、API / Webで意味値や順序を再計算しない。
 - manifestをchunk allowlistとし、path逸脱、symlink、未宣言・欠損file、checksum不一致を拒否する。attempt directoryは全終了経路とstartup recoveryでcleanupする。
 - 各resourceはencoded / decoded bytes、件数、深さの上限を持ち、上限超過artifactを公開しない。
+- Rust parentは全resourceのcanonical bytes、個別意味、resource集合、相互参照を検証したopaque artifactだけにvalidation contract IDを付けて公開する。readerは同じ意味規則を再実装せず、exact contract IDとartifact schemaの組をallowlistする。
+- published headerとchild resourceはDBで改変不能とし、staging中の差し替えと、参照されないparentの正規cleanupだけを許可する。child payloadと同じrowのchecksumだけをpublication provenanceの代用にしない。
 
 各作品はcurrentとpreviousの成功artifactを保持する。terminal jobは終了後45日保持し、`queued` / `running` を履歴cleanupしない。管理画面の直近3件という表示上限をDB保持条件に使わない。
 
@@ -117,6 +120,7 @@ DB lock順とstaging transactionの規則は `docs/db-rule.md`、process責務�
 - artifact endpointはstatusで解決したartifact IDを必須入力とし、1画面の全resourceを同じartifactへpinする。
 - current / previousとして読取可能かの確認と、要求された1 resource / scopeのbounded chunk取得を同じread snapshotで行う。作品全体をdecodeしない。
 - artifact schemaとHTTP wire schemaを分け、reader decoderのallowlistと上限を満たさないartifactはfail closedにする。
+- readerはvalidation contract ID、checksum、UTF-8、生成schema、byte / depth / node上限、要求したscope / member / metric / match identityを検証する。producerの集計意味やcross-resource整合性をbounded chunk readで再計算しない。
 - optionsは全登録作品を返し、scope候補は現在の確定試合に実在する値だけを返す。確定試合0件と登録作品0件を区別する。
 - current / previousでなくなったartifactは明示的なexpired errorとし、Webはstatus更新後に1回だけ最新artifactでretryする。同期計算や別scopeへのfallbackをしない。
 - public statusはjob ID、account、attempt数、内部診断を返さない。safe failure codeや要求者はadmin履歴に限定する。
@@ -152,10 +156,15 @@ OCR同居を有効化する場合は、共通parent-child境界、単一slot、�
 ## 8. Compatibility / Release / Rollback
 
 - DB migrationはadditiveに進め、reader-firstで新artifact schemaを読めるAPIを先に配置する。readerとworker capability確認後にdesired version / campaignを進める。
+- validation contractを導入・更新する場合は、published rowのimmutabilityを先に適用し、exact contractをadvertiseするworker世代だけで再計算する。Rustで検証済みの新規publicationまたは明示的な再検証だけをattestedとし、既存artifactをSQLだけで盲目的にattestしない。最初のattested publicationで未証明previous pointerを外し、current / previousの双方を監査してからexact contractを要求するreaderへ切り替える。
+- validation contractのreader-first配置は、validator初期化完了後にだけexact capabilityをadvertiseする。移行中readerはcontractなしartifactを従来のfull semantic validation付きで読み、contractなしdesiredに対するexact artifactも互換なcurrentとして扱う。exact desiredはcontractなしartifactをcurrentとして扱わない。
+- release promotionはfreshな全reader / workerのcapability集合をtransaction内で凍結して完全一致を確認し、release singleton、既存titleのdesired tuple、campaignを原子的に進める。登録作品0件のinitial backfillもtarget 0のterminal operationとして確定し、その後の新規作品はsingletonを継承する。
+- promotion後はattested workerで再計算し、current / previous双方のexact contract、pending work、failed outboxをrelease auditで確認する。監査完了後にだけreaderのlegacy semantic validatorとcontractなしread経路を除く。内部の`validation_contract_update` triggerは既存HTTP vocabularyの`artifact_schema_update`へprojectionし、storage rolloutだけでpublic wire enumを増やさない。
 - 計画保守で全reader / workerを停止し、公開再開前に全作品を再計算できる場合に限り、単一世代の一括切替を選べる。この場合は旧・新schemaの同時decodeを要求せず、停止確認、復元可能なDB snapshot、旧immutable release、全runtimeの新version一致、全作品の再計算完了を再開条件にする。
 - 新HTTP wireはOpenAPIと生成型を同時更新する。旧clientは明示的なreload-requiredへ縮退し、旧同期engineへfallbackしない。
 - artifactからwireへのprojectionはrename、enum mapping、metadata hydrateに限定し、旧artifactにない意味値を再計算しない。
 - rollbackはcurrent artifact、request、campaign、job、outboxを維持する。旧workerがdesired versionを非対応ならjobを `queued` に保ち、旧algorithmへ黙って戻さない。
+- validation contract promotion後のservice rollbackは、新DB列、lease fence、exact / legacy publicationを理解するtransitional API / workerまでとする。導入前binaryへ戻してexact jobをclaimさせず、singletonやartifactのcontractをSQLで消して世代を偽装しない。
 - DB down migrationでrevision / job / artifactを削除せず、publication停止中もcurrent artifactを読める状態を維持する。
 - 単一世代の保守切替を切り戻す場合は、サービスを停止したままDB snapshotと旧immutable releaseを同じ世代へ戻す。新旧のdesired version、job、artifactを部分的に組み合わせた状態では再開しない。
 - release候補はmigration、reader / worker compatibility、immutable provenance、resource hard limit、timeout、artifact / API上限を確認してから昇格する。

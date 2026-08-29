@@ -4,8 +4,9 @@ use momo_analysis_core::contract::ArtifactManifest;
 use tokio_postgres::{Client, Transaction};
 
 use crate::{
-    outbox::ControlOutcome, process::current_process_peak_resident_bytes,
-    series_analysis::config::AnalysisConsumerConfig,
+    outbox::ControlOutcome,
+    process::current_process_peak_resident_bytes,
+    series_analysis::{artifact::ValidatedArtifact, config::AnalysisConsumerConfig},
 };
 
 use super::{
@@ -15,7 +16,7 @@ use super::{
     publication::{
         ExistingArtifact, discard_staged_artifact, existing_artifact, finish_success,
         publish_staged_artifact, requires_staging, stage_artifact, validate_staged_artifact,
-        validated_manifest,
+        validated_artifact,
     },
     transaction::{bounded_transaction, lock_owned},
 };
@@ -38,7 +39,7 @@ pub(crate) async fn publish(
     artifact_directory: &Path,
     metrics: &mut AttemptMetrics,
 ) -> Result<ControlOutcome<PublicationResult>, ControlError> {
-    let (manifest, mut staged) =
+    let (artifact, mut staged) =
         prepare_staging(client, claim, config, artifact_directory, metrics).await?;
 
     loop {
@@ -62,11 +63,11 @@ pub(crate) async fn publish(
                 .await
                 .map(|outcome| outcome.map(|()| PublicationResult::Superseded));
         }
-        validate_candidate(&transaction, claim, &manifest, staged).await?;
+        validate_candidate(&transaction, claim, &artifact, staged).await?;
         match existing_artifact(
             &transaction,
             claim,
-            &manifest,
+            &artifact,
             desired.current_artifact_id.as_deref(),
         )
         .await?
@@ -79,7 +80,7 @@ pub(crate) async fn publish(
                     &mut publication_client,
                     claim,
                     config,
-                    &manifest,
+                    &artifact,
                     artifact_directory,
                 )
                 .await;
@@ -88,14 +89,14 @@ pub(crate) async fn publish(
                 retry_staging?;
             }
             ExistingArtifact::DifferentVersion => {
-                publish_staged_artifact(&transaction, claim, &manifest).await?;
+                publish_staged_artifact(&transaction, claim, &artifact).await?;
                 finish_publication_metrics(metrics, publication_started);
                 return commit_successful_publication(
                     transaction,
                     claim,
                     config,
                     metrics,
-                    &manifest.root_checksum,
+                    &artifact.manifest().root_checksum,
                     ResultDisposition::Published,
                     PublicationResult::Published,
                 )
@@ -103,7 +104,7 @@ pub(crate) async fn publish(
             }
             ExistingArtifact::Reusable => {
                 if staged {
-                    discard_staged_artifact(&transaction, claim, &manifest).await?;
+                    discard_staged_artifact(&transaction, claim, &artifact).await?;
                 }
                 finish_publication_metrics(metrics, publication_started);
                 return commit_successful_publication(
@@ -111,7 +112,7 @@ pub(crate) async fn publish(
                     claim,
                     config,
                     metrics,
-                    &manifest.root_checksum,
+                    &artifact.manifest().root_checksum,
                     ResultDisposition::Reused,
                     PublicationResult::Reused,
                 )
@@ -143,12 +144,13 @@ pub(crate) async fn publish(
 async fn validate_candidate(
     transaction: &Transaction<'_>,
     claim: &ClaimedJob,
-    manifest: &ArtifactManifest,
+    artifact: &ValidatedArtifact,
     staged: bool,
 ) -> Result<(), ControlError> {
-    authoritative_input::validate_manifest(transaction, &claim.game_title_id, manifest).await?;
+    authoritative_input::validate_manifest(transaction, &claim.game_title_id, artifact.manifest())
+        .await?;
     if staged {
-        validate_staged_artifact(transaction, claim, manifest).await?;
+        validate_staged_artifact(transaction, claim, artifact).await?;
     }
     Ok(())
 }
@@ -191,20 +193,20 @@ async fn prepare_staging(
     config: &AnalysisConsumerConfig,
     artifact_directory: &Path,
     metrics: &mut AttemptMetrics,
-) -> Result<(ArtifactManifest, bool), ControlError> {
+) -> Result<(ValidatedArtifact, bool), ControlError> {
     let started = Instant::now();
-    let manifest = validated_manifest(config, claim, artifact_directory).await?;
-    validate_manifest_metrics(metrics, &manifest)?;
-    let staged = requires_staging(client, claim).await?;
+    let artifact = validated_artifact(config, claim, artifact_directory).await?;
+    validate_manifest_metrics(metrics, artifact.manifest())?;
+    let staged = requires_staging(client, claim, &artifact).await?;
     let result = if staged {
-        stage(client, claim, config, &manifest, artifact_directory).await
+        stage(client, claim, config, &artifact, artifact_directory).await
     } else {
         Ok(())
     };
     metrics.record_staging(started.elapsed());
     result?;
     metrics.observe_worker_peak(current_process_peak_resident_bytes().await);
-    Ok((manifest, staged))
+    Ok((artifact, staged))
 }
 
 fn validate_manifest_metrics(
@@ -227,6 +229,7 @@ struct DesiredArtifact {
     input_revision: i64,
     algorithm_version: String,
     artifact_schema_version: i32,
+    validation_contract_id: Option<String>,
     current_artifact_id: Option<String>,
 }
 
@@ -235,6 +238,7 @@ impl DesiredArtifact {
         self.input_revision == claim.input_revision
             && self.algorithm_version == claim.algorithm_version
             && self.artifact_schema_version == claim.artifact_schema_version
+            && self.validation_contract_id == claim.validation_contract_id
     }
 }
 
@@ -244,7 +248,8 @@ async fn desired_artifact(
 ) -> Result<DesiredArtifact, ControlError> {
     let row = transaction
         .query_one(
-            "SELECT input_revision, algorithm_version, artifact_schema_version, current_artifact_id\x20\
+            "SELECT input_revision, algorithm_version, artifact_schema_version,\x20\
+                    validation_contract_id, current_artifact_id\x20\
              FROM series_analysis_title_states WHERE game_title_id = $1",
             &[&claim.game_title_id],
         )
@@ -253,7 +258,8 @@ async fn desired_artifact(
         input_revision: row.try_get(0)?,
         algorithm_version: row.try_get(1)?,
         artifact_schema_version: row.try_get(2)?,
-        current_artifact_id: row.try_get(3)?,
+        validation_contract_id: row.try_get(3)?,
+        current_artifact_id: row.try_get(4)?,
     })
 }
 
@@ -261,12 +267,12 @@ async fn stage(
     client: &mut Client,
     claim: &ClaimedJob,
     config: &AnalysisConsumerConfig,
-    manifest: &ArtifactManifest,
+    artifact: &ValidatedArtifact,
     artifact_directory: &Path,
 ) -> Result<(), ControlError> {
     let transaction =
         bounded_transaction(client, config.execution_limits.finalization_timeout).await?;
-    stage_artifact(&transaction, claim, manifest, artifact_directory).await?;
+    stage_artifact(&transaction, claim, artifact, artifact_directory).await?;
     match transaction.commit().await {
         Ok(()) => Ok(()),
         Err(_ambiguous_commit) => {
@@ -274,7 +280,7 @@ async fn stage(
                 &config.database_url,
                 config.execution_limits.finalization_timeout,
                 claim,
-                manifest,
+                artifact,
                 artifact_directory,
             )
             .await
@@ -286,16 +292,16 @@ pub(super) async fn reconcile_staging(
     database_url: &str,
     timeout: std::time::Duration,
     claim: &ClaimedJob,
-    manifest: &ArtifactManifest,
+    artifact: &ValidatedArtifact,
     artifact_directory: &Path,
 ) -> Result<(), ControlError> {
     let mut client = crate::postgres::connect(database_url).await?;
     let transaction = bounded_transaction(&mut client, timeout).await?;
     if let Err(recovery_error) =
-        stage_artifact(&transaction, claim, manifest, artifact_directory).await
+        stage_artifact(&transaction, claim, artifact, artifact_directory).await
     {
         let _rollback_result = transaction.rollback().await;
-        return match verify_durable_staging(database_url, timeout, claim, manifest).await {
+        return match verify_durable_staging(database_url, timeout, claim, artifact).await {
             Ok(()) => Ok(()),
             Err(_verification_error) => Err(recovery_error),
         };
@@ -303,7 +309,7 @@ pub(super) async fn reconcile_staging(
     match transaction.commit().await {
         Ok(()) => Ok(()),
         Err(commit_error) => {
-            match verify_durable_staging(database_url, timeout, claim, manifest).await {
+            match verify_durable_staging(database_url, timeout, claim, artifact).await {
                 Ok(()) => Ok(()),
                 Err(_verification_error) => Err(ControlError::Postgres(commit_error)),
             }
@@ -315,11 +321,11 @@ async fn verify_durable_staging(
     database_url: &str,
     timeout: std::time::Duration,
     claim: &ClaimedJob,
-    manifest: &ArtifactManifest,
+    artifact: &ValidatedArtifact,
 ) -> Result<(), ControlError> {
     let mut verifier = crate::postgres::connect(database_url).await?;
     let verification = bounded_transaction(&mut verifier, timeout).await?;
-    match validate_staged_artifact(&verification, claim, manifest).await {
+    match validate_staged_artifact(&verification, claim, artifact).await {
         Ok(()) => {
             verification.rollback().await?;
             Ok(())
@@ -352,6 +358,34 @@ fn finish_publication_metrics(metrics: &mut AttemptMetrics, started: Instant) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn publication_supersedes_a_contract_only_desired_version_change() {
+        let claim = ClaimedJob {
+            job_id: String::from("job-1"),
+            game_title_id: String::from("title-1"),
+            input_revision: 3,
+            algorithm_version: String::from(super::super::ALGORITHM_VERSION),
+            artifact_schema_version: 2,
+            validation_contract_id: None,
+            attempt_id: String::from("attempt-1"),
+            attempt_no: 1,
+            fencing_token: 1,
+        };
+        let mut desired = DesiredArtifact {
+            input_revision: claim.input_revision,
+            algorithm_version: claim.algorithm_version.clone(),
+            artifact_schema_version: claim.artifact_schema_version,
+            validation_contract_id: None,
+            current_artifact_id: None,
+        };
+
+        assert!(desired.matches(&claim));
+        desired.validation_contract_id = Some(String::from(
+            momo_analysis_core::contract::ARTIFACT_VALIDATION_CONTRACT_ID,
+        ));
+        assert!(!desired.matches(&claim));
+    }
 
     #[test]
     fn publication_requires_child_metrics_to_match_the_validated_manifest() {

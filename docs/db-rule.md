@@ -21,7 +21,9 @@
 - outbox writer は transaction 内で外部 I/O を行わず、commit 後にだけ typed effect を返す。dispatch 失敗は業務 transaction を巻き戻さない。
 - quota、idempotency、job claim、lease、fence、pointer 切替など競合する判断は、事前 read と write を分けず DB の同じ整合性境界へ閉じる。
 - 分析の入力 revision は単調増加値とし、時刻を concurrency token にしない。入力 version、algorithm version、artifact schema version を区別する。
+- 分析の有効なalgorithm / artifact schema / validation contractの組はrelease singletonを正本とし、新規作品のtitle stateは同じtransaction内のtriggerでその組を継承する。個別consumerが新規作品へversion定数を直書きしない。
 - 分析成果物は作品単位で原子的に公開し、失敗時は直前の成功成果物を維持する。current / previous の確認と chunk read は cleanup と競合しない read 境界で行う。
+- 分析のpublished artifact headerとchild resourceは改変不能とする。stagingの作成・差し替え、attempt保持cleanupによる許可済みprovenance変更、参照されないparentからのcascade cleanupを、公開内容の単独変更と区別する。
 - terminal job の保持期間と UI の表示件数を別契約として扱い、未完了 job を履歴 cleanup しない。
 
 ## 3. Consumer Contract
@@ -33,7 +35,9 @@ test の採用・維持・削除は `docs/test-rule.md` に従う。DB contract 
 - 複数 table の write は statement / lock 順と、保存後の関連 row を integration test で確認する。
 - lease、fence、slot、pointer、cleanup 競合は複数接続で stale owner と rollback を直接通す。
 - 大容量 staging は長い control lock から分離し、短い fenced transaction で完全性を再検証してから公開する。
+- publication contractを変更した場合は、stagingの更新、published header / childの変更拒否、参照中parentの削除拒否、未参照parentのcascade cleanupを実PostgreSQLで区別して検証する。
 - 分析 publication の lock 順は execution slot、title state、job、request / artifact とし、複数 title state は作品ID順に取得する。試合 mutation と campaign 展開は execution slot を取得しない。
+- 分析release promotionはrelease advisory lock、reader capability registry、worker capability registry、release singleton、作品ID順のtitle stateの順でlockする。capability registryは判定後の登録・heartbeat割込みをcommitまで遮断し、singleton更新と既存title更新を同じtransactionで確定する。
 - test が作る row を共通 cleanup の対象へ追加し、並列 test 間で ID、row、stream、file を分離する。
 - production が pooler / proxy を使う場合、直接 PostgreSQL への接続成功を wire 互換性の証拠にしない。
 - DB row は adapter 境界で失敗可能に decode し、不正値や SQL 例外を domain / application failure へ正規化する。
@@ -46,4 +50,4 @@ test の採用・維持・削除は `docs/test-rule.md` に従う。DB contract 
 
 後方互換な変更は migration 適用後に consumer を deploy する。
 
-破壊的変更、NOT NULL / 型変更、大量 backfill、旧 schema 削除は、旧新 consumer の同時稼働期間を考慮して複数段階へ分ける。deploy 順序、rollback、未移行データを実装前に決め、provider 固有の手順は `private/` に置く。
+破壊的変更、NOT NULL / 型変更、大量 backfill、旧 schema 削除は、旧新 consumer の同時稼働期間を考慮して複数段階へ分ける。deploy 順序、rollback、未移行データを実装前に決め、provider 固有の手順は `private/` に置く。validation contract導入後のrollback floorは、新columnとexact attestationを理解しつつ未移行artifactも検証して読めるtransitional consumerとし、導入前binaryへ戻さない。

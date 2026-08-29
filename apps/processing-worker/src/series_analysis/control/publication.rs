@@ -2,14 +2,17 @@ use std::path::Path;
 
 use momo_analysis_core::{
     canonical::sha256_prefixed,
-    contract::{ArtifactManifest, CommonResource, ResourceManifest},
+    contract::{
+        ARTIFACT_VALIDATION_CONTRACT_ID, ArtifactManifest, CommonResource, ResourceManifest,
+    },
 };
 use tokio::io::AsyncReadExt;
 use tokio_postgres::{Client, Transaction, binary_copy::BinaryCopyInWriter, types::Type};
 use tracing::{error, info};
 
 use crate::series_analysis::{
-    artifact::validate_artifact_directory, config::AnalysisConsumerConfig,
+    artifact::{ValidatedArtifact, validate_artifact_directory},
+    config::AnalysisConsumerConfig,
 };
 
 use super::{
@@ -22,11 +25,14 @@ use super::{
     },
 };
 
-pub(super) async fn validated_manifest(
+pub(super) async fn validated_artifact(
     config: &AnalysisConsumerConfig,
     claim: &ClaimedJob,
     artifact_directory: &Path,
-) -> Result<ArtifactManifest, ControlError> {
+) -> Result<ValidatedArtifact, ControlError> {
+    if !claim.accepts_current_validation_contract() {
+        return Err(ControlError::UnsupportedValidationContract);
+    }
     let limits = &config.execution_limits;
     let artifact_directory = artifact_directory.to_path_buf();
     let maximum_chunk_count = limits.chunk_count_limit.get();
@@ -42,13 +48,14 @@ pub(super) async fn validated_manifest(
     // the current-thread runtime lets the enclosing finalization timeout and sibling coordinators
     // continue. The task is read-only, so timeout cancellation cannot publish or mutate a candidate.
     tokio::task::spawn_blocking(move || {
-        let manifest = validate_artifact_directory(
+        let artifact = validate_artifact_directory(
             &artifact_directory,
             maximum_chunk_count,
             maximum_chunk_bytes,
             maximum_total_bytes,
             maximum_file_count,
         )?;
+        let manifest = artifact.manifest();
         let manifest_revision = manifest.input_revision.parse::<i64>()?;
         let manifest_schema = i32::try_from(manifest.artifact_schema_version)?;
         if manifest.artifact_id != expected_artifact_id
@@ -59,7 +66,7 @@ pub(super) async fn validated_manifest(
         {
             return Err(ControlError::InvalidMetadata);
         }
-        Ok(manifest)
+        Ok(artifact)
     })
     .await
     .map_err(ControlError::ArtifactValidationTask)?
@@ -74,15 +81,18 @@ pub(super) enum ExistingArtifact {
 pub(super) async fn requires_staging(
     client: &Client,
     claim: &ClaimedJob,
+    artifact: &ValidatedArtifact,
 ) -> Result<bool, ControlError> {
     let should_stage = client
         .query_one(
             "SELECT s.input_revision = $2 AND s.algorithm_version = $3\x20\
-                    AND s.artifact_schema_version = $4 AND NOT EXISTS (\x20\
+                    AND s.artifact_schema_version = $4\x20\
+                    AND s.validation_contract_id IS NOT DISTINCT FROM $5 AND NOT EXISTS (\x20\
                       SELECT 1 FROM series_analysis_artifacts a\x20\
                       WHERE a.id = s.current_artifact_id AND a.status = 'published'\x20\
                         AND a.input_revision = $2 AND a.algorithm_version = $3\x20\
                         AND a.artifact_schema_version = $4\x20\
+                        AND a.validation_contract_id = $6\x20\
                     )\x20\
              FROM series_analysis_title_states s WHERE s.game_title_id = $1",
             &[
@@ -90,6 +100,8 @@ pub(super) async fn requires_staging(
                 &claim.input_revision,
                 &claim.algorithm_version,
                 &claim.artifact_schema_version,
+                &claim.validation_contract_id,
+                &artifact.validation_contract_id(),
             ],
         )
         .await?
@@ -100,7 +112,7 @@ pub(super) async fn requires_staging(
 pub(super) async fn existing_artifact(
     transaction: &Transaction<'_>,
     claim: &ClaimedJob,
-    manifest: &ArtifactManifest,
+    artifact: &ValidatedArtifact,
     current_artifact_id: Option<&str>,
 ) -> Result<ExistingArtifact, ControlError> {
     let Some(current_artifact_id) = current_artifact_id else {
@@ -109,7 +121,7 @@ pub(super) async fn existing_artifact(
     let current = transaction
         .query_one(
             "SELECT input_revision, algorithm_version, artifact_schema_version,\x20\
-                    source_input_checksum, root_checksum\x20\
+                    source_input_checksum, root_checksum, validation_contract_id\x20\
              FROM series_analysis_artifacts WHERE id = $1 AND status = 'published'",
             &[&current_artifact_id],
         )
@@ -119,12 +131,16 @@ pub(super) async fn existing_artifact(
     let current_schema = current.try_get::<_, i32>(2)?;
     let current_source_checksum = current.try_get::<_, String>(3)?;
     let current_root_checksum = current.try_get::<_, String>(4)?;
+    let current_validation_contract = current.try_get::<_, Option<String>>(5)?;
     let same_version = current_revision == claim.input_revision
         && current_algorithm == claim.algorithm_version
         && current_schema == claim.artifact_schema_version;
-    if !same_version {
+    if !same_version
+        || current_validation_contract.as_deref() != Some(artifact.validation_contract_id())
+    {
         return Ok(ExistingArtifact::DifferentVersion);
     }
+    let manifest = artifact.manifest();
     if current_source_checksum != manifest.source_input_checksum {
         return Ok(ExistingArtifact::IntegrityFailure(
             super::SafeFailureCode::InputRevisionViolation,
@@ -141,34 +157,95 @@ pub(super) async fn existing_artifact(
 pub(super) async fn stage_artifact(
     transaction: &Transaction<'_>,
     claim: &ClaimedJob,
-    manifest: &ArtifactManifest,
+    artifact: &ValidatedArtifact,
     artifact_directory: &Path,
 ) -> Result<(), ControlError> {
+    let manifest = artifact.manifest();
     let totals = artifact_totals(manifest)?;
-    let inserted = insert_artifact_header(transaction, claim, manifest, &totals).await?;
+    let inserted = insert_artifact_header(transaction, claim, artifact, &totals).await?;
     match inserted {
         1 => {}
-        0 => replace_staged_artifact(transaction, claim, manifest, &totals).await?,
+        0 => replace_staged_artifact(transaction, claim, artifact, &totals).await?,
         _ => return Err(ControlError::PublicationRowCount),
     }
     copy_artifact_resources(transaction, manifest, artifact_directory, &totals).await?;
-    validate_staged_artifact_shape(transaction, claim, manifest, &totals).await
+    validate_staged_artifact_shape(transaction, claim, artifact, &totals, None).await?;
+    attest_staged_artifact(transaction, claim, artifact).await
 }
 
 pub(super) async fn validate_staged_artifact(
     transaction: &Transaction<'_>,
     claim: &ClaimedJob,
-    manifest: &ArtifactManifest,
+    artifact: &ValidatedArtifact,
 ) -> Result<(), ControlError> {
-    let totals = artifact_totals(manifest)?;
-    validate_staged_artifact_shape(transaction, claim, manifest, &totals).await
+    lock_staged_artifact(transaction, claim, artifact).await?;
+    let totals = artifact_totals(artifact.manifest())?;
+    validate_staged_artifact_shape(
+        transaction,
+        claim,
+        artifact,
+        &totals,
+        Some(artifact.validation_contract_id()),
+    )
+    .await
+}
+
+async fn attest_staged_artifact(
+    transaction: &Transaction<'_>,
+    claim: &ClaimedJob,
+    artifact: &ValidatedArtifact,
+) -> Result<(), ControlError> {
+    let manifest = artifact.manifest();
+    let attested = transaction
+        .execute(
+            "UPDATE series_analysis_artifacts\x20\
+             SET validation_contract_id = $4\x20\
+             WHERE id = $1 AND game_title_id = $2 AND attempt_id = $3\x20\
+               AND status = 'staging' AND validation_contract_id IS NULL",
+            &[
+                &manifest.artifact_id,
+                &claim.game_title_id,
+                &claim.attempt_id,
+                &artifact.validation_contract_id(),
+            ],
+        )
+        .await?;
+    require_publication_row(attested)
+}
+
+async fn lock_staged_artifact(
+    transaction: &Transaction<'_>,
+    claim: &ClaimedJob,
+    artifact: &ValidatedArtifact,
+) -> Result<(), ControlError> {
+    let manifest = artifact.manifest();
+    let locked = transaction
+        .query_opt(
+            "SELECT id FROM series_analysis_artifacts\x20\
+             WHERE id = $1 AND game_title_id = $2 AND attempt_id = $3 AND status = 'staging'\x20\
+               AND validation_contract_id = $4\x20\
+             FOR UPDATE",
+            &[
+                &manifest.artifact_id,
+                &claim.game_title_id,
+                &claim.attempt_id,
+                &artifact.validation_contract_id(),
+            ],
+        )
+        .await?;
+    if locked.is_some() {
+        Ok(())
+    } else {
+        Err(ControlError::InvalidMetadata)
+    }
 }
 
 pub(super) async fn discard_staged_artifact(
     transaction: &Transaction<'_>,
     claim: &ClaimedJob,
-    manifest: &ArtifactManifest,
+    artifact: &ValidatedArtifact,
 ) -> Result<(), ControlError> {
+    let manifest = artifact.manifest();
     let deleted = transaction
         .execute(
             "DELETE FROM series_analysis_artifacts\x20\
@@ -182,14 +259,20 @@ pub(super) async fn discard_staged_artifact(
 pub(super) async fn publish_staged_artifact(
     transaction: &Transaction<'_>,
     claim: &ClaimedJob,
-    manifest: &ArtifactManifest,
+    artifact: &ValidatedArtifact,
 ) -> Result<(), ControlError> {
+    let manifest = artifact.manifest();
     let published = transaction
         .execute(
             "UPDATE series_analysis_artifacts\x20\
              SET status = 'published', published_at = clock_timestamp()\x20\
-             WHERE id = $1 AND attempt_id = $2 AND status = 'staging'",
-            &[&manifest.artifact_id, &claim.attempt_id],
+             WHERE id = $1 AND attempt_id = $2 AND status = 'staging'\x20\
+               AND validation_contract_id = $3",
+            &[
+                &manifest.artifact_id,
+                &claim.attempt_id,
+                &artifact.validation_contract_id(),
+            ],
         )
         .await?;
     require_publication_row(published)?;
@@ -197,18 +280,26 @@ pub(super) async fn publish_staged_artifact(
         .execute(
             "UPDATE series_analysis_title_states SET\x20\
                previous_artifact_id = CASE\x20\
-                 WHEN current_artifact_id IS DISTINCT FROM $1 THEN current_artifact_id\x20\
+                 WHEN current_artifact_id IS DISTINCT FROM $1 AND EXISTS (\x20\
+                   SELECT 1 FROM series_analysis_artifacts previous\x20\
+                   WHERE previous.id = current_artifact_id AND previous.status = 'published'\x20\
+                     AND previous.validation_contract_id = $7\x20\
+                 ) THEN current_artifact_id\x20\
+                 WHEN current_artifact_id IS DISTINCT FROM $1 THEN NULL\x20\
                  ELSE previous_artifact_id END,\x20\
                current_artifact_id = $1, pending_work = false, pending_forced_run_count = 0,\x20\
                last_failure_code = NULL, last_failure_at = NULL, updated_at = clock_timestamp()\x20\
              WHERE game_title_id = $2 AND input_revision = $3\x20\
-               AND algorithm_version = $4 AND artifact_schema_version = $5",
+               AND algorithm_version = $4 AND artifact_schema_version = $5\x20\
+               AND validation_contract_id IS NOT DISTINCT FROM $6",
             &[
                 &manifest.artifact_id,
                 &claim.game_title_id,
                 &claim.input_revision,
                 &claim.algorithm_version,
                 &claim.artifact_schema_version,
+                &claim.validation_contract_id,
+                &artifact.validation_contract_id(),
             ],
         )
         .await?;
@@ -232,9 +323,11 @@ pub(super) async fn finish_success(
                status = 'succeeded', finished_at = clock_timestamp(),\x20\
                result_disposition = $1, output_checksum = $2, safe_failure_code = NULL,\x20\
                elapsed_milliseconds = $3, lease_owner = NULL, lease_attempt_id = NULL,\x20\
-               lease_fencing_token = NULL, lease_expires_at = NULL, updated_at = clock_timestamp()\x20\
+               lease_fencing_token = NULL, lease_expires_at = NULL,\x20\
+               lease_validation_contract_id = NULL, updated_at = clock_timestamp()\x20\
              WHERE id = $4 AND status = 'running' AND lease_owner = $5\x20\
                AND lease_attempt_id = $6 AND lease_fencing_token = $7\x20\
+               AND lease_validation_contract_id IS NOT DISTINCT FROM $8\x20\
                AND lease_expires_at > clock_timestamp()",
             &[
                 &disposition,
@@ -244,19 +337,29 @@ pub(super) async fn finish_success(
                 &worker_id,
                 &claim.attempt_id,
                 &claim.fencing_token,
+                &claim.validation_contract_id,
             ],
         )
         .await?;
     if updated != 1 {
         return Err(ControlError::OwnerLost);
     }
+    // A legacy current artifact may become `previous` during the first attested publication.
+    // Keep rollback data only when Rust proved it under the same exact contract; otherwise clear
+    // the pointer so release audit cannot mistake an unverified v2 payload for a safe fallback.
     transaction
         .execute(
             "UPDATE series_analysis_title_states SET\x20\
+               previous_artifact_id = CASE\x20\
+                 WHEN EXISTS (\x20\
+                   SELECT 1 FROM series_analysis_artifacts a\x20\
+                   WHERE a.id = series_analysis_title_states.previous_artifact_id\x20\
+                     AND a.status = 'published' AND a.validation_contract_id = $2\x20\
+                 ) THEN previous_artifact_id ELSE NULL END,\x20\
                pending_work = false, pending_forced_run_count = 0,\x20\
                last_failure_code = NULL, last_failure_at = NULL, updated_at = clock_timestamp()\x20\
              WHERE game_title_id = $1",
-            &[&claim.game_title_id],
+            &[&claim.game_title_id, &ARTIFACT_VALIDATION_CONTRACT_ID],
         )
         .await?;
     fulfill_requests(transaction, claim, RequestOutcome::Succeeded).await?;
@@ -351,17 +454,20 @@ fn artifact_totals(manifest: &ArtifactManifest) -> Result<ArtifactTotals, Contro
 async fn insert_artifact_header(
     transaction: &Transaction<'_>,
     claim: &ClaimedJob,
-    manifest: &ArtifactManifest,
+    artifact: &ValidatedArtifact,
     totals: &ArtifactTotals,
 ) -> Result<u64, ControlError> {
+    let manifest = artifact.manifest();
+    let validation_contract_id: Option<&str> = None;
     Ok(transaction
         .execute(
             "INSERT INTO series_analysis_artifacts (\x20\
                id, game_title_id, attempt_id, input_revision, algorithm_version,\x20\
-               artifact_schema_version, source_input_checksum, root_checksum, status,\x20\
+               artifact_schema_version, validation_contract_id, source_input_checksum,\x20\
+               root_checksum, status,\x20\
                aggregate_chunk_count, review_chunk_count, drilldown_chunk_count,\x20\
                match_context_chunk_count, encoded_bytes, decoded_bytes\x20\
-             ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'staging',$9,$10,$11,$12,$13,$14)\x20\
+             ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'staging',$10,$11,$12,$13,$14,$15)\x20\
              ON CONFLICT (id) DO NOTHING",
             &[
                 &manifest.artifact_id,
@@ -370,6 +476,7 @@ async fn insert_artifact_header(
                 &claim.input_revision,
                 &claim.algorithm_version,
                 &claim.artifact_schema_version,
+                &validation_contract_id,
                 &manifest.source_input_checksum,
                 &manifest.root_checksum,
                 &totals.counts.aggregates,
@@ -386,9 +493,10 @@ async fn insert_artifact_header(
 async fn replace_staged_artifact(
     transaction: &Transaction<'_>,
     claim: &ClaimedJob,
-    manifest: &ArtifactManifest,
+    artifact: &ValidatedArtifact,
     totals: &ArtifactTotals,
 ) -> Result<(), ControlError> {
+    let manifest = artifact.manifest();
     let deleted = transaction
         .execute(
             "DELETE FROM series_analysis_artifacts\x20\
@@ -401,16 +509,18 @@ async fn replace_staged_artifact(
         )
         .await?;
     require_publication_row(deleted)?;
-    let inserted = insert_artifact_header(transaction, claim, manifest, totals).await?;
+    let inserted = insert_artifact_header(transaction, claim, artifact, totals).await?;
     require_publication_row(inserted)
 }
 
 async fn validate_staged_artifact_shape(
     transaction: &Transaction<'_>,
     claim: &ClaimedJob,
-    manifest: &ArtifactManifest,
+    artifact: &ValidatedArtifact,
     totals: &ArtifactTotals,
+    expected_validation_contract_id: Option<&str>,
 ) -> Result<(), ControlError> {
+    let manifest = artifact.manifest();
     let row = transaction
         .query_opt(
             "WITH child_shape AS (\x20\
@@ -434,18 +544,20 @@ async fn validate_staged_artifact_shape(
              )\x20\
              SELECT a.game_title_id = $2 AND a.attempt_id = $3\x20\
                     AND a.input_revision = $4 AND a.algorithm_version = $5\x20\
-                    AND a.artifact_schema_version = $6 AND a.source_input_checksum = $7\x20\
-                    AND a.root_checksum = $8 AND a.status = 'staging'\x20\
-                    AND a.aggregate_chunk_count = $9 AND a.review_chunk_count = $10\x20\
-                    AND a.drilldown_chunk_count = $11 AND a.match_context_chunk_count = $12\x20\
-                    AND a.encoded_bytes = $13 AND a.decoded_bytes = $14\x20\
-                    AND (SELECT chunk_count FROM child_shape WHERE kind = 'aggregate') = $9\x20\
-                    AND (SELECT chunk_count FROM child_shape WHERE kind = 'review') = $10\x20\
-                    AND (SELECT chunk_count FROM child_shape WHERE kind = 'drilldown') = $11\x20\
-                    AND (SELECT chunk_count FROM child_shape WHERE kind = 'match_context') = $12\x20\
-                    AND (SELECT SUM(encoded_bytes) FROM child_shape) = $13\x20\
-                    AND (SELECT SUM(decoded_bytes) FROM child_shape) = $14\x20\
-             FROM series_analysis_artifacts a WHERE a.id = $1 FOR UPDATE OF a",
+                    AND a.artifact_schema_version = $6\x20\
+                    AND a.validation_contract_id IS NOT DISTINCT FROM $7\x20\
+                    AND a.source_input_checksum = $8 AND a.root_checksum = $9\x20\
+                    AND a.status = 'staging'\x20\
+                    AND a.aggregate_chunk_count = $10 AND a.review_chunk_count = $11\x20\
+                    AND a.drilldown_chunk_count = $12 AND a.match_context_chunk_count = $13\x20\
+                    AND a.encoded_bytes = $14 AND a.decoded_bytes = $15\x20\
+                    AND (SELECT chunk_count FROM child_shape WHERE kind = 'aggregate') = $10\x20\
+                    AND (SELECT chunk_count FROM child_shape WHERE kind = 'review') = $11\x20\
+                    AND (SELECT chunk_count FROM child_shape WHERE kind = 'drilldown') = $12\x20\
+                    AND (SELECT chunk_count FROM child_shape WHERE kind = 'match_context') = $13\x20\
+                    AND (SELECT SUM(encoded_bytes) FROM child_shape) = $14\x20\
+                    AND (SELECT SUM(decoded_bytes) FROM child_shape) = $15\x20\
+             FROM series_analysis_artifacts a WHERE a.id = $1",
             &[
                 &manifest.artifact_id,
                 &claim.game_title_id,
@@ -453,6 +565,7 @@ async fn validate_staged_artifact_shape(
                 &claim.input_revision,
                 &claim.algorithm_version,
                 &claim.artifact_schema_version,
+                &expected_validation_contract_id,
                 &manifest.source_input_checksum,
                 &manifest.root_checksum,
                 &totals.counts.aggregates,

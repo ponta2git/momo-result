@@ -1,5 +1,6 @@
 use std::error::Error;
 
+use momo_analysis_core::contract::ARTIFACT_VALIDATION_CONTRACT_ID;
 use redis::{AsyncCommands, aio::ConnectionManager, streams::StreamRangeReply};
 
 use super::*;
@@ -57,6 +58,7 @@ fn campaign_ids_match_the_cross_runtime_sha256_contract() {
 #[test]
 fn campaign_assignment_decision_preserves_the_acceptance_race_boundary() {
     let accepted_at = SystemTime::UNIX_EPOCH + Duration::from_secs(100);
+    let target = campaign_target(accepted_at);
     let queued = active_job("queued", None, None);
     let running_before = active_job(
         "running",
@@ -73,37 +75,81 @@ fn campaign_assignment_decision_preserves_the_acceptance_race_boundary() {
     let running_without_attempt = active_job("running", Some(accepted_at), None);
 
     assert_eq!(
-        campaign_assignment_decision(None, accepted_at).ok(),
+        campaign_assignment_decision(None, &target).ok(),
         Some(CampaignAssignmentDecision::Create)
     );
     assert_eq!(
-        campaign_assignment_decision(Some(&queued), accepted_at).ok(),
+        campaign_assignment_decision(Some(&queued), &target).ok(),
         Some(CampaignAssignmentDecision::RefreshQueued {
             job_id: "active-job"
         })
     );
     assert_eq!(
-        campaign_assignment_decision(Some(&running_before), accepted_at).ok(),
+        campaign_assignment_decision(Some(&running_before), &target).ok(),
         Some(CampaignAssignmentDecision::DeferForcedRun)
     );
     assert_eq!(
-        campaign_assignment_decision(Some(&running_at_acceptance), accepted_at).ok(),
+        campaign_assignment_decision(Some(&running_at_acceptance), &target).ok(),
         Some(CampaignAssignmentDecision::JoinRunning {
             job_id: "active-job",
             attempt_id: "attempt-at-acceptance"
         })
     );
     assert_eq!(
-        campaign_assignment_decision(Some(&running_after), accepted_at).ok(),
+        campaign_assignment_decision(Some(&running_after), &target).ok(),
         Some(CampaignAssignmentDecision::JoinRunning {
             job_id: "active-job",
             attempt_id: "attempt-after"
         })
     );
     assert_eq!(
-        campaign_assignment_decision(Some(&running_without_attempt), accepted_at).ok(),
+        campaign_assignment_decision(Some(&running_without_attempt), &target).ok(),
         Some(CampaignAssignmentDecision::DeferForcedRun)
     );
+}
+
+#[test]
+fn campaign_never_joins_a_running_attempt_under_a_different_version_contract() {
+    let accepted_at = SystemTime::UNIX_EPOCH + Duration::from_secs(100);
+    let target = campaign_target(accepted_at);
+    let mut running = active_job("running", Some(accepted_at), Some("attempt-1"));
+
+    running.validation_contract_id = Some(String::from("different-validation-contract"));
+    assert_eq!(
+        campaign_assignment_decision(Some(&running), &target).ok(),
+        Some(CampaignAssignmentDecision::DeferForcedRun)
+    );
+    running.validation_contract_id = target.validation_contract_id.clone();
+    running.algorithm_version = String::from("different-algorithm");
+    assert_eq!(
+        campaign_assignment_decision(Some(&running), &target).ok(),
+        Some(CampaignAssignmentDecision::DeferForcedRun)
+    );
+    running
+        .algorithm_version
+        .clone_from(&target.algorithm_version);
+    running.artifact_schema_version = target.artifact_schema_version + 1;
+    assert_eq!(
+        campaign_assignment_decision(Some(&running), &target).ok(),
+        Some(CampaignAssignmentDecision::DeferForcedRun)
+    );
+}
+
+#[test]
+fn only_release_campaigns_require_one_uniform_version_tuple() {
+    assert_eq!(
+        campaign_requires_uniform_version("manual").ok(),
+        Some(false)
+    );
+    for trigger in [
+        "algorithm_update",
+        "artifact_schema_update",
+        "validation_contract_update",
+        "initial_backfill",
+    ] {
+        assert_eq!(campaign_requires_uniform_version(trigger).ok(), Some(true));
+    }
+    assert!(campaign_requires_uniform_version("unknown-trigger").is_err());
 }
 
 fn campaign_target(accepted_at: SystemTime) -> CampaignTarget {
@@ -113,6 +159,7 @@ fn campaign_target(accepted_at: SystemTime) -> CampaignTarget {
         input_revision: 3,
         algorithm_version: String::from("series-analysis-v1"),
         artifact_schema_version: 1,
+        validation_contract_id: None,
         accepted_at,
         operation_id: String::from("operation-1"),
         trigger: String::from("manual"),
@@ -127,6 +174,9 @@ fn active_job(
     ActiveAnalysisJob {
         id: String::from("active-job"),
         status: String::from(status),
+        algorithm_version: String::from("series-analysis-v1"),
+        artifact_schema_version: 1,
+        validation_contract_id: None,
         started_at,
         attempt_id: attempt_id.map(String::from),
     }
@@ -314,6 +364,12 @@ async fn assert_campaign_expansion_decision_table(
               ('analysis-campaign-smoke-deleted', 'campaign deleted', 'momotetsu2', 9905);
 
             UPDATE series_analysis_title_states
+            SET algorithm_version = 'series-analysis-v3',
+                artifact_schema_version = 2,
+                validation_contract_id = 'series-analysis-artifact-v2-full-validation-v1'
+            WHERE game_title_id LIKE 'analysis-campaign-smoke-%';
+
+            UPDATE series_analysis_title_states
             SET input_revision = 9,
                 algorithm_version = 'series-analysis-v2',
                 artifact_schema_version = 2
@@ -329,56 +385,58 @@ async fn assert_campaign_expansion_decision_table(
             );
             INSERT INTO series_analysis_campaigns (
               id, operation_request_id, trigger, algorithm_version,
-              artifact_schema_version, status, target_count, accepted_at
+              artifact_schema_version, validation_contract_id, status, target_count, accepted_at
             )
             SELECT
-              'analysis-campaign-smoke', id, 'manual', 'series-analysis-v1', 1,
+              'analysis-campaign-smoke', id, 'manual', 'mixed', 2, NULL,
               'expanding', 5, accepted_at
             FROM series_analysis_operation_requests
             WHERE id = 'analysis-campaign-smoke-operation';
             INSERT INTO series_analysis_campaign_targets (
               campaign_id, game_title_id, input_revision, algorithm_version,
-              artifact_schema_version, accepted_at
+              artifact_schema_version, validation_contract_id, accepted_at
             )
-            SELECT c.id, title_id, 0, c.algorithm_version,
-                   c.artifact_schema_version, c.accepted_at
+            SELECT c.id, s.game_title_id, s.input_revision, s.algorithm_version,
+                   s.artifact_schema_version, s.validation_contract_id, c.accepted_at
             FROM series_analysis_campaigns c
-            CROSS JOIN unnest(ARRAY[
-              'analysis-campaign-smoke-new',
-              'analysis-campaign-smoke-queued',
-              'analysis-campaign-smoke-before',
-              'analysis-campaign-smoke-after',
-              'analysis-campaign-smoke-deleted'
-            ]) AS title_id
-            WHERE c.id = 'analysis-campaign-smoke';
+            CROSS JOIN series_analysis_title_states s
+            WHERE c.id = 'analysis-campaign-smoke'
+              AND s.game_title_id LIKE 'analysis-campaign-smoke-%';
 
             INSERT INTO series_analysis_jobs (
               id, game_title_id, input_revision, algorithm_version,
-              artifact_schema_version, status, trigger, requested_at, available_at
+              artifact_schema_version, validation_contract_id, status, trigger,
+              requested_at, available_at
             )
             SELECT
               'analysis-campaign-smoke-queued-job', 'analysis-campaign-smoke-queued',
-              0, 'stale-version', 1, 'queued', 'match_mutation', accepted_at, accepted_at
+              0, 'stale-version', 1, NULL, 'queued', 'match_mutation', accepted_at, accepted_at
             FROM series_analysis_campaigns WHERE id = 'analysis-campaign-smoke';
             INSERT INTO series_analysis_jobs (
               id, game_title_id, input_revision, algorithm_version,
-              artifact_schema_version, status, trigger, requested_at, available_at,
-              started_at, lease_owner, lease_attempt_id, lease_fencing_token, lease_expires_at
+              artifact_schema_version, validation_contract_id, status, trigger,
+              requested_at, available_at,
+              started_at, lease_owner, lease_attempt_id, lease_fencing_token, lease_expires_at,
+              lease_validation_contract_id
             )
             SELECT
               'analysis-campaign-smoke-before-job', 'analysis-campaign-smoke-before',
-              0, 'series-analysis-v1', 1, 'running', 'match_mutation',
+              0, 'series-analysis-v3', 2,
+              'series-analysis-artifact-v2-full-validation-v1', 'running', 'match_mutation',
               accepted_at - interval '1 second', accepted_at - interval '1 second',
               accepted_at - interval '1 second', 'worker-before', 'attempt-before', 1,
-              clock_timestamp() + interval '10 minutes'
+              clock_timestamp() + interval '10 minutes',
+              'series-analysis-artifact-v2-full-validation-v1'
             FROM series_analysis_campaigns WHERE id = 'analysis-campaign-smoke'
             UNION ALL
             SELECT
               'analysis-campaign-smoke-after-job', 'analysis-campaign-smoke-after',
-              0, 'series-analysis-v1', 1, 'running', 'match_mutation',
+              0, 'series-analysis-v3', 2,
+              'series-analysis-artifact-v2-full-validation-v1', 'running', 'match_mutation',
               accepted_at + interval '1 second', accepted_at + interval '1 second',
               accepted_at + interval '1 second', 'worker-after', 'attempt-after', 1,
-              clock_timestamp() + interval '10 minutes'
+              clock_timestamp() + interval '10 minutes',
+              'series-analysis-artifact-v2-full-validation-v1'
             FROM series_analysis_campaigns WHERE id = 'analysis-campaign-smoke';
 
             DELETE FROM game_titles WHERE id = 'analysis-campaign-smoke-deleted';
@@ -473,6 +531,15 @@ async fn assert_campaign_expansion_decision_table(
                     WHERE game_title_id = 'analysis-campaign-smoke-before') AS forced_runs,
                    (SELECT input_revision FROM series_analysis_jobs
                     WHERE id = 'analysis-campaign-smoke-queued-job') AS queued_revision,
+                   (SELECT validation_contract_id FROM series_analysis_jobs
+                    WHERE id = 'analysis-campaign-smoke-queued-job') AS queued_validation_contract,
+                   (SELECT BOOL_AND(
+                      r.id IS NULL
+                      OR r.validation_contract_id IS NOT DISTINCT FROM t.validation_contract_id
+                    )
+                    FROM series_analysis_campaign_targets t
+                    LEFT JOIN series_analysis_job_requests r ON r.id = t.job_request_id
+                    WHERE t.campaign_id = c.id) AS request_tuple_propagated,
                    (SELECT COUNT(*)::bigint FROM series_analysis_queue_outbox q
                     JOIN series_analysis_jobs j ON j.id = q.job_id
                     WHERE j.game_title_id LIKE 'analysis-campaign-smoke-%') AS outbox_count
@@ -493,6 +560,13 @@ async fn assert_campaign_expansion_decision_table(
     );
     assert_eq!(projection.try_get::<_, i32>("forced_runs")?, 1);
     assert_eq!(projection.try_get::<_, i64>("queued_revision")?, 9);
+    assert_eq!(
+        projection
+            .try_get::<_, Option<String>>("queued_validation_contract")?
+            .as_deref(),
+        Some(ARTIFACT_VALIDATION_CONTRACT_ID)
+    );
+    assert!(projection.try_get::<_, bool>("request_tuple_propagated")?);
     assert_eq!(projection.try_get::<_, i64>("outbox_count")?, 2);
 
     cleanup_campaign_expansion_fixture(&driver.database).await?;
@@ -504,8 +578,9 @@ fn campaign_target_for(game_title_id: &str) -> CampaignTarget {
         campaign_id: String::from(CAMPAIGN_ID),
         game_title_id: String::from(game_title_id),
         input_revision: 0,
-        algorithm_version: String::from("series-analysis-v1"),
-        artifact_schema_version: 1,
+        algorithm_version: String::from("series-analysis-v3"),
+        artifact_schema_version: 2,
+        validation_contract_id: Some(String::from(ARTIFACT_VALIDATION_CONTRACT_ID)),
         accepted_at: SystemTime::UNIX_EPOCH,
         operation_id: String::from(CAMPAIGN_OPERATION_ID),
         trigger: String::from("manual"),
@@ -550,7 +625,7 @@ async fn assert_locked_due_delivery_uses_bounded_retry(
         .execute(
             "UPDATE series_analysis_jobs SET status = 'queued', available_at = clock_timestamp(),\
              lease_owner = NULL, lease_attempt_id = NULL, lease_fencing_token = NULL,\
-             lease_expires_at = NULL WHERE id = $1",
+             lease_expires_at = NULL, lease_validation_contract_id = NULL WHERE id = $1",
             &[&JOB_ID],
         )
         .await?;
@@ -910,6 +985,14 @@ async fn prepare_outbox(database: &Client) -> SmokeResult {
         .execute(
             "INSERT INTO game_titles (id, name, layout_family, display_order) VALUES ($1, $2, $3, $4)",
             &[&TITLE_ID, &"Analysis outbox smoke", &"momotetsu2", &9_999_i32],
+        )
+        .await?;
+    database
+        .execute(
+            "UPDATE series_analysis_title_states SET algorithm_version = 'series-analysis-v1', \
+             artifact_schema_version = 1, validation_contract_id = NULL \
+             WHERE game_title_id = $1",
+            &[&TITLE_ID],
         )
         .await?;
     database

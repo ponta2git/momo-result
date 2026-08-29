@@ -122,6 +122,7 @@ Analysis / OCR の共通 contract として、次を固定する。
 - parent が DB、Redis、object、process、timeout、fence、outbox、ACK を所有し、child は1 attempt の bounded candidate だけを返すこと。
 - terminal DB write 前に ACK しないこと、rollback では wake しないこと、append 後の DB failure と重複 delivery が安全に収束すること。
 - startup / PEL recovery、wake coalescing、deadline、bounded drain、backoff を制御可能 clock と signal で検証し、idle 時の無条件 polling を許さないこと。
+- 分析outboxはworkerによるcampaign展開とdispatchを実DB / Redisで通し、process外commit後のhint、hint喪失後の低頻度recovery、旧dispatcherとのrolling overlapが同じdurable stateへ収束すること。
 - supervisor の shutdown、unexpected child / coordinator exit、sibling 停止、process group 回収。
 - DB / Redis / Linux process / native engine は通常 unit test から分離し、検証済み runtime image と隔離 service で通すこと。
 
@@ -135,6 +136,8 @@ OCR は schema / screen type、object metadata、parser / postprocess、failure 
 - stale fence、重複 delivery、commit 応答不明、unsupported version、partial staging、publication rollback、cleanup 競合を直接通し、部分公開・二重公開・孤立 job を残さない。
 - child の resource limit は対象 cgroup の readback / event と parent 生存を同時に確認する。host 上の制限や runtime 全体 OOM で代用しない。
 - artifact materialization は byte / node / depth / UTF-8 / checksum / path / symlink / disk 境界を検証する。
+- artifact publicationはRustのfull semantic validatorを唯一の意味oracleとし、exact validation contract、published rowのimmutability、APIのbounded shape / identity defenseをそれぞれの境界で検証する。
+- release promotionは2接続の実PostgreSQLで、capability検査後の非互換登録がcommitまで待つこと、singleton lock中の新規作品がcommit後のtupleを継承すること、登録作品0件がterminalになることを検証する。
 - OCR preemption は一方向、失敗回数非加算、旧 child 回収後の再実行を実 process / DB で確認する。
 - resource / endurance gate は release build、production 相当の上限、代表 data で機能 gate と分けて実行する。
 

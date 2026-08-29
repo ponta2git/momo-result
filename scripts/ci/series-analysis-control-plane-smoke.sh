@@ -6,9 +6,12 @@ if (( $# != 0 )); then
   exit 1
 fi
 
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# shellcheck source=analysis-smoke-safety.sh
+source "${repo_root}/scripts/ci/analysis-smoke-safety.sh"
 postgres_image="${POSTGRES_IMAGE:-postgres:18-alpine}"
 redis_image="${REDIS_IMAGE:-redis:7-alpine}"
-redis_stream="${MOMO_REDIS_ANALYSIS_STREAM:-momo:analysis:jobs}"
+redis_stream="${ANALYSIS_SMOKE_REDIS_STREAM:-}"
 redis_group="ci-analysis-worker-v1"
 redis_host="${REDIS_HOST:-127.0.0.1}"
 redis_port="${REDIS_PORT:-6379}"
@@ -17,6 +20,19 @@ worker_container="momo-analysis-control-smoke-worker"
 worker_database_url="${WORKER_DATABASE_URL:-${DATABASE_URL:-}}"
 worker_redis_url="${WORKER_REDIS_URL:-${REDIS_URL:-}}"
 release_database_url="${RELEASE_DATABASE_URL:-${DATABASE_URL:-}}"
+publication_contract="${repo_root}/docs/schemas/series-analysis-publication-contract-v1.json"
+algorithm_version="${analysis_smoke_algorithm_version}"
+artifact_schema_version="$(jq -er '
+  .artifactSchemaVersion |
+  select(type == "number" and . == floor and . >= 1)
+' "${publication_contract}")"
+validation_contract_id="$(jq -er '
+  .validationContractId |
+  select(type == "string" and test("^[a-z0-9][a-z0-9._-]{0,127}$"))
+' "${publication_contract}")"
+analysis_worker_id="ci-analysis-worker"
+analysis_capability_id="${analysis_worker_id}@${algorithm_version}@${artifact_schema_version}@${validation_contract_id}"
+release_capability_id="worker-release-smoke@${algorithm_version}@${artifact_schema_version}@${validation_contract_id}"
 runtime_memory_limit_bytes="268435456"
 child_memory_limit_bytes="201326592"
 parent_headroom_bytes="67108864"
@@ -31,6 +47,20 @@ if [[ -z "${worker_image}" ]]; then
   echo "ANALYSIS_WORKER_IMAGE is required." >&2
   exit 1
 fi
+
+if [[ ! "${redis_stream}" =~ ^momo:analysis:control-plane-smoke:[a-zA-Z0-9._-]+$ ]]; then
+  echo "ANALYSIS_SMOKE_REDIS_STREAM must be an explicit CI-only momo:analysis:control-plane-smoke:* stream." >&2
+  exit 1
+fi
+
+analysis_smoke_require_isolated_services
+analysis_smoke_require_same_postgres_database \
+  "${postgres_image}" \
+  "${DATABASE_URL}" \
+  "WORKER_DATABASE_URL" \
+  "${worker_database_url}" \
+  "RELEASE_DATABASE_URL" \
+  "${release_database_url}"
 
 run_release_command() {
   docker run --rm --network host --add-host host.docker.internal:host-gateway \
@@ -50,6 +80,8 @@ cleanup() {
     docker stop --timeout 5 "${worker_container}" >/dev/null 2>&1
     wait "${worker_pid}" 2>/dev/null
   fi
+  redis_ci DEL "${redis_stream}" >/dev/null 2>&1 || status=1
+  cleanup_database >/dev/null 2>&1 || status=1
   case "${run_root}" in
     /tmp/*|/private/tmp/*|/var/folders/*|/private/var/folders/*)
       rm -r -- "${run_root}"
@@ -80,6 +112,66 @@ psql_ci() {
   fi
 }
 
+cleanup_database() {
+  # The release singleton is the generation under test, not a row-owned fixture. It is left intact
+  # until the caller disposes this explicitly isolated PostgreSQL service.
+  psql_ci -v analysis_worker_id="${analysis_worker_id}" \
+    -v analysis_capability_id="${analysis_capability_id}" \
+    -v release_capability_id="${release_capability_id}" >/dev/null <<'SQL'
+BEGIN;
+SET LOCAL statement_timeout = '10s';
+SET LOCAL lock_timeout = '5s';
+UPDATE worker_execution_slots
+SET task_kind = NULL, owner = NULL, job_id = NULL, attempt_id = NULL,
+    holder_preemptible = NULL, lease_expires_at = NULL,
+    preempt_requested_by = NULL, preempt_requested_at = NULL,
+    updated_at = clock_timestamp()
+WHERE slot_key = 'shared-heavy-work'
+  AND (owner IS NULL OR owner IN (:'analysis_worker_id', 'ci-expired-worker'));
+UPDATE series_analysis_title_states
+SET current_artifact_id = NULL, previous_artifact_id = NULL
+WHERE game_title_id IN ('title-release-smoke-a', 'title-release-smoke-b');
+DELETE FROM series_analysis_artifacts
+WHERE game_title_id IN ('title-release-smoke-a', 'title-release-smoke-b');
+DELETE FROM series_analysis_operation_requests operation
+WHERE EXISTS (
+  SELECT 1
+  FROM series_analysis_campaigns campaign
+  JOIN series_analysis_campaign_targets target ON target.campaign_id = campaign.id
+  WHERE campaign.operation_request_id = operation.id
+    AND target.game_title_id IN ('title-release-smoke-a', 'title-release-smoke-b')
+)
+OR EXISTS (
+  SELECT 1
+  FROM series_analysis_job_requests request
+  WHERE request.operation_request_id = operation.id
+    AND request.game_title_id IN ('title-release-smoke-a', 'title-release-smoke-b')
+);
+DELETE FROM series_analysis_job_requests
+WHERE game_title_id IN ('title-release-smoke-a', 'title-release-smoke-b');
+DELETE FROM series_analysis_jobs
+WHERE game_title_id IN ('title-release-smoke-a', 'title-release-smoke-b');
+DELETE FROM series_analysis_reader_capabilities
+WHERE reader_id = 'reader-release-smoke';
+DELETE FROM series_analysis_worker_capabilities
+WHERE worker_id IN (
+  'worker-release-smoke',
+  :'release_capability_id',
+  :'analysis_worker_id',
+  :'analysis_capability_id'
+);
+DELETE FROM match_incidents WHERE match_id = 'match-release-smoke-a';
+DELETE FROM match_players WHERE match_id = 'match-release-smoke-a';
+DELETE FROM matches WHERE id = 'match-release-smoke-a';
+DELETE FROM held_events WHERE id = 'event-release-smoke-a';
+DELETE FROM season_masters WHERE id = 'season-release-smoke-a';
+DELETE FROM map_masters WHERE id = 'map-release-smoke-a';
+DELETE FROM game_titles
+WHERE id IN ('title-release-smoke-a', 'title-release-smoke-b');
+COMMIT;
+SQL
+}
+
 # The API dispatcher expansion itself is concurrency-tested by
 # PostgresSeriesAnalysisRepositorySpec. This worker smoke deliberately publishes Redis messages
 # itself, so it materializes only the durable job/request input that the worker consumes. Keeping
@@ -95,12 +187,14 @@ WITH pending_targets AS MATERIALIZED (
     t.input_revision AS requested_input_revision,
     t.algorithm_version AS requested_algorithm_version,
     t.artifact_schema_version AS requested_artifact_schema_version,
+    t.validation_contract_id AS requested_validation_contract_id,
     t.accepted_at,
     c.operation_request_id,
     c.trigger,
     s.input_revision,
     s.algorithm_version,
     s.artifact_schema_version,
+    s.validation_contract_id,
     'ci-analysis-job-' || md5(t.campaign_id || ':' || t.game_title_id) AS job_id,
     'ci-analysis-request-' || md5(t.campaign_id || ':' || t.game_title_id) AS request_id
   FROM series_analysis_campaign_targets t
@@ -111,18 +205,20 @@ WITH pending_targets AS MATERIALIZED (
 inserted_jobs AS (
   INSERT INTO series_analysis_jobs (
     id, game_title_id, input_revision, algorithm_version,
-    artifact_schema_version, status, trigger, requested_at, available_at
+    artifact_schema_version, validation_contract_id,
+    status, trigger, requested_at, available_at
   )
   SELECT
     job_id, game_title_id, input_revision, algorithm_version,
-    artifact_schema_version, 'queued', trigger, accepted_at, accepted_at
+    artifact_schema_version, validation_contract_id,
+    'queued', trigger, accepted_at, accepted_at
   FROM pending_targets
   RETURNING id
 ),
 inserted_requests AS (
   INSERT INTO series_analysis_job_requests (
     id, game_title_id, operation_request_id, campaign_id,
-    input_revision, algorithm_version, artifact_schema_version,
+    input_revision, algorithm_version, artifact_schema_version, validation_contract_id,
     trigger, force_run, status, assigned_job_id, accepted_at
   )
   SELECT
@@ -133,6 +229,7 @@ inserted_requests AS (
     target.requested_input_revision,
     target.requested_algorithm_version,
     target.requested_artifact_schema_version,
+    target.requested_validation_contract_id,
     target.trigger,
     true,
     'pending',
@@ -300,7 +397,7 @@ worker_environment=(
   "MOMO_ANALYSIS_READ_DATABASE_URL=${worker_database_url}"
   "MOMO_REDIS_ANALYSIS_STREAM=${redis_stream}"
   "MOMO_ANALYSIS_REDIS_GROUP=${redis_group}"
-  "MOMO_ANALYSIS_WORKER_ID=ci-analysis-worker"
+  "MOMO_ANALYSIS_WORKER_ID=${analysis_worker_id}"
   "MOMO_ANALYSIS_TEMPORARY_ROOT=/var/lib/momo-analysis"
   "MOMO_ANALYSIS_CONFIG_VERSION=ci-control-plane-v1"
   "MOMO_ANALYSIS_LEASE_DURATION_MS=60000"
@@ -312,6 +409,8 @@ worker_environment=(
   "MOMO_LOG_FORMAT=json"
   "RUST_LOG=momo_processing_worker=info"
 )
+
+redis_ci DEL "${redis_stream}" >/dev/null
 
 docker_environment=()
 for value in "${worker_environment[@]}"; do
@@ -328,10 +427,32 @@ worker_pid=$!
 
 wait_for_sql_value "1" "
   SELECT COUNT(*)::int FROM series_analysis_worker_capabilities
-  WHERE worker_id = 'ci-analysis-worker' AND draining = false;
+  WHERE worker_id = '${analysis_capability_id}'
+    AND algorithm_versions = jsonb_build_array('${algorithm_version}')
+    AND artifact_schema_versions = jsonb_build_array(${artifact_schema_version})
+    AND validation_contract_ids = jsonb_build_array('${validation_contract_id}')
+    AND draining = false;
 " "worker capability registration"
 
 materialize_pending_campaign_targets
+contract_propagation_shape="$(psql_ci -At -c "
+  SELECT
+    COUNT(*)::int,
+    COUNT(*) FILTER (
+      WHERE campaign.validation_contract_id IS DISTINCT FROM '${validation_contract_id}'
+         OR target.validation_contract_id IS DISTINCT FROM '${validation_contract_id}'
+         OR request.validation_contract_id IS DISTINCT FROM target.validation_contract_id
+         OR job.validation_contract_id IS DISTINCT FROM '${validation_contract_id}'
+    )::int
+  FROM series_analysis_campaign_targets target
+  JOIN series_analysis_campaigns campaign ON campaign.id = target.campaign_id
+  JOIN series_analysis_job_requests request ON request.id = target.job_request_id
+  JOIN series_analysis_jobs job ON job.id = request.assigned_job_id;
+")"
+if [[ "${contract_propagation_shape}" != "2|0" ]]; then
+  fail_with_worker_log \
+    "Campaign validation contract did not propagate through target/request/job: ${contract_propagation_shape}"
+fi
 publish_queued_jobs
 wait_for_sql_value "2|0" "
   SELECT
@@ -349,9 +470,12 @@ artifact_shape="$(psql_ci -At -c "
     (SELECT COUNT(*) FROM series_analysis_drilldown_artifacts c JOIN series_analysis_artifacts a ON a.id = c.artifact_id WHERE a.game_title_id = 'title-release-smoke-a'),
     (SELECT COUNT(*) FROM series_analysis_match_context_artifacts c JOIN series_analysis_artifacts a ON a.id = c.artifact_id WHERE a.game_title_id = 'title-release-smoke-a'),
     (SELECT COUNT(*) FROM series_analysis_scope_aggregate_artifacts c JOIN series_analysis_artifacts a ON a.id = c.artifact_id WHERE a.game_title_id = 'title-release-smoke-b'),
-    (SELECT COUNT(*) FROM series_analysis_scope_review_artifacts c JOIN series_analysis_artifacts a ON a.id = c.artifact_id WHERE a.game_title_id = 'title-release-smoke-b');
+    (SELECT COUNT(*) FROM series_analysis_scope_review_artifacts c JOIN series_analysis_artifacts a ON a.id = c.artifact_id WHERE a.game_title_id = 'title-release-smoke-b'),
+    (SELECT COUNT(*) FROM series_analysis_artifacts
+      WHERE status = 'published'
+        AND validation_contract_id = '${validation_contract_id}');
 ")"
-if [[ "${artifact_shape}" != "2|2|4|4|64|4|1|1" ]]; then
+if [[ "${artifact_shape}" != "2|2|4|4|64|4|1|1|2" ]]; then
   fail_with_worker_log "Unexpected published artifact shape: ${artifact_shape}"
 fi
 
@@ -415,16 +539,17 @@ psql_ci -c "
         SELECT fencing_token FROM worker_execution_slots WHERE slot_key = 'shared-heavy-work'
       ),
       lease_expires_at = clock_timestamp() - interval '1 second',
+      lease_validation_contract_id = validation_contract_id,
       attempt_count = 1, updated_at = clock_timestamp()
   WHERE id = '${lease_job}';
   INSERT INTO series_analysis_job_attempts (
     id, job_id, attempt_no, owner, fencing_token, input_revision,
-    algorithm_version, artifact_schema_version, status,
+    algorithm_version, artifact_schema_version, validation_contract_id, status,
     effective_config_version, calculation_timeout_milliseconds, started_at
   )
   SELECT
     'ci-expired-attempt', id, 1, 'ci-expired-worker', lease_fencing_token,
-    input_revision, algorithm_version, artifact_schema_version, 'running',
+    input_revision, algorithm_version, artifact_schema_version, validation_contract_id, 'running',
     'ci-expired-config', 120000, clock_timestamp() - interval '2 seconds'
   FROM series_analysis_jobs WHERE id = '${lease_job}';
   UPDATE series_analysis_job_requests
@@ -435,6 +560,20 @@ psql_ci -c "
   FROM series_analysis_job_requests r
   WHERE t.job_request_id = r.id AND r.assigned_job_id = '${lease_job}';
 "
+expired_contract_shape="$(psql_ci -At -c "
+  SELECT
+    job.validation_contract_id,
+    job.lease_validation_contract_id,
+    attempt.validation_contract_id
+  FROM series_analysis_jobs job
+  JOIN series_analysis_job_attempts attempt ON attempt.id = job.lease_attempt_id
+  WHERE job.id = '${lease_job}';
+")"
+expected_expired_contract_shape="${validation_contract_id}|${validation_contract_id}|${validation_contract_id}"
+if [[ "${expired_contract_shape}" != "${expected_expired_contract_shape}" ]]; then
+  fail_with_worker_log \
+    "Expired lease fixture lost validation contract provenance: ${expired_contract_shape}"
+fi
 publish_job "${lease_job}"
 queued_peer="$(psql_ci -At -c "
   SELECT id FROM series_analysis_jobs
@@ -498,6 +637,17 @@ final_shape="$(psql_ci -At -c "
 ")"
 if [[ "${final_shape}" != "1|3|5|3|1" ]]; then
   fail_with_worker_log "Supersede/publication state was unexpected: ${final_shape}"
+fi
+
+attempt_contract_mismatches="$(psql_ci -At -c "
+  SELECT COUNT(*)::int
+  FROM series_analysis_job_attempts attempt
+  JOIN series_analysis_jobs job ON job.id = attempt.job_id
+  WHERE attempt.validation_contract_id IS DISTINCT FROM job.validation_contract_id;
+")"
+if [[ "${attempt_contract_mismatches}" != "0" ]]; then
+  fail_with_worker_log \
+    "Attempt validation contracts diverged from their claimed jobs: ${attempt_contract_mismatches}"
 fi
 
 attempt_metric_shape="$(psql_ci -At -c "
@@ -589,11 +739,13 @@ unsupported_job_id="ci-analysis-job-unsupported-version"
 psql_ci -c "
   INSERT INTO series_analysis_jobs (
     id, game_title_id, input_revision, algorithm_version,
-    artifact_schema_version, status, trigger, requested_at, available_at
+    artifact_schema_version, validation_contract_id,
+    status, trigger, requested_at, available_at
   )
   SELECT
     '${unsupported_job_id}', game_title_id, input_revision, 'series-analysis-v999999',
-    artifact_schema_version, 'queued', 'algorithm_update', clock_timestamp(), clock_timestamp()
+    artifact_schema_version, validation_contract_id,
+    'queued', 'algorithm_update', clock_timestamp(), clock_timestamp()
   FROM series_analysis_title_states
   WHERE game_title_id = 'title-release-smoke-a';
 "
@@ -608,7 +760,9 @@ for required_field in \
   '"disposition":"leave_pending"' \
   '"job_algorithm_version":"series-analysis-v999999"' \
   '"supported_algorithm_version":' \
-  '"supported_artifact_schema_version":'
+  '"supported_artifact_schema_version":' \
+  '"job_validation_contract_id":' \
+  '"supported_validation_contract_id":'
 do
   if [[ "${deferred_log}" != *"${required_field}"* ]]; then
     fail_with_worker_log "Unsupported-version diagnostic omitted ${required_field}"
@@ -638,7 +792,7 @@ worker_pid=""
 
 draining="$(psql_ci -At -c "
   SELECT draining FROM series_analysis_worker_capabilities
-  WHERE worker_id = 'ci-analysis-worker';
+  WHERE worker_id = '${analysis_capability_id}';
 ")"
 if [[ "${draining}" != "t" ]]; then
   fail_with_worker_log "Worker capability did not enter draining state."

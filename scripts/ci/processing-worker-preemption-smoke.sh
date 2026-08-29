@@ -7,7 +7,7 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 source "${repo_root}/scripts/ci/analysis-smoke-safety.sh"
 postgres_image="${POSTGRES_IMAGE:-postgres:18-alpine}"
 redis_image="${REDIS_IMAGE:-redis:7-alpine}"
-worker_container="momo-analysis-preemption-smoke-worker"
+worker_container="momo-analysis-preemption-smoke-worker-$$"
 analysis_stream="momo:analysis:preemption-smoke"
 analysis_group="momo-analysis-preemption-smoke"
 ocr_stream="momo:ocr:v2:preemption-smoke"
@@ -28,9 +28,9 @@ validation_contract_id="$(jq -er '
 ' "${publication_contract}")"
 analysis_worker_id="ci-preemption-analysis-worker"
 analysis_capability_id="${analysis_worker_id}@${algorithm_version}@${artifact_schema_version}@${validation_contract_id}"
-run_root="$(mktemp -d "${TMPDIR:-/tmp}/momo-preemption-smoke.XXXXXX")"
-worker_log="${run_root}/worker.log"
-lock_log="${run_root}/lock.log"
+run_root=""
+worker_log=""
+lock_log=""
 lock_pid=""
 worker_pid=""
 
@@ -40,7 +40,6 @@ report_error() {
   tail -100 "${worker_log}" >&2 || true
   return "${status}"
 }
-trap report_error ERR
 
 if [[ -z "${DATABASE_URL:-}" || -z "${REDIS_URL:-}" ]]; then
   echo "DATABASE_URL and REDIS_URL are required." >&2
@@ -52,31 +51,34 @@ if [[ -z "${WORKER_DATABASE_URL:-}" || -z "${WORKER_REDIS_URL:-}" ]]; then
 fi
 
 analysis_smoke_require_isolated_services
+analysis_smoke_require_bootstrapped_postgres "${postgres_image}" "${DATABASE_URL}"
 analysis_smoke_require_same_postgres_database \
   "${postgres_image}" \
   "${DATABASE_URL}" \
   "WORKER_DATABASE_URL" \
   "${WORKER_DATABASE_URL}"
+analysis_smoke_require_same_redis_database \
+  "${redis_image}" \
+  "${REDIS_URL}" \
+  "WORKER_REDIS_URL" \
+  "${WORKER_REDIS_URL}"
+
+run_root="$(mktemp -d "${TMPDIR:-/tmp}/momo-preemption-smoke.XXXXXX")"
+worker_log="${run_root}/worker.log"
+lock_log="${run_root}/lock.log"
+trap report_error ERR
 
 psql_ci() {
-  if [[ -n "${POSTGRES_CONTAINER:-}" ]]; then
-    docker exec -i "${POSTGRES_CONTAINER}" \
-      psql -U "${POSTGRES_USER:-postgres}" -d "${POSTGRES_DB:-momo_result}" \
-      -v ON_ERROR_STOP=1 "$@"
-  else
-    docker run --rm -i --network host \
-      -e DATABASE_URL="${DATABASE_URL}" \
-      "${postgres_image}" \
-      psql "${DATABASE_URL}" -v ON_ERROR_STOP=1 "$@"
-  fi
+  docker run --rm -i --network host \
+    --add-host host.docker.internal:host-gateway \
+    -e DATABASE_URL="${DATABASE_URL}" \
+    "${postgres_image}" \
+    psql "${DATABASE_URL}" -v ON_ERROR_STOP=1 "$@"
 }
 
 redis_ci() {
-  if [[ -n "${REDIS_CONTAINER:-}" ]]; then
-    docker exec "${REDIS_CONTAINER}" redis-cli --raw "$@"
-  else
-    docker run --rm --network host "${redis_image}" redis-cli --raw -u "${REDIS_URL}" "$@"
-  fi
+  docker run --rm --network host --add-host host.docker.internal:host-gateway "${redis_image}" \
+    redis-cli --raw -u "${REDIS_URL}" "$@"
 }
 
 cleanup_database() {
@@ -127,6 +129,7 @@ release_input_lock() {
 
 cleanup() {
   local status=$?
+  trap - EXIT
   set +e
   release_input_lock
   if [[ -n "${worker_pid}" ]]; then
@@ -145,7 +148,7 @@ cleanup() {
       status=1
       ;;
   esac
-  return "${status}"
+  exit "${status}"
 }
 trap cleanup EXIT
 

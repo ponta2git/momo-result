@@ -33,6 +33,7 @@ if [[ -z "${worker_image}" && ! -x "${binary}" ]]; then
 fi
 
 analysis_smoke_require_isolated_services
+analysis_smoke_require_bootstrapped_postgres "${postgres_image}" "${DATABASE_URL}"
 analysis_smoke_require_same_postgres_database \
   "${postgres_image}" \
   "${DATABASE_URL}" \
@@ -55,16 +56,11 @@ run_release_command() {
 }
 
 psql_ci() {
-  if [[ -n "${POSTGRES_CONTAINER:-}" ]]; then
-    docker exec -i "${POSTGRES_CONTAINER}" \
-      psql -U "${POSTGRES_USER:-postgres}" -d "${POSTGRES_DB:-momo_result}" \
-      -v ON_ERROR_STOP=1 "$@"
-  else
-    docker run --rm -i --network host \
-      -e DATABASE_URL="${DATABASE_URL}" \
-      "${postgres_image}" \
-      psql "${DATABASE_URL}" -v ON_ERROR_STOP=1 "$@"
-  fi
+  docker run --rm -i --network host \
+    --add-host host.docker.internal:host-gateway \
+    -e DATABASE_URL="${DATABASE_URL}" \
+    "${postgres_image}" \
+    psql "${DATABASE_URL}" -v ON_ERROR_STOP=1 "$@"
 }
 
 cleanup_fixture() {
@@ -138,8 +134,9 @@ cleanup_on_failure() {
 trap cleanup_on_failure EXIT
 
 psql_ci -v artifact_schema_version="${artifact_schema_version}" \
+  -v algorithm_version="${algorithm_version}" \
   -v validation_contract_id="${validation_contract_id}" \
-  -v release_capability_id="${release_capability_id}" -c "
+  -v release_capability_id="${release_capability_id}" <<'SQL'
   INSERT INTO game_titles (id, name, layout_family, display_order)
   VALUES
     ('title-release-smoke-a', 'Release smoke A', 'momotetsu2', 901),
@@ -182,10 +179,10 @@ psql_ci -v artifact_schema_version="${artifact_schema_version}" \
     worker_id, algorithm_versions, artifact_schema_versions
   ) VALUES (
     :'release_capability_id',
-    jsonb_build_array('${algorithm_version}'),
+    jsonb_build_array(:'algorithm_version'),
     jsonb_build_array(:artifact_schema_version)
   );
-"
+SQL
 
 if run_release_command release-promote \
   --trigger algorithm-update \

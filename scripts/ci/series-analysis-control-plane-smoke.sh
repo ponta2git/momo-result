@@ -13,10 +13,8 @@ postgres_image="${POSTGRES_IMAGE:-postgres:18-alpine}"
 redis_image="${REDIS_IMAGE:-redis:7-alpine}"
 redis_stream="${ANALYSIS_SMOKE_REDIS_STREAM:-}"
 redis_group="ci-analysis-worker-v1"
-redis_host="${REDIS_HOST:-127.0.0.1}"
-redis_port="${REDIS_PORT:-6379}"
 worker_image="${ANALYSIS_WORKER_IMAGE:-}"
-worker_container="momo-analysis-control-smoke-worker"
+worker_container="momo-analysis-control-smoke-worker-$$"
 worker_database_url="${WORKER_DATABASE_URL:-${DATABASE_URL:-}}"
 worker_redis_url="${WORKER_REDIS_URL:-${REDIS_URL:-}}"
 release_database_url="${RELEASE_DATABASE_URL:-${DATABASE_URL:-}}"
@@ -54,6 +52,7 @@ if [[ ! "${redis_stream}" =~ ^momo:analysis:control-plane-smoke:[a-zA-Z0-9._-]+$
 fi
 
 analysis_smoke_require_isolated_services
+analysis_smoke_require_bootstrapped_postgres "${postgres_image}" "${DATABASE_URL}"
 analysis_smoke_require_same_postgres_database \
   "${postgres_image}" \
   "${DATABASE_URL}" \
@@ -61,6 +60,11 @@ analysis_smoke_require_same_postgres_database \
   "${worker_database_url}" \
   "RELEASE_DATABASE_URL" \
   "${release_database_url}"
+analysis_smoke_require_same_redis_database \
+  "${redis_image}" \
+  "${REDIS_URL}" \
+  "WORKER_REDIS_URL" \
+  "${worker_redis_url}"
 
 run_release_command() {
   docker run --rm --network host --add-host host.docker.internal:host-gateway \
@@ -73,25 +77,34 @@ run_root="$(mktemp -d "${TMPDIR:-/tmp}/momo-analysis-control-plane.XXXXXX")"
 worker_log="${run_root}/worker.log"
 worker_pid=""
 
+report_error() {
+  local status=$?
+  echo "Series-analysis control-plane smoke failed near line ${BASH_LINENO[0]}." >&2
+  tail -100 "${worker_log}" >&2 || true
+  return "${status}"
+}
+trap report_error ERR
+
 cleanup() {
   local status=$?
+  trap - EXIT
   set +e
   if [[ -n "${worker_pid}" ]]; then
-    docker stop --timeout 5 "${worker_container}" >/dev/null 2>&1
-    wait "${worker_pid}" 2>/dev/null
+    docker stop --timeout 5 "${worker_container}" >/dev/null 2>&1 || status=1
+    wait "${worker_pid}" 2>/dev/null || status=1
   fi
   redis_ci DEL "${redis_stream}" >/dev/null 2>&1 || status=1
   cleanup_database >/dev/null 2>&1 || status=1
   case "${run_root}" in
     /tmp/*|/private/tmp/*|/var/folders/*|/private/var/folders/*)
-      rm -r -- "${run_root}"
+      rm -r -- "${run_root}" || status=1
       ;;
     *)
       echo "Refusing to clean an unexpected temporary path: ${run_root}" >&2
       status=1
       ;;
   esac
-  return "${status}"
+  exit "${status}"
 }
 trap cleanup EXIT
 
@@ -100,16 +113,11 @@ worker_is_running() {
 }
 
 psql_ci() {
-  if [[ -n "${POSTGRES_CONTAINER:-}" ]]; then
-    docker exec -i "${POSTGRES_CONTAINER}" \
-      psql -U "${POSTGRES_USER:-postgres}" -d "${POSTGRES_DB:-momo_result}" \
-      -v ON_ERROR_STOP=1 "$@"
-  else
-    docker run --rm -i --network host \
-      -e DATABASE_URL="${DATABASE_URL}" \
-      "${postgres_image}" \
-      psql "${DATABASE_URL}" -v ON_ERROR_STOP=1 "$@"
-  fi
+  docker run --rm -i --network host \
+    --add-host host.docker.internal:host-gateway \
+    -e DATABASE_URL="${DATABASE_URL}" \
+    "${postgres_image}" \
+    psql "${DATABASE_URL}" -v ON_ERROR_STOP=1 "$@"
 }
 
 cleanup_database() {
@@ -172,113 +180,9 @@ COMMIT;
 SQL
 }
 
-# The API dispatcher expansion itself is concurrency-tested by
-# PostgresSeriesAnalysisRepositorySpec. This worker smoke deliberately publishes Redis messages
-# itself, so it materializes only the durable job/request input that the worker consumes. Keeping
-# this fixture explicit prevents the worker CI job from silently depending on the old synchronous
-# release-promote behavior.
-materialize_pending_campaign_targets() {
-  local pending_targets
-  psql_ci <<'SQL'
-WITH pending_targets AS MATERIALIZED (
-  SELECT
-    t.campaign_id,
-    t.game_title_id,
-    t.input_revision AS requested_input_revision,
-    t.algorithm_version AS requested_algorithm_version,
-    t.artifact_schema_version AS requested_artifact_schema_version,
-    t.validation_contract_id AS requested_validation_contract_id,
-    t.accepted_at,
-    c.operation_request_id,
-    c.trigger,
-    s.input_revision,
-    s.algorithm_version,
-    s.artifact_schema_version,
-    s.validation_contract_id,
-    'ci-analysis-job-' || md5(t.campaign_id || ':' || t.game_title_id) AS job_id,
-    'ci-analysis-request-' || md5(t.campaign_id || ':' || t.game_title_id) AS request_id
-  FROM series_analysis_campaign_targets t
-  JOIN series_analysis_campaigns c ON c.id = t.campaign_id
-  JOIN series_analysis_title_states s ON s.game_title_id = t.game_title_id
-  WHERE t.status = 'pending'
-),
-inserted_jobs AS (
-  INSERT INTO series_analysis_jobs (
-    id, game_title_id, input_revision, algorithm_version,
-    artifact_schema_version, validation_contract_id,
-    status, trigger, requested_at, available_at
-  )
-  SELECT
-    job_id, game_title_id, input_revision, algorithm_version,
-    artifact_schema_version, validation_contract_id,
-    'queued', trigger, accepted_at, accepted_at
-  FROM pending_targets
-  RETURNING id
-),
-inserted_requests AS (
-  INSERT INTO series_analysis_job_requests (
-    id, game_title_id, operation_request_id, campaign_id,
-    input_revision, algorithm_version, artifact_schema_version, validation_contract_id,
-    trigger, force_run, status, assigned_job_id, accepted_at
-  )
-  SELECT
-    target.request_id,
-    target.game_title_id,
-    target.operation_request_id,
-    target.campaign_id,
-    target.requested_input_revision,
-    target.requested_algorithm_version,
-    target.requested_artifact_schema_version,
-    target.requested_validation_contract_id,
-    target.trigger,
-    true,
-    'pending',
-    target.job_id,
-    target.accepted_at
-  FROM pending_targets target
-  JOIN inserted_jobs job ON job.id = target.job_id
-  RETURNING id, campaign_id, game_title_id
-),
-updated_targets AS (
-  UPDATE series_analysis_campaign_targets target
-  SET status = 'expanded',
-      job_request_id = request.id,
-      updated_at = clock_timestamp()
-  FROM inserted_requests request
-  WHERE target.campaign_id = request.campaign_id
-    AND target.game_title_id = request.game_title_id
-    AND target.status = 'pending'
-  RETURNING target.campaign_id
-),
-updated_campaigns AS (
-  UPDATE series_analysis_campaigns campaign
-  SET status = 'running',
-      expanded_count = campaign.target_count
-  WHERE campaign.id IN (SELECT DISTINCT campaign_id FROM updated_targets)
-  RETURNING campaign.operation_request_id
-)
-UPDATE series_analysis_operation_requests operation
-SET status = 'running'
-WHERE operation.id IN (SELECT operation_request_id FROM updated_campaigns);
-SQL
-
-  pending_targets="$(psql_ci -At -c "
-    SELECT COUNT(*)::int
-    FROM series_analysis_campaign_targets
-    WHERE status = 'pending';
-  ")"
-  if [[ "${pending_targets}" != "0" ]]; then
-    fail_with_worker_log "Worker fixture left ${pending_targets} campaign targets pending."
-  fi
-}
-
 redis_ci() {
-  if [[ -n "${REDIS_CONTAINER:-}" ]]; then
-    docker exec "${REDIS_CONTAINER}" redis-cli --raw "$@"
-  else
-    docker run --rm --network host "${redis_image}" \
-      redis-cli --raw -h "${redis_host}" -p "${redis_port}" "$@"
-  fi
+  docker run --rm --network host --add-host host.docker.internal:host-gateway "${redis_image}" \
+    redis-cli --raw -u "${REDIS_URL}" "$@"
 }
 
 fail_with_worker_log() {
@@ -361,24 +265,45 @@ wait_for_redis_group_lag() {
   fail_with_worker_log "Timed out waiting for ${description}; expected lag ${expected}, got ${actual}."
 }
 
-publish_queued_jobs() {
-  local jobs
-  jobs="$(psql_ci -At -c "
-    SELECT id FROM series_analysis_jobs
-    WHERE status = 'queued'
-    ORDER BY requested_at, id;
-  ")"
-  if [[ -z "${jobs}" ]]; then
-    fail_with_worker_log "No queued analysis jobs were available for delivery."
-  fi
-  while IFS= read -r job_id; do
-    publish_job "${job_id}"
-  done <<<"${jobs}"
-}
-
 publish_job() {
   local job_id="$1"
   redis_ci XADD "${redis_stream}" '*' schemaVersion 1 jobId "${job_id}" >/dev/null
+}
+
+# Recovery and supersede cases need a precise pre-delivery state. Create only the consumer's
+# durable input here; campaign expansion and normal outbox dispatch stay owned and exercised by
+# the running worker above this fixture boundary.
+create_fixture_job_pair() {
+  local prefix="$1"
+  psql_ci -v job_a="${prefix}-a" -v job_b="${prefix}-b" <<'SQL'
+BEGIN;
+UPDATE series_analysis_title_states
+SET pending_work = true, updated_at = clock_timestamp()
+WHERE game_title_id IN ('title-release-smoke-a', 'title-release-smoke-b');
+INSERT INTO series_analysis_jobs (
+  id, game_title_id, input_revision, algorithm_version,
+  artifact_schema_version, validation_contract_id,
+  status, trigger, requested_at, available_at
+)
+SELECT
+  fixture.job_id,
+  state.game_title_id,
+  state.input_revision,
+  state.algorithm_version,
+  state.artifact_schema_version,
+  state.validation_contract_id,
+  'queued',
+  'algorithm_update',
+  clock_timestamp(),
+  clock_timestamp()
+FROM series_analysis_title_states state
+JOIN (
+  VALUES
+    ('title-release-smoke-a', :'job_a'),
+    ('title-release-smoke-b', :'job_b')
+) AS fixture(game_title_id, job_id) USING (game_title_id);
+COMMIT;
+SQL
 }
 
 worker_environment=(
@@ -434,7 +359,13 @@ wait_for_sql_value "1" "
     AND draining = false;
 " "worker capability registration"
 
-materialize_pending_campaign_targets
+wait_for_sql_value "2|0" "
+  SELECT
+    COUNT(*) FILTER (WHERE status = 'succeeded')::int,
+    COUNT(*) FILTER (WHERE status IN ('queued','running','failed','timed_out'))::int
+  FROM series_analysis_jobs;
+" "worker-owned campaign expansion, dispatch, and publication"
+
 contract_propagation_shape="$(psql_ci -At -c "
   SELECT
     COUNT(*)::int,
@@ -443,23 +374,17 @@ contract_propagation_shape="$(psql_ci -At -c "
          OR target.validation_contract_id IS DISTINCT FROM '${validation_contract_id}'
          OR request.validation_contract_id IS DISTINCT FROM target.validation_contract_id
          OR job.validation_contract_id IS DISTINCT FROM '${validation_contract_id}'
-    )::int
+    )::int,
+    (SELECT COUNT(*)::int FROM series_analysis_queue_outbox WHERE status = 'delivered')
   FROM series_analysis_campaign_targets target
   JOIN series_analysis_campaigns campaign ON campaign.id = target.campaign_id
   JOIN series_analysis_job_requests request ON request.id = target.job_request_id
   JOIN series_analysis_jobs job ON job.id = request.assigned_job_id;
 ")"
-if [[ "${contract_propagation_shape}" != "2|0" ]]; then
+if [[ "${contract_propagation_shape}" != "2|0|2" ]]; then
   fail_with_worker_log \
-    "Campaign validation contract did not propagate through target/request/job: ${contract_propagation_shape}"
+    "Worker expansion/dispatch lost the campaign contract: ${contract_propagation_shape}"
 fi
-publish_queued_jobs
-wait_for_sql_value "2|0" "
-  SELECT
-    COUNT(*) FILTER (WHERE status = 'succeeded')::int,
-    COUNT(*) FILTER (WHERE status IN ('queued','running','failed','timed_out'))::int
-  FROM series_analysis_jobs;
-" "initial jobs to publish"
 
 artifact_shape="$(psql_ci -At -c "
   SELECT
@@ -494,8 +419,6 @@ run_release_command release-promote \
   --trigger algorithm-update \
   --operation-key ci-release-reuse \
   --apply >/dev/null
-materialize_pending_campaign_targets
-publish_queued_jobs
 wait_for_sql_value "4|0" "
   SELECT
     COUNT(*) FILTER (WHERE status = 'succeeded')::int,
@@ -514,11 +437,7 @@ if [[ "${dispositions}" != "2|2|2" ]]; then
   fail_with_worker_log "Unexpected publication/reuse dispositions: ${dispositions}"
 fi
 
-run_release_command release-promote \
-  --trigger algorithm-update \
-  --operation-key ci-release-lease-recovery \
-  --apply >/dev/null
-materialize_pending_campaign_targets
+create_fixture_job_pair "ci-analysis-lease-recovery"
 lease_job="$(psql_ci -At -c "
   SELECT id FROM series_analysis_jobs
   WHERE game_title_id = 'title-release-smoke-a' AND status = 'queued';
@@ -552,13 +471,6 @@ psql_ci -c "
     input_revision, algorithm_version, artifact_schema_version, validation_contract_id, 'running',
     'ci-expired-config', 120000, clock_timestamp() - interval '2 seconds'
   FROM series_analysis_jobs WHERE id = '${lease_job}';
-  UPDATE series_analysis_job_requests
-  SET status = 'assigned', assigned_attempt_id = 'ci-expired-attempt'
-  WHERE assigned_job_id = '${lease_job}';
-  UPDATE series_analysis_campaign_targets t
-  SET status = 'running', updated_at = clock_timestamp()
-  FROM series_analysis_job_requests r
-  WHERE t.job_request_id = r.id AND r.assigned_job_id = '${lease_job}';
 "
 expired_contract_shape="$(psql_ci -At -c "
   SELECT
@@ -597,11 +509,7 @@ if [[ "${lease_recovery_shape}" != "1|1|2" ]]; then
   fail_with_worker_log "Expired lease recovery did not preserve the fencing state machine: ${lease_recovery_shape}"
 fi
 
-run_release_command release-promote \
-  --trigger algorithm-update \
-  --operation-key ci-release-supersede \
-  --apply >/dev/null
-materialize_pending_campaign_targets
+create_fixture_job_pair "ci-analysis-supersede"
 stale_job="$(psql_ci -At -c "
   SELECT id FROM series_analysis_jobs
   WHERE game_title_id = 'title-release-smoke-a' AND status = 'queued';

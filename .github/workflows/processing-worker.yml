@@ -117,6 +117,8 @@ jobs:
         run: cargo test --locked --workspace
 
       - name: Apply momo-db migrations
+        env:
+          MOMO_DB_BOOTSTRAP_IS_FRESH: "true"
         run: ../../scripts/ci/apply-momo-db-migrations.sh
 
       - name: Rust Analysis PostgreSQL and Redis control-plane smoke
@@ -172,6 +174,7 @@ jobs:
       ANALYSIS_METADATA_ARTIFACT_NAME: analysis-candidate-metadata-${{ github.run_id }}-${{ github.run_attempt }}
       ANALYSIS_IMAGE_REF: ${{ inputs.package_image && format('registry.fly.io/momo-result-analysis:{0}-{1}-{2}', github.sha, github.run_id, github.run_attempt) || 'momo-analysis-worker:test' }}
       DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/momo_result
+      MOMO_DB_BOOTSTRAP_IS_FRESH: "true"
       REDIS_URL: redis://127.0.0.1:6379
       WORKER_DATABASE_URL: postgres://postgres:postgres@host.docker.internal:5432/momo_result
       WORKER_REDIS_URL: redis://host.docker.internal:6379
@@ -218,20 +221,26 @@ jobs:
         run: scripts/ci/processing-worker-image-smoke.sh "${ANALYSIS_IMAGE_REF}"
 
       - name: Apply momo-db migrations
+        env:
+          MOMO_DB_BOOTSTRAP_ATTESTATION_FILE: ${{ runner.temp }}/momo-analysis-db-bootstrap.identity
         run: scripts/ci/apply-momo-db-migrations.sh
 
       - name: Seed release control-plane fixtures through the runtime image
         env:
           ANALYSIS_WORKER_IMAGE: ${{ env.ANALYSIS_IMAGE_REF }}
+          ANALYSIS_SMOKE_DATABASE_ATTESTATION_FILE: ${{ runner.temp }}/momo-analysis-db-bootstrap.identity
         run: scripts/ci/analysis-release-db-smoke.sh
 
       - name: Worker PostgreSQL and Redis control-plane smoke through the runtime image
         env:
           ANALYSIS_WORKER_IMAGE: ${{ env.ANALYSIS_IMAGE_REF }}
+          ANALYSIS_SMOKE_DATABASE_ATTESTATION_FILE: ${{ runner.temp }}/momo-analysis-db-bootstrap.identity
           ANALYSIS_SMOKE_REDIS_STREAM: momo:analysis:control-plane-smoke:${{ github.run_id }}-${{ github.run_attempt }}
         run: scripts/ci/series-analysis-control-plane-smoke.sh
 
       - name: Combined analysis and OCR preemption smoke
+        env:
+          ANALYSIS_SMOKE_DATABASE_ATTESTATION_FILE: ${{ runner.temp }}/momo-analysis-db-bootstrap.identity
         run: scripts/ci/processing-worker-preemption-smoke.sh "${ANALYSIS_IMAGE_REF}"
 
       - name: Scan worker image

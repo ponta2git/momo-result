@@ -196,8 +196,11 @@ async function applyMigrations(postgres) {
       DOCKER_CONTEXT: process.env["DOCKER_CONTEXT"],
       DOCKER_HOST: process.env["DOCKER_HOST"],
       DOCKER_TLS_VERIFY: process.env["DOCKER_TLS_VERIFY"],
+      MOMO_DB_BOOTSTRAP_IS_FRESH: "true",
       MOMO_DB_MIGRATIONS_DIR: migrationsDir,
       POSTGRES_CONTAINER: postgres.getId(),
+      POSTGRES_DB,
+      POSTGRES_USER,
     }),
     label: "momo-db migrations",
   });

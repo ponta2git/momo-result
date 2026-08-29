@@ -168,6 +168,8 @@ jobs:
         timeout-minutes: 10
 
       - name: Apply momo-db migrations
+        env:
+          MOMO_DB_BOOTSTRAP_IS_FRESH: "true"
         run: scripts/ci/apply-momo-db-migrations.sh
         timeout-minutes: 5
 

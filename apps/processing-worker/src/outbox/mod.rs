@@ -221,11 +221,19 @@ mod tests {
     -> Result<(), Box<dyn Error + Send + Sync>> {
         let database_url = std::env::var("ANALYSIS_OUTBOX_SMOKE_DATABASE_URL")?;
         let (sink, mut wake) = PostCommitSink::channel(OutboxKind::SeriesAnalysis);
-        let listener =
+        let mut listener =
             crate::postgres::subscribe_to_series_analysis_outbox(&database_url, sink).await?;
+        let publisher = crate::postgres::connect(&database_url).await?;
+        listener.verify_notification_round_trip(&publisher).await?;
+        let verified = tokio::time::timeout(Duration::from_secs(2), wake.receiver.recv()).await?;
+        assert_eq!(
+            verified,
+            Some(()),
+            "the startup route probe must reach the process-local sink"
+        );
+
         let (shutdown_sender, shutdown) = tokio::sync::watch::channel(false);
         let listener_task = tokio::spawn(listener.run(shutdown));
-        let publisher = crate::postgres::connect(&database_url).await?;
 
         publisher
             .execute(

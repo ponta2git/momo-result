@@ -301,6 +301,7 @@ docker run --rm --name "${worker_container}" --privileged --cgroupns private \
   --add-host host.docker.internal:host-gateway \
   --tmpfs /var/lib/momo-analysis:rw,noexec,nosuid,size=67108864,uid=10001,gid=10001,mode=0700 \
   --env "DATABASE_URL=${WORKER_DATABASE_URL}" \
+  --env "MOMO_ANALYSIS_OUTBOX_LISTENER_DATABASE_URL=${WORKER_DATABASE_URL}" \
   --env "REDIS_URL=${WORKER_REDIS_URL}" \
   --env MOMO_ANALYSIS_PUBLICATION_MODE=enabled \
   --env MOMO_ANALYSIS_RUNTIME_MEMORY_LIMIT_BYTES=268435456 \

@@ -7,7 +7,7 @@ use openssl::{
 };
 use postgres_openssl::{MakeTlsConnector, TlsStream};
 use thiserror::Error;
-use tokio::sync::watch;
+use tokio::{sync::watch, time};
 use tokio_postgres::{AsyncMessage, Client, Config, Connection, Socket};
 use tracing::error;
 
@@ -15,6 +15,7 @@ use crate::outbox::{OutboxKind, PostCommitEffects, PostCommitSink, PostCommitSin
 
 const DEFAULT_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 const DEFAULT_TCP_USER_TIMEOUT: Duration = Duration::from_secs(30);
+const OUTBOX_NOTIFICATION_ROUTE_PROBE_TIMEOUT: Duration = Duration::from_secs(10);
 pub(crate) const SERIES_ANALYSIS_OUTBOX_NOTIFICATION_CHANNEL: &str = "series_analysis_queue_outbox";
 #[cfg(target_os = "linux")]
 const SYSTEM_CA_BUNDLE: &str = "/etc/ssl/certs/ca-certificates.crt";
@@ -35,6 +36,8 @@ pub(crate) enum OutboxNotificationError {
     Postgres(#[from] PostgresError),
     #[error("series-analysis outbox notification connection closed unexpectedly")]
     ConnectionClosed,
+    #[error("series-analysis outbox notification route probe timed out")]
+    RouteProbeTimeout,
     #[error("series-analysis outbox notification violated its payload-free protocol")]
     InvalidNotification,
     #[error("series-analysis outbox notification sink closed unexpectedly")]
@@ -58,6 +61,7 @@ impl OutboxNotificationError {
         match self {
             Self::Postgres(error) => error.kind(),
             Self::ConnectionClosed => "postgres_connection_closed",
+            Self::RouteProbeTimeout => "notification_route_probe_timeout",
             Self::InvalidNotification => "invalid_notification",
             Self::SinkClosed(_) => "outbox_wake_sink_closed",
             Self::ShutdownChannelClosed => "shutdown_channel_closed",
@@ -146,6 +150,47 @@ pub(crate) async fn subscribe_to_series_analysis_outbox(
 }
 
 impl SeriesAnalysisOutboxListener {
+    /// Proves that a commit on the ordinary control connection reaches this session-bound
+    /// listener before the worker advertises readiness.
+    ///
+    /// # Errors
+    ///
+    /// Returns a structural error when publication, delivery, protocol validation, or the bounded
+    /// probe deadline fails. A transaction-pooled listener therefore fails closed even when its
+    /// initial `LISTEN` statement appeared to succeed.
+    pub(crate) async fn verify_notification_round_trip(
+        &mut self,
+        publisher: &Client,
+    ) -> Result<(), OutboxNotificationError> {
+        let probe = async {
+            publisher
+                .execute(
+                    "SELECT pg_notify($1, '')",
+                    &[&SERIES_ANALYSIS_OUTBOX_NOTIFICATION_CHANNEL],
+                )
+                .await
+                .map_err(PostgresError::from)?;
+            loop {
+                let message = poll_fn(|context| self.connection.poll_message(context)).await;
+                let received = matches!(
+                    message.as_ref(),
+                    Some(Ok(AsyncMessage::Notification(notification)))
+                        if notification.channel()
+                            == SERIES_ANALYSIS_OUTBOX_NOTIFICATION_CHANNEL
+                            && notification.payload().is_empty()
+                );
+                handle_async_message(message, &self.sink)?;
+                if received {
+                    return Ok(());
+                }
+            }
+        };
+        match time::timeout(OUTBOX_NOTIFICATION_ROUTE_PROBE_TIMEOUT, probe).await {
+            Ok(result) => result,
+            Err(_elapsed) => Err(OutboxNotificationError::RouteProbeTimeout),
+        }
+    }
+
     /// Drives the already-established subscription until coordinated shutdown.
     ///
     /// # Errors

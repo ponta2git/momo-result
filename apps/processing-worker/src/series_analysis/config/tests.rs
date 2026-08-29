@@ -3,7 +3,7 @@ use std::{ffi::OsString, sync::Mutex};
 use super::*;
 
 static ENV_LOCK: Mutex<()> = Mutex::new(());
-const ENVIRONMENT_NAMES: [&str; 26] = [
+const ENVIRONMENT_NAMES: [&str; 27] = [
     PUBLICATION_MODE_ENV,
     "MOMO_ANALYSIS_RUNTIME_MEMORY_LIMIT_BYTES",
     "MOMO_ANALYSIS_CHILD_MEMORY_LIMIT_BYTES",
@@ -15,6 +15,7 @@ const ENVIRONMENT_NAMES: [&str; 26] = [
     "MOMO_ANALYSIS_CHUNK_COUNT_MAX",
     "MOMO_ANALYSIS_TEMPORARY_FILE_COUNT_MAX",
     "DATABASE_URL",
+    OUTBOX_LISTENER_DATABASE_URL_ENV,
     "MOMO_ANALYSIS_READ_DATABASE_URL",
     "REDIS_URL",
     "MOMO_REDIS_ANALYSIS_STREAM",
@@ -103,6 +104,10 @@ fn valid_enabled_environment() {
 fn valid_runtime_environment() -> tempfile::TempDir {
     EnvironmentGuard::set("DATABASE_URL", "postgresql://control.invalid/momo");
     EnvironmentGuard::set(
+        OUTBOX_LISTENER_DATABASE_URL_ENV,
+        "postgresql://listener.invalid/momo",
+    );
+    EnvironmentGuard::set(
         "MOMO_ANALYSIS_READ_DATABASE_URL",
         "postgresql://reader.invalid/momo",
     );
@@ -143,6 +148,37 @@ fn valid_runtime_environment() -> tempfile::TempDir {
     );
     EnvironmentGuard::set(crate::cgroup::CGROUP_LIMIT_ENV, "134217728");
     cgroup_root
+}
+
+#[test]
+fn runtime_requires_and_preserves_the_dedicated_outbox_listener_url() {
+    with_isolated_environment(|| {
+        valid_enabled_environment();
+        let _cgroup = valid_runtime_environment();
+        let activation = AnalysisActivationConfig::from_environment()
+            .unwrap_or_else(|error| panic!("valid analysis execution limits: {error}"));
+
+        EnvironmentGuard::remove(OUTBOX_LISTENER_DATABASE_URL_ENV);
+        assert_eq!(
+            AnalysisConsumerConfig::from_environment(&activation).err(),
+            Some(AnalysisConfigError::MissingRuntime {
+                name: OUTBOX_LISTENER_DATABASE_URL_ENV,
+            })
+        );
+
+        EnvironmentGuard::set(
+            OUTBOX_LISTENER_DATABASE_URL_ENV,
+            "postgresql://listener.invalid/momo",
+        );
+        let config = AnalysisConsumerConfig::from_environment(&activation)
+            .unwrap_or_else(|error| panic!("complete analysis runtime configuration: {error}"));
+        assert_eq!(config.database_url, "postgresql://control.invalid/momo");
+        assert_eq!(
+            config.outbox_listener_database_url,
+            "postgresql://listener.invalid/momo"
+        );
+        assert_eq!(config.read_database_url, "postgresql://reader.invalid/momo");
+    });
 }
 
 #[test]

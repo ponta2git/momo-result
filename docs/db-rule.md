@@ -40,7 +40,7 @@ test の採用・維持・削除は `docs/test-rule.md` に従う。DB contract 
 - 分析 publication の lock 順は execution slot、title state、job、request / artifact とし、複数 title state は作品ID順に取得する。試合 mutation と campaign 展開は execution slot を取得しない。
 - 分析release promotionはrelease advisory lock、reader capability registry、worker capability registry、release singleton、作品ID順のtitle stateの順でlockする。capability registryは判定後の登録・heartbeat割込みをcommitまで遮断し、singleton更新と既存title更新を同じtransactionで確定する。
 - test が作る row を共通 cleanup の対象へ追加し、並列 test 間で ID、row、stream、file を分離する。
-- production が pooler / proxy を使う場合、直接 PostgreSQL への接続成功を wire 互換性の証拠にしない。
+- production が pooler / proxy を使う場合、直接 PostgreSQL への接続成功を wire 互換性の証拠にしない。`LISTEN`などsession stateを持つconsumerはsession-capable接続を通常query接続から分離し、別接続のcommitから機能round tripを確認する。
 - DB row は adapter 境界で失敗可能に decode し、不正値や SQL 例外を domain / application failure へ正規化する。
 - dynamic SQL は列挙された fragment から選び、外部入力を SQL text へ連結しない。
 - keyset pagination は filter と同じ query に stable tie-breaker を含める。exact count を引き継ぐ場合は snapshot 値であることを契約化する。

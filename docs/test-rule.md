@@ -123,6 +123,7 @@ Analysis / OCR の共通 contract として、次を固定する。
 - terminal DB write 前に ACK しないこと、rollback では wake しないこと、append 後の DB failure と重複 delivery が安全に収束すること。
 - startup / PEL recovery、wake coalescing、deadline、bounded drain、backoff を制御可能 clock と signal で検証し、idle 時の無条件 polling を許さないこと。
 - 分析outboxはworkerによるcampaign展開とdispatchを実DB / Redisで通し、process外commit後のhint、hint喪失後の低頻度recovery、旧dispatcherとのrolling overlapが同じdurable stateへ収束すること。
+- PostgreSQL通知をwakeに使う場合、productionと同じpooling modeでsession-bound listenerへの別接続commitを通す。startupの`LISTEN`成功や直接DBだけのtestを、通知routeのreadiness evidenceにしない。
 - supervisor の shutdown、unexpected child / coordinator exit、sibling 停止、process group 回収。
 - DB / Redis / Linux process / native engine は通常 unit test から分離し、検証済み runtime image と隔離 service で通すこと。
 

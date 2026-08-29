@@ -13,11 +13,13 @@ readonly log_file="${test_dir}/fly.json"
 
 write_log() {
   local include_outbox="${1:-true}"
+  local include_notification_route="${2:-true}"
   jq -nc \
     --arg machineId "${machine_id}" \
     --arg analysisWorkerId "${analysis_worker_id}" \
     --arg ocrWorkerId "${ocr_worker_id}" \
-    --arg includeOutbox "${include_outbox}" '
+    --arg includeOutbox "${include_outbox}" \
+    --arg includeNotificationRoute "${include_notification_route}" '
       def outer($machine; $provider; $timestamp; $message): {
         instance: $machine,
         timestamp: $timestamp,
@@ -37,8 +39,12 @@ write_log() {
         (app("analysis_worker_ready"; $analysisWorkerId) | tojson)),
       outer($machineId; "app"; "2026-08-24T12:00:02Z";
         (app("ocr_rust_v2_worker_ready"; $ocrWorkerId) | tojson)),
-      if $includeOutbox == "true" then
+      if $includeNotificationRoute == "true" then
         outer($machineId; "app"; "2026-08-24T12:00:03Z";
+          (app("analysis_outbox_notification_route_ready"; $analysisWorkerId) | tojson))
+      else empty end,
+      if $includeOutbox == "true" then
+        outer($machineId; "app"; "2026-08-24T12:00:04Z";
           (app("analysis_outbox_ready"; $analysisWorkerId) | tojson))
       else empty end
     ' > "${log_file}"
@@ -68,6 +74,7 @@ jq -e \
     (.checks | map(.event)) == [
       "analysis_worker_ready",
       "ocr_rust_v2_worker_ready",
+      "analysis_outbox_notification_route_ready",
       "analysis_outbox_ready"
     ]
   ' <<< "${actual}" > /dev/null
@@ -81,6 +88,10 @@ expect_rejected stale-ocr-worker \
 
 write_log false
 expect_rejected missing-outbox \
+  "${log_file}" "${machine_id}" "${analysis_worker_id}" "${ocr_worker_id}"
+
+write_log true false
+expect_rejected missing-notification-route \
   "${log_file}" "${machine_id}" "${analysis_worker_id}" "${ocr_worker_id}"
 
 echo "Analysis worker readiness evidence tests passed."

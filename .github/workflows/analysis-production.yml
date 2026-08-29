@@ -278,6 +278,21 @@ jobs:
         with:
           version: 0.4.79
 
+      - name: Verify analysis worker secret contract
+        if: inputs.operation == 'deploy'
+        env:
+          FLY_API_TOKEN: ${{ secrets.ANALYSIS_FLY_API_TOKEN }}
+        run: |
+          if ! flyctl secrets list --app "${ANALYSIS_APP}" --json |
+            jq -e 'any(.[];
+              .name == "MOMO_ANALYSIS_OUTBOX_LISTENER_DATABASE_URL" and
+              (.status == "Deployed" or .status == "Staged")
+            )' \
+              > /dev/null; then
+            echo "MOMO_ANALYSIS_OUTBOX_LISTENER_DATABASE_URL must be staged or deployed before worker rollout." >&2
+            exit 1
+          fi
+
       - name: Authenticate Docker to Fly registry
         if: inputs.operation == 'deploy'
         env:

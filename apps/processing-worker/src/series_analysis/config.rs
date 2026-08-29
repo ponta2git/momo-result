@@ -10,6 +10,7 @@ use thiserror::Error;
 use crate::cgroup::ChildCgroup;
 
 const PUBLICATION_MODE_ENV: &str = "MOMO_ANALYSIS_PUBLICATION_MODE";
+const OUTBOX_LISTENER_DATABASE_URL_ENV: &str = "MOMO_ANALYSIS_OUTBOX_LISTENER_DATABASE_URL";
 pub(crate) const CHILD_MEMORY_LIMIT_ENV: &str = "MOMO_ANALYSIS_CHILD_MEMORY_LIMIT_BYTES";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -40,6 +41,7 @@ pub(crate) struct AnalysisActivationConfig {
 #[derive(Clone)]
 pub(crate) struct AnalysisConsumerConfig {
     pub(crate) database_url: String,
+    pub(crate) outbox_listener_database_url: String,
     pub(crate) read_database_url: String,
     pub(crate) redis_url: String,
     pub(crate) redis_stream: String,
@@ -197,6 +199,7 @@ impl AnalysisConsumerConfig {
             .map_err(|error| AnalysisConfigError::ChildCgroup { kind: error.kind() })?;
         Ok(Self {
             database_url: required_string("DATABASE_URL")?,
+            outbox_listener_database_url: required_string(OUTBOX_LISTENER_DATABASE_URL_ENV)?,
             read_database_url: required_string("MOMO_ANALYSIS_READ_DATABASE_URL")?,
             redis_url: required_string("REDIS_URL")?,
             redis_stream,

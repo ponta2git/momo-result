@@ -42,6 +42,7 @@ jq -s -e \
     [
       latest($events; "analysis_worker_ready"; $analysisWorkerId),
       latest($events; "ocr_rust_v2_worker_ready"; $ocrWorkerId),
+      latest($events; "analysis_outbox_notification_route_ready"; $analysisWorkerId),
       latest($events; "analysis_outbox_ready"; $analysisWorkerId)
     ] as $checks |
     select(all($checks[]; . != null)) |

@@ -308,6 +308,7 @@ SQL
 
 worker_environment=(
   "DATABASE_URL=${worker_database_url}"
+  "MOMO_ANALYSIS_OUTBOX_LISTENER_DATABASE_URL=${worker_database_url}"
   "REDIS_URL=${worker_redis_url}"
   "MOMO_ANALYSIS_PUBLICATION_MODE=enabled"
   "MOMO_ANALYSIS_RUNTIME_MEMORY_LIMIT_BYTES=${runtime_memory_limit_bytes}"

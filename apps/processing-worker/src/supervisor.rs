@@ -35,6 +35,7 @@ struct EnabledConsumers {
 #[derive(Clone)]
 struct AnalysisOutboxRuntimeConfig {
     database_url: String,
+    listener_database_url: String,
     redis_url: String,
     stream: String,
     worker_id: String,
@@ -44,6 +45,7 @@ impl From<&AnalysisConsumerConfig> for AnalysisOutboxRuntimeConfig {
     fn from(config: &AnalysisConsumerConfig) -> Self {
         Self {
             database_url: config.database_url.clone(),
+            listener_database_url: config.outbox_listener_database_url.clone(),
             redis_url: config.redis_url.clone(),
             stream: config.redis_stream.clone(),
             worker_id: config.worker_id.clone(),
@@ -265,8 +267,8 @@ async fn run_analysis_outbox(
     // Subscribe before the startup drain. A commit after LISTEN succeeds is retained by the
     // dedicated connection until the listener and coordinator begin running together, so there
     // is no check-then-listen window in which fresh durable work can lose its prompt wake.
-    let listener = postgres::subscribe_to_series_analysis_outbox(
-        &runtime_config.database_url,
+    let mut listener = postgres::subscribe_to_series_analysis_outbox(
+        &runtime_config.listener_database_url,
         notification_sink,
     )
     .await
@@ -280,6 +282,18 @@ async fn run_analysis_outbox(
             dependency: "postgresql",
             kind: error.kind(),
         })?;
+    listener
+        .verify_notification_round_trip(&database)
+        .await
+        .map_err(|source| SupervisorError::AnalysisOutboxNotification {
+            kind: source.kind(),
+            source,
+        })?;
+    tracing::info!(
+        event = "analysis_outbox_notification_route_ready",
+        worker_id = %runtime_config.worker_id,
+        "series-analysis outbox notification route completed a cross-connection probe"
+    );
     let redis_client =
         redis::Client::open(runtime_config.redis_url.as_str()).map_err(|_error| {
             SupervisorError::AnalysisOutboxDependency {

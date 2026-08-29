@@ -321,10 +321,21 @@ test("inspects saved analysis and handles explicit refresh states", async ({
       matchIndex: 1,
       matchNoInEvent: 1,
     });
-    const recentRank = aggregateFixture.recentRanks[0]?.rows[0];
-    if (recentRank) {
-      recentRank.itemId = `recent-rank:member_ponta:${matchId}`;
-      recentRank.matchId = matchId;
+    const recentRankEntry = aggregateFixture.recentRanks[0];
+    if (recentRankEntry) {
+      recentRankEntry.rows = Array.from({ length: 20 }, (_, index) => {
+        const isLatest = index === 19;
+        const recentMatchId = isLatest
+          ? matchId
+          : `e2e-recent-${String(index + 1).padStart(2, "0")}`;
+        return {
+          itemId: `recent-rank:member_ponta:${recentMatchId}`,
+          matchId: recentMatchId,
+          playedAt: `2026-07-${String(index + 1).padStart(2, "0")}T12:00:00.000Z`,
+          rank: isLatest ? 1 : (((index % 4) + 1) as 1 | 2 | 3 | 4),
+        };
+      });
+      recentRankEntry.targetCount = 20;
     }
     const strategyPoint = aggregateFixture.strategyScatter.points[0];
     if (strategyPoint) {
@@ -511,7 +522,67 @@ test("inspects saved analysis and handles explicit refresh states", async ({
       name: /ぽんた、第1戦、1位、この試合。試合結果を見る/u,
     });
     await expect(recentRankTile).toHaveAttribute("href", selectedMatchHref);
+    const recentRankScroller = page.getByRole("region", { exact: true, name: "直近順位" });
+    const recentRankScrollbar = page.getByRole("slider", {
+      name: "直近順位を横スクロール",
+    });
+    await expect(recentRankScrollbar).toBeEnabled();
+    const recentRankPlayerLinks = page
+      .getByRole("table", { name: "直近の試合順位" })
+      .getByRole("row")
+      .nth(1)
+      .getByRole("link");
+    await expect(recentRankPlayerLinks.first()).toHaveAttribute(
+      "href",
+      /\/matches\/e2e-recent-01\?returnTo=/u,
+    );
+    await expect(recentRankPlayerLinks.last()).toHaveAttribute("href", selectedMatchHref);
+    const recentRankMetrics = await recentRankScroller.evaluate((element) => ({
+      clientWidth: element.clientWidth,
+      scrollLeft: element.scrollLeft,
+      scrollWidth: element.scrollWidth,
+    }));
+    expect(recentRankMetrics.scrollWidth).toBeGreaterThan(recentRankMetrics.clientWidth);
+    expect(recentRankMetrics.scrollLeft).toBeGreaterThanOrEqual(
+      recentRankMetrics.scrollWidth - recentRankMetrics.clientWidth - 1,
+    );
+
+    const latestScrollbarValue = Number(await recentRankScrollbar.inputValue());
+    await recentRankScrollbar.focus();
+    await recentRankScrollbar.press("ArrowLeft");
+    await expect
+      .poll(async () => Number(await recentRankScrollbar.inputValue()))
+      .toBeLessThan(latestScrollbarValue);
+
+    await recentRankScrollbar.press("Home");
+    const scrollbarBox = await recentRankScrollbar.boundingBox();
+    if (!scrollbarBox) throw new Error("recent rank scrollbar must have a bounding box");
+    await recentRankScrollbar.click({
+      position: { x: scrollbarBox.width * 0.75, y: scrollbarBox.height / 2 },
+    });
+    await expect
+      .poll(async () => Number(await recentRankScrollbar.inputValue()))
+      .toBeGreaterThan(0);
+
+    await recentRankScrollbar.press("Home");
+    await recentRankScroller.hover();
+    await page.mouse.wheel(120, 0);
+    await expect
+      .poll(async () => recentRankScroller.evaluate((element) => element.scrollLeft))
+      .toBeGreaterThan(0);
     await expectNoHorizontalPageOverflow(page);
+
+    await page.setViewportSize({ height: 1080, width: 1920 });
+    await expect(recentRankScrollbar).toBeVisible();
+    await expect(recentRankScrollbar).toBeDisabled();
+    await expect(recentRankScrollbar).toHaveAttribute("aria-valuetext", "すべて表示");
+    const fittedRecentRankMetrics = await recentRankScroller.evaluate((element) => ({
+      clientWidth: element.clientWidth,
+      scrollWidth: element.scrollWidth,
+    }));
+    expect(fittedRecentRankMetrics.scrollWidth).toBe(fittedRecentRankMetrics.clientWidth);
+    await expectNoHorizontalPageOverflow(page);
+    await page.setViewportSize({ height: 844, width: 390 });
 
     await page.getByRole("tab", { name: "今の差" }).click();
     await expect(page.getByRole("region", { name: "順位と基礎比較" })).toBeVisible();

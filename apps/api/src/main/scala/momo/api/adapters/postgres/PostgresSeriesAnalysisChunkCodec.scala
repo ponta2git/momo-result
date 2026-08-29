@@ -123,7 +123,6 @@ private[postgres] object PostgresSeriesAnalysisChunkCodec:
         _ <- validateDecodedJson(
           json,
           request,
-          itemCount,
           sourceMatchRevision,
           depth,
           inspection.depth,
@@ -418,7 +417,6 @@ private[postgres] object PostgresSeriesAnalysisChunkCodec:
   private def validateDecodedJson(
       json: Json,
       request: SeriesAnalysisChunkRequest,
-      itemCount: Int,
       sourceMatchRevision: Option[Long],
       declaredDepth: Int,
       actualDepth: Int,
@@ -426,7 +424,6 @@ private[postgres] object PostgresSeriesAnalysisChunkCodec:
     SeriesAnalysisPayloadValidator.validate(
       json,
       request,
-      itemCount,
       sourceMatchRevision,
     ) && actualDepth == declaredDepth,
     (),

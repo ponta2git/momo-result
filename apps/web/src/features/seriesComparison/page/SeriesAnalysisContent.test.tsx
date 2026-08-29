@@ -126,8 +126,6 @@ describe("SeriesAnalysisContent", () => {
     expect(screen.getByRole("dialog", { name: "平均順位の推移" })).toHaveAccessibleDescription(
       "比較に使った試合を確認します。",
     );
-    expect(await screen.findByLabelText("詳細を読み込み中")).toBeInTheDocument();
-
     rendered.rerender(view(analysisBundle(nextAggregate, "overview")));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
 

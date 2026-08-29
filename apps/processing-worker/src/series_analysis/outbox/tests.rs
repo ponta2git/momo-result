@@ -285,7 +285,7 @@ async fn real_postgres_and_redis_preserve_claim_and_payload_contract() -> SmokeR
     assert_terminal_retry_uses_shared_mutation_lock_order(&mut driver, &database_url).await?;
     assert_recent_delivery_preserves_queued_job(&mut driver).await?;
     assert_locked_due_delivery_uses_bounded_retry(&mut driver, &database_url).await?;
-    assert_closed_database_client_is_structural(&driver, &database_url).await?;
+    assert_postgres_failure_classification(&driver, &database_url).await?;
 
     let _: usize = observer.del(STREAM).await?;
     driver
@@ -295,12 +295,36 @@ async fn real_postgres_and_redis_preserve_claim_and_payload_contract() -> SmokeR
     Ok(())
 }
 
-async fn assert_closed_database_client_is_structural(
+async fn assert_postgres_failure_classification(
     driver: &SeriesAnalysisOutboxDriver,
     database_url: &str,
 ) -> SmokeResult {
-    let closed_database = crate::postgres::connect(database_url).await?;
-    let backend_pid = closed_database
+    let dependency_database = crate::postgres::connect(database_url).await?;
+    dependency_database
+        .batch_execute("SET statement_timeout = '1ms'")
+        .await?;
+    let attempted = dependency_database
+        .query_one("SELECT pg_sleep(1)", &[])
+        .await;
+    let Err(dependency_failure) = attempted else {
+        return Err("bounded PostgreSQL statement unexpectedly completed".into());
+    };
+    assert!(
+        !dependency_failure.is_closed(),
+        "statement timeout must preserve the dependency connection"
+    );
+    assert_eq!(
+        SeriesAnalysisOutboxDriver::failure_kind(&SeriesAnalysisOutboxError::Postgres(
+            dependency_failure,
+        )),
+        DriverFailureKind::Recoverable,
+        "a live dependency failure retains bounded dependency backoff"
+    );
+    dependency_database
+        .batch_execute("SET statement_timeout = 0")
+        .await?;
+
+    let backend_pid = dependency_database
         .query_one("SELECT pg_backend_pid()", &[])
         .await?
         .try_get::<_, i32>(0)?;
@@ -310,28 +334,13 @@ async fn assert_closed_database_client_is_structural(
         .await?
         .try_get::<_, bool>(0)?;
     assert!(terminated, "isolated PostgreSQL peer was not terminated");
-    let attempted = tokio::time::timeout(
-        Duration::from_secs(2),
-        closed_database.query_one("SELECT 1", &[]),
-    )
-    .await?;
-    let Err(connection_loss) = attempted else {
-        return Err("terminated PostgreSQL client unexpectedly accepted a query".into());
-    };
-    assert_eq!(
-        SeriesAnalysisOutboxDriver::failure_kind(&SeriesAnalysisOutboxError::Postgres(
-            connection_loss,
-        )),
-        DriverFailureKind::Recoverable,
-        "the operation that first observes I/O loss retains bounded dependency backoff"
-    );
     tokio::time::timeout(Duration::from_secs(2), async {
-        while !closed_database.is_closed() {
+        while !dependency_database.is_closed() {
             tokio::task::yield_now().await;
         }
     })
     .await?;
-    let closed_attempt = closed_database.query_one("SELECT 1", &[]).await;
+    let closed_attempt = dependency_database.query_one("SELECT 1", &[]).await;
     let Err(error) = closed_attempt else {
         return Err("closed PostgreSQL client unexpectedly accepted a query".into());
     };

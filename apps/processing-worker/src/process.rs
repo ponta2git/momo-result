@@ -1147,9 +1147,8 @@ mod child_cleanup_tests {
 }
 
 #[cfg(test)]
+#[cfg(target_os = "linux")]
 mod tests {
-    #![cfg(target_os = "linux")]
-
     use std::{
         error::Error,
         fs,

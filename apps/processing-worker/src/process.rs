@@ -1146,8 +1146,10 @@ mod child_cleanup_tests {
     }
 }
 
-#[cfg(all(test, target_os = "linux"))]
+#[cfg(test)]
 mod tests {
+    #![cfg(target_os = "linux")]
+
     use std::{
         error::Error,
         fs,
@@ -1188,19 +1190,22 @@ mod tests {
         let descendant = descendant.trim().parse::<u32>()?;
 
         let status = leader.wait()?;
-        assert!(status.success(), "process-group fixture leader failed");
-        assert!(
-            process_is_running(descendant),
-            "fixture descendant exited early"
-        );
+        if !status.success() {
+            return Err(io::Error::other("process-group fixture leader failed").into());
+        }
+        if !process_is_running(descendant) {
+            return Err(io::Error::other("fixture descendant exited early").into());
+        }
 
         terminate_process_group(process_group, libc::SIGKILL)?;
         let deadline = Instant::now() + Duration::from_secs(5);
         while process_is_running(descendant) {
-            assert!(
-                Instant::now() < deadline,
-                "descendant remained alive after its reaped leader's group was killed"
-            );
+            if Instant::now() >= deadline {
+                return Err(io::Error::other(
+                    "descendant remained alive after its reaped leader's group was killed",
+                )
+                .into());
+            }
             thread::sleep(Duration::from_millis(25));
         }
         Ok(())
@@ -1258,11 +1263,11 @@ mod tests {
             }
             tokio::time::sleep(Duration::from_millis(10)).await;
         }
-        assert_ne!(
-            process_group_id(escaped_id),
-            Some(leader_id),
-            "setsid fixture must escape the original process group"
-        );
+        if process_group_id(escaped_id) == Some(leader_id) {
+            return Err(
+                io::Error::other("setsid fixture must escape the original process group").into(),
+            );
+        }
 
         // A regular file models the v1 membership snapshot. The process and setsid transition are
         // real Linux operations; this helper only mirrors the kernel removing a dead member from
@@ -1292,15 +1297,15 @@ mod tests {
         let _leader_status = leader.wait().await?;
         let _escaped_status = escaped.wait().await?;
 
-        assert!(
-            found_remaining_process,
-            "hard cleanup must report the escaped cgroup member"
-        );
+        if !found_remaining_process {
+            return Err(
+                io::Error::other("hard cleanup must report the escaped cgroup member").into(),
+            );
+        }
         cgroup.ensure_empty()?;
-        assert!(
-            !process_is_running(escaped_id),
-            "escaped cgroup member must be stopped"
-        );
+        if process_is_running(escaped_id) {
+            return Err(io::Error::other("escaped cgroup member must be stopped").into());
+        }
         Ok(())
     }
 

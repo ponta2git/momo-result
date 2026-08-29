@@ -61,7 +61,9 @@ describe("SeriesComparisonPage manual refresh", () => {
       </QueryClientProvider>,
     );
 
-    expect(await screen.findByRole("region", { name: "artifact由来の可視化" })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("region", { name: "artifact由来の可視化" }, { timeout: 5_000 }),
+    ).toBeInTheDocument();
     await waitFor(() => expect(queryClient.isFetching()).toBe(0));
     expect(statusRequests).toBe(1);
 

@@ -32,7 +32,21 @@ private[api] object SeriesAnalysisArtifactSupport:
     then sys.error("Unsupported Series analysis publication contract")
 
   def supports(schemaVersion: Int, validationContractId: Option[String]): Boolean =
-    schemaVersion == ArtifactSchemaVersion && validationContractId.contains(ValidationContractId)
+    schemaVersion == ArtifactSchemaVersion &&
+      validationContractId.forall(_ == ValidationContractId)
+
+  /**
+   * During reader-first rollout an unattested desired tuple may use either an unattested artifact
+   * or a newer exact-attested artifact. Once desired itself is exact, the artifact must be exact.
+   */
+  def satisfiesDesired(
+      desiredValidationContractId: Option[String],
+      artifactValidationContractId: Option[String],
+  ): Boolean = desiredValidationContractId match
+    case None => artifactValidationContractId.forall(_ == ValidationContractId)
+    case Some(ValidationContractId) =>
+      artifactValidationContractId.contains(ValidationContractId)
+    case Some(_) => false
 
   private def loadContract(): Json =
     val stream = Option(getClass.getResourceAsStream(ContractResource)).getOrElse(

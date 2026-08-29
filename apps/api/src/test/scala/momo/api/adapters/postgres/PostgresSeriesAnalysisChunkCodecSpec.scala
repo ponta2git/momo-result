@@ -81,21 +81,47 @@ final class PostgresSeriesAnalysisChunkCodecSpec extends FunSuite with JsonSchem
       "Invalid analysis artifact metadata.",
     )
 
-  test("requires the exact immutable Rust publication attestation"):
+  test("reads legacy artifacts through full validation and rejects unknown version pairs"):
     val payload = aggregateFixture.getBytes(StandardCharsets.UTF_8)
     val row = stored(payload, nestingDepth = nestingDepth(aggregateFixture))
 
-    List(None, Some("unknown-validation-contract")).foreach { contract =>
-      assertInternal(
-        PostgresSeriesAnalysisChunkCodec.decode(
-          row.copy(validationContractId = contract),
-          request,
-          SeriesAnalysisReadConfig.defaults,
-          None,
-        ),
-        "Invalid analysis artifact metadata.",
-      )
-    }
+    assert(SeriesAnalysisArtifactSupport.satisfiesDesired(None, None))
+    assert(SeriesAnalysisArtifactSupport.satisfiesDesired(
+      None,
+      Some(SeriesAnalysisArtifactSupport.ValidationContractId),
+    ))
+    assert(!SeriesAnalysisArtifactSupport.satisfiesDesired(
+      Some(SeriesAnalysisArtifactSupport.ValidationContractId),
+      None,
+    ))
+    assert(!SeriesAnalysisArtifactSupport.satisfiesDesired(
+      Some("unknown-validation-contract"),
+      Some(SeriesAnalysisArtifactSupport.ValidationContractId),
+    ))
+    assert(PostgresSeriesAnalysisChunkCodec.decode(
+      row.copy(validationContractId = None),
+      request,
+      SeriesAnalysisReadConfig.defaults,
+      None,
+    ).isRight)
+    assertInternal(
+      PostgresSeriesAnalysisChunkCodec.decode(
+        row.copy(validationContractId = None, itemCount = Some(1)),
+        request,
+        SeriesAnalysisReadConfig.defaults,
+        None,
+      ),
+      "Analysis artifact schema validation failed.",
+    )
+    assertInternal(
+      PostgresSeriesAnalysisChunkCodec.decode(
+        row.copy(validationContractId = Some("unknown-validation-contract")),
+        request,
+        SeriesAnalysisReadConfig.defaults,
+        None,
+      ),
+      "Invalid analysis artifact metadata.",
+    )
     assertInternal(
       PostgresSeriesAnalysisChunkCodec.decode(
         row.copy(artifactSchemaVersion = 1),

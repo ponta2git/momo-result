@@ -206,7 +206,10 @@ private[postgres] object PostgresSeriesAnalysisReadOps:
           if value.inputRevision == desired.inputRevision &&
             value.algorithmVersion == desired.algorithmVersion &&
             value.artifactSchemaVersion == desired.artifactSchemaVersion &&
-            row.desiredValidationContractId == row.artifactValidationContractId => "current"
+            SeriesAnalysisArtifactSupport.satisfiesDesired(
+              row.desiredValidationContractId,
+              row.artifactValidationContractId,
+            ) => "current"
       case Some(_) => "stale"
     val active = activeOrLatest.filter(row => row.status == "running" || row.status == "queued")
     val storedCalculation = active.orElse(pending.map(value =>

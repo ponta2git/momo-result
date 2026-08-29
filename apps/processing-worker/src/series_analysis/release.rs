@@ -11,7 +11,7 @@ use sha2::{Digest, Sha256};
 use thiserror::Error;
 use tokio_postgres::{Client, Row, Transaction};
 
-use crate::postgres::{PostgresError, connect};
+use crate::postgres::{PostgresError, SERIES_ANALYSIS_OUTBOX_NOTIFICATION_CHANNEL, connect};
 
 use super::control::{ALGORITHM_VERSION, CAPABILITY_FRESH_SECONDS};
 
@@ -219,10 +219,7 @@ pub(crate) async fn promote(
             compatible_worker_count: workers.compatible,
             idempotent_replay: true,
         };
-        transaction
-            .rollback()
-            .await
-            .map_err(|source| postgres_phase("replay_rollback", source))?;
+        finish_replayed_promotion(transaction, request.apply && existing.target_count > 0).await?;
         return Ok(report);
     }
 
@@ -249,6 +246,11 @@ pub(crate) async fn promote(
             key_hash: &key_hash,
         };
         apply_promotion(&transaction, request, &titles, &identity).await?;
+        if target_count > 0 {
+            enqueue_dispatcher_wake(&transaction)
+                .await
+                .map_err(|source| postgres_phase("outbox_notify", source))?;
+        }
         transaction
             .commit()
             .await
@@ -270,6 +272,40 @@ pub(crate) async fn promote(
         compatible_worker_count: workers.compatible,
         idempotent_replay: false,
     })
+}
+
+async fn finish_replayed_promotion(
+    transaction: Transaction<'_>,
+    should_wake: bool,
+) -> Result<(), ReleaseError> {
+    if should_wake {
+        enqueue_dispatcher_wake(&transaction)
+            .await
+            .map_err(|source| postgres_phase("replay_outbox_notify", source))?;
+        transaction
+            .commit()
+            .await
+            .map_err(|source| postgres_phase("replay_commit", source))
+    } else {
+        transaction
+            .rollback()
+            .await
+            .map_err(|source| postgres_phase("replay_rollback", source))
+    }
+}
+
+async fn enqueue_dispatcher_wake(
+    transaction: &Transaction<'_>,
+) -> Result<(), tokio_postgres::Error> {
+    // PostgreSQL releases NOTIFY only if this transaction commits. The empty payload is a
+    // coalescing hint; campaign targets remain the durable source of work.
+    transaction
+        .query_one(
+            "SELECT pg_notify($1, '')",
+            &[&SERIES_ANALYSIS_OUTBOX_NOTIFICATION_CHANNEL],
+        )
+        .await?;
+    Ok(())
 }
 
 async fn begin_promotion_transaction(client: &mut Client) -> Result<Transaction<'_>, ReleaseError> {

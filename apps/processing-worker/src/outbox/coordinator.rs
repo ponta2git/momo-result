@@ -12,6 +12,7 @@ use tracing::{info, warn};
 use super::OutboxWakeReceiver;
 
 const MAX_CONSECUTIVE_BATCHES: usize = 100;
+const COLD_RECOVERY_INTERVAL: Duration = Duration::from_mins(30);
 const RETRY_DELAYS: [Duration; 7] = [
     Duration::from_secs(1),
     Duration::from_secs(2),
@@ -85,9 +86,10 @@ pub(crate) trait OutboxDriver: Send {
 
 /// Runs one outbox kind from startup demand to event-driven idle.
 ///
-/// There is no periodic cold sweep. After a successful idle result, the driver is not called again
-/// until a local wake or the driver's earliest one-shot deadline. Recoverable failures retain
-/// demand and retry on the fixed 1/2/4/8/16/32/60-second schedule.
+/// After a successful idle result, the driver is called again only for a local wake, its earliest
+/// one-shot deadline, or a 30-minute cold-recovery deadline. The low-frequency recovery closes the
+/// correctness gap left by a lost cross-process hint without introducing short-interval polling.
+/// Recoverable failures retain demand and retry on the fixed 1/2/4/8/16/32/60-second schedule.
 ///
 /// # Errors
 ///
@@ -179,11 +181,12 @@ where
             DrainCycle::Idle { next } => {
                 consecutive_failures = 0;
                 demand = false;
-                next_wake_at = next;
+                let has_driver_deadline = next.is_some();
+                next_wake_at = Some(cold_recovery_deadline(clock.now(), next)?);
                 info!(
                     event = "outbox_coordinator_idle",
                     outbox_kind = kind.wire(),
-                    has_deadline = next_wake_at.is_some(),
+                    has_driver_deadline,
                     "outbox coordinator drained durable work"
                 );
             }
@@ -339,6 +342,21 @@ fn retry_delay(consecutive_failures: usize) -> Duration {
         .unwrap_or(Duration::from_mins(1))
 }
 
+fn cold_recovery_deadline<E>(
+    now: Instant,
+    driver_deadline: Option<Instant>,
+) -> Result<Instant, CoordinatorError<E>>
+where
+    E: Error + 'static,
+{
+    let recovery_deadline = now
+        .checked_add(COLD_RECOVERY_INTERVAL)
+        .ok_or(CoordinatorError::DeadlineOverflow)?;
+    Ok(driver_deadline.map_or(recovery_deadline, |deadline| {
+        deadline.min(recovery_deadline)
+    }))
+}
+
 #[cfg(test)]
 mod tests {
     use std::{
@@ -487,7 +505,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn startup_drains_once_then_waits_for_a_signal_without_periodic_calls() {
+    async fn startup_drains_once_then_waits_for_a_signal_before_its_deadline() {
         let start = Instant::now();
         let (clock, mut sleeps) = ManualClock::at(start);
         let deadline = start.checked_add(Duration::from_mins(1)).unwrap_or(start);
@@ -513,6 +531,33 @@ mod tests {
         assert_eq!(sink.submit(effect), Ok(()));
         observe_drain(&mut drains).await;
 
+        assert_eq!(shutdown_sender.send(true), Ok(()));
+        assert!(matches!(task.await, Ok(Ok(()))));
+    }
+
+    #[tokio::test]
+    async fn lost_hint_is_recovered_only_at_the_thirty_minute_cold_deadline() {
+        let start = Instant::now();
+        let recovery_at = start.checked_add(COLD_RECOVERY_INTERVAL).unwrap_or(start);
+        let (clock, mut sleeps) = ManualClock::at(start);
+        let (driver, mut drains) =
+            ScriptedDriver::new([Ok(DrainBatch::idle(None)), Ok(DrainBatch::idle(None))]);
+        let (_sink, wake) = PostCommitSink::channel(OutboxKind::SeriesAnalysis);
+        let (shutdown_sender, shutdown) = watch::channel(false);
+        let task = tokio::spawn(run_with_clock(driver, wake, shutdown, clock.clone()));
+
+        observe_drain(&mut drains).await;
+        assert_eq!(observe_sleep(&mut sleeps).await, Some(recovery_at));
+        clock.advance(COLD_RECOVERY_INTERVAL.saturating_sub(Duration::from_secs(1)));
+        assert_eq!(observe_sleep(&mut sleeps).await, Some(recovery_at));
+        assert_eq!(
+            drains.try_recv(),
+            Err(mpsc::error::TryRecvError::Empty),
+            "cold recovery must not become short-interval polling"
+        );
+
+        clock.advance(Duration::from_secs(1));
+        observe_drain(&mut drains).await;
         assert_eq!(shutdown_sender.send(true), Ok(()));
         assert!(matches!(task.await, Ok(Ok(()))));
     }

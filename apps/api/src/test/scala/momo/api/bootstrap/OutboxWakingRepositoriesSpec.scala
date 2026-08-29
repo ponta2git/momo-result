@@ -126,6 +126,22 @@ final class OutboxWakingRepositoriesSpec extends MomoCatsEffectSuite:
       assertEquals(actual, Right(()))
       assertEquals(escalations, 1)
 
+  test("a failed remote analysis hint preserves the committed mutation result"):
+    for
+      updateResult <- Ref.of[IO, Either[AppError, Unit]](Right(()))
+      deleteResult <- Ref.of[IO, Boolean](false)
+      escalations <- Ref.of[IO, Int](0)
+      repository = OutboxWakingRepositories.matches(
+        matchesRepository(updateResult, deleteResult),
+        FailingSink,
+        escalations.update(_ + 1),
+      )
+      actual <- repository.update(matchRecord, now)
+      escalationCount <- escalations.get
+    yield
+      assertEquals(actual, Right(()))
+      assertEquals(escalationCount, 1)
+
   test("a failed durable operation emits no wake"):
     for
       sink <- RecordingSink.create
@@ -311,5 +327,9 @@ final class OutboxWakingRepositoriesSpec extends MomoCatsEffectSuite:
       Ref.of[IO, List[PostCommitEffects]](Nil).map(
         new RecordingSink(_, OutboxWakeSubmitResult.Closed)
       )
+
+  private object FailingSink extends OutboxWakeSink[IO]:
+    override def submit(effects: PostCommitEffects): IO[OutboxWakeSubmitResult] =
+      IO.raiseError(new IllegalStateException("notification connection unavailable"))
 
 end OutboxWakingRepositoriesSpec

@@ -177,6 +177,7 @@ async fn run_analysis_only(
 ) -> Result<(), SupervisorError> {
     let outbox_config = AnalysisOutboxRuntimeConfig::from(&series_analysis_config);
     let (post_commit_sink, outbox_wake) = PostCommitSink::channel(OutboxKind::SeriesAnalysis);
+    let notification_sink = post_commit_sink.clone();
     let (shutdown_sender, shutdown_receiver) = watch::channel(false);
     let analysis_shutdown = shutdown_receiver.clone();
     let series_analysis_consumer = async move {
@@ -184,7 +185,12 @@ async fn run_analysis_only(
             .await
             .map_err(SupervisorError::SeriesAnalysis)
     };
-    let outbox_coordinator = run_analysis_outbox(outbox_config, outbox_wake, shutdown_receiver);
+    let outbox_coordinator = run_analysis_outbox(
+        outbox_config,
+        outbox_wake,
+        notification_sink,
+        shutdown_receiver,
+    );
 
     supervise_peers(
         [
@@ -215,6 +221,7 @@ async fn run_combined(
         ocr_config.child_liveness_timeout(),
     );
     let (post_commit_sink, outbox_wake) = PostCommitSink::channel(OutboxKind::SeriesAnalysis);
+    let notification_sink = post_commit_sink.clone();
     let (shutdown_sender, shutdown_receiver) = watch::channel(false);
     let analysis_sink = post_commit_sink.clone();
     let analysis_shutdown = shutdown_receiver.clone();
@@ -229,7 +236,12 @@ async fn run_combined(
             .await
             .map_err(SupervisorError::Ocr)
     };
-    let outbox_coordinator = run_analysis_outbox(outbox_config, outbox_wake, shutdown_receiver);
+    let outbox_coordinator = run_analysis_outbox(
+        outbox_config,
+        outbox_wake,
+        notification_sink,
+        shutdown_receiver,
+    );
 
     supervise_peers(
         [
@@ -247,8 +259,21 @@ async fn run_combined(
 async fn run_analysis_outbox(
     runtime_config: AnalysisOutboxRuntimeConfig,
     wake: OutboxWakeReceiver,
+    notification_sink: PostCommitSink,
     shutdown: watch::Receiver<bool>,
 ) -> Result<(), SupervisorError> {
+    // Subscribe before the startup drain. A commit after LISTEN succeeds is retained by the
+    // dedicated connection until the listener and coordinator begin running together, so there
+    // is no check-then-listen window in which fresh durable work can lose its prompt wake.
+    let listener = postgres::subscribe_to_series_analysis_outbox(
+        &runtime_config.database_url,
+        notification_sink,
+    )
+    .await
+    .map_err(|source| SupervisorError::AnalysisOutboxNotification {
+        kind: source.kind(),
+        source,
+    })?;
     let database = postgres::connect(&runtime_config.database_url)
         .await
         .map_err(|error| SupervisorError::AnalysisOutboxDependency {
@@ -277,9 +302,22 @@ async fn run_analysis_outbox(
         worker_id = %runtime_config.worker_id,
         "series-analysis outbox coordinator is ready"
     );
-    coordinator::run(driver, wake, shutdown)
-        .await
-        .map_err(SupervisorError::AnalysisOutboxCoordinator)
+    let listener_shutdown = shutdown.clone();
+    let coordinator = async move {
+        coordinator::run(driver, wake, shutdown)
+            .await
+            .map_err(SupervisorError::AnalysisOutboxCoordinator)
+    };
+    let listener = async move {
+        listener.run(listener_shutdown).await.map_err(|source| {
+            SupervisorError::AnalysisOutboxNotification {
+                kind: source.kind(),
+                source,
+            }
+        })
+    };
+    tokio::try_join!(coordinator, listener)?;
+    Ok(())
 }
 
 type RuntimePeer =
@@ -431,6 +469,12 @@ pub(crate) enum SupervisorError {
     AnalysisOutboxConfiguration(#[source] SeriesAnalysisOutboxError),
     #[error("series-analysis outbox coordinator failed")]
     AnalysisOutboxCoordinator(#[source] CoordinatorError<SeriesAnalysisOutboxError>),
+    #[error("series-analysis outbox notification listener failed ({kind})")]
+    AnalysisOutboxNotification {
+        kind: &'static str,
+        #[source]
+        source: postgres::OutboxNotificationError,
+    },
     #[error("{peer} runtime peer exited without a shutdown request")]
     UnexpectedExit { peer: &'static str },
     #[error("runtime shutdown drain budget exceeds a supported bound")]

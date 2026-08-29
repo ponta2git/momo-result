@@ -12,7 +12,7 @@ import momo.api.repositories.{
   AppSessionsRepository,
   IdempotencyRepository,
   OcrJobMaintenanceRepository,
-  SeriesAnalysisQueueOutboxRepository
+  SeriesAnalysisHistoryMaintenance
 }
 import momo.api.usecases.maintenance.{
   ExpiredSessionPruner,
@@ -28,7 +28,7 @@ private[bootstrap] object RuntimeMaintenance:
       ocrMaintenance: OcrJobMaintenanceRepository[F],
       appSessions: AppSessionsRepository[F],
       idempotency: IdempotencyRepository[F],
-      seriesAnalysisMaintenance: Option[SeriesAnalysisQueueOutboxRepository[F]],
+      seriesAnalysisHistory: Option[SeriesAnalysisHistoryMaintenance[F]],
       now: F[java.time.Instant],
   ): Resource[F, Unit] =
     val logger = LoggerFactory[F].getLogger
@@ -54,7 +54,7 @@ private[bootstrap] object RuntimeMaintenance:
       now.flatMap(idempotency.cleanup)
         .flatMap(deleted => logger.info(s"idempotency_key_pruner deleted=${deleted.toString}"))
     )
-    val seriesAnalysisHistoryPruner = seriesAnalysisMaintenance.fold(Resource.unit[F]) {
+    val seriesAnalysisHistoryPruner = seriesAnalysisHistory.fold(Resource.unit[F]) {
       maintenance =>
         PeriodicMaintenance.resource(
           "series_analysis_history_pruner",

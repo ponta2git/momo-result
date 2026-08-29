@@ -164,6 +164,8 @@ pub(crate) struct PostCommitSinkClosed {
 
 #[cfg(test)]
 mod tests {
+    use std::{error::Error, time::Duration};
+
     use tokio::sync::mpsc::error::TryRecvError;
 
     use super::*;
@@ -207,5 +209,39 @@ mod tests {
                 kind: OutboxKind::SeriesAnalysis
             })
         );
+    }
+
+    #[tokio::test]
+    #[ignore = "requires explicitly isolated ANALYSIS_OUTBOX_SMOKE_DATABASE_URL"]
+    #[expect(
+        clippy::panic_in_result_fn,
+        reason = "the isolated PostgreSQL listener scenario keeps its cross-process boundary visible"
+    )]
+    async fn subscribed_postgres_listener_delivers_the_next_commit_hint()
+    -> Result<(), Box<dyn Error + Send + Sync>> {
+        let database_url = std::env::var("ANALYSIS_OUTBOX_SMOKE_DATABASE_URL")?;
+        let (sink, mut wake) = PostCommitSink::channel(OutboxKind::SeriesAnalysis);
+        let listener =
+            crate::postgres::subscribe_to_series_analysis_outbox(&database_url, sink).await?;
+        let (shutdown_sender, shutdown) = tokio::sync::watch::channel(false);
+        let listener_task = tokio::spawn(listener.run(shutdown));
+        let publisher = crate::postgres::connect(&database_url).await?;
+
+        publisher
+            .execute(
+                "SELECT pg_notify($1, '')",
+                &[&crate::postgres::SERIES_ANALYSIS_OUTBOX_NOTIFICATION_CHANNEL],
+            )
+            .await?;
+        let received = tokio::time::timeout(Duration::from_secs(2), wake.receiver.recv()).await?;
+        assert_eq!(
+            received,
+            Some(()),
+            "the first commit after subscription must promptly reach the local sink"
+        );
+
+        assert_eq!(shutdown_sender.send(true), Ok(()));
+        assert!(matches!(listener_task.await, Ok(Ok(()))));
+        Ok(())
     }
 }

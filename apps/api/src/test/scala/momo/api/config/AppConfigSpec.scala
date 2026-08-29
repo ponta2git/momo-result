@@ -329,13 +329,13 @@ class AppConfigSpec extends CatsEffectSuite:
     }
   }
 
-  test("loadFromEnv reads outbox cold-recovery and semantic-redelivery intervals") {
+  test("loadFromEnv reads only API-owned OCR outbox intervals") {
     load(
       prodEnv ++ Map(
         "OCR_OUTBOX_RECOVERY_INTERVAL_SECONDS" -> "1200",
         "OCR_OUTBOX_REDELIVERY_AFTER_SECONDS" -> "90",
-        "SERIES_ANALYSIS_OUTBOX_RECOVERY_INTERVAL_SECONDS" -> "2400",
-        "SERIES_ANALYSIS_OUTBOX_REDELIVERY_AFTER_SECONDS" -> "240",
+        "SERIES_ANALYSIS_OUTBOX_RECOVERY_INTERVAL_SECONDS" -> "not-an-api-setting",
+        "SERIES_ANALYSIS_OUTBOX_REDELIVERY_AFTER_SECONDS" -> "not-an-api-setting",
         "STALE_OCR_JOB_REAPER_INTERVAL_SECONDS" -> "1800",
       )
     ).map { result =>
@@ -343,14 +343,6 @@ class AppConfigSpec extends CatsEffectSuite:
       assertEquals(
         result.map(_.resourceLimits.ocrOutboxSemanticRedeliveryInterval.toSeconds),
         Right(90L),
-      )
-      assertEquals(
-        result.map(_.resourceLimits.seriesAnalysisOutboxRecoveryInterval.toSeconds),
-        Right(2400L),
-      )
-      assertEquals(
-        result.map(_.resourceLimits.seriesAnalysisOutboxSemanticRedeliveryInterval.toSeconds),
-        Right(240L),
       )
       assertEquals(result.map(_.resourceLimits.staleOcrJobReaperInterval.toSeconds), Right(1800L))
     }
@@ -485,6 +477,12 @@ class AppConfigSpec extends CatsEffectSuite:
         result.flatMap(_.redis.map(_.v2DeadLetterStream).toRight(new RuntimeException())),
         Right("momo:ocr:v2:jobs:dead:test"),
       )
+    }
+  }
+
+  test("loadFromEnv ignores the removed analysis Redis stream setting") {
+    load(prodEnv + ("ANALYSIS_REDIS_STREAM" -> " ")).map { result =>
+      assert(result.isRight, s"analysis queue transport is not API configuration: $result")
     }
   }
 

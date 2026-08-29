@@ -35,10 +35,6 @@ import momo.api.repositories.*
 import momo.api.usecases.images.ImageStorageAdmission
 import momo.api.usecases.ocr.*
 import momo.api.usecases.queue.OutboxWakeup
-import momo.api.usecases.seriesanalysis.{
-  SeriesAnalysisQueueDispatcherConfig,
-  SeriesAnalysisQueueOutboxDispatcher
-}
 
 private[bootstrap] object PostgresApiRuntime:
   def resource[F[_]: Async: SecureRandom](
@@ -56,7 +52,8 @@ private[bootstrap] object PostgresApiRuntime:
     val ocrJobCreationStoreBase: OcrJobCreationStore[F] =
       PostgresOcrJobCreationStore[F](transactor)
     val ocrQueueOutbox = PostgresOcrQueueOutboxRepository[F](transactor)
-    val analysisQueueOutbox = PostgresSeriesAnalysisQueueOutboxRepository[F](transactor)
+    val analysisOutboxWake = PostgresSeriesAnalysisOutboxWakeSink[F](transactor)
+    val analysisHistoryMaintenance = PostgresSeriesAnalysisHistoryMaintenance[F](transactor)
     val heldEvents: HeldEventsRepository[F] = PostgresHeldEventsRepository[F](transactor)
     val heldEventDeletion: HeldEventDeletionRepository[F] =
       PostgresHeldEventDeletionRepository[F](transactor)
@@ -102,19 +99,6 @@ private[bootstrap] object PostgresApiRuntime:
     val outboxRuntime = OutboxWakeup.resource[F].flatMap { wakeup =>
       Resource.eval(Deferred[F, Throwable]).flatMap { backgroundFailure =>
         val reportCoordinatorFailure = (error: Throwable) => backgroundFailure.complete(error).void
-        val analysisDispatcher = infrastructure.analysisQueue.fold(Resource.unit[F]) { queue =>
-          SeriesAnalysisQueueOutboxDispatcher.resource[F](
-            analysisQueueOutbox,
-            queue,
-            SeriesAnalysisQueueDispatcherConfig(
-              redeliveryAfter =
-                config.resourceLimits.seriesAnalysisOutboxSemanticRedeliveryInterval,
-              coldRecoveryInterval = config.resourceLimits.seriesAnalysisOutboxRecoveryInterval,
-            ),
-            wakeup,
-            reportCoordinatorFailure,
-          )
-        }
         (
           OcrQueueOutboxDispatcher.resource[F](
             ocrQueueOutbox,
@@ -126,7 +110,6 @@ private[bootstrap] object PostgresApiRuntime:
             wakeup,
             reportCoordinatorFailure,
           ),
-          analysisDispatcher,
           PostgresSeriesAnalysisReaderCapability.resource[F](transactor),
         ).tupled.as((wakeup, backgroundFailure))
       }
@@ -143,13 +126,13 @@ private[bootstrap] object PostgresApiRuntime:
         )
         val matches = OutboxWakingRepositories.matches(
           matchesBase,
-          outboxWakeup,
-          signalBackgroundFailure,
+          analysisOutboxWake,
+          Async[F].unit,
         )
         val matchConfirmation = OutboxWakingRepositories.matchConfirmation(
           matchConfirmationBase,
-          outboxWakeup,
-          signalBackgroundFailure,
+          analysisOutboxWake,
+          Async[F].unit,
         )
         RuntimeMaintenance.resource(
           config = config,
@@ -157,7 +140,7 @@ private[bootstrap] object PostgresApiRuntime:
           ocrMaintenance = ocrMaintenance,
           appSessions = appSessions,
           idempotency = idempotency,
-          seriesAnalysisMaintenance = Some(analysisQueueOutbox),
+          seriesAnalysisHistory = Some(analysisHistoryMaintenance),
           now = Clock[F].realTimeInstant,
         ).evalMap { _ =>
           for
@@ -167,8 +150,8 @@ private[bootstrap] object PostgresApiRuntime:
             )
             wakingSeriesAnalysis = OutboxWakingRepositories.seriesAnalysis(
               seriesAnalysis,
-              outboxWakeup,
-              signalBackgroundFailure,
+              analysisOutboxWake,
+              Async[F].unit,
             )
             cachedMembers <- CachedReferenceRepositories.members(members)
             cachedGameTitles <- CachedReferenceRepositories.gameTitles(gameTitles)

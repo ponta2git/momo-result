@@ -10,10 +10,9 @@ final case class RedisConfig(
     url: String,
     v2Stream: String = RedisConfig.DefaultV2Stream,
     v2DeadLetterStream: String = RedisConfig.DefaultV2DeadLetterStream,
-    analysisStream: String = RedisConfig.DefaultAnalysisStream,
 ):
   override def toString: String =
-    s"RedisConfig(url=[REDACTED], v2Stream=$v2Stream, v2DeadLetterStream=$v2DeadLetterStream, analysisStream=$analysisStream)"
+    s"RedisConfig(url=[REDACTED], v2Stream=$v2Stream, v2DeadLetterStream=$v2DeadLetterStream)"
 
 final case class SeriesAnalysisReadConfig(
     maxEncodedBytes: Long,
@@ -54,8 +53,6 @@ final case class ResourceLimitsConfig(
     sessionPruneInterval: FiniteDuration,
     ocrOutboxRecoveryInterval: FiniteDuration,
     ocrOutboxSemanticRedeliveryInterval: FiniteDuration,
-    seriesAnalysisOutboxRecoveryInterval: FiniteDuration,
-    seriesAnalysisOutboxSemanticRedeliveryInterval: FiniteDuration,
     ocrOutboxDueBacklogLimit: Int,
     ocrOutboxActiveBacklogLimit: Int,
     ocrOutboxOldestDueMaxDelay: FiniteDuration,
@@ -122,7 +119,6 @@ object AuthConfig:
 object RedisConfig:
   val DefaultV2Stream: String = "momo:ocr:v2:jobs"
   val DefaultV2DeadLetterStream: String = "momo:ocr:v2:jobs:dead"
-  val DefaultAnalysisStream: String = "momo:analysis:jobs"
 
 object SeriesAnalysisReadConfig:
   val defaults: SeriesAnalysisReadConfig = SeriesAnalysisReadConfig(
@@ -173,8 +169,6 @@ object ResourceLimitsConfig:
     sessionPruneInterval = 60.minutes,
     ocrOutboxRecoveryInterval = 300.seconds,
     ocrOutboxSemanticRedeliveryInterval = 120.seconds,
-    seriesAnalysisOutboxRecoveryInterval = 1800.seconds,
-    seriesAnalysisOutboxSemanticRedeliveryInterval = 300.seconds,
     ocrOutboxDueBacklogLimit = 24,
     ocrOutboxActiveBacklogLimit = 48,
     ocrOutboxOldestDueMaxDelay = 600.seconds,

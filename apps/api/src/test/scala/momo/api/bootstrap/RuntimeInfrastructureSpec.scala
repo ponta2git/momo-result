@@ -9,7 +9,7 @@ import momo.api.MomoCatsEffectSuite
 import momo.api.config.{AppConfig, AppEnv}
 
 final class RuntimeInfrastructureSpec extends MomoCatsEffectSuite:
-  test("a runtime without Redis exposes no analysis publisher that could acknowledge delivery"):
+  test("a runtime without Redis still provides the OCR queue boundary"):
     val config = AppConfig(
       appEnv = AppEnv.Test,
       httpHost = "127.0.0.1",
@@ -19,7 +19,7 @@ final class RuntimeInfrastructureSpec extends MomoCatsEffectSuite:
     )
 
     RuntimeInfrastructure.resource[IO](config, IO.pure(Instant.EPOCH)).use { infrastructure =>
-      IO(assertEquals(infrastructure.analysisQueue, None))
+      infrastructure.queueHealth.deadLetterLength.map(length => assertEquals(length, 0L))
     }
 
 end RuntimeInfrastructureSpec

@@ -17,6 +17,8 @@ final case class PostCommitEffects private (
 
   def isEmpty: Boolean = outboxKinds.isEmpty
 
+  def contains(kind: OutboxKind): Boolean = outboxKinds.contains(kind)
+
 object PostCommitEffects:
   val empty: PostCommitEffects = PostCommitEffects(Set.empty)
 

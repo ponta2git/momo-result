@@ -7,6 +7,7 @@ use std::{
 
 use momo_analysis_core::contract::QUEUE_SCHEMA_VERSION;
 use redis::{AsyncCommands, RedisError, aio::ConnectionManager};
+use sha2::{Digest, Sha256};
 use thiserror::Error;
 use tokio::time::Instant;
 use tokio_postgres::{Client, Row, Transaction};
@@ -22,6 +23,8 @@ const RUNTIME_BATCH_SIZE: usize = 10;
 const RUNTIME_CLAIM_TTL: Duration = Duration::from_secs(30);
 const RUNTIME_SEMANTIC_REDELIVERY_AFTER: Duration = Duration::from_mins(5);
 const LOCK_CONTENTION_RETRY_DELAY: Duration = Duration::from_millis(250);
+const CAMPAIGN_STATEMENT_TIMEOUT: &str = "10000ms";
+const CAMPAIGN_LOCK_TIMEOUT: &str = "5000ms";
 
 /// Bounded policy required by the Series Analysis outbox state machine.
 ///
@@ -107,6 +110,7 @@ impl SeriesAnalysisOutboxDriver {
     }
 
     async fn drain_once(&mut self) -> Result<DrainBatch, SeriesAnalysisOutboxError> {
+        let expanded = self.expand_pending_campaign_targets().await?;
         let reconciled = self.reconcile_queued().await?;
         let claims = self.claim_due().await?;
         let claimed = claims.len();
@@ -120,9 +124,10 @@ impl SeriesAnalysisOutboxDriver {
                 PublishResult::Stale => stale = stale.saturating_add(1),
             }
         }
-        if reconciled > 0 || claimed > 0 {
+        if expanded > 0 || reconciled > 0 || claimed > 0 {
             info!(
                 event = "analysis_outbox_batch_progress",
+                expanded,
                 reconciled,
                 claimed,
                 delivered,
@@ -139,6 +144,73 @@ impl SeriesAnalysisOutboxDriver {
             .map(monotonic_deadline)
             .transpose()?;
         Ok(DrainBatch::idle(next))
+    }
+
+    /// Expands a bounded campaign snapshot while keeping every target in its own transaction.
+    ///
+    /// The candidate read is deliberately separate from target mutation. Each target transaction
+    /// then acquires title -> active job -> target, matching the control plane's shared lock order;
+    /// a crash or a contending runtime can therefore leave only retryable `pending` targets.
+    async fn expand_pending_campaign_targets(
+        &mut self,
+    ) -> Result<usize, SeriesAnalysisOutboxError> {
+        let limit =
+            i64::try_from(self.config.batch_size).map_err(SeriesAnalysisOutboxError::BatchBound)?;
+        let transaction = self.database.transaction().await?;
+        configure_campaign_transaction(&transaction).await?;
+        let rows = transaction
+            .query(
+                r"
+                SELECT campaign_id, game_title_id
+                FROM series_analysis_campaign_targets
+                WHERE status = 'pending'
+                ORDER BY accepted_at, campaign_id, game_title_id
+                LIMIT $1
+                ",
+                &[&limit],
+            )
+            .await?;
+        let targets = rows
+            .iter()
+            .map(decode_campaign_target_key)
+            .collect::<Result<Vec<_>, _>>()?;
+        transaction.commit().await?;
+
+        let mut expanded = 0_usize;
+        for target in targets {
+            if self.expand_campaign_target(&target).await? {
+                expanded = expanded.saturating_add(1);
+            }
+        }
+        Ok(expanded)
+    }
+
+    async fn expand_campaign_target(
+        &mut self,
+        key: &CampaignTargetKey,
+    ) -> Result<bool, SeriesAnalysisOutboxError> {
+        let transaction = self.database.transaction().await?;
+        configure_campaign_transaction(&transaction).await?;
+        let desired = lock_desired_analysis(&transaction, &key.game_title_id).await?;
+        let active = if desired.is_some() {
+            lock_active_analysis_job(&transaction, &key.game_title_id).await?
+        } else {
+            None
+        };
+        let target = lock_pending_campaign_target(&transaction, key).await?;
+        let Some(target) = target else {
+            transaction.commit().await?;
+            return Ok(false);
+        };
+        match desired {
+            Some(desired) => {
+                materialize_campaign_target(&transaction, &target, &desired, active.as_ref())
+                    .await?;
+            }
+            None => skip_deleted_campaign_title(&transaction, &target).await?,
+        }
+        transaction.commit().await?;
+        Ok(true)
     }
 
     async fn reconcile_queued(&mut self) -> Result<u64, SeriesAnalysisOutboxError> {
@@ -440,6 +512,422 @@ impl SeriesAnalysisOutboxDriver {
     }
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct CampaignTargetKey {
+    campaign_id: String,
+    game_title_id: String,
+}
+
+#[derive(Debug)]
+struct CampaignTarget {
+    campaign_id: String,
+    game_title_id: String,
+    input_revision: i64,
+    algorithm_version: String,
+    artifact_schema_version: i32,
+    accepted_at: SystemTime,
+    operation_id: String,
+    trigger: String,
+}
+
+#[derive(Debug)]
+struct DesiredAnalysis {
+    input_revision: i64,
+    algorithm_version: String,
+    artifact_schema_version: i32,
+}
+
+#[derive(Debug)]
+struct ActiveAnalysisJob {
+    id: String,
+    status: String,
+    started_at: Option<SystemTime>,
+    attempt_id: Option<String>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum CampaignAssignmentDecision<'a> {
+    Create,
+    RefreshQueued {
+        job_id: &'a str,
+    },
+    JoinRunning {
+        job_id: &'a str,
+        attempt_id: &'a str,
+    },
+    DeferForcedRun,
+}
+
+#[derive(Debug)]
+struct CampaignAssignment {
+    job_id: Option<String>,
+    attempt_id: Option<String>,
+    request_status: &'static str,
+    target_status: &'static str,
+    enqueue_job_id: Option<String>,
+}
+
+async fn configure_campaign_transaction(
+    transaction: &Transaction<'_>,
+) -> Result<(), SeriesAnalysisOutboxError> {
+    transaction
+        .query_one(
+            "SELECT set_config('statement_timeout', $1, true),\x20\
+                    set_config('lock_timeout', $2, true)",
+            &[&CAMPAIGN_STATEMENT_TIMEOUT, &CAMPAIGN_LOCK_TIMEOUT],
+        )
+        .await?;
+    Ok(())
+}
+
+fn decode_campaign_target_key(row: &Row) -> Result<CampaignTargetKey, SeriesAnalysisOutboxError> {
+    Ok(CampaignTargetKey {
+        campaign_id: row
+            .try_get("campaign_id")
+            .map_err(SeriesAnalysisOutboxError::InvalidRecord)?,
+        game_title_id: row
+            .try_get("game_title_id")
+            .map_err(SeriesAnalysisOutboxError::InvalidRecord)?,
+    })
+}
+
+async fn lock_desired_analysis(
+    transaction: &Transaction<'_>,
+    game_title_id: &str,
+) -> Result<Option<DesiredAnalysis>, SeriesAnalysisOutboxError> {
+    transaction
+        .query_opt(
+            r"
+            SELECT input_revision, algorithm_version, artifact_schema_version
+            FROM series_analysis_title_states
+            WHERE game_title_id = $1
+            FOR UPDATE
+            ",
+            &[&game_title_id],
+        )
+        .await?
+        .map(|row| {
+            Ok(DesiredAnalysis {
+                input_revision: row
+                    .try_get("input_revision")
+                    .map_err(SeriesAnalysisOutboxError::InvalidRecord)?,
+                algorithm_version: row
+                    .try_get("algorithm_version")
+                    .map_err(SeriesAnalysisOutboxError::InvalidRecord)?,
+                artifact_schema_version: row
+                    .try_get("artifact_schema_version")
+                    .map_err(SeriesAnalysisOutboxError::InvalidRecord)?,
+            })
+        })
+        .transpose()
+}
+
+async fn lock_active_analysis_job(
+    transaction: &Transaction<'_>,
+    game_title_id: &str,
+) -> Result<Option<ActiveAnalysisJob>, SeriesAnalysisOutboxError> {
+    transaction
+        .query_opt(
+            r"
+            SELECT id, status, started_at, lease_attempt_id
+            FROM series_analysis_jobs
+            WHERE game_title_id = $1
+              AND status IN ('queued', 'running')
+            FOR UPDATE
+            ",
+            &[&game_title_id],
+        )
+        .await?
+        .map(|row| {
+            Ok(ActiveAnalysisJob {
+                id: row
+                    .try_get("id")
+                    .map_err(SeriesAnalysisOutboxError::InvalidRecord)?,
+                status: row
+                    .try_get("status")
+                    .map_err(SeriesAnalysisOutboxError::InvalidRecord)?,
+                started_at: row
+                    .try_get("started_at")
+                    .map_err(SeriesAnalysisOutboxError::InvalidRecord)?,
+                attempt_id: row
+                    .try_get("lease_attempt_id")
+                    .map_err(SeriesAnalysisOutboxError::InvalidRecord)?,
+            })
+        })
+        .transpose()
+}
+
+async fn lock_pending_campaign_target(
+    transaction: &Transaction<'_>,
+    key: &CampaignTargetKey,
+) -> Result<Option<CampaignTarget>, SeriesAnalysisOutboxError> {
+    transaction
+        .query_opt(
+            r"
+            SELECT t.campaign_id, t.game_title_id, t.input_revision,
+                   t.algorithm_version, t.artifact_schema_version, t.accepted_at,
+                   c.operation_request_id, c.trigger
+            FROM series_analysis_campaign_targets t
+            JOIN series_analysis_campaigns c ON c.id = t.campaign_id
+            WHERE t.campaign_id = $1
+              AND t.game_title_id = $2
+              AND t.status = 'pending'
+            FOR UPDATE OF t
+            ",
+            &[&key.campaign_id, &key.game_title_id],
+        )
+        .await?
+        .map(|row| {
+            Ok(CampaignTarget {
+                campaign_id: row
+                    .try_get("campaign_id")
+                    .map_err(SeriesAnalysisOutboxError::InvalidRecord)?,
+                game_title_id: row
+                    .try_get("game_title_id")
+                    .map_err(SeriesAnalysisOutboxError::InvalidRecord)?,
+                input_revision: row
+                    .try_get("input_revision")
+                    .map_err(SeriesAnalysisOutboxError::InvalidRecord)?,
+                algorithm_version: row
+                    .try_get("algorithm_version")
+                    .map_err(SeriesAnalysisOutboxError::InvalidRecord)?,
+                artifact_schema_version: row
+                    .try_get("artifact_schema_version")
+                    .map_err(SeriesAnalysisOutboxError::InvalidRecord)?,
+                accepted_at: row
+                    .try_get("accepted_at")
+                    .map_err(SeriesAnalysisOutboxError::InvalidRecord)?,
+                operation_id: row
+                    .try_get("operation_request_id")
+                    .map_err(SeriesAnalysisOutboxError::InvalidRecord)?,
+                trigger: row
+                    .try_get("trigger")
+                    .map_err(SeriesAnalysisOutboxError::InvalidRecord)?,
+            })
+        })
+        .transpose()
+}
+
+fn campaign_assignment_decision(
+    active: Option<&ActiveAnalysisJob>,
+    accepted_at: SystemTime,
+) -> Result<CampaignAssignmentDecision<'_>, SeriesAnalysisOutboxError> {
+    match active {
+        None => Ok(CampaignAssignmentDecision::Create),
+        Some(job) if job.status == "queued" => {
+            Ok(CampaignAssignmentDecision::RefreshQueued { job_id: &job.id })
+        }
+        Some(job) if job.status == "running" => match (
+            job.started_at
+                .is_some_and(|started_at| started_at >= accepted_at),
+            job.attempt_id.as_deref(),
+        ) {
+            (true, Some(attempt_id)) => Ok(CampaignAssignmentDecision::JoinRunning {
+                job_id: &job.id,
+                attempt_id,
+            }),
+            _ => Ok(CampaignAssignmentDecision::DeferForcedRun),
+        },
+        Some(_) => Err(SeriesAnalysisOutboxError::InvalidRecordValue),
+    }
+}
+
+async fn materialize_campaign_target(
+    transaction: &Transaction<'_>,
+    target: &CampaignTarget,
+    desired: &DesiredAnalysis,
+    active: Option<&ActiveAnalysisJob>,
+) -> Result<(), SeriesAnalysisOutboxError> {
+    let request_id = campaign_stable_id("analysis-request", target);
+    let new_job_id = campaign_stable_id("analysis-job", target);
+    let outbox_id = campaign_stable_id("analysis-outbox", target);
+    let assignment =
+        assign_campaign_target(transaction, target, desired, active, &new_job_id).await?;
+    transaction
+        .execute(
+            r"
+            INSERT INTO series_analysis_job_requests (
+              id, game_title_id, operation_request_id, campaign_id,
+              input_revision, algorithm_version, artifact_schema_version,
+              trigger, force_run, status, assigned_job_id, assigned_attempt_id, accepted_at
+            ) VALUES (
+              $1, $2, $3, $4, $5, $6, $7,
+              $8, true, $9, $10, $11, $12
+            )
+            ",
+            &[
+                &request_id,
+                &target.game_title_id,
+                &target.operation_id,
+                &target.campaign_id,
+                &target.input_revision,
+                &target.algorithm_version,
+                &target.artifact_schema_version,
+                &target.trigger,
+                &assignment.request_status,
+                &assignment.job_id,
+                &assignment.attempt_id,
+                &target.accepted_at,
+            ],
+        )
+        .await?;
+    transaction
+        .execute(
+            r"
+            UPDATE series_analysis_campaign_targets
+            SET status = $3,
+                job_request_id = $4,
+                updated_at = clock_timestamp()
+            WHERE campaign_id = $1
+              AND game_title_id = $2
+              AND status = 'pending'
+            ",
+            &[
+                &target.campaign_id,
+                &target.game_title_id,
+                &assignment.target_status,
+                &request_id,
+            ],
+        )
+        .await?;
+    if let Some(job_id) = assignment.enqueue_job_id {
+        let dedupe_key = format!("campaign:{}:{}", target.campaign_id, target.game_title_id);
+        transaction
+            .execute(
+                r"
+                INSERT INTO series_analysis_queue_outbox (id, job_id, dedupe_key)
+                VALUES ($1, $2, $3)
+                ON CONFLICT (dedupe_key) DO NOTHING
+                ",
+                &[&outbox_id, &job_id, &dedupe_key],
+            )
+            .await?;
+    }
+    refresh_campaign(transaction, &target.campaign_id).await
+}
+
+async fn assign_campaign_target(
+    transaction: &Transaction<'_>,
+    target: &CampaignTarget,
+    desired: &DesiredAnalysis,
+    active: Option<&ActiveAnalysisJob>,
+    new_job_id: &str,
+) -> Result<CampaignAssignment, SeriesAnalysisOutboxError> {
+    match campaign_assignment_decision(active, target.accepted_at)? {
+        CampaignAssignmentDecision::Create => {
+            transaction
+                .execute(
+                    r"
+                    INSERT INTO series_analysis_jobs (
+                      id, game_title_id, input_revision, algorithm_version,
+                      artifact_schema_version, status, trigger, requested_at, available_at
+                    ) VALUES (
+                      $1, $2, $3, $4, $5, 'queued', $6, $7, $7
+                    )
+                    ",
+                    &[
+                        &new_job_id,
+                        &target.game_title_id,
+                        &desired.input_revision,
+                        &desired.algorithm_version,
+                        &desired.artifact_schema_version,
+                        &target.trigger,
+                        &target.accepted_at,
+                    ],
+                )
+                .await?;
+            Ok(CampaignAssignment {
+                job_id: Some(String::from(new_job_id)),
+                attempt_id: None,
+                request_status: "pending",
+                target_status: "expanded",
+                enqueue_job_id: Some(String::from(new_job_id)),
+            })
+        }
+        CampaignAssignmentDecision::RefreshQueued { job_id } => {
+            transaction
+                .execute(
+                    r"
+                    UPDATE series_analysis_jobs
+                    SET input_revision = $2,
+                        algorithm_version = $3,
+                        artifact_schema_version = $4,
+                        updated_at = clock_timestamp()
+                    WHERE id = $1 AND status = 'queued'
+                    ",
+                    &[
+                        &job_id,
+                        &desired.input_revision,
+                        &desired.algorithm_version,
+                        &desired.artifact_schema_version,
+                    ],
+                )
+                .await?;
+            Ok(CampaignAssignment {
+                job_id: Some(String::from(job_id)),
+                attempt_id: None,
+                request_status: "pending",
+                target_status: "expanded",
+                enqueue_job_id: Some(String::from(job_id)),
+            })
+        }
+        CampaignAssignmentDecision::JoinRunning { job_id, attempt_id } => Ok(CampaignAssignment {
+            job_id: Some(String::from(job_id)),
+            attempt_id: Some(String::from(attempt_id)),
+            request_status: "assigned",
+            target_status: "running",
+            enqueue_job_id: None,
+        }),
+        CampaignAssignmentDecision::DeferForcedRun => {
+            transaction
+                .execute(
+                    r"
+                    UPDATE series_analysis_title_states
+                    SET pending_work = true,
+                        pending_forced_run_count = pending_forced_run_count + 1,
+                        updated_at = clock_timestamp()
+                    WHERE game_title_id = $1
+                    ",
+                    &[&target.game_title_id],
+                )
+                .await?;
+            Ok(CampaignAssignment {
+                job_id: None,
+                attempt_id: None,
+                request_status: "pending",
+                target_status: "expanded",
+                enqueue_job_id: None,
+            })
+        }
+    }
+}
+
+async fn skip_deleted_campaign_title(
+    transaction: &Transaction<'_>,
+    target: &CampaignTarget,
+) -> Result<(), SeriesAnalysisOutboxError> {
+    transaction
+        .execute(
+            r"
+            UPDATE series_analysis_campaign_targets
+            SET status = 'skipped_title_deleted', updated_at = clock_timestamp()
+            WHERE campaign_id = $1
+              AND game_title_id = $2
+              AND status = 'pending'
+            ",
+            &[&target.campaign_id, &target.game_title_id],
+        )
+        .await?;
+    refresh_campaign(transaction, &target.campaign_id).await
+}
+
+fn campaign_stable_id(prefix: &str, target: &CampaignTarget) -> String {
+    let source = format!("{prefix}\0{}\0{}", target.campaign_id, target.game_title_id);
+    let digest: [u8; 32] = Sha256::digest(source.as_bytes()).into();
+    let short_digest = digest.split_at(16).0;
+    format!("{prefix}-{}", hex::encode(short_digest))
+}
+
 const fn bounded_idle_delay(delay: Duration) -> Duration {
     if delay.is_zero() {
         LOCK_CONTENTION_RETRY_DELAY
@@ -514,6 +1002,10 @@ impl OutboxDriver for SeriesAnalysisOutboxDriver {
 
     fn failure_kind(error: &Self::Error) -> DriverFailureKind {
         match error {
+            SeriesAnalysisOutboxError::Postgres(error)
+            | SeriesAnalysisOutboxError::ExecutionSlot(
+                crate::execution_slot::ExecutionSlotError::Postgres(error),
+            ) if error.is_closed() => DriverFailureKind::Structural,
             SeriesAnalysisOutboxError::Postgres(_)
             | SeriesAnalysisOutboxError::ExecutionSlot(
                 crate::execution_slot::ExecutionSlotError::Postgres(_),

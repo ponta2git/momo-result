@@ -112,7 +112,7 @@ object PostgresGameTitles:
         RETURNING campaign_id
       """.query[String].to[List]
       _ <- affectedCampaigns.distinct.traverse_(campaignId =>
-        PostgresSeriesAnalysisCampaignExpansionOps.refreshCampaign(campaignId, now)
+        PostgresSeriesAnalysisCampaignStatusOps.refresh(campaignId, now)
       )
       _ <- sql"""
         UPDATE series_analysis_operation_requests o

@@ -18,7 +18,7 @@ import momo.api.usecases.queue.{
   PostCommitEffects
 }
 
-/** Adds process-local outbox wake hints after successful durable repository transitions. */
+/** Adds outbox wake hints after successful durable repository transitions. */
 private[bootstrap] object OutboxWakingRepositories:
   def ocrJobCreation[F[_]: Async: LoggerFactory](
       delegate: OcrJobCreationStore[F],
@@ -142,7 +142,7 @@ private[bootstrap] object OutboxWakingRepositories:
 
     /**
      * Keeps the durable operation cancelable while masking only its successful result-to-signal
-     * handoff. A closed process-local sink is escalated separately and never rewrites a committed
+     * handoff. An unavailable sink is reported separately and never rewrites a committed
      * repository result as an HTTP failure.
      */
     def apply[A](operation: F[A], kind: OutboxKind)(shouldWake: A => Boolean): F[A] =

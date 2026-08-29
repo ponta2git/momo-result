@@ -64,7 +64,7 @@ private[bootstrap] object InMemoryApiRuntime:
           ocrMaintenance = parts.ocrMaintenance,
           appSessions = parts.repositories.appSessions,
           idempotency = parts.repositories.idempotency,
-          seriesAnalysisMaintenance = None,
+          seriesAnalysisHistory = None,
           now = Clock[F].realTimeInstant,
         ).evalMap { _ =>
           UseCaseWiring.assemble(

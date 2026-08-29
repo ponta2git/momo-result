@@ -29,12 +29,8 @@ private[config] object RedisConfigLoader:
               RedisConfig.DefaultV2DeadLetterStream,
             )
             .load[F]
-          analysisStream <- ConfigParsers
-            .envOrDefault(env, "ANALYSIS_REDIS_STREAM", RedisConfig.DefaultAnalysisStream)
-            .load[F]
         yield Some(RedisConfig(
           url = safeUrl,
           v2Stream = v2Stream,
           v2DeadLetterStream = v2DeadLetterStream,
-          analysisStream = analysisStream,
         ))

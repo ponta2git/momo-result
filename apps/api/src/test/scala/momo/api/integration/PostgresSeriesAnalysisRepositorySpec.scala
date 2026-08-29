@@ -14,7 +14,6 @@ import io.circe.{parser, Json}
 import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.adapters.postgres.{
   PostgresGameTitlesRepository,
-  PostgresSeriesAnalysisQueueOutboxRepository,
   PostgresSeriesAnalysisRepository
 }
 import momo.api.config.SeriesAnalysisReadConfig
@@ -154,20 +153,6 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
         ORDER BY game_title_id
       """.query[(String, Long, String, Int, String, Option[String])].to[List]
         .transact(transactor)
-      outbox = PostgresSeriesAnalysisQueueOutboxRepository[IO](transactor)
-      expanded <- (
-        outbox.expandPendingCampaignTargets(now, 10),
-        outbox.expandPendingCampaignTargets(now, 10),
-      ).parTupled
-      expansionReplay <- outbox.expandPendingCampaignTargets(now, 10)
-      expandedCounts <- sql"""
-        SELECT
-          (SELECT COUNT(*)::int FROM series_analysis_job_requests),
-          (SELECT COUNT(*)::int FROM series_analysis_jobs),
-          (SELECT COUNT(*)::int FROM series_analysis_queue_outbox),
-          (SELECT expanded_count FROM series_analysis_campaigns),
-          (SELECT status FROM series_analysis_campaigns)
-      """.query[(Int, Int, Int, Int, String)].unique.transact(transactor)
     yield
       assertEquals(replay, first)
       first match
@@ -185,11 +170,8 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
           (id, 0L, "series-analysis-v1", 1, "pending", None)
         ),
       )
-      assertEquals(expanded._1 + expanded._2, 2)
-      assertEquals(expansionReplay, 0)
-      assertEquals(expandedCounts, (2, 2, 2, 2, "running"))
 
-  test("deleting a title closes its expanded campaign work without retaining an active job"):
+  test("deleting a title closes its pending campaign target"):
     val artifactPayload = "{}".getBytes(StandardCharsets.UTF_8)
     for
       _ <- seedTitle
@@ -197,92 +179,24 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
       _ <- pointToArtifacts("artifact-analysis-delete", None)
       analysis <- repository
       _ <- analysis.requestAllRecalculation(accountId, "hash-delete-campaign")
-      outbox = PostgresSeriesAnalysisQueueOutboxRepository[IO](transactor)
-      _ <- outbox.expandPendingCampaignTargets(now, 10)
       _ <- new PostgresGameTitlesRepository[IO](transactor).delete(titleId)
       state <- sql"""
         SELECT
           (SELECT status FROM series_analysis_campaign_targets),
-          (SELECT status FROM series_analysis_job_requests),
-          (SELECT assigned_job_id FROM series_analysis_job_requests),
           (SELECT status FROM series_analysis_campaigns),
           (SELECT terminal_count FROM series_analysis_campaigns),
           (SELECT skipped_count FROM series_analysis_campaigns),
           (SELECT status FROM series_analysis_operation_requests),
+          (SELECT COUNT(*)::int FROM series_analysis_job_requests),
           (SELECT COUNT(*)::int FROM series_analysis_jobs),
           (SELECT COUNT(*)::int FROM series_analysis_queue_outbox),
           (SELECT COUNT(*)::int FROM series_analysis_artifacts)
-      """.query[(String, String, Option[String], String, Int, Int, String, Int, Int, Int)].unique
+      """.query[(String, String, Int, Int, String, Int, Int, Int, Int)].unique
         .transact(transactor)
     yield assertEquals(
       state,
-      ("skipped_title_deleted", "fulfilled", None, "terminal", 1, 1, "terminal", 0, 0, 0),
+      ("skipped_title_deleted", "terminal", 1, 1, "terminal", 0, 0, 0, 0),
     )
-
-  test("campaign expansion joins only running attempts that started after acceptance"):
-    val olderTitleId = GameTitleId.unsafeFromString("title-analysis-running-before")
-    val newerTitleId = GameTitleId.unsafeFromString("title-analysis-running-after")
-    val titles = new PostgresGameTitlesRepository[IO](transactor)
-    for
-      _ <- titles.createWithNextDisplayOrder(
-        GameTitle(olderTitleId, "受理前実行", "momotetsu2", 1, now)
-      )
-      _ <- titles.createWithNextDisplayOrder(
-        GameTitle(newerTitleId, "受理後実行", "momotetsu2", 2, now)
-      )
-      analysis <- repository
-      _ <- analysis.requestAllRecalculation(accountId, "hash-running-race")
-      acceptedAt <- sql"SELECT accepted_at FROM series_analysis_campaigns".query[Instant].unique
-        .transact(transactor)
-      _ <- sql"""
-        INSERT INTO series_analysis_jobs (
-          id, game_title_id, input_revision, algorithm_version,
-          artifact_schema_version, status, trigger, requested_at, available_at,
-          started_at, lease_owner, lease_attempt_id, lease_fencing_token, lease_expires_at
-        ) VALUES
-          (
-            'job-running-before', $olderTitleId, 0, 'series-analysis-v1', 1,
-            'running', 'match_mutation', ${acceptedAt.minusSeconds(1)},
-            ${acceptedAt.minusSeconds(1)}, ${acceptedAt.minusSeconds(1)},
-            'worker-before', 'attempt-before', 1, ${acceptedAt.plusSeconds(60)}
-          ),
-          (
-            'job-running-after', $newerTitleId, 0, 'series-analysis-v1', 1,
-            'running', 'match_mutation', ${acceptedAt.plusSeconds(1)},
-            ${acceptedAt.plusSeconds(1)}, ${acceptedAt.plusSeconds(1)},
-            'worker-after', 'attempt-after', 1, ${acceptedAt.plusSeconds(60)}
-          )
-      """.update.run.transact(transactor)
-      outbox = PostgresSeriesAnalysisQueueOutboxRepository[IO](transactor)
-      expanded <- outbox.expandPendingCampaignTargets(acceptedAt.plusSeconds(2), 10)
-      rows <- sql"""
-        SELECT t.game_title_id, r.status, r.assigned_job_id, r.assigned_attempt_id,
-               t.status, s.pending_forced_run_count
-        FROM series_analysis_campaign_targets t
-        JOIN series_analysis_job_requests r ON r.id = t.job_request_id
-        JOIN series_analysis_title_states s ON s.game_title_id = t.game_title_id
-        ORDER BY t.game_title_id
-      """.query[(String, String, Option[String], Option[String], String, Int)].to[List]
-        .transact(transactor)
-      outboxCount <- sql"SELECT COUNT(*)::int FROM series_analysis_queue_outbox".query[Int]
-        .unique.transact(transactor)
-    yield
-      assertEquals(expanded, 2)
-      assertEquals(
-        rows,
-        List(
-          (
-            newerTitleId.value,
-            "assigned",
-            Some("job-running-after"),
-            Some("attempt-after"),
-            "running",
-            0,
-          ),
-          (olderTitleId.value, "pending", None, None, "expanded", 1),
-        ).sortBy(_._1),
-      )
-      assertEquals(outboxCount, 0)
 
   test("aggregate reader accepts only current or previous bounded checksummed chunk"):
     val payload = Files.readAllBytes(

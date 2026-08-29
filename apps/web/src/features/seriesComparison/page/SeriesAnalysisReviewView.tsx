@@ -24,7 +24,6 @@ import type {
   SeriesAnalysisPlaybookCard,
   SeriesComparisonReviewV3,
 } from "@/shared/api/seriesAnalysis";
-import { orderFixedMembers } from "@/shared/domain/members";
 import { Button } from "@/shared/ui/actions/Button";
 import { Disclosure } from "@/shared/ui/data/Collapsible";
 import { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
@@ -58,9 +57,7 @@ export function ReviewView({
       </Notice>
     );
   }
-  const playbookByPlayer = orderFixedMembers(
-    response.playbookByPlayer.map((entry) => ({ entry, memberId: entry.player.memberId })),
-  ).map(({ entry }) => entry);
+  const playbookByPlayer = response.playbookByPlayer;
   return (
     <section
       aria-labelledby={purposeTabId("review")}

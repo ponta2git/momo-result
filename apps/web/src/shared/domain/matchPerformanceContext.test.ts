@@ -2,7 +2,10 @@
 import { describe, expect, it } from "vitest";
 
 import { matchPerformanceContextFromArtifact } from "@/shared/domain/matchPerformanceContext";
-import { makeSeriesAnalysisMatchContext } from "@/test/msw/seriesAnalysisFixtures";
+import {
+  makeSeriesAnalysisExcludedMatchContext,
+  makeSeriesAnalysisMatchContext,
+} from "@/test/msw/seriesAnalysisFixtures";
 
 describe("matchPerformanceContextFromArtifact", () => {
   it("maps worker-computed values without recalculating or rounding them", () => {
@@ -28,16 +31,11 @@ describe("matchPerformanceContextFromArtifact", () => {
     });
   });
 
-  it("maps first-observation and unavailable directions to the ledger vocabulary", () => {
+  it("maps the worker's first-observation direction to the ledger vocabulary", () => {
     const source = makeSeriesAnalysisMatchContext();
     if (!source.match) throw new Error("fixture must include a match");
     const players = [
       { ...source.match.players[0]!, cumulativeAverageDirection: "first_observation" as const },
-      {
-        ...source.match.players[0]!,
-        cumulativeAverageDirection: "unavailable" as const,
-        memberId: "member_other",
-      },
     ];
 
     const context = matchPerformanceContextFromArtifact({
@@ -45,19 +43,22 @@ describe("matchPerformanceContextFromArtifact", () => {
       match: { ...source.match, players },
     });
 
-    expect(context?.rows.map((row) => row.trend)).toEqual(["firstMatch", "unavailable"]);
+    expect(context?.rows.map((row) => row.trend)).toEqual(["firstMatch"]);
+  });
+
+  it("maps an unavailable revenue rank to the presentation absence value", () => {
+    const source = makeSeriesAnalysisMatchContext();
+    if (!source.match) throw new Error("fixture must include a match");
+    source.match.players[0]!.revenueRank = null;
+
+    expect(matchPerformanceContextFromArtifact(source)?.rows[0]?.revenueRank).toBeUndefined();
   });
 
   it.each(["match_changed_since_artifact", "not_in_artifact", "not_in_scope"] as const)(
     "returns no stale context for inclusion status %s",
     (status) => {
-      const source = makeSeriesAnalysisMatchContext();
       expect(
-        matchPerformanceContextFromArtifact({
-          ...source,
-          inclusion: { status },
-          match: null,
-        }),
+        matchPerformanceContextFromArtifact(makeSeriesAnalysisExcludedMatchContext(status)),
       ).toBeUndefined();
     },
   );

@@ -46,16 +46,22 @@ export async function createGameTitle(
 export async function updateGameTitle(
   id: string,
   request: UpdateGameTitleRequest,
+  options: IdempotencyRequestOptions,
 ): Promise<GameTitleResponse> {
   return apiRequest<GameTitleResponse>(`/api/game-titles/${encodeURIComponent(id)}`, {
     method: "PATCH",
     body: request,
+    idempotency: { key: options.idempotencyKey },
   });
 }
 
-export async function deleteGameTitle(id: string): Promise<DeleteMasterResponse> {
+export async function deleteGameTitle(
+  id: string,
+  options: IdempotencyRequestOptions,
+): Promise<DeleteMasterResponse> {
   return apiRequest<DeleteMasterResponse>(`/api/game-titles/${encodeURIComponent(id)}`, {
     method: "DELETE",
+    idempotency: { key: options.idempotencyKey },
   });
 }
 
@@ -83,16 +89,22 @@ export async function createMapMaster(
 export async function updateMapMaster(
   id: string,
   request: UpdateMapMasterRequest,
+  options: IdempotencyRequestOptions,
 ): Promise<MapMasterResponse> {
   return apiRequest<MapMasterResponse>(`/api/map-masters/${encodeURIComponent(id)}`, {
     method: "PATCH",
     body: request,
+    idempotency: { key: options.idempotencyKey },
   });
 }
 
-export async function deleteMapMaster(id: string): Promise<DeleteMasterResponse> {
+export async function deleteMapMaster(
+  id: string,
+  options: IdempotencyRequestOptions,
+): Promise<DeleteMasterResponse> {
   return apiRequest<DeleteMasterResponse>(`/api/map-masters/${encodeURIComponent(id)}`, {
     method: "DELETE",
+    idempotency: { key: options.idempotencyKey },
   });
 }
 
@@ -120,16 +132,22 @@ export async function createSeasonMaster(
 export async function updateSeasonMaster(
   id: string,
   request: UpdateSeasonMasterRequest,
+  options: IdempotencyRequestOptions,
 ): Promise<SeasonMasterResponse> {
   return apiRequest<SeasonMasterResponse>(`/api/season-masters/${encodeURIComponent(id)}`, {
     method: "PATCH",
     body: request,
+    idempotency: { key: options.idempotencyKey },
   });
 }
 
-export async function deleteSeasonMaster(id: string): Promise<DeleteMasterResponse> {
+export async function deleteSeasonMaster(
+  id: string,
+  options: IdempotencyRequestOptions,
+): Promise<DeleteMasterResponse> {
   return apiRequest<DeleteMasterResponse>(`/api/season-masters/${encodeURIComponent(id)}`, {
     method: "DELETE",
+    idempotency: { key: options.idempotencyKey },
   });
 }
 
@@ -159,15 +177,21 @@ export async function createMemberAlias(
 export async function updateMemberAlias(
   id: string,
   request: UpdateMemberAliasRequest,
+  options: IdempotencyRequestOptions,
 ): Promise<MemberAliasResponse> {
   return apiRequest<MemberAliasResponse>(`/api/member-aliases/${encodeURIComponent(id)}`, {
     method: "PATCH",
     body: request,
+    idempotency: { key: options.idempotencyKey },
   });
 }
 
-export async function deleteMemberAlias(id: string): Promise<DeleteMasterResponse> {
+export async function deleteMemberAlias(
+  id: string,
+  options: IdempotencyRequestOptions,
+): Promise<DeleteMasterResponse> {
   return apiRequest<DeleteMasterResponse>(`/api/member-aliases/${encodeURIComponent(id)}`, {
     method: "DELETE",
+    idempotency: { key: options.idempotencyKey },
   });
 }

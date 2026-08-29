@@ -1,12 +1,15 @@
 package momo.api.adapters.postgres
 
 import java.nio.charset.StandardCharsets
+import java.nio.file.Files
 import java.security.MessageDigest
 import java.time.Instant
 
 import cats.effect.IO
 import cats.effect.std.Semaphore
 import cats.syntax.all.*
+import io.circe.Json
+import io.circe.parser.parse
 import munit.CatsEffectSuite
 
 import momo.api.config.SeriesAnalysisReadConfig
@@ -18,8 +21,9 @@ import momo.api.domain.{
   SeriesAnalysisScope
 }
 import momo.api.errors.AppError
+import momo.api.testing.JsonSchemaAssertions
 
-final class PostgresSeriesAnalysisReadBoundSpec extends CatsEffectSuite:
+final class PostgresSeriesAnalysisReadBoundSpec extends CatsEffectSuite with JsonSchemaAssertions:
   private val gameTitleId = GameTitleId.unsafeFromString("title-read-bound")
   private val scope = SeriesAnalysisScope.Overall
   private val request = SeriesAnalysisChunkRequest(
@@ -28,10 +32,6 @@ final class PostgresSeriesAnalysisReadBoundSpec extends CatsEffectSuite:
     "artifact-read-bound",
     scope,
   )
-  private val AggregatePrefix =
-    """{"schemaVersion":3,"scope":{"kind":"overall","matchCount":0},"players":[],"summary":"""
-  private val AggregateSuffix =
-    ""","metricsByPlayer":[],"rankDistribution":[],"recentRanks":[],"strategyScatter":{},"playOrderComparison":[],"revenueRankConversion":[],"trends":[],"histograms":{},"headToHead":[],"momentumSwitch":{},"performanceProfiles":{},"assetStyleProfiles":{},"cardShopDestination":{},"matchDigest":[],"matchNoInEvent":[],"rankAnalysis":{},"highlights":[],"dataQuality":{},"metricDefinitions":[],"source":{}}"""
 
   test("timed out reads return a retryable error and release the decode permit"):
     val config = SeriesAnalysisReadConfig.defaults.copy(
@@ -69,15 +69,15 @@ final class PostgresSeriesAnalysisReadBoundSpec extends CatsEffectSuite:
       )
       assertEquals(wasStarted, false)
 
-  test("maximum accepted fixture materializes at the configured concurrency"):
-    val config = SeriesAnalysisReadConfig.defaults
+  test("an owner-valid fixture materializes at exact configured bounds and concurrency"):
     for
-      payload <- IO.blocking(maximumAcceptedPayload(config))
+      fixture <- IO.blocking(exactBoundedFixture())
+      (payload, config, nestingDepth) = fixture
       results <- List.range(0, config.decodeConcurrency).parTraverse(_ =>
         IO.blocking {
           val privatePayload = payload.clone()
           PostgresSeriesAnalysisChunkCodec
-            .decode(stored(privatePayload, nestingDepth = 4), request, config, None)
+            .decode(stored(privatePayload, nestingDepth), request, config, None)
             .flatMap(decoded =>
               Either.cond(
                 decoded.nodeCount == config.maxJsonNodes,
@@ -97,75 +97,44 @@ final class PostgresSeriesAnalysisReadBoundSpec extends CatsEffectSuite:
       )
     yield
       assertEquals(results.size, config.decodeConcurrency)
-      assert(config.maxEncodedBytes - payload.length.toLong <= 4096L)
+      assertEquals(payload.length.toLong, config.maxEncodedBytes)
       results.foreach {
         case Right(chunk) => assertEquals(chunk.payload.length.toLong, config.maxResponseBytes)
         case Left(error) => fail(s"maximum concurrent materialization failed: $error")
       }
 
-  private def maximumAcceptedPayload(config: SeriesAnalysisReadConfig): Array[Byte] =
-    val emptyPayload = aggregate("""{"nodes":[],"padding":""}""")
-      .getBytes(StandardCharsets.UTF_8)
-    val baseNodeCount = PostgresSeriesAnalysisChunkCodec
-      .decode(stored(emptyPayload, nestingDepth = 3), request, config, None)
-      .fold(error => fail(s"invalid empty maximum fixture: $error"), _.nodeCount)
-    val scalarNodeCount = config.maxJsonNodes - baseNodeCount
-    assert(scalarNodeCount > 0)
-
-    val unpadded = aggregateWithScalarNodes(scalarNodeCount, targetBytes = 0)
-    val preliminary = PostgresSeriesAnalysisChunkCodec
-      .decode(stored(unpadded, nestingDepth = 4), request, config, None)
-      .flatMap(decoded =>
-        PostgresSeriesAnalysisChunkCodec.hydrateAndRender(
-          decoded,
-          Map.empty,
-          Some("総合"),
-          config.copy(maxResponseBytes = Long.MaxValue),
-        )
+  private def exactBoundedFixture(): (Array[Byte], SeriesAnalysisReadConfig, Int) =
+    val payload = Files.readAllBytes(
+      repositoryFile("docs/schemas/fixtures/series-analysis/aggregate-payload-v3.json")
+    )
+    val parsed = parse(new String(payload, StandardCharsets.UTF_8))
+      .fold(error => fail(s"invalid owner aggregate fixture: $error"), identity)
+    val nestingDepth = jsonDepth(parsed)
+    val defaults = SeriesAnalysisReadConfig.defaults
+    val decoded = PostgresSeriesAnalysisChunkCodec
+      .decode(stored(payload, nestingDepth), request, defaults, None)
+      .fold(error => fail(s"invalid owner aggregate fixture: $error"), identity)
+    val rendered = PostgresSeriesAnalysisChunkCodec
+      .hydrateAndRender(
+        decoded,
+        Map.empty,
+        Some("総合"),
+        defaults.copy(maxResponseBytes = Long.MaxValue),
       )
-      .fold(error => fail(s"invalid unpadded maximum fixture: $error"), identity)
-    val responseOverhead = preliminary.payload.length - unpadded.length
-    assert(responseOverhead > 0)
-    val targetBytes = math.min(
-      config.maxEncodedBytes,
-      config.maxResponseBytes - responseOverhead.toLong,
-    ).toInt
+      .fold(error => fail(s"owner aggregate hydration failed: $error"), identity)
+    val exactConfig = defaults.copy(
+      maxEncodedBytes = payload.length.toLong,
+      maxDecodedBytes = payload.length.toLong,
+      maxResponseBytes = rendered.payload.length.toLong,
+      maxJsonNodes = decoded.nodeCount,
+    )
+    (payload, exactConfig, nestingDepth)
 
-    aggregateWithScalarNodes(scalarNodeCount, targetBytes)
-
-  private def aggregateWithScalarNodes(
-      scalarNodeCount: Int,
-      targetBytes: Int,
-  ): Array[Byte] =
-    // A fixed array avoids constructing another maximum-size String just to create the fixture.
-    // scalafix:off DisableSyntax.var
-    val prefix = (AggregatePrefix + """{"nodes":[""").getBytes(StandardCharsets.UTF_8)
-    val paddingPrefix = "],\"padding\":\"".getBytes(StandardCharsets.UTF_8)
-    val suffix = ("\"}" + AggregateSuffix).getBytes(StandardCharsets.UTF_8)
-    val scalarBytes = scalarNodeCount * 2 - 1
-    val fixedBytes = prefix.length + scalarBytes + paddingPrefix.length + suffix.length
-    val actualTarget = if targetBytes == 0 then fixedBytes else targetBytes
-    val paddingBytes = actualTarget - fixedBytes
-    assert(paddingBytes >= 0)
-
-    val payload = new Array[Byte](actualTarget)
-    System.arraycopy(prefix, 0, payload, 0, prefix.length)
-    var offset = prefix.length
-    var index = 0
-    while index < scalarNodeCount do
-      if index > 0 then
-        payload(offset) = ','.toByte
-        offset += 1
-      payload(offset) = '0'.toByte
-      offset += 1
-      index += 1
-    System.arraycopy(paddingPrefix, 0, payload, offset, paddingPrefix.length)
-    offset += paddingPrefix.length
-    java.util.Arrays.fill(payload, offset, offset + paddingBytes, 'a'.toByte)
-    offset += paddingBytes
-    System.arraycopy(suffix, 0, payload, offset, suffix.length)
-    // scalafix:on DisableSyntax.var
-    payload
+  private def jsonDepth(value: Json): Int = value.arrayOrObject(
+    1,
+    values => 1 + values.map(jsonDepth).maxOption.getOrElse(0),
+    fields => 1 + fields.values.map(jsonDepth).maxOption.getOrElse(0),
+  )
 
   private def stored(
       payload: Array[Byte],
@@ -185,8 +154,6 @@ final class PostgresSeriesAnalysisReadBoundSpec extends CatsEffectSuite:
     nestingDepth = Some(nestingDepth),
     checksum = Some(sha256(payload)),
   )
-
-  private def aggregate(summary: String): String = AggregatePrefix + summary + AggregateSuffix
 
   private def sha256(bytes: Array[Byte]): String =
     val digest = MessageDigest.getInstance("SHA-256").digest(bytes)

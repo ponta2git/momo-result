@@ -1,6 +1,7 @@
 package momo.api.adapters.postgres
 
 import java.nio.charset.StandardCharsets
+import java.nio.file.Files
 import java.security.MessageDigest
 import java.time.Instant
 
@@ -17,8 +18,9 @@ import momo.api.domain.{
   SeriesAnalysisScope
 }
 import momo.api.errors.AppError
+import momo.api.testing.JsonSchemaAssertions
 
-final class PostgresSeriesAnalysisChunkCodecSpec extends FunSuite:
+final class PostgresSeriesAnalysisChunkCodecSpec extends FunSuite with JsonSchemaAssertions:
   private val gameTitleId = GameTitleId.unsafeFromString("title-chunk-codec")
   private val scope = SeriesAnalysisScope.Overall
   private val request = SeriesAnalysisChunkRequest(
@@ -29,7 +31,7 @@ final class PostgresSeriesAnalysisChunkCodecSpec extends FunSuite:
   )
 
   test("rejects malformed UTF-8 instead of decoding replacement characters"):
-    val payload = aggregate("{\"note\":\"~\"}").getBytes(StandardCharsets.UTF_8)
+    val payload = aggregateFixture.replace("title-fixture", "~").getBytes(StandardCharsets.UTF_8)
     val markerIndex = payload.indexOf('~'.toByte)
     assert(markerIndex >= 0)
     payload(markerIndex) = 0x80.toByte
@@ -37,7 +39,7 @@ final class PostgresSeriesAnalysisChunkCodecSpec extends FunSuite:
     assertInternal(
       PostgresSeriesAnalysisChunkCodec
         .decode(
-          stored(payload, nestingDepth = 3),
+          stored(payload, nestingDepth = nestingDepth(aggregateFixture)),
           request,
           SeriesAnalysisReadConfig.defaults,
           None
@@ -47,12 +49,12 @@ final class PostgresSeriesAnalysisChunkCodecSpec extends FunSuite:
 
   test("rejects more than four distinct member identifiers before building a SQL IN clause"):
     val members = (1 to 5).map(index => s"{\"memberId\":\"member-$index\"}").mkString(",")
-    val text = aggregate(s"{\"members\":[$members]}")
+    val text = s"{\"members\":[$members]}"
     val payload = text.getBytes(StandardCharsets.UTF_8)
 
     assertInternal(
       PostgresSeriesAnalysisChunkCodec.decode(
-        stored(payload, nestingDepth = 5),
+        stored(payload, nestingDepth = nestingDepth(text)),
         request,
         SeriesAnalysisReadConfig.defaults,
         None,
@@ -61,13 +63,13 @@ final class PostgresSeriesAnalysisChunkCodecSpec extends FunSuite:
     )
 
   test("rejects a payload whose checksum differs from bounded metadata"):
-    val payload = aggregate("{}").getBytes(StandardCharsets.UTF_8)
+    val payload = aggregateFixture.getBytes(StandardCharsets.UTF_8)
 
     assertInternal(
       PostgresSeriesAnalysisChunkCodec.decode(
         storedWithChecksum(
           payload,
-          nestingDepth = 3,
+          nestingDepth = nestingDepth(aggregateFixture),
           checksum = "sha256:" + ("0" * 64),
         ),
         request,
@@ -78,13 +80,12 @@ final class PostgresSeriesAnalysisChunkCodecSpec extends FunSuite:
     )
 
   test("rejects a payload whose actual depth differs from bounded metadata"):
-    val payload = aggregate("{\"nested\":{\"value\":1}}")
-      .getBytes(StandardCharsets.UTF_8)
+    val payload = aggregateFixture.getBytes(StandardCharsets.UTF_8)
 
     assertInternal(
       PostgresSeriesAnalysisChunkCodec
         .decode(
-          stored(payload, nestingDepth = 3),
+          stored(payload, nestingDepth = nestingDepth(aggregateFixture) - 1),
           request,
           SeriesAnalysisReadConfig.defaults,
           None
@@ -93,25 +94,36 @@ final class PostgresSeriesAnalysisChunkCodecSpec extends FunSuite:
     )
 
   test("pre-parse depth scan ignores structural characters inside JSON strings"):
-    val text = aggregate("{\"note\":\"{{[[\\\"quoted\\\"]]}}\"}")
+    val text = parse(aggregateFixture)
+      .fold(error => fail(s"invalid aggregate fixture: $error"), identity)
+      .hcursor.downField("source")
+      .downField("gameTitleId")
+      .withFocus(_ => Json.fromString("{{[[\"quoted\"]]}}"))
+      .top.getOrElse(fail("failed to update source gameTitleId"))
+      .noSpaces
     val payload = text.getBytes(StandardCharsets.UTF_8)
 
     assertEquals(
       PostgresSeriesAnalysisChunkCodec
-        .decode(stored(payload, nestingDepth = 3), request, SeriesAnalysisReadConfig.defaults, None)
+        .decode(
+          stored(payload, nestingDepth = nestingDepth(text)),
+          request,
+          SeriesAnalysisReadConfig.defaults,
+          None,
+        )
         .map(_.payload),
       parse(text).left.map(error => fail(s"invalid test fixture: $error")),
     )
 
   test("rejects an isolated surrogate introduced by a JSON Unicode escape"):
     val isolatedSurrogateEscape = "\\u" + "D800"
-    val text = aggregate(s"""{"note":"$isolatedSurrogateEscape"}""")
+    val text = aggregateFixture.replace("title-fixture", isolatedSurrogateEscape)
     val payload = text.getBytes(StandardCharsets.UTF_8)
 
     assertInternal(
       PostgresSeriesAnalysisChunkCodec
         .decode(
-          stored(payload, nestingDepth = 3),
+          stored(payload, nestingDepth = nestingDepth(aggregateFixture)),
           request,
           SeriesAnalysisReadConfig.defaults,
           None
@@ -139,10 +151,10 @@ final class PostgresSeriesAnalysisChunkCodecSpec extends FunSuite:
     )
 
   test("rejects a decoded tree above the configured JSON node bound"):
-    val payload = aggregate("{}").getBytes(StandardCharsets.UTF_8)
+    val payload = aggregateFixture.getBytes(StandardCharsets.UTF_8)
     assertInternal(
       PostgresSeriesAnalysisChunkCodec.decode(
-        stored(payload, nestingDepth = 3),
+        stored(payload, nestingDepth = nestingDepth(aggregateFixture)),
         request,
         SeriesAnalysisReadConfig.defaults.copy(maxJsonNodes = 1),
         None,
@@ -151,7 +163,16 @@ final class PostgresSeriesAnalysisChunkCodecSpec extends FunSuite:
     )
 
   test("hydrates display metadata only when every referenced member is available"):
-    val decoded = decodedAggregate().copy(memberIds = List("member-ponta"))
+    val decoded = decodedAggregate().copy(
+      payload = Json.obj(
+        "player" -> Json.obj("memberId" -> Json.fromString("member-ponta")),
+        "scope" -> Json.obj(
+          "kind" -> Json.fromString("overall"),
+          "matchCount" -> Json.fromInt(0),
+        ),
+      ),
+      memberIds = List("member-ponta"),
+    )
     val hydrated = PostgresSeriesAnalysisChunkCodec.hydrateAndRender(
       decoded,
       Map("member-ponta" -> "ぽんた"),
@@ -161,9 +182,14 @@ final class PostgresSeriesAnalysisChunkCodecSpec extends FunSuite:
 
     assertEquals(
       hydrated.flatMap(chunk =>
-        parsePayload(chunk.payload).map(_.hcursor.downField("scope").get[String]("displayName"))
+        parsePayload(chunk.payload).map(payload =>
+          (
+            payload.hcursor.downField("scope").get[String]("displayName"),
+            payload.hcursor.downField("player").get[String]("displayName"),
+          )
+        )
       ),
-      Right(Right("総合")),
+      Right((Right("総合"), Right("ぽんた"))),
     )
     assertInternal(
       PostgresSeriesAnalysisChunkCodec.hydrateAndRender(
@@ -192,6 +218,27 @@ final class PostgresSeriesAnalysisChunkCodecSpec extends FunSuite:
       List("match_changed_since_artifact", "not_in_artifact", "not_in_scope"),
     )
 
+  test("moves the included match revision into the public inclusion envelope"):
+    val original = DecodedSeriesAnalysisChunk(
+      artifact = artifact,
+      scope = scope,
+      payload = Json.obj(
+        "schemaVersion" -> Json.fromInt(1),
+        "sourceMatchRevision" -> Json.fromString("7"),
+      ),
+      memberIds = Nil,
+      nodeCount = 3,
+    )
+
+    val included = PostgresSeriesAnalysisChunkCodec.includedContext(original, 7)
+
+    assertEquals(included.payload.hcursor.get[String]("sourceMatchRevision").toOption, None)
+    assertEquals(
+      included.payload.hcursor.downField("inclusion").get[String]("sourceMatchRevision"),
+      Right("7"),
+    )
+    assertEquals(included.nodeCount, 5)
+
   private def stored(
       payload: Array[Byte],
       nestingDepth: Int,
@@ -218,10 +265,24 @@ final class PostgresSeriesAnalysisChunkCodecSpec extends FunSuite:
       checksum = Some(checksum),
     )
 
+  private def artifact = momo.api.domain.SeriesAnalysisArtifactRef(
+    request.artifactId,
+    gameTitleId,
+    0,
+    "series-analysis-v1",
+    2,
+    Instant.parse("2026-08-09T00:00:00Z"),
+  )
+
   private def decodedAggregate() =
-    val payload = aggregate("{}").getBytes(StandardCharsets.UTF_8)
+    val payload = aggregateFixture.getBytes(StandardCharsets.UTF_8)
     PostgresSeriesAnalysisChunkCodec
-      .decode(stored(payload, nestingDepth = 3), request, SeriesAnalysisReadConfig.defaults, None)
+      .decode(
+        stored(payload, nestingDepth = nestingDepth(aggregateFixture)),
+        request,
+        SeriesAnalysisReadConfig.defaults,
+        None,
+      )
       .fold(error => fail(s"invalid decoded aggregate fixture: $error"), identity)
 
   private def parsePayload(payload: Array[Byte]): Either[AppError, Json] =
@@ -233,8 +294,18 @@ final class PostgresSeriesAnalysisChunkCodecSpec extends FunSuite:
       case Left(AppError.Internal(detail)) => assertEquals(detail, expectedDetail)
       case other => fail(s"expected Internal($expectedDetail), got $other")
 
-  private def aggregate(summary: String): String =
-    s"""{"schemaVersion":3,"scope":{"kind":"overall","matchCount":0},"players":[],"summary":$summary,"metricsByPlayer":[],"rankDistribution":[],"recentRanks":[],"strategyScatter":{},"playOrderComparison":[],"revenueRankConversion":[],"trends":[],"histograms":{},"headToHead":[],"momentumSwitch":{},"performanceProfiles":{},"assetStyleProfiles":{},"cardShopDestination":{},"matchDigest":[],"matchNoInEvent":[],"rankAnalysis":{},"highlights":[],"dataQuality":{},"metricDefinitions":[],"source":{}}"""
+  private lazy val aggregateFixture =
+    Files.readString(
+      repositoryFile("docs/schemas/fixtures/series-analysis/aggregate-payload-v3.json")
+    )
+
+  private def nestingDepth(text: String): Int =
+    def loop(value: Json): Int = value.arrayOrObject(
+      1,
+      values => 1 + values.map(loop).maxOption.getOrElse(0),
+      fields => 1 + fields.values.map(loop).maxOption.getOrElse(0),
+    )
+    parse(text).fold(error => fail(s"invalid JSON fixture: $error"), loop)
 
   private def sha256(bytes: Array[Byte]): String =
     val digest = MessageDigest.getInstance("SHA-256").digest(bytes)

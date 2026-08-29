@@ -61,7 +61,7 @@ lazy val macOsNettyDnsResolver: Seq[ModuleID] = {
   else {
     val classifier = osArch match {
       case "aarch64" | "arm64" => "osx-aarch_64"
-      case "amd64" | "x86_64"  => "osx-x86_64"
+      case "amd64" | "x86_64" => "osx-x86_64"
       case unsupported =>
         sys.error(s"Unsupported macOS architecture for Netty DNS resolver: $unsupported")
     }
@@ -76,19 +76,20 @@ lazy val macOsNettyDnsResolver: Seq[ModuleID] = {
 // Goal: catch as many bugs as possible at compile time, and force AI-generated
 // code to be precise. Each flag is paired with a short rationale.
 lazy val sharedScalacOptions = Seq(
-  "-deprecation",                // do not silently use deprecated API
-  "-encoding", "UTF-8",
-  "-explain",                    // verbose error messages help AI/humans debug type errors
-  "-feature",                    // require explicit imports for advanced features
-  "-unchecked",                  // surface unsafe pattern matches and erasures
-  "-Wunused:all",                // unused imports/vals/params/locals/privates
-  "-Wvalue-discard",             // accidental discard of a non-Unit value is an error
-  "-Wnonunit-statement",         // expressions that compute a non-Unit value cannot be statements
-  "-Wimplausible-patterns",      // unreachable case branches (Scala 3.4+)
-  "-Wsafe-init",                 // detect bad object initialization order
-  "-Xverify-signatures",         // ensure ASM-emitted signatures match Scala types
-  "-Werror",                     // promote all warnings above to errors
-  "-language:strictEquality",    // forbid `==` between unrelated types (CanEqual required)
+  "-deprecation", // do not silently use deprecated API
+  "-encoding",
+  "UTF-8",
+  "-explain", // verbose error messages help AI/humans debug type errors
+  "-feature", // require explicit imports for advanced features
+  "-unchecked", // surface unsafe pattern matches and erasures
+  "-Wunused:all", // unused imports/vals/params/locals/privates
+  "-Wvalue-discard", // accidental discard of a non-Unit value is an error
+  "-Wnonunit-statement", // expressions that compute a non-Unit value cannot be statements
+  "-Wimplausible-patterns", // unreachable case branches (Scala 3.4+)
+  "-Wsafe-init", // detect bad object initialization order
+  "-Xverify-signatures", // ensure ASM-emitted signatures match Scala types
+  "-Werror", // promote all warnings above to errors
+  "-language:strictEquality", // forbid `==` between unrelated types (CanEqual required)
 )
 
 lazy val root = (project in file("."))
@@ -112,6 +113,29 @@ lazy val root = (project in file("."))
     Compile / doc / sources := Seq.empty,
     Compile / packageDoc / publishArtifact := false,
     Compile / mainClass := Some("momo.api.Main"),
+    Compile / resourceGenerators += Def.task {
+      val schemaNames = Seq(
+        "series-analysis-aggregate-v3.schema.json",
+        "series-analysis-drilldown-v3.schema.json",
+        "series-analysis-match-context-v1.schema.json",
+        "series-analysis-review-v3.schema.json",
+      )
+      val sourceDirectory = baseDirectory.value / ".." / ".." / "docs" / "schemas"
+      val outputDirectory = (Compile / resourceManaged).value / "momo" / "api" /
+        "series-analysis-schemas"
+      IO.createDirectory(outputDirectory)
+      schemaNames.sorted.map { schemaName =>
+        val source = sourceDirectory / schemaName
+        val output = outputDirectory / schemaName
+        if (!source.isFile) {
+          sys.error(s"Series analysis resource schema is missing: ${source.getAbsolutePath}")
+        }
+        if (!output.isFile || Files.mismatch(source.toPath, output.toPath) != -1L) {
+          IO.copyFile(source, output)
+        }
+        output
+      }
+    }.taskValue,
     Compile / run / fork := true,
     Compile / run / javaOptions ++=
       Seq("-Dcats.effect.warnOnNonMainThreadDetected=false") ++
@@ -183,7 +207,7 @@ lazy val root = (project in file("."))
         "ch.qos.logback" % "logback-classic" % logbackVersion,
         "net.logstash.logback" % "logstash-logback-encoder" % logstashEncoderVersion,
         "org.codehaus.janino" % "janino" % janinoVersion,
-        "com.networknt" % "json-schema-validator" % jsonSchemaValidatorVersion % Test,
+        "com.networknt" % "json-schema-validator" % jsonSchemaValidatorVersion,
         "org.scalameta" %% "munit" % munitVersion % Test,
         "org.testcontainers" % "testcontainers-postgresql" % testcontainersVersion % Test,
         "org.testcontainers" % "testcontainers" % testcontainersVersion % Test,

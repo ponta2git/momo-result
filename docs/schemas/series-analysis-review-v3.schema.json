@@ -1,0 +1,1148 @@
+{
+  "$comment": "Generated from apps/processing-worker/crates/analysis-core/src/payload/schema.rs; do not edit by hand. Draft 2020-12 keywords describe the portable shape, type, and bounds subset. x-momo-maxUtf8Bytes, x-momo-finiteF64, and x-momo-integerToken record constraints additionally enforced by the Rust owner validator; generic JSON Schema validation that ignores these annotations is not fully equivalent.",
+  "$id": "https://momo-result.local/schemas/series-analysis-review-v3.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "baseline": {
+      "additionalProperties": false,
+      "properties": {
+        "matchCount": {
+          "maximum": 1000000,
+          "minimum": 0,
+          "type": "integer",
+          "x-momo-integerToken": true
+        },
+        "playerCount": {
+          "maximum": 1000000,
+          "minimum": 0,
+          "type": "integer",
+          "x-momo-integerToken": true
+        },
+        "qualityStatus": {
+          "enum": [
+            "ok",
+            "reference",
+            "no_target"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "matchCount",
+        "playerCount",
+        "qualityStatus"
+      ],
+      "type": "object"
+    },
+    "commonPlaybookTopics": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "category": {
+            "enum": [
+              "revenue",
+              "destination",
+              "assets",
+              "playOrder",
+              "ginji",
+              "recovery",
+              "destinationPositive",
+              "accident"
+            ],
+            "type": "string"
+          },
+          "detail": {
+            "maxLength": 4096,
+            "minLength": 1,
+            "type": "string",
+            "x-momo-maxUtf8Bytes": 4096
+          },
+          "heading": {
+            "maxLength": 4096,
+            "minLength": 1,
+            "type": "string",
+            "x-momo-maxUtf8Bytes": 4096
+          },
+          "playerIds": {
+            "items": {
+              "maxLength": 4096,
+              "minLength": 1,
+              "type": "string",
+              "x-momo-maxUtf8Bytes": 4096
+            },
+            "maxItems": 1000000,
+            "type": "array"
+          },
+          "topicId": {
+            "maxLength": 4096,
+            "minLength": 1,
+            "type": "string",
+            "x-momo-maxUtf8Bytes": 4096
+          }
+        },
+        "required": [
+          "category",
+          "detail",
+          "heading",
+          "playerIds",
+          "topicId"
+        ],
+        "type": "object"
+      },
+      "maxItems": 2,
+      "type": "array"
+    },
+    "dataQuality": {
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "denominator": {
+                "maximum": 1000000,
+                "minimum": 0,
+                "type": "integer",
+                "x-momo-integerToken": true
+              },
+              "hasTies": {
+                "type": "boolean"
+              },
+              "memberId": {
+                "maxLength": 4096,
+                "minLength": 1,
+                "type": "string",
+                "x-momo-maxUtf8Bytes": 4096
+              },
+              "metricId": {
+                "maxLength": 4096,
+                "minLength": 1,
+                "type": "string",
+                "x-momo-maxUtf8Bytes": 4096
+              },
+              "qualityStatus": {
+                "enum": [
+                  "ok",
+                  "reference",
+                  "no_target"
+                ],
+                "type": "string"
+              },
+              "targetCount": {
+                "maximum": 1000000,
+                "minimum": 0,
+                "type": "integer",
+                "x-momo-integerToken": true
+              }
+            },
+            "required": [
+              "denominator",
+              "hasTies",
+              "memberId",
+              "metricId",
+              "qualityStatus",
+              "targetCount"
+            ],
+            "type": "object"
+          },
+          "maxItems": 1000000,
+          "type": "array"
+        },
+        "summary": {
+          "additionalProperties": false,
+          "properties": {
+            "noTargetCount": {
+              "maximum": 1000000,
+              "minimum": 0,
+              "type": "integer",
+              "x-momo-integerToken": true
+            },
+            "okCount": {
+              "maximum": 1000000,
+              "minimum": 0,
+              "type": "integer",
+              "x-momo-integerToken": true
+            },
+            "referenceCount": {
+              "maximum": 1000000,
+              "minimum": 0,
+              "type": "integer",
+              "x-momo-integerToken": true
+            }
+          },
+          "required": [
+            "noTargetCount",
+            "okCount",
+            "referenceCount"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "items",
+        "summary"
+      ],
+      "type": "object"
+    },
+    "playbookByPlayer": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "player": {
+            "additionalProperties": false,
+            "properties": {
+              "memberId": {
+                "maxLength": 4096,
+                "minLength": 1,
+                "type": "string",
+                "x-momo-maxUtf8Bytes": 4096
+              }
+            },
+            "required": [
+              "memberId"
+            ],
+            "type": "object"
+          },
+          "primaryCard": {
+            "anyOf": [
+              {
+                "type": "null"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "actionAdviceScore": {
+                    "maximum": 1.7976931348623157e+308,
+                    "minimum": -1.7976931348623157e+308,
+                    "type": "number",
+                    "x-momo-finiteF64": true
+                  },
+                  "actionHypothesis": {
+                    "maxLength": 4096,
+                    "minLength": 1,
+                    "type": "string",
+                    "x-momo-maxUtf8Bytes": 4096
+                  },
+                  "anchorTarget": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "label": {
+                        "maxLength": 4096,
+                        "minLength": 1,
+                        "type": "string",
+                        "x-momo-maxUtf8Bytes": 4096
+                      },
+                      "sectionId": {
+                        "enum": [
+                          "metric-revenue-outcome",
+                          "metric-destination-outcome",
+                          "metric-money",
+                          "metric-play-order",
+                          "metric-ginji",
+                          "metric-momentum-switch",
+                          "metric-match-digest"
+                        ],
+                        "type": "string"
+                      },
+                      "view": {
+                        "enum": [
+                          "drivers",
+                          "context",
+                          "flow"
+                        ],
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "label",
+                      "sectionId",
+                      "view"
+                    ],
+                    "type": "object"
+                  },
+                  "avoidAction": {
+                    "maxLength": 4096,
+                    "minLength": 1,
+                    "type": "string",
+                    "x-momo-maxUtf8Bytes": 4096
+                  },
+                  "cardId": {
+                    "maxLength": 4096,
+                    "minLength": 1,
+                    "type": "string",
+                    "x-momo-maxUtf8Bytes": 4096
+                  },
+                  "category": {
+                    "enum": [
+                      "revenue",
+                      "destination",
+                      "assets",
+                      "playOrder",
+                      "ginji",
+                      "recovery",
+                      "destinationPositive",
+                      "accident"
+                    ],
+                    "type": "string"
+                  },
+                  "classification": {
+                    "enum": [
+                      "reproduce",
+                      "revise",
+                      "verify"
+                    ],
+                    "type": "string"
+                  },
+                  "dataReason": {
+                    "maxLength": 4096,
+                    "minLength": 1,
+                    "type": "string",
+                    "x-momo-maxUtf8Bytes": 4096
+                  },
+                  "evidence": {
+                    "items": false,
+                    "maxItems": 2,
+                    "minItems": 2,
+                    "prefixItems": [
+                      {
+                        "additionalProperties": false,
+                        "properties": {
+                          "denominator": {
+                            "maximum": 1000000,
+                            "minimum": 0,
+                            "type": "integer",
+                            "x-momo-integerToken": true
+                          },
+                          "label": {
+                            "maxLength": 4096,
+                            "minLength": 1,
+                            "type": "string",
+                            "x-momo-maxUtf8Bytes": 4096
+                          },
+                          "metricId": {
+                            "maxLength": 4096,
+                            "minLength": 1,
+                            "type": "string",
+                            "x-momo-maxUtf8Bytes": 4096
+                          },
+                          "qualityStatus": {
+                            "enum": [
+                              "ok",
+                              "reference",
+                              "no_target"
+                            ],
+                            "type": "string"
+                          },
+                          "stabilityBand": {
+                            "enum": [
+                              "high",
+                              "medium",
+                              "low"
+                            ],
+                            "type": "string"
+                          },
+                          "targetCount": {
+                            "maximum": 1000000,
+                            "minimum": 0,
+                            "type": "integer",
+                            "x-momo-integerToken": true
+                          },
+                          "unit": {
+                            "enum": [
+                              "rate",
+                              "score"
+                            ],
+                            "type": "string"
+                          },
+                          "value": {
+                            "maximum": 1.7976931348623157e+308,
+                            "minimum": -1.7976931348623157e+308,
+                            "type": "number",
+                            "x-momo-finiteF64": true
+                          }
+                        },
+                        "required": [
+                          "denominator",
+                          "label",
+                          "metricId",
+                          "qualityStatus",
+                          "stabilityBand",
+                          "targetCount",
+                          "unit",
+                          "value"
+                        ],
+                        "type": "object"
+                      },
+                      {
+                        "additionalProperties": false,
+                        "properties": {
+                          "confidenceHigh": {
+                            "anyOf": [
+                              {
+                                "type": "null"
+                              },
+                              {
+                                "maximum": 1.7976931348623157e+308,
+                                "minimum": -1.7976931348623157e+308,
+                                "type": "number",
+                                "x-momo-finiteF64": true
+                              }
+                            ]
+                          },
+                          "confidenceLow": {
+                            "anyOf": [
+                              {
+                                "type": "null"
+                              },
+                              {
+                                "maximum": 1.7976931348623157e+308,
+                                "minimum": -1.7976931348623157e+308,
+                                "type": "number",
+                                "x-momo-finiteF64": true
+                              }
+                            ]
+                          },
+                          "denominator": {
+                            "maximum": 1000000,
+                            "minimum": 0,
+                            "type": "integer",
+                            "x-momo-integerToken": true
+                          },
+                          "effectEstimate": {
+                            "maximum": 1.7976931348623157e+308,
+                            "minimum": -1.7976931348623157e+308,
+                            "type": "number",
+                            "x-momo-finiteF64": true
+                          },
+                          "label": {
+                            "maxLength": 4096,
+                            "minLength": 1,
+                            "type": "string",
+                            "x-momo-maxUtf8Bytes": 4096
+                          },
+                          "method": {
+                            "anyOf": [
+                              {
+                                "type": "null"
+                              },
+                              {
+                                "const": "event_cluster_bootstrap_v1",
+                                "type": "string"
+                              }
+                            ]
+                          },
+                          "metricId": {
+                            "maxLength": 4096,
+                            "minLength": 1,
+                            "type": "string",
+                            "x-momo-maxUtf8Bytes": 4096
+                          },
+                          "qualityStatus": {
+                            "enum": [
+                              "ok",
+                              "reference",
+                              "no_target"
+                            ],
+                            "type": "string"
+                          },
+                          "stability": {
+                            "anyOf": [
+                              {
+                                "type": "null"
+                              },
+                              {
+                                "maximum": 1.0,
+                                "minimum": 0.0,
+                                "type": "number",
+                                "x-momo-finiteF64": true
+                              }
+                            ]
+                          },
+                          "stabilityBand": {
+                            "enum": [
+                              "high",
+                              "medium",
+                              "low"
+                            ],
+                            "type": "string"
+                          },
+                          "supportCount": {
+                            "maximum": 1000000,
+                            "minimum": 0,
+                            "type": "integer",
+                            "x-momo-integerToken": true
+                          },
+                          "targetCount": {
+                            "maximum": 1000000,
+                            "minimum": 0,
+                            "type": "integer",
+                            "x-momo-integerToken": true
+                          },
+                          "unit": {
+                            "enum": [
+                              "score",
+                              "count"
+                            ],
+                            "type": "string"
+                          },
+                          "value": {
+                            "maximum": 1.7976931348623157e+308,
+                            "minimum": -1.7976931348623157e+308,
+                            "type": "number",
+                            "x-momo-finiteF64": true
+                          }
+                        },
+                        "required": [
+                          "confidenceHigh",
+                          "confidenceLow",
+                          "denominator",
+                          "effectEstimate",
+                          "label",
+                          "method",
+                          "metricId",
+                          "qualityStatus",
+                          "stability",
+                          "stabilityBand",
+                          "supportCount",
+                          "targetCount",
+                          "unit",
+                          "value"
+                        ],
+                        "type": "object"
+                      }
+                    ],
+                    "type": "array"
+                  },
+                  "evidenceStrength": {
+                    "enum": [
+                      "high",
+                      "medium",
+                      "low"
+                    ],
+                    "type": "string"
+                  },
+                  "heading": {
+                    "maxLength": 4096,
+                    "minLength": 1,
+                    "type": "string",
+                    "x-momo-maxUtf8Bytes": 4096
+                  },
+                  "plainReason": {
+                    "maxLength": 4096,
+                    "minLength": 1,
+                    "type": "string",
+                    "x-momo-maxUtf8Bytes": 4096
+                  },
+                  "postMatchCheck": {
+                    "maxLength": 4096,
+                    "minLength": 1,
+                    "type": "string",
+                    "x-momo-maxUtf8Bytes": 4096
+                  },
+                  "qualityStatus": {
+                    "enum": [
+                      "ok",
+                      "reference",
+                      "no_target"
+                    ],
+                    "type": "string"
+                  },
+                  "recommendedAction": {
+                    "maxLength": 4096,
+                    "minLength": 1,
+                    "type": "string",
+                    "x-momo-maxUtf8Bytes": 4096
+                  },
+                  "stabilityBand": {
+                    "enum": [
+                      "high",
+                      "medium",
+                      "low"
+                    ],
+                    "type": "string"
+                  },
+                  "supportCount": {
+                    "maximum": 1000000,
+                    "minimum": 0,
+                    "type": "integer",
+                    "x-momo-integerToken": true
+                  },
+                  "targetCount": {
+                    "maximum": 1000000,
+                    "minimum": 0,
+                    "type": "integer",
+                    "x-momo-integerToken": true
+                  },
+                  "triggerCondition": {
+                    "maxLength": 4096,
+                    "minLength": 1,
+                    "type": "string",
+                    "x-momo-maxUtf8Bytes": 4096
+                  }
+                },
+                "required": [
+                  "actionAdviceScore",
+                  "actionHypothesis",
+                  "anchorTarget",
+                  "avoidAction",
+                  "cardId",
+                  "category",
+                  "classification",
+                  "dataReason",
+                  "evidence",
+                  "evidenceStrength",
+                  "heading",
+                  "plainReason",
+                  "postMatchCheck",
+                  "qualityStatus",
+                  "recommendedAction",
+                  "stabilityBand",
+                  "supportCount",
+                  "targetCount",
+                  "triggerCondition"
+                ],
+                "type": "object"
+              }
+            ]
+          },
+          "secondaryCards": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "actionAdviceScore": {
+                  "maximum": 1.7976931348623157e+308,
+                  "minimum": -1.7976931348623157e+308,
+                  "type": "number",
+                  "x-momo-finiteF64": true
+                },
+                "actionHypothesis": {
+                  "maxLength": 4096,
+                  "minLength": 1,
+                  "type": "string",
+                  "x-momo-maxUtf8Bytes": 4096
+                },
+                "anchorTarget": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "label": {
+                      "maxLength": 4096,
+                      "minLength": 1,
+                      "type": "string",
+                      "x-momo-maxUtf8Bytes": 4096
+                    },
+                    "sectionId": {
+                      "enum": [
+                        "metric-revenue-outcome",
+                        "metric-destination-outcome",
+                        "metric-money",
+                        "metric-play-order",
+                        "metric-ginji",
+                        "metric-momentum-switch",
+                        "metric-match-digest"
+                      ],
+                      "type": "string"
+                    },
+                    "view": {
+                      "enum": [
+                        "drivers",
+                        "context",
+                        "flow"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "label",
+                    "sectionId",
+                    "view"
+                  ],
+                  "type": "object"
+                },
+                "avoidAction": {
+                  "maxLength": 4096,
+                  "minLength": 1,
+                  "type": "string",
+                  "x-momo-maxUtf8Bytes": 4096
+                },
+                "cardId": {
+                  "maxLength": 4096,
+                  "minLength": 1,
+                  "type": "string",
+                  "x-momo-maxUtf8Bytes": 4096
+                },
+                "category": {
+                  "enum": [
+                    "revenue",
+                    "destination",
+                    "assets",
+                    "playOrder",
+                    "ginji",
+                    "recovery",
+                    "destinationPositive",
+                    "accident"
+                  ],
+                  "type": "string"
+                },
+                "classification": {
+                  "enum": [
+                    "reproduce",
+                    "revise",
+                    "verify"
+                  ],
+                  "type": "string"
+                },
+                "dataReason": {
+                  "maxLength": 4096,
+                  "minLength": 1,
+                  "type": "string",
+                  "x-momo-maxUtf8Bytes": 4096
+                },
+                "evidence": {
+                  "items": false,
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "prefixItems": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "denominator": {
+                          "maximum": 1000000,
+                          "minimum": 0,
+                          "type": "integer",
+                          "x-momo-integerToken": true
+                        },
+                        "label": {
+                          "maxLength": 4096,
+                          "minLength": 1,
+                          "type": "string",
+                          "x-momo-maxUtf8Bytes": 4096
+                        },
+                        "metricId": {
+                          "maxLength": 4096,
+                          "minLength": 1,
+                          "type": "string",
+                          "x-momo-maxUtf8Bytes": 4096
+                        },
+                        "qualityStatus": {
+                          "enum": [
+                            "ok",
+                            "reference",
+                            "no_target"
+                          ],
+                          "type": "string"
+                        },
+                        "stabilityBand": {
+                          "enum": [
+                            "high",
+                            "medium",
+                            "low"
+                          ],
+                          "type": "string"
+                        },
+                        "targetCount": {
+                          "maximum": 1000000,
+                          "minimum": 0,
+                          "type": "integer",
+                          "x-momo-integerToken": true
+                        },
+                        "unit": {
+                          "enum": [
+                            "rate",
+                            "score"
+                          ],
+                          "type": "string"
+                        },
+                        "value": {
+                          "maximum": 1.7976931348623157e+308,
+                          "minimum": -1.7976931348623157e+308,
+                          "type": "number",
+                          "x-momo-finiteF64": true
+                        }
+                      },
+                      "required": [
+                        "denominator",
+                        "label",
+                        "metricId",
+                        "qualityStatus",
+                        "stabilityBand",
+                        "targetCount",
+                        "unit",
+                        "value"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "confidenceHigh": {
+                          "anyOf": [
+                            {
+                              "type": "null"
+                            },
+                            {
+                              "maximum": 1.7976931348623157e+308,
+                              "minimum": -1.7976931348623157e+308,
+                              "type": "number",
+                              "x-momo-finiteF64": true
+                            }
+                          ]
+                        },
+                        "confidenceLow": {
+                          "anyOf": [
+                            {
+                              "type": "null"
+                            },
+                            {
+                              "maximum": 1.7976931348623157e+308,
+                              "minimum": -1.7976931348623157e+308,
+                              "type": "number",
+                              "x-momo-finiteF64": true
+                            }
+                          ]
+                        },
+                        "denominator": {
+                          "maximum": 1000000,
+                          "minimum": 0,
+                          "type": "integer",
+                          "x-momo-integerToken": true
+                        },
+                        "effectEstimate": {
+                          "maximum": 1.7976931348623157e+308,
+                          "minimum": -1.7976931348623157e+308,
+                          "type": "number",
+                          "x-momo-finiteF64": true
+                        },
+                        "label": {
+                          "maxLength": 4096,
+                          "minLength": 1,
+                          "type": "string",
+                          "x-momo-maxUtf8Bytes": 4096
+                        },
+                        "method": {
+                          "anyOf": [
+                            {
+                              "type": "null"
+                            },
+                            {
+                              "const": "event_cluster_bootstrap_v1",
+                              "type": "string"
+                            }
+                          ]
+                        },
+                        "metricId": {
+                          "maxLength": 4096,
+                          "minLength": 1,
+                          "type": "string",
+                          "x-momo-maxUtf8Bytes": 4096
+                        },
+                        "qualityStatus": {
+                          "enum": [
+                            "ok",
+                            "reference",
+                            "no_target"
+                          ],
+                          "type": "string"
+                        },
+                        "stability": {
+                          "anyOf": [
+                            {
+                              "type": "null"
+                            },
+                            {
+                              "maximum": 1.0,
+                              "minimum": 0.0,
+                              "type": "number",
+                              "x-momo-finiteF64": true
+                            }
+                          ]
+                        },
+                        "stabilityBand": {
+                          "enum": [
+                            "high",
+                            "medium",
+                            "low"
+                          ],
+                          "type": "string"
+                        },
+                        "supportCount": {
+                          "maximum": 1000000,
+                          "minimum": 0,
+                          "type": "integer",
+                          "x-momo-integerToken": true
+                        },
+                        "targetCount": {
+                          "maximum": 1000000,
+                          "minimum": 0,
+                          "type": "integer",
+                          "x-momo-integerToken": true
+                        },
+                        "unit": {
+                          "enum": [
+                            "score",
+                            "count"
+                          ],
+                          "type": "string"
+                        },
+                        "value": {
+                          "maximum": 1.7976931348623157e+308,
+                          "minimum": -1.7976931348623157e+308,
+                          "type": "number",
+                          "x-momo-finiteF64": true
+                        }
+                      },
+                      "required": [
+                        "confidenceHigh",
+                        "confidenceLow",
+                        "denominator",
+                        "effectEstimate",
+                        "label",
+                        "method",
+                        "metricId",
+                        "qualityStatus",
+                        "stability",
+                        "stabilityBand",
+                        "supportCount",
+                        "targetCount",
+                        "unit",
+                        "value"
+                      ],
+                      "type": "object"
+                    }
+                  ],
+                  "type": "array"
+                },
+                "evidenceStrength": {
+                  "enum": [
+                    "high",
+                    "medium",
+                    "low"
+                  ],
+                  "type": "string"
+                },
+                "heading": {
+                  "maxLength": 4096,
+                  "minLength": 1,
+                  "type": "string",
+                  "x-momo-maxUtf8Bytes": 4096
+                },
+                "plainReason": {
+                  "maxLength": 4096,
+                  "minLength": 1,
+                  "type": "string",
+                  "x-momo-maxUtf8Bytes": 4096
+                },
+                "postMatchCheck": {
+                  "maxLength": 4096,
+                  "minLength": 1,
+                  "type": "string",
+                  "x-momo-maxUtf8Bytes": 4096
+                },
+                "qualityStatus": {
+                  "enum": [
+                    "ok",
+                    "reference",
+                    "no_target"
+                  ],
+                  "type": "string"
+                },
+                "recommendedAction": {
+                  "maxLength": 4096,
+                  "minLength": 1,
+                  "type": "string",
+                  "x-momo-maxUtf8Bytes": 4096
+                },
+                "stabilityBand": {
+                  "enum": [
+                    "high",
+                    "medium",
+                    "low"
+                  ],
+                  "type": "string"
+                },
+                "supportCount": {
+                  "maximum": 1000000,
+                  "minimum": 0,
+                  "type": "integer",
+                  "x-momo-integerToken": true
+                },
+                "targetCount": {
+                  "maximum": 1000000,
+                  "minimum": 0,
+                  "type": "integer",
+                  "x-momo-integerToken": true
+                },
+                "triggerCondition": {
+                  "maxLength": 4096,
+                  "minLength": 1,
+                  "type": "string",
+                  "x-momo-maxUtf8Bytes": 4096
+                }
+              },
+              "required": [
+                "actionAdviceScore",
+                "actionHypothesis",
+                "anchorTarget",
+                "avoidAction",
+                "cardId",
+                "category",
+                "classification",
+                "dataReason",
+                "evidence",
+                "evidenceStrength",
+                "heading",
+                "plainReason",
+                "postMatchCheck",
+                "qualityStatus",
+                "recommendedAction",
+                "stabilityBand",
+                "supportCount",
+                "targetCount",
+                "triggerCondition"
+              ],
+              "type": "object"
+            },
+            "maxItems": 2,
+            "type": "array"
+          }
+        },
+        "required": [
+          "player",
+          "primaryCard",
+          "secondaryCards"
+        ],
+        "type": "object"
+      },
+      "maxItems": 4,
+      "type": "array"
+    },
+    "schemaVersion": {
+      "const": 3,
+      "minimum": 0,
+      "type": "integer",
+      "x-momo-integerToken": true
+    },
+    "scope": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "overall",
+              "type": "string"
+            },
+            "matchCount": {
+              "maximum": 1000000,
+              "minimum": 0,
+              "type": "integer",
+              "x-momo-integerToken": true
+            }
+          },
+          "required": [
+            "kind",
+            "matchCount"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "season",
+              "type": "string"
+            },
+            "matchCount": {
+              "maximum": 1000000,
+              "minimum": 0,
+              "type": "integer",
+              "x-momo-integerToken": true
+            },
+            "seasonMasterId": {
+              "maxLength": 4096,
+              "minLength": 1,
+              "type": "string",
+              "x-momo-maxUtf8Bytes": 4096
+            }
+          },
+          "required": [
+            "kind",
+            "matchCount",
+            "seasonMasterId"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "map",
+              "type": "string"
+            },
+            "mapMasterId": {
+              "maxLength": 4096,
+              "minLength": 1,
+              "type": "string",
+              "x-momo-maxUtf8Bytes": 4096
+            },
+            "matchCount": {
+              "maximum": 1000000,
+              "minimum": 0,
+              "type": "integer",
+              "x-momo-integerToken": true
+            }
+          },
+          "required": [
+            "kind",
+            "mapMasterId",
+            "matchCount"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "season_map",
+              "type": "string"
+            },
+            "mapMasterId": {
+              "maxLength": 4096,
+              "minLength": 1,
+              "type": "string",
+              "x-momo-maxUtf8Bytes": 4096
+            },
+            "matchCount": {
+              "maximum": 1000000,
+              "minimum": 0,
+              "type": "integer",
+              "x-momo-integerToken": true
+            },
+            "seasonMasterId": {
+              "maxLength": 4096,
+              "minLength": 1,
+              "type": "string",
+              "x-momo-maxUtf8Bytes": 4096
+            }
+          },
+          "required": [
+            "kind",
+            "mapMasterId",
+            "matchCount",
+            "seasonMasterId"
+          ],
+          "type": "object"
+        }
+      ]
+    }
+  },
+  "required": [
+    "baseline",
+    "commonPlaybookTopics",
+    "dataQuality",
+    "playbookByPlayer",
+    "schemaVersion",
+    "scope"
+  ],
+  "title": "Series Analysis Review Resource v3",
+  "type": "object"
+}

@@ -12,7 +12,6 @@ import {
   qualityAdvisoryLabel,
   SeriesAnalysisQualityAdvisory,
 } from "@/features/seriesComparison/SeriesAnalysisQualityAdvisory";
-import { orderFixedMembers } from "@/shared/domain/members";
 import { Disclosure } from "@/shared/ui/data/Collapsible";
 import { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
 
@@ -27,7 +26,7 @@ export function RevenueOutcomeSection({
     <AnalysisSection id="metric-revenue-outcome" title="物件収益と最終順位">
       <RevenueConversionMatrices focusedItemIds={focusedItemIds} response={response} />
       <div className="mt-4 grid gap-x-6 gap-y-8 md:grid-cols-2 xl:grid-cols-4">
-        {orderFixedMembers(response.metricsByPlayer).map((metric) => (
+        {response.metricsByPlayer.map((metric) => (
           <article className="min-w-0" key={metric.memberId}>
             <h3 className="font-semibold">
               <MemberSequenceLabel memberId={metric.memberId}>
@@ -86,7 +85,7 @@ export function DestinationOutcomeSection({ response }: { response: Response }) 
   return (
     <AnalysisSection id="metric-destination-outcome" title="目的地到着と順位">
       <div className="grid gap-x-6 gap-y-8 md:grid-cols-2 xl:grid-cols-4">
-        {orderFixedMembers(response.metricsByPlayer).map((metric) => (
+        {response.metricsByPlayer.map((metric) => (
           <article className="min-w-0" key={metric.memberId}>
             <h3 className="font-semibold">
               <MemberSequenceLabel memberId={metric.memberId}>

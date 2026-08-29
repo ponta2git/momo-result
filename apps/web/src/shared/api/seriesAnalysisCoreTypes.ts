@@ -1,11 +1,8 @@
+import type { components } from "@/shared/api/generated";
+
 export type DataQualityStatus = "no_target" | "ok" | "reference";
 export type RelativeIntensity = "high" | "low" | "medium" | "none";
-export type ChangeDirection =
-  | "declined"
-  | "first_observation"
-  | "improved"
-  | "unavailable"
-  | "unchanged";
+export type ChangeDirection = "declined" | "first_observation" | "improved" | "unchanged";
 
 export type SeriesAnalysisArtifactRef = {
   algorithmVersion: string;
@@ -29,42 +26,9 @@ export type SeriesAnalysisPlayer = {
   memberId: string;
 };
 
-export type SeriesAnalysisOptionsResponse = {
-  defaultGameTitleId: string | null;
-  schemaVersion: 1;
-  titles: Array<{
-    confirmedMatchCount: number;
-    displayName: string;
-    gameTitleId: string;
-    maps: Array<{ displayName: string; mapMasterId: string }>;
-    seasonMapPairs: Array<{ mapMasterId: string; seasonMasterId: string }>;
-    seasons: Array<{ displayName: string; seasonMasterId: string }>;
-  }>;
-};
+export type SeriesAnalysisOptionsResponse = components["schemas"]["SeriesAnalysisOptionsResponse"];
 
-export type SeriesAnalysisStatusResponse = {
-  artifactFreshness: "current" | "stale" | "unavailable";
-  calculation: null | {
-    finishedAt: string | null;
-    requestedAt: string;
-    startedAt: string | null;
-    status: "failed" | "queued" | "running" | "succeeded" | "timed_out";
-    trigger:
-      | "algorithm_update"
-      | "artifact_schema_update"
-      | "initial_backfill"
-      | "manual"
-      | "match_mutation";
-  };
-  currentArtifact: SeriesAnalysisArtifactRef | null;
-  desired: {
-    algorithmVersion: string;
-    artifactSchemaVersion: number;
-    inputRevision: string;
-  };
-  gameTitleId: string;
-  schemaVersion: 1;
-};
+export type SeriesAnalysisStatusResponse = components["schemas"]["SeriesAnalysisStatusResponse"];
 
 export type RankCell = { count: number; rank: number; rate: number | null };
 

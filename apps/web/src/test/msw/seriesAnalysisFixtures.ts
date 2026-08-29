@@ -21,6 +21,17 @@ export const analysisArtifact = {
 const player = { displayName: "ぽんた", memberId: "member_ponta" } as const;
 const scope = { displayName: "総合", kind: "overall", matchCount: 12 } as const;
 
+function hydrateMemberDisplayNames<T>(value: T): T {
+  if (Array.isArray(value)) {
+    value.forEach(hydrateMemberDisplayNames);
+  } else if (typeof value === "object" && value !== null) {
+    const object = value as Record<string, unknown>;
+    Object.values(object).forEach(hydrateMemberDisplayNames);
+    if (object["memberId"] === player.memberId) object["displayName"] = player.displayName;
+  }
+  return value;
+}
+
 export function makeSeriesAnalysisOptions(): SeriesAnalysisOptionsResponse {
   return {
     defaultGameTitleId: "gt_momotetsu_2",
@@ -67,7 +78,7 @@ const quality = { noTargetCount: 0, okCount: 8, referenceCount: 0 };
 export function makeSeriesAnalysisAggregate(
   artifact: SeriesAnalysisArtifactRef = analysisArtifact,
 ): SeriesComparisonAggregateV3 {
-  return {
+  return hydrateMemberDisplayNames({
     artifact,
     assetStyleProfiles: {
       entries: [
@@ -477,6 +488,7 @@ export function makeSeriesAnalysisAggregate(
     ],
     schemaVersion: 3,
     scope,
+    source: { gameTitleId: artifact.gameTitleId },
     strategyScatter: {
       points: [
         {
@@ -499,7 +511,6 @@ export function makeSeriesAnalysisAggregate(
       leaderMemberIds: [player.memberId],
       quality,
       rankSpreadSignal: "visible",
-      sampleMaturity: "mature",
       totalGinjiCount: 3,
     },
     trends: [
@@ -569,7 +580,7 @@ export function makeSeriesAnalysisAggregate(
         ],
       },
     ],
-  };
+  });
 }
 
 export function makeSeriesAnalysisReview(): SeriesComparisonReviewV3 {
@@ -596,16 +607,29 @@ export function makeSeriesAnalysisReview(): SeriesComparisonReviewV3 {
           dataReason: "収益上位5戦のうち2戦は勝ち切れていません。",
           evidence: [
             {
-              confidenceHigh: 0.82,
-              confidenceLow: 0.31,
-              effectEstimate: 0.56,
+              denominator: 12,
               label: "収益上位時の勝率",
-              method: "event_cluster_bootstrap_v1",
               metricId: "revenue.topWinRate",
               qualityStatus: "ok",
+              stabilityBand: "high",
+              targetCount: 5,
+              unit: "rate",
+              value: 0.6,
+            },
+            {
+              confidenceHigh: 0.82,
+              confidenceLow: 0.31,
+              denominator: 5,
+              effectEstimate: 0.56,
+              label: "目的地到着と順位",
+              method: "event_cluster_bootstrap_v1",
+              metricId: "destination.rankEffect",
+              qualityStatus: "ok",
+              stabilityBand: "high",
               targetCount: 5,
               stability: 0.74,
-              unit: "rate",
+              supportCount: 5,
+              unit: "score",
               value: 0.6,
             },
           ],
@@ -851,6 +875,20 @@ export function makeSeriesAnalysisMatchContext(): SeriesAnalysisMatchContextV2 {
     matchId: "match-12",
     schemaVersion: 1,
     scope,
+  };
+}
+
+export function makeSeriesAnalysisExcludedMatchContext(
+  status: "match_changed_since_artifact" | "not_in_artifact" | "not_in_scope",
+  matchId = "match-12",
+): SeriesAnalysisMatchContextV2 {
+  return {
+    artifact: analysisArtifact,
+    inclusion: { status },
+    match: null,
+    matchId,
+    schemaVersion: 1,
+    scope: { displayName: scope.displayName, kind: scope.kind },
   };
 }
 

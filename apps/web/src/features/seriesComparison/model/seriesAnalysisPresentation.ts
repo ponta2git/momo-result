@@ -60,7 +60,7 @@ export function intensityClassName(intensity: RelativeIntensity): string {
   }
 }
 
-export function directionLabel(direction: ChangeDirection): string {
+export function directionLabel(direction: ChangeDirection | "unavailable"): string {
   switch (direction) {
     case "improved":
       return "改善";
@@ -170,12 +170,6 @@ export function matchFeatureLabel(code: string): string {
       return "マイナス資産あり";
     case "no_destination":
       return "目的地到着なし";
-    case "destination_burst":
-      return "目的地到着が集中";
-    case "low_revenue_win":
-      return "低収益から勝利";
-    case "fourth_order_win":
-      return "4番手から勝利";
     default:
       return "試合上の注目点";
   }

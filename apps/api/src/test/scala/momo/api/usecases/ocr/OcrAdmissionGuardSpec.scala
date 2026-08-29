@@ -33,6 +33,7 @@ final class OcrAdmissionGuardSpec extends MomoCatsEffectSuite:
     expiredInFlightCount = 0,
     duePendingCount = 0,
     oldestDueNextAttemptAt = None,
+    recoverableInvalidCount = 0,
   )
 
   test("allows OCR admission below backlog thresholds"):
@@ -43,6 +44,7 @@ final class OcrAdmissionGuardSpec extends MomoCatsEffectSuite:
         expiredInFlightCount = 0,
         duePendingCount = 1,
         oldestDueNextAttemptAt = Some(now.minusSeconds(60)),
+        recoverableInvalidCount = 0,
       ))
       guard = guardAt(repo, StaticOcrJobQueueHealthCheck(deadLetterLengthValue = 0L), config)
       result <- guard.ensureAvailable

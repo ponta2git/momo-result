@@ -17,6 +17,7 @@ import {
 import { setDevUser, testDevUserAccountId } from "@/test/auth";
 import { createDeferred } from "@/test/deferred";
 import { makeMatchWorkspaceMasterHandoffValues } from "@/test/factories";
+import { mswState } from "@/test/msw/fixtures";
 import { setupMsw } from "@/test/msw/lifecycle";
 import { server } from "@/test/msw/server";
 import { createTestQueryClient } from "@/test/queryClient";
@@ -507,6 +508,18 @@ describe("MastersPage", () => {
 
   it("updates a game title from the admin controls", async () => {
     setDevUser();
+    let idempotencyKey: string | null = null;
+    server.use(
+      http.patch("/api/game-titles/:id", async ({ params, request }) => {
+        idempotencyKey = request.headers.get("Idempotency-Key");
+        const body = (await request.json()) as { layoutFamily: string; name: string };
+        const id = String(params["id"]);
+        mswState.gameTitles = mswState.gameTitles.map((item) =>
+          item.id === id ? { ...item, ...body } : item,
+        );
+        return HttpResponse.json(mswState.gameTitles.find((item) => item.id === id));
+      }),
+    );
     renderPage();
 
     const gameTitleChoice = await screen.findByRole("radio", { name: "桃太郎電鉄2" });
@@ -526,6 +539,7 @@ describe("MastersPage", () => {
     await user.click(screen.getByRole("button", { name: "保存" }));
 
     expect(await screen.findByRole("radio", { name: "桃太郎電鉄2 DX" })).toBeChecked();
+    expect(idempotencyKey).toMatch(/\S/u);
   });
 
   it("keeps a failed master deletion in its dialog after the dialog closes", async () => {

@@ -283,7 +283,8 @@ fn validate_aggregate(
     let object = payload.as_object().ok_or(PayloadError::InvalidSchema)?;
     validate_scope(object.get("scope"), scope)?;
     let players = array(object.get("players"))?;
-    let player_ids = member_ids(players)?;
+    let player_order = member_id_order(players)?;
+    let player_ids = player_order.iter().copied().collect::<BTreeSet<_>>();
     if player_ids.len() != players.len() {
         return Err(PayloadError::InvalidSchema);
     }
@@ -303,7 +304,7 @@ fn validate_aggregate(
     if denominator_sum != item_count {
         return Err(PayloadError::ItemCountMismatch);
     }
-    validate_aggregate_semantics(object, &player_ids, item_count)?;
+    validate_aggregate_semantics(object, &player_ids, &player_order, item_count)?;
     let item_ids = collect_unique_item_ids(payload)?;
     validate_member_references(payload, &player_ids)?;
     Ok(ResourceReferences::Aggregate(AggregateReferences {
@@ -525,6 +526,7 @@ fn validate_match_context(
 fn validate_aggregate_semantics(
     object: &Map<String, Value>,
     player_ids: &BTreeSet<&str>,
+    player_order: &[&str],
     item_count: u64,
 ) -> Result<(), PayloadError> {
     validate_aggregate_member_sections(object, player_ids)?;
@@ -593,7 +595,7 @@ fn validate_aggregate_semantics(
     validate_momentum(object.get("momentumSwitch"))?;
     validate_card_shop(object.get("cardShopDestination"))?;
     validate_match_digest(object)?;
-    validate_match_number_entries(object.get("matchNoInEvent"), player_ids)?;
+    validate_match_number_entries(object.get("matchNoInEvent"), player_order)?;
     validate_rank_analysis(object.get("rankAnalysis"), player_ids)?;
     validate_data_quality(object.get("dataQuality"), player_ids)?;
     collect_unique_ids(array(object.get("metricDefinitions"))?, "metricId")?;
@@ -849,23 +851,36 @@ fn validate_match_digest(object: &Map<String, Value>) -> Result<(), PayloadError
 
 fn validate_match_number_entries(
     value: Option<&Value>,
-    player_ids: &BTreeSet<&str>,
+    player_order: &[&str],
 ) -> Result<(), PayloadError> {
     let entries = value
         .and_then(Value::as_object)
         .and_then(|value| value.get("entries"))
         .and_then(Value::as_array)
         .ok_or(PayloadError::InvalidSchema)?;
-    let mut numbers = BTreeSet::new();
+    let mut previous_number = None;
     for entry in entries {
         let number = entry
             .get("matchNoInEvent")
             .and_then(Value::as_i64)
             .ok_or(PayloadError::InvalidSchema)?;
-        if !numbers.insert(number) {
+        if number <= 0 || previous_number.is_some_and(|previous| previous >= number) {
             return Err(PayloadError::InvalidSchema);
         }
-        validate_exact_member_entries(array(entry.get("players"))?, player_ids)?;
+        previous_number = Some(number);
+
+        let expected_category = if number <= 4 { "regular" } else { "additional" };
+        if required_string(entry.get("category"))? != expected_category {
+            return Err(PayloadError::InvalidSchema);
+        }
+
+        let actual_player_order = array(entry.get("players"))?
+            .iter()
+            .map(|player| required_string(player.get("memberId")))
+            .collect::<Result<Vec<_>, _>>()?;
+        if actual_player_order != player_order {
+            return Err(PayloadError::ReferenceMismatch);
+        }
     }
     Ok(())
 }
@@ -1013,7 +1028,7 @@ fn validate_exact_member_entries(
     Ok(())
 }
 
-fn member_ids(players: &[Value]) -> Result<BTreeSet<&str>, PayloadError> {
+fn member_id_order(players: &[Value]) -> Result<Vec<&str>, PayloadError> {
     players
         .iter()
         .map(|player| required_string(player.get("memberId")))
@@ -1326,6 +1341,41 @@ mod tests {
         assert!(matches!(
             validate_computed(&duplicate_item),
             Err(PayloadError::ReferenceMismatch)
+        ));
+
+        let mut wrong_match_category = overall_resource(&resources, &kind);
+        *wrong_match_category
+            .payload
+            .pointer_mut("/matchNoInEvent/entries/0/category")
+            .unwrap_or_else(|| panic!("match category")) =
+            Value::String(String::from("additional"));
+        assert!(matches!(
+            validate_computed(&wrong_match_category),
+            Err(PayloadError::InvalidSchema)
+        ));
+
+        let mut wrong_player_order = overall_resource(&resources, &kind);
+        wrong_player_order
+            .payload
+            .pointer_mut("/matchNoInEvent/entries/0/players")
+            .and_then(Value::as_array_mut)
+            .unwrap_or_else(|| panic!("match players"))
+            .swap(0, 1);
+        assert!(matches!(
+            validate_computed(&wrong_player_order),
+            Err(PayloadError::ReferenceMismatch)
+        ));
+
+        let mut wrong_match_order = overall_resource(&resources, &kind);
+        wrong_match_order
+            .payload
+            .pointer_mut("/matchNoInEvent/entries")
+            .and_then(Value::as_array_mut)
+            .unwrap_or_else(|| panic!("match entries"))
+            .swap(0, 1);
+        assert!(matches!(
+            validate_computed(&wrong_match_order),
+            Err(PayloadError::InvalidSchema)
         ));
     }
 

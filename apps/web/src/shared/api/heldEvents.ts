@@ -54,11 +54,15 @@ export async function getHeldEventDetail(
   );
 }
 
-export async function deleteHeldEvent(heldEventId: string): Promise<DeleteHeldEventResponse> {
+export async function deleteHeldEvent(
+  heldEventId: string,
+  options: IdempotencyRequestOptions,
+): Promise<DeleteHeldEventResponse> {
   return apiRequest<DeleteHeldEventResponse>(
     `/api/held-events/${encodeURIComponent(heldEventId)}`,
     {
       method: "DELETE",
+      idempotency: { key: options.idempotencyKey },
     },
   );
 }

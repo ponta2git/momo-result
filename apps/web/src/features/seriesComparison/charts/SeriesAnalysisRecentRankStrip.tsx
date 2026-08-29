@@ -8,7 +8,6 @@ import { SeriesAnalysisMatchLink } from "@/features/seriesComparison/navigation/
 import { SeriesAnalysisQualityAdvisory } from "@/features/seriesComparison/SeriesAnalysisQualityAdvisory";
 import type { SeriesComparisonAggregateV3 } from "@/shared/api/seriesAnalysis";
 import { formatSeriesMatchIndex } from "@/shared/domain/matchLabels";
-import { orderFixedMembers } from "@/shared/domain/members";
 import { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
 import { rankColor, rankForegroundColor } from "@/shared/ui/rank/rankPresentation";
 
@@ -21,7 +20,7 @@ export function RecentRankStrips({
 }) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const entryByMemberId = new Map(response.recentRanks.map((entry) => [entry.memberId, entry]));
-  const orderedEntries = orderFixedMembers(response.players).map((player) => ({
+  const orderedEntries = response.players.map((player) => ({
     entry: entryByMemberId.get(player.memberId),
     player,
   }));

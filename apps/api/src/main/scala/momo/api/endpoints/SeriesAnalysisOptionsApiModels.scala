@@ -2,7 +2,7 @@ package momo.api.endpoints
 
 import io.circe.Codec
 
-import momo.api.domain.{SeriesAnalysisOptions, SeriesAnalysisTitleOption}
+import momo.api.domain.{SeriesAnalysisOptions, SeriesAnalysisTitleOption, SeriesAnalysisVocabulary}
 
 final case class SeriesAnalysisSeasonOptionResponse(
     seasonMasterId: String,
@@ -35,7 +35,7 @@ final case class SeriesAnalysisOptionsResponse(
 object SeriesAnalysisOptionsResponse:
   def from(value: SeriesAnalysisOptions): SeriesAnalysisOptionsResponse =
     SeriesAnalysisOptionsResponse(
-      schemaVersion = 1,
+      schemaVersion = SeriesAnalysisVocabulary.EnvelopeSchemaVersion,
       defaultGameTitleId = value.defaultGameTitleId.map(_.value),
       titles = value.titles.map(titleOption),
     )

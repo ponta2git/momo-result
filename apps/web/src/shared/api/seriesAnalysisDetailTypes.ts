@@ -11,7 +11,6 @@ import type {
   SeriesAnalysisReviewEvidence,
   SeriesAnalysisUnexpectedWinEvidence,
 } from "@/shared/api/seriesAnalysisMetricTypes";
-import type { MatchFeatureId } from "@/shared/domain/matchFeatures";
 
 export type SeriesAnalysisQuery = {
   artifactId: string;
@@ -43,7 +42,7 @@ export type SeriesAnalysisDrilldownV3 = {
           eventAverageRank: number;
           eventAverageRankDelta: number | null;
           eventRankDelta: number | null;
-          firstPlayedAt: string;
+          firstPlayedAt: string | null;
           heldEventId: string;
           matchCount: number;
           ranks: number[];
@@ -168,39 +167,56 @@ export type SeriesAnalysisDrilldownV3 = {
 
 export type SeriesAnalysisMatchContextQuery = SeriesAnalysisQuery & { matchId: string };
 
-export type SeriesAnalysisMatchContextV2 = {
+type SeriesAnalysisMatchContextBase = {
   artifact: SeriesAnalysisArtifactRef;
-  inclusion:
-    | { sourceMatchRevision: string; status: "included" }
-    | { status: "match_changed_since_artifact" | "not_in_artifact" | "not_in_scope" };
-  match: null | {
-    features: Array<{
-      evidence: SeriesAnalysisReviewEvidence[];
-      featureCode: MatchFeatureId;
-      memberIds: string[];
-      priority: number;
-      source: "match" | "series";
-      tone: "neutral" | "notice";
-    }>;
-    focusedItemIds: string[];
-    matchIndex: number;
-    playedAt: string;
-    players: Array<{
-      cumulativeAverageAfter: number;
-      cumulativeAverageBefore: number | null;
-      cumulativeAverageDelta: number | null;
-      cumulativeAverageDirection: ChangeDirection;
-      displayName: string;
-      memberId: string;
-      previousRank: number | null;
-      rank: number;
-      revenueAssetRate: number | null;
-      revenueManYen: number;
-      revenueRank: number;
-      totalAssetsManYen: number;
-    }>;
-  };
   matchId: string;
   schemaVersion: 1;
-  scope: SeriesAnalysisScope;
 };
+
+type IncludedSeriesAnalysisMatch = {
+  features: Array<{
+    evidence: SeriesAnalysisReviewEvidence[];
+    featureCode:
+      | "asset_blowout"
+      | "close_finish"
+      | "ginji_storm"
+      | "negative_assets"
+      | "no_destination"
+      | "revenue_top_no_win";
+    memberIds: string[];
+    priority: number;
+    source: "match";
+    tone: "neutral" | "notice";
+  }>;
+  focusedItemIds: string[];
+  matchIndex: number;
+  playedAt: string | null;
+  players: Array<{
+    cumulativeAverageAfter: number;
+    cumulativeAverageBefore: number | null;
+    cumulativeAverageDelta: number | null;
+    cumulativeAverageDirection: ChangeDirection;
+    displayName: string;
+    memberId: string;
+    previousRank: number | null;
+    rank: number;
+    revenueAssetRate: number | null;
+    revenueManYen: number;
+    revenueRank: number | null;
+    totalAssetsManYen: number;
+  }>;
+};
+
+export type SeriesAnalysisMatchContextV2 =
+  | (SeriesAnalysisMatchContextBase & {
+      inclusion: { sourceMatchRevision: string; status: "included" };
+      match: IncludedSeriesAnalysisMatch;
+      scope: SeriesAnalysisScope;
+    })
+  | (SeriesAnalysisMatchContextBase & {
+      inclusion: {
+        status: "match_changed_since_artifact" | "not_in_artifact" | "not_in_scope";
+      };
+      match: null;
+      scope: Omit<SeriesAnalysisScope, "matchCount">;
+    });

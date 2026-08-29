@@ -1,14 +1,14 @@
 import type { MatchDetailResponse } from "@/shared/api/matches";
 import type { SeriesAnalysisMatchContextV2 } from "@/shared/api/seriesAnalysis";
 import { matchFeatureDefinition } from "@/shared/domain/matchFeatures";
-import type { MatchFeatureDefinition, MatchFeatureSource } from "@/shared/domain/matchFeatures";
+import type { MatchFeatureDefinition } from "@/shared/domain/matchFeatures";
 import { memberDisplayName, orderFixedMembers } from "@/shared/domain/members";
 import { formatDateOnly, formatDateTimeLong } from "@/shared/lib/dateTime";
 export { seriesComparisonHrefForMatch } from "@/shared/navigation/matchLinks";
 
 export type MatchDetailPlayerResult = NonNullable<MatchDetailResponse["players"]>[number];
 export type MatchFeatureBadge = MatchFeatureDefinition & {
-  source: MatchFeatureSource;
+  tone: AnalysisFeature["tone"];
 };
 export type MatchDetailSortKey =
   | "cardShop"
@@ -90,7 +90,6 @@ export function buildMatchFeatureBadges({
 }): MatchFeatureBadge[] {
   return features.map((feature) => ({
     ...matchFeatureDefinition(feature.featureCode),
-    source: feature.source,
     tone: feature.tone,
   }));
 }

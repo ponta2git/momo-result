@@ -23,14 +23,12 @@ import momo.api.usecases.queue.{
 final case class SeriesAnalysisQueueDispatcherConfig(
     batchSize: Int = 10,
     claimTtl: FiniteDuration = 30.seconds,
-    maxBackoff: FiniteDuration = 60.seconds,
     redeliveryAfter: FiniteDuration = 5.minutes,
     coldRecoveryInterval: FiniteDuration = 30.minutes,
     maxConsecutiveBatches: Int = 100,
 ):
   require((1 to 100).contains(batchSize), "analysis dispatcher batchSize must be between 1 and 100")
   require(claimTtl > Duration.Zero, "analysis dispatcher claimTtl must be positive")
-  require(maxBackoff >= 1.second, "analysis dispatcher maxBackoff must be at least one second")
   require(redeliveryAfter > Duration.Zero, "analysis dispatcher redeliveryAfter must be positive")
   require(
     coldRecoveryInterval > Duration.Zero,
@@ -48,6 +46,7 @@ private[seriesanalysis] final class SeriesAnalysisQueueOutboxDispatcher[
     queue: SeriesAnalysisQueuePublisher[F],
     config: SeriesAnalysisQueueDispatcherConfig,
 ) extends OutboxWakeDriver[F]:
+  private val RetryDelays = Vector(2.seconds, 4.seconds, 8.seconds)
   private val logger = LoggerFactory[F].getLoggerFromClass(
     classOf[SeriesAnalysisQueueOutboxDispatcher[F]]
   )
@@ -90,12 +89,12 @@ private[seriesanalysis] final class SeriesAnalysisQueueOutboxDispatcher[
       case Left(error) =>
         for
           now <- Clock[F].realTimeInstant
-          nextAttempt = plus(now, nextBackoff(row.attemptCount + 1))
+          nextAttempt = plus(now, RetryDelays(row.attemptCount))
+          redeliverBefore = plus(now, -config.redeliveryAfter)
           released <- outbox.releaseForRetry(
-            row.id,
-            row.claimExpiresAt,
+            row,
             nextAttempt,
-            error.getClass.getName,
+            redeliverBefore,
             now,
           )
           _ <- if released then
@@ -107,10 +106,6 @@ private[seriesanalysis] final class SeriesAnalysisQueueOutboxDispatcher[
           else logger.warn(s"Analysis outbox retry ignored for stale claim outboxId=${row.id}")
         yield ()
     }
-
-  private def nextBackoff(attempt: Int): FiniteDuration =
-    val exponent = math.max(0, math.min(attempt - 1, 6))
-    math.min(config.maxBackoff.toSeconds, 1L << exponent).seconds
 
   private def plus(instant: Instant, duration: FiniteDuration): Instant = instant
     .plusMillis(duration.toMillis)

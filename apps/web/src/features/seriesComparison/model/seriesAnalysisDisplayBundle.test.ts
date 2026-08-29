@@ -6,6 +6,7 @@ import {
 } from "@/features/seriesComparison/model/seriesAnalysisDisplayBundle";
 import {
   makeSeriesAnalysisAggregate,
+  makeSeriesAnalysisExcludedMatchContext,
   makeSeriesAnalysisMatchContext,
   makeSeriesAnalysisReview,
 } from "@/test/msw/seriesAnalysisFixtures";
@@ -63,9 +64,7 @@ describe("series analysis display bundle", () => {
       false,
     );
 
-    const matchContext = makeSeriesAnalysisMatchContext();
-    matchContext.inclusion = { status: "not_in_scope" };
-    matchContext.match = null;
+    const matchContext = makeSeriesAnalysisExcludedMatchContext("not_in_scope");
     expect(
       resolveSeriesAnalysisDisplayBundle({
         activeView: "overview",

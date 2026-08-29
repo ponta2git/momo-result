@@ -81,7 +81,7 @@ export function seriesAnalysisScopeSignature(state: SeriesAnalysisUrlState): str
 
 type ArtifactScopedResource = {
   artifact: { artifactId: string; gameTitleId: string };
-  scope: SeriesAnalysisScope;
+  scope: Pick<SeriesAnalysisScope, "mapMasterId" | "seasonMasterId">;
 };
 
 export function matchesSeriesAnalysisResource(

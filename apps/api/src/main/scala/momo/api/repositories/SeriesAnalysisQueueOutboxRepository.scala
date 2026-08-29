@@ -9,7 +9,13 @@ final case class SeriesAnalysisQueueOutboxRecord(
     jobId: String,
     attemptCount: Int,
     claimExpiresAt: Instant,
-)
+):
+  require(
+    (0 until 3).contains(attemptCount),
+    "analysis outbox claim attemptCount must be between 0 and 2",
+  )
+
+  def exhaustsDeliveryAttempts: Boolean = attemptCount == 2
 
 final case class SeriesAnalysisCleanupCounts(
     operations: Int,
@@ -34,10 +40,9 @@ trait SeriesAnalysisQueueOutboxRepository[F[_]]:
       now: Instant,
   ): F[Boolean]
   def releaseForRetry(
-      id: String,
-      claimExpiresAt: Instant,
+      claim: SeriesAnalysisQueueOutboxRecord,
       nextAttemptAt: Instant,
-      safeErrorClass: String,
+      redeliverBefore: Instant,
       now: Instant,
   ): F[Boolean]
   def reconcileQueued(

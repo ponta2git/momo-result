@@ -27,12 +27,14 @@ export async function createLoginAccount(
 export async function updateLoginAccount(
   accountId: string,
   request: UpdateLoginAccountRequest,
+  options: IdempotencyRequestOptions,
 ): Promise<LoginAccountResponse> {
   return apiRequest<LoginAccountResponse>(
     `/api/admin/login-accounts/${encodeURIComponent(accountId)}`,
     {
       method: "PATCH",
       body: request,
+      idempotency: { key: options.idempotencyKey },
     },
   );
 }

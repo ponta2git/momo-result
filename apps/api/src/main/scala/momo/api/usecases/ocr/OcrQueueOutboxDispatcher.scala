@@ -10,7 +10,12 @@ import org.typelevel.log4cats.LoggerFactory
 
 import momo.api.logging.SafeLog
 import momo.api.ports.queue.OcrJobQueuePublisher
-import momo.api.repositories.{OcrQueueOutboxRecord, OcrQueueOutboxRepository}
+import momo.api.repositories.{
+  InvalidOcrQueueOutboxClaim,
+  OcrQueueOutboxClaim,
+  OcrQueueOutboxRecord,
+  OcrQueueOutboxRepository
+}
 import momo.api.usecases.queue.{
   OutboxDrainResult,
   OutboxKind,
@@ -57,10 +62,10 @@ final class OcrQueueOutboxDispatcher[F[_]: Temporal: Clock: LoggerFactory](
       _ <- Option.when(rearmed > 0)(
         logger.info(s"OCR queue semantic redelivery rearmedRows=${rearmed.toString}")
       ).sequence_
-      rows <- outbox.claimDue(config.batchSize, now, plus(now, config.claimTtl))
-      _ <- rows.traverse_(publisher.publish)
+      claims <- outbox.claimDue(config.batchSize, now, plus(now, config.claimTtl))
+      _ <- claims.traverse_(handleClaim)
       result <-
-        if rearmed > 0 || rows.nonEmpty then OutboxDrainResult.Progress.pure[F]
+        if rearmed > 0 || claims.nonEmpty then OutboxDrainResult.Progress.pure[F]
         else
           outbox.nextWakeAt(now, config.redeliveryAfter)
             .map(nextWakeAt => OutboxDrainResult.Idle(afterContention(now, nextWakeAt)))
@@ -71,6 +76,22 @@ final class OcrQueueOutboxDispatcher[F[_]: Temporal: Clock: LoggerFactory](
 
   private def plus(instant: Instant, duration: FiniteDuration): Instant = instant
     .plusMillis(duration.toMillis)
+
+  private def handleClaim(claim: OcrQueueOutboxClaim): F[Unit] = claim match
+    case OcrQueueOutboxClaim.Publish(record) => publisher.publish(record)
+    case OcrQueueOutboxClaim.Invalid(invalid) => failInvalidClaim(invalid)
+
+  private def failInvalidClaim(claim: InvalidOcrQueueOutboxClaim): F[Unit] =
+    Clock[F].realTimeInstant.flatMap { now =>
+      outbox.failInvalidClaim(claim, now).flatMap {
+        case true => logger.error(
+            s"OCR queue outbox invalid persisted claim quarantined jobId=${claim.jobId.value}"
+          )
+        case false => logger.warn(
+            s"OCR queue outbox invalid update ignored for stale claim jobId=${claim.jobId.value}"
+          )
+      }
+    }
 
 object OcrQueueOutboxDispatcher:
   def resource[F[_]: Temporal: Clock: LoggerFactory](

@@ -8,6 +8,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { AdminAccountsPage } from "@/features/adminAccounts/AdminAccountsPage";
 import { adminAccountKeys } from "@/shared/api/queryKeys";
 import { createDeferred } from "@/test/deferred";
+import { mswState } from "@/test/msw/fixtures";
 import { setupMsw } from "@/test/msw/lifecycle";
 import { server } from "@/test/msw/server";
 import { createTestQueryClient } from "@/test/queryClient";
@@ -70,6 +71,25 @@ describe("AdminAccountsPage", () => {
   });
 
   it("confirms login permission changes before applying them", async () => {
+    let idempotencyKey: string | null = null;
+    server.use(
+      http.patch("/api/admin/login-accounts/:accountId", async ({ params, request }) => {
+        idempotencyKey = request.headers.get("Idempotency-Key");
+        const body = (await request.json()) as {
+          isAdmin: boolean;
+          loginEnabled: boolean;
+        };
+        const accountId = String(params["accountId"]);
+        mswState.loginAccounts = mswState.loginAccounts.map((account) =>
+          account.accountId === accountId
+            ? { ...account, ...body, updatedAt: "2026-01-01T00:00:00.000Z" }
+            : account,
+        );
+        return HttpResponse.json(
+          mswState.loginAccounts.find((account) => account.accountId === accountId),
+        );
+      }),
+    );
     renderPage();
 
     const accountRow = (await screen.findByText("523484457705930752")).closest("tr");
@@ -84,6 +104,7 @@ describe("AdminAccountsPage", () => {
     await user.click(screen.getByRole("button", { name: "停止する" }));
 
     await waitFor(() => expect(within(accountRow!).getByText("ログイン停止")).toBeInTheDocument());
+    expect(idempotencyKey).toMatch(/\S/u);
   });
 
   it("offers one account-creation action when the list is empty", async () => {

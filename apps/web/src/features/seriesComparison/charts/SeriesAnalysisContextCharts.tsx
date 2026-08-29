@@ -14,7 +14,6 @@ import {
   formatPercent,
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
 import type { RelativeIntensity, SeriesComparisonAggregateV3 } from "@/shared/api/seriesAnalysis";
-import { orderFixedMembers } from "@/shared/domain/members";
 import { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
 import { PlayOrderMark } from "@/shared/ui/data/PlayOrderMark";
 import { colorMix } from "@/shared/ui/rank/rankPresentation";
@@ -41,7 +40,7 @@ export function PlayOrderMatrix({
         </tr>
       </thead>
       <tbody>
-        {orderFixedMembers(response.playOrderComparison).map((entry) => {
+        {response.playOrderComparison.map((entry) => {
           const cellByPlayOrder = new Map(entry.cells.map((cell) => [cell.playOrder, cell]));
           return (
             <tr key={entry.memberId}>
@@ -171,7 +170,7 @@ export function CardShopDestinationQuadrants({
 }) {
   return (
     <div className="grid gap-3 lg:grid-cols-2">
-      {orderFixedMembers(response.cardShopDestination).map((entry) => (
+      {response.cardShopDestination.map((entry) => (
         <article
           className="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3"
           key={entry.memberId}

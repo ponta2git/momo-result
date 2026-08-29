@@ -4,6 +4,42 @@ import java.time.Instant
 
 import momo.api.domain.ids.{AccountId, GameTitleId, MapMasterId, MatchId, MemberId, SeasonMasterId}
 
+object SeriesAnalysisVocabulary:
+  val EnvelopeSchemaVersion = 1
+  val JobStatuses: List[String] = List("queued", "running", "succeeded", "failed", "timed_out")
+  val TriggersByPriority: List[String] = List(
+    "manual",
+    "artifact_schema_update",
+    "algorithm_update",
+    "initial_backfill",
+    "match_mutation",
+  )
+  val ArtifactFreshness: List[String] = List("current", "stale", "unavailable")
+  val RequestedBy: List[String] = List("administrator", "mixed", "system")
+  val ResultDispositions: List[String] = List("none", "published", "reused")
+  val RequestDispositions: List[String] = List(
+    "coalesced_into_queued_job",
+    "created_job",
+    "forced_run_reserved",
+  )
+  val AcceptedCampaignStatuses: List[String] = List("expanding")
+  val SafeFailureCodes: List[String] = List(
+    "input_contract_invalid",
+    "input_revision_violation",
+    "calculation_failed",
+    "artifact_validation_failed",
+    "artifact_too_large",
+    "non_deterministic_output",
+    "dependency_retry_exhausted",
+    "lease_recovery_exhausted",
+    "worker_crashed",
+    "hard_timeout",
+    "resource_exhausted",
+    "temporary_storage_exhausted",
+    "publication_failed",
+  )
+end SeriesAnalysisVocabulary
+
 final case class SeriesAnalysisDesiredVersion(
     inputRevision: Long,
     algorithmVersion: String,

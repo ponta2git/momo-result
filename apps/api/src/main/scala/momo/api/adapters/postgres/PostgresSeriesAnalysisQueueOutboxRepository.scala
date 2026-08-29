@@ -20,6 +20,8 @@ import momo.api.repositories.{
 final class PostgresSeriesAnalysisQueueOutboxRepository[F[_]: MonadCancelThrow](
     transactor: Transactor[F]
 ) extends SeriesAnalysisQueueOutboxRepository[F]:
+  private val ExecutionSlotKey = "shared-heavy-work"
+  private val QueuePublishErrorClass = "redis_operation"
   private final case class DeliveryFailureRow(jobId: String, status: String)
 
   override def expandPendingCampaignTargets(now: Instant, limit: Int): F[Int] =
@@ -40,13 +42,17 @@ final class PostgresSeriesAnalysisQueueOutboxRepository[F[_]: MonadCancelThrow](
       claimUntil: Instant,
   ): F[List[SeriesAnalysisQueueOutboxRecord]] = sql"""
     WITH candidate AS (
-      SELECT id
-      FROM series_analysis_queue_outbox
-      WHERE (status = 'pending' AND next_attempt_at <= $now)
-         OR (status = 'in_flight' AND claim_expires_at <= $now)
-      ORDER BY next_attempt_at, created_at, id
+      SELECT q.id
+      FROM series_analysis_queue_outbox q
+      JOIN series_analysis_jobs j ON j.id = q.job_id
+      WHERE j.available_at <= $now
+        AND (
+          (q.status = 'pending' AND q.next_attempt_at <= $now)
+          OR (q.status = 'in_flight' AND q.claim_expires_at <= $now)
+        )
+      ORDER BY q.next_attempt_at, q.created_at, q.id
       LIMIT $limit
-      FOR UPDATE SKIP LOCKED
+      FOR UPDATE OF q SKIP LOCKED
     )
     UPDATE series_analysis_queue_outbox q
     SET status = 'in_flight',
@@ -77,27 +83,36 @@ final class PostgresSeriesAnalysisQueueOutboxRepository[F[_]: MonadCancelThrow](
   """.update.run.map(_ == 1).transact(transactor)
 
   override def releaseForRetry(
-      id: String,
-      claimExpiresAt: Instant,
+      claim: SeriesAnalysisQueueOutboxRecord,
       nextAttemptAt: Instant,
-      safeErrorClass: String,
+      redeliverBefore: Instant,
       now: Instant,
   ): F[Boolean] = (for
-    updated <- sql"""
-      UPDATE series_analysis_queue_outbox
-      SET status = CASE WHEN attempt_count + 1 >= 3 THEN 'failed' ELSE 'pending' END,
-          attempt_count = attempt_count + 1,
-          claim_expires_at = NULL,
-          next_attempt_at = $nextAttemptAt,
-          last_error = $safeErrorClass,
-          updated_at = $now
-      WHERE id = $id
-        AND status = 'in_flight'
-        AND claim_expires_at = $claimExpiresAt
-      RETURNING job_id, status
-    """.query[DeliveryFailureRow].option
+    boundaryExists <- if claim.exhaustsDeliveryAttempts then lockTerminalBoundary(claim)
+    else lockRetryJob(claim.jobId)
+    updated <- if !boundaryExists then Option.empty[DeliveryFailureRow].pure[ConnectionIO]
+    else
+      sql"""
+        UPDATE series_analysis_queue_outbox
+        SET status = CASE WHEN attempt_count + 1 >= 3 THEN 'failed' ELSE 'pending' END,
+            attempt_count = attempt_count + 1,
+            claim_expires_at = NULL,
+            next_attempt_at = GREATEST(
+              $nextAttemptAt,
+              (SELECT available_at FROM series_analysis_jobs WHERE id = ${claim.jobId})
+            ),
+            last_error = $QueuePublishErrorClass,
+            updated_at = $now
+        WHERE id = ${claim.id}
+          AND job_id = ${claim.jobId}
+          AND status = 'in_flight'
+          AND attempt_count = ${claim.attemptCount}
+          AND claim_expires_at = ${claim.claimExpiresAt}
+        RETURNING job_id, status
+      """.query[DeliveryFailureRow].option
     _ <- updated match
-      case Some(row) if row.status == "failed" => failUndeliverableJob(row.jobId, now)
+      case Some(row) if row.status == "failed" =>
+        failUndeliverableJob(row.jobId, redeliverBefore, now)
       case _ => ().pure[ConnectionIO]
   yield updated.nonEmpty).transact(transactor)
 
@@ -110,18 +125,23 @@ final class PostgresSeriesAnalysisQueueOutboxRepository[F[_]: MonadCancelThrow](
       SELECT j.id, j.input_revision
       FROM series_analysis_jobs j
       WHERE j.status = 'queued'
+        AND j.available_at <= $now
+        AND j.lease_owner IS NULL
+        AND j.lease_attempt_id IS NULL
+        AND j.lease_fencing_token IS NULL
+        AND j.lease_expires_at IS NULL
         AND NOT EXISTS (
           SELECT 1
           FROM series_analysis_queue_outbox q
           WHERE q.job_id = j.id
             AND (
               q.status IN ('pending', 'in_flight')
-              OR (q.status = 'delivered' AND q.delivered_at > $redeliverBefore)
+              OR (q.status = 'delivered' AND q.delivered_at >= $redeliverBefore)
             )
         )
       ORDER BY j.available_at, j.requested_at, j.id
       LIMIT $limit
-      FOR UPDATE SKIP LOCKED
+      FOR UPDATE OF j SKIP LOCKED
     )
     INSERT INTO series_analysis_queue_outbox (id, job_id, dedupe_key, next_attempt_at)
     SELECT
@@ -134,28 +154,38 @@ final class PostgresSeriesAnalysisQueueOutboxRepository[F[_]: MonadCancelThrow](
   """.update.run.transact(transactor)
 
   override def nextWakeAt(
-      now: Instant,
+      _now: Instant,
       redeliveryAfter: FiniteDuration,
   ): F[Option[Instant]] =
     val redeliveryMillis = redeliveryAfter.toMillis
     sql"""
       SELECT MIN(wake_at)
       FROM (
-        SELECT next_attempt_at AS wake_at
-        FROM series_analysis_queue_outbox
-        WHERE status = 'pending'
+        SELECT GREATEST(q.next_attempt_at, j.available_at) AS wake_at
+        FROM series_analysis_queue_outbox q
+        JOIN series_analysis_jobs j ON j.id = q.job_id
+        WHERE q.status = 'pending'
         UNION ALL
-        SELECT claim_expires_at AS wake_at
-        FROM series_analysis_queue_outbox
-        WHERE status = 'in_flight'
+        SELECT GREATEST(q.claim_expires_at, j.available_at) AS wake_at
+        FROM series_analysis_queue_outbox q
+        JOIN series_analysis_jobs j ON j.id = q.job_id
+        WHERE q.status = 'in_flight'
         UNION ALL
-        SELECT COALESCE(
-          MAX(q.delivered_at) + ($redeliveryMillis * INTERVAL '1 millisecond'),
-          $now
+        SELECT GREATEST(
+          j.available_at,
+          COALESCE(
+            MAX(q.delivered_at) FILTER (WHERE q.status = 'delivered')
+              + ($redeliveryMillis * INTERVAL '1 millisecond'),
+            j.available_at
+          )
         ) AS wake_at
         FROM series_analysis_jobs j
         LEFT JOIN series_analysis_queue_outbox q ON q.job_id = j.id
         WHERE j.status = 'queued'
+          AND j.lease_owner IS NULL
+          AND j.lease_attempt_id IS NULL
+          AND j.lease_fencing_token IS NULL
+          AND j.lease_expires_at IS NULL
         GROUP BY j.id
         HAVING COUNT(q.id) FILTER (WHERE q.status IN ('pending', 'in_flight')) = 0
       ) deadlines
@@ -237,7 +267,11 @@ final class PostgresSeriesAnalysisQueueOutboxRepository[F[_]: MonadCancelThrow](
     obsoleteArtifacts,
   )).transact(transactor)
 
-  private def failUndeliverableJob(jobId: String, now: Instant): ConnectionIO[Unit] =
+  private def failUndeliverableJob(
+      jobId: String,
+      redeliverBefore: Instant,
+      now: Instant,
+  ): ConnectionIO[Unit] =
     for
       failed <- sql"""
         UPDATE series_analysis_jobs j
@@ -249,12 +283,59 @@ final class PostgresSeriesAnalysisQueueOutboxRepository[F[_]: MonadCancelThrow](
           AND j.status = 'queued'
           AND NOT EXISTS (
             SELECT 1 FROM series_analysis_queue_outbox q
-            WHERE q.job_id = j.id AND q.status IN ('pending', 'in_flight', 'delivered')
+            WHERE q.job_id = j.id
+              AND (
+                q.status IN ('pending', 'in_flight')
+                OR (q.status = 'delivered' AND q.delivered_at >= $redeliverBefore)
+              )
           )
         RETURNING game_title_id
       """.query[String].option
       _ <- failed.traverse_(gameTitleId => closeUndeliverableRequests(jobId, gameTitleId, now))
     yield ()
+
+  private def lockRetryJob(jobId: String): ConnectionIO[Boolean] = sql"""
+    SELECT id
+    FROM series_analysis_jobs
+    WHERE id = $jobId
+    FOR UPDATE
+  """.query[String].option.map(_.nonEmpty)
+
+  private def lockTerminalBoundary(
+      claim: SeriesAnalysisQueueOutboxRecord
+  ): ConnectionIO[Boolean] = sql"""
+    SELECT game_title_id
+    FROM series_analysis_jobs
+    WHERE id = ${claim.jobId}
+  """.query[String].option.flatMap {
+    case None => false.pure[ConnectionIO]
+    case Some(gameTitleId) =>
+      for
+        _ <- sql"""
+          SELECT slot_key
+          FROM worker_execution_slots
+          WHERE slot_key = $ExecutionSlotKey
+          FOR UPDATE
+        """.query[String].unique
+        titleExists <- sql"""
+          SELECT game_title_id
+          FROM series_analysis_title_states
+          WHERE game_title_id = $gameTitleId
+          FOR UPDATE
+        """.query[String].option.map(_.nonEmpty)
+        jobExists <- sql"""
+          SELECT id
+          FROM series_analysis_jobs
+          WHERE id = ${claim.jobId} AND game_title_id = $gameTitleId
+          FOR UPDATE
+        """.query[String].option.map(_.nonEmpty)
+        _ <- if jobExists && !titleExists then
+          new IllegalStateException(
+            s"Series analysis job ${claim.jobId} has no title state"
+          ).raiseError[ConnectionIO, Unit]
+        else ().pure[ConnectionIO]
+      yield jobExists
+  }
 
   private def closeUndeliverableRequests(
       jobId: String,

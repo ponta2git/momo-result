@@ -23,7 +23,7 @@ fn queue_payload_and_retry_backoff_match_the_delivery_contract() {
     );
     assert_eq!(
         (0..=2)
-            .map(|attempt| delivery_retry_delay(attempt, Duration::from_mins(1)))
+            .map(delivery_retry_delay)
             .collect::<Result<Vec<_>, _>>()
             .map_err(|error| error.to_string()),
         Ok(vec![
@@ -37,13 +37,7 @@ fn queue_payload_and_retry_backoff_match_the_delivery_contract() {
 #[test]
 fn configuration_rejects_unbounded_or_immediate_work() {
     assert!(matches!(
-        SeriesAnalysisOutboxConfig::new(
-            String::new(),
-            0,
-            Duration::ZERO,
-            Duration::ZERO,
-            Duration::ZERO,
-        ),
+        SeriesAnalysisOutboxConfig::new(String::new(), 0, Duration::ZERO, Duration::ZERO,),
         Err(SeriesAnalysisOutboxError::InvalidConfiguration)
     ));
     assert!(
@@ -51,7 +45,6 @@ fn configuration_rejects_unbounded_or_immediate_work() {
             String::from("analysis-stream"),
             10,
             Duration::from_secs(30),
-            Duration::from_mins(1),
             Duration::from_mins(5),
         )
         .is_ok()
@@ -62,7 +55,6 @@ fn configuration_rejects_unbounded_or_immediate_work() {
             String::from("analysis-stream"),
             10,
             Duration::MAX,
-            Duration::from_mins(1),
             Duration::from_mins(5),
         ),
         Err(SeriesAnalysisOutboxError::DurationBound(_))
@@ -101,7 +93,6 @@ async fn real_postgres_and_redis_preserve_claim_and_payload_contract() -> SmokeR
         String::from(STREAM),
         10,
         Duration::from_secs(30),
-        Duration::from_mins(1),
         Duration::from_mins(5),
     )?;
     let redis = redis_client.get_connection_manager().await?;

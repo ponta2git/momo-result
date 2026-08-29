@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "scope": { "kind": "overall", "matchCount": 1 },
+  "matchId": "match-1",
+  "sourceMatchRevision": "1",
+  "match": {
+    "matchIndex": 1,
+    "playedAt": "2026-01-01T00:00:00.000000Z",
+    "players": [
+      {
+        "memberId": "member-1",
+        "rank": 1,
+        "totalAssetsManYen": 1000,
+        "revenueManYen": 100,
+        "revenueRank": 1.0,
+        "revenueAssetRate": 0.1,
+        "previousRank": null,
+        "cumulativeAverageBefore": null,
+        "cumulativeAverageAfter": 1.0,
+        "cumulativeAverageDelta": null,
+        "cumulativeAverageDirection": "first_observation"
+      }
+    ],
+    "focusedItemIds": [
+      "rank-distribution:member-1:1",
+      "recent-rank:member-1:match-1"
+    ],
+    "features": []
+  }
+}

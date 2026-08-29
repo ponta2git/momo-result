@@ -114,8 +114,11 @@ private[http] object IdempotencyReplay:
           case Right(result) =>
             handleFreshResult(guard.repository, key, account, endpoint, requestHash, result)
           case Left(error) =>
+            // A raised error does not prove that the mutation transaction rolled back: the
+            // connection can fail after PostgreSQL committed. Keep the reservation pending so a
+            // retry cannot duplicate an outcome whose commit status is unknown. Domain failures
+            // returned as Left below are known not to have committed and may be abandoned.
             logIdempotencyFailure(endpoint, account, key, "run mutation", error) >>
-              abandonReservation(guard.repository, key, account, endpoint, requestHash) >>
               Async[F].raiseError(error)
         }
       case IdempotencyReservation.Replay(response) =>

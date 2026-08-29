@@ -130,8 +130,10 @@ object PostgresSeriesAnalysisRepository:
   def create[F[_]: Async](
       transactor: Transactor[F],
       readConfig: SeriesAnalysisReadConfig,
-  ): F[PostgresSeriesAnalysisRepository[F]] = Semaphore[F](readConfig.decodeConcurrency.toLong)
-    .map(new PostgresSeriesAnalysisRepository(transactor, readConfig, _))
+  ): F[PostgresSeriesAnalysisRepository[F]] =
+    Async[F].delay(SeriesAnalysisPayloadValidator.ensureReady()) *>
+      Semaphore[F](readConfig.decodeConcurrency.toLong)
+        .map(new PostgresSeriesAnalysisRepository(transactor, readConfig, _))
 
   private[postgres] def boundedChunkRead[F[_]: Async](
       semaphore: Semaphore[F],

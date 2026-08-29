@@ -73,28 +73,31 @@ final class SeriesAnalysisQueueOutboxDispatcherSpec extends MomoCatsEffectSuite:
       result <- dispatcher(repository, queue).drainBatch
     yield assertEquals(result, OutboxDrainResult.Idle(Some(now.plusSeconds(1))))
 
-  test("failed publish uses a one-second first retry and a sanitized error class"):
+  test("failed publishes use the fixed two, four, and eight second retry schedule"):
     val failure = new IllegalStateException("redis://secret-host/analysis")
+    val retryRows = List(
+      SeriesAnalysisQueueOutboxRecord("outbox-1", "job-1", 0, claimUntil),
+      SeriesAnalysisQueueOutboxRecord("outbox-2", "job-2", 1, claimUntil),
+      SeriesAnalysisQueueOutboxRecord("outbox-3", "job-3", 2, claimUntil),
+    )
     for
       calls <- Ref.of[IO, Calls](Calls.empty)
       published <- Ref.of[IO, Vector[String]](Vector.empty)
-      repository = RecordingRepository(calls, List(row), None)
+      repository = RecordingRepository(calls, retryRows, None)
       queue = RecordingPublisher(published, Left(failure))
       _ <- dispatcher(repository, queue).drainBatch
       actual <- calls.get
       actualPublished <- published.get
     yield
-      assertEquals(actualPublished, Vector("job-1"))
+      assertEquals(actualPublished, Vector("job-1", "job-2", "job-3"))
       assertEquals(actual.deliveries, Vector.empty)
       assertEquals(
         actual.releases,
-        Vector((
-          "outbox-1",
-          claimUntil,
-          now.plusSeconds(1),
-          classOf[IllegalStateException].getName,
-          now,
-        )),
+        Vector(
+          (retryRows(0), now.plusSeconds(2), now.minusSeconds(300), now),
+          (retryRows(1), now.plusSeconds(4), now.minusSeconds(300), now),
+          (retryRows(2), now.plusSeconds(8), now.minusSeconds(300), now),
+        ),
       )
 
   private def dispatcher(
@@ -109,7 +112,7 @@ final class SeriesAnalysisQueueOutboxDispatcherSpec extends MomoCatsEffectSuite:
       reconciliations: Vector[(Instant, Instant, Int)],
       claims: Vector[(Int, Instant, Instant)],
       deliveries: Vector[(String, Instant, String, Instant)],
-      releases: Vector[(String, Instant, Instant, String, Instant)],
+      releases: Vector[(SeriesAnalysisQueueOutboxRecord, Instant, Instant, Instant)],
       nextWakeAts: Vector[(Instant, FiniteDuration)],
   )
 
@@ -154,14 +157,13 @@ final class SeriesAnalysisQueueOutboxDispatcherSpec extends MomoCatsEffectSuite:
     ).as(true)
 
     override def releaseForRetry(
-        id: String,
-        claimExpiresAt: Instant,
+        claim: SeriesAnalysisQueueOutboxRecord,
         nextAttemptAt: Instant,
-        safeErrorClass: String,
+        redeliverBefore: Instant,
         now: Instant,
     ): IO[Boolean] = calls.update(value =>
       value.copy(
-        releases = value.releases :+ ((id, claimExpiresAt, nextAttemptAt, safeErrorClass, now))
+        releases = value.releases :+ ((claim, nextAttemptAt, redeliverBefore, now))
       )
     ).as(true)
 

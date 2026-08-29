@@ -4,7 +4,7 @@ import java.time.format.DateTimeFormatter
 
 import io.circe.Codec
 
-import momo.api.domain.SeriesAnalysisRecalculationAccepted
+import momo.api.domain.{SeriesAnalysisRecalculationAccepted, SeriesAnalysisVocabulary}
 
 final case class SeriesAnalysisRecalculationRequest(gameTitleId: String) derives Codec.AsObject
 final case class SeriesAnalysisAllRecalculationRequest(confirmation: String) derives Codec.AsObject
@@ -28,7 +28,7 @@ object SeriesAnalysisRecalculationAcceptedResponse:
   def from(
       value: SeriesAnalysisRecalculationAccepted
   ): SeriesAnalysisRecalculationAcceptedResponse = SeriesAnalysisRecalculationAcceptedResponse(
-    1,
+    SeriesAnalysisVocabulary.EnvelopeSchemaVersion,
     value.requestId,
     DateTimeFormatter.ISO_INSTANT.format(value.acceptedAt),
     value.targetCount,

@@ -32,9 +32,7 @@ export function MatchFeatureSection({
           {view.badges.map((badge) => (
             <li
               key={badge.id}
-              aria-label={`${badge.label}。${badge.description}。${
-                badge.source === "series" ? "同条件内の比較" : "試合記録"
-              }から判定`}
+              aria-label={`${badge.label}。${badge.description}`}
               title={badge.description}
               className={cn(
                 "inline-flex min-h-7 items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold text-[var(--color-text-primary)]",
@@ -42,9 +40,6 @@ export function MatchFeatureSection({
               )}
             >
               <span>{badge.label}</span>
-              <span className="text-[10px] font-medium text-[var(--color-text-secondary)]">
-                {badge.source === "series" ? "同条件内" : "試合記録"}
-              </span>
             </li>
           ))}
         </ul>
@@ -104,9 +99,6 @@ export function MatchFeatureSection({
 }
 
 function matchFeatureBadgeClass(badge: MatchFeatureBadge): string {
-  if (badge.source === "series") {
-    return "border-[var(--color-analysis-emphasis)]/35 bg-[var(--color-analysis-emphasis)]/8";
-  }
   if (badge.tone === "notice") {
     return "border-[var(--color-review)]/45 bg-[var(--color-review)]/10";
   }

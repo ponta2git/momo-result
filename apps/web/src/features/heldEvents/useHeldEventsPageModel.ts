@@ -143,7 +143,15 @@ export function useHeldEventsPageModel(): HeldEventsPageModel {
   }, initialCreateHeldEventState);
 
   const deleteMutation = useMutation({
-    mutationFn: (event: HeldEventResponse) => deleteHeldEvent(event.id),
+    mutationFn: (event: HeldEventResponse) => {
+      const intent = { heldEventId: event.id };
+      return runIdempotentMutation(
+        idempotencyKeys,
+        "heldEvents.deleteHeldEvent",
+        intent,
+        (options) => deleteHeldEvent(event.id, options),
+      );
+    },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: heldEventKeys.all() });
       setDeleteTarget(null);

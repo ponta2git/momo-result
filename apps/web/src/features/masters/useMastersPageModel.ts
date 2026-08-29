@@ -111,6 +111,7 @@ export function useMastersPageModel() {
 
   const editCommands = useMasterEditCommands({
     authScope,
+    idempotencyKeys,
     queryClient,
     selectedGameTitleId: viewModel.selectedGameTitleId,
     setOperationError,

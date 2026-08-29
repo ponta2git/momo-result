@@ -5,13 +5,9 @@ const matchFeatureIds = [
   "ginji_storm",
   "negative_assets",
   "no_destination",
-  "destination_burst",
-  "low_revenue_win",
-  "fourth_order_win",
 ] as const;
 
 export type MatchFeatureId = (typeof matchFeatureIds)[number];
-export type MatchFeatureSource = "match" | "series";
 export type MatchFeatureTone = "neutral" | "notice";
 
 export type MatchFeatureDefinition = {
@@ -56,24 +52,6 @@ const matchFeatureDefinitions = {
     description: "全社長の目的地到着数が0回だった試合です。",
     id: "no_destination",
     label: "目的地なし決着",
-    tone: "neutral",
-  },
-  destination_burst: {
-    description: "全社長の目的地到着数が合計4回以上だった試合です。",
-    id: "destination_burst",
-    label: "目的地ラッシュ",
-    tone: "neutral",
-  },
-  low_revenue_win: {
-    description: "優勝社長の物件収益順位が3位以下だった試合です。",
-    id: "low_revenue_win",
-    label: "低収益勝ち",
-    tone: "neutral",
-  },
-  fourth_order_win: {
-    description: "4番手の社長が優勝した試合です。",
-    id: "fourth_order_win",
-    label: "4番手勝利",
     tone: "neutral",
   },
 } satisfies Record<MatchFeatureId, MatchFeatureDefinition>;

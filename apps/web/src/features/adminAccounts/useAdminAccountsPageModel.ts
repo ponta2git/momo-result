@@ -114,7 +114,13 @@ export function useAdminAccountsPageModel(): AdminAccountsPageModel {
     }: {
       accountId: string;
       request: UpdateLoginAccountRequest;
-    }) => updateLoginAccount(accountId, request),
+    }) =>
+      runIdempotentMutation(
+        idempotencyKeys,
+        "adminAccounts.updateLoginAccount",
+        { accountId, request },
+        (options) => updateLoginAccount(accountId, request, options),
+      ),
     onSuccess: async () => {
       await invalidateAdminAccountCaches(queryClient);
       showToast({ title: "アカウント設定を更新しました", tone: "success" });

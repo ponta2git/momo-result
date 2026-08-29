@@ -19,6 +19,7 @@ import {
 import { setupMsw } from "@/test/msw/lifecycle";
 import {
   analysisArtifact,
+  makeSeriesAnalysisExcludedMatchContext,
   makeSeriesAnalysisMatchContext,
   makeSeriesAnalysisStatus,
 } from "@/test/msw/seriesAnalysisFixtures";
@@ -640,7 +641,7 @@ describe("MatchDetailPage", () => {
                 featureCode: "close_finish",
                 memberIds: [],
                 priority: 1,
-                source: "series",
+                source: "match",
                 tone: "neutral",
               },
               {
@@ -677,7 +678,7 @@ describe("MatchDetailPage", () => {
               },
               {
                 evidence: [],
-                featureCode: "low_revenue_win",
+                featureCode: "asset_blowout",
                 memberIds: [],
                 priority: 6,
                 source: "match",
@@ -706,8 +707,8 @@ describe("MatchDetailPage", () => {
     expect(screen.getByText("スリの銀次多発")).toBeInTheDocument();
     expect(screen.getByText("借金あり")).toBeInTheDocument();
     expect(screen.getByText("目的地なし決着")).toBeInTheDocument();
-    expect(screen.getByText("低収益勝ち")).toBeInTheDocument();
-    expect(screen.getByText("同条件内")).toBeInTheDocument();
+    expect(screen.getByText("大差")).toBeInTheDocument();
+    expect(screen.getByText("同じ作品・シーズン・マップの試合と比較")).toBeInTheDocument();
     const contextParams = new URLSearchParams(contextSearches.at(-1));
     expect(contextParams.get("artifactId")).toBe("artifact-current");
     expect(contextParams.get("gameTitleId")).toBe("gt_momotetsu_2");
@@ -1140,13 +1141,9 @@ describe("MatchDetailPage", () => {
     setDevUser();
     server.use(
       http.get("/api/analytics/series-comparison/v2/match-context", () => {
-        const context = makeSeriesAnalysisMatchContext();
-        return HttpResponse.json({
-          ...context,
-          inclusion: { status: "match_changed_since_artifact" },
-          match: null,
-          matchId: "match-1",
-        });
+        return HttpResponse.json(
+          makeSeriesAnalysisExcludedMatchContext("match_changed_since_artifact", "match-1"),
+        );
       }),
     );
 

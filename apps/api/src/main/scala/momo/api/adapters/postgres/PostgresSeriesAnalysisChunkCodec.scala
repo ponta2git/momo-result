@@ -108,14 +108,6 @@ private[postgres] object PostgresSeriesAnalysisChunkCodec:
           .parseByteArray(payload)
           .leftMap(_ => AppError.Internal("Invalid analysis artifact payload."))
         inspection <- inspectJson(json, config.maxNestingDepth, config.maxJsonNodes)
-        _ <- validateDecodedJson(
-          json,
-          request,
-          itemCount,
-          sourceMatchRevision,
-          depth,
-          inspection.depth,
-        )
         _ <- Either.cond(
           !inspection.tooManyMembers,
           (),
@@ -125,6 +117,14 @@ private[postgres] object PostgresSeriesAnalysisChunkCodec:
           !inspection.invalidUnicode,
           (),
           AppError.Internal("Analysis artifact contains invalid Unicode."),
+        )
+        _ <- validateDecodedJson(
+          json,
+          request,
+          itemCount,
+          sourceMatchRevision,
+          depth,
+          inspection.depth,
         )
       yield DecodedSeriesAnalysisChunk(
         artifact,
@@ -157,14 +157,17 @@ private[postgres] object PostgresSeriesAnalysisChunkCodec:
       chunk: DecodedSeriesAnalysisChunk,
       sourceMatchRevision: Long,
   ): DecodedSeriesAnalysisChunk = chunk.copy(
-    payload = chunk.payload.mapObject(_.add(
-      "inclusion",
-      Json.obj(
-        "status" -> Json.fromString("included"),
-        "sourceMatchRevision" -> Json.fromString(sourceMatchRevision.toString),
-      ),
-    )),
-    nodeCount = chunk.nodeCount + 3,
+    payload = chunk.payload.mapObject(
+      _.remove("sourceMatchRevision").add(
+        "inclusion",
+        Json.obj(
+          "status" -> Json.fromString("included"),
+          "sourceMatchRevision" -> Json.fromString(sourceMatchRevision.toString),
+        ),
+      )
+    ),
+    // The stored revision string moves under `inclusion`; only its wrapper and status add nodes.
+    nodeCount = chunk.nodeCount + 2,
   )
 
   def excludedContext(

@@ -19,44 +19,13 @@ final class SeriesAnalysisPayloadValidatorSpec extends FunSuite with JsonSchemaA
   private val titleId = GameTitleId.unsafeFromString("title-payload-validator")
   private val overall = SeriesAnalysisScope.Overall
 
-  test("accepts each bounded resource shape"):
-    assertEquals(
-      validate(aggregate, simpleRequest(SeriesAnalysisChunkKind.Aggregate), 0, None),
-      true,
-    )
-    assertEquals(
-      validate(review, simpleRequest(SeriesAnalysisChunkKind.Review), 0, None),
-      true,
-    )
-    SeriesAnalysisDrilldownMetric.values.foreach { metric =>
-      assertEquals(
-        validate(
-          drilldown(metric),
-          request(SeriesAnalysisChunkKind.Drilldown, Some("member-1"), Some(metric), None),
-          1,
-          None,
-        ),
-        true,
-        metric.id,
-      )
-    }
-    assertEquals(
-      validate(
-        matchContext,
-        request(SeriesAnalysisChunkKind.MatchContext, None, None, Some("match-1")),
-        1,
-        Some(7),
-      ),
-      true,
-    )
-
-  test("accepts the shared v3 payload fixtures"):
+  test("accepts the four shared owner resource fixtures"):
     assertEquals(
       validate(
         sharedFixture("aggregate-payload-v3.json"),
         simpleRequest(SeriesAnalysisChunkKind.Aggregate),
         0,
-        None
+        None,
       ),
       true,
     )
@@ -65,7 +34,7 @@ final class SeriesAnalysisPayloadValidatorSpec extends FunSuite with JsonSchemaA
         sharedFixture("review-payload-v3.json"),
         simpleRequest(SeriesAnalysisChunkKind.Review),
         1,
-        None
+        None,
       ),
       true,
     )
@@ -83,10 +52,19 @@ final class SeriesAnalysisPayloadValidatorSpec extends FunSuite with JsonSchemaA
       ),
       true,
     )
+    assertEquals(
+      validate(
+        sharedFixture("match-context-payload-v1.json"),
+        request(SeriesAnalysisChunkKind.MatchContext, None, None, Some("match-1")),
+        1,
+        Some(1),
+      ),
+      true,
+    )
   test("rejects unknown fields and manifest identity mismatches"):
     assertEquals(
       validate(
-        aggregate.mapObject(_.add("unexpected", Json.True)),
+        sharedFixture("aggregate-payload-v3.json").mapObject(_.add("unexpected", Json.True)),
         simpleRequest(SeriesAnalysisChunkKind.Aggregate),
         0,
         None,
@@ -95,7 +73,7 @@ final class SeriesAnalysisPayloadValidatorSpec extends FunSuite with JsonSchemaA
     )
     assertEquals(
       validate(
-        drilldown(SeriesAnalysisDrilldownMetric.RankAverageHistory),
+        sharedFixture("drilldown-payload-v3.json"),
         request(
           SeriesAnalysisChunkKind.Drilldown,
           Some("member-other"),
@@ -109,46 +87,134 @@ final class SeriesAnalysisPayloadValidatorSpec extends FunSuite with JsonSchemaA
     )
     assertEquals(
       validate(
-        matchContext,
+        sharedFixture("match-context-payload-v1.json"),
         request(SeriesAnalysisChunkKind.MatchContext, None, None, Some("match-1")),
         1,
-        Some(8),
+        Some(2),
       ),
       false,
     )
 
-  test("rejects negative aggregate denominators even when their sum matches"):
-    val invalid = aggregate.mapObject(objectValue =>
-      objectValue
-        .add(
-          "players",
-          Json.arr(
-            Json.obj("memberId" -> Json.fromString("member-1")),
-            Json.obj("memberId" -> Json.fromString("member-2")),
-          )
-        )
-        .add(
-          "metricsByPlayer",
-          Json.arr(
-            Json.obj(
-              "memberId" -> Json.fromString("member-1"),
-              "denominator" -> Json.fromLong(-1),
-            ),
-            Json.obj(
-              "memberId" -> Json.fromString("member-2"),
-              "denominator" -> Json.fromLong(1),
-            ),
-          )
-        )
+  test("rejects nested empty shapes and unknown nested fields"):
+    val aggregate = sharedFixture("aggregate-payload-v3.json")
+    val emptyObject = aggregate.hcursor
+      .downField("summary")
+      .withFocus(_ => Json.obj())
+      .top
+      .getOrElse(fail("failed to replace aggregate summary"))
+    val emptyArray = aggregate.hcursor
+      .downField("strategyScatter")
+      .withFocus(_ => Json.arr())
+      .top
+      .getOrElse(fail("failed to replace aggregate strategyScatter"))
+    val unknownNested = aggregate.hcursor
+      .downField("source")
+      .withFocus(_.mapObject(_.add("unexpected", Json.True)))
+      .top
+      .getOrElse(fail("failed to add nested aggregate field"))
+
+    List(emptyObject, emptyArray, unknownNested).foreach { invalid =>
+      assertEquals(
+        validate(invalid, simpleRequest(SeriesAnalysisChunkKind.Aggregate), 0, None),
+        false,
+      )
+    }
+
+  test("rejects a drilldown resource from a different metric branch"):
+    val invalid = sharedFixture("drilldown-payload-v3.json").hcursor
+      .downField("payload")
+      .downField("kind")
+      .withFocus(_ => Json.fromString("unexpected_wins"))
+      .top
+      .getOrElse(fail("failed to replace drilldown payload kind"))
+
+    assertEquals(
+      validate(
+        invalid,
+        request(
+          SeriesAnalysisChunkKind.Drilldown,
+          Some("member-1"),
+          Some(SeriesAnalysisDrilldownMetric.UnexpectedWins),
+          None,
+        ),
+        1,
+        None,
+      ),
+      false,
     )
+
+  test("rejects a negative value in an unsigned schema field"):
+    val invalid = sharedFixture("aggregate-payload-v3.json").hcursor
+      .downField("summary")
+      .downField("totalGinjiCount")
+      .withFocus(_ => Json.fromLong(-1))
+      .top
+      .getOrElse(fail("failed to replace aggregate totalGinjiCount"))
 
     assertEquals(
       validate(invalid, simpleRequest(SeriesAnalysisChunkKind.Aggregate), 0, None),
       false,
     )
 
-  test("accepts bounded variable focus IDs and rejects duplicates"):
-    val expanded = matchContext.hcursor
+  test("enforces the Rust owner's UTF-8 byte bound instead of a character-count approximation"):
+    val oversized = sharedFixture("aggregate-payload-v3.json").hcursor
+      .downField("source")
+      .downField("gameTitleId")
+      .withFocus(_ => Json.fromString("あ" * 1400))
+      .top.getOrElse(fail("failed to replace aggregate source gameTitleId"))
+
+    assertEquals(
+      validate(oversized, simpleRequest(SeriesAnalysisChunkKind.Aggregate), 0, None),
+      false,
+    )
+
+  test("rejects match-number rows that can misalign Web matrix labels and values"):
+    val aggregate = sharedFixture("aggregate-payload-v3.json")
+    def withEntries(entries: Json*): Json = aggregate.hcursor
+      .downField("matchNoInEvent")
+      .withFocus(_.mapObject(_.add("entries", Json.arr(entries*))))
+      .top.getOrElse(fail("failed to replace match-number entries"))
+    def entry(number: Int, category: String, players: Json*): Json = Json.obj(
+      "category" -> Json.fromString(category),
+      "matchNoInEvent" -> Json.fromInt(number),
+      "players" -> Json.arr(players*),
+    )
+    val rowPlayer = Json.obj(
+      "averageRank" -> Json.fromDoubleOrNull(1.0),
+      "memberId" -> Json.fromString("member-out-of-order"),
+      "podiumRate" -> Json.fromDoubleOrNull(1.0),
+      "qualityStatus" -> Json.fromString("ok"),
+      "targetCount" -> Json.fromInt(1),
+    )
+
+    assert(validate(
+      withEntries(entry(1, "regular")),
+      simpleRequest(SeriesAnalysisChunkKind.Aggregate),
+      0,
+      None
+    ))
+    assert(!validate(
+      withEntries(entry(1, "additional")),
+      simpleRequest(SeriesAnalysisChunkKind.Aggregate),
+      0,
+      None
+    ))
+    assert(!validate(
+      withEntries(entry(2, "regular"), entry(1, "regular")),
+      simpleRequest(SeriesAnalysisChunkKind.Aggregate),
+      0,
+      None,
+    ))
+    assert(!validate(
+      withEntries(entry(1, "regular", rowPlayer)),
+      simpleRequest(SeriesAnalysisChunkKind.Aggregate),
+      0,
+      None,
+    ))
+
+  test("accepts bounded variable focus IDs and rejects dependent semantic violations"):
+    val context = sharedFixture("match-context-payload-v1.json")
+    val expanded = context.hcursor
       .downField("match")
       .withFocus(_.mapObject(_.add(
         "focusedItemIds",
@@ -161,12 +227,12 @@ final class SeriesAnalysisPayloadValidatorSpec extends FunSuite with JsonSchemaA
         expanded,
         request(SeriesAnalysisChunkKind.MatchContext, None, None, Some("match-1")),
         1,
-        Some(7),
+        Some(1),
       ),
       true,
     )
 
-    val overflow = matchContext.hcursor
+    val overflow = context.hcursor
       .downField("match")
       .withFocus(_.mapObject(_.add(
         "focusedItemIds",
@@ -179,12 +245,12 @@ final class SeriesAnalysisPayloadValidatorSpec extends FunSuite with JsonSchemaA
         overflow,
         request(SeriesAnalysisChunkKind.MatchContext, None, None, Some("match-1")),
         1,
-        Some(7),
+        Some(1),
       ),
       false,
     )
 
-    val duplicated = matchContext.hcursor
+    val duplicated = context.hcursor
       .downField("match")
       .withFocus(_.mapObject(_.add(
         "focusedItemIds",
@@ -197,7 +263,41 @@ final class SeriesAnalysisPayloadValidatorSpec extends FunSuite with JsonSchemaA
         duplicated,
         request(SeriesAnalysisChunkKind.MatchContext, None, None, Some("match-1")),
         1,
-        Some(7),
+        Some(1),
+      ),
+      false,
+    )
+
+    val underflow = context.hcursor
+      .downField("match")
+      .withFocus(_.mapObject(_.add(
+        "focusedItemIds",
+        Json.arr(Json.fromString("only-one")),
+      )))
+      .top
+      .getOrElse(fail("failed to underflow focusedItemIds"))
+    assertEquals(
+      validate(
+        underflow,
+        request(SeriesAnalysisChunkKind.MatchContext, None, None, Some("match-1")),
+        1,
+        Some(1),
+      ),
+      false,
+    )
+
+    val duplicateRank = context.hcursor
+      .downField("match")
+      .downField("players")
+      .withFocus(array => array.mapArray(values => values :+ values.head))
+      .top
+      .getOrElse(fail("failed to duplicate match rank"))
+    assertEquals(
+      validate(
+        duplicateRank,
+        request(SeriesAnalysisChunkKind.MatchContext, None, None, Some("match-1")),
+        2,
+        Some(1),
       ),
       false,
     )
@@ -230,114 +330,4 @@ final class SeriesAnalysisPayloadValidatorSpec extends FunSuite with JsonSchemaA
       itemCount: Int,
       revision: Option[Long],
   ): Boolean = SeriesAnalysisPayloadValidator.validate(json, request, itemCount, revision)
-
-  private def aggregate: Json = json(
-    """{
-      "schemaVersion":3,
-      "scope":{"kind":"overall","matchCount":0},
-      "players":[],
-      "summary":{},
-      "metricsByPlayer":[],
-      "rankDistribution":[],
-      "recentRanks":[],
-      "strategyScatter":{},
-      "playOrderComparison":[],
-      "revenueRankConversion":[],
-      "trends":[],
-      "histograms":{},
-      "headToHead":[],
-      "momentumSwitch":{},
-      "performanceProfiles":{},
-      "assetStyleProfiles":{},
-      "cardShopDestination":{},
-      "matchDigest":[],
-      "matchNoInEvent":[],
-      "rankAnalysis":{},
-      "highlights":[],
-      "dataQuality":{},
-      "metricDefinitions":[],
-      "source":{}
-    }"""
-  )
-
-  private def review: Json = json(
-    """{
-      "schemaVersion":3,
-      "scope":{"kind":"overall","matchCount":0},
-      "baseline":{},
-      "commonPlaybookTopics":[],
-      "playbookByPlayer":[],
-      "dataQuality":{}
-    }"""
-  )
-
-  private def drilldown(metric: SeriesAnalysisDrilldownMetric): Json =
-    val detail = metric match
-      case SeriesAnalysisDrilldownMetric.RankAverageHistory => Json.obj(
-          "kind" -> Json.fromString("rank_average_history"),
-          "summary" -> Json.obj("targetCount" -> Json.fromInt(1)),
-          "matchRows" -> Json.arr(),
-          "eventRows" -> Json.arr(),
-        )
-      case SeriesAnalysisDrilldownMetric.PlayOrderRankHistory => Json.obj(
-          "kind" -> Json.fromString("play_order_rank_history"),
-          "summary" -> Json.obj("targetCount" -> Json.fromInt(1)),
-          "seriesByPlayOrder" -> Json.arr(),
-          "rows" -> Json.arr(),
-        )
-      case SeriesAnalysisDrilldownMetric.RankSignals => Json.obj(
-          "kind" -> Json.fromString("rank_signals"),
-          "method" -> Json.obj(),
-          "status" -> Json.fromString("insufficient_data"),
-          "reasonCodes" -> Json.arr(),
-          "heldEventCount" -> Json.fromInt(0),
-          "matchCount" -> Json.fromInt(0),
-          "improvedFoldCount" -> Json.fromInt(0),
-          "candidates" -> Json.arr(),
-        )
-      case SeriesAnalysisDrilldownMetric.UnexpectedWins => Json.obj(
-          "kind" -> Json.fromString("unexpected_wins"),
-          "summary" -> Json.obj(),
-          "rows" -> Json.arr(),
-        )
-    Json.obj(
-      "schemaVersion" -> Json.fromInt(3),
-      "scope" -> Json.obj(
-        "kind" -> Json.fromString("overall"),
-        "matchCount" -> Json.fromInt(1),
-      ),
-      "player" -> Json.obj("memberId" -> Json.fromString("member-1")),
-      "payload" -> detail,
-    )
-
-  private def matchContext: Json = json(
-    """{
-      "schemaVersion":1,
-      "scope":{"kind":"overall","matchCount":1},
-      "matchId":"match-1",
-      "sourceMatchRevision":"7",
-      "match":{
-        "matchIndex":1,
-        "playedAt":"2026-08-09T00:00:00Z",
-        "players":[{
-          "memberId":"member-1",
-          "rank":1,
-          "totalAssetsManYen":100,
-          "revenueManYen":10,
-          "revenueRank":1,
-          "revenueAssetRate":0.1,
-          "previousRank":null,
-          "cumulativeAverageBefore":null,
-          "cumulativeAverageAfter":1,
-          "cumulativeAverageDelta":null,
-          "cumulativeAverageDirection":"first_observation"
-        }],
-        "focusedItemIds":["a","b","c"],
-        "features":[]
-      }
-    }"""
-  )
-
-  private def json(value: String): Json = parse(value)
-    .fold(error => fail(s"invalid fixture: $error"), identity)
 end SeriesAnalysisPayloadValidatorSpec

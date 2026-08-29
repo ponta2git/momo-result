@@ -6,6 +6,8 @@ import {
   invalidateMemberAliasCaches,
 } from "@/features/masters/masterResourceCache";
 import { parseLayoutFamily, normalizeName } from "@/features/masters/masterValidation";
+import type { IdempotencyKeyStore } from "@/shared/api/idempotency";
+import { runIdempotentMutation } from "@/shared/api/idempotency";
 import {
   deleteGameTitle,
   deleteMapMaster,
@@ -19,13 +21,20 @@ import {
 
 export function useMasterEditCommands(input: {
   authScope: string;
+  idempotencyKeys: IdempotencyKeyStore;
   queryClient: QueryClient;
   selectedGameTitleId: string;
   setOperationError: (message: string | undefined) => void;
   setSelectedGameTitleId: (id: string) => void;
 }) {
-  const { authScope, queryClient, selectedGameTitleId, setOperationError, setSelectedGameTitleId } =
-    input;
+  const {
+    authScope,
+    idempotencyKeys,
+    queryClient,
+    selectedGameTitleId,
+    setOperationError,
+    setSelectedGameTitleId,
+  } = input;
   const [pendingMutationCount, setPendingMutationCount] = useState(0);
 
   const trackMutation = useCallback(async <Result>(action: () => Promise<Result>) => {
@@ -53,61 +62,90 @@ export function useMasterEditCommands(input: {
         setOperationError("読み取り方式を選択してください");
         return;
       }
-      await updateGameTitleResource(id, {
+      const normalizedRequest = {
         name: normalizeName(request.name),
         layoutFamily,
-      });
+      };
+      await runIdempotentMutation(
+        idempotencyKeys,
+        "masters.updateGameTitle",
+        { id, request: normalizedRequest },
+        (options) => updateGameTitleResource(id, normalizedRequest, options),
+      );
       await invalidateMasterResourceCaches(queryClient, {
         authScope,
         resource: "game-titles",
       });
     },
-    [authScope, queryClient, setOperationError],
+    [authScope, idempotencyKeys, queryClient, setOperationError],
   );
 
   const updateMapMaster = useCallback(
     async (id: string, request: { name: string }) => {
       setOperationError(undefined);
-      await updateMapMasterResource(id, { name: normalizeName(request.name) });
+      const normalizedRequest = { name: normalizeName(request.name) };
+      await runIdempotentMutation(
+        idempotencyKeys,
+        "masters.updateMapMaster",
+        { id, request: normalizedRequest },
+        (options) => updateMapMasterResource(id, normalizedRequest, options),
+      );
       await invalidateMasterResourceCaches(queryClient, {
         authScope,
         gameTitleId: selectedGameTitleId,
         resource: "map-masters",
       });
     },
-    [authScope, queryClient, selectedGameTitleId, setOperationError],
+    [authScope, idempotencyKeys, queryClient, selectedGameTitleId, setOperationError],
   );
 
   const updateSeasonMaster = useCallback(
     async (id: string, request: { name: string }) => {
       setOperationError(undefined);
-      await updateSeasonMasterResource(id, { name: normalizeName(request.name) });
+      const normalizedRequest = { name: normalizeName(request.name) };
+      await runIdempotentMutation(
+        idempotencyKeys,
+        "masters.updateSeasonMaster",
+        { id, request: normalizedRequest },
+        (options) => updateSeasonMasterResource(id, normalizedRequest, options),
+      );
       await invalidateMasterResourceCaches(queryClient, {
         authScope,
         gameTitleId: selectedGameTitleId,
         resource: "season-masters",
       });
     },
-    [authScope, queryClient, selectedGameTitleId, setOperationError],
+    [authScope, idempotencyKeys, queryClient, selectedGameTitleId, setOperationError],
   );
 
   const updateMemberAlias = useCallback(
     async (id: string, request: { memberId: string; alias: string }) => {
       setOperationError(undefined);
-      await updateMemberAliasResource(id, {
+      const normalizedRequest = {
         memberId: normalizeName(request.memberId),
         alias: normalizeName(request.alias),
-      });
+      };
+      await runIdempotentMutation(
+        idempotencyKeys,
+        "masters.updateMemberAlias",
+        { id, request: normalizedRequest },
+        (options) => updateMemberAliasResource(id, normalizedRequest, options),
+      );
       await invalidateMemberAliasCaches(queryClient, authScope);
     },
-    [authScope, queryClient, setOperationError],
+    [authScope, idempotencyKeys, queryClient, setOperationError],
   );
 
   return {
     deleteGameTitle: (id: string) =>
       trackMutation(() =>
         deleteWithDialogFeedback(async () => {
-          await deleteGameTitle(id);
+          await runIdempotentMutation(
+            idempotencyKeys,
+            "masters.deleteGameTitle",
+            { id },
+            (options) => deleteGameTitle(id, options),
+          );
           if (selectedGameTitleId === id) {
             setSelectedGameTitleId("");
           }
@@ -120,7 +158,12 @@ export function useMasterEditCommands(input: {
     deleteMapMaster: (id: string) =>
       trackMutation(() =>
         deleteWithDialogFeedback(async () => {
-          await deleteMapMaster(id);
+          await runIdempotentMutation(
+            idempotencyKeys,
+            "masters.deleteMapMaster",
+            { id },
+            (options) => deleteMapMaster(id, options),
+          );
           await invalidateMasterResourceCaches(queryClient, {
             authScope,
             gameTitleId: selectedGameTitleId,
@@ -131,14 +174,24 @@ export function useMasterEditCommands(input: {
     deleteMemberAlias: (id: string) =>
       trackMutation(() =>
         deleteWithDialogFeedback(async () => {
-          await deleteMemberAlias(id);
+          await runIdempotentMutation(
+            idempotencyKeys,
+            "masters.deleteMemberAlias",
+            { id },
+            (options) => deleteMemberAlias(id, options),
+          );
           await invalidateMemberAliasCaches(queryClient, authScope);
         }),
       ),
     deleteSeasonMaster: (id: string) =>
       trackMutation(() =>
         deleteWithDialogFeedback(async () => {
-          await deleteSeasonMaster(id);
+          await runIdempotentMutation(
+            idempotencyKeys,
+            "masters.deleteSeasonMaster",
+            { id },
+            (options) => deleteSeasonMaster(id, options),
+          );
           await invalidateMasterResourceCaches(queryClient, {
             authScope,
             gameTitleId: selectedGameTitleId,

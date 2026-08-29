@@ -1,0 +1,433 @@
+{
+  "$comment": "Generated from apps/processing-worker/crates/analysis-core/src/payload/schema.rs; do not edit by hand. Draft 2020-12 keywords describe the portable shape, type, and bounds subset. x-momo-maxUtf8Bytes, x-momo-finiteF64, and x-momo-integerToken record constraints additionally enforced by the Rust owner validator; generic JSON Schema validation that ignores these annotations is not fully equivalent.",
+  "$id": "https://momo-result.local/schemas/series-analysis-match-context-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "match": {
+      "additionalProperties": false,
+      "properties": {
+        "features": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "evidence": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "denominator": {
+                      "anyOf": [
+                        {
+                          "type": "null"
+                        },
+                        {
+                          "maximum": 1000000,
+                          "minimum": 0,
+                          "type": "integer",
+                          "x-momo-integerToken": true
+                        }
+                      ]
+                    },
+                    "metricId": {
+                      "maxLength": 4096,
+                      "minLength": 1,
+                      "type": "string",
+                      "x-momo-maxUtf8Bytes": 4096
+                    },
+                    "qualityStatus": {
+                      "enum": [
+                        "ok",
+                        "reference",
+                        "no_target"
+                      ],
+                      "type": "string"
+                    },
+                    "unit": {
+                      "const": "count",
+                      "type": "string"
+                    },
+                    "value": {
+                      "anyOf": [
+                        {
+                          "type": "null"
+                        },
+                        {
+                          "maximum": 1.7976931348623157e+308,
+                          "minimum": -1.7976931348623157e+308,
+                          "type": "number",
+                          "x-momo-finiteF64": true
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "denominator",
+                    "metricId",
+                    "qualityStatus",
+                    "unit",
+                    "value"
+                  ],
+                  "type": "object"
+                },
+                "maxItems": 8,
+                "type": "array"
+              },
+              "featureCode": {
+                "enum": [
+                  "close_finish",
+                  "asset_blowout",
+                  "revenue_top_no_win",
+                  "ginji_storm",
+                  "negative_assets",
+                  "no_destination"
+                ],
+                "type": "string"
+              },
+              "memberIds": {
+                "items": {
+                  "maxLength": 4096,
+                  "minLength": 1,
+                  "type": "string",
+                  "x-momo-maxUtf8Bytes": 4096
+                },
+                "maxItems": 1000000,
+                "type": "array"
+              },
+              "priority": {
+                "maximum": 2147483647,
+                "minimum": -2147483648,
+                "type": "integer",
+                "x-momo-integerToken": true
+              },
+              "source": {
+                "const": "match",
+                "type": "string"
+              },
+              "tone": {
+                "enum": [
+                  "neutral",
+                  "notice"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "evidence",
+              "featureCode",
+              "memberIds",
+              "priority",
+              "source",
+              "tone"
+            ],
+            "type": "object"
+          },
+          "maxItems": 6,
+          "type": "array"
+        },
+        "focusedItemIds": {
+          "items": {
+            "maxLength": 4096,
+            "minLength": 1,
+            "type": "string",
+            "x-momo-maxUtf8Bytes": 4096
+          },
+          "maxItems": 1000000,
+          "type": "array"
+        },
+        "matchIndex": {
+          "maximum": 1000000,
+          "minimum": 0,
+          "type": "integer",
+          "x-momo-integerToken": true
+        },
+        "playedAt": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "maxLength": 4096,
+              "minLength": 1,
+              "type": "string",
+              "x-momo-maxUtf8Bytes": 4096
+            }
+          ]
+        },
+        "players": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "cumulativeAverageAfter": {
+                "maximum": 1.7976931348623157e+308,
+                "minimum": -1.7976931348623157e+308,
+                "type": "number",
+                "x-momo-finiteF64": true
+              },
+              "cumulativeAverageBefore": {
+                "anyOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "maximum": 1.7976931348623157e+308,
+                    "minimum": -1.7976931348623157e+308,
+                    "type": "number",
+                    "x-momo-finiteF64": true
+                  }
+                ]
+              },
+              "cumulativeAverageDelta": {
+                "anyOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "maximum": 1.7976931348623157e+308,
+                    "minimum": -1.7976931348623157e+308,
+                    "type": "number",
+                    "x-momo-finiteF64": true
+                  }
+                ]
+              },
+              "cumulativeAverageDirection": {
+                "enum": [
+                  "first_observation",
+                  "improved",
+                  "declined",
+                  "unchanged"
+                ],
+                "type": "string"
+              },
+              "memberId": {
+                "maxLength": 4096,
+                "minLength": 1,
+                "type": "string",
+                "x-momo-maxUtf8Bytes": 4096
+              },
+              "previousRank": {
+                "anyOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "maximum": 4,
+                    "minimum": 1,
+                    "type": "integer",
+                    "x-momo-integerToken": true
+                  }
+                ]
+              },
+              "rank": {
+                "maximum": 4,
+                "minimum": 1,
+                "type": "integer",
+                "x-momo-integerToken": true
+              },
+              "revenueAssetRate": {
+                "anyOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "maximum": 1.7976931348623157e+308,
+                    "minimum": -1.7976931348623157e+308,
+                    "type": "number",
+                    "x-momo-finiteF64": true
+                  }
+                ]
+              },
+              "revenueManYen": {
+                "maximum": 2147483647,
+                "minimum": -2147483648,
+                "type": "integer",
+                "x-momo-integerToken": true
+              },
+              "revenueRank": {
+                "anyOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "maximum": 1.7976931348623157e+308,
+                    "minimum": -1.7976931348623157e+308,
+                    "type": "number",
+                    "x-momo-finiteF64": true
+                  }
+                ]
+              },
+              "totalAssetsManYen": {
+                "maximum": 2147483647,
+                "minimum": -2147483648,
+                "type": "integer",
+                "x-momo-integerToken": true
+              }
+            },
+            "required": [
+              "cumulativeAverageAfter",
+              "cumulativeAverageBefore",
+              "cumulativeAverageDelta",
+              "cumulativeAverageDirection",
+              "memberId",
+              "previousRank",
+              "rank",
+              "revenueAssetRate",
+              "revenueManYen",
+              "revenueRank",
+              "totalAssetsManYen"
+            ],
+            "type": "object"
+          },
+          "maxItems": 4,
+          "type": "array"
+        }
+      },
+      "required": [
+        "features",
+        "focusedItemIds",
+        "matchIndex",
+        "playedAt",
+        "players"
+      ],
+      "type": "object"
+    },
+    "matchId": {
+      "maxLength": 4096,
+      "minLength": 1,
+      "type": "string",
+      "x-momo-maxUtf8Bytes": 4096
+    },
+    "schemaVersion": {
+      "const": 1,
+      "minimum": 0,
+      "type": "integer",
+      "x-momo-integerToken": true
+    },
+    "scope": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "overall",
+              "type": "string"
+            },
+            "matchCount": {
+              "maximum": 1000000,
+              "minimum": 0,
+              "type": "integer",
+              "x-momo-integerToken": true
+            }
+          },
+          "required": [
+            "kind",
+            "matchCount"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "season",
+              "type": "string"
+            },
+            "matchCount": {
+              "maximum": 1000000,
+              "minimum": 0,
+              "type": "integer",
+              "x-momo-integerToken": true
+            },
+            "seasonMasterId": {
+              "maxLength": 4096,
+              "minLength": 1,
+              "type": "string",
+              "x-momo-maxUtf8Bytes": 4096
+            }
+          },
+          "required": [
+            "kind",
+            "matchCount",
+            "seasonMasterId"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "map",
+              "type": "string"
+            },
+            "mapMasterId": {
+              "maxLength": 4096,
+              "minLength": 1,
+              "type": "string",
+              "x-momo-maxUtf8Bytes": 4096
+            },
+            "matchCount": {
+              "maximum": 1000000,
+              "minimum": 0,
+              "type": "integer",
+              "x-momo-integerToken": true
+            }
+          },
+          "required": [
+            "kind",
+            "mapMasterId",
+            "matchCount"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "season_map",
+              "type": "string"
+            },
+            "mapMasterId": {
+              "maxLength": 4096,
+              "minLength": 1,
+              "type": "string",
+              "x-momo-maxUtf8Bytes": 4096
+            },
+            "matchCount": {
+              "maximum": 1000000,
+              "minimum": 0,
+              "type": "integer",
+              "x-momo-integerToken": true
+            },
+            "seasonMasterId": {
+              "maxLength": 4096,
+              "minLength": 1,
+              "type": "string",
+              "x-momo-maxUtf8Bytes": 4096
+            }
+          },
+          "required": [
+            "kind",
+            "mapMasterId",
+            "matchCount",
+            "seasonMasterId"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "sourceMatchRevision": {
+      "maxLength": 4096,
+      "minLength": 1,
+      "type": "string",
+      "x-momo-maxUtf8Bytes": 4096
+    }
+  },
+  "required": [
+    "match",
+    "matchId",
+    "schemaVersion",
+    "scope",
+    "sourceMatchRevision"
+  ],
+  "title": "Series Analysis Match Context Resource v1",
+  "type": "object"
+}

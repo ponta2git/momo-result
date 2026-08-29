@@ -241,6 +241,7 @@ export type SeriesComparisonAggregateV3 = {
   }>;
   schemaVersion: 3;
   scope: SeriesAnalysisScope;
+  source: { gameTitleId: string };
   strategyScatter: {
     points: Array<{
       assetRank: number | null;
@@ -261,7 +262,6 @@ export type SeriesComparisonAggregateV3 = {
     leaderMemberIds: string[];
     quality: { noTargetCount: number; okCount: number; referenceCount: number };
     rankSpreadSignal: string;
-    sampleMaturity?: "early" | "mature" | undefined;
     totalGinjiCount: number;
   };
   trends: Array<{

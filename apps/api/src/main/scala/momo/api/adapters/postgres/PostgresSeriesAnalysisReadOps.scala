@@ -15,14 +15,8 @@ import momo.api.errors.AppError
 private[postgres] object PostgresSeriesAnalysisReadOps:
   private val SupportedArtifactSchemas =
     SeriesAnalysisArtifactSupport.SupportedArtifactSchemas
-  private val AllowedJobStatuses = Set("queued", "running", "succeeded", "failed", "timed_out")
-  private val AllowedTriggers = Set(
-    "match_mutation",
-    "manual",
-    "algorithm_update",
-    "artifact_schema_update",
-    "initial_backfill",
-  )
+  private val AllowedJobStatuses = SeriesAnalysisVocabulary.JobStatuses.toSet
+  private val AllowedTriggers = SeriesAnalysisVocabulary.TriggersByPriority.toSet
 
   private final case class TitleOptionRow(
       gameTitleId: GameTitleId,

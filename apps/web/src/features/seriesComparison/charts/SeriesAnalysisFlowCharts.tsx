@@ -14,7 +14,6 @@ import {
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
 import type { SeriesComparisonAggregateV3 } from "@/shared/api/seriesAnalysis";
 import { formatSeriesMatchIndex } from "@/shared/domain/matchLabels";
-import { orderFixedMembers } from "@/shared/domain/members";
 import { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
 import { DataVizLineChart } from "@/shared/ui/dataViz/LineChart";
 import { rankBackgroundColor, rankBorderColor } from "@/shared/ui/rank/rankPresentation";
@@ -26,7 +25,7 @@ export function RankTrendCharts({
   focusedItemIds: readonly string[];
   response: SeriesComparisonAggregateV3;
 }) {
-  const seriesIdentity = orderFixedMembers(response.players).map((player) => ({
+  const seriesIdentity = response.players.map((player) => ({
     id: player.memberId,
     label: player.displayName,
   }));
@@ -72,7 +71,7 @@ export function CumulativeFormCharts({
   focusedItemIds: readonly string[];
   response: SeriesComparisonAggregateV3;
 }) {
-  const seriesIdentity = orderFixedMembers(response.players).map((player) => ({
+  const seriesIdentity = response.players.map((player) => ({
     id: player.memberId,
     label: player.displayName,
   }));
@@ -127,7 +126,7 @@ export function GinjiCumulativeChart({
       formatValue={(value) => `${formatDecimal(value)}回`}
       minimumYStep={1}
       series={trendSeries(response, "ginji_cumulative_count")}
-      seriesIdentity={orderFixedMembers(response.players).map((player) => ({
+      seriesIdentity={response.players.map((player) => ({
         id: player.memberId,
         label: player.displayName,
       }))}
@@ -157,7 +156,7 @@ export function MomentumMatrices({
         ]}
       />
       <div className="grid gap-3 lg:grid-cols-2">
-        {orderFixedMembers(response.momentumSwitch).map((entry) => {
+        {response.momentumSwitch.map((entry) => {
           const cellByRanks = new Map(
             entry.cells.map((cell) => [`${cell.previousRank}:${cell.nextRank}`, cell]),
           );
@@ -255,14 +254,14 @@ export function MomentumMatrices({
 }
 
 function trendSeries(response: SeriesComparisonAggregateV3, kind: string) {
-  return orderFixedMembers(response.trends.filter((series) => series.kind === kind)).map(
-    (series) => ({
+  return response.trends
+    .filter((series) => series.kind === kind)
+    .map((series) => ({
       id: series.memberId,
       points: series.points.map((point) => ({
         index: point.index,
         itemId: point.itemId,
         value: point.value,
       })),
-    }),
-  );
+    }));
 }

@@ -1,6 +1,7 @@
 package momo.api.integration
 
 import java.nio.charset.StandardCharsets
+import java.nio.file.Files
 import java.security.MessageDigest
 import java.time.Instant
 
@@ -8,7 +9,7 @@ import cats.effect.IO
 import cats.syntax.all.*
 import doobie.implicits.*
 import doobie.postgres.implicits.*
-import io.circe.parser.parse
+import io.circe.{parser, Json}
 
 import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.adapters.postgres.{
@@ -25,8 +26,9 @@ import momo.api.domain.{
   SeriesAnalysisScope
 }
 import momo.api.errors.AppError
+import momo.api.testing.JsonSchemaAssertions
 
-final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite:
+final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with JsonSchemaAssertions:
   private val now = Instant.parse("2026-08-09T00:00:00Z")
   private val titleId = GameTitleId.unsafeFromString("title-analysis-contract")
   private val accountId = AccountId.unsafeFromString("account_ponta")
@@ -49,6 +51,24 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite:
         assertEquals(status.currentArtifact, None)
         assertEquals(status.calculation, None)
       case Left(error) => fail(s"expected status, got $error")
+
+  test("admin overview fails closed when a persisted failure code is not in the wire vocabulary"):
+    for
+      _ <- seedTitle
+      _ <- sql"""
+        INSERT INTO series_analysis_jobs (
+          id, game_title_id, input_revision, algorithm_version,
+          artifact_schema_version, status, trigger, requested_at, available_at,
+          finished_at, result_disposition, safe_failure_code
+        ) VALUES (
+          'job-unknown-failure-code', $titleId, 0, 'series-analysis-v1',
+          1, 'failed', 'manual', $now, $now,
+          $now, 'none', 'unknown_failure_code'
+        )
+      """.update.run.transact(transactor)
+      repo <- repository
+      result <- repo.adminOverview(Some(titleId))
+    yield assertEquals(result, Left(AppError.AnalysisStateUnavailable()))
 
   test("manual title request creates durable operation, job request, job and outbox"):
     for
@@ -265,16 +285,16 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite:
       assertEquals(outboxCount, 0)
 
   test("aggregate reader accepts only current or previous bounded checksummed chunk"):
-    val payload =
-      """{"schemaVersion":3,"scope":{"kind":"overall","matchCount":1},"players":[{"memberId":"member_ponta"}],"summary":{},"metricsByPlayer":[{"memberId":"member_ponta","denominator":1}],"rankDistribution":[],"recentRanks":[],"strategyScatter":{},"playOrderComparison":[],"revenueRankConversion":[],"trends":[],"histograms":{},"headToHead":[],"momentumSwitch":{},"performanceProfiles":{},"assetStyleProfiles":{},"cardShopDestination":{},"matchDigest":[],"matchNoInEvent":[],"rankAnalysis":{},"highlights":[],"dataQuality":{},"metricDefinitions":[],"source":{}}"""
-        .getBytes(StandardCharsets.UTF_8)
+    val payload = Files.readAllBytes(
+      repositoryFile("docs/schemas/fixtures/series-analysis/aggregate-payload-v3.json")
+    )
+    val payloadDepth = parser.parse(new String(payload, StandardCharsets.UTF_8))
+      .fold(error => fail(s"invalid shared aggregate fixture: $error"), jsonDepth)
     for
       _ <- seedTitle
-      _ <- insertPublishedArtifact("artifact-analysis-previous", payload, 1, 4)
-      _ <- insertPublishedArtifact("artifact-analysis-current", payload, 1, 4)
+      _ <- insertPublishedArtifact("artifact-analysis-previous", payload, 0, payloadDepth)
+      _ <- insertPublishedArtifact("artifact-analysis-current", payload, 0, payloadDepth)
       _ <- pointToArtifacts("artifact-analysis-current", Some("artifact-analysis-previous"))
-      memberName <- sql"SELECT display_name FROM members WHERE id = 'member_ponta'"
-        .query[String].unique.transact(transactor)
       repo <- repository
       current <- repo.chunk(SeriesAnalysisChunkRequest(
         SeriesAnalysisChunkKind.Aggregate,
@@ -295,8 +315,8 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite:
         SeriesAnalysisScope.Overall,
       ))
     yield
-      assertHydratedAggregate(current, "artifact-analysis-current", memberName)
-      assertHydratedAggregate(previous, "artifact-analysis-previous", memberName)
+      assertHydratedAggregate(current, "artifact-analysis-current")
+      assertHydratedAggregate(previous, "artifact-analysis-previous")
       assertEquals(
         expired,
         Left(AppError.AnalysisArtifactExpired()),
@@ -347,20 +367,21 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite:
   private def assertHydratedAggregate(
       result: Either[AppError, momo.api.domain.SeriesAnalysisChunk],
       artifactId: String,
-      memberName: String,
   ): Unit = result match
     case Right(chunk) =>
-      val payload = parse(new String(chunk.payload, StandardCharsets.UTF_8))
+      val payload = parser.parse(new String(chunk.payload, StandardCharsets.UTF_8))
         .fold(error => fail(s"expected JSON analysis payload, got $error"), identity)
       val cursor = payload.hcursor
       assertEquals(cursor.get[Int]("schemaVersion"), Right(3))
       assertEquals(cursor.downField("artifact").get[String]("artifactId"), Right(artifactId))
       assertEquals(cursor.downField("scope").get[String]("displayName"), Right("総合"))
-      assertEquals(
-        cursor.downField("players").downArray.get[String]("displayName"),
-        Right(memberName),
-      )
     case Left(error) => fail(s"expected hydrated aggregate $artifactId, got $error")
+
+  private def jsonDepth(value: Json): Int = value.arrayOrObject(
+    1,
+    values => 1 + values.map(jsonDepth).maxOption.getOrElse(0),
+    fields => 1 + fields.values.map(jsonDepth).maxOption.getOrElse(0),
+  )
 
   private def sha256(bytes: Array[Byte]): String =
     val digest = MessageDigest.getInstance("SHA-256").digest(bytes)

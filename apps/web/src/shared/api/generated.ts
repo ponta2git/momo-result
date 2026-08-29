@@ -1321,25 +1321,26 @@ export interface components {
             displayOrder: number;
             createdAt: string;
         };
-        /** SeriesAnalysisAcceptedCampaignResponse */
-        SeriesAnalysisAcceptedCampaignResponse: {
-            campaignId: string;
-            status: string;
-        };
-        /** SeriesAnalysisAcceptedTargetResponse */
-        SeriesAnalysisAcceptedTargetResponse: {
-            gameTitleId: string;
-            jobId?: string;
-            requestDisposition: string;
-        };
         /** SeriesAnalysisAdminOverviewResponse */
         SeriesAnalysisAdminOverviewResponse: {
-            /** Format: int32 */
-            schemaVersion: number;
-            titleOptions?: components["schemas"]["SeriesAnalysisAdminTitleOptionResponse"][];
-            selectedTitle?: components["schemas"]["SeriesAnalysisSelectedTitleResponse"];
+            /**
+             * Format: int32
+             * @enum {integer}
+             */
+            schemaVersion: 1;
+            titleOptions: components["schemas"]["SeriesAnalysisAdminTitleOptionResponse"][];
+            selectedTitle: {
+                gameTitleId: string;
+                gameTitleName: string;
+                status: components["schemas"]["SeriesAnalysisStatusResponse"];
+                pendingManualRun: {
+                    /** Format: int32 */
+                    requestCount: number;
+                    oldestRequestedAt: string;
+                } | null;
+            } | null;
             globalExecution: components["schemas"]["SeriesAnalysisGlobalExecutionResponse"];
-            recentJobs?: components["schemas"]["SeriesAnalysisJobSummaryResponse"][];
+            recentJobs: components["schemas"]["SeriesAnalysisJobSummaryResponse"][];
         };
         /** SeriesAnalysisAdminTitleOptionResponse */
         SeriesAnalysisAdminTitleOptionResponse: {
@@ -1351,39 +1352,6 @@ export interface components {
         /** SeriesAnalysisAllRecalculationRequest */
         SeriesAnalysisAllRecalculationRequest: {
             confirmation: string;
-        };
-        /** SeriesAnalysisArtifactRefResponse */
-        SeriesAnalysisArtifactRefResponse: {
-            artifactId: string;
-            gameTitleId: string;
-            inputRevision: string;
-            algorithmVersion: string;
-            /** Format: int32 */
-            artifactSchemaVersion: number;
-            publishedAt: string;
-        };
-        /** SeriesAnalysisCalculationResponse */
-        SeriesAnalysisCalculationResponse: {
-            status: string;
-            trigger: string;
-            requestedAt: string;
-            startedAt?: string;
-            finishedAt?: string;
-        };
-        /** SeriesAnalysisCampaignSummaryResponse */
-        SeriesAnalysisCampaignSummaryResponse: {
-            campaignId: string;
-            /** Format: int32 */
-            targetCount: number;
-            /** Format: int32 */
-            expandedCount: number;
-            /** Format: int32 */
-            terminalCount: number;
-            /** Format: int32 */
-            failedCount: number;
-            /** Format: int32 */
-            skippedCount: number;
-            acceptedAt: string;
         };
         /** SeriesAnalysisDesiredResponse */
         SeriesAnalysisDesiredResponse: {
@@ -1398,27 +1366,43 @@ export interface components {
             runningCount: number;
             /** Format: int32 */
             queuedTitleCount: number;
-            oldestQueuedAt?: string;
+            oldestQueuedAt: string | null;
             /** Format: int32 */
             activeCampaignCount: number;
-            latestActiveCampaign?: components["schemas"]["SeriesAnalysisCampaignSummaryResponse"];
+            latestActiveCampaign: {
+                campaignId: string;
+                /** Format: int32 */
+                targetCount: number;
+                /** Format: int32 */
+                expandedCount: number;
+                /** Format: int32 */
+                terminalCount: number;
+                /** Format: int32 */
+                failedCount: number;
+                /** Format: int32 */
+                skippedCount: number;
+                acceptedAt: string;
+            } | null;
         };
         /** SeriesAnalysisJobSummaryResponse */
         SeriesAnalysisJobSummaryResponse: {
             jobId: string;
             gameTitleId: string;
             gameTitleName: string;
-            status: string;
-            trigger: string;
-            coalescedTriggers?: string[];
-            requestedBy: string;
+            /** @enum {string} */
+            status: "queued" | "running" | "succeeded" | "failed" | "timed_out";
+            /** @enum {string} */
+            trigger: "manual" | "artifact_schema_update" | "algorithm_update" | "initial_backfill" | "match_mutation";
+            coalescedTriggers: ("manual" | "artifact_schema_update" | "algorithm_update" | "initial_backfill" | "match_mutation")[];
+            /** @enum {string} */
+            requestedBy: "administrator" | "mixed" | "system";
             /** Format: int32 */
             manualRequestCount: number;
             requestedAt: string;
-            startedAt?: string;
-            finishedAt?: string;
+            startedAt: string | null;
+            finishedAt: string | null;
             /** Format: int64 */
-            elapsedMilliseconds?: number;
+            elapsedMilliseconds: number | null;
             inputRevision: string;
             algorithmVersion: string;
             /** Format: int32 */
@@ -1428,10 +1412,15 @@ export interface components {
             /** Format: int32 */
             leaseRecoveryCount: number;
             /** Format: int64 */
-            queueWaitMilliseconds?: number;
-            resultDisposition: string;
-            firstManualRequester?: components["schemas"]["SeriesAnalysisRequesterResponse"];
-            safeFailureCode?: string;
+            queueWaitMilliseconds: number | null;
+            /** @enum {string} */
+            resultDisposition: "none" | "published" | "reused";
+            firstManualRequester: {
+                accountId: string;
+                displayName: string;
+            } | null;
+            /** @enum {string|null} */
+            safeFailureCode: "input_contract_invalid" | "input_revision_violation" | "calculation_failed" | "artifact_validation_failed" | "artifact_too_large" | "non_deterministic_output" | "dependency_retry_exhausted" | "lease_recovery_exhausted" | "worker_crashed" | "hard_timeout" | "resource_exhausted" | "temporary_storage_exhausted" | "publication_failed" | null;
         };
         /** SeriesAnalysisMapOptionResponse */
         SeriesAnalysisMapOptionResponse: {
@@ -1440,36 +1429,40 @@ export interface components {
         };
         /** SeriesAnalysisOptionsResponse */
         SeriesAnalysisOptionsResponse: {
-            /** Format: int32 */
-            schemaVersion: number;
-            defaultGameTitleId?: string;
-            titles?: components["schemas"]["SeriesAnalysisTitleOptionResponse"][];
-        };
-        /** SeriesAnalysisPendingManualRunResponse */
-        SeriesAnalysisPendingManualRunResponse: {
-            /** Format: int32 */
-            requestCount: number;
-            oldestRequestedAt: string;
+            /**
+             * Format: int32
+             * @enum {integer}
+             */
+            schemaVersion: 1;
+            defaultGameTitleId: string | null;
+            titles: components["schemas"]["SeriesAnalysisTitleOptionResponse"][];
         };
         /** SeriesAnalysisRecalculationAcceptedResponse */
         SeriesAnalysisRecalculationAcceptedResponse: {
-            /** Format: int32 */
-            schemaVersion: number;
+            /**
+             * Format: int32
+             * @enum {integer}
+             */
+            schemaVersion: 1;
             requestId: string;
             acceptedAt: string;
             /** Format: int32 */
             targetCount: number;
-            campaign?: components["schemas"]["SeriesAnalysisAcceptedCampaignResponse"];
-            target?: components["schemas"]["SeriesAnalysisAcceptedTargetResponse"];
+            campaign: {
+                campaignId: string;
+                /** @enum {string} */
+                status: "expanding";
+            } | null;
+            target: {
+                gameTitleId: string;
+                jobId: string | null;
+                /** @enum {string} */
+                requestDisposition: "coalesced_into_queued_job" | "created_job" | "forced_run_reserved";
+            } | null;
         };
         /** SeriesAnalysisRecalculationRequest */
         SeriesAnalysisRecalculationRequest: {
             gameTitleId: string;
-        };
-        /** SeriesAnalysisRequesterResponse */
-        SeriesAnalysisRequesterResponse: {
-            accountId: string;
-            displayName: string;
         };
         /** SeriesAnalysisSeasonMapPairResponse */
         SeriesAnalysisSeasonMapPairResponse: {
@@ -1481,22 +1474,35 @@ export interface components {
             seasonMasterId: string;
             displayName: string;
         };
-        /** SeriesAnalysisSelectedTitleResponse */
-        SeriesAnalysisSelectedTitleResponse: {
-            gameTitleId: string;
-            gameTitleName: string;
-            status: components["schemas"]["SeriesAnalysisStatusResponse"];
-            pendingManualRun?: components["schemas"]["SeriesAnalysisPendingManualRunResponse"];
-        };
         /** SeriesAnalysisStatusResponse */
         SeriesAnalysisStatusResponse: {
-            /** Format: int32 */
-            schemaVersion: number;
+            /**
+             * Format: int32
+             * @enum {integer}
+             */
+            schemaVersion: 1;
             gameTitleId: string;
             desired: components["schemas"]["SeriesAnalysisDesiredResponse"];
-            artifactFreshness: string;
-            currentArtifact?: components["schemas"]["SeriesAnalysisArtifactRefResponse"];
-            calculation?: components["schemas"]["SeriesAnalysisCalculationResponse"];
+            /** @enum {string} */
+            artifactFreshness: "current" | "stale" | "unavailable";
+            currentArtifact: {
+                artifactId: string;
+                gameTitleId: string;
+                inputRevision: string;
+                algorithmVersion: string;
+                /** Format: int32 */
+                artifactSchemaVersion: number;
+                publishedAt: string;
+            } | null;
+            calculation: {
+                /** @enum {string} */
+                status: "queued" | "running" | "succeeded" | "failed" | "timed_out";
+                /** @enum {string} */
+                trigger: "manual" | "artifact_schema_update" | "algorithm_update" | "initial_backfill" | "match_mutation";
+                requestedAt: string;
+                startedAt: string | null;
+                finishedAt: string | null;
+            } | null;
         };
         /** SeriesAnalysisTitleOptionResponse */
         SeriesAnalysisTitleOptionResponse: {
@@ -1504,9 +1510,9 @@ export interface components {
             displayName: string;
             /** Format: int64 */
             confirmedMatchCount: number;
-            seasons?: components["schemas"]["SeriesAnalysisSeasonOptionResponse"][];
-            maps?: components["schemas"]["SeriesAnalysisMapOptionResponse"][];
-            seasonMapPairs?: components["schemas"]["SeriesAnalysisSeasonMapPairResponse"][];
+            seasons: components["schemas"]["SeriesAnalysisSeasonOptionResponse"][];
+            maps: components["schemas"]["SeriesAnalysisMapOptionResponse"][];
+            seasonMapPairs: components["schemas"]["SeriesAnalysisSeasonMapPairResponse"][];
         };
         /** UpdateGameTitleRequest */
         UpdateGameTitleRequest: {

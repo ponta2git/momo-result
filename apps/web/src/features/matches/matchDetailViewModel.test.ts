@@ -7,17 +7,15 @@ import {
   sortMatchDetailPlayers,
 } from "@/features/matches/matchDetailViewModel";
 import type { SeriesAnalysisMatchContextV2 } from "@/shared/api/seriesAnalysis";
-import type { MatchFeatureId } from "@/shared/domain/matchFeatures";
 import { makeFourPlayerResults, makeMatchDetail } from "@/test/factories";
 
 type AnalysisFeature = NonNullable<SeriesAnalysisMatchContextV2["match"]>["features"][number];
 
 function feature(
-  featureCode: MatchFeatureId,
-  source: AnalysisFeature["source"] = "match",
+  featureCode: AnalysisFeature["featureCode"],
   tone: AnalysisFeature["tone"] = "neutral",
 ): AnalysisFeature {
-  return { evidence: [], featureCode, memberIds: [], priority: 1, source, tone };
+  return { evidence: [], featureCode, memberIds: [], priority: 1, source: "match", tone };
 }
 
 describe("match detail navigation", () => {
@@ -44,12 +42,12 @@ describe("match detail feature badges", () => {
   it("maps every worker-selected feature in artifact order without reprioritizing", () => {
     const badges = buildMatchFeatureBadges({
       features: [
-        feature("asset_blowout", "series", "notice"),
-        feature("close_finish", "series"),
-        feature("ginji_storm", "match", "notice"),
-        feature("negative_assets", "match", "notice"),
+        feature("asset_blowout", "notice"),
+        feature("close_finish"),
+        feature("ginji_storm", "notice"),
+        feature("negative_assets", "notice"),
         feature("no_destination"),
-        feature("low_revenue_win"),
+        feature("revenue_top_no_win"),
       ],
     });
 
@@ -59,10 +57,10 @@ describe("match detail feature badges", () => {
       "ginji_storm",
       "negative_assets",
       "no_destination",
-      "low_revenue_win",
+      "revenue_top_no_win",
     ]);
-    expect(badges[0]).toMatchObject({ source: "series", tone: "notice" });
-    expect(badges[2]).toMatchObject({ source: "match", tone: "notice" });
+    expect(badges[0]).toMatchObject({ tone: "notice" });
+    expect(badges[2]).toMatchObject({ tone: "notice" });
   });
 
   it("does not derive fallback badges from the mutable match record", () => {

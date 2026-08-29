@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest";
 
 import { useSeriesComparisonPageModel } from "@/features/seriesComparison/page/useSeriesComparisonPageModel";
 import { setupMsw } from "@/test/msw/lifecycle";
-import { makeSeriesAnalysisMatchContext } from "@/test/msw/seriesAnalysisFixtures";
+import { makeSeriesAnalysisExcludedMatchContext } from "@/test/msw/seriesAnalysisFixtures";
 import { server } from "@/test/msw/server";
 import { createTestQueryClient } from "@/test/queryClient";
 
@@ -49,13 +49,12 @@ describe("useSeriesComparisonPageModel", () => {
     };
     server.use(
       http.get("/api/analytics/series-comparison/v2/match-context", ({ request }) => {
-        const context = makeSeriesAnalysisMatchContext();
-        return HttpResponse.json({
-          ...context,
-          inclusion: { ...context.inclusion, status: "not_in_scope" as const },
-          match: null,
-          matchId: new URL(request.url).searchParams.get("matchId") ?? "match-excluded",
-        });
+        return HttpResponse.json(
+          makeSeriesAnalysisExcludedMatchContext(
+            "not_in_scope",
+            new URL(request.url).searchParams.get("matchId") ?? "match-excluded",
+          ),
+        );
       }),
     );
     const queryClient = createTestQueryClient();

@@ -4,7 +4,7 @@ import java.time.format.DateTimeFormatter
 
 import io.circe.Codec
 
-import momo.api.domain.{SeriesAnalysisArtifactRef, SeriesAnalysisStatus}
+import momo.api.domain.{SeriesAnalysisArtifactRef, SeriesAnalysisStatus, SeriesAnalysisVocabulary}
 
 final case class SeriesAnalysisDesiredResponse(
     inputRevision: String,
@@ -52,7 +52,7 @@ final case class SeriesAnalysisStatusResponse(
 object SeriesAnalysisStatusResponse:
   def from(value: SeriesAnalysisStatus): SeriesAnalysisStatusResponse =
     SeriesAnalysisStatusResponse(
-      schemaVersion = 1,
+      schemaVersion = SeriesAnalysisVocabulary.EnvelopeSchemaVersion,
       gameTitleId = value.gameTitleId.value,
       desired = SeriesAnalysisDesiredResponse(
         value.desired.inputRevision.toString,

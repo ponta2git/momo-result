@@ -34,7 +34,7 @@ export function matchPerformanceContextFromArtifact(
       rank: player.rank,
       revenueAssetRate: player.revenueAssetRate ?? undefined,
       revenueManYen: player.revenueManYen,
-      revenueRank: player.revenueRank,
+      revenueRank: player.revenueRank ?? undefined,
       totalAssetsManYen: player.totalAssetsManYen,
       trend: performanceTrendFromArtifact(player.cumulativeAverageDirection),
     })),
@@ -46,9 +46,12 @@ function performanceTrendFromArtifact(
     SeriesAnalysisMatchContextV2["match"]
   >["players"][number]["cumulativeAverageDirection"],
 ): MatchPerformanceTrend {
-  if (direction === "first_observation") return "firstMatch";
-  if (direction === "improved" || direction === "declined" || direction === "unchanged") {
-    return direction;
+  switch (direction) {
+    case "first_observation":
+      return "firstMatch";
+    case "improved":
+    case "declined":
+    case "unchanged":
+      return direction;
   }
-  return "unavailable";
 }

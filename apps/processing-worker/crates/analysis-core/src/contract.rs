@@ -8,7 +8,7 @@ use crate::canonical::{CanonicalError, FramedSha256};
 
 pub const ARTIFACT_SCHEMA_VERSION: u32 = 2;
 pub const MANIFEST_VERSION: u32 = 1;
-pub const QUEUE_SCHEMA_VERSION: u32 = 1;
+pub const QUEUE_SCHEMA_VERSION: &str = "1";
 const MAXIMUM_SCHEMA_CHUNK_BYTES: u64 = 16 * 1024 * 1024;
 const MAXIMUM_SCHEMA_CHUNK_COUNT: u64 = 1_000_000;
 const MAXIMUM_SCHEMA_ITEM_COUNT: u64 = 1_000_000;
@@ -16,7 +16,7 @@ const MAXIMUM_SCHEMA_ITEM_COUNT: u64 = 1_000_000;
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct QueuePayload {
-    pub schema_version: u32,
+    pub schema_version: String,
     pub job_id: String,
 }
 

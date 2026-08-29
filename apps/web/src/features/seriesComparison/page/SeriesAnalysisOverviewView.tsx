@@ -23,17 +23,16 @@ import {
   qualityAdvisoryLabel,
   SeriesAnalysisQualityAdvisory,
 } from "@/features/seriesComparison/SeriesAnalysisQualityAdvisory";
-import { orderFixedMembers } from "@/shared/domain/members";
 import { Button } from "@/shared/ui/actions/Button";
 import { DataTable } from "@/shared/ui/data/DataTable";
 import { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
 
 export function OverviewView({ focusedItemIds, response, onDrilldown }: AnalysisViewProps) {
   const crownQualityAdvisory = qualityAdvisoryLabel(response.rankAnalysis.crownCertainty.status);
-  const leaders = orderFixedMembers(
-    response.players.filter((player) => response.summary.leaderMemberIds.includes(player.memberId)),
+  const leaders = response.players.filter((player) =>
+    response.summary.leaderMemberIds.includes(player.memberId),
   );
-  const playerMetrics = orderFixedMembers(response.metricsByPlayer);
+  const playerMetrics = response.metricsByPlayer;
   return (
     <div
       aria-labelledby={analysisTabId("overview")}

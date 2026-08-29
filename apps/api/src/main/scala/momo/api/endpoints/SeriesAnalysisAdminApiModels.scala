@@ -7,7 +7,8 @@ import io.circe.Codec
 import momo.api.domain.{
   SeriesAnalysisAdminOverview,
   SeriesAnalysisGlobalExecution,
-  SeriesAnalysisJobSummary
+  SeriesAnalysisJobSummary,
+  SeriesAnalysisVocabulary
 }
 
 final case class SeriesAnalysisAdminTitleOptionResponse(
@@ -77,7 +78,7 @@ final case class SeriesAnalysisAdminOverviewResponse(
 object SeriesAnalysisAdminOverviewResponse:
   def from(value: SeriesAnalysisAdminOverview): SeriesAnalysisAdminOverviewResponse =
     SeriesAnalysisAdminOverviewResponse(
-      1,
+      SeriesAnalysisVocabulary.EnvelopeSchemaVersion,
       value.titleOptions.map(option =>
         SeriesAnalysisAdminTitleOptionResponse(
           option.gameTitleId.value,

@@ -1375,6 +1375,29 @@ const UNEXPECTED_RESOURCE: Schema = Schema::MergedObject(&[
     DRILLDOWN_IDENTITY_FIELDS,
     UNEXPECTED_PAYLOAD_FIELDS,
 ]);
+#[derive(Clone, Copy)]
+struct DrilldownVariant {
+    metric_id: &'static str,
+    schema: &'static Schema,
+}
+const DRILLDOWN_VARIANTS: &[DrilldownVariant] = &[
+    DrilldownVariant {
+        metric_id: "rank.averageHistory",
+        schema: &RANK_HISTORY_RESOURCE,
+    },
+    DrilldownVariant {
+        metric_id: "playOrder.rankHistory",
+        schema: &PLAY_ORDER_HISTORY_RESOURCE,
+    },
+    DrilldownVariant {
+        metric_id: "rankAnalysis.rankSignals",
+        schema: &SIGNAL_RESOURCE,
+    },
+    DrilldownVariant {
+        metric_id: "rankAnalysis.unexpectedWins",
+        schema: &UNEXPECTED_RESOURCE,
+    },
+];
 const CONTEXT_RESOURCE_FIELDS: &[Field] = &[
     field("matchId", &ID),
     field("sourceMatchRevision", &ID),
@@ -1392,13 +1415,11 @@ pub(super) fn validate_review(value: &Value) -> Result<(), PayloadError> {
 }
 
 pub(super) fn validate_drilldown(value: &Value, metric_id: &str) -> Result<(), PayloadError> {
-    let schema = match metric_id {
-        "rank.averageHistory" => &RANK_HISTORY_RESOURCE,
-        "playOrder.rankHistory" => &PLAY_ORDER_HISTORY_RESOURCE,
-        "rankAnalysis.rankSignals" => &SIGNAL_RESOURCE,
-        "rankAnalysis.unexpectedWins" => &UNEXPECTED_RESOURCE,
-        _ => return Err(PayloadError::IdentityMismatch),
-    };
+    let schema = DRILLDOWN_VARIANTS
+        .iter()
+        .find(|variant| variant.metric_id == metric_id)
+        .map(|variant| variant.schema)
+        .ok_or(PayloadError::IdentityMismatch)?;
     validate(value, schema)
 }
 
@@ -1533,4 +1554,410 @@ fn validate_one_of(value: &Value, options: &[&Schema]) -> Result<(), PayloadErro
     (matches == 1)
         .then_some(())
         .ok_or(PayloadError::InvalidSchema)
+}
+
+#[cfg(test)]
+#[expect(
+    clippy::panic,
+    reason = "the checked-in contract exporter reports exact schema and filesystem failures"
+)]
+mod json_schema_export_tests {
+    use std::path::{Path, PathBuf};
+
+    use serde_json::{Map, Number, Value, json};
+
+    use super::{
+        AGGREGATE, CONTEXT_RESOURCE, DRILLDOWN_VARIANTS, DrilldownVariant, Field, MAX_ITEMS,
+        MAX_TEXT_BYTES, REVIEW, Schema, validate_aggregate, validate_drilldown,
+        validate_match_context, validate_review,
+    };
+
+    const DRAFT_2020_12: &str = "https://json-schema.org/draft/2020-12/schema";
+    const UPDATE_ENV: &str = "UPDATE_SERIES_ANALYSIS_RESOURCE_SCHEMAS";
+    const OWNER_NOTE: &str = concat!(
+        "Generated from apps/processing-worker/crates/analysis-core/src/payload/schema.rs; ",
+        "do not edit by hand. Draft 2020-12 keywords describe the portable shape, type, ",
+        "and bounds subset. x-momo-maxUtf8Bytes, x-momo-finiteF64, and ",
+        "x-momo-integerToken record constraints additionally enforced by the Rust owner ",
+        "validator; generic JSON Schema validation that ignores these annotations is not ",
+        "fully equivalent."
+    );
+
+    struct GeneratedSchema {
+        file_name: &'static str,
+        contents: String,
+    }
+
+    fn finite_number(value: f64) -> Value {
+        Number::from_f64(value).map_or_else(
+            || panic!("schema descriptor contains a non-finite bound: {value}"),
+            Value::Number,
+        )
+    }
+
+    fn usize_value(value: usize) -> Value {
+        Value::from(
+            u64::try_from(value)
+                .unwrap_or_else(|error| panic!("schema bound does not fit u64: {error}")),
+        )
+    }
+
+    fn strict_object(fields: impl IntoIterator<Item = Field>) -> Value {
+        let mut properties = Map::new();
+        let mut required = Vec::new();
+        for field in fields {
+            assert!(
+                properties
+                    .insert(String::from(field.name), draft_schema(field.schema))
+                    .is_none(),
+                "duplicate object field in schema descriptor: {}",
+                field.name
+            );
+            required.push(field.name);
+        }
+        required.sort_unstable();
+        json!({
+            "additionalProperties": false,
+            "properties": properties,
+            "required": required,
+            "type": "object"
+        })
+    }
+
+    fn string_schema(non_empty: bool) -> Value {
+        let mut schema = Map::from_iter([
+            (String::from("maxLength"), usize_value(MAX_TEXT_BYTES)),
+            (String::from("type"), Value::from("string")),
+            (
+                String::from("x-momo-maxUtf8Bytes"),
+                usize_value(MAX_TEXT_BYTES),
+            ),
+        ]);
+        if non_empty {
+            schema.insert(String::from("minLength"), Value::from(1));
+        }
+        Value::Object(schema)
+    }
+
+    fn numeric_schema(minimum: f64, maximum: f64) -> Value {
+        json!({
+            "maximum": finite_number(maximum),
+            "minimum": finite_number(minimum),
+            "type": "number",
+            "x-momo-finiteF64": true
+        })
+    }
+
+    fn draft_schema(schema: &Schema) -> Value {
+        match schema {
+            Schema::Bool => json!({ "type": "boolean" }),
+            Schema::ExactUnsigned(expected) => json!({
+                "const": expected,
+                "minimum": 0,
+                "type": "integer",
+                "x-momo-integerToken": true
+            }),
+            Schema::Integer { minimum, maximum } => json!({
+                "maximum": maximum,
+                "minimum": minimum,
+                "type": "integer",
+                "x-momo-integerToken": true
+            }),
+            Schema::Unsigned { maximum } => json!({
+                "maximum": maximum,
+                "minimum": 0,
+                "type": "integer",
+                "x-momo-integerToken": true
+            }),
+            Schema::Number => numeric_schema(-f64::MAX, f64::MAX),
+            Schema::NumberRange { minimum, maximum } => numeric_schema(*minimum, *maximum),
+            Schema::String { non_empty } => string_schema(*non_empty),
+            Schema::StringEnum(allowed) => match allowed.first().copied() {
+                Some(only) if allowed.len() == 1 => json!({
+                    "const": only,
+                    "type": "string"
+                }),
+                _ => json!({
+                    "enum": allowed,
+                    "type": "string"
+                }),
+            },
+            Schema::Nullable(inner) => json!({
+                "anyOf": [
+                    { "type": "null" },
+                    draft_schema(inner)
+                ]
+            }),
+            Schema::Array { item, maximum } => json!({
+                "items": draft_schema(item),
+                "maxItems": usize_value(*maximum),
+                "type": "array"
+            }),
+            Schema::Tuple(items) => json!({
+                "items": false,
+                "maxItems": usize_value(items.len()),
+                "minItems": usize_value(items.len()),
+                "prefixItems": items.iter().map(|item| draft_schema(item)).collect::<Vec<_>>(),
+                "type": "array"
+            }),
+            Schema::Object(fields) => strict_object(fields.iter().copied()),
+            Schema::MergedObject(field_sets) => {
+                strict_object(field_sets.iter().flat_map(|fields| fields.iter()).copied())
+            }
+            Schema::StringMap(item) => json!({
+                "additionalProperties": draft_schema(item),
+                "maxProperties": MAX_ITEMS,
+                "propertyNames": {
+                    "maxLength": MAX_TEXT_BYTES,
+                    "minLength": 1,
+                    "type": "string",
+                    "x-momo-maxUtf8Bytes": MAX_TEXT_BYTES
+                },
+                "type": "object"
+            }),
+            Schema::OneOf(options) => json!({
+                "oneOf": options
+                    .iter()
+                    .map(|option| draft_schema(option))
+                    .collect::<Vec<_>>()
+            }),
+        }
+    }
+
+    fn document(file_name: &'static str, title: &str, schema: &Schema) -> GeneratedSchema {
+        document_from_value(file_name, title, draft_schema(schema))
+    }
+
+    fn document_from_value(
+        file_name: &'static str,
+        title: &str,
+        mut schema: Value,
+    ) -> GeneratedSchema {
+        let object = schema
+            .as_object_mut()
+            .unwrap_or_else(|| panic!("resource schema root is not an object: {file_name}"));
+        object.insert(String::from("$comment"), Value::from(OWNER_NOTE));
+        object.insert(
+            String::from("$id"),
+            Value::from(format!("https://momo-result.local/schemas/{file_name}")),
+        );
+        object.insert(String::from("$schema"), Value::from(DRAFT_2020_12));
+        object.insert(String::from("title"), Value::from(title));
+        let mut contents = serde_json::to_string_pretty(&schema)
+            .unwrap_or_else(|error| panic!("resource schema serialization failed: {error}"));
+        contents.push('\n');
+        GeneratedSchema {
+            file_name,
+            contents,
+        }
+    }
+
+    fn annotated_drilldown(variant: &DrilldownVariant) -> Value {
+        let mut branch = draft_schema(variant.schema);
+        branch
+            .as_object_mut()
+            .unwrap_or_else(|| {
+                panic!(
+                    "drilldown schema branch is not an object: {}",
+                    variant.metric_id
+                )
+            })
+            .insert(
+                String::from("x-momo-metricId"),
+                Value::from(variant.metric_id),
+            );
+        branch
+    }
+
+    fn drilldown_document() -> GeneratedSchema {
+        let mut mapping = Map::new();
+        let branches = DRILLDOWN_VARIANTS
+            .iter()
+            .map(|variant| {
+                let branch = annotated_drilldown(variant);
+                let payload_kind = branch
+                    .pointer("/properties/payload/properties/kind/const")
+                    .and_then(Value::as_str)
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "drilldown descriptor has no payload.kind const: {}",
+                            variant.metric_id
+                        )
+                    });
+                assert!(
+                    mapping
+                        .insert(String::from(payload_kind), Value::from(variant.metric_id))
+                        .is_none(),
+                    "duplicate drilldown payload.kind: {payload_kind}"
+                );
+                branch
+            })
+            .collect::<Vec<_>>();
+        document_from_value(
+            "series-analysis-drilldown-v3.schema.json",
+            "Series Analysis Drilldown Resource v3",
+            json!({
+                "oneOf": branches,
+                "x-momo-discriminator": {
+                    "mapping": mapping,
+                    "propertyPath": "/payload/kind"
+                }
+            }),
+        )
+    }
+
+    fn generated_schemas() -> [GeneratedSchema; 4] {
+        [
+            document(
+                "series-analysis-aggregate-v3.schema.json",
+                "Series Analysis Aggregate Resource v3",
+                &AGGREGATE,
+            ),
+            document(
+                "series-analysis-review-v3.schema.json",
+                "Series Analysis Review Resource v3",
+                &REVIEW,
+            ),
+            drilldown_document(),
+            document(
+                "series-analysis-match-context-v1.schema.json",
+                "Series Analysis Match Context Resource v1",
+                &CONTEXT_RESOURCE,
+            ),
+        ]
+    }
+
+    fn schemas_directory() -> PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../../docs/schemas")
+    }
+
+    #[test]
+    fn checked_in_resource_schemas_match_descriptor() {
+        let schemas = generated_schemas();
+        let directory = schemas_directory();
+        if std::env::var_os(UPDATE_ENV).is_some() {
+            for schema in schemas {
+                let path = directory.join(schema.file_name);
+                std::fs::write(&path, schema.contents)
+                    .unwrap_or_else(|error| panic!("failed to export {}: {error}", path.display()));
+            }
+            return;
+        }
+
+        for schema in schemas {
+            let path = directory.join(schema.file_name);
+            let checked_in = std::fs::read_to_string(&path).unwrap_or_else(|error| {
+                panic!(
+                    "failed to read checked-in schema {}: {error}",
+                    path.display()
+                )
+            });
+            assert_eq!(
+                checked_in,
+                schema.contents,
+                "checked-in schema is stale: {}; regenerate with {UPDATE_ENV}=1 cargo test -p momo-analysis-core checked_in_resource_schemas_match_descriptor",
+                path.display()
+            );
+        }
+    }
+
+    #[test]
+    fn shared_normal_fixtures_and_invalid_mutations_follow_owner_descriptor() {
+        let aggregate: Value = serde_json::from_str(include_str!(concat!(
+            "../../../../../../docs/schemas/fixtures/series-analysis/",
+            "aggregate-payload-v3.json"
+        )))
+        .unwrap_or_else(|error| panic!("aggregate fixture is not JSON: {error}"));
+        let review: Value = serde_json::from_str(include_str!(concat!(
+            "../../../../../../docs/schemas/fixtures/series-analysis/",
+            "review-payload-v3.json"
+        )))
+        .unwrap_or_else(|error| panic!("review fixture is not JSON: {error}"));
+        let drilldown: Value = serde_json::from_str(include_str!(concat!(
+            "../../../../../../docs/schemas/fixtures/series-analysis/",
+            "drilldown-payload-v3.json"
+        )))
+        .unwrap_or_else(|error| panic!("drilldown fixture is not JSON: {error}"));
+        let match_context: Value = serde_json::from_str(include_str!(concat!(
+            "../../../../../../docs/schemas/fixtures/series-analysis/",
+            "match-context-payload-v1.json"
+        )))
+        .unwrap_or_else(|error| panic!("match-context fixture is not JSON: {error}"));
+
+        assert!(validate_aggregate(&aggregate).is_ok());
+        assert!(validate_review(&review).is_ok());
+        assert!(validate_drilldown(&drilldown, "rank.averageHistory").is_ok());
+        assert!(validate_match_context(&match_context).is_ok());
+
+        let mut invalid_aggregate = aggregate;
+        invalid_aggregate
+            .as_object_mut()
+            .unwrap_or_else(|| panic!("aggregate fixture root"))
+            .insert(String::from("unexpected"), Value::Bool(true));
+        assert!(validate_aggregate(&invalid_aggregate).is_err());
+
+        let mut invalid_review = review;
+        invalid_review
+            .as_object_mut()
+            .unwrap_or_else(|| panic!("review fixture root"))
+            .remove("baseline");
+        assert!(validate_review(&invalid_review).is_err());
+
+        let mut invalid_drilldown = drilldown;
+        *invalid_drilldown
+            .pointer_mut("/payload/kind")
+            .unwrap_or_else(|| panic!("drilldown fixture kind")) = Value::from("unknown");
+        assert!(
+            validate_drilldown(&invalid_drilldown, "rank.averageHistory").is_err(),
+            "drilldown kind must close the metric branch"
+        );
+
+        let mut invalid_match_context = match_context;
+        *invalid_match_context
+            .pointer_mut("/matchId")
+            .unwrap_or_else(|| panic!("match-context fixture matchId")) =
+            Value::from("あ".repeat(MAX_TEXT_BYTES / 3 + 1));
+        assert!(
+            validate_match_context(&invalid_match_context).is_err(),
+            "Rust owner must enforce the UTF-8 byte bound beyond portable maxLength"
+        );
+    }
+
+    #[test]
+    fn draft_projection_preserves_closed_objects_tuples_and_metric_discriminator() {
+        let tuple = draft_schema(&Schema::Tuple(&[
+            &Schema::Bool,
+            &Schema::String { non_empty: true },
+        ]));
+        assert_eq!(tuple.pointer("/items"), Some(&Value::Bool(false)));
+        assert_eq!(tuple.pointer("/minItems"), Some(&Value::from(2)));
+        assert_eq!(tuple.pointer("/maxItems"), Some(&Value::from(2)));
+        assert_eq!(
+            tuple.pointer("/prefixItems/1/x-momo-maxUtf8Bytes"),
+            Some(&Value::from(MAX_TEXT_BYTES))
+        );
+
+        let drilldown = drilldown_document();
+        let document: Value = serde_json::from_str(&drilldown.contents)
+            .unwrap_or_else(|error| panic!("generated drilldown schema is not JSON: {error}"));
+        let branches = document
+            .pointer("/oneOf")
+            .and_then(Value::as_array)
+            .unwrap_or_else(|| panic!("drilldown oneOf"));
+        assert_eq!(branches.len(), 4);
+        for branch in branches {
+            assert_eq!(
+                branch.pointer("/additionalProperties"),
+                Some(&Value::Bool(false))
+            );
+            assert!(branch.get("x-momo-metricId").is_some());
+            assert!(
+                branch
+                    .pointer("/properties/payload/properties/kind/const")
+                    .and_then(Value::as_str)
+                    .is_some(),
+                "each drilldown branch must be closed by payload.kind"
+            );
+        }
+    }
 }

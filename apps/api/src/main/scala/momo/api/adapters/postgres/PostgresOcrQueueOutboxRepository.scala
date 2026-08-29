@@ -17,8 +17,11 @@ import io.circe.Json
 import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.contracts.ocrworker.OcrWorkerJobMessageV2
 import momo.api.domain.ids.OcrJobId
+import momo.api.domain.{FailureCode, OcrJobStatus}
 import momo.api.repositories.{
+  InvalidOcrQueueOutboxClaim,
   OcrQueueBacklogSnapshot,
+  OcrQueueOutboxClaim,
   OcrQueueOutboxDraft,
   OcrQueueOutboxRecord,
   OcrQueueOutboxRepository,
@@ -31,6 +34,10 @@ object PostgresOcrQueueOutbox:
       id: String,
       jobId: OcrJobId,
       payloadJson: Json,
+      outboxSchemaVersion: Short,
+      jobSchemaVersion: Short,
+      jobStatus: String,
+      jobAttemptCount: Int,
       attemptCount: Int,
       claimToken: UUID,
       claimExpiresAt: Instant,
@@ -60,29 +67,32 @@ object PostgresOcrQueueOutbox:
           )
         """.update.run.void
 
-  def toRecord(row: Row): ConnectionIO[OcrQueueOutboxRecord] =
-    OcrWorkerJobMessageV2.fromJson(row.payloadJson) match
-      case Right(message) => message.toEnqueueRequest match
-          case Right(request) => OcrQueueOutboxRecord(
-              row.id,
-              row.jobId,
-              request,
-              row.attemptCount,
-              row.claimToken,
-              row.claimExpiresAt,
-            ).pure[ConnectionIO]
-          case Left(reason) => invalidPayload(row, reason)
-      case Left(reason) => invalidPayload(row, reason)
-
-  private def invalidPayload(row: Row, reason: String): ConnectionIO[OcrQueueOutboxRecord] =
-    MonadThrow[ConnectionIO].raiseError(
-      PostgresDataIntegrityException.invalidPayload(
-        "ocr_queue_outbox",
-        row.id,
-        "stream_payload",
-        reason,
-      )
+  def toClaim(row: Row): OcrQueueOutboxClaim =
+    val invalid = OcrQueueOutboxClaim.Invalid(
+      InvalidOcrQueueOutboxClaim(row.id, row.jobId, row.claimToken)
     )
+    if row.outboxSchemaVersion != 2 || row.jobSchemaVersion != 2 ||
+      row.jobStatus != OcrJobStatus.Queued.wire || row.jobAttemptCount != 0 ||
+      row.id != OcrQueueOutboxDraft.idForJob(row.jobId)
+    then invalid
+    else
+      OcrWorkerJobMessageV2.fromJson(row.payloadJson) match
+        case Right(message)
+            if OcrWorkerJobMessageV2.fieldsAsJson(message).equals(row.payloadJson) =>
+          message.toEnqueueRequest match
+            case Right(request) if request.jobId == row.jobId =>
+              OcrQueueOutboxClaim.Publish(
+                OcrQueueOutboxRecord(
+                  row.id,
+                  row.jobId,
+                  request,
+                  row.attemptCount,
+                  row.claimToken,
+                  row.claimExpiresAt,
+                )
+              )
+            case _ => invalid
+        case _ => invalid
 
   final case class BacklogSnapshotRow(
       pendingCount: Long,
@@ -90,6 +100,7 @@ object PostgresOcrQueueOutbox:
       expiredInFlightCount: Long,
       duePendingCount: Long,
       oldestDueNextAttemptAt: Option[Instant],
+      recoverableInvalidCount: Long,
   ):
     def toSnapshot: OcrQueueBacklogSnapshot = OcrQueueBacklogSnapshot(
       pendingCount = pendingCount,
@@ -97,26 +108,40 @@ object PostgresOcrQueueOutbox:
       expiredInFlightCount = expiredInFlightCount,
       duePendingCount = duePendingCount,
       oldestDueNextAttemptAt = oldestDueNextAttemptAt,
+      recoverableInvalidCount = recoverableInvalidCount,
     )
 
 final class PostgresOcrQueueOutboxRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
     extends OcrQueueOutboxRepository[F]:
   import PostgresOcrQueueOutbox.*
 
+  private val invalidContractLastError = "invalid_persisted_contract"
+  private val invalidContractMessage = "The OCR queue delivery failed its persisted contract."
+  private val invalidContractUserAction = "運用担当者に連絡してください。"
+
   override def claimDue(
       limit: Int,
       now: Instant,
       claimUntil: Instant,
-  ): F[List[OcrQueueOutboxRecord]] = sql"""
+  ): F[List[OcrQueueOutboxClaim]] = sql"""
       WITH candidate AS (
-        SELECT id
-        FROM ocr_queue_outbox
+        SELECT q.id,
+               j.queue_schema_version AS job_schema_version,
+               j.status AS job_status,
+               j.attempt_count AS job_attempt_count
+        FROM ocr_queue_outbox q
+        JOIN ocr_jobs j ON j.id = q.job_id
         WHERE
-          (status = ${OcrQueueOutboxStatus.Pending} AND next_attempt_at <= $now)
-          OR (status = ${OcrQueueOutboxStatus.InFlight} AND claim_expires_at <= $now)
-        ORDER BY next_attempt_at ASC, created_at ASC, id ASC
+          (q.status = ${OcrQueueOutboxStatus.Pending} AND q.next_attempt_at <= $now)
+          OR (q.status = ${OcrQueueOutboxStatus.InFlight} AND q.claim_expires_at <= $now)
+          OR (
+            q.status = ${OcrQueueOutboxStatus.Delivered}
+            AND j.status = ${OcrJobStatus.Queued}
+            AND (q.schema_version <> 2 OR j.queue_schema_version <> 2)
+          )
+        ORDER BY q.next_attempt_at ASC, q.created_at ASC, q.id ASC
         LIMIT $limit
-        FOR UPDATE SKIP LOCKED
+        FOR UPDATE OF q SKIP LOCKED
       )
       UPDATE ocr_queue_outbox q
       SET
@@ -126,9 +151,63 @@ final class PostgresOcrQueueOutboxRepository[F[_]: MonadCancelThrow](transactor:
         updated_at = $now
       FROM candidate
       WHERE q.id = candidate.id
-      RETURNING q.id, q.job_id, q.stream_payload, q.attempt_count,
+      RETURNING q.id, q.job_id, q.stream_payload, q.schema_version,
+                candidate.job_schema_version, candidate.job_status,
+                candidate.job_attempt_count, q.attempt_count,
                 q.claim_token, q.claim_expires_at
-    """.query[Row].to[List].flatMap(_.traverse(toRecord)).transact(transactor)
+    """.query[Row].to[List].map(_.map(toClaim)).transact(transactor)
+
+  override def failInvalidClaim(
+      claim: InvalidOcrQueueOutboxClaim,
+      now: Instant,
+  ): F[Boolean] = (for
+    _ <- PostgresMatchDraftStatusSync.lockForJob(claim.jobId)
+    jobState <- sql"""
+      SELECT status, attempt_count, queue_schema_version
+      FROM ocr_jobs
+      WHERE id = ${claim.jobId}
+      FOR UPDATE
+    """.query[(String, Int, Short)].option
+    outboxUpdated <- sql"""
+      UPDATE ocr_queue_outbox
+      SET
+        status = ${OcrQueueOutboxStatus.Failed},
+        last_error = $invalidContractLastError,
+        claim_token = NULL,
+        claim_expires_at = NULL,
+        updated_at = $now
+      WHERE id = ${claim.id}
+        AND job_id = ${claim.jobId}
+        AND status = ${OcrQueueOutboxStatus.InFlight}
+        AND claim_token = ${claim.claimToken}
+    """.update.run
+    jobUpdated <-
+      if outboxUpdated == 1 && jobState.exists {
+          case (status, attemptCount, schemaVersion) if status == OcrJobStatus.Queued.wire =>
+            schemaVersion != 2 || attemptCount == 0
+          case _ => false
+        }
+      then
+        sql"""
+        UPDATE ocr_jobs
+        SET
+          status = ${OcrJobStatus.Failed},
+          failure_code = ${FailureCode.QueueFailure},
+          failure_message = $invalidContractMessage,
+          failure_retryable = false,
+          failure_user_action = $invalidContractUserAction,
+          finished_at = $now,
+          duration_ms = 0,
+          updated_at = $now
+        WHERE id = ${claim.jobId}
+          AND status = ${OcrJobStatus.Queued}
+          AND (queue_schema_version <> 2 OR attempt_count = 0)
+      """.update.run
+      else 0.pure[ConnectionIO]
+    _ <-
+      if jobUpdated == 1 then PostgresMatchDraftStatusSync.recomputeForJob(claim.jobId, now)
+      else ().pure[ConnectionIO]
+  yield outboxUpdated == 1).transact(transactor)
 
   override def rearmQueuedForRedelivery(
       now: Instant,
@@ -141,7 +220,10 @@ final class PostgresOcrQueueOutboxRepository[F[_]: MonadCancelThrow](transactor:
         JOIN ocr_jobs j ON j.id = q.job_id
         WHERE q.status = ${OcrQueueOutboxStatus.Delivered}
           AND q.delivered_at <= $redeliverBefore
+          AND q.schema_version = 2
           AND j.status = 'queued'
+          AND j.queue_schema_version = 2
+          AND j.attempt_count = 0
         ORDER BY q.delivered_at, q.created_at, q.id
         LIMIT $limit
         FOR UPDATE OF q, j SKIP LOCKED
@@ -162,7 +244,7 @@ final class PostgresOcrQueueOutboxRepository[F[_]: MonadCancelThrow](transactor:
     """.update.run.transact(transactor)
 
   override def nextWakeAt(
-      _now: Instant,
+      now: Instant,
       redeliveryAfter: FiniteDuration,
   ): F[Option[Instant]] =
     val redeliveryMillis = redeliveryAfter.toMillis
@@ -182,30 +264,54 @@ final class PostgresOcrQueueOutboxRepository[F[_]: MonadCancelThrow](transactor:
         JOIN ocr_jobs j ON j.id = q.job_id
         WHERE q.status = ${OcrQueueOutboxStatus.Delivered}
           AND j.status = 'queued'
+          AND q.schema_version = 2
+          AND j.queue_schema_version = 2
+          AND j.attempt_count = 0
           AND q.delivered_at IS NOT NULL
+        UNION ALL
+        SELECT $now AS wake_at
+        WHERE EXISTS (
+          SELECT 1
+          FROM ocr_queue_outbox q
+          JOIN ocr_jobs j ON j.id = q.job_id
+          WHERE q.status = ${OcrQueueOutboxStatus.Delivered}
+            AND j.status = ${OcrJobStatus.Queued}
+            AND (q.schema_version <> 2 OR j.queue_schema_version <> 2)
+        )
       ) deadlines
       WHERE wake_at IS NOT NULL
     """.query[Option[Instant]].unique.transact(transactor)
 
   override def backlogSnapshot(now: Instant): F[OcrQueueBacklogSnapshot] = sql"""
       SELECT
-        COUNT(*) FILTER (WHERE status = ${OcrQueueOutboxStatus.Pending}) AS pending_count,
-        COUNT(*) FILTER (WHERE status = ${OcrQueueOutboxStatus.InFlight}) AS in_flight_count,
+        COUNT(*) FILTER (WHERE q.status = ${OcrQueueOutboxStatus.Pending}) AS pending_count,
+        COUNT(*) FILTER (WHERE q.status = ${OcrQueueOutboxStatus.InFlight}) AS in_flight_count,
         COUNT(*) FILTER (
-          WHERE status = ${OcrQueueOutboxStatus.InFlight}
-            AND claim_expires_at <= $now
+          WHERE q.status = ${OcrQueueOutboxStatus.InFlight}
+            AND q.claim_expires_at <= $now
         ) AS expired_in_flight_count,
         COUNT(*) FILTER (
-          WHERE status = ${OcrQueueOutboxStatus.Pending}
-            AND next_attempt_at <= $now
+          WHERE q.status = ${OcrQueueOutboxStatus.Pending}
+            AND q.next_attempt_at <= $now
         ) AS due_pending_count,
-        MIN(next_attempt_at) FILTER (
-          WHERE status = ${OcrQueueOutboxStatus.Pending}
-            AND next_attempt_at <= $now
-        ) AS oldest_due_next_attempt_at
-      FROM ocr_queue_outbox
-      WHERE status = ${OcrQueueOutboxStatus.Pending}
-         OR status = ${OcrQueueOutboxStatus.InFlight}
+        MIN(q.next_attempt_at) FILTER (
+          WHERE q.status = ${OcrQueueOutboxStatus.Pending}
+            AND q.next_attempt_at <= $now
+        ) AS oldest_due_next_attempt_at,
+        COUNT(*) FILTER (
+          WHERE q.status = ${OcrQueueOutboxStatus.Delivered}
+            AND j.status = ${OcrJobStatus.Queued}
+            AND (q.schema_version <> 2 OR j.queue_schema_version <> 2)
+        ) AS recoverable_invalid_count
+      FROM ocr_queue_outbox q
+      JOIN ocr_jobs j ON j.id = q.job_id
+      WHERE q.status = ${OcrQueueOutboxStatus.Pending}
+         OR q.status = ${OcrQueueOutboxStatus.InFlight}
+         OR (
+           q.status = ${OcrQueueOutboxStatus.Delivered}
+           AND j.status = ${OcrJobStatus.Queued}
+           AND (q.schema_version <> 2 OR j.queue_schema_version <> 2)
+         )
     """.query[BacklogSnapshotRow].unique.map(_.toSnapshot).transact(transactor)
 
   override def markDelivered(

@@ -50,6 +50,7 @@ DELIVERED -> PENDING            (queued jobのsemantic redelivery)
 - admission guard は Redis 到達不能、due / active outbox、oldest due delay、DLQ backlog を判定し、危険域では row を作らず fail fast する。閾値は runtime 設定を正本とする。
 - dispatcher は startup、wake、retry / semantic deadline、cold recovery を待ち、bounded drain する。due work がなければ DB access を止め、固定短周期 polling や row ごとの timer を作らない。
 - due `PENDING` と stale `IN_FLIGHT` は lock を競合回避して claim し、claim ごとに新しい identity を発行する。完了 / retry は同じ claim identity だけが更新できる。
+- claim 後は outbox / job の schema version、job identity、保存済み wire payload の正規形を `XADD` 前に検証する。不整合な未観測 queued job は claim fence 下で outbox を `FAILED`、job を `QUEUE_FAILURE` へ収束させ、running / terminal / v2 PEL retry owner は変更しない。legacy `DELIVERED` + queued row は semantic redelivery せず、同じ invalid claim 経路で回収する。
 - `XADD` 後に message identity と `DELIVERED` を DB へ確定して初めて publish 完了とする。DB 更新失敗時は再 publish を許容する。
 - publish / drain failure は安全な error class と次回時刻を保存し、bounded backoff する。wake は保持するが backoff を迂回して hot loop しない。
 - `DELIVERED` のまま threshold を超えて `queued` の job だけを、DB lock 下で同じ outbox row の `PENDING` へ再武装する。保存済み payload は変えない。

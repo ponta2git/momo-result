@@ -16,7 +16,6 @@ import {
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
 import type { SeriesComparisonAggregateV3 } from "@/shared/api/seriesAnalysis";
 import { formatSeriesMatchIndex } from "@/shared/domain/matchLabels";
-import { orderFixedMembers } from "@/shared/domain/members";
 import { currentInternalLocation, withReturnTo } from "@/shared/navigation/returnTo";
 import { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
 import { DataVizHistogramChart } from "@/shared/ui/dataViz/HistogramChart";
@@ -24,7 +23,7 @@ import { DataVizScatterPlot } from "@/shared/ui/dataViz/ScatterPlot";
 import { rankBackgroundColor, rankBorderColor } from "@/shared/ui/rank/rankPresentation";
 
 export function AssetRevenueHistograms({ response }: { response: SeriesComparisonAggregateV3 }) {
-  const seriesIdentity = orderFixedMembers(response.players).map((player) => ({
+  const seriesIdentity = response.players.map((player) => ({
     id: player.memberId,
     label: player.displayName,
   }));
@@ -85,7 +84,7 @@ export function RevenueConversionMatrices({
         ]}
       />
       <div className="grid gap-3 lg:grid-cols-2">
-        {orderFixedMembers(response.revenueRankConversion).map((entry) => {
+        {response.revenueRankConversion.map((entry) => {
           const cellByRanks = new Map(
             entry.cells.map((cell) => [`${cell.revenueRank}:${cell.finalRank}`, cell]),
           );
@@ -214,7 +213,7 @@ export function StrategyScatter({
               },
             ],
       )}
-      seriesIdentity={orderFixedMembers(response.players).map((player) => ({
+      seriesIdentity={response.players.map((player) => ({
         id: player.memberId,
         label: player.displayName,
       }))}

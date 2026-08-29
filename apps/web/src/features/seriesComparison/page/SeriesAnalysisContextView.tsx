@@ -19,7 +19,6 @@ import {
   analysisTabId,
   AnalysisTableOfContents,
 } from "@/features/seriesComparison/page/SeriesComparisonAnalysisNavigation";
-import { orderFixedMembers } from "@/shared/domain/members";
 import { Button } from "@/shared/ui/actions/Button";
 import { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
 
@@ -35,7 +34,7 @@ export function ContextView({ focusedItemIds, response, onDrilldown }: AnalysisV
       <AnalysisSection id="metric-play-order" title="番手比較">
         <PlayOrderMatrix focusedItemIds={focusedItemIds} response={response} />
         <div className="mt-3 flex flex-wrap gap-2">
-          {orderFixedMembers(response.playOrderComparison).map((entry) => (
+          {response.playOrderComparison.map((entry) => (
             <Button
               key={entry.memberId}
               size="sm"
@@ -56,7 +55,7 @@ export function ContextView({ focusedItemIds, response, onDrilldown }: AnalysisV
       </AnalysisSection>
       <AnalysisSection id="metric-ginji" title="スリの銀次">
         <div className="grid gap-x-6 gap-y-8 md:grid-cols-2 xl:grid-cols-4">
-          {orderFixedMembers(response.metricsByPlayer).map((metric) => (
+          {response.metricsByPlayer.map((metric) => (
             <article className="min-w-0" key={metric.memberId}>
               <div className="flex justify-between gap-2">
                 <h3 className="font-semibold">

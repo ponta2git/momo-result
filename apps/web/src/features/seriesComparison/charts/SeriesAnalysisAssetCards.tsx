@@ -13,7 +13,6 @@ import {
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
 import { SeriesAnalysisQualityAdvisory } from "@/features/seriesComparison/SeriesAnalysisQualityAdvisory";
 import type { SeriesComparisonAggregateV3 } from "@/shared/api/seriesAnalysis";
-import { orderFixedMembers } from "@/shared/domain/members";
 import { Disclosure } from "@/shared/ui/data/Collapsible";
 import { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
 import { DataVizQuadrantPlot } from "@/shared/ui/dataViz/QuadrantPlot";
@@ -24,7 +23,7 @@ export function AssetComparisonCards({ response }: { response: SeriesComparisonA
   )?.leaderMemberIds;
   return (
     <div className="grid items-stretch gap-3 md:grid-cols-2 xl:grid-cols-4">
-      {orderFixedMembers(response.assetStyleProfiles.entries).map((entry) => {
+      {response.assetStyleProfiles.entries.map((entry) => {
         const performance = response.performanceProfiles.entries.find(
           (candidate) => candidate.memberId === entry.memberId,
         );
@@ -226,13 +225,13 @@ export function StrategyProfileQuadrant({ response }: { response: SeriesComparis
         topLeft: "遊戯王型（カード重視）／上位",
         topRight: "桃鉄型（物件重視）／上位",
       }}
-      points={orderFixedMembers(response.performanceProfiles.entries).map((entry) => ({
+      points={response.performanceProfiles.entries.map((entry) => ({
         label: `${entry.displayName}、物件収益比率${formatPercent(entry.averageRevenueAssetRate)}、順位スコア${formatDecimal(entry.averageRankScore)}`,
         seriesId: entry.memberId,
         x: entry.averageRevenueAssetRate,
         y: entry.averageRankScore,
       }))}
-      seriesIdentity={orderFixedMembers(response.players).map((player) => ({
+      seriesIdentity={response.players.map((player) => ({
         id: player.memberId,
         label: player.displayName,
       }))}

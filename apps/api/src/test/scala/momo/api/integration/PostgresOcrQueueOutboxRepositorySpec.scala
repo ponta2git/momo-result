@@ -10,14 +10,21 @@ import cats.syntax.all.*
 import doobie.implicits.*
 import doobie.postgres.circe.jsonb.implicits.*
 import doobie.postgres.implicits.*
+import io.circe.Json
 
 import momo.api.adapters.postgres.PostgresMeta.given
-import momo.api.adapters.postgres.{PostgresDataIntegrityException, PostgresOcrQueueOutboxRepository}
+import momo.api.adapters.postgres.PostgresOcrQueueOutboxRepository
 import momo.api.contracts.ocrworker.OcrWorkerJobMessageV2
 import momo.api.domain.ids.*
 import momo.api.domain.{OcrJobHints, ScreenType}
 import momo.api.ports.storage.{Sha256Hex, SourceImageIdempotencyHash, SourceImageObjectKey}
-import momo.api.repositories.OcrQueueOutboxStatus
+import momo.api.repositories.{
+  InvalidOcrQueueOutboxClaim,
+  OcrQueueOutboxClaim,
+  OcrQueueOutboxDraft,
+  OcrQueueOutboxRecord,
+  OcrQueueOutboxStatus
+}
 
 final class PostgresOcrQueueOutboxRepositorySpec extends IntegrationSuite:
 
@@ -51,7 +58,25 @@ final class PostgresOcrQueueOutboxRepositorySpec extends IntegrationSuite:
       requestId = None,
     ).fold(fail(_), identity)
 
-  private def insertOcrRows(jobId: OcrJobId, draftId: OcrDraftId, createdAt: Instant): IO[Unit] =
+  private def insertOcrRows(
+      jobId: OcrJobId,
+      draftId: OcrDraftId,
+      createdAt: Instant,
+  ): IO[Unit] = insertOcrRowsWithContract(
+    jobId,
+    draftId,
+    createdAt,
+    queueSchemaVersion = 2.toShort,
+    attemptCount = 0,
+  )
+
+  private def insertOcrRowsWithContract(
+      jobId: OcrJobId,
+      draftId: OcrDraftId,
+      createdAt: Instant,
+      queueSchemaVersion: Short,
+      attemptCount: Int,
+  ): IO[Unit] =
     (for
       _ <- sql"""
         INSERT INTO source_images (
@@ -79,7 +104,8 @@ final class PostgresOcrQueueOutboxRepositorySpec extends IntegrationSuite:
           requested_screen_type, status, attempt_count, created_at, updated_at
         ) VALUES (
           $jobId, $draftId, ${imageIdFor(jobId)}, ${imageObjectKeyFor(jobId).value},
-          ${imageIdFor(jobId)}, 2, 'total_assets', 'queued', 0, $createdAt, $createdAt
+          ${imageIdFor(jobId)}, $queueSchemaVersion, 'total_assets', 'queued', $attemptCount,
+          $createdAt, $createdAt
         )
       """.update.run
     yield ()).transact(transactor)
@@ -92,8 +118,71 @@ final class PostgresOcrQueueOutboxRepositorySpec extends IntegrationSuite:
       nextAttemptAt: Instant,
       claimExpiresAt: Option[Instant],
       createdAt: Instant,
+  ): IO[Unit] = insertOutboxRow(
+    id,
+    jobId,
+    status,
+    attemptCount,
+    nextAttemptAt,
+    claimExpiresAt,
+    createdAt,
+    schemaVersion = 2.toShort,
+    payloadJson = OcrWorkerJobMessageV2.fieldsAsJson(workerMessage(jobId)),
+  )
+
+  private def insertOutboxWithSchema(
+      id: String,
+      jobId: OcrJobId,
+      status: OcrQueueOutboxStatus,
+      attemptCount: Int,
+      nextAttemptAt: Instant,
+      claimExpiresAt: Option[Instant],
+      createdAt: Instant,
+      schemaVersion: Short,
+  ): IO[Unit] = insertOutboxRow(
+    id,
+    jobId,
+    status,
+    attemptCount,
+    nextAttemptAt,
+    claimExpiresAt,
+    createdAt,
+    schemaVersion,
+    OcrWorkerJobMessageV2.fieldsAsJson(workerMessage(jobId)),
+  )
+
+  private def insertOutboxWithPayload(
+      id: String,
+      jobId: OcrJobId,
+      status: OcrQueueOutboxStatus,
+      attemptCount: Int,
+      nextAttemptAt: Instant,
+      claimExpiresAt: Option[Instant],
+      createdAt: Instant,
+      payloadJson: Json,
+  ): IO[Unit] = insertOutboxRow(
+    id,
+    jobId,
+    status,
+    attemptCount,
+    nextAttemptAt,
+    claimExpiresAt,
+    createdAt,
+    schemaVersion = 2.toShort,
+    payloadJson = payloadJson,
+  )
+
+  private def insertOutboxRow(
+      id: String,
+      jobId: OcrJobId,
+      status: OcrQueueOutboxStatus,
+      attemptCount: Int,
+      nextAttemptAt: Instant,
+      claimExpiresAt: Option[Instant],
+      createdAt: Instant,
+      schemaVersion: Short,
+      payloadJson: Json,
   ): IO[Unit] =
-    val payloadJson = OcrWorkerJobMessageV2.fieldsAsJson(workerMessage(jobId))
     val claimToken = claimExpiresAt.map(_ => claimTokenFor(id))
     sql"""
       INSERT INTO ocr_queue_outbox (
@@ -101,16 +190,27 @@ final class PostgresOcrQueueOutboxRepositorySpec extends IntegrationSuite:
         status, attempt_count, claim_token, claim_expires_at, next_attempt_at,
         created_at, updated_at
       ) VALUES (
-        $id, $jobId, ${s"ocr-job:${jobId.value}"}, 2, $payloadJson,
+        $id, $jobId, ${s"ocr-job:${jobId.value}"}, $schemaVersion, $payloadJson,
         $status, $attemptCount, $claimToken, $claimExpiresAt, $nextAttemptAt,
         $createdAt, $createdAt
       )
     """.update.run.transact(transactor).map(_ => ())
 
+  private def publishedRecord(claim: OcrQueueOutboxClaim): OcrQueueOutboxRecord = claim match
+    case OcrQueueOutboxClaim.Publish(record) => record
+    case other => fail(s"expected publishable claim, got: $other")
+
+  private def invalidClaim(claim: OcrQueueOutboxClaim): InvalidOcrQueueOutboxClaim = claim match
+    case OcrQueueOutboxClaim.Invalid(invalid) => invalid
+    case other => fail(s"expected invalid claim, got: $other")
+
   test("claimDue claims due pending and expired in-flight rows in deterministic order"):
     val pendingJobId = OcrJobId.unsafeFromString("job-outbox-pending")
     val expiredJobId = OcrJobId.unsafeFromString("job-outbox-expired")
     val futureJobId = OcrJobId.unsafeFromString("job-outbox-future")
+    val pendingOutboxId = OcrQueueOutboxDraft.idForJob(pendingJobId)
+    val expiredOutboxId = OcrQueueOutboxDraft.idForJob(expiredJobId)
+    val futureOutboxId = OcrQueueOutboxDraft.idForJob(futureJobId)
     for
       _ <- insertOcrRows(
         pendingJobId,
@@ -128,7 +228,7 @@ final class PostgresOcrQueueOutboxRepositorySpec extends IntegrationSuite:
         now.minusSeconds(180),
       )
       _ <- insertOutbox(
-        id = "outbox-pending",
+        id = pendingOutboxId,
         jobId = pendingJobId,
         status = OcrQueueOutboxStatus.Pending,
         attemptCount = 0,
@@ -137,7 +237,7 @@ final class PostgresOcrQueueOutboxRepositorySpec extends IntegrationSuite:
         createdAt = now.minusSeconds(300),
       )
       _ <- insertOutbox(
-        id = "outbox-expired",
+        id = expiredOutboxId,
         jobId = expiredJobId,
         status = OcrQueueOutboxStatus.InFlight,
         attemptCount = 2,
@@ -146,7 +246,7 @@ final class PostgresOcrQueueOutboxRepositorySpec extends IntegrationSuite:
         createdAt = now.minusSeconds(240),
       )
       _ <- insertOutbox(
-        id = "outbox-future",
+        id = futureOutboxId,
         jobId = futureJobId,
         status = OcrQueueOutboxStatus.Pending,
         attemptCount = 0,
@@ -161,36 +261,41 @@ final class PostgresOcrQueueOutboxRepositorySpec extends IntegrationSuite:
         ORDER BY id
       """.query[(String, String, Option[Instant])].to[List].transact(transactor)
     yield
-      assertEquals(claimed.map(_.id), List("outbox-expired", "outbox-pending"))
-      assertEquals(claimed.map(_.attemptCount), List(2, 0))
+      val records = claimed.map(publishedRecord)
+      assertEquals(records.map(_.id), List(expiredOutboxId, pendingOutboxId))
+      assertEquals(records.map(_.attemptCount), List(2, 0))
       assertEquals(
-        claimed.map(_.enqueueRequest.jobId.value),
+        records.map(_.enqueueRequest.jobId.value),
         List(expiredJobId.value, pendingJobId.value),
       )
-      assertEquals(claimed.map(_.claimExpiresAt), List(claimUntil, claimUntil))
-      assertEquals(claimed.map(_.claimToken).distinct.size, 2)
+      assertEquals(records.map(_.claimExpiresAt), List(claimUntil, claimUntil))
+      assertEquals(records.map(_.claimToken).distinct.size, 2)
       assertEquals(
         states,
         List(
-          ("outbox-expired", "IN_FLIGHT", Some(claimUntil)),
-          ("outbox-future", "PENDING", None),
-          ("outbox-pending", "IN_FLIGHT", Some(claimUntil)),
+          (expiredOutboxId, "IN_FLIGHT", Some(claimUntil)),
+          (futureOutboxId, "PENDING", None),
+          (pendingOutboxId, "IN_FLIGHT", Some(claimUntil)),
         ),
       )
 
   test("semantic redelivery rearms only stale delivered rows whose job is still queued"):
     val oldQueued = OcrJobId.unsafeFromString("job-outbox-semantic-old")
+    val retriedQueued = OcrJobId.unsafeFromString("job-outbox-semantic-retried")
+    val legacyQueued = OcrJobId.unsafeFromString("job-outbox-semantic-legacy")
     val recentQueued = OcrJobId.unsafeFromString("job-outbox-semantic-recent")
     val running = OcrJobId.unsafeFromString("job-outbox-semantic-running")
     val terminal = OcrJobId.unsafeFromString("job-outbox-semantic-terminal")
-    val jobs = List(oldQueued, recentQueued, running, terminal)
+    val jobs = List(oldQueued, retriedQueued, legacyQueued, recentQueued, running, terminal)
     for
       _ <- jobs.zipWithIndex.traverse_ { case (jobId, index) =>
-        insertOcrRows(
+        insertOcrRowsWithContract(
           jobId,
           OcrDraftId.unsafeFromString(s"draft-${jobId.value}"),
           now.minusSeconds(600L - index.toLong),
-        ) >> insertOutbox(
+          queueSchemaVersion = (if jobId == legacyQueued then 1 else 2).toShort,
+          attemptCount = if jobId == retriedQueued then 1 else 0,
+        ) >> insertOutboxWithSchema(
           id = s"outbox-${jobId.value}",
           jobId = jobId,
           status = OcrQueueOutboxStatus.Delivered,
@@ -198,6 +303,7 @@ final class PostgresOcrQueueOutboxRepositorySpec extends IntegrationSuite:
           nextAttemptAt = now.minusSeconds(300),
           claimExpiresAt = None,
           createdAt = now.minusSeconds(600L - index.toLong),
+          schemaVersion = (if jobId == legacyQueued then 1 else 2).toShort,
         )
       }
       _ <- sql"""
@@ -229,16 +335,81 @@ final class PostgresOcrQueueOutboxRepositorySpec extends IntegrationSuite:
       )
       assertEquals(rows.filterNot(_._1 == oldQueued.value).map(_._2).distinct, List("DELIVERED"))
 
+  test("legacy delivered queued rows remain immediate recoverable backlog and converge"):
+    val queuedJobId = OcrJobId.unsafeFromString("job-outbox-legacy-delivered-queued")
+    val runningJobId = OcrJobId.unsafeFromString("job-outbox-legacy-delivered-running")
+    val terminalJobId = OcrJobId.unsafeFromString("job-outbox-legacy-delivered-terminal")
+    val jobs = List(queuedJobId, runningJobId, terminalJobId)
+    val outboxId = OcrQueueOutboxDraft.idForJob(queuedJobId)
+    for
+      _ <- jobs.traverse_(jobId =>
+        insertOcrRowsWithContract(
+          jobId,
+          OcrDraftId.unsafeFromString(s"draft-${jobId.value}"),
+          now.minusSeconds(180),
+          queueSchemaVersion = 1.toShort,
+          attemptCount = if jobId == queuedJobId then 1 else 0,
+        ) >> insertOutboxWithSchema(
+          id = OcrQueueOutboxDraft.idForJob(jobId),
+          jobId = jobId,
+          status = OcrQueueOutboxStatus.Delivered,
+          attemptCount = 0,
+          nextAttemptAt = now.minusSeconds(180),
+          claimExpiresAt = None,
+          createdAt = now.minusSeconds(180),
+          schemaVersion = 1.toShort,
+        )
+      )
+      _ <- sql"""
+        UPDATE ocr_queue_outbox
+        SET delivered_at = ${now.minusSeconds(150)}, redis_message_id = 'legacy-message'
+      """.update.run.transact(transactor)
+      _ <- sql"UPDATE ocr_jobs SET status = 'running' WHERE id = $runningJobId".update.run
+        .transact(transactor)
+      _ <- sql"UPDATE ocr_jobs SET status = 'failed' WHERE id = $terminalJobId".update.run
+        .transact(transactor)
+      snapshot <- repo.backlogSnapshot(now)
+      nextWakeAt <- repo.nextWakeAt(now, 120.seconds)
+      claim <- repo.claimDue(3, now, claimUntil)
+        .map(claims => invalidClaim(claims.headOption.getOrElse(fail("legacy claim missing"))))
+      failed <- repo.failInvalidClaim(claim, now.plusSeconds(1))
+      queuedJobStatus <- sql"SELECT status FROM ocr_jobs WHERE id = $queuedJobId".query[String]
+        .unique.transact(transactor)
+      finalSnapshot <- repo.backlogSnapshot(now.plusSeconds(1))
+      ownerOutboxStates <- sql"""
+        SELECT q.job_id, q.status
+        FROM ocr_queue_outbox q
+        WHERE q.job_id IN ($runningJobId, $terminalJobId)
+        ORDER BY q.job_id
+      """.query[(String, String)].to[List].transact(transactor)
+    yield
+      assertEquals(snapshot.recoverableInvalidCount, 1L)
+      assertEquals(snapshot.activeBacklogCount, 1L)
+      assertEquals(snapshot.dueBacklogCount, 1L)
+      assertEquals(nextWakeAt, Some(now))
+      assertEquals(claim.id, outboxId)
+      assert(failed)
+      assertEquals(queuedJobStatus, "failed")
+      assertEquals(finalSnapshot.recoverableInvalidCount, 0L)
+      assertEquals(finalSnapshot.activeBacklogCount, 0L)
+      assertEquals(
+        ownerOutboxStates,
+        List((runningJobId.value, "DELIVERED"), (terminalJobId.value, "DELIVERED")),
+      )
+
   test("nextWakeAt chooses the earliest pending, claim-expiry, or semantic deadline"):
     val pending = OcrJobId.unsafeFromString("job-outbox-deadline-pending")
     val inFlight = OcrJobId.unsafeFromString("job-outbox-deadline-in-flight")
     val delivered = OcrJobId.unsafeFromString("job-outbox-deadline-delivered")
+    val retriedDelivered = OcrJobId.unsafeFromString("job-outbox-deadline-retried")
     for
-      _ <- List(pending, inFlight, delivered).traverse_(jobId =>
-        insertOcrRows(
+      _ <- List(pending, inFlight, delivered, retriedDelivered).traverse_(jobId =>
+        insertOcrRowsWithContract(
           jobId,
           OcrDraftId.unsafeFromString(s"draft-${jobId.value}"),
           now.minusSeconds(60),
+          queueSchemaVersion = 2.toShort,
+          attemptCount = if jobId == retriedDelivered then 1 else 0,
         )
       )
       _ <- insertOutbox(
@@ -268,10 +439,23 @@ final class PostgresOcrQueueOutboxRepositorySpec extends IntegrationSuite:
         None,
         now,
       )
+      _ <- insertOutbox(
+        "outbox-deadline-retried",
+        retriedDelivered,
+        OcrQueueOutboxStatus.Delivered,
+        0,
+        now,
+        None,
+        now,
+      )
       _ <- sql"""
         UPDATE ocr_queue_outbox
-        SET delivered_at = ${now.minusSeconds(20)}, redis_message_id = 'existing-message'
-        WHERE id = 'outbox-deadline-delivered'
+        SET delivered_at = CASE
+              WHEN id = 'outbox-deadline-retried' THEN ${now.minusSeconds(180)}
+              ELSE ${now.minusSeconds(20)}
+            END,
+            redis_message_id = 'existing-message'
+        WHERE id IN ('outbox-deadline-delivered', 'outbox-deadline-retried')
       """.update.run.transact(transactor)
       deadline <- repo.nextWakeAt(now, 120.seconds)
     yield assertEquals(deadline, Some(now.plusSeconds(30)))
@@ -492,6 +676,7 @@ final class PostgresOcrQueueOutboxRepositorySpec extends IntegrationSuite:
 
   test("reclaimed rows reject terminal writes from the stale claim token"):
     val jobId = OcrJobId.unsafeFromString("job-outbox-token-fence")
+    val outboxId = OcrQueueOutboxDraft.idForJob(jobId)
     val firstClaimAt = now.minusSeconds(120)
     val firstClaimUntil = now.minusSeconds(1)
     for
@@ -501,7 +686,7 @@ final class PostgresOcrQueueOutboxRepositorySpec extends IntegrationSuite:
         now.minusSeconds(180),
       )
       _ <- insertOutbox(
-        id = "outbox-token-fence",
+        id = outboxId,
         jobId = jobId,
         status = OcrQueueOutboxStatus.Pending,
         attemptCount = 0,
@@ -510,17 +695,21 @@ final class PostgresOcrQueueOutboxRepositorySpec extends IntegrationSuite:
         createdAt = now.minusSeconds(180),
       )
       first <- repo.claimDue(1, firstClaimAt, firstClaimUntil)
-        .map(_.headOption.getOrElse(fail("first claim was not acquired")))
+        .map(claims =>
+          publishedRecord(claims.headOption.getOrElse(fail("first claim was not acquired")))
+        )
       second <- repo.claimDue(limit = 1, now = now, claimUntil = claimUntil)
-        .map(_.headOption.getOrElse(fail("expired claim was not reclaimed")))
+        .map(claims =>
+          publishedRecord(claims.headOption.getOrElse(fail("expired claim was not reclaimed")))
+        )
       staleDelivered <- repo.markDelivered(
-        "outbox-token-fence",
+        outboxId,
         first.claimToken,
         "1700000000002-0",
         now.plusSeconds(1),
       )
       currentDelivered <- repo.markDelivered(
-        "outbox-token-fence",
+        outboxId,
         second.claimToken,
         "1700000000003-0",
         now.plusSeconds(2),
@@ -528,7 +717,7 @@ final class PostgresOcrQueueOutboxRepositorySpec extends IntegrationSuite:
       messageId <- sql"""
         SELECT redis_message_id
         FROM ocr_queue_outbox
-        WHERE id = 'outbox-token-fence'
+        WHERE id = $outboxId
       """.query[Option[String]].unique.transact(transactor)
     yield
       assert(!first.claimToken.equals(second.claimToken))
@@ -536,20 +725,37 @@ final class PostgresOcrQueueOutboxRepositorySpec extends IntegrationSuite:
       assertEquals(currentDelivered, true)
       assertEquals(messageId, Some("1700000000003-0"))
 
-  test("claimDue rejects non-string stream payload fields and rolls back the claim"):
-    val jobId = OcrJobId.unsafeFromString("job-outbox-invalid-payload")
+  test("claimDue isolates malformed payloads while returning valid siblings for publication"):
+    val invalidJobId = OcrJobId.unsafeFromString("job-outbox-invalid-payload")
+    val validJobId = OcrJobId.unsafeFromString("job-outbox-valid-sibling")
+    val invalidOutboxId = OcrQueueOutboxDraft.idForJob(invalidJobId)
+    val validOutboxId = OcrQueueOutboxDraft.idForJob(validJobId)
     for
       _ <- insertOcrRows(
-        jobId,
+        invalidJobId,
         OcrDraftId.unsafeFromString("draft-outbox-invalid-payload"),
+        now.minusSeconds(120),
+      )
+      _ <- insertOcrRows(
+        validJobId,
+        OcrDraftId.unsafeFromString("draft-outbox-valid-sibling"),
         now.minusSeconds(60),
       )
+      _ <- sql"""
+        INSERT INTO match_drafts (
+          id, created_by_account_id, created_by_member_id, status, total_assets_draft_id,
+          created_at, updated_at
+        ) VALUES (
+          'match-draft-outbox-invalid-payload', 'account_ponta', 'member_ponta', 'ocr_running',
+          'draft-outbox-invalid-payload', ${now.minusSeconds(120)}, ${now.minusSeconds(120)}
+        )
+      """.update.run.transact(transactor)
       _ <- sql"""
         INSERT INTO ocr_queue_outbox (
           id, job_id, dedupe_key, schema_version, stream_payload,
           status, attempt_count, next_attempt_at, created_at, updated_at
         ) VALUES (
-          'outbox-invalid-payload', $jobId, 'ocr-job:job-outbox-invalid-payload', 2,
+          $invalidOutboxId, $invalidJobId, 'ocr-job:job-outbox-invalid-payload', 2,
           '{
             "schemaVersion": "2",
             "jobId": "job-outbox-invalid-payload",
@@ -566,16 +772,280 @@ final class PostgresOcrQueueOutboxRepositorySpec extends IntegrationSuite:
           ${now.minusSeconds(1)}, ${now.minusSeconds(60)}, ${now.minusSeconds(60)}
         )
       """.update.run.transact(transactor)
-      result <- repo.claimDue(limit = 1, now = now, claimUntil = claimUntil).attempt
-      status <- sql"""
+      _ <- insertOutbox(
+        id = validOutboxId,
+        jobId = validJobId,
+        status = OcrQueueOutboxStatus.Pending,
+        attemptCount = 0,
+        nextAttemptAt = now.minusSeconds(1),
+        claimExpiresAt = None,
+        createdAt = now.minusSeconds(60),
+      )
+      claims <- repo.claimDue(limit = 2, now = now, claimUntil = claimUntil)
+      invalid = invalidClaim(claims.head)
+      valid = publishedRecord(claims(1))
+      failed <- repo.failInvalidClaim(invalid, now.plusSeconds(1))
+      outboxState <- sql"""
+        SELECT status, last_error, claim_token, claim_expires_at
+        FROM ocr_queue_outbox
+        WHERE id = $invalidOutboxId
+      """.query[(String, Option[String], Option[UUID], Option[Instant])].unique
+        .transact(transactor)
+      jobState <- sql"""
+        SELECT status, failure_code, failure_message, failure_retryable,
+               failure_user_action, finished_at, duration_ms
+        FROM ocr_jobs
+        WHERE id = $invalidJobId
+      """.query[
+        (
+            String,
+            Option[String],
+            Option[String],
+            Option[Boolean],
+            Option[String],
+            Option[Instant],
+            Option[Int]
+        )
+      ].unique.transact(transactor)
+      validState <- sql"""
         SELECT status
         FROM ocr_queue_outbox
-        WHERE id = 'outbox-invalid-payload'
+        WHERE id = $validOutboxId
+      """.query[String].unique.transact(transactor)
+      matchDraftStatus <- sql"""
+        SELECT status
+        FROM match_drafts
+        WHERE id = 'match-draft-outbox-invalid-payload'
       """.query[String].unique.transact(transactor)
     yield
-      result match
-        case Left(error: PostgresDataIntegrityException) =>
-          assert(error.getMessage.contains("invalid stream_payload"), error.getMessage)
-          assert(error.getMessage.contains("field attempt must be a string"), error.getMessage)
-        case other => fail(s"expected invalid payload failure, got: $other")
-      assertEquals(status, "PENDING")
+      assertEquals(invalid.id, invalidOutboxId)
+      assertEquals(valid.id, validOutboxId)
+      assertEquals(valid.enqueueRequest.jobId, validJobId)
+      assert(failed)
+      assertEquals(outboxState, ("FAILED", Some("invalid_persisted_contract"), None, None))
+      assertEquals(
+        jobState,
+        (
+          "failed",
+          Some("QUEUE_FAILURE"),
+          Some("The OCR queue delivery failed its persisted contract."),
+          Some(false),
+          Some("運用担当者に連絡してください。"),
+          Some(now.plusSeconds(1)),
+          Some(0),
+        ),
+      )
+      assertEquals(validState, "IN_FLIGHT")
+      assertEquals(matchDraftStatus, "ocr_failed")
+
+  test("claimDue quarantines semantically parseable but non-canonical wire payloads"):
+    val jobId = OcrJobId.unsafeFromString("job-outbox-invalid-noncanonical")
+    val outboxId = OcrQueueOutboxDraft.idForJob(jobId)
+    val nonCanonicalPayload = OcrWorkerJobMessageV2.fieldsAsJson(workerMessage(jobId)).mapObject(
+      _.add("enqueuedAt", Json.fromString("2026-05-08T15:00:00.000Z"))
+    )
+    for
+      _ <- insertOcrRows(
+        jobId,
+        OcrDraftId.unsafeFromString("draft-outbox-invalid-noncanonical"),
+        now.minusSeconds(60),
+      )
+      _ <- insertOutboxWithPayload(
+        id = outboxId,
+        jobId = jobId,
+        status = OcrQueueOutboxStatus.Pending,
+        attemptCount = 0,
+        nextAttemptAt = now.minusSeconds(1),
+        claimExpiresAt = None,
+        createdAt = now.minusSeconds(60),
+        payloadJson = nonCanonicalPayload,
+      )
+      claim <- repo.claimDue(1, now, claimUntil)
+        .map(claims => invalidClaim(claims.headOption.getOrElse(fail("claim missing"))))
+      failed <- repo.failInvalidClaim(claim, now.plusSeconds(1))
+    yield
+      assertEquals(claim.id, outboxId)
+      assert(failed)
+
+  test("claimDue quarantines a non-canonical outbox identity"):
+    val jobId = OcrJobId.unsafeFromString("job-outbox-invalid-id")
+    val nonCanonicalOutboxId = "wrong-outbox-id"
+    for
+      _ <- insertOcrRows(
+        jobId,
+        OcrDraftId.unsafeFromString("draft-outbox-invalid-id"),
+        now.minusSeconds(60),
+      )
+      _ <- insertOutbox(
+        id = nonCanonicalOutboxId,
+        jobId = jobId,
+        status = OcrQueueOutboxStatus.Pending,
+        attemptCount = 0,
+        nextAttemptAt = now.minusSeconds(1),
+        claimExpiresAt = None,
+        createdAt = now.minusSeconds(60),
+      )
+      claim <- repo.claimDue(1, now, claimUntil)
+        .map(claims => invalidClaim(claims.headOption.getOrElse(fail("claim missing"))))
+      failed <- repo.failInvalidClaim(claim, now.plusSeconds(1))
+    yield
+      assertEquals(claim.id, nonCanonicalOutboxId)
+      assert(failed)
+
+  test("invalid claims converge outbox rows while preserving running and PEL owners"):
+    val corruptJobId = OcrJobId.unsafeFromString("job-outbox-invalid-corrupt")
+    val legacyJobId = OcrJobId.unsafeFromString("job-outbox-invalid-legacy")
+    val pelJobId = OcrJobId.unsafeFromString("job-outbox-invalid-pel")
+    val runningJobId = OcrJobId.unsafeFromString("job-outbox-invalid-running")
+    val payloadJobId = OcrJobId.unsafeFromString("job-outbox-invalid-other-payload")
+    val corruptOutboxId = OcrQueueOutboxDraft.idForJob(corruptJobId)
+    val legacyOutboxId = OcrQueueOutboxDraft.idForJob(legacyJobId)
+    val pelOutboxId = OcrQueueOutboxDraft.idForJob(pelJobId)
+    val runningOutboxId = OcrQueueOutboxDraft.idForJob(runningJobId)
+    for
+      _ <- insertOcrRows(
+        corruptJobId,
+        OcrDraftId.unsafeFromString("draft-outbox-invalid-corrupt"),
+        now.minusSeconds(150),
+      )
+      _ <- insertOcrRowsWithContract(
+        legacyJobId,
+        OcrDraftId.unsafeFromString("draft-outbox-invalid-legacy"),
+        now.minusSeconds(120),
+        queueSchemaVersion = 1.toShort,
+        attemptCount = 0,
+      )
+      _ <- insertOcrRowsWithContract(
+        pelJobId,
+        OcrDraftId.unsafeFromString("draft-outbox-invalid-pel"),
+        now.minusSeconds(90),
+        queueSchemaVersion = 2.toShort,
+        attemptCount = 1,
+      )
+      _ <- insertOcrRows(
+        runningJobId,
+        OcrDraftId.unsafeFromString("draft-outbox-invalid-running"),
+        now.minusSeconds(60),
+      )
+      _ <- insertOutbox(
+        id = corruptOutboxId,
+        jobId = corruptJobId,
+        status = OcrQueueOutboxStatus.Pending,
+        attemptCount = 0,
+        nextAttemptAt = now.minusSeconds(3),
+        claimExpiresAt = None,
+        createdAt = now.minusSeconds(150),
+      )
+      _ <- insertOutboxWithSchema(
+        id = legacyOutboxId,
+        jobId = legacyJobId,
+        status = OcrQueueOutboxStatus.Pending,
+        attemptCount = 0,
+        nextAttemptAt = now.minusSeconds(2),
+        claimExpiresAt = None,
+        createdAt = now.minusSeconds(120),
+        schemaVersion = 1.toShort,
+      )
+      _ <- insertOutbox(
+        id = pelOutboxId,
+        jobId = pelJobId,
+        status = OcrQueueOutboxStatus.Pending,
+        attemptCount = 0,
+        nextAttemptAt = now.minusSeconds(2),
+        claimExpiresAt = None,
+        createdAt = now.minusSeconds(90),
+      )
+      _ <- insertOutboxWithPayload(
+        id = runningOutboxId,
+        jobId = runningJobId,
+        status = OcrQueueOutboxStatus.Pending,
+        attemptCount = 0,
+        nextAttemptAt = now.minusSeconds(1),
+        claimExpiresAt = None,
+        createdAt = now.minusSeconds(60),
+        payloadJson = OcrWorkerJobMessageV2.fieldsAsJson(workerMessage(payloadJobId)),
+      )
+      _ <- sql"UPDATE ocr_jobs SET status = 'running' WHERE id = $runningJobId".update.run
+        .transact(transactor)
+      _ <- sql"UPDATE ocr_jobs SET status = 'corrupt' WHERE id = $corruptJobId".update.run
+        .transact(transactor)
+      claims <- repo.claimDue(limit = 4, now = now, claimUntil = claimUntil)
+      invalids = claims.map(invalidClaim)
+      results <- invalids.traverse(repo.failInvalidClaim(_, now.plusSeconds(1)))
+      outboxStates <- sql"""
+        SELECT id, status
+        FROM ocr_queue_outbox
+        WHERE id IN ($corruptOutboxId, $legacyOutboxId, $pelOutboxId, $runningOutboxId)
+        ORDER BY id
+      """.query[(String, String)].to[List].transact(transactor)
+      jobStates <- sql"""
+        SELECT id, status, failure_code
+        FROM ocr_jobs
+        WHERE id IN ($corruptJobId, $legacyJobId, $pelJobId, $runningJobId)
+        ORDER BY id
+      """.query[(String, String, Option[String])].to[List].transact(transactor)
+    yield
+      assertEquals(
+        invalids.map(_.id),
+        List(corruptOutboxId, legacyOutboxId, pelOutboxId, runningOutboxId),
+      )
+      assertEquals(results, List(true, true, true, true))
+      assertEquals(
+        outboxStates,
+        List(
+          (corruptOutboxId, "FAILED"),
+          (legacyOutboxId, "FAILED"),
+          (pelOutboxId, "FAILED"),
+          (runningOutboxId, "FAILED"),
+        ),
+      )
+      assertEquals(
+        jobStates,
+        List(
+          (corruptJobId.value, "corrupt", None),
+          (legacyJobId.value, "failed", Some("QUEUE_FAILURE")),
+          (pelJobId.value, "queued", None),
+          (runningJobId.value, "running", None),
+        ),
+      )
+
+  test("failInvalidClaim rejects a stale claim token after reclamation"):
+    val jobId = OcrJobId.unsafeFromString("job-outbox-invalid-stale-token")
+    val outboxId = OcrQueueOutboxDraft.idForJob(jobId)
+    val firstClaimAt = now.minusSeconds(120)
+    val firstClaimUntil = now.minusSeconds(1)
+    for
+      _ <- insertOcrRowsWithContract(
+        jobId,
+        OcrDraftId.unsafeFromString("draft-outbox-invalid-stale-token"),
+        now.minusSeconds(180),
+        queueSchemaVersion = 1.toShort,
+        attemptCount = 0,
+      )
+      _ <- insertOutboxWithSchema(
+        id = outboxId,
+        jobId = jobId,
+        status = OcrQueueOutboxStatus.Pending,
+        attemptCount = 0,
+        nextAttemptAt = firstClaimAt,
+        claimExpiresAt = None,
+        createdAt = now.minusSeconds(180),
+        schemaVersion = 1.toShort,
+      )
+      first <- repo.claimDue(1, firstClaimAt, firstClaimUntil)
+        .map(claims => invalidClaim(claims.headOption.getOrElse(fail("first claim missing"))))
+      second <- repo.claimDue(1, now, claimUntil)
+        .map(claims => invalidClaim(claims.headOption.getOrElse(fail("second claim missing"))))
+      staleFailed <- repo.failInvalidClaim(first, now.plusSeconds(1))
+      stateAfterStale <- sql"""
+        SELECT q.status, j.status
+        FROM ocr_queue_outbox q
+        JOIN ocr_jobs j ON j.id = q.job_id
+        WHERE q.id = $outboxId
+      """.query[(String, String)].unique.transact(transactor)
+      currentFailed <- repo.failInvalidClaim(second, now.plusSeconds(2))
+    yield
+      assertNotEquals(first.claimToken, second.claimToken)
+      assertEquals(staleFailed, false)
+      assertEquals(stateAfterStale, ("IN_FLIGHT", "queued"))
+      assertEquals(currentFailed, true)

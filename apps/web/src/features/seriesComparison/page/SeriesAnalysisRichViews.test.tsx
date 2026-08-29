@@ -268,13 +268,13 @@ describe("rich series analysis views", () => {
     expect(screen.getByText("下位の次に入賞")).toBeInTheDocument();
     expect(screen.getByText(/2\/4戦・50%/u)).toBeInTheDocument();
     expect(screen.getByRole("region", { name: "直近20戦" })).toBeInTheDocument();
-    expect(screen.getByText("第1試合")).toBeInTheDocument();
-    expect(screen.getByText("第2試合")).toBeInTheDocument();
-    expect(screen.getByText("第4試合")).toBeInTheDocument();
     const matchNoMatrix = screen.getByRole("table", {
-      name: "開催内第1試合から第4試合の傾向",
+      name: "通常試合の開催内順別傾向",
     });
-    expect(within(matchNoMatrix).getAllByRole("row")).toHaveLength(5);
+    expect(within(matchNoMatrix).getByText("第1試合")).toBeInTheDocument();
+    expect(within(matchNoMatrix).queryByText("第2試合")).not.toBeInTheDocument();
+    expect(within(matchNoMatrix).queryByText("第4試合")).not.toBeInTheDocument();
+    expect(within(matchNoMatrix).getAllByRole("row")).toHaveLength(2);
     expect(screen.getAllByText("1位–4位差")).toHaveLength(2);
     expect(screen.queryByText(/前の試合の順位から次の順位へ移った件数/u)).not.toBeInTheDocument();
   });

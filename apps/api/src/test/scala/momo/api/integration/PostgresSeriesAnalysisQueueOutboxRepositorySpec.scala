@@ -1,13 +1,17 @@
 package momo.api.integration
 
+import java.sql.Connection
 import java.time.Instant
 
 import scala.concurrent.duration.*
 
-import cats.effect.IO
+import cats.effect.{IO, Resource}
 import cats.syntax.all.*
+import doobie.ConnectionIO
+import doobie.free.KleisliInterpreter
 import doobie.implicits.*
 import doobie.postgres.implicits.*
+import doobie.util.log.LogHandler
 
 import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.adapters.postgres.{
@@ -30,37 +34,34 @@ final class PostgresSeriesAnalysisQueueOutboxRepositorySpec extends IntegrationS
       _ <- seedJob("analysis-job-retry", Some("analysis-outbox-retry"))
       first <- claim(now)
       _ <- repo.releaseForRetry(
-        first.id,
-        first.claimExpiresAt,
-        now.plusSeconds(1),
-        "java.io.IOException",
+        first,
+        now.plusSeconds(2),
+        now.minusSeconds(300),
         now,
       )
       second <- claim(now.plusSeconds(2))
       _ <- repo.releaseForRetry(
-        second.id,
-        second.claimExpiresAt,
-        now.plusSeconds(3),
-        "java.io.IOException",
+        second,
+        now.plusSeconds(6),
+        now.minusSeconds(298),
         now.plusSeconds(2),
       )
-      third <- claim(now.plusSeconds(4))
+      third <- claim(now.plusSeconds(6))
       _ <- repo.releaseForRetry(
-        third.id,
-        third.claimExpiresAt,
-        now.plusSeconds(5),
-        "java.io.IOException",
-        now.plusSeconds(4),
+        third,
+        now.plusSeconds(14),
+        now.minusSeconds(294),
+        now.plusSeconds(6),
       )
       state <- sql"""
-        SELECT q.status, q.attempt_count, j.status, j.safe_failure_code
+        SELECT q.status, q.attempt_count, q.last_error, j.status, j.safe_failure_code
         FROM series_analysis_queue_outbox q
         JOIN series_analysis_jobs j ON j.id = q.job_id
         WHERE q.id = 'analysis-outbox-retry'
-      """.query[(String, Int, String, Option[String])].unique.transact(transactor)
+      """.query[(String, Int, Option[String], String, Option[String])].unique.transact(transactor)
     yield assertEquals(
       state,
-      ("failed", 3, "failed", Some("dependency_retry_exhausted")),
+      ("failed", 3, Some("redis_operation"), "failed", Some("dependency_retry_exhausted")),
     )
 
   test("marks only the current claim delivered with its Redis message id"):
@@ -83,6 +84,99 @@ final class PostgresSeriesAnalysisQueueOutboxRepositorySpec extends IntegrationS
       assertEquals(stale, false)
       assertEquals(delivered, true)
       assertEquals(state, ("delivered", Some("1-0"), Some(now)))
+
+  test("future job availability defers reconciliation, claim, and the durable wake deadline"):
+    val availableAt = now.plusSeconds(3600)
+    for
+      _ <- seedJob("analysis-job-future", None)
+      _ <- sql"""
+        UPDATE series_analysis_jobs
+        SET available_at = $availableAt
+        WHERE id = 'analysis-job-future'
+      """.update.run.transact(transactor)
+      reconciled <- repo.reconcileQueued(now, now.minusSeconds(300), 10)
+      _ <- sql"""
+        INSERT INTO series_analysis_queue_outbox (
+          id, job_id, dedupe_key, next_attempt_at, created_at, updated_at
+        ) VALUES (
+          'analysis-outbox-future', 'analysis-job-future',
+          'dedupe:analysis-outbox-future', ${now.minusSeconds(60)}, $now, $now
+        )
+      """.update.run.transact(transactor)
+      claimed <- repo.claimDue(10, now, now.plusSeconds(30))
+      next <- repo.nextWakeAt(now, 300.seconds)
+    yield
+      assertEquals(reconciled, 0)
+      assertEquals(claimed, Nil)
+      assertEquals(next, Some(availableAt))
+
+  test("an active job lease does not block transport claim recovery"):
+    for
+      _ <- seedJob("analysis-job-leased", Some("analysis-outbox-leased"))
+      _ <- sql"""
+        UPDATE series_analysis_jobs
+        SET status = 'running',
+            started_at = $now,
+            lease_owner = 'worker-lease-owner',
+            lease_attempt_id = 'attempt-lease-owner',
+            lease_fencing_token = 1,
+            lease_expires_at = ${now.plusSeconds(30)}
+        WHERE id = 'analysis-job-leased'
+      """.update.run.transact(transactor)
+      claimed <- repo.claimDue(10, now, now.plusSeconds(30))
+      next <- repo.nextWakeAt(now, 300.seconds)
+    yield
+      assertEquals(claimed.map(_.jobId), List("analysis-job-leased"))
+      assertEquals(next, Some(now.plusSeconds(30)))
+
+  test("retry scheduling never precedes the job availability deadline"):
+    val availableAt = now.plusSeconds(3600)
+    for
+      _ <- seedJob("analysis-job-availability-retry", Some("analysis-outbox-availability-retry"))
+      row <- claim(now)
+      _ <- sql"""
+        UPDATE series_analysis_jobs
+        SET available_at = $availableAt
+        WHERE id = 'analysis-job-availability-retry'
+      """.update.run.transact(transactor)
+      released <- repo.releaseForRetry(
+        row,
+        now.plusSeconds(2),
+        now.minusSeconds(300),
+        now,
+      )
+      state <- sql"""
+        SELECT status, attempt_count, next_attempt_at, last_error
+        FROM series_analysis_queue_outbox
+        WHERE id = 'analysis-outbox-availability-retry'
+      """.query[(String, Int, Instant, Option[String])].unique.transact(transactor)
+    yield
+      assertEquals(released, true)
+      assertEquals(state, ("pending", 1, availableAt, Some("redis_operation")))
+
+  test("a locked due delivery is skipped without hiding its durable wake deadline"):
+    for
+      _ <- seedJob("analysis-job-contention", Some("analysis-outbox-contention"))
+      result <- rawConnection.use(connection =>
+        manualTransaction(connection) {
+          for
+            _ <- runOn(
+              connection,
+              sql"""
+              SELECT id
+              FROM series_analysis_queue_outbox
+              WHERE id = 'analysis-outbox-contention'
+              FOR UPDATE
+            """.query[String].unique,
+            )
+            claimed <- repo.claimDue(10, now, now.plusSeconds(30))
+            next <- repo.nextWakeAt(now, 300.seconds)
+          yield (claimed, next)
+        }
+      )
+    yield
+      assertEquals(result._1, Nil)
+      assertEquals(result._2, Some(now))
 
   test("reconciles a queued job that has no recent durable delivery"):
     for
@@ -118,11 +212,18 @@ final class PostgresSeriesAnalysisQueueOutboxRepositorySpec extends IntegrationS
       """.update.run.transact(transactor)
       protectedCount <- repo.reconcileQueued(now, now.minusSeconds(300), 10)
       next <- repo.nextWakeAt(now, 300.seconds)
-      rearmedAtBoundary <- repo.reconcileQueued(deadline, deadline.minusSeconds(300), 10)
+      protectedAtBoundary <- repo.reconcileQueued(deadline, deadline.minusSeconds(300), 10)
+      afterBoundary = deadline.plusMillis(1)
+      rearmedAfterBoundary <- repo.reconcileQueued(
+        afterBoundary,
+        afterBoundary.minusSeconds(300),
+        10,
+      )
     yield
       assertEquals(protectedCount, 0)
       assertEquals(next, Some(deadline))
-      assertEquals(rearmedAtBoundary, 1)
+      assertEquals(protectedAtBoundary, 0)
+      assertEquals(rearmedAfterBoundary, 1)
 
   test("nextWakeAt prefers an in-flight claim expiry over later retry work"):
     for
@@ -165,6 +266,111 @@ final class PostgresSeriesAnalysisQueueOutboxRepositorySpec extends IntegrationS
     yield
       assertEquals(afterFailure, ("queued", "pending"))
       assertEquals(delivered, true)
+
+  test("a recent delivered row protects the queued job after the current delivery is exhausted"):
+    val deliveredAt = now.minusSeconds(100)
+    val redeliverBefore = now.minusSeconds(300)
+    for
+      claim <- prepareTerminalClaim(
+        "analysis-job-recent-delivery",
+        "analysis-outbox-recent-current",
+        "analysis-outbox-recent-history",
+        deliveredAt,
+      )
+      released <- repo.releaseForRetry(claim, now.plusSeconds(8), redeliverBefore, now)
+      state <- sql"""
+        SELECT j.status, q.status
+        FROM series_analysis_jobs j
+        JOIN series_analysis_queue_outbox q
+          ON q.id = 'analysis-outbox-recent-current'
+        WHERE j.id = 'analysis-job-recent-delivery'
+      """.query[(String, String)].unique.transact(transactor)
+      reconciled <- repo.reconcileQueued(now, redeliverBefore, 10)
+      next <- repo.nextWakeAt(now, 300.seconds)
+    yield
+      assertEquals(released, true)
+      assertEquals(state, ("queued", "failed"))
+      assertEquals(reconciled, 0)
+      assertEquals(next, Some(deliveredAt.plusSeconds(300)))
+
+  test("terminal retry waits at slot before title, job, and outbox locks"):
+    val jobId = "analysis-job-historical-delivery"
+    val currentOutboxId = "analysis-outbox-historical-current"
+    val historicalOutboxId = "analysis-outbox-historical-history"
+    val redeliverBefore = now.minusSeconds(300)
+    for
+      claim <- prepareTerminalClaim(
+        jobId,
+        currentOutboxId,
+        historicalOutboxId,
+        now.minusSeconds(360),
+      )
+      released <- rawConnection.use { connection =>
+        manualTransaction(connection) {
+          for
+            blockerPid <- runOn(connection, sql"SELECT pg_backend_pid()".query[Int].unique)
+            _ <- runOn(
+              connection,
+              sql"""
+                SELECT slot_key
+                FROM worker_execution_slots
+                WHERE slot_key = 'shared-heavy-work'
+                FOR UPDATE
+              """.query[String].unique,
+            )
+            releaseFiber <- repo.releaseForRetry(
+              claim,
+              now.plusSeconds(8),
+              redeliverBefore,
+              now,
+            ).start
+            verifyPrefix =
+              for
+                _ <- awaitBackendBlockedBy(blockerPid)
+                _ <- runOn(
+                  connection,
+                  sql"""
+                  SELECT game_title_id
+                  FROM series_analysis_title_states
+                  WHERE game_title_id = $titleId
+                  FOR UPDATE NOWAIT
+                """.query[GameTitleId].unique,
+                )
+                _ <- runOn(
+                  connection,
+                  sql"""
+                  SELECT id
+                  FROM series_analysis_jobs
+                  WHERE id = $jobId
+                  FOR UPDATE NOWAIT
+                """.query[String].unique,
+                )
+                _ <- runOn(
+                  connection,
+                  sql"""
+                  SELECT id
+                  FROM series_analysis_queue_outbox
+                  WHERE id = $currentOutboxId
+                  FOR UPDATE NOWAIT
+                """.query[String].unique,
+                )
+              yield ()
+            _ <- verifyPrefix.onError(_ => releaseFiber.cancel)
+          yield releaseFiber
+        }.flatMap(_.joinWithNever)
+      }
+      state <- sql"""
+        SELECT j.status, current.status, historical.status
+        FROM series_analysis_jobs j
+        JOIN series_analysis_queue_outbox current ON current.id = $currentOutboxId
+        JOIN series_analysis_queue_outbox historical ON historical.id = $historicalOutboxId
+        WHERE j.id = $jobId
+      """.query[(String, String, String)].unique.transact(transactor)
+      reconciled <- repo.reconcileQueued(now, redeliverBefore, 10)
+    yield
+      assertEquals(released, true)
+      assertEquals(state, ("failed", "failed", "delivered"))
+      assertEquals(reconciled, 0)
 
   test("terminal outbox failure closes campaign and operation projections"):
     val accountId = AccountId.unsafeFromString("account_ponta")
@@ -225,19 +431,56 @@ final class PostgresSeriesAnalysisQueueOutboxRepositorySpec extends IntegrationS
   private def claim(at: Instant) = repo.claimDue(1, at, at.plusSeconds(30)).map(_.head)
 
   private def exhaustCurrentDelivery(at: Instant): IO[Unit] =
-    List(0L, 2L, 4L).traverse_ { offset =>
+    List((0L, 2L), (2L, 4L), (6L, 8L)).traverse_ { case (offset, retryDelay) =>
       val attemptAt = at.plusSeconds(offset)
       for
         row <- claim(attemptAt)
         _ <- repo.releaseForRetry(
-          row.id,
-          row.claimExpiresAt,
-          attemptAt.plusSeconds(1),
-          "java.io.IOException",
+          row,
+          attemptAt.plusSeconds(retryDelay),
+          attemptAt.minusSeconds(300),
           attemptAt,
         )
       yield ()
     }
+
+  private def prepareTerminalClaim(
+      jobId: String,
+      currentOutboxId: String,
+      historicalOutboxId: String,
+      deliveredAt: Instant,
+  ): IO[momo.api.repositories.SeriesAnalysisQueueOutboxRecord] =
+    for
+      _ <- seedJob(jobId, None)
+      _ <- sql"""
+        INSERT INTO series_analysis_queue_outbox (
+          id, job_id, dedupe_key, status, attempt_count, next_attempt_at,
+          delivered_at, redis_message_id, created_at, updated_at
+        ) VALUES
+          (
+            $currentOutboxId, $jobId, ${s"dedupe:$currentOutboxId"}, 'pending', 2,
+            ${now.minusSeconds(1)}, NULL, NULL, $now, $now
+          ),
+          (
+            $historicalOutboxId, $jobId, ${s"dedupe:$historicalOutboxId"}, 'delivered', 0,
+            $deliveredAt, $deliveredAt, 'historical-message', $deliveredAt, $deliveredAt
+          )
+      """.update.run.transact(transactor)
+      claim <- claim(now)
+    yield claim
+
+  private def rawConnection: Resource[IO, Connection] = Resource.fromAutoCloseable(
+    IO.blocking(dbFixture().transactor.kernel.getConnection)
+  )
+
+  private def runOn[A](connection: Connection, program: ConnectionIO[A]): IO[A] = program
+    .foldMap(KleisliInterpreter[IO](LogHandler.noop).ConnectionInterpreter).run(connection)
+
+  private def manualTransaction[A](connection: Connection)(action: IO[A]): IO[A] =
+    (IO.blocking(connection.setAutoCommit(false)) >> action.attempt.flatMap {
+      case Right(value) => IO.blocking(connection.commit()).as(value)
+      case Left(error) => IO.blocking(connection.rollback()).attempt >> IO.raiseError(error)
+    }).guarantee(IO.blocking(connection.setAutoCommit(true)))
 
   private def seedJob(jobId: String, outboxId: Option[String]): IO[Unit] =
     for

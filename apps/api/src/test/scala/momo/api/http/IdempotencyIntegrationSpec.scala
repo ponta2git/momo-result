@@ -158,7 +158,7 @@ final class IdempotencyIntegrationSpec extends MomoCatsEffectSuite with HttpAppT
       case Right(value) => fail(s"expected in-progress problem, got replay: $value")
   }
 
-  test("idempotency: raised mutation errors abandon the reservation for retries") {
+  test("idempotency: raised mutation errors keep the reservation when commit status is unknown") {
     val account = AuthenticatedAccount(
       accountId = AccountId.unsafeFromString("account_ponta"),
       displayName = "ponta",
@@ -193,8 +193,10 @@ final class IdempotencyIntegrationSpec extends MomoCatsEffectSuite with HttpAppT
       attemptCount <- attempts.get
     yield
       assert(first.isLeft, s"expected first mutation to raise, got $first")
-      assertEquals(second, Right(ok))
-      assertEquals(attemptCount, 2)
+      second match
+        case Left(problem) => assertEquals(problem.body.code, "IDEMPOTENCY_IN_PROGRESS")
+        case Right(value) => fail(s"unknown commit must not be re-executed, got $value")
+      assertEquals(attemptCount, 1)
   }
 
   test("idempotency: undecodable stored replay returns an internal problem") {

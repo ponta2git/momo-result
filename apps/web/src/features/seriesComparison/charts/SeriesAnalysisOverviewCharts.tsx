@@ -13,7 +13,6 @@ import {
   headToHeadSignalLabel,
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
 import type { RelativeIntensity, SeriesComparisonAggregateV3 } from "@/shared/api/seriesAnalysis";
-import { orderFixedMembers } from "@/shared/domain/members";
 import { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
 import { dataVizSeriesPresentation } from "@/shared/ui/dataViz/seriesPresentation";
 import { colorMix, rankColor } from "@/shared/ui/rank/rankPresentation";
@@ -25,7 +24,7 @@ type OverviewChartProps = {
 
 export function RankDistributionBars({ focusedItemIds, response }: OverviewChartProps) {
   const titleId = useId();
-  const players = orderFixedMembers(response.players);
+  const players = response.players;
   return (
     <section aria-labelledby={titleId} className="grid gap-3">
       <h3 className="text-sm font-semibold" id={titleId}>
@@ -114,7 +113,7 @@ function rankCountSummary(
 }
 
 export function CrownShareBars({ response }: { response: SeriesComparisonAggregateV3 }) {
-  const players = orderFixedMembers(response.players);
+  const players = response.players;
   const shareByMemberId = new Map(
     response.rankAnalysis.crownCertainty.shares.map((entry) => [entry.memberId, entry.share]),
   );
@@ -170,7 +169,7 @@ export function CrownShareBars({ response }: { response: SeriesComparisonAggrega
 }
 
 export function HeadToHeadMatrix({ response }: { response: SeriesComparisonAggregateV3 }) {
-  const players = orderFixedMembers(response.players);
+  const players = response.players;
   return (
     <AnalysisMatrix ariaLabel="直接対決" className="min-w-[42rem] table-fixed">
       <thead>

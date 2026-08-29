@@ -41,8 +41,12 @@ export async function getOcrJob(
   return apiRequest<OcrJobResponse>(`/api/ocr-jobs/${encodeURIComponent(jobId)}`, options);
 }
 
-export async function cancelOcrJob(jobId: string): Promise<CancelOcrJobResponse> {
+export async function cancelOcrJob(
+  jobId: string,
+  options: IdempotencyRequestOptions,
+): Promise<CancelOcrJobResponse> {
   return apiRequest<CancelOcrJobResponse>(`/api/ocr-jobs/${encodeURIComponent(jobId)}`, {
     method: "DELETE",
+    idempotency: { key: options.idempotencyKey },
   });
 }

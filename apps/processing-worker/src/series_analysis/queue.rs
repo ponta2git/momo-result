@@ -118,8 +118,8 @@ pub(super) fn payload_from_delivery(delivery: &StreamId) -> Option<QueuePayload>
     if delivery.len() != 2 {
         return None;
     }
-    let schema_version = delivery.get::<u32>("schemaVersion")?;
-    let job_id = delivery.get::<String>("jobId")?;
+    let schema_version = strict_string_field(delivery, "schemaVersion")?;
+    let job_id = strict_string_field(delivery, "jobId")?;
     let payload = QueuePayload {
         schema_version,
         job_id,
@@ -129,6 +129,13 @@ pub(super) fn payload_from_delivery(delivery: &StreamId) -> Option<QueuePayload>
     } else {
         Some(payload)
     }
+}
+
+fn strict_string_field(delivery: &StreamId, field: &str) -> Option<String> {
+    let redis::Value::BulkString(bytes) = delivery.map.get(field)? else {
+        return None;
+    };
+    std::str::from_utf8(bytes).ok().map(String::from)
 }
 
 pub(super) async fn acknowledge(
@@ -196,7 +203,10 @@ mod tests {
         let delivery = StreamId {
             id: String::from("1-0"),
             map: HashMap::from([
-                (String::from("schemaVersion"), Value::Int(1)),
+                (
+                    String::from("schemaVersion"),
+                    Value::BulkString(b"1".to_vec()),
+                ),
                 (
                     String::from("jobId"),
                     Value::BulkString(b"analysis-job-1".to_vec()),
@@ -209,7 +219,7 @@ mod tests {
     }
 
     #[test]
-    fn queue_delivery_accepts_only_the_minimal_contract() {
+    fn queue_delivery_rejects_non_string_wire_values() {
         let delivery = StreamId {
             id: String::from("1-0"),
             map: HashMap::from([
@@ -221,10 +231,29 @@ mod tests {
             ]),
         };
 
+        assert!(payload_from_delivery(&delivery).is_none());
+    }
+
+    #[test]
+    fn queue_delivery_accepts_only_the_minimal_contract() {
+        let delivery = StreamId {
+            id: String::from("1-0"),
+            map: HashMap::from([
+                (
+                    String::from("schemaVersion"),
+                    Value::BulkString(b"1".to_vec()),
+                ),
+                (
+                    String::from("jobId"),
+                    Value::BulkString(b"analysis-job-1".to_vec()),
+                ),
+            ]),
+        };
+
         assert_eq!(
             payload_from_delivery(&delivery),
             Some(QueuePayload {
-                schema_version: 1,
+                schema_version: String::from("1"),
                 job_id: String::from("analysis-job-1"),
             })
         );

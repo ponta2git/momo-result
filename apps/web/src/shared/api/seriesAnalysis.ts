@@ -5,6 +5,7 @@ import type {
   SeriesAnalysisRecalculationAccepted,
 } from "@/shared/api/seriesAnalysisAdminTypes";
 import type { SeriesComparisonAggregateV3 } from "@/shared/api/seriesAnalysisAggregateTypes";
+import { decodeSeriesAnalysisArtifact } from "@/shared/api/seriesAnalysisArtifactDecoder";
 import type {
   SeriesAnalysisOptionsResponse,
   SeriesAnalysisStatusResponse,
@@ -16,6 +17,12 @@ import type {
   SeriesAnalysisMatchContextV2,
   SeriesAnalysisQuery,
 } from "@/shared/api/seriesAnalysisDetailTypes";
+import {
+  decodeSeriesAnalysisAdminOverview,
+  decodeSeriesAnalysisOptions,
+  decodeSeriesAnalysisRecalculationAccepted,
+  decodeSeriesAnalysisStatus,
+} from "@/shared/api/seriesAnalysisEnvelopeSchemas";
 import type { SeriesComparisonReviewV3 } from "@/shared/api/seriesAnalysisReviewTypes";
 
 export type * from "@/shared/api/seriesAnalysisCoreTypes";
@@ -43,7 +50,10 @@ function scopeParams(query: SeriesAnalysisQuery): URLSearchParams {
 export function getSeriesAnalysisOptions(
   options: ApiSignalOptions = {},
 ): Promise<SeriesAnalysisOptionsResponse> {
-  return apiRequest("/api/analytics/series-comparison/v2/options", options);
+  return apiRequest("/api/analytics/series-comparison/v2/options", {
+    ...options,
+    decodeResponse: decodeSeriesAnalysisOptions,
+  });
 }
 
 export function getSeriesAnalysisStatus(
@@ -51,21 +61,32 @@ export function getSeriesAnalysisStatus(
   options: ApiSignalOptions = {},
 ): Promise<SeriesAnalysisStatusResponse> {
   const params = new URLSearchParams({ gameTitleId });
-  return apiRequest(`/api/analytics/series-comparison/v2/status?${params.toString()}`, options);
+  return apiRequest(`/api/analytics/series-comparison/v2/status?${params.toString()}`, {
+    ...options,
+    decodeResponse: decodeSeriesAnalysisStatus,
+  });
 }
 
 export function getSeriesAnalysisAggregate(
   query: SeriesAnalysisQuery,
   options: ApiSignalOptions = {},
 ): Promise<SeriesComparisonAggregateV3> {
-  return apiRequest(scopedPath("aggregate", query), options);
+  return apiRequest(scopedPath("aggregate", query), {
+    ...options,
+    decodeResponse: (value) =>
+      decodeSeriesAnalysisArtifact<SeriesComparisonAggregateV3>("aggregate", value),
+  });
 }
 
 export function getSeriesAnalysisReview(
   query: SeriesAnalysisQuery,
   options: ApiSignalOptions = {},
 ): Promise<SeriesComparisonReviewV3> {
-  return apiRequest(scopedPath("review", query), options);
+  return apiRequest(scopedPath("review", query), {
+    ...options,
+    decodeResponse: (value) =>
+      decodeSeriesAnalysisArtifact<SeriesComparisonReviewV3>("review", value),
+  });
 }
 
 export function getSeriesAnalysisDrilldown(
@@ -75,7 +96,11 @@ export function getSeriesAnalysisDrilldown(
   const params = scopeParams(query);
   params.set("memberId", query.memberId);
   params.set("metricId", query.metricId);
-  return apiRequest(`/api/analytics/series-comparison/v2/drilldown?${params.toString()}`, options);
+  return apiRequest(`/api/analytics/series-comparison/v2/drilldown?${params.toString()}`, {
+    ...options,
+    decodeResponse: (value) =>
+      decodeSeriesAnalysisArtifact<SeriesAnalysisDrilldownV3>("drilldown", value),
+  });
 }
 
 export function getSeriesAnalysisMatchContext(
@@ -84,10 +109,11 @@ export function getSeriesAnalysisMatchContext(
 ): Promise<SeriesAnalysisMatchContextV2> {
   const params = scopeParams(query);
   params.set("matchId", query.matchId);
-  return apiRequest(
-    `/api/analytics/series-comparison/v2/match-context?${params.toString()}`,
-    options,
-  );
+  return apiRequest(`/api/analytics/series-comparison/v2/match-context?${params.toString()}`, {
+    ...options,
+    decodeResponse: (value) =>
+      decodeSeriesAnalysisArtifact<SeriesAnalysisMatchContextV2>("matchContext", value),
+  });
 }
 
 export function getSeriesAnalysisAdminOverview(
@@ -97,7 +123,10 @@ export function getSeriesAnalysisAdminOverview(
   const params = new URLSearchParams();
   if (gameTitleId) params.set("gameTitleId", gameTitleId);
   const suffix = params.size > 0 ? `?${params.toString()}` : "";
-  return apiRequest(`/api/admin/series-analysis/overview${suffix}`, options);
+  return apiRequest(`/api/admin/series-analysis/overview${suffix}`, {
+    ...options,
+    decodeResponse: decodeSeriesAnalysisAdminOverview,
+  });
 }
 
 export function requestSeriesAnalysisRecalculation(
@@ -106,6 +135,7 @@ export function requestSeriesAnalysisRecalculation(
 ): Promise<SeriesAnalysisRecalculationAccepted> {
   return apiRequest("/api/admin/series-analysis/recalculations", {
     body: { gameTitleId },
+    decodeResponse: decodeSeriesAnalysisRecalculationAccepted,
     idempotency: { key: options.idempotencyKey },
     method: "POST",
   });
@@ -116,6 +146,7 @@ export function requestAllSeriesAnalysisRecalculation(
 ): Promise<SeriesAnalysisRecalculationAccepted> {
   return apiRequest("/api/admin/series-analysis/recalculations/all", {
     body: { confirmation: "all_titles" },
+    decodeResponse: decodeSeriesAnalysisRecalculationAccepted,
     idempotency: { key: options.idempotencyKey },
     method: "POST",
   });

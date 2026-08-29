@@ -7,7 +7,6 @@ const badge: MatchFeatureBadge = {
   description: "同じ条件の試合と比べた特徴",
   id: "close_finish",
   label: "接戦",
-  source: "series",
   tone: "neutral",
 };
 

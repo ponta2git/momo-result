@@ -13,11 +13,17 @@ import momo.api.MomoCatsEffectSuite
 import momo.api.domain.ids.*
 import momo.api.domain.{OcrJobHints, ScreenType, StoredImageLocation}
 import momo.api.ports.queue.{OcrJobEnqueueRequest, OcrJobQueuePublisher}
-import momo.api.repositories.{OcrQueueOutboxRecord, OcrQueueOutboxRepository}
+import momo.api.repositories.{
+  InvalidOcrQueueOutboxClaim,
+  OcrQueueOutboxClaim,
+  OcrQueueOutboxRecord,
+  OcrQueueOutboxRepository
+}
 import momo.api.testing.{
   FailingOcrJobQueuePublisher,
   FixedClock,
   OutboxClaimDueCall,
+  OutboxFailInvalidClaimCall,
   OutboxMarkDeliveredCall,
   OutboxNextWakeCall,
   OutboxRearmCall,
@@ -101,6 +107,33 @@ final class OcrQueueOutboxDispatcherSpec extends MomoCatsEffectSuite:
         Vector(OutboxMarkDeliveredCall("outbox-1", claimToken, "redis-job-1", fixedNow)),
       )
       assertEquals(wakeups, Vector.empty)
+
+  test("invalid persisted claims are quarantined without blocking a valid sibling"):
+    val invalid = InvalidOcrQueueOutboxClaim(
+      id = "outbox-invalid",
+      jobId = OcrJobId.unsafeFromString("job-invalid"),
+      claimToken = UUID.fromString("00000000-0000-0000-0000-000000000002"),
+    )
+    val valid = rowAt(fixedNow.plusSeconds(30))
+    for
+      repo <- RecordingOcrQueueOutboxRepository.createWithClaims(
+        List(OcrQueueOutboxClaim.Invalid(invalid), OcrQueueOutboxClaim.Publish(valid))
+      )
+      queue <- RecordingOcrJobQueuePublisher.create
+      result <- dispatcherAt(
+        fixedNow,
+        repo,
+        queue,
+        OcrQueueOutboxDispatcherConfig(),
+      ).drainBatch
+      invalidFailures <- repo.invalidFailures
+      published <- queue.published
+      deliveries <- repo.deliveries
+    yield
+      assertEquals(result, OutboxDrainResult.Progress)
+      assertEquals(invalidFailures, Vector(OutboxFailInvalidClaimCall(invalid, fixedNow)))
+      assertEquals(published.map(_.jobId), Vector(valid.jobId))
+      assertEquals(deliveries.map(_.id), Vector(valid.id))
 
   test("idle batch returns the repository's earliest retry or semantic deadline"):
     val nextWakeAt = fixedNow.plusSeconds(45)

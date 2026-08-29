@@ -464,9 +464,11 @@ describe("HeldEventsPage", () => {
 
   it("deletes an empty held event after confirmation", async () => {
     const heldEvents = [makeHeldEventResponse({ id: "held-empty" })];
+    let idempotencyKey: string | null = null;
     server.use(
       http.get("/api/held-events", () => HttpResponse.json({ items: heldEvents })),
-      http.delete("/api/held-events/:heldEventId", ({ params }) => {
+      http.delete("/api/held-events/:heldEventId", ({ params, request }) => {
+        idempotencyKey = request.headers.get("Idempotency-Key");
         const heldEventId = String(params["heldEventId"]);
         heldEvents.splice(
           heldEvents.findIndex((event) => event.id === heldEventId),
@@ -487,6 +489,7 @@ describe("HeldEventsPage", () => {
     await screen.findByText("開催履歴はまだありません");
     expect(screen.queryByRole("list")).not.toBeInTheDocument();
     expect(screen.getByText("開催を削除しました。")).toBeInTheDocument();
+    expect(idempotencyKey).toMatch(/\S/u);
   });
 
   it("keeps deletion disabled for events with confirmed matches", async () => {

@@ -240,11 +240,13 @@ describe("apiRequest", () => {
       Response.json({ jobId: "job/with-boundary", status: "cancelled" }),
     );
 
-    await cancelOcrJob("job/with-boundary");
+    await cancelOcrJob("job/with-boundary", { idempotencyKey: "cancel-key-1" });
 
     const calls = fetchCallsOf(fetchMock);
     expect(calls[0]?.[0]).toBe("/api/ocr-jobs/job%2Fwith-boundary");
     expect(requireInit(calls[0]?.[1]).method).toBe("DELETE");
+    const headers = requireInit(calls[0]?.[1]).headers as Headers;
+    expect(headers.get("Idempotency-Key")).toBe("cancel-key-1");
   });
 
   it("downloads non-JSON files with dev auth and filename metadata", async () => {

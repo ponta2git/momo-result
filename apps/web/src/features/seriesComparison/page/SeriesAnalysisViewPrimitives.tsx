@@ -6,7 +6,6 @@ import type {
   SeriesAnalysisPlayer,
   SeriesComparisonAggregateV3,
 } from "@/shared/api/seriesAnalysis";
-import { orderFixedMembers } from "@/shared/domain/members";
 import { Button } from "@/shared/ui/actions/Button";
 import { Disclosure } from "@/shared/ui/data/Collapsible";
 import type { FactListItem } from "@/shared/ui/data/FactList";
@@ -144,13 +143,7 @@ export function playerName(players: SeriesAnalysisPlayer[], memberId: string): s
 }
 
 export function memberNames(players: SeriesAnalysisPlayer[], memberIds: string[]): string {
-  return (
-    orderFixedMembers(
-      memberIds.map((memberId) => ({ memberId, name: playerName(players, memberId) })),
-    )
-      .map(({ name }) => name)
-      .join("、") || "—"
-  );
+  return memberIds.map((memberId) => playerName(players, memberId)).join("、") || "—";
 }
 
 function metricReadingCue(

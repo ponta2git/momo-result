@@ -3,10 +3,11 @@ import { normalizeApiErrorResponse, normalizeUnknownApiError } from "@/shared/ap
 
 type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
-type ApiRequestOptions = {
+type ApiRequestOptions<T = unknown> = {
   idempotency?: "none" | { key: string } | undefined;
   method?: HttpMethod;
   body?: unknown;
+  decodeResponse?: (value: unknown) => Promise<T> | T;
   formData?: FormData;
   headers?: HeadersInit;
   signal?: AbortSignal;
@@ -141,7 +142,7 @@ async function executeApiOperation<T>(operation: () => Promise<T>): Promise<T> {
   }
 }
 
-export async function apiRequest<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
+export async function apiRequest<T>(path: string, options: ApiRequestOptions<T> = {}): Promise<T> {
   return executeApiOperation(async () => {
     const requestPath = sameOriginRequestPath(path);
     const method = options.method ?? "GET";
@@ -170,13 +171,14 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
       return undefined as T;
     }
 
-    return (await response.json()) as T;
+    const value: unknown = await response.json();
+    return options.decodeResponse ? await options.decodeResponse(value) : (value as T);
   });
 }
 
 export async function apiDownload(
   path: string,
-  options: Pick<ApiRequestOptions, "headers" | "signal"> = {},
+  options: Pick<ApiRequestOptions<ApiDownloadResult>, "headers" | "signal"> = {},
 ): Promise<ApiDownloadResult> {
   return executeApiOperation(async () => {
     const requestPath = sameOriginRequestPath(path);

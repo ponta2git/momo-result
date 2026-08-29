@@ -20,7 +20,6 @@ const QUEUE_PUBLISH_ERROR_CLASS: &str = "redis_operation";
 const DELIVERY_RETRY_SECONDS: [u64; 3] = [2, 4, 8];
 const RUNTIME_BATCH_SIZE: usize = 10;
 const RUNTIME_CLAIM_TTL: Duration = Duration::from_secs(30);
-const RUNTIME_MAXIMUM_PUBLISH_BACKOFF: Duration = Duration::from_mins(1);
 const RUNTIME_SEMANTIC_REDELIVERY_AFTER: Duration = Duration::from_mins(5);
 const LOCK_CONTENTION_RETRY_DELAY: Duration = Duration::from_millis(250);
 
@@ -33,7 +32,6 @@ pub(crate) struct SeriesAnalysisOutboxConfig {
     stream: String,
     batch_size: usize,
     claim_ttl: Duration,
-    maximum_publish_backoff: Duration,
     semantic_redelivery_after: Duration,
 }
 
@@ -49,7 +47,6 @@ impl SeriesAnalysisOutboxConfig {
             stream,
             RUNTIME_BATCH_SIZE,
             RUNTIME_CLAIM_TTL,
-            RUNTIME_MAXIMUM_PUBLISH_BACKOFF,
             RUNTIME_SEMANTIC_REDELIVERY_AFTER,
         )
     }
@@ -64,29 +61,22 @@ impl SeriesAnalysisOutboxConfig {
         stream: String,
         batch_size: usize,
         claim_ttl: Duration,
-        maximum_publish_backoff: Duration,
         semantic_redelivery_after: Duration,
     ) -> Result<Self, SeriesAnalysisOutboxError> {
         if stream.trim().is_empty()
             || !(1..=MAXIMUM_BATCH_SIZE).contains(&batch_size)
             || claim_ttl.is_zero()
-            || maximum_publish_backoff.is_zero()
             || semantic_redelivery_after.is_zero()
         {
             return Err(SeriesAnalysisOutboxError::InvalidConfiguration);
         }
-        for duration in [
-            claim_ttl,
-            maximum_publish_backoff,
-            semantic_redelivery_after,
-        ] {
+        for duration in [claim_ttl, semantic_redelivery_after] {
             postgres_duration_milliseconds(duration)?;
         }
         Ok(Self {
             stream,
             batch_size,
             claim_ttl,
-            maximum_publish_backoff,
             semantic_redelivery_after,
         })
     }
@@ -276,8 +266,7 @@ impl SeriesAnalysisOutboxDriver {
                 }
             }
             Err(_publish_error) => {
-                let retry_delay =
-                    delivery_retry_delay(claim.attempt_count, self.config.maximum_publish_backoff)?;
+                let retry_delay = delivery_retry_delay(claim.attempt_count)?;
                 let released = self.release_for_retry(claim, retry_delay).await?;
                 if released {
                     warn!(
@@ -641,17 +630,14 @@ fn queue_fields(job_id: &str) -> [(&'static str, String); 2] {
     ]
 }
 
-fn delivery_retry_delay(
-    attempt_count: i32,
-    maximum: Duration,
-) -> Result<Duration, SeriesAnalysisOutboxError> {
+fn delivery_retry_delay(attempt_count: i32) -> Result<Duration, SeriesAnalysisOutboxError> {
     let index = usize::try_from(attempt_count)
         .map_err(|_invalid| SeriesAnalysisOutboxError::InvalidRecordValue)?;
     let seconds = DELIVERY_RETRY_SECONDS
         .get(index)
         .copied()
         .ok_or(SeriesAnalysisOutboxError::InvalidRecordValue)?;
-    Ok(Duration::from_secs(seconds).min(maximum))
+    Ok(Duration::from_secs(seconds))
 }
 
 fn postgres_duration_milliseconds(duration: Duration) -> Result<i64, SeriesAnalysisOutboxError> {

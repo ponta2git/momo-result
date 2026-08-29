@@ -17,7 +17,9 @@ import momo.api.ports.storage.ImageStorage
 import momo.api.repositories.{
   AppSession,
   AppSessionsRepository,
+  InvalidOcrQueueOutboxClaim,
   OcrQueueBacklogSnapshot,
+  OcrQueueOutboxClaim,
   OcrQueueOutboxRecord,
   OcrQueueOutboxRepository
 }
@@ -96,6 +98,8 @@ final case class OutboxClaimDueCall(limit: Int, now: Instant, claimUntil: Instan
 final case class OutboxRearmCall(now: Instant, redeliverBefore: Instant, limit: Int)
     derives CanEqual
 final case class OutboxNextWakeCall(now: Instant, redeliveryAfter: FiniteDuration) derives CanEqual
+final case class OutboxFailInvalidClaimCall(claim: InvalidOcrQueueOutboxClaim, now: Instant)
+    derives CanEqual
 
 final case class OutboxMarkDeliveredCall(
     id: String,
@@ -113,15 +117,17 @@ final case class OutboxReleaseForRetryCall(
 ) derives CanEqual
 
 final class RecordingOcrQueueOutboxRepository private (
-    claimRows: OutboxClaimDueCall => List[OcrQueueOutboxRecord],
+    claimRows: OutboxClaimDueCall => List[OcrQueueOutboxClaim],
     backlogSnapshotRows: Instant => OcrQueueBacklogSnapshot,
     rearmResult: Int,
     nextWakeAtResult: Option[Instant],
+    failInvalidClaimResult: Boolean,
     markDeliveredResult: Boolean,
     releaseForRetryResult: Boolean,
     claimsRef: Ref[IO, Vector[OutboxClaimDueCall]],
     rearmsRef: Ref[IO, Vector[OutboxRearmCall]],
     nextWakeAtsRef: Ref[IO, Vector[OutboxNextWakeCall]],
+    invalidFailuresRef: Ref[IO, Vector[OutboxFailInvalidClaimCall]],
     deliveriesRef: Ref[IO, Vector[OutboxMarkDeliveredCall]],
     releasesRef: Ref[IO, Vector[OutboxReleaseForRetryCall]],
 ) extends OcrQueueOutboxRepository[IO]:
@@ -129,9 +135,15 @@ final class RecordingOcrQueueOutboxRepository private (
       limit: Int,
       now: Instant,
       claimUntil: Instant,
-  ): IO[List[OcrQueueOutboxRecord]] =
+  ): IO[List[OcrQueueOutboxClaim]] =
     val call = OutboxClaimDueCall(limit, now, claimUntil)
     claimsRef.update(_ :+ call).as(claimRows(call))
+
+  override def failInvalidClaim(
+      claim: InvalidOcrQueueOutboxClaim,
+      now: Instant,
+  ): IO[Boolean] = invalidFailuresRef
+    .update(_ :+ OutboxFailInvalidClaimCall(claim, now)).as(failInvalidClaimResult)
 
   override def rearmQueuedForRedelivery(
       now: Instant,
@@ -170,6 +182,7 @@ final class RecordingOcrQueueOutboxRepository private (
   def claims: IO[Vector[OutboxClaimDueCall]] = claimsRef.get
   def rearms: IO[Vector[OutboxRearmCall]] = rearmsRef.get
   def nextWakeAts: IO[Vector[OutboxNextWakeCall]] = nextWakeAtsRef.get
+  def invalidFailures: IO[Vector[OutboxFailInvalidClaimCall]] = invalidFailuresRef.get
   def deliveries: IO[Vector[OutboxMarkDeliveredCall]] = deliveriesRef.get
   def releases: IO[Vector[OutboxReleaseForRetryCall]] = releasesRef.get
 
@@ -180,33 +193,53 @@ object RecordingOcrQueueOutboxRepository:
     expiredInFlightCount = 0,
     duePendingCount = 0,
     oldestDueNextAttemptAt = None,
+    recoverableInvalidCount = 0,
   )
 
   def createWithRows(rows: List[OcrQueueOutboxRecord]): IO[RecordingOcrQueueOutboxRepository] =
     create(_ => rows, markDeliveredResult = true, releaseForRetryResult = true)
 
+  def createWithClaims(
+      claims: List[OcrQueueOutboxClaim]
+  ): IO[RecordingOcrQueueOutboxRepository] = createWithClaims(claims, failInvalidClaimResult = true)
+
+  def createWithClaims(
+      claims: List[OcrQueueOutboxClaim],
+      failInvalidClaimResult: Boolean,
+  ): IO[RecordingOcrQueueOutboxRepository] = createWithClaimScheduleAndBacklog(
+    _ => claims,
+    markDeliveredResult = true,
+    releaseForRetryResult = true,
+    backlogSnapshotRows = _ => emptyBacklog,
+    rearmResult = 0,
+    nextWakeAtResult = None,
+    failInvalidClaimResult = failInvalidClaimResult,
+  )
+
   def create(
       claimRows: OutboxClaimDueCall => List[OcrQueueOutboxRecord],
       markDeliveredResult: Boolean,
       releaseForRetryResult: Boolean,
-  ): IO[RecordingOcrQueueOutboxRepository] = createWithScheduleAndBacklog(
-    claimRows,
+  ): IO[RecordingOcrQueueOutboxRepository] = createWithClaimScheduleAndBacklog(
+    call => claimRows(call).map(OcrQueueOutboxClaim.Publish.apply),
     markDeliveredResult,
     releaseForRetryResult,
     _ => emptyBacklog,
     rearmResult = 0,
     nextWakeAtResult = None,
+    failInvalidClaimResult = true,
   )
 
   def createWithBacklog(
       rows: Instant => OcrQueueBacklogSnapshot
-  ): IO[RecordingOcrQueueOutboxRepository] = createWithScheduleAndBacklog(
+  ): IO[RecordingOcrQueueOutboxRepository] = createWithClaimScheduleAndBacklog(
     _ => Nil,
     markDeliveredResult = true,
     releaseForRetryResult = true,
     backlogSnapshotRows = rows,
     rearmResult = 0,
     nextWakeAtResult = None,
+    failInvalidClaimResult = true,
   )
 
   def createWithSchedule(
@@ -215,27 +248,30 @@ object RecordingOcrQueueOutboxRepository:
       releaseForRetryResult: Boolean,
       rearmResult: Int,
       nextWakeAtResult: Option[Instant],
-  ): IO[RecordingOcrQueueOutboxRepository] = createWithScheduleAndBacklog(
-    claimRows,
+  ): IO[RecordingOcrQueueOutboxRepository] = createWithClaimScheduleAndBacklog(
+    call => claimRows(call).map(OcrQueueOutboxClaim.Publish.apply),
     markDeliveredResult,
     releaseForRetryResult,
     _ => emptyBacklog,
     rearmResult,
     nextWakeAtResult,
+    failInvalidClaimResult = true,
   )
 
-  private def createWithScheduleAndBacklog(
-      claimRows: OutboxClaimDueCall => List[OcrQueueOutboxRecord],
+  private def createWithClaimScheduleAndBacklog(
+      claimRows: OutboxClaimDueCall => List[OcrQueueOutboxClaim],
       markDeliveredResult: Boolean,
       releaseForRetryResult: Boolean,
       backlogSnapshotRows: Instant => OcrQueueBacklogSnapshot,
       rearmResult: Int,
       nextWakeAtResult: Option[Instant],
+      failInvalidClaimResult: Boolean,
   ): IO[RecordingOcrQueueOutboxRepository] =
     for
       claims <- Ref.of[IO, Vector[OutboxClaimDueCall]](Vector.empty)
       rearms <- Ref.of[IO, Vector[OutboxRearmCall]](Vector.empty)
       nextWakeAts <- Ref.of[IO, Vector[OutboxNextWakeCall]](Vector.empty)
+      invalidFailures <- Ref.of[IO, Vector[OutboxFailInvalidClaimCall]](Vector.empty)
       deliveries <- Ref.of[IO, Vector[OutboxMarkDeliveredCall]](Vector.empty)
       releases <- Ref.of[IO, Vector[OutboxReleaseForRetryCall]](Vector.empty)
     yield new RecordingOcrQueueOutboxRepository(
@@ -243,11 +279,13 @@ object RecordingOcrQueueOutboxRepository:
       backlogSnapshotRows,
       rearmResult,
       nextWakeAtResult,
+      failInvalidClaimResult,
       markDeliveredResult,
       releaseForRetryResult,
       claims,
       rearms,
       nextWakeAts,
+      invalidFailures,
       deliveries,
       releases,
     )

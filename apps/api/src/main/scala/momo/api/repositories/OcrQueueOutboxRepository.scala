@@ -26,15 +26,26 @@ final case class OcrQueueOutboxRecord(
     claimExpiresAt: Instant,
 )
 
+final case class InvalidOcrQueueOutboxClaim(
+    id: String,
+    jobId: OcrJobId,
+    claimToken: UUID,
+) derives CanEqual
+
+enum OcrQueueOutboxClaim derives CanEqual:
+  case Publish(record: OcrQueueOutboxRecord)
+  case Invalid(claim: InvalidOcrQueueOutboxClaim)
+
 final case class OcrQueueBacklogSnapshot(
     pendingCount: Long,
     inFlightCount: Long,
     expiredInFlightCount: Long,
     duePendingCount: Long,
     oldestDueNextAttemptAt: Option[Instant],
+    recoverableInvalidCount: Long,
 ) derives CanEqual:
-  def dueBacklogCount: Long = duePendingCount + expiredInFlightCount
-  def activeBacklogCount: Long = pendingCount + inFlightCount
+  def dueBacklogCount: Long = duePendingCount + expiredInFlightCount + recoverableInvalidCount
+  def activeBacklogCount: Long = pendingCount + inFlightCount + recoverableInvalidCount
 
 final case class OcrQueueOutboxDraft(
     id: String,
@@ -62,7 +73,8 @@ object OcrQueueOutboxDraft:
     )
 
 trait OcrQueueOutboxRepository[F[_]]:
-  def claimDue(limit: Int, now: Instant, claimUntil: Instant): F[List[OcrQueueOutboxRecord]]
+  def claimDue(limit: Int, now: Instant, claimUntil: Instant): F[List[OcrQueueOutboxClaim]]
+  def failInvalidClaim(claim: InvalidOcrQueueOutboxClaim, now: Instant): F[Boolean]
   def rearmQueuedForRedelivery(now: Instant, redeliverBefore: Instant, limit: Int): F[Int]
   def nextWakeAt(now: Instant, redeliveryAfter: FiniteDuration): F[Option[Instant]]
   def backlogSnapshot(now: Instant): F[OcrQueueBacklogSnapshot]

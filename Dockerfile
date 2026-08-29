@@ -21,12 +21,15 @@ RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store,sharing=locked \
   pnpm install --frozen-lockfile --store-dir "${PNPM_STORE_DIR}"
 
 FROM web-deps AS web-builder
+COPY apps/api/openapi.yaml apps/api/redocly.yaml apps/api/
 COPY apps/web/index.html apps/web/index.html
 COPY apps/web/tsconfig.json apps/web/tsconfig.json
 COPY apps/web/vite.config.ts apps/web/vite.config.ts
 COPY apps/web/public apps/web/public
 COPY apps/web/scripts/check-built-theme.mjs apps/web/scripts/check-built-theme.mjs
+COPY apps/web/scripts/generate-api.mjs apps/web/scripts/generate-api.mjs
 COPY apps/web/src apps/web/src
+RUN pnpm --filter web contract:check
 RUN pnpm --filter web build
 
 FROM ${JAVA_JDK_IMAGE} AS api-deps
@@ -65,6 +68,7 @@ RUN chmod 0755 /usr/local/bin/build-http4s-patch \
 FROM api-deps AS api-builder
 COPY --from=http4s-builder /root/.ivy2/local /root/.ivy2/local
 COPY --from=http4s-builder /opt/http4s-patch /opt/http4s-patch
+COPY docs/schemas/series-analysis-*.schema.json /workspace/docs/schemas/
 COPY apps/api/src/main src/main
 COPY apps/api/src/openapi src/openapi
 COPY apps/api/openapi.yaml openapi.yaml

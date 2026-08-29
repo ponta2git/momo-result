@@ -16,11 +16,11 @@ final case class OcrJobDraftAttachment(
 
 final case class OcrQueueDispatchIntent(
     enqueueRequest: OcrJobEnqueueRequest,
-    jobId: OcrJobId,
-    draftId: OcrDraftId,
     matchDraftId: Option[MatchDraftId],
-    createdAt: Instant,
-)
+):
+  def jobId: OcrJobId = enqueueRequest.jobId
+  def draftId: OcrDraftId = enqueueRequest.draftId
+  def createdAt: Instant = enqueueRequest.enqueuedAt
 
 final case class OcrJobCreationPlan(
     draft: OcrDraft,
@@ -31,15 +31,13 @@ final case class OcrJobCreationPlan(
 )
 
 object OcrJobCreationPlan:
-  /** Validates the duplicated queue/DB identifiers before any row or outbox mutation. */
+  /** Validates the queue/DB boundary before any row or outbox mutation. */
   def isConsistent(plan: OcrJobCreationPlan): Boolean =
     val request = plan.queueDispatch.enqueueRequest
     val attachment = plan.matchDraftAttachment
     plan.job.status == momo.api.domain.OcrJobStatus.Queued &&
     plan.draft.jobId == plan.job.id &&
     plan.job.draftId == plan.draft.id &&
-    plan.queueDispatch.jobId == plan.job.id &&
-    plan.queueDispatch.draftId == plan.draft.id &&
     plan.queueDispatch.matchDraftId == attachment.map(_.draftId) &&
     request.jobId == plan.job.id &&
     request.draftId == plan.draft.id &&
@@ -47,12 +45,11 @@ object OcrJobCreationPlan:
     request.imageLocation == plan.job.imageLocation &&
     request.requestedScreenType == plan.job.requestedScreenType &&
     request.attempt == OcrJobEnqueueRequest.InitialAttempt &&
-    request.enqueuedAt.equals(plan.queueDispatch.createdAt) &&
     attachment.forall(value =>
       value.sourceImageId == plan.job.imageId &&
         value.ocrDraftId == plan.draft.id &&
         value.screenType == plan.job.requestedScreenType &&
-        value.updatedAt.equals(plan.queueDispatch.createdAt)
+        value.updatedAt.equals(request.enqueuedAt)
     )
 
 trait OcrJobCreationStore[F[_]]:

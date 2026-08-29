@@ -354,10 +354,7 @@ final class PostgresOcrJobCreationStoreSpec extends IntegrationSuite with JsonSc
   ): OcrJobCreationPlan =
     val dispatch = OcrQueueDispatchIntent(
       enqueueRequest = enqueueRequest,
-      jobId = job.id,
-      draftId = draft.id,
       matchDraftId = attachment.map(_.draftId),
-      createdAt = now,
     )
     OcrJobCreationPlan(
       draft = draft,

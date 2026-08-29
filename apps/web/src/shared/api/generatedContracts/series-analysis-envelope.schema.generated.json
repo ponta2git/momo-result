@@ -1,0 +1,551 @@
+{
+  "$comment": "Generated from apps/api/openapi.yaml by apps/web/scripts/generate-api.mjs; do not edit by hand.",
+  "$defs": {
+    "SeriesAnalysisAdminOverviewResponse": {
+      "title": "SeriesAnalysisAdminOverviewResponse",
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "titleOptions",
+        "selectedTitle",
+        "globalExecution",
+        "recentJobs"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "type": "integer",
+          "enum": [1]
+        },
+        "titleOptions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SeriesAnalysisAdminTitleOptionResponse"
+          }
+        },
+        "selectedTitle": {
+          "type": ["object", "null"],
+          "required": ["gameTitleId", "gameTitleName", "status", "pendingManualRun"],
+          "properties": {
+            "gameTitleId": {
+              "type": "string"
+            },
+            "gameTitleName": {
+              "type": "string"
+            },
+            "status": {
+              "$ref": "#/$defs/SeriesAnalysisStatusResponse"
+            },
+            "pendingManualRun": {
+              "type": ["object", "null"],
+              "required": ["requestCount", "oldestRequestedAt"],
+              "properties": {
+                "requestCount": {
+                  "type": "integer"
+                },
+                "oldestRequestedAt": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        "globalExecution": {
+          "$ref": "#/$defs/SeriesAnalysisGlobalExecutionResponse"
+        },
+        "recentJobs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SeriesAnalysisJobSummaryResponse"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "SeriesAnalysisAdminTitleOptionResponse": {
+      "title": "SeriesAnalysisAdminTitleOptionResponse",
+      "type": "object",
+      "required": ["gameTitleId", "gameTitleName", "confirmedMatchCount"],
+      "properties": {
+        "gameTitleId": {
+          "type": "string"
+        },
+        "gameTitleName": {
+          "type": "string"
+        },
+        "confirmedMatchCount": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false
+    },
+    "SeriesAnalysisDesiredResponse": {
+      "title": "SeriesAnalysisDesiredResponse",
+      "type": "object",
+      "required": ["inputRevision", "algorithmVersion", "artifactSchemaVersion"],
+      "properties": {
+        "inputRevision": {
+          "type": "string"
+        },
+        "algorithmVersion": {
+          "type": "string"
+        },
+        "artifactSchemaVersion": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false
+    },
+    "SeriesAnalysisGlobalExecutionResponse": {
+      "title": "SeriesAnalysisGlobalExecutionResponse",
+      "type": "object",
+      "required": [
+        "runningCount",
+        "queuedTitleCount",
+        "oldestQueuedAt",
+        "activeCampaignCount",
+        "latestActiveCampaign"
+      ],
+      "properties": {
+        "runningCount": {
+          "type": "integer"
+        },
+        "queuedTitleCount": {
+          "type": "integer"
+        },
+        "oldestQueuedAt": {
+          "type": ["string", "null"]
+        },
+        "activeCampaignCount": {
+          "type": "integer"
+        },
+        "latestActiveCampaign": {
+          "type": ["object", "null"],
+          "required": [
+            "campaignId",
+            "targetCount",
+            "expandedCount",
+            "terminalCount",
+            "failedCount",
+            "skippedCount",
+            "acceptedAt"
+          ],
+          "properties": {
+            "campaignId": {
+              "type": "string"
+            },
+            "targetCount": {
+              "type": "integer"
+            },
+            "expandedCount": {
+              "type": "integer"
+            },
+            "terminalCount": {
+              "type": "integer"
+            },
+            "failedCount": {
+              "type": "integer"
+            },
+            "skippedCount": {
+              "type": "integer"
+            },
+            "acceptedAt": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "SeriesAnalysisJobSummaryResponse": {
+      "title": "SeriesAnalysisJobSummaryResponse",
+      "type": "object",
+      "required": [
+        "jobId",
+        "gameTitleId",
+        "gameTitleName",
+        "status",
+        "trigger",
+        "coalescedTriggers",
+        "requestedBy",
+        "manualRequestCount",
+        "requestedAt",
+        "startedAt",
+        "finishedAt",
+        "elapsedMilliseconds",
+        "inputRevision",
+        "algorithmVersion",
+        "attemptCount",
+        "transientRetryCount",
+        "leaseRecoveryCount",
+        "queueWaitMilliseconds",
+        "resultDisposition",
+        "firstManualRequester",
+        "safeFailureCode"
+      ],
+      "properties": {
+        "jobId": {
+          "type": "string"
+        },
+        "gameTitleId": {
+          "type": "string"
+        },
+        "gameTitleName": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["queued", "running", "succeeded", "failed", "timed_out"]
+        },
+        "trigger": {
+          "type": "string",
+          "enum": [
+            "manual",
+            "artifact_schema_update",
+            "algorithm_update",
+            "initial_backfill",
+            "match_mutation"
+          ]
+        },
+        "coalescedTriggers": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "manual",
+              "artifact_schema_update",
+              "algorithm_update",
+              "initial_backfill",
+              "match_mutation"
+            ]
+          }
+        },
+        "requestedBy": {
+          "type": "string",
+          "enum": ["administrator", "mixed", "system"]
+        },
+        "manualRequestCount": {
+          "type": "integer"
+        },
+        "requestedAt": {
+          "type": "string"
+        },
+        "startedAt": {
+          "type": ["string", "null"]
+        },
+        "finishedAt": {
+          "type": ["string", "null"]
+        },
+        "elapsedMilliseconds": {
+          "type": ["integer", "null"]
+        },
+        "inputRevision": {
+          "type": "string"
+        },
+        "algorithmVersion": {
+          "type": "string"
+        },
+        "attemptCount": {
+          "type": "integer"
+        },
+        "transientRetryCount": {
+          "type": "integer"
+        },
+        "leaseRecoveryCount": {
+          "type": "integer"
+        },
+        "queueWaitMilliseconds": {
+          "type": ["integer", "null"]
+        },
+        "resultDisposition": {
+          "type": "string",
+          "enum": ["none", "published", "reused"]
+        },
+        "firstManualRequester": {
+          "type": ["object", "null"],
+          "required": ["accountId", "displayName"],
+          "properties": {
+            "accountId": {
+              "type": "string"
+            },
+            "displayName": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "safeFailureCode": {
+          "type": ["string", "null"],
+          "enum": [
+            null,
+            "input_contract_invalid",
+            "input_revision_violation",
+            "calculation_failed",
+            "artifact_validation_failed",
+            "artifact_too_large",
+            "non_deterministic_output",
+            "dependency_retry_exhausted",
+            "lease_recovery_exhausted",
+            "worker_crashed",
+            "hard_timeout",
+            "resource_exhausted",
+            "temporary_storage_exhausted",
+            "publication_failed"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "SeriesAnalysisMapOptionResponse": {
+      "title": "SeriesAnalysisMapOptionResponse",
+      "type": "object",
+      "required": ["mapMasterId", "displayName"],
+      "properties": {
+        "mapMasterId": {
+          "type": "string"
+        },
+        "displayName": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "SeriesAnalysisOptionsResponse": {
+      "title": "SeriesAnalysisOptionsResponse",
+      "type": "object",
+      "required": ["schemaVersion", "defaultGameTitleId", "titles"],
+      "properties": {
+        "schemaVersion": {
+          "type": "integer",
+          "enum": [1]
+        },
+        "defaultGameTitleId": {
+          "type": ["string", "null"]
+        },
+        "titles": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SeriesAnalysisTitleOptionResponse"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "SeriesAnalysisRecalculationAcceptedResponse": {
+      "title": "SeriesAnalysisRecalculationAcceptedResponse",
+      "type": "object",
+      "required": ["schemaVersion", "requestId", "acceptedAt", "targetCount", "campaign", "target"],
+      "properties": {
+        "schemaVersion": {
+          "type": "integer",
+          "enum": [1]
+        },
+        "requestId": {
+          "type": "string"
+        },
+        "acceptedAt": {
+          "type": "string"
+        },
+        "targetCount": {
+          "type": "integer"
+        },
+        "campaign": {
+          "type": ["object", "null"],
+          "required": ["campaignId", "status"],
+          "properties": {
+            "campaignId": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string",
+              "enum": ["expanding"]
+            }
+          },
+          "additionalProperties": false
+        },
+        "target": {
+          "type": ["object", "null"],
+          "required": ["gameTitleId", "jobId", "requestDisposition"],
+          "properties": {
+            "gameTitleId": {
+              "type": "string"
+            },
+            "jobId": {
+              "type": ["string", "null"]
+            },
+            "requestDisposition": {
+              "type": "string",
+              "enum": ["coalesced_into_queued_job", "created_job", "forced_run_reserved"]
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "SeriesAnalysisSeasonMapPairResponse": {
+      "title": "SeriesAnalysisSeasonMapPairResponse",
+      "type": "object",
+      "required": ["seasonMasterId", "mapMasterId"],
+      "properties": {
+        "seasonMasterId": {
+          "type": "string"
+        },
+        "mapMasterId": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "SeriesAnalysisSeasonOptionResponse": {
+      "title": "SeriesAnalysisSeasonOptionResponse",
+      "type": "object",
+      "required": ["seasonMasterId", "displayName"],
+      "properties": {
+        "seasonMasterId": {
+          "type": "string"
+        },
+        "displayName": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "SeriesAnalysisStatusResponse": {
+      "title": "SeriesAnalysisStatusResponse",
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "gameTitleId",
+        "desired",
+        "artifactFreshness",
+        "currentArtifact",
+        "calculation"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "type": "integer",
+          "enum": [1]
+        },
+        "gameTitleId": {
+          "type": "string"
+        },
+        "desired": {
+          "$ref": "#/$defs/SeriesAnalysisDesiredResponse"
+        },
+        "artifactFreshness": {
+          "type": "string",
+          "enum": ["current", "stale", "unavailable"]
+        },
+        "currentArtifact": {
+          "type": ["object", "null"],
+          "required": [
+            "artifactId",
+            "gameTitleId",
+            "inputRevision",
+            "algorithmVersion",
+            "artifactSchemaVersion",
+            "publishedAt"
+          ],
+          "properties": {
+            "artifactId": {
+              "type": "string"
+            },
+            "gameTitleId": {
+              "type": "string"
+            },
+            "inputRevision": {
+              "type": "string"
+            },
+            "algorithmVersion": {
+              "type": "string"
+            },
+            "artifactSchemaVersion": {
+              "type": "integer"
+            },
+            "publishedAt": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "calculation": {
+          "type": ["object", "null"],
+          "required": ["status", "trigger", "requestedAt", "startedAt", "finishedAt"],
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": ["queued", "running", "succeeded", "failed", "timed_out"]
+            },
+            "trigger": {
+              "type": "string",
+              "enum": [
+                "manual",
+                "artifact_schema_update",
+                "algorithm_update",
+                "initial_backfill",
+                "match_mutation"
+              ]
+            },
+            "requestedAt": {
+              "type": "string"
+            },
+            "startedAt": {
+              "type": ["string", "null"]
+            },
+            "finishedAt": {
+              "type": ["string", "null"]
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "SeriesAnalysisTitleOptionResponse": {
+      "title": "SeriesAnalysisTitleOptionResponse",
+      "type": "object",
+      "required": [
+        "gameTitleId",
+        "displayName",
+        "confirmedMatchCount",
+        "seasons",
+        "maps",
+        "seasonMapPairs"
+      ],
+      "properties": {
+        "gameTitleId": {
+          "type": "string"
+        },
+        "displayName": {
+          "type": "string"
+        },
+        "confirmedMatchCount": {
+          "type": "integer"
+        },
+        "seasons": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SeriesAnalysisSeasonOptionResponse"
+          }
+        },
+        "maps": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SeriesAnalysisMapOptionResponse"
+          }
+        },
+        "seasonMapPairs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SeriesAnalysisSeasonMapPairResponse"
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

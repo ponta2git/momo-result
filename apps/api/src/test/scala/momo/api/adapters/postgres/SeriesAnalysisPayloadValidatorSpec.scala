@@ -29,6 +29,7 @@ final class SeriesAnalysisPayloadValidatorSpec extends FunSuite with JsonSchemaA
       ),
       true,
     )
+
     assertEquals(
       validate(
         sharedFixture("review-payload-v3.json"),
@@ -61,6 +62,19 @@ final class SeriesAnalysisPayloadValidatorSpec extends FunSuite with JsonSchemaA
       ),
       true,
     )
+
+  test("keeps the API drilldown vocabulary aligned with the owner schema"):
+    val schema = sharedSchema("series-analysis-drilldown-v3.schema.json")
+    val metricIds = schema.hcursor.downField("oneOf").as[Vector[Json]]
+      .fold(error => fail(s"invalid drilldown schema branches: $error"), identity)
+      .map(branch =>
+        branch.hcursor.get[String]("x-momo-metricId")
+          .fold(error => fail(s"invalid drilldown metric annotation: $error"), identity)
+      )
+      .toSet
+
+    assertEquals(metricIds, SeriesAnalysisDrilldownMetric.supportedIds.toSet)
+
   test("rejects unknown fields and manifest identity mismatches"):
     assertEquals(
       validate(
@@ -330,4 +344,8 @@ final class SeriesAnalysisPayloadValidatorSpec extends FunSuite with JsonSchemaA
       itemCount: Int,
       revision: Option[Long],
   ): Boolean = SeriesAnalysisPayloadValidator.validate(json, request, itemCount, revision)
+
+  private def sharedSchema(fileName: String): Json =
+    parse(Files.readString(repositoryFile(s"docs/schemas/$fileName")))
+      .fold(error => fail(s"invalid shared schema $fileName: $error"), identity)
 end SeriesAnalysisPayloadValidatorSpec

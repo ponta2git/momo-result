@@ -185,10 +185,7 @@ final class InMemoryOcrJobCreationStoreSpec extends MomoCatsEffectSuite:
   ): OcrJobCreationPlan =
     val dispatch = OcrQueueDispatchIntent(
       enqueueRequest = enqueueRequest(job, draft),
-      jobId = job.id,
-      draftId = draft.id,
       matchDraftId = attachment.map(_.draftId),
-      createdAt = now,
     )
     OcrJobCreationPlan(
       draft = draft,

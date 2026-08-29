@@ -78,6 +78,21 @@ final class SeriesAnalysisHttpSpec extends MomoCatsEffectSuite with HttpAppTestF
     )
   }
 
+  app.test("invalid drilldown metrics remain an API validation problem") { httpApp =>
+    val uri = Uri.unsafeFromString(
+      s"/api/analytics/series-comparison/v2/drilldown?gameTitleId=${titleId
+          .value}&artifactId=artifact-missing&memberId=member-1&metricId=rank.unknown"
+    )
+    httpApp.run(readGet(uri)).flatMap(response =>
+      assertProblem(
+        response,
+        Status.UnprocessableContent,
+        "VALIDATION_FAILED",
+        "metricId must be one of",
+      )
+    )
+  }
+
   app.test("title recalculation requires Idempotency-Key and replays the accepted contract") {
     httpApp =>
       val uri = uri"/api/admin/series-analysis/recalculations"

@@ -13,17 +13,17 @@ import {
 } from "@/test/msw/seriesAnalysisFixtures";
 
 describe("series analysis envelope decoders", () => {
-  it("accepts every supported envelope shape", () => {
-    expect(decodeSeriesAnalysisOptions(makeSeriesAnalysisOptions())).toEqual(
+  it("accepts every supported envelope shape", async () => {
+    await expect(decodeSeriesAnalysisOptions(makeSeriesAnalysisOptions())).resolves.toEqual(
       makeSeriesAnalysisOptions(),
     );
-    expect(decodeSeriesAnalysisStatus(makeSeriesAnalysisStatus())).toEqual(
+    await expect(decodeSeriesAnalysisStatus(makeSeriesAnalysisStatus())).resolves.toEqual(
       makeSeriesAnalysisStatus(),
     );
-    expect(decodeSeriesAnalysisAdminOverview(makeSeriesAnalysisAdminOverview())).toEqual(
-      makeSeriesAnalysisAdminOverview(),
-    );
-    expect(
+    await expect(
+      decodeSeriesAnalysisAdminOverview(makeSeriesAnalysisAdminOverview()),
+    ).resolves.toEqual(makeSeriesAnalysisAdminOverview());
+    await expect(
       decodeSeriesAnalysisRecalculationAccepted({
         acceptedAt: "2026-08-29T00:00:00Z",
         campaign: { campaignId: "campaign-1", status: "expanding" },
@@ -32,17 +32,17 @@ describe("series analysis envelope decoders", () => {
         target: null,
         targetCount: 1,
       }),
-    ).toBeDefined();
+    ).resolves.toBeDefined();
   });
 
-  it("rejects unsupported schema versions and vocabulary values", () => {
-    expect(() =>
+  it("rejects unsupported schema versions and vocabulary values", async () => {
+    await expect(
       decodeSeriesAnalysisStatus({
         ...makeSeriesAnalysisStatus(),
         schemaVersion: 2,
       }),
-    ).toThrow();
-    expect(() =>
+    ).rejects.toThrow();
+    await expect(
       decodeSeriesAnalysisStatus({
         ...makeSeriesAnalysisStatus(),
         calculation: {
@@ -50,16 +50,16 @@ describe("series analysis envelope decoders", () => {
           status: "waiting",
         },
       }),
-    ).toThrow();
+    ).rejects.toThrow();
 
     const overview = makeSeriesAnalysisAdminOverview();
-    expect(() =>
+    await expect(
       decodeSeriesAnalysisAdminOverview({
         ...overview,
         recentJobs: [{ ...overview.recentJobs[0], safeFailureCode: "new_failure" }],
       }),
-    ).toThrow();
-    expect(() =>
+    ).rejects.toThrow();
+    await expect(
       decodeSeriesAnalysisRecalculationAccepted({
         acceptedAt: "2026-08-29T00:00:00Z",
         campaign: { campaignId: "campaign-1", status: "queued" },
@@ -68,23 +68,23 @@ describe("series analysis envelope decoders", () => {
         target: null,
         targetCount: 1,
       }),
-    ).toThrow();
+    ).rejects.toThrow();
   });
 
-  it("rejects omitted required-nullable fields, omitted arrays, and unknown keys", () => {
+  it("rejects omitted required-nullable fields, omitted arrays, and unknown keys", async () => {
     const statusWithoutCalculation: Record<string, unknown> = { ...makeSeriesAnalysisStatus() };
     delete statusWithoutCalculation["calculation"];
-    expect(() => decodeSeriesAnalysisStatus(statusWithoutCalculation)).toThrow();
+    await expect(decodeSeriesAnalysisStatus(statusWithoutCalculation)).rejects.toThrow();
 
     const optionsWithoutTitles: Record<string, unknown> = { ...makeSeriesAnalysisOptions() };
     delete optionsWithoutTitles["titles"];
-    expect(() => decodeSeriesAnalysisOptions(optionsWithoutTitles)).toThrow();
+    await expect(decodeSeriesAnalysisOptions(optionsWithoutTitles)).rejects.toThrow();
 
-    expect(() =>
+    await expect(
       decodeSeriesAnalysisOptions({
         ...makeSeriesAnalysisOptions(),
         futureField: true,
       }),
-    ).toThrow();
+    ).rejects.toThrow();
   });
 });

@@ -37,6 +37,18 @@ trait JsonSchemaAssertions extends Assertions:
       s"JSON Schema validation unexpectedly passed for ${schemaPath.getFileName}: $inputJson",
     )
 
+  protected def assertInlineJsonSchemaValid(
+      schemaName: String,
+      schemaJson: String,
+      inputJson: String,
+  ): Unit =
+    val errors = jsonSchemaErrors(schemaJson, inputJson)
+
+    assert(
+      errors.isEmpty,
+      s"JSON Schema validation failed for $schemaName: ${errors.mkString("; ")}",
+    )
+
   protected def streamPayloadV2SchemaPath: Path =
     repoPath("docs/schemas/ocr-queue-payload-v2.schema.json")
 
@@ -53,9 +65,14 @@ trait JsonSchemaAssertions extends Assertions:
   private def jsonSchemaErrors(
       schemaPath: Path,
       inputJson: String,
+  ): List[com.networknt.schema.Error] = jsonSchemaErrors(Files.readString(schemaPath), inputJson)
+
+  private def jsonSchemaErrors(
+      schemaJson: String,
+      inputJson: String,
   ): List[com.networknt.schema.Error] =
     val registry = SchemaRegistry.withDefaultDialect(SpecificationVersion.DRAFT_2020_12)
-    val schema = registry.getSchema(Files.readString(schemaPath), InputFormat.JSON)
+    val schema = registry.getSchema(schemaJson, InputFormat.JSON)
     schema.validate(
       inputJson,
       InputFormat.JSON,

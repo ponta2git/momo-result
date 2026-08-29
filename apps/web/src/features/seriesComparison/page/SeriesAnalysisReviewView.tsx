@@ -206,14 +206,14 @@ function PlaybookCard({
                       {qualityStatus ? (
                         <SeriesAnalysisQualityAdvisory className="ml-2" status={qualityStatus} />
                       ) : null}
-                      {evidence.method ? (
+                      {"method" in evidence && evidence.method ? (
                         <span className="mt-1 block text-xs text-[var(--color-text-secondary)]">
                           開催単位の再標本化（bootstrap）による95%区間:{" "}
                           {formatDecimal(evidence.confidenceLow)}〜
                           {formatDecimal(evidence.confidenceHigh)}。開催を変えても傾向が残った割合:{" "}
                           {formatPercent(evidence.stability)}。
                         </span>
-                      ) : evidence.stability !== undefined && evidence.stability !== null ? (
+                      ) : "stability" in evidence && evidence.stability !== null ? (
                         <span className="mt-1 block text-xs text-[var(--color-text-secondary)]">
                           開催を変えても傾向が残った割合: {formatPercent(evidence.stability)}。
                         </span>
@@ -268,9 +268,7 @@ function evidenceQualityStatus(
 ): SeriesAnalysisPlaybookCard["qualityStatus"] | null {
   const status =
     evidence.qualityStatus ??
-    (evidence.status === "hidden" || evidence.status === undefined
-      ? cardQualityStatus
-      : evidence.status);
+    (!("status" in evidence) || evidence.status === "hidden" ? cardQualityStatus : evidence.status);
   return status === cardQualityStatus ? null : status;
 }
 

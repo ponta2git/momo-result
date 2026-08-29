@@ -73,8 +73,7 @@ export function getSeriesAnalysisAggregate(
 ): Promise<SeriesComparisonAggregateV3> {
   return apiRequest(scopedPath("aggregate", query), {
     ...options,
-    decodeResponse: (value) =>
-      decodeSeriesAnalysisArtifact<SeriesComparisonAggregateV3>("aggregate", value),
+    decodeResponse: (value) => decodeSeriesAnalysisArtifact("aggregate", value),
   });
 }
 
@@ -84,8 +83,7 @@ export function getSeriesAnalysisReview(
 ): Promise<SeriesComparisonReviewV3> {
   return apiRequest(scopedPath("review", query), {
     ...options,
-    decodeResponse: (value) =>
-      decodeSeriesAnalysisArtifact<SeriesComparisonReviewV3>("review", value),
+    decodeResponse: (value) => decodeSeriesAnalysisArtifact("review", value),
   });
 }
 
@@ -98,8 +96,7 @@ export function getSeriesAnalysisDrilldown(
   params.set("metricId", query.metricId);
   return apiRequest(`/api/analytics/series-comparison/v2/drilldown?${params.toString()}`, {
     ...options,
-    decodeResponse: (value) =>
-      decodeSeriesAnalysisArtifact<SeriesAnalysisDrilldownV3>("drilldown", value),
+    decodeResponse: (value) => decodeSeriesAnalysisArtifact("drilldown", value),
   });
 }
 
@@ -111,8 +108,7 @@ export function getSeriesAnalysisMatchContext(
   params.set("matchId", query.matchId);
   return apiRequest(`/api/analytics/series-comparison/v2/match-context?${params.toString()}`, {
     ...options,
-    decodeResponse: (value) =>
-      decodeSeriesAnalysisArtifact<SeriesAnalysisMatchContextV2>("matchContext", value),
+    decodeResponse: (value) => decodeSeriesAnalysisArtifact("matchContext", value),
   });
 }
 

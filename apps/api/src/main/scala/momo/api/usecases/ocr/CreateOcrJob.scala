@@ -74,19 +74,7 @@ final class CreateOcrJob[F[_]: MonadThrow](
     draftId <- EitherT.liftF(nextDraftId)
     draft = initialDraft(draftId, jobId, command.requestedScreenType, createdAt)
     job = queuedJob(jobId, draftId, imageId, image.location, command.requestedScreenType, createdAt)
-    enqueueRequest = buildEnqueueRequest(
-      jobId,
-      draftId,
-      imageId,
-      image.location,
-      image.sha256,
-      image.sizeBytes,
-      image.mediaType,
-      command.requestedScreenType,
-      createdAt,
-      hintsWithAliases,
-      requestId,
-    )
+    enqueueRequest = OcrJobEnqueueRequest.initial(job, image, hintsWithAliases, requestId)
     attachment = draftForMatch.map(draftRecord =>
       OcrJobDraftAttachment(
         draftId = draftRecord.id,
@@ -98,10 +86,7 @@ final class CreateOcrJob[F[_]: MonadThrow](
     )
     queueDispatch = OcrQueueDispatchIntent(
       enqueueRequest = enqueueRequest,
-      jobId = jobId,
-      draftId = draftId,
       matchDraftId = command.matchDraftId,
-      createdAt = createdAt,
     )
     creationPlan = OcrJobCreationPlan(
       draft = draft,
@@ -193,7 +178,7 @@ object CreateOcrJob:
       imageLocation: StoredImageLocation,
       screenType: ScreenType,
       createdAt: Instant,
-  ): OcrJob = OcrJob.Queued(
+  ): OcrJob.Queued = OcrJob.Queued(
     id = jobId,
     draftId = draftId,
     imageId = imageId,
@@ -202,31 +187,4 @@ object CreateOcrJob:
     attemptCount = 0,
     createdAt = createdAt,
     updatedAt = createdAt,
-  )
-
-  private def buildEnqueueRequest(
-      jobId: OcrJobId,
-      draftId: OcrDraftId,
-      imageId: ImageId,
-      imageLocation: StoredImageLocation,
-      imageSha256: String,
-      imageByteLength: Long,
-      imageMediaType: String,
-      screenType: ScreenType,
-      enqueuedAt: Instant,
-      hints: OcrJobHints,
-      requestId: Option[String],
-  ): OcrJobEnqueueRequest = OcrJobEnqueueRequest(
-    jobId = jobId,
-    draftId = draftId,
-    imageId = imageId,
-    imageLocation = imageLocation,
-    imageSha256 = imageSha256,
-    imageByteLength = imageByteLength,
-    imageMediaType = imageMediaType,
-    requestedScreenType = screenType,
-    attempt = OcrJobEnqueueRequest.InitialAttempt,
-    enqueuedAt = enqueuedAt,
-    hints = hints,
-    requestId = requestId,
   )

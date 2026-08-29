@@ -5,7 +5,7 @@ import java.time.Instant
 import cats.Applicative
 
 import momo.api.domain.ids.*
-import momo.api.domain.{OcrJobHints, ScreenType, StoredImageLocation}
+import momo.api.domain.{OcrJob, OcrJobHints, ScreenType, StoredImage, StoredImageLocation}
 
 final case class OcrJobEnqueueRequest(
     jobId: OcrJobId,
@@ -24,6 +24,26 @@ final case class OcrJobEnqueueRequest(
 
 object OcrJobEnqueueRequest:
   val InitialAttempt = 1
+
+  def initial(
+      job: OcrJob.Queued,
+      image: StoredImage,
+      hints: OcrJobHints,
+      requestId: Option[String],
+  ): OcrJobEnqueueRequest = OcrJobEnqueueRequest(
+    jobId = job.id,
+    draftId = job.draftId,
+    imageId = image.imageId,
+    imageLocation = image.location,
+    imageSha256 = image.sha256,
+    imageByteLength = image.sizeBytes,
+    imageMediaType = image.mediaType,
+    requestedScreenType = job.requestedScreenType,
+    attempt = InitialAttempt,
+    enqueuedAt = job.createdAt,
+    hints = hints,
+    requestId = requestId,
+  )
 
 trait OcrJobQueuePublisher[F[_]]:
   def publish(request: OcrJobEnqueueRequest): F[String]

@@ -335,7 +335,7 @@ describe("app routing", () => {
     const scopeSurface = await screen.findByRole("region", { name: "比較条件" });
     await waitFor(() => expect(scopeSurface).toHaveTextContent("12戦"));
     expect(scopeSurface).not.toHaveTextContent("十分");
-    expect(screen.getByRole("tab", { name: "次戦に備える" })).toHaveAttribute(
+    expect(await screen.findByRole("tab", { name: "次戦に備える" })).toHaveAttribute(
       "aria-selected",
       "true",
     );

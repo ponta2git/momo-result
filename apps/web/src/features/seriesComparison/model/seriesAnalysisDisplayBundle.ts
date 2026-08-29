@@ -81,8 +81,16 @@ export function seriesAnalysisScopeSignature(state: SeriesAnalysisUrlState): str
 
 type ArtifactScopedResource = {
   artifact: { artifactId: string; gameTitleId: string };
-  scope: Pick<SeriesAnalysisScope, "mapMasterId" | "seasonMasterId">;
+  scope: SeriesAnalysisScope | SeriesAnalysisMatchContextV2["scope"];
 };
+
+function scopeSeasonMasterId(scope: ArtifactScopedResource["scope"]): string | undefined {
+  return "seasonMasterId" in scope ? scope.seasonMasterId : undefined;
+}
+
+function scopeMapMasterId(scope: ArtifactScopedResource["scope"]): string | undefined {
+  return "mapMasterId" in scope ? scope.mapMasterId : undefined;
+}
 
 export function matchesSeriesAnalysisResource(
   resource: ArtifactScopedResource | undefined,
@@ -105,8 +113,8 @@ export function matchesSeriesAnalysisScope(
     resource &&
     state.gameTitleId &&
     resource.artifact.gameTitleId === state.gameTitleId &&
-    resource.scope.seasonMasterId === state.seasonMasterId &&
-    resource.scope.mapMasterId === state.mapMasterId,
+    scopeSeasonMasterId(resource.scope) === state.seasonMasterId &&
+    scopeMapMasterId(resource.scope) === state.mapMasterId,
   );
 }
 

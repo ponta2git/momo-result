@@ -16,6 +16,12 @@ object SeriesAnalysisApiSchemas:
   private def closedString(values: List[String]): Validator[String] =
     Validator.enumeration(values, value => Some(value))
 
+  private def closedNullableString(values: List[String]): Validator[Option[String]] =
+    Validator.enumeration(
+      None :: values.map(Some(_)),
+      value => Some(value.orNull),
+    )
+
   private val EnvelopeSchemaVersion = Validator.enumeration(
     List(SeriesAnalysisVocabulary.EnvelopeSchemaVersion),
     value => Some(value),
@@ -100,9 +106,10 @@ object SeriesAnalysisApiSchemas:
       _.validate(closedString(SeriesAnalysisVocabulary.ResultDispositions))
     )
     .modify(_.firstManualRequester)(requiredNullable)
-    .modify(_.safeFailureCode)(requiredNullable)
-    .modifyUnsafe[String]("safeFailureCode", Schema.ModifyCollectionElements)(
-      _.validate(closedString(SeriesAnalysisVocabulary.SafeFailureCodes))
+    .modify(_.safeFailureCode)(schema =>
+      requiredNullable(schema).validate(
+        closedNullableString(SeriesAnalysisVocabulary.SafeFailureCodes)
+      )
     )
   given Schema[SeriesAnalysisAdminOverviewResponse] = Schema
     .derived[SeriesAnalysisAdminOverviewResponse]

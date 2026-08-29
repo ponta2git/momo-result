@@ -184,11 +184,12 @@ function AnalysisViewContent({
     setDrilldown({ open: true, selection });
   };
   const focusedItemIds = bundle.matchContext?.match?.focusedItemIds ?? noFocusedItemIds;
+  const scope = bundle.aggregate.scope;
   const baseQuery: SeriesAnalysisQuery = {
     artifactId: bundle.aggregate.artifact.artifactId,
     gameTitleId: bundle.aggregate.artifact.gameTitleId,
-    mapMasterId: bundle.aggregate.scope.mapMasterId,
-    seasonMasterId: bundle.aggregate.scope.seasonMasterId,
+    mapMasterId: "mapMasterId" in scope ? scope.mapMasterId : undefined,
+    seasonMasterId: "seasonMasterId" in scope ? scope.seasonMasterId : undefined,
   };
 
   return (

@@ -10,10 +10,12 @@ import io.circe.parser.parse
 import munit.FunSuite
 
 import momo.api.config.SeriesAnalysisReadConfig
-import momo.api.domain.ids.GameTitleId
+import momo.api.contracts.seriesanalysis.SeriesAnalysisResponseSchemas
+import momo.api.domain.ids.{GameTitleId, MatchId, MemberId}
 import momo.api.domain.{
   SeriesAnalysisChunkKind,
   SeriesAnalysisChunkRequest,
+  SeriesAnalysisDrilldownMetric,
   SeriesAnalysisMatchContextExclusion,
   SeriesAnalysisScope
 }
@@ -200,6 +202,24 @@ final class PostgresSeriesAnalysisChunkCodecSpec extends FunSuite with JsonSchem
       ),
       "Analysis display metadata is unavailable.",
     )
+    assertInternal(
+      PostgresSeriesAnalysisChunkCodec.hydrateAndRender(
+        decoded,
+        Map("member-ponta" -> ""),
+        Some("総合"),
+        SeriesAnalysisReadConfig.defaults,
+      ),
+      "Analysis display metadata is unavailable.",
+    )
+    assertInternal(
+      PostgresSeriesAnalysisChunkCodec.hydrateAndRender(
+        decoded,
+        Map("member-ponta" -> "ぽんた"),
+        Some(""),
+        SeriesAnalysisReadConfig.defaults,
+      ),
+      "Analysis display metadata is unavailable.",
+    )
 
   test("applies the response byte bound after display metadata hydration"):
     assertInternal(
@@ -238,6 +258,58 @@ final class PostgresSeriesAnalysisChunkCodecSpec extends FunSuite with JsonSchem
       Right("7"),
     )
     assertEquals(included.nodeCount, 5)
+
+  test("rendered artifact responses satisfy the API-owned schemas"):
+    assertHydratedFixture(
+      "aggregate-payload-v3.json",
+      SeriesAnalysisResponseSchemas.aggregate,
+      request,
+      itemCount = 0,
+      sourceMatchRevision = None,
+    )
+    assertHydratedFixture(
+      "review-payload-v3.json",
+      SeriesAnalysisResponseSchemas.review,
+      request.copy(kind = SeriesAnalysisChunkKind.Review),
+      itemCount = 1,
+      sourceMatchRevision = None,
+    )
+    assertHydratedFixture(
+      "drilldown-payload-v3.json",
+      SeriesAnalysisResponseSchemas.drilldown,
+      request.copy(
+        kind = SeriesAnalysisChunkKind.Drilldown,
+        memberId = Some(MemberId.unsafeFromString("member-1")),
+        metric = Some(SeriesAnalysisDrilldownMetric.RankAverageHistory),
+      ),
+      itemCount = 1,
+      sourceMatchRevision = None,
+    )
+    assertHydratedFixture(
+      "match-context-payload-v1.json",
+      SeriesAnalysisResponseSchemas.matchContext,
+      request.copy(
+        kind = SeriesAnalysisChunkKind.MatchContext,
+        matchId = Some(MatchId.unsafeFromString("match-1")),
+      ),
+      itemCount = 1,
+      sourceMatchRevision = Some(1),
+    )
+
+    val excluded = PostgresSeriesAnalysisChunkCodec.excludedContext(
+      artifact,
+      scope,
+      MatchId.unsafeFromString("match-1"),
+      SeriesAnalysisMatchContextExclusion.NotInScope,
+    )
+    val rendered = PostgresSeriesAnalysisChunkCodec
+      .hydrateAndRender(excluded, Map.empty, Some("総合"), SeriesAnalysisReadConfig.defaults)
+      .fold(error => fail(s"failed to render excluded context: $error"), identity)
+    assertInlineJsonSchemaValid(
+      SeriesAnalysisResponseSchemas.matchContext.componentName,
+      responseSchema(SeriesAnalysisResponseSchemas.matchContext).noSpaces,
+      new String(rendered.payload, StandardCharsets.UTF_8),
+    )
 
   private def stored(
       payload: Array[Byte],
@@ -284,6 +356,47 @@ final class PostgresSeriesAnalysisChunkCodecSpec extends FunSuite with JsonSchem
         None,
       )
       .fold(error => fail(s"invalid decoded aggregate fixture: $error"), identity)
+
+  private def assertHydratedFixture(
+      fixtureName: String,
+      resource: SeriesAnalysisResponseSchemas.Resource,
+      fixtureRequest: SeriesAnalysisChunkRequest,
+      itemCount: Int,
+      sourceMatchRevision: Option[Long],
+  ): Unit =
+    val text = Files.readString(
+      repositoryFile(s"docs/schemas/fixtures/series-analysis/$fixtureName")
+    )
+    val payload = text.getBytes(StandardCharsets.UTF_8)
+    val row = stored(payload, nestingDepth(text)).copy(itemCount = Some(itemCount))
+    val decoded = PostgresSeriesAnalysisChunkCodec
+      .decode(
+        row,
+        fixtureRequest,
+        SeriesAnalysisReadConfig.defaults,
+        sourceMatchRevision,
+      )
+      .fold(error => fail(s"failed to decode $fixtureName: $error"), identity)
+    val publicChunk = sourceMatchRevision.fold(decoded)(revision =>
+      PostgresSeriesAnalysisChunkCodec.includedContext(decoded, revision)
+    )
+    val memberNames = publicChunk.memberIds.map(id => id -> s"name-$id").toMap
+    val rendered = PostgresSeriesAnalysisChunkCodec
+      .hydrateAndRender(
+        publicChunk,
+        memberNames,
+        Some("総合"),
+        SeriesAnalysisReadConfig.defaults,
+      )
+      .fold(error => fail(s"failed to hydrate $fixtureName: $error"), identity)
+    assertInlineJsonSchemaValid(
+      resource.componentName,
+      responseSchema(resource).noSpaces,
+      new String(rendered.payload, StandardCharsets.UTF_8),
+    )
+
+  private def responseSchema(resource: SeriesAnalysisResponseSchemas.Resource): Json =
+    SeriesAnalysisResponseSchemas.schemaFor(resource)
 
   private def parsePayload(payload: Array[Byte]): Either[AppError, Json] =
     parse(new String(payload, StandardCharsets.UTF_8))

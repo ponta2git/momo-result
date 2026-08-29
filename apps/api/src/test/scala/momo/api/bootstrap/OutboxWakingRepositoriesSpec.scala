@@ -288,7 +288,7 @@ final class OutboxWakingRepositoriesSpec extends MomoCatsEffectSuite:
       draft,
       job,
       None,
-      OcrQueueDispatchIntent(request, jobId, draftId, None, now),
+      OcrQueueDispatchIntent(request, None),
       12,
     )
 

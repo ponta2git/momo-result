@@ -21,7 +21,7 @@ export const analysisArtifact = {
 const player = { displayName: "ぽんた", memberId: "member_ponta" } as const;
 const scope = { displayName: "総合", kind: "overall", matchCount: 12 } as const;
 
-function hydrateMemberDisplayNames<T>(value: T): T {
+function hydrateMemberDisplayNames<T>(value: unknown): T {
   if (Array.isArray(value)) {
     value.forEach(hydrateMemberDisplayNames);
   } else if (typeof value === "object" && value !== null) {
@@ -29,7 +29,7 @@ function hydrateMemberDisplayNames<T>(value: T): T {
     Object.values(object).forEach(hydrateMemberDisplayNames);
     if (object["memberId"] === player.memberId) object["displayName"] = player.displayName;
   }
-  return value;
+  return value as T;
 }
 
 export function makeSeriesAnalysisOptions(): SeriesAnalysisOptionsResponse {
@@ -78,7 +78,7 @@ const quality = { noTargetCount: 0, okCount: 8, referenceCount: 0 };
 export function makeSeriesAnalysisAggregate(
   artifact: SeriesAnalysisArtifactRef = analysisArtifact,
 ): SeriesComparisonAggregateV3 {
-  return hydrateMemberDisplayNames({
+  return hydrateMemberDisplayNames<SeriesComparisonAggregateV3>({
     artifact,
     assetStyleProfiles: {
       entries: [

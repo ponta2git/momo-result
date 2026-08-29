@@ -4,16 +4,23 @@ import sttp.model.StatusCode
 import sttp.tapir.*
 import sttp.tapir.json.circe.*
 
+import momo.api.contracts.seriesanalysis.SeriesAnalysisResponseSchemas
 import momo.api.endpoints.CommonEndpoint.{SecuredMutation, SecuredRead}
 import momo.api.endpoints.SeriesAnalysisApiSchemas.given
 
 object SeriesAnalysisEndpoints:
   private val noStore = header("Cache-Control", "private, no-store")
-  private val rawJsonBody: EndpointIO.Body[Array[Byte], Array[Byte]] = EndpointIO.Body(
-    RawBodyType.ByteArrayBody,
-    Codec.id(CodecFormat.Json(), Schema.anyObject[Array[Byte]]),
-    EndpointIO.Info.empty,
-  )
+  private def rawJsonBody(
+      resource: SeriesAnalysisResponseSchemas.Resource
+  ): EndpointIO.Body[Array[Byte], Array[Byte]] =
+    EndpointIO.Body(
+      RawBodyType.ByteArrayBody,
+      Codec.id(
+        CodecFormat.Json(),
+        Schema.anyObject[Array[Byte]].name(Schema.SName(resource.componentName)),
+      ),
+      EndpointIO.Info.empty,
+    )
 
   val options: SecuredRead[Unit, SeriesAnalysisOptionsResponse] = endpoint
     .securityIn(CommonEndpoint.accountHeader)
@@ -79,26 +86,30 @@ object SeriesAnalysisEndpoints:
     .and(query[Option[String]]("mapMasterId"))
     .mapTo[MatchContextInput]
 
-  val aggregate: SecuredRead[ScopedArtifactInput, Array[Byte]] = artifactEndpoint("aggregate")
-  val review: SecuredRead[ScopedArtifactInput, Array[Byte]] = artifactEndpoint("review")
+  val aggregate: SecuredRead[ScopedArtifactInput, Array[Byte]] =
+    artifactEndpoint(SeriesAnalysisResponseSchemas.aggregate)
+  val review: SecuredRead[ScopedArtifactInput, Array[Byte]] =
+    artifactEndpoint(SeriesAnalysisResponseSchemas.review)
 
+  private val drilldownContract = SeriesAnalysisResponseSchemas.drilldown
   val drilldown: SecuredRead[DrilldownInput, Array[Byte]] = endpoint
     .securityIn(CommonEndpoint.accountHeader)
     .get
-    .in("api" / "analytics" / "series-comparison" / "v2" / "drilldown")
+    .in("api" / "analytics" / "series-comparison" / "v2" / drilldownContract.pathSegment)
     .in(drilldownInput)
     .errorOut(CommonEndpoint.errorOut)
-    .out(rawJsonBody)
+    .out(rawJsonBody(drilldownContract))
     .out(noStore)
     .tag("analytics")
 
+  private val matchContextContract = SeriesAnalysisResponseSchemas.matchContext
   val matchContext: SecuredRead[MatchContextInput, Array[Byte]] = endpoint
     .securityIn(CommonEndpoint.accountHeader)
     .get
-    .in("api" / "analytics" / "series-comparison" / "v2" / "match-context")
+    .in("api" / "analytics" / "series-comparison" / "v2" / matchContextContract.pathSegment)
     .in(matchContextInput)
     .errorOut(CommonEndpoint.errorOut)
-    .out(rawJsonBody)
+    .out(rawJsonBody(matchContextContract))
     .out(noStore)
     .tag("analytics")
 
@@ -144,13 +155,13 @@ object SeriesAnalysisEndpoints:
       .tag("admin-analysis")
 
   private def artifactEndpoint(
-      path: String
+      resource: SeriesAnalysisResponseSchemas.Resource
   ): SecuredRead[ScopedArtifactInput, Array[Byte]] = endpoint
     .securityIn(CommonEndpoint.accountHeader)
     .get
-    .in("api" / "analytics" / "series-comparison" / "v2" / path)
+    .in("api" / "analytics" / "series-comparison" / "v2" / resource.pathSegment)
     .in(scopedArtifactInput)
     .errorOut(CommonEndpoint.errorOut)
-    .out(rawJsonBody)
+    .out(rawJsonBody(resource))
     .out(noStore)
     .tag("analytics")

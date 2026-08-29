@@ -141,7 +141,10 @@ private[postgres] object PostgresSeriesAnalysisChunkCodec:
       scopeName: Option[String],
       config: SeriesAnalysisReadConfig,
   ): Either[AppError, SeriesAnalysisChunk] = scopeName
-    .filter(_ => memberNames.keySet == chunk.memberIds.toSet)
+    .filter(displayName =>
+      displayName.nonEmpty && memberNames.values.forall(_.nonEmpty) &&
+        memberNames.keySet == chunk.memberIds.toSet
+    )
     .toRight(AppError.Internal("Analysis display metadata is unavailable."))
     .flatMap { displayName =>
       Either.cond(

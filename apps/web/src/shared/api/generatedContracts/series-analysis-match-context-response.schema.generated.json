@@ -1,0 +1,627 @@
+{
+  "oneOf": [
+    {
+      "additionalProperties": false,
+      "properties": {
+        "match": {
+          "additionalProperties": false,
+          "properties": {
+            "features": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "evidence": {
+                    "items": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "denominator": {
+                          "anyOf": [
+                            {
+                              "type": "null"
+                            },
+                            {
+                              "maximum": 1000000,
+                              "minimum": 0,
+                              "type": "integer",
+                              "x-momo-integerToken": true
+                            }
+                          ]
+                        },
+                        "metricId": {
+                          "maxLength": 4096,
+                          "minLength": 1,
+                          "type": "string",
+                          "x-momo-maxUtf8Bytes": 4096
+                        },
+                        "qualityStatus": {
+                          "enum": ["ok", "reference", "no_target"],
+                          "type": "string"
+                        },
+                        "unit": {
+                          "const": "count",
+                          "type": "string"
+                        },
+                        "value": {
+                          "anyOf": [
+                            {
+                              "type": "null"
+                            },
+                            {
+                              "maximum": 1.7976931348623157e308,
+                              "minimum": -1.7976931348623157e308,
+                              "type": "number",
+                              "x-momo-finiteF64": true
+                            }
+                          ]
+                        }
+                      },
+                      "required": ["denominator", "metricId", "qualityStatus", "unit", "value"],
+                      "type": "object"
+                    },
+                    "maxItems": 8,
+                    "type": "array"
+                  },
+                  "featureCode": {
+                    "enum": [
+                      "close_finish",
+                      "asset_blowout",
+                      "revenue_top_no_win",
+                      "ginji_storm",
+                      "negative_assets",
+                      "no_destination"
+                    ],
+                    "type": "string"
+                  },
+                  "memberIds": {
+                    "items": {
+                      "maxLength": 4096,
+                      "minLength": 1,
+                      "type": "string",
+                      "x-momo-maxUtf8Bytes": 4096
+                    },
+                    "maxItems": 1000000,
+                    "type": "array"
+                  },
+                  "priority": {
+                    "maximum": 2147483647,
+                    "minimum": -2147483648,
+                    "type": "integer",
+                    "x-momo-integerToken": true
+                  },
+                  "source": {
+                    "const": "match",
+                    "type": "string"
+                  },
+                  "tone": {
+                    "enum": ["neutral", "notice"],
+                    "type": "string"
+                  }
+                },
+                "required": ["evidence", "featureCode", "memberIds", "priority", "source", "tone"],
+                "type": "object"
+              },
+              "maxItems": 6,
+              "type": "array"
+            },
+            "focusedItemIds": {
+              "items": {
+                "maxLength": 4096,
+                "minLength": 1,
+                "type": "string",
+                "x-momo-maxUtf8Bytes": 4096
+              },
+              "maxItems": 1000000,
+              "type": "array"
+            },
+            "matchIndex": {
+              "maximum": 1000000,
+              "minimum": 0,
+              "type": "integer",
+              "x-momo-integerToken": true
+            },
+            "playedAt": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "maxLength": 4096,
+                  "minLength": 1,
+                  "type": "string",
+                  "x-momo-maxUtf8Bytes": 4096
+                }
+              ]
+            },
+            "players": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "cumulativeAverageAfter": {
+                    "maximum": 1.7976931348623157e308,
+                    "minimum": -1.7976931348623157e308,
+                    "type": "number",
+                    "x-momo-finiteF64": true
+                  },
+                  "cumulativeAverageBefore": {
+                    "anyOf": [
+                      {
+                        "type": "null"
+                      },
+                      {
+                        "maximum": 1.7976931348623157e308,
+                        "minimum": -1.7976931348623157e308,
+                        "type": "number",
+                        "x-momo-finiteF64": true
+                      }
+                    ]
+                  },
+                  "cumulativeAverageDelta": {
+                    "anyOf": [
+                      {
+                        "type": "null"
+                      },
+                      {
+                        "maximum": 1.7976931348623157e308,
+                        "minimum": -1.7976931348623157e308,
+                        "type": "number",
+                        "x-momo-finiteF64": true
+                      }
+                    ]
+                  },
+                  "cumulativeAverageDirection": {
+                    "enum": ["first_observation", "improved", "declined", "unchanged"],
+                    "type": "string"
+                  },
+                  "memberId": {
+                    "maxLength": 4096,
+                    "minLength": 1,
+                    "type": "string",
+                    "x-momo-maxUtf8Bytes": 4096
+                  },
+                  "previousRank": {
+                    "anyOf": [
+                      {
+                        "type": "null"
+                      },
+                      {
+                        "maximum": 4,
+                        "minimum": 1,
+                        "type": "integer",
+                        "x-momo-integerToken": true
+                      }
+                    ]
+                  },
+                  "rank": {
+                    "maximum": 4,
+                    "minimum": 1,
+                    "type": "integer",
+                    "x-momo-integerToken": true
+                  },
+                  "revenueAssetRate": {
+                    "anyOf": [
+                      {
+                        "type": "null"
+                      },
+                      {
+                        "maximum": 1.7976931348623157e308,
+                        "minimum": -1.7976931348623157e308,
+                        "type": "number",
+                        "x-momo-finiteF64": true
+                      }
+                    ]
+                  },
+                  "revenueManYen": {
+                    "maximum": 2147483647,
+                    "minimum": -2147483648,
+                    "type": "integer",
+                    "x-momo-integerToken": true
+                  },
+                  "revenueRank": {
+                    "anyOf": [
+                      {
+                        "type": "null"
+                      },
+                      {
+                        "maximum": 1.7976931348623157e308,
+                        "minimum": -1.7976931348623157e308,
+                        "type": "number",
+                        "x-momo-finiteF64": true
+                      }
+                    ]
+                  },
+                  "totalAssetsManYen": {
+                    "maximum": 2147483647,
+                    "minimum": -2147483648,
+                    "type": "integer",
+                    "x-momo-integerToken": true
+                  },
+                  "displayName": {
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "cumulativeAverageAfter",
+                  "cumulativeAverageBefore",
+                  "cumulativeAverageDelta",
+                  "cumulativeAverageDirection",
+                  "memberId",
+                  "previousRank",
+                  "rank",
+                  "revenueAssetRate",
+                  "revenueManYen",
+                  "revenueRank",
+                  "totalAssetsManYen",
+                  "displayName"
+                ],
+                "type": "object"
+              },
+              "maxItems": 4,
+              "type": "array"
+            }
+          },
+          "required": ["features", "focusedItemIds", "matchIndex", "playedAt", "players"],
+          "type": "object"
+        },
+        "matchId": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "type": "string",
+          "x-momo-maxUtf8Bytes": 4096
+        },
+        "schemaVersion": {
+          "const": 1,
+          "minimum": 0,
+          "type": "integer",
+          "x-momo-integerToken": true
+        },
+        "scope": {
+          "oneOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "const": "overall",
+                  "type": "string"
+                },
+                "matchCount": {
+                  "maximum": 1000000,
+                  "minimum": 0,
+                  "type": "integer",
+                  "x-momo-integerToken": true
+                },
+                "displayName": {
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": ["kind", "matchCount", "displayName"],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "const": "season",
+                  "type": "string"
+                },
+                "matchCount": {
+                  "maximum": 1000000,
+                  "minimum": 0,
+                  "type": "integer",
+                  "x-momo-integerToken": true
+                },
+                "seasonMasterId": {
+                  "maxLength": 4096,
+                  "minLength": 1,
+                  "type": "string",
+                  "x-momo-maxUtf8Bytes": 4096
+                },
+                "displayName": {
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": ["kind", "matchCount", "seasonMasterId", "displayName"],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "const": "map",
+                  "type": "string"
+                },
+                "mapMasterId": {
+                  "maxLength": 4096,
+                  "minLength": 1,
+                  "type": "string",
+                  "x-momo-maxUtf8Bytes": 4096
+                },
+                "matchCount": {
+                  "maximum": 1000000,
+                  "minimum": 0,
+                  "type": "integer",
+                  "x-momo-integerToken": true
+                },
+                "displayName": {
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": ["kind", "mapMasterId", "matchCount", "displayName"],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "const": "season_map",
+                  "type": "string"
+                },
+                "mapMasterId": {
+                  "maxLength": 4096,
+                  "minLength": 1,
+                  "type": "string",
+                  "x-momo-maxUtf8Bytes": 4096
+                },
+                "matchCount": {
+                  "maximum": 1000000,
+                  "minimum": 0,
+                  "type": "integer",
+                  "x-momo-integerToken": true
+                },
+                "seasonMasterId": {
+                  "maxLength": 4096,
+                  "minLength": 1,
+                  "type": "string",
+                  "x-momo-maxUtf8Bytes": 4096
+                },
+                "displayName": {
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": ["kind", "mapMasterId", "matchCount", "seasonMasterId", "displayName"],
+              "type": "object"
+            }
+          ]
+        },
+        "artifact": {
+          "additionalProperties": false,
+          "properties": {
+            "algorithmVersion": {
+              "maxLength": 4096,
+              "minLength": 1,
+              "type": "string",
+              "x-momo-maxUtf8Bytes": 4096
+            },
+            "artifactId": {
+              "maxLength": 4096,
+              "minLength": 1,
+              "type": "string",
+              "x-momo-maxUtf8Bytes": 4096
+            },
+            "artifactSchemaVersion": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "gameTitleId": {
+              "maxLength": 4096,
+              "minLength": 1,
+              "type": "string",
+              "x-momo-maxUtf8Bytes": 4096
+            },
+            "inputRevision": {
+              "pattern": "^(0|[1-9][0-9]*)$",
+              "type": "string"
+            },
+            "publishedAt": {
+              "maxLength": 4096,
+              "minLength": 1,
+              "type": "string",
+              "x-momo-maxUtf8Bytes": 4096
+            }
+          },
+          "required": [
+            "algorithmVersion",
+            "artifactId",
+            "artifactSchemaVersion",
+            "gameTitleId",
+            "inputRevision",
+            "publishedAt"
+          ],
+          "type": "object"
+        },
+        "inclusion": {
+          "additionalProperties": false,
+          "properties": {
+            "sourceMatchRevision": {
+              "pattern": "^(0|[1-9][0-9]*)$",
+              "type": "string"
+            },
+            "status": {
+              "const": "included",
+              "type": "string"
+            }
+          },
+          "required": ["sourceMatchRevision", "status"],
+          "type": "object"
+        }
+      },
+      "required": ["match", "matchId", "schemaVersion", "scope", "artifact", "inclusion"],
+      "title": "Series Analysis Match Context Resource v1",
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "artifact": {
+          "additionalProperties": false,
+          "properties": {
+            "algorithmVersion": {
+              "maxLength": 4096,
+              "minLength": 1,
+              "type": "string",
+              "x-momo-maxUtf8Bytes": 4096
+            },
+            "artifactId": {
+              "maxLength": 4096,
+              "minLength": 1,
+              "type": "string",
+              "x-momo-maxUtf8Bytes": 4096
+            },
+            "artifactSchemaVersion": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "gameTitleId": {
+              "maxLength": 4096,
+              "minLength": 1,
+              "type": "string",
+              "x-momo-maxUtf8Bytes": 4096
+            },
+            "inputRevision": {
+              "pattern": "^(0|[1-9][0-9]*)$",
+              "type": "string"
+            },
+            "publishedAt": {
+              "maxLength": 4096,
+              "minLength": 1,
+              "type": "string",
+              "x-momo-maxUtf8Bytes": 4096
+            }
+          },
+          "required": [
+            "algorithmVersion",
+            "artifactId",
+            "artifactSchemaVersion",
+            "gameTitleId",
+            "inputRevision",
+            "publishedAt"
+          ],
+          "type": "object"
+        },
+        "inclusion": {
+          "additionalProperties": false,
+          "properties": {
+            "status": {
+              "enum": ["match_changed_since_artifact", "not_in_artifact", "not_in_scope"],
+              "type": "string"
+            }
+          },
+          "required": ["status"],
+          "type": "object"
+        },
+        "match": {
+          "type": "null"
+        },
+        "matchId": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "type": "string",
+          "x-momo-maxUtf8Bytes": 4096
+        },
+        "schemaVersion": {
+          "const": 1,
+          "minimum": 0,
+          "type": "integer",
+          "x-momo-integerToken": true
+        },
+        "scope": {
+          "oneOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "const": "overall",
+                  "type": "string"
+                },
+                "displayName": {
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": ["kind", "displayName"],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "const": "season",
+                  "type": "string"
+                },
+                "seasonMasterId": {
+                  "maxLength": 4096,
+                  "minLength": 1,
+                  "type": "string",
+                  "x-momo-maxUtf8Bytes": 4096
+                },
+                "displayName": {
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": ["kind", "seasonMasterId", "displayName"],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "const": "map",
+                  "type": "string"
+                },
+                "mapMasterId": {
+                  "maxLength": 4096,
+                  "minLength": 1,
+                  "type": "string",
+                  "x-momo-maxUtf8Bytes": 4096
+                },
+                "displayName": {
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": ["kind", "mapMasterId", "displayName"],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "const": "season_map",
+                  "type": "string"
+                },
+                "mapMasterId": {
+                  "maxLength": 4096,
+                  "minLength": 1,
+                  "type": "string",
+                  "x-momo-maxUtf8Bytes": 4096
+                },
+                "seasonMasterId": {
+                  "maxLength": 4096,
+                  "minLength": 1,
+                  "type": "string",
+                  "x-momo-maxUtf8Bytes": 4096
+                },
+                "displayName": {
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": ["kind", "mapMasterId", "seasonMasterId", "displayName"],
+              "type": "object"
+            }
+          ]
+        }
+      },
+      "required": ["artifact", "inclusion", "match", "matchId", "schemaVersion", "scope"],
+      "type": "object"
+    }
+  ],
+  "$comment": "Generated by the API OpenAPI projection from the Rust-owned artifact schema; do not edit by hand.",
+  "$id": "https://momo-result.local/schemas/series-analysis-match-context-response-v2.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

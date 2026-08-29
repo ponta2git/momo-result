@@ -196,6 +196,8 @@ public repository に置くため、具体的な障害位置、再現手順、en
 - pipeline成功、health check、機能応答、CPU / latency観測を別々の証拠として扱ったか。
 - algorithm version変更を定数とworker imageの更新だけで完了扱いせず、対応reader / worker、desired version昇格、
   queued jobの収束、非対応deliveryの観測を別々に確認したか。
+- fresh DBのrelease singletonをfixtureで変更する前に、algorithm / artifact schema / validation contractの
+  exact tupleを確認し、promotion済みDBやtest内の明示UPDATEで代用していないか。
 - 性能観測ができない状態なら、配置成功までを確認済み、性能回復は未検証として報告したか。
 - rollback時は表示名ではなく、影響を受けた全実行経路を覆う差分か確認したか。
 
@@ -288,6 +290,29 @@ public repository に置くため、具体的な障害位置、再現手順、en
 - `docs/test-rule.md` の UI Conformance
 - `docs/dev-rule.md` の Change Gates
 - `docs/ui-rule.md` の「検証」
+
+### L13 Shared DB migration は owner の authoring 手順から始める
+
+**該当条件**
+
+- `../momo-db` のschema、migration、Drizzle設定・script、またはmigration stateを変更する。
+- `momo-result`や`summit`から共有DBの変更を依頼・実装する。
+
+**確認**
+
+- file編集やDB操作より先に`../momo-db/docs/development.md`を全文確認したか。
+- schema宣言から生成するmigrationと、function、trigger、precondition、backfill用のcustom migrationを
+  正規commandで分け、journal / snapshotの採番を手で操作していないか。
+- 対象migrationの適用状態を確認し、保存対象DBをfresh検証へ流用せず、existing DBのdata保持を別に
+  確認したか。
+- custom migration内の手書きSQLを一律禁止するのではなく、Drizzle管理下の履歴・順序・検証へ閉じたか。
+
+**参照先**
+
+- `AGENTS.md`
+- `docs/db-rule.md`
+- `../momo-db/AGENTS.md`
+- `../momo-db/docs/development.md`
 
 ## 更新ルール
 

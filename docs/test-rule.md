@@ -137,6 +137,7 @@ OCR は schema / screen type、object metadata、parser / postprocess、failure 
 - child の resource limit は対象 cgroup の readback / event と parent 生存を同時に確認する。host 上の制限や runtime 全体 OOM で代用しない。
 - artifact materialization は byte / node / depth / UTF-8 / checksum / path / symlink / disk 境界を検証する。
 - artifact publicationはRustのfull semantic validatorを唯一の意味oracleとし、exact validation contract、published rowのimmutability、APIのbounded shape / identity defenseをそれぞれの境界で検証する。
+- analysis releaseのbaseline migrationを変える場合は、全migration直後かつfixture mutation前のsingletonをalgorithm / artifact schema / validation contractのexact tupleとして検証する。legacy singletonからのpromotion test、相対的なtitle inheritance、test内でexact tupleをseedしたrepository testはfresh baselineの代用にしない。
 - release promotionは2接続の実PostgreSQLで、capability検査後の非互換登録がcommitまで待つこと、singleton lock中の新規作品がcommit後のtupleを継承すること、登録作品0件がterminalになることを検証する。
 - OCR preemption は一方向、失敗回数非加算、旧 child 回収後の再実行を実 process / DB で確認する。
 - resource / endurance gate は release build、production 相当の上限、代表 data で機能 gate と分けて実行する。

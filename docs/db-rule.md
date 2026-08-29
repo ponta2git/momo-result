@@ -31,6 +31,7 @@
 test の採用・維持・削除は `docs/test-rule.md` に従う。DB contract を品質証拠に選んだ場合は、本節を production boundary と oracle の正本とし、変更に該当する項目を同じ単位で満たす。一項目ごとに新しい test case を要求する一覧ではない。
 
 - 依存する table、column、seed、nullable、default、index、constraint を特定し、選択した contract evidence が新しい前提を観測できることを確認する。既存 evidence で観測できなければ、利用者影響に応じて追加または置換する。
+- 分析releaseのalgorithm / artifact schema / validation contractは不可分なtupleとして扱う。momo-db revision、各default、またはbaseline migrationを変える場合は、fixtureやcleanupがsingletonを変更する前のfresh DBでexact consumer tupleとの一致を確認し、promotion済みDBの成功を代用しない。
 - 変更した query / repository を migration 適用済みの実 PostgreSQL で実行する。未実行または skip は DB 挙動を未検証として報告する。
 - 複数 table の write は statement / lock 順と、保存後の関連 row を integration test で確認する。
 - lease、fence、slot、pointer、cleanup 競合は複数接続で stale owner と rollback を直接通す。

@@ -1240,10 +1240,17 @@ mod tests {
             "../../../../../docs/schemas/fixtures/series-analysis/",
             "drilldown-payload-v3.json"
         )));
-        assert!(aggregate.is_ok() && review.is_ok() && drilldown.is_ok());
-        let (Some(aggregate), Some(review), Some(drilldown)) =
-            (aggregate.ok(), review.ok(), drilldown.ok())
-        else {
+        let rank_signals = fixture(include_str!(concat!(
+            "../../../../../docs/schemas/fixtures/series-analysis/",
+            "rank-signals-drilldown-payload-v3.json"
+        )));
+        assert!(aggregate.is_ok() && review.is_ok() && drilldown.is_ok() && rank_signals.is_ok());
+        let (Some(aggregate), Some(review), Some(drilldown), Some(rank_signals)) = (
+            aggregate.ok(),
+            review.ok(),
+            drilldown.ok(),
+            rank_signals.ok(),
+        ) else {
             return;
         };
 
@@ -1256,6 +1263,16 @@ mod tests {
                 1,
                 "member-1",
                 "rank.averageHistory"
+            )
+            .is_ok()
+        );
+        assert!(
+            validate_drilldown(
+                &rank_signals,
+                &ScopeRef::Overall,
+                40,
+                "member-1",
+                "rankAnalysis.rankSignals"
             )
             .is_ok()
         );

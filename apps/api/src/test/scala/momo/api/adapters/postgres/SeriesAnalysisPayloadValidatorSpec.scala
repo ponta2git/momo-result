@@ -19,7 +19,7 @@ final class SeriesAnalysisPayloadValidatorSpec extends FunSuite with JsonSchemaA
   private val titleId = GameTitleId.unsafeFromString("title-payload-validator")
   private val overall = SeriesAnalysisScope.Overall
 
-  test("accepts the four shared owner resource fixtures"):
+  test("accepts the shared owner resource fixtures"):
     assertEquals(
       validate(
         sharedFixture("aggregate-payload-v3.json"),
@@ -49,6 +49,20 @@ final class SeriesAnalysisPayloadValidatorSpec extends FunSuite with JsonSchemaA
           None,
         ),
         1,
+        None,
+      ),
+      true,
+    )
+    assertEquals(
+      validate(
+        sharedFixture("rank-signals-drilldown-payload-v3.json"),
+        request(
+          SeriesAnalysisChunkKind.Drilldown,
+          Some("member-1"),
+          Some(SeriesAnalysisDrilldownMetric.RankSignals),
+          None,
+        ),
+        40,
         None,
       ),
       true,

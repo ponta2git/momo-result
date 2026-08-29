@@ -9,6 +9,7 @@ import {
 import aggregateFixture from "../../../../../docs/schemas/fixtures/series-analysis/aggregate-payload-v3.json";
 import drilldownFixture from "../../../../../docs/schemas/fixtures/series-analysis/drilldown-payload-v3.json";
 import matchContextFixture from "../../../../../docs/schemas/fixtures/series-analysis/match-context-payload-v1.json";
+import rankSignalsDrilldownFixture from "../../../../../docs/schemas/fixtures/series-analysis/rank-signals-drilldown-payload-v3.json";
 import reviewFixture from "../../../../../docs/schemas/fixtures/series-analysis/review-payload-v3.json";
 
 const artifact = {
@@ -57,6 +58,7 @@ describe("series analysis artifact response decoder", () => {
     ["aggregate", aggregateFixture],
     ["review", reviewFixture],
     ["drilldown", drilldownFixture],
+    ["drilldown", rankSignalsDrilldownFixture],
   ] as const)(
     "accepts a hydrated %s response projected from the owner fixture",
     async (kind, fixture) => {

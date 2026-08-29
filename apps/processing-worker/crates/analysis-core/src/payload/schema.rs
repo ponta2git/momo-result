@@ -432,7 +432,9 @@ const FOLD_ROW_FIELDS: &[Field] = &[
     field("fold", &COUNT),
     field("heldEventCount", &COUNT),
     field("comparisonCount", &COUNT),
-    field("importance", &NON_NEGATIVE_NUMBER),
+    // A permutation can improve a single fold even when the aggregate signal is stable, so the
+    // per-fold loss delta is signed. `supported` records the positive-delta interpretation.
+    field("importance", &NUMBER),
     field("supported", &BOOL),
 ];
 const FOLD_ROW: Schema = Schema::Object(FOLD_ROW_FIELDS);
@@ -1569,9 +1571,9 @@ mod json_schema_export_tests {
     use crate::contract::{ARTIFACT_SCHEMA_VERSION, ARTIFACT_VALIDATION_CONTRACT_ID};
 
     use super::{
-        AGGREGATE, CONTEXT_RESOURCE, DRILLDOWN_VARIANTS, DrilldownVariant, Field, MAX_ITEMS,
-        MAX_TEXT_BYTES, REVIEW, Schema, validate_aggregate, validate_drilldown,
-        validate_match_context, validate_review,
+        AGGREGATE, CONTEXT_RESOURCE, DRILLDOWN_VARIANTS, DrilldownVariant, FOLD_ROW, Field,
+        MAX_ITEMS, MAX_TEXT_BYTES, REVIEW, Schema, validate, validate_aggregate,
+        validate_drilldown, validate_match_context, validate_review,
     };
 
     const DRAFT_2020_12: &str = "https://json-schema.org/draft/2020-12/schema";
@@ -1939,6 +1941,19 @@ mod json_schema_export_tests {
             validate_match_context(&invalid_match_context).is_err(),
             "Rust owner must enforce the UTF-8 byte bound beyond portable maxLength"
         );
+    }
+
+    #[test]
+    fn fold_importance_accepts_a_signed_permutation_loss_delta() {
+        let row = json!({
+            "fold": 0,
+            "heldEventCount": 8,
+            "comparisonCount": 48,
+            "importance": -0.001,
+            "supported": false,
+        });
+
+        assert!(validate(&row, &FOLD_ROW).is_ok());
     }
 
     #[test]

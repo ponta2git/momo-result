@@ -12873,7 +12873,7 @@
                               },
                               "importance" : {
                                 "maximum" : 1.7976931348623157e+308,
-                                "minimum" : 0.0,
+                                "minimum" : -1.7976931348623157e+308,
                                 "type" : "number",
                                 "x-momo-finiteF64" : true
                               },

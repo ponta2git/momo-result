@@ -1,0 +1,75 @@
+{
+  "payload": {
+    "candidates": [
+      {
+        "candidateSharePercent": null,
+        "direction": "more_is_higher",
+        "foldRows": [
+          {
+            "comparisonCount": 48,
+            "fold": 0,
+            "heldEventCount": 4,
+            "importance": 0.2,
+            "supported": true
+          },
+          {
+            "comparisonCount": 48,
+            "fold": 1,
+            "heldEventCount": 4,
+            "importance": 0.15,
+            "supported": true
+          },
+          {
+            "comparisonCount": 48,
+            "fold": 2,
+            "heldEventCount": 4,
+            "importance": 0.1,
+            "supported": true
+          },
+          {
+            "comparisonCount": 48,
+            "fold": 3,
+            "heldEventCount": 4,
+            "importance": 0.08,
+            "supported": true
+          },
+          {
+            "comparisonCount": 48,
+            "fold": 4,
+            "heldEventCount": 4,
+            "importance": -0.01,
+            "supported": false
+          }
+        ],
+        "importance": 0.104,
+        "signal": "revenue",
+        "stabilityBand": "medium",
+        "stable": true,
+        "supportCount": 4
+      }
+    ],
+    "heldEventCount": 20,
+    "improvedFoldCount": 4,
+    "kind": "rank_signals",
+    "matchCount": 40,
+    "method": {
+      "fixedSeed": "7885641797976813163",
+      "foldCount": 5,
+      "minimumHeldEvents": 8,
+      "minimumImportance": 0.0001,
+      "minimumMatches": 32,
+      "modelVersion": "rank-bt-v1",
+      "requiredImprovedFoldCount": 4
+    },
+    "reasonCodes": [],
+    "status": "ok"
+  },
+  "player": {
+    "memberId": "member-1"
+  },
+  "schemaVersion": 3,
+  "scope": {
+    "kind": "overall",
+    "matchCount": 40
+  }
+}

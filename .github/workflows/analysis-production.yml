@@ -378,6 +378,7 @@ jobs:
         timeout-minutes: 4
 
       - name: Run release audit
+        id: release-audit
         if: inputs.operation == 'audit'
         env:
           FLY_API_TOKEN: ${{ secrets.ANALYSIS_FLY_API_TOKEN }}
@@ -391,8 +392,12 @@ jobs:
           if [[ "${REQUIRE_QUIESCENT}" == "true" ]]; then
             command="${command} --require-quiescent"
           fi
+          set +e
           flyctl ssh console --app "${ANALYSIS_APP}" --pty=false --quiet \
             --command "${command}" > "${RUNNER_TEMP}/analysis-operation.json"
+          audit_exit_status=$?
+          set -e
+          printf 'exit_status=%s\n' "${audit_exit_status}" >> "${GITHUB_OUTPUT}"
 
       - name: Dry-run initial backfill
         if: inputs.operation == 'backfill-dry-run'
@@ -438,3 +443,13 @@ jobs:
             analysis-production-artifact/
           if-no-files-found: ignore
           retention-days: 7
+
+      - name: Enforce release audit result
+        if: always() && inputs.operation == 'audit'
+        env:
+          AUDIT_EXIT_STATUS: ${{ steps.release-audit.outputs.exit_status }}
+        run: |
+          [[ "${AUDIT_EXIT_STATUS}" == "0" ]] || {
+            echo "Analysis release audit reported violations or could not complete." >&2
+            exit 1
+          }

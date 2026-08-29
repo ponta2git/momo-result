@@ -81,21 +81,28 @@ object IntegrationDb:
 
     val connection = DriverManager.getConnection(settings.jdbcUrl, settings.user, settings.password)
     try
-      connection.setAutoCommit(true)
-      migrations.foreach { path =>
-        val sql = Files.readString(path)
-        StatementBreakpoint.split(sql).iterator.map(_.trim).filter(_.nonEmpty).foreach {
-          statementSql =>
-            val statement = connection.createStatement()
-            try statement.execute(statementSql)
-            catch
-              case error: Throwable => throw new RuntimeException(
-                  s"Failed to apply momo-db migration ${path.getFileName}",
-                  error,
-                )
-            finally statement.close()
+      connection.setAutoCommit(false)
+      try
+        migrations.foreach { path =>
+          val sql = Files.readString(path)
+          StatementBreakpoint.split(sql).iterator.map(_.trim).filter(_.nonEmpty).foreach {
+            statementSql =>
+              val statement = connection.createStatement()
+              try statement.execute(statementSql)
+              catch
+                case error: Throwable => throw new RuntimeException(
+                    s"Failed to apply momo-db migration ${path.getFileName}",
+                    error,
+                  )
+              finally statement.close()
+          }
         }
-      }
+        connection.commit()
+      catch
+        case error: Throwable =>
+          try connection.rollback()
+          catch case rollbackError: Throwable => error.addSuppressed(rollbackError)
+          throw error
     finally connection.close()
 
   private def migrationFiles(directory: Path): Seq[Path] =
@@ -175,6 +182,13 @@ object IntegrationDb:
           preempt_requested_at = NULL,
           updated_at = now()
       WHERE slot_key = 'shared-heavy-work'
+    """.update.run.void *> sql"""
+      UPDATE series_analysis_release_state
+      SET algorithm_version = 'series-analysis-v1',
+          artifact_schema_version = 1,
+          validation_contract_id = NULL,
+          updated_at = clock_timestamp()
+      WHERE singleton_key = 'current'
     """.update.run.void).transact(transactor)
 end IntegrationDb
 // scalafix:on DisableSyntax.throw

@@ -13,10 +13,8 @@ import momo.api.domain.ids.{GameTitleId, MapMasterId, SeasonMasterId}
 import momo.api.errors.AppError
 
 private[postgres] object PostgresSeriesAnalysisReadOps:
-  private val SupportedArtifactSchemas =
-    SeriesAnalysisArtifactSupport.SupportedArtifactSchemas
   private val AllowedJobStatuses = SeriesAnalysisVocabulary.JobStatuses.toSet
-  private val AllowedTriggers = SeriesAnalysisVocabulary.TriggersByPriority.toSet
+  private val AllowedTriggers = SeriesAnalysisVocabulary.StoredTriggersByPriority.toSet
 
   private final case class TitleOptionRow(
       gameTitleId: GameTitleId,
@@ -109,12 +107,14 @@ private[postgres] object PostgresSeriesAnalysisReadOps:
       inputRevision: Long,
       algorithmVersion: String,
       artifactSchemaVersion: Int,
+      desiredValidationContractId: Option[String],
       pendingWork: Boolean,
       currentArtifactId: Option[String],
       artifactGameTitleId: Option[GameTitleId],
       artifactInputRevision: Option[Long],
       artifactAlgorithmVersion: Option[String],
       artifactSchemaVersionValue: Option[Int],
+      artifactValidationContractId: Option[String],
       artifactPublishedAt: Option[Instant],
   )
 
@@ -139,12 +139,14 @@ private[postgres] object PostgresSeriesAnalysisReadOps:
           s.input_revision,
           s.algorithm_version,
           s.artifact_schema_version,
+          s.validation_contract_id,
           s.pending_work,
           a.id,
           a.game_title_id,
           a.input_revision,
           a.algorithm_version,
           a.artifact_schema_version,
+          a.validation_contract_id,
           a.published_at
         FROM series_analysis_title_states s
         LEFT JOIN series_analysis_artifacts a ON a.id = s.current_artifact_id
@@ -203,29 +205,41 @@ private[postgres] object PostgresSeriesAnalysisReadOps:
       case Some(value)
           if value.inputRevision == desired.inputRevision &&
             value.algorithmVersion == desired.algorithmVersion &&
-            value.artifactSchemaVersion == desired.artifactSchemaVersion => "current"
+            value.artifactSchemaVersion == desired.artifactSchemaVersion &&
+            SeriesAnalysisArtifactSupport.satisfiesDesired(
+              row.desiredValidationContractId,
+              row.artifactValidationContractId,
+            ) => "current"
       case Some(_) => "stale"
     val active = activeOrLatest.filter(row => row.status == "running" || row.status == "queued")
-    val calculation = active.orElse(pending.map(value =>
+    val storedCalculation = active.orElse(pending.map(value =>
       CalculationRow("queued", value.trigger, value.acceptedAt, None, None)
-    )).orElse(activeOrLatest).map(row =>
-      SeriesAnalysisCalculation(
-        row.status,
-        row.trigger,
-        row.requestedAt,
-        row.startedAt,
-        row.finishedAt,
+    )).orElse(activeOrLatest)
+    val calculation = storedCalculation.flatMap(row =>
+      SeriesAnalysisVocabulary.wireTrigger(row.trigger).map(trigger =>
+        SeriesAnalysisCalculation(
+          row.status,
+          trigger,
+          row.requestedAt,
+          row.startedAt,
+          row.finishedAt,
+        )
       )
     )
     val valuesValid =
-      row.inputRevision >= 0 && row.artifactSchemaVersion >= 1 &&
+      row.inputRevision >= 0 && SeriesAnalysisArtifactSupport.supports(
+        row.artifactSchemaVersion,
+        row.desiredValidationContractId,
+      ) &&
         artifact.forall(value =>
-          value.gameTitleId == gameTitleId && SupportedArtifactSchemas.contains(
-            value.artifactSchemaVersion
+          value.gameTitleId == gameTitleId && SeriesAnalysisArtifactSupport.supports(
+            value.artifactSchemaVersion,
+            row.artifactValidationContractId,
           )
         ) && activeOrLatest.forall(value =>
           AllowedJobStatuses.contains(value.status) && AllowedTriggers.contains(value.trigger)
-        ) && pending.forall(value => AllowedTriggers.contains(value.trigger))
+        ) && pending.forall(value => AllowedTriggers.contains(value.trigger)) &&
+        storedCalculation.forall(_ => calculation.nonEmpty)
     val staleInvariantValid = freshness != "stale" || row.pendingWork || calculation.exists(value =>
       value.status == "failed" || value.status == "timed_out"
     )

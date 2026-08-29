@@ -102,6 +102,7 @@ private[postgres] object PostgresSeriesAnalysisChunkOps:
         a.input_revision,
         a.algorithm_version,
         a.artifact_schema_version,
+        a.validation_contract_id,
         a.published_at,
         c.scope_kind,
         c.payload,
@@ -115,6 +116,9 @@ private[postgres] object PostgresSeriesAnalysisChunkOps:
         ON a.game_title_id = s.game_title_id
        AND a.id = ${request.artifactId}
        AND a.status = 'published'
+       AND a.artifact_schema_version = ${SeriesAnalysisArtifactSupport.ArtifactSchemaVersion}
+       AND (a.validation_contract_id IS NULL OR
+            a.validation_contract_id = ${SeriesAnalysisArtifactSupport.ValidationContractId})
        AND a.id IN (s.current_artifact_id, s.previous_artifact_id)
     """
     val query = request.kind match
@@ -225,6 +229,9 @@ private[postgres] object PostgresSeriesAnalysisChunkOps:
       ON a.id = $artifactId
      AND a.game_title_id = s.game_title_id
      AND a.status = 'published'
+     AND a.artifact_schema_version = ${SeriesAnalysisArtifactSupport.ArtifactSchemaVersion}
+     AND (a.validation_contract_id IS NULL OR
+          a.validation_contract_id = ${SeriesAnalysisArtifactSupport.ValidationContractId})
      AND a.id IN (s.current_artifact_id, s.previous_artifact_id)
     WHERE s.game_title_id = $gameTitleId
   """.query[SeriesAnalysisArtifactRef].option
@@ -239,6 +246,7 @@ private[postgres] object PostgresSeriesAnalysisChunkOps:
       a.input_revision,
       a.algorithm_version,
       a.artifact_schema_version,
+      a.validation_contract_id,
       a.published_at,
       c.scope_kind,
       c.payload,
@@ -253,6 +261,9 @@ private[postgres] object PostgresSeriesAnalysisChunkOps:
       ON a.id = ${request.artifactId}
      AND a.game_title_id = s.game_title_id
      AND a.status = 'published'
+     AND a.artifact_schema_version = ${SeriesAnalysisArtifactSupport.ArtifactSchemaVersion}
+     AND (a.validation_contract_id IS NULL OR
+          a.validation_contract_id = ${SeriesAnalysisArtifactSupport.ValidationContractId})
      AND a.id IN (s.current_artifact_id, s.previous_artifact_id)
     JOIN series_analysis_match_context_artifacts c
       ON c.artifact_id = a.id

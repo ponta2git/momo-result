@@ -73,7 +73,8 @@ private[postgres] object PostgresSeriesAnalysisTitleRequestOps:
   ): ConnectionIO[Either[AppError, SeriesAnalysisRecalculationAccepted]] =
     for
       desired <- sql"""
-        SELECT input_revision, algorithm_version, artifact_schema_version
+        SELECT input_revision, algorithm_version, artifact_schema_version,
+               validation_contract_id
         FROM series_analysis_title_states
         WHERE game_title_id = $gameTitleId
         FOR UPDATE
@@ -129,11 +130,13 @@ private[postgres] object PostgresSeriesAnalysisTitleRequestOps:
       """.update.run.void
       _ <- active match
         case None => insertManualJob(newJobId, gameTitleId, version, acceptedAt)
-        case Some(job) if job.status == "queued" => sql"""
+        case Some(job) if job.status == "queued" =>
+          sql"""
             UPDATE series_analysis_jobs
             SET input_revision = ${version.inputRevision},
                 algorithm_version = ${version.algorithmVersion},
                 artifact_schema_version = ${version.artifactSchemaVersion},
+                validation_contract_id = ${version.validationContractId},
                 updated_at = now()
             WHERE id = ${job.id} AND status = 'queued'
           """.update.run.void
@@ -147,11 +150,12 @@ private[postgres] object PostgresSeriesAnalysisTitleRequestOps:
       _ <- sql"""
         INSERT INTO series_analysis_job_requests (
           id, game_title_id, operation_request_id, input_revision,
-          algorithm_version, artifact_schema_version, trigger,
+          algorithm_version, artifact_schema_version, validation_contract_id, trigger,
           force_run, status, assigned_job_id, accepted_at
         ) VALUES (
           $requestId, $gameTitleId, $operationId, ${version.inputRevision},
-          ${version.algorithmVersion}, ${version.artifactSchemaVersion}, 'manual',
+          ${version.algorithmVersion}, ${version.artifactSchemaVersion},
+          ${version.validationContractId}, 'manual',
           true, 'pending', ${accepted._1}, $acceptedAt
         )
       """.update.run.void

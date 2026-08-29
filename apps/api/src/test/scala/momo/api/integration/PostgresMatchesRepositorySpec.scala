@@ -165,6 +165,13 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
     for
       _ <- seedPrereqs
       _ <- seedSecondTitle
+      _ <- sql"""
+        UPDATE series_analysis_title_states
+        SET algorithm_version = 'series-analysis-v3',
+            artifact_schema_version = 2,
+            validation_contract_id = ${momo.api.adapters.postgres.SeriesAnalysisArtifactSupport.ValidationContractId}
+        WHERE game_title_id IN ($gameTitleId, $secondGameTitleId)
+      """.update.run.transact(transactor)
       _ <- createMatch(rec)
       _ <- matches.update(moved, now.plusSeconds(1))
       matchRevision <- sql"SELECT analysis_revision FROM matches WHERE id = ${rec.id}"
@@ -181,14 +188,16 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
           (SELECT COUNT(*)::int FROM series_analysis_jobs WHERE status = 'queued'),
           (SELECT COUNT(*)::int FROM series_analysis_job_requests),
           (SELECT COUNT(*)::int FROM series_analysis_queue_outbox),
-          (SELECT COUNT(*)::int FROM matches WHERE id = ${rec.id})
-      """.query[(Int, Int, Int, Int)].unique.transact(transactor)
+          (SELECT COUNT(*)::int FROM matches WHERE id = ${rec.id}),
+          (SELECT bool_and(validation_contract_id = ${momo.api.adapters.postgres.SeriesAnalysisArtifactSupport.ValidationContractId}) FROM series_analysis_jobs),
+          (SELECT bool_and(validation_contract_id = ${momo.api.adapters.postgres.SeriesAnalysisArtifactSupport.ValidationContractId}) FROM series_analysis_job_requests)
+      """.query[(Int, Int, Int, Int, Boolean, Boolean)].unique.transact(transactor)
     yield
       assertEquals(deleted, true)
       assertEquals(matchRevision, 1L)
       assertEquals(titleRevisions.toMap.get(gameTitleId), Some(2L))
       assertEquals(titleRevisions.toMap.get(secondGameTitleId), Some(2L))
-      assertEquals(counts, (2, 4, 4, 0))
+      assertEquals(counts, (2, 4, 4, 0, true, true))
 
   test("listByHeldEvent orders by match_no_in_event"):
     for

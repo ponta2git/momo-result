@@ -81,6 +81,57 @@ final class PostgresSeriesAnalysisChunkCodecSpec extends FunSuite with JsonSchem
       "Invalid analysis artifact metadata.",
     )
 
+  test("reads legacy artifacts through full validation and rejects unknown version pairs"):
+    val payload = aggregateFixture.getBytes(StandardCharsets.UTF_8)
+    val row = stored(payload, nestingDepth = nestingDepth(aggregateFixture))
+
+    assert(SeriesAnalysisArtifactSupport.satisfiesDesired(None, None))
+    assert(SeriesAnalysisArtifactSupport.satisfiesDesired(
+      None,
+      Some(SeriesAnalysisArtifactSupport.ValidationContractId),
+    ))
+    assert(!SeriesAnalysisArtifactSupport.satisfiesDesired(
+      Some(SeriesAnalysisArtifactSupport.ValidationContractId),
+      None,
+    ))
+    assert(!SeriesAnalysisArtifactSupport.satisfiesDesired(
+      Some("unknown-validation-contract"),
+      Some(SeriesAnalysisArtifactSupport.ValidationContractId),
+    ))
+    assert(PostgresSeriesAnalysisChunkCodec.decode(
+      row.copy(validationContractId = None),
+      request,
+      SeriesAnalysisReadConfig.defaults,
+      None,
+    ).isRight)
+    assertInternal(
+      PostgresSeriesAnalysisChunkCodec.decode(
+        row.copy(validationContractId = None, itemCount = Some(1)),
+        request,
+        SeriesAnalysisReadConfig.defaults,
+        None,
+      ),
+      "Analysis artifact schema validation failed.",
+    )
+    assertInternal(
+      PostgresSeriesAnalysisChunkCodec.decode(
+        row.copy(validationContractId = Some("unknown-validation-contract")),
+        request,
+        SeriesAnalysisReadConfig.defaults,
+        None,
+      ),
+      "Invalid analysis artifact metadata.",
+    )
+    assertInternal(
+      PostgresSeriesAnalysisChunkCodec.decode(
+        row.copy(artifactSchemaVersion = 1),
+        request,
+        SeriesAnalysisReadConfig.defaults,
+        None,
+      ),
+      "Invalid analysis artifact metadata.",
+    )
+
   test("rejects a payload whose actual depth differs from bounded metadata"):
     val payload = aggregateFixture.getBytes(StandardCharsets.UTF_8)
 
@@ -327,6 +378,7 @@ final class PostgresSeriesAnalysisChunkCodecSpec extends FunSuite with JsonSchem
       inputRevision = 0,
       algorithmVersion = "series-analysis-v1",
       artifactSchemaVersion = 2,
+      validationContractId = Some(SeriesAnalysisArtifactSupport.ValidationContractId),
       publishedAt = Instant.parse("2026-08-09T00:00:00Z"),
       scopeKind = Some(scope.kind),
       payload = Some(payload),

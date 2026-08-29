@@ -16,6 +16,7 @@ private[postgres] object PostgresSeriesAnalysisRequestSupport:
       inputRevision: Long,
       algorithmVersion: String,
       artifactSchemaVersion: Int,
+      validationContractId: Option[String],
   )
   final case class ActiveJobRow(id: String, status: String)
 
@@ -39,10 +40,12 @@ private[postgres] object PostgresSeriesAnalysisRequestSupport:
   ): ConnectionIO[Unit] = sql"""
     INSERT INTO series_analysis_jobs (
       id, game_title_id, input_revision, algorithm_version,
-      artifact_schema_version, status, trigger, requested_at, available_at
+      artifact_schema_version, validation_contract_id,
+      status, trigger, requested_at, available_at
     ) VALUES (
       $jobId, $gameTitleId, ${version.inputRevision}, ${version.algorithmVersion},
-      ${version.artifactSchemaVersion}, 'queued', 'manual', $acceptedAt, $acceptedAt
+      ${version.artifactSchemaVersion}, ${version.validationContractId},
+      'queued', 'manual', $acceptedAt, $acceptedAt
     )
   """.update.run.void
 

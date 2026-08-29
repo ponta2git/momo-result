@@ -145,6 +145,7 @@ final class PostgresSeriesAnalysisReadBoundSpec extends CatsEffectSuite with Jso
     inputRevision = 0,
     algorithmVersion = "series-analysis-v1",
     artifactSchemaVersion = 2,
+    validationContractId = Some(SeriesAnalysisArtifactSupport.ValidationContractId),
     publishedAt = Instant.parse("2026-08-09T00:00:00Z"),
     scopeKind = Some(scope.kind),
     payload = Some(payload),

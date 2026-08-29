@@ -23,6 +23,7 @@ private[postgres] object PostgresSeriesAnalysisCampaignRequestOps:
       inputRevision: Long,
       algorithmVersion: String,
       artifactSchemaVersion: Int,
+      validationContractId: Option[String],
   )
   private final case class CampaignTargetSnapshot(
       campaignId: String,
@@ -30,6 +31,7 @@ private[postgres] object PostgresSeriesAnalysisCampaignRequestOps:
       inputRevision: Long,
       algorithmVersion: String,
       artifactSchemaVersion: Int,
+      validationContractId: Option[String],
       acceptedAt: Instant,
   )
 
@@ -70,7 +72,8 @@ private[postgres] object PostgresSeriesAnalysisCampaignRequestOps:
   ): ConnectionIO[Either[AppError, SeriesAnalysisRecalculationAccepted]] =
     for
       targets <- sql"""
-        SELECT s.game_title_id, s.input_revision, s.algorithm_version, s.artifact_schema_version
+        SELECT s.game_title_id, s.input_revision, s.algorithm_version,
+               s.artifact_schema_version, s.validation_contract_id
         FROM series_analysis_title_states s
         ORDER BY s.game_title_id
         FOR UPDATE
@@ -100,6 +103,9 @@ private[postgres] object PostgresSeriesAnalysisCampaignRequestOps:
         case single :: Nil => single
         case _ => "mixed"
       artifactSchemaVersion = targets.map(_.artifactSchemaVersion).max
+      validationContractId = targets.map(_.validationContractId).distinct match
+        case single :: Nil => single
+        case _ => None
       _ <- sql"""
         INSERT INTO series_analysis_operation_requests (
           id, scope, requested_by_account_id, idempotency_key_hash,
@@ -112,10 +118,12 @@ private[postgres] object PostgresSeriesAnalysisCampaignRequestOps:
       _ <- sql"""
         INSERT INTO series_analysis_campaigns (
           id, operation_request_id, trigger, algorithm_version,
-          artifact_schema_version, status, target_count, accepted_at
+          artifact_schema_version, validation_contract_id,
+          status, target_count, accepted_at
         ) VALUES (
           $campaignId, $operationId, 'manual', $algorithmVersion,
-          $artifactSchemaVersion, 'expanding', ${targets.size}, $acceptedAt
+          $artifactSchemaVersion, $validationContractId,
+          'expanding', ${targets.size}, $acceptedAt
         )
       """.update.run.void
       snapshots = targets.map(target =>
@@ -125,14 +133,16 @@ private[postgres] object PostgresSeriesAnalysisCampaignRequestOps:
           target.inputRevision,
           target.algorithmVersion,
           target.artifactSchemaVersion,
+          target.validationContractId,
           acceptedAt,
         )
       )
       _ <- Update[CampaignTargetSnapshot](
         """INSERT INTO series_analysis_campaign_targets (
           campaign_id, game_title_id, input_revision, algorithm_version,
-          artifact_schema_version, status, job_request_id, accepted_at
-        ) VALUES (?, ?, ?, ?, ?, 'pending', NULL, ?)"""
+          artifact_schema_version, validation_contract_id,
+          status, job_request_id, accepted_at
+        ) VALUES (?, ?, ?, ?, ?, ?, 'pending', NULL, ?)"""
       ).updateMany(snapshots).void
     yield SeriesAnalysisRecalculationAccepted(
       operationId,

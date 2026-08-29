@@ -19,6 +19,7 @@ private[postgres] object PostgresSeriesAnalysisMutationOps:
       inputRevision: Long,
       algorithmVersion: String,
       artifactSchemaVersion: Int,
+      validationContractId: Option[String],
   )
 
   private final case class ActiveJob(id: String, status: String)
@@ -34,7 +35,8 @@ private[postgres] object PostgresSeriesAnalysisMutationOps:
             pending_work = true,
             updated_at = now()
         WHERE game_title_id = $gameTitleId
-        RETURNING input_revision, algorithm_version, artifact_schema_version
+        RETURNING input_revision, algorithm_version, artifact_schema_version,
+                  validation_contract_id
       """.query[DesiredVersion].option.flatMap {
         case Some(value) => value.pure[ConnectionIO]
         case None => MonadThrow[ConnectionIO].raiseError(
@@ -58,6 +60,7 @@ private[postgres] object PostgresSeriesAnalysisMutationOps:
         desired.inputRevision.toString,
         desired.algorithmVersion,
         desired.artifactSchemaVersion.toString,
+        validationContractIdentity(desired.validationContractId),
       )
       jobId = active.fold(derivedJobId)(_.id)
       requestId = stableId(
@@ -66,6 +69,7 @@ private[postgres] object PostgresSeriesAnalysisMutationOps:
         desired.inputRevision.toString,
         desired.algorithmVersion,
         desired.artifactSchemaVersion.toString,
+        validationContractIdentity(desired.validationContractId),
       )
       _ <- active match
         case None => sql"""
@@ -75,6 +79,7 @@ private[postgres] object PostgresSeriesAnalysisMutationOps:
               input_revision,
               algorithm_version,
               artifact_schema_version,
+              validation_contract_id,
               status,
               trigger
             ) VALUES (
@@ -83,6 +88,7 @@ private[postgres] object PostgresSeriesAnalysisMutationOps:
               ${desired.inputRevision},
               ${desired.algorithmVersion},
               ${desired.artifactSchemaVersion},
+              ${desired.validationContractId},
               'queued',
               'match_mutation'
             )
@@ -93,6 +99,7 @@ private[postgres] object PostgresSeriesAnalysisMutationOps:
             SET input_revision = ${desired.inputRevision},
                 algorithm_version = ${desired.algorithmVersion},
                 artifact_schema_version = ${desired.artifactSchemaVersion},
+                validation_contract_id = ${desired.validationContractId},
                 updated_at = now()
             WHERE id = ${job.id}
               AND status = 'queued'
@@ -105,6 +112,7 @@ private[postgres] object PostgresSeriesAnalysisMutationOps:
           input_revision,
           algorithm_version,
           artifact_schema_version,
+          validation_contract_id,
           trigger,
           force_run,
           status,
@@ -115,6 +123,7 @@ private[postgres] object PostgresSeriesAnalysisMutationOps:
           ${desired.inputRevision},
           ${desired.algorithmVersion},
           ${desired.artifactSchemaVersion},
+          ${desired.validationContractId},
           'match_mutation',
           false,
           'pending',
@@ -137,6 +146,10 @@ private[postgres] object PostgresSeriesAnalysisMutationOps:
   private def stableId(prefix: String, parts: String*): String =
     val source = parts.mkString("\u001f")
     s"$prefix-${java.util.UUID.nameUUIDFromBytes(source.getBytes(java.nio.charset.StandardCharsets.UTF_8))}"
+
+  private[postgres] def validationContractIdentity(value: Option[String]): String = value match
+    case None => "none"
+    case Some(contractId) => s"some:$contractId"
 
   private def requireOne(table: String, id: String, operation: String)(affected: Int)
       : ConnectionIO[Unit] =

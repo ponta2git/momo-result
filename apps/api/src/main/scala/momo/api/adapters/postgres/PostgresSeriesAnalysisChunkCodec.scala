@@ -21,6 +21,7 @@ private[postgres] final case class SeriesAnalysisStoredChunk(
     inputRevision: Long,
     algorithmVersion: String,
     artifactSchemaVersion: Int,
+    validationContractId: Option[String],
     publishedAt: Instant,
     scopeKind: Option[String],
     payload: Option[Array[Byte]],
@@ -47,8 +48,6 @@ private[postgres] final case class DecodedSeriesAnalysisChunk(
 // imperative so a maximum chunk does not create iterator and accumulator copies.
 // scalafix:off DisableSyntax.var
 private[postgres] object PostgresSeriesAnalysisChunkCodec:
-  private val SupportedArtifactSchemas =
-    SeriesAnalysisArtifactSupport.SupportedArtifactSchemas
   private val MaximumMemberCount = 4
 
   private final case class JsonInspection(
@@ -84,7 +83,10 @@ private[postgres] object PostgresSeriesAnalysisChunkCodec:
     ).tupled.toRight(AppError.AnalysisScopeNotInArtifact())
     metadata.flatMap { case (scopeKind, payload, encoded, decoded, itemCount, depth, checksum) =>
       val metadataValid =
-        SupportedArtifactSchemas.contains(row.artifactSchemaVersion) &&
+        SeriesAnalysisArtifactSupport.supports(
+          row.artifactSchemaVersion,
+          row.validationContractId,
+        ) &&
           scopeKind == request.scope.kind && encoded >= 2 && decoded == encoded && itemCount >= 0 &&
           depth >= 1 && encoded.toLong <= config.maxEncodedBytes &&
           decoded.toLong <= config.maxDecodedBytes && itemCount <= config.maxItemCount &&

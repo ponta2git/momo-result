@@ -16,10 +16,16 @@ final class PostgresSeriesAnalysisReaderCapabilitySpec extends IntegrationSuite:
         .use(_ => capabilityRow)
       draining <- capabilityRow
     yield
-      assertEquals(active, ("[2]", false))
-      assertEquals(draining, ("[2]", true))
+      assertEquals(
+        active,
+        ("[2]", "[\"series-analysis-artifact-v2-full-validation-v1\"]", false),
+      )
+      assertEquals(
+        draining,
+        ("[2]", "[\"series-analysis-artifact-v2-full-validation-v1\"]", true),
+      )
 
-  private def capabilityRow: IO[(String, Boolean)] = sql"""
-    SELECT artifact_schema_versions::text, draining
+  private def capabilityRow: IO[(String, String, Boolean)] = sql"""
+    SELECT artifact_schema_versions::text, validation_contract_ids::text, draining
     FROM series_analysis_reader_capabilities
-  """.query[(String, Boolean)].unique.transact(transactor)
+  """.query[(String, String, Boolean)].unique.transact(transactor)

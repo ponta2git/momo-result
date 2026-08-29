@@ -13,7 +13,7 @@ import momo.api.domain.ids.{AccountId, GameTitleId}
 import momo.api.errors.AppError
 
 private[postgres] object PostgresSeriesAnalysisAdminOps:
-  private val TriggerPriority = SeriesAnalysisVocabulary.TriggersByPriority
+  private val TriggerPriority = SeriesAnalysisVocabulary.StoredTriggersByPriority
   private val AllowedJobStatuses = SeriesAnalysisVocabulary.JobStatuses.toSet
   private val AllowedTriggers = TriggerPriority.toSet
   private val AllowedResultDispositions = SeriesAnalysisVocabulary.ResultDispositions.toSet
@@ -194,6 +194,7 @@ private[postgres] object PostgresSeriesAnalysisAdminOps:
     val coalesced = TriggerPriority.filter(trigger =>
       trigger == job.trigger || audit.exists(_.trigger == trigger)
     )
+    val wireCoalesced = coalesced.flatMap(SeriesAnalysisVocabulary.wireTrigger).distinct
     val manual = audit.filter(_.trigger == "manual")
     val hasSystem = coalesced.exists(_ != "manual")
     val requestedBy =
@@ -208,6 +209,7 @@ private[postgres] object PostgresSeriesAnalysisAdminOps:
     val valuesValid =
       AllowedJobStatuses.contains(job.status) &&
         AllowedTriggers.contains(job.trigger) &&
+        coalesced.forall(trigger => SeriesAnalysisVocabulary.wireTrigger(trigger).nonEmpty) &&
         AllowedResultDispositions.contains(job.resultDisposition) &&
         job.safeFailureCode.forall(AllowedFailureCodes.contains) &&
         audit.forall(row => AllowedTriggers.contains(row.trigger))
@@ -218,8 +220,8 @@ private[postgres] object PostgresSeriesAnalysisAdminOps:
         job.gameTitleId,
         job.gameTitleName,
         job.status,
-        coalesced.headOption.getOrElse(job.trigger),
-        coalesced,
+        wireCoalesced.headOption.getOrElse(job.trigger),
+        wireCoalesced,
         requestedBy,
         manual.size,
         job.requestedAt,

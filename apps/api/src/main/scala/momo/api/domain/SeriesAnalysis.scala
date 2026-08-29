@@ -14,6 +14,16 @@ object SeriesAnalysisVocabulary:
     "initial_backfill",
     "match_mutation",
   )
+  val StoredTriggersByPriority: List[String] = TriggersByPriority.flatMap {
+    case trigger @ "manual" => List(trigger, "validation_contract_update")
+    case trigger => List(trigger)
+  }
+
+  /** Keeps storage-owned rollout detail behind the stable HTTP trigger vocabulary. */
+  def wireTrigger(storedTrigger: String): Option[String] = storedTrigger match
+    case "validation_contract_update" => Some("artifact_schema_update")
+    case value if TriggersByPriority.contains(value) => Some(value)
+    case _ => None
   val ArtifactFreshness: List[String] = List("current", "stale", "unavailable")
   val RequestedBy: List[String] = List("administrator", "mixed", "system")
   val ResultDispositions: List[String] = List("none", "published", "reused")

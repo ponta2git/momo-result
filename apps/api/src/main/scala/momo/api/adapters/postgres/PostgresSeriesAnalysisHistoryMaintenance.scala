@@ -7,10 +7,7 @@ import doobie.*
 import doobie.implicits.*
 import doobie.postgres.implicits.*
 
-import momo.api.repositories.{
-  SeriesAnalysisCleanupCounts,
-  SeriesAnalysisHistoryMaintenance
-}
+import momo.api.repositories.{SeriesAnalysisCleanupCounts, SeriesAnalysisHistoryMaintenance}
 
 final class PostgresSeriesAnalysisHistoryMaintenance[F[_]: MonadCancelThrow](
     transactor: Transactor[F]

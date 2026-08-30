@@ -141,6 +141,8 @@ while IFS= read -r -d '' path; do
       ;;
     .github/workflows/runtime-rollback.yml)
       ;;
+    .github/workflows/runtime-release.yml)
+      ;;
     .github/workflows/pr.yml)
       select_all
       ;;

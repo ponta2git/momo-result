@@ -187,6 +187,9 @@ assert_case runtime-memory-smoke \
 assert_case runtime-rollback-workflow \
   "$(expected false false false false false false true true false false)" \
   .github/workflows/runtime-rollback.yml
+assert_case runtime-release-workflow \
+  "$(expected false false false false false false true true false false)" \
+  .github/workflows/runtime-release.yml
 assert_case deploy-workflow \
   "$(expected false false false false true false true true false false)" \
   .github/workflows/deploy.yml

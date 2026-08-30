@@ -1,0 +1,110 @@
+name: Runtime release
+
+on:
+  workflow_run:
+    workflows:
+      - deploy
+    types:
+      - completed
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Publish runtime release notes
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'master' &&
+      github.event.workflow_run.repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      pull-requests: read
+    env:
+      RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
+      RUN_URL: ${{ github.event.workflow_run.html_url }}
+    steps:
+      # workflow_run uses the workflow and scripts from the protected default
+      # branch. It does not execute artifacts or code from the triggering run.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Prepare notes from the merged release PR
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          [[ "${RELEASE_SHA}" =~ ^[0-9a-f]{40}$ ]] || {
+            echo "Invalid release commit." >&2
+            exit 1
+          }
+          gh api \
+            -H "Accept: application/vnd.github+json" \
+            "repos/${GITHUB_REPOSITORY}/commits/${RELEASE_SHA}/pulls" \
+            > associated-pull-requests.json
+          scripts/ci/runtime-release-notes.sh \
+            associated-pull-requests.json "${GITHUB_REPOSITORY}" "${RELEASE_SHA}" \
+            "${RUN_URL}" runtime-release-notes.md >> "${GITHUB_OUTPUT}"
+
+          commit_date="$(
+            gh api "repos/${GITHUB_REPOSITORY}/commits/${RELEASE_SHA}" \
+              --jq '.commit.committer.date'
+          )"
+          [[ "${commit_date}" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T ]] || {
+            echo "Invalid release commit timestamp." >&2
+            exit 1
+          }
+          release_date="${commit_date:0:10}"
+          release_date="${release_date//-/}"
+          short_sha="${RELEASE_SHA:0:12}"
+          printf 'tag=runtime-%s-%s\n' "${release_date}" "${short_sha}" >> "${GITHUB_OUTPUT}"
+          printf 'title=Runtime %s (%s)\n' "${release_date}" "${short_sha}" >> "${GITHUB_OUTPUT}"
+
+      - name: Create an idempotent release for the deployed commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+          RELEASE_TITLE: ${{ steps.release.outputs.title }}
+        run: |
+          ref_exists=false
+          if ref_json="$(
+            gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${RELEASE_TAG}" 2>/dev/null
+          )"; then
+            ref_exists=true
+            ref_type="$(jq -r '.object.type' <<< "${ref_json}")"
+            ref_sha="$(jq -r '.object.sha' <<< "${ref_json}")"
+            [[ "${ref_type}" == "commit" && "${ref_sha}" == "${RELEASE_SHA}" ]] || {
+              echo "Release tag already exists for a different or indirect object." >&2
+              exit 1
+            }
+          fi
+
+          if gh release view "${RELEASE_TAG}" \
+            --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            [[ "${ref_exists}" == true ]] || {
+              echo "Release exists without its expected tag ref." >&2
+              exit 1
+            }
+            echo "Release ${RELEASE_TAG} already exists for ${RELEASE_SHA}."
+            exit 0
+          fi
+
+          if [[ "${ref_exists}" == true ]]; then
+            gh release create "${RELEASE_TAG}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --verify-tag \
+              --title "${RELEASE_TITLE}" \
+              --notes-file runtime-release-notes.md
+          else
+            gh release create "${RELEASE_TAG}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --target "${RELEASE_SHA}" \
+              --title "${RELEASE_TITLE}" \
+              --notes-file runtime-release-notes.md
+          fi

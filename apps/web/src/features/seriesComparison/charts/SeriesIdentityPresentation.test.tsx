@@ -25,6 +25,16 @@ describe("series artifact presentation", () => {
       "ぽんた",
       "いーゆー",
     ]);
+    const crownShareBar = screen.getByRole("img", {
+      name: /平均順位首位に残った比率/u,
+    });
+    const crownShareSegments = crownShareBar.children;
+    expect(crownShareSegments[0]).not.toHaveStyle({
+      boxShadow: "inset 1px 0 var(--color-chart-segment-separator)",
+    });
+    expect(crownShareSegments[1]).toHaveStyle({
+      boxShadow: "inset 1px 0 var(--color-chart-segment-separator)",
+    });
   });
 
   it("uses the artifact category instead of inferring it from the match number", async () => {

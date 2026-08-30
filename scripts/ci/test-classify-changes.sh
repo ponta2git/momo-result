@@ -137,6 +137,8 @@ assert_case docs-only "${none}" docs/README.md
 assert_case actionlint-only "${actionlint_policy}" scripts/ci/actionlint.sh
 assert_case dev-launcher "${policy_only}" scripts/dev-local.mjs
 assert_case policy-fixture "${policy_only}" scripts/ci/test-validate-runtime-deployment.sh
+assert_case release-policy "${policy_only}" scripts/ci/check-pr-branch-policy.sh
+assert_case release-notes-extractor "${policy_only}" scripts/ci/extract-release-notes.sh
 assert_case range-classifier \
   "$(expected true true true true true false true false false true)" \
   scripts/ci/classify-git-range.sh
@@ -185,6 +187,9 @@ assert_case runtime-memory-smoke \
 assert_case runtime-rollback-workflow \
   "$(expected false false false false false false true true false false)" \
   .github/workflows/runtime-rollback.yml
+assert_case runtime-release-workflow \
+  "$(expected false false false false false false true true false false)" \
+  .github/workflows/runtime-release.yml
 assert_case deploy-workflow \
   "$(expected false false false false true false true true false false)" \
   .github/workflows/deploy.yml

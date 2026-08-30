@@ -11,6 +11,8 @@
 - DB schema / migration の正本は `../momo-db`。
 - deploy や runtime に必要な非 secret 設定は `fly.toml` と CI 設定を正とする。
 - production deploy / rollbackは同じ承認境界を通し、CIに記録したcommit・設定・artifact identityを照合できない候補を適用しない。
+- 通常のruntime releaseは、`develop`上の選択したsnapshotを指す`release/*`から`master`へのPRで行う。`master`へのmergeがdeployを開始し、post-deploy verification成功後に同じcommitを指すGitHub Releaseを発行する。
+- 通常PRは`develop`へsquash mergeし、`master`へ直接pushしない。release branchへ独自commitを加えず、release PR作成後の`develop`変更を暗黙に取り込まない。
 - exactなworkflow入力、action、timeout、artifact名はCI設定を正とし、private runbookは人間の判断順序、承認条件、成功証拠、失敗後の状態確認を定める。
 - public docs に本番 topology、VM size、Machine 数、IP、rate limit 閾値、攻撃対策 gap、遮断 endpoint を書かない。
 - 障害調査で詳細runbookが必要な場合は、人間が上記private ops文書の参照可否を判断する。

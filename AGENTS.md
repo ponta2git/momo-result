@@ -49,3 +49,12 @@
 - `docs/post-mortem/lessons.md` を確認し、該当する教訓を検証している
 - 必要なクオリティゲートが通る
 - 主要な失敗ケースが考慮されている
+
+---
+
+## 7. PR / Linear
+
+- 通常PRは`develop`をbaseにする。release以外のPRを`master`へ向けない
+- Linear issueを完了させる変更はPR本文に`Fixes MOM-<番号>`を記載し、commit messageのmagic wordへ依存しない
+- `master`向けrelease PRには、含まれるPRと対象の`Fixes MOM-<番号>`をもう一度列挙し、利用者向け`## Release notes`を記載する
+- release PR本文や公開release noteへsecret、private operations detail、攻撃参考になる情報を含めない

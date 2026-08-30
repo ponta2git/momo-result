@@ -5,7 +5,6 @@ on:
   push:
     branches:
       - master
-  workflow_dispatch:
 
 permissions:
   contents: read
@@ -39,16 +38,13 @@ jobs:
             # The PR orchestrator invokes this workflow only after classifying
             # the change as runtime-relevant.
             result=$'api=false\nweb=false\nanalysis=false\nanalysis_image=false\nruntime=true\nhttp4s_patch=false'
-          elif [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
-            [[ "${GITHUB_REF}" == "refs/heads/master" ]] || {
-              echo "Manual runtime releases must run from master." >&2
-              exit 1
-            }
-            result=$'api=false\nweb=false\nanalysis=false\nanalysis_image=false\nruntime=true\nhttp4s_patch=true'
           elif [[ "${BASE_SHA}" =~ ^0+$ ]]; then
             result=$'api=true\nweb=true\nanalysis=true\nanalysis_image=true\nruntime=true\nhttp4s_patch=true'
           else
             result="$(scripts/ci/classify-git-range.sh "${BASE_SHA}" "${HEAD_SHA}")"
+            # Every master push is a runtime release boundary. Path
+            # classification still selects the additional patch-specific gate.
+            result="${result//runtime=false/runtime=true}"
           fi
           printf '%s\n' "${result}" >> "${GITHUB_OUTPUT}"
 

@@ -652,6 +652,60 @@ export function makeSeriesAnalysisReview(): SeriesComparisonReviewV3 {
   };
 }
 
+const fourPlayerReviewPlayers = [
+  { displayName: "いーゆー", memberId: "member_eu" },
+  { displayName: "ぽんた", memberId: "member_ponta" },
+  { displayName: "あかねまみ", memberId: "member_akane_mami" },
+  { displayName: "おーたか", memberId: "member_otaka" },
+] as const;
+const secondaryReviewCategories = ["destination", "recovery"] as const;
+
+export function makeFourPlayerSeriesAnalysisReview(): SeriesComparisonReviewV3 {
+  const response = makeSeriesAnalysisReview();
+  const sourceEntry = response.playbookByPlayer[0];
+  const sourceCard = sourceEntry?.primaryCard;
+  if (!sourceEntry || !sourceCard) throw new Error("review fixture requires a primary card");
+
+  response.baseline.playerCount = fourPlayerReviewPlayers.length;
+  response.playbookByPlayer = fourPlayerReviewPlayers.map((fixturePlayer) => {
+    const cloneCard = (
+      cardId: string,
+      actionHypothesis: string,
+      category: (typeof secondaryReviewCategories)[number] | "revenue",
+    ) => ({
+      ...structuredClone(sourceCard),
+      actionHypothesis,
+      anchorTarget: {
+        ...sourceCard.anchorTarget,
+        label: `${fixturePlayer.displayName}の詳しい分析`,
+      },
+      cardId,
+      category,
+      heading: actionHypothesis,
+    });
+
+    return {
+      player: {
+        displayName: fixturePlayer.displayName,
+        memberId: fixturePlayer.memberId,
+      },
+      primaryCard: cloneCard(
+        `playbook:${fixturePlayer.memberId}:primary`,
+        sourceCard.actionHypothesis,
+        "revenue",
+      ),
+      secondaryCards: secondaryReviewCategories.map((category, index) =>
+        cloneCard(
+          `playbook:${fixturePlayer.memberId}:secondary:${index + 1}`,
+          `${fixturePlayer.displayName}の補助仮説${index + 1}。`,
+          category,
+        ),
+      ),
+    };
+  });
+  return response;
+}
+
 export function makeSeriesAnalysisDrilldown(metricId: string): SeriesAnalysisDrilldownV3 {
   const common = { artifact: analysisArtifact, player, schemaVersion: 3 as const, scope };
   if (metricId === "playOrder.rankHistory") {

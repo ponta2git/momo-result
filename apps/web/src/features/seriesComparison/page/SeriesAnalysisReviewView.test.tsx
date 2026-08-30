@@ -3,12 +3,16 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import { ReviewView } from "@/features/seriesComparison/page/SeriesAnalysisReviewView";
-import { makeSeriesAnalysisReview } from "@/test/msw/seriesAnalysisFixtures";
+import {
+  makeFourPlayerSeriesAnalysisReview,
+  makeSeriesAnalysisReview,
+} from "@/test/msw/seriesAnalysisFixtures";
 
 describe("ReviewView", () => {
   it("shows common hypotheses directly, keeps secondary hypotheses local, and uses help dialogs", async () => {
     const user = userEvent.setup();
-    const response = makeSeriesAnalysisReview();
+    const response = makeFourPlayerSeriesAnalysisReview();
+    response.playbookByPlayer = response.playbookByPlayer.slice(0, 2);
     const firstEntry = response.playbookByPlayer[0];
     const primary = firstEntry?.primaryCard;
     if (!firstEntry || !primary) throw new Error("primary fixture is required");
@@ -21,17 +25,8 @@ describe("ReviewView", () => {
         topicId: "common:revenue",
       },
     ];
-    response.playbookByPlayer[0] = {
-      ...firstEntry,
-      secondaryCards: [
-        {
-          ...primary,
-          actionHypothesis: "下位後は目的地を1回取って戻す。",
-          cardId: "playbook:member_ponta:recovery",
-          category: "recovery",
-        },
-      ],
-    };
+    const firstSecondary = firstEntry.secondaryCards[0];
+    if (!firstSecondary) throw new Error("secondary fixture is required");
 
     const onViewChange = vi.fn();
     render(
@@ -43,7 +38,7 @@ describe("ReviewView", () => {
       />,
     );
 
-    expect(screen.getByText(primary.actionHypothesis)).toBeInTheDocument();
+    expect(screen.getAllByRole("heading", { name: primary.actionHypothesis })).toHaveLength(2);
 
     const usage = screen.getByLabelText("行動仮説の対象");
     expect(within(usage).getByText("対象")).toBeInTheDocument();
@@ -57,12 +52,24 @@ describe("ReviewView", () => {
       within(commonPlaybook).getByText(response.commonPlaybookTopics[0]!.detail),
     ).toBeVisible();
     expect(within(commonPlaybook).queryByRole("button")).not.toBeInTheDocument();
-    expect(screen.queryByText("下位後は目的地を1回取って戻す。")).not.toBeInTheDocument();
+    expect(screen.queryByText(firstSecondary.actionHypothesis)).not.toBeInTheDocument();
 
-    expect(screen.getByRole("heading", { name: "ぽんた" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "いーゆー" })).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "ぽんたのほかの仮説" }));
-    expect(screen.getByText("下位後は目的地を1回取って戻す。")).toBeInTheDocument();
+    const firstDisclosure = screen.getByRole("button", { name: "いーゆーのほかの仮説" });
+    const secondDisclosure = screen.getByRole("button", { name: "ぽんたのほかの仮説" });
+    expect(firstDisclosure).toHaveAttribute("aria-expanded", "false");
+    expect(secondDisclosure).toHaveAttribute("aria-expanded", "false");
+
+    firstDisclosure.focus();
+    await user.keyboard("{Enter}");
+    expect(firstDisclosure).toHaveAttribute("aria-expanded", "true");
+    expect(secondDisclosure).toHaveAttribute("aria-expanded", "false");
+    expect(screen.getByText(firstSecondary.actionHypothesis)).toBeInTheDocument();
+
+    await user.keyboard(" ");
+    expect(firstDisclosure).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByText(firstSecondary.actionHypothesis)).not.toBeInTheDocument();
 
     expect(screen.queryByText(/信頼度高め/u)).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "分類の読み方" }));

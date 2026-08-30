@@ -4,11 +4,11 @@ import { formatDateTimeLong } from "../src/shared/lib/dateTime";
 import { withReturnTo } from "../src/shared/navigation/returnTo";
 import {
   analysisArtifact,
+  makeFourPlayerSeriesAnalysisReview,
   makeSeriesAnalysisAggregate,
   makeSeriesAnalysisDrilldown,
   makeSeriesAnalysisMatchContext,
   makeSeriesAnalysisOptions,
-  makeSeriesAnalysisReview,
   makeSeriesAnalysisStatus,
 } from "../src/test/msw/seriesAnalysisFixtures";
 import {
@@ -350,9 +350,12 @@ test("inspects saved analysis and handles explicit refresh states", async ({
       trendPoint.matchId = matchId;
       trendPoint.index = 1;
     }
-    const reviewFixture = makeSeriesAnalysisReview();
+    const reviewFixture = makeFourPlayerSeriesAnalysisReview();
     reviewFixture.artifact = artifact;
     reviewFixture.scope = analysisScope;
+    const expandedReviewHypothesis = reviewFixture.playbookByPlayer[0]?.secondaryCards[0];
+    if (!expandedReviewHypothesis)
+      throw new Error("review layout fixture requires a secondary card");
     const matchContextFixture = makeSeriesAnalysisMatchContext();
     matchContextFixture.artifact = artifact;
     matchContextFixture.matchId = matchId;
@@ -638,6 +641,100 @@ test("inspects saved analysis and handles explicit refresh states", async ({
     await expect(reviewPurposeTab).toBeFocused();
     await expect(selectedMatch).toBeVisible();
 
+    const reviewPlayerNames = ["いーゆー", "ぽんた", "あかねまみ", "おーたか"] as const;
+    const [firstPlayerSection, secondPlayerSection, thirdPlayerSection, fourthPlayerSection] =
+      reviewPlayerNames.map((name) =>
+        nextMatchReview.getByRole("heading", { exact: true, name }).locator(".."),
+      );
+    if (
+      !firstPlayerSection ||
+      !secondPlayerSection ||
+      !thirdPlayerSection ||
+      !fourthPlayerSection
+    ) {
+      throw new Error("review layout requires four player sections");
+    }
+    const reviewPlayers = [
+      { name: "いーゆー", section: firstPlayerSection },
+      { name: "ぽんた", section: secondPlayerSection },
+      { name: "あかねまみ", section: thirdPlayerSection },
+      { name: "おーたか", section: fourthPlayerSection },
+    ] as const;
+    const firstDisclosure = firstPlayerSection.getByRole("button", {
+      name: "いーゆーのほかの仮説",
+    });
+    const secondPlayerHeading = nextMatchReview.getByRole("heading", {
+      exact: true,
+      name: "ぽんた",
+    });
+
+    const headingTops = await Promise.all(
+      reviewPlayerNames.map((name) =>
+        locatorPageTop(nextMatchReview.getByRole("heading", { exact: true, name })),
+      ),
+    );
+    expect(Math.max(...headingTops) - Math.min(...headingTops)).toBeLessThanOrEqual(1);
+    const desktopBefore = await Promise.all(
+      reviewPlayers.map(({ name, section }) => reviewPlayerGeometry(section, name)),
+    );
+
+    await firstDisclosure.click();
+    await expect(firstDisclosure).toHaveAttribute("aria-expanded", "true");
+    await expect(
+      nextMatchReview.getByRole("heading", {
+        exact: true,
+        name: expandedReviewHypothesis.actionHypothesis,
+      }),
+    ).toBeVisible();
+    const desktopAfter = await Promise.all(
+      reviewPlayers.map(({ name, section }) => reviewPlayerGeometry(section, name)),
+    );
+    for (const [index, before] of desktopBefore.entries()) {
+      const after = desktopAfter[index];
+      if (!after) throw new Error(`missing desktop geometry for player ${index}`);
+      expectStableReviewGeometry(before, after);
+    }
+    await expectNoHorizontalPageOverflow(page);
+
+    await firstDisclosure.click();
+    await expect(firstDisclosure).toHaveAttribute("aria-expanded", "false");
+    await page.setViewportSize({ height: 900, width: 1024 });
+    const tabletFirstBefore = await reviewPlayerGeometry(firstPlayerSection, "いーゆー");
+    const tabletNeighborBefore = await reviewPlayerGeometry(secondPlayerSection, "ぽんた");
+    await firstDisclosure.click();
+    await expect(firstDisclosure).toHaveAttribute("aria-expanded", "true");
+    expectStableReviewGeometry(
+      tabletFirstBefore,
+      await reviewPlayerGeometry(firstPlayerSection, "いーゆー"),
+    );
+    expectStableReviewGeometry(
+      tabletNeighborBefore,
+      await reviewPlayerGeometry(secondPlayerSection, "ぽんた"),
+    );
+    await expectNoHorizontalPageOverflow(page);
+
+    await firstDisclosure.click();
+    await expect(firstDisclosure).toHaveAttribute("aria-expanded", "false");
+    await page.setViewportSize({ height: 844, width: 390 });
+    const mobileDisclosureTop = await locatorPageTop(firstDisclosure);
+    const mobileNextPlayerTop = await locatorPageTop(secondPlayerHeading);
+    await firstDisclosure.click();
+    await expect(firstDisclosure).toHaveAttribute("aria-expanded", "true");
+    expect(
+      Math.abs((await locatorPageTop(firstDisclosure)) - mobileDisclosureTop),
+    ).toBeLessThanOrEqual(1);
+    await expect
+      .poll(() => locatorPageTop(secondPlayerHeading))
+      .toBeGreaterThan(mobileNextPlayerTop + 100);
+    await expectNoHorizontalPageOverflow(page);
+
+    await firstDisclosure.click();
+    await expect(firstDisclosure).toHaveAttribute("aria-expanded", "false");
+    await expect
+      .poll(async () => Math.abs((await locatorPageTop(secondPlayerHeading)) - mobileNextPlayerTop))
+      .toBeLessThanOrEqual(1);
+    await page.setViewportSize({ height: 900, width: 1440 });
+
     statusPhase = "failed";
     const failedStatusResponse = page.waitForResponse((response) =>
       new URL(response.url()).pathname.endsWith("/v2/status"),
@@ -847,6 +944,37 @@ test("downloads a confirmed match export", async ({ e2eRun, page, request }) => 
     ).toBeVisible();
   });
 });
+
+type ReviewPlayerGeometry = {
+  disclosureTop: number;
+  primaryActionTop: number;
+};
+
+async function locatorPageTop(locator: Locator): Promise<number> {
+  return locator.evaluate((element) => element.getBoundingClientRect().top + window.scrollY);
+}
+
+async function reviewPlayerGeometry(
+  section: Locator,
+  playerName: string,
+): Promise<ReviewPlayerGeometry> {
+  return {
+    disclosureTop: await locatorPageTop(
+      section.getByRole("button", { name: `${playerName}のほかの仮説` }),
+    ),
+    primaryActionTop: await locatorPageTop(
+      section.getByRole("button", { name: "根拠・注意・試合後の確認" }).first(),
+    ),
+  };
+}
+
+function expectStableReviewGeometry(
+  before: ReviewPlayerGeometry,
+  after: ReviewPlayerGeometry,
+): void {
+  expect(Math.abs(after.disclosureTop - before.disclosureTop)).toBeLessThanOrEqual(1);
+  expect(Math.abs(after.primaryActionTop - before.primaryActionTop)).toBeLessThanOrEqual(1);
+}
 
 async function seedMasterContext(request: APIRequestContext, e2eRun: E2eRun) {
   const { masterIdSuffix } = e2eRun;

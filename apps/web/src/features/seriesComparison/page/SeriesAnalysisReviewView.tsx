@@ -91,12 +91,9 @@ export function ReviewView({
           </div>
         </section>
       ) : null}
-      <div className="grid gap-x-6 gap-y-8 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid items-start gap-x-6 gap-y-8 md:grid-cols-2 xl:grid-cols-4">
         {playbookByPlayer.map((entry) => (
-          <section
-            className="grid min-w-0 grid-rows-[auto_minmax(0,1fr)_auto]"
-            key={entry.player.memberId}
-          >
+          <section className="min-w-0" key={entry.player.memberId}>
             <h3 className="text-base font-semibold">
               <MemberSequenceLabel memberId={entry.player.memberId}>
                 {entry.player.displayName}

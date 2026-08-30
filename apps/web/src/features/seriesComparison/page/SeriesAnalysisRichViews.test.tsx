@@ -45,6 +45,15 @@ describe("rich series analysis views", () => {
     expect(screen.getByLabelText("ぽんたの順位回数")).toHaveTextContent(
       "1位 6回（この試合）・2位 2回・3位 2回・4位 2回",
     );
+    const rankDistribution = screen.getByRole("group", { name: "ぽんたの順位分布" });
+    const secondRankSegment = within(rankDistribution).getByRole("img", { name: /2位 2回/u });
+    const thirdRankSegment = within(rankDistribution).getByRole("img", { name: /3位 2回/u });
+    expect(secondRankSegment.style.backgroundColor).not.toBe(
+      thirdRankSegment.style.backgroundColor,
+    );
+    expect(thirdRankSegment).toHaveStyle({
+      boxShadow: "inset 1px 0 var(--color-chart-segment-separator)",
+    });
     expect(document.body).not.toHaveTextContent(/member_ponta|property_focused|rank\.average/u);
 
     const crownRegion = screen.getByRole("region", { name: "平均順位首位の確からしさ" });

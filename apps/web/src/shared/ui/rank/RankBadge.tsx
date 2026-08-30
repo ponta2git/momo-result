@@ -1,7 +1,7 @@
 import type { CSSProperties } from "react";
 
 import { cn } from "@/shared/ui/cn";
-import { colorMix, rankColor } from "@/shared/ui/rank/rankPresentation";
+import { rankBadgeBackgroundColor, rankBadgeBorderColor } from "@/shared/ui/rank/rankPresentation";
 
 export function RankBadge({
   className,
@@ -12,7 +12,6 @@ export function RankBadge({
   rank: number;
   size?: "md" | "sm";
 }) {
-  const color = rankColor(rank);
   return (
     <span
       className={cn(
@@ -22,8 +21,8 @@ export function RankBadge({
       )}
       style={
         {
-          backgroundColor: colorMix(color, 0.14),
-          borderColor: colorMix(color, 0.55),
+          backgroundColor: rankBadgeBackgroundColor(rank),
+          borderColor: rankBadgeBorderColor(rank),
         } satisfies CSSProperties
       }
     >

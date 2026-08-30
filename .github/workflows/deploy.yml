@@ -44,7 +44,7 @@ jobs:
             result="$(scripts/ci/classify-git-range.sh "${BASE_SHA}" "${HEAD_SHA}")"
             # Every master push is a runtime release boundary. Path
             # classification still selects the additional patch-specific gate.
-            result="$(sed 's/^runtime=.*/runtime=true/' <<< "${result}")"
+            result="${result//runtime=false/runtime=true}"
           fi
           printf '%s\n' "${result}" >> "${GITHUB_OUTPUT}"
 

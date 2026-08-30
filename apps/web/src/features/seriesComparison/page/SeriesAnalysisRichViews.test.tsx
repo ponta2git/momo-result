@@ -225,6 +225,22 @@ describe("rich series analysis views", () => {
 
     const recentRankStrip = screen.getByRole("table", { name: "直近の試合順位" });
     expect(screen.getByLabelText("直近順位")).toContainElement(recentRankStrip);
+    const recentRankPlayerRow = within(recentRankStrip).getAllByRole("row")[1];
+    if (!recentRankPlayerRow) throw new Error("recent rank player row is required");
+    const recentRankLinks = within(recentRankPlayerRow).getAllByRole("link");
+    expect(recentRankLinks[0]).toHaveAttribute(
+      "href",
+      expect.stringContaining("/matches/match-1?returnTo="),
+    );
+    expect(recentRankLinks.at(-1)).toHaveAttribute(
+      "href",
+      expect.stringContaining("/matches/match-20?returnTo="),
+    );
+    expect(screen.getByRole("slider", { name: "直近順位を横スクロール" })).toBeDisabled();
+    expect(screen.getByRole("slider", { name: "直近順位を横スクロール" })).toHaveAttribute(
+      "aria-valuetext",
+      "すべて表示",
+    );
     const matchDigestHeading = screen.getByRole("heading", {
       level: 2,
       name: `直近${response.matchDigest.shownCount}戦と荒れ方`,

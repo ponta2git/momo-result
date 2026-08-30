@@ -109,7 +109,8 @@ while IFS= read -r -d '' path; do
       web=true
       ;;
     scripts/ci/test-* | scripts/ci/canonicalize-artifact-digest.sh | \
-      scripts/ci/check-pr-ready.sh | scripts/ci/classify-changes.sh | \
+      scripts/ci/check-pr-branch-policy.sh | scripts/ci/check-pr-ready.sh | \
+      scripts/ci/classify-changes.sh | scripts/ci/extract-release-notes.sh | \
       scripts/ci/load-* | scripts/ci/resolve-* | scripts/ci/sanitize-* | \
       scripts/ci/validate-*)
       ;;
@@ -139,6 +140,8 @@ while IFS= read -r -d '' path; do
       runtime=true
       ;;
     .github/workflows/runtime-rollback.yml)
+      ;;
+    .github/workflows/runtime-release.yml)
       ;;
     .github/workflows/pr.yml)
       select_all

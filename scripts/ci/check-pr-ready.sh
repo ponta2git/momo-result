@@ -28,6 +28,7 @@ require_optional() {
 }
 
 require_success classify "${CLASSIFY_RESULT:?}"
+require_success branch-policy "${BRANCH_POLICY_RESULT:?}"
 require_success public-safety "${PUBLIC_SAFETY_RESULT:?}"
 require_optional workflow-lint "${WORKFLOW_LINT_EXPECTED:?}" "${WORKFLOW_LINT_RESULT:?}"
 require_optional api "${API_EXPECTED:?}" "${API_RESULT:?}"

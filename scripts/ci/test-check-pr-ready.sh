@@ -6,6 +6,7 @@ checker="${repo_root}/scripts/ci/check-pr-ready.sh"
 
 run_checker() {
   CLASSIFY_RESULT="${CLASSIFY_RESULT:-success}" \
+    BRANCH_POLICY_RESULT="${BRANCH_POLICY_RESULT:-success}" \
     PUBLIC_SAFETY_RESULT="${PUBLIC_SAFETY_RESULT:-success}" \
     WORKFLOW_LINT_EXPECTED="${WORKFLOW_LINT_EXPECTED:-false}" \
     WORKFLOW_LINT_RESULT="${WORKFLOW_LINT_RESULT:-skipped}" \
@@ -25,6 +26,10 @@ if API_EXPECTED=true API_RESULT=skipped run_checker >/dev/null 2>&1; then
 fi
 if PUBLIC_SAFETY_RESULT=failure run_checker >/dev/null 2>&1; then
   echo "Expected checker to reject a failed always-required gate." >&2
+  exit 1
+fi
+if BRANCH_POLICY_RESULT=failure run_checker >/dev/null 2>&1; then
+  echo "Expected checker to reject a failed PR branch policy gate." >&2
   exit 1
 fi
 if WORKFLOW_LINT_EXPECTED=true WORKFLOW_LINT_RESULT=skipped run_checker >/dev/null 2>&1; then

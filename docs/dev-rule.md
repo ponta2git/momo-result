@@ -94,6 +94,7 @@ OpenAPI / Web 型の生成関係は `docs/architecture.md` の Wire Boundary、c
 - analysis candidate 作成と production 昇格、backfill、audit は別操作とする。人間の承認、復旧判断、操作順は `private/ops/runbook.md` を正本とし、public な test contract へ複製しない。
 - 公開 edge、内部 health、機能応答、resource / performance は別の観測点・証拠として扱う。gate のために security policy を弱めない。
 - 共有 credential の rotation は、更新前に全 consumer と secret store を列挙し、同じ保守単位で更新する。各 consumer が更新後の credential で新規接続し、必要な runtime peer が ready になった証拠を揃えるまで完了としない。
+- runtime release は `release/*` から `master` への PR merge を境界とする。`master` push の deploy と post-deploy verification が成功した後、release PR の `## Release notes` を基に exact `master` commit の GitHub Release を発行する。追跡する changelog を別に手編集せず、GitHub Releases を公開 release 履歴の正本とする。
 
 ## 7. Production rollback verification
 
@@ -104,4 +105,12 @@ OpenAPI / Web 型の生成関係は `docs/architecture.md` の Wire Boundary、c
 
 ## 8. Git
 
-branch / commit の形式は `<type>/<short-description>` / `<type>: <概要>` とし、type は `feat`、`fix`、`refactor`、`test`、`docs`、`chore` から選ぶ。PR は変更理由と gate が一つの単位で確認できる大きさに保ち、squash merge を基本とする。
+`develop` を default branch とし、通常の変更は `<type>/<short-description>` から `develop` への PR にする。commit は `<type>: <概要>` とし、type は `feat`、`fix`、`refactor`、`test`、`docs`、`chore` から選ぶ。通常 PR は変更理由と gate が一つの単位で確認できる大きさに保ち、squash merge する。
+
+本番へ出す commit を選んだら、その `develop` commit を指す短命な `release/YYYYMMDD-N` branch を作り、`master` への release PRを作る。release branch に release 専用 commit を追加しない。release PR は merge commit で取り込み、`master` へ直接 push しない。これにより、release PR 作成後に `develop` へ入った変更は次回 release まで含まれない。
+
+一人開発のため、`develop` と `master` の required approval 数は 0 とする。両 branch とも PR、`pr-ready`、会話解決を必須にし、merge 実行者は repository の write 権限を持つ owner に限定する。`develop` は squash merge のみ、`master` は merge commit のみを許可する。release PR は同一 repository の `release/*` からだけ受け付け、前回 release 以降かつ `develop` 履歴上の commit であることを CI で検証する。
+
+Linear issue を完了させる通常 PR は本文で `Fixes MOM-<番号>` を使う。`develop` merge は started status `Ready for release`、release PR の `master` merge は `Done` の境界として扱うため、release PR に対象 issue の `Fixes MOM-<番号>` をもう一度列挙する。commit message の magic word に issue lifecycle を依存させない。release PR を開いた時点で既存 status を後退させず、複数 PR に紐づく issue は最後の対象 PR が merge されるまで完了扱いにしない。
+
+release PR の `## Release notes` は利用者向けの変更だけを記載する。通常 PR では `N/A` でよいが、release PR の空欄や placeholder は CI で拒否する。secret や private operations detail を含めない。

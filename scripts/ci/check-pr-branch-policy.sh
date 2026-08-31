@@ -28,6 +28,46 @@ require_commit() {
   }
 }
 
+resolve_develop_snapshot() {
+  local release_head="$1"
+  local expected_master="$2"
+  local current_develop="$3"
+  local label="$4"
+  local -a head_commit
+  local head_parent_count
+  local release_snapshot
+  local synchronized_master
+
+  if git merge-base --is-ancestor "${release_head}" "${current_develop}"; then
+    printf '%s\n' "${release_head}"
+    return
+  fi
+
+  read -r -a head_commit <<< "$(git rev-list --parents -n 1 "${release_head}")"
+  head_parent_count="$((${#head_commit[@]} - 1))"
+  [[ "${head_parent_count}" -eq 2 ]] || {
+    echo "${label} must point to a develop commit or wrap one in a single master synchronization merge." >&2
+    return 1
+  }
+
+  release_snapshot="${head_commit[1]}"
+  synchronized_master="${head_commit[2]}"
+  [[ "${synchronized_master}" == "${expected_master}" ]] || {
+    echo "${label} synchronization merge must use the expected master as its second parent." >&2
+    return 1
+  }
+  git merge-base --is-ancestor "${release_snapshot}" "${current_develop}" || {
+    echo "${label} synchronization merge must use an existing develop commit as its first parent." >&2
+    return 1
+  }
+  [[ "$(git rev-parse "${release_head}^{tree}")" == "$(git rev-parse "${release_snapshot}^{tree}")" ]] || {
+    echo "${label} synchronization merge must not change the selected develop snapshot." >&2
+    return 1
+  }
+
+  printf '%s\n' "${release_snapshot}"
+}
+
 case "${base_ref}" in
   develop)
     echo "Normal pull request targets develop."
@@ -46,22 +86,22 @@ case "${base_ref}" in
     require_commit head-sha "${head_sha}"
     require_commit develop-sha "${develop_sha}"
 
+    release_snapshot="$(resolve_develop_snapshot \
+      "${head_sha}" "${base_sha}" "${develop_sha}" "Release branch")"
+
     released_snapshot="${base_sha}"
-    if ! git merge-base --is-ancestor "${base_sha}" "${head_sha}"; then
-      if previous_snapshot="$(git rev-parse --verify "${base_sha}^2" 2>/dev/null)" &&
-        git merge-base --is-ancestor "${previous_snapshot}" "${head_sha}"; then
-        released_snapshot="${previous_snapshot}"
-      else
+    if ! git merge-base --is-ancestor "${base_sha}" "${release_snapshot}"; then
+      if ! previous_release_head="$(git rev-parse --verify "${base_sha}^2" 2>/dev/null)" ||
+        ! previous_master="$(git rev-parse --verify "${base_sha}^1" 2>/dev/null)"; then
         echo "Release snapshot does not contain the previously released snapshot." >&2
         exit 1
       fi
+      released_snapshot="$(resolve_develop_snapshot \
+        "${previous_release_head}" "${previous_master}" "${develop_sha}" \
+        "Previously released branch")"
     fi
 
-    git merge-base --is-ancestor "${head_sha}" "${develop_sha}" || {
-      echo "Release branch must point to an existing develop commit without extra commits." >&2
-      exit 1
-    }
-    git merge-base --is-ancestor "${released_snapshot}" "${head_sha}" || {
+    git merge-base --is-ancestor "${released_snapshot}" "${release_snapshot}" || {
       echo "Release branch would roll master back to an older snapshot." >&2
       exit 1
     }

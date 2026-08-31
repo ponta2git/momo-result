@@ -107,9 +107,9 @@ OpenAPI / Web 型の生成関係は `docs/architecture.md` の Wire Boundary、c
 
 `develop` を default branch とし、通常の変更は `<type>/<short-description>` から `develop` への PR にする。commit は `<type>: <概要>` とし、type は `feat`、`fix`、`refactor`、`test`、`docs`、`chore` から選ぶ。通常 PR は変更理由と gate が一つの単位で確認できる大きさに保ち、squash merge する。
 
-本番へ出す commit を選んだら、その `develop` commit を指す短命な `release/YYYYMMDD-N` branch を作り、`master` への release PRを作る。release branch に release 専用 commit を追加しない。release PR は merge commit で取り込み、`master` へ直接 push しない。これにより、release PR 作成後に `develop` へ入った変更は次回 release まで含まれない。
+本番へ出す commit を選んだら、その `develop` commit を指す短命な `release/YYYYMMDD-N` branch を作り、`master` への release PRを作る。release branch に release 専用の内容変更を追加しない。`master` の required status check が最新baseへの追従を要求する場合だけ、選択した `develop` commitを第1親、現在の `master` を第2親とし、treeを第1親から変えない同期mergeを1件許可する。release PR は merge commit で取り込み、`master` へ直接 push しない。これにより、release PR 作成後に `develop` へ入った変更は次回 release まで含まれず、base更新も候補内容を変えない。
 
-一人開発のため、`develop` と `master` の required approval 数は 0 とする。両 branch とも PR、`pr-ready`、会話解決を必須にし、merge 実行者は repository の write 権限を持つ owner に限定する。`develop` は squash merge のみ、`master` は merge commit のみを許可する。release PR は同一 repository の `release/*` からだけ受け付け、前回 release 以降かつ `develop` 履歴上の commit であることを CI で検証する。
+一人開発のため、`develop` と `master` の required approval 数は 0 とする。両 branch とも PR、`pr-ready`、会話解決を必須にし、merge 実行者は repository の write 権限を持つ owner に限定する。`develop` は squash merge のみ、`master` は merge commit のみを許可する。release PR は同一 repository の `release/*` からだけ受け付け、選択したsnapshotが前回 release 以降かつ `develop` 履歴上の commitであることを CI で検証する。同期mergeがある場合は、親の順序、現在の `master` との一致、選択したsnapshotとのtree一致も検証する。
 
 Linear issue を完了させる通常 PR は本文で `Fixes MOM-<番号>` を使う。`develop` merge は started status `Ready for release`、release PR の `master` merge は `Done` の境界として扱うため、release PR に対象 issue の `Fixes MOM-<番号>` をもう一度列挙する。commit message の magic word に issue lifecycle を依存させない。release PR を開いた時点で既存 status を後退させず、複数 PR に紐づく issue は最後の対象 PR が merge されるまで完了扱いにしない。
 

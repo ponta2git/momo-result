@@ -18,6 +18,9 @@ const requiredThemeVariables = [
   ...[1, 2, 3, 4].map((sequence) => `--color-member-sequence-${sequence}`),
   ...[1, 2, 3, 4].map((playOrder) => `--color-play-order-${playOrder}`),
   ...[1, 2, 3, 4, 5, 6].map((series) => `--color-series-${series}`),
+  ...[1, 2, 3, 4].map((rank) => `--color-rank-${rank}`),
+  ...[1, 2, 3, 4].map((rank) => `--color-rank-${rank}-foreground`),
+  "--color-chart-segment-separator",
 ];
 const missingThemeVariables = requiredThemeVariables.filter(
   (name) => !builtCss.includes(`${name}:`),

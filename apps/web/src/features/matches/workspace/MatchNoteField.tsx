@@ -15,10 +15,7 @@ export function MatchNoteField({ error, onChange, value }: MatchNoteFieldProps) 
   const count = Array.from(normalizeMatchNote(value)).length;
   const invalid = error || count > matchNoteMaximumCharacters;
   return (
-    <section
-      aria-labelledby="match-note-field-heading"
-      className="grid gap-2 border-t border-[var(--color-border)] pt-4"
-    >
+    <section aria-labelledby="match-note-field-heading" className="grid gap-2">
       <div className="flex items-end justify-between gap-4">
         <div>
           <h2

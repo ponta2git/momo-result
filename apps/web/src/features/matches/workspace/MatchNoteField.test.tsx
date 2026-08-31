@@ -15,6 +15,7 @@ describe("MatchNoteField", () => {
     const user = userEvent.setup();
     render(<Harness />);
 
+    expect(screen.getByRole("region", { name: "試合メモ（任意）" })).toBeInTheDocument();
     const textarea = screen.getByRole("textbox", { name: "試合メモ（任意）" });
     await user.click(textarea);
     await user.paste("🍑".repeat(151));

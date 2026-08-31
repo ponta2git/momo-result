@@ -69,6 +69,60 @@ git -C "${fixture_repo}" merge --quiet --no-ff "${first_snapshot}" -m release-fi
 released_master="$(git -C "${fixture_repo}" rev-parse HEAD)"
 run_checker master release/20260830-2 ponta2git/momo-result ponta2git/momo-result \
   "${released_master}" "${develop_head}" "${develop_head}" >/dev/null
+
+git -C "${fixture_repo}" checkout --quiet --detach "${develop_head}"
+git -C "${fixture_repo}" merge --quiet --no-ff "${released_master}" -m sync-current-master
+synchronized_release="$(git -C "${fixture_repo}" rev-parse HEAD)"
+run_checker master release/20260830-2 ponta2git/momo-result ponta2git/momo-result \
+  "${released_master}" "${synchronized_release}" "${develop_head}" >/dev/null
+
+git -C "${fixture_repo}" checkout --quiet master
+git -C "${fixture_repo}" merge --quiet --no-ff "${synchronized_release}" -m release-synchronized
+master_after_synchronized_release="$(git -C "${fixture_repo}" rev-parse HEAD)"
+git -C "${fixture_repo}" checkout --quiet develop
+printf '%s\n' third >> "${fixture_repo}/state.txt"
+git -C "${fixture_repo}" commit --quiet -am third
+next_develop_head="$(git -C "${fixture_repo}" rev-parse HEAD)"
+run_checker master release/20260830-3 ponta2git/momo-result ponta2git/momo-result \
+  "${master_after_synchronized_release}" "${next_develop_head}" "${next_develop_head}" >/dev/null
+git -C "${fixture_repo}" checkout --quiet --detach "${next_develop_head}"
+git -C "${fixture_repo}" merge --quiet --no-ff "${master_after_synchronized_release}" \
+  -m sync-current-master-again
+next_synchronized_release="$(git -C "${fixture_repo}" rev-parse HEAD)"
+run_checker master release/20260830-3 ponta2git/momo-result ponta2git/momo-result \
+  "${master_after_synchronized_release}" "${next_synchronized_release}" \
+  "${next_develop_head}" >/dev/null
+
+git -C "${fixture_repo}" checkout --quiet master
+git -C "${fixture_repo}" commit --quiet --allow-empty -m advance-master
+advanced_master="$(git -C "${fixture_repo}" rev-parse HEAD)"
+assert_rejected stale-master-sync master release/20260830-2 ponta2git/momo-result \
+  ponta2git/momo-result "${advanced_master}" "${synchronized_release}" "${develop_head}"
+
+git -C "${fixture_repo}" checkout --quiet --detach "${synchronized_release}"
+printf '%s\n' release-only >> "${fixture_repo}/state.txt"
+git -C "${fixture_repo}" commit --quiet --amend -am changed-sync
+changed_sync="$(git -C "${fixture_repo}" rev-parse HEAD)"
+assert_rejected changed-sync master release/20260830-2 ponta2git/momo-result \
+  ponta2git/momo-result "${released_master}" "${changed_sync}" "${develop_head}"
+
+git -C "${fixture_repo}" checkout --quiet --detach "${develop_head}"
+printf '%s\n' release-only >> "${fixture_repo}/state.txt"
+git -C "${fixture_repo}" commit --quiet -am release-only-parent
+release_only_parent="$(git -C "${fixture_repo}" rev-parse HEAD)"
+git -C "${fixture_repo}" merge --quiet --no-ff "${released_master}" -m sync-from-release-only-parent
+non_develop_sync="$(git -C "${fixture_repo}" rev-parse HEAD)"
+assert_rejected non-develop-sync master release/20260830-2 ponta2git/momo-result \
+  ponta2git/momo-result "${released_master}" "${non_develop_sync}" "${develop_head}"
+
+develop_tree="$(git -C "${fixture_repo}" rev-parse "${develop_head}^{tree}")"
+octopus_sync="$({
+  printf '%s\n' sync-with-extra-parent
+} | git -C "${fixture_repo}" commit-tree "${develop_tree}" \
+  -p "${develop_head}" -p "${released_master}" -p "${master_base}")"
+assert_rejected extra-parent-sync master release/20260830-2 ponta2git/momo-result \
+  ponta2git/momo-result "${released_master}" "${octopus_sync}" "${develop_head}"
+
 assert_rejected rollback-after-release master release/20260830-2 ponta2git/momo-result \
   ponta2git/momo-result "${released_master}" "${master_base}" "${develop_head}"
 

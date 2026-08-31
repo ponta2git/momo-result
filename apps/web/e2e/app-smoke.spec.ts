@@ -521,6 +521,20 @@ test("inspects saved analysis and handles explicit refresh states", async ({
       selectedMatch.getByRole("link", { name: "第1戦の試合結果を見る" }),
     ).toHaveAttribute("href", selectedMatchHref);
     await expect(page.getByRole("table", { name: "直近の試合順位" })).toBeVisible();
+    const secondRankTile = page.getByRole("link", { name: /、2位.*試合結果を見る/u }).first();
+    const thirdRankTile = page.getByRole("link", { name: /、3位.*試合結果を見る/u }).first();
+    await expect(secondRankTile).toBeVisible();
+    await expect(thirdRankTile).toBeVisible();
+    const [secondRankTilePaint, thirdRankTilePaint] = await Promise.all(
+      [secondRankTile, thirdRankTile].map((tile) =>
+        tile.evaluate((element) => {
+          const style = getComputedStyle(element);
+          return { backgroundColor: style.backgroundColor, color: style.color };
+        }),
+      ),
+    );
+    expect(secondRankTilePaint.backgroundColor).not.toBe(thirdRankTilePaint.backgroundColor);
+    expect(secondRankTilePaint.color).not.toBe(thirdRankTilePaint.color);
     const recentRankTile = page.getByRole("link", {
       name: /ぽんた、第1戦、1位、この試合。試合結果を見る/u,
     });
@@ -588,7 +602,21 @@ test("inspects saved analysis and handles explicit refresh states", async ({
     await page.setViewportSize({ height: 844, width: 390 });
 
     await page.getByRole("tab", { name: "今の差" }).click();
-    await expect(page.getByRole("region", { name: "順位と基礎比較" })).toBeVisible();
+    const overviewRegion = page.getByRole("region", { name: "順位と基礎比較" });
+    await expect(overviewRegion).toBeVisible();
+    const rankDistribution = overviewRegion.getByRole("group", { name: "ぽんたの順位分布" });
+    const secondRankSegment = rankDistribution.getByRole("img", { name: /^2位 /u });
+    const thirdRankSegment = rankDistribution.getByRole("img", { name: /^3位 /u });
+    const [secondRankSegmentPaint, thirdRankSegmentPaint] = await Promise.all(
+      [secondRankSegment, thirdRankSegment].map((segment) =>
+        segment.evaluate((element) => {
+          const style = getComputedStyle(element);
+          return { backgroundColor: style.backgroundColor, boxShadow: style.boxShadow };
+        }),
+      ),
+    );
+    expect(secondRankSegmentPaint.backgroundColor).not.toBe(thirdRankSegmentPaint.backgroundColor);
+    expect(thirdRankSegmentPaint.boxShadow).not.toBe("none");
     await expectNoHorizontalPageOverflow(page);
     await expect(selectedMatch).toBeVisible();
     await expect(page).toHaveURL(new RegExp(`focusMatchId=${encodeURIComponent(matchId)}`, "u"));

@@ -162,7 +162,7 @@ export function RevenueConversionMatrices({
                             }
                           >
                             <strong className="text-sm tabular-nums">{cell.count}</strong>
-                            <p className="text-[11px] text-[var(--color-text-secondary)] tabular-nums">
+                            <p className="text-[11px] text-[var(--color-text-primary)] tabular-nums">
                               {formatPercent(cell.rate)}
                             </p>
                             {focused ? (

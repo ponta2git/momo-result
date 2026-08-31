@@ -50,9 +50,9 @@
   --ref-series-5: oklch(58% 0.15 340);
   --ref-series-6: oklch(57% 0.105 115);
 
-  --ref-rank-1: oklch(63% 0.115 78);
-  --ref-rank-2: oklch(56% 0.045 235);
-  --ref-rank-3: oklch(56% 0.008 240);
+  --ref-rank-1: oklch(64% 0.155 88);
+  --ref-rank-2: oklch(64% 0.035 235);
+  --ref-rank-3: oklch(50% 0.085 55);
   --ref-rank-4: oklch(56% 0.145 28);
 
   --ref-tray-assets: oklch(60% 0.09 240);
@@ -102,6 +102,11 @@
   --color-rank-2: var(--ref-rank-2);
   --color-rank-3: var(--ref-rank-3);
   --color-rank-4: var(--ref-rank-4);
+  --color-rank-1-foreground: var(--color-text-primary);
+  --color-rank-2-foreground: var(--color-text-primary);
+  --color-rank-3-foreground: var(--color-text-inverse);
+  --color-rank-4-foreground: var(--color-text-inverse);
+  --color-chart-segment-separator: var(--color-surface);
   --color-tray-assets: var(--ref-tray-assets);
   --color-tray-revenue: var(--ref-tray-revenue);
   --color-tray-incident: var(--ref-tray-incident);

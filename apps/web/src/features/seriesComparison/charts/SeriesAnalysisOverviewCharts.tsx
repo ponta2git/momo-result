@@ -22,6 +22,8 @@ type OverviewChartProps = {
   response: SeriesComparisonAggregateV3;
 };
 
+const STACKED_SEGMENT_SEPARATOR = "inset 1px 0 var(--color-chart-segment-separator)";
+
 export function RankDistributionBars({ focusedItemIds, response }: OverviewChartProps) {
   const titleId = useId();
   const players = response.players;
@@ -63,7 +65,7 @@ export function RankDistributionBars({ focusedItemIds, response }: OverviewChart
                 className="flex h-9 overflow-hidden rounded-[var(--radius-xs)] bg-[var(--color-surface)]"
                 role="group"
               >
-                {entry?.cells.map((cell) => (
+                {entry?.cells.map((cell, cellIndex) => (
                   <span
                     aria-label={`${cell.rank}位 ${cell.count}回 ${formatPercent(cell.rate)}${focusedItemIds.includes(cell.itemId) ? "、この試合" : ""}`}
                     data-focused-metric={focusedItemIds.includes(cell.itemId) ? "true" : undefined}
@@ -74,6 +76,7 @@ export function RankDistributionBars({ focusedItemIds, response }: OverviewChart
                       flexBasis: `${(cell.rate ?? 0) * 100}%`,
                       flexGrow: 0,
                       flexShrink: 0,
+                      boxShadow: cellIndex === 0 ? undefined : STACKED_SEGMENT_SEPARATOR,
                       outline: focusedItemIds.includes(cell.itemId)
                         ? "2px solid var(--color-action)"
                         : undefined,
@@ -127,7 +130,7 @@ export function CrownShareBars({ response }: { response: SeriesComparisonAggrega
         className="flex h-3 overflow-hidden rounded-full bg-[var(--color-surface-subtle)]"
         role="img"
       >
-        {players.map((player) => {
+        {players.map((player, playerIndex) => {
           const share = shareByMemberId.get(player.memberId) ?? 0;
           return (
             <span
@@ -136,6 +139,7 @@ export function CrownShareBars({ response }: { response: SeriesComparisonAggrega
               key={player.memberId}
               style={{
                 backgroundColor: dataVizSeriesPresentation(player.memberId).color,
+                boxShadow: playerIndex === 0 ? undefined : STACKED_SEGMENT_SEPARATOR,
                 flexBasis: `${share * 100}%`,
                 flexGrow: 0,
                 flexShrink: 0,

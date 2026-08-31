@@ -33,7 +33,7 @@ const followModeOptions = [
 function SourceImageLoadingFrame({ detail, label }: { detail: string; label: string }) {
   return (
     <div aria-busy="true" aria-label={label} className="grid min-h-[13rem] gap-3">
-      <Skeleton className="h-[10rem] w-full rounded-[var(--radius-sm)]" />
+      <Skeleton className="h-[10rem] w-full rounded-[var(--radius-sm)] 2xl:aspect-video 2xl:h-auto" />
       <p className="text-sm text-[var(--color-text-secondary)]">{detail}</p>
     </div>
   );
@@ -142,7 +142,7 @@ export function SourceImagePanel({
                   <>
                     <img
                       alt={`${sourceImageKindLabels[panel.activeState.kind]}の元画像`}
-                      className="h-[13rem] w-full rounded-[var(--radius-sm)] bg-[var(--color-media-canvas)] object-contain"
+                      className="h-[13rem] w-full rounded-[var(--radius-sm)] bg-[var(--color-media-canvas)] object-contain 2xl:aspect-video 2xl:h-auto"
                       src={panel.displayUrl}
                     />
                     <div className="mt-2 flex items-center justify-between gap-2">

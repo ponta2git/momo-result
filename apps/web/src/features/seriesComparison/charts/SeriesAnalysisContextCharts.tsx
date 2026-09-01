@@ -34,7 +34,7 @@ export function PlayOrderMatrix({
           <MatrixAxisHeader className="w-32" columnLabel="番手" rowLabel="プレーヤー" />
           {PLAY_ORDERS.map((playOrder) => (
             <MatrixColumnHeader key={playOrder}>
-              <PlayOrderMark className="justify-center" playOrder={playOrder} />
+              <PlayOrderMark align="center" playOrder={playOrder} />
             </MatrixColumnHeader>
           ))}
         </tr>

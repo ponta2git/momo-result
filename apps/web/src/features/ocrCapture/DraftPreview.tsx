@@ -41,12 +41,7 @@ export function DraftPreview({ draft }: DraftPreviewProps) {
   const warning = warningSummary(draft.warningsJson);
 
   return (
-    <Disclosure
-      className="mt-4"
-      panelClassName="px-3 py-3"
-      presentation="framed"
-      summary="読み取り結果"
-    >
+    <Disclosure panelPadding="sm" presentation="framed" summary="読み取り結果">
       <dl className="grid gap-2 text-sm text-[var(--color-text-primary)]">
         <div className="flex justify-between gap-4">
           <dt className="text-[var(--color-text-secondary)]">読み取り画面</dt>

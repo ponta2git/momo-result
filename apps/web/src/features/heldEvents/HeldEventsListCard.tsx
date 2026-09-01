@@ -42,62 +42,65 @@ export function HeldEventsListCard({
     <StaleShield
       active={model.refresh.pending}
       busyLabel="開催履歴を更新中"
-      contentClassName="grid min-w-0 gap-4"
       fallback={<HeldEventsLoading />}
       strategy={model.scopeChanging ? "preserve-inert" : "preserve-interactive"}
     >
-      {model.freshness === "stale" ? (
-        <Notice
-          action={
-            <Button
-              pending={model.refresh.pending}
-              pendingLabel="再取得中"
-              size="sm"
-              variant="secondary"
-              onClick={model.refresh.run}
-            >
-              開催履歴を再取得
-            </Button>
-          }
-          tone="warning"
-          title="開催履歴を更新できませんでした"
-        >
-          前回取得した開催履歴を表示しています。開催詳細への移動や出力は利用できますが、削除は最新状態を確認できるまで行えません。
-        </Notice>
-      ) : null}
-      {model.rows.length === 0 ? (
-        <EmptyState
-          action={
-            <Button icon={<Plus aria-hidden="true" className="size-4" />} onClick={onCreate}>
-              最初の開催を作成
-            </Button>
-          }
-          description="開催を作ると、同じ日に行った試合を番号順にまとめられます。"
-          icon={<CalendarDays className="size-5" />}
-          placement="embedded"
-          title="開催履歴はまだありません"
-        />
-      ) : (
-        <HeldEventsLedger
-          actionsDisabled={model.scopeChanging}
-          deleteDisabled={model.deletePending || model.freshness === "stale" || model.scopeChanging}
-          events={model.rows}
-          firstRowIsLatest={model.page === 1}
-          returnTo={model.returnTo}
-          onDelete={model.onRequestDelete}
-        />
-      )}
+      <div className="grid min-w-0 gap-4">
+        {model.freshness === "stale" ? (
+          <Notice
+            action={
+              <Button
+                pending={model.refresh.pending}
+                pendingLabel="再取得中"
+                size="sm"
+                variant="secondary"
+                onClick={model.refresh.run}
+              >
+                開催履歴を再取得
+              </Button>
+            }
+            tone="warning"
+            title="開催履歴を更新できませんでした"
+          >
+            前回取得した開催履歴を表示しています。開催詳細への移動や出力は利用できますが、削除は最新状態を確認できるまで行えません。
+          </Notice>
+        ) : null}
+        {model.rows.length === 0 ? (
+          <EmptyState
+            action={
+              <Button icon={<Plus aria-hidden="true" />} onClick={onCreate}>
+                最初の開催を作成
+              </Button>
+            }
+            description="開催を作ると、同じ日に行った試合を番号順にまとめられます。"
+            icon={<CalendarDays />}
+            placement="embedded"
+            title="開催履歴はまだありません"
+          />
+        ) : (
+          <HeldEventsLedger
+            actionsDisabled={model.scopeChanging}
+            deleteDisabled={
+              model.deletePending || model.freshness === "stale" || model.scopeChanging
+            }
+            events={model.rows}
+            firstRowIsLatest={model.page === 1}
+            returnTo={model.returnTo}
+            onDelete={model.onRequestDelete}
+          />
+        )}
 
-      {model.pagination && model.pagination.totalItems > 0 ? (
-        <PaginationControls
-          disabled={model.scopeChanging}
-          pageSizeOptions={[...heldEventViewModel.heldEventPageSizeOptions]}
-          pagination={model.pagination}
-          placement="embedded"
-          onPageChange={model.onPageChange}
-          onPageSizeChange={model.onPageSizeChange}
-        />
-      ) : null}
+        {model.pagination && model.pagination.totalItems > 0 ? (
+          <PaginationControls
+            disabled={model.scopeChanging}
+            pageSizeOptions={[...heldEventViewModel.heldEventPageSizeOptions]}
+            pagination={model.pagination}
+            placement="embedded"
+            onPageChange={model.onPageChange}
+            onPageSizeChange={model.onPageSizeChange}
+          />
+        ) : null}
+      </div>
     </StaleShield>
   );
 }
@@ -106,13 +109,13 @@ function HeldEventsLoading() {
   return (
     <div
       aria-label="開催履歴を読み込み中"
-      className="grid gap-0 overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)]"
+      className="grid divide-y divide-[var(--color-border)] overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)]"
       role="status"
     >
       {["first", "second", "third"].map((id) => (
         <div
           key={id}
-          className="grid gap-3 border-b border-[var(--color-border)] p-4 last:border-b-0 lg:grid-cols-[minmax(15rem,1fr)_minmax(12rem,16rem)_auto]"
+          className="grid gap-3 p-4 lg:grid-cols-[minmax(15rem,1fr)_minmax(12rem,16rem)_auto]"
         >
           <Skeleton className="h-11" />
           <Skeleton className="h-13" />

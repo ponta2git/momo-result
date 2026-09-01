@@ -24,7 +24,7 @@ export function HeldEventMatchNotePreview({ body }: { body: string }) {
   }, [body, expanded]);
 
   return (
-    <div className="mt-4">
+    <div>
       <p className="text-xs font-semibold text-[var(--color-text-secondary)]">試合メモ</p>
       <p
         id={bodyId}
@@ -37,16 +37,17 @@ export function HeldEventMatchNotePreview({ body }: { body: string }) {
         {body}
       </p>
       {collapsedOverflowing || expanded ? (
-        <Button
-          aria-controls={bodyId}
-          aria-expanded={expanded}
-          className="mt-1"
-          size="sm"
-          variant="quiet"
-          onClick={() => setExpanded((value) => !value)}
-        >
-          {expanded ? "メモを閉じる" : "メモ全文を表示"}
-        </Button>
+        <div className="mt-1">
+          <Button
+            aria-controls={bodyId}
+            aria-expanded={expanded}
+            size="sm"
+            variant="quiet"
+            onClick={() => setExpanded((value) => !value)}
+          >
+            {expanded ? "メモを閉じる" : "メモ全文を表示"}
+          </Button>
+        </div>
       ) : null}
     </div>
   );

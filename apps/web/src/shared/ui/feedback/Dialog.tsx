@@ -1,7 +1,7 @@
 import { AlertDialog as BaseAlertDialog } from "@base-ui/react/alert-dialog";
 import { Dialog as BaseDialog } from "@base-ui/react/dialog";
 import { AnimatePresence, useReducedMotionConfig } from "motion/react";
-import type { ReactElement, ReactNode } from "react";
+import type { HTMLAttributes, ReactElement, ReactNode } from "react";
 import { useState } from "react";
 
 import { AlertDialogLayer, DialogLayer } from "@/shared/ui/feedback/DialogLayer";
@@ -9,7 +9,7 @@ import { AlertDialogLayer, DialogLayer } from "@/shared/ui/feedback/DialogLayer"
 type DialogBaseProps = {
   backdropClassName?: string | undefined;
   children?: ReactNode | undefined;
-  className?: string | undefined;
+  contentClassName?: string | undefined;
   description?: ReactNode | undefined;
   onOpenChange?: ((open: boolean) => void) | undefined;
   open?: boolean | undefined;
@@ -36,9 +36,17 @@ type AlertDialogProps = DialogBaseProps & {
   trigger?: ReactElement | undefined;
 };
 
-/** Keeps action-bearing dialog forms in one reading order without moving them outside the form. */
-export const dialogFooterClassName =
-  "flex flex-wrap justify-end gap-2 border-t border-[var(--color-border)] pt-4";
+/** Owns the internal boundary and action order of an action-bearing dialog form. */
+export function DialogFooter({
+  ...props
+}: Omit<HTMLAttributes<HTMLDivElement>, "className" | "style">) {
+  return (
+    <div
+      className="flex flex-wrap justify-end gap-2 border-t border-[var(--color-border)] pt-4"
+      {...props}
+    />
+  );
+}
 
 function useControllableDialogOpen(
   open: boolean | undefined,
@@ -70,7 +78,7 @@ export function Dialog({
   busy = false,
   children,
   backdropClassName,
-  className,
+  contentClassName,
   description,
   dismissible = true,
   onOpenChange,
@@ -101,7 +109,7 @@ export function Dialog({
           <DialogLayer
             backdropClassName={backdropClassName}
             busy={busy}
-            className={className}
+            contentClassName={contentClassName}
             description={description}
             dismissible={canDismiss}
             key="dialog-layer"
@@ -122,7 +130,7 @@ export function AlertDialog({
   backdropClassName,
   cancelLabel = "キャンセル",
   children,
-  className,
+  contentClassName,
   closeOnSuccess = true,
   confirmDisabled = false,
   confirmLabel = "実行",
@@ -183,7 +191,7 @@ export function AlertDialog({
           <AlertDialogLayer
             backdropClassName={backdropClassName}
             cancelLabel={cancelLabel}
-            className={className}
+            contentClassName={contentClassName}
             confirmDisabled={confirmDisabled}
             confirmLabel={confirmLabel}
             description={description}

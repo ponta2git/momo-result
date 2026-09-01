@@ -145,8 +145,9 @@ export function RecentRankStrips({
                     {showMarker ? (
                       <SeriesAnalysisMatchLink
                         ariaLabel={`${formatSeriesMatchIndex(matchIndex)}の試合結果を見る${focused ? "、この試合" : ""}`}
-                        className={`justify-center text-[11px] whitespace-nowrap ${focused ? "" : "text-[var(--color-text-muted)]"}`}
+                        focused={focused}
                         matchId={row.matchId}
+                        presentation="axis"
                       >
                         {focused ? "この試合" : formatSeriesMatchIndex(matchIndex)}
                       </SeriesAnalysisMatchLink>
@@ -176,10 +177,9 @@ export function RecentRankStrips({
                       平均{formatDecimal(entry?.averageRank)}位・入賞
                       {formatPercent(entry?.podiumRate)}
                     </span>
-                    <SeriesAnalysisQualityAdvisory
-                      className="mt-0.5"
-                      status={entry?.qualityStatus ?? "no_target"}
-                    />
+                    <span className="mt-0.5 inline-flex empty:hidden">
+                      <SeriesAnalysisQualityAdvisory status={entry?.qualityStatus ?? "no_target"} />
+                    </span>
                     {entry ? (
                       <span className="block text-[11px] font-normal text-[var(--color-text-secondary)] tabular-nums">
                         連勝 {entry.winStreak}・連続入賞 {entry.podiumStreak}・連続下位{" "}
@@ -196,13 +196,14 @@ export function RecentRankStrips({
                         {row ? (
                           <SeriesAnalysisMatchLink
                             ariaLabel={`${player.displayName}、${formatSeriesMatchIndex(matchIndex)}、${row.rank}位${focused ? "、この試合" : ""}。試合結果を見る`}
-                            className={`size-11 justify-center overflow-hidden rounded-[var(--radius-xs)] border p-0 text-xs tabular-nums no-underline hover:no-underline ${focused ? "ring-2 ring-[var(--color-action)] ring-offset-2 ring-offset-[var(--color-surface)]" : ""}`}
-                            matchId={row.matchId}
-                            style={{
-                              backgroundColor: rankColor(row.rank),
-                              borderColor: rankColor(row.rank),
-                              color: rankForegroundColor(row.rank),
+                            colors={{
+                              background: rankColor(row.rank),
+                              border: rankColor(row.rank),
+                              foreground: rankForegroundColor(row.rank),
                             }}
+                            focused={focused}
+                            matchId={row.matchId}
+                            presentation="rank-cell"
                             title={`${formatSeriesMatchIndex(matchIndex)} ${row.rank}位`}
                           >
                             <span

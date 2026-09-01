@@ -4,11 +4,9 @@ import type { LinkProps } from "react-router-dom";
 
 import { buttonClassName, DecorativeActionIcon } from "@/shared/ui/actions/actionRecipes";
 import type { ButtonSize, ButtonVariant } from "@/shared/ui/actions/actionRecipes";
-import { cn } from "@/shared/ui/cn";
 
-export type LinkButtonProps = Omit<LinkProps, "children" | "className"> & {
+export type LinkButtonProps = Omit<LinkProps, "children" | "className" | "style"> & {
   children: ReactNode;
-  className?: string | undefined;
   disabled?: boolean | undefined;
   icon?: ReactNode;
   size?: ButtonSize;
@@ -18,7 +16,6 @@ export type LinkButtonProps = Omit<LinkProps, "children" | "className"> & {
 /** A navigation link presented with the shared text-action recipe. */
 export function LinkButton({
   children,
-  className,
   disabled = false,
   icon,
   size = "md",
@@ -37,7 +34,7 @@ export function LinkButton({
       <span
         aria-disabled="true"
         className={buttonClassName({
-          className: cn(className, "cursor-not-allowed opacity-60"),
+          disabled: true,
           size,
           variant,
         })}
@@ -49,7 +46,7 @@ export function LinkButton({
   }
 
   return (
-    <Link className={buttonClassName({ className, size, variant })} {...props}>
+    <Link className={buttonClassName({ size, variant })} {...props}>
       {content}
     </Link>
   );

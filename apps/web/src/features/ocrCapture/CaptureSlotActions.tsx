@@ -35,15 +35,8 @@ export function CaptureSlotActions({
     <div className="grid gap-2">
       <Button
         aria-pressed={captureSelected}
-        className="w-full"
         disabled={captureDisabled}
-        icon={
-          captureSelected ? (
-            <Check aria-hidden="true" className="size-4" />
-          ) : (
-            <Camera aria-hidden="true" className="size-4" />
-          )
-        }
+        icon={captureSelected ? <Check aria-hidden="true" /> : <Camera aria-hidden="true" />}
         size="sm"
         variant={captureSelected ? "secondary" : "quiet"}
         onClick={onSelectCapture}
@@ -54,7 +47,7 @@ export function CaptureSlotActions({
         <Button
           aria-label={moveBackwardLabel ? `${moveBackwardLabel}へ移動` : "前の分類へ移動"}
           disabled={!canMoveBackward}
-          icon={<ArrowLeft aria-hidden="true" className="size-4" />}
+          icon={<ArrowLeft aria-hidden="true" />}
           size="sm"
           variant="quiet"
           onClick={onMoveBackward}
@@ -64,7 +57,7 @@ export function CaptureSlotActions({
         <Button
           aria-label={moveForwardLabel ? `${moveForwardLabel}へ移動` : "次の分類へ移動"}
           disabled={!canMoveForward}
-          icon={<ArrowRight aria-hidden="true" className="size-4" />}
+          icon={<ArrowRight aria-hidden="true" />}
           size="sm"
           variant="quiet"
           onClick={onMoveForward}
@@ -74,7 +67,7 @@ export function CaptureSlotActions({
         <Button
           aria-label="画像を破棄"
           disabled={clearDisabled}
-          icon={<Trash2 aria-hidden="true" className="size-4" />}
+          icon={<Trash2 aria-hidden="true" />}
           size="sm"
           variant="quiet"
           onClick={onClear}

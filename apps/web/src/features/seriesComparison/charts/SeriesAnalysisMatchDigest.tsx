@@ -25,9 +25,9 @@ export function MatchDigestStrip({
 }) {
   return (
     <div className="grid gap-3">
-      <dl className="grid divide-y divide-[var(--color-border)] sm:grid-cols-2 sm:divide-x sm:divide-y-0 xl:grid-cols-4">
+      <dl className="grid gap-px bg-[var(--color-border)] sm:grid-cols-2 xl:grid-cols-4">
         {flagOrder.map((flag) => (
-          <div className="px-3 py-2" key={flag}>
+          <div className="bg-[var(--color-surface)] px-3 py-2" key={flag}>
             <dt className="text-xs text-[var(--color-text-secondary)]">
               {timelineFlagLabel(flag)}
             </dt>
@@ -54,8 +54,8 @@ export function MatchDigestStrip({
                     <div className="min-w-0">
                       <SeriesAnalysisMatchLink
                         ariaLabel={`${formatSeriesMatchIndex(match.matchIndex)}の試合結果を見る`}
-                        className="gap-1 text-xs"
                         matchId={match.matchId}
+                        presentation="inline"
                       >
                         {formatSeriesMatchIndex(match.matchIndex)}
                         <ArrowUpRight aria-hidden="true" className="size-3.5" />
@@ -103,15 +103,16 @@ export function MatchDigestStrip({
                       ))
                     )}
                   </div>
-                  <Button
-                    className="mt-2 w-full"
-                    icon={<Search aria-hidden="true" className="size-4" />}
-                    size="sm"
-                    variant={focused ? "secondary" : "quiet"}
-                    onClick={() => onFocusMatch(match.matchId)}
-                  >
-                    {focused ? "選択中" : "比較する"}
-                  </Button>
+                  <div className="mt-2 grid">
+                    <Button
+                      icon={<Search aria-hidden="true" />}
+                      size="sm"
+                      variant={focused ? "secondary" : "quiet"}
+                      onClick={() => onFocusMatch(match.matchId)}
+                    >
+                      {focused ? "選択中" : "比較する"}
+                    </Button>
+                  </div>
                 </article>
               );
             })}

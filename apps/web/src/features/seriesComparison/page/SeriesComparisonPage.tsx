@@ -55,7 +55,7 @@ export function SeriesComparisonPage() {
         actions={
           page.returnTo ? (
             <LinkButton
-              icon={<ArrowLeft aria-hidden="true" className="size-4" />}
+              icon={<ArrowLeft aria-hidden="true" />}
               size="sm"
               to={page.returnTo}
               variant="quiet"
@@ -94,7 +94,7 @@ export function SeriesComparisonPage() {
         ) : null}
         {filters.seriesOptions.length === 0 && !options.hasError ? (
           <EmptyState
-            icon={<BarChart3 className="size-5" />}
+            icon={<BarChart3 />}
             placement="embedded"
             title="登録されている作品がありません"
             description="設定管理で作品を登録すると、戦績分析の対象にできます。"
@@ -157,35 +157,36 @@ export function SeriesComparisonPage() {
                 <StaleShield
                   active={resource.loading || resource.shielded || focus.shielded}
                   busyLabel="比較条件を更新中"
-                  contentClassName="grid gap-4"
                   fallback={<ComparisonSkeleton />}
                   strategy="preserve-inert"
                 >
-                  {resource.data.scope.matchCount === 0 ? (
-                    <EmptyState
-                      action={
-                        filters.state.mapMasterId || filters.state.seasonMasterId ? (
-                          <Button variant="secondary" onClick={page.actions.clearScope}>
-                            全シーズン・全マップに戻す
-                          </Button>
-                        ) : (
-                          <LinkButton to="/matches">試合一覧を開く</LinkButton>
-                        )
-                      }
-                      icon={<BarChart3 className="size-5" />}
-                      placement="embedded"
-                      title="この範囲に確定済みの試合がありません"
-                      description="総合、別シーズン、別マップを選ぶと表示できる場合があります。"
-                    />
-                  ) : (
-                    <SeriesAnalysisContent
-                      bundle={resource.bundle}
-                      onArtifactExpired={page.actions.refresh}
-                      onClearFocusedMatch={page.actions.clearFocusedMatch}
-                      onFocusMatch={page.actions.focusMatch}
-                      onViewChange={filters.updateView}
-                    />
-                  )}
+                  <div className="grid gap-4">
+                    {resource.data.scope.matchCount === 0 ? (
+                      <EmptyState
+                        action={
+                          filters.state.mapMasterId || filters.state.seasonMasterId ? (
+                            <Button variant="secondary" onClick={page.actions.clearScope}>
+                              全シーズン・全マップに戻す
+                            </Button>
+                          ) : (
+                            <LinkButton to="/matches">試合一覧を開く</LinkButton>
+                          )
+                        }
+                        icon={<BarChart3 />}
+                        placement="embedded"
+                        title="この範囲に確定済みの試合がありません"
+                        description="総合、別シーズン、別マップを選ぶと表示できる場合があります。"
+                      />
+                    ) : (
+                      <SeriesAnalysisContent
+                        bundle={resource.bundle}
+                        onArtifactExpired={page.actions.refresh}
+                        onClearFocusedMatch={page.actions.clearFocusedMatch}
+                        onFocusMatch={page.actions.focusMatch}
+                        onViewChange={filters.updateView}
+                      />
+                    )}
+                  </div>
                 </StaleShield>
               </div>
             ) : null}

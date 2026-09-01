@@ -62,17 +62,21 @@ export function FlowView({
               <p className="mt-2 text-sm tabular-nums">
                 全{entry.totalWinCount}勝のうち {entry.unexpectedWinCount}戦
               </p>
-              <Button
-                className="mt-3"
-                disabled={!entry.hasDetails}
-                size="sm"
-                variant="secondary"
-                onClick={() =>
-                  onDrilldown({ memberId: entry.memberId, metricId: "rankAnalysis.unexpectedWins" })
-                }
-              >
-                対象試合を見る
-              </Button>
+              <div className="mt-3">
+                <Button
+                  disabled={!entry.hasDetails}
+                  size="sm"
+                  variant="secondary"
+                  onClick={() =>
+                    onDrilldown({
+                      memberId: entry.memberId,
+                      metricId: "rankAnalysis.unexpectedWins",
+                    })
+                  }
+                >
+                  対象試合を見る
+                </Button>
+              </div>
             </article>
           ))}
         </div>

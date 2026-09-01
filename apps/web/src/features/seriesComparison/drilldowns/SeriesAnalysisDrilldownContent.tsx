@@ -115,13 +115,14 @@ export function UnexpectedWinsDrilldown({
           caption={{ content: "予測より上位だった勝利の根拠" }}
           columns={[
             {
-              cellClassName: "tabular-nums",
+              tabular: true,
               header: "試合",
               key: "match",
               renderCell: (row) => (
                 <SeriesAnalysisMatchLink
                   ariaLabel={`${formatSeriesMatchIndex(row.matchIndex)}の試合結果を見る`}
                   matchId={row.matchId}
+                  presentation="text"
                 >
                   {formatSeriesMatchIndex(row.matchIndex)}
                 </SeriesAnalysisMatchLink>
@@ -129,61 +130,61 @@ export function UnexpectedWinsDrilldown({
               rowHeader: true,
             },
             {
-              cellClassName: "tabular-nums",
+              tabular: true,
               header: "日時",
               key: "played-at",
               renderCell: (row) => formatDateTime(row.playedAt),
             },
             {
-              cellClassName: "tabular-nums",
+              tabular: true,
               header: "期待順位",
               key: "expected-rank",
               renderCell: (row) => `${formatDecimal(row.expectedRank)}位`,
             },
             {
-              cellClassName: "tabular-nums",
+              tabular: true,
               header: "実順位",
               key: "actual-rank",
               renderCell: (row) => `${row.actualRank}位`,
             },
             {
-              cellClassName: "tabular-nums",
+              tabular: true,
               header: "物件収益",
               key: "revenue",
               renderCell: (row) => formatManYen(row.evidence.revenueManYen),
             },
             {
-              cellClassName: "tabular-nums",
+              tabular: true,
               header: "目的地",
               key: "destination",
               renderCell: (row) => `${row.evidence.destinationCount}回`,
             },
             {
-              cellClassName: "tabular-nums",
+              tabular: true,
               header: "プラス駅",
               key: "plus-station",
               renderCell: (row) => `${row.evidence.plusStationCount}回`,
             },
             {
-              cellClassName: "tabular-nums",
+              tabular: true,
               header: "マイナス駅",
               key: "minus-station",
               renderCell: (row) => `${row.evidence.minusStationCount}回`,
             },
             {
-              cellClassName: "tabular-nums",
+              tabular: true,
               header: "カード駅",
               key: "card-station",
               renderCell: (row) => `${row.evidence.cardStationCount}回`,
             },
             {
-              cellClassName: "tabular-nums",
+              tabular: true,
               header: "カード売り場",
               key: "card-shop",
               renderCell: (row) => `${row.evidence.cardShopCount}回`,
             },
             {
-              cellClassName: "tabular-nums",
+              tabular: true,
               header: "スリの銀次",
               key: "ginji",
               renderCell: (row) => `${row.evidence.ginjiCount}回`,

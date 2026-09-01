@@ -20,7 +20,7 @@ import { StaleShield } from "@/shared/ui/motion/StaleShield";
 
 function ListSkeleton({ showDesktopTable }: { showDesktopTable: boolean }) {
   return (
-    <div className="min-h-[24rem]">
+    <div>
       {showDesktopTable ? (
         <div className="grid gap-3 border-y border-[var(--color-border-strong)] bg-[var(--color-surface)] p-3">
           <Skeleton className="min-h-10" />
@@ -48,7 +48,7 @@ export function MatchesListPage() {
       {navigation.backHref ? (
         <div>
           <LinkButton
-            icon={<ArrowLeft aria-hidden="true" className="size-4" />}
+            icon={<ArrowLeft aria-hidden="true" />}
             size="sm"
             to={navigation.backHref}
             variant="quiet"
@@ -64,18 +64,11 @@ export function MatchesListPage() {
             className="grid w-full shrink-0 grid-cols-2 gap-2 sm:flex sm:w-auto sm:items-center"
             role="group"
           >
-            <LinkButton
-              className="w-full sm:w-auto"
-              icon={<ScanLine className="size-4" />}
-              size="sm"
-              to={navigation.ocrHref}
-              variant="secondary"
-            >
+            <LinkButton icon={<ScanLine />} size="sm" to={navigation.ocrHref} variant="secondary">
               OCR取り込み
             </LinkButton>
             <LinkButton
-              className="w-full sm:w-auto"
-              icon={<PenSquare className="size-4" />}
+              icon={<PenSquare />}
               size="sm"
               to={navigation.manualCreateHref}
               variant="secondary"
@@ -128,12 +121,7 @@ export function MatchesListPage() {
               className="flex flex-wrap items-center justify-end gap-1"
               role="group"
             >
-              <LinkButton
-                icon={<Download className="size-4" />}
-                size="sm"
-                to={navigation.exportHref}
-                variant="quiet"
-              >
+              <LinkButton icon={<Download />} size="sm" to={navigation.exportHref} variant="quiet">
                 CSV/TSVをまとめて出力
               </LinkButton>
               <IconButton
@@ -175,69 +163,75 @@ export function MatchesListPage() {
             <StaleShield
               active={list.updating}
               busyLabel="一覧を更新中"
-              contentClassName="grid gap-4"
               fallback={<ListSkeleton showDesktopTable={showDesktopTable} />}
               strategy={list.scopeChanging ? "preserve-inert" : "preserve-interactive"}
             >
-              {list.loadFailed ? (
-                <Notice tone="danger" title="試合一覧を読み込めません">
-                  <p>通信状態を確認して、もう一度お試しください。</p>
-                  <div className="mt-3">
-                    <Button
-                      pending={list.refresh.pending}
-                      pendingLabel="再読み込み中"
-                      size="sm"
-                      onClick={() => void list.refresh.run()}
-                    >
-                      一覧を再読み込み
-                    </Button>
-                  </div>
-                </Notice>
-              ) : list.items.length === 0 ? (
-                <EmptyState
-                  action={
-                    filters.hasActive ? undefined : (
-                      <div className="flex flex-wrap gap-2">
-                        <LinkButton to={navigation.ocrHref}>OCR取り込み</LinkButton>
-                        <LinkButton to={navigation.manualCreateHref} variant="secondary">
-                          手入力で作成
-                        </LinkButton>
-                      </div>
-                    )
-                  }
-                  className="min-h-[18rem]"
-                  description={
-                    filters.hasActive
-                      ? "状態や開催条件を広げると、他の試合記録を確認できます。"
-                      : "OCR取り込みか手入力で、最初の試合を登録します。"
-                  }
-                  icon={<AlertTriangle className="size-5" />}
-                  placement="embedded"
-                  title={filters.hasActive ? "該当する試合はありません" : "試合はまだありません"}
-                />
-              ) : (
-                <>
-                  {showDesktopTable ? (
-                    <MatchesTable items={list.items} rowActions={drafts.rowActions} />
-                  ) : (
-                    <div className="grid gap-3">
-                      {list.items.map((item) => (
-                        <MatchMobileCard key={item.id} item={item} rowActions={drafts.rowActions} />
-                      ))}
+              <div className="grid gap-4">
+                {list.loadFailed ? (
+                  <Notice tone="danger" title="試合一覧を読み込めません">
+                    <p>通信状態を確認して、もう一度お試しください。</p>
+                    <div className="mt-3">
+                      <Button
+                        pending={list.refresh.pending}
+                        pendingLabel="再読み込み中"
+                        size="sm"
+                        onClick={() => void list.refresh.run()}
+                      >
+                        一覧を再読み込み
+                      </Button>
                     </div>
-                  )}
-                  {list.pagination ? (
-                    <PaginationControls
-                      disabled={list.scopeChanging}
-                      pageSizeOptions={[...matchListPageSizeOptions]}
-                      pagination={list.pagination.value}
+                  </Notice>
+                ) : list.items.length === 0 ? (
+                  <div className="grid min-h-[18rem]">
+                    <EmptyState
+                      action={
+                        filters.hasActive ? undefined : (
+                          <div className="flex flex-wrap gap-2">
+                            <LinkButton to={navigation.ocrHref}>OCR取り込み</LinkButton>
+                            <LinkButton to={navigation.manualCreateHref} variant="secondary">
+                              手入力で作成
+                            </LinkButton>
+                          </div>
+                        )
+                      }
+                      description={
+                        filters.hasActive
+                          ? "状態や開催条件を広げると、他の試合記録を確認できます。"
+                          : "OCR取り込みか手入力で、最初の試合を登録します。"
+                      }
+                      icon={<AlertTriangle />}
                       placement="embedded"
-                      onPageChange={list.pagination.changePage}
-                      onPageSizeChange={list.pagination.changePageSize}
+                      title={
+                        filters.hasActive ? "該当する試合はありません" : "試合はまだありません"
+                      }
                     />
-                  ) : null}
-                </>
-              )}
+                  </div>
+                ) : (
+                  <>
+                    {showDesktopTable ? (
+                      <MatchesTable items={list.items} rowActions={drafts.rowActions} />
+                    ) : (
+                      <div className="grid gap-3">
+                        {list.items.map((item) => (
+                          <div className="grid min-h-48" key={item.id}>
+                            <MatchMobileCard item={item} rowActions={drafts.rowActions} />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {list.pagination ? (
+                      <PaginationControls
+                        disabled={list.scopeChanging}
+                        pageSizeOptions={[...matchListPageSizeOptions]}
+                        pagination={list.pagination.value}
+                        placement="embedded"
+                        onPageChange={list.pagination.changePage}
+                        onPageSizeChange={list.pagination.changePageSize}
+                      />
+                    ) : null}
+                  </>
+                )}
+              </div>
             </StaleShield>
           )}
         </section>

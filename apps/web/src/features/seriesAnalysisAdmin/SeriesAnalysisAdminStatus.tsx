@@ -67,10 +67,12 @@ export function SelectedTitleStatus({
         <StatusDatum label="最新の完了" value={formatDateTime(status.calculation?.finishedAt)} />
       </dl>
       {selected.pendingManualRun ? (
-        <Notice className="mt-3" tone="info" title="追加の再計算が予約されています">
-          {selected.pendingManualRun.requestCount}件・最古{" "}
-          {formatDateTime(selected.pendingManualRun.oldestRequestedAt)}
-        </Notice>
+        <div className="mt-3">
+          <Notice tone="info" title="追加の再計算が予約されています">
+            {selected.pendingManualRun.requestCount}件・最古{" "}
+            {formatDateTime(selected.pendingManualRun.oldestRequestedAt)}
+          </Notice>
+        </div>
       ) : null}
     </section>
   );
@@ -86,7 +88,9 @@ export function RecentJobs({ jobs }: { jobs: SeriesAnalysisAdminOverview["recent
         </p>
       </header>
       {jobs.length === 0 ? (
-        <EmptyState className="py-6" placement="embedded" title="実行履歴はありません" />
+        <div className="py-2">
+          <EmptyState placement="embedded" title="実行履歴はありません" />
+        </div>
       ) : (
         <DataTable
           caption={{ content: "全作品の直近3件の実行履歴" }}
@@ -246,37 +250,37 @@ const recentJobColumns = [
     renderCell: (job) => triggerLabel(job.trigger),
   },
   {
-    cellClassName: "tabular-nums",
+    tabular: true,
     header: "受理",
     key: "requested-at",
     renderCell: (job) => formatDateTime(job.requestedAt),
   },
   {
-    cellClassName: "tabular-nums",
+    tabular: true,
     header: "開始",
     key: "started-at",
     renderCell: (job) => formatDateTime(job.startedAt),
   },
   {
-    cellClassName: "tabular-nums",
+    tabular: true,
     header: "完了",
     key: "finished-at",
     renderCell: (job) => formatDateTime(job.finishedAt),
   },
   {
-    cellClassName: "tabular-nums",
+    tabular: true,
     header: "所要",
     key: "elapsed",
     renderCell: (job) => formatDuration(job.elapsedMilliseconds),
   },
   {
-    cellClassName: "tabular-nums",
+    tabular: true,
     header: "待機",
     key: "queue-wait",
     renderCell: (job) => formatDuration(job.queueWaitMilliseconds),
   },
   {
-    cellClassName: "tabular-nums",
+    tabular: true,
     header: "試行",
     key: "attempts",
     renderCell: (job) => `${job.attemptCount}回（再試行${job.transientRetryCount}回）`,

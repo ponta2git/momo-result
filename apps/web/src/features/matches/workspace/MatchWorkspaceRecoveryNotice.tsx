@@ -14,10 +14,7 @@ export function MatchWorkspaceRecoveryNotice({ model }: { model: MatchWorkspaceR
     <Notice
       action={
         <div className="flex flex-wrap gap-2">
-          <Button
-            icon={<RotateCcw aria-hidden="true" className="size-4" />}
-            onClick={model.onRestore}
-          >
+          <Button icon={<RotateCcw aria-hidden="true" />} onClick={model.onRestore}>
             一時保存を復元
           </Button>
           <Button variant="secondary" onClick={model.onDiscard}>

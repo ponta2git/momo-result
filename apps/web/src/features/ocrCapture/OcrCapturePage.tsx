@@ -29,7 +29,7 @@ export function OcrCapturePage() {
         actions={
           navigation.returnTo ? (
             <LinkButton
-              icon={<ArrowLeft aria-hidden="true" className="size-4" />}
+              icon={<ArrowLeft aria-hidden="true" />}
               size="sm"
               to={navigation.returnTo}
               variant="quiet"
@@ -44,11 +44,7 @@ export function OcrCapturePage() {
       <PageContentSurface className="grid gap-6">
         {feedback.auth.error ? (
           <div className="grid gap-3 rounded-[var(--radius-md)] border border-[var(--color-danger)]/50 bg-[var(--color-danger)]/8 p-4 md:grid-cols-[1fr_18rem] md:items-center">
-            <Notice
-              className="border-0 bg-transparent p-0"
-              tone="danger"
-              title={feedback.auth.error.title}
-            >
+            <Notice presentation="bare" tone="danger" title={feedback.auth.error.title}>
               <p>
                 {feedback.auth.error.status === 403
                   ? "この操作用アカウントでは利用できません。管理者に確認してください。"
@@ -101,20 +97,22 @@ export function OcrCapturePage() {
             <p className="text-xs text-[var(--color-text-muted)]">読み取り結果に引き継ぐ試合設定</p>
           </div>
           {setup.choices.failed ? (
-            <Notice className="mb-3" tone="warning" title="試合設定の選択肢を読み込めません">
-              <p>読み込めなかった選択肢を再取得できます。</p>
-              <div className="mt-3">
-                <Button
-                  pending={setup.choices.refreshing}
-                  pendingLabel="再読み込み中"
-                  size="sm"
-                  variant="secondary"
-                  onClick={setup.choices.refresh}
-                >
-                  選択肢を再読み込み
-                </Button>
-              </div>
-            </Notice>
+            <div className="mb-3">
+              <Notice tone="warning" title="試合設定の選択肢を読み込めません">
+                <p>読み込めなかった選択肢を再取得できます。</p>
+                <div className="mt-3">
+                  <Button
+                    pending={setup.choices.refreshing}
+                    pendingLabel="再読み込み中"
+                    size="sm"
+                    variant="secondary"
+                    onClick={setup.choices.refresh}
+                  >
+                    選択肢を再読み込み
+                  </Button>
+                </div>
+              </Notice>
+            </div>
           ) : null}
           <SetupPanel model={setup.panel} />
         </section>
@@ -143,22 +141,24 @@ export function OcrCapturePage() {
               </div>
             </div>
 
-            <CameraCapture
-              actionVariant={capture.camera.actionVariant}
-              disabled={capture.camera.disabled}
-              slotLabel={capture.camera.target.label}
-              onSelect={capture.camera.selectImage}
-              onValidationError={capture.camera.reportValidationError}
-              renderFallback={(prominent) => (
-                <ImageInput
-                  disabled={capture.camera.disabled}
-                  prominent={prominent}
-                  slotLabel={capture.camera.target.label}
-                  onSelect={capture.camera.selectImage}
-                  onValidationError={capture.camera.reportValidationError}
-                />
-              )}
-            />
+            <div className="max-w-[56rem]">
+              <CameraCapture
+                actionVariant={capture.camera.actionVariant}
+                disabled={capture.camera.disabled}
+                slotLabel={capture.camera.target.label}
+                onSelect={capture.camera.selectImage}
+                onValidationError={capture.camera.reportValidationError}
+                renderFallback={(prominent) => (
+                  <ImageInput
+                    disabled={capture.camera.disabled}
+                    prominent={prominent}
+                    slotLabel={capture.camera.target.label}
+                    onSelect={capture.camera.selectImage}
+                    onValidationError={capture.camera.reportValidationError}
+                  />
+                )}
+              />
+            </div>
           </section>
 
           <aside className="grid gap-3 xl:sticky xl:top-20" aria-labelledby="ocr-tray-title">
@@ -219,15 +219,16 @@ export function OcrCapturePage() {
           </div>
 
           <div className="flex flex-col gap-2 sm:items-end">
-            <Button
-              className="w-full sm:w-auto"
-              disabled={submission.start.disabled}
-              size="lg"
-              variant="primary"
-              onClick={submission.start.run}
-            >
-              {submission.start.buttonLabel}
-            </Button>
+            <div className="grid w-full sm:w-auto">
+              <Button
+                disabled={submission.start.disabled}
+                size="lg"
+                variant="primary"
+                onClick={submission.start.run}
+              >
+                {submission.start.buttonLabel}
+              </Button>
+            </div>
             <AlertDialog
               confirmLabel={`${capture.selectedImageCount}件を破棄`}
               description="分類トレイから画像を外します。再度使うには、撮影またはファイル選択が必要です。試合設定は残ります。"
@@ -235,7 +236,7 @@ export function OcrCapturePage() {
               trigger={
                 <Button
                   disabled={capture.tray.resetDisabled}
-                  icon={<Trash2 aria-hidden="true" className="size-4" />}
+                  icon={<Trash2 aria-hidden="true" />}
                   size="sm"
                   variant="quiet"
                 >

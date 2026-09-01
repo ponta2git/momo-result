@@ -28,7 +28,7 @@ export function ScoreGridReviewToolbar({
   return (
     <div
       aria-label="OCRの確認項目"
-      className="mt-3 grid gap-3 rounded-[var(--radius-sm)] border border-[var(--color-border-strong)] bg-[var(--color-surface-subtle)] p-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center"
+      className="grid gap-3 rounded-[var(--radius-sm)] border border-[var(--color-border-strong)] bg-[var(--color-surface-subtle)] p-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center"
     >
       <div className="min-w-0" aria-live="polite">
         <div className="flex flex-wrap items-center gap-2">
@@ -63,7 +63,7 @@ export function ScoreGridReviewToolbar({
       <div className="flex flex-wrap items-center gap-2">
         <Button
           aria-label="前の要確認セルへ"
-          icon={<ChevronLeft aria-hidden="true" className="size-4" />}
+          icon={<ChevronLeft aria-hidden="true" />}
           size="sm"
           variant="secondary"
           onClick={onPrevious}
@@ -72,7 +72,7 @@ export function ScoreGridReviewToolbar({
         </Button>
         <Button
           aria-label="次の要確認セルへ"
-          icon={<ChevronRight aria-hidden="true" className="size-4" />}
+          icon={<ChevronRight aria-hidden="true" />}
           size="sm"
           variant="secondary"
           onClick={onNext}
@@ -81,7 +81,7 @@ export function ScoreGridReviewToolbar({
         </Button>
         <Button
           disabled={!activeItem || activeReviewed}
-          icon={<Check aria-hidden="true" className="size-4" />}
+          icon={<Check aria-hidden="true" />}
           size="sm"
           onClick={onAcknowledge}
         >

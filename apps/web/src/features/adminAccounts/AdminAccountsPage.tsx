@@ -30,7 +30,7 @@ export function AdminAccountsPage() {
           hasAccounts ? (
             <Button
               ref={page.create.triggerRef}
-              icon={<UserPlus aria-hidden="true" className="size-4" />}
+              icon={<UserPlus aria-hidden="true" />}
               variant="secondary"
               onClick={page.create.open}
             >
@@ -82,15 +82,12 @@ export function AdminAccountsPage() {
             {page.list.items.length === 0 ? (
               <EmptyState
                 action={
-                  <Button
-                    icon={<UserPlus aria-hidden="true" className="size-4" />}
-                    onClick={page.create.open}
-                  >
+                  <Button icon={<UserPlus aria-hidden="true" />} onClick={page.create.open}>
                     {page.list.stale ? "アカウントを追加" : "最初のアカウントを追加"}
                   </Button>
                 }
                 description="利用を許可するDiscordアカウントを登録します。"
-                icon={<ShieldCheck className="size-5" />}
+                icon={<ShieldCheck />}
                 placement="embedded"
                 title={
                   page.list.stale
@@ -100,12 +97,19 @@ export function AdminAccountsPage() {
               />
             ) : (
               <div className="min-w-0">
-                <p className="border-t border-[var(--color-border-strong)] px-3 py-2 text-xs text-[var(--color-text-secondary)] md:hidden">
+                <p className="px-3 py-2 text-xs text-[var(--color-text-secondary)] md:hidden">
                   権限と操作は横にスクロールして確認できます。
                 </p>
                 <div className={dataTableScrollAreaClassName}>
                   <table className="w-full min-w-[44rem] text-left text-sm">
                     <caption className="sr-only">ログイン可能なアカウントと権限</caption>
+                    <colgroup>
+                      <col />
+                      <col className="w-56" />
+                      <col />
+                      <col />
+                      <col />
+                    </colgroup>
                     <thead>
                       <tr>
                         <th

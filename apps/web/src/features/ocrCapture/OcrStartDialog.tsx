@@ -148,10 +148,11 @@ export function OcrStartDialog({ onClose, onConfirm, onViewMatches, state }: Ocr
       >
         <div className="grid gap-4 py-1">
           <div className="flex items-start gap-3 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3">
-            <span aria-hidden="true" className="mt-0.5 flex size-5 shrink-0">
-              {progress.kind === "preparing" ? (
-                <SpinnerIcon className="text-[var(--color-action)]" size="lg" />
-              ) : null}
+            <span
+              aria-hidden="true"
+              className="mt-0.5 flex size-5 shrink-0 text-[var(--color-action)]"
+            >
+              {progress.kind === "preparing" ? <SpinnerIcon size="lg" /> : null}
             </span>
             <div className="min-w-0">
               <p className="font-semibold text-[var(--color-text-primary)]">{progress.label}</p>

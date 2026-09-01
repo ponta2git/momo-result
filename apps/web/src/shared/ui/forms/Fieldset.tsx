@@ -1,26 +1,16 @@
 import { useId } from "react";
 import type { FieldsetHTMLAttributes, ReactNode } from "react";
 
-import { cn } from "@/shared/ui/cn";
 import { buildFieldDescribedBy } from "@/shared/ui/forms/Field";
 
 type FieldsetProps = {
   children: ReactNode;
-  contentClassName?: string | undefined;
   description?: ReactNode | undefined;
   error?: ReactNode | undefined;
   legend: ReactNode;
-} & FieldsetHTMLAttributes<HTMLFieldSetElement>;
+} & Omit<FieldsetHTMLAttributes<HTMLFieldSetElement>, "className" | "style">;
 
-export function Fieldset({
-  children,
-  className,
-  contentClassName,
-  description,
-  error,
-  legend,
-  ...props
-}: FieldsetProps) {
+export function Fieldset({ children, description, error, legend, ...props }: FieldsetProps) {
   const id = useId();
   const descriptionId = description ? `${id}-description` : undefined;
   const errorId = error ? `${id}-error` : undefined;
@@ -29,17 +19,12 @@ export function Fieldset({
     <fieldset
       {...props}
       aria-describedby={buildFieldDescribedBy(descriptionId, errorId, props["aria-describedby"])}
-      className={cn("min-w-0", className)}
+      className="min-w-0"
     >
       <legend className="text-sm leading-5 font-semibold text-[var(--color-text-primary)]">
         {legend}
       </legend>
-      <div
-        className={cn(
-          "mt-1 flex min-h-11 min-w-0 flex-wrap items-center gap-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-1 py-1",
-          contentClassName,
-        )}
-      >
+      <div className="mt-1 flex min-h-11 min-w-0 flex-wrap items-center gap-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-1 py-1">
         {children}
       </div>
       {description ? (

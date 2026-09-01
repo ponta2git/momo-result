@@ -1,13 +1,11 @@
 import { Progress as BaseProgress } from "@base-ui/react/progress";
 import { m, useReducedMotionConfig } from "motion/react";
 
-import { cn } from "@/shared/ui/cn";
 import { instantMotionTransition, politeMotionTransition } from "@/shared/ui/motion/transitions";
 
 type ProgressBarProps = {
   "aria-label": string;
   "aria-valuetext"?: string | undefined;
-  className?: string | undefined;
   max: number;
   value: number;
 };
@@ -23,7 +21,6 @@ function normalizedProgress(value: number, max: number) {
 export function ProgressBar({
   "aria-label": ariaLabel,
   "aria-valuetext": ariaValueText,
-  className,
   max,
   value,
 }: ProgressBarProps) {
@@ -34,7 +31,7 @@ export function ProgressBar({
     <BaseProgress.Root
       aria-label={ariaLabel}
       aria-valuetext={ariaValueText}
-      className={cn("h-2 w-full overflow-hidden rounded-full bg-[var(--color-border)]", className)}
+      className="h-2 w-full overflow-hidden rounded-full bg-[var(--color-border)]"
       max={progress.max}
       value={progress.value}
     >

@@ -9,7 +9,7 @@ export function SeriesAnalysisReviewHelpDialog() {
       description="分類の扱い方と、信頼度が低い場合の注意を示します。"
       title="分類の読み方"
       trigger={
-        <Button icon={<CircleHelp className="size-4" />} size="sm" variant="quiet">
+        <Button icon={<CircleHelp />} size="sm" variant="quiet">
           分類の読み方
         </Button>
       }

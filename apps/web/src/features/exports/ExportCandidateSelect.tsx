@@ -139,13 +139,13 @@ export function ExportCandidateSelect({
   } else {
     selector = (
       <SelectField
+        controlHeight="touch"
         disabled={disabled}
         label={labelForScope(scope)}
         options={options.map((option) => ({
           label: candidateDisplayLabel(option),
           value: option.value,
         }))}
-        selectClassName="min-h-11"
         value={view.selectedId}
         onChange={(event) => onChange(event.currentTarget.value)}
       />

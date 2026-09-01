@@ -66,18 +66,21 @@ export function HeldEventDraftsSection({
                 ) : null}
               </div>
               {action.href ? (
-                <LinkButton
-                  className="shrink-0"
-                  size="sm"
-                  to={withReturnTo(action.href, returnTo)}
-                  variant={draft.matchDraftId === primaryDraftId ? "primary" : "secondary"}
-                >
-                  {action.label}
-                </LinkButton>
+                <div className="grid shrink-0">
+                  <LinkButton
+                    size="sm"
+                    to={withReturnTo(action.href, returnTo)}
+                    variant={draft.matchDraftId === primaryDraftId ? "primary" : "secondary"}
+                  >
+                    {action.label}
+                  </LinkButton>
+                </div>
               ) : (
-                <Button className="shrink-0" disabled size="sm" variant="secondary">
-                  {action.label}
-                </Button>
+                <div className="grid shrink-0">
+                  <Button disabled size="sm" variant="secondary">
+                    {action.label}
+                  </Button>
+                </div>
               )}
             </li>
           );

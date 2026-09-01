@@ -51,29 +51,26 @@ export function RevenueOutcomeSection({
                 value={formatPercent(metric.revenueOutcome.lowRevenue.podiumRate)}
               />
             </dl>
-            <Disclosure
-              className="mt-3"
-              panelClassName="p-3"
-              presentation="inset"
-              summary="収益と順位の詳細"
-            >
-              <dl className="grid gap-2 text-xs">
-                <MetricValue
-                  label="収益順位だけでは説明しない順位差"
-                  value={`${formatDecimal(metric.nonRevenue.rankDelta)}位`}
-                />
-                <MetricValue
-                  label="収益上位でも未勝利の割合"
-                  value={formatPercent(metric.nonRevenue.highRevenueNoWinRate)}
-                />
-                <MetricValue
-                  label="収益1位以外からの勝利"
-                  value={`${metric.revenueOutcome.nonTopWinCount}戦`}
-                />
-                <OutcomeDetails label="収益上位時" outcome={metric.revenueOutcome.top} />
-                <OutcomeDetails label="低収益時" outcome={metric.revenueOutcome.lowRevenue} />
-              </dl>
-            </Disclosure>
+            <div className="mt-3">
+              <Disclosure panelPadding="sm" presentation="inset" summary="収益と順位の詳細">
+                <dl className="grid gap-2 text-xs">
+                  <MetricValue
+                    label="収益順位だけでは説明しない順位差"
+                    value={`${formatDecimal(metric.nonRevenue.rankDelta)}位`}
+                  />
+                  <MetricValue
+                    label="収益上位でも未勝利の割合"
+                    value={formatPercent(metric.nonRevenue.highRevenueNoWinRate)}
+                  />
+                  <MetricValue
+                    label="収益1位以外からの勝利"
+                    value={`${metric.revenueOutcome.nonTopWinCount}戦`}
+                  />
+                  <OutcomeDetails label="収益上位時" outcome={metric.revenueOutcome.top} />
+                  <OutcomeDetails label="低収益時" outcome={metric.revenueOutcome.lowRevenue} />
+                </dl>
+              </Disclosure>
+            </div>
           </article>
         ))}
       </div>
@@ -112,40 +109,37 @@ export function DestinationOutcomeSection({ response }: { response: Response }) 
                 winRate={metric.destinationOutcome.zeroDestination.winRate}
               />
             </dl>
-            <Disclosure
-              className="mt-3"
-              panelClassName="p-3"
-              presentation="inset"
-              summary="目的地と順位の詳細"
-            >
-              <dl className="grid gap-2 text-xs">
-                <MetricValue
-                  label="到着多寡による入賞率差"
-                  value={formatPercent(metric.destination.conversionDelta)}
-                />
-                <MetricValue
-                  label="目的地への依存度"
-                  value={formatPercent(metric.destination.dependenceScore)}
-                />
-                <MetricValue
-                  label="到着上位の対象"
-                  value={`${metric.destination.upperTargetCount}戦`}
-                />
-                <MetricValue
-                  label="到着下位の対象"
-                  value={`${metric.destination.lowerTargetCount}戦`}
-                />
-                <OutcomeDetails label="到着上位" outcome={metric.destinationOutcome.top} />
-                <OutcomeDetails
-                  label="到着下位"
-                  outcome={metric.destinationOutcome.lowDestination}
-                />
-                <OutcomeDetails
-                  label="到着0回"
-                  outcome={metric.destinationOutcome.zeroDestination}
-                />
-              </dl>
-            </Disclosure>
+            <div className="mt-3">
+              <Disclosure panelPadding="sm" presentation="inset" summary="目的地と順位の詳細">
+                <dl className="grid gap-2 text-xs">
+                  <MetricValue
+                    label="到着多寡による入賞率差"
+                    value={formatPercent(metric.destination.conversionDelta)}
+                  />
+                  <MetricValue
+                    label="目的地への依存度"
+                    value={formatPercent(metric.destination.dependenceScore)}
+                  />
+                  <MetricValue
+                    label="到着上位の対象"
+                    value={`${metric.destination.upperTargetCount}戦`}
+                  />
+                  <MetricValue
+                    label="到着下位の対象"
+                    value={`${metric.destination.lowerTargetCount}戦`}
+                  />
+                  <OutcomeDetails label="到着上位" outcome={metric.destinationOutcome.top} />
+                  <OutcomeDetails
+                    label="到着下位"
+                    outcome={metric.destinationOutcome.lowDestination}
+                  />
+                  <OutcomeDetails
+                    label="到着0回"
+                    outcome={metric.destinationOutcome.zeroDestination}
+                  />
+                </dl>
+              </Disclosure>
+            </div>
           </article>
         ))}
       </div>

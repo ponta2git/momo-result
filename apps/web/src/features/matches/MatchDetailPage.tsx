@@ -69,7 +69,7 @@ function MatchDetailReadyContent({ page }: { page: MatchDetailReadyPageModel }) 
     <PageFrame className="min-w-0" width="wide">
       <div>
         <LinkButton
-          icon={<ArrowLeft aria-hidden="true" className="size-4" />}
+          icon={<ArrowLeft aria-hidden="true" />}
           size="sm"
           to={navigation.backHref}
           variant="quiet"

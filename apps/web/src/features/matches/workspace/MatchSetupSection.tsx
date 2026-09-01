@@ -60,7 +60,7 @@ export function MatchSetupSection({
         ariaLabel={editorOpen ? "条件を閉じる" : "条件を変更"}
         keepMounted
         open={editorOpen}
-        panelClassName="px-4 py-4"
+        panelPadding="md"
         presentation="inset"
         summary={
           <span className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
@@ -85,42 +85,49 @@ export function MatchSetupSection({
             </span>
           </span>
         }
-        triggerClassName="rounded-none px-4 py-3"
+        triggerLayout="section"
         onOpenChange={setEditorOpen}
       >
         <MatchSetupFields model={model.fields} />
 
-        <Disclosure
-          className="mt-4"
-          keepMounted
-          panelClassName="pt-2"
-          summary="一覧にない開催を追加する"
-          triggerClassName="px-2 text-xs text-[var(--color-text-secondary)]"
-        >
-          <div className="grid gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3 md:grid-cols-[1fr_auto] md:items-end">
-            <TextField
-              label="開催日時"
-              type="datetime-local"
-              value={model.eventCreation.input.value}
-              onChange={(event) => model.eventCreation.input.onChange(event.currentTarget.value)}
-            />
-            <Button
-              disabled={!model.eventCreation.input.value || model.eventCreation.action.pending}
-              pending={model.eventCreation.action.pending}
-              pendingLabel="作成中…"
-              variant="secondary"
-              onClick={model.eventCreation.action.onCreate}
-            >
-              作成して選択
-            </Button>
-          </div>
-          {model.eventCreation.feedback.error ? (
-            <Notice className="mt-2" title={model.eventCreation.feedback.error.title} tone="danger">
-              <p>{model.eventCreation.feedback.error.detail}</p>
-              <p className="mt-1">{model.eventCreation.feedback.error.nextStep}</p>
-            </Notice>
-          ) : null}
-        </Disclosure>
+        <div className="mt-4">
+          <Disclosure
+            keepMounted
+            summary="一覧にない開催を追加する"
+            triggerLayout="compact"
+            triggerVariant="compact"
+          >
+            <div className="pt-2">
+              <div className="grid gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3 md:grid-cols-[1fr_auto] md:items-end">
+                <TextField
+                  label="開催日時"
+                  type="datetime-local"
+                  value={model.eventCreation.input.value}
+                  onChange={(event) =>
+                    model.eventCreation.input.onChange(event.currentTarget.value)
+                  }
+                />
+                <Button
+                  disabled={!model.eventCreation.input.value || model.eventCreation.action.pending}
+                  pending={model.eventCreation.action.pending}
+                  pendingLabel="作成中…"
+                  variant="secondary"
+                  onClick={model.eventCreation.action.onCreate}
+                >
+                  作成して選択
+                </Button>
+              </div>
+              {model.eventCreation.feedback.error ? (
+                <div className="mt-2">
+                  <Notice title={model.eventCreation.feedback.error.title} tone="danger">
+                    <p>{model.eventCreation.feedback.error.detail}</p>
+                    <p className="mt-1">{model.eventCreation.feedback.error.nextStep}</p>
+                  </Notice>
+                </div>
+              ) : null}
+            </div>
+          </Disclosure>
+        </div>
 
         {mastersNavigation.show || cancellation.allowed || cancellation.error ? (
           <div className="mt-6 grid gap-2">
@@ -128,7 +135,7 @@ export function MatchSetupSection({
               <div>
                 {mastersNavigation.show ? (
                   <Button
-                    icon={<Settings2 aria-hidden="true" className="size-4" />}
+                    icon={<Settings2 aria-hidden="true" />}
                     pending={mastersNavigation.pending}
                     pendingLabel="移動中…"
                     size="sm"
@@ -149,11 +156,10 @@ export function MatchSetupSection({
                   title="確定前の記録を削除しますか？"
                   trigger={
                     <Button
-                      className="text-[var(--color-danger)] hover:text-[var(--color-danger)]"
                       disabled={cancellation.disabled}
-                      icon={<Trash2 aria-hidden="true" className="size-4" />}
+                      icon={<Trash2 aria-hidden="true" />}
                       size="sm"
-                      variant="quiet"
+                      variant="dangerQuiet"
                       onClick={cancellation.onTrigger}
                     >
                       確定前の記録を削除

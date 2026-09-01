@@ -3,24 +3,23 @@ import { useId } from "react";
 import { InputControl } from "@/shared/ui/forms/Control";
 import type { InputControlProps } from "@/shared/ui/forms/Control";
 import { buildFieldDescribedBy, Field } from "@/shared/ui/forms/Field";
+import type { FieldLayout } from "@/shared/ui/forms/Field";
 
 export type TextFieldProps = {
   "aria-describedby"?: string | undefined;
   description?: string | undefined;
   error?: string | undefined;
-  fieldClassName?: string | undefined;
-  inputClassName?: string | undefined;
   label: string;
+  layout?: FieldLayout | undefined;
 } & Omit<InputControlProps, "aria-describedby" | "className" | "invalid">;
 
 export function TextField({
   "aria-describedby": ariaDescribedBy,
   description,
   error,
-  fieldClassName,
   id,
-  inputClassName,
   label,
+  layout,
   required,
   ...props
 }: TextFieldProps) {
@@ -35,14 +34,13 @@ export function TextField({
       descriptionId={descriptionId}
       error={error}
       errorId={errorId}
-      className={fieldClassName}
       htmlFor={fieldId}
       label={label}
+      layout={layout}
       required={required}
     >
       <InputControl
         {...props}
-        className={inputClassName}
         id={fieldId}
         invalid={Boolean(error)}
         required={required}

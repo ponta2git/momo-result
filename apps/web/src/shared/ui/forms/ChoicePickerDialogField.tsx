@@ -14,7 +14,7 @@ import { StaleShield } from "@/shared/ui/motion/StaleShield";
 
 type ChoicePickerDialogFieldProps = Omit<
   HTMLAttributes<HTMLDivElement>,
-  "children" | "onChange"
+  "children" | "className" | "onChange" | "style"
 > & {
   disabled?: boolean | undefined;
   emptyState?: ReactNode | undefined;
@@ -41,7 +41,6 @@ type ChoicePickerDialogFieldProps = Omit<
  * page mounted but inert until the requested page is ready.
  */
 export function ChoicePickerDialogField({
-  className,
   disabled = false,
   emptyState = "選べる候補はありません。",
   error,
@@ -73,7 +72,6 @@ export function ChoicePickerDialogField({
   return (
     <Field
       {...fieldProps}
-      className={className}
       error={error}
       errorId={errorId}
       htmlFor={triggerId}
@@ -89,64 +87,69 @@ export function ChoicePickerDialogField({
         <p className="min-w-0 flex-1 text-sm leading-5 font-medium text-pretty text-[var(--color-text-primary)]">
           {selectedLabel}
         </p>
-        <Dialog
-          className="flex min-h-0 flex-col overflow-y-hidden"
-          open={open}
-          popupClassName="overflow-y-hidden"
-          surfaceClassName="flex flex-col overflow-y-hidden"
-          title={`${label}を選択`}
-          trigger={
-            <Button
-              aria-describedby={buildFieldDescribedBy(errorId)}
-              aria-invalid={error ? true : undefined}
-              aria-label={`${label}を${recovery ? "選び直す" : "変更"}`}
-              className="shrink-0 px-3"
-              disabled={disabled}
-              icon={<ChevronDown aria-hidden="true" className="size-4" />}
-              id={triggerId}
-              size="sm"
-              variant={recovery ? "primary" : "secondary"}
-            >
-              {recovery ? "選び直す" : "変更"}
-            </Button>
-          }
-          onOpenChange={setOpen}
-        >
-          <StaleShield
-            active={scopeChanging}
-            busyLabel={`${label}候補を更新中`}
-            className="flex min-h-0 flex-1 flex-col"
-            contentClassName="flex min-h-0 flex-1 flex-col gap-3 pt-2"
-            fallback={null}
-            statusClassName="top-0 justify-end"
-            strategy="preserve-inert"
+        <div className="shrink-0">
+          <Dialog
+            contentClassName="flex min-h-0 flex-col overflow-y-hidden"
+            open={open}
+            popupClassName="overflow-y-hidden"
+            surfaceClassName="flex flex-col overflow-y-hidden"
+            title={`${label}を選択`}
+            trigger={
+              <Button
+                aria-describedby={buildFieldDescribedBy(errorId)}
+                aria-invalid={error ? true : undefined}
+                aria-label={`${label}を${recovery ? "選び直す" : "変更"}`}
+                disabled={disabled}
+                icon={<ChevronDown aria-hidden="true" />}
+                id={triggerId}
+                size="sm"
+                variant={recovery ? "primary" : "secondary"}
+              >
+                {recovery ? "選び直す" : "変更"}
+              </Button>
+            }
+            onOpenChange={setOpen}
           >
-            <ChoiceList
-              className="flex min-h-0 flex-col"
-              disabled={disabled}
-              emptyState={emptyState}
-              legend={`${label}候補`}
-              listClassName="max-h-[min(24rem,55dvh)] min-h-0 flex-1 overflow-y-auto overscroll-contain"
-              name={name}
-              options={options}
-              pending={pending && !scopeChanging}
-              value={value}
-              onValueChange={selectChoice}
-            />
+            <div className="grid min-h-0 flex-1">
+              <StaleShield
+                active={scopeChanging}
+                busyLabel={`${label}候補を更新中`}
+                fallback={null}
+                statusPlacement="top-end"
+                strategy="preserve-inert"
+              >
+                <div className="flex min-h-0 flex-col gap-3 pt-2">
+                  <div className="flex min-h-0 flex-1 flex-col">
+                    <ChoiceList
+                      disabled={disabled}
+                      emptyState={emptyState}
+                      layout="dialog"
+                      legend={`${label}候補`}
+                      name={name}
+                      options={options}
+                      pending={pending && !scopeChanging}
+                      value={value}
+                      onValueChange={selectChoice}
+                    />
+                  </div>
 
-            {pagination && pagination.totalPages > 1 && onPageChange ? (
-              <PaginationControls
-                ariaLabel={paginationAriaLabel ?? `${label}候補のページネーション`}
-                className="shrink-0"
-                disabled={disabled || (pending && !scopeChanging)}
-                pagination={pagination}
-                placement="embedded"
-                variant="compact"
-                onPageChange={onPageChange}
-              />
-            ) : null}
-          </StaleShield>
-        </Dialog>
+                  {pagination && pagination.totalPages > 1 && onPageChange ? (
+                    <div className="shrink-0">
+                      <PaginationControls
+                        ariaLabel={paginationAriaLabel ?? `${label}候補のページネーション`}
+                        disabled={disabled || (pending && !scopeChanging)}
+                        pagination={pagination}
+                        placement="embedded"
+                        variant="compact"
+                        onPageChange={onPageChange}
+                      />
+                    </div>
+                  ) : null}
+                </div>
+              </StaleShield>
+            </div>
+          </Dialog>
+        </div>
       </div>
     </Field>
   );

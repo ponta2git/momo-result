@@ -37,7 +37,7 @@ export function MatchNoInEventMatrix({ response }: { response: SeriesComparisonA
       />
       {additionalEntries.length > 0 ? (
         <Disclosure
-          panelClassName="p-3"
+          panelPadding="sm"
           presentation="inset"
           summary="追加試合"
           triggerVariant="supporting"
@@ -70,9 +70,11 @@ function MatchNoMatrix({
           <MatrixAxisHeader className="w-28" columnLabel="プレーヤー" rowLabel="試合順" />
           {players.map((player) => (
             <MatrixColumnHeader key={player.memberId}>
-              <MemberSequenceLabel className="justify-center" memberId={player.memberId}>
-                {player.displayName}
-              </MemberSequenceLabel>
+              <span className="flex justify-center">
+                <MemberSequenceLabel memberId={player.memberId}>
+                  {player.displayName}
+                </MemberSequenceLabel>
+              </span>
             </MatrixColumnHeader>
           ))}
         </tr>

@@ -17,7 +17,7 @@ export function MetricDefinitions({ response }: { response: SeriesComparisonAggr
       description="分析に共通する指標の比べ方を示します。"
       title="指標の読み方"
       trigger={
-        <Button icon={<BookOpenText className="size-4" />} size="sm" variant="quiet">
+        <Button icon={<BookOpenText />} size="sm" variant="quiet">
           指標の読み方
         </Button>
       }
@@ -105,7 +105,7 @@ export function AnalysisReadingGuide({
   return (
     <Disclosure
       ariaLabel={ariaLabel}
-      panelClassName="p-3"
+      panelPadding="sm"
       presentation="inset"
       triggerVariant="supporting"
       summary={

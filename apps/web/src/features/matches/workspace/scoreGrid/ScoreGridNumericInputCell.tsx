@@ -239,27 +239,30 @@ export const NumericInputCell = memo(function NumericInputCell({
 
   return (
     <>
-      <InputControl
-        ref={registerCellRef ? handleRef : undefined}
-        aria-label={ariaLabel}
-        aria-describedby={showStateLabel && viewState.label ? `${cellId}-status` : undefined}
+      <div
         className={
           controlWidth === "short" ? "min-w-[6ch] tabular-nums" : "min-w-[12ch] tabular-nums"
         }
-        data-validation-path={validationPath}
-        density="compact"
-        id={cellId}
-        inputMode="numeric"
-        invalid={error}
-        textAlign={controlWidth === "short" ? "center" : "end"}
-        tone={viewState.tone}
-        type="text"
-        value={inputValue}
-        onBlur={commitInputValue}
-        onChange={handleChange}
-        onFocus={handleFocus}
-        onKeyDown={handleKeyDown}
-      />
+      >
+        <InputControl
+          ref={registerCellRef ? handleRef : undefined}
+          aria-label={ariaLabel}
+          aria-describedby={showStateLabel && viewState.label ? `${cellId}-status` : undefined}
+          data-validation-path={validationPath}
+          density="compact"
+          id={cellId}
+          inputMode="numeric"
+          invalid={error}
+          textAlign={controlWidth === "short" ? "center" : "end"}
+          tone={viewState.tone}
+          type="text"
+          value={inputValue}
+          onBlur={commitInputValue}
+          onChange={handleChange}
+          onFocus={handleFocus}
+          onKeyDown={handleKeyDown}
+        />
+      </div>
       {showStateLabel ? (
         <div className="min-h-5 pt-1">
           {viewState.label ? (

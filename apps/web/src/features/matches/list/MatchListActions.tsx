@@ -16,20 +16,14 @@ function ActionButton({
   action,
   checkingDraftIds,
   disabled = false,
-  layout,
   onDraftStatusCheckAction,
 }: {
   action: MatchListAction;
   checkingDraftIds?: ReadonlySet<string> | undefined;
   disabled?: boolean;
-  layout: "inline" | "stacked";
   onDraftStatusCheckAction?: ((action: MatchListAction) => void) | undefined;
 }) {
   const variant = action.variant ?? "primary";
-  const actionClassName = cn(
-    "justify-center",
-    layout === "stacked" ? "w-full" : "w-auto max-w-full",
-  );
   const isChecking = action.draftStatusCheck
     ? (checkingDraftIds?.has(action.draftStatusCheck.draftId) ?? false)
     : false;
@@ -43,7 +37,6 @@ function ActionButton({
   ) {
     return (
       <Button
-        className={actionClassName}
         pending={isChecking}
         pendingLabel="確認中…"
         size="sm"
@@ -57,19 +50,14 @@ function ActionButton({
 
   if (action.href && !action.disabled && !disabled) {
     return (
-      <LinkButton className={actionClassName} size="sm" to={action.href} variant={variant}>
+      <LinkButton size="sm" to={action.href} variant={variant}>
         {action.label}
       </LinkButton>
     );
   }
 
   return (
-    <Button
-      className={actionClassName}
-      disabled={action.disabled || disabled}
-      size="sm"
-      variant={variant}
-    >
+    <Button disabled={action.disabled || disabled} size="sm" variant={variant}>
       {action.label}
     </Button>
   );
@@ -94,7 +82,6 @@ export function MatchListActions({
         action={primaryAction}
         checkingDraftIds={checkingDraftIds}
         disabled={disabled}
-        layout={layout}
         onDraftStatusCheckAction={onDraftStatusCheckAction}
       />
       {secondaryActions.map((action) => (
@@ -103,7 +90,6 @@ export function MatchListActions({
           action={action}
           checkingDraftIds={checkingDraftIds}
           disabled={disabled}
-          layout={layout}
           onDraftStatusCheckAction={onDraftStatusCheckAction}
         />
       ))}

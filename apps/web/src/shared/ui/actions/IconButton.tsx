@@ -11,7 +11,7 @@ export type IconButtonVariant = IconActionVariant;
 
 export type IconButtonProps = Omit<
   ButtonHTMLAttributes<HTMLButtonElement>,
-  "aria-busy" | "aria-label" | "children" | "disabled" | "type"
+  "aria-busy" | "aria-label" | "children" | "className" | "disabled" | "style" | "type"
 > & {
   "aria-busy"?: never;
   "aria-label": string;
@@ -29,7 +29,6 @@ export type IconButtonProps = Omit<
 /** An icon-only button that owns its accessible name, pending state, and touch target. */
 export function IconButton({
   "aria-label": ariaLabel,
-  className,
   disabled,
   icon,
   pending,
@@ -50,7 +49,7 @@ export function IconButton({
       ref={ref}
       aria-busy={actualPending || undefined}
       aria-label={actualLabel}
-      className={iconActionClassName({ className, size, variant })}
+      className={iconActionClassName({ size, variant })}
       disabled={disabled || actualPending}
       // oxlint-disable-next-line react/button-has-type -- the public type is a closed literal union with a safe "button" default.
       type={type}

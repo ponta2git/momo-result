@@ -31,7 +31,7 @@ export function CaptureSlotFeedback({
       {slot.transportError ? <CaptureTransportError error={slot.transportError} /> : null}
       {slot.jobFailure ? <CaptureJobFailure failure={slot.jobFailure} /> : null}
       {canRefreshStatus ? (
-        <div className="mt-4 grid gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3 text-sm text-[var(--color-text-primary)] sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+        <div className="grid gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3 text-sm text-[var(--color-text-primary)] sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
           <p>読み取り状態は自動更新されません。必要なときに最新の状態を取得してください。</p>
           <Button
             pending={refreshing}
@@ -50,7 +50,7 @@ export function CaptureSlotFeedback({
 function CaptureMismatchAlert({ detectedKind }: { detectedKind?: SlotKind | undefined }) {
   return (
     <div
-      className="mt-4 rounded-[var(--radius-md)] border border-[var(--color-warning)]/60 bg-[var(--color-warning)]/20 p-3 text-sm text-[var(--color-text-primary)]"
+      className="rounded-[var(--radius-md)] border border-[var(--color-warning)]/60 bg-[var(--color-warning)]/20 p-3 text-sm text-[var(--color-text-primary)]"
       role="alert"
     >
       OCR判定は <strong>{detectedKind ? slotKindLabels[detectedKind] : "別の分類"}</strong>{" "}
@@ -66,7 +66,7 @@ function CaptureTransportError({
 }) {
   return (
     <div
-      className="mt-4 rounded-[var(--radius-md)] border border-[var(--color-danger)]/45 bg-[var(--color-danger)]/10 p-3 text-sm text-[var(--color-text-primary)]"
+      className="rounded-[var(--radius-md)] border border-[var(--color-danger)]/45 bg-[var(--color-danger)]/10 p-3 text-sm text-[var(--color-text-primary)]"
       role="alert"
     >
       <strong>{error.title}</strong>
@@ -78,7 +78,7 @@ function CaptureTransportError({
 function CaptureJobFailure({ failure }: { failure: NonNullable<CaptureSlotState["jobFailure"]> }) {
   return (
     <div
-      className="mt-4 rounded-[var(--radius-md)] border border-[var(--color-danger)]/45 bg-[var(--color-danger)]/10 p-3 text-sm text-[var(--color-text-primary)]"
+      className="rounded-[var(--radius-md)] border border-[var(--color-danger)]/45 bg-[var(--color-danger)]/10 p-3 text-sm text-[var(--color-text-primary)]"
       role="alert"
     >
       <strong>画像を読み取れませんでした</strong>

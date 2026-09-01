@@ -7,7 +7,7 @@ import { layoutFamilies, layoutFamilyLabels } from "@/shared/api/enums";
 import type { LayoutFamily } from "@/shared/api/enums";
 import type { GameTitleResponse } from "@/shared/api/masters";
 import { Button } from "@/shared/ui/actions/Button";
-import { Dialog, dialogFooterClassName } from "@/shared/ui/feedback/Dialog";
+import { Dialog, DialogFooter } from "@/shared/ui/feedback/Dialog";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { ChoiceList } from "@/shared/ui/forms/ChoiceList";
 import { SelectField } from "@/shared/ui/forms/SelectField";
@@ -94,37 +94,42 @@ export function GameTitleList({
             作品を選ぶと、対応するマップとシーズンを編集できます。
           </p>
         </div>
-        <GameTitleCreateDialog
-          key={create.formKey}
-          create={create}
-          defaultLayoutFamily={defaultLayoutFamily}
-        />
+        <div className="grid shrink-0">
+          <GameTitleCreateDialog
+            key={create.formKey}
+            create={create}
+            defaultLayoutFamily={defaultLayoutFamily}
+          />
+        </div>
       </header>
 
-      <MasterResourceRefreshNotice
-        className="mt-3"
-        onRetry={onRetry}
-        resourceLabel="作品"
-        retrying={refreshing}
-        stale={stale}
-      />
+      <div className="mt-3 empty:hidden">
+        <MasterResourceRefreshNotice
+          onRetry={onRetry}
+          resourceLabel="作品"
+          retrying={refreshing}
+          stale={stale}
+        />
+      </div>
 
       {items.length === 0 ? (
-        <EmptyState
-          className="mt-3"
-          placement="embedded"
-          title="作品はまだありません"
-          description="作品を追加すると、マップとシーズンを登録できます。"
-        />
+        <div className="mt-3">
+          <EmptyState
+            placement="embedded"
+            title="作品はまだありません"
+            description="作品を追加すると、マップとシーズンを登録できます。"
+          />
+        </div>
       ) : (
-        <ChoiceList
-          className="mt-3"
-          legend="編集する作品"
-          name="selected-game-title"
-          options={choices}
-          value={selectedGameTitleId}
-          onValueChange={onSelect}
-        />
+        <div className="mt-3">
+          <ChoiceList
+            legend="編集する作品"
+            name="selected-game-title"
+            options={choices}
+            value={selectedGameTitleId}
+            onValueChange={onSelect}
+          />
+        </div>
       )}
     </section>
   );
@@ -146,12 +151,7 @@ function GameTitleCreateDialog({
       open={open}
       title="作品を追加"
       trigger={
-        <Button
-          className="shrink-0"
-          icon={<Plus aria-hidden="true" className="size-4" />}
-          size="sm"
-          variant="secondary"
-        >
+        <Button icon={<Plus aria-hidden="true" />} size="sm" variant="secondary">
           作品を追加
         </Button>
       }
@@ -177,14 +177,14 @@ function GameTitleCreateDialog({
           }))}
         />
 
-        <div className={dialogFooterClassName}>
+        <DialogFooter>
           <Button disabled={create.pending} variant="secondary" onClick={() => setOpen(false)}>
             キャンセル
           </Button>
           <Button pendingLabel="追加中" type="submit">
             追加
           </Button>
-        </div>
+        </DialogFooter>
       </form>
     </Dialog>
   );

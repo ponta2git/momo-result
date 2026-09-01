@@ -25,17 +25,16 @@ export function MatchDetailLoading() {
           </div>
         </div>
 
-        <div className="overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)]">
-          <div className="border-b border-[var(--color-border)] p-4">
+        <div className="divide-y divide-[var(--color-border)] overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)]">
+          <div className="p-4">
             <Skeleton className="h-6 w-32" />
-            <Skeleton className="mt-2 h-4 w-64" />
+            <div className="mt-2">
+              <Skeleton className="h-4 w-64" />
+            </div>
           </div>
-          <div className="grid">
+          <div className="grid divide-y divide-[var(--color-border)]">
             {["rank-1", "rank-2", "rank-3", "rank-4"].map((id) => (
-              <div
-                key={id}
-                className="grid grid-cols-[4rem_minmax(0,1fr)_auto] gap-3 border-b border-[var(--color-border)] p-3 last:border-b-0"
-              >
+              <div key={id} className="grid grid-cols-[4rem_minmax(0,1fr)_auto] gap-3 p-3">
                 <Skeleton className="h-10 w-14 rounded-[var(--radius-sm)]" />
                 <div className="grid gap-2">
                   <Skeleton className="h-5 w-28" />

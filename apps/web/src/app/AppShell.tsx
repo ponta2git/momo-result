@@ -106,41 +106,39 @@ export function AppShell() {
     <>
       <SkipLink />
       <div
+        className="flex min-h-dvh flex-col"
         onClickCapture={handleNavigationClick}
         onFocusCapture={handlePreloadIntent}
         onPointerOverCapture={handlePreloadIntent}
       >
         <AppGlobalNav />
-      </div>
-      <main
-        className={cn(
-          "mx-auto flex min-h-[calc(100dvh-4rem)] w-full flex-col py-4 sm:py-6",
-          pageViewportGutterClass,
-        )}
-        id="main-content"
-        onClickCapture={handleNavigationClick}
-        onFocusCapture={handlePreloadIntent}
-        onPointerOverCapture={handlePreloadIntent}
-      >
-        <QueryErrorResetBoundary>
-          {({ reset }) => (
-            <RouteQueryResetBridge
-              pathname={location.pathname}
-              reset={reset}
-              resetKey={routeResetKey}
-            >
-              <RouteErrorBoundary onReset={reset} resetKey={routeResetKey}>
-                <Suspense fallback={<RouteSuspenseFallback pathname={location.pathname} />}>
-                  {/* Route availability must not depend on an exit-animation lifecycle. */}
-                  <div className="grid min-w-0">
-                    <Outlet />
-                  </div>
-                </Suspense>
-              </RouteErrorBoundary>
-            </RouteQueryResetBridge>
+        <main
+          className={cn(
+            "mx-auto flex w-full flex-1 flex-col py-4 sm:py-6",
+            pageViewportGutterClass,
           )}
-        </QueryErrorResetBoundary>
-      </main>
+          id="main-content"
+        >
+          <QueryErrorResetBoundary>
+            {({ reset }) => (
+              <RouteQueryResetBridge
+                pathname={location.pathname}
+                reset={reset}
+                resetKey={routeResetKey}
+              >
+                <RouteErrorBoundary onReset={reset} resetKey={routeResetKey}>
+                  <Suspense fallback={<RouteSuspenseFallback pathname={location.pathname} />}>
+                    {/* Route availability must not depend on an exit-animation lifecycle. */}
+                    <div className="grid min-w-0">
+                      <Outlet />
+                    </div>
+                  </Suspense>
+                </RouteErrorBoundary>
+              </RouteQueryResetBridge>
+            )}
+          </QueryErrorResetBoundary>
+        </main>
+      </div>
       <ToastHost />
     </>
   );

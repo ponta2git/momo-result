@@ -25,7 +25,7 @@ export function SeriesAnalysisAdminPage() {
         actions={
           data && !page.feedback.resourceError ? (
             <Button
-              icon={<RefreshCw aria-hidden="true" className="size-4" />}
+              icon={<RefreshCw aria-hidden="true" />}
               pending={page.resource.refreshing}
               pendingLabel="状態を更新中"
               size="sm"
@@ -71,7 +71,7 @@ export function SeriesAnalysisAdminPage() {
           <AdminSkeleton />
         ) : data?.titleOptions.length === 0 ? (
           <EmptyState
-            icon={<Activity className="size-5" />}
+            icon={<Activity />}
             placement="embedded"
             title="再計算できる作品がありません"
             description="設定管理で作品を登録すると、ここから再計算できます。"
@@ -90,7 +90,7 @@ export function SeriesAnalysisAdminPage() {
               />
               <Button
                 disabled={!page.selection.gameTitleId || page.recalculation.titleReserved}
-                icon={<Play className="size-4" />}
+                icon={<Play />}
                 pending={page.recalculation.titlePending}
                 pendingLabel="受け付け中"
                 onClick={() => void page.actions.recalculateTitle()}
@@ -104,7 +104,7 @@ export function SeriesAnalysisAdminPage() {
                 title="全作品の再計算を予約しますか？"
                 tone="primary"
                 trigger={
-                  <Button icon={<RotateCw className="size-4" />} variant="secondary">
+                  <Button icon={<RotateCw />} variant="secondary">
                     全作品を再計算
                   </Button>
                 }

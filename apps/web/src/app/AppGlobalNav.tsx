@@ -16,17 +16,17 @@ import { GlobalNav } from "@/shared/ui/layout/GlobalNav";
 import type { GlobalNavItem } from "@/shared/ui/layout/GlobalNav";
 
 const primaryItems = [
-  { icon: <Trophy className="size-4" />, label: "試合", to: "/matches" },
-  { icon: <BarChart3 className="size-4" />, label: "戦績比較", to: "/analytics/series" },
-  { icon: <ScanLine className="size-4" />, label: "OCR", to: "/ocr/new" },
-  { icon: <CalendarDays className="size-4" />, label: "開催", to: "/held-events" },
-  { icon: <Download className="size-4" />, label: "出力", to: "/exports" },
+  { icon: <Trophy />, label: "試合", to: "/matches" },
+  { icon: <BarChart3 />, label: "戦績比較", to: "/analytics/series" },
+  { icon: <ScanLine />, label: "OCR", to: "/ocr/new" },
+  { icon: <CalendarDays />, label: "開催", to: "/held-events" },
+  { icon: <Download />, label: "出力", to: "/exports" },
 ] as const satisfies readonly GlobalNavItem[];
 
 const adminItems = [
-  { icon: <Activity className="size-4" />, label: "分析", to: "/admin/analysis" },
-  { icon: <Database className="size-4" />, label: "設定", to: "/admin/masters" },
-  { icon: <ShieldCheck className="size-4" />, label: "アカウント", to: "/admin/accounts" },
+  { icon: <Activity />, label: "分析", to: "/admin/analysis" },
+  { icon: <Database />, label: "設定", to: "/admin/masters" },
+  { icon: <ShieldCheck />, label: "アカウント", to: "/admin/accounts" },
 ] as const satisfies readonly GlobalNavItem[];
 
 const noManagementItems: readonly GlobalNavItem[] = [];
@@ -46,19 +46,20 @@ export function AppGlobalNav() {
               {auth.auth?.displayName ?? "ログイン中"}
             </p>
             {canLogout ? (
-              <Button
-                aria-describedby={logoutFailed ? "global-nav-logout-error" : undefined}
-                aria-label={logoutFailed ? "ログアウトを再試行" : undefined}
-                className="shrink-0"
-                icon={<LogOut className="size-4" />}
-                onClick={auth.logout}
-                pending={auth.isLogoutPending}
-                pendingLabel="ログアウト中"
-                size="sm"
-                variant={logoutFailed ? "primary" : "secondary"}
-              >
-                {logoutFailed ? "再試行" : "ログアウト"}
-              </Button>
+              <div className="shrink-0">
+                <Button
+                  aria-describedby={logoutFailed ? "global-nav-logout-error" : undefined}
+                  aria-label={logoutFailed ? "ログアウトを再試行" : undefined}
+                  icon={<LogOut />}
+                  onClick={auth.logout}
+                  pending={auth.isLogoutPending}
+                  pendingLabel="ログアウト中"
+                  size="sm"
+                  variant={logoutFailed ? "primary" : "secondary"}
+                >
+                  {logoutFailed ? "再試行" : "ログアウト"}
+                </Button>
+              </div>
             ) : null}
           </div>
           {logoutFailed && canLogout ? (

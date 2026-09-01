@@ -4,11 +4,12 @@ import { cn } from "@/shared/ui/cn";
 import { Disclosure } from "@/shared/ui/data/Collapsible";
 
 export type FilterBarDetails = {
+  align?: "end" | "start" | undefined;
+  columns?: 1 | 2 | 3 | undefined;
   controls: ReactNode;
   label: ReactNode;
   onOpenChange?: ((open: boolean) => void) | undefined;
   open?: boolean | undefined;
-  panelClassName?: string | undefined;
   summary?: ReactNode | undefined;
 };
 
@@ -16,7 +17,6 @@ export type FilterBarProps = {
   action?: ReactNode | undefined;
   ariaLabel: string;
   busy?: boolean | undefined;
-  className?: string | undefined;
   details?: FilterBarDetails | undefined;
   meta?: ReactNode | undefined;
   primary: ReactNode;
@@ -32,18 +32,13 @@ export function FilterBar({
   action,
   ariaLabel,
   busy = false,
-  className,
   details,
   meta,
   primary,
   resetAction,
 }: FilterBarProps) {
   return (
-    <section
-      aria-busy={busy || undefined}
-      aria-label={ariaLabel}
-      className={cn("min-w-0", className)}
-    >
+    <section aria-busy={busy || undefined} aria-label={ariaLabel} className="min-w-0">
       <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4">
         <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
           <div className="min-w-0">{primary}</div>
@@ -57,10 +52,9 @@ export function FilterBar({
 
         {details ? (
           <Disclosure
-            className="group"
             keepMounted
             open={details.open}
-            panelClassName={cn("grid gap-4 p-3", details.panelClassName)}
+            panelPadding="sm"
             summary={
               <span className="min-w-0">
                 <span className="block text-sm font-semibold text-[var(--color-text-primary)]">
@@ -76,7 +70,19 @@ export function FilterBar({
             triggerVariant="supporting"
             onOpenChange={details.onOpenChange}
           >
-            {details.controls}
+            <div
+              className={cn(
+                "grid gap-4",
+                details.columns === 2
+                  ? "md:grid-cols-2"
+                  : details.columns === 3
+                    ? "md:grid-cols-3"
+                    : "",
+                details.align === "end" ? "md:items-end" : "",
+              )}
+            >
+              {details.controls}
+            </div>
           </Disclosure>
         ) : null}
 

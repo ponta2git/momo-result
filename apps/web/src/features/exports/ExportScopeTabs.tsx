@@ -48,13 +48,12 @@ export function ExportScopeTabs({
         </TabsList>
 
         {exportScopes.map((item) => (
-          <TabsPanel
-            className={item.value === "all" ? "mt-3" : "mt-4"}
-            keepMounted
-            key={item.value}
-            value={item.value}
-          >
-            {scope === item.value && item.value !== "all" ? children : null}
+          <TabsPanel keepMounted key={item.value} value={item.value}>
+            {scope === item.value ? (
+              <div className={item.value === "all" ? "mt-3" : "mt-4"}>
+                {item.value === "all" ? null : children}
+              </div>
+            ) : null}
           </TabsPanel>
         ))}
       </TabsRoot>

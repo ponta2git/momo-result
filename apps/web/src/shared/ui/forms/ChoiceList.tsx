@@ -16,11 +16,10 @@ export type ChoiceListOption<Value extends string = string> = {
 };
 
 export type ChoiceListProps<Value extends string = string> = {
-  className?: string | undefined;
   disabled?: boolean | undefined;
   emptyState?: ReactNode | undefined;
+  layout?: "default" | "dialog" | undefined;
   legend: ReactNode;
-  listClassName?: string | undefined;
   name: string;
   options: Array<ChoiceListOption<Value>>;
   pending?: boolean | undefined;
@@ -34,11 +33,10 @@ export type ChoiceListProps<Value extends string = string> = {
  * selected/pending feedback, and keeps option-specific actions outside the radio label.
  */
 export function ChoiceList<Value extends string>({
-  className,
   disabled = false,
   emptyState,
+  layout = "default",
   legend,
-  listClassName,
   name,
   options,
   pending = false,
@@ -51,7 +49,7 @@ export function ChoiceList<Value extends string>({
   return (
     <fieldset
       aria-busy={pending || undefined}
-      className={cn("min-w-0", className)}
+      className="flex min-h-0 min-w-0 flex-col"
       disabled={disabled || pending}
     >
       <legend className="text-sm leading-5 font-semibold text-[var(--color-text-primary)]">
@@ -59,8 +57,10 @@ export function ChoiceList<Value extends string>({
       </legend>
       <div
         className={cn(
-          "mt-2 min-w-0 overflow-hidden rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)]",
-          listClassName,
+          "mt-2 min-w-0 divide-y divide-[var(--color-border)] overflow-hidden rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)]",
+          layout === "dialog"
+            ? "max-h-[min(24rem,55dvh)] min-h-0 flex-1 overflow-y-auto overscroll-contain"
+            : "",
         )}
       >
         {options.length === 0 ? (
@@ -78,7 +78,8 @@ export function ChoiceList<Value extends string>({
               key={option.value}
               aria-busy={option.pending || undefined}
               className={cn(
-                "grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-stretch border-b border-[var(--color-border)] last:border-b-0",
+                "grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-stretch",
+                option.trailingAction ? "divide-x divide-[var(--color-border)]" : "",
                 selected ? "bg-[var(--color-surface-selected)]" : "bg-[var(--color-surface)]",
                 optionDisabled ? "opacity-65" : "",
               )}
@@ -139,9 +140,7 @@ export function ChoiceList<Value extends string>({
                 </span>
               </label>
               {option.trailingAction ? (
-                <div className="flex min-h-11 items-center border-l border-[var(--color-border)] px-1">
-                  {option.trailingAction}
-                </div>
+                <div className="flex min-h-11 items-center px-1">{option.trailingAction}</div>
               ) : null}
             </div>
           );

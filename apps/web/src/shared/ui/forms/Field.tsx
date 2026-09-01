@@ -3,29 +3,29 @@ import type { HTMLAttributes, ReactNode } from "react";
 
 import { cn } from "@/shared/ui/cn";
 
+export type FieldLayout = "stack" | "subgrid";
+
 export type FieldProps = {
   children: ReactNode;
-  className?: string | undefined;
   description?: ReactNode | undefined;
   descriptionId?: string | undefined;
   error?: ReactNode | undefined;
   errorId?: string | undefined;
   htmlFor: string;
   label: ReactNode;
-  labelClassName?: string | undefined;
+  layout?: FieldLayout | undefined;
   required?: boolean | undefined;
-} & HTMLAttributes<HTMLDivElement>;
+} & Omit<HTMLAttributes<HTMLDivElement>, "children" | "className" | "style">;
 
 export function Field({
   children,
-  className,
   description,
   descriptionId,
   error,
   errorId,
   htmlFor,
   label,
-  labelClassName,
+  layout = "stack",
   required,
   ...props
 }: FieldProps) {
@@ -36,12 +36,16 @@ export function Field({
   const resolvedErrorId = error ? (errorId ?? `${fallbackId}-error`) : undefined;
 
   return (
-    <div className={cn("flex min-w-0 flex-col gap-2", className)} {...props}>
+    <div
+      className={cn(
+        "min-w-0 gap-2",
+        layout === "subgrid" ? "flex flex-col md:grid md:grid-rows-subgrid" : "flex flex-col",
+      )}
+      {...props}
+      data-field-root=""
+    >
       <label
-        className={cn(
-          "text-sm leading-5 font-semibold text-[var(--color-text-primary)]",
-          labelClassName,
-        )}
+        className="text-sm leading-5 font-semibold text-[var(--color-text-primary)]"
         htmlFor={htmlFor}
       >
         {label}

@@ -67,6 +67,8 @@ export function MatchesFilterBar({
       ariaLabel="試合の表示条件"
       busy={pending || summaryLoading || summaryMasked}
       details={{
+        align: "end",
+        columns: 3,
         controls: (
           <MatchesListFilters
             actions={actions}
@@ -84,7 +86,6 @@ export function MatchesFilterBar({
         ),
         onOpenChange: setDetailOpen,
         open: detailOpen,
-        panelClassName: "md:grid-cols-3 md:items-end",
         summary: detailLabels.length > 0 ? detailLabels.join("・") : undefined,
       }}
       primary={

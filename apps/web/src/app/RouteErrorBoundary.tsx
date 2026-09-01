@@ -69,7 +69,7 @@ export class RouteErrorBoundary extends Component<
         <PageFrame className="py-8 sm:py-12" width="narrow">
           <PageHeader title="画面の読み込みに失敗しました" />
           <PageContentSurface>
-            <Notice className="p-4" role="alert" tone="danger">
+            <Notice role="alert" tone="danger">
               <p className="momo-break-token text-sm">{detail}</p>
               <div className="mt-3">
                 <Button onClick={this.handleRecovery}>

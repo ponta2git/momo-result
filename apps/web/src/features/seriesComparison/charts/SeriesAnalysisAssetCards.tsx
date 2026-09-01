@@ -141,64 +141,65 @@ export function AssetComparisonCards({ response }: { response: SeriesComparisonA
                 <AssetFact label="中央" value={formatManYen(metrics?.revenue.median)} />
               </div>
             </section>
-            <Disclosure
-              ariaLabel={`${entry.displayName}の資産傾向の詳しい根拠`}
-              className="mt-3"
-              panelClassName="p-3"
-              presentation="inset"
-              summary="詳しい根拠"
-              triggerVariant="supporting"
-            >
-              <dl className="grid grid-cols-2 gap-2 text-xs">
-                <AssetDetailFact
-                  label="資産の幅"
-                  value={formatManYen(entry.metrics.p90P10Spread)}
-                />
-                <AssetDetailFact
-                  label="目的地あり"
-                  value={formatPercent(entry.metrics.destinationPositiveRate)}
-                />
-                <AssetDetailFact
-                  label="1位"
-                  value={`${entry.metrics.winCount}件・${formatPercent(entry.metrics.winRate)}`}
-                />
-                <AssetDetailFact
-                  label="2位"
-                  value={`${entry.metrics.secondCount}件・${formatPercent(entry.metrics.secondRate)}`}
-                />
-                <AssetDetailFact
-                  label="下位率"
-                  value={formatPercent(entry.metrics.lowerHalfRate)}
-                />
-                <AssetDetailFact
-                  label="勝利時資産中央"
-                  value={formatManYen(entry.metrics.winMedianAssets)}
-                />
-                <AssetDetailFact
-                  label="勝利時の2位差中央"
-                  value={formatManYen(entry.metrics.winMedianMargin)}
-                />
-                <AssetDetailFact
-                  label="2位時の1位差中央"
-                  value={formatManYen(entry.metrics.secondMedianGap)}
-                />
-                <AssetDetailFact
-                  label="下位時の1位差中央"
-                  value={formatManYen(entry.metrics.lowerHalfMedianGap)}
-                />
-                <AssetDetailFact label="大勝" value={`${entry.metrics.blowoutWinCount}件`} />
-                <AssetDetailFact
-                  label="惜しい2位"
-                  value={`${entry.metrics.nearMissSecondCount}件`}
-                />
-                <AssetDetailFact label="大敗" value={`${entry.metrics.heavyLossCount}件`} />
-              </dl>
-              <p className="mt-2 text-[11px] leading-5 text-[var(--color-text-muted)]">
-                判定境界: 大勝 {formatManYen(response.assetStyleProfiles.blowoutWinThreshold)}・
-                惜しい2位 {formatManYen(response.assetStyleProfiles.nearMissSecondThreshold)}・大敗{" "}
-                {formatManYen(response.assetStyleProfiles.heavyLossThreshold)}
-              </p>
-            </Disclosure>
+            <div className="mt-3">
+              <Disclosure
+                ariaLabel={`${entry.displayName}の資産傾向の詳しい根拠`}
+                panelPadding="sm"
+                presentation="inset"
+                summary="詳しい根拠"
+                triggerVariant="supporting"
+              >
+                <dl className="grid grid-cols-2 gap-2 text-xs">
+                  <AssetDetailFact
+                    label="資産の幅"
+                    value={formatManYen(entry.metrics.p90P10Spread)}
+                  />
+                  <AssetDetailFact
+                    label="目的地あり"
+                    value={formatPercent(entry.metrics.destinationPositiveRate)}
+                  />
+                  <AssetDetailFact
+                    label="1位"
+                    value={`${entry.metrics.winCount}件・${formatPercent(entry.metrics.winRate)}`}
+                  />
+                  <AssetDetailFact
+                    label="2位"
+                    value={`${entry.metrics.secondCount}件・${formatPercent(entry.metrics.secondRate)}`}
+                  />
+                  <AssetDetailFact
+                    label="下位率"
+                    value={formatPercent(entry.metrics.lowerHalfRate)}
+                  />
+                  <AssetDetailFact
+                    label="勝利時資産中央"
+                    value={formatManYen(entry.metrics.winMedianAssets)}
+                  />
+                  <AssetDetailFact
+                    label="勝利時の2位差中央"
+                    value={formatManYen(entry.metrics.winMedianMargin)}
+                  />
+                  <AssetDetailFact
+                    label="2位時の1位差中央"
+                    value={formatManYen(entry.metrics.secondMedianGap)}
+                  />
+                  <AssetDetailFact
+                    label="下位時の1位差中央"
+                    value={formatManYen(entry.metrics.lowerHalfMedianGap)}
+                  />
+                  <AssetDetailFact label="大勝" value={`${entry.metrics.blowoutWinCount}件`} />
+                  <AssetDetailFact
+                    label="惜しい2位"
+                    value={`${entry.metrics.nearMissSecondCount}件`}
+                  />
+                  <AssetDetailFact label="大敗" value={`${entry.metrics.heavyLossCount}件`} />
+                </dl>
+                <p className="mt-2 text-[11px] leading-5 text-[var(--color-text-muted)]">
+                  判定境界: 大勝 {formatManYen(response.assetStyleProfiles.blowoutWinThreshold)}・
+                  惜しい2位 {formatManYen(response.assetStyleProfiles.nearMissSecondThreshold)}
+                  ・大敗 {formatManYen(response.assetStyleProfiles.heavyLossThreshold)}
+                </p>
+              </Disclosure>
+            </div>
           </article>
         );
       })}
@@ -256,7 +257,7 @@ function AssetFact({
   value: string;
 }) {
   return (
-    <div className="min-w-0 self-start border-l-2 border-[var(--color-border)] px-2 py-1 text-left">
+    <div className="min-w-0 border-l-2 border-[var(--color-border)] px-2 py-1 text-left">
       <p className="text-[11px] font-semibold text-[var(--color-text-secondary)]">{label}</p>
       {subLabel ? <p className="text-[11px] text-[var(--color-text-muted)]">{subLabel}</p> : null}
       <p className="mt-1 text-xs font-semibold break-words tabular-nums">{value}</p>

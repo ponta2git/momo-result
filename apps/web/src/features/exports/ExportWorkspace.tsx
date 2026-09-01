@@ -27,7 +27,7 @@ export function ExportWorkspace({ model }: ExportWorkspaceProps) {
       {navigation.returnTo ? (
         <div>
           <LinkButton
-            icon={<ArrowLeft aria-hidden="true" className="size-4" />}
+            icon={<ArrowLeft aria-hidden="true" />}
             size="sm"
             to={navigation.returnTo}
             variant="quiet"

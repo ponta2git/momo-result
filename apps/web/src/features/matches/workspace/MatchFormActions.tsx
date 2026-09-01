@@ -16,10 +16,12 @@ export function MatchFormActions({ model, primaryActionRef }: MatchFormActionsPr
       className="rounded-[var(--radius-md)] border border-[var(--color-border-strong)] bg-[var(--color-surface)] p-3"
     >
       {model.feedback.error ? (
-        <Notice className="mb-3" title={model.feedback.error.title} tone="danger">
-          <p>{model.feedback.error.detail}</p>
-          <p className="mt-1">{model.feedback.error.nextStep}</p>
-        </Notice>
+        <div className="mb-3">
+          <Notice title={model.feedback.error.title} tone="danger">
+            <p>{model.feedback.error.detail}</p>
+            <p className="mt-1">{model.feedback.error.nextStep}</p>
+          </Notice>
+        </div>
       ) : null}
       <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
         <p className="text-sm text-pretty text-[var(--color-text-secondary)]">
@@ -27,7 +29,6 @@ export function MatchFormActions({ model, primaryActionRef }: MatchFormActionsPr
         </p>
         <Button
           ref={primaryActionRef}
-          className="w-full sm:w-auto"
           disabled={model.availability.disabled || model.availability.pending}
           pending={model.availability.pending}
           pendingLabel={model.action.label === "保存" ? "保存中…" : "送信中…"}

@@ -2,11 +2,8 @@ import { Tooltip as BaseTooltip } from "@base-ui/react/tooltip";
 import { createContext, useContext } from "react";
 import type { ReactElement, ReactNode } from "react";
 
-import { cn } from "@/shared/ui/cn";
-
 type TooltipProps = {
   children: ReactElement;
-  className?: string;
   content: ReactNode;
   delay?: number;
   side?: "top" | "right" | "bottom" | "left";
@@ -32,7 +29,7 @@ export function TooltipProvider({ children }: { children: ReactNode }) {
 }
 
 /** A supplementary visual label; the trigger remains responsible for its accessible name. */
-export function Tooltip({ children, className, content, delay, side = "top" }: TooltipProps) {
+export function Tooltip({ children, content, delay, side = "top" }: TooltipProps) {
   const hasSharedProvider = useContext(SharedTooltipProviderContext);
 
   return (
@@ -43,12 +40,7 @@ export function Tooltip({ children, className, content, delay, side = "top" }: T
       />
       <BaseTooltip.Portal>
         <BaseTooltip.Positioner className="z-[var(--z-tooltip)]" side={side} sideOffset={8}>
-          <BaseTooltip.Popup
-            className={cn(
-              "max-w-[22rem] rounded-[var(--radius-sm)] border border-[var(--color-border-strong)] bg-[var(--color-surface-inverse)] px-3 py-2 text-xs leading-5 text-[var(--color-text-inverse)] shadow-[var(--shadow-raised)]",
-              className,
-            )}
-          >
+          <BaseTooltip.Popup className="max-w-[22rem] rounded-[var(--radius-sm)] border border-[var(--color-border-strong)] bg-[var(--color-surface-inverse)] px-3 py-2 text-xs leading-5 text-[var(--color-text-inverse)] shadow-[var(--shadow-raised)]">
             {content}
           </BaseTooltip.Popup>
         </BaseTooltip.Positioner>

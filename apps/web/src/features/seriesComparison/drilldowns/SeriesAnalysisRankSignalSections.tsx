@@ -25,8 +25,7 @@ export function RankSignalValidationMethod({ payload }: { payload: RankSignalPay
   return (
     <Disclosure
       ariaLabel="別開催テストと採用基準"
-      className="min-w-0"
-      panelClassName="grid gap-5 p-4"
+      panelPadding="md"
       presentation="inset"
       summary={
         <span className="flex flex-col gap-0.5">
@@ -38,57 +37,62 @@ export function RankSignalValidationMethod({ payload }: { payload: RankSignalPay
       }
       triggerVariant="supporting"
     >
-      <section aria-labelledby="rank-signal-validation-flow">
-        <h4 className="text-sm font-semibold text-balance" id="rank-signal-validation-flow">
-          検証の流れ
-        </h4>
-        <ol className="mt-3 grid gap-4 sm:grid-cols-3">
-          <MethodStep
-            number="1"
-            title="開催を分ける"
-            value={`${payload.method.foldCount}組に分割`}
-          />
-          <MethodStep number="2" title="候補を作る" value={`${trainingFoldCount}組を使用`} />
-          <MethodStep number="3" title="別開催で確かめる" value="残した1組を使用" />
-        </ol>
-      </section>
-      <section aria-labelledby="rank-signal-adoption-rules">
-        <h4 className="text-sm font-semibold text-balance" id="rank-signal-adoption-rules">
-          採用基準
-        </h4>
-        <dl className="mt-2 divide-y divide-[var(--color-border)] text-sm">
-          <MethodFact
-            label="必要な記録"
-            value={`${payload.method.minimumMatches}戦・${payload.method.minimumHeldEvents}開催以上`}
-          />
-          <MethodFact
-            label="全体モデル"
-            value={`${payload.method.foldCount}組中${payload.method.requiredImprovedFoldCount}組以上で改善`}
-          />
-          <MethodFact
-            label="候補の境目"
-            value={`重要度 ${formatRankSignalImportance(payload.method.minimumImportance)}以上`}
-          />
-        </dl>
-      </section>
-      <section aria-labelledby="rank-signal-validation-groups">
-        <h4 className="text-sm font-semibold text-balance" id="rank-signal-validation-groups">
-          確認グループ
-        </h4>
-        <ol aria-label="別開催テストの開催グループ" className="mt-2 flex flex-wrap gap-x-6 gap-y-2">
-          {Array.from({ length: payload.method.foldCount }, (_, fold) => {
-            const row = rowsByFold.get(fold);
-            return (
-              <li className="flex items-baseline gap-2 text-sm" key={fold}>
-                <span className="font-medium">開催{rankSignalFoldLabel(fold)}</span>
-                <span className="text-[var(--color-text-secondary)] tabular-nums">
-                  {row ? `${row.heldEventCount}開催` : "確認用"}
-                </span>
-              </li>
-            );
-          })}
-        </ol>
-      </section>
+      <div className="grid gap-5">
+        <section aria-labelledby="rank-signal-validation-flow">
+          <h4 className="text-sm font-semibold text-balance" id="rank-signal-validation-flow">
+            検証の流れ
+          </h4>
+          <ol className="mt-3 grid gap-4 sm:grid-cols-3 sm:divide-x sm:divide-[var(--color-border)]">
+            <MethodStep
+              number="1"
+              title="開催を分ける"
+              value={`${payload.method.foldCount}組に分割`}
+            />
+            <MethodStep number="2" title="候補を作る" value={`${trainingFoldCount}組を使用`} />
+            <MethodStep number="3" title="別開催で確かめる" value="残した1組を使用" />
+          </ol>
+        </section>
+        <section aria-labelledby="rank-signal-adoption-rules">
+          <h4 className="text-sm font-semibold text-balance" id="rank-signal-adoption-rules">
+            採用基準
+          </h4>
+          <dl className="mt-2 divide-y divide-[var(--color-border)] text-sm">
+            <MethodFact
+              label="必要な記録"
+              value={`${payload.method.minimumMatches}戦・${payload.method.minimumHeldEvents}開催以上`}
+            />
+            <MethodFact
+              label="全体モデル"
+              value={`${payload.method.foldCount}組中${payload.method.requiredImprovedFoldCount}組以上で改善`}
+            />
+            <MethodFact
+              label="候補の境目"
+              value={`重要度 ${formatRankSignalImportance(payload.method.minimumImportance)}以上`}
+            />
+          </dl>
+        </section>
+        <section aria-labelledby="rank-signal-validation-groups">
+          <h4 className="text-sm font-semibold text-balance" id="rank-signal-validation-groups">
+            確認グループ
+          </h4>
+          <ol
+            aria-label="別開催テストの開催グループ"
+            className="mt-2 flex flex-wrap gap-x-6 gap-y-2"
+          >
+            {Array.from({ length: payload.method.foldCount }, (_, fold) => {
+              const row = rowsByFold.get(fold);
+              return (
+                <li className="flex items-baseline gap-2 text-sm" key={fold}>
+                  <span className="font-medium">開催{rankSignalFoldLabel(fold)}</span>
+                  <span className="text-[var(--color-text-secondary)] tabular-nums">
+                    {row ? `${row.heldEventCount}開催` : "確認用"}
+                  </span>
+                </li>
+              );
+            })}
+          </ol>
+        </section>
+      </div>
     </Disclosure>
   );
 }
@@ -120,7 +124,7 @@ export function RankSignalCandidates({ payload }: { payload: RankSignalPayload }
 
 function MethodStep({ number, title, value }: { number: string; title: string; value: string }) {
   return (
-    <li className="grid grid-cols-[1.5rem_minmax(0,1fr)] gap-2 sm:border-l sm:border-[var(--color-border)] sm:px-4 sm:first:border-l-0 sm:first:pl-0 sm:last:pr-0">
+    <li className="grid grid-cols-[1.5rem_minmax(0,1fr)] gap-2 sm:px-4 sm:first:pl-0 sm:last:pr-0">
       <span
         className="flex size-6 items-center justify-center rounded-[var(--radius-xs)] bg-[var(--color-surface-selected)] text-xs font-medium text-[var(--color-text-primary)] tabular-nums"
         aria-hidden="true"
@@ -212,7 +216,9 @@ function CandidateCard({
             })}
           </ol>
         </div>
-        <FoldDetails candidate={candidate} />
+        <div className="mt-4">
+          <FoldDetails candidate={candidate} />
+        </div>
       </div>
     </article>
   );
@@ -239,8 +245,7 @@ function FoldDetails({ candidate }: { candidate: RankSignalCandidate }) {
   return (
     <Disclosure
       ariaLabel={`${rankSignalLabel(candidate.signal)}の開催別の数値`}
-      className="mt-4 min-w-0"
-      panelClassName="w-full min-w-0 max-w-full p-3"
+      panelPadding="sm"
       presentation="inset"
       summary={
         <span className="flex items-baseline justify-between gap-3">
@@ -250,26 +255,26 @@ function FoldDetails({ candidate }: { candidate: RankSignalCandidate }) {
           </span>
         </span>
       }
-      triggerClassName="px-0"
+      triggerLayout="flush-horizontal"
     >
       <DataTable
         caption={{ content: `${rankSignalLabel(candidate.signal)}の開催別テスト結果` }}
         columns={[
           {
-            cellClassName: "tabular-nums",
+            tabular: true,
             header: "確認組",
             key: "fold",
             renderCell: (row) => `開催${rankSignalFoldLabel(row.fold)}`,
             rowHeader: true,
           },
           {
-            cellClassName: "tabular-nums",
+            tabular: true,
             header: "開催数",
             key: "event-count",
             renderCell: (row) => `${row.heldEventCount}開催`,
           },
           {
-            cellClassName: "tabular-nums",
+            tabular: true,
             header: "順位の2人組",
             key: "comparison-count",
             renderCell: (row) => `${row.comparisonCount}組`,
@@ -280,7 +285,7 @@ function FoldDetails({ candidate }: { candidate: RankSignalCandidate }) {
             renderCell: (row) => (row.supported ? "支持" : "支持なし"),
           },
           {
-            cellClassName: "tabular-nums",
+            tabular: true,
             header: "重要度",
             key: "importance",
             renderCell: (row) => formatRankSignalImportance(row.importance),

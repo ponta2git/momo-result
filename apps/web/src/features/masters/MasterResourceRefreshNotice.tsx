@@ -2,7 +2,6 @@ import { Button } from "@/shared/ui/actions/Button";
 import { Notice } from "@/shared/ui/feedback/Notice";
 
 type MasterResourceRefreshNoticeProps = {
-  className?: string | undefined;
   onRetry: () => void;
   resourceLabel: string;
   retrying: boolean;
@@ -15,7 +14,6 @@ type MasterResourceRefreshNoticeProps = {
  * remains secondary because the cached directory is still usable.
  */
 export function MasterResourceRefreshNotice({
-  className,
   onRetry,
   resourceLabel,
   retrying,
@@ -26,11 +24,7 @@ export function MasterResourceRefreshNotice({
   }
 
   return (
-    <Notice
-      {...(className ? { className } : {})}
-      tone="warning"
-      title={`最新の${resourceLabel}を取得できません`}
-    >
+    <Notice tone="warning" title={`最新の${resourceLabel}を取得できません`}>
       <p>直前に取得した内容を表示しています。</p>
       <div className="mt-3">
         <Button

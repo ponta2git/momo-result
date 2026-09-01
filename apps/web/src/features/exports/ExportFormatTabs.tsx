@@ -45,13 +45,8 @@ export function ExportFormatTabs({
         </TabsList>
 
         {exportFormats.map((item) => (
-          <TabsPanel
-            className={children ? "mt-4" : undefined}
-            keepMounted
-            key={item.value}
-            value={item.value}
-          >
-            {format === item.value ? children : null}
+          <TabsPanel keepMounted key={item.value} value={item.value}>
+            {format === item.value && children ? <div className="mt-4">{children}</div> : null}
           </TabsPanel>
         ))}
       </TabsRoot>

@@ -32,28 +32,24 @@ export function MasterCreateForm({
   return (
     <form
       action={action}
-      className="grid gap-2 md:grid-cols-[1fr_auto] md:grid-rows-[auto_auto_auto]"
+      className="grid gap-2 md:grid-cols-[1fr_auto] md:grid-rows-[auto_auto_auto] md:[&>[data-field-root]]:row-span-3"
       key={formKey}
     >
       <TextField
         description={error ? undefined : disabledReason}
         disabled={disabled}
         error={error}
-        fieldClassName="md:row-span-3 md:grid md:grid-rows-subgrid"
         label={label}
+        layout="subgrid"
         name={inputName}
         placeholder={placeholder}
         type="text"
       />
-      <Button
-        className="md:col-start-2 md:row-start-2"
-        disabled={disabled}
-        pendingLabel={pendingLabel}
-        type="submit"
-        variant="secondary"
-      >
-        {buttonLabel}
-      </Button>
+      <div className="grid md:col-start-2 md:row-start-2">
+        <Button disabled={disabled} pendingLabel={pendingLabel} type="submit" variant="secondary">
+          {buttonLabel}
+        </Button>
+      </div>
     </form>
   );
 }

@@ -46,7 +46,7 @@ export function HeldEventMatchTimeline({
       {matches.length === 0 ? (
         <EmptyState
           description="OCR取り込みまたは手入力で試合を確定すると、開催戦績の集計が始まります。"
-          icon={<Trophy className="size-5" />}
+          icon={<Trophy />}
           placement="embedded"
           title="確定済みの試合はまだありません"
         />
@@ -99,7 +99,7 @@ export function HeldEventMatchTimeline({
                     </LinkButton>
                     <LinkButton
                       aria-label={`${formatMatchNoInEvent(match.matchNoInEvent)}を戦績比較で見る`}
-                      icon={<BarChart3 aria-hidden="true" className="size-4" />}
+                      icon={<BarChart3 aria-hidden="true" />}
                       size="sm"
                       to={withReturnTo(seriesComparisonHrefForMatch(match), returnTo)}
                       variant="quiet"
@@ -109,35 +109,43 @@ export function HeldEventMatchTimeline({
                   </div>
                 </div>
 
-                <ol
-                  aria-label={`${formatMatchNoInEvent(match.matchNoInEvent)}の順位と総資産`}
-                  className="mt-3 grid grid-cols-1 gap-x-6 gap-y-3 border-t border-[var(--color-border)] pt-3 sm:grid-cols-2 xl:grid-cols-4"
-                >
-                  {(match.players ?? [])
-                    .toSorted(
-                      (left, right) =>
-                        left.rank - right.rank ||
-                        left.playOrder - right.playOrder ||
-                        left.memberId.localeCompare(right.memberId),
-                    )
-                    .map((player) => (
-                      <li key={player.memberId} className="flex min-w-0 items-center gap-3">
-                        <RankBadge rank={player.rank} />
-                        <div className="min-w-0">
-                          <p className="min-w-0 text-sm font-semibold">
-                            <MemberSequenceLabel memberId={player.memberId}>
-                              <span className="truncate">{memberDisplayName(player.memberId)}</span>
-                            </MemberSequenceLabel>
-                          </p>
-                          <p className="truncate text-xs text-[var(--color-text-secondary)] tabular-nums">
-                            {formatManYen(player.totalAssetsManYen)}
-                          </p>
-                        </div>
-                      </li>
-                    ))}
-                </ol>
+                <div className="mt-3 border-t border-[var(--color-border)] pt-3">
+                  <ol
+                    aria-label={`${formatMatchNoInEvent(match.matchNoInEvent)}の順位と総資産`}
+                    className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2 xl:grid-cols-4"
+                  >
+                    {(match.players ?? [])
+                      .toSorted(
+                        (left, right) =>
+                          left.rank - right.rank ||
+                          left.playOrder - right.playOrder ||
+                          left.memberId.localeCompare(right.memberId),
+                      )
+                      .map((player) => (
+                        <li key={player.memberId} className="flex min-w-0 items-center gap-3">
+                          <RankBadge rank={player.rank} />
+                          <div className="min-w-0">
+                            <p className="min-w-0 text-sm font-semibold">
+                              <MemberSequenceLabel memberId={player.memberId}>
+                                <span className="truncate">
+                                  {memberDisplayName(player.memberId)}
+                                </span>
+                              </MemberSequenceLabel>
+                            </p>
+                            <p className="truncate text-xs text-[var(--color-text-secondary)] tabular-nums">
+                              {formatManYen(player.totalAssetsManYen)}
+                            </p>
+                          </div>
+                        </li>
+                      ))}
+                  </ol>
+                </div>
 
-                {match.noteBody ? <HeldEventMatchNotePreview body={match.noteBody} /> : null}
+                {match.noteBody ? (
+                  <div className="mt-4">
+                    <HeldEventMatchNotePreview body={match.noteBody} />
+                  </div>
+                ) : null}
               </article>
             </li>
           ))}

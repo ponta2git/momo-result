@@ -183,15 +183,17 @@ export function ScoreGrid({ actions, data }: ScoreGridProps) {
         </div>
       </div>
 
-      <ScoreGridReviewToolbar
-        activeItem={activeItem}
-        activeReviewed={Boolean(activeItem && acknowledgedCellIdSet.has(activeItem.cellId))}
-        remainingCount={unresolvedItems.length}
-        totalCount={data.review.items.length}
-        onAcknowledge={acknowledgeActiveItem}
-        onNext={() => navigateReviewItems(1)}
-        onPrevious={() => navigateReviewItems(-1)}
-      />
+      <div className="mt-3 empty:hidden">
+        <ScoreGridReviewToolbar
+          activeItem={activeItem}
+          activeReviewed={Boolean(activeItem && acknowledgedCellIdSet.has(activeItem.cellId))}
+          remainingCount={unresolvedItems.length}
+          totalCount={data.review.items.length}
+          onAcknowledge={acknowledgeActiveItem}
+          onNext={() => navigateReviewItems(1)}
+          onPrevious={() => navigateReviewItems(-1)}
+        />
+      </div>
 
       {isNarrowViewport ? null : (
         <div className="mt-4 overflow-x-auto pb-2">
@@ -216,23 +218,25 @@ export function ScoreGrid({ actions, data }: ScoreGridProps) {
       )}
 
       {isNarrowViewport ? (
-        <ScoreGridMobileCards
-          errorPathSet={data.errorPathSet}
-          expandedMobilePlayer={expandedMobilePlayer}
-          handleIncidentNumericCommit={handleIncidentNumericCommit}
-          handlePlayerNumericCommit={handlePlayerNumericCommit}
-          lastSyncedPlayerIndex={data.lastSyncedPlayerIndex}
-          originalPlayers={data.originalPlayers}
-          players={data.players}
-          review={data.review}
-          getCellId={getCellId}
-          registerCellRef={registerCellRef}
-          onPlayerChange={onPlayerChange}
-          onPlayOrderChange={onPlayOrderChange}
-          onPreferImageKindChange={onPreferImageKindChange}
-          onReviewCellFocus={onReviewCellFocus}
-          onTogglePlayer={handleToggleMobilePlayer}
-        />
+        <div className="mt-4">
+          <ScoreGridMobileCards
+            errorPathSet={data.errorPathSet}
+            expandedMobilePlayer={expandedMobilePlayer}
+            handleIncidentNumericCommit={handleIncidentNumericCommit}
+            handlePlayerNumericCommit={handlePlayerNumericCommit}
+            lastSyncedPlayerIndex={data.lastSyncedPlayerIndex}
+            originalPlayers={data.originalPlayers}
+            players={data.players}
+            review={data.review}
+            getCellId={getCellId}
+            registerCellRef={registerCellRef}
+            onPlayerChange={onPlayerChange}
+            onPlayOrderChange={onPlayOrderChange}
+            onPreferImageKindChange={onPreferImageKindChange}
+            onReviewCellFocus={onReviewCellFocus}
+            onTogglePlayer={handleToggleMobilePlayer}
+          />
+        </div>
       ) : null}
     </section>
   );

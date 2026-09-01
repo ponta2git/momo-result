@@ -32,7 +32,7 @@ export function AdminAccountRow({
       >
         {account.displayName}
       </th>
-      <td className={cn(dataTableBodyCellClassName, "momo-data max-w-[14rem] truncate text-xs")}>
+      <td className={cn(dataTableBodyCellClassName, "momo-data truncate text-xs")}>
         {account.discordUserId}
       </td>
       <td className={dataTableBodyCellClassName}>{memberDisplayName(account.playerMemberId)}</td>

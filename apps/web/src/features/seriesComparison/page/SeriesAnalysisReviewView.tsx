@@ -117,13 +117,15 @@ export function ReviewView({
               {entry.secondaryCards.length > 0 ? (
                 <Disclosure
                   ariaLabel={`${entry.player.displayName}のほかの仮説`}
-                  panelClassName="grid gap-4 p-3"
+                  panelPadding="sm"
                   presentation="inset"
                   summary={`ほかの仮説（${entry.secondaryCards.length}件）`}
                 >
-                  {entry.secondaryCards.map((card) => (
-                    <PlaybookCard card={card} key={card.cardId} onViewChange={onViewChange} />
-                  ))}
+                  <div className="grid gap-4">
+                    {entry.secondaryCards.map((card) => (
+                      <PlaybookCard card={card} key={card.cardId} onViewChange={onViewChange} />
+                    ))}
+                  </div>
                 </Disclosure>
               ) : null}
             </div>
@@ -201,7 +203,9 @@ function PlaybookCard({
                         </span>
                       ) : null}
                       {qualityStatus ? (
-                        <SeriesAnalysisQualityAdvisory className="ml-2" status={qualityStatus} />
+                        <span className="ml-2 empty:hidden">
+                          <SeriesAnalysisQualityAdvisory status={qualityStatus} />
+                        </span>
                       ) : null}
                       {"method" in evidence && evidence.method ? (
                         <span className="mt-1 block text-xs text-[var(--color-text-secondary)]">
@@ -227,7 +231,7 @@ function PlaybookCard({
           </div>
         </Dialog>
         <Button
-          icon={<ChevronRight className="size-4" />}
+          icon={<ChevronRight />}
           size="sm"
           variant="secondary"
           onClick={() => {

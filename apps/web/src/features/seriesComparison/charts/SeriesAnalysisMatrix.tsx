@@ -95,20 +95,15 @@ export function MatrixCell({ children, className, ...props }: ComponentPropsWith
 
 export function MatrixValueLegend({
   ariaLabel,
-  className,
   items,
 }: {
   ariaLabel: string;
-  className?: string | undefined;
   items: ReadonlyArray<{ id: string; label: string; value: string }>;
 }) {
   return (
     <dl
       aria-label={ariaLabel}
-      className={cn(
-        "flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-[var(--color-text-secondary)]",
-        className,
-      )}
+      className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-[var(--color-text-secondary)]"
     >
       {items.map((item) => (
         <div className="inline-flex gap-1" key={item.id}>

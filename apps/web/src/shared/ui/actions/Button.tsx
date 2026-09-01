@@ -15,7 +15,7 @@ type ButtonType = "button" | "submit" | "reset";
 
 export type ButtonProps = Omit<
   ButtonHTMLAttributes<HTMLButtonElement>,
-  "aria-busy" | "disabled" | "type"
+  "aria-busy" | "className" | "disabled" | "style" | "type"
 > & {
   "aria-busy"?: never;
   disabled?: boolean | undefined;
@@ -34,7 +34,6 @@ export type ButtonProps = Omit<
  */
 export function Button({
   children,
-  className,
   disabled,
   icon,
   pending,
@@ -48,7 +47,7 @@ export function Button({
   const formStatus = useFormStatus();
   const actualPending = pending ?? (type === "submit" && formStatus.pending);
   const isDisabled = disabled || actualPending;
-  const buttonClasses = buttonClassName({ className, size, variant });
+  const buttonClasses = buttonClassName({ size, variant });
   const inner = (
     <>
       {actualPending || icon ? (

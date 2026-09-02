@@ -6,9 +6,10 @@ ARG JAVA_JRE_IMAGE=eclipse-temurin:25-jre-noble@sha256:f9bd8815e73632c22985ebb13
 ARG GO_IMAGE=golang:1.26.6-bookworm@sha256:116d58cbd88c1297624acc6e967a060012422bacf9930927e23fb719189c6f36
 ARG HTTP4S_REPOSITORY=https://github.com/ponta2git/http4s.git
 ARG CADDY_VERSION=v2.11.4
-ARG CADDY_X_NET_VERSION=v0.56.0
-ARG CADDY_X_TEXT_VERSION=v0.39.0
-ARG CADDY_GRPC_VERSION=v1.82.1
+ARG CADDY_X_CRYPTO_VERSION=v0.55.0
+ARG CADDY_X_NET_VERSION=v0.57.0
+ARG CADDY_X_TEXT_VERSION=v0.41.0
+ARG CADDY_GRPC_VERSION=v1.83.1
 ARG DEBIAN_RUNTIME_IMAGE=debian:bookworm-slim@sha256:abd67ffcfa541b485a3dff59865ab629aa048a6c613e639d36e7456b0b229241
 
 FROM ${NODE_IMAGE} AS web-deps
@@ -91,6 +92,7 @@ RUN --mount=type=cache,id=go-build,target=/root/.cache/go-build,sharing=locked \
 
 FROM ${GO_IMAGE} AS caddy-builder
 ARG CADDY_VERSION
+ARG CADDY_X_CRYPTO_VERSION
 ARG CADDY_X_NET_VERSION
 ARG CADDY_X_TEXT_VERSION
 ARG CADDY_GRPC_VERSION
@@ -101,6 +103,7 @@ RUN --mount=type=cache,id=caddy-go-mod,target=/go/pkg/mod,sharing=locked \
   && chmod -R u+w .
 RUN --mount=type=cache,id=caddy-go-mod,target=/go/pkg/mod,sharing=locked \
   go get \
+    "golang.org/x/crypto@${CADDY_X_CRYPTO_VERSION}" \
     "golang.org/x/net@${CADDY_X_NET_VERSION}" \
     "golang.org/x/text@${CADDY_X_TEXT_VERSION}" \
     "google.golang.org/grpc@${CADDY_GRPC_VERSION}"
@@ -111,6 +114,9 @@ RUN --mount=type=cache,id=caddy-go-mod,target=/go/pkg/mod,sharing=locked \
   CGO_ENABLED=0 go build -trimpath \
     -ldflags="-s -w -X github.com/caddyserver/caddy/v2.CustomVersion=${CADDY_VERSION}" \
     -o /out/caddy ./cmd/caddy \
+  && go version -m /out/caddy | awk -v module="golang.org/x/crypto" \
+    -v version="${CADDY_X_CRYPTO_VERSION}" \
+    '$1 == "dep" && $2 == module && $3 == version { found = 1 } END { exit !found }' \
   && go version -m /out/caddy | awk -v module="golang.org/x/net" \
     -v version="${CADDY_X_NET_VERSION}" \
     '$1 == "dep" && $2 == module && $3 == version { found = 1 } END { exit !found }' \
@@ -128,7 +134,7 @@ ENV APP_ENV=prod
 ENV HTTP_HOST=127.0.0.1
 ENV HTTP_PORT=8081
 ENV JAVA_HOME=/opt/java/openjdk
-ENV JAVA_TOOL_OPTIONS="-Xms32m -Xmx256m -XX:MaxMetaspaceSize=160m -XX:CompressedClassSpaceSize=32m -XX:ReservedCodeCacheSize=48m -Xss512k -XX:+UseSerialGC -XX:ActiveProcessorCount=2 -XX:TieredStopAtLevel=1 -XX:+ExitOnOutOfMemoryError -XX:NativeMemoryTracking=summary -XX:+UnlockDiagnosticVMOptions -XX:+PrintNMTStatistics -Djava.security.egd=file:/dev/./urandom"
+ENV JAVA_TOOL_OPTIONS="-Xms32m -Xmx192m -XX:MaxMetaspaceSize=160m -XX:CompressedClassSpaceSize=32m -XX:ReservedCodeCacheSize=48m -Xss512k -XX:+UseG1GC -XX:+UseCompactObjectHeaders -XX:ActiveProcessorCount=2 -XX:TieredStopAtLevel=1 -XX:+ExitOnOutOfMemoryError -XX:NativeMemoryTracking=summary -XX:+UnlockDiagnosticVMOptions -XX:+PrintNMTStatistics -Djava.security.egd=file:/dev/./urandom"
 ENV MOMO_CADDY_OUTPUT_PATH=/tmp/momo-result/caddy/Caddyfile
 ENV MOMO_RUNTIME_STOP_GRACE_SECONDS=30
 ENV XDG_CONFIG_HOME=/tmp/momo-result/caddy/config

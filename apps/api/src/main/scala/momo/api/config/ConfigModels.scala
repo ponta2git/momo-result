@@ -122,9 +122,9 @@ object RedisConfig:
 
 object SeriesAnalysisReadConfig:
   val defaults: SeriesAnalysisReadConfig = SeriesAnalysisReadConfig(
-    maxEncodedBytes = 16L * 1024L * 1024L,
-    maxDecodedBytes = 16L * 1024L * 1024L,
-    maxResponseBytes = 16L * 1024L * 1024L,
+    maxEncodedBytes = 8L * 1024L * 1024L,
+    maxDecodedBytes = 8L * 1024L * 1024L,
+    maxResponseBytes = 8L * 1024L * 1024L,
     maxItemCount = 1000000,
     maxNestingDepth = 64,
     maxJsonNodes = 60000,

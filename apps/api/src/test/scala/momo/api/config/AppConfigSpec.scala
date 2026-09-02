@@ -376,11 +376,15 @@ class AppConfigSpec extends CatsEffectSuite:
     ))
   }
 
-  test("default analysis concurrency fits the explicit 160 MiB materialization budget") {
+  test("default analysis read limits fit the 192 MiB heap envelope") {
     val config = SeriesAnalysisReadConfig.defaults
     val concurrentBytes = SeriesAnalysisReadConfigLoader.maximumMaterializationBytes(config) *
       BigInt(config.decodeConcurrency)
 
+    assertEquals(config.maxEncodedBytes, 8L * 1024L * 1024L)
+    assertEquals(config.maxDecodedBytes, 8L * 1024L * 1024L)
+    assertEquals(config.maxResponseBytes, 8L * 1024L * 1024L)
+    assertEquals(config.decodeConcurrency, 2)
     assert(
       concurrentBytes <= BigInt(
         SeriesAnalysisReadConfigLoader.MaximumConcurrentMaterializationBytes

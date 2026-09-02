@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { cn } from "@/shared/ui/cn";
 
 export type ButtonSize = "sm" | "md" | "lg";
-export type ButtonVariant = "primary" | "secondary" | "quiet" | "danger";
+export type ButtonVariant = "primary" | "secondary" | "quiet" | "danger" | "dangerQuiet";
 export type IconActionSize = "sm" | "md" | "lg";
 export type IconActionVariant = "secondary" | "quiet" | "danger";
 
@@ -25,6 +25,8 @@ const buttonVariantClass = {
   secondary: cn(surfaceVariantClass.secondary, "text-[var(--color-text-primary)]"),
   quiet: surfaceVariantClass.quiet,
   danger: cn(surfaceVariantClass.danger, "focus-visible:outline-[var(--color-danger)]"),
+  dangerQuiet:
+    "border-transparent bg-transparent text-[var(--color-danger)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-danger)] focus-visible:outline-[var(--color-danger)]",
 } as const satisfies Record<ButtonVariant, string>;
 
 const iconActionVariantClass = {
@@ -48,33 +50,31 @@ const iconActionSizeClass = {
   lg: "size-12",
 } as const satisfies Record<IconActionSize, string>;
 
-/** Resolves the stable text-action recipe while allowing consumer layout classes. */
+/** Resolves the stable text-action recipe without exposing its visual boundary to consumers. */
 export function buttonClassName({
-  className,
+  disabled = false,
   size = "md",
   variant = "primary",
 }: {
-  className?: string | undefined;
+  disabled?: boolean | undefined;
   size?: ButtonSize | undefined;
   variant?: ButtonVariant | undefined;
 }) {
   return cn(
     actionBaseClass,
-    "w-auto min-w-0 gap-2 font-semibold whitespace-normal break-words disabled:cursor-not-allowed disabled:opacity-60",
+    "min-w-0 gap-2 font-semibold whitespace-normal break-words disabled:cursor-not-allowed disabled:opacity-60",
     buttonSizeClass[size],
     buttonVariantClass[variant],
-    className,
+    disabled && "cursor-not-allowed opacity-60",
   );
 }
 
 /** Resolves the stable square icon-action recipe for button and link semantics. */
 export function iconActionClassName({
-  className,
   disabled = false,
   size = "md",
   variant = "secondary",
 }: {
-  className?: string | undefined;
   disabled?: boolean | undefined;
   size?: IconActionSize | undefined;
   variant?: IconActionVariant | undefined;
@@ -85,7 +85,6 @@ export function iconActionClassName({
     iconActionSizeClass[size],
     iconActionVariantClass[variant],
     disabled && "cursor-not-allowed opacity-60",
-    className,
   );
 }
 
@@ -100,7 +99,10 @@ export function DecorativeActionIcon({
   return (
     <span
       aria-hidden="true"
-      className={cn("inline-flex items-center justify-center", iconOnly && "[&_svg]:size-5")}
+      className={cn(
+        "inline-flex shrink-0 items-center justify-center",
+        iconOnly ? "[&_svg]:size-5" : "[&_svg]:size-4",
+      )}
     >
       {children}
     </span>

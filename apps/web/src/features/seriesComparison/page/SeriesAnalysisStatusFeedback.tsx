@@ -37,7 +37,9 @@ export function SeriesAnalysisStatusFeedback({
     return (
       <Notice tone="warning" title="計算状態を確認できません">
         <p>取得済みの分析はそのまま表示します。</p>
-        <RefreshAction refreshing={refreshing} onRefresh={onRefresh} />
+        <div className="mt-3">
+          <RefreshAction refreshing={refreshing} onRefresh={onRefresh} />
+        </div>
       </Notice>
     );
   }
@@ -141,7 +143,7 @@ function NoArtifactFeedback({
         </Button>
       }
       description={copy.description}
-      icon={<Clock3 className="size-5" />}
+      icon={<Clock3 />}
       placement="embedded"
       title={copy.title}
     />
@@ -150,17 +152,15 @@ function NoArtifactFeedback({
 
 function RefreshAction({ onRefresh, refreshing }: { onRefresh: () => void; refreshing: boolean }) {
   return (
-    <div className="mt-3">
-      <Button
-        pending={refreshing}
-        pendingLabel="状態を確認中"
-        size="sm"
-        variant="secondary"
-        onClick={onRefresh}
-      >
-        状態を再確認
-      </Button>
-    </div>
+    <Button
+      pending={refreshing}
+      pendingLabel="状態を確認中"
+      size="sm"
+      variant="secondary"
+      onClick={onRefresh}
+    >
+      状態を再確認
+    </Button>
   );
 }
 

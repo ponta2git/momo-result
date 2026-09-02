@@ -3,6 +3,7 @@ import { useId } from "react";
 import { SelectControl } from "@/shared/ui/forms/Control";
 import type { SelectControlProps } from "@/shared/ui/forms/Control";
 import { buildFieldDescribedBy, Field } from "@/shared/ui/forms/Field";
+import type { FieldLayout } from "@/shared/ui/forms/Field";
 
 type SelectOption = {
   disabled?: boolean | undefined;
@@ -14,22 +15,20 @@ export type SelectFieldProps = {
   "aria-describedby"?: string | undefined;
   description?: string | undefined;
   error?: string | undefined;
-  fieldClassName?: string | undefined;
   label: string;
+  layout?: FieldLayout | undefined;
   options: SelectOption[];
-  selectClassName?: string | undefined;
 } & Omit<SelectControlProps, "aria-describedby" | "children" | "className" | "invalid">;
 
 export function SelectField({
   "aria-describedby": ariaDescribedBy,
   description,
   error,
-  fieldClassName,
   id,
   label,
+  layout,
   options,
   required,
-  selectClassName,
   ...props
 }: SelectFieldProps) {
   const fallbackId = useId();
@@ -43,14 +42,13 @@ export function SelectField({
       descriptionId={descriptionId}
       error={error}
       errorId={errorId}
-      className={fieldClassName}
       htmlFor={fieldId}
       label={label}
+      layout={layout}
       required={required}
     >
       <SelectControl
         {...props}
-        className={selectClassName}
         id={fieldId}
         invalid={Boolean(error)}
         required={required}

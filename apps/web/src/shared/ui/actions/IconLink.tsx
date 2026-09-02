@@ -6,9 +6,8 @@ import { DecorativeActionIcon, iconActionClassName } from "@/shared/ui/actions/a
 import type { IconActionSize, IconActionVariant } from "@/shared/ui/actions/actionRecipes";
 import { Tooltip } from "@/shared/ui/feedback/Tooltip";
 
-export type IconLinkProps = Omit<LinkProps, "children" | "className"> & {
+export type IconLinkProps = Omit<LinkProps, "children" | "className" | "style"> & {
   "aria-label": string;
-  className?: string | undefined;
   disabled?: boolean | undefined;
   icon: ReactNode;
   size?: IconActionSize | undefined;
@@ -19,7 +18,6 @@ export type IconLinkProps = Omit<LinkProps, "children" | "className"> & {
 /** A navigation-only icon control with one accessible name and a mobile-safe hit target. */
 export function IconLink({
   "aria-label": ariaLabel,
-  className,
   disabled = false,
   icon,
   size = "md",
@@ -27,7 +25,7 @@ export function IconLink({
   variant = "secondary",
   ...props
 }: IconLinkProps) {
-  const classes = iconActionClassName({ className, disabled, size, variant });
+  const classes = iconActionClassName({ disabled, size, variant });
   const content = <DecorativeActionIcon iconOnly>{icon}</DecorativeActionIcon>;
   const control = disabled ? (
     <span aria-disabled="true" aria-label={ariaLabel} className={classes} role="link">

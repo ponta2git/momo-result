@@ -60,36 +60,42 @@ export function MastersPage() {
             ))}
           </TabsList>
 
-          <TabsPanel className="mt-6" keepMounted value="catalog">
-            <MasterRelationBoard
-              gameTitle={page.catalog.gameTitle}
-              map={page.catalog.map}
-              scopedDisabledReason={page.catalog.scopedDisabledReason}
-              season={page.catalog.season}
-            />
+          <TabsPanel keepMounted value="catalog">
+            <div className="mt-6">
+              <MasterRelationBoard
+                gameTitle={page.catalog.gameTitle}
+                map={page.catalog.map}
+                scopedDisabledReason={page.catalog.scopedDisabledReason}
+                season={page.catalog.season}
+              />
+            </div>
           </TabsPanel>
 
-          <TabsPanel className="mt-6" keepMounted value="aliases">
-            <MemberAliasPanel
-              aliases={page.aliases.items}
-              createAction={page.aliases.createAction}
-              createError={page.aliases.createError}
-              createFormKey={page.aliases.createFormKey}
-              onDelete={page.aliases.onDelete}
-              onRetry={page.aliases.onRetry}
-              onUpdate={page.aliases.onUpdate}
-              refreshing={page.aliases.refreshing}
-              stale={page.aliases.stale}
-            />
+          <TabsPanel keepMounted value="aliases">
+            <div className="mt-6">
+              <MemberAliasPanel
+                aliases={page.aliases.items}
+                createAction={page.aliases.createAction}
+                createError={page.aliases.createError}
+                createFormKey={page.aliases.createFormKey}
+                onDelete={page.aliases.onDelete}
+                onRetry={page.aliases.onRetry}
+                onUpdate={page.aliases.onUpdate}
+                refreshing={page.aliases.refreshing}
+                stale={page.aliases.stale}
+              />
+            </div>
           </TabsPanel>
 
-          <TabsPanel className="mt-6" keepMounted value="incidents">
-            <IncidentMasterPanel
-              items={page.incidents.items}
-              onRetry={page.incidents.onRetry}
-              refreshing={page.incidents.refreshing}
-              stale={page.incidents.stale}
-            />
+          <TabsPanel keepMounted value="incidents">
+            <div className="mt-6">
+              <IncidentMasterPanel
+                items={page.incidents.items}
+                onRetry={page.incidents.onRetry}
+                refreshing={page.incidents.refreshing}
+                stale={page.incidents.stale}
+              />
+            </div>
           </TabsPanel>
         </TabsRoot>
       </PageContentSurface>

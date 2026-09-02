@@ -82,7 +82,6 @@ export function PurposeTabs({
   const activePurpose: PurposeId = activeView === "review" ? "review" : "analysis";
   return (
     <TabsRoot
-      className="w-full max-w-full min-w-0"
       value={activePurpose}
       onValueChange={(value) => {
         if (value === "review") {
@@ -121,7 +120,6 @@ export function AnalysisTabs({
 }) {
   return (
     <TabsRoot
-      className="w-full max-w-full min-w-0"
       value={activeView}
       onValueChange={(value) => {
         if (typeof value === "string" && isSeriesAnalysisViewId(value) && value !== "review") {

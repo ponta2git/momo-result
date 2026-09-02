@@ -110,17 +110,18 @@ export function DriversView({ focusedItemIds, response, onDrilldown }: AnalysisV
                   ))}
                 </ul>
               )}
-              <Button
-                className="mt-3"
-                disabled={entry.candidates.length === 0}
-                size="sm"
-                variant="secondary"
-                onClick={() =>
-                  onDrilldown({ memberId: entry.memberId, metricId: "rankAnalysis.rankSignals" })
-                }
-              >
-                検証範囲を見る
-              </Button>
+              <div className="mt-3">
+                <Button
+                  disabled={entry.candidates.length === 0}
+                  size="sm"
+                  variant="secondary"
+                  onClick={() =>
+                    onDrilldown({ memberId: entry.memberId, metricId: "rankAnalysis.rankSignals" })
+                  }
+                >
+                  検証範囲を見る
+                </Button>
+              </div>
             </article>
           ))}
         </div>

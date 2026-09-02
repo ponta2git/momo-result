@@ -18,7 +18,7 @@ import { PageHeader } from "@/shared/ui/layout/PageHeader";
 
 function StandaloneRouteMain({ children }: { children: ReactNode }) {
   return (
-    <>
+    <div className="flex min-h-dvh flex-col">
       <header className="border-b border-[var(--color-border)] bg-[var(--color-surface)]">
         <div
           className={cn(
@@ -32,15 +32,12 @@ function StandaloneRouteMain({ children }: { children: ReactNode }) {
         </div>
       </header>
       <main
-        className={cn(
-          "mx-auto flex min-h-[calc(100dvh-3.5rem)] w-full flex-col py-4 sm:py-6",
-          pageViewportGutterClass,
-        )}
+        className={cn("mx-auto flex w-full flex-1 flex-col py-4 sm:py-6", pageViewportGutterClass)}
         id="main-content"
       >
         {children}
       </main>
-    </>
+    </div>
   );
 }
 
@@ -166,9 +163,7 @@ export function AdminRoute({ children }: { children: ReactNode }) {
         <PageHeader title="管理者権限が必要です" />
         <PageContentSurface className="grid justify-items-start gap-4">
           <Notice tone="danger">この画面は管理者専用です。</Notice>
-          <LinkButton className="w-fit" to="/matches">
-            試合一覧へ戻る
-          </LinkButton>
+          <LinkButton to="/matches">試合一覧へ戻る</LinkButton>
         </PageContentSurface>
       </PageFrame>
     );

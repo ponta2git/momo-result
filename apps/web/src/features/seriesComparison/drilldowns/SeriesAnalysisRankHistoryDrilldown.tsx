@@ -89,20 +89,20 @@ export function RankHistoryDrilldown({
         caption={{ content: `${playerName}の開催別平均順位` }}
         columns={[
           {
-            cellClassName: "tabular-nums",
+            tabular: true,
             header: "開催日時",
             key: "event-date",
             renderCell: (row) => formatDateTime(row.firstPlayedAt),
             rowHeader: true,
           },
           {
-            cellClassName: "tabular-nums",
+            tabular: true,
             header: "順位列",
             key: "ranks",
             renderCell: (row) => row.ranks.join(" → "),
           },
           {
-            cellClassName: "tabular-nums",
+            tabular: true,
             header: "開催平均",
             key: "event-average",
             renderCell: (row) => `${formatDecimal(row.eventAverageRank)}位`,
@@ -118,7 +118,7 @@ export function RankHistoryDrilldown({
             ),
           },
           {
-            cellClassName: "tabular-nums",
+            tabular: true,
             header: "通算平均の変化",
             key: "cumulative-change",
             renderCell: (row) => (
@@ -144,13 +144,14 @@ export function RankHistoryDrilldown({
         caption={{ content: `${playerName}の試合別平均順位推移` }}
         columns={[
           {
-            cellClassName: "tabular-nums",
+            tabular: true,
             header: "試合",
             key: "match",
             renderCell: (row) => (
               <SeriesAnalysisMatchLink
                 ariaLabel={`${formatSeriesMatchIndex(row.matchIndex)}の試合結果を見る`}
                 matchId={row.matchId}
+                presentation="text"
               >
                 {formatSeriesMatchIndex(row.matchIndex)}
               </SeriesAnalysisMatchLink>
@@ -158,13 +159,13 @@ export function RankHistoryDrilldown({
             rowHeader: true,
           },
           {
-            cellClassName: "tabular-nums",
+            tabular: true,
             header: "日時",
             key: "played-at",
             renderCell: (row) => formatDateTime(row.playedAt),
           },
           {
-            cellClassName: "tabular-nums",
+            tabular: true,
             header: "開催内",
             key: "event-match",
             renderCell: (row) => formatMatchNoInEvent(row.matchNoInEvent),
@@ -175,7 +176,7 @@ export function RankHistoryDrilldown({
             renderCell: (row) => <RankBadge rank={row.rank} />,
           },
           {
-            cellClassName: "tabular-nums",
+            tabular: true,
             header: "通算平均",
             key: "cumulative-average",
             renderCell: (row) => `${formatDecimal(row.cumulativeAverageRank)}位`,

@@ -4,8 +4,6 @@ import type {
   DataQualityStatus,
   SeriesAnalysisPlaybookEvidenceStrength,
 } from "@/shared/api/seriesAnalysis";
-import { cn } from "@/shared/ui/cn";
-
 export function qualityAdvisoryLabel(status: DataQualityStatus): string | null {
   switch (status) {
     case "ok":
@@ -17,25 +15,13 @@ export function qualityAdvisoryLabel(status: DataQualityStatus): string | null {
   }
 }
 
-export function SeriesAnalysisQualityAdvisory({
-  className,
-  status,
-}: {
-  className?: string | undefined;
-  status: DataQualityStatus;
-}) {
+export function SeriesAnalysisQualityAdvisory({ status }: { status: DataQualityStatus }) {
   const label = qualityAdvisoryLabel(status);
   if (!label) return null;
 
   return (
     <span
-      className={cn(
-        "inline-flex items-center gap-1 text-xs",
-        status === "reference"
-          ? "font-semibold text-[var(--color-text-primary)]"
-          : "text-[var(--color-text-muted)]",
-        className,
-      )}
+      className={`inline-flex items-center gap-1 text-xs ${status === "reference" ? "font-semibold text-[var(--color-text-primary)]" : "text-[var(--color-text-muted)]"}`}
     >
       {status === "reference" ? (
         <TriangleAlert
@@ -55,22 +41,15 @@ export function lowEvidenceStrengthWarningLabel(
 }
 
 export function SeriesAnalysisEvidenceStrengthWarning({
-  className,
   strength,
 }: {
-  className?: string | undefined;
   strength: SeriesAnalysisPlaybookEvidenceStrength | undefined;
 }) {
   const label = lowEvidenceStrengthWarningLabel(strength);
   if (!label) return null;
 
   return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1 text-xs font-semibold text-[var(--color-text-primary)]",
-        className,
-      )}
-    >
+    <span className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--color-text-primary)]">
       <TriangleAlert aria-hidden="true" className="size-3.5 shrink-0 text-[var(--color-warning)]" />
       {label}
     </span>

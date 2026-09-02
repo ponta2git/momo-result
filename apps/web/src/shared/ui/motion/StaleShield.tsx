@@ -1,17 +1,14 @@
 import { useLayoutEffect, useRef } from "react";
 import type { ReactNode } from "react";
 
-import { cn } from "@/shared/ui/cn";
 import { SpinnerIcon } from "@/shared/ui/feedback/Spinner";
 
 type StaleShieldProps = {
   active: boolean;
   busyLabel?: string | undefined;
   children: ReactNode;
-  className?: string | undefined;
-  contentClassName?: string | undefined;
   fallback: ReactNode;
-  statusClassName?: string | undefined;
+  statusPlacement?: "top-center" | "top-end" | undefined;
   strategy?: "preserve-inert" | "preserve-interactive" | "replace" | undefined;
 };
 
@@ -23,10 +20,8 @@ export function StaleShield({
   active,
   busyLabel = "表示を更新中",
   children,
-  className,
-  contentClassName,
   fallback,
-  statusClassName,
+  statusPlacement = "top-center",
   strategy = "replace",
 }: StaleShieldProps) {
   const contentRef = useRef<HTMLDivElement>(null);
@@ -65,28 +60,23 @@ export function StaleShield({
     return (
       <div
         aria-busy={active || undefined}
-        className={cn("relative min-w-0", className)}
+        className="relative grid min-h-0 min-w-0"
         data-stale={active || undefined}
       >
         <div
-          className={cn(
-            "min-w-0",
-            active ? "blur-[0.5px] opacity-60" : "opacity-100",
-            contentClassName,
-          )}
+          className={`grid min-h-0 min-w-0 ${active ? "opacity-60 blur-[0.5px]" : "opacity-100"}`}
           ref={contentRef}
         >
           {children}
         </div>
         {active ? (
           <div
-            className={cn(
-              "pointer-events-none absolute inset-x-0 top-3 flex justify-center",
-              statusClassName,
-            )}
+            className={`pointer-events-none absolute inset-x-0 flex ${
+              statusPlacement === "top-end" ? "top-0 justify-end" : "top-3 justify-center"
+            }`}
           >
             <span
-              className="inline-flex min-h-8 items-center gap-2 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-xs font-semibold text-[var(--color-text-muted)] shadow-[var(--shadow-raised)]"
+              className="inline-flex min-h-8 items-center gap-2 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-xs font-semibold text-[var(--color-text-muted)]"
               role="status"
             >
               <SpinnerIcon size="sm" />
@@ -99,13 +89,13 @@ export function StaleShield({
   }
 
   return (
-    <div aria-busy={active || undefined} className={cn("min-w-0", className)}>
+    <div aria-busy={active || undefined} className="grid min-h-0 min-w-0">
       {active ? (
-        <div key="shield" className={cn("min-w-0", contentClassName)}>
+        <div key="shield" className="grid min-h-0 min-w-0">
           {fallback}
         </div>
       ) : (
-        <div key="content" className={cn("min-w-0", contentClassName)}>
+        <div key="content" className="grid min-h-0 min-w-0">
           {children}
         </div>
       )}

@@ -5,7 +5,10 @@ import { formatDateTimeLong } from "@/shared/lib/dateTime";
 import type { PaginationState } from "@/shared/lib/pagination";
 import { ChoicePickerDialogField } from "@/shared/ui/forms/ChoicePickerDialogField";
 
-type HeldEventPickerFieldProps = Omit<HTMLAttributes<HTMLDivElement>, "children" | "onChange"> & {
+type HeldEventPickerFieldProps = Omit<
+  HTMLAttributes<HTMLDivElement>,
+  "children" | "className" | "onChange" | "style"
+> & {
   disabled?: boolean | undefined;
   emptyChoiceDescription: string;
   emptyChoiceLabel: string;

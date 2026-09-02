@@ -48,7 +48,7 @@ function HeldEventDetailReadyContent({ page }: { page: HeldEventDetailReadyPageM
     <PageFrame className="min-w-0" width="wide">
       <div>
         <LinkButton
-          icon={<ArrowLeft aria-hidden="true" className="size-4" />}
+          icon={<ArrowLeft aria-hidden="true" />}
           size="sm"
           to={navigation.backHref}
           variant="quiet"
@@ -61,7 +61,7 @@ function HeldEventDetailReadyContent({ page }: { page: HeldEventDetailReadyPageM
         actions={
           <nav aria-label="この開催の関連操作" className="flex flex-wrap items-center gap-2">
             <LinkButton
-              icon={<ListFilter aria-hidden="true" className="size-4" />}
+              icon={<ListFilter aria-hidden="true" />}
               size="sm"
               to={navigation.matchesHref}
               variant="quiet"
@@ -69,7 +69,7 @@ function HeldEventDetailReadyContent({ page }: { page: HeldEventDetailReadyPageM
               試合検索で見る
             </LinkButton>
             <LinkButton
-              icon={<Download aria-hidden="true" className="size-4" />}
+              icon={<Download aria-hidden="true" />}
               size="sm"
               to={navigation.exportHref}
               variant="quiet"
@@ -78,7 +78,7 @@ function HeldEventDetailReadyContent({ page }: { page: HeldEventDetailReadyPageM
             </LinkButton>
             <Button
               aria-label="開催詳細を更新"
-              icon={<RefreshCw aria-hidden="true" className="size-4" />}
+              icon={<RefreshCw aria-hidden="true" />}
               pending={refresh.pending}
               pendingLabel="更新中"
               size="sm"
@@ -145,14 +145,14 @@ function HeldEventDetailReadyContent({ page }: { page: HeldEventDetailReadyPageM
           </h2>
           <div className="flex flex-wrap gap-2">
             <LinkButton
-              icon={<Camera aria-hidden="true" className="size-4" />}
+              icon={<Camera aria-hidden="true" />}
               to={navigation.ocrCaptureHref}
               variant={emphasizeNewMatch ? "primary" : "secondary"}
             >
               OCR取り込み
             </LinkButton>
             <LinkButton
-              icon={<Keyboard aria-hidden="true" className="size-4" />}
+              icon={<Keyboard aria-hidden="true" />}
               to={navigation.manualEntryHref}
               variant="secondary"
             >

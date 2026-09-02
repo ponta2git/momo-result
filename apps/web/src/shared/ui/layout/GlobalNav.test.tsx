@@ -6,13 +6,11 @@ import { describe, expect, it, vi } from "vitest";
 import { GlobalNav } from "@/shared/ui/layout/GlobalNav";
 
 const items = [
-  { icon: <Trophy className="size-4" />, label: "試合", to: "/matches" },
-  { icon: <BarChart3 className="size-4" />, label: "戦績比較", to: "/analytics/series" },
+  { icon: <Trophy />, label: "試合", to: "/matches" },
+  { icon: <BarChart3 />, label: "戦績比較", to: "/analytics/series" },
 ] as const;
 
-const managementItems = [
-  { icon: <Database className="size-4" />, label: "設定", to: "/admin/masters" },
-] as const;
+const managementItems = [{ icon: <Database />, label: "設定", to: "/admin/masters" }] as const;
 
 describe("GlobalNav", () => {
   it("renders caller-owned navigation content with accessible names", () => {

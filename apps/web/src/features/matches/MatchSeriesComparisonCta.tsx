@@ -8,9 +8,11 @@ export function MatchSeriesComparisonCta({ href }: { href: string }) {
           同じ作品・シーズン・マップ内で、この試合前後の推移を比べます。
         </p>
       </div>
-      <LinkButton className="shrink-0" to={href} variant="secondary">
-        前後の戦績を見る
-      </LinkButton>
+      <div className="grid shrink-0">
+        <LinkButton to={href} variant="secondary">
+          前後の戦績を見る
+        </LinkButton>
+      </div>
     </div>
   );
 }

@@ -7,9 +7,9 @@ import cats.syntax.all.*
 import ciris.{ConfigValue, Effect}
 
 private[config] object SeriesAnalysisReadConfigLoader:
-  // The runtime heap is capped at 256 MiB. Chunk materialization may use at most 160 MiB,
+  // The runtime heap is capped at 192 MiB. Chunk materialization may use at most 96 MiB,
   // leaving 96 MiB for the HTTP runtime, connection pools, caches and request coordination.
-  private[config] val MaximumConcurrentMaterializationBytes = 160L * 1024L * 1024L
+  private[config] val MaximumConcurrentMaterializationBytes = 96L * 1024L * 1024L
   private val JsonNodeMaterializationBytes = 256L
   private val Utf16BytesPerDecodedByte = 2L
   private val MaximumPayloadBytes = 16L * 1024L * 1024L

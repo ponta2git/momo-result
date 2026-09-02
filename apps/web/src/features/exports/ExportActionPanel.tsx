@@ -45,17 +45,18 @@ export function ExportActionPanel({
         </Notice>
       ) : (
         <>
-          <Button
-            className="w-full sm:w-fit"
-            disabled={!view.canDownload}
-            icon={<Download aria-hidden="true" className="size-4" />}
-            pending={isPending}
-            pendingLabel="作成中…"
-            size="lg"
-            onClick={onDownload}
-          >
-            {view.actionLabel}
-          </Button>
+          <div className="grid w-full sm:w-fit">
+            <Button
+              disabled={!view.canDownload}
+              icon={<Download aria-hidden="true" />}
+              pending={isPending}
+              pendingLabel="作成中…"
+              size="lg"
+              onClick={onDownload}
+            >
+              {view.actionLabel}
+            </Button>
+          </div>
 
           <ExportDownloadProgress isPending={isPending} isSlow={view.isSlow} />
           <ExportDownloadResult result={view.result} onRetry={onDownload} />

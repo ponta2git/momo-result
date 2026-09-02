@@ -3,7 +3,7 @@ import { useFormStatus } from "react-dom";
 
 import type { HeldEventCreateFormModel } from "@/features/heldEvents/heldEventViewModel";
 import { Button } from "@/shared/ui/actions/Button";
-import { Dialog, dialogFooterClassName } from "@/shared/ui/feedback/Dialog";
+import { Dialog, DialogFooter } from "@/shared/ui/feedback/Dialog";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { TextField } from "@/shared/ui/forms/TextField";
 
@@ -49,18 +49,18 @@ function CreateHeldEventDialogActions({
 }) {
   const { pending } = useFormStatus();
   return (
-    <div className={dialogFooterClassName}>
+    <DialogFooter>
       <Button disabled={pending} variant="secondary" onClick={close}>
         キャンセル
       </Button>
       <Button
         disabled={!canSubmit}
-        icon={<CalendarPlus aria-hidden="true" className="size-4" />}
+        icon={<CalendarPlus aria-hidden="true" />}
         pendingLabel="作成中…"
         type="submit"
       >
         開催を作成
       </Button>
-    </div>
+    </DialogFooter>
   );
 }

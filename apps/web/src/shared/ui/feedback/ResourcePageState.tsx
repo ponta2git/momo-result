@@ -56,7 +56,7 @@ export function ResourcePageState(props: ResourcePageStateProps) {
           <p>{props.description}</p>
         </Notice>
         <LinkButton
-          icon={<ArrowLeft aria-hidden="true" className="size-4" />}
+          icon={<ArrowLeft aria-hidden="true" />}
           to={props.backHref}
           variant={props.kind === "not-found" ? "primary" : "secondary"}
         >

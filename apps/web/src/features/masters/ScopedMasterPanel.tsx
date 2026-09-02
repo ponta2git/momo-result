@@ -86,10 +86,12 @@ export function ScopedMasterPanel({
           <Skeleton className="h-12 rounded-[var(--radius-sm)]" />
         </div>
       ) : loadBlocked ? (
-        <Notice className="mt-3" tone="danger" title={`${labels.itemLabel}を読み込めません`}>
-          <p>{list.error}</p>
-          <div className="mt-3">{retryAction}</div>
-        </Notice>
+        <div className="mt-3">
+          <Notice tone="danger" title={`${labels.itemLabel}を読み込めません`}>
+            <p>{list.error}</p>
+            <div className="mt-3">{retryAction}</div>
+          </Notice>
+        </div>
       ) : (
         <div className="mt-3 grid gap-3">
           {showStaleError ? (

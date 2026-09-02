@@ -7,16 +7,18 @@ import { cn } from "@/shared/ui/cn";
 export function SeriesAnalysisMatchLink({
   ariaLabel,
   children,
-  className,
+  colors,
+  focused = false,
   matchId,
-  style,
+  presentation,
   title,
 }: {
   ariaLabel: string;
   children: ReactNode;
-  className?: string | undefined;
+  colors?: { background: string; border: string; foreground: string } | undefined;
+  focused?: boolean | undefined;
   matchId: string;
-  style?: CSSProperties | undefined;
+  presentation: "axis" | "inline" | "rank-cell" | "text";
   title?: string | undefined;
 }) {
   const returnTo = currentInternalLocation(useLocation());
@@ -25,9 +27,31 @@ export function SeriesAnalysisMatchLink({
       aria-label={ariaLabel}
       className={cn(
         "inline-flex min-h-11 items-center font-semibold text-[var(--color-action)] underline-offset-4 hover:underline",
-        className,
+        presentation === "text"
+          ? ""
+          : presentation === "inline"
+            ? "gap-1 text-xs"
+            : presentation === "axis"
+              ? cn(
+                  "justify-center text-[11px] whitespace-nowrap",
+                  focused ? "" : "text-[var(--color-text-muted)]",
+                )
+              : cn(
+                  "size-11 justify-center overflow-hidden rounded-[var(--radius-xs)] border p-0 text-xs tabular-nums no-underline hover:no-underline",
+                  focused
+                    ? "ring-2 ring-[var(--color-action)] ring-offset-2 ring-offset-[var(--color-surface)]"
+                    : "",
+                ),
       )}
-      style={style}
+      style={
+        colors
+          ? ({
+              backgroundColor: colors.background,
+              borderColor: colors.border,
+              color: colors.foreground,
+            } satisfies CSSProperties)
+          : undefined
+      }
       title={title}
       to={withReturnTo(`/matches/${encodeURIComponent(matchId)}`, returnTo)}
     >

@@ -4,25 +4,15 @@ import { cn } from "@/shared/ui/cn";
 
 type PageHeaderProps = {
   actions?: ReactNode;
-  className?: string;
   description?: ReactNode;
   eyebrow?: ReactNode;
   meta?: ReactNode;
   title: ReactNode;
 };
 
-export function PageHeader({
-  actions,
-  className,
-  description,
-  eyebrow,
-  meta,
-  title,
-}: PageHeaderProps) {
+export function PageHeader({ actions, description, eyebrow, meta, title }: PageHeaderProps) {
   return (
-    <header
-      className={cn("grid min-w-0 gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end", className)}
-    >
+    <header className="grid min-w-0 gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
       <div className="min-w-0">
         {eyebrow ? (
           <p className="momo-label text-[var(--color-text-secondary)]">{eyebrow}</p>

@@ -131,13 +131,14 @@ export function PlayOrderHistoryDrilldown({
         caption={{ content: `${playerName}の番手別試合推移` }}
         columns={[
           {
-            cellClassName: "tabular-nums",
+            tabular: true,
             header: "試合",
             key: "match",
             renderCell: (row) => (
               <SeriesAnalysisMatchLink
                 ariaLabel={`${formatSeriesMatchIndex(row.matchIndex)}の試合結果を見る`}
                 matchId={row.matchId}
+                presentation="text"
               >
                 {formatSeriesMatchIndex(row.matchIndex)}
               </SeriesAnalysisMatchLink>
@@ -145,13 +146,13 @@ export function PlayOrderHistoryDrilldown({
             rowHeader: true,
           },
           {
-            cellClassName: "tabular-nums",
+            tabular: true,
             header: "日時",
             key: "played-at",
             renderCell: (row) => formatDateTime(row.playedAt),
           },
           {
-            cellClassName: "tabular-nums",
+            tabular: true,
             header: "開催内",
             key: "event-match",
             renderCell: (row) => formatMatchNoInEvent(row.matchNoInEvent),
@@ -162,7 +163,7 @@ export function PlayOrderHistoryDrilldown({
             renderCell: (row) => <PlayOrderMark playOrder={row.playOrder} />,
           },
           {
-            cellClassName: "tabular-nums",
+            tabular: true,
             header: "番手内",
             key: "occurrence",
             renderCell: (row) => `${row.occurrenceIndex}戦目`,
@@ -173,7 +174,7 @@ export function PlayOrderHistoryDrilldown({
             renderCell: (row) => <RankBadge rank={row.rank} />,
           },
           {
-            cellClassName: "tabular-nums",
+            tabular: true,
             header: "番手別通算",
             key: "cumulative-average",
             renderCell: (row) => `${formatDecimal(row.cumulativeAverageRank)}位`,

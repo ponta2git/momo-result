@@ -22,7 +22,7 @@ const dialogVisible = { opacity: 1 } as const;
 type SharedLayerProps = {
   backdropClassName?: string | undefined;
   children?: ReactNode | undefined;
-  className?: string | undefined;
+  contentClassName?: string | undefined;
   description?: ReactNode | undefined;
   popupClassName?: string | undefined;
   reduceMotion: boolean | null;
@@ -37,11 +37,11 @@ export type DialogLayerProps = SharedLayerProps & {
 
 function DialogContentFrame({
   children,
-  className,
+  contentClassName,
   description,
   dismissible,
   title,
-}: Pick<SharedLayerProps, "children" | "className" | "description" | "title"> & {
+}: Pick<SharedLayerProps, "children" | "contentClassName" | "description" | "title"> & {
   dismissible: boolean;
 }) {
   return (
@@ -65,7 +65,9 @@ function DialogContentFrame({
           />
         ) : null}
       </div>
-      <div className={cn("min-h-0 min-w-0 flex-1 overflow-y-auto px-2", className)}>{children}</div>
+      <div className={cn("min-h-0 min-w-0 flex-1 overflow-y-auto px-2", contentClassName)}>
+        {children}
+      </div>
     </div>
   );
 }
@@ -75,7 +77,7 @@ export function DialogLayer({
   backdropClassName,
   busy,
   children,
-  className,
+  contentClassName,
   description,
   dismissible,
   popupClassName,
@@ -124,7 +126,7 @@ export function DialogLayer({
           className={cn(dialogSurfaceClassName, "flex overflow-hidden", surfaceClassName)}
         >
           <DialogContentFrame
-            className={className}
+            contentClassName={contentClassName}
             description={description}
             dismissible={dismissible}
             title={title}
@@ -152,7 +154,7 @@ export function AlertDialogLayer({
   backdropClassName,
   cancelLabel,
   children,
-  className,
+  contentClassName,
   confirmDisabled,
   confirmLabel,
   description,
@@ -213,7 +215,7 @@ export function AlertDialogLayer({
                 {description}
               </BaseAlertDialog.Description>
             ) : null}
-            <div className={cn("min-w-0", className)}>{children}</div>
+            <div className={cn("min-w-0", contentClassName)}>{children}</div>
             {error ? (
               <p
                 className="rounded-[var(--radius-sm)] border border-[var(--color-danger)]/50 bg-[var(--color-danger)]/8 px-3 py-2 text-sm font-medium text-[var(--color-danger)]"

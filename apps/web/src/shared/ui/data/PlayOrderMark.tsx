@@ -45,10 +45,10 @@ export function playOrderPresentation(playOrder: number | null | undefined): Pla
 }
 
 export function PlayOrderMark({
-  className,
+  align = "start",
   playOrder,
 }: {
-  className?: string | undefined;
+  align?: "start" | "center" | undefined;
   playOrder: number | null | undefined;
 }) {
   const presentation = playOrderPresentation(playOrder);
@@ -57,7 +57,7 @@ export function PlayOrderMark({
     <span
       className={cn(
         "inline-flex min-w-0 items-center gap-2 text-xs font-semibold text-[var(--color-text-secondary)] tabular-nums",
-        className,
+        align === "center" ? "justify-center" : "",
       )}
       data-play-order={presentation.playOrder ?? "unknown"}
     >

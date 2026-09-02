@@ -54,7 +54,7 @@ export function ScoreGridMobileCards({
   const reviewItemByCellId = new Map(review.items.map((item) => [item.cellId, item]));
   const reviewedCellIds = new Set(review.acknowledgedCellIds);
   return (
-    <div className="mt-4 grid gap-3">
+    <div className="grid gap-3">
       {players.map((player, index) => {
         const originalRow = originalPlayers?.[index];
         const originalByOrder = originalByPlayOrder.get(player.playOrder);
@@ -73,7 +73,7 @@ export function ScoreGridMobileCards({
           >
             <Disclosure
               open={expandedMobilePlayer === index}
-              panelClassName="mt-3 space-y-2"
+              panelSpacing="md"
               summary={
                 <span className="flex min-w-0 items-center justify-between gap-3">
                   <span className="min-w-0">
@@ -92,121 +92,123 @@ export function ScoreGridMobileCards({
                   </span>
                 </span>
               }
-              triggerClassName="px-0 py-0"
+              triggerLayout="flush"
               onOpenChange={(open) => {
                 if (open !== (expandedMobilePlayer === index)) {
                   onTogglePlayer(index);
                 }
               }}
             >
-              <MobileMemberSelect
-                cellId={getCellId(index, 0)}
-                index={index}
-                memberId={player.memberId}
-                originalMemberId={originalRow?.memberId}
-                registerCellRef={registerCellRef}
-                reviewItem={reviewItemByCellId.get(getCellId(index, 0))}
-                reviewed={reviewedCellIds.has(getCellId(index, 0))}
-                onPlayerChange={onPlayerChange}
-                onPreferImageKindChange={onPreferImageKindChange}
-                onReviewCellFocus={onReviewCellFocus}
-              />
-              <div className="grid grid-cols-2 gap-2">
-                <MobilePlayOrderSelect
-                  error={errorPathSet.has(keyToPath(index, "playOrder"))}
-                  cellId={getCellId(index, 1)}
+              <div className="space-y-2">
+                <MobileMemberSelect
+                  cellId={getCellId(index, 0)}
                   index={index}
-                  originalPlayOrder={originalRow?.playOrder}
-                  playOrder={player.playOrder}
+                  memberId={player.memberId}
+                  originalMemberId={originalRow?.memberId}
                   registerCellRef={registerCellRef}
-                  reviewItem={reviewItemByCellId.get(getCellId(index, 1))}
-                  reviewed={reviewedCellIds.has(getCellId(index, 1))}
-                  synced={lastSyncedPlayerIndex === index}
-                  onPlayOrderChange={onPlayOrderChange}
+                  reviewItem={reviewItemByCellId.get(getCellId(index, 0))}
+                  reviewed={reviewedCellIds.has(getCellId(index, 0))}
+                  onPlayerChange={onPlayerChange}
                   onPreferImageKindChange={onPreferImageKindChange}
                   onReviewCellFocus={onReviewCellFocus}
                 />
+                <div className="grid grid-cols-2 gap-2">
+                  <MobilePlayOrderSelect
+                    error={errorPathSet.has(keyToPath(index, "playOrder"))}
+                    cellId={getCellId(index, 1)}
+                    index={index}
+                    originalPlayOrder={originalRow?.playOrder}
+                    playOrder={player.playOrder}
+                    registerCellRef={registerCellRef}
+                    reviewItem={reviewItemByCellId.get(getCellId(index, 1))}
+                    reviewed={reviewedCellIds.has(getCellId(index, 1))}
+                    synced={lastSyncedPlayerIndex === index}
+                    onPlayOrderChange={onPlayOrderChange}
+                    onPreferImageKindChange={onPreferImageKindChange}
+                    onReviewCellFocus={onReviewCellFocus}
+                  />
+                  <MobilePlayerNumericField
+                    cellId={getCellId(index, 2)}
+                    error={errorPathSet.has(keyToPath(index, "rank"))}
+                    field="rank"
+                    focusImageKind="total_assets"
+                    index={index}
+                    originalValue={originalRow?.rank}
+                    player={player}
+                    registerCellRef={registerCellRef}
+                    reviewItem={reviewItemByCellId.get(getCellId(index, 2))}
+                    reviewed={reviewedCellIds.has(getCellId(index, 2))}
+                    onPlayerCommit={handlePlayerNumericCommit}
+                    onPreferImageKindChange={onPreferImageKindChange}
+                    onReviewCellFocus={onReviewCellFocus}
+                  />
+                </div>
                 <MobilePlayerNumericField
-                  cellId={getCellId(index, 2)}
-                  error={errorPathSet.has(keyToPath(index, "rank"))}
-                  field="rank"
+                  allowSign
+                  cellId={getCellId(index, 3)}
+                  error={errorPathSet.has(keyToPath(index, "totalAssetsManYen"))}
+                  field="totalAssetsManYen"
                   focusImageKind="total_assets"
                   index={index}
-                  originalValue={originalRow?.rank}
+                  originalValue={originalRow?.totalAssetsManYen}
                   player={player}
                   registerCellRef={registerCellRef}
-                  reviewItem={reviewItemByCellId.get(getCellId(index, 2))}
-                  reviewed={reviewedCellIds.has(getCellId(index, 2))}
+                  reviewItem={reviewItemByCellId.get(getCellId(index, 3))}
+                  reviewed={reviewedCellIds.has(getCellId(index, 3))}
                   onPlayerCommit={handlePlayerNumericCommit}
                   onPreferImageKindChange={onPreferImageKindChange}
                   onReviewCellFocus={onReviewCellFocus}
                 />
-              </div>
-              <MobilePlayerNumericField
-                allowSign
-                cellId={getCellId(index, 3)}
-                error={errorPathSet.has(keyToPath(index, "totalAssetsManYen"))}
-                field="totalAssetsManYen"
-                focusImageKind="total_assets"
-                index={index}
-                originalValue={originalRow?.totalAssetsManYen}
-                player={player}
-                registerCellRef={registerCellRef}
-                reviewItem={reviewItemByCellId.get(getCellId(index, 3))}
-                reviewed={reviewedCellIds.has(getCellId(index, 3))}
-                onPlayerCommit={handlePlayerNumericCommit}
-                onPreferImageKindChange={onPreferImageKindChange}
-                onReviewCellFocus={onReviewCellFocus}
-              />
-              <MobilePlayerNumericField
-                allowSign
-                cellId={getCellId(index, 4)}
-                error={errorPathSet.has(keyToPath(index, "revenueManYen"))}
-                field="revenueManYen"
-                focusImageKind="revenue"
-                index={index}
-                originalValue={originalRow?.revenueManYen}
-                player={player}
-                registerCellRef={registerCellRef}
-                reviewItem={reviewItemByCellId.get(getCellId(index, 4))}
-                reviewed={reviewedCellIds.has(getCellId(index, 4))}
-                onPlayerCommit={handlePlayerNumericCommit}
-                onPreferImageKindChange={onPreferImageKindChange}
-                onReviewCellFocus={onReviewCellFocus}
-              />
-              <div className="grid grid-cols-2 gap-2">
-                {incidentScoreGridColumns.map((column, incidentIndex) => (
-                  <label
-                    key={column.incidentKey}
-                    className="grid gap-1 text-xs text-[var(--color-text-secondary)]"
-                    htmlFor={getCellId(index, incidentIndex + 5)}
-                  >
-                    {column.header}
-                    <ScoreGridNumericEditor
-                      allowSign={false}
-                      ariaLabel={`${memberDisplayName(player.memberId)} ${column.header}`}
-                      cellId={getCellId(index, incidentIndex + 5)}
-                      commitKind="incident"
-                      error={errorPathSet.has(keyToPath(index, `incident.${column.incidentKey}`))}
-                      focusImageKind="incident_log"
-                      incidentKey={column.incidentKey}
-                      originalValue={originalByOrder?.incidents[column.header]}
-                      registerCellRef={registerCellRef}
-                      reviewField={`incident.${column.incidentKey}`}
-                      reviewed={reviewedCellIds.has(getCellId(index, incidentIndex + 5))}
-                      reviewMessage={
-                        reviewItemByCellId.get(getCellId(index, incidentIndex + 5))?.message
-                      }
-                      row={index}
-                      showStateLabel
-                      validationPath={keyToPath(index, `incident.${column.incidentKey}`)}
-                      value={player.incidents[column.incidentKey]}
-                      onIncidentCommit={handleIncidentNumericCommit}
-                      onPreferImageKindChange={onPreferImageKindChange}
-                      onReviewCellFocus={onReviewCellFocus}
-                    />
-                  </label>
-                ))}
+                <MobilePlayerNumericField
+                  allowSign
+                  cellId={getCellId(index, 4)}
+                  error={errorPathSet.has(keyToPath(index, "revenueManYen"))}
+                  field="revenueManYen"
+                  focusImageKind="revenue"
+                  index={index}
+                  originalValue={originalRow?.revenueManYen}
+                  player={player}
+                  registerCellRef={registerCellRef}
+                  reviewItem={reviewItemByCellId.get(getCellId(index, 4))}
+                  reviewed={reviewedCellIds.has(getCellId(index, 4))}
+                  onPlayerCommit={handlePlayerNumericCommit}
+                  onPreferImageKindChange={onPreferImageKindChange}
+                  onReviewCellFocus={onReviewCellFocus}
+                />
+                <div className="grid grid-cols-2 gap-2">
+                  {incidentScoreGridColumns.map((column, incidentIndex) => (
+                    <label
+                      key={column.incidentKey}
+                      className="grid gap-1 text-xs text-[var(--color-text-secondary)]"
+                      htmlFor={getCellId(index, incidentIndex + 5)}
+                    >
+                      {column.header}
+                      <ScoreGridNumericEditor
+                        allowSign={false}
+                        ariaLabel={`${memberDisplayName(player.memberId)} ${column.header}`}
+                        cellId={getCellId(index, incidentIndex + 5)}
+                        commitKind="incident"
+                        error={errorPathSet.has(keyToPath(index, `incident.${column.incidentKey}`))}
+                        focusImageKind="incident_log"
+                        incidentKey={column.incidentKey}
+                        originalValue={originalByOrder?.incidents[column.header]}
+                        registerCellRef={registerCellRef}
+                        reviewField={`incident.${column.incidentKey}`}
+                        reviewed={reviewedCellIds.has(getCellId(index, incidentIndex + 5))}
+                        reviewMessage={
+                          reviewItemByCellId.get(getCellId(index, incidentIndex + 5))?.message
+                        }
+                        row={index}
+                        showStateLabel
+                        validationPath={keyToPath(index, `incident.${column.incidentKey}`)}
+                        value={player.incidents[column.incidentKey]}
+                        onIncidentCommit={handleIncidentNumericCommit}
+                        onPreferImageKindChange={onPreferImageKindChange}
+                        onReviewCellFocus={onReviewCellFocus}
+                      />
+                    </label>
+                  ))}
+                </div>
               </div>
             </Disclosure>
           </article>

@@ -3,7 +3,7 @@ import { useFormStatus } from "react-dom";
 import type { AdminAccountCreateDialogModel } from "@/features/adminAccounts/useAdminAccountsPageModel";
 import { canonicalResultMembers } from "@/shared/domain/members";
 import { Button } from "@/shared/ui/actions/Button";
-import { Dialog, dialogFooterClassName } from "@/shared/ui/feedback/Dialog";
+import { Dialog, DialogFooter } from "@/shared/ui/feedback/Dialog";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { CheckboxField } from "@/shared/ui/forms/CheckboxField";
 import { Fieldset } from "@/shared/ui/forms/Fieldset";
@@ -52,12 +52,12 @@ export function AdminAccountCreateDialog({ model }: { model: AdminAccountCreateD
           <CheckboxField defaultChecked label="ログイン許可" name="loginEnabled" />
           <CheckboxField label="管理者" name="isAdmin" />
         </Fieldset>
-        <div className={dialogFooterClassName}>
+        <DialogFooter>
           <Button disabled={pending} variant="secondary" onClick={() => setOpen(false)}>
             キャンセル
           </Button>
           <CreateAccountSubmitButton />
-        </div>
+        </DialogFooter>
       </form>
     </Dialog>
   );

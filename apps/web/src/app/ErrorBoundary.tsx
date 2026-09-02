@@ -40,7 +40,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
           <PageFrame width="narrow">
             <PageHeader title="画面を表示できません" />
             <PageContentSurface>
-              <Notice className="p-4" role="alert" tone="danger">
+              <Notice role="alert" tone="danger">
                 <p>
                   {reloadRequired
                     ? "画面を構成するファイルを取得できませんでした。通信状態を確認して、画面全体を再読み込みしてください。"

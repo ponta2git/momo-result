@@ -43,9 +43,12 @@ export function MatchNoteField({ error, onChange, value }: MatchNoteFieldProps) 
       <TextareaControl
         aria-label="試合メモ（任意）"
         aria-describedby={invalid ? "match-note-error" : undefined}
-        className={cn("min-h-24 resize-y leading-6 placeholder:text-[var(--color-text-muted)]")}
         invalid={invalid}
+        minHeight="sm"
+        placeholderTone="muted"
         placeholder="例：終盤のカード交換で流れが変わった"
+        resize="vertical"
+        textFlow="relaxed"
         value={value}
         onChange={(event) => onChange(event.currentTarget.value)}
       />

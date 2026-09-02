@@ -2,7 +2,7 @@ import { Tabs as BaseTabs } from "@base-ui/react/tabs";
 import { m, useReducedMotionConfig } from "motion/react";
 import type { MotionStyle } from "motion/react";
 import { createContext, useContext } from "react";
-import type { ComponentPropsWithoutRef, CSSProperties, Ref } from "react";
+import type { ComponentPropsWithoutRef, ComponentPropsWithRef, CSSProperties, Ref } from "react";
 
 import { cn } from "@/shared/ui/cn";
 import { instantMotionTransition, politeMotionTransition } from "@/shared/ui/motion/transitions";
@@ -11,6 +11,8 @@ export type TabsVariant = "filled" | "underline";
 
 type BaseTabsListProps = ComponentPropsWithoutRef<typeof BaseTabs.List>;
 type BaseTabsTabProps = ComponentPropsWithoutRef<typeof BaseTabs.Tab>;
+type BaseTabsRootProps = ComponentPropsWithRef<typeof BaseTabs.Root>;
+type BaseTabsPanelProps = ComponentPropsWithRef<typeof BaseTabs.Panel>;
 
 type TabsListAccessibleName =
   | {
@@ -24,24 +26,27 @@ type TabsListAccessibleName =
 
 export type TabsListProps = Omit<
   BaseTabsListProps,
-  "aria-label" | "aria-labelledby" | "className"
+  "aria-label" | "aria-labelledby" | "className" | "style"
 > &
   TabsListAccessibleName & {
-    className?: string | undefined;
     ref?: Ref<HTMLDivElement> | undefined;
     variant?: TabsVariant | undefined;
     wrap?: boolean | undefined;
   };
 
-export type TabsTabProps = Omit<BaseTabsTabProps, "className"> & {
-  className?: string | undefined;
+export type TabsTabProps = Omit<BaseTabsTabProps, "className" | "style"> & {
   ref?: Ref<HTMLElement> | undefined;
 };
 
 const TabsVariantContext = createContext<TabsVariant>("filled");
 
-export const TabsRoot = BaseTabs.Root;
-export const TabsPanel = BaseTabs.Panel;
+export function TabsRoot(props: Omit<BaseTabsRootProps, "className" | "style">) {
+  return <BaseTabs.Root {...props} />;
+}
+
+export function TabsPanel(props: Omit<BaseTabsPanelProps, "className" | "style">) {
+  return <BaseTabs.Panel {...props} />;
+}
 
 function activeIndicatorStyle(style: CSSProperties | undefined): MotionStyle {
   return {
@@ -84,14 +89,7 @@ function UnderlineSelectionIndicator() {
  * Owns the shared visual grammar for a related set of views. Feature code still
  * supplies the accessible name and decides whether arrow-key focus activates a tab.
  */
-export function TabsList({
-  children,
-  className,
-  ref,
-  variant = "filled",
-  wrap,
-  ...props
-}: TabsListProps) {
+export function TabsList({ children, ref, variant = "filled", wrap, ...props }: TabsListProps) {
   const shouldWrap = wrap ?? variant === "filled";
 
   return (
@@ -105,7 +103,6 @@ export function TabsList({
           variant === "filled"
             ? "gap-2"
             : "border-b border-[var(--color-border)] [scrollbar-width:thin]",
-          className,
         )}
       >
         {children}
@@ -116,7 +113,7 @@ export function TabsList({
 }
 
 /** A tab with selection, focus, disabled, and mobile hit-target styling in one place. */
-export function TabsTab({ className, ref, ...props }: TabsTabProps) {
+export function TabsTab({ ref, ...props }: TabsTabProps) {
   const variant = useContext(TabsVariantContext);
 
   return (
@@ -150,7 +147,6 @@ export function TabsTab({ className, ref, ...props }: TabsTabProps) {
                     ),
               ),
           state.disabled ? "cursor-not-allowed opacity-60" : "",
-          className,
         )
       }
     />

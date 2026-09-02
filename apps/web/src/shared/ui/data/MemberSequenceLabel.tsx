@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 
 import { memberSequence } from "@/shared/domain/members";
-import { cn } from "@/shared/ui/cn";
 
 export type MemberSequencePresentation = {
   color: string;
@@ -25,19 +24,17 @@ export function memberSequencePresentation(memberId: string): MemberSequencePres
 export function MemberSequenceLabel({
   accent = true,
   children,
-  className,
   memberId,
 }: {
   accent?: boolean | undefined;
   children: ReactNode;
-  className?: string | undefined;
   memberId: string;
 }) {
   const presentation = memberSequencePresentation(memberId);
 
   return (
     <span
-      className={cn("inline-flex min-w-0 items-center gap-2", className)}
+      className="inline-flex min-w-0 items-center gap-2"
       data-member-accent={accent ? "visible" : "neutral"}
       data-member-sequence={presentation.sequence ?? "unknown"}
     >

@@ -15,7 +15,7 @@ import {
 } from "@/shared/ui/data/DataTable";
 import { FactList } from "@/shared/ui/data/FactList";
 import { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
-import { Dialog, dialogFooterClassName } from "@/shared/ui/feedback/Dialog";
+import { Dialog, DialogFooter } from "@/shared/ui/feedback/Dialog";
 import { RankBadge } from "@/shared/ui/rank/RankBadge";
 
 type MatchConfirmSummaryProps = {
@@ -33,14 +33,14 @@ type MatchConfirmReviewSummary = {
 
 function ConfirmActionButtons({ onCancel, pending }: { onCancel: () => void; pending: boolean }) {
   return (
-    <div className={`mt-6 ${dialogFooterClassName}`}>
+    <DialogFooter>
       <Button variant="secondary" disabled={pending} onClick={onCancel} type="button">
         戻って修正
       </Button>
       <Button pending={pending} pendingLabel="確定中…" type="submit">
         確定する
       </Button>
-    </div>
+    </DialogFooter>
   );
 }
 
@@ -77,7 +77,7 @@ function MatchConfirmSummary({
 function PlayerLedger({ values }: { values: MatchFormValues }) {
   const orderedPlayers = orderFixedMembers(values.players);
   return (
-    <div className="mt-4">
+    <div>
       <p className="mb-2 text-xs text-[var(--color-text-secondary)] sm:hidden">
         4人分の結果は横にスクロールして確認できます。
       </p>
@@ -128,7 +128,7 @@ function OcrReviewSummary({
   }
   const reviewedCount = totalCount - unresolvedCount;
   return (
-    <div className="mt-4 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3">
+    <div className="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm tabular-nums">
         <span className="font-semibold text-[var(--color-text-primary)]">OCR確認状況</span>
         <span className="text-[var(--color-text-secondary)]">修正 {changedCount}件</span>
@@ -170,37 +170,38 @@ export function MatchConfirmDialog({ model }: { model: MatchWorkspaceConfirmatio
         }
       }}
     >
-      <form action={model.actions.onConfirm} className="min-w-0">
+      <form action={model.actions.onConfirm} className="grid min-w-0 gap-4">
         <MatchConfirmSummary {...model.summary} values={model.values} />
         <PlayerLedger values={model.values} />
         {model.values.noteBody.trim().length > 0 ? (
-          <section
-            className="mt-4 border-t border-[var(--color-border)] pt-3"
-            aria-labelledby="confirm-match-note-heading"
-          >
-            <h3
-              className="text-xs font-semibold text-[var(--color-text-secondary)]"
-              id="confirm-match-note-heading"
-            >
-              試合メモ
-            </h3>
-            <p className="mt-1 text-sm leading-6 break-words whitespace-pre-wrap text-[var(--color-text-primary)]">
-              {model.values.noteBody}
-            </p>
-          </section>
+          <div className="border-t border-[var(--color-border)] pt-3">
+            <section aria-labelledby="confirm-match-note-heading">
+              <h3
+                className="text-xs font-semibold text-[var(--color-text-secondary)]"
+                id="confirm-match-note-heading"
+              >
+                試合メモ
+              </h3>
+              <p className="mt-1 text-sm leading-6 break-words whitespace-pre-wrap text-[var(--color-text-primary)]">
+                {model.values.noteBody}
+              </p>
+            </section>
+          </div>
         ) : null}
         <OcrReviewSummary {...model.review} />
 
         {model.feedback.validationMessage ? (
           <div
-            className="mt-4 rounded-[var(--radius-sm)] border border-[var(--color-warning)]/65 bg-[var(--color-warning)]/18 px-3 py-2 text-sm text-[var(--color-text-primary)]"
+            className="rounded-[var(--radius-sm)] border border-[var(--color-warning)]/65 bg-[var(--color-warning)]/18 px-3 py-2 text-sm text-[var(--color-text-primary)]"
             role="alert"
           >
             {model.feedback.validationMessage}
           </div>
         ) : null}
 
-        <ConfirmActionButtons pending={model.pending} onCancel={model.actions.onClose} />
+        <div className="mt-2">
+          <ConfirmActionButtons pending={model.pending} onCancel={model.actions.onClose} />
+        </div>
       </form>
     </Dialog>
   );

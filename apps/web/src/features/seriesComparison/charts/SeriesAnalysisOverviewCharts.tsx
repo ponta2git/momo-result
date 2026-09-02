@@ -181,9 +181,11 @@ export function HeadToHeadMatrix({ response }: { response: SeriesComparisonAggre
           <MatrixAxisHeader className="w-36" columnLabel="相手" rowLabel="本人" />
           {players.map((player) => (
             <MatrixColumnHeader key={player.memberId}>
-              <MemberSequenceLabel className="justify-center" memberId={player.memberId}>
-                vs {player.displayName}
-              </MemberSequenceLabel>
+              <span className="flex justify-center">
+                <MemberSequenceLabel memberId={player.memberId}>
+                  vs {player.displayName}
+                </MemberSequenceLabel>
+              </span>
             </MatrixColumnHeader>
           ))}
         </tr>

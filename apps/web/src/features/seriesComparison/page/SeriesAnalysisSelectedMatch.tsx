@@ -39,6 +39,7 @@ export function SeriesAnalysisSelectedMatch({
             <SeriesAnalysisMatchLink
               ariaLabel={`${formatSeriesMatchIndex(context.match.matchIndex)}の試合結果を見る`}
               matchId={context.matchId}
+              presentation="text"
             >
               {formatSeriesMatchIndex(context.match.matchIndex)}・
               {formatDateTime(context.match.playedAt)}
@@ -49,12 +50,7 @@ export function SeriesAnalysisSelectedMatch({
           </p>
         </div>
         <div className="flex shrink-0 flex-wrap gap-2">
-          <Button
-            icon={<X aria-hidden="true" className="size-4" />}
-            size="sm"
-            variant="quiet"
-            onClick={onClear}
-          >
+          <Button icon={<X aria-hidden="true" />} size="sm" variant="quiet" onClick={onClear}>
             この試合の選択を解除
           </Button>
         </div>

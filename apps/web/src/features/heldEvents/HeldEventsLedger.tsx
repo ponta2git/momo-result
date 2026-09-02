@@ -103,7 +103,7 @@ function HeldEventsMobileList({
   returnTo,
 }: HeldEventsLedgerProps) {
   return (
-    <ol className="overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)]">
+    <ol className="divide-y divide-[var(--color-border)] overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)]">
       {events.map((event, index) => (
         <HeldEventRow
           key={event.id}
@@ -135,7 +135,7 @@ function HeldEventRow({
   returnTo: string;
 }) {
   return (
-    <li className="border-b border-[var(--color-border)] last:border-b-0">
+    <li>
       <article className="grid gap-3 px-4 py-3">
         <HeldEventIdentity
           actionsDisabled={actionsDisabled}
@@ -236,7 +236,7 @@ function HeldEventActions({
         <LinkButton
           aria-label={`${formatDateTimeLong(event.heldAt)}の開催にOCR取り込み`}
           disabled={actionsDisabled}
-          icon={<Camera aria-hidden="true" className="size-4" />}
+          icon={<Camera aria-hidden="true" />}
           size="sm"
           to={heldEventOcrCaptureHref(event.id, returnTo)}
           variant="secondary"
@@ -247,7 +247,7 @@ function HeldEventActions({
       <LinkButton
         aria-label={`${formatDateTimeLong(event.heldAt)}の試合を検索`}
         disabled={actionsDisabled}
-        icon={<ListFilter aria-hidden="true" className="size-4" />}
+        icon={<ListFilter aria-hidden="true" />}
         size="sm"
         to={withReturnTo(`/matches?heldEventId=${encodedId}&sort=match_no_asc`, returnTo)}
         variant="quiet"
@@ -257,7 +257,7 @@ function HeldEventActions({
       <LinkButton
         aria-label={`${formatDateTimeLong(event.heldAt)}をCSV出力`}
         disabled={actionsDisabled}
-        icon={<Download aria-hidden="true" className="size-4" />}
+        icon={<Download aria-hidden="true" />}
         size="sm"
         to={withReturnTo(`/exports?heldEventId=${encodedId}&format=csv`, returnTo)}
         variant="quiet"
@@ -268,7 +268,7 @@ function HeldEventActions({
         <Button
           aria-label={`${formatDateTimeLong(event.heldAt)}を削除`}
           disabled={deleteDisabled}
-          icon={<Trash2 aria-hidden="true" className="size-4" />}
+          icon={<Trash2 aria-hidden="true" />}
           size="sm"
           variant="quiet"
           onClick={() => onDelete(event)}

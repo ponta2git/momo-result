@@ -29,13 +29,15 @@ require_flag ActiveProcessorCount 2
 require_flag CompressedClassSpaceSize 33554432
 require_flag ExitOnOutOfMemoryError true
 require_flag InitialHeapSize 33554432
-require_flag MaxHeapSize 268435456
+require_flag MaxHeapSize 201326592
 require_flag MaxMetaspaceSize 167772160
 require_flag NativeMemoryTracking summary
 require_flag PrintNMTStatistics true
 require_flag ReservedCodeCacheSize 50331648
 require_flag ThreadStackSize 512
 require_flag TieredStopAtLevel 1
-require_flag UseSerialGC true
+require_flag UseCompactObjectHeaders true
+require_flag UseG1GC true
+require_flag UseSerialGC false
 
 echo "Effective JVM profile validation passed."

@@ -42,12 +42,11 @@ export function MobileMemberSelect({
 }) {
   const changed = Boolean(originalMemberId && originalMemberId !== memberId);
   return (
-    <label className="grid gap-1 text-xs text-[var(--color-text-secondary)]">
+    <label className="grid min-w-[10rem] gap-1 text-xs text-[var(--color-text-secondary)]">
       メンバー
       <SelectControl
         ref={(node) => registerCellRef(cellId, node)}
         aria-describedby={reviewItem ? `${cellId}-review-status` : undefined}
-        className="min-w-[10rem]"
         data-validation-path={keyToPath(index, "memberId")}
         density="compact"
         tone={selectCellTone({ changed, reviewItem, reviewed })}
@@ -107,12 +106,11 @@ export function MobilePlayOrderSelect({
 }) {
   const changed = Boolean(originalPlayOrder && originalPlayOrder !== playOrder);
   return (
-    <label className="grid gap-1 text-xs text-[var(--color-text-secondary)]">
+    <label className="grid min-w-[6ch] gap-1 text-xs text-[var(--color-text-secondary)]">
       プレー順
       <SelectControl
         ref={(node) => registerCellRef(cellId, node)}
         aria-describedby={error || reviewItem ? `${cellId}-review-status` : undefined}
-        className="min-w-[6ch]"
         data-validation-path={keyToPath(index, "playOrder")}
         density="compact"
         invalid={error}

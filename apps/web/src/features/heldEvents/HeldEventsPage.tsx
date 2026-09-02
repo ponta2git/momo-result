@@ -19,7 +19,7 @@ export function HeldEventsPage() {
         actions={
           <>
             <Button
-              icon={<RefreshCw aria-hidden="true" className="size-4" />}
+              icon={<RefreshCw aria-hidden="true" />}
               pending={page.refresh.pending}
               pendingLabel="更新中…"
               size="sm"
@@ -30,7 +30,7 @@ export function HeldEventsPage() {
             </Button>
             {page.list.kind === "ready" && page.list.rows.length > 0 ? (
               <Button
-                icon={<CalendarPlus aria-hidden="true" className="size-4" />}
+                icon={<CalendarPlus aria-hidden="true" />}
                 variant="secondary"
                 onClick={page.openCreate}
               >

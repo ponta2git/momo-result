@@ -51,22 +51,23 @@ export function MemberAliasPanel({
         </p>
       </header>
 
-      <MasterResourceRefreshNotice
-        className="mt-3"
-        onRetry={onRetry}
-        resourceLabel="別名"
-        retrying={refreshing}
-        stale={stale}
-      />
+      <div className="mt-3 empty:hidden">
+        <MasterResourceRefreshNotice
+          onRetry={onRetry}
+          resourceLabel="別名"
+          retrying={refreshing}
+          stale={stale}
+        />
+      </div>
 
       <form
         action={createAction}
-        className="mt-4 grid gap-3 md:grid-cols-[minmax(12rem,0.35fr)_minmax(12rem,1fr)_auto] md:grid-rows-[auto_auto_auto]"
+        className="mt-4 grid gap-3 md:grid-cols-[minmax(12rem,0.35fr)_minmax(12rem,1fr)_auto] md:grid-rows-[auto_auto_auto] md:[&>[data-field-root]]:row-span-3"
         key={createFormKey}
       >
         <SelectField
-          fieldClassName="md:row-span-3 md:grid md:grid-rows-subgrid"
           label="プレーヤー"
+          layout="subgrid"
           name="memberId"
           options={canonicalResultMembers.map((member) => ({
             label: member.displayName,
@@ -75,20 +76,17 @@ export function MemberAliasPanel({
         />
         <TextField
           error={createError}
-          fieldClassName="md:row-span-3 md:grid md:grid-rows-subgrid"
           label="別名"
+          layout="subgrid"
           name="alias"
           placeholder="例: NO11社長"
           required
         />
-        <Button
-          className="md:col-start-3 md:row-start-2"
-          pendingLabel="追加中"
-          type="submit"
-          variant="secondary"
-        >
-          追加
-        </Button>
+        <div className="grid md:col-start-3 md:row-start-2">
+          <Button pendingLabel="追加中" type="submit" variant="secondary">
+            追加
+          </Button>
+        </div>
       </form>
 
       <div className="mt-4 grid gap-x-4 gap-y-6 md:grid-cols-2 xl:grid-cols-4">

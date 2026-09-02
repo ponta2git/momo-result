@@ -14,19 +14,19 @@ type DraftStatusPresentation = {
 
 const draftStatusPresentation: Record<DraftStatusOrUnknown, DraftStatusPresentation> = {
   confirmed: {
-    icon: <CircleCheck className="size-4" />,
+    icon: <CircleCheck />,
     tone: "success",
   },
   draft_ready: {
-    icon: <PencilLine className="size-4" />,
+    icon: <PencilLine />,
     tone: "warning",
   },
   needs_review: {
-    icon: <AlertTriangle className="size-4" />,
+    icon: <AlertTriangle />,
     tone: "attention",
   },
   ocr_failed: {
-    icon: <AlertTriangle className="size-4" />,
+    icon: <AlertTriangle />,
     tone: "danger",
   },
   ocr_running: {
@@ -35,14 +35,13 @@ const draftStatusPresentation: Record<DraftStatusOrUnknown, DraftStatusPresentat
     tone: "info",
   },
   unknown: {
-    icon: <AlertTriangle className="size-4" />,
+    icon: <AlertTriangle />,
     tone: "warning",
   },
 };
 
 export type DraftStatusBadgeProps = {
   announceChanges?: boolean;
-  className?: string;
   hideIcon?: boolean;
   label?: string;
   note?: string;
@@ -52,7 +51,6 @@ export type DraftStatusBadgeProps = {
 /** Maps match-draft domain status to the domain-free StatusBadge presentation contract. */
 export function DraftStatusBadge({
   announceChanges = false,
-  className,
   hideIcon = false,
   label,
   note,
@@ -64,7 +62,6 @@ export function DraftStatusBadge({
     <StatusBadge
       announceChanges={announceChanges}
       busy={presentation.busy}
-      className={className}
       hideIcon={hideIcon}
       icon={presentation.icon}
       label={label ?? draftStatusLabels[status]}

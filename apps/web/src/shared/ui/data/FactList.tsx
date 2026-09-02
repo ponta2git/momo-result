@@ -10,7 +10,6 @@ export type FactListItem = {
 
 export type FactListProps = {
   ariaLabel: string;
-  className?: string | undefined;
   columns?: 1 | 2 | 4 | undefined;
   items: readonly FactListItem[];
   layout?: "grid" | "inline" | "segmented" | undefined;
@@ -23,13 +22,7 @@ const columnsClass = {
 } as const;
 
 /** Owns fact label/value semantics and consistent numeric alignment across finite layouts. */
-export function FactList({
-  ariaLabel,
-  className,
-  columns = 1,
-  items,
-  layout = "grid",
-}: FactListProps) {
+export function FactList({ ariaLabel, columns = 1, items, layout = "grid" }: FactListProps) {
   return (
     <dl
       aria-label={ariaLabel}
@@ -41,7 +34,6 @@ export function FactList({
           : layout === "grid"
             ? "gap-2"
             : "gap-1",
-        className,
       )}
     >
       {items.map((item) => (

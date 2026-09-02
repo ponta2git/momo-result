@@ -134,14 +134,16 @@ export function CaptureSlotCard({
         />
       </div>
 
-      <CaptureSlotFeedback
-        mismatch={Boolean(mismatch)}
-        refreshing={statusRefreshing}
-        slot={slot}
-        onRefreshStatus={actions.onRefreshStatus}
-      />
+      <div className="mt-4 grid gap-4 empty:hidden">
+        <CaptureSlotFeedback
+          mismatch={Boolean(mismatch)}
+          refreshing={statusRefreshing}
+          slot={slot}
+          onRefreshStatus={actions.onRefreshStatus}
+        />
 
-      <DraftPreview draft={draft} />
+        <DraftPreview draft={draft} />
+      </div>
     </section>
   );
 }

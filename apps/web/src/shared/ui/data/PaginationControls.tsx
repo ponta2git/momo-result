@@ -8,7 +8,6 @@ import { SelectField } from "@/shared/ui/forms/SelectField";
 
 type PaginationControlsBaseProps = {
   ariaLabel?: string | undefined;
-  className?: string;
   disabled?: boolean;
   pagination: PaginationState;
   placement?: "embedded" | "standalone" | undefined;
@@ -33,7 +32,6 @@ export type PaginationControlsProps = CompactPaginationControlsProps | FullPagin
 export function PaginationControls(props: PaginationControlsProps) {
   const {
     ariaLabel = "ページネーション",
-    className,
     disabled = false,
     pagination,
     placement = "standalone",
@@ -53,7 +51,6 @@ export function PaginationControls(props: PaginationControlsProps) {
         placement === "standalone"
           ? "rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3"
           : "bg-transparent",
-        className,
       )}
     >
       <p className="text-sm font-semibold text-[var(--color-text-secondary)] tabular-nums sm:inline-flex sm:min-h-9 sm:items-center">
@@ -69,19 +66,20 @@ export function PaginationControls(props: PaginationControlsProps) {
         )}
       >
         {props.variant === "compact" ? null : (
-          <SelectField
-            disabled={disabled}
-            label="表示件数"
-            options={props.pageSizeOptions.map((value) => ({
-              label: `${value.toLocaleString()}件ずつ`,
-              value: String(value),
-            }))}
-            selectClassName="sm:min-w-36"
-            value={String(pagination.pageSize)}
-            onChange={(event) => {
-              props.onPageSizeChange(Number(event.currentTarget.value));
-            }}
-          />
+          <div className="sm:min-w-36">
+            <SelectField
+              disabled={disabled}
+              label="表示件数"
+              options={props.pageSizeOptions.map((value) => ({
+                label: `${value.toLocaleString()}件ずつ`,
+                value: String(value),
+              }))}
+              value={String(pagination.pageSize)}
+              onChange={(event) => {
+                props.onPageSizeChange(Number(event.currentTarget.value));
+              }}
+            />
+          </div>
         )}
         <div
           className={cn(
@@ -92,25 +90,27 @@ export function PaginationControls(props: PaginationControlsProps) {
           )}
         >
           {variant === "full" ? (
-            <IconButton
-              aria-label="先頭ページへ"
-              className="order-2 sm:order-none"
-              disabled={!canGoPrevious}
-              icon={<ChevronsLeft />}
-              size="sm"
-              tooltip="先頭ページへ"
-              onClick={() => onPageChange(1)}
-            />
+            <div className="order-2 grid sm:order-none">
+              <IconButton
+                aria-label="先頭ページへ"
+                disabled={!canGoPrevious}
+                icon={<ChevronsLeft />}
+                size="sm"
+                tooltip="先頭ページへ"
+                onClick={() => onPageChange(1)}
+              />
+            </div>
           ) : null}
-          <IconButton
-            aria-label="前のページへ"
-            className={variant === "full" ? "order-2 sm:order-none" : undefined}
-            disabled={!canGoPrevious}
-            icon={<ChevronLeft />}
-            size="sm"
-            tooltip="前のページへ"
-            onClick={() => onPageChange(Math.max(1, pagination.page - 1))}
-          />
+          <div className={variant === "full" ? "order-2 grid sm:order-none" : "grid"}>
+            <IconButton
+              aria-label="前のページへ"
+              disabled={!canGoPrevious}
+              icon={<ChevronLeft />}
+              size="sm"
+              tooltip="前のページへ"
+              onClick={() => onPageChange(Math.max(1, pagination.page - 1))}
+            />
+          </div>
           <span
             className={cn(
               "inline-flex min-h-11 min-w-0 items-center justify-center rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-3 text-sm font-semibold text-[var(--color-text-secondary)] tabular-nums sm:min-h-9 sm:min-w-20",
@@ -119,25 +119,27 @@ export function PaginationControls(props: PaginationControlsProps) {
           >
             {currentPage.toLocaleString()}／{totalPages.toLocaleString()}
           </span>
-          <IconButton
-            aria-label="次のページへ"
-            className={variant === "full" ? "order-2 sm:order-none" : undefined}
-            disabled={!canGoNext}
-            icon={<ChevronRight />}
-            size="sm"
-            tooltip="次のページへ"
-            onClick={() => onPageChange(Math.min(totalPages, pagination.page + 1))}
-          />
-          {variant === "full" ? (
+          <div className={variant === "full" ? "order-2 grid sm:order-none" : "grid"}>
             <IconButton
-              aria-label="最後のページへ"
-              className="order-2 sm:order-none"
+              aria-label="次のページへ"
               disabled={!canGoNext}
-              icon={<ChevronsRight />}
+              icon={<ChevronRight />}
               size="sm"
-              tooltip="最後のページへ"
-              onClick={() => onPageChange(totalPages)}
+              tooltip="次のページへ"
+              onClick={() => onPageChange(Math.min(totalPages, pagination.page + 1))}
             />
+          </div>
+          {variant === "full" ? (
+            <div className="order-2 grid sm:order-none">
+              <IconButton
+                aria-label="最後のページへ"
+                disabled={!canGoNext}
+                icon={<ChevronsRight />}
+                size="sm"
+                tooltip="最後のページへ"
+                onClick={() => onPageChange(totalPages)}
+              />
+            </div>
           ) : null}
         </div>
       </div>

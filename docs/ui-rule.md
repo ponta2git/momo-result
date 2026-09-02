@@ -49,6 +49,7 @@
 - content surface の内側を通常 section ごとの白い card に分割しない。まず見出し、整列、列、関係的余白で構成し、同時に独立して扱う source / editor などの workspace、独立して反復する record、境界が操作の理解に必要な bounded panel に限って別面を許容する。empty、pagination、loading など親 scope に従属する状態・操作は、親の白面を重ねて作り直さない。
 - グルーピングは整列と余白から始める。divider は、隣接内容が余白と見出しだけでは同一群と誤認される場合、table の row / column、control、状態通知など境界自体が意味を持つ場合に限る。通常 section を上下線で挟まず、必要なら片側1本を使う。
 - 1つの視覚境界は1つの owner だけが描く。親 surface の外周と先頭・末尾 child、disclosure の root と panel、table wrapper と隣接 toolbar などへ同じ境界を重ねず、隣接する平行線や二重線を作らない。淡色背景、border、角丸を同じ要素へ慣習的に重ねず、境界を伝えるために必要な最小の手段を選ぶ。
+- sibling 間の divider は、それらを並べる親 composition が `divide-*` または独立した separator として所有し、各 child の先頭・末尾 border と `first` / `last` の相殺で組み立てない。control、bounded panel、badge、table の上端・header 下端・最終行下端など、部品自身の意味を成立させる perimeter / internal boundary はその部品が所有する。装飾だけの separator は accessibility tree へ意味を追加せず、内容上の区切りを表す場合だけ semantic な `hr` または section 構造を使う。
 - shadow は dialog、tooltip、toast など浮遊 UI に限定する。通常内容に elevation を足さず、gradient、glow、大きな surface contrast を装飾に使わない。
 
 ### 2.3 文字、余白、データ表現
@@ -74,10 +75,12 @@
 ### 3.1 抽象化の単位と所有権
 
 - 同じ目的、対象への作用、状態遷移、制約、回復方法を持つ操作は、画面が異なっても同じ shared UI primitive または操作 pattern を使う。業務上の結果や制約が異なる場合は、外形を揃えるために一つの操作へ統合しない。
-- shared UI は、意味に対応する構造、keyboard / focus、accessible name、hit target、disabled / pending、局所 feedback、responsive な配置を所有する。feature は業務語彙、URL / query / cache、権限、入力変換、副作用、業務状態遷移を所有し、app は route と画面 composition、shared domain は横断する業務 identity、順序、formatter を所有する。
+- shared UI は、意味に対応する構造、keyboard / focus、accessible name、hit target、disabled / pending、局所 feedback、component 内部の responsive arrangement を所有する。feature は業務語彙、URL / query / cache、権限、入力変換、副作用、業務状態遷移を所有し、app は route と画面 composition、shared domain は横断する業務 identity、順序、formatter を所有する。
 - shared UI へ切り出すのは、複数の現在用途を一つの小さい契約で覆える場合、または単独用途でも accessibility、制約、feedback、状態同期の重要な判断を隠せる場合に限る。名前を付けただけの wrapper、呼び出し元の判断を props へ移すだけの万能 component、将来用途だけを見込んだ schema は作らない。
 - primitive、操作 pattern、feature composition の三層で考える。feature は shared UI を組み合わせて文脈固有の操作を作り、shared UI は feature の業務 enum、API DTO、query key、文言一覧を知らない。
 - button、link、form control、status、notice、dialog、disclosure は shared UI とアクセシブルな primitive を優先し、機能ごとに同じ keyboard / focus / pending 挙動を手作りしない。
+- component を置く親 composition は、grid / flex 内の位置、並び順、外側の幅・高さ・余白、sibling 間の gap / divider、画面幅に応じた伸縮と積み替えを所有する。再利用 component は、内容または親が定めた slot に従って縮小・伸長できることを既定とし、特定の利用箇所だけを理由に autonomous な固定幅、固定高、外 margin、隣接 separator を持たない。page frame、dialog viewport、局所 scroll viewport など、利用可能領域を定義すること自体が責務の layout primitive はこの限りではない。
+- shared UI は、keyboard / focus と一体の最小 hit target、control の内部 padding / line-height、icon・marker の寸法、画像・図表で意味を保つ aspect ratio、内部 content scroller など、部品の契約を壊さない intrinsic constraint を所有する。`w-full` / `h-full` は親が定めた slot を消費する指定として使ってよいが、それだけで親の寸法責務を部品へ戻したとは扱わない。consumer は原則として外側 container で寸法を指定し、`className` による上書きで intrinsic constraint や internal boundary を壊さない。
 
 ### 3.2 選択・表示切替・表示範囲
 
@@ -194,6 +197,6 @@
 - component test は、shared primitive と利用者価値が現れる component を中心に、選択した state matrix、keyboard、focus、accessible name、local error、pending 中の重複操作、reduced motion 時の挙動を実操作で固定する。rendered size が必要な hit target は代表 flow の browser / visual evidence で確認し、各 component へ同じ case を複製しない。
 - 固定メンバー、プレー順、状態・意味 token のように複数画面が消費する対応関係は、共通の型・定義を実装上の正本とし、その consumer 契約を unit / component test で代表確認する。各画面の source 文字列を横断走査しない。
 - 主要 flow は Playwright で、変更が影響する layout mode の代表 viewport と主要状態を確認し、URL、request、保存、download、主要結果を主 oracle とする。responsive behavior を変える場合は対応する最小幅を含め、意図しない横 scroll、safe area、focus 復帰、dialog / disclosure の位置変化も確認する。同じ layout mode の近接幅を一律に重複実行しない。
-- screenshot は補助とし、視覚レビューでは hierarchy、読み幅、関係的余白、product specificity、restraint、structural fit を確認する。初見点検と cognitive walkthrough で、目的、現在地、主要操作を説明できるか確認する。
+- screenshot は補助とし、視覚レビューでは hierarchy、読み幅、関係的余白、product specificity、restraint、structural fit を確認する。component が親 slot に追従していること、狭幅と広幅で intrinsic constraint が保たれること、sibling 間の divider と部品 perimeter が二重にならないことも代表画面で確認する。初見点検と cognitive walkthrough で、目的、現在地、主要操作を説明できるか確認する。
 - 製品横断の階層、IA、固定メンバー / プレー順の意味を変える場合は、影響する利用段階の代表画面で、3秒見た利用者が「いま見る対象」と「次の1操作」を説明できることを確認する。grayscale / blur でも主役が残ること、色なしで役割を区別できること、順位がどちらの sequence にも見えないこと、通常状態で信頼性の注意が出ないこと、同じ事実や内部都合を反復していないことも確認する。
 - OCR 結果修正または手入力 workspace の構造を変える場合は、現行 baseline に対して画像と field の対応理解、修正完了時間、誤修正、操作数を比較し、同等以上であることを確認する。

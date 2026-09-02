@@ -15,13 +15,13 @@ export type DataTableCaption = {
 
 type DataTableColumnBase<Row> = {
   align?: DataTableAlign;
-  cellClassName?: string;
   header: ReactNode;
   key: string;
   minWidth?: string;
   width?: string;
   renderCell: (row: Row) => ReactNode;
   rowHeader?: boolean;
+  tabular?: boolean;
 };
 
 type StaticDataTableColumn = {
@@ -44,7 +44,6 @@ export type DataTableColumn<Row> = DataTableColumnBase<Row> &
 
 export type DataTableProps<Row> = {
   caption: DataTableCaption;
-  className?: string;
   columns: Array<DataTableColumn<Row>>;
   density?: DataTableDensity;
   emptyState?: ReactNode;
@@ -79,13 +78,12 @@ export const dataTableBodyCellClassName = "px-3 py-2 align-middle";
 
 export const dataTableScrollAreaClassName = "min-w-0 overflow-x-auto bg-[var(--color-surface)]";
 
-export function DataTableBodyRow({ className, ...props }: ComponentPropsWithoutRef<"tr">) {
+export function DataTableBodyRow({
+  ...props
+}: Omit<ComponentPropsWithoutRef<"tr">, "className" | "style">) {
   return (
     <tr
-      className={cn(
-        "group hover:bg-[var(--color-surface-hover)] last:[&>td]:border-b last:[&>td]:border-[var(--color-border-strong)] last:[&>th]:border-b last:[&>th]:border-[var(--color-border-strong)]",
-        className,
-      )}
+      className="group hover:bg-[var(--color-surface-hover)] last:[&>td]:border-b last:[&>td]:border-[var(--color-border-strong)] last:[&>th]:border-b last:[&>th]:border-[var(--color-border-strong)]"
       {...props}
     />
   );
@@ -93,7 +91,6 @@ export function DataTableBodyRow({ className, ...props }: ComponentPropsWithoutR
 
 export function DataTable<Row>({
   caption,
-  className,
   columns,
   density = "comfortable",
   emptyState,
@@ -116,7 +113,7 @@ export function DataTable<Row>({
   }, [columns]);
 
   return (
-    <div className={cn(dataTableScrollAreaClassName, className)}>
+    <div className={dataTableScrollAreaClassName}>
       <table
         className={cn(
           "w-full min-w-full border-separate border-spacing-0 text-sm leading-6",
@@ -127,7 +124,7 @@ export function DataTable<Row>({
         <caption
           className={cn(
             caption.visibility === "visible"
-              ? "border-b border-[var(--color-border)] px-3 py-2 text-left text-sm font-semibold text-[var(--color-text-primary)]"
+              ? "border-t border-[var(--color-border-strong)] px-3 py-2 text-left text-sm font-semibold text-[var(--color-text-primary)]"
               : "sr-only",
           )}
         >
@@ -154,6 +151,7 @@ export function DataTable<Row>({
                 }
                 className={cn(
                   dataTableHeaderCellClassName,
+                  caption.visibility === "visible" ? "border-t-0" : "",
                   "sticky top-0 z-[var(--z-base)]",
                   alignClass[column.align ?? "left"],
                 )}
@@ -204,7 +202,7 @@ export function DataTable<Row>({
                       alignClass[column.align ?? "left"],
                       verticalAlignClass[verticalAlign],
                       column.rowHeader ? "font-semibold" : "",
-                      column.cellClassName,
+                      column.tabular ? "tabular-nums" : "",
                     )}
                     scope={column.rowHeader ? "row" : undefined}
                     style={columnStyleByKey.get(column.key)}

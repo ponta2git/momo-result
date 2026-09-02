@@ -60,12 +60,7 @@ export function MatchNoteSection({ match, refetchMatch }: MatchNoteSectionProps)
               {match.note.body ? "編集" : "メモを追加"}
             </Button>
             {match.note.body ? (
-              <Button
-                className="text-[var(--color-danger)] hover:text-[var(--color-danger)]"
-                size="sm"
-                variant="quiet"
-                onClick={() => setDeleteOpen(true)}
-              >
+              <Button size="sm" variant="dangerQuiet" onClick={() => setDeleteOpen(true)}>
                 メモを削除
               </Button>
             ) : null}
@@ -90,9 +85,11 @@ export function MatchNoteSection({ match, refetchMatch }: MatchNoteSectionProps)
           <TextareaControl
             aria-label="試合メモ"
             aria-describedby={tooLong ? "match-note-detail-error" : undefined}
-            className="min-h-28 resize-y leading-6"
             disabled={pending}
             invalid={tooLong}
+            minHeight="md"
+            resize="vertical"
+            textFlow="relaxed"
             value={draft}
             onChange={(event) => setDraft(event.currentTarget.value)}
           />

@@ -38,10 +38,12 @@ export function MatchWorkspaceBlockedNotice({
         </Link>
       </div>
       {model.feedback.error ? (
-        <Notice className="mt-3" title={model.feedback.error.title} tone="danger">
-          <p>{model.feedback.error.detail}</p>
-          <p className="mt-1">{model.feedback.error.nextStep}</p>
-        </Notice>
+        <div className="mt-3">
+          <Notice title={model.feedback.error.title} tone="danger">
+            <p>{model.feedback.error.detail}</p>
+            <p className="mt-1">{model.feedback.error.nextStep}</p>
+          </Notice>
+        </div>
       ) : null}
     </section>
   );

@@ -16,7 +16,6 @@ const emptyNavItems: readonly GlobalNavItem[] = [];
 type GlobalNavProps = {
   brandLabel?: ReactNode;
   brandTo: string;
-  className?: string;
   endContent?: ReactNode;
   environmentLabel?: string | undefined;
   items: readonly GlobalNavItem[];
@@ -38,7 +37,9 @@ function NavItemLink({ item }: { item: GlobalNavItem }) {
         )
       }
     >
-      <span aria-hidden="true">{item.icon}</span>
+      <span aria-hidden="true" className="[&_svg]:size-4">
+        {item.icon}
+      </span>
       <span>{item.label}</span>
     </NavLink>
   );
@@ -47,7 +48,6 @@ function NavItemLink({ item }: { item: GlobalNavItem }) {
 export function GlobalNav({
   brandLabel = "momo-result",
   brandTo,
-  className,
   endContent,
   environmentLabel,
   items,
@@ -67,10 +67,7 @@ export function GlobalNav({
   return (
     <nav
       aria-label="グローバルナビゲーション"
-      className={cn(
-        "sticky top-0 z-[var(--z-sticky)] border-b border-[var(--color-border)] bg-[var(--color-surface)]",
-        className,
-      )}
+      className="sticky top-0 z-[var(--z-sticky)] border-b border-[var(--color-border)] bg-[var(--color-surface)]"
     >
       <div
         className={cn(
@@ -105,18 +102,24 @@ export function GlobalNav({
             <NavItemLink key={item.to} item={item} />
           ))}
           {managementItems.length > 0 ? (
-            <div
-              aria-label={managementLabel}
-              className="ml-1 flex min-w-0 shrink-0 items-center gap-2 border-l border-[var(--color-border)] pl-2"
-              role="group"
-            >
-              <span className="momo-label shrink-0 text-[var(--color-text-secondary)]">
-                {managementLabel}
-              </span>
-              {managementItems.map((item) => (
-                <NavItemLink key={item.to} item={item} />
-              ))}
-            </div>
+            <>
+              <span
+                aria-hidden="true"
+                className="ml-1 h-6 w-px shrink-0 bg-[var(--color-border)]"
+              />
+              <div
+                aria-label={managementLabel}
+                className="flex min-w-0 shrink-0 items-center gap-2"
+                role="group"
+              >
+                <span className="momo-label shrink-0 text-[var(--color-text-secondary)]">
+                  {managementLabel}
+                </span>
+                {managementItems.map((item) => (
+                  <NavItemLink key={item.to} item={item} />
+                ))}
+              </div>
+            </>
           ) : null}
         </div>
       </div>

@@ -12,12 +12,10 @@ type MatchResultLedgerContextStatus = "loading" | "ready" | "unavailable";
 
 export function MatchResultLedger({
   ariaLabel = "試合の順位と成績",
-  className,
   contextStatus,
   rows,
 }: {
   ariaLabel?: string;
-  className?: string;
   contextStatus: MatchResultLedgerContextStatus;
   rows: MatchResultLedgerRow[];
 }) {
@@ -26,33 +24,24 @@ export function MatchResultLedger({
   return (
     <ol
       aria-label={ariaLabel}
-      className={cn(
-        "grid overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border-strong)] bg-[var(--color-surface)]",
-        className,
-      )}
+      className="grid divide-y divide-[var(--color-border)] overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border-strong)] bg-[var(--color-surface)]"
     >
       {orderedRows.map((row) => (
         <li
           key={row.memberId}
-          className="grid min-w-0 gap-3 border-b border-[var(--color-border)] p-3 last:border-b-0 sm:grid-cols-[4rem_minmax(12rem,1fr)_minmax(10rem,auto)] sm:items-start"
+          className="grid min-w-0 gap-3 p-3 sm:grid-cols-[4rem_minmax(12rem,1fr)_minmax(10rem,auto)] sm:items-start"
         >
           <div className="flex items-center gap-3 sm:block">
             <RankBadge rank={row.rank} size="md" />
-            <MemberSequenceLabel
-              className="font-semibold text-[var(--color-text-primary)] sm:hidden"
-              memberId={row.memberId}
-            >
-              {row.displayName}
-            </MemberSequenceLabel>
+            <span className="min-w-0 font-semibold text-[var(--color-text-primary)] sm:hidden">
+              <MemberSequenceLabel memberId={row.memberId}>{row.displayName}</MemberSequenceLabel>
+            </span>
           </div>
 
           <div className="min-w-0">
-            <MemberSequenceLabel
-              className="hidden font-semibold text-[var(--color-text-primary)] sm:inline-flex"
-              memberId={row.memberId}
-            >
-              {row.displayName}
-            </MemberSequenceLabel>
+            <span className="min-w-0 font-semibold text-[var(--color-text-primary)] max-sm:hidden">
+              <MemberSequenceLabel memberId={row.memberId}>{row.displayName}</MemberSequenceLabel>
+            </span>
             <div className="mt-1 flex min-w-0 flex-wrap gap-x-3 gap-y-1 text-xs text-[var(--color-text-secondary)]">
               <span>
                 物件収益{" "}

@@ -91,22 +91,24 @@ export function SeriesAnalysisScopeBar({
   return (
     <FilterBar
       action={
-        <Button
-          className="w-full sm:w-auto"
-          disabled={!canRefresh}
-          icon={<RefreshCw className="size-4" />}
-          pending={refreshing}
-          pendingLabel="表示を更新中"
-          size="sm"
-          variant="secondary"
-          onClick={onRefresh}
-        >
-          表示を更新
-        </Button>
+        <div className="grid w-full sm:w-auto">
+          <Button
+            disabled={!canRefresh}
+            icon={<RefreshCw />}
+            pending={refreshing}
+            pendingLabel="表示を更新中"
+            size="sm"
+            variant="secondary"
+            onClick={onRefresh}
+          >
+            表示を更新
+          </Button>
+        </div>
       }
       ariaLabel="比較条件"
       busy={refreshing}
       details={{
+        columns: 2,
         controls: (
           <>
             <SelectField
@@ -126,7 +128,6 @@ export function SeriesAnalysisScopeBar({
         label: "比較対象を変更",
         onOpenChange: setOpen,
         open,
-        panelClassName: "md:grid-cols-2",
         summary: scopeSummary,
       }}
       primary={

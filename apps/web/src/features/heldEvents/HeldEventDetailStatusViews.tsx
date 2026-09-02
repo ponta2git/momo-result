@@ -24,7 +24,9 @@ export function HeldEventDetailLoading() {
         <section className="grid gap-3">
           <div>
             <Skeleton className="h-6 w-32" />
-            <Skeleton className="mt-2 h-4 w-64 max-w-full" />
+            <div className="mt-2">
+              <Skeleton className="h-4 w-64 max-w-full" />
+            </div>
           </div>
           <div className="divide-y divide-[var(--color-border)]">
             {["match-1", "match-2"].map((id) => (

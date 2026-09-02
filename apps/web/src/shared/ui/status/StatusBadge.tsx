@@ -23,7 +23,6 @@ export type StatusBadgeProps = {
   /** Opts a persistent, dynamically changing badge into a polite atomic live region. */
   announceChanges?: boolean | undefined;
   busy?: boolean | undefined;
-  className?: string | undefined;
   hideIcon?: boolean | undefined;
   icon?: ReactNode | undefined;
   label: ReactNode;
@@ -35,7 +34,6 @@ export type StatusBadgeProps = {
 export function StatusBadge({
   announceChanges = false,
   busy = false,
-  className,
   hideIcon = false,
   icon,
   label,
@@ -52,12 +50,14 @@ export function StatusBadge({
       className={cn(
         "inline-flex min-h-8 shrink-0 items-center gap-2 whitespace-nowrap rounded-[var(--radius-xs)] border px-2 py-1 text-xs font-semibold leading-5",
         toneClass[tone],
-        className,
       )}
       role={announceChanges ? "status" : undefined}
     >
       {!hideIcon && statusIcon ? (
-        <span aria-hidden="true" className="inline-flex shrink-0 items-center justify-center">
+        <span
+          aria-hidden="true"
+          className="inline-flex shrink-0 items-center justify-center [&_svg]:size-4"
+        >
           {statusIcon}
         </span>
       ) : null}

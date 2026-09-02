@@ -33,24 +33,25 @@ export function CameraCapture({
   return (
     <div className="space-y-3">
       {camera.devices.length > 0 ? (
-        <SelectField
-          disabled={disabled || camera.active || camera.starting}
-          fieldClassName="max-w-[28rem]"
-          label="カメラ"
-          options={[
-            { label: "ブラウザの既定カメラ", value: "" },
-            ...camera.devices.map((device, index) => ({
-              label: device.label || `カメラ ${index + 1}`,
-              value: device.deviceId,
-            })),
-          ]}
-          value={camera.deviceId}
-          onChange={(event) => camera.selectDevice(event.currentTarget.value)}
-        />
+        <div className="max-w-[28rem]">
+          <SelectField
+            disabled={disabled || camera.active || camera.starting}
+            label="カメラ"
+            options={[
+              { label: "ブラウザの既定カメラ", value: "" },
+              ...camera.devices.map((device, index) => ({
+                label: device.label || `カメラ ${index + 1}`,
+                value: device.deviceId,
+              })),
+            ]}
+            value={camera.deviceId}
+            onChange={(event) => camera.selectDevice(event.currentTarget.value)}
+          />
+        </div>
       ) : null}
       <div
         aria-label={`${slotLabel}の16:9カメラ画像枠`}
-        className="relative aspect-video w-full max-w-[56rem] overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-media-canvas)]"
+        className="relative aspect-video w-full overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-media-canvas)]"
         role="group"
       >
         {camera.active ? null : (
@@ -111,16 +112,17 @@ export function CameraCapture({
         <p className="text-xs text-[var(--color-text-secondary)]">現在は撮影できません。</p>
       ) : null}
       {!camera.error && renderFallback ? (
-        <Disclosure
-          className="w-full text-sm text-[var(--color-text-secondary)] sm:w-fit"
-          keepMounted
-          panelClassName="mt-2 p-2"
-          presentation="inset"
-          summary="カメラが使えない場合"
-          triggerClassName="w-full sm:w-auto"
-        >
-          {renderFallback(false)}
-        </Disclosure>
+        <div className="grid w-full text-sm text-[var(--color-text-secondary)] sm:w-fit">
+          <Disclosure
+            keepMounted
+            panelPadding="xs"
+            panelSpacing="sm"
+            presentation="inset"
+            summary="カメラが使えない場合"
+          >
+            {renderFallback(false)}
+          </Disclosure>
+        </div>
       ) : null}
     </div>
   );

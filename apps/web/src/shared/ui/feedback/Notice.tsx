@@ -1,8 +1,7 @@
 import type { ReactNode } from "react";
 
-import { cn } from "@/shared/ui/cn";
-
 type NoticeTone = "info" | "success" | "warning" | "danger";
+type NoticePresentation = "contained" | "bare";
 
 const toneClass = {
   info: "border-[var(--color-border)] bg-[var(--color-surface-subtle)] text-[var(--color-text-secondary)]",
@@ -17,20 +16,23 @@ const toneClass = {
 export type NoticeProps = {
   action?: ReactNode;
   children: ReactNode;
-  className?: string;
+  presentation?: NoticePresentation;
   role?: "alert" | "note" | "status";
   title?: ReactNode;
   tone?: NoticeTone;
 };
 
-export function Notice({ action, children, className, role, title, tone = "info" }: NoticeProps) {
+export function Notice({
+  action,
+  children,
+  presentation = "contained",
+  role,
+  title,
+  tone = "info",
+}: NoticeProps) {
   return (
     <section
-      className={cn(
-        "momo-copy rounded-[var(--radius-md)] border p-3 text-sm",
-        toneClass[tone],
-        className,
-      )}
+      className={`momo-copy text-sm ${presentation === "contained" ? `rounded-[var(--radius-md)] border p-3 ${toneClass[tone]}` : "text-[var(--color-text-primary)]"}`}
       role={role ?? (tone === "danger" ? "alert" : "status")}
     >
       {title ? (
@@ -38,7 +40,7 @@ export function Notice({ action, children, className, role, title, tone = "info"
           {title}
         </h3>
       ) : null}
-      <div className={cn("min-w-0 text-pretty", title ? "mt-1" : "")}>{children}</div>
+      <div className={`min-w-0 text-pretty${title ? " mt-1" : ""}`}>{children}</div>
       {action ? <div className="mt-2">{action}</div> : null}
     </section>
   );

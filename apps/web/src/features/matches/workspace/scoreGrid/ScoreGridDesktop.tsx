@@ -81,104 +81,110 @@ export function ScoreGridDesktopTable({
               }
             >
               <td className="sticky left-0 z-[var(--z-sticky)] rounded-l-[var(--radius-md)] border-l-[3px] border-l-[var(--play-order-accent)] bg-[var(--color-surface-subtle)] px-2 py-3 align-top">
-                <SelectControl
-                  ref={(node) => registerCellRef(memberCellId, node)}
-                  aria-describedby={memberReviewItem ? `${memberCellId}-review-status` : undefined}
-                  aria-label={`${memberDisplayName(player.memberId)} メンバー`}
-                  className="min-w-[10rem]"
-                  data-validation-path={keyToPath(rowIndex, "memberId")}
-                  density="compact"
-                  tone={selectCellTone({
-                    changed: Boolean(originalRow && originalRow.memberId !== player.memberId),
-                    reviewItem: memberReviewItem,
-                    reviewed: reviewedCellIds.has(memberCellId),
-                  })}
-                  value={player.memberId}
-                  onChange={(event) => {
-                    onPlayerChange(rowIndex, {
-                      memberId: event.target
-                        .value as MatchFormValues["players"][number]["memberId"],
-                    });
-                  }}
-                  onFocus={() => {
-                    onPreferImageKindChange?.("total_assets");
-                    onReviewCellFocus(rowIndex, "memberId");
-                  }}
-                  onKeyDown={(event) =>
-                    handleKeyboard({
-                      col: 0,
-                      event,
-                      onRevertCell: () => undefined,
-                      row: rowIndex,
-                    })
-                  }
-                >
-                  {canonicalResultMembers.map((member) => (
-                    <option key={member.memberId} value={member.memberId}>
-                      {member.displayName}
-                    </option>
-                  ))}
-                </SelectControl>
-                <ScoreGridSelectStatus
-                  cellId={memberCellId}
-                  changed={Boolean(originalRow && originalRow.memberId !== player.memberId)}
-                  reviewItem={memberReviewItem}
-                  reviewed={reviewedCellIds.has(memberCellId)}
-                />
-                <PlayOrderMark className="mt-1" playOrder={player.playOrder} />
+                <div className="min-w-[10rem]">
+                  <SelectControl
+                    ref={(node) => registerCellRef(memberCellId, node)}
+                    aria-describedby={
+                      memberReviewItem ? `${memberCellId}-review-status` : undefined
+                    }
+                    aria-label={`${memberDisplayName(player.memberId)} メンバー`}
+                    data-validation-path={keyToPath(rowIndex, "memberId")}
+                    density="compact"
+                    tone={selectCellTone({
+                      changed: Boolean(originalRow && originalRow.memberId !== player.memberId),
+                      reviewItem: memberReviewItem,
+                      reviewed: reviewedCellIds.has(memberCellId),
+                    })}
+                    value={player.memberId}
+                    onChange={(event) => {
+                      onPlayerChange(rowIndex, {
+                        memberId: event.target
+                          .value as MatchFormValues["players"][number]["memberId"],
+                      });
+                    }}
+                    onFocus={() => {
+                      onPreferImageKindChange?.("total_assets");
+                      onReviewCellFocus(rowIndex, "memberId");
+                    }}
+                    onKeyDown={(event) =>
+                      handleKeyboard({
+                        col: 0,
+                        event,
+                        onRevertCell: () => undefined,
+                        row: rowIndex,
+                      })
+                    }
+                  >
+                    {canonicalResultMembers.map((member) => (
+                      <option key={member.memberId} value={member.memberId}>
+                        {member.displayName}
+                      </option>
+                    ))}
+                  </SelectControl>
+                  <ScoreGridSelectStatus
+                    cellId={memberCellId}
+                    changed={Boolean(originalRow && originalRow.memberId !== player.memberId)}
+                    reviewItem={memberReviewItem}
+                    reviewed={reviewedCellIds.has(memberCellId)}
+                  />
+                  <div className="mt-1">
+                    <PlayOrderMark playOrder={player.playOrder} />
+                  </div>
+                </div>
               </td>
 
               <td className="px-2 py-3 align-top">
-                <SelectControl
-                  ref={(node) => registerCellRef(playOrderCellId, node)}
-                  aria-describedby={
-                    playOrderError || playOrderReviewItem
-                      ? `${playOrderCellId}-review-status`
-                      : undefined
-                  }
-                  aria-label={`${memberDisplayName(player.memberId)} プレー順`}
-                  className="min-w-[6ch]"
-                  data-validation-path={keyToPath(rowIndex, "playOrder")}
-                  density="compact"
-                  invalid={playOrderError}
-                  textAlign="center"
-                  tone={selectCellTone({
-                    changed: Boolean(originalRow && originalRow.playOrder !== player.playOrder),
-                    reviewItem: playOrderReviewItem,
-                    reviewed: reviewedCellIds.has(playOrderCellId),
-                  })}
-                  value={Number.isFinite(player.playOrder) ? String(player.playOrder) : ""}
-                  onChange={(event) =>
-                    onPlayOrderChange(rowIndex, Math.trunc(Number(event.target.value)))
-                  }
-                  onFocus={() => {
-                    onPreferImageKindChange?.("incident_log");
-                    onReviewCellFocus(rowIndex, "playOrder");
-                  }}
-                  onKeyDown={(event) =>
-                    handleKeyboard({
-                      col: 1,
-                      event,
-                      onRevertCell: () => undefined,
-                      row: rowIndex,
-                    })
-                  }
-                >
-                  <option value="">-</option>
-                  {[1, 2, 3, 4].map((order) => (
-                    <option key={order} value={order}>
-                      {order}
-                    </option>
-                  ))}
-                </SelectControl>
-                <ScoreGridSelectStatus
-                  cellId={playOrderCellId}
-                  changed={Boolean(originalRow && originalRow.playOrder !== player.playOrder)}
-                  error={playOrderError}
-                  reviewItem={playOrderReviewItem}
-                  reviewed={reviewedCellIds.has(playOrderCellId)}
-                  synced={lastSyncedPlayerIndex === rowIndex}
-                />
+                <div className="min-w-[6ch]">
+                  <SelectControl
+                    ref={(node) => registerCellRef(playOrderCellId, node)}
+                    aria-describedby={
+                      playOrderError || playOrderReviewItem
+                        ? `${playOrderCellId}-review-status`
+                        : undefined
+                    }
+                    aria-label={`${memberDisplayName(player.memberId)} プレー順`}
+                    data-validation-path={keyToPath(rowIndex, "playOrder")}
+                    density="compact"
+                    invalid={playOrderError}
+                    textAlign="center"
+                    tone={selectCellTone({
+                      changed: Boolean(originalRow && originalRow.playOrder !== player.playOrder),
+                      reviewItem: playOrderReviewItem,
+                      reviewed: reviewedCellIds.has(playOrderCellId),
+                    })}
+                    value={Number.isFinite(player.playOrder) ? String(player.playOrder) : ""}
+                    onChange={(event) =>
+                      onPlayOrderChange(rowIndex, Math.trunc(Number(event.target.value)))
+                    }
+                    onFocus={() => {
+                      onPreferImageKindChange?.("incident_log");
+                      onReviewCellFocus(rowIndex, "playOrder");
+                    }}
+                    onKeyDown={(event) =>
+                      handleKeyboard({
+                        col: 1,
+                        event,
+                        onRevertCell: () => undefined,
+                        row: rowIndex,
+                      })
+                    }
+                  >
+                    <option value="">-</option>
+                    {[1, 2, 3, 4].map((order) => (
+                      <option key={order} value={order}>
+                        {order}
+                      </option>
+                    ))}
+                  </SelectControl>
+                  <ScoreGridSelectStatus
+                    cellId={playOrderCellId}
+                    changed={Boolean(originalRow && originalRow.playOrder !== player.playOrder)}
+                    error={playOrderError}
+                    reviewItem={playOrderReviewItem}
+                    reviewed={reviewedCellIds.has(playOrderCellId)}
+                    synced={lastSyncedPlayerIndex === rowIndex}
+                  />
+                </div>
               </td>
 
               <PlayerNumericDesktopCell

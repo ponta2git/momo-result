@@ -8,18 +8,18 @@ export type CheckboxFieldProps = {
   "aria-describedby"?: string | undefined;
   description?: ReactNode | undefined;
   error?: ReactNode | undefined;
-  fieldClassName?: string | undefined;
   label: ReactNode;
-} & Omit<ComponentPropsWithRef<"input">, "aria-describedby" | "aria-invalid" | "type">;
+} & Omit<
+  ComponentPropsWithRef<"input">,
+  "aria-describedby" | "aria-invalid" | "className" | "style" | "type"
+>;
 
 /** Associates one native checkbox with its visible label, help, error, and disabled state. */
 export function CheckboxField({
   "aria-describedby": ariaDescribedBy,
-  className,
   description,
   disabled,
   error,
-  fieldClassName,
   id,
   label,
   required,
@@ -31,7 +31,7 @@ export function CheckboxField({
   const errorId = error ? `${fieldId}-error` : undefined;
 
   return (
-    <div className={cn("min-w-0", fieldClassName)}>
+    <div className="min-w-0">
       <label
         className={cn(
           "inline-flex min-h-11 min-w-0 cursor-pointer items-center gap-2 rounded-[var(--radius-xs)] px-2 text-sm font-medium text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)]",
@@ -43,7 +43,7 @@ export function CheckboxField({
           {...props}
           aria-describedby={buildFieldDescribedBy(descriptionId, errorId, ariaDescribedBy)}
           aria-invalid={error ? true : undefined}
-          className={cn("size-4 shrink-0 accent-[var(--color-action)]", className)}
+          className="size-4 shrink-0 accent-[var(--color-action)]"
           disabled={disabled}
           id={fieldId}
           required={required}

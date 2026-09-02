@@ -3,10 +3,12 @@ import type { ComponentPropsWithRef } from "react";
 import { cn } from "@/shared/ui/cn";
 
 export type ControlDensity = "compact" | "default";
+export type ControlHeight = "default" | "touch";
 export type ControlTextAlign = "center" | "end" | "start";
 export type ControlTone = "action" | "default" | "review" | "success" | "warning";
 
 type ControlPresentationProps = {
+  controlHeight?: ControlHeight | undefined;
   density?: ControlDensity | undefined;
   invalid?: boolean | undefined;
   textAlign?: ControlTextAlign | undefined;
@@ -17,6 +19,11 @@ const densityClass = {
   compact: "px-2",
   default: "px-3",
 } as const satisfies Record<ControlDensity, string>;
+
+const heightClass = {
+  default: "min-h-11 sm:min-h-10",
+  touch: "min-h-11",
+} as const satisfies Record<ControlHeight, string>;
 
 const textAlignClass = {
   center: "text-center",
@@ -33,10 +40,11 @@ const toneClass = {
 } as const satisfies Record<ControlTone, string>;
 
 const baseControlClass =
-  "min-h-11 w-full min-w-0 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] py-2 text-base leading-6 text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)] disabled:cursor-not-allowed disabled:bg-[var(--color-surface-subtle)] disabled:text-[var(--color-text-muted)] disabled:opacity-70 sm:min-h-10 sm:text-sm sm:leading-5";
+  "w-full min-w-0 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] py-2 text-base leading-6 text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)] disabled:cursor-not-allowed disabled:bg-[var(--color-surface-subtle)] disabled:text-[var(--color-text-muted)] disabled:opacity-70 sm:text-sm sm:leading-5";
 const invalidControlClass = "border-[var(--color-danger)]/65 bg-[var(--color-danger)]/10";
 
 type ResolvedControlPresentation = {
+  controlHeight: ControlHeight;
   density: ControlDensity;
   invalid: boolean;
   textAlign: ControlTextAlign;
@@ -44,27 +52,27 @@ type ResolvedControlPresentation = {
 };
 
 function controlClassName({
-  className,
+  controlHeight,
   density,
   invalid,
   textAlign,
   tone,
-}: ResolvedControlPresentation & { className?: string | undefined }) {
+}: ResolvedControlPresentation) {
   return cn(
     baseControlClass,
+    heightClass[controlHeight],
     densityClass[density],
     textAlignClass[textAlign],
     invalid ? invalidControlClass : toneClass[tone],
-    className,
   );
 }
 
 export type InputControlProps = ControlPresentationProps &
-  Omit<ComponentPropsWithRef<"input">, "aria-invalid">;
+  Omit<ComponentPropsWithRef<"input">, "aria-invalid" | "className" | "style">;
 
 /** Owns the shared presentation and boolean invalid contract for a native input. */
 export function InputControl({
-  className,
+  controlHeight = "default",
   density = "default",
   invalid = false,
   textAlign = "start",
@@ -75,17 +83,17 @@ export function InputControl({
     <input
       {...props}
       aria-invalid={invalid || undefined}
-      className={controlClassName({ className, density, invalid, textAlign, tone })}
+      className={controlClassName({ controlHeight, density, invalid, textAlign, tone })}
     />
   );
 }
 
 export type SelectControlProps = ControlPresentationProps &
-  Omit<ComponentPropsWithRef<"select">, "aria-invalid">;
+  Omit<ComponentPropsWithRef<"select">, "aria-invalid" | "className" | "style">;
 
 /** Owns the shared presentation and boolean invalid contract for a native select. */
 export function SelectControl({
-  className,
+  controlHeight = "default",
   density = "default",
   invalid = false,
   textAlign = "start",
@@ -96,19 +104,35 @@ export function SelectControl({
     <select
       {...props}
       aria-invalid={invalid || undefined}
-      className={controlClassName({ className, density, invalid, textAlign, tone })}
+      className={controlClassName({ controlHeight, density, invalid, textAlign, tone })}
     />
   );
 }
 
-export type TextareaControlProps = ControlPresentationProps &
-  Omit<ComponentPropsWithRef<"textarea">, "aria-invalid">;
+type TextareaMinHeight = "default" | "md" | "sm";
+
+const textareaMinHeightClass = {
+  default: "",
+  md: "min-h-28 sm:min-h-28",
+  sm: "min-h-24 sm:min-h-24",
+} as const satisfies Record<TextareaMinHeight, string>;
+
+export type TextareaControlProps = ControlPresentationProps & {
+  minHeight?: TextareaMinHeight | undefined;
+  placeholderTone?: "default" | "muted" | undefined;
+  resize?: "fixed" | "vertical" | undefined;
+  textFlow?: "default" | "relaxed" | undefined;
+} & Omit<ComponentPropsWithRef<"textarea">, "aria-invalid" | "className" | "style">;
 
 export function TextareaControl({
-  className,
+  controlHeight = "default",
   density = "default",
   invalid = false,
+  minHeight = "default",
+  placeholderTone = "default",
+  resize = "fixed",
   textAlign = "start",
+  textFlow = "default",
   tone = "default",
   ...props
 }: TextareaControlProps) {
@@ -116,7 +140,13 @@ export function TextareaControl({
     <textarea
       {...props}
       aria-invalid={invalid || undefined}
-      className={controlClassName({ className, density, invalid, textAlign, tone })}
+      className={cn(
+        controlClassName({ controlHeight, density, invalid, textAlign, tone }),
+        textareaMinHeightClass[minHeight],
+        resize === "vertical" ? "resize-y" : "resize-none",
+        textFlow === "relaxed" ? "leading-6" : "",
+        placeholderTone === "muted" ? "placeholder:text-[var(--color-text-muted)]" : "",
+      )}
     />
   );
 }

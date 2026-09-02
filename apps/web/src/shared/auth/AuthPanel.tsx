@@ -42,18 +42,17 @@ export function AuthPanel({
           {auth.displayName}
         </p>
       ) : (
-        <a
-          href={buildAuthLoginHref(loginNextPath)}
-          aria-busy={loginPending || undefined}
-          className={buttonClassName({
-            className: loginPending ? "w-fit opacity-85" : "w-fit",
-            variant: "primary",
-          })}
-          onClick={() => setLoginPending(true)}
-        >
-          {loginPending ? <SpinnerIcon /> : null}
-          <span>{loginPending ? "Discordへ移動中…" : "Discordでログインする"}</span>
-        </a>
+        <div className={loginPending ? "w-fit opacity-85" : "w-fit"}>
+          <a
+            href={buildAuthLoginHref(loginNextPath)}
+            aria-busy={loginPending || undefined}
+            className={buttonClassName({ variant: "primary" })}
+            onClick={() => setLoginPending(true)}
+          >
+            {loginPending ? <SpinnerIcon /> : null}
+            <span>{loginPending ? "Discordへ移動中…" : "Discordでログインする"}</span>
+          </a>
+        </div>
       )}
     </div>
   );

@@ -27,7 +27,7 @@ export function MatchDetailIdentity({
       <dl className="flex min-w-0 flex-wrap gap-x-5 gap-y-2">
         {items.map(([label, value]) => (
           <div key={label} className="flex min-w-0 items-baseline gap-2">
-            <dt className="shrink-0 text-[11px] font-semibold text-[var(--color-text-secondary)]">
+            <dt className="shrink-0 text-xs font-semibold text-[var(--color-text-secondary)]">
               {label}
             </dt>
             <dd className="min-w-0 text-sm font-semibold break-words text-[var(--color-text-primary)] tabular-nums">

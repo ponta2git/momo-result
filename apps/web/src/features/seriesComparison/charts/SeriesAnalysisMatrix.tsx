@@ -35,7 +35,7 @@ export function MatrixAxisHeader({
   return (
     <th
       className={cn(
-        "px-2 py-1 text-left align-middle text-[11px] font-semibold text-[var(--color-text-secondary)]",
+        "px-2 py-1 text-left align-middle text-xs font-semibold text-[var(--color-text-secondary)]",
         className,
       )}
       {...props}
@@ -103,7 +103,7 @@ export function MatrixValueLegend({
   return (
     <dl
       aria-label={ariaLabel}
-      className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-[var(--color-text-secondary)]"
+      className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-[var(--color-text-secondary)]"
     >
       {items.map((item) => (
         <div className="inline-flex gap-1" key={item.id}>

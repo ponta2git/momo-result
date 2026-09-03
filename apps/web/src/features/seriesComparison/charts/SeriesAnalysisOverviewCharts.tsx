@@ -230,10 +230,10 @@ export function HeadToHeadMatrix({ response }: { response: SeriesComparisonAggre
                       <strong className="text-sm tabular-nums">
                         {formatPercent(entry?.betterRankRate)}
                       </strong>
-                      <p className="mt-0.5 text-[11px] font-medium text-[var(--color-text-secondary)]">
+                      <p className="mt-0.5 text-xs font-medium text-[var(--color-text-secondary)]">
                         {headToHeadSignalLabel(entry?.signal)}
                       </p>
-                      <p className="mt-0.5 text-[11px] text-[var(--color-text-secondary)] tabular-nums">
+                      <p className="mt-0.5 text-xs text-[var(--color-text-secondary)] tabular-nums">
                         {entry?.betterRankCount ?? 0}/{entry?.matchCount ?? 0}戦・順位差
                         {formatDecimal(entry?.averageRankDiff)}
                       </p>

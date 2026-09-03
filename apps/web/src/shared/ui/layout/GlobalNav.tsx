@@ -84,7 +84,7 @@ export function GlobalNav({
               {brandLabel}
             </Link>
             {environmentLabel ? (
-              <span className="rounded-[var(--radius-xs)] border border-[var(--color-border)] px-2 py-0.5 text-[11px] font-medium text-[var(--color-text-secondary)]">
+              <span className="rounded-[var(--radius-xs)] border border-[var(--color-border)] px-2 py-0.5 text-xs font-medium text-[var(--color-text-secondary)]">
                 {environmentLabel}
               </span>
             ) : null}

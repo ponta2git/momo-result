@@ -184,7 +184,7 @@ export function MomentumMatrices({
                     <MatrixAxisHeader className="w-16 px-1" columnLabel="次戦" rowLabel="前戦" />
                     {SERIES_RANKS.map((rank) => (
                       <MatrixColumnHeader
-                        className="px-1 py-1 text-[11px]"
+                        className="px-1 py-1 text-xs"
                         key={rank}
                         style={{ borderTopColor: rankBorderColor(rank), borderTopWidth: 3 }}
                       >
@@ -196,9 +196,7 @@ export function MomentumMatrices({
                 <tbody>
                   {SERIES_RANKS.map((previousRank) => (
                     <tr key={previousRank}>
-                      <MatrixRowHeader className="px-1 text-[11px]">
-                        前{previousRank}位
-                      </MatrixRowHeader>
+                      <MatrixRowHeader className="px-1 text-xs">前{previousRank}位</MatrixRowHeader>
                       {SERIES_RANKS.map((nextRank) => {
                         const cell = cellByRanks.get(`${previousRank}:${nextRank}`);
                         if (!cell) {
@@ -235,7 +233,7 @@ export function MomentumMatrices({
                             }
                           >
                             <strong className="text-sm tabular-nums">{cell.count}</strong>
-                            <p className="text-[11px] text-[var(--color-text-primary)] tabular-nums">
+                            <p className="text-xs text-[var(--color-text-primary)] tabular-nums">
                               {formatPercent(cell.rate)}
                             </p>
                           </MatrixCell>

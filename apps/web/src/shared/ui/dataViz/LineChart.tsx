@@ -118,7 +118,7 @@ export function DataVizLineChart({
               />
               <text
                 fill="var(--color-action)"
-                fontSize="11"
+                fontSize="12"
                 fontWeight="600"
                 textAnchor="middle"
                 x={x(focusedPoint.index)}
@@ -140,7 +140,7 @@ export function DataVizLineChart({
               />
               <text
                 fill="var(--color-text-secondary)"
-                fontSize="11"
+                fontSize="12"
                 textAnchor="end"
                 x={padding.left - 8}
                 y={y(value) + 4}
@@ -152,7 +152,7 @@ export function DataVizLineChart({
           {indexTicks(maxIndex, 6).map((value) => (
             <text
               fill="var(--color-text-secondary)"
-              fontSize="11"
+              fontSize="12"
               key={value}
               textAnchor={value === 1 ? "start" : value === maxIndex ? "end" : "middle"}
               x={x(value)}

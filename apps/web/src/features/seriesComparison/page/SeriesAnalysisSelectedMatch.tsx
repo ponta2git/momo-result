@@ -34,7 +34,7 @@ export function SeriesAnalysisSelectedMatch({
     >
       <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
-          <p className="text-[11px] font-semibold text-[var(--color-action)]">選択中の試合</p>
+          <p className="text-xs font-semibold text-[var(--color-action)]">選択中の試合</p>
           <h2 className="mt-0.5 text-base font-semibold text-[var(--color-text-primary)]">
             <SeriesAnalysisMatchLink
               ariaLabel={`${formatSeriesMatchIndex(context.match.matchIndex)}の試合結果を見る`}

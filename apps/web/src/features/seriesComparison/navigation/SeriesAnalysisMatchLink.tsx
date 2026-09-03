@@ -33,7 +33,7 @@ export function SeriesAnalysisMatchLink({
             ? "gap-1 text-xs"
             : presentation === "axis"
               ? cn(
-                  "justify-center text-[11px] whitespace-nowrap",
+                  "justify-center text-xs whitespace-nowrap",
                   focused ? "" : "text-[var(--color-text-muted)]",
                 )
               : cn(

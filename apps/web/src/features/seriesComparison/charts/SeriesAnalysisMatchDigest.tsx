@@ -68,13 +68,11 @@ export function MatchDigestStrip({
                     </div>
                     <SeriesAnalysisQualityAdvisory status={match.qualityStatus} />
                   </div>
-                  <p className="mt-1 text-[11px] text-[var(--color-text-muted)]">
+                  <p className="mt-1 text-xs text-[var(--color-text-muted)]">
                     {formatDateTime(match.playedAt)}
                   </p>
                   {focused ? (
-                    <p className="mt-1 text-[11px] font-semibold text-[var(--color-action)]">
-                      選択中
-                    </p>
+                    <p className="mt-1 text-xs font-semibold text-[var(--color-action)]">選択中</p>
                   ) : null}
                   <dl className="mt-2 grid gap-1 text-xs">
                     <DigestValue
@@ -89,13 +87,11 @@ export function MatchDigestStrip({
                   </dl>
                   <div className="mt-2 flex min-h-6 flex-wrap gap-1">
                     {match.flags.length === 0 ? (
-                      <span className="text-[11px] text-[var(--color-text-muted)]">
-                        大きな特徴なし
-                      </span>
+                      <span className="text-xs text-[var(--color-text-muted)]">大きな特徴なし</span>
                     ) : (
                       match.flags.map((flag) => (
                         <span
-                          className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-2 py-1 text-[11px] text-[var(--color-text-secondary)]"
+                          className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-2 py-1 text-xs text-[var(--color-text-secondary)]"
                           key={flag}
                         >
                           {timelineFlagLabel(flag)}

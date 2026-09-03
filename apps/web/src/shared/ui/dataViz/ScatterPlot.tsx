@@ -101,7 +101,7 @@ export function DataVizScatterPlot({
               />
               <text
                 fill="var(--color-text-secondary)"
-                fontSize="11"
+                fontSize="12"
                 textAnchor="middle"
                 x={x(tick)}
                 y={height - padding.bottom + 20}
@@ -122,7 +122,7 @@ export function DataVizScatterPlot({
               />
               <text
                 fill="var(--color-text-secondary)"
-                fontSize="11"
+                fontSize="12"
                 textAnchor="end"
                 x={padding.left - 8}
                 y={y(tick) + 4}

@@ -81,12 +81,12 @@ export function PlayOrderMatrix({
                     <strong className="text-sm tabular-nums">
                       {formatDecimal(cell.rankAverage)}位
                     </strong>
-                    <p className="mt-0.5 text-[11px] text-[var(--color-text-secondary)] tabular-nums">
+                    <p className="mt-0.5 text-xs text-[var(--color-text-secondary)] tabular-nums">
                       {cell.targetCount}戦・入賞{formatPercent(cell.podiumRate)}
                     </p>
                     {presentation.label ? (
                       <p
-                        className="mt-1 text-[11px] font-semibold"
+                        className="mt-1 text-xs font-semibold"
                         style={{ color: presentation.accentColor }}
                       >
                         {presentation.label}
@@ -199,7 +199,7 @@ export function CardShopDestinationQuadrants({
                     {cardShopKindLabel(quadrant.kind)}
                     {focused ? "・この試合" : ""}
                   </h4>
-                  <dl className="mt-2 grid grid-cols-2 gap-x-2 gap-y-1 text-[11px]">
+                  <dl className="mt-2 grid grid-cols-2 gap-x-2 gap-y-1 text-xs">
                     <Value label="対象" value={`${quadrant.targetCount}戦`} />
                     <Value label="平均順位" value={`${formatDecimal(quadrant.averageRank)}位`} />
                     <Value label="勝率" value={formatPercent(quadrant.winRate)} />

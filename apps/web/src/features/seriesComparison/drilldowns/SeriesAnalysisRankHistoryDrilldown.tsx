@@ -190,7 +190,7 @@ export function RankHistoryDrilldown({
                   direction={row.changeDirection}
                   magnitude={row.cumulativeAverageRankDelta}
                 />
-                <span className="text-[11px] text-[var(--color-text-secondary)]">
+                <span className="text-xs text-[var(--color-text-secondary)]">
                   順位 {rankDeltaLabel(row.rankDelta)}
                 </span>
               </div>

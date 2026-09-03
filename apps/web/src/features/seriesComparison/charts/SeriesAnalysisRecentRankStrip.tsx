@@ -173,7 +173,7 @@ export function RecentRankStrips({
                         {player.displayName}
                       </MemberSequenceLabel>
                     </span>
-                    <span className="block text-[11px] font-normal text-[var(--color-text-secondary)] tabular-nums">
+                    <span className="block text-xs font-normal text-[var(--color-text-secondary)] tabular-nums">
                       平均{formatDecimal(entry?.averageRank)}位・入賞
                       {formatPercent(entry?.podiumRate)}
                     </span>
@@ -181,7 +181,7 @@ export function RecentRankStrips({
                       <SeriesAnalysisQualityAdvisory status={entry?.qualityStatus ?? "no_target"} />
                     </span>
                     {entry ? (
-                      <span className="block text-[11px] font-normal text-[var(--color-text-secondary)] tabular-nums">
+                      <span className="block text-xs font-normal text-[var(--color-text-secondary)] tabular-nums">
                         連勝 {entry.winStreak}・連続入賞 {entry.podiumStreak}・連続下位{" "}
                         {entry.lowerHalfStreak}
                       </span>

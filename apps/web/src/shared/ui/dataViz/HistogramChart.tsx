@@ -88,7 +88,7 @@ function SingleHistogram({
               />
               <text
                 fill="var(--color-text-secondary)"
-                fontSize="11"
+                fontSize="12"
                 textAnchor="end"
                 x={padding.left - 8}
                 y={y + 4}
@@ -116,7 +116,7 @@ function SingleHistogram({
               </rect>
               <text
                 fill="var(--color-text-secondary)"
-                fontSize="10"
+                fontSize="12"
                 textAnchor="end"
                 transform={`rotate(-30 ${center} ${height - 48})`}
                 x={center}

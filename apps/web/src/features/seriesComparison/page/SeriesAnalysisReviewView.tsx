@@ -148,7 +148,7 @@ function PlaybookCard({
   return (
     <article className={`flex h-full min-w-0 flex-col gap-3 ${emphasis ? "" : "py-1"}`}>
       <div className="flex flex-wrap items-center gap-2">
-        <span className="rounded-[var(--radius-xs)] border border-[var(--color-border)] px-2 py-0.5 text-[11px] font-semibold">
+        <span className="rounded-[var(--radius-xs)] border border-[var(--color-border)] px-2 py-0.5 text-xs font-semibold">
           {classificationLabel(card.classification)}
         </span>
         <span className="text-xs text-[var(--color-text-secondary)]">
@@ -183,9 +183,7 @@ function PlaybookCard({
             <PlaybookText label="避けること" value={card.avoidAction} />
             <PlaybookText label="データ上の理由" value={card.dataReason} />
             <div>
-              <h5 className="text-[11px] font-semibold text-[var(--color-text-secondary)]">
-                判断材料
-              </h5>
+              <h5 className="text-xs font-semibold text-[var(--color-text-secondary)]">判断材料</h5>
               <div className="mt-1 grid gap-2">
                 {card.evidence.map((evidence) => {
                   const countLabel = evidenceCountLabel(evidence, card.targetCount);
@@ -276,7 +274,7 @@ function evidenceQualityStatus(
 function PlaybookText({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <dt className="text-[11px] font-semibold text-[var(--color-text-secondary)]">{label}</dt>
+      <dt className="text-xs font-semibold text-[var(--color-text-secondary)]">{label}</dt>
       <dd className="mt-0.5 leading-6">{value}</dd>
     </div>
   );

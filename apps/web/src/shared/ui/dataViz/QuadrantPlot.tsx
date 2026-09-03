@@ -140,7 +140,7 @@ function CornerLabel({
   y: number;
 }) {
   return (
-    <text fill="var(--color-text-secondary)" fontSize="10.5" textAnchor={anchor} x={x} y={y}>
+    <text fill="var(--color-text-secondary)" fontSize="12" textAnchor={anchor} x={x} y={y}>
       {children}
     </text>
   );

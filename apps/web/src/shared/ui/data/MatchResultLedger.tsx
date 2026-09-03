@@ -60,7 +60,7 @@ export function MatchResultLedger({
           </div>
 
           <div className="min-w-0 sm:text-right">
-            <p className="text-[11px] font-semibold text-[var(--color-text-secondary)]">総資産</p>
+            <p className="text-xs font-semibold text-[var(--color-text-secondary)]">総資産</p>
             <p className="mt-0.5 text-xl font-semibold text-[var(--color-text-primary)] tabular-nums">
               {formatManYen(row.totalAssetsManYen)}
             </p>

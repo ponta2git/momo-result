@@ -200,10 +200,10 @@ function CandidateCard({
                   ) : (
                     <Minus aria-hidden="true" className="size-3.5 text-[var(--color-text-muted)]" />
                   )}
-                  <span className="text-[11px] font-medium">開催{rankSignalFoldLabel(fold)}</span>
+                  <span className="text-xs font-medium">開催{rankSignalFoldLabel(fold)}</span>
                   <span
                     className={cn(
-                      "text-[11px]",
+                      "text-xs",
                       row && supported
                         ? "text-[var(--color-analysis-positive)]"
                         : "text-[var(--color-text-secondary)]",

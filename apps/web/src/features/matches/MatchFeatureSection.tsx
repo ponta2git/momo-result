@@ -22,7 +22,7 @@ export function MatchFeatureSection({
       <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
         <h2 className="text-xs font-semibold text-[var(--color-text-primary)]">試合の特徴</h2>
         {ready ? (
-          <p className="text-[11px] font-medium text-[var(--color-text-secondary)]">
+          <p className="text-xs font-medium text-[var(--color-text-secondary)]">
             {view.scopeLabel}
           </p>
         ) : null}

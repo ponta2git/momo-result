@@ -49,9 +49,7 @@ export function FactList({ ariaLabel, columns = 1, items, layout = "grid" }: Fac
           )}
           key={item.id}
         >
-          <dt className="text-[11px] font-semibold text-[var(--color-text-secondary)]">
-            {item.label}
-          </dt>
+          <dt className="text-xs font-semibold text-[var(--color-text-secondary)]">{item.label}</dt>
           <dd
             className={cn(
               "min-w-0 text-sm font-semibold break-words tabular-nums",

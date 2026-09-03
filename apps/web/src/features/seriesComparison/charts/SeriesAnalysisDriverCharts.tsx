@@ -111,7 +111,7 @@ export function RevenueConversionMatrices({
                     />
                     {SERIES_RANKS.map((rank) => (
                       <MatrixColumnHeader
-                        className="px-1 py-1 text-[11px]"
+                        className="px-1 py-1 text-xs"
                         key={rank}
                         style={{ borderTopColor: rankBorderColor(rank), borderTopWidth: 3 }}
                       >
@@ -123,7 +123,7 @@ export function RevenueConversionMatrices({
                 <tbody>
                   {SERIES_RANKS.map((revenueRank) => (
                     <tr key={revenueRank}>
-                      <MatrixRowHeader className="px-1 text-[11px]">
+                      <MatrixRowHeader className="px-1 text-xs">
                         収益{revenueRank}位
                       </MatrixRowHeader>
                       {SERIES_RANKS.map((finalRank) => {
@@ -162,11 +162,11 @@ export function RevenueConversionMatrices({
                             }
                           >
                             <strong className="text-sm tabular-nums">{cell.count}</strong>
-                            <p className="text-[11px] text-[var(--color-text-primary)] tabular-nums">
+                            <p className="text-xs text-[var(--color-text-primary)] tabular-nums">
                               {formatPercent(cell.rate)}
                             </p>
                             {focused ? (
-                              <p className="mt-0.5 text-[11px] font-semibold text-[var(--color-action)]">
+                              <p className="mt-0.5 text-xs font-semibold text-[var(--color-action)]">
                                 この試合
                               </p>
                             ) : null}

@@ -53,7 +53,7 @@ export function PaginationControls(props: PaginationControlsProps) {
           : "bg-transparent",
       )}
     >
-      <p className="text-sm font-semibold text-[var(--color-text-secondary)] tabular-nums sm:inline-flex sm:min-h-9 sm:items-center">
+      <p className="text-sm font-semibold text-[var(--color-text-secondary)] tabular-nums sm:inline-flex sm:min-h-11 sm:items-center">
         {formatPaginationRange(pagination)}
       </p>
 
@@ -85,7 +85,7 @@ export function PaginationControls(props: PaginationControlsProps) {
           className={cn(
             "grid w-full items-center gap-2 sm:w-auto sm:justify-end",
             variant === "full"
-              ? "grid-cols-4 sm:grid-cols-[2.5rem_2.5rem_minmax(5rem,auto)_2.5rem_2.5rem]"
+              ? "grid-cols-4 sm:grid-cols-[2.75rem_2.75rem_minmax(5.5rem,auto)_2.75rem_2.75rem]"
               : "grid-cols-[2.75rem_minmax(5rem,auto)_2.75rem]",
           )}
         >
@@ -113,7 +113,7 @@ export function PaginationControls(props: PaginationControlsProps) {
           </div>
           <span
             className={cn(
-              "inline-flex min-h-11 min-w-0 items-center justify-center rounded-sm border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-3 text-sm font-semibold text-[var(--color-text-secondary)] tabular-nums sm:min-h-9 sm:min-w-20",
+              "inline-flex min-h-11 min-w-0 items-center justify-center rounded-sm border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-3 text-sm font-semibold text-[var(--color-text-secondary)] tabular-nums sm:min-w-22",
               variant === "full" ? "order-1 col-span-4 sm:order-none sm:col-span-1" : "",
             )}
           >

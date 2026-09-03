@@ -131,7 +131,7 @@
 
 - form は可視ラベル、説明、必須、validation error、disabled / pending を同じ field 境界で関連付け、paste を妨げない。checkbox、radio、select、text input は native semantics を保ち、見た目のために keyboard 操作を再実装しない。
 - OCR 結果修正と手入力は、入力 field と対応する source image、同じプレーヤー・項目順、編集結果の feedback を一つの workspace として保つ。この対応関係と少ない修正手数を保護し、画面の分断や画像と field の往復を増やさない。
-- モバイルの主要操作と icon-only action は 44px 以上の hit target を持つ。icon-only action は文脈を含む `aria-label`、decorative icon は `aria-hidden` を持つ。
+- coarse pointer の操作は viewport 幅にかかわらず 44px 以上の hit target を持ち、compact 化は `pointer: fine` が明示された場合だけ許容する。icon-only action は pointer accuracy にかかわらず 44px 以上を保ち、文脈を含む `aria-label` を持つ。decorative icon は `aria-hidden` を持つ。
 - hover で現れる操作や情報は keyboard focus と touch でも到達できる。tooltip は補助説明であり、主要な意味やエラーをそこだけに置かない。
 - 複数ステップの flow は Back、キャンセル、完了または安全な中断点を持つ。dialog を閉じた後は起点へ focus を返し、ナビゲーションを阻止する場合は理由と進行状況を示す。
 - fixed / sticky UI は safe-area inset を尊重し、focus target や主要操作を viewport 外へ隠さない。狭い幅では再配置して hit target と accessible name を保つ。

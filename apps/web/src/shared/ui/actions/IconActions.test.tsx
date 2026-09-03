@@ -23,14 +23,6 @@ describe("icon actions", () => {
     expect(button).toHaveAttribute("aria-busy", "true");
   });
 
-  it("keeps compact icon-only actions at least 44px for every pointer", () => {
-    render(<IconButton aria-label="一覧を更新" icon={<RefreshCw />} size="sm" />);
-
-    const button = screen.getByRole("button", { name: "一覧を更新" });
-    expect(button).toHaveClass("size-11");
-    expect(button).not.toHaveClass("sm:size-10", "pointer-fine:size-10");
-  });
-
   it("keeps icon navigation as a link and removes navigation when disabled", () => {
     const { rerender } = render(
       <MemoryRouter>

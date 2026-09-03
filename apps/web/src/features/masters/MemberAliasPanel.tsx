@@ -62,7 +62,7 @@ export function MemberAliasPanel({
 
       <form
         action={createAction}
-        className="mt-4 grid gap-3 md:grid-cols-[minmax(12rem,0.35fr)_minmax(12rem,1fr)_auto] md:grid-rows-[auto_auto_auto] md:[&>[data-field-root]]:row-span-3"
+        className="mt-4 grid gap-x-3 gap-y-3 md:grid-cols-[minmax(12rem,0.35fr)_minmax(12rem,1fr)_auto] md:grid-rows-[auto_auto_auto] md:gap-y-0 md:[&>[data-field-root]]:row-span-3"
         key={createFormKey}
       >
         <SelectField

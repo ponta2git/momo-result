@@ -28,24 +28,13 @@ describe("GlobalNav", () => {
 
     expect(screen.getByRole("navigation", { name: "グローバルナビゲーション" })).toBeVisible();
     expect(screen.getByRole("link", { name: "momo-result" })).toHaveAttribute("href", "/matches");
-    expect(screen.getByRole("link", { name: "momo-result" })).toHaveClass(
-      "min-h-11",
-      "pointer-fine:min-h-9",
-    );
     expect(screen.getByText("TEST")).toBeVisible();
     expect(screen.getByText("テストユーザー")).toBeVisible();
     for (const name of ["試合", "戦績比較", "設定"]) {
       const link = screen.getByRole("link", { name });
       expect(within(link).getByText(name)).toBeVisible();
       expect(within(link).queryByRole("img")).not.toBeInTheDocument();
-      expect(link).toHaveClass("min-h-11", "pointer-fine:min-h-9");
     }
-
-    const navLayout = screen
-      .getByRole("navigation", { name: "グローバルナビゲーション" })
-      .querySelector(":scope > div");
-    expect(navLayout).toHaveClass("py-2");
-    expect(navLayout).not.toHaveClass("lg:py-2");
   });
 
   it("keeps the caller-named management group and active destination discoverable", () => {

@@ -49,16 +49,13 @@ export function Field({
     >
       <label
         className="mb-2 text-sm leading-5 font-semibold text-[var(--color-text-primary)]"
-        data-field-label=""
         htmlFor={htmlFor}
       >
         {label}
         {required ? <span className="ml-1 text-[var(--color-danger)]">*</span> : null}
       </label>
-      <div className="min-w-0" data-field-control="">
-        {children}
-      </div>
-      <div className="mt-1 flex min-w-0 flex-col gap-1 empty:hidden" data-field-support="">
+      <div className="min-w-0">{children}</div>
+      <div className="mt-1 flex min-w-0 flex-col gap-1 empty:hidden">
         {description ? (
           <p
             id={resolvedDescriptionId}

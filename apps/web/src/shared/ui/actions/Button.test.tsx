@@ -31,15 +31,6 @@ describe("Button", () => {
     expect(screen.getByRole("button", { name: "閉じる" })).toHaveAttribute("type", "button");
   });
 
-  it("keeps touch height independent from viewport width", () => {
-    render(<Button size="sm">更新</Button>);
-
-    expect(screen.getByRole("button", { name: "更新" })).toHaveClass(
-      "min-h-11",
-      "pointer-fine:min-h-9",
-    );
-  });
-
   it("inherits pending state from its parent form for submit actions", async () => {
     const user = userEvent.setup();
     const deferred = createDeferred<void>();

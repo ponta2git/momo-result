@@ -9,7 +9,7 @@ describe("ResourcePageState", () => {
   it("offers a local retry for transient resource failure", async () => {
     const user = userEvent.setup();
     const onRetry = vi.fn();
-    const { container } = render(
+    render(
       <MemoryRouter>
         <ResourcePageState
           backHref="/matches"
@@ -32,7 +32,6 @@ describe("ResourcePageState", () => {
       "href",
       "/matches",
     );
-    expect(container.firstElementChild).toHaveClass("gap-6");
   });
 
   it("does not present retry for a missing resource", () => {

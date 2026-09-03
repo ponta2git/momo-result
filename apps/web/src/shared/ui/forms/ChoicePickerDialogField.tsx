@@ -80,7 +80,7 @@ export function ChoicePickerDialogField({
     >
       <div
         className={cn(
-          "flex min-h-11 min-w-0 items-center gap-2 rounded-sm border bg-[var(--color-surface)] pr-1 pl-3 sm:min-h-10",
+          "flex min-h-11 min-w-0 items-center gap-2 rounded-sm border bg-[var(--color-surface)] pr-1 pl-3 pointer-fine:min-h-10",
           error ? "border-[var(--color-danger)]" : "border-[var(--color-border)]",
         )}
       >

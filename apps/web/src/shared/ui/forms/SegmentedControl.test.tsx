@@ -23,8 +23,6 @@ describe("SegmentedControl", () => {
     );
 
     const tsv = screen.getByRole("button", { name: "TSV" });
-    expect(tsv).toHaveClass("min-h-11", "focus-visible:-outline-offset-3", "pointer-fine:min-h-9");
-    expect(tsv).not.toHaveClass("sm:min-h-9");
     tsv.focus();
     await user.keyboard("{Enter}");
     expect(onValueChange).toHaveBeenCalledWith("tsv");

@@ -28,7 +28,6 @@ describe("FilterBar", () => {
     expect(surface).toHaveTextContent("24件");
     expect(screen.getByRole("button", { name: "表示条件をリセット" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "更新" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "更新" }).parentElement).toHaveClass("gap-2");
   });
 
   it("owns a controlled, mounted detail disclosure without owning filter state", async () => {

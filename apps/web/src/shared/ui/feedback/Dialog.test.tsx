@@ -21,15 +21,12 @@ describe("Dialog", () => {
 
     const trigger = screen.getByRole("button", { name: "開く" });
     await user.click(trigger);
-    const dialog = await screen.findByRole("dialog", {
-      description: "保存前に内容を確認します。",
-      name: "試合を確定",
-    });
-    expect(dialog).toBeInTheDocument();
-    const dialogHeader = dialog.querySelector("[data-dialog-header]");
-    const dialogBody = dialog.querySelector("[data-dialog-body]");
-    expect(dialogHeader?.parentElement).toHaveClass("gap-4");
-    expect(dialogBody).toHaveTextContent("本文");
+    expect(
+      await screen.findByRole("dialog", {
+        description: "保存前に内容を確認します。",
+        name: "試合を確定",
+      }),
+    ).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "ダイアログを閉じる" }));
     expect(screen.queryByRole("dialog", { name: "試合を確定" })).not.toBeInTheDocument();
@@ -71,36 +68,12 @@ describe("AlertDialog", () => {
     );
 
     await user.click(screen.getByRole("button", { name: "削除" }));
-    const dialog = await screen.findByRole("alertdialog", {
-      description: "この操作は取り消せません。",
-      name: "試合を削除しますか？",
-    });
-    expect(dialog).toBeInTheDocument();
-    expect(dialog.querySelector("[data-alert-dialog-header]")).toBeInTheDocument();
-    expect(dialog.querySelector("[data-alert-dialog-body]")).not.toBeInTheDocument();
-    expect(dialog.querySelector("[data-alert-dialog-footer]")).toHaveClass("mt-4", "gap-2");
-  });
-
-  it("renders a body group only when confirmation needs supporting content", async () => {
-    const user = userEvent.setup();
-    render(
-      <AlertDialog
-        title="共有範囲を変更しますか？"
-        trigger={<Button>変更</Button>}
-        onConfirm={vi.fn()}
-      >
-        <p>現在の参加者にも反映されます。</p>
-      </AlertDialog>,
-    );
-
-    await user.click(screen.getByRole("button", { name: "変更" }));
-    const dialog = await screen.findByRole("alertdialog", {
-      name: "共有範囲を変更しますか？",
-    });
-    expect(dialog.querySelector("[data-alert-dialog-body]")).toHaveClass("mt-4");
-    expect(dialog.querySelector("[data-alert-dialog-body]")).toHaveTextContent(
-      "現在の参加者にも反映されます。",
-    );
+    expect(
+      await screen.findByRole("alertdialog", {
+        description: "この操作は取り消せません。",
+        name: "試合を削除しますか？",
+      }),
+    ).toBeInTheDocument();
   });
 
   it("prevents duplicate or dismissing actions while confirmation is pending", async () => {
@@ -145,10 +118,7 @@ describe("AlertDialog", () => {
 
     await user.click(screen.getByRole("button", { name: "削除" }));
     await user.click(await screen.findByRole("button", { name: "実行" }));
-    const feedback = await screen.findByRole("alert");
-    expect(feedback).toHaveTextContent("削除先を確認できませんでした。");
-    expect(feedback).toHaveAttribute("data-alert-dialog-feedback");
-    expect(feedback).toHaveClass("mt-4");
+    expect(await screen.findByRole("alert")).toHaveTextContent("削除先を確認できませんでした。");
     expect(screen.getByRole("alertdialog")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "実行" }));

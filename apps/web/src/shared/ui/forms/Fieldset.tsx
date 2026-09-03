@@ -23,19 +23,13 @@ export function Fieldset({ children, description, error, legend, ...props }: Fie
       aria-describedby={buildFieldDescribedBy(descriptionId, errorId, props["aria-describedby"])}
       className="min-w-0"
     >
-      <legend
-        className="text-sm leading-5 font-semibold text-[var(--color-text-primary)]"
-        data-field-label=""
-      >
+      <legend className="text-sm leading-5 font-semibold text-[var(--color-text-primary)]">
         {legend}
       </legend>
-      <div
-        className="mt-2 flex min-h-11 min-w-0 flex-wrap items-center gap-1 rounded-sm border border-[var(--color-border)] bg-[var(--color-surface)] px-1 py-1"
-        data-field-control=""
-      >
+      <div className="mt-2 flex min-h-11 min-w-0 flex-wrap items-center gap-1 rounded-sm border border-[var(--color-border)] bg-[var(--color-surface)] px-1 py-1">
         {children}
       </div>
-      <div className="mt-1 flex min-w-0 flex-col gap-1 empty:hidden" data-field-support="">
+      <div className="mt-1 flex min-w-0 flex-col gap-1 empty:hidden">
         {description ? (
           <p
             className={cn(

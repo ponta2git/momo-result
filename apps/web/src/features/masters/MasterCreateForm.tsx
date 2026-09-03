@@ -32,7 +32,7 @@ export function MasterCreateForm({
   return (
     <form
       action={action}
-      className="grid gap-2 md:grid-cols-[1fr_auto] md:grid-rows-[auto_auto_auto] md:[&>[data-field-root]]:row-span-3"
+      className="grid gap-x-2 gap-y-2 md:grid-cols-[1fr_auto] md:grid-rows-[auto_auto_auto] md:gap-y-0 md:[&>[data-field-root]]:row-span-3"
       key={formKey}
     >
       <TextField

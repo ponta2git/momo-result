@@ -50,7 +50,24 @@ describe("DataTable", () => {
     expect(screen.getByRole("columnheader", { name: "総資産" })).toHaveAttribute("scope", "col");
     expect(screen.getByRole("cell", { name: "100" })).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "総資産" }));
+    const staticHeader = screen.getByRole("columnheader", { name: "プレーヤー" });
+    const sortableHeader = screen.getByRole("columnheader", { name: "総資産" });
+    const sortButton = screen.getByRole("button", { name: "総資産" });
+    expect(staticHeader).toHaveClass("px-3", "py-2");
+    expect(sortableHeader).toHaveClass("p-0");
+    expect(sortableHeader).not.toHaveClass("px-3");
+    expect(sortableHeader).not.toHaveClass("py-2");
+    expect(sortButton).toHaveClass(
+      "w-full",
+      "px-3",
+      "py-2",
+      "justify-end",
+      "min-h-11",
+      "focus-visible:-outline-offset-3",
+      "pointer-fine:min-h-9",
+    );
+
+    await user.click(sortButton);
     expect(onSort).toHaveBeenCalledTimes(1);
   });
 

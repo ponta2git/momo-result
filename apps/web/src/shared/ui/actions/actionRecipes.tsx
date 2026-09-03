@@ -39,13 +39,13 @@ const iconActionVariantClass = {
 } as const satisfies Record<IconActionVariant, string>;
 
 const buttonSizeClass = {
-  sm: "min-h-11 px-3 py-2 text-sm sm:min-h-9 sm:py-1",
-  md: "min-h-11 px-4 py-2 text-sm sm:min-h-10",
+  sm: "min-h-11 px-3 py-2 text-sm pointer-fine:min-h-9 pointer-fine:py-1",
+  md: "min-h-11 px-4 py-2 text-sm pointer-fine:min-h-10",
   lg: "min-h-11 px-5 py-3 text-base",
 } as const satisfies Record<ButtonSize, string>;
 
 const iconActionSizeClass = {
-  sm: "size-11 sm:size-10",
+  sm: "size-11",
   md: "size-11",
   lg: "size-12",
 } as const satisfies Record<IconActionSize, string>;

@@ -38,6 +38,7 @@ export function CheckboxField({
           "inline-flex min-h-11 min-w-0 cursor-pointer items-center gap-2 rounded-xs px-2 text-sm font-medium text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)]",
           disabled ? "cursor-not-allowed opacity-65" : "",
         )}
+        data-field-control=""
         htmlFor={fieldId}
       >
         <input
@@ -55,29 +56,31 @@ export function CheckboxField({
           {required ? <span className="ml-1 text-[var(--color-danger)]">*</span> : null}
         </span>
       </label>
-      {description ? (
-        <p
-          className={cn(
-            "momo-copy mt-1 pl-2 text-xs text-pretty text-[var(--color-text-secondary)]",
-            readableTextWidthClass,
-          )}
-          id={descriptionId}
-        >
-          {description}
-        </p>
-      ) : null}
-      {error ? (
-        <p
-          className={cn(
-            "momo-copy mt-1 pl-2 text-xs text-pretty text-[var(--color-danger)]",
-            readableTextWidthClass,
-          )}
-          id={errorId}
-          role="alert"
-        >
-          {error}
-        </p>
-      ) : null}
+      <div className="mt-1 flex min-w-0 flex-col gap-1 pl-8 empty:hidden" data-field-support="">
+        {description ? (
+          <p
+            className={cn(
+              "momo-copy text-xs text-pretty text-[var(--color-text-secondary)]",
+              readableTextWidthClass,
+            )}
+            id={descriptionId}
+          >
+            {description}
+          </p>
+        ) : null}
+        {error ? (
+          <p
+            className={cn(
+              "momo-copy text-xs text-pretty text-[var(--color-danger)]",
+              readableTextWidthClass,
+            )}
+            id={errorId}
+            role="alert"
+          >
+            {error}
+          </p>
+        ) : null}
+      </div>
     </div>
   );
 }

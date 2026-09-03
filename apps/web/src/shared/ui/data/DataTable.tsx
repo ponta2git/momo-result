@@ -61,6 +61,12 @@ const alignClass = {
   right: "text-right",
 } as const satisfies Record<DataTableAlign, string>;
 
+const actionAlignClass = {
+  center: "justify-center text-center",
+  left: "justify-start text-left",
+  right: "justify-end text-right",
+} as const satisfies Record<DataTableAlign, string>;
+
 const verticalAlignClass = {
   middle: "align-middle",
   top: "align-top",
@@ -151,6 +157,7 @@ export function DataTable<Row>({
                 }
                 className={cn(
                   dataTableHeaderCellClassName,
+                  column.sortable ? "p-0" : "",
                   caption.visibility === "visible" ? "border-t-0" : "",
                   "sticky top-0 z-[var(--z-base)]",
                   alignClass[column.align ?? "left"],
@@ -161,7 +168,8 @@ export function DataTable<Row>({
                 {column.sortable ? (
                   <button
                     className={cn(
-                      "inline-flex min-h-11 items-center gap-1 rounded-xs px-1 py-1 text-left text-inherit sm:min-h-9",
+                      "inline-flex min-h-11 w-full items-center gap-1 rounded-xs px-3 py-2 text-inherit focus-visible:-outline-offset-3 pointer-fine:min-h-9 pointer-fine:py-1",
+                      actionAlignClass[column.align ?? "left"],
                       "hover:bg-[var(--color-surface-hover)] disabled:cursor-not-allowed disabled:opacity-60",
                       column.sortDirection
                         ? "bg-[var(--color-action)]/10 text-[var(--color-text-primary)]"

@@ -46,8 +46,8 @@ function DialogContentFrame({
   dismissible: boolean;
 }) {
   return (
-    <div className="flex min-h-0 w-full flex-1 flex-col gap-3">
-      <div className="flex shrink-0 items-start justify-between gap-3">
+    <div className="flex min-h-0 w-full flex-1 flex-col gap-4">
+      <div className="flex shrink-0 items-start justify-between gap-3" data-dialog-header="">
         <div className="min-w-0">
           <BaseDialog.Title className="text-lg font-semibold text-balance text-[var(--color-text-primary)]">
             {title}
@@ -71,7 +71,10 @@ function DialogContentFrame({
           />
         ) : null}
       </div>
-      <div className={cn("min-h-0 min-w-0 flex-1 overflow-y-auto px-2", contentClassName)}>
+      <div
+        className={cn("min-h-0 min-w-0 flex-1 overflow-y-auto px-2", contentClassName)}
+        data-dialog-body=""
+      >
         {children}
       </div>
     </div>
@@ -212,33 +215,40 @@ export function AlertDialogLayer({
           aria-busy={pending || undefined}
           className={cn(dialogSurfaceClassName, "overflow-y-auto", surfaceClassName)}
         >
-          <div className="space-y-3">
-            <BaseAlertDialog.Title className="text-lg font-semibold text-balance text-[var(--color-text-primary)]">
-              {title}
-            </BaseAlertDialog.Title>
-            {description ? (
-              <BaseAlertDialog.Description
-                className={cn(
-                  "text-sm leading-6 text-pretty text-[var(--color-text-secondary)]",
-                  readableTextWidthClass,
-                )}
-              >
-                {description}
-              </BaseAlertDialog.Description>
+          <div className="flex min-w-0 flex-col">
+            <div className="min-w-0" data-alert-dialog-header="">
+              <BaseAlertDialog.Title className="text-lg font-semibold text-balance text-[var(--color-text-primary)]">
+                {title}
+              </BaseAlertDialog.Title>
+              {description ? (
+                <BaseAlertDialog.Description
+                  className={cn(
+                    "mt-1 text-sm leading-6 text-pretty text-[var(--color-text-secondary)]",
+                    readableTextWidthClass,
+                  )}
+                >
+                  {description}
+                </BaseAlertDialog.Description>
+              ) : null}
+            </div>
+            {children !== undefined && children !== null ? (
+              <div className={cn("mt-4 min-w-0", contentClassName)} data-alert-dialog-body="">
+                {children}
+              </div>
             ) : null}
-            <div className={cn("min-w-0", contentClassName)}>{children}</div>
             {error ? (
               <p
                 className={cn(
-                  "rounded-xs border border-[var(--color-danger)]/50 bg-[var(--color-danger)]/8 px-3 py-2 text-sm font-medium text-[var(--color-danger)]",
+                  "mt-4 rounded-xs border border-[var(--color-danger)]/50 bg-[var(--color-danger)]/8 px-3 py-2 text-sm font-medium text-[var(--color-danger)]",
                   readableTextWidthClass,
                 )}
+                data-alert-dialog-feedback=""
                 role="alert"
               >
                 {error}
               </p>
             ) : null}
-            <div className="flex flex-wrap justify-end gap-2">
+            <div className="mt-4 flex flex-wrap justify-end gap-2" data-alert-dialog-footer="">
               <BaseAlertDialog.Close
                 render={
                   <Button

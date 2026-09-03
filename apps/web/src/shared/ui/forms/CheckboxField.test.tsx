@@ -33,6 +33,12 @@ describe("CheckboxField", () => {
     );
     expect(screen.getByRole("alert")).toHaveTextContent("権限を確認してください。");
 
+    const control = checkbox.closest("[data-field-control]");
+    const support = screen.getByRole("alert").closest("[data-field-support]");
+    expect(control).toHaveClass("gap-2");
+    expect(support).toHaveClass("mt-1", "gap-1", "pl-8");
+    expect(support).toContainElement(screen.getByText("管理画面を利用できます。"));
+
     await user.click(checkbox);
     expect(onChange).toHaveBeenCalledTimes(1);
   });

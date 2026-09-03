@@ -43,7 +43,7 @@ export function FilterBar({
         <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
           <div className="min-w-0">{primary}</div>
           {resetAction || action ? (
-            <div className="flex min-w-0 flex-wrap items-center justify-end gap-1">
+            <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
               {resetAction}
               {action}
             </div>

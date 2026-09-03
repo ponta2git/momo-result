@@ -39,43 +39,50 @@ export function Field({
   return (
     <div
       className={cn(
-        "min-w-0 gap-2",
-        layout === "subgrid" ? "flex flex-col md:grid md:grid-rows-subgrid" : "flex flex-col",
+        "min-w-0",
+        layout === "subgrid"
+          ? "flex flex-col md:grid md:grid-rows-subgrid md:gap-y-0"
+          : "flex flex-col",
       )}
       {...props}
       data-field-root=""
     >
       <label
-        className="text-sm leading-5 font-semibold text-[var(--color-text-primary)]"
+        className="mb-2 text-sm leading-5 font-semibold text-[var(--color-text-primary)]"
+        data-field-label=""
         htmlFor={htmlFor}
       >
         {label}
         {required ? <span className="ml-1 text-[var(--color-danger)]">*</span> : null}
       </label>
-      {children}
-      {description ? (
-        <p
-          id={resolvedDescriptionId}
-          className={cn(
-            "momo-copy min-w-0 text-xs text-[var(--color-text-secondary)]",
-            readableTextWidthClass,
-          )}
-        >
-          {description}
-        </p>
-      ) : null}
-      {error ? (
-        <p
-          id={resolvedErrorId}
-          className={cn(
-            "momo-copy min-w-0 text-xs text-[var(--color-danger)]",
-            readableTextWidthClass,
-          )}
-          role="alert"
-        >
-          {error}
-        </p>
-      ) : null}
+      <div className="min-w-0" data-field-control="">
+        {children}
+      </div>
+      <div className="mt-1 flex min-w-0 flex-col gap-1 empty:hidden" data-field-support="">
+        {description ? (
+          <p
+            id={resolvedDescriptionId}
+            className={cn(
+              "momo-copy min-w-0 text-xs text-[var(--color-text-secondary)]",
+              readableTextWidthClass,
+            )}
+          >
+            {description}
+          </p>
+        ) : null}
+        {error ? (
+          <p
+            id={resolvedErrorId}
+            className={cn(
+              "momo-copy min-w-0 text-xs text-[var(--color-danger)]",
+              readableTextWidthClass,
+            )}
+            role="alert"
+          >
+            {error}
+          </p>
+        ) : null}
+      </div>
     </div>
   );
 }

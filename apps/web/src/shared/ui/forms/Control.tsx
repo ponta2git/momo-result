@@ -21,7 +21,7 @@ const densityClass = {
 } as const satisfies Record<ControlDensity, string>;
 
 const heightClass = {
-  default: "min-h-11 sm:min-h-10",
+  default: "min-h-11 pointer-fine:min-h-10",
   touch: "min-h-11",
 } as const satisfies Record<ControlHeight, string>;
 
@@ -113,8 +113,8 @@ type TextareaMinHeight = "default" | "md" | "sm";
 
 const textareaMinHeightClass = {
   default: "",
-  md: "min-h-28 sm:min-h-28",
-  sm: "min-h-24 sm:min-h-24",
+  md: "min-h-28",
+  sm: "min-h-24",
 } as const satisfies Record<TextareaMinHeight, string>;
 
 export type TextareaControlProps = ControlPresentationProps & {

@@ -28,6 +28,8 @@ describe("InputControl", () => {
     expect(input).toBeDisabled();
     expect(input).toHaveAttribute("aria-invalid", "true");
     expect(input).toHaveAttribute("aria-describedby", "amount-help");
+    expect(input).toHaveClass("min-h-11", "pointer-fine:min-h-10");
+    expect(input).not.toHaveClass("sm:min-h-10");
 
     await user.type(input, "3");
     expect(onChange).not.toHaveBeenCalled();

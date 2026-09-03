@@ -39,6 +39,8 @@ describe("Tabs", () => {
 
     expect(disabled).toHaveAttribute("aria-disabled", "true");
     expect(first).toHaveAttribute("aria-controls", firstPanel.id);
+    expect(first).toHaveClass("min-h-11", "pointer-fine:min-h-9");
+    expect(first).not.toHaveClass("sm:min-h-9");
     expect(firstPanel).toHaveAttribute("aria-labelledby", first.id);
     expect(secondPanel).not.toBeNull();
     expect(secondPanel).toHaveAttribute("hidden");

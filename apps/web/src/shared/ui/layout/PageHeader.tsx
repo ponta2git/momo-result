@@ -11,6 +11,10 @@ type PageHeaderProps = {
   title: ReactNode;
 };
 
+/** Keeps multi-action headers two-column and predictable until inline labels have enough room. */
+export const responsivePageHeaderActionGroupClass =
+  "grid w-full shrink-0 grid-cols-2 gap-2 sm:flex sm:w-auto sm:items-center";
+
 export function PageHeader({ actions, description, eyebrow, meta, title }: PageHeaderProps) {
   return (
     <header className="grid min-w-0 gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">

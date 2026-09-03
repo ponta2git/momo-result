@@ -1,19 +1,17 @@
 import type { ReactNode } from "react";
 import { Component } from "react";
 
-import { routeFrameWidth } from "@/app/RouteSuspenseFallback";
+import { RouteTerminalPage } from "@/app/RouteTerminalPage";
 import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import { isModuleLoadError, reloadCurrentPage } from "@/shared/lib/moduleLoadError";
 import { Button } from "@/shared/ui/actions/Button";
 import { Notice } from "@/shared/ui/feedback/Notice";
-import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
-import { PageFrame } from "@/shared/ui/layout/PageFrame";
-import { PageHeader } from "@/shared/ui/layout/PageHeader";
 
 type RouteErrorBoundaryProps = {
   children: ReactNode;
   onReset?: (() => void) | undefined;
   pathname: string;
+  search?: string | undefined;
 };
 
 type RouteErrorBoundaryState = {
@@ -67,22 +65,23 @@ export class RouteErrorBoundary extends Component<
         ? "画面を構成するファイルを取得できませんでした。通信状態を確認して、画面全体を再読み込みしてください。"
         : normalized.detail || normalized.title || this.state.error.message;
       return (
-        <PageFrame width={routeFrameWidth(this.props.pathname)}>
-          <PageHeader title="画面の読み込みに失敗しました" />
-          <PageContentSurface>
-            <Notice
-              action={
-                <Button onClick={this.handleRecovery}>
-                  {reloadRequired ? "画面を再読み込み" : "もう一度読み込む"}
-                </Button>
-              }
-              role="alert"
-              tone="danger"
-            >
-              <p className="momo-break-token text-sm">{detail}</p>
-            </Notice>
-          </PageContentSurface>
-        </PageFrame>
+        <RouteTerminalPage
+          pathname={this.props.pathname}
+          search={this.props.search}
+          title="画面の読み込みに失敗しました"
+        >
+          <Notice
+            action={
+              <Button onClick={this.handleRecovery}>
+                {reloadRequired ? "画面を再読み込み" : "もう一度読み込む"}
+              </Button>
+            }
+            role="alert"
+            tone="danger"
+          >
+            <p className="momo-break-token text-sm">{detail}</p>
+          </Notice>
+        </RouteTerminalPage>
       );
     }
 

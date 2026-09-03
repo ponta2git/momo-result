@@ -1,7 +1,10 @@
 import type { ReactNode } from "react";
 import { Navigate, useLocation, useSearchParams } from "react-router-dom";
 
-import { routeFrameWidth, RouteSuspenseFallback } from "@/app/RouteSuspenseFallback";
+import { AppGlobalNav } from "@/app/AppGlobalNav";
+import { AppPageCanvas } from "@/app/AppPageCanvas";
+import { RouteSuspenseFallback } from "@/app/RouteSuspenseFallback";
+import { RouteTerminalPage } from "@/app/RouteTerminalPage";
 import { loginDescription } from "@/shared/auth/loginCopy";
 import { loginNavItems } from "@/shared/auth/loginNavigation";
 import {
@@ -12,31 +15,32 @@ import {
 import { useAuth } from "@/shared/auth/useAuth";
 import { Button } from "@/shared/ui/actions/Button";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
-import { cn } from "@/shared/ui/cn";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 import { GlobalNav } from "@/shared/ui/layout/GlobalNav";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
-import { PageFrame, pageViewportGutterClass } from "@/shared/ui/layout/PageFrame";
+import { PageFrame } from "@/shared/ui/layout/PageFrame";
 import type { PageFrameWidth } from "@/shared/ui/layout/PageFrame";
 import { PageHeader } from "@/shared/ui/layout/PageHeader";
 
 function StandaloneRouteMain({ children }: { children: ReactNode }) {
   return (
-    <div className="flex min-h-dvh flex-col">
-      <GlobalNav
-        brandTo="/login"
-        environmentLabel={import.meta.env.DEV ? "DEV" : undefined}
-        items={loginNavItems}
-      />
-      <main
-        className={cn("mx-auto flex w-full flex-1 flex-col py-4 sm:py-6", pageViewportGutterClass)}
-        id="main-content"
-      >
-        {children}
-      </main>
-    </div>
+    <AppPageCanvas
+      navigation={
+        <GlobalNav
+          brandTo="/login"
+          environmentLabel={import.meta.env.DEV ? "DEV" : undefined}
+          items={loginNavItems}
+        />
+      }
+    >
+      {children}
+    </AppPageCanvas>
   );
+}
+
+function ProtectedRouteMain({ children }: { children: ReactNode }) {
+  return <AppPageCanvas navigation={<AppGlobalNav />}>{children}</AppPageCanvas>;
 }
 
 function RouteGuardFrame({
@@ -118,7 +122,7 @@ export function PublicOnlyRoute({ children }: { children: ReactNode }) {
     return <Navigate to={destination} replace />;
   }
 
-  return children;
+  return <StandaloneRouteMain>{children}</StandaloneRouteMain>;
 }
 
 export function AuthenticatedRoute({ children }: { children: ReactNode }) {
@@ -127,13 +131,13 @@ export function AuthenticatedRoute({ children }: { children: ReactNode }) {
 
   if (auth.isChecking) {
     return (
-      <StandaloneRouteMain>
+      <ProtectedRouteMain>
         <RouteSuspenseFallback
           loadingLabel="ログイン状態を確認中…"
           pathname={location.pathname}
           search={location.search}
         />
-      </StandaloneRouteMain>
+      </ProtectedRouteMain>
     );
   }
 
@@ -149,9 +153,12 @@ export function AuthenticatedRoute({ children }: { children: ReactNode }) {
 
   if (auth.error) {
     return (
-      <RouteGuardFrame standalone width={routeFrameWidth(location.pathname)}>
-        <PageHeader title="ログイン状態を確認できません" />
-        <PageContentSurface>
+      <ProtectedRouteMain>
+        <RouteTerminalPage
+          pathname={location.pathname}
+          search={location.search}
+          title="ログイン状態を確認できません"
+        >
           <Notice
             action={
               <Button
@@ -166,8 +173,8 @@ export function AuthenticatedRoute({ children }: { children: ReactNode }) {
           >
             ログイン状態を確認できないため、この画面の表示を一時停止しています。通信状態を確認して、再試行してください。
           </Notice>
-        </PageContentSurface>
-      </RouteGuardFrame>
+        </RouteTerminalPage>
+      </ProtectedRouteMain>
     );
   }
 
@@ -190,13 +197,15 @@ export function AdminRoute({ children }: { children: ReactNode }) {
 
   if (!auth.auth?.isAdmin) {
     return (
-      <PageFrame>
-        <PageHeader title="管理者権限が必要です" />
-        <PageContentSurface className="grid justify-items-start gap-4">
-          <Notice tone="danger">この画面は管理者専用です。</Notice>
-          <LinkButton to="/matches">試合一覧へ戻る</LinkButton>
-        </PageContentSurface>
-      </PageFrame>
+      <RouteTerminalPage
+        contentClassName="grid justify-items-start gap-4"
+        pathname={location.pathname}
+        search={location.search}
+        title="管理者権限が必要です"
+      >
+        <Notice tone="danger">この画面は管理者専用です。</Notice>
+        <LinkButton to="/matches">試合一覧へ戻る</LinkButton>
+      </RouteTerminalPage>
     );
   }
 

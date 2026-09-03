@@ -1,4 +1,5 @@
 import { ArrowLeft } from "lucide-react";
+import type { ReactNode } from "react";
 
 import { Button } from "@/shared/ui/actions/Button";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
@@ -12,6 +13,7 @@ type ResourcePageStateBase = {
   backHref: string;
   backLabel: string;
   description: string;
+  eyebrow?: ReactNode;
   title: string;
   width?: PageFrameWidth | undefined;
 };
@@ -46,7 +48,7 @@ export function ResourcePageState(props: ResourcePageStateProps) {
           {props.backLabel}
         </LinkButton>
       </div>
-      <PageHeader title={props.title} />
+      <PageHeader eyebrow={props.eyebrow} title={props.title} />
       <PageContentSurface>
         <Notice
           action={

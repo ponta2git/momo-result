@@ -21,6 +21,14 @@ import { PageFrame } from "@/shared/ui/layout/PageFrame";
 import { PageHeader } from "@/shared/ui/layout/PageHeader";
 import { StaleShield } from "@/shared/ui/motion/StaleShield";
 
+function seriesReturnAction(returnTo: string | undefined) {
+  return returnTo ? (
+    <LinkButton icon={<ArrowLeft aria-hidden="true" />} size="sm" to={returnTo} variant="quiet">
+      前の画面へ戻る
+    </LinkButton>
+  ) : null;
+}
+
 export function SeriesComparisonPage() {
   const page = useSeriesComparisonPageModel();
   const { filters, focus, options, resource, status } = page;
@@ -34,7 +42,7 @@ export function SeriesComparisonPage() {
   if (page.clientUpgradeRequired) {
     return (
       <PageFrame width="wide">
-        <PageHeader title="戦績比較" />
+        <PageHeader actions={seriesReturnAction(page.returnTo)} title="戦績比較" />
         <PageContentSurface>
           <Notice
             action={
@@ -54,21 +62,7 @@ export function SeriesComparisonPage() {
 
   return (
     <PageFrame width="wide">
-      <PageHeader
-        actions={
-          page.returnTo ? (
-            <LinkButton
-              icon={<ArrowLeft aria-hidden="true" />}
-              size="sm"
-              to={page.returnTo}
-              variant="quiet"
-            >
-              前の画面へ戻る
-            </LinkButton>
-          ) : null
-        }
-        title="戦績比較"
-      />
+      <PageHeader actions={seriesReturnAction(page.returnTo)} title="戦績比較" />
       <PageContentSurface className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4">
         {options.hasError ? (
           <Notice

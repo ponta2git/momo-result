@@ -13,8 +13,8 @@ export function MatchDetailLoading() {
       <PageHeader
         actions={
           <>
-            <Skeleton className="h-11 w-28 rounded-sm pointer-fine:h-10" />
-            <Skeleton className="h-11 w-20 rounded-sm pointer-fine:h-10" />
+            <Skeleton className="h-11 w-32 rounded-sm pointer-fine:h-10" />
+            <Skeleton className="h-11 w-16 rounded-sm pointer-fine:h-10" />
           </>
         }
         title="試合結果を読み込み中"

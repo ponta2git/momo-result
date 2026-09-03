@@ -61,6 +61,11 @@ describe("app routing", () => {
         "別のDiscordアカウントを使う場合は、Discord側でログアウトするか、シークレットウィンドウで開きます。",
       ),
     ).not.toBeInTheDocument();
+    expect(screen.getAllByRole("navigation", { name: "グローバルナビゲーション" })).toHaveLength(1);
+    expect(screen.getAllByRole("link", { name: "メインコンテンツへスキップ" })).toHaveLength(1);
+    const main = screen.getByRole("main");
+    expect(main).toHaveAttribute("id", "main-content");
+    expect(main).toHaveClass("px-3", "py-4", "sm:px-4", "sm:py-6");
     expect(router.state.location.pathname).toBe("/login");
   });
 
@@ -98,6 +103,19 @@ describe("app routing", () => {
     expect(screen.getByText("ログイン状態を確認中…")).toBeInTheDocument();
     expect(screen.getByText("momo-result")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "ログアウト" })).not.toBeInTheDocument();
+    const navigation = screen.getByRole("navigation", { name: "グローバルナビゲーション" });
+    expect(within(navigation).getByText("確認中", { exact: true })).toBeInTheDocument();
+    expect(within(navigation).getByRole("link", { name: "戦績比較" })).toHaveAttribute(
+      "href",
+      "/analytics/series",
+    );
+    expect(within(navigation).queryByRole("link", { name: "ログイン" })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "メインコンテンツへスキップ" })).toHaveAttribute(
+      "href",
+      "#main-content",
+    );
+    expect(screen.getByRole("main")).toHaveAttribute("id", "main-content");
+    expect(screen.getAllByRole("navigation", { name: "グローバルナビゲーション" })).toHaveLength(1);
 
     responseGate.resolve();
     expect(await screen.findByRole("heading", { name: "試合一覧" })).toBeInTheDocument();
@@ -168,11 +186,48 @@ describe("app routing", () => {
     ).toBeInTheDocument();
     expect(screen.queryByText("Temporary failure")).not.toBeInTheDocument();
     expect(screen.queryByText("auth temporarily unavailable")).not.toBeInTheDocument();
+    expect(
+      within(screen.getByRole("navigation", { name: "グローバルナビゲーション" })).getByRole(
+        "link",
+        { name: "戦績比較" },
+      ),
+    ).toHaveAttribute("href", "/analytics/series");
+    expect(
+      within(screen.getByRole("navigation", { name: "グローバルナビゲーション" })).getByText(
+        "状態不明",
+        { exact: true },
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("main")).toHaveAttribute("id", "main-content");
     await user.click(retry);
 
     expect(await screen.findByRole("heading", { name: "試合一覧" })).toBeInTheDocument();
     expect(screen.queryByText("Temporary failure")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "再試行" })).not.toBeInTheDocument();
+    expect(screen.getAllByRole("navigation", { name: "グローバルナビゲーション" })).toHaveLength(1);
+  });
+
+  it("keeps route-specific chrome when authentication fails before a detail page loads", async () => {
+    setDevUser();
+    server.use(
+      http.get("/api/auth/me", () =>
+        HttpResponse.json({ detail: "auth temporarily unavailable" }, { status: 500 }),
+      ),
+    );
+
+    renderApp("/held-events/held-1");
+
+    const heading = await screen.findByRole("heading", {
+      level: 1,
+      name: "ログイン状態を確認できません",
+    });
+    const header = heading.closest("header");
+    const frame = header?.parentElement;
+    const back = screen.getByRole("link", { name: "開催履歴へ戻る" });
+    expect(back).toHaveAttribute("href", "/held-events");
+    expect(header).toHaveTextContent("開催記録");
+    expect(frame?.children).toHaveLength(3);
+    expect(frame?.children.item(0)).toContainElement(back);
   });
 
   it("redirects /login to /matches when authenticated", async () => {
@@ -728,10 +783,14 @@ describe("app routing", () => {
       ),
     );
 
-    renderApp("/analytics/series");
+    renderApp("/analytics/series?returnTo=%2Fmatches%2Fmatch-1");
 
     expect(await screen.findByText("画面の更新が必要です")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "画面を再読み込み" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "前の画面へ戻る" })).toHaveAttribute(
+      "href",
+      "/matches/match-1",
+    );
     expect(screen.queryByText("対象作品を読み込めません")).not.toBeInTheDocument();
   });
 });

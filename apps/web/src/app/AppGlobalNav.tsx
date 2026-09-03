@@ -35,6 +35,15 @@ export function AppGlobalNav() {
   const auth = useAuth();
   const canLogout = import.meta.env.DEV && auth.isAuthenticated && Boolean(auth.logout);
   const logoutFailed = Boolean(auth.logoutError);
+  const sessionLabel =
+    auth.auth?.displayName ??
+    (auth.isChecking
+      ? "確認中"
+      : auth.error
+        ? "状態不明"
+        : auth.isAuthenticated
+          ? "ログイン中"
+          : "未ログイン");
 
   return (
     <GlobalNav
@@ -43,7 +52,7 @@ export function AppGlobalNav() {
         <div className="grid max-w-full min-w-0 justify-items-end gap-1">
           <div className="flex max-w-full min-w-0 items-center justify-end gap-2">
             <p className="hidden max-w-28 truncate text-xs text-[var(--color-text-secondary)] min-[24rem]:block">
-              {auth.auth?.displayName ?? "ログイン中"}
+              {sessionLabel}
             </p>
             {canLogout ? (
               <div className="shrink-0">

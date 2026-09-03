@@ -110,6 +110,7 @@ function MatchWorkspacePageContent({
               {navigation.header.exit.label}
             </LinkButton>
           }
+          description={navigation.header.description}
           title={title}
         />
         <PageContentSurface>

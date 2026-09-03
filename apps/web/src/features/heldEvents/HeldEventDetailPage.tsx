@@ -16,7 +16,7 @@ import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
-import { PageHeader } from "@/shared/ui/layout/PageHeader";
+import { PageHeader, responsivePageHeaderActionGroupClass } from "@/shared/ui/layout/PageHeader";
 
 export function HeldEventDetailPage() {
   const page = useHeldEventDetailPageModel();
@@ -59,7 +59,7 @@ function HeldEventDetailReadyContent({ page }: { page: HeldEventDetailReadyPageM
 
       <PageHeader
         actions={
-          <nav aria-label="この開催の関連操作" className="flex flex-wrap items-center gap-2">
+          <nav aria-label="この開催の関連操作" className={responsivePageHeaderActionGroupClass}>
             <LinkButton
               icon={<ListFilter aria-hidden="true" />}
               size="sm"

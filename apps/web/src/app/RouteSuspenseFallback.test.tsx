@@ -5,6 +5,7 @@ import {
   RouteSuspenseFallback,
   routeFrameWidth,
   routeLoadingPresentation,
+  routeTerminalPresentation,
 } from "@/app/RouteSuspenseFallback";
 
 describe("RouteSuspenseFallback", () => {
@@ -29,23 +30,55 @@ describe("RouteSuspenseFallback", () => {
     [
       "/matches",
       "?returnTo=%2Fheld-events%2Fheld-1",
-      { actionSize: "sm", actionSlots: 2, description: false, eyebrow: false },
+      {
+        actionLayout: "responsive-grid",
+        actionSize: "sm",
+        actionSlots: 2,
+        actionWidths: ["standard", "wide"],
+        description: false,
+        eyebrow: false,
+      },
       true,
     ],
     [
       "/held-events/held-1",
       "",
-      { actionSize: "sm", actionSlots: 3, description: true, eyebrow: true },
+      {
+        actionLayout: "responsive-grid",
+        actionSize: "sm",
+        actionSlots: 3,
+        actionWidths: ["wide", "standard", "compact"],
+        description: true,
+        eyebrow: true,
+      },
       true,
     ],
     [
       "/matches/match-1/edit",
       "",
-      { actionSize: "sm", actionSlots: 1, description: true, eyebrow: false },
+      {
+        actionSize: "sm",
+        actionSlots: 1,
+        actionWidths: ["long"],
+        description: true,
+        descriptionText: "確定済みの試合記録を編集します。保存後は一覧と出力に反映されます。",
+        eyebrow: false,
+      },
       false,
     ],
     ["/admin/masters", "", { actionSlots: 0, description: false, eyebrow: true }, false],
-    ["/admin/accounts", "", { actionSlots: 0, description: true, eyebrow: true }, false],
+    [
+      "/admin/accounts",
+      "",
+      {
+        actionSlots: 0,
+        description: true,
+        descriptionText:
+          "Discordでログインできるアカウントと管理者権限を管理します。試合参加者とは別に扱います。",
+        eyebrow: true,
+      },
+      false,
+    ],
   ] as const)(
     "preserves the ready header and leading-slot shape for %s",
     (pathname, search, header, leadingActionSlot) => {
@@ -83,6 +116,131 @@ describe("RouteSuspenseFallback", () => {
     );
 
     expect(presentation.contextNoticeSlot).toBe(true);
+  });
+
+  it("keeps the master-workspace handoff on terminal return navigation", () => {
+    const presentation = routeTerminalPresentation(
+      "/admin/masters",
+      "?returnTo=%2Freview%2Fsession-1%3Fsample%3D1&handoffId=handoff-1",
+    );
+
+    expect(presentation.contextNavigation).toEqual({
+      href: "/review/session-1?sample=1&handoffId=handoff-1",
+      label: "元の画面へ戻る",
+    });
+  });
+
+  it.each([
+    ["/matches/new", "", "headerNavigation", "/matches", "入力をやめる", undefined],
+    [
+      "/matches/match-1/edit",
+      "",
+      "headerNavigation",
+      "/matches/match-1",
+      "編集をやめる",
+      undefined,
+    ],
+    ["/matches/match-1", "", "leadingNavigation", "/matches", "前の画面へ戻る", undefined],
+    ["/held-events/held-1", "", "leadingNavigation", "/held-events", "開催履歴へ戻る", undefined],
+    [
+      "/analytics/series",
+      "?returnTo=%2Fmatches%2Fmatch-1",
+      "headerNavigation",
+      "/matches/match-1",
+      "前の画面へ戻る",
+      "back",
+    ],
+    [
+      "/admin/masters",
+      "?returnTo=%2Freview%2Fsession-1",
+      "contextNavigation",
+      "/review/session-1",
+      "元の画面へ戻る",
+      undefined,
+    ],
+  ] as const)(
+    "maps %s terminal navigation without reclassifying the route",
+    (pathname, search, placement, href, label, icon) => {
+      const presentation = routeTerminalPresentation(pathname, search);
+
+      expect(presentation[placement]).toEqual({ href, ...(icon ? { icon } : {}), label });
+    },
+  );
+
+  it("does not misclassify match creation as a match detail", () => {
+    const presentation = routeTerminalPresentation("/matches/new");
+
+    expect(presentation.leadingNavigation).toBeUndefined();
+    expect(presentation.headerNavigation).toEqual({ href: "/matches", label: "入力をやめる" });
+  });
+
+  it("keeps static route navigation actions in terminal headers", () => {
+    const matches = routeTerminalPresentation("/matches", "?status=confirmed");
+    expect(matches.headerActions).toEqual({
+      items: [
+        {
+          href: "/ocr/new?returnTo=%2Fmatches%3Fstatus%3Dconfirmed",
+          icon: "scan",
+          label: "OCR取り込み",
+          size: "sm",
+        },
+        {
+          href: "/matches/new?returnTo=%2Fmatches%3Fstatus%3Dconfirmed",
+          icon: "manual",
+          label: "手入力で作成",
+          size: "sm",
+        },
+      ],
+      label: "試合を登録",
+      layout: "responsive-grid",
+    });
+
+    const detail = routeTerminalPresentation(
+      "/matches/match%201",
+      "?returnTo=%2Fheld-events%2Fheld-1",
+    );
+    expect(detail.headerActions?.items).toEqual([
+      {
+        href: "/exports?matchId=match+1&returnTo=%2Fmatches%2Fmatch%25201%3FreturnTo%3D%252Fheld-events%252Fheld-1",
+        label: "この試合を出力",
+      },
+      {
+        href: "/matches/match%201/edit?returnTo=%2Fmatches%2Fmatch%25201%3FreturnTo%3D%252Fheld-events%252Fheld-1",
+        label: "編集",
+      },
+    ]);
+  });
+
+  it.each([
+    ["/matches/new", "開催と4人分の結果を入力して、確定前の確認へ進みます。"],
+    [
+      "/review/session-1",
+      "読み取り結果を確認して、開催と4人分の結果を確定します。現在の状態: 状態不明",
+    ],
+    ["/matches/match-1/edit", "確定済みの試合記録を編集します。保存後は一覧と出力に反映されます。"],
+    [
+      "/admin/accounts",
+      "Discordでログインできるアカウントと管理者権限を管理します。試合参加者とは別に扱います。",
+    ],
+    ["/admin/analysis", "保存済み分析の状態確認と、作品単位または全作品の再計算を行います。"],
+  ])("shares the known description between loading and terminal states for %s", (path, text) => {
+    expect(routeLoadingPresentation(path).header.descriptionText).toBe(text);
+    expect(routeTerminalPresentation(path).description).toBe(text);
+  });
+
+  it("keeps route-specific terminal chrome and content density", () => {
+    expect(routeTerminalPresentation("/held-events/held-1").eyebrow).toBe("開催記録");
+    expect(routeTerminalPresentation("/admin/analysis").eyebrow).toBe("管理");
+    expect(routeTerminalPresentation("/exports").contentPadding).toBe("compact");
+  });
+
+  it("rejects an external terminal return destination", () => {
+    const presentation = routeTerminalPresentation(
+      "/analytics/series",
+      "?returnTo=https%3A%2F%2Fexample.com%2Foutside",
+    );
+
+    expect(presentation.headerNavigation).toBeUndefined();
   });
 
   it("normalizes a trailing route slash before selecting the layout", () => {

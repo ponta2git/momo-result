@@ -7,7 +7,7 @@ import {
   pageViewportGutterClass,
 } from "@/shared/ui/layout/PageFrame";
 import type { PageFrameWidth } from "@/shared/ui/layout/PageFrame";
-import { PageHeader } from "@/shared/ui/layout/PageHeader";
+import { PageHeader, responsivePageHeaderActionGroupClass } from "@/shared/ui/layout/PageHeader";
 
 export type PageLoadingKind =
   | "catalog"
@@ -21,11 +21,16 @@ export type PageLoadingKind =
   | "workspace";
 
 export type PageLoadingHeaderShape = {
+  actionLayout?: "inline" | "responsive-grid" | undefined;
   actionSize?: "sm" | "md" | undefined;
   actionSlots?: 0 | 1 | 2 | 3 | undefined;
+  actionWidths?: readonly PageLoadingActionWidth[] | undefined;
   description?: boolean | undefined;
+  descriptionText?: string | undefined;
   eyebrow?: boolean | undefined;
 };
+
+export type PageLoadingActionWidth = "compact" | "long" | "short" | "standard" | "wide";
 
 export type PageLoadingFallbackProps = {
   asMain?: boolean | undefined;
@@ -216,7 +221,7 @@ function PageLoadingSkeleton({
         {leadingSkeleton}
         {headerSkeleton}
         {contextSkeleton}
-        <PageContentSurface className="grid gap-4">
+        <PageContentSurface className="grid gap-4" padding="compact">
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {Array.from({ length: 4 }, (_, index) => (
               <Skeleton key={index} className="h-11" />
@@ -257,27 +262,53 @@ function LeadingActionSkeleton() {
 }
 
 function HeaderSkeleton({ shape }: { shape: PageLoadingHeaderShape | undefined }) {
-  const { actionSize = "md", actionSlots = 0, description = true, eyebrow = true } = shape ?? {};
+  const {
+    actionLayout = "inline",
+    actionSize = "md",
+    actionSlots = 0,
+    actionWidths = [],
+    description = true,
+    descriptionText,
+    eyebrow = true,
+  } = shape ?? {};
   const actionHeight = actionSize === "sm" ? "pointer-fine:h-9" : "pointer-fine:h-10";
+  const widthClasses = {
+    compact: actionLayout === "responsive-grid" ? "w-full sm:w-20" : "w-20",
+    long: actionLayout === "responsive-grid" ? "w-full sm:w-32" : "w-32",
+    short: actionLayout === "responsive-grid" ? "w-full sm:w-16" : "w-16",
+    standard: actionLayout === "responsive-grid" ? "w-full sm:w-28" : "w-28",
+    wide: actionLayout === "responsive-grid" ? "w-full sm:w-36" : "w-36",
+  } as const;
+  const actionSkeletons = Array.from({ length: actionSlots }, (_, index) => (
+    <Skeleton
+      className={cn(
+        "h-11 rounded-sm",
+        actionHeight,
+        widthClasses[actionWidths[index] ?? "standard"],
+      )}
+      key={index}
+    />
+  ));
 
   return (
     <div aria-hidden="true">
       <PageHeader
         actions={
-          actionSlots > 0
-            ? Array.from({ length: actionSlots }, (_, index) => (
-                <Skeleton
-                  className={cn("h-11 rounded-sm", actionHeight, index % 2 === 0 ? "w-28" : "w-36")}
-                  key={index}
-                />
-              ))
-            : undefined
+          actionSlots > 0 ? (
+            actionLayout === "responsive-grid" ? (
+              <div className={responsivePageHeaderActionGroupClass}>{actionSkeletons}</div>
+            ) : (
+              actionSkeletons
+            )
+          ) : undefined
         }
         description={
-          description ? <Skeleton as="span" className="block h-4 w-full max-w-2xl" /> : undefined
+          description
+            ? (descriptionText ?? <Skeleton as="span" className="block h-6 w-full max-w-2xl" />)
+            : undefined
         }
         eyebrow={eyebrow ? <Skeleton as="span" className="block h-4 w-24" /> : undefined}
-        title={<Skeleton as="span" className="block h-8 w-full max-w-80 md:h-9" />}
+        title={<Skeleton as="span" className="block h-8 w-full max-w-80 md:h-10" />}
       />
     </div>
   );

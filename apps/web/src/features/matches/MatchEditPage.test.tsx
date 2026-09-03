@@ -237,7 +237,13 @@ describe("MatchEditPage", () => {
       </QueryClientProvider>,
     );
 
-    expect(await screen.findByText("試合編集を読み込めませんでした")).toBeInTheDocument();
+    const failureHeading = await screen.findByRole("heading", {
+      level: 1,
+      name: "試合編集を読み込めませんでした",
+    });
+    expect(failureHeading.closest("header")).toHaveTextContent(
+      "確定済みの試合記録を編集します。保存後は一覧と出力に反映されます。",
+    );
     expect(screen.getByRole("button", { name: "試合編集を再読み込み" })).toBeEnabled();
   });
 
@@ -260,7 +266,13 @@ describe("MatchEditPage", () => {
       </QueryClientProvider>,
     );
 
-    expect(await screen.findByText("試合が見つかりませんでした")).toBeInTheDocument();
+    const missingHeading = await screen.findByRole("heading", {
+      level: 1,
+      name: "試合が見つかりませんでした",
+    });
+    expect(missingHeading.closest("header")).toHaveTextContent(
+      "確定済みの試合記録を編集します。保存後は一覧と出力に反映されます。",
+    );
     expect(screen.queryByRole("button", { name: "試合編集を再読み込み" })).not.toBeInTheDocument();
   });
 

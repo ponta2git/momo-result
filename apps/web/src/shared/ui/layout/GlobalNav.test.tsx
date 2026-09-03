@@ -74,7 +74,7 @@ describe("GlobalNav", () => {
   it("brings the active destination into the navigation viewport", () => {
     const getBoundingClientRect = vi
       .spyOn(HTMLElement.prototype, "getBoundingClientRect")
-      .mockImplementation(function () {
+      .mockImplementation(function (this: HTMLElement) {
         if (this.matches("[data-nav-scroll]")) return navigationRect(0, 200);
         if (this.matches('[aria-current="page"]')) return navigationRect(240, 300);
         return navigationRect(0, 0);
@@ -98,7 +98,7 @@ describe("GlobalNav", () => {
   it("leaves the navigation position unchanged when the active destination is visible", () => {
     const getBoundingClientRect = vi
       .spyOn(HTMLElement.prototype, "getBoundingClientRect")
-      .mockImplementation(function () {
+      .mockImplementation(function (this: HTMLElement) {
         if (this.matches("[data-nav-scroll]")) return navigationRect(0, 200);
         if (this.matches('[aria-current="page"]')) return navigationRect(80, 150);
         return navigationRect(0, 0);

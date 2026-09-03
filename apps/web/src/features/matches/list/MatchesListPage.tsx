@@ -15,7 +15,7 @@ import { Notice } from "@/shared/ui/feedback/Notice";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
-import { PageHeader } from "@/shared/ui/layout/PageHeader";
+import { PageHeader, responsivePageHeaderActionGroupClass } from "@/shared/ui/layout/PageHeader";
 import { StaleShield } from "@/shared/ui/motion/StaleShield";
 
 function ListSkeleton({ showDesktopTable }: { showDesktopTable: boolean }) {
@@ -61,7 +61,7 @@ export function MatchesListPage() {
         actions={
           <div
             aria-label="試合を登録"
-            className="grid w-full shrink-0 grid-cols-2 gap-2 sm:flex sm:w-auto sm:items-center"
+            className={responsivePageHeaderActionGroupClass}
             role="group"
           >
             <LinkButton icon={<ScanLine />} size="sm" to={navigation.ocrHref} variant="secondary">

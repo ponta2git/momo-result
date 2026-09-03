@@ -225,9 +225,13 @@ describe("SeriesAnalysisAdminPage", () => {
 
     renderAdminPage();
 
-    expect(
-      await screen.findByRole("heading", { level: 1, name: "管理者権限が必要です" }),
-    ).toBeInTheDocument();
+    const heading = await screen.findByRole("heading", {
+      level: 1,
+      name: "管理者権限が必要です",
+    });
+    const header = heading.closest("header");
+    expect(header).not.toBeNull();
+    expect(within(header!).getByText("管理", { exact: true })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "試合一覧へ戻る" })).toHaveAttribute(
       "href",
       "/matches",

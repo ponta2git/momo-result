@@ -1,6 +1,7 @@
 import { QueryClientProvider, useSuspenseQuery } from "@tanstack/react-query";
 import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type { ReactNode } from "react";
 import { useState } from "react";
 import { createMemoryRouter, RouterProvider } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
@@ -23,6 +24,10 @@ function StatefulRoute() {
       操作回数 {count}
     </button>
   );
+}
+
+function BrokenRoute(): ReactNode {
+  throw new Error("route failed");
 }
 
 describe("AppShell", () => {
@@ -177,6 +182,38 @@ describe("AppShell", () => {
 
       expect(await screen.findByRole("heading", { name: "再試行で復旧" })).toBeVisible();
       expect(attempts).toBe(2);
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+
+  it("passes safe return context from the location to the route error boundary", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const router = createMemoryRouter(
+      [
+        {
+          element: <AppShell />,
+          children: [{ element: <BrokenRoute />, path: "analytics/series" }],
+          path: "/",
+        },
+      ],
+      { initialEntries: ["/analytics/series?returnTo=%2Fmatches%2Fmatch-1"] },
+    );
+
+    try {
+      render(
+        <QueryClientProvider client={createTestQueryClient()}>
+          <RouterProvider router={router} />
+        </QueryClientProvider>,
+      );
+
+      const heading = await screen.findByRole("heading", {
+        level: 1,
+        name: "画面の読み込みに失敗しました",
+      });
+      const returnLink = screen.getByRole("link", { name: "前の画面へ戻る" });
+      expect(heading.closest("header")).toContainElement(returnLink);
+      expect(returnLink).toHaveAttribute("href", "/matches/match-1");
     } finally {
       consoleError.mockRestore();
     }

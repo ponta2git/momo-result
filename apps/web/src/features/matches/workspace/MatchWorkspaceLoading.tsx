@@ -13,7 +13,7 @@ export function MatchWorkspaceLoading({
   return (
     <PageFrame aria-busy="true" aria-label={title} width="workspace">
       <PageHeader
-        actions={<Skeleton className="h-11 w-28 max-w-full rounded-sm pointer-fine:h-9" />}
+        actions={<Skeleton className="h-11 w-32 max-w-full rounded-sm pointer-fine:h-9" />}
         description={description}
         title={title}
       />

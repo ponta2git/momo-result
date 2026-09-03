@@ -47,7 +47,10 @@ describe("HeldEventDetailPage", () => {
     expect(frame.children).toHaveLength(3);
     expect(frame.children.item(0)?.firstElementChild).toHaveAttribute("aria-hidden", "true");
     expect(frame.children.item(1)).toContainElement(heading);
-    expect(header?.children.item(1)?.children).toHaveLength(3);
+    expect(header).toHaveTextContent("開催記録");
+    const actionSlot = header?.children.item(1);
+    expect(actionSlot?.children).toHaveLength(1);
+    expect(actionSlot?.children.item(0)?.children).toHaveLength(3);
   });
 
   it("connects one held event to its draft, player recap, results, and comparison", async () => {
@@ -176,7 +179,11 @@ describe("HeldEventDetailPage", () => {
 
     renderPage();
 
-    expect(await screen.findByText("開催が見つかりません")).toBeInTheDocument();
+    const missingHeading = await screen.findByRole("heading", {
+      level: 1,
+      name: "開催が見つかりません",
+    });
+    expect(missingHeading.closest("header")).toHaveTextContent("開催記録");
     expect(screen.getByRole("link", { name: "開催履歴へ戻る" })).toHaveAttribute(
       "href",
       "/held-events",
@@ -197,7 +204,11 @@ describe("HeldEventDetailPage", () => {
 
     renderPage();
 
-    expect(await screen.findByText("開催詳細を読み込めませんでした")).toBeInTheDocument();
+    const failureHeading = await screen.findByRole("heading", {
+      level: 1,
+      name: "開催詳細を読み込めませんでした",
+    });
+    expect(failureHeading.closest("header")).toHaveTextContent("開催記録");
     await user.click(screen.getByRole("button", { name: "開催詳細を再読み込み" }));
 
     expect(

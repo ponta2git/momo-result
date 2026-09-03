@@ -18,7 +18,7 @@ export function DataVizHistogramChart({
   const countsById = new Map(series.map((item) => [item.id, item.counts]));
   return (
     <figure aria-label={ariaLabel} className="grid gap-3">
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid justify-items-center gap-3 lg:grid-cols-2 2xl:grid-cols-4">
         {seriesIdentity.map((identity) => (
           <SingleHistogram
             bins={bins}
@@ -58,7 +58,7 @@ function SingleHistogram({
   const binWidth = chartWidth / Math.max(1, bins.length);
   const barWidth = Math.max(10, binWidth * 0.62);
   return (
-    <div className="min-w-0 rounded-sm border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
+    <div className="w-full max-w-sm min-w-0 rounded-sm border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
       <div className="mb-2 flex min-w-0 items-center gap-2 text-sm font-semibold">
         <span
           aria-hidden="true"
@@ -67,67 +67,69 @@ function SingleHistogram({
         />
         <span className="min-w-0 break-words">{identity.label}</span>
       </div>
-      <svg
-        aria-label={`${identity.label}の分布`}
-        className="w-full rounded-sm bg-[var(--color-surface)]"
-        role="img"
-        style={{ aspectRatio: `${width} / ${height}` }}
-        viewBox={`0 0 ${width} ${height}`}
-      >
-        {numberTicks(0, countCeil, 5, 1).map((tick) => {
-          const y = height - padding.bottom - (tick / countCeil) * chartHeight;
-          return (
-            <g key={tick}>
-              <line
-                stroke="var(--color-border)"
-                strokeDasharray={tick === 0 ? undefined : "4 4"}
-                x1={padding.left}
-                x2={width - padding.right}
-                y1={y}
-                y2={y}
-              />
-              <text
-                fill="var(--color-text-secondary)"
-                fontSize="12"
-                textAnchor="end"
-                x={padding.left - 8}
-                y={y + 4}
-              >
-                {tick}
-              </text>
-            </g>
-          );
-        })}
-        {bins.map((bin, binIndex) => {
-          const count = counts[binIndex] ?? 0;
-          const barHeight = (count / countCeil) * chartHeight;
-          const center = padding.left + binIndex * binWidth + binWidth / 2;
-          return (
-            <g key={bin.id}>
-              <rect
-                fill={color}
-                height={barHeight}
-                rx="2"
-                width={barWidth}
-                x={center - barWidth / 2}
-                y={height - padding.bottom - barHeight}
-              >
-                <title>{`${bin.label}、${count}戦`}</title>
-              </rect>
-              <text
-                fill="var(--color-text-secondary)"
-                fontSize="12"
-                textAnchor="end"
-                transform={`rotate(-30 ${center} ${height - 48})`}
-                x={center}
-                y={height - 48}
-              >
-                {bin.label}
-              </text>
-            </g>
-          );
-        })}
-      </svg>
+      <div className="overflow-x-auto pb-1">
+        <svg
+          aria-label={`${identity.label}の分布`}
+          className="mx-auto block w-[320px] max-w-none min-w-[320px] rounded-sm bg-[var(--color-surface)]"
+          role="img"
+          style={{ aspectRatio: `${width} / ${height}` }}
+          viewBox={`0 0 ${width} ${height}`}
+        >
+          {numberTicks(0, countCeil, 5, 1).map((tick) => {
+            const y = height - padding.bottom - (tick / countCeil) * chartHeight;
+            return (
+              <g key={tick}>
+                <line
+                  stroke="var(--color-border)"
+                  strokeDasharray={tick === 0 ? undefined : "4 4"}
+                  x1={padding.left}
+                  x2={width - padding.right}
+                  y1={y}
+                  y2={y}
+                />
+                <text
+                  fill="var(--color-text-secondary)"
+                  fontSize="12"
+                  textAnchor="end"
+                  x={padding.left - 8}
+                  y={y + 4}
+                >
+                  {tick}
+                </text>
+              </g>
+            );
+          })}
+          {bins.map((bin, binIndex) => {
+            const count = counts[binIndex] ?? 0;
+            const barHeight = (count / countCeil) * chartHeight;
+            const center = padding.left + binIndex * binWidth + binWidth / 2;
+            return (
+              <g key={bin.id}>
+                <rect
+                  fill={color}
+                  height={barHeight}
+                  rx="2"
+                  width={barWidth}
+                  x={center - barWidth / 2}
+                  y={height - padding.bottom - barHeight}
+                >
+                  <title>{`${bin.label}、${count}戦`}</title>
+                </rect>
+                <text
+                  fill="var(--color-text-secondary)"
+                  fontSize="12"
+                  textAnchor="end"
+                  transform={`rotate(-30 ${center} ${height - 48})`}
+                  x={center}
+                  y={height - 48}
+                >
+                  {bin.label}
+                </text>
+              </g>
+            );
+          })}
+        </svg>
+      </div>
     </div>
   );
 }

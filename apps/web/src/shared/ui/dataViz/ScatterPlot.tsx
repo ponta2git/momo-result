@@ -67,10 +67,10 @@ export function DataVizScatterPlot({
 
   return (
     <figure className="grid max-w-full min-w-0 gap-2">
-      <div className="flex max-w-full min-w-0 overflow-x-auto pb-1 md:justify-center">
+      <div className="max-w-full min-w-0 overflow-x-auto pb-1">
         <svg
           aria-label={ariaLabel}
-          className="w-[760px] max-w-none shrink-0 rounded-sm bg-[var(--color-surface)] md:w-full md:max-w-[980px]"
+          className="mx-auto block w-[760px] max-w-none min-w-[760px] rounded-sm bg-[var(--color-surface)] md:w-full md:max-w-[980px]"
           role="img"
           style={{ aspectRatio: `${width} / ${height}` }}
           viewBox={`0 0 ${width} ${height}`}

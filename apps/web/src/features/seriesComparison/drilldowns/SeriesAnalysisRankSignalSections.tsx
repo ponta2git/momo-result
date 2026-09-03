@@ -37,7 +37,7 @@ export function RankSignalValidationMethod({ payload }: { payload: RankSignalPay
       }
       triggerVariant="supporting"
     >
-      <div className="grid gap-5">
+      <div className="grid gap-6">
         <section aria-labelledby="rank-signal-validation-flow">
           <h4 className="text-sm font-semibold text-balance" id="rank-signal-validation-flow">
             検証の流れ

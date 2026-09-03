@@ -118,7 +118,7 @@ export function MatchesListPage() {
           <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
             <div
               aria-label="試合一覧の操作"
-              className="flex flex-wrap items-center justify-end gap-1"
+              className="flex flex-wrap items-center justify-end gap-2"
               role="group"
             >
               <LinkButton icon={<Download />} size="sm" to={navigation.exportHref} variant="quiet">

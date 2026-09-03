@@ -79,7 +79,7 @@ export function PlayOrderHistoryDrilldown({
         ]}
         layout="inline"
       />
-      <div className="grid gap-x-6 gap-y-5 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-x-6 gap-y-6 sm:grid-cols-2 lg:grid-cols-4">
         {payload.rows.map((row) => (
           <div className="min-w-0" key={row.playOrder}>
             <div className="flex flex-wrap items-center justify-between gap-2">

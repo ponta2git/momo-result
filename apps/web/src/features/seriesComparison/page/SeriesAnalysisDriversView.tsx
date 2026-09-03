@@ -45,7 +45,7 @@ export function DriversView({ focusedItemIds, response, onDrilldown }: AnalysisV
       <AnalysisTableOfContents view="drivers" />
       <AnalysisSection id="metric-money" title="資産の残し方">
         <AssetComparisonCards response={response} />
-        <div className="mt-5">
+        <div className="mt-6">
           <AssetRevenueHistograms response={response} />
         </div>
         <div className="mt-6">

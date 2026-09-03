@@ -24,7 +24,7 @@ export function OcrCapturePage() {
   const { capture, feedback, navigation, setup, submission } = useOcrCapturePageModel();
 
   return (
-    <PageFrame className="gap-4">
+    <PageFrame>
       <PageHeader
         actions={
           navigation.returnTo ? (

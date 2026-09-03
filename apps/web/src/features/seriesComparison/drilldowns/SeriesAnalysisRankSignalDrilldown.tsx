@@ -12,7 +12,7 @@ import { Notice } from "@/shared/ui/feedback/Notice";
 export function RankSignalDrilldown({ payload }: { payload: RankSignalPayload }) {
   const qualityAdvisory = qualityAdvisoryLabel(payload.status);
   return (
-    <div className="grid gap-5">
+    <div className="grid gap-6">
       <RankSignalSummary payload={payload} qualityAdvisory={qualityAdvisory} />
       <section aria-labelledby="rank-signal-reading-order">
         <h3 className="text-sm font-semibold text-balance" id="rank-signal-reading-order">

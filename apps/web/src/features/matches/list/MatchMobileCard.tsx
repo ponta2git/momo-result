@@ -23,7 +23,7 @@ export function MatchMobileCard({ item, rowActions }: MatchMobileCardProps) {
         <div className="min-w-0 flex-1">
           <MatchListMatchIdentity item={item} />
         </div>
-        <div className="flex shrink-0 items-center gap-1">
+        <div className="flex shrink-0 items-center gap-2">
           <MatchListResultLink disabled={actionsDisabled} item={item} />
           <MatchListExportLink disabled={actionsDisabled} item={item} />
         </div>

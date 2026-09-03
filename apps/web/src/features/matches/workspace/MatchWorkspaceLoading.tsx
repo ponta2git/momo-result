@@ -11,7 +11,7 @@ export function MatchWorkspaceLoading({
   title?: string;
 }) {
   return (
-    <PageFrame aria-busy="true" aria-label={title} className="gap-4" width="workspace">
+    <PageFrame aria-busy="true" aria-label={title} width="workspace">
       <PageHeader description={description} title={title} />
 
       <PageContentSurface className="grid gap-6">

@@ -33,7 +33,7 @@ const noManagementItems: readonly GlobalNavItem[] = [];
 
 export function AppGlobalNav() {
   const auth = useAuth();
-  const canLogout = import.meta.env.DEV && Boolean(auth.logout);
+  const canLogout = import.meta.env.DEV && auth.isAuthenticated && Boolean(auth.logout);
   const logoutFailed = Boolean(auth.logoutError);
 
   return (

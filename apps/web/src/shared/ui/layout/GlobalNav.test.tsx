@@ -12,6 +12,20 @@ const items = [
 
 const managementItems = [{ icon: <Database />, label: "設定", to: "/admin/masters" }] as const;
 
+function navigationRect(left: number, right: number): DOMRect {
+  return {
+    bottom: 44,
+    height: 44,
+    left,
+    right,
+    top: 0,
+    width: right - left,
+    x: left,
+    y: 0,
+    toJSON: () => ({}),
+  } as DOMRect;
+}
+
 describe("GlobalNav", () => {
   it("renders caller-owned navigation content with accessible names", () => {
     render(
@@ -58,12 +72,13 @@ describe("GlobalNav", () => {
   });
 
   it("brings the active destination into the navigation viewport", () => {
-    const scrollIntoView = vi.fn();
-    const original = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "scrollIntoView");
-    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
-      configurable: true,
-      value: scrollIntoView,
-    });
+    const getBoundingClientRect = vi
+      .spyOn(HTMLElement.prototype, "getBoundingClientRect")
+      .mockImplementation(function () {
+        if (this.matches("[data-nav-scroll]")) return navigationRect(0, 200);
+        if (this.matches('[aria-current="page"]')) return navigationRect(240, 300);
+        return navigationRect(0, 0);
+      });
 
     try {
       render(
@@ -72,14 +87,33 @@ describe("GlobalNav", () => {
         </MemoryRouter>,
       );
 
-      expect(scrollIntoView).toHaveBeenCalledTimes(1);
-      expect(scrollIntoView).toHaveBeenCalledWith({ block: "nearest", inline: "nearest" });
+      expect(screen.getByRole("navigation").querySelector("[data-nav-scroll]")?.scrollLeft).toBe(
+        100,
+      );
     } finally {
-      if (original) {
-        Object.defineProperty(HTMLElement.prototype, "scrollIntoView", original);
-      } else {
-        Reflect.deleteProperty(HTMLElement.prototype, "scrollIntoView");
-      }
+      getBoundingClientRect.mockRestore();
+    }
+  });
+
+  it("leaves the navigation position unchanged when the active destination is visible", () => {
+    const getBoundingClientRect = vi
+      .spyOn(HTMLElement.prototype, "getBoundingClientRect")
+      .mockImplementation(function () {
+        if (this.matches("[data-nav-scroll]")) return navigationRect(0, 200);
+        if (this.matches('[aria-current="page"]')) return navigationRect(80, 150);
+        return navigationRect(0, 0);
+      });
+
+    try {
+      render(
+        <MemoryRouter initialEntries={["/admin/masters"]}>
+          <GlobalNav brandTo="/matches" items={items} managementItems={managementItems} />
+        </MemoryRouter>,
+      );
+
+      expect(screen.getByRole("navigation").querySelector("[data-nav-scroll]")?.scrollLeft).toBe(0);
+    } finally {
+      getBoundingClientRect.mockRestore();
     }
   });
 });

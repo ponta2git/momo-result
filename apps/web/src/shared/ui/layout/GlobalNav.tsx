@@ -45,6 +45,17 @@ function NavItemLink({ item }: { item: GlobalNavItem }) {
   );
 }
 
+function revealActiveDestination(scroller: HTMLDivElement, activeLink: HTMLAnchorElement) {
+  const scrollerRect = scroller.getBoundingClientRect();
+  const activeLinkRect = activeLink.getBoundingClientRect();
+
+  if (activeLinkRect.left < scrollerRect.left) {
+    scroller.scrollLeft += activeLinkRect.left - scrollerRect.left;
+  } else if (activeLinkRect.right > scrollerRect.right) {
+    scroller.scrollLeft += activeLinkRect.right - scrollerRect.right;
+  }
+}
+
 export function GlobalNav({
   brandLabel = "momo-result",
   brandTo,
@@ -59,9 +70,11 @@ export function GlobalNav({
   const destinationSignature = [...items, ...managementItems].map((item) => item.to).join("\0");
 
   useEffect(() => {
-    const activeLink =
-      navItemsRef.current?.querySelector<HTMLAnchorElement>('a[aria-current="page"]');
-    activeLink?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+    const scroller = navItemsRef.current;
+    const activeLink = scroller?.querySelector<HTMLAnchorElement>('a[aria-current="page"]');
+    if (scroller && activeLink) {
+      revealActiveDestination(scroller, activeLink);
+    }
   }, [destinationSignature, location.pathname]);
 
   return (

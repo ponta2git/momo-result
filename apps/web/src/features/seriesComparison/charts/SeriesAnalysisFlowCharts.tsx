@@ -155,14 +155,14 @@ export function MomentumMatrices({
           },
         ]}
       />
-      <div className="grid gap-3 lg:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-2">
         {response.momentumSwitch.map((entry) => {
           const cellByRanks = new Map(
             entry.cells.map((cell) => [`${cell.previousRank}:${cell.nextRank}`, cell]),
           );
           return (
             <article
-              className="min-w-0 rounded-sm border border-[var(--color-border)] bg-[var(--color-surface)] p-3"
+              className="min-w-0 rounded-sm border border-[var(--color-border)] bg-[var(--color-surface)] p-4"
               key={entry.memberId}
             >
               <h3 className="mb-3 font-semibold">

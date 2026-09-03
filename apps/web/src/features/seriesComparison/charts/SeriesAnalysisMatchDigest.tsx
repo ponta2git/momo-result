@@ -24,7 +24,7 @@ export function MatchDigestStrip({
   response: SeriesComparisonAggregateV3;
 }) {
   return (
-    <div className="grid gap-3">
+    <div className="grid gap-4">
       <dl className="grid gap-px bg-[var(--color-border)] sm:grid-cols-2 xl:grid-cols-4">
         {flagOrder.map((flag) => (
           <div className="bg-[var(--color-surface)] px-3 py-2" key={flag}>
@@ -41,12 +41,12 @@ export function MatchDigestStrip({
         <p className="py-3 text-sm text-[var(--color-text-secondary)]">対象試合はありません。</p>
       ) : (
         <div className="[scrollbar-width:thin] [scrollbar-color:var(--color-border)_transparent] overflow-x-auto pb-1">
-          <div className="flex min-w-max gap-3">
+          <div className="flex min-w-max gap-4">
             {response.matchDigest.recent.toReversed().map((match) => {
               const focused = focusedItemIds.includes(match.itemId);
               return (
                 <article
-                  className={`w-52 shrink-0 rounded-sm border bg-[var(--color-surface)] p-3 ${focused ? "border-[var(--color-action)] ring-2 ring-[var(--color-action)]/25" : "border-[var(--color-border)]"}`}
+                  className={`w-52 shrink-0 rounded-sm border bg-[var(--color-surface)] p-4 ${focused ? "border-[var(--color-action)] ring-2 ring-[var(--color-action)]/25" : "border-[var(--color-border)]"}`}
                   data-focused-metric={focused ? "true" : undefined}
                   key={match.itemId}
                 >

@@ -30,7 +30,7 @@ export function SeriesAnalysisSelectedMatch({
   return (
     <section
       aria-label="選択中の試合"
-      className="grid min-w-0 gap-3 rounded-md border border-[var(--color-action)]/55 bg-[var(--color-surface-selected)] p-3"
+      className="grid min-w-0 gap-4 rounded-md border border-[var(--color-action)]/55 bg-[var(--color-surface-selected)] p-4"
     >
       <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">

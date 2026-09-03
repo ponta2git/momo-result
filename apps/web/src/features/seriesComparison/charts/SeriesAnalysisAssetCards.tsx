@@ -22,7 +22,7 @@ export function AssetComparisonCards({ response }: { response: SeriesComparisonA
     (highlight) => highlight.metricId === "revenue.average",
   )?.leaderMemberIds;
   return (
-    <div className="grid items-stretch gap-3 md:grid-cols-2 xl:grid-cols-4">
+    <div className="grid items-stretch gap-4 md:grid-cols-2 xl:grid-cols-4">
       {response.assetStyleProfiles.entries.map((entry) => {
         const performance = response.performanceProfiles.entries.find(
           (candidate) => candidate.memberId === entry.memberId,
@@ -32,7 +32,7 @@ export function AssetComparisonCards({ response }: { response: SeriesComparisonA
         );
         return (
           <article
-            className="flex h-full min-w-0 flex-col rounded-sm border border-[var(--color-border)] p-3"
+            className="flex h-full min-w-0 flex-col rounded-sm border border-[var(--color-border)] p-4"
             key={entry.memberId}
           >
             <div className="flex items-start justify-between gap-2 pb-2">
@@ -46,7 +46,7 @@ export function AssetComparisonCards({ response }: { response: SeriesComparisonA
                 <SeriesAnalysisQualityAdvisory status={entry.qualityStatus} />
               </span>
             </div>
-            <section className="min-h-36 py-3">
+            <section className="py-3 md:min-h-36">
               <h4 className="text-xs font-semibold text-[var(--color-text-secondary)]">
                 総資産の出方
               </h4>
@@ -75,7 +75,7 @@ export function AssetComparisonCards({ response }: { response: SeriesComparisonA
                 </ul>
               ) : null}
             </section>
-            <section className="min-h-20 py-3">
+            <section className="py-3 md:min-h-20">
               <h4 className="text-xs font-semibold text-[var(--color-text-secondary)]">
                 総資産に占める物件収益の割合
               </h4>
@@ -86,7 +86,7 @@ export function AssetComparisonCards({ response }: { response: SeriesComparisonA
                 物件収益比率 {formatPercent(performance?.averageRevenueAssetRate)}
               </p>
             </section>
-            <section className="min-h-40 py-3">
+            <section className="py-3 md:min-h-40">
               <h4 className="text-xs font-semibold text-[var(--color-text-secondary)]">主要根拠</h4>
               <dl className="mt-2 grid gap-2">
                 {entry.evidence.map((evidence) => (
@@ -142,9 +142,11 @@ export function AssetComparisonCards({ response }: { response: SeriesComparisonA
             <div className="mt-3">
               <Disclosure
                 ariaLabel={`${entry.displayName}の資産傾向の詳しい根拠`}
-                panelPadding="sm"
+                panelPadding="none"
+                panelSpacing="sm"
                 presentation="inset"
                 summary="詳しい根拠"
+                triggerLayout="flush-horizontal"
                 triggerVariant="supporting"
               >
                 <dl className="grid grid-cols-2 gap-2 text-xs">

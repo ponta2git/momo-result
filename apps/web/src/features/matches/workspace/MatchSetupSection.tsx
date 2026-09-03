@@ -60,7 +60,8 @@ export function MatchSetupSection({
         ariaLabel={editorOpen ? "条件を閉じる" : "条件を変更"}
         keepMounted
         open={editorOpen}
-        panelPadding="md"
+        panelPadding="none"
+        panelSpacing="md"
         presentation="inset"
         summary={
           <span className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
@@ -85,7 +86,7 @@ export function MatchSetupSection({
             </span>
           </span>
         }
-        triggerLayout="section"
+        triggerLayout="flush-horizontal"
         onOpenChange={setEditorOpen}
       >
         <MatchSetupFields model={model.fields} />

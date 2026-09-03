@@ -169,10 +169,10 @@ export function CardShopDestinationQuadrants({
   response: SeriesComparisonAggregateV3;
 }) {
   return (
-    <div className="grid gap-3 lg:grid-cols-2">
+    <div className="grid gap-4 lg:grid-cols-2">
       {response.cardShopDestination.map((entry) => (
         <article
-          className="rounded-sm border border-[var(--color-border)] bg-[var(--color-surface)] p-3"
+          className="rounded-sm border border-[var(--color-border)] bg-[var(--color-surface)] p-4"
           key={entry.memberId}
         >
           <div className="flex flex-wrap items-start justify-between gap-2">

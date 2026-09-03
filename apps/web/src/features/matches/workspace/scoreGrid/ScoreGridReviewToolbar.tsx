@@ -67,33 +67,39 @@ export function ScoreGridReviewToolbar({
           </p>
         )}
       </div>
-      <div className="flex flex-wrap items-center gap-2">
-        <Button
-          aria-label="前の要確認セルへ"
-          icon={<ChevronLeft aria-hidden="true" />}
-          size="sm"
-          variant="secondary"
-          onClick={onPrevious}
-        >
-          前へ
-        </Button>
-        <Button
-          aria-label="次の要確認セルへ"
-          icon={<ChevronRight aria-hidden="true" />}
-          size="sm"
-          variant="secondary"
-          onClick={onNext}
-        >
-          次へ
-        </Button>
-        <Button
-          disabled={!activeItem || activeReviewed}
-          icon={<Check aria-hidden="true" />}
-          size="sm"
-          onClick={onAcknowledge}
-        >
-          この値で確認済み
-        </Button>
+      <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
+        <div className="grid">
+          <Button
+            aria-label="前の要確認セルへ"
+            icon={<ChevronLeft aria-hidden="true" />}
+            size="sm"
+            variant="secondary"
+            onClick={onPrevious}
+          >
+            前へ
+          </Button>
+        </div>
+        <div className="grid">
+          <Button
+            aria-label="次の要確認セルへ"
+            icon={<ChevronRight aria-hidden="true" />}
+            size="sm"
+            variant="secondary"
+            onClick={onNext}
+          >
+            次へ
+          </Button>
+        </div>
+        <div className="col-span-2 grid sm:col-span-1">
+          <Button
+            disabled={!activeItem || activeReviewed}
+            icon={<Check aria-hidden="true" />}
+            size="sm"
+            onClick={onAcknowledge}
+          >
+            この値で確認済み
+          </Button>
+        </div>
       </div>
     </div>
   );

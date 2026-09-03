@@ -28,7 +28,7 @@ export function AssetRevenueHistograms({ response }: { response: SeriesCompariso
     label: player.displayName,
   }));
   return (
-    <div className="grid gap-5">
+    <div className="grid gap-6">
       <div>
         <h3 className="mb-2 text-sm font-semibold">総資産の分布</h3>
         <DataVizHistogramChart
@@ -83,14 +83,14 @@ export function RevenueConversionMatrices({
           },
         ]}
       />
-      <div className="grid gap-3 lg:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-2">
         {response.revenueRankConversion.map((entry) => {
           const cellByRanks = new Map(
             entry.cells.map((cell) => [`${cell.revenueRank}:${cell.finalRank}`, cell]),
           );
           return (
             <article
-              className="min-w-0 rounded-sm border border-[var(--color-border)] bg-[var(--color-surface)] p-3"
+              className="min-w-0 rounded-sm border border-[var(--color-border)] bg-[var(--color-surface)] p-4"
               key={entry.memberId}
             >
               <h3 className="mb-3 text-sm font-semibold">

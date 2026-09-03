@@ -9,7 +9,7 @@ type PageFrameProps = HTMLAttributes<HTMLDivElement> & {
 };
 
 export const pageFrameWidthClass = {
-  narrow: "max-w-[56rem]",
+  narrow: "max-w-2xl",
   standard: "max-w-[96rem]",
   wide: "max-w-[108rem]",
   workspace: "max-w-[120rem]",

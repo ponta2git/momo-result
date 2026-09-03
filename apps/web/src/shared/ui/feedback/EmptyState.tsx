@@ -1,5 +1,8 @@
 import type { ReactNode } from "react";
 
+import { cn } from "@/shared/ui/cn";
+import { readableTextWidthClass } from "@/shared/ui/layout/readableText";
+
 export type EmptyStateProps = {
   action?: ReactNode;
   description?: ReactNode;
@@ -33,11 +36,21 @@ export function EmptyState({
           </div>
         ) : null}
         <div className="min-w-0">
-          <h3 className="momo-heading text-base font-semibold text-[var(--color-text-primary)]">
+          <h3
+            className={cn(
+              "momo-heading text-base font-semibold text-[var(--color-text-primary)]",
+              readableTextWidthClass,
+            )}
+          >
             {title}
           </h3>
           {description ? (
-            <div className="momo-copy mt-1 text-sm text-[var(--color-text-secondary)]">
+            <div
+              className={cn(
+                "momo-copy mt-1 text-sm text-[var(--color-text-secondary)] text-pretty",
+                readableTextWidthClass,
+              )}
+            >
               {description}
             </div>
           ) : null}

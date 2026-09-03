@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import { cn } from "@/shared/ui/cn";
+import { readableTextWidthClass } from "@/shared/ui/layout/readableText";
 
 type PageHeaderProps = {
   actions?: ReactNode;
@@ -26,7 +27,12 @@ export function PageHeader({ actions, description, eyebrow, meta, title }: PageH
           {title}
         </h1>
         {description ? (
-          <p className="momo-copy mt-2 max-w-3xl text-sm text-[var(--color-text-secondary)]">
+          <p
+            className={cn(
+              "momo-copy mt-2 text-sm text-[var(--color-text-secondary)]",
+              readableTextWidthClass,
+            )}
+          >
             {description}
           </p>
         ) : null}

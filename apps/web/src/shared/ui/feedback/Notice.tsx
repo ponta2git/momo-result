@@ -1,5 +1,8 @@
 import type { ReactNode } from "react";
 
+import { cn } from "@/shared/ui/cn";
+import { readableTextWidthClass } from "@/shared/ui/layout/readableText";
+
 type NoticeTone = "info" | "success" | "warning" | "danger";
 type NoticePresentation = "contained" | "bare";
 
@@ -32,15 +35,27 @@ export function Notice({
 }: NoticeProps) {
   return (
     <section
-      className={`momo-copy text-sm ${presentation === "contained" ? `rounded-[var(--radius-md)] border p-3 ${toneClass[tone]}` : "text-[var(--color-text-primary)]"}`}
+      className={cn(
+        "momo-copy text-sm",
+        presentation === "contained"
+          ? `rounded-[var(--radius-md)] border p-3 ${toneClass[tone]}`
+          : "text-[var(--color-text-primary)]",
+      )}
       role={role ?? (tone === "danger" ? "alert" : "status")}
     >
       {title ? (
-        <h3 className="momo-heading text-sm font-semibold text-[var(--color-text-primary)]">
+        <h3
+          className={cn(
+            "momo-heading text-sm font-semibold text-[var(--color-text-primary)]",
+            readableTextWidthClass,
+          )}
+        >
           {title}
         </h3>
       ) : null}
-      <div className={`min-w-0 text-pretty${title ? " mt-1" : ""}`}>{children}</div>
+      <div className={cn("min-w-0 text-pretty", readableTextWidthClass, title ? "mt-1" : "")}>
+        {children}
+      </div>
       {action ? <div className="mt-2">{action}</div> : null}
     </section>
   );

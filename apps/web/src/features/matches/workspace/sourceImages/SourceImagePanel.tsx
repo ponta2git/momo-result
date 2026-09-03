@@ -32,7 +32,7 @@ const followModeOptions = [
 function SourceImageLoadingFrame({ detail, label }: { detail: string; label: string }) {
   return (
     <div aria-busy="true" aria-label={label} className="grid min-h-[13rem] gap-3">
-      <Skeleton className="h-[10rem] w-full rounded-[var(--radius-sm)] 2xl:aspect-video 2xl:h-auto" />
+      <Skeleton className="h-[10rem] w-full rounded-xs 2xl:aspect-video 2xl:h-auto" />
       <p className="text-sm text-[var(--color-text-secondary)]">{detail}</p>
     </div>
   );
@@ -52,7 +52,7 @@ export function SourceImagePanel({
   });
 
   return (
-    <section className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-[var(--color-text-primary)]">
+    <section className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-[var(--color-text-primary)]">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-base font-semibold text-[var(--color-text-primary)]">元画像参照</h2>
@@ -109,7 +109,7 @@ export function SourceImagePanel({
           <TabsPanel keepMounted key={kind} value={kind}>
             {panel.activeKind === kind ? (
               <div className="mt-3">
-                <div className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3">
+                <div className="rounded-sm border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3">
                   {loading ? (
                     <SourceImageLoadingFrame
                       detail="画像一覧を取得しています。"
@@ -144,7 +144,7 @@ export function SourceImagePanel({
                       <div className="grid h-[13rem] w-full 2xl:aspect-video 2xl:h-auto">
                         <img
                           alt={`${sourceImageKindLabels[panel.activeState.kind]}の元画像`}
-                          className="size-full rounded-[var(--radius-sm)] bg-[var(--color-media-canvas)] object-contain"
+                          className="size-full rounded-xs bg-[var(--color-media-canvas)] object-contain"
                           src={panel.displayUrl}
                         />
                       </div>

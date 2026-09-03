@@ -52,7 +52,7 @@ function ToastRendererFallback() {
       {toasts.map((toast) => (
         <div
           className={cn(
-            "rounded-[var(--radius-lg)] border p-3 shadow-[var(--shadow-raised)]",
+            "rounded-lg border p-3 shadow-[var(--shadow-raised)]",
             toastToneClass[toast.type ?? "info"] ?? toastToneClass["info"],
           )}
           key={toast.id}

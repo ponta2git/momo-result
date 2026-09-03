@@ -22,7 +22,7 @@ export function SegmentedControl({
   value,
 }: SegmentedControlProps) {
   return (
-    <fieldset className="inline-flex max-w-full min-w-0 flex-wrap items-stretch gap-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] p-1">
+    <fieldset className="inline-flex max-w-full min-w-0 flex-wrap items-stretch gap-1 rounded-sm border border-[var(--color-border)] bg-[var(--color-surface)] p-1">
       <legend className="sr-only">{label}</legend>
       {options.map((option) => {
         return (
@@ -54,7 +54,7 @@ function SegmentedButton({
     <button
       aria-pressed={selected}
       className={cn(
-        "min-h-11 min-w-[5ch] rounded-[var(--radius-xs)] px-3 py-2 text-sm font-medium text-[var(--color-text-secondary)] sm:min-h-9 sm:py-1",
+        "min-h-11 min-w-[5ch] rounded-xs px-3 py-2 text-sm font-medium text-[var(--color-text-secondary)] sm:min-h-9 sm:py-1",
         selected
           ? "bg-[var(--color-surface-selected)] text-[var(--color-text-primary)]"
           : "hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]",

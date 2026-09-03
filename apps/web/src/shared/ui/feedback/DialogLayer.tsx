@@ -13,7 +13,7 @@ const dialogBackdropClassName = "fixed inset-0 z-[var(--z-dialog)] bg-[var(--col
 const dialogPopupClassName =
   "momo-dialog-popup fixed inset-0 z-[var(--z-dialog)] mx-auto flex w-full max-w-[40rem] items-center justify-center overflow-hidden";
 const dialogSurfaceClassName =
-  "momo-dialog-surface w-full rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-[var(--color-text-primary)] shadow-[var(--shadow-dialog)]";
+  "momo-dialog-surface w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-[var(--color-text-primary)] shadow-[var(--shadow-dialog)]";
 const dialogBackdropInitial = { opacity: 0 } as const;
 const dialogSurfaceInitial = { opacity: 0.96 } as const;
 const dialogHidden = { opacity: 0 } as const;
@@ -218,7 +218,7 @@ export function AlertDialogLayer({
             <div className={cn("min-w-0", contentClassName)}>{children}</div>
             {error ? (
               <p
-                className="rounded-[var(--radius-sm)] border border-[var(--color-danger)]/50 bg-[var(--color-danger)]/8 px-3 py-2 text-sm font-medium text-[var(--color-danger)]"
+                className="rounded-xs border border-[var(--color-danger)]/50 bg-[var(--color-danger)]/8 px-3 py-2 text-sm font-medium text-[var(--color-danger)]"
                 role="alert"
               >
                 {error}

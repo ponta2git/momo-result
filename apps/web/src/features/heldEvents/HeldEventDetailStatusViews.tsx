@@ -10,7 +10,18 @@ export function HeldEventDetailLoading() {
       <div>
         <Skeleton className="h-11 w-40 max-w-full rounded-sm pointer-fine:h-9" />
       </div>
-      <PageHeader eyebrow="開催記録" title="開催の記録を読み込み中" />
+      <PageHeader
+        actions={
+          <>
+            <Skeleton className="h-11 w-32 rounded-sm pointer-fine:h-9" />
+            <Skeleton className="h-11 w-24 rounded-sm pointer-fine:h-9" />
+            <Skeleton className="h-11 w-20 rounded-sm pointer-fine:h-9" />
+          </>
+        }
+        description={<Skeleton as="span" className="block h-4 w-56 max-w-full" />}
+        eyebrow="開催記録"
+        title="開催の記録を読み込み中"
+      />
       <PageContentSurface className="grid gap-8">
         <div className="grid gap-4 sm:grid-cols-3">
           {["matches", "drafts", "next"].map((id) => (

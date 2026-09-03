@@ -103,9 +103,16 @@ function MatchWorkspacePageContent({
     const notFound = loading.edit.failureKind === "notFound";
     const title = notFound ? "試合が見つかりませんでした" : "試合編集を読み込めませんでした";
     return (
-      <PageFrame>
-        <PageHeader title={title} />
-        <PageContentSurface className="grid justify-items-start gap-4">
+      <PageFrame width="workspace">
+        <PageHeader
+          actions={
+            <LinkButton size="sm" to={navigation.header.exit.href} variant="quiet">
+              {navigation.header.exit.label}
+            </LinkButton>
+          }
+          title={title}
+        />
+        <PageContentSurface>
           <Notice
             action={
               notFound ? undefined : (
@@ -127,9 +134,6 @@ function MatchWorkspacePageContent({
                 : "通信状態を確認して、もう一度お試しください。"}
             </p>
           </Notice>
-          <LinkButton to={navigation.header.exit.href} variant="secondary">
-            前の画面へ戻る
-          </LinkButton>
         </PageContentSurface>
       </PageFrame>
     );

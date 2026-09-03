@@ -30,7 +30,7 @@ export function SeriesComparisonPage() {
     preloadSeriesAnalysisView(filters.activeView);
   }, [filters.activeView, filters.seriesOptions.length, page.clientUpgradeRequired]);
 
-  if (options.loading) return <PageSkeleton />;
+  if (options.loading) return <PageSkeleton showReturnAction={Boolean(page.returnTo)} />;
   if (page.clientUpgradeRequired) {
     return (
       <PageFrame width="wide">

@@ -12,7 +12,11 @@ export function MatchWorkspaceLoading({
 }) {
   return (
     <PageFrame aria-busy="true" aria-label={title} width="workspace">
-      <PageHeader description={description} title={title} />
+      <PageHeader
+        actions={<Skeleton className="h-11 w-28 max-w-full rounded-sm pointer-fine:h-9" />}
+        description={description}
+        title={title}
+      />
 
       <PageContentSurface className="grid gap-6">
         <div className="grid gap-4 md:grid-cols-4">

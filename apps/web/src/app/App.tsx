@@ -7,7 +7,11 @@ export function App() {
   const location = useLocation();
 
   return (
-    <Suspense fallback={<RouteSuspenseFallback asMain pathname={location.pathname} />}>
+    <Suspense
+      fallback={
+        <RouteSuspenseFallback asMain pathname={location.pathname} search={location.search} />
+      }
+    >
       <Outlet />
     </Suspense>
   );

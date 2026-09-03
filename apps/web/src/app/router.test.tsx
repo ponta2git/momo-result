@@ -51,11 +51,11 @@ describe("app routing", () => {
   it("redirects / to /login when unauthenticated", async () => {
     const { router } = renderApp("/");
 
-    expect(await screen.findByRole("heading", { name: "ログイン" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "ログイン" })).toBeInTheDocument();
     expect(
-      screen.getByText("ログインすると、試合の記録・確認・比較・出力を利用できます。"),
+      await screen.findByText("ログインすると、試合の記録・確認・比較・出力を利用できます。"),
     ).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "ログイン" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "ログイン" })).toBeInTheDocument();
     expect(
       screen.queryByText(
         "別のDiscordアカウントを使う場合は、Discord側でログアウトするか、シークレットウィンドウで開きます。",
@@ -93,7 +93,7 @@ describe("app routing", () => {
 
     renderApp("/matches");
 
-    const loadingState = await screen.findByLabelText("ログイン状態を確認中");
+    const loadingState = await screen.findByLabelText("ログイン状態を確認中…");
     expect(loadingState).toHaveAttribute("aria-busy", "true");
     expect(screen.getByText("ログイン状態を確認中…")).toBeInTheDocument();
     expect(screen.getByText("momo-result")).toBeInTheDocument();
@@ -115,8 +115,8 @@ describe("app routing", () => {
     setDevUser("account-disabled");
     const { router } = renderApp("/exports?format=tsv&matchId=match-1#download");
 
-    expect(await screen.findByRole("heading", { name: "ログイン" })).toBeInTheDocument();
-    expect(screen.getByText("アクセス権限がありません")).toBeInTheDocument();
+    expect(await screen.findByText("アクセス権限がありません")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "ログイン" })).toBeInTheDocument();
     expect(router.state.location.pathname).toBe("/login");
     const recoveryParams = new URLSearchParams(router.state.location.search);
     expect(recoveryParams.get("reason")).toBe("forbidden");
@@ -249,8 +249,8 @@ describe("app routing", () => {
         expect(queryClient.getQueryData(matchKeys.detail("match-secret"))).toBeUndefined();
         expect(router.state.location.pathname).toBe("/login");
       });
-      expect(await screen.findByRole("heading", { name: "ログイン" })).toBeInTheDocument();
-      const accountPicker = screen.getByRole("combobox", { name: "操作用アカウント" });
+      const accountPicker = await screen.findByRole("combobox", { name: "操作用アカウント" });
+      expect(screen.getByRole("heading", { name: "ログイン" })).toBeInTheDocument();
       expect(accountPicker).toBeEnabled();
       await user.selectOptions(accountPicker, "account_eu");
 
@@ -522,7 +522,7 @@ describe("app routing", () => {
     const { router } = renderApp("/analytics/series?view=overview");
 
     expect(await screen.findByRole("heading", { name: "戦績比較" })).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: /比較対象を変更/u }));
+    await user.click(await screen.findByRole("button", { name: /比較対象を変更/u }));
     await user.selectOptions(screen.getByRole("combobox", { name: "シーズン" }), "season_current");
     await user.selectOptions(screen.getByRole("combobox", { name: "マップ" }), "map_east");
 

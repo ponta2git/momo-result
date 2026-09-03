@@ -70,9 +70,11 @@ describe("MatchDetailPage", () => {
 
     const frame = screen.getByLabelText("試合詳細を読み込み中");
     const heading = screen.getByRole("heading", { name: "試合結果を読み込み中" });
+    const header = heading.closest("header");
     expect(frame.children).toHaveLength(3);
     expect(frame.children.item(0)?.firstElementChild).toHaveAttribute("aria-hidden", "true");
     expect(frame.children.item(1)).toContainElement(heading);
+    expect(header?.children.item(1)?.children).toHaveLength(2);
   });
 
   it("exposes result navigation and confirms deletion before acting", async () => {

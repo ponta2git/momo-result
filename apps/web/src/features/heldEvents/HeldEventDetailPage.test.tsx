@@ -43,9 +43,11 @@ describe("HeldEventDetailPage", () => {
 
     const frame = screen.getByLabelText("開催詳細を読み込み中");
     const heading = screen.getByRole("heading", { name: "開催の記録を読み込み中" });
+    const header = heading.closest("header");
     expect(frame.children).toHaveLength(3);
     expect(frame.children.item(0)?.firstElementChild).toHaveAttribute("aria-hidden", "true");
     expect(frame.children.item(1)).toContainElement(heading);
+    expect(header?.children.item(1)?.children).toHaveLength(3);
   });
 
   it("connects one held event to its draft, player recap, results, and comparison", async () => {

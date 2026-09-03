@@ -36,11 +36,13 @@ function RouteQueryResetBridge({
   pathname,
   reset,
   resetKey,
+  search,
 }: {
   children: ReactNode;
   pathname: string;
   reset: () => void;
   resetKey: string;
+  search: string;
 }) {
   const [readyKey, setReadyKey] = useState(resetKey);
 
@@ -53,7 +55,7 @@ function RouteQueryResetBridge({
   }, [readyKey, reset, resetKey]);
 
   if (readyKey !== resetKey) {
-    return <RouteSuspenseFallback pathname={pathname} />;
+    return <RouteSuspenseFallback pathname={pathname} search={search} />;
   }
 
   return children;
@@ -125,9 +127,17 @@ export function AppShell() {
                 pathname={location.pathname}
                 reset={reset}
                 resetKey={routeResetKey}
+                search={location.search}
               >
                 <RouteErrorBoundary onReset={reset} pathname={location.pathname}>
-                  <Suspense fallback={<RouteSuspenseFallback pathname={location.pathname} />}>
+                  <Suspense
+                    fallback={
+                      <RouteSuspenseFallback
+                        pathname={location.pathname}
+                        search={location.search}
+                      />
+                    }
+                  >
                     {/* Route availability must not depend on an exit-animation lifecycle. */}
                     <div className="grid min-w-0">
                       <Outlet />

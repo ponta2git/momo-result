@@ -1,6 +1,9 @@
 import type { ReactNode } from "react";
 import { Navigate, useLocation, useSearchParams } from "react-router-dom";
 
+import { routeFrameWidth, RouteSuspenseFallback } from "@/app/RouteSuspenseFallback";
+import { loginDescription } from "@/shared/auth/loginCopy";
+import { loginNavItems } from "@/shared/auth/loginNavigation";
 import {
   buildLoginPath,
   currentAppPath,
@@ -12,25 +15,20 @@ import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { cn } from "@/shared/ui/cn";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
+import { GlobalNav } from "@/shared/ui/layout/GlobalNav";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
 import { PageFrame, pageViewportGutterClass } from "@/shared/ui/layout/PageFrame";
+import type { PageFrameWidth } from "@/shared/ui/layout/PageFrame";
 import { PageHeader } from "@/shared/ui/layout/PageHeader";
 
 function StandaloneRouteMain({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-dvh flex-col">
-      <header className="border-b border-[var(--color-border)] bg-[var(--color-surface)]">
-        <div
-          className={cn(
-            "mx-auto flex min-h-14 w-full max-w-[96rem] items-center",
-            pageViewportGutterClass,
-          )}
-        >
-          <span className="text-sm font-semibold text-[var(--color-text-primary)]">
-            momo-result
-          </span>
-        </div>
-      </header>
+      <GlobalNav
+        brandTo="/login"
+        environmentLabel={import.meta.env.DEV ? "DEV" : undefined}
+        items={loginNavItems}
+      />
       <main
         className={cn("mx-auto flex w-full flex-1 flex-col py-4 sm:py-6", pageViewportGutterClass)}
         id="main-content"
@@ -44,17 +42,35 @@ function StandaloneRouteMain({ children }: { children: ReactNode }) {
 function RouteGuardFrame({
   children,
   standalone = false,
+  width = "standard",
 }: {
   children: ReactNode;
   standalone?: boolean;
+  width?: PageFrameWidth;
 }) {
-  const frame = <PageFrame>{children}</PageFrame>;
+  const frame = <PageFrame width={width}>{children}</PageFrame>;
 
   if (standalone) {
     return <StandaloneRouteMain>{frame}</StandaloneRouteMain>;
   }
 
   return frame;
+}
+
+function LoginAuthLoading() {
+  return (
+    <RouteGuardFrame standalone width="narrow">
+      <div className="mx-auto grid w-full max-w-[34rem] gap-6">
+        <PageHeader description={loginDescription} title="ログイン" />
+        <PageContentSurface aria-busy="true" aria-label="ログイン状態を確認中">
+          <div aria-hidden="true" className="grid gap-4">
+            <Skeleton className="h-10 w-full max-w-md" />
+            <Skeleton className="h-20 w-full" />
+          </div>
+        </PageContentSurface>
+      </div>
+    </RouteGuardFrame>
+  );
 }
 
 function AuthLoading({ message, standalone = false }: { message: string; standalone?: boolean }) {
@@ -94,7 +110,7 @@ export function PublicOnlyRoute({ children }: { children: ReactNode }) {
   const [searchParams] = useSearchParams();
 
   if (auth.isChecking) {
-    return <AuthLoading message="ログイン状態を確認中…" standalone />;
+    return <LoginAuthLoading />;
   }
 
   if (auth.isAuthenticated) {
@@ -110,7 +126,15 @@ export function AuthenticatedRoute({ children }: { children: ReactNode }) {
   const location = useLocation();
 
   if (auth.isChecking) {
-    return <AuthLoading message="ログイン状態を確認中…" standalone />;
+    return (
+      <StandaloneRouteMain>
+        <RouteSuspenseFallback
+          loadingLabel="ログイン状態を確認中…"
+          pathname={location.pathname}
+          search={location.search}
+        />
+      </StandaloneRouteMain>
+    );
   }
 
   if (auth.isUnauthorized) {
@@ -125,7 +149,7 @@ export function AuthenticatedRoute({ children }: { children: ReactNode }) {
 
   if (auth.error) {
     return (
-      <RouteGuardFrame standalone>
+      <RouteGuardFrame standalone width={routeFrameWidth(location.pathname)}>
         <PageHeader title="ログイン状態を確認できません" />
         <PageContentSurface>
           <Notice
@@ -152,9 +176,16 @@ export function AuthenticatedRoute({ children }: { children: ReactNode }) {
 
 export function AdminRoute({ children }: { children: ReactNode }) {
   const auth = useAuth();
+  const location = useLocation();
 
   if (auth.isChecking) {
-    return <AuthLoading message="ログイン状態を確認中…" />;
+    return (
+      <RouteSuspenseFallback
+        loadingLabel="ログイン状態を確認中…"
+        pathname={location.pathname}
+        search={location.search}
+      />
+    );
   }
 
   if (!auth.auth?.isAdmin) {

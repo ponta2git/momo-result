@@ -7,6 +7,7 @@ import {
   pageViewportGutterClass,
 } from "@/shared/ui/layout/PageFrame";
 import type { PageFrameWidth } from "@/shared/ui/layout/PageFrame";
+import { PageHeader } from "@/shared/ui/layout/PageHeader";
 
 export type PageLoadingKind =
   | "catalog"
@@ -19,9 +20,19 @@ export type PageLoadingKind =
   | "sectioned-comparison"
   | "workspace";
 
+export type PageLoadingHeaderShape = {
+  actionSize?: "sm" | "md" | undefined;
+  actionSlots?: 0 | 1 | 2 | 3 | undefined;
+  description?: boolean | undefined;
+  eyebrow?: boolean | undefined;
+};
+
 export type PageLoadingFallbackProps = {
   asMain?: boolean | undefined;
+  contextNoticeSlot?: boolean | undefined;
+  header?: PageLoadingHeaderShape | undefined;
   kind?: PageLoadingKind | undefined;
+  leadingActionSlot?: boolean | undefined;
   loadingLabel?: string | undefined;
   width?: PageFrameWidth | undefined;
 };
@@ -29,7 +40,10 @@ export type PageLoadingFallbackProps = {
 /** Renders a route-agnostic structural loading region selected by the app composition. */
 export function PageLoadingFallback({
   asMain = false,
+  contextNoticeSlot = false,
+  header,
   kind = "generic",
+  leadingActionSlot = false,
   loadingLabel = "読み込んでいます…",
   width = "standard",
 }: PageLoadingFallbackProps) {
@@ -39,12 +53,21 @@ export function PageLoadingFallback({
     pageFrameWidthClass[width],
     asMain ? `${pageViewportGutterClass} py-4 sm:py-6` : "",
   );
-  const content = <PageLoadingSkeleton kind={kind} loadingLabel={loadingLabel} />;
+  const content = (
+    <PageLoadingSkeleton
+      contextNoticeSlot={contextNoticeSlot}
+      header={header}
+      kind={kind}
+      leadingActionSlot={leadingActionSlot}
+      loadingLabel={loadingLabel}
+    />
+  );
 
   if (asMain) {
     return (
       <main
         aria-busy="true"
+        aria-label={loadingLabel}
         aria-live="polite"
         className={className}
         data-testid="page-loading-fallback"
@@ -58,6 +81,7 @@ export function PageLoadingFallback({
   return (
     <div
       aria-busy="true"
+      aria-label={loadingLabel}
       aria-live="polite"
       className={className}
       data-testid="page-loading-fallback"
@@ -68,16 +92,28 @@ export function PageLoadingFallback({
 }
 
 function PageLoadingSkeleton({
+  contextNoticeSlot,
+  header,
   kind,
+  leadingActionSlot,
   loadingLabel,
 }: {
+  contextNoticeSlot: boolean;
+  header: PageLoadingHeaderShape | undefined;
   kind: PageLoadingKind;
+  leadingActionSlot: boolean;
   loadingLabel: string;
 }) {
+  const headerSkeleton = <HeaderSkeleton shape={header} />;
+  const leadingSkeleton = leadingActionSlot ? <LeadingActionSkeleton /> : null;
+  const contextSkeleton = contextNoticeSlot ? <Skeleton className="min-h-28 rounded-md" /> : null;
+
   if (kind === "list" || kind === "record-list") {
     return (
       <>
-        <HeaderSkeleton />
+        {leadingSkeleton}
+        {headerSkeleton}
+        {contextSkeleton}
         <PageContentSurface className={kind === "list" ? "grid gap-6" : "grid gap-4"}>
           <Skeleton className="h-16 rounded-md" />
           <Skeleton className="h-44 rounded-md" />
@@ -96,7 +132,9 @@ function PageLoadingSkeleton({
   if (kind === "workspace") {
     return (
       <>
-        <HeaderSkeleton />
+        {leadingSkeleton}
+        {headerSkeleton}
+        {contextSkeleton}
         <PageContentSurface className="grid gap-6">
           <Skeleton className="h-24 rounded-md" />
           <div className="grid gap-4 lg:grid-cols-4">
@@ -114,7 +152,9 @@ function PageLoadingSkeleton({
   if (kind === "detail") {
     return (
       <>
-        <HeaderSkeleton />
+        {leadingSkeleton}
+        {headerSkeleton}
+        {contextSkeleton}
         <PageContentSurface className="grid gap-8">
           <Skeleton className="h-44 rounded-md" />
           <div className="grid gap-4 md:grid-cols-2">
@@ -131,7 +171,9 @@ function PageLoadingSkeleton({
   if (kind === "comparison" || kind === "sectioned-comparison") {
     return (
       <>
-        <HeaderSkeleton />
+        {leadingSkeleton}
+        {headerSkeleton}
+        {contextSkeleton}
         <PageContentSurface
           className={kind === "sectioned-comparison" ? "grid gap-6" : "grid gap-4"}
         >
@@ -152,7 +194,9 @@ function PageLoadingSkeleton({
   if (kind === "catalog") {
     return (
       <>
-        <HeaderSkeleton />
+        {leadingSkeleton}
+        {headerSkeleton}
+        {contextSkeleton}
         <PageContentSurface className="grid gap-6">
           <Skeleton className="h-14 rounded-md" />
           <div className="grid gap-4 xl:grid-cols-3">
@@ -169,7 +213,9 @@ function PageLoadingSkeleton({
   if (kind === "form") {
     return (
       <>
-        <HeaderSkeleton />
+        {leadingSkeleton}
+        {headerSkeleton}
+        {contextSkeleton}
         <PageContentSurface className="grid gap-4">
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {Array.from({ length: 4 }, (_, index) => (
@@ -190,7 +236,9 @@ function PageLoadingSkeleton({
 
   return (
     <>
-      <HeaderSkeleton />
+      {leadingSkeleton}
+      {headerSkeleton}
+      {contextSkeleton}
       <PageContentSurface className="grid gap-4">
         <Skeleton className="h-40 w-full rounded-md" />
         <Skeleton className="h-32 w-full rounded-md" />
@@ -200,12 +248,37 @@ function PageLoadingSkeleton({
   );
 }
 
-function HeaderSkeleton() {
+function LeadingActionSkeleton() {
   return (
     <div>
-      <Skeleton className="h-4 w-24" />
-      <Skeleton className="mt-1 h-8 w-full max-w-80" />
-      <Skeleton className="mt-2 h-4 w-full max-w-2xl" />
+      <Skeleton className="h-11 w-40 max-w-full rounded-sm pointer-fine:h-9" />
+    </div>
+  );
+}
+
+function HeaderSkeleton({ shape }: { shape: PageLoadingHeaderShape | undefined }) {
+  const { actionSize = "md", actionSlots = 0, description = true, eyebrow = true } = shape ?? {};
+  const actionHeight = actionSize === "sm" ? "pointer-fine:h-9" : "pointer-fine:h-10";
+
+  return (
+    <div aria-hidden="true">
+      <PageHeader
+        actions={
+          actionSlots > 0
+            ? Array.from({ length: actionSlots }, (_, index) => (
+                <Skeleton
+                  className={cn("h-11 rounded-sm", actionHeight, index % 2 === 0 ? "w-28" : "w-36")}
+                  key={index}
+                />
+              ))
+            : undefined
+        }
+        description={
+          description ? <Skeleton as="span" className="block h-4 w-full max-w-2xl" /> : undefined
+        }
+        eyebrow={eyebrow ? <Skeleton as="span" className="block h-4 w-24" /> : undefined}
+        title={<Skeleton as="span" className="block h-8 w-full max-w-80 md:h-9" />}
+      />
     </div>
   );
 }

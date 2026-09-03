@@ -10,7 +10,15 @@ export function MatchDetailLoading() {
       <div>
         <Skeleton className="h-11 w-40 max-w-full rounded-sm pointer-fine:h-9" />
       </div>
-      <PageHeader title="試合結果を読み込み中" />
+      <PageHeader
+        actions={
+          <>
+            <Skeleton className="h-11 w-28 rounded-sm pointer-fine:h-10" />
+            <Skeleton className="h-11 w-20 rounded-sm pointer-fine:h-10" />
+          </>
+        }
+        title="試合結果を読み込み中"
+      />
 
       <PageContentSurface className="grid gap-8">
         <div className="grid gap-4">

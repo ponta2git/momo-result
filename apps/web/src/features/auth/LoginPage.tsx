@@ -1,25 +1,20 @@
-import { LogIn } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 
 import { AuthPanel } from "@/shared/auth/AuthPanel";
+import { loginDescription } from "@/shared/auth/loginCopy";
+import { loginNavItems } from "@/shared/auth/loginNavigation";
 import { sanitizeAppRedirectPath } from "@/shared/auth/redirectPath";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { GlobalNav } from "@/shared/ui/layout/GlobalNav";
-import type { GlobalNavItem } from "@/shared/ui/layout/GlobalNav";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
 import { PageFrame, pageViewportGutterClass } from "@/shared/ui/layout/PageFrame";
 import { PageHeader } from "@/shared/ui/layout/PageHeader";
 import { SkipLink } from "@/shared/ui/layout/SkipLink";
 
-const loginNavItems = [
-  { icon: <LogIn />, label: "ログイン", to: "/login" },
-] as const satisfies readonly GlobalNavItem[];
-
 export function LoginPage() {
   const [searchParams] = useSearchParams();
   const reason = searchParams.get("reason");
   const next = sanitizeAppRedirectPath(searchParams.get("next"));
-  const loginDescription = "ログインすると、試合の記録・確認・比較・出力を利用できます。";
 
   return (
     <div className="flex min-h-dvh flex-col">

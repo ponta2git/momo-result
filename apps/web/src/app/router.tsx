@@ -6,12 +6,12 @@ import { App } from "@/app/App";
 import { AppShell } from "@/app/AppShell";
 import { AdminRoute, AuthenticatedRoute, PublicOnlyRoute, RootRedirect } from "@/app/routeGuards";
 import {
+  LoginPage,
   loadAdminAccountsPage,
   loadDraftReviewPage,
   loadExportPage,
   loadHeldEventDetailPage,
   loadHeldEventsPage,
-  loadLoginPage,
   loadMastersPage,
   loadMatchCreatePage,
   loadMatchDetailPage,
@@ -24,7 +24,6 @@ import {
 import { loadLazyModule } from "@/shared/lib/moduleLoadError";
 
 const AdminAccountsPage = lazy(() => loadLazyModule(loadAdminAccountsPage));
-const LoginPage = lazy(() => loadLazyModule(loadLoginPage));
 const DraftReviewPage = lazy(() => loadLazyModule(loadDraftReviewPage));
 const ExportPage = lazy(() => loadLazyModule(loadExportPage));
 const HeldEventDetailPage = lazy(() => loadLazyModule(loadHeldEventDetailPage));

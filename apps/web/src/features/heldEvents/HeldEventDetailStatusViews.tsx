@@ -7,6 +7,9 @@ import { PageHeader } from "@/shared/ui/layout/PageHeader";
 export function HeldEventDetailLoading() {
   return (
     <PageFrame aria-busy="true" aria-label="開催詳細を読み込み中" width="wide">
+      <div>
+        <Skeleton className="h-11 w-40 max-w-full rounded-sm pointer-fine:h-9" />
+      </div>
       <PageHeader eyebrow="開催記録" title="開催の記録を読み込み中" />
       <PageContentSurface className="grid gap-8">
         <div className="grid gap-4 sm:grid-cols-3">

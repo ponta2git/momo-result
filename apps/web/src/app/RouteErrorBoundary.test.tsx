@@ -27,15 +27,21 @@ describe("RouteErrorBoundary", () => {
 
     try {
       render(
-        <RouteErrorBoundary onReset={onReset}>
+        <RouteErrorBoundary onReset={onReset} pathname="/analytics/series">
           <MaybeBroken shouldThrow={() => shouldThrow} />
         </RouteErrorBoundary>,
       );
 
       const retry = await screen.findByRole("button", { name: "もう一度読み込む" });
-      expect(
-        screen.getByRole("heading", { level: 1, name: "画面の読み込みに失敗しました" }),
-      ).toBeInTheDocument();
+      const heading = screen.getByRole("heading", {
+        level: 1,
+        name: "画面の読み込みに失敗しました",
+      });
+      expect(heading).toBeInTheDocument();
+      const frame = heading.closest(".mx-auto");
+      expect(frame?.children).toHaveLength(2);
+      expect(frame?.children.item(0)).toContainElement(heading);
+      expect(frame?.children.item(1)).toContainElement(retry);
 
       await user.click(retry);
 
@@ -62,7 +68,7 @@ describe("RouteErrorBoundary", () => {
 
     try {
       render(
-        <RouteErrorBoundary onReset={onReset}>
+        <RouteErrorBoundary onReset={onReset} pathname="/matches">
           <Suspense fallback={<p>ルートを読み込み中</p>}>
             <LazyRoute />
           </Suspense>

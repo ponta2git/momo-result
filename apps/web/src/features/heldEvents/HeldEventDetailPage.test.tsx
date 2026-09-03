@@ -7,6 +7,7 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { HeldEventDetailPage } from "@/features/heldEvents/HeldEventDetailPage";
+import { HeldEventDetailLoading } from "@/features/heldEvents/HeldEventDetailStatusViews";
 import { setDevUser } from "@/test/auth";
 import { makeHeldEventDetailResponse } from "@/test/factories";
 import { setupMsw } from "@/test/msw/lifecycle";
@@ -35,6 +36,16 @@ describe("HeldEventDetailPage", () => {
   beforeEach(() => {
     queryClient = createTestQueryClient();
     user = userEvent.setup();
+  });
+
+  it("reserves the leading navigation slot while loading", () => {
+    render(<HeldEventDetailLoading />);
+
+    const frame = screen.getByLabelText("開催詳細を読み込み中");
+    const heading = screen.getByRole("heading", { name: "開催の記録を読み込み中" });
+    expect(frame.children).toHaveLength(3);
+    expect(frame.children.item(0)?.firstElementChild).toHaveAttribute("aria-hidden", "true");
+    expect(frame.children.item(1)).toContainElement(heading);
   });
 
   it("connects one held event to its draft, player recap, results, and comparison", async () => {

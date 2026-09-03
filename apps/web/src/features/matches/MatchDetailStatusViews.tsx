@@ -7,6 +7,9 @@ import { PageHeader } from "@/shared/ui/layout/PageHeader";
 export function MatchDetailLoading() {
   return (
     <PageFrame aria-busy="true" aria-label="試合詳細を読み込み中" width="wide">
+      <div>
+        <Skeleton className="h-11 w-40 max-w-full rounded-sm pointer-fine:h-9" />
+      </div>
       <PageHeader title="試合結果を読み込み中" />
 
       <PageContentSurface className="grid gap-8">

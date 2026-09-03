@@ -126,7 +126,7 @@ export function AppShell() {
                 reset={reset}
                 resetKey={routeResetKey}
               >
-                <RouteErrorBoundary onReset={reset} resetKey={routeResetKey}>
+                <RouteErrorBoundary onReset={reset} pathname={location.pathname}>
                   <Suspense fallback={<RouteSuspenseFallback pathname={location.pathname} />}>
                     {/* Route availability must not depend on an exit-animation lifecycle. */}
                     <div className="grid min-w-0">

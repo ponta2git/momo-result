@@ -1,13 +1,17 @@
 import { PageLoadingFallback } from "@/shared/ui/feedback/PageLoadingFallback";
 import type { PageLoadingFallbackProps } from "@/shared/ui/feedback/PageLoadingFallback";
+import type { PageFrameWidth } from "@/shared/ui/layout/PageFrame";
 
 type RouteSuspenseFallbackProps = {
   asMain?: boolean | undefined;
   pathname: string;
 };
 
-type RouteLoadingPresentation = Required<Pick<PageLoadingFallbackProps, "kind" | "width">> &
-  Pick<PageLoadingFallbackProps, "loadingLabel">;
+type RouteLoadingPresentation = {
+  kind: NonNullable<PageLoadingFallbackProps["kind"]>;
+  loadingLabel?: PageLoadingFallbackProps["loadingLabel"];
+  width: PageFrameWidth;
+};
 
 /** Keeps pathname-to-layout knowledge in the app layer rather than shared UI. */
 export function routeLoadingPresentation(pathname: string): RouteLoadingPresentation {
@@ -47,6 +51,11 @@ export function routeLoadingPresentation(pathname: string): RouteLoadingPresenta
     return { kind: "form", width: "narrow" };
   }
   return { kind: "generic", width: "standard" };
+}
+
+/** Keeps terminal route states aligned with the ready/loading page width. */
+export function routeFrameWidth(pathname: string): PageFrameWidth {
+  return routeLoadingPresentation(pathname).width;
 }
 
 export function RouteSuspenseFallback({ asMain = false, pathname }: RouteSuspenseFallbackProps) {

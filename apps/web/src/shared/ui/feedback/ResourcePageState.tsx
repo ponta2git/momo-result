@@ -36,8 +36,18 @@ export type ResourcePageStateProps = ResourceErrorState | ResourceNotFoundState;
 export function ResourcePageState(props: ResourcePageStateProps) {
   return (
     <PageFrame width={props.width ?? "wide"}>
+      <div>
+        <LinkButton
+          icon={<ArrowLeft aria-hidden="true" />}
+          size="sm"
+          to={props.backHref}
+          variant="quiet"
+        >
+          {props.backLabel}
+        </LinkButton>
+      </div>
       <PageHeader title={props.title} />
-      <PageContentSurface className="grid justify-items-start gap-4">
+      <PageContentSurface>
         <Notice
           action={
             props.kind === "error" ? (
@@ -55,13 +65,6 @@ export function ResourcePageState(props: ResourcePageStateProps) {
         >
           <p>{props.description}</p>
         </Notice>
-        <LinkButton
-          icon={<ArrowLeft aria-hidden="true" />}
-          to={props.backHref}
-          variant={props.kind === "not-found" ? "primary" : "secondary"}
-        >
-          {props.backLabel}
-        </LinkButton>
       </PageContentSurface>
     </PageFrame>
   );

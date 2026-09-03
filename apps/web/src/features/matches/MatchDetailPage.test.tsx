@@ -7,6 +7,7 @@ import { MemoryRouter, Route, Routes, useLocation, useNavigate } from "react-rou
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { MatchDetailPage } from "@/features/matches/MatchDetailPage";
+import { MatchDetailLoading } from "@/features/matches/MatchDetailStatusViews";
 import { matchKeys } from "@/shared/api/queryKeys";
 import { setDevUser } from "@/test/auth";
 import { createDeferred } from "@/test/deferred";
@@ -62,6 +63,16 @@ describe("MatchDetailPage", () => {
   beforeEach(() => {
     queryClient = createTestQueryClient();
     user = userEvent.setup();
+  });
+
+  it("reserves the leading navigation slot while loading", () => {
+    render(<MatchDetailLoading />);
+
+    const frame = screen.getByLabelText("試合詳細を読み込み中");
+    const heading = screen.getByRole("heading", { name: "試合結果を読み込み中" });
+    expect(frame.children).toHaveLength(3);
+    expect(frame.children.item(0)?.firstElementChild).toHaveAttribute("aria-hidden", "true");
+    expect(frame.children.item(1)).toContainElement(heading);
   });
 
   it("exposes result navigation and confirms deletion before acting", async () => {

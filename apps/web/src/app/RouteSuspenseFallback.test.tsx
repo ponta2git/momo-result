@@ -1,9 +1,18 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { RouteSuspenseFallback } from "@/app/RouteSuspenseFallback";
+import { RouteSuspenseFallback, routeFrameWidth } from "@/app/RouteSuspenseFallback";
 
 describe("RouteSuspenseFallback", () => {
+  it.each([
+    ["/exports", "narrow"],
+    ["/matches", "standard"],
+    ["/analytics/series", "wide"],
+    ["/matches/new", "workspace"],
+  ] as const)("maps %s to the ready route width", (pathname, width) => {
+    expect(routeFrameWidth(pathname)).toBe(width);
+  });
+
   it("can provide the root main landmark", () => {
     render(<RouteSuspenseFallback asMain pathname="/" />);
 

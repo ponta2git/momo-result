@@ -136,7 +136,7 @@ function HeldEventRow({
 }) {
   return (
     <li>
-      <article className="grid gap-3 px-4 py-3">
+      <article className="grid gap-4 p-4">
         <HeldEventIdentity
           actionsDisabled={actionsDisabled}
           event={event}

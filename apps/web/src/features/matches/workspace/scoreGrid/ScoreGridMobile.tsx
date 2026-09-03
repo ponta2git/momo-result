@@ -183,10 +183,10 @@ export function ScoreGridMobileCards({
                   {incidentScoreGridColumns.map((column, incidentIndex) => (
                     <label
                       key={column.incidentKey}
-                      className="grid gap-1 text-xs text-[var(--color-text-secondary)]"
+                      className="grid text-xs text-[var(--color-text-secondary)]"
                       htmlFor={getCellId(index, incidentIndex + 5)}
                     >
-                      {column.header}
+                      <span className="mb-2">{column.header}</span>
                       <ScoreGridNumericEditor
                         allowSign={false}
                         ariaLabel={`${memberDisplayName(player.memberId)} ${column.header}`}

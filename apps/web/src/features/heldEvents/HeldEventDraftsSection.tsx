@@ -34,7 +34,7 @@ export function HeldEventDraftsSection({
       <p className="momo-copy mt-1 text-sm text-[var(--color-text-secondary)]">
         この開催に紐づく読み取り・確認作業です。確定すると下の試合記録へ移ります。
       </p>
-      <ul className="mt-3 divide-y divide-[var(--color-border)]">
+      <ul className="mt-4 divide-y divide-[var(--color-border)]">
         {drafts.map((draft) => {
           const action = heldEventDraftAction(draft);
           const scopeLabel = heldEventDraftScopeLabel(draft, masterNames);

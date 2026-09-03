@@ -47,7 +47,7 @@ function DialogContentFrame({
 }) {
   return (
     <div className="flex min-h-0 w-full flex-1 flex-col gap-4">
-      <div className="flex shrink-0 items-start justify-between gap-3">
+      <div className="flex shrink-0 items-start justify-between gap-2">
         <div className="min-w-0">
           <BaseDialog.Title className="text-lg font-semibold text-balance text-[var(--color-text-primary)]">
             {title}
@@ -210,9 +210,13 @@ export function AlertDialogLayer({
       >
         <div
           aria-busy={pending || undefined}
-          className={cn(dialogSurfaceClassName, "flex overflow-hidden", surfaceClassName)}
+          className={cn(
+            dialogSurfaceClassName,
+            "momo-alert-dialog-surface flex overflow-hidden",
+            surfaceClassName,
+          )}
         >
-          <div className="flex min-h-0 w-full flex-1 flex-col gap-4">
+          <div className="momo-alert-dialog-frame flex min-h-0 w-full flex-1 flex-col gap-4">
             <div className="min-w-0 shrink-0">
               <BaseAlertDialog.Title className="text-lg font-semibold text-balance text-[var(--color-text-primary)]">
                 {title}
@@ -231,7 +235,7 @@ export function AlertDialogLayer({
             {(children !== undefined && children !== null) || error ? (
               <div
                 className={cn(
-                  "min-h-0 min-w-0 flex-1 overflow-y-auto px-2 empty:hidden",
+                  "momo-alert-dialog-body grid min-h-0 min-w-0 flex-1 gap-4 overflow-y-auto px-2 empty:hidden",
                   contentClassName,
                 )}
               >
@@ -239,7 +243,6 @@ export function AlertDialogLayer({
                 {error ? (
                   <p
                     className={cn(
-                      "mt-4 first:mt-0",
                       "rounded-xs border border-[var(--color-danger)]/50 bg-[var(--color-danger)]/8 px-3 py-2 text-sm font-medium text-[var(--color-danger)]",
                       readableTextWidthClass,
                     )}

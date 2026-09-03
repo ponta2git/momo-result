@@ -31,7 +31,7 @@ const followModeOptions = [
 
 function SourceImageLoadingFrame({ detail, label }: { detail: string; label: string }) {
   return (
-    <div aria-busy="true" aria-label={label} className="grid min-h-[13rem] gap-3">
+    <div aria-busy="true" aria-label={label} className="grid min-h-[13rem] gap-1">
       <Skeleton className="h-[10rem] w-full rounded-xs 2xl:aspect-video 2xl:h-auto" />
       <p className="text-sm text-[var(--color-text-secondary)]">{detail}</p>
     </div>
@@ -52,38 +52,40 @@ export function SourceImagePanel({
   });
 
   return (
-    <section className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-[var(--color-text-primary)]">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-base font-semibold text-[var(--color-text-primary)]">元画像参照</h2>
-          <span className="text-xs font-semibold text-[var(--color-text-secondary)]">
-            {sourceImageKindLabels[panel.activeKind]}
-          </span>
+    <section className="grid gap-4 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-[var(--color-text-primary)]">
+      <div>
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h2 className="text-base font-semibold text-[var(--color-text-primary)]">元画像参照</h2>
+            <span className="mt-0.5 block text-xs font-semibold text-[var(--color-text-secondary)]">
+              {sourceImageKindLabels[panel.activeKind]}
+            </span>
+          </div>
+          <Button
+            disabled={panel.archiveSaveDisabled}
+            pending={panel.archiveSaving}
+            pendingLabel={archivePendingLabel}
+            size="sm"
+            variant="secondary"
+            onClick={panel.handleArchiveSaveRequest}
+          >
+            元画像を保存
+          </Button>
         </div>
-        <Button
-          disabled={panel.archiveSaveDisabled}
-          pending={panel.archiveSaving}
-          pendingLabel={archivePendingLabel}
-          size="sm"
-          variant="secondary"
-          onClick={panel.handleArchiveSaveRequest}
-        >
-          元画像を保存
-        </Button>
+        <p className="mt-1 text-xs text-pretty text-[var(--color-text-secondary)]">
+          自動追従では、選択中の入力セルに対応する画像を表示します。
+        </p>
+        {!loading && panel.availableImageCount === 0 ? (
+          <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
+            保存できる元画像がありません。
+          </p>
+        ) : null}
+        {panel.archiveError ? (
+          <p className="mt-1 text-sm text-[var(--color-danger)]" role="alert">
+            {panel.archiveError}
+          </p>
+        ) : null}
       </div>
-      <p className="mt-1 text-xs text-pretty text-[var(--color-text-secondary)]">
-        自動追従では、選択中の入力セルに対応する画像を表示します。
-      </p>
-      {!loading && panel.availableImageCount === 0 ? (
-        <p className="mt-2 text-xs text-[var(--color-text-secondary)]">
-          保存できる元画像がありません。
-        </p>
-      ) : null}
-      {panel.archiveError ? (
-        <p className="mt-2 text-sm text-[var(--color-danger)]" role="alert">
-          {panel.archiveError}
-        </p>
-      ) : null}
 
       <TabsRoot
         value={panel.activeKind}
@@ -93,7 +95,7 @@ export function SourceImagePanel({
           if (kind) panel.handleSourceImageTabChange(kind);
         }}
       >
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="shrink-0">
             <SegmentedControl
               label="元画像の追従方法"
@@ -108,7 +110,7 @@ export function SourceImagePanel({
         {sourceImageKinds.map((kind) => (
           <TabsPanel keepMounted key={kind} value={kind}>
             {panel.activeKind === kind ? (
-              <div className="mt-3">
+              <div className="mt-4">
                 <div className="rounded-sm border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3">
                   {loading ? (
                     <SourceImageLoadingFrame
@@ -129,7 +131,7 @@ export function SourceImagePanel({
                   {!loading &&
                   panel.activeState?.status === "available" &&
                   panel.activeImage?.status === "error" ? (
-                    <div className="grid justify-items-start gap-3">
+                    <div className="grid justify-items-start gap-2">
                       <p className="text-sm text-[var(--color-danger)]" role="alert">
                         元画像を読み込めませんでした。
                       </p>

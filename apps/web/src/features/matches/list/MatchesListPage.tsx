@@ -29,9 +29,9 @@ function ListSkeleton({ showDesktopTable }: { showDesktopTable: boolean }) {
           ))}
         </div>
       ) : (
-        <div className="grid gap-3">
+        <div className="grid gap-4">
           {["m1", "m2", "m3"].map((id) => (
-            <Skeleton key={id} className="min-h-56 rounded-md" />
+            <Skeleton key={id} className="min-h-48 rounded-md" />
           ))}
         </div>
       )}
@@ -82,9 +82,8 @@ export function MatchesListPage() {
 
       <PageContentSurface className="grid gap-6">
         {filters.loadFailed ? (
-          <Notice tone="warning" title="絞り込み候補を一部読み込めません">
-            <p>試合一覧は表示できます。開催、作品、シーズンの候補を再取得できます。</p>
-            <div className="mt-3">
+          <Notice
+            action={
               <Button
                 pending={filters.refresh.pending}
                 pendingLabel="再読み込み中"
@@ -94,7 +93,11 @@ export function MatchesListPage() {
               >
                 候補を再読み込み
               </Button>
-            </div>
+            }
+            tone="warning"
+            title="絞り込み候補を一部読み込めません"
+          >
+            <p>試合一覧は表示できます。開催、作品、シーズンの候補を再取得できます。</p>
           </Notice>
         ) : null}
 
@@ -168,9 +171,8 @@ export function MatchesListPage() {
             >
               <div className="grid gap-4">
                 {list.loadFailed ? (
-                  <Notice tone="danger" title="試合一覧を読み込めません">
-                    <p>通信状態を確認して、もう一度お試しください。</p>
-                    <div className="mt-3">
+                  <Notice
+                    action={
                       <Button
                         pending={list.refresh.pending}
                         pendingLabel="再読み込み中"
@@ -179,7 +181,11 @@ export function MatchesListPage() {
                       >
                         一覧を再読み込み
                       </Button>
-                    </div>
+                    }
+                    tone="danger"
+                    title="試合一覧を読み込めません"
+                  >
+                    <p>通信状態を確認して、もう一度お試しください。</p>
                   </Notice>
                 ) : list.items.length === 0 ? (
                   <div className="grid min-h-[18rem]">
@@ -211,7 +217,7 @@ export function MatchesListPage() {
                     {showDesktopTable ? (
                       <MatchesTable items={list.items} rowActions={drafts.rowActions} />
                     ) : (
-                      <div className="grid gap-3">
+                      <div className="grid gap-4">
                         {list.items.map((item) => (
                           <div className="grid min-h-48" key={item.id}>
                             <MatchMobileCard item={item} rowActions={drafts.rowActions} />

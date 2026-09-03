@@ -90,7 +90,7 @@ export function CaptureSlotCard({
   return (
     <section
       className={cn(
-        "relative overflow-hidden rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-3",
+        "relative grid gap-4 overflow-hidden rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-4",
         dragOver ? "border-[var(--color-action)] bg-[var(--color-action)]/10" : "",
       )}
       data-capture-target={presentation.captureTarget || undefined}
@@ -98,7 +98,7 @@ export function CaptureSlotCard({
       onDragLeave={() => setDragOver(false)}
       onDrop={handleDrop}
     >
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
           <span
             aria-hidden="true"
@@ -111,7 +111,7 @@ export function CaptureSlotCard({
         <CaptureStatusBadge status={slot.status} />
       </div>
 
-      <div className="mt-3 grid gap-3 sm:grid-cols-[minmax(8rem,10rem)_minmax(0,1fr)]">
+      <div className="grid gap-4 sm:grid-cols-[minmax(8rem,10rem)_minmax(0,1fr)]">
         <CaptureSlotPreview
           isWorking={isWorking}
           label={presentation.label}
@@ -134,7 +134,7 @@ export function CaptureSlotCard({
         />
       </div>
 
-      <div className="mt-4 grid gap-4 empty:hidden">
+      <div className="grid gap-4 empty:hidden">
         <CaptureSlotFeedback
           mismatch={Boolean(mismatch)}
           refreshing={statusRefreshing}

@@ -42,7 +42,7 @@ export function AdminAccountsPage() {
 
       <PageContentSurface aria-label="ログインアカウント一覧" className="grid gap-4" role="region">
         {page.list.kind === "loading" ? (
-          <div className="grid gap-3" aria-label="ログインアカウントを読み込み中">
+          <div className="grid gap-4" aria-label="ログインアカウントを読み込み中">
             <Skeleton className="min-h-10" />
             <Skeleton className="min-h-16" />
             <Skeleton className="min-h-16" />

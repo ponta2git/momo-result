@@ -35,11 +35,12 @@ export function SeriesAnalysisStatusFeedback({
   }
   if (hasError) {
     return (
-      <Notice tone="warning" title="計算状態を確認できません">
+      <Notice
+        action={<RefreshAction refreshing={refreshing} onRefresh={onRefresh} />}
+        tone="warning"
+        title="計算状態を確認できません"
+      >
         <p>取得済みの分析はそのまま表示します。</p>
-        <div className="mt-3">
-          <RefreshAction refreshing={refreshing} onRefresh={onRefresh} />
-        </div>
       </Notice>
     );
   }

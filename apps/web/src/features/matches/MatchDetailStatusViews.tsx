@@ -10,7 +10,7 @@ export function MatchDetailLoading() {
       <PageHeader title="試合結果を読み込み中" />
 
       <PageContentSurface className="grid gap-8">
-        <div className="grid gap-3">
+        <div className="grid gap-4">
           <div className="flex flex-wrap gap-4">
             {["held", "game", "season", "map"].map((id) => (
               <div key={id} className="grid gap-2">
@@ -46,8 +46,8 @@ export function MatchDetailLoading() {
           </div>
         </div>
 
-        <div>
-          <div className="mb-3 grid gap-2">
+        <div className="grid gap-4">
+          <div className="grid gap-2">
             <Skeleton className="h-6 w-28" />
             <Skeleton className="h-4 w-56" />
           </div>

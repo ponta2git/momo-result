@@ -19,7 +19,7 @@ export function IncidentMasterPanel({
   const hasExpectedCount = items.length === 6;
 
   return (
-    <section className="min-w-0">
+    <section className="grid min-w-0 gap-4">
       <header>
         <h2 className="sr-only">事件簿</h2>
         <p className="text-sm text-[var(--color-text-secondary)]">
@@ -27,7 +27,7 @@ export function IncidentMasterPanel({
         </p>
       </header>
 
-      <div className="mt-3 empty:hidden">
+      <div className="empty:hidden">
         <MasterResourceRefreshNotice
           onRetry={onRetry}
           resourceLabel="事件簿"
@@ -37,14 +37,14 @@ export function IncidentMasterPanel({
       </div>
 
       {hasExpectedCount || stale ? null : (
-        <div className="mt-3">
+        <div>
           <Notice tone="warning" title="事件簿の項目数を確認してください">
             現在 {items.length} 件です。期待値は6件です。
           </Notice>
         </div>
       )}
 
-      <ul className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+      <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
         {items.map((item, index) => (
           <li
             key={item.id}

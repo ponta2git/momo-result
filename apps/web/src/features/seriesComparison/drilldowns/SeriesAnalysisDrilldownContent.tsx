@@ -43,13 +43,16 @@ export function SeriesAnalysisDrilldownContent({
   if (resource.kind === "loading") return <SeriesAnalysisDrilldownLoading />;
   if (resource.kind === "failed") {
     return (
-      <Notice tone="danger" title="詳細を読み込めません">
-        <p>比較の詳細を取得できませんでした。</p>
-        <div className="mt-3">
+      <Notice
+        action={
           <Button size="sm" variant="secondary" onClick={resource.retry}>
             再読み込み
           </Button>
-        </div>
+        }
+        tone="danger"
+        title="詳細を読み込めません"
+      >
+        <p>比較の詳細を取得できませんでした。</p>
       </Notice>
     );
   }

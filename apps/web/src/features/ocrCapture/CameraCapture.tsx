@@ -31,7 +31,7 @@ export function CameraCapture({
   const captureVariant = useSecondaryActions || !camera.active ? "secondary" : "primary";
 
   return (
-    <div className="space-y-3">
+    <div className="grid gap-4">
       {camera.devices.length > 0 ? (
         <div className="max-w-[28rem]">
           <SelectField
@@ -73,7 +73,7 @@ export function CameraCapture({
       </div>
       {camera.error ? (
         <div
-          className="grid gap-3 rounded-sm border border-[var(--color-danger)]/45 bg-[var(--color-danger)]/8 p-3"
+          className="grid gap-2 rounded-sm border border-[var(--color-danger)]/45 bg-[var(--color-danger)]/8 p-3"
           role="alert"
         >
           <div>
@@ -85,32 +85,38 @@ export function CameraCapture({
           {renderFallback?.(!useSecondaryActions)}
         </div>
       ) : null}
-      <div className="flex flex-wrap gap-2">
-        <Button
-          pending={camera.starting}
-          pendingLabel="起動中…"
-          variant={startVariant}
-          onClick={camera.startCamera}
-          disabled={disabled || camera.active}
-        >
-          {camera.active ? "カメラ使用中" : "カメラ開始"}
-        </Button>
-        <Button
-          pending={camera.capturing}
-          pendingLabel="撮影中…"
-          variant={captureVariant}
-          onClick={camera.capture}
-          disabled={disabled || !camera.active}
-        >
-          静止画を撮影
-        </Button>
-        <Button variant="quiet" onClick={camera.stop} disabled={!camera.active || camera.capturing}>
-          停止
-        </Button>
+      <div className="grid gap-1">
+        <div className="flex flex-wrap gap-2">
+          <Button
+            pending={camera.starting}
+            pendingLabel="起動中…"
+            variant={startVariant}
+            onClick={camera.startCamera}
+            disabled={disabled || camera.active}
+          >
+            {camera.active ? "カメラ使用中" : "カメラ開始"}
+          </Button>
+          <Button
+            pending={camera.capturing}
+            pendingLabel="撮影中…"
+            variant={captureVariant}
+            onClick={camera.capture}
+            disabled={disabled || !camera.active}
+          >
+            静止画を撮影
+          </Button>
+          <Button
+            variant="quiet"
+            onClick={camera.stop}
+            disabled={!camera.active || camera.capturing}
+          >
+            停止
+          </Button>
+        </div>
+        {disabled ? (
+          <p className="text-xs text-[var(--color-text-secondary)]">現在は撮影できません。</p>
+        ) : null}
       </div>
-      {disabled ? (
-        <p className="text-xs text-[var(--color-text-secondary)]">現在は撮影できません。</p>
-      ) : null}
       {!camera.error && renderFallback ? (
         <div className="grid w-full text-sm text-[var(--color-text-secondary)] sm:w-fit">
           <Disclosure

@@ -21,7 +21,7 @@ export function ExportActionPanel({
   view,
 }: ExportActionPanelProps) {
   return (
-    <div aria-busy={isPending || undefined} className="grid gap-3 pt-2">
+    <div aria-busy={isPending || undefined} className="grid gap-4">
       <div className="grid gap-1">
         <p className="text-base font-semibold text-pretty text-[var(--color-text-primary)]">
           {view.summaryText}

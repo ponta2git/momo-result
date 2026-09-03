@@ -15,6 +15,8 @@ export type PageLoadingKind =
   | "form"
   | "generic"
   | "list"
+  | "record-list"
+  | "sectioned-comparison"
   | "workspace";
 
 export type PageLoadingFallbackProps = {
@@ -72,11 +74,11 @@ function PageLoadingSkeleton({
   kind: PageLoadingKind;
   loadingLabel: string;
 }) {
-  if (kind === "list") {
+  if (kind === "list" || kind === "record-list") {
     return (
       <>
         <HeaderSkeleton />
-        <PageContentSurface className="grid gap-6">
+        <PageContentSurface className={kind === "list" ? "grid gap-6" : "grid gap-4"}>
           <Skeleton className="h-16 rounded-md" />
           <Skeleton className="h-44 rounded-md" />
           <div className="grid gap-4 md:grid-cols-3">
@@ -126,11 +128,13 @@ function PageLoadingSkeleton({
     );
   }
 
-  if (kind === "comparison") {
+  if (kind === "comparison" || kind === "sectioned-comparison") {
     return (
       <>
         <HeaderSkeleton />
-        <PageContentSurface className="grid gap-4">
+        <PageContentSurface
+          className={kind === "sectioned-comparison" ? "grid gap-6" : "grid gap-4"}
+        >
           <Skeleton className="h-28 rounded-md" />
           <Skeleton className="h-12 rounded-md" />
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -174,7 +178,7 @@ function PageLoadingSkeleton({
           </div>
           <Skeleton className="h-11 w-full" />
           <Skeleton className="h-11 w-full max-w-64" />
-          <div className="grid gap-3">
+          <div className="grid gap-4">
             <Skeleton className="h-5 w-full max-w-md" />
             <Skeleton className="h-11 w-full max-w-72" />
           </div>

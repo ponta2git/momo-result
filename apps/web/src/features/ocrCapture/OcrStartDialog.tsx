@@ -146,7 +146,7 @@ export function OcrStartDialog({ onClose, onConfirm, onViewMatches, state }: Ocr
         description="すべての画像を受け付けるまで、この画面を開いたままお待ちください。"
         title="画像を送信しています"
       >
-        <div className="grid gap-4 py-1">
+        <div className="grid gap-4">
           <div className="flex items-start gap-3 rounded-sm border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3">
             <span
               aria-hidden="true"

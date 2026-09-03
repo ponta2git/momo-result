@@ -8,7 +8,7 @@ export function HeldEventDetailLoading() {
   return (
     <PageFrame aria-busy="true" aria-label="開催詳細を読み込み中" width="wide">
       <PageHeader eyebrow="開催記録" title="開催の記録を読み込み中" />
-      <PageContentSurface className="grid gap-6">
+      <PageContentSurface className="grid gap-8">
         <div className="grid gap-4 sm:grid-cols-3">
           {["matches", "drafts", "next"].map((id) => (
             <div key={id} className="grid gap-2">
@@ -17,26 +17,26 @@ export function HeldEventDetailLoading() {
             </div>
           ))}
         </div>
-        <div className="grid gap-3">
+        <div className="grid gap-4">
           <Skeleton className="h-6 w-32" />
           <Skeleton className="h-11 w-56 max-w-full" />
         </div>
-        <section className="grid gap-3">
+        <section className="grid gap-4">
           <div>
             <Skeleton className="h-6 w-32" />
             <div className="mt-2">
               <Skeleton className="h-4 w-64 max-w-full" />
             </div>
           </div>
-          <div className="divide-y divide-[var(--color-border)]">
+          <div className="grid gap-4">
             {["match-1", "match-2"].map((id) => (
-              <div key={id} className="grid gap-3 py-4">
+              <div key={id} className="grid gap-3">
                 <div className="flex justify-between gap-4">
                   <Skeleton className="h-6 w-32" />
                   <Skeleton className="h-9 w-24" />
                 </div>
                 <Skeleton className="h-4 w-72 max-w-full" />
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
                   {["a", "b", "c", "d"].map((player) => (
                     <Skeleton key={player} className="h-16" />
                   ))}

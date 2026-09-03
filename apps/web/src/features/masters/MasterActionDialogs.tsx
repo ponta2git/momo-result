@@ -48,7 +48,7 @@ export function MasterEditDialog({
       }
     >
       <form
-        className="grid gap-3 py-2"
+        className="grid gap-4"
         onSubmit={async (event) => {
           event.preventDefault();
           setError(undefined);

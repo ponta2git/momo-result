@@ -15,17 +15,17 @@ export function MatchFormActions({ model, primaryActionRef }: MatchFormActionsPr
   return (
     <section
       aria-label="入力内容の確定"
-      className="rounded-md border border-[var(--color-border-strong)] bg-[var(--color-surface)] p-3"
+      className="grid gap-4 rounded-md border border-[var(--color-border-strong)] bg-[var(--color-surface)] p-3"
     >
       {model.feedback.error ? (
-        <div className="mb-3">
+        <div>
           <Notice presentation="nested" title={model.feedback.error.title} tone="danger">
             <p>{model.feedback.error.detail}</p>
             <p className="mt-1">{model.feedback.error.nextStep}</p>
           </Notice>
         </div>
       ) : null}
-      <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+      <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
         <p
           className={cn(
             "text-sm text-pretty text-[var(--color-text-secondary)]",

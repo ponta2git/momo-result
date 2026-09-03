@@ -151,7 +151,7 @@ function MatchDetailReadyContent({ page }: { page: MatchDetailReadyPageModel }) 
           <MatchSeriesComparisonCta href={navigation.comparisonHref} />
         </section>
 
-        <section className="grid gap-3">
+        <section className="grid gap-4">
           <div>
             <h2 className="text-base font-semibold text-[var(--color-text-primary)]">成績詳細</h2>
             <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">

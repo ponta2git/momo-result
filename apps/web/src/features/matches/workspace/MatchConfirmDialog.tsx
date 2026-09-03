@@ -199,9 +199,7 @@ export function MatchConfirmDialog({ model }: { model: MatchWorkspaceConfirmatio
           </div>
         ) : null}
 
-        <div className="mt-2">
-          <ConfirmActionButtons pending={model.pending} onCancel={model.actions.onClose} />
-        </div>
+        <ConfirmActionButtons pending={model.pending} onCancel={model.actions.onClose} />
       </form>
     </Dialog>
   );

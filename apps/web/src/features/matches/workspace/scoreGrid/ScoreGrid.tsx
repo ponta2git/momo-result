@@ -183,7 +183,7 @@ export function ScoreGrid({ actions, data }: ScoreGridProps) {
         </div>
       </div>
 
-      <div className="mt-3 empty:hidden">
+      <div className="mt-4 empty:hidden">
         <ScoreGridReviewToolbar
           activeItem={activeItem}
           activeReviewed={Boolean(activeItem && acknowledgedCellIdSet.has(activeItem.cellId))}

@@ -12,7 +12,7 @@ export function MatchSetupFields({ model }: { model: MatchWorkspaceSetupFieldsMo
     model.validation.errorPathSet.has(path) ? "未入力です" : undefined;
 
   return (
-    <div className="grid gap-3 lg:grid-cols-12">
+    <div className="grid gap-4 lg:grid-cols-12">
       <div className="lg:col-span-5">
         <HeldEventPickerField
           data-validation-path="heldEventId"

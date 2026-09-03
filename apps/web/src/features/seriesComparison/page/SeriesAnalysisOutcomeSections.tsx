@@ -33,7 +33,7 @@ export function RevenueOutcomeSection({
                 {metric.displayName}
               </MemberSequenceLabel>
             </h3>
-            <dl className="mt-3 grid grid-cols-2 gap-3 text-sm">
+            <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
               <MetricValue
                 label="収益上位時の勝率"
                 value={formatPercent(metric.revenueOutcome.top.winRate)}
@@ -51,7 +51,7 @@ export function RevenueOutcomeSection({
                 value={formatPercent(metric.revenueOutcome.lowRevenue.podiumRate)}
               />
             </dl>
-            <div className="mt-3">
+            <div className="mt-4">
               <Disclosure panelPadding="sm" presentation="inset" summary="収益と順位の詳細">
                 <dl className="grid gap-2 text-xs">
                   <MetricValue
@@ -89,7 +89,7 @@ export function DestinationOutcomeSection({ response }: { response: Response }) 
                 {metric.displayName}
               </MemberSequenceLabel>
             </h3>
-            <dl className="mt-3 grid gap-3 text-sm">
+            <dl className="mt-4 grid gap-3 text-sm">
               <ConditionalOutcome
                 label="目的地到着が多い試合"
                 podiumRate={metric.destinationOutcome.top.podiumRate}
@@ -109,7 +109,7 @@ export function DestinationOutcomeSection({ response }: { response: Response }) 
                 winRate={metric.destinationOutcome.zeroDestination.winRate}
               />
             </dl>
-            <div className="mt-3">
+            <div className="mt-4">
               <Disclosure panelPadding="sm" presentation="inset" summary="目的地と順位の詳細">
                 <dl className="grid gap-2 text-xs">
                   <MetricValue

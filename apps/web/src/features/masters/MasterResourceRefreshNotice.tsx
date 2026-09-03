@@ -24,9 +24,8 @@ export function MasterResourceRefreshNotice({
   }
 
   return (
-    <Notice tone="warning" title={`最新の${resourceLabel}を取得できません`}>
-      <p>直前に取得した内容を表示しています。</p>
-      <div className="mt-3">
+    <Notice
+      action={
         <Button
           pending={retrying}
           pendingLabel="再読み込み中"
@@ -36,7 +35,11 @@ export function MasterResourceRefreshNotice({
         >
           {resourceLabel}を再読み込み
         </Button>
-      </div>
+      }
+      tone="warning"
+      title={`最新の${resourceLabel}を取得できません`}
+    >
+      <p>直前に取得した内容を表示しています。</p>
     </Notice>
   );
 }

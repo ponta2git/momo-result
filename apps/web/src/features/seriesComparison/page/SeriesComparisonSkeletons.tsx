@@ -6,7 +6,7 @@ export function PageSkeleton() {
   return (
     <PageFrame width="wide">
       <Skeleton className="min-h-24 rounded-md" />
-      <PageContentSurface className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-6">
+      <PageContentSurface className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4">
         <Skeleton className="min-h-24 rounded-md" />
         <ComparisonSkeleton />
       </PageContentSurface>

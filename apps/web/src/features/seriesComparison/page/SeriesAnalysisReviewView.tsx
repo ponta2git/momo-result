@@ -46,7 +46,7 @@ export function ReviewView({
 }) {
   if (loading) {
     return (
-      <div aria-label="次戦の準備を読み込み中" className="grid gap-3">
+      <div aria-label="次戦の準備を読み込み中" className="grid gap-6">
         <Skeleton className="min-h-24" />
         <Skeleton className="min-h-48" />
       </div>
@@ -77,7 +77,7 @@ export function ReviewView({
         <SeriesAnalysisReviewHelpDialog />
       </div>
       {response.commonPlaybookTopics.length > 0 ? (
-        <section aria-labelledby="common-playbook-heading" className="grid gap-3">
+        <section aria-labelledby="common-playbook-heading" className="grid gap-4">
           <h2 className="text-lg font-semibold" id="common-playbook-heading">
             複数人共通の行動仮説
           </h2>
@@ -98,7 +98,7 @@ export function ReviewView({
           </div>
         </section>
       ) : null}
-      <div className="grid items-start gap-x-6 gap-y-8 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid items-start gap-4 md:grid-cols-2 xl:grid-cols-4">
         {playbookByPlayer.map((entry) => (
           <section className="min-w-0" key={entry.player.memberId}>
             <h3 className="text-base font-semibold">
@@ -107,11 +107,11 @@ export function ReviewView({
               </MemberSequenceLabel>
             </h3>
             {entry.primaryCard ? (
-              <div className="mt-3 min-h-0">
+              <div className="mt-4 min-h-0">
                 <PlaybookCard card={entry.primaryCard} emphasis onViewChange={onViewChange} />
               </div>
             ) : (
-              <div className="mt-3 flex h-full flex-col justify-between gap-3">
+              <div className="mt-4 flex h-full flex-col justify-between gap-3">
                 <p className="text-sm text-[var(--color-text-secondary)]">
                   今回は無理に作戦を変えず、現在の差を確認します。
                 </p>
@@ -120,7 +120,7 @@ export function ReviewView({
                 </Button>
               </div>
             )}
-            <div className="mt-3 min-h-11">
+            <div className="mt-4 min-h-11">
               {entry.secondaryCards.length > 0 ? (
                 <Disclosure
                   ariaLabel={`${entry.player.displayName}のほかの仮説`}

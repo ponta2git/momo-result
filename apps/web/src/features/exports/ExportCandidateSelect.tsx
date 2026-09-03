@@ -48,16 +48,14 @@ export function ExportCandidateSelect({
 
   if (view.kind === "loading") {
     return (
-      <div
-        aria-busy="true"
-        aria-label={`${labelForScope(scope)}候補を読み込み中`}
-        className="grid gap-2"
-      >
-        <p className="text-sm leading-5 font-semibold text-[var(--color-text-primary)]">
-          {labelForScope(scope)}
-        </p>
-        <Skeleton className="h-11 w-full" />
-        <p className="mt-2 text-sm text-[var(--color-text-secondary)]">候補を読み込んでいます。</p>
+      <div aria-busy="true" aria-label={`${labelForScope(scope)}候補を読み込み中`} className="grid">
+        <div className="grid gap-2">
+          <p className="text-sm leading-5 font-semibold text-[var(--color-text-primary)]">
+            {labelForScope(scope)}
+          </p>
+          <Skeleton className="h-11 w-full" />
+        </div>
+        <p className="mt-1 text-sm text-[var(--color-text-secondary)]">候補を読み込んでいます。</p>
       </div>
     );
   }
@@ -90,7 +88,7 @@ export function ExportCandidateSelect({
       );
 
     return (
-      <div className="grid gap-3">
+      <div className="grid gap-4">
         <EmptyState
           action={action}
           description={view.message}
@@ -153,13 +151,15 @@ export function ExportCandidateSelect({
   }
 
   return (
-    <div className="grid gap-2">
-      {selector}
-      {refreshing && !scopeChanging ? (
-        <p className="text-sm text-[var(--color-text-secondary)]" role="status">
-          出力対象を確認しています。
-        </p>
-      ) : null}
+    <div className="grid gap-4">
+      <div className="grid gap-1 empty:hidden">
+        {selector}
+        {refreshing && !scopeChanging ? (
+          <p className="text-sm text-[var(--color-text-secondary)]" role="status">
+            出力対象を確認しています。
+          </p>
+        ) : null}
+      </div>
       {view.selectionState === "not-found" ? (
         <Notice
           action={

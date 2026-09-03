@@ -32,9 +32,9 @@ export function MastersPage() {
         />
       ) : null}
 
-      <PageContentSurface aria-label="設定管理" role="region">
+      <PageContentSurface aria-label="設定管理" className="grid gap-6" role="region">
         {page.feedback.operationError || page.feedback.invalidReturnTo ? (
-          <div className="mb-6 grid gap-3">
+          <div className="grid gap-4">
             {page.feedback.operationError ? (
               <Notice tone="danger" title="設定の変更に失敗しました">
                 {page.feedback.operationError}

@@ -36,9 +36,9 @@ export function MatchNoteSection({ match, refetchMatch }: MatchNoteSectionProps)
   } = editor;
 
   return (
-    <section aria-labelledby="match-note-heading" className="grid gap-3">
+    <section aria-labelledby="match-note-heading" className="grid gap-4">
       <MatchWorkspaceNavigationGuard model={{ dirty, navigationAllowedRef, onDiscard: cancel }} />
-      <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <h2
             className="text-base font-semibold text-[var(--color-text-primary)]"
@@ -69,39 +69,41 @@ export function MatchNoteSection({ match, refetchMatch }: MatchNoteSectionProps)
       </div>
 
       {editing ? (
-        <div className="grid gap-2">
-          <div className="flex justify-end">
-            <span
-              aria-live="polite"
-              className={
-                tooLong
-                  ? "text-xs font-semibold text-[var(--color-danger)] tabular-nums"
-                  : "text-xs text-[var(--color-text-secondary)] tabular-nums"
-              }
-            >
-              {count} / {matchNoteMaximumCharacters}
-            </span>
+        <div className="grid gap-4">
+          <div className="grid gap-1">
+            <div className="flex justify-end">
+              <span
+                aria-live="polite"
+                className={
+                  tooLong
+                    ? "text-xs font-semibold text-[var(--color-danger)] tabular-nums"
+                    : "text-xs text-[var(--color-text-secondary)] tabular-nums"
+                }
+              >
+                {count} / {matchNoteMaximumCharacters}
+              </span>
+            </div>
+            <TextareaControl
+              aria-label="試合メモ"
+              aria-describedby={tooLong ? "match-note-detail-error" : undefined}
+              disabled={pending}
+              invalid={tooLong}
+              minHeight="md"
+              resize="vertical"
+              textFlow="relaxed"
+              value={draft}
+              onChange={(event) => setDraft(event.currentTarget.value)}
+            />
+            {tooLong ? (
+              <p
+                className="text-xs font-semibold text-[var(--color-danger)]"
+                id="match-note-detail-error"
+                role="alert"
+              >
+                試合メモは{matchNoteMaximumCharacters}字以内で入力してください。
+              </p>
+            ) : null}
           </div>
-          <TextareaControl
-            aria-label="試合メモ"
-            aria-describedby={tooLong ? "match-note-detail-error" : undefined}
-            disabled={pending}
-            invalid={tooLong}
-            minHeight="md"
-            resize="vertical"
-            textFlow="relaxed"
-            value={draft}
-            onChange={(event) => setDraft(event.currentTarget.value)}
-          />
-          {tooLong ? (
-            <p
-              className="text-xs font-semibold text-[var(--color-danger)]"
-              id="match-note-detail-error"
-              role="alert"
-            >
-              試合メモは{matchNoteMaximumCharacters}字以内で入力してください。
-            </p>
-          ) : null}
           {conflict ? (
             <Notice tone="warning" title="別の利用者が先に更新しました">
               <div className="grid gap-3 text-sm">
@@ -135,7 +137,7 @@ export function MatchNoteSection({ match, refetchMatch }: MatchNoteSectionProps)
           </div>
         </div>
       ) : match.note.body ? (
-        <div className="grid gap-2">
+        <div className="grid gap-1">
           <p className="text-sm leading-6 break-words whitespace-pre-wrap text-[var(--color-text-primary)]">
             {match.note.body}
           </p>

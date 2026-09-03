@@ -15,7 +15,7 @@ import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
 import { PageHeader } from "@/shared/ui/layout/PageHeader";
 
-const panelClass = "min-w-0";
+const panelClass = "grid min-w-0 gap-4";
 
 const panelTitleClass = "text-base font-semibold text-[var(--color-text-primary)]";
 const panelLeadClass = "mt-1 text-sm leading-5 text-[var(--color-text-secondary)]";
@@ -43,15 +43,10 @@ export function OcrCapturePage() {
 
       <PageContentSurface className="grid gap-6">
         {feedback.auth.error ? (
-          <div className="grid gap-3 rounded-md border border-[var(--color-danger)]/50 bg-[var(--color-danger)]/8 p-4 md:grid-cols-[1fr_18rem] md:items-center">
-            <Notice presentation="bare" tone="danger" title={feedback.auth.error.title}>
-              <p>
-                {feedback.auth.error.status === 403
-                  ? "この操作用アカウントでは利用できません。管理者に確認してください。"
-                  : feedback.auth.error.detail}
-              </p>
-              {feedback.auth.error.status === 403 ? null : (
-                <div className="mt-3">
+          <div className="grid gap-4 rounded-md border border-[var(--color-danger)]/50 bg-[var(--color-danger)]/8 p-4 md:grid-cols-[1fr_18rem] md:items-center">
+            <Notice
+              action={
+                feedback.auth.error.status === 403 ? undefined : (
                   <Button
                     pending={feedback.auth.retrying}
                     pendingLabel="確認中"
@@ -61,8 +56,17 @@ export function OcrCapturePage() {
                   >
                     ログイン状態を再確認
                   </Button>
-                </div>
-              )}
+                )
+              }
+              presentation="bare"
+              tone="danger"
+              title={feedback.auth.error.title}
+            >
+              <p>
+                {feedback.auth.error.status === 403
+                  ? "この操作用アカウントでは利用できません。管理者に確認してください。"
+                  : feedback.auth.error.detail}
+              </p>
             </Notice>
             <AuthPanel
               auth={feedback.auth.data}
@@ -73,9 +77,8 @@ export function OcrCapturePage() {
         ) : null}
 
         {feedback.memberAliases.error ? (
-          <Notice tone="warning" title="プレーヤー名の読み替えを取得できません">
-            <p>OCR取り込みは続けられますが、登録済みの別名を読み取り候補に反映できません。</p>
-            <div className="mt-3">
+          <Notice
+            action={
               <Button
                 pending={feedback.memberAliases.refreshing}
                 pendingLabel="再読み込み中"
@@ -85,41 +88,46 @@ export function OcrCapturePage() {
               >
                 読み替え設定を再読み込み
               </Button>
-            </div>
+            }
+            tone="warning"
+            title="プレーヤー名の読み替えを取得できません"
+          >
+            <p>OCR取り込みは続けられますが、登録済みの別名を読み取り候補に反映できません。</p>
           </Notice>
         ) : null}
 
         <section className={panelClass} aria-labelledby="ocr-record-destination">
-          <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+          <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
             <h2 id="ocr-record-destination" className={panelTitleClass}>
               記録先
             </h2>
             <p className="text-xs text-[var(--color-text-muted)]">読み取り結果に引き継ぐ試合設定</p>
           </div>
           {setup.choices.failed ? (
-            <div className="mb-3">
-              <Notice tone="warning" title="試合設定の選択肢を読み込めません">
-                <p>読み込めなかった選択肢を再取得できます。</p>
-                <div className="mt-3">
-                  <Button
-                    pending={setup.choices.refreshing}
-                    pendingLabel="再読み込み中"
-                    size="sm"
-                    variant="secondary"
-                    onClick={setup.choices.refresh}
-                  >
-                    選択肢を再読み込み
-                  </Button>
-                </div>
-              </Notice>
-            </div>
+            <Notice
+              action={
+                <Button
+                  pending={setup.choices.refreshing}
+                  pendingLabel="再読み込み中"
+                  size="sm"
+                  variant="secondary"
+                  onClick={setup.choices.refresh}
+                >
+                  選択肢を再読み込み
+                </Button>
+              }
+              tone="warning"
+              title="試合設定の選択肢を読み込めません"
+            >
+              <p>読み込めなかった選択肢を再取得できます。</p>
+            </Notice>
           ) : null}
           <SetupPanel model={setup.panel} />
         </section>
 
-        <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_28rem] xl:items-start">
+        <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_28rem] xl:items-start">
           <section className={panelClass} aria-labelledby="ocr-camera-title">
-            <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+            <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <h2 id="ocr-camera-title" className={panelTitleClass}>
                   画面を撮影
@@ -161,7 +169,7 @@ export function OcrCapturePage() {
             </div>
           </section>
 
-          <aside className="grid gap-3 xl:sticky xl:top-20" aria-labelledby="ocr-tray-title">
+          <aside className="grid gap-4 xl:sticky xl:top-20" aria-labelledby="ocr-tray-title">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h2 id="ocr-tray-title" className={panelTitleClass}>
@@ -173,32 +181,34 @@ export function OcrCapturePage() {
                 配置済み{capture.selectedImageCount}件／全{capture.totalSlotCount}件
               </span>
             </div>
-            <CaptureRail
-              captureTargetKind={capture.tray.captureTargetKind}
-              layout="stack"
-              slots={capture.tray.slots}
-              drafts={capture.tray.drafts}
-              statusRefreshing={capture.tray.statusRefreshing}
-              onClear={capture.tray.clear}
-              onDropImage={capture.tray.drop}
-              onMoveImage={capture.tray.move}
-              onRefreshStatus={capture.tray.refreshStatus}
-              onSelectCaptureTarget={capture.tray.selectTarget}
-            />
-            <p
-              aria-label="分類トレイの操作結果"
-              aria-atomic="true"
-              aria-live="polite"
-              className="min-h-5 text-xs leading-5 text-[var(--color-text-secondary)]"
-              role="status"
-            >
-              {capture.tray.actionFeedback}
-            </p>
+            <div className="grid gap-1">
+              <CaptureRail
+                captureTargetKind={capture.tray.captureTargetKind}
+                layout="stack"
+                slots={capture.tray.slots}
+                drafts={capture.tray.drafts}
+                statusRefreshing={capture.tray.statusRefreshing}
+                onClear={capture.tray.clear}
+                onDropImage={capture.tray.drop}
+                onMoveImage={capture.tray.move}
+                onRefreshStatus={capture.tray.refreshStatus}
+                onSelectCaptureTarget={capture.tray.selectTarget}
+              />
+              <p
+                aria-label="分類トレイの操作結果"
+                aria-atomic="true"
+                aria-live="polite"
+                className="min-h-5 text-xs leading-5 text-[var(--color-text-secondary)]"
+                role="status"
+              >
+                {capture.tray.actionFeedback}
+              </p>
+            </div>
           </aside>
         </section>
 
         <section
-          className="momo-safe-bottom grid gap-3 rounded-md bg-[var(--color-surface-subtle)] p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:p-4"
+          className="momo-safe-bottom grid gap-4 rounded-md bg-[var(--color-surface-subtle)] p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
           aria-labelledby="ocr-start-title"
         >
           <div className="min-w-0">

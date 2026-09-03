@@ -94,7 +94,7 @@ function HeldEventDetailReadyContent({ page }: { page: HeldEventDetailReadyPageM
         title={formatHeldEventDateTime(detail.heldAt)}
       />
 
-      <PageContentSurface aria-label="開催内容" className="grid gap-6" role="region">
+      <PageContentSurface aria-label="開催内容" className="grid gap-8" role="region">
         {freshness.kind === "stale" ? (
           <Notice
             tone="warning"
@@ -136,7 +136,7 @@ function HeldEventDetailReadyContent({ page }: { page: HeldEventDetailReadyPageM
           </Notice>
         ) : null}
 
-        <section aria-labelledby="held-event-next-match-heading" className="grid gap-3">
+        <section aria-labelledby="held-event-next-match-heading" className="grid gap-4">
           <h2
             className="momo-heading text-lg font-semibold text-[var(--color-text-primary)]"
             id="held-event-next-match-heading"

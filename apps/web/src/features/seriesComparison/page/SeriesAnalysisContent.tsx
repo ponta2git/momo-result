@@ -254,11 +254,11 @@ function AnalysisViewLoading({ view }: { view: SeriesAnalysisBundle["view"] }) {
   return (
     <div
       aria-labelledby={analysisTabId(view)}
-      className="grid gap-3"
+      className="grid gap-8"
       id={analysisPanelId(view)}
       role="tabpanel"
     >
-      <div aria-label="分析を読み込み中" className="grid gap-3">
+      <div aria-label="分析を読み込み中" className="grid gap-8">
         <Skeleton className="min-h-24" />
         <Skeleton className="min-h-64" />
       </div>

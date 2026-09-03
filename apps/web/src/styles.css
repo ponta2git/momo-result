@@ -205,6 +205,21 @@ samp {
   );
 }
 
+@media (max-height: 24rem) {
+  .momo-alert-dialog-surface {
+    display: block;
+    overflow-y: auto;
+  }
+
+  .momo-alert-dialog-frame {
+    display: grid;
+  }
+
+  .momo-alert-dialog-body {
+    overflow: visible;
+  }
+}
+
 @utility momo-copy {
   line-height: 1.75;
   text-wrap: pretty;

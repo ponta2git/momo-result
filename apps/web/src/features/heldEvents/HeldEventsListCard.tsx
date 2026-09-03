@@ -22,9 +22,8 @@ export function HeldEventsListCard({
 
   if (model.kind === "loadFailed") {
     return (
-      <Notice tone="danger" title="開催履歴を読み込めません">
-        <p>通信状態を確認して、もう一度お試しください。</p>
-        <div className="mt-3">
+      <Notice
+        action={
           <Button
             pending={model.refresh.pending}
             pendingLabel="再読み込み中"
@@ -33,7 +32,11 @@ export function HeldEventsListCard({
           >
             開催履歴を再読み込み
           </Button>
-        </div>
+        }
+        tone="danger"
+        title="開催履歴を読み込めません"
+      >
+        <p>通信状態を確認して、もう一度お試しください。</p>
       </Notice>
     );
   }
@@ -115,7 +118,7 @@ function HeldEventsLoading() {
       {["first", "second", "third"].map((id) => (
         <div
           key={id}
-          className="grid gap-3 p-4 lg:grid-cols-[minmax(15rem,1fr)_minmax(12rem,16rem)_auto]"
+          className="grid gap-4 p-4 lg:grid-cols-[minmax(15rem,1fr)_minmax(12rem,16rem)_auto]"
         >
           <Skeleton className="h-11" />
           <Skeleton className="h-13" />

@@ -33,7 +33,7 @@ export function CaptureRail({
 }: CaptureRailProps) {
   return (
     <section
-      className={cn("grid gap-3", layout === "rail" ? "xl:grid-cols-3" : "")}
+      className={cn("grid gap-4", layout === "rail" ? "xl:grid-cols-3" : "")}
       aria-label="画像取り込み"
     >
       {slotDefinitions.map((definition, index) => {

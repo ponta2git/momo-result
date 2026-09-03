@@ -11,8 +11,11 @@ type RouteLoadingPresentation = Required<Pick<PageLoadingFallbackProps, "kind" |
 
 /** Keeps pathname-to-layout knowledge in the app layer rather than shared UI. */
 export function routeLoadingPresentation(pathname: string): RouteLoadingPresentation {
-  if (pathname === "/matches" || pathname === "/held-events" || pathname === "/admin/accounts") {
+  if (pathname === "/matches") {
     return { kind: "list", width: "standard" };
+  }
+  if (pathname === "/held-events" || pathname === "/admin/accounts") {
+    return { kind: "record-list", width: "standard" };
   }
   if (
     pathname === "/matches/new" ||
@@ -32,7 +35,7 @@ export function routeLoadingPresentation(pathname: string): RouteLoadingPresenta
   }
   if (pathname === "/admin/analysis") {
     return {
-      kind: "comparison",
+      kind: "sectioned-comparison",
       loadingLabel: "戦績分析管理を読み込んでいます",
       width: "wide",
     };

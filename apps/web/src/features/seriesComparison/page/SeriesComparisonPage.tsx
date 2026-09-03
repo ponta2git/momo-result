@@ -36,13 +36,16 @@ export function SeriesComparisonPage() {
       <PageFrame width="wide">
         <PageHeader title="戦績比較" />
         <PageContentSurface>
-          <Notice tone="warning" title="画面の更新が必要です">
-            <p>戦績分析の表示方法が更新されました。画面を再読み込みしてください。</p>
-            <div className="mt-3">
+          <Notice
+            action={
               <Button size="sm" onClick={page.actions.reloadClient}>
                 画面を再読み込み
               </Button>
-            </div>
+            }
+            tone="warning"
+            title="画面の更新が必要です"
+          >
+            <p>戦績分析の表示方法が更新されました。画面を再読み込みしてください。</p>
           </Notice>
         </PageContentSurface>
       </PageFrame>
@@ -69,6 +72,17 @@ export function SeriesComparisonPage() {
       <PageContentSurface className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4">
         {options.hasError ? (
           <Notice
+            action={
+              <Button
+                pending={options.refreshing}
+                pendingLabel="再読み込み中"
+                size="sm"
+                variant={options.hasVisibleData ? "secondary" : "primary"}
+                onClick={page.actions.refresh}
+              >
+                比較対象を再読み込み
+              </Button>
+            }
             tone={options.hasVisibleData ? "warning" : "danger"}
             title={
               options.hasVisibleData ? "最新の比較対象を取得できません" : "対象作品を読み込めません"
@@ -79,17 +93,6 @@ export function SeriesComparisonPage() {
                 ? "直前に取得した対象を表示しています。"
                 : "通信状態を確認して、もう一度お試しください。"}
             </p>
-            <div className="mt-3">
-              <Button
-                pending={options.refreshing}
-                pendingLabel="再読み込み中"
-                size="sm"
-                variant={options.hasVisibleData ? "secondary" : "primary"}
-                onClick={page.actions.refresh}
-              >
-                比較対象を再読み込み
-              </Button>
-            </div>
           </Notice>
         ) : null}
         {filters.seriesOptions.length === 0 && !options.hasError ? (
@@ -129,16 +132,19 @@ export function SeriesComparisonPage() {
             status.data?.currentArtifact &&
             resource.hasError &&
             !resource.data ? (
-              <Notice tone="danger" title="戦績データを読み込めません">
-                <p>分析結果を取得できませんでした。通信状態を確認して再読み込みしてください。</p>
-                <div className="mt-3">
+              <Notice
+                action={
                   <Button size="sm" onClick={page.actions.refresh}>
                     戦績データを再読み込み
                   </Button>
-                </div>
+                }
+                tone="danger"
+                title="戦績データを読み込めません"
+              >
+                <p>分析結果を取得できませんでした。通信状態を確認して再読み込みしてください。</p>
               </Notice>
             ) : status.data?.currentArtifact && resource.data && resource.bundle ? (
-              <div className="grid gap-3">
+              <div className="grid gap-4">
                 {resource.hasError ? (
                   <Notice tone="warning" title="最新の戦績データを取得できません">
                     直前に取得した分析結果を表示しています。

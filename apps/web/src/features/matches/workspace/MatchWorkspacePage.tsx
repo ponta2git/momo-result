@@ -106,14 +106,9 @@ function MatchWorkspacePageContent({
       <PageFrame>
         <PageHeader title={title} />
         <PageContentSurface className="grid justify-items-start gap-4">
-          <Notice tone={notFound ? "warning" : "danger"}>
-            <p>
-              {notFound
-                ? "指定された試合は削除されたか、存在しません。前の画面から別の試合を選んでください。"
-                : "通信状態を確認して、もう一度お試しください。"}
-            </p>
-            {notFound ? null : (
-              <div className="mt-3">
+          <Notice
+            action={
+              notFound ? undefined : (
                 <Button
                   pending={loading.edit.retrying}
                   pendingLabel="再読み込み中"
@@ -122,8 +117,15 @@ function MatchWorkspacePageContent({
                 >
                   試合編集を再読み込み
                 </Button>
-              </div>
-            )}
+              )
+            }
+            tone={notFound ? "warning" : "danger"}
+          >
+            <p>
+              {notFound
+                ? "指定された試合は削除されたか、存在しません。前の画面から別の試合を選んでください。"
+                : "通信状態を確認して、もう一度お試しください。"}
+            </p>
           </Notice>
           <LinkButton to={navigation.header.exit.href} variant="secondary">
             前の画面へ戻る
@@ -148,15 +150,8 @@ function MatchWorkspacePageContent({
 
       <PageContentSurface className="grid gap-6">
         {loading.base.errors.length > 0 ? (
-          <Notice tone="danger" title="画面データを読み込めません">
-            <ul className="grid list-disc gap-1 pl-5 text-sm">
-              {loading.base.errors.map((error) => (
-                <li className="momo-break-token" key={`${error.status}-${error.detail}`}>
-                  <span className="font-semibold">{error.title}</span>：{error.detail}
-                </li>
-              ))}
-            </ul>
-            <div className="mt-3">
+          <Notice
+            action={
               <Button
                 pending={loading.base.retrying}
                 pendingLabel="再読み込み中"
@@ -166,7 +161,17 @@ function MatchWorkspacePageContent({
               >
                 失敗したデータを再読み込み
               </Button>
-            </div>
+            }
+            tone="danger"
+            title="画面データを読み込めません"
+          >
+            <ul className="grid list-disc gap-1 pl-5 text-sm">
+              {loading.base.errors.map((error) => (
+                <li className="momo-break-token" key={`${error.status}-${error.detail}`}>
+                  <span className="font-semibold">{error.title}</span>：{error.detail}
+                </li>
+              ))}
+            </ul>
           </Notice>
         ) : null}
 

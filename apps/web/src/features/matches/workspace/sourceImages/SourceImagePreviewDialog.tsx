@@ -29,7 +29,7 @@ export function SourceImagePreviewDialog({
   return (
     <Dialog
       backdropClassName="bg-[var(--color-backdrop)]/65"
-      popupClassName="max-w-none p-0 px-3 py-6"
+      popupClassName="max-w-none"
       open={open}
       onOpenChange={handleOpenChange}
       surfaceClassName="max-w-4xl"

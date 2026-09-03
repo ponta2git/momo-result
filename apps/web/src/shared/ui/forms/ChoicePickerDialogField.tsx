@@ -118,7 +118,7 @@ export function ChoicePickerDialogField({
                 statusPlacement="top-end"
                 strategy="preserve-inert"
               >
-                <div className="flex min-h-0 flex-col gap-3 pt-2">
+                <div className="flex min-h-0 flex-col gap-3">
                   <div className="flex min-h-0 flex-1 flex-col">
                     <ChoiceList
                       disabled={disabled}

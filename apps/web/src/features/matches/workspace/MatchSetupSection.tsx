@@ -94,11 +94,12 @@ export function MatchSetupSection({
         <div className="mt-4">
           <Disclosure
             keepMounted
+            panelSpacing="sm"
             summary="一覧にない開催を追加する"
             triggerLayout="compact"
             triggerVariant="compact"
           >
-            <div className="pt-2">
+            <div className="grid gap-2">
               <div className="grid gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3 md:grid-cols-[1fr_auto] md:items-end">
                 <TextField
                   label="開催日時"
@@ -119,12 +120,10 @@ export function MatchSetupSection({
                 </Button>
               </div>
               {model.eventCreation.feedback.error ? (
-                <div className="mt-2">
-                  <Notice title={model.eventCreation.feedback.error.title} tone="danger">
-                    <p>{model.eventCreation.feedback.error.detail}</p>
-                    <p className="mt-1">{model.eventCreation.feedback.error.nextStep}</p>
-                  </Notice>
-                </div>
+                <Notice title={model.eventCreation.feedback.error.title} tone="danger">
+                  <p>{model.eventCreation.feedback.error.detail}</p>
+                  <p className="mt-1">{model.eventCreation.feedback.error.nextStep}</p>
+                </Notice>
               ) : null}
             </div>
           </Disclosure>

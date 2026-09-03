@@ -24,7 +24,7 @@ export function HeldEventMatchTimeline({
   returnTo: string;
 }) {
   return (
-    <section aria-labelledby="held-event-timeline-heading" className="grid gap-3">
+    <section aria-labelledby="held-event-timeline-heading" className="grid gap-4">
       <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h2 id="held-event-timeline-heading" className="momo-heading text-base font-semibold">
@@ -51,16 +51,13 @@ export function HeldEventMatchTimeline({
           title="確定済みの試合はまだありません"
         />
       ) : (
-        <ol aria-label="試合の流れ" className="grid">
+        <ol aria-label="試合の流れ" className="grid gap-4">
           {matches.map((match, index) => (
-            <li
-              key={match.matchId}
-              className="relative grid grid-cols-[2rem_minmax(0,1fr)] gap-4 py-4"
-            >
+            <li key={match.matchId} className="relative grid grid-cols-[2rem_minmax(0,1fr)] gap-4">
               {index < matches.length - 1 ? (
                 <span
                   aria-hidden="true"
-                  className="absolute top-8 -bottom-8 left-4 w-px bg-[var(--color-border-strong)]"
+                  className="absolute top-4 -bottom-8 left-4 w-px bg-[var(--color-border-strong)]"
                   data-timeline-connector
                 />
               ) : null}
@@ -109,10 +106,10 @@ export function HeldEventMatchTimeline({
                   </div>
                 </div>
 
-                <div className="mt-3 border-t border-[var(--color-border)] pt-3">
+                <div className="mt-2 border-t border-[var(--color-border)] pt-2">
                   <ol
                     aria-label={`${formatMatchNoInEvent(match.matchNoInEvent)}の順位と総資産`}
-                    className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2 xl:grid-cols-4"
+                    className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4"
                   >
                     {(match.players ?? [])
                       .toSorted(

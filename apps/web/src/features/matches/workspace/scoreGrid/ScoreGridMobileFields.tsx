@@ -42,8 +42,8 @@ export function MobileMemberSelect({
 }) {
   const changed = Boolean(originalMemberId && originalMemberId !== memberId);
   return (
-    <label className="grid min-w-[10rem] gap-1 text-xs text-[var(--color-text-secondary)]">
-      メンバー
+    <label className="grid min-w-[10rem] text-xs text-[var(--color-text-secondary)]">
+      <span className="mb-2">メンバー</span>
       <SelectControl
         ref={(node) => registerCellRef(cellId, node)}
         aria-describedby={reviewItem ? `${cellId}-review-status` : undefined}
@@ -106,8 +106,8 @@ export function MobilePlayOrderSelect({
 }) {
   const changed = Boolean(originalPlayOrder && originalPlayOrder !== playOrder);
   return (
-    <label className="grid min-w-[6ch] gap-1 text-xs text-[var(--color-text-secondary)]">
-      プレー順
+    <label className="grid min-w-[6ch] text-xs text-[var(--color-text-secondary)]">
+      <span className="mb-2">プレー順</span>
       <SelectControl
         ref={(node) => registerCellRef(cellId, node)}
         aria-describedby={error || reviewItem ? `${cellId}-review-status` : undefined}
@@ -174,8 +174,8 @@ export function MobilePlayerNumericField({
   reviewed: boolean;
 }) {
   return (
-    <label className="grid gap-1 text-xs text-[var(--color-text-secondary)]" htmlFor={cellId}>
-      {playerFieldLabels[field]}
+    <label className="grid text-xs text-[var(--color-text-secondary)]" htmlFor={cellId}>
+      <span className="mb-2">{playerFieldLabels[field]}</span>
       <ScoreGridNumericEditor
         allowSign={allowSign}
         ariaLabel={`${memberDisplayName(player.memberId)} ${playerFieldLabels[field]}`}

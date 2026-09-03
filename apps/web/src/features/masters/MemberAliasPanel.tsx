@@ -41,7 +41,7 @@ export function MemberAliasPanel({
   }));
 
   return (
-    <section className="min-w-0">
+    <section className="grid min-w-0 gap-4">
       <header>
         <h2 className="text-lg font-semibold text-[var(--color-text-primary)]">
           プレーヤー名の別名
@@ -51,7 +51,7 @@ export function MemberAliasPanel({
         </p>
       </header>
 
-      <div className="mt-3 empty:hidden">
+      <div className="empty:hidden">
         <MasterResourceRefreshNotice
           onRetry={onRetry}
           resourceLabel="別名"
@@ -62,7 +62,7 @@ export function MemberAliasPanel({
 
       <form
         action={createAction}
-        className="mt-4 grid gap-x-3 gap-y-3 md:grid-cols-[minmax(12rem,0.35fr)_minmax(12rem,1fr)_auto] md:grid-rows-[auto_auto_auto] md:gap-y-0 md:[&>[data-field-root]]:row-span-3"
+        className="grid gap-x-4 gap-y-4 md:grid-cols-[minmax(12rem,0.35fr)_minmax(12rem,1fr)_auto] md:grid-rows-[auto_auto_auto] md:gap-y-0 md:[&>[data-field-root]]:row-span-3"
         key={createFormKey}
       >
         <SelectField
@@ -89,7 +89,7 @@ export function MemberAliasPanel({
         </div>
       </form>
 
-      <div className="mt-4 grid gap-x-4 gap-y-6 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-x-4 gap-y-6 md:grid-cols-2 xl:grid-cols-4">
         {aliasesByMember.map(({ member, aliases: memberAliases }) => (
           <div className="min-w-0" key={member.memberId}>
             <h3 className="min-w-0 text-sm font-semibold text-[var(--color-text-primary)]">
@@ -109,7 +109,7 @@ export function MemberAliasPanel({
                     <span className="min-w-0 truncate text-sm font-semibold text-[var(--color-text-primary)]">
                       {alias.alias}
                     </span>
-                    <div className="flex items-center">
+                    <div className="flex items-center gap-2">
                       <AliasEditDialog alias={alias} onUpdate={onUpdate} />
                       <AlertDialog
                         title="別名を削除しますか？"
@@ -167,7 +167,7 @@ function AliasEditDialog({
       }
     >
       <form
-        className="grid gap-3"
+        className="grid gap-4"
         onSubmit={async (event) => {
           event.preventDefault();
           setError(undefined);

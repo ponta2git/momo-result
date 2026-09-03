@@ -64,7 +64,7 @@ export function GameTitleList({
       ),
       pending: isPending,
       trailingAction: isPending ? undefined : (
-        <div className="flex items-center">
+        <div className="flex items-center gap-2">
           <MasterEditDialog
             initialLayoutFamily={item.layoutFamily}
             initialName={item.name}
@@ -86,8 +86,8 @@ export function GameTitleList({
   });
 
   return (
-    <section className="min-w-0">
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+    <section className="grid min-w-0 gap-4">
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h2 className="text-lg font-semibold text-[var(--color-text-primary)]">作品</h2>
           <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
@@ -103,7 +103,7 @@ export function GameTitleList({
         </div>
       </header>
 
-      <div className="mt-3 empty:hidden">
+      <div className="empty:hidden">
         <MasterResourceRefreshNotice
           onRetry={onRetry}
           resourceLabel="作品"
@@ -113,7 +113,7 @@ export function GameTitleList({
       </div>
 
       {items.length === 0 ? (
-        <div className="mt-3">
+        <div>
           <EmptyState
             placement="embedded"
             title="作品はまだありません"
@@ -121,7 +121,7 @@ export function GameTitleList({
           />
         </div>
       ) : (
-        <div className="mt-3">
+        <div>
           <ChoiceList
             legend="編集する作品"
             name="selected-game-title"
@@ -157,7 +157,7 @@ function GameTitleCreateDialog({
       }
       onOpenChange={setOpen}
     >
-      <form action={create.action} className="grid gap-4 py-2">
+      <form action={create.action} className="grid gap-4">
         <TextField
           error={create.error}
           label="作品名"

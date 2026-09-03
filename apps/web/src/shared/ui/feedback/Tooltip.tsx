@@ -40,7 +40,7 @@ export function Tooltip({ children, content, delay, side = "top" }: TooltipProps
       />
       <BaseTooltip.Portal>
         <BaseTooltip.Positioner className="z-[var(--z-tooltip)]" side={side} sideOffset={8}>
-          <BaseTooltip.Popup className="max-w-[22rem] rounded-sm border border-[var(--color-border-strong)] bg-[var(--color-surface-inverse)] px-3 py-2 text-xs leading-5 text-[var(--color-text-inverse)] shadow-[var(--shadow-raised)]">
+          <BaseTooltip.Popup className="max-w-[22rem] rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-surface-inverse)] px-3 py-2 text-xs leading-5 text-[var(--color-text-inverse)] shadow-[var(--shadow-raised)]">
             {content}
           </BaseTooltip.Popup>
         </BaseTooltip.Positioner>

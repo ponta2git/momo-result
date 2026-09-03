@@ -4,7 +4,7 @@ import { cn } from "@/shared/ui/cn";
 import { readableTextWidthClass } from "@/shared/ui/layout/readableText";
 
 type NoticeTone = "info" | "success" | "warning" | "danger";
-type NoticePresentation = "contained" | "bare";
+type NoticePresentation = "contained" | "nested" | "bare";
 
 const toneClass = {
   info: "border-[var(--color-border)] bg-[var(--color-surface-subtle)] text-[var(--color-text-secondary)]",
@@ -15,6 +15,11 @@ const toneClass = {
   danger:
     "border-[var(--color-danger)]/50 bg-[var(--color-danger)]/10 text-[var(--color-text-primary)]",
 } as const satisfies Record<NoticeTone, string>;
+
+const boundedPresentationClass = {
+  contained: "rounded-md border p-3",
+  nested: "rounded-sm border p-3",
+} as const satisfies Record<Exclude<NoticePresentation, "bare">, string>;
 
 export type NoticeProps = {
   action?: ReactNode;
@@ -37,9 +42,9 @@ export function Notice({
     <section
       className={cn(
         "momo-copy text-sm",
-        presentation === "contained"
-          ? `rounded-md border p-3 ${toneClass[tone]}`
-          : "text-[var(--color-text-primary)]",
+        presentation === "bare"
+          ? "text-[var(--color-text-primary)]"
+          : cn(boundedPresentationClass[presentation], toneClass[tone]),
       )}
       role={role ?? (tone === "danger" ? "alert" : "status")}
     >

@@ -29,7 +29,7 @@ const triggerLayoutClass = {
 const presentationClass = {
   framed: {
     panel: "border-t border-[var(--color-border)]",
-    root: "rounded-md border border-[var(--color-border)]",
+    root: "rounded-sm border border-[var(--color-border)]",
   },
   inset: {
     panel: "",
@@ -99,9 +99,7 @@ export function Disclosure({
           "group flex min-h-11 w-full min-w-0 items-center justify-between gap-3 text-left hover:bg-[var(--color-surface-hover)] disabled:cursor-default disabled:opacity-70 disabled:hover:bg-transparent",
           triggerVariantClass[triggerVariant],
           triggerLayoutClass[triggerLayout],
-          presentation === "framed" || triggerLayout === "section"
-            ? "rounded-none"
-            : "rounded-sm",
+          presentation === "framed" || triggerLayout === "section" ? "rounded-none" : "rounded-sm",
         )}
         disabled={disabled}
         render={(triggerProps, state) => (

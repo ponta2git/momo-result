@@ -7,9 +7,11 @@ import type {
   SeriesComparisonAggregateV3,
 } from "@/shared/api/seriesAnalysis";
 import { Button } from "@/shared/ui/actions/Button";
+import { cn } from "@/shared/ui/cn";
 import { Disclosure } from "@/shared/ui/data/Collapsible";
 import type { FactListItem } from "@/shared/ui/data/FactList";
 import { Dialog } from "@/shared/ui/feedback/Dialog";
+import { readableTextWidthClass } from "@/shared/ui/layout/readableText";
 
 export function MetricDefinitions({ response }: { response: SeriesComparisonAggregateV3 }) {
   return (
@@ -119,7 +121,9 @@ export function AnalysisReadingGuide({
         {items.map((item) => (
           <div className="grid gap-0.5 sm:grid-cols-[7rem_1fr]" key={item.id}>
             <dt className="font-semibold">{item.label}</dt>
-            <dd className="text-[var(--color-text-secondary)]">{item.value}</dd>
+            <dd className={cn("text-[var(--color-text-secondary)]", readableTextWidthClass)}>
+              {item.value}
+            </dd>
           </div>
         ))}
       </dl>

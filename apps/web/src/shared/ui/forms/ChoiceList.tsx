@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 
 import { cn } from "@/shared/ui/cn";
 import { SpinnerIcon } from "@/shared/ui/feedback/Spinner";
+import { readableTextWidthClass } from "@/shared/ui/layout/readableText";
 
 export type ChoiceListOption<Value extends string = string> = {
   accessibleLabel?: string | undefined;
@@ -64,7 +65,12 @@ export function ChoiceList<Value extends string>({
         )}
       >
         {options.length === 0 ? (
-          <div className="p-3 text-sm text-pretty text-[var(--color-text-secondary)]">
+          <div
+            className={cn(
+              "p-3 text-sm text-pretty text-[var(--color-text-secondary)]",
+              readableTextWidthClass,
+            )}
+          >
             {emptyState ?? "選べる候補はありません。"}
           </div>
         ) : null}
@@ -125,7 +131,10 @@ export function ChoiceList<Value extends string>({
                   </span>
                   {option.description ? (
                     <span
-                      className="mt-0.5 block text-xs leading-5 text-pretty text-[var(--color-text-secondary)]"
+                      className={cn(
+                        "mt-0.5 block text-xs leading-5 text-pretty text-[var(--color-text-secondary)]",
+                        readableTextWidthClass,
+                      )}
                       id={descriptionId}
                     >
                       {option.description}

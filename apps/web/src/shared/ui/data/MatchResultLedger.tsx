@@ -9,14 +9,17 @@ type MatchResultLedgerRow = MatchPerformanceContextRow & {
 };
 
 type MatchResultLedgerContextStatus = "loading" | "ready" | "unavailable";
+type MatchResultLedgerPresentation = "embedded" | "standalone";
 
 export function MatchResultLedger({
   ariaLabel = "試合の順位と成績",
   contextStatus,
+  presentation = "standalone",
   rows,
 }: {
   ariaLabel?: string;
   contextStatus: MatchResultLedgerContextStatus;
+  presentation?: MatchResultLedgerPresentation;
   rows: MatchResultLedgerRow[];
 }) {
   const orderedRows = rows.toSorted((left, right) => left.rank - right.rank);
@@ -24,7 +27,10 @@ export function MatchResultLedger({
   return (
     <ol
       aria-label={ariaLabel}
-      className="grid divide-y divide-[var(--color-border)] overflow-hidden rounded-md border border-[var(--color-border-strong)] bg-[var(--color-surface)]"
+      className={cn(
+        "grid divide-y divide-[var(--color-border)] overflow-hidden border border-[var(--color-border-strong)] bg-[var(--color-surface)]",
+        presentation === "embedded" ? "rounded-sm" : "rounded-md",
+      )}
     >
       {orderedRows.map((row) => (
         <li
@@ -105,12 +111,7 @@ function AverageRankChange({
       <strong className="font-semibold text-[var(--color-text-primary)] tabular-nums">
         {transition}
       </strong>
-      <span
-        className={cn(
-          "rounded-xs border px-2 py-0.5 font-semibold",
-          trendTone(row.trend),
-        )}
-      >
+      <span className={cn("rounded-xs border px-2 py-0.5 font-semibold", trendTone(row.trend))}>
         {trendLabel(row)}
       </span>
     </span>

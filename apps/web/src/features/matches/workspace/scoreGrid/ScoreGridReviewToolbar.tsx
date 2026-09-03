@@ -3,6 +3,8 @@ import { Check, ChevronLeft, ChevronRight } from "lucide-react";
 import type { ReviewItem } from "@/features/matches/workspace/review/reviewProgress";
 import { sourceImageKindLabels } from "@/features/matches/workspace/sourceImages/sourceImageTypes";
 import { Button } from "@/shared/ui/actions/Button";
+import { cn } from "@/shared/ui/cn";
+import { readableTextWidthClass } from "@/shared/ui/layout/readableText";
 
 export function ScoreGridReviewToolbar({
   activeItem,
@@ -45,7 +47,12 @@ export function ScoreGridReviewToolbar({
           ) : null}
         </div>
         {activeItem ? (
-          <p className="mt-1 text-xs leading-5 text-pretty text-[var(--color-text-secondary)]">
+          <p
+            className={cn(
+              "mt-1 text-xs leading-5 text-pretty text-[var(--color-text-secondary)]",
+              readableTextWidthClass,
+            )}
+          >
             {activeItem.message}
             <span className="ml-1 whitespace-nowrap">
               ・{sourceImageKindLabels[activeItem.sourceKind]}

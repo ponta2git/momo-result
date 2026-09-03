@@ -246,10 +246,7 @@ export function ScoreGridDesktopTable({
                 const cellId = getCellId(rowIndex, col);
                 const reviewItem = reviewItemByCellId.get(cellId);
                 return (
-                  <td
-                    key={incidentKey}
-                    className="px-2 py-3 align-top last:rounded-r-md"
-                  >
+                  <td key={incidentKey} className="px-2 py-3 align-top last:rounded-r-md">
                     <ScoreGridNumericEditor
                       allowSign={false}
                       ariaLabel={`${memberDisplayName(player.memberId)} ${column.header}`}

@@ -3,6 +3,7 @@ import type { ComponentPropsWithRef, ReactNode } from "react";
 
 import { cn } from "@/shared/ui/cn";
 import { buildFieldDescribedBy } from "@/shared/ui/forms/Field";
+import { readableTextWidthClass } from "@/shared/ui/layout/readableText";
 
 export type CheckboxFieldProps = {
   "aria-describedby"?: string | undefined;
@@ -56,7 +57,10 @@ export function CheckboxField({
       </label>
       {description ? (
         <p
-          className="momo-copy mt-1 pl-2 text-xs text-pretty text-[var(--color-text-secondary)]"
+          className={cn(
+            "momo-copy mt-1 pl-2 text-xs text-pretty text-[var(--color-text-secondary)]",
+            readableTextWidthClass,
+          )}
           id={descriptionId}
         >
           {description}
@@ -64,7 +68,10 @@ export function CheckboxField({
       ) : null}
       {error ? (
         <p
-          className="momo-copy mt-1 pl-2 text-xs text-pretty text-[var(--color-danger)]"
+          className={cn(
+            "momo-copy mt-1 pl-2 text-xs text-pretty text-[var(--color-danger)]",
+            readableTextWidthClass,
+          )}
           id={errorId}
           role="alert"
         >

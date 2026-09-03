@@ -7,6 +7,7 @@ import type { ReactNode } from "react";
 import { Button } from "@/shared/ui/actions/Button";
 import { IconButton } from "@/shared/ui/actions/IconButton";
 import { cn } from "@/shared/ui/cn";
+import { readableTextWidthClass } from "@/shared/ui/layout/readableText";
 import { instantMotionTransition, politeMotionTransition } from "@/shared/ui/motion/transitions";
 
 const dialogBackdropClassName = "fixed inset-0 z-[var(--z-dialog)] bg-[var(--color-backdrop)]/35";
@@ -52,7 +53,12 @@ function DialogContentFrame({
             {title}
           </BaseDialog.Title>
           {description ? (
-            <BaseDialog.Description className="mt-1 text-sm leading-6 text-pretty text-[var(--color-text-secondary)]">
+            <BaseDialog.Description
+              className={cn(
+                "mt-1 text-sm leading-6 text-pretty text-[var(--color-text-secondary)]",
+                readableTextWidthClass,
+              )}
+            >
               {description}
             </BaseDialog.Description>
           ) : null}
@@ -211,14 +217,22 @@ export function AlertDialogLayer({
               {title}
             </BaseAlertDialog.Title>
             {description ? (
-              <BaseAlertDialog.Description className="text-sm leading-6 text-pretty text-[var(--color-text-secondary)]">
+              <BaseAlertDialog.Description
+                className={cn(
+                  "text-sm leading-6 text-pretty text-[var(--color-text-secondary)]",
+                  readableTextWidthClass,
+                )}
+              >
                 {description}
               </BaseAlertDialog.Description>
             ) : null}
             <div className={cn("min-w-0", contentClassName)}>{children}</div>
             {error ? (
               <p
-                className="rounded-xs border border-[var(--color-danger)]/50 bg-[var(--color-danger)]/8 px-3 py-2 text-sm font-medium text-[var(--color-danger)]"
+                className={cn(
+                  "rounded-xs border border-[var(--color-danger)]/50 bg-[var(--color-danger)]/8 px-3 py-2 text-sm font-medium text-[var(--color-danger)]",
+                  readableTextWidthClass,
+                )}
                 role="alert"
               >
                 {error}

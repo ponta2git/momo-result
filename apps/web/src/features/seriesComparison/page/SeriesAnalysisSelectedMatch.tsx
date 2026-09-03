@@ -67,7 +67,12 @@ export function SeriesAnalysisSelectedMatch({
           ))}
         </ul>
       ) : null}
-      <MatchResultLedger ariaLabel="選択中の試合の順位と成績" contextStatus="ready" rows={rows} />
+      <MatchResultLedger
+        ariaLabel="選択中の試合の順位と成績"
+        contextStatus="ready"
+        presentation="embedded"
+        rows={rows}
+      />
     </section>
   );
 }

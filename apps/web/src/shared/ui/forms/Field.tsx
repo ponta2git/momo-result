@@ -2,6 +2,7 @@ import { useId } from "react";
 import type { HTMLAttributes, ReactNode } from "react";
 
 import { cn } from "@/shared/ui/cn";
+import { readableTextWidthClass } from "@/shared/ui/layout/readableText";
 
 export type FieldLayout = "stack" | "subgrid";
 
@@ -55,7 +56,10 @@ export function Field({
       {description ? (
         <p
           id={resolvedDescriptionId}
-          className="momo-copy min-w-0 text-xs text-[var(--color-text-secondary)]"
+          className={cn(
+            "momo-copy min-w-0 text-xs text-[var(--color-text-secondary)]",
+            readableTextWidthClass,
+          )}
         >
           {description}
         </p>
@@ -63,7 +67,10 @@ export function Field({
       {error ? (
         <p
           id={resolvedErrorId}
-          className="momo-copy min-w-0 text-xs text-[var(--color-danger)]"
+          className={cn(
+            "momo-copy min-w-0 text-xs text-[var(--color-danger)]",
+            readableTextWidthClass,
+          )}
           role="alert"
         >
           {error}

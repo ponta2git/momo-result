@@ -25,11 +25,13 @@ import type {
   SeriesComparisonReviewV3,
 } from "@/shared/api/seriesAnalysis";
 import { Button } from "@/shared/ui/actions/Button";
+import { cn } from "@/shared/ui/cn";
 import { Disclosure } from "@/shared/ui/data/Collapsible";
 import { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
 import { Dialog } from "@/shared/ui/feedback/Dialog";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
+import { readableTextWidthClass } from "@/shared/ui/layout/readableText";
 
 export function ReviewView({
   loading,
@@ -83,7 +85,12 @@ export function ReviewView({
             {response.commonPlaybookTopics.map((topic) => (
               <article key={topic.topicId}>
                 <h3 className="text-sm font-semibold">{topic.heading}</h3>
-                <p className="mt-1 text-sm leading-6 text-[var(--color-text-secondary)]">
+                <p
+                  className={cn(
+                    "mt-1 text-sm leading-6 text-[var(--color-text-secondary)]",
+                    readableTextWidthClass,
+                  )}
+                >
                   {topic.detail}
                 </p>
               </article>

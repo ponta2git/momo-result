@@ -1,7 +1,9 @@
 import { useId } from "react";
 import type { FieldsetHTMLAttributes, ReactNode } from "react";
 
+import { cn } from "@/shared/ui/cn";
 import { buildFieldDescribedBy } from "@/shared/ui/forms/Field";
+import { readableTextWidthClass } from "@/shared/ui/layout/readableText";
 
 type FieldsetProps = {
   children: ReactNode;
@@ -28,12 +30,25 @@ export function Fieldset({ children, description, error, legend, ...props }: Fie
         {children}
       </div>
       {description ? (
-        <p className="momo-copy mt-1 text-xs text-[var(--color-text-secondary)]" id={descriptionId}>
+        <p
+          className={cn(
+            "momo-copy mt-1 text-xs text-[var(--color-text-secondary)]",
+            readableTextWidthClass,
+          )}
+          id={descriptionId}
+        >
           {description}
         </p>
       ) : null}
       {error ? (
-        <p className="momo-copy mt-1 text-xs text-[var(--color-danger)]" id={errorId} role="alert">
+        <p
+          className={cn(
+            "momo-copy mt-1 text-xs text-[var(--color-danger)]",
+            readableTextWidthClass,
+          )}
+          id={errorId}
+          role="alert"
+        >
           {error}
         </p>
       ) : null}

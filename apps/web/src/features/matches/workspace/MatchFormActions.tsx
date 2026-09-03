@@ -2,7 +2,9 @@ import type { Ref } from "react";
 
 import type { MatchWorkspaceSubmitModel } from "@/features/matches/workspace/matchWorkspacePageModelTypes";
 import { Button } from "@/shared/ui/actions/Button";
+import { cn } from "@/shared/ui/cn";
 import { Notice } from "@/shared/ui/feedback/Notice";
+import { readableTextWidthClass } from "@/shared/ui/layout/readableText";
 
 type MatchFormActionsProps = {
   model: MatchWorkspaceSubmitModel;
@@ -17,14 +19,19 @@ export function MatchFormActions({ model, primaryActionRef }: MatchFormActionsPr
     >
       {model.feedback.error ? (
         <div className="mb-3">
-          <Notice title={model.feedback.error.title} tone="danger">
+          <Notice presentation="nested" title={model.feedback.error.title} tone="danger">
             <p>{model.feedback.error.detail}</p>
             <p className="mt-1">{model.feedback.error.nextStep}</p>
           </Notice>
         </div>
       ) : null}
       <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
-        <p className="text-sm text-pretty text-[var(--color-text-secondary)]">
+        <p
+          className={cn(
+            "text-sm text-pretty text-[var(--color-text-secondary)]",
+            readableTextWidthClass,
+          )}
+        >
           {model.feedback.message}
         </p>
         <Button

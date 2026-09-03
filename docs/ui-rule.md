@@ -51,12 +51,15 @@
 - 1つの視覚境界は1つの owner だけが描く。親 surface の外周と先頭・末尾 child、disclosure の root と panel、table wrapper と隣接 toolbar などへ同じ境界を重ねず、隣接する平行線や二重線を作らない。淡色背景、border、角丸を同じ要素へ慣習的に重ねず、境界を伝えるために必要な最小の手段を選ぶ。
 - sibling 間の divider は、それらを並べる親 composition が `divide-*` または独立した separator として所有し、各 child の先頭・末尾 border と `first` / `last` の相殺で組み立てない。control、bounded panel、badge、table の上端・header 下端・最終行下端など、部品自身の意味を成立させる perimeter / internal boundary はその部品が所有する。装飾だけの separator は accessibility tree へ意味を追加せず、内容上の区切りを表す場合だけ semantic な `hr` または section 構造を使う。
 - shadow は dialog、tooltip、toast など浮遊 UI に限定する。通常内容に elevation を足さず、gradient、glow、大きな surface contrast を装飾に使わない。
+- 角丸は参照値の共有だけでなく、要素の役割と包含階層を表す。`xs` は compact な badge、marker、data cell、`sm` は control と小型の bounded panel、`md` は record、card、notice など content 内の独立境界、`lg` は page-level content surface と dialog、toast など最上位または浮遊する面に使う。`full` は円、pill、progress track など輪郭自体に意味がある形へ限定する。table は前項のとおり外周角丸を持たない。
+- 外側と内側の輪郭が同時に見える入れ子では、内側を外側より少なくとも一段弱い角丸にする。同じ角丸を重ねる前に内側の面、border、角丸のいずれかを除けないか確認する。画像を面の端まで裁つ場合は親の角丸と `overflow-hidden` を共有し、inset する場合は内側の役割に応じて弱める。外側と内側の半径比を固定式や source checker にせず、実際の padding と paint を含む visual review で同心性と階層を確認する。
 
 ### 2.3 文字、余白、データ表現
 
-- 一次情報、補助情報、ラベル、placeholder、disabled を既存の文字トークンとウェイトで階層化する。見出し、本文、ラベル、データの役割を固定し、本文と control は regular 以上を使う。小さい文字は補助 metadata に限定し、主要結果、操作、エラーを細字や低コントラストにしない。
-- 余白は定義済み token を使い、密接な要素よりグループ間を大きくする。page、data surface、workspace は一貫した外余白の内側で利用可能な横幅を使い、読み幅の制約は prose、単一 field 群など幅を狭める理由がある内容へ局所的に掛ける。画面全体を文章幅へ縮めず、試合間・プレーヤー間の走査や比較が速くなる表・図表は一貫して密にする。不規則な欠け、根拠のない非対称、任意の値や z-index を追加しない。
-- page 幅は内容形状に応じた少数の共通 variant に収束させる。単一の短い form / prose は narrow、通常の一覧・管理・取り込みは standard、横比較・詳細分析は wide、source と editor を常時並置する編集 workspace だけは workspace を使う。同等の画面は同じ variant を使い、内部の短い prose や単一 field だけを局所的に狭める。利用可能幅を埋めるためだけに workspace を選ばない。
+- 一次情報、補助情報、ラベル、placeholder、disabled を既存の文字トークンとウェイトで階層化する。見出し、本文、ラベル、データの役割を固定し、本文と control は regular 以上を使う。可視文字は `12px` を下限とし、通常本文、操作、主要データは原則 `14px` 以上、`12px` はラベルと補助 metadata に限定する。chart axis も別の数値表現があることを理由に縮小せず、同じ下限を保つ。主要結果、操作、エラーを小さい文字、細字、低コントラストへ逃がさない。
+- 文字サイズは `12 / 14 / 16 / 18 / 20 / 24 / 30px` の共通 scale から選び、近接した任意値を feature 内へ追加しない。サイズ差だけで役割を増やさず、同じ役割は shared UI の文字 recipe、ウェイト、文字色、行高を再利用する。狭い component に収まらない場合は文字を scale 外へ縮めず、component 幅、情報量、折り返し、局所 scroll、段階的開示の順に見直す。
+- 余白は定義済み token を使い、密接な要素よりグループ間を大きくする。page、data surface、workspace は一貫した外余白の内側で利用可能な横幅を使い、読み幅の制約は prose、単一 field 群など幅を狭める理由がある内容へ局所的に掛ける。長文になり得る page description、help、error、notice、empty state、narrative は、親の面を狭めず文字内容を共通の readable measure `max-w-2xl` 以内へ制限する。短い label、metadata、table、chart、matrix、横比較にはこの measure を一律適用しない。画面全体を文章幅へ縮めず、試合間・プレーヤー間の走査や比較が速くなる表・図表は一貫して密にする。不規則な欠け、根拠のない非対称、任意の値や z-index を追加しない。
+- page 幅は内容形状に応じた少数の共通 variant に収束させる。単一の短い form / prose は `max-w-2xl` の narrow、通常の一覧・管理・取り込みは standard、横比較・詳細分析は wide、source と editor を常時並置する編集 workspace だけは workspace を使う。同等の画面は同じ variant を使い、内部の短い prose や単一 field だけを局所的に狭める。利用可能幅を埋めるためだけに workspace を選ばない。
 - responsive layout は、可変列に `minmax(0, 1fr)`、child に縮小可能な幅を与え、label や操作名が不自然に割れる前に列を積み替える。breakpoint は端末名ではなく内容が保てる幅で決める。page 全体の横 scroll は作らず、table、図表、source image など横方向の関係を保つ必要がある領域だけが、可視の案内とともに局所 scroll を所有してよい。
 - 通常文を任意の位置で強制改行しない。ID、URL、外部 error など切れ目のない長い値だけへ局所的な wrap または scroll を指定し、全画面へ `overflow-wrap: anywhere` を継承させない。見出しの balance や本文の pretty wrap も、data label、定義値、control label へ一律適用せず、役割ごとに指定する。
 - 一行として走査する control、status、action cluster、通常の table cell は中央、文字同士の短い label / value 行は baseline、heading と lead や主情報と metadata からなる可変高の複合 record は上端を揃える。field を横に並べる form row は control の下端を揃えてよい。table editor の上端、chart axis の下端など対応関係のための例外は局所的に明示し、画面ごとの任意な offset で調整しない。shared interactive primitive が文字サイズ、行高、responsive な高さを所有し、global element selector の font shorthand で上書きしない。
@@ -198,5 +201,6 @@
 - 固定メンバー、プレー順、状態・意味 token のように複数画面が消費する対応関係は、共通の型・定義を実装上の正本とし、その consumer 契約を unit / component test で代表確認する。各画面の source 文字列を横断走査しない。
 - 主要 flow は Playwright で、変更が影響する layout mode の代表 viewport と主要状態を確認し、URL、request、保存、download、主要結果を主 oracle とする。responsive behavior を変える場合は対応する最小幅を含め、意図しない横 scroll、safe area、focus 復帰、dialog / disclosure の位置変化も確認する。同じ layout mode の近接幅を一律に重複実行しない。
 - screenshot は補助とし、視覚レビューでは hierarchy、読み幅、関係的余白、product specificity、restraint、structural fit を確認する。component が親 slot に追従していること、狭幅と広幅で intrinsic constraint が保たれること、sibling 間の divider と部品 perimeter が二重にならないことも代表画面で確認する。初見点検と cognitive walkthrough で、目的、現在地、主要操作を説明できるか確認する。
+- 角丸または文字 scale を変える場合は、page surface、dialog、bounded panel、control、badge、画像 frame が同時に現れる代表画面で包含階層を確認する。読み幅を変える場合は短い通常文だけで合格とせず、長い日本語の description、notice、error を置いた wide viewport でも一行が readable measure を超えないことを確認する。文字を大きくした結果は、desktop と mobile の dense data view で欠落、衝突、不自然な縮小、page 全体の横 scroll がないことを確認する。
 - 製品横断の階層、IA、固定メンバー / プレー順の意味を変える場合は、影響する利用段階の代表画面で、3秒見た利用者が「いま見る対象」と「次の1操作」を説明できることを確認する。grayscale / blur でも主役が残ること、色なしで役割を区別できること、順位がどちらの sequence にも見えないこと、通常状態で信頼性の注意が出ないこと、同じ事実や内部都合を反復していないことも確認する。
 - OCR 結果修正または手入力 workspace の構造を変える場合は、現行 baseline に対して画像と field の対応理解、修正完了時間、誤修正、操作数を比較し、同等以上であることを確認する。

@@ -210,10 +210,10 @@ export function AlertDialogLayer({
       >
         <div
           aria-busy={pending || undefined}
-          className={cn(dialogSurfaceClassName, "overflow-y-auto", surfaceClassName)}
+          className={cn(dialogSurfaceClassName, "flex overflow-hidden", surfaceClassName)}
         >
-          <div className="flex min-w-0 flex-col">
-            <div className="min-w-0">
+          <div className="flex min-h-0 w-full flex-1 flex-col gap-4">
+            <div className="min-w-0 shrink-0">
               <BaseAlertDialog.Title className="text-lg font-semibold text-balance text-[var(--color-text-primary)]">
                 {title}
               </BaseAlertDialog.Title>
@@ -228,21 +228,29 @@ export function AlertDialogLayer({
                 </BaseAlertDialog.Description>
               ) : null}
             </div>
-            {children !== undefined && children !== null ? (
-              <div className={cn("mt-4 min-w-0 empty:hidden", contentClassName)}>{children}</div>
-            ) : null}
-            {error ? (
-              <p
+            {(children !== undefined && children !== null) || error ? (
+              <div
                 className={cn(
-                  "mt-4 rounded-xs border border-[var(--color-danger)]/50 bg-[var(--color-danger)]/8 px-3 py-2 text-sm font-medium text-[var(--color-danger)]",
-                  readableTextWidthClass,
+                  "min-h-0 min-w-0 flex-1 overflow-y-auto px-2 empty:hidden",
+                  contentClassName,
                 )}
-                role="alert"
               >
-                {error}
-              </p>
+                {children}
+                {error ? (
+                  <p
+                    className={cn(
+                      "mt-4 first:mt-0",
+                      "rounded-xs border border-[var(--color-danger)]/50 bg-[var(--color-danger)]/8 px-3 py-2 text-sm font-medium text-[var(--color-danger)]",
+                      readableTextWidthClass,
+                    )}
+                    role="alert"
+                  >
+                    {error}
+                  </p>
+                ) : null}
+              </div>
             ) : null}
-            <div className="mt-4 flex flex-wrap justify-end gap-2">
+            <div className="flex shrink-0 flex-wrap justify-end gap-2">
               <BaseAlertDialog.Close
                 render={
                   <Button

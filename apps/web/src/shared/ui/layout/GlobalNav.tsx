@@ -103,10 +103,7 @@ export function GlobalNav({
           ))}
           {managementItems.length > 0 ? (
             <>
-              <span
-                aria-hidden="true"
-                className="ml-1 h-6 w-px shrink-0 bg-[var(--color-border)]"
-              />
+              <span aria-hidden="true" className="h-6 w-px shrink-0 bg-[var(--color-border)]" />
               <div
                 aria-label={managementLabel}
                 className="flex min-w-0 shrink-0 items-center gap-2"

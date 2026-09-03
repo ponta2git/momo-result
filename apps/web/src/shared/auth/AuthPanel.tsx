@@ -30,7 +30,7 @@ export function AuthPanel({
     <div
       className={cn(
         embedded
-          ? "grid gap-2"
+          ? "grid gap-0.5"
           : "rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3",
       )}
     >
@@ -38,7 +38,12 @@ export function AuthPanel({
         <p className="text-xs font-semibold text-[var(--color-text-secondary)]">ログイン中</p>
       ) : null}
       {auth ? (
-        <p className="mt-2 text-sm font-semibold text-[var(--color-text-primary)]">
+        <p
+          className={cn(
+            "text-sm font-semibold text-[var(--color-text-primary)]",
+            !embedded && "mt-0.5",
+          )}
+        >
           {auth.displayName}
         </p>
       ) : (

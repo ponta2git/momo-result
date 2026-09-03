@@ -76,10 +76,10 @@ function PageLoadingSkeleton({
     return (
       <>
         <HeaderSkeleton />
-        <PageContentSurface className="grid gap-4">
+        <PageContentSurface className="grid gap-6">
           <Skeleton className="h-16 rounded-md" />
           <Skeleton className="h-44 rounded-md" />
-          <div className="grid gap-3 md:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-3">
             <Skeleton className="h-24 rounded-md" />
             <Skeleton className="h-24 rounded-md" />
             <Skeleton className="h-24 rounded-md" />
@@ -95,7 +95,7 @@ function PageLoadingSkeleton({
     return (
       <>
         <HeaderSkeleton />
-        <PageContentSurface className="grid gap-4">
+        <PageContentSurface className="grid gap-6">
           <Skeleton className="h-24 rounded-md" />
           <div className="grid gap-4 lg:grid-cols-4">
             {Array.from({ length: 4 }, (_, index) => (
@@ -113,7 +113,7 @@ function PageLoadingSkeleton({
     return (
       <>
         <HeaderSkeleton />
-        <PageContentSurface className="grid gap-4">
+        <PageContentSurface className="grid gap-8">
           <Skeleton className="h-44 rounded-md" />
           <div className="grid gap-4 md:grid-cols-2">
             <Skeleton className="h-52 rounded-md" />
@@ -133,7 +133,7 @@ function PageLoadingSkeleton({
         <PageContentSurface className="grid gap-4">
           <Skeleton className="h-28 rounded-md" />
           <Skeleton className="h-12 rounded-md" />
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {Array.from({ length: 4 }, (_, index) => (
               <Skeleton key={index} className="h-24 rounded-md" />
             ))}
@@ -149,7 +149,7 @@ function PageLoadingSkeleton({
     return (
       <>
         <HeaderSkeleton />
-        <PageContentSurface className="grid gap-4">
+        <PageContentSurface className="grid gap-6">
           <Skeleton className="h-14 rounded-md" />
           <div className="grid gap-4 xl:grid-cols-3">
             {Array.from({ length: 3 }, (_, index) => (
@@ -174,7 +174,7 @@ function PageLoadingSkeleton({
           </div>
           <Skeleton className="h-11 w-full" />
           <Skeleton className="h-11 w-full max-w-64" />
-          <div className="grid gap-3 pt-2">
+          <div className="grid gap-3">
             <Skeleton className="h-5 w-full max-w-md" />
             <Skeleton className="h-11 w-full max-w-72" />
           </div>
@@ -198,10 +198,10 @@ function PageLoadingSkeleton({
 
 function HeaderSkeleton() {
   return (
-    <div className="grid gap-2">
+    <div>
       <Skeleton className="h-4 w-24" />
-      <Skeleton className="h-8 w-full max-w-80" />
-      <Skeleton className="h-4 w-full max-w-2xl" />
+      <Skeleton className="mt-1 h-8 w-full max-w-80" />
+      <Skeleton className="mt-2 h-4 w-full max-w-2xl" />
     </div>
   );
 }

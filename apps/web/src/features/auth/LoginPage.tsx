@@ -31,7 +31,7 @@ export function LoginPage() {
       />
       <main className="flex-1" id="main-content">
         <PageFrame className={`${pageViewportGutterClass} py-4 sm:py-6`} width="narrow">
-          <div className="mx-auto grid w-full max-w-[34rem] gap-4">
+          <div className="mx-auto grid w-full max-w-[34rem] gap-6">
             <PageHeader description={loginDescription} title="ログイン" />
             <PageContentSurface className="space-y-4">
               {reason === "forbidden" ? (

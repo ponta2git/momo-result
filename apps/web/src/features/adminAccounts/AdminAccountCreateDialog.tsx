@@ -28,7 +28,7 @@ export function AdminAccountCreateDialog({ model }: { model: AdminAccountCreateD
       title="アカウントを追加"
       onOpenChange={setOpen}
     >
-      <form key={formKey} action={action} className="grid gap-4 pt-1">
+      <form key={formKey} action={action} className="grid gap-4">
         {error ? (
           <Notice role="alert" tone="danger" title="アカウントを追加できません">
             {error}

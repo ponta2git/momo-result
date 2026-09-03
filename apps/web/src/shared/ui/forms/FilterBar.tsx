@@ -87,7 +87,7 @@ export function FilterBar({
         ) : null}
 
         {meta ? (
-          <div className="min-w-0 pt-1 text-xs text-[var(--color-text-secondary)] tabular-nums sm:text-right">
+          <div className="min-w-0 text-xs text-[var(--color-text-secondary)] tabular-nums sm:text-right">
             {meta}
           </div>
         ) : null}

@@ -48,9 +48,8 @@ export function AdminAccountsPage() {
             <Skeleton className="min-h-16" />
           </div>
         ) : page.list.kind === "loadFailed" ? (
-          <Notice tone="danger" title={page.list.error?.title ?? "アカウントを読み込めません"}>
-            <p>{page.list.error?.detail ?? "通信状態を確認して、もう一度お試しください。"}</p>
-            <div className="mt-3">
+          <Notice
+            action={
               <Button
                 pending={page.list.refresh.pending}
                 pendingLabel="再読み込み中"
@@ -59,14 +58,17 @@ export function AdminAccountsPage() {
               >
                 アカウントを再読み込み
               </Button>
-            </div>
+            }
+            tone="danger"
+            title={page.list.error?.title ?? "アカウントを読み込めません"}
+          >
+            <p>{page.list.error?.detail ?? "通信状態を確認して、もう一度お試しください。"}</p>
           </Notice>
         ) : (
           <div className="grid gap-4">
             {page.list.stale ? (
-              <Notice tone="warning" title="最新のアカウント情報を取得できません">
-                <p>直前に取得した内容を表示しています。</p>
-                <div className="mt-3">
+              <Notice
+                action={
                   <Button
                     pending={page.list.refresh.pending}
                     pendingLabel="再読み込み中"
@@ -76,7 +78,11 @@ export function AdminAccountsPage() {
                   >
                     最新情報を再読み込み
                   </Button>
-                </div>
+                }
+                tone="warning"
+                title="最新のアカウント情報を取得できません"
+              >
+                <p>直前に取得した内容を表示しています。</p>
               </Notice>
             ) : null}
             {page.list.items.length === 0 ? (

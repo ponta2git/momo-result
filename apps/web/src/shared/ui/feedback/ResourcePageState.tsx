@@ -35,7 +35,7 @@ export type ResourcePageStateProps = ResourceErrorState | ResourceNotFoundState;
  */
 export function ResourcePageState(props: ResourcePageStateProps) {
   return (
-    <PageFrame className="gap-4" width={props.width ?? "wide"}>
+    <PageFrame width={props.width ?? "wide"}>
       <PageHeader title={props.title} />
       <PageContentSurface className="grid justify-items-start gap-4">
         <Notice

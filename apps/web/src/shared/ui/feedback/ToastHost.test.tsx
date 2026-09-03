@@ -18,7 +18,10 @@ describe("ToastHost", () => {
         showToast({ description: "入力内容は保持されています。", title: "保存できません" });
       });
 
-      expect(await screen.findByRole("region", { name: "Notifications" })).toBeInTheDocument();
+      const viewport = await screen.findByRole("region", { name: "Notifications" });
+      expect(viewport).toBeInTheDocument();
+      expect(viewport).toHaveClass("momo-toast-viewport", "gap-2");
+      expect(viewport).not.toHaveClass("p-2");
       expect(await screen.findByText("保存できません")).toBeInTheDocument();
       expect(screen.getByText("入力内容は保持されています。")).toBeInTheDocument();
     } finally {

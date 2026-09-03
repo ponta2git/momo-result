@@ -1,7 +1,11 @@
 import { cn } from "@/shared/ui/cn";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
-import { pageFrameWidthClass, pageViewportGutterClass } from "@/shared/ui/layout/PageFrame";
+import {
+  pageFrameSiblingGapClass,
+  pageFrameWidthClass,
+  pageViewportGutterClass,
+} from "@/shared/ui/layout/PageFrame";
 import type { PageFrameWidth } from "@/shared/ui/layout/PageFrame";
 
 export type PageLoadingKind =
@@ -28,7 +32,8 @@ export function PageLoadingFallback({
   width = "standard",
 }: PageLoadingFallbackProps) {
   const className = cn(
-    "mx-auto flex w-full max-w-full min-w-0 flex-col gap-4",
+    "mx-auto flex w-full max-w-full min-w-0 flex-col",
+    pageFrameSiblingGapClass,
     pageFrameWidthClass[width],
     asMain ? `${pageViewportGutterClass} py-4 sm:py-6` : "",
   );

@@ -174,16 +174,20 @@ samp {
   outline-offset: 3px;
 }
 
-@utility momo-safe-top {
-  top: max(calc(env(safe-area-inset-top) + 1rem), 1rem);
-}
-
-@utility momo-safe-right {
-  right: max(calc(env(safe-area-inset-right) + 1rem), 1rem);
-}
-
 @utility momo-safe-bottom {
   bottom: max(calc(env(safe-area-inset-bottom) + 1rem), 1rem);
+}
+
+@utility momo-toast-viewport {
+  top: max(calc(env(safe-area-inset-top) + 1rem), 1rem);
+  right: max(calc(env(safe-area-inset-right) + 1rem), 1rem);
+  width: min(
+    24rem,
+    calc(
+      100vw - max(calc(env(safe-area-inset-left) + 1rem), 1rem) -
+        max(calc(env(safe-area-inset-right) + 1rem), 1rem)
+    )
+  );
 }
 
 .momo-dialog-popup {

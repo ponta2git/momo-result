@@ -52,7 +52,7 @@ function SingleHistogram({
 }) {
   const width = 320;
   const height = 236;
-  const padding = { bottom: 72, left: 36, right: 16, top: 18 };
+  const padding = { bottom: 72, left: 92, right: 16, top: 18 };
   const chartWidth = width - padding.left - padding.right;
   const chartHeight = height - padding.top - padding.bottom;
   const binWidth = chartWidth / Math.max(1, bins.length);

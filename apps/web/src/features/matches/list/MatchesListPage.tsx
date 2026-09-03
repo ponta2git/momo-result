@@ -31,7 +31,7 @@ function ListSkeleton({ showDesktopTable }: { showDesktopTable: boolean }) {
       ) : (
         <div className="grid gap-3">
           {["m1", "m2", "m3"].map((id) => (
-            <Skeleton key={id} className="min-h-56 rounded-[var(--radius-md)]" />
+            <Skeleton key={id} className="min-h-56 rounded-md" />
           ))}
         </div>
       )}

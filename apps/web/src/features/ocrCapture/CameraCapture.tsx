@@ -51,7 +51,7 @@ export function CameraCapture({
       ) : null}
       <div
         aria-label={`${slotLabel}の16:9カメラ画像枠`}
-        className="relative aspect-video w-full overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-media-canvas)]"
+        className="relative aspect-video w-full overflow-hidden rounded-md border border-[var(--color-border)] bg-[var(--color-media-canvas)]"
         role="group"
       >
         {camera.active ? null : (
@@ -73,7 +73,7 @@ export function CameraCapture({
       </div>
       {camera.error ? (
         <div
-          className="grid gap-3 rounded-[var(--radius-sm)] border border-[var(--color-danger)]/45 bg-[var(--color-danger)]/8 p-3"
+          className="grid gap-3 rounded-sm border border-[var(--color-danger)]/45 bg-[var(--color-danger)]/8 p-3"
           role="alert"
         >
           <div>

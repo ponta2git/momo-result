@@ -22,7 +22,7 @@ export function EmptyState({
     <section
       className={
         placement === "standalone"
-          ? "rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4"
+          ? "rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-4"
           : "bg-transparent py-4"
       }
     >

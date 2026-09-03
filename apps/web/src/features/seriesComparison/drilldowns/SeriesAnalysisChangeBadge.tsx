@@ -21,7 +21,7 @@ export function ChangeBadge({
   const value = absoluteMagnitude === null ? "" : `${formatDecimal(absoluteMagnitude)} `;
   return (
     <span
-      className={`inline-flex min-h-7 w-fit items-center rounded-[var(--radius-xs)] border px-2 py-0.5 text-xs font-semibold tabular-nums ${changeTone(direction)}`}
+      className={`inline-flex min-h-7 w-fit items-center rounded-xs border px-2 py-0.5 text-xs font-semibold tabular-nums ${changeTone(direction)}`}
     >
       {value}
       {directionLabel(direction)}

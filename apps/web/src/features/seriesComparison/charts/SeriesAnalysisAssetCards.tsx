@@ -32,7 +32,7 @@ export function AssetComparisonCards({ response }: { response: SeriesComparisonA
         );
         return (
           <article
-            className="flex h-full min-w-0 flex-col rounded-[var(--radius-sm)] border border-[var(--color-border)] p-3"
+            className="flex h-full min-w-0 flex-col rounded-sm border border-[var(--color-border)] p-3"
             key={entry.memberId}
           >
             <div className="flex items-start justify-between gap-2 pb-2">
@@ -91,7 +91,7 @@ export function AssetComparisonCards({ response }: { response: SeriesComparisonA
               <dl className="mt-2 grid gap-2">
                 {entry.evidence.map((evidence) => (
                   <div
-                    className={`grid grid-cols-[auto_1fr_auto] items-center gap-2 rounded-[var(--radius-xs)] border px-2 py-1 text-xs ${assetEvidenceToneClassName(evidence.tone)}`}
+                    className={`grid grid-cols-[auto_1fr_auto] items-center gap-2 rounded-xs border px-2 py-1 text-xs ${assetEvidenceToneClassName(evidence.tone)}`}
                     key={evidence.kind}
                   >
                     <dt className="font-semibold">{assetEvidenceToneLabel(evidence.tone)}</dt>

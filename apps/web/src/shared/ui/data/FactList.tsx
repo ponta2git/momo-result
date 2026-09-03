@@ -30,7 +30,7 @@ export function FactList({ ariaLabel, columns = 1, items, layout = "grid" }: Fac
         "grid min-w-0",
         columnsClass[columns],
         layout === "segmented"
-          ? "gap-px overflow-hidden rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-border)]"
+          ? "gap-px overflow-hidden rounded-sm border border-[var(--color-border)] bg-[var(--color-border)]"
           : layout === "grid"
             ? "gap-2"
             : "gap-1",
@@ -42,7 +42,7 @@ export function FactList({ ariaLabel, columns = 1, items, layout = "grid" }: Fac
             "min-w-0",
             layout === "segmented" ? "bg-[var(--color-surface-subtle)] px-3 py-2" : "",
             layout === "grid"
-              ? "rounded-[var(--radius-sm)] border border-[var(--color-border)] px-3 py-2"
+              ? "rounded-sm border border-[var(--color-border)] px-3 py-2"
               : layout === "inline"
                 ? "flex items-baseline justify-between gap-4 py-1"
                 : "",

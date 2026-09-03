@@ -34,7 +34,7 @@ export function CheckboxField({
     <div className="min-w-0">
       <label
         className={cn(
-          "inline-flex min-h-11 min-w-0 cursor-pointer items-center gap-2 rounded-[var(--radius-xs)] px-2 text-sm font-medium text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)]",
+          "inline-flex min-h-11 min-w-0 cursor-pointer items-center gap-2 rounded-xs px-2 text-sm font-medium text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)]",
           disabled ? "cursor-not-allowed opacity-65" : "",
         )}
         htmlFor={fieldId}

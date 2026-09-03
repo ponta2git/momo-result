@@ -161,7 +161,7 @@ export function DataTable<Row>({
                 {column.sortable ? (
                   <button
                     className={cn(
-                      "inline-flex min-h-11 items-center gap-1 rounded-[var(--radius-xs)] px-1 py-1 text-left text-inherit sm:min-h-9",
+                      "inline-flex min-h-11 items-center gap-1 rounded-xs px-1 py-1 text-left text-inherit sm:min-h-9",
                       "hover:bg-[var(--color-surface-hover)] disabled:cursor-not-allowed disabled:opacity-60",
                       column.sortDirection
                         ? "bg-[var(--color-action)]/10 text-[var(--color-text-primary)]"

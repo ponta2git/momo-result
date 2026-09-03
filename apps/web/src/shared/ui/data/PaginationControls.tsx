@@ -49,7 +49,7 @@ export function PaginationControls(props: PaginationControlsProps) {
       className={cn(
         "grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end",
         placement === "standalone"
-          ? "rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3"
+          ? "rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-3"
           : "bg-transparent",
       )}
     >
@@ -113,7 +113,7 @@ export function PaginationControls(props: PaginationControlsProps) {
           </div>
           <span
             className={cn(
-              "inline-flex min-h-11 min-w-0 items-center justify-center rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-3 text-sm font-semibold text-[var(--color-text-secondary)] tabular-nums sm:min-h-9 sm:min-w-20",
+              "inline-flex min-h-11 min-w-0 items-center justify-center rounded-sm border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-3 text-sm font-semibold text-[var(--color-text-secondary)] tabular-nums sm:min-h-9 sm:min-w-20",
               variant === "full" ? "order-1 col-span-4 sm:order-none sm:col-span-1" : "",
             )}
           >

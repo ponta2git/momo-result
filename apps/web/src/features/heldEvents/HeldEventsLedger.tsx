@@ -103,7 +103,7 @@ function HeldEventsMobileList({
   returnTo,
 }: HeldEventsLedgerProps) {
   return (
-    <ol className="divide-y divide-[var(--color-border)] overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)]">
+    <ol className="divide-y divide-[var(--color-border)] overflow-hidden rounded-md border border-[var(--color-border)]">
       {events.map((event, index) => (
         <HeldEventRow
           key={event.id}
@@ -143,7 +143,7 @@ function HeldEventRow({
           latest={latest}
           returnTo={returnTo}
         />
-        <dl className="grid grid-cols-2 divide-x divide-[var(--color-border)] overflow-hidden rounded-[var(--radius-sm)] border border-[var(--color-border)]">
+        <dl className="grid grid-cols-2 divide-x divide-[var(--color-border)] overflow-hidden rounded-sm border border-[var(--color-border)]">
           <div className="min-w-0 px-3 py-2">
             <dt className="momo-label text-[var(--color-text-secondary)]">確定済み</dt>
             <dd className="mt-1 text-sm font-semibold tabular-nums">{event.matchCount}試合</dd>
@@ -187,7 +187,7 @@ function HeldEventIdentity({
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
       {latest ? (
-        <span className="rounded-[var(--radius-xs)] border border-[var(--color-border-strong)] px-2 py-0.5 text-xs font-semibold text-[var(--color-text-secondary)]">
+        <span className="rounded-xs border border-[var(--color-border-strong)] px-2 py-0.5 text-xs font-semibold text-[var(--color-text-secondary)]">
           最新
         </span>
       ) : null}

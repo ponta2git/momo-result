@@ -90,7 +90,7 @@ export function RevenueConversionMatrices({
           );
           return (
             <article
-              className="min-w-0 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3"
+              className="min-w-0 rounded-sm border border-[var(--color-border)] bg-[var(--color-surface)] p-3"
               key={entry.memberId}
             >
               <h3 className="mb-3 text-sm font-semibold">
@@ -132,7 +132,7 @@ export function RevenueConversionMatrices({
                           return (
                             <MatrixCell
                               aria-label={`収益${revenueRank}位から最終${finalRank}位、対象なし`}
-                              className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface)] px-1 py-2 text-center"
+                              className="rounded-xs border border-[var(--color-border)] bg-[var(--color-surface)] px-1 py-2 text-center"
                               key={finalRank}
                             >
                               —
@@ -143,7 +143,7 @@ export function RevenueConversionMatrices({
                         return (
                           <MatrixCell
                             aria-label={`収益${cell.revenueRank}位から最終${cell.finalRank}位、${cell.count}戦、${formatPercent(cell.rate)}${focused ? "、この試合" : ""}`}
-                            className={`rounded-[var(--radius-xs)] border px-1 py-2 text-center ${focused ? "ring-2 ring-[var(--color-action)] ring-offset-1 ring-offset-[var(--color-surface)]" : ""}`}
+                            className={`rounded-xs border px-1 py-2 text-center ${focused ? "ring-2 ring-[var(--color-action)] ring-offset-1 ring-offset-[var(--color-surface)]" : ""}`}
                             data-focused-metric={focused ? "true" : undefined}
                             key={finalRank}
                             style={

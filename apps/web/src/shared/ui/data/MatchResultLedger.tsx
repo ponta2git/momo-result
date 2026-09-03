@@ -24,7 +24,7 @@ export function MatchResultLedger({
   return (
     <ol
       aria-label={ariaLabel}
-      className="grid divide-y divide-[var(--color-border)] overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border-strong)] bg-[var(--color-surface)]"
+      className="grid divide-y divide-[var(--color-border)] overflow-hidden rounded-md border border-[var(--color-border-strong)] bg-[var(--color-surface)]"
     >
       {orderedRows.map((row) => (
         <li
@@ -107,7 +107,7 @@ function AverageRankChange({
       </strong>
       <span
         className={cn(
-          "rounded-[var(--radius-xs)] border px-2 py-0.5 font-semibold",
+          "rounded-xs border px-2 py-0.5 font-semibold",
           trendTone(row.trend),
         )}
       >

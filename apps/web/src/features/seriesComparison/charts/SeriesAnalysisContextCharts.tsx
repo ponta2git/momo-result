@@ -55,7 +55,7 @@ export function PlayOrderMatrix({
                   return (
                     <MatrixCell
                       aria-label={`${entry.displayName}、${playOrder}番手、対象なし`}
-                      className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-2 text-center"
+                      className="rounded-xs border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-2 text-center"
                       key={playOrder}
                     >
                       —
@@ -73,7 +73,7 @@ export function PlayOrderMatrix({
                 return (
                   <MatrixCell
                     aria-label={`${entry.displayName}、${cell.playOrder}番手、平均${formatDecimal(cell.rankAverage)}位、${cell.targetCount}戦${presentation.label ? `、${presentation.label}` : ""}${focused ? "、この試合" : ""}`}
-                    className={`rounded-[var(--radius-xs)] border px-2 py-2 text-center ${focused ? "ring-2 ring-[var(--color-action)] ring-offset-1 ring-offset-[var(--color-surface)]" : ""}`}
+                    className={`rounded-xs border px-2 py-2 text-center ${focused ? "ring-2 ring-[var(--color-action)] ring-offset-1 ring-offset-[var(--color-surface)]" : ""}`}
                     data-focused-metric={focused ? "true" : undefined}
                     key={playOrder}
                     style={presentation.style}
@@ -172,7 +172,7 @@ export function CardShopDestinationQuadrants({
     <div className="grid gap-3 lg:grid-cols-2">
       {response.cardShopDestination.map((entry) => (
         <article
-          className="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3"
+          className="rounded-sm border border-[var(--color-border)] bg-[var(--color-surface)] p-3"
           key={entry.memberId}
         >
           <div className="flex flex-wrap items-start justify-between gap-2">

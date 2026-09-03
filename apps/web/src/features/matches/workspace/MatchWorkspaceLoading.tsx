@@ -25,7 +25,7 @@ export function MatchWorkspaceLoading({
           {["player-a", "player-b", "player-c", "player-d"].map((id) => (
             <div
               key={id}
-              className="grid gap-3 rounded-[var(--radius-sm)] border border-[var(--color-border)] p-3"
+              className="grid gap-3 rounded-sm border border-[var(--color-border)] p-3"
             >
               <Skeleton className="h-6 w-2/3" />
               <Skeleton className="h-10" />

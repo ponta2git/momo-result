@@ -91,7 +91,7 @@ function GuideStep({ label, number, value }: { label: string; number: string; va
   return (
     <li className="grid grid-cols-[1.5rem_minmax(0,1fr)] gap-2 sm:px-4 sm:first:pl-0 sm:last:pr-0">
       <span
-        className="flex size-6 items-center justify-center rounded-[var(--radius-xs)] bg-[var(--color-surface-selected)] text-xs font-medium text-[var(--color-text-primary)] tabular-nums"
+        className="flex size-6 items-center justify-center rounded-xs bg-[var(--color-surface-selected)] text-xs font-medium text-[var(--color-text-primary)] tabular-nums"
         aria-hidden="true"
       >
         {number}

@@ -126,7 +126,7 @@ function MethodStep({ number, title, value }: { number: string; title: string; v
   return (
     <li className="grid grid-cols-[1.5rem_minmax(0,1fr)] gap-2 sm:px-4 sm:first:pl-0 sm:last:pr-0">
       <span
-        className="flex size-6 items-center justify-center rounded-[var(--radius-xs)] bg-[var(--color-surface-selected)] text-xs font-medium text-[var(--color-text-primary)] tabular-nums"
+        className="flex size-6 items-center justify-center rounded-xs bg-[var(--color-surface-selected)] text-xs font-medium text-[var(--color-text-primary)] tabular-nums"
         aria-hidden="true"
       >
         {number}
@@ -181,7 +181,7 @@ function CandidateCard({
           <p className="text-xs font-medium text-[var(--color-text-secondary)]">開催ごとの判定</p>
           <ol
             aria-label={`${candidateLabel}の別開催での支持`}
-            className="mt-2 grid grid-cols-5 divide-x divide-[var(--color-border)] overflow-hidden rounded-[var(--radius-xs)] border border-[var(--color-border)]"
+            className="mt-2 grid grid-cols-5 divide-x divide-[var(--color-border)] overflow-hidden rounded-xs border border-[var(--color-border)]"
           >
             {Array.from({ length: foldCount }, (_, fold) => {
               const row = rowByFold.get(fold);

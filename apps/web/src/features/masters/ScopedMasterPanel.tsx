@@ -81,9 +81,9 @@ export function ScopedMasterPanel({
           aria-label={`${labels.itemLabel}を読み込み中`}
           className="mt-3 grid gap-2"
         >
-          <Skeleton className="h-12 rounded-[var(--radius-sm)]" />
-          <Skeleton className="h-12 rounded-[var(--radius-sm)]" />
-          <Skeleton className="h-12 rounded-[var(--radius-sm)]" />
+          <Skeleton className="h-12 rounded-sm" />
+          <Skeleton className="h-12 rounded-sm" />
+          <Skeleton className="h-12 rounded-sm" />
         </div>
       ) : loadBlocked ? (
         <div className="mt-3">

@@ -57,7 +57,7 @@ export function ChoiceList<Value extends string>({
       </legend>
       <div
         className={cn(
-          "mt-2 min-w-0 divide-y divide-[var(--color-border)] overflow-hidden rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)]",
+          "mt-2 min-w-0 divide-y divide-[var(--color-border)] overflow-hidden rounded-sm border border-[var(--color-border)] bg-[var(--color-surface)]",
           layout === "dialog"
             ? "max-h-[min(24rem,55dvh)] min-h-0 flex-1 overflow-y-auto overscroll-contain"
             : "",

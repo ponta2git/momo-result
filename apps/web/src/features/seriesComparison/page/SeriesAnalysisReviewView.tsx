@@ -148,7 +148,7 @@ function PlaybookCard({
   return (
     <article className={`flex h-full min-w-0 flex-col gap-3 ${emphasis ? "" : "py-1"}`}>
       <div className="flex flex-wrap items-center gap-2">
-        <span className="rounded-[var(--radius-xs)] border border-[var(--color-border)] px-2 py-0.5 text-xs font-semibold">
+        <span className="rounded-xs border border-[var(--color-border)] px-2 py-0.5 text-xs font-semibold">
           {classificationLabel(card.classification)}
         </span>
         <span className="text-xs text-[var(--color-text-secondary)]">

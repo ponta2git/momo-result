@@ -7,7 +7,7 @@ export function RankBadge({ rank, size = "sm" }: { rank: number; size?: "md" | "
   return (
     <span
       className={cn(
-        "inline-flex shrink-0 items-center justify-center rounded-[var(--radius-xs)] border font-semibold text-[var(--color-text-primary)] tabular-nums",
+        "inline-flex shrink-0 items-center justify-center rounded-xs border font-semibold text-[var(--color-text-primary)] tabular-nums",
         size === "md" ? "min-h-10 min-w-14 px-2 text-lg" : "min-h-6 min-w-9 px-2 text-xs",
       )}
       style={

@@ -13,7 +13,7 @@ export function MatchFormActions({ model, primaryActionRef }: MatchFormActionsPr
   return (
     <section
       aria-label="入力内容の確定"
-      className="rounded-[var(--radius-md)] border border-[var(--color-border-strong)] bg-[var(--color-surface)] p-3"
+      className="rounded-md border border-[var(--color-border-strong)] bg-[var(--color-surface)] p-3"
     >
       {model.feedback.error ? (
         <div className="mb-3">

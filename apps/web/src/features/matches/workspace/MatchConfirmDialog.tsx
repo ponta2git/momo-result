@@ -128,7 +128,7 @@ function OcrReviewSummary({
   }
   const reviewedCount = totalCount - unresolvedCount;
   return (
-    <div className="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3">
+    <div className="rounded-sm border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm tabular-nums">
         <span className="font-semibold text-[var(--color-text-primary)]">OCR確認状況</span>
         <span className="text-[var(--color-text-secondary)]">修正 {changedCount}件</span>
@@ -192,7 +192,7 @@ export function MatchConfirmDialog({ model }: { model: MatchWorkspaceConfirmatio
 
         {model.feedback.validationMessage ? (
           <div
-            className="rounded-[var(--radius-sm)] border border-[var(--color-warning)]/65 bg-[var(--color-warning)]/18 px-3 py-2 text-sm text-[var(--color-text-primary)]"
+            className="rounded-sm border border-[var(--color-warning)]/65 bg-[var(--color-warning)]/18 px-3 py-2 text-sm text-[var(--color-text-primary)]"
             role="alert"
           >
             {model.feedback.validationMessage}

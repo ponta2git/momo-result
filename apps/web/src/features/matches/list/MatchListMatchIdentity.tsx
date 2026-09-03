@@ -20,7 +20,7 @@ export function MatchListMatchIdentity({ item }: MatchListMatchIdentityProps) {
       </div>
       <p className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 font-semibold text-[var(--color-text-primary)]">
         <span className="shrink-0">{formatMatchNo(item.matchNoInEvent)}</span>
-        <span className="min-w-0 truncate rounded-[var(--radius-xs)] bg-[var(--color-surface-subtle)] px-2 py-0.5">
+        <span className="min-w-0 truncate rounded-xs bg-[var(--color-surface-subtle)] px-2 py-0.5">
           {item.mapName ?? "マップ未設定"}
         </span>
       </p>

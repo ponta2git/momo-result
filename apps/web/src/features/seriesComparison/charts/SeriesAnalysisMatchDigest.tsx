@@ -46,7 +46,7 @@ export function MatchDigestStrip({
               const focused = focusedItemIds.includes(match.itemId);
               return (
                 <article
-                  className={`w-52 shrink-0 rounded-[var(--radius-sm)] border bg-[var(--color-surface)] p-3 ${focused ? "border-[var(--color-action)] ring-2 ring-[var(--color-action)]/25" : "border-[var(--color-border)]"}`}
+                  className={`w-52 shrink-0 rounded-sm border bg-[var(--color-surface)] p-3 ${focused ? "border-[var(--color-action)] ring-2 ring-[var(--color-action)]/25" : "border-[var(--color-border)]"}`}
                   data-focused-metric={focused ? "true" : undefined}
                   key={match.itemId}
                 >
@@ -91,7 +91,7 @@ export function MatchDigestStrip({
                     ) : (
                       match.flags.map((flag) => (
                         <span
-                          className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-2 py-1 text-xs text-[var(--color-text-secondary)]"
+                          className="rounded-xs border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-2 py-1 text-xs text-[var(--color-text-secondary)]"
                           key={flag}
                         >
                           {timelineFlagLabel(flag)}

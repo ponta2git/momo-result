@@ -62,7 +62,7 @@ export function RankDistributionBars({ focusedItemIds, response }: OverviewChart
               </div>
               <div
                 aria-label={`${player.displayName}の順位分布`}
-                className="flex h-9 overflow-hidden rounded-[var(--radius-xs)] bg-[var(--color-surface)]"
+                className="flex h-9 overflow-hidden rounded-xs bg-[var(--color-surface)]"
                 role="group"
               >
                 {entry?.cells.map((cell, cellIndex) => (
@@ -148,7 +148,7 @@ export function CrownShareBars({ response }: { response: SeriesComparisonAggrega
           );
         })}
       </div>
-      <dl className="grid gap-px overflow-hidden rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-border)] sm:grid-cols-2 xl:grid-cols-4">
+      <dl className="grid gap-px overflow-hidden rounded-xs border border-[var(--color-border)] bg-[var(--color-border)] sm:grid-cols-2 xl:grid-cols-4">
         {players.map((player) => {
           const share = shareByMemberId.get(player.memberId);
           return (
@@ -212,7 +212,7 @@ export function HeadToHeadMatrix({ response }: { response: SeriesComparisonAggre
                       ? `${subject.displayName}本人`
                       : `${subject.displayName}対${opponent.displayName}、上位率${formatPercent(entry?.betterRankRate)}、${headToHeadSignalLabel(entry?.signal)}、${entry?.matchCount ?? 0}戦中${entry?.betterRankCount ?? 0}戦上位、平均順位差${formatDecimal(entry?.averageRankDiff)}`
                   }
-                  className="h-20 rounded-[var(--radius-xs)] border px-2 py-2 text-center"
+                  className="h-20 rounded-xs border px-2 py-2 text-center"
                   key={opponent.memberId}
                   style={
                     self

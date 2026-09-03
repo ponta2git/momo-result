@@ -35,7 +35,7 @@ export function SourceImagePreviewDialog({
       surfaceClassName="max-w-4xl"
       title={`${sourceImageKindLabels[kind]}の拡大表示`}
     >
-      <div className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-2">
+      <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-2">
         <img
           alt={`${sourceImageKindLabels[kind]}の元画像`}
           className="mx-auto h-auto max-w-full object-contain"

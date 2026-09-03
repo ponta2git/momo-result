@@ -80,7 +80,7 @@ export function ScoreGridDesktopTable({
                 } as CSSProperties
               }
             >
-              <td className="sticky left-0 z-[var(--z-sticky)] rounded-l-[var(--radius-md)] border-l-[3px] border-l-[var(--play-order-accent)] bg-[var(--color-surface-subtle)] px-2 py-3 align-top">
+              <td className="sticky left-0 z-[var(--z-sticky)] rounded-l-md border-l-[3px] border-l-[var(--play-order-accent)] bg-[var(--color-surface-subtle)] px-2 py-3 align-top">
                 <div className="min-w-[10rem]">
                   <SelectControl
                     ref={(node) => registerCellRef(memberCellId, node)}
@@ -248,7 +248,7 @@ export function ScoreGridDesktopTable({
                 return (
                   <td
                     key={incidentKey}
-                    className="px-2 py-3 align-top last:rounded-r-[var(--radius-md)]"
+                    className="px-2 py-3 align-top last:rounded-r-md"
                   >
                     <ScoreGridNumericEditor
                       allowSign={false}

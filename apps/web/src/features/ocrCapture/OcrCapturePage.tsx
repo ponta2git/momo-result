@@ -43,7 +43,7 @@ export function OcrCapturePage() {
 
       <PageContentSurface className="grid gap-6">
         {feedback.auth.error ? (
-          <div className="grid gap-3 rounded-[var(--radius-md)] border border-[var(--color-danger)]/50 bg-[var(--color-danger)]/8 p-4 md:grid-cols-[1fr_18rem] md:items-center">
+          <div className="grid gap-3 rounded-md border border-[var(--color-danger)]/50 bg-[var(--color-danger)]/8 p-4 md:grid-cols-[1fr_18rem] md:items-center">
             <Notice presentation="bare" tone="danger" title={feedback.auth.error.title}>
               <p>
                 {feedback.auth.error.status === 403
@@ -198,7 +198,7 @@ export function OcrCapturePage() {
         </section>
 
         <section
-          className="momo-safe-bottom grid gap-3 rounded-[var(--radius-md)] bg-[var(--color-surface-subtle)] p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:p-4"
+          className="momo-safe-bottom grid gap-3 rounded-md bg-[var(--color-surface-subtle)] p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:p-4"
           aria-labelledby="ocr-start-title"
         >
           <div className="min-w-0">

@@ -30,7 +30,7 @@ export function SeriesAnalysisSelectedMatch({
   return (
     <section
       aria-label="選択中の試合"
-      className="grid min-w-0 gap-3 rounded-[var(--radius-md)] border border-[var(--color-action)]/55 bg-[var(--color-surface-selected)] p-3"
+      className="grid min-w-0 gap-3 rounded-md border border-[var(--color-action)]/55 bg-[var(--color-surface-selected)] p-3"
     >
       <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
@@ -59,7 +59,7 @@ export function SeriesAnalysisSelectedMatch({
         <ul aria-label="この試合の注目点" className="flex flex-wrap gap-2">
           {context.match.features.map((feature) => (
             <li
-              className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-xs"
+              className="rounded-xs border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-xs"
               key={`${feature.priority}:${feature.featureCode}`}
             >
               {matchFeatureLabel(feature.featureCode)}

@@ -27,7 +27,7 @@ export function CaptureSlotPreview({
     <div
       aria-label={`${label}の16:9画像枠`}
       className={cn(
-        "relative aspect-video w-full overflow-hidden rounded-[var(--radius-sm)] border border-[var(--color-border)]",
+        "relative aspect-video w-full overflow-hidden rounded-sm border border-[var(--color-border)]",
         hasImage
           ? "bg-[var(--color-media-canvas)]"
           : "border-dashed bg-[var(--color-surface-subtle)]",
@@ -46,7 +46,7 @@ export function CaptureSlotPreview({
             className="size-full object-contain"
           />
           {slot.source ? (
-            <span className="absolute bottom-2 left-2 rounded-[var(--radius-sm)] border border-[var(--color-text-inverse)]/15 bg-[var(--color-surface-inverse)]/80 px-2 py-0.5 text-xs font-semibold text-[var(--color-text-inverse)]">
+            <span className="absolute bottom-2 left-2 rounded-sm border border-[var(--color-text-inverse)]/15 bg-[var(--color-surface-inverse)]/80 px-2 py-0.5 text-xs font-semibold text-[var(--color-text-inverse)]">
               {sourceLabels[slot.source]}
             </span>
           ) : null}

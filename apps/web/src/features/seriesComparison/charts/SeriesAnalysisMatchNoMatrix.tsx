@@ -99,7 +99,7 @@ function MatchNoRow({ entry }: { entry: MatchNoEntry }) {
         return (
           <MatrixCell
             aria-label={`${player.displayName}、${formatMatchNoInEvent(entry.matchNoInEvent)}、${player.targetCount}戦${qualityAdvisory ? `、${qualityAdvisory}` : ""}、平均${formatDecimal(player.averageRank)}位、入賞${formatPercent(player.podiumRate)}`}
-            className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-2"
+            className="rounded-xs border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-2"
             key={player.memberId}
           >
             <div className="flex items-center justify-between gap-2">

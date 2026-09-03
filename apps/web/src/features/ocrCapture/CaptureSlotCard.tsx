@@ -90,7 +90,7 @@ export function CaptureSlotCard({
   return (
     <section
       className={cn(
-        "relative overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3",
+        "relative overflow-hidden rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-3",
         dragOver ? "border-[var(--color-action)] bg-[var(--color-action)]/10" : "",
       )}
       data-capture-target={presentation.captureTarget || undefined}

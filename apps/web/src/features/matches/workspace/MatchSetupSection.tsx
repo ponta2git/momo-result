@@ -98,7 +98,7 @@ export function MatchSetupSection({
             triggerVariant="compact"
           >
             <div className="pt-2">
-              <div className="grid gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3 md:grid-cols-[1fr_auto] md:items-end">
+              <div className="grid gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3 md:grid-cols-[1fr_auto] md:items-end">
                 <TextField
                   label="開催日時"
                   type="datetime-local"

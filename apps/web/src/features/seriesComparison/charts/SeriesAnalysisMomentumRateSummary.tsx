@@ -14,7 +14,7 @@ export function MomentumRateSummary({
 }) {
   const qualityAdvisory = qualityAdvisoryLabel(rate.qualityStatus);
   return (
-    <div className="rounded-[var(--radius-xs)] bg-[var(--color-surface)] p-2">
+    <div className="rounded-xs bg-[var(--color-surface)] p-2">
       <dt className="font-semibold">{label}</dt>
       <dd className="mt-1 text-[var(--color-text-secondary)] tabular-nums">
         {rate.successCount}/{rate.targetCount}戦・{formatPercent(rate.rate)}

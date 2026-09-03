@@ -130,7 +130,7 @@ export function ExportCandidateSelect({
           <p className="text-sm leading-5 font-semibold text-[var(--color-text-primary)]">
             {labelForScope(scope)}
           </p>
-          <p className="min-h-11 rounded-[var(--radius-sm)] border border-[var(--color-border)] px-3 py-2 text-sm font-medium text-[var(--color-text-primary)]">
+          <p className="min-h-11 rounded-sm border border-[var(--color-border)] px-3 py-2 text-sm font-medium text-[var(--color-text-primary)]">
             {view.selectedLabel}
           </p>
         </div>

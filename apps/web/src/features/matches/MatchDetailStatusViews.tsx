@@ -25,7 +25,7 @@ export function MatchDetailLoading() {
           </div>
         </div>
 
-        <div className="divide-y divide-[var(--color-border)] overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)]">
+        <div className="divide-y divide-[var(--color-border)] overflow-hidden rounded-md border border-[var(--color-border)]">
           <div className="p-4">
             <Skeleton className="h-6 w-32" />
             <div className="mt-2">
@@ -35,7 +35,7 @@ export function MatchDetailLoading() {
           <div className="grid divide-y divide-[var(--color-border)]">
             {["rank-1", "rank-2", "rank-3", "rank-4"].map((id) => (
               <div key={id} className="grid grid-cols-[4rem_minmax(0,1fr)_auto] gap-3 p-3">
-                <Skeleton className="h-10 w-14 rounded-[var(--radius-sm)]" />
+                <Skeleton className="h-10 w-14 rounded-sm" />
                 <div className="grid gap-2">
                   <Skeleton className="h-5 w-28" />
                   <Skeleton className="h-3 w-48 max-w-full" />
@@ -52,10 +52,10 @@ export function MatchDetailLoading() {
             <Skeleton className="h-4 w-56" />
           </div>
           <div className="grid gap-3">
-            <Skeleton className="h-10 rounded-[var(--radius-sm)]" />
-            <Skeleton className="h-16 rounded-[var(--radius-sm)]" />
-            <Skeleton className="h-16 rounded-[var(--radius-sm)]" />
-            <Skeleton className="h-16 rounded-[var(--radius-sm)]" />
+            <Skeleton className="h-10 rounded-sm" />
+            <Skeleton className="h-16 rounded-sm" />
+            <Skeleton className="h-16 rounded-sm" />
+            <Skeleton className="h-16 rounded-sm" />
           </div>
         </div>
       </PageContentSurface>

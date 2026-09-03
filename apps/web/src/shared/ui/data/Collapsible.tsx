@@ -29,7 +29,7 @@ const triggerLayoutClass = {
 const presentationClass = {
   framed: {
     panel: "border-t border-[var(--color-border)]",
-    root: "rounded-[var(--radius-md)] border border-[var(--color-border)]",
+    root: "rounded-md border border-[var(--color-border)]",
   },
   inset: {
     panel: "",
@@ -101,7 +101,7 @@ export function Disclosure({
           triggerLayoutClass[triggerLayout],
           presentation === "framed" || triggerLayout === "section"
             ? "rounded-none"
-            : "rounded-[var(--radius-sm)]",
+            : "rounded-sm",
         )}
         disabled={disabled}
         render={(triggerProps, state) => (

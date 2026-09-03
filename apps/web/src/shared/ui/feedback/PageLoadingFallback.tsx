@@ -72,14 +72,14 @@ function PageLoadingSkeleton({
       <>
         <HeaderSkeleton />
         <PageContentSurface className="grid gap-4">
-          <Skeleton className="h-16 rounded-[var(--radius-md)]" />
-          <Skeleton className="h-44 rounded-[var(--radius-md)]" />
+          <Skeleton className="h-16 rounded-md" />
+          <Skeleton className="h-44 rounded-md" />
           <div className="grid gap-3 md:grid-cols-3">
-            <Skeleton className="h-24 rounded-[var(--radius-md)]" />
-            <Skeleton className="h-24 rounded-[var(--radius-md)]" />
-            <Skeleton className="h-24 rounded-[var(--radius-md)]" />
+            <Skeleton className="h-24 rounded-md" />
+            <Skeleton className="h-24 rounded-md" />
+            <Skeleton className="h-24 rounded-md" />
           </div>
-          <Skeleton className="h-80 rounded-[var(--radius-md)]" />
+          <Skeleton className="h-80 rounded-md" />
         </PageContentSurface>
         <LoadingLabel label={loadingLabel} />
       </>
@@ -91,13 +91,13 @@ function PageLoadingSkeleton({
       <>
         <HeaderSkeleton />
         <PageContentSurface className="grid gap-4">
-          <Skeleton className="h-24 rounded-[var(--radius-md)]" />
+          <Skeleton className="h-24 rounded-md" />
           <div className="grid gap-4 lg:grid-cols-4">
             {Array.from({ length: 4 }, (_, index) => (
-              <Skeleton key={index} className="h-20 rounded-[var(--radius-md)]" />
+              <Skeleton key={index} className="h-20 rounded-md" />
             ))}
           </div>
-          <Skeleton className="h-[26rem] rounded-[var(--radius-md)]" />
+          <Skeleton className="h-[26rem] rounded-md" />
         </PageContentSurface>
         <LoadingLabel label={loadingLabel} />
       </>
@@ -109,12 +109,12 @@ function PageLoadingSkeleton({
       <>
         <HeaderSkeleton />
         <PageContentSurface className="grid gap-4">
-          <Skeleton className="h-44 rounded-[var(--radius-md)]" />
+          <Skeleton className="h-44 rounded-md" />
           <div className="grid gap-4 md:grid-cols-2">
-            <Skeleton className="h-52 rounded-[var(--radius-md)]" />
-            <Skeleton className="h-52 rounded-[var(--radius-md)]" />
+            <Skeleton className="h-52 rounded-md" />
+            <Skeleton className="h-52 rounded-md" />
           </div>
-          <Skeleton className="h-72 rounded-[var(--radius-md)]" />
+          <Skeleton className="h-72 rounded-md" />
         </PageContentSurface>
         <LoadingLabel label={loadingLabel} />
       </>
@@ -126,14 +126,14 @@ function PageLoadingSkeleton({
       <>
         <HeaderSkeleton />
         <PageContentSurface className="grid gap-4">
-          <Skeleton className="h-28 rounded-[var(--radius-md)]" />
-          <Skeleton className="h-12 rounded-[var(--radius-md)]" />
+          <Skeleton className="h-28 rounded-md" />
+          <Skeleton className="h-12 rounded-md" />
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {Array.from({ length: 4 }, (_, index) => (
-              <Skeleton key={index} className="h-24 rounded-[var(--radius-md)]" />
+              <Skeleton key={index} className="h-24 rounded-md" />
             ))}
           </div>
-          <Skeleton className="h-80 rounded-[var(--radius-md)]" />
+          <Skeleton className="h-80 rounded-md" />
         </PageContentSurface>
         <LoadingLabel label={loadingLabel} />
       </>
@@ -145,10 +145,10 @@ function PageLoadingSkeleton({
       <>
         <HeaderSkeleton />
         <PageContentSurface className="grid gap-4">
-          <Skeleton className="h-14 rounded-[var(--radius-md)]" />
+          <Skeleton className="h-14 rounded-md" />
           <div className="grid gap-4 xl:grid-cols-3">
             {Array.from({ length: 3 }, (_, index) => (
-              <Skeleton key={index} className="h-[28rem] rounded-[var(--radius-md)]" />
+              <Skeleton key={index} className="h-[28rem] rounded-md" />
             ))}
           </div>
         </PageContentSurface>
@@ -183,8 +183,8 @@ function PageLoadingSkeleton({
     <>
       <HeaderSkeleton />
       <PageContentSurface className="grid gap-4">
-        <Skeleton className="h-40 w-full rounded-[var(--radius-md)]" />
-        <Skeleton className="h-32 w-full rounded-[var(--radius-md)]" />
+        <Skeleton className="h-40 w-full rounded-md" />
+        <Skeleton className="h-32 w-full rounded-md" />
       </PageContentSurface>
       <LoadingLabel label={loadingLabel} />
     </>

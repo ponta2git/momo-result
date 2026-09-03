@@ -37,7 +37,7 @@ export function SeriesAnalysisMatchLink({
                   focused ? "" : "text-[var(--color-text-muted)]",
                 )
               : cn(
-                  "size-11 justify-center overflow-hidden rounded-[var(--radius-xs)] border p-0 text-xs tabular-nums no-underline hover:no-underline",
+                  "size-11 justify-center overflow-hidden rounded-xs border p-0 text-xs tabular-nums no-underline hover:no-underline",
                   focused
                     ? "ring-2 ring-[var(--color-action)] ring-offset-2 ring-offset-[var(--color-surface)]"
                     : "",

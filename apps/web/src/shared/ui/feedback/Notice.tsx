@@ -38,7 +38,7 @@ export function Notice({
       className={cn(
         "momo-copy text-sm",
         presentation === "contained"
-          ? `rounded-[var(--radius-md)] border p-3 ${toneClass[tone]}`
+          ? `rounded-md border p-3 ${toneClass[tone]}`
           : "text-[var(--color-text-primary)]",
       )}
       role={role ?? (tone === "danger" ? "alert" : "status")}

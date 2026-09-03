@@ -7,7 +7,7 @@ export function Skeleton({ className, ...props }: HTMLAttributes<HTMLDivElement>
     <div
       aria-hidden="true"
       className={cn(
-        "rounded-[var(--radius-xs)] bg-[var(--color-surface-selected)] motion-safe:animate-pulse motion-reduce:animate-none",
+        "rounded-xs bg-[var(--color-surface-selected)] motion-safe:animate-pulse motion-reduce:animate-none",
         className,
       )}
       {...props}

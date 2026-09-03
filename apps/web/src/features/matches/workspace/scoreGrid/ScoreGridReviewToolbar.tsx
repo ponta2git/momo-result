@@ -28,11 +28,11 @@ export function ScoreGridReviewToolbar({
   return (
     <div
       aria-label="OCRの確認項目"
-      className="grid gap-3 rounded-[var(--radius-sm)] border border-[var(--color-border-strong)] bg-[var(--color-surface-subtle)] p-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center"
+      className="grid gap-3 rounded-sm border border-[var(--color-border-strong)] bg-[var(--color-surface-subtle)] p-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center"
     >
       <div className="min-w-0" aria-live="polite">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="rounded-[var(--radius-xs)] border border-[var(--color-review)]/70 bg-[var(--color-review)]/14 px-2 py-0.5 text-xs font-semibold text-[var(--color-text-primary)] tabular-nums">
+          <span className="rounded-xs border border-[var(--color-review)]/70 bg-[var(--color-review)]/14 px-2 py-0.5 text-xs font-semibold text-[var(--color-text-primary)] tabular-nums">
             未確認{remainingCount}件／全{totalCount}件
           </span>
           {activeItem ? (

@@ -26,7 +26,7 @@ function SetupSummary({ plan }: { plan: OcrSubmissionPlan }) {
   ];
 
   return (
-    <dl className="grid grid-cols-2 gap-x-4 gap-y-3 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3 text-sm sm:grid-cols-3">
+    <dl className="grid grid-cols-2 gap-x-4 gap-y-3 rounded-sm border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3 text-sm sm:grid-cols-3">
       {items.map(([label, value]) => (
         <div key={label} className="min-w-0">
           <dt className="text-xs font-semibold text-[var(--color-text-muted)]">{label}</dt>
@@ -56,7 +56,7 @@ function TraySummary({ plan }: { plan: OcrSubmissionPlan }) {
         return (
           <li
             key={definition.kind}
-            className="flex items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--color-border)] px-3 py-2 text-sm"
+            className="flex items-center gap-2 rounded-sm border border-[var(--color-border)] px-3 py-2 text-sm"
           >
             <span
               aria-hidden="true"
@@ -147,7 +147,7 @@ export function OcrStartDialog({ onClose, onConfirm, onViewMatches, state }: Ocr
         title="画像を送信しています"
       >
         <div className="grid gap-4 py-1">
-          <div className="flex items-start gap-3 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3">
+          <div className="flex items-start gap-3 rounded-sm border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3">
             <span
               aria-hidden="true"
               className="mt-0.5 flex size-5 shrink-0 text-[var(--color-action)]"

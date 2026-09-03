@@ -24,7 +24,7 @@ export function Fieldset({ children, description, error, legend, ...props }: Fie
       <legend className="text-sm leading-5 font-semibold text-[var(--color-text-primary)]">
         {legend}
       </legend>
-      <div className="mt-1 flex min-h-11 min-w-0 flex-wrap items-center gap-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-1 py-1">
+      <div className="mt-1 flex min-h-11 min-w-0 flex-wrap items-center gap-1 rounded-sm border border-[var(--color-border)] bg-[var(--color-surface)] px-1 py-1">
         {children}
       </div>
       {description ? (

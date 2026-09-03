@@ -64,7 +64,7 @@ export function ScoreGridMobileCards({
         return (
           <article
             key={playerSlotKey(index)}
-            className="rounded-[var(--radius-md)] border border-l-[3px] border-[var(--color-border)] border-l-[var(--play-order-accent)] bg-[var(--color-surface)] p-3"
+            className="rounded-md border border-l-[3px] border-[var(--color-border)] border-l-[var(--play-order-accent)] bg-[var(--color-surface)] p-3"
             style={
               {
                 "--play-order-accent": playOrderPresentation(player.playOrder).color,

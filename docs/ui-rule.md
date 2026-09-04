@@ -22,7 +22,7 @@
 
 ### 2.1 読解順と強調文法
 
-- 画面タイトル、グローバルナビゲーションの現在地、必要な親スコープ、主要な検索・絞り込みを、初見でも判断できる位置へ置く。詳細画面は安全な戻り先を持つ。
+- グローバルナビゲーションの現在地、必要な親スコープ、主要な検索・絞り込みを、初見でも判断できる位置へ置く。page 最上部の可視タイトルと補助文は、対象の identity 自体が主役になる試合結果・開催記録などの resource detail に限定する。一覧、入力 workspace、取り込み、比較、出力、設定・管理、認証では global navigation と content surface 内の section heading / landmark で scope を示し、route 名を page header として反復しない。詳細画面は安全な戻り先を持つ。
 - 画面の主役は利用段階で決める。未完了の取り込み、確認、編集では次に完了すべき操作を第一視線にし、確定済みの閲覧、結果、比較では判断対象となる結果を第一視線にする。結果と操作が共存しても同じ強さで競合させない。
 - 初期表示範囲に画面全体の視覚的な錨を原則1つ定める。錨は見出しを飾る容器ではなく、現在の目的に対する主要結果、主要操作、または現在状態そのものとする。4人比較など同格の反復要素は一つの比較群として扱い、各要素を等しくしても、その外側へ同じ強さの錨を重ねない。
 - 強調は次の3段階で組み立てる。
@@ -44,7 +44,7 @@
 - 淡色背景は、選択中または現在の scope、状態・通知・注意、入力や操作の inset、および compact な装飾ラベルに限定する。通常の要約、説明、見出し、重要情報は、重要という理由だけで淡色面へ置かない。面を追加するときは「何の選択・状態・操作領域・局所標識か」を答えられなければ使わない。
 - disclosure / collapsible は情報を開閉する操作であり、それ自体を選択状態や inset とみなさない。`Collapsible.Panel` に相当する展開内容は背景を所有せず、周囲の面をそのまま使う。feature や filter から panel 自体へ淡色背景を上書きしない。実際の状態、注意、独立した操作領域を内包する場合だけ、その内側の該当要素へ淡色背景を付ける。enabled trigger は文字階層や用途variantによらず同じ淡色hoverを持ち、行全体が操作可能であることを即時に返す。hoverは一時的なpointer feedbackに限り、展開中の固定背景やpanelの面へ転用せず、disabled triggerでは出さない。
 - `1位`、`2位`、分類名など、短く反復され、走査や識別を助けるラベルは局所的な標章として背景色、形、border を持ってよい。標章は文字だけでも意味が分かり、同じ種類で一貫した寸法と強度を持ち、clickable、selected、warning と誤認させない。広い面へ装飾を拡張せず、識別やリズムに寄与しない badge は足さない。
-- page canvas は、global navigation、戻り先、画面見出し、page-level action と content 間の余白を受け持つ。主要な作業・結果・data は白い content surface に置き、連続した1タスクまたは1 data scope につき原則1面とする。画面見出しは原則として content surface の外に置き、面をまたぐ下線を既定で持たせない。
+- page canvas は、global navigation、戻り先、detail で必要な画面見出しと content 間の余白を受け持つ。主要な作業・結果・data は白い content surface に置き、連続した1タスクまたは1 data scope につき原則1面とする。page 最上部の可視見出しを省く画面では空の header slot を残さず、page-level action は作用する content surface の先頭または対象 section の近くへ置く。detail の画面見出しは原則として content surface の外に置き、面をまたぐ下線を既定で持たせない。
 - table が主要内容の一覧・管理画面も page header から table を直結せず、通常の内余白を持つ content surface の内側に table を置く。table は上端、header 下端、最終行下端の横罫線を所有し、外周の枠線と角丸は持たない。loading、empty、error、pagination は同じ data scope の面と余白に従属させる。`padding="none"` は、workspace や全面表示など child が外余白を所有する明確な理由がある場合だけ使う。
 - content surface の内側を通常 section ごとの白い card に分割しない。まず見出し、整列、列、関係的余白で構成し、同時に独立して扱う source / editor などの workspace、独立して反復する record、境界が操作の理解に必要な bounded panel に限って別面を許容する。empty、pagination、loading など親 scope に従属する状態・操作は、親の白面を重ねて作り直さない。
 - グルーピングは整列と余白から始める。divider は、隣接内容が余白と見出しだけでは同一群と誤認される場合、table の row / column、control、状態通知など境界自体が意味を持つ場合に限る。通常 section を上下線で挟まず、必要なら片側1本を使う。
@@ -63,7 +63,7 @@
 - 独立した action 間と通常の inline item 間は `8px`、compound control 内および一つの値・標識内で密接な要素間と、support text 同士および control から support text は `4px` とする。基本 scale 外の `2px` は一つの label / value 内の密接な文字関係と光学補正だけに使ってよい。`1px` は border、divider、underline の境界補正に限定する。`20px` は大型 control の内余白など component 内部、`48 / 64px` は独立した empty / error など page-level 状態の外余白に限定し、page や section の中間段階を増やすために使わない。寸法、最小 hit target、scroll geometry は余白 scale と混同しない。
 - 同じ grouping の包含階層では、外側の群ほど内側の群より同じか大きい余白を持たせる。長い detail / analysis の最上位 section 間隔は、一つの surface 内にある独立した章の境界として扱い、この比較対象から除く。ただし data table、chart、matrix、compact badge は走査と比較に必要な密度を優先し、その外側の section 間隔で呼吸を作る。文字が収まらないときに内余白を無差別に削らず、折り返し、列の積み替え、局所 scroll、情報の段階的開示を先に検討する。狭幅の page gutter は利用可能幅を守るため `12px` を許容し、navigation の scroll bleed も同じ owner に従わせる。
 - sibling 間の余白は親 composition が自身の `gap` / `space` または自身が生成する slot wrapper で、component の内余白はその component、page gutter と page sibling 間隔は page layout primitive が所有する。再利用 child の API に外 margin を持たせて親の余白と二重化せず、loading、error、empty、ready の状態置換でも同じ owner と間隔を保つ。field は label から control を `8px`、control から description / error と support 同士を `4px` で関係付け、dialog は header、body、feedback、footer を別の群として構成する。safe area は fixed layer の viewport が左右両方を含めて所有し、child padding を画面端の位置補正に流用しない。
-- 初回 route loading、route-level error / access terminal、feature loading は、pathname と安全化済み query から確定する page width、専用 shell、戻る導線、header の eyebrow / description、常設 action、header と surface 間の文脈 slot を ready と同じ順序で保持する。ここで常設 action とは、pathname / query だけで移動先まで確定する navigation action を指す。runtime callback や data 取得結果で初めて実行可否・移動先が決まる action / notice は推測して skeleton や terminal action を足さず、loading は確定済み slot の大きさと responsive な積み替え、terminal は確定済み chrome と回復操作を保つ。状態ごとに似た余白や route 判定を個別再現せず、同じ layout primitive、親 composition、route presentation を owner にする。
+- 初回 route loading、route-level error / access terminal、feature loading は、pathname と安全化済み query から確定する page width、専用 shell、戻る導線、detail で必要な header、content surface 内の常設 action / status、文脈 slot を ready と同じ順序で保持する。ここで常設 action とは、pathname / query だけで移動先まで確定する navigation action を指す。runtime callback や data 取得結果で初めて実行可否・移動先が決まる action / notice は推測して skeleton や terminal action を足さず、loading は確定済み slot の大きさと responsive な積み替え、terminal は確定済み chrome と回復操作を保つ。ready で page header を持たない route の loading / terminal だけに title skeleton、eyebrow、description または空の header slot を作らない。状態ごとに似た余白や route 判定を個別再現せず、同じ layout primitive、親 composition、route presentation を owner にする。
 - page、data surface、workspace は一貫した外余白の内側で利用可能な横幅を使い、読み幅の制約は prose、単一 field 群など幅を狭める理由がある内容へ局所的に掛ける。長文になり得る page description、help、error、notice、empty state、narrative は、親の面を狭めず文字内容を共通の readable measure `max-w-2xl` 以内へ制限する。短い label、metadata、table、chart、matrix、横比較にはこの measure を一律適用しない。画面全体を文章幅へ縮めず、試合間・プレーヤー間の走査や比較が速くなる表・図表は一貫して密にする。不規則な欠け、根拠のない非対称、任意の値や z-index を追加しない。
 - page 幅は内容形状に応じた少数の共通 variant に収束させる。単一の短い form / prose は `max-w-2xl` の narrow、通常の一覧・管理・取り込みは standard、横比較・詳細分析は wide、source と editor を常時並置する編集 workspace だけは workspace を使う。同等の画面は同じ variant を使い、内部の短い prose や単一 field だけを局所的に狭める。利用可能幅を埋めるためだけに workspace を選ばない。
 - responsive layout は、可変列に `minmax(0, 1fr)`、child に縮小可能な幅を与え、label や操作名が不自然に割れる前に列を積み替える。breakpoint は端末名ではなく内容が保てる幅で決める。page 全体の横 scroll は作らず、table、図表、source image など横方向の関係を保つ必要がある領域だけが、可視の案内とともに局所 scroll を所有してよい。
@@ -74,6 +74,7 @@
 - 通常の data table は、親の surface と同じ背景、本文より弱い小さな header 文字、table 上端と header 下端および最終行下端の横罫線で構成する。本文行どうしの横罫線、外周の枠線、角丸、通常 header の淡色背景は付けず、pagination の有無にかかわらず共通 table primitive、body row、header pattern を使う。sortable header の選択表現は操作部分だけが所有し、行全体の背景へ広げない。
 - 時系列の連続 timeline は順序付きリストと1列の marker 軸で構成し、connector は隣接する marker の中心間だけを結ぶ。軸を最初の marker より上、最後の marker より下へ伸ばさず、record の枠線や別の縦罫線を平行に重ねない。各 marker は順序を文字でも示し、record heading と対応させる。
 - disclosure、tab、dialog、navigation を見た目だけで取り替えない。panel は trigger との関係を保ち、周囲の位置・幅・focus を不必要に変えない。可視見出しを省略する場合も `section`、`aria-label` / `aria-labelledby`、field label、accessible control name で構造を残す。
+- page 最上部の可視タイトルを省略する画面は、主要 content surface に用途を表す `aria-label` と適切な landmark を与え、surface 内の可視 section heading と control label は削らない。状態通知の title は page title の代用ではなく、発生した状態と回復方法を伝える局所 heading として保持してよい。
 - 同格の disclosure を列で並べる場合、一つの展開で同じ行の別 trigger や操作が展開内容の下端へ追従しない。各列は自身の内容順を保ち、展開による高さ変化は当該列と後続の共通内容だけへ反映する。
 - 主要操作は常時発見可能にし、二次操作だけを段階的に開示する。
 
@@ -207,6 +208,7 @@
 - 固定メンバー、プレー順、状態・意味 token のように複数画面が消費する対応関係は、共通の型・定義を実装上の正本とし、その consumer 契約を unit / component test で代表確認する。各画面の source 文字列を横断走査しない。
 - 主要 flow は Playwright で、変更が影響する layout mode の代表 viewport と主要状態を確認し、URL、request、保存、download、主要結果を主 oracle とする。responsive behavior を変える場合は対応する最小幅を含め、意図しない横 scroll、safe area、focus 復帰、dialog / disclosure の位置変化も確認する。同じ layout mode の近接幅を一律に重複実行しない。
 - screenshot は補助とし、視覚レビューでは hierarchy、読み幅、関係的余白、product specificity、restraint、structural fit を確認する。component が親 slot に追従していること、狭幅と広幅で intrinsic constraint が保たれること、sibling 間の divider と部品 perimeter が二重にならないことも代表画面で確認する。初見点検と cognitive walkthrough で、目的、現在地、主要操作を説明できるか確認する。
+- page 最上部の可視タイトルを省略する変更では、空の header slot や余白が残らず主要 surface が最初の page scope になること、移した action が作用対象の近くにあり loading / terminal / ready で順序が一致すること、global navigation・landmark・section heading・control label から現在地と目的を説明できることを代表 route で確認する。
 - 角丸または文字 scale を変える場合は、page surface、dialog、bounded panel、control、badge、画像 frame が同時に現れる代表画面で包含階層を確認する。読み幅を変える場合は短い通常文だけで合格とせず、長い日本語の description、notice、error を置いた wide viewport でも一行が readable measure を超えないことを確認する。文字を大きくした結果は、desktop と mobile の dense data view で欠落、衝突、不自然な縮小、page 全体の横 scroll がないことを確認する。
 - 余白 scale または spacing owner を変える場合は、ready だけでなく loading、error、empty、dialog の body / error 有無、fixed feedback を含む代表状態で、header、surface、section、action の位置が不意に移動しないことを確認する。mobile と desktop で同格の component の内余白が揃い、group 間が group 内より明確に広く、表・図表の走査密度を損なわず、focus outline が隣接 action と衝突せず、safe area を含む左右の viewport gutter が欠けないことを visual review する。
 - 製品横断の階層、IA、固定メンバー / プレー順の意味を変える場合は、影響する利用段階の代表画面で、3秒見た利用者が「いま見る対象」と「次の1操作」を説明できることを確認する。grayscale / blur でも主役が残ること、色なしで役割を区別できること、順位がどちらの sequence にも見えないこと、通常状態で信頼性の注意が出ないこと、同じ事実や内部都合を反復していないことも確認する。

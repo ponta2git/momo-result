@@ -127,6 +127,7 @@ export type MatchWorkspaceEditorModel = {
   };
   setup: MatchWorkspaceSetupSectionModel;
   sourceImagePanel: {
+    accountId?: string | undefined;
     loading: boolean;
     matchDraftId: string;
     preferredKind: SourceImageKind;

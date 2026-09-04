@@ -99,6 +99,7 @@ type MatchWorkspacePageModelInput = {
     heldEventPicker: HeldEventPickerDirectory;
   };
   sourceImages: {
+    accountId?: string | undefined;
     items: SourceImageItem[] | undefined;
     loading: boolean;
     preferredKind: SourceImageKind;
@@ -255,6 +256,7 @@ export function buildMatchWorkspacePageModel(
       sourceImagePanel:
         view.hasSourceImagePanel && view.matchDraftIdForImages
           ? {
+              accountId: input.sourceImages.accountId,
               loading: input.sourceImages.loading,
               matchDraftId: view.matchDraftIdForImages,
               preferredKind: input.sourceImages.preferredKind,

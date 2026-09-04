@@ -81,6 +81,20 @@ export const matchKeys = {
   },
 };
 
+export const sourceImageBlobKeys = {
+  draft: (draftId: string) => ["source-image-blobs", draftId] as const,
+  scope: (draftId: string, accountId: string | undefined, scope: string) =>
+    ["source-image-blobs", draftId, accountId, scope] as const,
+  image: (
+    draftId: string,
+    accountId: string | undefined,
+    scope: string,
+    kind: string,
+    url: string,
+    revision: string,
+  ) => ["source-image-blobs", draftId, accountId, scope, kind, url, revision] as const,
+};
+
 export const seriesAnalysisKeys = {
   all: () => ["series-analysis"] as const,
   options: () => ["series-analysis", "options", "v2"] as const,

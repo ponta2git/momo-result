@@ -1,20 +1,39 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { act, render as renderUi, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
+import { StrictMode } from "react";
+import type { ReactElement } from "react";
 import { describe, expect, it } from "vitest";
 
 import { SourceImagePanel } from "@/features/matches/workspace/sourceImages/SourceImagePanel";
+import { sourceImageBlobKeys } from "@/shared/api/queryKeys";
+import { evictDraftSourceImageBlobs } from "@/shared/api/sourceImageQueries";
+import { clearPrincipalClientState } from "@/shared/auth/principalClientState";
 import { setDevUser } from "@/test/auth";
 import { createDeferred } from "@/test/deferred";
 import { installAnchorClickMock, installObjectUrlMock } from "@/test/doubles/dom";
 import { makeMatchDraftSourceImageResponses } from "@/test/factories";
 import { setupMsw } from "@/test/msw/lifecycle";
 import { server } from "@/test/msw/server";
+import { createTestQueryClient } from "@/test/queryClient";
 
 const draftId = "draft-1";
 const sourceImages = makeMatchDraftSourceImageResponses(draftId);
 
 setupMsw();
+
+function render(ui: ReactElement) {
+  const queryClient = createTestQueryClient();
+  return {
+    ...renderUi(ui, {
+      wrapper: ({ children }) => (
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      ),
+    }),
+    queryClient,
+  };
+}
 
 function sourceImageResponse(): Response {
   return new HttpResponse("mock-image", {
@@ -138,31 +157,25 @@ describe("SourceImagePanel", () => {
     expect(capturedRequest.headers.get("X-Momo-Account-Id")).toBe("account_ponta");
   });
 
-  it("loads only the active source image and reuses it after the first view", async () => {
+  it("loads the displayed image first, prefetches sequentially, and switches without fetching", async () => {
     const user = userEvent.setup();
+    const gates = [createDeferred(), createDeferred(), createDeferred()];
+    const requestedKinds: string[] = [];
     const objectUrls = installObjectUrlMock({
       createObjectURL: (value) => (value instanceof Blob ? `blob:size-${value.size}` : "blob:0"),
     });
-    const requestedKinds: string[] = [];
     server.use(
-      http.get("/api/match-drafts/:draftId/source-images/:kind", ({ params }) => {
+      http.get("/api/match-drafts/:draftId/source-images/:kind", async ({ params }) => {
         const kind = String(params["kind"]);
+        const index = sourceImages.findIndex((item) => item.kind === kind);
         requestedKinds.push(kind);
-        const body =
-          kind === "total_assets"
-            ? "a"
-            : kind === "revenue"
-              ? "bb"
-              : kind === "incident_log"
-                ? "ccc"
-                : "x";
-        return new HttpResponse(body, {
+        await gates[index]?.promise;
+        return new HttpResponse("x".repeat(index + 1), {
           headers: { "Content-Type": "image/png" },
         });
       }),
     );
-
-    render(
+    const view = render(
       <SourceImagePanel
         loading={false}
         matchDraftId={draftId}
@@ -170,31 +183,39 @@ describe("SourceImagePanel", () => {
         sourceImages={sourceImages}
       />,
     );
-
+    await waitFor(() => expect(requestedKinds).toEqual(["total_assets"]));
+    expect(screen.getByLabelText("総資産の元画像を読み込み中")).toBeInTheDocument();
+    gates[0]?.resolve();
     expect(await screen.findByRole("img", { name: "総資産の元画像" })).toHaveAttribute(
       "src",
       "blob:size-1",
     );
-    expect(objectUrls.createObjectURL).toHaveBeenCalledTimes(1);
-    expect(requestedKinds).toEqual(["total_assets"]);
-
-    await user.click(screen.getByRole("tab", { name: "収益" }));
-
-    expect(await screen.findByRole("img", { name: "収益の元画像" })).toHaveAttribute(
-      "src",
-      "blob:size-2",
+    await waitFor(() => expect(requestedKinds).toEqual(["total_assets", "revenue"]));
+    gates[1]?.resolve();
+    await waitFor(() =>
+      expect(requestedKinds).toEqual(["total_assets", "revenue", "incident_log"]),
     );
-    expect(objectUrls.createObjectURL).toHaveBeenCalledTimes(2);
-    expect(requestedKinds).toEqual(["total_assets", "revenue"]);
-
-    await user.click(screen.getByRole("tab", { name: "総資産" }));
-
-    expect(screen.queryByLabelText("総資産の元画像を読み込み中")).not.toBeInTheDocument();
-    expect(screen.getByRole("img", { name: "総資産の元画像" })).toHaveAttribute(
-      "src",
-      "blob:size-1",
-    );
-    expect(requestedKinds).toEqual(["total_assets", "revenue"]);
+    gates[2]?.resolve();
+    await waitFor(() => expect(objectUrls.createObjectURL).toHaveBeenCalledTimes(3));
+    for (const [tab, src] of [
+      ["収益", "blob:size-2"],
+      ["事件簿", "blob:size-3"],
+      ["総資産", "blob:size-1"],
+    ] as const) {
+      await user.click(screen.getByRole("tab", { name: tab }));
+      expect(screen.queryByLabelText(`${tab}の元画像を読み込み中`)).not.toBeInTheDocument();
+      expect(screen.getByRole("img", { name: `${tab}の元画像` })).toHaveAttribute("src", src);
+    }
+    expect(requestedKinds).toEqual(["total_assets", "revenue", "incident_log"]);
+    const blobs = view.queryClient.getQueriesData<Blob>({
+      queryKey: sourceImageBlobKeys.draft(draftId),
+    });
+    expect(blobs.map(([, blob]) => blob?.size)).toEqual([1, 2, 3]);
+    view.unmount();
+    expect(
+      view.queryClient.getQueriesData({ queryKey: sourceImageBlobKeys.draft(draftId) }),
+    ).toEqual([]);
+    expect(objectUrls.revokeObjectURL).toHaveBeenCalledTimes(3);
   });
 
   it("aborts an obsolete active-image request when another tab is selected", async () => {
@@ -217,7 +238,7 @@ describe("SourceImagePanel", () => {
         loading={false}
         matchDraftId={draftId}
         preferredKind="total_assets"
-        sourceImages={sourceImages}
+        sourceImages={sourceImages.slice(0, 2)}
       />,
     );
 
@@ -234,6 +255,321 @@ describe("SourceImagePanel", () => {
 
     totalAssetsGate.resolve();
   });
+
+  it("shares a selected prefetch, preempts it for another image, and ignores its late response", async () => {
+    const user = userEvent.setup();
+    const oldRevenue = createDeferred();
+    const requested: string[] = [];
+    let revenueSignal: AbortSignal | undefined;
+    const urls = installObjectUrlMock({
+      createObjectURL: (blob) => `blob:${blob instanceof Blob ? blob.size : 0}`,
+    });
+    server.use(
+      http.get("/api/match-drafts/:draftId/source-images/:kind", async ({ params, request }) => {
+        const kind = String(params["kind"]);
+        requested.push(kind);
+        if (kind === "revenue" && !revenueSignal) {
+          revenueSignal = request.signal;
+          await oldRevenue.promise;
+          return new HttpResponse("obsolete");
+        }
+        return new HttpResponse(kind);
+      }),
+    );
+    render(
+      <SourceImagePanel
+        loading={false}
+        matchDraftId={draftId}
+        preferredKind="total_assets"
+        sourceImages={sourceImages}
+      />,
+    );
+    await screen.findByRole("img", { name: "総資産の元画像" });
+    await waitFor(() => expect(revenueSignal).toBeDefined());
+    await user.click(screen.getByRole("tab", { name: "収益" }));
+    expect(screen.getByLabelText("収益の元画像を読み込み中")).toBeInTheDocument();
+    expect(requested).toEqual(["total_assets", "revenue"]);
+    expect(revenueSignal?.aborted).toBe(false);
+    await user.click(screen.getByRole("tab", { name: "事件簿" }));
+    expect(await screen.findByRole("img", { name: "事件簿の元画像" })).toHaveAttribute(
+      "src",
+      "blob:12",
+    );
+    expect(revenueSignal?.aborted).toBe(true);
+    await user.click(screen.getByRole("tab", { name: "収益" }));
+    expect(await screen.findByRole("img", { name: "収益の元画像" })).toHaveAttribute(
+      "src",
+      "blob:7",
+    );
+    await act(async () => oldRevenue.resolve());
+    expect(screen.getByRole("img", { name: "収益の元画像" })).toHaveAttribute("src", "blob:7");
+    expect(requested).toEqual(["total_assets", "revenue", "incident_log", "revenue"]);
+    expect(urls.createObjectURL).toHaveBeenCalledTimes(3);
+  });
+
+  it("keeps background errors local and recovers through selection and manual retry", async () => {
+    const user = userEvent.setup();
+    installObjectUrlMock();
+    let revenueRequests = 0;
+    server.use(
+      http.get("/api/match-drafts/:draftId/source-images/:kind", ({ params }) => {
+        if (params["kind"] === "revenue" && ++revenueRequests < 3)
+          return new HttpResponse(null, { status: 503 });
+        return sourceImageResponse();
+      }),
+    );
+    const view = render(
+      <SourceImagePanel
+        loading={false}
+        matchDraftId={draftId}
+        preferredKind="total_assets"
+        sourceImages={sourceImages}
+      />,
+    );
+    await screen.findByRole("img", { name: "総資産の元画像" });
+    await waitFor(() =>
+      expect(
+        view.queryClient
+          .getQueryCache()
+          .findAll({ queryKey: sourceImageBlobKeys.draft(draftId) })
+          .filter((query) => query.state.status === "success"),
+      ).toHaveLength(2),
+    );
+    expect(revenueRequests).toBe(1);
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("tab", { name: "収益" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("元画像を読み込めませんでした。");
+    expect(revenueRequests).toBe(2);
+    await user.click(screen.getByRole("button", { name: "元画像を再読み込み" }));
+    expect(await screen.findByRole("img", { name: "収益の元画像" })).toBeInTheDocument();
+    expect(revenueRequests).toBe(3);
+  });
+
+  it.each([401, 403, 429])("stops remaining prefetches on HTTP %s", async (status) => {
+    installObjectUrlMock();
+    const requested: string[] = [];
+    server.use(
+      http.get("/api/match-drafts/:draftId/source-images/:kind", ({ params }) => {
+        const kind = String(params["kind"]);
+        requested.push(kind);
+        return kind === "revenue" ? new HttpResponse(null, { status }) : sourceImageResponse();
+      }),
+    );
+    const view = render(
+      <SourceImagePanel
+        loading={false}
+        matchDraftId={draftId}
+        preferredKind="total_assets"
+        sourceImages={sourceImages}
+      />,
+    );
+    await screen.findByRole("img", { name: "総資産の元画像" });
+    await waitFor(() =>
+      expect(
+        view.queryClient
+          .getQueryCache()
+          .findAll({ queryKey: sourceImageBlobKeys.draft(draftId) })
+          .some((query) => query.state.status === "error"),
+      ).toBe(true),
+    );
+    expect(requested).toEqual(["total_assets", "revenue"]);
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it.each(["terminal", "principal"] as const)(
+    "disposes images and prevents further requests when the %s boundary clears Query",
+    async (boundary) => {
+      const delayed = createDeferred();
+      const urls = installObjectUrlMock();
+      const requested: string[] = [];
+      let backgroundSignal: AbortSignal | undefined;
+      server.use(
+        http.get("/api/match-drafts/:draftId/source-images/:kind", async ({ params, request }) => {
+          const kind = String(params["kind"]);
+          requested.push(kind);
+          if (kind === "revenue") {
+            backgroundSignal = request.signal;
+            await delayed.promise;
+          }
+          return sourceImageResponse();
+        }),
+      );
+      const ui = (
+        <SourceImagePanel
+          loading={false}
+          matchDraftId={draftId}
+          preferredKind="total_assets"
+          sourceImages={sourceImages}
+        />
+      );
+      const view = render(ui);
+      await screen.findByRole("img", { name: "総資産の元画像" });
+      await waitFor(() => expect(backgroundSignal).toBeDefined());
+      await act(async () => {
+        if (boundary === "terminal") evictDraftSourceImageBlobs(view.queryClient, draftId);
+        else await clearPrincipalClientState(view.queryClient);
+      });
+      view.rerender(ui);
+      await act(async () => delayed.resolve());
+      expect(backgroundSignal?.aborted).toBe(true);
+      expect(screen.queryByRole("img")).not.toBeInTheDocument();
+      expect(
+        view.queryClient.getQueriesData({ queryKey: sourceImageBlobKeys.draft(draftId) }),
+      ).toEqual([]);
+      expect(urls.revokeObjectURL).toHaveBeenCalledTimes(1);
+      expect(urls.createObjectURL).toHaveBeenCalledTimes(1);
+      expect(requested).toEqual(["total_assets", "revenue"]);
+    },
+  );
+
+  it("replaces the same URL's old descriptor without displaying the previous image", async () => {
+    const replacement = createDeferred();
+    let requests = 0;
+    const urls = installObjectUrlMock({
+      createObjectURL: (blob) => `blob:${blob instanceof Blob ? blob.size : 0}`,
+    });
+    server.use(
+      http.get("/api/match-drafts/:draftId/source-images/:kind", async () => {
+        requests++;
+        if (requests > 1) await replacement.promise;
+        return new HttpResponse("x".repeat(requests));
+      }),
+    );
+    const initial = sourceImages.slice(0, 1);
+    const view = render(
+      <SourceImagePanel
+        loading={false}
+        matchDraftId={draftId}
+        preferredKind="total_assets"
+        sourceImages={initial}
+      />,
+    );
+    await screen.findByRole("img", { name: "総資産の元画像" });
+    view.rerender(
+      <SourceImagePanel
+        loading={false}
+        matchDraftId={draftId}
+        preferredKind="total_assets"
+        sourceImages={initial.map((item) =>
+          Object.assign({}, item, { createdAt: "2026-09-05T00:00:00Z" }),
+        )}
+      />,
+    );
+    expect(screen.queryByRole("img")).not.toBeInTheDocument();
+    expect(urls.revokeObjectURL).toHaveBeenCalledWith("blob:1");
+    replacement.resolve();
+    expect(await screen.findByRole("img", { name: "総資産の元画像" })).toHaveAttribute(
+      "src",
+      "blob:2",
+    );
+    expect(
+      view.queryClient.getQueriesData({ queryKey: sourceImageBlobKeys.draft(draftId) }),
+    ).toHaveLength(1);
+  });
+
+  it("isolates draft and principal scopes and survives StrictMode effect replay", async () => {
+    const urls = installObjectUrlMock({
+      createObjectURL: (blob) => `blob:${blob instanceof Blob ? blob.size : 0}`,
+    });
+    server.use(
+      http.get(
+        "/api/match-drafts/:draftId/source-images/:kind",
+        ({ params }) => new HttpResponse(String(params["draftId"])),
+      ),
+    );
+    const view = render(
+      <StrictMode>
+        <SourceImagePanel
+          accountId="first-account"
+          loading={false}
+          matchDraftId={draftId}
+          preferredKind="total_assets"
+          sourceImages={sourceImages.slice(0, 1)}
+        />
+      </StrictMode>,
+    );
+    expect(await screen.findByRole("img", { name: "総資産の元画像" })).toHaveAttribute(
+      "src",
+      "blob:7",
+    );
+    const nextDraft = "next-draft";
+    view.rerender(
+      <StrictMode>
+        <SourceImagePanel
+          accountId="second-account"
+          loading={false}
+          matchDraftId={nextDraft}
+          preferredKind="total_assets"
+          sourceImages={makeMatchDraftSourceImageResponses(nextDraft).slice(0, 1)}
+        />
+      </StrictMode>,
+    );
+    expect(
+      view.queryClient.getQueriesData({ queryKey: sourceImageBlobKeys.draft(draftId) }),
+    ).toEqual([]);
+    expect(await screen.findByRole("img", { name: "総資産の元画像" })).toHaveAttribute(
+      "src",
+      "blob:10",
+    );
+    expect(urls.revokeObjectURL).toHaveBeenCalledWith("blob:7");
+    view.unmount();
+    expect(
+      view.queryClient.getQueriesData({ queryKey: sourceImageBlobKeys.draft(nextDraft) }),
+    ).toEqual([]);
+    expect(urls.revokeObjectURL).toHaveBeenCalledWith("blob:10");
+  });
+
+  it.each([3 * 1024 * 1024, 3 * 1024 * 1024 + 1])(
+    "bounds cached source image bytes for a %s-byte response",
+    async (size) => {
+      const urls = installObjectUrlMock();
+      const requested: string[] = [];
+      server.use(
+        http.get("/api/match-drafts/:draftId/source-images/:kind", ({ params }) => {
+          requested.push(String(params["kind"]));
+          return new HttpResponse(new Uint8Array(size), {
+            headers: { "Content-Type": "image/png" },
+          });
+        }),
+      );
+      const view = render(
+        <SourceImagePanel
+          loading={false}
+          matchDraftId={draftId}
+          preferredKind="total_assets"
+          sourceImages={sourceImages}
+        />,
+      );
+      if (size === 3 * 1024 * 1024) {
+        await screen.findByRole("img", { name: "総資産の元画像" });
+        await waitFor(() => expect(urls.createObjectURL).toHaveBeenCalledTimes(3));
+        const cached = view.queryClient.getQueriesData<Blob>({
+          queryKey: sourceImageBlobKeys.draft(draftId),
+        });
+        expect(cached).toHaveLength(3);
+        expect(cached.reduce((sum, [, blob]) => sum + (blob?.size ?? 0), 0)).toBe(9 * 1024 * 1024);
+      } else {
+        expect(await screen.findByRole("alert")).toHaveTextContent(
+          "元画像を読み込めませんでした。",
+        );
+        await waitFor(() =>
+          expect(
+            view.queryClient
+              .getQueryCache()
+              .findAll({ queryKey: sourceImageBlobKeys.draft(draftId) })
+              .filter((query) => query.state.status === "error"),
+          ).toHaveLength(3),
+        );
+        expect(
+          view.queryClient
+            .getQueriesData<Blob>({ queryKey: sourceImageBlobKeys.draft(draftId) })
+            .every(([, blob]) => blob === undefined),
+        ).toBe(true);
+        expect(urls.createObjectURL).not.toHaveBeenCalled();
+      }
+      expect(requested).toEqual(["total_assets", "revenue", "incident_log"]);
+    },
+  );
 
   it("revokes cached object URLs when images disappear and when the panel unmounts", async () => {
     const user = userEvent.setup();

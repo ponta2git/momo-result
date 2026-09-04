@@ -56,6 +56,7 @@ test("keeps match rows usable through responsive update and retry states", async
       await page.goto("/review/dev-sample?sample=1");
       await expect.poll(() => directoryRequested).toBe(true);
       await expect(page.getByText("サンプルの読み取り結果で表示中", { exact: true })).toBeVisible();
+      await expect(page.getByRole("heading", { level: 1 })).toHaveCount(0);
 
       for (const width of [320, 375]) {
         await page.setViewportSize({ height: 844, width });
@@ -72,8 +73,9 @@ test("keeps match rows usable through responsive update and retry states", async
       await page.unroute(directoryPattern, holdDirectory);
     }
 
-    await expect(page.getByRole("heading", { name: "OCR結果の確認" })).toBeVisible();
+    await expect(page.getByRole("region", { name: "試合内容" })).toBeVisible();
     await expect(page.getByText("サンプルの読み取り結果で表示中", { exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1 })).toHaveCount(0);
     for (const width of [320, 375]) {
       await page.setViewportSize({ height: 844, width });
       await expectNoHorizontalPageOverflow(page);
@@ -86,6 +88,28 @@ test("keeps match rows usable through responsive update and retry states", async
         Math.abs(readySurfaceTop - (loadingSurfaceTop ?? readySurfaceTop)),
       ).toBeLessThanOrEqual(2);
     }
+
+    await page.getByRole("button", { name: "一覧にない開催を追加する" }).click();
+    const heldEventCreationFields = page.locator('[data-held-event-creation-fields=""]');
+    await expect(heldEventCreationFields).toBeVisible();
+    expect(
+      await heldEventCreationFields.evaluate((element) => {
+        const style = getComputedStyle(element);
+        return {
+          backgroundColor: style.backgroundColor,
+          borderBottomWidth: style.borderBottomWidth,
+          borderLeftWidth: style.borderLeftWidth,
+          borderRightWidth: style.borderRightWidth,
+          borderTopWidth: style.borderTopWidth,
+        };
+      }),
+    ).toEqual({
+      backgroundColor: "rgba(0, 0, 0, 0)",
+      borderBottomWidth: "0px",
+      borderLeftWidth: "0px",
+      borderRightWidth: "0px",
+      borderTopWidth: "0px",
+    });
   });
 
   await test.step("contain held-event detail loading at the narrow viewport", async () => {
@@ -247,7 +271,7 @@ test("keeps match rows usable through responsive update and retry states", async
       )}&seasonMasterId=${encodeURIComponent(seasonMasterId)}`,
     );
 
-    await expect(page.getByRole("heading", { exact: true, name: "試合一覧" })).toBeVisible();
+    await expect(page.getByRole("region", { exact: true, name: "試合一覧" })).toBeVisible();
     const filterBar = page.getByRole("region", { name: "試合の表示条件" });
     const statusFilter = filterBar.getByRole("combobox", { exact: true, name: "確定状況" });
     await expect(statusFilter).toBeVisible();
@@ -500,7 +524,7 @@ test("changes an export choice by keyboard and restores focus", async ({
 
     await page.setViewportSize({ height: 812, width: 375 });
     await page.goto(`/exports?matchId=${encodeURIComponent(selectedMatchId)}`);
-    await expect(page.getByRole("heading", { exact: true, name: "CSV/TSV出力" })).toBeVisible();
+    await expect(page.getByRole("region", { exact: true, name: "出力条件" })).toBeVisible();
 
     const changeMatch = page.getByRole("button", { name: "試合を変更" });
     await changeMatch.click();

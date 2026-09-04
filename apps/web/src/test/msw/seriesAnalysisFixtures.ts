@@ -197,8 +197,16 @@ export function makeSeriesAnalysisAggregate(
     ],
     histograms: {
       assets: {
-        bins: [{ index: 0, label: "0〜99999", lowerInclusive: 0, upperExclusive: 100_000 }],
-        series: [{ counts: [3], memberId: player.memberId }],
+        bins: [
+          { index: 0, label: "-5〜-3", lowerInclusive: -5, upperExclusive: -2 },
+          { index: 1, label: "-2〜0", lowerInclusive: -2, upperExclusive: 1 },
+          { index: 2, label: "1〜19", lowerInclusive: 1, upperExclusive: 20 },
+          { index: 3, label: "20〜37", lowerInclusive: 20, upperExclusive: 38 },
+          { index: 4, label: "38〜56", lowerInclusive: 38, upperExclusive: 57 },
+          { index: 5, label: "57〜74", lowerInclusive: 57, upperExclusive: 75 },
+          { index: 6, label: "75以上", lowerInclusive: 75, upperExclusive: null },
+        ],
+        series: [{ counts: [1, 1, 1, 0, 0, 0, 0], memberId: player.memberId }],
       },
       revenue: {
         bins: [

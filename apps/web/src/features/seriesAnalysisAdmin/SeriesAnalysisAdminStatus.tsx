@@ -82,7 +82,7 @@ export function RecentJobs({ jobs }: { jobs: SeriesAnalysisAdminOverview["recent
   return (
     <section className="min-w-0">
       <header className="mb-3">
-        <h2 className="font-semibold">直近3件</h2>
+        <h2 className="font-semibold">直近10件</h2>
         <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
           全作品を横断した新しい順です。履歴は45日保持します。
         </p>
@@ -93,7 +93,7 @@ export function RecentJobs({ jobs }: { jobs: SeriesAnalysisAdminOverview["recent
         </div>
       ) : (
         <DataTable
-          caption={{ content: "全作品の直近3件の実行履歴" }}
+          caption={{ content: "全作品の直近10件の実行履歴" }}
           columns={recentJobColumns}
           density="compact"
           getRowKey={(job) => job.jobId}

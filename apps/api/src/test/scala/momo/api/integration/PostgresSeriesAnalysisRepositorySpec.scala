@@ -61,6 +61,45 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
         assertEquals(status.calculation, None)
       case Left(error) => fail(s"expected status, got $error")
 
+  test("admin overview returns the latest ten jobs across titles in stable order"):
+    val otherTitleId = GameTitleId.unsafeFromString("title-analysis-contract-other")
+    val jobs = List.tabulate(12) { index =>
+      val jobId = f"job-admin-recent-$index%02d"
+      val jobTitleId = if index % 2 == 0 then titleId else otherTitleId
+      val createdAt = now.plusSeconds((index / 2).toLong)
+      (jobId, jobTitleId, createdAt)
+    }
+    for
+      _ <- seedTitle
+      _ <- new PostgresGameTitlesRepository[IO](transactor)
+        .createWithNextDisplayOrder(
+          GameTitle(otherTitleId, "別の分析契約作品", "momotetsu2", 2, now)
+        )
+        .void
+      _ <- jobs.traverse_ { case (jobId, jobTitleId, createdAt) =>
+        sql"""
+          INSERT INTO series_analysis_jobs (
+            id, game_title_id, input_revision, algorithm_version,
+            artifact_schema_version, status, trigger, requested_at, available_at,
+            finished_at, result_disposition, created_at
+          ) VALUES (
+            $jobId, $jobTitleId, 0, 'series-analysis-v3',
+            2, 'succeeded', 'match_mutation', $createdAt, $createdAt,
+            ${createdAt.plusSeconds(1)}, 'published', $createdAt
+          )
+        """.update.run.transact(transactor).void
+      }
+      repo <- repository
+      result <- repo.adminOverview(Some(titleId))
+    yield result match
+      case Right(overview) =>
+        assertEquals(overview.recentJobs.map(_.jobId), jobs.reverse.take(10).map(_._1))
+        assertEquals(
+          overview.recentJobs.map(_.gameTitleId).distinct.toSet,
+          Set(titleId, otherTitleId)
+        )
+      case Left(error) => fail(s"expected admin overview, got $error")
+
   test("validation-contract promotion stays exact in storage and stable on the public wire"):
     val jobId = "job-validation-contract-update"
     for

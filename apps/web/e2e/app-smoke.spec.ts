@@ -788,7 +788,7 @@ test("runs analysis administration and enforces access", async ({ e2eRun, page, 
     await page.goto("/admin/analysis");
     await expect(page.getByRole("heading", { exact: true, name: "戦績分析" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "全体の実行状況" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "直近3件" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "直近10件" })).toBeVisible();
 
     const titleSelect = page.getByRole("combobox", { name: "対象作品" });
     await titleSelect.selectOption(gameTitleId);

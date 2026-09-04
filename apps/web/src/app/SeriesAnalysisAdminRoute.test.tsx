@@ -150,7 +150,7 @@ describe("SeriesAnalysisAdminPage", () => {
 
     expect(await screen.findByRole("heading", { name: "戦績分析" })).toBeInTheDocument();
     expect(await screen.findByRole("heading", { name: "全体の実行状況" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "直近3件" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "直近10件" })).toBeInTheDocument();
     expect(screen.getByText("履歴は45日保持します。", { exact: false })).toBeInTheDocument();
     const history = screen.getByRole("table");
     const historyRows = within(history).getAllByRole("row", { name: /桃太郎電鉄2/u });

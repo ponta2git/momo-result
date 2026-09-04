@@ -10,7 +10,7 @@ import type {
 } from "@/shared/api/seriesAnalysis";
 
 export const analysisArtifact = {
-  algorithmVersion: "series-analysis-v3",
+  algorithmVersion: "series-analysis-v4",
   artifactId: "artifact-current",
   artifactSchemaVersion: 2,
   gameTitleId: "gt_momotetsu_2",
@@ -965,7 +965,7 @@ export function makeSeriesAnalysisAdminOverview(): SeriesAnalysisAdminOverview {
     },
     recentJobs: [
       {
-        algorithmVersion: "series-analysis-v3",
+        algorithmVersion: "series-analysis-v4",
         attemptCount: 1,
         coalescedTriggers: [],
         elapsedMilliseconds: 1234,

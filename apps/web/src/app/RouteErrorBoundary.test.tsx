@@ -116,6 +116,12 @@ describe("RouteErrorBoundary", () => {
       const back = screen.getByRole("link", { name: "開催履歴へ戻る" });
       expect(back).toHaveAttribute("href", "/held-events");
       expect(header).toHaveTextContent("開催記録");
+      expect(header).toHaveTextContent("試合数・下書き数は未取得です。");
+      expect(screen.getByRole("navigation", { name: "この開催の関連操作" })).toBeInTheDocument();
+      expect(screen.getByRole("link", { name: "試合検索で見る" })).toHaveAttribute(
+        "href",
+        "/matches?heldEventId=held-1&sort=match_no_asc&returnTo=%2Fheld-events%2Fheld-1",
+      );
       expect(frame?.children).toHaveLength(3);
       expect(frame?.children.item(0)).toContainElement(back);
       expect(frame?.children.item(1)).toBe(header);
@@ -146,6 +152,28 @@ describe("RouteErrorBoundary", () => {
       expect(header).toContainElement(exit);
       expect(header?.parentElement?.children).toHaveLength(2);
       expect(screen.getAllByRole("link", { name: "入力をやめる" })).toHaveLength(1);
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+
+  it("keeps query-known review context in the terminal header", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    try {
+      render(
+        <MemoryRouter>
+          <RouteErrorBoundary pathname="/review/session-1" search="?sample=1">
+            <MaybeBroken shouldThrow={() => true} />
+          </RouteErrorBoundary>
+        </MemoryRouter>,
+      );
+
+      const heading = await screen.findByRole("heading", {
+        level: 1,
+        name: "画面の読み込みに失敗しました",
+      });
+      expect(heading.closest("header")).toHaveTextContent("サンプルの読み取り結果で表示中");
     } finally {
       consoleError.mockRestore();
     }

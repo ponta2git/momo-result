@@ -11,6 +11,9 @@ type MatchResultLedgerRow = MatchPerformanceContextRow & {
 type MatchResultLedgerContextStatus = "loading" | "ready" | "unavailable";
 type MatchResultLedgerPresentation = "embedded" | "standalone";
 
+export const matchResultLedgerRowClass =
+  "grid min-w-0 gap-3 p-3 sm:grid-cols-[4rem_minmax(12rem,1fr)_minmax(10rem,auto)] sm:items-start";
+
 export function MatchResultLedger({
   ariaLabel = "試合の順位と成績",
   contextStatus,
@@ -33,10 +36,7 @@ export function MatchResultLedger({
       )}
     >
       {orderedRows.map((row) => (
-        <li
-          key={row.memberId}
-          className="grid min-w-0 gap-3 p-3 sm:grid-cols-[4rem_minmax(12rem,1fr)_minmax(10rem,auto)] sm:items-start"
-        >
+        <li key={row.memberId} className={matchResultLedgerRowClass}>
           <div className="flex items-center gap-3 sm:block">
             <RankBadge rank={row.rank} size="md" />
             <span className="min-w-0 font-semibold text-[var(--color-text-primary)] sm:hidden">

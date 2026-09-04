@@ -44,10 +44,10 @@ describe("RouteSuspenseFallback", () => {
       "/held-events/held-1",
       "",
       {
-        actionLayout: "responsive-grid",
+        actionLayout: "responsive-lead",
         actionSize: "sm",
-        actionSlots: 3,
-        actionWidths: ["wide", "standard", "compact"],
+        actionSlots: 2,
+        actionWidths: ["wide", "standard"],
         description: true,
         eyebrow: true,
       },
@@ -209,6 +209,29 @@ describe("RouteSuspenseFallback", () => {
         label: "編集",
       },
     ]);
+
+    const heldEvent = routeTerminalPresentation("/held-events/held-1");
+    expect(heldEvent.headerActions).toEqual({
+      items: [
+        {
+          href: "/matches?heldEventId=held-1&sort=match_no_asc&returnTo=%2Fheld-events%2Fheld-1",
+          icon: "filter",
+          label: "試合検索で見る",
+          size: "sm",
+          variant: "quiet",
+        },
+        {
+          href: "/exports?heldEventId=held-1&format=csv&returnTo=%2Fheld-events%2Fheld-1",
+          icon: "download",
+          label: "CSV出力",
+          size: "sm",
+          variant: "quiet",
+        },
+      ],
+      label: "この開催の関連操作",
+      layout: "responsive-lead",
+      semantics: "navigation",
+    });
   });
 
   it.each([
@@ -229,9 +252,29 @@ describe("RouteSuspenseFallback", () => {
   });
 
   it("keeps route-specific terminal chrome and content density", () => {
-    expect(routeTerminalPresentation("/held-events/held-1").eyebrow).toBe("開催記録");
+    const heldEvent = routeTerminalPresentation("/held-events/held-1");
+    expect(heldEvent.eyebrow).toBe("開催記録");
+    expect(heldEvent.description).toBe("試合数・下書き数は未取得です。");
     expect(routeTerminalPresentation("/admin/analysis").eyebrow).toBe("管理");
     expect(routeTerminalPresentation("/exports").contentPadding).toBe("compact");
+  });
+
+  it("keeps query-known sample status in loading and terminal headers", () => {
+    const search = "?sample=1";
+    const expected = {
+      label: "サンプルの読み取り結果で表示中",
+      tone: "warning",
+    };
+
+    expect(routeLoadingPresentation("/review/session-1", search).header.descriptionStatus).toEqual(
+      expected,
+    );
+    expect(routeTerminalPresentation("/review/session-1", search).descriptionStatus).toEqual(
+      expected,
+    );
+
+    render(<RouteSuspenseFallback pathname="/review/session-1" search={search} />);
+    expect(screen.getByText(expected.label)).toBeInTheDocument();
   });
 
   it("rejects an external terminal return destination", () => {

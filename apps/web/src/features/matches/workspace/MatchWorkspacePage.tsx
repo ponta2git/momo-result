@@ -10,6 +10,7 @@ import { MatchWorkspaceLoading } from "@/features/matches/workspace/MatchWorkspa
 import { MatchWorkspaceNavigationGuard } from "@/features/matches/workspace/MatchWorkspaceNavigationGuard";
 import { useMatchWorkspacePageModel } from "@/features/matches/workspace/useMatchWorkspacePageModel";
 import { draftIdsFromParams } from "@/features/matches/workspace/workspaceDerivations";
+import { buildWorkspacePageCopy } from "@/features/matches/workspace/workspaceViewModel";
 import { useAuth } from "@/shared/auth/useAuth";
 import { Button } from "@/shared/ui/actions/Button";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
@@ -49,8 +50,16 @@ function matchWorkspaceIdentityKey(
 export function MatchWorkspacePage(props: MatchWorkspacePageProps) {
   const [searchParams] = useSearchParams();
   const { auth, isChecking } = useAuth();
+  const useSampleDrafts = props.mode === "review" && searchParams.get("sample") === "1";
   if (isChecking) {
-    return <MatchWorkspaceLoading />;
+    return (
+      <MatchWorkspaceLoading
+        description={
+          buildWorkspacePageCopy({ mode: props.mode, reviewStatus: undefined }).description
+        }
+        sample={useSampleDrafts}
+      />
+    );
   }
   return (
     <MatchWorkspacePageContent
@@ -93,7 +102,8 @@ function MatchWorkspacePageContent({
   if (loading.edit.loading) {
     return (
       <MatchWorkspaceLoading
-        description="保存済みの試合内容を取得しています。"
+        description={navigation.header.description}
+        sample={navigation.header.sample}
         title="試合編集を読み込み中"
       />
     );
@@ -143,7 +153,8 @@ function MatchWorkspacePageContent({
   if (loading.workspace.loading) {
     return (
       <MatchWorkspaceLoading
-        description={loading.workspace.copy.description}
+        description={navigation.header.description}
+        sample={navigation.header.sample}
         title={loading.workspace.copy.title}
       />
     );
@@ -153,7 +164,7 @@ function MatchWorkspacePageContent({
     <PageFrame width="workspace">
       <MatchWorkspaceHeader model={navigation.header} />
 
-      <PageContentSurface className="grid gap-6">
+      <PageContentSurface aria-label="試合内容" className="grid gap-6" role="region">
         {loading.base.errors.length > 0 ? (
           <Notice
             action={

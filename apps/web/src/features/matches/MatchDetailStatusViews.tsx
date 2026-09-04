@@ -1,3 +1,4 @@
+import { matchResultLedgerRowClass } from "@/shared/ui/data/MatchResultLedger";
 import { ResourcePageState } from "@/shared/ui/feedback/ResourcePageState";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
@@ -40,18 +41,36 @@ export function MatchDetailLoading() {
           <div className="p-4">
             <Skeleton className="h-6 w-32" />
             <div className="mt-2">
-              <Skeleton className="h-4 w-64" />
+              <Skeleton className="h-4 w-full max-w-64" />
             </div>
           </div>
-          <div className="grid divide-y divide-[var(--color-border)]">
+          <div
+            aria-hidden="true"
+            className="grid divide-y divide-[var(--color-border)]"
+            data-match-result-loading-list=""
+          >
             {["rank-1", "rank-2", "rank-3", "rank-4"].map((id) => (
-              <div key={id} className="grid grid-cols-[4rem_minmax(0,1fr)_auto] gap-3 p-3">
-                <Skeleton className="h-10 w-14 rounded-sm" />
-                <div className="grid gap-2">
-                  <Skeleton className="h-5 w-28" />
-                  <Skeleton className="h-3 w-48 max-w-full" />
+              <div key={id} className={matchResultLedgerRowClass} data-match-result-loading-row="">
+                <div className="flex items-center gap-3 sm:block">
+                  <Skeleton className="h-10 w-14 rounded-sm" />
+                  <Skeleton className="h-5 w-28 max-w-full sm:hidden" />
                 </div>
-                <Skeleton className="h-7 w-28" />
+                <div className="min-w-0">
+                  <Skeleton className="h-5 w-28 max-w-full max-sm:hidden" />
+                  <div className="mt-1 flex min-w-0 flex-wrap gap-x-3 gap-y-1">
+                    <Skeleton className="h-4 w-32 max-w-full" />
+                    <Skeleton className="h-4 w-24 max-w-full" />
+                    <Skeleton className="h-4 w-28 max-w-full" />
+                  </div>
+                </div>
+                <div className="grid min-w-0 gap-1 sm:justify-items-end">
+                  <Skeleton className="h-3 w-12" />
+                  <Skeleton className="h-7 w-28 max-w-full" />
+                </div>
+                <div className="col-span-full flex min-w-0 flex-wrap items-center justify-between gap-2 pt-1 sm:col-span-2 sm:col-start-2">
+                  <Skeleton className="h-4 w-24 max-w-full" />
+                  <Skeleton className="h-4 w-28 max-w-full" />
+                </div>
               </div>
             ))}
           </div>

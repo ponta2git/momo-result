@@ -167,7 +167,10 @@ describe("MatchEditPage", () => {
     );
 
     expect(await screen.findByLabelText("試合編集を読み込み中")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "試合編集を読み込み中" })).toBeInTheDocument();
+    const loadingHeading = screen.getByRole("heading", { name: "試合編集を読み込み中" });
+    expect(loadingHeading.closest("header")).toHaveTextContent(
+      "確定済みの試合記録を編集します。保存後は一覧と出力に反映されます。",
+    );
 
     responseGate.resolve();
     expect(await screen.findByRole("heading", { name: "試合を編集" })).toBeInTheDocument();

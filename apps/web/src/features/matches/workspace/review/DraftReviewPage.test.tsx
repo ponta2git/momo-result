@@ -59,6 +59,11 @@ function matchDraftDetailResponse(
   };
 }
 
+async function waitForSampleWorkspaceReady() {
+  expect(await screen.findByRole("heading", { name: "OCR結果の確認" })).toBeInTheDocument();
+  expect(screen.getByText("サンプルの読み取り結果で表示中")).toBeInTheDocument();
+}
+
 describe("DraftReviewPage", () => {
   let queryClient: QueryClient;
   let user: ReturnType<typeof userEvent.setup>;
@@ -534,6 +539,11 @@ describe("DraftReviewPage", () => {
       "aria-busy",
       "true",
     );
+    expect(
+      screen.getByRole("heading", { name: "OCR結果を読み込み中" }).closest("header"),
+    ).toHaveTextContent(
+      "読み取り結果を確認して、開催と4人分の結果を確定します。現在の状態: 状態不明",
+    );
     expect(screen.queryByRole("button", { name: "確定前の確認へ進む" })).not.toBeInTheDocument();
 
     responseGate.resolve();
@@ -620,7 +630,7 @@ describe("DraftReviewPage", () => {
       </QueryClientProvider>,
     );
 
-    await screen.findByText("サンプルの読み取り結果で表示中");
+    await waitForSampleWorkspaceReady();
     const initialReviewProgress = screen.getByText(/未確認\d+件／全\d+件/u).textContent;
     const initialMatchNumber = (screen.getByLabelText("試合番号") as HTMLInputElement).value;
     await user.click(screen.getByRole("button", { name: "この値で確認済み" }));
@@ -658,7 +668,7 @@ describe("DraftReviewPage", () => {
       </QueryClientProvider>,
     );
 
-    await screen.findByText("サンプルの読み取り結果で表示中");
+    await waitForSampleWorkspaceReady();
     const matchNumber = screen.getByLabelText("試合番号");
     await user.clear(matchNumber);
     await user.type(matchNumber, "9");
@@ -748,7 +758,7 @@ describe("DraftReviewPage", () => {
       </QueryClientProvider>,
     );
 
-    expect(await screen.findByText("サンプルの読み取り結果で表示中")).toBeInTheDocument();
+    await waitForSampleWorkspaceReady();
     expect(screen.getByRole("heading", { name: "保存先と試合条件" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "4人分の結果を確認・修正" })).toBeInTheDocument();
     expect(screen.getByText("必須条件を設定してください")).toBeInTheDocument();
@@ -776,7 +786,7 @@ describe("DraftReviewPage", () => {
       </QueryClientProvider>,
     );
 
-    await screen.findByText("サンプルの読み取り結果で表示中");
+    await waitForSampleWorkspaceReady();
     await user.click(screen.getByRole("button", { name: "確定前の確認へ進む" }));
 
     await waitFor(() => expect(screen.getByRole("combobox", { name: /作品/u })).toHaveFocus());
@@ -798,7 +808,7 @@ describe("DraftReviewPage", () => {
       </QueryClientProvider>,
     );
 
-    await screen.findByText("サンプルの読み取り結果で表示中");
+    await waitForSampleWorkspaceReady();
     const rankInput = screen.getByLabelText("ぽんた 順位");
 
     await user.clear(rankInput);
@@ -822,7 +832,7 @@ describe("DraftReviewPage", () => {
       </QueryClientProvider>,
     );
 
-    await screen.findByText("サンプルの読み取り結果で表示中");
+    await waitForSampleWorkspaceReady();
     const rankInput = screen.getByLabelText("ぽんた 順位");
     await user.clear(rankInput);
     await user.type(rankInput, "4");

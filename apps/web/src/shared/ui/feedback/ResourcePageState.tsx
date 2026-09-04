@@ -14,6 +14,8 @@ type ResourcePageStateBase = {
   backLabel: string;
   description: string;
   eyebrow?: ReactNode;
+  headerActions?: ReactNode;
+  headerDescription?: ReactNode;
   title: string;
   width?: PageFrameWidth | undefined;
 };
@@ -48,7 +50,12 @@ export function ResourcePageState(props: ResourcePageStateProps) {
           {props.backLabel}
         </LinkButton>
       </div>
-      <PageHeader eyebrow={props.eyebrow} title={props.title} />
+      <PageHeader
+        actions={props.headerActions}
+        description={props.headerDescription}
+        eyebrow={props.eyebrow}
+        title={props.title}
+      />
       <PageContentSurface>
         <Notice
           action={

@@ -1,4 +1,4 @@
-import { ArrowLeft, PenSquare, ScanLine } from "lucide-react";
+import { ArrowLeft, Download, ListFilter, PenSquare, ScanLine } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { routeTerminalPresentation } from "@/app/RouteSuspenseFallback";
@@ -11,7 +11,11 @@ import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
-import { PageHeader, responsivePageHeaderActionGroupClass } from "@/shared/ui/layout/PageHeader";
+import {
+  PageHeader,
+  responsivePageHeaderActionGroupClass,
+  responsivePageHeaderLeadActionGroupClass,
+} from "@/shared/ui/layout/PageHeader";
 
 type RouteTerminalPageProps = {
   children: ReactNode;
@@ -45,27 +49,46 @@ function HeaderNavigationLink({ href, icon, label }: RouteNavigationPresentation
 function HeaderActionIcon({ icon }: Pick<RouteHeaderActionPresentation, "icon">) {
   if (icon === "scan") return <ScanLine aria-hidden="true" />;
   if (icon === "manual") return <PenSquare aria-hidden="true" />;
+  if (icon === "filter") return <ListFilter aria-hidden="true" />;
+  if (icon === "download") return <Download aria-hidden="true" />;
   return null;
 }
 
-function HeaderActions({ items, label, layout = "inline" }: RouteHeaderActionsPresentation) {
+function HeaderActions({
+  items,
+  label,
+  layout = "inline",
+  semantics = "group",
+}: RouteHeaderActionsPresentation) {
   const actions = items.map((item) => (
     <LinkButton
       icon={item.icon ? <HeaderActionIcon icon={item.icon} /> : undefined}
       key={`${item.href}:${item.label}`}
       size={item.size ?? "md"}
       to={item.href}
-      variant="secondary"
+      variant={item.variant ?? "secondary"}
     >
       {item.label}
     </LinkButton>
   ));
 
-  if (layout === "responsive-grid") {
+  if (layout !== "inline") {
+    const className =
+      layout === "responsive-lead"
+        ? responsivePageHeaderLeadActionGroupClass
+        : responsivePageHeaderActionGroupClass;
+    if (semantics === "navigation") {
+      return (
+        <nav aria-label={label} className={className} data-page-header-actions={layout}>
+          {actions}
+        </nav>
+      );
+    }
     return (
       <div
         aria-label={label}
-        className={responsivePageHeaderActionGroupClass}
+        className={className}
+        data-page-header-actions={layout}
         role={label ? "group" : undefined}
       >
         {actions}
@@ -102,6 +125,7 @@ export function RouteTerminalPage({
           ) : null
         }
         description={presentation.description}
+        descriptionStatus={presentation.descriptionStatus}
         eyebrow={presentation.eyebrow}
         title={title}
       />

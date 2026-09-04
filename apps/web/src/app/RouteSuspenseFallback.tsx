@@ -6,7 +6,9 @@ import type {
 } from "@/shared/ui/feedback/PageLoadingFallback";
 import type { PageContentSurfacePadding } from "@/shared/ui/layout/PageContentSurface";
 import type { PageFrameWidth } from "@/shared/ui/layout/PageFrame";
+import type { PageHeaderDescriptionStatus } from "@/shared/ui/layout/PageHeader";
 import { appendHandoffIdToReturnTo } from "@/shared/workflows/matchWorkspaceMasterHandoff";
+import { workspaceSampleHeaderStatus } from "@/shared/workflows/matchWorkspacePresentation";
 
 type RouteSuspenseFallbackProps = {
   asMain?: boolean | undefined;
@@ -31,20 +33,34 @@ export type RouteNavigationPresentation = {
 };
 
 export type RouteHeaderActionPresentation = Omit<RouteNavigationPresentation, "icon"> & {
-  icon?: "manual" | "scan" | undefined;
+  icon?: "download" | "filter" | "manual" | "scan" | undefined;
   size?: "md" | "sm" | undefined;
+  variant?: "quiet" | "secondary" | undefined;
 };
 
-export type RouteHeaderActionsPresentation = {
+type RouteHeaderActionsPresentationBase = {
   items: readonly RouteHeaderActionPresentation[];
-  label?: string | undefined;
-  layout?: "inline" | "responsive-grid" | undefined;
 };
+
+export type RouteHeaderActionsPresentation = RouteHeaderActionsPresentationBase &
+  (
+    | {
+        label: string;
+        layout: "responsive-grid" | "responsive-lead";
+        semantics: "navigation";
+      }
+    | {
+        label?: string | undefined;
+        layout?: "inline" | "responsive-grid" | "responsive-lead" | undefined;
+        semantics?: "group" | undefined;
+      }
+  );
 
 export type RouteTerminalPresentation = {
   contentPadding: PageContentSurfacePadding;
   contextNavigation?: RouteNavigationPresentation | undefined;
   description?: string | undefined;
+  descriptionStatus?: PageHeaderDescriptionStatus | undefined;
   eyebrow?: string | undefined;
   headerActions?: RouteHeaderActionsPresentation | undefined;
   headerNavigation?: RouteNavigationPresentation | undefined;
@@ -183,6 +199,8 @@ export function routePagePresentation(pathname: string, search = ""): RoutePageP
   if (/^\/review\/[^/]+$/u.test(normalizedPathname)) {
     const description =
       "読み取り結果を確認して、開催と4人分の結果を確定します。現在の状態: 状態不明";
+    const descriptionStatus =
+      searchParams.get("sample") === "1" ? workspaceSampleHeaderStatus : undefined;
     return defineRoutePresentation(
       {
         header: {
@@ -190,6 +208,7 @@ export function routePagePresentation(pathname: string, search = ""): RoutePageP
           actionSlots: 1,
           actionWidths: ["long"],
           description: true,
+          descriptionStatus,
           descriptionText: description,
           eyebrow: false,
         },
@@ -198,6 +217,7 @@ export function routePagePresentation(pathname: string, search = ""): RoutePageP
       },
       {
         description,
+        descriptionStatus,
         headerNavigation: {
           href: returnTo ?? "/matches",
           label: "入力をやめる",
@@ -289,13 +309,16 @@ export function routePagePresentation(pathname: string, search = ""): RoutePageP
     );
   }
   if (/^\/held-events\/[^/]+$/u.test(normalizedPathname)) {
+    const heldEventId = decodeRouteSegment(normalizedPathname.slice("/held-events/".length));
+    const matchesParams = new URLSearchParams({ heldEventId, sort: "match_no_asc" });
+    const exportParams = new URLSearchParams({ heldEventId, format: "csv" });
     return defineRoutePresentation(
       {
         header: {
-          actionLayout: "responsive-grid",
+          actionLayout: "responsive-lead",
           actionSize: "sm",
-          actionSlots: 3,
-          actionWidths: ["wide", "standard", "compact"],
+          actionSlots: 2,
+          actionWidths: ["wide", "standard"],
           description: true,
           eyebrow: true,
         },
@@ -304,7 +327,29 @@ export function routePagePresentation(pathname: string, search = ""): RoutePageP
         width: "wide",
       },
       {
+        description: "試合数・下書き数は未取得です。",
         eyebrow: "開催記録",
+        headerActions: {
+          items: [
+            {
+              href: withReturnTo(`/matches?${matchesParams.toString()}`, routeLocation),
+              icon: "filter",
+              label: "試合検索で見る",
+              size: "sm",
+              variant: "quiet",
+            },
+            {
+              href: withReturnTo(`/exports?${exportParams.toString()}`, routeLocation),
+              icon: "download",
+              label: "CSV出力",
+              size: "sm",
+              variant: "quiet",
+            },
+          ],
+          label: "この開催の関連操作",
+          layout: "responsive-lead",
+          semantics: "navigation",
+        },
         leadingNavigation: {
           href: returnTo ?? "/held-events",
           label: "開催履歴へ戻る",

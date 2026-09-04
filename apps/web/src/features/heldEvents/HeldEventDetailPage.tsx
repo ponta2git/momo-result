@@ -1,5 +1,6 @@
-import { ArrowLeft, Camera, Download, Keyboard, ListFilter, RefreshCw } from "lucide-react";
+import { ArrowLeft, Camera, Keyboard } from "lucide-react";
 
+import { HeldEventDetailHeaderActions } from "@/features/heldEvents/HeldEventDetailHeaderActions";
 import {
   HeldEventDetailLoading,
   HeldEventDetailUnavailable,
@@ -16,7 +17,7 @@ import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
-import { PageHeader, responsivePageHeaderActionGroupClass } from "@/shared/ui/layout/PageHeader";
+import { PageHeader } from "@/shared/ui/layout/PageHeader";
 
 export function HeldEventDetailPage() {
   const page = useHeldEventDetailPageModel();
@@ -25,12 +26,12 @@ export function HeldEventDetailPage() {
     return <HeldEventDetailLoading />;
   }
   if (page.kind === "notFound") {
-    return <HeldEventDetailUnavailable backHref={page.navigation.backHref} notFound />;
+    return <HeldEventDetailUnavailable {...page.navigation} notFound />;
   }
   if (page.kind === "loadFailed") {
     return (
       <HeldEventDetailUnavailable
-        backHref={page.navigation.backHref}
+        {...page.navigation}
         retrying={page.refresh.pending}
         onRetry={page.refresh.run}
       />
@@ -59,35 +60,11 @@ function HeldEventDetailReadyContent({ page }: { page: HeldEventDetailReadyPageM
 
       <PageHeader
         actions={
-          <nav aria-label="この開催の関連操作" className={responsivePageHeaderActionGroupClass}>
-            <LinkButton
-              icon={<ListFilter aria-hidden="true" />}
-              size="sm"
-              to={navigation.matchesHref}
-              variant="quiet"
-            >
-              試合検索で見る
-            </LinkButton>
-            <LinkButton
-              icon={<Download aria-hidden="true" />}
-              size="sm"
-              to={navigation.exportHref}
-              variant="quiet"
-            >
-              CSV出力
-            </LinkButton>
-            <Button
-              aria-label="開催詳細を更新"
-              icon={<RefreshCw aria-hidden="true" />}
-              pending={refresh.pending}
-              pendingLabel="更新中"
-              size="sm"
-              variant="quiet"
-              onClick={refresh.run}
-            >
-              更新
-            </Button>
-          </nav>
+          <HeldEventDetailHeaderActions
+            exportHref={navigation.exportHref}
+            matchesHref={navigation.matchesHref}
+            refresh={refresh}
+          />
         }
         description={`確定済み${detail.matchCount}試合・未確定下書き${detail.draftCount}件`}
         eyebrow="開催記録"

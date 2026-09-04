@@ -7,7 +7,12 @@ import {
   pageViewportGutterClass,
 } from "@/shared/ui/layout/PageFrame";
 import type { PageFrameWidth } from "@/shared/ui/layout/PageFrame";
-import { PageHeader, responsivePageHeaderActionGroupClass } from "@/shared/ui/layout/PageHeader";
+import {
+  PageHeader,
+  responsivePageHeaderActionGroupClass,
+  responsivePageHeaderLeadActionGroupClass,
+} from "@/shared/ui/layout/PageHeader";
+import type { PageHeaderDescriptionStatus } from "@/shared/ui/layout/PageHeader";
 
 export type PageLoadingKind =
   | "catalog"
@@ -21,11 +26,12 @@ export type PageLoadingKind =
   | "workspace";
 
 export type PageLoadingHeaderShape = {
-  actionLayout?: "inline" | "responsive-grid" | undefined;
+  actionLayout?: "inline" | "responsive-grid" | "responsive-lead" | undefined;
   actionSize?: "sm" | "md" | undefined;
   actionSlots?: 0 | 1 | 2 | 3 | undefined;
   actionWidths?: readonly PageLoadingActionWidth[] | undefined;
   description?: boolean | undefined;
+  descriptionStatus?: PageHeaderDescriptionStatus | undefined;
   descriptionText?: string | undefined;
   eyebrow?: boolean | undefined;
 };
@@ -268,16 +274,18 @@ function HeaderSkeleton({ shape }: { shape: PageLoadingHeaderShape | undefined }
     actionSlots = 0,
     actionWidths = [],
     description = true,
+    descriptionStatus,
     descriptionText,
     eyebrow = true,
   } = shape ?? {};
+  const isResponsiveActionLayout = actionLayout !== "inline";
   const actionHeight = actionSize === "sm" ? "pointer-fine:h-9" : "pointer-fine:h-10";
   const widthClasses = {
-    compact: actionLayout === "responsive-grid" ? "w-full sm:w-20" : "w-20",
-    long: actionLayout === "responsive-grid" ? "w-full sm:w-32" : "w-32",
-    short: actionLayout === "responsive-grid" ? "w-full sm:w-16" : "w-16",
-    standard: actionLayout === "responsive-grid" ? "w-full sm:w-28" : "w-28",
-    wide: actionLayout === "responsive-grid" ? "w-full sm:w-36" : "w-36",
+    compact: isResponsiveActionLayout ? "w-full sm:w-20" : "w-20",
+    long: isResponsiveActionLayout ? "w-full sm:w-32" : "w-32",
+    short: isResponsiveActionLayout ? "w-full sm:w-16" : "w-16",
+    standard: isResponsiveActionLayout ? "w-full sm:w-28" : "w-28",
+    wide: isResponsiveActionLayout ? "w-full sm:w-36" : "w-36",
   } as const;
   const actionSkeletons = Array.from({ length: actionSlots }, (_, index) => (
     <Skeleton
@@ -295,8 +303,17 @@ function HeaderSkeleton({ shape }: { shape: PageLoadingHeaderShape | undefined }
       <PageHeader
         actions={
           actionSlots > 0 ? (
-            actionLayout === "responsive-grid" ? (
-              <div className={responsivePageHeaderActionGroupClass}>{actionSkeletons}</div>
+            isResponsiveActionLayout ? (
+              <div
+                className={
+                  actionLayout === "responsive-lead"
+                    ? responsivePageHeaderLeadActionGroupClass
+                    : responsivePageHeaderActionGroupClass
+                }
+                data-page-header-actions={actionLayout}
+              >
+                {actionSkeletons}
+              </div>
             ) : (
               actionSkeletons
             )
@@ -307,6 +324,7 @@ function HeaderSkeleton({ shape }: { shape: PageLoadingHeaderShape | undefined }
             ? (descriptionText ?? <Skeleton as="span" className="block h-6 w-full max-w-2xl" />)
             : undefined
         }
+        descriptionStatus={descriptionStatus}
         eyebrow={eyebrow ? <Skeleton as="span" className="block h-4 w-24" /> : undefined}
         title={<Skeleton as="span" className="block h-8 w-full max-w-80 md:h-10" />}
       />

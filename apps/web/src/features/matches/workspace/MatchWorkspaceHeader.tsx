@@ -1,6 +1,7 @@
 import type { MatchWorkspaceHeaderModel } from "@/features/matches/workspace/matchWorkspacePageModelTypes";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { PageHeader } from "@/shared/ui/layout/PageHeader";
+import { workspaceSampleHeaderStatus } from "@/shared/workflows/matchWorkspacePresentation";
 
 type MatchWorkspaceHeaderProps = {
   model: MatchWorkspaceHeaderModel;
@@ -14,16 +15,8 @@ export function MatchWorkspaceHeader({ model }: MatchWorkspaceHeaderProps) {
           {model.exit.label}
         </LinkButton>
       }
-      description={
-        <>
-          {model.description}
-          {model.sample ? (
-            <span className="mt-2 block w-fit rounded-full border border-[var(--color-warning)]/65 bg-[var(--color-warning)]/18 px-3 py-1 text-sm font-semibold text-[var(--color-text-primary)]">
-              サンプルの読み取り結果で表示中
-            </span>
-          ) : null}
-        </>
-      }
+      description={model.description}
+      descriptionStatus={model.sample ? workspaceSampleHeaderStatus : undefined}
       title={model.title}
     />
   );

@@ -112,15 +112,12 @@ type MatchWorkspacePageModelInput = {
 };
 
 function workspaceLoadingCopy(mode: WorkspaceMode) {
-  return mode === "review"
-    ? {
-        description: "OCR結果と確定前の記録を取得しています。",
-        title: "OCR結果を読み込み中",
-      }
-    : {
-        description: "試合条件と入力フォームを準備しています。",
-        title: "試合作成を準備中",
-      };
+  const titleByMode = {
+    create: "試合作成を準備中",
+    edit: "試合編集を読み込み中",
+    review: "OCR結果を読み込み中",
+  } as const satisfies Record<WorkspaceMode, string>;
+  return { title: titleByMode[mode] };
 }
 
 function validationFeedback(firstMessage: string | undefined, success: boolean): string {

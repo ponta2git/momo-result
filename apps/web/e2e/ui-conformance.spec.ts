@@ -1,4 +1,4 @@
-import type { APIRequestContext, Route } from "@playwright/test";
+import type { APIRequestContext, Locator, Route } from "@playwright/test";
 
 import {
   devAccountId,
@@ -28,12 +28,216 @@ test("keeps match rows usable through responsive update and retry states", async
   const {
     heldEventId,
     mapName,
+    matchIds,
     primaryGameTitleId,
     primaryGameTitleName,
     seasonMasterId,
     seasonName,
     secondaryGameTitleId,
   } = await seedUiContext(request, e2eRun);
+
+  await test.step("preserve the query-known sample context through loading", async () => {
+    const directoryGate = createDeferred();
+    let directoryRequested = false;
+    const directoryPattern = /\/api\/held-events(?:\?.*)?$/u;
+    const holdDirectory = async (route: Route) => {
+      const url = new URL(route.request().url());
+      if (route.request().method() === "GET" && url.pathname === "/api/held-events") {
+        directoryRequested = true;
+        await directoryGate.promise;
+      }
+      await route.fallback();
+    };
+    const loadingSurfaceTops = new Map<number, number>();
+    await page.route(directoryPattern, holdDirectory);
+
+    try {
+      await page.setViewportSize({ height: 844, width: 320 });
+      await page.goto("/review/dev-sample?sample=1");
+      await expect.poll(() => directoryRequested).toBe(true);
+      await expect(page.getByText("サンプルの読み取り結果で表示中", { exact: true })).toBeVisible();
+
+      for (const width of [320, 375]) {
+        await page.setViewportSize({ height: 844, width });
+        await expectNoHorizontalPageOverflow(page);
+        loadingSurfaceTops.set(
+          width,
+          await page
+            .locator('[data-page-content-surface=""]')
+            .evaluate((surface) => surface.getBoundingClientRect().top),
+        );
+      }
+    } finally {
+      directoryGate.resolve();
+      await page.unroute(directoryPattern, holdDirectory);
+    }
+
+    await expect(page.getByRole("heading", { name: "OCR結果の確認" })).toBeVisible();
+    await expect(page.getByText("サンプルの読み取り結果で表示中", { exact: true })).toBeVisible();
+    for (const width of [320, 375]) {
+      await page.setViewportSize({ height: 844, width });
+      await expectNoHorizontalPageOverflow(page);
+      const readySurfaceTop = await page
+        .locator('[data-page-content-surface=""]')
+        .evaluate((surface) => surface.getBoundingClientRect().top);
+      const loadingSurfaceTop = loadingSurfaceTops.get(width);
+      expect(loadingSurfaceTop).toBeDefined();
+      expect(
+        Math.abs(readySurfaceTop - (loadingSurfaceTop ?? readySurfaceTop)),
+      ).toBeLessThanOrEqual(2);
+    }
+  });
+
+  await test.step("contain held-event detail loading at the narrow viewport", async () => {
+    const detailGate = createDeferred();
+    let detailRequested = false;
+    let loadingSurfaceTopAt320: number | undefined;
+    let loadingSurfaceTop: number | undefined;
+    const detailPattern = `**/api/held-events/${heldEventId}`;
+    const holdDetail = async (route: Route) => {
+      if (route.request().method() === "GET") {
+        detailRequested = true;
+        await detailGate.promise;
+      }
+      await route.fallback();
+    };
+    await page.route(detailPattern, holdDetail);
+
+    try {
+      await page.setViewportSize({ height: 844, width: 320 });
+      await page.goto(`/held-events/${heldEventId}?returnTo=%2Fheld-events`);
+
+      await expect(page.getByLabel("開催詳細を読み込み中")).toHaveAttribute("aria-busy", "true");
+      await expect.poll(() => detailRequested).toBe(true);
+      await expectNoHorizontalPageOverflow(page);
+      loadingSurfaceTopAt320 = await page
+        .getByRole("region", { name: "開催内容" })
+        .evaluate((surface) => surface.getBoundingClientRect().top);
+      await expectResponsiveLeadActionGeometry(
+        page.locator('[data-page-header-actions="responsive-lead"]'),
+        2,
+      );
+      const navigationGeometry = await page.evaluate(() => {
+        const scroller = document.querySelector<HTMLElement>("[data-nav-scroll]");
+        const active = scroller?.querySelector<HTMLElement>('[aria-current="page"]');
+        if (!scroller || !active) throw new Error("expected active global navigation item");
+        const scrollerRect = scroller.getBoundingClientRect();
+        const activeRect = active.getBoundingClientRect();
+        return {
+          activeLeft: activeRect.left,
+          activeRight: activeRect.right,
+          pageScrollX: window.scrollX,
+          scrollerLeft: scrollerRect.left,
+          scrollerRight: scrollerRect.right,
+          scrollerScrollLeft: scroller.scrollLeft,
+        };
+      });
+      expect(navigationGeometry.pageScrollX).toBe(0);
+      expect(navigationGeometry.scrollerScrollLeft).toBeGreaterThan(0);
+      expect(navigationGeometry.activeLeft).toBeGreaterThanOrEqual(
+        navigationGeometry.scrollerLeft - 1,
+      );
+      expect(navigationGeometry.activeRight).toBeLessThanOrEqual(
+        navigationGeometry.scrollerRight + 1,
+      );
+
+      await page.setViewportSize({ height: 844, width: 375 });
+      loadingSurfaceTop = await page
+        .getByRole("region", { name: "開催内容" })
+        .evaluate((surface) => surface.getBoundingClientRect().top);
+      await expectResponsiveLeadActionGeometry(
+        page.locator('[data-page-header-actions="responsive-lead"]'),
+        2,
+      );
+    } finally {
+      detailGate.resolve();
+      await page.unroute(detailPattern, holdDetail);
+    }
+
+    await expect(page.getByText("確定済み2試合・未確定下書き0件", { exact: true })).toBeVisible();
+    const readySurfaceTop = await page
+      .getByRole("region", { name: "開催内容" })
+      .evaluate((surface) => surface.getBoundingClientRect().top);
+    await expectResponsiveLeadActionGeometry(
+      page.locator('[data-page-header-actions="responsive-lead"]'),
+      3,
+    );
+    expect(loadingSurfaceTop).toBeDefined();
+    expect(Math.abs(readySurfaceTop - (loadingSurfaceTop ?? readySurfaceTop))).toBeLessThanOrEqual(
+      2,
+    );
+
+    await page.setViewportSize({ height: 844, width: 320 });
+    await expectNoHorizontalPageOverflow(page);
+    const readySurfaceTopAt320 = await page
+      .getByRole("region", { name: "開催内容" })
+      .evaluate((surface) => surface.getBoundingClientRect().top);
+    await expectResponsiveLeadActionGeometry(
+      page.locator('[data-page-header-actions="responsive-lead"]'),
+      3,
+    );
+    expect(loadingSurfaceTopAt320).toBeDefined();
+    expect(
+      Math.abs(readySurfaceTopAt320 - (loadingSurfaceTopAt320 ?? readySurfaceTopAt320)),
+    ).toBeLessThanOrEqual(2);
+
+    await page.route(detailPattern, fulfillHeldEventNotFound);
+    try {
+      await page.reload();
+      await expect(page.getByRole("heading", { name: "開催が見つかりません" })).toBeVisible();
+      for (const width of [320, 375]) {
+        await page.setViewportSize({ height: 844, width });
+        await expectNoHorizontalPageOverflow(page);
+        await expectResponsiveLeadActionGeometry(
+          page.locator('[data-page-header-actions="responsive-lead"]'),
+          2,
+        );
+      }
+    } finally {
+      await page.unroute(detailPattern, fulfillHeldEventNotFound);
+    }
+  });
+
+  await test.step("stack match-result loading rows without narrow-width collisions", async () => {
+    const matchId = matchIds[0];
+    if (!matchId) throw new Error("expected a seeded match");
+    const matchGate = createDeferred();
+    let matchRequested = false;
+    const detailPattern = `**/api/matches/${matchId}`;
+    const holdMatch = async (route: Route) => {
+      if (route.request().method() === "GET") {
+        matchRequested = true;
+        await matchGate.promise;
+      }
+      await route.fallback();
+    };
+    await page.route(detailPattern, holdMatch);
+
+    try {
+      await page.setViewportSize({ height: 844, width: 320 });
+      await page.goto(`/matches/${matchId}?returnTo=%2Fheld-events%2F${heldEventId}`);
+      await expect(page.getByLabel("試合詳細を読み込み中")).toHaveAttribute("aria-busy", "true");
+      await expect.poll(() => matchRequested).toBe(true);
+
+      for (const width of [320, 375]) {
+        await page.setViewportSize({ height: 844, width });
+        await expectNoHorizontalPageOverflow(page);
+        await expectStackedRowGeometry(page.locator("[data-match-result-loading-row]").first());
+      }
+    } finally {
+      matchGate.resolve();
+      await page.unroute(detailPattern, holdMatch);
+    }
+
+    await expect(page.getByRole("heading", { name: "第1試合の結果" })).toBeVisible();
+    for (const width of [320, 375]) {
+      await page.setViewportSize({ height: 844, width });
+      await expectNoHorizontalPageOverflow(page);
+      await expectStackedRowGeometry(
+        page.getByRole("list", { name: "試合の順位と成績" }).getByRole("listitem").first(),
+      );
+    }
+  });
 
   await test.step("keep the complete match filter contract at mobile and desktop widths", async () => {
     await page.setViewportSize({ height: 844, width: 320 });
@@ -144,6 +348,144 @@ test("keeps match rows usable through responsive update and retry states", async
     }
   });
 });
+
+async function expectResponsiveLeadActionGeometry(group: Locator, expectedCount: number) {
+  await expect(group).toBeVisible();
+  const directChildren = group.locator(":scope > *");
+  await expect(directChildren).toHaveCount(expectedCount);
+  for (let index = 0; index < expectedCount; index += 1) {
+    await expect(directChildren.nth(index)).toBeVisible();
+  }
+
+  const geometry = await group.evaluate((element) => {
+    const groupBox = element.getBoundingClientRect();
+    return {
+      children: Array.from(element.children, (child) => {
+        const box = child.getBoundingClientRect();
+        return {
+          bottom: box.bottom,
+          left: box.left,
+          right: box.right,
+          top: box.top,
+          height: box.height,
+          width: box.width,
+        };
+      }),
+      group: {
+        bottom: groupBox.bottom,
+        left: groupBox.left,
+        right: groupBox.right,
+        top: groupBox.top,
+        height: groupBox.height,
+        width: groupBox.width,
+      },
+    };
+  });
+  const first = geometry.children[0];
+  const second = geometry.children[1];
+  if (!first || !second) throw new Error("expected at least two header actions");
+
+  expect(geometry.group.height).toBeGreaterThan(0);
+  expect(geometry.group.width).toBeGreaterThan(0);
+  expect(Math.abs(first.left - geometry.group.left)).toBeLessThanOrEqual(1);
+  expect(Math.abs(first.right - geometry.group.right)).toBeLessThanOrEqual(1);
+  expect(Math.abs(first.width - geometry.group.width)).toBeLessThanOrEqual(1);
+  expect(Math.abs(second.top - first.bottom - 8)).toBeLessThanOrEqual(1);
+
+  for (let leftIndex = 0; leftIndex < geometry.children.length; leftIndex += 1) {
+    const child = geometry.children[leftIndex];
+    if (!child) throw new Error("expected header action geometry");
+    expect(child.height).toBeGreaterThan(0);
+    expect(child.width).toBeGreaterThan(0);
+    expect(child.left).toBeGreaterThanOrEqual(geometry.group.left - 1);
+    expect(child.right).toBeLessThanOrEqual(geometry.group.right + 1);
+    expect(child.top).toBeGreaterThanOrEqual(geometry.group.top - 1);
+    expect(child.bottom).toBeLessThanOrEqual(geometry.group.bottom + 1);
+
+    for (let rightIndex = leftIndex + 1; rightIndex < geometry.children.length; rightIndex += 1) {
+      const left = geometry.children[leftIndex];
+      const right = geometry.children[rightIndex];
+      if (!left || !right) throw new Error("expected header action geometry");
+      const horizontalOverlap = Math.min(left.right, right.right) - Math.max(left.left, right.left);
+      const verticalOverlap = Math.min(left.bottom, right.bottom) - Math.max(left.top, right.top);
+      expect(horizontalOverlap > 1 && verticalOverlap > 1).toBe(false);
+    }
+  }
+}
+
+async function fulfillHeldEventNotFound(route: Route) {
+  await route.fulfill({
+    contentType: "application/problem+json",
+    json: {
+      code: "NOT_FOUND",
+      detail: "E2E held-event terminal layout",
+      status: 404,
+      title: "Not found",
+      type: "about:blank",
+    },
+    status: 404,
+  });
+}
+
+async function expectStackedRowGeometry(row: Locator) {
+  await expect(row).toBeVisible();
+  const directChildren = row.locator(":scope > *");
+  await expect(directChildren).toHaveCount(4);
+  for (let index = 0; index < 4; index += 1) {
+    await expect(directChildren.nth(index)).toBeVisible();
+  }
+
+  const geometry = await row.evaluate((element) => {
+    const rowRect = element.getBoundingClientRect();
+    const childRects = Array.from(element.children, (child) => {
+      const rect = child.getBoundingClientRect();
+      return {
+        bottom: rect.bottom,
+        height: rect.height,
+        left: rect.left,
+        right: rect.right,
+        top: rect.top,
+        width: rect.width,
+      };
+    });
+    return {
+      childRects,
+      clientHeight: element.clientHeight,
+      clientWidth: element.clientWidth,
+      rowRect: {
+        bottom: rowRect.bottom,
+        height: rowRect.height,
+        left: rowRect.left,
+        right: rowRect.right,
+        top: rowRect.top,
+        width: rowRect.width,
+      },
+      scrollHeight: element.scrollHeight,
+      scrollWidth: element.scrollWidth,
+    };
+  });
+  expect(geometry.rowRect.height).toBeGreaterThan(0);
+  expect(geometry.rowRect.width).toBeGreaterThan(0);
+  expect(geometry.scrollHeight).toBeLessThanOrEqual(geometry.clientHeight);
+  expect(geometry.scrollWidth).toBeLessThanOrEqual(geometry.clientWidth);
+  for (const child of geometry.childRects) {
+    expect(child.height).toBeGreaterThan(0);
+    expect(child.width).toBeGreaterThan(0);
+    expect(child.left).toBeGreaterThanOrEqual(geometry.rowRect.left - 1);
+    expect(child.right).toBeLessThanOrEqual(geometry.rowRect.right + 1);
+    expect(child.top).toBeGreaterThanOrEqual(geometry.rowRect.top - 1);
+    expect(child.bottom).toBeLessThanOrEqual(geometry.rowRect.bottom + 1);
+  }
+  for (let index = 1; index < geometry.childRects.length; index += 1) {
+    const previous = geometry.childRects[index - 1];
+    const current = geometry.childRects[index];
+    if (!previous || !current) throw new Error("expected result-row geometry");
+    expect(Math.abs(current.top - previous.bottom - 12)).toBeLessThanOrEqual(1);
+  }
+  const last = geometry.childRects.at(-1);
+  if (!last) throw new Error("expected result-row geometry");
+  expect(last.bottom).toBeLessThanOrEqual(geometry.rowRect.bottom + 1);
+}
 
 test("changes an export choice by keyboard and restores focus", async ({
   e2eRun,

@@ -50,7 +50,7 @@ type MatchWorkspaceLoadingModel = {
   };
   workspace: {
     blocked: boolean;
-    copy: { description: string; title: string };
+    copy: { title: string };
     loading: boolean;
   };
 };

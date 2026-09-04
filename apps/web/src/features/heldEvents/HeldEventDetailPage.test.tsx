@@ -50,7 +50,7 @@ describe("HeldEventDetailPage", () => {
     expect(header).toHaveTextContent("開催記録");
     const actionSlot = header?.children.item(1);
     expect(actionSlot?.children).toHaveLength(1);
-    expect(actionSlot?.children.item(0)?.children).toHaveLength(3);
+    expect(actionSlot?.children.item(0)?.children).toHaveLength(2);
   });
 
   it("connects one held event to its draft, player recap, results, and comparison", async () => {
@@ -183,7 +183,17 @@ describe("HeldEventDetailPage", () => {
       level: 1,
       name: "開催が見つかりません",
     });
-    expect(missingHeading.closest("header")).toHaveTextContent("開催記録");
+    const missingHeader = missingHeading.closest("header");
+    expect(missingHeader).toHaveTextContent("開催記録");
+    expect(missingHeader).toHaveTextContent("試合数・下書き数は未取得です。");
+    expect(screen.getByRole("link", { name: "試合検索で見る" })).toHaveAttribute(
+      "href",
+      "/matches?heldEventId=held-1&sort=match_no_asc&returnTo=%2Fheld-events%2Fheld-1",
+    );
+    expect(screen.getByRole("link", { name: "CSV出力" })).toHaveAttribute(
+      "href",
+      "/exports?heldEventId=held-1&format=csv&returnTo=%2Fheld-events%2Fheld-1",
+    );
     expect(screen.getByRole("link", { name: "開催履歴へ戻る" })).toHaveAttribute(
       "href",
       "/held-events",
@@ -208,7 +218,10 @@ describe("HeldEventDetailPage", () => {
       level: 1,
       name: "開催詳細を読み込めませんでした",
     });
-    expect(failureHeading.closest("header")).toHaveTextContent("開催記録");
+    const failureHeader = failureHeading.closest("header");
+    expect(failureHeader).toHaveTextContent("開催記録");
+    expect(failureHeader).toHaveTextContent("試合数・下書き数は未取得です。");
+    expect(screen.getByRole("navigation", { name: "この開催の関連操作" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "開催詳細を再読み込み" }));
 
     expect(

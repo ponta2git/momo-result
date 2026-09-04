@@ -1,8 +1,12 @@
+import { HeldEventDetailHeaderActions } from "@/features/heldEvents/HeldEventDetailHeaderActions";
 import { ResourcePageState } from "@/shared/ui/feedback/ResourcePageState";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
-import { PageHeader, responsivePageHeaderActionGroupClass } from "@/shared/ui/layout/PageHeader";
+import {
+  PageHeader,
+  responsivePageHeaderLeadActionGroupClass,
+} from "@/shared/ui/layout/PageHeader";
 
 export function HeldEventDetailLoading() {
   return (
@@ -12,17 +16,23 @@ export function HeldEventDetailLoading() {
       </div>
       <PageHeader
         actions={
-          <div className={responsivePageHeaderActionGroupClass}>
+          <div
+            className={responsivePageHeaderLeadActionGroupClass}
+            data-page-header-actions="responsive-lead"
+          >
             <Skeleton className="h-11 w-full rounded-sm sm:w-36 pointer-fine:h-9" />
             <Skeleton className="h-11 w-full rounded-sm sm:w-28 pointer-fine:h-9" />
-            <Skeleton className="h-11 w-full rounded-sm sm:w-20 pointer-fine:h-9" />
           </div>
         }
         description={<Skeleton as="span" className="block h-6 w-full max-w-56" />}
         eyebrow="開催記録"
         title="開催の記録を読み込み中"
       />
-      <PageContentSurface className="grid grid-cols-[minmax(0,1fr)] gap-8">
+      <PageContentSurface
+        aria-label="開催内容"
+        className="grid grid-cols-[minmax(0,1fr)] gap-8"
+        role="region"
+      >
         <div className="grid gap-4 sm:grid-cols-3">
           {["matches", "drafts", "next"].map((id) => (
             <div key={id} className="grid gap-2">
@@ -66,11 +76,15 @@ export function HeldEventDetailLoading() {
 
 export function HeldEventDetailUnavailable({
   backHref = "/held-events",
+  exportHref,
+  matchesHref,
   notFound = false,
   onRetry,
   retrying = false,
 }: {
   backHref?: string;
+  exportHref: string;
+  matchesHref: string;
   notFound?: boolean;
   onRetry?: (() => void) | undefined;
   retrying?: boolean;
@@ -81,6 +95,10 @@ export function HeldEventDetailUnavailable({
       backLabel="開催履歴へ戻る"
       description="指定された開催は削除されたか、存在しません。開催履歴から別の開催を選んでください。"
       eyebrow="開催記録"
+      headerActions={
+        <HeldEventDetailHeaderActions exportHref={exportHref} matchesHref={matchesHref} />
+      }
+      headerDescription="試合数・下書き数は未取得です。"
       kind="not-found"
       title="開催が見つかりません"
     />
@@ -90,6 +108,10 @@ export function HeldEventDetailUnavailable({
       backLabel="開催履歴へ戻る"
       description="通信状態を確認して、もう一度お試しください。"
       eyebrow="開催記録"
+      headerActions={
+        <HeldEventDetailHeaderActions exportHref={exportHref} matchesHref={matchesHref} />
+      }
+      headerDescription="試合数・下書き数は未取得です。"
       kind="error"
       retryLabel="開催詳細を再読み込み"
       retrying={retrying}

@@ -30,6 +30,7 @@ export function PageContentSurface({
         paddingClass[padding],
         className,
       )}
+      data-page-content-surface=""
       {...props}
     />
   );

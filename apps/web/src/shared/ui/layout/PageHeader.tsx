@@ -2,10 +2,18 @@ import type { ReactNode } from "react";
 
 import { cn } from "@/shared/ui/cn";
 import { readableTextWidthClass } from "@/shared/ui/layout/readableText";
+import { StatusBadge } from "@/shared/ui/status/StatusBadge";
+import type { StatusBadgeTone } from "@/shared/ui/status/StatusBadge";
+
+export type PageHeaderDescriptionStatus = {
+  label: ReactNode;
+  tone?: StatusBadgeTone | undefined;
+};
 
 type PageHeaderProps = {
   actions?: ReactNode;
   description?: ReactNode;
+  descriptionStatus?: PageHeaderDescriptionStatus | undefined;
   eyebrow?: ReactNode;
   meta?: ReactNode;
   title: ReactNode;
@@ -15,7 +23,20 @@ type PageHeaderProps = {
 export const responsivePageHeaderActionGroupClass =
   "grid w-full shrink-0 grid-cols-2 gap-2 sm:flex sm:w-auto sm:items-center";
 
-export function PageHeader({ actions, description, eyebrow, meta, title }: PageHeaderProps) {
+/** Gives a mobile header one full-width lead action before the remaining compact actions. */
+export const responsivePageHeaderLeadActionGroupClass = cn(
+  responsivePageHeaderActionGroupClass,
+  "[&>*:first-child]:col-span-2 sm:[&>*:first-child]:col-auto",
+);
+
+export function PageHeader({
+  actions,
+  description,
+  descriptionStatus,
+  eyebrow,
+  meta,
+  title,
+}: PageHeaderProps) {
   return (
     <header className="grid min-w-0 gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
       <div className="min-w-0">
@@ -39,6 +60,11 @@ export function PageHeader({ actions, description, eyebrow, meta, title }: PageH
           >
             {description}
           </p>
+        ) : null}
+        {descriptionStatus ? (
+          <div className="mt-2 w-fit">
+            <StatusBadge label={descriptionStatus.label} tone={descriptionStatus.tone} />
+          </div>
         ) : null}
       </div>
       {meta || actions ? (

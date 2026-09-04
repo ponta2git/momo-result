@@ -20,7 +20,7 @@ use super::{
     presentation::{member_ref_json, scope_summary_json},
     quality::{data_quality, highlights, metric_definitions, quality_summary},
     signals::rank_spread_signal,
-    trends::{histogram, match_digest, match_no_in_event, revenue_histogram, trends},
+    trends::{asset_histogram, match_digest, match_no_in_event, revenue_histogram, trends},
 };
 
 pub(super) fn aggregate(
@@ -78,7 +78,7 @@ pub(super) fn aggregate(
         "revenueRankConversion": revenue_rank_conversion(players, player_matches_by_member, &revenue_ranks),
         "trends": trends,
         "histograms": {
-            "assets": histogram(rows, players, |row| row.total_assets_man_yen),
+            "assets": asset_histogram(rows, players, |row| row.total_assets_man_yen),
             "revenue": revenue_histogram(rows, players, |row| row.revenue_man_yen),
         },
         "headToHead": head_to_head,

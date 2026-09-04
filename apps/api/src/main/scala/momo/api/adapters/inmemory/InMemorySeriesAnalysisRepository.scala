@@ -89,7 +89,7 @@ final class InMemorySeriesAnalysisRepository[F[_]: Sync] private (
                   activeCampaignCount = 0,
                   latestActiveCampaign = None,
                 ),
-                jobs.take(3),
+                jobs.take(10),
               ).asRight[AppError].pure[F]
     yield result
 

@@ -109,7 +109,7 @@ DB lock順とstaging transactionの規則は `docs/db-rule.md`、process責務�
 - Rust parentは全resourceのcanonical bytes、個別意味、resource集合、相互参照を検証したopaque artifactだけにvalidation contract IDを付けて公開する。readerは同じ意味規則を再実装せず、exact contract IDとartifact schemaの組をallowlistする。
 - published headerとchild resourceはDBで改変不能とし、staging中の差し替えと、参照されないparentの正規cleanupだけを許可する。child payloadと同じrowのchecksumだけをpublication provenanceの代用にしない。
 
-各作品はcurrentとpreviousの成功artifactを保持する。terminal jobは終了後45日保持し、`queued` / `running` を履歴cleanupしない。管理画面の直近3件という表示上限をDB保持条件に使わない。
+各作品はcurrentとpreviousの成功artifactを保持する。terminal jobは終了後45日保持し、`queued` / `running` を履歴cleanupしない。管理画面の直近10件という表示上限をDB保持条件に使わない。
 
 ## 6. API / Web / Admin
 
@@ -138,7 +138,7 @@ DB lock順とstaging transactionの規則は `docs/db-rule.md`、process責務�
 
 - 管理画面は1作品runを主操作、全作品runを明示的な確認付き操作とする。一般利用者へ管理導線を出さない。
 - 作品候補は確定試合0件を含む全登録作品とし、登録作品0件では操作を拒否する。
-- overviewは選択作品のstatus、未充足手動run、slot / queue / campaign要約、全作品横断の直近3件を表示する。
+- overviewは選択作品のstatus、未充足手動run、slot / queue / campaign要約、全作品横断の直近10件を表示する。
 - 履歴は作品、状態、要求元、時刻、処理時間、version、attempt / recovery、safe failure codeを安全な範囲で示す。内部例外、接続先、artifact本文を返さない。
 
 ## 7. Correctness / Resource / OCR
@@ -180,7 +180,7 @@ OCR同居を有効化する場合は、共通parent-child境界、単一slot、�
 | slot / lease / child / preemption | 複数worker、stale fence、owner喪失、timeout、OOM、process group回収、一方向preemption |
 | calculation / artifact | 文書化した数式・性質・canonicalization、上限、部分公開拒否、current 維持 |
 | API / Web | bounded read、artifact pinning、expired retry、revision mismatch、状態decision table、意味再計算禁止 |
-| admin / retention | auth / CSRF / idempotency、target snapshot、未充足run、直近3件、45日cleanup |
+| admin / retention | auth / CSRF / idempotency、target snapshot、未充足run、直近10件、45日cleanup |
 | compatibility / release | reader-first、または停止を伴う単一世代切替の再開条件、version capability、reload導線、rollback後current維持、旧engine不在 |
 | resource | 定義した上限負荷を production 同等 runtime で処理し、worker / API / browser 別の resource と timeout 要求を満たす。実測は private evidence に置く |
 

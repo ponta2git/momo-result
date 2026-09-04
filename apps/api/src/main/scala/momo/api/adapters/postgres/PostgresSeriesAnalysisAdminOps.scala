@@ -175,7 +175,7 @@ private[postgres] object PostgresSeriesAnalysisAdminOps:
     FROM series_analysis_jobs j
     JOIN game_titles gt ON gt.id = j.game_title_id
     ORDER BY j.created_at DESC, j.id DESC
-    LIMIT 3
+    LIMIT 10
   """.query[JobRow].to[List]
 
   private def jobSummaryCio(

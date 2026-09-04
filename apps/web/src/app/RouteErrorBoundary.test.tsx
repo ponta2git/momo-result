@@ -34,15 +34,10 @@ describe("RouteErrorBoundary", () => {
       );
 
       const retry = await screen.findByRole("button", { name: "もう一度読み込む" });
-      const heading = screen.getByRole("heading", {
-        level: 1,
-        name: "画面の読み込みに失敗しました",
-      });
-      expect(heading).toBeInTheDocument();
-      const frame = heading.closest(".mx-auto");
-      expect(frame?.children).toHaveLength(2);
-      expect(frame?.children.item(0)).toContainElement(heading);
-      expect(frame?.children.item(1)).toContainElement(retry);
+      const surface = screen.getByRole("region", { name: "画面の読み込みに失敗しました" });
+      expect(screen.queryByRole("heading", { level: 1 })).not.toBeInTheDocument();
+      expect(surface).toContainElement(retry);
+      expect(surface.closest(".mx-auto")?.children).toHaveLength(1);
 
       await user.click(retry);
 
@@ -130,7 +125,7 @@ describe("RouteErrorBoundary", () => {
     }
   });
 
-  it("keeps workspace exit navigation in the header without a duplicate leading action", async () => {
+  it("keeps workspace exit navigation in the content surface without a duplicate action", async () => {
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
 
     try {
@@ -142,22 +137,21 @@ describe("RouteErrorBoundary", () => {
         </MemoryRouter>,
       );
 
-      const heading = await screen.findByRole("heading", {
-        level: 1,
+      const surface = await screen.findByRole("region", {
         name: "画面の読み込みに失敗しました",
       });
-      const header = heading.closest("header");
       const exit = screen.getByRole("link", { name: "入力をやめる" });
       expect(exit).toHaveAttribute("href", "/matches");
-      expect(header).toContainElement(exit);
-      expect(header?.parentElement?.children).toHaveLength(2);
+      expect(surface).toContainElement(exit);
+      expect(surface.closest(".mx-auto")?.children).toHaveLength(1);
+      expect(screen.queryByRole("heading", { level: 1 })).not.toBeInTheDocument();
       expect(screen.getAllByRole("link", { name: "入力をやめる" })).toHaveLength(1);
     } finally {
       consoleError.mockRestore();
     }
   });
 
-  it("keeps query-known review context in the terminal header", async () => {
+  it("keeps query-known review context in the terminal content toolbar", async () => {
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
 
     try {
@@ -169,17 +163,17 @@ describe("RouteErrorBoundary", () => {
         </MemoryRouter>,
       );
 
-      const heading = await screen.findByRole("heading", {
-        level: 1,
+      const surface = await screen.findByRole("region", {
         name: "画面の読み込みに失敗しました",
       });
-      expect(heading.closest("header")).toHaveTextContent("サンプルの読み取り結果で表示中");
+      expect(surface).toHaveTextContent("サンプルの読み取り結果で表示中");
+      expect(screen.queryByRole("heading", { level: 1 })).not.toBeInTheDocument();
     } finally {
       consoleError.mockRestore();
     }
   });
 
-  it("keeps a safe return context between the settings header and terminal surface", async () => {
+  it("keeps a safe return context ahead of the settings terminal surface", async () => {
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
 
     try {
@@ -194,18 +188,15 @@ describe("RouteErrorBoundary", () => {
         </MemoryRouter>,
       );
 
-      const heading = await screen.findByRole("heading", {
-        level: 1,
+      const surface = await screen.findByRole("region", {
         name: "画面の読み込みに失敗しました",
       });
-      const header = heading.closest("header");
-      const frame = header?.parentElement;
+      const frame = surface.parentElement;
       const returnLink = screen.getByRole("link", { name: "元の画面へ戻る" });
-      expect(header).toHaveTextContent("管理");
       expect(returnLink).toHaveAttribute("href", "/review/session-1?handoffId=handoff-1");
-      expect(frame?.children).toHaveLength(3);
-      expect(frame?.children.item(1)).toContainElement(returnLink);
-      expect(frame?.children.item(2)).toContainElement(
+      expect(frame?.children).toHaveLength(2);
+      expect(frame?.children.item(0)).toContainElement(returnLink);
+      expect(frame?.children.item(1)).toContainElement(
         screen.getByRole("button", { name: "もう一度読み込む" }),
       );
     } finally {
@@ -213,7 +204,7 @@ describe("RouteErrorBoundary", () => {
     }
   });
 
-  it("keeps route-known match actions in a terminal header", async () => {
+  it("keeps route-known match actions in the terminal content surface", async () => {
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
 
     try {
@@ -225,13 +216,11 @@ describe("RouteErrorBoundary", () => {
         </MemoryRouter>,
       );
 
-      const heading = await screen.findByRole("heading", {
-        level: 1,
+      const surface = await screen.findByRole("region", {
         name: "画面の読み込みに失敗しました",
       });
-      const header = heading.closest("header");
       const actionGroup = screen.getByRole("group", { name: "試合を登録" });
-      expect(header).toContainElement(actionGroup);
+      expect(surface).toContainElement(actionGroup);
       expect(screen.getByRole("link", { name: "OCR取り込み" })).toHaveAttribute(
         "href",
         "/ocr/new?returnTo=%2Fmatches%3Fstatus%3Dconfirmed",

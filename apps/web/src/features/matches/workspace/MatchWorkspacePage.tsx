@@ -5,19 +5,16 @@ import { MatchConfirmDialog } from "@/features/matches/workspace/MatchConfirmDia
 import type { WorkspaceMode } from "@/features/matches/workspace/matchFormTypes";
 import { MatchWorkspaceBlockedNotice } from "@/features/matches/workspace/MatchWorkspaceBlockedNotice";
 import { MatchWorkspaceEditor } from "@/features/matches/workspace/MatchWorkspaceEditor";
-import { MatchWorkspaceHeader } from "@/features/matches/workspace/MatchWorkspaceHeader";
 import { MatchWorkspaceLoading } from "@/features/matches/workspace/MatchWorkspaceLoading";
 import { MatchWorkspaceNavigationGuard } from "@/features/matches/workspace/MatchWorkspaceNavigationGuard";
+import { MatchWorkspaceToolbar } from "@/features/matches/workspace/MatchWorkspaceToolbar";
 import { useMatchWorkspacePageModel } from "@/features/matches/workspace/useMatchWorkspacePageModel";
 import { draftIdsFromParams } from "@/features/matches/workspace/workspaceDerivations";
-import { buildWorkspacePageCopy } from "@/features/matches/workspace/workspaceViewModel";
 import { useAuth } from "@/shared/auth/useAuth";
 import { Button } from "@/shared/ui/actions/Button";
-import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
-import { PageHeader } from "@/shared/ui/layout/PageHeader";
 
 type MatchWorkspacePageProps = {
   matchDraftId?: string;
@@ -52,14 +49,7 @@ export function MatchWorkspacePage(props: MatchWorkspacePageProps) {
   const { auth, isChecking } = useAuth();
   const useSampleDrafts = props.mode === "review" && searchParams.get("sample") === "1";
   if (isChecking) {
-    return (
-      <MatchWorkspaceLoading
-        description={
-          buildWorkspacePageCopy({ mode: props.mode, reviewStatus: undefined }).description
-        }
-        sample={useSampleDrafts}
-      />
-    );
+    return <MatchWorkspaceLoading sample={useSampleDrafts} />;
   }
   return (
     <MatchWorkspacePageContent
@@ -102,9 +92,8 @@ function MatchWorkspacePageContent({
   if (loading.edit.loading) {
     return (
       <MatchWorkspaceLoading
-        description={navigation.header.description}
-        sample={navigation.header.sample}
-        title="試合編集を読み込み中"
+        loadingLabel="試合編集を読み込み中"
+        sample={navigation.toolbar.sample}
       />
     );
   }
@@ -114,16 +103,8 @@ function MatchWorkspacePageContent({
     const title = notFound ? "試合が見つかりませんでした" : "試合編集を読み込めませんでした";
     return (
       <PageFrame width="workspace">
-        <PageHeader
-          actions={
-            <LinkButton size="sm" to={navigation.header.exit.href} variant="quiet">
-              {navigation.header.exit.label}
-            </LinkButton>
-          }
-          description={navigation.header.description}
-          title={title}
-        />
-        <PageContentSurface>
+        <PageContentSurface aria-label="試合内容" className="grid gap-6" role="region">
+          <MatchWorkspaceToolbar model={navigation.toolbar} />
           <Notice
             action={
               notFound ? undefined : (
@@ -137,6 +118,7 @@ function MatchWorkspacePageContent({
                 </Button>
               )
             }
+            title={title}
             tone={notFound ? "warning" : "danger"}
           >
             <p>
@@ -153,18 +135,16 @@ function MatchWorkspacePageContent({
   if (loading.workspace.loading) {
     return (
       <MatchWorkspaceLoading
-        description={navigation.header.description}
-        sample={navigation.header.sample}
-        title={loading.workspace.copy.title}
+        loadingLabel={loading.workspace.copy.loadingLabel}
+        sample={navigation.toolbar.sample}
       />
     );
   }
 
   return (
     <PageFrame width="workspace">
-      <MatchWorkspaceHeader model={navigation.header} />
-
       <PageContentSurface aria-label="試合内容" className="grid gap-6" role="region">
+        <MatchWorkspaceToolbar model={navigation.toolbar} />
         {loading.base.errors.length > 0 ? (
           <Notice
             action={

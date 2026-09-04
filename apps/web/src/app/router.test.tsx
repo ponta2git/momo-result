@@ -51,10 +51,11 @@ describe("app routing", () => {
   it("redirects / to /login when unauthenticated", async () => {
     const { router } = renderApp("/");
 
+    expect(await screen.findByRole("region", { name: "ログイン" })).toBeInTheDocument();
     expect(
-      await screen.findByText("ログインすると、試合の記録・確認・比較・出力を利用できます。"),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "ログイン" })).toBeInTheDocument();
+      screen.queryByText("ログインすると、試合の記録・確認・比較・出力を利用できます。"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { level: 1 })).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "ログイン" })).toBeInTheDocument();
     expect(
       screen.queryByText(
@@ -74,7 +75,7 @@ describe("app routing", () => {
     const { router } = renderApp("/");
 
     expect(
-      await screen.findByRole("heading", { name: "試合一覧" }, { timeout: 3_000 }),
+      await screen.findByRole("region", { name: "試合一覧" }, { timeout: 3_000 }),
     ).toBeInTheDocument();
     expect(router.state.location.pathname).toBe("/matches");
     expect(screen.getByRole("button", { name: "ログアウト" })).toBeInTheDocument();
@@ -118,13 +119,13 @@ describe("app routing", () => {
     expect(screen.getAllByRole("navigation", { name: "グローバルナビゲーション" })).toHaveLength(1);
 
     responseGate.resolve();
-    expect(await screen.findByRole("heading", { name: "試合一覧" })).toBeInTheDocument();
+    expect(await screen.findByRole("region", { name: "試合一覧" })).toBeInTheDocument();
   });
 
   it("redirects protected routes to /login with next query when unauthenticated", async () => {
     const { router } = renderApp("/exports");
 
-    expect(await screen.findByRole("heading", { name: "ログイン" })).toBeInTheDocument();
+    expect(await screen.findByRole("region", { name: "ログイン" })).toBeInTheDocument();
     expect(router.state.location.pathname).toBe("/login");
     expect(router.state.location.search).toContain("next=%2Fexports");
   });
@@ -134,7 +135,7 @@ describe("app routing", () => {
     const { router } = renderApp("/exports?format=tsv&matchId=match-1#download");
 
     expect(await screen.findByText("アクセス権限がありません")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "ログイン" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "ログイン" })).toBeInTheDocument();
     expect(router.state.location.pathname).toBe("/login");
     const recoveryParams = new URLSearchParams(router.state.location.search);
     expect(recoveryParams.get("reason")).toBe("forbidden");
@@ -182,8 +183,9 @@ describe("app routing", () => {
 
     const retry = await screen.findByRole("button", { name: "再試行" });
     expect(
-      screen.getByRole("heading", { level: 1, name: "ログイン状態を確認できません" }),
+      screen.getByRole("region", { name: "ログイン状態を確認できません" }),
     ).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { level: 1 })).not.toBeInTheDocument();
     expect(screen.queryByText("Temporary failure")).not.toBeInTheDocument();
     expect(screen.queryByText("auth temporarily unavailable")).not.toBeInTheDocument();
     expect(
@@ -201,7 +203,7 @@ describe("app routing", () => {
     expect(screen.getByRole("main")).toHaveAttribute("id", "main-content");
     await user.click(retry);
 
-    expect(await screen.findByRole("heading", { name: "試合一覧" })).toBeInTheDocument();
+    expect(await screen.findByRole("region", { name: "試合一覧" })).toBeInTheDocument();
     expect(screen.queryByText("Temporary failure")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "再試行" })).not.toBeInTheDocument();
     expect(screen.getAllByRole("navigation", { name: "グローバルナビゲーション" })).toHaveLength(1);
@@ -234,7 +236,7 @@ describe("app routing", () => {
     setDevUser();
     const { router } = renderApp("/login");
 
-    expect(await screen.findByRole("heading", { name: "試合一覧" })).toBeInTheDocument();
+    expect(await screen.findByRole("region", { name: "試合一覧" })).toBeInTheDocument();
     expect(router.state.location.pathname).toBe("/matches");
   });
 
@@ -256,7 +258,7 @@ describe("app routing", () => {
     );
     const { router } = renderApp("/matches");
 
-    expect(await screen.findByRole("heading", { name: "試合一覧" })).toBeInTheDocument();
+    expect(await screen.findByRole("region", { name: "試合一覧" })).toBeInTheDocument();
 
     const detailLinks = await screen.findAllByRole("link", {
       name: "第1試合 東日本編の試合結果を見る",
@@ -292,7 +294,7 @@ describe("app routing", () => {
     try {
       const { queryClient, router } = renderApp("/matches");
 
-      expect(await screen.findByRole("heading", { name: "試合一覧" })).toBeInTheDocument();
+      expect(await screen.findByRole("region", { name: "試合一覧" })).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "アカウント" })).toBeInTheDocument();
       queryClient.setQueryData(matchKeys.detail("match-secret"), {
         matchId: "match-secret",
@@ -305,7 +307,7 @@ describe("app routing", () => {
         expect(router.state.location.pathname).toBe("/login");
       });
       const accountPicker = await screen.findByRole("combobox", { name: "操作用アカウント" });
-      expect(screen.getByRole("heading", { name: "ログイン" })).toBeInTheDocument();
+      expect(screen.getByRole("region", { name: "ログイン" })).toBeInTheDocument();
       expect(accountPicker).toBeEnabled();
       await user.selectOptions(accountPicker, "account_eu");
 
@@ -340,7 +342,7 @@ describe("app routing", () => {
     try {
       const { router } = renderApp("/matches");
 
-      expect(await screen.findByRole("heading", { name: "試合一覧" })).toBeInTheDocument();
+      expect(await screen.findByRole("region", { name: "試合一覧" })).toBeInTheDocument();
       expect(router.state.location.pathname).toBe("/matches");
       expect(screen.queryByRole("button", { name: "ログアウト" })).not.toBeInTheDocument();
       expect(screen.queryByText("アカウント固定")).not.toBeInTheDocument();
@@ -362,7 +364,7 @@ describe("app routing", () => {
     setDevUser();
     const { router } = renderApp("/held-events");
 
-    expect(await screen.findByRole("heading", { name: "開催履歴" })).toBeInTheDocument();
+    expect(await screen.findByRole("region", { name: "開催履歴" })).toBeInTheDocument();
     expect(router.state.location.pathname).toBe("/held-events");
     expect(screen.getByRole("link", { name: "開催" })).toBeInTheDocument();
   });
@@ -386,7 +388,7 @@ describe("app routing", () => {
 
     const { router } = renderApp("/analytics/series");
 
-    expect(await screen.findByRole("heading", { name: "戦績比較" })).toBeInTheDocument();
+    expect(await screen.findByRole("region", { name: "戦績比較" })).toBeInTheDocument();
     const scopeSurface = await screen.findByRole("region", { name: "比較条件" });
     await waitFor(() => expect(scopeSurface).toHaveTextContent("12戦"));
     expect(scopeSurface).not.toHaveTextContent("十分");
@@ -576,7 +578,7 @@ describe("app routing", () => {
     );
     const { router } = renderApp("/analytics/series?view=overview");
 
-    expect(await screen.findByRole("heading", { name: "戦績比較" })).toBeInTheDocument();
+    expect(await screen.findByRole("region", { name: "戦績比較" })).toBeInTheDocument();
     await user.click(await screen.findByRole("button", { name: /比較対象を変更/u }));
     await user.selectOptions(screen.getByRole("combobox", { name: "シーズン" }), "season_current");
     await user.selectOptions(screen.getByRole("combobox", { name: "マップ" }), "map_east");

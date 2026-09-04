@@ -53,7 +53,7 @@ describe("HeldEventsPage", () => {
   it("renders held-event status and related links", async () => {
     renderPage();
 
-    expect(await screen.findByRole("heading", { name: "開催履歴" })).toBeInTheDocument();
+    expect(await screen.findByRole("region", { name: "開催履歴" })).toBeInTheDocument();
     expect(await screen.findByText("最新")).toBeInTheDocument();
     expect(screen.getByRole("region", { name: "開催履歴" })).toBeInTheDocument();
     expect(screen.getByText("確定済み")).toBeInTheDocument();

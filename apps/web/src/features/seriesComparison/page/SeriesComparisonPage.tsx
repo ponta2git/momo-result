@@ -12,13 +12,14 @@ import {
   PageSkeleton,
 } from "@/features/seriesComparison/page/SeriesComparisonSkeletons";
 import { useSeriesComparisonPageModel } from "@/features/seriesComparison/page/useSeriesComparisonPageModel";
+import { actionRowClass } from "@/shared/ui/actions/actionGroup";
 import { Button } from "@/shared/ui/actions/Button";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
+import { cn } from "@/shared/ui/cn";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
-import { PageHeader } from "@/shared/ui/layout/PageHeader";
 import { StaleShield } from "@/shared/ui/motion/StaleShield";
 
 function seriesReturnAction(returnTo: string | undefined) {
@@ -42,8 +43,12 @@ export function SeriesComparisonPage() {
   if (page.clientUpgradeRequired) {
     return (
       <PageFrame width="wide">
-        <PageHeader actions={seriesReturnAction(page.returnTo)} title="戦績比較" />
-        <PageContentSurface>
+        <PageContentSurface aria-label="戦績比較" className="grid gap-4" role="region">
+          {page.returnTo ? (
+            <nav aria-label="戦績比較の操作" className={cn(actionRowClass, "justify-end")}>
+              {seriesReturnAction(page.returnTo)}
+            </nav>
+          ) : null}
           <Notice
             action={
               <Button size="sm" onClick={page.actions.reloadClient}>
@@ -62,8 +67,16 @@ export function SeriesComparisonPage() {
 
   return (
     <PageFrame width="wide">
-      <PageHeader actions={seriesReturnAction(page.returnTo)} title="戦績比較" />
-      <PageContentSurface className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4">
+      <PageContentSurface
+        aria-label="戦績比較"
+        className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4"
+        role="region"
+      >
+        {page.returnTo ? (
+          <nav aria-label="戦績比較の操作" className={cn(actionRowClass, "justify-end")}>
+            {seriesReturnAction(page.returnTo)}
+          </nav>
+        ) : null}
         {options.hasError ? (
           <Notice
             action={

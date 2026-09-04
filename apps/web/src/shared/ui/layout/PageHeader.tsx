@@ -1,5 +1,9 @@
 import type { ReactNode } from "react";
 
+import {
+  responsiveActionGroupClass,
+  responsiveLeadActionGroupClass,
+} from "@/shared/ui/actions/actionGroup";
 import { cn } from "@/shared/ui/cn";
 import { readableTextWidthClass } from "@/shared/ui/layout/readableText";
 import { StatusBadge } from "@/shared/ui/status/StatusBadge";
@@ -20,14 +24,10 @@ type PageHeaderProps = {
 };
 
 /** Keeps multi-action headers two-column and predictable until inline labels have enough room. */
-export const responsivePageHeaderActionGroupClass =
-  "grid w-full shrink-0 grid-cols-2 gap-2 sm:flex sm:w-auto sm:items-center";
+export const responsivePageHeaderActionGroupClass = responsiveActionGroupClass;
 
 /** Gives a mobile header one full-width lead action before the remaining compact actions. */
-export const responsivePageHeaderLeadActionGroupClass = cn(
-  responsivePageHeaderActionGroupClass,
-  "[&>*:first-child]:col-span-2 sm:[&>*:first-child]:col-auto",
-);
+export const responsivePageHeaderLeadActionGroupClass = responsiveLeadActionGroupClass;
 
 export function PageHeader({
   actions,

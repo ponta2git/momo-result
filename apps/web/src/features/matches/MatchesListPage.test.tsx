@@ -63,7 +63,7 @@ describe("MatchesListPage", () => {
       </QueryClientProvider>,
     );
 
-    expect(await screen.findByRole("heading", { name: "試合一覧" })).toBeInTheDocument();
+    expect(await screen.findByRole("region", { name: "試合一覧" })).toBeInTheDocument();
     expect(await screen.findAllByText("優勝 ぽんた")).toHaveLength(1);
     const listRegion = screen.getByRole("region", { name: "登録済みの試合" });
     expect(within(listRegion).getByText("1〜3件／全3件")).toBeInTheDocument();
@@ -167,7 +167,7 @@ describe("MatchesListPage", () => {
       </QueryClientProvider>,
     );
 
-    expect(await screen.findByRole("heading", { name: "試合一覧" })).toBeInTheDocument();
+    expect(await screen.findByRole("region", { name: "試合一覧" })).toBeInTheDocument();
 
     const detailLinks = await screen.findAllByRole("link", {
       name: "第1試合 東日本編の試合結果を見る",
@@ -206,7 +206,7 @@ describe("MatchesListPage", () => {
       </QueryClientProvider>,
     );
 
-    expect(await screen.findByRole("heading", { name: "試合一覧" })).toBeInTheDocument();
+    expect(await screen.findByRole("region", { name: "試合一覧" })).toBeInTheDocument();
     expect(await screen.findByText("試合はまだありません")).toBeInTheDocument();
     const emptyOcrAction = screen.getAllByRole("link", { name: "OCR取り込み" }).at(-1)!;
     expect(emptyOcrAction).toHaveAttribute("href", "/ocr/new?returnTo=%2Fmatches");
@@ -359,7 +359,7 @@ describe("MatchesListPage", () => {
       </QueryClientProvider>,
     );
 
-    expect(await screen.findByRole("heading", { name: "試合一覧" })).toBeInTheDocument();
+    expect(await screen.findByRole("region", { name: "試合一覧" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "詳細条件" }));
     await user.click(await screen.findByRole("button", { name: "開催を変更" }));
     await user.click(await screen.findByRole("radio", { name: /2026\/01\/01/u }));
@@ -390,7 +390,7 @@ describe("MatchesListPage", () => {
       </QueryClientProvider>,
     );
 
-    expect(await screen.findByRole("heading", { name: "試合一覧" })).toBeInTheDocument();
+    expect(await screen.findByRole("region", { name: "試合一覧" })).toBeInTheDocument();
     await user.selectOptions(screen.getByLabelText("並び順"), "updated_desc");
 
     await waitFor(() =>
@@ -431,7 +431,7 @@ describe("MatchesListPage", () => {
       </QueryClientProvider>,
     );
 
-    expect(await screen.findByRole("heading", { name: "試合一覧" })).toBeInTheDocument();
+    expect(await screen.findByRole("region", { name: "試合一覧" })).toBeInTheDocument();
     const listRegion = screen.getByRole("region", { name: "登録済みの試合" });
     await waitFor(() => expect(listRegion).not.toHaveAttribute("aria-busy"));
     expect(summaryRequests).toBe(1);
@@ -505,7 +505,7 @@ describe("MatchesListPage", () => {
       </QueryClientProvider>,
     );
 
-    expect(await screen.findByRole("heading", { name: "試合一覧" })).toBeInTheDocument();
+    expect(await screen.findByRole("region", { name: "試合一覧" })).toBeInTheDocument();
     expect(requestedCursors.at(-1)).toBeNull();
 
     await user.click(await screen.findByRole("button", { name: "次のページへ" }));
@@ -593,7 +593,7 @@ describe("MatchesListPage", () => {
       </QueryClientProvider>,
     );
 
-    expect(await screen.findByRole("heading", { name: "試合一覧" })).toBeInTheDocument();
+    expect(await screen.findByRole("region", { name: "試合一覧" })).toBeInTheDocument();
     const draftActionButtons = await screen.findAllByRole("button", { name: "確認事項を直す" });
     expect(draftActionButtons).not.toHaveLength(0);
     const statusFilter = screen.getByLabelText("確定状況");
@@ -1130,7 +1130,7 @@ describe("MatchesListPage", () => {
       </QueryClientProvider>,
     );
 
-    expect(await screen.findByRole("heading", { name: "試合一覧" })).toBeInTheDocument();
+    expect(await screen.findByRole("region", { name: "試合一覧" })).toBeInTheDocument();
     const draftActions = await screen.findAllByRole("button", { name: "確認事項を直す" });
     const draftAction = draftActions[0];
     if (!draftAction) {
@@ -1197,7 +1197,7 @@ describe("MatchesListPage", () => {
       </QueryClientProvider>,
     );
 
-    expect(await screen.findByRole("heading", { name: "試合一覧" })).toBeInTheDocument();
+    expect(await screen.findByRole("region", { name: "試合一覧" })).toBeInTheDocument();
     const draftActions = await screen.findAllByRole("button", { name: "確認事項を直す" });
     const firstDraftAction = draftActions[0];
     if (!firstDraftAction) {

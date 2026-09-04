@@ -7,7 +7,9 @@ import type {
   RouteHeaderActionsPresentation,
   RouteNavigationPresentation,
 } from "@/app/RouteSuspenseFallback";
+import { actionRowClass } from "@/shared/ui/actions/actionGroup";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
+import { cn } from "@/shared/ui/cn";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
@@ -16,6 +18,7 @@ import {
   responsivePageHeaderActionGroupClass,
   responsivePageHeaderLeadActionGroupClass,
 } from "@/shared/ui/layout/PageHeader";
+import { StatusBadge } from "@/shared/ui/status/StatusBadge";
 
 type RouteTerminalPageProps = {
   children: ReactNode;
@@ -108,6 +111,26 @@ export function RouteTerminalPage({
   title,
 }: RouteTerminalPageProps) {
   const presentation = routeTerminalPresentation(pathname, search);
+  const pageActions = presentation.headerNavigation ? (
+    <HeaderNavigationLink {...presentation.headerNavigation} />
+  ) : presentation.headerActions ? (
+    <HeaderActions {...presentation.headerActions} />
+  ) : null;
+  const contentToolbar =
+    !presentation.preserveHeader && (pageActions || presentation.descriptionStatus) ? (
+      <div
+        className={cn(
+          actionRowClass,
+          presentation.descriptionStatus ? "justify-between" : "justify-end",
+        )}
+        data-page-content-actions=""
+      >
+        {presentation.descriptionStatus ? (
+          <StatusBadge {...presentation.descriptionStatus} />
+        ) : null}
+        {pageActions}
+      </div>
+    ) : null;
 
   return (
     <PageFrame width={presentation.width}>
@@ -116,19 +139,15 @@ export function RouteTerminalPage({
           <ReturnLink {...presentation.leadingNavigation} />
         </div>
       ) : null}
-      <PageHeader
-        actions={
-          presentation.headerNavigation ? (
-            <HeaderNavigationLink {...presentation.headerNavigation} />
-          ) : presentation.headerActions ? (
-            <HeaderActions {...presentation.headerActions} />
-          ) : null
-        }
-        description={presentation.description}
-        descriptionStatus={presentation.descriptionStatus}
-        eyebrow={presentation.eyebrow}
-        title={title}
-      />
+      {presentation.preserveHeader ? (
+        <PageHeader
+          actions={pageActions}
+          description={presentation.description}
+          descriptionStatus={presentation.descriptionStatus}
+          eyebrow={presentation.eyebrow}
+          title={title}
+        />
+      ) : null}
       {presentation.contextNavigation ? (
         <Notice
           action={<ReturnLink {...presentation.contextNavigation} />}
@@ -138,7 +157,13 @@ export function RouteTerminalPage({
           この画面を開く前の場所へ戻ることができます。
         </Notice>
       ) : null}
-      <PageContentSurface className={contentClassName} padding={presentation.contentPadding}>
+      <PageContentSurface
+        aria-label={typeof title === "string" ? title : undefined}
+        className={cn(contentToolbar ? "grid gap-4" : "", contentClassName)}
+        padding={presentation.contentPadding}
+        role={typeof title === "string" ? "region" : undefined}
+      >
+        {contentToolbar}
         {children}
       </PageContentSurface>
     </PageFrame>

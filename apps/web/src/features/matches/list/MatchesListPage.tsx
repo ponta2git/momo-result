@@ -6,16 +6,17 @@ import { matchListPageSizeOptions } from "@/features/matches/list/matchListSearc
 import { MatchMobileCard } from "@/features/matches/list/MatchMobileCard";
 import { useMatchesListPageModel } from "@/features/matches/list/useMatchesListPageModel";
 import { useMediaQuery } from "@/shared/lib/useMediaQuery";
+import { responsiveActionGroupClass } from "@/shared/ui/actions/actionGroup";
 import { Button } from "@/shared/ui/actions/Button";
 import { IconButton } from "@/shared/ui/actions/IconButton";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
+import { cn } from "@/shared/ui/cn";
 import { PaginationControls } from "@/shared/ui/data/PaginationControls";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
-import { PageHeader, responsivePageHeaderActionGroupClass } from "@/shared/ui/layout/PageHeader";
 import { StaleShield } from "@/shared/ui/motion/StaleShield";
 
 function ListSkeleton({ showDesktopTable }: { showDesktopTable: boolean }) {
@@ -57,30 +58,30 @@ export function MatchesListPage() {
           </LinkButton>
         </div>
       ) : null}
-      <PageHeader
-        actions={
-          <div
-            aria-label="試合を登録"
-            className={responsivePageHeaderActionGroupClass}
-            role="group"
+      <PageContentSurface aria-label="試合一覧" className="grid gap-6" role="region">
+        <div
+          aria-label="試合を登録"
+          className={cn(responsiveActionGroupClass, "sm:ml-auto")}
+          role="group"
+        >
+          <LinkButton
+            icon={<ScanLine aria-hidden="true" />}
+            size="sm"
+            to={navigation.ocrHref}
+            variant="secondary"
           >
-            <LinkButton icon={<ScanLine />} size="sm" to={navigation.ocrHref} variant="secondary">
-              OCR取り込み
-            </LinkButton>
-            <LinkButton
-              icon={<PenSquare />}
-              size="sm"
-              to={navigation.manualCreateHref}
-              variant="secondary"
-            >
-              手入力で作成
-            </LinkButton>
-          </div>
-        }
-        title="試合一覧"
-      />
+            OCR取り込み
+          </LinkButton>
+          <LinkButton
+            icon={<PenSquare aria-hidden="true" />}
+            size="sm"
+            to={navigation.manualCreateHref}
+            variant="secondary"
+          >
+            手入力で作成
+          </LinkButton>
+        </div>
 
-      <PageContentSurface className="grid gap-6">
         {filters.loadFailed ? (
           <Notice
             action={

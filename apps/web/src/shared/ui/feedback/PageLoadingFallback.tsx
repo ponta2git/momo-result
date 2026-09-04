@@ -1,3 +1,4 @@
+import { actionRowClass, inlineActionGroupClass } from "@/shared/ui/actions/actionGroup";
 import { cn } from "@/shared/ui/cn";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
@@ -13,6 +14,7 @@ import {
   responsivePageHeaderLeadActionGroupClass,
 } from "@/shared/ui/layout/PageHeader";
 import type { PageHeaderDescriptionStatus } from "@/shared/ui/layout/PageHeader";
+import { StatusBadge } from "@/shared/ui/status/StatusBadge";
 
 export type PageLoadingKind =
   | "catalog"
@@ -25,21 +27,29 @@ export type PageLoadingKind =
   | "sectioned-comparison"
   | "workspace";
 
-export type PageLoadingHeaderShape = {
+type PageLoadingActionShape = {
   actionLayout?: "inline" | "responsive-grid" | "responsive-lead" | undefined;
   actionSize?: "sm" | "md" | undefined;
   actionSlots?: 0 | 1 | 2 | 3 | undefined;
   actionWidths?: readonly PageLoadingActionWidth[] | undefined;
+};
+
+export type PageLoadingHeaderShape = PageLoadingActionShape & {
   description?: boolean | undefined;
   descriptionStatus?: PageHeaderDescriptionStatus | undefined;
   descriptionText?: string | undefined;
   eyebrow?: boolean | undefined;
 };
 
+export type PageLoadingContentToolbarShape = PageLoadingActionShape & {
+  status?: PageHeaderDescriptionStatus | undefined;
+};
+
 export type PageLoadingActionWidth = "compact" | "long" | "short" | "standard" | "wide";
 
 export type PageLoadingFallbackProps = {
   asMain?: boolean | undefined;
+  contentToolbar?: PageLoadingContentToolbarShape | undefined;
   contextNoticeSlot?: boolean | undefined;
   header?: PageLoadingHeaderShape | undefined;
   kind?: PageLoadingKind | undefined;
@@ -51,6 +61,7 @@ export type PageLoadingFallbackProps = {
 /** Renders a route-agnostic structural loading region selected by the app composition. */
 export function PageLoadingFallback({
   asMain = false,
+  contentToolbar,
   contextNoticeSlot = false,
   header,
   kind = "generic",
@@ -67,6 +78,7 @@ export function PageLoadingFallback({
   const content = (
     <PageLoadingSkeleton
       contextNoticeSlot={contextNoticeSlot}
+      contentToolbar={contentToolbar}
       header={header}
       kind={kind}
       leadingActionSlot={leadingActionSlot}
@@ -103,21 +115,24 @@ export function PageLoadingFallback({
 }
 
 function PageLoadingSkeleton({
+  contentToolbar,
   contextNoticeSlot,
   header,
   kind,
   leadingActionSlot,
   loadingLabel,
 }: {
+  contentToolbar: PageLoadingContentToolbarShape | undefined;
   contextNoticeSlot: boolean;
   header: PageLoadingHeaderShape | undefined;
   kind: PageLoadingKind;
   leadingActionSlot: boolean;
   loadingLabel: string;
 }) {
-  const headerSkeleton = <HeaderSkeleton shape={header} />;
+  const headerSkeleton = header ? <HeaderSkeleton shape={header} /> : null;
   const leadingSkeleton = leadingActionSlot ? <LeadingActionSkeleton /> : null;
   const contextSkeleton = contextNoticeSlot ? <Skeleton className="min-h-28 rounded-md" /> : null;
+  const toolbarSkeleton = contentToolbar ? <ContentToolbarSkeleton shape={contentToolbar} /> : null;
 
   if (kind === "list" || kind === "record-list") {
     return (
@@ -126,6 +141,7 @@ function PageLoadingSkeleton({
         {headerSkeleton}
         {contextSkeleton}
         <PageContentSurface className={kind === "list" ? "grid gap-6" : "grid gap-4"}>
+          {toolbarSkeleton}
           <Skeleton className="h-16 rounded-md" />
           <Skeleton className="h-44 rounded-md" />
           <div className="grid gap-4 md:grid-cols-3">
@@ -147,6 +163,7 @@ function PageLoadingSkeleton({
         {headerSkeleton}
         {contextSkeleton}
         <PageContentSurface className="grid gap-6">
+          {toolbarSkeleton}
           <Skeleton className="h-24 rounded-md" />
           <div className="grid gap-4 lg:grid-cols-4">
             {Array.from({ length: 4 }, (_, index) => (
@@ -167,6 +184,7 @@ function PageLoadingSkeleton({
         {headerSkeleton}
         {contextSkeleton}
         <PageContentSurface className="grid gap-8">
+          {toolbarSkeleton}
           <Skeleton className="h-44 rounded-md" />
           <div className="grid gap-4 md:grid-cols-2">
             <Skeleton className="h-52 rounded-md" />
@@ -188,6 +206,7 @@ function PageLoadingSkeleton({
         <PageContentSurface
           className={kind === "sectioned-comparison" ? "grid gap-6" : "grid gap-4"}
         >
+          {toolbarSkeleton}
           <Skeleton className="h-28 rounded-md" />
           <Skeleton className="h-12 rounded-md" />
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -209,6 +228,7 @@ function PageLoadingSkeleton({
         {headerSkeleton}
         {contextSkeleton}
         <PageContentSurface className="grid gap-6">
+          {toolbarSkeleton}
           <Skeleton className="h-14 rounded-md" />
           <div className="grid gap-4 xl:grid-cols-3">
             {Array.from({ length: 3 }, (_, index) => (
@@ -228,6 +248,7 @@ function PageLoadingSkeleton({
         {headerSkeleton}
         {contextSkeleton}
         <PageContentSurface className="grid gap-4" padding="compact">
+          {toolbarSkeleton}
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {Array.from({ length: 4 }, (_, index) => (
               <Skeleton key={index} className="h-11" />
@@ -251,6 +272,7 @@ function PageLoadingSkeleton({
       {headerSkeleton}
       {contextSkeleton}
       <PageContentSurface className="grid gap-4">
+        {toolbarSkeleton}
         <Skeleton className="h-40 w-full rounded-md" />
         <Skeleton className="h-32 w-full rounded-md" />
       </PageContentSurface>
@@ -268,16 +290,43 @@ function LeadingActionSkeleton() {
 }
 
 function HeaderSkeleton({ shape }: { shape: PageLoadingHeaderShape | undefined }) {
-  const {
-    actionLayout = "inline",
-    actionSize = "md",
-    actionSlots = 0,
-    actionWidths = [],
-    description = true,
-    descriptionStatus,
-    descriptionText,
-    eyebrow = true,
-  } = shape ?? {};
+  const { description = true, descriptionStatus, descriptionText, eyebrow = true } = shape ?? {};
+
+  return (
+    <div aria-hidden="true">
+      <PageHeader
+        actions={
+          (shape?.actionSlots ?? 0) > 0 ? <ActionSkeletonGroup shape={shape ?? {}} /> : undefined
+        }
+        description={
+          description
+            ? (descriptionText ?? <Skeleton as="span" className="block h-6 w-full max-w-2xl" />)
+            : undefined
+        }
+        descriptionStatus={descriptionStatus}
+        eyebrow={eyebrow ? <Skeleton as="span" className="block h-4 w-24" /> : undefined}
+        title={<Skeleton as="span" className="block h-8 w-full max-w-80 md:h-10" />}
+      />
+    </div>
+  );
+}
+
+function ContentToolbarSkeleton({ shape }: { shape: PageLoadingContentToolbarShape }) {
+  return (
+    <div
+      className={cn(actionRowClass, shape.status ? "justify-between" : "justify-end")}
+      data-page-content-actions=""
+    >
+      {shape.status ? <StatusBadge {...shape.status} /> : null}
+      <ActionSkeletonGroup shape={shape} />
+    </div>
+  );
+}
+
+function ActionSkeletonGroup({ shape }: { shape: PageLoadingActionShape }) {
+  const { actionLayout = "inline", actionSize = "md", actionSlots = 0, actionWidths = [] } = shape;
+  if (actionSlots === 0) return null;
+
   const isResponsiveActionLayout = actionLayout !== "inline";
   const actionHeight = actionSize === "sm" ? "pointer-fine:h-9" : "pointer-fine:h-10";
   const widthClasses = {
@@ -299,35 +348,18 @@ function HeaderSkeleton({ shape }: { shape: PageLoadingHeaderShape | undefined }
   ));
 
   return (
-    <div aria-hidden="true">
-      <PageHeader
-        actions={
-          actionSlots > 0 ? (
-            isResponsiveActionLayout ? (
-              <div
-                className={
-                  actionLayout === "responsive-lead"
-                    ? responsivePageHeaderLeadActionGroupClass
-                    : responsivePageHeaderActionGroupClass
-                }
-                data-page-header-actions={actionLayout}
-              >
-                {actionSkeletons}
-              </div>
-            ) : (
-              actionSkeletons
-            )
-          ) : undefined
-        }
-        description={
-          description
-            ? (descriptionText ?? <Skeleton as="span" className="block h-6 w-full max-w-2xl" />)
-            : undefined
-        }
-        descriptionStatus={descriptionStatus}
-        eyebrow={eyebrow ? <Skeleton as="span" className="block h-4 w-24" /> : undefined}
-        title={<Skeleton as="span" className="block h-8 w-full max-w-80 md:h-10" />}
-      />
+    <div
+      aria-hidden="true"
+      className={
+        actionLayout === "responsive-lead"
+          ? responsivePageHeaderLeadActionGroupClass
+          : actionLayout === "responsive-grid"
+            ? responsivePageHeaderActionGroupClass
+            : inlineActionGroupClass
+      }
+      data-page-header-actions={isResponsiveActionLayout ? actionLayout : undefined}
+    >
+      {actionSkeletons}
     </div>
   );
 }

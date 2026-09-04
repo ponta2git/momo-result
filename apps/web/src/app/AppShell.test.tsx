@@ -207,12 +207,12 @@ describe("AppShell", () => {
         </QueryClientProvider>,
       );
 
-      const heading = await screen.findByRole("heading", {
-        level: 1,
+      const surface = await screen.findByRole("region", {
         name: "画面の読み込みに失敗しました",
       });
       const returnLink = screen.getByRole("link", { name: "前の画面へ戻る" });
-      expect(heading.closest("header")).toContainElement(returnLink);
+      expect(surface).toContainElement(returnLink);
+      expect(screen.queryByRole("heading", { level: 1 })).not.toBeInTheDocument();
       expect(returnLink).toHaveAttribute("href", "/matches/match-1");
     } finally {
       consoleError.mockRestore();

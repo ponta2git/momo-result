@@ -2,20 +2,12 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  buildWorkspacePageCopy,
   heldEventPatchById,
   latestHeldEventPatch,
 } from "@/features/matches/workspace/workspaceViewModel";
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
 
 describe("workspaceViewModel", () => {
-  it("builds review page copy from the current draft status", () => {
-    expect(buildWorkspacePageCopy({ mode: "review", reviewStatus: "ocr_running" })).toMatchObject({
-      title: "OCR結果の確認",
-      description: expect.stringContaining("処理中"),
-    });
-  });
-
   it("selects the newest held event as the default patch", () => {
     const events = [
       {

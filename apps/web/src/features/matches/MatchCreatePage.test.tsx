@@ -29,6 +29,11 @@ function LocationProbe() {
   return <output aria-label="current location">{`${location.pathname}${location.search}`}</output>;
 }
 
+async function waitForMatchCreateReady() {
+  expect(await screen.findByRole("button", { name: "開催（必須）を変更" })).toBeEnabled();
+  expect(screen.queryByRole("heading", { level: 1 })).not.toBeInTheDocument();
+}
+
 describe("MatchCreatePage", () => {
   let queryClient: QueryClient;
 
@@ -67,7 +72,7 @@ describe("MatchCreatePage", () => {
       </QueryClientProvider>,
     );
 
-    expect(await screen.findByRole("heading", { name: "試合の新規作成" })).toBeInTheDocument();
+    await waitForMatchCreateReady();
     await user.click(screen.getByRole("button", { name: "設定管理へ" }));
 
     await waitFor(() =>
@@ -112,7 +117,7 @@ describe("MatchCreatePage", () => {
       </QueryClientProvider>,
     );
 
-    expect(await screen.findByRole("heading", { name: "試合の新規作成" })).toBeInTheDocument();
+    await waitForMatchCreateReady();
     await user.click(screen.getByRole("button", { name: "開催（必須）を変更" }));
     expect(screen.getByRole("radio", { checked: true })).toHaveAttribute("value", "held-1");
     expect(window.sessionStorage.length).toBe(0);
@@ -157,7 +162,7 @@ describe("MatchCreatePage", () => {
       </QueryClientProvider>,
     );
 
-    expect(await screen.findByRole("heading", { name: "試合の新規作成" })).toBeInTheDocument();
+    await waitForMatchCreateReady();
     await waitFor(() => {
       expect(screen.getByText(/確定済み3試合・未確定下書き2件/u)).toBeInTheDocument();
       expect(screen.getByLabelText("試合番号")).toHaveValue("8");
@@ -188,7 +193,7 @@ describe("MatchCreatePage", () => {
       </QueryClientProvider>,
     );
 
-    expect(await screen.findByRole("heading", { name: "試合の新規作成" })).toBeInTheDocument();
+    await waitForMatchCreateReady();
     const matchNumber = screen.getByLabelText("試合番号");
     await user.clear(matchNumber);
     await user.type(matchNumber, "9");
@@ -216,7 +221,7 @@ describe("MatchCreatePage", () => {
       </QueryClientProvider>,
     );
 
-    expect(await screen.findByRole("heading", { name: "試合の新規作成" })).toBeInTheDocument();
+    await waitForMatchCreateReady();
     await waitFor(() =>
       expect(queryClient.getQueryData(authMeQueryKeyFor(testDevUserAccountId))).toMatchObject({
         accountId: testDevUserAccountId,
@@ -270,7 +275,7 @@ describe("MatchCreatePage", () => {
       </QueryClientProvider>,
     );
 
-    expect(await screen.findByRole("heading", { name: "試合の新規作成" })).toBeInTheDocument();
+    await waitForMatchCreateReady();
     await waitFor(() => expect(requestedDraftId).toBe("draft-trimmed"));
   });
 
@@ -381,7 +386,7 @@ describe("MatchCreatePage", () => {
       </QueryClientProvider>,
     );
 
-    expect(await screen.findByRole("heading", { name: "試合の新規作成" })).toBeInTheDocument();
+    await waitForMatchCreateReady();
     const eventDisclosure = screen.getByText("一覧にない開催を追加する");
     await user.click(eventDisclosure);
     await user.click(screen.getByRole("button", { name: "作成して選択" }));

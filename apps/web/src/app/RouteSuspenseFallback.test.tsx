@@ -27,66 +27,43 @@ describe("RouteSuspenseFallback", () => {
   });
 
   it.each([
-    [
-      "/matches",
-      "?returnTo=%2Fheld-events%2Fheld-1",
-      {
-        actionLayout: "responsive-grid",
-        actionSize: "sm",
-        actionSlots: 2,
-        actionWidths: ["standard", "wide"],
-        description: false,
-        eyebrow: false,
-      },
-      true,
-    ],
-    [
-      "/held-events/held-1",
-      "",
-      {
-        actionLayout: "responsive-lead",
-        actionSize: "sm",
-        actionSlots: 2,
-        actionWidths: ["wide", "standard"],
-        description: true,
-        eyebrow: true,
-      },
-      true,
-    ],
-    [
-      "/matches/match-1/edit",
-      "",
-      {
-        actionSize: "sm",
-        actionSlots: 1,
-        actionWidths: ["long"],
-        description: true,
-        descriptionText: "確定済みの試合記録を編集します。保存後は一覧と出力に反映されます。",
-        eyebrow: false,
-      },
-      false,
-    ],
-    ["/admin/masters", "", { actionSlots: 0, description: false, eyebrow: true }, false],
-    [
-      "/admin/accounts",
-      "",
-      {
-        actionSlots: 0,
-        description: true,
-        descriptionText:
-          "Discordでログインできるアカウントと管理者権限を管理します。試合参加者とは別に扱います。",
-        eyebrow: true,
-      },
-      false,
-    ],
-  ] as const)(
-    "preserves the ready header and leading-slot shape for %s",
-    (pathname, search, header, leadingActionSlot) => {
-      const presentation = routeLoadingPresentation(pathname, search);
-      expect(presentation.header).toEqual(header);
-      expect(Boolean(presentation.leadingActionSlot)).toBe(leadingActionSlot);
+    ["/matches"],
+    ["/held-events"],
+    ["/matches/new"],
+    ["/review/session-1"],
+    ["/matches/match-1/edit"],
+    ["/ocr/new"],
+    ["/analytics/series"],
+    ["/admin/analysis"],
+    ["/admin/masters"],
+    ["/admin/accounts"],
+    ["/exports"],
+  ])("omits the page-header slot for %s", (pathname) => {
+    expect(routeLoadingPresentation(pathname).header).toBeUndefined();
+    expect(routeTerminalPresentation(pathname).preserveHeader).not.toBe(true);
+  });
+
+  it.each([["/matches/match-1"], ["/held-events/held-1"]])(
+    "preserves the resource-detail header for %s",
+    (pathname) => {
+      expect(routeLoadingPresentation(pathname).header).toBeDefined();
+      expect(routeTerminalPresentation(pathname).preserveHeader).toBe(true);
     },
   );
+
+  it("moves route-known actions into the content toolbar", () => {
+    expect(routeLoadingPresentation("/matches").contentToolbar).toEqual({
+      actionLayout: "responsive-grid",
+      actionSize: "sm",
+      actionSlots: 2,
+      actionWidths: ["standard", "wide"],
+    });
+    expect(routeLoadingPresentation("/matches/match-1/edit").contentToolbar).toEqual({
+      actionSize: "sm",
+      actionSlots: 1,
+      actionWidths: ["long"],
+    });
+  });
 
   it.each([
     ["", false],
@@ -99,13 +76,13 @@ describe("RouteSuspenseFallback", () => {
     expect(Boolean(presentation.leadingActionSlot)).toBe(expected);
   });
 
-  it("keeps query-driven header actions separate from leading navigation", () => {
+  it("keeps query-driven content actions separate from leading navigation", () => {
     const presentation = routeLoadingPresentation(
       "/analytics/series",
       "?returnTo=%2Fmatches%2Fmatch-1",
     );
 
-    expect(presentation.header.actionSlots).toBe(1);
+    expect(presentation.contentToolbar?.actionSlots).toBe(1);
     expect(presentation.leadingActionSlot).toBeUndefined();
   });
 
@@ -174,7 +151,7 @@ describe("RouteSuspenseFallback", () => {
     expect(presentation.headerNavigation).toEqual({ href: "/matches", label: "入力をやめる" });
   });
 
-  it("keeps static route navigation actions in terminal headers", () => {
+  it("keeps static route navigation actions in terminal states", () => {
     const matches = routeTerminalPresentation("/matches", "?status=confirmed");
     expect(matches.headerActions).toEqual({
       items: [
@@ -235,38 +212,32 @@ describe("RouteSuspenseFallback", () => {
   });
 
   it.each([
-    ["/matches/new", "開催と4人分の結果を入力して、確定前の確認へ進みます。"],
-    [
-      "/review/session-1",
-      "読み取り結果を確認して、開催と4人分の結果を確定します。現在の状態: 状態不明",
-    ],
-    ["/matches/match-1/edit", "確定済みの試合記録を編集します。保存後は一覧と出力に反映されます。"],
-    [
-      "/admin/accounts",
-      "Discordでログインできるアカウントと管理者権限を管理します。試合参加者とは別に扱います。",
-    ],
-    ["/admin/analysis", "保存済み分析の状態確認と、作品単位または全作品の再計算を行います。"],
-  ])("shares the known description between loading and terminal states for %s", (path, text) => {
-    expect(routeLoadingPresentation(path).header.descriptionText).toBe(text);
-    expect(routeTerminalPresentation(path).description).toBe(text);
+    ["/matches/new"],
+    ["/review/session-1"],
+    ["/matches/match-1/edit"],
+    ["/admin/accounts"],
+    ["/admin/analysis"],
+  ])("omits page-title descriptions from loading and terminal states for %s", (path) => {
+    expect(routeLoadingPresentation(path).header).toBeUndefined();
+    expect(routeTerminalPresentation(path).description).toBeUndefined();
+    expect(routeTerminalPresentation(path).eyebrow).toBeUndefined();
   });
 
   it("keeps route-specific terminal chrome and content density", () => {
     const heldEvent = routeTerminalPresentation("/held-events/held-1");
     expect(heldEvent.eyebrow).toBe("開催記録");
     expect(heldEvent.description).toBe("試合数・下書き数は未取得です。");
-    expect(routeTerminalPresentation("/admin/analysis").eyebrow).toBe("管理");
     expect(routeTerminalPresentation("/exports").contentPadding).toBe("compact");
   });
 
-  it("keeps query-known sample status in loading and terminal headers", () => {
+  it("keeps query-known sample status in loading and terminal content toolbars", () => {
     const search = "?sample=1";
     const expected = {
       label: "サンプルの読み取り結果で表示中",
       tone: "warning",
     };
 
-    expect(routeLoadingPresentation("/review/session-1", search).header.descriptionStatus).toEqual(
+    expect(routeLoadingPresentation("/review/session-1", search).contentToolbar?.status).toEqual(
       expected,
     );
     expect(routeTerminalPresentation("/review/session-1", search).descriptionStatus).toEqual(

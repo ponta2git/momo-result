@@ -112,12 +112,12 @@ type MatchWorkspacePageModelInput = {
 };
 
 function workspaceLoadingCopy(mode: WorkspaceMode) {
-  const titleByMode = {
+  const labelByMode = {
     create: "試合作成を準備中",
     edit: "試合編集を読み込み中",
     review: "OCR結果を読み込み中",
   } as const satisfies Record<WorkspaceMode, string>;
-  return { title: titleByMode[mode] };
+  return { loadingLabel: labelByMode[mode] };
 }
 
 function validationFeedback(firstMessage: string | undefined, success: boolean): string {
@@ -278,14 +278,12 @@ export function buildMatchWorkspacePageModel(
         navigationAllowedRef: input.draftSession.navigationAllowedRef,
         onDiscard: input.draftSession.markCommitted,
       },
-      header: {
-        description: view.pageDescription,
+      toolbar: {
         exit: {
           href: input.navigation.exitHref,
           label: mode === "edit" ? "編集をやめる" : "入力をやめる",
         },
         sample: useSampleDrafts,
-        title: view.pageTitle,
       },
     },
     persistence: {

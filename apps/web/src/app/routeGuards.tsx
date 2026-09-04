@@ -5,7 +5,6 @@ import { AppGlobalNav } from "@/app/AppGlobalNav";
 import { AppPageCanvas } from "@/app/AppPageCanvas";
 import { RouteSuspenseFallback } from "@/app/RouteSuspenseFallback";
 import { RouteTerminalPage } from "@/app/RouteTerminalPage";
-import { loginDescription } from "@/shared/auth/loginCopy";
 import { loginNavItems } from "@/shared/auth/loginNavigation";
 import {
   buildLoginPath,
@@ -21,7 +20,6 @@ import { GlobalNav } from "@/shared/ui/layout/GlobalNav";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
 import type { PageFrameWidth } from "@/shared/ui/layout/PageFrame";
-import { PageHeader } from "@/shared/ui/layout/PageHeader";
 
 function StandaloneRouteMain({ children }: { children: ReactNode }) {
   return (
@@ -64,9 +62,8 @@ function RouteGuardFrame({
 function LoginAuthLoading() {
   return (
     <RouteGuardFrame standalone width="narrow">
-      <div className="mx-auto grid w-full max-w-[34rem] gap-6">
-        <PageHeader description={loginDescription} title="ログイン" />
-        <PageContentSurface aria-busy="true" aria-label="ログイン状態を確認中">
+      <div className="mx-auto w-full max-w-[34rem]">
+        <PageContentSurface aria-busy="true" aria-label="ログイン状態を確認中" role="region">
           <div aria-hidden="true" className="grid gap-4">
             <Skeleton className="h-10 w-full max-w-md" />
             <Skeleton className="h-20 w-full" />

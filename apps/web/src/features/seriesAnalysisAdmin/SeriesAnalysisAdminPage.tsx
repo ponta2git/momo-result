@@ -7,23 +7,32 @@ import {
   SelectedTitleStatus,
 } from "@/features/seriesAnalysisAdmin/SeriesAnalysisAdminStatus";
 import { useSeriesAnalysisAdminPageModel } from "@/features/seriesAnalysisAdmin/useSeriesAnalysisAdminPageModel";
+import { actionRowClass } from "@/shared/ui/actions/actionGroup";
 import { Button } from "@/shared/ui/actions/Button";
+import { cn } from "@/shared/ui/cn";
 import { AlertDialog } from "@/shared/ui/feedback/Dialog";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { SelectField } from "@/shared/ui/forms/SelectField";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
-import { PageHeader } from "@/shared/ui/layout/PageHeader";
 
 export function SeriesAnalysisAdminPage() {
   const page = useSeriesAnalysisAdminPageModel();
   const { data } = page.resource;
   return (
     <PageFrame width="wide">
-      <PageHeader
-        actions={
-          data && !page.feedback.resourceError ? (
+      <PageContentSurface
+        aria-label="戦績分析管理"
+        className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-6"
+        role="region"
+      >
+        {data && !page.feedback.resourceError ? (
+          <div
+            aria-label="戦績分析管理の操作"
+            className={cn(actionRowClass, "justify-end")}
+            role="group"
+          >
             <Button
               icon={<RefreshCw aria-hidden="true" />}
               pending={page.resource.refreshing}
@@ -34,13 +43,8 @@ export function SeriesAnalysisAdminPage() {
             >
               状態を更新
             </Button>
-          ) : null
-        }
-        eyebrow="管理"
-        title="戦績分析"
-        description="保存済み分析の状態確認と、作品単位または全作品の再計算を行います。"
-      />
-      <PageContentSurface className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-6">
+          </div>
+        ) : null}
         {page.feedback.mutationError ? (
           <Notice tone="danger" title={page.feedback.mutationError.title}>
             {page.feedback.mutationError.detail}

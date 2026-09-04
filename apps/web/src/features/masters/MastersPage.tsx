@@ -7,15 +7,12 @@ import { Notice } from "@/shared/ui/feedback/Notice";
 import { TabsList, TabsPanel, TabsRoot, TabsTab } from "@/shared/ui/forms/Tabs";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
-import { PageHeader } from "@/shared/ui/layout/PageHeader";
 
 export function MastersPage() {
   const page = useMastersPageModel();
 
   return (
     <PageFrame>
-      <PageHeader eyebrow="管理" title="設定管理" />
-
       {page.feedback.authError ? (
         <Notice tone="danger" title={page.feedback.authError.title}>
           {page.feedback.authError.detail}

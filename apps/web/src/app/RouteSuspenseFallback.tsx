@@ -1,6 +1,7 @@
 import { sanitizeReturnTo, withReturnTo } from "@/shared/navigation/returnTo";
 import { PageLoadingFallback } from "@/shared/ui/feedback/PageLoadingFallback";
 import type {
+  PageLoadingContentToolbarShape,
   PageLoadingFallbackProps,
   PageLoadingHeaderShape,
 } from "@/shared/ui/feedback/PageLoadingFallback";
@@ -8,7 +9,7 @@ import type { PageContentSurfacePadding } from "@/shared/ui/layout/PageContentSu
 import type { PageFrameWidth } from "@/shared/ui/layout/PageFrame";
 import type { PageHeaderDescriptionStatus } from "@/shared/ui/layout/PageHeader";
 import { appendHandoffIdToReturnTo } from "@/shared/workflows/matchWorkspaceMasterHandoff";
-import { workspaceSampleHeaderStatus } from "@/shared/workflows/matchWorkspacePresentation";
+import { workspaceSampleStatus } from "@/shared/workflows/matchWorkspacePresentation";
 
 type RouteSuspenseFallbackProps = {
   asMain?: boolean | undefined;
@@ -18,8 +19,9 @@ type RouteSuspenseFallbackProps = {
 };
 
 type RouteLoadingPresentation = {
+  contentToolbar?: PageLoadingContentToolbarShape | undefined;
   contextNoticeSlot?: boolean;
-  header: PageLoadingHeaderShape;
+  header?: PageLoadingHeaderShape | undefined;
   kind: NonNullable<PageLoadingFallbackProps["kind"]>;
   leadingActionSlot?: boolean;
   loadingLabel?: PageLoadingFallbackProps["loadingLabel"];
@@ -65,6 +67,7 @@ export type RouteTerminalPresentation = {
   headerActions?: RouteHeaderActionsPresentation | undefined;
   headerNavigation?: RouteNavigationPresentation | undefined;
   leadingNavigation?: RouteNavigationPresentation | undefined;
+  preserveHeader?: boolean | undefined;
   width: PageFrameWidth;
 };
 
@@ -109,13 +112,11 @@ export function routePagePresentation(pathname: string, search = ""): RoutePageP
   if (normalizedPathname === "/matches") {
     return defineRoutePresentation(
       {
-        header: {
+        contentToolbar: {
           actionLayout: "responsive-grid",
           actionSize: "sm",
           actionSlots: 2,
           actionWidths: ["standard", "wide"],
-          description: false,
-          eyebrow: false,
         },
         kind: "list",
         leadingActionSlot: hasReturnTo,
@@ -146,49 +147,25 @@ export function routePagePresentation(pathname: string, search = ""): RoutePageP
   }
   if (normalizedPathname === "/held-events") {
     return defineRoutePresentation({
-      header: {
-        actionSize: "sm",
-        actionSlots: 1,
-        actionWidths: ["wide"],
-        description: false,
-        eyebrow: false,
-      },
       kind: "record-list",
       width: "standard",
     });
   }
   if (normalizedPathname === "/admin/accounts") {
-    const description =
-      "Discordでログインできるアカウントと管理者権限を管理します。試合参加者とは別に扱います。";
-    return defineRoutePresentation(
-      {
-        header: { actionSlots: 0, description: true, descriptionText: description, eyebrow: true },
-        kind: "record-list",
-        width: "standard",
-      },
-      {
-        description,
-        eyebrow: "管理",
-      },
-    );
+    return defineRoutePresentation({ kind: "record-list", width: "standard" });
   }
   if (normalizedPathname === "/matches/new") {
-    const description = "開催と4人分の結果を入力して、確定前の確認へ進みます。";
     return defineRoutePresentation(
       {
-        header: {
+        contentToolbar: {
           actionSize: "sm",
           actionSlots: 1,
           actionWidths: ["long"],
-          description: true,
-          descriptionText: description,
-          eyebrow: false,
         },
         kind: "workspace",
         width: "workspace",
       },
       {
-        description,
         headerNavigation: {
           href: returnTo ?? "/matches",
           label: "入力をやめる",
@@ -197,26 +174,20 @@ export function routePagePresentation(pathname: string, search = ""): RoutePageP
     );
   }
   if (/^\/review\/[^/]+$/u.test(normalizedPathname)) {
-    const description =
-      "読み取り結果を確認して、開催と4人分の結果を確定します。現在の状態: 状態不明";
     const descriptionStatus =
-      searchParams.get("sample") === "1" ? workspaceSampleHeaderStatus : undefined;
+      searchParams.get("sample") === "1" ? workspaceSampleStatus : undefined;
     return defineRoutePresentation(
       {
-        header: {
+        contentToolbar: {
           actionSize: "sm",
           actionSlots: 1,
           actionWidths: ["long"],
-          description: true,
-          descriptionStatus,
-          descriptionText: description,
-          eyebrow: false,
+          status: descriptionStatus,
         },
         kind: "workspace",
         width: "workspace",
       },
       {
-        description,
         descriptionStatus,
         headerNavigation: {
           href: returnTo ?? "/matches",
@@ -226,22 +197,17 @@ export function routePagePresentation(pathname: string, search = ""): RoutePageP
     );
   }
   if (/^\/matches\/[^/]+\/edit$/u.test(normalizedPathname)) {
-    const description = "確定済みの試合記録を編集します。保存後は一覧と出力に反映されます。";
     return defineRoutePresentation(
       {
-        header: {
+        contentToolbar: {
           actionSize: "sm",
           actionSlots: 1,
           actionWidths: ["long"],
-          description: true,
-          descriptionText: description,
-          eyebrow: false,
         },
         kind: "workspace",
         width: "workspace",
       },
       {
-        description,
         headerNavigation: {
           href: returnTo ?? normalizedPathname.slice(0, -"/edit".length),
           label: "編集をやめる",
@@ -252,13 +218,13 @@ export function routePagePresentation(pathname: string, search = ""): RoutePageP
   if (normalizedPathname === "/ocr/new") {
     return defineRoutePresentation(
       {
-        header: {
-          actionSize: "sm",
-          actionSlots: hasReturnTo ? 1 : 0,
-          actionWidths: hasReturnTo ? ["wide"] : [],
-          description: false,
-          eyebrow: false,
-        },
+        contentToolbar: hasReturnTo
+          ? {
+              actionSize: "sm",
+              actionSlots: 1,
+              actionWidths: ["wide"],
+            }
+          : undefined,
         kind: "workspace",
         width: "standard",
       },
@@ -305,6 +271,7 @@ export function routePagePresentation(pathname: string, search = ""): RoutePageP
           href: returnTo ?? "/matches",
           label: "前の画面へ戻る",
         },
+        preserveHeader: true,
       },
     );
   }
@@ -354,19 +321,20 @@ export function routePagePresentation(pathname: string, search = ""): RoutePageP
           href: returnTo ?? "/held-events",
           label: "開催履歴へ戻る",
         },
+        preserveHeader: true,
       },
     );
   }
   if (normalizedPathname === "/analytics/series") {
     return defineRoutePresentation(
       {
-        header: {
-          actionSize: "sm",
-          actionSlots: hasReturnTo ? 1 : 0,
-          actionWidths: hasReturnTo ? ["wide"] : [],
-          description: false,
-          eyebrow: false,
-        },
+        contentToolbar: hasReturnTo
+          ? {
+              actionSize: "sm",
+              actionSlots: 1,
+              actionWidths: ["wide"],
+            }
+          : undefined,
         kind: "comparison",
         loadingLabel: "戦績比較を読み込んでいます",
         width: "wide",
@@ -379,19 +347,11 @@ export function routePagePresentation(pathname: string, search = ""): RoutePageP
     );
   }
   if (normalizedPathname === "/admin/analysis") {
-    const description = "保存済み分析の状態確認と、作品単位または全作品の再計算を行います。";
-    return defineRoutePresentation(
-      {
-        header: { actionSlots: 0, description: true, descriptionText: description, eyebrow: true },
-        kind: "sectioned-comparison",
-        loadingLabel: "戦績分析管理を読み込んでいます",
-        width: "wide",
-      },
-      {
-        description,
-        eyebrow: "管理",
-      },
-    );
+    return defineRoutePresentation({
+      kind: "sectioned-comparison",
+      loadingLabel: "戦績分析管理を読み込んでいます",
+      width: "wide",
+    });
   }
   if (normalizedPathname === "/admin/masters") {
     const handoffId = searchParams.get("handoffId");
@@ -400,7 +360,6 @@ export function routePagePresentation(pathname: string, search = ""): RoutePageP
     return defineRoutePresentation(
       {
         contextNoticeSlot: hasReturnTo,
-        header: { actionSlots: 0, description: false, eyebrow: true },
         kind: "catalog",
         loadingLabel: "設定管理を読み込んでいます",
         width: "standard",
@@ -409,14 +368,12 @@ export function routePagePresentation(pathname: string, search = ""): RoutePageP
         contextNavigation: returnDestination
           ? { href: returnDestination, label: "元の画面へ戻る" }
           : undefined,
-        eyebrow: "管理",
       },
     );
   }
   if (normalizedPathname === "/exports") {
     return defineRoutePresentation(
       {
-        header: { actionSlots: 0, description: false, eyebrow: false },
         kind: "form",
         leadingActionSlot: hasReturnTo,
         width: "narrow",
@@ -428,7 +385,6 @@ export function routePagePresentation(pathname: string, search = ""): RoutePageP
     );
   }
   return defineRoutePresentation({
-    header: { actionSlots: 0, description: false, eyebrow: false },
     kind: "generic",
     width: "standard",
   });

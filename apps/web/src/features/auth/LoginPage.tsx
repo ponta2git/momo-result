@@ -1,12 +1,10 @@
 import { useSearchParams } from "react-router-dom";
 
 import { AuthPanel } from "@/shared/auth/AuthPanel";
-import { loginDescription } from "@/shared/auth/loginCopy";
 import { sanitizeAppRedirectPath } from "@/shared/auth/redirectPath";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
-import { PageHeader } from "@/shared/ui/layout/PageHeader";
 
 export function LoginPage() {
   const [searchParams] = useSearchParams();
@@ -15,9 +13,8 @@ export function LoginPage() {
 
   return (
     <PageFrame width="narrow">
-      <div className="mx-auto grid w-full max-w-[34rem] gap-6">
-        <PageHeader description={loginDescription} title="ログイン" />
-        <PageContentSurface className="space-y-4">
+      <div className="mx-auto w-full max-w-[34rem]">
+        <PageContentSurface aria-label="ログイン" className="space-y-4" role="region">
           {reason === "forbidden" ? (
             <Notice tone="warning" title="アクセス権限がありません">
               このアカウントでは利用できません。管理者に確認してください。

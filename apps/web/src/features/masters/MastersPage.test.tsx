@@ -81,7 +81,7 @@ describe("MastersPage", () => {
     setDevUser();
     renderPage();
 
-    expect(await screen.findByRole("heading", { name: "設定管理" })).toBeInTheDocument();
+    expect(await screen.findByRole("region", { name: "設定管理" })).toBeInTheDocument();
     expect(screen.getByRole("tablist", { name: "設定管理の表示切替" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "作品" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "マップ" })).toBeInTheDocument();
@@ -117,7 +117,7 @@ describe("MastersPage", () => {
       expect(requested).toEqual(new Set(["game-titles", "incident-masters", "member-aliases"])),
     );
     responseGate.resolve();
-    expect(await screen.findByRole("heading", { name: "設定管理" })).toBeInTheDocument();
+    expect(await screen.findByRole("region", { name: "設定管理" })).toBeInTheDocument();
   });
 
   it("shows scoped skeletons while maps and seasons are loading", async () => {
@@ -136,7 +136,7 @@ describe("MastersPage", () => {
 
     renderPage();
 
-    expect(await screen.findByRole("heading", { name: "設定管理" })).toBeInTheDocument();
+    expect(await screen.findByRole("region", { name: "設定管理" })).toBeInTheDocument();
     expect(await screen.findByLabelText("マップを読み込み中")).toHaveAttribute("aria-busy", "true");
     expect(await screen.findByLabelText("シーズンを読み込み中")).toHaveAttribute(
       "aria-busy",
@@ -740,7 +740,7 @@ describe("MastersPage", () => {
 
     renderPage();
 
-    expect(await screen.findByRole("heading", { name: "設定管理" })).toBeInTheDocument();
+    expect(await screen.findByRole("region", { name: "設定管理" })).toBeInTheDocument();
     await waitFor(() => expect(screen.queryByText("別画面キャッシュ")).not.toBeInTheDocument());
   });
 });

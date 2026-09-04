@@ -3,6 +3,7 @@ import { ShieldCheck, UserPlus } from "lucide-react";
 import { AdminAccountCreateDialog } from "@/features/adminAccounts/AdminAccountCreateDialog";
 import { AdminAccountRow } from "@/features/adminAccounts/AdminAccountRow";
 import { useAdminAccountsPageModel } from "@/features/adminAccounts/useAdminAccountsPageModel";
+import { actionRowClass } from "@/shared/ui/actions/actionGroup";
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
 import {
@@ -14,7 +15,6 @@ import { Notice } from "@/shared/ui/feedback/Notice";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
-import { PageHeader } from "@/shared/ui/layout/PageHeader";
 
 export function AdminAccountsPage() {
   const page = useAdminAccountsPageModel();
@@ -22,12 +22,13 @@ export function AdminAccountsPage() {
 
   return (
     <PageFrame>
-      <PageHeader
-        eyebrow="管理"
-        title="ログインアカウント"
-        description="Discordでログインできるアカウントと管理者権限を管理します。試合参加者とは別に扱います。"
-        actions={
-          hasAccounts ? (
+      <PageContentSurface aria-label="ログインアカウント一覧" className="grid gap-4" role="region">
+        {hasAccounts ? (
+          <div
+            aria-label="ログインアカウントの操作"
+            className={cn(actionRowClass, "justify-end")}
+            role="group"
+          >
             <Button
               ref={page.create.triggerRef}
               icon={<UserPlus aria-hidden="true" />}
@@ -36,11 +37,8 @@ export function AdminAccountsPage() {
             >
               アカウントを追加
             </Button>
-          ) : null
-        }
-      />
-
-      <PageContentSurface aria-label="ログインアカウント一覧" className="grid gap-4" role="region">
+          </div>
+        ) : null}
         {page.list.kind === "loading" ? (
           <div className="grid gap-4" aria-label="ログインアカウントを読み込み中">
             <Skeleton className="min-h-10" />

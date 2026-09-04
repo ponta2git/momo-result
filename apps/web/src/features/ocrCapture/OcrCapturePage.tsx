@@ -7,13 +7,14 @@ import { OcrStartDialog } from "@/features/ocrCapture/OcrStartDialog";
 import { SetupPanel } from "@/features/ocrCapture/SetupPanel";
 import { useOcrCapturePageModel } from "@/features/ocrCapture/useOcrCapturePageModel";
 import { AuthPanel } from "@/shared/auth/AuthPanel";
+import { actionRowClass } from "@/shared/ui/actions/actionGroup";
 import { Button } from "@/shared/ui/actions/Button";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
+import { cn } from "@/shared/ui/cn";
 import { AlertDialog } from "@/shared/ui/feedback/Dialog";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
-import { PageHeader } from "@/shared/ui/layout/PageHeader";
 
 const panelClass = "grid min-w-0 gap-4";
 
@@ -25,9 +26,9 @@ export function OcrCapturePage() {
 
   return (
     <PageFrame>
-      <PageHeader
-        actions={
-          navigation.returnTo ? (
+      <PageContentSurface aria-label="OCR取り込み" className="grid gap-6" role="region">
+        {navigation.returnTo ? (
+          <nav aria-label="OCR取り込みの操作" className={cn(actionRowClass, "justify-end")}>
             <LinkButton
               icon={<ArrowLeft aria-hidden="true" />}
               size="sm"
@@ -36,12 +37,8 @@ export function OcrCapturePage() {
             >
               取り込みをやめる
             </LinkButton>
-          ) : null
-        }
-        title="OCR取り込み"
-      />
-
-      <PageContentSurface className="grid gap-6">
+          </nav>
+        ) : null}
         {feedback.auth.error ? (
           <div className="grid gap-4 rounded-md border border-[var(--color-danger)]/50 bg-[var(--color-danger)]/8 p-4 md:grid-cols-[1fr_18rem] md:items-center">
             <Notice

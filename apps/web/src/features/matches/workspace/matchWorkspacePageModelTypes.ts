@@ -29,11 +29,9 @@ export type MatchWorkspaceNavigationGuardModel = {
   onDiscard: () => void;
 };
 
-export type MatchWorkspaceHeaderModel = {
-  description: string;
+export type MatchWorkspaceToolbarModel = {
   exit: { href: string; label: string };
   sample: boolean;
-  title: string;
 };
 
 type MatchWorkspaceLoadingModel = {
@@ -50,7 +48,7 @@ type MatchWorkspaceLoadingModel = {
   };
   workspace: {
     blocked: boolean;
-    copy: { title: string };
+    copy: { loadingLabel: string };
     loading: boolean;
   };
 };
@@ -167,7 +165,7 @@ export type MatchWorkspacePageModel = {
   loading: MatchWorkspaceLoadingModel;
   navigation: {
     guard: MatchWorkspaceNavigationGuardModel;
-    header: MatchWorkspaceHeaderModel;
+    toolbar: MatchWorkspaceToolbarModel;
   };
   persistence: { confirmation: MatchWorkspaceConfirmationDialogModel | null };
   review: { blocked: MatchWorkspaceBlockedReviewModel | null };

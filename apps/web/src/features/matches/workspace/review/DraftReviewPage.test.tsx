@@ -59,8 +59,13 @@ function matchDraftDetailResponse(
   };
 }
 
+async function waitForReviewWorkspaceReady() {
+  expect(await screen.findByRole("button", { name: "開催（必須）を変更" })).toBeEnabled();
+  expect(screen.queryByRole("heading", { level: 1 })).not.toBeInTheDocument();
+}
+
 async function waitForSampleWorkspaceReady() {
-  expect(await screen.findByRole("heading", { name: "OCR結果の確認" })).toBeInTheDocument();
+  await waitForReviewWorkspaceReady();
   expect(screen.getByText("サンプルの読み取り結果で表示中")).toBeInTheDocument();
 }
 
@@ -87,7 +92,7 @@ describe("DraftReviewPage", () => {
       </QueryClientProvider>,
     );
 
-    expect(await screen.findByRole("heading", { name: "OCR結果の確認" })).toBeInTheDocument();
+    await waitForReviewWorkspaceReady();
     expect(await screen.findByDisplayValue("あかねまみ")).toBeInTheDocument();
     await user.click(await screen.findByRole("button", { name: "開催（必須）を変更" }));
     expect(screen.getByRole("radio", { checked: true })).toHaveAttribute("value", "held-1");
@@ -125,7 +130,7 @@ describe("DraftReviewPage", () => {
       </QueryClientProvider>,
     );
 
-    expect(await screen.findByRole("heading", { name: "OCR結果の確認" })).toBeInTheDocument();
+    await waitForReviewWorkspaceReady();
     const matchNumber = screen.getByLabelText("試合番号");
     await user.clear(matchNumber);
     await user.type(matchNumber, "8");
@@ -240,7 +245,7 @@ describe("DraftReviewPage", () => {
       </QueryClientProvider>,
     );
 
-    expect(await screen.findByRole("heading", { name: "OCR結果の確認" })).toBeInTheDocument();
+    await waitForReviewWorkspaceReady();
     await user.click(screen.getByRole("button", { name: "確定前の確認へ進む" }));
     await user.click(await screen.findByRole("button", { name: "確定する" }));
 
@@ -289,7 +294,7 @@ describe("DraftReviewPage", () => {
       </QueryClientProvider>,
     );
 
-    expect(await screen.findByRole("heading", { name: "OCR結果の確認" })).toBeInTheDocument();
+    await waitForReviewWorkspaceReady();
     await user.click(screen.getByRole("button", { name: "確定前の確認へ進む" }));
     const dialog = await screen.findByRole("dialog", { name: "この内容で確定しますか？" });
     await user.click(within(dialog).getByRole("button", { name: "確定する" }));
@@ -358,7 +363,7 @@ describe("DraftReviewPage", () => {
       </QueryClientProvider>,
     );
 
-    expect(await screen.findByRole("heading", { name: "OCR結果の確認" })).toBeInTheDocument();
+    await waitForReviewWorkspaceReady();
     await user.click(screen.getByRole("button", { name: "確定前の確認へ進む" }));
     await user.click(await screen.findByRole("button", { name: "確定する" }));
 
@@ -403,7 +408,7 @@ describe("DraftReviewPage", () => {
       </QueryClientProvider>,
     );
 
-    expect(await screen.findByRole("heading", { name: "OCR結果の確認" })).toBeInTheDocument();
+    await waitForReviewWorkspaceReady();
     await user.click(screen.getByRole("button", { name: "確定前の確認へ進む" }));
     const dialog = await screen.findByRole("dialog", { name: "この内容で確定しますか？" });
     await user.click(within(dialog).getByRole("button", { name: "確定する" }));
@@ -440,7 +445,7 @@ describe("DraftReviewPage", () => {
       </QueryClientProvider>,
     );
 
-    expect(await screen.findByRole("heading", { name: "OCR結果の確認" })).toBeInTheDocument();
+    await waitForReviewWorkspaceReady();
     await user.click(screen.getByRole("button", { name: "確定前の確認へ進む" }));
     await user.click(await screen.findByRole("button", { name: "確定する" }));
 
@@ -477,7 +482,7 @@ describe("DraftReviewPage", () => {
       </QueryClientProvider>,
     );
 
-    expect(await screen.findByRole("heading", { name: "OCR結果の確認" })).toBeInTheDocument();
+    await waitForReviewWorkspaceReady();
     await user.click(screen.getByRole("button", { name: "確定前の記録を削除" }));
     await user.click(await screen.findByRole("button", { name: "削除する" }));
 
@@ -539,15 +544,12 @@ describe("DraftReviewPage", () => {
       "aria-busy",
       "true",
     );
-    expect(
-      screen.getByRole("heading", { name: "OCR結果を読み込み中" }).closest("header"),
-    ).toHaveTextContent(
-      "読み取り結果を確認して、開催と4人分の結果を確定します。現在の状態: 状態不明",
-    );
+    expect(screen.getByRole("region", { name: "試合内容" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { level: 1 })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "確定前の確認へ進む" })).not.toBeInTheDocument();
 
     responseGate.resolve();
-    expect(await screen.findByRole("heading", { name: "OCR結果の確認" })).toBeInTheDocument();
+    await waitForReviewWorkspaceReady();
     expect(screen.getByRole("button", { name: "確定前の確認へ進む" })).toBeEnabled();
   });
 
@@ -593,7 +595,7 @@ describe("DraftReviewPage", () => {
       </QueryClientProvider>,
     );
 
-    expect(await screen.findByRole("heading", { name: "OCR結果の確認" })).toBeInTheDocument();
+    await waitForReviewWorkspaceReady();
     await user.click(screen.getByRole("link", { name: "別の確認へ" }));
 
     expect(await screen.findByLabelText("OCR結果を読み込み中")).toHaveAttribute(
@@ -603,7 +605,7 @@ describe("DraftReviewPage", () => {
     expect(screen.queryByRole("button", { name: "確定前の確認へ進む" })).not.toBeInTheDocument();
 
     responseGate.resolve();
-    expect(await screen.findByRole("heading", { name: "OCR結果の確認" })).toBeInTheDocument();
+    await waitForReviewWorkspaceReady();
   });
 
   it("resets review progress while keeping each review session draft isolated", async () => {

@@ -41,19 +41,18 @@ export function useSeriesComparisonPageModel() {
   });
   const refreshAnalysis = analysis.refresh;
 
+  const excludedFocusNotice =
+    analysis.resolution.kind === "excluded" &&
+    location.state.focusMatchId &&
+    analysis.candidateArtifactId
+      ? seriesAnalysisFocusExclusionNotice(analysis.resolution.status)
+      : undefined;
+  if (excludedFocusNotice !== undefined && focusNotice !== excludedFocusNotice) {
+    setFocusNotice(excludedFocusNotice);
+  }
   useEffect(() => {
-    const focusMatchId = location.state.focusMatchId;
-    if (analysis.resolution.kind !== "excluded" || !focusMatchId || !analysis.candidateArtifactId) {
-      return;
-    }
-    setFocusNotice(seriesAnalysisFocusExclusionNotice(analysis.resolution.status));
-    clearFocusedMatch();
-  }, [
-    analysis.candidateArtifactId,
-    analysis.resolution,
-    clearFocusedMatch,
-    location.state.focusMatchId,
-  ]);
+    if (excludedFocusNotice !== undefined) clearFocusedMatch();
+  }, [clearFocusedMatch, excludedFocusNotice]);
 
   const focusMatch = useCallback(
     (focusMatchId: string) => {

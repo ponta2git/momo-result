@@ -40,7 +40,7 @@
 - OCR / 分析job、outbox、業務状態は同じDB transactionでdurableに確定し、Redis publishを業務transactionの成功条件にしない。
 - commit後のwakeは低遅延化のhintとし、startup / bounded recoveryで失われたwakeや重複deliveryから回復する。
 - dispatcherはidle時に短周期pollingせず、wake、deadline、低頻度recoveryで動く。
-- terminal DB write前にdeliveryをACKしない。重複deliveryはDB claim、lease、fence、terminal状態で冪等に収束させる。
+- 処理結果に必要なDB更新と再配送intentを確定してからACKする。claim前の重複配送、保留、再試行はOCR queue・分析jobの専門契約に従い、DB claim、lease、fenceで収束させる。
 - parent processが外部I/O、lease、timeout、子process、durable write、ACKを所有し、attempt childはboundedで非authoritativeなcandidateだけを返す。
 - OCRと分析は共有実行枠を1件とし、OCRだけが分析をpreemptできる。詳細は各専門正本に従う。
 

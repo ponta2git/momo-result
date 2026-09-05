@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import type { CaptureSlotState } from "@/features/ocrCapture/captureState";
 import {
@@ -77,61 +77,58 @@ export function useOcrCaptureMutations(hints: Record<string, unknown>): OcrCaptu
   });
   const { isPending: uploadPending, mutateAsync: upload } = uploadMutation;
 
-  const submit = useCallback(
-    async ({
-      onProgress,
-      selectedGameTitle,
-      selectedHeldEvent,
-      setup,
-      slots,
-      updateSlot,
-    }: OcrCaptureSubmitParams) => {
-      if (inFlightRef.current) {
-        return;
-      }
-      inFlightRef.current = true;
-      setIsSubmittingWorkflow(true);
-      try {
-        const result = await runOcrSubmissionWorkflow({
-          cancelDraft: async (matchDraftId) => {
-            const payload = { matchDraftId };
-            return runIdempotentMutation(
-              idempotencyKeys,
-              "ocrCapture.cancelMatchDraft",
-              payload,
-              (options) => cancelMatchDraft(matchDraftId, options),
-            );
-          },
-          createDraft: (request) =>
-            runIdempotentMutation(
-              idempotencyKeys,
-              "ocrCapture.createMatchDraft",
-              request,
-              (options) => createMatchDraft(request, options),
-            ),
-          createPlayedAtIso: currentIsoTimestamp,
-          createUploadJob: ({ file, matchDraftId, slot }) => upload({ file, matchDraftId, slot }),
-          onProgress,
-          selectedGameTitle,
-          selectedHeldEvent,
-          setup,
-          slots,
-          updateSlot,
-        });
+  const submit = async ({
+    onProgress,
+    selectedGameTitle,
+    selectedHeldEvent,
+    setup,
+    slots,
+    updateSlot,
+  }: OcrCaptureSubmitParams) => {
+    if (inFlightRef.current) {
+      return;
+    }
+    inFlightRef.current = true;
+    setIsSubmittingWorkflow(true);
+    try {
+      const result = await runOcrSubmissionWorkflow({
+        cancelDraft: async (matchDraftId) => {
+          const payload = { matchDraftId };
+          return runIdempotentMutation(
+            idempotencyKeys,
+            "ocrCapture.cancelMatchDraft",
+            payload,
+            (options) => cancelMatchDraft(matchDraftId, options),
+          );
+        },
+        createDraft: (request) =>
+          runIdempotentMutation(
+            idempotencyKeys,
+            "ocrCapture.createMatchDraft",
+            request,
+            (options) => createMatchDraft(request, options),
+          ),
+        createPlayedAtIso: currentIsoTimestamp,
+        createUploadJob: ({ file, matchDraftId, slot }) => upload({ file, matchDraftId, slot }),
+        onProgress,
+        selectedGameTitle,
+        selectedHeldEvent,
+        setup,
+        slots,
+        updateSlot,
+      });
 
-        if (result.status === "started" || result.status === "partial_started") {
-          await invalidateAfterOcrSubmissionStarted(queryClient).catch(() => undefined);
-        } else if (result.status === "failed_cleanup_failed") {
-          await invalidateAfterOcrSubmissionStarted(queryClient).catch(() => undefined);
-        }
-        return result;
-      } finally {
-        inFlightRef.current = false;
-        setIsSubmittingWorkflow(false);
+      if (result.status === "started" || result.status === "partial_started") {
+        await invalidateAfterOcrSubmissionStarted(queryClient).catch(() => undefined);
+      } else if (result.status === "failed_cleanup_failed") {
+        await invalidateAfterOcrSubmissionStarted(queryClient).catch(() => undefined);
       }
-    },
-    [idempotencyKeys, queryClient, upload],
-  );
+      return result;
+    } finally {
+      inFlightRef.current = false;
+      setIsSubmittingWorkflow(false);
+    }
+  };
 
   return {
     isSubmitting: isSubmittingWorkflow || uploadPending,

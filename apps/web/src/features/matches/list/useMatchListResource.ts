@@ -117,15 +117,13 @@ export function useMatchListResource({
   const currentSearchScope = buildMatchListSearchParams(currentSearch).toString();
   const manualRefreshFailed = manualRefreshFailure?.targetScope === currentSearchScope;
 
-  useEffect(() => {
-    if (
-      manualRefreshFailure !== null &&
-      manualRefreshFailure.originScope !== currentSearchScope &&
-      manualRefreshFailure.targetScope !== currentSearchScope
-    ) {
-      setManualRefreshFailure(null);
-    }
-  }, [currentSearchScope, manualRefreshFailure]);
+  if (
+    manualRefreshFailure !== null &&
+    manualRefreshFailure.originScope !== currentSearchScope &&
+    manualRefreshFailure.targetScope !== currentSearchScope
+  ) {
+    setManualRefreshFailure(null);
+  }
 
   useEffect(() => {
     const generation = lifecycleGenerationRef.current;

@@ -1,132 +1,123 @@
 ---
 name: postmortem
-description: Create or review momo-result incident postmortems, analyze outages/bugs/regressions/verification misses, extract durable lessons, keep private incident detail out of public docs, update docs/post-mortem/lessons.md, and move stable rules into AGENTS.md, dev-rule.md, test-rule.md, db-rule.md, domain-rule.md, architecture.md, or the owning requirement/contract doc.
+description: Analyze or review momo-result incidents, serious mistakes, and repeated failures; reassess follow-up actions; and verify authorized improvements. Also use for explicitly requested postmortems. Routine bug fixes alone do not require this workflow.
 ---
 
 # Postmortem
 
-Use this skill to convert an incident or verification miss into durable engineering practice for
-this repository. The goal is recurrence reduction: better tests, quality gates, operating rules,
-documentation, and AI-facing instructions.
+Reduce the likelihood or impact of recurrence through evidence, appropriate action, and follow-up.
+Match the depth of the analysis to the incident and the decisions it needs to support.
 
-## Repository Boundary
+## Scope and Repository Boundary
 
-- This repository is public by default.
-- Put incident-specific detail, timelines, provider facts, runbooks, measured values, attack
-  observations, and residual risks in `private/post-mortem/` unless the user explicitly requests a
-  different private path.
-- Keep public `docs/post-mortem/lessons.md` short: reflection prompts and links to durable rules
-  only.
-- Do not put secrets, tokens, DB/Redis URLs, origin lock tokens, session/CSRF/OAuth values, provider
-  configuration, or exploit-ready operational detail in public docs.
+- Preserve the requested scope: a new postmortem, a review, or reassessment of existing actions.
+  A review produces findings unless edits were requested. When implementation is authorized,
+  carry the selected changes through their required verification.
+- Establish whether impact is ongoing. Prioritize authorized stabilization or its handoff before
+  extended analysis; a postmortem request alone does not authorize production changes.
+- Follow `AGENTS.md` and use `docs/README.md` to find the relevant owners, executable sources, and
+  change gates. Read only the documents needed for the analysis or selected changes.
+- This repository, including this skill, is public. Keep incident detail, timelines, provider
+  facts, measurements, runbooks, and residual risks in `private/post-mortem/`, or another private
+  path specified by the user. Read private material only when authorized and relevant; authorization
+  already given for this task remains valid.
+- Never copy secret values into documents, tool output, commits, PRs, or chat. Public output may
+  contain abstract lessons and durable rules, but not incident-specific operational detail.
 
-## Workflow
+## Establish Facts and Causal Findings
 
-1. Gather facts.
-   Read only the relevant logs, diffs, tests, docs, and commands. Separate observed facts from
-   inference. Record what was verified and what remains unverified.
+1. Establish the impact, affected period, mitigation, and remaining uncertainty. Connect important
+   claims to source evidence and its time, revision, run, or environment when those distinctions
+   affect the conclusion. Current code and a later successful run do not establish what happened
+   during the incident. Distinguish no observed harm from verified absence within a stated scope.
+2. Separate observed facts, causal hypotheses, and unknowns. Explain the trigger, conditions that
+   allowed failure or amplified impact, and detection/recovery gaps as relevant. Consider evidence
+   against a proposed cause; an unknown cause is an acceptable result. Do not invent a person's or
+   agent's past assumptions to fill a narrative. Examine information and constraints available at
+   the time instead of stopping at "carelessness" or "should have checked."
+3. For recurrence or an existing safeguard, consult the relevant earlier record and action when
+   access is authorized. Distinguish an unimplemented action, an uncovered path, a bypass, and an
+   implemented but ineffective measure. Use that finding to bound investigation of the same failure
+   mechanism elsewhere; do not turn one incident into a repository-wide audit by default.
+4. Check whether the expected behavior was discoverable in the sources implementers were directed
+   to use. Treat ambiguity as a contributor only when evidence connects it to the failure.
+   Distinguish missing or inaccessible guidance from guidance that existed but was not enforced.
+   Examine modes, terminology, side effects, and generated contracts when relevant to that finding.
 
-2. Write or update the postmortem.
-   Default path is `private/post-mortem/YYYY-MM-DD-short-title.md`. Include impact, timeline, root
-   causes, contributing factors, what worked, what did not, residual risk, and follow-up actions.
-   If the user asks for a public document, strip incident-specific and operationally sensitive
-   detail and keep only abstract lessons.
+Incomplete causal knowledge does not prevent a bounded improvement to an observed failure
+mechanism. Preserve the uncertainty and identify any investigation needed for the remaining
+decision.
 
-3. Evaluate specification and documentation quality.
-   Check whether requirements, domain rules, architecture docs, API docs, contracts, or code
-   comments made the correct behavior discoverable. If ambiguous terms, implicit modes, optional
-   fields with hidden side effects, missing discriminators, stale docs, or implementation-only
-   contracts contributed, record that as a cause and move durable clarification to the owning docs.
+## Select and Carry Out Improvements
 
-4. Sync follow-up tracking.
-   If `private/post-mortem/follow-up-actions.md` exists, copy new or changed actions there. Preserve
-   original wording, source postmortem, original priority, target, done condition, and verification
-   method. Re-evaluate still-open actions and keep unresolved items ordered by current priority.
-   Mark actions as `Done` only with concrete evidence.
+- Tie each selected action to a causal finding and the outcome it should improve. Compare the
+  relevant alternatives: remove or simplify the failure mechanism, constrain unsafe behavior,
+  improve detection, limit impact, improve recovery, or change tests, documentation, and workflow.
+  Consider expected risk reduction, maintenance cost, existing coverage, and new failure modes.
+  Adding a rule or test is not the default outcome.
+- Select quality evidence through `docs/test-rule.md`, its design through
+  `docs/test-architecture.md` when needed, and gates through `docs/dev-rule.md`. For chosen evidence,
+  execute the failing boundary and judge the affected result; neighboring tests, mocks, or
+  successful compilation do not prove a path they did not exercise. Reuse, replace, or remove
+  evidence when justified rather than requiring a new test for every action.
+- If a product or operational decision is unresolved, formulate the decision, responsible
+  person/role, and next step. Do not disguise it as an implementation-ready task. Record risk
+  acceptance only with its decision-maker and rationale; merely listing a risk is not acceptance.
+- Implement and verify the selected changes within the user's authorization. Use existing
+  verification evidence when it applies to the current target; do not rerun unrelated gates merely
+  to rebuild historical evidence.
+- Change durable guidance only when a gap or a needed decision rule remains. Resolve ownership
+  through `docs/README.md`; do not duplicate its placement tables here. Keep
+  `docs/post-mortem/lessons.md` to relevant recall prompts and links. Add an agent instruction only
+  when an existing entry point does not already provide the required guidance.
 
-5. Review the improvements.
-   Check whether actions are sustainable, not ad hoc, and aimed at the mental model that let the
-   issue pass. Identify which test layer should catch the issue and whether a nearby test is being
-   used as a substitute for the real failing path.
+For a new or revised incident record, use [references/template.md](references/template.md).
+Default new-record path: `private/post-mortem/YYYY-MM-DD-short-title.md`.
+Keep the original event and decisions as dated history. Append a dated correction or follow-up
+result when later evidence changes a conclusion; do not silently rewrite what was known then.
 
-6. Move durable rules out of the postmortem.
-   Stable rules belong in the appropriate project docs, not only in a postmortem.
+## Maintain Follow-up Actions
 
-7. Keep `lessons.md` as an entry point.
-   If `docs/post-mortem/lessons.md` needs an update, add only when-to-remember prompts and pointers
-   to durable rules. Do not duplicate dev/test/db/domain/architecture rules there.
+Use `private/post-mortem/follow-up-actions.md` as the current plan for outstanding actions.
+Read its local conventions when working on follow-ups. The source postmortem owns the incident
+history, original decisions, and completed evidence. If the tracker is absent or unavailable, keep
+outstanding actions in the authorized incident record with an explicit tracking location and next
+step; do not leave them dependent on creating another document.
 
-8. Update AI operating instructions when needed.
-   If future agents must check a lesson before quality gates or completion, update `AGENTS.md` or
-   the equivalent project agent instructions.
+After selecting, implementing, or reassessing an action:
 
-9. Final check.
-   Verify docs are concise and MECE: no duplicated rule ownership, no unclear action owner, no
-   vague action without an acceptance condition, and no public/private boundary leak.
+- Keep a stable reference to the source action, such as a section anchor or local action ID.
+  Preserve the original priority and decision in the source; update the current target, priority,
+  and acceptance condition when justified, recording the date and reason for a changed decision.
+- Make an outstanding action executable from its tracking entry: causal purpose, target boundary,
+  responsible person/role (a stated shared owner is sufficient), acceptance condition, verification
+  method, and next step. A deferred or blocked action also needs its reason and a date or condition
+  for reconsideration. Do not invent an assignee, deadline, or approval.
+- When reviewing related actions, check whether the target still exists, evidence still applies,
+  and a revisit condition has occurred. Connect an event-based trigger to the relevant existing
+  work entry point or a named follow-up review. Respect private-access boundaries; a trigger in a
+  file does not create background monitoring or authorize unrelated reads.
+- Distinguish `Open` (work or verification remains), `Deferred` (a stated decision/condition
+  postpones work), and `Done` (the acceptance condition is evidenced). Use `Closed` for a
+  withdrawn, superseded, or explicitly accepted-risk action, recording that disposition and
+  rationale rather than claiming implementation. Identify the replacement when there is one.
+- A completion statement must point to evidence of the acceptance condition, including its scope
+  and result. A bare status label is not verification. Record manual review as manual review and
+  distinguish a one-time result from reusable automated coverage. Keep material verification gaps
+  open, with a next verification step; do not require indefinite observation for an otherwise
+  evidenced action.
+- Synchronize the final selected plan after review and implementation. Keep completed history in
+  its source, with at most a concise coverage summary in the tracker. Do not maintain two live
+  copies of the same action plan or re-evaluate unrelated backlog on every incident.
 
-## Rule Placement
+## Completion
 
-| Lesson type | Durable home |
-|---|---|
-| Incident detail, timeline, residual risk | `private/post-mortem/*.md` |
-| Short reflection prompts and links to rules | `docs/post-mortem/lessons.md` |
-| AI workflow, required pre-completion checks | `AGENTS.md` |
-| Business requirements, MVP scope, CSV/TSV | `docs/requirements/base.md` |
-| Series comparison requirements | `docs/requirements/series-comparison.md` |
-| DB ownership, migrations, schema contracts | `docs/db-rule.md` |
-| Domain definitions, lifecycle, invariants | `docs/domain-rule.md` |
-| Redis Streams / OCR queue contracts | `docs/redis-streams-ocr-contract.md` |
-| Test layers, quality gates, verification policy | `docs/test-rule.md` |
-| Coverage, test sizes, CI artifacts | `docs/test-architecture.md` |
-| Local setup and command sequences | `docs/dev-rule.md` |
-| Architecture, API patterns, security rules | `docs/architecture.md` |
+For the requested scope, report the findings and uncertainty, completed changes and evidence,
+and outstanding actions with their tracking location and next step. Distinguish recovery of the
+incident, completion of the analysis, and completion of follow-ups. Analysis can finish with
+explicitly tracked uncertainty and open actions.
 
-## Follow-up Actions
-
-Action items should be executable without re-reading the whole postmortem. Prefer this shape:
-
-| Priority | Action | Target | Done when | Verification |
-|---|---|---|---|---|
-
-Each action needs a target file/module, an acceptance condition, and a verification method. If that
-is not possible, mark it as a design decision or residual risk instead of pretending it is ready.
-
-## Test Architecture Check
-
-Ask which layer should have caught the issue:
-
-- DB contract: missing tables, columns, seed data, nullability, defaults.
-- Repository/integration: SQL syntax, filters, ordering, transactions, database-specific behavior.
-- HTTP/API: request parsing, auth, response encoding, error mapping.
-- Usecase/unit: domain branching, validation, state transitions.
-- Frontend component/page: UI state, user interaction, API error display.
-- OCR worker: parser, payload validation, job lifecycle, native OCR boundary.
-- E2E smoke: core cross-service flows.
-
-If the proposed test does not execute the failing path, say so and add the direct test or record the
-remaining risk.
-
-## Specification and Documentation Check
-
-Ask whether the expected behavior was clearly recoverable from the docs implementers were told to
-use. Treat specification and documentation as part of the system.
-
-Evaluate at least these questions:
-
-- Did the relevant requirements/domain/API docs explicitly name the behavior that failed?
-- Were there multiple valid modes or paths, and was the discriminator between them documented?
-- Did optional fields have side effects or lifecycle meaning that were only visible in code?
-- Were similar terms easy to confuse, such as provenance ids versus lifecycle/workflow ids?
-- Did a generated type or OpenAPI schema expose a field without explaining when it is required?
-- Did tests encode the documented contract, or only the implementation's current shape?
-- Should the durable fix live in requirements, domain rules, architecture rules, API docs, test
-  rules, queue contracts, DB rules, or agent instructions?
-
-When docs were ambiguous, avoid framing the incident only as an implementation miss. Add a root cause
-or contributing factor for the spec gap, update the owning docs, and add a follow-up action if the
-docs cannot be fixed immediately.
-
-## References
-
-For a reusable private postmortem structure and wording prompts, read `references/template.md` only
-when writing or revising an actual postmortem.
+Before finishing, verify that the selected actions address the findings, the current plan and
+source references agree, relevant lessons were considered, and changed files passed their
+applicable gates. Review public/private placement as well as automated safety checks. Do not
+claim implementation or verification that was outside the work performed.

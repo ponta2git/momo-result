@@ -1,104 +1,89 @@
 # Private Postmortem Template
 
-Use this template as a starting point for `private/post-mortem/`. Keep only sections that help the
-current incident. Do not copy incident-specific details into public `docs/` unless the user
-explicitly approves a sanitized public summary.
+Use this structure for a new or revised private incident record. Keep only sections that support
+the current analysis. Follow the workflow and action lifecycle in [../SKILL.md](../SKILL.md).
+The action table is a dated snapshot; the shared tracker owns the current outstanding plan.
+Keep secret values out of this record and publish only abstract lessons.
 
-```md
+````md
 # Postmortem: <short incident title>
 
-Date: YYYY-MM-DD
+Incident date / period: <date and timezone; mark estimates>
+Scope: <affected system and analysis scope>
+Incident state: <ongoing | mitigated | recovered | unknown>, as of <time>
+Analysis state: <draft | complete for the stated scope>, as of <date>
+Follow-up owner: <known responsible person/role; shared unless an action overrides it>
+Current follow-ups: <tracking file or source section>
 
-Scope: <system/component/repo>
+## Summary and Impact
 
-Status: <mitigated | resolved | follow-up actions open>
+<What failed, what users observed, mitigation, and remaining impact. State the basis and limits of
+impact estimates, including data loss or uncertainty.>
 
-## Summary
+## Evidence and Timeline
 
-<What failed, what users observed, and the short version of why.>
+| When | Observation | Evidence / relevant revision or run |
+|---|---|---|
+| <time and timezone> | <observed event; label estimates> | <safe source reference> |
 
-## Impact
+## Causal Analysis
 
-- <User-visible impact>
-- <Operational impact>
-- <Data loss or explicit "No data loss observed">
+<Explain the supported failure mechanism, enabling conditions, and detection/recovery gaps.
+Separate hypotheses from facts. Include conflicting evidence and unknowns that affect decisions.
+Do not infer the incident-time behavior from the current implementation alone.>
 
-## Timeline
+## Prior Measures and Recurrence
 
-- <timestamp timezone>: <event>
+<When relevant: link the previous action or safeguard. Was it unimplemented, outside its coverage,
+bypassed, or ineffective? What does that imply for the bounded scope of this response?>
 
-## Root Causes
+## What Helped or Hindered
 
-### 1. <root cause>
+<Diagnosis, mitigation, recovery, and the information available at the time. Explain whether
+requirements or guidance were missing, ambiguous, hard to find, or already correct but unenforced,
+only where that contributed.>
 
-<Explain the systemic cause, not only the immediate bug.>
+## Response Selection
 
-## Contributing Factors
+<Connect chosen actions to the findings and expected reduction in likelihood or impact. Explain
+material alternatives, costs, and trade-offs, including why an extra test or rule is unnecessary
+when that is the decision. Route any required specification decision to its owner.>
 
-- <Detection gap>
-- <Testing gap>
-- <Specification/documentation gap>
-- <Process or mental model issue>
+## Remediation and Verification Performed
 
-## Test Architecture Assessment
+| Change / action ref | Evidence and result | Verified boundary and remaining limits |
+|---|---|---|
+| <implemented change> | <revision/run/command/manual review reference> | <what it proves and does not prove> |
 
-<Identify which test layer should have caught the issue and whether current tests cover the exact
-failing path.>
+## Actions at Analysis Completion
 
-| Layer | Responsibility | Current gap | Needed change |
-|---|---|---|---|
+As of: <date>. Current outstanding plans are maintained at <tracker reference>.
+Use source section anchors or local IDs to keep action references stable.
 
-## What Worked
+| Ref | Priority / status | Action and causal purpose | Target / owner override | Done when | Verification method | Next step / revisit condition |
+|---|---|---|---|---|---|---|
+| <A1> | <priority / status> | <concrete action and intended effect> | <boundary; override shared owner if needed> | <observable acceptance condition> | <suitable evidence> | <next step; reason and trigger if postponed> |
 
-- <What made diagnosis or mitigation easier>
+## Open Questions and Residual Risk
 
-## What Did Not Work
+<Unverified behavior, unanswered questions, and their investigation/decision action references.
+For accepted risk, identify who decided, why, and any review condition. A recorded risk is not
+automatically accepted.>
 
-- <What let the issue escape>
+## Durable Guidance Changes
 
-## Immediate Remediation Completed
-
-- <Fix or mitigation already done>
-
-## Residual Risk
-
-- <What remains unverified or unimplemented>
-
-## Follow-up Actions
-
-| Priority | Action | Target | Done when | Verification |
-|---|---|---|---|---|
-| P0 | <action> | <file/module> | <acceptance condition> | <command/test/review> |
+<When needed: link the owning rules and describe the decision they now clarify. An existing
+correct rule may need implementation support instead of another documentation change. Keep
+lessons.md to applicable recall prompts and pointers.>
 
 ## Changed Mental Model
 
-Replace:
+<Optional: a supported misconception and the corrected model. Label an inferred misconception
+as a hypothesis; omit this section when the evidence does not support one.>
 
-```text
-<old assumption>
-```
+## Dated Follow-up Results
 
-With:
-
-```text
-<new operating model>
-```
-
-## Rules To Move
-
-| Lesson | Durable home |
-|---|---|
-| <stable rule> | <docs/*-rule.md or AGENTS.md> |
-```
-
-## Review Prompts
-
-- Does each action have a target, done condition, and verification?
-- Are durable rules moved to their proper docs instead of staying only in the postmortem?
-- Is `docs/post-mortem/lessons.md` only an entry point, not a duplicate rulebook?
-- Does the test plan execute the actual failing path?
-- Are skipped integration tests reported as unverified behavior?
-- Does the document challenge the mental model that let the issue pass?
-- Are timeline facts separated from inference?
-- Is any public doc update sanitized for the repository's public/private boundary?
-- Is any recommendation vague enough that the next agent could ignore it?
+<Append only when later work changes a conclusion, closes an action, or replaces/withdraws it.
+Include the action reference, date, evidence or decision rationale, and replacement if any.
+Preserve the original snapshot rather than silently revising incident history.>
+````

@@ -1,5 +1,7 @@
-import "@testing-library/jest-dom/vitest";
-import { afterEach, beforeEach, vi } from "vitest";
+import * as matchers from "@testing-library/jest-dom/matchers";
+import { afterEach, beforeEach, expect, vi } from "vitest";
+
+expect.extend(matchers);
 
 const hasDom = typeof window !== "undefined";
 

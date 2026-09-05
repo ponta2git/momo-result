@@ -124,6 +124,8 @@ export function useCameraCaptureSession({
   }, [releaseCurrentStream]);
 
   useEffect(() => {
+    // Device state arrives asynchronously from enumerateDevices, not from render-derived data.
+    // oxlint-disable-next-line react/set-state-in-effect
     void refreshDevices();
   }, [refreshDevices]);
 

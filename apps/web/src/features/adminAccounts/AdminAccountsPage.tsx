@@ -18,6 +18,7 @@ import { PageFrame } from "@/shared/ui/layout/PageFrame";
 
 export function AdminAccountsPage() {
   const page = useAdminAccountsPageModel();
+  const { triggerRef } = page.create;
   const hasAccounts = page.list.kind === "ready" && page.list.items.length > 0;
 
   return (
@@ -30,7 +31,7 @@ export function AdminAccountsPage() {
             role="group"
           >
             <Button
-              ref={page.create.triggerRef}
+              ref={triggerRef}
               icon={<UserPlus aria-hidden="true" />}
               variant="secondary"
               onClick={page.create.open}

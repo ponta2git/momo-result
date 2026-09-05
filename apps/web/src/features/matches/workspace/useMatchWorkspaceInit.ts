@@ -74,6 +74,8 @@ export function useMatchWorkspaceInit({
       }
       onInitialize(matchDetailToMatchForm(matchDetail), null);
       initializedSourceKeyRef.current = sourceKey;
+      // Publish readiness after the form initialization command has run in this commit.
+      // oxlint-disable-next-line react/set-state-in-effect
       setInitializedSourceKey(sourceKey);
       return;
     }

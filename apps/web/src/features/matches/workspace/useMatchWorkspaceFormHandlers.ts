@@ -70,13 +70,14 @@ export function useMatchWorkspaceFormHandlers({
     [dispatch, onReviewFieldChange],
   );
 
+  const incidentByPlayOrder = workspaceData?.incidentByPlayOrder;
   const onPlayOrderChange = useCallback(
     (index: number, playOrder: number) => {
       onReviewPlayOrderChange(index);
       dispatch(
-        workspaceData?.incidentByPlayOrder
+        incidentByPlayOrder
           ? {
-              incidentByPlayOrder: workspaceData.incidentByPlayOrder,
+              incidentByPlayOrder,
               index,
               playOrder,
               type: "sync_incidents_from_play_order",
@@ -88,7 +89,7 @@ export function useMatchWorkspaceFormHandlers({
             },
       );
     },
-    [dispatch, onReviewPlayOrderChange, workspaceData?.incidentByPlayOrder],
+    [dispatch, incidentByPlayOrder, onReviewPlayOrderChange],
   );
 
   return {

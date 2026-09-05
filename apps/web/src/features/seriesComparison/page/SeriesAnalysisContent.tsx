@@ -128,6 +128,8 @@ function ArtifactViewContent({
     const sectionId = decodeURIComponent(window.location.hash.slice(1));
     if (!sectionId) return;
     document.getElementById(sectionId)?.scrollIntoView?.({ block: "start" });
+    // The view and artifact determine when the hash target exists in the committed DOM.
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies
   }, [activeView, artifactId]);
 
   return (

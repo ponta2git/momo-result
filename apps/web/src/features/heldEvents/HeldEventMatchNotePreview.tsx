@@ -21,6 +21,8 @@ export function HeldEventMatchNotePreview({ body }: { body: string }) {
     const observer = new ResizeObserver(measure);
     observer.observe(element);
     return () => observer.disconnect();
+    // Text changes can alter scrollHeight without resizing the clamped element.
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies
   }, [body, expanded]);
 
   return (

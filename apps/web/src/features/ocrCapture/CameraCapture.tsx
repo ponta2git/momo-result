@@ -24,7 +24,12 @@ export function CameraCapture({
   onSelect,
   onValidationError,
 }: CameraCaptureProps) {
-  const camera = useCameraCaptureSession({ disabled, onSelect, onValidationError, slotLabel });
+  const { videoRef, canvasRef, ...camera } = useCameraCaptureSession({
+    disabled,
+    onSelect,
+    onValidationError,
+    slotLabel,
+  });
   const useSecondaryActions = actionVariant === "secondary";
   const startVariant =
     useSecondaryActions || camera.active || camera.error !== null ? "secondary" : "primary";
@@ -63,13 +68,13 @@ export function CameraCapture({
           </div>
         )}
         <video
-          ref={camera.videoRef}
+          ref={videoRef}
           className="size-full object-contain"
           muted
           playsInline
           aria-label={`${slotLabel}のカメラプレビュー`}
         />
-        <canvas ref={camera.canvasRef} className="hidden" />
+        <canvas ref={canvasRef} className="hidden" />
       </div>
       {camera.error ? (
         <div

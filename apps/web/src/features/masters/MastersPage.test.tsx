@@ -1,6 +1,6 @@
 import { QueryClientProvider, QueryErrorResetBoundary } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { MemoryRouter, useLocation } from "react-router-dom";
@@ -692,30 +692,29 @@ describe("MastersPage", () => {
       }),
     );
 
-    let resetQueryErrors: (() => void) | undefined;
     function MasterRouteHarness({ showPage }: { showPage: boolean }) {
       return (
         <QueryClientProvider client={queryClient}>
           <QueryErrorResetBoundary>
-            {({ reset }) => {
-              resetQueryErrors = reset;
-              return showPage ? (
-                <MemoryRouter initialEntries={["/admin/masters"]}>
-                  <MastersPage />
-                </MemoryRouter>
-              ) : null;
-            }}
+            {({ reset }) => (
+              <>
+                <button type="button" onClick={reset}>
+                  Reset query errors
+                </button>
+                {showPage ? (
+                  <MemoryRouter initialEntries={["/admin/masters"]}>
+                    <MastersPage />
+                  </MemoryRouter>
+                ) : null}
+              </>
+            )}
           </QueryErrorResetBoundary>
         </QueryClientProvider>
       );
     }
 
     const view = render(<MasterRouteHarness showPage={false} />);
-    const resetRouteQueryErrors = resetQueryErrors;
-    if (!resetRouteQueryErrors) {
-      throw new Error("query error reset was not registered");
-    }
-    act(() => resetRouteQueryErrors());
+    await userEvent.setup().click(screen.getByRole("button", { name: "Reset query errors" }));
     view.rerender(<MasterRouteHarness showPage />);
 
     await requestStarted.promise;

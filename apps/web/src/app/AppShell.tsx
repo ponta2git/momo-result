@@ -49,6 +49,8 @@ function RouteQueryResetBridge({
       return;
     }
     reset();
+    // The new route may render only after the external QueryErrorResetBoundary was reset.
+    // oxlint-disable-next-line react/set-state-in-effect
     setReadyKey(resetKey);
   }, [readyKey, reset, resetKey]);
 

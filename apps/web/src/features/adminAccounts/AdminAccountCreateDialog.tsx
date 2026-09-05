@@ -1,4 +1,4 @@
-import { useFormStatus } from "react-dom";
+import { startTransition } from "react";
 
 import type { AdminAccountCreateDialogModel } from "@/features/adminAccounts/useAdminAccountsPageModel";
 import { canonicalResultMembers } from "@/shared/domain/members";
@@ -28,7 +28,18 @@ export function AdminAccountCreateDialog({ model }: { model: AdminAccountCreateD
       title="アカウントを追加"
       onOpenChange={setOpen}
     >
-      <form key={formKey} action={action} className="grid gap-4">
+      <form
+        key={formKey}
+        className="grid gap-4"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (pending) return;
+          const formData = new FormData(event.currentTarget);
+          // Dispatch explicitly: resolved error Actions must not trigger an automatic form reset.
+          // The successful action advances formKey to initialize the next account's form.
+          startTransition(() => action(formData));
+        }}
+      >
         {error ? (
           <Notice role="alert" tone="danger" title="アカウントを追加できません">
             {error}
@@ -56,18 +67,11 @@ export function AdminAccountCreateDialog({ model }: { model: AdminAccountCreateD
           <Button disabled={pending} variant="secondary" onClick={() => setOpen(false)}>
             キャンセル
           </Button>
-          <CreateAccountSubmitButton />
+          <Button pending={pending} pendingLabel="追加中" type="submit">
+            追加
+          </Button>
         </DialogFooter>
       </form>
     </Dialog>
-  );
-}
-
-function CreateAccountSubmitButton() {
-  const { pending } = useFormStatus();
-  return (
-    <Button pending={pending} pendingLabel="追加中" type="submit">
-      追加
-    </Button>
   );
 }

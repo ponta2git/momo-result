@@ -11,6 +11,7 @@ import { invalidateAfterMatchConfirmed } from "@/shared/api/cacheInvalidation";
 import { getMatchDraftDetail } from "@/shared/api/matchDrafts";
 import type { MatchDraftDetailResponse } from "@/shared/api/matchDrafts";
 import { matchKeys } from "@/shared/api/queryKeys";
+import { evictDraftSourceImageBlobs } from "@/shared/api/sourceImageQueries";
 import { withReturnTo } from "@/shared/navigation/returnTo";
 
 export function useConfirmedDraftRedirect({
@@ -54,6 +55,7 @@ export function useConfirmedDraftRedirect({
       }
 
       redirectedConfirmedDraftRef.current = destination.matchId;
+      if (detail) evictDraftSourceImageBlobs(queryClient, detail.matchDraftId);
       setConfirmedDraftRedirecting(true);
       void invalidateAfterMatchConfirmed(queryClient);
       notify(message, "warning");

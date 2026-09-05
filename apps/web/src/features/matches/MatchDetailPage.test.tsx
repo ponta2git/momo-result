@@ -3,7 +3,16 @@ import type { QueryClient } from "@tanstack/react-query";
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
-import { MemoryRouter, Route, Routes, useLocation, useNavigate } from "react-router-dom";
+import {
+  createMemoryRouter,
+  MemoryRouter,
+  Outlet,
+  Route,
+  RouterProvider,
+  Routes,
+  useLocation,
+  useNavigate,
+} from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { MatchDetailPage } from "@/features/matches/MatchDetailPage";
@@ -42,6 +51,40 @@ function GlobalNavigationButton({ destination = "/other" }: { destination?: stri
     <button data-testid="leave-match-detail" type="button" onClick={() => navigate(destination)}>
       leave detail
     </button>
+  );
+}
+
+// Deletion relies on navigate({ flushSync: true }) before evicting the detail.
+// Use the same data-router boundary as the app so the old route has unmounted.
+function renderDeletionPage(
+  queryClient: QueryClient,
+  initialEntry = "/matches/match-1",
+  leaveDestination = "/other",
+) {
+  const router = createMemoryRouter(
+    [
+      {
+        element: (
+          <>
+            <GlobalNavigationButton destination={leaveDestination} />
+            <LocationProbe />
+            <Outlet />
+          </>
+        ),
+        children: [
+          { path: "/matches/:matchId", element: <MatchDetailPage /> },
+          { path: "/matches", element: <p>filtered-list</p> },
+          { path: "/held-events/:heldEventId", element: <p>held-event-page</p> },
+          { path: "/other", element: <p>other-page</p> },
+        ],
+      },
+    ],
+    { initialEntries: [initialEntry] },
+  );
+  render(
+    <QueryClientProvider client={queryClient}>
+      <RouterProvider router={router} />
+    </QueryClientProvider>,
   );
 }
 
@@ -172,16 +215,7 @@ describe("MatchDetailPage", () => {
       }),
     );
 
-    render(
-      <QueryClientProvider client={queryClient}>
-        <MemoryRouter initialEntries={["/matches/match-1"]}>
-          <Routes>
-            <Route path="/matches/:matchId" element={<MatchDetailPage />} />
-            <Route path="/held-events/:heldEventId" element={<p>held-event-page</p>} />
-          </Routes>
-        </MemoryRouter>
-      </QueryClientProvider>,
-    );
+    renderDeletionPage(queryClient);
 
     expect(await screen.findByRole("heading", { name: /第1試合の結果/u })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "削除" }));
@@ -375,17 +409,7 @@ describe("MatchDetailPage", () => {
       }),
     );
 
-    render(
-      <QueryClientProvider client={queryClient}>
-        <MemoryRouter initialEntries={["/matches/match-1"]}>
-          <LocationProbe />
-          <Routes>
-            <Route path="/matches/:matchId" element={<MatchDetailPage />} />
-            <Route path="/held-events/:heldEventId" element={<p>held-event-page</p>} />
-          </Routes>
-        </MemoryRouter>
-      </QueryClientProvider>,
-    );
+    renderDeletionPage(queryClient);
 
     expect(await screen.findByRole("heading", { name: /第1試合の結果/u })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "削除" }));
@@ -399,10 +423,18 @@ describe("MatchDetailPage", () => {
     expect(queryClient.getQueryData(matchKeys.detail("match-1"))).toBeUndefined();
 
     await act(async () => invalidationGate.resolve());
+    await waitFor(() => expect(queryClient.isMutating()).toBe(0));
   });
 
   it("does not navigate back after leaving the detail while delete invalidation is pending", async () => {
     setDevUser();
+    // The detail route must release its observer before its cache is removed.
+    const evictionRoutes: Array<string | null> = [];
+    const originalRemoveQueries = queryClient.removeQueries.bind(queryClient);
+    vi.spyOn(queryClient, "removeQueries").mockImplementation((filters) => {
+      evictionRoutes.push(screen.getByLabelText("current location").textContent);
+      return originalRemoveQueries(filters);
+    });
     const invalidationGate = createDeferred();
     let heldEventDirectoryRequests = 0;
     server.use(
@@ -415,19 +447,7 @@ describe("MatchDetailPage", () => {
       }),
     );
 
-    render(
-      <QueryClientProvider client={queryClient}>
-        <MemoryRouter initialEntries={["/matches/match-1"]}>
-          <GlobalNavigationButton />
-          <LocationProbe />
-          <Routes>
-            <Route path="/matches/:matchId" element={<MatchDetailPage />} />
-            <Route path="/held-events/:heldEventId" element={<p>held-event-page</p>} />
-            <Route path="/other" element={<p>other-page</p>} />
-          </Routes>
-        </MemoryRouter>
-      </QueryClientProvider>,
-    );
+    renderDeletionPage(queryClient);
 
     expect(await screen.findByRole("heading", { name: /第1試合の結果/u })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "削除" }));
@@ -438,14 +458,14 @@ describe("MatchDetailPage", () => {
     );
     expect(queryClient.getQueryData(matchKeys.detail("match-1"))).toBeUndefined();
 
+    expect(evictionRoutes).toEqual(["/held-events/held-1"]);
     act(() => screen.getByTestId("leave-match-detail").click());
     expect(screen.getByLabelText("current location")).toHaveTextContent("/other");
     expect(screen.getByText("other-page")).toBeInTheDocument();
 
     await act(async () => invalidationGate.resolve());
-    await waitFor(() =>
-      expect(queryClient.getQueryData(matchKeys.detail("match-1"))).toBeUndefined(),
-    );
+    await waitFor(() => expect(queryClient.isMutating()).toBe(0));
+    expect(queryClient.getQueryData(matchKeys.detail("match-1"))).toBeUndefined();
 
     expect(screen.getByLabelText("current location")).toHaveTextContent("/other");
     expect(screen.getByText("other-page")).toBeInTheDocument();
@@ -464,19 +484,7 @@ describe("MatchDetailPage", () => {
       }),
     );
 
-    render(
-      <QueryClientProvider client={queryClient}>
-        <MemoryRouter initialEntries={["/matches/match-1"]}>
-          <GlobalNavigationButton />
-          <LocationProbe />
-          <Routes>
-            <Route path="/matches/:matchId" element={<MatchDetailPage />} />
-            <Route path="/held-events/:heldEventId" element={<p>held-event-page</p>} />
-            <Route path="/other" element={<p>other-page</p>} />
-          </Routes>
-        </MemoryRouter>
-      </QueryClientProvider>,
-    );
+    renderDeletionPage(queryClient);
 
     expect(await screen.findByRole("heading", { name: /第1試合の結果/u })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "削除" }));
@@ -508,17 +516,7 @@ describe("MatchDetailPage", () => {
       }),
     );
 
-    render(
-      <QueryClientProvider client={queryClient}>
-        <MemoryRouter initialEntries={["/matches/match-1"]}>
-          <GlobalNavigationButton destination="/matches/match-2" />
-          <LocationProbe />
-          <Routes>
-            <Route path="/matches/:matchId" element={<MatchDetailPage />} />
-          </Routes>
-        </MemoryRouter>
-      </QueryClientProvider>,
-    );
+    renderDeletionPage(queryClient, "/matches/match-1", "/matches/match-2");
 
     expect(await screen.findByRole("heading", { name: /第1試合の結果/u })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "削除" }));
@@ -544,20 +542,9 @@ describe("MatchDetailPage", () => {
   it("returns to the originating filtered list after deleting a match", async () => {
     setDevUser();
 
-    render(
-      <QueryClientProvider client={queryClient}>
-        <MemoryRouter
-          initialEntries={[
-            "/matches/match-1?returnTo=%2Fmatches%3Fstatus%3Dconfirmed%26cursor%3Dcursor-2",
-          ]}
-        >
-          <LocationProbe />
-          <Routes>
-            <Route path="/matches/:matchId" element={<MatchDetailPage />} />
-            <Route path="/matches" element={<p>filtered-list</p>} />
-          </Routes>
-        </MemoryRouter>
-      </QueryClientProvider>,
+    renderDeletionPage(
+      queryClient,
+      "/matches/match-1?returnTo=%2Fmatches%3Fstatus%3Dconfirmed%26cursor%3Dcursor-2",
     );
 
     expect(await screen.findByRole("link", { name: "試合一覧へ戻る" })).toHaveAttribute(
@@ -578,19 +565,9 @@ describe("MatchDetailPage", () => {
     setDevUser();
     const removeQueries = vi.spyOn(queryClient, "removeQueries");
 
-    render(
-      <QueryClientProvider client={queryClient}>
-        <MemoryRouter
-          initialEntries={["/matches/match-1?returnTo=%2Fmatches%2Fmatch-1%2F%3Fsource%3Dcrafted"]}
-          useTransitions={false}
-        >
-          <LocationProbe />
-          <Routes>
-            <Route path="/matches/:matchId" element={<MatchDetailPage />} />
-            <Route path="/held-events/:heldEventId" element={<p>held-event-page</p>} />
-          </Routes>
-        </MemoryRouter>
-      </QueryClientProvider>,
+    renderDeletionPage(
+      queryClient,
+      "/matches/match-1?returnTo=%2Fmatches%2Fmatch-1%2F%3Fsource%3Dcrafted",
     );
 
     expect(await screen.findByRole("heading", { name: /第1試合の結果/u })).toBeInTheDocument();

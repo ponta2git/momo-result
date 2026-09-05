@@ -4,7 +4,7 @@ import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { Link, MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { MatchCreatePage } from "@/features/matches/MatchCreatePage";
 import type { AuthMeResponse } from "@/shared/api/auth";
@@ -354,6 +354,9 @@ describe("MatchCreatePage", () => {
         </MemoryRouter>
       </QueryClientProvider>,
     );
+
+    // Wait for the lazy toast renderer before starting the notification assertion timeout.
+    await act(() => vi.dynamicImportSettled());
 
     expect(
       await screen.findByText("設定管理から戻りましたが、入力内容を復元できませんでした。"),

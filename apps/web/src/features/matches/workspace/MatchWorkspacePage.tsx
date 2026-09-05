@@ -103,7 +103,7 @@ function MatchWorkspacePageContent({
     const title = notFound ? "試合が見つかりませんでした" : "試合編集を読み込めませんでした";
     return (
       <PageFrame width="workspace">
-        <PageContentSurface aria-label="試合内容" className="grid gap-6" role="region">
+        <PageContentSurface aria-label="試合内容" className="grid grid-cols-1 gap-6" role="region">
           <MatchWorkspaceToolbar model={navigation.toolbar} />
           <Notice
             action={
@@ -143,7 +143,7 @@ function MatchWorkspacePageContent({
 
   return (
     <PageFrame width="workspace">
-      <PageContentSurface aria-label="試合内容" className="grid gap-6" role="region">
+      <PageContentSurface aria-label="試合内容" className="grid grid-cols-1 gap-6" role="region">
         <MatchWorkspaceToolbar model={navigation.toolbar} />
         {loading.base.errors.length > 0 ? (
           <Notice

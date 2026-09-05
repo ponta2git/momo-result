@@ -48,7 +48,7 @@ export function MatchWorkspaceEditor({ model }: MatchWorkspaceEditorProps) {
 
       <div
         className={cn(
-          "grid gap-4",
+          "grid min-w-0 grid-cols-1 gap-4",
           model.sourceImagePanel ? "2xl:grid-cols-[minmax(0,1fr)_minmax(30rem,32rem)]" : "",
         )}
       >

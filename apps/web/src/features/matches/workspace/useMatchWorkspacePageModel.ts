@@ -287,6 +287,7 @@ export function useMatchWorkspacePageModel({
       heldEventPicker,
     },
     sourceImages: {
+      accountId,
       items: sourceImages,
       loading: load.sourceImagesLoading,
       preferredKind: local.preferredImageKind,

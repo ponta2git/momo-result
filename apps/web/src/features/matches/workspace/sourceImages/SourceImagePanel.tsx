@@ -17,6 +17,7 @@ import { SegmentedControl } from "@/shared/ui/forms/SegmentedControl";
 import { TabsPanel, TabsRoot } from "@/shared/ui/forms/Tabs";
 
 type SourceImagePanelProps = {
+  accountId?: string | undefined;
   loading: boolean;
   matchDraftId: string;
   preferredKind: SourceImageKind | undefined;
@@ -38,13 +39,24 @@ function SourceImageLoadingFrame({ detail, label }: { detail: string; label: str
   );
 }
 
-export function SourceImagePanel({
+export function SourceImagePanel(props: SourceImagePanelProps) {
+  return (
+    <SourceImagePanelContent
+      key={JSON.stringify([props.accountId, props.matchDraftId])}
+      {...props}
+    />
+  );
+}
+
+function SourceImagePanelContent({
+  accountId,
   loading,
   matchDraftId,
   preferredKind,
   sourceImages,
 }: SourceImagePanelProps) {
   const panel = useSourceImagePanelState({
+    accountId,
     loading,
     matchDraftId,
     preferredKind,
@@ -146,7 +158,7 @@ export function SourceImagePanel({
                       <div className="grid h-[13rem] w-full 2xl:aspect-video 2xl:h-auto">
                         <img
                           alt={`${sourceImageKindLabels[panel.activeState.kind]}の元画像`}
-                          className="size-full rounded-xs bg-[var(--color-media-canvas)] object-contain"
+                          className="size-full min-h-0 min-w-0 rounded-xs bg-[var(--color-media-canvas)] object-contain"
                           src={panel.displayUrl}
                         />
                       </div>

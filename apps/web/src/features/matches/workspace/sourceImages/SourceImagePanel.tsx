@@ -158,7 +158,7 @@ function SourceImagePanelContent({
                       <div className="grid h-[13rem] w-full 2xl:aspect-video 2xl:h-auto">
                         <img
                           alt={`${sourceImageKindLabels[panel.activeState.kind]}の元画像`}
-                          className="size-full rounded-xs bg-[var(--color-media-canvas)] object-contain"
+                          className="size-full min-h-0 min-w-0 rounded-xs bg-[var(--color-media-canvas)] object-contain"
                           src={panel.displayUrl}
                         />
                       </div>

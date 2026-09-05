@@ -1,5 +1,5 @@
 import { Settings2, Trash2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { MatchSetupFields } from "@/features/matches/workspace/MatchSetupFields";
 import type {
@@ -36,12 +36,12 @@ export function MatchSetupSection({
     selectedHeldEvent && selectedGameTitle && selectedSeason && selectedMap && values.playedAt,
   );
   const hasErrors = model.fields.validation.errorPathSet.size > 0;
-  const [editorOpen, setEditorOpen] = useState(!contextComplete);
-  useEffect(() => {
-    if (hasErrors) {
-      setEditorOpen(true);
-    }
-  }, [hasErrors]);
+  const [editorOpen, setEditorOpen] = useState(!contextComplete || hasErrors);
+  const [previousHasErrors, setPreviousHasErrors] = useState(hasErrors);
+  if (previousHasErrors !== hasErrors) {
+    setPreviousHasErrors(hasErrors);
+    if (hasErrors) setEditorOpen(true);
+  }
   const contextSummary = contextComplete
     ? [
         selectedHeldEvent ? formatDateTimeLong(selectedHeldEvent.heldAt) : null,

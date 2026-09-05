@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import {
   displaySeriesAnalysisBundleWithoutContext,
@@ -134,43 +134,21 @@ export function useSeriesAnalysisResource({
     [activeView, candidateAggregate, candidateReview, matchContextData, publishedArtifactId, state],
   );
 
-  useEffect(() => {
-    if (bundleResolution.kind !== "ready") return;
-    setLastSuccessfulBundle((current) =>
-      sameSeriesAnalysisDisplayBundle(current, bundleResolution.value)
-        ? current
-        : bundleResolution.value,
-    );
-  }, [bundleResolution]);
-
-  useEffect(() => {
-    if (
-      !candidateResource ||
-      bundleResolution.kind !== "waiting" ||
-      matchContextQueryParams === undefined ||
-      !matchContextFailed
-    ) {
-      return;
-    }
-    const fallback = displaySeriesAnalysisBundleWithoutContext(
-      activeView,
-      candidateAggregate,
-      candidateReview,
-    );
-    if (fallback) {
-      setLastSuccessfulBundle((current) =>
-        sameSeriesAnalysisDisplayBundle(current, fallback) ? current : fallback,
-      );
-    }
-  }, [
-    activeView,
-    bundleResolution.kind,
-    candidateAggregate,
-    candidateResource,
-    candidateReview,
-    matchContextFailed,
-    matchContextQueryParams,
-  ]);
+  const nextSuccessfulBundle =
+    bundleResolution.kind === "ready"
+      ? bundleResolution.value
+      : candidateResource &&
+          bundleResolution.kind === "waiting" &&
+          matchContextQueryParams !== undefined &&
+          matchContextFailed
+        ? displaySeriesAnalysisBundleWithoutContext(activeView, candidateAggregate, candidateReview)
+        : undefined;
+  if (
+    nextSuccessfulBundle &&
+    !sameSeriesAnalysisDisplayBundle(lastSuccessfulBundle, nextSuccessfulBundle)
+  ) {
+    setLastSuccessfulBundle(nextSuccessfulBundle);
+  }
 
   const activeQueryParams = activeView === "review" ? reviewQueryParams : aggregateQueryParams;
   const activeError = activeView === "review" ? reviewError : aggregateError;

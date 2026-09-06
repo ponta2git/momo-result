@@ -1,5 +1,5 @@
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactNode } from "react";
 
 import {
   formatDecimal,
@@ -21,13 +21,6 @@ export function RecentRankStrips({
   focusedItemIds: readonly string[];
   response: SeriesComparisonAggregateV3;
 }) {
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const pinnedToLatestRef = useRef(true);
-  const [scrollMetrics, setScrollMetrics] = useState({
-    clientWidth: 0,
-    scrollLeft: 0,
-    scrollWidth: 0,
-  });
   const entryByMemberId = new Map(response.recentRanks.map((entry) => [entry.memberId, entry]));
   const orderedEntries = response.players.map((player) => ({
     entry: entryByMemberId.get(player.memberId),
@@ -47,6 +40,134 @@ export function RecentRankStrips({
     matchIndexById.set(match.matchId, match.matchIndex);
   }
   const latestPointKey = axisRows.map((row) => row.matchId).join(":");
+  if (axisRows.length === 0) {
+    return <p className={cn(contentText.body, "py-3")}>直近順位の対象試合はありません。</p>;
+  }
+
+  return (
+    <RecentRankScroller latestPointKey={latestPointKey}>
+      <table className="mx-auto w-max border-separate border-spacing-x-1 border-spacing-y-2">
+        <caption className="sr-only">直近の試合順位</caption>
+        <thead>
+          <tr>
+            <th
+              className="sticky left-0 z-[var(--z-sticky)] w-40 min-w-40 bg-[var(--color-surface)] pr-2 align-bottom"
+              scope="col"
+            >
+              <span className="sr-only">プレーヤー</span>
+            </th>
+            {axisRows.map((row, pointIndex) => {
+              const matchIndex = matchIndexById.get(row.matchId);
+              const focused = focusedMatchIds.has(row.matchId);
+              const showMarker =
+                focused || shouldShowRankStripMatchMarker(matchIndex, pointIndex, axisRows.length);
+              return (
+                <th
+                  className={`w-11 min-w-11 px-0 text-center align-bottom ${focused ? "w-14 min-w-14" : ""}`}
+                  key={row.matchId}
+                  scope="col"
+                >
+                  {showMarker ? (
+                    <SeriesAnalysisMatchLink
+                      ariaLabel={`${formatSeriesMatchIndex(matchIndex)}の試合結果を見る${focused ? "、この試合" : ""}`}
+                      focused={focused}
+                      matchId={row.matchId}
+                      presentation="axis"
+                    >
+                      {focused ? "この試合" : formatSeriesMatchIndex(matchIndex)}
+                    </SeriesAnalysisMatchLink>
+                  ) : (
+                    <span aria-hidden="true" className="block h-11" />
+                  )}
+                </th>
+              );
+            })}
+          </tr>
+        </thead>
+        <tbody>
+          {orderedEntries.map(({ entry, player }) => {
+            const rowsByMatchId = new Map((entry?.rows ?? []).map((row) => [row.matchId, row]));
+            return (
+              <tr key={player.memberId}>
+                <th
+                  className="sticky left-0 z-[var(--z-base)] w-40 min-w-40 bg-[var(--color-surface)] py-1 pr-2 pl-2 text-left align-middle"
+                  scope="row"
+                >
+                  <span className={cn(contentText.body, "block break-words")}>
+                    <MemberSequenceLabel memberId={player.memberId}>
+                      {player.displayName}
+                    </MemberSequenceLabel>
+                  </span>
+                  <span className={cn(contentText.supporting, "block tabular-nums")}>
+                    平均{formatDecimal(entry?.averageRank)}位・入賞
+                    {formatPercent(entry?.podiumRate)}
+                  </span>
+                  <span className="mt-0.5 inline-flex empty:hidden">
+                    <SeriesAnalysisQualityAdvisory status={entry?.qualityStatus ?? "no_target"} />
+                  </span>
+                  {entry ? (
+                    <span className={cn(contentText.supporting, "block tabular-nums")}>
+                      連勝 {entry.winStreak}・連続入賞 {entry.podiumStreak}・連続下位{" "}
+                      {entry.lowerHalfStreak}
+                    </span>
+                  ) : null}
+                </th>
+                {axisRows.map((axisRow) => {
+                  const row = rowsByMatchId.get(axisRow.matchId);
+                  const matchIndex = matchIndexById.get(axisRow.matchId);
+                  const focused = row ? focusedItemIds.includes(row.itemId) : false;
+                  return (
+                    <td className="h-11 w-11 min-w-11 px-0 align-middle" key={axisRow.matchId}>
+                      {row ? (
+                        <SeriesAnalysisMatchLink
+                          ariaLabel={`${player.displayName}、${formatSeriesMatchIndex(matchIndex)}、${row.rank}位${focused ? "、この試合" : ""}。試合結果を見る`}
+                          colors={{
+                            background: rankColor(row.rank),
+                            border: rankColor(row.rank),
+                            foreground: rankForegroundColor(row.rank),
+                          }}
+                          focused={focused}
+                          matchId={row.matchId}
+                          presentation="rank-cell"
+                          title={`${formatSeriesMatchIndex(matchIndex)} ${row.rank}位`}
+                        >
+                          <span
+                            className="grid size-full place-items-center rounded-[calc(var(--radius-xs)-1px)]"
+                            data-focused-metric={focused ? "true" : undefined}
+                          >
+                            {row.rank}
+                          </span>
+                        </SeriesAnalysisMatchLink>
+                      ) : (
+                        <span aria-hidden="true" className="block size-11" />
+                      )}
+                    </td>
+                  );
+                })}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </RecentRankScroller>
+  );
+}
+
+/** Scroll updates own the viewport and slider; the unchanged table stays outside that render. */
+function RecentRankScroller({
+  children,
+  latestPointKey,
+}: {
+  children: ReactNode;
+  latestPointKey: string;
+}) {
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const pinnedToLatestRef = useRef(true);
+  const [scrollMetrics, setScrollMetrics] = useState({
+    clientWidth: 0,
+    scrollLeft: 0,
+    scrollWidth: 0,
+  });
   const maximumScrollLeft = Math.max(scrollMetrics.scrollWidth - scrollMetrics.clientWidth, 0);
   const scrollbarThumbWidth =
     scrollMetrics.scrollWidth > 0
@@ -106,123 +227,15 @@ export function RecentRankStrips({
     // New match columns change DOM geometry and must realign to the latest result.
   }, [latestPointKey, syncScrollMetrics]);
 
-  if (axisRows.length === 0) {
-    return <p className={cn(contentText.body, "py-3")}>直近順位の対象試合はありません。</p>;
-  }
-
   return (
     <div className="min-w-0">
       <div
         aria-label="直近順位"
         className="w-full [scrollbar-width:none] overflow-x-auto pb-2 [&::-webkit-scrollbar]:hidden"
-        onScroll={syncScrollMetrics}
         ref={scrollContainerRef}
         role="region"
       >
-        <table className="mx-auto w-max border-separate border-spacing-x-1 border-spacing-y-2">
-          <caption className="sr-only">直近の試合順位</caption>
-          <thead>
-            <tr>
-              <th
-                className="sticky left-0 z-[var(--z-sticky)] w-40 min-w-40 bg-[var(--color-surface)] pr-2 align-bottom"
-                scope="col"
-              >
-                <span className="sr-only">プレーヤー</span>
-              </th>
-              {axisRows.map((row, pointIndex) => {
-                const matchIndex = matchIndexById.get(row.matchId);
-                const focused = focusedMatchIds.has(row.matchId);
-                const showMarker =
-                  focused ||
-                  shouldShowRankStripMatchMarker(matchIndex, pointIndex, axisRows.length);
-                return (
-                  <th
-                    className={`w-11 min-w-11 px-0 text-center align-bottom ${focused ? "w-14 min-w-14" : ""}`}
-                    key={row.matchId}
-                    scope="col"
-                  >
-                    {showMarker ? (
-                      <SeriesAnalysisMatchLink
-                        ariaLabel={`${formatSeriesMatchIndex(matchIndex)}の試合結果を見る${focused ? "、この試合" : ""}`}
-                        focused={focused}
-                        matchId={row.matchId}
-                        presentation="axis"
-                      >
-                        {focused ? "この試合" : formatSeriesMatchIndex(matchIndex)}
-                      </SeriesAnalysisMatchLink>
-                    ) : (
-                      <span aria-hidden="true" className="block h-11" />
-                    )}
-                  </th>
-                );
-              })}
-            </tr>
-          </thead>
-          <tbody>
-            {orderedEntries.map(({ entry, player }) => {
-              const rowsByMatchId = new Map((entry?.rows ?? []).map((row) => [row.matchId, row]));
-              return (
-                <tr key={player.memberId}>
-                  <th
-                    className="sticky left-0 z-[var(--z-base)] w-40 min-w-40 bg-[var(--color-surface)] py-1 pr-2 pl-2 text-left align-middle"
-                    scope="row"
-                  >
-                    <span className={cn(contentText.body, "block break-words")}>
-                      <MemberSequenceLabel memberId={player.memberId}>
-                        {player.displayName}
-                      </MemberSequenceLabel>
-                    </span>
-                    <span className={cn(contentText.supporting, "block tabular-nums")}>
-                      平均{formatDecimal(entry?.averageRank)}位・入賞
-                      {formatPercent(entry?.podiumRate)}
-                    </span>
-                    <span className="mt-0.5 inline-flex empty:hidden">
-                      <SeriesAnalysisQualityAdvisory status={entry?.qualityStatus ?? "no_target"} />
-                    </span>
-                    {entry ? (
-                      <span className={cn(contentText.supporting, "block tabular-nums")}>
-                        連勝 {entry.winStreak}・連続入賞 {entry.podiumStreak}・連続下位{" "}
-                        {entry.lowerHalfStreak}
-                      </span>
-                    ) : null}
-                  </th>
-                  {axisRows.map((axisRow) => {
-                    const row = rowsByMatchId.get(axisRow.matchId);
-                    const matchIndex = matchIndexById.get(axisRow.matchId);
-                    const focused = row ? focusedItemIds.includes(row.itemId) : false;
-                    return (
-                      <td className="h-11 w-11 min-w-11 px-0 align-middle" key={axisRow.matchId}>
-                        {row ? (
-                          <SeriesAnalysisMatchLink
-                            ariaLabel={`${player.displayName}、${formatSeriesMatchIndex(matchIndex)}、${row.rank}位${focused ? "、この試合" : ""}。試合結果を見る`}
-                            colors={{
-                              background: rankColor(row.rank),
-                              border: rankColor(row.rank),
-                              foreground: rankForegroundColor(row.rank),
-                            }}
-                            focused={focused}
-                            matchId={row.matchId}
-                            presentation="rank-cell"
-                            title={`${formatSeriesMatchIndex(matchIndex)} ${row.rank}位`}
-                          >
-                            <span
-                              className="grid size-full place-items-center rounded-[calc(var(--radius-xs)-1px)]"
-                              data-focused-metric={focused ? "true" : undefined}
-                            >
-                              {row.rank}
-                            </span>
-                          </SeriesAnalysisMatchLink>
-                        ) : (
-                          <span aria-hidden="true" className="block size-11" />
-                        )}
-                      </td>
-                    );
-                  })}
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+        {children}
       </div>
       <input
         aria-label="直近順位を横スクロール"

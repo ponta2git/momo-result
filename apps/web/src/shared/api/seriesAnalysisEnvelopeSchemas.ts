@@ -21,16 +21,16 @@ type EnvelopeName = keyof EnvelopeResponseByName;
 
 const envelopeValidatorLoaders = {
   SeriesAnalysisAdminOverviewResponse: async () =>
-    (await import("@/shared/api/generatedContracts/series-analysis-validators.generated"))
+    (await import("@/shared/api/generatedContracts/series-analysis-envelope-validators.generated"))
       .validateSeriesAnalysisAdminOverviewResponse,
   SeriesAnalysisOptionsResponse: async () =>
-    (await import("@/shared/api/generatedContracts/series-analysis-validators.generated"))
+    (await import("@/shared/api/generatedContracts/series-analysis-envelope-validators.generated"))
       .validateSeriesAnalysisOptionsResponse,
   SeriesAnalysisRecalculationAcceptedResponse: async () =>
-    (await import("@/shared/api/generatedContracts/series-analysis-validators.generated"))
+    (await import("@/shared/api/generatedContracts/series-analysis-envelope-validators.generated"))
       .validateSeriesAnalysisRecalculationAcceptedResponse,
   SeriesAnalysisStatusResponse: async () =>
-    (await import("@/shared/api/generatedContracts/series-analysis-validators.generated"))
+    (await import("@/shared/api/generatedContracts/series-analysis-envelope-validators.generated"))
       .validateSeriesAnalysisStatusResponse,
 } satisfies Record<EnvelopeName, ContractValidatorLoader>;
 

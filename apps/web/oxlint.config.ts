@@ -213,7 +213,7 @@ export default defineConfig({
     "dist/**",
     "coverage/**",
     "src/shared/api/generated.ts",
-    "src/shared/api/generatedContracts/series-analysis-validators.generated.*",
+    "src/shared/api/generatedContracts/series-analysis-*-validators.generated.*",
   ],
   overrides: [
     {

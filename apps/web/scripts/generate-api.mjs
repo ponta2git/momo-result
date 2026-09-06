@@ -20,11 +20,6 @@ const envelopeSchemasOutput = resolve(
   generatedContractRoot,
   "series-analysis-envelope.schema.generated.json",
 );
-const validatorsOutput = resolve(generatedContractRoot, "series-analysis-validators.generated.js");
-const validatorTypesOutput = resolve(
-  generatedContractRoot,
-  "series-analysis-validators.generated.d.ts",
-);
 const checkOnly = process.argv.slice(2).includes("--check");
 
 const artifactKindExtension = "x-momo-series-analysis-resource-kind";
@@ -38,6 +33,8 @@ const envelopeRoots = [
 
 const generatedArtifactPattern =
   /^series-analysis-[a-z0-9-]+-response(?:-v\d+)?\.schema\.generated\.json$/u;
+const generatedValidatorPattern =
+  /^series-analysis-(?:[a-z0-9-]+-)?validators\.generated\.(?:js|d\.ts)$/u;
 
 if (process.argv.length > (checkOnly ? 3 : 2)) {
   throw new Error("Usage: node scripts/generate-api.mjs [--check]");
@@ -135,6 +132,7 @@ function artifactContracts(openapi) {
     runtimeSchemas.push({
       componentName,
       kind,
+      validatorModule: `series-analysis-${fileKind}-validators.generated`,
       output: resolve(
         generatedContractRoot,
         `series-analysis-${fileKind}-response.schema.generated.json`,
@@ -167,8 +165,8 @@ function artifactRegistrySource(artifacts) {
     .join("\n");
   const validatorLoaders = artifacts
     .map(
-      ({ kind }) =>
-        `  ${kind}: async () => (await import("./series-analysis-validators.generated")).${artifactValidatorExport(kind)},`,
+      ({ kind, validatorModule }) =>
+        `  ${kind}: async () => (await import("./${validatorModule}")).${artifactValidatorExport(kind)},`,
     )
     .join("\n");
   return `import type { components } from "@/shared/api/generated";
@@ -217,31 +215,21 @@ function registerOwnerKeywords(ajv) {
   ajv.addKeyword({ keyword: "x-momo-metricId", schemaType: "string", valid: true });
 }
 
-function standaloneValidatorSource(artifacts, envelopeDocument) {
+function standaloneValidatorSource(schemas, sharedSchemas) {
   const ajv = new Ajv2020({
     allErrors: false,
     code: { esm: true, source: true },
+    // Reuse referenced validators instead of expanding large nested schemas at every use.
+    inlineRefs: false,
     strict: true,
   });
   registerOwnerKeywords(ajv);
+  for (const schema of sharedSchemas) ajv.addSchema(schema);
 
   const validators = {};
-  for (const { kind, schema } of artifacts) {
-    const key = `artifact:${kind}`;
-    ajv.addSchema(schema, key);
-    validators[artifactValidatorExport(kind)] = key;
-  }
-  for (const name of envelopeRoots) {
-    const key = `envelope:${name}`;
-    ajv.addSchema(
-      {
-        ...structuredClone(envelopeDocument),
-        $id: `https://momo-result.local/schemas/${name}.json`,
-        $ref: `#/$defs/${name}`,
-      },
-      key,
-    );
-    validators[`validate${name}`] = key;
+  for (const { exportName, schema } of schemas) {
+    ajv.addSchema(schema, exportName);
+    validators[exportName] = exportName;
   }
 
   const generated = standaloneCode(ajv, validators).replaceAll(
@@ -261,15 +249,24 @@ ${generated}
 `;
 }
 
-function validatorTypesSource(artifacts) {
-  const exports = [
-    ...artifacts.map(({ kind }) => artifactValidatorExport(kind)),
-    ...envelopeRoots.map((name) => `validate${name}`),
-  ];
+function validatorTypesSource(schemas) {
   return `import type { ContractValidator } from "@/shared/api/seriesAnalysisContractDecoder";
 
-${exports.map((name) => `export const ${name}: ContractValidator;`).join("\n")}
+${schemas.map(({ exportName }) => `export const ${exportName}: ContractValidator;`).join("\n")}
 `;
+}
+
+function validatorModuleOutputs(moduleName, schemas, sharedSchemas = []) {
+  return [
+    {
+      output: resolve(generatedContractRoot, `${moduleName}.js`),
+      contents: standaloneValidatorSource(schemas, sharedSchemas),
+    },
+    {
+      output: resolve(generatedContractRoot, `${moduleName}.d.ts`),
+      contents: validatorTypesSource(schemas),
+    },
+  ];
 }
 
 async function generate() {
@@ -289,18 +286,36 @@ async function generate() {
     artifactRegistryOutput,
     artifactRegistrySource(artifacts),
   );
+  const envelopeDocument = envelopeSchemaDocument(schema);
   const envelopeSchemas = await formatGenerated(
     envelopeSchemasOutput,
-    `${JSON.stringify(envelopeSchemaDocument(schema), null, 2)}\n`,
+    `${JSON.stringify(envelopeDocument, null, 2)}\n`,
   );
-  const validators = standaloneValidatorSource(artifacts, envelopeSchemaDocument(schema));
+  const envelopeSchemaId = "https://momo-result.local/schemas/series-analysis-envelope.json";
+  const envelopeValidators = envelopeRoots.map((name) => ({
+    exportName: `validate${name}`,
+    schema: { $ref: `${envelopeSchemaId}#/$defs/${name}` },
+  }));
   return {
     artifactRegistry,
     artifactSchemas,
     envelopeSchemas,
     openapiTypes: astToString(ast),
-    validators,
-    validatorTypes: validatorTypesSource(artifacts),
+    validatorOutputs: [
+      ...artifacts.flatMap(({ kind, schema: artifactSchema, validatorModule }) =>
+        validatorModuleOutputs(validatorModule, [
+          {
+            exportName: artifactValidatorExport(kind),
+            schema: artifactSchema,
+          },
+        ]),
+      ),
+      ...validatorModuleOutputs(
+        "series-analysis-envelope-validators.generated",
+        envelopeValidators,
+        [{ ...envelopeDocument, $id: envelopeSchemaId }],
+      ),
+    ],
   };
 }
 
@@ -319,19 +334,21 @@ async function updateOutput(path, generated, staleMessage) {
   return true;
 }
 
-async function removeUnexpectedArtifactSchemas(expectedPaths) {
+async function removeUnexpectedGeneratedContracts(expectedPaths) {
   const expectedNames = new Set(expectedPaths.map((path) => basename(path)));
   const entries = await readdir(generatedContractRoot).catch((error) => {
     if (error?.code === "ENOENT") return [];
     throw error;
   });
   const unexpected = entries.filter(
-    (entry) => generatedArtifactPattern.test(entry) && !expectedNames.has(entry),
+    (entry) =>
+      (generatedArtifactPattern.test(entry) || generatedValidatorPattern.test(entry)) &&
+      !expectedNames.has(entry),
   );
   if (unexpected.length === 0) return true;
   if (checkOnly) {
     console.error(
-      `Obsolete generated series analysis response schemas exist: ${unexpected.toSorted().join(", ")}`,
+      `Obsolete generated series analysis contracts exist: ${unexpected.toSorted().join(", ")}`,
     );
     return false;
   }
@@ -342,7 +359,10 @@ async function removeUnexpectedArtifactSchemas(expectedPaths) {
 const generated = await generate();
 const generatedArtifactPaths = generated.artifactSchemas.map(({ output }) => output);
 const results = await Promise.all([
-  removeUnexpectedArtifactSchemas(generatedArtifactPaths),
+  removeUnexpectedGeneratedContracts([
+    ...generatedArtifactPaths,
+    ...generated.validatorOutputs.map(({ output }) => output),
+  ]),
   updateOutput(
     typesOutput,
     generated.openapiTypes,
@@ -358,15 +378,12 @@ const results = await Promise.all([
     generated.envelopeSchemas,
     "Generated series analysis envelope schemas are stale. Run `pnpm generate:api` and commit the result.",
   ),
-  updateOutput(
-    validatorsOutput,
-    generated.validators,
-    "Generated series analysis validators are stale. Run `pnpm generate:api` and commit the result.",
-  ),
-  updateOutput(
-    validatorTypesOutput,
-    generated.validatorTypes,
-    "Generated series analysis validator types are stale. Run `pnpm generate:api` and commit the result.",
+  ...generated.validatorOutputs.map(({ contents, output }) =>
+    updateOutput(
+      output,
+      contents,
+      "Generated series analysis validators are stale. Run `pnpm generate:api` and commit the result.",
+    ),
   ),
   ...generated.artifactSchemas.map(({ contents, output: runtimeOutput }) =>
     updateOutput(

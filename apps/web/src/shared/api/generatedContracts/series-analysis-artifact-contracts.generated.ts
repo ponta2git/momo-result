@@ -10,11 +10,14 @@ export type SeriesAnalysisArtifactResponseByKind = {
 
 export const seriesAnalysisArtifactValidatorLoaders = {
   aggregate: async () =>
-    (await import("./series-analysis-validators.generated")).validateSeriesAnalysisAggregate,
+    (await import("./series-analysis-aggregate-validators.generated"))
+      .validateSeriesAnalysisAggregate,
   drilldown: async () =>
-    (await import("./series-analysis-validators.generated")).validateSeriesAnalysisDrilldown,
+    (await import("./series-analysis-drilldown-validators.generated"))
+      .validateSeriesAnalysisDrilldown,
   matchContext: async () =>
-    (await import("./series-analysis-validators.generated")).validateSeriesAnalysisMatchContext,
+    (await import("./series-analysis-match-context-validators.generated"))
+      .validateSeriesAnalysisMatchContext,
   review: async () =>
-    (await import("./series-analysis-validators.generated")).validateSeriesAnalysisReview,
+    (await import("./series-analysis-review-validators.generated")).validateSeriesAnalysisReview,
 } satisfies Record<keyof SeriesAnalysisArtifactResponseByKind, () => Promise<ContractValidator>>;

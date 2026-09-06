@@ -292,7 +292,7 @@ impl ControlError {
     ///
     /// Unlike malformed child output, these failures do not prove that the candidate is bad:
     /// `Io` occurs only while re-reading an already validated file for database staging, a join
-    /// error means the blocking validator panicked or was cancelled, and an unsupported requested
+    /// error means a blocking validation/read task panicked or was cancelled, and an unsupported requested
     /// validator proves the durable claim changed outside the supported control path. The caller
     /// must retain the lease and delivery for recovery instead of persisting a business failure
     /// and `ACKing`.

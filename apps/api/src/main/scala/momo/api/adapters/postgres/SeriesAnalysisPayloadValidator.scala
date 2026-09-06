@@ -16,6 +16,7 @@ import momo.api.domain.{
   SeriesAnalysisDrilldownMetric,
   SeriesAnalysisScope
 }
+import momo.api.encoding.Utf8
 
 /**
  * Reader-side defense for an immutable, Rust-attested artifact.
@@ -57,15 +58,13 @@ private[postgres] object SeriesAnalysisPayloadValidator:
 
   /** JSON Schema maxLength counts code points, while the producer contract bounds UTF-8 bytes. */
   private def stringsWithinOwnerBounds(json: Json): Boolean = json.arrayOrObject(
-    json.asString.forall(utf8Length(_) <= MaximumTextBytes),
+    json.asString.forall(Utf8.length(_) <= MaximumTextBytes),
     _.forall(stringsWithinOwnerBounds),
     fields =>
       fields.toIterable.forall { case (key, value) =>
-        utf8Length(key) <= MaximumTextBytes && stringsWithinOwnerBounds(value)
+        Utf8.length(key) <= MaximumTextBytes && stringsWithinOwnerBounds(value)
       },
   )
-
-  private def utf8Length(value: String): Int = value.getBytes(StandardCharsets.UTF_8).length
 
   private def loadSchema(fileName: String): Schema =
     val resourcePath = s"$SchemaResourceDirectory/$fileName"

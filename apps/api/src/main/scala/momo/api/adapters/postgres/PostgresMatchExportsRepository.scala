@@ -34,9 +34,17 @@ private object PostgresMatchExports extends PostgresMatchesReadSupport:
         selection.matchId.map(id => fr"id = $id"),
       ).flatten
       val where = fragments.whereAndOpt(conditions)
+      // Select the bounded export first, then rank full histories only for its titles. Ranking
+      // selected rows alone would reset season/title numbers when exporting a single match.
       val select =
         fr"""
-        WITH ranked_matches AS (
+        WITH selected_matches AS MATERIALIZED (
+          SELECT id, game_title_id
+          FROM matches
+      """ ++ where ++ fr"""
+          ORDER BY played_at DESC, created_at DESC
+          LIMIT ${selection.limit}
+        ), ranked_matches AS (
           SELECT
             id,
             held_event_id,
@@ -63,12 +71,7 @@ private object PostgresMatchExports extends PostgresMatchesReadSupport:
                 id COLLATE "C"
             ) AS integer) AS game_title_sequence
           FROM matches
-        ), export_selected AS (
-          SELECT *
-          FROM ranked_matches
-      """ ++ where ++ fr"""
-          ORDER BY played_at DESC, created_at DESC
-          LIMIT ${selection.limit}
+          WHERE game_title_id IN (SELECT game_title_id FROM selected_matches)
         )
         SELECT
           id,
@@ -78,7 +81,8 @@ private object PostgresMatchExports extends PostgresMatchesReadSupport:
           played_at,
           season_sequence,
           game_title_sequence
-        FROM export_selected
+        FROM ranked_matches
+        WHERE id IN (SELECT id FROM selected_matches)
         ORDER BY
           date_trunc('milliseconds', played_at),
           held_event_id COLLATE "C",
@@ -87,6 +91,8 @@ private object PostgresMatchExports extends PostgresMatchesReadSupport:
       """
 
       for
+        // The ranked parent selection and batched children must describe the same match revision.
+        _ <- sql"SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY".update.run
         rows <- select.query[ExportMatchRow].to[List]
         playersByMatch <- loadPlayersBatch(rows.map(_.id))
         projected <- rows.traverse(row => toProjection(row, playersByMatch.get(row.id)))

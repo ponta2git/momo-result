@@ -77,7 +77,7 @@ final class ExportMatchesSpec extends MomoCatsEffectSuite:
     for
       usecase <- createUsecaseWithMatches(count = 1, limits = generousLimits.copy(maxBytes = 10L))
       result <- usecase.run(MatchExportFormat.Csv, MatchExportScope.All)
-    yield assertAppError(result, "PAYLOAD_TOO_LARGE", "exceeding the configured limit of 10 bytes")
+    yield assertAppError(result, "PAYLOAD_TOO_LARGE", "configured limit of 10 bytes")
 
   private def createUsecase(): IO[ExportMatches[IO]] = createUsecaseSeeded(seedMatch = false)
 

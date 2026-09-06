@@ -6,6 +6,7 @@ import java.time.format.DateTimeFormatter
 import scala.annotation.tailrec
 
 import momo.api.domain.{MatchExportFormat, MatchExportRow}
+import momo.api.encoding.Utf8
 
 object MatchExportRenderer:
   private val Jst = ZoneId.of("Asia/Tokyo")
@@ -32,16 +33,33 @@ object MatchExportRenderer:
 
   final case class Rendered(body: String, sizeBytes: Long)
 
-  /** Renders directly into the final builder and reports its UTF-8 size without a second body. */
-  def render(format: MatchExportFormat, rows: List[MatchExportRow]): Rendered =
+  /** Stops at the UTF-8 limit before appending an oversized field or constructing the final body. */
+  def render(
+      format: MatchExportFormat,
+      rows: List[MatchExportRow],
+      maximumBytes: Long,
+  ): Option[Rendered] =
     val output = new StringBuilder
     val renderField: String => String = format match
       case MatchExportFormat.Csv => csvField
       case MatchExportFormat.Tsv => tsvField
-    appendLine(output, format.delimiter, renderField, Header)
-    rows.foreach(row => appendLine(output, format.delimiter, renderField, fields(row)))
-    val body = output.result()
-    Rendered(body, utf8Size(body))
+    val lines = Iterator.single(Header) ++ rows.iterator.map(fields)
+
+    @tailrec
+    def appendLines(written: Long): Option[Rendered] =
+      if !lines.hasNext then Some(Rendered(output.result(), written))
+      else
+        appendLine(
+          output,
+          format.delimiter,
+          renderField,
+          lines.next(),
+          maximumBytes - written
+        ) match
+          case None => None
+          case Some(size) => appendLines(written + size)
+
+    appendLines(0L)
 
   private def fields(row: MatchExportRow): Array[String] = Array(
     spreadsheetSafeText(row.seasonName),
@@ -68,16 +86,26 @@ object MatchExportRenderer:
       delimiter: String,
       renderField: String => String,
       fields: Array[String],
-  ): Unit =
+      maximumBytes: Long,
+  ): Option[Long] =
     @tailrec
-    def appendFields(index: Int): Unit =
-      if index < fields.length then
-        if index > 0 then output.append(delimiter)
-        output.append(renderField(fields(index)))
-        appendFields(index + 1)
+    def appendFields(index: Int, written: Long): Option[Long] =
+      if index == fields.length then
+        if maximumBytes - written < 2 then None
+        else
+          output.append("\r\n")
+          Some(written + 2)
+      else
+        val field = renderField(fields(index))
+        val separatorSize = if index > 0 then Utf8.length(delimiter) else 0L
+        val size = separatorSize + Utf8.length(field)
+        if size > maximumBytes - written then None
+        else
+          if index > 0 then output.append(delimiter)
+          output.append(field)
+          appendFields(index + 1, written + size)
 
-    appendFields(0)
-    output.append("\r\n")
+    appendFields(0, 0L)
 
   private def spreadsheetSafeText(value: String): String =
     val dangerousFirst = value.headOption.exists(ch => ch == '\t' || ch == '\r' || ch == '\n')
@@ -101,20 +129,3 @@ object MatchExportRenderer:
         case '\n' => "\\n"
         case ch => ch.toString
       }
-
-  private def utf8Size(value: String): Long =
-    @tailrec
-    def loop(index: Int, bytes: Long): Long =
-      if index >= value.length then bytes
-      else
-        val codeUnit = value.charAt(index)
-        if codeUnit <= 0x7f then loop(index + 1, bytes + 1)
-        else if codeUnit <= 0x7ff then loop(index + 1, bytes + 2)
-        else if Character.isHighSurrogate(codeUnit) && index + 1 < value.length &&
-          Character
-            .isLowSurrogate(value.charAt(index + 1))
-        then loop(index + 2, bytes + 4)
-        else if Character.isSurrogate(codeUnit) then loop(index + 1, bytes + 1)
-        else loop(index + 1, bytes + 3)
-
-    loop(index = 0, bytes = 0L)

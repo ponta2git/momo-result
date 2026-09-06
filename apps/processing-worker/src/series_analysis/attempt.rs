@@ -219,9 +219,7 @@ pub(super) async fn run_claimed_child(
     calculation_time_remaining(started, config.execution_limits.calculation_timeout)
         .map_err(ChildSupervisionFailure::Interrupted)?;
     let mut child = spawn_claimed_child(config, child_spec).await?;
-    if let Some(result) =
-        refresh_child_liveness(&mut child, started, config.child_stop_grace).await?
-    {
+    if let Some(result) = refresh_child_liveness(&mut child, started, config).await? {
         return Ok(finalize_child_result(child_spec, result));
     }
     let mut heartbeat_interval = time::interval(config.heartbeat_interval);
@@ -254,7 +252,7 @@ pub(super) async fn run_claimed_child(
                         if let Some(result) = refresh_child_liveness(
                             &mut child,
                             started,
-                            config.child_stop_grace,
+                            config,
                         )
                         .await?
                         {
@@ -481,9 +479,7 @@ async fn handle_heartbeat_result(
     started: Instant,
 ) -> Result<Option<(AnalysisChildOutcome, AttemptMetrics)>, ChildSupervisionFailure> {
     match heartbeat_result {
-        Ok(Ok(HeartbeatResult::Continue)) => {
-            refresh_child_liveness(child, started, config.child_stop_grace).await
-        }
+        Ok(Ok(HeartbeatResult::Continue)) => refresh_child_liveness(child, started, config).await,
         Ok(Ok(HeartbeatResult::PreemptRequested)) => Err(terminate_for(
             child,
             config.child_stop_grace,
@@ -539,10 +535,24 @@ async fn handle_heartbeat_result(
 async fn refresh_child_liveness(
     child: &mut ManagedAnalysisChild,
     started: Instant,
-    child_stop_grace: time::Duration,
+    config: &AnalysisConsumerConfig,
 ) -> Result<Option<(AnalysisChildOutcome, AttemptMetrics)>, ChildSupervisionFailure> {
-    match child.refresh_liveness() {
-        Ok(()) => return Ok(None),
+    let remaining =
+        match calculation_time_remaining(started, config.execution_limits.calculation_timeout) {
+            Ok(remaining) => remaining,
+            Err(interruption) => {
+                return Err(terminate_for(child, config.child_stop_grace, interruption).await);
+            }
+        };
+    // One heartbeat interval fits the existing lease margin; cleanup retains its full stop grace.
+    let exit_grace = config.heartbeat_interval.min(remaining);
+    match child.refresh_liveness(exit_grace).await {
+        Ok(outcome) => Ok(outcome.map(|outcome| {
+            (
+                outcome,
+                elapsed_metrics(started, child.peak_resident_bytes()),
+            )
+        })),
         Err(error) => {
             warn!(
                 event = "analysis_child_liveness_failed",
@@ -550,15 +560,12 @@ async fn refresh_child_liveness(
                 error_kind = error.kind(),
                 "analysis child liveness refresh failed"
             );
-        }
-    }
-    match child.try_wait() {
-        Ok(Some(outcome)) => Ok(Some((
-            outcome,
-            elapsed_metrics(started, child.peak_resident_bytes()),
-        ))),
-        Ok(None) | Err(_) => {
-            Err(terminate_for(child, child_stop_grace, AttemptInterruption::WorkerCrashed).await)
+            let interruption = if started.elapsed() >= config.execution_limits.calculation_timeout {
+                AttemptInterruption::TimedOut
+            } else {
+                AttemptInterruption::WorkerCrashed
+            };
+            Err(terminate_for(child, config.child_stop_grace, interruption).await)
         }
     }
 }

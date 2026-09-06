@@ -14,6 +14,9 @@ use crate::cgroup::{CgroupError, ChildCgroup};
 mod allocation;
 #[cfg(target_os = "linux")]
 mod bootstrap_config;
+#[cfg(test)]
+#[cfg(unix)]
+mod liveness_tests;
 mod probe;
 
 pub(crate) use allocation::allocate_and_touch;
@@ -377,28 +380,43 @@ impl ManagedAnalysisChild {
         resolve_spawn_setup_failure(setup_error, cleanup_result)
     }
 
-    /// Refreshes the child's monotonic liveness deadline without blocking the worker runtime.
+    /// Refreshes the child's liveness deadline, or returns its verified completed outcome.
+    ///
+    /// The child can close its socket before its exit becomes waitable. On channel failure, allow
+    /// it to finish within the caller's bounded exit grace instead of signalling a normal exit.
     ///
     /// # Errors
     ///
-    /// Returns an error if the liveness channel has failed for a child that is still expected to
-    /// be running.
+    /// Returns an error if the channel fails and the child remains alive past the grace period,
+    /// or if waiting and verifying the exited child's cgroup fails. The caller still owns cleanup.
     #[cfg(unix)]
-    pub(crate) fn refresh_liveness(&mut self) -> Result<(), ProcessError> {
-        match self.parent_liveness.write(&[1]) {
-            Ok(1) => Ok(()),
-            Ok(_) => Err(ProcessError::Liveness(io::Error::new(
+    pub(crate) async fn refresh_liveness(
+        &mut self,
+        exit_grace: Duration,
+    ) -> Result<Option<AnalysisChildOutcome>, ProcessError> {
+        let channel_error = match self.parent_liveness.write(&[1]) {
+            Ok(1) => return Ok(None),
+            Ok(_) => io::Error::new(
                 io::ErrorKind::WriteZero,
                 "child liveness channel accepted no data",
-            ))),
-            Err(error) if error.kind() == io::ErrorKind::WouldBlock => Ok(()),
-            Err(error) => Err(ProcessError::Liveness(error)),
+            ),
+            Err(error) if error.kind() == io::ErrorKind::WouldBlock => return Ok(None),
+            Err(error) => error,
+        };
+        let deadline = child_stop_deadlines(exit_grace)?.overall;
+        match tokio::time::timeout_at(deadline, self.child.wait()).await {
+            Ok(Ok(status)) => self.completed_outcome(status).map(Some),
+            Ok(Err(error)) => Err(ProcessError::Wait(error)),
+            Err(_elapsed) => Err(ProcessError::Liveness(channel_error)),
         }
     }
 
     /// Reports that child liveness channels require Unix file descriptors.
     #[cfg(not(unix))]
-    pub(crate) fn refresh_liveness(&mut self) -> Result<(), ProcessError> {
+    pub(crate) async fn refresh_liveness(
+        &mut self,
+        _exit_grace: Duration,
+    ) -> Result<Option<AnalysisChildOutcome>, ProcessError> {
         Err(ProcessError::UnsupportedPlatform)
     }
 
@@ -421,12 +439,16 @@ impl ManagedAnalysisChild {
         let Some(status) = self.child.try_wait().map_err(ProcessError::Wait)? else {
             return Ok(None);
         };
+        self.completed_outcome(status).map(Some)
+    }
+
+    fn completed_outcome(&self, status: ExitStatus) -> Result<AnalysisChildOutcome, ProcessError> {
         let memory_after = self.cgroup.snapshot()?;
         self.cgroup.ensure_empty()?;
-        Ok(Some(classify_analysis_status(
+        Ok(classify_analysis_status(
             status,
             memory_after.oom_kill_count > self.oom_kill_count_before,
-        )))
+        ))
     }
 
     /// Stops the child process group, gives it a bounded grace period, and always reaps it.

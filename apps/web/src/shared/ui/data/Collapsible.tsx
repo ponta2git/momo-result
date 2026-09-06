@@ -122,7 +122,7 @@ export function Disclosure({
           presentationClass[presentation].panel,
           panelSpacingClass[panelSpacing],
           panelPaddingClass[panelPadding],
-          "bg-transparent",
+          "mx-2 bg-transparent",
         )}
         keepMounted={keepMounted}
       >

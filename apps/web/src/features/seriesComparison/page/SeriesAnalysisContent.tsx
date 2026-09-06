@@ -106,13 +106,7 @@ type DrilldownDialogState = {
  * this boundary shallow prevents unrelated page feedback from rebuilding chart models and SVG
  * subtrees for an unchanged artifact and selection.
  */
-export const SeriesAnalysisContent = memo(function SeriesAnalysisContent(
-  props: SeriesAnalysisContentProps,
-) {
-  return <ArtifactViewContent {...props} />;
-});
-
-function ArtifactViewContent({
+export const SeriesAnalysisContent = memo(function SeriesAnalysisContent({
   bundle,
   onArtifactExpired,
   onClearFocusedMatch,
@@ -125,7 +119,12 @@ function ArtifactViewContent({
   const contentIdentity = `${artifactId}:${activeView}`;
 
   useEffect(() => {
-    const sectionId = decodeURIComponent(window.location.hash.slice(1));
+    let sectionId: string;
+    try {
+      sectionId = decodeURIComponent(window.location.hash.slice(1));
+    } catch {
+      return;
+    }
     if (!sectionId) return;
     document.getElementById(sectionId)?.scrollIntoView?.({ block: "start" });
     // The view and artifact determine when the hash target exists in the committed DOM.
@@ -167,7 +166,7 @@ function ArtifactViewContent({
       )}
     </div>
   );
-}
+});
 
 function AnalysisViewContent({
   bundle,

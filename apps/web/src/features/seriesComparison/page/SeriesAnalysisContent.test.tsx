@@ -21,6 +21,32 @@ function analysisBundle(
 }
 
 describe("SeriesAnalysisContent", () => {
+  it("keeps analysis and its controls usable with a malformed section fragment", async () => {
+    const originalUrl = window.location.href;
+    window.history.replaceState(null, "", "#%E0%A4%A");
+    try {
+      const user = userEvent.setup();
+      render(
+        <QueryClientProvider client={createTestQueryClient()}>
+          <MemoryRouter>
+            <SeriesAnalysisContent
+              bundle={analysisBundle(makeSeriesAnalysisAggregate(), "overview")}
+              onArtifactExpired={vi.fn()}
+              onClearFocusedMatch={vi.fn()}
+              onFocusMatch={vi.fn()}
+              onViewChange={vi.fn()}
+            />
+          </MemoryRouter>
+        </QueryClientProvider>,
+      );
+      expect(await screen.findByRole("heading", { name: "順位と基礎比較" })).toBeInTheDocument();
+      await user.click(screen.getByRole("button", { name: "指標の読み方" }));
+      expect(await screen.findByRole("dialog", { name: "指標の読み方" })).toBeInTheDocument();
+    } finally {
+      window.history.replaceState(null, "", originalUrl);
+    }
+  });
+
   it("opens the shared metric guide from an analysis view", async () => {
     const user = userEvent.setup();
     const queryClient = createTestQueryClient();

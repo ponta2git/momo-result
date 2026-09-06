@@ -1,3 +1,4 @@
+import { ChevronDown } from "lucide-react";
 import type { ComponentPropsWithRef } from "react";
 
 import { cn } from "@/shared/ui/cn";
@@ -96,16 +97,38 @@ export function SelectControl({
   controlHeight = "default",
   density = "default",
   invalid = false,
+  multiple,
+  size,
   textAlign = "start",
   tone = "default",
   ...props
 }: SelectControlProps) {
+  const showIndicator = !multiple && (size === undefined || size <= 1);
+
   return (
-    <select
-      {...props}
-      aria-invalid={invalid || undefined}
-      className={controlClassName({ controlHeight, density, invalid, textAlign, tone })}
-    />
+    <div className="relative min-w-0">
+      <select
+        {...props}
+        multiple={multiple}
+        size={size}
+        aria-invalid={invalid || undefined}
+        className={cn(
+          controlClassName({ controlHeight, density, invalid, textAlign, tone }),
+          "peer block",
+          showIndicator ? "appearance-none forced-colors:appearance-auto" : "",
+          showIndicator ? (density === "compact" ? "pr-8" : "pr-10") : "",
+        )}
+      />
+      {showIndicator ? (
+        <ChevronDown
+          aria-hidden="true"
+          className={cn(
+            "pointer-events-none absolute top-1/2 size-4 -translate-y-1/2 text-[var(--color-text-secondary)] peer-disabled:text-[var(--color-text-muted)] peer-disabled:opacity-70 forced-colors:hidden",
+            density === "compact" ? "right-2" : "right-3",
+          )}
+        />
+      ) : null}
+    </div>
   );
 }
 

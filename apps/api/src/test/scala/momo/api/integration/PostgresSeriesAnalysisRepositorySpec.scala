@@ -61,6 +61,140 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
         assertEquals(status.calculation, None)
       case Left(error) => fail(s"expected status, got $error")
 
+  test("options preserve empty titles and count only observed season-map combinations"):
+    for
+      repo <- repository
+      empty <- repo.options
+      _ <- seedTitle
+      _ <- new PostgresGameTitlesRepository[IO](transactor).createWithNextDisplayOrder(
+        GameTitle(GameTitleId.unsafeFromString("title-empty"), "未記録作品", "momotetsu2", 2, now)
+      )
+      unplayed <- repo.options
+      _ <-
+      (sql"""
+        INSERT INTO season_masters (id, game_title_id, name, display_order)
+        VALUES ('analysis-season-a', $titleId, '年度A', 2),
+               ('analysis-season-b', $titleId, '年度B', 1)
+      """.update.run *> sql"""
+        INSERT INTO map_masters (id, game_title_id, name, display_order)
+        VALUES ('analysis-map-a', $titleId, '地図A', 1),
+               ('analysis-map-b', $titleId, '地図B', 2)
+      """.update.run *> sql"""
+        INSERT INTO held_events (id, held_date_iso, start_at)
+        VALUES ('event-options', '2026-08-09', $now)
+      """.update.run *> sql"""
+        INSERT INTO matches (
+          id, held_event_id, match_no_in_event, game_title_id, layout_family,
+          season_master_id, owner_member_id, map_master_id, played_at, created_by_account_id
+        )
+        SELECT 'match-options-' || n, 'event-options', n, $titleId, 'momotetsu2',
+          CASE WHEN n = 1 THEN 'analysis-season-a' ELSE 'analysis-season-b' END,
+          'member_ponta', CASE WHEN n = 1 THEN 'analysis-map-a' ELSE 'analysis-map-b' END,
+          $now, $accountId
+        FROM generate_series(1, 3) n
+      """.update.run *>
+        sql"""
+        INSERT INTO match_players (
+          match_id, member_id, play_order, rank, total_assets_man_yen, revenue_man_yen
+        )
+        SELECT m.id, p.id, p.play_order, p.play_order, 0, 0
+        FROM matches m CROSS JOIN (
+          VALUES ('member_eu', 1), ('member_ponta', 2), ('member_akane_mami', 3), ('member_otaka', 4)
+        ) AS p(id, play_order)
+        WHERE m.held_event_id = 'event-options'
+      """.update.run).transact(transactor)
+      played <- repo.options
+    yield
+      assertEquals(empty.map(_.titles), Right(Nil))
+      assertEquals(unplayed.map(_.defaultGameTitleId), Right(Some(titleId)))
+      played match
+        case Right(options) =>
+          assertEquals(options.defaultGameTitleId, Some(titleId))
+          assertEquals(options.titles.map(_.confirmedMatchCount), List(3L, 0L))
+          val title = options.titles.head
+          assertEquals(title.seasons.map(_.displayName), List("年度B", "年度A"))
+          assertEquals(title.maps.map(_.displayName), List("地図A", "地図B"))
+          assertEquals(
+            title.seasonMapPairs.map(pair => pair.seasonMasterId.value -> pair.mapMasterId.value),
+            List("analysis-season-b" -> "analysis-map-b", "analysis-season-a" -> "analysis-map-a"),
+          )
+          assertEquals(options.titles.last.seasonMapPairs, Nil)
+        case Left(error) => fail(s"expected options, got $error")
+
+  test(
+    "status prioritizes active jobs over pending intent and pending intent over terminal history"
+  ):
+    val terminalAt = now.minusSeconds(60)
+    for
+      _ <- seedTitle
+      repo <- repository
+      missing <- repo.status(GameTitleId.unsafeFromString("title-missing"))
+      _ <- sql"""
+        INSERT INTO series_analysis_jobs (
+          id, game_title_id, input_revision, algorithm_version, artifact_schema_version,
+          status, trigger, requested_at, finished_at
+        ) VALUES (
+          'job-status-terminal', $titleId, 0, 'series-analysis-v3', 2,
+          'succeeded', 'match_mutation', $terminalAt, $terminalAt
+        )
+      """.update.run.transact(transactor)
+      terminal <- repo.status(titleId)
+      _ <- sql"""
+        INSERT INTO series_analysis_job_requests (
+          id, game_title_id, input_revision, algorithm_version, artifact_schema_version,
+          status, trigger, accepted_at
+        ) VALUES (
+          'request-status-pending', $titleId, 0, 'series-analysis-v3', 2,
+          'pending', 'manual', $now
+        )
+      """.update.run.transact(transactor)
+      pending <- repo.status(titleId)
+      _ <- sql"""
+        INSERT INTO series_analysis_jobs (
+          id, game_title_id, input_revision, algorithm_version, artifact_schema_version,
+          status, trigger, requested_at
+        ) VALUES (
+          'job-status-active', $titleId, 0, 'series-analysis-v3', 2,
+          'queued', 'algorithm_update', $now
+        )
+      """.update.run.transact(transactor)
+      active <- repo.status(titleId)
+    yield
+      assertEquals(missing, Left(AppError.NotFound("game title", "title-missing")))
+      assertEquals(terminal.map(_.calculation.map(_.status)), Right(Some("succeeded")))
+      assertEquals(
+        pending.map(_.calculation.map(value => value.status -> value.trigger)),
+        Right(Some("queued" -> "manual"))
+      )
+      assertEquals(
+        active.map(_.calculation.map(value => value.status -> value.trigger)),
+        Right(Some("queued" -> "algorithm_update"))
+      )
+
+  test("admin history keeps each job's coalesced manual requests separate"):
+    val otherTitleId = GameTitleId.unsafeFromString("title-other-audit")
+    for
+      _ <- seedTitle
+      _ <- new PostgresGameTitlesRepository[IO](transactor).createWithNextDisplayOrder(
+        GameTitle(otherTitleId, "別作品監査", "momotetsu2", 2, now)
+      )
+      repo <- repository
+      first <- repo.requestTitleRecalculation(titleId, accountId, "audit-first")
+      second <- repo.requestTitleRecalculation(titleId, accountId, "audit-second")
+      other <- repo.requestTitleRecalculation(otherTitleId, accountId, "audit-other")
+      overview <- repo.adminOverview(Some(titleId))
+    yield
+      assert(first.isRight && second.isRight && other.isRight)
+      overview match
+        case Right(value) =>
+          val byTitle = value.recentJobs.map(job => job.gameTitleId -> job).toMap
+          assertEquals(byTitle(titleId).manualRequestCount, 2)
+          assertEquals(byTitle(otherTitleId).manualRequestCount, 1)
+          value.recentJobs.foreach(job =>
+            assertEquals(job.firstManualRequester.map(_.accountId), Some(accountId))
+          )
+        case Left(error) => fail(s"expected per-job audit, got $error")
+
   test("admin overview returns the latest ten jobs across titles in stable order"):
     val otherTitleId = GameTitleId.unsafeFromString("title-analysis-contract-other")
     val jobs = List.tabulate(12) { index =>

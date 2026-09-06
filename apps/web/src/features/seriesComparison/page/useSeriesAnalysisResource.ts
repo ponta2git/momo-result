@@ -18,19 +18,20 @@ import type {
   SeriesAnalysisViewId,
 } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
 import { seriesAnalysisQueryFromState } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
-import { useSeriesAnalysisArtifactRecovery } from "@/features/seriesComparison/page/useSeriesAnalysisArtifactRecovery";
 import { isAnalysisClientUpgradeRequired } from "@/shared/api/problemDetails";
 import {
   isInitialQueryLoading,
   shouldShowQueryError,
   shouldShowStaleShield,
 } from "@/shared/api/queryErrorState";
+import { seriesAnalysisKeys } from "@/shared/api/queryKeys";
 import {
   seriesAnalysisAggregateQueryOptions,
   seriesAnalysisMatchContextQueryOptions,
   seriesAnalysisReviewQueryOptions,
   seriesAnalysisStatusQueryOptions,
 } from "@/shared/api/seriesAnalysisQueryOptions";
+import { useAnalysisArtifactRecovery } from "@/shared/api/useAnalysisArtifactRecovery";
 
 /**
  * Owns the complete artifact lifecycle: active query selection, stale display retention,
@@ -163,14 +164,21 @@ export function useSeriesAnalysisResource({
   const currentDisplayBundle =
     bundleResolution.kind === "ready" ? bundleResolution.value : lastSuccessfulBundle;
 
-  useSeriesAnalysisArtifactRecovery({
-    activeError,
-    activeQuery: activeQueryParams,
-    activeView,
-    contextError: matchContextError,
-    contextQuery: matchContextQueryParams,
-    refetchActive,
-    refetchContext: refetchMatchContext,
+  useAnalysisArtifactRecovery({
+    artifactId: activeQueryParams?.artifactId,
+    error: activeError,
+    queryKey:
+      activeView === "review"
+        ? seriesAnalysisKeys.review(activeQueryParams)
+        : seriesAnalysisKeys.aggregate(activeQueryParams),
+    refetchArtifact: refetchActive,
+    refetchStatus,
+  });
+  useAnalysisArtifactRecovery({
+    artifactId: matchContextQueryParams?.artifactId,
+    error: matchContextError,
+    queryKey: seriesAnalysisKeys.matchContext(matchContextQueryParams),
+    refetchArtifact: refetchMatchContext,
     refetchStatus,
   });
 

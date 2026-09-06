@@ -1,17 +1,16 @@
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useRef } from "react";
 
 import { buildMatchFeatureBadges } from "@/features/matches/matchDetailViewModel";
 import type { MatchDetailResponse } from "@/shared/api/matches";
-import { isAnalysisArtifactExpired } from "@/shared/api/problemDetails";
+import { seriesAnalysisKeys } from "@/shared/api/queryKeys";
 import {
   seriesAnalysisMatchContextQueryOptions,
   seriesAnalysisStatusQueryOptions,
 } from "@/shared/api/seriesAnalysisQueryOptions";
+import { useAnalysisArtifactRecovery } from "@/shared/api/useAnalysisArtifactRecovery";
 import { matchPerformanceContextFromArtifact } from "@/shared/domain/matchPerformanceContext";
 
 export function useMatchFeatureAnalysis(match: MatchDetailResponse | undefined) {
-  const handledExpiredArtifacts = useRef(new Set<string>());
   const statusQuery = useQuery(seriesAnalysisStatusQueryOptions(match?.gameTitleId));
   const {
     data: statusData,
@@ -45,25 +44,13 @@ export function useMatchFeatureAnalysis(match: MatchDetailResponse | undefined) 
     contextData.matchId === match.matchId
       ? contextData
       : undefined;
-  const requestedArtifactId = contextQueryParams?.artifactId;
-
-  useEffect(() => {
-    const artifactId = requestedArtifactId;
-    if (
-      !artifactId ||
-      handledExpiredArtifacts.current.has(artifactId) ||
-      !isAnalysisArtifactExpired(contextError)
-    ) {
-      return;
-    }
-    handledExpiredArtifacts.current.add(artifactId);
-    void refetchStatus().then((result) => {
-      if (result.data?.currentArtifact?.artifactId === artifactId) {
-        return refetchContext();
-      }
-      return undefined;
-    });
-  }, [contextError, refetchContext, refetchStatus, requestedArtifactId]);
+  useAnalysisArtifactRecovery({
+    artifactId: contextQueryParams?.artifactId,
+    error: contextError,
+    queryKey: seriesAnalysisKeys.matchContext(contextQueryParams),
+    refetchArtifact: refetchContext,
+    refetchStatus,
+  });
 
   const performanceContext = matchPerformanceContextFromArtifact(context);
   const badges = buildMatchFeatureBadges({

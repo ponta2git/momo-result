@@ -21,6 +21,7 @@ const feedback = {
 function renderDraftFlow() {
   const queryClient = createTestQueryClient();
   return renderHook(() => useOcrCaptureDraftFlow(), {
+    reactStrictMode: true,
     wrapper: ({ children }: { children: ReactNode }) => (
       <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
     ),
@@ -100,5 +101,48 @@ describe("useOcrCaptureDraftFlow", () => {
 
     view.unmount();
     expect(objectUrls.revokeObjectURL).toHaveBeenCalledWith("blob:second.png");
+  });
+
+  it("releases an image when navigation unmounts the screen before its state commits", () => {
+    const objectUrls = installObjectUrlMock({ createObjectURL: () => "blob:uncommitted" });
+    const view = renderDraftFlow();
+
+    act(() => {
+      view.result.current.handleAddImage(
+        new File(["image"], "image.png", { type: "image/png" }),
+        "upload",
+        "total_assets",
+        feedback,
+      );
+      view.unmount();
+    });
+
+    expect(objectUrls.revokeObjectURL).toHaveBeenCalledExactlyOnceWith("blob:uncommitted");
+  });
+
+  it("releases intermediate images when replacements are batched before a render", () => {
+    const objectUrls = installObjectUrlMock({
+      createObjectURL: (value) => (value instanceof File ? `blob:${value.name}` : "blob:unknown"),
+    });
+    const view = renderDraftFlow();
+
+    act(() => {
+      for (const name of ["first.png", "second.png"]) {
+        view.result.current.handleAddImage(
+          new File([name], name, { type: "image/png" }),
+          "upload",
+          "total_assets",
+          feedback,
+        );
+      }
+    });
+
+    expect(view.result.current.slots[0]?.previewUrl).toBe("blob:second.png");
+    expect(objectUrls.revokeObjectURL).toHaveBeenCalledExactlyOnceWith("blob:first.png");
+    view.unmount();
+    expect(objectUrls.revokeObjectURL.mock.calls).toEqual([
+      ["blob:first.png"],
+      ["blob:second.png"],
+    ]);
   });
 });

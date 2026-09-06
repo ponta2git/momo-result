@@ -22,7 +22,6 @@ export type CaptureSlotState = {
   source?: InputSource | undefined;
   file?: File | undefined;
   previewUrl?: string | undefined;
-  cameraStream?: MediaStream | undefined;
   imageId?: string | undefined;
   jobId?: string | undefined;
   draftId?: string | undefined;
@@ -80,12 +79,6 @@ export function detectedKindFromResponse(value: unknown): SlotKind | undefined {
 export function releaseSlotResources(slot: CaptureSlotState): void {
   if (slot.previewUrl) {
     URL.revokeObjectURL(slot.previewUrl);
-  }
-
-  if (slot.cameraStream) {
-    for (const track of slot.cameraStream.getTracks()) {
-      track.stop();
-    }
   }
 }
 

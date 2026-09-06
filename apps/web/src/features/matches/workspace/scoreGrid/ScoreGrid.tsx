@@ -71,7 +71,6 @@ export function ScoreGrid({ actions, data }: ScoreGridProps) {
     next.focus();
     setPendingFocusCellId(null);
     // Opening a mobile player mounts the pending focus target; retry after that DOM commit.
-    // oxlint-disable-next-line react/exhaustive-effect-dependencies
   }, [expandedMobilePlayer, pendingFocusCellId]);
 
   const acknowledgedCellIdSet = useMemo(

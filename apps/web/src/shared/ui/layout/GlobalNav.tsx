@@ -76,7 +76,6 @@ export function GlobalNav({
       revealActiveDestination(scroller, activeLink);
     }
     // Route and destination changes update aria-current and link geometry in the DOM.
-    // oxlint-disable-next-line react/exhaustive-effect-dependencies
   }, [destinationSignature, location.pathname]);
 
   return (

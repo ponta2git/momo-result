@@ -102,7 +102,6 @@ export function RecentRankStrips({
       element.removeEventListener("scroll", handleScroll);
     };
     // New match columns change DOM geometry and must realign to the latest result.
-    // oxlint-disable-next-line react/exhaustive-effect-dependencies
   }, [latestPointKey, syncScrollMetrics]);
 
   if (axisRows.length === 0) {

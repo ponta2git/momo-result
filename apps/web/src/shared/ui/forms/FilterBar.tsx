@@ -40,7 +40,12 @@ export function FilterBar({
   return (
     <section aria-busy={busy || undefined} aria-label={ariaLabel} className="min-w-0">
       <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4">
-        <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+        <div
+          className={cn(
+            "grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3",
+            resetAction || action ? "sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end" : "",
+          )}
+        >
           <div className="min-w-0">{primary}</div>
           {resetAction || action ? (
             <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">

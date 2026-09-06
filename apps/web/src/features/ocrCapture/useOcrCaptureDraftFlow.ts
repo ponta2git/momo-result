@@ -155,13 +155,11 @@ export function useOcrCaptureDraftFlow({
   const handleClear = useCallback(
     (kind: SlotKind, feedback: OcrCaptureDraftFeedback) => {
       const currentSlot = slots.find((slot) => slot.kind === kind);
-      if (currentSlot) {
-        if (isWorkingStatus(currentSlot.status)) {
-          feedback.reportFailure(
-            "読み取り中の画像は破棄できません。試合一覧で状態を確認してください。",
-          );
-          return;
-        }
+      if (currentSlot && isWorkingStatus(currentSlot.status)) {
+        feedback.reportFailure(
+          "読み取り中の画像は破棄できません。試合一覧で状態を確認してください。",
+        );
+        return;
       }
       updateLocalSlots((current) =>
         current.map((slot) => (slot.kind === kind ? createInitialSlot(kind) : slot)),

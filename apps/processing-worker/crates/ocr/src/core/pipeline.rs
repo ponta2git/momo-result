@@ -1,4 +1,6 @@
-use image::DynamicImage;
+use std::io::Cursor;
+
+use image::{DynamicImage, ImageDecoder, ImageReader, Limits};
 use serde_json::Value as JsonValue;
 use thiserror::Error;
 
@@ -69,11 +71,7 @@ fn analyze_core(
     recognition: &mut dyn RecognitionPort,
     observe: &mut dyn FnMut(OcrPhaseEvent),
 ) -> Result<OcrAnalysis, CoreOcrError> {
-    let image = observe_phase(observe, OcrPhase::Decode, || {
-        let image = image::load_from_memory(bytes).map_err(|_error| CoreOcrError::Decode)?;
-        validate_dimensions(&image)?;
-        Ok::<DynamicImage, CoreOcrError>(image)
-    })?;
+    let image = observe_phase(observe, OcrPhase::Decode, || decode_supported_image(bytes))?;
 
     observe_phase(observe, OcrPhase::InitializeEngine, || {
         recognition.initialize().map_err(CoreOcrError::from)
@@ -153,15 +151,31 @@ impl From<super::geometry::GeometryError> for CoreOcrError {
     }
 }
 
-fn validate_dimensions(image: &DynamicImage) -> Result<(), CoreOcrError> {
-    if image.width() < MINIMUM_WIDTH
-        || image.height() < MINIMUM_HEIGHT
-        || image.width() > MAXIMUM_WIDTH
-        || image.height() > MAXIMUM_HEIGHT
+/// Rejects unsupported dimensions from the header before allocating the decoded pixel buffer.
+fn decode_supported_image(bytes: &[u8]) -> Result<DynamicImage, CoreOcrError> {
+    let mut decoder = ImageReader::new(Cursor::new(bytes))
+        .with_guessed_format()
+        .map_err(|_error| CoreOcrError::Decode)?
+        .into_decoder()
+        .map_err(|_error| CoreOcrError::Decode)?;
+    let (width, height) = decoder.dimensions();
+    if width < MINIMUM_WIDTH
+        || height < MINIMUM_HEIGHT
+        || width > MAXIMUM_WIDTH
+        || height > MAXIMUM_HEIGHT
     {
         return Err(CoreOcrError::Layout);
     }
-    Ok(())
+    // ImageReader::decode reserves the output buffer before passing the remaining budget to
+    // the decoder. Preserve that allocation limit when using the header-checked decoder directly.
+    let mut limits = Limits::default();
+    limits
+        .reserve(decoder.total_bytes())
+        .map_err(|_error| CoreOcrError::Decode)?;
+    decoder
+        .set_limits(limits)
+        .map_err(|_error| CoreOcrError::Decode)?;
+    DynamicImage::from_decoder(decoder).map_err(|_error| CoreOcrError::Decode)
 }
 
 const fn engine_failure(error: CoreOcrError) -> OcrFailure {
@@ -179,8 +193,6 @@ const fn engine_failure(error: CoreOcrError) -> OcrFailure {
     reason = "an in-memory PNG fixture must encode before it can exercise the capability boundary"
 )]
 mod tests {
-    use std::io::Cursor;
-
     use image::{DynamicImage, ImageFormat, RgbImage};
 
     use super::*;
@@ -306,5 +318,69 @@ mod tests {
             ],
             "a malformed image must fail before any native dependency is touched"
         );
+    }
+
+    #[test]
+    fn supported_formats_decode_to_the_same_pixels_at_layout_boundaries() {
+        for format in [ImageFormat::Png, ImageFormat::Jpeg, ImageFormat::WebP] {
+            for (width, height) in [
+                (MINIMUM_WIDTH, MINIMUM_HEIGHT),
+                (MAXIMUM_WIDTH, MAXIMUM_HEIGHT),
+            ] {
+                let image = DynamicImage::ImageRgb8(RgbImage::from_fn(width, height, |x, y| {
+                    image::Rgb([
+                        u8::try_from(x % 256).expect("bounded color channel"),
+                        u8::try_from(y % 256).expect("bounded color channel"),
+                        127,
+                    ])
+                }));
+                let mut encoded = Cursor::new(Vec::new());
+                image
+                    .write_to(&mut encoded, format)
+                    .expect("supported encoder");
+                let bytes = encoded.into_inner();
+                assert_eq!(
+                    decode_supported_image(&bytes).expect("supported layout"),
+                    image::load_from_memory(&bytes).expect("reference decode"),
+                    "header inspection must preserve decoded pixels for {format:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn unsupported_layout_is_rejected_before_pixel_data_or_native_initialization() {
+        let image = DynamicImage::ImageRgb8(RgbImage::new(MAXIMUM_WIDTH + 1, MINIMUM_HEIGHT));
+        let mut encoded = Cursor::new(Vec::new());
+        image
+            .write_to(&mut encoded, ImageFormat::Png)
+            .expect("PNG fixture");
+        let mut bytes = encoded.into_inner();
+        // Keep the PNG header and the IDAT chunk header, but omit compressed pixels.
+        let pixels_start = bytes
+            .windows(4)
+            .position(|value| value == b"IDAT")
+            .expect("encoded PNG has image data")
+            + 4;
+        bytes.truncate(pixels_start);
+        assert!(
+            image::load_from_memory(&bytes).is_err(),
+            "pixel data is absent"
+        );
+
+        let mut recognizer = UnavailableRecognizer::default();
+        assert_eq!(
+            analyze(
+                &bytes,
+                RequestedScreenType::TotalAssets,
+                &OcrHints::default(),
+                &mut recognizer,
+                &mut |_event| {}
+            ),
+            Err(OcrFailure::LayoutUnsupported),
+            "the header must reject unsupported dimensions before decoding pixels"
+        );
+        assert_eq!(recognizer.initialize_calls, 0);
+        assert_eq!(recognizer.recognize_calls, 0);
     }
 }

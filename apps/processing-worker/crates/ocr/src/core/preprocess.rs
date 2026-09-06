@@ -1,3 +1,5 @@
+use std::cell::OnceCell;
+
 use image::{DynamicImage, GrayImage, Luma, imageops::FilterType};
 
 const COUNT_SCALE: u32 = 5;
@@ -86,19 +88,43 @@ pub(crate) fn invert(image: &GrayImage) -> GrayImage {
     })
 }
 
-pub(crate) fn prepare_ranked_row_variants(image: &DynamicImage) -> Vec<GrayImage> {
-    let gray = image.to_luma8();
-    let enhanced = contrast(&gray, 2.0);
-    let base = resize(&enhanced, 2, FilterType::Lanczos3);
-    let inverted = (mean_luminance(&gray) < 110.0).then(|| invert(&base));
-    let binarized = otsu_binarize(&base);
-    let mut variants = Vec::with_capacity(if inverted.is_some() { 3 } else { 2 });
-    variants.push(base);
-    if let Some(inverted) = inverted {
-        variants.push(inverted);
+/// Keeps the primary row and prepares fallback images only when recognition reaches them.
+/// Cached fallbacks preserve the same pixels and ordering when sparse-text recognition retries.
+pub(crate) struct RankedRowVariants {
+    primary: GrayImage,
+    needs_inversion: bool,
+    inverted: OnceCell<GrayImage>,
+    binarized: OnceCell<GrayImage>,
+}
+
+impl RankedRowVariants {
+    pub(crate) fn new(image: &DynamicImage) -> Self {
+        let gray = image.to_luma8();
+        let enhanced = contrast(&gray, 2.0);
+        Self {
+            primary: resize(&enhanced, 2, FilterType::Lanczos3),
+            needs_inversion: mean_luminance(&gray) < 110.0,
+            inverted: OnceCell::new(),
+            binarized: OnceCell::new(),
+        }
     }
-    variants.push(binarized);
-    variants
+
+    pub(crate) const fn primary(&self) -> &GrayImage {
+        &self.primary
+    }
+
+    pub(crate) fn iter(&self) -> impl Iterator<Item = &GrayImage> {
+        std::iter::once(&self.primary)
+            .chain(
+                self.needs_inversion
+                    .then_some(())
+                    .into_iter()
+                    .map(|()| self.inverted.get_or_init(|| invert(&self.primary))),
+            )
+            .chain(std::iter::once_with(|| {
+                self.binarized.get_or_init(|| otsu_binarize(&self.primary))
+            }))
+    }
 }
 
 pub(crate) fn prepare_slot_name_variants(image: &DynamicImage) -> Vec<GrayImage> {

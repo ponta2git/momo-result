@@ -8,7 +8,7 @@ use super::{
     has_unit_bearing_money_text, names_match, parse_money_man_yen, parse_revenue_man_yen,
     pipeline::{CoreOcrError, ParsedScreen},
     player_order::PlayerOrderDetection,
-    preprocess::prepare_ranked_row_variants,
+    preprocess::RankedRowVariants,
     recognition::{PageSegmentationMode, RecognitionLanguage, recognize_color, recognize_gray},
     scale_profile_rect,
 };
@@ -94,35 +94,35 @@ fn recognize_row(
     image: &DynamicImage,
     recognition: &mut dyn RecognitionPort,
 ) -> Result<RankedRecognition, CoreOcrError> {
-    let variants = prepare_ranked_row_variants(image);
+    let variants = RankedRowVariants::new(image);
     let mut snippets = Vec::new();
     let mut confidences = Vec::new();
-    if let Some(primary) = variants.first() {
-        append_grayscale_recognitions(
-            primary,
-            &[
-                PageSegmentationMode::SingleBlock,
-                PageSegmentationMode::SingleLine,
-            ],
-            recognition,
-            &mut snippets,
-            &mut confidences,
-        )?;
-    }
-    for variant in variants.iter().skip(1) {
-        if has_money_and_name(&snippets) {
-            break;
+    append_grayscale_recognitions(
+        variants.primary(),
+        &[
+            PageSegmentationMode::SingleBlock,
+            PageSegmentationMode::SingleLine,
+        ],
+        recognition,
+        &mut snippets,
+        &mut confidences,
+    )?;
+    if !has_money_and_name(&snippets) {
+        for variant in variants.iter().skip(1) {
+            append_grayscale_recognitions(
+                variant,
+                &[
+                    PageSegmentationMode::SingleBlock,
+                    PageSegmentationMode::SingleLine,
+                ],
+                recognition,
+                &mut snippets,
+                &mut confidences,
+            )?;
+            if has_money_and_name(&snippets) {
+                break;
+            }
         }
-        append_grayscale_recognitions(
-            variant,
-            &[
-                PageSegmentationMode::SingleBlock,
-                PageSegmentationMode::SingleLine,
-            ],
-            recognition,
-            &mut snippets,
-            &mut confidences,
-        )?;
     }
     if !has_money_and_name(&snippets) {
         append_color_recognitions(
@@ -137,10 +137,7 @@ fn recognize_row(
         )?;
     }
     if !has_money_and_name(&snippets) {
-        for variant in &variants {
-            if has_money_and_name(&snippets) {
-                break;
-            }
+        for variant in variants.iter() {
             append_grayscale_recognitions(
                 variant,
                 &[PageSegmentationMode::SparseText],
@@ -148,6 +145,9 @@ fn recognize_row(
                 &mut snippets,
                 &mut confidences,
             )?;
+            if has_money_and_name(&snippets) {
+                break;
+            }
         }
     }
     Ok(RankedRecognition {

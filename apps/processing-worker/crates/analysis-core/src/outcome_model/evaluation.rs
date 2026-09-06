@@ -188,12 +188,12 @@ fn evaluate_folds(events: &[EncodedEvent]) -> Result<Vec<FoldEvaluation>, Outcom
             if training_pairs.is_empty() || test_pairs.is_empty() {
                 return Err(OutcomeModelFailure::Calculation);
             }
-            let baseline_fit = fit(&training_pairs
+            let baseline_fit = fit(training_pairs
                 .iter()
                 .map(|pair| pair.baseline)
                 .collect::<Vec<_>>())
             .map_err(|_error| OutcomeModelFailure::ModelNotConverged)?;
-            let full_fit = fit(&training_pairs
+            let full_fit = fit(training_pairs
                 .iter()
                 .map(|pair| pair.full)
                 .collect::<Vec<_>>())

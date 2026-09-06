@@ -8,7 +8,7 @@ use super::{
     clippy::suboptimal_flops,
     reason = "floating-point operation order is part of the rank-bt-v1 artifact identity"
 )]
-pub(super) fn fit<const N: usize>(observations: &[Observation<N>]) -> Result<Fit<N>, ()> {
+pub(super) fn fit<const N: usize>(mut observations: Vec<Observation<N>>) -> Result<Fit<N>, ()> {
     if N == 0
         || observations.iter().any(|observation| {
             observation.features.iter().any(|value| !value.is_finite())
@@ -17,11 +17,11 @@ pub(super) fn fit<const N: usize>(observations: &[Observation<N>]) -> Result<Fit
     {
         return Err(());
     }
-    let mut ordered = observations.to_vec();
-    ordered.sort_by(compare_observations);
+    // Fitting owns the sample: sorting it in place avoids keeping a second full observation set.
+    observations.sort_by(compare_observations);
     let mut coefficients = [0.0; N];
     for iteration in 0..=100 {
-        let derivatives = objective_gradient_hessian(&ordered, &coefficients)?;
+        let derivatives = objective_gradient_hessian(&observations, &coefficients)?;
         if max_absolute(&derivatives.gradient) <= 1e-8 {
             return Ok(Fit { coefficients });
         }
@@ -44,7 +44,7 @@ pub(super) fn fit<const N: usize>(observations: &[Observation<N>]) -> Result<Fit
             {
                 *candidate_coefficient = coefficient - scale * step_component;
             }
-            let candidate_objective = objective(&ordered, &candidate)?;
+            let candidate_objective = objective(&observations, &candidate)?;
             if candidate_objective
                 <= derivatives.objective - ARMIJO_FACTOR * scale * directional_decrease
             {

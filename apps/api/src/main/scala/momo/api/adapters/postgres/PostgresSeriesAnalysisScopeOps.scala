@@ -1,6 +1,5 @@
 package momo.api.adapters.postgres
 
-import cats.syntax.all.*
 import doobie.*
 import doobie.implicits.*
 
@@ -12,54 +11,53 @@ private[postgres] object PostgresSeriesAnalysisScopeOps:
   def exists(
       gameTitleId: GameTitleId,
       scope: SeriesAnalysisScope,
-  ): ConnectionIO[Boolean] = scope match
+  ): Fragment = scope match
     case SeriesAnalysisScope.Overall =>
-      sql"SELECT EXISTS(SELECT 1 FROM game_titles WHERE id = $gameTitleId)"
-        .query[Boolean].unique
-    case SeriesAnalysisScope.Season(seasonId) => sql"""
-        SELECT EXISTS(
+      fr"EXISTS(SELECT 1 FROM game_titles WHERE id = $gameTitleId)"
+    case SeriesAnalysisScope.Season(seasonId) => fr"""
+        EXISTS(
           SELECT 1 FROM matches
           WHERE game_title_id = $gameTitleId
             AND season_master_id = $seasonId
         )
-      """.query[Boolean].unique
-    case SeriesAnalysisScope.Map(mapId) => sql"""
-        SELECT EXISTS(
+      """
+    case SeriesAnalysisScope.Map(mapId) => fr"""
+        EXISTS(
           SELECT 1 FROM matches
           WHERE game_title_id = $gameTitleId
             AND map_master_id = $mapId
         )
-      """.query[Boolean].unique
-    case SeriesAnalysisScope.SeasonMap(seasonId, mapId) => sql"""
-        SELECT EXISTS(
+      """
+    case SeriesAnalysisScope.SeasonMap(seasonId, mapId) => fr"""
+        EXISTS(
           SELECT 1 FROM matches
           WHERE game_title_id = $gameTitleId
             AND season_master_id = $seasonId
             AND map_master_id = $mapId
         )
-      """.query[Boolean].unique
+      """
 
   def displayName(
       gameTitleId: GameTitleId,
       scope: SeriesAnalysisScope,
-  ): ConnectionIO[Option[String]] = scope match
-    case SeriesAnalysisScope.Overall => Option("総合").pure[ConnectionIO]
-    case SeriesAnalysisScope.Season(seasonId) => sql"""
-        SELECT name FROM season_masters
-        WHERE game_title_id = $gameTitleId AND id = $seasonId
-      """.query[String].option
-    case SeriesAnalysisScope.Map(mapId) => sql"""
-        SELECT name FROM map_masters
-        WHERE game_title_id = $gameTitleId AND id = $mapId
-      """.query[String].option
-    case SeriesAnalysisScope.SeasonMap(seasonId, mapId) => sql"""
-        SELECT s.name || ' / ' || m.name
+  ): Fragment = scope match
+    case SeriesAnalysisScope.Overall => fr"'総合'::text"
+    case SeriesAnalysisScope.Season(seasonId) => fr"""
+        (SELECT name FROM season_masters
+         WHERE game_title_id = $gameTitleId AND id = $seasonId)
+      """
+    case SeriesAnalysisScope.Map(mapId) => fr"""
+        (SELECT name FROM map_masters
+         WHERE game_title_id = $gameTitleId AND id = $mapId)
+      """
+    case SeriesAnalysisScope.SeasonMap(seasonId, mapId) => fr"""
+        (SELECT s.name || ' / ' || m.name
         FROM season_masters s
         JOIN map_masters m ON m.game_title_id = s.game_title_id
         WHERE s.game_title_id = $gameTitleId
           AND s.id = $seasonId
-          AND m.id = $mapId
-      """.query[String].option
+          AND m.id = $mapId)
+      """
 
   def contains(
       scope: SeriesAnalysisScope,

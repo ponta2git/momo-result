@@ -1,5 +1,6 @@
 package momo.api.adapters.postgres
 
+import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 
 import io.circe.Json
@@ -172,7 +173,12 @@ final class SeriesAnalysisPayloadValidatorSpec extends FunSuite with JsonSchemaA
       json: Json,
       request: SeriesAnalysisChunkRequest,
       revision: Option[Long],
-  ): Boolean = SeriesAnalysisPayloadValidator.validate(json, request, revision)
+  ): Boolean = SeriesAnalysisPayloadValidator.validate(
+    json,
+    json.noSpaces.getBytes(StandardCharsets.UTF_8),
+    request,
+    revision,
+  )
 
   private def sharedSchema(fileName: String): Json =
     parse(Files.readString(repositoryFile(s"docs/schemas/$fileName")))

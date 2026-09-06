@@ -18,7 +18,7 @@ import momo.api.adapters.postgres.{
   SeriesAnalysisArtifactSupport
 }
 import momo.api.config.SeriesAnalysisReadConfig
-import momo.api.domain.ids.{AccountId, GameTitleId}
+import momo.api.domain.ids.{AccountId, GameTitleId, MatchId, SeasonMasterId}
 import momo.api.domain.{
   GameTitle,
   SeriesAnalysisChunkKind,
@@ -556,6 +556,7 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
         0,
         1,
         Some(SeriesAnalysisArtifactSupport.ValidationContractId),
+        None,
       )
       _ <- pointToArtifacts("artifact-analysis-delete", None)
       analysis <- repository
@@ -593,6 +594,7 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
         0,
         payloadDepth,
         Some(SeriesAnalysisArtifactSupport.ValidationContractId),
+        None,
       )
       _ <- insertPublishedArtifact(
         "artifact-analysis-current",
@@ -600,6 +602,7 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
         0,
         payloadDepth,
         Some(SeriesAnalysisArtifactSupport.ValidationContractId),
+        None,
       )
       _ <- pointToArtifacts("artifact-analysis-current", Some("artifact-analysis-previous"))
       repo <- repository
@@ -629,6 +632,121 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
         Left(AppError.AnalysisArtifactExpired()),
       )
 
+  test("bounded reads distinguish missing scopes, absent chunks and oversized material"):
+    val payload = Files.readAllBytes(
+      repositoryFile("docs/schemas/fixtures/series-analysis/aggregate-payload-v3.json")
+    )
+    val depth =
+      parser.parse(new String(payload, StandardCharsets.UTF_8)).toOption.map(jsonDepth).get
+    val request = SeriesAnalysisChunkRequest(
+      SeriesAnalysisChunkKind.Aggregate,
+      titleId,
+      "artifact-bounded",
+      SeriesAnalysisScope.Overall,
+    )
+    for
+      _ <- seedTitle
+      _ <- insertPublishedArtifact(
+        request.artifactId,
+        payload,
+        0,
+        depth,
+        Some(SeriesAnalysisArtifactSupport.ValidationContractId),
+        None,
+      )
+      _ <- pointToArtifacts(request.artifactId, None)
+      repo <- repository
+      absent <- repo.chunk(request.copy(kind = SeriesAnalysisChunkKind.Review))
+      missing <- repo.chunk(request.copy(scope =
+        SeriesAnalysisScope.Season(
+          SeasonMasterId.unsafeFromString("absent-season")
+        )
+      ))
+      bounded <- PostgresSeriesAnalysisRepository.create[IO](
+        transactor,
+        SeriesAnalysisReadConfig.defaults.copy(maxEncodedBytes = payload.length.toLong - 1)
+      )
+      oversized <- bounded.chunk(request)
+    yield
+      assertEquals(absent, Left(AppError.AnalysisScopeNotInArtifact()))
+      assertEquals(missing, Left(AppError.AnalysisScopeNotFound()))
+      assertEquals(oversized, Left(AppError.Internal("Invalid analysis artifact metadata.")))
+
+  test("match context classifies live identity and pinned content in one snapshot"):
+    val aggregate = Files.readAllBytes(
+      repositoryFile("docs/schemas/fixtures/series-analysis/aggregate-payload-v3.json")
+    )
+    val depth =
+      parser.parse(new String(aggregate, StandardCharsets.UTF_8)).toOption.map(jsonDepth).get
+    val context = Files.readString(
+      repositoryFile("docs/schemas/fixtures/series-analysis/match-context-payload-v1.json")
+    ).replace("member-1", "member_ponta").getBytes(StandardCharsets.UTF_8)
+    val request = SeriesAnalysisChunkRequest(
+      SeriesAnalysisChunkKind.MatchContext,
+      titleId,
+      "artifact-context",
+      SeriesAnalysisScope.Overall,
+      matchId = Some(MatchId.unsafeFromString("match-1"))
+    )
+    def inclusion(result: Either[AppError, momo.api.domain.SeriesAnalysisChunk]) =
+      result.flatMap(chunk =>
+        parser.parse(new String(chunk.payload, StandardCharsets.UTF_8)).flatMap(
+          _.hcursor.downField("inclusion").get[String]("status")
+        ).leftMap(_ => AppError.Internal("invalid context response"))
+      )
+    for
+      _ <- seedTitle
+      _ <-
+      (sql"""INSERT INTO season_masters (id, game_title_id, name, display_order)
+          VALUES ('context-season', $titleId, '年度', 1), ('different-season', $titleId, '別年度', 2)""".update.run *>
+        sql"""INSERT INTO map_masters (id, game_title_id, name, display_order)
+          VALUES ('context-map', $titleId, '地図', 1)""".update.run *>
+        sql"""INSERT INTO held_events (id, held_date_iso, start_at)
+          VALUES ('context-event', '2026-08-09', $now)""".update.run *>
+        sql"""INSERT INTO matches (id, held_event_id, match_no_in_event, game_title_id,
+          layout_family, season_master_id, owner_member_id, map_master_id, played_at,
+          created_by_account_id, analysis_revision)
+          VALUES ('match-1', 'context-event', 1, $titleId, 'momotetsu2', 'context-season',
+            'member_ponta', 'context-map', $now, $accountId, 1)""".update.run *>
+        sql"""INSERT INTO match_players (match_id, member_id, play_order, rank,
+          total_assets_man_yen, revenue_man_yen)
+          SELECT 'match-1', p.id, p.n, p.n, 0, 0 FROM (
+            VALUES ('member_eu', 1), ('member_ponta', 2), ('member_akane_mami', 3), ('member_otaka', 4)
+          ) p(id, n)""".update.run).transact(transactor)
+      _ <- insertPublishedArtifact(
+        request.artifactId,
+        aggregate,
+        0,
+        depth,
+        Some(SeriesAnalysisArtifactSupport.ValidationContractId),
+        Some(context)
+      )
+      _ <- pointToArtifacts(request.artifactId, None)
+      repo <- repository
+      included <- repo.chunk(request)
+      missing <- repo.chunk(request.copy(matchId = Some(MatchId.unsafeFromString("missing-match"))))
+      expired <- repo.chunk(request.copy(artifactId = "expired-artifact"))
+      outside <- repo.chunk(request.copy(scope =
+        SeriesAnalysisScope.Season(
+          SeasonMasterId.unsafeFromString("different-season")
+        )
+      ))
+      noChunk <- repo.chunk(request.copy(scope =
+        SeriesAnalysisScope.Season(
+          SeasonMasterId.unsafeFromString("context-season")
+        )
+      ))
+      _ <- sql"UPDATE matches SET analysis_revision = analysis_revision + 1 WHERE id = 'match-1'"
+        .update.run.transact(transactor)
+      changed <- repo.chunk(request)
+    yield
+      assertEquals(inclusion(included), Right("included"))
+      assertEquals(missing, Left(AppError.NotFound("match", "missing-match")))
+      assertEquals(expired, Left(AppError.AnalysisArtifactExpired()))
+      assertEquals(inclusion(outside), Right("not_in_scope"))
+      assertEquals(inclusion(noChunk), Right("not_in_artifact"))
+      assertEquals(inclusion(changed), Right("match_changed_since_artifact"))
+
   test("exact reader fails closed when the active release still points to a legacy artifact"):
     val payload = Files.readAllBytes(
       repositoryFile("docs/schemas/fixtures/series-analysis/aggregate-payload-v3.json")
@@ -649,6 +767,7 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
         itemCount = 0,
         nestingDepth = payloadDepth,
         validationContractId = None,
+        contextPayload = None,
       )
       _ <- sql"""
         UPDATE series_analysis_title_states
@@ -673,6 +792,7 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
       itemCount: Int,
       nestingDepth: Int,
       validationContractId: Option[String],
+      contextPayload: Option[Array[Byte]],
   ): IO[Unit] =
     val length = payload.length
     val checksum = sha256(payload)
@@ -688,7 +808,7 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
         2, NULL,
         'sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
         'sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd',
-        'staging', 1, 0, 0, 0, $length, $length, NULL
+        'staging', 1, 0, 0, ${contextPayload.size}, $length, $length, NULL
       )
     """.update.run.void *> sql"""
       INSERT INTO series_analysis_scope_aggregate_artifacts (
@@ -698,7 +818,17 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
         $artifactId, 'overall', 'overall', $payload,
         $length, $length, $itemCount, $nestingDepth, $checksum
       )
-    """.update.run.void *> validationContractId.traverse_(contractId => sql"""
+    """.update.run.void *> contextPayload.traverse_ { context =>
+      val size = context.length
+      val checksum = sha256(context)
+      val depth =
+        parser.parse(new String(context, StandardCharsets.UTF_8)).toOption.map(jsonDepth).get
+      sql"""INSERT INTO series_analysis_match_context_artifacts (
+        artifact_id, scope_key, scope_kind, match_id, source_match_revision, payload,
+        encoded_bytes, decoded_bytes, item_count, nesting_depth, checksum
+      ) VALUES ($artifactId, 'overall', 'overall', 'match-1', 1, $context,
+        $size, $size, 1, $depth, $checksum)""".update.run.void
+    } *> validationContractId.traverse_(contractId => sql"""
       UPDATE series_analysis_artifacts
       SET validation_contract_id = $contractId
       WHERE id = $artifactId AND status = 'staging'

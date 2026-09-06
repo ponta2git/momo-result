@@ -30,7 +30,15 @@ private[postgres] final case class SeriesAnalysisStoredChunk(
     itemCount: Option[Int],
     nestingDepth: Option[Int],
     checksum: Option[String],
-)
+):
+  def artifact: SeriesAnalysisArtifactRef = SeriesAnalysisArtifactRef(
+    artifactId,
+    artifactGameTitleId,
+    inputRevision,
+    algorithmVersion,
+    artifactSchemaVersion,
+    publishedAt,
+  )
 
 /**
  * Validated JSON retained only inside the Postgres adapter. The repository boundary exposes the
@@ -64,14 +72,6 @@ private[postgres] object PostgresSeriesAnalysisChunkCodec:
       config: SeriesAnalysisReadConfig,
       sourceMatchRevision: Option[Long],
   ): Either[AppError, DecodedSeriesAnalysisChunk] =
-    val artifact = SeriesAnalysisArtifactRef(
-      row.artifactId,
-      row.artifactGameTitleId,
-      row.inputRevision,
-      row.algorithmVersion,
-      row.artifactSchemaVersion,
-      row.publishedAt,
-    )
     val metadata = (
       row.scopeKind,
       row.payload,
@@ -122,13 +122,14 @@ private[postgres] object PostgresSeriesAnalysisChunkCodec:
         )
         _ <- validateDecodedJson(
           json,
+          payload,
           request,
           sourceMatchRevision,
           depth,
           inspection.depth,
         )
       yield DecodedSeriesAnalysisChunk(
-        artifact,
+        row.artifact,
         request.scope,
         json,
         inspection.memberIds,
@@ -416,6 +417,7 @@ private[postgres] object PostgresSeriesAnalysisChunkCodec:
 
   private def validateDecodedJson(
       json: Json,
+      encoded: Array[Byte],
       request: SeriesAnalysisChunkRequest,
       sourceMatchRevision: Option[Long],
       declaredDepth: Int,
@@ -423,6 +425,7 @@ private[postgres] object PostgresSeriesAnalysisChunkCodec:
   ): Either[AppError, Unit] = Either.cond(
     SeriesAnalysisPayloadValidator.validate(
       json,
+      encoded,
       request,
       sourceMatchRevision,
     ) && actualDepth == declaredDepth,

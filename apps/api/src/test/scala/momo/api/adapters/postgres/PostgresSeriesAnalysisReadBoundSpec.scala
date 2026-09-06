@@ -5,8 +5,8 @@ import java.nio.file.Files
 import java.security.MessageDigest
 import java.time.Instant
 
-import cats.effect.IO
 import cats.effect.std.Semaphore
+import cats.effect.{Deferred, IO}
 import cats.syntax.all.*
 import io.circe.Json
 import io.circe.parser.parse
@@ -50,6 +50,20 @@ final class PostgresSeriesAnalysisReadBoundSpec extends CatsEffectSuite with Jso
         Left(AppError.AnalysisReadBusy(config.busyRetryAfterSeconds)),
       )
       assertEquals(permitAfterTimeout, true)
+
+  test("cancelling an admitted read releases its permit for the next request"):
+    for
+      semaphore <- Semaphore[IO](1)
+      started <- Deferred[IO, Unit]
+      fiber <- PostgresSeriesAnalysisRepository.boundedChunkRead(
+        semaphore,
+        SeriesAnalysisReadConfig.defaults
+      )(started.complete(()).void *>
+        IO.never[Either[AppError, SeriesAnalysisChunk]]).start
+      _ <- started.get
+      _ <- fiber.cancel
+      available <- semaphore.available
+    yield assertEquals(available, 1L)
 
   test("a saturated decode semaphore fails without starting the read"):
     val config = SeriesAnalysisReadConfig.defaults

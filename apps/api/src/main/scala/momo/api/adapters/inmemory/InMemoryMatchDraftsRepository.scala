@@ -6,7 +6,7 @@ import cats.effect.{Ref, Sync}
 import cats.syntax.all.*
 
 import momo.api.domain.ids.*
-import momo.api.domain.{MatchDraft, MatchDraftStatus, ScreenType}
+import momo.api.domain.{HeldEventScope, MatchDraft, MatchDraftStatus, ScreenType}
 import momo.api.errors.AppError
 import momo.api.repositories.*
 
@@ -55,6 +55,9 @@ final class InMemoryMatchDraftsRepository[F[_]: Sync] private (
       id -> MatchDraftsRepository.HeldEventStats(
         draftCount = scoped.size,
         maxMatchNo = scoped.flatMap(_.matchNoInEvent.map(_.value)).maxOption.getOrElse(0),
+        scopes = scoped.map(draft =>
+          HeldEventScope(draft.gameTitleId, draft.seasonMasterId)
+        ).filter(_.isDefined).distinct,
       )
     }.toMap
   }

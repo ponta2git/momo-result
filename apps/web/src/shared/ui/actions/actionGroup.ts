@@ -15,3 +15,7 @@ export const responsiveLeadActionGroupClass = cn(
   responsiveActionGroupClass,
   "[&>*:first-child]:col-span-2 sm:[&>*:first-child]:col-auto",
 );
+
+/** The final execution step shares one inset surface, without a second border. */
+export const taskActionPanelClass =
+  "grid min-w-0 gap-4 rounded-md bg-[var(--color-surface-subtle)] p-4";

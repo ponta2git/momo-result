@@ -1,6 +1,7 @@
 import { ArrowLeft, BarChart3 } from "lucide-react";
 import { useEffect } from "react";
 
+import { matchesSeriesAnalysisScope } from "@/features/seriesComparison/model/seriesAnalysisDisplayBundle";
 import {
   preloadSeriesAnalysisView,
   SeriesAnalysisContent,
@@ -116,7 +117,9 @@ export function SeriesComparisonPage() {
               mapOptions={filters.mapOptions}
               mapValue={filters.state.mapMasterId ?? ""}
               refreshing={resource.refreshing || status.refreshing}
-              response={resource.data}
+              response={
+                matchesSeriesAnalysisScope(resource.data, filters.state) ? resource.data : undefined
+              }
               seasonOptions={filters.seasonOptions}
               seasonValue={filters.state.seasonMasterId ?? ""}
               seriesOptions={filters.seriesOptions}

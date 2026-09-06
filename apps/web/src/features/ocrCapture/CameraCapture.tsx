@@ -4,8 +4,10 @@ import type { ReactNode } from "react";
 import type { InputSource } from "@/features/ocrCapture/captureState";
 import { useCameraCaptureSession } from "@/features/ocrCapture/useCameraCaptureSession";
 import { Button } from "@/shared/ui/actions/Button";
+import { cn } from "@/shared/ui/cn";
 import { Disclosure } from "@/shared/ui/data/Collapsible";
 import { SelectField } from "@/shared/ui/forms/SelectField";
+import { contentText } from "@/shared/ui/typography";
 
 type CameraCaptureProps = {
   actionVariant?: "primary" | "secondary";
@@ -63,7 +65,7 @@ export function CameraCapture({
           <div className="pointer-events-none absolute inset-0 grid place-items-center px-6 text-center text-[var(--color-text-inverse)]/75">
             <div>
               <CameraIcon aria-hidden="true" className="mx-auto size-7" />
-              <p className="mt-2 text-sm font-semibold">カメラを開始して画面を撮影</p>
+              <p className="font-plain mt-2 text-sm">カメラを開始して画面を撮影</p>
             </div>
           </div>
         )}
@@ -82,10 +84,8 @@ export function CameraCapture({
           role="alert"
         >
           <div>
-            <p className="text-sm font-semibold text-[var(--color-text-primary)]">
-              カメラを利用できません
-            </p>
-            <p className="mt-1 text-sm text-[var(--color-text-secondary)]">{camera.error}</p>
+            <p className={contentText.compactPrimary}>カメラを利用できません</p>
+            <p className={cn(contentText.body, "mt-1")}>{camera.error}</p>
           </div>
           {renderFallback?.(!useSecondaryActions)}
         </div>
@@ -118,9 +118,7 @@ export function CameraCapture({
             停止
           </Button>
         </div>
-        {disabled ? (
-          <p className="text-xs text-[var(--color-text-secondary)]">現在は撮影できません。</p>
-        ) : null}
+        {disabled ? <p className={contentText.supporting}>現在は撮影できません。</p> : null}
       </div>
       {!camera.error && renderFallback ? (
         <div className="grid w-full text-sm text-[var(--color-text-secondary)] sm:w-fit">

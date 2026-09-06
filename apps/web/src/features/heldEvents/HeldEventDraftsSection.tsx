@@ -11,6 +11,9 @@ import { DraftStatusBadge } from "@/shared/matches/DraftStatusBadge";
 import { withReturnTo } from "@/shared/navigation/returnTo";
 import { Button } from "@/shared/ui/actions/Button";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
+import { cn } from "@/shared/ui/cn";
+import { ContentWithActions } from "@/shared/ui/layout/ContentWithActions";
+import { contentText } from "@/shared/ui/typography";
 
 export function HeldEventDraftsSection({
   drafts,
@@ -28,10 +31,10 @@ export function HeldEventDraftsSection({
 
   return (
     <section aria-labelledby="held-event-drafts-heading" className="min-w-0">
-      <h2 id="held-event-drafts-heading" className="momo-heading text-base font-semibold">
+      <h2 id="held-event-drafts-heading" className={contentText.heading}>
         未確定下書き
       </h2>
-      <p className="momo-copy mt-1 text-sm text-[var(--color-text-secondary)]">
+      <p className={cn(contentText.body, "mt-1 text-pretty")}>
         この開催に紐づく読み取り・確認作業です。確定すると下の試合記録へ移ります。
       </p>
       <ul className="mt-4 divide-y divide-[var(--color-border)]">
@@ -40,48 +43,44 @@ export function HeldEventDraftsSection({
           const scopeLabel = heldEventDraftScopeLabel(draft, masterNames);
           const updatedAt = formatHeldEventShortDateTime(draft.updatedAt);
           return (
-            <li
-              key={draft.matchDraftId}
-              className="flex flex-col gap-3 py-3 sm:flex-row sm:items-center sm:justify-between"
-            >
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="font-semibold tabular-nums">
-                    {formatMatchNoInEvent(draft.matchNoInEvent)}
-                  </p>
-                  <DraftStatusBadge
-                    label={reviewStatusLabel(draft.status)}
-                    status={asDraftStatusOrUnknown(draft.status)}
-                  />
+            <li key={draft.matchDraftId} className="py-3">
+              <ContentWithActions
+                actions={
+                  action.href ? (
+                    <LinkButton
+                      size="sm"
+                      to={withReturnTo(action.href, returnTo)}
+                      variant={draft.matchDraftId === primaryDraftId ? "primary" : "secondary"}
+                    >
+                      {action.label}
+                    </LinkButton>
+                  ) : (
+                    <Button disabled size="sm" variant="secondary">
+                      {action.label}
+                    </Button>
+                  )
+                }
+              >
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className={cn(contentText.body, "tabular-nums")}>
+                      {formatMatchNoInEvent(draft.matchNoInEvent)}
+                    </p>
+                    <DraftStatusBadge
+                      label={reviewStatusLabel(draft.status)}
+                      status={asDraftStatusOrUnknown(draft.status)}
+                    />
+                  </div>
+                  {scopeLabel ? (
+                    <p className={cn(contentText.body, "mt-1 truncate")}>{scopeLabel}</p>
+                  ) : null}
+                  {updatedAt ? (
+                    <p className={cn(contentText.supporting, "mt-1 tabular-nums")}>
+                      最終更新 {updatedAt}
+                    </p>
+                  ) : null}
                 </div>
-                {scopeLabel ? (
-                  <p className="mt-1 truncate text-sm text-[var(--color-text-secondary)]">
-                    {scopeLabel}
-                  </p>
-                ) : null}
-                {updatedAt ? (
-                  <p className="mt-1 text-xs text-[var(--color-text-secondary)] tabular-nums">
-                    最終更新 {updatedAt}
-                  </p>
-                ) : null}
-              </div>
-              {action.href ? (
-                <div className="grid shrink-0">
-                  <LinkButton
-                    size="sm"
-                    to={withReturnTo(action.href, returnTo)}
-                    variant={draft.matchDraftId === primaryDraftId ? "primary" : "secondary"}
-                  >
-                    {action.label}
-                  </LinkButton>
-                </div>
-              ) : (
-                <div className="grid shrink-0">
-                  <Button disabled size="sm" variant="secondary">
-                    {action.label}
-                  </Button>
-                </div>
-              )}
+              </ContentWithActions>
             </li>
           );
         })}

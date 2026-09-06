@@ -13,7 +13,7 @@ import doobie.util.fragments
 
 import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.domain.ids.*
-import momo.api.domain.{MatchDraft, MatchDraftStatus, ScreenType}
+import momo.api.domain.{HeldEventScope, MatchDraft, MatchDraftStatus, ScreenType}
 import momo.api.errors.{AppError, AppException}
 import momo.api.repositories.*
 
@@ -27,6 +27,8 @@ object PostgresMatchDrafts extends PostgresMatchDraftsRowSupport:
       heldEventId: HeldEventId,
       count: Int,
       maxMatchNo: Int,
+      gameTitleId: Option[GameTitleId],
+      seasonMasterId: Option[SeasonMasterId],
   )
 
   private def isUniqueViolation(state: SqlState): Boolean = state.value ==
@@ -133,19 +135,22 @@ object PostgresMatchDrafts extends PostgresMatchDraftsRowSupport:
       else
         val ids = heldEventIds.map(_.value).toArray
         sql"""
-          SELECT held_event_id, COUNT(*)::int, COALESCE(MAX(match_no_in_event), 0)::int
+          SELECT held_event_id, COUNT(*)::int, COALESCE(MAX(match_no_in_event), 0)::int,
+                 game_title_id, season_master_id
           FROM match_drafts
           WHERE held_event_id = ANY($ids)
             AND status <> ${MatchDraftStatus.Cancelled}
             AND status <> ${MatchDraftStatus.Confirmed}
-          GROUP BY held_event_id
+          GROUP BY held_event_id, game_title_id, season_master_id
         """.query[HeldEventDraftStatsRow].to[List].map { rows =>
-          val seen = rows.map(row =>
-            row.heldEventId -> MatchDraftsRepository.HeldEventStats(
-              draftCount = row.count,
-              maxMatchNo = row.maxMatchNo,
+          val seen = rows.groupBy(_.heldEventId).map { case (id, grouped) =>
+            id -> MatchDraftsRepository.HeldEventStats(
+              draftCount = grouped.map(_.count).sum,
+              maxMatchNo = grouped.map(_.maxMatchNo).max,
+              scopes = grouped.map(row => HeldEventScope(row.gameTitleId, row.seasonMasterId))
+                .filter(_.isDefined),
             )
-          ).toMap
+          }
           heldEventIds.map(id =>
             id -> seen.getOrElse(
               id,

@@ -1,6 +1,7 @@
 import { HeldEventDetailHeaderActions } from "@/features/heldEvents/HeldEventDetailHeaderActions";
 import { ResourcePageState } from "@/shared/ui/feedback/ResourcePageState";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
+import { ContentWithActions } from "@/shared/ui/layout/ContentWithActions";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
 import {
@@ -55,11 +56,12 @@ export function HeldEventDetailLoading() {
           <div className="grid gap-4">
             {["match-1", "match-2"].map((id) => (
               <div key={id} className="grid gap-3">
-                <div className="flex justify-between gap-4">
-                  <Skeleton className="h-6 w-32" />
-                  <Skeleton className="h-9 w-24" />
-                </div>
-                <Skeleton className="h-4 w-full max-w-72" />
+                <ContentWithActions actions={<Skeleton className="h-11 w-24" />}>
+                  <div className="grid gap-1">
+                    <Skeleton className="h-5 w-32" />
+                    <Skeleton className="h-4 w-full max-w-72" />
+                  </div>
+                </ContentWithActions>
                 <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
                   {["a", "b", "c", "d"].map((player) => (
                     <Skeleton key={player} className="h-16" />
@@ -77,14 +79,12 @@ export function HeldEventDetailLoading() {
 export function HeldEventDetailUnavailable({
   backHref = "/held-events",
   exportHref,
-  matchesHref,
   notFound = false,
   onRetry,
   retrying = false,
 }: {
   backHref?: string;
   exportHref: string;
-  matchesHref: string;
   notFound?: boolean;
   onRetry?: (() => void) | undefined;
   retrying?: boolean;
@@ -95,9 +95,7 @@ export function HeldEventDetailUnavailable({
       backLabel="開催履歴へ戻る"
       description="指定された開催は削除されたか、存在しません。開催履歴から別の開催を選んでください。"
       eyebrow="開催記録"
-      headerActions={
-        <HeldEventDetailHeaderActions exportHref={exportHref} matchesHref={matchesHref} />
-      }
+      headerActions={<HeldEventDetailHeaderActions exportHref={exportHref} />}
       headerDescription="試合数・下書き数は未取得です。"
       kind="not-found"
       title="開催が見つかりません"
@@ -108,9 +106,7 @@ export function HeldEventDetailUnavailable({
       backLabel="開催履歴へ戻る"
       description="通信状態を確認して、もう一度お試しください。"
       eyebrow="開催記録"
-      headerActions={
-        <HeldEventDetailHeaderActions exportHref={exportHref} matchesHref={matchesHref} />
-      }
+      headerActions={<HeldEventDetailHeaderActions exportHref={exportHref} />}
       headerDescription="試合数・下書き数は未取得です。"
       kind="error"
       retryLabel="開催詳細を再読み込み"

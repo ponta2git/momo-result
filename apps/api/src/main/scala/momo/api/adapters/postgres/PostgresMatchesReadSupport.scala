@@ -69,6 +69,8 @@ private[postgres] trait PostgresMatchesReadSupport:
       heldEventId: HeldEventId,
       count: Int,
       maxMatchNo: Int,
+      gameTitleId: GameTitleId,
+      seasonMasterId: SeasonMasterId,
   )
 
   protected val selectMatch = fr"""SELECT

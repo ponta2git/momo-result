@@ -7,7 +7,9 @@ import {
   qualityAdvisoryLabel,
   SeriesAnalysisQualityAdvisory,
 } from "@/features/seriesComparison/SeriesAnalysisQualityAdvisory";
+import { cn } from "@/shared/ui/cn";
 import { Notice } from "@/shared/ui/feedback/Notice";
+import { contentText } from "@/shared/ui/typography";
 
 export function RankSignalDrilldown({ payload }: { payload: RankSignalPayload }) {
   const qualityAdvisory = qualityAdvisoryLabel(payload.status);
@@ -15,13 +17,10 @@ export function RankSignalDrilldown({ payload }: { payload: RankSignalPayload })
     <div className="grid gap-6">
       <RankSignalSummary payload={payload} qualityAdvisory={qualityAdvisory} />
       <section aria-labelledby="rank-signal-reading-order">
-        <h3 className="text-sm font-semibold text-balance" id="rank-signal-reading-order">
+        <h3 className={cn(contentText.heading, "text-balance")} id="rank-signal-reading-order">
           判断の順序
         </h3>
-        <ol
-          aria-label="順位を読む手掛かりの使い方"
-          className="mt-3 grid gap-4 sm:grid-cols-2 sm:divide-x sm:divide-[var(--color-border)]"
-        >
+        <ol aria-label="順位を読む手掛かりの使い方" className="mt-2 grid gap-6 sm:grid-cols-2">
           <GuideStep
             number="1"
             label="候補を選ぶ"
@@ -33,8 +32,8 @@ export function RankSignalDrilldown({ payload }: { payload: RankSignalPayload })
             value="観察する項目を1つ決め、試合後に同じ傾向が続いたか確認します。"
           />
         </ol>
-        <p className="mt-3 text-sm leading-6 text-pretty text-[var(--color-text-secondary)]">
-          <span className="font-medium text-[var(--color-text-primary)]">使わない：</span>
+        <p className={cn(contentText.body, "mt-4 text-pretty")}>
+          <span className="font-plain text-[var(--color-text-primary)]">使わない：</span>
           候補内の比重を、勝率や次戦順位の確率には読み替えません。
         </p>
       </section>
@@ -60,11 +59,11 @@ function RankSignalSummary({
   return (
     <section
       aria-label="順位を読む手掛かりの分析範囲"
-      className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)] sm:divide-x sm:divide-[var(--color-border)]"
+      className="grid gap-6 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)]"
     >
-      <div className="py-3 sm:pr-5">
-        <p className="text-xs text-[var(--color-text-secondary)]">別開催テスト</p>
-        <p className="mt-0.5 text-xl font-semibold tabular-nums">
+      <div className="min-w-0">
+        <p className={contentText.supporting}>別開催テスト</p>
+        <p className={cn(contentText.primary, "mt-0.5 tabular-nums")}>
           {payload.improvedFoldCount}/{payload.method.foldCount}組で改善
         </p>
         {qualityAdvisory ? (
@@ -73,14 +72,16 @@ function RankSignalSummary({
           </div>
         ) : null}
       </div>
-      <dl className="grid grid-cols-2 gap-x-6 gap-y-2 sm:items-center sm:pl-5">
+      <dl className="grid grid-cols-2 items-start gap-2">
         <div>
-          <dt className="text-xs text-[var(--color-text-secondary)]">対象試合</dt>
-          <dd className="mt-0.5 font-medium tabular-nums">{payload.matchCount}戦</dd>
+          <dt className={contentText.supporting}>対象試合</dt>
+          <dd className={cn(contentText.body, "mt-0.5 tabular-nums")}>{payload.matchCount}戦</dd>
         </div>
         <div>
-          <dt className="text-xs text-[var(--color-text-secondary)]">対象開催</dt>
-          <dd className="mt-0.5 font-medium tabular-nums">{payload.heldEventCount}開催</dd>
+          <dt className={contentText.supporting}>対象開催</dt>
+          <dd className={cn(contentText.body, "mt-0.5 tabular-nums")}>
+            {payload.heldEventCount}開催
+          </dd>
         </div>
       </dl>
     </section>
@@ -89,18 +90,19 @@ function RankSignalSummary({
 
 function GuideStep({ label, number, value }: { label: string; number: string; value: string }) {
   return (
-    <li className="grid grid-cols-[1.5rem_minmax(0,1fr)] gap-2 sm:px-4 sm:first:pl-0 sm:last:pr-0">
+    <li className="grid grid-cols-[1.5rem_minmax(0,1fr)] gap-2">
       <span
-        className="flex size-6 items-center justify-center rounded-xs bg-[var(--color-surface-selected)] text-xs font-medium text-[var(--color-text-primary)] tabular-nums"
+        className={cn(
+          contentText.supporting,
+          "flex size-6 items-center justify-center tabular-nums",
+        )}
         aria-hidden="true"
       >
         {number}
       </span>
       <div>
-        <p className="text-sm font-medium">{label}</p>
-        <p className="mt-0.5 text-sm leading-6 text-pretty text-[var(--color-text-secondary)]">
-          {value}
-        </p>
+        <p className={contentText.heading}>{label}</p>
+        <p className={cn(contentText.body, "mt-1 text-pretty")}>{value}</p>
       </div>
     </li>
   );

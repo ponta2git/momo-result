@@ -4,12 +4,14 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { HeldEventsPage } from "@/features/heldEvents/HeldEventsPage";
 import { ToastHost } from "@/shared/ui/feedback/ToastHost";
 import { setDevUser } from "@/test/auth";
 import { createDeferred } from "@/test/deferred";
+import { installMatchMediaController } from "@/test/doubles/dom";
+import type { MatchMediaController } from "@/test/doubles/dom";
 import { makeHeldEventResponse } from "@/test/factories";
 import { setupMsw } from "@/test/msw/lifecycle";
 import { server } from "@/test/msw/server";
@@ -41,6 +43,7 @@ function renderPage(path = "/held-events") {
   );
 }
 
+let matchMedia: MatchMediaController | undefined;
 let queryClient: QueryClient;
 let user: ReturnType<typeof userEvent.setup>;
 
@@ -50,13 +53,20 @@ describe("HeldEventsPage", () => {
     user = userEvent.setup();
   });
 
+  afterEach(() => {
+    matchMedia?.restore();
+    matchMedia = undefined;
+  });
+
   it("renders held-event status and related links", async () => {
+    matchMedia = installMatchMediaController(true);
     renderPage();
 
     expect(await screen.findByRole("region", { name: "開催履歴" })).toBeInTheDocument();
     expect(await screen.findByText("最新")).toBeInTheDocument();
     expect(screen.getByRole("region", { name: "開催履歴" })).toBeInTheDocument();
     expect(screen.getByText("確定済み")).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "結果" })).toBeInTheDocument();
     expect(screen.getByText("0件")).toBeInTheDocument();
     expect(screen.queryByText("held-1")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "開催を作成" })).toBeInTheDocument();
@@ -64,14 +74,51 @@ describe("HeldEventsPage", () => {
       "href",
       "/held-events/held-1?returnTo=%2Fheld-events",
     );
-    expect(screen.getByRole("link", { name: /の試合を検索$/u })).toHaveAttribute(
-      "href",
-      "/matches?heldEventId=held-1&sort=match_no_asc&returnTo=%2Fheld-events",
-    );
+    expect(
+      screen.queryByRole("link", { name: /試合検索で見る|の試合を検索$/u }),
+    ).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: /をCSV出力$/u })).toHaveAttribute(
       "href",
       "/exports?heldEventId=held-1&format=csv&returnTo=%2Fheld-events",
     );
+  });
+
+  it("shows every series and season in its held-event row, including a partly configured draft", async () => {
+    server.use(
+      http.get("/api/held-events", () =>
+        HttpResponse.json({
+          items: [
+            makeHeldEventResponse({
+              id: "held-scopes",
+              scopes: [
+                {
+                  gameTitleId: "world",
+                  gameTitleName: "桃鉄ワールド",
+                  seasonMasterId: "spring",
+                  seasonName: "春シーズン",
+                },
+                {
+                  gameTitleId: "two",
+                  gameTitleName: "桃鉄2",
+                  seasonMasterId: "summer",
+                  seasonName: "夏シーズン",
+                },
+                { gameTitleId: "two", gameTitleName: "桃鉄2" },
+              ],
+            }),
+            makeHeldEventResponse({ id: "held-empty", scopes: [] }),
+          ],
+        }),
+      ),
+    );
+    renderPage();
+    const scopes = await screen.findByRole("list", { name: "開催のシリーズ・シーズン" });
+    expect(
+      within(scopes)
+        .getAllByRole("listitem")
+        .map((item) => item.textContent),
+    ).toEqual(["桃鉄ワールド・春シーズン", "桃鉄2・夏シーズン", "桃鉄2・シーズン未設定"]);
+    expect(screen.getAllByRole("list", { name: "開催のシリーズ・シーズン" })).toHaveLength(1);
   });
 
   it("starts OCR from only the latest held event and preserves the list location", async () => {
@@ -463,6 +510,7 @@ describe("HeldEventsPage", () => {
   });
 
   it("deletes an empty held event after confirmation", async () => {
+    matchMedia = installMatchMediaController(true);
     const heldEvents = [makeHeldEventResponse({ id: "held-empty" })];
     let idempotencyKey: string | null = null;
     server.use(

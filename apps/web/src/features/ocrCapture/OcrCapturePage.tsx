@@ -7,7 +7,7 @@ import { OcrStartDialog } from "@/features/ocrCapture/OcrStartDialog";
 import { SetupPanel } from "@/features/ocrCapture/SetupPanel";
 import { useOcrCapturePageModel } from "@/features/ocrCapture/useOcrCapturePageModel";
 import { AuthPanel } from "@/shared/auth/AuthPanel";
-import { actionRowClass } from "@/shared/ui/actions/actionGroup";
+import { actionRowClass, taskActionPanelClass } from "@/shared/ui/actions/actionGroup";
 import { Button } from "@/shared/ui/actions/Button";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { cn } from "@/shared/ui/cn";
@@ -15,11 +15,12 @@ import { AlertDialog } from "@/shared/ui/feedback/Dialog";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
+import { contentText } from "@/shared/ui/typography";
 
 const panelClass = "grid min-w-0 gap-4";
 
-const panelTitleClass = "text-base font-semibold text-[var(--color-text-primary)]";
-const panelLeadClass = "mt-1 text-sm leading-5 text-[var(--color-text-secondary)]";
+const panelTitleClass = contentText.heading;
+const panelLeadClass = cn(contentText.body, "mt-1");
 
 export function OcrCapturePage() {
   const { capture, feedback, navigation, setup, submission } = useOcrCapturePageModel();
@@ -98,7 +99,7 @@ export function OcrCapturePage() {
             <h2 id="ocr-record-destination" className={panelTitleClass}>
               記録先
             </h2>
-            <p className="text-xs text-[var(--color-text-muted)]">読み取り結果に引き継ぐ試合設定</p>
+            <p className={contentText.supporting}>読み取り結果に引き継ぐ試合設定</p>
           </div>
           {setup.choices.failed ? (
             <Notice
@@ -131,19 +132,6 @@ export function OcrCapturePage() {
                 </h2>
                 <p className={panelLeadClass}>ゲーム画面全体が入るようにカメラを合わせます。</p>
               </div>
-              <div
-                className="flex items-center gap-2 py-1 text-sm"
-                aria-label={`次の撮影先は${capture.camera.target.label}`}
-              >
-                <span
-                  aria-hidden="true"
-                  className={`h-5 w-1 rounded-full ${capture.camera.target.accentClass}`}
-                />
-                <span className="text-xs text-[var(--color-text-secondary)]">撮影先</span>
-                <strong className="text-[var(--color-text-primary)]">
-                  {capture.camera.target.label}
-                </strong>
-              </div>
             </div>
 
             <div className="max-w-[56rem]">
@@ -174,7 +162,7 @@ export function OcrCapturePage() {
                 </h2>
                 <p className={panelLeadClass}>撮影先を選び、必要なら画像を入れ替えます。</p>
               </div>
-              <span className="shrink-0 text-sm font-semibold text-[var(--color-text-secondary)]">
+              <span className={cn(contentText.supporting, "shrink-0")}>
                 配置済み{capture.selectedImageCount}件／全{capture.totalSlotCount}件
               </span>
             </div>
@@ -195,7 +183,7 @@ export function OcrCapturePage() {
                 aria-label="分類トレイの操作結果"
                 aria-atomic="true"
                 aria-live="polite"
-                className="min-h-5 text-xs leading-5 text-[var(--color-text-secondary)]"
+                className={cn(contentText.body, "min-h-5")}
                 role="status"
               >
                 {capture.tray.actionFeedback}
@@ -205,7 +193,10 @@ export function OcrCapturePage() {
         </section>
 
         <section
-          className="momo-safe-bottom grid gap-4 rounded-md bg-[var(--color-surface-subtle)] p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
+          className={cn(
+            taskActionPanelClass,
+            "momo-safe-bottom sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center",
+          )}
           aria-labelledby="ocr-start-title"
         >
           <div className="min-w-0">
@@ -213,13 +204,13 @@ export function OcrCapturePage() {
               <h2 id="ocr-start-title" className={panelTitleClass}>
                 読み取りの準備
               </h2>
-              <span className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-3 py-1 text-xs font-semibold text-[var(--color-text-primary)]">
+              <span className="font-plain rounded-full border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-3 py-1 text-xs text-[var(--color-text-primary)]">
                 {submission.start.badgeLabel}
               </span>
             </div>
             <p className={panelLeadClass}>{submission.start.description}</p>
             {submission.start.blockedReason ? (
-              <p className="mt-2 text-sm font-semibold text-[var(--color-review)]">
+              <p className="font-emphasis mt-2 text-sm text-[var(--color-review)]">
                 {submission.start.blockedReason}
               </p>
             ) : null}

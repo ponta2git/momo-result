@@ -77,7 +77,7 @@ export function AppGlobalNav() {
               id="global-nav-logout-error"
               role="alert"
             >
-              <span className="font-semibold">ログアウトできませんでした。</span>
+              <span className="font-emphasis">ログアウトできませんでした。</span>
               ログイン状態と表示中の内容は保持しています。通信状態を確認して再試行してください。
             </p>
           ) : null}

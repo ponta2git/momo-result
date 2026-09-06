@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { cn } from "@/shared/ui/cn";
 import { SpinnerIcon } from "@/shared/ui/feedback/Spinner";
 import { readableTextWidthClass } from "@/shared/ui/layout/readableText";
+import { contentText, fieldText } from "@/shared/ui/typography";
 
 export type ChoiceListOption<Value extends string = string> = {
   accessibleLabel?: string | undefined;
@@ -53,9 +54,7 @@ export function ChoiceList<Value extends string>({
       className="flex min-h-0 min-w-0 flex-col"
       disabled={disabled || pending}
     >
-      <legend className="text-sm leading-5 font-semibold text-[var(--color-text-primary)]">
-        {legend}
-      </legend>
+      <legend className={fieldText.label}>{legend}</legend>
       <div
         className={cn(
           "mt-2 min-w-0 divide-y divide-[var(--color-border)] overflow-hidden rounded-sm border border-[var(--color-border)] bg-[var(--color-surface)]",
@@ -65,12 +64,7 @@ export function ChoiceList<Value extends string>({
         )}
       >
         {options.length === 0 ? (
-          <div
-            className={cn(
-              "p-3 text-sm text-pretty text-[var(--color-text-secondary)]",
-              readableTextWidthClass,
-            )}
-          >
+          <div className={cn(contentText.body, "p-3 text-pretty", readableTextWidthClass)}>
             {emptyState ?? "選べる候補はありません。"}
           </div>
         ) : null}
@@ -126,13 +120,12 @@ export function ChoiceList<Value extends string>({
                   ) : null}
                 </span>
                 <span className="min-w-0">
-                  <span className="block text-sm font-medium text-pretty text-[var(--color-text-primary)]">
-                    {option.label}
-                  </span>
+                  <span className={cn(fieldText.label, "block text-pretty")}>{option.label}</span>
                   {option.description ? (
                     <span
                       className={cn(
-                        "mt-0.5 block text-xs leading-5 text-pretty text-[var(--color-text-secondary)]",
+                        contentText.supporting,
+                        "mt-1 block text-pretty",
                         readableTextWidthClass,
                       )}
                       id={descriptionId}
@@ -143,7 +136,7 @@ export function ChoiceList<Value extends string>({
                 </span>
                 <span
                   aria-hidden={!selected}
-                  className="min-w-12 text-right text-xs font-semibold text-[var(--color-text-secondary)]"
+                  className={cn(contentText.supporting, "min-w-12 text-right")}
                 >
                   {selected ? selectedLabel : null}
                 </span>

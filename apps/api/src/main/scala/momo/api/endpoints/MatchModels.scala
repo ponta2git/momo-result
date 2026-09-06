@@ -6,6 +6,7 @@ import io.circe.Codec
 import sttp.tapir.Schema
 
 import momo.api.domain.{HeldEvent, MatchListItem, MatchListSummary, PagedResult}
+import momo.api.usecases.heldevents.HeldEventScopeSummary
 
 final case class PaginationResponse(
     page: Int,
@@ -26,12 +27,28 @@ object PaginationResponse:
     hasNextPage = result.hasNextPage,
   )
 
+final case class HeldEventScopeResponse(
+    gameTitleId: Option[String],
+    gameTitleName: Option[String],
+    seasonMasterId: Option[String],
+    seasonName: Option[String],
+) derives Codec.AsObject
+
+object HeldEventScopeResponse:
+  def from(summary: HeldEventScopeSummary): HeldEventScopeResponse = HeldEventScopeResponse(
+    gameTitleId = summary.scope.gameTitleId.map(_.value),
+    gameTitleName = summary.gameTitleName,
+    seasonMasterId = summary.scope.seasonMasterId.map(_.value),
+    seasonName = summary.seasonName,
+  )
+
 final case class HeldEventResponse(
     id: String,
     heldAt: String,
     matchCount: Int,
     draftCount: Int,
     nextMatchNo: Int,
+    scopes: List[HeldEventScopeResponse] = Nil,
 ) derives Codec.AsObject
 
 object HeldEventResponse:
@@ -40,12 +57,14 @@ object HeldEventResponse:
       matchCount: Int,
       draftCount: Int,
       nextMatchNo: Int,
+      scopes: List[HeldEventScopeSummary],
   ): HeldEventResponse = HeldEventResponse(
     id = e.id.value,
     heldAt = DateTimeFormatter.ISO_INSTANT.format(e.heldAt),
     matchCount = matchCount,
     draftCount = draftCount,
     nextMatchNo = nextMatchNo,
+    scopes = scopes.map(HeldEventScopeResponse.from),
   )
 
 final case class HeldEventListResponse(

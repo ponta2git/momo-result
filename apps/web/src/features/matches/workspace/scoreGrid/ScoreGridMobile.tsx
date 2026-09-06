@@ -1,5 +1,3 @@
-import type { CSSProperties } from "react";
-
 import {
   incidentScoreGridColumns,
   keyToPath,
@@ -18,9 +16,11 @@ import type {
   ScoreGridNumericHandlers,
 } from "@/features/matches/workspace/scoreGrid/ScoreGridTypes";
 import { memberDisplayName } from "@/shared/domain/members";
+import { cn } from "@/shared/ui/cn";
 import { Disclosure } from "@/shared/ui/data/Collapsible";
-import { PlayOrderMark, playOrderPresentation } from "@/shared/ui/data/PlayOrderMark";
+import { PlayOrderMark } from "@/shared/ui/data/PlayOrderMark";
 import { RankBadge } from "@/shared/ui/rank/RankBadge";
+import { contentText } from "@/shared/ui/typography";
 
 type ScoreGridMobileCardsProps = ScoreGridData &
   ScoreGridCellRegistry &
@@ -64,12 +64,7 @@ export function ScoreGridMobileCards({
         return (
           <article
             key={playerSlotKey(index)}
-            className="rounded-md border border-l-[3px] border-[var(--color-border)] border-l-[var(--play-order-accent)] bg-[var(--color-surface)] p-4"
-            style={
-              {
-                "--play-order-accent": playOrderPresentation(player.playOrder).color,
-              } as CSSProperties
-            }
+            className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-4"
           >
             <Disclosure
               open={expandedMobilePlayer === index}
@@ -77,13 +72,15 @@ export function ScoreGridMobileCards({
               summary={
                 <span className="flex min-w-0 items-center justify-between gap-3">
                   <span className="min-w-0">
-                    <span className="block truncate font-semibold text-[var(--color-text-primary)]">
+                    <span className={cn(contentText.body, "block truncate")}>
                       {memberDisplayName(player.memberId)}
                     </span>
                     <span className="mt-1 flex flex-wrap items-center gap-2 text-xs text-[var(--color-text-secondary)] tabular-nums">
                       <PlayOrderMark playOrder={player.playOrder} />
                       <RankBadge rank={player.rank} />
-                      <span>総資産 {player.totalAssetsManYen.toLocaleString()}万円</span>
+                      <span className={contentText.compactPrimary}>
+                        総資産 {player.totalAssetsManYen.toLocaleString()}万円
+                      </span>
                       {unresolvedCount > 0 ? <span>・未確認{unresolvedCount}件</span> : null}
                     </span>
                   </span>

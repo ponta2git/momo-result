@@ -40,7 +40,7 @@ export type OcrCapturePageModel = {
       disabled: boolean;
       reportValidationError: (message: string) => void;
       selectImage: (file: File, source: InputSource) => void;
-      target: { accentClass: string; label: string };
+      target: { label: string };
     };
     selectedImageCount: number;
     totalSlotCount: number;
@@ -168,8 +168,7 @@ export function useOcrCapturePageModel(): OcrCapturePageModel {
       return;
     }
     setCaptureTargetKind(kind);
-    const label = slotDefinitions.find((definition) => definition.kind === kind)?.label ?? kind;
-    setCaptureActionFeedback(`次の撮影先を${label}に変更しました。`);
+    setCaptureActionFeedback(undefined);
   };
 
   const selectImage = (file: File, source: InputSource) => {
@@ -217,7 +216,6 @@ export function useOcrCapturePageModel(): OcrCapturePageModel {
         reportValidationError: draftFeedback.reportFailure,
         selectImage,
         target: {
-          accentClass: captureTarget.accentClass,
           label: captureTarget.label,
         },
       },

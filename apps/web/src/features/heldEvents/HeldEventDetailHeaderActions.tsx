@@ -1,4 +1,4 @@
-import { Download, ListFilter, RefreshCw } from "lucide-react";
+import { Download, RefreshCw } from "lucide-react";
 
 import { Button } from "@/shared/ui/actions/Button";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
@@ -6,7 +6,6 @@ import { responsivePageHeaderLeadActionGroupClass } from "@/shared/ui/layout/Pag
 
 type HeldEventDetailHeaderActionsProps = {
   exportHref: string;
-  matchesHref: string;
   refresh?:
     | {
         pending: boolean;
@@ -18,7 +17,6 @@ type HeldEventDetailHeaderActionsProps = {
 /** Keeps route-known detail navigation stable while the optional refresh command changes state. */
 export function HeldEventDetailHeaderActions({
   exportHref,
-  matchesHref,
   refresh,
 }: HeldEventDetailHeaderActionsProps) {
   return (
@@ -27,14 +25,6 @@ export function HeldEventDetailHeaderActions({
       className={responsivePageHeaderLeadActionGroupClass}
       data-page-header-actions="responsive-lead"
     >
-      <LinkButton
-        icon={<ListFilter aria-hidden="true" />}
-        size="sm"
-        to={matchesHref}
-        variant="quiet"
-      >
-        試合検索で見る
-      </LinkButton>
       <LinkButton icon={<Download aria-hidden="true" />} size="sm" to={exportHref} variant="quiet">
         CSV出力
       </LinkButton>

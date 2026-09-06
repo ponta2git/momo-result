@@ -1,6 +1,7 @@
 import type { ComponentPropsWithoutRef, ReactNode } from "react";
 
 import { cn } from "@/shared/ui/cn";
+import { contentText } from "@/shared/ui/typography";
 
 export const SERIES_RANKS = [1, 2, 3, 4] as const;
 
@@ -34,10 +35,7 @@ export function MatrixAxisHeader({
 }) {
   return (
     <th
-      className={cn(
-        "px-2 py-1 text-left align-middle text-xs font-semibold text-[var(--color-text-secondary)]",
-        className,
-      )}
+      className={cn(contentText.supporting, "px-2 py-1 text-left align-middle", className)}
       {...props}
       scope="col"
     >
@@ -55,7 +53,8 @@ export function MatrixColumnHeader({
   return (
     <th
       className={cn(
-        "px-2 py-2 text-center align-middle text-xs font-semibold break-words",
+        contentText.supporting,
+        "px-2 py-2 text-center align-middle break-words",
         className,
       )}
       {...props}
@@ -73,10 +72,7 @@ export function MatrixRowHeader({
 }: Omit<ComponentPropsWithoutRef<"th">, "scope">) {
   return (
     <th
-      className={cn(
-        "px-2 py-2 text-left align-middle text-sm font-semibold break-words",
-        className,
-      )}
+      className={cn(contentText.body, "px-2 py-2 text-left align-middle break-words", className)}
       {...props}
       scope="row"
     >
@@ -103,11 +99,11 @@ export function MatrixValueLegend({
   return (
     <dl
       aria-label={ariaLabel}
-      className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-[var(--color-text-secondary)]"
+      className={cn(contentText.supporting, "flex flex-wrap gap-x-4 gap-y-1")}
     >
       {items.map((item) => (
-        <div className="inline-flex gap-1" key={item.id}>
-          <dt className="font-semibold">{item.label}</dt>
+        <div className="inline-flex items-baseline gap-1" key={item.id}>
+          <dt className="font-plain">{item.label}</dt>
           <dd>{item.value}</dd>
         </div>
       ))}

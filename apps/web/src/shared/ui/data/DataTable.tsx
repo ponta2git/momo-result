@@ -3,6 +3,7 @@ import { useMemo } from "react";
 import type { ComponentPropsWithoutRef, CSSProperties, ReactNode } from "react";
 
 import { cn } from "@/shared/ui/cn";
+import { contentText } from "@/shared/ui/typography";
 
 type DataTableAlign = "center" | "left" | "right";
 type DataTableDensity = "comfortable" | "compact";
@@ -77,8 +78,10 @@ const densityClass = {
   compact: "px-3 py-2",
 } as const satisfies Record<DataTableDensity, string>;
 
-export const dataTableHeaderCellClassName =
-  "border-y border-[var(--color-border-strong)] bg-[var(--color-surface)] px-3 py-2 align-middle text-xs leading-5 font-semibold text-[var(--color-text-secondary)]";
+export const dataTableHeaderCellClassName = cn(
+  contentText.supporting,
+  "border-y border-[var(--color-border-strong)] bg-[var(--color-surface)] px-3 py-2 align-middle",
+);
 
 export const dataTableBodyCellClassName = "px-3 py-2 align-middle";
 
@@ -122,7 +125,8 @@ export function DataTable<Row>({
     <div className={dataTableScrollAreaClassName}>
       <table
         className={cn(
-          "w-full min-w-full border-separate border-spacing-0 text-sm leading-6",
+          contentText.body,
+          "w-full min-w-full border-separate border-spacing-0",
           layout === "fixed" ? "table-fixed" : "",
         )}
         style={minWidth ? { minWidth } : undefined}
@@ -130,7 +134,10 @@ export function DataTable<Row>({
         <caption
           className={cn(
             caption.visibility === "visible"
-              ? "border-t border-[var(--color-border-strong)] px-3 py-2 text-left text-sm font-semibold text-[var(--color-text-primary)]"
+              ? cn(
+                  contentText.heading,
+                  "border-t border-[var(--color-border-strong)] px-3 py-2 text-left",
+                )
               : "sr-only",
           )}
         >
@@ -209,7 +216,7 @@ export function DataTable<Row>({
                       densityClass[density],
                       alignClass[column.align ?? "left"],
                       verticalAlignClass[verticalAlign],
-                      column.rowHeader ? "font-semibold" : "",
+                      "font-plain",
                       column.tabular ? "tabular-nums" : "",
                     )}
                     scope={column.rowHeader ? "row" : undefined}

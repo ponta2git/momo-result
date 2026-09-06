@@ -106,11 +106,25 @@ describe("OcrCapturePage", () => {
     await user.upload(input, new File(["assets"], "assets.png", { type: "image/png" }));
     expect(screen.getByRole("button", { name: "1件で読み取りを開始" })).toBeEnabled();
 
-    expect(screen.getByLabelText("次の撮影先は収益")).toBeInTheDocument();
+    expect(
+      within(screen.getByRole("heading", { name: "収益" }).closest("section")!).getByRole(
+        "button",
+        {
+          name: "撮影先に選択中",
+        },
+      ),
+    ).toHaveAttribute("aria-pressed", "true");
     await user.upload(input, new File(["revenue"], "revenue.png", { type: "image/png" }));
     expect(screen.getByRole("button", { name: "2件で読み取りを開始" })).toBeEnabled();
 
-    expect(screen.getByLabelText("次の撮影先は事件簿")).toBeInTheDocument();
+    expect(
+      within(screen.getByRole("heading", { name: "事件簿" }).closest("section")!).getByRole(
+        "button",
+        {
+          name: "撮影先に選択中",
+        },
+      ),
+    ).toHaveAttribute("aria-pressed", "true");
     await user.upload(input, new File(["incident"], "incident.png", { type: "image/png" }));
 
     expect(screen.getByRole("button", { name: "3件で読み取りを開始" })).toBeEnabled();
@@ -165,19 +179,31 @@ describe("OcrCapturePage", () => {
     renderCaptureRoute();
 
     expect(await screen.findByRole("option", { name: "桃太郎電鉄2" })).toBeInTheDocument();
-    expect(screen.getByLabelText("次の撮影先は総資産")).toBeInTheDocument();
+    expect(
+      within(screen.getByRole("heading", { name: "総資産" }).closest("section")!).getByRole(
+        "button",
+        {
+          name: "撮影先に選択中",
+        },
+      ),
+    ).toHaveAttribute("aria-pressed", "true");
     const incidentCard = screen.getByRole("heading", { name: "事件簿" }).closest("section");
     expect(incidentCard).not.toBeNull();
 
     await user.click(within(incidentCard!).getByRole("button", { name: "撮影先にする" }));
-    expect(screen.getByLabelText("次の撮影先は事件簿")).toBeInTheDocument();
+    expect(
+      within(screen.getByRole("heading", { name: "事件簿" }).closest("section")!).getByRole(
+        "button",
+        {
+          name: "撮影先に選択中",
+        },
+      ),
+    ).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByRole("button", { name: "撮影先に選択中" })).toHaveAttribute(
       "aria-pressed",
       "true",
     );
-    expect(screen.getByRole("status", { name: "分類トレイの操作結果" })).toHaveTextContent(
-      "次の撮影先を事件簿に変更しました。",
-    );
+    expect(screen.getByRole("status", { name: "分類トレイの操作結果" })).toBeEmptyDOMElement();
 
     const input = screen.getByLabelText("OCRの画像をアップロード");
     await user.upload(input, new File(["first"], "incident-first.png", { type: "image/png" }));

@@ -164,7 +164,7 @@ function MatchWorkspacePageContent({
             <ul className="grid list-disc gap-1 pl-5 text-sm">
               {loading.base.errors.map((error) => (
                 <li className="momo-break-token" key={`${error.status}-${error.detail}`}>
-                  <span className="font-semibold">{error.title}</span>：{error.detail}
+                  <span className="font-emphasis">{error.title}</span>：{error.detail}
                 </li>
               ))}
             </ul>

@@ -82,7 +82,7 @@ export function UnexpectedWinsDrilldown({
 }) {
   const qualityAdvisory = qualityAdvisoryLabel(payload.summary.status);
   return (
-    <div className="grid gap-4">
+    <div className="grid gap-6">
       <FactList
         ariaLabel="予測より上位だった勝利の要約"
         columns={4}
@@ -107,7 +107,7 @@ export function UnexpectedWinsDrilldown({
               ]
             : []),
         ]}
-        layout="segmented"
+        layout="plain"
       />
       {payload.rows.length === 0 ? (
         <Notice tone="info" title="予測より上位だった勝利はありません">

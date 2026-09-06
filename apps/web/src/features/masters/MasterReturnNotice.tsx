@@ -1,5 +1,6 @@
 import { Button } from "@/shared/ui/actions/Button";
 import { Notice } from "@/shared/ui/feedback/Notice";
+import { contentText } from "@/shared/ui/typography";
 
 type HandoffStatus = "available" | "expired" | "invalid" | "missing";
 
@@ -35,9 +36,7 @@ export function MasterReturnNotice({
           >
             元の入力画面へ戻る
           </Button>
-          {disabledReason ? (
-            <p className="text-xs text-[var(--color-text-secondary)]">{disabledReason}</p>
-          ) : null}
+          {disabledReason ? <p className={contentText.supporting}>{disabledReason}</p> : null}
         </div>
       }
     >

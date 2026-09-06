@@ -15,6 +15,7 @@ import { Notice } from "@/shared/ui/feedback/Notice";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
+import { contentText } from "@/shared/ui/typography";
 
 export function AdminAccountsPage() {
   const page = useAdminAccountsPageModel();
@@ -102,11 +103,11 @@ export function AdminAccountsPage() {
               />
             ) : (
               <div className="min-w-0">
-                <p className="px-3 py-2 text-xs text-[var(--color-text-secondary)] md:hidden">
+                <p className={cn(contentText.supporting, "px-3 py-2 md:hidden")}>
                   権限と操作は横にスクロールして確認できます。
                 </p>
                 <div className={dataTableScrollAreaClassName}>
-                  <table className="w-full min-w-[44rem] text-left text-sm">
+                  <table className={cn(contentText.body, "w-full min-w-[44rem] text-left")}>
                     <caption className="sr-only">ログイン可能なアカウントと権限</caption>
                     <colgroup>
                       <col />

@@ -4,6 +4,7 @@ import {
 } from "@/features/matches/workspace/review/confirmMatchFormSchema";
 import { cn } from "@/shared/ui/cn";
 import { TextareaControl } from "@/shared/ui/forms/Control";
+import { fieldText } from "@/shared/ui/typography";
 
 type MatchNoteFieldProps = {
   error: boolean;
@@ -18,24 +19,16 @@ export function MatchNoteField({ error, onChange, value }: MatchNoteFieldProps) 
     <section aria-labelledby="match-note-field-heading" className="grid gap-2">
       <div className="flex items-end justify-between gap-4">
         <div>
-          <h2
-            className="text-sm font-semibold text-[var(--color-text-primary)]"
-            id="match-note-field-heading"
-          >
+          <h2 className={fieldText.label} id="match-note-field-heading">
             試合メモ（任意）
           </h2>
-          <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">
+          <p className={cn(fieldText.description, "mt-1")}>
             印象に残った出来事や、あとで話したいことを残せます。
           </p>
         </div>
         <span
           aria-live="polite"
-          className={cn(
-            "shrink-0 text-xs tabular-nums",
-            invalid
-              ? "font-semibold text-[var(--color-danger)]"
-              : "text-[var(--color-text-secondary)]",
-          )}
+          className={cn("shrink-0 tabular-nums", invalid ? fieldText.error : fieldText.description)}
         >
           {count} / {matchNoteMaximumCharacters}
         </span>
@@ -53,11 +46,7 @@ export function MatchNoteField({ error, onChange, value }: MatchNoteFieldProps) 
         onChange={(event) => onChange(event.currentTarget.value)}
       />
       {invalid ? (
-        <p
-          className="text-xs font-semibold text-[var(--color-danger)]"
-          id="match-note-error"
-          role="alert"
-        >
+        <p className={fieldText.error} id="match-note-error" role="alert">
           試合メモは{matchNoteMaximumCharacters}字以内で入力してください。
         </p>
       ) : null}

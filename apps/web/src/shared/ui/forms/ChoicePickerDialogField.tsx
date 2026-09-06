@@ -84,7 +84,7 @@ export function ChoicePickerDialogField({
           error ? "border-[var(--color-danger)]" : "border-[var(--color-border)]",
         )}
       >
-        <p className="min-w-0 flex-1 text-sm leading-5 font-medium text-pretty text-[var(--color-text-primary)]">
+        <p className="font-plain min-w-0 flex-1 text-sm leading-5 text-pretty text-[var(--color-text-primary)]">
           {selectedLabel}
         </p>
         <div className="shrink-0">

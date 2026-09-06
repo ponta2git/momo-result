@@ -764,7 +764,8 @@ describe("app routing", () => {
     expect(await screen.findByText("対象作品を読み込めません")).toBeInTheDocument();
     expect(screen.queryByText("登録されている作品がありません")).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "比較対象を再読み込み" }));
-    expect(await screen.findByRole("combobox", { name: "対象作品" })).toBeInTheDocument();
+    await user.click(await screen.findByRole("button", { name: "比較対象を変更" }));
+    expect(screen.getByRole("combobox", { name: "対象作品" })).toBeInTheDocument();
     expect(attempts).toBe(2);
   });
 

@@ -24,8 +24,10 @@ import {
   SeriesAnalysisQualityAdvisory,
 } from "@/features/seriesComparison/SeriesAnalysisQualityAdvisory";
 import { Button } from "@/shared/ui/actions/Button";
+import { cn } from "@/shared/ui/cn";
 import { DataTable } from "@/shared/ui/data/DataTable";
 import { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
+import { contentText } from "@/shared/ui/typography";
 
 export function OverviewView({ focusedItemIds, response, onDrilldown }: AnalysisViewProps) {
   const crownQualityAdvisory = qualityAdvisoryLabel(response.rankAnalysis.crownCertainty.status);
@@ -47,10 +49,8 @@ export function OverviewView({ focusedItemIds, response, onDrilldown }: Analysis
           className="mb-6 grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start"
         >
           <div>
-            <dt className="text-xs font-semibold text-[var(--color-text-secondary)]">
-              平均順位の先頭
-            </dt>
-            <dd className="mt-1 flex flex-wrap gap-x-4 gap-y-2 text-2xl font-semibold tracking-tight">
+            <dt className={contentText.supporting}>平均順位の先頭</dt>
+            <dd className={cn(contentText.primary, "mt-1 flex flex-wrap gap-x-4 gap-y-2")}>
               {leaders.length > 0
                 ? leaders.map((player) => (
                     <MemberSequenceLabel key={player.memberId} memberId={player.memberId}>
@@ -61,8 +61,8 @@ export function OverviewView({ focusedItemIds, response, onDrilldown }: Analysis
             </dd>
           </div>
           <div className="sm:text-right">
-            <dt className="text-xs text-[var(--color-text-secondary)]">先頭と最後尾の差</dt>
-            <dd className="mt-1 text-xl font-semibold tabular-nums">
+            <dt className={contentText.supporting}>先頭と最後尾の差</dt>
+            <dd className={cn(contentText.primary, "mt-1 tabular-nums")}>
               {formatDecimal(response.summary.averageRankSpread)}位
             </dd>
           </div>
@@ -84,7 +84,11 @@ export function OverviewView({ focusedItemIds, response, onDrilldown }: Analysis
               tabular: true,
               header: "平均順位",
               key: "average-rank",
-              renderCell: (metric) => `${formatDecimal(metric.rank.average)}位`,
+              renderCell: (metric) => (
+                <span className={contentText.compactPrimary}>
+                  {formatDecimal(metric.rank.average)}位
+                </span>
+              ),
             },
             {
               tabular: true,
@@ -137,13 +141,18 @@ export function OverviewView({ focusedItemIds, response, onDrilldown }: Analysis
           minWidth="52rem"
           rows={playerMetrics}
         />
-        <div className="mt-4">
+        <div className="mt-6">
           <RankDistributionBars focusedItemIds={focusedItemIds} response={response} />
         </div>
       </AnalysisSection>
       <AnalysisSection id="metric-crown-certainty" title="平均順位首位の確からしさ">
         <CrownShareBars response={response} />
-        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-[var(--color-text-secondary)] tabular-nums">
+        <div
+          className={cn(
+            contentText.supporting,
+            "mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 tabular-nums",
+          )}
+        >
           <span>
             根拠 {response.rankAnalysis.matchCount}戦・{response.rankAnalysis.heldEventCount}開催
           </span>

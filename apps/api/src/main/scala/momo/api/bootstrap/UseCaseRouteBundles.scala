@@ -79,7 +79,8 @@ private[bootstrap] object UseCaseRouteBundles:
     val getOcrDraft = GetOcrDraft[F](drafts)
     val getOcrDraftsBulk = GetOcrDraftsBulk[F](drafts)
     val cancelOcrJob = CancelOcrJob[F](jobs, now)
-    val listHeldEvents = ListHeldEvents[F](heldEvents, matches, matchDrafts)
+    val listHeldEvents =
+      ListHeldEvents[F](heldEvents, matches, matchDrafts, gameTitles, seasonMasters)
     val getHeldEventDetail = GetHeldEventDetail[F](heldEvents, matches, matchList)
     val createHeldEvent = CreateHeldEvent[F](heldEvents, ids.nextHeldEventId)
     val sourceImageRetention = PurgeSourceImages[F](matchDrafts, imageStorage)

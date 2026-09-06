@@ -238,7 +238,7 @@ export function DataVizLegend({
                 />
               </svg>
             )}
-            <span className="min-w-0 font-medium break-words text-[var(--color-text-primary)]">
+            <span className="font-plain min-w-0 break-words text-[var(--color-text-primary)]">
               {item.label}
             </span>
           </span>

@@ -5,6 +5,7 @@ import { sanitizeAppRedirectPath } from "@/shared/auth/redirectPath";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
+import { contentText } from "@/shared/ui/typography";
 
 export function LoginPage() {
   const [searchParams] = useSearchParams();
@@ -29,7 +30,7 @@ export function LoginPage() {
           />
 
           {import.meta.env.DEV ? null : (
-            <p className="momo-copy text-xs text-[var(--color-text-secondary)]">
+            <p className={contentText.supporting}>
               別のDiscordアカウントを使う場合は、Discord側でログアウトするか、シークレットウィンドウで開きます。
             </p>
           )}

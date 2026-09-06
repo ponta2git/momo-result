@@ -59,7 +59,7 @@ function SingleHistogram({
   const barWidth = Math.max(10, binWidth * 0.62);
   return (
     <div className="w-full max-w-sm min-w-0 rounded-sm border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
-      <div className="mb-2 flex min-w-0 items-center gap-2 text-sm font-semibold">
+      <div className="font-plain mb-2 flex min-w-0 items-center gap-2 text-sm">
         <span
           aria-hidden="true"
           className="size-2.5 rounded-full"

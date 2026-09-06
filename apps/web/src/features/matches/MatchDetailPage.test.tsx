@@ -691,14 +691,14 @@ describe("MatchDetailPage", () => {
       </QueryClientProvider>,
     );
 
-    expect(await screen.findByRole("heading", { name: "試合の特徴" })).toBeInTheDocument();
+    expect(await screen.findByRole("list", { name: "試合の特徴" })).toBeInTheDocument();
     expect(await screen.findByText("接戦")).toBeInTheDocument();
     expect(screen.getByText("物件収益ねじれ")).toBeInTheDocument();
     expect(screen.getByText("スリの銀次多発")).toBeInTheDocument();
     expect(screen.getByText("借金あり")).toBeInTheDocument();
     expect(screen.getByText("目的地なし決着")).toBeInTheDocument();
     expect(screen.getByText("大差")).toBeInTheDocument();
-    expect(screen.getByText("同じ作品・シーズン・マップの試合と比較")).toBeInTheDocument();
+    expect(screen.getByText(/同じ作品・シーズン・マップの初戦から集計/u)).toBeInTheDocument();
     const contextParams = new URLSearchParams(contextSearches.at(-1));
     expect(contextParams.get("artifactId")).toBe("artifact-current");
     expect(contextParams.get("gameTitleId")).toBe("gt_momotetsu_2");
@@ -779,7 +779,7 @@ describe("MatchDetailPage", () => {
     expect(contextArtifactIds).toEqual([analysisArtifact.artifactId, recoveredArtifact.artifactId]);
   });
 
-  it("checks analysis status only after manual update from a ready feature view", async () => {
+  it("shows feature badges without update controls or passive polling", async () => {
     setDevUser();
     let statusAttempts = 0;
     server.use(
@@ -800,19 +800,14 @@ describe("MatchDetailPage", () => {
     );
 
     expect(await screen.findByText("接戦")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "特徴を更新" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "試合の特徴" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /特徴を/u })).not.toBeInTheDocument();
     expect(statusAttempts).toBe(1);
-
     await dispatchPassiveRefreshSignals();
     expect(statusAttempts).toBe(1);
-
-    await user.click(screen.getByRole("button", { name: "特徴を更新" }));
-
-    await waitFor(() => expect(statusAttempts).toBe(2));
-    expect(screen.getByText("接戦")).toBeInTheDocument();
   });
 
-  it("refreshes queued match features only after the explicit update action", async () => {
+  it("omits feature content while the first analysis is queued", async () => {
     setDevUser();
     let statusAttempts = 0;
     server.use(
@@ -846,45 +841,32 @@ describe("MatchDetailPage", () => {
       </QueryClientProvider>,
     );
 
-    expect(await screen.findByRole("button", { name: "特徴を更新" })).toBeInTheDocument();
+    expect(await screen.findAllByText("比較データを読み込み中")).toHaveLength(4);
+    expect(screen.queryByRole("list", { name: "試合の特徴" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /特徴を/u })).not.toBeInTheDocument();
     expect(statusAttempts).toBe(1);
-
     await dispatchPassiveRefreshSignals();
     expect(statusAttempts).toBe(1);
-
-    await user.click(screen.getByRole("button", { name: "特徴を更新" }));
-
-    expect(await screen.findByText("接戦")).toBeInTheDocument();
-    expect(statusAttempts).toBe(2);
   });
 
-  it("keeps a failed queued-status refresh recoverable instead of leaving retry pending", async () => {
+  it("keeps published badges visible while replacement analysis is queued", async () => {
     setDevUser();
-    let statusAttempts = 0;
     server.use(
-      http.get("/api/analytics/series-comparison/v2/status", () => {
-        statusAttempts += 1;
-        if (statusAttempts === 2) {
-          return HttpResponse.json({ title: "status unavailable" }, { status: 500 });
-        }
-        return HttpResponse.json(
-          statusAttempts === 1
-            ? makeSeriesAnalysisStatus({
-                artifactFreshness: "unavailable",
-                calculation: {
-                  finishedAt: null,
-                  requestedAt: "2026-08-09T01:00:00.000Z",
-                  startedAt: null,
-                  status: "queued",
-                  trigger: "match_mutation",
-                },
-                currentArtifact: null,
-              })
-            : makeSeriesAnalysisStatus(),
-        );
-      }),
+      http.get("/api/analytics/series-comparison/v2/status", () =>
+        HttpResponse.json(
+          makeSeriesAnalysisStatus({
+            artifactFreshness: "stale",
+            calculation: {
+              finishedAt: null,
+              requestedAt: "2026-08-09T01:30:00.000Z",
+              startedAt: null,
+              status: "queued",
+              trigger: "match_mutation",
+            },
+          }),
+        ),
+      ),
     );
-
     render(
       <QueryClientProvider client={queryClient}>
         <MemoryRouter initialEntries={["/matches/match-1"]}>
@@ -894,189 +876,12 @@ describe("MatchDetailPage", () => {
         </MemoryRouter>
       </QueryClientProvider>,
     );
-
-    await user.click(await screen.findByRole("button", { name: "特徴を更新" }));
-
-    expect(await screen.findByText("試合の特徴を読み込めません")).toBeInTheDocument();
-    const retry = screen.getByRole("button", { name: "特徴を再読み込み" });
-    expect(retry).toBeEnabled();
-    expect(statusAttempts).toBe(2);
-
-    await user.click(retry);
-
     expect(await screen.findByText("接戦")).toBeInTheDocument();
-    expect(statusAttempts).toBe(3);
+    expect(screen.queryByRole("button", { name: /特徴を/u })).not.toBeInTheDocument();
+    expect(screen.getByRole("list", { name: "試合の特徴" }).children).toHaveLength(1);
   });
 
-  it("does not refetch immutable context when manual status refresh keeps the same artifact", async () => {
-    setDevUser();
-    const refreshGate = createDeferred();
-    let statusAttempts = 0;
-    let contextAttempts = 0;
-    const queuedStatus = makeSeriesAnalysisStatus({
-      artifactFreshness: "stale",
-      calculation: {
-        finishedAt: null,
-        requestedAt: "2026-08-09T01:30:00.000Z",
-        startedAt: null,
-        status: "queued",
-        trigger: "match_mutation",
-      },
-      currentArtifact: analysisArtifact,
-    });
-    server.use(
-      http.get("/api/analytics/series-comparison/v2/status", async () => {
-        statusAttempts += 1;
-        if (statusAttempts === 2) await refreshGate.promise;
-        return HttpResponse.json(queuedStatus);
-      }),
-      http.get("/api/analytics/series-comparison/v2/match-context", () => {
-        contextAttempts += 1;
-        return HttpResponse.json({
-          ...makeSeriesAnalysisMatchContext(),
-          matchId: "match-1",
-        });
-      }),
-    );
-
-    render(
-      <QueryClientProvider client={queryClient}>
-        <MemoryRouter initialEntries={["/matches/match-1"]}>
-          <Routes>
-            <Route path="/matches/:matchId" element={<MatchDetailPage />} />
-          </Routes>
-        </MemoryRouter>
-      </QueryClientProvider>,
-    );
-
-    expect(await screen.findByText("接戦")).toBeInTheDocument();
-    expect(contextAttempts).toBe(1);
-
-    await user.click(screen.getByRole("button", { name: "特徴を更新" }));
-
-    await waitFor(() => expect(statusAttempts).toBe(2));
-    expect(screen.getByRole("button", { name: "特徴を更新中" })).toBeDisabled();
-    expect(contextAttempts).toBe(1);
-
-    await act(async () => refreshGate.resolve());
-
-    await waitFor(() => expect(screen.getByRole("button", { name: "特徴を更新" })).toBeEnabled());
-    expect(screen.getByText("接戦")).toBeInTheDocument();
-    expect(contextAttempts).toBe(1);
-  });
-
-  it("keeps the published features visible while a queued analysis waits for manual refresh", async () => {
-    setDevUser();
-    const nextArtifact = {
-      ...analysisArtifact,
-      artifactId: "artifact-next",
-      inputRevision: "13",
-      publishedAt: "2026-08-09T02:00:00.000Z",
-    };
-    let statusAttempts = 0;
-    const requestedContextArtifacts: string[] = [];
-    server.use(
-      http.get("/api/analytics/series-comparison/v2/status", () => {
-        statusAttempts += 1;
-        return HttpResponse.json(
-          statusAttempts === 1
-            ? makeSeriesAnalysisStatus({
-                artifactFreshness: "stale",
-                calculation: {
-                  finishedAt: null,
-                  requestedAt: "2026-08-09T01:30:00.000Z",
-                  startedAt: null,
-                  status: "queued",
-                  trigger: "match_mutation",
-                },
-                currentArtifact: analysisArtifact,
-                desired: {
-                  algorithmVersion: analysisArtifact.algorithmVersion,
-                  artifactSchemaVersion: analysisArtifact.artifactSchemaVersion,
-                  inputRevision: nextArtifact.inputRevision,
-                },
-              })
-            : makeSeriesAnalysisStatus({
-                calculation: {
-                  finishedAt: nextArtifact.publishedAt,
-                  requestedAt: "2026-08-09T01:30:00.000Z",
-                  startedAt: "2026-08-09T01:31:00.000Z",
-                  status: "succeeded",
-                  trigger: "match_mutation",
-                },
-                currentArtifact: nextArtifact,
-                desired: {
-                  algorithmVersion: nextArtifact.algorithmVersion,
-                  artifactSchemaVersion: nextArtifact.artifactSchemaVersion,
-                  inputRevision: nextArtifact.inputRevision,
-                },
-              }),
-        );
-      }),
-      http.get("/api/analytics/series-comparison/v2/match-context", ({ request }) => {
-        const artifactId = new URL(request.url).searchParams.get("artifactId") ?? "";
-        requestedContextArtifacts.push(artifactId);
-        const context = makeSeriesAnalysisMatchContext();
-        if (!context.match) throw new Error("fixture must include a match");
-        return HttpResponse.json({
-          ...context,
-          artifact: artifactId === nextArtifact.artifactId ? nextArtifact : analysisArtifact,
-          matchId: "match-1",
-          match:
-            artifactId === nextArtifact.artifactId
-              ? {
-                  ...context.match,
-                  features: [
-                    {
-                      evidence: [],
-                      featureCode: "negative_assets",
-                      memberIds: [],
-                      priority: 1,
-                      source: "match",
-                      tone: "notice",
-                    },
-                  ],
-                }
-              : context.match,
-        });
-      }),
-    );
-
-    render(
-      <QueryClientProvider client={queryClient}>
-        <MemoryRouter initialEntries={["/matches/match-1"]}>
-          <Routes>
-            <Route path="/matches/:matchId" element={<MatchDetailPage />} />
-          </Routes>
-        </MemoryRouter>
-      </QueryClientProvider>,
-    );
-
-    expect(await screen.findByText("接戦")).toBeInTheDocument();
-    expect(
-      screen.getByText("新しい分析を計算しています。完了状況は更新して確認できます。"),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "特徴を更新" })).toBeInTheDocument();
-    expect(statusAttempts).toBe(1);
-    expect(requestedContextArtifacts).toEqual([analysisArtifact.artifactId]);
-
-    await dispatchPassiveRefreshSignals();
-    expect(statusAttempts).toBe(1);
-    expect(requestedContextArtifacts).toEqual([analysisArtifact.artifactId]);
-
-    await user.click(screen.getByRole("button", { name: "特徴を更新" }));
-
-    expect(await screen.findByText("借金あり")).toBeInTheDocument();
-    expect(screen.queryByText("接戦")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "特徴を更新" })).toBeInTheDocument();
-    expect(statusAttempts).toBe(2);
-    expect(requestedContextArtifacts).toEqual([
-      analysisArtifact.artifactId,
-      nextArtifact.artifactId,
-    ]);
-  });
-
-  it("keeps the match result and retries a failed feature-context request locally", async () => {
+  it("keeps each player’s saved results and incidents together when analysis fails", async () => {
     setDevUser();
     let contextAttempts = 0;
     server.use(
@@ -1084,7 +889,18 @@ describe("MatchDetailPage", () => {
         HttpResponse.json(
           makeMatchDetail({
             players: makeFourPlayerResults([
-              { rank: 1, revenueManYen: 300 },
+              {
+                rank: 1,
+                revenueManYen: 300,
+                incidents: {
+                  destination: 1,
+                  plusStation: 2,
+                  minusStation: 3,
+                  cardStation: 4,
+                  cardShop: 5,
+                  suriNoGinji: 6,
+                },
+              },
               { rank: 2, revenueManYen: 400 },
               { rank: 3, revenueManYen: 200 },
               { rank: 4, revenueManYen: 100 },
@@ -1114,17 +930,28 @@ describe("MatchDetailPage", () => {
     );
 
     expect(await screen.findByRole("heading", { name: /第1試合の結果/u })).toBeInTheDocument();
-    expect(await screen.findByText("試合の特徴を読み込めません")).toBeInTheDocument();
-    expect(screen.getByRole("list", { name: "試合の順位と成績" }).children).toHaveLength(4);
-    expect(
-      screen.queryByText("同じ条件の試合と比べて、表示対象の特徴はありません。"),
-    ).not.toBeInTheDocument();
+    expect(await screen.findAllByText("比較データなし")).toHaveLength(4);
+    const ledger = screen.getByRole("list", { name: "試合の順位と成績" });
+    expect(ledger.children).toHaveLength(4);
+    const player = within(ledger).getByRole("heading", { name: "ぽんた" }).closest("li")!;
+    expect(within(player).getByText("1位")).toBeInTheDocument();
+    expect(within(player).getByText("300万円")).toBeInTheDocument();
+    expect(within(player).getByText("プレー順1")).toBeInTheDocument();
+    const incidents = within(player).getByLabelText("ぽんたの事件簿");
+    for (const [label, count] of [
+      ["目的地", 1],
+      ["プラス駅", 2],
+      ["マイナス駅", 3],
+      ["カード駅", 4],
+      ["カード売り場", 5],
+      ["スリの銀次", 6],
+    ] as const) {
+      expect(within(incidents).getByText(label).nextElementSibling).toHaveTextContent(`${count}回`);
+    }
+    expect(screen.queryByRole("list", { name: "試合の特徴" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /特徴を/u })).not.toBeInTheDocument();
     expect(screen.queryByText("接戦")).not.toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: "特徴を再読み込み" }));
-
-    expect(await screen.findByText("接戦")).toBeInTheDocument();
-    expect(contextAttempts).toBe(2);
+    expect(contextAttempts).toBe(1);
   });
 
   it("keeps primary match rows but hides stale analysis after a match revision mismatch", async () => {
@@ -1147,12 +974,8 @@ describe("MatchDetailPage", () => {
       </QueryClientProvider>,
     );
 
-    expect(
-      await screen.findByText(
-        "この試合の更新後は、同じ条件の試合と比べた特徴を次の分析完了後に表示します。",
-      ),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "特徴を更新" })).toBeInTheDocument();
+    expect(await screen.findAllByText("比較データなし")).toHaveLength(4);
+    expect(screen.queryByRole("list", { name: "試合の特徴" })).not.toBeInTheDocument();
     expect(screen.getByRole("list", { name: "試合の順位と成績" }).children).toHaveLength(4);
     expect(screen.getAllByText("比較データなし")).toHaveLength(4);
     expect(screen.queryByText("1.82 → 1.75")).not.toBeInTheDocument();

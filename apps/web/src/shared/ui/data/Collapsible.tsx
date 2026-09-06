@@ -13,9 +13,9 @@ type DisclosurePanelPadding = "none" | "xs" | "sm" | "md";
 type DisclosureTriggerLayout = "compact" | "default" | "flush" | "flush-horizontal" | "section";
 
 const triggerVariantClass = {
-  compact: "text-xs font-semibold text-[var(--color-text-secondary)]",
-  default: "text-sm font-semibold text-[var(--color-text-primary)]",
-  supporting: "text-sm font-medium text-[var(--color-text-secondary)]",
+  compact: "text-xs font-plain text-[var(--color-text-secondary)]",
+  default: "text-sm font-plain text-[var(--color-text-primary)]",
+  supporting: "text-sm font-plain text-[var(--color-text-secondary)]",
 } as const satisfies Record<DisclosureTriggerVariant, string>;
 
 const triggerLayoutClass = {

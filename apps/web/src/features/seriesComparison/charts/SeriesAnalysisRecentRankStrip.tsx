@@ -9,8 +9,10 @@ import { SeriesAnalysisMatchLink } from "@/features/seriesComparison/navigation/
 import { SeriesAnalysisQualityAdvisory } from "@/features/seriesComparison/SeriesAnalysisQualityAdvisory";
 import type { SeriesComparisonAggregateV3 } from "@/shared/api/seriesAnalysis";
 import { formatSeriesMatchIndex } from "@/shared/domain/matchLabels";
+import { cn } from "@/shared/ui/cn";
 import { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
 import { rankColor, rankForegroundColor } from "@/shared/ui/rank/rankPresentation";
+import { contentText } from "@/shared/ui/typography";
 
 export function RecentRankStrips({
   focusedItemIds,
@@ -105,11 +107,7 @@ export function RecentRankStrips({
   }, [latestPointKey, syncScrollMetrics]);
 
   if (axisRows.length === 0) {
-    return (
-      <p className="py-3 text-sm text-[var(--color-text-secondary)]">
-        直近順位の対象試合はありません。
-      </p>
-    );
+    return <p className={cn(contentText.body, "py-3")}>直近順位の対象試合はありません。</p>;
   }
 
   return (
@@ -169,12 +167,12 @@ export function RecentRankStrips({
                     className="sticky left-0 z-[var(--z-base)] w-40 min-w-40 bg-[var(--color-surface)] py-1 pr-2 pl-2 text-left align-middle"
                     scope="row"
                   >
-                    <span className="block text-sm leading-5 font-semibold break-words">
+                    <span className={cn(contentText.body, "block break-words")}>
                       <MemberSequenceLabel memberId={player.memberId}>
                         {player.displayName}
                       </MemberSequenceLabel>
                     </span>
-                    <span className="block text-xs font-normal text-[var(--color-text-secondary)] tabular-nums">
+                    <span className={cn(contentText.supporting, "block tabular-nums")}>
                       平均{formatDecimal(entry?.averageRank)}位・入賞
                       {formatPercent(entry?.podiumRate)}
                     </span>
@@ -182,7 +180,7 @@ export function RecentRankStrips({
                       <SeriesAnalysisQualityAdvisory status={entry?.qualityStatus ?? "no_target"} />
                     </span>
                     {entry ? (
-                      <span className="block text-xs font-normal text-[var(--color-text-secondary)] tabular-nums">
+                      <span className={cn(contentText.supporting, "block tabular-nums")}>
                         連勝 {entry.winStreak}・連続入賞 {entry.podiumStreak}・連続下位{" "}
                         {entry.lowerHalfStreak}
                       </span>

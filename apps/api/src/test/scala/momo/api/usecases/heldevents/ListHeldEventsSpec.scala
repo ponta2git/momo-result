@@ -6,12 +6,22 @@ import cats.effect.IO
 import munit.CatsEffectSuite
 
 import momo.api.adapters.inmemory.{
+  InMemoryGameTitlesRepository,
   InMemoryHeldEventsRepository,
   InMemoryMatchDraftsRepository,
-  InMemoryMatchesRepository
+  InMemoryMatchesRepository,
+  InMemorySeasonMastersRepository
 }
 import momo.api.domain.ids.*
-import momo.api.domain.{HeldEvent, MatchDraft, MatchDraftCommon, MatchDraftStatus, MatchNoInEvent}
+import momo.api.domain.{
+  GameTitle,
+  HeldEvent,
+  MatchDraft,
+  MatchDraftCommon,
+  MatchDraftStatus,
+  MatchNoInEvent,
+  SeasonMaster
+}
 import momo.api.usecases.testing.MatchFixtures
 
 final class ListHeldEventsSpec extends CatsEffectSuite:
@@ -23,6 +33,22 @@ final class ListHeldEventsSpec extends CatsEffectSuite:
       events <- InMemoryHeldEventsRepository.create[IO]
       matches <- InMemoryMatchesRepository.create[IO]
       drafts <- InMemoryMatchDraftsRepository.create[IO]
+      titles <- InMemoryGameTitlesRepository.create[IO]
+      seasons <- InMemorySeasonMastersRepository.create[IO]
+      _ <- titles.createWithNextDisplayOrder(GameTitle(
+        GameTitleId.unsafeFromString("title-world"),
+        "桃鉄ワールド",
+        "world",
+        0,
+        heldAt
+      ))
+      _ <- seasons.createWithNextDisplayOrder(SeasonMaster(
+        SeasonMasterId.unsafeFromString("season-spring"),
+        GameTitleId.unsafeFromString("title-world"),
+        "春",
+        0,
+        heldAt
+      ))
       _ <- events.create(HeldEvent(heldEventId, heldAt))
       _ <- matches.create(MatchFixtures.matchRecord(
         id = MatchId.unsafeFromString("match-list-stats"),
@@ -38,26 +64,42 @@ final class ListHeldEventsSpec extends CatsEffectSuite:
         revenueDraftId = None,
         incidentLogDraftId = None,
       ))
-      _ <- drafts.create(activeDraft(5))
-      result <- ListHeldEvents[IO](events, matches, drafts).run(None, None, None, None)
+      _ <- drafts.create(activeDraft(
+        5,
+        Some(GameTitleId.unsafeFromString("title-world")),
+        Some(SeasonMasterId.unsafeFromString("season-spring"))
+      ))
+      _ <- drafts.create(activeDraft(2, Some(GameTitleId.unsafeFromString("title-world")), None))
+      _ <- drafts.create(activeDraft(1, None, None))
+      result <-
+        ListHeldEvents[IO](events, matches, drafts, titles, seasons).run(None, None, None, None)
     yield result match
       case Left(error) => fail(s"unexpected error: $error")
       case Right(page) =>
         assertEquals(page.totalMatchCount, 1)
         assertEquals(page.items.map(_.matchCount), List(1))
-        assertEquals(page.items.map(_.draftCount), List(1))
+        assertEquals(page.items.map(_.draftCount), List(3))
         assertEquals(page.items.map(_.nextMatchNo), List(6))
+        assertEquals(
+          page.items.flatMap(_.scopes).map(_.gameTitleName),
+          List(Some("桃鉄ワールド"), Some("桃鉄ワールド"))
+        )
+        assertEquals(page.items.flatMap(_.scopes).map(_.seasonName), List(None, Some("春")))
 
-  private def activeDraft(matchNo: Int): MatchDraft = MatchDraft.editable(
+  private def activeDraft(
+      matchNo: Int,
+      titleId: Option[GameTitleId],
+      seasonId: Option[SeasonMasterId],
+  ): MatchDraft = MatchDraft.editable(
     common = MatchDraftCommon(
-      id = MatchDraftId.unsafeFromString("draft-list-stats"),
+      id = MatchDraftId.unsafeFromString(s"draft-list-stats-$matchNo"),
       createdByAccountId = AccountId.unsafeFromString("account-ponta"),
       createdByMemberId = None,
       heldEventId = Some(heldEventId),
       matchNoInEvent = Some(MatchNoInEvent.unsafeFromInt(matchNo)),
-      gameTitleId = None,
+      gameTitleId = titleId,
       layoutFamily = None,
-      seasonMasterId = None,
+      seasonMasterId = seasonId,
       ownerMemberId = None,
       mapMasterId = None,
       playedAt = Some(heldAt),

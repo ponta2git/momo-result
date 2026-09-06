@@ -64,7 +64,7 @@ export function StaleShield({
         data-stale={active || undefined}
       >
         <div
-          className={`grid min-h-0 min-w-0 ${active ? "opacity-60 blur-[0.5px]" : "opacity-100"}`}
+          className={`grid min-h-0 min-w-0 ${active ? "opacity-60 blur-[2px]" : "opacity-100"}`}
           ref={contentRef}
         >
           {children}
@@ -76,7 +76,7 @@ export function StaleShield({
             }`}
           >
             <span
-              className="inline-flex min-h-8 items-center gap-2 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-xs font-semibold text-[var(--color-text-muted)]"
+              className="font-plain inline-flex min-h-8 items-center gap-2 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-xs text-[var(--color-text-muted)]"
               role="status"
             >
               <SpinnerIcon size="sm" />

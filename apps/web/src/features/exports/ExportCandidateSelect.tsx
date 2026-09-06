@@ -2,10 +2,12 @@ import type { ReactNode } from "react";
 
 import { Button } from "@/shared/ui/actions/Button";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
+import { cn } from "@/shared/ui/cn";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 import { SelectField } from "@/shared/ui/forms/SelectField";
+import { contentText, fieldText } from "@/shared/ui/typography";
 
 import { ExportCandidatePickerDialog } from "./ExportCandidatePickerDialog";
 import type { ExportScope } from "./exportTypes";
@@ -50,12 +52,10 @@ export function ExportCandidateSelect({
     return (
       <div aria-busy="true" aria-label={`${labelForScope(scope)}候補を読み込み中`} className="grid">
         <div className="grid gap-2">
-          <p className="text-sm leading-5 font-semibold text-[var(--color-text-primary)]">
-            {labelForScope(scope)}
-          </p>
+          <p className={fieldText.label}>{labelForScope(scope)}</p>
           <Skeleton className="h-11 w-full" />
         </div>
-        <p className="mt-1 text-sm text-[var(--color-text-secondary)]">候補を読み込んでいます。</p>
+        <p className={cn(contentText.supporting, "mt-1")}>候補を読み込んでいます。</p>
       </div>
     );
   }
@@ -125,10 +125,13 @@ export function ExportCandidateSelect({
     } else if (view.selectionState === "resolved") {
       selector = (
         <div className="grid gap-2">
-          <p className="text-sm leading-5 font-semibold text-[var(--color-text-primary)]">
-            {labelForScope(scope)}
-          </p>
-          <p className="min-h-11 rounded-sm border border-[var(--color-border)] px-3 py-2 text-sm font-medium text-[var(--color-text-primary)]">
+          <p className={fieldText.label}>{labelForScope(scope)}</p>
+          <p
+            className={cn(
+              contentText.body,
+              "min-h-11 rounded-sm border border-[var(--color-border)] px-3 py-2",
+            )}
+          >
             {view.selectedLabel}
           </p>
         </div>
@@ -155,7 +158,7 @@ export function ExportCandidateSelect({
       <div className="grid gap-1 empty:hidden">
         {selector}
         {refreshing && !scopeChanging ? (
-          <p className="text-sm text-[var(--color-text-secondary)]" role="status">
+          <p className={contentText.body} role="status">
             出力対象を確認しています。
           </p>
         ) : null}

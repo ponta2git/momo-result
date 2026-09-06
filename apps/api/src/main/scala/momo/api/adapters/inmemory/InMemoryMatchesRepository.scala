@@ -4,7 +4,14 @@ import cats.effect.{Ref, Sync}
 import cats.syntax.all.*
 
 import momo.api.domain.ids.*
-import momo.api.domain.{MatchNoInEvent, MatchNote, MatchNoteBody, MatchNoteVersion, MatchRecord}
+import momo.api.domain.{
+  HeldEventScope,
+  MatchNoInEvent,
+  MatchNote,
+  MatchNoteBody,
+  MatchNoteVersion,
+  MatchRecord
+}
 import momo.api.errors.{AppError, AppException}
 import momo.api.repositories.{
   MatchExportsRepository,
@@ -118,6 +125,9 @@ final class InMemoryMatchesRepository[F[_]: Sync] private (ref: Ref[F, Map[Match
       id -> MatchesRepository.HeldEventStats(
         matchCount = scoped.size,
         maxMatchNo = scoped.map(_.matchNoInEvent.value).maxOption.getOrElse(0),
+        scopes = scoped.map(record =>
+          HeldEventScope(Some(record.gameTitleId), Some(record.seasonMasterId))
+        ).filter(_.isDefined).distinct,
       )
     }.toMap
   }

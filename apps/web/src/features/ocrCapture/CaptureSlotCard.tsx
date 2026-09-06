@@ -12,6 +12,7 @@ import type { SlotKind } from "@/shared/api/enums";
 import { parseSlotKind } from "@/shared/api/enums";
 import type { OcrDraftResponse } from "@/shared/api/ocrDrafts";
 import { cn } from "@/shared/ui/cn";
+import { contentText } from "@/shared/ui/typography";
 
 type CaptureSlotCardProps = {
   actions: CaptureSlotActionsModel;
@@ -90,7 +91,10 @@ export function CaptureSlotCard({
   return (
     <section
       className={cn(
-        "relative grid gap-4 overflow-hidden rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-4",
+        "relative grid gap-4 overflow-hidden rounded-md border p-4",
+        presentation.captureTarget
+          ? "border-[var(--color-action)] bg-[var(--color-surface-selected)]"
+          : "border-[var(--color-border)] bg-[var(--color-surface)]",
         dragOver ? "border-[var(--color-action)] bg-[var(--color-action)]/10" : "",
       )}
       data-capture-target={presentation.captureTarget || undefined}
@@ -105,7 +109,7 @@ export function CaptureSlotCard({
             className={`h-6 w-1 shrink-0 rounded-full ${presentation.accentClass}`}
           />
           <div className="min-w-0">
-            <h3 className="font-semibold text-[var(--color-text-primary)]">{presentation.label}</h3>
+            <h3 className={contentText.heading}>{presentation.label}</h3>
           </div>
         </div>
         <CaptureStatusBadge status={slot.status} />

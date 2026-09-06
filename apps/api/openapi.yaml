@@ -5421,6 +5421,30 @@
           "nextMatchNo" : {
             "type" : "integer",
             "format" : "int32"
+          },
+          "scopes" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/HeldEventScopeResponse"
+            }
+          }
+        }
+      },
+      "HeldEventScopeResponse" : {
+        "title" : "HeldEventScopeResponse",
+        "type" : "object",
+        "properties" : {
+          "gameTitleId" : {
+            "type" : "string"
+          },
+          "gameTitleName" : {
+            "type" : "string"
+          },
+          "seasonMasterId" : {
+            "type" : "string"
+          },
+          "seasonName" : {
+            "type" : "string"
           }
         }
       },

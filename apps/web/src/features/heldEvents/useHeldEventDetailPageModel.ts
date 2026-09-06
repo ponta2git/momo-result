@@ -59,7 +59,6 @@ export type HeldEventDetailReadyPageModel = {
     backHref: string;
     exportHref: string;
     manualEntryHref: string;
-    matchesHref: string;
     ocrCaptureHref: string;
     returnTo: string;
   };
@@ -69,7 +68,6 @@ export type HeldEventDetailReadyPageModel = {
 type HeldEventDetailTerminalNavigation = {
   backHref: string;
   exportHref: string;
-  matchesHref: string;
 };
 
 export type HeldEventDetailPageModel =
@@ -94,10 +92,6 @@ export function useHeldEventDetailPageModel(): HeldEventDetailPageModel {
     backHref,
     exportHref: withReturnTo(
       `/exports?heldEventId=${encodedRequestedHeldEventId}&format=csv`,
-      returnTo,
-    ),
-    matchesHref: withReturnTo(
-      `/matches?heldEventId=${encodedRequestedHeldEventId}&sort=match_no_asc`,
       returnTo,
     ),
   };
@@ -210,10 +204,6 @@ export function useHeldEventDetailPageModel(): HeldEventDetailPageModel {
       backHref,
       exportHref: withReturnTo(`/exports?heldEventId=${encodedHeldEventId}&format=csv`, returnTo),
       manualEntryHref: withReturnTo(`/matches/new?heldEventId=${encodedHeldEventId}`, returnTo),
-      matchesHref: withReturnTo(
-        `/matches?heldEventId=${encodedHeldEventId}&sort=match_no_asc`,
-        returnTo,
-      ),
       ocrCaptureHref: heldEventOcrCaptureHref(detail.id, returnTo),
       returnTo,
     },

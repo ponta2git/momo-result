@@ -18,6 +18,7 @@ import { Notice } from "@/shared/ui/feedback/Notice";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
 import { PageHeader } from "@/shared/ui/layout/PageHeader";
+import { contentText } from "@/shared/ui/typography";
 
 export function HeldEventDetailPage() {
   const page = useHeldEventDetailPageModel();
@@ -60,11 +61,7 @@ function HeldEventDetailReadyContent({ page }: { page: HeldEventDetailReadyPageM
 
       <PageHeader
         actions={
-          <HeldEventDetailHeaderActions
-            exportHref={navigation.exportHref}
-            matchesHref={navigation.matchesHref}
-            refresh={refresh}
-          />
+          <HeldEventDetailHeaderActions exportHref={navigation.exportHref} refresh={refresh} />
         }
         description={`確定済み${detail.matchCount}試合・未確定下書き${detail.draftCount}件`}
         eyebrow="開催記録"
@@ -114,10 +111,7 @@ function HeldEventDetailReadyContent({ page }: { page: HeldEventDetailReadyPageM
         ) : null}
 
         <section aria-labelledby="held-event-next-match-heading" className="grid gap-4">
-          <h2
-            className="momo-heading text-lg font-semibold text-[var(--color-text-primary)]"
-            id="held-event-next-match-heading"
-          >
+          <h2 className={contentText.heading} id="held-event-next-match-heading">
             {formatMatchNoInEvent(detail.nextMatchNo)}を記録
           </h2>
           <div className="flex flex-wrap gap-2">

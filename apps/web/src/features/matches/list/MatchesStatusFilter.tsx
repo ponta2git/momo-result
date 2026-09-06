@@ -3,7 +3,9 @@ import type {
   MatchListSummaryCounts,
 } from "@/features/matches/list/matchListTypes";
 import { Button } from "@/shared/ui/actions/Button";
+import { cn } from "@/shared/ui/cn";
 import { SelectField } from "@/shared/ui/forms/SelectField";
+import { contentText } from "@/shared/ui/typography";
 
 type MatchesStatusFilterProps = {
   counts?: MatchListSummaryCounts | undefined;
@@ -68,7 +70,9 @@ export function MatchesStatusFilter({
       />
 
       {unavailable ? (
-        <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-[var(--color-text-secondary)]">
+        <div
+          className={cn(contentText.body, "flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1")}
+        >
           <p role="status">内訳の件数を取得できません。確定状況の絞り込みは利用できます。</p>
           {onRetry ? (
             <Button size="sm" variant="quiet" onClick={onRetry}>

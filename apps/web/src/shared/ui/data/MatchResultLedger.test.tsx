@@ -71,15 +71,26 @@ describe("MatchResultLedger", () => {
     expect(screen.getByText("比較データなし")).toBeInTheDocument();
   });
 
-  it("always uses rank order independently of API array order", () => {
+  it("does not label an unavailable positive-assets ratio as inapplicable", () => {
+    render(
+      <MatchResultLedger
+        contextStatus="unavailable"
+        rows={[ledgerRow("member_ponta", "ぽんた", 1)]}
+      />,
+    );
+    expect(screen.getByText("物件収益比率 —")).toBeInTheDocument();
+    expect(screen.queryByText("物件収益比率 対象外")).not.toBeInTheDocument();
+  });
+
+  it("shows first through fourth place regardless of member or API order", () => {
     render(
       <MatchResultLedger
         contextStatus="unavailable"
         rows={[
-          ledgerRow("member_otaka", "おーたか", 1),
-          ledgerRow("member_akane_mami", "あかねまみ", 2),
-          ledgerRow("member_ponta", "ぽんた", 3),
           ledgerRow("member_eu", "いーゆー", 4),
+          ledgerRow("member_akane_mami", "あかねまみ", 2),
+          ledgerRow("member_otaka", "おーたか", 1),
+          ledgerRow("member_ponta", "ぽんた", 3),
         ]}
       />,
     );

@@ -1,7 +1,10 @@
 import { CircleHelp } from "lucide-react";
 
 import { Button } from "@/shared/ui/actions/Button";
+import { cn } from "@/shared/ui/cn";
+import { FactList } from "@/shared/ui/data/FactList";
 import { Dialog } from "@/shared/ui/feedback/Dialog";
+import { contentText } from "@/shared/ui/typography";
 
 export function SeriesAnalysisReviewHelpDialog() {
   return (
@@ -14,37 +17,51 @@ export function SeriesAnalysisReviewHelpDialog() {
         </Button>
       }
     >
-      <div className="grid gap-4 text-sm leading-6">
+      <div className="grid gap-6">
         <section>
-          <h4 className="font-semibold">分類</h4>
-          <dl className="mt-2 grid gap-2">
-            <HelpItem label="再現する" value="成績が伸びた条件を、次の4戦でも意識する候補です。" />
-            <HelpItem label="見直す" value="成績が崩れた条件を避けるため、行動を変える候補です。" />
-            <HelpItem label="検証する" value="差は見えるものの、まず次の4戦で確かめる候補です。" />
-          </dl>
+          <h4 className={contentText.heading}>分類</h4>
+          <div className="mt-2">
+            <FactList
+              ariaLabel="行動仮説の分類"
+              layout="plain"
+              items={[
+                {
+                  id: "reproduce",
+                  label: "再現する",
+                  value: "成績が伸びた条件を、今後の試合でも意識する候補です。",
+                },
+                {
+                  id: "review",
+                  label: "見直す",
+                  value: "成績が崩れた条件を避けるため、行動を変える候補です。",
+                },
+                {
+                  id: "verify",
+                  label: "検証する",
+                  value: "差は見えるものの、今後の試合で確かめる候補です。",
+                },
+              ]}
+            />
+          </div>
         </section>
         <section>
-          <h4 className="font-semibold">信頼度が低い場合</h4>
-          <p className="mt-2 text-[var(--color-text-secondary)]">
+          <h4 className={contentText.heading}>信頼度が低い場合</h4>
+          <p className={cn(contentText.body, "mt-2")}>
             「信頼度低め」と警告された候補は結論ではなく、試す価値のある仮説として扱います。
           </p>
         </section>
-        <dl>
-          <HelpItem
-            label="発動条件"
-            value="自動検出や次戦予測ではなく、本人が次の試合で自己観察する場面です。"
-          />
-        </dl>
+        <FactList
+          ariaLabel="発動条件の読み方"
+          layout="plain"
+          items={[
+            {
+              id: "trigger",
+              label: "発動条件",
+              value: "自動検出や次戦予測ではなく、本人が次の試合で自己観察する場面です。",
+            },
+          ]}
+        />
       </div>
     </Dialog>
-  );
-}
-
-function HelpItem({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="grid gap-0.5 sm:grid-cols-[6rem_1fr]">
-      <dt className="font-semibold">{label}</dt>
-      <dd className="text-[var(--color-text-secondary)]">{value}</dd>
-    </div>
   );
 }

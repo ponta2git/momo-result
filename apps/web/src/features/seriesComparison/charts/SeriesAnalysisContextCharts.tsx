@@ -14,9 +14,11 @@ import {
   formatPercent,
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
 import type { RelativeIntensity, SeriesComparisonAggregateV3 } from "@/shared/api/seriesAnalysis";
+import { cn } from "@/shared/ui/cn";
 import { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
 import { PlayOrderMark } from "@/shared/ui/data/PlayOrderMark";
 import { colorMix } from "@/shared/ui/rank/rankPresentation";
+import { contentText } from "@/shared/ui/typography";
 
 const PLAY_ORDERS = [1, 2, 3, 4] as const;
 
@@ -78,15 +80,15 @@ export function PlayOrderMatrix({
                     key={playOrder}
                     style={presentation.style}
                   >
-                    <strong className="text-sm tabular-nums">
+                    <strong className={cn(contentText.compactPrimary, "tabular-nums")}>
                       {formatDecimal(cell.rankAverage)}位
                     </strong>
-                    <p className="mt-0.5 text-xs text-[var(--color-text-secondary)] tabular-nums">
+                    <p className={cn(contentText.supporting, "mt-0.5 tabular-nums")}>
                       {cell.targetCount}戦・入賞{formatPercent(cell.podiumRate)}
                     </p>
                     {presentation.label ? (
                       <p
-                        className="mt-1 text-xs font-semibold"
+                        className={cn(contentText.body, "mt-1")}
                         style={{ color: presentation.accentColor }}
                       >
                         {presentation.label}
@@ -176,30 +178,30 @@ export function CardShopDestinationQuadrants({
           key={entry.memberId}
         >
           <div className="flex flex-wrap items-start justify-between gap-2">
-            <h3 className="font-semibold">
+            <h3 className={contentText.heading}>
               <MemberSequenceLabel memberId={entry.memberId}>
                 {entry.displayName}
               </MemberSequenceLabel>
             </h3>
-            <span className="text-xs text-[var(--color-text-secondary)] tabular-nums">
+            <span className={cn(contentText.supporting, "tabular-nums")}>
               売り場あり {entry.cardShopMatchCount}/{entry.denominator}戦・目的地なし
               {formatPercent(entry.cardShopWithoutDestinationRate)}
             </span>
           </div>
-          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+          <div className="mt-4 grid gap-6 sm:grid-cols-2">
             {entry.quadrants.map((quadrant) => {
               const focused = focusedItemIds.includes(quadrant.itemId);
               return (
                 <div
-                  className={`border-l-2 border-[var(--color-border)] px-2 py-1 ${focused ? "ring-2 ring-[var(--color-action)] ring-offset-1 ring-offset-[var(--color-surface)]" : ""}`}
+                  className={`min-w-0 ${focused ? "ring-2 ring-[var(--color-action)] ring-offset-1 ring-offset-[var(--color-surface)]" : ""}`}
                   data-focused-metric={focused ? "true" : undefined}
                   key={quadrant.itemId}
                 >
-                  <h4 className="text-xs font-semibold">
+                  <h4 className={contentText.heading}>
                     {cardShopKindLabel(quadrant.kind)}
                     {focused ? "・この試合" : ""}
                   </h4>
-                  <dl className="mt-2 grid grid-cols-2 gap-x-2 gap-y-1 text-xs">
+                  <dl className="mt-2 grid grid-cols-2 gap-2">
                     <Value label="対象" value={`${quadrant.targetCount}戦`} />
                     <Value label="平均順位" value={`${formatDecimal(quadrant.averageRank)}位`} />
                     <Value label="勝率" value={formatPercent(quadrant.winRate)} />
@@ -221,8 +223,8 @@ export function CardShopDestinationQuadrants({
 function Value({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <dt className="text-[var(--color-text-secondary)]">{label}</dt>
-      <dd className="font-semibold tabular-nums">{value}</dd>
+      <dt className={contentText.supporting}>{label}</dt>
+      <dd className={cn(contentText.body, "mt-0.5 tabular-nums")}>{value}</dd>
     </div>
   );
 }

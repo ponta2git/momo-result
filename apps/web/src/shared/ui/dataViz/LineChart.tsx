@@ -119,7 +119,7 @@ export function DataVizLineChart({
               <text
                 fill="var(--color-action)"
                 fontSize="12"
-                fontWeight="600"
+                className="font-plain"
                 textAnchor="middle"
                 x={x(focusedPoint.index)}
                 y="18"

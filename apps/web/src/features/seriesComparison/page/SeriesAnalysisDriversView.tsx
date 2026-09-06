@@ -32,7 +32,9 @@ import {
 } from "@/features/seriesComparison/page/SeriesComparisonAnalysisNavigation";
 import { SeriesAnalysisQualityAdvisory } from "@/features/seriesComparison/SeriesAnalysisQualityAdvisory";
 import { Button } from "@/shared/ui/actions/Button";
+import { cn } from "@/shared/ui/cn";
 import { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
+import { contentText } from "@/shared/ui/typography";
 
 export function DriversView({ focusedItemIds, response, onDrilldown }: AnalysisViewProps) {
   return (
@@ -49,8 +51,8 @@ export function DriversView({ focusedItemIds, response, onDrilldown }: AnalysisV
           <AssetRevenueHistograms response={response} />
         </div>
         <div className="mt-6">
-          <h3 className="text-sm font-semibold">資産タイプの位置</h3>
-          <div className="mt-3">
+          <h3 className={contentText.heading}>資産タイプの位置</h3>
+          <div className="mt-2">
             <StrategyProfileQuadrant response={response} />
           </div>
         </div>
@@ -59,19 +61,14 @@ export function DriversView({ focusedItemIds, response, onDrilldown }: AnalysisV
       <DestinationOutcomeSection response={response} />
       <AnalysisSection id="metric-strategy-scatter" title="試合ごとの資産と収益">
         <StrategyScatter focusedItemIds={focusedItemIds} response={response} />
-        <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {response.highlights.map((highlight) => (
-            <div
-              className="border-l-2 border-[var(--color-border)] px-3 py-2"
-              key={highlight.highlightId}
-            >
-              <p className="text-xs text-[var(--color-text-secondary)]">
-                {highlightMetricLabel(highlight.metricId)}
-              </p>
-              <p className="mt-1 font-semibold">
+            <div className="min-w-0" key={highlight.highlightId}>
+              <p className={contentText.supporting}>{highlightMetricLabel(highlight.metricId)}</p>
+              <p className={cn(contentText.body, "mt-1")}>
                 {memberNames(response.players, highlight.leaderMemberIds)}
               </p>
-              <p className="text-sm tabular-nums">
+              <p className={cn(contentText.compactPrimary, "tabular-nums")}>
                 {formatHighlightValue(highlight.metricId, highlight.value)}
               </p>
             </div>
@@ -83,7 +80,7 @@ export function DriversView({ focusedItemIds, response, onDrilldown }: AnalysisV
           {response.rankAnalysis.rankSignalsByPlayer.map((entry) => (
             <article className="min-w-0" key={entry.memberId}>
               <div className="flex items-center justify-between gap-2">
-                <h3 className="font-semibold">
+                <h3 className={contentText.heading}>
                   <MemberSequenceLabel memberId={entry.memberId}>
                     {playerName(response.players, entry.memberId)}
                   </MemberSequenceLabel>
@@ -91,15 +88,17 @@ export function DriversView({ focusedItemIds, response, onDrilldown }: AnalysisV
                 <SeriesAnalysisQualityAdvisory status={entry.status} />
               </div>
               {entry.candidates.length === 0 ? (
-                <p className="mt-3 text-sm text-[var(--color-text-secondary)]">
+                <p className={cn(contentText.body, "mt-2")}>
                   この範囲では、繰り返し残る候補はありません。
                 </p>
               ) : (
-                <ul className="mt-3 grid gap-2">
+                <ul className="mt-2 grid gap-2">
                   {entry.candidates.map((candidate) => (
-                    <li className="grid gap-0.5 text-sm" key={candidate.signal}>
-                      <span className="font-medium">{rankSignalLabel(candidate.signal)}</span>
-                      <span className="text-xs text-[var(--color-text-secondary)] tabular-nums">
+                    <li className="grid gap-1" key={candidate.signal}>
+                      <span className={contentText.compactPrimary}>
+                        {rankSignalLabel(candidate.signal)}
+                      </span>
+                      <span className={cn(contentText.supporting, "tabular-nums")}>
                         {rankSignalCandidateShareLabel(
                           candidate.candidateSharePercent,
                           entry.candidates.length,
@@ -110,7 +109,7 @@ export function DriversView({ focusedItemIds, response, onDrilldown }: AnalysisV
                   ))}
                 </ul>
               )}
-              <div className="mt-3">
+              <div className="mt-2">
                 <Button
                   disabled={entry.candidates.length === 0}
                   size="sm"

@@ -3,10 +3,13 @@ import { Check } from "lucide-react";
 import { slotDefinitions } from "@/features/ocrCapture/captureState";
 import type { OcrStartDialogState, OcrSubmissionPlan } from "@/features/ocrCapture/useOcrStartFlow";
 import { Button } from "@/shared/ui/actions/Button";
+import { cn } from "@/shared/ui/cn";
+import { FactList } from "@/shared/ui/data/FactList";
 import { Dialog } from "@/shared/ui/feedback/Dialog";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { ProgressBar } from "@/shared/ui/feedback/ProgressBar";
 import { SpinnerIcon } from "@/shared/ui/feedback/Spinner";
+import { contentText } from "@/shared/ui/typography";
 
 type OcrStartDialogProps = {
   onClose: () => void;
@@ -23,22 +26,15 @@ function SetupSummary({ plan }: { plan: OcrSubmissionPlan }) {
     ["シーズン", plan.setupSummary.season],
     ["マップ", plan.setupSummary.map],
     ["オーナー", plan.setupSummary.owner],
-  ];
+  ] as const;
 
   return (
-    <dl className="grid grid-cols-2 gap-x-4 gap-y-3 rounded-sm border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3 text-sm sm:grid-cols-3">
-      {items.map(([label, value]) => (
-        <div key={label} className="min-w-0">
-          <dt className="text-xs font-semibold text-[var(--color-text-muted)]">{label}</dt>
-          <dd
-            className="mt-0.5 truncate font-semibold text-[var(--color-text-primary)]"
-            title={value}
-          >
-            {value}
-          </dd>
-        </div>
-      ))}
-    </dl>
+    <FactList
+      ariaLabel="読み取る試合の設定"
+      columns={3}
+      items={items.map(([label, value]) => ({ id: label, label, value }))}
+      layout="plain"
+    />
   );
 }
 
@@ -60,15 +56,13 @@ function TraySummary({ plan }: { plan: OcrSubmissionPlan }) {
           >
             <span
               aria-hidden="true"
-              className={`flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-bold text-[var(--color-text-primary)] ${definition.accentClass}`}
+              className={`font-plain flex size-7 shrink-0 items-center justify-center rounded-full text-xs text-[var(--color-text-primary)] ${definition.accentClass}`}
             >
               {selected ? <Check className="size-4" /> : definition.stationLabel}
             </span>
             <span className="min-w-0">
-              <span className="block font-semibold text-[var(--color-text-primary)]">
-                {definition.label}
-              </span>
-              <span className="block text-xs text-[var(--color-text-muted)]">
+              <span className={cn(contentText.body, "block")}>{definition.label}</span>
+              <span className={cn(contentText.supporting, "mt-0.5 block")}>
                 {selected ? "送信する" : "今回は送信しない"}
               </span>
             </span>
@@ -91,7 +85,7 @@ function ConfirmingContent({
   const isPartial = plan.slots.length < slotDefinitions.length;
 
   return (
-    <div className="grid gap-4">
+    <div className="grid gap-6">
       <SetupSummary plan={plan} />
       <TraySummary plan={plan} />
       {isPartial ? (
@@ -155,8 +149,8 @@ export function OcrStartDialog({ onClose, onConfirm, onViewMatches, state }: Ocr
               {progress.kind === "preparing" ? <SpinnerIcon size="lg" /> : null}
             </span>
             <div className="min-w-0">
-              <p className="font-semibold text-[var(--color-text-primary)]">{progress.label}</p>
-              <p className="mt-1 text-sm leading-6 text-[var(--color-text-secondary)]">
+              <p className={contentText.compactPrimary}>{progress.label}</p>
+              <p className={cn(contentText.body, "mt-1")}>
                 誤送信を防ぐため、準備が終わるまで移動や再操作はできません。
               </p>
             </div>

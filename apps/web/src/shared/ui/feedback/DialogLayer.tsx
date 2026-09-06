@@ -9,6 +9,7 @@ import { IconButton } from "@/shared/ui/actions/IconButton";
 import { cn } from "@/shared/ui/cn";
 import { readableTextWidthClass } from "@/shared/ui/layout/readableText";
 import { instantMotionTransition, politeMotionTransition } from "@/shared/ui/motion/transitions";
+import { contentText, fieldText } from "@/shared/ui/typography";
 
 const dialogBackdropClassName = "fixed inset-0 z-[var(--z-dialog)] bg-[var(--color-backdrop)]/35";
 const dialogPopupClassName =
@@ -49,15 +50,12 @@ function DialogContentFrame({
     <div className="flex min-h-0 w-full flex-1 flex-col gap-4">
       <div className="flex shrink-0 items-start justify-between gap-2">
         <div className="min-w-0">
-          <BaseDialog.Title className="text-lg font-semibold text-balance text-[var(--color-text-primary)]">
+          <BaseDialog.Title className={cn(contentText.heading, "text-balance")}>
             {title}
           </BaseDialog.Title>
           {description ? (
             <BaseDialog.Description
-              className={cn(
-                "mt-1 text-sm leading-6 text-pretty text-[var(--color-text-secondary)]",
-                readableTextWidthClass,
-              )}
+              className={cn(contentText.body, "mt-1 text-pretty", readableTextWidthClass)}
             >
               {description}
             </BaseDialog.Description>
@@ -218,15 +216,12 @@ export function AlertDialogLayer({
         >
           <div className="momo-alert-dialog-frame flex min-h-0 w-full flex-1 flex-col gap-4">
             <div className="min-w-0 shrink-0">
-              <BaseAlertDialog.Title className="text-lg font-semibold text-balance text-[var(--color-text-primary)]">
+              <BaseAlertDialog.Title className={cn(contentText.heading, "text-balance")}>
                 {title}
               </BaseAlertDialog.Title>
               {description ? (
                 <BaseAlertDialog.Description
-                  className={cn(
-                    "mt-1 text-sm leading-6 text-pretty text-[var(--color-text-secondary)]",
-                    readableTextWidthClass,
-                  )}
+                  className={cn(contentText.body, "mt-1 text-pretty", readableTextWidthClass)}
                 >
                   {description}
                 </BaseAlertDialog.Description>
@@ -243,7 +238,8 @@ export function AlertDialogLayer({
                 {error ? (
                   <p
                     className={cn(
-                      "rounded-xs border border-[var(--color-danger)]/50 bg-[var(--color-danger)]/8 px-3 py-2 text-sm font-medium text-[var(--color-danger)]",
+                      fieldText.error,
+                      "rounded-xs border border-[var(--color-danger)]/50 bg-[var(--color-danger)]/8 px-3 py-2",
                       readableTextWidthClass,
                     )}
                     role="alert"

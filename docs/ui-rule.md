@@ -30,7 +30,9 @@
   2. **内容構造**: 見出し、整列、関係的余白、列でまとまりと順序を示し、それだけでは別の範囲と誤認する場合にだけ divider を補う。通常の section や説明を淡色面で囲わない。
   3. **局所標識**: 選択、現在状態、順位、分類、注意などを、短いラベル、marker、icon、compact な fill または border で走査可能にする。局所標識を section 全体の強調へ拡張しない。
 - 文字の大きさ、ウェイト、コントラストを常に同時に最大化せず、3つすべてを使うのは画面の主焦点に限る。ラベルは値より、補足は本文より、metadata は判断材料より明確に弱める。色を除いた grayscale と blur でも主焦点、比較群、補助情報の順序が残ることを先に成立させる。
-- 強調の総量を相対評価する。同一のタスク範囲で最大強度の表現は1つとし、新しい強調を足す場合は既存要素のいずれを弱めるかも決める。初期表示範囲に独立した大きな淡色面を複数並べず、例外的に同格比較へ反復する場合は、反復群全体を一つの錨として読み取れる構造にする。
+- 太字は、現在のタスクで読むべき主要結果、判断の核になる数値・短い文言、および見落とせない局所的な問題へ限定する。label、heading、button、link、selected、status、data value という種類だけでは太字にしない。内容構造は位置、文字サイズ、整列、関係的余白、操作・状態は既存の control、marker、文字、形で識別できるようにする。主要操作も塗りと配置を先に使い、補助操作と一緒に太字を既定にしない。
+- 強調の総量を相対評価する。同一のタスク範囲で最大強度の表現は1つとし、新しい強調を足す場合は既存要素のいずれを弱めるかも決める。同じ判断に使う同格の内容は、共通・個別などの適用範囲だけを理由に強弱を変えず、一つの比較群として扱う。初期表示範囲に独立した大きな淡色面を複数並べず、例外的に同格比較へ反復する場合は、反復群全体を一つの錨として読み取れる構造にする。
+- 内容のまとまりは、利用者が答えを求める問いと作用する対象から決める。主情報、付随するメタ情報、内容を詳しく調べる操作、別候補への移動は役割を区別し、すべてが文字やbuttonであるという外形だけでは一群にしない。分類・件数・属性は対応する主情報の近くに置き、注意や解釈に必要な条件を含む場合は初期表示から隠さない。同じ説明を要約と詳細で反復する場合は、判断に必要な前提を残して説明の表示先を一つにする。
 - 内容のない kicker、section 番号、大文字ラベル、同じ強さの KPI card や CTA を反復しない。重要であることを面積や装飾だけで主張せず、その要素が伝える結果、状態、操作を第一視線で読めるようにする。
 
 ### 2.2 色、面、境界、装飾ラベル
@@ -58,9 +60,33 @@
 
 - 一次情報、補助情報、ラベル、placeholder、disabled を既存の文字トークンとウェイトで階層化する。見出し、本文、ラベル、データの役割を固定し、本文と control は regular 以上を使う。可視文字は `12px` を下限とし、通常本文、操作、主要データは原則 `14px` 以上、`12px` はラベルと補助 metadata に限定する。chart axis も別の数値表現があることを理由に縮小せず、同じ下限を保つ。主要結果、操作、エラーを小さい文字、細字、低コントラストへ逃がさない。
 - 文字サイズは `12 / 14 / 16 / 18 / 20 / 24 / 30px` の共通 scale から選び、近接した任意値を feature 内へ追加しない。サイズ差だけで役割を増やさず、同じ役割は shared UI の文字 recipe、ウェイト、文字色、行高を再利用する。狭い component に収まらない場合は文字を scale 外へ縮めず、component 幅、情報量、折り返し、局所 scroll、段階的開示の順に見直す。
-- 余白は基本 scale `4 / 8 / 12 / 16 / 20 / 24 / 32 / 48 / 64px` から選び、距離が表す関係を先に決める。`PageFrame` 直下、および一つの content surface 内で page scope を分ける主要 block は原則 `24px`、section または form の主要 sibling と同格の card / record 間は `16px` とする。長い detail / analysis 内で見出しと scope が独立した最上位 section 同士に限り `32px` を許容し、通常の section や form の中間段階には使わない。
+- 濃色の本文が主要な結論と競合する場合は、`text-primary` を主要な結論・結果や識別の要点、`text-body` を通常本文、`text-secondary` を補足へ割り当てる。本文との濃淡差が足りない補助ラベル・補足には `text-muted` を使ってよいが、実際の背景とのコントラストと小さい文字の読みやすさを確認する。文字色の変更は役割が確かめられた箇所から適用し、親全体の文字色変更で主要結果や注意表示まで一律に弱めない。
+- 文字ウェイトは次の役割へ割り当て、具体的な token と utility は `styles.css` が所有する。通常表示を既定とし、すべてを中間ウェイトへ置換しない。
+
+  | 役割     | ウェイト | 用途                                                                                                |
+  | -------- | -------- | --------------------------------------------------------------------------------------------------- |
+  | 通常表示 | 400      | 本文、通常の値・入力値、form label、表の列・行見出し、補足、操作、navigation、tab、状態・順位の標識 |
+  | 内容構造 | 500      | section・dialog の見出しなど、まとまりを示す短い文字。サイズと余白でも見出しを識別できること        |
+  | 主要強調 | 600      | 主要な順位・金額・比較結果、判断の核となる短い文言、対応が必要な問題の要点                          |
+
+- 端末フォントによって 500 は 400 と同じ face、600 は Bold の face へ対応し得る。500 を独立した視覚階層の成立条件にせず、600 を「控えめな太字」ともみなさない。650 などの中間値で微差を作らず、英数字と日本語の描き分けが揃わない環境でも意味を保つ。
+- 文章を中心に読む内容と記録情報では、次の文字recipeを基本とし、具体的なclassの組み合わせは `shared/ui/typography.ts` が所有する。主要情報・通常内容・補足の3つのサイズで階層を作り、内容構造は通常本文と同じサイズでも位置とウェイトで識別する。HTMLのheading levelは文書構造に従い、この文字役割とは別に選ぶ。
+
+  | 内容の役割             | サイズ / 行高 | ウェイト | 文字色         |
+  | ---------------------- | ------------- | -------- | -------------- |
+  | 主要な結論・短い主情報 | 20 / 28px     | 600      | `text-primary` |
+  | 一覧・反復行の主要結果 | 14 / 20px     | 600      | `text-primary` |
+  | 内容構造・小見出し     | 14 / 20px     | 500      | `text-primary` |
+  | 通常本文・値           | 14 / 20px     | 400      | `text-body`    |
+  | 補足・メタ情報・ラベル | 12 / 16px     | 400      | `text-muted`   |
+
+- 一覧や反復する結果行は、走査密度を保つ `compactPrimary` を主要結果へ使う。単独で読む結論の `primary` と重要度は同じでも、配置密度に応じたサイズを共通recipeで選び、featureで縮小しない。
+- 上表は全画面の文字を20 / 14 / 12pxへ置換する規則ではない。主要金額、表、chart、control、長文の読み物は用途に応じた既存の共通recipeと許容scaleを使う。同じ役割のサイズ、行高、ウェイト、色をfeatureで別々に上書きせず、複数の実用途で別の組み合わせが必要なら共通recipe側で定義する。elementの既定スタイルはbase layerに置き、明示されたrecipeを上書きしない。
+- 同格の4人比較や反復する試合結果では、同じ主要指標を比較群として等しく強調してよい。その場合も、主情報でない名前、補助指標、説明、操作まで一緒に太字にしない。試合結果のように「だれが何位か」を読む場面では、名前と順位も主情報として扱う。太字を減らした分を、濃い背景、大きな文字、余白の拡大で一律に補わない。
+- 余白は基本 scale `4 / 8 / 12 / 16 / 20 / 24 / 32 / 48 / 64px` から選び、距離が表す関係を先に決める。`PageFrame` 直下、および一つの content surface 内で page scope を分ける主要 block は原則 `24px`、section または form の主要 sibling と同格の compact な card / record 間は `16px` とする。文章中心の内容では、関係の近い項目同士を `8px`、主情報・具体的内容・補助操作など問いの異なる群を `24px` で区切る。長い detail / analysis 内で見出しと scope が独立した最上位 section 同士に限り `32px` を許容し、通常の section や form の中間段階には使わない。
 - 複数の意味上の内容群または field 群を持つ独立 card / record の内余白は `16px`、一つの状態・値・操作を示す compact な bounded panel と走査密度を優先する data record の内余白は `12px` とする。一つの操作または状態を完結させる compact component 内では、`4 / 8px` では群境界が不足し `16px` では走査密度を損なう content cluster 間に限り `12px` を使ってよい。page-level content surface の default は狭い viewport で `16px`、`sm` 以上で `24px` を共通 primitive が所有し、理由を持って密度を保つ compact variant は viewport にかかわらず `16px` とする。
-- 独立した action 間と通常の inline item 間は `8px`、compound control 内および一つの値・標識内で密接な要素間と、support text 同士および control から support text は `4px` とする。基本 scale 外の `2px` は一つの label / value 内の密接な文字関係と光学補正だけに使ってよい。`1px` は border、divider、underline の境界補正に限定する。`20px` は大型 control の内余白など component 内部、`48 / 64px` は独立した empty / error など page-level 状態の外余白に限定し、page や section の中間段階を増やすために使わない。寸法、最小 hit target、scroll geometry は余白 scale と混同しない。
+- 独立した action 間と通常の inline item 間は原則 `8px`、compound control 内および一つの値・標識内で密接な要素間と、support text 同士および control から support text は `4px` とする。同じ対象を調べるquietな補助操作を縦に並べる場合は、hit target内の余白で文字が離れていれば外側のgapを重ねなくてよい。基本 scale 外の `2px` は一つの label / value 内の密接な文字関係と光学補正だけに使ってよい。`1px` は border、divider、underline の境界補正に限定する。`20px` は大型 control の内余白など component 内部、`48 / 64px` は原則として独立した empty / error など page-level 状態の外余白に使う。複数の内容群や可変長のメモを持つdetail内の反復recordでは、罫線を使わず読む単位を分けるためにrecord間の `48px` を許容する。通常のpageやsectionの中間段階を増やすためには使わない。寸法、最小 hit target、scroll geometry は余白 scale と混同しない。
+- 縦のリズムは、行高、labelと値の間隔、群内・群間のgap、control内部の余白を合わせて確認する。間延びを解消するときも一律に縮めず、同時に群の境界を広げる必要があるか検討する。見出しの横のcontrolが行高を押し広げ、本文との距離を増やす場合は、見出しと本文を一群にし、その群の横または後ろへ操作を置く構成を検討する。余白の総量やclassの数ではなく、近い内容を続けて読め、次の対象へ移る位置が分かることを基準にする。
 - 同じ grouping の包含階層では、外側の群ほど内側の群より同じか大きい余白を持たせる。長い detail / analysis の最上位 section 間隔は、一つの surface 内にある独立した章の境界として扱い、この比較対象から除く。ただし data table、chart、matrix、compact badge は走査と比較に必要な密度を優先し、その外側の section 間隔で呼吸を作る。文字が収まらないときに内余白を無差別に削らず、折り返し、列の積み替え、局所 scroll、情報の段階的開示を先に検討する。狭幅の page gutter は利用可能幅を守るため `12px` を許容し、navigation の scroll bleed も同じ owner に従わせる。
 - sibling 間の余白は親 composition が自身の `gap` / `space` または自身が生成する slot wrapper で、component の内余白はその component、page gutter と page sibling 間隔は page layout primitive が所有する。再利用 child の API に外 margin を持たせて親の余白と二重化せず、loading、error、empty、ready の状態置換でも同じ owner と間隔を保つ。field は label から control を `8px`、control から description / error と support 同士を `4px` で関係付け、dialog は header、body、feedback、footer を別の群として構成する。safe area は fixed layer の viewport が左右両方を含めて所有し、child padding を画面端の位置補正に流用しない。
 - 初回 route loading、route-level error / access terminal、feature loading は、pathname と安全化済み query から確定する page width、専用 shell、戻る導線、detail で必要な header、content surface 内の常設 action / status、文脈 slot を ready と同じ順序で保持する。ここで常設 action とは、pathname / query だけで移動先まで確定する navigation action を指す。runtime callback や data 取得結果で初めて実行可否・移動先が決まる action / notice は推測して skeleton や terminal action を足さず、loading は確定済み slot の大きさと responsive な積み替え、terminal は確定済み chrome と回復操作を保つ。ready で page header を持たない route の loading / terminal だけに title skeleton、eyebrow、description または空の header slot を作らない。状態ごとに似た余白や route 判定を個別再現せず、同じ layout primitive、親 composition、route presentation を owner にする。
@@ -72,7 +98,7 @@
 - 日時、金額、試合番号、状態名は共通 formatter / ViewModel を使う。件数と比較値には対象、単位、分母または基準を添え、整列する数値には tabular numerals を使う。
 - table は row / column header と identity を保つ。グラフは答える問いがある場合に使い、数値表現を併記し、比較軸、単位、スケールを揃える。モバイルへ再配置しても、プレーヤーと試合の対応、比較順、詳細への到達を失わせない。
 - 通常の data table は、親の surface と同じ背景、本文より弱い小さな header 文字、table 上端と header 下端および最終行下端の横罫線で構成する。本文行どうしの横罫線、外周の枠線、角丸、通常 header の淡色背景は付けず、pagination の有無にかかわらず共通 table primitive、body row、header pattern を使う。sortable header の選択表現は操作部分だけが所有し、行全体の背景へ広げない。
-- 時系列の連続 timeline は順序付きリストと1列の marker 軸で構成し、connector は隣接する marker の中心間だけを結ぶ。軸を最初の marker より上、最後の marker より下へ伸ばさず、record の枠線や別の縦罫線を平行に重ねない。各 marker は順序を文字でも示し、record heading と対応させる。
+- 時系列の連続 timeline は順序付きリストと1列の marker 軸で構成し、connector は隣接する marker の中心間だけを結ぶ。軸を最初の marker より上、最後の marker より下へ伸ばさず、record の枠線や別の縦罫線を平行に重ねない。各 marker は順序を文字でも示し、record heading と対応させる。 一つのrecordに識別情報、結果、メモなど複数の内容群がある場合は、群内よりrecord間の境界を明確にする。群内は近接させ、record間にはそれより大きな余白を取り、メモの展開後も次のrecordの開始位置を追えるようにする。横罫線は余白だけでは境界が読み取れない場合に補助として使う。
 - disclosure、tab、dialog、navigation を見た目だけで取り替えない。panel は trigger との関係を保ち、周囲の位置・幅・focus を不必要に変えない。可視見出しを省略する場合も `section`、`aria-label` / `aria-labelledby`、field label、accessible control name で構造を残す。
 - page 最上部の可視タイトルを省略する画面は、主要 content surface に用途を表す `aria-label` と適切な landmark を与え、surface 内の可視 section heading と control label は削らない。状態通知の title は page title の代用ではなく、発生した状態と回復方法を伝える局所 heading として保持してよい。
 - 同格の disclosure を列で並べる場合、一つの展開で同じ行の別 trigger や操作が展開内容の下端へ追従しない。各列は自身の内容順を保ち、展開による高さ変化は当該列と後続の共通内容だけへ反映する。
@@ -91,6 +117,10 @@
 - button、link、form control、status、notice、dialog、disclosure は shared UI とアクセシブルな primitive を優先し、機能ごとに同じ keyboard / focus / pending 挙動を手作りしない。
 - component を置く親 composition は、grid / flex 内の位置、並び順、外側の幅・高さ・余白、sibling 間の gap / divider、画面幅に応じた伸縮と積み替えを所有する。再利用 component は、内容または親が定めた slot に従って縮小・伸長できることを既定とし、特定の利用箇所だけを理由に autonomous な固定幅、固定高、外 margin、隣接 separator を持たない。page frame、dialog viewport、局所 scroll viewport など、利用可能領域を定義すること自体が責務の layout primitive はこの限りではない。
 - shared UI は、keyboard / focus と一体の最小 hit target、control の内部 padding / line-height、icon・marker の寸法、画像・図表で意味を保つ aspect ratio、内部 content scroller など、部品の契約を壊さない intrinsic constraint を所有する。`w-full` / `h-full` は親が定めた slot を消費する指定として使ってよいが、それだけで親の寸法責務を部品へ戻したとは扱わない。consumer は原則として外側 container で寸法を指定し、`className` による上書きで intrinsic constraint や internal boundary を壊さない。
+
+- 汎用部品は通常表示を既定とし、主要コンテンツであることが契約に含まれる部品だけが、該当する値・短い文言へ主要強調を持つ。feature composition は画面の主役を選び、同じ文字 recipe をその箇所へ適用する。任意の `fontWeight` を渡す万能 API や親全体の太字指定で補正しない。`th` / `scope` / heading level などの意味構造とウェイトを分離し、子の label・metadata・操作へ太字を継承させない。
+- labelと値を読む表示は、共通の `FactList` がterm / definitionの意味構造、文字recipe、labelと値の近さ、項目間隔、列数に応じた積み替えを所有する。通常の文章・記録情報には周囲の面を共有するplain表示を使い、featureは項目の内容と並びを渡す。入力fieldはlabelとcontrolの対応を持つ別契約とし、この表示用patternへ統合しない。
+- 見出しと本文・値・説明からなる読み取り群へ、編集・移動・保存などの補助操作群を横に添える場合は、`ContentWithActions` で内容群と操作群を並べる。見出しとその本文・値・説明は内容群にまとめ、操作の高さで文字同士の距離を増やさない。横方向の群間は16px、折り返した操作との間隔は8pxとし、部品へ割り当てられた幅に収まらなければ内容、操作の読み順で積み替える。画面幅だけで横並びを強制せず、負の余白や重ね配置でhit targetを本文へはみ出させない。内容内部の文字階層と間隔、見出し・region・操作名の意味はfeatureが所有する。page header、labelと入力欄、tab、disclosure、dialogの固定headerと閉じる操作は各primitiveの操作・scroll契約を使い、このpatternへ置き換えない。
 
 ### 3.2 選択・表示切替・表示範囲
 
@@ -111,7 +141,7 @@
 
 - link は場所の移動、button は現在の文脈での実行に使う。icon-only の移動と実行もこの区別を保ち、見た目を共通化しても element の意味を変えない。
 - 実行操作は影響する対象の近くへ置き、ラベルで対象と予測できる結果を示す。操作前に必要な制約と影響を示し、押下直後、pending、成功、部分成功、失敗のうち該当する状態を同じ操作文脈で返す。
-- form の確定は選択または編集と区別し、pending 中は同じ送信を重複実行させない。dialog 内の確定操作は一貫した footer、読み順、主要度を持ち、pending 中に不用意に閉じて結果を見失わせない。
+- form の確定は選択または編集と区別し、pending 中は同じ送信を重複実行させない。取り込み・手入力・OCR確認の最終実行領域は、共通の `taskActionPanelClass` で枠なしの淡色背景と16pxの内余白を持つ操作領域に揃え、可否・結果のfeedbackと実行操作を一群にする。dialog 内の確定操作は一貫した footer、読み順、主要度を持ち、pending 中に不用意に閉じて結果を見失わせない。
 - 不可逆または高コストな操作は、対象と結果を `AlertDialog` で明示する。安全に可逆な操作は即時反映と Undo を優先し、routine な操作へ確認 dialog を増やさない。
 
 ### 3.4 更新・再試行・初期化・破棄
@@ -134,6 +164,8 @@
 ## 4. 入力・ワークスペース・アクセシビリティ
 
 - form は可視ラベル、説明、必須、validation error、disabled / pending を同じ field 境界で関連付け、paste を妨げない。checkbox、radio、select、text input は native semantics を保ち、見た目のために keyboard 操作を再実装しない。
+- 入力用の文字は `shared/ui/typography.ts` の `fieldText` を `Field` / `Fieldset` と独自入力欄で共有する。可視ラベルは14 / 20px・通常ウェイトの主要文字色、補足は12 / 16px、修正に必要なエラーは14 / 20px・dangerとし、読むための小さなmetadataラベルを入力ラベルやエラーへ流用しない。control自体の入力値・高さ・focus表示は既存のinteractive primitiveが所有する。
+- 入力中の現在対象（撮影先、確認中の項目、参照画像）と、確定前に照合する主要結果を識別の要点として強調する。設定の確認値は編集controlと区別し、通常のlabel / valueとして `FactList` で示す。確認dialogでは設定、結果・送信対象、注意、確定操作を意味ごとの群に分け、長い名称は確認前に全文を読めるようにする。
 - OCR 結果修正と手入力は、入力 field と対応する source image、同じプレーヤー・項目順、編集結果の feedback を一つの workspace として保つ。この対応関係と少ない修正手数を保護し、画面の分断や画像と field の往復を増やさない。
 - coarse pointer の操作は viewport 幅にかかわらず 44px 以上の interactive box を持ち、compact 化は `pointer: fine` が明示された場合だけ許容する。44px は painted icon、thumb、track 自体の寸法ではなく hit target の寸法であり、視覚要素はその内側で役割に合う大きさを保ってよい。icon-only action は pointer accuracy にかかわらず 44px 以上を保ち、文脈を含む `aria-label` を持つ。decorative icon は `aria-hidden` を持つ。
 - hover で現れる操作や情報は keyboard focus と touch でも到達できる。tooltip は補助説明であり、主要な意味やエラーをそこだけに置かない。
@@ -190,9 +222,10 @@
 ## 8. 4人の共通結果台帳
 
 - OCR 確認の要約、試合詳細、開催結果、分析では、4人の同一性、順序、整列を共通の視覚文法として反復する。これは同じ card を複製する規則ではなく、文脈に合う表、列、行、図表へ変形してよい。
-- 固定メンバーは `いーゆー → ぽんた → あかねまみ → おーたか` の順と名前で識別し、member sequence はこの順に `青 → 赤 → 黄 → 緑` を対応させる。この順序と色順を共通台帳、分析表、4人を表すグラフ系列・凡例へ一貫して適用し、順位、指標値、試合ごとのプレー順で並べ替えない。色は名前を補助する走査用の手掛かりとし、固定メンバーの同一性を色だけに依存させない。
-- 固定メンバーを並べる表示の既定順は canonical 順とする。ただし、利用者が列見出しなどの明示された操作で並び替えを要求した詳細表は、その表の範囲に限って指定順を優先してよい。並び替え後も member sequence の色と名前の対応は変えず、現在の sort と既定順へ戻す方法を操作から判断できるようにする。共通台帳、要約、グラフ系列・凡例はこの例外に含めない。
+- 固定メンバーは `いーゆー → ぽんた → あかねまみ → おーたか` の順と名前で識別し、member sequence はこの順に `青 → 赤 → 黄 → 緑` を対応させる。この順序と色順を共通台帳、分析表、4人を表すグラフ系列・凡例へ一貫して適用し、順位、指標値、試合ごとのプレー順で並べ替えない。ただし、1試合の順位・総資産を読む結果台帳は1位からの順位順とする。色は名前を補助する走査用の手掛かりとし、固定メンバーの同一性を色だけに依存させない。
+- 固定メンバーを並べる表示の既定順は、前項の順位台帳を除き canonical 順とする。ただし、利用者が列見出しなどの明示された操作で並び替えを要求した詳細表は、その表の範囲に限って指定順を優先してよい。並び替え後も member sequence の色と名前の対応は変えず、現在の sort と既定順へ戻す方法を操作から判断できるようにする。共通台帳、要約、グラフ系列・凡例はこの例外に含めない。
 - 試合記録の play-order sequence も `プレー順1=青`、`2=赤`、`3=黄`、`4=緑` とするため、固定メンバーの member sequence と異なる色が同じ人物へ付く場合がある。両者を併記するときは play-order marker だけに4色を使い、固定メンバー名は neutral にする。固定メンバー名と `プレー順N` は別の可視ラベルで示し、順位はどちらの sequence からも独立させる。
+- 編集workspaceのプレー順の色は `PlayOrderMark` の丸印と番号ラベルへ集約する。行・cardの外周の一辺だけを色付けし、角丸へ接続する装飾を重ねない。
 - source image と連動する編集 workspace は、対応関係を保つため画像上の並びに合わせてよい。ただし、固定メンバー名と `プレー順N` を別のラベルとして各入力に示し、確定後の結果表示は固定メンバー順へ戻す。結果表示では順位、プレーヤー名、総資産を主情報とし、画面固有の補助指標は対象要求を正本とする。
 - 分析の入口は「平均順位の差が縮まったか」「最近の負けが通常より続いているか」「桃鉄型など別の型を試す根拠があるか」という会話へ答えられる構成にする。順位内訳、平均順位と差、直近範囲、総資産・収益を優先候補とし、型の変更は推薦ではなく根拠付きの仮説として示す。
 - 前後の差は「改善」「後退」「維持」「初戦」と値を併記し、符号付き小数だけに意味を持たせない。
@@ -207,7 +240,8 @@
 - component test は、shared primitive と利用者価値が現れる component を中心に、選択した state matrix、keyboard、focus、accessible name、local error、pending 中の重複操作、reduced motion 時の挙動を実操作で固定する。rendered size が必要な hit target は代表 flow の browser / visual evidence で確認し、各 component へ同じ case を複製しない。
 - 固定メンバー、プレー順、状態・意味 token のように複数画面が消費する対応関係は、共通の型・定義を実装上の正本とし、その consumer 契約を unit / component test で代表確認する。各画面の source 文字列を横断走査しない。
 - 主要 flow は Playwright で、変更が影響する layout mode の代表 viewport と主要状態を確認し、URL、request、保存、download、主要結果を主 oracle とする。responsive behavior を変える場合は対応する最小幅を含め、意図しない横 scroll、safe area、focus 復帰、dialog / disclosure の位置変化も確認する。同じ layout mode の近接幅を一律に重複実行しない。
-- screenshot は補助とし、視覚レビューでは hierarchy、読み幅、関係的余白、product specificity、restraint、structural fit を確認する。component が親 slot に追従していること、狭幅と広幅で intrinsic constraint が保たれること、sibling 間の divider と部品 perimeter が二重にならないことも代表画面で確認する。初見点検と cognitive walkthrough で、目的、現在地、主要操作を説明できるか確認する。
+- screenshot は補助とし、視覚レビューでは hierarchy、読み幅、関係的余白、product specificity、restraint、structural fit を確認する。共通の文字・内容patternを導入するときは、適用する異なる用途の代表画面で、主情報・本文・メタ情報が同じ役割として読め、画面固有の優先順位や必要な注意を失わないことを確認する。component が親 slot に追従していること、狭幅と広幅で intrinsic constraint が保たれること、sibling 間の divider と部品 perimeter が二重にならないことも代表画面で確認する。初見点検と cognitive walkthrough で、目的、現在地、主要操作を説明できるか確認する。
+- ウェイト変更では、通常の label・操作・metadata が主要結果と競合せず、残した主要強調がその画面で読むべき結果や問題に対応することを確認する。500 と 400 が同じ face でも見出しを判別でき、selected / disabled / error と現在地を太字だけに依存せず認識できること、文字幅の変化で折り返しや操作位置が破綻しないことも代表 viewport と状態で確認する。computed weight や太字の個数だけを合格条件にせず、OS ごとの描画を未確認ならその境界を報告する。
 - page 最上部の可視タイトルを省略する変更では、空の header slot や余白が残らず主要 surface が最初の page scope になること、移した action が作用対象の近くにあり loading / terminal / ready で順序が一致すること、global navigation・landmark・section heading・control label から現在地と目的を説明できることを代表 route で確認する。
 - 角丸または文字 scale を変える場合は、page surface、dialog、bounded panel、control、badge、画像 frame が同時に現れる代表画面で包含階層を確認する。読み幅を変える場合は短い通常文だけで合格とせず、長い日本語の description、notice、error を置いた wide viewport でも一行が readable measure を超えないことを確認する。文字を大きくした結果は、desktop と mobile の dense data view で欠落、衝突、不自然な縮小、page 全体の横 scroll がないことを確認する。
 - 余白 scale または spacing owner を変える場合は、ready だけでなく loading、error、empty、dialog の body / error 有無、fixed feedback を含む代表状態で、header、surface、section、action の位置が不意に移動しないことを確認する。mobile と desktop で同格の component の内余白が揃い、group 間が group 内より明確に広く、表・図表の走査密度を損なわず、focus outline が隣接 action と衝突せず、safe area を含む左右の viewport gutter が欠けないことを visual review する。

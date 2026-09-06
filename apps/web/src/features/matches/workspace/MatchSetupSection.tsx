@@ -15,6 +15,7 @@ import { Disclosure } from "@/shared/ui/data/Collapsible";
 import { AlertDialog } from "@/shared/ui/feedback/Dialog";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { TextField } from "@/shared/ui/forms/TextField";
+import { contentText, fieldText } from "@/shared/ui/typography";
 
 type MatchSetupSectionProps = {
   cancellation: MatchWorkspaceCancellationModel;
@@ -66,15 +67,13 @@ export function MatchSetupSection({
         summary={
           <span className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
             <span className="min-w-0 flex-1">
-              <span className="block text-sm font-semibold text-[var(--color-text-primary)]">
-                保存先と試合条件
-              </span>
+              <span className={cn(contentText.heading, "block")}>保存先と試合条件</span>
               <span
                 className={cn(
-                  "mt-0.5 block truncate text-xs tabular-nums",
+                  "mt-0.5 block tabular-nums",
                   hasErrors || !contextComplete
-                    ? "font-semibold text-[var(--color-danger)]"
-                    : "text-[var(--color-text-secondary)]",
+                    ? fieldText.error
+                    : cn(contentText.supporting, "truncate"),
                 )}
                 title={contextSummary}
               >

@@ -78,7 +78,7 @@ function AuthLoading({ message, standalone = false }: { message: string; standal
   return (
     <RouteGuardFrame standalone={standalone}>
       <PageContentSurface aria-busy="true" aria-label="ログイン状態を確認中">
-        <p className="text-sm font-semibold text-[var(--color-text-primary)]">{message}</p>
+        <p className="font-emphasis text-sm text-[var(--color-text-primary)]">{message}</p>
         <div className="mt-4 grid gap-3">
           <Skeleton className="h-10 w-full max-w-md" />
           <Skeleton className="h-20 w-full" />

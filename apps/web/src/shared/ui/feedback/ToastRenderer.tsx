@@ -5,6 +5,7 @@ import { IconButton } from "@/shared/ui/actions/IconButton";
 import { cn } from "@/shared/ui/cn";
 import { toastToneClass, toastViewportClassName } from "@/shared/ui/feedback/toastPresentation";
 import { instantMotionTransition, politeMotionTransition } from "@/shared/ui/motion/transitions";
+import { contentText } from "@/shared/ui/typography";
 
 const toastVisible = { opacity: 1 } as const;
 const toastHidden = { opacity: 0 } as const;
@@ -34,8 +35,8 @@ function PresentToast({ reduceMotion, toast }: { reduceMotion: boolean | null; t
         <Toast.Content>
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
-              <Toast.Title className="text-sm font-semibold text-[var(--color-text-primary)]" />
-              <Toast.Description className="mt-0.5 text-xs leading-5 text-[var(--color-text-secondary)]" />
+              <Toast.Title className={contentText.heading} />
+              <Toast.Description className={cn(contentText.body, "mt-1 text-pretty")} />
             </div>
             <Toast.Close
               aria-label="通知を閉じる"

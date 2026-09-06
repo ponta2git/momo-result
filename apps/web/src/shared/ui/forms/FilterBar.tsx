@@ -62,7 +62,7 @@ export function FilterBar({
             panelPadding="sm"
             summary={
               <span className="min-w-0">
-                <span className="block text-sm font-semibold text-[var(--color-text-primary)]">
+                <span className="font-plain block text-sm text-[var(--color-text-primary)]">
                   {details.label}
                 </span>
                 {details.summary ? (

@@ -1,7 +1,9 @@
 import { useId } from "react";
 import type { ReactNode } from "react";
 
+import { cn } from "@/shared/ui/cn";
 import { TabsList, TabsPanel, TabsRoot, TabsTab } from "@/shared/ui/forms/Tabs";
+import { contentText } from "@/shared/ui/typography";
 
 import type { ExportFormat } from "./exportTypes";
 import { exportFormats } from "./exportViewModel";
@@ -27,7 +29,7 @@ export function ExportFormatTabs({
 
   return (
     <section aria-labelledby={headingId}>
-      <h2 className="mb-2 text-sm font-semibold text-[var(--color-text-primary)]" id={headingId}>
+      <h2 className={cn(contentText.heading, "mb-2")} id={headingId}>
         ファイル形式
       </h2>
       <TabsRoot

@@ -53,7 +53,7 @@ export function PaginationControls(props: PaginationControlsProps) {
           : "bg-transparent",
       )}
     >
-      <p className="text-sm font-semibold text-[var(--color-text-secondary)] tabular-nums sm:inline-flex sm:min-h-11 sm:items-center">
+      <p className="font-plain text-sm text-[var(--color-text-secondary)] tabular-nums sm:inline-flex sm:min-h-11 sm:items-center">
         {formatPaginationRange(pagination)}
       </p>
 
@@ -113,7 +113,7 @@ export function PaginationControls(props: PaginationControlsProps) {
           </div>
           <span
             className={cn(
-              "inline-flex min-h-11 min-w-0 items-center justify-center rounded-sm border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-3 text-sm font-semibold text-[var(--color-text-secondary)] tabular-nums sm:min-w-22",
+              "inline-flex min-h-11 min-w-0 items-center justify-center rounded-sm border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-3 text-sm font-plain text-[var(--color-text-secondary)] tabular-nums sm:min-w-22",
               variant === "full" ? "order-1 col-span-4 sm:order-none sm:col-span-1" : "",
             )}
           >

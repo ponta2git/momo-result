@@ -16,6 +16,7 @@ import { Notice } from "@/shared/ui/feedback/Notice";
 import { SelectField } from "@/shared/ui/forms/SelectField";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
+import { contentText } from "@/shared/ui/typography";
 
 export function SeriesAnalysisAdminPage() {
   const page = useSeriesAnalysisAdminPageModel();
@@ -119,7 +120,7 @@ export function SeriesAnalysisAdminPage() {
                 />
               </div>
               {page.recalculation.titleReserved ? (
-                <p className="text-sm text-[var(--color-text-secondary)]">
+                <p className={contentText.body}>
                   この作品には処理待ちの手動再計算予約があります。完了後にもう一度予約できます。
                 </p>
               ) : null}

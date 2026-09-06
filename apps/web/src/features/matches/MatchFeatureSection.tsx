@@ -1,100 +1,24 @@
-import type { MatchDetailRefreshModel } from "@/features/matches/matchDetailPageModel";
 import type { MatchFeatureBadge } from "@/features/matches/matchDetailViewModel";
-import type { MatchFeatureView } from "@/features/matches/matchFeatureViewModel";
-import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
-import { Notice } from "@/shared/ui/feedback/Notice";
 
-export function MatchFeatureSection({
-  needsManualRefresh,
-  refresh,
-  view,
-}: {
-  needsManualRefresh: boolean;
-  refresh: MatchDetailRefreshModel;
-  view: MatchFeatureView;
-}) {
-  const ready = view.kind === "ready-empty" || view.kind === "with-items";
-  const canRefresh = view.kind !== "load-failed";
-
+export function MatchFeatureSection({ badges }: { badges: MatchFeatureBadge[] }) {
+  if (badges.length === 0) return null;
   return (
-    <section aria-label="試合の特徴" className="grid gap-2">
-      <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
-        <h2 className="text-xs font-semibold text-[var(--color-text-primary)]">試合の特徴</h2>
-        {ready ? (
-          <p className="text-xs font-medium text-[var(--color-text-secondary)]">
-            {view.scopeLabel}
-          </p>
-        ) : null}
-      </div>
-      {view.kind === "with-items" ? (
-        <ul className="flex flex-wrap gap-2">
-          {view.badges.map((badge) => (
-            <li
-              key={badge.id}
-              aria-label={`${badge.label}。${badge.description}`}
-              title={badge.description}
-              className={cn(
-                "inline-flex min-h-7 items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold text-[var(--color-text-primary)]",
-                matchFeatureBadgeClass(badge),
-              )}
-            >
-              <span>{badge.label}</span>
-            </li>
-          ))}
-        </ul>
-      ) : null}
-      {view.kind === "ready-empty" ? (
-        <p className="text-xs text-[var(--color-text-secondary)]">
-          同じ条件の試合と比べて、表示対象の特徴はありません。
-        </p>
-      ) : null}
-      {view.kind === "loading" ? (
-        <p className="text-xs text-[var(--color-text-secondary)]" role="status">
-          同じ条件の試合との特徴を確認しています。
-        </p>
-      ) : null}
-      {view.kind === "load-failed" ? (
-        <Notice
-          action={
-            <Button
-              pending={view.retrying}
-              pendingLabel="特徴を再読み込み中"
-              size="sm"
-              variant="secondary"
-              onClick={view.onRetry}
-            >
-              特徴を再読み込み
-            </Button>
-          }
-          title="試合の特徴を読み込めません"
-          tone="warning"
+    <ul aria-label="試合の特徴" className="flex flex-wrap gap-2">
+      {badges.map((badge) => (
+        <li
+          key={badge.id}
+          aria-label={`${badge.label}。${badge.description}`}
+          title={badge.description}
+          className={cn(
+            "inline-flex min-h-7 items-center gap-2 rounded-full border px-3 py-1 text-xs font-plain text-[var(--color-text-primary)]",
+            matchFeatureBadgeClass(badge),
+          )}
         >
-          <p>順位・総資産は表示したままです。通信状態を確認して再読み込みしてください。</p>
-        </Notice>
-      ) : null}
-      {view.kind === "unavailable" ? (
-        <p className="text-xs text-[var(--color-text-secondary)]">{view.message}</p>
-      ) : null}
-      {needsManualRefresh && ready ? (
-        <p className="text-xs text-[var(--color-text-secondary)]" role="status">
-          新しい分析を計算しています。完了状況は更新して確認できます。
-        </p>
-      ) : null}
-      {canRefresh ? (
-        <div>
-          <Button
-            pending={refresh.pending}
-            pendingLabel="特徴を更新中"
-            size="sm"
-            variant="secondary"
-            onClick={refresh.run}
-          >
-            特徴を更新
-          </Button>
-        </div>
-      ) : null}
-    </section>
+          {badge.label}
+        </li>
+      ))}
+    </ul>
   );
 }
 

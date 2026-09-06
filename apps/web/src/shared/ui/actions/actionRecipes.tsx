@@ -62,7 +62,7 @@ export function buttonClassName({
 }) {
   return cn(
     actionBaseClass,
-    "min-w-0 gap-2 font-semibold whitespace-normal break-words disabled:cursor-not-allowed disabled:opacity-60",
+    "min-w-0 gap-2 font-plain whitespace-normal break-words disabled:cursor-not-allowed disabled:opacity-60",
     buttonSizeClass[size],
     buttonVariantClass[variant],
     disabled && "cursor-not-allowed opacity-60",

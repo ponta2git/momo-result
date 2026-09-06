@@ -3,6 +3,7 @@ import type { HTMLAttributes, ReactNode } from "react";
 
 import { cn } from "@/shared/ui/cn";
 import { readableTextWidthClass } from "@/shared/ui/layout/readableText";
+import { fieldText } from "@/shared/ui/typography";
 
 export type FieldLayout = "stack" | "subgrid";
 
@@ -47,10 +48,7 @@ export function Field({
       {...props}
       data-field-root=""
     >
-      <label
-        className="mb-2 text-sm leading-5 font-semibold text-[var(--color-text-primary)]"
-        htmlFor={htmlFor}
-      >
+      <label className={cn(fieldText.label, "mb-2")} htmlFor={htmlFor}>
         {label}
         {required ? <span className="ml-1 text-[var(--color-danger)]">*</span> : null}
       </label>
@@ -59,10 +57,7 @@ export function Field({
         {description ? (
           <p
             id={resolvedDescriptionId}
-            className={cn(
-              "momo-copy min-w-0 text-xs text-[var(--color-text-secondary)]",
-              readableTextWidthClass,
-            )}
+            className={cn(fieldText.description, "min-w-0 text-pretty", readableTextWidthClass)}
           >
             {description}
           </p>
@@ -70,10 +65,7 @@ export function Field({
         {error ? (
           <p
             id={resolvedErrorId}
-            className={cn(
-              "momo-copy min-w-0 text-xs text-[var(--color-danger)]",
-              readableTextWidthClass,
-            )}
+            className={cn(fieldText.error, "min-w-0 text-pretty", readableTextWidthClass)}
             role="alert"
           >
             {error}

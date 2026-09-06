@@ -6,8 +6,11 @@ import { formatApiError } from "@/shared/api/problemDetails";
 import { formatMatchNoInEvent } from "@/shared/domain/matchLabels";
 import { memberDisplayName } from "@/shared/domain/members";
 import { Button } from "@/shared/ui/actions/Button";
+import { FactList } from "@/shared/ui/data/FactList";
 import { AlertDialog } from "@/shared/ui/feedback/Dialog";
 import { Notice } from "@/shared/ui/feedback/Notice";
+import { ContentWithActions } from "@/shared/ui/layout/ContentWithActions";
+import { contentText } from "@/shared/ui/typography";
 
 export function MatchRecordMetadata({
   confirmDelete,
@@ -38,46 +41,42 @@ export function MatchRecordMetadata({
           {errorMessage}
         </Notice>
       ) : null}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h2
-            className="text-base font-semibold text-[var(--color-text-primary)]"
-            id="match-record-metadata-heading"
-          >
+      <ContentWithActions
+        actions={
+          <AlertDialog
+            cancelLabel="キャンセル"
+            confirmLabel={isDeletePending ? "削除中…" : "削除する"}
+            formatError={(error) => formatApiError(error, "削除に失敗しました")}
+            pending={isDeletePending}
+            description={`${formatMatchNoInEvent(match.matchNoInEvent)}を完全に削除します。この操作は取り消せません。`}
+            open={showConfirm}
+            title="試合を削除しますか？"
+            trigger={
+              <Button size="sm" variant="danger" onClick={openDeleteDialog}>
+                削除
+              </Button>
+            }
+            onConfirm={handleDeleteConfirm}
+            onOpenChange={setShowConfirm}
+          />
+        }
+      >
+        <div className="grid min-w-0 gap-2">
+          <h2 className={contentText.heading} id="match-record-metadata-heading">
             記録情報
           </h2>
+          <FactList
+            ariaLabel="試合の記録情報"
+            columns={3}
+            items={[
+              { id: "owner", label: "オーナー", value: memberDisplayName(match.ownerMemberId) },
+              { id: "playedAt", label: "対戦日時", value: formatMatchDetailDate(match.playedAt) },
+              { id: "createdAt", label: "確定日時", value: formatMatchDetailDate(match.createdAt) },
+            ]}
+            layout="plain"
+          />
         </div>
-        <AlertDialog
-          cancelLabel="キャンセル"
-          confirmLabel={isDeletePending ? "削除中…" : "削除する"}
-          formatError={(error) => formatApiError(error, "削除に失敗しました")}
-          pending={isDeletePending}
-          description={`${formatMatchNoInEvent(match.matchNoInEvent)}を完全に削除します。この操作は取り消せません。`}
-          open={showConfirm}
-          title="試合を削除しますか？"
-          trigger={
-            <Button size="sm" variant="danger" onClick={openDeleteDialog}>
-              削除
-            </Button>
-          }
-          onConfirm={handleDeleteConfirm}
-          onOpenChange={setShowConfirm}
-        />
-      </div>
-      <dl className="grid gap-3 text-sm sm:grid-cols-3">
-        <div>
-          <dt className="text-xs font-semibold text-[var(--color-text-secondary)]">オーナー</dt>
-          <dd className="mt-1">{memberDisplayName(match.ownerMemberId)}</dd>
-        </div>
-        <div>
-          <dt className="text-xs font-semibold text-[var(--color-text-secondary)]">対戦日時</dt>
-          <dd className="mt-1 tabular-nums">{formatMatchDetailDate(match.playedAt)}</dd>
-        </div>
-        <div>
-          <dt className="text-xs font-semibold text-[var(--color-text-secondary)]">確定日時</dt>
-          <dd className="mt-1 tabular-nums">{formatMatchDetailDate(match.createdAt)}</dd>
-        </div>
-      </dl>
+      </ContentWithActions>
     </section>
   );
 }

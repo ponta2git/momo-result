@@ -57,7 +57,7 @@ function ToastRendererFallback() {
           )}
           key={toast.id}
         >
-          <p className="text-sm font-semibold text-[var(--color-text-primary)]">{toast.title}</p>
+          <p className="font-structure text-sm text-[var(--color-text-primary)]">{toast.title}</p>
           {toast.description ? (
             <p className="mt-0.5 text-xs leading-5 text-[var(--color-text-secondary)]">
               {toast.description}

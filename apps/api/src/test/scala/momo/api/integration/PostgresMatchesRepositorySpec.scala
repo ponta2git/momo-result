@@ -379,9 +379,22 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
       _ <- seedPrereqs
       _ <- createMatch(sampleMatch("match_stats_001", 1))
       _ <- createMatch(sampleMatch("match_stats_004", 4))
+      _ <- seedSecondTitle
+      _ <- createMatch(sampleMatch("match_stats_002", 2).copy(
+        gameTitleId = secondGameTitleId,
+        mapMasterId = secondMapMasterId,
+        seasonMasterId = secondSeasonMasterId,
+      ))
       stats <- matches.statsByHeldEvents(List(heldEventId, missing))
     yield
-      assertEquals(stats(heldEventId).matchCount, 2)
+      assertEquals(stats(heldEventId).matchCount, 3)
+      assertEquals(
+        stats(heldEventId).scopes.toSet,
+        Set(
+          HeldEventScope(Some(gameTitleId), Some(seasonMasterId)),
+          HeldEventScope(Some(secondGameTitleId), Some(secondSeasonMasterId)),
+        )
+      )
       assertEquals(stats(heldEventId).maxMatchNo, 4)
       assertEquals(stats(missing).matchCount, 0)
       assertEquals(stats(missing).maxMatchNo, 0)

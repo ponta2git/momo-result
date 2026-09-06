@@ -17,10 +17,12 @@ import {
 import type { SeriesComparisonAggregateV3 } from "@/shared/api/seriesAnalysis";
 import { formatSeriesMatchIndex } from "@/shared/domain/matchLabels";
 import { currentInternalLocation, withReturnTo } from "@/shared/navigation/returnTo";
+import { cn } from "@/shared/ui/cn";
 import { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
 import { DataVizHistogramChart } from "@/shared/ui/dataViz/HistogramChart";
 import { DataVizScatterPlot } from "@/shared/ui/dataViz/ScatterPlot";
 import { rankBackgroundColor, rankBorderColor } from "@/shared/ui/rank/rankPresentation";
+import { contentText } from "@/shared/ui/typography";
 
 export function AssetRevenueHistograms({ response }: { response: SeriesComparisonAggregateV3 }) {
   const seriesIdentity = response.players.map((player) => ({
@@ -30,7 +32,7 @@ export function AssetRevenueHistograms({ response }: { response: SeriesCompariso
   return (
     <div className="grid gap-6">
       <div>
-        <h3 className="mb-2 text-sm font-semibold">総資産の分布</h3>
+        <h3 className={cn(contentText.heading, "mb-2")}>総資産の分布</h3>
         <DataVizHistogramChart
           ariaLabel="4人の総資産分布"
           bins={response.histograms.assets.bins.map((bin) => ({
@@ -45,7 +47,7 @@ export function AssetRevenueHistograms({ response }: { response: SeriesCompariso
         />
       </div>
       <div>
-        <h3 className="mb-2 text-sm font-semibold">物件収益の分布</h3>
+        <h3 className={cn(contentText.heading, "mb-2")}>物件収益の分布</h3>
         <DataVizHistogramChart
           ariaLabel="4人の物件収益分布"
           bins={response.histograms.revenue.bins.map((bin) => ({
@@ -93,7 +95,7 @@ export function RevenueConversionMatrices({
               className="min-w-0 rounded-sm border border-[var(--color-border)] bg-[var(--color-surface)] p-4"
               key={entry.memberId}
             >
-              <h3 className="mb-3 text-sm font-semibold">
+              <h3 className={cn(contentText.heading, "mb-4")}>
                 <MemberSequenceLabel memberId={entry.memberId}>
                   {entry.displayName}
                 </MemberSequenceLabel>
@@ -161,12 +163,14 @@ export function RevenueConversionMatrices({
                                   }
                             }
                           >
-                            <strong className="text-sm tabular-nums">{cell.count}</strong>
-                            <p className="text-xs text-[var(--color-text-primary)] tabular-nums">
+                            <strong className={cn(contentText.compactPrimary, "tabular-nums")}>
+                              {cell.count}
+                            </strong>
+                            <p className={cn(contentText.body, "tabular-nums")}>
                               {formatPercent(cell.rate)}
                             </p>
                             {focused ? (
-                              <p className="mt-0.5 text-xs font-semibold text-[var(--color-action)]">
+                              <p className="font-plain mt-0.5 text-xs text-[var(--color-action)]">
                                 この試合
                               </p>
                             ) : null}

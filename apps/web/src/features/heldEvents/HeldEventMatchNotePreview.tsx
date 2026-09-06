@@ -2,6 +2,8 @@ import { useId, useLayoutEffect, useRef, useState } from "react";
 
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
+import { readableTextWidthClass } from "@/shared/ui/layout/readableText";
+import { contentText } from "@/shared/ui/typography";
 
 export function HeldEventMatchNotePreview({ body }: { body: string }) {
   const bodyId = useId();
@@ -25,13 +27,13 @@ export function HeldEventMatchNotePreview({ body }: { body: string }) {
   }, [body, expanded]);
 
   return (
-    <div>
-      <p className="text-xs font-semibold text-[var(--color-text-secondary)]">試合メモ</p>
+    <div aria-label="試合メモ" className={readableTextWidthClass} role="note">
       <p
         id={bodyId}
         ref={textRef}
         className={cn(
-          "mt-1 whitespace-pre-wrap break-words text-sm leading-6 text-[var(--color-text-primary)]",
+          contentText.body,
+          "whitespace-pre-wrap break-words text-pretty",
           !expanded && "line-clamp-3",
         )}
       >

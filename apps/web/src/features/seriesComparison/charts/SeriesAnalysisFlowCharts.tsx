@@ -14,9 +14,11 @@ import {
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
 import type { SeriesComparisonAggregateV3 } from "@/shared/api/seriesAnalysis";
 import { formatSeriesMatchIndex } from "@/shared/domain/matchLabels";
+import { cn } from "@/shared/ui/cn";
 import { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
 import { DataVizLineChart } from "@/shared/ui/dataViz/LineChart";
 import { rankBackgroundColor, rankBorderColor } from "@/shared/ui/rank/rankPresentation";
+import { contentText } from "@/shared/ui/typography";
 
 export function RankTrendCharts({
   focusedItemIds,
@@ -32,7 +34,7 @@ export function RankTrendCharts({
   return (
     <div className="grid gap-6">
       <div>
-        <h3 className="mb-2 text-sm font-semibold">累積平均順位</h3>
+        <h3 className={cn(contentText.heading, "mb-2")}>累積平均順位</h3>
         <DataVizLineChart
           ariaLabel="4人の累積平均順位の推移"
           domain={[1, 4]}
@@ -48,7 +50,7 @@ export function RankTrendCharts({
         />
       </div>
       <div>
-        <h3 className="mb-2 text-sm font-semibold">順位のぶれ</h3>
+        <h3 className={cn(contentText.heading, "mb-2")}>順位のぶれ</h3>
         <DataVizLineChart
           ariaLabel="4人の順位のぶれの推移"
           focusItemIds={focusedItemIds}
@@ -78,7 +80,7 @@ export function CumulativeFormCharts({
   return (
     <div className="grid gap-6">
       <div>
-        <h3 className="mb-2 text-sm font-semibold">累積入賞率</h3>
+        <h3 className={cn(contentText.heading, "mb-2")}>累積入賞率</h3>
         <DataVizLineChart
           ariaLabel="4人の累積入賞率の推移"
           domain={[0, 1]}
@@ -93,7 +95,7 @@ export function CumulativeFormCharts({
         />
       </div>
       <div>
-        <h3 className="mb-2 text-sm font-semibold">累積下位率</h3>
+        <h3 className={cn(contentText.heading, "mb-2")}>累積下位率</h3>
         <DataVizLineChart
           ariaLabel="4人の累積下位率の推移"
           domain={[0, 1]}
@@ -165,12 +167,12 @@ export function MomentumMatrices({
               className="min-w-0 rounded-sm border border-[var(--color-border)] bg-[var(--color-surface)] p-4"
               key={entry.memberId}
             >
-              <h3 className="mb-3 font-semibold">
+              <h3 className={cn(contentText.heading, "mb-4")}>
                 <MemberSequenceLabel memberId={entry.memberId}>
                   {entry.displayName}
                 </MemberSequenceLabel>
               </h3>
-              <dl className="mb-3 grid gap-2 text-xs sm:grid-cols-3">
+              <dl className="mb-6 grid gap-4 sm:grid-cols-3">
                 <MomentumRateSummary label="下位の次に入賞" rate={entry.afterLower} />
                 <MomentumRateSummary label="4位の次に入賞" rate={entry.afterFourth} />
                 <MomentumRateSummary label="入賞の次に下位" rate={entry.afterPodium} />
@@ -232,8 +234,10 @@ export function MomentumMatrices({
                                   }
                             }
                           >
-                            <strong className="text-sm tabular-nums">{cell.count}</strong>
-                            <p className="text-xs text-[var(--color-text-primary)] tabular-nums">
+                            <strong className={cn(contentText.compactPrimary, "tabular-nums")}>
+                              {cell.count}
+                            </strong>
+                            <p className={cn(contentText.body, "tabular-nums")}>
                               {formatPercent(cell.rate)}
                             </p>
                           </MatrixCell>

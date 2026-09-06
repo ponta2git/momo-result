@@ -8,6 +8,7 @@ import { cn } from "@/shared/ui/cn";
 import { readableTextWidthClass } from "@/shared/ui/layout/readableText";
 import { StatusBadge } from "@/shared/ui/status/StatusBadge";
 import type { StatusBadgeTone } from "@/shared/ui/status/StatusBadge";
+import { contentText } from "@/shared/ui/typography";
 
 export type PageHeaderDescriptionStatus = {
   label: ReactNode;
@@ -40,26 +41,17 @@ export function PageHeader({
   return (
     <header className="grid min-w-0 gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
       <div className="min-w-0">
-        {eyebrow ? (
-          <p className="momo-label text-[var(--color-text-secondary)]">{eyebrow}</p>
-        ) : null}
+        {eyebrow ? <p className={contentText.supporting}>{eyebrow}</p> : null}
         <h1
           className={cn(
-            "momo-heading text-2xl font-semibold text-balance text-[var(--color-text-primary)] md:text-3xl",
+            "momo-heading text-2xl font-structure text-balance text-[var(--color-text-primary)] md:text-3xl",
             eyebrow ? "mt-1" : "",
           )}
         >
           {title}
         </h1>
         {description ? (
-          <p
-            className={cn(
-              "momo-copy mt-2 text-sm text-[var(--color-text-secondary)]",
-              readableTextWidthClass,
-            )}
-          >
-            {description}
-          </p>
+          <p className={cn(contentText.body, "mt-2", readableTextWidthClass)}>{description}</p>
         ) : null}
         {descriptionStatus ? (
           <div className="mt-2 w-fit">

@@ -5,6 +5,7 @@ import { sourceImageKindLabels } from "@/features/matches/workspace/sourceImages
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
 import { readableTextWidthClass } from "@/shared/ui/layout/readableText";
+import { contentText } from "@/shared/ui/typography";
 
 export function ScoreGridReviewToolbar({
   activeItem,
@@ -34,37 +35,30 @@ export function ScoreGridReviewToolbar({
     >
       <div className="min-w-0" aria-live="polite">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="rounded-xs border border-[var(--color-review)]/70 bg-[var(--color-review)]/14 px-2 py-0.5 text-xs font-semibold text-[var(--color-text-primary)] tabular-nums">
+          <span className="font-plain rounded-xs border border-[var(--color-review)]/70 bg-[var(--color-review)]/14 px-2 py-0.5 text-xs text-[var(--color-text-primary)] tabular-nums">
             未確認{remainingCount}件／全{totalCount}件
           </span>
           {activeItem ? (
-            <span className="truncate text-sm font-semibold text-[var(--color-text-primary)]">
-              {activeItem.label}
-            </span>
+            <span className={contentText.compactPrimary}>{activeItem.label}</span>
           ) : null}
           {activeReviewed ? (
-            <span className="text-xs font-semibold text-[var(--color-success)]">確認済み</span>
+            <span className="font-plain text-xs text-[var(--color-success)]">確認済み</span>
           ) : null}
         </div>
         {activeItem ? (
-          <p
-            className={cn(
-              "mt-1 text-xs leading-5 text-pretty text-[var(--color-text-secondary)]",
-              readableTextWidthClass,
-            )}
-          >
-            {activeItem.message}
-            <span className="ml-1 whitespace-nowrap">
-              ・{sourceImageKindLabels[activeItem.sourceKind]}
+          <div className="mt-1 grid gap-1">
+            <p className={cn(contentText.body, "text-pretty", readableTextWidthClass)}>
+              {activeItem.message}
+            </p>
+            <p className={contentText.supporting}>
+              {sourceImageKindLabels[activeItem.sourceKind]}
               {activeItem.confidence === null
                 ? ""
                 : `・確度 ${Math.round(activeItem.confidence * 100)}%`}
-            </span>
-          </p>
+            </p>
+          </div>
         ) : (
-          <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
-            すべての強調項目を確認しました。
-          </p>
+          <p className={cn(contentText.body, "mt-1")}>すべての強調項目を確認しました。</p>
         )}
       </div>
       <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">

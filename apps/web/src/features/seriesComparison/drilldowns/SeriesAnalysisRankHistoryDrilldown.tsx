@@ -13,6 +13,7 @@ import { DataTable } from "@/shared/ui/data/DataTable";
 import { FactList } from "@/shared/ui/data/FactList";
 import { DataVizLineChart } from "@/shared/ui/dataViz/LineChart";
 import { RankBadge } from "@/shared/ui/rank/RankBadge";
+import { contentText } from "@/shared/ui/typography";
 
 import { ChangeBadge, deltaDirection, rankDeltaLabel } from "./SeriesAnalysisChangeBadge";
 
@@ -30,7 +31,7 @@ export function RankHistoryDrilldown({
 }) {
   const qualityAdvisory = qualityAdvisoryLabel(payload.summary.qualityStatus);
   return (
-    <div className="grid gap-4">
+    <div className="grid gap-6">
       <FactList
         ariaLabel={`${playerName}の平均順位推移の要約`}
         columns={4}
@@ -61,7 +62,7 @@ export function RankHistoryDrilldown({
               ]
             : []),
         ]}
-        layout="segmented"
+        layout="plain"
       />
       <DataVizLineChart
         ariaLabel={`${playerName}の累積平均順位の推移`}
@@ -190,9 +191,7 @@ export function RankHistoryDrilldown({
                   direction={row.changeDirection}
                   magnitude={row.cumulativeAverageRankDelta}
                 />
-                <span className="text-xs text-[var(--color-text-secondary)]">
-                  順位 {rankDeltaLabel(row.rankDelta)}
-                </span>
+                <span className={contentText.supporting}>順位 {rankDeltaLabel(row.rankDelta)}</span>
               </div>
             ),
           },

@@ -7,11 +7,14 @@ import { layoutFamilies, layoutFamilyLabels } from "@/shared/api/enums";
 import type { LayoutFamily } from "@/shared/api/enums";
 import type { GameTitleResponse } from "@/shared/api/masters";
 import { Button } from "@/shared/ui/actions/Button";
+import { cn } from "@/shared/ui/cn";
 import { Dialog, DialogFooter } from "@/shared/ui/feedback/Dialog";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { ChoiceList } from "@/shared/ui/forms/ChoiceList";
 import { SelectField } from "@/shared/ui/forms/SelectField";
 import { TextField } from "@/shared/ui/forms/TextField";
+import { ContentWithActions } from "@/shared/ui/layout/ContentWithActions";
+import { contentText } from "@/shared/ui/typography";
 
 type GameTitleListItem = GameTitleResponse & { pending?: boolean };
 
@@ -55,11 +58,7 @@ export function GameTitleList({
       label: (
         <>
           {item.name}
-          {isPending ? (
-            <span className="ml-2 text-xs font-normal text-[var(--color-text-secondary)]">
-              (追加中…)
-            </span>
-          ) : null}
+          {isPending ? <span className={cn(contentText.supporting, "ml-2")}>(追加中…)</span> : null}
         </>
       ),
       pending: isPending,
@@ -87,21 +86,22 @@ export function GameTitleList({
 
   return (
     <section className="grid min-w-0 gap-4">
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h2 className="text-lg font-semibold text-[var(--color-text-primary)]">作品</h2>
-          <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
-            作品を選ぶと、対応するマップとシーズンを編集できます。
-          </p>
-        </div>
-        <div className="grid shrink-0">
+      <ContentWithActions
+        actions={
           <GameTitleCreateDialog
             key={create.formKey}
             create={create}
             defaultLayoutFamily={defaultLayoutFamily}
           />
+        }
+      >
+        <div>
+          <h2 className={contentText.heading}>作品</h2>
+          <p className={cn(contentText.body, "mt-1")}>
+            作品を選ぶと、対応するマップとシーズンを編集できます。
+          </p>
         </div>
-      </header>
+      </ContentWithActions>
 
       <div className="empty:hidden">
         <MasterResourceRefreshNotice

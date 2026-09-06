@@ -5,30 +5,42 @@ import type {
   SeriesAnalysisSafeFailureCode,
   SeriesAnalysisTrigger,
 } from "@/shared/api/seriesAnalysis";
+import { cn } from "@/shared/ui/cn";
 import { DataTable } from "@/shared/ui/data/DataTable";
 import type { DataTableColumn } from "@/shared/ui/data/DataTable";
+import { FactList } from "@/shared/ui/data/FactList";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 import { StatusBadge } from "@/shared/ui/status/StatusBadge";
 import type { StatusBadgeTone } from "@/shared/ui/status/StatusBadge";
+import { contentText } from "@/shared/ui/typography";
 
 export function ExecutionStatus({ data }: { data: SeriesAnalysisAdminOverview }) {
   const execution = data.globalExecution;
   return (
     <section aria-live="polite" className="grid min-w-0 gap-4">
       <header>
-        <h2 className="font-semibold">全体の実行状況</h2>
+        <h2 className={contentText.heading}>全体の実行状況</h2>
       </header>
-      <div className="grid gap-1">
-        <dl className="grid divide-y divide-[var(--color-border)] text-sm sm:grid-cols-4 sm:divide-x sm:divide-y-0">
-          <StatusDatum label="実行中" value={`${execution.runningCount}件`} />
-          <StatusDatum label="待機作品" value={`${execution.queuedTitleCount}作品`} />
-          <StatusDatum label="展開中の全作品操作" value={`${execution.activeCampaignCount}件`} />
-          <StatusDatum label="最古の待機" value={formatDateTime(execution.oldestQueuedAt)} />
-        </dl>
+      <div className="grid gap-2">
+        <FactList
+          ariaLabel="全体の実行状況"
+          columns={4}
+          items={[
+            { id: "running", label: "実行中", value: `${execution.runningCount}件` },
+            { id: "queued", label: "待機作品", value: `${execution.queuedTitleCount}作品` },
+            {
+              id: "campaign",
+              label: "展開中の全作品操作",
+              value: `${execution.activeCampaignCount}件`,
+            },
+            { id: "oldest", label: "最古の待機", value: formatDateTime(execution.oldestQueuedAt) },
+          ]}
+          layout="plain"
+        />
         {execution.latestActiveCampaign ? (
-          <p className="text-xs text-[var(--color-text-secondary)]">
+          <p className={contentText.body}>
             全作品操作: 予約作成{execution.latestActiveCampaign.expandedCount}件／全
             {execution.latestActiveCampaign.targetCount}作品・処理終了
             {execution.latestActiveCampaign.terminalCount}件・失敗
@@ -51,23 +63,36 @@ export function SelectedTitleStatus({
   return (
     <section className="grid min-w-0 gap-4">
       <header className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="font-semibold">{selected.gameTitleName}</h2>
+        <h2 className={contentText.heading}>{selected.gameTitleName}</h2>
         <AnalysisJobStatusBadge announceChanges status={status.calculation?.status ?? "not_run"} />
       </header>
-      <dl className="grid divide-y divide-[var(--color-border)] text-sm sm:grid-cols-3 sm:divide-x sm:divide-y-0">
-        <StatusDatum
-          label="成果物"
-          value={
-            status.artifactFreshness === "current"
-              ? "最新"
-              : status.artifactFreshness === "stale"
-                ? "更新待ち"
-                : "未作成"
-          }
-        />
-        <StatusDatum label="最終成功" value={formatDateTime(status.currentArtifact?.publishedAt)} />
-        <StatusDatum label="最新の完了" value={formatDateTime(status.calculation?.finishedAt)} />
-      </dl>
+      <FactList
+        ariaLabel={`${selected.gameTitleName}の計算状況`}
+        columns={3}
+        items={[
+          {
+            id: "artifact",
+            label: "成果物",
+            value:
+              status.artifactFreshness === "current"
+                ? "最新"
+                : status.artifactFreshness === "stale"
+                  ? "更新待ち"
+                  : "未作成",
+          },
+          {
+            id: "published",
+            label: "最終成功",
+            value: formatDateTime(status.currentArtifact?.publishedAt),
+          },
+          {
+            id: "finished",
+            label: "最新の完了",
+            value: formatDateTime(status.calculation?.finishedAt),
+          },
+        ]}
+        layout="plain"
+      />
       {selected.pendingManualRun ? (
         <div>
           <Notice tone="info" title="追加の再計算が予約されています">
@@ -84,8 +109,8 @@ export function RecentJobs({ jobs }: { jobs: SeriesAnalysisAdminOverview["recent
   return (
     <section className="grid min-w-0 gap-4">
       <header>
-        <h2 className="font-semibold">直近10件</h2>
-        <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
+        <h2 className={contentText.heading}>直近10件</h2>
+        <p className={cn(contentText.supporting, "mt-1")}>
           全作品を横断した新しい順です。履歴は45日保持します。
         </p>
       </header>
@@ -102,15 +127,6 @@ export function RecentJobs({ jobs }: { jobs: SeriesAnalysisAdminOverview["recent
         />
       )}
     </section>
-  );
-}
-
-function StatusDatum({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="px-4 py-3">
-      <dt className="text-xs text-[var(--color-text-secondary)]">{label}</dt>
-      <dd className="mt-1 font-semibold tabular-nums">{value}</dd>
-    </div>
   );
 }
 

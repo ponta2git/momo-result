@@ -3,7 +3,7 @@ package momo.api.repositories
 import cats.{~>, MonadThrow}
 
 import momo.api.domain.ids.*
-import momo.api.domain.{MatchNoInEvent, MatchRecord}
+import momo.api.domain.{HeldEventScope, MatchNoInEvent, MatchRecord}
 import momo.api.errors.AppError
 
 trait MatchesAlg[F0[_]]:
@@ -40,7 +40,11 @@ trait MatchesRepository[F[_]]:
   ): F[Map[HeldEventId, MatchesRepository.HeldEventStats]]
 
 object MatchesRepository:
-  final case class HeldEventStats(matchCount: Int, maxMatchNo: Int)
+  final case class HeldEventStats(
+      matchCount: Int,
+      maxMatchNo: Int,
+      scopes: List[HeldEventScope] = Nil
+  )
 
   final case class ListFilter(
       heldEventId: Option[HeldEventId] = None,

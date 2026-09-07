@@ -31,7 +31,7 @@ final class MatchExportRendererSpec extends FunSuite:
   )
 
   test("CSV output fixes header order and escapes RFC4180 fields"):
-    val out = MatchExportRenderer.render(MatchExportFormat.Csv, List(row)).body
+    val out = render(MatchExportFormat.Csv, List(row)).body
     val lines = out.split("\r\n", -1).toList
     assertEquals(
       lines.head,
@@ -44,9 +44,9 @@ final class MatchExportRendererSpec extends FunSuite:
     assertEquals(lines.last, "")
 
   test("TSV output escapes structural tab and newline characters"):
-    val out = MatchExportRenderer
-      .render(MatchExportFormat.Tsv, List(row.copy(seasonName = "春\t大会", playerName = "A\\B\nC")))
-      .body
+    val out =
+      render(MatchExportFormat.Tsv, List(row.copy(seasonName = "春\t大会", playerName = "A\\B\nC")))
+        .body
     val lines = out.split("\r\n", -1).toList
     assertEquals(
       lines(1),
@@ -54,7 +54,7 @@ final class MatchExportRendererSpec extends FunSuite:
     )
 
   test("CSV output neutralizes spreadsheet formulas in text cells"):
-    val out = MatchExportRenderer.render(
+    val out = render(
       MatchExportFormat.Csv,
       List(row.copy(
         seasonName = "=cmd",
@@ -70,9 +70,9 @@ final class MatchExportRendererSpec extends FunSuite:
     )
 
   test("TSV output neutralizes formulas before structural escaping"):
-    val out = MatchExportRenderer
-      .render(MatchExportFormat.Tsv, List(row.copy(seasonName = "\t=cmd", playerName = "@player")))
-      .body
+    val out =
+      render(MatchExportFormat.Tsv, List(row.copy(seasonName = "\t=cmd", playerName = "@player")))
+        .body
     val lines = out.split("\r\n", -1).toList
     assertEquals(
       lines(1),
@@ -80,16 +80,33 @@ final class MatchExportRendererSpec extends FunSuite:
     )
 
   test("empty exports still include the header line"):
-    val out = MatchExportRenderer.render(MatchExportFormat.Csv, Nil).body
+    val out = render(MatchExportFormat.Csv, Nil).body
     assertEquals(
       out,
       "シーズン,シーズンNo.,オーナー,マップ,対戦日,対戦No.,プレー順,プレーヤー名,順位,総資産,収益,目的地,プラス駅,マイナス駅,カード駅,カード売り場,スリの銀次\r\n",
     )
 
   test("reported size matches the exact UTF-8 body size"):
-    val rendered = MatchExportRenderer.render(
+    val rendered = render(
       MatchExportFormat.Csv,
       List(row.copy(seasonName = "春🌸", playerName = "ぽんた")),
     )
 
     assertEquals(rendered.sizeBytes, rendered.body.getBytes(StandardCharsets.UTF_8).length.toLong)
+
+  test("the exact UTF-8 bound succeeds and one byte less rejects the complete export"):
+    val rows = List(row.copy(playerName = "春🌸\uD800"), row)
+    List(MatchExportFormat.Csv, MatchExportFormat.Tsv).foreach { format =>
+      val rendered = render(format, rows)
+      val exactBytes = rendered.body.getBytes(StandardCharsets.UTF_8).length.toLong
+      assertEquals(MatchExportRenderer.render(format, rows, exactBytes), Some(rendered))
+      assertEquals(MatchExportRenderer.render(format, rows, exactBytes - 1), None)
+      assertEquals(MatchExportRenderer.render(format, Nil, 1), None)
+    }
+
+  private def render(
+      format: MatchExportFormat,
+      rows: List[MatchExportRow]
+  ): MatchExportRenderer.Rendered =
+    MatchExportRenderer.render(format, rows, Long.MaxValue)
+      .getOrElse(fail("unbounded test rendering unexpectedly failed"))

@@ -1,87 +1,44 @@
 # AI Document Index
 
-## 1. 読み方と到達条件
+## 1. 変更対象から読む
 
-最初に読むのは `AGENTS.md` とこの文書だけにする。次に変更対象を一つ以上のスコープへ絞る。
-`第一読` は入口、`必読` は実装前に必ず読む正本、`条件付き` は列の条件が成立したときだけ読む正本である。
-`実行正本` は現在の型・設定・挙動を決めるコード、schema、設定であり、文書中の写しより優先する。生成物、test、fixture、lint、checker、report は、下表で正本に明示したものを除き、正本を機械へ投影または観測する派生物・証拠であり、生成元の意味を上書きしない。
-長い文書は、まず目次と該当章だけ読む。 *既に読んだ文書は再読せず、ファイル名と要点を再利用する。*
+`AGENTS.md` の読込み・再確認・判断方針に従い、次表から必要な章と実装入口を選ぶ。複数の行に該当する場合は参照の和集合を扱う。
 
-| スコープ | 第一読 | 必読 | 条件付き | 実行正本 | 検証先 |
-| --- | --- | --- | --- | --- | --- |
-| 業務要件 / CSV / TSV | `docs/requirements/base.md` | — | 用語・状態遷移は `docs/domain-rule.md` | — | 対象実装の規約 |
-| 技術構成 / 非機能 | `docs/requirements/system-design.md` | `docs/test-rule.md`, `docs/dev-rule.md` | 実装境界は `docs/architecture.md`、公開運用原則は `docs/ops/README.md` | 対象の設定・runtime定義 | 変更 gate |
-| web | `docs/architecture.md` の Web | `docs/test-rule.md`, `docs/dev-rule.md` | UIは `docs/ui-rule.md`、API境界は `docs/architecture.md` の API | `apps/web/src/`、lint / build設定 | `docs/test-rule.md` の Web Evidence Catalog |
-| Web UI / UX / デザインシステム | `docs/ui-rule.md` | `docs/test-rule.md`, `docs/dev-rule.md` | 対象画面の要求、`docs/architecture.md`、`docs/domain-rule.md` | `apps/web/src/styles.css`, `apps/web/src/shared/ui/`、対象component | `docs/ui-rule.md` の検証、`docs/test-rule.md` の Web Evidence Catalog / UI Conformance |
-| UI文字列 / UX Writing / 日本語表記 | `docs/ui-rule.md` の「製品の方向性と意味」「現在地・視覚階層・情報表現」 | 対象画面の要求正本、`docs/test-rule.md`, `docs/dev-rule.md` | 用語は `docs/domain-rule.md` | 対象UIと formatter / ViewModel | `docs/test-rule.md` |
-| 製品横断の Product Experience / IA | `docs/ui-rule.md` の「製品の方向性と意味」「ナビゲーションと有限のタスクループ」 | 対象画面の要求正本、`docs/test-rule.md`, `docs/dev-rule.md` | `docs/domain-rule.md`、`docs/post-mortem/lessons.md` の該当カード | 対象route / component | `docs/test-rule.md` |
-| API / usecase | `docs/architecture.md` の API | `docs/test-rule.md`, `docs/dev-rule.md` | `docs/domain-rule.md`、`docs/db-rule.md`、`docs/redis-streams-ocr-contract.md`、該当する分析要求 | Tapir endpoint、API source | `docs/test-rule.md` の API Evidence Catalog、`docs/dev-rule.md` の Change Gates |
-| DB / repository | `docs/db-rule.md` | `docs/test-rule.md`, `docs/dev-rule.md` | `../momo-db` の schema / migration / Drizzle 設定・script / migration state を変える場合は `../momo-db/docs/development.md`、ほかに `docs/domain-rule.md`、`docs/redis-streams-ocr-contract.md`、該当する分析要求 | `../momo-db` migration、repository / query source | `docs/test-rule.md` の DB-backed API、`docs/dev-rule.md` の Change Gates |
-| Redis / OCR queue | `docs/redis-streams-ocr-contract.md` | `docs/schemas/ocr-*.schema.json`、`docs/db-rule.md`, `docs/test-rule.md`, `docs/dev-rule.md` | `docs/architecture.md` の OCR Capability / Worker Role | `docs/schemas/ocr-*.schema.json`、API producer / Rust consumer source | `docs/test-rule.md` の Processing Worker Evidence Catalog、`docs/dev-rule.md` の Change Gates |
-| OCR capability / worker role | `docs/architecture.md` の OCR Capability / Worker Role | `docs/redis-streams-ocr-contract.md`、`docs/test-rule.md`, `docs/dev-rule.md` | DB前提は `docs/db-rule.md` | `apps/processing-worker/`、OCR schema | `docs/test-rule.md` の Processing Worker Evidence Catalog、`docs/dev-rule.md` の Change Gates |
-| Analysis capability / worker role / job / artifact / API | `docs/requirements/series-analysis-batch.md` | `docs/test-rule.md`, `docs/dev-rule.md` | `docs/db-rule.md`、`docs/architecture.md`、`docs/ui-rule.md`、該当する指標・review要求 | artifact / queue schema、Tapir endpoint、`apps/processing-worker/`、Web source | `docs/test-rule.md` の Analysis Capability / Worker Evidence Catalog、`docs/dev-rule.md` の Change Gates |
-| テスト / coverage / CI | `docs/test-rule.md` | `docs/test-architecture.md`, `docs/dev-rule.md` | 境界契約は各正本 | test config、workflow。test source は品質証拠 | 変更gate |
-| ローカル起動 / コマンド / Git | `docs/dev-rule.md` | — | テスト選択は `docs/test-rule.md` | package manifest、CI workflow、script | 対象の変更gate |
-| 戦績比較ページ | `docs/requirements/series-comparison.md` | `docs/requirements/series-analysis-batch.md`, `docs/test-rule.md`, `docs/dev-rule.md` | reviewは `docs/requirements/series-review-playbook.md`、UIは `docs/ui-rule.md` | Tapir endpoint、artifact schema、Web source | analysis / Web gate |
-| 開催一覧・開催詳細 | `docs/requirements/held-event-detail.md` | `docs/test-rule.md`, `docs/dev-rule.md` | `docs/requirements/base.md`、`docs/architecture.md` | 対象API / Web source | 対象変更gate |
-| 試合メモ | `docs/requirements/match-note.md` | `docs/test-rule.md`, `docs/dev-rule.md` | `docs/requirements/base.md`、`docs/requirements/held-event-detail.md`、`docs/requirements/series-analysis-batch.md`、`docs/domain-rule.md`、`docs/ui-rule.md` | Tapir endpoint、momo-db migration、API / Web source | API / DB / Web gate |
-| docs 変更 | この文書 | 変更対象の正本、`docs/post-mortem/lessons.md` | 要求・運用の文書は変更対象に含むときだけ | 参照先のコード・schema・設定 | `git diff --check`, `pnpm public:safety:check` |
+実装変更の共通参照は `docs/test-rule.md` の「品質証拠の採用・維持・削除」と `docs/dev-rule.md` の「Change Gates」。変更に関係する evidence catalog と gate 行を読む。test の size、実行構成、parallelism、coverage、report を変更する場合だけ `docs/test-architecture.md` を加える。
 
-この表は実装規約の導線を評価するもので、要求・運用文書全体の網羅性を主張しない。
+| 変更 | 要求・専門規約 | 条件付きで加える章 | 実装入口・固有の検証境界 |
+| --- | --- | --- | --- |
+| 業務要件 / CSV / TSV | `docs/requirements/base.md` | 用語・状態は `docs/domain-rule.md` | 対象 usecase / export |
+| 技術構成 / 非機能 | `docs/requirements/system-design.md` | 構造は `docs/architecture.md`、運用は `docs/ops/README.md` | 設定・runtime 定義、変更した実行境界 |
+| Web | 対象画面の要求、`docs/architecture.md` の Web | 表示・操作は `docs/ui-rule.md`、wire は API / Wire Boundary | `apps/web/src/`、Web Evidence Catalog |
+| UI / UX / デザインシステム / 文章 / IA | 対象画面の要求、`docs/ui-rule.md` の該当章 | 用語は `docs/domain-rule.md`、実装境界は architecture の Web | styles.css、shared/ui、formatter、対象 component。UI規約の検証と UI Conformance |
+| API / usecase | `docs/architecture.md` の API、対象要求 | 状態は domain、DB は db-rule、配送は対象 queue 契約 | Tapir endpoint、`apps/api/`、API Evidence Catalog |
+| DB / repository | `docs/db-rule.md`、対象の業務・job 要求 | momo-db の schema / migration / Drizzle 設定・script / migration state 変更は `../momo-db/docs/development.md` を事前に全文読む | pinned migration、対象 query、変更経路の DB quality |
+| OCR / Redis queue | `docs/redis-streams-ocr-contract.md`、`docs/db-rule.md`、`docs/schemas/ocr-*.schema.json` | worker 構造は architecture の OCR Capability / Worker Role | API producer、`apps/processing-worker/`、queue / DB / process の変更境界 |
+| 分析 job / artifact / worker / API | `docs/requirements/series-analysis-batch.md` | DB は db-rule、構造は architecture、表示は ui-rule、指標・review は対象要求 | artifact / queue schema、Tapir、processing-worker、Web。Analysis Capability / Worker Evidence Catalog |
+| 戦績比較 | `docs/requirements/series-comparison.md`、分析 batch 要求 | review は `docs/requirements/series-review-playbook.md`、UI は ui-rule | artifact schema、worker、Web、analysis / Web gate |
+| 開催一覧・詳細 | `docs/requirements/held-event-detail.md` | 業務前提は base、メモは match-note、実装境界は architecture | 対象 API / Web |
+| 試合メモ | `docs/requirements/match-note.md` | 変更する境界に応じて base、開催詳細、分析 batch、domain、UI | Tapir、momo-db、API / Web、DB と UI の変更経路 |
+| テスト / coverage / CI | `docs/test-rule.md`、`docs/dev-rule.md` | 実行設計は test-architecture、契約の意味は専門正本 | test 設定、workflow、対象経路の証拠 |
+| ローカル起動 / コマンド / Git | `docs/dev-rule.md` の該当章 | テスト選択は test-rule | package manifest、build 設定、script、workflow |
+| インシデント / 重大なミス / 対策の再評価 | `.agents/skills/postmortem/SKILL.md` | 実装は変更対象の行。個別記録・台帳は参照を許可された場合だけ | スキルの完了条件と対象 gate |
+| 文書のみ | 変更対象の正本、`docs/post-mortem/lessons.md` の該当カード | コードとの相違は対応する実行経路 | `git diff --check`、`pnpm public:safety:check` |
 
-test / quality gate は、(1) 要求・domain・UI・architecture・境界契約から守る利用者価値を特定する、(2) `docs/test-rule.md` で evidence の要否と oracle を選ぶ、(3) evidence または実行設計を変える場合は `docs/test-architecture.md` で size、量感、parallelism、report を決める、(4) `docs/dev-rule.md` で gate の役割と command へ割り当てる、の順で判断する。workflow、既存 test、checker から逆向きに要求を作らない。
+`base`、`ui-rule` などの略記は `docs/requirements/base.md`、`docs/ui-rule.md` など同名の文書を指す。索引から本文の意味を推測せず、判断する契約の章を読む。現行挙動の相違・必要な質問は `AGENTS.md` に従って解消する。
 
-AIは実装前に、(1) その規則のowner、(2) 必読と発火した条件付き依存、(3) 実行正本、(4) 検証先を特定する。
-この4点が特定できなければ実装へ進まない。全文検索で意味を推測せず、明らかな参照切れは入口表または正本文書で直し、owner の競合、正本間の矛盾、判断を要する欠落は人間へ確認する。
+品質証拠は、要求・契約から守る結果を特定し、test-rule で境界と oracle を選び、必要なら test-architecture で実行設計を決め、dev-rule の gate と command へ割り当てる。既存 test や checker から逆向きに要求を作らない。
 
-## 2. 文書の責務と正本
+## 2. 正本と証拠
 
-- 要求文書は「何を満たすか」を書く。実装手順、テストコマンド、provider固有手順は置かない。
-- 要求文書の Acceptance Criteria は受け入れる結果と見落とせない production boundary を定め、test case の本数や層は定めない。品質証拠は本書1節の順序で選ぶ。
-- 実装コード、生成物、設定ファイルにしかない詳細を文書へ写す場合は、重複管理に見合う判断ルールだけを残す。
-- 一つの意味に一つの正本を定める。生成物は生成元、lint / checker は規約、test は対象契約を参照し、派生物同士の一致だけで意味を保証したと扱わない。
-- 決定論的検査は、宣言した構造・入力・oracle の範囲を確認する品質証拠である。適用範囲外まで保証を広げず、誤検出や未検出を含む独自 source scanner を正本として文書マップへ置かない。
+- 要求は利用者の目的、適用範囲、正常・失敗時の結果、受入条件を定める。順序自体が成功条件なら残し、コマンドや provider 固有手順は実行側へ置く。
+- architecture は責務と依存方向、domain は用語と不変条件、DB / queue 契約は境界で守る条件、UI 規約は意味と操作の一貫性を所有する。
+- コード・schema・設定は現行の型・値・実行契約の確認先。test、fixture、snapshot、lint、checker、coverage、report は宣言した範囲の証拠であり、成功を範囲外の保証へ広げない。
+- `docs/schemas/*.schema.json` は OCR / 分析の wire 契約。共有 fixture は専門正本が canonical と明示した具体例だけを正本とする。`apps/api/openapi.yaml` と Web 生成型は Tapir 由来の派生物であり、手編集で意味を定めない。
+- 一つの契約の完全な条件は一つの正本へ置く。作業の入口には短い結論と詳細章への参照を置いてよい。要約が扱えない例外は詳細章へ進む条件を示し、別の規則を作らない。
+- `docs/post-mortem/lessons.md` は該当時の再確認用であり、恒久ルールの置き場にしない。
 
-| 種別 | ファイル | 責務 |
-| --- | --- | --- |
-| 索引 | `docs/README.md` | 読む順、文書境界、public/private境界 |
-| 要求正本 | `docs/requirements/base.md` | 業務要件、MVP範囲、CSV/TSV列順 |
-| 要求正本 | `docs/requirements/system-design.md` | 技術構成、非機能、運用方針の高レベル要求 |
-| 要求正本 | `docs/requirements/series-comparison.md` | 戦績比較ページの利用者体験、scope、指標の意味 |
-| 要求正本 | `docs/requirements/series-analysis-batch.md` | 戦績分析のjob、queue、artifact公開、API / Web pinning、状態表示、管理、version・release・検証の横断要求 |
-| 要求正本 | `docs/requirements/series-review-playbook.md` | 行動プレイブックの生成、選定、表現要求 |
-| 要求正本 | `docs/requirements/held-event-detail.md` | 開催一覧、開催詳細、試合記録・戦績比較への導線 |
-| 要求正本 | `docs/requirements/match-note.md` | 試合メモの入力、共有、更新、表示、分析・出力境界 |
-| 実装正本 | `docs/architecture.md` | API / web / Processing Worker runtime、OCR / 戦績分析能力の構造、依存方向、実装規約 |
-| UI正本 | `docs/ui-rule.md` | Web の意味表現、余白、操作、motion、状態表示、画面遷移の一貫性 |
-| ドメイン正本 | `docs/domain-rule.md` | 用語、状態遷移、不変条件、認証主体と試合参加者の区別 |
-| DB正本 | `docs/db-rule.md` | momo-result の共有DB所有権、migration前提、consumer contract。momo-db の変更手順は `../momo-db/docs/development.md` |
-| Queue正本 | `docs/redis-streams-ocr-contract.md` | Redis Streams、outbox、payload、ack / retry 契約 |
-| Schema正本 | `docs/schemas/*.schema.json` | Redis payload、OCR hints、戦績分析 artifact / queue の機械可読契約 |
-| 契約 fixture | `docs/schemas/fixtures/` | 言語間で共有する契約例・品質証拠。責務を持つ文書が明示した canonical fixture だけは、その具体例の正本 |
-| 派生契約 | `apps/api/openapi.yaml`, Web生成型 | Tapir endpoint から生成し、内部 Web consumer へ渡す追跡対象。意味の正本にはしない |
-| テスト選定正本 | `docs/test-rule.md` | evidence の採用・維持・削除、layer、oracle |
-| テスト設計正本 | `docs/test-architecture.md` | test size、量感、parallelism、coverage、CI artifact |
-| 開発正本 | `docs/dev-rule.md` | toolchain、ローカル起動、gate、developer wait、コマンド、Git運用 |
-| 最終確認 | `docs/post-mortem/lessons.md` | 作業完了前に該当カードだけ確認する再発防止チェック |
-| 公開運用原則 | `docs/ops/README.md` | public repo に置ける運用原則 |
+## 3. 公開範囲と文書の増減
 
-## 3. Public / Private 境界
+公開範囲は `AGENTS.md`、公開運用原則は `docs/ops/README.md` に従う。private の計画・測定・履歴は、参照を許可された作業で適用対象と現行判断先を確認して使う。
 
-- `docs/` は public 前提。secret、provider token、DB/Redis URL、origin lock token、session / CSRF token、OAuth token、実測ログ、攻撃対策の詳細手順を置かない。
-- 詳細 runbook、provider 設定、個別 postmortem、実装計画、一時メモは git 管理外の `private/` に置く。
-- AI は通常探索で `private/` を読まない。ユーザーが明示し、作業上必要な場合だけ読む。
-- `fly.toml` に CD に必要な app / service / health check などの非 secret 設定が出ることは許容する。ただし docs 側で本番 topology や攻撃面を重複説明しない。
-
-## 4. 文書の増減判断
-
-以下の場合は、文書を新設する：
-
-- 変更時に読むべき対象が明確に分かれ、既存文書へ置くと読む条件が曖昧になる。
-- public に置ける抽象ルールだけで完結し、secret や攻撃手順を含まない。
-
-以下の場合は、既存文書を統合・削除する:
-
-- 正本性がない。
-- 実装コードや設定ファイルの値を写しているだけで、判断ルールがない。
-- private に置くべき運用詳細や検討メモになっている。
+文書を分割するのは、独立して読む作業があり、条件と例外をまとめたまま参照負担を減らせる場合。まず既存の章を整理する。正本性のない写しや判断に寄与しない説明は削除し、移動・統合時は入口と参照先を同じ変更で更新する。

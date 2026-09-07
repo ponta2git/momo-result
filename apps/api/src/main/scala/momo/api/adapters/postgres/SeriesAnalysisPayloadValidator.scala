@@ -1,10 +1,12 @@
 package momo.api.adapters.postgres
 
+import java.io.ByteArrayInputStream
 import java.nio.charset.StandardCharsets
 
 import com.networknt.schema.dialect.{Dialect, Dialects}
 import com.networknt.schema.keyword.NonValidationKeyword
-import com.networknt.schema.{InputFormat, Schema, SchemaLocation}
+import com.networknt.schema.serialization.NodeReader
+import com.networknt.schema.{InputFormat, OutputFormat, Schema, SchemaLocation}
 import io.circe.Json
 import io.circe.parser.parse
 
@@ -14,6 +16,7 @@ import momo.api.domain.{
   SeriesAnalysisDrilldownMetric,
   SeriesAnalysisScope
 }
+import momo.api.encoding.Utf8
 
 /**
  * Reader-side defense for an immutable, Rust-attested artifact.
@@ -39,6 +42,7 @@ private[postgres] object SeriesAnalysisPayloadValidator:
     .keyword(new NonValidationKeyword("x-momo-metricId"))
     .build()
   private val Registry = com.networknt.schema.SchemaRegistry.withDialect(OwnerDialect)
+  private val JsonReader = NodeReader.builder().build()
   private val Schemas = SchemaFiles.view.mapValues(loadSchema).toMap
   private val MaximumTextBytes = ownerMaximumTextBytes(SchemaFiles.values.toSet)
 
@@ -46,22 +50,21 @@ private[postgres] object SeriesAnalysisPayloadValidator:
 
   def validate(
       json: Json,
+      encoded: Array[Byte],
       request: SeriesAnalysisChunkRequest,
       sourceMatchRevision: Option[Long],
-  ): Boolean = stringsWithinOwnerBounds(json) && validateShape(json, request.kind) &&
+  ): Boolean = stringsWithinOwnerBounds(json) && validateShape(encoded, request.kind) &&
     payloadIdentityMatches(json, request, sourceMatchRevision)
 
   /** JSON Schema maxLength counts code points, while the producer contract bounds UTF-8 bytes. */
   private def stringsWithinOwnerBounds(json: Json): Boolean = json.arrayOrObject(
-    json.asString.forall(utf8Length(_) <= MaximumTextBytes),
+    json.asString.forall(Utf8.length(_) <= MaximumTextBytes),
     _.forall(stringsWithinOwnerBounds),
     fields =>
       fields.toIterable.forall { case (key, value) =>
-        utf8Length(key) <= MaximumTextBytes && stringsWithinOwnerBounds(value)
+        Utf8.length(key) <= MaximumTextBytes && stringsWithinOwnerBounds(value)
       },
   )
-
-  private def utf8Length(value: String): Int = value.getBytes(StandardCharsets.UTF_8).length
 
   private def loadSchema(fileName: String): Schema =
     val resourcePath = s"$SchemaResourceDirectory/$fileName"
@@ -72,8 +75,12 @@ private[postgres] object SeriesAnalysisPayloadValidator:
     schema.initializeValidators()
     schema
 
-  private def validateShape(json: Json, kind: SeriesAnalysisChunkKind): Boolean =
-    Schemas(kind).validate(json.noSpaces, InputFormat.JSON).isEmpty
+  private def validateShape(encoded: Array[Byte], kind: SeriesAnalysisChunkKind): Boolean =
+    // The bytes have already passed the checksum, UTF-8 and JSON complexity checks. Reuse them
+    // instead of rendering a second full JSON String just to feed the schema reader. Only the
+    // validity is consumed: BOOLEAN bounds error collection and stops after a decisive failure.
+    val node = JsonReader.readTree(new ByteArrayInputStream(encoded), InputFormat.JSON)
+    Schemas(kind).validate(node, OutputFormat.BOOLEAN).booleanValue()
 
   private def payloadIdentityMatches(
       json: Json,

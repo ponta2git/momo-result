@@ -75,10 +75,10 @@ export function DataVizLineChart({
 
   return (
     <figure className="grid max-w-full min-w-0 gap-2">
-      <div className="flex max-w-full min-w-0 overflow-x-auto pb-1 md:justify-center">
+      <div className="max-w-full min-w-0 overflow-x-auto pb-1">
         <svg
           aria-label={ariaLabel}
-          className="w-[760px] max-w-none shrink-0 rounded-[var(--radius-sm)] bg-[var(--color-surface)] md:w-full md:max-w-[980px]"
+          className="mx-auto block w-[760px] max-w-none min-w-[760px] rounded-sm bg-[var(--color-surface)] md:w-full md:max-w-[980px]"
           role="img"
           style={{ aspectRatio: `${width} / ${height}` }}
           viewBox={`0 0 ${width} ${height}`}
@@ -118,8 +118,8 @@ export function DataVizLineChart({
               />
               <text
                 fill="var(--color-action)"
-                fontSize="11"
-                fontWeight="600"
+                fontSize="12"
+                className="font-plain"
                 textAnchor="middle"
                 x={x(focusedPoint.index)}
                 y="18"
@@ -140,7 +140,7 @@ export function DataVizLineChart({
               />
               <text
                 fill="var(--color-text-secondary)"
-                fontSize="11"
+                fontSize="12"
                 textAnchor="end"
                 x={padding.left - 8}
                 y={y(value) + 4}
@@ -152,7 +152,7 @@ export function DataVizLineChart({
           {indexTicks(maxIndex, 6).map((value) => (
             <text
               fill="var(--color-text-secondary)"
-              fontSize="11"
+              fontSize="12"
               key={value}
               textAnchor={value === 1 ? "start" : value === maxIndex ? "end" : "middle"}
               x={x(value)}

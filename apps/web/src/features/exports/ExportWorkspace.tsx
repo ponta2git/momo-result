@@ -3,7 +3,6 @@ import { ArrowLeft } from "lucide-react";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
-import { PageHeader } from "@/shared/ui/layout/PageHeader";
 
 import { ExportActionPanel } from "./ExportActionPanel";
 import { ExportCandidateSelect } from "./ExportCandidateSelect";
@@ -36,8 +35,6 @@ export function ExportWorkspace({ model }: ExportWorkspaceProps) {
           </LinkButton>
         </div>
       ) : null}
-      <PageHeader title="CSV/TSV出力" />
-
       <PageContentSurface
         aria-label="出力条件"
         className="grid gap-4"

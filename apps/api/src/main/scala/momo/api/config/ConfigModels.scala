@@ -24,7 +24,17 @@ final case class SeriesAnalysisReadConfig(
     decodeConcurrency: Int,
     readTimeout: FiniteDuration,
     busyRetryAfterSeconds: Int,
-)
+):
+  /** Admits complexity against the actual chunk size, before either JSON tree is allocated. */
+  def admittedJsonNodeLimit(encodedBytes: Long): Int =
+    // Decode can retain the database bytes and both Circe/Jackson UTF-16 string contents.
+    // The encoded bytes and temporary validation tree are released before hydration/rendering.
+    val decodingBytes = BigInt(encodedBytes) * 5
+    val renderingBytes = BigInt(encodedBytes) * 2 + maxResponseBytes
+    val available = BigInt(SeriesAnalysisReadConfig.MaximumConcurrentMaterializationBytes) /
+      decodeConcurrency - decodingBytes.max(renderingBytes)
+    (available / SeriesAnalysisReadConfig.JsonNodeMaterializationBytes)
+      .max(BigInt(0)).min(BigInt(maxJsonNodes)).toInt
 
 final case class ResourceLimitsConfig(
     uploadRateLimitPerMinute: Int,
@@ -121,13 +131,18 @@ object RedisConfig:
   val DefaultV2DeadLetterStream: String = "momo:ocr:v2:jobs:dead"
 
 object SeriesAnalysisReadConfig:
+  // Database bytes, decoded character storage, tree nodes and response bytes share an admission
+  // estimate. The complete pipeline holds a permit; runtime memory evidence verifies headroom.
+  private[config] val MaximumConcurrentMaterializationBytes = 96L * 1024L * 1024L
+  private[config] val JsonNodeMaterializationBytes = 256L
+
   val defaults: SeriesAnalysisReadConfig = SeriesAnalysisReadConfig(
     maxEncodedBytes = 8L * 1024L * 1024L,
     maxDecodedBytes = 8L * 1024L * 1024L,
     maxResponseBytes = 8L * 1024L * 1024L,
     maxItemCount = 1000000,
     maxNestingDepth = 64,
-    maxJsonNodes = 60000,
+    maxJsonNodes = 100000,
     decodeConcurrency = 2,
     readTimeout = 10.seconds,
     busyRetryAfterSeconds = 2,

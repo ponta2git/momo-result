@@ -25,13 +25,16 @@ describe("ResourcePageState", () => {
 
     await user.click(screen.getByRole("button", { name: "試合詳細を再読み込み" }));
     expect(onRetry).toHaveBeenCalledTimes(1);
+    const heading = screen.getByRole("heading", {
+      level: 1,
+      name: "試合詳細を読み込めませんでした",
+    });
+    const backLink = screen.getByRole("link", { name: "試合一覧へ戻る" });
+    expect(heading).toBeInTheDocument();
+    expect(backLink).toHaveAttribute("href", "/matches");
     expect(
-      screen.getByRole("heading", { level: 1, name: "試合詳細を読み込めませんでした" }),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "試合一覧へ戻る" })).toHaveAttribute(
-      "href",
-      "/matches",
-    );
+      backLink.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 
   it("does not present retry for a missing resource", () => {

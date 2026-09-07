@@ -2,7 +2,8 @@ package momo.api.repositories
 
 import scala.concurrent.duration.{DurationInt, FiniteDuration}
 
-import cats.effect.{Clock, Ref, Sync}
+import cats.effect.std.Mutex
+import cats.effect.{Async, Clock, Ref}
 import cats.syntax.all.*
 
 import momo.api.domain.ids.*
@@ -14,12 +15,23 @@ private final case class ReferenceCacheState[A](
     entry: Option[ReferenceCacheEntry[A]]
 )
 
-private final class ReferenceCache[F[_]: Clock: Sync, A](
+private final class ReferenceCache[F[_]: Async, A](
     ref: Ref[F, ReferenceCacheState[A]],
+    reloadMutex: Mutex[F],
     ttl: FiniteDuration,
     load: F[A],
 ):
+  /** Hits never wait for the loader; concurrent misses share the first successful reload. */
   def get: F[A] =
+    for
+      now <- Clock[F].monotonic
+      snapshot <- ref.get
+      value <- snapshot.entry match
+        case Some(entry) if now - entry.loadedAt <= ttl => entry.value.pure[F]
+        case _ => reloadMutex.lock.surround(loadFresh)
+    yield value
+
+  private def loadFresh: F[A] =
     for
       now <- Clock[F].monotonic
       access <- ref.access
@@ -34,9 +46,9 @@ private final class ReferenceCache[F[_]: Clock: Sync, A](
   )
 
   def invalidateAfterSuccess[E, B](effect: F[Either[E, B]]): F[Either[E, B]] =
-    Sync[F].uncancelable { poll =>
+    Async[F].uncancelable { poll =>
       // Cancellation can race a committed delegate write, so it invalidates conservatively.
-      Sync[F].onCancel(poll(effect), invalidate)
+      Async[F].onCancel(poll(effect), invalidate)
         .flatTap(_.traverse_(_ => invalidate))
     }
 
@@ -48,21 +60,23 @@ private final class ReferenceCache[F[_]: Clock: Sync, A](
       value <- load
       now <- Clock[F].monotonic
       stored <- store(snapshot.copy(entry = Some(ReferenceCacheEntry(now, value))))
-      result <- if stored then value.pure[F] else get
+      // Invalidation deliberately does not wait for the loader. A committed write fences out
+      // this snapshot, then the same lock owner retries before any waiter can consume stale rows.
+      result <- if stored then value.pure[F] else loadFresh
     yield result
 
 private object ReferenceCache:
-  def create[F[_]: Clock: Sync, A](ttl: FiniteDuration, load: F[A]): F[ReferenceCache[F, A]] =
-    Ref.of[F, ReferenceCacheState[A]](ReferenceCacheState(0L, None))
-      .map(ref => ReferenceCache(ref, ttl, load))
+  def create[F[_]: Async, A](ttl: FiniteDuration, load: F[A]): F[ReferenceCache[F, A]] =
+    (Ref.of[F, ReferenceCacheState[A]](ReferenceCacheState(0L, None)), Mutex[F])
+      .mapN((ref, mutex) => ReferenceCache(ref, mutex, ttl, load))
 
 object CachedReferenceRepositories:
   val DefaultTtl: FiniteDuration = 30.seconds
 
-  def members[F[_]: Clock: Sync](delegate: MembersRepository[F]): F[MembersRepository[F]] =
+  def members[F[_]: Async](delegate: MembersRepository[F]): F[MembersRepository[F]] =
     members(delegate, DefaultTtl)
 
-  def members[F[_]: Clock: Sync](
+  def members[F[_]: Async](
       delegate: MembersRepository[F],
       ttl: FiniteDuration,
   ): F[MembersRepository[F]] = ReferenceCache.create(ttl, delegate.list).map { cache =>
@@ -71,11 +85,11 @@ object CachedReferenceRepositories:
       def find(id: MemberId): F[Option[Member]] = cache.get.map(_.find(_.id == id))
   }
 
-  def gameTitles[F[_]: Clock: Sync](
+  def gameTitles[F[_]: Async](
       delegate: GameTitlesRepository[F]
   ): F[GameTitlesRepository[F]] = gameTitles(delegate, DefaultTtl)
 
-  def gameTitles[F[_]: Clock: Sync](
+  def gameTitles[F[_]: Async](
       delegate: GameTitlesRepository[F],
       ttl: FiniteDuration,
   ): F[GameTitlesRepository[F]] = ReferenceCache.create(ttl, delegate.list).map { cache =>
@@ -88,11 +102,11 @@ object CachedReferenceRepositories:
       def delete(id: GameTitleId) = cache.invalidateAfterSuccess(delegate.delete(id))
   }
 
-  def mapMasters[F[_]: Clock: Sync](
+  def mapMasters[F[_]: Async](
       delegate: MapMastersRepository[F]
   ): F[MapMastersRepository[F]] = mapMasters(delegate, DefaultTtl)
 
-  def mapMasters[F[_]: Clock: Sync](
+  def mapMasters[F[_]: Async](
       delegate: MapMastersRepository[F],
       ttl: FiniteDuration,
   ): F[MapMastersRepository[F]] = ReferenceCache.create(ttl, delegate.list(None)).map { cache =>
@@ -106,11 +120,11 @@ object CachedReferenceRepositories:
       def delete(id: MapMasterId) = cache.invalidateAfterSuccess(delegate.delete(id))
   }
 
-  def seasonMasters[F[_]: Clock: Sync](
+  def seasonMasters[F[_]: Async](
       delegate: SeasonMastersRepository[F]
   ): F[SeasonMastersRepository[F]] = seasonMasters(delegate, DefaultTtl)
 
-  def seasonMasters[F[_]: Clock: Sync](
+  def seasonMasters[F[_]: Async](
       delegate: SeasonMastersRepository[F],
       ttl: FiniteDuration,
   ): F[SeasonMastersRepository[F]] = ReferenceCache.create(ttl, delegate.list(None)).map { cache =>
@@ -124,11 +138,11 @@ object CachedReferenceRepositories:
       def delete(id: SeasonMasterId) = cache.invalidateAfterSuccess(delegate.delete(id))
   }
 
-  def incidentMasters[F[_]: Clock: Sync](
+  def incidentMasters[F[_]: Async](
       delegate: IncidentMastersRepository[F]
   ): F[IncidentMastersRepository[F]] = incidentMasters(delegate, DefaultTtl)
 
-  def incidentMasters[F[_]: Clock: Sync](
+  def incidentMasters[F[_]: Async](
       delegate: IncidentMastersRepository[F],
       ttl: FiniteDuration,
   ): F[IncidentMastersRepository[F]] = ReferenceCache.create(ttl, delegate.list).map { cache =>
@@ -136,11 +150,11 @@ object CachedReferenceRepositories:
       def list: F[List[IncidentMaster]] = cache.get
   }
 
-  def memberAliases[F[_]: Clock: Sync](
+  def memberAliases[F[_]: Async](
       delegate: MemberAliasesRepository[F]
   ): F[MemberAliasesRepository[F]] = memberAliases(delegate, DefaultTtl)
 
-  def memberAliases[F[_]: Clock: Sync](
+  def memberAliases[F[_]: Async](
       delegate: MemberAliasesRepository[F],
       ttl: FiniteDuration,
   ): F[MemberAliasesRepository[F]] = ReferenceCache.create(ttl, delegate.list(None)).map { cache =>

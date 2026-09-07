@@ -12,8 +12,10 @@ import {
   qualityAdvisoryLabel,
   SeriesAnalysisQualityAdvisory,
 } from "@/features/seriesComparison/SeriesAnalysisQualityAdvisory";
+import { cn } from "@/shared/ui/cn";
 import { Disclosure } from "@/shared/ui/data/Collapsible";
 import { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
+import { contentText } from "@/shared/ui/typography";
 
 type Response = AnalysisViewProps["response"];
 type Outcome = Response["metricsByPlayer"][number]["revenueOutcome"]["top"];
@@ -28,12 +30,12 @@ export function RevenueOutcomeSection({
       <div className="mt-4 grid gap-x-6 gap-y-8 md:grid-cols-2 xl:grid-cols-4">
         {response.metricsByPlayer.map((metric) => (
           <article className="min-w-0" key={metric.memberId}>
-            <h3 className="font-semibold">
+            <h3 className={contentText.heading}>
               <MemberSequenceLabel memberId={metric.memberId}>
                 {metric.displayName}
               </MemberSequenceLabel>
             </h3>
-            <dl className="mt-3 grid grid-cols-2 gap-3 text-sm">
+            <dl className="mt-2 grid grid-cols-2 gap-2">
               <MetricValue
                 label="収益上位時の勝率"
                 value={formatPercent(metric.revenueOutcome.top.winRate)}
@@ -51,9 +53,9 @@ export function RevenueOutcomeSection({
                 value={formatPercent(metric.revenueOutcome.lowRevenue.podiumRate)}
               />
             </dl>
-            <div className="mt-3">
+            <div className="mt-4">
               <Disclosure panelPadding="sm" presentation="inset" summary="収益と順位の詳細">
-                <dl className="grid gap-2 text-xs">
+                <dl className="grid gap-2">
                   <MetricValue
                     label="収益順位だけでは説明しない順位差"
                     value={`${formatDecimal(metric.nonRevenue.rankDelta)}位`}
@@ -84,12 +86,12 @@ export function DestinationOutcomeSection({ response }: { response: Response }) 
       <div className="grid gap-x-6 gap-y-8 md:grid-cols-2 xl:grid-cols-4">
         {response.metricsByPlayer.map((metric) => (
           <article className="min-w-0" key={metric.memberId}>
-            <h3 className="font-semibold">
+            <h3 className={contentText.heading}>
               <MemberSequenceLabel memberId={metric.memberId}>
                 {metric.displayName}
               </MemberSequenceLabel>
             </h3>
-            <dl className="mt-3 grid gap-3 text-sm">
+            <dl className="mt-2 grid gap-4">
               <ConditionalOutcome
                 label="目的地到着が多い試合"
                 podiumRate={metric.destinationOutcome.top.podiumRate}
@@ -109,9 +111,9 @@ export function DestinationOutcomeSection({ response }: { response: Response }) 
                 winRate={metric.destinationOutcome.zeroDestination.winRate}
               />
             </dl>
-            <div className="mt-3">
+            <div className="mt-4">
               <Disclosure panelPadding="sm" presentation="inset" summary="目的地と順位の詳細">
-                <dl className="grid gap-2 text-xs">
+                <dl className="grid gap-2">
                   <MetricValue
                     label="到着多寡による入賞率差"
                     value={formatPercent(metric.destination.conversionDelta)}
@@ -150,13 +152,13 @@ export function DestinationOutcomeSection({ response }: { response: Response }) 
 function OutcomeDetails({ label, outcome }: { label: string; outcome: Outcome }) {
   const qualityAdvisory = qualityAdvisoryLabel(outcome.qualityStatus);
   return (
-    <div className="border-l-2 border-[var(--color-border)] px-2 py-1">
-      <dt className="font-semibold">{label}の内訳</dt>
-      <dd className="mt-1 text-[var(--color-text-secondary)] tabular-nums">
+    <div className="min-w-0">
+      <dt className={contentText.supporting}>{label}の内訳</dt>
+      <dd className={cn(contentText.body, "mt-1 tabular-nums")}>
         勝利 {outcome.winCount}戦・入賞 {outcome.podiumCount}戦・下位 {outcome.lowerHalfCount}戦（
         {formatPercent(outcome.lowerHalfRate)}）
       </dd>
-      <dd className="mt-1 text-[var(--color-text-secondary)] tabular-nums">
+      <dd className={cn(contentText.body, "mt-1 tabular-nums")}>
         順位分布{" "}
         {outcome.rankDistribution.map((cell) => `${cell.rank}位 ${cell.count}戦`).join("・")}
       </dd>
@@ -181,9 +183,9 @@ function ConditionalOutcome({
   winRate: number | null;
 }) {
   return (
-    <div className="border-l-2 border-[var(--color-border)] px-2 py-1">
-      <dt className="text-xs font-semibold">{label}</dt>
-      <dd className="mt-1 text-xs text-[var(--color-text-secondary)] tabular-nums">
+    <div className="min-w-0">
+      <dt className={contentText.supporting}>{label}</dt>
+      <dd className={cn(contentText.body, "mt-1 tabular-nums")}>
         {targetCount}戦・勝率 {formatPercent(winRate)}・入賞率 {formatPercent(podiumRate)}
       </dd>
     </div>

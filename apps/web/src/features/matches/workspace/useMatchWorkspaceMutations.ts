@@ -13,6 +13,7 @@ import { runIdempotentMutation } from "@/shared/api/idempotency";
 import { cancelMatchDraft } from "@/shared/api/matchDrafts";
 import { confirmMatch, updateMatch } from "@/shared/api/matches";
 import { formatApiError, normalizeUnknownApiError } from "@/shared/api/problemDetails";
+import { evictDraftSourceImageBlobs } from "@/shared/api/sourceImageQueries";
 import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
 import { assertDefined } from "@/shared/lib/invariant";
 import { withReturnTo } from "@/shared/navigation/returnTo";
@@ -64,7 +65,8 @@ export function useMatchWorkspaceMutations({
         (options) => confirmMatch(request, options),
       );
     },
-    onSuccess: async (response) => {
+    onSuccess: async (response, request) => {
+      if (request.matchDraftId) evictDraftSourceImageBlobs(queryClient, request.matchDraftId);
       await invalidateAfterMatchConfirmed(queryClient);
       onConfirmSuccess();
       onPersistedSuccess();
@@ -116,7 +118,8 @@ export function useMatchWorkspaceMutations({
         (options) => cancelMatchDraft(draftId, options),
       );
     },
-    onSuccess: async () => {
+    onSuccess: async (_, draftId) => {
+      evictDraftSourceImageBlobs(queryClient, draftId);
       await invalidateAfterDraftCancelled(queryClient);
       onPersistedSuccess();
       navigate(

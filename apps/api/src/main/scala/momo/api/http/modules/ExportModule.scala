@@ -1,7 +1,5 @@
 package momo.api.http.modules
 
-import java.nio.charset.StandardCharsets
-
 import cats.effect.Async
 import cats.syntax.all.*
 import org.slf4j.LoggerFactory
@@ -44,10 +42,9 @@ object ExportModule:
                     logRejected(member.accountId.value, exportFormat.wire, scope, error) *>
                       security.toProblemF(error).map(Left(_))
                   case Right(file) =>
-                    val bodyBytes = file.body.getBytes(StandardCharsets.UTF_8).length
                     val event = s"match_export_completed accountId=${member.accountId.value} " +
                       s"format=${exportFormat.wire} scope=${scope.filePart} " +
-                      s"bodyBytes=${bodyBytes.toString}"
+                      s"bodyBytes=${file.sizeBytes.toString}"
                     HttpDownloadHeaders.attachment(file.fileName) match
                       case Left(error) => security.toProblemF(error).map(Left(_))
                       case Right(disposition) => Async[F].delay(logger.info(event)) *>

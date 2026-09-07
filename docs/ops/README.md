@@ -2,7 +2,7 @@
 
 目的: public repository に置ける運用原則だけを残す。
 
-詳細な本番runbook、provider dashboard手順、攻撃対策、実測値、kill switch、secret名以外の設定値は `private/ops/` に置く。通常release、Analysis昇格、rollbackは `private/ops/runbook.md`、初回構築は `private/ops/production-deploy.md` を人間向け正本とする。`private/ops/` はgit管理外であり、通常のAI作業では読まない。
+詳細な本番runbook、provider dashboard手順、攻撃対策、実測値、kill switch、secret名以外の設定値は `private/ops/` に置く。通常release、Analysis昇格、rollbackは `private/ops/runbook.md` を人間向け正本とする。`private/ops/production-deploy.md` は初回構築時の履歴であり、現行手順として実行しない。`private/ops/` はgit管理外であり、通常のAI作業では読まない。
 
 ## Public Rules
 

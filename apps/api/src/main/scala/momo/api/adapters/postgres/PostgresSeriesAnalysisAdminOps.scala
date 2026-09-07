@@ -55,6 +55,7 @@ private[postgres] object PostgresSeriesAnalysisAdminOps:
       safeFailureCode: Option[String],
   )
   private final case class JobRequestAuditRow(
+      jobId: String,
       trigger: String,
       requestedByAccountId: Option[AccountId],
       requesterDisplayName: Option[String],
@@ -68,8 +69,9 @@ private[postgres] object PostgresSeriesAnalysisAdminOps:
       global <- globalCio
       latestCampaign <- latestCampaignCio
       jobs <- recentJobsCio
-      summaryResults <- jobs.traverse(jobSummaryCio)
-      result <- (optionsResult, summaryResults.sequence) match
+      audit <- jobAuditsCio(jobs.map(_.jobId))
+      summaryResults = jobs.traverse(job => jobSummary(job, audit.getOrElse(job.jobId, Nil)))
+      result <- (optionsResult, summaryResults) match
         case (Left(error), _) => error.asLeft[SeriesAnalysisAdminOverview].pure[ConnectionIO]
         case (_, Left(error)) => error.asLeft[SeriesAnalysisAdminOverview].pure[ConnectionIO]
         case (Right(options), Right(summaries)) =>
@@ -175,22 +177,32 @@ private[postgres] object PostgresSeriesAnalysisAdminOps:
     FROM series_analysis_jobs j
     JOIN game_titles gt ON gt.id = j.game_title_id
     ORDER BY j.created_at DESC, j.id DESC
-    LIMIT 3
+    LIMIT 10
   """.query[JobRow].to[List]
 
-  private def jobSummaryCio(
-      job: JobRow
-  ): ConnectionIO[Either[AppError, SeriesAnalysisJobSummary]] = sql"""
+  private def jobAuditsCio(
+      jobIds: List[String]
+  ): ConnectionIO[Map[String, List[JobRequestAuditRow]]] =
+    if jobIds.isEmpty then Map.empty[String, List[JobRequestAuditRow]].pure[ConnectionIO]
+    else
+      val ids = jobIds.toArray
+      sql"""
     SELECT
+      jr.assigned_job_id,
       jr.trigger,
       op.requested_by_account_id,
       account.display_name
     FROM series_analysis_job_requests jr
     LEFT JOIN series_analysis_operation_requests op ON op.id = jr.operation_request_id
     LEFT JOIN momo_login_accounts account ON account.id = op.requested_by_account_id
-    WHERE jr.assigned_job_id = ${job.jobId}
+    WHERE jr.assigned_job_id = ANY($ids)
     ORDER BY jr.accepted_at, jr.id
-  """.query[JobRequestAuditRow].to[List].map { audit =>
+  """.query[JobRequestAuditRow].to[List].map(_.groupBy(_.jobId))
+
+  private def jobSummary(
+      job: JobRow,
+      audit: List[JobRequestAuditRow],
+  ): Either[AppError, SeriesAnalysisJobSummary] =
     val coalesced = TriggerPriority.filter(trigger =>
       trigger == job.trigger || audit.exists(_.trigger == trigger)
     )
@@ -240,7 +252,6 @@ private[postgres] object PostgresSeriesAnalysisAdminOps:
       ),
       AppError.AnalysisStateUnavailable(),
     )
-  }
 
   private def pendingManualCio(
       gameTitleId: GameTitleId

@@ -15,8 +15,10 @@ import {
 } from "@/features/seriesComparison/SeriesAnalysisQualityAdvisory";
 import type { SeriesComparisonAggregateV3 } from "@/shared/api/seriesAnalysis";
 import { formatMatchNoInEvent } from "@/shared/domain/matchLabels";
+import { cn } from "@/shared/ui/cn";
 import { Disclosure } from "@/shared/ui/data/Collapsible";
 import { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
+import { contentText } from "@/shared/ui/typography";
 
 type MatchNoEntry = SeriesComparisonAggregateV3["matchNoInEvent"]["entries"][number];
 
@@ -99,19 +101,19 @@ function MatchNoRow({ entry }: { entry: MatchNoEntry }) {
         return (
           <MatrixCell
             aria-label={`${player.displayName}、${formatMatchNoInEvent(entry.matchNoInEvent)}、${player.targetCount}戦${qualityAdvisory ? `、${qualityAdvisory}` : ""}、平均${formatDecimal(player.averageRank)}位、入賞${formatPercent(player.podiumRate)}`}
-            className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-2"
+            className="rounded-xs border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-2"
             key={player.memberId}
           >
             <div className="flex items-center justify-between gap-2">
-              <span className="text-xs text-[var(--color-text-secondary)] tabular-nums">
+              <span className={cn(contentText.supporting, "tabular-nums")}>
                 {player.targetCount}戦
               </span>
               <SeriesAnalysisQualityAdvisory status={player.qualityStatus} />
             </div>
-            <p className="mt-1 text-sm font-semibold tabular-nums">
+            <p className={cn(contentText.compactPrimary, "mt-1 tabular-nums")}>
               平均 {formatDecimal(player.averageRank)}位
             </p>
-            <p className="mt-0.5 text-xs text-[var(--color-text-secondary)] tabular-nums">
+            <p className={cn(contentText.body, "mt-0.5 tabular-nums")}>
               入賞 {formatPercent(player.podiumRate)}
             </p>
           </MatrixCell>

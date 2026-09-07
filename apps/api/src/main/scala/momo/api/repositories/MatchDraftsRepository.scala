@@ -5,7 +5,7 @@ import java.time.Instant
 import cats.{~>, MonadThrow}
 
 import momo.api.domain.ids.*
-import momo.api.domain.{MatchDraft, MatchDraftStatus, ScreenType}
+import momo.api.domain.{HeldEventScope, MatchDraft, MatchDraftStatus, ScreenType}
 import momo.api.errors.AppError
 
 trait MatchDraftsAlg[F0[_]]:
@@ -83,7 +83,11 @@ trait MatchDraftCancellationRepository[F[_]]:
   ): F[MatchDraftCancellationResult]
 
 object MatchDraftsRepository:
-  final case class HeldEventStats(draftCount: Int, maxMatchNo: Int)
+  final case class HeldEventStats(
+      draftCount: Int,
+      maxMatchNo: Int,
+      scopes: List[HeldEventScope] = Nil
+  )
 
   final case class ListFilter(
       heldEventId: Option[HeldEventId] = None,

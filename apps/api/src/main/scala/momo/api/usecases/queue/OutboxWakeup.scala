@@ -35,6 +35,11 @@ enum OutboxWakeSubmitResult derives CanEqual:
   /** The runtime is shutting down. The committed operation must remain successful. */
   case Closed
 
+/**
+ * Accepts bounded process-local hints after a durable commit. Submission must not wait for
+ * external I/O: callers mask cancellation only while handing off an already committed result.
+ * A Resource-owned coordinator is responsible for relaying accepted hints to external systems.
+ */
 trait OutboxWakeSink[F[_]]:
   def submit(effects: PostCommitEffects): F[OutboxWakeSubmitResult]
 

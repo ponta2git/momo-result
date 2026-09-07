@@ -1,6 +1,8 @@
 import type { CaptureSlotState } from "@/features/ocrCapture/captureState";
 import type { SlotKind } from "@/shared/api/enums";
 import { Button } from "@/shared/ui/actions/Button";
+import { cn } from "@/shared/ui/cn";
+import { contentText } from "@/shared/ui/typography";
 
 const slotKindLabels = {
   incident_log: "事件簿",
@@ -31,7 +33,12 @@ export function CaptureSlotFeedback({
       {slot.transportError ? <CaptureTransportError error={slot.transportError} /> : null}
       {slot.jobFailure ? <CaptureJobFailure failure={slot.jobFailure} /> : null}
       {canRefreshStatus ? (
-        <div className="grid gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3 text-sm text-[var(--color-text-primary)] sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+        <div
+          className={cn(
+            contentText.body,
+            "grid gap-2 rounded-sm bg-[var(--color-surface-subtle)] p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center",
+          )}
+        >
           <p>読み取り状態は自動更新されません。必要なときに最新の状態を取得してください。</p>
           <Button
             pending={refreshing}
@@ -50,10 +57,16 @@ export function CaptureSlotFeedback({
 function CaptureMismatchAlert({ detectedKind }: { detectedKind?: SlotKind | undefined }) {
   return (
     <div
-      className="rounded-[var(--radius-md)] border border-[var(--color-warning)]/60 bg-[var(--color-warning)]/20 p-3 text-sm text-[var(--color-text-primary)]"
+      className={cn(
+        contentText.body,
+        "rounded-sm border border-[var(--color-warning)]/60 bg-[var(--color-warning)]/20 p-3",
+      )}
       role="alert"
     >
-      OCR判定は <strong>{detectedKind ? slotKindLabels[detectedKind] : "別の分類"}</strong>{" "}
+      OCR判定は{" "}
+      <strong className={contentText.compactPrimary}>
+        {detectedKind ? slotKindLabels[detectedKind] : "別の分類"}
+      </strong>{" "}
       でした。画像を正しい分類へ移動してから、もう一度読み取りを開始してください。
     </div>
   );
@@ -66,10 +79,13 @@ function CaptureTransportError({
 }) {
   return (
     <div
-      className="rounded-[var(--radius-md)] border border-[var(--color-danger)]/45 bg-[var(--color-danger)]/10 p-3 text-sm text-[var(--color-text-primary)]"
+      className={cn(
+        contentText.body,
+        "rounded-sm border border-[var(--color-danger)]/45 bg-[var(--color-danger)]/10 p-3",
+      )}
       role="alert"
     >
-      <strong>{error.title}</strong>
+      <strong className={contentText.compactPrimary}>{error.title}</strong>
       <p className="mt-1">{error.detail}</p>
     </div>
   );
@@ -78,10 +94,13 @@ function CaptureTransportError({
 function CaptureJobFailure({ failure }: { failure: NonNullable<CaptureSlotState["jobFailure"]> }) {
   return (
     <div
-      className="rounded-[var(--radius-md)] border border-[var(--color-danger)]/45 bg-[var(--color-danger)]/10 p-3 text-sm text-[var(--color-text-primary)]"
+      className={cn(
+        contentText.body,
+        "rounded-sm border border-[var(--color-danger)]/45 bg-[var(--color-danger)]/10 p-3",
+      )}
       role="alert"
     >
-      <strong>画像を読み取れませんでした</strong>
+      <strong className={contentText.compactPrimary}>画像を読み取れませんでした</strong>
       <p className="mt-1">この分類の読み取り結果は作成されていません。</p>
       <p className="mt-1">
         {failure.userAction ?? "画像を確認して、もう一度読み取りを開始してください。"}

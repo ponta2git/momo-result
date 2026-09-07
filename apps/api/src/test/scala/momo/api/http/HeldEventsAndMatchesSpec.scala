@@ -65,6 +65,7 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
         assertEquals(jsonField[String](item, "id"), id)
         assertEquals(jsonField[Int](item, "draftCount"), 0)
         assertEquals(jsonField[Int](item, "nextMatchNo"), 1)
+        assertEquals(jsonField[List[Json]](item, "scopes"), Nil)
       case other => fail(s"expected exactly 1 held event, got: ${other.map(_.noSpaces)}")
   }
 
@@ -83,10 +84,15 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
         _ = assertEquals(draftRes.status, Status.Ok)
         res <- httpApp.run(readGet(Uri.unsafeFromString(s"/api/held-events/$heldEventId")))
         body <- res.as[Json]
+        listRes <- httpApp.run(readGet(uri"/api/held-events"))
+        listBody <- listRes.as[Json]
+        scopes = jsonField[List[Json]](jsonField[List[Json]](listBody, "items").head, "scopes")
         matches = jsonField[List[Json]](body, "matches")
         drafts = jsonField[List[Json]](body, "drafts")
       yield
         assertEquals(res.status, Status.Ok)
+        assertEquals(scopes.map(jsonField[String](_, "gameTitleName")), List("桃太郎電鉄ワールド"))
+        assertEquals(scopes.map(jsonField[String](_, "seasonName")), List("2024-spring"))
         assertEquals(jsonField[Int](body, "matchCount"), 1)
         assertEquals(jsonField[Int](body, "draftCount"), 1)
         assertEquals(jsonField[Int](body, "nextMatchNo"), 6)

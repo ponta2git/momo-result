@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import type { MouseEvent } from "react";
 
 import type {
@@ -7,10 +7,8 @@ import type {
 } from "@/features/matches/workspace/sourceImages/sourceImageTypes";
 import { sourceImageKinds } from "@/features/matches/workspace/sourceImages/sourceImageTypes";
 import { toSourceImageStates } from "@/features/matches/workspace/sourceImages/sourceImageViewModel";
-import {
-  downloadMatchDraftSourceImage,
-  downloadMatchDraftSourceImagesArchive,
-} from "@/shared/api/matchDrafts";
+import { useSourceImageResource } from "@/features/matches/workspace/sourceImages/useSourceImageResource";
+import { downloadMatchDraftSourceImagesArchive } from "@/shared/api/matchDrafts";
 import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import { triggerBrowserDownload } from "@/shared/browser/downloadFile";
 
@@ -21,21 +19,16 @@ const archiveRateLimitError =
 const archiveTooLargeError =
   "元画像ZIPのサイズが上限を超えています。必要な画像を個別に保存してください。";
 
-type LoadedSourceImage =
-  | { status: "loading"; url: string }
-  | { objectUrl: string; status: "ready"; url: string }
-  | { status: "error"; url: string };
-
-type SourceImageCache = Record<string, LoadedSourceImage>;
-
 type SourceImageSelection = { mode: "auto" } | { kind: SourceImageKind; mode: "fixed" };
 
 export function useSourceImagePanelState({
+  accountId,
   loading,
   matchDraftId,
   preferredKind,
   sourceImages,
 }: {
+  accountId: string | undefined;
   loading: boolean;
   matchDraftId: string;
   preferredKind: SourceImageKind | undefined;
@@ -47,143 +40,25 @@ export function useSourceImagePanelState({
     kind: SourceImageKind;
     open: boolean;
   } | null>(null);
-  const [imageCache, setImageCache] = useState<SourceImageCache>({});
-  const [imageRetrySequence, setImageRetrySequence] = useState(0);
   const [archiveConfirmOpen, setArchiveConfirmOpen] = useState(false);
   const [archiveSaving, setArchiveSaving] = useState(false);
   const [archiveError, setArchiveError] = useState("");
   const previewTriggerRef = useRef<HTMLElement | null>(null);
-  const imageCacheRef = useRef<SourceImageCache>({});
-  const imageObjectUrlsRef = useRef(new Map<string, string>());
-  const imageLoadControllersRef = useRef(new Map<string, AbortController>());
-
-  useEffect(() => {
-    imageCacheRef.current = imageCache;
-  }, [imageCache]);
-
   const activeKind =
     selection.mode === "fixed" ? selection.kind : (preferredKind ?? "total_assets");
   const activeState = states.find((state) => state.kind === activeKind);
-  const activeImageUrl = activeState?.status === "available" ? activeState.url : undefined;
-  const activeImage = activeImageUrl ? imageCache[activeImageUrl] : undefined;
-  const displayUrl =
-    activeImage?.status === "ready" && activeImage.url === activeImageUrl
-      ? activeImage.objectUrl
-      : undefined;
+  const { activeImage, displayUrl, handleActiveImageRetry } = useSourceImageResource({
+    accountId,
+    matchDraftId,
+    loading,
+    activeKind,
+    sourceImages,
+  });
   const previewKind = previewDialog?.kind ?? null;
   const previewUrl = previewKind === activeKind ? displayUrl : undefined;
   const availableImageCount = states.filter((state) => state.status === "available").length;
   const expectedImageCount = sourceImageKinds.length;
   const archiveSaveDisabled = loading || archiveSaving || availableImageCount === 0;
-
-  useEffect(() => {
-    const availableUrls = new Set(
-      states.flatMap((state) => (state.status === "available" ? [state.url] : [])),
-    );
-
-    for (const [url, controller] of imageLoadControllersRef.current) {
-      if (!availableUrls.has(url)) {
-        controller.abort();
-        imageLoadControllersRef.current.delete(url);
-      }
-    }
-    for (const [url, objectUrl] of imageObjectUrlsRef.current) {
-      if (!availableUrls.has(url)) {
-        URL.revokeObjectURL(objectUrl);
-        imageObjectUrlsRef.current.delete(url);
-      }
-    }
-
-    setImageCache((current) => {
-      const staleUrls = Object.keys(current).filter((url) => !availableUrls.has(url));
-      if (staleUrls.length === 0) {
-        return current;
-      }
-      const next = { ...current };
-      for (const url of staleUrls) {
-        delete next[url];
-      }
-      return next;
-    });
-  }, [states]);
-
-  useEffect(() => {
-    if (!activeImageUrl) {
-      return;
-    }
-
-    const cached = imageCacheRef.current[activeImageUrl];
-    if (cached?.status === "ready" || cached?.status === "error") {
-      return;
-    }
-    const imageLoadControllers = imageLoadControllersRef.current;
-    if (imageLoadControllers.has(activeImageUrl)) {
-      return;
-    }
-
-    const controller = new AbortController();
-    imageLoadControllers.set(activeImageUrl, controller);
-    setImageCache((current) => {
-      const latest = current[activeImageUrl];
-      if (latest?.status === "ready" || latest?.status === "error") {
-        return current;
-      }
-      return { ...current, [activeImageUrl]: { status: "loading", url: activeImageUrl } };
-    });
-
-    const loadActiveImage = async () => {
-      try {
-        const blob = await downloadMatchDraftSourceImage(activeImageUrl, controller.signal);
-        if (controller.signal.aborted || imageLoadControllers.get(activeImageUrl) !== controller) {
-          return;
-        }
-        const objectUrl = URL.createObjectURL(blob);
-        const previousObjectUrl = imageObjectUrlsRef.current.get(activeImageUrl);
-        if (previousObjectUrl) {
-          URL.revokeObjectURL(previousObjectUrl);
-        }
-        imageObjectUrlsRef.current.set(activeImageUrl, objectUrl);
-        setImageCache((current) => ({
-          ...current,
-          [activeImageUrl]: { objectUrl, status: "ready", url: activeImageUrl },
-        }));
-      } catch {
-        if (controller.signal.aborted || imageLoadControllers.get(activeImageUrl) !== controller) {
-          return;
-        }
-        setImageCache((current) => ({
-          ...current,
-          [activeImageUrl]: { status: "error", url: activeImageUrl },
-        }));
-      } finally {
-        if (imageLoadControllers.get(activeImageUrl) === controller) {
-          imageLoadControllers.delete(activeImageUrl);
-        }
-      }
-    };
-    void loadActiveImage();
-
-    return () => {
-      if (imageLoadControllers.get(activeImageUrl) === controller) {
-        controller.abort();
-        imageLoadControllers.delete(activeImageUrl);
-      }
-    };
-  }, [activeImageUrl, imageRetrySequence]);
-
-  useEffect(
-    () => () => {
-      for (const controller of imageLoadControllersRef.current.values()) {
-        controller.abort();
-      }
-      imageLoadControllersRef.current.clear();
-      for (const objectUrl of imageObjectUrlsRef.current.values()) {
-        URL.revokeObjectURL(objectUrl);
-      }
-      imageObjectUrlsRef.current.clear();
-    },
-    [],
-  );
 
   const saveArchive = useCallback(async () => {
     setArchiveError("");
@@ -245,28 +120,6 @@ export function useSourceImagePanelState({
     setPreviewDialog((current) => (current ? { ...current, open: false } : null));
     previewTriggerRef.current?.focus();
   }, []);
-  const handleActiveImageRetry = useCallback(() => {
-    if (!activeImageUrl) {
-      return;
-    }
-    imageLoadControllersRef.current.get(activeImageUrl)?.abort();
-    imageLoadControllersRef.current.delete(activeImageUrl);
-    const objectUrl = imageObjectUrlsRef.current.get(activeImageUrl);
-    if (objectUrl) {
-      URL.revokeObjectURL(objectUrl);
-      imageObjectUrlsRef.current.delete(activeImageUrl);
-    }
-    setImageCache((current) => {
-      if (!current[activeImageUrl]) {
-        return current;
-      }
-      const next = { ...current };
-      delete next[activeImageUrl];
-      return next;
-    });
-    setImageRetrySequence((current) => current + 1);
-  }, [activeImageUrl]);
-
   return {
     activeImage,
     activeKind,

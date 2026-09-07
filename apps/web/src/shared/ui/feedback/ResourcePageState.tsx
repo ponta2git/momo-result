@@ -1,4 +1,5 @@
 import { ArrowLeft } from "lucide-react";
+import type { ReactNode } from "react";
 
 import { Button } from "@/shared/ui/actions/Button";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
@@ -12,6 +13,9 @@ type ResourcePageStateBase = {
   backHref: string;
   backLabel: string;
   description: string;
+  eyebrow?: ReactNode;
+  headerActions?: ReactNode;
+  headerDescription?: ReactNode;
   title: string;
   width?: PageFrameWidth | undefined;
 };
@@ -35,9 +39,24 @@ export type ResourcePageStateProps = ResourceErrorState | ResourceNotFoundState;
  */
 export function ResourcePageState(props: ResourcePageStateProps) {
   return (
-    <PageFrame className="gap-4" width={props.width ?? "wide"}>
-      <PageHeader title={props.title} />
-      <PageContentSurface className="grid justify-items-start gap-4">
+    <PageFrame width={props.width ?? "wide"}>
+      <div>
+        <LinkButton
+          icon={<ArrowLeft aria-hidden="true" />}
+          size="sm"
+          to={props.backHref}
+          variant="quiet"
+        >
+          {props.backLabel}
+        </LinkButton>
+      </div>
+      <PageHeader
+        actions={props.headerActions}
+        description={props.headerDescription}
+        eyebrow={props.eyebrow}
+        title={props.title}
+      />
+      <PageContentSurface>
         <Notice
           action={
             props.kind === "error" ? (
@@ -55,13 +74,6 @@ export function ResourcePageState(props: ResourcePageStateProps) {
         >
           <p>{props.description}</p>
         </Notice>
-        <LinkButton
-          icon={<ArrowLeft aria-hidden="true" />}
-          to={props.backHref}
-          variant={props.kind === "not-found" ? "primary" : "secondary"}
-        >
-          {props.backLabel}
-        </LinkButton>
       </PageContentSurface>
     </PageFrame>
   );

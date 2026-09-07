@@ -16,7 +16,9 @@ const baseProps = {
   refreshing: false,
   seasonOptions: [{ label: "今シーズン", value: "season-current" }],
   seasonValue: "season-current",
-  seriesOptions: [{ label: "桃太郎電鉄2", value: "gt_momotetsu_2" }],
+  seriesOptions: [
+    { label: "桃太郎電鉄2 (99戦)", summaryLabel: "桃太郎電鉄2", value: "gt_momotetsu_2" },
+  ],
   seriesValue: "gt_momotetsu_2",
 };
 
@@ -41,7 +43,10 @@ describe("SeriesAnalysisScopeBar", () => {
       "aria-expanded",
       "false",
     );
-    expect(within(surface).getByRole("combobox", { name: "対象作品" })).toBeInTheDocument();
+    const trigger = within(surface).getByRole("button", { name: /比較対象を変更/u });
+    expect(trigger).toHaveTextContent("桃太郎電鉄2");
+    expect(trigger).not.toHaveTextContent("99戦");
+    expect(within(surface).queryByRole("combobox", { name: "対象作品" })).not.toBeInTheDocument();
     expect(within(surface).queryByRole("combobox", { name: "シーズン" })).not.toBeInTheDocument();
 
     await user.click(within(surface).getByRole("button", { name: "表示を更新" }));
@@ -58,17 +63,35 @@ describe("SeriesAnalysisScopeBar", () => {
     expect(surface).toHaveTextContent("参考値 1項目・対象なし 2項目");
   });
 
+  it("keeps selected conditions visible while their result count is unavailable", () => {
+    render(<SeriesAnalysisScopeBar {...baseProps} response={undefined} />);
+
+    const trigger = screen.getByRole("button", { name: "比較対象を変更" });
+    expect(trigger).toHaveTextContent("桃太郎電鉄2");
+    expect(trigger).toHaveTextContent("シーズン 今シーズン・マップ 東日本編");
+    expect(trigger).toHaveTextContent("対戦数を確認中");
+    expect(trigger).not.toHaveTextContent("99戦");
+    expect(trigger).not.toHaveTextContent("0戦");
+    expect(screen.getByRole("button", { name: "表示を更新" })).toBeEnabled();
+  });
+
   it("keeps collapsed details out of accessibility and tab order, then allows changes", async () => {
     const user = userEvent.setup();
     const onSeasonChange = vi.fn();
+    const onSeriesChange = vi.fn();
     render(
       <SeriesAnalysisScopeBar
         {...baseProps}
         onSeasonChange={onSeasonChange}
+        onSeriesChange={onSeriesChange}
         response={makeSeriesAnalysisReview()}
         seasonOptions={[
           ...baseProps.seasonOptions,
           { label: "前シーズン", value: "season-previous" },
+        ]}
+        seriesOptions={[
+          ...baseProps.seriesOptions,
+          { label: "桃鉄ワールド (20戦)", summaryLabel: "桃鉄ワールド", value: "gt_world" },
         ]}
       />,
     );
@@ -81,6 +104,7 @@ describe("SeriesAnalysisScopeBar", () => {
     expect(trigger).toHaveTextContent("12戦");
     expect(within(surface).queryByRole("combobox", { name: "シーズン" })).not.toBeInTheDocument();
     expect(within(surface).queryByRole("combobox", { name: "マップ" })).not.toBeInTheDocument();
+    expect(within(surface).queryByRole("combobox", { name: "対象作品" })).not.toBeInTheDocument();
     expect(mountedSeasonControl.closest("[hidden]")).not.toBeNull();
 
     trigger.focus();
@@ -95,6 +119,15 @@ describe("SeriesAnalysisScopeBar", () => {
     expect(seasonControl.closest("[hidden]")).toBeNull();
     await user.selectOptions(seasonControl, "season-previous");
     expect(onSeasonChange).toHaveBeenCalledWith("season-previous");
+    await user.selectOptions(
+      within(surface).getByRole("combobox", { name: "対象作品" }),
+      "gt_world",
+    );
+    expect(onSeriesChange).toHaveBeenCalledWith("gt_world");
+
+    await user.click(trigger);
+    expect(trigger).toHaveAttribute("aria-expanded", "false");
+    expect(within(surface).queryByRole("combobox", { name: "対象作品" })).not.toBeInTheDocument();
   });
 
   it("omits a detail-filter summary when season and map use their defaults", () => {

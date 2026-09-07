@@ -1,15 +1,17 @@
-import { ArrowRight, Camera, Download, ListFilter, Trash2 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Camera, ClipboardList, Download, Trash2 } from "lucide-react";
 
 import { heldEventOcrCaptureHref } from "@/features/heldEvents/heldEventNavigation";
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
 import { formatDateTimeLong } from "@/shared/lib/dateTime";
 import { useMediaQuery } from "@/shared/lib/useMediaQuery";
 import { withReturnTo } from "@/shared/navigation/returnTo";
-import { Button } from "@/shared/ui/actions/Button";
-import { LinkButton } from "@/shared/ui/actions/LinkButton";
+import { IconButton } from "@/shared/ui/actions/IconButton";
+import { IconLink } from "@/shared/ui/actions/IconLink";
+import { cn } from "@/shared/ui/cn";
 import { DataTable } from "@/shared/ui/data/DataTable";
 import type { DataTableColumn } from "@/shared/ui/data/DataTable";
+import { FactList } from "@/shared/ui/data/FactList";
+import { contentText } from "@/shared/ui/typography";
 
 type HeldEventsLedgerProps = {
   actionsDisabled: boolean;
@@ -41,12 +43,7 @@ function HeldEventsTable({
       key: "heldAt",
       minWidth: "16rem",
       renderCell: (event) => (
-        <HeldEventIdentity
-          actionsDisabled={actionsDisabled}
-          event={event}
-          latest={event.id === latestEventId}
-          returnTo={returnTo}
-        />
+        <HeldEventIdentity event={event} latest={event.id === latestEventId} />
       ),
       rowHeader: true,
     },
@@ -64,22 +61,55 @@ function HeldEventsTable({
       renderCell: (event) => <span className="tabular-nums">{event.draftCount}件</span>,
       width: "9rem",
     },
+    ...(latestEventId
+      ? [
+          {
+            align: "center" as const,
+            header: "OCR",
+            key: "capture",
+            width: "4.5rem",
+            renderCell: (event: HeldEventResponse) =>
+              event.id === latestEventId ? (
+                <HeldEventCaptureLink
+                  disabled={actionsDisabled}
+                  event={event}
+                  returnTo={returnTo}
+                />
+              ) : null,
+          },
+        ]
+      : []),
     {
-      align: "right",
-      header: "操作",
-      key: "actions",
-      minWidth: "24rem",
+      align: "center",
+      header: "結果",
+      key: "detail",
+      width: "4.5rem",
       renderCell: (event) => (
-        <HeldEventActions
-          actionsDisabled={actionsDisabled}
-          deleteDisabled={deleteDisabled}
-          event={event}
-          latest={event.id === latestEventId}
-          returnTo={returnTo}
-          onDelete={onDelete}
-        />
+        <HeldEventResultLink disabled={actionsDisabled} event={event} returnTo={returnTo} />
       ),
     },
+    {
+      align: "center",
+      header: "出力",
+      key: "export",
+      width: "4.5rem",
+      renderCell: (event) => (
+        <HeldEventExportLink disabled={actionsDisabled} event={event} returnTo={returnTo} />
+      ),
+    },
+    ...(events.some(canDeleteHeldEvent)
+      ? [
+          {
+            align: "center" as const,
+            header: "削除",
+            key: "delete",
+            width: "4.5rem",
+            renderCell: (event: HeldEventResponse) => (
+              <HeldEventDeleteButton disabled={deleteDisabled} event={event} onDelete={onDelete} />
+            ),
+          },
+        ]
+      : []),
   ];
 
   return (
@@ -87,7 +117,7 @@ function HeldEventsTable({
       caption={{ content: "開催履歴" }}
       columns={columns}
       getRowKey={(event) => event.id}
-      minWidth="58rem"
+      minWidth="50rem"
       rows={events}
       verticalAlign="middle"
     />
@@ -103,7 +133,7 @@ function HeldEventsMobileList({
   returnTo,
 }: HeldEventsLedgerProps) {
   return (
-    <ol className="divide-y divide-[var(--color-border)] overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)]">
+    <ol className="divide-y divide-[var(--color-border)] overflow-hidden rounded-md border border-[var(--color-border)]">
       {events.map((event, index) => (
         <HeldEventRow
           key={event.id}
@@ -136,23 +166,17 @@ function HeldEventRow({
 }) {
   return (
     <li>
-      <article className="grid gap-3 px-4 py-3">
-        <HeldEventIdentity
-          actionsDisabled={actionsDisabled}
-          event={event}
-          latest={latest}
-          returnTo={returnTo}
+      <article className="grid gap-4 p-4">
+        <HeldEventIdentity event={event} latest={latest} />
+        <FactList
+          ariaLabel="開催の記録件数"
+          columns={2}
+          layout="plain"
+          items={[
+            { id: "matches", label: "確定済み", value: `${event.matchCount}試合` },
+            { id: "drafts", label: "未確定下書き", value: `${event.draftCount}件` },
+          ]}
         />
-        <dl className="grid grid-cols-2 divide-x divide-[var(--color-border)] overflow-hidden rounded-[var(--radius-sm)] border border-[var(--color-border)]">
-          <div className="min-w-0 px-3 py-2">
-            <dt className="momo-label text-[var(--color-text-secondary)]">確定済み</dt>
-            <dd className="mt-1 text-sm font-semibold tabular-nums">{event.matchCount}試合</dd>
-          </div>
-          <div className="min-w-0 px-3 py-2">
-            <dt className="momo-label text-[var(--color-text-secondary)]">未確定下書き</dt>
-            <dd className="mt-1 text-sm font-semibold tabular-nums">{event.draftCount}件</dd>
-          </div>
-        </dl>
         <HeldEventActions
           actionsDisabled={actionsDisabled}
           deleteDisabled={deleteDisabled}
@@ -166,49 +190,37 @@ function HeldEventRow({
   );
 }
 
-function HeldEventIdentity({
-  actionsDisabled,
-  event,
-  latest,
-  returnTo,
-}: {
-  actionsDisabled: boolean;
-  event: HeldEventResponse;
-  latest: boolean;
-  returnTo: string;
-}) {
-  const detailLabel = `${formatDateTimeLong(event.heldAt)}の開催詳細`;
-  const detailContent = (
-    <>
-      <span className="truncate tabular-nums">{formatDateTimeLong(event.heldAt)}</span>
-      <ArrowRight aria-hidden="true" className="size-4 shrink-0" />
-    </>
-  );
+function HeldEventIdentity({ event, latest }: { event: HeldEventResponse; latest: boolean }) {
   return (
-    <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-      {latest ? (
-        <span className="rounded-[var(--radius-xs)] border border-[var(--color-border-strong)] px-2 py-0.5 text-xs font-semibold text-[var(--color-text-secondary)]">
-          最新
-        </span>
+    <div className="grid min-w-0 gap-1">
+      <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+        {latest ? (
+          <span
+            className={cn(
+              contentText.supporting,
+              "rounded-xs border border-[var(--color-border-strong)] px-2 py-0.5",
+            )}
+          >
+            最新
+          </span>
+        ) : null}
+        <time className={cn(contentText.body, "truncate tabular-nums")} dateTime={event.heldAt}>
+          {formatDateTimeLong(event.heldAt)}
+        </time>
+      </div>
+      {(event.scopes?.length ?? 0) > 0 ? (
+        <ul
+          aria-label="開催のシリーズ・シーズン"
+          className={cn(contentText.supporting, "grid gap-1")}
+        >
+          {event.scopes?.map((scope) => (
+            <li key={`${scope.gameTitleId ?? ""}:${scope.seasonMasterId ?? ""}`}>
+              {scope.gameTitleName ?? (scope.gameTitleId ? "作品名未取得" : "作品未設定")}・
+              {scope.seasonName ?? (scope.seasonMasterId ? "シーズン名未取得" : "シーズン未設定")}
+            </li>
+          ))}
+        </ul>
       ) : null}
-      {actionsDisabled ? (
-        <span
-          aria-disabled="true"
-          aria-label={detailLabel}
-          className="momo-heading inline-flex min-h-11 min-w-0 cursor-not-allowed items-center gap-2 text-base font-semibold text-[var(--color-text-primary)] opacity-60"
-          role="link"
-        >
-          {detailContent}
-        </span>
-      ) : (
-        <Link
-          aria-label={detailLabel}
-          className="momo-heading inline-flex min-h-11 min-w-0 items-center gap-2 text-base font-semibold text-[var(--color-text-primary)] underline-offset-4 hover:underline"
-          to={withReturnTo(`/held-events/${encodeURIComponent(event.id)}`, returnTo)}
-        >
-          {detailContent}
-        </Link>
-      )}
     </div>
   );
 }
@@ -228,54 +240,85 @@ function HeldEventActions({
   onDelete: (event: HeldEventResponse) => void;
   returnTo: string;
 }) {
-  const encodedId = encodeURIComponent(event.id);
-  const canDelete = event.matchCount === 0 && event.draftCount === 0;
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-2 md:justify-end">
       {latest ? (
-        <LinkButton
-          aria-label={`${formatDateTimeLong(event.heldAt)}の開催にOCR取り込み`}
-          disabled={actionsDisabled}
-          icon={<Camera aria-hidden="true" />}
-          size="sm"
-          to={heldEventOcrCaptureHref(event.id, returnTo)}
-          variant="secondary"
-        >
-          OCR取り込み
-        </LinkButton>
+        <HeldEventCaptureLink disabled={actionsDisabled} event={event} returnTo={returnTo} />
       ) : null}
-      <LinkButton
-        aria-label={`${formatDateTimeLong(event.heldAt)}の試合を検索`}
-        disabled={actionsDisabled}
-        icon={<ListFilter aria-hidden="true" />}
-        size="sm"
-        to={withReturnTo(`/matches?heldEventId=${encodedId}&sort=match_no_asc`, returnTo)}
-        variant="quiet"
-      >
-        試合検索
-      </LinkButton>
-      <LinkButton
-        aria-label={`${formatDateTimeLong(event.heldAt)}をCSV出力`}
-        disabled={actionsDisabled}
-        icon={<Download aria-hidden="true" />}
-        size="sm"
-        to={withReturnTo(`/exports?heldEventId=${encodedId}&format=csv`, returnTo)}
-        variant="quiet"
-      >
-        出力
-      </LinkButton>
-      {canDelete ? (
-        <Button
-          aria-label={`${formatDateTimeLong(event.heldAt)}を削除`}
-          disabled={deleteDisabled}
-          icon={<Trash2 aria-hidden="true" />}
-          size="sm"
-          variant="quiet"
-          onClick={() => onDelete(event)}
-        >
-          削除
-        </Button>
-      ) : null}
+      <HeldEventResultLink disabled={actionsDisabled} event={event} returnTo={returnTo} />
+      <HeldEventExportLink disabled={actionsDisabled} event={event} returnTo={returnTo} />
+      <HeldEventDeleteButton disabled={deleteDisabled} event={event} onDelete={onDelete} />
     </div>
+  );
+}
+
+type HeldEventLinkProps = {
+  disabled: boolean;
+  event: HeldEventResponse;
+  returnTo: string;
+};
+
+function HeldEventCaptureLink({ disabled, event, returnTo }: HeldEventLinkProps) {
+  return (
+    <IconLink
+      aria-label={`${formatDateTimeLong(event.heldAt)}の開催にOCR取り込み`}
+      disabled={disabled}
+      icon={<Camera />}
+      to={heldEventOcrCaptureHref(event.id, returnTo)}
+      tooltip="この開催にOCR取り込み"
+      variant="quiet"
+    />
+  );
+}
+
+function HeldEventResultLink({ disabled, event, returnTo }: HeldEventLinkProps) {
+  return (
+    <IconLink
+      aria-label={`${formatDateTimeLong(event.heldAt)}の開催詳細`}
+      disabled={disabled}
+      icon={<ClipboardList />}
+      to={withReturnTo(`/held-events/${encodeURIComponent(event.id)}`, returnTo)}
+      tooltip="開催結果を見る"
+      variant="quiet"
+    />
+  );
+}
+
+function HeldEventExportLink({ disabled, event, returnTo }: HeldEventLinkProps) {
+  return (
+    <IconLink
+      aria-label={`${formatDateTimeLong(event.heldAt)}をCSV出力`}
+      disabled={disabled}
+      icon={<Download />}
+      to={withReturnTo(`/exports?heldEventId=${encodeURIComponent(event.id)}&format=csv`, returnTo)}
+      tooltip="CSV/TSV出力へ"
+      variant="quiet"
+    />
+  );
+}
+
+function canDeleteHeldEvent(event: HeldEventResponse) {
+  return event.matchCount === 0 && event.draftCount === 0;
+}
+
+function HeldEventDeleteButton({
+  disabled,
+  event,
+  onDelete,
+}: {
+  disabled: boolean;
+  event: HeldEventResponse;
+  onDelete: (event: HeldEventResponse) => void;
+}) {
+  if (!canDeleteHeldEvent(event)) return null;
+  return (
+    <IconButton
+      aria-label={`${formatDateTimeLong(event.heldAt)}を削除`}
+      disabled={disabled}
+      icon={<Trash2 />}
+      tooltip="空の開催を削除"
+      variant="quiet"
+      onClick={() => onDelete(event)}
+    />
   );
 }

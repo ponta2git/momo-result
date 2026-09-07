@@ -7,6 +7,7 @@ import { formatMatchNoInEvent } from "@/shared/domain/matchLabels";
 import { memberDisplayName, orderFixedMembers } from "@/shared/domain/members";
 import { formatDateTimeLong } from "@/shared/lib/dateTime";
 import { Button } from "@/shared/ui/actions/Button";
+import { cn } from "@/shared/ui/cn";
 import {
   dataTableBodyCellClassName,
   DataTableBodyRow,
@@ -17,6 +18,7 @@ import { FactList } from "@/shared/ui/data/FactList";
 import { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
 import { Dialog, DialogFooter } from "@/shared/ui/feedback/Dialog";
 import { RankBadge } from "@/shared/ui/rank/RankBadge";
+import { contentText } from "@/shared/ui/typography";
 
 type MatchConfirmSummaryProps = {
   gameTitleName?: string | undefined;
@@ -69,7 +71,8 @@ function MatchConfirmSummary({
         { id: "season", label: "シーズン", value: seasonName ?? "未選択" },
         { id: "map", label: "マップ", value: mapName ?? "未選択" },
       ]}
-      layout="inline"
+      columns={2}
+      layout="plain"
     />
   );
 }
@@ -77,8 +80,8 @@ function MatchConfirmSummary({
 function PlayerLedger({ values }: { values: MatchFormValues }) {
   const orderedPlayers = orderFixedMembers(values.players);
   return (
-    <div>
-      <p className="mb-2 text-xs text-[var(--color-text-secondary)] sm:hidden">
+    <div className="min-w-0">
+      <p className={cn(contentText.supporting, "mb-2 sm:hidden")}>
         4人分の結果は横にスクロールして確認できます。
       </p>
       <div className={dataTableScrollAreaClassName}>
@@ -98,12 +101,18 @@ function PlayerLedger({ values }: { values: MatchFormValues }) {
                 <td className={dataTableBodyCellClassName}>
                   <RankBadge rank={player.rank} />
                 </td>
-                <th className={`${dataTableBodyCellClassName} text-left font-semibold`} scope="row">
+                <th className={`${dataTableBodyCellClassName} font-plain text-left`} scope="row">
                   <MemberSequenceLabel memberId={player.memberId}>
                     {memberDisplayName(player.memberId)}
                   </MemberSequenceLabel>
                 </th>
-                <td className={`${dataTableBodyCellClassName} text-right tabular-nums`}>
+                <td
+                  className={cn(
+                    dataTableBodyCellClassName,
+                    contentText.compactPrimary,
+                    "text-right tabular-nums",
+                  )}
+                >
                   {player.totalAssetsManYen.toLocaleString()}
                 </td>
                 <td className={`${dataTableBodyCellClassName} text-right tabular-nums`}>
@@ -128,9 +137,9 @@ function OcrReviewSummary({
   }
   const reviewedCount = totalCount - unresolvedCount;
   return (
-    <div className="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3">
+    <div className="rounded-sm border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm tabular-nums">
-        <span className="font-semibold text-[var(--color-text-primary)]">OCR確認状況</span>
+        <span className="font-plain text-[var(--color-text-primary)]">OCR確認状況</span>
         <span className="text-[var(--color-text-secondary)]">修正 {changedCount}件</span>
         <span className="text-[var(--color-text-secondary)]">
           確認済み{reviewedCount}件／全{totalCount}件
@@ -162,7 +171,6 @@ export function MatchConfirmDialog({ model }: { model: MatchWorkspaceConfirmatio
     <Dialog
       busy={model.pending}
       open
-      description="確定前の確認"
       title="この内容で確定しますか？"
       onOpenChange={(open) => {
         if (!open) {
@@ -170,38 +178,31 @@ export function MatchConfirmDialog({ model }: { model: MatchWorkspaceConfirmatio
         }
       }}
     >
-      <form action={model.actions.onConfirm} className="grid min-w-0 gap-4">
+      <form action={model.actions.onConfirm} className="grid min-w-0 gap-6">
         <MatchConfirmSummary {...model.summary} values={model.values} />
         <PlayerLedger values={model.values} />
         {model.values.noteBody.trim().length > 0 ? (
-          <div className="border-t border-[var(--color-border)] pt-3">
-            <section aria-labelledby="confirm-match-note-heading">
-              <h3
-                className="text-xs font-semibold text-[var(--color-text-secondary)]"
-                id="confirm-match-note-heading"
-              >
-                試合メモ
-              </h3>
-              <p className="mt-1 text-sm leading-6 break-words whitespace-pre-wrap text-[var(--color-text-primary)]">
-                {model.values.noteBody}
-              </p>
-            </section>
-          </div>
+          <section aria-labelledby="confirm-match-note-heading" className="grid gap-1">
+            <h3 className={contentText.heading} id="confirm-match-note-heading">
+              試合メモ
+            </h3>
+            <p className={cn(contentText.body, "break-words whitespace-pre-wrap")}>
+              {model.values.noteBody}
+            </p>
+          </section>
         ) : null}
         <OcrReviewSummary {...model.review} />
 
         {model.feedback.validationMessage ? (
           <div
-            className="rounded-[var(--radius-sm)] border border-[var(--color-warning)]/65 bg-[var(--color-warning)]/18 px-3 py-2 text-sm text-[var(--color-text-primary)]"
+            className="rounded-sm border border-[var(--color-warning)]/65 bg-[var(--color-warning)]/18 px-3 py-2 text-sm text-[var(--color-text-primary)]"
             role="alert"
           >
             {model.feedback.validationMessage}
           </div>
         ) : null}
 
-        <div className="mt-2">
-          <ConfirmActionButtons pending={model.pending} onCancel={model.actions.onClose} />
-        </div>
+        <ConfirmActionButtons pending={model.pending} onCancel={model.actions.onClose} />
       </form>
     </Dialog>
   );

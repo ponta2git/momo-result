@@ -8,6 +8,7 @@ import { AppGlobalNav } from "@/app/AppGlobalNav";
 const authMock = vi.hoisted(() => ({
   current: {
     auth: { displayName: "ぽんた", isAdmin: false },
+    isAuthenticated: true,
     isLogoutPending: false,
     logout: vi.fn(),
     logoutError: undefined as { status: number } | undefined,
@@ -22,6 +23,7 @@ describe("AppGlobalNav", () => {
   beforeEach(() => {
     authMock.current = {
       auth: { displayName: "ぽんた", isAdmin: false },
+      isAuthenticated: true,
       isLogoutPending: false,
       logout: vi.fn(),
       logoutError: undefined,
@@ -61,6 +63,7 @@ describe("AppGlobalNav", () => {
     const logout = vi.fn();
     authMock.current = {
       auth: { displayName: "ぽんた", isAdmin: false },
+      isAuthenticated: true,
       isLogoutPending: false,
       logout,
       logoutError: { status: 503 },

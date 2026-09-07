@@ -6,6 +6,7 @@ import { cn } from "@/shared/ui/cn";
 import { dataTableBodyCellClassName, DataTableBodyRow } from "@/shared/ui/data/DataTable";
 import { AlertDialog } from "@/shared/ui/feedback/Dialog";
 import { StatusBadge } from "@/shared/ui/status/StatusBadge";
+import { contentText } from "@/shared/ui/typography";
 
 export function AdminAccountRow({
   account,
@@ -26,13 +27,13 @@ export function AdminAccountRow({
       <th
         className={cn(
           dataTableBodyCellClassName,
-          "sticky left-0 z-[var(--z-base)] bg-[var(--color-surface)] text-left font-semibold",
+          "sticky left-0 z-[var(--z-base)] bg-[var(--color-surface)] text-left font-plain",
         )}
         scope="row"
       >
         {account.displayName}
       </th>
-      <td className={cn(dataTableBodyCellClassName, "momo-data truncate text-xs")}>
+      <td className={cn(dataTableBodyCellClassName, contentText.supporting, "momo-data")}>
         {account.discordUserId}
       </td>
       <td className={dataTableBodyCellClassName}>{memberDisplayName(account.playerMemberId)}</td>

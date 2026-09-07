@@ -34,6 +34,7 @@ export function buildSeriesAnalysisFilterOptions(
     seriesOptions:
       options?.titles.map((title) => ({
         label: `${title.displayName} (${title.confirmedMatchCount}戦)`,
+        summaryLabel: title.displayName,
         value: title.gameTitleId,
       })) ?? [],
   };

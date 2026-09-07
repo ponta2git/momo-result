@@ -22,7 +22,7 @@ pub(super) fn crown_certainty(
             .into_iter()
             .map(|pair| pair.full)
             .collect::<Vec<_>>();
-        if let Ok(fit) = fit(&observations)
+        if let Ok(fit) = fit(observations)
             && let Ok(iteration_leaders) = leaders(&fit.coefficients, players.len())
         {
             iterations.push(iteration_leaders);

@@ -7,7 +7,7 @@ import {
   requestedScreenTypeForSlot,
   validateImageFile,
 } from "@/features/ocrCapture/captureState";
-import { createMockMediaStream, installObjectUrlMock } from "@/test/doubles/dom";
+import { installObjectUrlMock } from "@/test/doubles/dom";
 
 describe("captureState", () => {
   it("uses the final classification tray as the OCR screen type hint", () => {
@@ -26,17 +26,14 @@ describe("captureState", () => {
     ).toContain("3MB");
   });
 
-  it("releases object URLs and camera tracks", () => {
+  it("releases preview object URLs", () => {
     const objectUrls = installObjectUrlMock();
-    const { stream, track } = createMockMediaStream();
 
     releaseSlotResources({
       ...createInitialSlot("total_assets"),
       previewUrl: "blob:test",
-      cameraStream: stream,
     });
 
     expect(objectUrls.revokeObjectURL).toHaveBeenCalledWith("blob:test");
-    expect(track.stop).toHaveBeenCalledOnce();
   });
 });

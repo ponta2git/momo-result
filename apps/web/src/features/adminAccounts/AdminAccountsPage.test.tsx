@@ -6,6 +6,7 @@ import { http, HttpResponse } from "msw";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { AdminAccountsPage } from "@/features/adminAccounts/AdminAccountsPage";
+import type { CreateLoginAccountRequest } from "@/shared/api/adminAccounts";
 import { adminAccountKeys } from "@/shared/api/queryKeys";
 import { createDeferred } from "@/test/deferred";
 import { mswState } from "@/test/msw/fixtures";
@@ -68,6 +69,85 @@ describe("AdminAccountsPage", () => {
     await waitFor(() =>
       expect(screen.queryByRole("dialog", { name: "アカウントを追加" })).not.toBeInTheDocument(),
     );
+  });
+
+  it("retains every creation field after failure, retries unchanged, and resets after success", async () => {
+    const submissions: Array<{ key: string | null; payload: CreateLoginAccountRequest }> = [];
+    const failedResponse = createDeferred();
+    server.use(
+      http.post("/api/admin/login-accounts", async ({ request }) => {
+        const payload = (await request.json()) as CreateLoginAccountRequest;
+        submissions.push({ key: request.headers.get("Idempotency-Key"), payload });
+        if (submissions.length === 1) {
+          await failedResponse.promise;
+          return HttpResponse.json({ detail: "temporarily unavailable" }, { status: 503 });
+        }
+        const created = {
+          ...payload,
+          accountId: "account-retry",
+          createdAt: "2026-01-01T00:00:00.000Z",
+          updatedAt: "2026-01-01T00:00:00.000Z",
+        };
+        mswState.loginAccounts.push(created);
+        return HttpResponse.json(created);
+      }),
+    );
+    renderPage();
+    const trigger = await screen.findByRole("button", { name: "アカウントを追加" });
+    await user.click(trigger);
+    const dialog = screen.getByRole("dialog", { name: "アカウントを追加" });
+    const discordId = within(dialog).getByRole("textbox", { name: /DiscordユーザーID/u });
+    const displayName = within(dialog).getByRole("textbox", { name: /表示名/u });
+    const player = within(dialog).getByRole("combobox", { name: "紐づくプレーヤー" });
+    const loginEnabled = within(dialog).getByRole("checkbox", { name: "ログイン許可" });
+    const isAdmin = within(dialog).getByRole("checkbox", { name: "管理者" });
+    await user.type(discordId, "999000111222333444");
+    await user.type(displayName, "再送ユーザー");
+    await user.selectOptions(player, "member_ponta");
+    await user.click(loginEnabled);
+    await user.click(isAdmin);
+    await user.click(within(dialog).getByRole("button", { name: "追加" }));
+    try {
+      const submit = await within(dialog).findByRole("button", { name: "追加中" });
+      expect(submit).toBeDisabled();
+      expect(within(dialog).getByRole("button", { name: "キャンセル" })).toBeDisabled();
+      await user.click(submit);
+    } finally {
+      failedResponse.resolve();
+    }
+
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent(
+      "アカウントを追加できません",
+    );
+    expect(submissions).toHaveLength(1);
+    expect(discordId).toHaveValue("999000111222333444");
+    expect(displayName).toHaveValue("再送ユーザー");
+    expect(player).toHaveValue("member_ponta");
+    expect(loginEnabled).not.toBeChecked();
+    expect(isAdmin).toBeChecked();
+
+    await user.click(within(dialog).getByRole("button", { name: "追加" }));
+    expect(await screen.findByRole("rowheader", { name: "再送ユーザー" })).toBeVisible();
+    expect(submissions).toHaveLength(2);
+    expect(submissions[0]?.key).toMatch(/\S/u);
+    expect(submissions[1]).toEqual(submissions[0]);
+    expect(submissions[1]?.payload).toEqual({
+      discordUserId: "999000111222333444",
+      displayName: "再送ユーザー",
+      isAdmin: true,
+      loginEnabled: false,
+      playerMemberId: "member_ponta",
+    });
+    await waitFor(() => expect(trigger).toHaveFocus());
+
+    await user.click(trigger);
+    const nextDialog = screen.getByRole("dialog", { name: "アカウントを追加" });
+    expect(within(nextDialog).getByRole("textbox", { name: /DiscordユーザーID/u })).toHaveValue("");
+    expect(within(nextDialog).getByRole("textbox", { name: /表示名/u })).toHaveValue("");
+    expect(within(nextDialog).getByRole("combobox", { name: "紐づくプレーヤー" })).toHaveValue("");
+    expect(within(nextDialog).getByRole("checkbox", { name: "ログイン許可" })).toBeChecked();
+    expect(within(nextDialog).getByRole("checkbox", { name: "管理者" })).not.toBeChecked();
+    expect(within(nextDialog).queryByRole("alert")).not.toBeInTheDocument();
   });
 
   it("confirms login permission changes before applying them", async () => {

@@ -1,29 +1,28 @@
 import type { ReactNode } from "react";
 import { Component } from "react";
 
+import { RouteTerminalPage } from "@/app/RouteTerminalPage";
 import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import { isModuleLoadError, reloadCurrentPage } from "@/shared/lib/moduleLoadError";
 import { Button } from "@/shared/ui/actions/Button";
 import { Notice } from "@/shared/ui/feedback/Notice";
-import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
-import { PageFrame } from "@/shared/ui/layout/PageFrame";
-import { PageHeader } from "@/shared/ui/layout/PageHeader";
 
 type RouteErrorBoundaryProps = {
   children: ReactNode;
   onReset?: (() => void) | undefined;
-  resetKey?: string;
+  pathname: string;
+  search?: string | undefined;
 };
 
 type RouteErrorBoundaryState = {
   error: Error | null;
-  resetKey: string | undefined;
+  pathname: string;
 };
 
 /**
  * アプリのルート単位の ErrorBoundary。通常の query / render エラーは境界を解除して再試行し、
  * 同じ React.lazy type では回復できない module 読み込み失敗だけは画面全体を再読み込みする。
- * `resetKey`（例: pathname）が変わった場合も自動リセットする。
+ * pathname が変わった場合も自動リセットする。
  */
 export class RouteErrorBoundary extends Component<
   RouteErrorBoundaryProps,
@@ -31,7 +30,7 @@ export class RouteErrorBoundary extends Component<
 > {
   constructor(props: RouteErrorBoundaryProps) {
     super(props);
-    this.state = { error: null, resetKey: props.resetKey };
+    this.state = { error: null, pathname: props.pathname };
   }
 
   static getDerivedStateFromError(error: Error): Partial<RouteErrorBoundaryState> {
@@ -42,8 +41,8 @@ export class RouteErrorBoundary extends Component<
     props: RouteErrorBoundaryProps,
     state: RouteErrorBoundaryState,
   ): Partial<RouteErrorBoundaryState> | null {
-    if (props.resetKey !== state.resetKey) {
-      return { error: null, resetKey: props.resetKey };
+    if (props.pathname !== state.pathname) {
+      return { error: null, pathname: props.pathname };
     }
     return null;
   }
@@ -66,19 +65,23 @@ export class RouteErrorBoundary extends Component<
         ? "画面を構成するファイルを取得できませんでした。通信状態を確認して、画面全体を再読み込みしてください。"
         : normalized.detail || normalized.title || this.state.error.message;
       return (
-        <PageFrame className="py-8 sm:py-12" width="narrow">
-          <PageHeader title="画面の読み込みに失敗しました" />
-          <PageContentSurface>
-            <Notice role="alert" tone="danger">
-              <p className="momo-break-token text-sm">{detail}</p>
-              <div className="mt-3">
-                <Button onClick={this.handleRecovery}>
-                  {reloadRequired ? "画面を再読み込み" : "もう一度読み込む"}
-                </Button>
-              </div>
-            </Notice>
-          </PageContentSurface>
-        </PageFrame>
+        <RouteTerminalPage
+          pathname={this.props.pathname}
+          search={this.props.search}
+          title="画面の読み込みに失敗しました"
+        >
+          <Notice
+            action={
+              <Button onClick={this.handleRecovery}>
+                {reloadRequired ? "画面を再読み込み" : "もう一度読み込む"}
+              </Button>
+            }
+            role="alert"
+            tone="danger"
+          >
+            <p className="momo-break-token text-sm">{detail}</p>
+          </Notice>
+        </RouteTerminalPage>
       );
     }
 

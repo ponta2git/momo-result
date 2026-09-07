@@ -7,9 +7,13 @@ import type {
   SeriesComparisonAggregateV3,
 } from "@/shared/api/seriesAnalysis";
 import { Button } from "@/shared/ui/actions/Button";
+import { cn } from "@/shared/ui/cn";
 import { Disclosure } from "@/shared/ui/data/Collapsible";
+import { FactList } from "@/shared/ui/data/FactList";
 import type { FactListItem } from "@/shared/ui/data/FactList";
 import { Dialog } from "@/shared/ui/feedback/Dialog";
+import { readableTextWidthClass } from "@/shared/ui/layout/readableText";
+import { contentText } from "@/shared/ui/typography";
 
 export function MetricDefinitions({ response }: { response: SeriesComparisonAggregateV3 }) {
   return (
@@ -22,16 +26,16 @@ export function MetricDefinitions({ response }: { response: SeriesComparisonAggr
         </Button>
       }
     >
-      <dl className="grid gap-x-6 sm:grid-cols-2">
-        {response.metricDefinitions.map((definition) => (
-          <div className="py-2" key={definition.metricId}>
-            <dt className="text-sm font-semibold">{definition.label}</dt>
-            <dd className="mt-1 text-xs text-[var(--color-text-secondary)]">
-              {metricReadingCue(definition)}
-            </dd>
-          </div>
-        ))}
-      </dl>
+      <FactList
+        ariaLabel="指標ごとの比べ方"
+        columns={2}
+        items={response.metricDefinitions.map((definition) => ({
+          id: definition.metricId,
+          label: definition.label,
+          value: metricReadingCue(definition),
+        }))}
+        layout="plain"
+      />
     </Dialog>
   );
 }
@@ -55,7 +59,7 @@ export function AnalysisSection({
   return (
     <section aria-labelledby={headingId} className="min-w-0 scroll-mt-24" id={id}>
       <header>
-        <h2 className="text-lg font-semibold tracking-tight" id={headingId}>
+        <h2 className={contentText.heading} id={headingId}>
           {title}
         </h2>
       </header>
@@ -81,12 +85,10 @@ export function AnalysisSubsection({
   return (
     <section aria-labelledby={headingId} id={id}>
       <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
-        <h3 className="text-sm font-semibold" id={headingId}>
+        <h3 className={contentText.heading} id={headingId}>
           {title}
         </h3>
-        {meta ? (
-          <span className="text-xs text-[var(--color-text-secondary)] tabular-nums">{meta}</span>
-        ) : null}
+        {meta ? <span className={cn(contentText.supporting, "tabular-nums")}>{meta}</span> : null}
       </div>
       {children}
     </section>
@@ -115,14 +117,9 @@ export function AnalysisReadingGuide({
         </span>
       }
     >
-      <dl className="grid gap-2 text-sm">
-        {items.map((item) => (
-          <div className="grid gap-0.5 sm:grid-cols-[7rem_1fr]" key={item.id}>
-            <dt className="font-semibold">{item.label}</dt>
-            <dd className="text-[var(--color-text-secondary)]">{item.value}</dd>
-          </div>
-        ))}
-      </dl>
+      <div className={readableTextWidthClass}>
+        <FactList ariaLabel={ariaLabel} items={items} layout="plain" />
+      </div>
     </Disclosure>
   );
 }
@@ -130,8 +127,8 @@ export function AnalysisReadingGuide({
 export function MetricValue({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <dt className="text-xs text-[var(--color-text-secondary)]">{label}</dt>
-      <dd className="mt-0.5 font-semibold tabular-nums">{value}</dd>
+      <dt className={contentText.supporting}>{label}</dt>
+      <dd className={cn(contentText.body, "mt-0.5 tabular-nums")}>{value}</dd>
     </div>
   );
 }

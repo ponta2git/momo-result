@@ -15,7 +15,9 @@ import type {
   ScoreGridNumericHandlers,
 } from "@/features/matches/workspace/scoreGrid/ScoreGridTypes";
 import { canonicalResultMembers, memberDisplayName } from "@/shared/domain/members";
+import { cn } from "@/shared/ui/cn";
 import { SelectControl } from "@/shared/ui/forms/Control";
+import { fieldText } from "@/shared/ui/typography";
 
 export function MobileMemberSelect({
   cellId,
@@ -42,8 +44,8 @@ export function MobileMemberSelect({
 }) {
   const changed = Boolean(originalMemberId && originalMemberId !== memberId);
   return (
-    <label className="grid min-w-[10rem] gap-1 text-xs text-[var(--color-text-secondary)]">
-      メンバー
+    <label className={cn(fieldText.label, "grid min-w-[10rem]")}>
+      <span className="mb-2">メンバー</span>
       <SelectControl
         ref={(node) => registerCellRef(cellId, node)}
         aria-describedby={reviewItem ? `${cellId}-review-status` : undefined}
@@ -106,8 +108,8 @@ export function MobilePlayOrderSelect({
 }) {
   const changed = Boolean(originalPlayOrder && originalPlayOrder !== playOrder);
   return (
-    <label className="grid min-w-[6ch] gap-1 text-xs text-[var(--color-text-secondary)]">
-      プレー順
+    <label className={cn(fieldText.label, "grid min-w-[6ch]")}>
+      <span className="mb-2">プレー順</span>
       <SelectControl
         ref={(node) => registerCellRef(cellId, node)}
         aria-describedby={error || reviewItem ? `${cellId}-review-status` : undefined}
@@ -174,8 +176,8 @@ export function MobilePlayerNumericField({
   reviewed: boolean;
 }) {
   return (
-    <label className="grid gap-1 text-xs text-[var(--color-text-secondary)]" htmlFor={cellId}>
-      {playerFieldLabels[field]}
+    <label className={cn(fieldText.label, "grid")} htmlFor={cellId}>
+      <span className="mb-2">{playerFieldLabels[field]}</span>
       <ScoreGridNumericEditor
         allowSign={allowSign}
         ariaLabel={`${memberDisplayName(player.memberId)} ${playerFieldLabels[field]}`}

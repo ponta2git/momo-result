@@ -13,16 +13,18 @@ import {
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
 import { SeriesAnalysisQualityAdvisory } from "@/features/seriesComparison/SeriesAnalysisQualityAdvisory";
 import type { SeriesComparisonAggregateV3 } from "@/shared/api/seriesAnalysis";
+import { cn } from "@/shared/ui/cn";
 import { Disclosure } from "@/shared/ui/data/Collapsible";
 import { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
 import { DataVizQuadrantPlot } from "@/shared/ui/dataViz/QuadrantPlot";
+import { contentText } from "@/shared/ui/typography";
 
 export function AssetComparisonCards({ response }: { response: SeriesComparisonAggregateV3 }) {
   const revenueLeaders = response.highlights.find(
     (highlight) => highlight.metricId === "revenue.average",
   )?.leaderMemberIds;
   return (
-    <div className="grid items-stretch gap-3 md:grid-cols-2 xl:grid-cols-4">
+    <div className="grid items-stretch gap-6 md:grid-cols-2 xl:grid-cols-4">
       {response.assetStyleProfiles.entries.map((entry) => {
         const performance = response.performanceProfiles.entries.find(
           (candidate) => candidate.memberId === entry.memberId,
@@ -31,34 +33,31 @@ export function AssetComparisonCards({ response }: { response: SeriesComparisonA
           (candidate) => candidate.memberId === entry.memberId,
         );
         return (
-          <article
-            className="flex h-full min-w-0 flex-col rounded-[var(--radius-sm)] border border-[var(--color-border)] p-3"
-            key={entry.memberId}
-          >
-            <div className="flex items-start justify-between gap-2 pb-2">
-              <h3 className="font-semibold">
+          <article className="flex h-full min-w-0 flex-col gap-6" key={entry.memberId}>
+            <div className="flex items-start justify-between gap-2">
+              <h3 className={contentText.heading}>
                 <MemberSequenceLabel memberId={entry.memberId}>
                   {entry.displayName}
                 </MemberSequenceLabel>
               </h3>
-              <span className="grid justify-items-end gap-1 text-xs text-[var(--color-text-secondary)] tabular-nums">
+              <span
+                className={cn(contentText.supporting, "grid justify-items-end gap-1 tabular-nums")}
+              >
                 <span>{entry.targetCount}戦</span>
                 <SeriesAnalysisQualityAdvisory status={entry.qualityStatus} />
               </span>
             </div>
-            <section className="min-h-36 py-3">
-              <h4 className="text-[11px] font-semibold text-[var(--color-text-secondary)]">
-                総資産の出方
-              </h4>
-              <p className="mt-1 text-sm font-semibold">{assetStyleLabel(entry.primaryKind)}</p>
+            <section className="md:min-h-36">
+              <h4 className={contentText.supporting}>総資産の出方</h4>
+              <p className={cn(contentText.compactPrimary, "mt-1")}>
+                {assetStyleLabel(entry.primaryKind)}
+              </p>
               {entry.secondaryKind ? (
-                <p className="mt-1 text-xs font-semibold text-[var(--color-text-secondary)]">
+                <p className={cn(contentText.supporting, "mt-1")}>
                   補助傾向: {assetTagLabel(entry.secondaryKind)}
                 </p>
               ) : null}
-              <p className="mt-1 text-xs leading-5 text-[var(--color-text-secondary)]">
-                {assetShapeLabel(entry.shapeKind)}
-              </p>
+              <p className={cn(contentText.body, "mt-1")}>{assetShapeLabel(entry.shapeKind)}</p>
               {entry.tags.length > 0 ? (
                 <ul
                   aria-label={`${entry.displayName}の資産傾向タグ`}
@@ -66,7 +65,7 @@ export function AssetComparisonCards({ response }: { response: SeriesComparisonA
                 >
                   {entry.tags.map((tag) => (
                     <li
-                      className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-2 py-1 text-[11px]"
+                      className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-2 py-1 text-xs"
                       key={tag}
                     >
                       {assetTagLabel(tag)}
@@ -75,41 +74,37 @@ export function AssetComparisonCards({ response }: { response: SeriesComparisonA
                 </ul>
               ) : null}
             </section>
-            <section className="min-h-20 py-3">
-              <h4 className="text-[11px] font-semibold text-[var(--color-text-secondary)]">
-                総資産に占める物件収益の割合
-              </h4>
-              <p className="mt-1 text-sm font-semibold">
+            <section className="md:min-h-20">
+              <h4 className={contentText.supporting}>総資産に占める物件収益の割合</h4>
+              <p className={cn(contentText.body, "mt-1")}>
                 {profileLabel(performance?.strategyKind ?? null)}
               </p>
-              <p className="mt-1 text-xs text-[var(--color-text-secondary)] tabular-nums">
+              <p className={cn(contentText.supporting, "mt-1 tabular-nums")}>
                 物件収益比率 {formatPercent(performance?.averageRevenueAssetRate)}
               </p>
             </section>
-            <section className="min-h-40 py-3">
-              <h4 className="text-[11px] font-semibold text-[var(--color-text-secondary)]">
-                主要根拠
-              </h4>
+            <section className="md:min-h-40">
+              <h4 className={contentText.supporting}>主要根拠</h4>
               <dl className="mt-2 grid gap-2">
                 {entry.evidence.map((evidence) => (
                   <div
-                    className={`grid grid-cols-[auto_1fr_auto] items-center gap-2 rounded-[var(--radius-xs)] border px-2 py-1 text-xs ${assetEvidenceToneClassName(evidence.tone)}`}
+                    className={`grid grid-cols-[auto_1fr_auto] items-center gap-2 rounded-xs border px-2 py-1 text-xs ${assetEvidenceToneClassName(evidence.tone)}`}
                     key={evidence.kind}
                   >
-                    <dt className="font-semibold">{assetEvidenceToneLabel(evidence.tone)}</dt>
-                    <dd className="text-[var(--color-text-secondary)]">
-                      {assetEvidenceLabel(evidence.kind)}
+                    <dt className={contentText.supporting}>
+                      {assetEvidenceToneLabel(evidence.tone)}
+                    </dt>
+                    <dd className={contentText.body}>{assetEvidenceLabel(evidence.kind)}</dd>
+                    <dd className={cn(contentText.body, "tabular-nums")}>
+                      {formatPercent(evidence.value)}
                     </dd>
-                    <dd className="font-semibold tabular-nums">{formatPercent(evidence.value)}</dd>
                   </div>
                 ))}
               </dl>
             </section>
-            <section className="py-3">
-              <h4 className="text-[11px] font-semibold text-[var(--color-text-secondary)]">
-                総資産レンジ
-              </h4>
-              <div className="mt-2 grid grid-cols-3 items-start gap-1">
+            <section className="min-w-0">
+              <h4 className={contentText.supporting}>総資産レンジ</h4>
+              <div className="mt-2 grid grid-cols-[repeat(auto-fit,minmax(min(100%,7rem),1fr))] items-start gap-2">
                 <AssetFact
                   label="低め"
                   subLabel="下位10%"
@@ -127,11 +122,9 @@ export function AssetComparisonCards({ response }: { response: SeriesComparisonA
                 />
               </div>
             </section>
-            <section className="pt-3">
-              <h4 className="text-[11px] font-semibold text-[var(--color-text-secondary)]">
-                物件収益額
-              </h4>
-              <div className="mt-2 grid grid-cols-3 items-start gap-1">
+            <section className="min-w-0">
+              <h4 className={contentText.supporting}>物件収益額</h4>
+              <div className="mt-2 grid grid-cols-[repeat(auto-fit,minmax(min(100%,7rem),1fr))] items-start gap-2">
                 <AssetFact label="最高" value={formatManYen(metrics?.revenue.max)} />
                 <AssetFact
                   badge={revenueLeaders?.includes(entry.memberId) ? "4人内最高" : undefined}
@@ -141,15 +134,17 @@ export function AssetComparisonCards({ response }: { response: SeriesComparisonA
                 <AssetFact label="中央" value={formatManYen(metrics?.revenue.median)} />
               </div>
             </section>
-            <div className="mt-3">
+            <div className="min-w-0">
               <Disclosure
                 ariaLabel={`${entry.displayName}の資産傾向の詳しい根拠`}
-                panelPadding="sm"
+                panelPadding="none"
+                panelSpacing="sm"
                 presentation="inset"
                 summary="詳しい根拠"
+                triggerLayout="flush-horizontal"
                 triggerVariant="supporting"
               >
-                <dl className="grid grid-cols-2 gap-2 text-xs">
+                <dl className="grid grid-cols-2 gap-2">
                   <AssetDetailFact
                     label="資産の幅"
                     value={formatManYen(entry.metrics.p90P10Spread)}
@@ -193,7 +188,7 @@ export function AssetComparisonCards({ response }: { response: SeriesComparisonA
                   />
                   <AssetDetailFact label="大敗" value={`${entry.metrics.heavyLossCount}件`} />
                 </dl>
-                <p className="mt-2 text-[11px] leading-5 text-[var(--color-text-muted)]">
+                <p className={cn(contentText.supporting, "mt-2")}>
                   判定境界: 大勝 {formatManYen(response.assetStyleProfiles.blowoutWinThreshold)}・
                   惜しい2位 {formatManYen(response.assetStyleProfiles.nearMissSecondThreshold)}
                   ・大敗 {formatManYen(response.assetStyleProfiles.heavyLossThreshold)}
@@ -209,9 +204,9 @@ export function AssetComparisonCards({ response }: { response: SeriesComparisonA
 
 function AssetDetailFact({ label, value }: { label: string; value: string }) {
   return (
-    <div className="min-w-0 border-l-2 border-[var(--color-border)] px-2 py-1">
-      <dt className="text-[11px] text-[var(--color-text-secondary)]">{label}</dt>
-      <dd className="mt-1 font-semibold break-words tabular-nums">{value}</dd>
+    <div className="min-w-0">
+      <dt className={contentText.supporting}>{label}</dt>
+      <dd className={cn(contentText.body, "mt-0.5 break-words tabular-nums")}>{value}</dd>
     </div>
   );
 }
@@ -257,12 +252,12 @@ function AssetFact({
   value: string;
 }) {
   return (
-    <div className="min-w-0 border-l-2 border-[var(--color-border)] px-2 py-1 text-left">
-      <p className="text-[11px] font-semibold text-[var(--color-text-secondary)]">{label}</p>
-      {subLabel ? <p className="text-[11px] text-[var(--color-text-muted)]">{subLabel}</p> : null}
-      <p className="mt-1 text-xs font-semibold break-words tabular-nums">{value}</p>
+    <div className="min-w-0 text-left">
+      <p className={contentText.supporting}>{label}</p>
+      {subLabel ? <p className={contentText.supporting}>{subLabel}</p> : null}
+      <p className={cn(contentText.body, "mt-1 break-words tabular-nums")}>{value}</p>
       {badge ? (
-        <span className="mt-1 inline-flex rounded-full border border-[var(--color-analysis-emphasis)]/45 bg-[var(--color-analysis-emphasis)]/10 px-2 py-1 text-[11px] font-semibold text-[var(--color-analysis-emphasis)]">
+        <span className="font-plain mt-1 inline-flex rounded-full border border-[var(--color-analysis-emphasis)]/45 bg-[var(--color-analysis-emphasis)]/10 px-2 py-1 text-xs text-[var(--color-analysis-emphasis)]">
           {badge}
         </span>
       ) : null}

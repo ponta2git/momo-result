@@ -988,6 +988,14 @@ export interface components {
             draftCount: number;
             /** Format: int32 */
             nextMatchNo: number;
+            scopes?: components["schemas"]["HeldEventScopeResponse"][];
+        };
+        /** HeldEventScopeResponse */
+        HeldEventScopeResponse: {
+            gameTitleId?: string;
+            gameTitleName?: string;
+            seasonMasterId?: string;
+            seasonName?: string;
         };
         /** IncidentCountsRequest */
         IncidentCountsRequest: {

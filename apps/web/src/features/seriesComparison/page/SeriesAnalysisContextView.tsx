@@ -20,7 +20,9 @@ import {
   AnalysisTableOfContents,
 } from "@/features/seriesComparison/page/SeriesComparisonAnalysisNavigation";
 import { Button } from "@/shared/ui/actions/Button";
+import { cn } from "@/shared/ui/cn";
 import { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
+import { contentText } from "@/shared/ui/typography";
 
 export function ContextView({ focusedItemIds, response, onDrilldown }: AnalysisViewProps) {
   return (
@@ -58,16 +60,16 @@ export function ContextView({ focusedItemIds, response, onDrilldown }: AnalysisV
           {response.metricsByPlayer.map((metric) => (
             <article className="min-w-0" key={metric.memberId}>
               <div className="flex justify-between gap-2">
-                <h3 className="font-semibold">
+                <h3 className={contentText.heading}>
                   <MemberSequenceLabel memberId={metric.memberId}>
                     {metric.displayName}
                   </MemberSequenceLabel>
                 </h3>
-                <span className="text-xs text-[var(--color-text-secondary)] tabular-nums">
+                <span className={cn(contentText.supporting, "tabular-nums")}>
                   遭遇 {metric.ginji.encounterMatches}戦
                 </span>
               </div>
-              <dl className="mt-3 grid grid-cols-2 gap-3 text-sm">
+              <dl className="mt-2 grid grid-cols-2 gap-2">
                 <MetricValue label="遭遇率" value={formatPercent(metric.ginji.encounterRate)} />
                 <MetricValue label="合計回数" value={`${metric.ginji.count}回`} />
                 <MetricValue
@@ -91,7 +93,7 @@ export function ContextView({ focusedItemIds, response, onDrilldown }: AnalysisV
             </article>
           ))}
         </div>
-        <div className="mt-8">
+        <div className="mt-6">
           <AnalysisSubsection id="metric-ginji-cumulative" title="累計遭遇回数">
             <GinjiCumulativeChart focusedItemIds={focusedItemIds} response={response} />
           </AnalysisSubsection>

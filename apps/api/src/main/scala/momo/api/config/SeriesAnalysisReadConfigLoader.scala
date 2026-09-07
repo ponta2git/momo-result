@@ -9,13 +9,10 @@ import ciris.{ConfigValue, Effect}
 private[config] object SeriesAnalysisReadConfigLoader:
   // The runtime heap is capped at 192 MiB. Chunk materialization may use at most 96 MiB,
   // leaving 96 MiB for the HTTP runtime, connection pools, caches and request coordination.
-  private[config] val MaximumConcurrentMaterializationBytes = 96L * 1024L * 1024L
-  private val JsonNodeMaterializationBytes = 256L
-  private val Utf16BytesPerDecodedByte = 2L
   private val MaximumPayloadBytes = 16L * 1024L * 1024L
   private val MaximumItemCount = 1000000
   private val MaximumNestingDepth = 64
-  private val MaximumJsonNodes = 60000
+  private val MaximumJsonNodes = 100000
   private val MaximumDecodeConcurrency = 4
   private val MaximumReadTimeout = 30.seconds
   private val MaximumBusyRetryAfterSeconds = 60
@@ -76,8 +73,6 @@ private[config] object SeriesAnalysisReadConfigLoader:
   private def validate(
       value: SeriesAnalysisReadConfig
   ): Either[IllegalArgumentException, SeriesAnalysisReadConfig] =
-    val concurrentMaterializationBudget = maximumMaterializationBytes(value) *
-      BigInt(value.decodeConcurrency)
     val valid =
       value.maxEncodedBytes <= MaximumPayloadBytes &&
         value.maxDecodedBytes <= MaximumPayloadBytes &&
@@ -88,7 +83,7 @@ private[config] object SeriesAnalysisReadConfigLoader:
         value.decodeConcurrency <= MaximumDecodeConcurrency &&
         value.readTimeout <= MaximumReadTimeout &&
         value.busyRetryAfterSeconds <= MaximumBusyRetryAfterSeconds &&
-        concurrentMaterializationBudget <= BigInt(MaximumConcurrentMaterializationBytes)
+        value.admittedJsonNodeLimit(math.min(value.maxEncodedBytes, value.maxDecodedBytes)) > 0
     Either.cond(
       valid,
       value,
@@ -96,14 +91,3 @@ private[config] object SeriesAnalysisReadConfigLoader:
         "Series-analysis read limits exceed the supported reliability envelope."
       ),
     )
-
-  /**
-   * Deterministic admission budget for simultaneously live chunk representations: database bytes,
-   * decoded UTF-16 string contents inside the Circe tree, hydrated tree nodes and rendered bytes.
-   */
-  private[config] def maximumMaterializationBytes(
-      value: SeriesAnalysisReadConfig
-  ): BigInt = BigInt(value.maxEncodedBytes) +
-    BigInt(value.maxDecodedBytes) * Utf16BytesPerDecodedByte +
-    BigInt(value.maxResponseBytes) +
-    BigInt(value.maxJsonNodes) * JsonNodeMaterializationBytes

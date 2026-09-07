@@ -3,7 +3,6 @@ import { useParams } from "react-router-dom";
 
 import { MatchDetailIdentity } from "@/features/matches/MatchDetailIdentity";
 import type { MatchDetailReadyPageModel } from "@/features/matches/matchDetailPageModel";
-import { MatchDetailResultsTable } from "@/features/matches/MatchDetailResultsTable";
 import {
   MatchDetailLoadFailed,
   MatchDetailLoading,
@@ -11,17 +10,19 @@ import {
 import { MatchFeatureSection } from "@/features/matches/MatchFeatureSection";
 import { MatchNoteSection } from "@/features/matches/MatchNoteSection";
 import { MatchRecordMetadata } from "@/features/matches/MatchRecordMetadata";
-import { MatchSeriesComparisonCta } from "@/features/matches/MatchSeriesComparisonCta";
 import { useMatchDetailPageModel } from "@/features/matches/useMatchDetailPageModel";
+import { incidentColumns } from "@/shared/domain/incidents";
 import { formatMatchNoInEvent, formatSeriesMatchIndex } from "@/shared/domain/matchLabels";
 import { memberDisplayName } from "@/shared/domain/members";
 import { Button } from "@/shared/ui/actions/Button";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
+import { cn } from "@/shared/ui/cn";
 import { MatchResultLedger } from "@/shared/ui/data/MatchResultLedger";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
 import { PageHeader } from "@/shared/ui/layout/PageHeader";
+import { contentText } from "@/shared/ui/typography";
 
 export function MatchDetailPage() {
   const { matchId = "" } = useParams<{ matchId: string }>();
@@ -53,7 +54,7 @@ function MatchDetailScreen() {
 }
 
 function MatchDetailReadyContent({ page }: { page: MatchDetailReadyPageModel }) {
-  const { analysis, deletion, enrichment, identity, match, navigation, note, results } = page;
+  const { analysis, deletion, enrichment, identity, match, navigation, note } = page;
   const ledgerRows = (
     analysis.performanceContext?.rows ??
     (match.players ?? []).map((player) => ({
@@ -63,7 +64,28 @@ function MatchDetailReadyContent({ page }: { page: MatchDetailReadyPageModel }) 
       totalAssetsManYen: player.totalAssetsManYen,
       trend: "unavailable" as const,
     }))
-  ).map((row) => Object.assign({ displayName: memberDisplayName(row.memberId) }, row));
+  ).map((row) => {
+    const player = match.players?.find((candidate) => candidate.memberId === row.memberId);
+    return Object.assign({}, row, {
+      displayName: memberDisplayName(row.memberId),
+      playOrder: player?.playOrder,
+      details: player ? (
+        <dl
+          aria-label={`${memberDisplayName(row.memberId)}の事件簿`}
+          className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,5rem),1fr))] gap-2"
+        >
+          {incidentColumns.map(([key, label]) => (
+            <div key={key} className="min-w-0">
+              <dt className={contentText.supporting}>{label}</dt>
+              <dd className={cn(contentText.body, "mt-1 tabular-nums")}>
+                {player.incidents[key]}回
+              </dd>
+            </div>
+          ))}
+        </dl>
+      ) : null,
+    });
+  });
 
   return (
     <PageFrame className="min-w-0" width="wide">
@@ -91,7 +113,7 @@ function MatchDetailReadyContent({ page }: { page: MatchDetailReadyPageModel }) 
         }
       />
 
-      <PageContentSurface className="grid gap-8">
+      <PageContentSurface className="grid gap-6">
         {enrichment.kind === "warning" ? (
           <Notice
             action={
@@ -121,48 +143,32 @@ function MatchDetailReadyContent({ page }: { page: MatchDetailReadyPageModel }) 
             matchNoInEvent={match.matchNoInEvent}
             season={identity.season}
           />
-          <MatchFeatureSection
-            needsManualRefresh={analysis.needsManualRefresh}
-            refresh={analysis.refresh}
-            view={analysis.featureView}
-          />
+          <MatchFeatureSection badges={analysis.badges} />
         </div>
 
         <section aria-labelledby="match-result-ledger-heading" className="grid w-full gap-4">
           <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <h2
-                className="text-base font-semibold text-[var(--color-text-primary)]"
-                id="match-result-ledger-heading"
-              >
+              <h2 className={contentText.heading} id="match-result-ledger-heading">
                 順位・総資産
               </h2>
-              <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">
-                物件収益と、この試合による通算平均順位の変化も併記しています。
+              <p className={cn(contentText.supporting, "mt-1")}>
+                通算平均順位は、同じ作品・シーズン・マップの初戦から集計しています（この試合の前 →
+                後）。
               </p>
             </div>
             {analysis.performanceContext ? (
-              <p className="shrink-0 text-xs font-semibold text-[var(--color-text-secondary)] tabular-nums">
+              <p className={cn(contentText.supporting, "shrink-0 tabular-nums")}>
                 同条件内 {formatSeriesMatchIndex(analysis.performanceContext.matchIndex)}
               </p>
             ) : null}
           </div>
           <MatchResultLedger contextStatus={analysis.comparisonContextStatus} rows={ledgerRows} />
-          <MatchSeriesComparisonCta href={navigation.comparisonHref} />
-        </section>
-
-        <section className="grid gap-3">
-          <div>
-            <h2 className="text-base font-semibold text-[var(--color-text-primary)]">成績詳細</h2>
-            <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">
-              列見出しで並び替えできます。画面幅が狭い場合は横にスクロールして確認できます。
-            </p>
+          <div className="flex justify-end">
+            <LinkButton to={navigation.comparisonHref} variant="secondary">
+              前後の戦績を見る
+            </LinkButton>
           </div>
-          <MatchDetailResultsTable
-            players={results.players}
-            setSortKey={results.setSortKey}
-            sort={results.sort}
-          />
         </section>
 
         <MatchNoteSection match={match} refetchMatch={note.refetchMatch} />

@@ -47,31 +47,23 @@ export function useMatchWorkspaceSessionDraft({
   const [committedKey, setCommittedKey] = useState<string | null>(null);
   const [sessionState, setSessionState] = useState<SessionState | null>(null);
 
-  useEffect(() => {
-    if (!enabled || !storageKey || !storageScope || sessionState?.key === storageKey) {
-      return;
-    }
-
-    const initialValues = values;
-    const baselineValuesFingerprint = matchWorkspaceValuesFingerprint(initialValues, mode);
+  if (enabled && storageKey && storageScope && sessionState?.key !== storageKey) {
+    const baselineValuesFingerprint = matchWorkspaceValuesFingerprint(values, mode);
     const baselineDraftFingerprint = matchWorkspaceDraftFingerprint({
       acknowledgedCellIds: [],
       mode,
-      values: initialValues,
+      values,
     });
     const stored = loadMatchWorkspaceSessionDraft(storageScope);
     const recovery =
       stored && stored.baselineFingerprint === baselineValuesFingerprint ? stored : null;
-    if (stored && !recovery) {
-      removeMatchWorkspaceSessionDraft(storageScope);
-    }
     setSessionState({
       baselineDraftFingerprint,
       baselineValuesFingerprint,
       key: storageKey,
       recovery,
     });
-  }, [enabled, mode, sessionState?.key, storageKey, storageScope, values]);
+  }
 
   const currentFingerprint = useMemo(
     () => matchWorkspaceDraftFingerprint({ acknowledgedCellIds, mode, values }),
@@ -101,7 +93,7 @@ export function useMatchWorkspaceSessionDraft({
       values,
       version: 2,
     });
-  }, [acknowledgedCellIds, activeState, dirty, storageKey, storageScope, values]);
+  }, [acknowledgedCellIds, activeState, dirty, storageScope, values]);
 
   const restoreRecovery = useCallback(() => {
     const recovery = sessionState?.key === storageKey ? sessionState.recovery : null;

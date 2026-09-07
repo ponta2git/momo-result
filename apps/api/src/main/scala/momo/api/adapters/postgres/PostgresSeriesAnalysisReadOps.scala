@@ -25,7 +25,6 @@ private[postgres] object PostgresSeriesAnalysisReadOps:
   )
 
   private final case class ScopeOptionRow(
-      gameTitleId: GameTitleId,
       seasonMasterId: SeasonMasterId,
       seasonName: String,
       seasonOrder: Int,
@@ -35,48 +34,46 @@ private[postgres] object PostgresSeriesAnalysisReadOps:
   )
 
   def options: ConnectionIO[Either[AppError, SeriesAnalysisOptions]] =
-    for
-      titles <- sql"""
+    sql"""
+        WITH match_scopes AS MATERIALIZED (
+          SELECT game_title_id, season_master_id, map_master_id,
+                 COUNT(*)::bigint AS match_count, MAX(played_at) AS latest_played_at
+          FROM matches
+          GROUP BY game_title_id, season_master_id, map_master_id
+        ), title_matches AS (
+          SELECT game_title_id, SUM(match_count)::bigint AS match_count,
+                 MAX(latest_played_at) AS latest_played_at
+          FROM match_scopes
+          GROUP BY game_title_id
+        )
         SELECT
           gt.id,
           gt.name,
           gt.display_order,
-          COUNT(m.id)::bigint,
-          MAX(m.played_at)
+          COALESCE(tm.match_count, 0)::bigint,
+          tm.latest_played_at,
+          sm.id,
+          sm.name,
+          sm.display_order,
+          mm.id,
+          mm.name,
+          mm.display_order
         FROM game_titles gt
-        LEFT JOIN matches m ON m.game_title_id = gt.id
-        GROUP BY gt.id, gt.name, gt.display_order
-        ORDER BY gt.display_order, gt.id
-      """.query[TitleOptionRow].to[List]
-      scopes <- sql"""
-        SELECT
-          m.game_title_id,
-          sm.id,
-          sm.name,
-          sm.display_order,
-          mm.id,
-          mm.name,
-          mm.display_order
-        FROM matches m
-        JOIN season_masters sm ON sm.id = m.season_master_id
-        JOIN map_masters mm ON mm.id = m.map_master_id
-        GROUP BY
-          m.game_title_id,
-          sm.id,
-          sm.name,
-          sm.display_order,
-          mm.id,
-          mm.name,
-          mm.display_order
+        LEFT JOIN title_matches tm ON tm.game_title_id = gt.id
+        LEFT JOIN match_scopes ms ON ms.game_title_id = gt.id
+        LEFT JOIN season_masters sm ON sm.id = ms.season_master_id
+        LEFT JOIN map_masters mm ON mm.id = ms.map_master_id
         ORDER BY
-          m.game_title_id,
+          gt.display_order,
+          gt.id,
           sm.display_order,
           sm.id,
           mm.display_order,
           mm.id
-      """.query[ScopeOptionRow].to[List]
-    yield
-      val byTitle = scopes.groupBy(_.gameTitleId)
+      """.query[(TitleOptionRow, Option[ScopeOptionRow])].to[List].map { selections =>
+      // Counts and scope candidates come from the same scan and statement snapshot.
+      val titles = selections.map(_._1).distinct
+      val byTitle = selections.groupMap(_._1.gameTitleId)(_._2).view.mapValues(_.flatten).toMap
       val options = titles.map { title =>
         val rows = byTitle.getOrElse(title.gameTitleId, Nil)
         val seasons = rows
@@ -102,6 +99,7 @@ private[postgres] object PostgresSeriesAnalysisReadOps:
         .sortBy(row => (row.latestPlayedAt.get, -row.displayOrder, row.gameTitleId.value))
         .lastOption.map(_.gameTitleId).orElse(titles.headOption.map(_.gameTitleId))
       SeriesAnalysisOptions(default, options).asRight[AppError]
+    }
 
   private final case class StateRow(
       inputRevision: Long,
@@ -131,10 +129,8 @@ private[postgres] object PostgresSeriesAnalysisReadOps:
   def status(
       gameTitleId: GameTitleId
   ): ConnectionIO[Either[AppError, SeriesAnalysisStatus]] =
-    for
-      titleExists <- sql"SELECT EXISTS(SELECT 1 FROM game_titles WHERE id = $gameTitleId)"
-        .query[Boolean].unique
-      state <- sql"""
+    // A single statement prevents a publication or job transition from producing a mixed status.
+    sql"""
         SELECT
           s.input_revision,
           s.algorithm_version,
@@ -147,37 +143,40 @@ private[postgres] object PostgresSeriesAnalysisReadOps:
           a.algorithm_version,
           a.artifact_schema_version,
           a.validation_contract_id,
-          a.published_at
-        FROM series_analysis_title_states s
+          a.published_at,
+          j.status, j.trigger, j.requested_at, j.started_at, j.finished_at,
+          p.trigger, p.accepted_at
+        FROM game_titles gt
+        LEFT JOIN series_analysis_title_states s ON s.game_title_id = gt.id
         LEFT JOIN series_analysis_artifacts a ON a.id = s.current_artifact_id
-        WHERE s.game_title_id = $gameTitleId
-      """.query[StateRow].option
-      activeOrLatest <- sql"""
-        SELECT status, trigger, requested_at, started_at, finished_at
-        FROM series_analysis_jobs
-        WHERE game_title_id = $gameTitleId
-        ORDER BY
-          CASE status WHEN 'running' THEN 0 WHEN 'queued' THEN 1 ELSE 2 END,
-          CASE WHEN status IN ('running', 'queued') THEN requested_at END ASC NULLS LAST,
-          finished_at DESC NULLS LAST,
-          id DESC
-        LIMIT 1
-      """.query[CalculationRow].option
-      pending <- sql"""
-        SELECT trigger, accepted_at
-        FROM series_analysis_job_requests
-        WHERE game_title_id = $gameTitleId
-          AND status = 'pending'
-          AND assigned_job_id IS NULL
-        ORDER BY accepted_at, id
-        LIMIT 1
-      """.query[PendingProjectionRow].option
-    yield
-      if !titleExists then AppError.NotFound("game title", gameTitleId.value).asLeft
-      else
-        state match
-          case None => AppError.AnalysisStateUnavailable().asLeft
-          case Some(row) => buildStatus(gameTitleId, row, activeOrLatest, pending)
+        LEFT JOIN LATERAL (
+          SELECT status, trigger, requested_at, started_at, finished_at
+          FROM series_analysis_jobs
+          WHERE game_title_id = gt.id
+          ORDER BY
+            CASE status WHEN 'running' THEN 0 WHEN 'queued' THEN 1 ELSE 2 END,
+            CASE WHEN status IN ('running', 'queued') THEN requested_at END ASC NULLS LAST,
+            finished_at DESC NULLS LAST,
+            id DESC
+          LIMIT 1
+        ) j ON true
+        LEFT JOIN LATERAL (
+          SELECT trigger, accepted_at
+          FROM series_analysis_job_requests
+          WHERE game_title_id = gt.id
+            AND status = 'pending'
+            AND assigned_job_id IS NULL
+          ORDER BY accepted_at, id
+          LIMIT 1
+        ) p ON true
+        WHERE gt.id = $gameTitleId
+      """.query[(Option[StateRow], Option[CalculationRow], Option[PendingProjectionRow])]
+      .option.map {
+        case None => AppError.NotFound("game title", gameTitleId.value).asLeft
+        case Some((None, _, _)) => AppError.AnalysisStateUnavailable().asLeft
+        case Some((Some(row), activeOrLatest, pending)) =>
+          buildStatus(gameTitleId, row, activeOrLatest, pending)
+      }
 
   private def buildStatus(
       gameTitleId: GameTitleId,

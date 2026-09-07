@@ -30,7 +30,15 @@ private[postgres] final case class SeriesAnalysisStoredChunk(
     itemCount: Option[Int],
     nestingDepth: Option[Int],
     checksum: Option[String],
-)
+):
+  def artifact: SeriesAnalysisArtifactRef = SeriesAnalysisArtifactRef(
+    artifactId,
+    artifactGameTitleId,
+    inputRevision,
+    algorithmVersion,
+    artifactSchemaVersion,
+    publishedAt,
+  )
 
 /**
  * Validated JSON retained only inside the Postgres adapter. The repository boundary exposes the
@@ -64,14 +72,6 @@ private[postgres] object PostgresSeriesAnalysisChunkCodec:
       config: SeriesAnalysisReadConfig,
       sourceMatchRevision: Option[Long],
   ): Either[AppError, DecodedSeriesAnalysisChunk] =
-    val artifact = SeriesAnalysisArtifactRef(
-      row.artifactId,
-      row.artifactGameTitleId,
-      row.inputRevision,
-      row.algorithmVersion,
-      row.artifactSchemaVersion,
-      row.publishedAt,
-    )
     val metadata = (
       row.scopeKind,
       row.payload,
@@ -101,15 +101,12 @@ private[postgres] object PostgresSeriesAnalysisChunkCodec:
           )
         )
         _ <- validateUtf8(payload)
-        _ <- Either.cond(
-          jsonTextDepthWithin(payload, config.maxNestingDepth),
-          (),
-          AppError.Internal("Analysis artifact exceeds the JSON nesting bound."),
-        )
+        nodeLimit = config.admittedJsonNodeLimit(encoded.toLong)
+        _ <- validateJsonTextBounds(payload, config.maxNestingDepth, nodeLimit)
         json <- JawnParser(math.min(config.maxDecodedBytes, Int.MaxValue.toLong).toInt)
           .parseByteArray(payload)
           .leftMap(_ => AppError.Internal("Invalid analysis artifact payload."))
-        inspection <- inspectJson(json, config.maxNestingDepth, config.maxJsonNodes)
+        inspection <- inspectJson(json, config.maxNestingDepth, nodeLimit)
         _ <- Either.cond(
           !inspection.tooManyMembers,
           (),
@@ -122,13 +119,14 @@ private[postgres] object PostgresSeriesAnalysisChunkCodec:
         )
         _ <- validateDecodedJson(
           json,
+          payload,
           request,
           sourceMatchRevision,
           depth,
           inspection.depth,
         )
       yield DecodedSeriesAnalysisChunk(
-        artifact,
+        row.artifact,
         request.scope,
         json,
         inspection.memberIds,
@@ -321,25 +319,57 @@ private[postgres] object PostgresSeriesAnalysisChunkCodec:
       else valid = false
     valid
 
-  private def jsonTextDepthWithin(bytes: Array[Byte], maximumDepth: Int): Boolean =
+  /** Counts values, not object keys; Jawn remains responsible for complete JSON syntax. */
+  private def validateJsonTextBounds(
+      bytes: Array[Byte],
+      maximumDepth: Int,
+      maximumNodes: Int,
+  ): Either[AppError, Unit] =
+    val objectContainers = new Array[Boolean](maximumDepth)
     var index = 0
     var depth = 0
+    var nodeCount = 0
     var inString = false
     var escaped = false
+    var expectsValue = true
     var valid = true
-    while valid && index < bytes.length do
+    while valid && nodeCount <= maximumNodes && index < bytes.length do
       val character = bytes(index) & 0xff
       if inString then
         if escaped then escaped = false
         else if character == '\\' then escaped = true
         else if character == '"' then inString = false
-      else if character == '"' then inString = true
+      else if character == '"' then
+        if expectsValue then nodeCount += 1
+        expectsValue = false
+        inString = true
       else if character == '{' || character == '[' then
-        if depth >= maximumDepth then valid = false else depth += 1
+        nodeCount += 1
+        if depth >= maximumDepth then valid = false
+        else
+          objectContainers(depth) = character == '{'
+          depth += 1
+          expectsValue = character == '['
       else if character == '}' || character == ']' then
         if depth <= 0 then valid = false else depth -= 1
+        expectsValue = false
+      else if character == ':' then expectsValue = true
+      else if character == ',' then
+        expectsValue = depth > 0 && !objectContainers(depth - 1)
+      else if character != ' ' && character != '\t' && character != '\r' && character != '\n' &&
+        expectsValue
+      then
+        nodeCount += 1
+        expectsValue = false
       index += 1
-    valid && !inString && depth == 0
+    if nodeCount > maximumNodes then
+      AppError.Internal("Analysis artifact exceeds the JSON node bound.").asLeft
+    else
+      Either.cond(
+        valid && !inString && depth == 0,
+        (),
+        AppError.Internal("Analysis artifact exceeds the JSON nesting bound."),
+      )
 
   private def inspectJson(
       json: Json,
@@ -416,6 +446,7 @@ private[postgres] object PostgresSeriesAnalysisChunkCodec:
 
   private def validateDecodedJson(
       json: Json,
+      encoded: Array[Byte],
       request: SeriesAnalysisChunkRequest,
       sourceMatchRevision: Option[Long],
       declaredDepth: Int,
@@ -423,6 +454,7 @@ private[postgres] object PostgresSeriesAnalysisChunkCodec:
   ): Either[AppError, Unit] = Either.cond(
     SeriesAnalysisPayloadValidator.validate(
       json,
+      encoded,
       request,
       sourceMatchRevision,
     ) && actualDepth == declaredDepth,

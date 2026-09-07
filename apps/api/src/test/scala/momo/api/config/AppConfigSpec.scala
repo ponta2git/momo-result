@@ -364,7 +364,7 @@ class AppConfigSpec extends CatsEffectSuite:
     val invalid = List(
       Map("ANALYSIS_API_MAX_ENCODED_BYTES" -> "16777217"),
       Map("ANALYSIS_API_MAX_NESTING_DEPTH" -> "65"),
-      Map("ANALYSIS_API_MAX_JSON_NODES" -> "60001"),
+      Map("ANALYSIS_API_MAX_JSON_NODES" -> "100001"),
       Map("ANALYSIS_API_DECODE_CONCURRENCY" -> "3"),
       Map("ANALYSIS_API_READ_TIMEOUT_MS" -> "30001"),
     )
@@ -378,18 +378,14 @@ class AppConfigSpec extends CatsEffectSuite:
 
   test("default analysis read limits fit the 192 MiB heap envelope") {
     val config = SeriesAnalysisReadConfig.defaults
-    val concurrentBytes = SeriesAnalysisReadConfigLoader.maximumMaterializationBytes(config) *
-      BigInt(config.decodeConcurrency)
-
     assertEquals(config.maxEncodedBytes, 8L * 1024L * 1024L)
     assertEquals(config.maxDecodedBytes, 8L * 1024L * 1024L)
     assertEquals(config.maxResponseBytes, 8L * 1024L * 1024L)
     assertEquals(config.decodeConcurrency, 2)
-    assert(
-      concurrentBytes <= BigInt(
-        SeriesAnalysisReadConfigLoader.MaximumConcurrentMaterializationBytes
-      )
-    )
+    // Dense small chunks can contain more values while an 8 MiB chunk keeps the shared budget.
+    assertEquals(config.admittedJsonNodeLimit(3L * 1024 * 1024), 100000)
+    assertEquals(config.admittedJsonNodeLimit(8L * 1024 * 1024), 32768)
+
   }
 
   test("loadFromEnv reads image upload storage limits") {

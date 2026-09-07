@@ -56,7 +56,7 @@ export function PlayOrderMark({
   return (
     <span
       className={cn(
-        "inline-flex min-w-0 items-center gap-2 text-xs font-semibold text-[var(--color-text-secondary)] tabular-nums",
+        "inline-flex min-w-0 items-center gap-2 text-xs font-plain text-[var(--color-text-secondary)] tabular-nums",
         align === "center" ? "justify-center" : "",
       )}
       data-play-order={presentation.playOrder ?? "unknown"}

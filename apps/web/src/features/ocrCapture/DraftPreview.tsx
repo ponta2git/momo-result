@@ -1,5 +1,6 @@
 import type { OcrDraftResponse } from "@/shared/api/ocrDrafts";
 import { Disclosure } from "@/shared/ui/data/Collapsible";
+import { FactList } from "@/shared/ui/data/FactList";
 
 type DraftPreviewProps = {
   draft?: OcrDraftResponse | undefined;
@@ -42,18 +43,14 @@ export function DraftPreview({ draft }: DraftPreviewProps) {
 
   return (
     <Disclosure panelPadding="sm" presentation="framed" summary="読み取り結果">
-      <dl className="grid gap-2 text-sm text-[var(--color-text-primary)]">
-        <div className="flex justify-between gap-4">
-          <dt className="text-[var(--color-text-secondary)]">読み取り画面</dt>
-          <dd>{screenTypeLabel(draft.detectedScreenType)}</dd>
-        </div>
-        {warning ? (
-          <div className="flex justify-between gap-4">
-            <dt className="text-[var(--color-text-secondary)]">確認事項</dt>
-            <dd className="text-right">{warning}</dd>
-          </div>
-        ) : null}
-      </dl>
+      <FactList
+        ariaLabel="読み取り結果"
+        items={[
+          { id: "screen", label: "読み取り画面", value: screenTypeLabel(draft.detectedScreenType) },
+          ...(warning ? [{ id: "warning", label: "確認事項", value: warning }] : []),
+        ]}
+        layout="plain"
+      />
     </Disclosure>
   );
 }

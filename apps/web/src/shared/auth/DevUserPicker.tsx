@@ -25,7 +25,7 @@ export function DevUserPicker({ embedded = false, force = false }: DevUserPicker
       className={cn(
         embedded
           ? "grid gap-2"
-          : "rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3",
+          : "rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3",
       )}
     >
       <SelectField

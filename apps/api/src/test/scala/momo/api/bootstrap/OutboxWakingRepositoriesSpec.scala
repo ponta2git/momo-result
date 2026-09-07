@@ -2,7 +2,8 @@ package momo.api.bootstrap
 
 import java.time.Instant
 
-import cats.effect.{IO, Ref}
+import cats.effect.testkit.TestControl
+import cats.effect.{Deferred, IO, Ref}
 import org.typelevel.log4cats.LoggerFactory
 import org.typelevel.log4cats.noop.NoOpFactory
 
@@ -14,9 +15,14 @@ import momo.api.ports.queue.OcrJobEnqueueRequest
 import momo.api.repositories.*
 import momo.api.repositories.OcrJobCreationStore.OcrJobCreationRejection
 import momo.api.usecases.queue.{
+  OutboxDrainResult,
   OutboxKind,
+  OutboxWakeCoordinator,
+  OutboxWakeCoordinatorConfig,
+  OutboxWakeDriver,
   OutboxWakeSink,
   OutboxWakeSubmitResult,
+  OutboxWakeup,
   PostCommitEffects
 }
 import momo.api.usecases.testing.MatchFixtures
@@ -126,7 +132,7 @@ final class OutboxWakingRepositoriesSpec extends MomoCatsEffectSuite:
       assertEquals(actual, Right(()))
       assertEquals(escalations, 1)
 
-  test("a failed remote analysis hint preserves the committed mutation result"):
+  test("a failed local analysis hint preserves the committed mutation result"):
     for
       updateResult <- Ref.of[IO, Either[AppError, Unit]](Right(()))
       deleteResult <- Ref.of[IO, Boolean](false)
@@ -141,6 +147,35 @@ final class OutboxWakingRepositoriesSpec extends MomoCatsEffectSuite:
     yield
       assertEquals(actual, Right(()))
       assertEquals(escalationCount, 1)
+
+  test("analysis commits return during stalled notification I/O and shutdown cancels the relay"):
+    TestControl.executeEmbed {
+      OutboxWakeup.resource[IO].use { wakeup =>
+        for
+          updateResult <- Ref.of[IO, Either[AppError, Unit]](Right(()))
+          deleteResult <- Ref.of[IO, Boolean](false)
+          notificationStarted <- Deferred[IO, Unit]
+          notificationCancelled <- Deferred[IO, Unit]
+          notifier = new OutboxWakeDriver[IO]:
+            override def drainBatch: IO[OutboxDrainResult] =
+              (notificationStarted.complete(()).void *> IO.never[OutboxDrainResult])
+                .onCancel(notificationCancelled.complete(()).void)
+          repository = OutboxWakingRepositories.matches(
+            matchesRepository(updateResult, deleteResult),
+            wakeup,
+            IO.raiseError(new IllegalStateException("unexpected sink closure")),
+          )
+          results <- OutboxWakeCoordinator.resource[IO](
+            OutboxKind.SeriesAnalysis,
+            wakeup,
+            notifier,
+            OutboxWakeCoordinatorConfig(coldRecoveryInterval = None),
+            IO.raiseError[Unit],
+          ).use(_ => notificationStarted.get *> repository.update(matchRecord, now).replicateA(32))
+          _ <- notificationCancelled.get
+        yield assertEquals(results, List.fill(32)(Right(())))
+      }
+    }
 
   test("a failed durable operation emits no wake"):
     for

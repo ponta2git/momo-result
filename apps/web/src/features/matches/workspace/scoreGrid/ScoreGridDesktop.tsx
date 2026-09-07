@@ -1,5 +1,3 @@
-import type { CSSProperties } from "react";
-
 import type {
   MatchFormValues,
   OriginalPlayerSnapshot,
@@ -25,7 +23,7 @@ import type {
   ScoreGridNumericHandlers,
 } from "@/features/matches/workspace/scoreGrid/ScoreGridTypes";
 import { canonicalResultMembers, memberDisplayName } from "@/shared/domain/members";
-import { PlayOrderMark, playOrderPresentation } from "@/shared/ui/data/PlayOrderMark";
+import { PlayOrderMark } from "@/shared/ui/data/PlayOrderMark";
 import { SelectControl } from "@/shared/ui/forms/Control";
 
 type ScoreGridDesktopTableProps = ScoreGridData &
@@ -71,16 +69,8 @@ export function ScoreGridDesktopTable({
           const playOrderReviewItem = reviewItemByCellId.get(playOrderCellId);
           const playOrderError = errorPathSet.has(keyToPath(rowIndex, "playOrder"));
           return (
-            <tr
-              key={playerSlotKey(rowIndex)}
-              className="bg-[var(--color-surface-subtle)]"
-              style={
-                {
-                  "--play-order-accent": playOrderPresentation(player.playOrder).color,
-                } as CSSProperties
-              }
-            >
-              <td className="sticky left-0 z-[var(--z-sticky)] rounded-l-[var(--radius-md)] border-l-[3px] border-l-[var(--play-order-accent)] bg-[var(--color-surface-subtle)] px-2 py-3 align-top">
+            <tr key={playerSlotKey(rowIndex)} className="bg-[var(--color-surface-subtle)]">
+              <td className="sticky left-0 z-[var(--z-sticky)] rounded-l-md bg-[var(--color-surface-subtle)] px-2 py-3 align-top">
                 <div className="min-w-[10rem]">
                   <SelectControl
                     ref={(node) => registerCellRef(memberCellId, node)}
@@ -246,10 +236,7 @@ export function ScoreGridDesktopTable({
                 const cellId = getCellId(rowIndex, col);
                 const reviewItem = reviewItemByCellId.get(cellId);
                 return (
-                  <td
-                    key={incidentKey}
-                    className="px-2 py-3 align-top last:rounded-r-[var(--radius-md)]"
-                  >
+                  <td key={incidentKey} className="px-2 py-3 align-top last:rounded-r-md">
                     <ScoreGridNumericEditor
                       allowSign={false}
                       ariaLabel={`${memberDisplayName(player.memberId)} ${column.header}`}

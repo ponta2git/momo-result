@@ -62,23 +62,33 @@ provider固有値、費用、実測、昇格・復旧手順は public docs へ�
 
 ## 3. Job / Delivery
 
-| 状態 | 意味 |
-| --- | --- |
-| `queued` | 実行待ち、supersede / preemption / graceful停止後の再実行待ち |
-| `running` | DB lease / fence を持つ attempt が実行中 |
-| `succeeded` | 対象 version の成果物を公開済み |
-| `failed` | 非再試行失敗、または retry / lease recovery 上限 |
-| `timed_out` | hard timeout |
+| job 状態 | 意味 | 終端 |
+| --- | --- | --- |
+| `queued` | 実行または再実行待ち | No |
+| `running` | DB lease / fence を持つ attempt が実行中 | No |
+| `succeeded` | 対象 version の成果物を公開済み | Yes |
+| `failed` | 非再試行失敗、または retry / lease recovery 上限 | Yes |
+| `timed_out` | hard timeout | Yes |
 
-- queued 中の新 revision は最新版へ集約する。running 中の新 revision は古い candidate を公開せず、次runへ戻す。
-- 一時的な DB / queue 障害だけを最大3回自動 retry する。timeout、入力契約違反、決定論的失敗は retry しない。
-- lease recovery は計算 retry と別に有界化する。supersede、preemption、graceful停止を失敗回数へ含めない。
+queued 中の新 revision は最新版へ集約する。running attempt の終了後は、理由に応じて同じ job を次の状態へ移す。job の終端と attempt の終了を混同しない。
+
+| 終了理由 | job の次状態・結果 | 再実行の扱い |
+| --- | --- | --- |
+| 正常公開・成果物再利用 | `succeeded` | 終端 |
+| supersede（入力・対象 version の更新） | 古い candidate を公開せず、最新の対象で `queued` | 失敗回数へ加算しない |
+| OCR preemption / graceful 停止 | `queued` | 失敗回数へ加算しない |
+| 一時的な DB / queue 障害 | `queued`、retry 上限で `failed` | 計算 retry は最大3回 |
+| lease 期限切れ | 回収条件を満たす場合に `queued`、回収上限で `failed` | 計算 retry と別の回数で有界化 |
+| hard timeout | `timed_out` | retry しない |
+| 入力契約違反・決定論的失敗 | `failed` | retry しない |
+
+- 再実行・終端更新は DB の所有権と整合性条件を満たす場合だけ行う。stale owner が自己判断で再実行や公開を確定しない。
 - worker は対応する algorithm / artifact schema version の job だけを claim する。非対応 job を terminal 化せず、compatible workerへ再配送可能な `queued` に保つ。
 - queue payload は version と opaque job ID だけを運び、業務状態を信用しない。厳密なshapeはqueue schemaを正本とする。
 - work と outbox は同じ transaction で確定し、commit 後にだけ typed wake を送る。wake はcoalescing hintであり、durable outboxの代わりにしない。
 - dispatcher は startup、wake、retry / semantic deadline、低頻度 recovery を待って bounded drain する。固定短周期 polling と rowごとの timer を作らない。
 - Redis append と outbox delivery確定の両方が成功して配送完了とする。append後のDB失敗や重複 delivery はDB claimで収束させる。
-- terminal DB write と必要な次outboxを確定してから ACK する。commit成否不明時はDBを再読し、結果を推測しない。
+- ACK する処理結果では、attempt の終了に伴う DB 更新と必要な次outboxを先に確定する。supersede、transient retry、OCR preemption で job が `queued` へ戻る場合も ACK する。graceful 停止では同じ再queueの確定後、元 delivery を ACK せず consumer loop を終了する。commit成否不明時はDBを再読し、結果を推測しない。
 - stale PEL は bounded recovery と新規 delivery の公平性を保つ。shared slot busyやunsupported versionで delivery を失わない。
 
 ## 4. Execution / Publication
@@ -109,7 +119,7 @@ DB lock順とstaging transactionの規則は `docs/db-rule.md`、process責務�
 - Rust parentは全resourceのcanonical bytes、個別意味、resource集合、相互参照を検証したopaque artifactだけにvalidation contract IDを付けて公開する。readerは同じ意味規則を再実装せず、exact contract IDとartifact schemaの組をallowlistする。
 - published headerとchild resourceはDBで改変不能とし、staging中の差し替えと、参照されないparentの正規cleanupだけを許可する。child payloadと同じrowのchecksumだけをpublication provenanceの代用にしない。
 
-各作品はcurrentとpreviousの成功artifactを保持する。terminal jobは終了後45日保持し、`queued` / `running` を履歴cleanupしない。管理画面の直近3件という表示上限をDB保持条件に使わない。
+各作品はcurrentとpreviousの成功artifactを保持する。terminal jobは終了後45日保持し、`queued` / `running` を履歴cleanupしない。管理画面の直近10件という表示上限をDB保持条件に使わない。
 
 ## 6. API / Web / Admin
 
@@ -138,7 +148,7 @@ DB lock順とstaging transactionの規則は `docs/db-rule.md`、process責務�
 
 - 管理画面は1作品runを主操作、全作品runを明示的な確認付き操作とする。一般利用者へ管理導線を出さない。
 - 作品候補は確定試合0件を含む全登録作品とし、登録作品0件では操作を拒否する。
-- overviewは選択作品のstatus、未充足手動run、slot / queue / campaign要約、全作品横断の直近3件を表示する。
+- overviewは選択作品のstatus、未充足手動run、slot / queue / campaign要約、全作品横断の直近10件を表示する。
 - 履歴は作品、状態、要求元、時刻、処理時間、version、attempt / recovery、safe failure codeを安全な範囲で示す。内部例外、接続先、artifact本文を返さない。
 
 ## 7. Correctness / Resource / OCR
@@ -176,11 +186,11 @@ OCR同居を有効化する場合は、共通parent-child境界、単一slot、�
 | 変更領域 | 受入条件 / production boundary |
 | --- | --- |
 | revision / trigger / campaign | 同一transaction、A→B移動、同時mutation、target snapshot、idempotency、crash recovery |
-| job / queue / outbox | coalescing、unsupported version、duplicate delivery、append後DB失敗、terminal write before ACK、retry上限 |
+| job / queue / outbox | coalescing、unsupported version、duplicate delivery、append後DB失敗、attempt確定後のACK / graceful停止時の保留、retry上限 |
 | slot / lease / child / preemption | 複数worker、stale fence、owner喪失、timeout、OOM、process group回収、一方向preemption |
 | calculation / artifact | 文書化した数式・性質・canonicalization、上限、部分公開拒否、current 維持 |
 | API / Web | bounded read、artifact pinning、expired retry、revision mismatch、状態decision table、意味再計算禁止 |
-| admin / retention | auth / CSRF / idempotency、target snapshot、未充足run、直近3件、45日cleanup |
+| admin / retention | auth / CSRF / idempotency、target snapshot、未充足run、直近10件、45日cleanup |
 | compatibility / release | reader-first、または停止を伴う単一世代切替の再開条件、version capability、reload導線、rollback後current維持、旧engine不在 |
 | resource | 定義した上限負荷を production 同等 runtime で処理し、worker / API / browser 別の resource と timeout 要求を満たす。実測は private evidence に置く |
 

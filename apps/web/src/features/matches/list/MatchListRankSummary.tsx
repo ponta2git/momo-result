@@ -1,5 +1,7 @@
 import type { MatchListItemView } from "@/features/matches/list/matchListTypes";
+import { cn } from "@/shared/ui/cn";
 import { RankBadge } from "@/shared/ui/rank/RankBadge";
+import { contentText } from "@/shared/ui/typography";
 
 export function MatchListRankSummary({ item }: { item: MatchListItemView }) {
   const ranks = item.ranks.toSorted((left, right) => left.rank - right.rank);
@@ -7,14 +9,14 @@ export function MatchListRankSummary({ item }: { item: MatchListItemView }) {
   const others = ranks.filter((rank) => rank.rank !== 1);
 
   if (!winner) {
-    return <p className="text-sm text-[var(--color-text-secondary)]">順位はまだ確定していません</p>;
+    return <p className={contentText.body}>順位はまだ確定していません</p>;
   }
 
   return (
     <div className="grid gap-2">
       <p className="flex min-w-0 items-center gap-2">
         <RankBadge rank={winner.rank} />
-        <span className="truncate text-sm font-semibold text-[var(--color-text-primary)]">
+        <span className={cn(contentText.compactPrimary, "truncate")}>
           優勝 {winner.displayName}
         </span>
       </p>
@@ -23,9 +25,7 @@ export function MatchListRankSummary({ item }: { item: MatchListItemView }) {
           {others.map((rank) => (
             <li key={rank.memberId} className="inline-flex min-w-0 items-center gap-2">
               <RankBadge rank={rank.rank} />
-              <span className="max-w-28 truncate text-xs text-[var(--color-text-secondary)]">
-                {rank.displayName}
-              </span>
+              <span className={cn(contentText.body, "max-w-28 truncate")}>{rank.displayName}</span>
             </li>
           ))}
         </ul>

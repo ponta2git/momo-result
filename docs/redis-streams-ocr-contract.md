@@ -58,22 +58,31 @@ DELIVERED -> PENDING            (queued jobのsemantic redelivery)
 
 ## 4. Consumer Delivery / ACK
 
-原則は terminal DB write before `XACK`。DB の `succeeded`、`failed`、`cancelled` を確定する前に ACK しない。
+処理結果を確定する配送では、必要な DB 更新が成功してから ACK する。claim 前の配送と再試行は次表に従う。保留した配送は PEL recovery へ残す。
+
+通常配送の DB state は、期限切れ slot holder の回収を試みた後の候補判定時点を指す。回収で `running` から `queued` に戻った job は再claimの対象になり得る。
 
 | Delivery / DB state | 動作 |
 | --- | --- |
 | unknown `jobId` | DB に存在しない残骸として ACK |
 | already terminal | 再実行せず ACK |
-| already running、または claim 競合に敗れた | owner を尊重し、再実行・失敗書込みをせず ACK |
-| malformed、bounded-valid `jobId` を回収可能 | `QUEUE_FAILURE` を DB へ terminal write 後に ACK |
-| malformed、failure write 失敗 | ACK せず PEL recovery に委ねる |
-| attempt 上限、bounded-valid `jobId` を回収可能 | terminal failure、DLQ write の順に成功してから ACK |
-| attempt 上限、`jobId` を回収不能 | DLQ write 後に ACK |
-| DLQ / terminal write 失敗 | ACK せず PEL recovery に委ねる |
+| already running | owner を尊重し、再実行・失敗書込みをせず ACK |
+| 非対応 queue schema / 実行可能時刻前 | ACK せず cold recovery へ保留 |
+| 共有実行枠が使用中 / OCR preemption 要求後 | ACK せず期限付きで claim を再試行。待機期限で idle threshold 後の回収へ、shutdown で保留へ戻す |
+| 保存済み契約と配送の不一致 / 保存済み契約の不正 | 対象 queued job の `QUEUE_FAILURE` 確定後に ACK |
+| malformed、bounded-valid `jobId` を回収可能 | 下記の failure write guard に従って処理後に ACK |
+| malformed、`jobId` を回収不能 | ACK せず idle threshold 後の回収へ保留 |
+| attempt 上限、bounded-valid `jobId` を回収可能 | failure write guard に従って処理後、DLQ 追加と ACK を同一 Redis transaction で送る |
+| attempt 上限、`jobId` を回収不能 | DLQ 追加と ACK を同一 Redis transaction で送る |
+| transient OCR failure | job を将来時刻の `queued` へ戻し、ACK せず idle threshold 後の回収へ保留 |
+| ACK 前に必要な DB 更新が失敗 | ACK 処理へ進まず、残った配送を PEL recovery に委ねる |
+| ACK / DLQ transaction の Redis error | error を返す。error だけから ACK 未実行や PEL 残存を推測しない |
 
+- malformed / attempt 上限の failure write は、DB に存在する queue schema v2 の queued job だけを `QUEUE_FAILURE` にする。存在しない job、running / terminal、非対応 schema は変更せず、表の ACK / DLQ 処理へ進む。
+- DLQ 追加と ACK の transaction は、DLQ 成功を条件に ACK する分岐ではない。Redis は実行中の command error で他の command を rollback しないため、DLQ 失敗時の ACK 抑止や応答消失時の未実行を保証しない。詳細は [Redis transactions](https://redis.io/docs/latest/develop/using-commands/transactions/#errors-inside-a-transaction) に従う。
 - queued job の claim は DB lease / fence で確定し、stale owner の terminal write を拒否する。
 - success は draft upsert と job terminal transition を同じ transaction にする。1 job の再処理は同じ draft を冪等に更新する。
-- transient OCR failure は job を将来時刻の `queued` へ戻し、元 delivery を PEL に残す。新規 outbox、semantic redelivery、outbox wake を作らない。
+- transient OCR failure の再試行では元 delivery を使い、新規 outbox、semantic redelivery、outbox wake を作らない。
 - OCR role が別種の outbox を commit した場合は、initiator ではなく outbox 種別に対応する wake を commit 後に送る。
 - stale running job の terminal 化は maintenance が所有する。running 中の cancel は即時中断を保証しない。
 - terminal transition と前状態の詳細は `docs/domain-rule.md` を正本とする。

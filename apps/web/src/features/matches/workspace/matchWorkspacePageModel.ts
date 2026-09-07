@@ -99,6 +99,7 @@ type MatchWorkspacePageModelInput = {
     heldEventPicker: HeldEventPickerDirectory;
   };
   sourceImages: {
+    accountId?: string | undefined;
     items: SourceImageItem[] | undefined;
     loading: boolean;
     preferredKind: SourceImageKind;
@@ -112,15 +113,12 @@ type MatchWorkspacePageModelInput = {
 };
 
 function workspaceLoadingCopy(mode: WorkspaceMode) {
-  return mode === "review"
-    ? {
-        description: "OCR結果と確定前の記録を取得しています。",
-        title: "OCR結果を読み込み中",
-      }
-    : {
-        description: "試合条件と入力フォームを準備しています。",
-        title: "試合作成を準備中",
-      };
+  const labelByMode = {
+    create: "試合作成を準備中",
+    edit: "試合編集を読み込み中",
+    review: "OCR結果を読み込み中",
+  } as const satisfies Record<WorkspaceMode, string>;
+  return { loadingLabel: labelByMode[mode] };
 }
 
 function validationFeedback(firstMessage: string | undefined, success: boolean): string {
@@ -258,6 +256,7 @@ export function buildMatchWorkspacePageModel(
       sourceImagePanel:
         view.hasSourceImagePanel && view.matchDraftIdForImages
           ? {
+              accountId: input.sourceImages.accountId,
               loading: input.sourceImages.loading,
               matchDraftId: view.matchDraftIdForImages,
               preferredKind: input.sourceImages.preferredKind,
@@ -281,14 +280,12 @@ export function buildMatchWorkspacePageModel(
         navigationAllowedRef: input.draftSession.navigationAllowedRef,
         onDiscard: input.draftSession.markCommitted,
       },
-      header: {
-        description: view.pageDescription,
+      toolbar: {
         exit: {
           href: input.navigation.exitHref,
           label: mode === "edit" ? "編集をやめる" : "入力をやめる",
         },
         sample: useSampleDrafts,
-        title: view.pageTitle,
       },
     },
     persistence: {

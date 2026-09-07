@@ -1,7 +1,9 @@
 import { Download } from "lucide-react";
 
 import { Button } from "@/shared/ui/actions/Button";
+import { cn } from "@/shared/ui/cn";
 import { Notice } from "@/shared/ui/feedback/Notice";
+import { contentText } from "@/shared/ui/typography";
 
 import { ExportDownloadProgress } from "./ExportDownloadProgress";
 import { ExportDownloadResult } from "./ExportDownloadResult";
@@ -21,12 +23,10 @@ export function ExportActionPanel({
   view,
 }: ExportActionPanelProps) {
   return (
-    <div aria-busy={isPending || undefined} className="grid gap-3 pt-2">
-      <div className="grid gap-1">
-        <p className="text-base font-semibold text-pretty text-[var(--color-text-primary)]">
-          {view.summaryText}
-        </p>
-        <p className="text-sm text-pretty text-[var(--color-text-secondary)]">
+    <div aria-busy={isPending || undefined} className="grid gap-4">
+      <div className="grid gap-2">
+        <p className={cn(contentText.primary, "text-pretty")}>{view.summaryText}</p>
+        <p className={cn(contentText.supporting, "text-pretty")}>
           確定済みのみ・1プレーヤー1行・金額は万円
         </p>
       </div>

@@ -43,7 +43,7 @@ export function CaptureSlotActions({
       >
         {captureSelected ? "撮影先に選択中" : captureLabel}
       </Button>
-      <div className="flex flex-wrap gap-1">
+      <div className="flex flex-wrap gap-2">
         <Button
           aria-label={moveBackwardLabel ? `${moveBackwardLabel}へ移動` : "前の分類へ移動"}
           disabled={!canMoveBackward}

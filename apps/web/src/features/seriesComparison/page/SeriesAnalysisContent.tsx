@@ -106,13 +106,7 @@ type DrilldownDialogState = {
  * this boundary shallow prevents unrelated page feedback from rebuilding chart models and SVG
  * subtrees for an unchanged artifact and selection.
  */
-export const SeriesAnalysisContent = memo(function SeriesAnalysisContent(
-  props: SeriesAnalysisContentProps,
-) {
-  return <ArtifactViewContent {...props} />;
-});
-
-function ArtifactViewContent({
+export const SeriesAnalysisContent = memo(function SeriesAnalysisContent({
   bundle,
   onArtifactExpired,
   onClearFocusedMatch,
@@ -125,9 +119,16 @@ function ArtifactViewContent({
   const contentIdentity = `${artifactId}:${activeView}`;
 
   useEffect(() => {
-    const sectionId = decodeURIComponent(window.location.hash.slice(1));
+    let sectionId: string;
+    try {
+      sectionId = decodeURIComponent(window.location.hash.slice(1));
+    } catch {
+      return;
+    }
     if (!sectionId) return;
     document.getElementById(sectionId)?.scrollIntoView?.({ block: "start" });
+    // The view and artifact determine when the hash target exists in the committed DOM.
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies
   }, [activeView, artifactId]);
 
   return (
@@ -166,7 +167,7 @@ function ArtifactViewContent({
       )}
     </div>
   );
-}
+});
 
 function AnalysisViewContent({
   bundle,
@@ -254,11 +255,11 @@ function AnalysisViewLoading({ view }: { view: SeriesAnalysisBundle["view"] }) {
   return (
     <div
       aria-labelledby={analysisTabId(view)}
-      className="grid gap-3"
+      className="grid gap-8"
       id={analysisPanelId(view)}
       role="tabpanel"
     >
-      <div aria-label="分析を読み込み中" className="grid gap-3">
+      <div aria-label="分析を読み込み中" className="grid gap-8">
         <Skeleton className="min-h-24" />
         <Skeleton className="min-h-64" />
       </div>

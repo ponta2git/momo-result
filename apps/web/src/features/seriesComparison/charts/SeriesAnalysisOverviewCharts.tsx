@@ -13,9 +13,11 @@ import {
   headToHeadSignalLabel,
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
 import type { RelativeIntensity, SeriesComparisonAggregateV3 } from "@/shared/api/seriesAnalysis";
+import { cn } from "@/shared/ui/cn";
 import { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
 import { dataVizSeriesPresentation } from "@/shared/ui/dataViz/seriesPresentation";
 import { colorMix, rankColor } from "@/shared/ui/rank/rankPresentation";
+import { contentText } from "@/shared/ui/typography";
 
 type OverviewChartProps = {
   focusedItemIds: readonly string[];
@@ -28,11 +30,11 @@ export function RankDistributionBars({ focusedItemIds, response }: OverviewChart
   const titleId = useId();
   const players = response.players;
   return (
-    <section aria-labelledby={titleId} className="grid gap-3">
-      <h3 className="text-sm font-semibold" id={titleId}>
+    <section aria-labelledby={titleId} className="grid gap-2">
+      <h3 className={contentText.heading} id={titleId}>
         各順位の回数
       </h3>
-      <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs">
+      <div className={cn(contentText.supporting, "flex flex-wrap gap-x-3 gap-y-1")}>
         {[1, 2, 3, 4].map((rank) => (
           <span className="inline-flex items-center gap-2" key={rank}>
             <span
@@ -44,7 +46,7 @@ export function RankDistributionBars({ focusedItemIds, response }: OverviewChart
           </span>
         ))}
       </div>
-      <div className="grid gap-2">
+      <div className="grid gap-4">
         {players.map((player) => {
           const entry = response.rankDistribution.find(
             (candidate) => candidate.memberId === player.memberId,
@@ -55,14 +57,14 @@ export function RankDistributionBars({ focusedItemIds, response }: OverviewChart
               className="grid gap-1 sm:grid-cols-[8rem_minmax(0,1fr)_4rem] sm:items-center"
               key={player.memberId}
             >
-              <div className="text-sm font-semibold break-words">
+              <div className={cn(contentText.body, "break-words")}>
                 <MemberSequenceLabel memberId={player.memberId}>
                   {player.displayName}
                 </MemberSequenceLabel>
               </div>
               <div
                 aria-label={`${player.displayName}の順位分布`}
-                className="flex h-9 overflow-hidden rounded-[var(--radius-xs)] bg-[var(--color-surface)]"
+                className="flex h-9 overflow-hidden rounded-xs bg-[var(--color-surface)]"
                 role="group"
               >
                 {entry?.cells.map((cell, cellIndex) => (
@@ -85,10 +87,10 @@ export function RankDistributionBars({ focusedItemIds, response }: OverviewChart
                   />
                 ))}
               </div>
-              <div className="text-xs text-[var(--color-text-secondary)] tabular-nums sm:text-right">
+              <div className={cn(contentText.supporting, "tabular-nums sm:text-right")}>
                 {entry?.total ?? 0}戦
               </div>
-              <p className="text-sm leading-5 font-medium text-[var(--color-text-primary)] tabular-nums sm:col-start-2 sm:col-end-4">
+              <p className={cn(contentText.body, "tabular-nums sm:col-start-2 sm:col-end-4")}>
                 {rankCountSummary(entry?.cells ?? [], focusedItemIds)}
               </p>
             </div>
@@ -148,20 +150,20 @@ export function CrownShareBars({ response }: { response: SeriesComparisonAggrega
           );
         })}
       </div>
-      <dl className="grid gap-px overflow-hidden rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-border)] sm:grid-cols-2 xl:grid-cols-4">
+      <dl className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {players.map((player) => {
           const share = shareByMemberId.get(player.memberId);
           return (
             <div
-              className="flex items-center justify-between gap-2 bg-[var(--color-surface)] px-3 py-2"
+              className="flex min-w-0 items-baseline justify-between gap-2"
               key={player.memberId}
             >
-              <dt className="text-sm font-semibold break-words">
+              <dt className={cn(contentText.body, "break-words")}>
                 <MemberSequenceLabel memberId={player.memberId}>
                   {player.displayName}
                 </MemberSequenceLabel>
               </dt>
-              <dd className="text-right text-sm font-semibold tabular-nums">
+              <dd className={cn(contentText.compactPrimary, "text-right tabular-nums")}>
                 {formatPercent(share)}
               </dd>
             </div>
@@ -212,7 +214,7 @@ export function HeadToHeadMatrix({ response }: { response: SeriesComparisonAggre
                       ? `${subject.displayName}本人`
                       : `${subject.displayName}対${opponent.displayName}、上位率${formatPercent(entry?.betterRankRate)}、${headToHeadSignalLabel(entry?.signal)}、${entry?.matchCount ?? 0}戦中${entry?.betterRankCount ?? 0}戦上位、平均順位差${formatDecimal(entry?.averageRankDiff)}`
                   }
-                  className="h-20 rounded-[var(--radius-xs)] border px-2 py-2 text-center"
+                  className="h-20 rounded-xs border px-2 py-2 text-center"
                   key={opponent.memberId}
                   style={
                     self
@@ -224,16 +226,16 @@ export function HeadToHeadMatrix({ response }: { response: SeriesComparisonAggre
                   }
                 >
                   {self ? (
-                    <span className="text-xs text-[var(--color-text-muted)]">—</span>
+                    <span className={contentText.supporting}>—</span>
                   ) : (
                     <>
-                      <strong className="text-sm tabular-nums">
+                      <strong className={cn(contentText.compactPrimary, "tabular-nums")}>
                         {formatPercent(entry?.betterRankRate)}
                       </strong>
-                      <p className="mt-0.5 text-[11px] font-medium text-[var(--color-text-secondary)]">
+                      <p className={cn(contentText.body, "mt-0.5")}>
                         {headToHeadSignalLabel(entry?.signal)}
                       </p>
-                      <p className="mt-0.5 text-[11px] text-[var(--color-text-secondary)] tabular-nums">
+                      <p className={cn(contentText.supporting, "mt-0.5 tabular-nums")}>
                         {entry?.betterRankCount ?? 0}/{entry?.matchCount ?? 0}戦・順位差
                         {formatDecimal(entry?.averageRankDiff)}
                       </p>

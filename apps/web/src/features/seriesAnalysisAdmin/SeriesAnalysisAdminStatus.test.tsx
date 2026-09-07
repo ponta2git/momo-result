@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -31,14 +31,21 @@ describe("SeriesAnalysisAdminStatus", () => {
     expect(status).toHaveAttribute("aria-live", "polite");
   });
 
-  it("does not announce historical job statuses as live updates", () => {
+  it("renders ten historical jobs without announcing their statuses as live updates", () => {
     const overview = makeSeriesAnalysisAdminOverview();
+    const sourceJob = overview.recentJobs[0];
+    if (!sourceJob) throw new Error("Expected a recent job fixture");
+    const jobs = Array.from({ length: 10 }, (_, index) => ({
+      ...sourceJob,
+      jobId: `job-${index + 1}`,
+    }));
 
-    render(<RecentJobs jobs={overview.recentJobs} />);
+    render(<RecentJobs jobs={jobs} />);
 
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
-    expect(screen.getByText("成功")).toBeInTheDocument();
-    expect(screen.getByRole("table", { name: "全作品の直近3件の実行履歴" })).toBeInTheDocument();
+    expect(screen.getAllByText("成功")).toHaveLength(10);
+    const table = screen.getByRole("table", { name: "全作品の直近10件の実行履歴" });
+    expect(within(table).getAllByRole("row")).toHaveLength(11);
   });
 
   it("uses the embedded empty-state contract when no recent jobs exist", () => {

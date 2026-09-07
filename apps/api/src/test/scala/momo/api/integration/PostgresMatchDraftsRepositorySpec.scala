@@ -7,8 +7,25 @@ import doobie.implicits.*
 import doobie.postgres.implicits.*
 
 import momo.api.adapters.postgres.PostgresMatchDraftsRepository
-import momo.api.domain.ids.{AccountId, HeldEventId, ImageId, MatchDraftId, MemberId, OcrDraftId}
-import momo.api.domain.{MatchDraft, MatchDraftStatus, ScreenType}
+import momo.api.adapters.postgres.PostgresMeta.given
+import momo.api.domain.ids.{
+  AccountId,
+  GameTitleId,
+  HeldEventId,
+  ImageId,
+  MatchDraftId,
+  MemberId,
+  OcrDraftId,
+  SeasonMasterId
+}
+import momo.api.domain.{
+  GameTitle,
+  HeldEventScope,
+  MatchDraft,
+  MatchDraftStatus,
+  ScreenType,
+  SeasonMaster
+}
 import momo.api.errors.AppError
 import momo.api.repositories.{
   MatchDraftAttachmentResult,
@@ -153,14 +170,26 @@ final class PostgresMatchDraftsRepositorySpec extends IntegrationSuite:
   test("statsByHeldEvents excludes terminal drafts and returns the maximum active match number"):
     val heldEventId = HeldEventId.unsafeFromString("held-draft-stats")
     val missing = HeldEventId.unsafeFromString("held-draft-stats-missing")
+    val titleId = GameTitleId.unsafeFromString("title-draft-stats")
+    val seasonId = SeasonMasterId.unsafeFromString("season-draft-stats")
     for
       _ <- insertHeldEvent(heldEventId.value)
       _ <- insertDraftForHeldEvent("draft-stats-2", "draft_ready", heldEventId.value, 2)
       _ <- insertDraftForHeldEvent("draft-stats-5", "needs_review", heldEventId.value, 5)
       _ <- insertDraftForHeldEvent("draft-stats-cancelled", "cancelled", heldEventId.value, 9)
+      _ <- momo.api.adapters.postgres.PostgresGameTitlesRepository[IO](transactor)
+        .createWithNextDisplayOrder(GameTitle(titleId, "桃鉄", "world", 0, createdAt))
+      _ <- momo.api.adapters.postgres.PostgresSeasonMastersRepository[IO](transactor)
+        .createWithNextDisplayOrder(SeasonMaster(seasonId, titleId, "春", 0, createdAt))
+      _ <- sql"UPDATE match_drafts SET game_title_id = $titleId WHERE id = 'draft-stats-5'"
+        .update.run.transact(transactor)
+      _ <-
+        sql"UPDATE match_drafts SET game_title_id = $titleId, season_master_id = $seasonId WHERE id = 'draft-stats-cancelled'"
+          .update.run.transact(transactor)
       stats <- repo.statsByHeldEvents(List(heldEventId, missing))
     yield
       assertEquals(stats(heldEventId).draftCount, 2)
+      assertEquals(stats(heldEventId).scopes, List(HeldEventScope(Some(titleId), None)))
       assertEquals(stats(heldEventId).maxMatchNo, 5)
       assertEquals(stats(missing).draftCount, 0)
       assertEquals(stats(missing).maxMatchNo, 0)

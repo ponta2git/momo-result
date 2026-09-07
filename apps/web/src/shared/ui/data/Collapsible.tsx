@@ -13,9 +13,9 @@ type DisclosurePanelPadding = "none" | "xs" | "sm" | "md";
 type DisclosureTriggerLayout = "compact" | "default" | "flush" | "flush-horizontal" | "section";
 
 const triggerVariantClass = {
-  compact: "text-xs font-semibold text-[var(--color-text-secondary)]",
-  default: "text-sm font-semibold text-[var(--color-text-primary)]",
-  supporting: "text-sm font-medium text-[var(--color-text-secondary)]",
+  compact: "text-xs font-plain text-[var(--color-text-secondary)]",
+  default: "text-sm font-plain text-[var(--color-text-primary)]",
+  supporting: "text-sm font-plain text-[var(--color-text-secondary)]",
 } as const satisfies Record<DisclosureTriggerVariant, string>;
 
 const triggerLayoutClass = {
@@ -29,7 +29,7 @@ const triggerLayoutClass = {
 const presentationClass = {
   framed: {
     panel: "border-t border-[var(--color-border)]",
-    root: "rounded-[var(--radius-md)] border border-[var(--color-border)]",
+    root: "rounded-sm border border-[var(--color-border)]",
   },
   inset: {
     panel: "",
@@ -99,9 +99,7 @@ export function Disclosure({
           "group flex min-h-11 w-full min-w-0 items-center justify-between gap-3 text-left hover:bg-[var(--color-surface-hover)] disabled:cursor-default disabled:opacity-70 disabled:hover:bg-transparent",
           triggerVariantClass[triggerVariant],
           triggerLayoutClass[triggerLayout],
-          presentation === "framed" || triggerLayout === "section"
-            ? "rounded-none"
-            : "rounded-[var(--radius-sm)]",
+          presentation === "framed" || triggerLayout === "section" ? "rounded-none" : "rounded-sm",
         )}
         disabled={disabled}
         render={(triggerProps, state) => (
@@ -124,7 +122,7 @@ export function Disclosure({
           presentationClass[presentation].panel,
           panelSpacingClass[panelSpacing],
           panelPaddingClass[panelPadding],
-          "bg-transparent",
+          "mx-2 bg-transparent",
         )}
         keepMounted={keepMounted}
       >

@@ -2,9 +2,11 @@ import { MasterDeleteDialog, MasterEditDialog } from "@/features/masters/MasterA
 import { MasterCreateForm } from "@/features/masters/MasterCreateForm";
 import type { MapMasterResponse, SeasonMasterResponse } from "@/shared/api/masters";
 import { Button } from "@/shared/ui/actions/Button";
+import { cn } from "@/shared/ui/cn";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
+import { contentText } from "@/shared/ui/typography";
 
 type ScopedMasterItem = (MapMasterResponse | SeasonMasterResponse) & { pending?: boolean };
 
@@ -65,39 +67,37 @@ export function ScopedMasterPanel({
     </Button>
   );
   return (
-    <section className="min-w-0">
-      <header className="flex items-baseline justify-between gap-3">
-        <h3 className="text-lg font-semibold text-[var(--color-text-primary)]">{labels.title}</h3>
+    <section className="grid min-w-0 gap-4">
+      <header className="flex items-baseline justify-between gap-2">
+        <h3 className={contentText.heading}>{labels.title}</h3>
         {!loading && !loadBlocked ? (
-          <p className="shrink-0 text-xs text-[var(--color-text-secondary)] tabular-nums">
+          <p className={cn(contentText.supporting, "shrink-0 tabular-nums")}>
             {list.items.length}件
           </p>
         ) : null}
       </header>
 
       {loading ? (
-        <div
-          aria-busy="true"
-          aria-label={`${labels.itemLabel}を読み込み中`}
-          className="mt-3 grid gap-2"
-        >
-          <Skeleton className="h-12 rounded-[var(--radius-sm)]" />
-          <Skeleton className="h-12 rounded-[var(--radius-sm)]" />
-          <Skeleton className="h-12 rounded-[var(--radius-sm)]" />
+        <div aria-busy="true" aria-label={`${labels.itemLabel}を読み込み中`} className="grid gap-2">
+          <Skeleton className="h-12 rounded-sm" />
+          <Skeleton className="h-12 rounded-sm" />
+          <Skeleton className="h-12 rounded-sm" />
         </div>
       ) : loadBlocked ? (
-        <div className="mt-3">
-          <Notice tone="danger" title={`${labels.itemLabel}を読み込めません`}>
+        <div>
+          <Notice action={retryAction} tone="danger" title={`${labels.itemLabel}を読み込めません`}>
             <p>{list.error}</p>
-            <div className="mt-3">{retryAction}</div>
           </Notice>
         </div>
       ) : (
-        <div className="mt-3 grid gap-3">
+        <div className="grid gap-4">
           {showStaleError ? (
-            <Notice tone="warning" title={`最新の${labels.itemLabel}を取得できません`}>
+            <Notice
+              action={retryAction}
+              tone="warning"
+              title={`最新の${labels.itemLabel}を取得できません`}
+            >
               <p>直前に取得した内容を表示しています。</p>
-              <div className="mt-3">{retryAction}</div>
             </Notice>
           ) : null}
           {list.items.length === 0 ? (
@@ -115,17 +115,15 @@ export function ScopedMasterPanel({
                     aria-busy={isPending || undefined}
                   >
                     <div className="min-w-0">
-                      <p className="line-clamp-2 text-sm font-semibold text-[var(--color-text-primary)]">
+                      <p className={cn(contentText.body, "break-words")}>
                         {item.name}
                         {isPending ? (
-                          <span className="ml-2 text-xs font-normal text-[var(--color-text-secondary)]">
-                            (追加中…)
-                          </span>
+                          <span className={cn(contentText.supporting, "ml-2")}>(追加中…)</span>
                         ) : null}
                       </p>
                     </div>
                     {isPending ? null : (
-                      <div className="flex items-center">
+                      <div className="flex items-center gap-2">
                         <MasterEditDialog
                           initialName={item.name}
                           label={labels.itemLabel}
@@ -149,7 +147,7 @@ export function ScopedMasterPanel({
         </div>
       )}
 
-      <div className="mt-4">
+      <div>
         <MasterCreateForm
           action={create.action}
           disabled={loading || loadBlocked || Boolean(disabledReason)}

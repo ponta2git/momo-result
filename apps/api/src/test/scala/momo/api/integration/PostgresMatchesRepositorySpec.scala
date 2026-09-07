@@ -292,6 +292,13 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
     }
     for
       _ <- seedPrereqs
+      _ <- seedSecondTitle
+      _ <- createMatch(sampleMatch("match_export_other_title", 5).copy(
+        gameTitleId = secondGameTitleId,
+        mapMasterId = secondMapMasterId,
+        seasonMasterId = secondSeasonMasterId,
+        playedAt = now.minusSeconds(10),
+      ))
       _ <- seasonMasters.createWithNextDisplayOrder(
         SeasonMaster(laterSeasonId, gameTitleId, "2024-later", 2, now)
       )
@@ -309,10 +316,20 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
       sameMillisecond <- matchExports.project(
         MatchExportsRepository.Selection(matchId = Some(records(1).id), limit = 2)
       )
+      other <- matchExports.project(MatchExportsRepository.Selection(
+        seasonMasterId = Some(secondSeasonMasterId),
+        limit = 2,
+      ))
+      absent <- matchExports.project(MatchExportsRepository.Selection(
+        matchId = Some(MatchId.unsafeFromString("absent-export-match")),
+        limit = 2,
+      ))
       recent <- matchExports.project(
         MatchExportsRepository.Selection(limit = 2)
       )
     yield
+      assertEquals(other.map(row => row.seasonSequence -> row.gameTitleSequence), List(1 -> 1))
+      assertEquals(absent, Nil)
       assertEquals(single.map(_.id), List(records.last.id))
       assertEquals(single.map(_.seasonSequence), List(2))
       assertEquals(single.map(_.gameTitleSequence), List(4))
@@ -379,9 +396,22 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
       _ <- seedPrereqs
       _ <- createMatch(sampleMatch("match_stats_001", 1))
       _ <- createMatch(sampleMatch("match_stats_004", 4))
+      _ <- seedSecondTitle
+      _ <- createMatch(sampleMatch("match_stats_002", 2).copy(
+        gameTitleId = secondGameTitleId,
+        mapMasterId = secondMapMasterId,
+        seasonMasterId = secondSeasonMasterId,
+      ))
       stats <- matches.statsByHeldEvents(List(heldEventId, missing))
     yield
-      assertEquals(stats(heldEventId).matchCount, 2)
+      assertEquals(stats(heldEventId).matchCount, 3)
+      assertEquals(
+        stats(heldEventId).scopes.toSet,
+        Set(
+          HeldEventScope(Some(gameTitleId), Some(seasonMasterId)),
+          HeldEventScope(Some(secondGameTitleId), Some(secondSeasonMasterId)),
+        )
+      )
       assertEquals(stats(heldEventId).maxMatchNo, 4)
       assertEquals(stats(missing).matchCount, 0)
       assertEquals(stats(missing).maxMatchNo, 0)

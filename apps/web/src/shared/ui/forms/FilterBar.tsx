@@ -40,10 +40,15 @@ export function FilterBar({
   return (
     <section aria-busy={busy || undefined} aria-label={ariaLabel} className="min-w-0">
       <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4">
-        <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+        <div
+          className={cn(
+            "grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3",
+            resetAction || action ? "sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end" : "",
+          )}
+        >
           <div className="min-w-0">{primary}</div>
           {resetAction || action ? (
-            <div className="flex min-w-0 flex-wrap items-center justify-end gap-1">
+            <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
               {resetAction}
               {action}
             </div>
@@ -57,7 +62,7 @@ export function FilterBar({
             panelPadding="sm"
             summary={
               <span className="min-w-0">
-                <span className="block text-sm font-semibold text-[var(--color-text-primary)]">
+                <span className="font-plain block text-sm text-[var(--color-text-primary)]">
                   {details.label}
                 </span>
                 {details.summary ? (
@@ -87,7 +92,7 @@ export function FilterBar({
         ) : null}
 
         {meta ? (
-          <div className="min-w-0 pt-1 text-xs text-[var(--color-text-secondary)] tabular-nums sm:text-right">
+          <div className="min-w-0 text-xs text-[var(--color-text-secondary)] tabular-nums sm:text-right">
             {meta}
           </div>
         ) : null}

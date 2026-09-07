@@ -11,7 +11,7 @@ export function SetupPanel({ model }: SetupPanelProps) {
   const { fields, intents } = model;
 
   return (
-    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
       <div className="xl:col-span-3">
         <HeldEventPickerField
           disabled={fields.heldEvent.disabled}

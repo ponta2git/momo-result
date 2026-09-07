@@ -1,8 +1,12 @@
 import type { Ref } from "react";
 
 import type { MatchWorkspaceSubmitModel } from "@/features/matches/workspace/matchWorkspacePageModelTypes";
+import { taskActionPanelClass } from "@/shared/ui/actions/actionGroup";
 import { Button } from "@/shared/ui/actions/Button";
+import { cn } from "@/shared/ui/cn";
 import { Notice } from "@/shared/ui/feedback/Notice";
+import { readableTextWidthClass } from "@/shared/ui/layout/readableText";
+import { contentText } from "@/shared/ui/typography";
 
 type MatchFormActionsProps = {
   model: MatchWorkspaceSubmitModel;
@@ -11,20 +15,17 @@ type MatchFormActionsProps = {
 
 export function MatchFormActions({ model, primaryActionRef }: MatchFormActionsProps) {
   return (
-    <section
-      aria-label="入力内容の確定"
-      className="rounded-[var(--radius-md)] border border-[var(--color-border-strong)] bg-[var(--color-surface)] p-3"
-    >
+    <section aria-label="入力内容の確定" className={taskActionPanelClass}>
       {model.feedback.error ? (
-        <div className="mb-3">
-          <Notice title={model.feedback.error.title} tone="danger">
+        <div>
+          <Notice presentation="nested" title={model.feedback.error.title} tone="danger">
             <p>{model.feedback.error.detail}</p>
             <p className="mt-1">{model.feedback.error.nextStep}</p>
           </Notice>
         </div>
       ) : null}
-      <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
-        <p className="text-sm text-pretty text-[var(--color-text-secondary)]">
+      <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+        <p className={cn(contentText.body, "text-pretty", readableTextWidthClass)}>
           {model.feedback.message}
         </p>
         <Button

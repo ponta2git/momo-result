@@ -11,6 +11,7 @@ import type { SeriesAnalysisDrilldownV3 } from "@/shared/api/seriesAnalysis";
 import { cn } from "@/shared/ui/cn";
 import { Disclosure } from "@/shared/ui/data/Collapsible";
 import { DataTable } from "@/shared/ui/data/DataTable";
+import { contentText } from "@/shared/ui/typography";
 
 export type RankSignalPayload = Extract<
   SeriesAnalysisDrilldownV3["payload"],
@@ -30,19 +31,19 @@ export function RankSignalValidationMethod({ payload }: { payload: RankSignalPay
       summary={
         <span className="flex flex-col gap-0.5">
           <span>検証方法と採用基準</span>
-          <span className="text-xs font-normal text-pretty text-[var(--color-text-secondary)] tabular-nums">
+          <span className={cn(contentText.supporting, "text-pretty tabular-nums")}>
             {payload.method.foldCount}組中{payload.method.requiredImprovedFoldCount}組以上で改善
           </span>
         </span>
       }
       triggerVariant="supporting"
     >
-      <div className="grid gap-5">
+      <div className="grid gap-6">
         <section aria-labelledby="rank-signal-validation-flow">
-          <h4 className="text-sm font-semibold text-balance" id="rank-signal-validation-flow">
+          <h4 className={cn(contentText.heading, "text-balance")} id="rank-signal-validation-flow">
             検証の流れ
           </h4>
-          <ol className="mt-3 grid gap-4 sm:grid-cols-3 sm:divide-x sm:divide-[var(--color-border)]">
+          <ol className="mt-2 grid gap-6 sm:grid-cols-3">
             <MethodStep
               number="1"
               title="開催を分ける"
@@ -53,10 +54,10 @@ export function RankSignalValidationMethod({ payload }: { payload: RankSignalPay
           </ol>
         </section>
         <section aria-labelledby="rank-signal-adoption-rules">
-          <h4 className="text-sm font-semibold text-balance" id="rank-signal-adoption-rules">
+          <h4 className={cn(contentText.heading, "text-balance")} id="rank-signal-adoption-rules">
             採用基準
           </h4>
-          <dl className="mt-2 divide-y divide-[var(--color-border)] text-sm">
+          <dl className="mt-2 grid gap-2">
             <MethodFact
               label="必要な記録"
               value={`${payload.method.minimumMatches}戦・${payload.method.minimumHeldEvents}開催以上`}
@@ -72,7 +73,10 @@ export function RankSignalValidationMethod({ payload }: { payload: RankSignalPay
           </dl>
         </section>
         <section aria-labelledby="rank-signal-validation-groups">
-          <h4 className="text-sm font-semibold text-balance" id="rank-signal-validation-groups">
+          <h4
+            className={cn(contentText.heading, "text-balance")}
+            id="rank-signal-validation-groups"
+          >
             確認グループ
           </h4>
           <ol
@@ -82,9 +86,9 @@ export function RankSignalValidationMethod({ payload }: { payload: RankSignalPay
             {Array.from({ length: payload.method.foldCount }, (_, fold) => {
               const row = rowsByFold.get(fold);
               return (
-                <li className="flex items-baseline gap-2 text-sm" key={fold}>
-                  <span className="font-medium">開催{rankSignalFoldLabel(fold)}</span>
-                  <span className="text-[var(--color-text-secondary)] tabular-nums">
+                <li className={cn(contentText.body, "flex items-baseline gap-2")} key={fold}>
+                  <span className="font-plain">開催{rankSignalFoldLabel(fold)}</span>
+                  <span className={cn(contentText.supporting, "tabular-nums")}>
                     {row ? `${row.heldEventCount}開催` : "確認用"}
                   </span>
                 </li>
@@ -101,14 +105,12 @@ export function RankSignalCandidates({ payload }: { payload: RankSignalPayload }
   return (
     <section aria-labelledby="rank-signal-candidates">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h3 className="text-sm font-semibold text-balance" id="rank-signal-candidates">
+        <h3 className={cn(contentText.heading, "text-balance")} id="rank-signal-candidates">
           手掛かり候補
         </h3>
-        <p className="text-xs text-[var(--color-text-secondary)] tabular-nums">
-          {payload.candidates.length}件
-        </p>
+        <p className={cn(contentText.supporting, "tabular-nums")}>{payload.candidates.length}件</p>
       </div>
-      <div className="mt-2 grid min-w-0 gap-8">
+      <div className="mt-4 grid min-w-0 gap-6">
         {payload.candidates.map((candidate) => (
           <CandidateCard
             candidate={candidate}
@@ -124,16 +126,19 @@ export function RankSignalCandidates({ payload }: { payload: RankSignalPayload }
 
 function MethodStep({ number, title, value }: { number: string; title: string; value: string }) {
   return (
-    <li className="grid grid-cols-[1.5rem_minmax(0,1fr)] gap-2 sm:px-4 sm:first:pl-0 sm:last:pr-0">
+    <li className="grid grid-cols-[1.5rem_minmax(0,1fr)] gap-2">
       <span
-        className="flex size-6 items-center justify-center rounded-[var(--radius-xs)] bg-[var(--color-surface-selected)] text-xs font-medium text-[var(--color-text-primary)] tabular-nums"
+        className={cn(
+          contentText.supporting,
+          "flex size-6 items-center justify-center tabular-nums",
+        )}
         aria-hidden="true"
       >
         {number}
       </span>
       <div>
-        <p className="font-medium">{title}</p>
-        <p className="mt-0.5 text-xs text-[var(--color-text-secondary)] tabular-nums">{value}</p>
+        <p className={contentText.heading}>{title}</p>
+        <p className={cn(contentText.body, "mt-1 tabular-nums")}>{value}</p>
       </div>
     </li>
   );
@@ -141,9 +146,9 @@ function MethodStep({ number, title, value }: { number: string; title: string; v
 
 function MethodFact({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 py-3">
-      <dt className="text-[var(--color-text-secondary)]">{label}</dt>
-      <dd className="font-medium tabular-nums">{value}</dd>
+    <div className="grid gap-0.5">
+      <dt className={contentText.supporting}>{label}</dt>
+      <dd className={cn(contentText.body, "tabular-nums")}>{value}</dd>
     </div>
   );
 }
@@ -161,11 +166,11 @@ function CandidateCard({
   const candidateLabel = rankSignalLabel(candidate.signal);
   return (
     <article aria-label={`${candidateLabel}の検証結果`} className="min-w-0">
-      <header className="pb-3">
-        <h4 className="font-semibold text-balance">{candidateLabel}</h4>
+      <header className="pb-2">
+        <h4 className={cn(contentText.compactPrimary, "text-balance")}>{candidateLabel}</h4>
       </header>
       <div>
-        <dl className="grid divide-y divide-[var(--color-border)] sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+        <dl className="grid items-start gap-4 sm:grid-cols-3">
           <CandidateFact
             emphasis
             label="別開催で支持"
@@ -178,10 +183,10 @@ function CandidateCard({
           />
         </dl>
         <div className="mt-4">
-          <p className="text-xs font-medium text-[var(--color-text-secondary)]">開催ごとの判定</p>
+          <p className={contentText.supporting}>開催ごとの判定</p>
           <ol
             aria-label={`${candidateLabel}の別開催での支持`}
-            className="mt-2 grid grid-cols-5 divide-x divide-[var(--color-border)] overflow-hidden rounded-[var(--radius-xs)] border border-[var(--color-border)]"
+            className="mt-2 grid grid-cols-5 divide-x divide-[var(--color-border)] overflow-hidden rounded-xs border border-[var(--color-border)]"
           >
             {Array.from({ length: foldCount }, (_, fold) => {
               const row = rowByFold.get(fold);
@@ -200,10 +205,10 @@ function CandidateCard({
                   ) : (
                     <Minus aria-hidden="true" className="size-3.5 text-[var(--color-text-muted)]" />
                   )}
-                  <span className="text-[11px] font-medium">開催{rankSignalFoldLabel(fold)}</span>
+                  <span className="font-plain text-xs">開催{rankSignalFoldLabel(fold)}</span>
                   <span
                     className={cn(
-                      "text-[11px]",
+                      "text-xs",
                       row && supported
                         ? "text-[var(--color-analysis-positive)]"
                         : "text-[var(--color-text-secondary)]",
@@ -234,9 +239,11 @@ function CandidateFact({
   value: string;
 }) {
   return (
-    <div className="py-3 sm:px-3 sm:first:pl-0 sm:last:pr-0">
-      <dt className="text-xs text-[var(--color-text-secondary)]">{label}</dt>
-      <dd className={cn("mt-0.5 font-semibold tabular-nums", emphasis && "text-lg")}>{value}</dd>
+    <div className="min-w-0">
+      <dt className={contentText.supporting}>{label}</dt>
+      <dd className={cn(emphasis ? contentText.primary : contentText.body, "mt-0.5 tabular-nums")}>
+        {value}
+      </dd>
     </div>
   );
 }
@@ -250,7 +257,7 @@ function FoldDetails({ candidate }: { candidate: RankSignalCandidate }) {
       summary={
         <span className="flex items-baseline justify-between gap-3">
           <span>開催別の数値</span>
-          <span className="text-xs font-normal text-[var(--color-text-secondary)] tabular-nums">
+          <span className={cn(contentText.supporting, "tabular-nums")}>
             {candidate.foldRows.length}組
           </span>
         </span>

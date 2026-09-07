@@ -4,8 +4,10 @@ import type { ReactNode } from "react";
 import type { InputSource } from "@/features/ocrCapture/captureState";
 import { useCameraCaptureSession } from "@/features/ocrCapture/useCameraCaptureSession";
 import { Button } from "@/shared/ui/actions/Button";
+import { cn } from "@/shared/ui/cn";
 import { Disclosure } from "@/shared/ui/data/Collapsible";
 import { SelectField } from "@/shared/ui/forms/SelectField";
+import { contentText } from "@/shared/ui/typography";
 
 type CameraCaptureProps = {
   actionVariant?: "primary" | "secondary";
@@ -24,14 +26,19 @@ export function CameraCapture({
   onSelect,
   onValidationError,
 }: CameraCaptureProps) {
-  const camera = useCameraCaptureSession({ disabled, onSelect, onValidationError, slotLabel });
+  const { videoRef, canvasRef, ...camera } = useCameraCaptureSession({
+    disabled,
+    onSelect,
+    onValidationError,
+    slotLabel,
+  });
   const useSecondaryActions = actionVariant === "secondary";
   const startVariant =
     useSecondaryActions || camera.active || camera.error !== null ? "secondary" : "primary";
   const captureVariant = useSecondaryActions || !camera.active ? "secondary" : "primary";
 
   return (
-    <div className="space-y-3">
+    <div className="grid gap-4">
       {camera.devices.length > 0 ? (
         <div className="max-w-[28rem]">
           <SelectField
@@ -51,66 +58,68 @@ export function CameraCapture({
       ) : null}
       <div
         aria-label={`${slotLabel}の16:9カメラ画像枠`}
-        className="relative aspect-video w-full overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-media-canvas)]"
+        className="relative aspect-video w-full overflow-hidden rounded-md border border-[var(--color-border)] bg-[var(--color-media-canvas)]"
         role="group"
       >
         {camera.active ? null : (
           <div className="pointer-events-none absolute inset-0 grid place-items-center px-6 text-center text-[var(--color-text-inverse)]/75">
             <div>
               <CameraIcon aria-hidden="true" className="mx-auto size-7" />
-              <p className="mt-2 text-sm font-semibold">カメラを開始して画面を撮影</p>
+              <p className="font-plain mt-2 text-sm">カメラを開始して画面を撮影</p>
             </div>
           </div>
         )}
         <video
-          ref={camera.videoRef}
+          ref={videoRef}
           className="size-full object-contain"
           muted
           playsInline
           aria-label={`${slotLabel}のカメラプレビュー`}
         />
-        <canvas ref={camera.canvasRef} className="hidden" />
+        <canvas ref={canvasRef} className="hidden" />
       </div>
       {camera.error ? (
         <div
-          className="grid gap-3 rounded-[var(--radius-sm)] border border-[var(--color-danger)]/45 bg-[var(--color-danger)]/8 p-3"
+          className="grid gap-2 rounded-sm border border-[var(--color-danger)]/45 bg-[var(--color-danger)]/8 p-3"
           role="alert"
         >
           <div>
-            <p className="text-sm font-semibold text-[var(--color-text-primary)]">
-              カメラを利用できません
-            </p>
-            <p className="mt-1 text-sm text-[var(--color-text-secondary)]">{camera.error}</p>
+            <p className={contentText.compactPrimary}>カメラを利用できません</p>
+            <p className={cn(contentText.body, "mt-1")}>{camera.error}</p>
           </div>
           {renderFallback?.(!useSecondaryActions)}
         </div>
       ) : null}
-      <div className="flex flex-wrap gap-2">
-        <Button
-          pending={camera.starting}
-          pendingLabel="起動中…"
-          variant={startVariant}
-          onClick={camera.startCamera}
-          disabled={disabled || camera.active}
-        >
-          {camera.active ? "カメラ使用中" : "カメラ開始"}
-        </Button>
-        <Button
-          pending={camera.capturing}
-          pendingLabel="撮影中…"
-          variant={captureVariant}
-          onClick={camera.capture}
-          disabled={disabled || !camera.active}
-        >
-          静止画を撮影
-        </Button>
-        <Button variant="quiet" onClick={camera.stop} disabled={!camera.active || camera.capturing}>
-          停止
-        </Button>
+      <div className="grid gap-1">
+        <div className="flex flex-wrap gap-2">
+          <Button
+            pending={camera.starting}
+            pendingLabel="起動中…"
+            variant={startVariant}
+            onClick={camera.startCamera}
+            disabled={disabled || camera.active}
+          >
+            {camera.active ? "カメラ使用中" : "カメラ開始"}
+          </Button>
+          <Button
+            pending={camera.capturing}
+            pendingLabel="撮影中…"
+            variant={captureVariant}
+            onClick={camera.capture}
+            disabled={disabled || !camera.active}
+          >
+            静止画を撮影
+          </Button>
+          <Button
+            variant="quiet"
+            onClick={camera.stop}
+            disabled={!camera.active || camera.capturing}
+          >
+            停止
+          </Button>
+        </div>
+        {disabled ? <p className={contentText.supporting}>現在は撮影できません。</p> : null}
       </div>
-      {disabled ? (
-        <p className="text-xs text-[var(--color-text-secondary)]">現在は撮影できません。</p>
-      ) : null}
       {!camera.error && renderFallback ? (
         <div className="grid w-full text-sm text-[var(--color-text-secondary)] sm:w-fit">
           <Disclosure

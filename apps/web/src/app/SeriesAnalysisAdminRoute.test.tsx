@@ -148,9 +148,10 @@ describe("SeriesAnalysisAdminPage", () => {
     const router = renderAdminPage();
     const user = userEvent.setup();
 
-    expect(await screen.findByRole("heading", { name: "戦績分析" })).toBeInTheDocument();
+    expect(await screen.findByRole("region", { name: "戦績分析管理" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { level: 1 })).not.toBeInTheDocument();
     expect(await screen.findByRole("heading", { name: "全体の実行状況" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "直近3件" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "直近10件" })).toBeInTheDocument();
     expect(screen.getByText("履歴は45日保持します。", { exact: false })).toBeInTheDocument();
     const history = screen.getByRole("table");
     const historyRows = within(history).getAllByRole("row", { name: /桃太郎電鉄2/u });
@@ -225,10 +226,9 @@ describe("SeriesAnalysisAdminPage", () => {
 
     renderAdminPage();
 
-    expect(
-      await screen.findByRole("heading", { level: 1, name: "管理者権限が必要です" }),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "試合一覧へ戻る" })).toHaveAttribute(
+    const surface = await screen.findByRole("region", { name: "管理者権限が必要です" });
+    expect(screen.queryByRole("heading", { level: 1 })).not.toBeInTheDocument();
+    expect(within(surface).getByRole("link", { name: "試合一覧へ戻る" })).toHaveAttribute(
       "href",
       "/matches",
     );

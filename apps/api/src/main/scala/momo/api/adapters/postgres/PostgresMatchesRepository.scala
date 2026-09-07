@@ -16,7 +16,7 @@ import momo.api.adapters.postgres.PostgresMatchInsertOps.replaceMatchChildren
 import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.adapters.postgres.PostgresSeriesAnalysisMutationOps.enqueueMatchMutation
 import momo.api.domain.ids.*
-import momo.api.domain.{MatchNoInEvent, MatchRecord}
+import momo.api.domain.{HeldEventScope, MatchNoInEvent, MatchRecord}
 import momo.api.errors.{AppError, AppException}
 import momo.api.repositories.{MatchesAlg, MatchesRepository}
 
@@ -153,17 +153,20 @@ object PostgresMatches extends PostgresMatchesReadSupport:
       else
         val ids = heldEventIds.map(_.value).toArray
         sql"""
-            SELECT held_event_id, COUNT(*)::int, COALESCE(MAX(match_no_in_event), 0)::int
+            SELECT held_event_id, COUNT(*)::int, COALESCE(MAX(match_no_in_event), 0)::int,
+                   game_title_id, season_master_id
             FROM matches
             WHERE held_event_id = ANY($ids)
-            GROUP BY held_event_id
+            GROUP BY held_event_id, game_title_id, season_master_id
           """.query[HeldEventMatchStatsRow].to[List].map { rows =>
-          val seen = rows.map(row =>
-            row.heldEventId -> MatchesRepository.HeldEventStats(
-              matchCount = row.count,
-              maxMatchNo = row.maxMatchNo,
+          val seen = rows.groupBy(_.heldEventId).map { case (id, grouped) =>
+            id -> MatchesRepository.HeldEventStats(
+              matchCount = grouped.map(_.count).sum,
+              maxMatchNo = grouped.map(_.maxMatchNo).max,
+              scopes =
+                grouped.map(row => HeldEventScope(Some(row.gameTitleId), Some(row.seasonMasterId))),
             )
-          ).toMap
+          }
           heldEventIds.map(id => id -> seen.getOrElse(id, MatchesRepository.HeldEventStats(0, 0)))
             .toMap
         }

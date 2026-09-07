@@ -1,6 +1,6 @@
 use std::{
     fs::{self, File, OpenOptions},
-    io::{self, Write},
+    io::{self, BufWriter, Write},
     path::Path,
     time::{Duration, Instant},
 };
@@ -318,7 +318,7 @@ struct CanonicalFileMetadata {
 }
 
 struct BoundedHashWriter {
-    file: File,
+    file: BufWriter<File>,
     digest: Sha256,
     encoded_bytes: u64,
     maximum_bytes: u64,
@@ -329,7 +329,9 @@ struct BoundedHashWriter {
 impl BoundedHashWriter {
     fn new(file: File, maximum_bytes: u64) -> Self {
         Self {
-            file,
+            // Canonical serialization emits many small writes. Keep bounds and hashing on
+            // those bytes while batching only the file I/O; flush before accepting the file.
+            file: BufWriter::new(file),
             digest: Sha256::new(),
             encoded_bytes: 0,
             maximum_bytes,
@@ -404,8 +406,9 @@ fn write_canonical_file<T: Serialize>(
     value: &T,
     maximum_bytes: u64,
 ) -> Result<CanonicalFileMetadata, ArtifactError> {
-    let mut incomplete = IncompleteFile::new(path);
     let file = OpenOptions::new().write(true).create_new(true).open(path)?;
+    // Cleanup owns only files created by this attempt, including when a path already exists.
+    let mut incomplete = IncompleteFile::new(path);
     let mut writer = BoundedHashWriter::new(file, maximum_bytes);
     if let Err(error) = write_canonical(value, &mut writer) {
         return if writer.bound_exceeded {
@@ -433,4 +436,55 @@ fn validate_empty_directory(path: &Path) -> Result<(), ArtifactError> {
         return Err(ArtifactError::UnsafeDirectory);
     }
     Ok(())
+}
+
+#[cfg(test)]
+#[expect(
+    clippy::expect_used,
+    reason = "owned temporary files exercise bounded serialization and collision recovery"
+)]
+mod tests {
+    use momo_analysis_core::canonical::{canonicalize_value, sha256_prefixed};
+    use serde_json::json;
+
+    use super::*;
+
+    #[test]
+    fn buffered_file_preserves_canonical_bytes_and_removes_a_bounded_partial_write() {
+        let directory = tempfile::tempdir().expect("owned temporary directory");
+        let value = json!({"text": "bounded output".repeat(1_024), "count": 3});
+        let expected = canonicalize_value(&value).expect("canonical test value");
+        let maximum = u64::try_from(expected.len()).expect("small test value");
+        let path = directory.path().join("resource.json");
+        let written = write_canonical_file(&path, &value, maximum).expect("exact bound fits");
+        assert_eq!(fs::read(&path).expect("flushed bytes"), expected);
+        assert_eq!(written.encoded_bytes, maximum);
+        assert_eq!(written.checksum, sha256_prefixed(&expected));
+
+        let partial_path = directory.path().join("partial.json");
+        assert!(matches!(
+            write_canonical_file(&partial_path, &value, maximum - 1),
+            Err(ArtifactError::ResourceBound)
+        ));
+        assert!(
+            !partial_path.exists(),
+            "a rejected file must leave no partial bytes"
+        );
+    }
+
+    #[test]
+    fn failed_creation_preserves_an_existing_file() {
+        let directory = tempfile::tempdir().expect("owned temporary directory");
+        let path = directory.path().join("resource.json");
+        let existing = b"another owner's bytes";
+        fs::write(&path, existing).expect("existing file");
+        assert!(matches!(
+            write_canonical_file(&path, &json!({"replacement": true}), 1_024),
+            Err(ArtifactError::Io(_))
+        ));
+        assert_eq!(
+            fs::read(&path).expect("existing file is retained"),
+            existing
+        );
+    }
 }

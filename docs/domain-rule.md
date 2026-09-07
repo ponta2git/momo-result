@@ -1,6 +1,6 @@
 # ドメインルール
 
-目的: コードや DB shape だけでは決められない用語、不変条件、状態遷移、識別子の意味を定義する。CSV / TSV は `docs/requirements/base.md`、DB 所有権は `docs/db-rule.md`、queue は `docs/redis-streams-ocr-contract.md` を正本とする。
+目的: 用語、不変条件、状態遷移、識別子の意味を定義する。CSV / TSV は `docs/requirements/base.md`、DB 所有権は `docs/db-rule.md`、queue は `docs/redis-streams-ocr-contract.md` を正本とする。
 
 ## 1. Terms
 
@@ -56,7 +56,7 @@
 
 | 状態 | 意味 | 終端 |
 | --- | --- | --- |
-| `queued` | 配送待ちまたは未 claim | No |
+| `queued` | 配送・実行待ち、または一時失敗後の再実行待ち | No |
 | `running` | worker が処理中 | No |
 | `succeeded` | draft を保存済み | Yes |
 | `failed` | 失敗を保存済み | Yes |
@@ -68,18 +68,12 @@
 
 ## 6. Series Analysis Job
 
-| 状態 | 意味 | 終端 |
-| --- | --- | --- |
-| `queued` | 実行または preemption 後の再実行待ち | No |
-| `running` | lease を持つ attempt が処理中 | No |
-| `succeeded` | 対象 version を原子的に公開済み | Yes |
-| `failed` | 非再試行失敗または retry 上限 | Yes |
-| `timed_out` | hard timeout | Yes |
+job は1作品の計算を管理し、attempt は lease を持つ1回の実行を表す。attempt の終了は job の終端とは限らない。状態と再実行条件は `docs/requirements/series-analysis-batch.md` の Job / Delivery を正本とする。
 
 - 試合確定、確定済み試合の分析入力となる項目の更新、試合削除は、対象作品の再計算 intent と同じ transaction で確定する。初版の試合メモだけの更新は分析入力を変えず、再計算 intent を作らない。
-- 1 job は同じ入力 snapshot から1作品を計算し、部分成果物を公開しない。失敗や timeout は直前成功成果物を変更しない。
+- 1 attempt は一貫した入力 snapshot から1作品を計算し、部分成果物を公開しない。失敗や timeout は直前成功成果物を変更しない。
 - 対象なし、分母0、件数不足、定義済みの model 非採用は、品質状態を持つ正常成果物とする。予期しない scope 失敗は job 全体を失敗させる。
-- OCR による preemption だけ `running -> queued` を許可し、失敗回数へ加算しない。分析から OCR を preempt しない。
+- OCR だけが分析を preempt でき、分析から OCR を preempt しない。
 - 入力 version、algorithm version、artifact schema version を混同しない。詳細な job / artifact 要求は `docs/requirements/series-analysis-batch.md` を正本とする。
 
 ## 7. Masters / Held Events

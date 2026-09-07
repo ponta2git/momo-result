@@ -90,7 +90,7 @@ export function MasterRelationBoard({
   };
 
   return (
-    <section className="grid gap-8">
+    <section className="grid gap-6">
       <GameTitleList
         create={gameTitle.create}
         defaultLayoutFamily={gameTitle.defaultLayoutFamily}
@@ -105,8 +105,8 @@ export function MasterRelationBoard({
       />
 
       <div>
-        <div className="grid min-w-0 divide-y divide-[var(--color-border)] xl:grid-cols-2 xl:divide-x xl:divide-y-0">
-          <div className="min-w-0 pb-6 xl:pr-6 xl:pb-0">
+        <div className="grid min-w-0 gap-6 xl:grid-cols-2">
+          <div className="min-w-0">
             <ScopedMasterPanel
               actions={mapActions}
               create={map.create}
@@ -116,7 +116,7 @@ export function MasterRelationBoard({
             />
           </div>
 
-          <div className="min-w-0 pt-6 xl:pt-0 xl:pl-6">
+          <div className="min-w-0">
             <ScopedMasterPanel
               actions={seasonActions}
               create={season.create}

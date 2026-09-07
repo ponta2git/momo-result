@@ -53,4 +53,9 @@ final case class MatchExportRow(
     incidents: IncidentCounts,
 )
 
-final case class MatchExportFile(fileName: String, contentType: String, body: String)
+final case class MatchExportFile(
+    fileName: String,
+    contentType: String,
+    body: String,
+    sizeBytes: Long,
+)

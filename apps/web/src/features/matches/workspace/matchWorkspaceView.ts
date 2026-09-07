@@ -1,6 +1,5 @@
 import { confirmedDraftDestination } from "@/features/matches/confirmedDraftNavigation";
 import type { MatchFormValues, WorkspaceMode } from "@/features/matches/workspace/matchFormTypes";
-import { buildWorkspacePageCopy } from "@/features/matches/workspace/workspaceViewModel";
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
 import type {
   GameTitleResponse,
@@ -37,7 +36,6 @@ export function buildMatchWorkspaceView({
   values: MatchFormValues;
 }) {
   const heldEvents = heldEventItems ?? noHeldEvents;
-  const pageCopy = buildWorkspacePageCopy({ mode, reviewStatus });
   const gameTitles = gameTitleItems ?? noGameTitles;
   const maps = mapItems ?? noMaps;
   const seasons = seasonItems ?? noSeasons;
@@ -58,8 +56,6 @@ export function buildMatchWorkspaceView({
     heldEvents,
     mapItems: maps,
     matchDraftIdForImages,
-    pageDescription: pageCopy.description,
-    pageTitle: pageCopy.title,
     seasonItems: seasons,
     selectedGameTitle: gameTitles.find((item) => item.id === values.gameTitleId),
     selectedHeldEvent: heldEvents.find((event) => event.id === values.heldEventId),

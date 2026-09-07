@@ -1,6 +1,7 @@
 import { ArrowLeft, BarChart3 } from "lucide-react";
 import { useEffect } from "react";
 
+import { matchesSeriesAnalysisScope } from "@/features/seriesComparison/model/seriesAnalysisDisplayBundle";
 import {
   preloadSeriesAnalysisView,
   SeriesAnalysisContent,
@@ -12,14 +13,23 @@ import {
   PageSkeleton,
 } from "@/features/seriesComparison/page/SeriesComparisonSkeletons";
 import { useSeriesComparisonPageModel } from "@/features/seriesComparison/page/useSeriesComparisonPageModel";
+import { actionRowClass } from "@/shared/ui/actions/actionGroup";
 import { Button } from "@/shared/ui/actions/Button";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
+import { cn } from "@/shared/ui/cn";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
-import { PageHeader } from "@/shared/ui/layout/PageHeader";
 import { StaleShield } from "@/shared/ui/motion/StaleShield";
+
+function seriesReturnAction(returnTo: string | undefined) {
+  return returnTo ? (
+    <LinkButton icon={<ArrowLeft aria-hidden="true" />} size="sm" to={returnTo} variant="quiet">
+      前の画面へ戻る
+    </LinkButton>
+  ) : null;
+}
 
 export function SeriesComparisonPage() {
   const page = useSeriesComparisonPageModel();
@@ -30,19 +40,26 @@ export function SeriesComparisonPage() {
     preloadSeriesAnalysisView(filters.activeView);
   }, [filters.activeView, filters.seriesOptions.length, page.clientUpgradeRequired]);
 
-  if (options.loading) return <PageSkeleton />;
+  if (options.loading) return <PageSkeleton showReturnAction={Boolean(page.returnTo)} />;
   if (page.clientUpgradeRequired) {
     return (
       <PageFrame width="wide">
-        <PageHeader title="戦績比較" />
-        <PageContentSurface>
-          <Notice tone="warning" title="画面の更新が必要です">
-            <p>戦績分析の表示方法が更新されました。画面を再読み込みしてください。</p>
-            <div className="mt-3">
+        <PageContentSurface aria-label="戦績比較" className="grid gap-4" role="region">
+          {page.returnTo ? (
+            <nav aria-label="戦績比較の操作" className={cn(actionRowClass, "justify-end")}>
+              {seriesReturnAction(page.returnTo)}
+            </nav>
+          ) : null}
+          <Notice
+            action={
               <Button size="sm" onClick={page.actions.reloadClient}>
                 画面を再読み込み
               </Button>
-            </div>
+            }
+            tone="warning"
+            title="画面の更新が必要です"
+          >
+            <p>戦績分析の表示方法が更新されました。画面を再読み込みしてください。</p>
           </Notice>
         </PageContentSurface>
       </PageFrame>
@@ -51,24 +68,29 @@ export function SeriesComparisonPage() {
 
   return (
     <PageFrame width="wide">
-      <PageHeader
-        actions={
-          page.returnTo ? (
-            <LinkButton
-              icon={<ArrowLeft aria-hidden="true" />}
-              size="sm"
-              to={page.returnTo}
-              variant="quiet"
-            >
-              前の画面へ戻る
-            </LinkButton>
-          ) : null
-        }
-        title="戦績比較"
-      />
-      <PageContentSurface className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4">
+      <PageContentSurface
+        aria-label="戦績比較"
+        className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4"
+        role="region"
+      >
+        {page.returnTo ? (
+          <nav aria-label="戦績比較の操作" className={cn(actionRowClass, "justify-end")}>
+            {seriesReturnAction(page.returnTo)}
+          </nav>
+        ) : null}
         {options.hasError ? (
           <Notice
+            action={
+              <Button
+                pending={options.refreshing}
+                pendingLabel="再読み込み中"
+                size="sm"
+                variant={options.hasVisibleData ? "secondary" : "primary"}
+                onClick={page.actions.refresh}
+              >
+                比較対象を再読み込み
+              </Button>
+            }
             tone={options.hasVisibleData ? "warning" : "danger"}
             title={
               options.hasVisibleData ? "最新の比較対象を取得できません" : "対象作品を読み込めません"
@@ -79,17 +101,6 @@ export function SeriesComparisonPage() {
                 ? "直前に取得した対象を表示しています。"
                 : "通信状態を確認して、もう一度お試しください。"}
             </p>
-            <div className="mt-3">
-              <Button
-                pending={options.refreshing}
-                pendingLabel="再読み込み中"
-                size="sm"
-                variant={options.hasVisibleData ? "secondary" : "primary"}
-                onClick={page.actions.refresh}
-              >
-                比較対象を再読み込み
-              </Button>
-            </div>
           </Notice>
         ) : null}
         {filters.seriesOptions.length === 0 && !options.hasError ? (
@@ -106,7 +117,9 @@ export function SeriesComparisonPage() {
               mapOptions={filters.mapOptions}
               mapValue={filters.state.mapMasterId ?? ""}
               refreshing={resource.refreshing || status.refreshing}
-              response={resource.data}
+              response={
+                matchesSeriesAnalysisScope(resource.data, filters.state) ? resource.data : undefined
+              }
               seasonOptions={filters.seasonOptions}
               seasonValue={filters.state.seasonMasterId ?? ""}
               seriesOptions={filters.seriesOptions}
@@ -129,16 +142,19 @@ export function SeriesComparisonPage() {
             status.data?.currentArtifact &&
             resource.hasError &&
             !resource.data ? (
-              <Notice tone="danger" title="戦績データを読み込めません">
-                <p>分析結果を取得できませんでした。通信状態を確認して再読み込みしてください。</p>
-                <div className="mt-3">
+              <Notice
+                action={
                   <Button size="sm" onClick={page.actions.refresh}>
                     戦績データを再読み込み
                   </Button>
-                </div>
+                }
+                tone="danger"
+                title="戦績データを読み込めません"
+              >
+                <p>分析結果を取得できませんでした。通信状態を確認して再読み込みしてください。</p>
               </Notice>
             ) : status.data?.currentArtifact && resource.data && resource.bundle ? (
-              <div className="grid gap-3">
+              <div className="grid gap-4">
                 {resource.hasError ? (
                   <Notice tone="warning" title="最新の戦績データを取得できません">
                     直前に取得した分析結果を表示しています。

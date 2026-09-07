@@ -189,6 +189,18 @@ final class PostgresSeriesAnalysisChunkCodecSpec extends FunSuite with JsonSchem
       "Analysis artifact exceeds the JSON node bound.",
     )
 
+  test("rejects excess JSON values before parsing an otherwise malformed document"):
+    val payload = "{\"scope\": [0,}".getBytes(StandardCharsets.UTF_8)
+    assertInternal(
+      PostgresSeriesAnalysisChunkCodec.decode(
+        stored(payload, nestingDepth = 3),
+        request,
+        SeriesAnalysisReadConfig.defaults.copy(maxJsonNodes = 1),
+        None,
+      ),
+      "Analysis artifact exceeds the JSON node bound.",
+    )
+
   test("hydrates display metadata only when every referenced member is available"):
     val decoded = decodedAggregate().copy(
       payload = Json.obj(

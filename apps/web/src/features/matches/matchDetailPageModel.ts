@@ -1,8 +1,4 @@
-import type {
-  MatchDetailSortKey,
-  MatchDetailSortState,
-} from "@/features/matches/matchDetailViewModel";
-import type { MatchFeatureView } from "@/features/matches/matchFeatureViewModel";
+import type { MatchFeatureBadge } from "@/features/matches/matchDetailViewModel";
 import type { MatchDetailResponse } from "@/shared/api/matches";
 import type { matchPerformanceContextFromArtifact } from "@/shared/domain/matchPerformanceContext";
 
@@ -31,10 +27,8 @@ export type MatchDeletionModel = {
 export type MatchDetailReadyPageModel = {
   analysis: {
     comparisonContextStatus: "loading" | "ready" | "unavailable";
-    featureView: MatchFeatureView;
-    needsManualRefresh: boolean;
+    badges: MatchFeatureBadge[];
     performanceContext: ReturnType<typeof matchPerformanceContextFromArtifact>;
-    refresh: MatchDetailRefreshModel;
   };
   deletion: MatchDeletionModel;
   enrichment: MatchDetailEnrichmentModel;
@@ -54,11 +48,6 @@ export type MatchDetailReadyPageModel = {
     exportHref: string;
   };
   note: { refetchMatch: () => Promise<{ data?: MatchDetailResponse | undefined }> };
-  results: {
-    players: NonNullable<MatchDetailResponse["players"]>;
-    setSortKey: (key: MatchDetailSortKey) => void;
-    sort: MatchDetailSortState;
-  };
 };
 
 export type MatchDetailPageModel =

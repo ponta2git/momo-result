@@ -1,7 +1,9 @@
 import { useId } from "react";
 import type { ReactNode } from "react";
 
+import { cn } from "@/shared/ui/cn";
 import { TabsList, TabsPanel, TabsRoot, TabsTab } from "@/shared/ui/forms/Tabs";
+import { contentText } from "@/shared/ui/typography";
 
 import type { ExportScope } from "./exportTypes";
 import { exportScopes } from "./exportViewModel";
@@ -29,10 +31,10 @@ export function ExportScopeTabs({
 
   return (
     <section aria-labelledby={headingId}>
-      <h2 className="mb-2 text-sm font-semibold text-[var(--color-text-primary)]" id={headingId}>
+      <h2 className={cn(contentText.heading, "mb-2")} id={headingId}>
         出力範囲
       </h2>
-      <p className="mb-3 text-sm text-[var(--color-text-secondary)]">{exportExclusionNotice}</p>
+      <p className={cn(contentText.body, "mb-3 text-pretty")}>{exportExclusionNotice}</p>
       <TabsRoot
         value={scope}
         onValueChange={(value) => {
@@ -49,10 +51,8 @@ export function ExportScopeTabs({
 
         {exportScopes.map((item) => (
           <TabsPanel keepMounted key={item.value} value={item.value}>
-            {scope === item.value ? (
-              <div className={item.value === "all" ? "mt-3" : "mt-4"}>
-                {item.value === "all" ? null : children}
-              </div>
+            {scope === item.value && item.value !== "all" ? (
+              <div className="mt-4">{children}</div>
             ) : null}
           </TabsPanel>
         ))}

@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback } from "react";
 import { useLocation, useParams, useSearchParams } from "react-router-dom";
 
 import { resolvedEnrichmentName } from "@/features/matches/matchDetailPageModel";
@@ -7,15 +7,7 @@ import type {
   MatchDetailEnrichmentModel,
   MatchDetailPageModel,
 } from "@/features/matches/matchDetailPageModel";
-import {
-  nextMatchDetailSort,
-  seriesComparisonHrefForMatch,
-  sortMatchDetailPlayers,
-} from "@/features/matches/matchDetailViewModel";
-import type {
-  MatchDetailSortKey,
-  MatchDetailSortState,
-} from "@/features/matches/matchDetailViewModel";
+import { seriesComparisonHrefForMatch } from "@/features/matches/matchDetailViewModel";
 import { useMatchDeletionCommand } from "@/features/matches/useMatchDeletionCommand";
 import { useMatchFeatureAnalysis } from "@/features/matches/useMatchFeatureAnalysis";
 import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
@@ -40,10 +32,6 @@ export function useMatchDetailPageModel(): MatchDetailPageModel {
   const contextualReturnTo = sanitizeReturnTo(searchParams.get("returnTo"));
   const fallbackBackHref = contextualReturnTo ?? "/matches";
   const detailReturnTo = currentInternalLocation(location);
-  const [sort, setSort] = useState<MatchDetailSortState>({
-    key: "member",
-    direction: "asc",
-  });
 
   const matchQuery = useQuery(matchDetailQueryOptions(matchId, matchId.trim().length > 0));
   const heldEventsQuery = useQuery(heldEventDirectoryQueryOptions());
@@ -72,12 +60,6 @@ export function useMatchDetailPageModel(): MatchDetailPageModel {
     matchId,
     pathname: location.pathname,
   });
-
-  const sourcePlayers = useMemo(() => match?.players ?? [], [match?.players]);
-  const players = useMemo(() => sortMatchDetailPlayers(sourcePlayers, sort), [sourcePlayers, sort]);
-  const setSortKey = useCallback((key: MatchDetailSortKey) => {
-    setSort((current) => nextMatchDetailSort(current, key));
-  }, []);
 
   const matchFailed = shouldShowQueryError({ error: matchError, isFetching: matchIsFetching });
   const heldEventsFailed = shouldShowQueryError({
@@ -153,13 +135,8 @@ export function useMatchDetailPageModel(): MatchDetailPageModel {
   return {
     analysis: {
       comparisonContextStatus: analysis.comparisonContextStatus,
-      featureView: analysis.featureView,
-      needsManualRefresh: analysis.needsManualRefresh,
+      badges: analysis.badges,
       performanceContext: analysis.performanceContext,
-      refresh: {
-        pending: analysis.analysisRefreshing,
-        run: analysis.refreshAnalysis,
-      },
     },
     deletion,
     enrichment,
@@ -198,6 +175,5 @@ export function useMatchDetailPageModel(): MatchDetailPageModel {
       ),
     },
     note: { refetchMatch },
-    results: { players, setSortKey, sort },
   };
 }

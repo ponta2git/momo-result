@@ -10,12 +10,14 @@ import {
 } from "@/features/seriesComparison/SeriesAnalysisQualityAdvisory";
 import type { SeriesAnalysisDrilldownV3 } from "@/shared/api/seriesAnalysis";
 import { formatMatchNoInEvent, formatSeriesMatchIndex } from "@/shared/domain/matchLabels";
+import { cn } from "@/shared/ui/cn";
 import { DataTable } from "@/shared/ui/data/DataTable";
 import { FactList } from "@/shared/ui/data/FactList";
 import { PlayOrderMark, playOrderPresentation } from "@/shared/ui/data/PlayOrderMark";
 import { DataVizLineChart } from "@/shared/ui/dataViz/LineChart";
 import { playOrderSeriesId } from "@/shared/ui/dataViz/seriesPresentation";
 import { RankBadge } from "@/shared/ui/rank/RankBadge";
+import { contentText } from "@/shared/ui/typography";
 
 import { ChangeBadge, formatSignedDecimal } from "./SeriesAnalysisChangeBadge";
 
@@ -35,7 +37,7 @@ export function PlayOrderHistoryDrilldown({
 }) {
   const qualityAdvisory = qualityAdvisoryLabel(payload.summary.qualityStatus);
   return (
-    <div className="grid gap-4">
+    <div className="grid gap-6">
       <FactList
         ariaLabel={`${playerName}の番手別順位推移の要約`}
         columns={4}
@@ -77,25 +79,25 @@ export function PlayOrderHistoryDrilldown({
               ]
             : []),
         ]}
-        layout="inline"
+        layout="plain"
       />
-      <div className="grid gap-x-6 gap-y-5 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-x-6 gap-y-6 sm:grid-cols-2 lg:grid-cols-4">
         {payload.rows.map((row) => (
           <div className="min-w-0" key={row.playOrder}>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <PlayOrderMark playOrder={row.playOrder} />
-              <span className="text-xs text-[var(--color-text-secondary)] tabular-nums">
+              <span className={cn(contentText.supporting, "tabular-nums")}>
                 {row.targetCount}戦
               </span>
             </div>
-            <p className="mt-1 text-lg font-semibold tabular-nums">
+            <p className={cn(contentText.primary, "mt-1 tabular-nums")}>
               {formatDecimal(row.rankAverage)}位
             </p>
-            <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
+            <p className={cn(contentText.body, "mt-2")}>
               入賞{row.podiumCount}戦・{formatPercent(row.podiumRate)}／下位{row.lowerHalfCount}
               戦・{formatPercent(row.lowerHalfRate)}
             </p>
-            <p className="mt-1 text-xs text-[var(--color-text-secondary)] tabular-nums">
+            <p className={cn(contentText.supporting, "mt-1 tabular-nums")}>
               全体同番手 {formatDecimal(row.baselineRankAverage)}位・差{" "}
               {formatSignedDecimal(row.baselineDelta)}位
             </p>

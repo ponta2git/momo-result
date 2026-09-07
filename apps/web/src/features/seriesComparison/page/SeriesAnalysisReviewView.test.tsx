@@ -40,18 +40,11 @@ describe("ReviewView", () => {
 
     expect(screen.getAllByRole("heading", { name: primary.actionHypothesis })).toHaveLength(2);
 
-    const usage = screen.getByLabelText("行動仮説の対象");
-    expect(within(usage).getByText("対象")).toBeInTheDocument();
-    expect(within(usage).getByText("次の4戦")).toBeInTheDocument();
-    expect(within(usage).queryByText("使う場面")).not.toBeInTheDocument();
-    expect(screen.queryByText("発動条件に当てはまるとき")).not.toBeInTheDocument();
     const commonPlaybook = screen.getByRole("region", { name: "複数人共通の行動仮説" });
     expect(screen.getByRole("button", { name: "分類の読み方" })).toBeInTheDocument();
     expect(within(commonPlaybook).getByText("収益先行後の詰め方")).toBeInTheDocument();
-    expect(
-      within(commonPlaybook).getByText(response.commonPlaybookTopics[0]!.detail),
-    ).toBeVisible();
-    expect(within(commonPlaybook).queryByRole("button")).not.toBeInTheDocument();
+    expect(within(commonPlaybook).getByText("3人")).toBeVisible();
+    expect(screen.queryByText(primary.plainReason)).not.toBeInTheDocument();
     expect(screen.queryByText(firstSecondary.actionHypothesis)).not.toBeInTheDocument();
 
     expect(screen.getByRole("heading", { name: "いーゆー" })).toBeInTheDocument();
@@ -80,6 +73,7 @@ describe("ReviewView", () => {
 
     await user.click(screen.getAllByRole("button", { name: "根拠・注意・試合後の確認" })[0]!);
     const detailDialog = await screen.findByRole("dialog");
+    expect(within(detailDialog).getByText(primary.dataReason)).toBeVisible();
     expect(within(detailDialog).getByText("収益だけで安全と見ない。")).toBeInTheDocument();
     expect(within(detailDialog).getByText("ぶれにくさ: 高め")).toBeInTheDocument();
     expect(within(detailDialog).getByText(/開催単位の再標本化/u)).toHaveTextContent(

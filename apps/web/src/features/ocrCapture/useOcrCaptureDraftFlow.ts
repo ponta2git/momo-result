@@ -86,10 +86,6 @@ export function useOcrCaptureDraftFlow({
   const refreshIncidentLog = incidentLogResource.refresh;
 
   useEffect(() => {
-    localSlotsRef.current = localSlots;
-  }, [localSlots]);
-
-  useEffect(() => {
     return () => {
       for (const slot of localSlotsRef.current) {
         releaseSlotResources(slot);
@@ -97,11 +93,34 @@ export function useOcrCaptureDraftFlow({
     };
   }, []);
 
-  const updateSlot = useCallback((nextSlot: CaptureSlotState) => {
-    setLocalSlots((current) =>
-      current.map((slot) => (slot.kind === nextSlot.kind ? nextSlot : slot)),
-    );
-  }, []);
+  // Commands own the URLs immediately, including images replaced or abandoned before a commit.
+  // Keep cleanup outside React state updaters, which Strict Mode may invoke more than once.
+  const updateLocalSlots = useCallback(
+    (update: (current: CaptureSlotState[]) => CaptureSlotState[]) => {
+      const current = localSlotsRef.current;
+      const next = update(current);
+      for (const slot of current) {
+        if (
+          slot.previewUrl &&
+          !next.some((candidate) => candidate.previewUrl === slot.previewUrl)
+        ) {
+          releaseSlotResources(slot);
+        }
+      }
+      localSlotsRef.current = next;
+      setLocalSlots(next);
+    },
+    [],
+  );
+
+  const updateSlot = useCallback(
+    (nextSlot: CaptureSlotState) => {
+      updateLocalSlots((current) =>
+        current.map((slot) => (slot.kind === nextSlot.kind ? nextSlot : slot)),
+      );
+    },
+    [updateLocalSlots],
+  );
 
   const handleAddImage = useCallback(
     (file: File, source: InputSource, targetKind: SlotKind, feedback: OcrCaptureDraftFeedback) => {
@@ -115,7 +134,6 @@ export function useOcrCaptureDraftFlow({
         return false;
       }
       const previewUrl = URL.createObjectURL(file);
-      releaseSlotResources(targetSlot);
       const selectedSlot: CaptureSlotState = {
         ...createInitialSlot(targetKind),
         source,
@@ -137,21 +155,18 @@ export function useOcrCaptureDraftFlow({
   const handleClear = useCallback(
     (kind: SlotKind, feedback: OcrCaptureDraftFeedback) => {
       const currentSlot = slots.find((slot) => slot.kind === kind);
-      if (currentSlot) {
-        if (isWorkingStatus(currentSlot.status)) {
-          feedback.reportFailure(
-            "読み取り中の画像は破棄できません。試合一覧で状態を確認してください。",
-          );
-          return;
-        }
-        releaseSlotResources(currentSlot);
+      if (currentSlot && isWorkingStatus(currentSlot.status)) {
+        feedback.reportFailure(
+          "読み取り中の画像は破棄できません。試合一覧で状態を確認してください。",
+        );
+        return;
       }
-      setLocalSlots((current) =>
+      updateLocalSlots((current) =>
         current.map((slot) => (slot.kind === kind ? createInitialSlot(kind) : slot)),
       );
       feedback.reportSuccess("画像を破棄しました。");
     },
-    [slots],
+    [slots, updateLocalSlots],
   );
 
   const handleResetAll = useCallback(
@@ -162,13 +177,10 @@ export function useOcrCaptureDraftFlow({
         );
         return;
       }
-      for (const slot of slots) {
-        releaseSlotResources(slot);
-      }
-      setLocalSlots(createInitialSlots());
+      updateLocalSlots(createInitialSlots);
       feedback.reportSuccess("画像をすべて破棄しました。次の試合を撮影できます。");
     },
-    [slots],
+    [slots, updateLocalSlots],
   );
 
   const handleDropImage = useCallback(
@@ -183,7 +195,7 @@ export function useOcrCaptureDraftFlow({
         );
         return;
       }
-      setLocalSlots((current) =>
+      updateLocalSlots((current) =>
         current.map((slot) => {
           if (slot.kind === sourceKind) return { ...keepImageOnly(targetSlot), kind: sourceKind };
           if (slot.kind === targetKind) return { ...keepImageOnly(sourceSlot), kind: targetKind };
@@ -196,7 +208,7 @@ export function useOcrCaptureDraftFlow({
         slotDefinitions.find((definition) => definition.kind === targetKind)?.label ?? targetKind;
       feedback.reportSuccess(`${sourceLabel}と${targetLabel}の画像を入れ替えました。`);
     },
-    [slots],
+    [slots, updateLocalSlots],
   );
 
   const handleMoveImage = useCallback(

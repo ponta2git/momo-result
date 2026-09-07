@@ -4,13 +4,11 @@ import type { FocusEvent, MouseEvent, PointerEvent, ReactNode } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 
 import { AppGlobalNav } from "@/app/AppGlobalNav";
+import { AppPageCanvas } from "@/app/AppPageCanvas";
 import { RouteErrorBoundary } from "@/app/RouteErrorBoundary";
 import { preloadRouteForPath } from "@/app/routeModules";
 import { RouteSuspenseFallback } from "@/app/RouteSuspenseFallback";
-import { cn } from "@/shared/ui/cn";
 import { ToastHost } from "@/shared/ui/feedback/ToastHost";
-import { pageViewportGutterClass } from "@/shared/ui/layout/PageFrame";
-import { SkipLink } from "@/shared/ui/layout/SkipLink";
 
 function shouldPreloadAnchor(anchor: HTMLAnchorElement): boolean {
   if (anchor.target === "_blank" || anchor.hasAttribute("download")) {
@@ -36,11 +34,13 @@ function RouteQueryResetBridge({
   pathname,
   reset,
   resetKey,
+  search,
 }: {
   children: ReactNode;
   pathname: string;
   reset: () => void;
   resetKey: string;
+  search: string;
 }) {
   const [readyKey, setReadyKey] = useState(resetKey);
 
@@ -49,11 +49,13 @@ function RouteQueryResetBridge({
       return;
     }
     reset();
+    // The new route may render only after the external QueryErrorResetBoundary was reset.
+    // oxlint-disable-next-line react/set-state-in-effect
     setReadyKey(resetKey);
   }, [readyKey, reset, resetKey]);
 
   if (readyKey !== resetKey) {
-    return <RouteSuspenseFallback pathname={pathname} />;
+    return <RouteSuspenseFallback pathname={pathname} search={search} />;
   }
 
   return children;
@@ -104,41 +106,40 @@ export function AppShell() {
 
   return (
     <>
-      <SkipLink />
-      <div
-        className="flex min-h-dvh flex-col"
+      <AppPageCanvas
+        navigation={<AppGlobalNav />}
         onClickCapture={handleNavigationClick}
         onFocusCapture={handlePreloadIntent}
         onPointerOverCapture={handlePreloadIntent}
       >
-        <AppGlobalNav />
-        <main
-          className={cn(
-            "mx-auto flex w-full flex-1 flex-col py-4 sm:py-6",
-            pageViewportGutterClass,
-          )}
-          id="main-content"
-        >
-          <QueryErrorResetBoundary>
-            {({ reset }) => (
-              <RouteQueryResetBridge
+        <QueryErrorResetBoundary>
+          {({ reset }) => (
+            <RouteQueryResetBridge
+              pathname={location.pathname}
+              reset={reset}
+              resetKey={routeResetKey}
+              search={location.search}
+            >
+              <RouteErrorBoundary
+                onReset={reset}
                 pathname={location.pathname}
-                reset={reset}
-                resetKey={routeResetKey}
+                search={location.search}
               >
-                <RouteErrorBoundary onReset={reset} resetKey={routeResetKey}>
-                  <Suspense fallback={<RouteSuspenseFallback pathname={location.pathname} />}>
-                    {/* Route availability must not depend on an exit-animation lifecycle. */}
-                    <div className="grid min-w-0">
-                      <Outlet />
-                    </div>
-                  </Suspense>
-                </RouteErrorBoundary>
-              </RouteQueryResetBridge>
-            )}
-          </QueryErrorResetBoundary>
-        </main>
-      </div>
+                <Suspense
+                  fallback={
+                    <RouteSuspenseFallback pathname={location.pathname} search={location.search} />
+                  }
+                >
+                  {/* Route availability must not depend on an exit-animation lifecycle. */}
+                  <div className="grid min-w-0">
+                    <Outlet />
+                  </div>
+                </Suspense>
+              </RouteErrorBoundary>
+            </RouteQueryResetBridge>
+          )}
+        </QueryErrorResetBoundary>
+      </AppPageCanvas>
       <ToastHost />
     </>
   );

@@ -7,13 +7,15 @@ import type { ReactNode } from "react";
 import { Button } from "@/shared/ui/actions/Button";
 import { IconButton } from "@/shared/ui/actions/IconButton";
 import { cn } from "@/shared/ui/cn";
+import { readableTextWidthClass } from "@/shared/ui/layout/readableText";
 import { instantMotionTransition, politeMotionTransition } from "@/shared/ui/motion/transitions";
+import { contentText, fieldText } from "@/shared/ui/typography";
 
 const dialogBackdropClassName = "fixed inset-0 z-[var(--z-dialog)] bg-[var(--color-backdrop)]/35";
 const dialogPopupClassName =
   "momo-dialog-popup fixed inset-0 z-[var(--z-dialog)] mx-auto flex w-full max-w-[40rem] items-center justify-center overflow-hidden";
 const dialogSurfaceClassName =
-  "momo-dialog-surface w-full rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-[var(--color-text-primary)] shadow-[var(--shadow-dialog)]";
+  "momo-dialog-surface w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-[var(--color-text-primary)] shadow-[var(--shadow-dialog)]";
 const dialogBackdropInitial = { opacity: 0 } as const;
 const dialogSurfaceInitial = { opacity: 0.96 } as const;
 const dialogHidden = { opacity: 0 } as const;
@@ -45,14 +47,16 @@ function DialogContentFrame({
   dismissible: boolean;
 }) {
   return (
-    <div className="flex min-h-0 w-full flex-1 flex-col gap-3">
-      <div className="flex shrink-0 items-start justify-between gap-3">
+    <div className="flex min-h-0 w-full flex-1 flex-col gap-4">
+      <div className="flex shrink-0 items-start justify-between gap-2">
         <div className="min-w-0">
-          <BaseDialog.Title className="text-lg font-semibold text-balance text-[var(--color-text-primary)]">
+          <BaseDialog.Title className={cn(contentText.heading, "text-balance")}>
             {title}
           </BaseDialog.Title>
           {description ? (
-            <BaseDialog.Description className="mt-1 text-sm leading-6 text-pretty text-[var(--color-text-secondary)]">
+            <BaseDialog.Description
+              className={cn(contentText.body, "mt-1 text-pretty", readableTextWidthClass)}
+            >
               {description}
             </BaseDialog.Description>
           ) : null}
@@ -204,27 +208,48 @@ export function AlertDialogLayer({
       >
         <div
           aria-busy={pending || undefined}
-          className={cn(dialogSurfaceClassName, "overflow-y-auto", surfaceClassName)}
+          className={cn(
+            dialogSurfaceClassName,
+            "momo-alert-dialog-surface flex overflow-hidden",
+            surfaceClassName,
+          )}
         >
-          <div className="space-y-3">
-            <BaseAlertDialog.Title className="text-lg font-semibold text-balance text-[var(--color-text-primary)]">
-              {title}
-            </BaseAlertDialog.Title>
-            {description ? (
-              <BaseAlertDialog.Description className="text-sm leading-6 text-pretty text-[var(--color-text-secondary)]">
-                {description}
-              </BaseAlertDialog.Description>
-            ) : null}
-            <div className={cn("min-w-0", contentClassName)}>{children}</div>
-            {error ? (
-              <p
-                className="rounded-[var(--radius-sm)] border border-[var(--color-danger)]/50 bg-[var(--color-danger)]/8 px-3 py-2 text-sm font-medium text-[var(--color-danger)]"
-                role="alert"
+          <div className="momo-alert-dialog-frame flex min-h-0 w-full flex-1 flex-col gap-4">
+            <div className="min-w-0 shrink-0">
+              <BaseAlertDialog.Title className={cn(contentText.heading, "text-balance")}>
+                {title}
+              </BaseAlertDialog.Title>
+              {description ? (
+                <BaseAlertDialog.Description
+                  className={cn(contentText.body, "mt-1 text-pretty", readableTextWidthClass)}
+                >
+                  {description}
+                </BaseAlertDialog.Description>
+              ) : null}
+            </div>
+            {(children !== undefined && children !== null) || error ? (
+              <div
+                className={cn(
+                  "momo-alert-dialog-body grid min-h-0 min-w-0 flex-1 gap-4 overflow-y-auto px-2 empty:hidden",
+                  contentClassName,
+                )}
               >
-                {error}
-              </p>
+                {children}
+                {error ? (
+                  <p
+                    className={cn(
+                      fieldText.error,
+                      "rounded-xs border border-[var(--color-danger)]/50 bg-[var(--color-danger)]/8 px-3 py-2",
+                      readableTextWidthClass,
+                    )}
+                    role="alert"
+                  >
+                    {error}
+                  </p>
+                ) : null}
+              </div>
             ) : null}
-            <div className="flex flex-wrap justify-end gap-2">
+            <div className="flex shrink-0 flex-wrap justify-end gap-2">
               <BaseAlertDialog.Close
                 render={
                   <Button

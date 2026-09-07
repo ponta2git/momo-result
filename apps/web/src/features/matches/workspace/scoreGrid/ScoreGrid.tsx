@@ -17,6 +17,8 @@ import type {
   ScoreGridProps,
 } from "@/features/matches/workspace/scoreGrid/ScoreGridTypes";
 import { useMediaQuery } from "@/shared/lib/useMediaQuery";
+import { cn } from "@/shared/ui/cn";
+import { contentText } from "@/shared/ui/typography";
 
 export function ScoreGrid({ actions, data }: ScoreGridProps) {
   const [expandedMobilePlayer, setExpandedMobilePlayer] = useState(0);
@@ -70,6 +72,8 @@ export function ScoreGrid({ actions, data }: ScoreGridProps) {
     }
     next.focus();
     setPendingFocusCellId(null);
+    // Opening a mobile player mounts the pending focus target; retry after that DOM commit.
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies
   }, [expandedMobilePlayer, pendingFocusCellId]);
 
   const acknowledgedCellIdSet = useMemo(
@@ -172,18 +176,16 @@ export function ScoreGrid({ actions, data }: ScoreGridProps) {
     <section data-validation-path="players" tabIndex={-1}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-xl font-semibold text-[var(--color-text-primary)]">
-            4人分の結果を確認・修正
-          </h2>
+          <h2 className={contentText.heading}>4人分の結果を確認・修正</h2>
           {isNarrowViewport ? null : (
-            <p className="mt-1 text-sm text-pretty text-[var(--color-text-secondary)]">
+            <p className={cn(contentText.supporting, "mt-1 text-pretty")}>
               Enterキーと矢印キーで移動できます。Escキーで編集中のセルを元に戻せます。
             </p>
           )}
         </div>
       </div>
 
-      <div className="mt-3 empty:hidden">
+      <div className="mt-4 empty:hidden">
         <ScoreGridReviewToolbar
           activeItem={activeItem}
           activeReviewed={Boolean(activeItem && acknowledgedCellIdSet.has(activeItem.cellId))}

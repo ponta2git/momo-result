@@ -7,6 +7,7 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { HeldEventDetailPage } from "@/features/heldEvents/HeldEventDetailPage";
+import { HeldEventDetailLoading } from "@/features/heldEvents/HeldEventDetailStatusViews";
 import { setDevUser } from "@/test/auth";
 import { makeHeldEventDetailResponse } from "@/test/factories";
 import { setupMsw } from "@/test/msw/lifecycle";
@@ -35,6 +36,21 @@ describe("HeldEventDetailPage", () => {
   beforeEach(() => {
     queryClient = createTestQueryClient();
     user = userEvent.setup();
+  });
+
+  it("reserves the leading navigation slot while loading", () => {
+    render(<HeldEventDetailLoading />);
+
+    const frame = screen.getByLabelText("開催詳細を読み込み中");
+    const heading = screen.getByRole("heading", { name: "開催の記録を読み込み中" });
+    const header = heading.closest("header");
+    expect(frame.children).toHaveLength(3);
+    expect(frame.children.item(0)?.firstElementChild).toHaveAttribute("aria-hidden", "true");
+    expect(frame.children.item(1)).toContainElement(heading);
+    expect(header).toHaveTextContent("開催記録");
+    const actionSlot = header?.children.item(1);
+    expect(actionSlot?.children).toHaveLength(1);
+    expect(actionSlot?.children.item(0)?.children).toHaveLength(2);
   });
 
   it("connects one held event to its draft, player recap, results, and comparison", async () => {
@@ -110,7 +126,9 @@ describe("HeldEventDetailPage", () => {
     expect(screen.getByRole("link", { name: "手入力" })).toBeInTheDocument();
     const results = screen.getByRole("list", { name: "第1試合の順位と総資産" });
     expect(within(results).getByText("1億2345万円")).toBeInTheDocument();
-    expect(screen.getByText("試合メモ")).toBeInTheDocument();
+    expect(screen.getByRole("note", { name: "試合メモ" })).toHaveTextContent(
+      "終盤のカード交換で流れが変わった",
+    );
     expect(screen.getByText("終盤のカード交換で流れが変わった")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "第1試合の結果を見る" })).toHaveAttribute(
       "href",
@@ -120,10 +138,9 @@ describe("HeldEventDetailPage", () => {
       "href",
       "/analytics/series?gameTitleId=gt_momotetsu_2&seasonMasterId=season_current&mapMasterId=map_east&focusMatchId=match-1&view=flow&returnTo=%2Fheld-events%2Fheld-1",
     );
-    expect(screen.getByRole("link", { name: "試合検索で見る" })).toHaveAttribute(
-      "href",
-      "/matches?heldEventId=held-1&sort=match_no_asc&returnTo=%2Fheld-events%2Fheld-1",
-    );
+    expect(
+      screen.queryByRole("link", { name: /試合検索で見る|の試合を検索$/u }),
+    ).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "第4試合を記録" })).toBeInTheDocument();
   });
 
@@ -163,7 +180,20 @@ describe("HeldEventDetailPage", () => {
 
     renderPage();
 
-    expect(await screen.findByText("開催が見つかりません")).toBeInTheDocument();
+    const missingHeading = await screen.findByRole("heading", {
+      level: 1,
+      name: "開催が見つかりません",
+    });
+    const missingHeader = missingHeading.closest("header");
+    expect(missingHeader).toHaveTextContent("開催記録");
+    expect(missingHeader).toHaveTextContent("試合数・下書き数は未取得です。");
+    expect(
+      screen.queryByRole("link", { name: /試合検索で見る|の試合を検索$/u }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "CSV出力" })).toHaveAttribute(
+      "href",
+      "/exports?heldEventId=held-1&format=csv&returnTo=%2Fheld-events%2Fheld-1",
+    );
     expect(screen.getByRole("link", { name: "開催履歴へ戻る" })).toHaveAttribute(
       "href",
       "/held-events",
@@ -184,7 +214,14 @@ describe("HeldEventDetailPage", () => {
 
     renderPage();
 
-    expect(await screen.findByText("開催詳細を読み込めませんでした")).toBeInTheDocument();
+    const failureHeading = await screen.findByRole("heading", {
+      level: 1,
+      name: "開催詳細を読み込めませんでした",
+    });
+    const failureHeader = failureHeading.closest("header");
+    expect(failureHeader).toHaveTextContent("開催記録");
+    expect(failureHeader).toHaveTextContent("試合数・下書き数は未取得です。");
+    expect(screen.getByRole("navigation", { name: "この開催の関連操作" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "開催詳細を再読み込み" }));
 
     expect(

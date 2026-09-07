@@ -30,9 +30,8 @@ describe("ErrorBoundary", () => {
       );
 
       const redisplay = await screen.findByRole("button", { name: "画面を再表示" });
-      expect(
-        screen.getByRole("heading", { level: 1, name: "画面を表示できません" }),
-      ).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "画面を表示できません" })).toBeInTheDocument();
+      expect(screen.queryByRole("heading", { level: 1 })).not.toBeInTheDocument();
 
       shouldThrow = false;
       await user.click(redisplay);

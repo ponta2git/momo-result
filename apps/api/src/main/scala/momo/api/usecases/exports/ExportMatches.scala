@@ -62,12 +62,15 @@ final class ExportMatches[F[_]: Monad](
       ).flatMap { rows =>
         for
           _ <- ensureRowLimit(rows.length)
-          rendered = MatchExportRenderer.render(format, rows)
-          _ <- ensureByteLimit(rendered.sizeBytes)
+          rendered <- MatchExportRenderer.render(format, rows, limits.maxBytes)
+            .toRight(AppError.PayloadTooLarge(
+              s"Match export exceeds the configured limit of ${limits.maxBytes} bytes. Narrow the export scope."
+            ))
         yield MatchExportFile(
           fileName = s"momo-results-${scope.filePart}.${format.extension}",
           contentType = format.contentType,
           body = rendered.body,
+          sizeBytes = rendered.sizeBytes,
         )
       }
 
@@ -141,16 +144,6 @@ final class ExportMatches[F[_]: Monad](
 
   private def ensureRowLimit(rowCount: Int): Either[AppError, Unit] = Either
     .cond(rowCount <= limits.maxRows, (), rowLimitError(rowCount))
-
-  private def ensureByteLimit(bodyBytes: Long): Either[AppError, Unit] =
-    Either.cond(
-      bodyBytes <= limits.maxBytes,
-      (),
-      AppError.PayloadTooLarge(
-        s"Match export has $bodyBytes bytes, exceeding the configured limit of ${limits
-            .maxBytes} bytes. Narrow the export scope."
-      ),
-    )
 
   private def rowLimitError(rowCount: Int): AppError = AppError
     .PayloadTooLarge(s"Match export has $rowCount rows, exceeding the configured limit of ${limits

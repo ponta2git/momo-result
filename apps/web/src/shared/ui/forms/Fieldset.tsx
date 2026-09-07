@@ -1,7 +1,10 @@
 import { useId } from "react";
 import type { FieldsetHTMLAttributes, ReactNode } from "react";
 
+import { cn } from "@/shared/ui/cn";
 import { buildFieldDescribedBy } from "@/shared/ui/forms/Field";
+import { readableTextWidthClass } from "@/shared/ui/layout/readableText";
+import { fieldText } from "@/shared/ui/typography";
 
 type FieldsetProps = {
   children: ReactNode;
@@ -21,22 +24,29 @@ export function Fieldset({ children, description, error, legend, ...props }: Fie
       aria-describedby={buildFieldDescribedBy(descriptionId, errorId, props["aria-describedby"])}
       className="min-w-0"
     >
-      <legend className="text-sm leading-5 font-semibold text-[var(--color-text-primary)]">
-        {legend}
-      </legend>
-      <div className="mt-1 flex min-h-11 min-w-0 flex-wrap items-center gap-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] px-1 py-1">
+      <legend className={fieldText.label}>{legend}</legend>
+      <div className="mt-2 flex min-h-11 min-w-0 flex-wrap items-center gap-1 rounded-sm border border-[var(--color-border)] bg-[var(--color-surface)] px-1 py-1">
         {children}
       </div>
-      {description ? (
-        <p className="momo-copy mt-1 text-xs text-[var(--color-text-secondary)]" id={descriptionId}>
-          {description}
-        </p>
-      ) : null}
-      {error ? (
-        <p className="momo-copy mt-1 text-xs text-[var(--color-danger)]" id={errorId} role="alert">
-          {error}
-        </p>
-      ) : null}
+      <div className="mt-1 flex min-w-0 flex-col gap-1 empty:hidden">
+        {description ? (
+          <p
+            className={cn(fieldText.description, "text-pretty", readableTextWidthClass)}
+            id={descriptionId}
+          >
+            {description}
+          </p>
+        ) : null}
+        {error ? (
+          <p
+            className={cn(fieldText.error, "text-pretty", readableTextWidthClass)}
+            id={errorId}
+            role="alert"
+          >
+            {error}
+          </p>
+        ) : null}
+      </div>
     </fieldset>
   );
 }

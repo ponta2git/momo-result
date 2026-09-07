@@ -1,5 +1,6 @@
 import type { ReviewItem } from "@/features/matches/workspace/review/reviewProgress";
 import type { ControlTone } from "@/shared/ui/forms/Control";
+import { contentText, fieldText } from "@/shared/ui/typography";
 
 export function selectCellTone({
   changed,
@@ -46,7 +47,7 @@ export function ScoreGridSelectStatus({
     <div className="min-h-5 pt-1">
       {label ? (
         <p
-          className="text-xs leading-4 text-[var(--color-text-secondary)]"
+          className={error ? fieldText.error : contentText.supporting}
           id={`${cellId}-review-status`}
         >
           {label}

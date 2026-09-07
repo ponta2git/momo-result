@@ -11,12 +11,16 @@ import type {
 } from "@/features/matches/workspace/sourceImages/sourceImageTypes";
 import { useSourceImagePanelState } from "@/features/matches/workspace/sourceImages/useSourceImagePanelState";
 import { Button } from "@/shared/ui/actions/Button";
+import { cn } from "@/shared/ui/cn";
 import { Dialog } from "@/shared/ui/feedback/Dialog";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 import { SegmentedControl } from "@/shared/ui/forms/SegmentedControl";
 import { TabsPanel, TabsRoot } from "@/shared/ui/forms/Tabs";
+import { ContentWithActions } from "@/shared/ui/layout/ContentWithActions";
+import { contentText } from "@/shared/ui/typography";
 
 type SourceImagePanelProps = {
+  accountId?: string | undefined;
   loading: boolean;
   matchDraftId: string;
   preferredKind: SourceImageKind | undefined;
@@ -31,20 +35,31 @@ const followModeOptions = [
 
 function SourceImageLoadingFrame({ detail, label }: { detail: string; label: string }) {
   return (
-    <div aria-busy="true" aria-label={label} className="grid min-h-[13rem] gap-3">
-      <Skeleton className="h-[10rem] w-full rounded-[var(--radius-sm)] 2xl:aspect-video 2xl:h-auto" />
-      <p className="text-sm text-[var(--color-text-secondary)]">{detail}</p>
+    <div aria-busy="true" aria-label={label} className="grid min-h-[13rem] gap-1">
+      <Skeleton className="h-[10rem] w-full rounded-xs 2xl:aspect-video 2xl:h-auto" />
+      <p className={contentText.body}>{detail}</p>
     </div>
   );
 }
 
-export function SourceImagePanel({
+export function SourceImagePanel(props: SourceImagePanelProps) {
+  return (
+    <SourceImagePanelContent
+      key={JSON.stringify([props.accountId, props.matchDraftId])}
+      {...props}
+    />
+  );
+}
+
+function SourceImagePanelContent({
+  accountId,
   loading,
   matchDraftId,
   preferredKind,
   sourceImages,
 }: SourceImagePanelProps) {
   const panel = useSourceImagePanelState({
+    accountId,
     loading,
     matchDraftId,
     preferredKind,
@@ -52,38 +67,41 @@ export function SourceImagePanel({
   });
 
   return (
-    <section className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-[var(--color-text-primary)]">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-base font-semibold text-[var(--color-text-primary)]">元画像参照</h2>
-          <span className="text-xs font-semibold text-[var(--color-text-secondary)]">
-            {sourceImageKindLabels[panel.activeKind]}
-          </span>
-        </div>
-        <Button
-          disabled={panel.archiveSaveDisabled}
-          pending={panel.archiveSaving}
-          pendingLabel={archivePendingLabel}
-          size="sm"
-          variant="secondary"
-          onClick={panel.handleArchiveSaveRequest}
+    <section className="grid gap-4 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-[var(--color-text-primary)]">
+      <div>
+        <ContentWithActions
+          actions={
+            <Button
+              disabled={panel.archiveSaveDisabled}
+              pending={panel.archiveSaving}
+              pendingLabel={archivePendingLabel}
+              size="sm"
+              variant="secondary"
+              onClick={panel.handleArchiveSaveRequest}
+            >
+              元画像を保存
+            </Button>
+          }
         >
-          元画像を保存
-        </Button>
+          <div>
+            <h2 className={contentText.heading}>元画像参照</h2>
+            <span className={cn(contentText.compactPrimary, "mt-2 block")}>
+              {sourceImageKindLabels[panel.activeKind]}
+            </span>
+            <p className={cn(contentText.supporting, "mt-1 text-pretty")}>
+              自動追従では、選択中の入力セルに対応する画像を表示します。
+            </p>
+          </div>
+        </ContentWithActions>
+        {!loading && panel.availableImageCount === 0 ? (
+          <p className={cn(contentText.body, "mt-1")}>保存できる元画像がありません。</p>
+        ) : null}
+        {panel.archiveError ? (
+          <p className="mt-1 text-sm text-[var(--color-danger)]" role="alert">
+            {panel.archiveError}
+          </p>
+        ) : null}
       </div>
-      <p className="mt-1 text-xs text-pretty text-[var(--color-text-secondary)]">
-        自動追従では、選択中の入力セルに対応する画像を表示します。
-      </p>
-      {!loading && panel.availableImageCount === 0 ? (
-        <p className="mt-2 text-xs text-[var(--color-text-secondary)]">
-          保存できる元画像がありません。
-        </p>
-      ) : null}
-      {panel.archiveError ? (
-        <p className="mt-2 text-sm text-[var(--color-danger)]" role="alert">
-          {panel.archiveError}
-        </p>
-      ) : null}
 
       <TabsRoot
         value={panel.activeKind}
@@ -93,7 +111,7 @@ export function SourceImagePanel({
           if (kind) panel.handleSourceImageTabChange(kind);
         }}
       >
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="shrink-0">
             <SegmentedControl
               label="元画像の追従方法"
@@ -108,8 +126,8 @@ export function SourceImagePanel({
         {sourceImageKinds.map((kind) => (
           <TabsPanel keepMounted key={kind} value={kind}>
             {panel.activeKind === kind ? (
-              <div className="mt-3">
-                <div className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3">
+              <div className="mt-4">
+                <div className="rounded-sm border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3">
                   {loading ? (
                     <SourceImageLoadingFrame
                       detail="画像一覧を取得しています。"
@@ -129,7 +147,7 @@ export function SourceImagePanel({
                   {!loading &&
                   panel.activeState?.status === "available" &&
                   panel.activeImage?.status === "error" ? (
-                    <div className="grid justify-items-start gap-3">
+                    <div className="grid justify-items-start gap-2">
                       <p className="text-sm text-[var(--color-danger)]" role="alert">
                         元画像を読み込めませんでした。
                       </p>
@@ -144,14 +162,12 @@ export function SourceImagePanel({
                       <div className="grid h-[13rem] w-full 2xl:aspect-video 2xl:h-auto">
                         <img
                           alt={`${sourceImageKindLabels[panel.activeState.kind]}の元画像`}
-                          className="size-full rounded-[var(--radius-sm)] bg-[var(--color-media-canvas)] object-contain"
+                          className="size-full min-h-0 min-w-0 rounded-xs bg-[var(--color-media-canvas)] object-contain"
                           src={panel.displayUrl}
                         />
                       </div>
                       <div className="mt-2 flex items-center justify-between gap-2">
-                        <p className="text-xs text-[var(--color-text-secondary)]">
-                          {panel.activeState.description}
-                        </p>
+                        <p className={contentText.supporting}>{panel.activeState.description}</p>
                         <Button variant="secondary" onClick={panel.handlePreviewOpen}>
                           拡大
                         </Button>
@@ -160,9 +176,7 @@ export function SourceImagePanel({
                   ) : null}
 
                   {!loading && panel.activeState?.status === "missing" ? (
-                    <p className="text-sm text-[var(--color-text-secondary)]">
-                      {panel.activeState.description}
-                    </p>
+                    <p className={contentText.body}>{panel.activeState.description}</p>
                   ) : null}
                 </div>
               </div>
@@ -185,7 +199,7 @@ export function SourceImagePanel({
         title="元画像がすべてそろっていません"
         onOpenChange={panel.handleArchiveDialogOpenChange}
       >
-        <p className="text-sm leading-6 text-pretty text-[var(--color-text-secondary)]">
+        <p className={cn(contentText.body, "text-pretty")}>
           {`保存できる元画像は${panel.expectedImageCount}枚中${panel.availableImageCount}枚です。不足している画像はZIPに含まれません。このまま保存しますか？`}
         </p>
         <div className="mt-4 flex flex-wrap justify-end gap-2">

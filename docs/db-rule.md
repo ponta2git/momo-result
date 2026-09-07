@@ -28,6 +28,18 @@
 
 ## 3. Consumer Contract
 
+本節は実装が守る契約であり、test の選択によらず適用する。
+
+- 大容量 staging は長い control lock から分離し、短い fenced transaction で完全性を再検証してから公開する。
+- 分析 publication の lock 順は execution slot、title state、job、request / artifact とし、複数 title state は作品ID順に取得する。試合 mutation と campaign 展開は execution slot を取得しない。
+- 分析release promotionはrelease advisory lock、reader capability registry、worker capability registry、release singleton、作品ID順のtitle stateの順でlockする。capability registryは判定後の登録・heartbeat割込みをcommitまで遮断し、singleton更新と既存title更新を同じtransactionで確定する。
+- DB row は adapter 境界で失敗可能に decode し、不正値や SQL 例外を domain / application failure へ正規化する。
+- dynamic SQL は列挙された fragment から選び、外部入力を SQL text へ連結しない。
+- keyset pagination は filter と同じ query に stable tie-breaker を含める。exact count を引き継ぐ場合は snapshot 値であることを契約化する。
+- `LISTEN` など session state を持つ consumer は、session-capable 接続を通常 query 接続から分離する。
+
+## 4. Contract Evidence
+
 test の採用・維持・削除は `docs/test-rule.md` に従う。DB contract を品質証拠に選んだ場合は、本節を production boundary と oracle の正本とし、変更に該当する項目を同じ単位で満たす。一項目ごとに新しい test case を要求する一覧ではない。
 
 - 依存する table、column、seed、nullable、default、index、constraint を特定し、選択した contract evidence が新しい前提を観測できることを確認する。既存 evidence で観測できなければ、利用者影響に応じて追加または置換する。
@@ -35,19 +47,13 @@ test の採用・維持・削除は `docs/test-rule.md` に従う。DB contract 
 - 変更した query / repository を migration 適用済みの実 PostgreSQL で実行する。未実行または skip は DB 挙動を未検証として報告する。
 - 複数 table の write は statement / lock 順と、保存後の関連 row を integration test で確認する。
 - lease、fence、slot、pointer、cleanup 競合は複数接続で stale owner と rollback を直接通す。
-- 大容量 staging は長い control lock から分離し、短い fenced transaction で完全性を再検証してから公開する。
 - publication contractを変更した場合は、stagingの更新、published header / childの変更拒否、参照中parentの削除拒否、未参照parentのcascade cleanupを実PostgreSQLで区別して検証する。
-- 分析 publication の lock 順は execution slot、title state、job、request / artifact とし、複数 title state は作品ID順に取得する。試合 mutation と campaign 展開は execution slot を取得しない。
-- 分析release promotionはrelease advisory lock、reader capability registry、worker capability registry、release singleton、作品ID順のtitle stateの順でlockする。capability registryは判定後の登録・heartbeat割込みをcommitまで遮断し、singleton更新と既存title更新を同じtransactionで確定する。
 - test が作る row を共通 cleanup の対象へ追加し、並列 test 間で ID、row、stream、file を分離する。
-- production が pooler / proxy を使う場合、直接 PostgreSQL への接続成功を wire 互換性の証拠にしない。`LISTEN`などsession stateを持つconsumerはsession-capable接続を通常query接続から分離し、別接続のcommitから機能round tripを確認する。
-- DB row は adapter 境界で失敗可能に decode し、不正値や SQL 例外を domain / application failure へ正規化する。
-- dynamic SQL は列挙された fragment から選び、外部入力を SQL text へ連結しない。
-- keyset pagination は filter と同じ query に stable tie-breaker を含める。exact count を引き継ぐ場合は snapshot 値であることを契約化する。
+- production が pooler / proxy を使う場合、直接 PostgreSQL への接続成功を wire 互換性の証拠にしない。session state を持つ consumer は、対応する接続方式で別接続の commit から機能 round trip を確認する。
 
 集合演算、window / JSON 演算、dynamic fragment、`ON CONFLICT`、lock、guard 付き update、nullable FK、複数 table の filter / order / limit が、選択した consumer contract の結果を左右する場合は、double ではなく実 PostgreSQL を検証境界にする。
 
-## 4. Migration / Deployment
+## 5. Migration / Deployment
 
 後方互換な変更は migration 適用後に consumer を deploy する。
 

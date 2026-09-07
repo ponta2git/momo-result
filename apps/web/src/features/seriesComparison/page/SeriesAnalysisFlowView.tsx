@@ -18,7 +18,9 @@ import {
 } from "@/features/seriesComparison/page/SeriesComparisonAnalysisNavigation";
 import { SeriesAnalysisQualityAdvisory } from "@/features/seriesComparison/SeriesAnalysisQualityAdvisory";
 import { Button } from "@/shared/ui/actions/Button";
+import { cn } from "@/shared/ui/cn";
 import { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
+import { contentText } from "@/shared/ui/typography";
 
 export function FlowView({
   focusedItemIds,
@@ -52,17 +54,17 @@ export function FlowView({
           {response.rankAnalysis.unexpectedWinsByPlayer.map((entry) => (
             <article className="min-w-0" key={entry.memberId}>
               <div className="flex justify-between gap-2">
-                <h3 className="font-semibold">
+                <h3 className={contentText.heading}>
                   <MemberSequenceLabel memberId={entry.memberId}>
                     {playerName(response.players, entry.memberId)}
                   </MemberSequenceLabel>
                 </h3>
                 <SeriesAnalysisQualityAdvisory status={entry.status} />
               </div>
-              <p className="mt-2 text-sm tabular-nums">
+              <p className={cn(contentText.compactPrimary, "mt-2 tabular-nums")}>
                 全{entry.totalWinCount}勝のうち {entry.unexpectedWinCount}戦
               </p>
-              <div className="mt-3">
+              <div className="mt-2">
                 <Button
                   disabled={!entry.hasDetails}
                   size="sm"
@@ -85,7 +87,7 @@ export function FlowView({
         <AnalysisSubsection id="metric-recent-form-recent" title={recentWindowTitle}>
           <RecentRankStrips focusedItemIds={focusedItemIds} response={response} />
         </AnalysisSubsection>
-        <div className="mt-8">
+        <div className="mt-6">
           <AnalysisSubsection
             id="metric-recent-form-cumulative"
             meta={`${response.scope.matchCount}戦`}

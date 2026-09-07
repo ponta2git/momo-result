@@ -6,16 +6,17 @@ import { matchListPageSizeOptions } from "@/features/matches/list/matchListSearc
 import { MatchMobileCard } from "@/features/matches/list/MatchMobileCard";
 import { useMatchesListPageModel } from "@/features/matches/list/useMatchesListPageModel";
 import { useMediaQuery } from "@/shared/lib/useMediaQuery";
+import { responsiveActionGroupClass } from "@/shared/ui/actions/actionGroup";
 import { Button } from "@/shared/ui/actions/Button";
 import { IconButton } from "@/shared/ui/actions/IconButton";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
+import { cn } from "@/shared/ui/cn";
 import { PaginationControls } from "@/shared/ui/data/PaginationControls";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
-import { PageHeader } from "@/shared/ui/layout/PageHeader";
 import { StaleShield } from "@/shared/ui/motion/StaleShield";
 
 function ListSkeleton({ showDesktopTable }: { showDesktopTable: boolean }) {
@@ -29,9 +30,9 @@ function ListSkeleton({ showDesktopTable }: { showDesktopTable: boolean }) {
           ))}
         </div>
       ) : (
-        <div className="grid gap-3">
+        <div className="grid gap-4">
           {["m1", "m2", "m3"].map((id) => (
-            <Skeleton key={id} className="min-h-56 rounded-[var(--radius-md)]" />
+            <Skeleton key={id} className="min-h-48 rounded-md" />
           ))}
         </div>
       )}
@@ -57,34 +58,33 @@ export function MatchesListPage() {
           </LinkButton>
         </div>
       ) : null}
-      <PageHeader
-        actions={
-          <div
-            aria-label="試合を登録"
-            className="grid w-full shrink-0 grid-cols-2 gap-2 sm:flex sm:w-auto sm:items-center"
-            role="group"
+      <PageContentSurface aria-label="試合一覧" className="grid gap-6" role="region">
+        <div
+          aria-label="試合を登録"
+          className={cn(responsiveActionGroupClass, "sm:ml-auto")}
+          role="group"
+        >
+          <LinkButton
+            icon={<ScanLine aria-hidden="true" />}
+            size="sm"
+            to={navigation.ocrHref}
+            variant="secondary"
           >
-            <LinkButton icon={<ScanLine />} size="sm" to={navigation.ocrHref} variant="secondary">
-              OCR取り込み
-            </LinkButton>
-            <LinkButton
-              icon={<PenSquare />}
-              size="sm"
-              to={navigation.manualCreateHref}
-              variant="secondary"
-            >
-              手入力で作成
-            </LinkButton>
-          </div>
-        }
-        title="試合一覧"
-      />
+            OCR取り込み
+          </LinkButton>
+          <LinkButton
+            icon={<PenSquare aria-hidden="true" />}
+            size="sm"
+            to={navigation.manualCreateHref}
+            variant="secondary"
+          >
+            手入力で作成
+          </LinkButton>
+        </div>
 
-      <PageContentSurface className="grid gap-6">
         {filters.loadFailed ? (
-          <Notice tone="warning" title="絞り込み候補を一部読み込めません">
-            <p>試合一覧は表示できます。開催、作品、シーズンの候補を再取得できます。</p>
-            <div className="mt-3">
+          <Notice
+            action={
               <Button
                 pending={filters.refresh.pending}
                 pendingLabel="再読み込み中"
@@ -94,7 +94,11 @@ export function MatchesListPage() {
               >
                 候補を再読み込み
               </Button>
-            </div>
+            }
+            tone="warning"
+            title="絞り込み候補を一部読み込めません"
+          >
+            <p>試合一覧は表示できます。開催、作品、シーズンの候補を再取得できます。</p>
           </Notice>
         ) : null}
 
@@ -118,7 +122,7 @@ export function MatchesListPage() {
           <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
             <div
               aria-label="試合一覧の操作"
-              className="flex flex-wrap items-center justify-end gap-1"
+              className="flex flex-wrap items-center justify-end gap-2"
               role="group"
             >
               <LinkButton icon={<Download />} size="sm" to={navigation.exportHref} variant="quiet">
@@ -168,9 +172,8 @@ export function MatchesListPage() {
             >
               <div className="grid gap-4">
                 {list.loadFailed ? (
-                  <Notice tone="danger" title="試合一覧を読み込めません">
-                    <p>通信状態を確認して、もう一度お試しください。</p>
-                    <div className="mt-3">
+                  <Notice
+                    action={
                       <Button
                         pending={list.refresh.pending}
                         pendingLabel="再読み込み中"
@@ -179,7 +182,11 @@ export function MatchesListPage() {
                       >
                         一覧を再読み込み
                       </Button>
-                    </div>
+                    }
+                    tone="danger"
+                    title="試合一覧を読み込めません"
+                  >
+                    <p>通信状態を確認して、もう一度お試しください。</p>
                   </Notice>
                 ) : list.items.length === 0 ? (
                   <div className="grid min-h-[18rem]">
@@ -211,7 +218,7 @@ export function MatchesListPage() {
                     {showDesktopTable ? (
                       <MatchesTable items={list.items} rowActions={drafts.rowActions} />
                     ) : (
-                      <div className="grid gap-3">
+                      <div className="grid gap-4">
                         {list.items.map((item) => (
                           <div className="grid min-h-48" key={item.id}>
                             <MatchMobileCard item={item} rowActions={drafts.rowActions} />

@@ -3,6 +3,7 @@ import { useMemo } from "react";
 import type { ComponentPropsWithoutRef, CSSProperties, ReactNode } from "react";
 
 import { cn } from "@/shared/ui/cn";
+import { contentText } from "@/shared/ui/typography";
 
 type DataTableAlign = "center" | "left" | "right";
 type DataTableDensity = "comfortable" | "compact";
@@ -61,6 +62,12 @@ const alignClass = {
   right: "text-right",
 } as const satisfies Record<DataTableAlign, string>;
 
+const actionAlignClass = {
+  center: "justify-center text-center",
+  left: "justify-start text-left",
+  right: "justify-end text-right",
+} as const satisfies Record<DataTableAlign, string>;
+
 const verticalAlignClass = {
   middle: "align-middle",
   top: "align-top",
@@ -71,8 +78,10 @@ const densityClass = {
   compact: "px-3 py-2",
 } as const satisfies Record<DataTableDensity, string>;
 
-export const dataTableHeaderCellClassName =
-  "border-y border-[var(--color-border-strong)] bg-[var(--color-surface)] px-3 py-2 align-middle text-xs leading-5 font-semibold text-[var(--color-text-secondary)]";
+export const dataTableHeaderCellClassName = cn(
+  contentText.supporting,
+  "border-y border-[var(--color-border-strong)] bg-[var(--color-surface)] px-3 py-2 align-middle",
+);
 
 export const dataTableBodyCellClassName = "px-3 py-2 align-middle";
 
@@ -116,7 +125,8 @@ export function DataTable<Row>({
     <div className={dataTableScrollAreaClassName}>
       <table
         className={cn(
-          "w-full min-w-full border-separate border-spacing-0 text-sm leading-6",
+          contentText.body,
+          "w-full min-w-full border-separate border-spacing-0",
           layout === "fixed" ? "table-fixed" : "",
         )}
         style={minWidth ? { minWidth } : undefined}
@@ -124,7 +134,10 @@ export function DataTable<Row>({
         <caption
           className={cn(
             caption.visibility === "visible"
-              ? "border-t border-[var(--color-border-strong)] px-3 py-2 text-left text-sm font-semibold text-[var(--color-text-primary)]"
+              ? cn(
+                  contentText.heading,
+                  "border-t border-[var(--color-border-strong)] px-3 py-2 text-left",
+                )
               : "sr-only",
           )}
         >
@@ -151,6 +164,7 @@ export function DataTable<Row>({
                 }
                 className={cn(
                   dataTableHeaderCellClassName,
+                  column.sortable ? "p-0" : "",
                   caption.visibility === "visible" ? "border-t-0" : "",
                   "sticky top-0 z-[var(--z-base)]",
                   alignClass[column.align ?? "left"],
@@ -161,7 +175,8 @@ export function DataTable<Row>({
                 {column.sortable ? (
                   <button
                     className={cn(
-                      "inline-flex min-h-11 items-center gap-1 rounded-[var(--radius-xs)] px-1 py-1 text-left text-inherit sm:min-h-9",
+                      "inline-flex min-h-11 w-full items-center gap-1 rounded-xs px-3 py-2 text-inherit focus-visible:-outline-offset-3 pointer-fine:min-h-9 pointer-fine:py-1",
+                      actionAlignClass[column.align ?? "left"],
                       "hover:bg-[var(--color-surface-hover)] disabled:cursor-not-allowed disabled:opacity-60",
                       column.sortDirection
                         ? "bg-[var(--color-action)]/10 text-[var(--color-text-primary)]"
@@ -201,7 +216,7 @@ export function DataTable<Row>({
                       densityClass[density],
                       alignClass[column.align ?? "left"],
                       verticalAlignClass[verticalAlign],
-                      column.rowHeader ? "font-semibold" : "",
+                      "font-plain",
                       column.tabular ? "tabular-nums" : "",
                     )}
                     scope={column.rowHeader ? "row" : undefined}

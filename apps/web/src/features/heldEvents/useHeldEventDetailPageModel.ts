@@ -59,19 +59,23 @@ export type HeldEventDetailReadyPageModel = {
     backHref: string;
     exportHref: string;
     manualEntryHref: string;
-    matchesHref: string;
     ocrCaptureHref: string;
     returnTo: string;
   };
   refresh: RefreshModel;
 };
 
+type HeldEventDetailTerminalNavigation = {
+  backHref: string;
+  exportHref: string;
+};
+
 export type HeldEventDetailPageModel =
   | { kind: "loading" }
-  | { kind: "notFound"; navigation: { backHref: string } }
+  | { kind: "notFound"; navigation: HeldEventDetailTerminalNavigation }
   | {
       kind: "loadFailed";
-      navigation: { backHref: string };
+      navigation: HeldEventDetailTerminalNavigation;
       refresh: RefreshModel;
     }
   | HeldEventDetailReadyPageModel;
@@ -83,6 +87,14 @@ export function useHeldEventDetailPageModel(): HeldEventDetailPageModel {
   const [searchParams] = useSearchParams();
   const returnTo = currentInternalLocation(location);
   const backHref = sanitizeReturnTo(searchParams.get("returnTo")) ?? "/held-events";
+  const encodedRequestedHeldEventId = encodeURIComponent(heldEventId);
+  const terminalNavigation: HeldEventDetailTerminalNavigation = {
+    backHref,
+    exportHref: withReturnTo(
+      `/exports?heldEventId=${encodedRequestedHeldEventId}&format=csv`,
+      returnTo,
+    ),
+  };
   const detailQuery = useQuery(
     heldEventDetailQueryOptions(heldEventId, heldEventId.trim().length > 0),
   );
@@ -139,7 +151,7 @@ export function useHeldEventDetailPageModel(): HeldEventDetailPageModel {
   }
 
   if (detailFailed && normalizeUnknownApiError(detailError).status === 404) {
-    return { kind: "notFound", navigation: { backHref } };
+    return { kind: "notFound", navigation: terminalNavigation };
   }
 
   if (
@@ -154,7 +166,7 @@ export function useHeldEventDetailPageModel(): HeldEventDetailPageModel {
   ) {
     return {
       kind: "loadFailed",
-      navigation: { backHref },
+      navigation: terminalNavigation,
       refresh: { pending: detailIsFetching, run: retryDetail },
     };
   }
@@ -192,10 +204,6 @@ export function useHeldEventDetailPageModel(): HeldEventDetailPageModel {
       backHref,
       exportHref: withReturnTo(`/exports?heldEventId=${encodedHeldEventId}&format=csv`, returnTo),
       manualEntryHref: withReturnTo(`/matches/new?heldEventId=${encodedHeldEventId}`, returnTo),
-      matchesHref: withReturnTo(
-        `/matches?heldEventId=${encodedHeldEventId}&sort=match_no_asc`,
-        returnTo,
-      ),
       ocrCaptureHref: heldEventOcrCaptureHref(detail.id, returnTo),
       returnTo,
     },

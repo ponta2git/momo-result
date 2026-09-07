@@ -4,6 +4,7 @@ import type { ChangeEvent, KeyboardEvent } from "react";
 import type { ReviewFieldKey } from "@/features/matches/workspace/review/reviewWarningModel";
 import { InputControl } from "@/shared/ui/forms/Control";
 import type { ControlTone } from "@/shared/ui/forms/Control";
+import { contentText, fieldText } from "@/shared/ui/typography";
 
 export type PreferredImageKind = "incident_log" | "revenue" | "total_assets";
 export type RegisterCellRef = (cellId: string, node: HTMLElement | null) => void;
@@ -266,10 +267,7 @@ export const NumericInputCell = memo(function NumericInputCell({
       {showStateLabel ? (
         <div className="min-h-5 pt-1">
           {viewState.label ? (
-            <p
-              className="text-xs leading-4 text-[var(--color-text-secondary)]"
-              id={`${cellId}-status`}
-            >
+            <p className={error ? fieldText.error : contentText.supporting} id={`${cellId}-status`}>
               {viewState.label}
               {viewState.description ? (
                 <span className="sr-only">：{viewState.description}</span>

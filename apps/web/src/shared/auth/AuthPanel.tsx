@@ -6,6 +6,7 @@ import { buildAuthLoginHref } from "@/shared/auth/redirectPath";
 import { buttonClassName } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
 import { SpinnerIcon } from "@/shared/ui/feedback/Spinner";
+import { contentText } from "@/shared/ui/typography";
 
 type AuthPanelProps = {
   auth: AuthMeResponse | undefined;
@@ -30,17 +31,13 @@ export function AuthPanel({
     <div
       className={cn(
         embedded
-          ? "grid gap-2"
-          : "rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3",
+          ? "grid gap-0.5"
+          : "rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3",
       )}
     >
+      {auth ? <p className={contentText.supporting}>ログイン中</p> : null}
       {auth ? (
-        <p className="text-xs font-semibold text-[var(--color-text-secondary)]">ログイン中</p>
-      ) : null}
-      {auth ? (
-        <p className="mt-2 text-sm font-semibold text-[var(--color-text-primary)]">
-          {auth.displayName}
-        </p>
+        <p className={cn(contentText.body, !embedded && "mt-0.5")}>{auth.displayName}</p>
       ) : (
         <div className={loginPending ? "w-fit opacity-85" : "w-fit"}>
           <a

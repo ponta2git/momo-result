@@ -57,7 +57,7 @@ test("creates a held event and completes OCR intake and review", async ({
   await test.step("create a held event after dev login", async () => {
     await page.goto("/held-events");
 
-    await expect(page.getByRole("heading", { exact: true, name: "開催履歴" })).toBeVisible();
+    await expect(page.getByRole("region", { exact: true, name: "開催履歴" })).toBeVisible();
 
     const createResponse = page.waitForResponse(
       (response) =>
@@ -102,13 +102,15 @@ test("creates a held event and completes OCR intake and review", async ({
     expectGeneratedId(heldEventId, "held event ID");
 
     await page.goto("/held-events");
-    await expect(page.getByRole("heading", { exact: true, name: "開催履歴" })).toBeVisible();
+    await expect(page.getByRole("region", { exact: true, name: "開催履歴" })).toBeVisible();
 
     const expectedOcrHref = withReturnTo(`/ocr/new?heldEventId=${heldEventId}`, "/held-events");
-    const heldEventOcrLink = page
-      .locator(`a[href="${expectedOcrHref}"]`)
-      .filter({ hasText: "OCR取り込み" });
+    const heldEventOcrLink = page.getByRole("link", {
+      exact: true,
+      name: `${heldEventLabelPrefix}の開催にOCR取り込み`,
+    });
     await expect(heldEventOcrLink).toHaveCount(1);
+    await expect(heldEventOcrLink).toHaveAttribute("href", expectedOcrHref);
     await expect(heldEventOcrLink).toBeVisible();
 
     await page.setViewportSize({ height: 844, width: 390 });
@@ -117,7 +119,7 @@ test("creates a held event and completes OCR intake and review", async ({
     await heldEventOcrLink.click();
 
     await expect(page).toHaveURL(expectedOcrHref);
-    await expect(page.getByRole("heading", { exact: true, name: "OCR取り込み" })).toBeVisible();
+    await expect(page.getByRole("region", { exact: true, name: "OCR取り込み" })).toBeVisible();
     await expect(page.getByText(/— 確定済み0試合・未確定下書き0件$/u)).toBeVisible();
     await expect(page.getByRole("button", { name: "開催（任意）を変更" })).toBeVisible();
     await expect(page.getByLabel("試合番号")).toHaveValue("1");
@@ -132,7 +134,7 @@ test("creates a held event and completes OCR intake and review", async ({
   await test.step("start an OCR job from an uploaded image", async () => {
     await page.goto("/ocr/new");
 
-    await expect(page.getByRole("heading", { exact: true, name: "OCR取り込み" })).toBeVisible();
+    await expect(page.getByRole("region", { exact: true, name: "OCR取り込み" })).toBeVisible();
     await selectSeedMasters(page, { gameTitleId, mapMasterId, seasonMasterId });
 
     const cameraFrame = page.getByRole("group", { name: "総資産の16:9カメラ画像枠" });
@@ -178,7 +180,7 @@ test("creates a held event and completes OCR intake and review", async ({
 
     await expectOk(await jobResponse, "create OCR job");
     await expect(page).toHaveURL(/\/matches\?status=incomplete&sort=updated_desc$/u);
-    await expect(page.getByRole("heading", { exact: true, name: "試合一覧" })).toBeVisible();
+    await expect(page.getByRole("region", { exact: true, name: "試合一覧" })).toBeVisible();
   });
 
   await test.step("confirm the sample OCR review into a match detail", async () => {
@@ -186,7 +188,7 @@ test("creates a held event and completes OCR intake and review", async ({
 
     await page.goto("/review/dev-sample?sample=1");
 
-    await expect(page.getByRole("heading", { exact: true, name: "OCR結果の確認" })).toBeVisible();
+    await expect(page.getByRole("region", { exact: true, name: "試合内容" })).toBeVisible();
     await expect(page.getByText("サンプルの読み取り結果で表示中")).toBeVisible();
     const reviewRail = page.getByLabel("OCRの確認項目");
     await expect(reviewRail.getByText("未確認2件／全2件")).toBeVisible();
@@ -470,7 +472,7 @@ test("inspects saved analysis and handles explicit refresh states", async ({
     await expect(comparisonLink).toHaveAttribute("href", comparisonHref);
     await comparisonLink.click();
 
-    await expect(page.getByRole("heading", { exact: true, name: "戦績比較" })).toBeVisible();
+    await expect(page.getByRole("region", { exact: true, name: "戦績比較" })).toBeVisible();
     const statusRequestsBeforeLifecycleEvents = interceptedStatusRequests;
     await page.evaluate(
       () =>
@@ -786,9 +788,9 @@ test("runs analysis administration and enforces access", async ({ e2eRun, page, 
 
   await test.step("run analysis administration and enforce admin access", async () => {
     await page.goto("/admin/analysis");
-    await expect(page.getByRole("heading", { exact: true, name: "戦績分析" })).toBeVisible();
+    await expect(page.getByRole("region", { exact: true, name: "戦績分析管理" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "全体の実行状況" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "直近3件" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "直近10件" })).toBeVisible();
 
     const titleSelect = page.getByRole("combobox", { name: "対象作品" });
     await titleSelect.selectOption(gameTitleId);
@@ -827,7 +829,7 @@ test("runs analysis administration and enforces access", async ({ e2eRun, page, 
 
     await page.route("**/api/**", continueWithE2eNonAdminAuth);
     await page.goto("/admin/analysis");
-    await expect(page.getByText("管理者権限が必要です")).toBeVisible();
+    await expect(page.getByRole("region", { name: "管理者権限が必要です" })).toBeVisible();
     await expect(page.getByRole("button", { name: "この作品を再計算" })).toHaveCount(0);
     await page.unroute("**/api/**", continueWithE2eNonAdminAuth);
     await page.setViewportSize({ height: 900, width: 1440 });
@@ -846,7 +848,7 @@ test("filters and opens a confirmed match", async ({ e2eRun, page, request }) =>
 
     await page.goto("/matches");
 
-    await expect(page.getByRole("heading", { exact: true, name: "試合一覧" })).toBeVisible();
+    await expect(page.getByRole("region", { exact: true, name: "試合一覧" })).toBeVisible();
 
     const statusResponse = page.waitForResponse((response) => {
       const url = new URL(response.url());
@@ -923,7 +925,7 @@ test("filters and opens a confirmed match", async ({ e2eRun, page, request }) =>
 
     await page.goto(`/matches?status=confirmed&heldEventId=${heldEventId}`);
 
-    await expect(page.getByRole("heading", { exact: true, name: "試合一覧" })).toBeVisible();
+    await expect(page.getByRole("region", { exact: true, name: "試合一覧" })).toBeVisible();
     const detailLink = matchDetailLink(page, matchId);
     await expect(detailLink).toHaveCount(1);
     await expect(detailLink).toBeVisible();
@@ -952,7 +954,7 @@ test("downloads a confirmed match export", async ({ e2eRun, page, request }) => 
 
     await page.goto(`/exports?matchId=${encodeURIComponent(matchId)}&format=tsv`);
 
-    await expect(page.getByRole("heading", { exact: true, name: "CSV/TSV出力" })).toBeVisible();
+    await expect(page.getByRole("region", { exact: true, name: "出力条件" })).toBeVisible();
     await page.setViewportSize({ height: 812, width: 375 });
     await expectNoHorizontalPageOverflow(page);
 

@@ -3,6 +3,7 @@ import { ShieldCheck, UserPlus } from "lucide-react";
 import { AdminAccountCreateDialog } from "@/features/adminAccounts/AdminAccountCreateDialog";
 import { AdminAccountRow } from "@/features/adminAccounts/AdminAccountRow";
 import { useAdminAccountsPageModel } from "@/features/adminAccounts/useAdminAccountsPageModel";
+import { actionRowClass } from "@/shared/ui/actions/actionGroup";
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
 import {
@@ -14,43 +15,41 @@ import { Notice } from "@/shared/ui/feedback/Notice";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
-import { PageHeader } from "@/shared/ui/layout/PageHeader";
+import { contentText } from "@/shared/ui/typography";
 
 export function AdminAccountsPage() {
   const page = useAdminAccountsPageModel();
+  const { triggerRef } = page.create;
   const hasAccounts = page.list.kind === "ready" && page.list.items.length > 0;
 
   return (
     <PageFrame>
-      <PageHeader
-        eyebrow="管理"
-        title="ログインアカウント"
-        description="Discordでログインできるアカウントと管理者権限を管理します。試合参加者とは別に扱います。"
-        actions={
-          hasAccounts ? (
+      <PageContentSurface aria-label="ログインアカウント一覧" className="grid gap-4" role="region">
+        {hasAccounts ? (
+          <div
+            aria-label="ログインアカウントの操作"
+            className={cn(actionRowClass, "justify-end")}
+            role="group"
+          >
             <Button
-              ref={page.create.triggerRef}
+              ref={triggerRef}
               icon={<UserPlus aria-hidden="true" />}
               variant="secondary"
               onClick={page.create.open}
             >
               アカウントを追加
             </Button>
-          ) : null
-        }
-      />
-
-      <PageContentSurface aria-label="ログインアカウント一覧" className="grid gap-4" role="region">
+          </div>
+        ) : null}
         {page.list.kind === "loading" ? (
-          <div className="grid gap-3" aria-label="ログインアカウントを読み込み中">
+          <div className="grid gap-4" aria-label="ログインアカウントを読み込み中">
             <Skeleton className="min-h-10" />
             <Skeleton className="min-h-16" />
             <Skeleton className="min-h-16" />
           </div>
         ) : page.list.kind === "loadFailed" ? (
-          <Notice tone="danger" title={page.list.error?.title ?? "アカウントを読み込めません"}>
-            <p>{page.list.error?.detail ?? "通信状態を確認して、もう一度お試しください。"}</p>
-            <div className="mt-3">
+          <Notice
+            action={
               <Button
                 pending={page.list.refresh.pending}
                 pendingLabel="再読み込み中"
@@ -59,14 +58,17 @@ export function AdminAccountsPage() {
               >
                 アカウントを再読み込み
               </Button>
-            </div>
+            }
+            tone="danger"
+            title={page.list.error?.title ?? "アカウントを読み込めません"}
+          >
+            <p>{page.list.error?.detail ?? "通信状態を確認して、もう一度お試しください。"}</p>
           </Notice>
         ) : (
           <div className="grid gap-4">
             {page.list.stale ? (
-              <Notice tone="warning" title="最新のアカウント情報を取得できません">
-                <p>直前に取得した内容を表示しています。</p>
-                <div className="mt-3">
+              <Notice
+                action={
                   <Button
                     pending={page.list.refresh.pending}
                     pendingLabel="再読み込み中"
@@ -76,7 +78,11 @@ export function AdminAccountsPage() {
                   >
                     最新情報を再読み込み
                   </Button>
-                </div>
+                }
+                tone="warning"
+                title="最新のアカウント情報を取得できません"
+              >
+                <p>直前に取得した内容を表示しています。</p>
               </Notice>
             ) : null}
             {page.list.items.length === 0 ? (
@@ -97,11 +103,11 @@ export function AdminAccountsPage() {
               />
             ) : (
               <div className="min-w-0">
-                <p className="px-3 py-2 text-xs text-[var(--color-text-secondary)] md:hidden">
+                <p className={cn(contentText.supporting, "px-3 py-2 md:hidden")}>
                   権限と操作は横にスクロールして確認できます。
                 </p>
                 <div className={dataTableScrollAreaClassName}>
-                  <table className="w-full min-w-[44rem] text-left text-sm">
+                  <table className={cn(contentText.body, "w-full min-w-[44rem] text-left")}>
                     <caption className="sr-only">ログイン可能なアカウントと権限</caption>
                     <colgroup>
                       <col />

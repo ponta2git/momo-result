@@ -9,11 +9,14 @@ type PageFrameProps = HTMLAttributes<HTMLDivElement> & {
 };
 
 export const pageFrameWidthClass = {
-  narrow: "max-w-[56rem]",
+  narrow: "max-w-2xl",
   standard: "max-w-[96rem]",
   wide: "max-w-[108rem]",
   workspace: "max-w-[120rem]",
 } as const satisfies Record<PageFrameWidth, string>;
+
+/** Keeps page-level siblings on one rhythm across ready, loading, and terminal states. */
+export const pageFrameSiblingGapClass = "gap-6";
 
 /** Keeps viewport-level content and navigation on the same responsive inline gutter. */
 export const pageViewportGutterClass = "px-3 sm:px-4";
@@ -22,7 +25,8 @@ export function PageFrame({ className, width = "standard", ...props }: PageFrame
   return (
     <div
       className={cn(
-        "mx-auto flex w-full max-w-full min-w-0 flex-col gap-6",
+        "mx-auto flex w-full max-w-full min-w-0 flex-col",
+        pageFrameSiblingGapClass,
         pageFrameWidthClass[width],
         className,
       )}

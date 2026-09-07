@@ -43,13 +43,16 @@ export function SeriesAnalysisDrilldownContent({
   if (resource.kind === "loading") return <SeriesAnalysisDrilldownLoading />;
   if (resource.kind === "failed") {
     return (
-      <Notice tone="danger" title="詳細を読み込めません">
-        <p>比較の詳細を取得できませんでした。</p>
-        <div className="mt-3">
+      <Notice
+        action={
           <Button size="sm" variant="secondary" onClick={resource.retry}>
             再読み込み
           </Button>
-        </div>
+        }
+        tone="danger"
+        title="詳細を読み込めません"
+      >
+        <p>比較の詳細を取得できませんでした。</p>
       </Notice>
     );
   }
@@ -79,7 +82,7 @@ export function UnexpectedWinsDrilldown({
 }) {
   const qualityAdvisory = qualityAdvisoryLabel(payload.summary.status);
   return (
-    <div className="grid gap-4">
+    <div className="grid gap-6">
       <FactList
         ariaLabel="予測より上位だった勝利の要約"
         columns={4}
@@ -104,7 +107,7 @@ export function UnexpectedWinsDrilldown({
               ]
             : []),
         ]}
-        layout="segmented"
+        layout="plain"
       />
       {payload.rows.length === 0 ? (
         <Notice tone="info" title="予測より上位だった勝利はありません">

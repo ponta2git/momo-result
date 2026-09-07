@@ -5,6 +5,7 @@ import java.time.Instant
 import scala.concurrent.duration.DurationInt
 
 import cats.effect.{Deferred, IO, Ref}
+import cats.syntax.all.*
 
 import momo.api.MomoCatsEffectSuite
 import momo.api.domain.ids.*
@@ -34,6 +35,47 @@ final class CachedReferenceRepositoriesSpec extends MomoCatsEffectSuite:
       assertEquals(foundById, Some(member))
       assertEquals(listed, List(member))
       assertEquals(calls, 1)
+
+  test("concurrent cache misses share one successful delegate load"):
+    for
+      calls <- Ref.of[IO, Int](0)
+      started <- Deferred[IO, Unit]
+      release <- Deferred[IO, Unit]
+      delegate = new MembersRepository[IO]:
+        def list = calls.update(_ + 1) *> started.complete(()).void *> release.get.as(List(member))
+        def find(id: MemberId) = list.map(_.find(_.id == id))
+      cached <- CachedReferenceRepositories.members[IO](delegate, 1.hour)
+      readers <- List.fill(12)(cached.list.start).sequence
+      _ <- started.get
+      _ <- release.complete(())
+      results <- readers.traverse(_.joinWithNever)
+      count <- calls.get
+    yield
+      assertEquals(results, List.fill(12)(List(member)))
+      assertEquals(count, 1)
+
+  test("cancelling the reload owner lets another reader populate the cache"):
+    for
+      calls <- Ref.of[IO, Int](0)
+      started <- Deferred[IO, Unit]
+      delegate = new MembersRepository[IO]:
+        def list = calls.getAndUpdate(_ + 1).flatMap {
+          case 0 => started.complete(()).void *> IO.never[List[Member]]
+          case _ => IO.pure(List(member))
+        }
+        def find(id: MemberId) = list.map(_.find(_.id == id))
+      cached <- CachedReferenceRepositories.members[IO](delegate, 1.hour)
+      owner <- cached.list.start
+      _ <- started.get
+      waiter <- cached.list.start
+      _ <- owner.cancel
+      result <- waiter.joinWithNever
+      cachedResult <- cached.list
+      count <- calls.get
+    yield
+      assertEquals(result, List(member))
+      assertEquals(cachedResult, result)
+      assertEquals(count, 2)
 
   test("game title writes invalidate cached rows"):
     val renamed = title.copy(name = "桃鉄2改")

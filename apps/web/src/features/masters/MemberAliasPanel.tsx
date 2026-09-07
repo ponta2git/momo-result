@@ -7,10 +7,12 @@ import { formatApiError } from "@/shared/api/problemDetails";
 import { canonicalResultMembers, memberDisplayName } from "@/shared/domain/members";
 import { Button } from "@/shared/ui/actions/Button";
 import { IconButton } from "@/shared/ui/actions/IconButton";
+import { cn } from "@/shared/ui/cn";
 import { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
 import { AlertDialog, Dialog } from "@/shared/ui/feedback/Dialog";
 import { SelectField } from "@/shared/ui/forms/SelectField";
 import { TextField } from "@/shared/ui/forms/TextField";
+import { contentText } from "@/shared/ui/typography";
 
 type MemberAliasPanelProps = {
   aliases: MemberAliasResponse[];
@@ -41,17 +43,15 @@ export function MemberAliasPanel({
   }));
 
   return (
-    <section className="min-w-0">
+    <section className="grid min-w-0 gap-4">
       <header>
-        <h2 className="text-lg font-semibold text-[var(--color-text-primary)]">
-          プレーヤー名の別名
-        </h2>
-        <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
+        <h2 className={contentText.heading}>プレーヤー名の別名</h2>
+        <p className={cn(contentText.body, "mt-1")}>
           画像から読み取られる表記を正式なプレーヤー名に紐づけます。
         </p>
       </header>
 
-      <div className="mt-3 empty:hidden">
+      <div className="empty:hidden">
         <MasterResourceRefreshNotice
           onRetry={onRetry}
           resourceLabel="別名"
@@ -62,7 +62,7 @@ export function MemberAliasPanel({
 
       <form
         action={createAction}
-        className="mt-4 grid gap-3 md:grid-cols-[minmax(12rem,0.35fr)_minmax(12rem,1fr)_auto] md:grid-rows-[auto_auto_auto] md:[&>[data-field-root]]:row-span-3"
+        className="grid gap-x-4 gap-y-4 md:grid-cols-[minmax(12rem,0.35fr)_minmax(12rem,1fr)_auto] md:grid-rows-[auto_auto_auto] md:gap-y-0 md:[&>[data-field-root]]:row-span-3"
         key={createFormKey}
       >
         <SelectField
@@ -89,27 +89,27 @@ export function MemberAliasPanel({
         </div>
       </form>
 
-      <div className="mt-4 grid gap-x-4 gap-y-6 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-x-4 gap-y-6 md:grid-cols-2 xl:grid-cols-4">
         {aliasesByMember.map(({ member, aliases: memberAliases }) => (
           <div className="min-w-0" key={member.memberId}>
-            <h3 className="min-w-0 text-sm font-semibold text-[var(--color-text-primary)]">
+            <h3 className={cn(contentText.heading, "min-w-0")}>
               <MemberSequenceLabel memberId={member.memberId}>
                 <span className="truncate">{member.displayName}</span>
               </MemberSequenceLabel>
             </h3>
             {memberAliases.length === 0 ? (
-              <p className="mt-3 text-sm text-[var(--color-text-secondary)]">別名なし</p>
+              <p className={cn(contentText.supporting, "mt-2")}>別名なし</p>
             ) : (
-              <ul className="mt-3 divide-y divide-[var(--color-border)]">
+              <ul className="mt-2 divide-y divide-[var(--color-border)]">
                 {memberAliases.map((alias) => (
                   <li
                     className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 py-2"
                     key={alias.id}
                   >
-                    <span className="min-w-0 truncate text-sm font-semibold text-[var(--color-text-primary)]">
+                    <span className={cn(contentText.body, "min-w-0 break-words")}>
                       {alias.alias}
                     </span>
-                    <div className="flex items-center">
+                    <div className="flex items-center gap-2">
                       <AliasEditDialog alias={alias} onUpdate={onUpdate} />
                       <AlertDialog
                         title="別名を削除しますか？"
@@ -167,7 +167,7 @@ function AliasEditDialog({
       }
     >
       <form
-        className="grid gap-3"
+        className="grid gap-4"
         onSubmit={async (event) => {
           event.preventDefault();
           setError(undefined);

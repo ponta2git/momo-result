@@ -118,9 +118,9 @@
 
 Analysis / OCR の共通 contract として、次を固定する。
 
-- `consume -> claim / lease / slot -> child -> candidate validation -> durable commit -> post-commit effect -> delivery disposition` の順序。
+- claim して child を実行する経路の `consume -> claim / lease / slot -> child -> candidate validation -> durable commit -> post-commit effect -> delivery disposition` の順序。claim 前に完結する ACK / 保留は各配送契約に従う。
 - parent が DB、Redis、object、process、timeout、fence、outbox、ACK を所有し、child は1 attempt の bounded candidate だけを返すこと。
-- terminal DB write 前に ACK しないこと、rollback では wake しないこと、append 後の DB failure と重複 delivery が安全に収束すること。
+- 処理結果の ACK 前に必要な DB 更新と次outboxを確定すること、再queue時の ACK / 保留を各配送契約どおりに扱うこと、rollback では wake しないこと、append 後の DB failure と重複 delivery が安全に収束すること。
 - startup / PEL recovery、wake coalescing、deadline、bounded drain、backoff を制御可能 clock と signal で検証し、idle 時の無条件 polling を許さないこと。
 - 分析outboxはworkerによるcampaign展開とdispatchを実DB / Redisで通し、process外commit後のhint、hint喪失後の低頻度recovery、旧dispatcherとのrolling overlapが同じdurable stateへ収束すること。
 - PostgreSQL通知をwakeに使う場合、productionと同じpooling modeでsession-bound listenerへの別接続commitを通す。startupの`LISTEN`成功や直接DBだけのtestを、通知routeのreadiness evidenceにしない。

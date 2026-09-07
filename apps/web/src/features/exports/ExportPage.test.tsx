@@ -94,7 +94,7 @@ describe("ExportPage", () => {
     );
 
     renderPage();
-    await screen.findByRole("heading", { name: "CSV/TSV出力" });
+    await screen.findByRole("region", { name: "出力条件" });
     await user.click(screen.getByRole("button", { name: "全試合をCSVでダウンロード" }));
 
     await waitFor(() => expect(captured?.searchParams.get("format")).toBe("csv"));
@@ -107,7 +107,7 @@ describe("ExportPage", () => {
   it("keeps the exclusion notice visible for every export scope", async () => {
     renderPage();
 
-    await screen.findByRole("heading", { name: "CSV/TSV出力" });
+    await screen.findByRole("region", { name: "出力条件" });
     const scopeTabs = screen.getByRole("tablist", { name: "出力範囲" });
     const exclusionNotice = screen.getByText("下書きや確認待ちの試合は含みません。");
 
@@ -127,7 +127,7 @@ describe("ExportPage", () => {
     );
     renderPage();
 
-    await screen.findByRole("heading", { name: "CSV/TSV出力" });
+    await screen.findByRole("region", { name: "出力条件" });
     const formatTabs = screen.getByRole("tablist", { name: "ファイル形式" });
     await user.click(within(formatTabs).getByRole("tab", { name: "CSV" }));
     await user.keyboard("{ArrowRight}");
@@ -166,7 +166,7 @@ describe("ExportPage", () => {
       path: "/exports?returnTo=%2Fmatches%3Fstatus%3Dconfirmed%26cursor%3Dcursor-2",
     });
 
-    await screen.findByRole("heading", { name: "CSV/TSV出力" });
+    await screen.findByRole("region", { name: "出力条件" });
     const backLink = screen.getByRole("link", { name: "前の画面へ戻る" });
     expect(backLink).toHaveAttribute("href", "/matches?status=confirmed&cursor=cursor-2");
 
@@ -216,7 +216,7 @@ describe("ExportPage", () => {
     );
 
     renderPage({ path: "/exports?matchId=match-1&format=tsv" });
-    await screen.findByRole("heading", { name: "CSV/TSV出力" });
+    await screen.findByRole("region", { name: "出力条件" });
     expect(screen.getByRole("tab", { name: "試合" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("tab", { name: "TSV" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("tabpanel", { name: "試合" })).toBeInTheDocument();
@@ -401,7 +401,7 @@ describe("ExportPage", () => {
     server.use(http.get("/api/season-masters", () => HttpResponse.json({ items: [] })));
 
     renderPage();
-    await screen.findByRole("heading", { name: "CSV/TSV出力" });
+    await screen.findByRole("region", { name: "出力条件" });
     await user.click(screen.getByRole("tab", { name: "シーズン" }));
 
     expect(await screen.findByText("シーズン候補がありません")).toBeInTheDocument();
@@ -838,7 +838,7 @@ describe("ExportPage", () => {
     );
 
     renderPage();
-    await screen.findByRole("heading", { name: "CSV/TSV出力" });
+    await screen.findByRole("region", { name: "出力条件" });
     await user.click(screen.getByRole("button", { name: "全試合をCSVでダウンロード" }));
 
     expect(await screen.findByText("出力条件を確認してください")).toBeInTheDocument();
@@ -917,7 +917,7 @@ describe("ExportPage", () => {
     );
 
     renderPage();
-    await screen.findByRole("heading", { name: "CSV/TSV出力" });
+    await screen.findByRole("region", { name: "出力条件" });
     const location = screen.getByLabelText("current location");
     const initialLocation = location.dataset["location"] ?? "";
     await user.click(screen.getByRole("button", { name: "全試合をCSVでダウンロード" }));
@@ -965,7 +965,7 @@ describe("ExportPage", () => {
     );
 
     renderPage({ slowThresholdMs: 1_000 });
-    await screen.findByRole("heading", { name: "CSV/TSV出力" });
+    await screen.findByRole("region", { name: "出力条件" });
     vi.useFakeTimers();
 
     fireEvent.click(screen.getByRole("button", { name: "全試合をCSVでダウンロード" }));
@@ -1009,7 +1009,7 @@ describe("ExportPage", () => {
     );
 
     renderPage();
-    await screen.findByRole("heading", { name: "CSV/TSV出力" });
+    await screen.findByRole("region", { name: "出力条件" });
     await user.click(screen.getByRole("button", { name: "全試合をCSVでダウンロード" }));
 
     expect(await screen.findByText("出力が完了しませんでした")).toBeInTheDocument();

@@ -182,7 +182,8 @@ pub(crate) async fn run(request: &ShadowRequest) -> Result<ShadowReport, ShadowE
                 input_revision,
                 run_number,
             )
-            .await?,
+            .await
+            .inspect_err(|failure| log_process_failure(run_number, failure))?,
         );
     }
     let checksums = runs
@@ -335,14 +336,22 @@ async fn run_once(
     })
 }
 
+fn log_process_failure(run_number: u32, failure: &ShadowError) {
+    if let ShadowError::Process(source) = failure {
+        tracing::error!(
+            event = "analysis_shadow_process_failed",
+            run = run_number,
+            error_kind = source.kind(),
+            "shadow child process boundary failed"
+        );
+    }
+}
+
 async fn supervise_shadow_child(
     child: &mut ManagedAnalysisChild,
     started: Instant,
     calculation_timeout: Duration,
 ) -> Result<AnalysisChildOutcome, ShadowError> {
-    if let Err(error) = child.refresh_liveness() {
-        return Err(terminate_after_supervision_error(child, error).await);
-    }
     child.sample_resident_bytes().await;
     let outcome = loop {
         match child.try_wait() {
@@ -352,19 +361,19 @@ async fn supervise_shadow_child(
                 return Err(terminate_after_supervision_error(child, error).await);
             }
         }
-        if started.elapsed() >= calculation_timeout {
+        let remaining = calculation_timeout.saturating_sub(started.elapsed());
+        if remaining.is_zero() {
             let _status = child.terminate(SHADOW_CHILD_STOP_GRACE).await?;
             return Err(ShadowError::TimedOut);
         }
-        if let Err(error) = child.refresh_liveness() {
-            match child.try_wait() {
-                Ok(Some(outcome)) => break outcome,
-                Ok(None) => {
-                    return Err(terminate_after_supervision_error(child, error).await);
-                }
-                Err(wait_error) => {
-                    return Err(terminate_after_supervision_error(child, wait_error).await);
-                }
+        match child
+            .refresh_liveness(SHADOW_CHILD_STOP_GRACE.min(remaining))
+            .await
+        {
+            Ok(Some(outcome)) => break outcome,
+            Ok(None) => {}
+            Err(error) => {
+                return Err(terminate_after_supervision_error(child, error).await);
             }
         }
         child.sample_resident_bytes().await;

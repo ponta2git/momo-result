@@ -2,12 +2,16 @@ import type { HTMLAttributes } from "react";
 
 import { cn } from "@/shared/ui/cn";
 
-export function Skeleton({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
+type SkeletonProps = HTMLAttributes<HTMLElement> & {
+  as?: "div" | "span" | undefined;
+};
+
+export function Skeleton({ as: Component = "div", className, ...props }: SkeletonProps) {
   return (
-    <div
+    <Component
       aria-hidden="true"
       className={cn(
-        "rounded-[var(--radius-xs)] bg-[var(--color-surface-selected)] motion-safe:animate-pulse motion-reduce:animate-none",
+        "rounded-xs bg-[var(--color-surface-selected)] motion-safe:animate-pulse motion-reduce:animate-none",
         className,
       )}
       {...props}

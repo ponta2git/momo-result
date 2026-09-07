@@ -4,9 +4,13 @@ import { matchNoteMaximumCharacters } from "@/features/matches/workspace/review/
 import type { MatchDetailResponse } from "@/shared/api/matches";
 import { formatDateTimeLong } from "@/shared/lib/dateTime";
 import { Button } from "@/shared/ui/actions/Button";
+import { cn } from "@/shared/ui/cn";
 import { AlertDialog } from "@/shared/ui/feedback/Dialog";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { TextareaControl } from "@/shared/ui/forms/Control";
+import { ContentWithActions } from "@/shared/ui/layout/ContentWithActions";
+import { readableTextWidthClass } from "@/shared/ui/layout/readableText";
+import { contentText, fieldText } from "@/shared/ui/typography";
 
 type MatchNoteSectionProps = {
   match: MatchDetailResponse;
@@ -36,122 +40,138 @@ export function MatchNoteSection({ match, refetchMatch }: MatchNoteSectionProps)
   } = editor;
 
   return (
-    <section aria-labelledby="match-note-heading" className="grid gap-3">
+    <section aria-labelledby="match-note-heading" className="grid gap-4">
       <MatchWorkspaceNavigationGuard model={{ dirty, navigationAllowedRef, onDiscard: cancel }} />
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2
-            className="text-base font-semibold text-[var(--color-text-primary)]"
-            id="match-note-heading"
-          >
-            試合メモ
-          </h2>
-          <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">
-            試合後の振り返りを、この結果を見られる人と共有します。
-          </p>
-        </div>
-        {editing ? null : (
-          <div
-            aria-label="試合メモの操作"
-            className="flex shrink-0 flex-wrap items-center justify-end gap-2"
-            role="group"
-          >
-            <Button size="sm" variant="secondary" onClick={startEditing}>
-              {match.note.body ? "編集" : "メモを追加"}
-            </Button>
-            {match.note.body ? (
-              <Button size="sm" variant="dangerQuiet" onClick={() => setDeleteOpen(true)}>
-                メモを削除
+      <ContentWithActions
+        actions={
+          editing ? null : (
+            <div
+              aria-label="試合メモの操作"
+              className="flex shrink-0 flex-wrap items-center gap-2"
+              role="group"
+            >
+              <Button size="sm" variant="secondary" onClick={startEditing}>
+                {match.note.body ? "編集" : "メモを追加"}
               </Button>
+              {match.note.body ? (
+                <Button size="sm" variant="dangerQuiet" onClick={() => setDeleteOpen(true)}>
+                  メモを削除
+                </Button>
+              ) : null}
+            </div>
+          )
+        }
+      >
+        <div className="grid min-w-0 gap-2">
+          <div className="flex items-baseline justify-between gap-4">
+            <h2 className={contentText.heading} id="match-note-heading">
+              試合メモ
+            </h2>
+            {editing ? (
+              <span
+                aria-live="polite"
+                className={cn(tooLong ? fieldText.error : contentText.supporting, "tabular-nums")}
+              >
+                {count} / {matchNoteMaximumCharacters}
+              </span>
             ) : null}
           </div>
-        )}
-      </div>
 
-      {editing ? (
-        <div className="grid gap-2">
-          <div className="flex justify-end">
-            <span
-              aria-live="polite"
-              className={
-                tooLong
-                  ? "text-xs font-semibold text-[var(--color-danger)] tabular-nums"
-                  : "text-xs text-[var(--color-text-secondary)] tabular-nums"
-              }
-            >
-              {count} / {matchNoteMaximumCharacters}
-            </span>
-          </div>
-          <TextareaControl
-            aria-label="試合メモ"
-            aria-describedby={tooLong ? "match-note-detail-error" : undefined}
-            disabled={pending}
-            invalid={tooLong}
-            minHeight="md"
-            resize="vertical"
-            textFlow="relaxed"
-            value={draft}
-            onChange={(event) => setDraft(event.currentTarget.value)}
-          />
-          {tooLong ? (
-            <p
-              className="text-xs font-semibold text-[var(--color-danger)]"
-              id="match-note-detail-error"
-              role="alert"
-            >
-              試合メモは{matchNoteMaximumCharacters}字以内で入力してください。
-            </p>
-          ) : null}
-          {conflict ? (
-            <Notice tone="warning" title="別の利用者が先に更新しました">
-              <div className="grid gap-3 text-sm">
-                <div>
-                  <p className="font-semibold">保存済みの最新版</p>
-                  <p className="mt-1 break-words whitespace-pre-wrap">
-                    {conflict.latest.body ?? "（メモなし）"}
+          {editing ? (
+            <div className="grid gap-4">
+              <div className="grid gap-1">
+                <TextareaControl
+                  aria-label="試合メモ"
+                  aria-describedby={tooLong ? "match-note-detail-error" : undefined}
+                  disabled={pending}
+                  invalid={tooLong}
+                  minHeight="md"
+                  resize="vertical"
+                  textFlow="relaxed"
+                  value={draft}
+                  onChange={(event) => setDraft(event.currentTarget.value)}
+                />
+                {tooLong ? (
+                  <p className={fieldText.error} id="match-note-detail-error" role="alert">
+                    試合メモは{matchNoteMaximumCharacters}字以内で入力してください。
                   </p>
-                </div>
-                <div>
-                  <p className="font-semibold">あなたの入力</p>
-                  <p className="mt-1 break-words whitespace-pre-wrap">{conflict.draft}</p>
-                </div>
+                ) : null}
               </div>
-            </Notice>
-          ) : null}
-          <div className="flex flex-wrap justify-end gap-2">
-            <Button disabled={pending} variant="quiet" onClick={cancel}>
-              キャンセル
-            </Button>
-            <Button
-              disabled={
-                pending || tooLong || normalizedDraft.trim().length === 0 || (!dirty && !conflict)
-              }
-              pending={pending}
-              pendingLabel="保存中…"
-              onClick={save}
-            >
-              {conflict ? "この入力で再試行" : "保存"}
-            </Button>
-          </div>
+              {conflict ? (
+                <Notice tone="warning" title="別の利用者が先に更新しました">
+                  <div className="grid gap-4">
+                    <div>
+                      <p className={contentText.heading}>保存済みの最新版</p>
+                      <p
+                        className={cn(
+                          contentText.body,
+                          "mt-1 break-words whitespace-pre-wrap",
+                          readableTextWidthClass,
+                        )}
+                      >
+                        {conflict.latest.body ?? "（メモなし）"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className={contentText.heading}>あなたの入力</p>
+                      <p
+                        className={cn(
+                          contentText.body,
+                          "mt-1 break-words whitespace-pre-wrap",
+                          readableTextWidthClass,
+                        )}
+                      >
+                        {conflict.draft}
+                      </p>
+                    </div>
+                  </div>
+                </Notice>
+              ) : null}
+              <div className="flex flex-wrap justify-end gap-2">
+                <Button disabled={pending} variant="quiet" onClick={cancel}>
+                  キャンセル
+                </Button>
+                <Button
+                  disabled={
+                    pending ||
+                    tooLong ||
+                    normalizedDraft.trim().length === 0 ||
+                    (!dirty && !conflict)
+                  }
+                  pending={pending}
+                  pendingLabel="保存中…"
+                  onClick={save}
+                >
+                  {conflict ? "この入力で再試行" : "保存"}
+                </Button>
+              </div>
+            </div>
+          ) : match.note.body ? (
+            <div className="grid gap-1">
+              <p
+                className={cn(
+                  contentText.body,
+                  "break-words whitespace-pre-wrap",
+                  readableTextWidthClass,
+                )}
+              >
+                {match.note.body}
+              </p>
+              {match.note.updatedAt ? (
+                <p className={contentText.supporting}>
+                  {match.note.updatedByDisplayName ?? "利用者"}が
+                  {formatDateTimeLong(match.note.updatedAt)}に更新
+                </p>
+              ) : null}
+            </div>
+          ) : (
+            <p className={contentText.body}>まだメモはありません。</p>
+          )}
         </div>
-      ) : match.note.body ? (
-        <div className="grid gap-2">
-          <p className="text-sm leading-6 break-words whitespace-pre-wrap text-[var(--color-text-primary)]">
-            {match.note.body}
-          </p>
-          {match.note.updatedAt ? (
-            <p className="text-xs text-[var(--color-text-secondary)]">
-              {match.note.updatedByDisplayName ?? "利用者"}が
-              {formatDateTimeLong(match.note.updatedAt)}に更新
-            </p>
-          ) : null}
-        </div>
-      ) : (
-        <p className="text-sm text-[var(--color-text-secondary)]">まだメモはありません。</p>
-      )}
+      </ContentWithActions>
 
       {errorMessage ? (
-        <p className="text-sm text-[var(--color-danger)]" role="alert">
+        <p className={fieldText.error} role="alert">
           {errorMessage}
         </p>
       ) : null}

@@ -76,6 +76,9 @@ OpenAPI / Web 型の生成関係は `docs/architecture.md` の Wire Boundary、c
 
 表は変更時に選ぶ evidence の種類を示し、新しい test case の自動追加や各層での重複を要求しない。選択基準と oracle は `docs/test-rule.md`、現在の job 構成とまとめて実行する suite は CI workflow を実行上の正本とする。変更分類を弱めて gate を避けない。
 
+変更範囲に必要な gate と選択した品質証拠を確認したら、検証を終了する。追加・再実行は、結果を無効にする変更、失敗、具体的な未解決事項が生じた場合に、その影響範囲で行う。
+結果の再利用は、対象コード、依存する schema・設定・環境、観測した経路が今回の判断に適合する場合に限る。必須 gate の実行単位は CI の定義に従い、未実行を通過扱いにしない。
+
 ## 5. Developer Wait / Parallel Execution
 
 - 品質を保つ範囲で developer 待ち時間を最小化する。独立した job は並列実行し、同じ test 集合の通常実行と coverage 実行、重複 setup、不要な build を critical path に重ねない。test 内の並列性と隔離は `docs/test-architecture.md` に従う。

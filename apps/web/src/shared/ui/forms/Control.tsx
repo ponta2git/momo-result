@@ -1,3 +1,4 @@
+import { ChevronDown } from "lucide-react";
 import type { ComponentPropsWithRef } from "react";
 
 import { cn } from "@/shared/ui/cn";
@@ -21,7 +22,7 @@ const densityClass = {
 } as const satisfies Record<ControlDensity, string>;
 
 const heightClass = {
-  default: "min-h-11 sm:min-h-10",
+  default: "min-h-11 pointer-fine:min-h-10",
   touch: "min-h-11",
 } as const satisfies Record<ControlHeight, string>;
 
@@ -40,7 +41,7 @@ const toneClass = {
 } as const satisfies Record<ControlTone, string>;
 
 const baseControlClass =
-  "w-full min-w-0 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] py-2 text-base leading-6 text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)] disabled:cursor-not-allowed disabled:bg-[var(--color-surface-subtle)] disabled:text-[var(--color-text-muted)] disabled:opacity-70 sm:text-sm sm:leading-5";
+  "w-full min-w-0 rounded-sm border border-[var(--color-border)] bg-[var(--color-surface)] py-2 text-base leading-6 font-plain text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)] disabled:cursor-not-allowed disabled:bg-[var(--color-surface-subtle)] disabled:text-[var(--color-text-muted)] disabled:opacity-70 sm:text-sm sm:leading-5";
 const invalidControlClass = "border-[var(--color-danger)]/65 bg-[var(--color-danger)]/10";
 
 type ResolvedControlPresentation = {
@@ -96,16 +97,38 @@ export function SelectControl({
   controlHeight = "default",
   density = "default",
   invalid = false,
+  multiple,
+  size,
   textAlign = "start",
   tone = "default",
   ...props
 }: SelectControlProps) {
+  const showIndicator = !multiple && (size === undefined || size <= 1);
+
   return (
-    <select
-      {...props}
-      aria-invalid={invalid || undefined}
-      className={controlClassName({ controlHeight, density, invalid, textAlign, tone })}
-    />
+    <div className="relative min-w-0">
+      <select
+        {...props}
+        multiple={multiple}
+        size={size}
+        aria-invalid={invalid || undefined}
+        className={cn(
+          controlClassName({ controlHeight, density, invalid, textAlign, tone }),
+          "peer block",
+          showIndicator ? "appearance-none forced-colors:appearance-auto" : "",
+          showIndicator ? (density === "compact" ? "pr-8" : "pr-10") : "",
+        )}
+      />
+      {showIndicator ? (
+        <ChevronDown
+          aria-hidden="true"
+          className={cn(
+            "pointer-events-none absolute top-1/2 size-4 -translate-y-1/2 text-[var(--color-text-secondary)] peer-disabled:text-[var(--color-text-muted)] peer-disabled:opacity-70 forced-colors:hidden",
+            density === "compact" ? "right-2" : "right-3",
+          )}
+        />
+      ) : null}
+    </div>
   );
 }
 
@@ -113,8 +136,8 @@ type TextareaMinHeight = "default" | "md" | "sm";
 
 const textareaMinHeightClass = {
   default: "",
-  md: "min-h-28 sm:min-h-28",
-  sm: "min-h-24 sm:min-h-24",
+  md: "min-h-28",
+  sm: "min-h-24",
 } as const satisfies Record<TextareaMinHeight, string>;
 
 export type TextareaControlProps = ControlPresentationProps & {

@@ -18,7 +18,7 @@ import momo.api.adapters.postgres.{
   SeriesAnalysisArtifactSupport
 }
 import momo.api.config.SeriesAnalysisReadConfig
-import momo.api.domain.ids.{AccountId, GameTitleId}
+import momo.api.domain.ids.{AccountId, GameTitleId, MatchId, SeasonMasterId}
 import momo.api.domain.{
   GameTitle,
   SeriesAnalysisChunkKind,
@@ -60,6 +60,179 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
         assertEquals(status.currentArtifact, None)
         assertEquals(status.calculation, None)
       case Left(error) => fail(s"expected status, got $error")
+
+  test("options preserve empty titles and count only observed season-map combinations"):
+    for
+      repo <- repository
+      empty <- repo.options
+      _ <- seedTitle
+      _ <- new PostgresGameTitlesRepository[IO](transactor).createWithNextDisplayOrder(
+        GameTitle(GameTitleId.unsafeFromString("title-empty"), "未記録作品", "momotetsu2", 2, now)
+      )
+      unplayed <- repo.options
+      _ <-
+      (sql"""
+        INSERT INTO season_masters (id, game_title_id, name, display_order)
+        VALUES ('analysis-season-a', $titleId, '年度A', 2),
+               ('analysis-season-b', $titleId, '年度B', 1)
+      """.update.run *> sql"""
+        INSERT INTO map_masters (id, game_title_id, name, display_order)
+        VALUES ('analysis-map-a', $titleId, '地図A', 1),
+               ('analysis-map-b', $titleId, '地図B', 2)
+      """.update.run *> sql"""
+        INSERT INTO held_events (id, held_date_iso, start_at)
+        VALUES ('event-options', '2026-08-09', $now)
+      """.update.run *> sql"""
+        INSERT INTO matches (
+          id, held_event_id, match_no_in_event, game_title_id, layout_family,
+          season_master_id, owner_member_id, map_master_id, played_at, created_by_account_id
+        )
+        SELECT 'match-options-' || n, 'event-options', n, $titleId, 'momotetsu2',
+          CASE WHEN n = 1 THEN 'analysis-season-a' ELSE 'analysis-season-b' END,
+          'member_ponta', CASE WHEN n = 1 THEN 'analysis-map-a' ELSE 'analysis-map-b' END,
+          $now, $accountId
+        FROM generate_series(1, 3) n
+      """.update.run *>
+        sql"""
+        INSERT INTO match_players (
+          match_id, member_id, play_order, rank, total_assets_man_yen, revenue_man_yen
+        )
+        SELECT m.id, p.id, p.play_order, p.play_order, 0, 0
+        FROM matches m CROSS JOIN (
+          VALUES ('member_eu', 1), ('member_ponta', 2), ('member_akane_mami', 3), ('member_otaka', 4)
+        ) AS p(id, play_order)
+        WHERE m.held_event_id = 'event-options'
+      """.update.run).transact(transactor)
+      played <- repo.options
+    yield
+      assertEquals(empty.map(_.titles), Right(Nil))
+      assertEquals(unplayed.map(_.defaultGameTitleId), Right(Some(titleId)))
+      played match
+        case Right(options) =>
+          assertEquals(options.defaultGameTitleId, Some(titleId))
+          assertEquals(options.titles.map(_.confirmedMatchCount), List(3L, 0L))
+          val title = options.titles.head
+          assertEquals(title.seasons.map(_.displayName), List("年度B", "年度A"))
+          assertEquals(title.maps.map(_.displayName), List("地図A", "地図B"))
+          assertEquals(
+            title.seasonMapPairs.map(pair => pair.seasonMasterId.value -> pair.mapMasterId.value),
+            List("analysis-season-b" -> "analysis-map-b", "analysis-season-a" -> "analysis-map-a"),
+          )
+          assertEquals(options.titles.last.seasonMapPairs, Nil)
+        case Left(error) => fail(s"expected options, got $error")
+
+  test(
+    "status prioritizes active jobs over pending intent and pending intent over terminal history"
+  ):
+    val terminalAt = now.minusSeconds(60)
+    for
+      _ <- seedTitle
+      repo <- repository
+      missing <- repo.status(GameTitleId.unsafeFromString("title-missing"))
+      _ <- sql"""
+        INSERT INTO series_analysis_jobs (
+          id, game_title_id, input_revision, algorithm_version, artifact_schema_version,
+          status, trigger, requested_at, finished_at
+        ) VALUES (
+          'job-status-terminal', $titleId, 0, 'series-analysis-v3', 2,
+          'succeeded', 'match_mutation', $terminalAt, $terminalAt
+        )
+      """.update.run.transact(transactor)
+      terminal <- repo.status(titleId)
+      _ <- sql"""
+        INSERT INTO series_analysis_job_requests (
+          id, game_title_id, input_revision, algorithm_version, artifact_schema_version,
+          status, trigger, accepted_at
+        ) VALUES (
+          'request-status-pending', $titleId, 0, 'series-analysis-v3', 2,
+          'pending', 'manual', $now
+        )
+      """.update.run.transact(transactor)
+      pending <- repo.status(titleId)
+      _ <- sql"""
+        INSERT INTO series_analysis_jobs (
+          id, game_title_id, input_revision, algorithm_version, artifact_schema_version,
+          status, trigger, requested_at
+        ) VALUES (
+          'job-status-active', $titleId, 0, 'series-analysis-v3', 2,
+          'queued', 'algorithm_update', $now
+        )
+      """.update.run.transact(transactor)
+      active <- repo.status(titleId)
+    yield
+      assertEquals(missing, Left(AppError.NotFound("game title", "title-missing")))
+      assertEquals(terminal.map(_.calculation.map(_.status)), Right(Some("succeeded")))
+      assertEquals(
+        pending.map(_.calculation.map(value => value.status -> value.trigger)),
+        Right(Some("queued" -> "manual"))
+      )
+      assertEquals(
+        active.map(_.calculation.map(value => value.status -> value.trigger)),
+        Right(Some("queued" -> "algorithm_update"))
+      )
+
+  test("admin history keeps each job's coalesced manual requests separate"):
+    val otherTitleId = GameTitleId.unsafeFromString("title-other-audit")
+    for
+      _ <- seedTitle
+      _ <- new PostgresGameTitlesRepository[IO](transactor).createWithNextDisplayOrder(
+        GameTitle(otherTitleId, "別作品監査", "momotetsu2", 2, now)
+      )
+      repo <- repository
+      first <- repo.requestTitleRecalculation(titleId, accountId, "audit-first")
+      second <- repo.requestTitleRecalculation(titleId, accountId, "audit-second")
+      other <- repo.requestTitleRecalculation(otherTitleId, accountId, "audit-other")
+      overview <- repo.adminOverview(Some(titleId))
+    yield
+      assert(first.isRight && second.isRight && other.isRight)
+      overview match
+        case Right(value) =>
+          val byTitle = value.recentJobs.map(job => job.gameTitleId -> job).toMap
+          assertEquals(byTitle(titleId).manualRequestCount, 2)
+          assertEquals(byTitle(otherTitleId).manualRequestCount, 1)
+          value.recentJobs.foreach(job =>
+            assertEquals(job.firstManualRequester.map(_.accountId), Some(accountId))
+          )
+        case Left(error) => fail(s"expected per-job audit, got $error")
+
+  test("admin overview returns the latest ten jobs across titles in stable order"):
+    val otherTitleId = GameTitleId.unsafeFromString("title-analysis-contract-other")
+    val jobs = List.tabulate(12) { index =>
+      val jobId = f"job-admin-recent-$index%02d"
+      val jobTitleId = if index % 2 == 0 then titleId else otherTitleId
+      val createdAt = now.plusSeconds((index / 2).toLong)
+      (jobId, jobTitleId, createdAt)
+    }
+    for
+      _ <- seedTitle
+      _ <- new PostgresGameTitlesRepository[IO](transactor)
+        .createWithNextDisplayOrder(
+          GameTitle(otherTitleId, "別の分析契約作品", "momotetsu2", 2, now)
+        )
+        .void
+      _ <- jobs.traverse_ { case (jobId, jobTitleId, createdAt) =>
+        sql"""
+          INSERT INTO series_analysis_jobs (
+            id, game_title_id, input_revision, algorithm_version,
+            artifact_schema_version, status, trigger, requested_at, available_at,
+            finished_at, result_disposition, created_at
+          ) VALUES (
+            $jobId, $jobTitleId, 0, 'series-analysis-v3',
+            2, 'succeeded', 'match_mutation', $createdAt, $createdAt,
+            ${createdAt.plusSeconds(1)}, 'published', $createdAt
+          )
+        """.update.run.transact(transactor).void
+      }
+      repo <- repository
+      result <- repo.adminOverview(Some(titleId))
+    yield result match
+      case Right(overview) =>
+        assertEquals(overview.recentJobs.map(_.jobId), jobs.reverse.take(10).map(_._1))
+        assertEquals(
+          overview.recentJobs.map(_.gameTitleId).distinct.toSet,
+          Set(titleId, otherTitleId)
+        )
+      case Left(error) => fail(s"expected admin overview, got $error")
 
   test("validation-contract promotion stays exact in storage and stable on the public wire"):
     val jobId = "job-validation-contract-update"
@@ -383,6 +556,7 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
         0,
         1,
         Some(SeriesAnalysisArtifactSupport.ValidationContractId),
+        None,
       )
       _ <- pointToArtifacts("artifact-analysis-delete", None)
       analysis <- repository
@@ -420,6 +594,7 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
         0,
         payloadDepth,
         Some(SeriesAnalysisArtifactSupport.ValidationContractId),
+        None,
       )
       _ <- insertPublishedArtifact(
         "artifact-analysis-current",
@@ -427,6 +602,7 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
         0,
         payloadDepth,
         Some(SeriesAnalysisArtifactSupport.ValidationContractId),
+        None,
       )
       _ <- pointToArtifacts("artifact-analysis-current", Some("artifact-analysis-previous"))
       repo <- repository
@@ -456,6 +632,121 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
         Left(AppError.AnalysisArtifactExpired()),
       )
 
+  test("bounded reads distinguish missing scopes, absent chunks and oversized material"):
+    val payload = Files.readAllBytes(
+      repositoryFile("docs/schemas/fixtures/series-analysis/aggregate-payload-v3.json")
+    )
+    val depth =
+      parser.parse(new String(payload, StandardCharsets.UTF_8)).toOption.map(jsonDepth).get
+    val request = SeriesAnalysisChunkRequest(
+      SeriesAnalysisChunkKind.Aggregate,
+      titleId,
+      "artifact-bounded",
+      SeriesAnalysisScope.Overall,
+    )
+    for
+      _ <- seedTitle
+      _ <- insertPublishedArtifact(
+        request.artifactId,
+        payload,
+        0,
+        depth,
+        Some(SeriesAnalysisArtifactSupport.ValidationContractId),
+        None,
+      )
+      _ <- pointToArtifacts(request.artifactId, None)
+      repo <- repository
+      absent <- repo.chunk(request.copy(kind = SeriesAnalysisChunkKind.Review))
+      missing <- repo.chunk(request.copy(scope =
+        SeriesAnalysisScope.Season(
+          SeasonMasterId.unsafeFromString("absent-season")
+        )
+      ))
+      bounded <- PostgresSeriesAnalysisRepository.create[IO](
+        transactor,
+        SeriesAnalysisReadConfig.defaults.copy(maxEncodedBytes = payload.length.toLong - 1)
+      )
+      oversized <- bounded.chunk(request)
+    yield
+      assertEquals(absent, Left(AppError.AnalysisScopeNotInArtifact()))
+      assertEquals(missing, Left(AppError.AnalysisScopeNotFound()))
+      assertEquals(oversized, Left(AppError.Internal("Invalid analysis artifact metadata.")))
+
+  test("match context classifies live identity and pinned content in one snapshot"):
+    val aggregate = Files.readAllBytes(
+      repositoryFile("docs/schemas/fixtures/series-analysis/aggregate-payload-v3.json")
+    )
+    val depth =
+      parser.parse(new String(aggregate, StandardCharsets.UTF_8)).toOption.map(jsonDepth).get
+    val context = Files.readString(
+      repositoryFile("docs/schemas/fixtures/series-analysis/match-context-payload-v1.json")
+    ).replace("member-1", "member_ponta").getBytes(StandardCharsets.UTF_8)
+    val request = SeriesAnalysisChunkRequest(
+      SeriesAnalysisChunkKind.MatchContext,
+      titleId,
+      "artifact-context",
+      SeriesAnalysisScope.Overall,
+      matchId = Some(MatchId.unsafeFromString("match-1"))
+    )
+    def inclusion(result: Either[AppError, momo.api.domain.SeriesAnalysisChunk]) =
+      result.flatMap(chunk =>
+        parser.parse(new String(chunk.payload, StandardCharsets.UTF_8)).flatMap(
+          _.hcursor.downField("inclusion").get[String]("status")
+        ).leftMap(_ => AppError.Internal("invalid context response"))
+      )
+    for
+      _ <- seedTitle
+      _ <-
+      (sql"""INSERT INTO season_masters (id, game_title_id, name, display_order)
+          VALUES ('context-season', $titleId, '年度', 1), ('different-season', $titleId, '別年度', 2)""".update.run *>
+        sql"""INSERT INTO map_masters (id, game_title_id, name, display_order)
+          VALUES ('context-map', $titleId, '地図', 1)""".update.run *>
+        sql"""INSERT INTO held_events (id, held_date_iso, start_at)
+          VALUES ('context-event', '2026-08-09', $now)""".update.run *>
+        sql"""INSERT INTO matches (id, held_event_id, match_no_in_event, game_title_id,
+          layout_family, season_master_id, owner_member_id, map_master_id, played_at,
+          created_by_account_id, analysis_revision)
+          VALUES ('match-1', 'context-event', 1, $titleId, 'momotetsu2', 'context-season',
+            'member_ponta', 'context-map', $now, $accountId, 1)""".update.run *>
+        sql"""INSERT INTO match_players (match_id, member_id, play_order, rank,
+          total_assets_man_yen, revenue_man_yen)
+          SELECT 'match-1', p.id, p.n, p.n, 0, 0 FROM (
+            VALUES ('member_eu', 1), ('member_ponta', 2), ('member_akane_mami', 3), ('member_otaka', 4)
+          ) p(id, n)""".update.run).transact(transactor)
+      _ <- insertPublishedArtifact(
+        request.artifactId,
+        aggregate,
+        0,
+        depth,
+        Some(SeriesAnalysisArtifactSupport.ValidationContractId),
+        Some(context)
+      )
+      _ <- pointToArtifacts(request.artifactId, None)
+      repo <- repository
+      included <- repo.chunk(request)
+      missing <- repo.chunk(request.copy(matchId = Some(MatchId.unsafeFromString("missing-match"))))
+      expired <- repo.chunk(request.copy(artifactId = "expired-artifact"))
+      outside <- repo.chunk(request.copy(scope =
+        SeriesAnalysisScope.Season(
+          SeasonMasterId.unsafeFromString("different-season")
+        )
+      ))
+      noChunk <- repo.chunk(request.copy(scope =
+        SeriesAnalysisScope.Season(
+          SeasonMasterId.unsafeFromString("context-season")
+        )
+      ))
+      _ <- sql"UPDATE matches SET analysis_revision = analysis_revision + 1 WHERE id = 'match-1'"
+        .update.run.transact(transactor)
+      changed <- repo.chunk(request)
+    yield
+      assertEquals(inclusion(included), Right("included"))
+      assertEquals(missing, Left(AppError.NotFound("match", "missing-match")))
+      assertEquals(expired, Left(AppError.AnalysisArtifactExpired()))
+      assertEquals(inclusion(outside), Right("not_in_scope"))
+      assertEquals(inclusion(noChunk), Right("not_in_artifact"))
+      assertEquals(inclusion(changed), Right("match_changed_since_artifact"))
+
   test("exact reader fails closed when the active release still points to a legacy artifact"):
     val payload = Files.readAllBytes(
       repositoryFile("docs/schemas/fixtures/series-analysis/aggregate-payload-v3.json")
@@ -476,6 +767,7 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
         itemCount = 0,
         nestingDepth = payloadDepth,
         validationContractId = None,
+        contextPayload = None,
       )
       _ <- sql"""
         UPDATE series_analysis_title_states
@@ -500,6 +792,7 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
       itemCount: Int,
       nestingDepth: Int,
       validationContractId: Option[String],
+      contextPayload: Option[Array[Byte]],
   ): IO[Unit] =
     val length = payload.length
     val checksum = sha256(payload)
@@ -515,7 +808,7 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
         2, NULL,
         'sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
         'sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd',
-        'staging', 1, 0, 0, 0, $length, $length, NULL
+        'staging', 1, 0, 0, ${contextPayload.size}, $length, $length, NULL
       )
     """.update.run.void *> sql"""
       INSERT INTO series_analysis_scope_aggregate_artifacts (
@@ -525,7 +818,17 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
         $artifactId, 'overall', 'overall', $payload,
         $length, $length, $itemCount, $nestingDepth, $checksum
       )
-    """.update.run.void *> validationContractId.traverse_(contractId => sql"""
+    """.update.run.void *> contextPayload.traverse_ { context =>
+      val size = context.length
+      val checksum = sha256(context)
+      val depth =
+        parser.parse(new String(context, StandardCharsets.UTF_8)).toOption.map(jsonDepth).get
+      sql"""INSERT INTO series_analysis_match_context_artifacts (
+        artifact_id, scope_key, scope_kind, match_id, source_match_revision, payload,
+        encoded_bytes, decoded_bytes, item_count, nesting_depth, checksum
+      ) VALUES ($artifactId, 'overall', 'overall', 'match-1', 1, $context,
+        $size, $size, 1, $depth, $checksum)""".update.run.void
+    } *> validationContractId.traverse_(contractId => sql"""
       UPDATE series_analysis_artifacts
       SET validation_contract_id = $contractId
       WHERE id = $artifactId AND status = 'staging'

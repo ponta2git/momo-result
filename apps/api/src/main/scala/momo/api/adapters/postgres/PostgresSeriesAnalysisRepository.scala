@@ -140,14 +140,14 @@ object PostgresSeriesAnalysisRepository:
       config: SeriesAnalysisReadConfig,
   )(
       read: F[Either[AppError, SeriesAnalysisChunk]]
-  ): F[Either[AppError, SeriesAnalysisChunk]] = semaphore.tryAcquire.flatMap {
+  ): F[Either[AppError, SeriesAnalysisChunk]] = semaphore.tryPermit.use {
     case false => AppError.AnalysisReadBusy(config.busyRetryAfterSeconds)
         .asLeft[SeriesAnalysisChunk].pure[F]
     case true => read.timeoutTo(
         config.readTimeout,
         AppError.AnalysisReadBusy(config.busyRetryAfterSeconds)
           .asLeft[SeriesAnalysisChunk].pure[F],
-      ).guarantee(semaphore.release)
+      )
   }
 
 end PostgresSeriesAnalysisRepository

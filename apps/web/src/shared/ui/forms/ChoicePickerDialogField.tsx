@@ -80,11 +80,11 @@ export function ChoicePickerDialogField({
     >
       <div
         className={cn(
-          "flex min-h-11 min-w-0 items-center gap-2 rounded-[var(--radius-sm)] border bg-[var(--color-surface)] pr-1 pl-3 sm:min-h-10",
+          "flex min-h-11 min-w-0 items-center gap-2 rounded-sm border bg-[var(--color-surface)] pr-1 pl-3 pointer-fine:min-h-10",
           error ? "border-[var(--color-danger)]" : "border-[var(--color-border)]",
         )}
       >
-        <p className="min-w-0 flex-1 text-sm leading-5 font-medium text-pretty text-[var(--color-text-primary)]">
+        <p className="font-plain min-w-0 flex-1 text-sm leading-5 text-pretty text-[var(--color-text-primary)]">
           {selectedLabel}
         </p>
         <div className="shrink-0">
@@ -118,7 +118,7 @@ export function ChoicePickerDialogField({
                 statusPlacement="top-end"
                 strategy="preserve-inert"
               >
-                <div className="flex min-h-0 flex-col gap-3 pt-2">
+                <div className="flex min-h-0 flex-col gap-3">
                   <div className="flex min-h-0 flex-1 flex-col">
                     <ChoiceList
                       disabled={disabled}

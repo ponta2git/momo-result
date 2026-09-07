@@ -17,10 +17,12 @@ import {
 import type { SeriesComparisonAggregateV3 } from "@/shared/api/seriesAnalysis";
 import { formatSeriesMatchIndex } from "@/shared/domain/matchLabels";
 import { currentInternalLocation, withReturnTo } from "@/shared/navigation/returnTo";
+import { cn } from "@/shared/ui/cn";
 import { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
 import { DataVizHistogramChart } from "@/shared/ui/dataViz/HistogramChart";
 import { DataVizScatterPlot } from "@/shared/ui/dataViz/ScatterPlot";
 import { rankBackgroundColor, rankBorderColor } from "@/shared/ui/rank/rankPresentation";
+import { contentText } from "@/shared/ui/typography";
 
 export function AssetRevenueHistograms({ response }: { response: SeriesComparisonAggregateV3 }) {
   const seriesIdentity = response.players.map((player) => ({
@@ -28,9 +30,9 @@ export function AssetRevenueHistograms({ response }: { response: SeriesCompariso
     label: player.displayName,
   }));
   return (
-    <div className="grid gap-5">
+    <div className="grid gap-6">
       <div>
-        <h3 className="mb-2 text-sm font-semibold">総資産の分布</h3>
+        <h3 className={cn(contentText.heading, "mb-2")}>総資産の分布</h3>
         <DataVizHistogramChart
           ariaLabel="4人の総資産分布"
           bins={response.histograms.assets.bins.map((bin) => ({
@@ -45,7 +47,7 @@ export function AssetRevenueHistograms({ response }: { response: SeriesCompariso
         />
       </div>
       <div>
-        <h3 className="mb-2 text-sm font-semibold">物件収益の分布</h3>
+        <h3 className={cn(contentText.heading, "mb-2")}>物件収益の分布</h3>
         <DataVizHistogramChart
           ariaLabel="4人の物件収益分布"
           bins={response.histograms.revenue.bins.map((bin) => ({
@@ -83,17 +85,17 @@ export function RevenueConversionMatrices({
           },
         ]}
       />
-      <div className="grid gap-3 lg:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-2">
         {response.revenueRankConversion.map((entry) => {
           const cellByRanks = new Map(
             entry.cells.map((cell) => [`${cell.revenueRank}:${cell.finalRank}`, cell]),
           );
           return (
             <article
-              className="min-w-0 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3"
+              className="min-w-0 rounded-sm border border-[var(--color-border)] bg-[var(--color-surface)] p-4"
               key={entry.memberId}
             >
-              <h3 className="mb-3 text-sm font-semibold">
+              <h3 className={cn(contentText.heading, "mb-4")}>
                 <MemberSequenceLabel memberId={entry.memberId}>
                   {entry.displayName}
                 </MemberSequenceLabel>
@@ -111,7 +113,7 @@ export function RevenueConversionMatrices({
                     />
                     {SERIES_RANKS.map((rank) => (
                       <MatrixColumnHeader
-                        className="px-1 py-1 text-[11px]"
+                        className="px-1 py-1 text-xs"
                         key={rank}
                         style={{ borderTopColor: rankBorderColor(rank), borderTopWidth: 3 }}
                       >
@@ -123,7 +125,7 @@ export function RevenueConversionMatrices({
                 <tbody>
                   {SERIES_RANKS.map((revenueRank) => (
                     <tr key={revenueRank}>
-                      <MatrixRowHeader className="px-1 text-[11px]">
+                      <MatrixRowHeader className="px-1 text-xs">
                         収益{revenueRank}位
                       </MatrixRowHeader>
                       {SERIES_RANKS.map((finalRank) => {
@@ -132,7 +134,7 @@ export function RevenueConversionMatrices({
                           return (
                             <MatrixCell
                               aria-label={`収益${revenueRank}位から最終${finalRank}位、対象なし`}
-                              className="rounded-[var(--radius-xs)] border border-[var(--color-border)] bg-[var(--color-surface)] px-1 py-2 text-center"
+                              className="rounded-xs border border-[var(--color-border)] bg-[var(--color-surface)] px-1 py-2 text-center"
                               key={finalRank}
                             >
                               —
@@ -143,7 +145,7 @@ export function RevenueConversionMatrices({
                         return (
                           <MatrixCell
                             aria-label={`収益${cell.revenueRank}位から最終${cell.finalRank}位、${cell.count}戦、${formatPercent(cell.rate)}${focused ? "、この試合" : ""}`}
-                            className={`rounded-[var(--radius-xs)] border px-1 py-2 text-center ${focused ? "ring-2 ring-[var(--color-action)] ring-offset-1 ring-offset-[var(--color-surface)]" : ""}`}
+                            className={`rounded-xs border px-1 py-2 text-center ${focused ? "ring-2 ring-[var(--color-action)] ring-offset-1 ring-offset-[var(--color-surface)]" : ""}`}
                             data-focused-metric={focused ? "true" : undefined}
                             key={finalRank}
                             style={
@@ -161,12 +163,14 @@ export function RevenueConversionMatrices({
                                   }
                             }
                           >
-                            <strong className="text-sm tabular-nums">{cell.count}</strong>
-                            <p className="text-[11px] text-[var(--color-text-primary)] tabular-nums">
+                            <strong className={cn(contentText.compactPrimary, "tabular-nums")}>
+                              {cell.count}
+                            </strong>
+                            <p className={cn(contentText.body, "tabular-nums")}>
                               {formatPercent(cell.rate)}
                             </p>
                             {focused ? (
-                              <p className="mt-0.5 text-[11px] font-semibold text-[var(--color-action)]">
+                              <p className="font-plain mt-0.5 text-xs text-[var(--color-action)]">
                                 この試合
                               </p>
                             ) : null}

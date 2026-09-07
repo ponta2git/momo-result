@@ -1,5 +1,6 @@
-import { ArrowLeft, Camera, Download, Keyboard, ListFilter, RefreshCw } from "lucide-react";
+import { ArrowLeft, Camera, Keyboard } from "lucide-react";
 
+import { HeldEventDetailHeaderActions } from "@/features/heldEvents/HeldEventDetailHeaderActions";
 import {
   HeldEventDetailLoading,
   HeldEventDetailUnavailable,
@@ -17,6 +18,7 @@ import { Notice } from "@/shared/ui/feedback/Notice";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
 import { PageHeader } from "@/shared/ui/layout/PageHeader";
+import { contentText } from "@/shared/ui/typography";
 
 export function HeldEventDetailPage() {
   const page = useHeldEventDetailPageModel();
@@ -25,12 +27,12 @@ export function HeldEventDetailPage() {
     return <HeldEventDetailLoading />;
   }
   if (page.kind === "notFound") {
-    return <HeldEventDetailUnavailable backHref={page.navigation.backHref} notFound />;
+    return <HeldEventDetailUnavailable {...page.navigation} notFound />;
   }
   if (page.kind === "loadFailed") {
     return (
       <HeldEventDetailUnavailable
-        backHref={page.navigation.backHref}
+        {...page.navigation}
         retrying={page.refresh.pending}
         onRetry={page.refresh.run}
       />
@@ -59,42 +61,14 @@ function HeldEventDetailReadyContent({ page }: { page: HeldEventDetailReadyPageM
 
       <PageHeader
         actions={
-          <nav aria-label="この開催の関連操作" className="flex flex-wrap items-center gap-2">
-            <LinkButton
-              icon={<ListFilter aria-hidden="true" />}
-              size="sm"
-              to={navigation.matchesHref}
-              variant="quiet"
-            >
-              試合検索で見る
-            </LinkButton>
-            <LinkButton
-              icon={<Download aria-hidden="true" />}
-              size="sm"
-              to={navigation.exportHref}
-              variant="quiet"
-            >
-              CSV出力
-            </LinkButton>
-            <Button
-              aria-label="開催詳細を更新"
-              icon={<RefreshCw aria-hidden="true" />}
-              pending={refresh.pending}
-              pendingLabel="更新中"
-              size="sm"
-              variant="quiet"
-              onClick={refresh.run}
-            >
-              更新
-            </Button>
-          </nav>
+          <HeldEventDetailHeaderActions exportHref={navigation.exportHref} refresh={refresh} />
         }
         description={`確定済み${detail.matchCount}試合・未確定下書き${detail.draftCount}件`}
         eyebrow="開催記録"
         title={formatHeldEventDateTime(detail.heldAt)}
       />
 
-      <PageContentSurface aria-label="開催内容" className="grid gap-6" role="region">
+      <PageContentSurface aria-label="開催内容" className="grid gap-8" role="region">
         {freshness.kind === "stale" ? (
           <Notice
             tone="warning"
@@ -136,11 +110,8 @@ function HeldEventDetailReadyContent({ page }: { page: HeldEventDetailReadyPageM
           </Notice>
         ) : null}
 
-        <section aria-labelledby="held-event-next-match-heading" className="grid gap-3">
-          <h2
-            className="momo-heading text-lg font-semibold text-[var(--color-text-primary)]"
-            id="held-event-next-match-heading"
-          >
+        <section aria-labelledby="held-event-next-match-heading" className="grid gap-4">
+          <h2 className={contentText.heading} id="held-event-next-match-heading">
             {formatMatchNoInEvent(detail.nextMatchNo)}を記録
           </h2>
           <div className="flex flex-wrap gap-2">

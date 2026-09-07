@@ -1,5 +1,5 @@
 import { Settings2, Trash2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { MatchSetupFields } from "@/features/matches/workspace/MatchSetupFields";
 import type {
@@ -15,6 +15,7 @@ import { Disclosure } from "@/shared/ui/data/Collapsible";
 import { AlertDialog } from "@/shared/ui/feedback/Dialog";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { TextField } from "@/shared/ui/forms/TextField";
+import { contentText, fieldText } from "@/shared/ui/typography";
 
 type MatchSetupSectionProps = {
   cancellation: MatchWorkspaceCancellationModel;
@@ -36,12 +37,12 @@ export function MatchSetupSection({
     selectedHeldEvent && selectedGameTitle && selectedSeason && selectedMap && values.playedAt,
   );
   const hasErrors = model.fields.validation.errorPathSet.size > 0;
-  const [editorOpen, setEditorOpen] = useState(!contextComplete);
-  useEffect(() => {
-    if (hasErrors) {
-      setEditorOpen(true);
-    }
-  }, [hasErrors]);
+  const [editorOpen, setEditorOpen] = useState(!contextComplete || hasErrors);
+  const [previousHasErrors, setPreviousHasErrors] = useState(hasErrors);
+  if (previousHasErrors !== hasErrors) {
+    setPreviousHasErrors(hasErrors);
+    if (hasErrors) setEditorOpen(true);
+  }
   const contextSummary = contextComplete
     ? [
         selectedHeldEvent ? formatDateTimeLong(selectedHeldEvent.heldAt) : null,
@@ -60,20 +61,19 @@ export function MatchSetupSection({
         ariaLabel={editorOpen ? "条件を閉じる" : "条件を変更"}
         keepMounted
         open={editorOpen}
-        panelPadding="md"
+        panelPadding="none"
+        panelSpacing="md"
         presentation="inset"
         summary={
           <span className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
             <span className="min-w-0 flex-1">
-              <span className="block text-sm font-semibold text-[var(--color-text-primary)]">
-                保存先と試合条件
-              </span>
+              <span className={cn(contentText.heading, "block")}>保存先と試合条件</span>
               <span
                 className={cn(
-                  "mt-0.5 block truncate text-xs tabular-nums",
+                  "mt-0.5 block tabular-nums",
                   hasErrors || !contextComplete
-                    ? "font-semibold text-[var(--color-danger)]"
-                    : "text-[var(--color-text-secondary)]",
+                    ? fieldText.error
+                    : cn(contentText.supporting, "truncate"),
                 )}
                 title={contextSummary}
               >
@@ -85,7 +85,7 @@ export function MatchSetupSection({
             </span>
           </span>
         }
-        triggerLayout="section"
+        triggerLayout="flush-horizontal"
         onOpenChange={setEditorOpen}
       >
         <MatchSetupFields model={model.fields} />
@@ -93,12 +93,16 @@ export function MatchSetupSection({
         <div className="mt-4">
           <Disclosure
             keepMounted
+            panelSpacing="sm"
             summary="一覧にない開催を追加する"
             triggerLayout="compact"
             triggerVariant="compact"
           >
-            <div className="pt-2">
-              <div className="grid gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3 md:grid-cols-[1fr_auto] md:items-end">
+            <div className="grid gap-2">
+              <div
+                className="grid gap-2 md:grid-cols-[1fr_auto] md:items-end"
+                data-held-event-creation-fields=""
+              >
                 <TextField
                   label="開催日時"
                   type="datetime-local"
@@ -118,12 +122,10 @@ export function MatchSetupSection({
                 </Button>
               </div>
               {model.eventCreation.feedback.error ? (
-                <div className="mt-2">
-                  <Notice title={model.eventCreation.feedback.error.title} tone="danger">
-                    <p>{model.eventCreation.feedback.error.detail}</p>
-                    <p className="mt-1">{model.eventCreation.feedback.error.nextStep}</p>
-                  </Notice>
-                </div>
+                <Notice title={model.eventCreation.feedback.error.title} tone="danger">
+                  <p>{model.eventCreation.feedback.error.detail}</p>
+                  <p className="mt-1">{model.eventCreation.feedback.error.nextStep}</p>
+                </Notice>
               ) : null}
             </div>
           </Disclosure>

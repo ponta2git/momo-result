@@ -48,6 +48,7 @@ object HeldEventModule:
               item.matchCount,
               item.draftCount,
               item.nextMatchNo,
+              item.scopes,
             )
           ),
           pagination = PaginationResponse.from(result.pagination),
@@ -76,7 +77,13 @@ object HeldEventModule:
             security.decode(HeldEventCodec.toCreateCommand(request))(command =>
               security
                 .respond(createHeldEvent.run(command))(event =>
-                  HeldEventResponse.from(event, matchCount = 0, draftCount = 0, nextMatchNo = 1)
+                  HeldEventResponse.from(
+                    event,
+                    matchCount = 0,
+                    draftCount = 0,
+                    nextMatchNo = 1,
+                    scopes = Nil
+                  )
                 )
             ),
           )

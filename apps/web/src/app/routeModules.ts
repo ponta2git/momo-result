@@ -1,10 +1,9 @@
+export { LoginPage } from "@/features/auth/LoginPage";
+
 export const loadAdminAccountsPage = () =>
   import("@/features/adminAccounts/AdminAccountsPage").then((module) => ({
     default: module.AdminAccountsPage,
   }));
-
-export const loadLoginPage = () =>
-  import("@/features/auth/LoginPage").then((module) => ({ default: module.LoginPage }));
 
 export const loadDraftReviewPage = () =>
   import("@/features/matches/workspace/DraftReviewPage").then((module) => ({
@@ -66,7 +65,6 @@ const routePreloaders: Array<{
   matches: (pathname: string) => boolean;
   preload: () => Promise<unknown>;
 }> = [
-  { matches: (pathname) => pathname === "/login", preload: loadLoginPage },
   { matches: (pathname) => pathname === "/matches", preload: loadMatchesListPage },
   { matches: (pathname) => pathname === "/held-events", preload: loadHeldEventsPage },
   {

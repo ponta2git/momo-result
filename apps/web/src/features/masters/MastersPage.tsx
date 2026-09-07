@@ -7,15 +7,12 @@ import { Notice } from "@/shared/ui/feedback/Notice";
 import { TabsList, TabsPanel, TabsRoot, TabsTab } from "@/shared/ui/forms/Tabs";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
-import { PageHeader } from "@/shared/ui/layout/PageHeader";
 
 export function MastersPage() {
   const page = useMastersPageModel();
 
   return (
     <PageFrame>
-      <PageHeader eyebrow="管理" title="設定管理" />
-
       {page.feedback.authError ? (
         <Notice tone="danger" title={page.feedback.authError.title}>
           {page.feedback.authError.detail}
@@ -32,9 +29,9 @@ export function MastersPage() {
         />
       ) : null}
 
-      <PageContentSurface aria-label="設定管理" role="region">
+      <PageContentSurface aria-label="設定管理" className="grid gap-6" role="region">
         {page.feedback.operationError || page.feedback.invalidReturnTo ? (
-          <div className="mb-6 grid gap-3">
+          <div className="grid gap-4">
             {page.feedback.operationError ? (
               <Notice tone="danger" title="設定の変更に失敗しました">
                 {page.feedback.operationError}

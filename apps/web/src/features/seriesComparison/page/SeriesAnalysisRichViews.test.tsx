@@ -121,6 +121,9 @@ describe("rich series analysis views", () => {
     expect(screen.getByText("目的地への依存度")).toBeInTheDocument();
     expect(screen.getByText(/候補はこの1件.*別開催で支持 5組/u)).toBeInTheDocument();
     expect(screen.getByText("4億5000万円")).toBeInTheDocument();
+    expect(screen.getByText("-5万円〜-3万円")).toBeInTheDocument();
+    expect(screen.getByText("-2万円〜0円")).toBeInTheDocument();
+    expect(screen.getByText("-2万円〜0円、1戦")).toBeInTheDocument();
     expect(screen.getByText("0円")).toBeInTheDocument();
     expect(screen.getByText("1万円〜9999万円")).toBeInTheDocument();
     expect(screen.queryByText("0〜9999")).not.toBeInTheDocument();

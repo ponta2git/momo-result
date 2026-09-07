@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-readonly analysis_smoke_algorithm_version="series-analysis-v3"
+readonly analysis_smoke_algorithm_version="series-analysis-v4"
 
 analysis_smoke_require_isolated_services() {
   if [[ "${ANALYSIS_SMOKE_SERVICES_ARE_ISOLATED:-}" != "true" ]]; then

@@ -25,7 +25,7 @@ export function HeldEventDetailLoading() {
             <Skeleton className="h-11 w-full rounded-sm sm:w-28 pointer-fine:h-9" />
           </div>
         }
-        description={<Skeleton as="span" className="block h-6 w-full max-w-56" />}
+        description={<Skeleton as="span" className="block h-5 w-full max-w-56" />}
         eyebrow="開催記録"
         title="開催の記録を読み込み中"
       />

@@ -105,10 +105,12 @@ test("creates a held event and completes OCR intake and review", async ({
     await expect(page.getByRole("region", { exact: true, name: "開催履歴" })).toBeVisible();
 
     const expectedOcrHref = withReturnTo(`/ocr/new?heldEventId=${heldEventId}`, "/held-events");
-    const heldEventOcrLink = page
-      .locator(`a[href="${expectedOcrHref}"]`)
-      .filter({ hasText: "OCR取り込み" });
+    const heldEventOcrLink = page.getByRole("link", {
+      exact: true,
+      name: `${heldEventLabelPrefix}の開催にOCR取り込み`,
+    });
     await expect(heldEventOcrLink).toHaveCount(1);
+    await expect(heldEventOcrLink).toHaveAttribute("href", expectedOcrHref);
     await expect(heldEventOcrLink).toBeVisible();
 
     await page.setViewportSize({ height: 844, width: 390 });

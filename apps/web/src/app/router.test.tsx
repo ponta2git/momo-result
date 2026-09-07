@@ -1,5 +1,5 @@
 import { QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { createMemoryRouter, RouterProvider } from "react-router-dom";
@@ -410,11 +410,15 @@ describe("app routing", () => {
     expect(reviewSearches).toHaveLength(1);
     expect(reviewSearches[0]?.get("artifactId")).toBe(analysisArtifact.artifactId);
 
+    // This test controls API readiness; module transformation belongs to build/runtime evidence.
+    await import("@/features/seriesComparison/page/SeriesAnalysisOverviewView");
     const analysisPurposeTab = screen.getByRole("tab", { name: "分析する" });
     await user.click(analysisPurposeTab);
     expect(await screen.findByText("比較条件を更新中")).toBeInTheDocument();
-    analysisPurposeTab.blur();
-    aggregateResponseGate.resolve();
+    await act(async () => {
+      analysisPurposeTab.blur();
+      aggregateResponseGate.resolve();
+    });
     expect(await screen.findByRole("tabpanel", { name: "今の差" })).toBeInTheDocument();
     expect(analysisPurposeTab).toHaveFocus();
     expect(await screen.findByRole("heading", { name: "順位と基礎比較" })).toBeInTheDocument();

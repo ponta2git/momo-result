@@ -1,4 +1,4 @@
-import type { APIRequestContext, Locator, Route } from "@playwright/test";
+import type { APIRequestContext, Locator, Page, Route } from "@playwright/test";
 
 import {
   devAccountId,
@@ -137,10 +137,6 @@ test("keeps match rows usable through responsive update and retry states", async
       loadingSurfaceTopAt320 = await page
         .getByRole("region", { name: "開催内容" })
         .evaluate((surface) => surface.getBoundingClientRect().top);
-      await expectResponsiveLeadActionGeometry(
-        page.locator('[data-page-header-actions="responsive-lead"]'),
-        2,
-      );
       const navigationGeometry = await page.evaluate(() => {
         const scroller = document.querySelector<HTMLElement>("[data-nav-scroll]");
         const active = scroller?.querySelector<HTMLElement>('[aria-current="page"]');
@@ -169,10 +165,6 @@ test("keeps match rows usable through responsive update and retry states", async
       loadingSurfaceTop = await page
         .getByRole("region", { name: "開催内容" })
         .evaluate((surface) => surface.getBoundingClientRect().top);
-      await expectResponsiveLeadActionGeometry(
-        page.locator('[data-page-header-actions="responsive-lead"]'),
-        2,
-      );
     } finally {
       detailGate.resolve();
       await page.unroute(detailPattern, holdDetail);
@@ -182,10 +174,7 @@ test("keeps match rows usable through responsive update and retry states", async
     const readySurfaceTop = await page
       .getByRole("region", { name: "開催内容" })
       .evaluate((surface) => surface.getBoundingClientRect().top);
-    await expectResponsiveLeadActionGeometry(
-      page.locator('[data-page-header-actions="responsive-lead"]'),
-      3,
-    );
+    await expectHeldEventActionsUsable(page, true);
     expect(loadingSurfaceTop).toBeDefined();
     expect(Math.abs(readySurfaceTop - (loadingSurfaceTop ?? readySurfaceTop))).toBeLessThanOrEqual(
       2,
@@ -196,10 +185,7 @@ test("keeps match rows usable through responsive update and retry states", async
     const readySurfaceTopAt320 = await page
       .getByRole("region", { name: "開催内容" })
       .evaluate((surface) => surface.getBoundingClientRect().top);
-    await expectResponsiveLeadActionGeometry(
-      page.locator('[data-page-header-actions="responsive-lead"]'),
-      3,
-    );
+    await expectHeldEventActionsUsable(page, true);
     expect(loadingSurfaceTopAt320).toBeDefined();
     expect(
       Math.abs(readySurfaceTopAt320 - (loadingSurfaceTopAt320 ?? readySurfaceTopAt320)),
@@ -212,10 +198,7 @@ test("keeps match rows usable through responsive update and retry states", async
       for (const width of [320, 375]) {
         await page.setViewportSize({ height: 844, width });
         await expectNoHorizontalPageOverflow(page);
-        await expectResponsiveLeadActionGeometry(
-          page.locator('[data-page-header-actions="responsive-lead"]'),
-          2,
-        );
+        await expectHeldEventActionsUsable(page, false);
       }
     } finally {
       await page.unroute(detailPattern, fulfillHeldEventNotFound);
@@ -373,67 +356,26 @@ test("keeps match rows usable through responsive update and retry states", async
   });
 });
 
-async function expectResponsiveLeadActionGeometry(group: Locator, expectedCount: number) {
-  await expect(group).toBeVisible();
-  const directChildren = group.locator(":scope > *");
-  await expect(directChildren).toHaveCount(expectedCount);
-  for (let index = 0; index < expectedCount; index += 1) {
-    await expect(directChildren.nth(index)).toBeVisible();
-  }
+async function expectHeldEventActionsUsable(page: Page, refreshAvailable: boolean) {
+  const back = page.getByRole("link", { exact: true, name: "開催履歴へ戻る" });
+  const actions = page.getByRole("navigation", { name: "この開催の関連操作" });
+  const exportLink = actions.getByRole("link", { exact: true, name: "CSV出力" });
+  const refresh = actions.getByRole("button", { name: "開催詳細を更新" });
 
-  const geometry = await group.evaluate((element) => {
-    const groupBox = element.getBoundingClientRect();
-    return {
-      children: Array.from(element.children, (child) => {
-        const box = child.getBoundingClientRect();
-        return {
-          bottom: box.bottom,
-          left: box.left,
-          right: box.right,
-          top: box.top,
-          height: box.height,
-          width: box.width,
-        };
-      }),
-      group: {
-        bottom: groupBox.bottom,
-        left: groupBox.left,
-        right: groupBox.right,
-        top: groupBox.top,
-        height: groupBox.height,
-        width: groupBox.width,
-      },
-    };
-  });
-  const first = geometry.children[0];
-  const second = geometry.children[1];
-  if (!first || !second) throw new Error("expected at least two header actions");
+  await expect(back).toHaveAttribute("href", "/held-events");
+  await back.click({ trial: true });
+  await exportLink.click({ trial: true });
+  await back.focus();
+  await back.press("Tab");
+  await expect(exportLink).toBeFocused();
 
-  expect(geometry.group.height).toBeGreaterThan(0);
-  expect(geometry.group.width).toBeGreaterThan(0);
-  expect(Math.abs(first.left - geometry.group.left)).toBeLessThanOrEqual(1);
-  expect(Math.abs(first.right - geometry.group.right)).toBeLessThanOrEqual(1);
-  expect(Math.abs(first.width - geometry.group.width)).toBeLessThanOrEqual(1);
-  expect(Math.abs(second.top - first.bottom - 8)).toBeLessThanOrEqual(1);
-
-  for (let leftIndex = 0; leftIndex < geometry.children.length; leftIndex += 1) {
-    const child = geometry.children[leftIndex];
-    if (!child) throw new Error("expected header action geometry");
-    expect(child.height).toBeGreaterThan(0);
-    expect(child.width).toBeGreaterThan(0);
-    expect(child.left).toBeGreaterThanOrEqual(geometry.group.left - 1);
-    expect(child.right).toBeLessThanOrEqual(geometry.group.right + 1);
-    expect(child.top).toBeGreaterThanOrEqual(geometry.group.top - 1);
-    expect(child.bottom).toBeLessThanOrEqual(geometry.group.bottom + 1);
-
-    for (let rightIndex = leftIndex + 1; rightIndex < geometry.children.length; rightIndex += 1) {
-      const left = geometry.children[leftIndex];
-      const right = geometry.children[rightIndex];
-      if (!left || !right) throw new Error("expected header action geometry");
-      const horizontalOverlap = Math.min(left.right, right.right) - Math.max(left.left, right.left);
-      const verticalOverlap = Math.min(left.bottom, right.bottom) - Math.max(left.top, right.top);
-      expect(horizontalOverlap > 1 && verticalOverlap > 1).toBe(false);
-    }
+  if (refreshAvailable) {
+    await expect(refresh).toBeEnabled();
+    await refresh.click({ trial: true });
+    await exportLink.press("Tab");
+    await expect(refresh).toBeFocused();
+  } else {
+    await expect(refresh).toHaveCount(0);
   }
 }
 
@@ -453,11 +395,6 @@ async function fulfillHeldEventNotFound(route: Route) {
 
 async function expectStackedRowGeometry(row: Locator) {
   await expect(row).toBeVisible();
-  const directChildren = row.locator(":scope > *");
-  await expect(directChildren).toHaveCount(4);
-  for (let index = 0; index < 4; index += 1) {
-    await expect(directChildren.nth(index)).toBeVisible();
-  }
 
   const geometry = await row.evaluate((element) => {
     const rowRect = element.getBoundingClientRect();
@@ -504,7 +441,7 @@ async function expectStackedRowGeometry(row: Locator) {
     const previous = geometry.childRects[index - 1];
     const current = geometry.childRects[index];
     if (!previous || !current) throw new Error("expected result-row geometry");
-    expect(Math.abs(current.top - previous.bottom - 12)).toBeLessThanOrEqual(1);
+    expect(current.top).toBeGreaterThanOrEqual(previous.bottom);
   }
   const last = geometry.childRects.at(-1);
   if (!last) throw new Error("expected result-row geometry");

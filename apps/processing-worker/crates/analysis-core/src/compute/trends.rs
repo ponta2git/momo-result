@@ -164,12 +164,42 @@ impl RunningPopulationStdDev {
     }
 }
 
-pub(super) fn histogram(
+pub(super) fn asset_histogram(
     rows: &[&PlayerMatchInput],
     players: &[String],
     value: impl Fn(&PlayerMatchInput) -> i32 + Copy,
 ) -> Value {
-    histogram_with_zero_handling(rows, players, value, ZeroHandling::SharedBin)
+    const SINGLE_SIDE_BIN_COUNT: i64 = 6;
+    const MIXED_NONPOSITIVE_BIN_COUNT: i64 = 2;
+    const MIXED_POSITIVE_BIN_COUNT: i64 = 5;
+
+    let all_values = rows.iter().map(|row| value(row)).collect::<Vec<_>>();
+    if all_values.is_empty() {
+        return json!({ "bins": [], "series": [] });
+    }
+    let nonpositive_values = all_values
+        .iter()
+        .copied()
+        .filter(|candidate| *candidate <= 0)
+        .collect::<Vec<_>>();
+    let positive_values = all_values
+        .iter()
+        .copied()
+        .filter(|candidate| *candidate > 0)
+        .collect::<Vec<_>>();
+    let (nonpositive_bin_count, positive_bin_count) =
+        match (nonpositive_values.is_empty(), positive_values.is_empty()) {
+            (false, false) => (MIXED_NONPOSITIVE_BIN_COUNT, MIXED_POSITIVE_BIN_COUNT),
+            (false, true) => (SINGLE_SIDE_BIN_COUNT, 0),
+            (true, false) => (0, SINGLE_SIDE_BIN_COUNT),
+            (true, true) => return json!({ "bins": [], "series": [] }),
+        };
+    let mut bins = partition_histogram_bins(&nonpositive_values, nonpositive_bin_count, Some(1))
+        .unwrap_or_default();
+    bins.extend(
+        partition_histogram_bins(&positive_values, positive_bin_count, None).unwrap_or_default(),
+    );
+    histogram_json(rows, players, value, &bins)
 }
 
 pub(super) fn revenue_histogram(
@@ -177,38 +207,25 @@ pub(super) fn revenue_histogram(
     players: &[String],
     value: impl Fn(&PlayerMatchInput) -> i32 + Copy,
 ) -> Value {
-    histogram_with_zero_handling(rows, players, value, ZeroHandling::Isolated)
-}
-
-fn histogram_with_zero_handling(
-    rows: &[&PlayerMatchInput],
-    players: &[String],
-    value: impl Fn(&PlayerMatchInput) -> i32 + Copy,
-    zero_handling: ZeroHandling,
-) -> Value {
     let all_values = rows.iter().map(|row| value(row)).collect::<Vec<_>>();
     if all_values.is_empty() {
         return json!({ "bins": [], "series": [] });
     }
-    let values_for_boundaries = match zero_handling {
-        ZeroHandling::Isolated => all_values
-            .iter()
-            .copied()
-            .filter(|candidate| *candidate != 0)
-            .collect::<Vec<_>>(),
-        ZeroHandling::SharedBin => all_values.clone(),
-    };
+    let values_for_boundaries = all_values
+        .iter()
+        .copied()
+        .filter(|candidate| *candidate != 0)
+        .collect::<Vec<_>>();
     let Some(base_bins) = fixed_histogram_bins(&values_for_boundaries) else {
-        if zero_handling == ZeroHandling::Isolated && all_values.contains(&0) {
+        if all_values.contains(&0) {
             return histogram_json(rows, players, value, &[HistogramBin::zero()]);
         }
         return json!({ "bins": [], "series": [] });
     };
-    let bins = match zero_handling {
-        ZeroHandling::Isolated if all_values.contains(&0) => {
-            bins_with_isolated_zero(base_bins, &values_for_boundaries)
-        }
-        ZeroHandling::Isolated | ZeroHandling::SharedBin => base_bins,
+    let bins = if all_values.contains(&0) {
+        bins_with_isolated_zero(base_bins, &values_for_boundaries)
+    } else {
+        base_bins
     };
     histogram_json(rows, players, value, &bins)
 }
@@ -228,6 +245,44 @@ fn fixed_histogram_bins(values: &[i32]) -> Option<Vec<HistogramBin>> {
         })
         .collect();
     Some(bins)
+}
+
+fn partition_histogram_bins(
+    values: &[i32],
+    maximum_bin_count: i64,
+    final_upper_exclusive: Option<i64>,
+) -> Option<Vec<HistogramBin>> {
+    if values.is_empty() || maximum_bin_count <= 0 {
+        return None;
+    }
+    let minimum = values.iter().min().copied().map(i64::from)?;
+    let lower = percentile_i32(values, 0.05).and_then(floor_i64)?;
+    let upper = percentile_i32(values, 0.95).and_then(ceil_i64)?;
+    let span = (upper - lower).max(0);
+    let bin_count = maximum_bin_count.min(span.checked_add(1)?).max(1);
+    let bins = (0..bin_count)
+        .map(|index| {
+            let lower_inclusive = if index == 0 {
+                minimum
+            } else {
+                histogram_cut(lower, span, index, bin_count)
+            };
+            let upper_exclusive = if index == bin_count - 1 {
+                final_upper_exclusive
+            } else {
+                Some(histogram_cut(lower, span, index + 1, bin_count))
+            };
+            HistogramBin {
+                lower_inclusive,
+                upper_exclusive,
+            }
+        })
+        .collect();
+    Some(bins)
+}
+
+const fn histogram_cut(lower: i64, span: i64, index: i64, bin_count: i64) -> i64 {
+    lower + (span * index + bin_count - 1) / bin_count
 }
 
 fn bins_with_isolated_zero(bins: Vec<HistogramBin>, nonzero_values: &[i32]) -> Vec<HistogramBin> {
@@ -299,12 +354,6 @@ fn histogram_json(
         })
         .collect::<Vec<_>>();
     json!({ "bins": bin_rows, "series": series })
-}
-
-#[derive(Clone, Copy, Eq, PartialEq)]
-enum ZeroHandling {
-    SharedBin,
-    Isolated,
 }
 
 #[derive(Clone, Copy)]

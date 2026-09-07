@@ -44,6 +44,45 @@ fn row(match_index: i32, player: i32) -> PlayerMatchInput {
     }
 }
 
+fn assets_histogram(values: [i32; 4]) -> Value {
+    let indexed_values = (1..=4)
+        .zip(values)
+        .map(|(player, assets)| (1, player, assets))
+        .collect::<Vec<_>>();
+    assets_histogram_for_rows(&indexed_values)
+}
+
+fn assets_histogram_for_rows(values: &[(i32, i32, i32)]) -> Value {
+    let owned_rows = values
+        .iter()
+        .map(|(match_index, player, assets)| {
+            let mut value = row(*match_index, *player);
+            value.total_assets_man_yen = *assets;
+            value
+        })
+        .collect::<Vec<_>>();
+    let rows = owned_rows.iter().collect::<Vec<_>>();
+    let players = (1..=4)
+        .map(|player| format!("member-{player}"))
+        .collect::<Vec<_>>();
+    trends::asset_histogram(&rows, &players, |entry| entry.total_assets_man_yen)
+}
+
+fn histogram_counts_for(histogram: &Value, member_id: &str) -> Vec<u64> {
+    histogram
+        .get("series")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .find(|series| series.get("memberId").and_then(Value::as_str) == Some(member_id))
+        .and_then(|series| series.get("counts"))
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_u64)
+        .collect()
+}
+
 #[test]
 fn recent_rank_window_keeps_the_latest_twenty_matches_in_order() {
     let owned_rows = (1..=24)
@@ -363,6 +402,156 @@ fn play_order_drilldown_compares_member_against_whole_scope_baseline() {
         drilldown.and_then(|payload| payload.pointer("/payload/summary/bestPlayOrder")),
         Some(&json!(1))
     );
+}
+
+#[test]
+fn asset_histogram_separates_mixed_values_within_the_seven_bin_contract() {
+    let histogram = assets_histogram_for_rows(&[
+        (1, 1, -5),
+        (2, 1, 5),
+        (1, 2, 0),
+        (2, 2, -2),
+        (1, 3, 1),
+        (2, 3, 50),
+        (1, 4, -1),
+        (2, 4, 100),
+    ]);
+    let bins = histogram.get("bins").and_then(Value::as_array);
+    assert!(bins.is_some(), "asset histogram bins missing");
+    let Some(bins) = bins else {
+        return;
+    };
+    assert_eq!(bins.len(), 7);
+    assert!(
+        bins.iter().take(2).all(|bin| {
+            bin.get("lowerInclusive")
+                .and_then(Value::as_i64)
+                .is_some_and(|lower| lower <= 0)
+                && bin
+                    .get("upperExclusive")
+                    .and_then(Value::as_i64)
+                    .is_some_and(|upper| upper <= 1)
+        }),
+        "the first two bins must stay on the nonpositive side"
+    );
+    assert!(
+        bins.iter().skip(2).all(|bin| {
+            bin.get("lowerInclusive")
+                .and_then(Value::as_i64)
+                .is_some_and(|lower| lower >= 1)
+        }),
+        "the final five bins must stay on the positive side"
+    );
+    for pair in bins.windows(2) {
+        let [left, right] = pair else {
+            continue;
+        };
+        let left_upper = left.get("upperExclusive").and_then(Value::as_i64);
+        let right_lower = right.get("lowerInclusive").and_then(Value::as_i64);
+        assert!(
+            left_upper
+                .zip(right_lower)
+                .is_some_and(|(upper, lower)| upper <= lower),
+            "asset histogram bins must be non-overlapping and ordered"
+        );
+    }
+    for (player, expected_nonpositive_count) in (1..=4).zip([1_u64, 2, 0, 1]) {
+        let counts = histogram_counts_for(&histogram, &format!("member-{player}"));
+        assert_eq!(counts.iter().sum::<u64>(), 2);
+        let nonpositive_count = counts.iter().take(2).sum::<u64>();
+        assert_eq!(nonpositive_count, expected_nonpositive_count);
+    }
+}
+
+#[test]
+fn asset_histogram_uses_up_to_six_bins_for_nonpositive_values_only() {
+    let histogram = assets_histogram([-60, -40, -20, 0]);
+    let bins = histogram.get("bins").and_then(Value::as_array);
+    assert!(bins.is_some(), "asset histogram bins missing");
+    let Some(bins) = bins else {
+        return;
+    };
+    assert_eq!(bins.len(), 6);
+    assert!(
+        bins.iter().all(|bin| {
+            bin.get("lowerInclusive")
+                .and_then(Value::as_i64)
+                .is_some_and(|lower| lower <= 0)
+                && bin
+                    .get("upperExclusive")
+                    .and_then(Value::as_i64)
+                    .is_some_and(|upper| upper <= 1)
+        }),
+        "nonpositive-only bins must not include positive values"
+    );
+    for player in 1..=4 {
+        let counts = histogram_counts_for(&histogram, &format!("member-{player}"));
+        assert_eq!(counts.iter().sum::<u64>(), 1);
+    }
+}
+
+#[test]
+fn asset_histogram_uses_positive_bins_only_when_all_values_are_positive() {
+    let histogram = assets_histogram([1, 10, 20, 30]);
+    let bins = histogram.get("bins").and_then(Value::as_array);
+    assert!(bins.is_some(), "asset histogram bins missing");
+    let Some(bins) = bins else {
+        return;
+    };
+    assert_eq!(bins.len(), 6);
+    assert!(
+        bins.iter().all(|bin| {
+            bin.get("lowerInclusive")
+                .and_then(Value::as_i64)
+                .is_some_and(|lower| lower >= 1)
+        }),
+        "positive-only input must not create a nonpositive bin"
+    );
+    for player in 1..=4 {
+        let counts = histogram_counts_for(&histogram, &format!("member-{player}"));
+        assert_eq!(counts.iter().sum::<u64>(), 1);
+    }
+}
+
+#[test]
+fn all_zero_asset_histogram_uses_one_meaningful_bin() {
+    let histogram = assets_histogram([0, 0, 0, 0]);
+    assert_eq!(
+        histogram.get("bins"),
+        Some(&json!([{
+            "index": 0,
+            "lowerInclusive": 0,
+            "upperExclusive": 1,
+            "label": "0〜0",
+        }]))
+    );
+    for player in 1..=4 {
+        assert_eq!(
+            histogram_counts_for(&histogram, &format!("member-{player}")),
+            vec![1]
+        );
+    }
+}
+
+#[test]
+fn nonpositive_values_do_not_change_positive_asset_bin_boundaries() {
+    let first = assets_histogram([-5, 0, 10, 100]);
+    let second = assets_histogram([-500_000, -20_000, 10, 100]);
+    let positive_bins = |histogram: &Value| {
+        histogram
+            .get("bins")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter(|bin| {
+                bin.get("lowerInclusive")
+                    .and_then(Value::as_i64)
+                    .is_some_and(|lower| lower >= 1)
+            })
+            .cloned()
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(positive_bins(&first), positive_bins(&second));
 }
 
 #[test]

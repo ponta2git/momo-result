@@ -642,6 +642,14 @@ test("inspects saved analysis and handles explicit refresh states", async ({
 
     await page.getByRole("tab", { name: "勝因候補" }).click();
     await expect(page.getByRole("table", { name: "ぽんたの物件収益順位と最終順位" })).toBeVisible();
+    const assetHistogram = page.getByLabel("4人の総資産分布");
+    const nonpositiveAxisLabel = assetHistogram
+      .locator("svg text")
+      .filter({ hasText: /^-2万円〜0円$/u });
+    await expect(nonpositiveAxisLabel).toBeVisible();
+    await expect(
+      assetHistogram.locator("rect title").filter({ hasText: /^-2万円〜0円、1戦$/u }),
+    ).toHaveText("-2万円〜0円、1戦");
     const scatterMatchHref = withReturnTo(
       `/matches/${encodeURIComponent(matchId)}`,
       currentPagePath(page),

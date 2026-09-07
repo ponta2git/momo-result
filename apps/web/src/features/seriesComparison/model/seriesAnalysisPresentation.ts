@@ -36,7 +36,9 @@ export function formatHistogramManYenBin({
 }): string {
   if (lowerInclusive === 0 && upperExclusive === 1) return "0円";
   if (upperExclusive === null) return `${formatStoredManYen(lowerInclusive)}以上`;
-  return `${formatStoredManYen(lowerInclusive)}〜${formatStoredManYen(upperExclusive - 1)}`;
+  const upperInclusive = upperExclusive - 1;
+  const upperLabel = upperInclusive === 0 ? "0円" : formatStoredManYen(upperInclusive);
+  return `${formatStoredManYen(lowerInclusive)}〜${upperLabel}`;
 }
 
 export function formatPercent(value: number | null | undefined): string {

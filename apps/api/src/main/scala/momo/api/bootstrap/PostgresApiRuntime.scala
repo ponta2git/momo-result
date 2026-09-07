@@ -34,7 +34,12 @@ import momo.api.ports.storage.{
 import momo.api.repositories.*
 import momo.api.usecases.images.ImageStorageAdmission
 import momo.api.usecases.ocr.*
-import momo.api.usecases.queue.OutboxWakeup
+import momo.api.usecases.queue.{
+  OutboxKind,
+  OutboxWakeCoordinator,
+  OutboxWakeCoordinatorConfig,
+  OutboxWakeup
+}
 
 private[bootstrap] object PostgresApiRuntime:
   def resource[F[_]: Async: SecureRandom](
@@ -52,7 +57,7 @@ private[bootstrap] object PostgresApiRuntime:
     val ocrJobCreationStoreBase: OcrJobCreationStore[F] =
       PostgresOcrJobCreationStore[F](transactor)
     val ocrQueueOutbox = PostgresOcrQueueOutboxRepository[F](transactor)
-    val analysisOutboxWake = PostgresSeriesAnalysisOutboxWakeSink[F](transactor)
+    val analysisOutboxNotifier = PostgresSeriesAnalysisOutboxNotifier[F](transactor)
     val analysisHistoryMaintenance = PostgresSeriesAnalysisHistoryMaintenance[F](transactor)
     val heldEvents: HeldEventsRepository[F] = PostgresHeldEventsRepository[F](transactor)
     val heldEventDeletion: HeldEventDeletionRepository[F] =
@@ -110,6 +115,13 @@ private[bootstrap] object PostgresApiRuntime:
             wakeup,
             reportCoordinatorFailure,
           ),
+          OutboxWakeCoordinator.resource[F](
+            OutboxKind.SeriesAnalysis,
+            wakeup,
+            analysisOutboxNotifier,
+            OutboxWakeCoordinatorConfig(coldRecoveryInterval = None),
+            reportCoordinatorFailure,
+          ),
           PostgresSeriesAnalysisReaderCapability.resource[F](transactor),
         ).tupled.as((wakeup, backgroundFailure))
       }
@@ -126,13 +138,13 @@ private[bootstrap] object PostgresApiRuntime:
         )
         val matches = OutboxWakingRepositories.matches(
           matchesBase,
-          analysisOutboxWake,
-          Async[F].unit,
+          outboxWakeup,
+          signalBackgroundFailure,
         )
         val matchConfirmation = OutboxWakingRepositories.matchConfirmation(
           matchConfirmationBase,
-          analysisOutboxWake,
-          Async[F].unit,
+          outboxWakeup,
+          signalBackgroundFailure,
         )
         RuntimeMaintenance.resource(
           config = config,
@@ -150,8 +162,8 @@ private[bootstrap] object PostgresApiRuntime:
             )
             wakingSeriesAnalysis = OutboxWakingRepositories.seriesAnalysis(
               seriesAnalysis,
-              analysisOutboxWake,
-              Async[F].unit,
+              outboxWakeup,
+              signalBackgroundFailure,
             )
             cachedMembers <- CachedReferenceRepositories.members(members)
             cachedGameTitles <- CachedReferenceRepositories.gameTitles(gameTitles)

@@ -45,6 +45,7 @@
 - 業務状態と outbox は同じ DB transaction で確定し、Redis publish は transaction の成功条件にしない。
 - wake / publish は commit 後に実行する。rollback 時は post-commit effect を返さない。
 - wake は業務 payload を持たない coalescing signal とし、永続 outbox row の代わりにしない。
+- API の commit 後 handoff は process-local wake までとし、外部通知の I/O は Resource が所有する coordinator で実行する。通知の遅延・失敗で確定済み更新の応答を待たせず、再試行と停止は coordinator、通知喪失後の回収は durable outbox の consumer が所有する。
 - dispatcher は startup recovery、bounded drain、retry deadline、backoff を扱い、無条件の短周期 polling をしない。
 - append 後の DB 更新失敗や重複配送を許容し、claim / fence と冪等な consumer で収束させる。
 - 分析ではAPIとrelease controllerをdurable intentのwriter、Processing Workerをcampaign展開からRedis append、delivery mark / retryまでの単一dispatcher ownerとする。writerはcommit時にpayloadless hintだけを送り、workerはhint喪失を低頻度のbounded recoveryで収束させる。

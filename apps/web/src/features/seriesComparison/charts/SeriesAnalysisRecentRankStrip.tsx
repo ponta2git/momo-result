@@ -225,6 +225,7 @@ function RecentRankScroller({
       element.removeEventListener("scroll", handleScroll);
     };
     // New match columns change DOM geometry and must realign to the latest result.
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies
   }, [latestPointKey, syncScrollMetrics]);
 
   return (

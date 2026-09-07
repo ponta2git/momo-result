@@ -410,8 +410,12 @@ describe("app routing", () => {
     expect(reviewSearches).toHaveLength(1);
     expect(reviewSearches[0]?.get("artifactId")).toBe(analysisArtifact.artifactId);
 
-    // This test controls API readiness; module transformation belongs to build/runtime evidence.
-    await import("@/features/seriesComparison/page/SeriesAnalysisOverviewView");
+    // Control API readiness without timing the first transform of the lazy view or validator.
+    // Both real modules still run; their cold loading belongs to build/runtime evidence.
+    await Promise.all([
+      import("@/features/seriesComparison/page/SeriesAnalysisOverviewView"),
+      import("@/shared/api/generatedContracts/series-analysis-aggregate-validators.generated"),
+    ]);
     const analysisPurposeTab = screen.getByRole("tab", { name: "分析する" });
     await user.click(analysisPurposeTab);
     expect(await screen.findByText("比較条件を更新中")).toBeInTheDocument();

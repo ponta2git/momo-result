@@ -499,7 +499,10 @@ describe("HeldEventsPage", () => {
       "予期しないエラーが発生しました。もう一度お試しください。",
     );
 
-    await user.click(within(dialog).getByRole("button", { name: "キャンセル" }));
+    const cancelButton = within(dialog).getByRole("button", { name: "キャンセル" });
+    // The API error can render before the form action has finished clearing pending.
+    await waitFor(() => expect(cancelButton).toBeEnabled());
+    await user.click(cancelButton);
     await waitFor(() =>
       expect(screen.queryByRole("dialog", { name: "新しい開催を作成" })).not.toBeInTheDocument(),
     );

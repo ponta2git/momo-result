@@ -128,6 +128,7 @@ export const SeriesAnalysisContent = memo(function SeriesAnalysisContent({
     if (!sectionId) return;
     document.getElementById(sectionId)?.scrollIntoView?.({ block: "start" });
     // The view and artifact determine when the hash target exists in the committed DOM.
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies
   }, [activeView, artifactId]);
 
   return (

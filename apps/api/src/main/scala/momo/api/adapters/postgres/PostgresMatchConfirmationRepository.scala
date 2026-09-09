@@ -69,7 +69,11 @@ final class PostgresMatchConfirmationRepository[F[_]: MonadCancelThrow](transact
           _ <- updatedImages match
             case Some(images) =>
               PostgresSourceImageLifecycle.stageDeletion(images.imageIds, updatedAt) *>
-                insert(record, updatedAt) *> attachConfirmedMatch(expected, record)
+                insert(record, updatedAt) *> attachConfirmedMatch(expected, record) *>
+                PostgresResultNotificationCancellation.draftsUnavailable(
+                  List(expected.draftId),
+                  updatedAt
+                )
             case None => ().pure[ConnectionIO]
         yield
           if updatedImages.nonEmpty then MatchConfirmationResult.Confirmed

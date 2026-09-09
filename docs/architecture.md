@@ -43,6 +43,7 @@
 ### Transaction / Outbox
 
 - 業務状態と outbox は同じ DB transaction で確定し、Redis publish は transaction の成功条件にしない。
+- 下書き・試合の変更に伴うDiscord通知取消も同じsource commandへ含める。transactionの集約単位とlock順はアプリに明示し、通知triggerで暗黙に補完しない。詳細は`docs/db-rule.md`を参照する。
 - wake / publish は commit 後に実行する。rollback 時は post-commit effect を返さない。
 - wake は業務 payload を持たない coalescing signal とし、永続 outbox row の代わりにしない。
 - API の commit 後 handoff は process-local wake までとし、外部通知の I/O は Resource が所有する coordinator で実行する。通知の遅延・失敗で確定済み更新の応答を待たせず、再試行と停止は coordinator、通知喪失後の回収は durable outbox の consumer が所有する。

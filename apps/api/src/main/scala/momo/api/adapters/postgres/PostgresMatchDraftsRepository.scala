@@ -106,9 +106,13 @@ object PostgresMatchDrafts extends PostgresMatchDraftsRowSupport:
           ${MatchDraftStatus.DraftReady},
           ${MatchDraftStatus.NeedsReview}
         )
-    """.update.run.map {
-          case affected if affected > 0 => MatchDraftUpdateResult.Updated
-          case _ => MatchDraftUpdateResult.NotEditableOrChanged
+    """.update.run.flatMap {
+          case affected if affected > 0 =>
+            val cancel = if draft.confirmedMatchId.nonEmpty then
+              PostgresResultNotificationCancellation.draftsUnavailable(List(draft.id), updatedAt)
+            else ().pure[ConnectionIO]
+            cancel.as(MatchDraftUpdateResult.Updated)
+          case _ => MatchDraftUpdateResult.NotEditableOrChanged.pure[ConnectionIO]
         }
 
     override def find(id: MatchDraftId): ConnectionIO[Option[MatchDraft]] =

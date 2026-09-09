@@ -473,10 +473,13 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
       _ <- createMatch(existing)
       _ <- insertSourceImage(imageId)
       _ <- insertMatchDraft(draftId, now, Some(imageId))
+      _ <- ResultNotificationFixture.seed("match_draft", draftId.value, now).transact(transactor)
+      notificationBefore <- ResultNotificationFixture.state(transactor)
       before <- persistedState
       result <- confirmations.confirm(conflicting, Some(snapshot), now.plusSeconds(2))
       after <- persistedState
       conflictingMatch <- matches.find(conflicting.id)
+      notificationAfter <- ResultNotificationFixture.state(transactor)
     yield
       assertEquals(
         result,
@@ -490,6 +493,7 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
         (MatchDraftStatus.DraftReady, None, None, None, "AVAILABLE", None, 1, 1),
       )
       assertEquals(conflictingMatch, None)
+      assertEquals(notificationAfter, notificationBefore)
 
   test("confirmation from draft persists match and confirmed draft link"):
     val draftId = MatchDraftId.unsafeFromString("match-draft-confirm-success")
@@ -504,9 +508,11 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
     for
       _ <- seedPrereqs
       _ <- insertMatchDraft(draftId, now)
+      _ <- ResultNotificationFixture.seed("match_draft", draftId.value, now).transact(transactor)
       confirmed <- confirmations.confirm(rec, Some(snapshot), now.plusSeconds(2))
       found <- matches.find(rec.id)
       status <- draftStatus(draftId)
+      notification <- ResultNotificationFixture.state(transactor)
       analysisIntent <- sql"""
         SELECT s.input_revision,
                s.pending_work,
@@ -524,6 +530,7 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
       """.query[(Long, Boolean, Long, String, String, String, Boolean, String)].unique
         .transact(transactor)
     yield
+      assertEquals(notification, ResultNotificationFixture.cancelled("draft_unavailable"))
       assertEquals(confirmed, Right(MatchConfirmationResult.Confirmed))
       assertEquals(found.map(_.id), Some(rec.id))
       assertEquals(status, (MatchDraftStatus.Confirmed, Some(rec.id)))
@@ -573,10 +580,13 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
       _ <- seedPrereqs
       _ <- insertMatchDraft(draftId, now)
       confirmed <- confirmations.confirm(rec, Some(snapshot), now.plusSeconds(2))
+      _ <- ResultNotificationFixture.seed("match", rec.id.value, now).transact(transactor)
       deleted <- matches.delete(rec.id)
       found <- matches.find(rec.id)
       draftStillExists <- draftExists(draftId)
+      notification <- ResultNotificationFixture.state(transactor)
     yield
+      assertEquals(notification, ResultNotificationFixture.cancelled("match_deleted"))
       assertEquals(confirmed, Right(MatchConfirmationResult.Confirmed))
       assertEquals(deleted, true)
       assertEquals(found, None)

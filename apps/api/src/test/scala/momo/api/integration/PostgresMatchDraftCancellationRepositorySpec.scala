@@ -2,12 +2,17 @@ package momo.api.integration
 
 import java.time.Instant
 
-import cats.effect.IO
+import cats.effect.{Deferred, IO, Resource}
+import cats.syntax.all.*
+import doobie.*
 import doobie.implicits.*
 import doobie.postgres.implicits.*
 
-import momo.api.adapters.postgres.PostgresMatchDraftCancellationRepository
 import momo.api.adapters.postgres.PostgresMeta.given
+import momo.api.adapters.postgres.{
+  PostgresMatchDraftCancellation,
+  PostgresMatchDraftCancellationRepository
+}
 import momo.api.domain.MatchDraftStatus
 import momo.api.domain.ids.{ImageId, MatchDraftId}
 import momo.api.repositories.MatchDraftCancellationResult
@@ -31,15 +36,18 @@ final class PostgresMatchDraftCancellationRepositorySpec extends IntegrationSuit
         totalAssetsImageId = Some(imageId.value),
         totalAssetsDraftId = Some("ocr-draft-cancel-atomic"),
       )
+      _ <- ResultNotificationFixture.seed("match_draft", draftId.value, now).transact(transactor)
       result <- repo.cancelDraftAndQueuedOcrJobs(draftId, now)
       draftExists <- matchDraftExists(draftId.value)
       jobStatus <- ocrJobStatus("ocr-job-cancel-atomic")
       sourceStatus <- sourceImageStatus(imageId)
+      notification <- ResultNotificationFixture.state(transactor)
     yield
       assertEquals(result, MatchDraftCancellationResult.Cancelled(List(imageId)))
       assertEquals(draftExists, false)
       assertEquals(jobStatus, "cancelled")
       assertEquals(sourceStatus, "DELETE_PENDING")
+      assertEquals(notification, ResultNotificationFixture.cancelled("draft_unavailable"))
 
   test("cancelDraftAndQueuedOcrJobs keeps terminal drafts and their OCR jobs unchanged"):
     for
@@ -58,6 +66,66 @@ final class PostgresMatchDraftCancellationRepositorySpec extends IntegrationSuit
       assertEquals(result, MatchDraftCancellationResult.NotCancellable(MatchDraftStatus.Cancelled))
       assertEquals(draftExists, true)
       assertEquals(jobStatus, "queued")
+
+  test("a failure after cancellation rolls back both the source draft and notification parts"):
+    for
+      _ <- insertMatchDraft(draftId.value, "draft_ready", None, None)
+      _ <- ResultNotificationFixture.seed("match_draft", draftId.value, now).transact(transactor)
+      before <- ResultNotificationFixture.state(transactor)
+      result <-
+      (PostgresMatchDraftCancellation.cancelDraftAndQueuedOcrJobs(draftId, now) *>
+        new IllegalStateException("abort source command").raiseError[ConnectionIO, Unit])
+        .transact(transactor).attempt
+      exists <- matchDraftExists(draftId.value)
+      after <- ResultNotificationFixture.state(transactor)
+    yield
+      assertEquals(result.left.map(_.getMessage), Left("abort source command"))
+      assertEquals(exists, true)
+      assertEquals(after, before)
+
+  test(
+    "source deletion remains uncommitted while its notification cancellation waits for the gate"
+  ):
+    for
+      _ <- insertMatchDraft(draftId.value, "draft_ready", None, None)
+      _ <- ResultNotificationFixture.seed("match_draft", draftId.value, now).transact(transactor)
+      locked <- Deferred[IO, Int]
+      release <- Deferred[IO, Unit]
+      holder <- holdNotificationGate(locked, release).start
+      pid <- locked.get
+      cancellation <- repo.cancelDraftAndQueuedOcrJobs(draftId, now).start
+      before <- (awaitBackendBlockedBy(pid) *> matchDraftExists(draftId.value))
+        .guarantee(release.complete(()).void)
+      result <- cancellation.joinWithNever
+      _ <- holder.joinWithNever
+      after <- matchDraftExists(draftId.value)
+      notification <- ResultNotificationFixture.state(transactor)
+    yield
+      assertEquals(before, true)
+      assertEquals(after, false)
+      assertEquals(result, MatchDraftCancellationResult.Cancelled(Nil))
+      assertEquals(notification, ResultNotificationFixture.cancelled("draft_unavailable"))
+
+  private def holdNotificationGate(
+      locked: Deferred[IO, Int],
+      release: Deferred[IO, Unit]
+  ): IO[Unit] =
+    Resource.fromAutoCloseable(IO.blocking(dataSource.getConnection)).use { connection =>
+      val acquire = IO.blocking {
+        connection.setAutoCommit(false)
+        val statement = connection.createStatement()
+        try
+          val rows =
+            statement.executeQuery("SELECT pg_advisory_xact_lock(19790514, 1), pg_backend_pid()")
+          try
+            if !rows.next() then fail("gate fixture returned no backend")
+            rows.getInt(2)
+          finally rows.close()
+        finally statement.close()
+      }
+      (acquire.flatMap(locked.complete) *> release.get *> IO.blocking(connection.commit()))
+        .onError(_ => IO.blocking(connection.rollback()))
+    }
 
   private def insertOcrDraft(id: String, jobId: String): IO[Int] = sql"""
     INSERT INTO ocr_drafts (

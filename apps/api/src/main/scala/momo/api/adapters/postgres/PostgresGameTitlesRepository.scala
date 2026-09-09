@@ -75,11 +75,12 @@ object PostgresGameTitles:
 
     override def delete(id: GameTitleId): ConnectionIO[Unit] = (for
       _ <- prepareAnalysisDeletion(id)
-      _ <- deleteDiscardedDrafts(fr"game_title_id = $id")
+      deletedDrafts <- deleteDiscardedDrafts(fr"game_title_id = $id")
       deleted <- sql"DELETE FROM game_titles WHERE id = $id".update.run
       _ <- deleted match
         case 1 => ().pure[ConnectionIO]
         case _ => notFound("game title", id.value)
+      _ <- PostgresResultNotificationCancellation.afterDeletion(deletedDrafts, Nil)
     yield ()).exceptSomeSqlState {
       case state if isForeignKeyViolation(state) => conflict("game title is still referenced.")
     }

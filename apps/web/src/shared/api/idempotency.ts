@@ -29,6 +29,7 @@ export const idempotencyOperations = [
   "ocrCapture.cancelMatchDraft",
   "ocrCapture.createMatchDraft",
   "ocrCapture.createUploadJob",
+  "notificationSettings.update",
   "seriesAnalysis.recalculateAll",
   "seriesAnalysis.recalculateTitle",
 ] as const;

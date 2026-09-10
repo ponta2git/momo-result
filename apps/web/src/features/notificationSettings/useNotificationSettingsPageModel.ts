@@ -15,13 +15,44 @@ import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
 type Kind = keyof NotificationSettings;
 type Values = Record<Kind, boolean>;
 type Draft = { base: NotificationSettings; values: Values };
-type Feedback = { kind: "success" | "failed" | "conflict" | "unknown"; message: string };
+type Feedback = {
+  tone: "success" | "danger" | "warning";
+  message: string;
+  requiresReload?: true;
+};
+type SettingsResource =
+  | { status: "loading" | "failed" }
+  | { status: "ready"; confirmed: NotificationSettings; values: Values };
 
 function valuesOf(settings: NotificationSettings): Values {
   return {
     ocrCompleted: settings.ocrCompleted.enabled,
     analysisCompleted: settings.analysisCompleted.enabled,
   };
+}
+
+function saveErrorFeedback(error: unknown): Feedback {
+  const problem = normalizeUnknownApiError(error);
+  if (problem.code === "NOTIFICATION_SETTINGS_VERSION_CONFLICT") {
+    return {
+      tone: "warning",
+      requiresReload: true,
+      message: "通知設定が別の画面で更新されています。現在の設定を読み込んで選び直してください。",
+    };
+  }
+  if (
+    problem.status === undefined ||
+    problem.status >= 500 ||
+    problem.code === "IDEMPOTENCY_IN_PROGRESS"
+  ) {
+    return {
+      tone: "warning",
+      requiresReload: true,
+      message:
+        "保存結果を確認できません。現在の設定を読み込んで、反映された内容を確認してください。",
+    };
+  }
+  return { tone: "danger", message: `保存できませんでした。${problem.detail}` };
 }
 
 /** Keeps editable choices tied to the confirmed generations from which editing began. */
@@ -39,21 +70,39 @@ export function useNotificationSettingsPageModel() {
       runIdempotentMutation(idempotencyKeys, "notificationSettings.update", request, (options) =>
         updateNotificationSettings(request, options),
       ),
+    onMutate: () => {
+      setFeedback(undefined);
+      return queryClient.cancelQueries({ queryKey: notificationSettingsKeys.all() });
+    },
+    onSuccess: (saved) => {
+      queryClient.setQueryData(notificationSettingsKeys.all(), saved);
+      setDraft(undefined);
+      setFeedback({ tone: "success", message: "通知設定を保存しました。" });
+      // A replay may describe an earlier save. Reconcile independently so a read failure
+      // cannot turn a confirmed mutation into a failed save.
+      void query.refetch();
+    },
+    onError: (error) => setFeedback(saveErrorFeedback(error)),
+    onSettled: () => {
+      saving.current = false;
+      setConfirmationOpen(false);
+    },
   });
 
   const confirmed = query.data;
-  const values = draft?.values ?? (confirmed ? valuesOf(confirmed) : undefined);
+  const resource: SettingsResource = confirmed
+    ? { status: "ready", confirmed, values: draft?.values ?? valuesOf(confirmed) }
+    : { status: query.isError ? "failed" : "loading" };
   const dirty = Boolean(
     draft &&
     (draft.values.ocrCompleted !== draft.base.ocrCompleted.enabled ||
       draft.values.analysisCompleted !== draft.base.analysisCompleted.enabled),
   );
-  const needsReload =
-    feedback?.kind === "conflict" || feedback?.kind === "unknown" || query.isError;
+  const needsReload = Boolean(feedback?.requiresReload || query.isError);
   const disabled = mutation.isPending || query.isFetching || needsReload;
 
   const change = (kind: Kind, enabled: boolean) => {
-    if (!confirmed || disabled) return;
+    if (!confirmed || disabled || saving.current) return;
     setDraft((current) => ({
       base: current?.base ?? confirmed,
       values: { ...(current?.values ?? valuesOf(confirmed)), [kind]: enabled },
@@ -61,10 +110,10 @@ export function useNotificationSettingsPageModel() {
     setFeedback(undefined);
   };
 
-  const save = async () => {
+  const save = () => {
     if (!draft || !dirty || disabled || saving.current) return;
     saving.current = true;
-    const request: NotificationSettingsUpdate = {
+    mutation.mutate({
       ocrCompleted: {
         enabled: draft.values.ocrCompleted,
         expectedGeneration: draft.base.ocrCompleted.generation,
@@ -73,41 +122,7 @@ export function useNotificationSettingsPageModel() {
         enabled: draft.values.analysisCompleted,
         expectedGeneration: draft.base.analysisCompleted.generation,
       },
-    };
-    try {
-      await queryClient.cancelQueries({ queryKey: notificationSettingsKeys.all() });
-      const saved = await mutation.mutateAsync(request);
-      queryClient.setQueryData(notificationSettingsKeys.all(), saved);
-      setDraft(undefined);
-      setFeedback({ kind: "success", message: "通知設定を保存しました。" });
-      // A replay may describe an earlier successful save. Reconcile with the current settings;
-      // a subsequent read failure is separate from the confirmed mutation result.
-      void query.refetch();
-    } catch (error) {
-      const problem = normalizeUnknownApiError(error);
-      if (problem.code === "NOTIFICATION_SETTINGS_VERSION_CONFLICT") {
-        setFeedback({
-          kind: "conflict",
-          message:
-            "通知設定が別の画面で更新されています。現在の設定を読み込んで選び直してください。",
-        });
-      } else if (
-        problem.status === undefined ||
-        problem.status >= 500 ||
-        problem.code === "IDEMPOTENCY_IN_PROGRESS"
-      ) {
-        setFeedback({
-          kind: "unknown",
-          message:
-            "保存結果を確認できません。現在の設定を読み込んで、反映された内容を確認してください。",
-        });
-      } else {
-        setFeedback({ kind: "failed", message: `保存できませんでした。${problem.detail}` });
-      }
-    } finally {
-      saving.current = false;
-      setConfirmationOpen(false);
-    }
+    });
   };
 
   const submit = () => {
@@ -116,10 +131,11 @@ export function useNotificationSettingsPageModel() {
       (kind) => draft.base[kind].enabled && !draft.values[kind],
     );
     if (turnsOff) setConfirmationOpen(true);
-    else void save();
+    else save();
   };
 
   const reload = async () => {
+    if (saving.current || query.isFetching) return;
     const result = await query.refetch();
     if (result.isSuccess) {
       setDraft(undefined);
@@ -129,16 +145,13 @@ export function useNotificationSettingsPageModel() {
   };
 
   return {
-    confirmed,
-    values,
+    resource,
     dirty,
     disabled,
     feedback,
     change,
     submit,
     pending: mutation.isPending,
-    loading: confirmed === undefined && query.isPending,
-    loadFailed: confirmed === undefined && query.isError,
     stale: confirmed !== undefined && query.isError,
     needsReload,
     refreshing: query.isFetching,

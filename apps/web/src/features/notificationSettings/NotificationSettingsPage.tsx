@@ -19,6 +19,7 @@ const settings = [
 
 export function NotificationSettingsPage() {
   const page = useNotificationSettingsPageModel();
+  const resource = page.resource;
   const reloadButton = (
     <Button
       pending={page.refreshing}
@@ -40,16 +41,16 @@ export function NotificationSettingsPage() {
             全利用者に共通の設定です。通知する種類を選んで保存してください。
           </p>
         </div>
-        {page.loading ? (
+        {resource.status === "loading" ? (
           <div aria-label="通知設定を読み込み中" className="grid gap-4" role="status">
             <Skeleton className="min-h-20" />
             <Skeleton className="min-h-20" />
           </div>
-        ) : page.loadFailed ? (
+        ) : resource.status === "failed" ? (
           <Notice action={reloadButton} title="通知設定を読み込めません" tone="danger">
             <p>通信状態を確認して、もう一度読み込んでください。</p>
           </Notice>
-        ) : page.values && page.confirmed ? (
+        ) : resource.status === "ready" ? (
           <form
             className="grid gap-6"
             onSubmit={(event) => {
@@ -62,13 +63,13 @@ export function NotificationSettingsPage() {
               {settings.map(({ kind, label, description }) => (
                 <div className="grid gap-2" key={kind}>
                   <CheckboxField
-                    checked={page.values?.[kind] ?? false}
+                    checked={resource.values[kind]}
                     description={description}
                     label={label}
                     onChange={(event) => page.change(kind, event.target.checked)}
                   />
                   <p className={`${contentText.supporting} pl-8`}>
-                    保存済み：{page.confirmed?.[kind].enabled ? "ON" : "OFF"}
+                    保存済み：{resource.confirmed[kind].enabled ? "ON" : "OFF"}
                   </p>
                 </div>
               ))}
@@ -79,13 +80,7 @@ export function NotificationSettingsPage() {
             {page.feedback ? (
               <Notice
                 action={page.needsReload && !page.stale ? reloadButton : undefined}
-                tone={
-                  page.feedback.kind === "success"
-                    ? "success"
-                    : page.feedback.kind === "failed"
-                      ? "danger"
-                      : "warning"
-                }
+                tone={page.feedback.tone}
               >
                 <p>{page.feedback.message}</p>
               </Notice>

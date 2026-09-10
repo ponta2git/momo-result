@@ -8,7 +8,13 @@ import doobie.*
 import doobie.implicits.*
 import doobie.postgres.implicits.*
 
-import momo.api.domain.{NotificationGeneration, NotificationSetting, NotificationSettings, NotificationSettingsUpdate, ResultNotificationKind}
+import momo.api.domain.{
+  NotificationGeneration,
+  NotificationSetting,
+  NotificationSettings,
+  NotificationSettingsUpdate,
+  ResultNotificationKind
+}
 import momo.api.errors.AppError
 import momo.api.repositories.NotificationSettingsRepository
 
@@ -20,9 +26,16 @@ object PostgresNotificationSettings:
           rows.find(_._1 == kind.wire).toRight(s"Missing ${kind.wire} setting").flatMap { row =>
             NotificationGeneration.fromLong(row._3).map(NotificationSetting(row._2, _))
           }
-        (setting(ResultNotificationKind.OcrCompleted), setting(ResultNotificationKind.AnalysisCompleted))
+        (
+          setting(ResultNotificationKind.OcrCompleted),
+          setting(ResultNotificationKind.AnalysisCompleted)
+        )
           .mapN(NotificationSettings.apply).leftMap(reason =>
-            PostgresDataIntegrityException.inconsistentRow("discord_notification_settings", "global", reason)
+            PostgresDataIntegrityException.inconsistentRow(
+              "discord_notification_settings",
+              "global",
+              reason
+            )
           ).liftTo[ConnectionIO]
       }
 
@@ -32,8 +45,9 @@ object PostgresNotificationSettings:
   ): ConnectionIO[Either[AppError, NotificationSettings]] =
     for
       _ <- sql"SET TRANSACTION ISOLATION LEVEL READ COMMITTED".update.run
-      _ <- sql"SELECT set_config('lock_timeout', '5s', true), set_config('statement_timeout', '10s', true)"
-        .query[(String, String)].unique
+      _ <-
+        sql"SELECT set_config('lock_timeout', '5s', true), set_config('statement_timeout', '10s', true)"
+          .query[(String, String)].unique
       _ <- PostgresResultNotificationCancellation.acquireGate
       current <- get
       result <- NotificationSettings.change(current, requested) match
@@ -52,9 +66,13 @@ object PostgresNotificationSettings:
           yield Right(change.settings)
     yield result
 
-final class PostgresNotificationSettingsRepository[F[_]: MonadCancelThrow](transactor: Transactor[F])
-    extends NotificationSettingsRepository[F]:
+final class PostgresNotificationSettingsRepository[F[_]: MonadCancelThrow](
+    transactor: Transactor[F]
+) extends NotificationSettingsRepository[F]:
   def get: F[NotificationSettings] = PostgresNotificationSettings.get.transact(transactor)
 
-  def update(requested: NotificationSettingsUpdate, now: Instant): F[Either[AppError, NotificationSettings]] =
+  def update(
+      requested: NotificationSettingsUpdate,
+      now: Instant
+  ): F[Either[AppError, NotificationSettings]] =
     PostgresNotificationSettings.update(requested, now).transact(transactor)

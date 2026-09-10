@@ -6,7 +6,7 @@ import org.http4s.HttpApp as Http4sApp
 import org.http4s.server.Router
 import sttp.tapir.AnyEndpoint
 import sttp.tapir.server.ServerEndpoint
-import sttp.tapir.server.http4s.Http4sServerInterpreter
+import sttp.tapir.server.http4s.{Http4sServerInterpreter, Http4sServerOptions}
 
 import momo.api.auth.{
   CsrfTokenService,
@@ -45,6 +45,13 @@ import momo.api.usecases.ocr.*
 import momo.api.usecases.seriesanalysis.*
 
 object HttpRoutes:
+  /** Let the outer middleware own safe error logging and Problem Details for failed effects. */
+  private[http] def serverOptions[F[_]: Async]: Http4sServerOptions[F] =
+    Http4sServerOptions.customiseInterceptors[F]
+      .exceptionHandler(None)
+      .serverLog(None)
+      .options
+
   final case class AuthDependencies[F[_]](
       roster: MemberRoster,
       loginAccounts: LoginAccountsRepository[F],
@@ -286,7 +293,7 @@ object HttpRoutes:
       security,
     )
 
-    val interpreter = Http4sServerInterpreter[F]()
+    val interpreter = Http4sServerInterpreter[F](serverOptions[F])
     val tapirRoutes = interpreter.toRoutes(endpoints)
     val sourceImageRoutes = interpreter.toRoutes(sourceImageEndpoints)
 

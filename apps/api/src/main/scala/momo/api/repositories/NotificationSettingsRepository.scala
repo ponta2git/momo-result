@@ -9,4 +9,7 @@ trait NotificationSettingsRepository[F[_]]:
   def get: F[NotificationSettings]
 
   /** Read, evaluate NotificationSettings.change, save and cancel in one atomic command. */
-  def update(requested: NotificationSettingsUpdate, now: Instant): F[Either[AppError, NotificationSettings]]
+  def update(
+      requested: NotificationSettingsUpdate,
+      now: Instant
+  ): F[Either[AppError, NotificationSettings]]

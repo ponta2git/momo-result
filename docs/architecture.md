@@ -28,6 +28,7 @@
 - `apps/api/openapi.yaml` は内部 Web codegen 用の追跡する派生物であり、契約や公開 API documentation の正本ではない。Tapir から一時生成した spec を保守された OpenAPI-aware linter で構造検証し、tracked artifact と一致させ、その artifact から Web 型を生成する。手編集で差分を解消しない。
 - OpenAPI lint は unresolved reference、path / parameter、schema、operation identity など構造整合性に限定する。field の公開可否、認証、業務意味は endpoint、DTO、要求・domain 規約で決め、legacy 名や source 断片の文字列検査を契約にしない。
 - HTTP 層は入力・認証・エラー変換に閉じ、DB、Redis、業務分岐を直接持たない。
+- Tapirのserver logicで発生した例外は外側の`HttpErrorMiddleware`へ伝え、共通のProblem Detailsと機密情報を除いたincident logに変換する。Tapirの既定例外応答・例外logと二重に処理しない。mutationの結果不明時に保持するidempotency予約は、このHTTP変換より内側で確定する。
 - raw ID、設定値、wire value は境界で検証済み型へ変換する。usecase へ未検証値や wire DTO を渡さない。
 - optional field が mode や副作用を変える場合は discriminator として要件または domain 文書にも意味を残す。
 - 外部依存は port と adapter で隔離し、composition root だけが実装を選ぶ。

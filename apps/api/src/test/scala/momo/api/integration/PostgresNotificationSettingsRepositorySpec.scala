@@ -8,19 +8,37 @@ import doobie.*
 import doobie.implicits.*
 import doobie.postgres.implicits.*
 
-import momo.api.adapters.postgres.{PostgresNotificationSettings, PostgresNotificationSettingsRepository}
-import momo.api.domain.{NotificationGeneration, NotificationSettingUpdate, NotificationSettings, NotificationSettingsUpdate}
+import momo.api.adapters.postgres.{
+  PostgresNotificationSettings,
+  PostgresNotificationSettingsRepository
+}
+import momo.api.domain.{
+  NotificationGeneration,
+  NotificationSettingUpdate,
+  NotificationSettings,
+  NotificationSettingsUpdate
+}
 import momo.api.errors.AppError
 
 final class PostgresNotificationSettingsRepositorySpec extends IntegrationSuite:
   private val now = Instant.parse("2026-09-10T08:00:00Z")
   private def repo = PostgresNotificationSettingsRepository[IO](transactor)
 
-  private def request(ocr: Boolean, analysis: Boolean): NotificationSettingsUpdate = request(ocr, analysis, 0, 0)
+  private def request(ocr: Boolean, analysis: Boolean): NotificationSettingsUpdate =
+    request(ocr, analysis, 0, 0)
 
-  private def request(ocr: Boolean, analysis: Boolean, ocrGeneration: Long): NotificationSettingsUpdate = request(ocr, analysis, ocrGeneration, 0)
+  private def request(
+      ocr: Boolean,
+      analysis: Boolean,
+      ocrGeneration: Long
+  ): NotificationSettingsUpdate = request(ocr, analysis, ocrGeneration, 0)
 
-  private def request(ocr: Boolean, analysis: Boolean, ocrGeneration: Long, analysisGeneration: Long): NotificationSettingsUpdate =
+  private def request(
+      ocr: Boolean,
+      analysis: Boolean,
+      ocrGeneration: Long,
+      analysisGeneration: Long
+  ): NotificationSettingsUpdate =
     def generation(value: Long) = NotificationGeneration.fromLong(value).fold(fail(_), identity)
     NotificationSettingsUpdate(
       NotificationSettingUpdate(ocr, generation(ocrGeneration)),
@@ -28,9 +46,13 @@ final class PostgresNotificationSettingsRepositorySpec extends IntegrationSuite:
     )
 
   test("fresh migrations seed both kinds ON at generation zero before fixture cleanup"):
-    IO(assertEquals(dbFixture().migratedNotificationSettings, List(
-      ("analysis_completed", true, 0L), ("ocr_completed", true, 0L),
-    )))
+    IO(assertEquals(
+      dbFixture().migratedNotificationSettings,
+      List(
+        ("analysis_completed", true, 0L),
+        ("ocr_completed", true, 0L),
+      )
+    ))
 
   test("each changed kind advances once; a no-op preserves both generations and update times"):
     for
@@ -41,30 +63,53 @@ final class PostgresNotificationSettingsRepositorySpec extends IntegrationSuite:
       second <- repo.update(request(false, false, 1), now.plusSeconds(20))
       restored <- repo.update(request(true, true, 1, 1), now.plusSeconds(30))
     yield
-      assertEquals(first.map(s => (s.ocrCompleted.generation.value, s.analysisCompleted.generation.value)), Right((1L, 0L)))
+      assertEquals(
+        first.map(s => (s.ocrCompleted.generation.value, s.analysisCompleted.generation.value)),
+        Right((1L, 0L))
+      )
       assertEquals(noop, first)
       assertEquals(afterNoop, beforeNoop)
-      assertEquals(second.map(s => (s.ocrCompleted.enabled, s.analysisCompleted.enabled)), Right((false, false)))
-      assertEquals(restored.map(s => (s.ocrCompleted.generation.value, s.analysisCompleted.generation.value)), Right((2L, 2L)))
+      assertEquals(
+        second.map(s => (s.ocrCompleted.enabled, s.analysisCompleted.enabled)),
+        Right((false, false))
+      )
+      assertEquals(
+        restored.map(s => (s.ocrCompleted.generation.value, s.analysisCompleted.generation.value)),
+        Right((2L, 2L))
+      )
 
-  test("OFF cancels waiting, retry, failed, and claimed parts only for its kind; ON never revives them"):
+  test(
+    "OFF cancels waiting, retry, failed, and claimed parts only for its kind; ON never revives them"
+  ):
     for
-      _ <- List("pending", "retry", "failed", "claimed", "delivered", "cancelled", "purged", "analysis").traverse_(seedState)
+      _ <- List(
+        "pending",
+        "retry",
+        "failed",
+        "claimed",
+        "delivered",
+        "cancelled",
+        "purged",
+        "analysis"
+      ).traverse_(seedState)
       _ <- repo.update(request(false, true), now)
       disabled <- notificationStates
       _ <- repo.update(request(true, true, 1), now.plusSeconds(1))
       enabled <- notificationStates
     yield
-      assertEquals(disabled, List(
-        ("analysis", "PENDING", "PENDING", None),
-        ("cancelled", "CANCELLED", "CANCELLED", None),
-        ("claimed", "CANCELLED", "CANCELLED", None),
-        ("delivered", "DELIVERED", "DELIVERED", None),
-        ("failed", "CANCELLED", "CANCELLED", None),
-        ("pending", "CANCELLED", "CANCELLED", None),
-        ("purged", "FAILED", "PENDING", None),
-        ("retry", "CANCELLED", "CANCELLED", None),
-      ))
+      assertEquals(
+        disabled,
+        List(
+          ("analysis", "PENDING", "PENDING", None),
+          ("cancelled", "CANCELLED", "CANCELLED", None),
+          ("claimed", "CANCELLED", "CANCELLED", None),
+          ("delivered", "DELIVERED", "DELIVERED", None),
+          ("failed", "CANCELLED", "CANCELLED", None),
+          ("pending", "CANCELLED", "CANCELLED", None),
+          ("purged", "FAILED", "PENDING", None),
+          ("retry", "CANCELLED", "CANCELLED", None),
+        )
+      )
       assertEquals(enabled, disabled)
 
   test("OFF preserves delivered evidence and a part whose send already began"):
@@ -92,8 +137,12 @@ final class PostgresNotificationSettingsRepositorySpec extends IntegrationSuite:
     for
       _ <- ResultNotificationFixture.seed("match_draft", "draft", now).transact(transactor)
       before <- ResultNotificationFixture.state(transactor)
-      result <- (PostgresNotificationSettings.update(request(false, false), now) *>
-        new IllegalStateException("abort settings command").raiseError[ConnectionIO, Unit]).transact(transactor).attempt
+      result <-
+      (PostgresNotificationSettings.update(request(false, false), now) *>
+        new IllegalStateException("abort settings command").raiseError[
+          ConnectionIO,
+          Unit
+        ]).transact(transactor).attempt
       settings <- repo.get
       after <- ResultNotificationFixture.state(transactor)
     yield
@@ -118,7 +167,10 @@ final class PostgresNotificationSettingsRepositorySpec extends IntegrationSuite:
       assertEquals(second, Left(AppError.NotificationSettingsVersionConflict()))
       assertEquals((saved.ocrCompleted.enabled, saved.analysisCompleted.enabled), (false, true))
 
-  private def holdGateAndSave(locked: Deferred[IO, Int], release: Deferred[IO, Unit]): IO[Either[AppError, NotificationSettings]] =
+  private def holdGateAndSave(
+      locked: Deferred[IO, Int],
+      release: Deferred[IO, Unit]
+  ): IO[Either[AppError, NotificationSettings]] =
     Resource.fromAutoCloseable(IO.blocking(dataSource.getConnection)).use { connection =>
       val xa = Transactor.fromConnection[IO](connection, None)
       (for
@@ -132,7 +184,9 @@ final class PostgresNotificationSettingsRepositorySpec extends IntegrationSuite:
     }
 
   private def updateTimes: IO[List[Instant]] =
-    sql"SELECT updated_at FROM discord_notification_settings ORDER BY kind".query[Instant].to[List].transact(transactor)
+    sql"SELECT updated_at FROM discord_notification_settings ORDER BY kind".query[
+      Instant
+    ].to[List].transact(transactor)
 
   private def seedState(id: String): IO[Unit] =
     val kind = if id == "analysis" then "analysis_completed" else "ocr_completed"
@@ -148,13 +202,15 @@ final class PostgresNotificationSettingsRepositorySpec extends IntegrationSuite:
     val purged = Option.when(id == "purged")(now)
     val payload = Option.when(id != "purged")("{}")
     (for
-      _ <- sql"""
+      _ <-
+        sql"""
         INSERT INTO discord_notifications(id, family, kind, dedupe_key, payload, payload_hash, status,
           claim_token, claim_expires_at, part_count, renderer_version, next_attempt_at, purged_at)
         VALUES ($id, 'result', $kind, $id, $payload::jsonb, ${"a" * 64}, $status,
           $token::uuid, $expiry, 1, 1, ${now.plusSeconds(3600)}, $purged)
       """.update.run
-      _ <- sql"""
+      _ <-
+        sql"""
         INSERT INTO discord_notification_results(notification_id, kind, source_job_id, occurred_at, settings_generation)
         VALUES ($id, $kind, $id, $now, 0)
       """.update.run

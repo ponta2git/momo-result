@@ -7,7 +7,8 @@ import sttp.tapir.json.circe.*
 
 import momo.api.domain.{NotificationSetting, NotificationSettings}
 
-final case class NotificationSettingResponse(enabled: Boolean, generation: String) derives Codec.AsObject
+final case class NotificationSettingResponse(enabled: Boolean, generation: String)
+    derives Codec.AsObject
 
 object NotificationSettingResponse:
   def from(setting: NotificationSetting): NotificationSettingResponse =
@@ -19,12 +20,14 @@ final case class NotificationSettingsResponse(
 ) derives Codec.AsObject
 
 object NotificationSettingsResponse:
-  def from(settings: NotificationSettings): NotificationSettingsResponse = NotificationSettingsResponse(
-    NotificationSettingResponse.from(settings.ocrCompleted),
-    NotificationSettingResponse.from(settings.analysisCompleted),
-  )
+  def from(settings: NotificationSettings): NotificationSettingsResponse =
+    NotificationSettingsResponse(
+      NotificationSettingResponse.from(settings.ocrCompleted),
+      NotificationSettingResponse.from(settings.analysisCompleted),
+    )
 
-final case class NotificationSettingUpdateRequest(enabled: Boolean, expectedGeneration: String) derives Codec.AsObject
+final case class NotificationSettingUpdateRequest(enabled: Boolean, expectedGeneration: String)
+    derives Codec.AsObject
 
 final case class NotificationSettingsUpdateRequest(
     ocrCompleted: NotificationSettingUpdateRequest,

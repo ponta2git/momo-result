@@ -70,8 +70,11 @@ object NotificationSettings:
       val changed = kinds.filter(kind => current(kind).enabled != requested(kind).enabled)
       def next(kind: ResultNotificationKind): Either[AppError, NotificationSetting] =
         if !changed.contains(kind) then Right(current(kind))
-        else current(kind).generation.next
-          .toRight(AppError.Internal("Notification settings generation is exhausted."))
-          .map(NotificationSetting(requested(kind).enabled, _))
+        else
+          current(kind).generation.next
+            .toRight(AppError.Internal("Notification settings generation is exhausted."))
+            .map(NotificationSetting(requested(kind).enabled, _))
       (next(ResultNotificationKind.OcrCompleted), next(ResultNotificationKind.AnalysisCompleted))
-        .mapN((ocr, analysis) => NotificationSettingsChange(NotificationSettings(ocr, analysis), changed))
+        .mapN((ocr, analysis) =>
+          NotificationSettingsChange(NotificationSettings(ocr, analysis), changed)
+        )

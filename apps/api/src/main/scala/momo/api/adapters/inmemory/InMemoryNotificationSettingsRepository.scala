@@ -15,7 +15,10 @@ final class InMemoryNotificationSettingsRepository[F[_]] private (
 ) extends NotificationSettingsRepository[F]:
   def get: F[NotificationSettings] = state.get
 
-  def update(requested: NotificationSettingsUpdate, now: Instant): F[Either[AppError, NotificationSettings]] =
+  def update(
+      requested: NotificationSettingsUpdate,
+      now: Instant
+  ): F[Either[AppError, NotificationSettings]] =
     state.modify { current =>
       NotificationSettings.change(current, requested) match
         case Left(error) => (current, Left(error))

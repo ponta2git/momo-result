@@ -31,7 +31,8 @@ object ResultNotificationFixture:
         INSERT INTO discord_notification_targets(notification_id, target_kind, target_id)
         VALUES ($id, $targetKind, $targetId)
       """.update.run
-      _ <- sql"""
+      _ <-
+        sql"""
         INSERT INTO discord_notification_parts
           (notification_id, part_no, status, delivered_message_id, delivered_at, claim_token, send_started_at)
         VALUES ($id, 0, 'DELIVERED', 'sent-0', $now, NULL, $now),
@@ -40,7 +41,8 @@ object ResultNotificationFixture:
       """.update.run
     yield ()
 
-  def state(xa: Transactor[IO]): IO[(String, Option[String], Option[String], List[(String, Option[String])])] =
+  def state(xa: Transactor[IO])
+      : IO[(String, Option[String], Option[String], List[(String, Option[String])])] =
     (for
       parent <- sql"""
         SELECT status, cancel_reason, claim_token::text FROM discord_notifications WHERE id = $id
@@ -51,7 +53,12 @@ object ResultNotificationFixture:
       """.query[(String, Option[String])].to[List]
     yield (parent._1, parent._2, parent._3, parts)).transact(xa)
 
-  def cancelled(reason: String): (String, Option[String], Option[String], List[(String, Option[String])]) =
-    ("CANCELLED", Some(reason), Some(token),
-      List(("DELIVERED", Some("sent-0")), ("IN_FLIGHT", None), ("CANCELLED", None)))
+  def cancelled(reason: String)
+      : (String, Option[String], Option[String], List[(String, Option[String])]) =
+    (
+      "CANCELLED",
+      Some(reason),
+      Some(token),
+      List(("DELIVERED", Some("sent-0")), ("IN_FLIGHT", None), ("CANCELLED", None))
+    )
 end ResultNotificationFixture

@@ -51,6 +51,12 @@ object AppError:
     val code = "IDEMPOTENCY_IN_PROGRESS"
     val title = "Idempotency Key In Progress"
 
+  final case class NotificationSettingsVersionConflict(
+      detail: String = "Notification settings have changed. Reload the current settings."
+  ) extends AppError:
+    val code = "NOTIFICATION_SETTINGS_VERSION_CONFLICT"
+    val title = "Notification Settings Version Conflict"
+
   final case class IdempotencyPayloadMismatch(detail: String) extends AppError:
     val code = "IDEMPOTENCY_PAYLOAD_MISMATCH"
     val title = "Idempotency Payload Mismatch"

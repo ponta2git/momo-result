@@ -26,6 +26,7 @@ private[bootstrap] final case class UseCaseRouteBundles[F[_]](
     analytics: HttpRoutes.AnalyticsUseCases[F],
     masters: HttpRoutes.MasterUseCases[F],
     adminAccounts: HttpRoutes.AdminAccountUseCases[F],
+    notificationSettings: HttpRoutes.NotificationSettingsUseCases[F],
 )
 
 private[bootstrap] object UseCaseRouteBundles:
@@ -232,5 +233,9 @@ private[bootstrap] object UseCaseRouteBundles:
         listLoginAccounts = listLoginAccounts,
         createLoginAccount = createLoginAccount,
         updateLoginAccount = updateLoginAccount,
+      ),
+      notificationSettings = HttpRoutes.NotificationSettingsUseCases(
+        get = GetNotificationSettings[F](repositories.notificationSettings),
+        update = UpdateNotificationSettings[F](repositories.notificationSettings, now),
       ),
     )

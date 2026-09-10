@@ -37,7 +37,10 @@ object IntegrationDb:
    * Suite-wide fixture combining a transactor with auto-cleanup before each test. Suites
    * acquire it through [[IntegrationDb.acquire]] in their `munitFixtures`.
    */
-  final class DbFixture(val transactor: HikariTransactor[IO]):
+  final class DbFixture(
+      val transactor: HikariTransactor[IO],
+      val migratedNotificationSettings: List[(String, Boolean, Long)],
+  ):
     def cleanup(): IO[Unit] = truncateAppTables(transactor)
 
   private lazy val sharedFixture: DbFixture =
@@ -57,7 +60,10 @@ object IntegrationDb:
     val (transactor, releaseTransactor) = transactorResource(settings).allocated.unsafeRunSync()
     val release = releaseTransactor >> IO.blocking(container.stop())
     val _ = sys.addShutdownHook(release.unsafeRunSync())
-    new DbFixture(transactor)
+    val migratedNotificationSettings = sql"""
+      SELECT kind, enabled, generation FROM discord_notification_settings ORDER BY kind
+    """.query[(String, Boolean, Long)].to[List].transact(transactor).unsafeRunSync()
+    new DbFixture(transactor, migratedNotificationSettings)
 
   def acquire: IO[DbFixture] = IO.blocking(sharedFixture)
 

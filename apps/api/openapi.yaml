@@ -4741,6 +4741,136 @@
           }
         }
       }
+    },
+    "/api/admin/notification-settings" : {
+      "get" : {
+        "tags" : [
+          "admin"
+        ],
+        "operationId" : "getApiAdminNotification-settings",
+        "parameters" : [
+          {
+            "name" : "X-Momo-Account-Id",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/NotificationSettingsResponse"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "headers" : {
+              "Retry-After" : {
+                "required" : false,
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            },
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put" : {
+        "tags" : [
+          "admin"
+        ],
+        "operationId" : "putApiAdminNotification-settings",
+        "parameters" : [
+          {
+            "name" : "X-Momo-Account-Id",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "X-CSRF-Token",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "Idempotency-Key",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/NotificationSettingsUpdateRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/NotificationSettingsResponse"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid value for: body",
+            "content" : {
+              "text/plain" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "headers" : {
+              "Retry-After" : {
+                "required" : false,
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            },
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components" : {
@@ -6092,6 +6222,70 @@
           }
         }
       },
+      "NotificationSettingResponse" : {
+        "title" : "NotificationSettingResponse",
+        "type" : "object",
+        "required" : [
+          "enabled",
+          "generation"
+        ],
+        "properties" : {
+          "enabled" : {
+            "type" : "boolean"
+          },
+          "generation" : {
+            "type" : "string"
+          }
+        }
+      },
+      "NotificationSettingUpdateRequest" : {
+        "title" : "NotificationSettingUpdateRequest",
+        "type" : "object",
+        "required" : [
+          "enabled",
+          "expectedGeneration"
+        ],
+        "properties" : {
+          "enabled" : {
+            "type" : "boolean"
+          },
+          "expectedGeneration" : {
+            "type" : "string"
+          }
+        }
+      },
+      "NotificationSettingsResponse" : {
+        "title" : "NotificationSettingsResponse",
+        "type" : "object",
+        "required" : [
+          "ocrCompleted",
+          "analysisCompleted"
+        ],
+        "properties" : {
+          "ocrCompleted" : {
+            "$ref" : "#/components/schemas/NotificationSettingResponse"
+          },
+          "analysisCompleted" : {
+            "$ref" : "#/components/schemas/NotificationSettingResponse"
+          }
+        }
+      },
+      "NotificationSettingsUpdateRequest" : {
+        "title" : "NotificationSettingsUpdateRequest",
+        "type" : "object",
+        "required" : [
+          "ocrCompleted",
+          "analysisCompleted"
+        ],
+        "properties" : {
+          "ocrCompleted" : {
+            "$ref" : "#/components/schemas/NotificationSettingUpdateRequest"
+          },
+          "analysisCompleted" : {
+            "$ref" : "#/components/schemas/NotificationSettingUpdateRequest"
+          }
+        }
+      },
       "OcrDraftListResponse" : {
         "title" : "OcrDraftListResponse",
         "type" : "object",
@@ -6406,6 +6600,7 @@
               "PAYLOAD_TOO_LARGE",
               "CONFLICT",
               "MATCH_NOTE_VERSION_CONFLICT",
+              "NOTIFICATION_SETTINGS_VERSION_CONFLICT",
               "IDEMPOTENCY_IN_PROGRESS",
               "IDEMPOTENCY_PAYLOAD_MISMATCH",
               "TOO_MANY_REQUESTS",

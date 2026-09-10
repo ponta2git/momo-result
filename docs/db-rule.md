@@ -39,6 +39,7 @@
 - keyset pagination は filter と同じ query に stable tie-breaker を含める。exact count を引き継ぐ場合は snapshot 値であることを契約化する。
 - `LISTEN` など session state を持つ consumer は、session-capable 接続を通常 query 接続から分離する。
 - 通知の業務判断と更新単位はアプリが所有し、通知用stored function・triggerへ委ねない。`PostgresResultNotificationCancellation`を全source writeの末尾で合成し、別transactionで後追い取消しない。確定・取消・試合削除に加え、マスター・開催削除時の古い下書き清掃も対象とする。
+- 通知設定はAPIから共有DBへ直接保存し、SummitへのHTTPに依存しない。`PostgresNotificationSettings`は共通gate取得後の最新2行を`NotificationSettings.change`へ渡し、両方の期待世代の一致を確認してから変更対象だけを書き込む。ON/OFFが変わる種類だけ世代を進め、OFFへの変更と対象通知の未開始部分取消を一つのtransactionへ合成する。競合時は両方とも変更しない。
 - 通知gateはsource rowの更新後に取得する。通知側はgate取得後にsource row lockを取らず、READ COMMITTEDでcommit済み状態を読む。この順序で受付先行・対象変更先行の双方を収束させる。gate取得後に追加の業務write・外部I/Oを行わない。
 - 取消は送達済み部分と開始済み部分の証跡を保ち、未開始部分だけを取消状態へ進める。開始済み送信が後から完了しても親を復帰させない。物理schema・consumer間の排他契約は`../momo-db/docs/discord-notifications.md`を参照する。
 
@@ -54,6 +55,7 @@ test の採用・維持・削除は `docs/test-rule.md` に従う。DB contract 
 - publication contractを変更した場合は、stagingの更新、published header / childの変更拒否、参照中parentの削除拒否、未参照parentのcascade cleanupを実PostgreSQLで区別して検証する。
 - test が作る row を共通 cleanup の対象へ追加し、並列 test 間で ID、row、stream、file を分離する。
 - 通知取消では実際の確認・取消・削除commandと、source更新後のrollback、通知gate待ちのcommit境界、部分配送証跡を実PostgreSQLで観測する。
+- 通知設定ではcleanupが設定を初期化する前のmigration seed、種類ごとの独立性、変更のない保存、両設定と通知取消のrollback、gate待ち後の世代再確認を実PostgreSQLで観測する。consumerとの相互接続は実際の受付・送信開始commandを通し、取消SQLをtestへ写して代用しない。
 - production が pooler / proxy を使う場合、直接 PostgreSQL への接続成功を wire 互換性の証拠にしない。session state を持つ consumer は、対応する接続方式で別接続の commit から機能 round trip を確認する。
 
 集合演算、window / JSON 演算、dynamic fragment、`ON CONFLICT`、lock、guard 付き update、nullable FK、複数 table の filter / order / limit が、選択した consumer contract の結果を左右する場合は、double ではなく実 PostgreSQL を検証境界にする。

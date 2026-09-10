@@ -7,6 +7,7 @@ import doobie.*
 import doobie.implicits.*
 import doobie.postgres.implicits.*
 
+import momo.api.domain.ResultNotificationKind
 import momo.api.domain.ids.{MatchDraftId, MatchId}
 
 /**
@@ -15,6 +16,25 @@ import momo.api.domain.ids.{MatchDraftId, MatchId}
  * never locks source rows after it; READ COMMITTED observes the winning source change.
  */
 private[postgres] object PostgresResultNotificationCancellation:
+  def acquireGate: ConnectionIO[Unit] =
+    sql"SELECT pg_advisory_xact_lock(19790514, 1)".query[Unit].unique
+
+  /** The setting command already holds the gate and decided which kinds became OFF. */
+  def settingsDisabled(kinds: List[ResultNotificationKind], now: Instant): ConnectionIO[Unit] =
+    if kinds.isEmpty then ().pure[ConnectionIO]
+    else
+      for
+        ids <- sql"""
+          SELECT n.id FROM discord_notifications n
+          JOIN discord_notification_results r ON r.notification_id = n.id
+          WHERE r.kind = ANY(${kinds.map(_.wire).toArray})
+            AND n.family = 'result' AND n.purged_at IS NULL
+            AND n.status IN ('PENDING', 'IN_FLIGHT', 'FAILED')
+          ORDER BY n.id
+        """.query[String].to[List]
+        _ <- ids.traverse_(cancel(_, "setting_off", now))
+      yield ()
+
   private final case class Notification(
       status: String,
       purgedAt: Option[Instant],
@@ -43,7 +63,7 @@ private[postgres] object PostgresResultNotificationCancellation:
     if ids.isEmpty then ().pure[ConnectionIO]
     else
       for
-        _ <- sql"SELECT pg_advisory_xact_lock(19790514, 1)".query[Unit].unique
+        _ <- acquireGate
         notificationIds <- sql"""
           SELECT DISTINCT notification_id FROM discord_notification_targets
           WHERE target_kind = $kind AND target_id = ANY(${ids.toArray})

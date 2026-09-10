@@ -36,7 +36,7 @@ lazy val apiOpenApi = taskKey[File]("Generate OpenAPI from Tapir endpoint defini
 lazy val apiOpenApiCheck = taskKey[Unit]("Check that openapi.yaml matches generated Tapir output")
 lazy val OpenApi = config("openapi").hide.extend(Compile)
 
-lazy val nettyVersion = "4.2.15.Final"
+lazy val nettyVersion = "4.2.18.Final"
 lazy val http4sVersion = "0.23.36"
 lazy val http4sPatchedVersion =
   sys.props

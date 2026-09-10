@@ -38,9 +38,7 @@ final class InMemoryOcrJobCreationStore[F[_]: MonadThrow](
       )
       _ <- EitherT(activeLimitGuard(plan.activeJobLimit))
       _ <- EitherT.liftF(rejectDuplicateOcrRecords(draft, job))
-      _ <- attachment match
-        case None => EitherT.rightT[F, OcrJobCreationRejection](())
-        case Some(a) => EitherT(rejectActiveSlot(a))
+      _ <- EitherT(rejectActiveSlot(attachment))
       _ <- EitherT(attachMatchDraft(attachment))
       _ <- EitherT.liftF(createDraft(draft))
       _ <- EitherT.liftF(createJob(job))
@@ -55,20 +53,18 @@ final class InMemoryOcrJobCreationStore[F[_]: MonadThrow](
   }
 
   private def attachMatchDraft(
-      attachment: Option[OcrJobDraftAttachment]
-  ): F[Either[OcrJobCreationRejection, Unit]] = attachment match
-    case None => ().asRight[OcrJobCreationRejection].pure[F]
-    case Some(a) => matchDrafts.attachOcrArtifacts(
-        draftId = a.draftId,
-        screenType = a.screenType,
-        sourceImageId = a.sourceImageId,
-        ocrDraftId = a.ocrDraftId,
-        updatedAt = a.updatedAt,
-      ).map {
-        case MatchDraftAttachmentResult.Attached => ().asRight
-        case MatchDraftAttachmentResult.NotAttachable =>
-          OcrJobCreationRejection.MatchDraftAttachmentRejected(a.draftId).asLeft
-      }
+      a: OcrJobDraftAttachment
+  ): F[Either[OcrJobCreationRejection, Unit]] = matchDrafts.attachOcrArtifacts(
+    draftId = a.draftId,
+    screenType = a.screenType,
+    sourceImageId = a.sourceImageId,
+    ocrDraftId = a.ocrDraftId,
+    updatedAt = a.updatedAt,
+  ).map {
+    case MatchDraftAttachmentResult.Attached => ().asRight
+    case MatchDraftAttachmentResult.NotAttachable =>
+      OcrJobCreationRejection.MatchDraftAttachmentRejected(a.draftId).asLeft
+  }
 
   private def rejectDuplicateOcrRecords(draft: OcrDraft, job: OcrJob): F[Unit] =
     (drafts.find(draft.id), jobs.find(job.id)).mapN {

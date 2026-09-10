@@ -47,6 +47,7 @@
 | `cancelled` | 互換用の中止終端 | 不可 | Yes |
 
 - OCR slot は `total_assets`、`revenue`、`incident_log` を明示する。legacy decode を除き `auto` を受理しない。同じ slot の再取込は最新結果で置き換える。
+- 新規OCRジョブは必ず対戦下書きのslotへ紐づく。下書きIDの欠落・不正、存在しない下書き、終端下書きへの受付ではOCRレコードを作らない。
 - 投影状態の優先順は未完了、失敗、警告、ready とする。OCR 失敗後も手入力で続行できる。
 - 未確定下書きの削除は画像保持も閉じる。`confirmed` は試合作成と同じ usecase でだけ到達し、終端状態から再開しない。
 - 画像なしの直接確定は下書きを変更しない。OCR 下書きからの確定は `matchDraftId` で作業単位を閉じ、参照した各 OCR draft が現在 slot と一致することを確認する。

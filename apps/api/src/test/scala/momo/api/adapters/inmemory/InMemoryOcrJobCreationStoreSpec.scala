@@ -38,7 +38,7 @@ final class InMemoryOcrJobCreationStoreSpec extends MomoCatsEffectSuite:
       job = queuedJob("ocr-job-new", draft.id)
       _ <- fixture.matchDrafts.create(editableMatchDraft)
       _ <- fixture.drafts.create(draft)
-      result <- fixture.store.store(plan(job, draft, Some(attachment(draft.id)), 10)).attempt
+      result <- fixture.store.store(plan(job, draft, attachment(draft.id), 10)).attempt
       matchDraft <- fixture.matchDrafts.find(matchDraftId)
     yield
       assertAppException(result, "CONFLICT", "ocr draft already exists")
@@ -50,7 +50,7 @@ final class InMemoryOcrJobCreationStoreSpec extends MomoCatsEffectSuite:
       fixture <- newFixture
       draft = ocrDraft("ocr-draft-active-limit", "ocr-job-active-limit")
       job = queuedJob("ocr-job-active-limit", draft.id)
-      result <- fixture.store.store(plan(job, draft, None, 0))
+      result <- fixture.store.store(plan(job, draft, attachment(draft.id), 0))
       storedDraft <- fixture.drafts.find(draft.id)
       storedJob <- fixture.jobs.find(job.id)
     yield
@@ -63,7 +63,7 @@ final class InMemoryOcrJobCreationStoreSpec extends MomoCatsEffectSuite:
       fixture <- newFixture
       draft = ocrDraft("ocr-draft-attach-failed", "ocr-job-attach-failed")
       job = queuedJob("ocr-job-attach-failed", draft.id)
-      result <- fixture.store.store(plan(job, draft, Some(attachment(draft.id)), 10))
+      result <- fixture.store.store(plan(job, draft, attachment(draft.id), 10))
       storedDraft <- fixture.drafts.find(draft.id)
       storedJob <- fixture.jobs.find(job.id)
     yield
@@ -79,7 +79,7 @@ final class InMemoryOcrJobCreationStoreSpec extends MomoCatsEffectSuite:
       inconsistent = attachment(draft.id).copy(
         sourceImageId = ImageId.unsafeFromString("different-source-image")
       )
-      result <- fixture.store.store(plan(job, draft, Some(inconsistent), 10))
+      result <- fixture.store.store(plan(job, draft, inconsistent, 10))
       storedDraft <- fixture.drafts.find(draft.id)
       storedJob <- fixture.jobs.find(job.id)
     yield
@@ -180,12 +180,12 @@ final class InMemoryOcrJobCreationStoreSpec extends MomoCatsEffectSuite:
   private def plan(
       job: OcrJob,
       draft: OcrDraft,
-      attachment: Option[OcrJobDraftAttachment],
+      attachment: OcrJobDraftAttachment,
       activeJobLimit: Int,
   ): OcrJobCreationPlan =
     val dispatch = OcrQueueDispatchIntent(
       enqueueRequest = enqueueRequest(job, draft),
-      matchDraftId = attachment.map(_.draftId),
+      matchDraftId = attachment.draftId,
     )
     OcrJobCreationPlan(
       draft = draft,

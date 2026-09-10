@@ -385,7 +385,7 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
 
   app.test("mutation without development CSRF token is rejected") { httpApp =>
     val request = readRequest(Method.POST, uri"/api/ocr-jobs")
-      .withEntity(HttpRequestBodies.Matches.createOcrJob("missing", "auto"))
+      .withEntity(HttpRequestBodies.Matches.createOcrJob("missing", "auto", "missing-match-draft"))
     httpApp.run(request).flatMap(response =>
       assertProblem(
         response,
@@ -399,7 +399,7 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
   app.test("new OCR requests reject the retired auto screen type before image lookup") { httpApp =>
     val request = writePost(
       uri"/api/ocr-jobs",
-      HttpRequestBodies.Matches.createOcrJob("missing", "auto"),
+      HttpRequestBodies.Matches.createOcrJob("missing", "auto", "missing-match-draft"),
     )
     httpApp.run(request).flatMap(response =>
       assertProblem(
@@ -714,7 +714,7 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
   ocrAccountRateLimitApp.test("OCR create endpoint applies per-account rate limits") { httpApp =>
     val request = writePost(
       uri"/api/ocr-jobs",
-      HttpRequestBodies.Matches.createOcrJob("image-1", "total_assets"),
+      HttpRequestBodies.Matches.createOcrJob("image-1", "total_assets", "missing-match-draft"),
     )
     httpApp.run(request).flatMap(response =>
       assertProblem(response, Status.TooManyRequests, "TOO_MANY_REQUESTS", "Too many OCR jobs")
@@ -724,7 +724,7 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
   ocrGlobalRateLimitApp.test("OCR create endpoint applies global rate limits") { httpApp =>
     val request = writePost(
       uri"/api/ocr-jobs",
-      HttpRequestBodies.Matches.createOcrJob("image-1", "total_assets"),
+      HttpRequestBodies.Matches.createOcrJob("image-1", "total_assets", "missing-match-draft"),
     )
     httpApp.run(request).flatMap(response =>
       assertProblem(
@@ -739,9 +739,10 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
   ocrActiveLimitApp.test("OCR create endpoint returns 503 when the active queue is full") { httpApp =>
     for
       imageId <- uploadPng(httpApp)
+      matchDraftId <- createMatchDraft(httpApp)
       response <- httpApp.run(writePost(
         uri"/api/ocr-jobs",
-        HttpRequestBodies.Matches.createOcrJob(imageId, "total_assets"),
+        HttpRequestBodies.Matches.createOcrJob(imageId, "total_assets", matchDraftId),
       ))
       _ <- assertProblem(
         response,
@@ -756,9 +757,10 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
     .test("OCR idempotency replay does not consume another create rate-limit token") { httpApp =>
       for
         imageId <- uploadPng(httpApp)
+        matchDraftId <- createMatchDraft(httpApp)
         request = writePost(
           uri"/api/ocr-jobs",
-          HttpRequestBodies.Matches.createOcrJob(imageId, "total_assets"),
+          HttpRequestBodies.Matches.createOcrJob(imageId, "total_assets", matchDraftId),
           idempotencyKey = Some("ocr-replay-key"),
         )
         first <- httpApp.run(request)
@@ -769,6 +771,13 @@ final class HttpAppSpec extends MomoCatsEffectSuite with HttpAppTestFixtures:
         assertEquals(first.status, Status.Ok)
         assertEquals(second.status, Status.Ok)
         assertEquals(jsonField[String](secondBody, "jobId"), jsonField[String](firstBody, "jobId"))
+    }
+
+  private def createMatchDraft(httpApp: TestHttpApp): IO[String] = httpApp
+    .run(writePost(uri"/api/match-drafts", HttpRequestBodies.Matches.emptyMatchDraft))
+    .flatMap { response =>
+      assertEquals(response.status, Status.Ok)
+      response.as[Json].map(jsonField[String](_, "matchDraftId"))
     }
 
   private def uploadPng(httpApp: TestHttpApp): IO[String] = uploadPngRequest().flatMap { request =>

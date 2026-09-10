@@ -28,6 +28,7 @@
 - `apps/api/openapi.yaml` は内部 Web codegen 用の追跡する派生物であり、契約や公開 API documentation の正本ではない。Tapir から一時生成した spec を保守された OpenAPI-aware linter で構造検証し、tracked artifact と一致させ、その artifact から Web 型を生成する。手編集で差分を解消しない。
 - OpenAPI lint は unresolved reference、path / parameter、schema、operation identity など構造整合性に限定する。field の公開可否、認証、業務意味は endpoint、DTO、要求・domain 規約で決め、legacy 名や source 断片の文字列検査を契約にしない。
 - HTTP 層は入力・認証・エラー変換に閉じ、DB、Redis、業務分岐を直接持たない。
+- Tapirのserver logicで発生した例外は外側の`HttpErrorMiddleware`へ伝え、共通のProblem Detailsと機密情報を除いたincident logに変換する。Tapirの既定例外応答・例外logと二重に処理しない。mutationの結果不明時に保持するidempotency予約は、このHTTP変換より内側で確定する。
 - raw ID、設定値、wire value は境界で検証済み型へ変換する。usecase へ未検証値や wire DTO を渡さない。
 - optional field が mode や副作用を変える場合は discriminator として要件または domain 文書にも意味を残す。
 - 外部依存は port と adapter で隔離し、composition root だけが実装を選ぶ。
@@ -43,6 +44,8 @@
 ### Transaction / Outbox
 
 - 業務状態と outbox は同じ DB transaction で確定し、Redis publish は transaction の成功条件にしない。
+- 下書き・試合の変更に伴うDiscord通知取消も同じsource commandへ含める。transactionの集約単位とlock順はアプリに明示し、通知triggerで暗黙に補完しない。詳細は`docs/db-rule.md`を参照する。
+- 管理者のDiscord通知設定はAPIのapplication commandとして扱う。domainが世代競合と変更・取消対象を決め、PostgreSQL adapterがgate取得、最新状態の読取り、設定と取消の一括保存を行う。DBは永続化と排他を担い、Summitの稼働は設定保存の前提にしない。
 - wake / publish は commit 後に実行する。rollback 時は post-commit effect を返さない。
 - wake は業務 payload を持たない coalescing signal とし、永続 outbox row の代わりにしない。
 - API の commit 後 handoff は process-local wake までとし、外部通知の I/O は Resource が所有する coordinator で実行する。通知の遅延・失敗で確定済み更新の応答を待たせず、再試行と停止は coordinator、通知喪失後の回収は durable outbox の consumer が所有する。

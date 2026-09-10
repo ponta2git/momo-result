@@ -53,7 +53,7 @@ describe("AppGlobalNav", () => {
     );
 
     expect(screen.getByRole("group", { name: "管理" })).toBeInTheDocument();
-    for (const name of ["分析", "設定", "アカウント"]) {
+    for (const name of ["分析", "通知", "設定", "アカウント"]) {
       expect(screen.getByRole("link", { name })).toBeInTheDocument();
     }
   });

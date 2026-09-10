@@ -18,6 +18,10 @@ export const adminAccountKeys = {
   all: () => ["admin", "login-accounts"] as const,
 };
 
+export const notificationSettingsKeys = {
+  all: () => ["admin", "notification-settings"] as const,
+};
+
 export const ocrJobKeys = {
   all: () => ["ocr-job"] as const,
   detail: (jobId: string | undefined) => ["ocr-job", jobId] as const,

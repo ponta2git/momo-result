@@ -66,12 +66,19 @@ final class PostgresHeldEventDeletionRepositorySpec extends IntegrationSuite:
           $now, $now
         )
       """.update.run.transact(transactor)
+      _ <- ResultNotificationFixture.seed(
+        "match_draft",
+        "draft_delete_atomic_cancelled",
+        now
+      ).transact(transactor)
       result <- deletions.deleteIfUnreferenced(eventId)
       found <- events.find(eventId)
       draftExists <- sql"""
         SELECT EXISTS(SELECT 1 FROM match_drafts WHERE id = 'draft_delete_atomic_cancelled')
       """.query[Boolean].unique.transact(transactor)
+      notification <- ResultNotificationFixture.state(transactor)
     yield
+      assertEquals(notification, ResultNotificationFixture.cancelled("draft_unavailable"))
       assertEquals(result, HeldEventDeletionResult.Deleted)
       assertEquals(found, None)
       assertEquals(draftExists, false)

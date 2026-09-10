@@ -69,4 +69,6 @@ object ApiEndpoints:
     AdminAccountEndpoints.list,
     AdminAccountEndpoints.create,
     AdminAccountEndpoints.update,
+    NotificationSettingsEndpoints.get,
+    NotificationSettingsEndpoints.update,
   )

@@ -12,7 +12,7 @@ import doobie.postgres.implicits.*
 import doobie.postgres.sqlstate
 
 import momo.api.adapters.postgres.PostgresMeta.given
-import momo.api.domain.ids.HeldEventId
+import momo.api.domain.ids.{HeldEventId, MatchDraftId}
 import momo.api.domain.{HeldEvent, MatchDraftStatus, PageRequest, PagedResult}
 import momo.api.errors.{AppError, AppException}
 import momo.api.repositories.{
@@ -94,18 +94,20 @@ object PostgresHeldEventDeletion:
       deleted: Boolean,
   )
 
-  private def deleteDiscardedDrafts(id: HeldEventId): ConnectionIO[Int] = sql"""
+  private def deleteDiscardedDrafts(id: HeldEventId): ConnectionIO[List[MatchDraftId]] = sql"""
     DELETE FROM match_drafts
     WHERE held_event_id = $id
       AND (
         status = ${MatchDraftStatus.Cancelled}
         OR (status = ${MatchDraftStatus.Confirmed} AND confirmed_match_id IS NULL)
       )
-  """.update.run
+    RETURNING id
+  """.query[MatchDraftId].to[List]
 
   val alg: HeldEventDeletionAlg[ConnectionIO] = new HeldEventDeletionAlg[ConnectionIO]:
     override def deleteIfUnreferenced(id: HeldEventId): ConnectionIO[HeldEventDeletionResult] =
-      deleteDiscardedDrafts(id) *> sql"""
+      deleteDiscardedDrafts(id).flatMap { deletedDrafts =>
+        sql"""
         WITH target AS (
           SELECT id FROM held_events WHERE id = $id
         ),
@@ -128,11 +130,12 @@ object PostgresHeldEventDeletion:
           (SELECT has_drafts FROM reference_state) AS has_drafts,
           EXISTS(SELECT 1 FROM deleted) AS deleted
       """.query[DeletionState].unique.map {
-        case state if state.deleted => HeldEventDeletionResult.Deleted
-        case state if !state.found => HeldEventDeletionResult.NotFound
-        case state if state.hasMatches => HeldEventDeletionResult.HasConfirmedMatches
-        case state if state.hasDrafts => HeldEventDeletionResult.HasMatchDrafts
-        case _ => HeldEventDeletionResult.Referenced
+          case state if state.deleted => HeldEventDeletionResult.Deleted
+          case state if !state.found => HeldEventDeletionResult.NotFound
+          case state if state.hasMatches => HeldEventDeletionResult.HasConfirmedMatches
+          case state if state.hasDrafts => HeldEventDeletionResult.HasMatchDrafts
+          case _ => HeldEventDeletionResult.Referenced
+        }.flatTap(_ => PostgresResultNotificationCancellation.afterDeletion(deletedDrafts, Nil))
       }.exceptSomeSqlState {
         case state if isForeignKeyViolation(state) =>
           MonadThrow[ConnectionIO].pure(HeldEventDeletionResult.Referenced)

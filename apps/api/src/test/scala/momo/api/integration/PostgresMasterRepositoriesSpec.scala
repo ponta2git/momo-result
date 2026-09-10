@@ -181,13 +181,20 @@ final class PostgresMasterRepositoriesSpec extends IntegrationSuite:
           $now, $now
         )
       """.update.run.transact(transactor)
+      _ <- ResultNotificationFixture.seed(
+        "match_draft",
+        "draft_master_delete_legacy",
+        now
+      ).transact(transactor)
       deletedMap <- deleteMap.run(mapId)
       deletedSeason <- deleteSeason.run(seasonId)
       deletedTitle <- deleteTitle.run(titleId)
       legacyExists <- sql"""
         SELECT EXISTS(SELECT 1 FROM match_drafts WHERE id = 'draft_master_delete_legacy')
       """.query[Boolean].unique.transact(transactor)
+      notification <- ResultNotificationFixture.state(transactor)
     yield
+      assertEquals(notification, ResultNotificationFixture.cancelled("draft_unavailable"))
       assertEquals(deletedMap, Right(()))
       assertEquals(deletedSeason, Right(()))
       assertEquals(deletedTitle, Right(()))

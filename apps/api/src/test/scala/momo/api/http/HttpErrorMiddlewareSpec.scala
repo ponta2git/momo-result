@@ -7,17 +7,26 @@ import ch.qos.logback.classic.Level
 import ch.qos.logback.classic.spi.ILoggingEvent
 import io.circe.parser.parse
 import org.http4s.{HttpRoutes, Request, Status, Uri}
+import sttp.tapir.*
+import sttp.tapir.server.http4s.Http4sServerInterpreter
 
 import momo.api.MomoCatsEffectSuite
+import momo.api.endpoints.CommonEndpoint
 import momo.api.errors.{AppError, AppException}
 import momo.api.testing.LogbackCapture
 
 final class HttpErrorMiddlewareSpec extends MomoCatsEffectSuite:
   test("maps and logs database exceptions without exposing dependency details") {
     val secret = "postgres://user:secret@db.example.com/momo"
-    val app = HttpErrorMiddleware[IO](HttpRoutes.of[IO] { case _ =>
-      IO.raiseError(new SQLException(s"relation secret_table missing $secret"))
-    }.orNotFound)
+    val failedEndpoint = endpoint.get.in("boom").out(stringBody)
+      .errorOut(CommonEndpoint.errorOut)
+      .serverLogic[IO](_ =>
+        IO.raiseError(new SQLException(s"relation secret_table missing $secret"))
+      )
+    val app = HttpErrorMiddleware[IO](
+      Http4sServerInterpreter[IO](momo.api.http.HttpRoutes.serverOptions[IO])
+        .toRoutes(failedEndpoint).orNotFound
+    )
 
     for
       (response, events) <-

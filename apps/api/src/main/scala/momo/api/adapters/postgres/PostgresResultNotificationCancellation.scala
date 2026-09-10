@@ -16,6 +16,8 @@ import momo.api.domain.ids.{MatchDraftId, MatchId}
  * never locks source rows after it; READ COMMITTED observes the winning source change.
  */
 private[postgres] object PostgresResultNotificationCancellation:
+  private val BatchSize = 256
+
   def acquireGate: ConnectionIO[Unit] =
     sql"SELECT pg_advisory_xact_lock(19790514, 1)".query[Unit].unique
 
@@ -23,24 +25,14 @@ private[postgres] object PostgresResultNotificationCancellation:
   def settingsDisabled(kinds: List[ResultNotificationKind], now: Instant): ConnectionIO[Unit] =
     if kinds.isEmpty then ().pure[ConnectionIO]
     else
-      for
-        ids <- sql"""
-          SELECT n.id FROM discord_notifications n
-          JOIN discord_notification_results r ON r.notification_id = n.id
-          WHERE r.kind = ANY(${kinds.map(_.wire).toArray})
-            AND n.family = 'result' AND n.purged_at IS NULL
-            AND n.status IN ('PENDING', 'IN_FLIGHT', 'FAILED')
-          ORDER BY n.id
-        """.query[String].to[List]
-        _ <- ids.traverse_(cancel(_, "setting_off", now))
-      yield ()
-
-  private final case class Notification(
-      status: String,
-      purgedAt: Option[Instant],
-      claimToken: Option[String],
-      claimExpiresAt: Option[Instant],
-  )
+      cancelMatching(
+        fr"""EXISTS (
+          SELECT 1 FROM discord_notification_results r
+          WHERE r.notification_id = n.id AND r.kind = ANY(${kinds.map(_.wire).toArray})
+        )""",
+        "setting_off",
+        now,
+      )
 
   def draftsUnavailable(ids: List[MatchDraftId], now: Instant): ConnectionIO[Unit] =
     cancelTargets("match_draft", ids.map(_.value), "draft_unavailable", now)
@@ -62,40 +54,65 @@ private[postgres] object PostgresResultNotificationCancellation:
   ): ConnectionIO[Unit] =
     if ids.isEmpty then ().pure[ConnectionIO]
     else
-      for
-        _ <- acquireGate
-        notificationIds <- sql"""
-          SELECT DISTINCT notification_id FROM discord_notification_targets
-          WHERE target_kind = $kind AND target_id = ANY(${ids.toArray})
-          ORDER BY notification_id
-        """.query[String].to[List]
-        _ <- notificationIds.traverse_(cancel(_, reason, now))
-      yield ()
+      acquireGate *> cancelMatching(
+        fr"""EXISTS (
+          SELECT 1 FROM discord_notification_targets t
+          WHERE t.notification_id = n.id AND t.target_kind = $kind
+            AND t.target_id = ANY(${ids.toArray})
+        )""",
+        reason,
+        now,
+      )
 
-  private def cancel(id: String, reason: String, now: Instant): ConnectionIO[Unit] =
-    sql"""
-      SELECT status, purged_at, claim_token::text, claim_expires_at
-      FROM discord_notifications WHERE id = $id AND family = 'result' FOR UPDATE
-    """.query[Notification].option.flatMap {
-      case Some(n) if n.status != "DELIVERED" && n.status != "CANCELLED" && n.purgedAt.isEmpty =>
-        for
-          _ <- sql"""
-            UPDATE discord_notification_parts SET status = 'CANCELLED', claim_token = NULL
-            WHERE notification_id = $id AND status = 'PENDING'
-          """.update.run
-          sending <- sql"""
-            SELECT EXISTS (SELECT 1 FROM discord_notification_parts
-              WHERE notification_id = $id AND status = 'IN_FLIGHT')
-          """.query[Boolean].unique
-          token = n.claimToken.filter(_ => sending)
-          expiry = n.claimExpiresAt.filter(_ => sending)
-          _ <- sql"""
-            UPDATE discord_notifications SET status = 'CANCELLED', cancel_reason = $reason,
-              terminal_at = $now, updated_at = $now,
-              claim_token = $token::uuid, claim_expires_at = $expiry
-            WHERE id = $id
-          """.update.run
-        yield ()
-      case _ => ().pure[ConnectionIO]
-    }
+  /** Bound memory and DB round trips while keeping every batch inside the caller's transaction. */
+  private def cancelMatching(
+      target: Fragment,
+      reason: String,
+      now: Instant,
+  ): ConnectionIO[Unit] =
+    def loop(after: Option[String]): ConnectionIO[Unit] =
+      val boundary = after.fold(Fragment.empty)(id => fr"AND n.id > $id")
+      (fr"""
+        SELECT n.id FROM discord_notifications n
+        WHERE n.family = 'result' AND n.purged_at IS NULL
+          AND n.status IN ('PENDING', 'IN_FLIGHT', 'FAILED') AND
+      """ ++ target ++ boundary ++ fr"ORDER BY n.id LIMIT $BatchSize FOR UPDATE OF n")
+        .query[String].to[List].flatMap { ids =>
+          if ids.isEmpty then ().pure[ConnectionIO]
+          else
+            cancelLocked(ids, reason, now) *>
+              (if ids.size < BatchSize then ().pure[ConnectionIO] else loop(ids.lastOption))
+        }
+    loop(None)
+
+  private def cancelLocked(ids: List[String], reason: String, now: Instant): ConnectionIO[Unit] =
+    for
+      _ <- sql"""
+        UPDATE discord_notification_parts SET status = 'CANCELLED', claim_token = NULL
+        WHERE notification_id = ANY(${ids.toArray}) AND status = 'PENDING'
+      """.update.run
+      // Read parts after acquiring parent locks: a delivery may have committed while we waited.
+      sending <- sql"""
+        SELECT DISTINCT notification_id FROM discord_notification_parts
+        WHERE notification_id = ANY(${ids.toArray}) AND status = 'IN_FLIGHT'
+      """.query[String].to[Set]
+      (started, unstarted) = ids.partition(sending.contains)
+      _ <- markCancelled(started, reason, now, releaseClaim = false)
+      _ <- markCancelled(unstarted, reason, now, releaseClaim = true)
+    yield ()
+
+  private def markCancelled(
+      ids: List[String],
+      reason: String,
+      now: Instant,
+      releaseClaim: Boolean,
+  ): ConnectionIO[Unit] =
+    if ids.isEmpty then ().pure[ConnectionIO]
+    else
+      val claim = if releaseClaim then fr", claim_token = NULL, claim_expires_at = NULL"
+      else Fragment.empty
+      (fr"""
+        UPDATE discord_notifications SET status = 'CANCELLED', cancel_reason = $reason,
+          terminal_at = $now, updated_at = $now
+      """ ++ claim ++ fr"WHERE id = ANY(${ids.toArray})").update.run.void
 end PostgresResultNotificationCancellation

@@ -8,7 +8,10 @@ import momo.api.errors.AppError
 trait NotificationSettingsRepository[F[_]]:
   def get: F[NotificationSettings]
 
-  /** Read, evaluate NotificationSettings.change, save and cancel in one atomic command. */
+  /**
+   * Compare both generations and atomically save changes with the cancellation of unsent
+   * notifications. A conflict changes nothing; delivery that already began keeps its evidence.
+   */
   def update(
       requested: NotificationSettingsUpdate,
       now: Instant

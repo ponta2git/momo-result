@@ -119,6 +119,28 @@ final class PostgresNotificationSettingsRepositorySpec extends IntegrationSuite:
       state <- ResultNotificationFixture.state(transactor)
     yield assertEquals(state, ResultNotificationFixture.cancelled("setting_off"))
 
+  test(
+    "OFF cancels an entire backlog across batches, including a partially delivered notification"
+  ):
+    for
+      _ <- seedBacklog
+      _ <- ResultNotificationFixture.seed("match_draft", "draft", now).transact(transactor)
+      _ <- seedState("analysis")
+      _ <- repo.update(request(false, true), now)
+      states <- notificationStates
+      started <- ResultNotificationFixture.state(transactor)
+    yield
+      val backlog = states.filter(_._1.startsWith("backlog:"))
+      assertEquals(backlog.size, 1025)
+      assert(backlog.forall { case (_, parent, part, token) =>
+        parent == "CANCELLED" && part == "CANCELLED" && token.isEmpty
+      })
+      assertEquals(
+        states.filter(_._1 == "analysis"),
+        List(("analysis", "PENDING", "PENDING", None))
+      )
+      assertEquals(started, ResultNotificationFixture.cancelled("setting_off"))
+
   test("a conflict on either kind leaves both settings and pending notifications unchanged"):
     for
       _ <- seedState("pending")
@@ -135,8 +157,10 @@ final class PostgresNotificationSettingsRepositorySpec extends IntegrationSuite:
 
   test("failure after both writes and cancellation rolls back the complete command"):
     for
+      _ <- seedBacklog
       _ <- ResultNotificationFixture.seed("match_draft", "draft", now).transact(transactor)
       before <- ResultNotificationFixture.state(transactor)
+      notificationsBefore <- notificationStates
       result <-
       (PostgresNotificationSettings.update(request(false, false), now) *>
         new IllegalStateException("abort settings command").raiseError[
@@ -145,10 +169,12 @@ final class PostgresNotificationSettingsRepositorySpec extends IntegrationSuite:
         ]).transact(transactor).attempt
       settings <- repo.get
       after <- ResultNotificationFixture.state(transactor)
+      notificationsAfter <- notificationStates
     yield
       assertEquals(result.left.map(_.getMessage), Left("abort settings command"))
       assertEquals(settings, NotificationSettings.initial)
       assertEquals(after, before)
+      assertEquals(notificationsAfter, notificationsBefore)
 
   test("concurrent saves wait at the consumer gate and re-read the committed generations"):
     for
@@ -187,6 +213,25 @@ final class PostgresNotificationSettingsRepositorySpec extends IntegrationSuite:
     sql"SELECT updated_at FROM discord_notification_settings ORDER BY kind".query[
       Instant
     ].to[List].transact(transactor)
+
+  private def seedBacklog: IO[Unit] =
+    (for
+      _ <- sql"""
+        INSERT INTO discord_notifications
+          (id, family, kind, dedupe_key, payload, payload_hash, part_count, renderer_version)
+        SELECT 'backlog:' || i, 'result', 'ocr_completed', 'backlog:' || i, '{}', ${"a" * 64}, 1, 1
+        FROM generate_series(1, 1025) i
+      """.update.run
+      _ <- sql"""
+        INSERT INTO discord_notification_results
+          (notification_id, kind, source_job_id, occurred_at, settings_generation)
+        SELECT id, kind, id, $now, 0 FROM discord_notifications WHERE id LIKE 'backlog:%'
+      """.update.run
+      _ <- sql"""
+        INSERT INTO discord_notification_parts(notification_id, part_no)
+        SELECT id, 0 FROM discord_notifications WHERE id LIKE 'backlog:%'
+      """.update.run
+    yield ()).transact(transactor)
 
   private def seedState(id: String): IO[Unit] =
     val kind = if id == "analysis" then "analysis_completed" else "ocr_completed"

@@ -2,6 +2,7 @@ use std::{fmt, time::Duration};
 
 use momo_ocr::OcrOutput;
 use thiserror::Error;
+use tokio::time::{Instant, timeout_at};
 use tokio_postgres::{Client, Transaction};
 
 use crate::execution_slot::{
@@ -449,9 +450,20 @@ pub(crate) async fn finish_success(
     completion: &OcrDraftCompletion,
     notification: Option<NotificationReservation>,
 ) -> Result<Option<PreparedNotification>, OcrControlError> {
-    tokio::time::timeout(
-        config.finalization_timeout,
-        finish_success_transaction(client, claim, config, hints, completion, notification),
+    let deadline = Instant::now()
+        .checked_add(config.finalization_timeout)
+        .ok_or(OcrControlError::NumericBound)?;
+    timeout_at(
+        deadline,
+        finish_success_transaction(
+            client,
+            claim,
+            config,
+            hints,
+            completion,
+            notification,
+            deadline,
+        ),
     )
     .await
     .map_err(|_elapsed| OcrControlError::FinalizationTimeout)?
@@ -464,6 +476,7 @@ async fn finish_success_transaction(
     hints: &OcrHints,
     completion: &OcrDraftCompletion,
     notification: Option<NotificationReservation>,
+    deadline: Instant,
 ) -> Result<Option<PreparedNotification>, OcrControlError> {
     validate_completion(claim, hints, completion)?;
     let transaction = bounded_transaction(client, config.finalization_timeout).await?;
@@ -531,7 +544,7 @@ async fn finish_success_transaction(
                 .warnings
                 .as_array()
                 .is_some_and(|warnings| !warnings.is_empty()),
-            config.finalization_timeout,
+            deadline,
         )
         .await?
     } else {

@@ -24,6 +24,7 @@ const TIMEOUT: Fixture = fixture!("timeout", "c");
 const ORPHAN: Fixture = fixture!("orphan", "d");
 const ROLLBACK: Fixture = fixture!("rollback", "e");
 const GENERATION: Fixture = fixture!("generation", "f");
+const LATE: Fixture = fixture!("late", "0");
 
 pub(super) async fn verify(primary: &mut Client, peer: &mut Client) -> SmokeResult {
     for fixture in [
@@ -35,6 +36,7 @@ pub(super) async fn verify(primary: &mut Client, peer: &mut Client) -> SmokeResu
         &ORPHAN,
         &ROLLBACK,
         &GENERATION,
+        &LATE,
     ] {
         insert_fixture(primary, fixture).await?;
     }
@@ -46,6 +48,7 @@ pub(super) async fn verify(primary: &mut Client, peer: &mut Client) -> SmokeResu
     verify_mixed_images(primary, &config, &sink).await?;
     verify_generation_after_gate_wait(primary, peer, &config, &sink).await?;
     verify_skips_preserve_success(primary, peer, &config, &sink).await?;
+    verify_late_finalization(primary, peer, &config, &sink).await?;
     verify_rollback(primary, &config, &sink).await?;
     drop(sink);
     drop(driver);
@@ -270,21 +273,103 @@ async fn verify_skips_preserve_success(
             TOTAL.draft_id,
             "total_assets",
             true,
-            config.finalization_timeout(),
+            Instant::now() + config.finalization_timeout(),
         )
         .await?;
         assert_eq!(result.is_none(), block);
         drop(result);
         for name in ["statement_timeout", "lock_timeout"] {
-            let value: String = tx
-                .query_one("SELECT current_setting($1)", &[&name])
+            let value: i64 = tx
+                .query_one(
+                    "SELECT (extract(epoch FROM current_setting($1)::interval) * 1000)::bigint",
+                    &[&name],
+                )
                 .await?
                 .try_get(0)?;
-            assert_eq!(value, "1s");
+            assert!(
+                (501..=1000).contains(&value),
+                "business completion must not retain the short preparation limit"
+            );
         }
         tx.rollback().await?;
         restoration_gate.rollback().await?;
     }
+    Ok(())
+}
+
+async fn verify_late_finalization(
+    primary: &mut Client,
+    peer: &mut Client,
+    config: &OcrControlConfig,
+    sink: &NotificationSink,
+) -> SmokeResult {
+    let claim = claimed(claim_job(primary, &payload(&LATE)?, config).await?)?;
+    let gate = peer.transaction().await?;
+    gate.query_one("SELECT pg_advisory_xact_lock(19790514, 1)", &[])
+        .await?;
+    let completion = tests::valid_completion(RequestedScreenType::TotalAssets);
+    // Supply the deadline after most of its original one-second budget has already been spent.
+    // This exercises the real fenced writes and commit without a timing-dependent business sleep.
+    let deadline = Instant::now() + Duration::from_millis(150);
+    let prepared = timeout_at(
+        deadline,
+        finish_success_transaction(
+            primary,
+            &claim,
+            config,
+            &OcrHints::default(),
+            &completion,
+            Some(reserve(sink)?),
+            deadline,
+        ),
+    )
+    .await??;
+    assert!(
+        prepared.is_none(),
+        "contended optional notification must be skipped"
+    );
+    drop(prepared);
+    let row = primary
+        .query_one(
+            "SELECT j.status, j.lease_owner, d.id, s.owner FROM ocr_jobs j \
+         JOIN ocr_drafts d ON d.job_id = j.id \
+         CROSS JOIN worker_execution_slots s \
+         WHERE j.id = $1 AND s.slot_key = 'shared-heavy-work'",
+            &[&LATE.job_id],
+        )
+        .await?;
+    assert_eq!(row.try_get::<_, String>(0)?, "succeeded");
+    assert_eq!(row.try_get::<_, Option<String>>(1)?, None);
+    assert_eq!(row.try_get::<_, String>(2)?, LATE.draft_id);
+    assert_eq!(row.try_get::<_, Option<String>>(3)?, None);
+    assert_match_draft_status(primary, &LATE, "draft_ready").await?;
+
+    // A shorter remainder must avoid notification SQL altogether, even while its gate is held.
+    let tx = bounded_transaction(primary, config.finalization_timeout()).await?;
+    let short_deadline = Instant::now() + Duration::from_millis(50);
+    assert!(
+        timeout_at(
+            short_deadline,
+            ocr::prepare(
+                &tx,
+                reserve(sink)?,
+                LATE.job_id,
+                LATE.draft_id,
+                "total_assets",
+                false,
+                short_deadline,
+            )
+        )
+        .await??
+        .is_none()
+    );
+    let original_limit: String = tx
+        .query_one("SHOW statement_timeout", &[])
+        .await?
+        .try_get(0)?;
+    assert_eq!(original_limit, "1s");
+    tx.commit().await?;
+    gate.rollback().await?;
     Ok(())
 }
 

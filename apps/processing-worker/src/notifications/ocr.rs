@@ -3,6 +3,7 @@
 use std::time::Duration;
 
 use serde::Serialize;
+use tokio::time::{Instant, timeout_at};
 use tokio_postgres::{Row, Transaction};
 
 use super::{
@@ -12,6 +13,8 @@ use super::{
 
 pub(crate) const MAXIMUM_SNAPSHOT_BYTES: usize = 16 * 1024;
 const KIND: &str = "ocr_completed";
+const MAXIMUM_PREPARATION_TIMEOUT: Duration = Duration::from_millis(250);
+const RECOVERY_AND_COMMIT_RESERVE: Duration = Duration::from_millis(100);
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -34,7 +37,8 @@ struct Context {
 }
 
 /// A failed savepoint rollback or lost connection still fails finalization. Only recoverable
-/// preparation errors become skips; an uncertain business COMMIT never authorizes HTTP.
+/// preparation errors become skips; an uncertain business COMMIT never authorizes HTTP. The
+/// caller supplies the original finalization deadline, including time spent on business writes.
 pub(crate) async fn prepare(
     transaction: &Transaction<'_>,
     reservation: NotificationReservation,
@@ -42,13 +46,19 @@ pub(crate) async fn prepare(
     draft_id: &str,
     screen_type: &str,
     needs_review: bool,
-    finalization_timeout: Duration,
+    finalization_deadline: Instant,
 ) -> Result<Option<PreparedNotification>, tokio_postgres::Error> {
+    let now = Instant::now();
+    let remaining = finalization_deadline.saturating_duration_since(now);
+    let Some(budget) = preparation_budget(remaining) else {
+        log_skip(KIND, job_id, SkipReason::FinalizationBudget);
+        return Ok(None);
+    };
+    let preparation_deadline = now + budget;
     transaction
         .batch_execute("SAVEPOINT result_notification_preparation")
         .await?;
-    let budget = (finalization_timeout / 4).min(Duration::from_millis(250));
-    let attempt = tokio::time::timeout(budget, async {
+    let attempt = timeout_at(preparation_deadline, async {
         set_timeouts(transaction, budget).await?;
         // This command must finish before the SELECT starts: a single CTE could retain the
         // pre-wait READ COMMITTED snapshot and send with a stale OFF/ON generation.
@@ -58,22 +68,30 @@ pub(crate) async fn prepare(
         let rows = transaction.query(SNAPSHOT_SQL, &[&job_id]).await?;
         let snapshot = snapshot(&rows, job_id, draft_id, screen_type, needs_review)
             .and_then(|envelope| reservation.prepare(&envelope));
-        // RELEASE does not restore SET LOCAL. Restore both limits before releasing the savepoint.
-        set_timeouts(transaction, finalization_timeout).await?;
+        // RELEASE does not restore SET LOCAL. Give COMMIT the remaining parent budget, without
+        // restarting its original timeout or retaining the short preparation limit.
+        set_timeouts(
+            transaction,
+            finalization_deadline.saturating_duration_since(Instant::now()),
+        )
+        .await?;
         Ok::<_, tokio_postgres::Error>(snapshot)
     })
     .await;
     let result = if let Ok(Ok(result)) = attempt {
+        transaction
+            .batch_execute("RELEASE SAVEPOINT result_notification_preparation")
+            .await?;
         result
     } else {
         transaction
-            .batch_execute("ROLLBACK TO SAVEPOINT result_notification_preparation")
+            .batch_execute(
+                "ROLLBACK TO SAVEPOINT result_notification_preparation; \
+                 RELEASE SAVEPOINT result_notification_preparation",
+            )
             .await?;
         Err(SkipReason::PreparationFailed)
     };
-    transaction
-        .batch_execute("RELEASE SAVEPOINT result_notification_preparation")
-        .await?;
     match result {
         Ok(prepared) => Ok(Some(prepared)),
         Err(reason) => {
@@ -81,6 +99,14 @@ pub(crate) async fn prepare(
             Ok(None)
         }
     }
+}
+
+fn preparation_budget(remaining: Duration) -> Option<Duration> {
+    // Dropping a PostgreSQL query future does not cancel the server command. Leave one further
+    // statement-timeout interval for it to finish, as well as time for rollback and business COMMIT.
+    let budget =
+        (remaining.checked_sub(RECOVERY_AND_COMMIT_RESERVE)? / 2).min(MAXIMUM_PREPARATION_TIMEOUT);
+    (budget >= Duration::from_millis(1)).then_some(budget)
 }
 
 async fn set_timeouts(

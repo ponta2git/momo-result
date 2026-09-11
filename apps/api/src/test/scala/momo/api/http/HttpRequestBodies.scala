@@ -80,17 +80,14 @@ object HttpRequestBodies:
       status = None,
     ).asJson
 
-    def createOcrJob(imageId: String, requestedScreenType: String): Json =
-      CreateOcrJobRequest(imageId = imageId, requestedScreenType = requestedScreenType).asJson
-
-    def createOcrJobForDraft(
+    def createOcrJob(
         imageId: String,
         requestedScreenType: String,
         matchDraftId: String,
     ): Json = CreateOcrJobRequest(
       imageId = imageId,
       requestedScreenType = requestedScreenType,
-      matchDraftId = Some(matchDraftId),
+      matchDraftId = matchDraftId,
     ).asJson
 
     def defaultIncidentCounts: IncidentCountsRequest = incidentCounts(1, 0, 0, 0, 0, 0)

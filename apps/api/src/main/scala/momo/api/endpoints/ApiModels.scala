@@ -62,12 +62,15 @@ object OcrJobHintsRequest:
 final case class CreateOcrJobRequest(
     imageId: String,
     requestedScreenType: String,
+    matchDraftId: String,
     ocrHints: Option[OcrJobHintsRequest] = None,
-    matchDraftId: Option[String] = None,
 ) derives Codec.AsObject
 
 object CreateOcrJobRequest:
   given Schema[CreateOcrJobRequest] = Schema.derived[CreateOcrJobRequest]
+    .modify(
+      _.matchDraftId
+    )(_.description("Existing editable match draft to attach this image's OCR result to."))
     .modify(_.requestedScreenType)(_.description(
       "Must be total_assets, revenue, or incident_log. The legacy auto value is not accepted."
     ))

@@ -177,6 +177,7 @@ MVPのUIでは、画像を3種類の分類トレイへ配置して読み取り�
 - OCRはサーバー側の OCR worker で実行し、ブラウザは画像を一時アップロードする。
 - バックエンドはAPIサーバーとOCRワーカーを分離する。
 - OCRジョブ状態の正本はDBに置く。
+- OCR受付には既存の対戦下書きIDを必須とし、画像ごとのOCRジョブ・結果と下書きのslotを同じtransactionで紐づける。開催と開催内の試合番号は、この時点では未選択でもよい。
 - OCRジョブ配送には Redis Streams を使う。
 - API はOCRジョブ作成時にDBへ durable enqueue intent を保存し、Redis publish は outbox dispatcher が行う。
 - OCR処理は、将来差し替え可能な構造にする。

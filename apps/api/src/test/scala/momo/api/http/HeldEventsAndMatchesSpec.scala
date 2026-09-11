@@ -248,9 +248,35 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
 
   app.test("POST /api/ocr-jobs rejects unknown screen type at the HTTP boundary") { httpApp =>
     val req =
-      writePost(uri"/api/ocr-jobs", HttpRequestBodies.Matches.createOcrJob("image-1", "unknown"))
+      writePost(
+        uri"/api/ocr-jobs",
+        HttpRequestBodies.Matches.createOcrJob("image-1", "unknown", "missing-match-draft")
+      )
     httpApp.run(req).flatMap { res =>
       assertProblem(res, Status.UnprocessableContent, "VALIDATION_FAILED", "requestedScreenType")
+    }
+  }
+
+  List(
+    "missing" -> Json.obj(),
+    "null" -> Json.obj("matchDraftId" -> Json.Null),
+    "empty" -> Json.obj("matchDraftId" -> Json.fromString("")),
+    "blank" -> Json.obj("matchDraftId" -> Json.fromString(" ")),
+  ).foreach { (name, matchDraftField) =>
+    app.test(s"POST /api/ocr-jobs rejects $name matchDraftId at the HTTP boundary") { httpApp =>
+      val body = Json.obj(
+        "imageId" -> Json.fromString("missing-image"),
+        "requestedScreenType" -> Json.fromString("total_assets"),
+      ).deepMerge(matchDraftField)
+      httpApp.run(writePost(uri"/api/ocr-jobs", body)).flatMap { response =>
+        if name == "missing" || name == "null" then
+          response.as[String].map { message =>
+            assertEquals(response.status, Status.BadRequest)
+            assert(message.contains("matchDraftId"))
+          }
+        else
+          assertProblem(response, Status.UnprocessableContent, "VALIDATION_FAILED", "matchDraftId")
+      }
     }
   }
 
@@ -489,7 +515,7 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
       imageId <- uploadPng(httpApp)
       createJobRes <- httpApp.run(writePost(
         uri"/api/ocr-jobs",
-        HttpRequestBodies.Matches.createOcrJobForDraft(imageId, "total_assets", matchDraftId),
+        HttpRequestBodies.Matches.createOcrJob(imageId, "total_assets", matchDraftId),
       ))
       _ = assertEquals(createJobRes.status, Status.Ok)
       _ <- createJobRes.as[Json]
@@ -522,18 +548,18 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
         totalAssetsJobRes <- httpApp.run(writePost(
           uri"/api/ocr-jobs",
           HttpRequestBodies.Matches
-            .createOcrJobForDraft(totalAssetsImageId, "total_assets", matchDraftId),
+            .createOcrJob(totalAssetsImageId, "total_assets", matchDraftId),
         ))
         _ = assertEquals(totalAssetsJobRes.status, Status.Ok)
         revenueJobRes <- httpApp.run(writePost(
           uri"/api/ocr-jobs",
-          HttpRequestBodies.Matches.createOcrJobForDraft(revenueImageId, "revenue", matchDraftId),
+          HttpRequestBodies.Matches.createOcrJob(revenueImageId, "revenue", matchDraftId),
         ))
         _ = assertEquals(revenueJobRes.status, Status.Ok)
         incidentLogJobRes <- httpApp.run(writePost(
           uri"/api/ocr-jobs",
           HttpRequestBodies.Matches
-            .createOcrJobForDraft(incidentLogImageId, "incident_log", matchDraftId),
+            .createOcrJob(incidentLogImageId, "incident_log", matchDraftId),
         ))
         _ = assertEquals(incidentLogJobRes.status, Status.Ok)
         archiveRes <- httpApp.run(readGet(

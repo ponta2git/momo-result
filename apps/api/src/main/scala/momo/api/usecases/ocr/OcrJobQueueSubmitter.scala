@@ -31,10 +31,9 @@ object OcrJobQueueSubmitter:
           val originalErrorClasses = SafeLog.throwableClasses(error)
           val logOriginal = logger.error(s"OCR enqueue publish failed jobId=${intent.jobId
               .value} draftId=${intent.draftId.value} matchDraftId=${intent.matchDraftId
-              .fold("none")(_.value)} errorClasses=$originalErrorClasses")
-          val markDraftFailure = intent.matchDraftId match
-            case Some(id) => matchDrafts.markOcrFailed(id, intent.createdAt).void
-            case None => MonadThrow[F].unit
+              .value} errorClasses=$originalErrorClasses")
+          val markDraftFailure =
+            matchDrafts.markOcrFailed(intent.matchDraftId, intent.createdAt).void
           // Run compensation (mark job/draft failed) and log any secondary failure so it is not
           // silently swallowed. Logged fields are restricted to identifiers and throwable classes.
           val compensate =
@@ -43,7 +42,7 @@ object OcrJobQueueSubmitter:
                 case Right(_) => MonadThrow[F].unit
                 case Left(compensationError) =>
                   val compensationErrorClasses = SafeLog.throwableClasses(compensationError)
-                  val matchDraftId = intent.matchDraftId.fold("none")(_.value)
+                  val matchDraftId = intent.matchDraftId.value
                   logger.error(
                     s"OCR enqueue compensation failed jobId=${intent.jobId.value} draftId=${intent
                         .draftId.value} matchDraftId=$matchDraftId " +

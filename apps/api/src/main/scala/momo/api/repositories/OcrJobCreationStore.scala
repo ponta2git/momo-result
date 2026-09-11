@@ -16,7 +16,7 @@ final case class OcrJobDraftAttachment(
 
 final case class OcrQueueDispatchIntent(
     enqueueRequest: OcrJobEnqueueRequest,
-    matchDraftId: Option[MatchDraftId],
+    matchDraftId: MatchDraftId,
 ):
   def jobId: OcrJobId = enqueueRequest.jobId
   def draftId: OcrDraftId = enqueueRequest.draftId
@@ -25,7 +25,7 @@ final case class OcrQueueDispatchIntent(
 final case class OcrJobCreationPlan(
     draft: OcrDraft,
     job: OcrJob,
-    matchDraftAttachment: Option[OcrJobDraftAttachment],
+    matchDraftAttachment: OcrJobDraftAttachment,
     queueDispatch: OcrQueueDispatchIntent,
     activeJobLimit: Int,
 )
@@ -38,19 +38,17 @@ object OcrJobCreationPlan:
     plan.job.status == momo.api.domain.OcrJobStatus.Queued &&
     plan.draft.jobId == plan.job.id &&
     plan.job.draftId == plan.draft.id &&
-    plan.queueDispatch.matchDraftId == attachment.map(_.draftId) &&
+    plan.queueDispatch.matchDraftId == attachment.draftId &&
     request.jobId == plan.job.id &&
     request.draftId == plan.draft.id &&
     request.imageId == plan.job.imageId &&
     request.imageLocation == plan.job.imageLocation &&
     request.requestedScreenType == plan.job.requestedScreenType &&
     request.attempt == OcrJobEnqueueRequest.InitialAttempt &&
-    attachment.forall(value =>
-      value.sourceImageId == plan.job.imageId &&
-        value.ocrDraftId == plan.draft.id &&
-        value.screenType == plan.job.requestedScreenType &&
-        value.updatedAt.equals(request.enqueuedAt)
-    )
+    attachment.sourceImageId == plan.job.imageId &&
+    attachment.ocrDraftId == plan.draft.id &&
+    attachment.screenType == plan.job.requestedScreenType &&
+    attachment.updatedAt.equals(request.enqueuedAt)
 
 trait OcrJobCreationStore[F[_]]:
   def store(plan: OcrJobCreationPlan): F[OcrJobCreationStore.OcrJobCreationResult]

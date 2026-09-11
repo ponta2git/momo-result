@@ -883,8 +883,9 @@ export interface components {
             imageId: string;
             /** @description Must be total_assets, revenue, or incident_log. The legacy auto value is not accepted. */
             requestedScreenType: string;
+            /** @description Existing editable match draft to attach this image's OCR result to. */
+            matchDraftId: string;
             ocrHints?: components["schemas"]["OcrJobHintsRequest"];
-            matchDraftId?: string;
         };
         /** CreateOcrJobResponse */
         CreateOcrJobResponse: {

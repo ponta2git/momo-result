@@ -215,6 +215,7 @@ mod tests {
             },
         );
         assert!(matches!(result, Ok(OcrConsumerRuntimeConfig::Disabled)));
+        drop(result);
         assert_eq!(
             reads.get(),
             0,
@@ -234,6 +235,7 @@ mod tests {
             })
         ));
 
+        drop(result);
         let mut missing_interval = complete_values();
         missing_interval.remove("MOMO_OCR_V2_PEL_RECOVERY_INTERVAL_MS");
         assert!(matches!(
@@ -245,6 +247,7 @@ mod tests {
 
         let complete = build(&complete_values());
         assert!(matches!(complete, Ok(OcrConsumerRuntimeConfig::Enabled(_))));
+        drop(complete);
     }
 
     #[test]

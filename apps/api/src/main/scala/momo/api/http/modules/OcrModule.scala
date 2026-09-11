@@ -134,7 +134,7 @@ object OcrModule:
     case Left(error) => security.toProblemF(error).map(Left(_))
     case Right(created) =>
       val response = OcrJobCodec.toCreateResponse(created)
-      val matchDraftId = request.matchDraftId.getOrElse("none")
+      val matchDraftId = request.matchDraftId
       val requestIdValue = requestId.getOrElse("none")
       val event = s"ocr_job_accepted accountId=$accountId jobId=${created.job.id.value} " +
         s"draftId=${created.draft.id.value} imageId=${request.imageId} " +

@@ -5160,7 +5160,8 @@
         "type" : "object",
         "required" : [
           "imageId",
-          "requestedScreenType"
+          "requestedScreenType",
+          "matchDraftId"
         ],
         "properties" : {
           "imageId" : {
@@ -5170,11 +5171,12 @@
             "description" : "Must be total_assets, revenue, or incident_log. The legacy auto value is not accepted.",
             "type" : "string"
           },
+          "matchDraftId" : {
+            "description" : "Existing editable match draft to attach this image's OCR result to.",
+            "type" : "string"
+          },
           "ocrHints" : {
             "$ref" : "#/components/schemas/OcrJobHintsRequest"
-          },
-          "matchDraftId" : {
-            "type" : "string"
           }
         }
       },

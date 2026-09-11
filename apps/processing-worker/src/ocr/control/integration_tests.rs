@@ -28,6 +28,8 @@ use crate::{
 
 type SmokeResult<T = ()> = Result<T, Box<dyn Error + Send + Sync>>;
 
+mod notifications;
+
 const TAKEOVER: Fixture = Fixture {
     job_id: "c2-smoke-job-takeover",
     draft_id: "c2-smoke-draft-takeover",
@@ -126,6 +128,7 @@ async fn real_postgres_and_redis_preserve_ocr_fencing_and_delivery_order() -> Sm
     verify_expired_analysis_recovery_emits_wake(&mut primary).await?;
     verify_analysis_preemption_and_stale_intent(&mut primary).await?;
     verify_redis_failure_order(&mut primary, &redis_url).await?;
+    notifications::verify(&mut primary, &mut stale).await?;
 
     cleanup_database(&primary).await?;
     Ok(())
@@ -218,7 +221,15 @@ async fn verify_success_and_terminal_duplicate(primary: &mut Client) -> SmokeRes
     let config = control_config("ocr-c2-worker-success")?;
     let claim = claimed(claim_job(primary, &payload, &config).await?)?;
     let completion = tests::valid_completion(RequestedScreenType::TotalAssets);
-    finish_success(primary, &claim, &config, &OcrHints::default(), &completion).await?;
+    finish_success(
+        primary,
+        &claim,
+        &config,
+        &OcrHints::default(),
+        &completion,
+        None,
+    )
+    .await?;
     let row = primary
         .query_one(
             "SELECT j.status, COUNT(d.id)::bigint FROM ocr_jobs j\x20\
@@ -241,7 +252,15 @@ async fn verify_success_with_warnings(primary: &mut Client) -> SmokeResult {
     let config = control_config("ocr-c2-worker-success-warnings")?;
     let claim = claimed(claim_job(primary, &payload, &config).await?)?;
     let completion = tests::completion_with_missing_amount_warning();
-    finish_success(primary, &claim, &config, &OcrHints::default(), &completion).await?;
+    finish_success(
+        primary,
+        &claim,
+        &config,
+        &OcrHints::default(),
+        &completion,
+        None,
+    )
+    .await?;
     assert_match_draft_status(primary, &SUCCESS_WITH_WARNINGS, "needs_review").await?;
     Ok(())
 }

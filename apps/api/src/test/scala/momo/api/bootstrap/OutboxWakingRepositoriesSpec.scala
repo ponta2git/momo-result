@@ -338,8 +338,14 @@ final class OutboxWakingRepositoriesSpec extends MomoCatsEffectSuite:
     OcrJobCreationPlan(
       draft,
       job,
-      None,
-      OcrQueueDispatchIntent(request, None),
+      OcrJobDraftAttachment(
+        MatchDraftId.unsafeFromString("match-draft-wake"),
+        ScreenType.TotalAssets,
+        imageId,
+        draftId,
+        now
+      ),
+      OcrQueueDispatchIntent(request, MatchDraftId.unsafeFromString("match-draft-wake")),
       12,
     )
 

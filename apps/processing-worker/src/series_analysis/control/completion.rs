@@ -23,6 +23,12 @@ use super::{
 
 mod authoritative_input;
 
+struct PublicationNotification<'a> {
+    comparison: Option<crate::notifications::analysis::Comparison>,
+    previous_artifact_id: Option<&'a str>,
+    finalization_deadline: tokio::time::Instant,
+}
+
 #[cfg(test)]
 pub(super) use authoritative_input::validate_manifest as validate_authoritative_manifest;
 
@@ -32,12 +38,17 @@ pub(super) use authoritative_input::validate_manifest as validate_authoritative_
 ///
 /// Returns an error for invalid artifacts, stale ownership/revisions, nondeterministic output, or
 /// a failed `PostgreSQL` publication transaction.
+#[expect(
+    clippy::significant_drop_tightening,
+    reason = "reservations move into the success commit or are explicitly dropped on every other publication branch"
+)]
 pub(crate) async fn publish(
     client: &mut Client,
     claim: &ClaimedJob,
     config: &AnalysisConsumerConfig,
     artifact_directory: &Path,
     metrics: &mut AttemptMetrics,
+    finalization_deadline: tokio::time::Instant,
 ) -> Result<ControlOutcome<PublicationResult>, ControlError> {
     let (artifact, mut staged) =
         prepare_staging(client, claim, config, artifact_directory, metrics).await?;
@@ -46,6 +57,15 @@ pub(crate) async fn publish(
         // A commit error can mean that PostgreSQL committed and then closed the connection before
         // acknowledging it. Always begin B on a new connection after staging/reconciliation so a
         // durable staging artifact is not terminally failed merely because A's client is unusable.
+        let notification = crate::notifications::analysis::load(
+            &config.notifications,
+            &config.database_url,
+            claim,
+            &artifact.manifest().artifact_id,
+            staged,
+            finalization_deadline,
+        )
+        .await;
         let mut publication_client = crate::postgres::connect(&config.database_url).await?;
         metrics.observe_worker_peak(current_process_peak_resident_bytes().await);
         let publication_started = Instant::now();
@@ -57,6 +77,7 @@ pub(crate) async fn publish(
         lock_owned(&transaction, claim, config).await?;
         let desired = desired_artifact(&transaction, claim).await?;
         if !desired.matches(claim) {
+            drop(notification);
             transaction.rollback().await?;
             finish_publication_metrics(metrics, publication_started);
             return supersede(&mut publication_client, claim, config, metrics)
@@ -64,7 +85,12 @@ pub(crate) async fn publish(
                 .map(|outcome| outcome.map(|()| PublicationResult::Superseded));
         }
         validate_candidate(&transaction, claim, &artifact, staged).await?;
-        match existing_artifact(
+        let notification = PublicationNotification {
+            comparison: notification,
+            previous_artifact_id: desired.current_artifact_id.as_deref(),
+            finalization_deadline,
+        };
+        let disposition = match existing_artifact(
             &transaction,
             claim,
             &artifact,
@@ -73,6 +99,7 @@ pub(crate) async fn publish(
         .await?
         {
             ExistingArtifact::DifferentVersion if !staged => {
+                drop(notification);
                 transaction.rollback().await?;
                 finish_publication_metrics(metrics, publication_started);
                 let retry_staging_started = Instant::now();
@@ -87,58 +114,62 @@ pub(crate) async fn publish(
                 staged = true;
                 metrics.add_staging(retry_staging_started.elapsed());
                 retry_staging?;
+                continue;
             }
             ExistingArtifact::DifferentVersion => {
                 publish_staged_artifact(&transaction, claim, &artifact).await?;
-                finish_publication_metrics(metrics, publication_started);
-                return commit_successful_publication(
-                    transaction,
-                    claim,
-                    config,
-                    metrics,
-                    &artifact.manifest().root_checksum,
-                    ResultDisposition::Published,
-                    PublicationResult::Published,
-                )
-                .await;
+                ResultDisposition::Published
             }
             ExistingArtifact::Reusable => {
                 if staged {
                     discard_staged_artifact(&transaction, claim, &artifact).await?;
                 }
-                finish_publication_metrics(metrics, publication_started);
-                return commit_successful_publication(
-                    transaction,
-                    claim,
-                    config,
-                    metrics,
-                    &artifact.manifest().root_checksum,
-                    ResultDisposition::Reused,
-                    PublicationResult::Reused,
-                )
-                .await;
+                ResultDisposition::Reused
             }
             ExistingArtifact::IntegrityFailure(failure_code) => {
-                let mut effects = TransactionEffects::empty();
+                drop(notification);
                 finish_publication_metrics(metrics, publication_started);
-                finish_terminal_failure(
-                    &transaction,
-                    claim,
-                    config,
-                    AttemptFailure::failed(failure_code),
-                    metrics,
-                    &mut effects,
-                )
-                .await?;
-                return commit_publication(
-                    transaction,
-                    effects,
-                    PublicationResult::IntegrityFailure(failure_code),
-                )
-                .await;
+                return commit_integrity_failure(transaction, claim, config, metrics, failure_code)
+                    .await;
             }
-        }
+        };
+        finish_publication_metrics(metrics, publication_started);
+        return commit_successful_publication(
+            transaction,
+            claim,
+            config,
+            metrics,
+            &artifact.manifest().root_checksum,
+            disposition,
+            notification,
+        )
+        .await;
     }
+}
+
+async fn commit_integrity_failure(
+    transaction: Transaction<'_>,
+    claim: &ClaimedJob,
+    config: &AnalysisConsumerConfig,
+    metrics: &AttemptMetrics,
+    failure_code: super::SafeFailureCode,
+) -> Result<ControlOutcome<PublicationResult>, ControlError> {
+    let mut effects = TransactionEffects::empty();
+    finish_terminal_failure(
+        &transaction,
+        claim,
+        config,
+        AttemptFailure::failed(failure_code),
+        metrics,
+        &mut effects,
+    )
+    .await?;
+    commit_publication(
+        transaction,
+        effects,
+        PublicationResult::IntegrityFailure(failure_code),
+    )
+    .await
 }
 
 async fn validate_candidate(
@@ -162,7 +193,7 @@ async fn commit_successful_publication(
     metrics: &AttemptMetrics,
     output_checksum: &str,
     disposition: ResultDisposition,
-    result: PublicationResult,
+    notification: PublicationNotification<'_>,
 ) -> Result<ControlOutcome<PublicationResult>, ControlError> {
     let mut effects = TransactionEffects::empty();
     finish_success(
@@ -175,7 +206,28 @@ async fn commit_successful_publication(
         &mut effects,
     )
     .await?;
-    commit_publication(transaction, effects, result).await
+    let result = match disposition {
+        ResultDisposition::Published => PublicationResult::Published,
+        ResultDisposition::Reused => PublicationResult::Reused,
+    };
+    let prepared = if let Some(comparison) = notification.comparison {
+        comparison
+            .prepare(
+                &transaction,
+                claim,
+                notification.previous_artifact_id,
+                result == PublicationResult::Reused,
+                notification.finalization_deadline,
+            )
+            .await?
+    } else {
+        None
+    };
+    let outcome = commit_publication(transaction, effects, result).await?;
+    prepared
+        .into_iter()
+        .for_each(crate::notifications::PreparedNotification::dispatch);
+    Ok(outcome)
 }
 
 async fn commit_publication(

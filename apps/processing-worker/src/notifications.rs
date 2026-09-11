@@ -6,9 +6,11 @@ use futures_util::{StreamExt, stream::FuturesUnordered};
 use serde::Serialize;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore, mpsc};
 
+pub(crate) mod analysis;
 mod config;
 mod http;
 pub(crate) mod ocr;
+mod preparation;
 
 use config::{CONCURRENT_REQUESTS, MAXIMUM_BYTES, MAXIMUM_PENDING, MAXIMUM_WIRE_BYTES};
 pub(crate) use config::{NotificationConfig, NotificationConfigError};

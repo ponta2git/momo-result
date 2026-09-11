@@ -42,6 +42,7 @@
 - 通知設定はAPIから共有DBへ直接保存し、SummitへのHTTPに依存しない。`PostgresNotificationSettings`は共通gate取得後の最新2行を`NotificationSettings.change`へ渡し、両方の期待世代の一致を確認してから変更対象だけを書き込む。ON/OFFが変わる種類だけ世代を進め、OFFへの変更と対象通知の未開始部分取消を一つのtransactionへ合成する。競合時は両方とも変更しない。
 - 通知gateはsource rowの更新後に取得する。通知側はgate取得後にsource row lockを取らず、READ COMMITTEDでcommit済み状態を読む。この順序で受付先行・対象変更先行の双方を収束させる。gate取得後に追加の業務write・外部I/Oを行わない。
 - 取消は送達済み部分と開始済み部分の証跡を保ち、未開始部分だけを取消状態へ進める。開始済み送信が後から完了しても親を復帰させない。物理schema・consumer間の排他契約は`../momo-db/docs/discord-notifications.md`を参照する。
+- 分析通知のimmutable成果物は公開lock前のread-only / repeatable-read snapshotで必要resourceだけを上限付きで読む。最終transactionで比較準備時のcurrent識別と公開revisionを確認し、業務write完了後のSAVEPOINT内でgateを取得する。gate取得と、設定・表示metadataの一括SELECTは別statementとする。通常の準備エラーはSAVEPOINTを復旧して業務commitを継続する。
 
 ## 4. Contract Evidence
 

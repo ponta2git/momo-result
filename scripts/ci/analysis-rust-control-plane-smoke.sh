@@ -21,6 +21,7 @@ tests=(
   "series_analysis::control::capability::tests::real_postgres_registration_replaces_the_generation_capability_set"
   "series_analysis::control::claim::tests::real_postgres_keeps_exact_jobs_queued_when_an_old_binary_omits_the_lease_contract"
   "series_analysis::control::integration_tests::real_postgres_keeps_staging_separate_from_fenced_publication"
+  "series_analysis::control::integration_tests::notifications::real_postgres_analysis_notifications_follow_committed_publications"
   "series_analysis::release::tests::real_postgres_release_capabilities_require_exact_singleton_arrays"
   "series_analysis::release::tests::real_postgres_promotion_freezes_capability_registration_after_inspection"
   "series_analysis::release::tests::real_postgres_zero_title_backfill_is_terminal_and_updates_the_release_generation"

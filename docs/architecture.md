@@ -145,7 +145,7 @@
 - OCR の object / queue / 状態契約は `docs/redis-streams-ocr-contract.md` と schema を正本とし、URL、credential、local path を runtime 間 payload にしない。
 - OCR完了通知は画像ごとの検証済み結果から作り、他のslotを含む下書きの投影状態には依存しない。成功transactionの業務更新をすべて終えてから共有result gateと設定を読み、ONの場合だけ成功時点の識別子・文脈・警告有無を固定する。共有wireと排他契約は `../momo-db/docs/discord-notifications.md` を正本とする。
 - 通知準備は確定処理と同じ絶対期限から残り時間を計算し、実行中SQLの終了・SAVEPOINT復旧・業務commitの時間を確保する。余裕がなければ通知用SQLを実行せず、復旧可能な準備失敗では業務成功を保って通知を省略する。commit成功後だけ、件数・bytes・同時接続数に上限を持つ共通senderへ渡す。OCRのACK・実行枠解放はHTTP完了を待たない。
-- senderは一度だけHTTPを試み、整合する受付応答を永続受付の証拠として扱う。応答不明時も通知outbox・再試行・再起動時の再構築は行わない。停止時はproducerの確定を優先し、残りの共通期限で通知をdrainする。
+- senderはDNS・接続・応答を含む単一のrequest期限内で一度だけHTTPを試み、整合する受付応答を永続受付の証拠として扱う。接続だけを先に打ち切る短い期限を重ねず、TCPの一時的な停滞からの回復も同じ期限に含める。応答不明時も通知outbox・再試行・再起動時の再構築は行わない。停止時はproducerの確定を優先し、残りの共通期限で通知をdrainする。
 
 ## 5. Runtime / Security
 

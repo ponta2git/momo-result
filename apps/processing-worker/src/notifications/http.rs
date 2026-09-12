@@ -36,7 +36,12 @@ pub(super) async fn send(client: &Client, config: &HttpConfig, mut entry: Queued
         .await
     {
         Ok(response) => read_receipt(response, &entry.id).await,
-        Err(_error) => ReceiptOutcome::Unknown("transport"),
+        Err(error) => ReceiptOutcome::Unknown(match (error.is_connect(), error.is_timeout()) {
+            (true, true) => "connect_timeout",
+            (true, false) => "connect",
+            (false, true) => "request_timeout",
+            (false, false) => "transport",
+        }),
     };
     match outcome {
         ReceiptOutcome::Stored(receipt) => tracing::info!(

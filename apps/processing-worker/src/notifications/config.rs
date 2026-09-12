@@ -9,7 +9,6 @@ pub(super) const MAXIMUM_BYTES: usize = 32 * 1024 * 1024;
 pub(super) const MAXIMUM_WIRE_BYTES: usize = 16 * 1024 * 1024;
 pub(super) const CONCURRENT_REQUESTS: usize = 2;
 pub(super) const REQUEST_TIMEOUT: Duration = Duration::from_secs(5);
-pub(super) const CONNECT_TIMEOUT: Duration = Duration::from_secs(1);
 
 /// Transport activation is separate from the user's durable ON/OFF setting.
 pub(crate) enum NotificationConfig {
@@ -80,7 +79,6 @@ pub(super) fn client() -> Result<Client, NotificationConfigError> {
         .no_proxy()
         .http1_only()
         .pool_max_idle_per_host(CONCURRENT_REQUESTS)
-        .connect_timeout(CONNECT_TIMEOUT)
         .timeout(REQUEST_TIMEOUT)
         .build()
         .map_err(|_error| NotificationConfigError)
@@ -89,3 +87,7 @@ pub(super) fn client() -> Result<Client, NotificationConfigError> {
 #[derive(Debug, Error)]
 #[error("result notification transport configuration is invalid")]
 pub(crate) struct NotificationConfigError;
+
+#[cfg(test)]
+#[cfg(target_os = "linux")]
+mod tests;

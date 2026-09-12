@@ -99,6 +99,7 @@ pub(crate) enum SkipReason {
     PayloadBound,
     InvalidSnapshot,
     SettingOff,
+    ComparisonTimeout,
     FinalizationBudget,
     PreparationFailed,
 }

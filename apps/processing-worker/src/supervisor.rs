@@ -159,6 +159,7 @@ pub(crate) async fn run(
         shutdown_drain_timeout,
     } = enabled_consumers;
     let (notification_sink, notification_driver) = NotificationDriver::new(notifications)?;
+    let series_analysis = series_analysis.with_notifications(notification_sink.clone());
     match ocr {
         OcrConsumerRuntimeConfig::Disabled => {
             drop(notification_sink);

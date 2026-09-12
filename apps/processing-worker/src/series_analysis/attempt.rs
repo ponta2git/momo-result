@@ -597,11 +597,8 @@ async fn finish_successful_child(
     metrics: &mut AttemptMetrics,
 ) -> Result<ControlOutcome<DeliveryDisposition>, ConsumerError> {
     let publication_started = Instant::now();
-    let result = time::timeout(
-        config.execution_limits.finalization_timeout,
-        publish(control_client, claim, config, attempt_directory, metrics),
-    )
-    .await;
+    let result =
+        publish_with_deadline(control_client, config, claim, attempt_directory, metrics).await;
     metrics.observe_worker_peak(current_process_peak_resident_bytes().await);
     match result {
         Ok(Ok(outcome)) => match outcome.value {
@@ -692,6 +689,29 @@ async fn finish_successful_child(
             finish_publication_failure(config, claim, metrics).await
         }
     }
+}
+
+// Share one absolute deadline across staging, optional notification preparation and COMMIT.
+async fn publish_with_deadline(
+    control_client: &mut tokio_postgres::Client,
+    config: &AnalysisConsumerConfig,
+    claim: &ClaimedJob,
+    attempt_directory: &std::path::Path,
+    metrics: &mut AttemptMetrics,
+) -> Result<Result<ControlOutcome<PublicationResult>, ControlError>, time::error::Elapsed> {
+    let finalization_deadline = time::Instant::now() + config.execution_limits.finalization_timeout;
+    time::timeout_at(
+        finalization_deadline,
+        publish(
+            control_client,
+            claim,
+            config,
+            attempt_directory,
+            metrics,
+            finalization_deadline,
+        ),
+    )
+    .await
 }
 
 fn log_attempt_success(publication: PublicationResult, metrics: &AttemptMetrics) {

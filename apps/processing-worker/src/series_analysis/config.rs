@@ -56,6 +56,7 @@ pub(crate) struct AnalysisConsumerConfig {
     pub(crate) pel_recovery_interval: Duration,
     pub(crate) execution_limits: AnalysisExecutionLimits,
     pub(crate) child_cgroup: ChildCgroup,
+    pub(crate) notifications: crate::notifications::NotificationSink,
 }
 
 #[derive(Debug, Error, Eq, PartialEq)]
@@ -141,6 +142,14 @@ impl AnalysisActivationConfig {
 }
 
 impl AnalysisConsumerConfig {
+    pub(crate) fn with_notifications(
+        mut self,
+        notifications: crate::notifications::NotificationSink,
+    ) -> Self {
+        self.notifications = notifications;
+        self
+    }
+
     /// Loads connection and lease settings only after publication safety limits are accepted.
     ///
     /// # Errors
@@ -214,6 +223,7 @@ impl AnalysisConsumerConfig {
             pel_recovery_interval,
             execution_limits,
             child_cgroup,
+            notifications: crate::notifications::NotificationSink::default(),
         })
     }
 }

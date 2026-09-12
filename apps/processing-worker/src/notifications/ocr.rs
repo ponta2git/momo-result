@@ -1,20 +1,16 @@
 //! Freeze only this image's validated outcome, after every business write and before COMMIT.
 
-use std::time::Duration;
-
 use serde::Serialize;
-use tokio::time::{Instant, timeout_at};
+use tokio::time::Instant;
 use tokio_postgres::{Row, Transaction};
 
 use super::{
-    NotificationEnvelope, NotificationReservation, PreparedNotification, SkipReason, log_skip,
+    NotificationEnvelope, NotificationReservation, PreparedNotification, SkipReason,
     valid_source_id,
 };
 
 pub(crate) const MAXIMUM_SNAPSHOT_BYTES: usize = 16 * 1024;
 const KIND: &str = "ocr_completed";
-const MAXIMUM_PREPARATION_TIMEOUT: Duration = Duration::from_millis(250);
-const RECOVERY_AND_COMMIT_RESERVE: Duration = Duration::from_millis(100);
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -48,77 +44,12 @@ pub(crate) async fn prepare(
     needs_review: bool,
     finalization_deadline: Instant,
 ) -> Result<Option<PreparedNotification>, tokio_postgres::Error> {
-    let now = Instant::now();
-    let remaining = finalization_deadline.saturating_duration_since(now);
-    let Some(budget) = preparation_budget(remaining) else {
-        log_skip(KIND, job_id, SkipReason::FinalizationBudget);
-        return Ok(None);
-    };
-    let preparation_deadline = now + budget;
-    transaction
-        .batch_execute("SAVEPOINT result_notification_preparation")
-        .await?;
-    let attempt = timeout_at(preparation_deadline, async {
-        set_timeouts(transaction, budget).await?;
-        // This command must finish before the SELECT starts: a single CTE could retain the
-        // pre-wait READ COMMITTED snapshot and send with a stale OFF/ON generation.
-        transaction
-            .query_one("SELECT pg_advisory_xact_lock(19790514, 1)", &[])
-            .await?;
+    super::preparation::recoverable(transaction, KIND, job_id, finalization_deadline, async {
         let rows = transaction.query(SNAPSHOT_SQL, &[&job_id]).await?;
-        let snapshot = snapshot(&rows, job_id, draft_id, screen_type, needs_review)
-            .and_then(|envelope| reservation.prepare(&envelope));
-        // RELEASE does not restore SET LOCAL. Give COMMIT the remaining parent budget, without
-        // restarting its original timeout or retaining the short preparation limit.
-        set_timeouts(
-            transaction,
-            finalization_deadline.saturating_duration_since(Instant::now()),
-        )
-        .await?;
-        Ok::<_, tokio_postgres::Error>(snapshot)
+        Ok(snapshot(&rows, job_id, draft_id, screen_type, needs_review)
+            .and_then(|envelope| reservation.prepare(&envelope)))
     })
-    .await;
-    let result = if let Ok(Ok(result)) = attempt {
-        transaction
-            .batch_execute("RELEASE SAVEPOINT result_notification_preparation")
-            .await?;
-        result
-    } else {
-        transaction
-            .batch_execute(
-                "ROLLBACK TO SAVEPOINT result_notification_preparation; \
-                 RELEASE SAVEPOINT result_notification_preparation",
-            )
-            .await?;
-        Err(SkipReason::PreparationFailed)
-    };
-    match result {
-        Ok(prepared) => Ok(Some(prepared)),
-        Err(reason) => {
-            log_skip(KIND, job_id, reason);
-            Ok(None)
-        }
-    }
-}
-
-fn preparation_budget(remaining: Duration) -> Option<Duration> {
-    // Dropping a PostgreSQL query future does not cancel the server command. Leave one further
-    // statement-timeout interval for it to finish, as well as time for rollback and business COMMIT.
-    let budget =
-        (remaining.checked_sub(RECOVERY_AND_COMMIT_RESERVE)? / 2).min(MAXIMUM_PREPARATION_TIMEOUT);
-    (budget >= Duration::from_millis(1)).then_some(budget)
-}
-
-async fn set_timeouts(
-    transaction: &Transaction<'_>,
-    timeout: Duration,
-) -> Result<(), tokio_postgres::Error> {
-    let value = format!("{}ms", timeout.as_millis().max(1));
-    transaction.query_one(
-        "SELECT set_config('statement_timeout', $1, true), set_config('lock_timeout', $1, true)",
-        &[&value],
-    ).await?;
-    Ok(())
+    .await
 }
 
 fn snapshot<'a>(

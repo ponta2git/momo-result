@@ -22,6 +22,7 @@ const KIND: &str = NotificationKind::AnalysisCompleted.as_str();
 const MAXIMUM_SNAPSHOT_BYTES: i32 = 4 * 1024 * 1024;
 const MAXIMUM_LISTED_MATCHES: usize = 1024;
 const MAXIMUM_SEASONS: usize = 128;
+const COMPARISON_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Owns the reserved capacity and immutable comparison until finalization. Reuse shares one
 /// artifact between both sides. Preparation checks the final current pointer before freezing
@@ -41,6 +42,7 @@ pub(crate) async fn load(
     staged: bool,
     deadline: Instant,
 ) -> Option<Comparison> {
+    let started = Instant::now();
     let attempt = async {
         let reservation = sink.reserve(
             usize::try_from(MAXIMUM_SNAPSHOT_BYTES).map_err(|_error| SkipReason::PayloadBound)?,
@@ -64,16 +66,26 @@ pub(crate) async fn load(
             changes,
         })
     };
-    let budget =
-        (deadline.saturating_duration_since(Instant::now()) / 4).min(Duration::from_secs(1));
+    // Connection setup and the complete MVCC read share this allowance. Keep most of the
+    // parent deadline available for fenced publication, recovery and COMMIT.
+    let budget = (deadline.saturating_duration_since(started) / 4).min(COMPARISON_TIMEOUT);
     match timeout(budget, attempt).await {
-        Ok(Ok(comparison)) => Some(comparison),
+        Ok(Ok(comparison)) => {
+            tracing::info!(
+                event = "result_notification_comparison_ready",
+                kind = KIND,
+                source_job_id = %claim.job_id,
+                elapsed_milliseconds = started.elapsed().as_millis(),
+                changed_match_count = comparison.changes.matches.len(),
+            );
+            Some(comparison)
+        }
         Ok(Err(reason)) => {
             log_skip(KIND, &claim.job_id, reason);
             None
         }
         Err(_error) => {
-            log_skip(KIND, &claim.job_id, SkipReason::FinalizationBudget);
+            log_skip(KIND, &claim.job_id, SkipReason::ComparisonTimeout);
             None
         }
     }

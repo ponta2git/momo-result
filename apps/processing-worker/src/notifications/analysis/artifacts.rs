@@ -93,11 +93,10 @@ async fn read(
     {
         return Err(SkipReason::PayloadBound);
     }
-    let rows = transaction.query_raw(
-        "SELECT left(season_master_id, 201), payload FROM series_analysis_scope_aggregate_artifacts \
-         WHERE artifact_id = $1 AND scope_kind IN ('overall','season') ORDER BY scope_key",
-        [&artifact_id],
-    ).await.map_err(database_error)?;
+    let rows = transaction
+        .query_raw(include_str!("artifacts/scopes.sql"), [&artifact_id])
+        .await
+        .map_err(database_error)?;
     tokio::pin!(rows);
     let mut scopes = BTreeMap::new();
     while let Some(row) = rows.try_next().await.map_err(database_error)? {

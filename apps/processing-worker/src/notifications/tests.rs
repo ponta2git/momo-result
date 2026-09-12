@@ -17,15 +17,13 @@ fn config() -> Result<NotificationConfig, NotificationConfigError> {
 }
 
 fn envelope() -> NotificationEnvelope<'static, serde_json::Value> {
-    NotificationEnvelope {
-        notification_id: "result:ocr_completed:example-ocr-1".to_owned(),
-        kind: "ocr_completed",
-        schema_version: 1,
-        source_job_id: "example-ocr-1",
-        occurred_at: "2026-01-01T12:00:00.000Z".to_owned(),
-        settings_generation: "0".to_owned(),
-        data: serde_json::json!({"context": {"gameTitleName": null, "heldDateIso": null, "matchNoInEvent": null}}),
-    }
+    NotificationEnvelope::new(
+        NotificationKind::OcrCompleted,
+        "example-ocr-1",
+        "2026-01-01T12:00:00.000Z".to_owned(),
+        "0".to_owned(),
+        serde_json::json!({"context": {"gameTitleName": null, "heldDateIso": null, "matchNoInEvent": null}}),
+    )
 }
 
 #[test]

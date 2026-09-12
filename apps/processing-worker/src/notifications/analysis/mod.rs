@@ -6,7 +6,8 @@ use tokio::time::{Instant, timeout};
 use tokio_postgres::Transaction;
 
 use super::{
-    NotificationReservation, NotificationSink, PreparedNotification, SkipReason, log_skip,
+    NotificationKind, NotificationReservation, NotificationSink, PreparedNotification, SkipReason,
+    log_skip,
 };
 use crate::series_analysis::control::ClaimedJob;
 use types::Artifact;
@@ -16,7 +17,7 @@ mod comparison;
 mod snapshot;
 mod types;
 
-const KIND: &str = "analysis_completed";
+const KIND: &str = NotificationKind::AnalysisCompleted.as_str();
 // Conservative wire bound leaves room for JSONB whitespace and numeric expansion at receipt.
 const MAXIMUM_SNAPSHOT_BYTES: i32 = 4 * 1024 * 1024;
 const MAXIMUM_LISTED_MATCHES: usize = 1024;

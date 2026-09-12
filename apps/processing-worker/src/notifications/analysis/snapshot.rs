@@ -4,10 +4,13 @@ use serde::Deserialize;
 use tokio_postgres::{Transaction, types::Json};
 
 use super::{
-    Comparison, KIND, MAXIMUM_SNAPSHOT_BYTES, PreparedNotification, SkipReason, comparison,
+    Comparison, MAXIMUM_SNAPSHOT_BYTES, PreparedNotification, SkipReason, comparison,
     types::{AnalysisData, NotificationMatch, SeasonRanks},
 };
-use crate::{notifications::NotificationEnvelope, series_analysis::control::ClaimedJob};
+use crate::{
+    notifications::{NotificationEnvelope, NotificationKind},
+    series_analysis::control::ClaimedJob,
+};
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -93,14 +96,12 @@ pub(super) async fn prepare(
                 })
             })
             .collect::<Result<Vec<_>, SkipReason>>()?;
-        let envelope = NotificationEnvelope {
-            notification_id: format!("result:{KIND}:{}", claim.job_id),
-            kind: KIND,
-            schema_version: 1,
-            source_job_id: &claim.job_id,
-            occurred_at: occurred_at.ok_or(SkipReason::InvalidSnapshot)?,
-            settings_generation: generation,
-            data: AnalysisData {
+        let envelope = NotificationEnvelope::new(
+            NotificationKind::AnalysisCompleted,
+            &claim.job_id,
+            occurred_at.ok_or(SkipReason::InvalidSnapshot)?,
+            generation,
+            AnalysisData {
                 game_title_id: &claim.game_title_id,
                 game_title_name: snapshot.game_title_name,
                 disposition: if reused { "reused" } else { "published" },
@@ -113,12 +114,12 @@ pub(super) async fn prepare(
                 overall,
                 seasons,
             },
-        };
+        );
         let prepared = comparison.reservation.prepare(&envelope)?;
-        tracing::info!(event = "analysis_notification_prepared", notification_id = %envelope.notification_id,
+        tracing::info!(event = "analysis_notification_prepared", notification_id = %envelope.notification_id(),
             job_id = %claim.job_id, input_revision = claim.input_revision,
-            previous_artifact_id = ?envelope.data.previous_analysis.as_ref().map(|identity| &identity.artifact_id),
-            current_artifact_id = %envelope.data.current_analysis.artifact_id);
+            previous_artifact_id = ?comparison.previous.as_ref().map(|artifact| &artifact.identity.artifact_id),
+            current_artifact_id = %current.identity.artifact_id);
         Ok(prepared)
     })();
     Ok(result)

@@ -145,6 +145,7 @@ COPY --from=caddy-builder /out/caddy /usr/bin/caddy
 RUN apt-get update \
   && apt-get install -y --no-install-recommends \
     ca-certificates \
+    libpcre2-8-0 \
     libstdc++6 \
     zlib1g \
   && rm -rf /var/lib/apt/lists/* \

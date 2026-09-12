@@ -586,6 +586,8 @@ fn valid_incident_warnings(
     warnings: &[WarningCandidate],
 ) -> bool {
     let mut expected = expected_player_order_warnings(&category.player_order.slots);
+    // Plausibility warnings make an observed count reviewable; they are not hard value bounds.
+    // Keep the parser's warning obligations here so an overread cannot bypass review or stop saving.
     let mut ginji_total = 0_u32;
     for (player_index, player) in players.iter().enumerate() {
         let mut station_total = 0_u32;
@@ -595,14 +597,14 @@ fn valid_incident_warnings(
             };
             match field.value.as_ref() {
                 Some(value) if incident_name == "スリの銀次" => {
-                    if *value > 2 {
-                        return false;
-                    }
                     ginji_total = ginji_total.saturating_add(*value);
                 }
                 Some(value) => {
                     if *value > 12 {
-                        return false;
+                        expected.push((
+                            "SUSPICIOUS_INCIDENT_COUNT",
+                            format!("players[{player_index}].incidents[{incident_name:?}]"),
+                        ));
                     }
                     station_total = station_total.saturating_add(*value);
                 }

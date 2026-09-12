@@ -599,15 +599,13 @@ mod tests {
                     break;
                 }
             }
-            let envelope = crate::notifications::NotificationEnvelope {
-                notification_id: "result:ocr_completed:last-job".to_owned(),
-                kind: "ocr_completed",
-                schema_version: 1,
-                source_job_id: "last-job",
-                occurred_at: "2026-01-01T00:00:00.000Z".to_owned(),
-                settings_generation: "0".to_owned(),
-                data: (),
-            };
+            let envelope = crate::notifications::NotificationEnvelope::new(
+                crate::notifications::NotificationKind::OcrCompleted,
+                "last-job",
+                "2026-01-01T00:00:00.000Z".to_owned(),
+                "0".to_owned(),
+                (),
+            );
             sink.reserve(1024)
                 .and_then(|reservation| reservation.prepare(&envelope))
                 .map_err(|_error| SupervisorError::ShutdownDrainBudgetBound)?

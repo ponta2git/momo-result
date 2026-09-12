@@ -5,12 +5,12 @@ use tokio::time::Instant;
 use tokio_postgres::{Row, Transaction};
 
 use super::{
-    NotificationEnvelope, NotificationReservation, PreparedNotification, SkipReason,
-    valid_source_id,
+    NotificationEnvelope, NotificationKind, NotificationReservation, PreparedNotification,
+    SkipReason, valid_source_id,
 };
 
 pub(crate) const MAXIMUM_SNAPSHOT_BYTES: usize = 16 * 1024;
-const KIND: &str = "ocr_completed";
+const KIND: &str = NotificationKind::OcrCompleted.as_str();
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -115,15 +115,13 @@ fn snapshot<'a>(
                 .map_err(|_error| SkipReason::InvalidSnapshot)?,
         },
     };
-    Ok(NotificationEnvelope {
-        notification_id: format!("result:{KIND}:{job_id}"),
-        kind: KIND,
-        schema_version: 1,
-        source_job_id: job_id,
+    Ok(NotificationEnvelope::new(
+        NotificationKind::OcrCompleted,
+        job_id,
         occurred_at,
-        settings_generation: generation,
+        generation,
         data,
-    })
+    ))
 }
 
 // Bound every variable-length field before it crosses the DB driver. An oversized/ambiguous

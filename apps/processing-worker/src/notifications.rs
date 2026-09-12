@@ -8,12 +8,14 @@ use tokio::sync::{OwnedSemaphorePermit, Semaphore, mpsc};
 
 pub(crate) mod analysis;
 mod config;
+mod envelope;
 mod http;
 pub(crate) mod ocr;
 mod preparation;
 
 use config::{CONCURRENT_REQUESTS, MAXIMUM_BYTES, MAXIMUM_PENDING, MAXIMUM_WIRE_BYTES};
 pub(crate) use config::{NotificationConfig, NotificationConfigError};
+pub(crate) use envelope::{NotificationEnvelope, NotificationKind};
 
 #[derive(Clone, Default)]
 pub(crate) struct NotificationSink(Option<Arc<Admission>>);
@@ -141,29 +143,12 @@ pub(crate) struct NotificationReservation {
     maximum_bytes: usize,
 }
 
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct NotificationEnvelope<'a, T> {
-    pub(crate) notification_id: String,
-    pub(crate) kind: &'static str,
-    pub(crate) schema_version: u8,
-    pub(crate) source_job_id: &'a str,
-    pub(crate) occurred_at: String,
-    pub(crate) settings_generation: String,
-    pub(crate) data: T,
-}
-
 impl NotificationReservation {
     pub(crate) fn prepare<T: Serialize>(
         self,
         envelope: &NotificationEnvelope<'_, T>,
     ) -> Result<PreparedNotification, SkipReason> {
-        if !matches!(envelope.kind, "ocr_completed" | "analysis_completed")
-            || envelope.schema_version != 1
-            || !valid_source_id(envelope.source_job_id)
-            || envelope.notification_id
-                != format!("result:{}:{}", envelope.kind, envelope.source_job_id)
-        {
+        if !valid_source_id(envelope.source_job_id()) {
             return Err(SkipReason::InvalidSnapshot);
         }
         let mut writer = BoundedJson {
@@ -174,9 +159,9 @@ impl NotificationReservation {
         Ok(PreparedNotification {
             sender: self.sender,
             entry: QueuedNotification {
-                id: envelope.notification_id.clone(),
-                source_job_id: envelope.source_job_id.to_owned(),
-                kind: envelope.kind,
+                id: envelope.notification_id().to_owned(),
+                source_job_id: envelope.source_job_id().to_owned(),
+                kind: envelope.kind(),
                 body: Some(writer.bytes),
                 _count: self.count,
                 _bytes: self.bytes,

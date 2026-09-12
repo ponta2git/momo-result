@@ -1,6 +1,6 @@
 //! Compare published artifacts, then freeze display metadata at the final success boundary.
 
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 use tokio::time::{Instant, timeout};
 use tokio_postgres::Transaction;
@@ -18,13 +18,17 @@ mod types;
 
 const KIND: &str = "analysis_completed";
 // Conservative wire bound leaves room for JSONB whitespace and numeric expansion at receipt.
-const MAXIMUM_SNAPSHOT_BYTES: usize = 4 * 1024 * 1024;
+const MAXIMUM_SNAPSHOT_BYTES: i32 = 4 * 1024 * 1024;
 const MAXIMUM_LISTED_MATCHES: usize = 1024;
+const MAXIMUM_SEASONS: usize = 128;
 
+/// Owns the reserved capacity and immutable comparison until finalization. Reuse shares one
+/// artifact between both sides. Preparation checks the final current pointer before freezing
+/// metadata; only the caller's confirmed success COMMIT may authorize dispatch.
 pub(crate) struct Comparison {
     reservation: NotificationReservation,
-    previous: Option<Artifact>,
-    current: Artifact,
+    previous: Option<Arc<Artifact>>,
+    current: Arc<Artifact>,
     changes: comparison::Changes,
 }
 
@@ -37,7 +41,9 @@ pub(crate) async fn load(
     deadline: Instant,
 ) -> Option<Comparison> {
     let attempt = async {
-        let reservation = sink.reserve(MAXIMUM_SNAPSHOT_BYTES)?;
+        let reservation = sink.reserve(
+            usize::try_from(MAXIMUM_SNAPSHOT_BYTES).map_err(|_error| SkipReason::PayloadBound)?,
+        )?;
         let mut client = crate::postgres::connect(database_url)
             .await
             .map_err(|_error| SkipReason::PreparationFailed)?;
@@ -49,12 +55,7 @@ pub(crate) async fn load(
         {
             return Err(SkipReason::InvalidSnapshot);
         }
-        let changes = comparison::changes(previous.as_ref(), &current);
-        if changes.matches.len() > MAXIMUM_LISTED_MATCHES
-            || changes.seasons.len() > artifacts::MAXIMUM_SEASONS
-        {
-            return Err(SkipReason::PayloadBound);
-        }
+        let changes = comparison::changes(previous.as_deref(), &current)?;
         Ok(Comparison {
             reservation,
             previous,

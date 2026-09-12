@@ -1,73 +1,55 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use serde::Deserialize;
-
 use super::{
-    SkipReason,
-    types::{Artifact, MatchIdentity, RankComparison, RankSample, Ranks},
+    MAXIMUM_LISTED_MATCHES, MAXIMUM_SEASONS, SkipReason,
+    types::{Artifact, MatchIdentity, RankComparison, RankSample},
 };
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct Aggregate {
-    metrics_by_player: Vec<Metric>,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct Metric {
-    member_id: String,
-    denominator: u32,
-    rank: Average,
-}
-
-#[derive(Deserialize)]
-struct Average {
-    average: Option<f64>,
-}
-
-pub(super) fn decode_ranks(bytes: &[u8]) -> Result<Ranks, SkipReason> {
-    let aggregate: Aggregate =
-        serde_json::from_slice(bytes).map_err(|_error| SkipReason::InvalidSnapshot)?;
-    let mut ranks = BTreeMap::new();
-    if aggregate.metrics_by_player.len() > 4 {
-        return Err(SkipReason::InvalidSnapshot);
-    }
-    for metric in aggregate.metrics_by_player {
-        let sample = RankSample {
-            match_count: metric.denominator,
-            average_rank: metric.rank.average,
-        };
-        if metric.member_id.is_empty()
-            || metric.member_id.len() > 200
-            || !sample
-                .average_rank
-                .map_or(sample.match_count == 0, |average| {
-                    sample.match_count > 0 && (1.0..=4.0).contains(&average)
-                })
-            || ranks.insert(metric.member_id, sample).is_some()
-        {
-            return Err(SkipReason::InvalidSnapshot);
-        }
-    }
-    Ok(ranks)
-}
 
 pub(super) struct Changes {
     pub(super) matches: BTreeMap<String, MatchIdentity>,
     pub(super) seasons: BTreeSet<String>,
 }
 
-pub(super) fn changes(before: Option<&Artifact>, after: &Artifact) -> Changes {
+impl Changes {
+    pub(super) fn unchanged(artifact: &Artifact) -> Result<Self, SkipReason> {
+        let seasons: BTreeSet<_> = artifact
+            .scopes
+            .keys()
+            .flatten()
+            .take(MAXIMUM_SEASONS + 1)
+            .cloned()
+            .collect();
+        if seasons.len() > MAXIMUM_SEASONS {
+            return Err(SkipReason::PayloadBound);
+        }
+        Ok(Self {
+            matches: BTreeMap::new(),
+            seasons,
+        })
+    }
+}
+
+/// Compare revisions and membership, stopping before an unpublishable listing is materialized.
+/// Deletions affect season aggregates but never become listed matches.
+pub(super) fn changes(before: Option<&Artifact>, after: &Artifact) -> Result<Changes, SkipReason> {
+    if before.is_some_and(|before| std::ptr::eq(before, after)) {
+        return Changes::unchanged(after);
+    }
     let mut matches = BTreeMap::new();
     let mut seasons = BTreeSet::new();
     for (id, current) in &after.matches {
         let previous = before.and_then(|artifact| artifact.matches.get(id));
         if previous != Some(current) {
+            if matches.len() == MAXIMUM_LISTED_MATCHES {
+                return Err(SkipReason::PayloadBound);
+            }
             matches.insert(id.clone(), current.clone());
             seasons.insert(current.season_id.clone());
             if let Some(previous) = previous {
                 seasons.insert(previous.season_id.clone());
+            }
+            if seasons.len() > MAXIMUM_SEASONS {
+                return Err(SkipReason::PayloadBound);
             }
         }
     }
@@ -75,14 +57,17 @@ pub(super) fn changes(before: Option<&Artifact>, after: &Artifact) -> Changes {
         for (id, previous) in &before.matches {
             if !after.matches.contains_key(id) {
                 seasons.insert(previous.season_id.clone());
+                if seasons.len() > MAXIMUM_SEASONS {
+                    return Err(SkipReason::PayloadBound);
+                }
             }
         }
     }
     // Deletion-only changes already have affected seasons; do not confuse them with a no-op.
     if seasons.is_empty() {
-        seasons.extend(after.scopes.keys().flatten().cloned());
+        return Changes::unchanged(after);
     }
-    Changes { matches, seasons }
+    Ok(Changes { matches, seasons })
 }
 
 pub(super) fn ranks(

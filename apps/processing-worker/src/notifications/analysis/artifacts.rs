@@ -1,26 +1,27 @@
 //! Immutable resources are read before publication locks, from one cleanup-safe MVCC snapshot.
 
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, sync::Arc};
 
 use futures_util::TryStreamExt;
 use momo_analysis_core::model::MAXIMUM_PLAYER_MATCH_ROWS;
 use tokio_postgres::{Client, IsolationLevel, Transaction};
 
 use super::{
-    SkipReason,
-    comparison::decode_ranks,
-    types::{AnalysisIdentity, Artifact, MatchIdentity},
+    MAXIMUM_SEASONS, SkipReason,
+    types::{AnalysisIdentity, Artifact, MatchIdentity, RankSample, Ranks},
 };
 
+mod aggregate;
+pub(super) use aggregate::decode_ranks;
+
 const MAXIMUM_ARTIFACT_BYTES: i64 = 8 * 1024 * 1024;
-pub(super) const MAXIMUM_SEASONS: usize = 128;
 
 pub(super) async fn load(
     client: &mut Client,
     title_id: &str,
     candidate_id: &str,
     staged: bool,
-) -> Result<(Option<Artifact>, Artifact), SkipReason> {
+) -> Result<(Option<Arc<Artifact>>, Arc<Artifact>), SkipReason> {
     let transaction = client
         .build_transaction()
         .isolation_level(IsolationLevel::RepeatableRead)
@@ -41,13 +42,15 @@ pub(super) async fn load(
         .map_err(database_error)?;
     let previous_id: Option<String> = row.try_get(0).map_err(database_error)?;
     let previous = if let Some(id) = previous_id {
-        Some(read(&transaction, title_id, &id).await?)
+        Some(Arc::new(read(&transaction, title_id, &id).await?))
     } else {
         None
     };
     let current = if staged {
-        read(&transaction, title_id, candidate_id).await?
+        Arc::new(read(&transaction, title_id, candidate_id).await?)
     } else {
+        // Reuse shares immutable resources; copying every match and scope would double the
+        // preparation allocation even though both sides identify the same retained artifact.
         previous.clone().ok_or(SkipReason::InvalidSnapshot)?
     };
     transaction.commit().await.map_err(database_error)?;
@@ -59,11 +62,13 @@ async fn read(
     title_id: &str,
     artifact_id: &str,
 ) -> Result<Artifact, SkipReason> {
-    let header = transaction.query_one(
-        "SELECT left(id, 201), input_revision::text, left(algorithm_version, 201), artifact_schema_version, \
-         left(validation_contract_id, 201) FROM series_analysis_artifacts WHERE id = $1 AND game_title_id = $2",
-        &[&artifact_id, &title_id],
-    ).await.map_err(database_error)?;
+    let header = transaction
+        .query_one(
+            include_str!("artifacts/header.sql"),
+            &[&artifact_id, &title_id],
+        )
+        .await
+        .map_err(database_error)?;
     let identity = AnalysisIdentity {
         artifact_id: header.try_get(0).map_err(database_error)?,
         input_revision: header.try_get(1).map_err(database_error)?,
@@ -81,14 +86,11 @@ async fn read(
     {
         return Err(SkipReason::InvalidSnapshot);
     }
-    let size = transaction.query_one(
-        "SELECT count(*)::bigint, COALESCE(sum(octet_length(payload)), 0)::bigint \
-         FROM series_analysis_scope_aggregate_artifacts WHERE artifact_id = $1 AND scope_kind IN ('overall','season')",
-        &[&artifact_id],
-    ).await.map_err(database_error)?;
-    let count: i64 = size.try_get(0).map_err(database_error)?;
-    let bytes: i64 = size.try_get(1).map_err(database_error)?;
-    if !(1..=129).contains(&count) || bytes > MAXIMUM_ARTIFACT_BYTES {
+    let count: i64 = header.try_get("scope_count").map_err(database_error)?;
+    let bytes: i64 = header.try_get("payload_bytes").map_err(database_error)?;
+    if !usize::try_from(count).is_ok_and(|count| (1..=MAXIMUM_SEASONS + 1).contains(&count))
+        || bytes > MAXIMUM_ARTIFACT_BYTES
+    {
         return Err(SkipReason::PayloadBound);
     }
     let rows = transaction.query_raw(
@@ -109,15 +111,31 @@ async fn read(
             return Err(SkipReason::InvalidSnapshot);
         }
     }
-    if !scopes.contains_key(&None) {
-        return Err(SkipReason::InvalidSnapshot);
-    }
     let matches = match_identities(transaction, artifact_id).await?;
-    for (season, samples) in &scopes {
-        let expected_count = matches
-            .values()
-            .filter(|m| season.as_ref().is_none_or(|id| *id == m.season_id))
-            .count();
+    validate_scope_counts(&scopes, &matches)?;
+    Ok(Artifact {
+        identity,
+        scopes,
+        matches,
+    })
+}
+
+// Count each match once, regardless of the number of seasons. Remaining entries identify
+// missing aggregates, including seasons whose matches could otherwise disappear silently.
+fn validate_scope_counts(
+    scopes: &BTreeMap<Option<String>, Ranks>,
+    matches: &BTreeMap<String, MatchIdentity>,
+) -> Result<(), SkipReason> {
+    let mut season_counts = BTreeMap::new();
+    for identity in matches.values() {
+        *season_counts
+            .entry(identity.season_id.as_str())
+            .or_insert(0_usize) += 1;
+    }
+    for (season, samples) in scopes {
+        let expected_count = season.as_ref().map_or(matches.len(), |id| {
+            season_counts.remove(id.as_str()).unwrap_or_default()
+        });
         if (expected_count > 0 && samples.len() != 4)
             || samples
                 .values()
@@ -126,17 +144,10 @@ async fn read(
             return Err(SkipReason::InvalidSnapshot);
         }
     }
-    if matches
-        .values()
-        .any(|m| !scopes.contains_key(&Some(m.season_id.clone())))
-    {
+    if !scopes.contains_key(&None) || !season_counts.is_empty() {
         return Err(SkipReason::InvalidSnapshot);
     }
-    Ok(Artifact {
-        identity,
-        scopes,
-        matches,
-    })
+    Ok(())
 }
 
 async fn match_identities(
@@ -180,3 +191,6 @@ const fn valid_id(id: &str) -> bool {
 fn database_error(_error: tokio_postgres::Error) -> SkipReason {
     SkipReason::PreparationFailed
 }
+
+#[cfg(test)]
+mod tests;

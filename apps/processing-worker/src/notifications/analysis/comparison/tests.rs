@@ -4,6 +4,7 @@
 )]
 
 use super::*;
+use crate::notifications::analysis::artifacts::decode_ranks;
 use crate::notifications::analysis::types::AnalysisIdentity;
 
 fn artifact(artifact_id: &str, entries: &[(&str, &str, &str, &str)]) -> Artifact {
@@ -39,7 +40,8 @@ fn artifact(artifact_id: &str, entries: &[(&str, &str, &str, &str)]) -> Artifact
 }
 
 #[test]
-fn changed_revisions_moves_additions_and_deletions_select_affected_seasons() {
+fn changed_revisions_moves_additions_and_deletions_select_affected_seasons()
+-> Result<(), SkipReason> {
     let before = artifact(
         "old",
         &[
@@ -58,7 +60,7 @@ fn changed_revisions_moves_additions_and_deletions_select_affected_seasons() {
             ("backdated", "1", "b", "map"),
         ],
     );
-    let diff = changes(Some(&before), &after);
+    let diff = changes(Some(&before), &after)?;
     assert_eq!(
         diff.matches.keys().map(String::as_str).collect::<Vec<_>>(),
         ["backdated", "edited", "moved"]
@@ -70,7 +72,7 @@ fn changed_revisions_moves_additions_and_deletions_select_affected_seasons() {
     let deletion = changes(
         Some(&before),
         &artifact("new", &[("untouched", "1", "quiet", "map")]),
-    );
+    )?;
     assert!(
         deletion.matches.is_empty(),
         "deleted matches cannot be listed or counted as zero ginji"
@@ -79,13 +81,14 @@ fn changed_revisions_moves_additions_and_deletions_select_affected_seasons() {
         !deletion.seasons.contains("quiet"),
         "deletion-only is not an unchanged recalculation"
     );
-    let unchanged = changes(Some(&after), &after);
+    let unchanged = changes(Some(&after), &after)?;
     assert!(
         unchanged.matches.is_empty(),
         "manual reuse has no added/changed matches"
     );
     assert_eq!(unchanged.seasons.len(), 4);
-    assert_eq!(changes(None, &after).matches.len(), 4);
+    assert_eq!(changes(None, &after)?.matches.len(), 4);
+    Ok(())
 }
 
 #[test]
@@ -136,6 +139,42 @@ fn rank_comparisons_use_unrounded_artifact_values_and_typed_absence() {
         .is_some_and(|small_delta| small_delta < 0.0 && small_delta.abs() < 0.01),
         "small improvement must not become maintenance"
     );
+}
+
+#[test]
+fn oversized_changes_skip_the_whole_listing_but_unchanged_history_is_allowed()
+-> Result<(), SkipReason> {
+    let mut after = artifact("current", &[]);
+    for index in 0..MAXIMUM_LISTED_MATCHES {
+        after.matches.insert(
+            format!("m{index}"),
+            MatchIdentity {
+                source_revision: "1".to_owned(),
+                season_id: "season".to_owned(),
+                map_id: "map".to_owned(),
+            },
+        );
+    }
+    after
+        .scopes
+        .insert(Some("season".to_owned()), BTreeMap::new());
+    assert_eq!(changes(None, &after)?.matches.len(), MAXIMUM_LISTED_MATCHES);
+    after.matches.insert(
+        "overflow".to_owned(),
+        MatchIdentity {
+            source_revision: "1".to_owned(),
+            season_id: "season".to_owned(),
+            map_id: "map".to_owned(),
+        },
+    );
+    assert!(
+        matches!(changes(None, &after), Err(SkipReason::PayloadBound)),
+        "an over-capacity initial publication must not yield a truncated listing"
+    );
+    let unchanged = changes(Some(&after), &after)?;
+    assert!(unchanged.matches.is_empty());
+    assert_eq!(unchanged.seasons, BTreeSet::from(["season".to_owned()]));
+    Ok(())
 }
 
 #[test]

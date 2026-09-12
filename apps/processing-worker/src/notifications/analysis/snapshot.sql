@@ -1,6 +1,6 @@
 SELECT setting.enabled, setting.generation::text AS generation,
   to_char(job.finished_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS occurred_at,
-  CASE WHEN octet_length(frozen.body::text) <= 4194304 THEN frozen.body END AS body
+  CASE WHEN octet_length(frozen.body::text) <= $7 THEN frozen.body END AS body
 FROM discord_notification_settings setting
 LEFT JOIN series_analysis_jobs job ON job.id = $3 AND job.status = 'succeeded'
 LEFT JOIN series_analysis_title_states state ON state.game_title_id = $1

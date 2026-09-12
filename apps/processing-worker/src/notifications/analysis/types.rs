@@ -55,7 +55,6 @@ pub(super) struct MatchIdentity {
 
 pub(super) type Ranks = BTreeMap<String, RankSample>;
 
-#[derive(Clone)]
 pub(super) struct Artifact {
     pub(super) identity: AnalysisIdentity,
     // None means overall; a named key is a season across all maps.

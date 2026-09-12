@@ -1,11 +1,11 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use serde::Deserialize;
-use tokio_postgres::Transaction;
+use tokio_postgres::{Transaction, types::Json};
 
 use super::{
-    Comparison, KIND, PreparedNotification, SkipReason, comparison,
-    types::{AnalysisData, MatchIdentity, NotificationMatch, SeasonRanks},
+    Comparison, KIND, MAXIMUM_SNAPSHOT_BYTES, PreparedNotification, SkipReason, comparison,
+    types::{AnalysisData, NotificationMatch, SeasonRanks},
 };
 use crate::{notifications::NotificationEnvelope, series_analysis::control::ClaimedJob};
 
@@ -25,17 +25,17 @@ pub(super) async fn prepare(
     reused: bool,
 ) -> Result<Result<PreparedNotification, SkipReason>, tokio_postgres::Error> {
     let current = if reused {
-        comparison.previous.as_ref()
+        comparison.previous.as_deref()
     } else {
-        Some(&comparison.current)
+        Some(comparison.current.as_ref())
     };
     let Some(current) = current else {
         return Ok(Err(SkipReason::InvalidSnapshot));
     };
     let changed = if reused {
-        comparison::Changes {
-            matches: BTreeMap::new(),
-            seasons: current.scopes.keys().flatten().cloned().collect(),
+        match comparison::Changes::unchanged(current) {
+            Ok(changes) => changes,
+            Err(reason) => return Ok(Err(reason)),
         }
     } else {
         comparison.changes
@@ -52,22 +52,26 @@ pub(super) async fn prepare(
                 &current.identity.artifact_id,
                 &claim.input_revision,
                 &season_ids,
+                &MAXIMUM_SNAPSHOT_BYTES,
             ],
         )
         .await?;
     if !row.try_get::<_, bool>("enabled")? {
         return Ok(Err(SkipReason::SettingOff));
     }
-    let body: Option<serde_json::Value> = row.try_get("body")?;
     let occurred_at: Option<String> = row.try_get("occurred_at")?;
     let generation: String = row.try_get("generation")?;
     let result = (|| {
-        let snapshot: Snapshot = serde_json::from_value(body.ok_or(SkipReason::PayloadBound)?)
-            .map_err(|_error| SkipReason::InvalidSnapshot)?;
+        // Decode straight from the bounded JSONB row into the wire snapshot. A generic Value
+        // tree would allocate every object key and intermediate collection inside the gate.
+        let Json(snapshot) = row
+            .try_get::<_, Option<Json<Snapshot>>>("body")
+            .map_err(|_error| SkipReason::InvalidSnapshot)?
+            .ok_or(SkipReason::PayloadBound)?;
         validate(&snapshot, &changed)?;
         let overall = comparison::ranks(
             &snapshot.members,
-            comparison.previous.as_ref(),
+            comparison.previous.as_deref(),
             current,
             None,
             reused,
@@ -79,7 +83,7 @@ pub(super) async fn prepare(
                 Ok(SeasonRanks {
                     ranks: comparison::ranks(
                         &snapshot.members,
-                        comparison.previous.as_ref(),
+                        comparison.previous.as_deref(),
                         current,
                         Some(&id),
                         reused,
@@ -133,17 +137,19 @@ fn validate(snapshot: &Snapshot, changes: &comparison::Changes) -> Result<(), Sk
     }
     let mut seen = BTreeSet::new();
     for m in &snapshot.matches {
-        let identity = MatchIdentity {
-            source_revision: m.source_revision.clone(),
-            season_id: m.season_id.clone(),
-            map_id: m.map_id.clone(),
+        let Some(expected) = changes.matches.get(&m.match_id) else {
+            return Err(SkipReason::InvalidSnapshot);
         };
-        let players: BTreeSet<_> = m.players.iter().map(|player| &player.member_id).collect();
-        let ranks: BTreeSet<_> = m.players.iter().map(|player| player.rank).collect();
-        if changes.matches.get(&m.match_id) != Some(&identity)
+        let mut players = m.players.each_ref().map(|player| &player.member_id);
+        let mut ranks = m.players.each_ref().map(|player| player.rank);
+        players.sort_unstable();
+        ranks.sort_unstable();
+        if expected.source_revision != m.source_revision
+            || expected.season_id != m.season_id
+            || expected.map_id != m.map_id
             || !seen.insert(&m.match_id)
-            || players.iter().copied().ne(snapshot.members.keys())
-            || ranks != BTreeSet::from([1, 2, 3, 4])
+            || players.into_iter().ne(snapshot.members.keys())
+            || ranks != [1, 2, 3, 4]
             || m.players.iter().any(|player| {
                 player.ginji_count < 0
                     || snapshot.members.get(&player.member_id) != Some(&player.display_name)

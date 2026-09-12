@@ -35,6 +35,8 @@ object HttpAssertions:
       "保存済みの状態が変わっています。内容を確認して、もう一度実行してください。"
     case "MATCH_NOTE_VERSION_CONFLICT" =>
       "試合メモが別の利用者に更新されました。最新の内容を確認してください。"
+    case "NOTIFICATION_SETTINGS_VERSION_CONFLICT" =>
+      "通知設定が更新されています。現在の設定を読み込んで確認してください。"
     case "IDEMPOTENCY_IN_PROGRESS" =>
       "同じ操作を処理中です。少し待ってから、同じ内容で再実行してください。"
     case "IDEMPOTENCY_PAYLOAD_MISMATCH" =>

@@ -27,7 +27,7 @@ final case class CreateOcrJobCommand(
     imageId: ImageId,
     requestedScreenType: ScreenType,
     ocrHints: OcrJobHints,
-    matchDraftId: Option[MatchDraftId],
+    matchDraftId: MatchDraftId,
 )
 
 final case class CreatedOcrJob(job: OcrJob, draft: OcrDraft)
@@ -58,15 +58,14 @@ final class CreateOcrJob[F[_]: MonadThrow](
     _ <- EitherT.fromEither[F](validateOcrHints(command.ocrHints))
     _ <- EitherT(admissionGuard.ensureAvailable)
     hintsWithAliases <- EitherT.liftF(mergeMemberAliases(command.ocrHints))
-    draftForMatch <- command.matchDraftId match
-      case None => EitherT.rightT[F, AppError](Option.empty[momo.api.domain.MatchDraft])
-      case Some(id) => matchDrafts.find(id).orNotFound("match draft", id.value).flatMap { draft =>
-          if Set(MatchDraftStatus.Confirmed, MatchDraftStatus.Cancelled).contains(draft.status) then
-            EitherT.leftT[F, Option[momo.api.domain.MatchDraft]](AppError.Conflict(
-              s"match draft in status=${draft.status.wire} cannot start OCR."
-            ))
-          else EitherT.rightT[F, AppError](Some(draft))
-        }
+    draftForMatch <- matchDrafts.find(command.matchDraftId)
+      .orNotFound("match draft", command.matchDraftId.value).flatMap { draft =>
+        if Set(MatchDraftStatus.Confirmed, MatchDraftStatus.Cancelled).contains(draft.status) then
+          EitherT.leftT[F, momo.api.domain.MatchDraft](AppError.Conflict(
+            s"match draft in status=${draft.status.wire} cannot start OCR."
+          ))
+        else EitherT.rightT[F, AppError](draft)
+      }
     imageId = command.imageId
     image <- imageStore.find(imageId).orNotFound("image", command.imageId.value)
     createdAt <- EitherT.liftF(now)
@@ -75,14 +74,12 @@ final class CreateOcrJob[F[_]: MonadThrow](
     draft = initialDraft(draftId, jobId, command.requestedScreenType, createdAt)
     job = queuedJob(jobId, draftId, imageId, image.location, command.requestedScreenType, createdAt)
     enqueueRequest = OcrJobEnqueueRequest.initial(job, image, hintsWithAliases, requestId)
-    attachment = draftForMatch.map(draftRecord =>
-      OcrJobDraftAttachment(
-        draftId = draftRecord.id,
-        screenType = command.requestedScreenType,
-        sourceImageId = command.imageId,
-        ocrDraftId = draft.id,
-        updatedAt = createdAt,
-      )
+    attachment = OcrJobDraftAttachment(
+      draftId = draftForMatch.id,
+      screenType = command.requestedScreenType,
+      sourceImageId = command.imageId,
+      ocrDraftId = draft.id,
+      updatedAt = createdAt,
     )
     queueDispatch = OcrQueueDispatchIntent(
       enqueueRequest = enqueueRequest,

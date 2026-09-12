@@ -9,6 +9,7 @@ package momo.api.http
 object HttpOperation:
   val CreateLoginAccount = "POST /api/admin/login-accounts"
   val UpdateLoginAccount = "PATCH /api/admin/login-accounts/:id"
+  val UpdateNotificationSettings = "PUT /api/admin/notification-settings"
 
   val CreateOcrJob = "POST /api/ocr-jobs"
   val UploadImage = "POST /api/uploads/images"

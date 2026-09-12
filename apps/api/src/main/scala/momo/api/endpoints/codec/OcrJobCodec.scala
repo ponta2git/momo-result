@@ -17,7 +17,7 @@ object OcrJobCodec:
         ))
       hints <- request.ocrHints.fold(Right(OcrJobHints.empty))(OcrJobHintsRequest.asDomain)
       matchDraftId <- BoundaryId
-        .optional("matchDraftId", request.matchDraftId)(MatchDraftId.fromString)
+        .required("matchDraftId", request.matchDraftId)(MatchDraftId.fromString)
     yield CreateOcrJobCommand(
       imageId = imageId,
       requestedScreenType = requestedScreenType,

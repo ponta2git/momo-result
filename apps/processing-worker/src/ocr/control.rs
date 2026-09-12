@@ -2,6 +2,7 @@ use std::{fmt, time::Duration};
 
 use momo_ocr::OcrOutput;
 use thiserror::Error;
+use tokio::time::{Instant, timeout_at};
 use tokio_postgres::{Client, Transaction};
 
 use crate::execution_slot::{
@@ -9,6 +10,7 @@ use crate::execution_slot::{
     NewExecutionSlotHolder, SlotAcquisition, SlotRenewal, acquire_ocr, lock as lock_execution_slot,
     lock_owned as lock_owned_slot, release_owned, renew_owned, request_analysis_preemption,
 };
+use crate::notifications::{NotificationReservation, PreparedNotification};
 use crate::outbox::ControlOutcome;
 use crate::series_analysis::control::TransactionEffects;
 
@@ -201,6 +203,8 @@ pub(crate) enum OcrControlError {
     InvalidConfiguration,
     #[error("OCR completion payload violates its bounded shape")]
     InvalidCompletion,
+    #[error("OCR success finalization exceeded its deadline")]
+    FinalizationTimeout,
 }
 
 impl From<ExecutionSlotError> for OcrControlError {
@@ -219,6 +223,7 @@ impl OcrControlError {
             Self::InvalidState => "ocr_persisted_state",
             Self::InvalidConfiguration => "ocr_control_configuration",
             Self::InvalidCompletion => "ocr_completion_contract",
+            Self::FinalizationTimeout => "ocr_finalization_timeout",
         }
     }
 }
@@ -443,7 +448,36 @@ pub(crate) async fn finish_success(
     config: &OcrControlConfig,
     hints: &OcrHints,
     completion: &OcrDraftCompletion,
-) -> Result<(), OcrControlError> {
+    notification: Option<NotificationReservation>,
+) -> Result<Option<PreparedNotification>, OcrControlError> {
+    let deadline = Instant::now()
+        .checked_add(config.finalization_timeout)
+        .ok_or(OcrControlError::NumericBound)?;
+    timeout_at(
+        deadline,
+        finish_success_transaction(
+            client,
+            claim,
+            config,
+            hints,
+            completion,
+            notification,
+            deadline,
+        ),
+    )
+    .await
+    .map_err(|_elapsed| OcrControlError::FinalizationTimeout)?
+}
+
+async fn finish_success_transaction(
+    client: &mut Client,
+    claim: &ClaimedOcrJob,
+    config: &OcrControlConfig,
+    hints: &OcrHints,
+    completion: &OcrDraftCompletion,
+    notification: Option<NotificationReservation>,
+    deadline: Instant,
+) -> Result<Option<PreparedNotification>, OcrControlError> {
     validate_completion(claim, hints, completion)?;
     let transaction = bounded_transaction(client, config.finalization_timeout).await?;
     lock_owned_job(&transaction, claim, config).await?;
@@ -498,8 +532,26 @@ pub(crate) async fn finish_success(
     }
     sync_match_draft_status(&transaction, &claim.job_id).await?;
     release_slot(&transaction, claim, config).await?;
+    let prepared = if let Some(reservation) = notification {
+        crate::notifications::ocr::prepare(
+            &transaction,
+            reservation,
+            &claim.job_id,
+            &claim.draft_id,
+            requested_screen_type,
+            completion
+                .output
+                .warnings
+                .as_array()
+                .is_some_and(|warnings| !warnings.is_empty()),
+            deadline,
+        )
+        .await?
+    } else {
+        None
+    };
     transaction.commit().await?;
-    Ok(())
+    Ok(prepared)
 }
 
 pub(crate) async fn finish_failure(
@@ -818,7 +870,11 @@ async fn bounded_transaction(
     client: &mut Client,
     timeout: Duration,
 ) -> Result<Transaction<'_>, OcrControlError> {
-    let transaction = client.transaction().await?;
+    let transaction = client
+        .build_transaction()
+        .isolation_level(tokio_postgres::IsolationLevel::ReadCommitted)
+        .start()
+        .await?;
     let timeout = format!("{}ms", duration_milliseconds(timeout)?);
     transaction
         .query_one(

@@ -178,6 +178,7 @@ fn runtime_requires_and_preserves_the_dedicated_outbox_listener_url() {
             "postgresql://listener.invalid/momo"
         );
         assert_eq!(config.read_database_url, "postgresql://reader.invalid/momo");
+        drop(config);
     });
 }
 

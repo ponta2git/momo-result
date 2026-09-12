@@ -8,6 +8,7 @@ import doobie.postgres.sqlstate
 
 import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.domain.MatchDraftStatus
+import momo.api.domain.ids.MatchDraftId
 import momo.api.errors.{AppError, AppException}
 
 private[postgres] val RestrictViolationSqlState = "23001"
@@ -28,10 +29,11 @@ private[postgres] def conflict[A](message: String): ConnectionIO[A] =
 private[postgres] def notFound[A](resource: String, id: String): ConnectionIO[A] =
   appError(AppError.NotFound(resource, id))
 
-private[postgres] def deleteDiscardedDrafts(where: Fragment): ConnectionIO[Int] =
+private[postgres] def deleteDiscardedDrafts(where: Fragment): ConnectionIO[List[MatchDraftId]] =
   (fr"DELETE FROM match_drafts WHERE" ++ where ++ fr"""
     AND (
       status = ${MatchDraftStatus.Cancelled}
       OR (status = ${MatchDraftStatus.Confirmed} AND confirmed_match_id IS NULL)
     )
-  """).update.run
+    RETURNING id
+  """).query[MatchDraftId].to[List]

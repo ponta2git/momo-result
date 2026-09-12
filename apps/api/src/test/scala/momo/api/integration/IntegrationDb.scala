@@ -37,7 +37,10 @@ object IntegrationDb:
    * Suite-wide fixture combining a transactor with auto-cleanup before each test. Suites
    * acquire it through [[IntegrationDb.acquire]] in their `munitFixtures`.
    */
-  final class DbFixture(val transactor: HikariTransactor[IO]):
+  final class DbFixture(
+      val transactor: HikariTransactor[IO],
+      val migratedNotificationSettings: List[(String, Boolean, Long)],
+  ):
     def cleanup(): IO[Unit] = truncateAppTables(transactor)
 
   private lazy val sharedFixture: DbFixture =
@@ -57,7 +60,10 @@ object IntegrationDb:
     val (transactor, releaseTransactor) = transactorResource(settings).allocated.unsafeRunSync()
     val release = releaseTransactor >> IO.blocking(container.stop())
     val _ = sys.addShutdownHook(release.unsafeRunSync())
-    new DbFixture(transactor)
+    val migratedNotificationSettings = sql"""
+      SELECT kind, enabled, generation FROM discord_notification_settings ORDER BY kind
+    """.query[(String, Boolean, Long)].to[List].transact(transactor).unsafeRunSync()
+    new DbFixture(transactor, migratedNotificationSettings)
 
   def acquire: IO[DbFixture] = IO.blocking(sharedFixture)
 
@@ -137,8 +143,10 @@ object IntegrationDb:
    * `0013_login_accounts.sql`), and `incident_masters` (seeded by migration). Order respects FK
    * dependencies; using TRUNCATE ... CASCADE keeps it terse.
    */
-  def truncateAppTables(transactor: Transactor[IO]): IO[Unit] = (sql"""
+  def truncateAppTables(transactor: Transactor[IO]): IO[Unit] =
+    (sql"""
       TRUNCATE TABLE
+        discord_notifications,
         series_analysis_match_context_artifacts,
         series_analysis_drilldown_artifacts,
         series_analysis_scope_review_artifacts,
@@ -170,6 +178,8 @@ object IntegrationDb:
         idempotency_keys,
         app_sessions
       RESTART IDENTITY CASCADE
+    """.update.run.void *> sql"""
+      UPDATE discord_notification_settings SET enabled = true, generation = 0
     """.update.run.void *> sql"""
       UPDATE worker_execution_slots
       SET task_kind = NULL,

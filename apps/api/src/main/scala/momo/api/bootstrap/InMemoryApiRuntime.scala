@@ -166,6 +166,7 @@ private[bootstrap] object InMemoryApiRuntime:
       incidentMasters <- InMemoryIncidentMastersRepository.create[F]
       memberAliases <- InMemoryMemberAliasesRepository.create[F]
       idempotency <- InMemoryIdempotencyRepository.create[F]
+      notificationSettings <- InMemoryNotificationSettingsRepository.create[F]
       ocrJobCreationStore = InMemoryOcrJobCreationStore[F](
         drafts,
         drafts.create,
@@ -197,6 +198,7 @@ private[bootstrap] object InMemoryApiRuntime:
         members = members,
         loginAccounts = loginAccounts,
         loginAccountAdministration = loginAccountAdministration,
+        notificationSettings = notificationSettings,
         gameTitles = gameTitles,
         mapMasters = mapMasters,
         seasonMasters = seasonMasters,

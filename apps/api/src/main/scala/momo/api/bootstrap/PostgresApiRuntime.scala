@@ -196,6 +196,7 @@ private[bootstrap] object PostgresApiRuntime:
                 members = cachedMembers,
                 loginAccounts = loginAccounts,
                 loginAccountAdministration = loginAccountAdministration,
+                notificationSettings = PostgresNotificationSettingsRepository[F](transactor),
                 gameTitles = cachedGameTitles,
                 mapMasters = cachedMapMasters,
                 seasonMasters = cachedSeasonMasters,

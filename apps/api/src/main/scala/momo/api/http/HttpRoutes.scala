@@ -6,7 +6,7 @@ import org.http4s.HttpApp as Http4sApp
 import org.http4s.server.Router
 import sttp.tapir.AnyEndpoint
 import sttp.tapir.server.ServerEndpoint
-import sttp.tapir.server.http4s.Http4sServerInterpreter
+import sttp.tapir.server.http4s.{Http4sServerInterpreter, Http4sServerOptions}
 
 import momo.api.auth.{
   CsrfTokenService,
@@ -28,6 +28,7 @@ import momo.api.http.modules.{
   MasterModule,
   MatchDraftModule,
   MatchModule,
+  NotificationSettingsModule,
   OcrModule,
   SeriesAnalysisModule,
   UploadModule
@@ -44,6 +45,13 @@ import momo.api.usecases.ocr.*
 import momo.api.usecases.seriesanalysis.*
 
 object HttpRoutes:
+  /** Let the outer middleware own safe error logging and Problem Details for failed effects. */
+  private[http] def serverOptions[F[_]: Async]: Http4sServerOptions[F] =
+    Http4sServerOptions.customiseInterceptors[F]
+      .exceptionHandler(None)
+      .serverLog(None)
+      .options
+
   final case class AuthDependencies[F[_]](
       roster: MemberRoster,
       loginAccounts: LoginAccountsRepository[F],
@@ -124,6 +132,11 @@ object HttpRoutes:
       updateLoginAccount: UpdateLoginAccount[F],
   )
 
+  final case class NotificationSettingsUseCases[F[_]](
+      get: GetNotificationSettings[F],
+      update: UpdateNotificationSettings[F],
+  )
+
   final case class Dependencies[F[_]](
       config: AppConfig,
       auth: AuthDependencies[F],
@@ -136,6 +149,7 @@ object HttpRoutes:
       analytics: AnalyticsUseCases[F],
       masters: MasterUseCases[F],
       adminAccounts: AdminAccountUseCases[F],
+      notificationSettings: NotificationSettingsUseCases[F],
       rateLimiters: HttpRateLimiters[F],
       idempotency: IdempotencyRepository[F],
       healthDetails: F[momo.api.endpoints.HealthEndpoints.HealthDetailsResponse],
@@ -183,7 +197,8 @@ object HttpRoutes:
         idempotencyGuard,
         deps.nowF,
         security,
-      ) ::: HeldEventModule.routes[F](
+      ) :::
+      HeldEventModule.routes[F](
         deps.heldEvents.listHeldEvents,
         deps.heldEvents.getHeldEventDetail,
         deps.heldEvents.createHeldEvent,
@@ -191,7 +206,8 @@ object HttpRoutes:
         idempotencyGuard,
         deps.nowF,
         security,
-      ) ::: MatchDraftModule.routes[F](
+      ) :::
+      MatchDraftModule.routes[F](
         deps.matchDrafts.createMatchDraft,
         deps.matchDrafts.getMatchDraft,
         deps.matchDrafts.updateMatchDraft,
@@ -200,12 +216,14 @@ object HttpRoutes:
         idempotencyGuard,
         deps.nowF,
         security,
-      ) ::: ExportModule.routes[F](
+      ) :::
+      ExportModule.routes[F](
         deps.exportMatches,
         deps.rateLimiters.matchExport,
         deps.rateLimiters.matchExportAll,
         security,
-      ) ::: MatchModule.routes[F](
+      ) :::
+      MatchModule.routes[F](
         deps.matches.confirmMatch,
         deps.matches.listMatches,
         deps.matches.getMatch,
@@ -216,10 +234,12 @@ object HttpRoutes:
         idempotencyGuard,
         deps.nowF,
         security,
-      ) ::: AnalyticsModule.routes[F](
+      ) :::
+      AnalyticsModule.routes[F](
         deps.rateLimiters.readApi,
         security,
-      ) ::: SeriesAnalysisModule.routes[F](
+      ) :::
+      SeriesAnalysisModule.routes[F](
         deps.analytics.getSeriesAnalysisOptions,
         deps.analytics.getSeriesAnalysisStatus,
         deps.analytics.getSeriesAnalysisChunk,
@@ -229,7 +249,8 @@ object HttpRoutes:
         idempotencyGuard,
         deps.nowF,
         security,
-      ) ::: MasterModule.routes[F](
+      ) :::
+      MasterModule.routes[F](
         deps.masters.listGameTitles,
         deps.masters.listMapMasters,
         deps.masters.listSeasonMasters,
@@ -250,10 +271,18 @@ object HttpRoutes:
         idempotencyGuard,
         deps.nowF,
         security,
-      ) ::: AdminAccountModule.routes[F](
+      ) :::
+      AdminAccountModule.routes[F](
         deps.adminAccounts.listLoginAccounts,
         deps.adminAccounts.createLoginAccount,
         deps.adminAccounts.updateLoginAccount,
+        idempotencyGuard,
+        deps.nowF,
+        security,
+      ) :::
+      NotificationSettingsModule.routes[F](
+        deps.notificationSettings.get,
+        deps.notificationSettings.update,
         idempotencyGuard,
         deps.nowF,
         security,
@@ -264,7 +293,7 @@ object HttpRoutes:
       security,
     )
 
-    val interpreter = Http4sServerInterpreter[F]()
+    val interpreter = Http4sServerInterpreter[F](serverOptions[F])
     val tapirRoutes = interpreter.toRoutes(endpoints)
     val sourceImageRoutes = interpreter.toRoutes(sourceImageEndpoints)
 

@@ -78,12 +78,14 @@ object PostgresSeasonMasters:
         conflict(s"season_master already exists: ${season.id.value} or ${season.name}")
     }
 
-    override def delete(id: SeasonMasterId): ConnectionIO[Unit] = deleteDiscardedDrafts(
-      fr"season_master_id = $id"
-    ) *> sql"DELETE FROM season_masters WHERE id = $id".update.run.flatMap {
-      case 1 => ().pure[ConnectionIO]
-      case _ => notFound("season master", id.value)
-    }.exceptSomeSqlState {
+    override def delete(id: SeasonMasterId): ConnectionIO[Unit] = (for
+      deletedDrafts <- deleteDiscardedDrafts(fr"season_master_id = $id")
+      deleted <- sql"DELETE FROM season_masters WHERE id = $id".update.run
+      _ <- deleted match
+        case 1 => ().pure[ConnectionIO]
+        case _ => notFound("season master", id.value)
+      _ <- PostgresResultNotificationCancellation.afterDeletion(deletedDrafts, Nil)
+    yield ()).exceptSomeSqlState {
       case state if isForeignKeyViolation(state) => conflict("season master is still referenced.")
     }
 

@@ -12,12 +12,14 @@ import {
 import { getMatchDraftDetail, listMatchDraftSourceImages } from "@/shared/api/matchDrafts";
 import { getMatch, getMatchListSummary, listMatches } from "@/shared/api/matches";
 import type { ListMatchesQuery } from "@/shared/api/matches";
+import { getNotificationSettings } from "@/shared/api/notificationSettings";
 import { getOcrDraft, getOcrDraftsBulk } from "@/shared/api/ocrDrafts";
 import {
   adminAccountKeys,
   heldEventKeys,
   masterKeys,
   matchKeys,
+  notificationSettingsKeys,
   ocrDraftKeys,
 } from "@/shared/api/queryKeys";
 
@@ -25,6 +27,13 @@ export function adminLoginAccountsQueryOptions() {
   return queryOptions({
     queryKey: adminAccountKeys.all(),
     queryFn: ({ signal }) => listLoginAccounts({ signal }),
+  });
+}
+
+export function notificationSettingsQueryOptions() {
+  return queryOptions({
+    queryKey: notificationSettingsKeys.all(),
+    queryFn: ({ signal }) => getNotificationSettings({ signal }),
   });
 }
 

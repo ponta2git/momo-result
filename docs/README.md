@@ -13,6 +13,7 @@
 | Web | 対象画面の要求、`docs/architecture.md` の Web | 表示・操作は `docs/ui-rule.md`、wire は API / Wire Boundary | `apps/web/src/`、Web Evidence Catalog |
 | UI / UX / デザインシステム / 文章 / IA | 対象画面の要求、`docs/ui-rule.md` の該当章 | 用語は `docs/domain-rule.md`、実装境界は architecture の Web | styles.css、shared/ui、formatter、対象 component。UI規約の検証と UI Conformance |
 | API / usecase | `docs/architecture.md` の API、対象要求 | 状態は domain、DB は db-rule、配送は対象 queue 契約 | Tapir endpoint、`apps/api/`、API Evidence Catalog |
+| Discord通知設定 | `docs/requirements/base.md` の Discord通知設定、`docs/db-rule.md` | 共有consumer契約は `../momo-db/docs/discord-notifications.md` | NotificationSettings、管理画面、設定と取消のDB transaction |
 | DB / repository | `docs/db-rule.md`、対象の業務・job 要求 | momo-db の schema / migration / Drizzle 設定・script / migration state 変更は `../momo-db/docs/development.md` を事前に全文読む | pinned migration、対象 query、変更経路の DB quality |
 | OCR / Redis queue | `docs/redis-streams-ocr-contract.md`、`docs/db-rule.md`、`docs/schemas/ocr-*.schema.json` | worker 構造は architecture の OCR Capability / Worker Role | API producer、`apps/processing-worker/`、queue / DB / process の変更境界 |
 | 分析 job / artifact / worker / API | `docs/requirements/series-analysis-batch.md` | DB は db-rule、構造は architecture、表示は ui-rule、指標・review は対象要求 | artifact / queue schema、Tapir、processing-worker、Web。Analysis Capability / Worker Evidence Catalog |

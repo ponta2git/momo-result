@@ -37,6 +37,7 @@ object ProblemDetails:
     "PAYLOAD_TOO_LARGE",
     "CONFLICT",
     "MATCH_NOTE_VERSION_CONFLICT",
+    "NOTIFICATION_SETTINGS_VERSION_CONFLICT",
     "IDEMPOTENCY_IN_PROGRESS",
     "IDEMPOTENCY_PAYLOAD_MISMATCH",
     "TOO_MANY_REQUESTS",
@@ -86,6 +87,8 @@ object ProblemDetails:
       "保存済みの状態が変わっています。内容を確認して、もう一度実行してください。"
     case _: AppError.MatchNoteVersionConflict =>
       "試合メモが別の利用者に更新されました。最新の内容を確認してください。"
+    case _: AppError.NotificationSettingsVersionConflict =>
+      "通知設定が更新されています。現在の設定を読み込んで確認してください。"
     case _: AppError.IdempotencyInProgress =>
       "同じ操作を処理中です。少し待ってから、同じ内容で再実行してください。"
     case _: AppError.IdempotencyPayloadMismatch =>
@@ -118,6 +121,7 @@ object ProblemDetails:
     case _: AppError.PayloadTooLarge => StatusCode.PayloadTooLarge
     case _: AppError.Conflict => StatusCode.Conflict
     case _: AppError.MatchNoteVersionConflict => StatusCode.Conflict
+    case _: AppError.NotificationSettingsVersionConflict => StatusCode.Conflict
     case _: AppError.IdempotencyInProgress => StatusCode.Conflict
     case _: AppError.IdempotencyPayloadMismatch => StatusCode.Conflict
     case _: AppError.TooManyRequests => StatusCode.TooManyRequests

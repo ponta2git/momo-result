@@ -5,6 +5,7 @@ import java.time.Instant
 import cats.effect.{Deferred, IO, Resource}
 import doobie.implicits.*
 import doobie.postgres.circe.jsonb.implicits.*
+import doobie.postgres.implicits.*
 import io.circe.Json
 
 import momo.api.adapters.postgres.{PostgresOcrJobCreationStore, PostgresSourceImagesRepository}
@@ -37,6 +38,20 @@ final class PostgresOcrJobCreationStoreSpec extends IntegrationSuite with JsonSc
 
   private def repo = PostgresOcrJobCreationStore[IO](transactor)
   private def sourceImages = PostgresSourceImagesRepository[IO](transactor)
+
+  private val matchDraftId = MatchDraftId.unsafeFromString("match-draft-ocr-create")
+  private def attachment: OcrJobDraftAttachment = OcrJobDraftAttachment(
+    matchDraftId,
+    ScreenType.TotalAssets,
+    imageId,
+    draftId,
+    now,
+  )
+
+  private def prepareMatchDraft: IO[Unit] = sql"""
+    INSERT INTO match_drafts (id, created_by_account_id, status, created_at, updated_at)
+    VALUES (${matchDraftId.value}, 'account_ponta', 'draft_ready', $now, $now)
+  """.update.run.transact(transactor).void
 
   private def draft: OcrDraft = OcrDraft(
     id = draftId,
@@ -85,7 +100,7 @@ final class PostgresOcrJobCreationStoreSpec extends IntegrationSuite with JsonSc
 
   test("store inserts OCR records and durable outbox intent in one transaction"):
     for
-      result <- store(plan(job, draft, None, activeJobLimit = 12))
+      result <- store(plan(job, draft, attachment, activeJobLimit = 12))
       row <- sql"""
         SELECT status, attempt_count, stream_payload->>'jobId', stream_payload->>'requestId',
                stream_payload
@@ -102,7 +117,7 @@ final class PostgresOcrJobCreationStoreSpec extends IntegrationSuite with JsonSc
 
   test("store rejects over the active job limit before inserting related rows"):
     for
-      result <- store(plan(job, draft, None, activeJobLimit = 0))
+      result <- store(plan(job, draft, attachment, activeJobLimit = 0))
       counts <- sql"""
         SELECT
           (SELECT count(*) FROM ocr_drafts WHERE id = ${draftId.value}),
@@ -122,7 +137,7 @@ final class PostgresOcrJobCreationStoreSpec extends IntegrationSuite with JsonSc
       updatedAt = now,
     )
     for
-      result <- store(plan(job, draft, Some(attachment), activeJobLimit = 12))
+      result <- store(plan(job, draft, attachment, activeJobLimit = 12))
       counts <- sql"""
         SELECT
           (SELECT count(*) FROM ocr_drafts WHERE id = ${draftId.value}),
@@ -136,7 +151,7 @@ final class PostgresOcrJobCreationStoreSpec extends IntegrationSuite with JsonSc
   test("store rejects invalid draft JSON before inserting related rows"):
     val invalidDraft = draft.copy(payloadJson = "{")
     for
-      result <- store(plan(job, invalidDraft, None, activeJobLimit = 12)).attempt
+      result <- store(plan(job, invalidDraft, attachment, activeJobLimit = 12)).attempt
       counts <- sql"""
         SELECT
           (SELECT count(*) FROM ocr_drafts WHERE id = ${draftId.value}),
@@ -148,7 +163,7 @@ final class PostgresOcrJobCreationStoreSpec extends IntegrationSuite with JsonSc
       assertEquals(counts, (0L, 0L, 0L))
 
   test("store rejects queue metadata that disagrees with the locked source image"):
-    val valid = plan(job, draft, None, activeJobLimit = 12)
+    val valid = plan(job, draft, attachment, activeJobLimit = 12)
     val invalid = valid.copy(queueDispatch =
       valid.queueDispatch.copy(
         enqueueRequest = valid.queueDispatch.enqueueRequest.copy(imageSha256 = "b" * 64)
@@ -176,19 +191,20 @@ final class PostgresOcrJobCreationStoreSpec extends IntegrationSuite with JsonSc
       updatedAt = now,
     )
 
-    store(plan(job, draft, Some(inconsistentAttachment), activeJobLimit = 12)).map(result =>
+    store(plan(job, draft, inconsistentAttachment, activeJobLimit = 12)).map(result =>
       assertEquals(result, Left(OcrJobCreationRejection.InvalidPlan))
     )
 
   test("store waits for a concurrent deletion transition and rejects its committed state"):
     for
+      _ <- prepareMatchDraft
       _ <- prepareSourceImage
       deletionLocked <- Deferred[IO, Int]
       releaseDeletion <- Deferred[IO, Unit]
       deletion <- holdDeletionTransition(deletionLocked, releaseDeletion).start
       deletionBackend <- deletionLocked.get
       resultReady <- Deferred[IO, OcrJobCreationStore.OcrJobCreationResult]
-      creation <- repo.store(plan(job, draft, None, activeJobLimit = 12))
+      creation <- repo.store(plan(job, draft, attachment, activeJobLimit = 12))
         .flatTap(resultReady.complete).start
       _ <- awaitBackendBlockedBy(deletionBackend)
       beforeCommit <- resultReady.tryGet
@@ -227,7 +243,8 @@ final class PostgresOcrJobCreationStoreSpec extends IntegrationSuite with JsonSc
 
   private def store(
       creationPlan: OcrJobCreationPlan
-  ): IO[OcrJobCreationStore.OcrJobCreationResult] = prepareSourceImage *> repo.store(creationPlan)
+  ): IO[OcrJobCreationStore.OcrJobCreationResult] = prepareMatchDraft *> prepareSourceImage *>
+    repo.store(creationPlan)
 
   private def prepareSourceImage: IO[Unit] =
     val reservation = SourceImageReservation(
@@ -349,12 +366,12 @@ final class PostgresOcrJobCreationStoreSpec extends IntegrationSuite with JsonSc
   private def plan(
       job: OcrJob,
       draft: OcrDraft,
-      attachment: Option[OcrJobDraftAttachment],
+      attachment: OcrJobDraftAttachment,
       activeJobLimit: Int,
   ): OcrJobCreationPlan =
     val dispatch = OcrQueueDispatchIntent(
       enqueueRequest = enqueueRequest,
-      matchDraftId = attachment.map(_.draftId),
+      matchDraftId = attachment.draftId,
     )
     OcrJobCreationPlan(
       draft = draft,

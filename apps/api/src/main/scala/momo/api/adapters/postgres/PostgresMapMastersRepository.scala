@@ -78,12 +78,14 @@ object PostgresMapMasters:
         conflict(s"map_master already exists: ${map.id.value} or ${map.name}")
     }
 
-    override def delete(id: MapMasterId): ConnectionIO[Unit] = deleteDiscardedDrafts(
-      fr"map_master_id = $id"
-    ) *> sql"DELETE FROM map_masters WHERE id = $id".update.run.flatMap {
-      case 1 => ().pure[ConnectionIO]
-      case _ => notFound("map master", id.value)
-    }.exceptSomeSqlState {
+    override def delete(id: MapMasterId): ConnectionIO[Unit] = (for
+      deletedDrafts <- deleteDiscardedDrafts(fr"map_master_id = $id")
+      deleted <- sql"DELETE FROM map_masters WHERE id = $id".update.run
+      _ <- deleted match
+        case 1 => ().pure[ConnectionIO]
+        case _ => notFound("map master", id.value)
+      _ <- PostgresResultNotificationCancellation.afterDeletion(deletedDrafts, Nil)
+    yield ()).exceptSomeSqlState {
       case state if isForeignKeyViolation(state) => conflict("map master is still referenced.")
     }
 

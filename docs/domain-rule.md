@@ -34,6 +34,7 @@
 - 資産・収益は万円単位の整数、事件回数は0以上の整数とする。表示形式は UI の責務とする。
 - 試合メモは確定の必須条件ではなく、上限150 Unicode code pointsのplain textとする。入力、更新、分析境界は `docs/requirements/match-note.md` を正本とする。
 - 固定メンバー構成を変える場合は局所定数の変更ではなく、共有 master と API 契約を含む設計変更として扱う。
+- 分析完了通知の順位・銀次は公開した追加・変更試合の保存値とする。分析結果は成果物ID、通知の発生は論理ジョブIDで識別する。通知の比較元・対象集合・固定時点は `docs/requirements/series-analysis-batch.md` を正本とする。
 
 ## 4. Draft / Match Confirmation Modes
 
@@ -47,6 +48,7 @@
 | `cancelled` | 互換用の中止終端 | 不可 | Yes |
 
 - OCR slot は `total_assets`、`revenue`、`incident_log` を明示する。legacy decode を除き `auto` を受理しない。同じ slot の再取込は最新結果で置き換える。
+- 新規OCRジョブは必ず対戦下書きのslotへ紐づく。下書きIDの欠落・不正、存在しない下書き、終端下書きへの受付ではOCRレコードを作らない。
 - 投影状態の優先順は未完了、失敗、警告、ready とする。OCR 失敗後も手入力で続行できる。
 - 未確定下書きの削除は画像保持も閉じる。`confirmed` は試合作成と同じ usecase でだけ到達し、終端状態から再開しない。
 - 画像なしの直接確定は下書きを変更しない。OCR 下書きからの確定は `matchDraftId` で作業単位を閉じ、参照した各 OCR draft が現在 slot と一致することを確認する。

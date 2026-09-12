@@ -26,6 +26,7 @@ momo-ocr = { path = "crates/ocr" }
 openssl = "0.10.81"
 postgres-openssl = "0.5.3"
 redis = { version = "0.32.7", default-features = false, features = ["connection-manager", "streams", "tokio-rustls-comp"] }
+reqwest = { version = "0.13.5", default-features = false, features = ["native-tls-no-alpn"] }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.145"
 sha2 = "0.11.0"

@@ -48,6 +48,14 @@ describe("app routing", () => {
     user = userEvent.setup();
   });
 
+  it("prevents a non-admin from opening notification settings directly", async () => {
+    setDevUser("account_eu");
+    renderApp("/admin/notifications");
+    expect(await screen.findByText("この画面は管理者専用です。")).toBeInTheDocument();
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "通知" })).not.toBeInTheDocument();
+  });
+
   it("redirects / to /login when unauthenticated", async () => {
     const { router } = renderApp("/");
 

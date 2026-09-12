@@ -676,17 +676,20 @@ fn exit_code(code: i32) -> ExitCode {
 async fn run_worker() -> Result<(), String> {
     let analysis_activation =
         AnalysisActivationConfig::from_environment().map_err(|error| error.to_string())?;
-    let runtime_plan = crate::supervisor::WorkerRuntimePlan::from_environment(&analysis_activation)
-        .map_err(|error| error.to_string())?;
-    info!(
-        event = "analysis_configuration_accepted",
-        publication_mode = ?analysis_activation.publication_mode,
-        analysis_enabled = runtime_plan.series_analysis_enabled(),
-        ocr_v2_enabled = runtime_plan.ocr_enabled(),
-        "combined worker configuration accepted"
-    );
     let (shutdown_sender, shutdown_receiver) = tokio::sync::watch::channel(false);
-    let supervised_runtime = crate::supervisor::run(runtime_plan, shutdown_receiver);
+    let supervised_runtime = {
+        let runtime_plan =
+            crate::supervisor::WorkerRuntimePlan::from_environment(&analysis_activation)
+                .map_err(|error| error.to_string())?;
+        info!(
+            event = "analysis_configuration_accepted",
+            publication_mode = ?analysis_activation.publication_mode,
+            analysis_enabled = runtime_plan.series_analysis_enabled(),
+            ocr_v2_enabled = runtime_plan.ocr_enabled(),
+            "combined worker configuration accepted"
+        );
+        crate::supervisor::run(runtime_plan, shutdown_receiver)
+    };
     tokio::pin!(supervised_runtime);
     tokio::select! {
         result = &mut supervised_runtime => result.map_err(|error| error.to_string()),

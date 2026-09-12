@@ -104,6 +104,17 @@ queued 中の新 revision は最新版へ集約する。running attempt の終�
 
 DB lock順とstaging transactionの規則は `docs/db-rule.md`、process責務は `docs/architecture.md` を正本とする。
 
+### 分析完了通知
+
+- 公開・再利用をcommitした論理ジョブにつき、一つの固定通知を共通senderへ渡す。同じ入力の手動実行も別の論理ジョブなら対象とする。内部attempt、失敗、superseded、preemption、成功commit不明から送出を再構築しない。
+- 比較元は公開直前のcurrent成果物。通知OFFや過去の送信失敗とは独立して選ぶ。再利用は同じ成果物を前後に置き、通知を発生させた論理ジョブIDと成果物IDを分ける。元ジョブ・attemptの履歴整理後も比較を続ける。
+- 前後の試合ID・source revision・所属scopeを照合する。初回は今回の全試合、以後は変更後に存在する追加・変更試合だけを掲載し、削除試合は含めない。過去日付への追加もこの集合差で扱う。
+- シーズン通算は影響するシーズンだけを載せる。削除では変更前、移動では移動前後の所属を含める。追加・変更・削除がない再計算は現在の全シーズンを載せる。masterも削除済みなら「削除済みシーズン」と明示する。
+- 平均と対象数はoverall / seasonの保存済みaggregateから取り出し、APIやSummitで平均を計算しない。丸め前の差分を保持し、比較可能・初回・対象なし・比較不能・再利用を区別する。空のscopeを平均0で補わない。
+- 通知用の比較準備は公開lock前に上限付きで行う。業務更新・slot解放の後、共通gate取得後の一括SELECTで設定世代と保存済み順位・銀次・メモ・表示名を固定する。取得後からcommitまでの編集を含める保証は求めない。
+- 通知準備の通常失敗・上限超過・通信失敗は分析成功へ波及させない。内容を切り捨てて送らず、通知全体を省略する。DB接続喪失やcommit不明を成功確認済みと扱わない。HTTPはcommit後に一度だけ試み、ACK・次の計算を通信完了で待たせない。
+- 永続受付前の欠落は許容し、producer outbox・HTTP再試行・未受付通知の再構築を追加しない。永続受付後の保存・配送・取消はSummitが担う。wireとconsumer間の排他契約は `../momo-db/docs/discord-notifications.md` を正本とする。
+
 ## 5. Artifact Contract
 
 - 1作品の成果物はoverallと、確定試合が実在するseason、map、season×mapだけを含む。空の直積scopeを作らない。

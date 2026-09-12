@@ -83,10 +83,15 @@ object PostgresMatches extends PostgresMatchesReadSupport:
           WHERE id = $id
           FOR UPDATE
         """.query[GameTitleId].option
-        _ <- sql"DELETE FROM match_drafts WHERE confirmed_match_id = $id".update.run
+        deletedDrafts <- sql"DELETE FROM match_drafts WHERE confirmed_match_id = $id RETURNING id"
+          .query[MatchDraftId].to[List]
         deleted <- sql"DELETE FROM matches WHERE id = $id".update.run.map(_ > 0)
         _ <- oldTitle.filter(_ => deleted).toList.traverse_(title =>
           enqueueMatchMutation(List(title))
+        )
+        _ <- PostgresResultNotificationCancellation.afterDeletion(
+          deletedDrafts,
+          List(id).filter(_ => deleted)
         )
       yield deleted
 

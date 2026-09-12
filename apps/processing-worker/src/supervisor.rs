@@ -5,6 +5,7 @@ use thiserror::Error;
 use tokio::{sync::watch, time};
 
 use crate::{
+    notifications::{NotificationConfig, NotificationConfigError, NotificationDriver},
     ocr::{
         OcrConsumerMode, OcrConsumerRuntimeConfig, OcrRuntimeConfigError,
         consumer_mode_from_environment,
@@ -27,6 +28,7 @@ use crate::{
 };
 
 struct EnabledConsumers {
+    notifications: NotificationConfig,
     series_analysis: AnalysisConsumerConfig,
     ocr: OcrConsumerRuntimeConfig,
     shutdown_drain_timeout: Duration,
@@ -67,6 +69,7 @@ impl WorkerRuntimePlan {
     pub(crate) fn from_environment(
         analysis_activation: &AnalysisActivationConfig,
     ) -> Result<Self, SupervisorError> {
+        let notifications = NotificationConfig::from_environment()?;
         let ocr_mode = consumer_mode_from_environment()?;
         if analysis_activation.publication_mode == AnalysisPublicationMode::Disabled {
             if ocr_mode == OcrConsumerMode::Enabled {
@@ -106,6 +109,7 @@ impl WorkerRuntimePlan {
         };
         Ok(Self {
             enabled_consumers: Some(EnabledConsumers {
+                notifications,
                 series_analysis,
                 ocr,
                 shutdown_drain_timeout,
@@ -149,16 +153,33 @@ pub(crate) async fn run(
         return wait_until_shutdown(shutdown).await;
     };
     let EnabledConsumers {
+        notifications,
         series_analysis,
         ocr,
         shutdown_drain_timeout,
     } = enabled_consumers;
+    let (notification_sink, notification_driver) = NotificationDriver::new(notifications)?;
+    let series_analysis = series_analysis.with_notifications(notification_sink.clone());
     match ocr {
         OcrConsumerRuntimeConfig::Disabled => {
-            run_analysis_only(series_analysis, shutdown, shutdown_drain_timeout).await
+            drop(notification_sink);
+            run_analysis_only(
+                series_analysis,
+                shutdown,
+                shutdown_drain_timeout,
+                notification_driver,
+            )
+            .await
         }
         OcrConsumerRuntimeConfig::Enabled(ocr) => {
-            run_combined(series_analysis, *ocr, shutdown, shutdown_drain_timeout).await
+            run_combined(
+                series_analysis,
+                ocr.with_notifications(notification_sink),
+                shutdown,
+                shutdown_drain_timeout,
+                notification_driver,
+            )
+            .await
         }
     }
 }
@@ -176,6 +197,7 @@ async fn run_analysis_only(
     series_analysis_config: AnalysisConsumerConfig,
     external_shutdown: watch::Receiver<bool>,
     shutdown_drain_timeout: Duration,
+    notification_driver: NotificationDriver,
 ) -> Result<(), SupervisorError> {
     let outbox_config = AnalysisOutboxRuntimeConfig::from(&series_analysis_config);
     let (post_commit_sink, outbox_wake) = PostCommitSink::channel(OutboxKind::SeriesAnalysis);
@@ -202,6 +224,7 @@ async fn run_analysis_only(
         shutdown_sender,
         external_shutdown,
         shutdown_drain_timeout,
+        notification_driver,
     )
     .await
 }
@@ -212,6 +235,7 @@ async fn run_combined(
     ocr_config: crate::ocr::consumer::OcrConsumerConfig,
     external_shutdown: watch::Receiver<bool>,
     shutdown_drain_timeout: Duration,
+    notification_driver: NotificationDriver,
 ) -> Result<(), SupervisorError> {
     use crate::ocr::IsolatedOcrChildLauncher;
 
@@ -254,6 +278,7 @@ async fn run_combined(
         shutdown_sender,
         external_shutdown,
         shutdown_drain_timeout,
+        notification_driver,
     )
     .await
 }
@@ -349,14 +374,21 @@ async fn supervise_peers<const PEERS: usize>(
     shutdown_sender: watch::Sender<bool>,
     mut external_shutdown: watch::Receiver<bool>,
     shutdown_drain_timeout: Duration,
+    notification_driver: NotificationDriver,
 ) -> Result<(), SupervisorError> {
     let mut running = peers.into_iter().collect::<FuturesUnordered<_>>();
+    let notifications = notification_driver.run();
+    tokio::pin!(notifications);
+    let mut notifications_finished = false;
     let first_exit = if *external_shutdown.borrow() || PEERS == 0 {
         None
     } else {
         loop {
             tokio::select! {
                 result = running.next() => break result,
+                () = &mut notifications, if !notifications_finished => {
+                    notifications_finished = true;
+                }
                 changed = external_shutdown.changed() => {
                     if changed.is_err() || *external_shutdown.borrow() {
                         break None;
@@ -367,7 +399,7 @@ async fn supervise_peers<const PEERS: usize>(
     };
     signal_shutdown(&shutdown_sender);
 
-    let drain = async {
+    let drain_peers = async {
         match first_exit {
             Some((peer, result)) => {
                 drain_secondary_peers(&mut running).await;
@@ -379,16 +411,33 @@ async fn supervise_peers<const PEERS: usize>(
     let deadline = time::Instant::now()
         .checked_add(shutdown_drain_timeout)
         .ok_or(SupervisorError::ShutdownDrainBudgetBound)?;
-    match time::timeout_at(deadline, drain).await {
-        Ok(result) => result,
-        Err(_elapsed) => {
-            // Dropping every remaining peer future also drops any open database transaction and
-            // managed child handle. Their rollback/Drop contracts fail closed instead of letting
-            // an unresponsive peer keep the process alive beyond its validated cleanup budget.
+    let mut business_result = None;
+    let drain = async {
+        tokio::join!(
+            async {
+                business_result = Some(drain_peers.await);
+            },
+            async {
+                if !notifications_finished {
+                    notifications.await;
+                }
+            }
+        );
+    };
+    let drained = time::timeout_at(deadline, drain).await;
+    business_result.map_or_else(
+        || {
+            // Drop the remaining business futures only after their own cleanup budget expires.
             drop(running);
             Err(SupervisorError::ShutdownDrainTimeout)
-        }
-    }
+        },
+        |result| {
+            if drained.is_err() {
+                tracing::warn!(event = "result_notification_drain_expired");
+            }
+            result
+        },
+    )
 }
 
 async fn drain_secondary_peers(running: &mut FuturesUnordered<RuntimePeer>) {
@@ -448,18 +497,22 @@ fn run_combined(
     ocr_config: crate::ocr::consumer::OcrConsumerConfig,
     shutdown: watch::Receiver<bool>,
     shutdown_drain_timeout: Duration,
+    notification_driver: NotificationDriver,
 ) -> std::future::Ready<Result<(), SupervisorError>> {
     drop((
         series_analysis_config,
         ocr_config,
         shutdown,
         shutdown_drain_timeout,
+        notification_driver,
     ));
     std::future::ready(Err(SupervisorError::UnsupportedPlatform))
 }
 
 #[derive(Debug, Error)]
 pub(crate) enum SupervisorError {
+    #[error(transparent)]
+    NotificationConfiguration(#[from] NotificationConfigError),
     #[error(transparent)]
     SeriesAnalysisConfiguration(#[from] AnalysisConfigError),
     #[error(transparent)]
@@ -526,6 +579,58 @@ mod tests {
     use super::*;
 
     const TEST_SHUTDOWN_DRAIN_TIMEOUT: Duration = Duration::from_secs(1);
+
+    #[tokio::test]
+    async fn last_committed_notification_is_admitted_and_cannot_fail_business_shutdown()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
+        let endpoint = format!(
+            "http://{}/internal/discord-notifications",
+            listener.local_addr()?
+        );
+        let (sink, driver) =
+            NotificationDriver::new(NotificationConfig::http(&endpoint, &"x".repeat(32))?)?;
+        let (_external_sender, external_shutdown) = watch::channel(true);
+        let (shutdown_sender, mut shutdown_receiver) = watch::channel(false);
+        let (committed_sender, committed_receiver) = oneshot::channel();
+        let producer = async move {
+            while !*shutdown_receiver.borrow() {
+                if shutdown_receiver.changed().await.is_err() {
+                    break;
+                }
+            }
+            let envelope = crate::notifications::NotificationEnvelope::new(
+                crate::notifications::NotificationKind::OcrCompleted,
+                "last-job",
+                "2026-01-01T00:00:00.000Z".to_owned(),
+                "0".to_owned(),
+                (),
+            );
+            sink.reserve(1024)
+                .and_then(|reservation| reservation.prepare(&envelope))
+                .map_err(|_error| SupervisorError::ShutdownDrainBudgetBound)?
+                .dispatch();
+            committed_sender
+                .send(())
+                .map_err(|_error| SupervisorError::ShutdownDrainBudgetBound)?;
+            Ok(())
+        };
+        let result = supervise_peers(
+            [runtime_peer("producer", producer)],
+            shutdown_sender,
+            external_shutdown,
+            TEST_SHUTDOWN_DRAIN_TIMEOUT,
+            driver,
+        )
+        .await;
+        result?;
+        committed_receiver.await?;
+        // The listening socket deliberately never answers HTTP. A pending connection proves the
+        // last commit reached transport, while the supervisor still returns under its own budget.
+        let (socket, _) = time::timeout(TEST_SHUTDOWN_DRAIN_TIMEOUT, listener.accept()).await??;
+        drop(socket);
+        Ok(())
+    }
 
     struct DropSignal(Option<oneshot::Sender<()>>);
 
@@ -603,6 +708,7 @@ mod tests {
             shutdown_sender,
             external_shutdown,
             TEST_SHUTDOWN_DRAIN_TIMEOUT,
+            NotificationDriver::disabled(),
         )
         .await;
 
@@ -638,6 +744,7 @@ mod tests {
             shutdown_sender,
             external_shutdown,
             TEST_SHUTDOWN_DRAIN_TIMEOUT,
+            NotificationDriver::disabled(),
         )
         .await;
 
@@ -673,6 +780,7 @@ mod tests {
             shutdown_sender,
             external_shutdown,
             TEST_SHUTDOWN_DRAIN_TIMEOUT,
+            NotificationDriver::disabled(),
         )
         .await;
 
@@ -699,6 +807,7 @@ mod tests {
             shutdown_sender,
             external_shutdown,
             TEST_SHUTDOWN_DRAIN_TIMEOUT,
+            NotificationDriver::disabled(),
         )
         .await;
 
@@ -724,6 +833,7 @@ mod tests {
             shutdown_sender,
             external_shutdown,
             Duration::from_millis(10),
+            NotificationDriver::disabled(),
         )
         .await;
 

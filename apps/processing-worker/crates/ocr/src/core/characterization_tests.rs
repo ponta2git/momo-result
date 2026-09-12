@@ -195,3 +195,76 @@ fn recognition(attempt: Attempt) -> CountRecognition {
         confidence: attempt.confidence,
     }
 }
+
+#[test]
+fn suspicious_incident_counts_remain_reviewable_across_the_output_contract()
+-> Result<(), Box<dyn Error>> {
+    use crate::{OcrHints, OcrTimings, RequestedScreenType};
+    use std::io::Cursor;
+
+    struct Overread;
+    impl RecognitionPort for Overread {
+        fn initialize(&mut self) -> Result<(), RecognitionError> {
+            Ok(())
+        }
+        fn recognize(
+            &mut self,
+            _frame: RecognitionFrame<'_>,
+            _language: RecognitionLanguage,
+            _segmentation: PageSegmentationMode,
+        ) -> Result<RecognizedText, RecognitionError> {
+            Ok(RecognizedText::new("6", Some(0.9)))
+        }
+    }
+    let image = image::DynamicImage::new_rgb8(640, 360);
+    let mut encoded = Cursor::new(Vec::new());
+    image.write_to(&mut encoded, image::ImageFormat::Png)?;
+    let hints = OcrHints::default();
+    let screen = RequestedScreenType::IncidentLog;
+    let analysis = analyze(
+        encoded.get_ref(),
+        screen,
+        &hints,
+        &mut Overread,
+        &mut |_| {},
+    )
+    .map_err(|failure| format!("unexpected OCR failure: {failure:?}"))?;
+    let mut output = analysis.with_timings(OcrTimings::new(0.0, 0.0, 0.0, 0.0, 1.0)?);
+    assert_eq!(
+        output
+            .payload
+            .pointer("/players/0/incidents/スリの銀次/value"),
+        Some(&serde_json::json!(6))
+    );
+    assert!(
+        output
+            .warnings
+            .as_array()
+            .is_some_and(|warnings| warnings.iter().any(|warning| {
+                warning["code"] == "SUSPICIOUS_INCIDENT_COUNT"
+                    && warning["field_path"] == "players[].incidents['スリの銀次']"
+            }))
+    );
+    assert!(
+        output.satisfies_contract(screen, &hints, 1),
+        "parser review warnings must survive persistence validation"
+    );
+
+    output
+        .warnings
+        .as_array_mut()
+        .ok_or("missing warnings array")?
+        .retain(|warning| {
+            warning.get("field_path")
+                != Some(&serde_json::json!("players[].incidents['スリの銀次']"))
+        });
+    *output
+        .payload
+        .get_mut("warnings")
+        .ok_or("missing warnings field")? = output.warnings.clone();
+    assert!(
+        !output.satisfies_contract(screen, &hints, 1),
+        "missing review warnings must remain invalid"
+    );
+    Ok(())
+}

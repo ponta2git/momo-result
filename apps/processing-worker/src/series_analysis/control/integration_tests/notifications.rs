@@ -49,6 +49,9 @@ async fn real_postgres_analysis_notifications_follow_committed_publications() ->
     let metadata = crate::postgres::connect(&database_url).await?;
     let (published, edited) = tokio::join!(publish(&mut primary, &config, &first), async {
         wait_for_gate(&gate).await?;
+        // A finite settings transaction can outlast a few local round trips. Publication and
+        // its notification must both survive that wait within the parent's remaining budget.
+        tokio::time::sleep(Duration::from_millis(600)).await;
         metadata.execute("UPDATE matches SET note_body = $2, note_version = 1, note_updated_by_account_id = 'account_ponta', \
                 note_updated_at = clock_timestamp() WHERE id = $1", &[&MATCH_ID, &"保存済みメモ。\n改行と @everyone を保持。"] ).await?;
         gate.batch_execute("UPDATE discord_notification_settings SET generation = 9007199254740993 WHERE kind = 'analysis_completed'").await?;

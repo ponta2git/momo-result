@@ -19,10 +19,13 @@ pub(super) async fn recoverable(
     let now = Instant::now();
     // Dropping a query future does not cancel the server command. Reserve a second timeout
     // interval for that command, plus recovery and COMMIT, within the original parent deadline.
-    let budget = finalization_deadline
-        .saturating_duration_since(now)
-        .checked_sub(Duration::from_millis(100))
-        .map(|remaining| (remaining / 2).min(Duration::from_millis(250)))
+    // Scale the recovery margin with the remaining time so short OCR deadlines still admit
+    // useful work, while longer finalization windows reserve several database round trips.
+    let remaining = finalization_deadline.saturating_duration_since(now);
+    let recovery = (remaining / 4).clamp(Duration::from_millis(100), Duration::from_secs(1));
+    let budget = remaining
+        .checked_sub(recovery)
+        .map(|remaining| (remaining / 2).min(Duration::from_secs(2)))
         .filter(|budget| *budget >= Duration::from_millis(1));
     let Some(budget) = budget else {
         log_skip(kind, job_id, SkipReason::FinalizationBudget);

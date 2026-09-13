@@ -48,6 +48,30 @@ describe("app routing", () => {
     user = userEvent.setup();
   });
 
+  it("keeps a self-disable completion at login and clears it before another account is used", async () => {
+    setDevUser();
+    const { router } = renderApp("/admin/accounts");
+    const row = (await screen.findByText("523484457705930752")).closest("tr")!;
+    await user.click(within(row).getByRole("button", { name: "ログイン停止" }));
+    await user.click(screen.getByRole("button", { name: "停止する" }));
+    expect(
+      await screen.findByText("このアカウントのログインを無効にしました。"),
+    ).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe("/login");
+    expect(
+      screen.queryByRole("dialog", { name: "アカウント設定を更新しました" }),
+    ).not.toBeInTheDocument();
+    await user.selectOptions(
+      screen.getByRole("combobox", { name: "操作用アカウント" }),
+      "account_eu",
+    );
+    await user.click(await screen.findByRole("link", { name: "試合一覧へ戻る" }));
+    expect(await screen.findByRole("region", { name: "試合一覧" })).toBeInTheDocument();
+    expect(
+      screen.queryByText("このアカウントのログインを無効にしました。"),
+    ).not.toBeInTheDocument();
+  });
+
   it("prevents a non-admin from opening notification settings directly", async () => {
     setDevUser("account_eu");
     renderApp("/admin/notifications");
@@ -426,7 +450,7 @@ describe("app routing", () => {
     ]);
     const analysisPurposeTab = screen.getByRole("tab", { name: "分析する" });
     await user.click(analysisPurposeTab);
-    expect(await screen.findByText("比較条件を更新中")).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "表示を更新中" })).toBeDisabled();
     await act(async () => {
       analysisPurposeTab.blur();
       aggregateResponseGate.resolve();
@@ -509,10 +533,12 @@ describe("app routing", () => {
     renderApp("/analytics/series");
 
     expect(await screen.findByText("収益先行時は目的地0回で終えない。")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "表示を更新" }));
+    await user.click(await screen.findByRole("button", { name: "表示を更新" }));
     expect(await screen.findByText("最新の戦績データを取得できません")).toBeInTheDocument();
     expect(screen.getByText("収益先行時は目的地0回で終えない。")).toBeInTheDocument();
-    await waitFor(() => expect(screen.queryByText("比較条件を更新中")).not.toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: "表示を更新中" })).not.toBeInTheDocument(),
+    );
     const reviewPanel = screen.getByRole("tabpanel", { name: "次戦に備える" });
     expect(reviewPanel.closest("[inert]")).toBeNull();
     expect(screen.getByRole("button", { name: "表示を更新" })).toBeEnabled();
@@ -578,7 +604,7 @@ describe("app routing", () => {
     expect(
       screen.getByText("計算完了後に「状態を再確認」を押すと表示します。"),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "状態を再確認" })).toBeEnabled();
+    expect(await screen.findByRole("button", { name: "状態を再確認" })).toBeEnabled();
     expect(aggregateRequests).toBe(0);
     expect(reviewRequests).toBe(0);
   });
@@ -641,11 +667,13 @@ describe("app routing", () => {
     await user.click(screen.getByRole("button", { name: /比較対象を変更/u }));
     await user.selectOptions(screen.getByRole("combobox", { name: "シーズン" }), "season_current");
 
-    expect(await screen.findByText("比較条件を更新中")).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "表示を更新中" })).toBeDisabled();
     expect(screen.getByRole("tab", { name: "今の差" })).toBe(activeTab);
 
     scopedAggregateResponseGate.resolve();
-    await waitFor(() => expect(screen.queryByText("比較条件を更新中")).not.toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: "表示を更新中" })).not.toBeInTheDocument(),
+    );
     expect(screen.getByRole("tab", { name: "今の差" })).toBe(activeTab);
   });
 

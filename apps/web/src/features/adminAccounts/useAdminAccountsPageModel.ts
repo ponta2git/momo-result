@@ -19,7 +19,10 @@ import {
 } from "@/shared/api/queryErrorState";
 import { adminLoginAccountsQueryOptions } from "@/shared/api/queryOptions";
 import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
+import { reportSelfAccountDisabled } from "@/shared/auth/accountOperationNotice";
+import { useAuth } from "@/shared/auth/useAuth";
 import { showToast } from "@/shared/ui/feedback/Toast";
+import { useRetryNotice } from "@/shared/ui/feedback/useRetryNotice";
 
 type AccountListRefresh = {
   pending: boolean;
@@ -67,6 +70,7 @@ const initialCreateAccountState = { error: "", formKey: 0 };
 
 /** Owns the account screen's server-state interpretation and account workflows. */
 export function useAdminAccountsPageModel(): AdminAccountsPageModel {
+  const auth = useAuth();
   const queryClient = useQueryClient();
   const idempotencyKeys = useIdempotencyKeyStore();
   const [createOpen, setCreateOpen] = useState(false);
@@ -98,6 +102,7 @@ export function useAdminAccountsPageModel(): AdminAccountsPageModel {
       await invalidateAdminAccountCaches(queryClient);
       focusCreateTriggerAfterSuccessRef.current = true;
       setCreateOpen(false);
+      showToast({ title: "アカウントを追加しました", tone: "success" });
       return { error: "", formKey: previous.formKey + 1 };
     } catch (error) {
       return {
@@ -121,9 +126,11 @@ export function useAdminAccountsPageModel(): AdminAccountsPageModel {
         { accountId, request },
         (options) => updateLoginAccount(accountId, request, options),
       ),
-    onSuccess: async () => {
+    onSuccess: async (_response, { accountId, request }) => {
+      const selfDisabled = accountId === auth.auth?.accountId && request.loginEnabled === false;
+      if (selfDisabled) reportSelfAccountDisabled(accountId);
       await invalidateAdminAccountCaches(queryClient);
-      showToast({ title: "アカウント設定を更新しました", tone: "success" });
+      if (!selfDisabled) showToast({ title: "アカウント設定を更新しました", tone: "success" });
     },
   });
 
@@ -142,11 +149,19 @@ export function useAdminAccountsPageModel(): AdminAccountsPageModel {
     }
   }, [accounts.length, createOpen]);
 
-  const refresh = { pending: accountsQuery.isFetching, run: refreshAccounts };
+  const refresh = {
+    pending: accountsQuery.isFetching && !createPending && !updateMutation.isPending,
+    run: refreshAccounts,
+  };
+  const loadFailed = useRetryNotice(
+    shouldShowBlockingQueryError(accountsQuery),
+    accountsQuery.isFetching,
+  );
+  const stale = useRetryNotice(shouldShowQueryError(accountsQuery), accountsQuery.isFetching);
   let list: AdminAccountListModel;
-  if (isInitialQueryLoading(accountsQuery)) {
+  if (isInitialQueryLoading(accountsQuery) && !loadFailed) {
     list = { kind: "loading" };
-  } else if (shouldShowBlockingQueryError(accountsQuery)) {
+  } else if (loadFailed) {
     list = {
       error: accountsQuery.error ? normalizeUnknownApiError(accountsQuery.error) : undefined,
       kind: "loadFailed",
@@ -157,7 +172,7 @@ export function useAdminAccountsPageModel(): AdminAccountsPageModel {
       items: accounts,
       kind: "ready",
       refresh,
-      stale: shouldShowQueryError(accountsQuery),
+      stale,
     };
   }
 

@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import type { ReactNode } from "react";
 import { Navigate, useLocation, useSearchParams } from "react-router-dom";
 
@@ -5,6 +6,7 @@ import { AppGlobalNav } from "@/app/AppGlobalNav";
 import { AppPageCanvas } from "@/app/AppPageCanvas";
 import { RouteSuspenseFallback } from "@/app/RouteSuspenseFallback";
 import { RouteTerminalPage } from "@/app/RouteTerminalPage";
+import { clearAccountOperationNotice } from "@/shared/auth/accountOperationNotice";
 import { loginNavItems } from "@/shared/auth/loginNavigation";
 import {
   buildLoginPath,
@@ -124,6 +126,9 @@ export function PublicOnlyRoute({ children }: { children: ReactNode }) {
 
 export function AuthenticatedRoute({ children }: { children: ReactNode }) {
   const auth = useAuth();
+  useEffect(() => {
+    if (auth.isAuthenticated && auth.auth?.accountId) clearAccountOperationNotice();
+  }, [auth.isAuthenticated, auth.auth?.accountId]);
   const location = useLocation();
 
   if (auth.isChecking) {

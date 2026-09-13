@@ -91,13 +91,18 @@
 | server data、cache、refetch | TanStack Query |
 | 楽観表示 | React `useOptimistic` または TanStack Query の mutation / cache のいずれか一方 |
 | pending | Action、Transition、mutation など、その処理を開始した lifecycle |
+| 操作と結果の通知単位・発火、inline feedback の継続条件 | 操作を所有する feature。表示先の選択は UI 規約に従う |
+| 通知の描画・読み上げ、toast の表示寿命 | shared UI。画面をまたぐ toast は app に置く共通 host |
 | pathname、search params、navigation | React Router |
 | dialog / disclosure の open、focus、keyboard | Base UI と owning shared UI primitive |
 | DOM / SVG の補間、非対話的な exit snapshot | Motion |
 
 - 同じ楽観表示を React `useOptimistic` と TanStack Query cache の両方で表現しない。一つの表示箇所だけなら action / mutation の入力から局所 overlay を導出し、複数 consumer の server state を揃える必要がある場合だけ cache update と snapshot / rollback を使う。pending から server response へ同じ対象を引き継ぐ場合は、client で安定した identity を発行し、表示順や Motion の layout identity を data identity の代わりにしない。
-- Suspense は code / data readiness と fallback の presence を所有し、boundary は利用者に見せる loading sequence に合わせる。維持すべき dialog、tab list、toolbar、page surface は boundary の外に置き、その内部の未準備な body だけを fallback と置き換える。Motion や `AnimatePresence` で fallback と完成内容を crossfade せず、同じ primitive を loading 用と完成用に重複 mount して open / focus lifecycle を作り直さない。
+- 表示準備、操作制限、通知は別の境界として設計する。表示準備は未準備な code / data と置換する body、操作制限は処理中の重複・競合操作、権限・前提条件、表示中と要求中の scope の違いから誤操作を招く範囲、通知は一つの利用者操作とその結果を成立させる取得のまとまりを扱う。query や親子 component ごとに同じ待機表示を生成せず、feature composition が既存の取得・操作状態から表示担当を導出する。通知の集約を理由に query を結合したり、独立した結果・失敗を一つの global pending に潰したりしない。
+- Suspense は code / data readiness と fallback の presence を所有し、boundary は利用者に見せる loading sequence に合わせる。一度表示した dialog、tab list、toolbar、page surface の lifecycle を、その内部の body の待機から分離する。Suspense を使う場合は維持する部分を該当 boundary の外に置き、未準備な body だけを fallback と置き換える。最初の route module 自体が未準備な場合は route の structural fallback を使う。Motion や `AnimatePresence` で fallback と完成内容を crossfade せず、同じ primitive を loading 用と完成用に重複 mount して open / focus lifecycle を作り直さない。
 - 異なる pathname は新しい route identity として、未準備なら route の structural fallback を表示する。同一 pathname の query key、filter、scope、sort、page の変更では、通常 query、Transition、deferred value など所有する state layer の手段で既存内容を維持し、Motion に待機や切替を決めさせない。
+- 通常 query と Suspense query は、前条件の data 保持、部分失敗、独立した回復、安定した操作領域をどちらが簡潔に表現できるかで選ぶ。Suspense 採用を refetch 中の fallback 表示と同一視しない。待機表示の整理だけを理由に取得方式を置き換えず、boundary や content の identity を pending の切替で作り直さない。
+- toast は feature が確定した実行結果から発火し、render、汎用 query observer、cache invalidation ごとの成功通知にしない。通常の route content の境界から共通 host を分離し、描画部分の遅延読み込み・失敗でも通知の表示と寿命の契約を守る。通知の一意性は実行結果に結び付け、server state や操作の完了判定を toast の状態に移さない。
 - 有限で局所的な motion の標準実装は Motion for React とする。app の一つの provider で同期 `LazyMotion`、animation と renderer だけを含む `domMin`、`strict`、`m` component を構成し、`MotionConfig reducedMotion="user"` を基準にする。`motion` component、`domAnimation` / `domMax` の gesture feature、layout / shared layout、drag / pan は初期 scope に含めず、必要性、操作契約、bundle 差分、主要 device の実測を伴う別の architecture decision とする。
 - Motion の宣言は、変化する pixel と semantic state を所有する shared UI primitive または feature の末端 visual component に置く。PageModel、resource / command / query hook、router は Motion を import しない。`Fade`、`Slide`、`Scale` のように effect 名だけを隠す pass-through wrapper は作らず、複数用途の accessibility、state mapping、interruption を一つの小さい契約で隠せる場合だけ shared abstraction にする。
 - application code は Motion の完了 callback を、data、cache、route、open、focus、pending、error、操作可能性を進める唯一の条件にしない。callback が所有してよいのは、中断または未実行でも application state を誤らせない冪等な表示上の後始末に限る。exit のため一時保持する node は非対話的かつ accessibility tree の対象外とし、先に確定した state と focus を巻き戻さない。

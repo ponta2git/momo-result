@@ -79,14 +79,17 @@
 | 操作・実装入口 | 現行の主な差分 | 処理中の担当（採用） | 成功の通知（採用） | 失敗・回復（採用） |
 | --- | --- | --- | --- | --- |
 | [マスター初回・作品切替・再試行](../apps/web/src/features/masters/useMasterResourceQueries.ts) | 共同初回取得にSuspense。マップ・シーズンは個別queryとskeleton、部分失敗Notice | 共同初回境界を維持。作品切替に伴う複数取得は一つの操作として通知 | 結果表示。Toastなし | 部分失敗と再試行は各対象に残す。事件簿は読取専用を維持 |
-| [作品追加](../apps/web/src/features/masters/useMasterCreateActions.ts) | 送信buttonと楽観追加行に待機表現。成功時dialog閉鎖、Toastなし | dialogの送信button。楽観行は未確定という静的な区別を維持 | 「作品を追加しました」のToastを追加 | dialog内の入力error・失敗 |
+| [作品追加](../apps/web/src/features/masters/useMasterCreateActions.ts) | 送信buttonと楽観追加行に待機表現。成功時dialog閉鎖と新作品の選択、Toastなし | dialogの送信button。楽観行は未確定という静的な区別を維持 | 選択された作品と一覧付近の「作品を追加しました」をinline表示。Toastなし | dialog内の入力error・失敗 |
 | [マップ・シーズン・別名のinline追加](../apps/web/src/features/masters/MasterCreateForm.tsx) | button pending、楽観行、成功時一覧追加・form reset | 送信button。未確定行へ二つ目の動く表示を増やさない | 一覧とform近くの短い結果表示。Toastなし | 入力errorを保持。追加成功と再取得失敗を区別 |
-| [マスター編集・削除](../apps/web/src/features/masters/useMasterEditCommands.ts) | dialogの実行button pending、成功時閉鎖、Toastなし | dialogの実行button。関連取得の待機を重ねない | 対象種別を示す保存・削除Toastを追加 | dialog内の失敗と同じ対象の再試行 |
+| [マスター編集](../apps/web/src/features/masters/useMasterEditCommands.ts) | dialogの保存button pending、成功時閉鎖し同じ行に変更後の値が残る。Toastなし | dialogの保存button。関連取得の待機を重ねない | 対象行付近に保存完了をinline表示。Toastなし | dialog内の失敗と同じ対象の再試行 |
+| [マスター削除](../apps/web/src/features/masters/MasterActionDialogs.tsx) | dialogの削除button pending、成功時にdialogと対象行が消える。Toastなし | dialogの削除button。関連取得の待機を重ねない | 対象種別を示す削除Toastを追加 | dialog内の失敗と同じ対象の再試行 |
 | [マスター管理から記録へ戻る](../apps/web/src/features/masters/useMasterReturnRoute.ts) | 移動button pending、戻り先・復元errorはページNotice | 移動button | 通常移動のToastなし。復元結果は記録側の方針に従う | 復元不能理由と回復を持続表示 |
 | [アカウント一覧取得・再試行](../apps/web/src/features/adminAccounts/useAdminAccountsPageModel.ts) | 初回skeleton、失敗・stale Noticeと再試行 | 初回の準備範囲、再試行button | 一覧表示。Toastなし | 一覧を保持し、再試行案内を維持 |
 | [アカウント追加](../apps/web/src/features/adminAccounts/AdminAccountCreateDialog.tsx) | 追加中、成功時dialog閉鎖・trigger focus。Toastなし | dialogの追加button | 「アカウントを追加しました」のToastを追加 | dialog内の入力・失敗Notice |
-| [ログイン可否・管理者権限変更](../apps/web/src/features/adminAccounts/AdminAccountRow.tsx) | 確認dialog pending、行のaria-busy、成功Toast | 確認dialogの実行button。行に通信spinnerを増やさない | 既存成功Toastを維持し文体を統一 | dialog内に失敗と回復 |
+| [ログイン可否・管理者権限変更](../apps/web/src/features/adminAccounts/AdminAccountRow.tsx) | 確認dialog pending、行のaria-busy、成功Toast。変更で行順や自身のアクセス状態も変わり得る | 確認dialogの実行button。行に通信spinnerを増やさない | 確認位置が失われ得るため既存成功Toastを維持。認証終了でhostも失う場合は認証案内に結果を引き継ぐ | dialog内に失敗と回復 |
 | [通知設定保存・OFF確認](../apps/web/src/features/notificationSettings/useNotificationSettingsPageModel.ts) | dialogと背面保存buttonが同じpending。成功Notice後にも再取得文 | dialog開中は確認button、それ以外は保存button | 保存済み値と既存inline Notice。Toastなし | 失敗・競合・結果不明と選び直しを持続表示。保存確定と再取得失敗を区別 |
+
+アカウント変更では、[一覧の並び順](../apps/api/src/main/scala/momo/api/adapters/postgres/PostgresLoginAccountsRepository.scala)と[認証情報の再取得](../apps/web/src/features/adminAccounts/adminAccountCache.ts)によって対象行や管理画面が維持されない場合がある。行に結果が残るマスターの名称編集とは通知先を分ける。認証案内に引き継ぐのはその操作の結果だけとし、別アカウントの通知として持ち越さない。
 
 ### 3.5 比較・分析管理
 

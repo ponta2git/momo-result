@@ -13,14 +13,15 @@ type ToastItem = ReturnType<typeof Toast.useToastManager>["toasts"][number];
 
 function PresentToast({ reduceMotion, toast }: { reduceMotion: boolean | null; toast: ToastItem }) {
   const isPresent = useIsPresent();
+  const inactive = !isPresent || toast.limited || toast.transitionStatus === "ending";
 
   return (
     <m.div
-      aria-hidden={isPresent ? undefined : true}
-      className={cn("w-full", !isPresent && "pointer-events-none")}
+      aria-hidden={inactive || undefined}
+      className={cn("w-full", toast.limited && "hidden", inactive && "pointer-events-none")}
       data-toast-exit-snapshot={isPresent ? undefined : ""}
       exit={toastHidden}
-      inert={isPresent ? undefined : true}
+      inert={inactive || undefined}
       initial={reduceMotion ? false : toastHidden}
       animate={toastVisible}
       transition={reduceMotion ? instantMotionTransition : politeMotionTransition}

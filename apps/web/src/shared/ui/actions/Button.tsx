@@ -1,12 +1,12 @@
 import type { ButtonHTMLAttributes, ReactNode, Ref } from "react";
 import { useFormStatus } from "react-dom";
 
-import { buttonClassName, DecorativeActionIcon } from "@/shared/ui/actions/actionRecipes";
+import { buttonClassName } from "@/shared/ui/actions/actionRecipes";
 import type {
   ButtonSize as ActionButtonSize,
   ButtonVariant as ActionButtonVariant,
 } from "@/shared/ui/actions/actionRecipes";
-import { SpinnerIcon } from "@/shared/ui/feedback/Spinner";
+import { PendingActionContent } from "@/shared/ui/actions/PendingActionContent";
 
 export { buttonClassName } from "@/shared/ui/actions/actionRecipes";
 export type ButtonSize = ActionButtonSize;
@@ -48,14 +48,6 @@ export function Button({
   const actualPending = pending ?? (type === "submit" && formStatus.pending);
   const isDisabled = disabled || actualPending;
   const buttonClasses = buttonClassName({ size, variant });
-  const inner = (
-    <>
-      {actualPending || icon ? (
-        <DecorativeActionIcon>{actualPending ? <SpinnerIcon /> : icon}</DecorativeActionIcon>
-      ) : null}
-      <span>{actualPending ? (pendingLabel ?? children) : children}</span>
-    </>
-  );
 
   return (
     <button
@@ -67,7 +59,14 @@ export function Button({
       // oxlint-disable-next-line react/button-has-type -- ButtonType is a closed literal union with a safe "button" default; one branch avoids three drift-prone JSX copies.
       type={type}
     >
-      {inner}
+      <PendingActionContent
+        icon={icon}
+        pending={actualPending}
+        pendingLabel={pendingLabel}
+        reservePending={pending !== undefined || pendingLabel != null || type === "submit"}
+      >
+        {children}
+      </PendingActionContent>
     </button>
   );
 }

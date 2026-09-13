@@ -4,8 +4,8 @@ import type { AuthMeResponse } from "@/shared/api/auth";
 import { DevUserPicker } from "@/shared/auth/DevUserPicker";
 import { buildAuthLoginHref } from "@/shared/auth/redirectPath";
 import { buttonClassName } from "@/shared/ui/actions/Button";
+import { PendingActionContent } from "@/shared/ui/actions/PendingActionContent";
 import { cn } from "@/shared/ui/cn";
-import { SpinnerIcon } from "@/shared/ui/feedback/Spinner";
 import { contentText } from "@/shared/ui/typography";
 
 type AuthPanelProps = {
@@ -46,8 +46,9 @@ export function AuthPanel({
             className={buttonClassName({ variant: "primary" })}
             onClick={() => setLoginPending(true)}
           >
-            {loginPending ? <SpinnerIcon /> : null}
-            <span>{loginPending ? "Discordへ移動中…" : "Discordでログインする"}</span>
+            <PendingActionContent pending={loginPending} pendingLabel="Discordへ移動中…">
+              Discordでログインする
+            </PendingActionContent>
           </a>
         </div>
       )}

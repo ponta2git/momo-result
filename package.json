@@ -27,6 +27,7 @@
     "web:e2e:runtime": "pnpm --filter web e2e:runtime",
     "web:test": "pnpm --filter web test:run",
     "web:test:coverage": "pnpm --filter web test:coverage",
-    "web:typecheck": "pnpm --filter web typecheck"
+    "web:typecheck": "pnpm --filter web typecheck",
+    "analysis:maintain": "scripts/ops/analysis.sh"
   }
 }

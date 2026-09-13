@@ -134,7 +134,7 @@ while IFS= read -r -d '' path; do
       analysis=true
       analysis_image=true
       ;;
-    .github/workflows/analysis-candidate.yml | .github/workflows/analysis-production.yml)
+    .github/workflows/analysis-production.yml)
       ;;
     .github/workflows/deploy.yml)
       runtime=true

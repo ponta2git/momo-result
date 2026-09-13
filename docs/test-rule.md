@@ -140,6 +140,7 @@ OCR は schema / screen type、object metadata、parser / postprocess、failure 
 - artifact publicationはRustのfull semantic validatorを唯一の意味oracleとし、exact validation contract、published rowのimmutability、APIのbounded shape / identity defenseをそれぞれの境界で検証する。
 - analysis releaseのbaseline migrationを変える場合は、全migration直後かつfixture mutation前のsingletonをalgorithm / artifact schema / validation contractのexact tupleとして検証する。legacy singletonからのpromotion test、相対的なtitle inheritance、test内でexact tupleをseedしたrepository testはfresh baselineの代用にしない。
 - release promotionは2接続の実PostgreSQLで、capability検査後の非互換登録がcommitまで待つこと、singleton lock中の新規作品がcommit後のtupleを継承すること、登録作品0件がterminalになることを検証する。
+- 自動・手動の分析保守は、preview の非更新、対象 snapshot 変更時の拒否、互換性不足、同じ世代の再実行、未完了・失敗 target の識別を実 PostgreSQL で確認する。運用 runner は不正 report、配備世代変更、待機期限を失敗として扱い、enqueue 成功を release 完了にしない。
 - OCR preemption は一方向、失敗回数非加算、旧 child 回収後の再実行を実 process / DB で確認する。
 - resource / endurance gate は release build、production 相当の上限、代表 data で機能 gate と分けて実行する。
 - 分析通知の通常更新は追加・変更試合数だけでなく、比較対象となる既存履歴の量とDB往復も含めて確認する。有限の設定競合待ち後に通知が成立すること、残時間不足・長期競合では業務成功を保ち通知を省略することを実DBで区別する。

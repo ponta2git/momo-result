@@ -14,7 +14,16 @@ output_file="$2"
 }
 
 jq -e '
-  if has("operationId") and has("campaignId") then
+  if has("planDigest") then
+    select(.schemaVersion == 1 and
+      (.status | IN("planned", "running", "complete", "not_needed", "attention_required")) and
+      (.action | IN("none", "resume", "algorithm_update", "artifact_schema_update", "validation_contract_update", "initial_backfill")) and
+      (.reason | IN("already_current", "existing_operation", "release_integrity_audit_failed", "applied_operation_has_a_different_current_release", "promote_before_backfill", "previous_generation_requires_explicit_recovery", "release_update_required", "reader_or_worker_incompatible", "plan_changed_run_check_again", "operation_accepted", "current_generation_operations")) and
+      (.planDigest | type == "string" and (. == "" or test("^sha256:[0-9a-f]{64}$"))) and
+      ([.targetCount, .completedCount, .failedCount] | all(.[]; type == "number" and . >= 0 and floor == .))) |
+    {schemaVersion: 1, kind: "maintenance", status, action, reason, planDigest,
+      targetCount, completedCount, failedCount}
+  elif has("operationId") and has("campaignId") then
     select(
       (.mode == "dry_run" or .mode == "apply") and
       (.trigger | type == "string") and

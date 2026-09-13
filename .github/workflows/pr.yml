@@ -78,7 +78,7 @@ jobs:
   workflow-lint:
     name: Workflow lint
     needs: classify
-    if: needs.classify.outputs.workflow == 'true'
+    if: github.event.pull_request.base.ref != 'master' && needs.classify.outputs.workflow == 'true'
     uses: ./.github/workflows/workflow-lint.yml
     with:
       actionlint: ${{ needs.classify.outputs.actionlint == 'true' }}
@@ -88,7 +88,7 @@ jobs:
   api:
     name: API
     needs: classify
-    if: needs.classify.outputs.api == 'true'
+    if: github.event.pull_request.base.ref != 'master' && needs.classify.outputs.api == 'true'
     uses: ./.github/workflows/api.yml
     with:
       test_http4s_patch: ${{ needs.classify.outputs.http4s_patch == 'true' }}
@@ -96,13 +96,13 @@ jobs:
   web:
     name: Web
     needs: classify
-    if: needs.classify.outputs.web == 'true'
+    if: github.event.pull_request.base.ref != 'master' && needs.classify.outputs.web == 'true'
     uses: ./.github/workflows/web.yml
 
   analysis:
     name: Analysis worker
     needs: classify
-    if: needs.classify.outputs.analysis == 'true'
+    if: github.event.pull_request.base.ref != 'master' && needs.classify.outputs.analysis == 'true'
     uses: ./.github/workflows/processing-worker.yml
     with:
       verify_image: ${{ needs.classify.outputs.analysis_image == 'true' }}
@@ -110,7 +110,7 @@ jobs:
   runtime:
     name: Runtime smoke
     needs: classify
-    if: needs.classify.outputs.runtime == 'true'
+    if: github.event.pull_request.base.ref != 'master' && needs.classify.outputs.runtime == 'true'
     uses: ./.github/workflows/deploy.yml
 
   pr-ready:
@@ -133,6 +133,7 @@ jobs:
           persist-credentials: false
       - name: Confirm required PR gates
         env:
+          PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
           CLASSIFY_RESULT: ${{ needs.classify.result }}
           BRANCH_POLICY_RESULT: ${{ needs.branch-policy.result }}
           PUBLIC_SAFETY_RESULT: ${{ needs.public-safety.result }}

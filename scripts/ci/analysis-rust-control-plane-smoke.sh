@@ -27,6 +27,7 @@ tests=(
   "series_analysis::release::tests::real_postgres_zero_title_backfill_is_terminal_and_updates_the_release_generation"
   "series_analysis::release::tests::real_postgres_audit_reports_a_release_state_mismatch"
   "series_analysis::release::tests::real_postgres_release_lock_serializes_new_title_state_inheritance"
+  "series_analysis::release::maintenance::tests::real_postgres_reconcile_preserves_preview_and_replays_an_applied_operation"
   "outbox::tests::subscribed_postgres_listener_delivers_the_next_commit_hint"
   "series_analysis::outbox::tests::real_postgres_and_redis_preserve_claim_and_payload_contract"
 )

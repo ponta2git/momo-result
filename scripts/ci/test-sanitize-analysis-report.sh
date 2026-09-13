@@ -50,4 +50,17 @@ if "${sanitizer}" "${test_dir}/unknown.json" "${test_dir}/unsafe.json" \
   exit 1
 fi
 
+jq -n '{schemaVersion:1,status:"attention_required",action:"none",
+  reason:"reader_or_worker_incompatible",planDigest:"",targetCount:0,
+  completedCount:0,failedCount:0,current:{private:"omit"}}' > "${test_dir}/maintenance.json"
+"${sanitizer}" "${test_dir}/maintenance.json" "${test_dir}/safe-maintenance.json"
+jq -e '.kind == "maintenance" and .reason == "reader_or_worker_incompatible" and (has("current") | not)' \
+  "${test_dir}/safe-maintenance.json" > /dev/null
+for field in status reason action; do
+  jq --arg field "${field}" '.[$field] = "untrusted-free-text"' "${test_dir}/maintenance.json" > "${test_dir}/invalid.json"
+  if "${sanitizer}" "${test_dir}/invalid.json" "${test_dir}/unsafe.json" > /dev/null 2>&1; then
+    echo "Unrecognized maintenance vocabulary must not reach the public report." >&2
+    exit 1
+  fi
+done
 echo "Analysis report sanitization tests passed."

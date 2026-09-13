@@ -245,6 +245,11 @@ dry_run="$(run_release_command release-promote \
 grep -q '"mode":"dry_run"' <<<"${dry_run}"
 grep -q '"targetCount":2' <<<"${dry_run}"
 
+maintenance_preview="$(run_release_command release-reconcile \
+  --operation backfill --release-id 0123456789abcdef0123456789abcdef01234567)"
+jq -e '.status == "planned" and .action == "initial_backfill" and .targetCount == 1' \
+  <<< "${maintenance_preview}" > /dev/null
+
 dry_counts="$(psql_ci -At -c "
   SELECT
     (SELECT COUNT(*) FROM series_analysis_operation_requests),
@@ -302,3 +307,8 @@ if run_release_command release-audit --require-current --require-quiescent; then
   echo "strict audit must reject active backfill work." >&2
   exit 1
 fi
+
+maintenance_progress="$(run_release_command release-reconcile \
+  --operation auto --release-id 0123456789abcdef0123456789abcdef01234567 --apply)"
+jq -e '.status == "running" and .targetCount == 2 and .completedCount == 0' \
+  <<< "${maintenance_progress}" > /dev/null

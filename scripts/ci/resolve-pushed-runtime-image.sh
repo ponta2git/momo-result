@@ -2,13 +2,13 @@
 set -euo pipefail
 
 if [[ "$#" -ne 1 ]]; then
-  echo "Usage: $0 <runtime-image-tag>" >&2
+  echo "Usage: $0 <candidate-image-tag>" >&2
   exit 2
 fi
 
 image_ref="$1"
-[[ "${image_ref}" =~ ^registry\.fly\.io/momo-result:[0-9a-f]{40}-[1-9][0-9]*-[1-9][0-9]*$ ]] || {
-  echo "Runtime image tag does not have the trusted candidate format." >&2
+[[ "${image_ref}" =~ ^registry\.fly\.io/momo-result(-analysis)?:[0-9a-f]{40}-[1-9][0-9]*-[1-9][0-9]*$ ]] || {
+  echo "Candidate image tag does not have the trusted candidate format." >&2
   exit 1
 }
 
@@ -26,7 +26,7 @@ registry_ref="$(
       end
     '
 )" || {
-  echo "Docker did not expose exactly one pushed runtime repository digest." >&2
+  echo "Docker did not expose exactly one pushed candidate repository digest." >&2
   exit 1
 }
 

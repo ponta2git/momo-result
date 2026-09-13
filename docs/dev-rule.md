@@ -92,14 +92,16 @@ OpenAPI / Web 型の生成関係は `docs/architecture.md` の Wire Boundary、c
 
 - CI は変更範囲を fail closed で分類し、対象 subsystem の gate を通す。workflow、service、timeout、artifact path の一覧は docs へ写さない。
 - PR では compile / lint / generation などの pipeline integrity、選択した S / M evidence、変更境界に応じた DB / Redis contract、影響する主要 user flow を優先する。endurance、resource limit、live provider は、PR でしか検出できない変更を除き release evidence へ分離する。
+- release PR は snapshot、branch policy、公開情報を検証する。アプリ・image の gate は通常 PR と exact `master` commit の本番候補で実行し、release PR で重複させない。最終 gate の失敗は merge 後に判明するが、必要な候補の検証がすべて成功するまで本番変更を開始しない。
 - retry の結果分類と report artifact は `docs/test-architecture.md` の CI Artifacts に従う。
 - release 候補は一度だけ build し、commit、設定、immutable artifact identity、digest、producer attempt を記録する。後続 smoke / deploy / rollback は同じ候補を使う。
 - 外部 action / provider の値は境界で検証・正規化し、consumer 用の表現を推測しない。workflow 再実行時も current attempt から候補 identity を再計算しない。
 - mutable tag や cache hit を provenance / 検証成功の根拠にしない。
-- analysis candidate 作成と production 昇格、backfill、audit は別操作とする。人間の承認、復旧判断、操作順は `private/ops/runbook.md` を正本とし、public な test contract へ複製しない。
+- 通常 release は runtime と Processing Worker の検証済み候補を揃え、同じ承認・排他の中で reader-first に適用する。独立した worker candidate workflow は重ねない。Worker の image・設定・稼働状態が一致し、未適用の設定がない場合は再配備を省く。
+- 分析昇格・初回 backfill は配備後の実世代と DB の状態から必要性を判定し、安全に適用できる場合は自動実行する。手動操作も同じ判定・適用・監査を使う。対象 snapshot と世代に結びついた operation を再利用し、実行中・失敗・不要・完了を区別する。自動復旧できない場合は workflow を未成功とし、理由と再開方法を記録する。人間の承認、復旧判断、通知の受信設定は `private/ops/runbook.md` を正本とする。
 - 公開 edge、内部 health、機能応答、resource / performance は別の観測点・証拠として扱う。gate のために security policy を弱めない。
 - 共有 credential の rotation は、更新前に全 consumer と secret store を列挙し、同じ保守単位で更新する。各 consumer が更新後の credential で新規接続し、必要な runtime peer が ready になった証拠を揃えるまで完了としない。
-- runtime release は `release/*` から `master` への PR merge を境界とする。`master` push の deploy と post-deploy verification が成功した後、release PR の `## Release notes` を基に exact `master` commit の GitHub Release を発行する。追跡する changelog を別に手編集せず、GitHub Releases を公開 release 履歴の正本とする。
+- runtime release は `release/*` から `master` への PR merge を境界とする。`master` push の runtime / worker deploy、post-deploy verification、必要な分析処理の完了確認がすべて成功した後、release PR の `## Release notes` を基に exact `master` commit の GitHub Release を発行する。追跡する changelog を別に手編集せず、GitHub Releases を公開 release 履歴の正本とする。
 
 ## 7. Production rollback verification
 

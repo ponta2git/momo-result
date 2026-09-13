@@ -5,7 +5,8 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 checker="${repo_root}/scripts/ci/check-pr-ready.sh"
 
 run_checker() {
-  CLASSIFY_RESULT="${CLASSIFY_RESULT:-success}" \
+  PR_BASE_REF="${PR_BASE_REF:-develop}" \
+    CLASSIFY_RESULT="${CLASSIFY_RESULT:-success}" \
     BRANCH_POLICY_RESULT="${BRANCH_POLICY_RESULT:-success}" \
     PUBLIC_SAFETY_RESULT="${PUBLIC_SAFETY_RESULT:-success}" \
     WORKFLOW_LINT_EXPECTED="${WORKFLOW_LINT_EXPECTED:-false}" \
@@ -34,6 +35,19 @@ if BRANCH_POLICY_RESULT=failure run_checker >/dev/null 2>&1; then
 fi
 if WORKFLOW_LINT_EXPECTED=true WORKFLOW_LINT_RESULT=skipped run_checker >/dev/null 2>&1; then
   echo "Expected checker to reject skipped workflow tooling checks." >&2
+  exit 1
+fi
+
+PR_BASE_REF=master API_EXPECTED=true ANALYSIS_EXPECTED=true RUNTIME_EXPECTED=true \
+  run_checker >/dev/null
+for gate in BRANCH_POLICY_RESULT CLASSIFY_RESULT PUBLIC_SAFETY_RESULT; do
+  if (export PR_BASE_REF=master "${gate}=failure"; run_checker >/dev/null 2>&1); then
+    echo "Release PR accepted a failed ${gate}." >&2
+    exit 1
+  fi
+done
+if PR_BASE_REF=master RUNTIME_RESULT=failure run_checker >/dev/null 2>&1; then
+  echo "Release PR accepted an unexpectedly executed failing suite." >&2
   exit 1
 fi
 

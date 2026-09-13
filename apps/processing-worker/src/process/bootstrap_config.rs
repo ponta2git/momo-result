@@ -12,6 +12,7 @@ pub(super) fn command_allowed(arguments: &[OsString]) -> bool {
         "worker"
             | "release-audit"
             | "release-promote"
+            | "release-reconcile"
             | "shadow-endurance"
             | "probe-cgroup-limit"
             | "probe-ocr-child-lifecycle"
@@ -55,6 +56,7 @@ mod tests {
             "worker",
             "release-audit",
             "release-promote",
+            "release-reconcile",
             "shadow-endurance",
             "probe-cgroup-limit",
             "probe-ocr-child-lifecycle",
@@ -89,7 +91,7 @@ mod tests {
                 "{command}"
             );
         }
-        for command in ["release-audit", "release-promote"] {
+        for command in ["release-audit", "release-promote", "release-reconcile"] {
             assert!(
                 !requires_child_cgroup(&[OsString::from(command)]),
                 "{command}"

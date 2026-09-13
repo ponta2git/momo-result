@@ -1,7 +1,8 @@
 # Private Postmortem Template
 
 Use this structure for a new or revised private incident record. Keep only sections that support
-the current analysis. Follow the workflow and action lifecycle in [../SKILL.md](../SKILL.md).
+the current analysis. Follow [../SKILL.md](../SKILL.md); when selecting or updating actions, use
+[follow-up-actions.md](follow-up-actions.md) for their lifecycle and tracking.
 The action table is a dated snapshot; the shared tracker owns the current outstanding plan.
 Keep secret values out of this record and publish only abstract lessons.
 

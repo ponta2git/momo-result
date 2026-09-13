@@ -1,10 +1,10 @@
-# AI Document Index
+# 文書索引
 
 ## 1. 変更対象から読む
 
-`AGENTS.md` の読込み・再確認・判断方針に従い、次表から必要な章と実装入口を選ぶ。複数の行に該当する場合は参照の和集合を扱う。
+次表は正本と実装入口を探すための索引である。変更する契約に関係する章を選び、複数の行に該当しても共通の参照は一度扱う。対象が分かっている作業で索引から読み直す必要はない。
 
-実装変更の共通参照は `docs/test-rule.md` の「品質証拠の採用・維持・削除」と `docs/dev-rule.md` の「Change Gates」。変更に関係する evidence catalog と gate 行を読む。test の size、実行構成、parallelism、coverage、report を変更する場合だけ `docs/test-architecture.md` を加える。
+検証方針を決める場合は `docs/test-rule.md` の「品質証拠の採用・維持・削除」と変更に関係する evidence catalog、実行する gate を選ぶ場合は `docs/dev-rule.md` の「Change Gates」を参照する。test の size、実行構成、parallelism、coverage、report を変更する場合だけ `docs/test-architecture.md` を加える。
 
 | 変更 | 要求・専門規約 | 条件付きで加える章 | 実装入口・固有の検証境界 |
 | --- | --- | --- | --- |
@@ -14,7 +14,7 @@
 | UI / UX / デザインシステム / 文章 / IA | 対象画面の要求、`docs/ui-rule.md` の該当章 | 用語は `docs/domain-rule.md`、実装境界は architecture の Web | styles.css、shared/ui、formatter、対象 component。UI規約の検証と UI Conformance |
 | API / usecase | `docs/architecture.md` の API、対象要求 | 状態は domain、DB は db-rule、配送は対象 queue 契約 | Tapir endpoint、`apps/api/`、API Evidence Catalog |
 | Discord通知設定 | `docs/requirements/base.md` の Discord通知設定、`docs/db-rule.md` | 共有consumer契約は `../momo-db/docs/discord-notifications.md` | NotificationSettings、管理画面、設定と取消のDB transaction |
-| DB / repository | `docs/db-rule.md`、対象の業務・job 要求 | momo-db の schema / migration / Drizzle 設定・script / migration state 変更は `../momo-db/docs/development.md` を事前に全文読む | pinned migration、対象 query、変更経路の DB quality |
+| DB / repository | `docs/db-rule.md`、対象の業務・job 要求 | momo-db 側の変更は `AGENTS.md` の事前確認条件と `docs/db-rule.md` の Migration / Deployment | pinned migration、対象 query、変更経路の DB quality |
 | OCR / Redis queue | `docs/redis-streams-ocr-contract.md`、`docs/db-rule.md`、`docs/schemas/ocr-*.schema.json` | worker 構造は architecture の OCR Capability / Worker Role | API producer、`apps/processing-worker/`、queue / DB / process の変更境界 |
 | 分析 job / artifact / worker / API | `docs/requirements/series-analysis-batch.md` | DB は db-rule、構造は architecture、表示は ui-rule、指標・review は対象要求 | artifact / queue schema、Tapir、processing-worker、Web。Analysis Capability / Worker Evidence Catalog |
 | 戦績比較 | `docs/requirements/series-comparison.md`、分析 batch 要求 | review は `docs/requirements/series-review-playbook.md`、UI は ui-rule | artifact schema、worker、Web、analysis / Web gate |
@@ -23,7 +23,8 @@
 | テスト / coverage / CI | `docs/test-rule.md`、`docs/dev-rule.md` | 実行設計は test-architecture、契約の意味は専門正本 | test 設定、workflow、対象経路の証拠 |
 | ローカル起動 / コマンド / Git | `docs/dev-rule.md` の該当章 | テスト選択は test-rule | package manifest、build 設定、script、workflow |
 | インシデント / 重大なミス / 対策の再評価 | `.agents/skills/postmortem/SKILL.md` | 実装は変更対象の行。個別記録・台帳は参照を許可された場合だけ | スキルの完了条件と対象 gate |
-| 文書のみ | 変更対象の正本、`docs/post-mortem/lessons.md` の該当カード | コードとの相違は対応する実行経路 | `git diff --check`、`pnpm public:safety:check` |
+| 規約 / repository skill | 本書の「正本と証拠」「規約・skill の保守」、変更対象の正本 | 起動条件・参照先・完了条件が他の入口と整合するか | 対象文書・skill と参照元、Change Gates の docs only |
+| 文書のみ | 変更対象の正本 | 挙動を記述・変更する場合は対応する実行経路と教訓カード | Change Gates の docs only |
 
 `base`、`ui-rule` などの略記は `docs/requirements/base.md`、`docs/ui-rule.md` など同名の文書を指す。索引から本文の意味を推測せず、判断する契約の章を読む。現行挙動の相違・必要な質問は `AGENTS.md` に従って解消する。
 
@@ -43,3 +44,12 @@
 公開範囲は `AGENTS.md`、公開運用原則は `docs/ops/README.md` に従う。private の計画・測定・履歴は、参照を許可された作業で適用対象と現行判断先を確認して使う。
 
 文書を分割するのは、独立して読む作業があり、条件と例外をまとめたまま参照負担を減らせる場合。まず既存の章を整理する。正本性のない写しや判断に寄与しない説明は削除し、移動・統合時は入口と参照先を同じ変更で更新する。
+
+### 規約・skill の保守
+
+- `AGENTS.md` は作業全体に効く判断と固有の制約、専門規約は対象の契約、skill は特定作業の知識・手順を持つ。詳細は所有する正本へ置き、入口には適用条件と参照先を残す。
+- 指示は守る結果、適用条件、完了条件を明確にする。固定順序や全文確認は、権限・データ保全・互換性など順序を崩すと具体的な問題が生じる箇所に残す。一般的な作業能力の説明や一件の失敗への対策を、すべての作業に適用する規則へ広げない。
+- skill の description は何ができ、どの依頼で使うかを短く示す。単なる用語の一致で通常作業を専門レビューへ誘導せず、複数の作業モードに固有の詳細は条件付きで参照する。特定モデルの癖やツールの一時的な既定値を repository の恒久ルールにしない。
+- 改訂時は、実際に想定する依頼で必要な参照・承認・検証・終了を判断できるか確認する。適用するケースに加え、誤字修正、通常の不具合修正、承認済み作業など誤って手順を増やしやすいケースも選ぶ。実際のエージェント挙動を試していない場合は、文面の点検と区別する。
+
+参考: OpenAI の [skills / AGENTS.md の見直し](https://developers.openai.com/blog/rethinking-skills-and-prompts-for-gpt-6-astra) と [モデル別 prompting guidance](https://developers.openai.com/api/docs/guides/latest-model#prompting-best-practices)。本書はそれらを踏まえた repository の保守方針であり、作業ごとの再読を要求しない。

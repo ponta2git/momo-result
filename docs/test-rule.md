@@ -11,7 +11,7 @@
 
 ## 2. 品質証拠の採用・維持・削除
 
-既存 evidence の維持・変更・削除、または新しい test case、独立 suite、lint / checker rule、manual review の採否は、次の順で判断する。
+既存 evidence の維持・変更・削除、または新しい test case、独立 suite、lint / checker rule、manual review の採否は、次の観点で判断する。
 
 1. 守るアプリ利用者の結果と、失敗時の影響を特定する。共通実装では直接の利用者をその実装の consumer とし、最終的なアプリ利用者への影響まで遡る。技術的な難しさ、実装規約、未検証であることだけでは採用理由にしない。
 2. その結果を壊す実行経路と独立した失敗条件を特定する。複数 component の組み合わせで初めて価値または失敗が現れる場合は、個別 unit test へ分解して保証したことにせず、integration / component / E2E の組み上がった境界で判断する。
@@ -24,7 +24,7 @@
 - 共通実装は、consumer から見える契約を同値 class、境界、意味の異なる mode に分け、各 partition の代表を検証する。全 call site や内部 branch の機械的な網羅を求めない。
 - test 数や test / production LOC に一律の上限・比率を置かない。ただし、同じ失敗を重複して検出する case、正本を写しただけの assertion、弱い oracle、慢性的に信頼できない test は、追加時だけでなく変更時にも統合・削除を検討する。
 - 実行が速いことは採用・維持の理由ではなく、遅いことだけも削除理由ではない。価値ある証拠は境界や setup を改善し、価値の薄い証拠は速くても残さない。
-- 不具合修正でも回帰 test を自動的に追加しない。利用者影響、再発可能性、因果経路、既存証拠を同じ基準で評価し、必要な場合は実際に失敗した production 経路を通す。
+- 不具合修正でも回帰 test を自動的に追加しない。利用者影響、再発可能性、因果経路、既存証拠を同じ基準で評価し、必要な場合は実際に失敗した production 経路を通す。可逆で影響の小さい変更に、実装を写すだけの test を追加しない。
 
 以下の各領域に列挙する条件は、対象変更で検討する failure-mode catalog である。一項目ごとに独立した test を要求する一覧ではなく、各項目の命令形は、その条件を evidence に選んだ場合だけ適用する。選択した条件については、記載した境界と oracle を満たす。
 
@@ -165,4 +165,4 @@ job、publication、artifact、version の詳細ケースは `docs/requirements/
 
 本書で選んだ最小の evidence を、`docs/dev-rule.md` の gate 役割と変更種別へ割り当てる。契約、schema、algorithm version、production OS / runtime、resource profile を変えたことだけを理由に test を自動追加せず、変更した利用者価値と production boundary を直接通す evidence を選ぶ。既存 check の廃止・縮小も同じ採用基準で再評価し、価値がなければ代替 check を作らない。retry と report artifact は `docs/test-architecture.md` に従う。
 
-完了前に `docs/post-mortem/lessons.md` の該当カードだけを確認し、未検証の外部依存と残リスクを報告する。
+検証の終了・再実行と報告は `docs/dev-rule.md` の Change Gates と `AGENTS.md` に従う。

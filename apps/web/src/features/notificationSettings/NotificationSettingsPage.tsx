@@ -1,5 +1,9 @@
+import { useRef } from "react";
+
 import { useNotificationSettingsPageModel } from "@/features/notificationSettings/useNotificationSettingsPageModel";
+import { actionRowClass } from "@/shared/ui/actions/actionGroup";
 import { Button } from "@/shared/ui/actions/Button";
+import { FactList } from "@/shared/ui/data/FactList";
 import { AlertDialog } from "@/shared/ui/feedback/Dialog";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
@@ -18,8 +22,17 @@ const settings = [
 ] as const;
 
 export function NotificationSettingsPage() {
+  const saveButtonRef = useRef<HTMLButtonElement>(null);
+  const headingRef = useRef<HTMLHeadingElement>(null);
   const page = useNotificationSettingsPageModel();
   const resource = page.resource;
+  const editingStatus = page.refreshing
+    ? "保存済みの設定を確認しています。"
+    : page.dirty
+      ? "未保存の変更があります"
+      : page.feedback
+        ? undefined
+        : "通知の選択を変更すると保存できます。";
   const reloadButton = (
     <Button
       pending={page.refreshing}
@@ -34,11 +47,18 @@ export function NotificationSettingsPage() {
 
   return (
     <PageFrame width="narrow">
-      <PageContentSurface className="grid gap-6">
+      <PageContentSurface aria-label="Discord通知設定" className="grid gap-6" role="region">
         <div className="grid gap-2">
-          <h1 className={contentText.primary}>Discord通知</h1>
+          <h2
+            className={contentText.heading}
+            id="notification-kinds-heading"
+            ref={headingRef}
+            tabIndex={-1}
+          >
+            通知する種類
+          </h2>
           <p className={contentText.body}>
-            全利用者に共通の設定です。通知する種類を選んで保存してください。
+            Discordへ送る通知を選びます。全利用者に共通の設定で、保存すると反映されます。
           </p>
         </div>
         {resource.status === "loading" ? (
@@ -52,31 +72,54 @@ export function NotificationSettingsPage() {
           </Notice>
         ) : resource.status === "ready" ? (
           <form
+            aria-label="通知設定の編集"
             className="grid gap-6"
             onSubmit={(event) => {
               event.preventDefault();
               page.submit();
             }}
           >
-            <fieldset className="grid gap-6" disabled={page.disabled}>
-              <legend className="sr-only">通知する種類</legend>
+            <fieldset
+              aria-labelledby="notification-kinds-heading"
+              className="grid min-w-0 gap-4"
+              disabled={page.disabled}
+            >
               {settings.map(({ kind, label, description }) => (
-                <div className="grid gap-2" key={kind}>
+                <div
+                  className="grid min-w-0 gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start sm:gap-6"
+                  key={kind}
+                >
                   <CheckboxField
                     checked={resource.values[kind]}
                     description={description}
+                    disabled={page.disabled}
                     label={label}
                     onChange={(event) => page.change(kind, event.target.checked)}
                   />
-                  <p className={`${contentText.supporting} pl-8`}>
-                    保存済み：{resource.confirmed[kind].enabled ? "ON" : "OFF"}
-                  </p>
+                  <div className="pl-8 sm:pt-2 sm:pl-0">
+                    <FactList
+                      ariaLabel={`${label}の保存済み設定`}
+                      items={[
+                        {
+                          id: kind,
+                          label: "保存済み",
+                          value: resource.confirmed[kind].enabled ? "ON" : "OFF",
+                        },
+                      ]}
+                      layout="inline"
+                    />
+                  </div>
                 </div>
               ))}
             </fieldset>
-            <p className={contentText.body}>
-              OFFで保存すると、待機中・再送待ちの通知も取り消します。再びONにしても過去の通知は送りません。送信開始済みの通知は届く場合があります。
-            </p>
+            <div className="grid gap-2">
+              {page.turnsOff ? (
+                <p className={contentText.body}>
+                  OFFで保存すると、未送信の通知も取り消します。送信開始済みの通知は届く場合があります。
+                </p>
+              ) : null}
+              <p className={contentText.body}>ONにしても、過去の通知は送信されません。</p>
+            </div>
             {page.feedback ? (
               <Notice
                 action={page.needsReload && !page.stale ? reloadButton : undefined}
@@ -90,25 +133,28 @@ export function NotificationSettingsPage() {
                 <p>最後に確認できた保存内容を表示しています。編集中の選択は保持しています。</p>
               </Notice>
             ) : null}
-            <div className="flex flex-wrap items-center gap-3 border-t border-[var(--color-border)] pt-4">
-              <Button
-                disabled={!page.dirty || page.disabled}
-                pending={page.pending}
-                pendingLabel="保存中"
-                type="submit"
-              >
-                保存
-              </Button>
-              <Button
-                disabled={!page.dirty || page.disabled}
-                variant="secondary"
-                onClick={page.reset}
-              >
-                変更を戻す
-              </Button>
-              {page.dirty ? (
-                <p className={contentText.supporting} role="status">
-                  未保存の変更があります
+            <div className="grid gap-2">
+              <div className={actionRowClass}>
+                <Button
+                  disabled={!page.dirty || page.disabled}
+                  pending={page.pending}
+                  pendingLabel="保存中"
+                  ref={saveButtonRef}
+                  type="submit"
+                >
+                  保存
+                </Button>
+                <Button
+                  disabled={!page.dirty || page.disabled}
+                  variant="secondary"
+                  onClick={page.reset}
+                >
+                  変更を破棄
+                </Button>
+              </div>
+              {!page.pending && !page.needsReload && editingStatus ? (
+                <p className={contentText.body} role="status">
+                  {editingStatus}
                 </p>
               ) : null}
             </div>
@@ -119,12 +165,32 @@ export function NotificationSettingsPage() {
         open={page.confirmation.open}
         onOpenChange={page.confirmation.setOpen}
         title="通知をOFFにして保存しますか？"
-        description="OFFにする種類の待機中・再送待ちの通知を取り消します。再びONにしても、取り消した通知は送信されません。"
+        description="全利用者に共通の通知設定を、次の内容で保存します。"
         confirmLabel="OFFにして保存"
         pending={page.pending}
         closeOnSuccess={false}
+        finalFocus={() =>
+          saveButtonRef.current && !saveButtonRef.current.disabled
+            ? saveButtonRef.current
+            : headingRef.current
+        }
         onConfirm={page.confirmation.save}
-      />
+      >
+        {resource.status === "ready" ? (
+          <FactList
+            ariaLabel="保存する通知設定"
+            items={settings.map(({ kind, label }) => ({
+              id: kind,
+              label,
+              value: resource.values[kind] ? "ON" : "OFF",
+            }))}
+            layout="inline"
+          />
+        ) : null}
+        <p className={contentText.body}>
+          OFFにする種類の待機中・再送待ちの通知を取り消します。再びONにしても、取り消した通知は送信されません。送信開始済みの通知は届く場合があります。
+        </p>
+      </AlertDialog>
     </PageFrame>
   );
 }

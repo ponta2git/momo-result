@@ -100,6 +100,12 @@ export function useNotificationSettingsPageModel() {
   );
   const needsReload = Boolean(feedback?.requiresReload || query.isError);
   const disabled = mutation.isPending || query.isFetching || needsReload;
+  const turnsOff = Boolean(
+    draft &&
+    (Object.keys(draft.values) as Kind[]).some(
+      (kind) => draft.base[kind].enabled && !draft.values[kind],
+    ),
+  );
 
   const change = (kind: Kind, enabled: boolean) => {
     if (!confirmed || disabled || saving.current) return;
@@ -127,9 +133,6 @@ export function useNotificationSettingsPageModel() {
 
   const submit = () => {
     if (!draft || !dirty || disabled) return;
-    const turnsOff = (Object.keys(draft.values) as Kind[]).some(
-      (kind) => draft.base[kind].enabled && !draft.values[kind],
-    );
     if (turnsOff) setConfirmationOpen(true);
     else save();
   };
@@ -147,6 +150,7 @@ export function useNotificationSettingsPageModel() {
   return {
     resource,
     dirty,
+    turnsOff,
     disabled,
     feedback,
     change,

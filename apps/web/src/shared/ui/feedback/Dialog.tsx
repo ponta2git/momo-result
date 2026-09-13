@@ -5,6 +5,7 @@ import type { HTMLAttributes, ReactElement, ReactNode } from "react";
 import { useState } from "react";
 
 import { AlertDialogLayer, DialogLayer } from "@/shared/ui/feedback/DialogLayer";
+import type { AlertDialogLayerProps } from "@/shared/ui/feedback/DialogLayer";
 
 type DialogBaseProps = {
   backdropClassName?: string | undefined;
@@ -25,6 +26,7 @@ type DialogProps = DialogBaseProps & {
 };
 
 type AlertDialogProps = DialogBaseProps & {
+  finalFocus?: AlertDialogLayerProps["finalFocus"];
   cancelLabel?: ReactNode | undefined;
   closeOnSuccess?: boolean | undefined;
   confirmDisabled?: boolean | undefined;
@@ -136,6 +138,7 @@ export function AlertDialog({
   confirmLabel = "実行",
   description,
   formatError = defaultAlertErrorMessage,
+  finalFocus,
   onConfirm,
   onOpenChange,
   open,
@@ -196,6 +199,7 @@ export function AlertDialog({
             confirmLabel={confirmLabel}
             description={description}
             error={internalError}
+            finalFocus={finalFocus}
             key="alert-dialog-layer"
             pending={actualPending}
             popupClassName={popupClassName}

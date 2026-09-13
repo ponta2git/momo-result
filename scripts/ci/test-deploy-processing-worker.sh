@@ -55,7 +55,7 @@ for condition in staged changed different; do
   status=0
   scripts/ci/deploy-processing-worker.sh > output 2>&1 || status=$?
   test "${status}" = 42
-  rg -q -- '--image registry.fly.io/momo-result-analysis@sha256:' deploy
+  grep -qF -- '--image registry.fly.io/momo-result-analysis@sha256:' deploy
   rm "${condition}" deploy
 done
 printf 'Worker deployment reuse and immutable rollout tests passed.\n'

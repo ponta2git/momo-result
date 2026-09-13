@@ -43,33 +43,33 @@ expect_calls() { test "$(wc -l < "${task_tmp}/calls" | tr -d ' ')" = "$1"; }
 report 1 not_needed
 run_case auto
 expect_calls 1
-! rg -q must-not-appear "${task_tmp}/output"
+! grep -qF must-not-appear "${task_tmp}/output"
 reset_case
 report 1 planned
 run_case check
 expect_calls 1
-! rg -q -- --apply "${task_tmp}/calls"
+! grep -qF -- --apply "${task_tmp}/calls"
 reset_case
 report 1 planned
 report 2 running operation_accepted
 report 3 complete
 run_case auto
 expect_calls 3
-rg -q -- '--apply --expected-plan sha256:a{64}' "${task_tmp}/calls"
+grep -qE -- '--apply --expected-plan sha256:a{64}' "${task_tmp}/calls"
 reset_case
 report 1 planned
 report 2 attention_required plan_changed_run_check_again
 printf '%s\n' '{"timestamp":"fixture","fields":{"event":"analysis_command_failed"}}' >> "${task_tmp}/response-2"
 if run_case auto; then echo 'A changed plan must fail.' >&2; exit 1; fi
 expect_calls 2
-rg -q plan_changed_run_check_again "${task_tmp}/repo/analysis-production-artifact/operation-report.json"
-! rg -q analysis_command_failed "${task_tmp}/repo/analysis-production-artifact/operation-report.json"
+grep -qF plan_changed_run_check_again "${task_tmp}/repo/analysis-production-artifact/operation-report.json"
+! grep -qF analysis_command_failed "${task_tmp}/repo/analysis-production-artifact/operation-report.json"
 reset_case
 report 1 running
 report 2 running
 if ANALYSIS_WAIT_SECONDS=0 run_case auto; then echo 'Pending work must not pass the release gate.' >&2; exit 1; fi
 expect_calls 2
-rg -q 'still running' "${task_tmp}/output"
+grep -qF 'still running' "${task_tmp}/output"
 reset_case
 report 1 planned
 : > "${task_tmp}/changed"

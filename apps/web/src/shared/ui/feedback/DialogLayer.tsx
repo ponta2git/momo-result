@@ -148,6 +148,7 @@ export type AlertDialogLayerProps = SharedLayerProps & {
   cancelLabel: ReactNode;
   confirmDisabled: boolean;
   confirmLabel: ReactNode;
+  pendingLabel: ReactNode;
   error: string;
   onConfirm: () => void;
   pending: boolean;
@@ -162,6 +163,7 @@ export function AlertDialogLayer({
   contentClassName,
   confirmDisabled,
   confirmLabel,
+  pendingLabel,
   description,
   error,
   finalFocus,
@@ -267,7 +269,7 @@ export function AlertDialogLayer({
               <Button
                 disabled={confirmDisabled}
                 pending={pending}
-                pendingLabel={confirmLabel}
+                pendingLabel={pendingLabel}
                 variant={tone === "danger" ? "danger" : "primary"}
                 onClick={onConfirm}
               >

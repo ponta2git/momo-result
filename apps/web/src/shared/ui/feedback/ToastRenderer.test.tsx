@@ -18,6 +18,7 @@ describe("ToastRenderer", () => {
         manager.add({ id: `result-${index}`, title: `結果 ${index}` });
     });
     expect(await screen.findAllByRole("dialog")).toHaveLength(4);
+    expect(screen.getAllByRole("button", { name: "通知を閉じる" })).toHaveLength(4);
     expect(screen.queryByRole("dialog", { name: "結果 0" })).not.toBeInTheDocument();
     act(() => {
       manager.add({ id: "result-4", title: "保存しました" });
@@ -42,7 +43,7 @@ describe("ToastRenderer", () => {
     });
     expect(await screen.findByText("保存しました")).toBeInTheDocument();
 
-    await user.click(screen.getByLabelText("通知を閉じる", { selector: "button" }));
+    await user.click(screen.getByRole("button", { name: "通知を閉じる" }));
     expect(screen.queryByRole("dialog", { name: "保存しました" })).not.toBeInTheDocument();
 
     act(() => {

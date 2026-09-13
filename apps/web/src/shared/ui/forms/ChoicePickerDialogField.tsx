@@ -7,6 +7,7 @@ import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
 import { PaginationControls } from "@/shared/ui/data/PaginationControls";
 import { Dialog } from "@/shared/ui/feedback/Dialog";
+import { PendingStatus } from "@/shared/ui/feedback/PendingStatus";
 import { ChoiceList } from "@/shared/ui/forms/ChoiceList";
 import type { ChoiceListOption } from "@/shared/ui/forms/ChoiceList";
 import { buildFieldDescribedBy, Field } from "@/shared/ui/forms/Field";
@@ -111,23 +112,26 @@ export function ChoicePickerDialogField({
             onOpenChange={setOpen}
           >
             <div className="grid min-h-0 flex-1">
+              <PendingStatus
+                pending={pending || scopeChanging}
+              >{`${label}候補を更新中`}</PendingStatus>
               <StaleShield
                 active={scopeChanging}
                 busyLabel={`${label}候補を更新中`}
                 fallback={null}
-                statusPlacement="top-end"
+                statusPlacement="external"
                 strategy="preserve-inert"
               >
                 <div className="flex min-h-0 flex-col gap-3">
                   <div className="flex min-h-0 flex-1 flex-col">
                     <ChoiceList
-                      disabled={disabled}
+                      disabled={disabled || pending}
                       emptyState={emptyState}
                       layout="dialog"
                       legend={`${label}候補`}
                       name={name}
                       options={options}
-                      pending={pending && !scopeChanging}
+                      pending={false}
                       value={value}
                       onValueChange={selectChoice}
                     />

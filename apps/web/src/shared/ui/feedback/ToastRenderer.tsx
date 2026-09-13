@@ -40,6 +40,7 @@ function PresentToast({ reduceMotion, toast }: { reduceMotion: boolean | null; t
               <Toast.Description className={cn(contentText.body, "mt-1 text-pretty")} />
             </div>
             <Toast.Close
+              aria-hidden={false}
               aria-label="通知を閉じる"
               render={<IconButton aria-label="通知を閉じる" icon="×" size="sm" variant="quiet" />}
             />

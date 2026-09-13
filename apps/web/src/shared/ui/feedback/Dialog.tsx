@@ -31,6 +31,7 @@ type AlertDialogProps = DialogBaseProps & {
   closeOnSuccess?: boolean | undefined;
   confirmDisabled?: boolean | undefined;
   confirmLabel?: ReactNode | undefined;
+  pendingLabel?: ReactNode | undefined;
   formatError?: ((error: unknown) => string) | undefined;
   onConfirm: () => Promise<void> | void;
   pending?: boolean | undefined;
@@ -136,6 +137,7 @@ export function AlertDialog({
   closeOnSuccess = true,
   confirmDisabled = false,
   confirmLabel = "実行",
+  pendingLabel = confirmLabel,
   description,
   formatError = defaultAlertErrorMessage,
   finalFocus,
@@ -163,10 +165,10 @@ export function AlertDialog({
     controllableOpen.setOpen(nextOpen);
   };
   const handleConfirm = async () => {
-    setInternalError("");
     setInternalPending(true);
     try {
       await onConfirm();
+      setInternalError("");
       if (closeOnSuccess) {
         setOpen(false);
       }
@@ -197,6 +199,7 @@ export function AlertDialog({
             contentClassName={contentClassName}
             confirmDisabled={confirmDisabled}
             confirmLabel={confirmLabel}
+            pendingLabel={pendingLabel}
             description={description}
             error={internalError}
             finalFocus={finalFocus}

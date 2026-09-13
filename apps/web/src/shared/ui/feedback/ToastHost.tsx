@@ -68,6 +68,7 @@ function ToastRendererFallback() {
                 <Toast.Description className="mt-0.5 text-xs leading-5 text-[var(--color-text-secondary)]" />
               </div>
               <Toast.Close
+                aria-hidden={false}
                 aria-label="通知を閉じる"
                 render={<IconButton aria-label="通知を閉じる" icon="×" size="sm" variant="quiet" />}
               />

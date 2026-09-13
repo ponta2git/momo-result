@@ -4,7 +4,6 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 classifier="${repo_root}/scripts/ci/classify-changes.sh"
 range_classifier="${repo_root}/scripts/ci/classify-git-range.sh"
-release_validator="${repo_root}/scripts/ci/validate-current-runtime-release.sh"
 
 assert_case() {
   local name="$1"
@@ -83,56 +82,6 @@ if [[ "${rename_actual}" != "${api_runtime}" ]]; then
   exit 1
 fi
 
-release_repo="${test_root}/release-repo"
-git init --quiet "${release_repo}"
-git -C "${release_repo}" config user.email fixture@example.invalid
-git -C "${release_repo}" config user.name Fixture
-printf '%s\n' base > "${release_repo}/README.md"
-git -C "${release_repo}" add .
-git -C "${release_repo}" commit --quiet -m base
-release_candidate="$(git -C "${release_repo}" rev-parse HEAD)"
-(
-  cd "${release_repo}"
-  "${release_validator}" "${release_candidate}" "${release_candidate}"
-)
-
-mkdir -p "${release_repo}/docs"
-printf '%s\n' docs > "${release_repo}/docs/note.md"
-git -C "${release_repo}" add .
-git -C "${release_repo}" commit --quiet -m docs
-docs_head="$(git -C "${release_repo}" rev-parse HEAD)"
-(
-  cd "${release_repo}"
-  "${release_validator}" "${release_candidate}" "${docs_head}"
-)
-
-mkdir -p "${release_repo}/apps/api"
-printf '%s\n' 'object RuntimeChange' > "${release_repo}/apps/api/RuntimeChange.scala"
-git -C "${release_repo}" add .
-git -C "${release_repo}" commit --quiet -m runtime
-runtime_head="$(git -C "${release_repo}" rev-parse HEAD)"
-if (
-  cd "${release_repo}"
-  "${release_validator}" "${release_candidate}" "${runtime_head}"
-) > /dev/null 2>&1; then
-  echo "A runtime-stale release candidate was accepted." >&2
-  exit 1
-fi
-
-git -C "${release_repo}" checkout --quiet --orphan rewritten
-git -C "${release_repo}" rm -q -rf .
-printf '%s\n' rewritten > "${release_repo}/README.md"
-git -C "${release_repo}" add .
-git -C "${release_repo}" commit --quiet -m rewritten
-rewritten_head="$(git -C "${release_repo}" rev-parse HEAD)"
-if (
-  cd "${release_repo}"
-  "${release_validator}" "${release_candidate}" "${rewritten_head}"
-) > /dev/null 2>&1; then
-  echo "A non-ancestor release candidate was accepted." >&2
-  exit 1
-fi
-
 assert_case docs-only "${none}" docs/README.md
 assert_case actionlint-only "${actionlint_policy}" scripts/ci/actionlint.sh
 assert_case dev-launcher "${policy_only}" scripts/dev-local.mjs
@@ -157,9 +106,6 @@ assert_case web-quality-script "${web_only}" apps/web/scripts/generate-api.mjs
 assert_case web-lint-config "${web_only}" apps/web/oxlint.config.ts
 assert_case analysis-test "${analysis_only}" apps/processing-worker/tests/parent_liveness.rs
 assert_case analysis-source "${analysis_image}" apps/processing-worker/src/main.rs
-assert_case analysis-candidate-workflow \
-  "$(expected false false false false false false true true false false)" \
-  .github/workflows/analysis-candidate.yml
 assert_case analysis-production-workflow \
   "$(expected false false false false false false true true false false)" \
   .github/workflows/analysis-production.yml

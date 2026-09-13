@@ -15,6 +15,9 @@ use crate::postgres::{PostgresError, SERIES_ANALYSIS_OUTBOX_NOTIFICATION_CHANNEL
 
 use super::control::{ALGORITHM_VERSION, CAPABILITY_FRESH_SECONDS};
 
+mod maintenance;
+pub(crate) use maintenance::{MaintenanceOperation, reconcile};
+
 const RELEASE_TRANSACTION_LIMITS: &str = "SET LOCAL lock_timeout = '5s'; SET LOCAL statement_timeout = '30s'; \
      SET LOCAL idle_in_transaction_session_timeout = '30s'";
 const RELEASE_AUDIT_TRANSACTION: &str = "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY; \
@@ -126,6 +129,7 @@ struct CapabilityCounts {
 struct TargetRow {
     game_title_id: String,
     eligible: bool,
+    input_revision: i64,
 }
 
 #[derive(Clone, Debug)]
@@ -186,6 +190,13 @@ pub(crate) async fn promote(
     let mut client = connect(&database_url).await?;
     let transaction = begin_promotion_transaction(&mut client).await?;
 
+    promote_transaction(transaction, request).await
+}
+
+async fn promote_transaction(
+    transaction: Transaction<'_>,
+    request: &PromotionRequest<'_>,
+) -> Result<PromotionReport, ReleaseError> {
     let key_hash = canonical::sha256_prefixed(request.operation_key.as_bytes());
     let operation_id = stable_id("analysis-release-operation", &key_hash, "all");
     let campaign_id = stable_id("analysis-release-campaign", &key_hash, "all");
@@ -618,7 +629,7 @@ async fn lock_targets(
             "SELECT s.game_title_id, \
                     $1::text <> 'initial_backfill' OR EXISTS (\
                       SELECT 1 FROM matches m WHERE m.game_title_id = s.game_title_id\
-                    ) \
+                    ), s.input_revision \
              FROM series_analysis_title_states s \
              ORDER BY s.game_title_id FOR UPDATE",
             &[&trigger.wire()],
@@ -629,6 +640,7 @@ async fn lock_targets(
             Ok(TargetRow {
                 game_title_id: row.try_get(0)?,
                 eligible: row.try_get(1)?,
+                input_revision: row.try_get(2)?,
             })
         })
         .collect()
@@ -976,7 +988,7 @@ const fn global_violation(code: &'static str) -> CompletenessViolation {
 mod tests {
     use super::*;
 
-    fn valid_title_audit_row() -> TitleAuditRow {
+    pub(super) fn valid_title_audit_row() -> TitleAuditRow {
         TitleAuditRow {
             game_title_id: String::from("title-release-audit"),
             confirmed_match_count: 1,

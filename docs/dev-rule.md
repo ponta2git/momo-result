@@ -12,6 +12,8 @@
 - DB を使う前に sibling `momo-db` の migration が接続先へ適用済みであることを確認する。
 - integration / E2E は普段使いの DB、Redis、bucket と分離する。外部依存 gate の未実行は、その wire 動作を未検証として報告する。
 
+上記の隔離と接続先を確認できるローカル検証は、依頼された変更の検証・失敗修正・影響範囲の再実行まで個別承認なしで進める。任意 target や live provider を使う command にはこの前提を持ち込まず、実際の接続先と副作用を確認する。
+
 ## 2. Local Run
 
 通常の API + Web は root の `pnpm dev` を使う。依存 DB の起動と migration は `../momo-db` の scripts を使い、利用可能な command は各 `package.json` を正とする。
@@ -51,7 +53,7 @@ OpenAPI / Web 型の生成関係は `docs/architecture.md` の Wire Boundary、c
 | Manual review | Yes（選択時） | 視覚階層、関係的余白、文章の強さなど自動 oracle が不適切な項目 |
 
 - blocking check は、所有する正本、検出する違反、失敗時の対処を特定できる場合だけ置く。pipeline-integrity evidence の成功を product behavior の成功として扱わない。
-- manual review は、利用者影響があり自動 oracle が適切でない場合だけ選び、確認対象と結果を PR に残す。近似的な checker を追加して代用しない。
+- manual review は、利用者影響があり自動 oracle が適切でない場合だけ選び、確認対象と結果を変更報告や PR に残す。エージェントによるブラウザ実確認も含み、本番操作などの人間承認とは別である。近似的な checker を追加して代用しない。
 - lint / checker は syntax-aware な既存 tool と設定を優先する。独自 script は、既存 tool で表現できず、利用者価値または pipeline integrity への影響が大きく、positive / negative fixture で誤検出と未検出を管理できる場合だけ採用する。
 - production build が source detection、tree-shaking、minification などで output を選別し、runtime が識別子を動的に組み立てる場合、canonical build は consumer が必要とする識別子が最終 artifact に残ることを直接検証する。source 定義、compile、unit test の成功を artifact 保持の代用にせず、build が参照する checker、manifest、fixture は host と container の全 build input に含める。
 - check が速いことは採用・維持の理由にしない。廃止時も同等 check の機械的な追加を要求せず、守っていた価値と証拠を `docs/test-rule.md` の基準で再評価する。
@@ -74,7 +76,7 @@ OpenAPI / Web 型の生成関係は `docs/architecture.md` の Wire Boundary、c
 | Go deploy / ops tool | Go test / vet、shell collector を変えた場合は対応 script test |
 | docs only | `git diff --check`、`pnpm public:safety:check` |
 
-表は変更時に選ぶ evidence の種類を示し、新しい test case の自動追加や各層での重複を要求しない。選択基準と oracle は `docs/test-rule.md`、現在の job 構成とまとめて実行する suite は CI workflow を実行上の正本とする。変更分類を弱めて gate を避けない。
+表は変更時に選ぶ evidence の種類を示し、新しい test case の自動追加や各層での重複を要求しない。規約・skill の文章変更は docs only とし、同時に script、schema、設定を変更した場合はその gate も適用する。選択基準と oracle は `docs/test-rule.md`、現在の job 構成とまとめて実行する suite は CI workflow を実行上の正本とする。変更分類を弱めて gate を避けない。
 
 変更範囲に必要な gate と選択した品質証拠を確認したら、検証を終了する。追加・再実行は、結果を無効にする変更、失敗、具体的な未解決事項が生じた場合に、その影響範囲で行う。
 結果の再利用は、対象コード、依存する schema・設定・環境、観測した経路が今回の判断に適合する場合に限る。必須 gate の実行単位は CI の定義に従い、未実行を通過扱いにしない。
@@ -90,14 +92,16 @@ OpenAPI / Web 型の生成関係は `docs/architecture.md` の Wire Boundary、c
 
 - CI は変更範囲を fail closed で分類し、対象 subsystem の gate を通す。workflow、service、timeout、artifact path の一覧は docs へ写さない。
 - PR では compile / lint / generation などの pipeline integrity、選択した S / M evidence、変更境界に応じた DB / Redis contract、影響する主要 user flow を優先する。endurance、resource limit、live provider は、PR でしか検出できない変更を除き release evidence へ分離する。
+- release PR は snapshot、branch policy、公開情報を検証する。アプリ・image の gate は通常 PR と exact `master` commit の本番候補で実行し、release PR で重複させない。最終 gate の失敗は merge 後に判明するが、必要な候補の検証がすべて成功するまで本番変更を開始しない。
 - retry の結果分類と report artifact は `docs/test-architecture.md` の CI Artifacts に従う。
 - release 候補は一度だけ build し、commit、設定、immutable artifact identity、digest、producer attempt を記録する。後続 smoke / deploy / rollback は同じ候補を使う。
 - 外部 action / provider の値は境界で検証・正規化し、consumer 用の表現を推測しない。workflow 再実行時も current attempt から候補 identity を再計算しない。
 - mutable tag や cache hit を provenance / 検証成功の根拠にしない。
-- analysis candidate 作成と production 昇格、backfill、audit は別操作とする。人間の承認、復旧判断、操作順は `private/ops/runbook.md` を正本とし、public な test contract へ複製しない。
+- 通常 release は runtime と Processing Worker の検証済み候補を揃え、同じ承認・排他の中で reader-first に適用する。独立した worker candidate workflow は重ねない。Worker の image・設定・稼働状態が一致し、未適用の設定がない場合は再配備を省く。
+- 分析昇格・初回 backfill は配備後の実世代と DB の状態から必要性を判定し、安全に適用できる場合は自動実行する。手動操作も同じ判定・適用・監査を使う。対象 snapshot と世代に結びついた operation を再利用し、実行中・失敗・不要・完了を区別する。自動復旧できない場合は workflow を未成功とし、理由と再開方法を記録する。人間の承認、復旧判断、通知の受信設定は `private/ops/runbook.md` を正本とする。
 - 公開 edge、内部 health、機能応答、resource / performance は別の観測点・証拠として扱う。gate のために security policy を弱めない。
 - 共有 credential の rotation は、更新前に全 consumer と secret store を列挙し、同じ保守単位で更新する。各 consumer が更新後の credential で新規接続し、必要な runtime peer が ready になった証拠を揃えるまで完了としない。
-- runtime release は `release/*` から `master` への PR merge を境界とする。`master` push の deploy と post-deploy verification が成功した後、release PR の `## Release notes` を基に exact `master` commit の GitHub Release を発行する。追跡する changelog を別に手編集せず、GitHub Releases を公開 release 履歴の正本とする。
+- runtime release は `release/*` から `master` への PR merge を境界とする。`master` push の runtime / worker deploy、post-deploy verification、必要な分析処理の完了確認がすべて成功した後、release PR の `## Release notes` を基に exact `master` commit の GitHub Release を発行する。追跡する changelog を別に手編集せず、GitHub Releases を公開 release 履歴の正本とする。
 
 ## 7. Production rollback verification
 
@@ -116,4 +120,4 @@ OpenAPI / Web 型の生成関係は `docs/architecture.md` の Wire Boundary、c
 
 Linear issue を完了させる通常 PR は本文で `Fixes MOM-<番号>` を使う。`develop` merge は started status `Ready for release`、release PR の `master` merge は `Done` の境界として扱うため、release PR に対象 issue の `Fixes MOM-<番号>` をもう一度列挙する。commit message の magic word に issue lifecycle を依存させない。release PR を開いた時点で既存 status を後退させず、複数 PR に紐づく issue は最後の対象 PR が merge されるまで完了扱いにしない。
 
-release PR の `## Release notes` は利用者向けの変更だけを記載する。通常 PR では `N/A` でよいが、release PR の空欄や placeholder は CI で拒否する。secret や private operations detail を含めない。
+release PR は含まれる PR を列挙し、`## Release notes` に利用者向けの変更を記載する。通常 PR の Release notes は `N/A` でよいが、release PR の空欄や placeholder は CI で拒否する。本文と公開 release note の公開範囲は `AGENTS.md` に従う。

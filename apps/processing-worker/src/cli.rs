@@ -22,7 +22,7 @@ use crate::{
     process::{ProbeOutcome, allocate_and_touch},
     series_analysis::{
         config::AnalysisActivationConfig,
-        release::{PromotionRequest, PromotionTrigger},
+        release::{MaintenanceOperation, PromotionRequest, PromotionTrigger},
     },
 };
 use tracing::{error, info};
@@ -62,6 +62,17 @@ enum Command {
         operation_key: String,
         #[arg(long)]
         apply: bool,
+    },
+    /// Inspect or reconcile the deployed analysis generation. Preview by default.
+    ReleaseReconcile {
+        #[arg(long, value_enum, default_value = "auto")]
+        operation: MaintenanceOperation,
+        #[arg(long)]
+        release_id: String,
+        #[arg(long)]
+        apply: bool,
+        #[arg(long)]
+        expected_plan: Option<String>,
     },
     ShadowEndurance {
         #[arg(long)]
@@ -352,6 +363,7 @@ pub async fn entrypoint() -> ExitCode {
         Command::Worker
         | Command::ReleaseAudit { .. }
         | Command::ReleasePromote { .. }
+        | Command::ReleaseReconcile { .. }
         | Command::ShadowEndurance { .. }
         | Command::ProbeCgroupLimit { .. }
         | Command::ProbeOcrChildLifecycle { .. }
@@ -388,6 +400,29 @@ async fn run(command: Command) -> Result<(), String> {
             operation_key,
             apply,
         } => release_promote(trigger, &operation_key, apply).await,
+        Command::ReleaseReconcile {
+            operation,
+            release_id,
+            apply,
+            expected_plan,
+        } => {
+            let report = crate::series_analysis::release::reconcile(
+                operation,
+                &release_id,
+                apply,
+                expected_plan.as_deref(),
+            )
+            .await
+            .map_err(|error| error.to_string())?;
+            write_json_line(&report)?;
+            if report.status == "attention_required" {
+                Err(String::from(
+                    "analysis maintenance requires attention; inspect the operation report",
+                ))
+            } else {
+                Ok(())
+            }
+        }
         Command::ShadowEndurance {
             game_title_id,
             runs,

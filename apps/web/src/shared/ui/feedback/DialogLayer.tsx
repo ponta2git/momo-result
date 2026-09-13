@@ -2,7 +2,7 @@ import { AlertDialog as BaseAlertDialog } from "@base-ui/react/alert-dialog";
 import { Dialog as BaseDialog } from "@base-ui/react/dialog";
 import { X } from "lucide-react";
 import { m, useIsPresent } from "motion/react";
-import type { ReactNode } from "react";
+import type { ComponentProps, ReactNode } from "react";
 
 import { Button } from "@/shared/ui/actions/Button";
 import { IconButton } from "@/shared/ui/actions/IconButton";
@@ -144,6 +144,7 @@ export function DialogLayer({
 }
 
 export type AlertDialogLayerProps = SharedLayerProps & {
+  finalFocus?: ComponentProps<typeof BaseAlertDialog.Popup>["finalFocus"];
   cancelLabel: ReactNode;
   confirmDisabled: boolean;
   confirmLabel: ReactNode;
@@ -163,6 +164,7 @@ export function AlertDialogLayer({
   confirmLabel,
   description,
   error,
+  finalFocus,
   onConfirm,
   pending,
   popupClassName,
@@ -195,6 +197,7 @@ export function AlertDialogLayer({
       />
       <BaseAlertDialog.Popup
         {...exitSnapshotProps}
+        finalFocus={finalFocus}
         className={cn(dialogPopupClassName, !isPresent && "pointer-events-none", popupClassName)}
         data-exit-snapshot={isPresent ? undefined : ""}
         render={

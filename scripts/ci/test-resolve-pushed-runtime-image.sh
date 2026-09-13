@@ -45,4 +45,13 @@ if PATH="${fake_bin}:${PATH}" FAKE_REPO_DIGESTS="[\"${registry_ref}\"]" \
   exit 1
 fi
 
-echo "Pushed runtime image resolution tests passed."
+worker_ref="registry.fly.io/momo-result-analysis@sha256:${digest_a}"
+actual="$(PATH="${fake_bin}:${PATH}" FAKE_REPO_DIGESTS="[\"${worker_ref}\"]" \
+  "${resolver}" "registry.fly.io/momo-result-analysis:${commit}-123456-2")"
+[[ "${actual}" == "${worker_ref}" ]]
+if PATH="${fake_bin}:${PATH}" FAKE_REPO_DIGESTS="[\"${registry_ref}\"]" \
+  "${resolver}" "registry.fly.io/momo-result-analysis:${commit}-123456-2" > /dev/null 2>&1; then
+  echo "A runtime digest must not identify a worker candidate." >&2
+  exit 1
+fi
+echo "Pushed candidate image resolution tests passed."

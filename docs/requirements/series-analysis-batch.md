@@ -180,6 +180,8 @@ OCR同居を有効化する場合は、共通parent-child境界、単一slot、�
 - validation contractを導入・更新する場合は、published rowのimmutabilityを先に適用し、exact contractをadvertiseするworker世代だけで再計算する。Rustで検証済みの新規publicationまたは明示的な再検証だけをattestedとし、既存artifactをSQLだけで盲目的にattestしない。最初のattested publicationで未証明previous pointerを外し、current / previousの双方を監査してからexact contractを要求するreaderへ切り替える。
 - validation contractのreader-first配置は、validator初期化完了後にだけexact capabilityをadvertiseする。移行中readerはcontractなしartifactを従来のfull semantic validation付きで読み、contractなしdesiredに対するexact artifactも互換なcurrentとして扱う。exact desiredはcontractなしartifactをcurrentとして扱わない。
 - release promotionはfreshな全reader / workerのcapability集合をtransaction内で凍結して完全一致を確認し、release singleton、既存titleのdesired tuple、campaignを原子的に進める。登録作品0件のinitial backfillもtarget 0のterminal operationとして確定し、その後の新規作品はsingletonを継承する。
+- 自動保守は稼働世代と singleton の exact tuple 差分を昇格対象とし、既知の過去世代への自動復帰を拒否する。差分がない場合は初回未処理の必要性と既存 campaign の進捗を確認する。preview と apply の間で対象作品・input revision・世代が変われば適用しない。自動・手動の再実行は同じ durable operation を参照する。
+- release 完了は受理 snapshot の target が公開済みまたは作品削除で終端したことと整合性監査で判定する。後続の通常入力更新による pending work は別に扱い、全 queue の停止を通常 release の完了条件にしない。failed target や構造的不整合は要対応とする。
 - promotion後はattested workerで再計算し、current / previous双方のexact contract、pending work、failed outboxをrelease auditで確認する。監査完了後にだけreaderのlegacy semantic validatorとcontractなしread経路を除く。内部の`validation_contract_update` triggerは既存HTTP vocabularyの`artifact_schema_update`へprojectionし、storage rolloutだけでpublic wire enumを増やさない。
 - 計画保守で全reader / workerを停止し、公開再開前に全作品を再計算できる場合に限り、単一世代の一括切替を選べる。この場合は旧・新schemaの同時decodeを要求せず、停止確認、復元可能なDB snapshot、旧immutable release、全runtimeの新version一致、全作品の再計算完了を再開条件にする。
 - 新HTTP wireはOpenAPIと生成型を同時更新する。旧clientは明示的なreload-requiredへ縮退し、旧同期engineへfallbackしない。

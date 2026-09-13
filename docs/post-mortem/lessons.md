@@ -1,29 +1,23 @@
 # Postmortem Lessons
 
-この文書は、作業完了前に見落としやすい重要事項だけを反芻するための最終チェックリストである。
-実装規約・設計規約・契約仕様の正本ではない。
-public repository に置くため、具体的な障害位置、再現手順、endpoint / component 名、時系列詳細は含めない。
-個別の詳細記録は `private/post-mortem/` に置き、ユーザーが明示した場合だけ読む。
-
-恒久ルールは次へ置く。
-
-- 業務要件・CSV/TSV: `docs/requirements/base.md`
-- 技術構成・API / Web / Processing Worker runtime実装規約: `docs/architecture.md`
-- ドメイン用語・状態遷移: `docs/domain-rule.md`
-- DB共有・migration: `docs/db-rule.md`
-- Redis Streams / OCR queue 契約: `docs/redis-streams-ocr-contract.md`
-- evidence の選択・oracle: `docs/test-rule.md`
-- test size・parallelism・coverage・CI artifact: `docs/test-architecture.md`
-- quality gate・検証コマンド: `docs/dev-rule.md`
+変更に該当する失敗の見落としを、設計や検証を選ぶ時に思い出すためのカード集である。恒久ルールの置き場は [文書索引](../README.md)、公開範囲と個別記録の扱いは [Public Postmortem Policy](README.md) を参照する。
 
 ## 使い方
 
-1. 変更対象に一致するカードだけ読む。
-2. 各カードの「確認」を、作業計画・実装・テスト選択のいずれかへ反映する。
-3. 判断に迷う場合は「参照先」の正本文書を読む。
-4. 検証できない項目が残る場合は、最終報告で未検証として明記する。
+下表から該当カードの条件・確認事項を読む。確認事項は見落としを問い直す観点であり、すべてを独立した test や gate にするものではない。契約は参照先の正本、証拠の採否は `docs/test-rule.md`、検証の終了は `docs/dev-rule.md` に従う。既に反映した確認を完了直前に繰り返したり、非該当理由を全カードについて列挙したりする必要はない。
 
-非該当カードは適用せず、一件ずつ非該当理由を列挙しない。
+| 変更・判断 | カード |
+| --- | --- |
+| DB query / transaction / 接続 | L1 |
+| 品質証拠の選択 / test double / oracle | L2、L5 |
+| Web cache / form / request 変換 / React API | L3、L4、L6 |
+| 契約や意味論の記述 | L7 |
+| 分析処理 / artifact / resource / algorithm version | L8 |
+| CI / release 来歴 / 外部 wire | L9 |
+| production OS / native dependency / adapter / E2E retry | L10 |
+| 共有 credential の rotation | L11 |
+| 動的な識別子と production asset | L12 |
+| momo-db の schema / migration / Drizzle / migration state | L13 |
 
 ## 教訓カード
 

@@ -405,6 +405,11 @@ if [[ "${artifact_shape}" != "2|2|4|4|64|4|1|1|2" ]]; then
   fail_with_worker_log "Unexpected published artifact shape: ${artifact_shape}"
 fi
 
+maintenance_first_complete="$(run_release_command release-reconcile \
+  --operation auto --release-id 0123456789abcdef0123456789abcdef01234567)"
+jq -e '.status == "complete" and .targetCount == 2 and .completedCount == 2 and .failedCount == 0' \
+  <<< "${maintenance_first_complete}" > /dev/null
+
 first_job="$(psql_ci -At -c "SELECT id FROM series_analysis_jobs ORDER BY requested_at, id LIMIT 1;")"
 attempts_before="$(psql_ci -At -c "SELECT attempt_count FROM series_analysis_jobs WHERE id = '${first_job}';")"
 redis_ci XADD "${redis_stream}" '*' schemaVersion 1 jobId "${first_job}" >/dev/null
@@ -642,6 +647,10 @@ if grep -Eq '(postgres|redis)://[^" ]+' "${worker_log}"; then
   fail_with_worker_log "Worker log exposed a database or Redis connection URL."
 fi
 
+maintenance_complete="$(run_release_command release-reconcile \
+  --operation auto --release-id 0123456789abcdef0123456789abcdef01234567)"
+jq -e '.status == "complete" and .targetCount == 4 and .completedCount == 4 and .failedCount == 0' \
+  <<< "${maintenance_complete}" > /dev/null
 run_release_command release-audit --require-current --require-quiescent >/dev/null
 
 unsupported_job_id="ci-analysis-job-unsupported-version"

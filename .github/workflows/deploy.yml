@@ -53,6 +53,11 @@ jobs:
     if: github.event_name != 'pull_request' && needs.scope.outputs.runtime == 'true'
     uses: ./.github/workflows/public-safety.yml
 
+  workflow-lint:
+    needs: scope
+    if: github.event_name != 'pull_request'
+    uses: ./.github/workflows/workflow-lint.yml
+
   api:
     needs: scope
     if: github.event_name != 'pull_request' && needs.scope.outputs.runtime == 'true'
@@ -64,6 +69,12 @@ jobs:
     needs: scope
     if: github.event_name != 'pull_request' && needs.scope.outputs.runtime == 'true'
     uses: ./.github/workflows/web.yml
+
+  analysis-candidate:
+    if: github.event_name != 'pull_request'
+    uses: ./.github/workflows/processing-worker.yml
+    with:
+      package_image: true
 
   dockerfile-lint:
     name: Lint Dockerfiles
@@ -360,6 +371,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 3
     needs:
+      - analysis-candidate
+      - workflow-lint
       - public-safety
       - api
       - web
@@ -384,15 +397,28 @@ jobs:
             "${RUNTIME_CANDIDATE_ARTIFACT_NAME}" "${RUNTIME_CANDIDATE_ARTIFACT_ID}" \
             "${RUNTIME_CANDIDATE_ARTIFACT_DIGEST}" "${IMAGE_REF}"
 
+      - name: Validate exact worker producer selection
+        env:
+          METADATA_ID: ${{ needs.analysis-candidate.outputs.metadata_artifact_id }}
+          METADATA_NAME: ${{ needs.analysis-candidate.outputs.metadata_artifact_name }}
+          METADATA_DIGEST: ${{ needs.analysis-candidate.outputs.metadata_artifact_digest }}
+          PRODUCER_ATTEMPT: ${{ needs.analysis-candidate.outputs.producer_run_attempt }}
+        run: |
+          [[ "${METADATA_ID}" =~ ^[1-9][0-9]*$ ]] || exit 1
+          [[ "${PRODUCER_ATTEMPT}" =~ ^[1-9][0-9]*$ ]] || exit 1
+          test "${METADATA_NAME}" = "analysis-candidate-metadata-${GITHUB_RUN_ID}-${PRODUCER_ATTEMPT}"
+          scripts/ci/canonicalize-artifact-digest.sh "${METADATA_DIGEST}" > /dev/null
+
       - name: Confirm release gates
         run: echo "All release gates passed for ${IMAGE_REF}."
 
   deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 90
     needs:
       - release-ready
       - runtime-image
+      - analysis-candidate
     if: github.event_name != 'pull_request'
     concurrency:
       group: fly-deploy-production
@@ -424,6 +450,37 @@ jobs:
         uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1
         with:
           version: 0.4.79
+
+      - name: Download exact worker producer metadata
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          artifact-ids: ${{ needs.analysis-candidate.outputs.metadata_artifact_id }}
+          path: analysis-candidate-metadata
+
+      - name: Validate worker candidate
+        id: analysis-candidate
+        env:
+          PRODUCER_ATTEMPT: ${{ needs.analysis-candidate.outputs.producer_run_attempt }}
+        run: |
+          candidate=analysis-candidate-metadata/candidate.json
+          scripts/ci/validate-analysis-candidate.sh \
+            "${candidate}" "${GITHUB_RUN_ID}" "${PRODUCER_ATTEMPT}" "${GITHUB_SHA}" \
+            >> "${GITHUB_OUTPUT}"
+          expected_config="$(jq -r '.configSha256' "${candidate}")"
+          actual_config="$(sha256sum fly.analysis.toml | cut -d ' ' -f 1)"
+          test "${expected_config}" = "${actual_config}"
+
+      - name: Download verified worker image
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          artifact-ids: ${{ steps.analysis-candidate.outputs.image_artifact_id }}
+          path: analysis-candidate-image
+
+      - name: Load verified worker image
+        env:
+          CANDIDATE_IMAGE: ${{ steps.analysis-candidate.outputs.image_ref }}
+          CANDIDATE_TAR_SHA: ${{ steps.analysis-candidate.outputs.tar_sha256 }}
+        run: scripts/ci/load-analysis-candidate.sh analysis-candidate-image "${CANDIDATE_IMAGE}" "${CANDIDATE_TAR_SHA}"
 
       - name: Authenticate Docker to Fly registry
         env:
@@ -539,8 +596,10 @@ jobs:
       - name: Reject a stale runtime release
         run: |
           GIT_TERMINAL_PROMPT=0 git fetch --no-tags origin refs/heads/master
-          scripts/ci/validate-current-runtime-release.sh \
-            "${GITHUB_SHA}" "$(git rev-parse FETCH_HEAD)"
+          test "${GITHUB_SHA}" = "$(git rev-parse FETCH_HEAD)" || {
+            echo "A newer release superseded this candidate; use its deploy run." >&2
+            exit 1
+          }
 
       - name: Deploy to Fly.io
         env:
@@ -587,5 +646,34 @@ jobs:
         with:
           name: runtime-production-${{ github.run_id }}-${{ github.run_attempt }}
           path: runtime-production-evidence/
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Deploy and verify Processing Worker
+        env:
+          ANALYSIS_IMAGE_REF: ${{ steps.analysis-candidate.outputs.image_ref }}
+          ANALYSIS_RELEASE_SHA: ${{ github.sha }}
+          FLY_API_TOKEN: ${{ secrets.ANALYSIS_FLY_API_TOKEN }}
+        run: scripts/ci/deploy-processing-worker.sh
+        timeout-minutes: 25
+
+      - name: Reconcile analysis promotion and backfill
+        env:
+          FLY_API_TOKEN: ${{ secrets.ANALYSIS_FLY_API_TOKEN }}
+        run: scripts/ops/analysis-maintain.sh auto
+        timeout-minutes: 35
+
+      - name: Summarize maintenance and required follow-up
+        if: always()
+        env:
+          OPERATION_RESULT: ${{ job.status }}
+        run: scripts/ci/analysis-maintenance-summary.sh
+
+      - name: Upload analysis release evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: analysis-production-${{ github.run_id }}-${{ github.run_attempt }}
+          path: analysis-production-artifact/
           if-no-files-found: ignore
           retention-days: 7

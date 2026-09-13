@@ -32,6 +32,15 @@ function renderPage() {
   );
 }
 
+function expectSaved(ocr: "ON" | "OFF", analysis: "ON" | "OFF") {
+  expect(
+    within(screen.getByLabelText("OCR完了の保存済み設定")).getByRole("definition"),
+  ).toHaveTextContent(ocr);
+  expect(
+    within(screen.getByLabelText("分析完了の保存済み設定")).getByRole("definition"),
+  ).toHaveTextContent(analysis);
+}
+
 function problem(status: number, code: string) {
   return HttpResponse.json(
     { type: "about:blank", title: "Failed", detail: "private error", status, code },
@@ -108,7 +117,14 @@ describe("NotificationSettingsPage", () => {
     expect(submissions).toHaveLength(0);
     await user.click(screen.getByRole("button", { name: "保存" }));
     const dialog = screen.getByRole("alertdialog");
+    const summary = within(dialog).getByLabelText("保存する通知設定");
+    expect(
+      within(summary)
+        .getAllByRole("definition")
+        .map((item) => item.textContent),
+    ).toEqual(["OFF", "OFF"]);
     await user.click(within(dialog).getByRole("button", { name: "キャンセル" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "保存" })).toHaveFocus());
     expect(submissions).toHaveLength(0);
     expect(screen.getByRole("checkbox", { name: "OCR完了" })).not.toBeChecked();
     await user.click(screen.getByRole("button", { name: "保存" }));
@@ -127,8 +143,32 @@ describe("NotificationSettingsPage", () => {
     });
     await act(async () => committed.resolve());
     expect(await screen.findByText("通知設定を保存しました。")).toBeInTheDocument();
-    expect(screen.getAllByText("保存済み：OFF")).toHaveLength(2);
+    expectSaved("OFF", "OFF");
+    await waitFor(() =>
+      expect(screen.getByRole("heading", { name: "通知する種類" })).toHaveFocus(),
+    );
     expect(screen.getByRole("button", { name: "保存" })).toBeDisabled();
+  });
+
+  it("distinguishes saved values from edits and discards both choices without saving", async () => {
+    renderPage();
+    await user.click(await screen.findByRole("checkbox", { name: "OCR完了" }));
+    expectSaved("ON", "ON");
+    await user.click(screen.getByRole("button", { name: "保存" }));
+    const dialog = screen.getByRole("alertdialog");
+    const summary = within(dialog).getByLabelText("保存する通知設定");
+    expect(
+      within(summary)
+        .getAllByRole("definition")
+        .map((item) => item.textContent),
+    ).toEqual(["OFF", "ON"]);
+    await user.click(within(dialog).getByRole("button", { name: "キャンセル" }));
+    await user.click(screen.getByRole("checkbox", { name: "分析完了" }));
+    await user.click(screen.getByRole("button", { name: "変更を破棄" }));
+    expect(screen.getByRole("checkbox", { name: "OCR完了" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "分析完了" })).toBeChecked();
+    expect(screen.getByRole("button", { name: "保存" })).toBeDisabled();
+    expect(screen.queryByText("未保存の変更があります")).not.toBeInTheDocument();
   });
 
   it("keeps controls unavailable on initial failure and can reload", async () => {
@@ -156,7 +196,7 @@ describe("NotificationSettingsPage", () => {
     await confirmOff();
     expect(await screen.findByText(/保存できませんでした/u)).toBeInTheDocument();
     expect(screen.getByRole("checkbox", { name: "OCR完了" })).not.toBeChecked();
-    expect(screen.getAllByText("保存済み：ON")).toHaveLength(2);
+    expectSaved("ON", "ON");
     await user.click(screen.getByRole("button", { name: "保存" }));
     await confirmOff();
     expect(await screen.findByText("通知設定を保存しました。")).toBeInTheDocument();
@@ -177,9 +217,9 @@ describe("NotificationSettingsPage", () => {
     await confirmOff();
     expect(await screen.findByText(/保存結果を確認できません/u)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "保存" })).toBeDisabled();
-    expect(screen.getAllByText("保存済み：ON")).toHaveLength(2);
+    expectSaved("ON", "ON");
     await user.click(screen.getByRole("button", { name: "現在の設定を読み込んで選び直す" }));
-    expect(await screen.findByText("保存済み：OFF")).toBeInTheDocument();
+    await waitFor(() => expectSaved("OFF", "ON"));
     expect(screen.getByRole("checkbox", { name: "OCR完了" })).not.toBeChecked();
     expect(screen.queryByText("未保存の変更があります")).not.toBeInTheDocument();
   });
@@ -226,7 +266,7 @@ describe("NotificationSettingsPage", () => {
     await confirmOff();
     expect(await screen.findByText("通知設定を保存しました。")).toBeInTheDocument();
     expect(await screen.findByText("現在の設定を確認できません")).toBeInTheDocument();
-    expect(screen.getByText("保存済み：OFF")).toBeInTheDocument();
+    expectSaved("OFF", "ON");
     expect(screen.queryByText(/保存できませんでした/u)).not.toBeInTheDocument();
   });
 });

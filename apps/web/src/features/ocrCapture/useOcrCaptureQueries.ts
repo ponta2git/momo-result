@@ -9,6 +9,7 @@ import { memberAliasesQueryOptions } from "@/shared/api/queryOptions";
 import { authQueryOptions } from "@/shared/auth/authQueries";
 import { useDevUser } from "@/shared/auth/useDevUser";
 import { buildMemberAliasDirectory } from "@/shared/domain/memberDirectory";
+import { useRetryNotice } from "@/shared/ui/feedback/useRetryNotice";
 
 type AuthMe = Awaited<ReturnType<typeof getAuthMe>>;
 
@@ -53,6 +54,21 @@ export function useOcrCaptureQueries(): OcrCaptureQueries {
     [memberAliasesQuery.data],
   );
 
+  const aliasErrorTitle = useRetryNotice(
+    shouldShowQueryError(memberAliasesQuery)
+      ? normalizeUnknownApiError(memberAliasesQuery.error).title
+      : undefined,
+    memberAliasesQuery.isFetching,
+    accountId ?? "",
+  );
+  const aliasErrorDetail = useRetryNotice(
+    shouldShowQueryError(memberAliasesQuery)
+      ? normalizeUnknownApiError(memberAliasesQuery.error).detail
+      : undefined,
+    memberAliasesQuery.isFetching,
+    accountId ?? "",
+  );
+
   return {
     auth: {
       accountId,
@@ -65,8 +81,12 @@ export function useOcrCaptureQueries(): OcrCaptureQueries {
     memberAliases: {
       directory: memberAliasDirectory,
       feedback: {
-        error: shouldShowQueryError(memberAliasesQuery)
-          ? normalizeUnknownApiError(memberAliasesQuery.error)
+        error: aliasErrorTitle
+          ? {
+              ...normalizeUnknownApiError(memberAliasesQuery.error),
+              title: aliasErrorTitle,
+              detail: aliasErrorDetail ?? "",
+            }
           : undefined,
         refresh: () => void memberAliasesQuery.refetch(),
         refreshing: memberAliasesQuery.isFetching,

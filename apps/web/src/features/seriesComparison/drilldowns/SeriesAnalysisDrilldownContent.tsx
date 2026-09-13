@@ -45,7 +45,13 @@ export function SeriesAnalysisDrilldownContent({
     return (
       <Notice
         action={
-          <Button size="sm" variant="secondary" onClick={resource.retry}>
+          <Button
+            pending={resource.pending}
+            pendingLabel="再読み込み中"
+            size="sm"
+            variant="secondary"
+            onClick={resource.retry}
+          >
             再読み込み
           </Button>
         }

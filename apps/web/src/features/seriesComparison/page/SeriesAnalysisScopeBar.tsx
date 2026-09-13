@@ -67,11 +67,7 @@ export function SeriesAnalysisScopeBar({
   const selectedSeries = seriesOptions.find((option) => option.value === seriesValue);
 
   return (
-    <section
-      aria-busy={refreshing || undefined}
-      aria-label="比較条件"
-      className="grid min-w-0 gap-2"
-    >
+    <section aria-label="比較条件" className="grid min-w-0 gap-2">
       <Disclosure
         keepMounted
         ariaLabel="比較対象を変更"

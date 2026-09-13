@@ -11,6 +11,7 @@ import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import { notificationSettingsKeys } from "@/shared/api/queryKeys";
 import { notificationSettingsQueryOptions } from "@/shared/api/queryOptions";
 import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
+import { useRetryNotice } from "@/shared/ui/feedback/useRetryNotice";
 
 type Kind = keyof NotificationSettings;
 type Values = Record<Kind, boolean>;
@@ -90,9 +91,10 @@ export function useNotificationSettingsPageModel() {
   });
 
   const confirmed = query.data;
+  const failed = useRetryNotice(query.isError, query.isFetching);
   const resource: SettingsResource = confirmed
     ? { status: "ready", confirmed, values: draft?.values ?? valuesOf(confirmed) }
-    : { status: query.isError ? "failed" : "loading" };
+    : { status: failed ? "failed" : "loading" };
   const dirty = Boolean(
     draft &&
     (draft.values.ocrCompleted !== draft.base.ocrCompleted.enabled ||
@@ -156,7 +158,7 @@ export function useNotificationSettingsPageModel() {
     change,
     submit,
     pending: mutation.isPending,
-    stale: confirmed !== undefined && query.isError,
+    stale: confirmed !== undefined && failed,
     needsReload,
     refreshing: query.isFetching,
     reload: () => {

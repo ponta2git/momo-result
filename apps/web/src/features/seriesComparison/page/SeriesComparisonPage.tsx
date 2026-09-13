@@ -1,5 +1,5 @@
 import { ArrowLeft, BarChart3 } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 import { matchesSeriesAnalysisScope } from "@/features/seriesComparison/model/seriesAnalysisDisplayBundle";
 import {
@@ -34,6 +34,38 @@ function seriesReturnAction(returnTo: string | undefined) {
 export function SeriesComparisonPage() {
   const page = useSeriesComparisonPageModel();
   const { filters, focus, options, resource, status } = page;
+  const updating =
+    options.refreshing ||
+    status.refreshing ||
+    resource.refreshing ||
+    resource.loading ||
+    resource.shielded ||
+    focus.shielded ||
+    focus.loading;
+  const [requestedRetryOwner, setRequestedRetryOwner] = useState<
+    "options" | "status" | "resource"
+  >();
+  const defaultRetryOwner = options.hasError
+    ? "options"
+    : status.hasError || (!status.loading && !status.data?.currentArtifact)
+      ? "status"
+      : resource.hasError && !resource.data
+        ? "resource"
+        : undefined;
+
+  const requestedRetryStillVisible =
+    requestedRetryOwner === "options"
+      ? options.hasError
+      : requestedRetryOwner === "status"
+        ? status.hasError || (!status.loading && !status.data?.currentArtifact)
+        : requestedRetryOwner === "resource"
+          ? resource.hasError && !resource.data
+          : false;
+  const retryOwner = requestedRetryStillVisible ? requestedRetryOwner : defaultRetryOwner;
+  const retry = (owner: "options" | "status" | "resource") => {
+    setRequestedRetryOwner(owner);
+    page.actions.refresh();
+  };
 
   useEffect(() => {
     if (page.clientUpgradeRequired || filters.seriesOptions.length === 0) return;
@@ -82,11 +114,11 @@ export function SeriesComparisonPage() {
           <Notice
             action={
               <Button
-                pending={options.refreshing}
+                pending={updating && retryOwner === "options"}
                 pendingLabel="再読み込み中"
                 size="sm"
                 variant={options.hasVisibleData ? "secondary" : "primary"}
-                onClick={page.actions.refresh}
+                onClick={() => retry("options")}
               >
                 比較対象を再読み込み
               </Button>
@@ -113,10 +145,14 @@ export function SeriesComparisonPage() {
         ) : filters.seriesOptions.length > 0 ? (
           <>
             <SeriesAnalysisScopeBar
-              canRefresh={resource.canRefresh || Boolean(filters.state.gameTitleId)}
+              canRefresh={
+                (resource.canRefresh || Boolean(filters.state.gameTitleId)) &&
+                !updating &&
+                !retryOwner
+              }
               mapOptions={filters.mapOptions}
               mapValue={filters.state.mapMasterId ?? ""}
-              refreshing={resource.refreshing || status.refreshing}
+              refreshing={updating && !retryOwner && Boolean(resource.data)}
               response={
                 matchesSeriesAnalysisScope(resource.data, filters.state) ? resource.data : undefined
               }
@@ -133,18 +169,29 @@ export function SeriesComparisonPage() {
               confirmedMatchCount={filters.confirmedMatchCount}
               hasError={status.hasError}
               loading={status.loading}
-              refreshing={resource.refreshing || status.refreshing}
+              refreshing={updating && retryOwner === "status"}
               status={status.data}
-              onRefresh={page.actions.refresh}
+              onRefresh={() => retry("status")}
             />
-            {status.loading && !status.data ? <ComparisonSkeleton /> : null}
+            {(status.loading && !status.data) ||
+            (resource.loading &&
+              !resource.data &&
+              !resource.hasError &&
+              status.data?.currentArtifact) ? (
+              <ComparisonSkeleton />
+            ) : null}
             {!status.loading &&
             status.data?.currentArtifact &&
             resource.hasError &&
             !resource.data ? (
               <Notice
                 action={
-                  <Button size="sm" onClick={page.actions.refresh}>
+                  <Button
+                    pending={updating && retryOwner === "resource"}
+                    pendingLabel="再読み込み中"
+                    size="sm"
+                    onClick={() => retry("resource")}
+                  >
                     戦績データを再読み込み
                   </Button>
                 }
@@ -173,6 +220,7 @@ export function SeriesComparisonPage() {
                 <StaleShield
                   active={resource.loading || resource.shielded || focus.shielded}
                   busyLabel="比較条件を更新中"
+                  statusPlacement="external"
                   fallback={<ComparisonSkeleton />}
                   strategy="preserve-inert"
                 >

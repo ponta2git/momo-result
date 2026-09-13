@@ -5,10 +5,11 @@ import type { SeriesAnalysisDrilldownSelection } from "@/features/seriesComparis
 import { isAnalysisArtifactExpired } from "@/shared/api/problemDetails";
 import type { SeriesAnalysisDrilldownV3, SeriesAnalysisQuery } from "@/shared/api/seriesAnalysis";
 import { seriesAnalysisDrilldownQueryOptions } from "@/shared/api/seriesAnalysisQueryOptions";
+import { useRetryNotice } from "@/shared/ui/feedback/useRetryNotice";
 
 export type SeriesAnalysisDrilldownResource =
   | { kind: "loading" }
-  | { kind: "failed"; retry: () => void }
+  | { kind: "failed"; pending: boolean; retry: () => void }
   | { data: SeriesAnalysisDrilldownV3; kind: "ready" };
 
 /** Owns drilldown query lifecycle and exposes only display-relevant resource states. */
@@ -27,7 +28,13 @@ export function useSeriesAnalysisDrilldown({
     if (isAnalysisArtifactExpired(query.error)) onArtifactExpired();
   }, [onArtifactExpired, query.error]);
 
-  if (query.isPending) return { kind: "loading" };
-  if (query.isError) return { kind: "failed", retry: () => void query.refetch() };
+  const failed = useRetryNotice(
+    query.isError,
+    query.isFetching,
+    JSON.stringify({ ...baseQuery, ...selection }),
+  );
+  if (failed)
+    return { kind: "failed", pending: query.isFetching, retry: () => void query.refetch() };
+  if (query.isPending || !query.data) return { kind: "loading" };
   return { data: query.data, kind: "ready" };
 }

@@ -24,6 +24,7 @@ import {
   seasonMastersQueryOptions,
 } from "@/shared/api/queryOptions";
 import { useHeldEventPickerDirectory } from "@/shared/api/useHeldEventPickerDirectory";
+import { useRetryNotice } from "@/shared/ui/feedback/useRetryNotice";
 
 type OcrSetupOptionsParams = {
   enabled: boolean;
@@ -185,7 +186,11 @@ export function useOcrSetupOptions({ enabled, onChange, value }: OcrSetupOptions
 
   return {
     gameTitles,
-    gameTitlesError: gameTitlesLoadFailed ? queryErrorMessage(gameTitlesQuery.error) : undefined,
+    gameTitlesError: useRetryNotice(
+      gameTitlesLoadFailed ? queryErrorMessage(gameTitlesQuery.error) : undefined,
+      gameTitlesQuery.isFetching,
+      String(enabled),
+    ),
     gameTitlesPlaceholder: gameTitlesPlaceholder({
       enabled,
       failed: gameTitlesLoadFailed,
@@ -193,22 +198,34 @@ export function useOcrSetupOptions({ enabled, onChange, value }: OcrSetupOptions
     }),
     heldEvents,
     heldEventPicker,
-    hasError,
-    heldEventsError: heldEventContextNotFound
-      ? "選択した開催は見つかりませんでした。"
-      : heldEventContextFailed
-        ? (queryErrorMessage(preferredHeldEventQuery.error ?? heldEventsQuery.error) ??
-          "選択した開催を読み込めません。")
-        : heldEventsLoadFailed
-          ? queryErrorMessage(heldEventsQuery.error)
-          : undefined,
+    hasError: useRetryNotice(
+      hasError,
+      refreshing,
+      `${enabled}:${value.gameTitleId}:${value.heldEventId ?? ""}`,
+    ),
+    heldEventsError: useRetryNotice(
+      heldEventContextNotFound
+        ? "選択した開催は見つかりませんでした。"
+        : heldEventContextFailed
+          ? (queryErrorMessage(preferredHeldEventQuery.error ?? heldEventsQuery.error) ??
+            "選択した開催を読み込めません。")
+          : heldEventsLoadFailed
+            ? queryErrorMessage(heldEventsQuery.error)
+            : undefined,
+      heldEventsQuery.isFetching || preferredHeldEventQuery.isFetching,
+      `${enabled}:${value.heldEventId ?? ""}`,
+    ),
     heldEventsPlaceholder: gameTitlesPlaceholder({
       enabled,
       failed: heldEventsLoadFailed,
       loading: heldEventsQuery.isLoading,
     }),
     mapMasters,
-    mapMastersError: mapMastersLoadFailed ? queryErrorMessage(mapMastersQuery.error) : undefined,
+    mapMastersError: useRetryNotice(
+      mapMastersLoadFailed ? queryErrorMessage(mapMastersQuery.error) : undefined,
+      mapMastersQuery.isFetching,
+      value.gameTitleId,
+    ),
     mapMastersPlaceholder: scopedMastersPlaceholder({
       enabled,
       failed: mapMastersLoadFailed,
@@ -216,9 +233,11 @@ export function useOcrSetupOptions({ enabled, onChange, value }: OcrSetupOptions
       loading: mapMastersQuery.isLoading,
     }),
     seasonMasters,
-    seasonMastersError: seasonMastersLoadFailed
-      ? queryErrorMessage(seasonMastersQuery.error)
-      : undefined,
+    seasonMastersError: useRetryNotice(
+      seasonMastersLoadFailed ? queryErrorMessage(seasonMastersQuery.error) : undefined,
+      seasonMastersQuery.isFetching,
+      value.gameTitleId,
+    ),
     seasonMastersPlaceholder: scopedMastersPlaceholder({
       enabled,
       failed: seasonMastersLoadFailed,

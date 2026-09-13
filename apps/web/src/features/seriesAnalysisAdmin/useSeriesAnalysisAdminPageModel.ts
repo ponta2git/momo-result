@@ -12,6 +12,7 @@ import {
 } from "@/shared/api/seriesAnalysis";
 import { seriesAnalysisAdminOverviewQueryOptions } from "@/shared/api/seriesAnalysisQueryOptions";
 import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
+import { useRetryNotice } from "@/shared/ui/feedback/useRetryNotice";
 
 type AcceptanceMessage = { detail: string; title: string };
 
@@ -95,6 +96,21 @@ export function useSeriesAnalysisAdminPageModel() {
       ? selectedTitleCandidate
       : null;
 
+  const resourceErrorTitle = useRetryNotice(
+    shouldShowQueryError(overviewQuery)
+      ? normalizeDisplayApiError(overviewQuery.error).title
+      : undefined,
+    overviewQuery.isFetching,
+    gameTitleId ?? "",
+  );
+  const resourceErrorDetail = useRetryNotice(
+    shouldShowQueryError(overviewQuery)
+      ? normalizeDisplayApiError(overviewQuery.error).detail
+      : undefined,
+    overviewQuery.isFetching,
+    gameTitleId ?? "",
+  );
+
   return {
     actions: {
       recalculateAll: () => allMutation.mutateAsync(),
@@ -117,8 +133,8 @@ export function useSeriesAnalysisAdminPageModel() {
       mutationError: mutationError
         ? normalizeDisplayApiError(mutationError, "再計算を受け付けられません")
         : undefined,
-      resourceError: shouldShowQueryError(overviewQuery)
-        ? normalizeDisplayApiError(overviewQuery.error)
+      resourceError: resourceErrorTitle
+        ? { title: resourceErrorTitle, detail: resourceErrorDetail }
         : undefined,
     },
     recalculation: {
@@ -128,8 +144,9 @@ export function useSeriesAnalysisAdminPageModel() {
     },
     resource: {
       data: overview,
-      loading: isInitialQueryLoading(overviewQuery),
-      refreshing: overviewQuery.isFetching,
+      loading: isInitialQueryLoading(overviewQuery) && !resourceErrorTitle,
+      refreshing: overviewQuery.isFetching && !titleMutation.isPending && !allMutation.isPending,
+      refreshDisabled: overviewQuery.isFetching || titleMutation.isPending || allMutation.isPending,
     },
     selection: {
       gameTitleId: selectedGameTitleId,

@@ -290,7 +290,11 @@ describe("OcrCapturePage", () => {
     const input = await screen.findByLabelText("OCRの画像をアップロード");
     await user.upload(input, new File(["image"], "assets.png", { type: "image/png" }));
 
-    expect(await screen.findByText("試合設定の選択肢を確認しています。")).toBeInTheDocument();
+    expect(
+      screen
+        .getAllByRole("status")
+        .some((status) => status.textContent === "試合設定の選択肢を確認中"),
+    ).toBe(true);
     expect(screen.getByLabelText(/シーズン/u)).toBeDisabled();
     expect(screen.getByLabelText(/マップ/u)).toBeDisabled();
     expect(screen.getByRole("button", { name: "1件で読み取りを開始" })).toBeDisabled();
@@ -299,7 +303,11 @@ describe("OcrCapturePage", () => {
     expect(await screen.findByRole("option", { name: "今シーズン" })).toBeInTheDocument();
     expect(await screen.findByRole("option", { name: "東日本編" })).toBeInTheDocument();
     await waitFor(() => {
-      expect(screen.queryByText("試合設定の選択肢を確認しています。")).not.toBeInTheDocument();
+      expect(
+        screen
+          .getAllByRole("status")
+          .some((status) => status.textContent === "試合設定の選択肢を確認中"),
+      ).toBe(false);
       expect(screen.getByRole("button", { name: "1件で読み取りを開始" })).toBeEnabled();
     });
   });

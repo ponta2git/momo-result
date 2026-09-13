@@ -1,4 +1,5 @@
 import { Activity, Play, RefreshCw, RotateCw } from "lucide-react";
+import { useState } from "react";
 
 import {
   AdminSkeleton,
@@ -20,6 +21,7 @@ import { contentText } from "@/shared/ui/typography";
 
 export function SeriesAnalysisAdminPage() {
   const page = useSeriesAnalysisAdminPageModel();
+  const [allDialogOpen, setAllDialogOpen] = useState(false);
   const { data } = page.resource;
   return (
     <PageFrame width="wide">
@@ -36,6 +38,7 @@ export function SeriesAnalysisAdminPage() {
           >
             <Button
               icon={<RefreshCw aria-hidden="true" />}
+              disabled={page.resource.refreshDisabled}
               pending={page.resource.refreshing}
               pendingLabel="状態を更新中"
               size="sm"
@@ -46,7 +49,7 @@ export function SeriesAnalysisAdminPage() {
             </Button>
           </div>
         ) : null}
-        {page.feedback.mutationError ? (
+        {page.feedback.mutationError && !allDialogOpen ? (
           <Notice tone="danger" title={page.feedback.mutationError.title}>
             {page.feedback.mutationError.detail}
           </Notice>
@@ -60,6 +63,7 @@ export function SeriesAnalysisAdminPage() {
           <Notice
             action={
               <Button
+                disabled={page.resource.refreshDisabled}
                 pending={page.resource.refreshing}
                 pendingLabel="再読み込み中"
                 size="sm"
@@ -104,6 +108,8 @@ export function SeriesAnalysisAdminPage() {
                   {page.recalculation.titleReserved ? "再計算を予約済み" : "この作品を再計算"}
                 </Button>
                 <AlertDialog
+                  open={allDialogOpen}
+                  onOpenChange={setAllDialogOpen}
                   confirmLabel="全作品を再計算"
                   description={`${data.titleOptions.length}作品を対象として予約します。実行中の作品は完了後に再計算されます。`}
                   pending={page.recalculation.allPending}

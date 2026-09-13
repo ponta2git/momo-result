@@ -152,7 +152,7 @@ describe("SeriesAnalysisScopeBar", () => {
     );
 
     const surface = screen.getByRole("region", { name: "比較条件" });
-    expect(surface).toHaveAttribute("aria-busy", "true");
+    expect(surface).not.toHaveAttribute("aria-busy");
     expect(within(surface).getByRole("button", { name: "表示を更新中" })).toBeDisabled();
     expect(within(surface).queryByRole("button", { name: /再読み込み/u })).not.toBeInTheDocument();
   });

@@ -26,13 +26,14 @@ export function NotificationSettingsPage() {
   const headingRef = useRef<HTMLHeadingElement>(null);
   const page = useNotificationSettingsPageModel();
   const resource = page.resource;
-  const editingStatus = page.refreshing
-    ? "保存済みの設定を確認しています。"
-    : page.dirty
-      ? "未保存の変更があります"
-      : page.feedback
-        ? undefined
-        : "通知の選択を変更すると保存できます。";
+  const editingStatus =
+    page.refreshing && !page.feedback && !page.stale
+      ? "保存済みの設定を確認しています。"
+      : page.dirty
+        ? "未保存の変更があります"
+        : page.feedback
+          ? undefined
+          : "通知の選択を変更すると保存できます。";
   const reloadButton = (
     <Button
       pending={page.refreshing}
@@ -137,7 +138,7 @@ export function NotificationSettingsPage() {
               <div className={actionRowClass}>
                 <Button
                   disabled={!page.dirty || page.disabled}
-                  pending={page.pending}
+                  pending={page.pending && !page.confirmation.open}
                   pendingLabel="保存中"
                   ref={saveButtonRef}
                   type="submit"

@@ -601,7 +601,7 @@ describe("MatchesListPage", () => {
 
     expect(statusFilter).toHaveValue("needs_review");
     expect(statusFilter).toBeDisabled();
-    expect(screen.getByText("一覧を更新中")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "一覧を更新中" })).toBeDisabled();
     const listRegion = screen.getByRole("region", { name: "登録済みの試合" });
     expect(listRegion.querySelector("[inert]")).not.toBeNull();
     draftActionButtons.forEach((button) => expect(button).toBeDisabled());
@@ -677,7 +677,8 @@ describe("MatchesListPage", () => {
     await user.click(screen.getByRole("button", { name: "最新情報に更新" }));
     await waitFor(() => expect(attempts).toBe(2));
 
-    expect(listRegion).toHaveAttribute("aria-busy", "true");
+    expect(screen.getByRole("button", { name: "一覧を更新中" })).toBeDisabled();
+    expect(listRegion.querySelector("[aria-busy=true]")).not.toBeNull();
     expect(listRegion.querySelector("[inert]")).toBeNull();
     expect(screen.getByLabelText("並び順")).toBeEnabled();
     expect(screen.getByLabelText("表示件数")).toBeEnabled();

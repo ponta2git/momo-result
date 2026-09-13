@@ -29,6 +29,7 @@ type MatchesFilterBarProps = {
   summaryError?: boolean | undefined;
   summaryLoading?: boolean | undefined;
   summaryMasked?: boolean | undefined;
+  summaryRetryPending?: boolean | undefined;
 };
 
 const sortOptions: Array<{ label: string; value: MatchListSort }> = [
@@ -50,6 +51,7 @@ export function MatchesFilterBar({
   summaryError = false,
   summaryLoading = false,
   summaryMasked = false,
+  summaryRetryPending = false,
 }: MatchesFilterBarProps) {
   const detailLabels = describeMatchListDetailFilters(candidates, search);
   const hasDetailFilters = detailLabels.length > 0;
@@ -96,6 +98,7 @@ export function MatchesFilterBar({
             disabled={disabled}
             loading={summaryLoading}
             masked={summaryMasked}
+            retryPending={summaryRetryPending}
             unavailable={summaryError}
             onRetry={onRetrySummary}
             onSelectStatus={(status) => patchSearch({ status })}

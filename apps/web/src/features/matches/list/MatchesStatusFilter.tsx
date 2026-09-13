@@ -13,6 +13,7 @@ type MatchesStatusFilterProps = {
   disabled?: boolean | undefined;
   loading?: boolean | undefined;
   masked?: boolean | undefined;
+  retryPending?: boolean | undefined;
   unavailable?: boolean | undefined;
   onRetry?: (() => void) | undefined;
   onSelectStatus: (status: MatchListStatusFilter) => void;
@@ -48,6 +49,7 @@ export function MatchesStatusFilter({
   disabled = false,
   loading = false,
   masked = false,
+  retryPending = false,
   unavailable = false,
   onRetry,
   onSelectStatus,
@@ -75,7 +77,13 @@ export function MatchesStatusFilter({
         >
           <p role="status">内訳の件数を取得できません。確定状況の絞り込みは利用できます。</p>
           {onRetry ? (
-            <Button size="sm" variant="quiet" onClick={onRetry}>
+            <Button
+              pending={retryPending}
+              pendingLabel="件数を再取得中"
+              size="sm"
+              variant="quiet"
+              onClick={onRetry}
+            >
               件数を再取得
             </Button>
           ) : null}

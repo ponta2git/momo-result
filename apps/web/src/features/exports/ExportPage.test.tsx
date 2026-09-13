@@ -623,7 +623,9 @@ describe("ExportPage", () => {
       const retry = screen.getByRole("button", { name: "出力候補を再取得" });
       await user.click(retry);
 
-      expect(await screen.findByText("出力対象を確認しています。")).toBeInTheDocument();
+      expect(await screen.findByRole("button", { name: "再取得中" })).toBe(retry);
+      expect(retry).toBeDisabled();
+      expect(screen.getByText("出力候補を読み込めませんでした")).toBeInTheDocument();
       expect(screen.getByRole("button", { name: downloadName })).toBeEnabled();
 
       retryGate.resolve();
@@ -890,8 +892,7 @@ describe("ExportPage", () => {
       queryKey: matchKeys.exports({ kind: "match", status: "confirmed" }),
     });
 
-    expect(await screen.findByText("出力対象を確認しています。")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "試合を変更" })).toBeDisabled();
+    await waitFor(() => expect(screen.getByRole("button", { name: "試合を変更" })).toBeDisabled());
     expect(screen.getByRole("button", { name: "この試合をCSVでダウンロード" })).toBeEnabled();
 
     refetchGate.resolve();
@@ -929,7 +930,8 @@ describe("ExportPage", () => {
     const seasonTab = screen.getByRole("tab", { name: "シーズン" });
     expect(csvTab).toHaveAttribute("aria-disabled", "true");
     expect(allScopeTab).toHaveAttribute("aria-disabled", "true");
-    expect(screen.getByText("出力ファイルを作成しています")).toBeInTheDocument();
+    expect(screen.queryByText("出力ファイルを作成しています")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "作成中…" })).toBeDisabled();
     expect(screen.queryByRole("link", { name: "試合一覧へ戻る" })).not.toBeInTheDocument();
 
     await user.click(tsvTab);
@@ -973,13 +975,15 @@ describe("ExportPage", () => {
       await vi.advanceTimersByTimeAsync(0);
     });
 
-    expect(screen.getByText("出力ファイルを作成しています")).toBeInTheDocument();
+    expect(screen.queryByText("出力ファイルを作成しています")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "作成中…" })).toBeDisabled();
     expect(screen.queryByText("通常より時間がかかっています")).not.toBeInTheDocument();
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(999);
     });
-    expect(screen.getByText("出力ファイルを作成しています")).toBeInTheDocument();
+    expect(screen.queryByText("出力ファイルを作成しています")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "作成中…" })).toBeDisabled();
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1);

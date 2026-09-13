@@ -7,6 +7,7 @@ import type {
   MatchWorkspaceMastersNavigationModel,
   MatchWorkspaceSetupSectionModel,
 } from "@/features/matches/workspace/matchWorkspacePageModelTypes";
+import { formatApiError } from "@/shared/api/problemDetails";
 import { formatMatchNoInEvent } from "@/shared/domain/matchLabels";
 import { formatDateTimeLong } from "@/shared/lib/dateTime";
 import { Button } from "@/shared/ui/actions/Button";
@@ -151,7 +152,11 @@ export function MatchSetupSection({
               {cancellation.allowed ? (
                 <AlertDialog
                   cancelLabel="キャンセル"
-                  confirmLabel={cancellation.dialog.pending ? "削除中…" : "削除する"}
+                  confirmLabel="削除する"
+                  pendingLabel="削除中…"
+                  formatError={(error) =>
+                    formatApiError(error, "確定前の記録を削除できませんでした")
+                  }
                   description="この確定前の記録を削除します。元に戻せません。"
                   open={cancellation.dialog.open}
                   pending={cancellation.dialog.pending}
@@ -172,7 +177,7 @@ export function MatchSetupSection({
                 />
               ) : null}
             </div>
-            {cancellation.error ? (
+            {cancellation.error && !cancellation.dialog.open ? (
               <Notice title={cancellation.error.title} tone="danger">
                 <p>{cancellation.error.detail}</p>
                 <p className="mt-1">{cancellation.error.nextStep}</p>

@@ -1,4 +1,4 @@
-import { AlertTriangle, CircleCheck, PencilLine } from "lucide-react";
+import { AlertTriangle, CircleCheck, Clock3, PencilLine } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { draftStatusLabels } from "@/shared/domain/draftStatus";
@@ -7,7 +7,6 @@ import { StatusBadge } from "@/shared/ui/status/StatusBadge";
 import type { StatusBadgeTone } from "@/shared/ui/status/StatusBadge";
 
 type DraftStatusPresentation = {
-  busy?: boolean;
   icon: ReactNode;
   tone: StatusBadgeTone;
 };
@@ -30,8 +29,7 @@ const draftStatusPresentation: Record<DraftStatusOrUnknown, DraftStatusPresentat
     tone: "danger",
   },
   ocr_running: {
-    busy: true,
-    icon: null,
+    icon: <Clock3 />,
     tone: "info",
   },
   unknown: {
@@ -61,7 +59,6 @@ export function DraftStatusBadge({
   return (
     <StatusBadge
       announceChanges={announceChanges}
-      busy={presentation.busy}
       hideIcon={hideIcon}
       icon={presentation.icon}
       label={label ?? draftStatusLabels[status]}

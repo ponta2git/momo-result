@@ -9,13 +9,10 @@ import { useMasterOptimisticCatalog } from "@/features/masters/useMasterOptimist
 import { useMasterResourceQueries } from "@/features/masters/useMasterResourceQueries";
 import { useMasterReturnRoute } from "@/features/masters/useMasterReturnRoute";
 import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
-import {
-  isInitialQueryLoading,
-  shouldShowBlockingQueryError,
-  shouldShowQueryError,
-} from "@/shared/api/queryErrorState";
+import { isInitialQueryLoading, shouldShowQueryError } from "@/shared/api/queryErrorState";
 import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
 import { useAuth } from "@/shared/auth/useAuth";
+import { useRetryNotice } from "@/shared/ui/feedback/useRetryNotice";
 
 export const masterTabs = [
   { id: "catalog", label: "作品・マップ・シーズン" },
@@ -71,6 +68,10 @@ export function useMastersPageModel() {
     },
     [searchParams, setSearchParams],
   );
+  const [completions, setCompletions] = useState<Record<string, string>>({});
+  const onFeedback = useCallback((kind: string, scope: string, message: string) => {
+    setCompletions((current) => ({ ...current, [`${kind}:${scope}`]: message }));
+  }, []);
   const [operationError, setOperationError] = useState<string>();
   const returnRoute = useMasterReturnRoute(auth.auth?.accountId);
 
@@ -95,6 +96,7 @@ export function useMastersPageModel() {
   const { viewModel } = optimisticCatalog;
 
   const createActions = useMasterCreateActions({
+    onFeedback,
     addOptimisticGameTitle: optimisticCatalog.addOptimisticGameTitle,
     addOptimisticMapMaster: optimisticCatalog.addOptimisticMapMaster,
     addOptimisticSeasonMaster: optimisticCatalog.addOptimisticSeasonMaster,
@@ -110,6 +112,7 @@ export function useMastersPageModel() {
   });
 
   const editCommands = useMasterEditCommands({
+    onFeedback,
     authScope,
     idempotencyKeys,
     queryClient,
@@ -124,16 +127,48 @@ export function useMastersPageModel() {
     createActions.seasonCreatePending ||
     createActions.aliasCreatePending ||
     editCommands.editPending;
-  const gameTitlesHasError = shouldShowQueryError(resourceQueries.gameTitlesQuery);
-  const incidentMastersHasError = shouldShowQueryError(resourceQueries.incidentMastersQuery);
+  const gameTitlesHasError = useRetryNotice(
+    shouldShowQueryError(resourceQueries.gameTitlesQuery),
+    resourceQueries.gameTitlesQuery.isFetching,
+    authScope,
+  );
+  const incidentMastersHasError = useRetryNotice(
+    shouldShowQueryError(resourceQueries.incidentMastersQuery),
+    resourceQueries.incidentMastersQuery.isFetching,
+    authScope,
+  );
   const mapMastersHasData = resourceQueries.mapMastersQuery.data !== undefined;
-  const mapMastersHasError = shouldShowQueryError(resourceQueries.mapMastersQuery);
-  const memberAliasesHasError = shouldShowQueryError(resourceQueries.memberAliasesQuery);
+  const mapMastersHasError = useRetryNotice(
+    shouldShowQueryError(resourceQueries.mapMastersQuery),
+    resourceQueries.mapMastersQuery.isFetching,
+    `${authScope}:${resourceQueries.selectedGameTitleId}`,
+  );
+  const memberAliasesHasError = useRetryNotice(
+    shouldShowQueryError(resourceQueries.memberAliasesQuery),
+    resourceQueries.memberAliasesQuery.isFetching,
+    authScope,
+  );
   const seasonMastersHasData = resourceQueries.seasonMastersQuery.data !== undefined;
-  const seasonMastersHasError = shouldShowQueryError(resourceQueries.seasonMastersQuery);
+  const seasonMastersHasError = useRetryNotice(
+    shouldShowQueryError(resourceQueries.seasonMastersQuery),
+    resourceQueries.seasonMastersQuery.isFetching,
+    `${authScope}:${resourceQueries.selectedGameTitleId}`,
+  );
+
+  const mapError = useRetryNotice(
+    errorMessage(resourceQueries.mapMastersQuery.error),
+    resourceQueries.mapMastersQuery.isFetching,
+    resourceQueries.selectedGameTitleId,
+  );
+  const seasonError = useRetryNotice(
+    errorMessage(resourceQueries.seasonMastersQuery.error),
+    resourceQueries.seasonMastersQuery.isFetching,
+    resourceQueries.selectedGameTitleId,
+  );
 
   return {
     aliases: {
+      completion: completions["aliases:"],
       createAction: createActions.aliasCreateAction,
       createError: createActions.aliasCreateState.error,
       createFormKey: createActions.aliasCreateState.version,
@@ -141,11 +176,12 @@ export function useMastersPageModel() {
       onDelete: editCommands.deleteMemberAlias,
       onRetry: () => void resourceQueries.memberAliasesQuery.refetch(),
       onUpdate: editCommands.updateMemberAlias,
-      refreshing: resourceQueries.memberAliasesQuery.isFetching,
+      refreshing: resourceQueries.memberAliasesQuery.isFetching && !hasPendingMutation,
       stale: memberAliasesHasError && resourceQueries.memberAliasesQuery.data !== undefined,
     },
     catalog: {
       gameTitle: {
+        completion: completions["gameTitle:"],
         create: {
           action: createActions.gameTitleCreateAction,
           error: createActions.gameTitleCreateState.error,
@@ -158,47 +194,48 @@ export function useMastersPageModel() {
         onRetry: () => void resourceQueries.gameTitlesQuery.refetch(),
         onSelect: setSelectedGameTitleId,
         onUpdate: editCommands.updateGameTitle,
-        refreshing: resourceQueries.gameTitlesQuery.isFetching,
+        refreshing: resourceQueries.gameTitlesQuery.isFetching && !hasPendingMutation,
         selectedId: viewModel.selectedGameTitleId,
         stale: gameTitlesHasError && resourceQueries.gameTitlesQuery.data !== undefined,
       },
       map: {
+        completion: completions[`map:${viewModel.selectedGameTitleId}`],
         create: {
           action: createActions.mapCreateAction,
           error: createActions.mapCreateState.error,
           formKey: createActions.mapCreateState.version,
           pending: createActions.mapCreatePending,
         },
-        error: mapMastersHasError ? errorMessage(resourceQueries.mapMastersQuery.error) : undefined,
+        error: mapMastersHasError ? mapError : undefined,
         hasData: mapMastersHasData,
         items: viewModel.selectedMapMasters,
-        loadFailed: shouldShowBlockingQueryError(resourceQueries.mapMastersQuery),
-        loading: isInitialQueryLoading(resourceQueries.mapMastersQuery),
+        loadFailed: mapMastersHasError && !mapMastersHasData,
+        loading: isInitialQueryLoading(resourceQueries.mapMastersQuery) && !mapMastersHasError,
         onDelete: editCommands.deleteMapMaster,
         onRetry: () => void resourceQueries.mapMastersQuery.refetch(),
         onUpdate: editCommands.updateMapMaster,
-        retrying: resourceQueries.mapMastersQuery.isFetching,
+        retrying: resourceQueries.mapMastersQuery.isFetching && !hasPendingMutation,
         stale: mapMastersHasError && mapMastersHasData,
       },
       scopedDisabledReason: viewModel.scopedDisabledReason,
       season: {
+        completion: completions[`season:${viewModel.selectedGameTitleId}`],
         create: {
           action: createActions.seasonCreateAction,
           error: createActions.seasonCreateState.error,
           formKey: createActions.seasonCreateState.version,
           pending: createActions.seasonCreatePending,
         },
-        error: seasonMastersHasError
-          ? errorMessage(resourceQueries.seasonMastersQuery.error)
-          : undefined,
+        error: seasonMastersHasError ? seasonError : undefined,
         hasData: seasonMastersHasData,
         items: viewModel.selectedSeasonMasters,
-        loadFailed: shouldShowBlockingQueryError(resourceQueries.seasonMastersQuery),
-        loading: isInitialQueryLoading(resourceQueries.seasonMastersQuery),
+        loadFailed: seasonMastersHasError && !seasonMastersHasData,
+        loading:
+          isInitialQueryLoading(resourceQueries.seasonMastersQuery) && !seasonMastersHasError,
         onDelete: editCommands.deleteSeasonMaster,
         onRetry: () => void resourceQueries.seasonMastersQuery.refetch(),
         onUpdate: editCommands.updateSeasonMaster,
-        retrying: resourceQueries.seasonMastersQuery.isFetching,
+        retrying: resourceQueries.seasonMastersQuery.isFetching && !hasPendingMutation,
         stale: seasonMastersHasError && seasonMastersHasData,
       },
     },

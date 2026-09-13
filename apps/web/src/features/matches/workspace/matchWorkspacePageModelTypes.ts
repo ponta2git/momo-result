@@ -8,6 +8,7 @@ import type {
   SourceImageItem,
   SourceImageKind,
 } from "@/features/matches/workspace/sourceImages/sourceImageTypes";
+import type { WorkspaceNotice } from "@/features/matches/workspace/useWorkspaceNotice";
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
 import type {
   GameTitleResponse,
@@ -110,6 +111,7 @@ export type MatchWorkspaceSubmitModel = {
 };
 
 export type MatchWorkspaceEditorModel = {
+  notice?: WorkspaceNotice | null | undefined;
   note: {
     error: boolean;
     onChange: (value: string) => void;

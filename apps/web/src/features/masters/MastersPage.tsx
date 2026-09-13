@@ -72,6 +72,7 @@ export function MastersPage() {
             <div className="mt-6">
               <MemberAliasPanel
                 aliases={page.aliases.items}
+                completion={page.aliases.completion}
                 createAction={page.aliases.createAction}
                 createError={page.aliases.createError}
                 createFormKey={page.aliases.createFormKey}

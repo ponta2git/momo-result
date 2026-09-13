@@ -170,6 +170,10 @@ export function MatchNoteSection({ match, refetchMatch }: MatchNoteSectionProps)
         </div>
       </ContentWithActions>
 
+      <p className={contentText.supporting} role="status">
+        {editor.successMessage}
+      </p>
+
       {errorMessage ? (
         <p className={fieldText.error} role="alert">
           {errorMessage}

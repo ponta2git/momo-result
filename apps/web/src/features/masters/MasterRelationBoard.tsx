@@ -6,6 +6,7 @@ import type {
   MapMasterResponse,
   SeasonMasterResponse,
 } from "@/shared/api/masters";
+import { PendingStatus } from "@/shared/ui/feedback/PendingStatus";
 
 type GameTitleListItem = GameTitleResponse & { pending?: boolean };
 type ScopedMasterListItem = (MapMasterResponse | SeasonMasterResponse) & { pending?: boolean };
@@ -18,6 +19,7 @@ type MasterCreateBinding = {
 };
 
 type GameTitleRelation = {
+  completion?: string | undefined;
   create: MasterCreateBinding;
   defaultLayoutFamily: LayoutFamily;
   items: GameTitleListItem[];
@@ -31,6 +33,7 @@ type GameTitleRelation = {
 };
 
 type ScopedMasterRelation = {
+  completion?: string | undefined;
   create: MasterCreateBinding;
   error?: string | undefined;
   hasData: boolean;
@@ -69,6 +72,7 @@ export function MasterRelationBoard({
   const mapActions = { onDelete: map.onDelete, onUpdate: map.onUpdate };
   const mapList = {
     error: map.error,
+    completion: map.completion,
     hasData: map.hasData,
     items: map.items,
     loadFailed: map.loadFailed,
@@ -80,6 +84,7 @@ export function MasterRelationBoard({
   const seasonActions = { onDelete: season.onDelete, onUpdate: season.onUpdate };
   const seasonList = {
     error: season.error,
+    completion: season.completion,
     hasData: season.hasData,
     items: season.items,
     loadFailed: season.loadFailed,
@@ -93,6 +98,7 @@ export function MasterRelationBoard({
     <section className="grid gap-6">
       <GameTitleList
         create={gameTitle.create}
+        completion={gameTitle.completion}
         defaultLayoutFamily={gameTitle.defaultLayoutFamily}
         items={gameTitle.items}
         onDelete={gameTitle.onDelete}
@@ -105,6 +111,11 @@ export function MasterRelationBoard({
       />
 
       <div>
+        <PendingStatus
+          pending={Boolean((map.loading || season.loading) && !gameTitle.create.pending)}
+        >
+          選択した作品の設定を読み込み中
+        </PendingStatus>
         <div className="grid min-w-0 gap-6 xl:grid-cols-2">
           <div className="min-w-0">
             <ScopedMasterPanel

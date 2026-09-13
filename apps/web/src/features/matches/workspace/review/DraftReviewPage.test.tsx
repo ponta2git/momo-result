@@ -486,12 +486,13 @@ describe("DraftReviewPage", () => {
     await user.click(screen.getByRole("button", { name: "確定前の記録を削除" }));
     await user.click(await screen.findByRole("button", { name: "削除する" }));
 
+    const dialog = screen.getByRole("alertdialog", { name: "確定前の記録を削除しますか？" });
+    expect(await within(dialog).findByRole("alert")).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "削除する" })).toBeEnabled();
+    await user.click(within(dialog).getByRole("button", { name: "キャンセル" }));
     expect(
       await screen.findByRole("heading", { name: "確定前の記録を削除できませんでした" }),
     ).toBeInTheDocument();
-    expect(
-      screen.queryByRole("heading", { name: "確定前の記録を削除しますか？" }),
-    ).not.toBeInTheDocument();
     const deleteFailure = screen
       .getByRole("heading", { name: "確定前の記録を削除できませんでした" })
       .closest("section");

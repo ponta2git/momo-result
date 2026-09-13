@@ -15,6 +15,7 @@ import { TextField } from "@/shared/ui/forms/TextField";
 import { contentText } from "@/shared/ui/typography";
 
 type MemberAliasPanelProps = {
+  completion?: string | undefined;
   aliases: MemberAliasResponse[];
   createAction: (formData: FormData) => void | Promise<void>;
   createError?: string | undefined;
@@ -27,6 +28,7 @@ type MemberAliasPanelProps = {
 };
 
 export function MemberAliasPanel({
+  completion,
   aliases,
   createAction,
   createError,
@@ -60,6 +62,9 @@ export function MemberAliasPanel({
         />
       </div>
 
+      <p className={contentText.supporting} role="status">
+        {completion}
+      </p>
       <form
         action={createAction}
         className="grid gap-x-4 gap-y-4 md:grid-cols-[minmax(12rem,0.35fr)_minmax(12rem,1fr)_auto] md:grid-rows-[auto_auto_auto] md:gap-y-0 md:[&>[data-field-root]]:row-span-3"

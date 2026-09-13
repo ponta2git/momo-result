@@ -47,7 +47,7 @@ export function useMatchWorkspacePageModel({
 }: MatchWorkspacePageModelParams): MatchWorkspacePageModel {
   const [searchParams] = useSearchParams();
   const contextualReturnTo = sanitizeReturnTo(searchParams.get("returnTo"));
-  const { notify } = useWorkspaceNotice();
+  const { notice, notify, notifyToast } = useWorkspaceNotice();
   const local = useMatchWorkspaceLocalState();
   const { dispatch, setValidationFocusRequest, setWorkspaceData, state } = local;
   const useSampleDrafts = mode === "review" && searchParams.get("sample") === "1";
@@ -154,7 +154,7 @@ export function useMatchWorkspacePageModel({
   const submitFlow = useMatchWorkspaceSubmitFlow({
     matchId,
     mode,
-    notify,
+    notify: notifyToast,
     onPersistedSuccess: sessionDraft.markCommitted,
     setConfirmOpen: local.setConfirmOpen,
     setOperationError: local.setOperationError,
@@ -233,6 +233,7 @@ export function useMatchWorkspacePageModel({
 
   return buildMatchWorkspacePageModel({
     draftSession: sessionDraft,
+    notice,
     form: {
       actions: formActions,
       focusRequest: local.validationFocusRequest,

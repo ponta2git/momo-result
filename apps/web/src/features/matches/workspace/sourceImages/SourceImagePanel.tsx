@@ -96,6 +96,11 @@ function SourceImagePanelContent({
         {!loading && panel.availableImageCount === 0 ? (
           <p className={cn(contentText.body, "mt-1")}>保存できる元画像がありません。</p>
         ) : null}
+        {panel.archiveDownloaded ? (
+          <p className="text-xs text-[var(--color-text-muted)]" role="status">
+            ダウンロードを開始しました
+          </p>
+        ) : null}
         {panel.archiveError ? (
           <p className="mt-1 text-sm text-[var(--color-danger)]" role="alert">
             {panel.archiveError}

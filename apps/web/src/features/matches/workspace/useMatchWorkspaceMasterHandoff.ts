@@ -6,6 +6,7 @@ import type { MatchFormValues, WorkspaceMode } from "@/features/matches/workspac
 import { useMasterHandoffRestore } from "@/features/matches/workspace/useMasterHandoffRestore";
 import { useMatchWorkspaceHandoffNavigation } from "@/features/matches/workspace/useMatchWorkspaceHandoffNavigation";
 import type { WorkspaceNoticeTone } from "@/features/matches/workspace/useWorkspaceNotice";
+import { showToast } from "@/shared/ui/feedback/Toast";
 import type { MasterHandoffPayload } from "@/shared/workflows/matchWorkspaceMasterHandoff";
 
 export type MatchWorkspaceMasterHandoffParams = {
@@ -48,9 +49,13 @@ export function useMatchWorkspaceMasterHandoff({
         },
         type: "replace",
       });
-      notify("設定管理から戻ったため、入力内容を復元しました。", "success");
+      showToast({
+        id: `handoff-restored:${handoffSessionId}:${searchParams.get("handoffId") ?? ""}`,
+        title: "設定管理から戻ったため、入力内容を復元しました。",
+        tone: "success",
+      });
     },
-    [dispatch, notify, values.matchDraftId, values.noteBody],
+    [dispatch, handoffSessionId, searchParams, values.matchDraftId, values.noteBody],
   );
   const reportRestoreFailure = useCallback(
     () => notify("設定管理から戻りましたが、入力内容を復元できませんでした。", "warning"),

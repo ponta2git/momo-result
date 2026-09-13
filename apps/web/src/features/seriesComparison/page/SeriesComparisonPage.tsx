@@ -34,6 +34,9 @@ function seriesReturnAction(returnTo: string | undefined) {
 export function SeriesComparisonPage() {
   const page = useSeriesComparisonPageModel();
   const { filters, focus, options, resource, status } = page;
+  const purposeChanging =
+    resource.bundle !== undefined &&
+    (filters.activeView === "review") !== (resource.bundle.kind === "review");
   const updating =
     options.refreshing ||
     status.refreshing ||
@@ -152,7 +155,7 @@ export function SeriesComparisonPage() {
               }
               mapOptions={filters.mapOptions}
               mapValue={filters.state.mapMasterId ?? ""}
-              refreshing={updating && !retryOwner && Boolean(resource.data)}
+              refreshing={updating && !retryOwner && Boolean(resource.data) && !purposeChanging}
               response={
                 matchesSeriesAnalysisScope(resource.data, filters.state) ? resource.data : undefined
               }
@@ -218,7 +221,9 @@ export function SeriesComparisonPage() {
                   </Notice>
                 ) : null}
                 <StaleShield
-                  active={resource.loading || resource.shielded || focus.shielded}
+                  active={
+                    !purposeChanging && (resource.loading || resource.shielded || focus.shielded)
+                  }
                   busyLabel="比較条件を更新中"
                   statusPlacement="external"
                   fallback={<ComparisonSkeleton />}
@@ -243,6 +248,7 @@ export function SeriesComparisonPage() {
                       />
                     ) : (
                       <SeriesAnalysisContent
+                        activeView={filters.activeView}
                         bundle={resource.bundle}
                         onArtifactExpired={page.actions.refresh}
                         onClearFocusedMatch={page.actions.clearFocusedMatch}

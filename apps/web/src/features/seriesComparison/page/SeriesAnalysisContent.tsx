@@ -88,6 +88,7 @@ export function preloadSeriesAnalysisView(view: SeriesAnalysisViewId): void {
 }
 
 type SeriesAnalysisContentProps = {
+  activeView?: SeriesAnalysisViewId;
   bundle: SeriesAnalysisDisplayBundle;
   onArtifactExpired: () => void;
   onClearFocusedMatch: () => void;
@@ -108,13 +109,14 @@ type DrilldownDialogState = {
  */
 export const SeriesAnalysisContent = memo(function SeriesAnalysisContent({
   bundle,
+  activeView = bundle.view,
   onArtifactExpired,
   onClearFocusedMatch,
   onFocusMatch,
   onViewChange,
 }: SeriesAnalysisContentProps) {
   const resource = bundle.kind === "review" ? bundle.review : bundle.aggregate;
-  const { matchContext, view: activeView } = bundle;
+  const { matchContext } = bundle;
   const artifactId = resource.artifact.artifactId;
   const contentIdentity = `${artifactId}:${activeView}`;
 
@@ -137,10 +139,10 @@ export const SeriesAnalysisContent = memo(function SeriesAnalysisContent({
         <SeriesAnalysisSelectedMatch context={matchContext} onClear={onClearFocusedMatch} />
       ) : null}
       <PurposeTabs activeView={activeView} onViewChange={onViewChange} />
-      {bundle.kind === "review" ? (
+      {activeView === "review" ? (
         <ReviewView
-          loading={false}
-          response={bundle.review}
+          loading={bundle.kind !== "review"}
+          response={bundle.kind === "review" ? bundle.review : undefined}
           showError={false}
           onViewChange={onViewChange}
         />
@@ -152,17 +154,23 @@ export const SeriesAnalysisContent = memo(function SeriesAnalysisContent({
           role="tabpanel"
         >
           <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
-            <AnalysisTabs activeView={bundle.view} onViewChange={onViewChange} />
+            <AnalysisTabs activeView={activeView} onViewChange={onViewChange} />
             <div className="justify-self-start sm:justify-self-end">
-              <MetricDefinitions response={bundle.aggregate} />
+              {bundle.kind === "analysis" ? (
+                <MetricDefinitions response={bundle.aggregate} />
+              ) : null}
             </div>
           </div>
-          <AnalysisViewContent
-            bundle={bundle}
-            key={contentIdentity}
-            onArtifactExpired={onArtifactExpired}
-            onFocusMatch={onFocusMatch}
-          />
+          {bundle.kind === "analysis" ? (
+            <AnalysisViewContent
+              bundle={bundle}
+              key={contentIdentity}
+              onArtifactExpired={onArtifactExpired}
+              onFocusMatch={onFocusMatch}
+            />
+          ) : (
+            <AnalysisViewLoading view={activeView} />
+          )}
         </div>
       )}
     </div>

@@ -15,6 +15,7 @@ import { setupMsw } from "@/test/msw/lifecycle";
 import {
   analysisArtifact,
   makeSeriesAnalysisAggregate,
+  makeSeriesAnalysisAdminOverview,
   makeSeriesAnalysisOptions,
   makeSeriesAnalysisReview,
   makeSeriesAnalysisStatus,
@@ -46,6 +47,52 @@ function renderApp(initialEntry: string) {
 describe("app routing", () => {
   beforeEach(() => {
     user = userEvent.setup();
+  });
+
+  it("selects the analysis tab and shows its loading body before its data arrives", async () => {
+    setDevUser();
+    const gate = createDeferred();
+    server.use(
+      http.get("/api/analytics/series-comparison/v2/aggregate", async () => {
+        await gate.promise;
+        return HttpResponse.json(makeSeriesAnalysisAggregate());
+      }),
+    );
+    renderApp("/analytics/series");
+    const tab = await screen.findByRole("tab", { name: "分析する" });
+    await user.click(tab);
+    expect(tab).toHaveAttribute("aria-selected", "true");
+    expect(tab.closest("[inert]")).toBeNull();
+    expect(screen.getByLabelText("分析を読み込み中")).toBeInTheDocument();
+    expect(screen.queryByRole("tabpanel", { name: "次戦に備える" })).not.toBeInTheDocument();
+    gate.resolve();
+    expect(await screen.findByRole("heading", { name: "順位と基礎比較" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "分析する" })).toBe(tab);
+  });
+
+  it("keeps manually refreshed analysis jobs when returning through the default title route", async () => {
+    setDevUser();
+    let requests = 0;
+    server.use(
+      http.get("/api/admin/series-analysis/overview", () => {
+        requests += 1;
+        const overview = makeSeriesAnalysisAdminOverview();
+        for (const job of overview.recentJobs) {
+          job.gameTitleName = requests === 1 ? "初回の処理履歴" : "更新済みの処理履歴";
+        }
+        return HttpResponse.json(overview);
+      }),
+    );
+    renderApp("/admin/analysis");
+    expect(await screen.findByText("初回の処理履歴")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "状態を更新" }));
+    expect(await screen.findByText("更新済みの処理履歴")).toBeInTheDocument();
+    await user.click(screen.getByRole("link", { name: "試合" }));
+    expect(await screen.findByRole("region", { name: "試合一覧" })).toBeInTheDocument();
+    await user.click(screen.getByRole("link", { name: "分析" }));
+    expect(await screen.findByText("更新済みの処理履歴")).toBeInTheDocument();
+    expect(screen.queryByText("初回の処理履歴")).not.toBeInTheDocument();
+    expect(requests).toBe(2);
   });
 
   it("keeps a self-disable completion at login and clears it before another account is used", async () => {
@@ -450,14 +497,15 @@ describe("app routing", () => {
     ]);
     const analysisPurposeTab = screen.getByRole("tab", { name: "分析する" });
     await user.click(analysisPurposeTab);
-    expect(await screen.findByRole("button", { name: "表示を更新中" })).toBeDisabled();
+    expect(screen.getByLabelText("分析を読み込み中")).toBeInTheDocument();
+    expect(analysisPurposeTab).toHaveAttribute("aria-selected", "true");
+    expect(analysisPurposeTab).toHaveFocus();
     await act(async () => {
-      analysisPurposeTab.blur();
       aggregateResponseGate.resolve();
     });
-    expect(await screen.findByRole("tabpanel", { name: "今の差" })).toBeInTheDocument();
-    expect(analysisPurposeTab).toHaveFocus();
     expect(await screen.findByRole("heading", { name: "順位と基礎比較" })).toBeInTheDocument();
+    expect(screen.getByRole("tabpanel", { name: "今の差" })).toBeInTheDocument();
+    expect(analysisPurposeTab).toHaveFocus();
     expect(router.state.location.search).toContain("view=overview");
 
     expect(aggregateSearches).toHaveLength(1);

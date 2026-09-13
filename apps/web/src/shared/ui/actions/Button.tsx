@@ -59,12 +59,7 @@ export function Button({
       // oxlint-disable-next-line react/button-has-type -- ButtonType is a closed literal union with a safe "button" default; one branch avoids three drift-prone JSX copies.
       type={type}
     >
-      <PendingActionContent
-        icon={icon}
-        pending={actualPending}
-        pendingLabel={pendingLabel}
-        reservePending={pending !== undefined || pendingLabel != null || type === "submit"}
-      >
+      <PendingActionContent icon={icon} pending={actualPending} pendingLabel={pendingLabel}>
         {children}
       </PendingActionContent>
     </button>

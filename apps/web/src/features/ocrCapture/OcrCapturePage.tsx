@@ -100,7 +100,12 @@ export function OcrCapturePage() {
             <h2 id="ocr-record-destination" className={panelTitleClass}>
               記録先
             </h2>
-            <p className={contentText.supporting}>読み取り結果に引き継ぐ試合設定</p>
+            <PendingStatus
+              idleLabel="読み取り結果に引き継ぐ試合設定"
+              pending={setup.choices.refreshing && !setup.choices.failed}
+            >
+              試合設定の選択肢を確認中
+            </PendingStatus>
           </div>
           {setup.choices.failed ? (
             <Notice
@@ -122,9 +127,6 @@ export function OcrCapturePage() {
             </Notice>
           ) : null}
           <SetupPanel model={setup.panel} />
-          <PendingStatus pending={setup.choices.refreshing && !setup.choices.failed}>
-            試合設定の選択肢を確認中
-          </PendingStatus>
         </section>
 
         <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_28rem] xl:items-start">

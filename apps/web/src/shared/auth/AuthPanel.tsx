@@ -6,6 +6,7 @@ import { buildAuthLoginHref } from "@/shared/auth/redirectPath";
 import { buttonClassName } from "@/shared/ui/actions/Button";
 import { PendingActionContent } from "@/shared/ui/actions/PendingActionContent";
 import { cn } from "@/shared/ui/cn";
+import { useSurfaceFeedback } from "@/shared/ui/motion/useSurfaceFeedback";
 import { contentText } from "@/shared/ui/typography";
 
 type AuthPanelProps = {
@@ -21,6 +22,7 @@ export function AuthPanel({
   forceDevPicker = false,
   loginNextPath,
 }: AuthPanelProps) {
+  const surfaceRef = useSurfaceFeedback<HTMLAnchorElement>();
   const [loginPending, setLoginPending] = useState(false);
 
   if (import.meta.env.DEV) {
@@ -41,6 +43,7 @@ export function AuthPanel({
       ) : (
         <div className={loginPending ? "w-fit opacity-85" : "w-fit"}>
           <a
+            ref={surfaceRef}
             href={buildAuthLoginHref(loginNextPath)}
             aria-busy={loginPending || undefined}
             className={buttonClassName({ variant: "primary" })}

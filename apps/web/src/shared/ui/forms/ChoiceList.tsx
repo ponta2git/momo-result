@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { cn } from "@/shared/ui/cn";
 import { SpinnerIcon } from "@/shared/ui/feedback/Spinner";
 import { readableTextWidthClass } from "@/shared/ui/layout/readableText";
+import { useSurfaceFeedback } from "@/shared/ui/motion/useSurfaceFeedback";
 import { contentText, fieldText } from "@/shared/ui/typography";
 
 export type ChoiceListOption<Value extends string = string> = {
@@ -68,86 +69,119 @@ export function ChoiceList<Value extends string>({
             {emptyState ?? "選べる候補はありません。"}
           </div>
         ) : null}
-        {options.map((option, index) => {
-          const selected = option.value === value;
-          const optionDisabled = disabled || pending || option.disabled || option.pending;
-          const descriptionId = option.description ? `${groupId}-${index}-description` : undefined;
-
-          return (
-            <div
-              key={option.value}
-              aria-busy={option.pending || undefined}
-              className={cn(
-                "grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-stretch",
-                option.trailingAction ? "divide-x divide-[var(--color-border)]" : "",
-                selected ? "bg-[var(--color-surface-selected)]" : "bg-[var(--color-surface)]",
-                optionDisabled ? "opacity-65" : "",
-              )}
-            >
-              <label
-                className={cn(
-                  "grid min-h-11 min-w-0 grid-cols-[1.25rem_minmax(0,1fr)_auto] items-center gap-2 px-3 py-2",
-                  optionDisabled
-                    ? "cursor-not-allowed"
-                    : "cursor-pointer hover:bg-[var(--color-surface-hover)]",
-                  "has-[:focus-visible]:outline-3 has-[:focus-visible]:-outline-offset-3 has-[:focus-visible]:outline-[var(--color-action)]",
-                )}
-              >
-                <input
-                  aria-describedby={descriptionId}
-                  aria-label={option.accessibleLabel}
-                  checked={selected}
-                  className="sr-only"
-                  disabled={optionDisabled}
-                  name={name}
-                  type="radio"
-                  value={option.value}
-                  onChange={() => onValueChange(option.value)}
-                />
-                <span
-                  aria-hidden="true"
-                  className={cn(
-                    "inline-flex size-5 items-center justify-center rounded-full border",
-                    selected
-                      ? "border-[var(--color-action)] text-[var(--color-action)]"
-                      : "border-[var(--color-border-strong)] text-transparent",
-                  )}
-                >
-                  {option.pending ? (
-                    <SpinnerIcon size="sm" />
-                  ) : selected ? (
-                    <Check className="size-3.5" strokeWidth={3} />
-                  ) : null}
-                </span>
-                <span className="min-w-0">
-                  <span className={cn(fieldText.label, "block text-pretty")}>{option.label}</span>
-                  {option.description ? (
-                    <span
-                      className={cn(
-                        contentText.supporting,
-                        "mt-1 block text-pretty",
-                        readableTextWidthClass,
-                      )}
-                      id={descriptionId}
-                    >
-                      {option.description}
-                    </span>
-                  ) : null}
-                </span>
-                <span
-                  aria-hidden={!selected}
-                  className={cn(contentText.supporting, "min-w-12 text-right")}
-                >
-                  {selected ? selectedLabel : null}
-                </span>
-              </label>
-              {option.trailingAction ? (
-                <div className="flex min-h-11 items-center px-1">{option.trailingAction}</div>
-              ) : null}
-            </div>
-          );
-        })}
+        {options.map((option, index) => (
+          <ChoiceOption
+            key={option.value}
+            option={option}
+            index={index}
+            groupId={groupId}
+            disabled={disabled}
+            pending={pending}
+            value={value}
+            name={name}
+            selectedLabel={selectedLabel}
+            onValueChange={onValueChange}
+          />
+        ))}
       </div>
     </fieldset>
+  );
+}
+
+function ChoiceOption<Value extends string>({
+  option,
+  index,
+  groupId,
+  disabled,
+  pending,
+  value,
+  name,
+  selectedLabel,
+  onValueChange,
+}: {
+  option: ChoiceListOption<Value>;
+  index: number;
+  groupId: string;
+  disabled: boolean;
+  pending: boolean;
+  value: Value | undefined;
+  name: string;
+  selectedLabel: ReactNode;
+  onValueChange: (value: Value) => void;
+}) {
+  const surfaceRef = useSurfaceFeedback<HTMLLabelElement>();
+  const selected = option.value === value;
+  const optionDisabled = disabled || pending || option.disabled || option.pending;
+  const descriptionId = option.description ? `${groupId}-${index}-description` : undefined;
+
+  return (
+    <div
+      key={option.value}
+      aria-busy={option.pending || undefined}
+      className={cn(
+        "grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-stretch",
+        option.trailingAction ? "divide-x divide-[var(--color-border)]" : "",
+        selected ? "bg-[var(--color-surface-selected)]" : "bg-[var(--color-surface)]",
+        optionDisabled ? "opacity-65" : "",
+      )}
+    >
+      <label
+        ref={surfaceRef}
+        className={cn(
+          "momo-surface momo-surface-press grid min-h-11 min-w-0 grid-cols-[1.25rem_minmax(0,1fr)_auto] items-center gap-2 px-3 py-2",
+          selected ? "momo-surface-selected" : "",
+          optionDisabled ? "cursor-not-allowed" : "cursor-pointer",
+          "has-[:focus-visible]:outline-3 has-[:focus-visible]:-outline-offset-3 has-[:focus-visible]:outline-[var(--color-action)]",
+        )}
+      >
+        <input
+          aria-describedby={descriptionId}
+          aria-label={option.accessibleLabel}
+          checked={selected}
+          className="sr-only"
+          disabled={optionDisabled}
+          name={name}
+          type="radio"
+          value={option.value}
+          onChange={() => onValueChange(option.value)}
+        />
+        <span
+          aria-hidden="true"
+          className={cn(
+            "inline-flex size-5 items-center justify-center rounded-full border",
+            selected
+              ? "border-[var(--color-action)] text-[var(--color-action)]"
+              : "border-[var(--color-border-strong)] text-transparent",
+          )}
+        >
+          {option.pending ? (
+            <SpinnerIcon size="sm" />
+          ) : selected ? (
+            <Check className="size-3.5" strokeWidth={3} />
+          ) : null}
+        </span>
+        <span className="min-w-0">
+          <span className={cn(fieldText.label, "block text-pretty")}>{option.label}</span>
+          {option.description ? (
+            <span
+              className={cn(
+                contentText.supporting,
+                "mt-1 block text-pretty",
+                readableTextWidthClass,
+              )}
+              id={descriptionId}
+            >
+              {option.description}
+            </span>
+          ) : null}
+        </span>
+        <span aria-hidden={!selected} className={cn(contentText.supporting, "min-w-12 text-right")}>
+          {selected ? selectedLabel : null}
+        </span>
+      </label>
+      {option.trailingAction ? (
+        <div className="flex min-h-11 items-center px-1">{option.trailingAction}</div>
+      ) : null}
+    </div>
   );
 }

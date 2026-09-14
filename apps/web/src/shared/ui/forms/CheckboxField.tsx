@@ -4,6 +4,7 @@ import type { ComponentPropsWithRef, ReactNode } from "react";
 import { cn } from "@/shared/ui/cn";
 import { buildFieldDescribedBy } from "@/shared/ui/forms/Field";
 import { readableTextWidthClass } from "@/shared/ui/layout/readableText";
+import { useSurfaceFeedback } from "@/shared/ui/motion/useSurfaceFeedback";
 
 export type CheckboxFieldProps = {
   "aria-describedby"?: string | undefined;
@@ -26,6 +27,7 @@ export function CheckboxField({
   required,
   ...props
 }: CheckboxFieldProps) {
+  const surfaceRef = useSurfaceFeedback<HTMLLabelElement>();
   const fallbackId = useId();
   const fieldId = id ?? fallbackId;
   const descriptionId = description ? `${fieldId}-description` : undefined;
@@ -34,8 +36,9 @@ export function CheckboxField({
   return (
     <div className="min-w-0">
       <label
+        ref={surfaceRef}
         className={cn(
-          "inline-flex min-h-11 min-w-0 cursor-pointer items-center gap-2 rounded-xs px-2 text-sm font-plain text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)]",
+          "momo-surface momo-surface-press inline-flex min-h-11 min-w-0 cursor-pointer items-center gap-2 rounded-xs px-2 text-sm font-plain text-[var(--color-text-primary)]",
           disabled ? "cursor-not-allowed opacity-65" : "",
         )}
         htmlFor={fieldId}

@@ -4,6 +4,7 @@ import { Link, NavLink, useLocation } from "react-router-dom";
 
 import { cn } from "@/shared/ui/cn";
 import { pageViewportGutterClass } from "@/shared/ui/layout/PageFrame";
+import { useSurfaceFeedback } from "@/shared/ui/motion/useSurfaceFeedback";
 
 export type GlobalNavItem = {
   icon: ReactNode;
@@ -24,16 +25,18 @@ type GlobalNavProps = {
 };
 
 function NavItemLink({ item }: { item: GlobalNavItem }) {
+  const surfaceRef = useSurfaceFeedback<HTMLAnchorElement>();
   return (
     <NavLink
+      ref={surfaceRef}
       to={item.to}
       aria-label={item.label}
       className={({ isActive }) =>
         cn(
-          "inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-2 rounded-sm border px-3 py-2 text-sm font-plain pointer-fine:min-h-9 pointer-fine:min-w-0 pointer-fine:py-1",
+          "momo-surface momo-surface-press momo-surface-nav inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-2 rounded-sm border px-3 py-2 text-sm font-plain pointer-fine:min-h-9 pointer-fine:min-w-0 pointer-fine:py-1",
           isActive
-            ? "border-[var(--color-action)]/60 bg-[var(--color-action)]/12 text-[var(--color-text-primary)]"
-            : "border-transparent text-[var(--color-text-secondary)] hover:border-[var(--color-border)] hover:bg-[var(--color-surface-hover)]",
+            ? "momo-surface-nav-current border-[var(--color-action)]/60 text-[var(--color-text-primary)]"
+            : "text-[var(--color-text-secondary)]",
         )
       }
     >

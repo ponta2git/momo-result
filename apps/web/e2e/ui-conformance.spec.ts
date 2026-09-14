@@ -269,6 +269,35 @@ test("keeps match rows usable through responsive update and retry states", async
     await expectNoHorizontalPageOverflow(page);
   });
 
+  await test.step("keep surface feedback readable and honor a changed motion preference", async () => {
+    const action = page.getByRole("link", { exact: true, name: "手入力で作成" });
+    const paint = () => action.evaluate((element) => getComputedStyle(element).backgroundColor);
+    await page.mouse.move(0, 0);
+    const restingPaint = await paint();
+    const restingBox = await action.boundingBox();
+    await action.hover();
+    await expect.poll(paint).not.toBe(restingPaint);
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    const hoverPaint = await paint();
+    await expect(action).toHaveCSS("opacity", "1");
+    expect(await action.boundingBox()).toEqual(restingBox);
+    await page.mouse.move(0, 0);
+    await expect.poll(paint).toBe(restingPaint);
+
+    try {
+      await page.emulateMedia({ reducedMotion: "no-preference" });
+      await action.hover();
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      await expect.poll(paint).toBe(hoverPaint);
+      await action.focus();
+      await expect(action).toBeFocused();
+      await expect(action).not.toHaveCSS("outline-style", "none");
+    } finally {
+      await page.emulateMedia({ reducedMotion: "no-preference" });
+      await page.mouse.move(0, 0);
+    }
+  });
+
   await test.step("distinguish update from retry and preserve visible rows while updating", async () => {
     let holdNextListRequest = false;
     let listRequestHeld = false;

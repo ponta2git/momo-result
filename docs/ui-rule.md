@@ -53,6 +53,7 @@
 - 1つの視覚境界は1つの owner だけが描く。親 surface の外周と先頭・末尾 child、disclosure の root と panel、table wrapper と隣接 toolbar などへ同じ境界を重ねず、隣接する平行線や二重線を作らない。淡色背景、border、角丸を同じ要素へ慣習的に重ねず、境界を伝えるために必要な最小の手段を選ぶ。
 - 入力場所と独自選択マークの識別に必要な境界は、一般の区切り線から分けた意味tokenを使い、実際の隣接色に対して3:1以上を確保する。半透明の枠は、その下の入力背景と外側の面を含めて検証する。hover途中や要確認・errorの状態でも識別性を保ち、無効状態を通常状態と同じ濃さへ強制しない。
 - 通常境界は役割、意味枠は要確認・error等、focus枠は操作先を示す。非focusの入力にも同じ通常境界を残し、focus移動で選択・error・説明を消さない。値と「変更」buttonを囲む表示用の枠は、全体が操作できる入力欄と同じ強さへ変更しない。
+- 枠付きの副button / icon actionは専用の補助境界tokenへ接続し、主操作の塗りと入力の識別用境界より控えめにする。quietや開閉操作へ常時の枠を追加せず、一般の区切り線の色を一括変更しない。
 - sibling 間の divider は、それらを並べる親 composition が `divide-*` または独立した separator として所有し、各 child の先頭・末尾 border と `first` / `last` の相殺で組み立てない。control、bounded panel、badge、table の上端・header 下端・最終行下端など、部品自身の意味を成立させる perimeter / internal boundary はその部品が所有する。装飾だけの separator は accessibility tree へ意味を追加せず、内容上の区切りを表す場合だけ semantic な `hr` または section 構造を使う。
 - shadow は dialog、tooltip、toast など浮遊 UI に限定する。通常内容に elevation を足さず、gradient、glow、大きな surface contrast を装飾に使わない。
 - 角丸は参照値の共有だけでなく、要素の役割と包含階層を表す。`xs` は compact な badge、marker、data cell、`sm` は control と小型の bounded panel、`md` は record、card、notice など content 内の独立境界、`lg` は page-level content surface と dialog、toast など最上位または浮遊する面に使う。`full` は円、pill、progress track など輪郭自体に意味がある形へ限定する。table は前項のとおり外周角丸を持たない。
@@ -228,6 +229,7 @@
 - hoverは開始遅延0、共通の100ms・cubic-bezier(0, 0, 0.58, 1)で現在値から補間し、反応を蓄積しない。pressed・focus・操作制限と、意味を認識する表示は即時に返す。非必須の補間は動きを減らす設定で省略し、touchからhoverを作らない。既存の矢印・indicatorの補間とは用途を分ける。
 - 操作部品は通常→hover→pressedで面の濃さを小さく増す。編集用controlへ押し込み表現を足さない。選択済みでも変更可能なら選択の印を保った反応を返す。invalid / review / warning / successはその意味色の範囲で応答し、通常hover色で覆わない。readOnlyは編集不可として扱い、focus・文字選択・copyを保つ。
 - 表の行は操作部品より弱いhoverで読む位置を補助する。子buttonは独立して反応し、親の反応量を継承しない。行全体へpressed、pointer cursor、tabIndexを追加しない。面のない本文linkは既存の下線等を維持する。
+- 共有DataTableは、子操作の`:focus-visible`に連動する薄い行背景で対象名との対応を補助する。子のfocus枠を主表示にし、固定セルまで同じ不透明な行面へ接続する。hoverと加算せず、focus取得・解除は即時。その時点のhoverへ戻し、最後のfocus行や処理中の行を記憶しない。別行のhoverは併存できる。子の無効化を他の操作・行全体へ広げず、`aria-busy`だけからfocusや操作制限を作らない。
 - 色対・反応の接続はshared UIが所有し、featureは既存の用途・状態propsで利用する。部品別の時間・任意色・エフェクト指定を公開せず、独自linkやrender差替えも実要素の接続を確認する。hoverのために新しいwrapperや余白を追加しない。
 
 ### 6.2 モーション

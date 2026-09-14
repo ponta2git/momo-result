@@ -12,7 +12,7 @@ const actionBaseClass =
   "momo-surface momo-surface-press inline-flex items-center justify-center rounded-sm border";
 
 const surfaceVariantClass = {
-  secondary: "momo-surface-neutral border-[var(--color-border)]",
+  secondary: "momo-surface-neutral border-[var(--color-secondary-border)]",
   quiet: "border-transparent text-[var(--color-text-secondary)]",
   danger: "momo-surface-danger border-[var(--color-danger)] text-[var(--color-text-inverse)]",
 } as const satisfies Record<IconActionVariant, string>;

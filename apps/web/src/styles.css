@@ -80,6 +80,7 @@
   --color-surface-subtle: var(--ref-neutral-100);
   --color-surface-selected: var(--ref-neutral-200);
   --color-surface-row-hover: var(--ref-neutral-60);
+  --color-surface-row-focus: var(--ref-neutral-60);
   --color-surface-pressed: var(--ref-neutral-100);
   --color-surface-selected-hover: var(--ref-neutral-225);
   --color-surface-selected-pressed: var(--ref-neutral-250);
@@ -97,6 +98,7 @@
   --color-text-inverse: var(--ref-neutral-0);
   --color-border: var(--ref-neutral-border);
   --color-border-strong: var(--ref-neutral-border-strong);
+  --color-secondary-border: var(--ref-neutral-border-strong);
   --color-control-border: var(--ref-neutral-control-border);
   --color-control-border-action: color-mix(in oklab, var(--color-action) 75%, transparent);
   --color-control-border-review: color-mix(in oklab, var(--color-review) 80%, transparent);
@@ -373,11 +375,15 @@ samp {
     [aria-disabled="true"],
     [data-disabled],
     [readonly],
-    :has(input:disabled),
+    label:has(input:disabled),
     [inert],
     [inert] *
   ) {
     --ui-hover-amount: 0;
     background-color: var(--ui-surface-base);
+  }
+  /* Reading context follows actual focus; hover remains independently owned by Motion. */
+  .momo-surface-row:has(:focus-visible):not([inert], [inert] *) {
+    background-color: var(--color-surface-row-focus);
   }
 }

@@ -12,6 +12,10 @@ import {
 } from "./support";
 import type { E2eRun } from "./support";
 
+function readRowPaint(row: Locator) {
+  return row.evaluate((element) => getComputedStyle(element).backgroundColor);
+}
+
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(
     ([key, value]) => window.localStorage.setItem(key, value),
@@ -298,6 +302,36 @@ test("keeps match rows usable through responsive update and retry states", async
     }
   });
 
+  await test.step("connect keyboard actions to their row without overriding pointer context", async () => {
+    const rows = page.getByRole("table", { name: "登録済みの試合" }).locator("tbody tr");
+    const firstRow = rows.first();
+    const secondRow = rows.nth(1);
+    const result = firstRow.getByRole("link", { name: /の試合結果を見る$/u });
+    await page.mouse.move(0, 0);
+    const restingPaint = await readRowPaint(firstRow);
+    await result.focus();
+    await result.press("Tab");
+    await expect(firstRow.locator(":focus-visible")).toHaveCount(1);
+    await expect(firstRow).not.toHaveAttribute("tabindex");
+    const focusPaint = await readRowPaint(firstRow);
+    expect(focusPaint).not.toBe(restingPaint);
+    await expect(firstRow.locator(":focus-visible")).not.toHaveCSS("outline-style", "none");
+
+    await secondRow.hover();
+    await expect.poll(() => readRowPaint(secondRow)).not.toBe(restingPaint);
+    expect(await readRowPaint(firstRow)).toBe(focusPaint);
+    await firstRow.hover();
+    expect(await readRowPaint(firstRow)).toBe(focusPaint);
+
+    await page.mouse.move(0, 0);
+    await page.keyboard.press("Shift+Tab");
+    await expect(result).toBeFocused();
+    expect(await readRowPaint(firstRow)).toBe(focusPaint);
+    await page.getByRole("link", { exact: true, name: "手入力で作成" }).focus();
+    await expect(firstRow.locator(":focus-visible")).toHaveCount(0);
+    await expect.poll(() => readRowPaint(firstRow)).toBe(restingPaint);
+  });
+
   await test.step("distinguish update from retry and preserve visible rows while updating", async () => {
     let holdNextListRequest = false;
     let listRequestHeld = false;
@@ -510,6 +544,17 @@ test("changes an export choice by keyboard and restores focus", async ({
     const selectedRadio = dialog.locator(`input[type="radio"][value="${selectedMatchId}"]`);
     await expect(selectedRadio).toBeChecked();
     await selectedRadio.focus();
+    await selectedRadio.press(" ");
+    const visibleChoice = selectedRadio.locator("..");
+    await expect(visibleChoice).toHaveCSS("outline-style", "solid");
+    await expect(selectedRadio).toHaveCSS("outline-style", "none");
+    try {
+      await page.emulateMedia({ forcedColors: "active" });
+      await expect(selectedRadio).toBeFocused();
+      await expect(visibleChoice).toHaveCSS("outline-style", "solid");
+    } finally {
+      await page.emulateMedia({ forcedColors: "none" });
+    }
     await selectedRadio.press("ArrowDown");
 
     await expect(dialog).toHaveCount(0);

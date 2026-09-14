@@ -100,7 +100,6 @@ export function SeriesAnalysisScopeBar({
             <span className={contentText.supporting}>比較対象を変更</span>
           </span>
         }
-        triggerLayout="flush-horizontal"
         triggerVariant="supporting"
         onOpenChange={setOpen}
       >

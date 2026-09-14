@@ -180,7 +180,9 @@ function ChoiceOption<Value extends string>({
         </span>
       </label>
       {option.trailingAction ? (
-        <div className="flex min-h-11 items-center px-1">{option.trailingAction}</div>
+        <div className="flex min-h-11 items-center px-1 [&_a:focus-visible]:-outline-offset-3 [&_button:focus-visible]:-outline-offset-3">
+          {option.trailingAction}
+        </div>
       ) : null}
     </div>
   );

@@ -175,6 +175,7 @@
 - hover で現れる操作や情報は keyboard focus と touch でも到達できる。tooltip は補助説明であり、主要な意味やエラーをそこだけに置かない。
 - 複数ステップの flow は Back、キャンセル、完了または安全な中断点を持つ。dialog を閉じた後は起点へ focus を返し、ナビゲーションを阻止する場合は理由と進行状況を示す。
 - fixed / sticky UI は safe-area inset を尊重し、focus target や主要操作を viewport 外へ隠さない。狭い幅では再配置して hit target と accessible name を保つ。
+- 隠した native input の focus を可視 label へ描く場合、同じ対象に二重の枠を描かない。候補一覧等の切り抜き境界に接する操作は、共有部品が内側の outline を所有し、feature の余白補正で切れを隠さない。forced colors でも選択の印と focus 枠を残す。
 - dialog は viewport 側と内容側に二重の縦 scroll を作らず、見出しと閉じる操作を固定した一つの内部 content scroller を owner とする。極端に低い viewport や拡大表示で固定領域だけが利用可能高を超える場合は、すべての操作へ到達できるよう dialog surface 全体を唯一の scroller に切り替える。内部 disclosure の展開も有効な唯一の scroller の高さへ収まり、背後の page scroll を動かさない。全幅 control の focus ring が scroller 境界で切れないよう、共通 content scroller が outline 分の inline gutter を持ち、個別 form で補正を重ねない。
 - camera preview、source image、分類 tray など同じ画像を対応付ける frame は、状態や配置前後で aspect ratio を変えない。OCR の撮影 preview と分類 tray は `16:9` を保ち、画像全体を確認できる収め方を使う。
 - keyboard、focus、label、contrast、status announcement は WCAG AA 相当を最低基準とする。

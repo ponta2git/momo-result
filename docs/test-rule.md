@@ -77,6 +77,7 @@
 - motion を伴う操作は、通常、途中で逆方向へ変更、unmount、連打、animation 完了 callback 未実行、`prefers-reduced-motion` の各条件で同じ application state と操作可能性へ収束することを、制御した state と clock で検証する。duration の経過だけを待つ test や screenshot 差分だけを主 oracle にしない。
 - viewport を使う図表は、初回と再進入では完成値、表示中の同一 identity の値変更だけが補間対象、表示領域外の更新は再進入時に再生されないことを固定する。IntersectionObserver と clock は test から制御し、実時間 scroll や sleep に依存しない。
 - Motion の状態収束、操作可能性、reduced motion、focus は shared primitive の component test と、利用者価値が現れる代表 flow で検証する。import / bundle 境界の正本と静的検査は `docs/architecture.md` と `docs/dev-rule.md` に従う。
+- 操作面のhoverは実browserで文字・寸法の安定、行と子操作の分離、途中反転、動きを減らす設定の実行中変更を確認する。hover中のselected / invalid / toneの発生・解除と操作制限が旧意味色を残さないこと、focusとnativeの実行が補間を待たないことを代表接続で検証する。色対と補間途中のcontrastは自動検証し、frame数だけで快適さを判定しない。
 
 ### Completion / Toast
 

@@ -1,18 +1,18 @@
-# 操作する場所の輪郭を整える実施計画
+# 操作する場所の輪郭を整える実施記録
 
 ## 1. 位置付けと今回の成果
 
-採用案の観点1「輪郭は、操作の場所だけ少し明瞭にする」を具体化する。観点2の面の反応、観点3の待機表示・通知、戦績比較ヘッダの標準余白への修正は維持する。観点1の製品コードへの適用はまだ行っていない。ただし、レビューで見つかった管理一覧の固定名前セルが既存hoverを遮る不具合は、観点1を待たず先行修正した。
+採用案の観点1「輪郭は、操作の場所だけ少し明瞭にする」を具体化する。観点2の面の反応、観点3の待機表示・通知、戦績比較ヘッダの標準余白への修正は維持する。入力・選択マーク・枠付き副操作の境界と、実focusに連動する行の補助を共通部品へ実装した。管理一覧の固定名前セルが既存hoverを遮る不具合は先行修正済み。実装、自動検査、Chromeでの代表画面確認を終えたが、Playwright MCPの接続障害により計画のE2E gateは未完了である。
 
 目指す像は、白に近い面と現在の文字階層を保ち、値を扱う部品、実行する操作、現在の操作先が迷わず分かる状態である。薄い線を一律に濃くするのではなく、識別に必要な輪郭、操作を補助する輪郭、内容を区切る線を分ける。通常時の大きさ・角丸・余白・文字・配置を変えず、1pxの既存境界の色を中心に整える。
 
 敵対的レビューで、前案の「各部品を明瞭にすれば全体も使いやすくなる」という不足を見直した。観点2と同じ状態の分け方を用い、操作中・関連内容・その他のUIをつなぐ表示の範囲、複数状態の同時表示、終了後の戻り方までを本計画の完了条件に含める。レビューで既存コードを確認した事実と、未実装の案に対する反例、今後の利用者検証を区別する。
 
-表示契約の正本は [UI規約](ui-rule.md)、実装境界は [architecture](architecture.md#client-lifecycle--suspense--motion)、検証の選定は [test-rule](test-rule.md#4-web-evidence-catalog)。本書には実装差分・判断・順序を置き、恒久ルールは実施時に正本へ反映する。
+表示契約の正本は [UI規約](ui-rule.md)、実装境界は [architecture](architecture.md#client-lifecycle--suspense--motion)、検証の選定は [test-rule](test-rule.md#4-web-evidence-catalog)。本書には採用時の判断、実装差分、検証結果を置き、恒久ルールは正本へ反映した。3〜6章は合意した設計と反証条件、7章は実施結果を記録する。
 
-## 2. 現状から分かったこと
+## 2. 着手時の調査結果
 
-| 実装入口 | 現状と問題 | 計画上の扱い |
+| 実装入口 | 着手時の状態と問題 | 採用した扱い |
 | --- | --- | --- |
 | [Control](../apps/web/src/shared/ui/forms/Control.tsx) | input / select / textareaの通常枠が、区切り線と共通の`color-border`。toneとinvalidの枠は意味色に個別の透明度を掛けている | 入力場所の境界を専用の意味トークンへ分離し、通常と意味状態の両方を確認 |
 | [ChoiceList](../apps/web/src/shared/ui/forms/ChoiceList.tsx) | native radioを視覚的に隠し、独自の丸印を描く。未選択の丸印が`color-border-strong`で薄い。選択済みにはcheckと文言がある | 丸印の識別を改善。候補一覧の外枠・区切り線とは分ける |
@@ -72,7 +72,7 @@ focusは既存の明瞭な枠を基準とする。[Focus Visible](https://www.w3
 ### A. 入力欄と選択マークの輪郭
 
 - `styles.css`に入力境界の意味トークンを設け、通常のinput / select / textareaと、独自に描く未選択radioの丸印へ接続する。一般の`color-border` / `color-border-strong`の値は変えない。
-- 通常色の試作は既存neutralの色相・低彩度を保ち、不透明な1px線を第一候補とする。標準surface / canvas上の候補はOKLCHのL=64%・C=0.018・H=250から比較する。この候補の計算値は約3.26 / 3.13:1だが、選択面など全背景では同じ基準を満たさないため確定値にはしない。
+- 通常色の試作は既存neutralの色相・低彩度を保ち、不透明な1px線を第一候補とする。標準surface / canvas上の候補はOKLCHのL=64%・C=0.018・H=250から比較する。この候補の計算値は約3.26 / 3.13:1だが、subtle面では約2.993:1となり不採用。実装ではL=63.5%へ調整した。
 - 候補値は、実際に接する背景の棚卸し→contrast確認→標準入力と密な編集画面の比較、の順で確定する。必要な背景で合格する候補から最も控えめな値を選ぶ。全背景へ無条件で使える色を作るために通常線を過度に濃くしない。
 - action / review / success / warning / invalidは現在の意味色を保ち、枠の透明度を含む色対を共通定義にまとめる。invalidの発生・解除、hover中のtone変更でも新しい意味の枠へ即時に変わる。focusでerror枠を通常色へ戻さない。
 - 入力のhoverは観点2の面だけで返す。通常枠を濃くした上で、hoverの枠強調や内側shadowを重ねない。境界の幅を増減して寸法を動かさない。非フォーカスの入力にも同じ通常枠を使い、初めて触れる前と次の入力へ移った後の発見可能性を保つ。
@@ -92,13 +92,13 @@ DataTableの子操作が`:focus-visible`に一致する間だけ行へ薄い背�
 - hoverとの重複で二重に暗くせず、focusがある間は同じ一つの面として描く。focusが抜けたら現在のpointer位置に応じたhoverへ戻る。focus取得・解除へ100msの補間や最低表示時間を追加しない。
 - `:focus-visible`は厳密な「最後の入力がkeyboardだったか」の自作判定ではない。browserの判断に従い、文字入力や利用者の常時focus表示設定ではpointer操作後も表示され得る。[Selectors仕様の説明](https://www.w3.org/TR/selectors-4/#the-focus-visible-pseudo)
 - dialogが開いてfocusが移ったとき、行の削除やnative disabled / inert化でfocusを失ったときは、focus由来の行表示を保持しない。dialogを閉じた後は実際に戻ったfocusへ追従する。再描画でも同じDOMのfocusが保たれるなら行表示も保つ。子孫selectorによる静的表示を第一候補とし、Reactへfocused rowのstateを追加しない。
-- focusを保持できるaria-disabled等の経路では、実際のfocusを見えなくしない。`aria-busy`だけで行をfocus中に見せたり、反応を全部消したりしない。子操作が一つdisabledになったことを、別の子操作や行の読取り全体の無効化へ広げない。既存の`.momo-surface:has(input:disabled)`はlabel等の操作ownerに限定すべきか、行との合成時に点検する。
+- focusを保持できるaria-disabled等の経路では、実際のfocusを見えなくしない。`aria-busy`だけで行をfocus中に見せたり、反応を全部消したりしない。子操作が一つdisabledになったことを、別の子操作や行の読取り全体の無効化へ広げない。既存の`.momo-surface:has(input:disabled)`はlabel ownerに限定し、disabledの子inputが行全体の読取り反応を抑止しないよう修正した。
 - 管理のアカウント行では、既存hoverを遮る固定名前セルの不具合を修正済み。DataTable側の不透明な行背景を固定セルが継承する接続へ、新しいfocus表示も載せる。個別セルへ別の時間・状態selectorを複製しない。単純な透明化では横scroll時に背後の文字が透けるため、不透明性を維持する。対象名に届かない帯を「適用済み」にしない。
 - 対象は共有DataTableのデータ行。試合編集のScoreGridは独自の編集構造であり、今回DataTableへ移し替えない。モバイルのrecord全体へ新しい面を付ける変更も対象外で、内部操作のfocusを確認する。
 
 ### D. フォーカス枠の接続確認
 
-既存の3px枠を基準に、input、button/link、radio label、tabs、sort、disclosure、dialog内と横scroll内を点検する。隣接操作との衝突、outlineの切れ、隠したinputとlabelによる二重描画があれば、所有するshared primitiveまたはscroll領域で修正する。既存の内側枠・2px枠には用途上の理由を確認し、単なる数値統一のための変更はしない。
+既存の3px枠を基準に、input、button/link、radio label、tabs、sort、disclosure、dialog内と横scroll内を点検する。隣接操作との衝突、outlineの切れ、隠したinputとlabelによる二重描画があれば、所有するshared primitiveまたはscroll領域で修正する。既存の内側枠・2px枠には用途上の理由を確認し、単なる数値統一のための変更はしない。実装ではChoiceListの隠したradioの枠を可視labelへ一本化した。末尾の編集・削除操作は、右端のoutlineが切れることをChromeで確認し、同じ共有部品内で3pxの内側outlineへ修正した。
 
 forced colorsでは実行対象と選択・focusを識別できることを確認し、通常色を強制して利用者の色設定を妨げない。行背景が省略されても子のfocus枠と操作は成立させる。
 
@@ -161,31 +161,61 @@ forced colorsでは実行対象と選択・focusを識別できることを確�
 
 エージェントの実画面レビューでは、対象名との対応、文字と枠の階層、残る意味、次の操作への到達を記録する。利用者テストが行える場合は、迷い・誤対象の選択・不要な再探索を観測する。操作時間や誤操作の減少は未測定で、意匠評価の点数をUX改善の実証として扱わない。「状態の説明」「規則の予測可能性」「反応の強さ」「初見の理解」は3.1・3.2・Eと上表の条件で評価する。
 
-レビューでは既存規約・共有部品・利用箇所のコードを確認した。管理一覧の既存hoverの不具合はChromeで再現し、修正後は通常時と補間途中の行・固定セルの背景一致、390px幅での横scroll後の固定位置と不透明性を確認した。関連component test 10件、format、lint、typecheck、production buildは通過。Playwright MCPは未接続で、E2Eの証拠にはしていない。観点1の新しい色・行focusの完成表示と、その利用者への効果は未検証であり、以下の実施段階で確かめる。
+レビューでは既存規約・共有部品・利用箇所のコードを確認した。管理一覧の既存hoverの不具合はChromeで再現し、修正後は通常時と補間途中の行・固定セルの背景一致、390px幅での横scroll後の固定位置と不透明性を確認した。関連component test 10件、format、lint、typecheck、production buildは通過。Playwright MCPは未接続で、E2Eの証拠にはしていない。観点1の追加実装の確認結果は7章に記録する。利用者テストによる効果の実証は行っていない。
 
 必須の識別性は維持した上で、仮説に反する結果が出れば反応面積・強さ・接続を先に直す。色の種類や新しいanimation、周囲の減光を追加して解決したことにしない。合意済みの対象範囲を外す必要が生じる場合だけ、具体的な失敗と代替案を示して再確認する。
 
-## 7. 実施順序と完了条件
+## 7. 実施結果と残る検証
 
-| 段階 | 実施内容 | 完了条件・コミット単位 |
-| --- | --- | --- |
-| 1 | 文法の合成と境界色の比較 | 代表部品の試作で四つの軸、Eの複合状態、固定見出しと非focusの意味表示を先行確認。input・tone・未選択radio・副buttonの実背景で候補を比較し、観測した6.1の反例を解消してから横展開 |
-| 2 | 入力境界と選択マーク | 参照色・意味token・Control・ChoiceListへ適用。通常／意味状態／hover／disabled／readOnlyを確認し、規約と色の検証を含めてコミット |
-| 3 | 副操作と行focus・focus枠 | B / Cと管理の固定見出しへの接続を実装。移動順・click・横scroll・複数状態・dialog focus復帰を確認し、shared接続単位でコミット |
-| 4 | 横展開と回帰確認 | 接続／対象外の対応表を確定。狭幅、密な編集、Eの複合状態、forced colorsと6.1の代表タスクを確認。操作中の部品と周囲の両方で検出した問題を修正してコミット |
-| 5 | 文書整理と報告 | 採用値、適用範囲、判断根拠、gateと未検証範囲を記録。UI規約を正本とし、本書を実施結果へ整理 |
+### 実装と採用値
 
-検証は失敗条件に応じた代表例を選び、全状態×全画面の総当たりにはしない。
+| 段階 | 結果 |
+| --- | --- |
+| 先行不具合修正 | `f812d2a5`。共有行を不透明にし、AdminAccountRowの固定名前セルを`bg-inherit`で接続 |
+| 入力・選択マーク | `6cbb0772`。ControlとChoiceListへ境界tokenを接続。合成後の色検証とUI規約を更新 |
+| 副操作・行focus | `1fda6a46`。4種のsecondary actionを接続し、共有行に`:has(:focus-visible)`の静的表示を追加。E2Eの回帰シナリオを追加（未実行） |
+| focus枠の修正 | `34a7bf7d`。ChoiceList末尾のbutton / linkを内側outlineにし、右端での切れを解消 |
+| 横展開・記録 | 共通部品の接続先と代表画面を確認し、本書とUI規約へ反映。Playwright MCPでのE2Eは残る |
 
-- 色: 必要な境界・選択マーク・focusの隣接色contrast、半透明の合成、hover途中とtone / invalidの両方向の変更。文字の既存基準も維持する。装飾線や補助的な行背景を誤って3:1の対象にしない。
-- 操作: native input / select、独自radio、button / link、Base UI trigger、sortの既存契約。Tab / Shift+Tab、Enter / Space、pointer、disabled / readOnly、dialogへの移動と復帰を確認する。
-- 実画面: 試合一覧・開催・管理の行内操作、試合編集の通常／要確認／エラー入力、出力の選択dialog、比較のfilter / tabsを代表に320 / 390 / 1440pxで確認。通常寸法、折り返し、scroll、focusの見失いと線の密度を評価する。
-- 自動検証: 既存の色検証を合成に対応させ、影響する部品・業務操作のtestを選ぶ。CSS class一致やjsdom寸法で見た目を代用せず、field数と同数の重複snapshotは作らない。
-- gate: format、lint、typecheck、選択したunit / component test、production buildでtoken・selectorの保持確認、影響する主要flowのPlaywright。目視はPlaywright MCPまたはChromeを使う。未接続・未実行を通過扱いにせず、未確認条件を記録する。文書のみの現段階は`git diff --check`と`pnpm public:safety:check`。
+通常の入力境界は`oklch(63.5% 0.018 250)`。元のneutralの色相と低彩度を保った。標準surfaceで約3.329:1、canvasで約3.192:1、subtle / pressed面で約3.053:1、hover面で約3.142:1となる。L=64%候補がsubtle面で3:1を下回ることから、0.5ポイント下げた値を採用した。これは定義値の計算であり、最適な見やすさを測定した値ではない。
 
-## 8. 確定事項と実施時の判断
+意味枠は元の意味色に対する不透明度をaction 75%、review 80%、success 80%、warning 95%、invalid 75%として専用tokenにした。tone面のnormal〜hoverを11点で計算し、surface / canvas / subtle上で内側・外側の隣接色に対し3:1以上、文字は4.5:1以上を検証する。境界はcontrol自身の半透明背景へ重ね、その背景を外側surfaceへ重ねる実際の合成順を使う。既存のopaque変換へalpha付き色を渡すと失敗させ、alphaの破棄による誤合格を防いだ。検証用の既知値として、白地に50%黒を合成したcontrastも確認する。
 
-1. 行背景の表示条件: ユーザー回答「キーボードのフォーカス表示に連動する」に従い、子の`:focus-visible`へ連動する。
-2. 枠付き副ボタンの範囲: ユーザー回答「枠付きの副ボタンも少し明瞭にする」に従い、Bを実施する。
+副操作の境界は従来の`color-border-strong`相当。行focusは弱い行hoverと同じneutral参照値を、行focus専用の意味tokenへ接続した。一般の区切り線、寸法、角丸、余白、文字階層は変更していない。新しいstate、provider、依存、transitionの例外は追加していない。
 
-対象範囲の確認待ちはない。境界の太さ・角丸・余白を保つこと、通常枠と意味枠を分けること、必要な識別性を確保することは既存規約と目的に沿って計画に含めた。具体色の最終値は実施段階の比較で決める技術上の検証事項であり、未確認の最適値として断定しない。
+### 利用先への接続
+
+| 接続先 | 結果・維持した境界 |
+| --- | --- |
+| Controlを使う試合編集・OCR確認・比較filter・出力・開催・管理・認証 | 通常とtone / invalidを共通tokenへ接続。disabled、readOnly、native select / checkboxの操作契約を維持 |
+| ChoiceListを使う出力候補・管理の作品選択等 | 未選択radioの丸印を入力境界へ接続。選択のcheck・文言を維持し、labelがfocusを一つ所有 |
+| Button / LinkButton / IconButton / IconLink | secondaryだけを専用tokenへ接続。primary、danger、quiet、dangerQuietは維持 |
+| 試合・開催・管理等の共有DataTable | 子focusに追従する行面を一つのCSS ownerで接続。固定セルは同じ不透明面を継承 |
+| ChoicePickerDialogField、ScoreGrid、native checkbox / file / range | 表示用外枠、編集構造、native描画を一律に入力境界へ置換しない。内部の既存Control / actionを通して適用 |
+| Tabs / disclosure / sort / nav | 既存の構造、選択表示、focus、hoverの役割を維持。常時の枠を追加しない |
+
+### 検証結果
+
+- 入力・選択・色のtest 13件、action / form / DataTable / Dialog / StaleShield / 管理画面のtest 48件が通過。最終のChoiceList / ScoreGrid / ExportPage / HeldEventsPageのtest 52件も通過した。重複を含む各実行の件数であり、合計の独立test数ではない。
+- 最終コードのformat、lint、typecheck、production buildが通過。built theme checkに加え、生成CSSに今回の8つの意味token、行focus selector、末尾操作の内側outline selectorが残ることを確認した。buildには既存の大きなchunkに関する警告が残る。
+- Chrome: 1440pxの密な編集画面と320pxの入力移動を確認。入力値・ラベルの階層を保ち、通常枠とfocusを区別でき、他のinvalid表示が残る。320pxでページ全体の横はみ出しはなく、順位から総資産へTab移動できた。
+- Chrome: 管理行のTab / Shift+Tab相当の行内移動、別行hoverとの併存、同じ行での非加算、dialogを開いたときの背景行focus解除とEscape後の実focus復帰を確認。390pxで横scrollした操作列へ到達した状態でも、固定名前セルと行背景が同色・不透明で、子操作のfocus枠を確認できた。reduced motionでも行focusを表示できた。
+- Chrome: 390pxの管理ChoiceListで選択印とfocusを確認。末尾削除buttonのoutlineが切れる不具合を修正し、通常色とforced colorsで選択印・labelのfocus枠を維持することを確認した。隠したnative radio側の二重outlineはない。
+- Chrome: 390pxの比較filterでnative selectへTab移動し、ページの横はみ出しとoutlineの切れがないことを確認。タブの矢印移動で「分析する」にfocusしても「次戦に備える」の選択表示を保つ。
+- Chrome: 390pxの出力候補dialogで現在値、未選択候補、labelの単一focus枠を確認。ArrowDownで別の試合を選ぶとdialogが閉じ、元の「試合を変更」buttonへ可視focusが戻り、選択内容が更新された。ダウンロードやdata mutationは実行していない。
+- 文書の`git diff --check`、`pnpm public:safety:check`が通過。
+
+これらは共通部品の契約と代表画面の実装確認であり、利用者の操作時間・誤操作の減少を実証したものではない。全画面×全状態の視覚検査でもない。
+
+### 未完了のgateと再開位置
+
+Playwright MCPの`browser_snapshot`と`browser_tabs`がページ操作前に`Transport closed`となり、E2Eを実行できていない。Chrome確認やunit / component testをその代わりに通過扱いにはしない。
+
+復旧後は`apps/web/e2e/ui-conformance.spec.ts`の対象flowをPlaywright MCPで検証する。今回追加した、試合行のfocus移動・別行hoverとの併存・同じ行での非加算・focus解除、出力radioの単一outlineとforced colors、選択後の復帰を優先する。取得中・inert化との合成、開催行やpointerだけで操作した場合のflowについても、既存の待機制御を含むE2Eの回帰確認が残る。保存・削除等の実業務mutationはこの実画面確認では行っていない。
+
+## 8. 確定事項
+
+1. 行背景はユーザー回答「キーボードのフォーカス表示に連動する」に従い、子の`:focus-visible`へ連動した。
+2. ユーザー回答「枠付きの副ボタンも少し明瞭にする」に従い、secondaryの4経路を対象にした。
+
+対象範囲の確認待ちはない。未完了は上記のE2E検証であり、色の選定や実装方式の承認待ちではない。

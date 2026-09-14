@@ -27,7 +27,7 @@ export function AdminAccountRow({
       <th
         className={cn(
           dataTableBodyCellClassName,
-          "sticky left-0 z-[var(--z-base)] bg-[var(--color-surface)] text-left font-plain",
+          "sticky left-0 z-[var(--z-base)] bg-inherit text-left font-plain",
         )}
         scope="row"
       >

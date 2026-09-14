@@ -92,10 +92,11 @@ export function DataTableBodyRow({
   ...props
 }: Omit<ComponentPropsWithoutRef<"tr">, "className" | "style">) {
   const surfaceRef = useSurfaceFeedback<HTMLTableRowElement>();
+  // Keep the row opaque so sticky cells can inherit its complete hover paint.
   return (
     <tr
       ref={surfaceRef}
-      className="momo-surface momo-surface-row group last:[&>td]:border-b last:[&>td]:border-[var(--color-border-strong)] last:[&>th]:border-b last:[&>th]:border-[var(--color-border-strong)]"
+      className="momo-surface momo-surface-neutral momo-surface-row group last:[&>td]:border-b last:[&>td]:border-[var(--color-border-strong)] last:[&>th]:border-b last:[&>th]:border-[var(--color-border-strong)]"
       {...props}
     />
   );

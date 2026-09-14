@@ -531,10 +531,12 @@ describe("MatchesListPage", () => {
     ).toBeInTheDocument();
   });
 
-  it("shows optimistic status selection while the filtered list is refetching", async () => {
+  it("keeps filter focus and applies the latest condition when responses finish out of order", async () => {
     setDevUser();
     const responseGate = createDeferred();
     let needsReviewRequested = false;
+    const latestResponseGate = createDeferred();
+    let confirmedRequested = false;
     const allItems = [
       {
         createdAt: "2026-01-01T00:00:00.000Z",
@@ -579,6 +581,13 @@ describe("MatchesListPage", () => {
             items: allItems.filter((item) => item.status === "needs_review"),
           });
         }
+        if (url.searchParams.get("status") === "confirmed") {
+          confirmedRequested = true;
+          await latestResponseGate.promise;
+          return HttpResponse.json({
+            items: allItems.filter((item) => item.status === "confirmed"),
+          });
+        }
         return HttpResponse.json({ items: allItems });
       }),
     );
@@ -600,21 +609,38 @@ describe("MatchesListPage", () => {
     await user.selectOptions(statusFilter, "needs_review");
 
     expect(statusFilter).toHaveValue("needs_review");
-    expect(statusFilter).toBeDisabled();
+    expect(statusFilter).toBeEnabled();
+    expect(statusFilter).toHaveFocus();
     expect(screen.getByRole("button", { name: "一覧を更新中" })).toBeDisabled();
     const listRegion = screen.getByRole("region", { name: "登録済みの試合" });
     expect(listRegion.querySelector("[inert]")).not.toBeNull();
     draftActionButtons.forEach((button) => expect(button).toBeDisabled());
     await waitFor(() => expect(needsReviewRequested).toBe(true));
 
-    responseGate.resolve();
-    await waitFor(() =>
-      screen
-        .getAllByRole("button", { name: "確認事項を直す" })
-        .forEach((button) => expect(button).toBeEnabled()),
-    );
-    expect(statusFilter).toBeEnabled();
-    expect(listRegion.querySelector("[inert]")).toBeNull();
+    // Move on with the keyboard before the first condition has finished loading.
+    await user.tab();
+    expect(screen.getByLabelText("並び順")).toHaveFocus();
+    await user.tab({ shift: true });
+    await user.selectOptions(statusFilter, "confirmed");
+    await waitFor(() => expect(confirmedRequested).toBe(true));
+    expect(statusFilter).toHaveValue("confirmed");
+    expect(statusFilter).toHaveFocus();
+    expect(listRegion.querySelector("[inert]")).not.toBeNull();
+
+    // Completion must not take focus back after the user has moved to the next condition.
+    await user.tab();
+    latestResponseGate.resolve();
+    await waitFor(() => expect(listRegion.querySelector("[inert]")).toBeNull());
+    expect(screen.getByLabelText("並び順")).toHaveFocus();
+    expect(
+      within(listRegion).getByRole("link", { name: "第1試合 東日本編の試合結果を見る" }),
+    ).toHaveAttribute("href", expect.stringContaining("/matches/match-1"));
+    expect(screen.queryByRole("button", { name: "確認事項を直す" })).not.toBeInTheDocument();
+
+    await act(async () => responseGate.resolve());
+    expect(statusFilter).toHaveValue("confirmed");
+    expect(screen.getByLabelText("並び順")).toHaveFocus();
+    expect(screen.queryByRole("button", { name: "確認事項を直す" })).not.toBeInTheDocument();
   });
 
   it("keeps same-scope list operations available and reports a cached refresh failure locally", async () => {

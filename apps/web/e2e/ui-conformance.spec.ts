@@ -273,6 +273,41 @@ test("keeps match rows usable through responsive update and retry states", async
     await expectNoHorizontalPageOverflow(page);
   });
 
+  await test.step("continue keyboard filtering while protecting the previous results", async () => {
+    const gate = createDeferred();
+    let requested = false;
+    const pattern = "**/api/matches?**";
+    const holdCondition = async (route: Route) => {
+      const url = new URL(route.request().url());
+      if (url.searchParams.get("status") === "confirmed") {
+        requested = true;
+        await gate.promise;
+      }
+      await route.fallback();
+    };
+    await page.route(pattern, holdCondition);
+    const status = page.getByRole("combobox", { exact: true, name: "確定状況" });
+    const sort = page.getByRole("combobox", { exact: true, name: "並び順" });
+    const list = page.getByRole("region", { exact: true, name: "登録済みの試合" });
+    try {
+      await status.focus();
+      await status.selectOption("confirmed");
+      await expect.poll(() => requested).toBe(true);
+      await expect(status).toBeEnabled();
+      await expect(status).toBeFocused();
+      await expect(list.locator("[inert]")).toHaveCount(1);
+      await status.press("Tab");
+      await expect(sort).toBeFocused();
+    } finally {
+      gate.resolve();
+      await page.unroute(pattern, holdCondition);
+    }
+    await expect(list.locator("[inert]")).toHaveCount(0);
+    await expect(list.getByRole("table").locator("tbody tr")).toHaveCount(2);
+    await expect(sort).toBeFocused();
+    await expect(status).toHaveValue("confirmed");
+  });
+
   await test.step("keep surface feedback readable and honor a changed motion preference", async () => {
     const action = page.getByRole("link", { exact: true, name: "手入力で作成" });
     const paint = () => action.evaluate((element) => getComputedStyle(element).backgroundColor);
@@ -366,10 +401,9 @@ test("keeps match rows usable through responsive update and retry states", async
         "aria-busy",
         "true",
       );
-      await expect(page.getByRole("region", { name: "登録済みの試合" })).toHaveAttribute(
-        "aria-busy",
-        "true",
-      );
+      await expect(
+        page.getByRole("region", { name: "登録済みの試合" }).locator("[data-stale]"),
+      ).toHaveAttribute("aria-busy", "true");
       await expect(visibleMatchRow).toBeVisible();
       await expect(page.getByRole("button", { name: "一覧を再読み込み" })).toHaveCount(0);
     } finally {

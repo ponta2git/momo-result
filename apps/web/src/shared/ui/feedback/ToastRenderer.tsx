@@ -57,7 +57,7 @@ export function ToastRenderer() {
 
   return (
     <Toast.Portal>
-      <Toast.Viewport aria-live="polite" className={toastViewportClassName}>
+      <Toast.Viewport aria-label="通知" aria-live="polite" className={toastViewportClassName}>
         <AnimatePresence initial={false}>
           {toasts.map((toast) => (
             <PresentToast key={toast.id} reduceMotion={reduceMotion} toast={toast} />

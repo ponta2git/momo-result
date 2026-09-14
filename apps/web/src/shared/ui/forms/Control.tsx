@@ -34,16 +34,17 @@ const textAlignClass = {
 } as const satisfies Record<ControlTextAlign, string>;
 
 const toneClass = {
-  action: "border-[var(--color-action)]/55 momo-surface-control-action",
+  action: "border-[var(--color-control-border-action)] momo-surface-control-action",
   default: "",
-  review: "border-[var(--color-review)]/75 momo-surface-control-review",
-  success: "border-[var(--color-success)]/55 momo-surface-control-success",
-  warning: "border-[var(--color-warning)]/65 momo-surface-control-warning",
+  review: "border-[var(--color-control-border-review)] momo-surface-control-review",
+  success: "border-[var(--color-control-border-success)] momo-surface-control-success",
+  warning: "border-[var(--color-control-border-warning)] momo-surface-control-warning",
 } as const satisfies Record<ControlTone, string>;
 
 const baseControlClass =
-  "w-full min-w-0 rounded-sm border border-[var(--color-border)] momo-surface momo-surface-neutral py-2 text-base leading-6 font-plain text-[var(--color-text-primary)] disabled:cursor-not-allowed disabled:bg-[var(--color-surface-subtle)] disabled:text-[var(--color-text-muted)] disabled:opacity-70 sm:text-sm sm:leading-5";
-const invalidControlClass = "border-[var(--color-danger)]/65 momo-surface-control-invalid";
+  "w-full min-w-0 rounded-sm border border-[var(--color-control-border)] momo-surface momo-surface-neutral py-2 text-base leading-6 font-plain text-[var(--color-text-primary)] disabled:cursor-not-allowed disabled:bg-[var(--color-surface-subtle)] disabled:text-[var(--color-text-muted)] disabled:opacity-70 sm:text-sm sm:leading-5";
+const invalidControlClass =
+  "border-[var(--color-control-border-invalid)] momo-surface-control-invalid";
 
 type ResolvedControlPresentation = {
   controlHeight: ControlHeight;

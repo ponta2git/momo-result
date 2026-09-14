@@ -51,6 +51,8 @@
 - content surface の内側を通常 section ごとの白い card に分割しない。まず見出し、整列、列、関係的余白で構成し、同時に独立して扱う source / editor などの workspace、独立して反復する record、境界が操作の理解に必要な bounded panel に限って別面を許容する。empty、pagination、loading など親 scope に従属する状態・操作は、親の白面を重ねて作り直さない。
 - グルーピングは整列と余白から始める。divider は、隣接内容が余白と見出しだけでは同一群と誤認される場合、table の row / column、control、状態通知など境界自体が意味を持つ場合に限る。通常 section を上下線で挟まず、必要なら片側1本を使う。
 - 1つの視覚境界は1つの owner だけが描く。親 surface の外周と先頭・末尾 child、disclosure の root と panel、table wrapper と隣接 toolbar などへ同じ境界を重ねず、隣接する平行線や二重線を作らない。淡色背景、border、角丸を同じ要素へ慣習的に重ねず、境界を伝えるために必要な最小の手段を選ぶ。
+- 入力場所と独自選択マークの識別に必要な境界は、一般の区切り線から分けた意味tokenを使い、実際の隣接色に対して3:1以上を確保する。半透明の枠は、その下の入力背景と外側の面を含めて検証する。hover途中や要確認・errorの状態でも識別性を保ち、無効状態を通常状態と同じ濃さへ強制しない。
+- 通常境界は役割、意味枠は要確認・error等、focus枠は操作先を示す。非focusの入力にも同じ通常境界を残し、focus移動で選択・error・説明を消さない。値と「変更」buttonを囲む表示用の枠は、全体が操作できる入力欄と同じ強さへ変更しない。
 - sibling 間の divider は、それらを並べる親 composition が `divide-*` または独立した separator として所有し、各 child の先頭・末尾 border と `first` / `last` の相殺で組み立てない。control、bounded panel、badge、table の上端・header 下端・最終行下端など、部品自身の意味を成立させる perimeter / internal boundary はその部品が所有する。装飾だけの separator は accessibility tree へ意味を追加せず、内容上の区切りを表す場合だけ semantic な `hr` または section 構造を使う。
 - shadow は dialog、tooltip、toast など浮遊 UI に限定する。通常内容に elevation を足さず、gradient、glow、大きな surface contrast を装飾に使わない。
 - 角丸は参照値の共有だけでなく、要素の役割と包含階層を表す。`xs` は compact な badge、marker、data cell、`sm` は control と小型の bounded panel、`md` は record、card、notice など content 内の独立境界、`lg` は page-level content surface と dialog、toast など最上位または浮遊する面に使う。`full` は円、pill、progress track など輪郭自体に意味がある形へ限定する。table は前項のとおり外周角丸を持たない。

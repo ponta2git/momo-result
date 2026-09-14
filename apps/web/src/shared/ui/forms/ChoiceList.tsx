@@ -138,7 +138,7 @@ function ChoiceOption<Value extends string>({
           aria-describedby={descriptionId}
           aria-label={option.accessibleLabel}
           checked={selected}
-          className="sr-only"
+          className="sr-only focus-visible:outline-none"
           disabled={optionDisabled}
           name={name}
           type="radio"
@@ -151,7 +151,7 @@ function ChoiceOption<Value extends string>({
             "inline-flex size-5 items-center justify-center rounded-full border",
             selected
               ? "border-[var(--color-action)] text-[var(--color-action)]"
-              : "border-[var(--color-border-strong)] text-transparent",
+              : "border-[var(--color-control-border)] text-transparent",
           )}
         >
           {option.pending ? (

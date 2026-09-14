@@ -120,6 +120,10 @@ export function SelectControl({
         aria-invalid={invalid || undefined}
         className={cn(
           controlClassName({ controlHeight, density, invalid, textAlign, tone }),
+          // The arrow identifies a dropdown; its ordinary border only outlines the hit area.
+          showIndicator && tone === "default" && !invalid
+            ? "border-[var(--color-select-border)]"
+            : "",
           "peer block",
           showIndicator ? "appearance-none forced-colors:appearance-auto" : "",
           showIndicator ? (density === "compact" ? "pr-8" : "pr-10") : "",

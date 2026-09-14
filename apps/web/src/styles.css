@@ -99,6 +99,7 @@
   --color-border: var(--ref-neutral-border);
   --color-border-strong: var(--ref-neutral-border-strong);
   --color-secondary-border: var(--ref-neutral-border-strong);
+  --color-select-border: var(--ref-neutral-border-strong);
   --color-control-border: var(--ref-neutral-control-border);
   --color-control-border-action: color-mix(in oklab, var(--color-action) 75%, transparent);
   --color-control-border-review: color-mix(in oklab, var(--color-review) 80%, transparent);

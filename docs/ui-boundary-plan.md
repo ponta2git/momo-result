@@ -231,7 +231,7 @@ Playwright MCPの接続が復旧し、タブ一覧取得とアプリへのブラ
 
 対象範囲の確認待ちはなく、計画した実装と変更に必要な検証を完了した。
 
-## 9. 通常のドロップダウン境界の再検討（提案・未適用）
+## 9. 通常のドロップダウン境界の再検討と調整（実施済み）
 
 実装後に「ドロップダウンの枠が濃く、調和を乱す」という利用者の指摘があった。再検討の対象は、候補を開く前の通常の一行select。共通のSelectControlは現在、値・下向き矢印を持つにもかかわらず、テキスト入力と同じ3:1以上の全周境界を描く。選択欄が複数並ぶ場面で枠の反復が強くなるため、入力場所の識別を全周に担わせた前回の判断を修正する。
 
@@ -249,7 +249,7 @@ Playwright MCPの接続が復旧し、タブ一覧取得とアプリへのブラ
 
 推奨案の矢印は既存のsecondary text色を維持する。標準surfaceで約6.48:1、subtle / hover背景で約5.94 / 6.12:1となる。枠の1.57:1を識別基準の代わりにせず、矢印側のcontrastを確認する。薄い枠は残して操作範囲を補助し、未操作のselectをdisabledに見せるための文字・矢印の減光は行わない。
 
-### 実装する場合の接続
+### 実装の接続
 
 - 通常の一行selectに限り、`--color-select-border`を既存の`--ref-neutral-border-strong`へ接続する。buttonの用途tokenを流用せず、参照値を共有する。新しいpalette値やfeature別propsは追加しない。
 - SelectControl内で、矢印がある一行表示・toneがdefault・invalidでない場合に選ぶ。複数選択やlistbox表示にはこの条件を広げず、矢印がない部品の識別用境界を維持する。
@@ -257,4 +257,15 @@ Playwright MCPの接続が復旧し、タブ一覧取得とアプリへのブラ
 - テキスト入力、textarea、未選択radioの識別用境界は今回の対象に含めない。入力とselectを混在させた場合も、同じ枠色を強制するのではなく、それぞれの識別に必要な情報とfocusの文法を揃える。
 - UI規約の境界要件を「全入力部品の全周」へ拡大解釈しないよう、通常selectの矢印と補助枠の役割を明記する。色の検証も通常枠の3:1ではなく、実背景に対する矢印の識別性を対象にする。
 
-比較表示では1440pxでの並び、390pxの横はみ出しとfocus移動、エラー枠の保持、forced colorsでのnative appearanceへの復帰・独自矢印の非表示・focus枠を確認した。これは共通部品を用いた候補の比較であり、推奨案を製品へ適用した結果や全画面のE2Eではない。実装時は比較filter、出力条件、密な編集で接続と状態を確認する。
+比較表示では1440pxでの並び、390pxの横はみ出しとfocus移動、エラー枠の保持、forced colorsでのnative appearanceへの復帰・独自矢印の非表示・focus枠を確認した。これは採用前の候補比較として行った確認である。ユーザー承認後、上記の条件をSelectControlへ適用し、次の製品確認を行った。
+
+### 調整後の検証結果
+
+- SelectControl、色のcontrast、ScoreGridの既存test計19件が通過。矢印に使うsecondary text色は、既存の色検証でsurface / canvas / hover / subtleとのcontrastを確認している。補助枠を識別用境界の3:1 oracleへ追加するtestは作らない。
+- format、lint、typecheck、production buildが通過。生成CSSに`--color-select-border`とその参照classが残ることを確認した。buildには従来のchunk size警告が残る。
+- 隔離したAPI / DB / Redisとproduction buildのpreviewを使い、Playwright MCPで製品の実経路を確認した。比較filterの対象作品・シーズン・マップ、出力のシーズン、編集画面のオーナー・メンバー・プレー順へ薄い枠が接続されている。
+- 比較filterはhoverで枠色や寸法が変わらず、Tabでのfocus移動、選択によるURL更新、320 / 390pxの横はみ出しなしを確認。forced colorsではnative appearanceとfocusを保ち、独自矢印を非表示にする既存の接続が成立した。
+- 密な編集画面では、通常の選択欄とテキスト入力の境界、invalid / reviewの意味枠を区別できることを1440pxで確認。hover中に作品の未選択errorを解消すると通常の補助枠へ戻る。390pxでもメンバーからプレー順へfocusを移せ、ページ全体の横はみ出しはない。
+- 出力画面でも通常selectの枠、単一の矢印、次の操作へのTab移動、390pxの横はみ出しなしを確認した。未変更の保存・ダウンロード処理や全E2E suiteまでを再実行した結果ではない。
+
+新しい参照色、依存、feature別の指定、hover演出は追加せず、通常selectの境界だけを役割に合わせて調整した。検証用の一時環境は正常終了し、専用コンテナの後片付けも完了した。

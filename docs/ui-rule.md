@@ -220,10 +220,18 @@
 - toast は同じ実行結果の重複を除き、別の対象・別の実行を文言の一致だけで消さない。共通 host が表示上限、閉じる操作、表示寿命、読み上げを所有する。上限外の通知は表示領域を占有せず、閉じた通知は操作・読み上げの対象から直ちに外す。architecture で許容する有限の非対話的な退出表示が終わった後に、内容や空き領域を残さない。
 - toast の表示位置は、主要操作、fixed / sticky action、入力中の control を覆わないよう共通 host が所有する。画面固有の主要操作が下端にある場合は上端へ配置するなど、通知を閉じるまでタスクが停止する重なりを作らない。通常の画面遷移や描画部分の初回準備で、伝えるべき完了結果を失わない。
 
+### 操作面の反応
+
+- 文字・icon・寸法を保ち、面の濃さで操作へ応える。操作可能性、選択・tone・invalidの意味、一時的なhover / pressed、focusを分ける。意味の基底色とhover量を分離し、状態の発生・解除をhoverの補間へ巻き込まない。
+- hoverは開始遅延0、共通の100ms・cubic-bezier(0, 0, 0.58, 1)で現在値から補間し、反応を蓄積しない。pressed・focus・操作制限と、意味を認識する表示は即時に返す。非必須の補間は動きを減らす設定で省略し、touchからhoverを作らない。既存の矢印・indicatorの補間とは用途を分ける。
+- 操作部品は通常→hover→pressedで面の濃さを小さく増す。編集用controlへ押し込み表現を足さない。選択済みでも変更可能なら選択の印を保った反応を返す。invalid / review / warning / successはその意味色の範囲で応答し、通常hover色で覆わない。readOnlyは編集不可として扱い、focus・文字選択・copyを保つ。
+- 表の行は操作部品より弱いhoverで読む位置を補助する。子buttonは独立して反応し、親の反応量を継承しない。行全体へpressed、pointer cursor、tabIndexを追加しない。面のない本文linkは既存の下線等を維持する。
+- 色対・反応の接続はshared UIが所有し、featureは既存の用途・状態propsで利用する。部品別の時間・任意色・エフェクト指定を公開せず、独自linkやrender差替えも実要素の接続を確認する。hoverのために新しいwrapperや余白を追加しない。
+
 ### 6.2 モーション
 
 - motion は、操作への即時 feedback、状態の因果、同じ対象の連続性を補助する場合だけ使う。文字、形、位置、accessible state だけで意味を成立させた上で、動いたこと自体を見せ場にせず、注意深く見れば変化を追いやすい程度に抑える。
-- 有限の motion は最短の共通 token を既定とし、主に opacity と transform を使う。値そのものの変化を伝える図表や数値は、その mark または値だけを補間してよい。周囲の layout shift、bounce / overshoot、stagger、視線を奪う移動を作らない。
+- 有限の motion は用途に対応する共通 token を使い、主に opacity と transform を使う。操作面のhoverは下記の色反応に従う。値そのものの変化を伝える図表や数値は、その mark または値だけを補間してよい。周囲の layout shift、bounce / overshoot、stagger、視線を奪う移動を作らない。
 - 利用者の intent と application state は motion より先に反映し、操作可能性、data、route、open、focus、pending、error の変更を animation 完了まで待たせない。motion は中断または省略されても、同じ最終状態と回復操作へ到達できなければならない。
 - route content、Suspense の fallback と完成内容、初回 content、一覧 row を、登場または置換そのものの演出として animate しない。異なる pathname の loading は structural fallback、同一 pathname の更新は既存内容の維持と局所 feedback で表す。
 - 楽観更新の pending、confirmed、error は、文字、accessible state、disabled、局所 error / retry のうち必要な手段で静止状態でも区別する。同じ安定した identity の `pending -> confirmed` では局所的な属性だけを補間してよいが、追加・削除の presence motion は、rollback、server correction、同時 mutation を含む必要性と正しさを先に検証する。

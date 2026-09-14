@@ -7,6 +7,7 @@ import type {
   ButtonVariant as ActionButtonVariant,
 } from "@/shared/ui/actions/actionRecipes";
 import { PendingActionContent } from "@/shared/ui/actions/PendingActionContent";
+import { useSurfaceFeedback } from "@/shared/ui/motion/useSurfaceFeedback";
 
 export { buttonClassName } from "@/shared/ui/actions/actionRecipes";
 export type ButtonSize = ActionButtonSize;
@@ -44,6 +45,7 @@ export function Button({
   variant = "primary",
   ...props
 }: ButtonProps) {
+  const surfaceRef = useSurfaceFeedback(ref);
   const formStatus = useFormStatus();
   const actualPending = pending ?? (type === "submit" && formStatus.pending);
   const isDisabled = disabled || actualPending;
@@ -52,7 +54,7 @@ export function Button({
   return (
     <button
       {...props}
-      ref={ref}
+      ref={surfaceRef}
       aria-busy={actualPending || undefined}
       className={buttonClasses}
       disabled={isDisabled}

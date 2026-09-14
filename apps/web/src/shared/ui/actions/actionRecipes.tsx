@@ -8,32 +8,27 @@ export type ButtonVariant = "primary" | "secondary" | "quiet" | "danger" | "dang
 export type IconActionSize = "sm" | "md" | "lg";
 export type IconActionVariant = "secondary" | "quiet" | "danger";
 
-const actionBaseClass = "inline-flex items-center justify-center rounded-sm border";
+const actionBaseClass =
+  "momo-surface momo-surface-press inline-flex items-center justify-center rounded-sm border";
 
 const surfaceVariantClass = {
-  secondary:
-    "border-[var(--color-border)] bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)]",
-  quiet:
-    "border-transparent bg-transparent text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]",
-  danger:
-    "border-[var(--color-danger)] bg-[var(--color-danger)] text-[var(--color-text-inverse)] hover:opacity-90 active:opacity-95",
+  secondary: "momo-surface-neutral border-[var(--color-border)]",
+  quiet: "border-transparent text-[var(--color-text-secondary)]",
+  danger: "momo-surface-danger border-[var(--color-danger)] text-[var(--color-text-inverse)]",
 } as const satisfies Record<IconActionVariant, string>;
 
 const buttonVariantClass = {
   primary:
-    "border-[var(--color-action)] bg-[var(--color-action)] text-[var(--color-text-inverse)] hover:opacity-90 active:opacity-95 focus-visible:outline-[var(--color-action)]",
+    "momo-surface-action border-[var(--color-action)] text-[var(--color-text-inverse)] focus-visible:outline-[var(--color-action)]",
   secondary: cn(surfaceVariantClass.secondary, "text-[var(--color-text-primary)]"),
   quiet: surfaceVariantClass.quiet,
   danger: cn(surfaceVariantClass.danger, "focus-visible:outline-[var(--color-danger)]"),
   dangerQuiet:
-    "border-transparent bg-transparent text-[var(--color-danger)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-danger)] focus-visible:outline-[var(--color-danger)]",
+    "border-transparent text-[var(--color-danger)] focus-visible:outline-[var(--color-danger)]",
 } as const satisfies Record<ButtonVariant, string>;
 
 const iconActionVariantClass = {
-  secondary: cn(
-    surfaceVariantClass.secondary,
-    "text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]",
-  ),
+  secondary: cn(surfaceVariantClass.secondary, "text-[var(--color-text-secondary)]"),
   quiet: surfaceVariantClass.quiet,
   danger: surfaceVariantClass.danger,
 } as const satisfies Record<IconActionVariant, string>;

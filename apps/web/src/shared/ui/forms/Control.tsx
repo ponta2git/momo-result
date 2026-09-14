@@ -2,6 +2,7 @@ import { ChevronDown } from "lucide-react";
 import type { ComponentPropsWithRef } from "react";
 
 import { cn } from "@/shared/ui/cn";
+import { useSurfaceFeedback } from "@/shared/ui/motion/useSurfaceFeedback";
 
 export type ControlDensity = "compact" | "default";
 export type ControlHeight = "default" | "touch";
@@ -33,16 +34,16 @@ const textAlignClass = {
 } as const satisfies Record<ControlTextAlign, string>;
 
 const toneClass = {
-  action: "border-[var(--color-action)]/55 bg-[var(--color-action)]/10",
+  action: "border-[var(--color-action)]/55 momo-surface-control-action",
   default: "",
-  review: "border-[var(--color-review)]/75 bg-[var(--color-review)]/14",
-  success: "border-[var(--color-success)]/55 bg-[var(--color-success)]/12",
-  warning: "border-[var(--color-warning)]/65 bg-[var(--color-warning)]/18",
+  review: "border-[var(--color-review)]/75 momo-surface-control-review",
+  success: "border-[var(--color-success)]/55 momo-surface-control-success",
+  warning: "border-[var(--color-warning)]/65 momo-surface-control-warning",
 } as const satisfies Record<ControlTone, string>;
 
 const baseControlClass =
-  "w-full min-w-0 rounded-sm border border-[var(--color-border)] bg-[var(--color-surface)] py-2 text-base leading-6 font-plain text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)] disabled:cursor-not-allowed disabled:bg-[var(--color-surface-subtle)] disabled:text-[var(--color-text-muted)] disabled:opacity-70 sm:text-sm sm:leading-5";
-const invalidControlClass = "border-[var(--color-danger)]/65 bg-[var(--color-danger)]/10";
+  "w-full min-w-0 rounded-sm border border-[var(--color-border)] momo-surface momo-surface-neutral py-2 text-base leading-6 font-plain text-[var(--color-text-primary)] disabled:cursor-not-allowed disabled:bg-[var(--color-surface-subtle)] disabled:text-[var(--color-text-muted)] disabled:opacity-70 sm:text-sm sm:leading-5";
+const invalidControlClass = "border-[var(--color-danger)]/65 momo-surface-control-invalid";
 
 type ResolvedControlPresentation = {
   controlHeight: ControlHeight;
@@ -80,9 +81,11 @@ export function InputControl({
   tone = "default",
   ...props
 }: InputControlProps) {
+  const surfaceRef = useSurfaceFeedback(props.ref);
   return (
     <input
       {...props}
+      ref={surfaceRef}
       aria-invalid={invalid || undefined}
       className={controlClassName({ controlHeight, density, invalid, textAlign, tone })}
     />
@@ -103,12 +106,14 @@ export function SelectControl({
   tone = "default",
   ...props
 }: SelectControlProps) {
+  const surfaceRef = useSurfaceFeedback(props.ref);
   const showIndicator = !multiple && (size === undefined || size <= 1);
 
   return (
     <div className="relative min-w-0">
       <select
         {...props}
+        ref={surfaceRef}
         multiple={multiple}
         size={size}
         aria-invalid={invalid || undefined}
@@ -159,9 +164,11 @@ export function TextareaControl({
   tone = "default",
   ...props
 }: TextareaControlProps) {
+  const surfaceRef = useSurfaceFeedback(props.ref);
   return (
     <textarea
       {...props}
+      ref={surfaceRef}
       aria-invalid={invalid || undefined}
       className={cn(
         controlClassName({ controlHeight, density, invalid, textAlign, tone }),

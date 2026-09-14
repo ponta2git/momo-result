@@ -3,6 +3,7 @@ import { useMemo } from "react";
 import type { ComponentPropsWithoutRef, CSSProperties, ReactNode } from "react";
 
 import { cn } from "@/shared/ui/cn";
+import { useSurfaceFeedback } from "@/shared/ui/motion/useSurfaceFeedback";
 import { contentText } from "@/shared/ui/typography";
 
 type DataTableAlign = "center" | "left" | "right";
@@ -90,9 +91,11 @@ export const dataTableScrollAreaClassName = "min-w-0 overflow-x-auto bg-[var(--c
 export function DataTableBodyRow({
   ...props
 }: Omit<ComponentPropsWithoutRef<"tr">, "className" | "style">) {
+  const surfaceRef = useSurfaceFeedback<HTMLTableRowElement>();
   return (
     <tr
-      className="group hover:bg-[var(--color-surface-hover)] last:[&>td]:border-b last:[&>td]:border-[var(--color-border-strong)] last:[&>th]:border-b last:[&>th]:border-[var(--color-border-strong)]"
+      ref={surfaceRef}
+      className="momo-surface momo-surface-row group last:[&>td]:border-b last:[&>td]:border-[var(--color-border-strong)] last:[&>th]:border-b last:[&>th]:border-[var(--color-border-strong)]"
       {...props}
     />
   );
@@ -173,26 +176,14 @@ export function DataTable<Row>({
                 style={columnStyleByKey.get(column.key)}
               >
                 {column.sortable ? (
-                  <button
-                    className={cn(
-                      "inline-flex min-h-11 w-full items-center gap-1 rounded-xs px-3 py-2 text-inherit focus-visible:-outline-offset-3 pointer-fine:min-h-9 pointer-fine:py-1",
-                      actionAlignClass[column.align ?? "left"],
-                      "hover:bg-[var(--color-surface-hover)] disabled:cursor-not-allowed disabled:opacity-60",
-                      column.sortDirection
-                        ? "bg-[var(--color-action)]/10 text-[var(--color-text-primary)]"
-                        : "",
-                    )}
+                  <DataTableSortButton
+                    align={column.align ?? "left"}
                     disabled={column.sortDisabled}
-                    onClick={column.onSort}
-                    type="button"
+                    direction={column.sortDirection}
+                    onSort={column.onSort}
                   >
-                    <span>{column.header}</span>
-                    {column.sortDirection === "asc" ? (
-                      <ArrowUp aria-hidden="true" className="size-3.5" />
-                    ) : column.sortDirection === "desc" ? (
-                      <ArrowDown aria-hidden="true" className="size-3.5" />
-                    ) : null}
-                  </button>
+                    {column.header}
+                  </DataTableSortButton>
                 ) : (
                   column.header
                 )}
@@ -241,5 +232,42 @@ export function DataTable<Row>({
         </tbody>
       </table>
     </div>
+  );
+}
+
+function DataTableSortButton({
+  align,
+  children,
+  direction,
+  disabled,
+  onSort,
+}: {
+  align: DataTableAlign;
+  children: ReactNode;
+  direction: "asc" | "desc" | undefined;
+  disabled: boolean | undefined;
+  onSort: () => void;
+}) {
+  const surfaceRef = useSurfaceFeedback<HTMLButtonElement>();
+  return (
+    <button
+      ref={surfaceRef}
+      className={cn(
+        "momo-surface momo-surface-press inline-flex min-h-11 w-full items-center gap-1 rounded-xs px-3 py-2 text-inherit focus-visible:-outline-offset-3 pointer-fine:min-h-9 pointer-fine:py-1",
+        actionAlignClass[align],
+        "disabled:cursor-not-allowed disabled:opacity-60",
+        direction ? "momo-surface-sorted text-[var(--color-text-primary)]" : "",
+      )}
+      disabled={disabled}
+      onClick={onSort}
+      type="button"
+    >
+      <span>{children}</span>
+      {direction === "asc" ? (
+        <ArrowUp aria-hidden="true" className="size-3.5" />
+      ) : direction === "desc" ? (
+        <ArrowDown aria-hidden="true" className="size-3.5" />
+      ) : null}
+    </button>
   );
 }

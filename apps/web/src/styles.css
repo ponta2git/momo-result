@@ -32,6 +32,14 @@
   --ref-neutral-border-strong: oklch(24.5% 0.02 250 / 0.22);
   --ref-neutral-night: oklch(24% 0.035 260);
 
+  --ref-neutral-60: oklch(98% 0.004 235);
+  --ref-neutral-225: oklch(91.5% 0.025 235);
+  --ref-neutral-250: oklch(90.5% 0.025 235);
+  --ref-action-725: oklch(46.5% 0.095 245);
+  --ref-action-750: oklch(44.5% 0.095 245);
+  --ref-status-danger-725: oklch(47.5% 0.17 28);
+  --ref-status-danger-750: oklch(45.5% 0.17 28);
+
   --ref-action-700: oklch(48% 0.095 245);
   --ref-analysis-emphasis-700: oklch(51% 0.105 70);
   --ref-analysis-positive-700: oklch(49% 0.08 195);
@@ -70,6 +78,14 @@
   --color-surface-hover: var(--ref-neutral-75);
   --color-surface-subtle: var(--ref-neutral-100);
   --color-surface-selected: var(--ref-neutral-200);
+  --color-surface-row-hover: var(--ref-neutral-60);
+  --color-surface-pressed: var(--ref-neutral-100);
+  --color-surface-selected-hover: var(--ref-neutral-225);
+  --color-surface-selected-pressed: var(--ref-neutral-250);
+  --color-action-hover: var(--ref-action-725);
+  --color-action-pressed: var(--ref-action-750);
+  --color-danger-hover: var(--ref-status-danger-725);
+  --color-danger-pressed: var(--ref-status-danger-750);
   --color-surface-inverse: var(--ref-neutral-night);
   --color-media-canvas: var(--ref-neutral-night);
   --color-backdrop: var(--ref-neutral-night);
@@ -256,4 +272,105 @@ samp {
   font-family: var(--font-momo-data);
   font-feature-settings: "tnum" 1;
   font-variant-numeric: tabular-nums;
+}
+
+/* Only --ui-hover is animated by Motion. Semantic paint and native states are immediate. */
+@layer components {
+  .momo-surface {
+    --ui-hover: 0;
+    --ui-hover-amount: var(--ui-hover);
+    --ui-surface-base: transparent;
+    --ui-surface-hover: var(--color-surface-hover);
+    --ui-surface-pressed: var(--color-surface-pressed);
+    background-color: color-mix(
+      in oklab,
+      var(--ui-surface-base),
+      var(--ui-surface-hover) calc(var(--ui-hover-amount) * 100%)
+    );
+  }
+  .momo-surface-neutral {
+    --ui-surface-base: var(--color-surface);
+  }
+  .momo-surface-action {
+    --ui-surface-base: var(--color-action);
+    --ui-surface-hover: var(--color-action-hover);
+    --ui-surface-pressed: var(--color-action-pressed);
+  }
+  .momo-surface-danger {
+    --ui-surface-base: var(--color-danger);
+    --ui-surface-hover: var(--color-danger-hover);
+    --ui-surface-pressed: var(--color-danger-pressed);
+  }
+  .momo-surface-row {
+    --ui-surface-hover: var(--color-surface-row-hover);
+  }
+  .momo-surface-selected {
+    --ui-surface-base: var(--color-surface-selected);
+    --ui-surface-hover: var(--color-surface-selected-hover);
+    --ui-surface-pressed: var(--color-surface-selected-pressed);
+  }
+  .momo-surface-sorted {
+    --ui-surface-base: color-mix(in oklab, var(--color-action) 10%, transparent);
+    --ui-surface-hover: color-mix(in oklab, var(--color-action) 13%, transparent);
+    --ui-surface-pressed: color-mix(in oklab, var(--color-action) 16%, transparent);
+  }
+  .momo-surface-control-action {
+    --ui-surface-base: color-mix(in oklab, var(--color-action) 10%, transparent);
+    --ui-surface-hover: color-mix(in oklab, var(--color-action) 13%, transparent);
+  }
+  .momo-surface-control-review {
+    --ui-surface-base: color-mix(in oklab, var(--color-review) 14%, transparent);
+    --ui-surface-hover: color-mix(in oklab, var(--color-review) 17%, transparent);
+  }
+  .momo-surface-control-success {
+    --ui-surface-base: color-mix(in oklab, var(--color-success) 12%, transparent);
+    --ui-surface-hover: color-mix(in oklab, var(--color-success) 15%, transparent);
+  }
+  .momo-surface-control-warning {
+    --ui-surface-base: color-mix(in oklab, var(--color-warning) 18%, transparent);
+    --ui-surface-hover: color-mix(in oklab, var(--color-warning) 21%, transparent);
+  }
+  .momo-surface-control-invalid {
+    --ui-surface-base: color-mix(in oklab, var(--color-danger) 10%, transparent);
+    --ui-surface-hover: color-mix(in oklab, var(--color-danger) 13%, transparent);
+  }
+  .momo-surface-underline {
+    --ui-surface-hover: transparent;
+    --ui-surface-pressed: transparent;
+    border-bottom-color: color-mix(
+      in oklab,
+      transparent,
+      var(--color-border-strong) calc(var(--ui-hover-amount) * 100%)
+    );
+  }
+  .momo-surface-underline-selected {
+    border-bottom-color: transparent;
+  }
+  .momo-surface-nav {
+    border-color: color-mix(
+      in oklab,
+      transparent,
+      var(--color-border) calc(var(--ui-hover-amount) * 100%)
+    );
+  }
+  .momo-surface-nav-current {
+    --ui-surface-base: color-mix(in oklab, var(--color-action) 12%, transparent);
+    --ui-surface-hover: color-mix(in oklab, var(--color-action) 15%, transparent);
+    --ui-surface-pressed: color-mix(in oklab, var(--color-action) 18%, transparent);
+  }
+  .momo-surface-press:active {
+    background-color: var(--ui-surface-pressed);
+  }
+  .momo-surface:where(
+    :disabled,
+    [aria-disabled="true"],
+    [data-disabled],
+    [readonly],
+    :has(input:disabled),
+    [inert],
+    [inert] *
+  ) {
+    --ui-hover-amount: 0;
+    background-color: var(--ui-surface-base);
+  }
 }

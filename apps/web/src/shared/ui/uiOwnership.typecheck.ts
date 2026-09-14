@@ -45,7 +45,15 @@ import type { StatusBadgeProps } from "@/shared/ui/status/StatusBadge";
 
 type ExternalVisualOverride<Props> = Extract<
   keyof Props,
-  "className" | "style" | `${string}ClassName`
+  | "className"
+  | "style"
+  | `${string}ClassName`
+  | "duration"
+  | "easing"
+  | "transition"
+  | "animate"
+  | "whileHover"
+  | "whileTap"
 >;
 type HasNoExternalVisualOverride<Props> =
   ExternalVisualOverride<Props> extends never ? true : false;

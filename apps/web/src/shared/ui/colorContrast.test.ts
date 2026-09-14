@@ -143,6 +143,43 @@ describe("shared color contrast", () => {
     }
   });
 
+  it("keeps action and surface text readable throughout hover and pressed feedback", () => {
+    const ramps = [
+      ["--color-text-inverse", "--color-action", "--color-action-hover", "--color-action-pressed"],
+      ["--color-text-inverse", "--color-danger", "--color-danger-hover", "--color-danger-pressed"],
+      [
+        "--color-text-primary",
+        "--color-surface",
+        "--color-surface-hover",
+        "--color-surface-pressed",
+      ],
+      [
+        "--color-text-primary",
+        "--color-surface-selected",
+        "--color-surface-selected-hover",
+        "--color-surface-selected-pressed",
+      ],
+      [
+        "--color-text-secondary",
+        "--color-surface",
+        "--color-surface-hover",
+        "--color-surface-pressed",
+      ],
+    ] as const;
+    for (const [text, base, hover, pressed] of ramps) {
+      const foreground = oklab(token(text));
+      for (let step = 0; step <= 10; step += 1) {
+        expect(
+          oklabContrast(foreground, mixOklab(oklab(token(hover)), oklab(token(base)), step / 10)),
+          `${text}: ${base} -> ${hover} at ${step}/10`,
+        ).toBeGreaterThanOrEqual(4.5);
+      }
+      expect(contrast(token(text), token(pressed)), `${text} on ${pressed}`).toBeGreaterThanOrEqual(
+        4.5,
+      );
+    }
+  });
+
   it("meets AA for text rendered on solid rank backgrounds", () => {
     for (const rank of [1, 2, 3, 4]) {
       const foreground = `--color-rank-${rank}-foreground`;

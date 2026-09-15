@@ -1,8 +1,8 @@
 # 選択肢表示の共通化 — 実装計画
 
-状態: 策定済み・未実装。2026-09-15作成。利用者の回答により入力表のキー割当を確定し、計画策定に必要な確認事項は解消した。UI実装・規約変更はまだ行っていない。
+状態: 実装済み。2026-09-15策定、2026-09-16実装・検証。第1〜4段階を実施し、利用可能なChromium環境で代表操作と外観を確認した。実装結果と未検証範囲は第8節を参照。
 
-方式比較と現行コードの調査は [調査記録](ui-select-review.md) を参照する。本書は実装する範囲、変更順序、受入条件を扱う。実装時には表示・操作契約を [UI規約](ui-rule.md)、責務を [architecture](architecture.md) へ反映する。
+方式比較と現行コードの調査は [調査記録](ui-select-review.md) を参照する。本書は実装する範囲、変更順序、受入条件を扱う。表示・操作契約は [UI規約](ui-rule.md)、責務は [architecture](architecture.md) へ反映済み。
 
 ## 1. 到達点と範囲
 
@@ -50,7 +50,7 @@
 | disabled / 無効候補 | 値を変更できない。候補の無効状態と現在値を読み取れる |
 | 候補更新 / 条件変更 | 値の維持・リセットは既存featureの判断に従う。共通部品が先頭候補を勝手に選んだり、副作用を起こしたりしない |
 
-上記は採用するアプリの契約であり、未実装の動作保証ではない。インストール済みBase UI 1.8.0とContext7の公式資料で、候補移動と値確定が分かれ、閉じたtypeaheadは値を変える実装を確認した。Tab、pointer、入れ子のfocusは実browserで受入条件を確認する。キー処理をサンプルから作り直さず、公開APIと必要最小限の接続で成立させる。[Base UI Select](https://base-ui.com/react/components/select)
+上記は採用するアプリの契約であり、検証済みの組合せは第8節に限定する。インストール済みBase UI 1.8.0とContext7の公式資料で、候補移動と値確定が分かれ、閉じたtypeaheadは値を変える実装を確認した。Tab、pointer、入れ子のfocusは実browserで受入条件を確認する。キー処理をサンプルから作り直さず、公開APIと必要最小限の接続で成立させる。[Base UI Select](https://base-ui.com/react/components/select)
 
 ### 外観と寸法
 
@@ -119,7 +119,7 @@ Base UIのネストしたfocus・outside interactionの管理と接続し、選�
 
 ### 3. 入力表4箇所の移行とnative実装の撤去
 
-- メンバー・プレー順のdesktop/mobileを移行する。ref登録、label、validation、OCR誘導、プレー順の入替を確認する。
+- メンバー・プレー順のdesktop/mobileを移行する。ref登録、label、validation、OCR誘導、プレー順更新に伴うOCR事件簿の再同期を確認する。
 - 確定したキー契約へ接続し、実際の操作と一致する案内文へ変更する。
 - 古いSelectControl実装と不要な型・option children・native select専用testを撤去する。移行専用の互換APIや設定を残さない。
 - 完了条件: 25+4箇所が一つの共通Selectに揃い、数値入力とOCRの既存契約が維持される。
@@ -136,7 +136,7 @@ Base UIのネストしたfocus・outside interactionの管理と接続し、選�
 | 境界 | 主に守る結果 | 証拠 |
 | --- | --- | --- |
 | 共通Select / Field | keyboard、確定・取消、同値再選択、label / error、可視ref、disabled、空文字、フォーム送信・reset | 共有component testとbrowser操作。全画面へ同じケースを複製しない |
-| 入力表・OCR | 選択欄のEnter・上下が表移動を起こさず、閉じた欄のTab・左右で移動できる。数値入力の従来操作、対象プレーヤーへのfocus、review状態、確定時の正しい入替を維持 | 既存ScoreGrid testの更新とPlaywright MCPのdesktop/mobile代表flow |
+| 入力表・OCR | 選択欄のEnter・上下が表移動を起こさず、閉じた欄のTab・左右で移動できる。数値入力の従来操作、対象プレーヤーへのfocus、review状態、プレー順確定時の既存の数値再同期を維持 | 既存ScoreGrid testの更新とPlaywright MCPのdesktop/mobile代表flow |
 | dialog内フォーム | 候補が読める・押せる、Escape一回で候補だけ閉じる、外側押下の貫通なし、正しいFormData、エラー時の値保持 | 共有dialogの入れ子検証と管理フォームの代表操作 |
 | 一覧・比較・出力 | 条件・URL・依存候補・出力対象が正しく更新される、取消や同値選択で余計な処理をしない | 影響する既存component / E2Eを更新。取得待ち・通知の既存挙動も確認 |
 | 外観と端末 | 欄の配置維持、長文、viewport端、内部scroll、hit target、選択と操作位置の識別 | production buildでwide / narrow、coarse pointer、拡大、forced colors、reduced motionを実確認 |
@@ -153,3 +153,34 @@ Chromeで主要flowを確認し、Firefox / Safari / Edgeでは共通Selectとdi
 - 方式、対象、共通部品の責務、段階的な移行、検証範囲: 本計画で具体化済み。
 - 利用者への確認事項: 解消済み。入力表の選択欄も他の選択欄と揃え、数値入力の操作は維持する。
 - 実装時に実測・技術検証する事項: portal hostの配置、フォームreset連携、混在入力でのfocus表示、候補の寸法、browser / 実機の成立とbundle差分。未確認の実装結果を計画上の保証としない。
+
+## 8. 実装結果と検証記録
+
+### 完成した構成
+
+- `SelectField` 25箇所と入力表の直接利用4箇所を共通 `SelectControl` へ移行し、productionのnative selectと互換APIを撤去した。日時input・豊富な情報を持つ候補選択dialogは従来の部品を維持する。
+- `options`、文字列の `value` / `defaultValue`、`onValueChange` に値契約を限定した。可視triggerにlabel、error、validation path、refを接続し、フォーム送信はBase UIのinput、uncontrolledのreset連携はsharedが所有する。
+- dialogのportalを局所的な重なり順の単位とし、`BaseDialog.Popup` 内でスクロールするsurfaceの隣にfloating用hostを置いた。候補は`positionMethod="fixed"`で配置する。Selectのportal全体でpointerを受け、Base UIの透明backdropが背後の操作へのクリックを遮る。
+- popupのmount管理はBase UIへ残し、閉じた欄のtypeahead・autofill経路を壊さない。閉じた候補は即時にhiddenとし、無効化・dialog退出でも操作対象を残さない。
+- Base UI 1.8のShift+Tabはtriggerへ戻るため、このキーに限り公開APIの`preventBaseUIHandler()`を使い、triggerを起点にブラウザ標準の後方Tab移動を通す。候補探索・文書内のfocus先探索は自作しない。数値入力のキー契約は変更していない。
+- 既存の選択用境界、hover、selected、focusのtokenを接続した。強制カラーモードのselected行にはシステム色を明示し、文字の背景補正でラベルが読めなくなることを防いだ。
+
+### 検証と保証範囲
+
+| 境界 | 実施内容・結果 |
+| --- | --- |
+| 共通部品 | 候補移動と確定の分離、Escape、Tab、同値、disabled、未知のID、空文字、controlled / uncontrolled、可視ref、FormData、reset、dialogの一層ずつの取消をcomponent testで確認。閉じた欄のtypeaheadでは無効候補を飛ばすことも確認 |
+| アプリの既存接続 | 全Webテスト158ファイル・884件が成功。入力表のメンバー変更、数値入力・選択欄のキー分離、OCR確認画面、非制御フォームの送信・失敗時の保持など、既存の業務値assertを維持して移行 |
+| Playwright MCP | Chromiumで、試合一覧の条件・URL更新と取消、比較シーズンの値・URL更新と取消、出力対象の表示、OCRオーナー変更、入力表の左右移動・数値欄のEnter移動・mobileのOCR対象へのfocusを確認。管理dialogでは選択値を送信して一覧の紐付け結果を確認し、再度開いた際の初期化も確認 |
+| 描画とfocusの回帰 | production buildで、Tab / Shift+Tabによる次／前の欄への移動、wide / narrowで候補の外側を押した際のクリック遮断を確認。タッチ操作時にtriggerの位置が動かないことを確認。これらを既存E2E suiteにも回帰ケースとして追加 |
+| 表示条件 | 1440px幅・375px幅、coarse pointer、長い日本語を含む26候補、内部scroll、上下反転、Endで末尾候補へ移動して確定、reduced motion、forced colorsを確認。候補行はfineで40px、coarseで44px以上。2倍のvisual viewport拡大でも代表候補が表示範囲内に収まることを確認 |
+
+ブラウザ操作は既存MSW fixtureを使ったフロントエンド境界の確認であり、実API・DBへの保存や実カメラの検証ではない。検証用のbootstrap、worker、画面は検証後に撤去し、製品へ含めていない。実行可能だったMCP環境はChromiumで、Firefox / Safari / Edge、iOS / Android実機、screen reader、ブラウザの表示倍率設定・OSの文字拡大は未検証。これらをemulationの成功で代替したとは扱わない。
+
+format、lint、typecheck、production build（built theme検査を含む）、`git diff --check`、公開情報検査も成功。
+
+### 配信と維持負担
+
+追加のpackageはない。同条件のproduction build比較では、全JS chunkのgzip合計は532.24kBから543.59kBへ約11.35kB増、CSSのgzipは12.42kBから12.61kBへ約0.19kB増。chunkの共通化も変化し、entry単体は112.29kBから140.77kBとなった。全chunk合計は初回転送量ではなく、entry差分もSelect単体の増分とはみなさない。既存の分析schema chunkに対する500kB警告は継続している。
+
+全体検証で既存の分析ビューtestに不足していたRouter文脈を補い、遅延ロード完了待ちの上限を整えた。前者は2件のRouter wrapper追加、後者は既存の完了条件を維持した待機上限の変更であり、製品のルーティング・待機表示は変更していない。

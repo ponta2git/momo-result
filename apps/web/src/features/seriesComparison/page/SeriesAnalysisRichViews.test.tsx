@@ -23,6 +23,7 @@ describe("rich series analysis views", () => {
         response={response}
         onDrilldown={vi.fn()}
       />,
+      { wrapper: MemoryRouter },
     );
 
     const overviewRegion = screen.getByRole("region", { name: "順位と基礎比較" });
@@ -179,6 +180,7 @@ describe("rich series analysis views", () => {
         response={makeSeriesAnalysisAggregate()}
         onDrilldown={vi.fn()}
       />,
+      { wrapper: MemoryRouter },
     );
 
     expect(screen.getByText("目的地あり・売り場あり・この試合")).toBeInTheDocument();

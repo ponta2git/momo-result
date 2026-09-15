@@ -1,7 +1,7 @@
 import { Select } from "@base-ui/react/select";
 import { Check, ChevronDown } from "lucide-react";
 import { useIsPresent } from "motion/react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { ComponentPropsWithRef } from "react";
 
 import { cn } from "@/shared/ui/cn";
@@ -97,6 +97,18 @@ export function SelectControl({
   const controlled = value !== undefined;
   const selectedValue = value ?? internalValue;
   const surfaceRef = useSurfaceFeedback(ref);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const attachTrigger = useCallback(
+    (node: HTMLButtonElement | null) => {
+      triggerRef.current = node;
+      const cleanup = surfaceRef(node);
+      return () => {
+        triggerRef.current = null;
+        cleanup?.();
+      };
+    },
+    [surfaceRef],
+  );
   const selectedLabel =
     options.find((option) => option.value === selectedValue)?.label ?? "選択内容を確認";
 
@@ -139,7 +151,7 @@ export function SelectControl({
     >
       <Select.Trigger
         {...triggerProps}
-        ref={surfaceRef}
+        ref={attachTrigger}
         type="button"
         aria-invalid={invalid || undefined}
         className={cn(
@@ -168,24 +180,40 @@ export function SelectControl({
           <ChevronDown aria-hidden="true" className="size-4" />
         </Select.Icon>
       </Select.Trigger>
-      {open && present && !disabled ? (
-        <Select.Portal container={container ?? undefined}>
-          <Select.Positioner
-            alignItemWithTrigger={false}
-            side="bottom"
-            align="start"
-            sideOffset={4}
-            collisionPadding={16}
-            className="pointer-events-auto z-[var(--z-dropdown)]"
+      {/* The portal also owns the invisible backdrop, including inside pointer-inert dialog hosts. */}
+      <Select.Portal
+        container={container ?? undefined}
+        className="pointer-events-auto relative isolate z-[var(--z-dropdown)]"
+      >
+        <Select.Positioner
+          alignItemWithTrigger={false}
+          positionMethod="fixed"
+          side="bottom"
+          align="start"
+          sideOffset={4}
+          collisionPadding={16}
+          className="pointer-events-auto z-[var(--z-dropdown)]"
+        >
+          <Select.Popup
+            hidden={!open || !present || disabled}
+            className="momo-select-popup rounded-sm border border-[var(--color-border)] bg-[var(--color-surface)] p-1 shadow-[var(--shadow-raised)]"
+            onKeyDown={(event) => {
+              // Base UI 1.8 treats Shift+Tab as returning from a submenu to its trigger.
+              // Start the browser's native backward tab from the field, without traversing
+              // the document ourselves or canceling Tab's default action.
+              if (event.key === "Tab" && event.shiftKey) {
+                event.preventBaseUIHandler();
+                triggerRef.current?.focus();
+                setOpen(false);
+              }
+            }}
           >
-            <Select.Popup className="momo-select-popup rounded-sm border border-[var(--color-border)] bg-[var(--color-surface)] p-1 shadow-[var(--shadow-raised)]">
-              {options.map((option) => (
-                <SelectOptionRow key={option.value} option={option} />
-              ))}
-            </Select.Popup>
-          </Select.Positioner>
-        </Select.Portal>
-      ) : null}
+            {options.map((option) => (
+              <SelectOptionRow key={option.value} option={option} />
+            ))}
+          </Select.Popup>
+        </Select.Positioner>
+      </Select.Portal>
     </Select.Root>
   );
 }

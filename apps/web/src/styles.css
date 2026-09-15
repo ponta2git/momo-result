@@ -264,6 +264,7 @@ samp {
 
 @media (forced-colors: active) {
   .momo-select-option[data-selected] {
+    forced-color-adjust: none;
     color: HighlightText;
     background: Highlight;
   }

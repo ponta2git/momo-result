@@ -15,6 +15,26 @@ const options = [
 ];
 
 describe("SelectControl", () => {
+  it("retains closed-field typeahead without opening or selecting a disabled match", async () => {
+    const user = userEvent.setup();
+    render(
+      <SelectControl
+        aria-label="対象"
+        defaultValue="spring"
+        options={[
+          { value: "spring", label: "Spring" },
+          { value: "blocked", label: "Autumn unavailable", disabled: true },
+          { value: "autumn", label: "Autumn" },
+        ]}
+      />,
+    );
+    await user.tab();
+    await user.keyboard("a");
+    expect(screen.getByRole("combobox")).toHaveTextContent("Autumn");
+    expect(screen.getByRole("combobox")).not.toHaveTextContent("unavailable");
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+  });
+
   it("separates navigation, cancellation and commitment, retaining form values and reset", async () => {
     const user = userEvent.setup();
     const changed = vi.fn();

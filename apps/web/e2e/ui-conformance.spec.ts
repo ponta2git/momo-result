@@ -25,6 +25,73 @@ test.beforeEach(async ({ page }) => {
   await installE2eAuthHeaders(page);
 });
 
+test("keeps dialog select navigation and outside presses within their own layer", async ({
+  page,
+}) => {
+  await page.goto("/admin/accounts");
+  await page.getByRole("button", { name: "アカウントを追加", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "アカウントを追加" });
+  const trigger = dialog.getByRole("combobox", { name: "紐づくプレーヤー" });
+
+  await trigger.click();
+  await expect(page.getByRole("option", { selected: true })).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("Shift+Tab");
+  await expect(dialog.getByRole("textbox", { name: "表示名*", exact: true })).toBeFocused();
+  await expect(trigger).toHaveText("試合参加者に紐づけない");
+
+  await trigger.click();
+  await expect(page.getByRole("option", { selected: true })).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("Tab");
+  await expect(dialog.getByRole("checkbox", { name: "ログイン許可" })).toBeFocused();
+  await expect(trigger).toHaveText("試合参加者に紐づけない");
+
+  for (const width of [1440, 375]) {
+    await page.setViewportSize({ width, height: 812 });
+    await trigger.click();
+    await expect(page.getByRole("listbox")).toBeVisible();
+    await expectNoHorizontalPageOverflow(page);
+    const close = await dialog.getByRole("button", { name: "ダイアログを閉じる" }).boundingBox();
+    if (!close) throw new Error("Dialog close control is not visible");
+    // The pointer must land on the select's transparent backdrop, not the button below it.
+    await page.mouse.click(close.x + close.width / 2, close.y + close.height / 2);
+    await expect(page.getByRole("listbox")).toHaveCount(0);
+    await expect(dialog).toBeVisible();
+  }
+});
+
+test.describe("touch selection", () => {
+  test.use({ hasTouch: true, isMobile: true, viewport: { width: 375, height: 667 } });
+
+  test("opens options without scrolling their field out of view", async ({ page }) => {
+    await page.goto("/matches");
+    await page.getByRole("button", { name: /詳細条件/u }).tap();
+    const trigger = page.getByRole("combobox", { name: "作品", exact: true });
+    await trigger.scrollIntoViewIfNeeded();
+    const before = await trigger.boundingBox();
+    if (!before) throw new Error("Select field is not visible");
+    await trigger.tap();
+    const popup = page.getByRole("listbox");
+    await expect(popup).toBeVisible();
+    await expect
+      .poll(async () => {
+        const rect = await popup.boundingBox();
+        return Boolean(rect && rect.y >= 0 && rect.y + rect.height <= 667);
+      })
+      .toBe(true);
+    const after = await trigger.boundingBox();
+    expect(Math.abs((after?.y ?? Infinity) - before.y)).toBeLessThanOrEqual(2);
+    await expectNoHorizontalPageOverflow(page);
+    expect(
+      await popup
+        .getByRole("option")
+        .first()
+        .evaluate((row) => row.getBoundingClientRect().height),
+    ).toBeGreaterThanOrEqual(44);
+  });
+});
+
 test("keeps match rows usable through responsive update and retry states", async ({
   e2eRun,
   page,

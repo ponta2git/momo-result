@@ -241,6 +241,37 @@ samp {
   );
 }
 
+.momo-select-popup {
+  min-width: var(--anchor-width);
+  width: max-content;
+  max-width: min(var(--available-width), calc(100vw - 2rem));
+  max-height: min(20rem, var(--available-height));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scroll-padding-block: 0.25rem;
+}
+
+/* Keep the focus outline inside the scroller; selection keeps its separate check mark. */
+.momo-select-option:focus-visible {
+  outline-offset: -3px;
+}
+
+.momo-select-option[data-disabled] {
+  --ui-hover-amount: 0;
+  color: var(--color-text-muted);
+  cursor: not-allowed;
+}
+
+@media (forced-colors: active) {
+  .momo-select-option[data-selected] {
+    color: HighlightText;
+    background: Highlight;
+  }
+  .momo-select-option[data-disabled] {
+    color: GrayText;
+  }
+}
+
 @media (max-height: 24rem) {
   .momo-alert-dialog-surface {
     display: block;

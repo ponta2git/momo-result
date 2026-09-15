@@ -2,18 +2,20 @@ import { AlertDialog as BaseAlertDialog } from "@base-ui/react/alert-dialog";
 import { Dialog as BaseDialog } from "@base-ui/react/dialog";
 import { X } from "lucide-react";
 import { m, useIsPresent } from "motion/react";
+import { useState } from "react";
 import type { ComponentProps, ReactNode } from "react";
 
 import { Button } from "@/shared/ui/actions/Button";
 import { IconButton } from "@/shared/ui/actions/IconButton";
 import { cn } from "@/shared/ui/cn";
+import { DialogFloatingContainerContext } from "@/shared/ui/feedback/DialogFloatingContainer";
 import { readableTextWidthClass } from "@/shared/ui/layout/readableText";
 import { instantMotionTransition, politeMotionTransition } from "@/shared/ui/motion/transitions";
 import { contentText, fieldText } from "@/shared/ui/typography";
 
-const dialogBackdropClassName = "fixed inset-0 z-[var(--z-dialog)] bg-[var(--color-backdrop)]/35";
+const dialogBackdropClassName = "fixed inset-0 z-[var(--z-base)] bg-[var(--color-backdrop)]/35";
 const dialogPopupClassName =
-  "momo-dialog-popup fixed inset-0 z-[var(--z-dialog)] mx-auto flex w-full max-w-[40rem] items-center justify-center overflow-hidden";
+  "momo-dialog-popup fixed inset-0 z-[var(--z-base)] mx-auto flex w-full max-w-[40rem] items-center justify-center overflow-hidden";
 const dialogSurfaceClassName =
   "momo-dialog-surface w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-[var(--color-text-primary)] shadow-[var(--shadow-dialog)]";
 const dialogBackdropInitial = { opacity: 0 } as const;
@@ -102,56 +104,64 @@ export function DialogLayer({
   title,
 }: DialogLayerProps) {
   const isPresent = useIsPresent();
+  const [floatingContainer, setFloatingContainer] = useState<HTMLDivElement | null>(null);
   const transition = reduceMotion ? instantMotionTransition : politeMotionTransition;
   const exitSnapshotProps = isPresent ? {} : ({ "aria-hidden": true, inert: true } as const);
 
   return (
-    <BaseDialog.Portal keepMounted>
-      <BaseDialog.Backdrop
-        className={cn(
-          dialogBackdropClassName,
-          !isPresent && "pointer-events-none",
-          backdropClassName,
-        )}
-        data-exit-snapshot={isPresent ? undefined : ""}
-        render={
-          <m.div
-            animate={dialogVisible}
-            exit={dialogHidden}
-            initial={reduceMotion ? false : dialogBackdropInitial}
-            transition={transition}
-          />
-        }
-      />
-      <BaseDialog.Popup
-        {...exitSnapshotProps}
-        className={cn(dialogPopupClassName, !isPresent && "pointer-events-none", popupClassName)}
-        data-exit-snapshot={isPresent ? undefined : ""}
-        initialFocus={true}
-        render={
-          <m.div
-            animate={dialogVisible}
-            exit={dialogHidden}
-            initial={reduceMotion ? false : dialogSurfaceInitial}
-            transition={transition}
-          />
-        }
-      >
-        <div
-          aria-busy={busy || undefined}
-          className={cn(dialogSurfaceClassName, "flex overflow-hidden", surfaceClassName)}
+    <BaseDialog.Portal keepMounted className="relative isolate z-[var(--z-dialog)]">
+      <DialogFloatingContainerContext value={floatingContainer}>
+        <BaseDialog.Backdrop
+          className={cn(
+            dialogBackdropClassName,
+            !isPresent && "pointer-events-none",
+            backdropClassName,
+          )}
+          data-exit-snapshot={isPresent ? undefined : ""}
+          render={
+            <m.div
+              animate={dialogVisible}
+              exit={dialogHidden}
+              initial={reduceMotion ? false : dialogBackdropInitial}
+              transition={transition}
+            />
+          }
+        />
+        <BaseDialog.Popup
+          {...exitSnapshotProps}
+          className={cn(dialogPopupClassName, !isPresent && "pointer-events-none", popupClassName)}
+          data-exit-snapshot={isPresent ? undefined : ""}
+          initialFocus={true}
+          render={
+            <m.div
+              animate={dialogVisible}
+              exit={dialogHidden}
+              initial={reduceMotion ? false : dialogSurfaceInitial}
+              transition={transition}
+            />
+          }
         >
-          <DialogContentFrame
-            contentClassName={contentClassName}
-            description={description}
-            dismissible={dismissible}
-            headerStatus={headerStatus}
-            title={title}
+          <div
+            aria-busy={busy || undefined}
+            className={cn(dialogSurfaceClassName, "flex overflow-hidden", surfaceClassName)}
           >
-            {children}
-          </DialogContentFrame>
-        </div>
-      </BaseDialog.Popup>
+            <DialogContentFrame
+              contentClassName={contentClassName}
+              description={description}
+              dismissible={dismissible}
+              headerStatus={headerStatus}
+              title={title}
+            >
+              {children}
+            </DialogContentFrame>
+          </div>
+          <div
+            {...exitSnapshotProps}
+            ref={setFloatingContainer}
+            className="pointer-events-none fixed inset-0 z-[var(--z-dropdown)]"
+          />
+        </BaseDialog.Popup>
+      </DialogFloatingContainerContext>
     </BaseDialog.Portal>
   );
 }
@@ -189,109 +199,117 @@ export function AlertDialogLayer({
   tone,
 }: AlertDialogLayerProps) {
   const isPresent = useIsPresent();
+  const [floatingContainer, setFloatingContainer] = useState<HTMLDivElement | null>(null);
   const transition = reduceMotion ? instantMotionTransition : politeMotionTransition;
   const exitSnapshotProps = isPresent ? {} : ({ "aria-hidden": true, inert: true } as const);
 
   return (
-    <BaseAlertDialog.Portal keepMounted>
-      <BaseAlertDialog.Backdrop
-        className={cn(
-          dialogBackdropClassName,
-          !isPresent && "pointer-events-none",
-          backdropClassName,
-        )}
-        data-exit-snapshot={isPresent ? undefined : ""}
-        render={
-          <m.div
-            animate={dialogVisible}
-            exit={dialogHidden}
-            initial={reduceMotion ? false : dialogBackdropInitial}
-            transition={transition}
-          />
-        }
-      />
-      <BaseAlertDialog.Popup
-        {...exitSnapshotProps}
-        finalFocus={finalFocus}
-        className={cn(dialogPopupClassName, !isPresent && "pointer-events-none", popupClassName)}
-        data-exit-snapshot={isPresent ? undefined : ""}
-        render={
-          <m.div
-            animate={dialogVisible}
-            exit={dialogHidden}
-            initial={reduceMotion ? false : dialogSurfaceInitial}
-            transition={transition}
-          />
-        }
-      >
-        <div
-          aria-busy={pending || undefined}
+    <BaseAlertDialog.Portal keepMounted className="relative isolate z-[var(--z-dialog)]">
+      <DialogFloatingContainerContext value={floatingContainer}>
+        <BaseAlertDialog.Backdrop
           className={cn(
-            dialogSurfaceClassName,
-            "momo-alert-dialog-surface flex overflow-hidden",
-            surfaceClassName,
+            dialogBackdropClassName,
+            !isPresent && "pointer-events-none",
+            backdropClassName,
           )}
+          data-exit-snapshot={isPresent ? undefined : ""}
+          render={
+            <m.div
+              animate={dialogVisible}
+              exit={dialogHidden}
+              initial={reduceMotion ? false : dialogBackdropInitial}
+              transition={transition}
+            />
+          }
+        />
+        <BaseAlertDialog.Popup
+          {...exitSnapshotProps}
+          finalFocus={finalFocus}
+          className={cn(dialogPopupClassName, !isPresent && "pointer-events-none", popupClassName)}
+          data-exit-snapshot={isPresent ? undefined : ""}
+          render={
+            <m.div
+              animate={dialogVisible}
+              exit={dialogHidden}
+              initial={reduceMotion ? false : dialogSurfaceInitial}
+              transition={transition}
+            />
+          }
         >
-          <div className="momo-alert-dialog-frame flex min-h-0 w-full flex-1 flex-col gap-4">
-            <div className="min-w-0 shrink-0 px-2">
-              <BaseAlertDialog.Title className={cn(contentText.heading, "text-balance")}>
-                {title}
-              </BaseAlertDialog.Title>
-              {description ? (
-                <BaseAlertDialog.Description
-                  className={cn(contentText.body, "mt-1 text-pretty", readableTextWidthClass)}
-                >
-                  {description}
-                </BaseAlertDialog.Description>
-              ) : null}
-            </div>
-            {(children !== undefined && children !== null) || error ? (
-              <div
-                className={cn(
-                  "momo-alert-dialog-body grid min-h-0 min-w-0 flex-1 gap-4 overflow-y-auto px-2 empty:hidden",
-                  contentClassName,
-                )}
-              >
-                {children}
-                {error ? (
-                  <p
-                    className={cn(
-                      fieldText.error,
-                      "rounded-xs border border-[var(--color-danger)]/50 bg-[var(--color-danger)]/8 px-3 py-2",
-                      readableTextWidthClass,
-                    )}
-                    role="alert"
+          <div
+            aria-busy={pending || undefined}
+            className={cn(
+              dialogSurfaceClassName,
+              "momo-alert-dialog-surface flex overflow-hidden",
+              surfaceClassName,
+            )}
+          >
+            <div className="momo-alert-dialog-frame flex min-h-0 w-full flex-1 flex-col gap-4">
+              <div className="min-w-0 shrink-0 px-2">
+                <BaseAlertDialog.Title className={cn(contentText.heading, "text-balance")}>
+                  {title}
+                </BaseAlertDialog.Title>
+                {description ? (
+                  <BaseAlertDialog.Description
+                    className={cn(contentText.body, "mt-1 text-pretty", readableTextWidthClass)}
                   >
-                    {error}
-                  </p>
+                    {description}
+                  </BaseAlertDialog.Description>
                 ) : null}
               </div>
-            ) : null}
-            <div className="flex shrink-0 flex-wrap justify-end gap-2 px-2">
-              <BaseAlertDialog.Close
-                render={
-                  <Button
-                    aria-label={typeof cancelLabel === "string" ? cancelLabel : "キャンセル"}
-                    disabled={pending}
-                    variant="secondary"
-                  >
-                    {cancelLabel}
-                  </Button>
-                }
-              />
-              <Button
-                disabled={confirmDisabled}
-                pending={pending}
-                pendingLabel={pendingLabel}
-                variant={tone === "danger" ? "danger" : "primary"}
-                onClick={onConfirm}
-              >
-                {confirmLabel}
-              </Button>
+              {(children !== undefined && children !== null) || error ? (
+                <div
+                  className={cn(
+                    "momo-alert-dialog-body grid min-h-0 min-w-0 flex-1 gap-4 overflow-y-auto px-2 empty:hidden",
+                    contentClassName,
+                  )}
+                >
+                  {children}
+                  {error ? (
+                    <p
+                      className={cn(
+                        fieldText.error,
+                        "rounded-xs border border-[var(--color-danger)]/50 bg-[var(--color-danger)]/8 px-3 py-2",
+                        readableTextWidthClass,
+                      )}
+                      role="alert"
+                    >
+                      {error}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
+              <div className="flex shrink-0 flex-wrap justify-end gap-2 px-2">
+                <BaseAlertDialog.Close
+                  render={
+                    <Button
+                      aria-label={typeof cancelLabel === "string" ? cancelLabel : "キャンセル"}
+                      disabled={pending}
+                      variant="secondary"
+                    >
+                      {cancelLabel}
+                    </Button>
+                  }
+                />
+                <Button
+                  disabled={confirmDisabled}
+                  pending={pending}
+                  pendingLabel={pendingLabel}
+                  variant={tone === "danger" ? "danger" : "primary"}
+                  onClick={onConfirm}
+                >
+                  {confirmLabel}
+                </Button>
+              </div>
             </div>
           </div>
-        </div>
-      </BaseAlertDialog.Popup>
+          <div
+            {...exitSnapshotProps}
+            ref={setFloatingContainer}
+            className="pointer-events-none fixed inset-0 z-[var(--z-dropdown)]"
+          />
+        </BaseAlertDialog.Popup>
+      </DialogFloatingContainerContext>
     </BaseAlertDialog.Portal>
   );
 }

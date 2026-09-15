@@ -78,6 +78,28 @@ describe("DraftReviewPage", () => {
     user = userEvent.setup();
   });
 
+  it("keeps OCR warnings unresolved when navigating away from unchanged numeric values", async () => {
+    setDevUser();
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/review/dev-sample?sample=1"]}>
+          <Routes>
+            <Route path="/review/:matchSessionId" element={<DraftReviewPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    await waitForSampleWorkspaceReady();
+    const rail = screen.getByLabelText("OCRの確認項目");
+    await user.click(within(rail).getByRole("button", { name: "次の要確認セルへ" }));
+    await user.click(within(rail).getByRole("button", { name: "次の要確認セルへ" }));
+    expect(screen.getByRole("textbox", { name: "おーたか 順位" })).toHaveFocus();
+    await user.click(within(rail).getByRole("button", { name: "前の要確認セルへ" }));
+    expect(within(rail).getByText("未確認2件／全2件")).toBeInTheDocument();
+    await user.click(within(rail).getByRole("button", { name: "次の要確認セルへ" }));
+    expect(screen.getByRole("textbox", { name: "おーたか 順位" })).toHaveValue("3");
+  });
+
   it("loads OCR drafts and opens confirmation after validation passes", async () => {
     setDevUser();
 

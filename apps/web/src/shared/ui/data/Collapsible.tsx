@@ -125,7 +125,9 @@ export function Disclosure({
           presentationClass[presentation].panel,
           panelSpacingClass[panelSpacing],
           panelPaddingClass[panelPadding],
-          "mx-2 bg-transparent",
+          // Panel presence may outlive open for a commit. Only the chevron animates here:
+          // closing content must leave layout before a sibling receives focus.
+          "mx-2 bg-transparent data-closed:hidden",
         )}
         keepMounted={keepMounted}
       >

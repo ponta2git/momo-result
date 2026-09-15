@@ -192,12 +192,25 @@ test("creates a held event and completes OCR intake and review", async ({
     await expect(page.getByText("サンプルの読み取り結果で表示中")).toBeVisible();
     const reviewRail = page.getByLabel("OCRの確認項目");
     await expect(reviewRail.getByText("未確認2件／全2件")).toBeVisible();
+    await page.setViewportSize({ height: 844, width: 390 });
+    await reviewRail.getByRole("button", { name: "次の要確認セルへ" }).click();
+    const member = page.getByRole("combobox", { name: /^メンバー/u });
+    await expect(page.getByLabel("ぽんた 順位", { exact: true })).not.toBeVisible();
+    await expect(member).toBeFocused();
+    await expectPageTargetInView(member);
+    await reviewRail.getByRole("button", { name: "次の要確認セルへ" }).click();
+    await expect(page.getByLabel("あかねまみ 順位", { exact: true })).not.toBeVisible();
+    await expectPageTargetInView(page.getByLabel("おーたか 順位", { exact: true }));
+    await reviewRail.getByRole("button", { name: "前の要確認セルへ" }).click();
+    await expect(member).toBeFocused();
+    await expectPageTargetInView(member);
     await reviewRail.getByRole("button", { name: "この値で確認済み" }).click();
     await expect(reviewRail.getByText("未確認1件／全2件")).toBeVisible();
 
     await page.setViewportSize({ height: 844, width: 390 });
     await reviewRail.getByRole("button", { name: "次の要確認セルへ" }).click();
     await expect(page.getByLabel("おーたか 順位")).toBeFocused();
+    await expectPageTargetInView(page.getByLabel("おーたか 順位", { exact: true }));
     await expectNoHorizontalPageOverflow(page);
     await page.setViewportSize({ height: 900, width: 1440 });
 
@@ -1152,4 +1165,20 @@ async function measureElement(locator: Locator, label: string) {
       width: rect.width,
     };
   });
+}
+
+async function expectPageTargetInView(locator: Locator) {
+  await expect(locator).toBeInViewport({ ratio: 1 });
+  const geometry = await locator.evaluate((element) => {
+    const label = (element as HTMLInputElement).labels?.[0] ?? element;
+    return {
+      bottom: label.getBoundingClientRect().bottom,
+      navigationBottom:
+        document.getElementById("global-navigation")?.getBoundingClientRect().bottom ?? 0,
+      top: label.getBoundingClientRect().top,
+      viewportHeight: window.innerHeight,
+    };
+  });
+  expect(geometry.top).toBeGreaterThanOrEqual(geometry.navigationBottom);
+  expect(geometry.bottom).toBeLessThanOrEqual(geometry.viewportHeight);
 }

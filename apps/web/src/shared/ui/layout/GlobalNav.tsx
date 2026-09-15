@@ -4,6 +4,7 @@ import { Link, NavLink, useLocation } from "react-router-dom";
 
 import { cn } from "@/shared/ui/cn";
 import { pageViewportGutterClass } from "@/shared/ui/layout/PageFrame";
+import { globalNavigationId } from "@/shared/ui/layout/revealPageElement";
 import { useSurfaceFeedback } from "@/shared/ui/motion/useSurfaceFeedback";
 
 export type GlobalNavItem = {
@@ -85,6 +86,7 @@ export function GlobalNav({
   return (
     <nav
       aria-label="グローバルナビゲーション"
+      id={globalNavigationId}
       className="sticky top-0 z-[var(--z-sticky)] border-b border-[var(--color-border)] bg-[var(--color-surface)]"
     >
       <div

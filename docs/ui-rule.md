@@ -240,6 +240,7 @@
 - motion は、操作への即時 feedback、状態の因果、同じ対象の連続性を補助する場合だけ使う。文字、形、位置、accessible state だけで意味を成立させた上で、動いたこと自体を見せ場にせず、注意深く見れば変化を追いやすい程度に抑える。
 - 有限の motion は用途に対応する共通 token を使い、主に opacity と transform を使う。操作面のhoverは上記の色反応に従う。値そのものの変化を伝える図表や数値は、その mark または値だけを補間してよい。周囲の layout shift、bounce / overshoot、stagger、視線を奪う移動を作らない。
 - 利用者の intent と application state は motion より先に反映し、操作可能性、data、route、open、focus、pending、error の変更を animation 完了まで待たせない。motion は中断または省略されても、同じ最終状態と回復操作へ到達できなければならない。
+- disclosureの本文は開閉状態と同時に配置・操作対象へ反映する。矢印の補間やprimitive内部のpresence管理によって閉じた本文の高さを残し、移動先のfocus・表示位置を後からずらさない。
 - route content、Suspense の fallback と完成内容、初回 content、一覧 row を、登場または置換そのものの演出として animate しない。異なる pathname の loading は structural fallback、同一 pathname の更新は既存内容の維持と局所 feedback で表す。
 - 楽観更新の pending、confirmed、error は、文字、accessible state、disabled、局所 error / retry のうち必要な手段で静止状態でも区別する。同じ安定した identity の `pending -> confirmed` では局所的な属性だけを補間してよいが、追加・削除の presence motion は、rollback、server correction、同時 mutation を含む必要性と正しさを先に検証する。
 - viewport への進入を初回 motion の trigger にしない。図表は初めから完成値を描画し、その後、現在表示中の同じ対象に値変更が起きた場合だけ補間してよい。表示領域外で変わった値は完成値へ即時反映し、再進入時に再生しない。

@@ -77,7 +77,7 @@ export function ScoreGrid({ actions, data }: ScoreGridProps) {
     const current = document.activeElement;
     if (next && (current === pendingFocus.origin || current === document.body)) {
       next.focus({ preventScroll: true });
-      const label = (next as HTMLInputElement | HTMLSelectElement).labels?.[0];
+      const label = (next as HTMLInputElement | HTMLButtonElement).labels?.[0];
       revealPageElement(label ?? next);
     }
   }, [pendingFocus]);
@@ -137,7 +137,7 @@ export function ScoreGrid({ actions, data }: ScoreGridProps) {
         const delta = args.event.key === "ArrowLeft" ? -1 : 1;
         const nextCol = args.col + delta;
         if (nextCol >= 0 && nextCol < gridColumns.length) {
-          const isSelect = target instanceof HTMLSelectElement;
+          const isSelect = target.getAttribute("role") === "combobox";
           const isInputSelectedAll =
             target instanceof HTMLInputElement &&
             target.selectionStart === 0 &&
@@ -191,7 +191,7 @@ export function ScoreGrid({ actions, data }: ScoreGridProps) {
           <h2 className={contentText.heading}>4人分の結果を確認・修正</h2>
           {isNarrowViewport ? null : (
             <p className={cn(contentText.supporting, "mt-1 text-pretty")}>
-              Enterキーと矢印キーで移動できます。Escキーで編集中のセルを元に戻せます。
+              選択欄はEnter・上下キーで候補を開き、Tab・左右キーで欄を移動します。数値欄はEnter・矢印キーで移動し、Escキーで編集を元に戻せます。
             </p>
           )}
         </div>

@@ -115,7 +115,9 @@ describe("DraftReviewPage", () => {
     );
 
     await waitForReviewWorkspaceReady();
-    expect(await screen.findByDisplayValue("あかねまみ")).toBeInTheDocument();
+    expect(
+      await screen.findByRole("combobox", { name: "あかねまみ メンバー" }),
+    ).toBeInTheDocument();
     await user.click(await screen.findByRole("button", { name: "開催（必須）を変更" }));
     expect(screen.getByRole("radio", { checked: true })).toHaveAttribute("value", "held-1");
     await user.click(screen.getByRole("button", { name: "ダイアログを閉じる" }));
@@ -791,11 +793,13 @@ describe("DraftReviewPage", () => {
       "aria-expanded",
       "true",
     );
-    expect(await screen.findByDisplayValue("あかねまみ")).toBeInTheDocument();
+    expect(
+      await screen.findByRole("combobox", { name: "あかねまみ メンバー" }),
+    ).toBeInTheDocument();
     expect(await screen.findByDisplayValue("15420")).toBeInTheDocument();
     expect(screen.queryByText("OCR読み取り状況を確認")).not.toBeInTheDocument();
     expect(screen.queryByText(/緑=高信頼OCR/u)).not.toBeInTheDocument();
-    expect(screen.getByText(/Enterキーと矢印キーで移動できます/u)).toBeInTheDocument();
+    expect(screen.getByText(/選択欄はEnter・上下キーで候補を開き/u)).toBeInTheDocument();
   });
 
   it("focuses the first invalid field when confirmation cannot open", async () => {

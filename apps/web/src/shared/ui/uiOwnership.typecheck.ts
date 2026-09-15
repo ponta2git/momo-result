@@ -25,15 +25,12 @@ import type { Tooltip, TooltipProvider } from "@/shared/ui/feedback/Tooltip";
 import type { CheckboxFieldProps } from "@/shared/ui/forms/CheckboxField";
 import type { ChoiceListProps } from "@/shared/ui/forms/ChoiceList";
 import type { ChoicePickerDialogField } from "@/shared/ui/forms/ChoicePickerDialogField";
-import type {
-  InputControlProps,
-  SelectControlProps,
-  TextareaControlProps,
-} from "@/shared/ui/forms/Control";
+import type { InputControlProps, TextareaControlProps } from "@/shared/ui/forms/Control";
 import type { FieldProps } from "@/shared/ui/forms/Field";
 import type { Fieldset } from "@/shared/ui/forms/Fieldset";
 import type { FilterBarProps } from "@/shared/ui/forms/FilterBar";
 import type { SegmentedControlProps } from "@/shared/ui/forms/SegmentedControl";
+import type { SelectControlProps } from "@/shared/ui/forms/SelectControl";
 import type { SelectFieldProps } from "@/shared/ui/forms/SelectField";
 import type { TabsListProps, TabsPanel, TabsRoot, TabsTabProps } from "@/shared/ui/forms/Tabs";
 import type { TextFieldProps } from "@/shared/ui/forms/TextField";

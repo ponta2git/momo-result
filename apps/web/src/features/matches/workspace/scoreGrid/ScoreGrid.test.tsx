@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -13,6 +13,7 @@ import type { ScoreGridProps } from "@/features/matches/workspace/scoreGrid/Scor
 import { useMatchWorkspaceReviewState } from "@/features/matches/workspace/useMatchWorkspaceReviewState";
 import { installMatchMediaController } from "@/test/doubles/dom";
 import type { MatchMediaController } from "@/test/doubles/dom";
+import { selectOption } from "@/test/selectOption";
 
 const noErrorPaths = new Set<string>();
 const noReview: ScoreGridProps["data"]["review"] = {
@@ -179,7 +180,7 @@ describe("ScoreGrid", () => {
 
     await user.click(next);
     expect(screen.getByRole("combobox", { name: /^メンバー/u })).toHaveFocus();
-    expect(screen.getByRole("combobox", { name: /^メンバー/u })).toHaveValue("member_akane_mami");
+    expect(screen.getByRole("combobox", { name: /^メンバー/u })).toHaveTextContent("あかねまみ");
     await user.click(next);
     const rank = screen.getByRole("textbox", { name: "おーたか 順位" });
     expect(rank).toHaveFocus();
@@ -295,10 +296,35 @@ describe("ScoreGrid", () => {
     render(<ScoreGridHarness onPlayerChange={onPlayerChange} />);
 
     const memberSelect = screen.getByLabelText("メンバー");
-    await user.selectOptions(memberSelect, "member_eu");
+    await selectOption(user, memberSelect, "member_eu");
 
     expect(onPlayerChange).toHaveBeenLastCalledWith(0, { memberId: "member_eu" });
-    expect(memberSelect).toHaveValue("member_eu");
+    expect(memberSelect).toHaveTextContent("いーゆー");
+  });
+
+  it("uses selection keys inside selects and keeps horizontal and numeric cell navigation", async () => {
+    const user = userEvent.setup();
+    const onPlayerChange = vi.fn();
+    render(<ScoreGridHarness onPlayerChange={onPlayerChange} />);
+    const member = screen.getByRole("combobox", { name: "ぽんた メンバー" });
+    const order = screen.getByRole("combobox", { name: "ぽんた プレー順" });
+
+    member.focus();
+    await user.keyboard("{Enter}");
+    await screen.findByRole("listbox");
+    await user.keyboard("{ArrowDown}{Escape}");
+    await waitFor(() => expect(member).toHaveFocus());
+    expect(member).toHaveTextContent("ぽんた");
+    expect(onPlayerChange).not.toHaveBeenCalled();
+    await user.keyboard("{ArrowRight}");
+    expect(order).toHaveFocus();
+    await user.keyboard("{ArrowDown}");
+    await screen.findByRole("listbox");
+    await user.keyboard("{Tab}");
+    const rank = screen.getByRole("textbox", { name: "ぽんた 順位" });
+    await waitFor(() => expect(rank).toHaveFocus());
+    await user.keyboard("{Enter}");
+    expect(screen.getByRole("textbox", { name: "あかねまみ 順位" })).toHaveFocus();
   });
 
   it("exposes invalid score cells through native ARIA", () => {

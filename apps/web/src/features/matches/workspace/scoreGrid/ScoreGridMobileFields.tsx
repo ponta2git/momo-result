@@ -16,7 +16,7 @@ import type {
 } from "@/features/matches/workspace/scoreGrid/ScoreGridTypes";
 import { canonicalResultMembers, memberDisplayName } from "@/shared/domain/members";
 import { cn } from "@/shared/ui/cn";
-import { SelectControl } from "@/shared/ui/forms/Control";
+import { SelectControl } from "@/shared/ui/forms/SelectControl";
 import { fieldText } from "@/shared/ui/typography";
 
 export function MobileMemberSelect({
@@ -44,38 +44,39 @@ export function MobileMemberSelect({
 }) {
   const changed = Boolean(originalMemberId && originalMemberId !== memberId);
   return (
-    <label className={cn(fieldText.label, "grid min-w-[10rem]")}>
-      <span className="mb-2">メンバー</span>
+    <div className={cn(fieldText.label, "grid min-w-[10rem]")}>
+      <label htmlFor={cellId} className="mb-2">
+        メンバー
+      </label>
       <SelectControl
+        id={cellId}
         ref={(node) => registerCellRef(cellId, node)}
         aria-describedby={reviewItem ? `${cellId}-review-status` : undefined}
         data-validation-path={keyToPath(index, "memberId")}
         density="compact"
         tone={selectCellTone({ changed, reviewItem, reviewed })}
         value={memberId}
-        onChange={(event) => {
+        onValueChange={(nextValue) => {
           onPlayerChange(index, {
-            memberId: event.target.value as MatchFormValues["players"][number]["memberId"],
+            memberId: nextValue as MatchFormValues["players"][number]["memberId"],
           });
         }}
         onFocus={() => {
           onPreferImageKindChange?.("total_assets");
           onReviewCellFocus(index, "memberId");
         }}
-      >
-        {canonicalResultMembers.map((member) => (
-          <option key={member.memberId} value={member.memberId}>
-            {member.displayName}
-          </option>
-        ))}
-      </SelectControl>
+        options={canonicalResultMembers.map((member) => ({
+          value: member.memberId,
+          label: member.displayName,
+        }))}
+      />
       <ScoreGridSelectStatus
         cellId={cellId}
         changed={changed}
         reviewItem={reviewItem}
         reviewed={reviewed}
       />
-    </label>
+    </div>
   );
 }
 
@@ -108,9 +109,12 @@ export function MobilePlayOrderSelect({
 }) {
   const changed = Boolean(originalPlayOrder && originalPlayOrder !== playOrder);
   return (
-    <label className={cn(fieldText.label, "grid min-w-[6ch]")}>
-      <span className="mb-2">プレー順</span>
+    <div className={cn(fieldText.label, "grid min-w-[6ch]")}>
+      <label htmlFor={cellId} className="mb-2">
+        プレー順
+      </label>
       <SelectControl
+        id={cellId}
         ref={(node) => registerCellRef(cellId, node)}
         aria-describedby={error || reviewItem ? `${cellId}-review-status` : undefined}
         data-validation-path={keyToPath(index, "playOrder")}
@@ -119,19 +123,16 @@ export function MobilePlayOrderSelect({
         textAlign="center"
         tone={selectCellTone({ changed, reviewItem, reviewed })}
         value={Number.isFinite(playOrder) ? String(playOrder) : ""}
-        onChange={(event) => onPlayOrderChange(index, Math.trunc(Number(event.target.value)))}
+        onValueChange={(nextValue) => onPlayOrderChange(index, Math.trunc(Number(nextValue)))}
         onFocus={() => {
           onPreferImageKindChange?.("incident_log");
           onReviewCellFocus(index, "playOrder");
         }}
-      >
-        <option value="">-</option>
-        {[1, 2, 3, 4].map((order) => (
-          <option key={order} value={order}>
-            {order}
-          </option>
-        ))}
-      </SelectControl>
+        options={[
+          { value: "", label: "-" },
+          ...[1, 2, 3, 4].map((order) => ({ value: String(order), label: String(order) })),
+        ]}
+      />
       <ScoreGridSelectStatus
         cellId={cellId}
         changed={changed}
@@ -140,7 +141,7 @@ export function MobilePlayOrderSelect({
         reviewed={reviewed}
         synced={synced}
       />
-    </label>
+    </div>
   );
 }
 

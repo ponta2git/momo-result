@@ -119,4 +119,18 @@ describe("SelectControl", () => {
     expect(screen.getByRole("combobox")).toHaveAttribute("aria-invalid", "true");
     expect(screen.getByRole("combobox")).not.toHaveTextContent("missing-id");
   });
+
+  it("discards an open popup when its field becomes unavailable", async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(
+      <SelectControl aria-label="対象" value="spring" options={options} />,
+    );
+    await user.click(screen.getByRole("combobox"));
+    await screen.findByRole("listbox");
+    rerender(<SelectControl aria-label="対象" value="spring" options={options} disabled />);
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+    rerender(<SelectControl aria-label="対象" value="spring" options={options} />);
+    await waitFor(() => expect(screen.queryByRole("listbox")).not.toBeInTheDocument());
+    expect(screen.getByRole("combobox")).toHaveTextContent("春");
+  });
 });

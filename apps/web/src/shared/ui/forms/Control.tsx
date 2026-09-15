@@ -1,4 +1,3 @@
-import { ChevronDown } from "lucide-react";
 import type { ComponentPropsWithRef } from "react";
 
 import { cn } from "@/shared/ui/cn";
@@ -33,54 +32,6 @@ export function InputControl({
       aria-invalid={invalid || undefined}
       className={controlClassName({ controlHeight, density, invalid, textAlign, tone })}
     />
-  );
-}
-
-export type SelectControlProps = ControlPresentationProps &
-  Omit<ComponentPropsWithRef<"select">, "aria-invalid" | "className" | "style">;
-
-/** Owns the shared presentation and boolean invalid contract for a native select. */
-export function SelectControl({
-  controlHeight = "default",
-  density = "default",
-  invalid = false,
-  multiple,
-  size,
-  textAlign = "start",
-  tone = "default",
-  ...props
-}: SelectControlProps) {
-  const surfaceRef = useSurfaceFeedback(props.ref);
-  const showIndicator = !multiple && (size === undefined || size <= 1);
-
-  return (
-    <div className="relative min-w-0">
-      <select
-        {...props}
-        ref={surfaceRef}
-        multiple={multiple}
-        size={size}
-        aria-invalid={invalid || undefined}
-        className={cn(
-          controlClassName(
-            { controlHeight, density, invalid, textAlign, tone },
-            showIndicator ? "selection" : "entry",
-          ),
-          "peer block",
-          showIndicator ? "appearance-none forced-colors:appearance-auto" : "",
-          showIndicator ? (density === "compact" ? "pr-8" : "pr-10") : "",
-        )}
-      />
-      {showIndicator ? (
-        <ChevronDown
-          aria-hidden="true"
-          className={cn(
-            "pointer-events-none absolute top-1/2 size-4 -translate-y-1/2 text-[var(--color-text-secondary)] peer-disabled:text-[var(--color-text-muted)] peer-disabled:opacity-70 forced-colors:hidden",
-            density === "compact" ? "right-2" : "right-3",
-          )}
-        />
-      ) : null}
-    </div>
   );
 }
 

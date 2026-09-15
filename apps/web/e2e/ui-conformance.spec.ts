@@ -1,6 +1,7 @@
 import type { APIRequestContext, Locator, Page, Route } from "@playwright/test";
 
 import {
+  selectControlOption,
   devAccountId,
   devUserStorageKey,
   expect,
@@ -262,7 +263,7 @@ test("keeps match rows usable through responsive update and retry states", async
     const filterBar = page.getByRole("region", { name: "試合の表示条件" });
     const statusFilter = filterBar.getByRole("combobox", { exact: true, name: "確定状況" });
     await expect(statusFilter).toBeVisible();
-    await expect(statusFilter).toHaveValue("all");
+    await expect(statusFilter).toHaveText("すべて");
     await expect(filterBar).toContainText(`作品 ${primaryGameTitleName}`);
     await expect(filterBar).toContainText(`シーズン ${seasonName}`);
     await expect(page.getByRole("region", { name: "登録済みの試合" })).toContainText("2件");
@@ -291,7 +292,7 @@ test("keeps match rows usable through responsive update and retry states", async
     const list = page.getByRole("region", { exact: true, name: "登録済みの試合" });
     try {
       await status.focus();
-      await status.selectOption("confirmed");
+      await selectControlOption(page, status, "confirmed");
       await expect.poll(() => requested).toBe(true);
       await expect(status).toBeEnabled();
       await expect(status).toBeFocused();
@@ -305,7 +306,7 @@ test("keeps match rows usable through responsive update and retry states", async
     await expect(list.locator("[inert]")).toHaveCount(0);
     await expect(list.getByRole("table").locator("tbody tr")).toHaveCount(2);
     await expect(sort).toBeFocused();
-    await expect(status).toHaveValue("confirmed");
+    await expect(status).toHaveText("確定済み");
   });
 
   await test.step("keep surface feedback readable and honor a changed motion preference", async () => {

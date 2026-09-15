@@ -14,6 +14,7 @@ import {
 import {
   continueWithE2eAuth,
   continueWithE2eNonAdminAuth,
+  selectControlOption,
   devAccountId,
   devUserStorageKey,
   expect,
@@ -833,8 +834,7 @@ test("runs analysis administration and enforces access", async ({ e2eRun, page, 
     await expect(page.getByRole("heading", { name: "直近10件" })).toBeVisible();
 
     const titleSelect = page.getByRole("combobox", { name: "対象作品" });
-    await titleSelect.selectOption(gameTitleId);
-    await expect(titleSelect).toHaveValue(gameTitleId);
+    await selectControlOption(page, titleSelect, gameTitleId);
 
     const titleResponse = page.waitForResponse(
       (response) =>
@@ -900,7 +900,7 @@ test("filters and opens a confirmed match", async ({ e2eRun, page, request }) =>
     });
     const statusSelect = page.getByRole("combobox", { exact: true, name: "確定状況" });
     await expect(statusSelect).toBeEnabled();
-    await statusSelect.selectOption("confirmed");
+    await selectControlOption(page, statusSelect, "confirmed");
     expect((await statusResponse).ok()).toBe(true);
     await expect(page).toHaveURL(/[?&]status=confirmed(?:&|$)/u);
 
@@ -932,12 +932,12 @@ test("filters and opens a confirmed match", async ({ e2eRun, page, request }) =>
     });
     const sortSelect = page.getByRole("combobox", { name: "並び順" });
     await expect(sortSelect).toBeEnabled();
-    await sortSelect.selectOption("updated_desc");
+    await selectControlOption(page, sortSelect, "updated_desc");
     expect((await sortResponse).ok()).toBe(true);
     await expect(page).toHaveURL(/[?&]sort=updated_desc(?:&|$)/u);
 
-    await sortSelect.selectOption("held_desc");
-    await expect(sortSelect).toHaveValue("held_desc");
+    await selectControlOption(page, sortSelect, "held_desc");
+    await expect(sortSelect).toHaveText("開催が新しい順");
     await expect(page).not.toHaveURL(/[?&]sort=/u);
     await expect(confirmedMatchRow).toBeVisible();
   });
@@ -1161,18 +1161,15 @@ async function selectSeedMasters(
 ): Promise<void> {
   const gameTitleSelect = page.getByRole("combobox", { name: /^作品/u });
   await expect(gameTitleSelect).toBeEnabled();
-  await gameTitleSelect.selectOption(ids.gameTitleId);
-  await expect(gameTitleSelect).toHaveValue(ids.gameTitleId);
+  await selectControlOption(page, gameTitleSelect, ids.gameTitleId);
 
   const seasonSelect = page.getByRole("combobox", { name: /^シーズン/u });
   await expect(seasonSelect).toBeEnabled();
-  await seasonSelect.selectOption(ids.seasonMasterId);
-  await expect(seasonSelect).toHaveValue(ids.seasonMasterId);
+  await selectControlOption(page, seasonSelect, ids.seasonMasterId);
 
   const mapSelect = page.getByRole("combobox", { name: /^マップ/u });
   await expect(mapSelect).toBeEnabled();
-  await mapSelect.selectOption(ids.mapMasterId);
-  await expect(mapSelect).toHaveValue(ids.mapMasterId);
+  await selectControlOption(page, mapSelect, ids.mapMasterId);
 }
 
 async function measureElement(locator: Locator, label: string) {

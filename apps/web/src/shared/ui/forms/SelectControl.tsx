@@ -100,6 +100,9 @@ export function SelectControl({
   const selectedLabel =
     options.find((option) => option.value === selectedValue)?.label ?? "選択内容を確認";
 
+  // A temporarily unavailable or exiting field must not reopen when it becomes available.
+  if (open && (disabled || !present)) setOpen(false);
+
   // HTML reset does not reset a custom control's React state. Follow the owning form,
   // including external form association, without notifying business change handlers.
   useEffect(() => {
@@ -165,7 +168,7 @@ export function SelectControl({
           <ChevronDown aria-hidden="true" className="size-4" />
         </Select.Icon>
       </Select.Trigger>
-      {present && !disabled ? (
+      {open && present && !disabled ? (
         <Select.Portal container={container ?? undefined}>
           <Select.Positioner
             alignItemWithTrigger={false}

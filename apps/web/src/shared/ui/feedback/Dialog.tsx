@@ -20,6 +20,7 @@ type DialogBaseProps = {
 };
 
 type DialogProps = DialogBaseProps & {
+  headerStatus?: ReactNode | undefined;
   busy?: boolean | undefined;
   dismissible?: boolean | undefined;
   trigger?: ReactElement | undefined;
@@ -84,6 +85,7 @@ export function Dialog({
   contentClassName,
   description,
   dismissible = true,
+  headerStatus,
   onOpenChange,
   open,
   popupClassName,
@@ -115,6 +117,7 @@ export function Dialog({
             contentClassName={contentClassName}
             description={description}
             dismissible={canDismiss}
+            headerStatus={headerStatus}
             key="dialog-layer"
             popupClassName={popupClassName}
             reduceMotion={reduceMotion}

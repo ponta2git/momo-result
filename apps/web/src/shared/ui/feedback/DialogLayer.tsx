@@ -35,6 +35,7 @@ type SharedLayerProps = {
 export type DialogLayerProps = SharedLayerProps & {
   busy: boolean;
   dismissible: boolean;
+  headerStatus?: ReactNode | undefined;
 };
 
 function DialogContentFrame({
@@ -42,14 +43,21 @@ function DialogContentFrame({
   contentClassName,
   description,
   dismissible,
+  headerStatus,
   title,
 }: Pick<SharedLayerProps, "children" | "contentClassName" | "description" | "title"> & {
   dismissible: boolean;
+  headerStatus?: ReactNode | undefined;
 }) {
   return (
     <div className="flex min-h-0 w-full flex-1 flex-col gap-4">
-      <div className="flex shrink-0 items-start justify-between gap-2">
-        <div className="min-w-0">
+      <div className="flex shrink-0 items-start justify-between gap-2 px-2">
+        <div
+          className={cn(
+            "flex min-w-0 flex-1 flex-col justify-center",
+            dismissible || headerStatus ? "min-h-11" : "",
+          )}
+        >
           <BaseDialog.Title className={cn(contentText.heading, "text-balance")}>
             {title}
           </BaseDialog.Title>
@@ -61,6 +69,9 @@ function DialogContentFrame({
             </BaseDialog.Description>
           ) : null}
         </div>
+        {headerStatus ? (
+          <div className="flex min-h-11 shrink-0 items-center">{headerStatus}</div>
+        ) : null}
         {dismissible ? (
           <BaseDialog.Close
             render={
@@ -84,6 +95,7 @@ export function DialogLayer({
   contentClassName,
   description,
   dismissible,
+  headerStatus,
   popupClassName,
   reduceMotion,
   surfaceClassName,
@@ -133,6 +145,7 @@ export function DialogLayer({
             contentClassName={contentClassName}
             description={description}
             dismissible={dismissible}
+            headerStatus={headerStatus}
             title={title}
           >
             {children}
@@ -220,7 +233,7 @@ export function AlertDialogLayer({
           )}
         >
           <div className="momo-alert-dialog-frame flex min-h-0 w-full flex-1 flex-col gap-4">
-            <div className="min-w-0 shrink-0">
+            <div className="min-w-0 shrink-0 px-2">
               <BaseAlertDialog.Title className={cn(contentText.heading, "text-balance")}>
                 {title}
               </BaseAlertDialog.Title>
@@ -254,7 +267,7 @@ export function AlertDialogLayer({
                 ) : null}
               </div>
             ) : null}
-            <div className="flex shrink-0 flex-wrap justify-end gap-2">
+            <div className="flex shrink-0 flex-wrap justify-end gap-2 px-2">
               <BaseAlertDialog.Close
                 render={
                   <Button

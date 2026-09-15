@@ -42,7 +42,12 @@ const toneClass = {
 } as const satisfies Record<ControlTone, string>;
 
 const baseControlClass =
-  "w-full min-w-0 rounded-sm border border-[var(--color-control-border)] momo-surface momo-surface-neutral py-2 text-base leading-6 font-plain text-[var(--color-text-primary)] disabled:cursor-not-allowed disabled:bg-[var(--color-surface-subtle)] disabled:text-[var(--color-text-muted)] disabled:opacity-70 sm:text-sm sm:leading-5";
+  "w-full min-w-0 rounded-sm border momo-surface momo-surface-neutral py-2 text-base leading-6 font-plain text-[var(--color-text-primary)] disabled:cursor-not-allowed disabled:bg-[var(--color-surface-subtle)] disabled:text-[var(--color-text-muted)] disabled:opacity-70 sm:text-sm sm:leading-5";
+// Entry fields need an identifiable boundary; a single-choice select has its own arrow.
+const boundaryClass = {
+  entry: "border-[var(--color-control-border)]",
+  selection: "border-[var(--color-select-border)]",
+};
 const invalidControlClass =
   "border-[var(--color-control-border-invalid)] momo-surface-control-invalid";
 
@@ -54,19 +59,16 @@ type ResolvedControlPresentation = {
   tone: ControlTone;
 };
 
-function controlClassName({
-  controlHeight,
-  density,
-  invalid,
-  textAlign,
-  tone,
-}: ResolvedControlPresentation) {
+function controlClassName(
+  { controlHeight, density, invalid, textAlign, tone }: ResolvedControlPresentation,
+  boundary: keyof typeof boundaryClass = "entry",
+) {
   return cn(
     baseControlClass,
     heightClass[controlHeight],
     densityClass[density],
     textAlignClass[textAlign],
-    invalid ? invalidControlClass : toneClass[tone],
+    invalid ? invalidControlClass : tone === "default" ? boundaryClass[boundary] : toneClass[tone],
   );
 }
 
@@ -119,11 +121,10 @@ export function SelectControl({
         size={size}
         aria-invalid={invalid || undefined}
         className={cn(
-          controlClassName({ controlHeight, density, invalid, textAlign, tone }),
-          // The arrow identifies a dropdown; its ordinary border only outlines the hit area.
-          showIndicator && tone === "default" && !invalid
-            ? "border-[var(--color-select-border)]"
-            : "",
+          controlClassName(
+            { controlHeight, density, invalid, textAlign, tone },
+            showIndicator ? "selection" : "entry",
+          ),
           "peer block",
           showIndicator ? "appearance-none forced-colors:appearance-auto" : "",
           showIndicator ? (density === "compact" ? "pr-8" : "pr-10") : "",

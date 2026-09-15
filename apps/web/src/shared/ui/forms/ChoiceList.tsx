@@ -22,20 +22,23 @@ export type ChoiceListProps<Value extends string = string> = {
   disabled?: boolean | undefined;
   emptyState?: ReactNode | undefined;
   layout?: "default" | "dialog" | undefined;
-  legend: ReactNode;
   name: string;
   options: Array<ChoiceListOption<Value>>;
   pending?: boolean | undefined;
   selectedLabel?: ReactNode | undefined;
   value?: Value | undefined;
   onValueChange: (value: Value) => void;
-};
+} & (
+  | { legend: ReactNode; "aria-labelledby"?: never }
+  | { legend?: never; "aria-labelledby": string }
+);
 
 /**
  * Presents descriptive, mutually exclusive choices. It owns native radio semantics,
  * selected/pending feedback, and keeps option-specific actions outside the radio label.
  */
 export function ChoiceList<Value extends string>({
+  "aria-labelledby": labelledBy,
   disabled = false,
   emptyState,
   layout = "default",
@@ -52,13 +55,15 @@ export function ChoiceList<Value extends string>({
   return (
     <fieldset
       aria-busy={pending || undefined}
+      aria-labelledby={labelledBy}
       className="flex min-h-0 min-w-0 flex-col"
       disabled={disabled || pending}
     >
-      <legend className={fieldText.label}>{legend}</legend>
+      {labelledBy ? null : <legend className={fieldText.label}>{legend}</legend>}
       <div
         className={cn(
-          "mt-2 min-w-0 divide-y divide-[var(--color-border)] overflow-hidden rounded-sm border border-[var(--color-border)] bg-[var(--color-surface)]",
+          "min-w-0 divide-y divide-[var(--color-border)] overflow-hidden rounded-sm border border-[var(--color-border)] bg-[var(--color-surface)]",
+          labelledBy ? "" : "mt-2",
           layout === "dialog"
             ? "max-h-[min(24rem,55dvh)] min-h-0 flex-1 overflow-y-auto overscroll-contain"
             : "",

@@ -215,7 +215,8 @@ test("creates a held event and completes OCR intake and review", async ({
     await page.setViewportSize({ height: 900, width: 1440 });
 
     await page.getByRole("button", { name: "開催（必須）を変更" }).click();
-    const heldEventDialog = page.getByRole("dialog", { name: "開催（必須）を選択" });
+    const heldEventDialog = page.getByRole("dialog", { name: "開催を選択" });
+    await expect(heldEventDialog.getByRole("group", { name: "開催を選択" })).toBeVisible();
     await selectDialogRadio(heldEventDialog, new RegExp(`^${heldEventLabelPrefix} —`, "u"));
     await expect(page.getByText(new RegExp(`^${heldEventLabelPrefix} —`, "u"))).toBeVisible();
     await selectSeedMasters(page, { gameTitleId, mapMasterId, seasonMasterId });

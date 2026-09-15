@@ -53,6 +53,7 @@
 - 1つの視覚境界は1つの owner だけが描く。親 surface の外周と先頭・末尾 child、disclosure の root と panel、table wrapper と隣接 toolbar などへ同じ境界を重ねず、隣接する平行線や二重線を作らない。淡色背景、border、角丸を同じ要素へ慣習的に重ねず、境界を伝えるために必要な最小の手段を選ぶ。
 - 入力場所と独自選択マークの識別に必要な境界は、一般の区切り線から分けた意味tokenを使い、実際の隣接色に対して3:1以上を確保する。半透明の枠は、その下の入力背景と外側の面を含めて検証する。hover途中や要確認・errorの状態でも識別性を保ち、無効状態を通常状態と同じ濃さへ強制しない。
 - 通常の一行selectは値と下向き矢印で操作を識別し、全周には副操作と同程度の薄い補助枠を残す。矢印は実背景に対して3:1以上を確保し、全周枠へ識別基準を一律に要求しない。tone / invalidの意味枠とfocus枠は維持し、矢印を持たない複数選択・listboxや、テキスト入力の識別用境界へ補助枠を広げない。
+- 数値・日時も直接編集するinputであり、一行selectとは境界の役割が異なる。`Control`が入力用／選択用の通常境界と、tone、invalidの優先順位をまとめて所有し、featureは枠色を選ばない。日時pickerを開くiconがあっても、直接編集する入力欄をselect用の補助枠へ切り替えない。
 - 通常境界は役割、意味枠は要確認・error等、focus枠は操作先を示す。非focusの入力にも同じ通常境界を残し、focus移動で選択・error・説明を消さない。値と「変更」buttonを囲む表示用の枠は、全体が操作できる入力欄と同じ強さへ変更しない。
 - 枠付きの副button / icon actionは専用の補助境界tokenへ接続し、主操作の塗りと入力の識別用境界より控えめにする。quietや開閉操作へ常時の枠を追加せず、一般の区切り線の色を一括変更しない。
 - sibling 間の divider は、それらを並べる親 composition が `divide-*` または独立した separator として所有し、各 child の先頭・末尾 border と `first` / `last` の相殺で組み立てない。control、bounded panel、badge、table の上端・header 下端・最終行下端など、部品自身の意味を成立させる perimeter / internal boundary はその部品が所有する。装飾だけの separator は accessibility tree へ意味を追加せず、内容上の区切りを表す場合だけ semantic な `hr` または section 構造を使う。
@@ -128,8 +129,9 @@
 
 ### 3.2 選択・表示切替・表示範囲
 
-- 説明を読み比べて一つを選ぶ候補は、可視 legend を持つ native radio group と説明付きの選択行で表す。選択行全体を操作可能にし、選択状態は control、文字、形で示して色だけに依存しない。候補固有の別操作は選択 label の内側へ混ぜない。
+- 説明を読み比べて一つを選ぶ候補は、native radio group と説明付きの選択行で表す。群の名前は可視legend、または`aria-labelledby`で参照する可視見出しが所有する。単一の選択群だけを扱うdialogでは「開催を選択」等のtitleを群の名前にも使い、「開催候補」等の同義見出しを重ねない。独立した複数の群を持つ場合は、それぞれのlegendを残す。選択行全体を操作可能にし、選択状態はcontrol、文字、形で示して色だけに依存しない。候補固有の別操作は選択labelの内側へ混ぜない。
 - 開催、試合など日時・件数・状態を読み比べる単一選択は、現在値と変更 trigger を持つ共通 dialog field を使う。任意選択の「すべて」「選択しない」も同じ radio group の候補として扱い、filter、OCR、作成・編集、出力の文脈ごとに別の選択文法を作らない。候補が1画面に収まらない場合は共通の compact pagination で server page を切り替え、page 外へ移った現在の選択と表示 label を失わせない。
+- 選択dialogはtitle、選択肢、必要なページ送りの順に構成する。必須／任意などfieldの注記はtitleへ反復しない。読み取りの更新表示はtitleの名前を変えず、閉じる操作と同じheader内の安定したslotへ置く。待機表示だけの空行を一覧の上へ加えず、header・bodyの左端を揃え、本文のscroll用の内余白を見出しからの意図しない段差にしない。
 - 少数の短い mode 選択のうち、値だけを変えて周囲の内容領域を切り替えないものは segmented control を使う。同じ対象の view を切り替える場合、または選択ごとに直下の候補・結果・実行内容が一つの対応 panel として切り替わる場合は tab を使う。補助詳細の開閉は disclosure、多数の簡潔な候補は select または検索可能な選択を使う。見た目の都合で意味を交換せず、選択と即時実行を混同しない。
 - page-local な主要 tab は、設定管理を基準とする共通の filled presentation を使う。tab list 自体を枠や背景で囲わず、選択中の tab だけを selected surface、文字、`aria-selected` で示し、狭い幅では label を分断せず tab 単位で折り返す。同じ panel 内の下位 view は、より弱い underline presentation と局所的な横 scroll を使ってよく、上下2階層を同じ強さの fill で競合させない。
 - tab は同じ tab set として tab list、tab、対応する tab panel の関係を持ち、keyboard focus と選択状態を shared UI が所有する。focus 移動だけで即座に表示できる panel は自動 activation を使ってよいが、取得や高コスト処理を始める切替は、矢印キーで focus、Enter または Space で activation する。切替後の取得中も起点 tab の DOM と focus を維持し、stale content の `inert` 化で focus が document へ退避した場合は完了時に起点へ戻す。ただし、利用者が別の操作へ移した focus は奪わない。panel を伴わない排他条件は tab の外観へ寄せるために tab semantics を付けない。

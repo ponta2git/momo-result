@@ -29,6 +29,8 @@ describe("ChoicePickerDialogField", () => {
 
     await user.click(screen.getByRole("button", { name: "開催を変更" }));
     const dialog = screen.getByRole("dialog", { name: "開催を選択" });
+    expect(screen.getByRole("group", { name: "開催を選択" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "開催を選択" })).toBeInTheDocument();
     expect(dialog).toHaveTextContent("確定 3試合・未完了 1件");
 
     await user.click(screen.getByRole("radio", { name: /2026\/08\/09 09:00/u }));
@@ -115,7 +117,8 @@ describe("ChoicePickerDialogField", () => {
     expect(
       screen.getByRole("navigation", { name: "開催候補のページネーション" }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("status")).toHaveTextContent("開催候補を更新中");
+    expect(screen.getByRole("status")).toHaveTextContent("更新中");
+    expect(dialog).toHaveAccessibleName("開催を選択");
     expect(screen.getByRole("button", { name: "次のページへ" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "ダイアログを閉じる" })).toBeEnabled();
 

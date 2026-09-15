@@ -63,7 +63,7 @@ function expectSingleCandidateScrollRegion(label: "開催" | "試合") {
   expect(dialog).not.toHaveClass("overflow-y-auto");
   expect(dialog.firstElementChild).toHaveClass("overflow-y-hidden");
   expect(dialog.firstElementChild).not.toHaveClass("overflow-y-auto");
-  const candidateGroup = screen.getByRole("group", { name: `${label}候補` });
+  const candidateGroup = screen.getByRole("group", { name: `${label}を選択` });
   const candidateList = candidateGroup.querySelector(":scope > div");
   expect(candidateGroup).not.toHaveClass("overflow-y-auto");
   expect(candidateList).toHaveClass("overflow-y-auto", "overscroll-contain");
@@ -292,7 +292,7 @@ describe("ExportPage", () => {
     expect(screen.getByText("1〜20件／全21件")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "次のページへ" }));
-    expect(await screen.findByRole("status")).toHaveTextContent("開催候補を更新中");
+    expect(await screen.findByRole("status")).toHaveTextContent("更新中");
     expect(screen.getByText("1〜20件／全21件")).toBeInTheDocument();
     expect(
       screen.getByRole("navigation", { name: "開催候補のページネーション" }),
@@ -384,7 +384,7 @@ describe("ExportPage", () => {
     await user.click(screen.getByRole("button", { name: "試合を変更" }));
     expectSingleCandidateScrollRegion("試合");
     await user.click(screen.getByRole("button", { name: "次のページへ" }));
-    expect(await screen.findByRole("status")).toHaveTextContent("試合候補を更新中");
+    expect(await screen.findByRole("status")).toHaveTextContent("更新中");
     expect(screen.getByText("1〜20件／全21件")).toBeInTheDocument();
     expect(
       screen.getByRole("navigation", { name: "試合候補のページネーション" }),

@@ -95,14 +95,21 @@ test("keeps export choices usable and restores paging focus on mobile", async ({
 
   await page.getByRole("button", { name: "開催を変更" }).click();
   const dialog = page.getByRole("dialog", { name: "開催を選択" });
-  const pager = dialog.getByRole("navigation", { name: "開催候補のページネーション" });
+  const pager = dialog.getByRole("navigation", {
+    includeHidden: true,
+    name: "開催候補のページネーション",
+  });
+  const choices = dialog.getByRole("group", { includeHidden: true, name: "開催を選択" });
   const nextPage = dialog.getByRole("button", { name: "次のページへ" });
   const selectedCandidate = dialog.getByRole("radio").first();
   await expect(selectedCandidate).toBeChecked();
+  const readyLayout = await Promise.all([choices.boundingBox(), pager.boundingBox()]);
 
   await nextPage.focus();
   await nextPage.click();
-  await expect(dialog.getByRole("status")).toHaveText("開催候補を更新中");
+  await expect(dialog.getByRole("status")).toHaveText("更新中");
+  await expect(dialog).toHaveAccessibleName("開催を選択");
+  expect(await Promise.all([choices.boundingBox(), pager.boundingBox()])).toEqual(readyLayout);
   await expect(dialog.getByRole("button", { name: "ダイアログを閉じる" })).toBeEnabled();
   await expect(selectedCandidate).toBeVisible();
   await expect(pager).toBeVisible();

@@ -17,6 +17,8 @@ type ChoicePickerDialogFieldProps = Omit<
   HTMLAttributes<HTMLDivElement>,
   "children" | "className" | "onChange" | "style"
 > & {
+  /** The choice subject, without field annotations such as required / optional. */
+  choiceLabel?: string | undefined;
   disabled?: boolean | undefined;
   emptyState?: ReactNode | undefined;
   error?: ReactNode | undefined;
@@ -42,6 +44,7 @@ type ChoicePickerDialogFieldProps = Omit<
  * page mounted but inert until the requested page is ready.
  */
 export function ChoicePickerDialogField({
+  choiceLabel,
   disabled = false,
   emptyState = "選べる候補はありません。",
   error,
@@ -63,6 +66,8 @@ export function ChoicePickerDialogField({
   const [open, setOpen] = useState(false);
   const fallbackId = useId();
   const triggerId = `${fallbackId}-trigger`;
+  const titleId = `${fallbackId}-title`;
+  const subject = choiceLabel ?? label;
   const errorId = error ? `${fallbackId}-error` : undefined;
 
   const selectChoice = (nextValue: string) => {
@@ -91,10 +96,11 @@ export function ChoicePickerDialogField({
         <div className="shrink-0">
           <Dialog
             contentClassName="flex min-h-0 flex-col overflow-y-hidden"
+            headerStatus={<PendingStatus pending={pending || scopeChanging}>更新中</PendingStatus>}
             open={open}
             popupClassName="overflow-y-hidden"
             surfaceClassName="flex flex-col overflow-y-hidden"
-            title={`${label}を選択`}
+            title={<span id={titleId}>{`${subject}を選択`}</span>}
             trigger={
               <Button
                 aria-describedby={buildFieldDescribedBy(errorId)}
@@ -112,12 +118,8 @@ export function ChoicePickerDialogField({
             onOpenChange={setOpen}
           >
             <div className="grid min-h-0 flex-1">
-              <PendingStatus
-                pending={pending || scopeChanging}
-              >{`${label}候補を更新中`}</PendingStatus>
               <StaleShield
                 active={scopeChanging}
-                busyLabel={`${label}候補を更新中`}
                 fallback={null}
                 statusPlacement="external"
                 strategy="preserve-inert"
@@ -125,10 +127,10 @@ export function ChoicePickerDialogField({
                 <div className="flex min-h-0 flex-col gap-3">
                   <div className="flex min-h-0 flex-1 flex-col">
                     <ChoiceList
+                      aria-labelledby={titleId}
                       disabled={disabled || pending}
                       emptyState={emptyState}
                       layout="dialog"
-                      legend={`${label}候補`}
                       name={name}
                       options={options}
                       pending={false}

@@ -358,3 +358,19 @@ OCRはサンプルと一時API、比較は既存のfixture応答を使った実�
 - Playwright MCPでは390pxの実画面と既存の分析fixture応答を使い、通常 / reduced motion、初回の遅延chunk保留と解放、主仮説・補助仮説から根拠への到達、戻る・進むの位置と開示の復元、直接リンクの正規化、目次の往復、通常tabのfocus保持を確認した。chunk待ちの間に「指標の読み方」を開いた場合も、完了後にdialogからfocusや閲覧位置を奪わない。既存app smokeへ根拠の可視性と復帰の回帰stepを追加した。
 - 両修正のブラウザー確認にはproduction buildを使用した。OCR確認欄と比較の到達先の画像も見て、ラベル・見出しがsticky navigationに隠れないことを確認した。全E2E suite、実機カメラ・仮想キーボード、実際のscreen reader発話、分析アルゴリズムを検証した結果ではない。
 - 最終差分でWebのformat、lint、typecheck、production buildと公開文書検査が通過した。選択したcomponent / router / workspace検証は両修正で計9ファイル52件が通過し、既存のchunk size警告以外に残る検査失敗はない。
+
+## 12. 入力境界と選択dialogの情報構造の再点検
+
+### 判断と変更
+
+- 試合番号はtext input、開催日時はdatetime-local inputであり、作品等の一行selectとは識別手段が異なる。実画面でも`control-border`と`select-border`がそれぞれの共通部品から適用され、feature側の独自色ではなかった。入力用の識別枠と矢印付きselectの補助枠を維持し、通常境界、tone、invalidの決定を`Control`の一か所へ集約した。色値、focus、hoverの反応は変更していない。
+- 選択dialogではheaderの下に空のPendingStatus、可視legend、一覧上余白が重なっていた。更新表示を共通Dialogのheader slotへ移し、単一選択群は可視titleを`aria-labelledby`で参照する。通常の画面内ChoiceListではlegendを残し、型でも命名方法を一つ選ぶ。`開催（必須）`等のfield注記はその場に残し、dialogの目的は「開催を選択」に整理した。開催filter、OCR、試合入力、出力へ同じ部品を通して適用する。
+- DialogとAlertDialogの見出し・本文・操作端を、本文のscroll用余白に揃えた。閉じる操作と並ぶ短いtitleはheader内で中央に配置する。閉じる操作もstatusもないheaderの高さは増やさない。選択肢のpage切替・inert化・現在値・閉じる操作の責務は維持した。
+
+可視見出しからの命名は[WAIのグループ化](https://www.w3.org/WAI/tutorials/forms/grouping/)に沿う。Base UIのTitleはdialogの見出しとaccessible nameを所有するため、更新statusはTitleの外側へ置いた。一般的なlegendの一律非表示や、dialog全体への別の選択roleの追加は行っていない。
+
+### 確認結果
+
+- 既存の8 testファイル41件でnative input / select、選択・無効状態、dialogの開閉、group名、更新中のdialog名の安定、出力の選択・page切替を確認した。文言変更に伴う既存app smokeとpagination continuityを更新し、後者には更新前／更新中の一覧・ページ送りの位置保持を追加した。配置と色はclass一致のtestを増やさず実画面で判定した。
+- Playwright MCPでproduction buildと架空の候補応答を使い、1440pxと320px、通常／reduced motionの代表条件を確認した。見出しと一覧の左端が揃い、見出しから最初の選択肢までの不要な空白が解消した。試合入力と出力の両方で、更新表示の出現だけでは一覧・ページ送りの位置が動かないことを確認した。keyboardでの選択結果・起点へのfocus復帰、Escape、未保存確認のcancel、説明を持つ開催作成dialogの整列と狭幅での折返しも確認した。
+- 対象範囲の暫定評価は、修正前の視覚8/10（見出しの階層・関係的余白に不足）、操作9/10（重複説明による軽度の迷い）から、確認した範囲では各10/10。全画面の網羅評価や利用者調査を意味しない。全E2E suite、実機の日時picker・仮想キーボード、実際のscreen reader発話は未検証。

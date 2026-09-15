@@ -6,7 +6,7 @@ import {
   useOptimistic,
   useTransition,
 } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 
 import {
   buildSeriesAnalysisSearchParams,
@@ -26,6 +26,8 @@ import { sanitizeReturnTo } from "@/shared/navigation/returnTo";
 /** Owns parsing, canonicalization, and intent-level updates for the series-analysis URL. */
 export function useSeriesAnalysisLocationState(options: SeriesAnalysisOptionsResponse | undefined) {
   const [searchParams, setSearchParams] = useSearchParams();
+  const location = useLocation();
+  const navigate = useNavigate();
   const returnTo = sanitizeReturnTo(searchParams.get("returnTo"));
   const rawState = useMemo(() => parseSeriesAnalysisSearchParams(searchParams), [searchParams]);
   const [, startStateTransition] = useTransition();
@@ -47,9 +49,22 @@ export function useSeriesAnalysisLocationState(options: SeriesAnalysisOptionsRes
     const next = buildSeriesAnalysisSearchParams(urlState);
     if (returnTo) next.set("returnTo", returnTo);
     if (next.toString() !== searchParams.toString()) {
-      setSearchParams(next, { replace: true });
+      void navigate(
+        { pathname: location.pathname, search: `?${next.toString()}`, hash: location.hash },
+        { replace: true, state: location.state },
+      );
     }
-  }, [locationSettling, options, returnTo, searchParams, setSearchParams, urlState]);
+  }, [
+    location.hash,
+    location.pathname,
+    location.state,
+    locationSettling,
+    navigate,
+    options,
+    returnTo,
+    searchParams,
+    urlState,
+  ]);
 
   const update = useCallback(
     (next: SeriesAnalysisUrlState, updateOptions: { replace?: boolean } = {}) => {

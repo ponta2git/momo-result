@@ -61,7 +61,7 @@
 - 同じcategoryが3人以上に現れる場合は特徴の強い1〜2人だけを個人cardへ残し、残りを共通論点へ寄せる。
 - 候補0件では弱い仮説を補充せず、「今の差」へ進む空状態を出す。
 - PCは4人の最優先cardを比較しやすく、mobileは1人ずつ読めるようにする。分類、品質、linkを色だけで伝えない。
-- URLは `review` viewを復元し、詳細viewへの移動後にbrowser backでscopeとreview状態へ戻れること。
+- 詳細リンクはscope・選択試合・view・対象指標を一つの移動先URLで指定し、対象の描画後にその見出しへ到達できること。URLは `review` viewを復元し、詳細viewへの移動後にbrowser back一回でscope、起点仮説の開示・閲覧位置へ戻れること。待機中に利用者が別の操作へ移った場合は、遅れてfocusや閲覧位置を引き戻さない。
 
 ## 3. Candidate Model
 

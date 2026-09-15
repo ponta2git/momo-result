@@ -779,6 +779,24 @@ test("inspects saved analysis and handles explicit refresh states", async ({
       .toBeGreaterThan(mobileNextPlayerTop + 100);
     await expectNoHorizontalPageOverflow(page);
 
+    const evidenceLink = firstPlayerSection
+      .getByRole("link", { name: "いーゆーの詳しい分析" })
+      .nth(1);
+    await evidenceLink.scrollIntoViewIfNeeded();
+    const reviewUrl = page.url();
+    const reviewScroll = await page.evaluate(() => window.scrollY);
+    await evidenceLink.click();
+    const evidenceHeading = page.getByRole("heading", { name: "物件収益と最終順位", exact: true });
+    await expect(evidenceHeading).toBeFocused();
+    await expectPageTargetInView(evidenceHeading);
+    await page.goBack();
+    await expect(page).toHaveURL(reviewUrl);
+    await expect(firstDisclosure).toHaveAttribute("aria-expanded", "true");
+    await expect(evidenceLink).toBeFocused();
+    expect(
+      Math.abs((await page.evaluate(() => window.scrollY)) - reviewScroll),
+    ).toBeLessThanOrEqual(1);
+
     await firstDisclosure.click();
     await expect(firstDisclosure).toHaveAttribute("aria-expanded", "false");
     await expect

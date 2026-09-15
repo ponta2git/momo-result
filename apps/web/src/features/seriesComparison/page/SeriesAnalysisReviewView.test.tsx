@@ -1,5 +1,7 @@
-import { render, screen, within } from "@testing-library/react";
+import { render as renderUI, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type { ReactElement } from "react";
+import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
 import { ReviewView } from "@/features/seriesComparison/page/SeriesAnalysisReviewView";
@@ -7,6 +9,10 @@ import {
   makeFourPlayerSeriesAnalysisReview,
   makeSeriesAnalysisReview,
 } from "@/test/msw/seriesAnalysisFixtures";
+
+function render(ui: ReactElement) {
+  return renderUI(<MemoryRouter>{ui}</MemoryRouter>);
+}
 
 describe("ReviewView", () => {
   it("shows common hypotheses directly, keeps secondary hypotheses local, and uses help dialogs", async () => {

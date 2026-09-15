@@ -1,5 +1,3 @@
-import { ChevronRight } from "lucide-react";
-
 import {
   classificationLabel,
   evidenceStrengthLabel,
@@ -10,6 +8,8 @@ import {
   reviewEvidenceLabel,
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
 import type { SeriesAnalysisViewId } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
+import { useSeriesAnalysisNavigation } from "@/features/seriesComparison/navigation/SeriesAnalysisNavigation";
+import { SeriesAnalysisSectionLink } from "@/features/seriesComparison/navigation/SeriesAnalysisSectionLink";
 import { SeriesAnalysisReviewHelpDialog } from "@/features/seriesComparison/page/SeriesAnalysisReviewHelpDialog";
 import {
   purposePanelId,
@@ -45,6 +45,7 @@ export function ReviewView({
   response: SeriesComparisonReviewV3 | undefined;
   showError: boolean;
 }) {
+  const navigation = useSeriesAnalysisNavigation();
   if (loading) {
     return (
       <div aria-label="次戦の準備を読み込み中" className="grid gap-6">
@@ -103,7 +104,7 @@ export function ReviewView({
             </h3>
             {entry.primaryCard ? (
               <div className="mt-2 min-h-0">
-                <PlaybookCard card={entry.primaryCard} emphasis onViewChange={onViewChange} />
+                <PlaybookCard card={entry.primaryCard} emphasis />
               </div>
             ) : (
               <div className="mt-2 flex h-full flex-col justify-between gap-3">
@@ -117,13 +118,18 @@ export function ReviewView({
               <div className="mt-6 min-h-11">
                 <Disclosure
                   ariaLabel={`${entry.player.displayName}のほかの仮説`}
+                  defaultOpen={navigation?.visit.expandedMembers.has(entry.player.memberId)}
+                  onOpenChange={(open) => {
+                    if (open) navigation?.visit.expandedMembers.add(entry.player.memberId);
+                    else navigation?.visit.expandedMembers.delete(entry.player.memberId);
+                  }}
                   panelPadding="sm"
                   presentation="inset"
                   summary={`ほかの仮説（${entry.secondaryCards.length}件）`}
                 >
                   <div className="grid gap-6">
                     {entry.secondaryCards.map((card) => (
-                      <PlaybookCard card={card} key={card.cardId} onViewChange={onViewChange} />
+                      <PlaybookCard card={card} key={card.cardId} />
                     ))}
                   </div>
                 </Disclosure>
@@ -139,11 +145,9 @@ export function ReviewView({
 function PlaybookCard({
   card,
   emphasis = false,
-  onViewChange,
 }: {
   card: SeriesAnalysisPlaybookCard;
   emphasis?: boolean;
-  onViewChange: (view: SeriesAnalysisViewId, options?: { replace?: boolean }) => void;
 }) {
   return (
     <article className={cn("flex h-full min-w-0 flex-col", emphasis ? "gap-6" : "gap-4 py-1")}>
@@ -246,17 +250,7 @@ function PlaybookCard({
             </p>
           </div>
         </Dialog>
-        <Button
-          icon={<ChevronRight />}
-          size="sm"
-          variant="quiet"
-          onClick={() => {
-            window.location.hash = card.anchorTarget.sectionId;
-            onViewChange(card.anchorTarget.view, { replace: false });
-          }}
-        >
-          {card.anchorTarget.label}
-        </Button>
+        <SeriesAnalysisSectionLink card={card} />
       </div>
     </article>
   );

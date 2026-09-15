@@ -345,4 +345,16 @@ OCRはサンプルと一時API、比較は既存のfixture応答を使った実�
 - ScoreGridは確認項目・原画像の選択を移動要求と一緒に更新し、同じ対象への再移動も扱う。要求ごとに一度だけfocusし、ラベルを含む範囲を表示する。sticky navigationの実寸を使う小さな共有表示処理を追加し、すでに見える対象の位置や他の操作へ移ったfocusを不用意に変更しない。
 - 連続操作で、未変更の数値欄からblurするだけでも変更通知が発生し、確認済みになる既存経路を発見した。数値が変わる場合だけcommitし、移動や未変更のEscで確認を代行しないよう修正した。実workspaceの回帰testで未確認件数と値の保持を確認する。
 - 選択したcomponent / workspace検証は4ファイル36件が通過。Playwright MCPでは390px通常表示、320pxのreduced motion、1440pxの表で前後移動と対象・ラベルの可視性を確認した。表とカードの幅切替、確認件数の保持、最後の確認後に確定操作が画面内でfocusされることも確認した。既存app smokeのfocus assertionに、閉じた欄の非表示とviewport内の位置の判定を追加した。
-- lint、typecheck、production buildは通過。既存のchunk size警告は残る。実機の仮想キーボードとscreen readerは未検証。比較側の実施結果は後続の検証後に追記する。
+- format、lint、typecheck、production buildは通過。既存のchunk size警告は残る。実機の仮想キーボードとscreen readerは未検証。
+
+### 11.7 比較の実施結果
+
+- 「詳しい分析」を共通LinkButtonへ接続し、既存のURL生成・解析を使ってscope・選択試合・view・hash・内部returnToを一度に指定する。正規化でhashを失わないようURL ownerを修正した。目次の同一view内移動もrouterを通し、履歴のidentityと復帰先を揃えた。
+- 到達処理を実指標と同じSuspense境界へ配置した。現在のscope / view / 選択試合の準備が整ったときだけ実本文の見出しを表示し、keyboardで続けられるfocusを置く。fallback、旧条件のinert本文、通常のtab切替を到達処理に巻き込まない。
+- 比較ページ内で履歴entryごとの開示・起点・閲覧位置を保持する。保存位置を優先し、幅や内容の変化で起点が隠れる場合は見える位置へ補正する。保持は直近32 entryに制限し、ページを離れると破棄する。query key、API応答、分析値や永続設定へ表示位置を混ぜていない。
+- 同一view内のhash履歴では、ブラウザー標準の復元が後から位置を上書きすることを実画面で確認した。比較ページが表示されている間だけscroll復元を所有し、SPAでの離脱、documentの離脱、再表示で元の方式と所有権を受け渡す。再読み込み後に比較を離れた場合も元の方式へ戻ることを確認した。
+- 待機中のpointer操作、keyboard、focus移動、手動scrollや取得失敗では古い移動要求を取り消す。固定待機、常時DOM監視、追加Toast、強い強調演出、全viewの常時mountは導入していない。
+- 選択したcomponent / router検証は5ファイル16件が通過。実リンクからURL ownerを通る移動、余分な中間履歴がないこと、補助仮説の開示とfocusの復元、未準備からの到達、別操作での取消、正規化後のhash保持、不正hashでも操作可能なことを確認した。既存の不正hash testはrouterのlocationを使う経路へ更新した。
+- Playwright MCPでは390pxの実画面と既存の分析fixture応答を使い、通常 / reduced motion、初回の遅延chunk保留と解放、主仮説・補助仮説から根拠への到達、戻る・進むの位置と開示の復元、直接リンクの正規化、目次の往復、通常tabのfocus保持を確認した。chunk待ちの間に「指標の読み方」を開いた場合も、完了後にdialogからfocusや閲覧位置を奪わない。既存app smokeへ根拠の可視性と復帰の回帰stepを追加した。
+- 両修正のブラウザー確認にはproduction buildを使用した。OCR確認欄と比較の到達先の画像も見て、ラベル・見出しがsticky navigationに隠れないことを確認した。全E2E suite、実機カメラ・仮想キーボード、実際のscreen reader発話、分析アルゴリズムを検証した結果ではない。
+- 最終差分でWebのformat、lint、typecheck、production buildと公開文書検査が通過した。選択したcomponent / router / workspace検証は両修正で計9ファイル52件が通過し、既存のchunk size警告以外に残る検査失敗はない。

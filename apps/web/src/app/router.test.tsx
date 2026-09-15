@@ -67,7 +67,10 @@ describe("app routing", () => {
     expect(screen.getByLabelText("分析を読み込み中")).toBeInTheDocument();
     expect(screen.queryByRole("tabpanel", { name: "次戦に備える" })).not.toBeInTheDocument();
     gate.resolve();
-    expect(await screen.findByRole("heading", { name: "順位と基礎比較" })).toBeInTheDocument();
+    // The full suite also loads and validates the lazy analysis view after the gate opens.
+    expect(
+      await screen.findByRole("heading", { name: "順位と基礎比較" }, { timeout: 5000 }),
+    ).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "分析する" })).toBe(tab);
   });
 

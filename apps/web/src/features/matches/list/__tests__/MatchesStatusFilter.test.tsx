@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import { MatchesStatusFilter } from "@/features/matches/list/MatchesStatusFilter";
+import { selectOption } from "@/test/selectOption";
 
 const counts = {
   incompleteCount: 8,
@@ -25,7 +26,9 @@ describe("MatchesStatusFilter", () => {
     );
 
     const select = screen.getByLabelText("確定状況");
-    expect(select).toHaveValue("needs_review");
+    expect(select).toHaveTextContent("要確認のみ（2件）");
+    await user.click(select);
+    await screen.findByRole("listbox");
     expect(screen.getAllByRole("option").map((option) => option.textContent)).toEqual([
       "すべて",
       "未確定すべて（8件）",
@@ -35,7 +38,7 @@ describe("MatchesStatusFilter", () => {
       "確定済み",
     ]);
 
-    await user.selectOptions(select, "ocr_running");
+    await selectOption(user, select, "ocr_running");
     expect(onSelectStatus).toHaveBeenCalledWith("ocr_running");
   });
 
@@ -52,17 +55,20 @@ describe("MatchesStatusFilter", () => {
       />,
     );
 
-    expect(screen.getByRole("option", { name: "未確定すべて" })).toBeInTheDocument();
+    await user.click(screen.getByLabelText("確定状況"));
+    expect(await screen.findByRole("option", { name: "未確定すべて" })).toBeInTheDocument();
     expect(screen.queryByText(/0件/u)).not.toBeInTheDocument();
     expect(
       screen.getByText("内訳の件数を取得できません。確定状況の絞り込みは利用できます。"),
     ).toBeInTheDocument();
 
+    await user.keyboard("{Escape}");
     await user.click(screen.getByRole("button", { name: "件数を再取得" }));
     expect(onRetry).toHaveBeenCalledOnce();
   });
 
-  it("masks counts from the previous scope while the next summary loads", () => {
+  it("masks counts from the previous scope while the next summary loads", async () => {
+    const user = userEvent.setup();
     render(
       <MatchesStatusFilter
         counts={counts}
@@ -72,7 +78,8 @@ describe("MatchesStatusFilter", () => {
       />,
     );
 
-    expect(screen.getByRole("option", { name: "未確定すべて" })).toBeInTheDocument();
+    await user.click(screen.getByLabelText("確定状況"));
+    expect(await screen.findByRole("option", { name: "未確定すべて" })).toBeInTheDocument();
     expect(screen.queryByRole("option", { name: /8件/u })).not.toBeInTheDocument();
     expect(screen.getByText("内訳の件数を確認中です。")).toBeInTheDocument();
   });

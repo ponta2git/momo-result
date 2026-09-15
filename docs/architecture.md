@@ -94,7 +94,7 @@
 | 操作と結果の通知単位・発火、inline feedback の継続条件 | 操作を所有する feature。表示先の選択は UI 規約に従う |
 | 通知の描画・読み上げ、toast の表示寿命 | shared UI。画面をまたぐ toast は app に置く共通 host |
 | pathname、search params、navigation | React Router |
-| dialog / disclosure の open、focus、keyboard | Base UI と owning shared UI primitive |
+| dialog / disclosure / select の open、focus、keyboard | Base UI と owning shared UI primitive |
 | DOM / SVG の補間、非対話的な exit snapshot | Motion |
 
 - 同じ楽観表示を React `useOptimistic` と TanStack Query cache の両方で表現しない。一つの表示箇所だけなら action / mutation の入力から局所 overlay を導出し、複数 consumer の server state を揃える必要がある場合だけ cache update と snapshot / rollback を使う。pending から server response へ同じ対象を引き継ぐ場合は、client で安定した identity を発行し、表示順や Motion の layout identity を data identity の代わりにしない。

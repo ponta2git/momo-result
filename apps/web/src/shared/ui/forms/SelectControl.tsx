@@ -25,6 +25,10 @@ type TriggerProps = Pick<
   | "autoFocus"
 >;
 
+export type SelectValueProps =
+  | { value: string; defaultValue?: never }
+  | { value?: undefined; defaultValue?: string | undefined };
+
 export type SelectControlProps = ControlPresentationProps &
   TriggerProps & {
     "data-validation-path"?: string | undefined;
@@ -34,10 +38,7 @@ export type SelectControlProps = ControlPresentationProps &
     required?: boolean | undefined;
     options: readonly SelectOption[];
     onValueChange?: ((value: string) => void) | undefined;
-  } & (
-    | { value: string; defaultValue?: never }
-    | { value?: undefined; defaultValue?: string | undefined }
-  );
+  } & SelectValueProps;
 
 function SelectOptionRow({ option }: { option: SelectOption }) {
   const surfaceRef = useSurfaceFeedback<HTMLElement>();
@@ -46,6 +47,7 @@ function SelectOptionRow({ option }: { option: SelectOption }) {
       ref={surfaceRef}
       disabled={option.disabled}
       label={option.label}
+      data-value={option.value}
       value={option.value}
       className={({ selected }) =>
         cn(

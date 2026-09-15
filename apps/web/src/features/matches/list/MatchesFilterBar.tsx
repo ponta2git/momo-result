@@ -105,9 +105,7 @@ export function MatchesFilterBar({
               label="並び順"
               options={sortOptions}
               value={search.sort}
-              onChange={(event) =>
-                patchSearch({ sort: event.currentTarget.value as MatchListSort })
-              }
+              onValueChange={(nextValue) => patchSearch({ sort: nextValue as MatchListSort })}
             />
           </div>
         </div>

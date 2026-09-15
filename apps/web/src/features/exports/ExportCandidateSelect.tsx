@@ -168,7 +168,7 @@ export function ExportCandidateSelect({
           value: option.value,
         }))}
         value={view.selectedId}
-        onChange={(event) => onChange(event.currentTarget.value)}
+        onValueChange={(nextValue) => onChange(nextValue)}
       />
     );
   }

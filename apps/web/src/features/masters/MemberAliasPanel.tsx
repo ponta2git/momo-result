@@ -74,6 +74,7 @@ export function MemberAliasPanel({
           label="プレーヤー"
           layout="subgrid"
           name="memberId"
+          defaultValue={canonicalResultMembers[0]?.memberId ?? ""}
           options={canonicalResultMembers.map((member) => ({
             label: member.displayName,
             value: member.memberId,

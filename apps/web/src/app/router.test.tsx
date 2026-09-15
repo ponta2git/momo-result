@@ -22,6 +22,7 @@ import {
 } from "@/test/msw/seriesAnalysisFixtures";
 import { server } from "@/test/msw/server";
 import { createTestQueryClient } from "@/test/queryClient";
+import { selectOption } from "@/test/selectOption";
 
 setupMsw();
 
@@ -108,7 +109,8 @@ describe("app routing", () => {
     expect(
       screen.queryByRole("dialog", { name: "アカウント設定を更新しました" }),
     ).not.toBeInTheDocument();
-    await user.selectOptions(
+    await selectOption(
+      user,
       screen.getByRole("combobox", { name: "操作用アカウント" }),
       "account_eu",
     );
@@ -220,7 +222,8 @@ describe("app routing", () => {
     expect(recoveryParams.get("reason")).toBe("forbidden");
     expect(recoveryParams.get("next")).toBe("/exports?format=tsv&matchId=match-1#download");
 
-    await user.selectOptions(
+    await selectOption(
+      user,
       screen.getByRole("combobox", { name: "操作用アカウント" }),
       "account_ponta",
     );
@@ -388,7 +391,7 @@ describe("app routing", () => {
       const accountPicker = await screen.findByRole("combobox", { name: "操作用アカウント" });
       expect(screen.getByRole("region", { name: "ログイン" })).toBeInTheDocument();
       expect(accountPicker).toBeEnabled();
-      await user.selectOptions(accountPicker, "account_eu");
+      await selectOption(user, accountPicker, "account_eu");
 
       await waitFor(() => {
         expect(router.state.location.pathname).toBe("/matches");
@@ -607,7 +610,7 @@ describe("app routing", () => {
 
     expect(await screen.findByText("収益先行時は目的地0回で終えない。")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /比較対象を変更/u }));
-    await user.selectOptions(screen.getByRole("combobox", { name: "シーズン" }), "season_current");
+    await selectOption(user, screen.getByRole("combobox", { name: "シーズン" }), "season_current");
     expect(await screen.findByText("戦績データを読み込めません")).toBeInTheDocument();
     await waitFor(() =>
       expect(screen.queryByText("収益先行時は目的地0回で終えない。")).not.toBeInTheDocument(),
@@ -670,8 +673,8 @@ describe("app routing", () => {
 
     expect(await screen.findByRole("region", { name: "戦績比較" })).toBeInTheDocument();
     await user.click(await screen.findByRole("button", { name: /比較対象を変更/u }));
-    await user.selectOptions(screen.getByRole("combobox", { name: "シーズン" }), "season_current");
-    await user.selectOptions(screen.getByRole("combobox", { name: "マップ" }), "map_east");
+    await selectOption(user, screen.getByRole("combobox", { name: "シーズン" }), "season_current");
+    await selectOption(user, screen.getByRole("combobox", { name: "マップ" }), "map_east");
 
     await waitFor(() => {
       expect(router.state.location.search).toContain("seasonMasterId=season_current");
@@ -713,7 +716,7 @@ describe("app routing", () => {
 
     const activeTab = await screen.findByRole("tab", { name: "今の差" });
     await user.click(screen.getByRole("button", { name: /比較対象を変更/u }));
-    await user.selectOptions(screen.getByRole("combobox", { name: "シーズン" }), "season_current");
+    await selectOption(user, screen.getByRole("combobox", { name: "シーズン" }), "season_current");
 
     expect(await screen.findByRole("button", { name: "表示を更新中" })).toBeDisabled();
     expect(screen.getByRole("tab", { name: "今の差" })).toBe(activeTab);

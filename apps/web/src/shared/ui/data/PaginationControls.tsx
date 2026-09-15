@@ -75,8 +75,8 @@ export function PaginationControls(props: PaginationControlsProps) {
                 value: String(value),
               }))}
               value={String(pagination.pageSize)}
-              onChange={(event) => {
-                props.onPageSizeChange(Number(event.currentTarget.value));
+              onValueChange={(nextValue) => {
+                props.onPageSizeChange(Number(nextValue));
               }}
             />
           </div>

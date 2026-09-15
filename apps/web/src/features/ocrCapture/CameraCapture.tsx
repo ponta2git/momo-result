@@ -52,7 +52,7 @@ export function CameraCapture({
               })),
             ]}
             value={camera.deviceId}
-            onChange={(event) => camera.selectDevice(event.currentTarget.value)}
+            onValueChange={(nextValue) => camera.selectDevice(nextValue)}
           />
         </div>
       ) : null}

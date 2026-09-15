@@ -434,7 +434,7 @@ describe("ExportPage", () => {
     const retry = screen.getByRole("button", { name: "再読み込み" });
     await user.click(retry);
 
-    expect(await screen.findByRole("combobox", { name: "シーズン" })).toHaveValue("season-1");
+    expect(await screen.findByRole("combobox", { name: "シーズン" })).toHaveTextContent("3年決戦");
     expect(requests).toBe(2);
   });
 

@@ -68,7 +68,7 @@ export function MatchesStatusFilter({
           value: option.value,
         }))}
         value={currentStatus}
-        onChange={(event) => onSelectStatus(event.currentTarget.value as MatchListStatusFilter)}
+        onValueChange={(nextValue) => onSelectStatus(nextValue as MatchListStatusFilter)}
       />
 
       {unavailable ? (

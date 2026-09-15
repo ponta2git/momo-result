@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { SeriesAnalysisScopeBar } from "@/features/seriesComparison/page/SeriesAnalysisScopeBar";
 import { makeSeriesAnalysisReview } from "@/test/msw/seriesAnalysisFixtures";
+import { selectOption } from "@/test/selectOption";
 
 const baseProps = {
   canRefresh: true,
@@ -117,9 +118,10 @@ describe("SeriesAnalysisScopeBar", () => {
     expect(trigger).toHaveTextContent("シーズン 今シーズン・マップ 東日本編");
     expect(trigger).toHaveTextContent("12戦");
     expect(seasonControl.closest("[hidden]")).toBeNull();
-    await user.selectOptions(seasonControl, "season-previous");
+    await selectOption(user, seasonControl, "season-previous");
     expect(onSeasonChange).toHaveBeenCalledWith("season-previous");
-    await user.selectOptions(
+    await selectOption(
+      user,
       within(surface).getByRole("combobox", { name: "対象作品" }),
       "gt_world",
     );

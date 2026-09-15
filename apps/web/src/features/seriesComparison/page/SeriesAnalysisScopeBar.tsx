@@ -108,19 +108,19 @@ export function SeriesAnalysisScopeBar({
             label="対象作品"
             options={seriesOptions}
             value={seriesValue}
-            onChange={(event) => onSeriesChange(event.currentTarget.value)}
+            onValueChange={(nextValue) => onSeriesChange(nextValue)}
           />
           <SelectField
             label="シーズン"
             options={seasonOptions}
             value={seasonValue}
-            onChange={(event) => onSeasonChange(event.currentTarget.value)}
+            onValueChange={(nextValue) => onSeasonChange(nextValue)}
           />
           <SelectField
             label="マップ"
             options={mapOptions}
             value={mapValue}
-            onChange={(event) => onMapChange(event.currentTarget.value)}
+            onValueChange={(nextValue) => onMapChange(nextValue)}
           />
         </div>
       </Disclosure>

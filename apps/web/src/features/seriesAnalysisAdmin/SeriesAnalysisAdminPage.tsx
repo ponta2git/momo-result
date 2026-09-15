@@ -96,7 +96,7 @@ export function SeriesAnalysisAdminPage() {
                   label="対象作品"
                   options={page.selection.options}
                   value={page.selection.gameTitleId ?? ""}
-                  onChange={(event) => page.actions.selectTitle(event.currentTarget.value)}
+                  onValueChange={(nextValue) => page.actions.selectTitle(nextValue)}
                 />
                 <Button
                   disabled={!page.selection.gameTitleId || page.recalculation.titleReserved}

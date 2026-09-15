@@ -114,8 +114,8 @@ export function MatchesListFilters({
         options={gameTitleOptions}
         value={search.gameTitleId}
         {...gameTitlesErrorProps}
-        onChange={(event) => {
-          const value = event.currentTarget.value;
+        onValueChange={(nextValue) => {
+          const value = nextValue;
           patchSearch({
             gameTitleId: value,
             seasonMasterId: value && search.gameTitleId === value ? search.seasonMasterId : "",
@@ -127,8 +127,8 @@ export function MatchesListFilters({
         options={seasonOptions}
         value={search.seasonMasterId}
         {...seasonsErrorProps}
-        onChange={(event) => {
-          patchSearch({ seasonMasterId: event.currentTarget.value });
+        onValueChange={(nextValue) => {
+          patchSearch({ seasonMasterId: nextValue });
         }}
       />
     </>

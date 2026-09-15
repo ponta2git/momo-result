@@ -13,6 +13,7 @@ import { mswState } from "@/test/msw/fixtures";
 import { setupMsw } from "@/test/msw/lifecycle";
 import { server } from "@/test/msw/server";
 import { createTestQueryClient } from "@/test/queryClient";
+import { selectOption } from "@/test/selectOption";
 
 setupMsw();
 
@@ -45,7 +46,7 @@ describe("AdminAccountsPage", () => {
 
     const dialog = screen.getByRole("dialog", { name: "アカウントを追加" });
     const playerSelect = within(dialog).getByRole("combobox", { name: "紐づくプレーヤー" });
-    expect(playerSelect).toHaveValue("");
+    expect(playerSelect).toHaveTextContent("試合参加者に紐づけない");
 
     const permissions = within(dialog).getByRole("group", { name: "権限" });
     const loginEnabled = within(permissions).getByRole("checkbox", { name: "ログイン許可" });
@@ -103,7 +104,7 @@ describe("AdminAccountsPage", () => {
     const isAdmin = within(dialog).getByRole("checkbox", { name: "管理者" });
     await user.type(discordId, "999000111222333444");
     await user.type(displayName, "再送ユーザー");
-    await user.selectOptions(player, "member_ponta");
+    await selectOption(user, player, "member_ponta");
     await user.click(loginEnabled);
     await user.click(isAdmin);
     await user.click(within(dialog).getByRole("button", { name: "追加" }));
@@ -122,7 +123,7 @@ describe("AdminAccountsPage", () => {
     expect(submissions).toHaveLength(1);
     expect(discordId).toHaveValue("999000111222333444");
     expect(displayName).toHaveValue("再送ユーザー");
-    expect(player).toHaveValue("member_ponta");
+    expect(player).toHaveTextContent("ぽんた");
     expect(loginEnabled).not.toBeChecked();
     expect(isAdmin).toBeChecked();
 
@@ -144,7 +145,9 @@ describe("AdminAccountsPage", () => {
     const nextDialog = screen.getByRole("dialog", { name: "アカウントを追加" });
     expect(within(nextDialog).getByRole("textbox", { name: /DiscordユーザーID/u })).toHaveValue("");
     expect(within(nextDialog).getByRole("textbox", { name: /表示名/u })).toHaveValue("");
-    expect(within(nextDialog).getByRole("combobox", { name: "紐づくプレーヤー" })).toHaveValue("");
+    expect(
+      within(nextDialog).getByRole("combobox", { name: "紐づくプレーヤー" }),
+    ).toHaveTextContent("試合参加者に紐づけない");
     expect(within(nextDialog).getByRole("checkbox", { name: "ログイン許可" })).toBeChecked();
     expect(within(nextDialog).getByRole("checkbox", { name: "管理者" })).not.toBeChecked();
     expect(within(nextDialog).queryByRole("alert")).not.toBeInTheDocument();

@@ -170,7 +170,10 @@
 
 ## 4. 入力・ワークスペース・アクセシビリティ
 
-- form は可視ラベル、説明、必須、validation error、disabled / pending を同じ field 境界で関連付け、paste を妨げない。checkbox、radio、select、text input は native semantics を保ち、見た目のために keyboard 操作を再実装しない。
+- form は可視ラベル、説明、必須、validation error、disabled / pending を同じ field 境界で関連付け、paste を妨げない。checkbox、radio、text input は native semantics を保つ。一行ラベルの単一選択はsharedのBase UI Selectを使い、featureでkeyboard・focus・候補表示を再実装しない。
+- 単一選択は、候補移動と値確定を分ける。現在値はcheckとselected surface、操作位置はfocusで示し、hoverは共通の反応の文法へ接続する。Enter / Spaceで確定し、Escape・外側押下・Tabでは未確定の候補を採用しない。Escapeは欄へ戻り、Tabは次の操作へ進む。閉じた欄のtypeaheadによる値確定は維持し、同じ値の再選択で業務処理を増やさない。
+- Selectの可視triggerがlabel・説明・error・外部refの接続先となり、フォーム送信とresetはsharedが所有する。空文字の意味と候補更新時の値変更はfeatureが所有する。popupは既存の寸法・面・境界を使い、viewport内の一つの候補scrollerへ収める。dialog内の候補はowning dialogのfocusとlayerに所属し、本文で切れたり、親dialogの退出後も操作可能なまま残ったりしない。
+- 試合入力表の選択欄もEnter / Space / 上下を選択操作に使う。閉じた選択欄ではTab・左右で欄を移動し、開いた候補の操作を表の移動へ渡さない。数値入力のセル移動・編集取消はその入力契約を維持する。
 - 入力用の文字は `shared/ui/typography.ts` の `fieldText` を `Field` / `Fieldset` と独自入力欄で共有する。可視ラベルは14 / 20px・通常ウェイトの主要文字色、補足は12 / 16px、修正に必要なエラーは14 / 20px・dangerとし、読むための小さなmetadataラベルを入力ラベルやエラーへ流用しない。control自体の入力値・高さ・focus表示は既存のinteractive primitiveが所有する。
 - 入力中の現在対象（撮影先、確認中の項目、参照画像）と、確定前に照合する主要結果を識別の要点として強調する。設定の確認値は編集controlと区別し、通常のlabel / valueとして `FactList` で示す。確認dialogでは設定、結果・送信対象、注意、確定操作を意味ごとの群に分け、長い名称は確認前に全文を読めるようにする。
 - OCR 結果修正と手入力は、入力 field と対応する source image、同じプレーヤー・項目順、編集結果の feedback を一つの workspace として保つ。この対応関係と少ない修正手数を保護し、画面の分断や画像と field の往復を増やさない。

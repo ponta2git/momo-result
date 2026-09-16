@@ -24,8 +24,17 @@ const invalidMotionPaths = [
   },
   {
     name: "motion/react",
-    importNames: ["domAnimation", "domMax", "motion"],
-    message: "Use the approved domMin and m-based Motion boundary.",
+    importNames: [
+      "domAnimation",
+      "domMax",
+      "motion",
+      "animate",
+      "motionValue",
+      "styleEffect",
+      "hover",
+      "press",
+    ],
+    message: "Use the approved domMin/m boundary; surface animation belongs to useSurfaceFeedback.",
   },
 ];
 
@@ -76,6 +85,10 @@ function featureRestrictedImports(
       paths: [
         ...productionRestrictedPaths,
         {
+          name: "@/shared/ui/motion/useSurfaceFeedback",
+          message: "Surface feedback is connected inside shared UI primitives, not feature code.",
+        },
+        {
           name: "@/shared/api/generated",
           message: "Use a shared API resource facade.",
         },
@@ -108,12 +121,24 @@ function featureRestrictedImports(
   ];
 }
 
-function sharedRestrictedImports(restrictQueryLifecycle: boolean): RestrictedImportsRule {
+function sharedRestrictedImports(
+  restrictQueryLifecycle: boolean,
+  surfaceAnimation = false,
+): RestrictedImportsRule {
   return [
     "error",
     {
       paths: [
-        ...productionRestrictedPaths,
+        ...productionRestrictedPaths.map((rule) =>
+          surfaceAnimation && rule.name === "motion/react" && "importNames" in rule
+            ? {
+                ...rule,
+                importNames: rule.importNames.filter(
+                  (name) => !["animate", "motionValue", "styleEffect"].includes(name),
+                ),
+              }
+            : rule,
+        ),
         ...(restrictQueryLifecycle
           ? [
               {
@@ -278,6 +303,10 @@ export default defineConfig({
       rules: {
         "no-restricted-imports": sharedRestrictedImports(true),
       },
+    },
+    {
+      files: ["src/shared/ui/motion/useSurfaceFeedback.ts"],
+      rules: { "no-restricted-imports": sharedRestrictedImports(false, true) },
     },
     {
       files: ["src/**/*.d.ts"],

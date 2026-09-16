@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useLocation, useParams, useSearchParams } from "react-router-dom";
 
 import { buildHeldEventPlayerRecaps } from "@/features/heldEvents/heldEventDetailViewModel";
@@ -26,8 +26,10 @@ import {
   sanitizeReturnTo,
   withReturnTo,
 } from "@/shared/navigation/returnTo";
+import { useRetryNotice } from "@/shared/ui/feedback/useRetryNotice";
 
 type RefreshModel = {
+  disabled?: boolean;
   pending: boolean;
   run: () => void;
 };
@@ -82,6 +84,7 @@ export type HeldEventDetailPageModel =
 
 /** Maps the held-event resource and optional master-name enrichment into one screen contract. */
 export function useHeldEventDetailPageModel(): HeldEventDetailPageModel {
+  const [refreshingAll, setRefreshingAll] = useState(false);
   const { heldEventId = "" } = useParams<{ heldEventId: string }>();
   const location = useLocation();
   const [searchParams] = useSearchParams();
@@ -126,7 +129,11 @@ export function useHeldEventDetailPageModel(): HeldEventDetailPageModel {
   );
   const masterNames: HeldEventMasterNames = masters.names;
   const playerRecaps = useMemo(() => buildHeldEventPlayerRecaps(matches), [matches]);
-  const detailFailed = shouldShowQueryError({ error: detailError, isFetching: detailIsFetching });
+  const detailFailed = useRetryNotice(
+    shouldShowQueryError({ error: detailError, isFetching: detailIsFetching }),
+    detailIsFetching,
+    heldEventId,
+  );
   const failedMasterNameFields = [
     masters.failed.gameTitles ? "作品名" : undefined,
     masters.failed.seasons ? "シーズン名" : undefined,
@@ -134,13 +141,15 @@ export function useHeldEventDetailPageModel(): HeldEventDetailPageModel {
   ].filter((field): field is string => Boolean(field));
   const refreshing = detailIsFetching || masters.refreshing;
   const refresh = useCallback(() => {
-    void Promise.all([refetchDetail(), refreshMasters()]);
+    setRefreshingAll(true);
+    void Promise.all([refetchDetail(), refreshMasters()]).finally(() => setRefreshingAll(false));
   }, [refetchDetail, refreshMasters]);
   const retryDetail = useCallback(() => {
     void refetchDetail();
   }, [refetchDetail]);
 
   if (
+    !detailFailed &&
     isInitialQueryLoading({
       data: detail,
       isFetching: detailIsFetching,
@@ -177,7 +186,11 @@ export function useHeldEventDetailPageModel(): HeldEventDetailPageModel {
       ? {
           fields: failedMasterNameFields,
           kind: "warning",
-          refresh: { pending: masters.refreshing, run: masters.retryFailed },
+          refresh: {
+            disabled: masters.refreshing,
+            pending: masters.refreshing && !refreshingAll,
+            run: masters.retryFailed,
+          },
         }
       : masters.initialPending
         ? { kind: "pending" }
@@ -196,7 +209,11 @@ export function useHeldEventDetailPageModel(): HeldEventDetailPageModel {
     freshness: detailFailed
       ? {
           kind: "stale",
-          refresh: { pending: detailIsFetching, run: retryDetail },
+          refresh: {
+            disabled: detailIsFetching,
+            pending: detailIsFetching && !refreshingAll,
+            run: retryDetail,
+          },
         }
       : { kind: "current" },
     kind: "ready",
@@ -207,6 +224,15 @@ export function useHeldEventDetailPageModel(): HeldEventDetailPageModel {
       ocrCaptureHref: heldEventOcrCaptureHref(detail.id, returnTo),
       returnTo,
     },
-    refresh: { pending: refreshing, run: refresh },
+    refresh: {
+      disabled: refreshing,
+      pending:
+        refreshingAll ||
+        (refreshing &&
+          !detailFailed &&
+          failedMasterNameFields.length === 0 &&
+          !masters.initialPending),
+      run: refresh,
+    },
   };
 }

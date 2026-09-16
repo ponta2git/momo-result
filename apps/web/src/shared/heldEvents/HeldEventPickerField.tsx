@@ -77,6 +77,7 @@ export function HeldEventPickerField({
   return (
     <ChoicePickerDialogField
       {...fieldProps}
+      choiceLabel="開催"
       disabled={disabled}
       emptyState="選べる開催はありません。"
       error={error}

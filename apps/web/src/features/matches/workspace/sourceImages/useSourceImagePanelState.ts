@@ -43,6 +43,7 @@ export function useSourceImagePanelState({
   const [archiveConfirmOpen, setArchiveConfirmOpen] = useState(false);
   const [archiveSaving, setArchiveSaving] = useState(false);
   const [archiveError, setArchiveError] = useState("");
+  const [archiveDownloaded, setArchiveDownloaded] = useState(false);
   const previewTriggerRef = useRef<HTMLElement | null>(null);
   const activeKind =
     selection.mode === "fixed" ? selection.kind : (preferredKind ?? "total_assets");
@@ -63,9 +64,11 @@ export function useSourceImagePanelState({
   const saveArchive = useCallback(async () => {
     setArchiveError("");
     setArchiveSaving(true);
+    setArchiveDownloaded(false);
     try {
       const result = await downloadMatchDraftSourceImagesArchive(matchDraftId);
       triggerBrowserDownload(result);
+      setArchiveDownloaded(true);
     } catch (error) {
       const normalized = normalizeUnknownApiError(error);
       if (normalized.status === 429 || normalized.code === "TOO_MANY_REQUESTS") {
@@ -126,6 +129,7 @@ export function useSourceImagePanelState({
     activeState,
     archiveConfirmOpen,
     archiveError,
+    archiveDownloaded,
     archiveSaveDisabled,
     archiveSaving,
     availableImageCount,

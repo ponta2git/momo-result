@@ -27,6 +27,7 @@ type ScopedMasterLabels = {
 };
 
 type ScopedMasterList = {
+  completion?: string | undefined;
   error?: string | undefined;
   hasData: boolean;
   items: ScopedMasterItem[];
@@ -147,6 +148,9 @@ export function ScopedMasterPanel({
         </div>
       )}
 
+      <p className={contentText.supporting} role="status">
+        {list.completion}
+      </p>
       <div>
         <MasterCreateForm
           action={create.action}

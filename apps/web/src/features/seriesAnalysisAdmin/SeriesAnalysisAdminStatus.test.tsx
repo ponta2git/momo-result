@@ -27,7 +27,7 @@ describe("SeriesAnalysisAdminStatus", () => {
 
     const status = screen.getByRole("status");
     expect(status).toHaveTextContent("計算中");
-    expect(status).toHaveAttribute("aria-busy", "true");
+    expect(status).not.toHaveAttribute("aria-busy");
     expect(status).toHaveAttribute("aria-live", "polite");
   });
 

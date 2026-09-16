@@ -78,6 +78,28 @@ describe("DraftReviewPage", () => {
     user = userEvent.setup();
   });
 
+  it("keeps OCR warnings unresolved when navigating away from unchanged numeric values", async () => {
+    setDevUser();
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/review/dev-sample?sample=1"]}>
+          <Routes>
+            <Route path="/review/:matchSessionId" element={<DraftReviewPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    await waitForSampleWorkspaceReady();
+    const rail = screen.getByLabelText("OCRの確認項目");
+    await user.click(within(rail).getByRole("button", { name: "次の要確認セルへ" }));
+    await user.click(within(rail).getByRole("button", { name: "次の要確認セルへ" }));
+    expect(screen.getByRole("textbox", { name: "おーたか 順位" })).toHaveFocus();
+    await user.click(within(rail).getByRole("button", { name: "前の要確認セルへ" }));
+    expect(within(rail).getByText("未確認2件／全2件")).toBeInTheDocument();
+    await user.click(within(rail).getByRole("button", { name: "次の要確認セルへ" }));
+    expect(screen.getByRole("textbox", { name: "おーたか 順位" })).toHaveValue("3");
+  });
+
   it("loads OCR drafts and opens confirmation after validation passes", async () => {
     setDevUser();
 
@@ -93,7 +115,9 @@ describe("DraftReviewPage", () => {
     );
 
     await waitForReviewWorkspaceReady();
-    expect(await screen.findByDisplayValue("あかねまみ")).toBeInTheDocument();
+    expect(
+      await screen.findByRole("combobox", { name: "あかねまみ メンバー" }),
+    ).toBeInTheDocument();
     await user.click(await screen.findByRole("button", { name: "開催（必須）を変更" }));
     expect(screen.getByRole("radio", { checked: true })).toHaveAttribute("value", "held-1");
     await user.click(screen.getByRole("button", { name: "ダイアログを閉じる" }));
@@ -486,12 +510,13 @@ describe("DraftReviewPage", () => {
     await user.click(screen.getByRole("button", { name: "確定前の記録を削除" }));
     await user.click(await screen.findByRole("button", { name: "削除する" }));
 
+    const dialog = screen.getByRole("alertdialog", { name: "確定前の記録を削除しますか？" });
+    expect(await within(dialog).findByRole("alert")).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "削除する" })).toBeEnabled();
+    await user.click(within(dialog).getByRole("button", { name: "キャンセル" }));
     expect(
       await screen.findByRole("heading", { name: "確定前の記録を削除できませんでした" }),
     ).toBeInTheDocument();
-    expect(
-      screen.queryByRole("heading", { name: "確定前の記録を削除しますか？" }),
-    ).not.toBeInTheDocument();
     const deleteFailure = screen
       .getByRole("heading", { name: "確定前の記録を削除できませんでした" })
       .closest("section");
@@ -768,11 +793,13 @@ describe("DraftReviewPage", () => {
       "aria-expanded",
       "true",
     );
-    expect(await screen.findByDisplayValue("あかねまみ")).toBeInTheDocument();
+    expect(
+      await screen.findByRole("combobox", { name: "あかねまみ メンバー" }),
+    ).toBeInTheDocument();
     expect(await screen.findByDisplayValue("15420")).toBeInTheDocument();
     expect(screen.queryByText("OCR読み取り状況を確認")).not.toBeInTheDocument();
     expect(screen.queryByText(/緑=高信頼OCR/u)).not.toBeInTheDocument();
-    expect(screen.getByText(/Enterキーと矢印キーで移動できます/u)).toBeInTheDocument();
+    expect(screen.getByText(/選択欄はEnter・上下キーで候補を開き/u)).toBeInTheDocument();
   });
 
   it("focuses the first invalid field when confirmation cannot open", async () => {

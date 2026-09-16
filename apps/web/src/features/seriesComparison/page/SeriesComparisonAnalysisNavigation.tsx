@@ -1,5 +1,8 @@
+import { Link, useLocation } from "react-router-dom";
+
 import type { SeriesAnalysisViewId } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
 import { isSeriesAnalysisViewId } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
+import { useSeriesAnalysisNavigation } from "@/features/seriesComparison/navigation/SeriesAnalysisNavigation";
 import { TabsList, TabsRoot, TabsTab } from "@/shared/ui/forms/Tabs";
 
 type AnalysisViewId = Exclude<SeriesAnalysisViewId, "review">;
@@ -144,6 +147,8 @@ export function AnalysisTabs({
 }
 
 export function AnalysisTableOfContents({ view }: { view: AnalysisViewId }) {
+  const location = useLocation();
+  const navigation = useSeriesAnalysisNavigation();
   const definition = analysisViews.find((item) => item.id === view);
   if (!definition) return null;
   return (
@@ -151,12 +156,24 @@ export function AnalysisTableOfContents({ view }: { view: AnalysisViewId }) {
       <ol className="flex min-w-0 flex-1 [scrollbar-width:thin] gap-x-3 overflow-x-auto">
         {definition.sections.map((section) => (
           <li className="shrink-0" key={section.id}>
-            <a
+            <Link
+              id={`analysis-toc-${section.id}`}
               className="inline-flex min-h-11 shrink-0 items-center whitespace-nowrap text-[var(--color-text-secondary)] underline decoration-[var(--color-border-strong)] underline-offset-4 hover:text-[var(--color-text-primary)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-action)]"
-              href={`#${section.id}`}
+              to={{ pathname: location.pathname, search: location.search, hash: `#${section.id}` }}
+              onClick={(event) => {
+                if (
+                  !event.defaultPrevented &&
+                  event.button === 0 &&
+                  !event.metaKey &&
+                  !event.ctrlKey &&
+                  !event.shiftKey &&
+                  !event.altKey
+                )
+                  navigation?.rememberOrigin(event.currentTarget.id);
+              }}
             >
               {section.label}
-            </a>
+            </Link>
           </li>
         ))}
       </ol>

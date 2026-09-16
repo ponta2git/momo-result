@@ -22,6 +22,7 @@ import {
   seasonMastersQueryOptions,
 } from "@/shared/api/queryOptions";
 import { cursorForPage } from "@/shared/lib/cursorPagination";
+import { useRetryNotice } from "@/shared/ui/feedback/useRetryNotice";
 
 const CANDIDATE_PAGE_SIZE = 20;
 
@@ -139,7 +140,11 @@ export function useExportCandidates({
           snapshotCandidate,
         });
   const resolvedCandidate = selected.candidate;
-  const selectedResolution = selected.state;
+  const selectedResolution = useRetryNotice(
+    selected.state,
+    selectedDetailQuery?.isFetching === true,
+    `${scope}:${selectedId}`,
+  );
   const hasResolvedTarget = Boolean(selectedId && resolvedCandidate?.value === selectedId);
   const scopeChanging =
     scope === "heldEvent"
@@ -172,10 +177,26 @@ export function useExportCandidates({
               (query) => query.isFetching && (!query.isLoading || hasResolvedTarget),
             )
           : false;
-  const seasonError = shouldShowQueryError(seasonsQuery);
-  const gameTitleError = shouldShowQueryError(gameTitlesQuery);
-  const heldEventError = shouldShowQueryError(heldEventsQuery);
-  const matchError = shouldShowQueryError(matchesQuery);
+  const seasonError = useRetryNotice(
+    shouldShowQueryError(seasonsQuery),
+    seasonsQuery.isFetching,
+    scope,
+  );
+  const gameTitleError = useRetryNotice(
+    shouldShowQueryError(gameTitlesQuery),
+    gameTitlesQuery.isFetching,
+    scope,
+  );
+  const heldEventError = useRetryNotice(
+    shouldShowQueryError(heldEventsQuery),
+    heldEventsQuery.isFetching,
+    String(heldEventPage),
+  );
+  const matchError = useRetryNotice(
+    shouldShowQueryError(matchesQuery),
+    matchesQuery.isFetching,
+    matchCursor,
+  );
   const selectedDetailRefreshFailed = Boolean(
     selectedDetailFailure === "load-failed" && resolvedCandidate?.value === selectedId,
   );
@@ -225,7 +246,7 @@ export function useExportCandidates({
   const view = buildCandidateView({
     candidates,
     error,
-    loading,
+    loading: loading && !error,
     pagination,
     resolvedCandidate,
     selectedResolution,
@@ -246,7 +267,10 @@ export function useExportCandidates({
   };
 
   return {
-    refreshing,
+    refreshing:
+      refreshing ||
+      (loading && error) ||
+      Boolean(selectedDetailQuery?.isFetching && selectedResolution === "load-failed"),
     reset,
     scopeChanging,
     selectCandidate: (nextSelectedId: string) => {

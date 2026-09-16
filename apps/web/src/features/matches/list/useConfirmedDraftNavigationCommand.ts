@@ -14,6 +14,7 @@ import { showToast } from "@/shared/ui/feedback/Toast";
 
 export type ConfirmedDraftNavigationCommand = {
   checkingIds: ReadonlySet<string>;
+  errors: Readonly<Record<string, string>>;
   run: (action: MatchListAction) => Promise<void>;
 };
 
@@ -23,6 +24,7 @@ export function useConfirmedDraftNavigationCommand(
 ): ConfirmedDraftNavigationCommand {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const checkingIdsRef = useRef(new Set<string>());
   const [checkingIds, setCheckingIds] = useState<ReadonlySet<string>>(() => new Set());
 
@@ -53,11 +55,11 @@ export function useConfirmedDraftNavigationCommand(
       }
       navigate(action.href);
     } catch {
-      showToast({ title: confirmedDraftMessages.statusCheckFailed, tone: "warning" });
+      setErrors((current) => ({ ...current, [draftId]: confirmedDraftMessages.statusCheckFailed }));
     } finally {
       setChecking(draftId, false);
     }
   };
 
-  return { checkingIds, run };
+  return { checkingIds, errors, run };
 }

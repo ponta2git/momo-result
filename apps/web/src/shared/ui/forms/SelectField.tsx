@@ -1,15 +1,13 @@
 import { useId } from "react";
 
-import { SelectControl } from "@/shared/ui/forms/Control";
-import type { SelectControlProps } from "@/shared/ui/forms/Control";
 import { buildFieldDescribedBy, Field } from "@/shared/ui/forms/Field";
 import type { FieldLayout } from "@/shared/ui/forms/Field";
-
-type SelectOption = {
-  disabled?: boolean | undefined;
-  label: string;
-  value: string;
-};
+import { SelectControl } from "@/shared/ui/forms/SelectControl";
+import type {
+  SelectControlProps,
+  SelectOption,
+  SelectValueProps,
+} from "@/shared/ui/forms/SelectControl";
 
 export type SelectFieldProps = {
   "aria-describedby"?: string | undefined;
@@ -18,7 +16,8 @@ export type SelectFieldProps = {
   label: string;
   layout?: FieldLayout | undefined;
   options: SelectOption[];
-} & Omit<SelectControlProps, "aria-describedby" | "children" | "className" | "invalid">;
+} & Omit<SelectControlProps, "aria-describedby" | "invalid" | "value" | "defaultValue"> &
+  SelectValueProps;
 
 export function SelectField({
   "aria-describedby": ariaDescribedBy,
@@ -53,13 +52,8 @@ export function SelectField({
         invalid={Boolean(error)}
         required={required}
         aria-describedby={buildFieldDescribedBy(descriptionId, errorId, ariaDescribedBy)}
-      >
-        {options.map((option) => (
-          <option key={option.value} disabled={option.disabled} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </SelectControl>
+        options={options}
+      />
     </Field>
   );
 }

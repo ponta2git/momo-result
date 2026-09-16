@@ -1,6 +1,8 @@
 import type { QueryClient, QueryKey } from "@tanstack/react-query";
 
 import { clearCsrfToken } from "@/shared/api/csrfTokenStore";
+import { clearAccountOperationNotice } from "@/shared/auth/accountOperationNotice";
+import { momoToastManager } from "@/shared/ui/feedback/Toast";
 
 function isSameQueryKey(left: QueryKey, right: QueryKey): boolean {
   return left.length === right.length && left.every((value, index) => value === right[index]);
@@ -23,6 +25,8 @@ export async function clearPrincipalClientState(
   options: { loggedOutAuthQueryKey?: QueryKey } = {},
 ): Promise<void> {
   clearCsrfToken();
+  clearAccountOperationNotice();
+  momoToastManager.close();
   clearPrincipalSessionStorage();
   await queryClient.cancelQueries();
 

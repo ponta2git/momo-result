@@ -51,6 +51,11 @@
 - content surface の内側を通常 section ごとの白い card に分割しない。まず見出し、整列、列、関係的余白で構成し、同時に独立して扱う source / editor などの workspace、独立して反復する record、境界が操作の理解に必要な bounded panel に限って別面を許容する。empty、pagination、loading など親 scope に従属する状態・操作は、親の白面を重ねて作り直さない。
 - グルーピングは整列と余白から始める。divider は、隣接内容が余白と見出しだけでは同一群と誤認される場合、table の row / column、control、状態通知など境界自体が意味を持つ場合に限る。通常 section を上下線で挟まず、必要なら片側1本を使う。
 - 1つの視覚境界は1つの owner だけが描く。親 surface の外周と先頭・末尾 child、disclosure の root と panel、table wrapper と隣接 toolbar などへ同じ境界を重ねず、隣接する平行線や二重線を作らない。淡色背景、border、角丸を同じ要素へ慣習的に重ねず、境界を伝えるために必要な最小の手段を選ぶ。
+- 通常の入力・選択欄は、既存の薄いselect枠と同じ参照色を持つ共通の補助境界tokenを使う。控えめな全周枠で統一する採用方針であり、通常枠の3:1以上は保証しない。半透明の枠は入力背景と外側の面を含めて見た目を確認し、無効状態を通常状態と同じ濃さへ強制しない。
+- テキスト・数値・日時input、textarea、一行select、値と変更buttonを持つdialog型選択欄、選択肢groupの外枠は同じ通常境界へ接続する。矢印やpicker iconの有無、候補がpopupかdialogかで枠の濃さを変えない。候補がなく変更できない選択値の表示も、同じfieldの枠を保つ。
+- `shared/ui/forms/controlPresentation`が通常・invalidの境界recipeとcontrolのtone優先順位を所有する。複合fieldは境界recipeを使い、入力そのもののhoverやpaddingを表示用wrapperへ付けない。featureは枠色を独自に選ばない。
+- 独自選択マーク、selectの矢印、focus、要確認・errorの意味枠は通常の補助枠から分け、実際の隣接色に対して3:1以上を確保する。通常枠の薄色化をこれらの識別標識へ波及させず、focus移動で選択・error・説明を消さない。
+- 枠付きの副button / icon actionは専用の補助境界tokenを使い、通常の入力・選択欄と薄い参照色を共有する。主操作は塗りで区別する。quietや開閉操作へ常時の枠を追加せず、一般の区切り線の色を一括変更しない。
 - sibling 間の divider は、それらを並べる親 composition が `divide-*` または独立した separator として所有し、各 child の先頭・末尾 border と `first` / `last` の相殺で組み立てない。control、bounded panel、badge、table の上端・header 下端・最終行下端など、部品自身の意味を成立させる perimeter / internal boundary はその部品が所有する。装飾だけの separator は accessibility tree へ意味を追加せず、内容上の区切りを表す場合だけ semantic な `hr` または section 構造を使う。
 - shadow は dialog、tooltip、toast など浮遊 UI に限定する。通常内容に elevation を足さず、gradient、glow、大きな surface contrast を装飾に使わない。
 - 角丸は参照値の共有だけでなく、要素の役割と包含階層を表す。`xs` は compact な badge、marker、data cell、`sm` は control と小型の bounded panel、`md` は record、card、notice など content 内の独立境界、`lg` は page-level content surface と dialog、toast など最上位または浮遊する面に使う。`full` は円、pill、progress track など輪郭自体に意味がある形へ限定する。table は前項のとおり外周角丸を持たない。
@@ -91,6 +96,7 @@
 - sibling 間の余白は親 composition が自身の `gap` / `space` または自身が生成する slot wrapper で、component の内余白はその component、page gutter と page sibling 間隔は page layout primitive が所有する。再利用 child の API に外 margin を持たせて親の余白と二重化せず、loading、error、empty、ready の状態置換でも同じ owner と間隔を保つ。field は label から control を `8px`、control から description / error と support 同士を `4px` で関係付け、dialog は header、body、feedback、footer を別の群として構成する。safe area は fixed layer の viewport が左右両方を含めて所有し、child padding を画面端の位置補正に流用しない。
 - 初回 route loading、route-level error / access terminal、feature loading は、pathname と安全化済み query から確定する page width、専用 shell、戻る導線、detail で必要な header、content surface 内の常設 action / status、文脈 slot を ready と同じ順序で保持する。ここで常設 action とは、pathname / query だけで移動先まで確定する navigation action を指す。runtime callback や data 取得結果で初めて実行可否・移動先が決まる action / notice は推測して skeleton や terminal action を足さず、loading は確定済み slot の大きさと responsive な積み替え、terminal は確定済み chrome と回復操作を保つ。ready で page header を持たない route の loading / terminal だけに title skeleton、eyebrow、description または空の header slot を作らない。状態ごとに似た余白や route 判定を個別再現せず、同じ layout primitive、親 composition、route presentation を owner にする。
 - page、data surface、workspace は一貫した外余白の内側で利用可能な横幅を使い、読み幅の制約は prose、単一 field 群など幅を狭める理由がある内容へ局所的に掛ける。長文になり得る page description、help、error、notice、empty state、narrative は、親の面を狭めず文字内容を共通の readable measure `max-w-2xl` 以内へ制限する。短い label、metadata、table、chart、matrix、横比較にはこの measure を一律適用しない。画面全体を文章幅へ縮めず、試合間・プレーヤー間の走査や比較が速くなる表・図表は一貫して密にする。不規則な欠け、根拠のない非対称、任意の値や z-index を追加しない。
+- 縦scrollが不要なpageでは、viewportの右端にscrollbar用の空きを常時予約せず、global navigationとpageが利用可能な幅を使う。必要なscrollbarはブラウザに任せ、dialog / selectのscroll lockと幅補正は共通primitiveに任せる。
 - page 幅は内容形状に応じた少数の共通 variant に収束させる。単一の短い form / prose は `max-w-2xl` の narrow、通常の一覧・管理・取り込みは standard、横比較・詳細分析は wide、source と editor を常時並置する編集 workspace だけは workspace を使う。同等の画面は同じ variant を使い、内部の短い prose や単一 field だけを局所的に狭める。利用可能幅を埋めるためだけに workspace を選ばない。
 - responsive layout は、可変列に `minmax(0, 1fr)`、child に縮小可能な幅を与え、label や操作名が不自然に割れる前に列を積み替える。breakpoint は端末名ではなく内容が保てる幅で決める。page 全体の横 scroll は作らず、table、図表、source image など横方向の関係を保つ必要がある領域だけが、可視の案内とともに局所 scroll を所有してよい。
 - 通常文を任意の位置で強制改行しない。ID、URL、外部 error など切れ目のない長い値だけへ局所的な wrap または scroll を指定し、全画面へ `overflow-wrap: anywhere` を継承させない。見出しの balance や本文の pretty wrap も、data label、定義値、control label へ一律適用せず、役割ごとに指定する。
@@ -124,8 +130,9 @@
 
 ### 3.2 選択・表示切替・表示範囲
 
-- 説明を読み比べて一つを選ぶ候補は、可視 legend を持つ native radio group と説明付きの選択行で表す。選択行全体を操作可能にし、選択状態は control、文字、形で示して色だけに依存しない。候補固有の別操作は選択 label の内側へ混ぜない。
+- 説明を読み比べて一つを選ぶ候補は、native radio group と説明付きの選択行で表す。群の名前は可視legend、または`aria-labelledby`で参照する可視見出しが所有する。単一の選択群だけを扱うdialogでは「開催を選択」等のtitleを群の名前にも使い、「開催候補」等の同義見出しを重ねない。独立した複数の群を持つ場合は、それぞれのlegendを残す。選択行全体を操作可能にし、選択状態はcontrol、文字、形で示して色だけに依存しない。候補固有の別操作は選択labelの内側へ混ぜない。
 - 開催、試合など日時・件数・状態を読み比べる単一選択は、現在値と変更 trigger を持つ共通 dialog field を使う。任意選択の「すべて」「選択しない」も同じ radio group の候補として扱い、filter、OCR、作成・編集、出力の文脈ごとに別の選択文法を作らない。候補が1画面に収まらない場合は共通の compact pagination で server page を切り替え、page 外へ移った現在の選択と表示 label を失わせない。
+- 選択dialogはtitle、選択肢、必要なページ送りの順に構成する。必須／任意などfieldの注記はtitleへ反復しない。読み取りの更新表示はtitleの名前を変えず、閉じる操作と同じheader内の安定したslotへ置く。待機表示だけの空行を一覧の上へ加えず、header・bodyの左端を揃え、本文のscroll用の内余白を見出しからの意図しない段差にしない。
 - 少数の短い mode 選択のうち、値だけを変えて周囲の内容領域を切り替えないものは segmented control を使う。同じ対象の view を切り替える場合、または選択ごとに直下の候補・結果・実行内容が一つの対応 panel として切り替わる場合は tab を使う。補助詳細の開閉は disclosure、多数の簡潔な候補は select または検索可能な選択を使う。見た目の都合で意味を交換せず、選択と即時実行を混同しない。
 - page-local な主要 tab は、設定管理を基準とする共通の filled presentation を使う。tab list 自体を枠や背景で囲わず、選択中の tab だけを selected surface、文字、`aria-selected` で示し、狭い幅では label を分断せず tab 単位で折り返す。同じ panel 内の下位 view は、より弱い underline presentation と局所的な横 scroll を使ってよく、上下2階層を同じ強さの fill で競合させない。
 - tab は同じ tab set として tab list、tab、対応する tab panel の関係を持ち、keyboard focus と選択状態を shared UI が所有する。focus 移動だけで即座に表示できる panel は自動 activation を使ってよいが、取得や高コスト処理を始める切替は、矢印キーで focus、Enter または Space で activation する。切替後の取得中も起点 tab の DOM と focus を維持し、stale content の `inert` 化で focus が document へ退避した場合は完了時に起点へ戻す。ただし、利用者が別の操作へ移した focus は奪わない。panel を伴わない排他条件は tab の外観へ寄せるために tab semantics を付けない。
@@ -158,12 +165,16 @@
 - interactive component は、該当する default、hover、focus-visible、active、selected、disabled、pending / loading、error、success を定義する。data surface は loading、empty、error、stale、not found を混同しない。
 - 利用可能な操作、対象、現在状態を実行前に読み取れ、押下または選択を直ちに知覚でき、完了結果と次の操作を判断できるようにする。操作の重要度に feedback の強さを合わせ、routine な選択へ toast や dialog を使わない。
 - disabled は利用不能な理由を対象の近くに示す。pending は進行中であることを表示し、単に control を無反応にしない。長時間操作は進行中であることと、安全に離脱または中断できるかを示す。
+- 非同期 button は通常時と pending 時の文言・icon の領域を確保し、同じ viewport では切替だけで幅・高さや隣接操作の位置を変えない。文言の切替を残し、狭幅での折り返しにも対応する。寸法確保用の内容を重複して読み上げず、button 本体と form / focus の lifecycle を保つ。
 - 失敗は操作箇所の近くに表示し、何が起きたか、影響範囲、次にできることを示す。保存、削除、再取得、download の失敗を toast だけへ逃がさず、同じ結果を toast と inline notice に重複表示しない。
 - 補助 metadata や color だけから業務状態を推測せず、明示された状態を表示用の共通表現へ変換する。業務状態の enum や遷移自体は feature / domain が所有する。
 
 ## 4. 入力・ワークスペース・アクセシビリティ
 
-- form は可視ラベル、説明、必須、validation error、disabled / pending を同じ field 境界で関連付け、paste を妨げない。checkbox、radio、select、text input は native semantics を保ち、見た目のために keyboard 操作を再実装しない。
+- form は可視ラベル、説明、必須、validation error、disabled / pending を同じ field 境界で関連付け、paste を妨げない。checkbox、radio、text input は native semantics を保つ。一行ラベルの単一選択はsharedのBase UI Selectを使い、featureでkeyboard・focus・候補表示を再実装しない。
+- 単一選択は、候補移動と値確定を分ける。現在値はcheckとselected surface、操作位置はfocusで示し、hoverは共通の反応の文法へ接続する。Enter / Spaceで確定し、Escape・外側押下・Tabでは未確定の候補を採用しない。Escapeは欄へ戻り、Tabは次の操作へ進む。閉じた欄のtypeaheadによる値確定は維持し、同じ値の再選択で業務処理を増やさない。
+- Selectの可視triggerがlabel・説明・error・外部refの接続先となり、フォーム送信とresetはsharedが所有する。空文字の意味と候補更新時の値変更はfeatureが所有する。popupは既存の寸法・面・境界を使い、viewport内の一つの候補scrollerへ収める。dialog内の候補はowning dialogのfocusとlayerに所属し、本文で切れたり、親dialogの退出後も操作可能なまま残ったりしない。
+- 試合入力表の選択欄もEnter / Space / 上下を選択操作に使う。閉じた選択欄ではTab・左右で欄を移動し、開いた候補の操作を表の移動へ渡さない。数値入力のセル移動・編集取消はその入力契約を維持する。
 - 入力用の文字は `shared/ui/typography.ts` の `fieldText` を `Field` / `Fieldset` と独自入力欄で共有する。可視ラベルは14 / 20px・通常ウェイトの主要文字色、補足は12 / 16px、修正に必要なエラーは14 / 20px・dangerとし、読むための小さなmetadataラベルを入力ラベルやエラーへ流用しない。control自体の入力値・高さ・focus表示は既存のinteractive primitiveが所有する。
 - 入力中の現在対象（撮影先、確認中の項目、参照画像）と、確定前に照合する主要結果を識別の要点として強調する。設定の確認値は編集controlと区別し、通常のlabel / valueとして `FactList` で示す。確認dialogでは設定、結果・送信対象、注意、確定操作を意味ごとの群に分け、長い名称は確認前に全文を読めるようにする。
 - OCR 結果修正と手入力は、入力 field と対応する source image、同じプレーヤー・項目順、編集結果の feedback を一つの workspace として保つ。この対応関係と少ない修正手数を保護し、画面の分断や画像と field の往復を増やさない。
@@ -171,6 +182,7 @@
 - hover で現れる操作や情報は keyboard focus と touch でも到達できる。tooltip は補助説明であり、主要な意味やエラーをそこだけに置かない。
 - 複数ステップの flow は Back、キャンセル、完了または安全な中断点を持つ。dialog を閉じた後は起点へ focus を返し、ナビゲーションを阻止する場合は理由と進行状況を示す。
 - fixed / sticky UI は safe-area inset を尊重し、focus target や主要操作を viewport 外へ隠さない。狭い幅では再配置して hit target と accessible name を保つ。
+- 隠した native input の focus を可視 label へ描く場合、同じ対象に二重の枠を描かない。候補一覧等の切り抜き境界に接する操作は、共有部品が内側の outline を所有し、feature の余白補正で切れを隠さない。forced colors でも選択の印と focus 枠を残す。
 - dialog は viewport 側と内容側に二重の縦 scroll を作らず、見出しと閉じる操作を固定した一つの内部 content scroller を owner とする。極端に低い viewport や拡大表示で固定領域だけが利用可能高を超える場合は、すべての操作へ到達できるよう dialog surface 全体を唯一の scroller に切り替える。内部 disclosure の展開も有効な唯一の scroller の高さへ収まり、背後の page scroll を動かさない。全幅 control の focus ring が scroller 境界で切れないよう、共通 content scroller が outline 分の inline gutter を持ち、個別 form で補正を重ねない。
 - camera preview、source image、分類 tray など同じ画像を対応付ける frame は、状態や配置前後で aspect ratio を変えない。OCR の撮影 preview と分類 tray は `16:9` を保ち、画像全体を確認できる収め方を使う。
 - keyboard、focus、label、contrast、status announcement は WCAG AA 相当を最低基準とする。
@@ -196,18 +208,45 @@
 ### 6.1 取得状態とフィードバック
 
 - 取得状態は、表示対象の意味上の同一性に基づいて「置き換える」か「維持する」かを決める。初回表示、または異なる pathname へ移動して新しい内容が未準備の場合は、最終 layout に近い structural skeleton を使う。
-- 同一 pathname 内の filter、scope、sort、page の変更と refetch では、既存内容を保って局所的に更新中を示し、全面 skeleton へ戻さない。表示中の内容が新しい条件では誤操作を招く場合は、対象範囲を操作不能にし、更新中であることを文字または status でも示す。
-- 一つの loading scope には、その時点で最も局所的かつ因果の近い表示を一つだけ置く。button の pending、spinner、skeleton、toast を同じ待機について重ねず、別 scope の待機は互いの取得済み内容を置き換えない。
+- 同一 pathname 内の filter、scope、sort、page の変更と refetch では、既存内容を保って局所的に更新中を示し、全面 skeleton へ戻さない。同じ条件の再取得では通常の濃さと鮮明さを保ち、内容に待機表示を重ねない。表示中の内容が新しい条件では誤操作を招く場合は、必要な範囲を操作不能にし、条件変更を操作の近くで示す。操作制限を理由に無関係な内容まで減光・ぼかしの対象へ広げない。
+- 結果取得中も安全に変更できる条件欄は操作可能なまま保ち、待機だけを理由に無効化してfocusを失わせない。古い結果への操作制限とは分け、連続変更には最後の条件を反映する。利用者が次の操作へ移ったfocusを、取得完了時に戻さない。
+- loading の通知単位は、一つの利用者操作と、その結果を成立させる取得のまとまりとする。API、query key、component、Suspense boundary の数では決めない。一覧と件数の同時更新、保存に付随する cache 整合は、同じ操作の待機としてまとめる。独立して開始・回復できる別の操作は、それぞれの進行と失敗を判断できるようにする。
+- 一つの待機には、その時点で因果の近い表示を一つ置く。再試行では失敗箇所の操作、実行中の操作がある場合はその button、操作を伴わない取得では対象領域の status を使い、親子の spinner、overlay、toast を重ねない。button 内の spinner と文言は一つの表示としてよい。対象を識別する静的な状態ラベルと、安全のための disabled は消さず、別の待機演出を追加しない。
+- 操作欄の待機表示には通常時から領域を確保し、出現・消失だけで操作欄の折り返しや内容の上端を動かさない。取得済み内容がある再試行では、処理開始で失敗案内と再試行操作を取り除かず、その場で pending を示す。完了後の実データの変化、既定の遷移、新たな失敗・長時間待機の説明に必要な領域拡張は別に扱う。
+- 視覚表示と読み上げは同じ通知単位を使う。`aria-busy` は更新対象に付け、開始・結果を伝える live region がその busy によって通知を保留されない構成にする。複数の live region で同じ進行や結果を繰り返さず、通知のために focus を移動しない。
 - error、not found、empty、stale data を別状態にし、更新と再試行は操作文法で定めた回復契約に従う。
 - empty state は現在実行可能で安全な主要操作を1件示し、二次操作は弱める。権限または前提条件で実行不能な導線を出さない。
-- 補助情報の取得失敗で、取得済みの主表示を置き換えない。完了結果が画面上で明らかな場合は祝福目的の toast を追加せず、局所的な feedback を優先する。
-- transient toast は viewport 上の主要操作、fixed / sticky action、入力中の control を覆わない位置を共通 host が所有する。画面固有の主要操作が下端にある場合は上端へ配置するなど、通知を閉じるまでタスクが停止する重なりを作らない。
+- 補助情報の取得失敗で、取得済みの主表示を置き換えない。保存の確定と、その後の表示用 data の再取得は結果を区別し、再取得の失敗を保存失敗として伝えない。結果不明と確定した成功・失敗も混同しない。
+
+完了・失敗の通知先は画面ごとの慣習ではなく、結果の確認場所と回復の必要性で決める。
+
+| 状況 | 通知先 |
+| --- | --- |
+| 保存・作成・確定・削除後に遷移、または操作面が閉じ、完了の確認場所が残らない | 確定した結果を短い toast で一度知らせる |
+| 結果が同じ場所に明瞭に残る | 結果表示を使う。保存確定が値だけでは分からない場合は操作付近の短い完了表示を使う |
+| 一覧の手動更新、filter / page 変更、付随する再取得の成功 | 待機表示を終了して結果を示す。毎回の成功 toast は追加しない |
+| 入力不備、操作不能、保存・取得失敗、結果不明 | 操作文法に従って原因・影響と回復手段をその場に残す。toast だけにしない |
+| OCR・分析などの非同期処理 | 受付・開始と完了を区別する。継続中の状態と回復操作は対象領域に残す |
+
+- 同じ結果を toast と inline notice へ二重に出さない。状態がすでに明らかな選択、通常の入力復元、cache の再取得だけを理由に toast を増やさない。遷移理由など、その場から失われる重要な文脈は短い通知で補ってよい。
+- toast は同じ実行結果の重複を除き、別の対象・別の実行を文言の一致だけで消さない。共通 host が表示上限、閉じる操作、表示寿命、読み上げを所有する。上限外の通知は表示領域を占有せず、閉じた通知は操作・読み上げの対象から直ちに外す。architecture で許容する有限の非対話的な退出表示が終わった後に、内容や空き領域を残さない。
+- toast の表示位置は、主要操作、fixed / sticky action、入力中の control を覆わないよう共通 host が所有する。画面固有の主要操作が下端にある場合は上端へ配置するなど、通知を閉じるまでタスクが停止する重なりを作らない。通常の画面遷移や描画部分の初回準備で、伝えるべき完了結果を失わない。
+
+### 操作面の反応
+
+- 文字・icon・寸法を保ち、面の濃さで操作へ応える。操作可能性、選択・tone・invalidの意味、一時的なhover / pressed、focusを分ける。意味の基底色とhover量を分離し、状態の発生・解除をhoverの補間へ巻き込まない。
+- hoverは開始遅延0、共通の100ms・cubic-bezier(0, 0, 0.58, 1)で現在値から補間し、反応を蓄積しない。pressed・focus・操作制限と、意味を認識する表示は即時に返す。非必須の補間は動きを減らす設定で省略し、touchからhoverを作らない。既存の矢印・indicatorの補間とは用途を分ける。
+- 操作部品は通常→hover→pressedで面の濃さを小さく増す。編集用controlへ押し込み表現を足さない。選択済みでも変更可能なら選択の印を保った反応を返す。invalid / review / warning / successはその意味色の範囲で応答し、通常hover色で覆わない。readOnlyは編集不可として扱い、focus・文字選択・copyを保つ。
+- 表の行は操作部品より弱いhoverで読む位置を補助する。子buttonは独立して反応し、親の反応量を継承しない。行全体へpressed、pointer cursor、tabIndexを追加しない。面のない本文linkは既存の下線等を維持する。
+- 共有DataTableは、子操作の`:focus-visible`に連動する薄い行背景で対象名との対応を補助する。子のfocus枠を主表示にし、固定セルまで同じ不透明な行面へ接続する。hoverと加算せず、focus取得・解除は即時。その時点のhoverへ戻し、最後のfocus行や処理中の行を記憶しない。別行のhoverは併存できる。子の無効化を他の操作・行全体へ広げず、`aria-busy`だけからfocusや操作制限を作らない。
+- 色対・反応の接続はshared UIが所有し、featureは既存の用途・状態propsで利用する。部品別の時間・任意色・エフェクト指定を公開せず、独自linkやrender差替えも実要素の接続を確認する。hoverのために新しいwrapperや余白を追加しない。
 
 ### 6.2 モーション
 
 - motion は、操作への即時 feedback、状態の因果、同じ対象の連続性を補助する場合だけ使う。文字、形、位置、accessible state だけで意味を成立させた上で、動いたこと自体を見せ場にせず、注意深く見れば変化を追いやすい程度に抑える。
-- 有限の motion は最短の共通 token を既定とし、主に opacity と transform を使う。値そのものの変化を伝える図表や数値は、その mark または値だけを補間してよい。周囲の layout shift、bounce / overshoot、stagger、視線を奪う移動を作らない。
+- 有限の motion は用途に対応する共通 token を使い、主に opacity と transform を使う。操作面のhoverは上記の色反応に従う。値そのものの変化を伝える図表や数値は、その mark または値だけを補間してよい。周囲の layout shift、bounce / overshoot、stagger、視線を奪う移動を作らない。
 - 利用者の intent と application state は motion より先に反映し、操作可能性、data、route、open、focus、pending、error の変更を animation 完了まで待たせない。motion は中断または省略されても、同じ最終状態と回復操作へ到達できなければならない。
+- disclosureの本文は開閉状態と同時に配置・操作対象へ反映する。矢印の補間やprimitive内部のpresence管理によって閉じた本文の高さを残し、移動先のfocus・表示位置を後からずらさない。
 - route content、Suspense の fallback と完成内容、初回 content、一覧 row を、登場または置換そのものの演出として animate しない。異なる pathname の loading は structural fallback、同一 pathname の更新は既存内容の維持と局所 feedback で表す。
 - 楽観更新の pending、confirmed、error は、文字、accessible state、disabled、局所 error / retry のうち必要な手段で静止状態でも区別する。同じ安定した identity の `pending -> confirmed` では局所的な属性だけを補間してよいが、追加・削除の presence motion は、rollback、server correction、同時 mutation を含む必要性と正しさを先に検証する。
 - viewport への進入を初回 motion の trigger にしない。図表は初めから完成値を描画し、その後、現在表示中の同じ対象に値変更が起きた場合だけ補間してよい。表示領域外で変わった値は完成値へ即時反映し、再進入時に再生しない。

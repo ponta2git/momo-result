@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 
 import { cn } from "@/shared/ui/cn";
 import { politeMotionTransition } from "@/shared/ui/motion/transitions";
+import { useSurfaceFeedback } from "@/shared/ui/motion/useSurfaceFeedback";
 
 type DisclosureTriggerVariant = "compact" | "default" | "supporting";
 type DisclosurePresentation = "framed" | "inset" | "plain";
@@ -85,6 +86,7 @@ export function Disclosure({
   triggerLayout = "default",
   triggerVariant = "default",
 }: DisclosureProps) {
+  const surfaceRef = useSurfaceFeedback<HTMLElement>();
   return (
     <BaseCollapsible.Root
       aria-label={ariaLabel}
@@ -94,9 +96,10 @@ export function Disclosure({
       onOpenChange={(nextOpen) => onOpenChange?.(nextOpen)}
     >
       <BaseCollapsible.Trigger
+        ref={surfaceRef}
         aria-label={ariaLabel}
         className={cn(
-          "group flex min-h-11 w-full min-w-0 items-center justify-between gap-3 text-left hover:bg-[var(--color-surface-hover)] disabled:cursor-default disabled:opacity-70 disabled:hover:bg-transparent",
+          "momo-surface momo-surface-press group flex min-h-11 w-full min-w-0 items-center justify-between gap-3 text-left disabled:cursor-default disabled:opacity-70",
           triggerVariantClass[triggerVariant],
           triggerLayoutClass[triggerLayout],
           presentation === "framed" || triggerLayout === "section" ? "rounded-none" : "rounded-sm",
@@ -122,7 +125,9 @@ export function Disclosure({
           presentationClass[presentation].panel,
           panelSpacingClass[panelSpacing],
           panelPaddingClass[panelPadding],
-          "mx-2 bg-transparent",
+          // Panel presence may outlive open for a commit. Only the chevron animates here:
+          // closing content must leave layout before a sibling receives focus.
+          "mx-2 bg-transparent data-closed:hidden",
         )}
         keepMounted={keepMounted}
       >

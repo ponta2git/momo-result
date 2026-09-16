@@ -18,8 +18,10 @@ import {
   updateMemberAlias as updateMemberAliasResource,
   updateSeasonMaster as updateSeasonMasterResource,
 } from "@/shared/api/masters";
+import { showToast } from "@/shared/ui/feedback/Toast";
 
 export function useMasterEditCommands(input: {
+  onFeedback: (kind: string, scope: string, message: string) => void;
   authScope: string;
   idempotencyKeys: IdempotencyKeyStore;
   queryClient: QueryClient;
@@ -29,6 +31,7 @@ export function useMasterEditCommands(input: {
 }) {
   const {
     authScope,
+    onFeedback,
     idempotencyKeys,
     queryClient,
     selectedGameTitleId,
@@ -56,6 +59,7 @@ export function useMasterEditCommands(input: {
 
   const updateGameTitle = useCallback(
     async (id: string, request: { name: string; layoutFamily: string }) => {
+      onFeedback("gameTitle", "", "");
       setOperationError(undefined);
       const layoutFamily = parseLayoutFamily(request.layoutFamily);
       if (!layoutFamily) {
@@ -76,12 +80,14 @@ export function useMasterEditCommands(input: {
         authScope,
         resource: "game-titles",
       });
+      onFeedback("gameTitle", "", "作品を保存しました");
     },
-    [authScope, idempotencyKeys, queryClient, setOperationError],
+    [onFeedback, authScope, idempotencyKeys, queryClient, setOperationError],
   );
 
   const updateMapMaster = useCallback(
     async (id: string, request: { name: string }) => {
+      onFeedback("map", selectedGameTitleId, "");
       setOperationError(undefined);
       const normalizedRequest = { name: normalizeName(request.name) };
       await runIdempotentMutation(
@@ -95,12 +101,14 @@ export function useMasterEditCommands(input: {
         gameTitleId: selectedGameTitleId,
         resource: "map-masters",
       });
+      onFeedback("map", selectedGameTitleId, "マップを保存しました");
     },
-    [authScope, idempotencyKeys, queryClient, selectedGameTitleId, setOperationError],
+    [onFeedback, authScope, idempotencyKeys, queryClient, selectedGameTitleId, setOperationError],
   );
 
   const updateSeasonMaster = useCallback(
     async (id: string, request: { name: string }) => {
+      onFeedback("season", selectedGameTitleId, "");
       setOperationError(undefined);
       const normalizedRequest = { name: normalizeName(request.name) };
       await runIdempotentMutation(
@@ -114,12 +122,14 @@ export function useMasterEditCommands(input: {
         gameTitleId: selectedGameTitleId,
         resource: "season-masters",
       });
+      onFeedback("season", selectedGameTitleId, "シーズンを保存しました");
     },
-    [authScope, idempotencyKeys, queryClient, selectedGameTitleId, setOperationError],
+    [onFeedback, authScope, idempotencyKeys, queryClient, selectedGameTitleId, setOperationError],
   );
 
   const updateMemberAlias = useCallback(
     async (id: string, request: { memberId: string; alias: string }) => {
+      onFeedback("aliases", "", "");
       setOperationError(undefined);
       const normalizedRequest = {
         memberId: normalizeName(request.memberId),
@@ -132,14 +142,16 @@ export function useMasterEditCommands(input: {
         (options) => updateMemberAliasResource(id, normalizedRequest, options),
       );
       await invalidateMemberAliasCaches(queryClient, authScope);
+      onFeedback("aliases", "", "別名を保存しました");
     },
-    [authScope, idempotencyKeys, queryClient, setOperationError],
+    [onFeedback, authScope, idempotencyKeys, queryClient, setOperationError],
   );
 
   return {
     deleteGameTitle: (id: string) =>
       trackMutation(() =>
         deleteWithDialogFeedback(async () => {
+          onFeedback("gameTitle", "", "");
           await runIdempotentMutation(
             idempotencyKeys,
             "masters.deleteGameTitle",
@@ -153,11 +165,13 @@ export function useMasterEditCommands(input: {
             authScope,
             resource: "game-titles",
           });
+          showToast({ title: "作品を削除しました", tone: "success" });
         }),
       ),
     deleteMapMaster: (id: string) =>
       trackMutation(() =>
         deleteWithDialogFeedback(async () => {
+          onFeedback("map", selectedGameTitleId, "");
           await runIdempotentMutation(
             idempotencyKeys,
             "masters.deleteMapMaster",
@@ -169,11 +183,13 @@ export function useMasterEditCommands(input: {
             gameTitleId: selectedGameTitleId,
             resource: "map-masters",
           });
+          showToast({ title: "マップを削除しました", tone: "success" });
         }),
       ),
     deleteMemberAlias: (id: string) =>
       trackMutation(() =>
         deleteWithDialogFeedback(async () => {
+          onFeedback("aliases", "", "");
           await runIdempotentMutation(
             idempotencyKeys,
             "masters.deleteMemberAlias",
@@ -181,11 +197,13 @@ export function useMasterEditCommands(input: {
             (options) => deleteMemberAlias(id, options),
           );
           await invalidateMemberAliasCaches(queryClient, authScope);
+          showToast({ title: "別名を削除しました", tone: "success" });
         }),
       ),
     deleteSeasonMaster: (id: string) =>
       trackMutation(() =>
         deleteWithDialogFeedback(async () => {
+          onFeedback("season", selectedGameTitleId, "");
           await runIdempotentMutation(
             idempotencyKeys,
             "masters.deleteSeasonMaster",
@@ -197,6 +215,7 @@ export function useMasterEditCommands(input: {
             gameTitleId: selectedGameTitleId,
             resource: "season-masters",
           });
+          showToast({ title: "シーズンを削除しました", tone: "success" });
         }),
       ),
     editPending: pendingMutationCount > 0,

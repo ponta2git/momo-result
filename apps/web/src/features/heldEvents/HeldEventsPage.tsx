@@ -13,19 +13,21 @@ import { PageFrame } from "@/shared/ui/layout/PageFrame";
 
 export function HeldEventsPage() {
   const page = useHeldEventsPageModel();
+  const dialogPending = page.create.pending || page.deleteDialog.pending;
+  const toolbarPending =
+    page.refresh.pending &&
+    !dialogPending &&
+    page.list.kind === "ready" &&
+    page.list.freshness === "current";
 
   return (
     <PageFrame>
-      <PageContentSurface
-        aria-busy={page.refresh.pending || undefined}
-        aria-label="開催履歴"
-        className="grid gap-4"
-        role="region"
-      >
+      <PageContentSurface aria-label="開催履歴" className="grid gap-4" role="region">
         <div aria-label="開催履歴の操作" className={cn(actionRowClass, "justify-end")} role="group">
           <Button
             icon={<RefreshCw aria-hidden="true" />}
-            pending={page.refresh.pending}
+            disabled={page.refresh.pending || dialogPending}
+            pending={toolbarPending}
             pendingLabel="更新中…"
             size="sm"
             variant="quiet"

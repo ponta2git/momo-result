@@ -7,7 +7,6 @@ import { AppShell } from "@/app/AppShell";
 import { AdminRoute, AuthenticatedRoute, PublicOnlyRoute, RootRedirect } from "@/app/routeGuards";
 import {
   LoginPage,
-  loadAdminAccountsPage,
   loadDraftReviewPage,
   loadExportPage,
   loadHeldEventDetailPage,
@@ -18,13 +17,11 @@ import {
   loadMatchesListPage,
   loadMatchEditPage,
   loadOcrCapturePage,
-  loadNotificationSettingsPage,
   loadSeriesComparisonPage,
   loadSeriesAnalysisAdminPage,
 } from "@/app/routeModules";
 import { loadLazyModule } from "@/shared/lib/moduleLoadError";
 
-const AdminAccountsPage = lazy(() => loadLazyModule(loadAdminAccountsPage));
 const DraftReviewPage = lazy(() => loadLazyModule(loadDraftReviewPage));
 const ExportPage = lazy(() => loadLazyModule(loadExportPage));
 const HeldEventDetailPage = lazy(() => loadLazyModule(loadHeldEventDetailPage));
@@ -35,7 +32,6 @@ const MatchDetailPage = lazy(() => loadLazyModule(loadMatchDetailPage));
 const MatchesListPage = lazy(() => loadLazyModule(loadMatchesListPage));
 const MatchEditPage = lazy(() => loadLazyModule(loadMatchEditPage));
 const OcrCapturePage = lazy(() => loadLazyModule(loadOcrCapturePage));
-const NotificationSettingsPage = lazy(() => loadLazyModule(loadNotificationSettingsPage));
 const SeriesComparisonPage = lazy(() => loadLazyModule(loadSeriesComparisonPage));
 const SeriesAnalysisAdminPage = lazy(() => loadLazyModule(loadSeriesAnalysisAdminPage));
 
@@ -63,14 +59,6 @@ export const appRoutes: RouteObject[] = [
           </AuthenticatedRoute>
         ),
         children: [
-          {
-            path: "admin/notifications",
-            element: (
-              <AdminRoute>
-                <NotificationSettingsPage />
-              </AdminRoute>
-            ),
-          },
           {
             path: "matches",
             element: <MatchesListPage />,
@@ -124,14 +112,6 @@ export const appRoutes: RouteObject[] = [
             element: (
               <AdminRoute>
                 <MastersPage />
-              </AdminRoute>
-            ),
-          },
-          {
-            path: "admin/accounts",
-            element: (
-              <AdminRoute>
-                <AdminAccountsPage />
               </AdminRoute>
             ),
           },

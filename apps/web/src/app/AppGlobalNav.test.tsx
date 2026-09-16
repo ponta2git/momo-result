@@ -53,9 +53,11 @@ describe("AppGlobalNav", () => {
     );
 
     expect(screen.getByRole("group", { name: "管理" })).toBeInTheDocument();
-    for (const name of ["分析", "通知", "設定", "アカウント"]) {
+    for (const name of ["分析", "設定"]) {
       expect(screen.getByRole("link", { name })).toBeInTheDocument();
     }
+    expect(screen.queryByRole("link", { name: "通知" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "アカウント" })).not.toBeInTheDocument();
   });
 
   it("keeps logout failure feedback and its retry action at the account control", async () => {

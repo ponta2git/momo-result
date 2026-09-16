@@ -15,6 +15,7 @@ import { installObjectUrlMock } from "@/test/doubles/dom";
 import { setupMsw } from "@/test/msw/lifecycle";
 import { server } from "@/test/msw/server";
 import { createTestQueryClient } from "@/test/queryClient";
+import { selectOption } from "@/test/selectOption";
 
 setupMsw();
 
@@ -92,7 +93,9 @@ describe("OcrCapturePage", () => {
     setDevUser();
     renderCaptureRoute();
 
-    expect(await screen.findByRole("option", { name: "桃太郎電鉄2" })).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByRole("combobox", { name: "作品" })).toHaveTextContent("桃太郎電鉄2"),
+    );
     const startButton = screen.getByRole("button", { name: "読み取りを開始" });
     expect(startButton).toBeDisabled();
   });
@@ -101,7 +104,9 @@ describe("OcrCapturePage", () => {
     setDevUser();
     renderCaptureRoute();
 
-    await screen.findByRole("option", { name: "桃太郎電鉄2" });
+    await waitFor(() =>
+      expect(screen.getByRole("combobox", { name: "作品" })).toHaveTextContent("桃太郎電鉄2"),
+    );
     const input = screen.getByLabelText("OCRの画像をアップロード");
     await user.upload(input, new File(["assets"], "assets.png", { type: "image/png" }));
     expect(screen.getByRole("button", { name: "1件で読み取りを開始" })).toBeEnabled();
@@ -157,7 +162,9 @@ describe("OcrCapturePage", () => {
     expect(await screen.findByRole("button", { name: "選択肢を再読み込み" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "選択肢を再読み込み" }));
 
-    expect(await screen.findByRole("option", { name: "桃太郎電鉄2" })).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByRole("combobox", { name: "作品" })).toHaveTextContent("桃太郎電鉄2"),
+    );
     expect(attempts).toBe(2);
   });
 
@@ -178,7 +185,9 @@ describe("OcrCapturePage", () => {
     });
     renderCaptureRoute();
 
-    expect(await screen.findByRole("option", { name: "桃太郎電鉄2" })).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByRole("combobox", { name: "作品" })).toHaveTextContent("桃太郎電鉄2"),
+    );
     expect(
       within(screen.getByRole("heading", { name: "総資産" }).closest("section")!).getByRole(
         "button",
@@ -230,7 +239,9 @@ describe("OcrCapturePage", () => {
     setDevUser();
     renderCaptureRoute();
 
-    await screen.findByRole("option", { name: "桃太郎電鉄2" });
+    await waitFor(() =>
+      expect(screen.getByRole("combobox", { name: "作品" })).toHaveTextContent("桃太郎電鉄2"),
+    );
     await user.upload(
       screen.getByLabelText("OCRの画像をアップロード"),
       new File(["image"], "assets.png", { type: "image/png" }),
@@ -286,20 +297,34 @@ describe("OcrCapturePage", () => {
 
     renderCaptureRoute();
 
-    expect(await screen.findByRole("option", { name: "桃太郎電鉄2" })).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByRole("combobox", { name: "作品" })).toHaveTextContent("桃太郎電鉄2"),
+    );
     const input = await screen.findByLabelText("OCRの画像をアップロード");
     await user.upload(input, new File(["image"], "assets.png", { type: "image/png" }));
 
-    expect(await screen.findByText("試合設定の選択肢を確認しています。")).toBeInTheDocument();
+    expect(
+      screen
+        .getAllByRole("status")
+        .some((status) => status.textContent === "試合設定の選択肢を確認中"),
+    ).toBe(true);
     expect(screen.getByLabelText(/シーズン/u)).toBeDisabled();
     expect(screen.getByLabelText(/マップ/u)).toBeDisabled();
     expect(screen.getByRole("button", { name: "1件で読み取りを開始" })).toBeDisabled();
 
     setupGate.resolve();
-    expect(await screen.findByRole("option", { name: "今シーズン" })).toBeInTheDocument();
-    expect(await screen.findByRole("option", { name: "東日本編" })).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByRole("combobox", { name: "シーズン" })).toHaveTextContent("今シーズン"),
+    );
+    await waitFor(() =>
+      expect(screen.getByRole("combobox", { name: "マップ" })).toHaveTextContent("東日本編"),
+    );
     await waitFor(() => {
-      expect(screen.queryByText("試合設定の選択肢を確認しています。")).not.toBeInTheDocument();
+      expect(
+        screen
+          .getAllByRole("status")
+          .some((status) => status.textContent === "試合設定の選択肢を確認中"),
+      ).toBe(false);
       expect(screen.getByRole("button", { name: "1件で読み取りを開始" })).toBeEnabled();
     });
   });
@@ -336,16 +361,20 @@ describe("OcrCapturePage", () => {
       </QueryClientProvider>,
     );
 
-    expect(await screen.findAllByRole("option", { name: "ログイン後に読み込みます" })).toHaveLength(
-      3,
-    );
+    for (const label of ["作品", "シーズン", "マップ"]) {
+      expect(await screen.findByRole("combobox", { name: label })).toHaveTextContent(
+        "ログイン後に読み込みます",
+      );
+    }
     expect(screen.getByLabelText(/作品/u)).toBeDisabled();
     expect(authRequests).toBe(0);
 
-    await user.selectOptions(await screen.findByLabelText("操作用アカウント"), "account_ponta");
+    await selectOption(user, await screen.findByLabelText("操作用アカウント"), "account_ponta");
 
     expect(await screen.findByLabelText(/作品/u)).toBeEnabled();
-    expect(screen.getByRole("option", { name: "桃太郎電鉄2" })).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByRole("combobox", { name: "作品" })).toHaveTextContent("桃太郎電鉄2"),
+    );
     expect(authRequests).toBe(1);
   });
 
@@ -383,7 +412,9 @@ describe("OcrCapturePage", () => {
 
     renderCaptureRoute();
 
-    expect(await screen.findByRole("option", { name: "桃太郎電鉄2" })).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByRole("combobox", { name: "作品" })).toHaveTextContent("桃太郎電鉄2"),
+    );
     const input = await screen.findByLabelText("OCRの画像をアップロード");
     await user.upload(input, new File(["image"], "assets.png", { type: "image/png" }));
     await startOcrAllowingPartialTray();
@@ -503,7 +534,9 @@ describe("OcrCapturePage", () => {
 
     const { router } = renderCaptureRoute();
 
-    expect(await screen.findByRole("option", { name: "桃太郎電鉄2" })).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByRole("combobox", { name: "作品" })).toHaveTextContent("桃太郎電鉄2"),
+    );
     const input = await screen.findByLabelText("OCRの画像をアップロード");
     await user.upload(input, new File(["image"], "assets.png", { type: "image/png" }));
     await user.click(screen.getByRole("button", { name: "1件で読み取りを開始" }));
@@ -562,7 +595,9 @@ describe("OcrCapturePage", () => {
 
     renderCaptureRoute();
 
-    expect(await screen.findByRole("option", { name: "桃太郎電鉄2" })).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByRole("combobox", { name: "作品" })).toHaveTextContent("桃太郎電鉄2"),
+    );
     const input = await screen.findByLabelText("OCRの画像をアップロード");
     await user.upload(input, new File(["first"], "first.png", { type: "image/png" }));
     await user.upload(input, new File(["second"], "second.png", { type: "image/png" }));
@@ -633,7 +668,9 @@ describe("OcrCapturePage", () => {
 
     renderCaptureRoute();
 
-    expect(await screen.findByRole("option", { name: "桃太郎電鉄2" })).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByRole("combobox", { name: "作品" })).toHaveTextContent("桃太郎電鉄2"),
+    );
     const input = await screen.findByLabelText("OCRの画像をアップロード");
     await user.upload(input, new File(["first"], "first.png", { type: "image/png" }));
     await user.upload(input, new File(["second"], "second.png", { type: "image/png" }));
@@ -678,7 +715,9 @@ describe("OcrCapturePage", () => {
 
     renderCaptureRoute();
 
-    expect(await screen.findByRole("option", { name: "桃太郎電鉄2" })).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByRole("combobox", { name: "作品" })).toHaveTextContent("桃太郎電鉄2"),
+    );
     const input = await screen.findByLabelText("OCRの画像をアップロード");
     await user.upload(input, new File(["image"], "assets.png", { type: "image/png" }));
     await startOcrAllowingPartialTray();

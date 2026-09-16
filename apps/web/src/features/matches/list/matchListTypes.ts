@@ -74,6 +74,7 @@ export type MatchListAction = {
 };
 
 export type MatchListRowActions = {
+  draftErrors?: Readonly<Record<string, string>>;
   checkingDraftIds?: ReadonlySet<string> | undefined;
   disabled?: boolean;
   onDraftStatusCheckAction: (action: MatchListAction) => void;

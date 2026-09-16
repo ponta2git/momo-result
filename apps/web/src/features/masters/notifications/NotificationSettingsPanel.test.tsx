@@ -5,7 +5,8 @@ import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { NotificationSettingsPage } from "@/features/notificationSettings/NotificationSettingsPage";
+import { NotificationSettingsPanel } from "@/features/masters/notifications/NotificationSettingsPanel";
+import { useNotificationSettingsModel } from "@/features/masters/notifications/useNotificationSettingsModel";
 import type {
   NotificationSettings,
   NotificationSettingsUpdate,
@@ -24,10 +25,15 @@ let queryClient: QueryClient;
 let user: ReturnType<typeof userEvent.setup>;
 let saved: NotificationSettings;
 
+function NotificationSettingsHarness() {
+  const model = useNotificationSettingsModel();
+  return <NotificationSettingsPanel model={model} />;
+}
+
 function renderPage() {
   return render(
     <QueryClientProvider client={queryClient}>
-      <NotificationSettingsPage />
+      <NotificationSettingsHarness />
     </QueryClientProvider>,
   );
 }
@@ -58,7 +64,7 @@ async function confirmOff() {
   await user.click(screen.getByRole("button", { name: "OFFにして保存" }));
 }
 
-describe("NotificationSettingsPage", () => {
+describe("NotificationSettingsPanel", () => {
   beforeEach(() => {
     queryClient = createTestQueryClient();
     user = userEvent.setup();
@@ -179,6 +185,45 @@ describe("NotificationSettingsPage", () => {
     server.use(http.get(path, () => HttpResponse.json(saved)));
     await user.click(screen.getByRole("button", { name: "現在の設定を読み込む" }));
     expect(await screen.findByRole("checkbox", { name: "OCR完了" })).toBeChecked();
+    await waitFor(() =>
+      expect(screen.getByRole("heading", { name: "通知する種類" })).toHaveFocus(),
+    );
+  });
+
+  it("keeps saved choices visible and reports reconciliation in the completion slot", async () => {
+    const committed = createDeferred();
+    const reconciled = createDeferred();
+    saved.ocrCompleted.enabled = false;
+    server.use(
+      http.put(path, async () => {
+        await committed.promise;
+        saved.ocrCompleted = { enabled: true, generation: "1" };
+        server.use(
+          http.get(path, async () => {
+            await reconciled.promise;
+            return HttpResponse.json(saved);
+          }),
+        );
+        return HttpResponse.json(saved);
+      }),
+    );
+    renderPage();
+    await user.click(await screen.findByRole("checkbox", { name: "OCR完了" }));
+    const status = screen.getByRole("status");
+    expect(status).toHaveTextContent("未保存の変更があります");
+    await user.click(screen.getByRole("button", { name: "保存" }));
+    expect(screen.getByRole("button", { name: "保存中" })).toBeDisabled();
+    expect(status).toBeEmptyDOMElement();
+    await act(async () => committed.resolve());
+    expect(await screen.findByText("通知設定を保存しました。")).toBeInTheDocument();
+    expectSaved("ON", "ON");
+    expect(screen.getByRole("checkbox", { name: "OCR完了" })).toBeDisabled();
+    expect(screen.queryByRole("status", { name: "通知設定を読み込み中" })).not.toBeInTheDocument();
+    expect(screen.getAllByRole("status")).toEqual([status]);
+    expect(status).toHaveTextContent("保存済みの設定を確認しています。");
+    await act(async () => reconciled.resolve());
+    await waitFor(() => expect(screen.getByRole("checkbox", { name: "OCR完了" })).toBeEnabled());
+    expect(status).toHaveTextContent(/^通知設定を保存しました。$/u);
   });
 
   it("retains a rejected form and reuses its idempotency key for the same retry", async () => {
@@ -268,5 +313,44 @@ describe("NotificationSettingsPage", () => {
     expect(await screen.findByText("現在の設定を確認できません")).toBeInTheDocument();
     expectSaved("OFF", "ON");
     expect(screen.queryByText(/保存できませんでした/u)).not.toBeInTheDocument();
+    const reloaded = createDeferred();
+    server.use(
+      http.get(path, async () => {
+        await reloaded.promise;
+        return HttpResponse.json(saved);
+      }),
+    );
+    const retry = screen.getByRole("button", { name: "現在の設定を読み込む" });
+    await user.click(retry);
+    expect(screen.getByText("現在の設定を確認できません")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "読み込み中" })).toBe(retry);
+    expect(retry).toBeDisabled();
+    expectSaved("OFF", "ON");
+    await act(async () => reloaded.resolve());
+    await waitFor(() =>
+      expect(screen.queryByText("現在の設定を確認できません")).not.toBeInTheDocument(),
+    );
+    expect(screen.getByRole("heading", { name: "通知する種類" })).toHaveFocus();
+  });
+
+  it("keeps one recovery notice when reloading after a conflict also fails", async () => {
+    server.use(http.put(path, () => problem(409, "NOTIFICATION_SETTINGS_VERSION_CONFLICT")));
+    renderPage();
+    await chooseOcrOff();
+    await confirmOff();
+    expect(await screen.findByText(/通知設定が別の画面で更新されています/u)).toBeInTheDocument();
+    server.use(http.get(path, () => problem(503, "DEPENDENCY_FAILED")));
+    await user.click(screen.getByRole("button", { name: "現在の設定を読み込んで選び直す" }));
+    expect(await screen.findByText(/最後に確認できた保存内容/u)).toHaveTextContent(
+      "編集中の選択は保持しています。",
+    );
+    const notices = screen.getAllByRole("status").filter((element) => element.textContent);
+    expect(notices).toHaveLength(1);
+    expect(notices[0]).toHaveTextContent("通知設定が別の画面で更新されています");
+    expect(
+      within(notices[0]!).getByRole("button", { name: "現在の設定を読み込んで選び直す" }),
+    ).toBeEnabled();
+    expect(screen.getByRole("checkbox", { name: "OCR完了" })).not.toBeChecked();
+    expectSaved("ON", "ON");
   });
 });

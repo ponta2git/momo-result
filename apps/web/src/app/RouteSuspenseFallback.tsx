@@ -151,16 +151,6 @@ export function routePagePresentation(pathname: string, search = ""): RoutePageP
       width: "standard",
     });
   }
-  if (normalizedPathname === "/admin/accounts") {
-    return defineRoutePresentation({ kind: "record-list", width: "standard" });
-  }
-  if (normalizedPathname === "/admin/notifications") {
-    return defineRoutePresentation({
-      kind: "form",
-      loadingLabel: "通知設定を読み込んでいます",
-      width: "narrow",
-    });
-  }
   if (normalizedPathname === "/matches/new") {
     return defineRoutePresentation(
       {
@@ -419,11 +409,12 @@ export function RouteSuspenseFallback({
   pathname,
   search = "",
 }: RouteSuspenseFallbackProps) {
-  const presentation = routeLoadingPresentation(pathname, search);
+  const { loading: presentation, terminal } = routePagePresentation(pathname, search);
   return (
     <PageLoadingFallback
       asMain={asMain}
       {...presentation}
+      contentPadding={terminal.contentPadding}
       loadingLabel={loadingLabel ?? presentation.loadingLabel}
     />
   );

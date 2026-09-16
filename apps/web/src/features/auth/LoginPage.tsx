@@ -1,5 +1,6 @@
 import { useSearchParams } from "react-router-dom";
 
+import { useSelfAccountDisabledNotice } from "@/shared/auth/accountOperationNotice";
 import { AuthPanel } from "@/shared/auth/AuthPanel";
 import { sanitizeAppRedirectPath } from "@/shared/auth/redirectPath";
 import { Notice } from "@/shared/ui/feedback/Notice";
@@ -8,6 +9,7 @@ import { PageFrame } from "@/shared/ui/layout/PageFrame";
 import { contentText } from "@/shared/ui/typography";
 
 export function LoginPage() {
+  const selfDisabled = useSelfAccountDisabledNotice();
   const [searchParams] = useSearchParams();
   const reason = searchParams.get("reason");
   const next = sanitizeAppRedirectPath(searchParams.get("next"));
@@ -16,7 +18,12 @@ export function LoginPage() {
     <PageFrame width="narrow">
       <div className="mx-auto w-full max-w-[34rem]">
         <PageContentSurface aria-label="ログイン" className="space-y-4" role="region">
-          {reason === "forbidden" ? (
+          {selfDisabled ? (
+            <Notice tone="success" title="アカウント設定を更新しました">
+              このアカウントのログインを無効にしました。
+            </Notice>
+          ) : null}
+          {reason === "forbidden" && !selfDisabled ? (
             <Notice tone="warning" title="アクセス権限がありません">
               このアカウントでは利用できません。管理者に確認してください。
             </Notice>

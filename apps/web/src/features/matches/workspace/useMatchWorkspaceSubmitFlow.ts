@@ -82,7 +82,7 @@ export function useMatchWorkspaceSubmitFlow({
     }
     setOperationError(null);
     setValidationMessage("");
-    await cancelDraft(values.matchDraftId).catch(() => undefined);
+    await cancelDraft(values.matchDraftId);
   }, [cancelDraft, setOperationError, setValidationMessage, values.matchDraftId]);
 
   return { cancelDraftConfirmed, confirmation, confirmedDraft, mutations };

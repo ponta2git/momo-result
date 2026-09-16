@@ -49,7 +49,7 @@ describe("HeldEventPickerField", () => {
         emptyChoiceDescription="開催を選択してください。"
         emptyChoiceLabel="未選択"
         heldEvents={[]}
-        label="開催履歴"
+        label="開催（任意）"
         name="held-event"
         selectedHeldEvent={heldEvent}
         value="held-1"
@@ -61,7 +61,8 @@ describe("HeldEventPickerField", () => {
       screen.getByText("2026/08/09 09:00 — 確定済み3試合・未確定下書き1件"),
     ).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "開催履歴を変更" }));
+    await user.click(screen.getByRole("button", { name: "開催（任意）を変更" }));
+    expect(screen.getByRole("dialog", { name: "開催を選択" })).toBeInTheDocument();
 
     expect(
       screen.getByRole("radio", {

@@ -1,4 +1,6 @@
 import { cn } from "@/shared/ui/cn";
+import { controlBorderClass } from "@/shared/ui/forms/controlPresentation";
+import { useSurfaceFeedback } from "@/shared/ui/motion/useSurfaceFeedback";
 
 type SegmentedOption = {
   disabled?: boolean;
@@ -22,7 +24,12 @@ export function SegmentedControl({
   value,
 }: SegmentedControlProps) {
   return (
-    <fieldset className="inline-flex max-w-full min-w-0 flex-wrap items-stretch gap-1 rounded-sm border border-[var(--color-border)] bg-[var(--color-surface)] p-1">
+    <fieldset
+      className={cn(
+        "inline-flex max-w-full min-w-0 flex-wrap items-stretch gap-1 rounded-sm border bg-[var(--color-surface)] p-1",
+        controlBorderClass.default,
+      )}
+    >
       <legend className="sr-only">{label}</legend>
       {options.map((option) => {
         return (
@@ -50,14 +57,14 @@ function SegmentedButton({
   selected: boolean;
   onValueChange: (value: string) => void;
 }) {
+  const surfaceRef = useSurfaceFeedback<HTMLButtonElement>();
   return (
     <button
+      ref={surfaceRef}
       aria-pressed={selected}
       className={cn(
-        "min-h-11 min-w-[5ch] rounded-xs px-3 py-2 text-sm font-plain text-[var(--color-text-secondary)] focus-visible:-outline-offset-3 pointer-fine:min-h-9 pointer-fine:py-1",
-        selected
-          ? "bg-[var(--color-surface-selected)] text-[var(--color-text-primary)]"
-          : "hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]",
+        "momo-surface momo-surface-press min-h-11 min-w-[5ch] rounded-xs px-3 py-2 text-sm font-plain text-[var(--color-text-secondary)] focus-visible:-outline-offset-3 pointer-fine:min-h-9 pointer-fine:py-1",
+        selected ? "momo-surface-selected text-[var(--color-text-primary)]" : "",
         "disabled:cursor-not-allowed disabled:opacity-50",
       )}
       disabled={disabled}

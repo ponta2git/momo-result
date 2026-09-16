@@ -7,6 +7,7 @@ import type {
   MatchListFilterCandidates,
   MatchListSearch,
 } from "@/features/matches/list/matchListTypes";
+import { selectOption } from "@/test/selectOption";
 
 const initialSearch: MatchListSearch = {
   cursor: "",
@@ -68,8 +69,8 @@ describe("MatchesFilterBar", () => {
     );
 
     const surface = screen.getByRole("region", { name: "試合の表示条件" });
-    expect(within(surface).getByLabelText("確定状況")).toHaveValue("needs_review");
-    expect(within(surface).getByLabelText("並び順")).toHaveValue("updated_desc");
+    expect(within(surface).getByLabelText("確定状況")).toHaveTextContent("要確認のみ");
+    expect(within(surface).getByLabelText("並び順")).toHaveTextContent("更新が新しい順");
     expect(surface).not.toHaveTextContent("適用中:");
 
     const detailTrigger = within(surface).getByRole("button", { name: /^詳細条件/u });
@@ -103,7 +104,7 @@ describe("MatchesFilterBar", () => {
       />,
     );
 
-    await user.selectOptions(screen.getByLabelText("確定状況"), "ocr_running");
+    await selectOption(user, screen.getByLabelText("確定状況"), "ocr_running");
     expect(onApply).toHaveBeenLastCalledWith({ ...search, cursor: "", status: "ocr_running" });
 
     onApply.mockClear();
@@ -115,7 +116,7 @@ describe("MatchesFilterBar", () => {
         search={search}
       />,
     );
-    await user.selectOptions(screen.getByLabelText("並び順"), "updated_desc");
+    await selectOption(user, screen.getByLabelText("並び順"), "updated_desc");
     expect(onApply).toHaveBeenLastCalledWith({ ...search, cursor: "", sort: "updated_desc" });
   });
 

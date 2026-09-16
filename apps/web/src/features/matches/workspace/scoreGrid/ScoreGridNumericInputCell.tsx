@@ -186,18 +186,18 @@ export const NumericInputCell = memo(function NumericInputCell({
     if (parsed === undefined) {
       return;
     }
-    onCommit(parsed);
+    if (parsed !== value) onCommit(parsed);
     setDraftValue(undefined);
-  }, [allowSign, inputValue, onCommit]);
+  }, [allowSign, inputValue, onCommit, value]);
 
   const revertCell = useCallback(() => {
     const before = editStartValueRef.current ?? fallbackValue;
     const parsed = parseNumericValue(before, allowSign);
     setDraftValue(before);
-    if (parsed !== undefined) {
+    if (parsed !== undefined && parsed !== value) {
       onCommit(parsed);
     }
-  }, [allowSign, fallbackValue, onCommit]);
+  }, [allowSign, fallbackValue, onCommit, value]);
 
   const handleChange = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => {

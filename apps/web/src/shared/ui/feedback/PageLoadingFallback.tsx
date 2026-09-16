@@ -2,6 +2,7 @@ import { actionRowClass, inlineActionGroupClass } from "@/shared/ui/actions/acti
 import { cn } from "@/shared/ui/cn";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
+import type { PageContentSurfacePadding } from "@/shared/ui/layout/PageContentSurface";
 import {
   pageFrameSiblingGapClass,
   pageFrameWidthClass,
@@ -49,6 +50,7 @@ export type PageLoadingActionWidth = "compact" | "long" | "short" | "standard" |
 
 export type PageLoadingFallbackProps = {
   asMain?: boolean | undefined;
+  contentPadding?: PageContentSurfacePadding | undefined;
   contentToolbar?: PageLoadingContentToolbarShape | undefined;
   contextNoticeSlot?: boolean | undefined;
   header?: PageLoadingHeaderShape | undefined;
@@ -61,6 +63,7 @@ export type PageLoadingFallbackProps = {
 /** Renders a route-agnostic structural loading region selected by the app composition. */
 export function PageLoadingFallback({
   asMain = false,
+  contentPadding,
   contentToolbar,
   contextNoticeSlot = false,
   header,
@@ -77,6 +80,7 @@ export function PageLoadingFallback({
   );
   const content = (
     <PageLoadingSkeleton
+      contentPadding={contentPadding ?? (kind === "form" ? "compact" : "default")}
       contextNoticeSlot={contextNoticeSlot}
       contentToolbar={contentToolbar}
       header={header}
@@ -115,6 +119,7 @@ export function PageLoadingFallback({
 }
 
 function PageLoadingSkeleton({
+  contentPadding,
   contentToolbar,
   contextNoticeSlot,
   header,
@@ -122,6 +127,7 @@ function PageLoadingSkeleton({
   leadingActionSlot,
   loadingLabel,
 }: {
+  contentPadding: PageContentSurfacePadding;
   contentToolbar: PageLoadingContentToolbarShape | undefined;
   contextNoticeSlot: boolean;
   header: PageLoadingHeaderShape | undefined;
@@ -140,7 +146,10 @@ function PageLoadingSkeleton({
         {leadingSkeleton}
         {headerSkeleton}
         {contextSkeleton}
-        <PageContentSurface className={kind === "list" ? "grid gap-6" : "grid gap-4"}>
+        <PageContentSurface
+          className={kind === "list" ? "grid gap-6" : "grid gap-4"}
+          padding={contentPadding}
+        >
           {toolbarSkeleton}
           <Skeleton className="h-16 rounded-md" />
           <Skeleton className="h-44 rounded-md" />
@@ -162,7 +171,7 @@ function PageLoadingSkeleton({
         {leadingSkeleton}
         {headerSkeleton}
         {contextSkeleton}
-        <PageContentSurface className="grid gap-6">
+        <PageContentSurface className="grid gap-6" padding={contentPadding}>
           {toolbarSkeleton}
           <Skeleton className="h-24 rounded-md" />
           <div className="grid gap-4 lg:grid-cols-4">
@@ -183,7 +192,7 @@ function PageLoadingSkeleton({
         {leadingSkeleton}
         {headerSkeleton}
         {contextSkeleton}
-        <PageContentSurface className="grid gap-8">
+        <PageContentSurface className="grid gap-8" padding={contentPadding}>
           {toolbarSkeleton}
           <Skeleton className="h-44 rounded-md" />
           <div className="grid gap-4 md:grid-cols-2">
@@ -205,6 +214,7 @@ function PageLoadingSkeleton({
         {contextSkeleton}
         <PageContentSurface
           className={kind === "sectioned-comparison" ? "grid gap-6" : "grid gap-4"}
+          padding={contentPadding}
         >
           {toolbarSkeleton}
           <Skeleton className="h-28 rounded-md" />
@@ -227,7 +237,7 @@ function PageLoadingSkeleton({
         {leadingSkeleton}
         {headerSkeleton}
         {contextSkeleton}
-        <PageContentSurface className="grid gap-6">
+        <PageContentSurface className="grid gap-6" padding={contentPadding}>
           {toolbarSkeleton}
           <Skeleton className="h-14 rounded-md" />
           <div className="grid gap-4 xl:grid-cols-3">
@@ -247,7 +257,7 @@ function PageLoadingSkeleton({
         {leadingSkeleton}
         {headerSkeleton}
         {contextSkeleton}
-        <PageContentSurface className="grid gap-4" padding="compact">
+        <PageContentSurface className="grid gap-4" padding={contentPadding}>
           {toolbarSkeleton}
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {Array.from({ length: 4 }, (_, index) => (
@@ -271,7 +281,7 @@ function PageLoadingSkeleton({
       {leadingSkeleton}
       {headerSkeleton}
       {contextSkeleton}
-      <PageContentSurface className="grid gap-4">
+      <PageContentSurface className="grid gap-4" padding={contentPadding}>
         {toolbarSkeleton}
         <Skeleton className="h-40 w-full rounded-md" />
         <Skeleton className="h-32 w-full rounded-md" />

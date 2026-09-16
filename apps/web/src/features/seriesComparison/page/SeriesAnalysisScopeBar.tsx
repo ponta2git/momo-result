@@ -67,11 +67,7 @@ export function SeriesAnalysisScopeBar({
   const selectedSeries = seriesOptions.find((option) => option.value === seriesValue);
 
   return (
-    <section
-      aria-busy={refreshing || undefined}
-      aria-label="比較条件"
-      className="grid min-w-0 gap-2"
-    >
+    <section aria-label="比較条件" className="grid min-w-0 gap-2">
       <Disclosure
         keepMounted
         ariaLabel="比較対象を変更"
@@ -104,7 +100,6 @@ export function SeriesAnalysisScopeBar({
             <span className={contentText.supporting}>比較対象を変更</span>
           </span>
         }
-        triggerLayout="flush-horizontal"
         triggerVariant="supporting"
         onOpenChange={setOpen}
       >
@@ -113,19 +108,19 @@ export function SeriesAnalysisScopeBar({
             label="対象作品"
             options={seriesOptions}
             value={seriesValue}
-            onChange={(event) => onSeriesChange(event.currentTarget.value)}
+            onValueChange={(nextValue) => onSeriesChange(nextValue)}
           />
           <SelectField
             label="シーズン"
             options={seasonOptions}
             value={seasonValue}
-            onChange={(event) => onSeasonChange(event.currentTarget.value)}
+            onValueChange={(nextValue) => onSeasonChange(nextValue)}
           />
           <SelectField
             label="マップ"
             options={mapOptions}
             value={mapValue}
-            onChange={(event) => onMapChange(event.currentTarget.value)}
+            onValueChange={(nextValue) => onMapChange(nextValue)}
           />
         </div>
       </Disclosure>

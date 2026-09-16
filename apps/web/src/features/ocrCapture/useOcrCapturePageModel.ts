@@ -25,7 +25,6 @@ import type { NormalizedApiError } from "@/shared/api/problemDetails";
 import { trimSearchParam } from "@/shared/lib/searchParams";
 import type { SlotMap } from "@/shared/lib/slotMap";
 import { sanitizeReturnTo } from "@/shared/navigation/returnTo";
-import { showToast } from "@/shared/ui/feedback/Toast";
 
 type MemberAliasesFeedback = {
   error: NormalizedApiError | undefined;
@@ -34,6 +33,7 @@ type MemberAliasesFeedback = {
 };
 
 export type OcrCapturePageModel = {
+  startError: string | undefined;
   capture: {
     camera: {
       actionVariant: "primary" | "secondary";
@@ -88,12 +88,9 @@ export type OcrCapturePageModel = {
 
 const readyStatuses = new Set(["selected", "failed", "cancelled"]);
 
-function notify(message: string, tone: "info" | "success" | "warning" = "info") {
-  showToast({ title: message, tone });
-}
-
 /** Owns OCR capture screen state and exposes only view-ready slices and user intents. */
 export function useOcrCapturePageModel(): OcrCapturePageModel {
+  const [startError, setStartError] = useState<string>();
   const [searchParams] = useSearchParams();
   const requestedHeldEventId = trimSearchParam(searchParams.get("heldEventId"));
   const returnTo = sanitizeReturnTo(searchParams.get("returnTo"));
@@ -120,7 +117,7 @@ export function useOcrCapturePageModel(): OcrCapturePageModel {
     return buildOcrHints(input, referenceData.memberAliases.directory);
   }, [referenceData.memberAliases.directory, setupOptions.selectedGameTitle]);
   const draftFlow = useOcrCaptureDraftFlow({
-    onDraftLoadError: (error) => notify(error.detail || error.title, "warning"),
+    onDraftLoadError: (error) => setCaptureActionFeedback(error.detail || error.title),
   });
   const captureSubmission = useOcrCaptureMutations(hints);
   const startFlow = useOcrStartFlow({
@@ -130,8 +127,7 @@ export function useOcrCapturePageModel(): OcrCapturePageModel {
   const draftFeedback = useMemo<OcrCaptureDraftFeedback>(
     () => ({
       reportFailure: (message) => {
-        setCaptureActionFeedback(undefined);
-        notify(message, "warning");
+        setCaptureActionFeedback(message);
       },
       reportSuccess: setCaptureActionFeedback,
     }),
@@ -163,8 +159,7 @@ export function useOcrCapturePageModel(): OcrCapturePageModel {
   const selectCaptureTarget = (kind: SlotKind) => {
     const slot = draftFlow.slots.find((candidate) => candidate.kind === kind);
     if (slot && isWorkingStatus(slot.status)) {
-      setCaptureActionFeedback(undefined);
-      notify("読み取り中の分類は撮影先に変更できません。", "warning");
+      setCaptureActionFeedback("読み取り中の分類は撮影先に変更できません。");
       return;
     }
     setCaptureTargetKind(kind);
@@ -183,13 +178,14 @@ export function useOcrCapturePageModel(): OcrCapturePageModel {
 
   const startOcr = () => {
     if (!setupReady) {
-      notify(setupBlockedReason ?? "試合設定を確認してください。", "warning");
+      setStartError(setupBlockedReason ?? "試合設定を確認してください。");
       return;
     }
     if (readySlots.length === 0) {
-      notify("読み取る画像がありません。まず画像を撮影してください。", "warning");
+      setStartError("読み取る画像がありません。まず画像を撮影してください。");
       return;
     }
+    setStartError(undefined);
     startFlow.open(
       buildOcrSubmissionPlan({
         selectedSlotLabels,
@@ -209,6 +205,7 @@ export function useOcrCapturePageModel(): OcrCapturePageModel {
       : "分類トレイを選び、まず1枚撮影してください。";
 
   return {
+    startError,
     capture: {
       camera: {
         actionVariant: selectedImageCount === slotDefinitions.length ? "secondary" : "primary",

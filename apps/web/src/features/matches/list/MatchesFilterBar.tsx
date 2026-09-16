@@ -29,6 +29,7 @@ type MatchesFilterBarProps = {
   summaryError?: boolean | undefined;
   summaryLoading?: boolean | undefined;
   summaryMasked?: boolean | undefined;
+  summaryRetryPending?: boolean | undefined;
 };
 
 const sortOptions: Array<{ label: string; value: MatchListSort }> = [
@@ -50,13 +51,13 @@ export function MatchesFilterBar({
   summaryError = false,
   summaryLoading = false,
   summaryMasked = false,
+  summaryRetryPending = false,
 }: MatchesFilterBarProps) {
   const detailLabels = describeMatchListDetailFilters(candidates, search);
   const hasDetailFilters = detailLabels.length > 0;
   const hasResettableFilters =
     hasDetailFilters || search.status !== "all" || search.sort !== "held_desc";
   const [detailOpen, setDetailOpen] = useState(hasDetailFilters);
-  const disabled = pending;
 
   function patchSearch(patch: Partial<MatchListSearch>) {
     actions.onApply({ ...search, ...patch, cursor: "" });
@@ -73,7 +74,6 @@ export function MatchesFilterBar({
           <MatchesListFilters
             actions={actions}
             candidates={candidates}
-            pending={disabled}
             search={search}
             selectionErrors={selectionErrors}
           />
@@ -93,22 +93,19 @@ export function MatchesFilterBar({
           <MatchesStatusFilter
             counts={counts}
             currentStatus={search.status}
-            disabled={disabled}
             loading={summaryLoading}
             masked={summaryMasked}
+            retryPending={summaryRetryPending}
             unavailable={summaryError}
             onRetry={onRetrySummary}
             onSelectStatus={(status) => patchSearch({ status })}
           />
           <div className="min-w-0">
             <SelectField
-              disabled={disabled}
               label="並び順"
               options={sortOptions}
               value={search.sort}
-              onChange={(event) =>
-                patchSearch({ sort: event.currentTarget.value as MatchListSort })
-              }
+              onValueChange={(nextValue) => patchSearch({ sort: nextValue as MatchListSort })}
             />
           </div>
         </div>
@@ -117,7 +114,6 @@ export function MatchesFilterBar({
         hasResettableFilters ? (
           <Button
             aria-label="確定状況・並び順・詳細条件を初期状態に戻す"
-            disabled={disabled}
             size="sm"
             variant="quiet"
             onClick={actions.onClear}

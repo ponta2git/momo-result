@@ -68,12 +68,23 @@
 
 ### Loading / Optimistic Update / Motion
 
-- loading は、初回 suspend、異なる pathname の未準備、同一 pathname の filter / scope 変更、cached data を保った refetch、補助 data の失敗を別ケースにする。初回と異なる pathname では最終 layout に近い structural fallback、同一 pathname の変更と refetch では既存内容の維持、誤操作を招く stale scope では対象操作の無効化、各 scope では一つの loading feedback だけが現れることを検証する。
+- loading は、初回 suspend、異なる pathname の未準備、同一 pathname の filter / scope 変更、cached data を保った refetch、補助 data の失敗を別ケースにする。初回と異なる pathname では最終 layout に近い structural fallback、同一 pathname の変更と refetch では既存内容の維持、誤操作を招く stale scope では対象操作の無効化を検証する。
+- 待機表示の単位は `docs/ui-rule.md` の「取得状態とフィードバック」に従う。一覧と件数の同時取得、保存後の cache 整合、局所的な再試行について、同じ操作の待機が親子や複数の場所に重複しないことを、実際の表示と accessible status で確認する。独立した操作の同時実行、片方だけの失敗も扱い、ページ全体の spinner / status 総数だけで合否を決めない。
+- 処理前・処理中・完了後を制御した Promise / 通信で観測し、button の文言・icon 切替と操作欄の待機表示だけでは寸法や周辺位置が変わらないことを実 browser で確認する。狭幅の折り返し、スクロール、内容内の focus、再試行操作の継続も対象にし、完了後の実データ変更や既定の遷移とは分ける。component test の CSS class 一致や jsdom の寸法値を見た目の証拠にしない。
 - Suspense fallback と完成内容の切替に animation lifecycle がなく、route content、安定した surface、open / focus が Motion の完了を待たないことを確認する。dialog や disclosure は body が suspend または exit 中でも keyboard 契約と focus 復帰を保ち、非対話的な exit node が操作対象または accessibility tree に残らないことを検証する。
+- 表示済み内容の同条件 refetch は、操作欄や内容の再 mount、route fallback への逆戻りを起こさず、入力・選択・focus と安全な操作を保つことを確認する。表示準備と操作制限を同じ boolean とみなさず、条件変更時に必要な保護と復帰も検証する。
 - 楽観更新は pending、success、server correction、rollback、retry、同時 mutation を decision table にする。安定した identity、重複操作の抑止、局所 error、canonical data への収束を主 oracle とし、presence や opacity を状態の唯一の oracle にしない。
 - motion を伴う操作は、通常、途中で逆方向へ変更、unmount、連打、animation 完了 callback 未実行、`prefers-reduced-motion` の各条件で同じ application state と操作可能性へ収束することを、制御した state と clock で検証する。duration の経過だけを待つ test や screenshot 差分だけを主 oracle にしない。
 - viewport を使う図表は、初回と再進入では完成値、表示中の同一 identity の値変更だけが補間対象、表示領域外の更新は再進入時に再生されないことを固定する。IntersectionObserver と clock は test から制御し、実時間 scroll や sleep に依存しない。
 - Motion の状態収束、操作可能性、reduced motion、focus は shared primitive の component test と、利用者価値が現れる代表 flow で検証する。import / bundle 境界の正本と静的検査は `docs/architecture.md` と `docs/dev-rule.md` に従う。
+- 操作面のhoverは実browserで文字・寸法の安定、行と子操作の分離、途中反転、動きを減らす設定の実行中変更を確認する。hover中のselected / invalid / toneの発生・解除と操作制限が旧意味色を残さないこと、focusとnativeの実行が補間を待たないことを代表接続で検証する。色対と補間途中のcontrastは自動検証し、frame数だけで快適さを判定しない。
+
+### Completion / Toast
+
+- 通知先は `docs/ui-rule.md` を正本とし、遷移・dialog 閉鎖で完了確認場所が失われる操作、その場に結果が残る操作、局所回復が必要な失敗を代表例に選ぶ。toast の呼出しだけでなく、利用者に現れる結果と次の操作を確認する。
+- 保存確定後の再取得失敗、結果不明、処理の受付と完了を分け、誤った成功・失敗や二重通知を防ぐ。同じ実行の再描画・cache 更新では通知を増やさず、別の実行結果を誤ってまとめないことを確認する。
+- 共通 host は最初の通知、通常の route 遷移とbodyの準備待ち、連続通知、表示上限、閉じる操作・期限終了を検証する。通知の描画・focus・表示寿命をrouteの準備に巻き込まない。上限外の通知は表示領域・操作・読み上げの対象から外れること、閉じた通知は直ちに非対話的になり、architecture で許容する有限の退出表示後に内容や空き領域が残らないことを確認する。該当する実画面では狭幅、主要操作との重なり、keyboard と reduced motion を確認する。
+- live region の配置と accessible state は component / browser で確認し、実際の読み上げ回数・順序を保証する場合は screen reader で確かめる。DOM の role 数や `aria-busy` の存在だけを、その保証の代用にしない。
 
 ### Test Foundation / Doubles
 

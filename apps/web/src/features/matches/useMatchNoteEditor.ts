@@ -26,6 +26,7 @@ export function useMatchNoteEditor({ match, refetchMatch }: MatchNoteEditorOptio
   const queryClient = useQueryClient();
   const idempotencyKeys = useIdempotencyKeyStore();
   const navigationAllowedRef = useRef(false);
+  const [successMessage, setSuccessMessage] = useState("");
   const [editing, setEditing] = useState(false);
   const [editingDraft, setEditingDraft] = useState("");
   const [conflict, setConflict] = useState<MatchNoteConflictState | null>(null);
@@ -74,7 +75,7 @@ export function useMatchNoteEditor({ match, refetchMatch }: MatchNoteEditorOptio
       setConflict({ draft: variables.body, latest: latest.data.note });
       setEditingDraft(variables.body);
     },
-    onSuccess: async () => {
+    onSuccess: async (_response, variables) => {
       navigationAllowedRef.current = true;
       setConflict(null);
       setErrorMessage(null);
@@ -82,6 +83,7 @@ export function useMatchNoteEditor({ match, refetchMatch }: MatchNoteEditorOptio
       setEditing(false);
       await invalidateAfterMatchNoteReplaced(queryClient, match.matchId);
       navigationAllowedRef.current = false;
+      setSuccessMessage(variables.body === undefined ? "メモを削除しました" : "保存しました");
     },
   });
 
@@ -94,6 +96,7 @@ export function useMatchNoteEditor({ match, refetchMatch }: MatchNoteEditorOptio
   const save = () => {
     if (tooLong || normalizedDraft.trim().length === 0) return;
     setErrorMessage(null);
+    setSuccessMessage("");
     mutation.mutate({
       body: normalizedDraft,
       expectedVersion: conflict?.latest.version ?? match.note.version,
@@ -101,6 +104,7 @@ export function useMatchNoteEditor({ match, refetchMatch }: MatchNoteEditorOptio
   };
   const remove = () => {
     setErrorMessage(null);
+    setSuccessMessage("");
     mutation.mutate({ expectedVersion: match.note.version });
   };
 
@@ -120,7 +124,9 @@ export function useMatchNoteEditor({ match, refetchMatch }: MatchNoteEditorOptio
     save,
     setDeleteOpen,
     setDraft: setEditingDraft,
+    successMessage,
     startEditing: () => {
+      setSuccessMessage("");
       setEditingDraft(match.note.body ?? "");
       setEditing(true);
     },

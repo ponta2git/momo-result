@@ -22,8 +22,9 @@ export function ExportActionPanel({
   onResetConditions,
   view,
 }: ExportActionPanelProps) {
+  const retryOwnsFeedback = Boolean(view.result && view.result.kind !== "success");
   return (
-    <div aria-busy={isPending || undefined} className="grid gap-4">
+    <div className="grid gap-4">
       <div className="grid gap-2">
         <p className={cn(contentText.primary, "text-pretty")}>{view.summaryText}</p>
         <p className={cn(contentText.supporting, "text-pretty")}>
@@ -49,7 +50,7 @@ export function ExportActionPanel({
             <Button
               disabled={!view.canDownload}
               icon={<Download aria-hidden="true" />}
-              pending={isPending}
+              pending={isPending && !retryOwnsFeedback}
               pendingLabel="作成中…"
               size="lg"
               onClick={onDownload}
@@ -59,7 +60,7 @@ export function ExportActionPanel({
           </div>
 
           <ExportDownloadProgress isPending={isPending} isSlow={view.isSlow} />
-          <ExportDownloadResult result={view.result} onRetry={onDownload} />
+          <ExportDownloadResult pending={isPending} result={view.result} onRetry={onDownload} />
         </>
       )}
     </div>

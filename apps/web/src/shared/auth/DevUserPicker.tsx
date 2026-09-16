@@ -38,8 +38,8 @@ export function DevUserPicker({ embedded = false, force = false }: DevUserPicker
           })),
         ]}
         value={currentPrincipal}
-        onChange={(event) => {
-          void switchPrincipal(event.currentTarget.value);
+        onValueChange={(nextValue) => {
+          void switchPrincipal(nextValue);
         }}
       />
     </div>

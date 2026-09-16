@@ -14,6 +14,7 @@ import { cn } from "@/shared/ui/cn";
 import { PaginationControls } from "@/shared/ui/data/PaginationControls";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { Notice } from "@/shared/ui/feedback/Notice";
+import { PendingStatus } from "@/shared/ui/feedback/PendingStatus";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
@@ -43,6 +44,13 @@ function ListSkeleton({ showDesktopTable }: { showDesktopTable: boolean }) {
 export function MatchesListPage() {
   const showDesktopTable = useMediaQuery("(min-width: 1024px)");
   const { drafts, filters, list, navigation, summary } = useMatchesListPageModel();
+  const retryOwnsFeedback = list.loadFailed || list.refreshFailed;
+  const listPending = list.refresh.pending || list.scopeChanging || list.sameScopeRefreshing;
+  const toolbarPending =
+    listPending &&
+    !list.loading &&
+    !retryOwnsFeedback &&
+    !(summary.loadFailed && summary.retryPending);
 
   return (
     <PageFrame>
@@ -112,14 +120,14 @@ export function MatchesListPage() {
           summaryError={summary.loadFailed}
           summaryLoading={summary.loading}
           summaryMasked={summary.masked}
+          summaryRetryPending={summary.retryPending}
         />
 
-        <section
-          aria-busy={list.scopeChanging || list.sameScopeRefreshing || undefined}
-          aria-label="登録済みの試合"
-          className="relative grid min-h-[24rem] gap-4"
-        >
+        <section aria-label="登録済みの試合" className="relative grid min-h-[24rem] gap-4">
           <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
+            <PendingStatus pending={toolbarPending} spinner={false}>
+              一覧を更新中
+            </PendingStatus>
             <div
               aria-label="試合一覧の操作"
               className="flex flex-wrap items-center justify-end gap-2"
@@ -130,9 +138,9 @@ export function MatchesListPage() {
               </LinkButton>
               <IconButton
                 aria-label="最新情報に更新"
-                disabled={list.scopeChanging && !list.refresh.pending}
+                disabled={listPending || list.loading}
                 icon={<RefreshCw />}
-                pending={list.refresh.pending}
+                pending={toolbarPending}
                 pendingLabel="一覧を更新中"
                 tooltip={list.refresh.pending ? "更新中…" : "最新情報に更新"}
                 variant="quiet"
@@ -145,7 +153,7 @@ export function MatchesListPage() {
             <Notice
               action={
                 <Button
-                  pending={list.refresh.pending}
+                  pending={listPending}
                   pendingLabel="一覧を再読み込み中"
                   size="sm"
                   variant="secondary"
@@ -167,6 +175,7 @@ export function MatchesListPage() {
             <StaleShield
               active={list.updating}
               busyLabel="一覧を更新中"
+              statusPlacement="external"
               fallback={<ListSkeleton showDesktopTable={showDesktopTable} />}
               strategy={list.scopeChanging ? "preserve-inert" : "preserve-interactive"}
             >
@@ -175,7 +184,7 @@ export function MatchesListPage() {
                   <Notice
                     action={
                       <Button
-                        pending={list.refresh.pending}
+                        pending={listPending}
                         pendingLabel="再読み込み中"
                         size="sm"
                         onClick={() => void list.refresh.run()}

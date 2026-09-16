@@ -17,6 +17,7 @@ import { evictDraftSourceImageBlobs } from "@/shared/api/sourceImageQueries";
 import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
 import { assertDefined } from "@/shared/lib/invariant";
 import { withReturnTo } from "@/shared/navigation/returnTo";
+import { showToast } from "@/shared/ui/feedback/Toast";
 
 export type MatchWorkspaceMutationsParams = {
   heldEventId: string;
@@ -37,7 +38,7 @@ function isConflict(error: unknown): boolean {
 
 /**
  * confirm / update / cancel の 3 つの副作用を持つ操作を集約する。
- * 各 onSuccess は冪等なキャッシュ無効化のみを実行し、
+ * 各 onSuccess はキャッシュ整合と完了通知を実行し、
  * 成功時のナビゲーションも内部で完結させる。
  */
 export function useMatchWorkspaceMutations({
@@ -68,6 +69,7 @@ export function useMatchWorkspaceMutations({
     onSuccess: async (response, request) => {
       if (request.matchDraftId) evictDraftSourceImageBlobs(queryClient, request.matchDraftId);
       await invalidateAfterMatchConfirmed(queryClient);
+      showToast({ title: "試合を確定しました", tone: "success" });
       onConfirmSuccess();
       onPersistedSuccess();
       navigate(matchSuccessDestination(response.matchId, mode, returnTo));
@@ -99,6 +101,7 @@ export function useMatchWorkspaceMutations({
     onSuccess: async (response) => {
       assertDefined(matchId, "matchId");
       await invalidateAfterMatchUpdated(queryClient, matchId);
+      showToast({ title: "試合を保存しました", tone: "success" });
       onPersistedSuccess();
       navigate(matchSuccessDestination(response.matchId, mode, returnTo));
     },
@@ -121,6 +124,7 @@ export function useMatchWorkspaceMutations({
     onSuccess: async (_, draftId) => {
       evictDraftSourceImageBlobs(queryClient, draftId);
       await invalidateAfterDraftCancelled(queryClient);
+      showToast({ title: "確定前の記録を削除しました", tone: "success" });
       onPersistedSuccess();
       navigate(
         returnTo ?? (heldEventId ? `/held-events/${encodeURIComponent(heldEventId)}` : "/matches"),

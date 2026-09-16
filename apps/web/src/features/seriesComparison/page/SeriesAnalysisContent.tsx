@@ -1,9 +1,11 @@
-import { lazy, memo, Suspense, useEffect, useState } from "react";
+import { lazy, memo, Suspense, useRef, useState } from "react";
+import type { RefObject } from "react";
 
 import type { SeriesAnalysisDrilldownSelection } from "@/features/seriesComparison/drilldowns/SeriesAnalysisDrilldownContent";
 import { SeriesAnalysisDrilldownLoading } from "@/features/seriesComparison/drilldowns/SeriesAnalysisDrilldownLoading";
 import type { SeriesAnalysisDisplayBundle } from "@/features/seriesComparison/model/seriesAnalysisDisplayBundle";
 import type { SeriesAnalysisViewId } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
+import { SeriesAnalysisArrival } from "@/features/seriesComparison/navigation/SeriesAnalysisNavigation";
 import { ReviewView } from "@/features/seriesComparison/page/SeriesAnalysisReviewView";
 import { SeriesAnalysisSelectedMatch } from "@/features/seriesComparison/page/SeriesAnalysisSelectedMatch";
 import { MetricDefinitions } from "@/features/seriesComparison/page/SeriesAnalysisViewPrimitives";
@@ -88,7 +90,9 @@ export function preloadSeriesAnalysisView(view: SeriesAnalysisViewId): void {
 }
 
 type SeriesAnalysisContentProps = {
+  activeView?: SeriesAnalysisViewId;
   bundle: SeriesAnalysisDisplayBundle;
+  navigationReady?: boolean;
   onArtifactExpired: () => void;
   onClearFocusedMatch: () => void;
   onFocusMatch: (matchId: string) => void;
@@ -108,42 +112,35 @@ type DrilldownDialogState = {
  */
 export const SeriesAnalysisContent = memo(function SeriesAnalysisContent({
   bundle,
+  activeView = bundle.view,
+  navigationReady = true,
   onArtifactExpired,
   onClearFocusedMatch,
   onFocusMatch,
   onViewChange,
 }: SeriesAnalysisContentProps) {
   const resource = bundle.kind === "review" ? bundle.review : bundle.aggregate;
-  const { matchContext, view: activeView } = bundle;
+  const { matchContext } = bundle;
   const artifactId = resource.artifact.artifactId;
   const contentIdentity = `${artifactId}:${activeView}`;
-
-  useEffect(() => {
-    let sectionId: string;
-    try {
-      sectionId = decodeURIComponent(window.location.hash.slice(1));
-    } catch {
-      return;
-    }
-    if (!sectionId) return;
-    document.getElementById(sectionId)?.scrollIntoView?.({ block: "start" });
-    // The view and artifact determine when the hash target exists in the committed DOM.
-    // oxlint-disable-next-line react/exhaustive-effect-dependencies
-  }, [activeView, artifactId]);
+  const root = useRef<HTMLDivElement>(null);
 
   return (
-    <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4">
+    <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4" ref={root}>
       {matchContext ? (
         <SeriesAnalysisSelectedMatch context={matchContext} onClear={onClearFocusedMatch} />
       ) : null}
       <PurposeTabs activeView={activeView} onViewChange={onViewChange} />
-      {bundle.kind === "review" ? (
-        <ReviewView
-          loading={false}
-          response={bundle.review}
-          showError={false}
-          onViewChange={onViewChange}
-        />
+      {activeView === "review" ? (
+        <>
+          <ReviewView
+            loading={bundle.kind !== "review"}
+            response={bundle.kind === "review" ? bundle.review : undefined}
+            showError={false}
+            onViewChange={onViewChange}
+          />
+          <SeriesAnalysisArrival ready={navigationReady && bundle.kind === "review"} root={root} />
+        </>
       ) : (
         <div
           aria-labelledby={purposeTabId("analysis")}
@@ -152,17 +149,25 @@ export const SeriesAnalysisContent = memo(function SeriesAnalysisContent({
           role="tabpanel"
         >
           <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
-            <AnalysisTabs activeView={bundle.view} onViewChange={onViewChange} />
+            <AnalysisTabs activeView={activeView} onViewChange={onViewChange} />
             <div className="justify-self-start sm:justify-self-end">
-              <MetricDefinitions response={bundle.aggregate} />
+              {bundle.kind === "analysis" ? (
+                <MetricDefinitions response={bundle.aggregate} />
+              ) : null}
             </div>
           </div>
-          <AnalysisViewContent
-            bundle={bundle}
-            key={contentIdentity}
-            onArtifactExpired={onArtifactExpired}
-            onFocusMatch={onFocusMatch}
-          />
+          {bundle.kind === "analysis" ? (
+            <AnalysisViewContent
+              bundle={bundle}
+              key={contentIdentity}
+              navigationReady={navigationReady}
+              root={root}
+              onArtifactExpired={onArtifactExpired}
+              onFocusMatch={onFocusMatch}
+            />
+          ) : (
+            <AnalysisViewLoading view={activeView} />
+          )}
         </div>
       )}
     </div>
@@ -171,10 +176,14 @@ export const SeriesAnalysisContent = memo(function SeriesAnalysisContent({
 
 function AnalysisViewContent({
   bundle,
+  navigationReady,
+  root,
   onArtifactExpired,
   onFocusMatch,
 }: {
   bundle: SeriesAnalysisBundle;
+  navigationReady: boolean;
+  root: RefObject<HTMLDivElement | null>;
   onArtifactExpired: () => void;
   onFocusMatch: (matchId: string) => void;
 }) {
@@ -225,6 +234,7 @@ function AnalysisViewContent({
             onDrilldown={openDrilldown}
           />
         ) : null}
+        <SeriesAnalysisArrival ready={navigationReady} root={root} />
       </Suspense>
       {drilldown ? (
         <Dialog

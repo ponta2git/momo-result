@@ -12,6 +12,7 @@ import {
 } from "@/shared/api/seriesAnalysis";
 import { seriesAnalysisAdminOverviewQueryOptions } from "@/shared/api/seriesAnalysisQueryOptions";
 import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
+import { useRetryNotice } from "@/shared/ui/feedback/useRetryNotice";
 
 type AcceptanceMessage = { detail: string; title: string };
 
@@ -26,20 +27,43 @@ export function useSeriesAnalysisAdminPageModel() {
   const gameTitleId = searchParams.get("gameTitleId")?.trim() || undefined;
   const [acceptanceMessage, setAcceptanceMessage] = useState<AcceptanceMessage | undefined>();
   const overviewQuery = useQuery(seriesAnalysisAdminOverviewQueryOptions(gameTitleId));
-  const overview = overviewQuery.data;
-  const canonicalGameTitleId = overview?.selectedTitle?.gameTitleId;
+  const sourceOverview = overviewQuery.data;
+  const canonicalGameTitleId = sourceOverview?.selectedTitle?.gameTitleId;
+  const canonicalKey = seriesAnalysisAdminOverviewQueryOptions(canonicalGameTitleId).queryKey;
+  const canonicalState = queryClient.getQueryState(canonicalKey);
+  // The default-title alias can outlive a manual refresh of the canonical query.
+  // Keep its older history from flashing on screen or overwriting that newer cache.
+  const hasNewerCanonical =
+    !gameTitleId &&
+    canonicalGameTitleId &&
+    (canonicalState?.dataUpdatedAt ?? 0) > overviewQuery.dataUpdatedAt;
+  const overview = hasNewerCanonical ? queryClient.getQueryData(canonicalKey) : sourceOverview;
 
   useEffect(() => {
-    if (!gameTitleId && canonicalGameTitleId && overview) {
-      queryClient.setQueryData(
-        seriesAnalysisAdminOverviewQueryOptions(canonicalGameTitleId).queryKey,
-        overview,
-      );
+    if (
+      !gameTitleId &&
+      canonicalGameTitleId &&
+      sourceOverview &&
+      !overviewQuery.isPlaceholderData
+    ) {
+      const key = seriesAnalysisAdminOverviewQueryOptions(canonicalGameTitleId).queryKey;
+      if ((queryClient.getQueryState(key)?.dataUpdatedAt ?? 0) < overviewQuery.dataUpdatedAt) {
+        queryClient.setQueryData(key, sourceOverview, { updatedAt: overviewQuery.dataUpdatedAt });
+      }
       const next = new URLSearchParams(searchParams);
       next.set("gameTitleId", canonicalGameTitleId);
       setSearchParams(next, { replace: true });
     }
-  }, [canonicalGameTitleId, gameTitleId, overview, queryClient, searchParams, setSearchParams]);
+  }, [
+    canonicalGameTitleId,
+    gameTitleId,
+    sourceOverview,
+    overviewQuery.dataUpdatedAt,
+    overviewQuery.isPlaceholderData,
+    queryClient,
+    searchParams,
+    setSearchParams,
+  ]);
 
   const invalidate = async () => {
     await Promise.all([
@@ -95,6 +119,21 @@ export function useSeriesAnalysisAdminPageModel() {
       ? selectedTitleCandidate
       : null;
 
+  const resourceErrorTitle = useRetryNotice(
+    shouldShowQueryError(overviewQuery)
+      ? normalizeDisplayApiError(overviewQuery.error).title
+      : undefined,
+    overviewQuery.isFetching,
+    gameTitleId ?? "",
+  );
+  const resourceErrorDetail = useRetryNotice(
+    shouldShowQueryError(overviewQuery)
+      ? normalizeDisplayApiError(overviewQuery.error).detail
+      : undefined,
+    overviewQuery.isFetching,
+    gameTitleId ?? "",
+  );
+
   return {
     actions: {
       recalculateAll: () => allMutation.mutateAsync(),
@@ -117,8 +156,8 @@ export function useSeriesAnalysisAdminPageModel() {
       mutationError: mutationError
         ? normalizeDisplayApiError(mutationError, "再計算を受け付けられません")
         : undefined,
-      resourceError: shouldShowQueryError(overviewQuery)
-        ? normalizeDisplayApiError(overviewQuery.error)
+      resourceError: resourceErrorTitle
+        ? { title: resourceErrorTitle, detail: resourceErrorDetail }
         : undefined,
     },
     recalculation: {
@@ -128,8 +167,9 @@ export function useSeriesAnalysisAdminPageModel() {
     },
     resource: {
       data: overview,
-      loading: isInitialQueryLoading(overviewQuery),
-      refreshing: overviewQuery.isFetching,
+      loading: isInitialQueryLoading(overviewQuery) && !resourceErrorTitle,
+      refreshing: overviewQuery.isFetching && !titleMutation.isPending && !allMutation.isPending,
+      refreshDisabled: overviewQuery.isFetching || titleMutation.isPending || allMutation.isPending,
     },
     selection: {
       gameTitleId: selectedGameTitleId,

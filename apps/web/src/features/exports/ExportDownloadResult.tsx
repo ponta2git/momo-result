@@ -6,9 +6,14 @@ import type { ExportDownloadResultView } from "./exportViewModel";
 type ExportDownloadResultProps = {
   onRetry?: (() => void) | undefined;
   result?: ExportDownloadResultView | undefined;
+  pending?: boolean;
 };
 
-export function ExportDownloadResult({ onRetry, result }: ExportDownloadResultProps) {
+export function ExportDownloadResult({
+  onRetry,
+  result,
+  pending = false,
+}: ExportDownloadResultProps) {
   if (!result) return null;
 
   if (result.kind === "success") {
@@ -24,7 +29,13 @@ export function ExportDownloadResult({ onRetry, result }: ExportDownloadResultPr
       <Notice
         action={
           onRetry ? (
-            <Button size="sm" variant="secondary" onClick={onRetry}>
+            <Button
+              pending={pending}
+              pendingLabel="作成中…"
+              size="sm"
+              variant="secondary"
+              onClick={onRetry}
+            >
               もう一度試す
             </Button>
           ) : undefined
@@ -41,7 +52,13 @@ export function ExportDownloadResult({ onRetry, result }: ExportDownloadResultPr
     <Notice
       action={
         onRetry ? (
-          <Button size="sm" variant="secondary" onClick={onRetry}>
+          <Button
+            pending={pending}
+            pendingLabel="作成中…"
+            size="sm"
+            variant="secondary"
+            onClick={onRetry}
+          >
             もう一度試す
           </Button>
         ) : undefined

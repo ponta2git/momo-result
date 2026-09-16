@@ -1,8 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useActionState, useEffect, useRef, useState } from "react";
-import type { RefObject } from "react";
+import { useActionState, useState } from "react";
 
-import { invalidateAdminAccountCaches } from "@/features/adminAccounts/adminAccountCache";
+import { invalidateAdminAccountCaches } from "@/features/masters/accounts/adminAccountCache";
 import { createLoginAccount, updateLoginAccount } from "@/shared/api/adminAccounts";
 import type {
   CreateLoginAccountRequest,
@@ -19,11 +18,14 @@ import {
 } from "@/shared/api/queryErrorState";
 import { adminLoginAccountsQueryOptions } from "@/shared/api/queryOptions";
 import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
+import { reportSelfAccountDisabled } from "@/shared/auth/accountOperationNotice";
+import { useAuth } from "@/shared/auth/useAuth";
 import { showToast } from "@/shared/ui/feedback/Toast";
+import { useRetryNotice } from "@/shared/ui/feedback/useRetryNotice";
 
 type AccountListRefresh = {
   pending: boolean;
-  run: () => void;
+  run: () => Promise<boolean>;
 };
 
 export type AdminAccountListModel =
@@ -45,35 +47,28 @@ export type AdminAccountCreateDialogModel = {
   setOpen: (open: boolean) => void;
 };
 
-type AdminAccountCreateModel = {
-  dialog: AdminAccountCreateDialogModel;
-  open: () => void;
-  triggerRef: RefObject<HTMLButtonElement | null>;
-};
-
 type AdminAccountUpdateModel = {
   pending: boolean;
   pendingRequestFor: (accountId: string) => UpdateLoginAccountRequest | undefined;
   run: (accountId: string, request: UpdateLoginAccountRequest) => Promise<void>;
 };
 
-export type AdminAccountsPageModel = {
-  create: AdminAccountCreateModel;
+export type AccountSettingsModel = {
+  create: AdminAccountCreateDialogModel;
   list: AdminAccountListModel;
+  pending: boolean;
   update: AdminAccountUpdateModel;
 };
 
 const initialCreateAccountState = { error: "", formKey: 0 };
 
-/** Owns the account screen's server-state interpretation and account workflows. */
-export function useAdminAccountsPageModel(): AdminAccountsPageModel {
+/** Keeps account workflows alive while the user moves between settings tabs. */
+export function useAccountSettingsModel(queryEnabled = true): AccountSettingsModel {
+  const auth = useAuth();
   const queryClient = useQueryClient();
   const idempotencyKeys = useIdempotencyKeyStore();
   const [createOpen, setCreateOpen] = useState(false);
-  const createTriggerRef = useRef<HTMLButtonElement>(null);
-  const focusCreateTriggerAfterSuccessRef = useRef(false);
-
-  const accountsQuery = useQuery(adminLoginAccountsQueryOptions());
+  const accountsQuery = useQuery({ ...adminLoginAccountsQueryOptions(), enabled: queryEnabled });
 
   const [createState, createAction, createPending] = useActionState<
     typeof initialCreateAccountState,
@@ -96,8 +91,8 @@ export function useAdminAccountsPageModel(): AdminAccountsPageModel {
         (options) => createLoginAccount(request, options),
       );
       await invalidateAdminAccountCaches(queryClient);
-      focusCreateTriggerAfterSuccessRef.current = true;
       setCreateOpen(false);
+      showToast({ title: "アカウントを追加しました", tone: "success" });
       return { error: "", formKey: previous.formKey + 1 };
     } catch (error) {
       return {
@@ -121,32 +116,34 @@ export function useAdminAccountsPageModel(): AdminAccountsPageModel {
         { accountId, request },
         (options) => updateLoginAccount(accountId, request, options),
       ),
-    onSuccess: async () => {
+    onSuccess: async (_response, { accountId, request }) => {
+      const selfDisabled = accountId === auth.auth?.accountId && request.loginEnabled === false;
+      if (selfDisabled) reportSelfAccountDisabled(accountId);
       await invalidateAdminAccountCaches(queryClient);
-      showToast({ title: "アカウント設定を更新しました", tone: "success" });
+      if (!selfDisabled) showToast({ title: "アカウント設定を更新しました", tone: "success" });
     },
   });
 
-  const refreshAccounts = () => {
-    void accountsQuery.refetch();
-  };
+  const refreshAccounts = async () => (await accountsQuery.refetch()).isSuccess;
   const updateAccount = async (accountId: string, request: UpdateLoginAccountRequest) => {
     await updateMutation.mutateAsync({ accountId, request });
   };
 
   const accounts = accountsQuery.data?.items ?? [];
-  useEffect(() => {
-    if (!createOpen && accounts.length > 0 && focusCreateTriggerAfterSuccessRef.current) {
-      focusCreateTriggerAfterSuccessRef.current = false;
-      createTriggerRef.current?.focus();
-    }
-  }, [accounts.length, createOpen]);
 
-  const refresh = { pending: accountsQuery.isFetching, run: refreshAccounts };
+  const refresh = {
+    pending: accountsQuery.isFetching && !createPending && !updateMutation.isPending,
+    run: refreshAccounts,
+  };
+  const loadFailed = useRetryNotice(
+    shouldShowBlockingQueryError(accountsQuery),
+    accountsQuery.isFetching,
+  );
+  const stale = useRetryNotice(shouldShowQueryError(accountsQuery), accountsQuery.isFetching);
   let list: AdminAccountListModel;
-  if (isInitialQueryLoading(accountsQuery)) {
+  if (isInitialQueryLoading(accountsQuery) && !loadFailed) {
     list = { kind: "loading" };
-  } else if (shouldShowBlockingQueryError(accountsQuery)) {
+  } else if (loadFailed) {
     list = {
       error: accountsQuery.error ? normalizeUnknownApiError(accountsQuery.error) : undefined,
       kind: "loadFailed",
@@ -157,24 +154,21 @@ export function useAdminAccountsPageModel(): AdminAccountsPageModel {
       items: accounts,
       kind: "ready",
       refresh,
-      stale: shouldShowQueryError(accountsQuery),
+      stale,
     };
   }
 
   return {
     create: {
-      dialog: {
-        action: createAction,
-        error: createState.error,
-        formKey: createState.formKey,
-        open: createOpen,
-        pending: createPending,
-        setOpen: setCreateOpen,
-      },
-      open: () => setCreateOpen(true),
-      triggerRef: createTriggerRef,
+      action: createAction,
+      error: createState.error,
+      formKey: createState.formKey,
+      open: createOpen,
+      pending: createPending,
+      setOpen: setCreateOpen,
     },
     list,
+    pending: createPending || updateMutation.isPending,
     update: {
       pending: updateMutation.isPending,
       pendingRequestFor: (accountId) =>

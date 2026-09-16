@@ -202,9 +202,17 @@ describe("CameraCapture", () => {
     render(<CameraCapture slotLabel="総資産" onSelect={vi.fn()} onValidationError={vi.fn()} />);
 
     expect(await screen.findByRole("combobox", { name: "カメラ" })).toBeInTheDocument();
+    await userEvent.setup().click(screen.getByRole("combobox", { name: "カメラ" }));
+    await screen.findByRole("listbox");
     expect(screen.getAllByRole("option")).toHaveLength(2);
-    expect(screen.getByRole("option", { name: "ブラウザの既定カメラ" })).toHaveValue("");
-    expect(screen.getByRole("option", { name: "カメラ 1" })).toHaveValue("camera-1");
+    expect(screen.getByRole("option", { name: "ブラウザの既定カメラ" })).toHaveAttribute(
+      "data-value",
+      "",
+    );
+    expect(screen.getByRole("option", { name: "カメラ 1" })).toHaveAttribute(
+      "data-value",
+      "camera-1",
+    );
   });
 
   it("promotes the file fallback when camera permission is denied", async () => {

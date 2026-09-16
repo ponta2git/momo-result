@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import { PaginationControls } from "@/shared/ui/data/PaginationControls";
+import { selectOption } from "@/test/selectOption";
 
 const middlePage = {
   hasNextPage: true,
@@ -30,7 +31,7 @@ describe("PaginationControls", () => {
     expect(screen.getByText("26〜50件／全75件")).toBeInTheDocument();
     expect(screen.getByRole("navigation", { name: "ページネーション" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "先頭ページへ" }));
-    await user.selectOptions(screen.getByLabelText("表示件数"), "50");
+    await selectOption(user, screen.getByLabelText("表示件数"), "50");
     expect(onPageChange).toHaveBeenCalledWith(1);
     expect(onPageSizeChange).toHaveBeenCalledWith(50);
   });

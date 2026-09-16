@@ -26,6 +26,7 @@ type MasterCreateBinding = {
 };
 
 type GameTitleListProps = {
+  completion?: string | undefined;
   create: MasterCreateBinding;
   defaultLayoutFamily: LayoutFamily;
   items: GameTitleListItem[];
@@ -39,6 +40,7 @@ type GameTitleListProps = {
 };
 
 export function GameTitleList({
+  completion,
   create,
   defaultLayoutFamily,
   items,
@@ -61,7 +63,7 @@ export function GameTitleList({
           {isPending ? <span className={cn(contentText.supporting, "ml-2")}>(追加中…)</span> : null}
         </>
       ),
-      pending: isPending,
+      disabled: isPending,
       trailingAction: isPending ? undefined : (
         <div className="flex items-center gap-2">
           <MasterEditDialog
@@ -103,6 +105,9 @@ export function GameTitleList({
         </div>
       </ContentWithActions>
 
+      <p className={contentText.supporting} role="status">
+        {completion}
+      </p>
       <div className="empty:hidden">
         <MasterResourceRefreshNotice
           onRetry={onRetry}

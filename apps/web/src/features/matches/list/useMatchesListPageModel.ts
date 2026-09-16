@@ -57,6 +57,7 @@ export type MatchesListPageModel = {
     loadFailed: boolean;
     loading: boolean;
     masked: boolean;
+    retryPending: boolean;
     retry: () => void;
   };
 };
@@ -90,6 +91,7 @@ export function useMatchesListPageModel(): MatchesListPageModel {
     drafts: {
       rowActions: {
         checkingDraftIds: draftNavigation.checkingIds,
+        draftErrors: draftNavigation.errors,
         disabled: resource.list.scopeChanging,
         onDraftStatusCheckAction: (action) => void draftNavigation.run(action),
       },

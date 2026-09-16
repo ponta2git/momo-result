@@ -84,7 +84,7 @@ export function MatchSetupFields({ model }: { model: MatchWorkspaceSetupFieldsMo
             })),
           ]}
           value={values.gameTitleId}
-          onChange={(event) => actions.onGameTitleChange(event.currentTarget.value)}
+          onValueChange={(nextValue) => actions.onGameTitleChange(nextValue)}
         />
       </div>
 
@@ -102,7 +102,7 @@ export function MatchSetupFields({ model }: { model: MatchWorkspaceSetupFieldsMo
             })),
           ]}
           value={values.seasonMasterId}
-          onChange={(event) => actions.onPatchRoot({ seasonMasterId: event.currentTarget.value })}
+          onValueChange={(nextValue) => actions.onPatchRoot({ seasonMasterId: nextValue })}
         />
       </div>
 
@@ -120,7 +120,7 @@ export function MatchSetupFields({ model }: { model: MatchWorkspaceSetupFieldsMo
             })),
           ]}
           value={values.mapMasterId}
-          onChange={(event) => actions.onPatchRoot({ mapMasterId: event.currentTarget.value })}
+          onValueChange={(nextValue) => actions.onPatchRoot({ mapMasterId: nextValue })}
         />
       </div>
 
@@ -134,9 +134,9 @@ export function MatchSetupFields({ model }: { model: MatchWorkspaceSetupFieldsMo
             value: member.memberId,
           }))}
           value={values.ownerMemberId}
-          onChange={(event) =>
+          onValueChange={(nextValue) =>
             actions.onPatchRoot({
-              ownerMemberId: event.currentTarget.value as MatchFormValues["ownerMemberId"],
+              ownerMemberId: nextValue as MatchFormValues["ownerMemberId"],
             })
           }
         />

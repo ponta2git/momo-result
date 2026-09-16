@@ -9,6 +9,7 @@ type HeldEventDetailHeaderActionsProps = {
   refresh?:
     | {
         pending: boolean;
+        disabled?: boolean;
         run: () => void;
       }
     | undefined;
@@ -31,6 +32,7 @@ export function HeldEventDetailHeaderActions({
       {refresh ? (
         <Button
           aria-label="開催詳細を更新"
+          disabled={refresh.disabled}
           icon={<RefreshCw aria-hidden="true" />}
           pending={refresh.pending}
           pendingLabel="更新中"

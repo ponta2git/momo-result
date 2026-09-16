@@ -1,6 +1,7 @@
 import type { APIRequestContext, Locator, Page, Route } from "@playwright/test";
 
 import {
+  selectControlOption,
   devAccountId,
   devUserStorageKey,
   expect,
@@ -12,12 +13,83 @@ import {
 } from "./support";
 import type { E2eRun } from "./support";
 
+function readRowPaint(row: Locator) {
+  return row.evaluate((element) => getComputedStyle(element).backgroundColor);
+}
+
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(
     ([key, value]) => window.localStorage.setItem(key, value),
     [devUserStorageKey, devAccountId],
   );
   await installE2eAuthHeaders(page);
+});
+
+test("keeps dialog select navigation and outside presses within their own layer", async ({
+  page,
+}) => {
+  await page.goto("/admin/masters?tab=accounts");
+  await page.getByRole("button", { name: "アカウントを追加", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "アカウントを追加" });
+  const trigger = dialog.getByRole("combobox", { name: "紐づくプレーヤー" });
+
+  await trigger.click();
+  await expect(page.getByRole("option", { selected: true })).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("Shift+Tab");
+  await expect(dialog.getByRole("textbox", { name: "表示名*", exact: true })).toBeFocused();
+  await expect(trigger).toHaveText("試合参加者に紐づけない");
+
+  await trigger.click();
+  await expect(page.getByRole("option", { selected: true })).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("Tab");
+  await expect(dialog.getByRole("checkbox", { name: "ログイン許可" })).toBeFocused();
+  await expect(trigger).toHaveText("試合参加者に紐づけない");
+
+  for (const width of [1440, 375]) {
+    await page.setViewportSize({ width, height: 812 });
+    await trigger.click();
+    await expect(page.getByRole("listbox")).toBeVisible();
+    await expectNoHorizontalPageOverflow(page);
+    const close = await dialog.getByRole("button", { name: "ダイアログを閉じる" }).boundingBox();
+    if (!close) throw new Error("Dialog close control is not visible");
+    // The pointer must land on the select's transparent backdrop, not the button below it.
+    await page.mouse.click(close.x + close.width / 2, close.y + close.height / 2);
+    await expect(page.getByRole("listbox")).toHaveCount(0);
+    await expect(dialog).toBeVisible();
+  }
+});
+
+test.describe("touch selection", () => {
+  test.use({ hasTouch: true, isMobile: true, viewport: { width: 375, height: 667 } });
+
+  test("opens options without scrolling their field out of view", async ({ page }) => {
+    await page.goto("/matches");
+    await page.getByRole("button", { name: /詳細条件/u }).tap();
+    const trigger = page.getByRole("combobox", { name: "作品", exact: true });
+    await trigger.scrollIntoViewIfNeeded();
+    const before = await trigger.boundingBox();
+    if (!before) throw new Error("Select field is not visible");
+    await trigger.tap();
+    const popup = page.getByRole("listbox");
+    await expect(popup).toBeVisible();
+    await expect
+      .poll(async () => {
+        const rect = await popup.boundingBox();
+        return Boolean(rect && rect.y >= 0 && rect.y + rect.height <= 667);
+      })
+      .toBe(true);
+    const after = await trigger.boundingBox();
+    expect(Math.abs((after?.y ?? Infinity) - before.y)).toBeLessThanOrEqual(2);
+    await expectNoHorizontalPageOverflow(page);
+    expect(
+      await popup
+        .getByRole("option")
+        .first()
+        .evaluate((row) => row.getBoundingClientRect().height),
+    ).toBeGreaterThanOrEqual(44);
+  });
 });
 
 test("keeps match rows usable through responsive update and retry states", async ({
@@ -258,7 +330,7 @@ test("keeps match rows usable through responsive update and retry states", async
     const filterBar = page.getByRole("region", { name: "試合の表示条件" });
     const statusFilter = filterBar.getByRole("combobox", { exact: true, name: "確定状況" });
     await expect(statusFilter).toBeVisible();
-    await expect(statusFilter).toHaveValue("all");
+    await expect(statusFilter).toHaveText("すべて");
     await expect(filterBar).toContainText(`作品 ${primaryGameTitleName}`);
     await expect(filterBar).toContainText(`シーズン ${seasonName}`);
     await expect(page.getByRole("region", { name: "登録済みの試合" })).toContainText("2件");
@@ -267,6 +339,100 @@ test("keeps match rows usable through responsive update and retry states", async
     await page.setViewportSize({ height: 900, width: 1280 });
     await expect(filterBar).toBeVisible();
     await expectNoHorizontalPageOverflow(page);
+  });
+
+  await test.step("continue keyboard filtering while protecting the previous results", async () => {
+    const gate = createDeferred();
+    let requested = false;
+    const pattern = "**/api/matches?**";
+    const holdCondition = async (route: Route) => {
+      const url = new URL(route.request().url());
+      if (url.searchParams.get("status") === "confirmed") {
+        requested = true;
+        await gate.promise;
+      }
+      await route.fallback();
+    };
+    await page.route(pattern, holdCondition);
+    const status = page.getByRole("combobox", { exact: true, name: "確定状況" });
+    const sort = page.getByRole("combobox", { exact: true, name: "並び順" });
+    const list = page.getByRole("region", { exact: true, name: "登録済みの試合" });
+    try {
+      await status.focus();
+      await selectControlOption(page, status, "confirmed");
+      await expect.poll(() => requested).toBe(true);
+      await expect(status).toBeEnabled();
+      await expect(status).toBeFocused();
+      await expect(list.locator("[inert]")).toHaveCount(1);
+      await status.press("Tab");
+      await expect(sort).toBeFocused();
+    } finally {
+      gate.resolve();
+      await page.unroute(pattern, holdCondition);
+    }
+    await expect(list.locator("[inert]")).toHaveCount(0);
+    await expect(list.getByRole("table").locator("tbody tr")).toHaveCount(2);
+    await expect(sort).toBeFocused();
+    await expect(status).toHaveText("確定済み");
+  });
+
+  await test.step("keep surface feedback readable and honor a changed motion preference", async () => {
+    const action = page.getByRole("link", { exact: true, name: "手入力で作成" });
+    const paint = () => action.evaluate((element) => getComputedStyle(element).backgroundColor);
+    await page.mouse.move(0, 0);
+    const restingPaint = await paint();
+    const restingBox = await action.boundingBox();
+    await action.hover();
+    await expect.poll(paint).not.toBe(restingPaint);
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    const hoverPaint = await paint();
+    await expect(action).toHaveCSS("opacity", "1");
+    expect(await action.boundingBox()).toEqual(restingBox);
+    await page.mouse.move(0, 0);
+    await expect.poll(paint).toBe(restingPaint);
+
+    try {
+      await page.emulateMedia({ reducedMotion: "no-preference" });
+      await action.hover();
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      await expect.poll(paint).toBe(hoverPaint);
+      await action.focus();
+      await expect(action).toBeFocused();
+      await expect(action).not.toHaveCSS("outline-style", "none");
+    } finally {
+      await page.emulateMedia({ reducedMotion: "no-preference" });
+      await page.mouse.move(0, 0);
+    }
+  });
+
+  await test.step("connect keyboard actions to their row without overriding pointer context", async () => {
+    const rows = page.getByRole("table", { name: "登録済みの試合" }).locator("tbody tr");
+    const firstRow = rows.first();
+    const secondRow = rows.nth(1);
+    const result = firstRow.getByRole("link", { name: /の試合結果を見る$/u });
+    await page.mouse.move(0, 0);
+    const restingPaint = await readRowPaint(firstRow);
+    await result.focus();
+    await result.press("Tab");
+    await expect(firstRow.locator(":focus-visible")).toHaveCount(1);
+    await expect(firstRow).not.toHaveAttribute("tabindex");
+    const focusPaint = await readRowPaint(firstRow);
+    expect(focusPaint).not.toBe(restingPaint);
+    await expect(firstRow.locator(":focus-visible")).not.toHaveCSS("outline-style", "none");
+
+    await secondRow.hover();
+    await expect.poll(() => readRowPaint(secondRow)).not.toBe(restingPaint);
+    expect(await readRowPaint(firstRow)).toBe(focusPaint);
+    await firstRow.hover();
+    expect(await readRowPaint(firstRow)).toBe(focusPaint);
+
+    await page.mouse.move(0, 0);
+    await page.keyboard.press("Shift+Tab");
+    await expect(result).toBeFocused();
+    expect(await readRowPaint(firstRow)).toBe(focusPaint);
+    await page.getByRole("link", { exact: true, name: "手入力で作成" }).focus();
+    await expect(firstRow.locator(":focus-visible")).toHaveCount(0);
+    await expect.poll(() => readRowPaint(firstRow)).toBe(restingPaint);
   });
 
   await test.step("distinguish update from retry and preserve visible rows while updating", async () => {
@@ -303,10 +469,9 @@ test("keeps match rows usable through responsive update and retry states", async
         "aria-busy",
         "true",
       );
-      await expect(page.getByRole("region", { name: "登録済みの試合" })).toHaveAttribute(
-        "aria-busy",
-        "true",
-      );
+      await expect(
+        page.getByRole("region", { name: "登録済みの試合" }).locator("[data-stale]"),
+      ).toHaveAttribute("aria-busy", "true");
       await expect(visibleMatchRow).toBeVisible();
       await expect(page.getByRole("button", { name: "一覧を再読み込み" })).toHaveCount(0);
     } finally {
@@ -481,6 +646,17 @@ test("changes an export choice by keyboard and restores focus", async ({
     const selectedRadio = dialog.locator(`input[type="radio"][value="${selectedMatchId}"]`);
     await expect(selectedRadio).toBeChecked();
     await selectedRadio.focus();
+    await selectedRadio.press(" ");
+    const visibleChoice = selectedRadio.locator("..");
+    await expect(visibleChoice).toHaveCSS("outline-style", "solid");
+    await expect(selectedRadio).toHaveCSS("outline-style", "none");
+    try {
+      await page.emulateMedia({ forcedColors: "active" });
+      await expect(selectedRadio).toBeFocused();
+      await expect(visibleChoice).toHaveCSS("outline-style", "solid");
+    } finally {
+      await page.emulateMedia({ forcedColors: "none" });
+    }
     await selectedRadio.press("ArrowDown");
 
     await expect(dialog).toHaveCount(0);

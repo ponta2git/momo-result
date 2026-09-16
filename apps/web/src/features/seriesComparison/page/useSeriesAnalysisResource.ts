@@ -32,6 +32,7 @@ import {
   seriesAnalysisStatusQueryOptions,
 } from "@/shared/api/seriesAnalysisQueryOptions";
 import { useAnalysisArtifactRecovery } from "@/shared/api/useAnalysisArtifactRecovery";
+import { useRetryNotice } from "@/shared/ui/feedback/useRetryNotice";
 
 /**
  * Owns the complete artifact lifecycle: active query selection, stale display retention,
@@ -220,6 +221,17 @@ export function useSeriesAnalysisResource({
     refetchStatus,
   ]);
 
+  const resourceFailed = useRetryNotice(
+    shouldShowQueryError({ error: activeError, isFetching: activeFetching }),
+    activeFetching,
+    `${activeView}:${seriesAnalysisScopeSignature(state)}:${publishedArtifactId ?? ""}`,
+  );
+  const statusFailed = useRetryNotice(
+    shouldShowQueryError({ error: statusError, isFetching: statusFetching }),
+    statusFetching,
+    state.gameTitleId ?? "",
+  );
+
   return {
     candidateArtifactId,
     clientUpgradeRequired: [statusError, activeError, matchContextError].some(
@@ -247,7 +259,7 @@ export function useSeriesAnalysisResource({
       bundle: visibleBundle,
       canRefresh: activeQueryParams !== undefined,
       data: visibleResource,
-      hasError: shouldShowQueryError({ error: activeError, isFetching: activeFetching }),
+      hasError: resourceFailed,
       loading:
         isInitialQueryLoading({
           data: activeData,
@@ -260,12 +272,14 @@ export function useSeriesAnalysisResource({
     },
     status: {
       data: statusData,
-      hasError: shouldShowQueryError({ error: statusError, isFetching: statusFetching }),
-      loading: isInitialQueryLoading({
-        data: statusData,
-        isFetching: statusFetching,
-        isLoading: statusLoading,
-      }),
+      hasError: statusFailed,
+      loading:
+        !statusFailed &&
+        isInitialQueryLoading({
+          data: statusData,
+          isFetching: statusFetching,
+          isLoading: statusLoading,
+        }),
       refreshing: statusFetching,
     },
   };

@@ -8,6 +8,7 @@ import { useSeriesAnalysisResource } from "@/features/seriesComparison/page/useS
 import { isAnalysisClientUpgradeRequired } from "@/shared/api/problemDetails";
 import { isInitialQueryLoading, shouldShowQueryError } from "@/shared/api/queryErrorState";
 import { seriesAnalysisOptionsQueryOptions } from "@/shared/api/seriesAnalysisQueryOptions";
+import { useRetryNotice } from "@/shared/ui/feedback/useRetryNotice";
 
 /** Composes location, option, and artifact owners into the display-ready page contract. */
 export function useSeriesComparisonPageModel() {
@@ -66,6 +67,11 @@ export function useSeriesComparisonPageModel() {
     refreshAnalysis();
   }, [refetchOptions, refreshAnalysis]);
 
+  const optionsFailed = useRetryNotice(
+    shouldShowQueryError({ error: optionsError, isFetching: optionsFetching }),
+    optionsFetching,
+  );
+
   return {
     actions: {
       clearFocusedMatch,
@@ -93,13 +99,15 @@ export function useSeriesComparisonPageModel() {
       notice: focusNotice,
     },
     options: {
-      hasError: shouldShowQueryError({ error: optionsError, isFetching: optionsFetching }),
+      hasError: optionsFailed,
       hasVisibleData: optionsData !== undefined,
-      loading: isInitialQueryLoading({
-        data: optionsData,
-        isFetching: optionsFetching,
-        isLoading: optionsLoading,
-      }),
+      loading:
+        !optionsFailed &&
+        isInitialQueryLoading({
+          data: optionsData,
+          isFetching: optionsFetching,
+          isLoading: optionsLoading,
+        }),
       refreshing: optionsFetching,
     },
     resource: analysis.resource,

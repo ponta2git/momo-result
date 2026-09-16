@@ -49,7 +49,7 @@ export function SetupPanel({ model }: SetupPanelProps) {
           label="オーナー"
           options={fields.owner.options}
           value={fields.owner.value}
-          onChange={(event) => intents.changeOwner(event.currentTarget.value)}
+          onValueChange={(nextValue) => intents.changeOwner(nextValue)}
         />
       </div>
 
@@ -60,7 +60,7 @@ export function SetupPanel({ model }: SetupPanelProps) {
           label="作品"
           options={fields.gameTitle.options}
           value={fields.gameTitle.value}
-          onChange={(event) => intents.changeGameTitle(event.currentTarget.value)}
+          onValueChange={(nextValue) => intents.changeGameTitle(nextValue)}
         />
       </div>
 
@@ -71,7 +71,7 @@ export function SetupPanel({ model }: SetupPanelProps) {
           label="シーズン"
           options={fields.season.options}
           value={fields.season.value}
-          onChange={(event) => intents.changeSeason(event.currentTarget.value)}
+          onValueChange={(nextValue) => intents.changeSeason(nextValue)}
         />
       </div>
 
@@ -82,7 +82,7 @@ export function SetupPanel({ model }: SetupPanelProps) {
           label="マップ"
           options={fields.map.options}
           value={fields.map.value}
-          onChange={(event) => intents.changeMap(event.currentTarget.value)}
+          onValueChange={(nextValue) => intents.changeMap(nextValue)}
         />
       </div>
     </div>

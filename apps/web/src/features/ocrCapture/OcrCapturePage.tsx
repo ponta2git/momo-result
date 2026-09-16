@@ -13,6 +13,7 @@ import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { cn } from "@/shared/ui/cn";
 import { AlertDialog } from "@/shared/ui/feedback/Dialog";
 import { Notice } from "@/shared/ui/feedback/Notice";
+import { PendingStatus } from "@/shared/ui/feedback/PendingStatus";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
 import { contentText } from "@/shared/ui/typography";
@@ -23,7 +24,7 @@ const panelTitleClass = contentText.heading;
 const panelLeadClass = cn(contentText.body, "mt-1");
 
 export function OcrCapturePage() {
-  const { capture, feedback, navigation, setup, submission } = useOcrCapturePageModel();
+  const { capture, feedback, navigation, setup, submission, startError } = useOcrCapturePageModel();
 
   return (
     <PageFrame>
@@ -99,7 +100,12 @@ export function OcrCapturePage() {
             <h2 id="ocr-record-destination" className={panelTitleClass}>
               記録先
             </h2>
-            <p className={contentText.supporting}>読み取り結果に引き継ぐ試合設定</p>
+            <PendingStatus
+              idleLabel="読み取り結果に引き継ぐ試合設定"
+              pending={setup.choices.refreshing && !setup.choices.failed}
+            >
+              試合設定の選択肢を確認中
+            </PendingStatus>
           </div>
           {setup.choices.failed ? (
             <Notice
@@ -209,7 +215,12 @@ export function OcrCapturePage() {
               </span>
             </div>
             <p className={panelLeadClass}>{submission.start.description}</p>
-            {submission.start.blockedReason ? (
+            {startError ? (
+              <p className="text-sm text-[var(--color-danger)]" role="alert">
+                {startError}
+              </p>
+            ) : null}
+            {submission.start.blockedReason && !setup.choices.refreshing ? (
               <p className="font-emphasis mt-2 text-sm text-[var(--color-review)]">
                 {submission.start.blockedReason}
               </p>

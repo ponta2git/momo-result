@@ -23,6 +23,7 @@ import {
   sanitizeReturnTo,
   withReturnTo,
 } from "@/shared/navigation/returnTo";
+import { useRetryNotice } from "@/shared/ui/feedback/useRetryNotice";
 
 /** Owns the primary match resource and optional display enrichment for the detail screen. */
 export function useMatchDetailPageModel(): MatchDetailPageModel {
@@ -61,11 +62,18 @@ export function useMatchDetailPageModel(): MatchDetailPageModel {
     pathname: location.pathname,
   });
 
-  const matchFailed = shouldShowQueryError({ error: matchError, isFetching: matchIsFetching });
-  const heldEventsFailed = shouldShowQueryError({
-    error: heldEventsError,
-    isFetching: heldEventsIsFetching,
-  });
+  const matchFailed = useRetryNotice(
+    shouldShowQueryError({ error: matchError, isFetching: matchIsFetching }),
+    matchIsFetching,
+    matchId,
+  );
+  const heldEventsFailed = useRetryNotice(
+    shouldShowQueryError({
+      error: heldEventsError,
+      isFetching: heldEventsIsFetching,
+    }),
+    heldEventsIsFetching,
+  );
   const failedEnrichmentFields = [
     heldEventsFailed ? "開催日" : undefined,
     masters.failed.gameTitles ? "作品名" : undefined,
@@ -86,6 +94,7 @@ export function useMatchDetailPageModel(): MatchDetailPageModel {
   }, [refetchMatch]);
 
   if (
+    !matchFailed &&
     isInitialQueryLoading({
       data: match,
       isFetching: matchIsFetching,

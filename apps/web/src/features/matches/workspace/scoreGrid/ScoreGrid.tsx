@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { MatchFormValues } from "@/features/matches/workspace/matchFormTypes";
+import type { ReviewItem } from "@/features/matches/workspace/review/reviewProgress";
 import { reviewCellId } from "@/features/matches/workspace/review/reviewWarningModel";
 import type { ReviewFieldKey } from "@/features/matches/workspace/review/reviewWarningModel";
 import { gridColumns } from "@/features/matches/workspace/scoreGrid/ScoreGridColumns";
@@ -18,11 +19,16 @@ import type {
 } from "@/features/matches/workspace/scoreGrid/ScoreGridTypes";
 import { useMediaQuery } from "@/shared/lib/useMediaQuery";
 import { cn } from "@/shared/ui/cn";
+import { revealPageElement } from "@/shared/ui/layout/revealPageElement";
 import { contentText } from "@/shared/ui/typography";
 
 export function ScoreGrid({ actions, data }: ScoreGridProps) {
   const [expandedMobilePlayer, setExpandedMobilePlayer] = useState(0);
-  const [pendingFocusCellId, setPendingFocusCellId] = useState<string | null>(null);
+  const [pendingFocus, setPendingFocus] = useState<{
+    cellId: string;
+    origin: Element | null;
+  } | null>(null);
+  const handledFocus = useRef(pendingFocus);
   const isNarrowViewport = useMediaQuery("(max-width: 1119px)");
   const inputRefs = useRef(new Map<string, HTMLElement>());
   const {
@@ -63,18 +69,18 @@ export function ScoreGrid({ actions, data }: ScoreGridProps) {
   }, []);
 
   useEffect(() => {
-    if (!pendingFocusCellId) {
+    if (!pendingFocus || handledFocus.current === pendingFocus) {
       return;
     }
-    const next = inputRefs.current.get(pendingFocusCellId);
-    if (!next) {
-      return;
+    handledFocus.current = pendingFocus;
+    const next = inputRefs.current.get(pendingFocus.cellId);
+    const current = document.activeElement;
+    if (next && (current === pendingFocus.origin || current === document.body)) {
+      next.focus({ preventScroll: true });
+      const label = (next as HTMLInputElement | HTMLButtonElement).labels?.[0];
+      revealPageElement(label ?? next);
     }
-    next.focus();
-    setPendingFocusCellId(null);
-    // Opening a mobile player mounts the pending focus target; retry after that DOM commit.
-    // oxlint-disable-next-line react/exhaustive-effect-dependencies
-  }, [expandedMobilePlayer, pendingFocusCellId]);
+  }, [pendingFocus]);
 
   const acknowledgedCellIdSet = useMemo(
     () => new Set(data.review.acknowledgedCellIds),
@@ -86,10 +92,15 @@ export function ScoreGrid({ actions, data }: ScoreGridProps) {
   const activeItem =
     unresolvedItems.find((item) => item.cellId === data.review.activeCellId) ?? unresolvedItems[0];
 
-  const requestReviewItemFocus = useCallback((cellId: string, row: number) => {
-    setExpandedMobilePlayer(row);
-    setPendingFocusCellId(cellId);
-  }, []);
+  const requestReviewItemFocus = useCallback(
+    (item: ReviewItem) => {
+      onReviewCellFocus(item.row, item.field);
+      onPreferImageKindChange?.(item.sourceKind);
+      setExpandedMobilePlayer(item.row);
+      setPendingFocus({ cellId: item.cellId, origin: document.activeElement });
+    },
+    [onPreferImageKindChange, onReviewCellFocus],
+  );
 
   const navigateReviewItems = useCallback(
     (direction: -1 | 1) => {
@@ -103,7 +114,7 @@ export function ScoreGrid({ actions, data }: ScoreGridProps) {
       const nextIndex = (startIndex + direction + unresolvedItems.length) % unresolvedItems.length;
       const next = unresolvedItems[nextIndex];
       if (next) {
-        requestReviewItemFocus(next.cellId, next.row);
+        requestReviewItemFocus(next);
       }
     },
     [data.review.activeCellId, requestReviewItemFocus, unresolvedItems],
@@ -126,7 +137,7 @@ export function ScoreGrid({ actions, data }: ScoreGridProps) {
         const delta = args.event.key === "ArrowLeft" ? -1 : 1;
         const nextCol = args.col + delta;
         if (nextCol >= 0 && nextCol < gridColumns.length) {
-          const isSelect = target instanceof HTMLSelectElement;
+          const isSelect = target.getAttribute("role") === "combobox";
           const isInputSelectedAll =
             target instanceof HTMLInputElement &&
             target.selectionStart === 0 &&
@@ -169,6 +180,7 @@ export function ScoreGrid({ actions, data }: ScoreGridProps) {
   );
 
   const handleToggleMobilePlayer = useCallback((index: number) => {
+    setPendingFocus(null);
     setExpandedMobilePlayer((current) => (current === index ? -1 : index));
   }, []);
 
@@ -179,7 +191,7 @@ export function ScoreGrid({ actions, data }: ScoreGridProps) {
           <h2 className={contentText.heading}>4人分の結果を確認・修正</h2>
           {isNarrowViewport ? null : (
             <p className={cn(contentText.supporting, "mt-1 text-pretty")}>
-              Enterキーと矢印キーで移動できます。Escキーで編集中のセルを元に戻せます。
+              選択欄はEnter・上下キーで候補を開き、Tab・左右キーで欄を移動します。数値欄はEnter・矢印キーで移動し、Escキーで編集を元に戻せます。
             </p>
           )}
         </div>

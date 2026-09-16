@@ -1,13 +1,18 @@
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 
 import { showToast } from "@/shared/ui/feedback/Toast";
 
 export type WorkspaceNoticeTone = "info" | "success" | "warning";
+export type WorkspaceNotice = { message: string; tone: WorkspaceNoticeTone };
 
 export function useWorkspaceNotice() {
+  const [notice, setNotice] = useState<WorkspaceNotice | null>(null);
   const notify = useCallback((message: string, tone: WorkspaceNoticeTone = "info") => {
+    setNotice(message ? { message, tone } : null);
+  }, []);
+  const notifyToast = useCallback((message: string, tone: WorkspaceNoticeTone = "info") => {
     showToast({ title: message, tone });
   }, []);
 
-  return { notify };
+  return { notice, notify, notifyToast };
 }

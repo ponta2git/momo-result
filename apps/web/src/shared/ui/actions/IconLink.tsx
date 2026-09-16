@@ -5,6 +5,7 @@ import type { LinkProps } from "react-router-dom";
 import { DecorativeActionIcon, iconActionClassName } from "@/shared/ui/actions/actionRecipes";
 import type { IconActionSize, IconActionVariant } from "@/shared/ui/actions/actionRecipes";
 import { Tooltip } from "@/shared/ui/feedback/Tooltip";
+import { useSurfaceFeedback } from "@/shared/ui/motion/useSurfaceFeedback";
 
 export type IconLinkProps = Omit<LinkProps, "children" | "className" | "style"> & {
   "aria-label": string;
@@ -25,6 +26,7 @@ export function IconLink({
   variant = "secondary",
   ...props
 }: IconLinkProps) {
+  const surfaceRef = useSurfaceFeedback<HTMLAnchorElement>();
   const classes = iconActionClassName({ disabled, size, variant });
   const content = <DecorativeActionIcon iconOnly>{icon}</DecorativeActionIcon>;
   const control = disabled ? (
@@ -32,7 +34,7 @@ export function IconLink({
       {content}
     </span>
   ) : (
-    <Link aria-label={ariaLabel} className={classes} {...props}>
+    <Link ref={surfaceRef} aria-label={ariaLabel} className={classes} {...props}>
       {content}
     </Link>
   );

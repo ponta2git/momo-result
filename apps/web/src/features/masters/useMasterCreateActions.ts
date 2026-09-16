@@ -32,6 +32,7 @@ export type CreateState = { error?: string | undefined; version: number };
 const initialCreateState: CreateState = { version: 0 };
 
 export function useMasterCreateActions(input: {
+  onFeedback: (kind: string, scope: string, message: string) => void;
   addOptimisticGameTitle: (item: OptimisticGameTitle) => void;
   addOptimisticMapMaster: (item: OptimisticMapMaster) => void;
   addOptimisticSeasonMaster: (item: OptimisticSeasonMaster) => void;
@@ -49,6 +50,7 @@ export function useMasterCreateActions(input: {
     CreateState,
     FormData
   >(async (prev, formData) => {
+    input.onFeedback("gameTitle", "", "");
     const name = normalizeName(String(formData.get("name") ?? ""));
     if (!isNameValid(name)) {
       return { ...prev, error: "作品名を入力してください" };
@@ -83,6 +85,7 @@ export function useMasterCreateActions(input: {
         authScope: input.authScope,
         resource: "game-titles",
       });
+      input.onFeedback("gameTitle", "", "作品を追加しました");
       return { error: undefined, version: prev.version + 1 };
     } catch (error) {
       return { ...prev, error: formatApiError(error, "作品の追加に失敗しました") };
@@ -91,6 +94,7 @@ export function useMasterCreateActions(input: {
 
   const [mapCreateState, mapCreateAction, mapCreatePending] = useActionState<CreateState, FormData>(
     async (prev, formData) => {
+      input.onFeedback("map", input.viewModel.selectedGameTitleId, "");
       const name = normalizeName(String(formData.get("name") ?? ""));
       if (!isNameValid(name) || !input.viewModel.selectedGameTitleId) {
         return { ...prev, error: "マップ名を入力してください" };
@@ -122,6 +126,7 @@ export function useMasterCreateActions(input: {
           gameTitleId,
           resource: "map-masters",
         });
+        input.onFeedback("map", gameTitleId, "マップを追加しました");
         return { error: undefined, version: prev.version + 1 };
       } catch (error) {
         return { ...prev, error: formatApiError(error, "マップの追加に失敗しました") };
@@ -134,6 +139,7 @@ export function useMasterCreateActions(input: {
     CreateState,
     FormData
   >(async (prev, formData) => {
+    input.onFeedback("season", input.viewModel.selectedGameTitleId, "");
     const name = normalizeName(String(formData.get("name") ?? ""));
     if (!isNameValid(name) || !input.viewModel.selectedGameTitleId) {
       return { ...prev, error: "シーズン名を入力してください" };
@@ -165,6 +171,7 @@ export function useMasterCreateActions(input: {
         gameTitleId,
         resource: "season-masters",
       });
+      input.onFeedback("season", gameTitleId, "シーズンを追加しました");
       return { error: undefined, version: prev.version + 1 };
     } catch (error) {
       return { ...prev, error: formatApiError(error, "シーズンの追加に失敗しました") };
@@ -175,6 +182,7 @@ export function useMasterCreateActions(input: {
     CreateState,
     FormData
   >(async (prev, formData) => {
+    input.onFeedback("aliases", "", "");
     const memberId = normalizeName(String(formData.get("memberId") ?? ""));
     const alias = normalizeName(String(formData.get("alias") ?? ""));
     if (!memberId || !alias) {
@@ -189,6 +197,7 @@ export function useMasterCreateActions(input: {
         (options) => createMemberAlias(request, options),
       );
       await invalidateMemberAliasCaches(input.queryClient, input.authScope);
+      input.onFeedback("aliases", "", "別名を追加しました");
       return { error: undefined, version: prev.version + 1 };
     } catch (error) {
       return { ...prev, error: formatApiError(error, "別名の追加に失敗しました") };

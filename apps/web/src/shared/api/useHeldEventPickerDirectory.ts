@@ -5,6 +5,7 @@ import type { HeldEventResponse } from "@/shared/api/heldEvents";
 import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import { shouldShowQueryError } from "@/shared/api/queryErrorState";
 import { heldEventDetailQueryOptions, heldEventsQueryOptions } from "@/shared/api/queryOptions";
+import { useRetryNotice } from "@/shared/ui/feedback/useRetryNotice";
 
 export const heldEventPickerPageSize = 20;
 
@@ -54,11 +55,15 @@ export function useHeldEventPickerDirectory({
   const selectionFailed = Boolean(
     selectedId && !resolvedSelection && shouldShowQueryError(selectedDetailQuery),
   );
-  const error = directoryFailed
-    ? pickerErrorMessage(directoryQuery.error)
-    : selectionFailed
-      ? pickerErrorMessage(selectedDetailQuery.error)
-      : undefined;
+  const error = useRetryNotice(
+    directoryFailed
+      ? pickerErrorMessage(directoryQuery.error)
+      : selectionFailed
+        ? pickerErrorMessage(selectedDetailQuery.error)
+        : undefined,
+    directoryQuery.isFetching || selectedDetailQuery.isFetching,
+    `${page}:${selectedId}`,
+  );
 
   return {
     error,

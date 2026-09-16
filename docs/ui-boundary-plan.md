@@ -20,7 +20,7 @@
 | [ChoiceList](../apps/web/src/shared/ui/forms/ChoiceList.tsx) | native radioを視覚的に隠し、独自の丸印を描く。未選択の丸印が`color-border-strong`で薄い。選択済みにはcheckと文言がある | 丸印の識別を改善。候補一覧の外枠・区切り線とは分ける |
 | [actionRecipes](../apps/web/src/shared/ui/actions/actionRecipes.tsx) | secondary button / icon actionの枠も`color-border`。primary / dangerはすでに塗りで識別でき、quietは枠を持たない | 枠付きの副操作だけを小幅に調整する |
 | [DataTableBodyRow](../apps/web/src/shared/ui/data/DataTable.tsx) | 行には弱いhoverがあるが、子のfocusに連動する行の表示はない | 子のfocus枠を残し、読んでいる行を補助する |
-| [AdminAccountRow](../apps/web/src/features/adminAccounts/AdminAccountRow.tsx) | 固定名前セルの独自のsurface色が既存の行hoverを遮っていた。共有行を不透明にし、固定セルがその背景を継承するよう修正済み | 新しい行focusも同じ接続を使う。不透明性を保って横scroll時の内容の透けを防ぐ |
+| [AdminAccountRow](../apps/web/src/features/masters/accounts/AdminAccountRow.tsx) | 固定名前セルの独自のsurface色が既存の行hoverを遮っていた。共有行を不透明にし、固定セルがその背景を継承するよう修正済み | 新しい行focusも同じ接続を使う。不透明性を保って横scroll時の内容の透けを防ぐ |
 | focusの表示 | 全体は3px・offset 3px。Tabs、選択label、sort等には2pxまたは内側へ描く指定がある | 太さを一律変更せず、用途と切れ・重複を確認して共通部品側で修正 |
 | [ChoicePickerDialogField](../apps/web/src/shared/ui/forms/ChoicePickerDialogField.tsx) | 値の表示と「変更」buttonを一つの枠で囲むが、枠全体はclickableではない | 外側を入力欄と同じ強さへ機械的に変更しない。実際に押すbuttonの境界を扱う |
 | [色の検証](../apps/web/src/shared/ui/colorContrast.test.ts) | 文字・図表・面の補間は検証しているが、半透明の境界と実背景の合成を検証していない。変換関数はalphaを保持しない | 既存の通過を枠の識別性の保証に使わず、今回の色対と合成経路を検証へ加える |

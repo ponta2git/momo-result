@@ -1,10 +1,5 @@
 export { LoginPage } from "@/features/auth/LoginPage";
 
-export const loadAdminAccountsPage = () =>
-  import("@/features/adminAccounts/AdminAccountsPage").then((module) => ({
-    default: module.AdminAccountsPage,
-  }));
-
 export const loadDraftReviewPage = () =>
   import("@/features/matches/workspace/DraftReviewPage").then((module) => ({
     default: module.DraftReviewPage,
@@ -79,7 +74,6 @@ const routePreloaders: Array<{
   { matches: (pathname) => pathname === "/analytics/series", preload: loadSeriesComparisonPage },
   { matches: (pathname) => pathname === "/exports", preload: loadExportPage },
   { matches: (pathname) => pathname === "/admin/masters", preload: loadMastersPage },
-  { matches: (pathname) => pathname === "/admin/accounts", preload: loadAdminAccountsPage },
   { matches: (pathname) => pathname === "/admin/analysis", preload: loadSeriesAnalysisAdminPage },
 ];
 

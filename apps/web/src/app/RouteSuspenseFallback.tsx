@@ -151,9 +151,6 @@ export function routePagePresentation(pathname: string, search = ""): RoutePageP
       width: "standard",
     });
   }
-  if (normalizedPathname === "/admin/accounts") {
-    return defineRoutePresentation({ kind: "record-list", width: "standard" });
-  }
   if (normalizedPathname === "/matches/new") {
     return defineRoutePresentation(
       {

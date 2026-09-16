@@ -5,7 +5,8 @@ import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { AdminAccountsPage } from "@/features/adminAccounts/AdminAccountsPage";
+import { AccountSettingsPanel } from "@/features/masters/accounts/AccountSettingsPanel";
+import { useAccountSettingsModel } from "@/features/masters/accounts/useAccountSettingsModel";
 import type { CreateLoginAccountRequest } from "@/shared/api/adminAccounts";
 import { adminAccountKeys } from "@/shared/api/queryKeys";
 import { createDeferred } from "@/test/deferred";
@@ -20,15 +21,20 @@ setupMsw();
 let queryClient: QueryClient;
 let user: ReturnType<typeof userEvent.setup>;
 
+function AccountSettingsHarness() {
+  const model = useAccountSettingsModel();
+  return <AccountSettingsPanel model={model} />;
+}
+
 function renderPage() {
   return render(
     <QueryClientProvider client={queryClient}>
-      <AdminAccountsPage />
+      <AccountSettingsHarness />
     </QueryClientProvider>,
   );
 }
 
-describe("AdminAccountsPage", () => {
+describe("AccountSettingsPanel", () => {
   beforeEach(() => {
     queryClient = createTestQueryClient();
     user = userEvent.setup();
@@ -38,7 +44,7 @@ describe("AdminAccountsPage", () => {
     renderPage();
 
     expect(
-      await screen.findByRole("table", { name: "ログイン可能なアカウントと権限" }),
+      await screen.findByRole("table", { name: "登録アカウントとログイン・管理者権限" }),
     ).toBeInTheDocument();
     expect(screen.getByRole("rowheader", { name: "ぽんた" })).toBeInTheDocument();
     const createTrigger = screen.getByRole("button", { name: "アカウントを追加" });
@@ -95,6 +101,7 @@ describe("AdminAccountsPage", () => {
     );
     renderPage();
     const trigger = await screen.findByRole("button", { name: "アカウントを追加" });
+    await waitFor(() => expect(trigger).toBeEnabled());
     await user.click(trigger);
     const dialog = screen.getByRole("dialog", { name: "アカウントを追加" });
     const discordId = within(dialog).getByRole("textbox", { name: /DiscordユーザーID/u });
@@ -195,13 +202,12 @@ describe("AdminAccountsPage", () => {
 
     renderPage();
 
-    expect(
-      await screen.findByRole("button", { name: "最初のアカウントを追加" }),
-    ).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "アカウントを追加" })).not.toBeInTheDocument();
+    expect(await screen.findByText("登録されたアカウントはありません")).toBeVisible();
+    expect(screen.getAllByRole("button", { name: "アカウントを追加" })).toHaveLength(1);
+    expect(screen.getByRole("button", { name: "アカウントを追加" })).toBeEnabled();
   });
 
-  it("moves focus to the new header action after creating the first account", async () => {
+  it("restores focus to the same header action after creating the first account", async () => {
     const accounts: Array<{
       accountId: string;
       createdAt: string;
@@ -233,7 +239,9 @@ describe("AdminAccountsPage", () => {
 
     renderPage();
 
-    await user.click(await screen.findByRole("button", { name: "最初のアカウントを追加" }));
+    const createTrigger = screen.getByRole("button", { name: "アカウントを追加" });
+    await waitFor(() => expect(createTrigger).toBeEnabled());
+    await user.click(createTrigger);
     const dialog = screen.getByRole("dialog", { name: "アカウントを追加" });
     await user.type(
       within(dialog).getByPlaceholderText("例: 523484457705930752"),
@@ -244,6 +252,7 @@ describe("AdminAccountsPage", () => {
 
     expect(await screen.findByText("最初の利用者")).toBeInTheDocument();
     const nextCreateTrigger = await screen.findByRole("button", { name: "アカウントを追加" });
+    expect(nextCreateTrigger).toBe(createTrigger);
     await waitFor(() => expect(nextCreateTrigger).toHaveFocus());
   });
 
@@ -283,7 +292,7 @@ describe("AdminAccountsPage", () => {
 
     await requestStarted.promise;
     expect(screen.queryByText("cached account error")).not.toBeInTheDocument();
-    expect(screen.getByLabelText("ログインアカウントを読み込み中")).toBeInTheDocument();
+    expect(screen.getByLabelText("アカウントを読み込み中")).toBeInTheDocument();
 
     responseGate.resolve();
     expect(await screen.findByText("復旧ユーザー")).toBeInTheDocument();
@@ -315,10 +324,10 @@ describe("AdminAccountsPage", () => {
     renderPage();
 
     const retryButton = await screen.findByRole("button", {
-      name: "アカウントを再読み込み",
+      name: "再読み込み",
     });
     expect(retryButton).toBeVisible();
-    expect(screen.queryByText("ログイン可能なアカウントはまだありません")).not.toBeInTheDocument();
+    expect(screen.queryByText("登録されたアカウントはありません")).not.toBeInTheDocument();
 
     await user.click(retryButton);
 
@@ -354,10 +363,10 @@ describe("AdminAccountsPage", () => {
 
     expect(await screen.findByText("最新のアカウント情報を取得できません")).toBeInTheDocument();
     expect(
-      screen.getByText("前回取得時点ではログイン可能なアカウントがありません"),
+      screen.getByText("前回取得時点では登録されたアカウントがありません"),
     ).toBeInTheDocument();
     expect(screen.queryByText("アカウントを読み込めません")).not.toBeInTheDocument();
-    const retryButton = screen.getByRole("button", { name: "最新情報を再読み込み" });
+    const retryButton = screen.getByRole("button", { name: "再読み込み" });
     expect(screen.getByRole("button", { name: "アカウントを追加" })).toBeEnabled();
 
     await user.click(retryButton);

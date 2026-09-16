@@ -88,6 +88,104 @@ describe("MastersPage", () => {
     expect(screen.getByRole("heading", { name: "シーズン" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "事件簿" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "通知" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "アカウント" })).toBeInTheDocument();
+  });
+
+  it("loads accounts only when visited and retains the list through tab changes", async () => {
+    setDevUser();
+    let accountReads = 0;
+    const unrelatedReads: string[] = [];
+    server.use(
+      http.get("/api/admin/login-accounts", () => {
+        accountReads += 1;
+        return HttpResponse.json({ items: mswState.loginAccounts });
+      }),
+      ...["game-titles", "incident-masters", "member-aliases", "map-masters", "season-masters"].map(
+        (name) =>
+          http.get(`/api/${name}`, () => {
+            unrelatedReads.push(name);
+            return HttpResponse.json({ items: [] });
+          }),
+      ),
+      http.get("/api/admin/notification-settings", () =>
+        HttpResponse.json({
+          ocrCompleted: { enabled: true, generation: "0" },
+          analysisCompleted: { enabled: true, generation: "0" },
+        }),
+      ),
+    );
+    renderPage("/admin/masters?tab=notifications");
+    await screen.findByRole("checkbox", { name: "OCR完了" });
+    expect(accountReads).toBe(0);
+    await user.click(screen.getByRole("tab", { name: "アカウント" }));
+    const table = await screen.findByRole("table", {
+      name: "登録アカウントとログイン・管理者権限",
+    });
+    expect(accountReads).toBe(1);
+    expect(unrelatedReads).toEqual([]);
+    await user.click(screen.getByRole("tab", { name: "通知" }));
+    await user.click(screen.getByRole("tab", { name: "アカウント" }));
+    expect(screen.getByRole("table")).toBe(table);
+    expect(accountReads).toBe(1);
+    expect(screen.getByLabelText("current location")).toHaveTextContent("?tab=accounts");
+  });
+
+  it("isolates account loading and retry while preserving edits in other settings", async () => {
+    setDevUser();
+    const gate = createDeferred();
+    let attempts = 0;
+    server.use(
+      http.get("/api/admin/login-accounts", async () => {
+        attempts += 1;
+        await gate.promise;
+        return attempts === 1
+          ? HttpResponse.json({ detail: "unavailable" }, { status: 503 })
+          : HttpResponse.json({ items: mswState.loginAccounts });
+      }),
+    );
+    renderPage("/admin/masters?tab=accounts");
+    await screen.findByRole("status", { name: "アカウントを読み込み中" });
+    expect(screen.getByRole("button", { name: "アカウントを追加" })).toBeDisabled();
+    await user.click(screen.getByRole("tab", { name: "メンバー名寄せ" }));
+    await user.type(await screen.findByRole("textbox", { name: /^別名/u }), "編集中の別名");
+    await user.click(screen.getByRole("tab", { name: "アカウント" }));
+    gate.resolve();
+    await user.click(await screen.findByRole("button", { name: "再読み込み" }));
+    await screen.findByRole("table");
+    await waitFor(() =>
+      expect(screen.getByRole("heading", { name: "ログインと権限" })).toHaveFocus(),
+    );
+    await user.click(screen.getByRole("tab", { name: "メンバー名寄せ" }));
+    expect(screen.getByRole("textbox", { name: /^別名/u })).toHaveValue("編集中の別名");
+    expect(attempts).toBe(2);
+  });
+
+  it("includes account updates in the shared return guard and retains the committed status", async () => {
+    setDevUser();
+    const committed = createDeferred();
+    server.use(
+      http.patch("/api/admin/login-accounts/:accountId", async ({ params }) => {
+        await committed.promise;
+        const account = mswState.loginAccounts.find(
+          (item) => item.accountId === params["accountId"],
+        )!;
+        account.loginEnabled = false;
+        return HttpResponse.json(account);
+      }),
+    );
+    renderPage(`${createMasterReturnEntry()}&tab=accounts`);
+    const returnButton = await screen.findByRole("button", { name: "元の入力画面へ戻る" });
+    const row = (await screen.findByText("523484457705930755")).closest("tr")!;
+    await user.click(within(row).getByRole("button", { name: "ログイン停止" }));
+    await user.click(screen.getByRole("button", { name: "停止する" }));
+    expect(returnButton).toBeDisabled();
+    committed.resolve();
+    await waitFor(() => expect(returnButton).toBeEnabled());
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+    await user.click(screen.getByRole("tab", { name: "事件簿" }));
+    await user.click(screen.getByRole("tab", { name: "アカウント" }));
+    expect(within(row).getByText("ログイン停止")).toBeVisible();
+    expect(screen.getByLabelText("current location")).toHaveTextContent("returnTo=");
   });
 
   it("opens notification settings directly without requesting master resources", async () => {

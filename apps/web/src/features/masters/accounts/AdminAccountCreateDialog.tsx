@@ -1,6 +1,7 @@
+import { UserPlus } from "lucide-react";
 import { startTransition } from "react";
 
-import type { AdminAccountCreateDialogModel } from "@/features/adminAccounts/useAdminAccountsPageModel";
+import type { AdminAccountCreateDialogModel } from "@/features/masters/accounts/useAccountSettingsModel";
 import { canonicalResultMembers } from "@/shared/domain/members";
 import { Button } from "@/shared/ui/actions/Button";
 import { Dialog, DialogFooter } from "@/shared/ui/feedback/Dialog";
@@ -18,7 +19,13 @@ const accountPlayerOptions = [
   })),
 ];
 
-export function AdminAccountCreateDialog({ model }: { model: AdminAccountCreateDialogModel }) {
+export function AdminAccountCreateDialog({
+  disabled,
+  model,
+}: {
+  disabled: boolean;
+  model: AdminAccountCreateDialogModel;
+}) {
   const { action, error, formKey, open, pending, setOpen } = model;
   return (
     <Dialog
@@ -26,6 +33,11 @@ export function AdminAccountCreateDialog({ model }: { model: AdminAccountCreateD
       description="Discordの利用者と、必要な場合だけ試合参加者・管理者権限を紐づけます。"
       open={open}
       title="アカウントを追加"
+      trigger={
+        <Button disabled={disabled} icon={<UserPlus />} size="sm" variant="secondary">
+          アカウントを追加
+        </Button>
+      }
       onOpenChange={setOpen}
     >
       <form

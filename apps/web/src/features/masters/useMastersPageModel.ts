@@ -2,6 +2,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useOptimistic, useState, useTransition } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
+import { useAccountSettingsModel } from "@/features/masters/accounts/useAccountSettingsModel";
 import { defaultLayoutFamily } from "@/features/masters/masterValidation";
 import { useNotificationSettingsModel } from "@/features/masters/notifications/useNotificationSettingsModel";
 import { useMasterCreateActions } from "@/features/masters/useMasterCreateActions";
@@ -20,6 +21,7 @@ export const masterTabs = [
   { id: "aliases", label: "メンバー名寄せ" },
   { id: "incidents", label: "事件簿" },
   { id: "notifications", label: "通知" },
+  { id: "accounts", label: "アカウント" },
 ] as const;
 
 export type MasterTabId = (typeof masterTabs)[number]["id"];
@@ -97,10 +99,11 @@ export function useMastersPageModel() {
 
   // Keep visited resources mounted and enabled: switching tabs must not become a reload.
   const notifications = useNotificationSettingsModel(openedTabs.includes("notifications"));
+  const accounts = useAccountSettingsModel(openedTabs.includes("accounts"));
   const resourceQueries = useMasterResourceQueries(
     authScope,
     selectedGameTitleId,
-    openedTabs.some((tab) => tab !== "notifications"),
+    openedTabs.some((tab) => tab === "catalog" || tab === "aliases" || tab === "incidents"),
   );
   const { gameTitles, mapMasters, seasonMasters } = resourceQueries;
   const optimisticCatalog = useMasterOptimisticCatalog({
@@ -275,10 +278,14 @@ export function useMastersPageModel() {
       stale: incidentMastersHasError && resourceQueries.incidentMastersQuery.data !== undefined,
     },
     navigation: {
-      disabled: hasPendingMutation || notifications.pending || isReturnNavigationPending,
+      disabled:
+        hasPendingMutation ||
+        notifications.pending ||
+        accounts.pending ||
+        isReturnNavigationPending,
       disabledReason: isReturnNavigationPending
         ? "元の入力画面へ移動しています。"
-        : hasPendingMutation || notifications.pending
+        : hasPendingMutation || notifications.pending || accounts.pending
           ? "設定の追加・保存・削除が完了すると戻れます。"
           : undefined,
       destination: returnRoute.returnDestination,
@@ -291,6 +298,7 @@ export function useMastersPageModel() {
       },
     },
     notifications,
+    accounts,
     tabs: {
       active: activeTab,
       items: masterTabs,

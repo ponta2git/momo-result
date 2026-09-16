@@ -28,7 +28,7 @@ test.beforeEach(async ({ page }) => {
 test("keeps dialog select navigation and outside presses within their own layer", async ({
   page,
 }) => {
-  await page.goto("/admin/accounts");
+  await page.goto("/admin/masters?tab=accounts");
   await page.getByRole("button", { name: "アカウントを追加", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "アカウントを追加" });
   const trigger = dialog.getByRole("combobox", { name: "紐づくプレーヤー" });

@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
 
-import { invalidateAdminAccountCaches } from "@/features/adminAccounts/adminAccountCache";
+import { invalidateAdminAccountCaches } from "@/features/masters/accounts/adminAccountCache";
 import { adminAccountKeys } from "@/shared/api/queryKeys";
 import { authMeQueryKey } from "@/shared/auth/authQueries";
 import { createTestQueryClient } from "@/test/queryClient";

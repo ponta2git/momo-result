@@ -61,7 +61,7 @@ export function AdminAccountRow({
           <AccountActionConfirm
             disabled={isPending}
             title={account.isAdmin ? "管理者権限を解除しますか？" : "管理者権限を付与しますか？"}
-            description={`${account.displayName} の管理者権限を変更します。設定管理とアカウント管理の操作範囲が変わります。`}
+            description={`${account.displayName} の管理者権限を変更します。設定の変更や分析の管理を行える範囲が変わります。`}
             label={account.isAdmin ? "管理者解除" : "管理者にする"}
             confirmLabel={account.isAdmin ? "解除する" : "付与する"}
             pending={adminPending}

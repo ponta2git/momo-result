@@ -6,7 +6,6 @@ import {
   Download,
   LogOut,
   ScanLine,
-  ShieldCheck,
   Trophy,
 } from "lucide-react";
 
@@ -26,7 +25,6 @@ const primaryItems = [
 const adminItems = [
   { icon: <Activity />, label: "分析", to: "/admin/analysis" },
   { icon: <Database />, label: "設定", to: "/admin/masters" },
-  { icon: <ShieldCheck />, label: "アカウント", to: "/admin/accounts" },
 ] as const satisfies readonly GlobalNavItem[];
 
 const noManagementItems: readonly GlobalNavItem[] = [];

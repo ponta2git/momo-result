@@ -1,3 +1,4 @@
+import { AccountSettingsPanel } from "@/features/masters/accounts/AccountSettingsPanel";
 import { IncidentMasterPanel } from "@/features/masters/IncidentMasterPanel";
 import { MasterPanelContent } from "@/features/masters/MasterPanelContent";
 import { MasterRelationBoard } from "@/features/masters/MasterRelationBoard";
@@ -107,6 +108,12 @@ export function MastersPage() {
           <TabsPanel keepMounted value="notifications">
             <div className="mt-6">
               <NotificationSettingsPanel model={page.notifications} />
+            </div>
+          </TabsPanel>
+
+          <TabsPanel keepMounted value="accounts">
+            <div className="mt-6">
+              <AccountSettingsPanel model={page.accounts} />
             </div>
           </TabsPanel>
         </TabsRoot>

@@ -11,6 +11,7 @@ import { matchKeys } from "@/shared/api/queryKeys";
 import { setDevUser } from "@/test/auth";
 import { createDeferred } from "@/test/deferred";
 import { makeFourPlayerResults, makeMatchDetail } from "@/test/factories";
+import { mswState } from "@/test/msw/fixtures";
 import { setupMsw } from "@/test/msw/lifecycle";
 import {
   analysisArtifact,
@@ -101,7 +102,7 @@ describe("app routing", () => {
 
   it("keeps a self-disable completion at login and clears it before another account is used", async () => {
     setDevUser();
-    const { router } = renderApp("/admin/accounts");
+    const { router } = renderApp("/admin/masters?tab=accounts");
     const row = (await screen.findByText("523484457705930752")).closest("tr")!;
     await user.click(within(row).getByRole("button", { name: "ログイン停止" }));
     await user.click(screen.getByRole("button", { name: "停止する" }));
@@ -124,12 +125,33 @@ describe("app routing", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("prevents a non-admin from opening the notification settings tab", async () => {
-    setDevUser("account_eu");
-    renderApp("/admin/masters?tab=notifications");
+  it.each(["notifications", "accounts"])(
+    "prevents a non-admin from opening the %s settings tab",
+    async (tab) => {
+      setDevUser("account_eu");
+      renderApp(`/admin/masters?tab=${tab}`);
+      expect(await screen.findByText("この画面は管理者専用です。")).toBeInTheDocument();
+      expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+      expect(screen.queryByRole("region", { name: "設定管理" })).not.toBeInTheDocument();
+    },
+  );
+
+  it("revokes access to settings after removing the current account's admin permission", async () => {
+    setDevUser();
+    mswState.loginAccounts.find((account) => account.accountId === "account_eu")!.isAdmin = true;
+    renderApp("/admin/masters?tab=accounts");
+    const row = (await screen.findByText("523484457705930752")).closest("tr")!;
+    const navigation = screen.getByRole("navigation", { name: "グローバルナビゲーション" });
+    expect(within(navigation).getByRole("link", { name: "設定" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    expect(within(navigation).queryByRole("link", { name: "アカウント" })).not.toBeInTheDocument();
+    await user.click(within(row).getByRole("button", { name: "管理者解除" }));
+    await user.click(screen.getByRole("button", { name: "解除する" }));
     expect(await screen.findByText("この画面は管理者専用です。")).toBeInTheDocument();
-    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "通知" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "設定管理" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "設定" })).not.toBeInTheDocument();
   });
 
   it("opens the notification settings tab directly and uses one management navigation entry", async () => {
@@ -403,7 +425,7 @@ describe("app routing", () => {
       const { queryClient, router } = renderApp("/matches");
 
       expect(await screen.findByRole("region", { name: "試合一覧" })).toBeInTheDocument();
-      expect(screen.getByRole("link", { name: "アカウント" })).toBeInTheDocument();
+      expect(screen.getByRole("link", { name: "設定" })).toBeInTheDocument();
       queryClient.setQueryData(matchKeys.detail("match-secret"), {
         matchId: "match-secret",
         privateNote: "previous session cache",
@@ -426,7 +448,7 @@ describe("app routing", () => {
         name: "グローバルナビゲーション",
       });
       expect(within(globalNavigation).getByText("いーゆー")).toBeInTheDocument();
-      expect(screen.queryByRole("link", { name: "アカウント" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("link", { name: "設定" })).not.toBeInTheDocument();
       expect(logoutRequests).toBe(0);
     } finally {
       vi.unstubAllEnvs();

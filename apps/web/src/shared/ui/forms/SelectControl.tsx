@@ -155,7 +155,7 @@ export function SelectControl({
         type="button"
         aria-invalid={invalid || undefined}
         className={cn(
-          controlClassName({ controlHeight, density, invalid, textAlign, tone }, "selection"),
+          controlClassName({ controlHeight, density, invalid, textAlign, tone }),
           "relative block",
           density === "compact" ? "pr-8" : "pr-10",
         )}

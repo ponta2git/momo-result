@@ -10,6 +10,8 @@
 
 表示契約の正本は [UI規約](ui-rule.md)、実装境界は [architecture](architecture.md#client-lifecycle--suspense--motion)、検証の選定は [test-rule](test-rule.md#4-web-evidence-catalog)。本書には採用時の判断、実装差分、検証結果を置き、恒久ルールは正本へ反映した。3〜6章は合意した設計と反証条件、7章は実施結果を記録する。
 
+後続の全体点検で、入力欄と選択欄の枠の差が不統一に見えるという指摘を受けた。以下に記録するselect専用の薄い枠は採用当時の判断であり、現在は廃止している。テキスト・数値・日時・textarea・一行selectを同じ通常境界へ接続し、表示契約はUI規約へ更新した。
+
 ## 2. 着手時の調査結果
 
 | 実装入口 | 着手時の状態と問題 | 採用した扱い |

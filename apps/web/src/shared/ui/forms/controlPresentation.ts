@@ -31,7 +31,7 @@ const textAlignClass = {
 
 const toneClass = {
   action: "border-[var(--color-control-border-action)] momo-surface-control-action",
-  default: "",
+  default: "border-[var(--color-control-border)]",
   review: "border-[var(--color-control-border-review)] momo-surface-control-review",
   success: "border-[var(--color-control-border-success)] momo-surface-control-success",
   warning: "border-[var(--color-control-border-warning)] momo-surface-control-warning",
@@ -39,11 +39,6 @@ const toneClass = {
 
 const baseControlClass =
   "w-full min-w-0 rounded-sm border momo-surface momo-surface-neutral py-2 text-base leading-6 font-plain text-[var(--color-text-primary)] disabled:cursor-not-allowed disabled:bg-[var(--color-surface-subtle)] disabled:text-[var(--color-text-muted)] disabled:opacity-70 sm:text-sm sm:leading-5";
-// Entry fields need an identifiable boundary; a single-choice select has its own arrow.
-const boundaryClass = {
-  entry: "border-[var(--color-control-border)]",
-  selection: "border-[var(--color-select-border)]",
-};
 const invalidControlClass =
   "border-[var(--color-control-border-invalid)] momo-surface-control-invalid";
 
@@ -55,15 +50,18 @@ type ResolvedControlPresentation = {
   tone: ControlTone;
 };
 
-export function controlClassName(
-  { controlHeight, density, invalid, textAlign, tone }: ResolvedControlPresentation,
-  boundary: keyof typeof boundaryClass = "entry",
-) {
+export function controlClassName({
+  controlHeight,
+  density,
+  invalid,
+  textAlign,
+  tone,
+}: ResolvedControlPresentation) {
   return cn(
     baseControlClass,
     heightClass[controlHeight],
     densityClass[density],
     textAlignClass[textAlign],
-    invalid ? invalidControlClass : tone === "default" ? boundaryClass[boundary] : toneClass[tone],
+    invalid ? invalidControlClass : toneClass[tone],
   );
 }

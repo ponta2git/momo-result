@@ -42,4 +42,19 @@ describe("CheckboxField", () => {
 
     expect(screen.getByRole("checkbox", { name: "ログインを許可" })).toBeDisabled();
   });
+
+  it("describes a separate saved status without changing the label or replacing the control", async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(<CheckboxField label="OCR完了" />);
+    const checkbox = screen.getByRole("checkbox", { name: "OCR完了" });
+    await user.click(screen.getByText("OCR完了"));
+    expect(checkbox).toBeChecked();
+    rerender(<CheckboxField label="OCR完了" status="保存済み OFF" />);
+    expect(screen.getByRole("checkbox", { name: "OCR完了" })).toBe(checkbox);
+    expect(checkbox).toHaveFocus();
+    expect(checkbox).toBeChecked();
+    expect(checkbox).toHaveAccessibleDescription("保存済み OFF");
+    await user.click(screen.getByText("保存済み OFF"));
+    expect(checkbox).toBeChecked();
+  });
 });

@@ -11,6 +11,8 @@ export type CheckboxFieldProps = {
   description?: ReactNode | undefined;
   error?: ReactNode | undefined;
   label: ReactNode;
+  /** Noninteractive state beside the control, also included in its accessible description. */
+  status?: ReactNode | undefined;
 } & Omit<
   ComponentPropsWithRef<"input">,
   "aria-describedby" | "aria-invalid" | "className" | "style" | "type"
@@ -25,6 +27,7 @@ export function CheckboxField({
   id,
   label,
   required,
+  status,
   ...props
 }: CheckboxFieldProps) {
   const surfaceRef = useSurfaceFeedback<HTMLLabelElement>();
@@ -32,32 +35,45 @@ export function CheckboxField({
   const fieldId = id ?? fallbackId;
   const descriptionId = description ? `${fieldId}-description` : undefined;
   const errorId = error ? `${fieldId}-error` : undefined;
+  const statusId = status ? `${fieldId}-status` : undefined;
 
   return (
     <div className="min-w-0">
-      <label
-        ref={surfaceRef}
-        className={cn(
-          "momo-surface momo-surface-press inline-flex min-h-11 min-w-0 cursor-pointer items-center gap-2 rounded-xs px-2 text-sm font-plain text-[var(--color-text-primary)]",
-          disabled ? "cursor-not-allowed opacity-65" : "",
-        )}
-        htmlFor={fieldId}
-      >
-        <input
-          {...props}
-          aria-describedby={buildFieldDescribedBy(descriptionId, errorId, ariaDescribedBy)}
-          aria-invalid={error ? true : undefined}
-          className="size-4 shrink-0 accent-[var(--color-action)]"
-          disabled={disabled}
-          id={fieldId}
-          required={required}
-          type="checkbox"
-        />
-        <span className="min-w-0 text-pretty">
-          {label}
-          {required ? <span className="ml-1 text-[var(--color-danger)]">*</span> : null}
-        </span>
-      </label>
+      <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-1">
+        <label
+          ref={surfaceRef}
+          className={cn(
+            "momo-surface momo-surface-press inline-flex min-h-11 min-w-0 cursor-pointer items-center gap-2 rounded-xs px-2 text-sm font-plain text-[var(--color-text-primary)]",
+            disabled ? "cursor-not-allowed opacity-65" : "",
+          )}
+          htmlFor={fieldId}
+        >
+          <input
+            {...props}
+            aria-describedby={buildFieldDescribedBy(
+              descriptionId,
+              errorId,
+              statusId,
+              ariaDescribedBy,
+            )}
+            aria-invalid={error ? true : undefined}
+            className="size-4 shrink-0 accent-[var(--color-action)]"
+            disabled={disabled}
+            id={fieldId}
+            required={required}
+            type="checkbox"
+          />
+          <span className="min-w-0 text-pretty">
+            {label}
+            {required ? <span className="ml-1 text-[var(--color-danger)]">*</span> : null}
+          </span>
+        </label>
+        {status ? (
+          <div className="min-w-0" id={statusId}>
+            {status}
+          </div>
+        ) : null}
+      </div>
       <div className="mt-1 flex min-w-0 flex-col gap-1 pl-8 empty:hidden">
         {description ? (
           <p

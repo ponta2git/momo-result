@@ -61,7 +61,8 @@ describe("app routing", () => {
       }),
     );
     renderApp("/analytics/series");
-    const tab = await screen.findByRole("tab", { name: "分析する" });
+    // Cold route imports include artifact validators; coverage instrumentation can exceed 1s.
+    const tab = await screen.findByRole("tab", { name: "分析する" }, { timeout: 5000 });
     await user.click(tab);
     expect(tab).toHaveAttribute("aria-selected", "true");
     expect(tab.closest("[inert]")).toBeNull();
@@ -88,10 +89,19 @@ describe("app routing", () => {
         return HttpResponse.json(overview);
       }),
     );
-    renderApp("/admin/analysis");
+    const { router } = renderApp("/admin/analysis");
     expect(await screen.findByText("初回の処理履歴")).toBeInTheDocument();
+    // Refresh the settled title route, after the default-title URL handoff has committed.
+    await waitFor(() =>
+      expect(new URLSearchParams(router.state.location.search).get("gameTitleId")).toBe(
+        makeSeriesAnalysisAdminOverview().selectedTitle?.gameTitleId,
+      ),
+    );
+    await waitFor(() => expect(screen.getByRole("button", { name: "状態を更新" })).toBeEnabled());
     await user.click(screen.getByRole("button", { name: "状態を更新" }));
-    expect(await screen.findByText("更新済みの処理履歴")).toBeInTheDocument();
+    expect(
+      await screen.findByText("更新済みの処理履歴", {}, { timeout: 5000 }),
+    ).toBeInTheDocument();
     await user.click(screen.getByRole("link", { name: "試合" }));
     expect(await screen.findByRole("region", { name: "試合一覧" })).toBeInTheDocument();
     await user.click(screen.getByRole("link", { name: "分析" }));

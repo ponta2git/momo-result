@@ -15,7 +15,8 @@ export function DeleteHeldEventDialog({ model }: DeleteHeldEventDialogProps) {
   return (
     <AlertDialog
       cancelLabel="キャンセル"
-      confirmLabel={model.pending ? "削除中…" : "削除する"}
+      confirmLabel="削除する"
+      pendingLabel="削除中…"
       pending={model.pending}
       formatError={(error) => formatApiError(error, "開催の削除に失敗しました")}
       description={`${formatDateTimeLong(model.target.heldAt)}の開催を削除します。この操作は取り消せません。`}

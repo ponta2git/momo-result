@@ -19,8 +19,15 @@ export function MatchListStatusAction({
     return null;
   }
 
+  const draftId = item.primaryAction.draftStatusCheck?.draftId;
+  const error = draftId ? rowActions.draftErrors?.[draftId] : undefined;
   return (
-    <div>
+    <div className="grid gap-2">
+      {error ? (
+        <p className="text-xs text-[var(--color-danger)]" role="alert">
+          {error} 同じボタンから再試行できます。
+        </p>
+      ) : null}
       <MatchListActions
         checkingDraftIds={rowActions.checkingDraftIds}
         disabled={rowActions.disabled ?? false}

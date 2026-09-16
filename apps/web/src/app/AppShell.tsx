@@ -8,6 +8,7 @@ import { AppPageCanvas } from "@/app/AppPageCanvas";
 import { RouteErrorBoundary } from "@/app/RouteErrorBoundary";
 import { preloadRouteForPath } from "@/app/routeModules";
 import { RouteSuspenseFallback } from "@/app/RouteSuspenseFallback";
+import { useAuth } from "@/shared/auth/useAuth";
 import { ToastHost } from "@/shared/ui/feedback/ToastHost";
 
 function shouldPreloadAnchor(anchor: HTMLAnchorElement): boolean {
@@ -62,6 +63,7 @@ function RouteQueryResetBridge({
 }
 
 export function AppShell() {
+  const auth = useAuth();
   const location = useLocation();
   const routeResetKey = location.pathname;
 
@@ -140,7 +142,7 @@ export function AppShell() {
           )}
         </QueryErrorResetBoundary>
       </AppPageCanvas>
-      <ToastHost />
+      <ToastHost key={auth.auth?.accountId ?? "anonymous"} />
     </>
   );
 }

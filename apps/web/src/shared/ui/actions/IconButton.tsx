@@ -5,6 +5,7 @@ import { DecorativeActionIcon, iconActionClassName } from "@/shared/ui/actions/a
 import type { IconActionSize, IconActionVariant } from "@/shared/ui/actions/actionRecipes";
 import { SpinnerIcon } from "@/shared/ui/feedback/Spinner";
 import { Tooltip } from "@/shared/ui/feedback/Tooltip";
+import { useSurfaceFeedback } from "@/shared/ui/motion/useSurfaceFeedback";
 
 export type IconButtonSize = IconActionSize;
 export type IconButtonVariant = IconActionVariant;
@@ -40,13 +41,14 @@ export function IconButton({
   variant = "secondary",
   ...props
 }: IconButtonProps) {
+  const surfaceRef = useSurfaceFeedback(ref);
   const formStatus = useFormStatus();
   const actualPending = pending ?? (type === "submit" && formStatus.pending);
   const actualLabel = actualPending ? (pendingLabel ?? ariaLabel) : ariaLabel;
   const button = (
     <button
       {...props}
-      ref={ref}
+      ref={surfaceRef}
       aria-busy={actualPending || undefined}
       aria-label={actualLabel}
       className={iconActionClassName({ size, variant })}

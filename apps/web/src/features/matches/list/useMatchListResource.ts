@@ -27,6 +27,7 @@ import {
 import { useHeldEventPickerDirectory } from "@/shared/api/useHeldEventPickerDirectory";
 import { useMasterNameDirectory } from "@/shared/api/useMasterNameDirectory";
 import type { PaginationState } from "@/shared/lib/pagination";
+import { useRetryNotice } from "@/shared/ui/feedback/useRetryNotice";
 
 const matchListStaleTimeMs = 10_000;
 
@@ -56,6 +57,7 @@ export type MatchListResource = {
     loadFailed: boolean;
     loading: boolean;
     masked: boolean;
+    retryPending: boolean;
     retry: () => void;
   };
 };
@@ -165,12 +167,32 @@ export function useMatchListResource({
     isRefreshing: listBackgroundRefreshing,
     isSettling: locationSettling,
   });
+  const listFailed = useRetryNotice(
+    shouldShowBlockingQueryError(matchesQuery),
+    matchesQuery.isFetching || manualRefreshing,
+    currentSearchScope,
+  );
+  const summaryFailed = useRetryNotice(
+    shouldShowBlockingQueryError(summaryQuery),
+    summaryQuery.isFetching,
+    JSON.stringify(buildMatchListSummaryQuery(currentSearch)),
+  );
+  const filtersFailed = useRetryNotice(
+    shouldShowBlockingQueryError(heldEventsQuery) ||
+      masters.blockingLoadFailed ||
+      Boolean(heldEventPicker.error),
+    heldEventsQuery.isFetching || masters.refreshing || heldEventPicker.pending,
+  );
+  const refreshFailed = useRetryNotice(
+    manualRefreshFailed || matchesQuery.isRefetchError || summaryQuery.isRefetchError,
+    manualRefreshing || sameScopeRefreshing,
+    currentSearchScope,
+  );
 
   const refresh = async () => {
     if (manualRefreshingRef.current) return;
     manualRefreshingRef.current = true;
     setManualRefreshing(true);
-    setManualRefreshFailure(null);
     const refreshGeneration = lifecycleGenerationRef.current;
     const refreshStartScope = currentSearchScope;
     const refreshedSearch = { ...currentSearch, cursor: "" };
@@ -196,6 +218,8 @@ export function useMatchListResource({
           originScope: refreshStartScope,
           targetScope: cursorReset ? refreshScope : refreshStartScope,
         });
+      } else {
+        setManualRefreshFailure(null);
       }
     } catch {
       if (lifecycleGenerationRef.current === refreshGeneration) {
@@ -226,10 +250,7 @@ export function useMatchListResource({
         },
         seasons: masters.items.seasons,
       },
-      loadFailed:
-        shouldShowBlockingQueryError(heldEventsQuery) ||
-        masters.blockingLoadFailed ||
-        Boolean(heldEventPicker.error),
+      loadFailed: filtersFailed,
       refresh: {
         pending: heldEventsQuery.isFetching || heldEventPicker.pending || masters.refreshing,
         run: () => {
@@ -241,11 +262,10 @@ export function useMatchListResource({
     },
     list: {
       items,
-      loadFailed: shouldShowBlockingQueryError(matchesQuery),
-      loading: initialLoading,
+      loadFailed: listFailed,
+      loading: initialLoading && !listFailed,
       pagination: matchesQuery.data?.pagination,
-      refreshFailed:
-        manualRefreshFailed || matchesQuery.isRefetchError || summaryQuery.isRefetchError,
+      refreshFailed: refreshFailed && !listFailed,
       sameScopeRefreshing,
       scopeChanging: listScopeChanging,
       updating,
@@ -253,9 +273,10 @@ export function useMatchListResource({
     refresh: { pending: manualRefreshing, run: refresh },
     summary: {
       counts: summaryQuery.data,
-      loadFailed: shouldShowBlockingQueryError(summaryQuery),
-      loading: isInitialQueryLoading(summaryQuery),
+      loadFailed: summaryFailed,
+      loading: isInitialQueryLoading(summaryQuery) && !summaryFailed,
       masked: summaryMasked,
+      retryPending: summaryQuery.isFetching && !manualRefreshing,
       retry: () => void summaryQuery.refetch(),
     },
   };

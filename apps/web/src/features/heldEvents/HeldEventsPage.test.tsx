@@ -390,11 +390,9 @@ describe("HeldEventsPage", () => {
     );
     await user.click(screen.getByRole("button", { name: "次のページへ" }));
 
-    await waitFor(() =>
-      expect(screen.getByRole("region", { name: "開催履歴" })).toHaveAttribute("aria-busy", "true"),
-    );
+    await waitFor(() => expect(screen.getByRole("button", { name: "更新中…" })).toBeDisabled());
     const ledger = screen.getByRole("region", { name: "開催履歴" });
-    expect(within(ledger).getByRole("status")).toHaveTextContent("開催履歴を更新中");
+    expect(within(ledger).queryByRole("status")).not.toBeInTheDocument();
     expect(within(ledger).queryByLabelText("開催履歴を読み込み中")).not.toBeInTheDocument();
     const disabledDetail = within(ledger).getByRole("link", { name: /の開催詳細$/u });
     expect(disabledDetail).toHaveAttribute("aria-disabled", "true");

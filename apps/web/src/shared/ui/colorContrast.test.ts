@@ -29,7 +29,7 @@ function token(name: string): string {
 }
 
 function oklab(value: string): readonly [number, number, number] {
-  const match = value.match(/^oklch\(([0-9.]+)%\s+([0-9.]+)\s+([0-9.]+)(?:\s*\/\s*[0-9.]+)?\)$/u);
+  const match = value.match(/^oklch\(([0-9.]+)%\s+([0-9.]+)\s+([0-9.]+)\)$/u);
   if (!match) throw new Error(`Expected an OKLCH color, received: ${value}`);
 
   const lightness = Number(match[1]) / 100;
@@ -42,18 +42,70 @@ function clamp(channel: number): number {
   return Math.min(1, Math.max(0, channel));
 }
 
-function relativeLuminance(value: string): number {
-  return relativeLuminanceFromOklab(oklab(value));
-}
+type Channels = readonly [number, number, number];
+type Paint = { rgb: Channels; alpha: number };
 
-function relativeLuminanceFromOklab([lightness, a, b]: readonly [number, number, number]): number {
+function linearRgb([lightness, a, b]: Channels): Channels {
   const l = Math.pow(lightness + 0.396_337_777_4 * a + 0.215_803_757_3 * b, 3);
   const m = Math.pow(lightness - 0.105_561_345_8 * a - 0.063_854_172_8 * b, 3);
   const s = Math.pow(lightness - 0.089_484_177_5 * a - 1.291_485_548 * b, 3);
   const red = clamp(4.076_741_662_1 * l - 3.307_711_591_3 * m + 0.230_969_929_2 * s);
   const green = clamp(-1.268_438_004_6 * l + 2.609_757_401_1 * m - 0.341_319_396_5 * s);
   const blue = clamp(-0.004_196_086_3 * l - 0.703_418_614_7 * m + 1.707_614_701 * s);
+  return [red, green, blue];
+}
+
+function relativeLuminanceFromOklab(color: Channels): number {
+  const [red, green, blue] = linearRgb(color);
   return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
+}
+
+function encodeSrgb(value: number): number {
+  return value <= 0.003_130_8 ? 12.92 * value : 1.055 * Math.pow(value, 1 / 2.4) - 0.055;
+}
+
+function srgb(color: Channels): Channels {
+  const [red, green, blue] = linearRgb(color);
+  return [encodeSrgb(red), encodeSrgb(green), encodeSrgb(blue)];
+}
+
+/** Parse the theme's OKLCH/alpha and single-color transparent mixes, not arbitrary CSS. */
+function paint(value: string): Paint {
+  const tint = value.match(
+    /^color-mix\(in oklab, var\((--[a-z0-9-]+)\) ([0-9.]+)%, transparent\)$/u,
+  );
+  if (tint?.[1]) {
+    const source = paint(token(tint[1]));
+    return { rgb: source.rgb, alpha: (source.alpha * Number(tint[2])) / 100 };
+  }
+  const alpha = value.match(/\s*\/\s*([0-9.]+)\)$/u);
+  return {
+    rgb: srgb(oklab(value.replace(/\s*\/\s*[0-9.]+\)$/u, ")"))),
+    alpha: alpha ? Number(alpha[1]) : 1,
+  };
+}
+
+/** CSS source-over compositing in sRGB, including the control background under its border. */
+function over(foreground: Paint, background: Channels): Channels {
+  return [
+    foreground.rgb[0] * foreground.alpha + background[0] * (1 - foreground.alpha),
+    foreground.rgb[1] * foreground.alpha + background[1] * (1 - foreground.alpha),
+    foreground.rgb[2] * foreground.alpha + background[2] * (1 - foreground.alpha),
+  ];
+}
+
+function decodeSrgb(value: number): number {
+  return value <= 0.04045 ? value / 12.92 : Math.pow((value + 0.055) / 1.055, 2.4);
+}
+
+function rgbLuminance(rgb: Channels): number {
+  return 0.2126 * decodeSrgb(rgb[0]) + 0.7152 * decodeSrgb(rgb[1]) + 0.0722 * decodeSrgb(rgb[2]);
+}
+
+function rgbContrast(foreground: Channels, background: Channels): number {
+  const lighter = Math.max(rgbLuminance(foreground), rgbLuminance(background));
+  const darker = Math.min(rgbLuminance(foreground), rgbLuminance(background));
+  return (lighter + 0.05) / (darker + 0.05);
 }
 
 function mixOklab(
@@ -80,14 +132,70 @@ function oklabContrast(
 }
 
 function contrast(foreground: string, background: string): number {
-  const [lighter = 0, darker = 0] = [
-    relativeLuminance(foreground),
-    relativeLuminance(background),
-  ].toSorted((left, right) => right - left);
-  return (lighter + 0.05) / (darker + 0.05);
+  const backdrop = paint(background);
+  if (backdrop.alpha !== 1) throw new Error("Contrast needs an opaque background");
+  return rgbContrast(over(paint(foreground), backdrop.rgb), backdrop.rgb);
 }
 
 describe("shared color contrast", () => {
+  it("retains alpha instead of accepting a translucent border as its opaque source", () => {
+    expect(contrast("oklch(0% 0 0 / 0.5)", "oklch(100% 0 0)")).toBeCloseTo(3.9767, 4);
+    expect(contrast(token("--color-border-strong"), token("--color-surface"))).toBeLessThan(3);
+    expect(() => oklab("oklch(0% 0 0 / 0.5)")).toThrow();
+  });
+
+  it("identifies unselected radio marks on their actual surfaces", () => {
+    const border = token("--color-choice-marker-border");
+    for (const surface of [
+      "--color-surface",
+      "--color-canvas",
+      "--color-surface-subtle",
+      "--color-surface-hover",
+      "--color-surface-pressed",
+    ]) {
+      expect(contrast(border, token(surface)), surface).toBeGreaterThanOrEqual(3);
+    }
+  });
+
+  it("keeps semantic input boundaries distinct from both adjacent surfaces throughout hover", () => {
+    for (const [tone, source] of [
+      ["action", "action"],
+      ["review", "review"],
+      ["success", "success"],
+      ["warning", "warning"],
+      ["invalid", "danger"],
+    ]) {
+      // Read the actual control surface recipe so a tint change invalidates this evidence.
+      const recipe = styles.match(
+        new RegExp(`\\.momo-surface-control-${tone} \\{([^}]+)\\}`, "u"),
+      )?.[1];
+      if (!recipe) throw new Error(`Missing control surface for ${tone}`);
+      const rates = [...recipe.matchAll(/var\(--color-[a-z]+\) ([0-9.]+)%/gu)].map(
+        (match) => Number(match[1]) / 100,
+      );
+      const [base, hover] = rates;
+      if (base === undefined || hover === undefined) throw new Error(`Missing ${tone} tint`);
+      const border = paint(token(`--color-control-border-${tone}`));
+      const surface = paint(token(`--color-${source}`));
+      for (const parent of ["--color-surface", "--color-canvas", "--color-surface-subtle"]) {
+        const outside = paint(token(parent)).rgb;
+        for (let step = 0; step <= 10; step += 1) {
+          const inside = over({ ...surface, alpha: base + ((hover - base) * step) / 10 }, outside);
+          const edge = over(border, inside);
+          for (const adjacent of [inside, outside]) {
+            expect(
+              rgbContrast(edge, adjacent),
+              `${tone} on ${parent} at ${step}/10`,
+            ).toBeGreaterThanOrEqual(3);
+          }
+          expect(
+            rgbContrast(paint(token("--color-text-primary")).rgb, inside),
+          ).toBeGreaterThanOrEqual(4.5);
+        }
+      }
+    }
+  });
+
   it("meets AA for shared text/control pairs and 3:1 for data marks", () => {
     const surfaces = [token("--color-surface"), token("--color-canvas")];
     const foregrounds = [
@@ -140,6 +248,43 @@ describe("shared color contrast", () => {
     ];
     for (const mark of marks) {
       expect(contrast(token(mark), token("--color-surface")), mark).toBeGreaterThanOrEqual(3);
+    }
+  });
+
+  it("keeps action and surface text readable throughout hover and pressed feedback", () => {
+    const ramps = [
+      ["--color-text-inverse", "--color-action", "--color-action-hover", "--color-action-pressed"],
+      ["--color-text-inverse", "--color-danger", "--color-danger-hover", "--color-danger-pressed"],
+      [
+        "--color-text-primary",
+        "--color-surface",
+        "--color-surface-hover",
+        "--color-surface-pressed",
+      ],
+      [
+        "--color-text-primary",
+        "--color-surface-selected",
+        "--color-surface-selected-hover",
+        "--color-surface-selected-pressed",
+      ],
+      [
+        "--color-text-secondary",
+        "--color-surface",
+        "--color-surface-hover",
+        "--color-surface-pressed",
+      ],
+    ] as const;
+    for (const [text, base, hover, pressed] of ramps) {
+      const foreground = oklab(token(text));
+      for (let step = 0; step <= 10; step += 1) {
+        expect(
+          oklabContrast(foreground, mixOklab(oklab(token(hover)), oklab(token(base)), step / 10)),
+          `${text}: ${base} -> ${hover} at ${step}/10`,
+        ).toBeGreaterThanOrEqual(4.5);
+      }
+      expect(contrast(token(text), token(pressed)), `${text} on ${pressed}`).toBeGreaterThanOrEqual(
+        4.5,
+      );
     }
   });
 

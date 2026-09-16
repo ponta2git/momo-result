@@ -24,7 +24,7 @@ import type {
 } from "@/features/matches/workspace/scoreGrid/ScoreGridTypes";
 import { canonicalResultMembers, memberDisplayName } from "@/shared/domain/members";
 import { PlayOrderMark } from "@/shared/ui/data/PlayOrderMark";
-import { SelectControl } from "@/shared/ui/forms/Control";
+import { SelectControl } from "@/shared/ui/forms/SelectControl";
 
 type ScoreGridDesktopTableProps = ScoreGridData &
   ScoreGridCellRegistry &
@@ -86,10 +86,9 @@ export function ScoreGridDesktopTable({
                       reviewed: reviewedCellIds.has(memberCellId),
                     })}
                     value={player.memberId}
-                    onChange={(event) => {
+                    onValueChange={(nextValue) => {
                       onPlayerChange(rowIndex, {
-                        memberId: event.target
-                          .value as MatchFormValues["players"][number]["memberId"],
+                        memberId: nextValue as MatchFormValues["players"][number]["memberId"],
                       });
                     }}
                     onFocus={() => {
@@ -104,13 +103,11 @@ export function ScoreGridDesktopTable({
                         row: rowIndex,
                       })
                     }
-                  >
-                    {canonicalResultMembers.map((member) => (
-                      <option key={member.memberId} value={member.memberId}>
-                        {member.displayName}
-                      </option>
-                    ))}
-                  </SelectControl>
+                    options={canonicalResultMembers.map((member) => ({
+                      value: member.memberId,
+                      label: member.displayName,
+                    }))}
+                  />
                   <ScoreGridSelectStatus
                     cellId={memberCellId}
                     changed={Boolean(originalRow && originalRow.memberId !== player.memberId)}
@@ -143,8 +140,8 @@ export function ScoreGridDesktopTable({
                       reviewed: reviewedCellIds.has(playOrderCellId),
                     })}
                     value={Number.isFinite(player.playOrder) ? String(player.playOrder) : ""}
-                    onChange={(event) =>
-                      onPlayOrderChange(rowIndex, Math.trunc(Number(event.target.value)))
+                    onValueChange={(nextValue) =>
+                      onPlayOrderChange(rowIndex, Math.trunc(Number(nextValue)))
                     }
                     onFocus={() => {
                       onPreferImageKindChange?.("incident_log");
@@ -158,14 +155,14 @@ export function ScoreGridDesktopTable({
                         row: rowIndex,
                       })
                     }
-                  >
-                    <option value="">-</option>
-                    {[1, 2, 3, 4].map((order) => (
-                      <option key={order} value={order}>
-                        {order}
-                      </option>
-                    ))}
-                  </SelectControl>
+                    options={[
+                      { value: "", label: "-" },
+                      ...[1, 2, 3, 4].map((order) => ({
+                        value: String(order),
+                        label: String(order),
+                      })),
+                    ]}
+                  />
                   <ScoreGridSelectStatus
                     cellId={playOrderCellId}
                     changed={Boolean(originalRow && originalRow.playOrder !== player.playOrder)}

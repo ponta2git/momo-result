@@ -1,15 +1,19 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { draftToMatchForm } from "@/features/matches/workspace/draftToMatchForm";
 import type { IncidentKey, MatchFormValues } from "@/features/matches/workspace/matchFormTypes";
 import { emptyPlayers } from "@/features/matches/workspace/matchFormTypes";
+import { createSampleDraftMap } from "@/features/matches/workspace/review/sampleDrafts";
 import { ScoreGrid } from "@/features/matches/workspace/scoreGrid/ScoreGrid";
 import { ScoreGridReviewToolbar } from "@/features/matches/workspace/scoreGrid/ScoreGridReviewToolbar";
 import type { ScoreGridProps } from "@/features/matches/workspace/scoreGrid/ScoreGridTypes";
+import { useMatchWorkspaceReviewState } from "@/features/matches/workspace/useMatchWorkspaceReviewState";
 import { installMatchMediaController } from "@/test/doubles/dom";
 import type { MatchMediaController } from "@/test/doubles/dom";
+import { selectOption } from "@/test/selectOption";
 
 const noErrorPaths = new Set<string>();
 const noReview: ScoreGridProps["data"]["review"] = {
@@ -17,6 +21,44 @@ const noReview: ScoreGridProps["data"]["review"] = {
   activeCellId: null,
   items: [],
 };
+
+const reviewSample = draftToMatchForm({
+  draftByKind: createSampleDraftMap(),
+  nowIso: "2026-01-01T00:00:00.000Z",
+});
+
+function GuidedReviewHarness() {
+  const [values, setValues] = useState(reviewSample.values);
+  const review = useMatchWorkspaceReviewState({
+    values,
+    workspaceData: reviewSample.initialData,
+  });
+  return (
+    <ScoreGrid
+      actions={{
+        onAcknowledgeReviewCell: review.acknowledgeCell,
+        onIncidentChange: () => undefined,
+        onPlayerChange: (index, patch) =>
+          setValues((current) => ({
+            ...current,
+            players: current.players.map((player, row) =>
+              row === index ? { ...player, ...patch } : player,
+            ),
+          })),
+        onPlayOrderChange: () => undefined,
+        onRequestSubmitFocus: () => undefined,
+        onReviewCellFocus: review.focusCell,
+      }}
+      data={{
+        errorPathSet: noErrorPaths,
+        lastSyncedPlayerIndex: null,
+        originalPlayers: reviewSample.initialData.originalPlayers,
+        players: values.players,
+        review,
+      }}
+    />
+  );
+}
 
 function ScoreGridHarness({
   errorPathSet = noErrorPaths,
@@ -129,6 +171,34 @@ describe("ScoreGrid", () => {
     matchMedia = undefined;
   });
 
+  it("opens and focuses each warning while preserving values and explicit acknowledgement", async () => {
+    matchMedia = installMatchMediaController(true);
+    const user = userEvent.setup();
+    render(<GuidedReviewHarness />);
+    const next = screen.getByRole("button", { name: "次の要確認セルへ" });
+    const previous = screen.getByRole("button", { name: "前の要確認セルへ" });
+
+    await user.click(next);
+    expect(screen.getByRole("combobox", { name: /^メンバー/u })).toHaveFocus();
+    expect(screen.getByRole("combobox", { name: /^メンバー/u })).toHaveTextContent("あかねまみ");
+    await user.click(next);
+    const rank = screen.getByRole("textbox", { name: "おーたか 順位" });
+    expect(rank).toHaveFocus();
+    expect(rank).toHaveValue("3");
+    await user.click(previous);
+    expect(screen.getByRole("combobox", { name: /^メンバー/u })).toHaveFocus();
+    expect(screen.getByText("未確認2件／全2件")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "この値で確認済み" }));
+    await user.click(next);
+    expect(screen.getByRole("textbox", { name: "おーたか 順位" })).toHaveFocus();
+    await user.click(next);
+    expect(screen.getByRole("textbox", { name: "おーたか 順位" })).toHaveFocus();
+    expect(screen.getByText("未確認1件／全2件")).toBeInTheDocument();
+    await user.tab();
+    expect(screen.getByRole("textbox", { name: "おーたか 総資産（万円）" })).toHaveFocus();
+  });
+
   it("keeps a mobile signed numeric draft local until the cell is committed", async () => {
     matchMedia = installMatchMediaController(true);
     const user = userEvent.setup();
@@ -226,10 +296,35 @@ describe("ScoreGrid", () => {
     render(<ScoreGridHarness onPlayerChange={onPlayerChange} />);
 
     const memberSelect = screen.getByLabelText("メンバー");
-    await user.selectOptions(memberSelect, "member_eu");
+    await selectOption(user, memberSelect, "member_eu");
 
     expect(onPlayerChange).toHaveBeenLastCalledWith(0, { memberId: "member_eu" });
-    expect(memberSelect).toHaveValue("member_eu");
+    expect(memberSelect).toHaveTextContent("いーゆー");
+  });
+
+  it("uses selection keys inside selects and keeps horizontal and numeric cell navigation", async () => {
+    const user = userEvent.setup();
+    const onPlayerChange = vi.fn();
+    render(<ScoreGridHarness onPlayerChange={onPlayerChange} />);
+    const member = screen.getByRole("combobox", { name: "ぽんた メンバー" });
+    const order = screen.getByRole("combobox", { name: "ぽんた プレー順" });
+
+    member.focus();
+    await user.keyboard("{Enter}");
+    await screen.findByRole("listbox");
+    await user.keyboard("{ArrowDown}{Escape}");
+    await waitFor(() => expect(member).toHaveFocus());
+    expect(member).toHaveTextContent("ぽんた");
+    expect(onPlayerChange).not.toHaveBeenCalled();
+    await user.keyboard("{ArrowRight}");
+    expect(order).toHaveFocus();
+    await user.keyboard("{ArrowDown}");
+    await screen.findByRole("listbox");
+    await user.keyboard("{Tab}");
+    const rank = screen.getByRole("textbox", { name: "ぽんた 順位" });
+    await waitFor(() => expect(rank).toHaveFocus());
+    await user.keyboard("{Enter}");
+    expect(screen.getByRole("textbox", { name: "あかねまみ 順位" })).toHaveFocus();
   });
 
   it("exposes invalid score cells through native ARIA", () => {

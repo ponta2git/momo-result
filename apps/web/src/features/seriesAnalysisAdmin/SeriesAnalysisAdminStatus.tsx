@@ -139,12 +139,7 @@ function AnalysisJobStatusBadge({
 }) {
   const model: AnalysisJobStatusViewModel = analysisJobStatusViewModel[status];
   return (
-    <StatusBadge
-      announceChanges={announceChanges}
-      busy={model.busy}
-      label={statusLabel(status)}
-      tone={model.tone}
-    />
+    <StatusBadge announceChanges={announceChanges} label={statusLabel(status)} tone={model.tone} />
   );
 }
 
@@ -184,15 +179,14 @@ const statusLabels = {
 } as const satisfies Record<SeriesAnalysisJobStatus | "not_run", string>;
 
 type AnalysisJobStatusViewModel = {
-  busy?: boolean | undefined;
   tone: StatusBadgeTone;
 };
 
 const analysisJobStatusViewModel = {
   failed: { tone: "danger" },
   not_run: { tone: "neutral" },
-  queued: { busy: true, tone: "info" },
-  running: { busy: true, tone: "info" },
+  queued: { tone: "info" },
+  running: { tone: "info" },
   succeeded: { tone: "success" },
   timed_out: { tone: "danger" },
 } as const satisfies Record<SeriesAnalysisJobStatus | "not_run", AnalysisJobStatusViewModel>;

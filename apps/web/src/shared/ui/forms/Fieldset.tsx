@@ -2,6 +2,7 @@ import { useId } from "react";
 import type { FieldsetHTMLAttributes, ReactNode } from "react";
 
 import { cn } from "@/shared/ui/cn";
+import { controlBorderClass } from "@/shared/ui/forms/controlPresentation";
 import { buildFieldDescribedBy } from "@/shared/ui/forms/Field";
 import { readableTextWidthClass } from "@/shared/ui/layout/readableText";
 import { fieldText } from "@/shared/ui/typography";
@@ -25,7 +26,12 @@ export function Fieldset({ children, description, error, legend, ...props }: Fie
       className="min-w-0"
     >
       <legend className={fieldText.label}>{legend}</legend>
-      <div className="mt-2 flex min-h-11 min-w-0 flex-wrap items-center gap-1 rounded-sm border border-[var(--color-border)] bg-[var(--color-surface)] px-1 py-1">
+      <div
+        className={cn(
+          "mt-2 flex min-h-11 min-w-0 flex-wrap items-center gap-1 rounded-sm border bg-[var(--color-surface)] px-1 py-1",
+          controlBorderClass.default,
+        )}
+      >
         {children}
       </div>
       <div className="mt-1 flex min-w-0 flex-col gap-1 empty:hidden">

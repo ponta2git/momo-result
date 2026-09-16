@@ -6,6 +6,7 @@ import type { ComponentPropsWithoutRef, ComponentPropsWithRef, CSSProperties, Re
 
 import { cn } from "@/shared/ui/cn";
 import { instantMotionTransition, politeMotionTransition } from "@/shared/ui/motion/transitions";
+import { useSurfaceFeedback } from "@/shared/ui/motion/useSurfaceFeedback";
 
 export type TabsVariant = "filled" | "underline";
 
@@ -115,35 +116,32 @@ export function TabsList({ children, ref, variant = "filled", wrap, ...props }: 
 /** A tab with selection, focus, disabled, and mobile hit-target styling in one place. */
 export function TabsTab({ ref, ...props }: TabsTabProps) {
   const variant = useContext(TabsVariantContext);
+  const surfaceRef = useSurfaceFeedback(ref);
 
   return (
     <BaseTabs.Tab
       {...props}
-      ref={ref}
+      ref={surfaceRef}
       className={(state) =>
         cn(
-          "inline-flex min-h-11 shrink-0 items-center justify-center px-3 py-2 text-sm font-plain whitespace-nowrap focus-visible:outline-2 focus-visible:outline-[var(--color-action)] pointer-fine:min-h-9 pointer-fine:py-1",
+          "momo-surface momo-surface-press inline-flex min-h-11 shrink-0 items-center justify-center px-3 py-2 text-sm font-plain whitespace-nowrap focus-visible:outline-2 focus-visible:outline-[var(--color-action)] pointer-fine:min-h-9 pointer-fine:py-1",
           variant === "filled"
             ? cn(
                 "rounded-sm focus-visible:outline-offset-2",
                 state.active
-                  ? "bg-[var(--color-surface-selected)] text-[var(--color-text-primary)]"
+                  ? "momo-surface-selected text-[var(--color-text-primary)]"
                   : cn(
                       "text-[var(--color-text-secondary)]",
-                      state.disabled
-                        ? ""
-                        : "hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text-primary)]",
+                      state.disabled ? "" : "hover:text-[var(--color-text-primary)]",
                     ),
               )
             : cn(
-                "-mb-px border-b-2 focus-visible:outline-offset-[-2px]",
+                "momo-surface-underline -mb-px border-b-2 focus-visible:outline-offset-[-2px]",
                 state.active
-                  ? "border-transparent text-[var(--color-text-primary)]"
+                  ? "momo-surface-underline-selected border-transparent text-[var(--color-text-primary)]"
                   : cn(
-                      "border-transparent text-[var(--color-text-secondary)]",
-                      state.disabled
-                        ? ""
-                        : "hover:border-[var(--color-border-strong)] hover:text-[var(--color-text-primary)]",
+                      "text-[var(--color-text-secondary)]",
+                      state.disabled ? "" : "hover:text-[var(--color-text-primary)]",
                     ),
               ),
           state.disabled ? "cursor-not-allowed opacity-60" : "",

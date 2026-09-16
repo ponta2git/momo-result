@@ -18,12 +18,12 @@ describe("DraftStatusBadge", () => {
     expect(screen.getByText("状態不明")).toBeInTheDocument();
   });
 
-  it("maps the running domain status to generic busy and live-region behavior", () => {
+  it("announces the running domain status as a static label", () => {
     render(<DraftStatusBadge announceChanges status="ocr_running" />);
 
     const badge = screen.getByRole("status");
     expect(badge).toHaveTextContent("処理中");
-    expect(badge).toHaveAttribute("aria-busy", "true");
+    expect(badge).not.toHaveAttribute("aria-busy");
   });
 
   it("allows feature copy to override only the mapped label and note", () => {

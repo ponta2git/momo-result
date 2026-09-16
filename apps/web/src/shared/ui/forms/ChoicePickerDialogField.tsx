@@ -7,8 +7,10 @@ import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
 import { PaginationControls } from "@/shared/ui/data/PaginationControls";
 import { Dialog } from "@/shared/ui/feedback/Dialog";
+import { PendingStatus } from "@/shared/ui/feedback/PendingStatus";
 import { ChoiceList } from "@/shared/ui/forms/ChoiceList";
 import type { ChoiceListOption } from "@/shared/ui/forms/ChoiceList";
+import { controlBorderClass } from "@/shared/ui/forms/controlPresentation";
 import { buildFieldDescribedBy, Field } from "@/shared/ui/forms/Field";
 import { StaleShield } from "@/shared/ui/motion/StaleShield";
 
@@ -16,6 +18,8 @@ type ChoicePickerDialogFieldProps = Omit<
   HTMLAttributes<HTMLDivElement>,
   "children" | "className" | "onChange" | "style"
 > & {
+  /** The choice subject, without field annotations such as required / optional. */
+  choiceLabel?: string | undefined;
   disabled?: boolean | undefined;
   emptyState?: ReactNode | undefined;
   error?: ReactNode | undefined;
@@ -41,6 +45,7 @@ type ChoicePickerDialogFieldProps = Omit<
  * page mounted but inert until the requested page is ready.
  */
 export function ChoicePickerDialogField({
+  choiceLabel,
   disabled = false,
   emptyState = "選べる候補はありません。",
   error,
@@ -62,6 +67,8 @@ export function ChoicePickerDialogField({
   const [open, setOpen] = useState(false);
   const fallbackId = useId();
   const triggerId = `${fallbackId}-trigger`;
+  const titleId = `${fallbackId}-title`;
+  const subject = choiceLabel ?? label;
   const errorId = error ? `${fallbackId}-error` : undefined;
 
   const selectChoice = (nextValue: string) => {
@@ -81,7 +88,7 @@ export function ChoicePickerDialogField({
       <div
         className={cn(
           "flex min-h-11 min-w-0 items-center gap-2 rounded-sm border bg-[var(--color-surface)] pr-1 pl-3 pointer-fine:min-h-10",
-          error ? "border-[var(--color-danger)]" : "border-[var(--color-border)]",
+          error ? controlBorderClass.invalid : controlBorderClass.default,
         )}
       >
         <p className="font-plain min-w-0 flex-1 text-sm leading-5 text-pretty text-[var(--color-text-primary)]">
@@ -90,10 +97,11 @@ export function ChoicePickerDialogField({
         <div className="shrink-0">
           <Dialog
             contentClassName="flex min-h-0 flex-col overflow-y-hidden"
+            headerStatus={<PendingStatus pending={pending || scopeChanging}>更新中</PendingStatus>}
             open={open}
             popupClassName="overflow-y-hidden"
             surfaceClassName="flex flex-col overflow-y-hidden"
-            title={`${label}を選択`}
+            title={<span id={titleId}>{`${subject}を選択`}</span>}
             trigger={
               <Button
                 aria-describedby={buildFieldDescribedBy(errorId)}
@@ -113,21 +121,20 @@ export function ChoicePickerDialogField({
             <div className="grid min-h-0 flex-1">
               <StaleShield
                 active={scopeChanging}
-                busyLabel={`${label}候補を更新中`}
                 fallback={null}
-                statusPlacement="top-end"
+                statusPlacement="external"
                 strategy="preserve-inert"
               >
                 <div className="flex min-h-0 flex-col gap-3">
                   <div className="flex min-h-0 flex-1 flex-col">
                     <ChoiceList
-                      disabled={disabled}
+                      aria-labelledby={titleId}
+                      disabled={disabled || pending}
                       emptyState={emptyState}
                       layout="dialog"
-                      legend={`${label}候補`}
                       name={name}
                       options={options}
-                      pending={pending && !scopeChanging}
+                      pending={false}
                       value={value}
                       onValueChange={selectChoice}
                     />

@@ -4,6 +4,7 @@ import type { LinkProps } from "react-router-dom";
 
 import { buttonClassName, DecorativeActionIcon } from "@/shared/ui/actions/actionRecipes";
 import type { ButtonSize, ButtonVariant } from "@/shared/ui/actions/actionRecipes";
+import { useSurfaceFeedback } from "@/shared/ui/motion/useSurfaceFeedback";
 
 export type LinkButtonProps = Omit<LinkProps, "children" | "className" | "style"> & {
   children: ReactNode;
@@ -22,6 +23,7 @@ export function LinkButton({
   variant = "primary",
   ...props
 }: LinkButtonProps) {
+  const surfaceRef = useSurfaceFeedback<HTMLAnchorElement>();
   const content = (
     <>
       {icon ? <DecorativeActionIcon>{icon}</DecorativeActionIcon> : null}
@@ -46,7 +48,7 @@ export function LinkButton({
   }
 
   return (
-    <Link className={buttonClassName({ size, variant })} {...props}>
+    <Link ref={surfaceRef} className={buttonClassName({ size, variant })} {...props}>
       {content}
     </Link>
   );

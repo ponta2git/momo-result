@@ -28,6 +28,7 @@ import { toIsoFromLocalDateTime, toLocalDateTimeInputValue } from "@/shared/lib/
 import { parsePositiveIntSearchParam } from "@/shared/lib/searchParams";
 import { withReturnTo } from "@/shared/navigation/returnTo";
 import { showToast } from "@/shared/ui/feedback/Toast";
+import { useRetryNotice } from "@/shared/ui/feedback/useRetryNotice";
 
 const initialCreateHeldEventState = { version: 0 };
 const defaultPagination = { page: 1, pageSize: 10 };
@@ -221,18 +222,26 @@ export function useHeldEventsPageModel(): HeldEventsPageModel {
     [deleteEventAsync],
   );
 
-  const loadFailed =
+  const loadFailed = useRetryNotice(
     shouldShowBlockingQueryError(heldEventsQuery) ||
-    (shouldShowQueryError(heldEventsQuery) && !hasCurrentScopeData);
+      (shouldShowQueryError(heldEventsQuery) && !hasCurrentScopeData),
+    heldEventsIsFetching,
+    rawSearch,
+  );
+  const stale = useRetryNotice(
+    shouldShowQueryError(heldEventsQuery) && hasCurrentScopeData,
+    heldEventsIsFetching,
+    rawSearch,
+  );
   let list: HeldEventsListModel;
-  if (isInitialQueryLoading(heldEventsQuery) || pageCorrectionPending) {
+  if ((isInitialQueryLoading(heldEventsQuery) && !loadFailed) || pageCorrectionPending) {
     list = { kind: "loading", refresh };
   } else if (loadFailed) {
     list = { kind: "loadFailed", refresh };
   } else {
     list = {
       deletePending,
-      freshness: shouldShowQueryError(heldEventsQuery) && hasCurrentScopeData ? "stale" : "current",
+      freshness: stale ? "stale" : "current",
       kind: "ready",
       onPageChange: updatePage,
       onPageSizeChange: updatePageSize,

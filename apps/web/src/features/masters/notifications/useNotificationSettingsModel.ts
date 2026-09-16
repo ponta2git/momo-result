@@ -11,6 +11,7 @@ import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import { notificationSettingsKeys } from "@/shared/api/queryKeys";
 import { notificationSettingsQueryOptions } from "@/shared/api/queryOptions";
 import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
+import { useRetryNotice } from "@/shared/ui/feedback/useRetryNotice";
 
 type Kind = keyof NotificationSettings;
 type Values = Record<Kind, boolean>;
@@ -56,10 +57,10 @@ function saveErrorFeedback(error: unknown): Feedback {
 }
 
 /** Keeps editable choices tied to the confirmed generations from which editing began. */
-export function useNotificationSettingsPageModel() {
+export function useNotificationSettingsModel(queryEnabled = true) {
   const queryClient = useQueryClient();
   const idempotencyKeys = useIdempotencyKeyStore();
-  const query = useQuery(notificationSettingsQueryOptions());
+  const query = useQuery({ ...notificationSettingsQueryOptions(), enabled: queryEnabled });
   const [draft, setDraft] = useState<Draft>();
   const [feedback, setFeedback] = useState<Feedback>();
   const [confirmationOpen, setConfirmationOpen] = useState(false);
@@ -90,9 +91,10 @@ export function useNotificationSettingsPageModel() {
   });
 
   const confirmed = query.data;
+  const failed = useRetryNotice(query.isError, query.isFetching);
   const resource: SettingsResource = confirmed
     ? { status: "ready", confirmed, values: draft?.values ?? valuesOf(confirmed) }
-    : { status: query.isError ? "failed" : "loading" };
+    : { status: failed ? "failed" : "loading" };
   const dirty = Boolean(
     draft &&
     (draft.values.ocrCompleted !== draft.base.ocrCompleted.enabled ||
@@ -138,30 +140,28 @@ export function useNotificationSettingsPageModel() {
   };
 
   const reload = async () => {
-    if (saving.current || query.isFetching) return;
+    if (saving.current || query.isFetching) return false;
     const result = await query.refetch();
     if (result.isSuccess) {
       setDraft(undefined);
       idempotencyKeys.reset("notificationSettings.update");
       setFeedback(undefined);
     }
+    return result.isSuccess;
   };
 
   return {
     resource,
     dirty,
-    turnsOff,
     disabled,
     feedback,
     change,
     submit,
     pending: mutation.isPending,
-    stale: confirmed !== undefined && query.isError,
+    stale: confirmed !== undefined && failed,
     needsReload,
     refreshing: query.isFetching,
-    reload: () => {
-      void reload();
-    },
+    reload,
     reset: () => {
       setDraft(undefined);
       setFeedback(undefined);
@@ -169,3 +169,5 @@ export function useNotificationSettingsPageModel() {
     confirmation: { open: confirmationOpen, setOpen: setConfirmationOpen, save },
   };
 }
+
+export type NotificationSettingsModel = ReturnType<typeof useNotificationSettingsModel>;

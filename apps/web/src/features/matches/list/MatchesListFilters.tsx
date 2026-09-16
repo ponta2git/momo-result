@@ -14,7 +14,6 @@ import { SelectField } from "@/shared/ui/forms/SelectField";
 type MatchesListFiltersProps = {
   actions: MatchListFilterActions;
   candidates: MatchListFilterCandidates;
-  pending?: boolean | undefined;
   search: MatchListSearch;
   selectionErrors?: MatchListFilterSelectionErrors | undefined;
 };
@@ -49,7 +48,6 @@ export function describeMatchListDetailFilters(
 export function MatchesListFilters({
   actions,
   candidates,
-  pending = false,
   search,
   selectionErrors,
 }: MatchesListFiltersProps) {
@@ -93,7 +91,6 @@ export function MatchesListFilters({
   return (
     <>
       <HeldEventPickerField
-        disabled={pending}
         emptyChoiceDescription="開催で絞り込みません。"
         emptyChoiceLabel="すべての開催"
         error={selectionErrors?.heldEvents ?? heldEventPicker?.error}
@@ -113,13 +110,12 @@ export function MatchesListFilters({
         }}
       />
       <SelectField
-        disabled={pending}
         label="作品"
         options={gameTitleOptions}
         value={search.gameTitleId}
         {...gameTitlesErrorProps}
-        onChange={(event) => {
-          const value = event.currentTarget.value;
+        onValueChange={(nextValue) => {
+          const value = nextValue;
           patchSearch({
             gameTitleId: value,
             seasonMasterId: value && search.gameTitleId === value ? search.seasonMasterId : "",
@@ -127,13 +123,12 @@ export function MatchesListFilters({
         }}
       />
       <SelectField
-        disabled={pending}
         label="シーズン"
         options={seasonOptions}
         value={search.seasonMasterId}
         {...seasonsErrorProps}
-        onChange={(event) => {
-          patchSearch({ seasonMasterId: event.currentTarget.value });
+        onValueChange={(nextValue) => {
+          patchSearch({ seasonMasterId: nextValue });
         }}
       />
     </>

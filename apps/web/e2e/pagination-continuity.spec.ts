@@ -64,26 +64,39 @@ test.beforeEach(async ({ page }) => {
   await installE2eAuthHeaders(page);
 });
 
-test("keeps held-event rows usable while the next page loads", async ({ page }) => {
+test("keeps held-event rows visible and blocks stale actions while the next page loads", async ({
+  page,
+}) => {
   const pageTwoGate = createDeferred();
   await installHeldEventDirectory(page, pageTwoGate);
   await page.setViewportSize({ height: 900, width: 1280 });
   await page.goto("/held-events");
 
   const history = page.getByRole("region", { name: "開催履歴" });
-  const pager = page.getByRole("navigation", { name: "ページネーション" });
-  const visibleEventLink = history.getByRole("link", { name: /の開催詳細$/u }).first();
+  // The preserved page becomes inert until the requested page arrives.
+  const pager = page.getByRole("navigation", { includeHidden: true, name: "ページネーション" });
+  const visibleEventLink = history
+    .getByRole("link", { includeHidden: true, name: /の開催詳細$/u })
+    .first();
+  const nextPage = page.getByRole("button", { includeHidden: true, name: "次のページへ" });
   await expect(visibleEventLink).toBeVisible();
 
-  await page.getByRole("button", { name: "次のページへ" }).click();
-  await expect(history.getByRole("status")).toHaveText("開催履歴を更新中");
+  await nextPage.click();
+  await expect(history.getByRole("button", { name: "更新中…", exact: true })).toBeDisabled();
+  await expect(history.getByRole("status")).toHaveCount(0);
   await expect(history.getByLabel("開催履歴を読み込み中")).toHaveCount(0);
   await expect(visibleEventLink).toBeVisible();
+  await expect(visibleEventLink).toHaveAttribute("aria-disabled", "true");
+  await expect(visibleEventLink).not.toHaveAttribute("href");
   await expect(pager).toBeVisible();
-  await expect(page.getByRole("button", { name: "次のページへ" })).toBeDisabled();
+  await expect(nextPage).toBeDisabled();
 
   pageTwoGate.resolve();
   await expect(page.getByText("2／5")).toBeVisible();
+  await expect(history.getByRole("button", { name: "更新", exact: true })).toBeEnabled();
+  await expect(visibleEventLink).toHaveAttribute("href", /held-continuity-11\?/u);
+  await expect(nextPage).toBeEnabled();
+  await expect(nextPage).toBeFocused();
   await expect(history.getByRole("status")).toHaveCount(0);
 });
 
@@ -95,14 +108,21 @@ test("keeps export choices usable and restores paging focus on mobile", async ({
 
   await page.getByRole("button", { name: "開催を変更" }).click();
   const dialog = page.getByRole("dialog", { name: "開催を選択" });
-  const pager = dialog.getByRole("navigation", { name: "開催候補のページネーション" });
+  const pager = dialog.getByRole("navigation", {
+    includeHidden: true,
+    name: "開催候補のページネーション",
+  });
+  const choices = dialog.getByRole("group", { includeHidden: true, name: "開催を選択" });
   const nextPage = dialog.getByRole("button", { name: "次のページへ" });
   const selectedCandidate = dialog.getByRole("radio").first();
   await expect(selectedCandidate).toBeChecked();
+  const readyLayout = await Promise.all([choices.boundingBox(), pager.boundingBox()]);
 
   await nextPage.focus();
   await nextPage.click();
-  await expect(dialog.getByRole("status")).toHaveText("開催候補を更新中");
+  await expect(dialog.getByRole("status")).toHaveText("更新中");
+  await expect(dialog).toHaveAccessibleName("開催を選択");
+  expect(await Promise.all([choices.boundingBox(), pager.boundingBox()])).toEqual(readyLayout);
   await expect(dialog.getByRole("button", { name: "ダイアログを閉じる" })).toBeEnabled();
   await expect(selectedCandidate).toBeVisible();
   await expect(pager).toBeVisible();

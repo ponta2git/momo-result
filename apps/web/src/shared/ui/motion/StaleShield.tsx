@@ -8,7 +8,7 @@ type StaleShieldProps = {
   busyLabel?: string | undefined;
   children: ReactNode;
   fallback: ReactNode;
-  statusPlacement?: "top-center" | "top-end" | undefined;
+  statusPlacement?: "top-center" | "top-end" | "external" | undefined;
   strategy?: "preserve-inert" | "preserve-interactive" | "replace" | undefined;
 };
 
@@ -63,13 +63,10 @@ export function StaleShield({
         className="relative grid min-h-0 min-w-0"
         data-stale={active || undefined}
       >
-        <div
-          className={`grid min-h-0 min-w-0 ${active ? "opacity-60 blur-[2px]" : "opacity-100"}`}
-          ref={contentRef}
-        >
+        <div className="grid min-h-0 min-w-0" ref={contentRef}>
           {children}
         </div>
-        {active ? (
+        {active && statusPlacement !== "external" ? (
           <div
             className={`pointer-events-none absolute inset-x-0 flex ${
               statusPlacement === "top-end" ? "top-0 justify-end" : "top-3 justify-center"

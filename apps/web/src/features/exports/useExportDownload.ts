@@ -60,7 +60,7 @@ export function useExportDownload({
     onMutate: () => {
       clearSlowTimer();
       setSlow(false);
-      setResult(undefined);
+      setResult((previous) => (previous?.kind === "success" ? undefined : previous));
       slowTimerRef.current = window.setTimeout(() => {
         slowTimerRef.current = undefined;
         setSlow(true);

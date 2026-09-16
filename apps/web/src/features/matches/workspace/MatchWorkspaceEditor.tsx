@@ -35,6 +35,7 @@ export function MatchWorkspaceEditor({ model }: MatchWorkspaceEditorProps) {
       {model.persistence.recovery ? (
         <MatchWorkspaceRecoveryNotice model={model.persistence.recovery} />
       ) : null}
+      {model.notice ? <Notice tone={model.notice.tone}>{model.notice.message}</Notice> : null}
 
       {model.warnings.length > 0 ? (
         <Notice tone="warning" title="入力内容を確認してください">

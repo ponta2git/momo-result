@@ -7,6 +7,7 @@ import { getCsrfToken, setCsrfToken } from "@/shared/api/csrfTokenStore";
 import { DevUserPicker } from "@/shared/auth/DevUserPicker";
 import { setDevUser, testDevUserStorageKey } from "@/test/auth";
 import { createTestQueryClient } from "@/test/queryClient";
+import { selectOption } from "@/test/selectOption";
 
 describe("DevUserPicker principal transition", () => {
   it("clears cached and tab-local state before activating another account", async () => {
@@ -26,7 +27,11 @@ describe("DevUserPicker principal transition", () => {
       </QueryClientProvider>,
     );
 
-    await userEvent.selectOptions(screen.getByLabelText("操作用アカウント"), "account_ponta");
+    await selectOption(
+      userEvent.setup(),
+      screen.getByLabelText("操作用アカウント"),
+      "account_ponta",
+    );
 
     await waitFor(() =>
       expect(window.localStorage.getItem(testDevUserStorageKey)).toBe("account_ponta"),

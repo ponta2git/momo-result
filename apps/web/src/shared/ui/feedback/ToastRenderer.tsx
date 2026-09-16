@@ -13,14 +13,15 @@ type ToastItem = ReturnType<typeof Toast.useToastManager>["toasts"][number];
 
 function PresentToast({ reduceMotion, toast }: { reduceMotion: boolean | null; toast: ToastItem }) {
   const isPresent = useIsPresent();
+  const inactive = !isPresent || toast.limited || toast.transitionStatus === "ending";
 
   return (
     <m.div
-      aria-hidden={isPresent ? undefined : true}
-      className={cn("w-full", !isPresent && "pointer-events-none")}
+      aria-hidden={inactive || undefined}
+      className={cn("w-full", toast.limited && "hidden", inactive && "pointer-events-none")}
       data-toast-exit-snapshot={isPresent ? undefined : ""}
       exit={toastHidden}
-      inert={isPresent ? undefined : true}
+      inert={inactive || undefined}
       initial={reduceMotion ? false : toastHidden}
       animate={toastVisible}
       transition={reduceMotion ? instantMotionTransition : politeMotionTransition}
@@ -39,6 +40,7 @@ function PresentToast({ reduceMotion, toast }: { reduceMotion: boolean | null; t
               <Toast.Description className={cn(contentText.body, "mt-1 text-pretty")} />
             </div>
             <Toast.Close
+              aria-hidden={false}
               aria-label="通知を閉じる"
               render={<IconButton aria-label="通知を閉じる" icon="×" size="sm" variant="quiet" />}
             />
@@ -55,7 +57,7 @@ export function ToastRenderer() {
 
   return (
     <Toast.Portal>
-      <Toast.Viewport aria-live="polite" className={toastViewportClassName}>
+      <Toast.Viewport aria-label="通知" aria-live="polite" className={toastViewportClassName}>
         <AnimatePresence initial={false}>
           {toasts.map((toast) => (
             <PresentToast key={toast.id} reduceMotion={reduceMotion} toast={toast} />

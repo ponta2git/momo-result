@@ -59,7 +59,7 @@ export function AnalysisSection({
   return (
     <section aria-labelledby={headingId} className="min-w-0 scroll-mt-24" id={id}>
       <header>
-        <h2 className={contentText.heading} id={headingId}>
+        <h2 className={contentText.heading} id={headingId} tabIndex={-1}>
           {title}
         </h2>
       </header>
@@ -85,7 +85,7 @@ export function AnalysisSubsection({
   return (
     <section aria-labelledby={headingId} id={id}>
       <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
-        <h3 className={contentText.heading} id={headingId}>
+        <h3 className={contentText.heading} id={headingId} tabIndex={-1}>
           {title}
         </h3>
         {meta ? <span className={cn(contentText.supporting, "tabular-nums")}>{meta}</span> : null}

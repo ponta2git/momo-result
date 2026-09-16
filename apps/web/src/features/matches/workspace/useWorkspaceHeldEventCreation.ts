@@ -25,7 +25,10 @@ export function useWorkspaceHeldEventCreation({
   const idempotencyKeys = useIdempotencyKeyStore();
 
   return useMutation({
-    onMutate: () => setOperationError(null),
+    onMutate: () => {
+      notify("");
+      setOperationError(null);
+    },
     mutationFn: async (request: Parameters<typeof createHeldEvent>[0]) => {
       return runIdempotentMutation(
         idempotencyKeys,

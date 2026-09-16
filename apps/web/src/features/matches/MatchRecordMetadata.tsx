@@ -45,7 +45,8 @@ export function MatchRecordMetadata({
         actions={
           <AlertDialog
             cancelLabel="キャンセル"
-            confirmLabel={isDeletePending ? "削除中…" : "削除する"}
+            confirmLabel="削除する"
+            pendingLabel="削除中…"
             formatError={(error) => formatApiError(error, "削除に失敗しました")}
             pending={isDeletePending}
             description={`${formatMatchNoInEvent(match.matchNoInEvent)}を完全に削除します。この操作は取り消せません。`}

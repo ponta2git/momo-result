@@ -15,10 +15,12 @@ import type {
   SourceImageItem,
   SourceImageKind,
 } from "@/features/matches/workspace/sourceImages/sourceImageTypes";
+import type { WorkspaceNotice } from "@/features/matches/workspace/useWorkspaceNotice";
 import type { HeldEventPickerDirectory } from "@/shared/api/useHeldEventPickerDirectory";
 import type { IncidentKey } from "@/shared/domain/incidents";
 
 type MatchWorkspacePageModelInput = {
+  notice?: WorkspaceNotice | null;
   draftSession: {
     dirty: boolean;
     navigationAllowedRef: { current: boolean };
@@ -185,8 +187,11 @@ export function buildMatchWorkspacePageModel(
             onRun: input.persistence.onPrimaryAction,
           },
           availability: {
-            disabled: input.loading.workspaceLoading,
-            pending: input.persistence.busy,
+            disabled: input.loading.workspaceLoading || input.persistence.busy,
+            pending:
+              input.persistence.busy &&
+              !input.persistence.confirmation.open &&
+              !input.persistence.cancellation.confirmOpen,
           },
           feedback: {
             error:
@@ -264,6 +269,7 @@ export function buildMatchWorkspacePageModel(
             }
           : null,
       warnings: workspaceData?.warnings ?? [],
+      notice: input.notice,
     },
     loading: {
       base: input.loading.base,

@@ -76,6 +76,7 @@ function HeldEventDetailReadyContent({ page }: { page: HeldEventDetailReadyPageM
             action={
               <Button
                 pending={freshness.refresh.pending}
+                disabled={freshness.refresh.disabled}
                 pendingLabel="再取得中"
                 size="sm"
                 variant="secondary"
@@ -96,6 +97,7 @@ function HeldEventDetailReadyContent({ page }: { page: HeldEventDetailReadyPageM
             action={
               <Button
                 pending={enrichment.refresh.pending}
+                disabled={enrichment.refresh.disabled}
                 pendingLabel="再取得中"
                 size="sm"
                 variant="secondary"

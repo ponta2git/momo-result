@@ -4,6 +4,7 @@ import { expect, test as base } from "@playwright/test";
 import type {
   APIRequestContext,
   APIResponse,
+  Locator,
   Page,
   Request,
   Route,
@@ -12,6 +13,17 @@ import type {
 
 export const devAccountId = "account_ponta";
 export const devUserStorageKey = "momoresult.devUser";
+
+/** Exercise the visible selection path using the option's stable business identity. */
+export async function selectControlOption(page: Page, trigger: Locator, value: string) {
+  await trigger.click();
+  const option = page
+    .getByRole("option")
+    .and(page.locator(`[data-value=${JSON.stringify(value)}]`));
+  const label = await option.textContent();
+  await option.click();
+  await expect(trigger).toHaveText(label ?? "");
+}
 
 const generatedIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u;
 

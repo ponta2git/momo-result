@@ -10,6 +10,7 @@ import type {
   MatchListFilterCandidates,
   MatchListSearch,
 } from "@/features/matches/list/matchListTypes";
+import { selectOption } from "@/test/selectOption";
 
 const initialSearch: MatchListSearch = {
   cursor: "",
@@ -97,7 +98,7 @@ describe("MatchesListFilters", () => {
       />,
     );
 
-    await user.selectOptions(screen.getByLabelText("作品"), "game-2");
+    await selectOption(user, screen.getByLabelText("作品"), "game-2");
 
     expect(onApply).toHaveBeenCalledWith({
       ...search,

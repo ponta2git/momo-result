@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useState } from "react";
 
 import { Button } from "@/shared/ui/actions/Button";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
@@ -6,6 +7,7 @@ import { cn } from "@/shared/ui/cn";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
+import { controlBorderClass } from "@/shared/ui/forms/controlPresentation";
 import { SelectField } from "@/shared/ui/forms/SelectField";
 import { contentText, fieldText } from "@/shared/ui/typography";
 
@@ -46,6 +48,15 @@ export function ExportCandidateSelect({
   scope,
   view,
 }: ExportCandidateSelectProps) {
+  const [requestedRetryOwner, setRequestedRetryOwner] = useState<"selection" | "support">();
+  const retrySelection = () => {
+    setRequestedRetryOwner("selection");
+    onSelectedCandidateRetry();
+  };
+  const retrySupport = () => {
+    setRequestedRetryOwner("support");
+    onRetry();
+  };
   if (view.kind === "hidden") return null;
 
   if (view.kind === "loading") {
@@ -64,7 +75,7 @@ export function ExportCandidateSelect({
     return (
       <Notice
         action={
-          <Button size="sm" onClick={onRetry}>
+          <Button pending={refreshing} pendingLabel="再読み込み中" size="sm" onClick={onRetry}>
             再読み込み
           </Button>
         }
@@ -96,12 +107,22 @@ export function ExportCandidateSelect({
           title={view.title}
         />
         {view.supportIssue ? (
-          <CandidateSupportNotice issue={view.supportIssue} onRetry={onRetry} />
+          <CandidateSupportNotice
+            issue={view.supportIssue}
+            pending={refreshing}
+            onRetry={onRetry}
+          />
         ) : null}
       </div>
     );
   }
 
+  const retryOwner =
+    requestedRetryOwner === "support" && view.supportIssue
+      ? "support"
+      : view.selectionState === "load-failed"
+        ? "selection"
+        : "support";
   const hasUnresolvedSelection = view.selectionState !== "resolved";
   const options = hasUnresolvedSelection
     ? [{ label: view.selectedLabel, value: view.selectedId }, ...view.candidates]
@@ -129,7 +150,8 @@ export function ExportCandidateSelect({
           <p
             className={cn(
               contentText.body,
-              "min-h-11 rounded-sm border border-[var(--color-border)] px-3 py-2",
+              "min-h-11 rounded-sm border px-3 py-2",
+              controlBorderClass.default,
             )}
           >
             {view.selectedLabel}
@@ -148,7 +170,7 @@ export function ExportCandidateSelect({
           value: option.value,
         }))}
         value={view.selectedId}
-        onChange={(event) => onChange(event.currentTarget.value)}
+        onValueChange={(nextValue) => onChange(nextValue)}
       />
     );
   }
@@ -157,7 +179,11 @@ export function ExportCandidateSelect({
     <div className="grid gap-4">
       <div className="grid gap-1 empty:hidden">
         {selector}
-        {refreshing && !scopeChanging ? (
+        {refreshing &&
+        !scopeChanging &&
+        scope === "season" &&
+        !view.supportIssue &&
+        view.selectionState !== "load-failed" ? (
           <p className={contentText.body} role="status">
             出力対象を確認しています。
           </p>
@@ -183,7 +209,12 @@ export function ExportCandidateSelect({
       {view.selectionState === "load-failed" ? (
         <Notice
           action={
-            <Button size="sm" onClick={onSelectedCandidateRetry}>
+            <Button
+              pending={refreshing && retryOwner === "selection"}
+              pendingLabel="再確認中"
+              size="sm"
+              onClick={retrySelection}
+            >
               指定対象を再確認
             </Button>
           }
@@ -194,17 +225,23 @@ export function ExportCandidateSelect({
         </Notice>
       ) : null}
       {view.supportIssue ? (
-        <CandidateSupportNotice issue={view.supportIssue} onRetry={onRetry} />
+        <CandidateSupportNotice
+          issue={view.supportIssue}
+          pending={refreshing && retryOwner === "support"}
+          onRetry={retrySupport}
+        />
       ) : null}
     </div>
   );
 }
 
 function CandidateSupportNotice({
+  pending,
   issue,
   onRetry,
 }: {
   issue: ExportCandidateSupportIssue;
+  pending: boolean;
   onRetry: () => void;
 }) {
   const title =
@@ -234,7 +271,13 @@ function CandidateSupportNotice({
   return (
     <Notice
       action={
-        <Button size="sm" variant="secondary" onClick={onRetry}>
+        <Button
+          pending={pending}
+          pendingLabel="再取得中"
+          size="sm"
+          variant="secondary"
+          onClick={onRetry}
+        >
           出力候補を再取得
         </Button>
       }

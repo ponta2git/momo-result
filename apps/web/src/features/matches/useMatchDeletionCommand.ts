@@ -11,6 +11,7 @@ import { runIdempotentMutation } from "@/shared/api/idempotency";
 import { deleteMatch } from "@/shared/api/matches";
 import { formatApiError } from "@/shared/api/problemDetails";
 import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
+import { showToast } from "@/shared/ui/feedback/Toast";
 
 type MatchDeletionCommand = {
   destination: string;
@@ -72,6 +73,7 @@ export function useMatchDeletionCommand(options: MatchDeletionCommandOptions): M
     onSuccess: async (_response, command) => {
       const invalidation = invalidateAfterMatchDeleted(queryClient);
       if (mountedRef.current) {
+        showToast({ title: "試合を削除しました", tone: "success" });
         navigate(command.destination, { flushSync: true, replace: true });
       }
       evictDeletedMatchDetail(queryClient, command.targetMatchId);

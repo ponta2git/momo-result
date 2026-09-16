@@ -12,6 +12,7 @@ import {
   mapMastersQueryOptions,
   seasonMastersQueryOptions,
 } from "@/shared/api/queryOptions";
+import { useRetryNotice } from "@/shared/ui/feedback/useRetryNotice";
 
 const noGameTitles: GameTitleResponse[] = [];
 const noMaps: MapMasterResponse[] = [];
@@ -33,9 +34,9 @@ export function useMasterNameDirectory() {
   const maps = mapsQuery.data?.items ?? noMaps;
   const seasons = seasonsQuery.data?.items ?? noSeasons;
   const failed = {
-    gameTitles: shouldShowQueryError(gameTitlesQuery),
-    maps: shouldShowQueryError(mapsQuery),
-    seasons: shouldShowQueryError(seasonsQuery),
+    gameTitles: useRetryNotice(shouldShowQueryError(gameTitlesQuery), gameTitlesQuery.isFetching),
+    maps: useRetryNotice(shouldShowQueryError(mapsQuery), mapsQuery.isFetching),
+    seasons: useRetryNotice(shouldShowQueryError(seasonsQuery), seasonsQuery.isFetching),
   };
   const names = useMemo(
     () => ({

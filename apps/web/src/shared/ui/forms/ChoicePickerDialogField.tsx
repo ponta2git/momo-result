@@ -10,6 +10,7 @@ import { Dialog } from "@/shared/ui/feedback/Dialog";
 import { PendingStatus } from "@/shared/ui/feedback/PendingStatus";
 import { ChoiceList } from "@/shared/ui/forms/ChoiceList";
 import type { ChoiceListOption } from "@/shared/ui/forms/ChoiceList";
+import { controlBorderClass } from "@/shared/ui/forms/controlPresentation";
 import { buildFieldDescribedBy, Field } from "@/shared/ui/forms/Field";
 import { StaleShield } from "@/shared/ui/motion/StaleShield";
 
@@ -87,7 +88,7 @@ export function ChoicePickerDialogField({
       <div
         className={cn(
           "flex min-h-11 min-w-0 items-center gap-2 rounded-sm border bg-[var(--color-surface)] pr-1 pl-3 pointer-fine:min-h-10",
-          error ? "border-[var(--color-danger)]" : "border-[var(--color-border)]",
+          error ? controlBorderClass.invalid : controlBorderClass.default,
         )}
       >
         <p className="font-plain min-w-0 flex-1 text-sm leading-5 text-pretty text-[var(--color-text-primary)]">

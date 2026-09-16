@@ -30,7 +30,7 @@
   --ref-neutral-900: oklch(24.5% 0.02 250);
   --ref-neutral-border: oklch(24.5% 0.02 250 / 0.12);
   --ref-neutral-border-strong: oklch(24.5% 0.02 250 / 0.22);
-  --ref-neutral-control-border: oklch(63.5% 0.018 250);
+  --ref-neutral-choice-marker: oklch(63.5% 0.018 250);
   --ref-neutral-night: oklch(24% 0.035 260);
 
   --ref-neutral-60: oklch(98% 0.004 235);
@@ -99,7 +99,8 @@
   --color-border: var(--ref-neutral-border);
   --color-border-strong: var(--ref-neutral-border-strong);
   --color-secondary-border: var(--ref-neutral-border-strong);
-  --color-control-border: var(--ref-neutral-control-border);
+  --color-control-border: var(--ref-neutral-border-strong);
+  --color-choice-marker-border: var(--ref-neutral-choice-marker);
   --color-control-border-action: color-mix(in oklab, var(--color-action) 75%, transparent);
   --color-control-border-review: color-mix(in oklab, var(--color-review) 80%, transparent);
   --color-control-border-success: color-mix(in oklab, var(--color-success) 80%, transparent);

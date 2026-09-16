@@ -7,6 +7,7 @@ import { cn } from "@/shared/ui/cn";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
+import { controlBorderClass } from "@/shared/ui/forms/controlPresentation";
 import { SelectField } from "@/shared/ui/forms/SelectField";
 import { contentText, fieldText } from "@/shared/ui/typography";
 
@@ -149,7 +150,8 @@ export function ExportCandidateSelect({
           <p
             className={cn(
               contentText.body,
-              "min-h-11 rounded-sm border border-[var(--color-border)] px-3 py-2",
+              "min-h-11 rounded-sm border px-3 py-2",
+              controlBorderClass.default,
             )}
           >
             {view.selectedLabel}

@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 
 import { cn } from "@/shared/ui/cn";
 import { SpinnerIcon } from "@/shared/ui/feedback/Spinner";
+import { controlBorderClass } from "@/shared/ui/forms/controlPresentation";
 import { readableTextWidthClass } from "@/shared/ui/layout/readableText";
 import { useSurfaceFeedback } from "@/shared/ui/motion/useSurfaceFeedback";
 import { contentText, fieldText } from "@/shared/ui/typography";
@@ -62,7 +63,8 @@ export function ChoiceList<Value extends string>({
       {labelledBy ? null : <legend className={fieldText.label}>{legend}</legend>}
       <div
         className={cn(
-          "min-w-0 divide-y divide-[var(--color-border)] overflow-hidden rounded-sm border border-[var(--color-border)] bg-[var(--color-surface)]",
+          "min-w-0 divide-y divide-[var(--color-border)] overflow-hidden rounded-sm border bg-[var(--color-surface)]",
+          controlBorderClass.default,
           labelledBy ? "" : "mt-2",
           layout === "dialog"
             ? "max-h-[min(24rem,55dvh)] min-h-0 flex-1 overflow-y-auto overscroll-contain"
@@ -156,7 +158,7 @@ function ChoiceOption<Value extends string>({
             "inline-flex size-5 items-center justify-center rounded-full border",
             selected
               ? "border-[var(--color-action)] text-[var(--color-action)]"
-              : "border-[var(--color-control-border)] text-transparent",
+              : "border-[var(--color-choice-marker-border)] text-transparent",
           )}
         >
           {option.pending ? (

@@ -29,9 +29,15 @@ const textAlignClass = {
   start: "text-left",
 } as const satisfies Record<ControlTextAlign, string>;
 
+/** Shared outlines for editable fields, grouped choices, and dialog-backed selection fields. */
+export const controlBorderClass = {
+  default: "border-[var(--color-control-border)]",
+  invalid: "border-[var(--color-control-border-invalid)]",
+} as const;
+
 const toneClass = {
   action: "border-[var(--color-control-border-action)] momo-surface-control-action",
-  default: "border-[var(--color-control-border)]",
+  default: controlBorderClass.default,
   review: "border-[var(--color-control-border-review)] momo-surface-control-review",
   success: "border-[var(--color-control-border-success)] momo-surface-control-success",
   warning: "border-[var(--color-control-border-warning)] momo-surface-control-warning",
@@ -39,8 +45,7 @@ const toneClass = {
 
 const baseControlClass =
   "w-full min-w-0 rounded-sm border momo-surface momo-surface-neutral py-2 text-base leading-6 font-plain text-[var(--color-text-primary)] disabled:cursor-not-allowed disabled:bg-[var(--color-surface-subtle)] disabled:text-[var(--color-text-muted)] disabled:opacity-70 sm:text-sm sm:leading-5";
-const invalidControlClass =
-  "border-[var(--color-control-border-invalid)] momo-surface-control-invalid";
+const invalidControlClass = cn(controlBorderClass.invalid, "momo-surface-control-invalid");
 
 type ResolvedControlPresentation = {
   controlHeight: ControlHeight;

@@ -1,4 +1,5 @@
 import { cn } from "@/shared/ui/cn";
+import { controlBorderClass } from "@/shared/ui/forms/controlPresentation";
 import { useSurfaceFeedback } from "@/shared/ui/motion/useSurfaceFeedback";
 
 type SegmentedOption = {
@@ -23,7 +24,12 @@ export function SegmentedControl({
   value,
 }: SegmentedControlProps) {
   return (
-    <fieldset className="inline-flex max-w-full min-w-0 flex-wrap items-stretch gap-1 rounded-sm border border-[var(--color-border)] bg-[var(--color-surface)] p-1">
+    <fieldset
+      className={cn(
+        "inline-flex max-w-full min-w-0 flex-wrap items-stretch gap-1 rounded-sm border bg-[var(--color-surface)] p-1",
+        controlBorderClass.default,
+      )}
+    >
       <legend className="sr-only">{label}</legend>
       {options.map((option) => {
         return (

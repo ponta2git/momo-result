@@ -144,8 +144,8 @@ describe("shared color contrast", () => {
     expect(() => oklab("oklch(0% 0 0 / 0.5)")).toThrow();
   });
 
-  it("identifies input boundaries and unselected radio marks on their actual surfaces", () => {
-    const border = token("--color-control-border");
+  it("identifies unselected radio marks on their actual surfaces", () => {
+    const border = token("--color-choice-marker-border");
     for (const surface of [
       "--color-surface",
       "--color-canvas",

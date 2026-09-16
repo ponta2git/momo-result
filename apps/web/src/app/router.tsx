@@ -18,7 +18,6 @@ import {
   loadMatchesListPage,
   loadMatchEditPage,
   loadOcrCapturePage,
-  loadNotificationSettingsPage,
   loadSeriesComparisonPage,
   loadSeriesAnalysisAdminPage,
 } from "@/app/routeModules";
@@ -35,7 +34,6 @@ const MatchDetailPage = lazy(() => loadLazyModule(loadMatchDetailPage));
 const MatchesListPage = lazy(() => loadLazyModule(loadMatchesListPage));
 const MatchEditPage = lazy(() => loadLazyModule(loadMatchEditPage));
 const OcrCapturePage = lazy(() => loadLazyModule(loadOcrCapturePage));
-const NotificationSettingsPage = lazy(() => loadLazyModule(loadNotificationSettingsPage));
 const SeriesComparisonPage = lazy(() => loadLazyModule(loadSeriesComparisonPage));
 const SeriesAnalysisAdminPage = lazy(() => loadLazyModule(loadSeriesAnalysisAdminPage));
 
@@ -67,7 +65,7 @@ export const appRoutes: RouteObject[] = [
             path: "admin/notifications",
             element: (
               <AdminRoute>
-                <NotificationSettingsPage />
+                <Navigate replace to="/admin/masters?tab=notifications" />
               </AdminRoute>
             ),
           },

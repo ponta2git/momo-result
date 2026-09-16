@@ -5,7 +5,8 @@ import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { NotificationSettingsPage } from "@/features/notificationSettings/NotificationSettingsPage";
+import { NotificationSettingsPanel } from "@/features/masters/notifications/NotificationSettingsPanel";
+import { useNotificationSettingsModel } from "@/features/masters/notifications/useNotificationSettingsModel";
 import type {
   NotificationSettings,
   NotificationSettingsUpdate,
@@ -24,10 +25,15 @@ let queryClient: QueryClient;
 let user: ReturnType<typeof userEvent.setup>;
 let saved: NotificationSettings;
 
+function NotificationSettingsHarness() {
+  const model = useNotificationSettingsModel();
+  return <NotificationSettingsPanel model={model} />;
+}
+
 function renderPage() {
   return render(
     <QueryClientProvider client={queryClient}>
-      <NotificationSettingsPage />
+      <NotificationSettingsHarness />
     </QueryClientProvider>,
   );
 }
@@ -58,7 +64,7 @@ async function confirmOff() {
   await user.click(screen.getByRole("button", { name: "OFFにして保存" }));
 }
 
-describe("NotificationSettingsPage", () => {
+describe("NotificationSettingsPanel", () => {
   beforeEach(() => {
     queryClient = createTestQueryClient();
     user = userEvent.setup();

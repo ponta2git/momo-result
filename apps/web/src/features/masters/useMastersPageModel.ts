@@ -1,8 +1,9 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useState, useTransition } from "react";
+import { useCallback, useEffect, useOptimistic, useState, useTransition } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
 import { defaultLayoutFamily } from "@/features/masters/masterValidation";
+import { useNotificationSettingsModel } from "@/features/masters/notifications/useNotificationSettingsModel";
 import { useMasterCreateActions } from "@/features/masters/useMasterCreateActions";
 import { useMasterEditCommands } from "@/features/masters/useMasterEditCommands";
 import { useMasterOptimisticCatalog } from "@/features/masters/useMasterOptimisticCatalog";
@@ -18,6 +19,7 @@ export const masterTabs = [
   { id: "catalog", label: "作品・マップ・シーズン" },
   { id: "aliases", label: "メンバー名寄せ" },
   { id: "incidents", label: "事件簿" },
+  { id: "notifications", label: "通知" },
 ] as const;
 
 export type MasterTabId = (typeof masterTabs)[number]["id"];
@@ -55,7 +57,13 @@ export function useMastersPageModel() {
 
   const [selectedGameTitleId, setSelectedGameTitleId] = useState("");
   const rawTab = searchParams.get("tab");
-  const activeTab: MasterTabId = isMasterTabId(rawTab) ? rawTab : "catalog";
+  const urlTab: MasterTabId = isMasterTabId(rawTab) ? rawTab : "catalog";
+  const [activeTab, setOptimisticTab] = useOptimistic(urlTab);
+  const [, startTabTransition] = useTransition();
+  const [openedTabs, setOpenedTabs] = useState<MasterTabId[]>([activeTab]);
+  if (!openedTabs.includes(activeTab)) {
+    setOpenedTabs([...openedTabs, activeTab]);
+  }
   const setActiveTab = useCallback(
     (nextTab: MasterTabId) => {
       const next = new URLSearchParams(searchParams);
@@ -64,9 +72,12 @@ export function useMastersPageModel() {
       } else {
         next.set("tab", nextTab);
       }
-      setSearchParams(next, { replace: true });
+      startTabTransition(() => {
+        setOptimisticTab(nextTab);
+        setSearchParams(next, { replace: true });
+      });
     },
-    [searchParams, setSearchParams],
+    [searchParams, setOptimisticTab, setSearchParams],
   );
   const [completions, setCompletions] = useState<Record<string, string>>({});
   const onFeedback = useCallback((kind: string, scope: string, message: string) => {
@@ -84,7 +95,13 @@ export function useMastersPageModel() {
     setSearchParams(next, { replace: true });
   }, [rawTab, searchParams, setSearchParams]);
 
-  const resourceQueries = useMasterResourceQueries(authScope, selectedGameTitleId);
+  // Keep visited resources mounted and enabled: switching tabs must not become a reload.
+  const notifications = useNotificationSettingsModel(openedTabs.includes("notifications"));
+  const resourceQueries = useMasterResourceQueries(
+    authScope,
+    selectedGameTitleId,
+    openedTabs.some((tab) => tab !== "notifications"),
+  );
   const { gameTitles, mapMasters, seasonMasters } = resourceQueries;
   const optimisticCatalog = useMasterOptimisticCatalog({
     fallbackSelectedGameTitleId: resourceQueries.selectedGameTitleId,
@@ -168,19 +185,23 @@ export function useMastersPageModel() {
 
   return {
     aliases: {
+      hasData: resourceQueries.memberAliasesQuery.data !== undefined,
+      loadFailed: memberAliasesHasError && resourceQueries.memberAliasesQuery.data === undefined,
       completion: completions["aliases:"],
       createAction: createActions.aliasCreateAction,
       createError: createActions.aliasCreateState.error,
       createFormKey: createActions.aliasCreateState.version,
       items: resourceQueries.memberAliases,
       onDelete: editCommands.deleteMemberAlias,
-      onRetry: () => void resourceQueries.memberAliasesQuery.refetch(),
+      onRetry: async () => (await resourceQueries.memberAliasesQuery.refetch()).isSuccess,
       onUpdate: editCommands.updateMemberAlias,
       refreshing: resourceQueries.memberAliasesQuery.isFetching && !hasPendingMutation,
       stale: memberAliasesHasError && resourceQueries.memberAliasesQuery.data !== undefined,
     },
     catalog: {
       gameTitle: {
+        hasData: resourceQueries.gameTitlesQuery.data !== undefined,
+        loadFailed: gameTitlesHasError && resourceQueries.gameTitlesQuery.data === undefined,
         completion: completions["gameTitle:"],
         create: {
           action: createActions.gameTitleCreateAction,
@@ -191,7 +212,7 @@ export function useMastersPageModel() {
         defaultLayoutFamily,
         items: optimisticCatalog.optimisticGameTitles,
         onDelete: editCommands.deleteGameTitle,
-        onRetry: () => void resourceQueries.gameTitlesQuery.refetch(),
+        onRetry: async () => (await resourceQueries.gameTitlesQuery.refetch()).isSuccess,
         onSelect: setSelectedGameTitleId,
         onUpdate: editCommands.updateGameTitle,
         refreshing: resourceQueries.gameTitlesQuery.isFetching && !hasPendingMutation,
@@ -245,16 +266,19 @@ export function useMastersPageModel() {
       operationError,
     },
     incidents: {
+      hasData: resourceQueries.incidentMastersQuery.data !== undefined,
+      loadFailed:
+        incidentMastersHasError && resourceQueries.incidentMastersQuery.data === undefined,
       items: resourceQueries.incidentMasters,
-      onRetry: () => void resourceQueries.incidentMastersQuery.refetch(),
+      onRetry: async () => (await resourceQueries.incidentMastersQuery.refetch()).isSuccess,
       refreshing: resourceQueries.incidentMastersQuery.isFetching,
       stale: incidentMastersHasError && resourceQueries.incidentMastersQuery.data !== undefined,
     },
     navigation: {
-      disabled: hasPendingMutation || isReturnNavigationPending,
+      disabled: hasPendingMutation || notifications.pending || isReturnNavigationPending,
       disabledReason: isReturnNavigationPending
         ? "元の入力画面へ移動しています。"
-        : hasPendingMutation
+        : hasPendingMutation || notifications.pending
           ? "設定の追加・保存・削除が完了すると戻れます。"
           : undefined,
       destination: returnRoute.returnDestination,
@@ -266,6 +290,7 @@ export function useMastersPageModel() {
         }
       },
     },
+    notifications,
     tabs: {
       active: activeTab,
       items: masterTabs,

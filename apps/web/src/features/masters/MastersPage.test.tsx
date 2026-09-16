@@ -83,10 +83,136 @@ describe("MastersPage", () => {
 
     expect(await screen.findByRole("region", { name: "設定管理" })).toBeInTheDocument();
     expect(screen.getByRole("tablist", { name: "設定管理の表示切替" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "作品" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "作品" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "マップ" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "シーズン" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "事件簿" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "通知" })).toBeInTheDocument();
+  });
+
+  it("opens notification settings directly without requesting master resources", async () => {
+    setDevUser();
+    const masterRequests: string[] = [];
+    server.use(
+      ...["game-titles", "incident-masters", "member-aliases", "map-masters", "season-masters"].map(
+        (name) =>
+          http.get(`/api/${name}`, () => {
+            masterRequests.push(name);
+            return HttpResponse.json({ detail: "unavailable" }, { status: 503 });
+          }),
+      ),
+      http.get("/api/admin/notification-settings", () =>
+        HttpResponse.json({
+          ocrCompleted: { enabled: true, generation: "0" },
+          analysisCompleted: { enabled: false, generation: "0" },
+        }),
+      ),
+    );
+    renderPage("/admin/masters?tab=notifications");
+    expect(await screen.findByRole("checkbox", { name: "OCR完了" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "分析完了" })).not.toBeChecked();
+    expect(screen.getByRole("tab", { name: "通知" })).toHaveAttribute("aria-selected", "true");
+    expect(masterRequests).toEqual([]);
+  });
+
+  it("keeps tab navigation and notification edits available through a master load failure", async () => {
+    setDevUser();
+    const masterGate = createDeferred();
+    let notificationReads = 0;
+    server.use(
+      http.get("/api/game-titles", async () => {
+        await masterGate.promise;
+        return HttpResponse.json({ detail: "unavailable" }, { status: 503 });
+      }),
+      http.get("/api/admin/notification-settings", () => {
+        notificationReads += 1;
+        return HttpResponse.json({
+          ocrCompleted: { enabled: true, generation: "0" },
+          analysisCompleted: { enabled: true, generation: "0" },
+        });
+      }),
+    );
+    renderPage();
+    expect(await screen.findByRole("status", { name: "作品を読み込み中" })).toBeInTheDocument();
+    const notificationsTab = screen.getByRole("tab", { name: "通知" });
+    await user.click(notificationsTab);
+    const checkbox = await screen.findByRole("checkbox", { name: "OCR完了" });
+    await user.click(checkbox);
+    await user.click(screen.getByRole("tab", { name: "作品・マップ・シーズン" }));
+    masterGate.resolve();
+    expect(await screen.findByText("作品を読み込めません")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "作品を追加" })).not.toBeInTheDocument();
+    const retryGate = createDeferred();
+    server.use(
+      http.get("/api/game-titles", async () => {
+        await retryGate.promise;
+        return HttpResponse.json({ items: [] });
+      }),
+    );
+    await user.click(screen.getByRole("button", { name: "再読み込み" }));
+    expect(screen.getByText("作品を読み込めません")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "再読み込み中" })).toBeDisabled();
+    retryGate.resolve();
+    expect(await screen.findByRole("heading", { name: "作品" })).toBeInTheDocument();
+    expect(screen.getByRole("tabpanel", { name: "作品・マップ・シーズン" })).toHaveFocus();
+    await user.click(notificationsTab);
+    expect(screen.getByRole("checkbox", { name: "OCR完了" })).toBe(checkbox);
+    expect(checkbox).not.toBeChecked();
+    expect(screen.getByText("未保存の変更があります")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "保存" })).toBeEnabled();
+    expect(screen.getByLabelText("current location")).toHaveTextContent("?tab=notifications");
+    expect(notificationReads).toBe(1);
+  });
+
+  it("isolates notification loading and failure while retaining edits in another tab", async () => {
+    setDevUser();
+    const gate = createDeferred();
+    server.use(
+      http.get("/api/admin/notification-settings", async () => {
+        await gate.promise;
+        return HttpResponse.json({ detail: "unavailable" }, { status: 503 });
+      }),
+    );
+    renderPage("/admin/masters?tab=notifications");
+    expect(await screen.findByRole("status", { name: "通知設定を読み込み中" })).toBeInTheDocument();
+    await user.click(screen.getByRole("tab", { name: "メンバー名寄せ" }));
+    const alias = await screen.findByRole("textbox", { name: /^別名/u });
+    await user.type(alias, "編集中の別名");
+    await user.click(screen.getByRole("tab", { name: "通知" }));
+    gate.resolve();
+    expect(await screen.findByText("通知設定を読み込めません")).toBeInTheDocument();
+    await user.click(screen.getByRole("tab", { name: "メンバー名寄せ" }));
+    expect(screen.getByRole("textbox", { name: /^別名/u })).toHaveValue("編集中の別名");
+  });
+
+  it("keeps notification saving tied to the shared return action across tab changes", async () => {
+    setDevUser();
+    const committed = createDeferred();
+    const saved = {
+      ocrCompleted: { enabled: false, generation: "0" },
+      analysisCompleted: { enabled: true, generation: "0" },
+    };
+    server.use(
+      http.get("/api/admin/notification-settings", () => HttpResponse.json(saved)),
+      http.put("/api/admin/notification-settings", async () => {
+        await committed.promise;
+        saved.ocrCompleted = { enabled: true, generation: "1" };
+        return HttpResponse.json(saved);
+      }),
+    );
+    renderPage(`${createMasterReturnEntry()}&tab=notifications`);
+    await user.click(await screen.findByRole("checkbox", { name: "OCR完了" }));
+    await user.click(screen.getByRole("button", { name: "保存" }));
+    const returnButton = screen.getByRole("button", { name: "元の入力画面へ戻る" });
+    expect(returnButton).toBeDisabled();
+    await user.click(screen.getByRole("tab", { name: "事件簿" }));
+    expect(returnButton).toBeDisabled();
+    committed.resolve();
+    await waitFor(() => expect(returnButton).toBeEnabled());
+    await user.click(screen.getByRole("tab", { name: "通知" }));
+    expect(screen.getByRole("checkbox", { name: "OCR完了" })).toBeChecked();
+    expect(screen.getByText("通知設定を保存しました。")).toBeVisible();
+    expect(screen.getByLabelText("current location")).toHaveTextContent("returnTo=");
   });
 
   it("starts independent master directory requests in parallel", async () => {

@@ -1,10 +1,5 @@
 export { LoginPage } from "@/features/auth/LoginPage";
 
-export const loadNotificationSettingsPage = () =>
-  import("@/features/notificationSettings/NotificationSettingsPage").then((module) => ({
-    default: module.NotificationSettingsPage,
-  }));
-
 export const loadAdminAccountsPage = () =>
   import("@/features/adminAccounts/AdminAccountsPage").then((module) => ({
     default: module.AdminAccountsPage,
@@ -87,7 +82,7 @@ const routePreloaders: Array<{
   { matches: (pathname) => pathname === "/admin/accounts", preload: loadAdminAccountsPage },
   {
     matches: (pathname) => pathname === "/admin/notifications",
-    preload: loadNotificationSettingsPage,
+    preload: loadMastersPage,
   },
   { matches: (pathname) => pathname === "/admin/analysis", preload: loadSeriesAnalysisAdminPage },
 ];

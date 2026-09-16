@@ -11,7 +11,7 @@ import {
 describe("RouteSuspenseFallback", () => {
   it.each([
     ["/exports", "narrow"],
-    ["/admin/notifications", "narrow"],
+    ["/admin/notifications", "standard"],
     ["/matches", "standard"],
     ["/analytics/series", "wide"],
     ["/matches/new", "workspace"],

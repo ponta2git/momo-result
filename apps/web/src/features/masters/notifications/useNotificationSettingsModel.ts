@@ -57,10 +57,10 @@ function saveErrorFeedback(error: unknown): Feedback {
 }
 
 /** Keeps editable choices tied to the confirmed generations from which editing began. */
-export function useNotificationSettingsPageModel() {
+export function useNotificationSettingsModel(queryEnabled = true) {
   const queryClient = useQueryClient();
   const idempotencyKeys = useIdempotencyKeyStore();
-  const query = useQuery(notificationSettingsQueryOptions());
+  const query = useQuery({ ...notificationSettingsQueryOptions(), enabled: queryEnabled });
   const [draft, setDraft] = useState<Draft>();
   const [feedback, setFeedback] = useState<Feedback>();
   const [confirmationOpen, setConfirmationOpen] = useState(false);
@@ -169,3 +169,5 @@ export function useNotificationSettingsPageModel() {
     confirmation: { open: confirmationOpen, setOpen: setConfirmationOpen, save },
   };
 }
+
+export type NotificationSettingsModel = ReturnType<typeof useNotificationSettingsModel>;

@@ -1,6 +1,6 @@
 import { useRef } from "react";
 
-import { useNotificationSettingsPageModel } from "@/features/notificationSettings/useNotificationSettingsPageModel";
+import type { NotificationSettingsModel } from "@/features/masters/notifications/useNotificationSettingsModel";
 import { actionRowClass } from "@/shared/ui/actions/actionGroup";
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
@@ -9,8 +9,7 @@ import { AlertDialog } from "@/shared/ui/feedback/Dialog";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 import { CheckboxField } from "@/shared/ui/forms/CheckboxField";
-import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
-import { PageFrame } from "@/shared/ui/layout/PageFrame";
+import { readableTextWidthClass } from "@/shared/ui/layout/readableText";
 import { contentText } from "@/shared/ui/typography";
 
 const settings = [
@@ -22,10 +21,9 @@ const settings = [
   },
 ] as const;
 
-export function NotificationSettingsPage() {
+export function NotificationSettingsPanel({ model: page }: { model: NotificationSettingsModel }) {
   const saveButtonRef = useRef<HTMLButtonElement>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
-  const page = useNotificationSettingsPageModel();
   const resource = page.resource;
   const issue = page.feedback?.tone === "success" ? undefined : page.feedback;
   const completion = page.feedback?.tone === "success" ? page.feedback.message : undefined;
@@ -45,8 +43,8 @@ export function NotificationSettingsPage() {
   );
 
   return (
-    <PageFrame width="narrow">
-      <PageContentSurface aria-label="Discord通知設定" className="grid gap-4" role="region">
+    <>
+      <section aria-label="Discord通知設定" className={cn("grid gap-4", readableTextWidthClass)}>
         <div className="grid gap-1">
           <h2
             className={contentText.heading}
@@ -162,7 +160,7 @@ export function NotificationSettingsPage() {
             </div>
           </form>
         ) : null}
-      </PageContentSurface>
+      </section>
       <AlertDialog
         open={page.confirmation.open}
         onOpenChange={page.confirmation.setOpen}
@@ -194,6 +192,6 @@ export function NotificationSettingsPage() {
           OFFにする種類の待機中・再送待ちの通知を取り消します。再びONにしても、取り消した通知は送信されません。送信開始済みの通知は届く場合があります。
         </p>
       </AlertDialog>
-    </PageFrame>
+    </>
   );
 }

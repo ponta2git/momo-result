@@ -1,7 +1,9 @@
 import { IncidentMasterPanel } from "@/features/masters/IncidentMasterPanel";
+import { MasterPanelContent } from "@/features/masters/MasterPanelContent";
 import { MasterRelationBoard } from "@/features/masters/MasterRelationBoard";
 import { MasterReturnNotice } from "@/features/masters/MasterReturnNotice";
 import { MemberAliasPanel } from "@/features/masters/MemberAliasPanel";
+import { NotificationSettingsPanel } from "@/features/masters/notifications/NotificationSettingsPanel";
 import { useMastersPageModel } from "@/features/masters/useMastersPageModel";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { TabsList, TabsPanel, TabsRoot, TabsTab } from "@/shared/ui/forms/Tabs";
@@ -59,40 +61,52 @@ export function MastersPage() {
 
           <TabsPanel keepMounted value="catalog">
             <div className="mt-6">
-              <MasterRelationBoard
-                gameTitle={page.catalog.gameTitle}
-                map={page.catalog.map}
-                scopedDisabledReason={page.catalog.scopedDisabledReason}
-                season={page.catalog.season}
-              />
+              <MasterPanelContent resource={page.catalog.gameTitle} resourceLabel="作品">
+                <MasterRelationBoard
+                  gameTitle={page.catalog.gameTitle}
+                  map={page.catalog.map}
+                  scopedDisabledReason={page.catalog.scopedDisabledReason}
+                  season={page.catalog.season}
+                />
+              </MasterPanelContent>
             </div>
           </TabsPanel>
 
           <TabsPanel keepMounted value="aliases">
             <div className="mt-6">
-              <MemberAliasPanel
-                aliases={page.aliases.items}
-                completion={page.aliases.completion}
-                createAction={page.aliases.createAction}
-                createError={page.aliases.createError}
-                createFormKey={page.aliases.createFormKey}
-                onDelete={page.aliases.onDelete}
-                onRetry={page.aliases.onRetry}
-                onUpdate={page.aliases.onUpdate}
-                refreshing={page.aliases.refreshing}
-                stale={page.aliases.stale}
-              />
+              <MasterPanelContent resource={page.aliases} resourceLabel="メンバー名寄せ">
+                <MemberAliasPanel
+                  aliases={page.aliases.items}
+                  completion={page.aliases.completion}
+                  createAction={page.aliases.createAction}
+                  createError={page.aliases.createError}
+                  createFormKey={page.aliases.createFormKey}
+                  onDelete={page.aliases.onDelete}
+                  onRetry={page.aliases.onRetry}
+                  onUpdate={page.aliases.onUpdate}
+                  refreshing={page.aliases.refreshing}
+                  stale={page.aliases.stale}
+                />
+              </MasterPanelContent>
             </div>
           </TabsPanel>
 
           <TabsPanel keepMounted value="incidents">
             <div className="mt-6">
-              <IncidentMasterPanel
-                items={page.incidents.items}
-                onRetry={page.incidents.onRetry}
-                refreshing={page.incidents.refreshing}
-                stale={page.incidents.stale}
-              />
+              <MasterPanelContent resource={page.incidents} resourceLabel="事件簿">
+                <IncidentMasterPanel
+                  items={page.incidents.items}
+                  onRetry={page.incidents.onRetry}
+                  refreshing={page.incidents.refreshing}
+                  stale={page.incidents.stale}
+                />
+              </MasterPanelContent>
+            </div>
+          </TabsPanel>
+
+          <TabsPanel keepMounted value="notifications">
+            <div className="mt-6">
+              <NotificationSettingsPanel model={page.notifications} />
             </div>
           </TabsPanel>
         </TabsRoot>

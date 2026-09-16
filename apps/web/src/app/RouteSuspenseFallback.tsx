@@ -154,13 +154,6 @@ export function routePagePresentation(pathname: string, search = ""): RoutePageP
   if (normalizedPathname === "/admin/accounts") {
     return defineRoutePresentation({ kind: "record-list", width: "standard" });
   }
-  if (normalizedPathname === "/admin/notifications") {
-    return defineRoutePresentation({
-      kind: "form",
-      loadingLabel: "通知設定を読み込んでいます",
-      width: "narrow",
-    });
-  }
   if (normalizedPathname === "/matches/new") {
     return defineRoutePresentation(
       {
@@ -360,7 +353,7 @@ export function routePagePresentation(pathname: string, search = ""): RoutePageP
       width: "wide",
     });
   }
-  if (normalizedPathname === "/admin/masters") {
+  if (normalizedPathname === "/admin/masters" || normalizedPathname === "/admin/notifications") {
     const handoffId = searchParams.get("handoffId");
     const returnDestination =
       returnTo && handoffId ? appendHandoffIdToReturnTo(returnTo, handoffId) : returnTo;

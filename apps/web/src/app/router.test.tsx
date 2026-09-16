@@ -124,18 +124,15 @@ describe("app routing", () => {
     ).not.toBeInTheDocument();
   });
 
-  it.each(["/admin/notifications", "/admin/masters?tab=notifications"])(
-    "prevents a non-admin from opening %s",
-    async (entry) => {
-      setDevUser("account_eu");
-      renderApp(entry);
-      expect(await screen.findByText("この画面は管理者専用です。")).toBeInTheDocument();
-      expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
-      expect(screen.queryByRole("link", { name: "通知" })).not.toBeInTheDocument();
-    },
-  );
+  it("prevents a non-admin from opening the notification settings tab", async () => {
+    setDevUser("account_eu");
+    renderApp("/admin/masters?tab=notifications");
+    expect(await screen.findByText("この画面は管理者専用です。")).toBeInTheDocument();
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "通知" })).not.toBeInTheDocument();
+  });
 
-  it("redirects the old notification URL into settings and uses one management navigation entry", async () => {
+  it("opens the notification settings tab directly and uses one management navigation entry", async () => {
     setDevUser();
     server.use(
       http.get("/api/admin/notification-settings", () =>
@@ -145,7 +142,7 @@ describe("app routing", () => {
         }),
       ),
     );
-    const { router } = renderApp("/admin/notifications");
+    const { router } = renderApp("/admin/masters?tab=notifications");
     expect(await screen.findByRole("checkbox", { name: "OCR完了" })).toBeChecked();
     expect(router.state.location.pathname).toBe("/admin/masters");
     expect(router.state.location.search).toBe("?tab=notifications");

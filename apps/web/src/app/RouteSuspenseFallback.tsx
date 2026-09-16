@@ -353,7 +353,7 @@ export function routePagePresentation(pathname: string, search = ""): RoutePageP
       width: "wide",
     });
   }
-  if (normalizedPathname === "/admin/masters" || normalizedPathname === "/admin/notifications") {
+  if (normalizedPathname === "/admin/masters") {
     const handoffId = searchParams.get("handoffId");
     const returnDestination =
       returnTo && handoffId ? appendHandoffIdToReturnTo(returnTo, handoffId) : returnTo;

@@ -21,6 +21,8 @@ const settings = [
   },
 ] as const;
 
+const notificationFieldsClass = "grid min-w-0 gap-x-6 gap-y-4 md:grid-cols-2";
+
 export function NotificationSettingsPanel({ model: page }: { model: NotificationSettingsModel }) {
   const saveButtonRef = useRef<HTMLButtonElement>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
@@ -44,8 +46,8 @@ export function NotificationSettingsPanel({ model: page }: { model: Notification
 
   return (
     <>
-      <section aria-label="Discord通知設定" className={cn("grid gap-4", readableTextWidthClass)}>
-        <div className="grid gap-1">
+      <section aria-label="Discord通知設定" className="grid min-w-0 gap-4">
+        <header className="grid gap-1">
           <h2
             className={contentText.heading}
             id="notification-kinds-heading"
@@ -54,12 +56,12 @@ export function NotificationSettingsPanel({ model: page }: { model: Notification
           >
             通知する種類
           </h2>
-          <p className={contentText.body}>
+          <p className={cn(contentText.body, readableTextWidthClass)}>
             Discordへ送る通知を選びます。全利用者に共通の設定です。
           </p>
-        </div>
+        </header>
         {resource.status === "loading" ? (
-          <div aria-label="通知設定を読み込み中" className="grid gap-4" role="status">
+          <div aria-label="通知設定を読み込み中" className={notificationFieldsClass} role="status">
             <Skeleton className="min-h-20" />
             <Skeleton className="min-h-20" />
           </div>
@@ -70,7 +72,7 @@ export function NotificationSettingsPanel({ model: page }: { model: Notification
         ) : resource.status === "ready" ? (
           <form
             aria-label="通知設定の編集"
-            className="grid gap-4"
+            className="grid min-w-0 gap-6"
             onSubmit={(event) => {
               event.preventDefault();
               page.submit();
@@ -78,7 +80,7 @@ export function NotificationSettingsPanel({ model: page }: { model: Notification
           >
             <fieldset
               aria-labelledby="notification-kinds-heading"
-              className="grid min-w-0 gap-4"
+              className={notificationFieldsClass}
               disabled={page.disabled}
             >
               {settings.map(({ kind, label, description }) => (
@@ -105,58 +107,60 @@ export function NotificationSettingsPanel({ model: page }: { model: Notification
                 />
               ))}
             </fieldset>
-            <div className={cn("grid gap-1", contentText.supporting)}>
-              <p>
-                OFFで保存すると、未送信の通知を取り消します。送信開始済みの通知は届く場合があります。
-              </p>
-              <p>ONにしても、過去の通知は送信されません。</p>
-            </div>
-            {issue || page.stale ? (
-              <Notice
-                action={page.needsReload || page.stale ? reloadButton : undefined}
-                title={!issue && page.stale ? "現在の設定を確認できません" : undefined}
-                tone={issue?.tone ?? "warning"}
-              >
-                {issue ? <p>{issue.message}</p> : null}
-                {page.stale ? (
-                  <p>
-                    最後に確認できた保存内容を表示しています。
-                    {page.dirty ? "編集中の選択は保持しています。" : null}
-                  </p>
-                ) : null}
-              </Notice>
-            ) : null}
-            <div className="grid gap-2">
-              <div className={actionRowClass}>
-                <Button
-                  disabled={!page.dirty || page.disabled}
-                  pending={page.pending && !page.confirmation.open}
-                  pendingLabel="保存中"
-                  ref={saveButtonRef}
-                  type="submit"
-                >
-                  保存
-                </Button>
-                <Button
-                  disabled={!page.dirty || page.disabled}
-                  variant="secondary"
-                  onClick={page.reset}
-                >
-                  変更を破棄
-                </Button>
+            <div className="grid min-w-0 gap-4">
+              <div className={cn("grid gap-1", contentText.supporting, readableTextWidthClass)}>
+                <p>
+                  OFFで保存すると、未送信の通知を取り消します。送信開始済みの通知は届く場合があります。
+                </p>
+                <p>ONにしても、過去の通知は送信されません。</p>
               </div>
-              <p className={cn("min-h-4", contentText.supporting)} role="status">
-                {page.pending ? null : (
-                  <>
-                    {completion ? <span>{completion}</span> : null}
-                    {checking ? (
-                      <span>{completion ? " " : null}保存済みの設定を確認しています。</span>
-                    ) : !page.feedback && !page.needsReload && page.dirty ? (
-                      "未保存の変更があります"
-                    ) : null}
-                  </>
-                )}
-              </p>
+              {issue || page.stale ? (
+                <Notice
+                  action={page.needsReload || page.stale ? reloadButton : undefined}
+                  title={!issue && page.stale ? "現在の設定を確認できません" : undefined}
+                  tone={issue?.tone ?? "warning"}
+                >
+                  {issue ? <p>{issue.message}</p> : null}
+                  {page.stale ? (
+                    <p>
+                      最後に確認できた保存内容を表示しています。
+                      {page.dirty ? "編集中の選択は保持しています。" : null}
+                    </p>
+                  ) : null}
+                </Notice>
+              ) : null}
+              <div className="grid gap-2">
+                <div className={actionRowClass}>
+                  <Button
+                    disabled={!page.dirty || page.disabled}
+                    pending={page.pending && !page.confirmation.open}
+                    pendingLabel="保存中"
+                    ref={saveButtonRef}
+                    type="submit"
+                  >
+                    保存
+                  </Button>
+                  <Button
+                    disabled={!page.dirty || page.disabled}
+                    variant="secondary"
+                    onClick={page.reset}
+                  >
+                    変更を破棄
+                  </Button>
+                </div>
+                <p className={cn("min-h-4", contentText.supporting)} role="status">
+                  {page.pending ? null : (
+                    <>
+                      {completion ? <span>{completion}</span> : null}
+                      {checking ? (
+                        <span>{completion ? " " : null}保存済みの設定を確認しています。</span>
+                      ) : !page.feedback && !page.needsReload && page.dirty ? (
+                        "未保存の変更があります"
+                      ) : null}
+                    </>
+                  )}
+                </p>
+              </div>
             </div>
           </form>
         ) : null}

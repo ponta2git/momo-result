@@ -62,14 +62,6 @@ export const appRoutes: RouteObject[] = [
         ),
         children: [
           {
-            path: "admin/notifications",
-            element: (
-              <AdminRoute>
-                <Navigate replace to="/admin/masters?tab=notifications" />
-              </AdminRoute>
-            ),
-          },
-          {
             path: "matches",
             element: <MatchesListPage />,
           },

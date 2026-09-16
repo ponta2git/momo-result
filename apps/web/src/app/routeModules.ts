@@ -80,10 +80,6 @@ const routePreloaders: Array<{
   { matches: (pathname) => pathname === "/exports", preload: loadExportPage },
   { matches: (pathname) => pathname === "/admin/masters", preload: loadMastersPage },
   { matches: (pathname) => pathname === "/admin/accounts", preload: loadAdminAccountsPage },
-  {
-    matches: (pathname) => pathname === "/admin/notifications",
-    preload: loadMastersPage,
-  },
   { matches: (pathname) => pathname === "/admin/analysis", preload: loadSeriesAnalysisAdminPage },
 ];
 

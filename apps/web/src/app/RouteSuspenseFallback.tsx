@@ -419,11 +419,12 @@ export function RouteSuspenseFallback({
   pathname,
   search = "",
 }: RouteSuspenseFallbackProps) {
-  const presentation = routeLoadingPresentation(pathname, search);
+  const { loading: presentation, terminal } = routePagePresentation(pathname, search);
   return (
     <PageLoadingFallback
       asMain={asMain}
       {...presentation}
+      contentPadding={terminal.contentPadding}
       loadingLabel={loadingLabel ?? presentation.loadingLabel}
     />
   );

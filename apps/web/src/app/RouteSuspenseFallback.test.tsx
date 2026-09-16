@@ -11,6 +11,7 @@ import {
 describe("RouteSuspenseFallback", () => {
   it.each([
     ["/exports", "narrow"],
+    ["/admin/notifications", "narrow"],
     ["/matches", "standard"],
     ["/analytics/series", "wide"],
     ["/matches/new", "workspace"],
@@ -37,6 +38,7 @@ describe("RouteSuspenseFallback", () => {
     ["/admin/analysis"],
     ["/admin/masters"],
     ["/admin/accounts"],
+    ["/admin/notifications"],
     ["/exports"],
   ])("omits the page-header slot for %s", (pathname) => {
     expect(routeLoadingPresentation(pathname).header).toBeUndefined();

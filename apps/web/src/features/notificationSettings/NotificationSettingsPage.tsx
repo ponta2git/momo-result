@@ -3,6 +3,7 @@ import { useRef } from "react";
 import { useNotificationSettingsPageModel } from "@/features/notificationSettings/useNotificationSettingsPageModel";
 import { actionRowClass } from "@/shared/ui/actions/actionGroup";
 import { Button } from "@/shared/ui/actions/Button";
+import { cn } from "@/shared/ui/cn";
 import { FactList } from "@/shared/ui/data/FactList";
 import { AlertDialog } from "@/shared/ui/feedback/Dialog";
 import { Notice } from "@/shared/ui/feedback/Notice";
@@ -26,21 +27,18 @@ export function NotificationSettingsPage() {
   const headingRef = useRef<HTMLHeadingElement>(null);
   const page = useNotificationSettingsPageModel();
   const resource = page.resource;
-  const editingStatus =
-    page.refreshing && !page.feedback && !page.stale
-      ? "保存済みの設定を確認しています。"
-      : page.dirty
-        ? "未保存の変更があります"
-        : page.feedback
-          ? undefined
-          : "通知の選択を変更すると保存できます。";
+  const issue = page.feedback?.tone === "success" ? undefined : page.feedback;
+  const completion = page.feedback?.tone === "success" ? page.feedback.message : undefined;
+  const checking = page.refreshing && !page.pending && !page.needsReload && !page.stale;
   const reloadButton = (
     <Button
       pending={page.refreshing}
       pendingLabel="読み込み中"
       size="sm"
       variant="secondary"
-      onClick={page.reload}
+      onClick={async () => {
+        if (await page.reload()) headingRef.current?.focus();
+      }}
     >
       {page.dirty ? "現在の設定を読み込んで選び直す" : "現在の設定を読み込む"}
     </Button>
@@ -48,8 +46,8 @@ export function NotificationSettingsPage() {
 
   return (
     <PageFrame width="narrow">
-      <PageContentSurface aria-label="Discord通知設定" className="grid gap-6" role="region">
-        <div className="grid gap-2">
+      <PageContentSurface aria-label="Discord通知設定" className="grid gap-4" role="region">
+        <div className="grid gap-1">
           <h2
             className={contentText.heading}
             id="notification-kinds-heading"
@@ -59,7 +57,7 @@ export function NotificationSettingsPage() {
             通知する種類
           </h2>
           <p className={contentText.body}>
-            Discordへ送る通知を選びます。全利用者に共通の設定で、保存すると反映されます。
+            Discordへ送る通知を選びます。全利用者に共通の設定です。
           </p>
         </div>
         {resource.status === "loading" ? (
@@ -74,7 +72,7 @@ export function NotificationSettingsPage() {
         ) : resource.status === "ready" ? (
           <form
             aria-label="通知設定の編集"
-            className="grid gap-6"
+            className="grid gap-4"
             onSubmit={(event) => {
               event.preventDefault();
               page.submit();
@@ -86,18 +84,14 @@ export function NotificationSettingsPage() {
               disabled={page.disabled}
             >
               {settings.map(({ kind, label, description }) => (
-                <div
-                  className="grid min-w-0 gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start sm:gap-6"
+                <CheckboxField
                   key={kind}
-                >
-                  <CheckboxField
-                    checked={resource.values[kind]}
-                    description={description}
-                    disabled={page.disabled}
-                    label={label}
-                    onChange={(event) => page.change(kind, event.target.checked)}
-                  />
-                  <div className="pl-8 sm:pt-2 sm:pl-0">
+                  checked={resource.values[kind]}
+                  description={description}
+                  disabled={page.disabled}
+                  label={label}
+                  onChange={(event) => page.change(kind, event.target.checked)}
+                  status={
                     <FactList
                       ariaLabel={`${label}の保存済み設定`}
                       items={[
@@ -109,29 +103,29 @@ export function NotificationSettingsPage() {
                       ]}
                       layout="inline"
                     />
-                  </div>
-                </div>
+                  }
+                />
               ))}
             </fieldset>
-            <div className="grid gap-2">
-              {page.turnsOff ? (
-                <p className={contentText.body}>
-                  OFFで保存すると、未送信の通知も取り消します。送信開始済みの通知は届く場合があります。
-                </p>
-              ) : null}
-              <p className={contentText.body}>ONにしても、過去の通知は送信されません。</p>
+            <div className={cn("grid gap-1", contentText.supporting)}>
+              <p>
+                OFFで保存すると、未送信の通知を取り消します。送信開始済みの通知は届く場合があります。
+              </p>
+              <p>ONにしても、過去の通知は送信されません。</p>
             </div>
-            {page.feedback ? (
+            {issue || page.stale ? (
               <Notice
-                action={page.needsReload && !page.stale ? reloadButton : undefined}
-                tone={page.feedback.tone}
+                action={page.needsReload || page.stale ? reloadButton : undefined}
+                title={!issue && page.stale ? "現在の設定を確認できません" : undefined}
+                tone={issue?.tone ?? "warning"}
               >
-                <p>{page.feedback.message}</p>
-              </Notice>
-            ) : null}
-            {page.stale ? (
-              <Notice action={reloadButton} title="現在の設定を確認できません" tone="warning">
-                <p>最後に確認できた保存内容を表示しています。編集中の選択は保持しています。</p>
+                {issue ? <p>{issue.message}</p> : null}
+                {page.stale ? (
+                  <p>
+                    最後に確認できた保存内容を表示しています。
+                    {page.dirty ? "編集中の選択は保持しています。" : null}
+                  </p>
+                ) : null}
               </Notice>
             ) : null}
             <div className="grid gap-2">
@@ -153,11 +147,18 @@ export function NotificationSettingsPage() {
                   変更を破棄
                 </Button>
               </div>
-              {!page.pending && !page.needsReload && editingStatus ? (
-                <p className={contentText.body} role="status">
-                  {editingStatus}
-                </p>
-              ) : null}
+              <p className={cn("min-h-4", contentText.supporting)} role="status">
+                {page.pending ? null : (
+                  <>
+                    {completion ? <span>{completion}</span> : null}
+                    {checking ? (
+                      <span>{completion ? " " : null}保存済みの設定を確認しています。</span>
+                    ) : !page.feedback && !page.needsReload && page.dirty ? (
+                      "未保存の変更があります"
+                    ) : null}
+                  </>
+                )}
+              </p>
             </div>
           </form>
         ) : null}
@@ -169,6 +170,7 @@ export function NotificationSettingsPage() {
         description="全利用者に共通の通知設定を、次の内容で保存します。"
         confirmLabel="OFFにして保存"
         pending={page.pending}
+        pendingLabel="保存中"
         closeOnSuccess={false}
         finalFocus={() =>
           saveButtonRef.current && !saveButtonRef.current.disabled

@@ -140,19 +140,19 @@ export function useNotificationSettingsPageModel() {
   };
 
   const reload = async () => {
-    if (saving.current || query.isFetching) return;
+    if (saving.current || query.isFetching) return false;
     const result = await query.refetch();
     if (result.isSuccess) {
       setDraft(undefined);
       idempotencyKeys.reset("notificationSettings.update");
       setFeedback(undefined);
     }
+    return result.isSuccess;
   };
 
   return {
     resource,
     dirty,
-    turnsOff,
     disabled,
     feedback,
     change,
@@ -161,9 +161,7 @@ export function useNotificationSettingsPageModel() {
     stale: confirmed !== undefined && failed,
     needsReload,
     refreshing: query.isFetching,
-    reload: () => {
-      void reload();
-    },
+    reload,
     reset: () => {
       setDraft(undefined);
       setFeedback(undefined);

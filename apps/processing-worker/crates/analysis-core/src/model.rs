@@ -72,6 +72,7 @@ pub struct PlayerMatchInput {
     pub match_no_in_event: i32,
     pub season_master_id: String,
     pub map_master_id: String,
+    pub owner_member_id: String,
     pub member_id: String,
     pub play_order: i32,
     pub rank: i32,
@@ -213,6 +214,7 @@ impl PlayerMatchInput {
             self.season_master_id.as_str(),
             self.map_master_id.as_str(),
             self.member_id.as_str(),
+            self.owner_member_id.as_str(),
         ]
         .into_iter()
         .all(valid_input_id)
@@ -240,6 +242,7 @@ impl PlayerMatchInput {
             && self.match_no_in_event == other.match_no_in_event
             && self.season_master_id == other.season_master_id
             && self.map_master_id == other.map_master_id
+            && self.owner_member_id == other.owner_member_id
     }
 }
 
@@ -264,6 +267,9 @@ fn valid_match(player_matches: &[&PlayerMatchInput]) -> bool {
             .any(|player_match| player_match.play_order == order)
     });
     distinct_members
+        && player_matches
+            .iter()
+            .any(|row| row.member_id == first.owner_member_id)
         && complete_ranks
         && complete_orders
         && player_matches
@@ -492,6 +498,7 @@ mod tests {
                 match_no_in_event: 1,
                 season_master_id: String::from("season-1"),
                 map_master_id: String::from("map-1"),
+                owner_member_id: String::from("member-1"),
                 member_id: format!("member-{player}"),
                 play_order: player,
                 rank: player,
@@ -666,5 +673,24 @@ mod tests {
             "a row belongs only to overall, season, map, and season-map indexes"
         );
         assert_eq!(normalized.resource_count(), Some(58_018));
+    }
+    #[test]
+    fn owner_must_be_consistent_and_participate_in_the_match() {
+        let mut rows = match_rows();
+        if let Some(first) = rows.first_mut() {
+            first.owner_member_id = String::from("member-2");
+        }
+        assert_eq!(
+            input(rows).try_into_normalized(),
+            Err(AnalysisInputError::InvalidMatch)
+        );
+        let mut unknown_owner_rows = match_rows();
+        for row in &mut unknown_owner_rows {
+            row.owner_member_id = String::from("unknown");
+        }
+        assert_eq!(
+            input(unknown_owner_rows).try_into_normalized(),
+            Err(AnalysisInputError::InvalidMatch)
+        );
     }
 }

@@ -16,7 +16,7 @@ ocr_dead_stream="momo:ocr:v2:preemption-smoke:dead"
 analysis_job="ci-preemption-analysis-job"
 ocr_job="ci-preemption-ocr-job"
 title_id="ci-preemption-title"
-publication_contract="${repo_root}/docs/schemas/series-analysis-publication-contract-v1.json"
+publication_contract="${repo_root}/docs/schemas/series-analysis-publication-contract-v2.json"
 algorithm_version="${analysis_smoke_algorithm_version}"
 artifact_schema_version="$(jq -er '
   .artifactSchemaVersion |

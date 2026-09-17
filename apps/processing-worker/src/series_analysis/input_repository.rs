@@ -20,7 +20,8 @@ const ANALYSIS_INPUT_QUERY: &str = r#"SELECT
        COALESCE(SUM(mi.count) FILTER (WHERE mi.incident_master_id = 'incident_minus_station'), 0)::int,
        COALESCE(SUM(mi.count) FILTER (WHERE mi.incident_master_id = 'incident_card_station'), 0)::int,
        COALESCE(SUM(mi.count) FILTER (WHERE mi.incident_master_id = 'incident_card_shop'), 0)::int,
-       COALESCE(SUM(mi.count) FILTER (WHERE mi.incident_master_id = 'incident_suri_no_ginji'), 0)::int
+       COALESCE(SUM(mi.count) FILTER (WHERE mi.incident_master_id = 'incident_suri_no_ginji'), 0)::int,
+       m.owner_member_id
      FROM matches m
      JOIN match_players mp ON mp.match_id = m.id
      LEFT JOIN match_incidents mi ON mi.match_id = mp.match_id AND mi.member_id = mp.member_id
@@ -128,7 +129,8 @@ async fn validate_input_shape(
                       COALESCE(MAX(octet_length(m.held_event_id)), 0)::int,
                       COALESCE(MAX(octet_length(m.season_master_id)), 0)::int,
                       COALESCE(MAX(octet_length(m.map_master_id)), 0)::int,
-                      COALESCE(MAX(octet_length(mp.member_id)), 0)::int
+                      COALESCE(MAX(octet_length(mp.member_id)), 0)::int,
+                      COALESCE(MAX(octet_length(m.owner_member_id)), 0)::int
                FROM matches m
                JOIN match_players mp ON mp.match_id = m.id
                WHERE m.game_title_id = $1",
@@ -142,6 +144,7 @@ async fn validate_input_shape(
         row.try_get::<_, i32>(3)?,
         row.try_get::<_, i32>(4)?,
         row.try_get::<_, i32>(5)?,
+        row.try_get::<_, i32>(6)?,
     ];
     let supported_player_match_count = usize::try_from(player_match_count)
         .ok()
@@ -169,6 +172,7 @@ fn player_match_from_database(row: &Row) -> Result<PlayerMatchInput, tokio_postg
         match_no_in_event: row.try_get(4)?,
         season_master_id: row.try_get(5)?,
         map_master_id: row.try_get(6)?,
+        owner_member_id: row.try_get(18)?,
         member_id: row.try_get(7)?,
         play_order: row.try_get(8)?,
         rank: row.try_get(9)?,

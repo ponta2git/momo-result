@@ -8,6 +8,7 @@ use crate::{
     contract::{ResourceManifest, ScopeRef},
 };
 
+mod owner;
 mod schema;
 
 #[derive(Debug, Error)]
@@ -305,6 +306,13 @@ fn validate_aggregate(
         return Err(PayloadError::ItemCountMismatch);
     }
     validate_aggregate_semantics(object, &player_ids, &player_order, item_count)?;
+    owner::validate(
+        payload
+            .get("ownerComparison")
+            .ok_or(PayloadError::InvalidSchema)?,
+        &player_order,
+        required_u64(payload.pointer("/scope/matchCount"))?,
+    )?;
     let item_ids = collect_unique_item_ids(payload)?;
     validate_member_references(payload, &player_ids)?;
     Ok(ResourceReferences::Aggregate(AggregateReferences {
@@ -1187,6 +1195,7 @@ mod tests {
                         match_no_in_event: (match_index - 1).rem_euclid(4) + 1,
                         season_master_id: String::from("season-1"),
                         map_master_id: String::from("map-1"),
+                        owner_member_id: String::from("member-1"),
                         member_id: format!("member-{player}"),
                         play_order: player,
                         rank: (player + match_index - 2).rem_euclid(4) + 1,
@@ -1227,10 +1236,10 @@ mod tests {
     }
 
     #[test]
-    fn shared_v3_payload_fixtures_match_worker_contract() {
+    fn shared_payload_fixtures_match_worker_contract() {
         let aggregate = fixture(include_str!(concat!(
             "../../../../../docs/schemas/fixtures/series-analysis/",
-            "aggregate-payload-v3.json"
+            "aggregate-payload-v4.json"
         )));
         let review = fixture(include_str!(concat!(
             "../../../../../docs/schemas/fixtures/series-analysis/",

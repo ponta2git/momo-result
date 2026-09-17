@@ -6,14 +6,19 @@ use thiserror::Error;
 
 use crate::canonical::{CanonicalError, FramedSha256};
 
-pub const ARTIFACT_SCHEMA_VERSION: u32 = 2;
+pub const ARTIFACT_SCHEMA_VERSION: u32 = 3;
 /// Exact identifier for the complete Rust-owned validation contract applied before publication.
 ///
 /// This is deliberately independent from [`ARTIFACT_SCHEMA_VERSION`]: the latter identifies the
 /// persisted payload shape, while this value proves which semantic, cross-resource, canonical,
 /// and bounded-file checks accepted a concrete artifact. Existing rows without this exact value
 /// must not be treated as having passed the current validator.
-pub const ARTIFACT_VALIDATION_CONTRACT_ID: &str = "series-analysis-artifact-v2-full-validation-v1";
+pub const ARTIFACT_VALIDATION_CONTRACT_ID: &str = "series-analysis-artifact-v3-full-validation-v1";
+/// Readable publication pairs in migration order. Writer support remains current-only.
+pub const READABLE_PUBLICATION_CONTRACTS: &[(u32, &str)] = &[
+    (2, "series-analysis-artifact-v2-full-validation-v1"),
+    (ARTIFACT_SCHEMA_VERSION, ARTIFACT_VALIDATION_CONTRACT_ID),
+];
 pub const MANIFEST_VERSION: u32 = 1;
 pub const QUEUE_SCHEMA_VERSION: &str = "1";
 const MAXIMUM_SCHEMA_CHUNK_BYTES: u64 = 16 * 1024 * 1024;
@@ -503,9 +508,9 @@ mod tests {
     use super::*;
 
     const VALID_ARTIFACT: &str =
-        include_str!("../../../../../docs/schemas/fixtures/series-analysis/valid-artifact-v2.json");
+        include_str!("../../../../../docs/schemas/fixtures/series-analysis/valid-artifact-v3.json");
     const INVALID_ARTIFACT: &str = include_str!(
-        "../../../../../docs/schemas/fixtures/series-analysis/invalid-artifact-v2.json"
+        "../../../../../docs/schemas/fixtures/series-analysis/invalid-artifact-v3.json"
     );
     const VALID_QUEUE: &str = include_str!(
         "../../../../../docs/schemas/fixtures/series-analysis/valid-queue-payload-v1.json"

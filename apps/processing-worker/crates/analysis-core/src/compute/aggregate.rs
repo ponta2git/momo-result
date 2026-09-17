@@ -60,7 +60,7 @@ pub(super) fn aggregate(
     let (leader_member_ids, rank_spread) = leader_summary(players, player_matches_by_member);
 
     json!({
-        "schemaVersion": 3,
+        "schemaVersion": 4,
         "scope": scope_summary_json(scope, groups.len()),
         "players": players.iter().map(|member_id| member_ref_json(member_id)).collect::<Vec<_>>(),
         "summary": {
@@ -75,6 +75,7 @@ pub(super) fn aggregate(
         "recentRanks": recent_ranks,
         "strategyScatter": strategy_scatter(groups, &revenue_ranks, &asset_ranks),
         "playOrderComparison": play_order_comparison(players, player_matches_by_member),
+        "ownerComparison": super::owner::build(rows, players),
         "revenueRankConversion": revenue_rank_conversion(players, player_matches_by_member, &revenue_ranks),
         "trends": trends,
         "histograms": {

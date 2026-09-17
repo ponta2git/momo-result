@@ -10,7 +10,7 @@ use crate::{
 };
 
 const INPUT_FIXTURE: &str =
-    include_str!("../../../../../docs/schemas/fixtures/series-analysis/input-v1.json");
+    include_str!("../../../../../docs/schemas/fixtures/series-analysis/input-v2.json");
 
 fn fixture_json() -> Value {
     serde_json::from_str(INPUT_FIXTURE)
@@ -72,6 +72,7 @@ fn boundary_input() -> AnalysisInput {
                             match_no_in_event: match_index + 1,
                             season_master_id: format!("season-{}", 1 + event_index % 2),
                             map_master_id: format!("map-{}", 1 + match_index % 2),
+                            owner_member_id: String::from("eu"),
                             member_id: String::from(member_id),
                             play_order: 1 + (match_index + player_index) % 4,
                             rank: 1 + (event_index + match_index + player_index) % 4,
@@ -100,7 +101,7 @@ fn boundary_input() -> AnalysisInput {
 #[test]
 fn shared_boundary_fixture_matches_normalized_input_and_overall_checksum() {
     let fixture = fixture_json();
-    assert_eq!(fixture_value(&fixture, "/schemaVersion"), &Value::from(1));
+    assert_eq!(fixture_value(&fixture, "/schemaVersion"), &Value::from(2));
     assert_eq!(
         fixture_value(&fixture, "/generator/heldEventCount"),
         &Value::from(8)

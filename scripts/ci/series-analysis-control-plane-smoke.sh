@@ -18,7 +18,7 @@ worker_container="momo-analysis-control-smoke-worker-$$"
 worker_database_url="${WORKER_DATABASE_URL:-${DATABASE_URL:-}}"
 worker_redis_url="${WORKER_REDIS_URL:-${REDIS_URL:-}}"
 release_database_url="${RELEASE_DATABASE_URL:-${DATABASE_URL:-}}"
-publication_contract="${repo_root}/docs/schemas/series-analysis-publication-contract-v1.json"
+publication_contract="${repo_root}/docs/schemas/series-analysis-publication-contract-v2.json"
 algorithm_version="${analysis_smoke_algorithm_version}"
 artifact_schema_version="$(jq -er '
   .artifactSchemaVersion |

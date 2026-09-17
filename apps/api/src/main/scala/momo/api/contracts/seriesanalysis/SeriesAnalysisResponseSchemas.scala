@@ -62,11 +62,20 @@ private[api] object SeriesAnalysisResponseSchemas:
 
   val aggregate: Resource = Resource(
     "aggregate",
-    "aggregate",
+    "aggregateV2",
     "SeriesAnalysisAggregateResponse",
     "series-analysis-aggregate-v3.schema.json",
     "series-analysis-aggregate-response-v2.schema.json",
     matchContext = false,
+  )
+  val aggregateV3: Resource = Resource(
+    "aggregate",
+    "aggregateV3",
+    "SeriesAnalysisAggregateV3Response",
+    "series-analysis-aggregate-v3.schema.json",
+    "series-analysis-aggregate-response-v3.schema.json",
+    matchContext = false,
+    additionalOwnerFile = Some("series-analysis-aggregate-v4.schema.json"),
   )
   val drilldown: Resource = Resource(
     "drilldown",
@@ -93,7 +102,7 @@ private[api] object SeriesAnalysisResponseSchemas:
     matchContext = false,
   )
 
-  val resources: List[Resource] = List(aggregate, drilldown, matchContext, review)
+  val resources: List[Resource] = List(aggregate, aggregateV3, drilldown, matchContext, review)
 
   def schemaFor(resource: Resource): Json =
     val registered = resources.find(_.componentName == resource.componentName).getOrElse(
@@ -101,7 +110,14 @@ private[api] object SeriesAnalysisResponseSchemas:
     )
     if registered ne resource then
       sys.error(s"Conflicting series analysis response component: ${resource.componentName}")
-    val owner = loadSchema(resource.ownerFile)
+    val owner = resource.additionalOwnerFile match
+      case None => loadSchema(resource.ownerFile)
+      case Some(file) => Json.obj("oneOf" -> Json.arr(
+          loadSchema(
+            resource.ownerFile
+          ).mapObject(_.remove("$id").remove("$schema").remove("$comment")),
+          loadSchema(file).mapObject(_.remove("$id").remove("$schema").remove("$comment")),
+        ))
     if resource.matchContext then matchContextResponseSchema(owner, resource)
     else responseSchema(owner, resource)
 
@@ -112,6 +128,7 @@ private[api] object SeriesAnalysisResponseSchemas:
       ownerFile: String,
       outputFile: String,
       matchContext: Boolean,
+      additionalOwnerFile: Option[String] = None,
   )
 
   private def responseSchema(owner: Json, resource: Resource): Json =

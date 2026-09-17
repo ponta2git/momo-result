@@ -100,17 +100,23 @@ private[postgres] object PostgresSeriesAnalysisChunkOps:
     c.encoded_bytes, c.decoded_bytes, c.item_count, c.nesting_depth, c.checksum
   """
 
-  private def readableArtifact(request: SeriesAnalysisChunkRequest): Fragment = fr"""
+  private def readableArtifact(request: SeriesAnalysisChunkRequest): Fragment =
+    fr"""
     FROM (VALUES (${request.gameTitleId})) requested(game_title_id)
     LEFT JOIN series_analysis_title_states s ON s.game_title_id = requested.game_title_id
     LEFT JOIN series_analysis_artifacts a
       ON a.game_title_id = s.game_title_id
      AND a.id = ${request.artifactId}
      AND a.status = 'published'
-     AND a.artifact_schema_version = ${SeriesAnalysisArtifactSupport.ArtifactSchemaVersion}
-     AND a.validation_contract_id = ${SeriesAnalysisArtifactSupport.ValidationContractId}
+     AND
+  """ ++ readableContract ++ fr"""
      AND a.id IN (s.current_artifact_id, s.previous_artifact_id)
   """
+
+  private val readableContract: Fragment = fr"(" ++
+    SeriesAnalysisArtifactSupport.ReadableContracts.toList.map { case (version, id) =>
+      fr"(a.artifact_schema_version = $version AND a.validation_contract_id = $id)"
+    }.intercalate(fr"OR") ++ fr")"
 
   private def chunkJoin(request: SeriesAnalysisChunkRequest): Fragment = request.kind match
     case SeriesAnalysisChunkKind.Aggregate => fr"""

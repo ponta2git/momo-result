@@ -122,6 +122,7 @@ private[postgres] object PostgresSeriesAnalysisChunkCodec:
           payload,
           request,
           sourceMatchRevision,
+          row.artifactSchemaVersion,
           depth,
           inspection.depth,
         )
@@ -449,6 +450,7 @@ private[postgres] object PostgresSeriesAnalysisChunkCodec:
       encoded: Array[Byte],
       request: SeriesAnalysisChunkRequest,
       sourceMatchRevision: Option[Long],
+      artifactSchemaVersion: Int,
       declaredDepth: Int,
       actualDepth: Int,
   ): Either[AppError, Unit] = Either.cond(
@@ -457,6 +459,7 @@ private[postgres] object PostgresSeriesAnalysisChunkCodec:
       encoded,
       request,
       sourceMatchRevision,
+      artifactSchemaVersion,
     ) && actualDepth == declaredDepth,
     (),
     AppError.Internal("Analysis artifact schema validation failed."),

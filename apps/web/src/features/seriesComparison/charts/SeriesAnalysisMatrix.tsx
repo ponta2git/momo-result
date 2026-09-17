@@ -60,7 +60,7 @@ export function MatrixColumnHeader({
       {...props}
       scope="col"
     >
-      {children}
+      <div className="grid min-w-0">{children}</div>
     </th>
   );
 }

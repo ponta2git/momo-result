@@ -14,12 +14,11 @@ import { AnalysisSection } from "@/features/seriesComparison/page/SeriesAnalysis
 import { SeriesAnalysisQualityAdvisory } from "@/features/seriesComparison/SeriesAnalysisQualityAdvisory";
 import type { SeriesComparisonAggregate } from "@/shared/api/seriesAnalysis";
 import { cn } from "@/shared/ui/cn";
-import { Disclosure } from "@/shared/ui/data/Collapsible";
 import { DataTable } from "@/shared/ui/data/DataTable";
 import type { DataTableColumn } from "@/shared/ui/data/DataTable";
 import { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
-import { SelectField } from "@/shared/ui/forms/SelectField";
+import { SelectControl } from "@/shared/ui/forms/SelectControl";
 import { rankColor } from "@/shared/ui/rank/rankPresentation";
 import { contentText } from "@/shared/ui/typography";
 
@@ -36,16 +35,12 @@ export function SeriesAnalysisOwnerComparison({
   onMetricChange?: ((metric: OwnerMetricId) => void) | undefined;
 }) {
   const comparison = response.schemaVersion === 4 ? response.ownerComparison : undefined;
-  const definition = ownerMetricPresentation(metric);
   return (
     <AnalysisSection id="metric-owner" title="オーナー比較">
       <div className="grid min-w-0 gap-4">
-        <p className={cn(contentText.body, "max-w-2xl text-pretty")}>
-          保存されたオーナーごとに、4人の成績を比べます。
-        </p>
         <div className="max-w-sm">
-          <SelectField
-            label="オーナー比較の指標"
+          <SelectControl
+            aria-label="オーナー比較の指標"
             value={metric}
             options={ownerMetricOptions}
             disabled={!comparison || response.scope.matchCount === 0}
@@ -74,12 +69,6 @@ export function SeriesAnalysisOwnerComparison({
             この分析にはオーナー別の集計がありません。新しい分析が完成すると表示されます。
           </p>
         )}
-        <Disclosure summary="オーナー比較の読み方" presentation="plain">
-          <p className={cn(contentText.body, "max-w-2xl text-pretty")}>
-            列は保存されたオーナー、行はプレーヤーです。平均や割合の分母は、各オーナーの対象戦数です。1〜2戦の値には「参考値」を添えています。表示している「
-            {definition.label}」の差だけで、オーナーによる影響は判断できません。
-          </p>
-        </Disclosure>
       </div>
     </AnalysisSection>
   );
@@ -115,9 +104,11 @@ function OwnerTable({
         <div className="grid gap-1">
           <span className="wrap-anywhere">{owner.displayName}</span>
           <span>{owner.targetCount}戦</span>
-          <span>
-            <SeriesAnalysisQualityAdvisory status={owner.qualityStatus} />
-          </span>
+          {owner.qualityStatus === "ok" ? null : (
+            <span className="flex justify-end">
+              <SeriesAnalysisQualityAdvisory status={owner.qualityStatus} />
+            </span>
+          )}
         </div>
       ),
       renderCell: (row) => {

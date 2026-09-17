@@ -111,7 +111,7 @@ DB側の責務は実装仕様6節で定めた既存範囲に限定する。詳�
 変更入口は [DataTable](../apps/web/src/shared/ui/data/DataTable.tsx)、[条件別view](../apps/web/src/features/seriesComparison/page/SeriesAnalysisContextView.tsx)、目次、`SeriesAnalysisViewPrimitives.tsx`、既存formatter・品質表示。ownerの行/列・指標表示はfeature内の専用componentへまとめる。
 
 1. DataTableへ行見出し固定とlabel付きのkeyboard操作可能なscroll領域を任意指定で加える。CSSでstickyとscrollを成立させ、row/column headerの交点・背景・包含範囲を含める。高さ/幅の配置はfeature、内部scrollとfocusの契約はsharedが所有する。overflow hintに測定が必要ならscroll領域単位へ閉じ、cellごとのobserver・scrollごとの全表再計算は避ける。順位分布の高さでも列見出しを見失わず、既存consumerのdefaultを変えないことを確認する。
-2. 「条件別」の番手比較の後へ `metric-owner` を追加し、共通 `AnalysisSection`、`SelectField`、書式、`QualityAdvisory` を接続する。表DOMとselectを指標ごとにremountしない。順位分布は既存rank tokenと可視の件数・率を使い、番手比較のcell装飾やfocus itemの強調をコピーしない。
+2. 「条件別」の番手比較の後へ `metric-owner` を追加し、共通 `AnalysisSection`、accessible nameを持つ `SelectControl`、書式、`QualityAdvisory` を接続する。表DOMとselectを指標ごとにremountしない。順位分布は既存rank tokenと可視の件数・率を使い、番手比較のcell装飾やfocus itemの強調をコピーしない。
 3. 新aggregateの通常・1オーナー・0戦列、旧aggregateのdisabled selectと理由、親scope全体の共通空表示をつなぐ。表示bundleの世代で判定し、旧値の表示中にdesiredだけを見て新しい節を有効化しない。
 4. 目的地平均・銀次平均の共通指標定義を足す。銀次遭遇率のhelpは共通定義と、そのviewで実際に見られる関連指標の読み方に分ける。owner表に存在しない遭遇時順位・資産の説明を流用しない。
 
@@ -235,3 +235,9 @@ PCと320 / 360pxのmobile幅で、行列見出しの固定、局所scroll、keyb
 ローカル開発DBのbackupを復元したコピーで既存migrationの適用とデータ保全を確認した後、開発DBへ適用した。現行APIとworkerの実登録による互換性確認を経て、release CLIのdry-run / applyで新世代へ昇格し、再集計の完了とcurrent / quiescent監査を確認した。開催・試合・設定などの保存データを前後で照合した。
 
 MOM-3専用の一時worktree、consumer検証copy、検証container・image tag・一時ファイルを整理した。必要な検証証拠は追跡外のarchiveへ、backupとローカル移行の記録は追跡外の領域へ保存した。要求・実装仕様・採用判断と受入証拠は引き続き本書と参照先に残す。
+
+### 実画面へのフィードバック
+
+利用者の指摘に沿って、オーナー節の導入説明文、指標selectの可視ラベル、専用の読み方アコーディオンを削除した。selectのaccessible nameと既存の指標選択・URL・focusの契約は維持する。表の列見出しでは、inline要素の基線下の空きと品質表示のない空行を取り除き、上下の余白を揃えた。
+
+Webのformat・lint・typecheck・buildと関連component / navigationの21 testを確認した。Playwright MCPの隔離fixtureでPC・mobileの表示、指標選択とfocus / URLの維持、表内のkeyboard scrollと離脱、品質表示の有無による列見出しの余白を確認した。新しいtestや専用のUI部品は追加していない。

@@ -119,7 +119,7 @@ v2/v3は同じread usecase・repository instance・decode admissionを共有し�
 ### 共通UIへの接続
 
 - [UI規約](ui-rule.md) を意味・表現の正本、`.interface-design/system.md` を判断の索引、`styles.css` とshared UIを実装値の正本とする。索引の古い値や、隣接する既存componentの見た目だけを新機能の契約にしない。
-- 節は既存 `AnalysisSection` と同じ階層・余白を使い、指標は `SelectField` / `SelectControl` に接続する。7候補の表示指標選択であり、新たなtab階層・scope filter・独自popupにはしない。URLと指標の意味はfeatureが所有する。
+- 節は既存 `AnalysisSection` と同じ階層・余白を使い、指標は可視ラベルのない `SelectControl` に接続する。accessible nameは「オーナー比較の指標」とし、導入説明文と専用の読み方アコーディオンは置かない。7候補の表示指標選択であり、新たなtab階層・scope filter・独自popupにはしない。URLと指標の意味はfeatureが所有する。
 - 比較表は共通 `DataTable` の行・列見出しとacademic tableの表現を使う。番手比較から再利用するのは行＝プレーヤー・列＝条件の読み方と軸ラベルであり、`AnalysisMatrix` の離れたセル、番手の枠・強度・得意苦手の表現を複製しない。
 - 通常の表は上端・header下端・最終行下端の横罫線で構成し、外枠・縦罫線・セルごとのcard・通常セルの着色を足さない。headerの文字recipeはshared UIに従う。主要値は `contentText.compactPrimary` とtabular numerals、補助回数・品質は共通の補助表現を使い、名前・操作・全説明まで一律に太字にしない。
 - 行見出しは `MemberSequenceLabel`、列はneutralなオーナー名と対象戦数・`SeriesAnalysisQualityAdvisory` を使う。本人がオーナーの対角も通常値とする。列見出しはsort操作を持たず、数値で並び替えない。

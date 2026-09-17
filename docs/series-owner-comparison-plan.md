@@ -1,10 +1,10 @@
 # オーナー別戦績比較 実装計画
 
-対象: [MOM-3](https://linear.app/ponta/issue/MOM-3)。状態: **計画策定済み・実装未着手**（2026-09-17）。
+対象: [MOM-3](https://linear.app/ponta/issue/MOM-3)。状態: **実装済み・隔離環境で主要受入を検証済み**（2026-09-18）。公開前に残る確認は7節に記す。
 
 本書は [要求仕様](requirements/series-owner-comparison.md) と [実装仕様](series-owner-comparison-spec.md) を、変更単位・依存関係・完了証拠へ落とし込む。指標の意味と受入条件は要求仕様、payload・URL・移行契約は実装仕様を正本とし、ここで再定義しない。[敵対的レビュー](series-owner-comparison-review.md#5-実装仕様の敵対的レビュー) の指摘も各工程に割り当てる。
 
-同日の [技術レビューK1〜K8](series-owner-comparison-review.md#6-実装計画の技術レビュー) を反映済み。React / Router / Query / Cats Effectの公式資料と実際の利用方法を照合し、性能効率性・保守性の受入条件を4節へ追加した。依存libraryのupgradeは含めない。
+2026-09-17の [技術レビューK1〜K8](series-owner-comparison-review.md#6-実装計画の技術レビュー) を反映済み。React / Router / Query / Cats Effectの公式資料と実際の利用方法を照合し、性能効率性・保守性の受入条件を4節へ追加した。依存libraryのupgradeは含めない。
 
 ## 1. 必要十分性・実現可能性・提供価値の再評価
 
@@ -20,7 +20,7 @@
 
 オーナーfilter、対象試合一覧、因果・公平性の判定、差の自動解説、Discord連携、owner専用通知、全APIのv3化、旧readerの撤去は今回の工程へ追加しない。汎用の多次元分析frameworkや新しいtable基盤も作らない。
 
-利用者の選択が必要な未決事項は残っていない。実データでの性能、migrationの成立、実画面の読みやすさは未検証であり、以下の実装工程で証拠を揃える。これらをコード調査だけで確認済みとは扱わない。
+利用者の選択が必要な仕様の未決事項は残っていない。実装と隔離環境での検証結果は7節に記録する。実データ量との照合、本番移行、利用者本人による読解は、それぞれ別の確認として残す。
 
 ## 2. 作業単位と依存関係
 
@@ -56,7 +56,7 @@
 
 変更入口はsibling `momo-db` の `src/schema.ts` と新しいforward migration、本repositoryの [.momo-db-ref](../.momo-db-ref)。DB編集・操作前にsiblingの `docs/development.md` の確認内容が現行であることを確かめ、[DB利用規約](db-rule.md) とそのauthoring手順に従う。
 
-DB側の責務は実装仕様6節で定めた既存範囲に限定する。詳細計画・差分レビューでは、各変更を既存の制約・guard・初期化処理へ対応づけ、維持する不変条件と新世代対応の差分を示す。オーナー固有の業務判断はP2で扱う。この境界の合意は、momo-db側の詳細な変更対象・migration分割・適用順序・lock影響・consumer影響のレビュー完了を意味しない。
+DB側の責務は実装仕様6節で定めた既存範囲に限定する。詳細計画・差分レビューでは、各変更を既存の制約・guard・初期化処理へ対応づけ、維持する不変条件と新世代対応の差分を示す。オーナー固有の業務判断はP2で扱う。実装時にmigrationの分割・順序・lock取得・consumer影響を確認し、既存の責務内で完了した。内訳と証拠は7節に記す。
 
 1. 旧・新のschema/validation IDのexact pairを制約とpublication/pointer guardへ反映する。試合の列を増やさず、published成果物の不変性と未公開stagingの契約を維持する。
 2. 新規bootstrapの初期tupleを新世代へ進める条件を、実装仕様6節に従ってmigrationに閉じる。作品数0だけを根拠にしない。稼働・登録履歴のあるDBは旧tupleを保ち、通常のpromotionへ渡す。
@@ -131,7 +131,7 @@ URL ID・select候補・payload参照・formatterの対応は一つの型付きc
 
 ## 4. 検証の割当てと終了条件
 
-以下は実装時に適用するgateである。今回実行した文書検証は7節に記録し、実装に対するgateはまだ実行していない。現行commandの正本はpackage manifest・build設定・CI、選定基準は [Change Gates](dev-rule.md#4-change-gates) と [テスト・品質規約](test-rule.md) とする。
+以下は今回の実装に適用したgateである。実行結果と保証範囲は7節に記録する。現行commandの正本はpackage manifest・build設定・CI、選定基準は [Change Gates](dev-rule.md#4-change-gates) と [テスト・品質規約](test-rule.md) とする。
 
 | 境界 | 選ぶgate・実行入口 | 主に検出する失敗 |
 | --- | --- | --- |
@@ -184,10 +184,47 @@ URL ID・select候補・payload参照・formatterの対応は一つの型付きc
 
 本番操作の境界は [公開運用規約](ops/README.md) に従う。本計画は公開操作の実施・承認記録ではない。実装と隔離環境での受入完了、公開準備完了、実際の公開・backfill完了を分けて報告する。
 
-## 7. 今回の確認範囲
+## 7. 実装・検証記録（2026-09-18）
 
-規約・実装仕様・コード・既存の生成/検証経路を読み、作業順序と完了条件を具体化した。続く技術レビューでは公式framework資料とISOの品質モデルを確認し、K1〜K8を実装仕様と本計画へ反映した。性能・保守性の条件は計画上のものであり、測定済みの結果ではない。
+P1〜P5を実装し、P6の機能・互換性・実画面・代表fixtureでの資源検証を隔離環境で行った。実測値・実行環境の詳細は公開文書へ置かず、以下では保証した契約と残る確認を記録する。
 
-この時点でアプリコード、共有DB、生成schemaは変更していない。migration、実DB、実画面、resource性能は未検証であり、P1〜P6の完了証拠として残る。
+### 共有DBの変更と責務
 
-文書検証: `git diff --check`、`pnpm public:safety:check`、今回編集した4文書の空白・ローカル参照先103件・節参照13件の確認を通過した。これは実装の動作証拠ではない。
+[.momo-db-ref](../.momo-db-ref) は `8eecff3846210f278740d9b9770a717d34f71704` を指す。元のsibling checkoutを保ち、別worktreeで作成・検証・commitした。既存migrationを書き換えていない。
+
+| migration | 既存責務への対応 | 維持する条件 |
+| --- | --- | --- |
+| 0046 | 通常のrelease lockを取得して後続DDLの順序を揃えるcustom migration | migration全体を正規migratorのtransactionで適用 |
+| 0047 | Drizzle生成のpair制約・default更新 | 旧・新のexact pairを受理し、交差pairを拒否 |
+| 0048 | 既存のpublication / pointer guardの新pair対応 | published成果物の不変性、stagingと参照の制約 |
+| 0049 | 未稼働DBの初期tupleだけを進めるcustom migration | stale / drainingを含む登録・稼働履歴があれば旧tupleを保持 |
+
+試合列、オーナー別の数式、分母・品質判定、成果物の意味検証をDBへ追加していない。これらはRustが所有する。migration SQLのlock順序・transaction・名前・`search_path`・既存triggerとの関係を確認し、共有通知のschemaや型は変更していない。
+
+### 実行した証拠
+
+| 境界 | 結果と保証範囲 |
+| --- | --- |
+| momo-db | `build`、`db:check`、`test:migrations`（6件）通過。fresh tuple、旧DBのbackup / restoreからのupgrade、旧row / pointer / checksum保持、交差pair拒否、稼働履歴がある0作品DBを確認 |
+| Rust | format、Clippy、workspace test通過（analysis-core 62件、OCR 18件、worker 174件）。DB / Redisを使う対象の12件も明示実行。手計算例、owner訂正、全scope、0/1/2/3戦、入力順、意味検証とschema exportを確認 |
+| API | `apiQuality`、通常test（468件）、`apiDbQuality`（166件）、OpenAPI生成・freshness通過。両世代read、旧current / 新desired、pairとpayload不一致、共通admissionの上限・取消・回復を確認 |
+| Web | format、lint、typecheck、contract check、build通過。全suite 901件に加え、最終wire境界とowner表示の対象17件を実行。旧wireの新payload拒否、新wireの両世代受理と必須owner欠落拒否を確認 |
+| runtime / release | workerとアプリのproduction image build、image scan、Dockerfile lint、image / release DB / control-plane / preemption / runtime HTTP smoke通過。childの上限超過、回収後の次処理、世代移行を確認 |
+| 既存通知consumer | 変更後DB packageを使った隔離copyのSummitでtypecheck / build、既存通知契約・renderの20件を確認。新identityの受入と世代差分の既存incomparable表現も確認。外部送信は実施していない |
+| 公開情報 | `git diff --check`、`public:safety:check`を実行。ローカル測定・画面証拠はcommit対象外 |
+
+### 利用者の結果と実画面
+
+Playwright MCPで、通常APIによる3試合の登録からworker生成、API取得、Web表示までを通した。2試合目のownerを通常の更新APIで訂正し、4人全員の値が同時に別の列へ移り、親scopeの既存指標が変わらないことを確認した。新aggregateのHTTP成功、旧aggregate endpointの426も実応答で確認した。
+
+7指標の切替、Nと参考値、対象なしと観測0、銀次の遭遇率と平均回数、同じURLの別contextでの復元を確認した。指標切替は追加取得・履歴追加・inert化を起こさず、selectのfocusと読んでいる位置を保持した。router / Strict Modeの操作証拠で、連続操作とcanonical化の競合も確認した。
+
+PCと320 / 360pxのmobile幅で、行列見出しの固定、局所scroll、keyboardでの到達・離脱を確認した。長い表示名の折り返し不備は実画面で検出して修正した。大きな負の金額と順位分布も同じ表で確認した。これはエージェントによる読解・操作確認であり、利用者本人の読解成功とは区別する。
+
+### 資源検証と公開前に残る確認
+
+固定4人・500試合・全9scope・オーナー数の偏りを持つfixtureを、変更前後それぞれ100回実行した。100開催に分けた代表fixtureも同条件で実行した。production相当の制限下で、worker / child / 一時成果物の既存上限、連続実行後の回収とメモリ推移を確認した。APIは最終イメージで代表fixtureのbounded read / renderと同時読取り、Webは初回取得・保存済み表示・指標切替を確認した。既存上限を緩めていない。境界負荷でのreader拒否は、代表負荷の成功と分けて扱った。
+
+- 「現在の実データ量の2倍」の照合は、作品ごとの現在件数が未確認のため保留。500試合を超えるfixtureが必要なら、公開前に規定量で再測定する。
+- 本人が説明なしに値・分母を読み取れたという証拠は未取得。
+- DB commitの共有・merge、アプリのpush / PR、実DBへのmigration、reader-firstの配置と過去分再計算は未実施。本作業のローカル実装・検証を、本番公開やbackfillの完了として扱わない。

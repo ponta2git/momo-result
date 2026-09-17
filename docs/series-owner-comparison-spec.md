@@ -1,12 +1,12 @@
 # オーナー別戦績比較 実装仕様
 
-対象: [MOM-3](https://linear.app/ponta/issue/MOM-3)。状態: **仕様確定・未実装**（2026-09-17）。
+対象: [MOM-3](https://linear.app/ponta/issue/MOM-3)。状態: **実装済み**（2026-09-18）。検証結果と公開前の残件は [実装計画7節](series-owner-comparison-plan.md) を参照する。
 
-同日の [敵対的レビュー](series-owner-comparison-review.md#5-実装仕様の敵対的レビュー) を反映済み。仕様としての不整合を修正した状態であり、実装・公開の検証完了を示すものではない。
+2026-09-17の [敵対的レビュー](series-owner-comparison-review.md#5-実装仕様の敵対的レビュー) を反映済み。要求・規約との不整合を修正し、実装へ反映した。公開は未実施。
 
 [実装計画の技術レビュー](series-owner-comparison-review.md#6-実装計画の技術レビュー) も反映済み。計算増分、読取り資源の共有、publication契約文書の形式、表示変更intentの寿命を具体化した。
 
-[要求仕様](requirements/series-owner-comparison.md) の利用者との合意を、現行コードと規約に照らして実装契約へ具体化する。目的・指標の数式・表示の意味・受入条件は要求仕様を正本とする。本書は変更後の契約と移行方針を定める。現在の実装が対応済みであることは意味しない。実装後の機械可読なshapeはRust所有のJSON Schema、HTTPはTapir、DBはmomo-dbを正本とする。
+[要求仕様](requirements/series-owner-comparison.md) の利用者との合意を、現行コードと規約に照らして実装契約へ具体化する。目的・指標の数式・表示の意味・受入条件は要求仕様を正本とする。本書は変更後の契約と移行方針を定める。実装・隔離検証と本番公開の状態は分けて扱う。実装後の機械可読なshapeはRust所有のJSON Schema、HTTPはTapir、DBはmomo-dbを正本とする。
 
 ## 1. 規約との対応と採用する構成
 
@@ -185,7 +185,7 @@ publication契約文書は `series-analysis-publication-contract-v2.json` へ改
 3. 新規DB用defaultを新tupleに合わせる。初期singletonの更新を「作品・操作要求が0件」だけで許可しない。新規bootstrapとしてruntime未接続を保証し、作品・操作要求・job・campaign・artifactと、reader / workerの登録履歴がないDBだけを初期化対象にする。registryの確認ではstale / drainingを除外しない。条件確認と更新は同一transactionに閉じ、lock順はDB規約に従う。fresh環境へのruntime接続は初期化完了後とする。稼働履歴があるDBは現在0作品でもactive tupleを保持し、capability確認付きの0-target promotionを使う。
 4. siblingで通常DDLとcustom SQLを規約どおり分離し、fresh migrationと旧成果物を持つDBからのupgradeを検証する。実装時に確定したmomo-db commitへ `.momo-db-ref` を更新する。
 
-調査では `.momo-db-ref` の指す版とsibling HEADの `src/schema.ts`・migration群に差分がないことを確認した。稼働DBへの適用状態は確認していない。新しいmigrationの採番・commit hashは実装成果物であり、ここで未作成の値を仮置きしない。
+実装ではmomo-dbの0046〜0049を正規手順で作成・検証し、完了commitへ `.momo-db-ref` を更新した。内訳は実装計画7節に記録する。稼働DBへの適用は行っていない。
 
 ## 7. 新旧混在と公開の順序
 
@@ -226,4 +226,4 @@ workerは新algorithm・schema 3・新validation IDの単一profileへの完全�
 
 実装時の必須gateは [Change Gates](dev-rule.md#4-change-gates) のWorker、algorithm version、API、DB、Web API contract、比較の主要UI flowに対応するものを使う。既存証拠を再利用・修正し、同じ数式を全層へ複製したtestや、実装をなぞる専用checkerは追加しない。実装と必要な検証が終わるまでMOM-3の実装完了とは扱わない。
 
-今回確認したのは規約・現行schema・コードと要求の整合までである。実データの件数、稼働DB、migration適用、実画面、性能は未検証。これらは仕様の未決事項ではなく、実装後の完了証拠として残す。
+隔離環境で入力・計算・migration・API・Web・代表負荷を検証した。実データ量との照合、本人の読解、本番移行は実装計画7節の残件として明示する。

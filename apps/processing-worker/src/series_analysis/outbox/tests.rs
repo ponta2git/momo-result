@@ -1,6 +1,5 @@
 use std::error::Error;
 
-use momo_analysis_core::contract::ARTIFACT_VALIDATION_CONTRACT_ID;
 use redis::{AsyncCommands, aio::ConnectionManager, streams::StreamRangeReply};
 
 use super::*;
@@ -573,7 +572,7 @@ async fn assert_campaign_expansion_decision_table(
         projection
             .try_get::<_, Option<String>>("queued_validation_contract")?
             .as_deref(),
-        Some(ARTIFACT_VALIDATION_CONTRACT_ID)
+        Some("series-analysis-artifact-v2-full-validation-v1")
     );
     assert!(projection.try_get::<_, bool>("request_tuple_propagated")?);
     assert_eq!(projection.try_get::<_, i64>("outbox_count")?, 2);
@@ -589,7 +588,9 @@ fn campaign_target_for(game_title_id: &str) -> CampaignTarget {
         input_revision: 0,
         algorithm_version: String::from("series-analysis-v3"),
         artifact_schema_version: 2,
-        validation_contract_id: Some(String::from(ARTIFACT_VALIDATION_CONTRACT_ID)),
+        validation_contract_id: Some(String::from(
+            "series-analysis-artifact-v2-full-validation-v1",
+        )),
         accepted_at: SystemTime::UNIX_EPOCH,
         operation_id: String::from(CAMPAIGN_OPERATION_ID),
         trigger: String::from("manual"),

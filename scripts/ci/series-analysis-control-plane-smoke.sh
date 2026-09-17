@@ -407,8 +407,10 @@ fi
 
 maintenance_first_complete="$(run_release_command release-reconcile \
   --operation auto --release-id 0123456789abcdef0123456789abcdef01234567)"
-jq -e '.status == "complete" and .targetCount == 2 and .completedCount == 2 and .failedCount == 0' \
-  <<< "${maintenance_first_complete}" > /dev/null
+if ! jq -e '.status == "complete" and .targetCount == 2 and .completedCount == 2 and .failedCount == 0' \
+  <<< "${maintenance_first_complete}" > /dev/null; then
+  fail_with_worker_log "Unexpected maintenance completion: ${maintenance_first_complete}"
+fi
 
 first_job="$(psql_ci -At -c "SELECT id FROM series_analysis_jobs ORDER BY requested_at, id LIMIT 1;")"
 attempts_before="$(psql_ci -At -c "SELECT attempt_count FROM series_analysis_jobs WHERE id = '${first_job}';")"

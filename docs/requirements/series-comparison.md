@@ -7,6 +7,8 @@
 | 関心事 | 正本 |
 | --- | --- |
 | 本ページのscope、指標の意味、表示上の判断 | 本書 |
+| オーナー別比較の初版範囲、指標、件数・表示 | `docs/requirements/series-owner-comparison.md` |
+| MOM-3の成果物・HTTP・URL・DB変更と移行方針 | [オーナー別戦績比較の実装仕様](../series-owner-comparison-spec.md)（仕様確定・未実装） |
 | 「次戦に備える」の行動プレイブック | `docs/requirements/series-review-playbook.md` |
 | 非同期計算、artifact、状態、管理、公開・復旧 | `docs/requirements/series-analysis-batch.md` |
 | HTTP / artifact shape | Tapir endpoint、JSON Schema |
@@ -19,7 +21,7 @@ endpoint path、DTO field、component構成、query cache key、閾値の配置�
 - 「シリーズ」は既存の作品1件と同義であり、初期版は作品内の4プレーヤー比較に集中する。作品間の同時比較はしない。
 - 集計対象は確定済み試合だけとし、OCR下書きや未確定下書きを含めない。
 - 初回は確定済み試合が最も新しい作品の総合scopeを選ぶ。過去作品への切替は残す。
-- 利用者は次戦前の作戦確認と対戦後の振り返りに使い、結論から詳細指標、根拠試合へ段階的に移動できる。
+- 利用者は次戦前の作戦確認と対戦後の振り返りに使い、結論から詳細指標、根拠試合へ段階的に移動できる。記録を見比べて仲間内の会話の材料を得る利用も含む。
 - 認証済みの有効accountだけが閲覧できる。URLは状態復元に使うが、公開共有手段にはしない。
 - 試合作成・編集、master管理、export、共有画像、自由文AI、勝者予測、未保存の行動・カード・距離の推定は本ページの責務外とする。
 
@@ -56,9 +58,10 @@ endpoint path、DTO field、component構成、query cache key、閾値の配置�
 | 今の差 (`overview`) | 平均順位、順位分布、直接対決、順位ブレ、王座の確からしさ |
 | 勝因候補 (`drivers`) | 資産、物件収益、目的地、順位を読む追加の手掛かり |
 | 推移 (`flow`) | 直近成績、切り替え力、荒れ試合、開催内の流れ、予測より上位だった勝利 |
-| 条件別 (`context`) | 番手、カード売り場と目的地、スリの銀次 |
+| 条件別 (`context`) | 番手、オーナー、カード売り場と目的地、スリの銀次 |
 
 - URLは作品、season、map、view、選択試合を復元する。無効値は別scopeへ推測変換せず、安全な既定値へ正規化して理由を示す。
+- オーナー比較への到達と選択指標のURL復元は [オーナー別戦績比較](series-owner-comparison.md#別端末で同じ話題を見る) に従う。
 - view切替だけで集計scopeを変えない。作品・season・map変更時は選択試合を解除する。
 - 根拠試合の選択中は4人の結果と分析上の位置を一貫して示す。試合粒度で一意に対応できない指標へ目印を捏造しない。
 - 対象試合のrevisionまたは作品所属がartifactと異なる場合、一次データは維持し、古い派生分析だけを隠す。
@@ -94,7 +97,7 @@ endpoint path、DTO field、component構成、query cache key、閾値の配置�
 | 今の差 | 対戦数、平均順位、順位分布、入賞・下位率、順位ブレ、直接対決 |
 | 資産・収益 | 総資産と物件収益の代表値・共通bin分布、収益順位との差、収益トップ未勝利、観測上の戦い方傾向 |
 | 推移 | 累積平均順位・順位ブレ、直近20戦、前戦からの順位遷移、開催内第n試合、荒れ試合 |
-| 条件別 | 番手別成績、目的地、カード売り場×目的地、銀次の件数・発生率・被害時成績 |
+| 条件別 | 番手別成績、オーナー別比較、目的地、カード売り場×目的地、銀次の件数・発生率・被害時成績 |
 | 補助 | 根拠付きhighlight、高度な順位分析、試合とプレーヤー粒度のdrilldown |
 
 ### Core / Drivers
@@ -118,6 +121,8 @@ endpoint path、DTO field、component構成、query cache key、閾値の配置�
 - 資産タイプは各人値と4人中央値の差を固定優先順位で分類し、分布形状を別軸、収益比率・目的地・下振れなどを複数tagとして保持する。primary分類とtagを相互に上書きしない。
 
 ### Flow / Context
+
+オーナー別比較は既存scope内の条件別集計として「番手比較」に続けて表示する。親scopeとは分母が異なる比較として扱い、初版は集計値の比較までを完了点とする。指標・分母・少数例・表示・対象試合一覧を追加しない範囲は [オーナー別戦績比較](series-owner-comparison.md) に従う。
 
 | 指標 | 定義 |
 | --- | --- |
@@ -170,6 +175,7 @@ highlightは既存指標から決定論的に選び、銀次被害後の成績�
 - Web / APIは保存済みartifactを読むだけとし、指標、閾値、意味順、fallbackを再計算しない。詳細はbatch正本に従う。
 - options、status、aggregate、review、drilldown、試合文脈は用途別resourceとし、同一画面ではstatusが解決した同じartifactへ固定する。
 - 通常表示はactive viewのbounded chunkだけを読み、試合詳細N+1や作品全体decodeを行わない。
+- 表示可能なartifactがあっても選択scope全体が0戦なら、分析本文に代えて共通の空状態と回復導線を出す。scope内の一条件だけ対象0件の場合と、成果物が未取得の場合を区別する。
 - 計算中・失敗時は直前成功artifactがあれば鮮度と状態を示して閲覧を維持し、一度も成功していなければ分析値を表示しない。
 - 定義済みの対象なし・件数不足はtypedな正常結果とし、予期しないscope計算失敗で部分artifactを公開しない。
 - ancillary resourceの取得失敗で取得済み主表示を消さない。expired artifactはstatusを更新して一度だけ最新へretryし、同期計算や別scopeへfallbackしない。

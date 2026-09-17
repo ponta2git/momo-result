@@ -17,7 +17,7 @@
 | DB / repository | `docs/db-rule.md`、対象の業務・job 要求 | momo-db 側の変更は `AGENTS.md` の事前確認条件と `docs/db-rule.md` の Migration / Deployment | pinned migration、対象 query、変更経路の DB quality |
 | OCR / Redis queue | `docs/redis-streams-ocr-contract.md`、`docs/db-rule.md`、`docs/schemas/ocr-*.schema.json` | worker 構造は architecture の OCR Capability / Worker Role | API producer、`apps/processing-worker/`、queue / DB / process の変更境界 |
 | 分析 job / artifact / worker / API | `docs/requirements/series-analysis-batch.md` | DB は db-rule、構造は architecture、表示は ui-rule、指標・review は対象要求 | artifact / queue schema、Tapir、processing-worker、Web。Analysis Capability / Worker Evidence Catalog |
-| 戦績比較 | `docs/requirements/series-comparison.md`、分析 batch 要求 | review は `docs/requirements/series-review-playbook.md`、UI は ui-rule | artifact schema、worker、Web、analysis / Web gate |
+| 戦績比較 | `docs/requirements/series-comparison.md`、分析 batch 要求 | オーナー別比較は `docs/requirements/series-owner-comparison.md`、review は `docs/requirements/series-review-playbook.md`、UI は ui-rule | artifact schema、worker、Web、analysis / Web gate |
 | 開催一覧・詳細 | `docs/requirements/held-event-detail.md` | 業務前提は base、メモは match-note、実装境界は architecture | 対象 API / Web |
 | 試合メモ | `docs/requirements/match-note.md` | 変更する境界に応じて base、開催詳細、分析 batch、domain、UI | Tapir、momo-db、API / Web、DB と UI の変更経路 |
 | テスト / coverage / CI | `docs/test-rule.md`、`docs/dev-rule.md` | 実行設計は test-architecture、契約の意味は専門正本 | test 設定、workflow、対象経路の証拠 |
@@ -35,6 +35,12 @@
 実施記録: [操作する場所の輪郭を整える（採用案の観点1）](ui-boundary-plan.md)。採用値、共通部品への接続、接続復旧後のE2Eを含む検証結果を整理する。
 
 検討記録: 選択肢表示の共通化の [調査](ui-select-review.md) と [実装計画](ui-select-plan.md)。方式比較、Base UIを使う場合の変更順序・受入条件・確認状況を扱う。未実装の提案であり、表示契約はUI規約を参照する。
+
+検討記録: [オーナー別戦績比較のレビュー](series-owner-comparison-review.md)。提供価値・既存画面との整合に加え、実装仕様・計画を規約、framework、性能効率性・保守性から検討する。採用した変更は要求仕様・実装仕様・計画の該当する正本へ反映する。
+
+確定仕様（未実装）: [オーナー別戦績比較の実装仕様](series-owner-comparison-spec.md)。要求と各規約・現行コードを照合し、入力・成果物・HTTP・URL・共有DBの変更、互換性、実装後の完了証拠を定める。
+
+実装計画（未着手）: [オーナー別戦績比較の実装計画](series-owner-comparison-plan.md)。必要十分性・実現可能性・提供価値を再評価し、変更箇所、依存順序、各工程の受入証拠、公開準備を具体化する。
 
 ## 2. 正本と証拠
 

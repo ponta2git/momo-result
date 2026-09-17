@@ -232,4 +232,4 @@ PC・mobileで同じ問いに答えられることを確認する。代表課題
 | オーナーを含む構造化された試合更新は、試合の分析revisionと作品の再計算要求を同一transactionで更新する | [PostgresMatches](../../apps/api/src/main/scala/momo/api/adapters/postgres/PostgresMatchesRepository.scala)、[mutation intent](../../apps/api/src/main/scala/momo/api/adapters/postgres/PostgresSeriesAnalysisMutationOps.scala) |
 | 通常指標は対象0件を対象なし、1〜2件を参考とする | [stats](../../apps/processing-worker/crates/analysis-core/src/stats.rs) |
 
-チケット本文、当初の6点と追加レビューでの回答を要求へ反映した。調査時点でチケットにはコメント・添付・関連issueの登録はなかった。過去のオーナーは複数人について実態に合わせて入力しているという利用者の回答を前提とする。これは実データを照合した証拠ではなく、実データの件数・条件の偏り・稼働DBへのmigration適用は未確認である。実画面の操作と代表fixtureでの性能は、その後の隔離検証で確認した。新成果物の具体的な構造、version・互換性の更新範囲、DB変更の要否は [実装仕様](../series-owner-comparison-spec.md) で確定し、必要な実装後の証拠を同書8節へ割り当てた。
+チケット本文、当初の6点と追加レビューでの回答を要求へ反映した。調査時点でチケットにはコメント・添付・関連issueの登録はなかった。過去のオーナーは複数人について実態に合わせて入力しているという利用者の回答を前提とする。実DBの件数・条件の偏りを直接照会しておらず、稼働DBへのmigration適用も未実施である。検証量が現在件数の2倍以上という条件は、2026-09-18の利用者の回答に基づいて照合した。実画面の操作と代表fixtureでの性能は隔離検証で確認した。新成果物の具体的な構造、version・互換性の更新範囲、DB変更の要否は [実装仕様](../series-owner-comparison-spec.md) で確定し、必要な実装後の証拠を同書8節へ割り当てた。

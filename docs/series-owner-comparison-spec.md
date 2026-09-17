@@ -226,4 +226,4 @@ workerは新algorithm・schema 3・新validation IDの単一profileへの完全�
 
 実装時の必須gateは [Change Gates](dev-rule.md#4-change-gates) のWorker、algorithm version、API、DB、Web API contract、比較の主要UI flowに対応するものを使う。既存証拠を再利用・修正し、同じ数式を全層へ複製したtestや、実装をなぞる専用checkerは追加しない。実装と必要な検証が終わるまでMOM-3の実装完了とは扱わない。
 
-隔離環境で入力・計算・migration・API・Web・代表負荷を検証した。実データ量との照合、本人の読解、本番移行は実装計画7節の残件として明示する。
+隔離環境で入力・計算・migration・API・Web・代表負荷を検証した。検証量が現在件数の2倍以上という条件は、利用者の回答に基づいて照合済み。本人の読解と本番移行は実装計画7節の残件として明示する。

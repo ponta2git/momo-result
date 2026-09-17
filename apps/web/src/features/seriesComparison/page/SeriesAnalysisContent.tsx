@@ -4,6 +4,7 @@ import type { RefObject } from "react";
 import type { SeriesAnalysisDrilldownSelection } from "@/features/seriesComparison/drilldowns/SeriesAnalysisDrilldownContent";
 import { SeriesAnalysisDrilldownLoading } from "@/features/seriesComparison/drilldowns/SeriesAnalysisDrilldownLoading";
 import type { SeriesAnalysisDisplayBundle } from "@/features/seriesComparison/model/seriesAnalysisDisplayBundle";
+import type { OwnerMetricId } from "@/features/seriesComparison/model/seriesAnalysisOwnerMetrics";
 import type { SeriesAnalysisViewId } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
 import { SeriesAnalysisArrival } from "@/features/seriesComparison/navigation/SeriesAnalysisNavigation";
 import { ReviewView } from "@/features/seriesComparison/page/SeriesAnalysisReviewView";
@@ -90,6 +91,8 @@ export function preloadSeriesAnalysisView(view: SeriesAnalysisViewId): void {
 }
 
 type SeriesAnalysisContentProps = {
+  ownerMetric?: OwnerMetricId | undefined;
+  onOwnerMetricChange?: ((metric: OwnerMetricId) => void) | undefined;
   activeView?: SeriesAnalysisViewId;
   bundle: SeriesAnalysisDisplayBundle;
   navigationReady?: boolean;
@@ -114,6 +117,8 @@ export const SeriesAnalysisContent = memo(function SeriesAnalysisContent({
   bundle,
   activeView = bundle.view,
   navigationReady = true,
+  ownerMetric = "rank.average",
+  onOwnerMetricChange,
   onArtifactExpired,
   onClearFocusedMatch,
   onFocusMatch,
@@ -158,6 +163,8 @@ export const SeriesAnalysisContent = memo(function SeriesAnalysisContent({
           </div>
           {bundle.kind === "analysis" ? (
             <AnalysisViewContent
+              ownerMetric={ownerMetric}
+              onOwnerMetricChange={onOwnerMetricChange}
               bundle={bundle}
               key={contentIdentity}
               navigationReady={navigationReady}
@@ -175,12 +182,16 @@ export const SeriesAnalysisContent = memo(function SeriesAnalysisContent({
 });
 
 function AnalysisViewContent({
+  ownerMetric,
+  onOwnerMetricChange,
   bundle,
   navigationReady,
   root,
   onArtifactExpired,
   onFocusMatch,
 }: {
+  ownerMetric: OwnerMetricId;
+  onOwnerMetricChange: ((metric: OwnerMetricId) => void) | undefined;
   bundle: SeriesAnalysisBundle;
   navigationReady: boolean;
   root: RefObject<HTMLDivElement | null>;
@@ -229,6 +240,8 @@ function AnalysisViewContent({
         ) : null}
         {bundle.view === "context" ? (
           <ContextView
+            ownerMetric={ownerMetric}
+            onOwnerMetricChange={onOwnerMetricChange}
             focusedItemIds={focusedItemIds}
             response={bundle.aggregate}
             onDrilldown={openDrilldown}

@@ -2,7 +2,7 @@ import { RefreshCw, TriangleAlert } from "lucide-react";
 import { useState } from "react";
 
 import type {
-  SeriesComparisonAggregateV3,
+  SeriesComparisonAggregate,
   SeriesComparisonReviewV3,
 } from "@/shared/api/seriesAnalysis";
 import { formatDateTimeLong } from "@/shared/lib/dateTime";
@@ -14,7 +14,7 @@ import { contentText, fieldText } from "@/shared/ui/typography";
 
 type SelectOption = { disabled?: boolean | undefined; label: string; value: string };
 type SeriesAnalysisResourceSummary = Pick<
-  SeriesComparisonAggregateV3 | SeriesComparisonReviewV3,
+  SeriesComparisonAggregate | SeriesComparisonReviewV3,
   "artifact" | "dataQuality" | "scope"
 >;
 

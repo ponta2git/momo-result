@@ -1,3 +1,8 @@
+import {
+  defaultOwnerMetric,
+  isOwnerMetricId,
+} from "@/features/seriesComparison/model/seriesAnalysisOwnerMetrics";
+import type { OwnerMetricId } from "@/features/seriesComparison/model/seriesAnalysisOwnerMetrics";
 import type {
   SeriesAnalysisOptionsResponse,
   SeriesAnalysisQuery,
@@ -6,6 +11,7 @@ import type {
 export type SeriesAnalysisViewId = "context" | "drivers" | "flow" | "overview" | "review";
 
 export type SeriesAnalysisUrlState = {
+  ownerMetric?: OwnerMetricId | undefined;
   focusMatchId?: string | undefined;
   gameTitleId?: string | undefined;
   mapMasterId?: string | undefined;
@@ -34,14 +40,17 @@ export function parseSeriesAnalysisSearchParams(params: URLSearchParams): Series
   const mapMasterId = params.get("mapMasterId")?.trim() || undefined;
   const focusMatchId = params.get("focusMatchId")?.trim() || undefined;
   const view = normalizeView(params.get("view")?.trim());
+  const rawMetric = params.get("ownerMetric");
+  const ownerMetric = isOwnerMetricId(rawMetric) ? rawMetric : defaultOwnerMetric;
   if (seasonMasterId || mapMasterId) {
-    return { focusMatchId, gameTitleId, mapMasterId, seasonMasterId, view };
+    return { focusMatchId, gameTitleId, mapMasterId, seasonMasterId, view, ownerMetric };
   }
 
   const rawKind = params.get("scopeKind")?.trim();
   const scopeKind = legacyScopeKinds.has(rawKind ?? "") ? rawKind : "overall";
   const scopeId = params.get("scopeId")?.trim() || undefined;
   return {
+    ownerMetric,
     focusMatchId,
     gameTitleId,
     mapMasterId: scopeKind === "map" ? scopeId : undefined,
@@ -52,6 +61,8 @@ export function parseSeriesAnalysisSearchParams(params: URLSearchParams): Series
 
 export function buildSeriesAnalysisSearchParams(state: SeriesAnalysisUrlState): URLSearchParams {
   const params = new URLSearchParams();
+  if (state.ownerMetric && state.ownerMetric !== defaultOwnerMetric)
+    params.set("ownerMetric", state.ownerMetric);
   if (state.gameTitleId) params.set("gameTitleId", state.gameTitleId);
   if (state.seasonMasterId) params.set("seasonMasterId", state.seasonMasterId);
   if (state.mapMasterId) params.set("mapMasterId", state.mapMasterId);
@@ -78,7 +89,8 @@ export function normalizeSeriesAnalysisSelection(
     titles.find((title) => title.gameTitleId === options?.defaultGameTitleId) ??
     titles[0];
   const view = normalizeView(state.view);
-  if (!selectedTitle) return { view };
+  const ownerMetric = state.ownerMetric ?? defaultOwnerMetric;
+  if (!selectedTitle) return { view, ownerMetric };
 
   const seasonMasterId = selectedTitle.seasons.some(
     (season) => season.seasonMasterId === state.seasonMasterId,
@@ -99,6 +111,7 @@ export function normalizeSeriesAnalysisSelection(
   }
   return {
     ...(state.focusMatchId ? { focusMatchId: state.focusMatchId } : {}),
+    ownerMetric,
     gameTitleId: selectedTitle.gameTitleId,
     ...(mapMasterId ? { mapMasterId } : {}),
     ...(seasonMasterId ? { seasonMasterId } : {}),

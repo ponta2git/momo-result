@@ -12,7 +12,7 @@ import {
   formatPercent,
   headToHeadSignalLabel,
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
-import type { RelativeIntensity, SeriesComparisonAggregateV3 } from "@/shared/api/seriesAnalysis";
+import type { RelativeIntensity, SeriesComparisonAggregate } from "@/shared/api/seriesAnalysis";
 import { cn } from "@/shared/ui/cn";
 import { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
 import { dataVizSeriesPresentation } from "@/shared/ui/dataViz/seriesPresentation";
@@ -21,7 +21,7 @@ import { contentText } from "@/shared/ui/typography";
 
 type OverviewChartProps = {
   focusedItemIds: readonly string[];
-  response: SeriesComparisonAggregateV3;
+  response: SeriesComparisonAggregate;
 };
 
 const STACKED_SEGMENT_SEPARATOR = "inset 1px 0 var(--color-chart-segment-separator)";
@@ -117,7 +117,7 @@ function rankCountSummary(
     .join("・");
 }
 
-export function CrownShareBars({ response }: { response: SeriesComparisonAggregateV3 }) {
+export function CrownShareBars({ response }: { response: SeriesComparisonAggregate }) {
   const players = response.players;
   const shareByMemberId = new Map(
     response.rankAnalysis.crownCertainty.shares.map((entry) => [entry.memberId, entry.share]),
@@ -174,7 +174,7 @@ export function CrownShareBars({ response }: { response: SeriesComparisonAggrega
   );
 }
 
-export function HeadToHeadMatrix({ response }: { response: SeriesComparisonAggregateV3 }) {
+export function HeadToHeadMatrix({ response }: { response: SeriesComparisonAggregate }) {
   const players = response.players;
   return (
     <AnalysisMatrix ariaLabel="直接対決" className="min-w-[42rem] table-fixed">

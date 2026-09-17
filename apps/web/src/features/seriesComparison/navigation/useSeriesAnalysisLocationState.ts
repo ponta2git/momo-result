@@ -4,10 +4,14 @@ import {
   useEffect,
   useMemo,
   useOptimistic,
+  useRef,
+  useState,
   useTransition,
 } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 
+import { isOwnerMetricId } from "@/features/seriesComparison/model/seriesAnalysisOwnerMetrics";
+import type { OwnerMetricId } from "@/features/seriesComparison/model/seriesAnalysisOwnerMetrics";
 import {
   buildSeriesAnalysisSearchParams,
   compatibleMapIds,
@@ -23,9 +27,23 @@ import type {
 import type { SeriesAnalysisOptionsResponse } from "@/shared/api/seriesAnalysis";
 import { sanitizeReturnTo } from "@/shared/navigation/returnTo";
 
-/** Owns parsing, canonicalization, and intent-level updates for the series-analysis URL. */
+/** One page-local operation; only the matching REPLACE commit can inherit its source position. */
+export type SeriesAnalysisDisplayIntent = {
+  operation: number;
+  sourceVisit: string;
+  target: string;
+  position: { x: number; y: number };
+};
+type PendingLocation = {
+  sourceKey: string;
+  target: string;
+  state: SeriesAnalysisUrlState;
+  hash: string;
+};
+
+/** Owns parsing, canonicalization, and atomic URL updates, including uncommitted successive actions. */
 export function useSeriesAnalysisLocationState(options: SeriesAnalysisOptionsResponse | undefined) {
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const location = useLocation();
   const navigate = useNavigate();
   const returnTo = sanitizeReturnTo(searchParams.get("returnTo"));
@@ -37,28 +55,35 @@ export function useSeriesAnalysisLocationState(options: SeriesAnalysisOptionsRes
   );
   const [state, setOptimisticState] = useOptimistic(urlState);
   const deferredState = useDeferredValue(state);
-  const urlSignature = useMemo(
-    () => buildSeriesAnalysisSearchParams(urlState).toString(),
-    [urlState],
-  );
-  const stateSignature = useMemo(() => buildSeriesAnalysisSearchParams(state).toString(), [state]);
-  const locationSettling = urlSignature !== stateSignature;
+  const pending = useRef<PendingLocation | undefined>(undefined);
+  const operation = useRef(0);
+  const [displayIntent, setDisplayIntent] = useState<SeriesAnalysisDisplayIntent>();
+  const [normalizationNotice, setNormalizationNotice] = useState<string>();
+  const href = `${location.pathname}${location.search}${location.hash}`;
+  const rawMetric = searchParams.get("ownerMetric");
+  if (rawMetric !== null && !isOwnerMetricId(rawMetric) && normalizationNotice === undefined) {
+    setNormalizationNotice("オーナー比較の指標を平均順位に戻しました。");
+  }
 
   useEffect(() => {
-    if (!options || locationSettling) return;
+    if (!options) return;
+    // A canonicalization based on the old visit cannot overwrite a user action in flight.
+    if (pending.current?.sourceKey === location.key && pending.current.target !== href) return;
+    pending.current = undefined;
     const next = buildSeriesAnalysisSearchParams(urlState);
     if (returnTo) next.set("returnTo", returnTo);
     if (next.toString() !== searchParams.toString()) {
       void navigate(
         { pathname: location.pathname, search: `?${next.toString()}`, hash: location.hash },
-        { replace: true, state: location.state },
+        { replace: true, state: location.state, preventScrollReset: true },
       );
     }
   }, [
+    href,
     location.hash,
+    location.key,
     location.pathname,
     location.state,
-    locationSettling,
     navigate,
     options,
     returnTo,
@@ -67,73 +92,129 @@ export function useSeriesAnalysisLocationState(options: SeriesAnalysisOptionsRes
   ]);
 
   const update = useCallback(
-    (next: SeriesAnalysisUrlState, updateOptions: { replace?: boolean } = {}) => {
-      const normalized = normalizeSeriesAnalysisSelection(options, next);
+    (
+      change: (current: SeriesAnalysisUrlState) => SeriesAnalysisUrlState,
+      updateOptions: { replace?: boolean; displayOnly?: boolean } = {},
+    ) => {
+      const previous = pending.current;
+      const inFlight =
+        previous && (previous.sourceKey === location.key || previous.target === href)
+          ? previous
+          : undefined;
+      const normalized = normalizeSeriesAnalysisSelection(
+        options,
+        change(inFlight?.state ?? urlState),
+      );
+      const params = buildSeriesAnalysisSearchParams(normalized);
+      if (returnTo) params.set("returnTo", returnTo);
+      const hash = updateOptions.displayOnly ? "#metric-owner" : (inFlight?.hash ?? location.hash);
+      const target = `${location.pathname}?${params.toString()}${hash}`;
+      pending.current = { sourceKey: location.key, target, state: normalized, hash };
+      operation.current += 1;
+      setDisplayIntent(
+        updateOptions.displayOnly
+          ? {
+              operation: operation.current,
+              sourceVisit: `${location.key}:${location.hash}`,
+              target,
+              position: { x: window.scrollX, y: window.scrollY },
+            }
+          : undefined,
+      );
       startStateTransition(() => {
         setOptimisticState(normalized);
-        const params = buildSeriesAnalysisSearchParams(normalized);
-        if (returnTo) params.set("returnTo", returnTo);
-        setSearchParams(params, { replace: updateOptions.replace ?? true });
+        void navigate(
+          { pathname: location.pathname, search: `?${params.toString()}`, hash },
+          {
+            replace: updateOptions.replace ?? true,
+            state: location.state,
+            preventScrollReset: true,
+          },
+        );
       });
     },
-    [options, returnTo, setOptimisticState, setSearchParams],
+    [
+      href,
+      location.hash,
+      location.key,
+      location.pathname,
+      location.state,
+      navigate,
+      options,
+      returnTo,
+      setOptimisticState,
+      urlState,
+    ],
   );
 
   const updateGameTitle = useCallback(
-    (gameTitleId: string) => update({ gameTitleId, view: state.view ?? defaultSeriesAnalysisView }),
-    [state.view, update],
+    (gameTitleId: string) =>
+      update((current) => ({
+        gameTitleId,
+        view: current.view ?? defaultSeriesAnalysisView,
+        ownerMetric: current.ownerMetric,
+      })),
+    [update],
   );
   const updateSeasonMasterId = useCallback(
-    (seasonMasterId: string) => {
-      const nextSeason = seasonMasterId || undefined;
-      const mapIds = compatibleMapIds(options, state.gameTitleId, nextSeason);
-      const currentMap = state.mapMasterId;
-      update({
-        ...state,
-        focusMatchId: undefined,
-        mapMasterId: currentMap && mapIds && !mapIds.has(currentMap) ? undefined : currentMap,
-        seasonMasterId: nextSeason,
-      });
-    },
-    [options, state, update],
+    (seasonMasterId: string) =>
+      update((current) => {
+        const nextSeason = seasonMasterId || undefined;
+        const mapIds = compatibleMapIds(options, current.gameTitleId, nextSeason);
+        const currentMap = current.mapMasterId;
+        return {
+          ...current,
+          focusMatchId: undefined,
+          mapMasterId: currentMap && mapIds && !mapIds.has(currentMap) ? undefined : currentMap,
+          seasonMasterId: nextSeason,
+        };
+      }),
+    [options, update],
   );
   const updateMapMasterId = useCallback(
-    (mapMasterId: string) => {
-      const nextMap = mapMasterId || undefined;
-      const seasonIds = compatibleSeasonIds(options, state.gameTitleId, nextMap);
-      const currentSeason = state.seasonMasterId;
-      update({
-        ...state,
-        focusMatchId: undefined,
-        mapMasterId: nextMap,
-        seasonMasterId:
-          currentSeason && seasonIds && !seasonIds.has(currentSeason) ? undefined : currentSeason,
-      });
-    },
-    [options, state, update],
+    (mapMasterId: string) =>
+      update((current) => {
+        const nextMap = mapMasterId || undefined;
+        const seasonIds = compatibleSeasonIds(options, current.gameTitleId, nextMap);
+        const currentSeason = current.seasonMasterId;
+        return {
+          ...current,
+          focusMatchId: undefined,
+          mapMasterId: nextMap,
+          seasonMasterId:
+            currentSeason && seasonIds && !seasonIds.has(currentSeason) ? undefined : currentSeason,
+        };
+      }),
+    [options, update],
   );
   const updateView = useCallback(
     (view: SeriesAnalysisViewId, updateOptions?: { replace?: boolean }) =>
-      update({ ...state, view }, updateOptions),
-    [state, update],
+      update((current) => ({ ...current, view }), updateOptions),
+    [update],
+  );
+  const updateOwnerMetric = useCallback(
+    (ownerMetric: OwnerMetricId) =>
+      update((current) => ({ ...current, ownerMetric }), { displayOnly: true }),
+    [update],
   );
   const focusMatch = useCallback(
-    (focusMatchId: string) => update({ ...state, focusMatchId }, { replace: false }),
-    [state, update],
+    (focusMatchId: string) =>
+      update((current) => ({ ...current, focusMatchId }), { replace: false }),
+    [update],
   );
   const clearFocusedMatch = useCallback(
-    () => update({ ...state, focusMatchId: undefined }),
-    [state, update],
+    () => update((current) => ({ ...current, focusMatchId: undefined })),
+    [update],
   );
   const clearScope = useCallback(
     () =>
-      update({
-        ...state,
+      update((current) => ({
+        ...current,
         focusMatchId: undefined,
         mapMasterId: undefined,
         seasonMasterId: undefined,
-      }),
-    [state, update],
+      })),
+    [update],
   );
 
   return {
@@ -145,9 +226,12 @@ export function useSeriesAnalysisLocationState(options: SeriesAnalysisOptionsRes
       updateMapMasterId,
       updateSeasonMasterId,
       updateView,
+      updateOwnerMetric,
     },
     activeView: state.view ?? defaultSeriesAnalysisView,
     deferredState,
+    displayIntent,
+    normalizationNotice,
     returnTo,
     state,
   };

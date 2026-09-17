@@ -14,7 +14,7 @@ import {
   formatManYen,
   formatPercent,
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
-import type { SeriesComparisonAggregateV3 } from "@/shared/api/seriesAnalysis";
+import type { SeriesComparisonAggregate } from "@/shared/api/seriesAnalysis";
 import { formatSeriesMatchIndex } from "@/shared/domain/matchLabels";
 import { currentInternalLocation, withReturnTo } from "@/shared/navigation/returnTo";
 import { cn } from "@/shared/ui/cn";
@@ -24,7 +24,7 @@ import { DataVizScatterPlot } from "@/shared/ui/dataViz/ScatterPlot";
 import { rankBackgroundColor, rankBorderColor } from "@/shared/ui/rank/rankPresentation";
 import { contentText } from "@/shared/ui/typography";
 
-export function AssetRevenueHistograms({ response }: { response: SeriesComparisonAggregateV3 }) {
+export function AssetRevenueHistograms({ response }: { response: SeriesComparisonAggregate }) {
   const seriesIdentity = response.players.map((player) => ({
     id: player.memberId,
     label: player.displayName,
@@ -70,7 +70,7 @@ export function RevenueConversionMatrices({
   response,
 }: {
   focusedItemIds: readonly string[];
-  response: SeriesComparisonAggregateV3;
+  response: SeriesComparisonAggregate;
 }) {
   return (
     <div className="grid gap-2">
@@ -194,7 +194,7 @@ export function StrategyScatter({
   response,
 }: {
   focusedItemIds: readonly string[];
-  response: SeriesComparisonAggregateV3;
+  response: SeriesComparisonAggregate;
 }) {
   const returnTo = currentInternalLocation(useLocation());
   return (

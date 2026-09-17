@@ -13,7 +13,7 @@ import {
   formatManYen,
   formatPercent,
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
-import type { RelativeIntensity, SeriesComparisonAggregateV3 } from "@/shared/api/seriesAnalysis";
+import type { RelativeIntensity, SeriesComparisonAggregate } from "@/shared/api/seriesAnalysis";
 import { cn } from "@/shared/ui/cn";
 import { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
 import { PlayOrderMark } from "@/shared/ui/data/PlayOrderMark";
@@ -27,7 +27,7 @@ export function PlayOrderMatrix({
   response,
 }: {
   focusedItemIds: readonly string[];
-  response: SeriesComparisonAggregateV3;
+  response: SeriesComparisonAggregate;
 }) {
   return (
     <AnalysisMatrix ariaLabel="番手別成績" className="min-w-[42rem] table-fixed">
@@ -168,7 +168,7 @@ export function CardShopDestinationQuadrants({
   response,
 }: {
   focusedItemIds: readonly string[];
-  response: SeriesComparisonAggregateV3;
+  response: SeriesComparisonAggregate;
 }) {
   return (
     <div className="grid gap-4 lg:grid-cols-2">

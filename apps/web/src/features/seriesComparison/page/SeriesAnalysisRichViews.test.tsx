@@ -176,6 +176,8 @@ describe("rich series analysis views", () => {
   it("uses readable condition names for focused contextual evidence", () => {
     render(
       <ContextView
+        ownerMetric="rank.average"
+        onOwnerMetricChange={undefined}
         focusedItemIds={["card-shop:member_ponta:destination_with_shop"]}
         response={makeSeriesAnalysisAggregate()}
         onDrilldown={vi.fn()}

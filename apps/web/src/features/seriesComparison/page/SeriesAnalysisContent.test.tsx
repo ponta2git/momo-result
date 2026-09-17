@@ -8,14 +8,14 @@ import type { SeriesAnalysisDisplayBundle } from "@/features/seriesComparison/mo
 import type { SeriesAnalysisViewId } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
 import { SeriesAnalysisNavigation } from "@/features/seriesComparison/navigation/SeriesAnalysisNavigation";
 import { SeriesAnalysisContent } from "@/features/seriesComparison/page/SeriesAnalysisContent";
-import type { SeriesComparisonAggregateV3 } from "@/shared/api/seriesAnalysis";
+import type { SeriesComparisonAggregate } from "@/shared/api/seriesAnalysis";
 import { makeSeriesAnalysisAggregate } from "@/test/msw/seriesAnalysisFixtures";
 import { createTestQueryClient } from "@/test/queryClient";
 
 type AnalysisViewId = Exclude<SeriesAnalysisViewId, "review">;
 
 function analysisBundle(
-  aggregate: SeriesComparisonAggregateV3,
+  aggregate: SeriesComparisonAggregate,
   view: AnalysisViewId,
 ): SeriesAnalysisDisplayBundle {
   return { aggregate, kind: "analysis", matchContext: undefined, view };

@@ -2,10 +2,7 @@ import { BookOpenText } from "lucide-react";
 import type { ReactNode } from "react";
 
 import type { SeriesAnalysisDrilldownSelection } from "@/features/seriesComparison/drilldowns/SeriesAnalysisDrilldownContent";
-import type {
-  SeriesAnalysisPlayer,
-  SeriesComparisonAggregateV3,
-} from "@/shared/api/seriesAnalysis";
+import type { SeriesAnalysisPlayer, SeriesComparisonAggregate } from "@/shared/api/seriesAnalysis";
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
 import { Disclosure } from "@/shared/ui/data/Collapsible";
@@ -15,7 +12,7 @@ import { Dialog } from "@/shared/ui/feedback/Dialog";
 import { readableTextWidthClass } from "@/shared/ui/layout/readableText";
 import { contentText } from "@/shared/ui/typography";
 
-export function MetricDefinitions({ response }: { response: SeriesComparisonAggregateV3 }) {
+export function MetricDefinitions({ response }: { response: SeriesComparisonAggregate }) {
   return (
     <Dialog
       description="分析に共通する指標の比べ方を示します。"
@@ -42,7 +39,7 @@ export function MetricDefinitions({ response }: { response: SeriesComparisonAggr
 
 export type AnalysisViewProps = {
   focusedItemIds: readonly string[];
-  response: SeriesComparisonAggregateV3;
+  response: SeriesComparisonAggregate;
   onDrilldown: (selection: SeriesAnalysisDrilldownSelection) => void;
 };
 
@@ -144,7 +141,7 @@ export function memberNames(players: SeriesAnalysisPlayer[], memberIds: string[]
 }
 
 function metricReadingCue(
-  definition: SeriesComparisonAggregateV3["metricDefinitions"][number],
+  definition: SeriesComparisonAggregate["metricDefinitions"][number],
 ): string {
   const cue = metricReadingCues[definition.metricId];
   if (cue) return cue;
@@ -160,9 +157,14 @@ function metricReadingCue(
 
 const metricReadingCues: Readonly<Partial<Record<string, string>>> = {
   "assets.average": "4人の金額差と分布を比べ、資産をどの水準で残したかを確認します。",
+  "destination.average":
+    "目的地への到着回数を対象戦数で割った回数（回/試合）です。オーナー比較では列の対象戦数を使います。",
+  "ginji.average":
+    "銀次の合計遭遇回数を対象戦数で割った回数（回/試合）です。同じ試合での複数回遭遇も含みます。",
   "destination.conversionDelta":
     "目的地順位と最終順位のずれを比べ、到着回数が順位へつながったかを確認します。",
-  "ginji.encounterRate": "低さだけで決めず、遭遇した試合の平均順位と平均資産も合わせて確認します。",
+  "ginji.encounterRate":
+    "対象試合のうち、1回以上銀次に遭遇した試合の割合です。1試合平均の遭遇回数とは異なります。",
   "podium.rate": "1〜2位で終えた割合です。対象戦数と下位率を一緒に比べます。",
   "rank.average": "1位に近いほど上位です。順位分布と合わせ、平均に隠れた波を確認します。",
   "rank.distribution": "1〜4位の内訳から、平均順位だけでは見えない安定と波を確認します。",

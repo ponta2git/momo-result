@@ -7,7 +7,7 @@ import {
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
 import { SeriesAnalysisMatchLink } from "@/features/seriesComparison/navigation/SeriesAnalysisMatchLink";
 import { SeriesAnalysisQualityAdvisory } from "@/features/seriesComparison/SeriesAnalysisQualityAdvisory";
-import type { SeriesComparisonAggregateV3 } from "@/shared/api/seriesAnalysis";
+import type { SeriesComparisonAggregate } from "@/shared/api/seriesAnalysis";
 import { formatSeriesMatchIndex } from "@/shared/domain/matchLabels";
 import { cn } from "@/shared/ui/cn";
 import { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
@@ -19,7 +19,7 @@ export function RecentRankStrips({
   response,
 }: {
   focusedItemIds: readonly string[];
-  response: SeriesComparisonAggregateV3;
+  response: SeriesComparisonAggregate;
 }) {
   const entryByMemberId = new Map(response.recentRanks.map((entry) => [entry.memberId, entry]));
   const orderedEntries = response.players.map((player) => ({

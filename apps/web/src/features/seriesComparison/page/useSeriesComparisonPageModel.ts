@@ -30,6 +30,7 @@ export function useSeriesComparisonPageModel() {
     updateMapMasterId,
     updateSeasonMasterId,
     updateView,
+    updateOwnerMetric,
   } = location.actions;
   const filterOptions = useMemo(
     () => buildSeriesAnalysisFilterOptions(optionsData, location.state),
@@ -93,6 +94,7 @@ export function useSeriesComparisonPageModel() {
       updateMapMasterId,
       updateSeasonMasterId,
       updateView,
+      updateOwnerMetric,
     },
     focus: {
       ...analysis.focus,
@@ -112,6 +114,8 @@ export function useSeriesComparisonPageModel() {
     },
     resource: analysis.resource,
     returnTo: location.returnTo,
+    displayIntent: location.displayIntent,
+    normalizationNotice: location.normalizationNotice,
     status: analysis.status,
   };
 }

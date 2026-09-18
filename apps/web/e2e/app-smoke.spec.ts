@@ -435,7 +435,7 @@ test("inspects saved analysis and handles explicit refresh states", async ({
       });
     });
     await page.route(
-      /\/api\/analytics\/series-comparison\/v2\/aggregate(?:\?.*)?$/u,
+      /\/api\/analytics\/series-comparison\/v3\/aggregate(?:\?.*)?$/u,
       async (route) => route.fulfill({ json: aggregateFixture }),
     );
     await page.route(/\/api\/analytics\/series-comparison\/v2\/review(?:\?.*)?$/u, async (route) =>
@@ -488,6 +488,7 @@ test("inspects saved analysis and handles explicit refresh states", async ({
     await comparisonLink.click();
 
     await expect(page.getByRole("region", { exact: true, name: "戦績比較" })).toBeVisible();
+    await expect(page.getByRole("table", { name: "直近の試合順位" })).toBeVisible();
     const statusRequestsBeforeLifecycleEvents = interceptedStatusRequests;
     await page.evaluate(
       () =>
@@ -537,7 +538,6 @@ test("inspects saved analysis and handles explicit refresh states", async ({
     await expect(
       selectedMatch.getByRole("link", { name: "第1戦の試合結果を見る" }),
     ).toHaveAttribute("href", selectedMatchHref);
-    await expect(page.getByRole("table", { name: "直近の試合順位" })).toBeVisible();
     const secondRankTile = page.getByRole("link", { name: /、2位.*試合結果を見る/u }).first();
     const thirdRankTile = page.getByRole("link", { name: /、3位.*試合結果を見る/u }).first();
     await expect(secondRankTile).toBeVisible();

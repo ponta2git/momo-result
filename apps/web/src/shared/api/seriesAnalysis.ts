@@ -4,7 +4,7 @@ import type {
   SeriesAnalysisAdminOverview,
   SeriesAnalysisRecalculationAccepted,
 } from "@/shared/api/seriesAnalysisAdminTypes";
-import type { SeriesComparisonAggregateV3 } from "@/shared/api/seriesAnalysisAggregateTypes";
+import type { SeriesComparisonAggregate } from "@/shared/api/seriesAnalysisAggregateTypes";
 import { decodeSeriesAnalysisArtifact } from "@/shared/api/seriesAnalysisArtifactDecoder";
 import type {
   SeriesAnalysisOptionsResponse,
@@ -34,7 +34,7 @@ export type * from "@/shared/api/seriesAnalysisAdminTypes";
 
 function scopedPath(resource: "aggregate" | "review", query: SeriesAnalysisQuery): string {
   const params = scopeParams(query);
-  return `/api/analytics/series-comparison/v2/${resource}?${params.toString()}`;
+  return `/api/analytics/series-comparison/${resource === "aggregate" ? "v3" : "v2"}/${resource}?${params.toString()}`;
 }
 
 function scopeParams(query: SeriesAnalysisQuery): URLSearchParams {
@@ -70,10 +70,10 @@ export function getSeriesAnalysisStatus(
 export function getSeriesAnalysisAggregate(
   query: SeriesAnalysisQuery,
   options: ApiSignalOptions = {},
-): Promise<SeriesComparisonAggregateV3> {
+): Promise<SeriesComparisonAggregate> {
   return apiRequest(scopedPath("aggregate", query), {
     ...options,
-    decodeResponse: (value) => decodeSeriesAnalysisArtifact("aggregate", value),
+    decodeResponse: (value) => decodeSeriesAnalysisArtifact("aggregateV3", value),
   });
 }
 

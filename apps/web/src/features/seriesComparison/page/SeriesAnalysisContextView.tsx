@@ -3,6 +3,8 @@ import {
   PlayOrderMatrix,
 } from "@/features/seriesComparison/charts/SeriesAnalysisContextCharts";
 import { GinjiCumulativeChart } from "@/features/seriesComparison/charts/SeriesAnalysisFlowCharts";
+import { SeriesAnalysisOwnerComparison } from "@/features/seriesComparison/charts/SeriesAnalysisOwnerComparison";
+import type { OwnerMetricId } from "@/features/seriesComparison/model/seriesAnalysisOwnerMetrics";
 import {
   formatDecimal,
   formatManYen,
@@ -24,7 +26,16 @@ import { cn } from "@/shared/ui/cn";
 import { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
 import { contentText } from "@/shared/ui/typography";
 
-export function ContextView({ focusedItemIds, response, onDrilldown }: AnalysisViewProps) {
+export function ContextView({
+  focusedItemIds,
+  response,
+  onDrilldown,
+  ownerMetric,
+  onOwnerMetricChange,
+}: AnalysisViewProps & {
+  ownerMetric: OwnerMetricId;
+  onOwnerMetricChange: ((metric: OwnerMetricId) => void) | undefined;
+}) {
   return (
     <div
       aria-labelledby={analysisTabId("context")}
@@ -52,6 +63,11 @@ export function ContextView({ focusedItemIds, response, onDrilldown }: AnalysisV
           ))}
         </div>
       </AnalysisSection>
+      <SeriesAnalysisOwnerComparison
+        response={response}
+        metric={ownerMetric}
+        onMetricChange={onOwnerMetricChange}
+      />
       <AnalysisSection id="metric-card-shop-destination" title="カード売り場と目的地">
         <CardShopDestinationQuadrants focusedItemIds={focusedItemIds} response={response} />
       </AnalysisSection>

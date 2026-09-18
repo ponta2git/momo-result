@@ -18,7 +18,7 @@ export const seriesAnalysisHandlers = [
   http.get("/api/analytics/series-comparison/v2/status", () =>
     HttpResponse.json(makeSeriesAnalysisStatus()),
   ),
-  http.get("/api/analytics/series-comparison/v2/aggregate", () =>
+  http.get("/api/analytics/series-comparison/v3/aggregate", () =>
     HttpResponse.json(makeSeriesAnalysisAggregate()),
   ),
   http.get("/api/analytics/series-comparison/v2/review", () =>

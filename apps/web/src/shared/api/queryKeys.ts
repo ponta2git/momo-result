@@ -107,7 +107,7 @@ export const seriesAnalysisKeys = {
     ["series-analysis", "status", "v2", gameTitleId ?? "none"] as const,
   artifactRoot: () => ["series-analysis", "artifact", "v3"] as const,
   aggregate: (params: unknown) =>
-    ["series-analysis", "artifact", "v3", "aggregate", params] as const,
+    ["series-analysis", "artifact", "v3", "aggregate", "http-v3", params] as const,
   review: (params: unknown) => ["series-analysis", "artifact", "v3", "review", params] as const,
   drilldown: (params: unknown) =>
     ["series-analysis", "artifact", "v3", "drilldown", params] as const,

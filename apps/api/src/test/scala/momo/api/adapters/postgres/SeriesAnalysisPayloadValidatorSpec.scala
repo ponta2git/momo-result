@@ -57,6 +57,23 @@ final class SeriesAnalysisPayloadValidatorSpec extends FunSuite with JsonSchemaA
       Some(1),
     ))
 
+  test("selects aggregate shape by the attested generation, rejecting crossed payloads"):
+    val old = sharedFixture("aggregate-payload-v3.json")
+    val current = sharedFixture("aggregate-payload-v4.json")
+    val request = simpleRequest(SeriesAnalysisChunkKind.Aggregate)
+    assert(validate(current, request, None, 3))
+    assert(!validate(old, request, None, 3))
+    assert(!validate(current, request, None, 2))
+    assert(!validate(current, request, None, 99))
+    assert(!validate(current.mapObject(_.remove("ownerComparison")), request, None, 3))
+    SeriesAnalysisArtifactSupport.ReadableContracts.foreach { case (version, id) =>
+      assert(SeriesAnalysisArtifactSupport.supports(version, Some(id)))
+      assert(!SeriesAnalysisArtifactSupport.supports(version, None))
+      SeriesAnalysisArtifactSupport.ReadableContracts.filterNot(_._1 == version).foreach {
+        case (_, otherId) => assert(!SeriesAnalysisArtifactSupport.supports(version, Some(otherId)))
+      }
+    }
+
   test("keeps the API drilldown vocabulary aligned with the owner schema"):
     val schema = sharedSchema("series-analysis-drilldown-v3.schema.json")
     val metricIds = schema.hcursor.downField("oneOf").as[Vector[Json]]
@@ -172,12 +189,21 @@ final class SeriesAnalysisPayloadValidatorSpec extends FunSuite with JsonSchemaA
   private def validate(
       json: Json,
       request: SeriesAnalysisChunkRequest,
+      revision: Option[Long]
+  ): Boolean =
+    validate(json, request, revision, 2)
+
+  private def validate(
+      json: Json,
+      request: SeriesAnalysisChunkRequest,
       revision: Option[Long],
+      artifactSchemaVersion: Int,
   ): Boolean = SeriesAnalysisPayloadValidator.validate(
     json,
     json.noSpaces.getBytes(StandardCharsets.UTF_8),
     request,
     revision,
+    artifactSchemaVersion,
   )
 
   private def sharedSchema(fileName: String): Json =

@@ -364,7 +364,7 @@ final class PostgresSeriesAnalysisChunkCodecSpec extends FunSuite with JsonSchem
       inputRevision = 0,
       algorithmVersion = "series-analysis-v1",
       artifactSchemaVersion = 2,
-      validationContractId = Some(SeriesAnalysisArtifactSupport.ValidationContractId),
+      validationContractId = Some("series-analysis-artifact-v2-full-validation-v1"),
       publishedAt = Instant.parse("2026-08-09T00:00:00Z"),
       scopeKind = Some(scope.kind),
       payload = Some(payload),

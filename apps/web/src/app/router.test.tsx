@@ -59,7 +59,7 @@ describe("app routing", () => {
       setDevUser();
       const gate = createDeferred();
       server.use(
-        http.get("/api/analytics/series-comparison/v2/aggregate", async () => {
+        http.get("/api/analytics/series-comparison/v3/aggregate", async () => {
           await gate.promise;
           return HttpResponse.json(makeSeriesAnalysisAggregate());
         }),
@@ -524,7 +524,7 @@ describe("app routing", () => {
     const aggregateSearches: URLSearchParams[] = [];
     const reviewSearches: URLSearchParams[] = [];
     server.use(
-      http.get("/api/analytics/series-comparison/v2/aggregate", async ({ request }) => {
+      http.get("/api/analytics/series-comparison/v3/aggregate", async ({ request }) => {
         aggregateSearches.push(new URL(request.url).searchParams);
         await aggregateResponseGate.promise;
         return HttpResponse.json(makeSeriesAnalysisAggregate());
@@ -563,7 +563,7 @@ describe("app routing", () => {
     // Both real modules still run; their cold loading belongs to build/runtime evidence.
     await Promise.all([
       import("@/features/seriesComparison/page/SeriesAnalysisOverviewView"),
-      import("@/shared/api/generatedContracts/series-analysis-aggregate-validators.generated"),
+      import("@/shared/api/generatedContracts/series-analysis-aggregate-v3-validators.generated"),
     ]);
     const analysisPurposeTab = screen.getByRole("tab", { name: "分析する" });
     await user.click(analysisPurposeTab);
@@ -704,7 +704,7 @@ describe("app routing", () => {
           }),
         ),
       ),
-      http.get("/api/analytics/series-comparison/v2/aggregate", () => {
+      http.get("/api/analytics/series-comparison/v3/aggregate", () => {
         aggregateRequests += 1;
         return HttpResponse.json(makeSeriesAnalysisAggregate());
       }),
@@ -731,7 +731,7 @@ describe("app routing", () => {
     setDevUser();
     const aggregateSearches: URLSearchParams[] = [];
     server.use(
-      http.get("/api/analytics/series-comparison/v2/aggregate", ({ request }) => {
+      http.get("/api/analytics/series-comparison/v3/aggregate", ({ request }) => {
         aggregateSearches.push(new URL(request.url).searchParams);
         return HttpResponse.json(makeSeriesAnalysisAggregate());
       }),
@@ -761,7 +761,7 @@ describe("app routing", () => {
     setDevUser();
     const scopedAggregateResponseGate = createDeferred();
     server.use(
-      http.get("/api/analytics/series-comparison/v2/aggregate", async ({ request }) => {
+      http.get("/api/analytics/series-comparison/v3/aggregate", async ({ request }) => {
         const seasonMasterId = new URL(request.url).searchParams.get("seasonMasterId");
         if (!seasonMasterId) return HttpResponse.json(makeSeriesAnalysisAggregate());
 
@@ -821,7 +821,7 @@ describe("app routing", () => {
               }),
         );
       }),
-      http.get("/api/analytics/series-comparison/v2/aggregate", ({ request }) => {
+      http.get("/api/analytics/series-comparison/v3/aggregate", ({ request }) => {
         const artifactId = new URL(request.url).searchParams.get("artifactId") ?? "";
         aggregateArtifactIds.push(artifactId);
         if (artifactId === analysisArtifact.artifactId) {
@@ -892,7 +892,7 @@ describe("app routing", () => {
         const review = makeSeriesAnalysisReview();
         return HttpResponse.json({ ...review, artifact: replacementArtifact });
       }),
-      http.get("/api/analytics/series-comparison/v2/aggregate", () => {
+      http.get("/api/analytics/series-comparison/v3/aggregate", () => {
         aggregateRequests += 1;
         return HttpResponse.json(makeSeriesAnalysisAggregate(replacementArtifact));
       }),

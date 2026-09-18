@@ -1,3 +1,3 @@
 import type { ContractValidator } from "@/shared/api/seriesAnalysisContractDecoder";
 
-export const validateSeriesAnalysisAggregate: ContractValidator;
+export const validateSeriesAnalysisAggregateV3: ContractValidator;

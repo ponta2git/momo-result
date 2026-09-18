@@ -3,8 +3,6 @@ package momo.api.integration
 import cats.syntax.all.*
 import doobie.implicits.*
 
-import momo.api.adapters.postgres.SeriesAnalysisArtifactSupport
-
 /**
  * Cross-consumer DB behavior not owned by one API repository.
  *
@@ -153,7 +151,7 @@ final class DbContractSpec extends IntegrationSuite:
       """.update.run
         sealedCount <- sql"""
         UPDATE series_analysis_artifacts
-        SET validation_contract_id = ${SeriesAnalysisArtifactSupport.ValidationContractId}
+        SET validation_contract_id = 'series-analysis-artifact-v2-full-validation-v1'
         WHERE id = $artifactId
       """.update.run
         _ <- sql"""
@@ -194,7 +192,7 @@ final class DbContractSpec extends IntegrationSuite:
         match_context_chunk_count, encoded_bytes, decoded_bytes
       ) VALUES (
         'artifact-contract-direct-sealed', $titleId, 0, 'series-analysis-v1', 2,
-        ${SeriesAnalysisArtifactSupport.ValidationContractId},
+        'series-analysis-artifact-v2-full-validation-v1',
         ${"sha256:" + "a" * 64}, ${"sha256:" + "b" * 64}, 'staging',
         1, 0, 0, 0, 0, 0
       )
@@ -220,7 +218,7 @@ final class DbContractSpec extends IntegrationSuite:
     """.update.run
     val sealWrongSchema = sql"""
       UPDATE series_analysis_artifacts
-      SET validation_contract_id = ${SeriesAnalysisArtifactSupport.ValidationContractId}
+      SET validation_contract_id = 'series-analysis-artifact-v2-full-validation-v1'
       WHERE id = 'artifact-contract-wrong-schema'
     """.update.run
     val publishStaging =
@@ -238,7 +236,7 @@ final class DbContractSpec extends IntegrationSuite:
         pointed <- sql"""
         UPDATE series_analysis_title_states
         SET artifact_schema_version = 2,
-            validation_contract_id = ${SeriesAnalysisArtifactSupport.ValidationContractId},
+            validation_contract_id = 'series-analysis-artifact-v2-full-validation-v1',
             current_artifact_id = $artifactId
         WHERE game_title_id = $titleId
       """.update.run

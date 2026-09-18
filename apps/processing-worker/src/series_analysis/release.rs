@@ -3,10 +3,12 @@ use std::env;
 use clap::ValueEnum;
 use momo_analysis_core::{
     canonical,
-    contract::{ARTIFACT_SCHEMA_VERSION, ARTIFACT_VALIDATION_CONTRACT_ID},
+    contract::{
+        ARTIFACT_SCHEMA_VERSION, ARTIFACT_VALIDATION_CONTRACT_ID, READABLE_PUBLICATION_CONTRACTS,
+    },
 };
 use serde::Serialize;
-use serde_json::json;
+use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use thiserror::Error;
 use tokio_postgres::{Client, Row, Transaction};
@@ -440,12 +442,30 @@ where
     Ok(report)
 }
 
+fn reader_schema_versions() -> Value {
+    json!(
+        READABLE_PUBLICATION_CONTRACTS
+            .iter()
+            .map(|pair| pair.0)
+            .collect::<Vec<_>>()
+    )
+}
+
+fn reader_validation_contract_ids() -> Value {
+    json!(
+        READABLE_PUBLICATION_CONTRACTS
+            .iter()
+            .map(|pair| pair.1)
+            .collect::<Vec<_>>()
+    )
+}
+
 async fn reader_capabilities<C>(client: &C) -> Result<CapabilityCounts, tokio_postgres::Error>
 where
     C: tokio_postgres::GenericClient + Sync,
 {
-    let supported_schemas = json!([ARTIFACT_SCHEMA_VERSION]);
-    let supported_validation_contracts = json!([ARTIFACT_VALIDATION_CONTRACT_ID]);
+    let supported_schemas = reader_schema_versions();
+    let supported_validation_contracts = reader_validation_contract_ids();
     let row = client
         .query_one(
             "SELECT \
@@ -994,18 +1014,18 @@ mod tests {
             confirmed_match_count: 1,
             input_revision: 4,
             algorithm_version: String::from(ALGORITHM_VERSION),
-            artifact_schema_version: 2,
+            artifact_schema_version: 3,
             validation_contract_id: Some(String::from(ARTIFACT_VALIDATION_CONTRACT_ID)),
             pending_work: false,
             current_artifact_id: Some(String::from("artifact-current")),
             current_status: Some(String::from("published")),
             current_input_revision: Some(4),
             current_algorithm_version: Some(String::from(ALGORITHM_VERSION)),
-            current_artifact_schema_version: Some(2),
+            current_artifact_schema_version: Some(3),
             current_validation_contract_id: Some(String::from(ARTIFACT_VALIDATION_CONTRACT_ID)),
             previous_artifact_id: Some(String::from("artifact-previous")),
             previous_status: Some(String::from("published")),
-            previous_artifact_schema_version: Some(2),
+            previous_artifact_schema_version: Some(3),
             previous_validation_contract_id: Some(String::from(ARTIFACT_VALIDATION_CONTRACT_ID)),
             declared_aggregate_count: Some(1),
             declared_review_count: Some(0),
@@ -1284,8 +1304,8 @@ mod tests {
                    ('analysis-release-capability-smoke-reader-draining', $1, $2, true, clock_timestamp(), clock_timestamp()),\x20\
                    ('analysis-release-capability-smoke-reader-stale', $1, $2, false, clock_timestamp(), clock_timestamp() - interval '10 minutes')",
                 &[
-                    &schemas,
-                    &validation_contracts,
+                    &reader_schema_versions(),
+                    &reader_validation_contract_ids(),
                     &unknown_validation_contracts,
                     &unknown_schemas,
                     &extra_schemas,

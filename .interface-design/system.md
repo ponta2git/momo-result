@@ -20,7 +20,7 @@
 ### Academic Data Table
 
 - 親 table と同じ surface 背景を使い、通常状態を淡色面で強調しない。
-- 小さな secondary text と semibold、table 上端と header 下端の横罫線で、data row より弱い階層にする。
+- header は共通 `DataTable` の文字 recipe と、table 上端・header 下端の横罫線で data row より弱い階層にする。header という役割だけで semibold を指定せず、文字ウェイトは `docs/ui-rule.md` と shared UI を正本とする。
 - 本文行どうしの横罫線は引かず、最終行の下端だけを閉じる。外周の枠線、角丸、縦罫線を足さない。
 - pagination の有無にかかわらず、共通 `DataTable`、body row、header pattern を使う。sortable state は操作部分だけに閉じる。
 

@@ -12,7 +12,7 @@ import {
   formatDecimal,
   formatPercent,
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
-import type { SeriesComparisonAggregateV3 } from "@/shared/api/seriesAnalysis";
+import type { SeriesComparisonAggregate } from "@/shared/api/seriesAnalysis";
 import { formatSeriesMatchIndex } from "@/shared/domain/matchLabels";
 import { cn } from "@/shared/ui/cn";
 import { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
@@ -25,7 +25,7 @@ export function RankTrendCharts({
   response,
 }: {
   focusedItemIds: readonly string[];
-  response: SeriesComparisonAggregateV3;
+  response: SeriesComparisonAggregate;
 }) {
   const seriesIdentity = response.players.map((player) => ({
     id: player.memberId,
@@ -71,7 +71,7 @@ export function CumulativeFormCharts({
   response,
 }: {
   focusedItemIds: readonly string[];
-  response: SeriesComparisonAggregateV3;
+  response: SeriesComparisonAggregate;
 }) {
   const seriesIdentity = response.players.map((player) => ({
     id: player.memberId,
@@ -118,7 +118,7 @@ export function GinjiCumulativeChart({
   response,
 }: {
   focusedItemIds: readonly string[];
-  response: SeriesComparisonAggregateV3;
+  response: SeriesComparisonAggregate;
 }) {
   return (
     <DataVizLineChart
@@ -142,7 +142,7 @@ export function MomentumMatrices({
   response,
 }: {
   focusedItemIds: readonly string[];
-  response: SeriesComparisonAggregateV3;
+  response: SeriesComparisonAggregate;
 }) {
   return (
     <div className="grid gap-2">
@@ -255,7 +255,7 @@ export function MomentumMatrices({
   );
 }
 
-function trendSeries(response: SeriesComparisonAggregateV3, kind: string) {
+function trendSeries(response: SeriesComparisonAggregate, kind: string) {
   return response.trends
     .filter((series) => series.kind === kind)
     .map((series) => ({

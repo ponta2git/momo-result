@@ -59,6 +59,27 @@ object SeriesAnalysisModule:
           rawMatchId = None,
         ),
         security,
+        legacyAggregate = true,
+      )
+    },
+    SecuredEndpoint.readLogic(security, SeriesAnalysisEndpoints.aggregateV3) { member => input =>
+      readChunk(
+        readRateLimiter,
+        member.accountId.value,
+        HttpOperation.GetSeriesAnalysisAggregateV3,
+        getChunk,
+        SeriesAnalysisCodec.chunk(
+          kind = SeriesAnalysisChunkKind.Aggregate,
+          rawGameTitleId = input.gameTitleId,
+          rawArtifactId = input.artifactId,
+          seasonMasterId = input.seasonMasterId,
+          mapMasterId = input.mapMasterId,
+          rawMemberId = None,
+          rawMetricId = None,
+          rawMatchId = None,
+        ),
+        security,
+        legacyAggregate = false,
       )
     },
     SecuredEndpoint.readLogic(security, SeriesAnalysisEndpoints.review) { member => input =>
@@ -78,6 +99,7 @@ object SeriesAnalysisModule:
           rawMatchId = None,
         ),
         security,
+        legacyAggregate = false,
       )
     },
     SecuredEndpoint.readLogic(security, SeriesAnalysisEndpoints.drilldown) { member => input =>
@@ -97,6 +119,7 @@ object SeriesAnalysisModule:
           rawMatchId = None,
         ),
         security,
+        legacyAggregate = false,
       )
     },
     SecuredEndpoint.readLogic(security, SeriesAnalysisEndpoints.matchContext) { member => input =>
@@ -116,6 +139,7 @@ object SeriesAnalysisModule:
           rawMatchId = Some(input.matchId),
         ),
         security,
+        legacyAggregate = false,
       )
     },
     SecuredEndpoint.adminReadLogic(security, SeriesAnalysisEndpoints.adminOverview) {
@@ -189,11 +213,19 @@ object SeriesAnalysisModule:
       getChunk: GetSeriesAnalysisChunk[F],
       decoded: Either[AppError, momo.api.domain.SeriesAnalysisChunkRequest],
       security: EndpointSecurity[F],
+      legacyAggregate: Boolean,
   ): F[Either[ProblemDetails.ProblemResponse, Array[Byte]]] = read(
     limiter,
     accountId,
     operation,
-    security.decode(decoded)(request => security.respond(getChunk.run(request))(_.payload)),
+    security.decode(decoded)(request =>
+      security.respond(getChunk.run(request).map(_.flatMap { chunk =>
+        // Compatibility is decided only after the shared reader has validated the artifact.
+        if legacyAggregate && chunk.artifact.artifactSchemaVersion != 2 then
+          Left(AppError.AnalysisClientUpgradeRequired())
+        else Right(chunk)
+      }))(_.payload)
+    ),
   )
 
   private def requiredIdempotencyKey[F[_]: Async, A](

@@ -34,6 +34,7 @@ fn input() -> AnalysisInput {
                 match_no_in_event: 1,
                 season_master_id: String::from("season-1"),
                 map_master_id: String::from("map-1"),
+                owner_member_id: String::from("member-1"),
                 member_id: format!("member-{player}"),
                 play_order: player,
                 rank: player,
@@ -104,7 +105,7 @@ fn builds_and_stream_validates_a_complete_artifact() {
     assert_eq!(manifest.algorithm_version, "series-analysis-v1");
     assert_eq!(
         manifest.root_checksum,
-        "sha256:808844215f9f8593efec5a6bd299075cfd6af9a5843214e076962533e3f60334"
+        "sha256:b71840a6ca9c4afd2f6ff786dca16c19030138101a2bd801a0cebd12634ddb1e"
     );
     let resource_counts = manifest.resources.iter().fold(
         (0_usize, 0_usize, 0_usize, 0_usize),
@@ -381,4 +382,21 @@ fn rejects_noncanonical_payload_even_when_checksums_are_recomputed() {
             momo_analysis_core::canonical::CanonicalError::NonCanonical
         ))
     ));
+}
+
+#[test]
+fn owner_correction_changes_source_checksum_without_changing_input_revision() {
+    let first_directory = TempDir::new().unwrap_or_else(|error| panic!("temp directory: {error}"));
+    let second_directory = TempDir::new().unwrap_or_else(|error| panic!("temp directory: {error}"));
+    let original = input();
+    let mut corrected = original.clone();
+    for row in &mut corrected.player_matches {
+        row.owner_member_id = String::from("member-2");
+    }
+    let first = build(original, &request(), first_directory.path())
+        .unwrap_or_else(|error| panic!("artifact build: {error}"));
+    let second = build(corrected, &request(), second_directory.path())
+        .unwrap_or_else(|error| panic!("artifact build: {error}"));
+    assert_ne!(first.source_input_checksum, second.source_input_checksum);
+    assert_ne!(first.root_checksum, second.root_checksum);
 }

@@ -768,6 +768,7 @@ mod tests {
             match_no_in_event: index,
             season_master_id: String::from("season-1"),
             map_master_id: String::from("map-1"),
+            owner_member_id: String::from("member-1"),
             member_id: format!("member-{player}"),
             play_order: player,
             rank,

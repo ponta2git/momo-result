@@ -5,11 +5,13 @@ import {
   useEffect,
   useLayoutEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import type { ReactNode, RefObject } from "react";
 import { useLocation, useNavigationType } from "react-router-dom";
 
+import type { SeriesAnalysisDisplayIntent } from "@/features/seriesComparison/navigation/useSeriesAnalysisLocationState";
 import { revealPageElement } from "@/shared/ui/layout/revealPageElement";
 
 class Visit {
@@ -27,6 +29,11 @@ class Visit {
   }
   consume() {
     this.handled = true;
+  }
+
+  inheritPosition(saved: { x: number; y: number }) {
+    this.position = saved;
+    this.consume();
   }
 
   capture(originId?: string) {
@@ -51,13 +58,16 @@ function position() {
 export function SeriesAnalysisNavigation({
   children,
   failed = false,
+  displayIntent,
 }: {
   children: ReactNode;
   failed?: boolean;
+  displayIntent?: SeriesAnalysisDisplayIntent | undefined;
 }) {
   const location = useLocation();
   const navigationType = useNavigationType();
   const [visits] = useState(() => new Map<string, Visit>());
+  const appliedDisplay = useRef<{ operation: number; visitKey: string } | undefined>(undefined);
   const visitKey = `${location.key}:${location.hash}`;
   const visit = useMemo(() => visits.get(visitKey) ?? new Visit(), [visitKey, visits]);
 
@@ -121,6 +131,37 @@ export function SeriesAnalysisNavigation({
       document.removeEventListener("focusin", cancelFocus, true);
     };
   }, [visit, visitKey, visits]);
+
+  useLayoutEffect(() => {
+    const target = `${location.pathname}${location.search}${location.hash}`;
+    const applied = appliedDisplay.current;
+    if (
+      navigationType === "REPLACE" &&
+      displayIntent?.target === target &&
+      displayIntent.sourceVisit !== visitKey &&
+      visits.has(displayIntent.sourceVisit) &&
+      (!applied || applied.operation !== displayIntent.operation || applied.visitKey === visitKey)
+    ) {
+      // Reapply to the same visit after Strict Mode's effect restart; never consume during render.
+      visit.inheritPosition(displayIntent.position);
+      appliedDisplay.current = { operation: displayIntent.operation, visitKey };
+    } else if (
+      displayIntent &&
+      displayIntent.sourceVisit !== visitKey &&
+      (navigationType === "POP" || displayIntent.target !== target)
+    ) {
+      appliedDisplay.current = { operation: displayIntent.operation, visitKey: "" };
+    }
+  }, [
+    displayIntent,
+    location.hash,
+    location.pathname,
+    location.search,
+    navigationType,
+    visit,
+    visitKey,
+    visits,
+  ]);
 
   useEffect(() => {
     if (failed) visit.cancel();

@@ -9,8 +9,7 @@ import doobie.postgres.implicits.*
 import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.adapters.postgres.{
   PostgresGameTitlesRepository,
-  PostgresSeriesAnalysisHistoryMaintenance,
-  SeriesAnalysisArtifactSupport
+  PostgresSeriesAnalysisHistoryMaintenance
 }
 import momo.api.domain.GameTitle
 import momo.api.domain.ids.GameTitleId
@@ -32,7 +31,7 @@ final class PostgresSeriesAnalysisHistoryMaintenanceSpec extends IntegrationSuit
           requested_at, available_at, finished_at
         ) VALUES
           ('analysis-job-old-terminal', $titleId, 0, 'series-analysis-v1', 2,
-           ${SeriesAnalysisArtifactSupport.ValidationContractId}, 'failed', 'manual',
+           'series-analysis-artifact-v2-full-validation-v1', 'failed', 'manual',
            ${cutoff.minusSeconds(60)}, ${cutoff.minusSeconds(
           60
         )}, ${cutoff.minusSeconds(1)}),
@@ -51,7 +50,7 @@ final class PostgresSeriesAnalysisHistoryMaintenanceSpec extends IntegrationSuit
         ) VALUES (
           'analysis-attempt-old-terminal', 'analysis-job-old-terminal', 1,
           'history-maintenance-test', 1, 0, 'series-analysis-v1', 2,
-          ${SeriesAnalysisArtifactSupport.ValidationContractId}, 'terminal', 'failed',
+          'series-analysis-artifact-v2-full-validation-v1', 'terminal', 'failed',
           'history-maintenance-test', 1000, ${cutoff.minusSeconds(1)}
         )
       """.update.run.transact(transactor)
@@ -81,7 +80,7 @@ final class PostgresSeriesAnalysisHistoryMaintenanceSpec extends IntegrationSuit
       """.update.run.transact(transactor)
       _ <- sql"""
         UPDATE series_analysis_artifacts
-        SET validation_contract_id = ${SeriesAnalysisArtifactSupport.ValidationContractId}
+        SET validation_contract_id = 'series-analysis-artifact-v2-full-validation-v1'
         WHERE id = 'analysis-artifact-old-sealed'
       """.update.run.transact(transactor)
       maintenance = PostgresSeriesAnalysisHistoryMaintenance[IO](transactor)

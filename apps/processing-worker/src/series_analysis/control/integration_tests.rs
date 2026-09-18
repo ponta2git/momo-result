@@ -354,6 +354,7 @@ fn analysis_input() -> AnalysisInput {
                     match_no_in_event: 1,
                     season_master_id: String::from(SEASON_ID),
                     map_master_id: String::from(MAP_ID),
+                    owner_member_id: String::from(MEMBER_IDS[0]),
                     member_id: String::from(member_id),
                     play_order: player,
                     rank: player,

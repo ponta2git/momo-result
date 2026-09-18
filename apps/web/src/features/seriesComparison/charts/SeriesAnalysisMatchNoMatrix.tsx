@@ -13,16 +13,16 @@ import {
   qualityAdvisoryLabel,
   SeriesAnalysisQualityAdvisory,
 } from "@/features/seriesComparison/SeriesAnalysisQualityAdvisory";
-import type { SeriesComparisonAggregateV3 } from "@/shared/api/seriesAnalysis";
+import type { SeriesComparisonAggregate } from "@/shared/api/seriesAnalysis";
 import { formatMatchNoInEvent } from "@/shared/domain/matchLabels";
 import { cn } from "@/shared/ui/cn";
 import { Disclosure } from "@/shared/ui/data/Collapsible";
 import { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
 import { contentText } from "@/shared/ui/typography";
 
-type MatchNoEntry = SeriesComparisonAggregateV3["matchNoInEvent"]["entries"][number];
+type MatchNoEntry = SeriesComparisonAggregate["matchNoInEvent"]["entries"][number];
 
-export function MatchNoInEventMatrix({ response }: { response: SeriesComparisonAggregateV3 }) {
+export function MatchNoInEventMatrix({ response }: { response: SeriesComparisonAggregate }) {
   const regularEntries = response.matchNoInEvent.entries.filter(
     (entry) => entry.category === "regular",
   );
@@ -62,7 +62,7 @@ function MatchNoMatrix({
 }: {
   ariaLabel: string;
   entries: MatchNoEntry[];
-  response: SeriesComparisonAggregateV3;
+  response: SeriesComparisonAggregate;
 }) {
   const players = response.players;
   return (

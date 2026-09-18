@@ -8,7 +8,7 @@ import {
 import { SeriesAnalysisMatchLink } from "@/features/seriesComparison/navigation/SeriesAnalysisMatchLink";
 import { playerName } from "@/features/seriesComparison/page/SeriesAnalysisViewPrimitives";
 import { SeriesAnalysisQualityAdvisory } from "@/features/seriesComparison/SeriesAnalysisQualityAdvisory";
-import type { SeriesComparisonAggregateV3 } from "@/shared/api/seriesAnalysis";
+import type { SeriesComparisonAggregate } from "@/shared/api/seriesAnalysis";
 import { formatSeriesMatchIndex } from "@/shared/domain/matchLabels";
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
@@ -23,7 +23,7 @@ export function MatchDigestStrip({
 }: {
   focusedItemIds: readonly string[];
   onFocusMatch: (matchId: string) => void;
-  response: SeriesComparisonAggregateV3;
+  response: SeriesComparisonAggregate;
 }) {
   return (
     <div className="grid gap-4">

@@ -10,7 +10,7 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 source "${repo_root}/scripts/ci/analysis-smoke-safety.sh"
 algorithm_version="${analysis_smoke_algorithm_version}"
 release_database_url="${RELEASE_DATABASE_URL:-${WORKER_DATABASE_URL:-${DATABASE_URL:-}}}"
-publication_contract="${repo_root}/docs/schemas/series-analysis-publication-contract-v1.json"
+publication_contract="${repo_root}/docs/schemas/series-analysis-publication-contract-v2.json"
 artifact_schema_version="$(jq -er '
   .artifactSchemaVersion |
   select(type == "number" and . == floor and . >= 1)
@@ -19,6 +19,8 @@ validation_contract_id="$(jq -er '
   .validationContractId |
   select(type == "string" and test("^[a-z0-9][a-z0-9._-]{0,127}$"))
 ' "${publication_contract}")"
+reader_schemas="$(jq -ce '[.readableContracts[].artifactSchemaVersion]' "${publication_contract}")"
+reader_contracts="$(jq -ce '[.readableContracts[].validationContractId]' "${publication_contract}")"
 release_worker_id="worker-release-smoke"
 release_capability_id="${release_worker_id}@${algorithm_version}@${artifact_schema_version}@${validation_contract_id}"
 
@@ -136,6 +138,7 @@ trap cleanup_on_failure EXIT
 psql_ci -v artifact_schema_version="${artifact_schema_version}" \
   -v algorithm_version="${algorithm_version}" \
   -v validation_contract_id="${validation_contract_id}" \
+  -v reader_schemas="${reader_schemas}" -v reader_contracts="${reader_contracts}" \
   -v release_capability_id="${release_capability_id}" <<'SQL'
   INSERT INTO game_titles (id, name, layout_family, display_order)
   VALUES
@@ -172,8 +175,8 @@ psql_ci -v artifact_schema_version="${artifact_schema_version}" \
     reader_id, artifact_schema_versions, validation_contract_ids
   ) VALUES (
     'reader-release-smoke',
-    jsonb_build_array(:artifact_schema_version),
-    jsonb_build_array(:'validation_contract_id')
+    :'reader_schemas'::jsonb,
+    :'reader_contracts'::jsonb
   );
   INSERT INTO series_analysis_worker_capabilities (
     worker_id, algorithm_versions, artifact_schema_versions
@@ -235,7 +238,7 @@ fi
 
 psql_ci -c "
   UPDATE series_analysis_reader_capabilities
-  SET validation_contract_ids = jsonb_build_array('${validation_contract_id}')
+  SET validation_contract_ids = '${reader_contracts}'::jsonb
   WHERE reader_id = 'reader-release-smoke';
 "
 

@@ -116,9 +116,10 @@ lazy val root = (project in file("."))
     Compile / resourceGenerators += Def.task {
       val schemaNames = Seq(
         "series-analysis-aggregate-v3.schema.json",
+        "series-analysis-aggregate-v4.schema.json",
         "series-analysis-drilldown-v3.schema.json",
         "series-analysis-match-context-v1.schema.json",
-        "series-analysis-publication-contract-v1.json",
+        "series-analysis-publication-contract-v2.json",
         "series-analysis-review-v3.schema.json",
       )
       val sourceDirectory = baseDirectory.value / ".." / ".." / "docs" / "schemas"

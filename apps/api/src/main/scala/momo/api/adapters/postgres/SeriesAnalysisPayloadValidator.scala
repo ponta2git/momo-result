@@ -44,17 +44,26 @@ private[postgres] object SeriesAnalysisPayloadValidator:
   private val Registry = com.networknt.schema.SchemaRegistry.withDialect(OwnerDialect)
   private val JsonReader = NodeReader.builder().build()
   private val Schemas = SchemaFiles.view.mapValues(loadSchema).toMap
-  private val MaximumTextBytes = ownerMaximumTextBytes(SchemaFiles.values.toSet)
+  private val CurrentAggregateFile = "series-analysis-aggregate-v4.schema.json"
+  private val CurrentAggregate = loadSchema(CurrentAggregateFile)
+  private val MaximumTextBytes =
+    ownerMaximumTextBytes(SchemaFiles.values.toSet + CurrentAggregateFile)
 
-  private[postgres] def ensureReady(): Unit = Schemas.values.foreach(_.initializeValidators())
+  private[postgres] def ensureReady(): Unit =
+    Schemas.values.foreach(_.initializeValidators())
+    CurrentAggregate.initializeValidators()
 
   def validate(
       json: Json,
       encoded: Array[Byte],
       request: SeriesAnalysisChunkRequest,
       sourceMatchRevision: Option[Long],
-  ): Boolean = stringsWithinOwnerBounds(json) && validateShape(encoded, request.kind) &&
-    payloadIdentityMatches(json, request, sourceMatchRevision)
+      artifactSchemaVersion: Int,
+  ): Boolean =
+    SeriesAnalysisArtifactSupport.SupportedArtifactSchemas.contains(artifactSchemaVersion) &&
+      stringsWithinOwnerBounds(json) &&
+      validateShape(encoded, request.kind, artifactSchemaVersion) &&
+      payloadIdentityMatches(json, request, sourceMatchRevision)
 
   /** JSON Schema maxLength counts code points, while the producer contract bounds UTF-8 bytes. */
   private def stringsWithinOwnerBounds(json: Json): Boolean = json.arrayOrObject(
@@ -75,12 +84,19 @@ private[postgres] object SeriesAnalysisPayloadValidator:
     schema.initializeValidators()
     schema
 
-  private def validateShape(encoded: Array[Byte], kind: SeriesAnalysisChunkKind): Boolean =
+  private def validateShape(
+      encoded: Array[Byte],
+      kind: SeriesAnalysisChunkKind,
+      artifactSchemaVersion: Int
+  ): Boolean =
     // The bytes have already passed the checksum, UTF-8 and JSON complexity checks. Reuse them
     // instead of rendering a second full JSON String just to feed the schema reader. Only the
     // validity is consumed: BOOLEAN bounds error collection and stops after a decisive failure.
     val node = JsonReader.readTree(new ByteArrayInputStream(encoded), InputFormat.JSON)
-    Schemas(kind).validate(node, OutputFormat.BOOLEAN).booleanValue()
+    val schema = if kind == SeriesAnalysisChunkKind.Aggregate && artifactSchemaVersion == 3 then
+      CurrentAggregate
+    else Schemas(kind)
+    schema.validate(node, OutputFormat.BOOLEAN).booleanValue()
 
   private def payloadIdentityMatches(
       json: Json,

@@ -26,13 +26,15 @@ object OcrHintEnrichment:
     // when no persisted aliases exist. Server defaults normalize OCR's optional title suffix.
     val players =
       if !useDefaults && aliasesByMember.isEmpty then requested
-      else memberIds.flatMap { memberId =>
-        val aliases = (requested.find(_.memberId == memberId).fold(Nil)(_.aliases) ++
-          aliasesByMember.getOrElse(memberId, Nil)).map { alias =>
-          if useDefaults then alias.trim.stripSuffix("社長").trim else alias.trim
-        }.filter(_.nonEmpty).distinct.take(OcrJobHints.MaxAliasesPerPlayer)
-        Option.when(aliases.nonEmpty)(PlayerAliasHint(memberId, aliases))
-      }
+      else
+        memberIds.flatMap { memberId =>
+          val aliases =
+            (requested.find(_.memberId == memberId).fold(Nil)(_.aliases) ++
+              aliasesByMember.getOrElse(memberId, Nil)).map { alias =>
+              if useDefaults then alias.trim.stripSuffix("社長").trim else alias.trim
+            }.filter(_.nonEmpty).distinct.take(OcrJobHints.MaxAliasesPerPlayer)
+          Option.when(aliases.nonEmpty)(PlayerAliasHint(memberId, aliases))
+        }
     val computerAliases =
       if hints.computerPlayerAliases.isEmpty && hints.layoutFamily.contains("reiwa") then
         List("さくま")

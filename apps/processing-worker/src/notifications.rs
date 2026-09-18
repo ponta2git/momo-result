@@ -101,6 +101,7 @@ pub(crate) enum SkipReason {
     SettingOff,
     ComparisonTimeout,
     FinalizationBudget,
+    PreparationTimeout,
     PreparationFailed,
 }
 
@@ -254,5 +255,7 @@ impl io::Write for BoundedJson {
     }
 }
 
+#[cfg(test)]
+pub(crate) mod test_support;
 #[cfg(test)]
 mod tests;

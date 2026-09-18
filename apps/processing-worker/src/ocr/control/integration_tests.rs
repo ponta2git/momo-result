@@ -128,7 +128,7 @@ async fn real_postgres_and_redis_preserve_ocr_fencing_and_delivery_order() -> Sm
     verify_expired_analysis_recovery_emits_wake(&mut primary).await?;
     verify_analysis_preemption_and_stale_intent(&mut primary).await?;
     verify_redis_failure_order(&mut primary, &redis_url).await?;
-    notifications::verify(&mut primary, &mut stale).await?;
+    notifications::verify(&mut primary, &mut stale, &database_url).await?;
 
     cleanup_database(&primary).await?;
     Ok(())
@@ -684,7 +684,9 @@ async fn prepare_database(client: &Client) -> SmokeResult {
 }
 
 async fn insert_fixture(client: &Client, fixture: &Fixture) -> SmokeResult {
-    let idempotency_hash = fixture.idempotency_digit.repeat(64);
+    let idempotency_hash = fixture
+        .idempotency_digit
+        .repeat(64 / fixture.idempotency_digit.len());
     let sha256 = "ab".repeat(32);
     client
         .execute(

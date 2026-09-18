@@ -179,7 +179,7 @@ API の判断は React の [useDeferredValue](https://react.dev/reference/react/
 - OCR だけが分析を preempt できる。共有実行枠、再queue、失敗回数、公開の詳細は `docs/requirements/series-analysis-batch.md` を正本とする。
 
 - 分析完了通知は `notifications/analysis` が前後のimmutable成果物を比較し、公開transaction末尾で表示metadataを固定する。通知準備はOCRと同じ回復可能なSAVEPOINT境界を使い、正常commitを確認した経路だけが共通senderへ渡す。分析child・API・Summitに平均計算やproducer送出の責務を移さない。内容と比較範囲は `docs/requirements/series-analysis-batch.md` を参照する。
-- 比較用の成果物取得は通知に必要な保存済みplayer metricsだけを射影し、通知で使わない分析カードを転送しない。元成果物のbyte・件数上限とtyped decode、前後のidentity・scope整合性は維持する。比較準備の時間枠には接続確立と全DB往復を含め、確定transaction内の準備とともに親の絶対期限から業務commit・復旧の余裕を残す。比較取得のtimeoutと、確定直前の残時間不足は別の省略理由として記録する。
+- 比較用の成果物取得は通知に必要な保存済みplayer metricsだけを射影し、通知で使わない分析カードを転送しない。元成果物のbyte・件数上限とtyped decode、前後のidentity・scope整合性は維持する。比較準備の時間枠には接続確立と全DB往復を含め、確定transaction内の準備とともに親の絶対期限から業務commit・復旧の余裕を残す。比較read transactionが正常commitした新規接続は続く公開transactionに再利用し、失敗・timeout時は破棄する。
 
 ### OCR Capability / Worker Role
 
@@ -188,6 +188,7 @@ API の判断は React の [useDeferredValue](https://react.dev/reference/react/
 - OCR・分析通知のenvelopeは `notifications/envelope` が種類・論理job IDから通知IDとwire versionを一括で構築する。各producerは固定dataと成功時刻・世代を渡し、型ごとにIDやversionを組み立て直さない。送出可否と成功commit後のhandoffは引き続き制御側が所有する。
 - OCR完了通知は画像ごとの検証済み結果から作り、他のslotを含む下書きの投影状態には依存しない。成功transactionの業務更新をすべて終えてから共有result gateと設定を読み、ONの場合だけ成功時点の識別子・文脈・警告有無を固定する。共有wireと排他契約は `../momo-db/docs/discord-notifications.md` を正本とする。
 - 通知準備は確定処理と同じ絶対期限から残り時間を計算し、実行中SQLの終了・SAVEPOINT復旧・業務commitの時間を確保する。余裕がなければ通知用SQLを実行せず、復旧可能な準備失敗では業務成功を保って通知を省略する。commit成功後だけ、件数・bytes・同時接続数に上限を持つ共通senderへ渡す。OCRのACK・実行枠解放はHTTP完了を待たない。
+- 通知の一回限りのSQLはパラメータ型を明示し、statementの準備・実行を分ける不要なDB往復を避ける。共有gate取得とsnapshot取得は別statementのまま維持する。比較・準備のtimeout、残時間不足、DBエラーは区別し、準備失敗には処理段階・時間予算・経過時間・SQLSTATEを記録する。DB例外本文やbind値は出力しない。
 - senderはDNS・接続・応答を含む単一のrequest期限内で一度だけHTTPを試み、整合する受付応答を永続受付の証拠として扱う。接続だけを先に打ち切る短い期限を重ねず、TCPの一時的な停滞からの回復も同じ期限に含める。応答不明時も通知outbox・再試行・再起動時の再構築は行わない。停止時はproducerの確定を優先し、残りの共通期限で通知をdrainする。
 
 ## 5. Runtime / Security

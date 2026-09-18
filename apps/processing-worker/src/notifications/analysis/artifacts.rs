@@ -4,7 +4,7 @@ use std::{collections::BTreeMap, sync::Arc};
 
 use futures_util::TryStreamExt;
 use momo_analysis_core::model::MAXIMUM_PLAYER_MATCH_ROWS;
-use tokio_postgres::{Client, IsolationLevel, Transaction};
+use tokio_postgres::{Client, IsolationLevel, Transaction, types::Type};
 
 use super::{
     MAXIMUM_SEASONS, SkipReason,
@@ -34,9 +34,9 @@ pub(super) async fn load(
         .await
         .map_err(database_error)?;
     let row = transaction
-        .query_one(
+        .query_typed_one(
             "SELECT current_artifact_id FROM series_analysis_title_states WHERE game_title_id = $1",
-            &[&title_id],
+            &[(&title_id, Type::TEXT)],
         )
         .await
         .map_err(database_error)?;
@@ -63,9 +63,9 @@ async fn read(
     artifact_id: &str,
 ) -> Result<Artifact, SkipReason> {
     let header = transaction
-        .query_one(
+        .query_typed_one(
             include_str!("artifacts/header.sql"),
-            &[&artifact_id, &title_id],
+            &[(&artifact_id, Type::TEXT), (&title_id, Type::TEXT)],
         )
         .await
         .map_err(database_error)?;
@@ -93,8 +93,10 @@ async fn read(
     {
         return Err(SkipReason::PayloadBound);
     }
+    let parameters: [(&(dyn tokio_postgres::types::ToSql + Sync), Type); 1] =
+        [(&artifact_id, Type::TEXT)];
     let rows = transaction
-        .query_raw(include_str!("artifacts/scopes.sql"), [&artifact_id])
+        .query_typed_raw(include_str!("artifacts/scopes.sql"), parameters)
         .await
         .map_err(database_error)?;
     tokio::pin!(rows);
@@ -155,8 +157,9 @@ async fn match_identities(
 ) -> Result<BTreeMap<String, MatchIdentity>, SkipReason> {
     let limit = i64::try_from(MAXIMUM_PLAYER_MATCH_ROWS / 4 + 1)
         .map_err(|_error| SkipReason::PayloadBound)?;
-    let parameters: [&(dyn tokio_postgres::types::ToSql + Sync); 2] = [&artifact_id, &limit];
-    let rows = transaction.query_raw(
+    let parameters: [(&(dyn tokio_postgres::types::ToSql + Sync), Type); 2] =
+        [(&artifact_id, Type::TEXT), (&limit, Type::INT8)];
+    let rows = transaction.query_typed_raw(
         "SELECT left(match_id, 201), source_match_revision::text, left(season_master_id, 201), left(map_master_id, 201) \
          FROM series_analysis_match_context_artifacts WHERE artifact_id = $1 AND scope_kind = 'season_map' \
          ORDER BY match_id LIMIT $2", parameters,
@@ -187,7 +190,16 @@ async fn match_identities(
 const fn valid_id(id: &str) -> bool {
     !id.is_empty() && id.len() <= 200
 }
-fn database_error(_error: tokio_postgres::Error) -> SkipReason {
+#[expect(
+    clippy::needless_pass_by_value,
+    reason = "map_err owns the driver error before discarding its sensitive detail"
+)]
+fn database_error(error: tokio_postgres::Error) -> SkipReason {
+    tracing::warn!(
+        event = "result_notification_database_failed",
+        phase = "comparison",
+        sqlstate = error.code().map(tokio_postgres::error::SqlState::code)
+    );
     SkipReason::PreparationFailed
 }
 

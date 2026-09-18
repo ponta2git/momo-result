@@ -2,7 +2,7 @@
 
 use serde::Serialize;
 use tokio::time::Instant;
-use tokio_postgres::{Row, Transaction};
+use tokio_postgres::{Row, Transaction, types::Type};
 
 use super::{
     NotificationEnvelope, NotificationKind, NotificationReservation, PreparedNotification,
@@ -45,7 +45,9 @@ pub(crate) async fn prepare(
     finalization_deadline: Instant,
 ) -> Result<Option<PreparedNotification>, tokio_postgres::Error> {
     super::preparation::recoverable(transaction, KIND, job_id, finalization_deadline, async {
-        let rows = transaction.query(SNAPSHOT_SQL, &[&job_id]).await?;
+        let rows = transaction
+            .query_typed(SNAPSHOT_SQL, &[(&job_id, Type::TEXT)])
+            .await?;
         Ok(snapshot(&rows, job_id, draft_id, screen_type, needs_review)
             .and_then(|envelope| reservation.prepare(&envelope)))
     })

@@ -111,6 +111,7 @@ async fn real_postgres_analysis_notifications_follow_committed_publications() ->
     );
 
     verify_preparation_boundaries(&mut primary, &peer, &config, &reused).await?;
+    verify_delayed_database(&database_url, &config, &reused).await?;
     for (label, enabled) in [("off", false), ("contended", true)] {
         let next = next_job(&primary, &reused, label).await?;
         primary.execute("UPDATE discord_notification_settings SET enabled = $1 WHERE kind = 'analysis_completed'", &[&enabled]).await?;
@@ -151,6 +152,43 @@ async fn real_postgres_analysis_notifications_follow_committed_publications() ->
     Ok(())
 }
 
+async fn verify_delayed_database(
+    database_url: &str,
+    config: &AnalysisConsumerConfig,
+    claim: &ClaimedJob,
+) -> SmokeResult {
+    let proxy = crate::notifications::test_support::DelayedDatabase::start(
+        database_url,
+        Duration::from_millis(300),
+    )
+    .await?;
+    let artifact_id = artifact_id_for_attempt(OLD_ATTEMPT_ID);
+    let deadline = Instant::now() + Duration::from_secs(45);
+    // Read both sides, as a new publication does, even though this fixture can reuse its data.
+    let (mut client, comparison) = analysis::load(
+        &config.notifications,
+        &proxy.url,
+        claim,
+        &artifact_id,
+        true,
+        deadline,
+    )
+    .await
+    .ok_or("analysis comparison missing on delayed database")?;
+    let transaction = client.transaction().await?;
+    let prepared = comparison
+        .prepare(&transaction, claim, Some(&artifact_id), true, deadline)
+        .await?
+        .ok_or("analysis notification missing after delayed database comparison")?;
+    assert_eq!(
+        prepared.payload()?.get("sourceJobId"),
+        Some(&json!(claim.job_id))
+    );
+    transaction.rollback().await?;
+    drop(prepared);
+    Ok(())
+}
+
 async fn verify_preparation_boundaries(
     primary: &mut Client,
     peer: &Client,
@@ -160,7 +198,7 @@ async fn verify_preparation_boundaries(
     let artifact_id = artifact_id_for_attempt(OLD_ATTEMPT_ID);
     for scenario in ["rollback", "invalid", "short"] {
         let deadline = Instant::now() + Duration::from_secs(2);
-        let comparison = analysis::load(
+        let (_comparison_client, comparison) = analysis::load(
             &config.notifications,
             &config.database_url,
             claim,

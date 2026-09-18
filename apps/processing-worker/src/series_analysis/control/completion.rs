@@ -57,7 +57,7 @@ pub(crate) async fn publish(
         // A commit error can mean that PostgreSQL committed and then closed the connection before
         // acknowledging it. Always begin B on a new connection after staging/reconciliation so a
         // durable staging artifact is not terminally failed merely because A's client is unusable.
-        let notification = crate::notifications::analysis::load(
+        let comparison = crate::notifications::analysis::load(
             &config.notifications,
             &config.database_url,
             claim,
@@ -66,7 +66,12 @@ pub(crate) async fn publish(
             finalization_deadline,
         )
         .await;
-        let mut publication_client = crate::postgres::connect(&config.database_url).await?;
+        let (mut publication_client, notification) =
+            if let Some((fresh_client, comparison)) = comparison {
+                (fresh_client, Some(comparison))
+            } else {
+                (crate::postgres::connect(&config.database_url).await?, None)
+            };
         metrics.observe_worker_peak(current_process_peak_resident_bytes().await);
         let publication_started = Instant::now();
         let transaction = bounded_transaction(

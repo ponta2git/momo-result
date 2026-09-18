@@ -1,7 +1,10 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use serde::Deserialize;
-use tokio_postgres::{Transaction, types::Json};
+use tokio_postgres::{
+    Transaction,
+    types::{Json, Type},
+};
 
 use super::{
     Comparison, MAXIMUM_SNAPSHOT_BYTES, PreparedNotification, SkipReason, comparison,
@@ -46,16 +49,16 @@ pub(super) async fn prepare(
     let match_ids: Vec<_> = changed.matches.keys().collect();
     let season_ids: Vec<_> = changed.seasons.iter().collect();
     let row = transaction
-        .query_one(
+        .query_typed_one(
             include_str!("snapshot.sql"),
             &[
-                &claim.game_title_id,
-                &match_ids,
-                &claim.job_id,
-                &current.identity.artifact_id,
-                &claim.input_revision,
-                &season_ids,
-                &MAXIMUM_SNAPSHOT_BYTES,
+                (&claim.game_title_id, Type::TEXT),
+                (&match_ids, Type::TEXT_ARRAY),
+                (&claim.job_id, Type::TEXT),
+                (&current.identity.artifact_id, Type::TEXT),
+                (&claim.input_revision, Type::INT8),
+                (&season_ids, Type::TEXT_ARRAY),
+                (&MAXIMUM_SNAPSHOT_BYTES, Type::INT4),
             ],
         )
         .await?;

@@ -18,11 +18,19 @@ final class PostgresSeriesAnalysisReaderCapabilitySpec extends IntegrationSuite:
     yield
       assertEquals(
         active,
-        ("[2]", "[\"series-analysis-artifact-v2-full-validation-v1\"]", false),
+        (
+          "[2, 3]",
+          "[\"series-analysis-artifact-v2-full-validation-v1\", \"series-analysis-artifact-v3-full-validation-v1\"]",
+          false
+        ),
       )
       assertEquals(
         draining,
-        ("[2]", "[\"series-analysis-artifact-v2-full-validation-v1\"]", true),
+        (
+          "[2, 3]",
+          "[\"series-analysis-artifact-v2-full-validation-v1\", \"series-analysis-artifact-v3-full-validation-v1\"]",
+          true
+        ),
       )
 
   private def capabilityRow: IO[(String, String, Boolean)] = sql"""

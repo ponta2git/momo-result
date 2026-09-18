@@ -5,7 +5,7 @@ import type {
 import type {
   SeriesAnalysisMatchContextV2,
   SeriesAnalysisScope,
-  SeriesComparisonAggregateV3,
+  SeriesComparisonAggregate,
   SeriesComparisonReviewV3,
 } from "@/shared/api/seriesAnalysis";
 
@@ -13,7 +13,7 @@ type SeriesAnalysisAnalysisViewId = Exclude<SeriesAnalysisViewId, "review">;
 
 export type SeriesAnalysisDisplayBundle =
   | {
-      aggregate: SeriesComparisonAggregateV3;
+      aggregate: SeriesComparisonAggregate;
       kind: "analysis";
       matchContext: SeriesAnalysisMatchContextV2 | undefined;
       view: SeriesAnalysisAnalysisViewId;
@@ -35,7 +35,7 @@ export type SeriesAnalysisBundleResolution =
 
 export function displaySeriesAnalysisBundleWithoutContext(
   activeView: SeriesAnalysisViewId,
-  aggregate: SeriesComparisonAggregateV3 | undefined,
+  aggregate: SeriesComparisonAggregate | undefined,
   review: SeriesComparisonReviewV3 | undefined,
 ): SeriesAnalysisDisplayBundle | undefined {
   if (activeView === "review") {
@@ -120,7 +120,7 @@ export function matchesSeriesAnalysisScope(
 
 function readyBundle(
   activeView: SeriesAnalysisViewId,
-  aggregate: SeriesComparisonAggregateV3 | undefined,
+  aggregate: SeriesComparisonAggregate | undefined,
   review: SeriesComparisonReviewV3 | undefined,
   matchContext: SeriesAnalysisMatchContextV2 | undefined,
 ): SeriesAnalysisBundleResolution {
@@ -149,7 +149,7 @@ export function resolveSeriesAnalysisDisplayBundle({
   state,
 }: {
   activeView: SeriesAnalysisViewId;
-  aggregate: SeriesComparisonAggregateV3 | undefined;
+  aggregate: SeriesComparisonAggregate | undefined;
   artifactId: string | undefined;
   matchContext: SeriesAnalysisMatchContextV2 | undefined;
   review: SeriesComparisonReviewV3 | undefined;

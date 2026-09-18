@@ -7,6 +7,7 @@ import {
 } from "@/test/msw/seriesAnalysisFixtures";
 
 import aggregateFixture from "../../../../../docs/schemas/fixtures/series-analysis/aggregate-payload-v3.json";
+import ownerAggregateFixture from "../../../../../docs/schemas/fixtures/series-analysis/aggregate-payload-v4.json";
 import drilldownFixture from "../../../../../docs/schemas/fixtures/series-analysis/drilldown-payload-v3.json";
 import matchContextFixture from "../../../../../docs/schemas/fixtures/series-analysis/match-context-payload-v1.json";
 import rankSignalsDrilldownFixture from "../../../../../docs/schemas/fixtures/series-analysis/rank-signals-drilldown-payload-v3.json";
@@ -55,7 +56,8 @@ function includedMatchContextResponse(): Record<string, unknown> {
 
 describe("series analysis artifact response decoder", () => {
   it.each([
-    ["aggregate", aggregateFixture],
+    ["aggregateV2", aggregateFixture],
+    ["aggregateV3", aggregateFixture],
     ["review", reviewFixture],
     ["drilldown", drilldownFixture],
     ["drilldown", rankSignalsDrilldownFixture],
@@ -68,8 +70,28 @@ describe("series analysis artifact response decoder", () => {
     },
   );
 
+  it("accepts the owner generation only on the new aggregate wire contract", async () => {
+    const response = artifactResponse(ownerAggregateFixture);
+    response["artifact"] = {
+      ...artifact,
+      algorithmVersion: "series-analysis-v5",
+      artifactSchemaVersion: 3,
+    };
+
+    await expect(decodeSeriesAnalysisArtifact("aggregateV3", response)).resolves.toBe(response);
+    await expect(decodeSeriesAnalysisArtifact("aggregateV2", response)).rejects.toThrow(
+      "Invalid series analysis aggregateV2 response.",
+    );
+
+    const missingOwnerComparison = { ...response };
+    delete missingOwnerComparison["ownerComparison"];
+    await expect(
+      decodeSeriesAnalysisArtifact("aggregateV3", missingOwnerComparison),
+    ).rejects.toThrow("Invalid series analysis aggregateV3 response.");
+  });
+
   it.each([
-    ["aggregate", makeSeriesAnalysisAggregate()],
+    ["aggregateV3", makeSeriesAnalysisAggregate()],
     ["review", makeSeriesAnalysisReview()],
     ["drilldown", makeSeriesAnalysisDrilldown("rank.averageHistory")],
     ["matchContext", makeSeriesAnalysisMatchContext()],
@@ -127,8 +149,8 @@ describe("series analysis artifact response decoder", () => {
     const impossibleExclusion = includedMatchContextResponse();
     impossibleExclusion["inclusion"] = { status: "not_in_scope" };
 
-    await expect(decodeSeriesAnalysisArtifact("aggregate", malformedAggregate)).rejects.toThrow(
-      "Invalid series analysis aggregate response.",
+    await expect(decodeSeriesAnalysisArtifact("aggregateV3", malformedAggregate)).rejects.toThrow(
+      "Invalid series analysis aggregateV3 response.",
     );
     await expect(decodeSeriesAnalysisArtifact("matchContext", impossibleExclusion)).rejects.toThrow(
       "Invalid series analysis matchContext response.",
@@ -151,8 +173,8 @@ describe("series analysis artifact response decoder", () => {
     await expect(decodeSeriesAnalysisArtifact("review", missingDisplayName)).rejects.toThrow(
       "Invalid series analysis review response.",
     );
-    await expect(decodeSeriesAnalysisArtifact("aggregate", oversizedUtf8)).rejects.toThrow(
-      "Invalid series analysis aggregate response.",
+    await expect(decodeSeriesAnalysisArtifact("aggregateV3", oversizedUtf8)).rejects.toThrow(
+      "Invalid series analysis aggregateV3 response.",
     );
   });
 

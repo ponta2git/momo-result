@@ -115,6 +115,8 @@ pub(super) fn metric_definitions() -> Vec<Value> {
         ("revenue.average", "平均物件収益", "man_yen", "higher"),
         ("podium.rate", "入賞率", "rate", "higher"),
         ("ginji.encounterRate", "銀次遭遇率", "rate", "lower"),
+        ("destination.average", "目的地到着回数（1試合平均）", "count", "contextual"),
+        ("ginji.average", "銀次遭遇回数（1試合平均）", "count", "contextual"),
         ("destination.conversionDelta", "目的地順位と最終順位の差", "rank", "higher"),
     ].into_iter().map(|(metric_id, label, unit, direction)| json!({ "metricId": metric_id, "label": label, "unit": unit, "preferredDirection": direction })).collect()
 }

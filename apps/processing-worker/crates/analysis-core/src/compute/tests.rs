@@ -35,6 +35,7 @@ fn row(match_index: i32, player: i32) -> PlayerMatchInput {
         match_no_in_event: match_index,
         season_master_id: String::from("season-1"),
         map_master_id: String::from("map-1"),
+        owner_member_id: String::from("member-1"),
         member_id: format!("member-{player}"),
         play_order: player,
         rank: player,
@@ -684,4 +685,218 @@ fn all_zero_revenue_produces_only_the_dedicated_bin() {
         counts,
         vec![&json!([1]), &json!([1]), &json!([1]), &json!([1])]
     );
+}
+
+#[expect(
+    clippy::panic,
+    reason = "a missing field invalidates the hand-calculated fixture"
+)]
+fn owner_fixture_value<'a>(value: &'a Value, pointer: &str) -> &'a Value {
+    value
+        .pointer(pointer)
+        .unwrap_or_else(|| panic!("missing owner fixture field: {pointer}"))
+}
+
+fn owner_example_input() -> AnalysisInput {
+    AnalysisInput {
+        game_title_id: String::from("title-owner"),
+        input_revision: 1,
+        player_matches: [[1, 2, 3, 4], [3, 1, 4, 2], [4, 3, 2, 1]]
+            .into_iter()
+            .zip(1..=3)
+            .flat_map(|(ranks, index)| {
+                ranks.into_iter().zip(1..=4).map(move |(rank, player)| {
+                    let mut value = row(index, player);
+                    value.rank = rank;
+                    value.owner_member_id =
+                        String::from(if index == 3 { "member-2" } else { "member-1" });
+                    value.total_assets_man_yen = if index == 1 { -100 } else { 300 };
+                    value.revenue_man_yen = if index == 1 { 0 } else { 20 };
+                    value.incidents.destination = if index == 2 { 2 } else { 0 };
+                    value.incidents.suri_no_ginji = if index == 2 { 3 } else { 0 };
+                    value
+                })
+            })
+            .collect(),
+    }
+}
+
+#[test]
+#[expect(
+    clippy::panic,
+    reason = "missing computed fixtures must fail this hand-calculated example"
+)]
+fn owner_comparison_matches_the_hand_calculated_example_and_correction() {
+    let mut input = owner_example_input();
+    let aggregate = |source: &AnalysisInput| {
+        compute_all(source)
+            .into_iter()
+            .find(|r| r.scope == ScopeRef::Overall && r.kind == ComputedResourceKind::Aggregate)
+    };
+    let Some(before) = aggregate(&input) else {
+        panic!("overall aggregate missing")
+    };
+    assert!(crate::payload::validate_computed(&before).is_ok());
+    let comparison = owner_fixture_value(&before.payload, "/ownerComparison");
+    assert_eq!(owner_fixture_value(comparison, "/recordedOwnerCount"), 2);
+    assert_eq!(
+        owner_fixture_value(comparison, "/owners"),
+        &json!([
+            {"memberId":"member-1","targetCount":2,"qualityStatus":"reference"},
+            {"memberId":"member-2","targetCount":1,"qualityStatus":"reference"},
+            {"memberId":"member-3","targetCount":0,"qualityStatus":"no_target"},
+            {"memberId":"member-4","targetCount":0,"qualityStatus":"no_target"}
+        ])
+    );
+    for (index, (a, b)) in [(2.0, 4.0), (1.5, 3.0), (3.5, 2.0), (3.0, 1.0)]
+        .into_iter()
+        .enumerate()
+    {
+        assert_eq!(
+            owner_fixture_value(comparison, &format!("/rows/{index}/cells/0/rank/average")),
+            a
+        );
+        assert_eq!(
+            owner_fixture_value(comparison, &format!("/rows/{index}/cells/1/rank/average")),
+            b
+        );
+        assert!(
+            owner_fixture_value(comparison, &format!("/rows/{index}/cells/2/rank/average"))
+                .is_null()
+        );
+    }
+    let first = owner_fixture_value(comparison, "/rows/0/cells/0");
+    assert_eq!(owner_fixture_value(first, "/assets/average"), 100.0);
+    assert_eq!(owner_fixture_value(first, "/revenue/average"), 10.0);
+    assert_eq!(
+        owner_fixture_value(first, "/destination"),
+        &json!({"count":2,"average":1.0})
+    );
+    assert_eq!(
+        owner_fixture_value(first, "/ginji"),
+        &json!({"count":3,"average":1.5,"encounterMatches":1,"encounterRate":0.5})
+    );
+    assert_eq!(
+        owner_fixture_value(comparison, "/rows/0/cells/1/ginji/average"),
+        0.0
+    );
+    assert_eq!(
+        owner_fixture_value(comparison, "/rows/0/cells/2/ginji/average"),
+        &Value::Null
+    );
+    for value in &mut input.player_matches {
+        if value.match_id == "match-2" {
+            value.owner_member_id = String::from("member-2");
+        }
+    }
+    let Some(after) = aggregate(&input) else {
+        panic!("corrected aggregate missing")
+    };
+    assert!(crate::payload::validate_computed(&after).is_ok());
+    assert_eq!(
+        owner_fixture_value(&after.payload, "/metricsByPlayer"),
+        owner_fixture_value(&before.payload, "/metricsByPlayer")
+    );
+    assert_eq!(
+        owner_fixture_value(
+            &after.payload,
+            "/ownerComparison/rows/0/cells/0/rank/average"
+        ),
+        1.0
+    );
+    assert_eq!(
+        owner_fixture_value(
+            &after.payload,
+            "/ownerComparison/rows/0/cells/1/rank/average"
+        ),
+        3.5
+    );
+    input.player_matches.reverse();
+    assert_eq!(aggregate(&input).map(|r| r.payload), Some(after.payload));
+}
+
+#[test]
+fn owner_quality_uses_its_own_zero_one_two_three_match_denominator() {
+    let input = AnalysisInput {
+        game_title_id: String::from("title-owner"),
+        input_revision: 1,
+        player_matches: (1..=6)
+            .flat_map(|index| {
+                (1..=4).map(move |player| {
+                    let mut value = row(index, player);
+                    value.owner_member_id = format!(
+                        "member-{}",
+                        if index <= 3 {
+                            1
+                        } else if index <= 5 {
+                            2
+                        } else {
+                            3
+                        }
+                    );
+                    value
+                })
+            })
+            .collect(),
+    };
+    for resource in compute_all(&input)
+        .into_iter()
+        .filter(|r| r.kind == ComputedResourceKind::Aggregate)
+    {
+        assert!(crate::payload::validate_computed(&resource).is_ok());
+        assert_eq!(
+            owner_fixture_value(&resource.payload, "/ownerComparison/owners")
+                .as_array()
+                .map(|owners| owners
+                    .iter()
+                    .map(|v| owner_fixture_value(v, "/qualityStatus").as_str())
+                    .collect::<Vec<_>>()),
+            Some(vec![
+                Some("ok"),
+                Some("reference"),
+                Some("reference"),
+                Some("no_target")
+            ])
+        );
+    }
+}
+
+#[test]
+#[expect(
+    clippy::panic,
+    reason = "a missing mutation target invalidates the semantic test fixture"
+)]
+fn owner_semantic_validator_rejects_inconsistent_counts_references_and_ratios() {
+    let Some(original) = compute_all(&owner_example_input())
+        .into_iter()
+        .find(|r| r.scope == ScopeRef::Overall && r.kind == ComputedResourceKind::Aggregate)
+    else {
+        panic!("overall aggregate missing")
+    };
+    for (path, value) in [
+        ("/recordedOwnerCount", json!(1)),
+        ("/owners/0/targetCount", json!(3)),
+        ("/owners/0/qualityStatus", json!("ok")),
+        ("/owners/0/memberId", json!("member-2")),
+        ("/rows/0/memberId", json!("member-2")),
+        ("/rows/0/cells/0/ownerMemberId", json!("member-2")),
+        ("/rows/0/cells/0/rank/distribution/0/count", json!(2)),
+        ("/rows/0/cells/0/rank/average", json!(1.99)),
+        ("/rows/0/cells/0/ginji/average", json!(3.0)),
+        ("/rows/0/cells/0/ginji/encounterMatches", json!(2)),
+        ("/rows/0/cells/0/ginji/encounterRate", json!(0.49)),
+        ("/rows/0/cells/0/destination/average", json!(0.5)),
+        ("/rows/0/cells/2/assets/average", json!(0.0)),
+        ("/rows/0/cells/2/destination/count", json!(1)),
+    ] {
+        let mut resource = original.clone();
+        *resource
+            .payload
+            .pointer_mut(&format!("/ownerComparison{path}"))
+            .unwrap_or_else(|| panic!("missing mutation path: {path}")) = value;
+        assert!(
+            crate::payload::validate_computed(&resource).is_err(),
+            "accepted invalid owner value at {path}"
+        );
+    }
 }

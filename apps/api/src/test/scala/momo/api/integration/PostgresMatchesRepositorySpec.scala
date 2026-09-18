@@ -169,7 +169,7 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
         UPDATE series_analysis_title_states
         SET algorithm_version = 'series-analysis-v3',
             artifact_schema_version = 2,
-            validation_contract_id = ${momo.api.adapters.postgres.SeriesAnalysisArtifactSupport.ValidationContractId}
+            validation_contract_id = 'series-analysis-artifact-v2-full-validation-v1'
         WHERE game_title_id IN ($gameTitleId, $secondGameTitleId)
       """.update.run.transact(transactor)
       _ <- createMatch(rec)
@@ -189,8 +189,8 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
           (SELECT COUNT(*)::int FROM series_analysis_job_requests),
           (SELECT COUNT(*)::int FROM series_analysis_queue_outbox),
           (SELECT COUNT(*)::int FROM matches WHERE id = ${rec.id}),
-          (SELECT bool_and(validation_contract_id = ${momo.api.adapters.postgres.SeriesAnalysisArtifactSupport.ValidationContractId}) FROM series_analysis_jobs),
-          (SELECT bool_and(validation_contract_id = ${momo.api.adapters.postgres.SeriesAnalysisArtifactSupport.ValidationContractId}) FROM series_analysis_job_requests)
+          (SELECT bool_and(validation_contract_id = 'series-analysis-artifact-v2-full-validation-v1') FROM series_analysis_jobs),
+          (SELECT bool_and(validation_contract_id = 'series-analysis-artifact-v2-full-validation-v1') FROM series_analysis_job_requests)
       """.query[(Int, Int, Int, Int, Boolean, Boolean)].unique.transact(transactor)
     yield
       assertEquals(deleted, true)

@@ -1,5 +1,5 @@
 import { ArrowDown, ArrowUp } from "lucide-react";
-import { useMemo } from "react";
+import { useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ComponentPropsWithoutRef, CSSProperties, ReactNode } from "react";
 
 import { cn } from "@/shared/ui/cn";
@@ -55,6 +55,9 @@ export type DataTableProps<Row> = {
   rows: Row[];
   isRowBusy?: ((row: Row) => boolean) | undefined;
   verticalAlign?: DataTableVerticalAlign;
+  /** Opt in for wide comparisons; row headers stay visible within the named scroll region. */
+  stickyRowHeader?: boolean;
+  scrollArea?: { label: string; maxHeight?: string };
 };
 
 const alignClass = {
@@ -113,7 +116,32 @@ export function DataTable<Row>({
   rows,
   isRowBusy,
   verticalAlign = "middle",
+  stickyRowHeader = false,
+  scrollArea,
 }: DataTableProps<Row>) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const hintId = useId();
+  const [overflow, setOverflow] = useState({ horizontal: false, vertical: false });
+  const namedScroll = scrollArea !== undefined;
+  useLayoutEffect(() => {
+    const area = scrollRef.current;
+    if (!namedScroll || !area) return;
+    const measure = () => {
+      const horizontal = area.scrollWidth > area.clientWidth;
+      const vertical = area.scrollHeight > area.clientHeight;
+      setOverflow((previous) =>
+        previous.horizontal === horizontal && previous.vertical === vertical
+          ? previous
+          : { horizontal, vertical },
+      );
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(area);
+    if (area.firstElementChild) observer.observe(area.firstElementChild);
+    return () => observer.disconnect();
+  }, [namedScroll]);
+  const scrollable = overflow.horizontal || overflow.vertical;
   const columnStyleByKey = useMemo(() => {
     return new Map<string, CSSProperties | undefined>(
       columns.map((column) => [
@@ -126,112 +154,139 @@ export function DataTable<Row>({
   }, [columns]);
 
   return (
-    <div className={dataTableScrollAreaClassName}>
-      <table
+    <div className="min-w-0">
+      {namedScroll && scrollable ? (
+        <p className={cn(contentText.supporting, "mb-2")} id={hintId}>
+          {overflow.horizontal && overflow.vertical
+            ? "表は上下左右にスクロールできます。"
+            : overflow.horizontal
+              ? "表は左右にスクロールできます。"
+              : "表は上下にスクロールできます。"}
+        </p>
+      ) : null}
+      <div
         className={cn(
-          contentText.body,
-          "w-full min-w-full border-separate border-spacing-0",
-          layout === "fixed" ? "table-fixed" : "",
+          dataTableScrollAreaClassName,
+          namedScroll && "relative isolate focus-visible:-outline-offset-2",
         )}
-        style={minWidth ? { minWidth } : undefined}
+        ref={scrollRef}
+        role={namedScroll ? "region" : undefined}
+        aria-label={scrollArea?.label}
+        aria-describedby={namedScroll && scrollable ? hintId : undefined}
+        tabIndex={namedScroll && scrollable ? 0 : undefined}
+        style={scrollArea?.maxHeight ? { maxHeight: scrollArea.maxHeight } : undefined}
       >
-        <caption
+        <table
           className={cn(
-            caption.visibility === "visible"
-              ? cn(
-                  contentText.heading,
-                  "border-t border-[var(--color-border-strong)] px-3 py-2 text-left",
-                )
-              : "sr-only",
+            contentText.body,
+            "w-full min-w-full border-separate border-spacing-0",
+            layout === "fixed" ? "table-fixed" : "",
           )}
+          style={minWidth ? { minWidth } : undefined}
         >
-          {caption.content}
-        </caption>
-        <colgroup>
-          {columns.map((column) => (
-            <col key={column.key} style={columnStyleByKey.get(column.key)} />
-          ))}
-        </colgroup>
-        <thead>
-          <tr>
+          <caption
+            className={cn(
+              caption.visibility === "visible"
+                ? cn(
+                    contentText.heading,
+                    "border-t border-[var(--color-border-strong)] px-3 py-2 text-left",
+                  )
+                : "sr-only",
+            )}
+          >
+            {caption.content}
+          </caption>
+          <colgroup>
             {columns.map((column) => (
-              <th
-                key={column.key}
-                aria-sort={
-                  column.sortable
-                    ? column.sortDirection === "asc"
-                      ? "ascending"
-                      : column.sortDirection === "desc"
-                        ? "descending"
-                        : "none"
-                    : undefined
-                }
-                className={cn(
-                  dataTableHeaderCellClassName,
-                  column.sortable ? "p-0" : "",
-                  caption.visibility === "visible" ? "border-t-0" : "",
-                  "sticky top-0 z-[var(--z-base)]",
-                  alignClass[column.align ?? "left"],
-                )}
-                scope="col"
-                style={columnStyleByKey.get(column.key)}
-              >
-                {column.sortable ? (
-                  <DataTableSortButton
-                    align={column.align ?? "left"}
-                    disabled={column.sortDisabled}
-                    direction={column.sortDirection}
-                    onSort={column.onSort}
-                  >
-                    {column.header}
-                  </DataTableSortButton>
-                ) : (
-                  column.header
-                )}
-              </th>
+              <col key={column.key} style={columnStyleByKey.get(column.key)} />
             ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row, rowIndex) => (
-            <DataTableBodyRow
-              key={getRowKey(row, rowIndex)}
-              aria-busy={isRowBusy?.(row) || undefined}
-            >
-              {columns.map((column) => {
-                const Cell = column.rowHeader ? "th" : "td";
-                return (
-                  <Cell
-                    key={column.key}
-                    className={cn(
-                      "text-[var(--color-text-primary)]",
-                      densityClass[density],
-                      alignClass[column.align ?? "left"],
-                      verticalAlignClass[verticalAlign],
-                      "font-plain",
-                      column.tabular ? "tabular-nums" : "",
-                    )}
-                    scope={column.rowHeader ? "row" : undefined}
-                    style={columnStyleByKey.get(column.key)}
-                  >
-                    <div className="min-w-0">{column.renderCell(row)}</div>
-                  </Cell>
-                );
-              })}
-            </DataTableBodyRow>
-          ))}
-          {rows.length === 0 && emptyState ? (
+          </colgroup>
+          <thead>
             <tr>
-              <td
-                className="border-b border-[var(--color-border-strong)] p-3 align-middle"
-                colSpan={columns.length}
-              >
-                {emptyState}
-              </td>
+              {columns.map((column) => (
+                <th
+                  key={column.key}
+                  aria-sort={
+                    column.sortable
+                      ? column.sortDirection === "asc"
+                        ? "ascending"
+                        : column.sortDirection === "desc"
+                          ? "descending"
+                          : "none"
+                      : undefined
+                  }
+                  className={cn(
+                    dataTableHeaderCellClassName,
+                    column.sortable ? "p-0" : "",
+                    caption.visibility === "visible" ? "border-t-0" : "",
+                    "sticky top-0 z-[var(--z-base)]",
+                    stickyRowHeader && "z-[var(--z-sticky)]",
+                    stickyRowHeader && column.rowHeader && "left-0 z-[var(--z-sticky-raised)]",
+                    alignClass[column.align ?? "left"],
+                  )}
+                  scope="col"
+                  style={columnStyleByKey.get(column.key)}
+                >
+                  {column.sortable ? (
+                    <DataTableSortButton
+                      align={column.align ?? "left"}
+                      disabled={column.sortDisabled}
+                      direction={column.sortDirection}
+                      onSort={column.onSort}
+                    >
+                      {column.header}
+                    </DataTableSortButton>
+                  ) : (
+                    column.header
+                  )}
+                </th>
+              ))}
             </tr>
-          ) : null}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {rows.map((row, rowIndex) => (
+              <DataTableBodyRow
+                key={getRowKey(row, rowIndex)}
+                aria-busy={isRowBusy?.(row) || undefined}
+              >
+                {columns.map((column) => {
+                  const Cell = column.rowHeader ? "th" : "td";
+                  return (
+                    <Cell
+                      key={column.key}
+                      className={cn(
+                        "text-[var(--color-text-primary)]",
+                        densityClass[density],
+                        alignClass[column.align ?? "left"],
+                        verticalAlignClass[verticalAlign],
+                        "font-plain",
+                        column.tabular ? "tabular-nums" : "",
+                        stickyRowHeader &&
+                          column.rowHeader &&
+                          "sticky left-0 z-[var(--z-base)] bg-inherit",
+                      )}
+                      scope={column.rowHeader ? "row" : undefined}
+                      style={columnStyleByKey.get(column.key)}
+                    >
+                      <div className="min-w-0">{column.renderCell(row)}</div>
+                    </Cell>
+                  );
+                })}
+              </DataTableBodyRow>
+            ))}
+            {rows.length === 0 && emptyState ? (
+              <tr>
+                <td
+                  className="border-b border-[var(--color-border-strong)] p-3 align-middle"
+                  colSpan={columns.length}
+                >
+                  {emptyState}
+                </td>
+              </tr>
+            ) : null}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

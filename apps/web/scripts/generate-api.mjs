@@ -172,13 +172,13 @@ function artifactRegistrySource(artifacts) {
   return `import type { components } from "@/shared/api/generated";
 import type { ContractValidator } from "@/shared/api/seriesAnalysisContractDecoder";
 
-export type SeriesAnalysisArtifactResponseByKind = {
+export type SeriesAnalysisArtifactResponseByContract = {
 ${responseTypes}
 };
 
 export const seriesAnalysisArtifactValidatorLoaders = {
 ${validatorLoaders}
-} satisfies Record<keyof SeriesAnalysisArtifactResponseByKind, () => Promise<ContractValidator>>;
+} satisfies Record<keyof SeriesAnalysisArtifactResponseByContract, () => Promise<ContractValidator>>;
 `;
 }
 

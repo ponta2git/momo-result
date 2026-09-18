@@ -497,6 +497,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/analytics/series-comparison/v3/aggregate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getApiAnalyticsSeries-comparisonV3Aggregate"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/analytics/series-comparison/v2/review": {
         parameters: {
             query?: never;
@@ -1982,6 +1998,1376 @@ export interface components {
             }[];
             /** @constant */
             schemaVersion: 3;
+            scope: {
+                /** @constant */
+                kind: "overall";
+                matchCount: number;
+                displayName: string;
+            } | {
+                /** @constant */
+                kind: "season";
+                matchCount: number;
+                seasonMasterId: string;
+                displayName: string;
+            } | {
+                /** @constant */
+                kind: "map";
+                mapMasterId: string;
+                matchCount: number;
+                displayName: string;
+            } | {
+                /** @constant */
+                kind: "season_map";
+                mapMasterId: string;
+                matchCount: number;
+                seasonMasterId: string;
+                displayName: string;
+            };
+            source: {
+                gameTitleId: string;
+            };
+            strategyScatter: {
+                points: {
+                    assetRank: null | number;
+                    itemId: string;
+                    matchId: string;
+                    matchIndex: number;
+                    memberId: string;
+                    playedAt: string;
+                    rank: number;
+                    revenueAssetRate: null | number;
+                    revenueManYen: number;
+                    revenueRank: null | number;
+                    totalAssetsManYen: number;
+                    displayName: string;
+                }[];
+            };
+            summary: {
+                averageRankSpread: null | number;
+                leaderMemberIds: string[];
+                quality: {
+                    noTargetCount: number;
+                    okCount: number;
+                    referenceCount: number;
+                };
+                /** @enum {string} */
+                rankSpreadSignal: "insufficient" | "flat" | "small" | "visible" | "large";
+                totalGinjiCount: number;
+            };
+            trends: {
+                /** @enum {string} */
+                kind: "rank_cumulative_average" | "rank_cumulative_standard_deviation" | "podium_cumulative_rate" | "lower_half_cumulative_rate" | "ginji_cumulative_count";
+                memberId: string;
+                points: {
+                    index: number;
+                    itemId: string;
+                    matchId: string;
+                    playedAt: string;
+                    value: number;
+                }[];
+                displayName: string;
+            }[];
+            artifact: {
+                algorithmVersion: string;
+                artifactId: string;
+                artifactSchemaVersion: number;
+                gameTitleId: string;
+                inputRevision: string;
+                publishedAt: string;
+            };
+        };
+        SeriesAnalysisAggregateV3Response: {
+            assetStyleProfiles: {
+                blowoutWinThreshold: null | number;
+                entries: {
+                    evidence: {
+                        /** @enum {string} */
+                        kind: "high_asset_rate" | "low_asset_rate" | "win_rate";
+                        /** @enum {string} */
+                        tone: "strength" | "risk" | "neutral";
+                        value: null | number;
+                    }[];
+                    memberId: string;
+                    metrics: {
+                        averageRevenueAssetRate: null | number;
+                        blowoutWinCount: number;
+                        destinationAverage: null | number;
+                        destinationPositiveRate: null | number;
+                        heavyLossCount: number;
+                        highAssetCount: number;
+                        highAssetRate: null | number;
+                        lowAssetCount: number;
+                        lowAssetRate: null | number;
+                        lowerHalfMedianGap: null | number;
+                        lowerHalfRate: null | number;
+                        medianAssets: null | number;
+                        nearMissSecondCount: number;
+                        p10Assets: null | number;
+                        p90Assets: null | number;
+                        p90P10Spread: null | number;
+                        podiumRate: null | number;
+                        secondCount: number;
+                        secondMedianGap: null | number;
+                        secondRate: null | number;
+                        winCount: number;
+                        winMedianAssets: null | number;
+                        winMedianMargin: null | number;
+                        winRate: null | number;
+                    };
+                    primaryKind: null | ("asset_explosion" | "high_risk_breakthrough" | "close_collector" | "steady_accumulator" | "upper_chaser" | "balanced");
+                    /** @enum {string} */
+                    qualityStatus: "ok" | "reference" | "no_target";
+                    secondaryKind: null | ("high_variance" | "mobility_collecting" | "upper_chaser" | "property_base" | "downside_risk" | "card_base" | "close_finish");
+                    shapeKind: null | ("two_tailed" | "upper_side" | "lower_tail" | "thin_right_tail" | "right_tail" | "middle_heavy");
+                    tags: ("high_variance" | "mobility_collecting" | "upper_chaser" | "property_base" | "downside_risk" | "card_base" | "close_finish")[];
+                    targetCount: number;
+                    displayName: string;
+                }[];
+                heavyLossThreshold: null | number;
+                highAssetThreshold: null | number;
+                lowAssetThreshold: null | number;
+                nearMissSecondThreshold: null | number;
+            };
+            cardShopDestination: {
+                cardShopMatchCount: number;
+                cardShopRate: null | number;
+                cardShopWithoutDestinationCount: number;
+                cardShopWithoutDestinationRate: null | number;
+                denominator: number;
+                memberId: string;
+                quadrants: {
+                    averageAssets: null | number;
+                    averageRank: null | number;
+                    averageRevenue: null | number;
+                    itemId: string;
+                    /** @enum {string} */
+                    kind: "destination_with_shop" | "destination_without_shop" | "no_destination_with_shop" | "no_destination_without_shop";
+                    podiumRate: null | number;
+                    /** @enum {string} */
+                    qualityStatus: "ok" | "reference" | "no_target";
+                    rate: null | number;
+                    targetCount: number;
+                    winRate: null | number;
+                }[];
+                displayName: string;
+            }[];
+            dataQuality: {
+                items: {
+                    denominator: number;
+                    hasTies: boolean;
+                    memberId: string;
+                    metricId: string;
+                    /** @enum {string} */
+                    qualityStatus: "ok" | "reference" | "no_target";
+                    targetCount: number;
+                    displayName: string;
+                }[];
+                summary: {
+                    noTargetCount: number;
+                    okCount: number;
+                    referenceCount: number;
+                };
+            };
+            headToHead: {
+                entries: ({
+                    averageAssetsDiff: null | number;
+                    averageRankDiff: null | number;
+                    betterRankCount: number;
+                    betterRankRate: null | number;
+                    itemId: string;
+                    matchCount: number;
+                    opponentMemberId: string;
+                    /** @enum {string} */
+                    qualityStatus: "ok" | "reference" | "no_target";
+                    /** @enum {string} */
+                    relativeIntensity: "high" | "medium" | "low" | "none";
+                    /** @constant */
+                    signal: "self";
+                    subjectMemberId: string;
+                } | {
+                    averageAssetsDiff: null | number;
+                    averageRankDiff: null | number;
+                    betterRankCount: number;
+                    betterRankRate: null | number;
+                    itemId: string;
+                    matchCount: number;
+                    opponentMemberId: string;
+                    /** @enum {string} */
+                    qualityStatus: "ok" | "reference" | "no_target";
+                    /** @enum {string} */
+                    relativeIntensity: "high" | "medium" | "low" | "none";
+                    /** @enum {string} */
+                    sampleMaturity: "early" | "mature";
+                    /** @enum {string} */
+                    signal: "no_target" | "reference" | "neutral" | "slight_advantage" | "strong_advantage" | "slight_disadvantage" | "strong_disadvantage";
+                    subjectMemberId: string;
+                })[];
+            };
+            highlights: {
+                highlightId: string;
+                leaderMemberIds: string[];
+                metricId: string;
+                /** @enum {string} */
+                qualityStatus: "ok" | "reference" | "no_target";
+                targetCount: number;
+                value: number;
+            }[];
+            histograms: {
+                assets: {
+                    bins: {
+                        index: number;
+                        label: string;
+                        lowerInclusive: number;
+                        upperExclusive: null | number;
+                    }[];
+                    series: {
+                        counts: number[];
+                        memberId: string;
+                        displayName: string;
+                    }[];
+                };
+                revenue: {
+                    bins: {
+                        index: number;
+                        label: string;
+                        lowerInclusive: number;
+                        upperExclusive: null | number;
+                    }[];
+                    series: {
+                        counts: number[];
+                        memberId: string;
+                        displayName: string;
+                    }[];
+                };
+            };
+            matchDigest: {
+                flagCounts: {
+                    [key: string]: number;
+                };
+                hiddenCount: number;
+                recent: {
+                    assetGapFirstToLast: null | number;
+                    assetGapFirstToSecond: null | number;
+                    flags: ("revenue_top_no_win" | "ginji_storm" | "close_finish" | "asset_blowout")[];
+                    heldEventId: string;
+                    itemId: string;
+                    matchId: string;
+                    matchIndex: number;
+                    matchNoInEvent: number;
+                    playedAt: string;
+                    /** @enum {string} */
+                    qualityStatus: "ok" | "reference" | "no_target";
+                    revenueTopMemberIds: string[];
+                    totalGinjiCount: number;
+                    winnerMemberId: null | string;
+                }[];
+                shownCount: number;
+                totalCount: number;
+            };
+            matchNoInEvent: {
+                entries: {
+                    /** @enum {string} */
+                    category: "regular" | "additional";
+                    matchNoInEvent: number;
+                    players: {
+                        averageRank: null | number;
+                        memberId: string;
+                        podiumRate: null | number;
+                        /** @enum {string} */
+                        qualityStatus: "ok" | "reference" | "no_target";
+                        targetCount: number;
+                        displayName: string;
+                    }[];
+                }[];
+            };
+            metricDefinitions: {
+                label: string;
+                metricId: string;
+                /** @enum {string} */
+                preferredDirection: "higher" | "lower" | "contextual";
+                /** @enum {string} */
+                unit: "rank" | "count" | "man_yen" | "rate";
+            }[];
+            metricsByPlayer: {
+                assets: {
+                    average: null | number;
+                    max: null | number;
+                    median: null | number;
+                    min: null | number;
+                };
+                denominator: number;
+                destination: {
+                    conversionDelta: null | number;
+                    dependenceScore: null | number;
+                    lowerTargetCount: number;
+                    upperTargetCount: number;
+                };
+                destinationOutcome: {
+                    lowDestination: {
+                        lowerHalfCount: number;
+                        lowerHalfRate: null | number;
+                        podiumCount: number;
+                        podiumRate: null | number;
+                        /** @enum {string} */
+                        qualityStatus: "ok" | "reference" | "no_target";
+                        rankDistribution: {
+                            count: number;
+                            rank: number;
+                            rate: null | number;
+                        }[];
+                        targetCount: number;
+                        winCount: number;
+                        winRate: null | number;
+                    };
+                    top: {
+                        lowerHalfCount: number;
+                        lowerHalfRate: null | number;
+                        podiumCount: number;
+                        podiumRate: null | number;
+                        /** @enum {string} */
+                        qualityStatus: "ok" | "reference" | "no_target";
+                        rankDistribution: {
+                            count: number;
+                            rank: number;
+                            rate: null | number;
+                        }[];
+                        targetCount: number;
+                        winCount: number;
+                        winRate: null | number;
+                    };
+                    zeroDestination: {
+                        lowerHalfCount: number;
+                        lowerHalfRate: null | number;
+                        podiumCount: number;
+                        podiumRate: null | number;
+                        /** @enum {string} */
+                        qualityStatus: "ok" | "reference" | "no_target";
+                        rankDistribution: {
+                            count: number;
+                            rank: number;
+                            rate: null | number;
+                        }[];
+                        targetCount: number;
+                        winCount: number;
+                        winRate: null | number;
+                    };
+                };
+                ginji: {
+                    count: number;
+                    encounterMatches: number;
+                    encounterRate: null | number;
+                    maxInSingleMatch: number;
+                    multiEncounterMatchCount: number;
+                    resilienceAssetsAverage: null | number;
+                    resilienceRankAverage: null | number;
+                    resilienceRevenueAverage: null | number;
+                };
+                lowerHalf: {
+                    count: number;
+                    rate: null | number;
+                };
+                memberId: string;
+                nonRevenue: {
+                    highRevenueNoWinCount: number;
+                    highRevenueNoWinRate: null | number;
+                    highRevenueTopCount: number;
+                    rankDelta: null | number;
+                };
+                playOrder: {
+                    assetsDiff: null | number;
+                    assetsIndex: null | number;
+                    breakdown: {
+                        assetsAverage: null | number;
+                        matchCount: number;
+                        playOrder: number;
+                        /** @enum {string} */
+                        qualityStatus: "ok" | "reference" | "no_target";
+                        rankAverage: null | number;
+                        revenueAverage: null | number;
+                    }[];
+                    revenueDiff: null | number;
+                    revenueIndex: null | number;
+                };
+                podium: {
+                    count: number;
+                    rate: null | number;
+                };
+                /** @enum {string} */
+                qualityStatus: "ok" | "reference" | "no_target";
+                rank: {
+                    average: null | number;
+                    distribution: {
+                        count: number;
+                        rank: number;
+                        rate: null | number;
+                    }[];
+                    standardDeviation: null | number;
+                };
+                revenue: {
+                    average: null | number;
+                    max: null | number;
+                    median: null | number;
+                };
+                revenueOutcome: {
+                    lowRevenue: {
+                        lowerHalfCount: number;
+                        lowerHalfRate: null | number;
+                        podiumCount: number;
+                        podiumRate: null | number;
+                        /** @enum {string} */
+                        qualityStatus: "ok" | "reference" | "no_target";
+                        rankDistribution: {
+                            count: number;
+                            rank: number;
+                            rate: null | number;
+                        }[];
+                        targetCount: number;
+                        winCount: number;
+                        winRate: null | number;
+                    };
+                    nonTopWinCount: number;
+                    top: {
+                        lowerHalfCount: number;
+                        lowerHalfRate: null | number;
+                        podiumCount: number;
+                        podiumRate: null | number;
+                        /** @enum {string} */
+                        qualityStatus: "ok" | "reference" | "no_target";
+                        rankDistribution: {
+                            count: number;
+                            rank: number;
+                            rate: null | number;
+                        }[];
+                        targetCount: number;
+                        winCount: number;
+                        winRate: null | number;
+                    };
+                };
+                displayName: string;
+            }[];
+            momentumSwitch: {
+                afterFourth: {
+                    baselineRate: null | number;
+                    deltaFromBaseline: null | number;
+                    /** @enum {string} */
+                    qualityStatus: "ok" | "reference" | "no_target";
+                    rate: null | number;
+                    /** @enum {string} */
+                    signal: "strength" | "risk" | "none";
+                    successCount: number;
+                    targetCount: number;
+                };
+                afterLower: {
+                    baselineRate: null | number;
+                    deltaFromBaseline: null | number;
+                    /** @enum {string} */
+                    qualityStatus: "ok" | "reference" | "no_target";
+                    rate: null | number;
+                    /** @enum {string} */
+                    signal: "strength" | "risk" | "none";
+                    successCount: number;
+                    targetCount: number;
+                };
+                afterPodium: {
+                    baselineRate: null | number;
+                    deltaFromBaseline: null | number;
+                    /** @enum {string} */
+                    qualityStatus: "ok" | "reference" | "no_target";
+                    rate: null | number;
+                    /** @enum {string} */
+                    signal: "strength" | "risk" | "none";
+                    successCount: number;
+                    targetCount: number;
+                };
+                cells: {
+                    count: number;
+                    itemId: string;
+                    nextRank: number;
+                    previousRank: number;
+                    /** @enum {string} */
+                    qualityStatus: "ok" | "reference" | "no_target";
+                    rate: null | number;
+                    /** @enum {string} */
+                    relativeIntensity: "high" | "medium" | "low" | "none";
+                    targetCount: number;
+                }[];
+                denominator: number;
+                memberId: string;
+                transitionCount: number;
+                displayName: string;
+            }[];
+            performanceProfiles: {
+                averageRankScoreMedian: null | number;
+                averageRevenueAssetRateMedian: null | number;
+                entries: {
+                    averageRankScore: null | number;
+                    averageRevenueAssetRate: null | number;
+                    memberId: string;
+                    profileKind: null | ("steady_leader" | "swing_leader" | "steady_chaser" | "swing_chaser");
+                    /** @enum {string} */
+                    qualityStatus: "ok" | "reference" | "no_target";
+                    rankStandardDeviation: null | number;
+                    strategyKind: null | ("property_focused" | "card_focused" | "balanced");
+                    displayName: string;
+                }[];
+                rankStandardDeviationMedian: null | number;
+            };
+            playOrderComparison: {
+                bestPlayOrder: null | number;
+                cells: {
+                    itemId: string;
+                    playOrder: number;
+                    podiumRate: null | number;
+                    /** @enum {string} */
+                    qualityStatus: "ok" | "reference" | "no_target";
+                    rankAverage: null | number;
+                    /** @enum {string} */
+                    relativeIntensity: "high" | "medium" | "low" | "none";
+                    targetCount: number;
+                }[];
+                memberId: string;
+                /** @enum {string} */
+                signal: "no_target" | "flat" | "visible" | "large";
+                spread: null | number;
+                worstPlayOrder: null | number;
+                displayName: string;
+            }[];
+            players: {
+                memberId: string;
+                displayName: string;
+            }[];
+            rankAnalysis: {
+                crownCertainty: {
+                    bootstrapIterations: number;
+                    leaderChangeCount: number;
+                    shares: {
+                        memberId: string;
+                        share: number;
+                        displayName: string;
+                    }[];
+                    /** @enum {string} */
+                    status: "ok" | "reference" | "no_target";
+                    successfulIterations: number;
+                };
+                defaultMemberId: null | string;
+                foldScores: {
+                    baselineBrierScore: number;
+                    baselineLogLoss: number;
+                    comparisonCount: number;
+                    fold: number;
+                    fullBrierScore: number;
+                    fullLogLoss: number;
+                    fullModelImproved: boolean;
+                    heldEventCount: number;
+                }[];
+                heldEventCount: number;
+                improvedFoldCount: number;
+                matchCount: number;
+                /** @constant */
+                modelVersion: "rank-bt-v1";
+                rankSignalsByPlayer: {
+                    candidates: {
+                        candidateSharePercent: null | number;
+                        /** @enum {string} */
+                        direction: "more_is_higher" | "less_is_higher";
+                        importance: number;
+                        /** @enum {string} */
+                        signal: "revenue" | "destination" | "plus_station" | "minus_station" | "card_station" | "card_shop" | "ginji";
+                        /** @enum {string} */
+                        stabilityBand: "high" | "medium" | "low";
+                        stable: boolean;
+                        supportCount: number;
+                    }[];
+                    memberId: string;
+                    /** @enum {string} */
+                    status: "ok" | "reference" | "no_target";
+                    displayName: string;
+                }[];
+                reasonCodes: ("insufficient_matches" | "insufficient_events" | "model_not_better" | "unstable_signals" | "model_not_converged" | "calculation_failed" | "invalid_dataset")[];
+                requiredImprovedFoldCount: number;
+                /** @enum {string} */
+                status: "ok" | "reference" | "no_target";
+                unexpectedWinsByPlayer: {
+                    hasDetails: boolean;
+                    latest: null | {
+                        actualRank: number;
+                        evidence: {
+                            cardShopCount: number;
+                            cardStationCount: number;
+                            destinationCount: number;
+                            ginjiCount: number;
+                            minusStationCount: number;
+                            plusStationCount: number;
+                            revenueManYen: number;
+                        };
+                        expectedRank: number;
+                        heldEventId: string;
+                        matchId: string;
+                        matchNoInEvent: number;
+                        playedAt: string;
+                    };
+                    memberId: string;
+                    /** @enum {string} */
+                    status: "ok" | "reference" | "no_target";
+                    totalWinCount: number;
+                    unexpectedWinCount: number;
+                    displayName: string;
+                }[];
+            };
+            rankDistribution: {
+                cells: {
+                    count: number;
+                    itemId: string;
+                    rank: number;
+                    rate: null | number;
+                }[];
+                memberId: string;
+                /** @enum {string} */
+                qualityStatus: "ok" | "reference" | "no_target";
+                total: number;
+                displayName: string;
+            }[];
+            recentRanks: {
+                averageRank: null | number;
+                lowerHalfStreak: number;
+                memberId: string;
+                podiumRate: null | number;
+                podiumStreak: number;
+                /** @enum {string} */
+                qualityStatus: "ok" | "reference" | "no_target";
+                rows: {
+                    itemId: string;
+                    matchId: string;
+                    playedAt: string;
+                    rank: number;
+                }[];
+                targetCount: number;
+                usedFallback: boolean;
+                winStreak: number;
+                windowSize: number;
+                displayName: string;
+            }[];
+            revenueRankConversion: {
+                cells: {
+                    count: number;
+                    finalRank: number;
+                    hasRevenueTie: boolean;
+                    itemId: string;
+                    rate: null | number;
+                    /** @enum {string} */
+                    relativeIntensity: "high" | "medium" | "low" | "none";
+                    revenueRank: number;
+                }[];
+                memberId: string;
+                displayName: string;
+            }[];
+            /** @constant */
+            schemaVersion: 3;
+            scope: {
+                /** @constant */
+                kind: "overall";
+                matchCount: number;
+                displayName: string;
+            } | {
+                /** @constant */
+                kind: "season";
+                matchCount: number;
+                seasonMasterId: string;
+                displayName: string;
+            } | {
+                /** @constant */
+                kind: "map";
+                mapMasterId: string;
+                matchCount: number;
+                displayName: string;
+            } | {
+                /** @constant */
+                kind: "season_map";
+                mapMasterId: string;
+                matchCount: number;
+                seasonMasterId: string;
+                displayName: string;
+            };
+            source: {
+                gameTitleId: string;
+            };
+            strategyScatter: {
+                points: {
+                    assetRank: null | number;
+                    itemId: string;
+                    matchId: string;
+                    matchIndex: number;
+                    memberId: string;
+                    playedAt: string;
+                    rank: number;
+                    revenueAssetRate: null | number;
+                    revenueManYen: number;
+                    revenueRank: null | number;
+                    totalAssetsManYen: number;
+                    displayName: string;
+                }[];
+            };
+            summary: {
+                averageRankSpread: null | number;
+                leaderMemberIds: string[];
+                quality: {
+                    noTargetCount: number;
+                    okCount: number;
+                    referenceCount: number;
+                };
+                /** @enum {string} */
+                rankSpreadSignal: "insufficient" | "flat" | "small" | "visible" | "large";
+                totalGinjiCount: number;
+            };
+            trends: {
+                /** @enum {string} */
+                kind: "rank_cumulative_average" | "rank_cumulative_standard_deviation" | "podium_cumulative_rate" | "lower_half_cumulative_rate" | "ginji_cumulative_count";
+                memberId: string;
+                points: {
+                    index: number;
+                    itemId: string;
+                    matchId: string;
+                    playedAt: string;
+                    value: number;
+                }[];
+                displayName: string;
+            }[];
+            artifact: {
+                algorithmVersion: string;
+                artifactId: string;
+                artifactSchemaVersion: number;
+                gameTitleId: string;
+                inputRevision: string;
+                publishedAt: string;
+            };
+        } | {
+            assetStyleProfiles: {
+                blowoutWinThreshold: null | number;
+                entries: {
+                    evidence: {
+                        /** @enum {string} */
+                        kind: "high_asset_rate" | "low_asset_rate" | "win_rate";
+                        /** @enum {string} */
+                        tone: "strength" | "risk" | "neutral";
+                        value: null | number;
+                    }[];
+                    memberId: string;
+                    metrics: {
+                        averageRevenueAssetRate: null | number;
+                        blowoutWinCount: number;
+                        destinationAverage: null | number;
+                        destinationPositiveRate: null | number;
+                        heavyLossCount: number;
+                        highAssetCount: number;
+                        highAssetRate: null | number;
+                        lowAssetCount: number;
+                        lowAssetRate: null | number;
+                        lowerHalfMedianGap: null | number;
+                        lowerHalfRate: null | number;
+                        medianAssets: null | number;
+                        nearMissSecondCount: number;
+                        p10Assets: null | number;
+                        p90Assets: null | number;
+                        p90P10Spread: null | number;
+                        podiumRate: null | number;
+                        secondCount: number;
+                        secondMedianGap: null | number;
+                        secondRate: null | number;
+                        winCount: number;
+                        winMedianAssets: null | number;
+                        winMedianMargin: null | number;
+                        winRate: null | number;
+                    };
+                    primaryKind: null | ("asset_explosion" | "high_risk_breakthrough" | "close_collector" | "steady_accumulator" | "upper_chaser" | "balanced");
+                    /** @enum {string} */
+                    qualityStatus: "ok" | "reference" | "no_target";
+                    secondaryKind: null | ("high_variance" | "mobility_collecting" | "upper_chaser" | "property_base" | "downside_risk" | "card_base" | "close_finish");
+                    shapeKind: null | ("two_tailed" | "upper_side" | "lower_tail" | "thin_right_tail" | "right_tail" | "middle_heavy");
+                    tags: ("high_variance" | "mobility_collecting" | "upper_chaser" | "property_base" | "downside_risk" | "card_base" | "close_finish")[];
+                    targetCount: number;
+                    displayName: string;
+                }[];
+                heavyLossThreshold: null | number;
+                highAssetThreshold: null | number;
+                lowAssetThreshold: null | number;
+                nearMissSecondThreshold: null | number;
+            };
+            cardShopDestination: {
+                cardShopMatchCount: number;
+                cardShopRate: null | number;
+                cardShopWithoutDestinationCount: number;
+                cardShopWithoutDestinationRate: null | number;
+                denominator: number;
+                memberId: string;
+                quadrants: {
+                    averageAssets: null | number;
+                    averageRank: null | number;
+                    averageRevenue: null | number;
+                    itemId: string;
+                    /** @enum {string} */
+                    kind: "destination_with_shop" | "destination_without_shop" | "no_destination_with_shop" | "no_destination_without_shop";
+                    podiumRate: null | number;
+                    /** @enum {string} */
+                    qualityStatus: "ok" | "reference" | "no_target";
+                    rate: null | number;
+                    targetCount: number;
+                    winRate: null | number;
+                }[];
+                displayName: string;
+            }[];
+            dataQuality: {
+                items: {
+                    denominator: number;
+                    hasTies: boolean;
+                    memberId: string;
+                    metricId: string;
+                    /** @enum {string} */
+                    qualityStatus: "ok" | "reference" | "no_target";
+                    targetCount: number;
+                    displayName: string;
+                }[];
+                summary: {
+                    noTargetCount: number;
+                    okCount: number;
+                    referenceCount: number;
+                };
+            };
+            headToHead: {
+                entries: ({
+                    averageAssetsDiff: null | number;
+                    averageRankDiff: null | number;
+                    betterRankCount: number;
+                    betterRankRate: null | number;
+                    itemId: string;
+                    matchCount: number;
+                    opponentMemberId: string;
+                    /** @enum {string} */
+                    qualityStatus: "ok" | "reference" | "no_target";
+                    /** @enum {string} */
+                    relativeIntensity: "high" | "medium" | "low" | "none";
+                    /** @constant */
+                    signal: "self";
+                    subjectMemberId: string;
+                } | {
+                    averageAssetsDiff: null | number;
+                    averageRankDiff: null | number;
+                    betterRankCount: number;
+                    betterRankRate: null | number;
+                    itemId: string;
+                    matchCount: number;
+                    opponentMemberId: string;
+                    /** @enum {string} */
+                    qualityStatus: "ok" | "reference" | "no_target";
+                    /** @enum {string} */
+                    relativeIntensity: "high" | "medium" | "low" | "none";
+                    /** @enum {string} */
+                    sampleMaturity: "early" | "mature";
+                    /** @enum {string} */
+                    signal: "no_target" | "reference" | "neutral" | "slight_advantage" | "strong_advantage" | "slight_disadvantage" | "strong_disadvantage";
+                    subjectMemberId: string;
+                })[];
+            };
+            highlights: {
+                highlightId: string;
+                leaderMemberIds: string[];
+                metricId: string;
+                /** @enum {string} */
+                qualityStatus: "ok" | "reference" | "no_target";
+                targetCount: number;
+                value: number;
+            }[];
+            histograms: {
+                assets: {
+                    bins: {
+                        index: number;
+                        label: string;
+                        lowerInclusive: number;
+                        upperExclusive: null | number;
+                    }[];
+                    series: {
+                        counts: number[];
+                        memberId: string;
+                        displayName: string;
+                    }[];
+                };
+                revenue: {
+                    bins: {
+                        index: number;
+                        label: string;
+                        lowerInclusive: number;
+                        upperExclusive: null | number;
+                    }[];
+                    series: {
+                        counts: number[];
+                        memberId: string;
+                        displayName: string;
+                    }[];
+                };
+            };
+            matchDigest: {
+                flagCounts: {
+                    [key: string]: number;
+                };
+                hiddenCount: number;
+                recent: {
+                    assetGapFirstToLast: null | number;
+                    assetGapFirstToSecond: null | number;
+                    flags: ("revenue_top_no_win" | "ginji_storm" | "close_finish" | "asset_blowout")[];
+                    heldEventId: string;
+                    itemId: string;
+                    matchId: string;
+                    matchIndex: number;
+                    matchNoInEvent: number;
+                    playedAt: string;
+                    /** @enum {string} */
+                    qualityStatus: "ok" | "reference" | "no_target";
+                    revenueTopMemberIds: string[];
+                    totalGinjiCount: number;
+                    winnerMemberId: null | string;
+                }[];
+                shownCount: number;
+                totalCount: number;
+            };
+            matchNoInEvent: {
+                entries: {
+                    /** @enum {string} */
+                    category: "regular" | "additional";
+                    matchNoInEvent: number;
+                    players: {
+                        averageRank: null | number;
+                        memberId: string;
+                        podiumRate: null | number;
+                        /** @enum {string} */
+                        qualityStatus: "ok" | "reference" | "no_target";
+                        targetCount: number;
+                        displayName: string;
+                    }[];
+                }[];
+            };
+            metricDefinitions: {
+                label: string;
+                metricId: string;
+                /** @enum {string} */
+                preferredDirection: "higher" | "lower" | "contextual";
+                /** @enum {string} */
+                unit: "rank" | "count" | "man_yen" | "rate";
+            }[];
+            metricsByPlayer: {
+                assets: {
+                    average: null | number;
+                    max: null | number;
+                    median: null | number;
+                    min: null | number;
+                };
+                denominator: number;
+                destination: {
+                    conversionDelta: null | number;
+                    dependenceScore: null | number;
+                    lowerTargetCount: number;
+                    upperTargetCount: number;
+                };
+                destinationOutcome: {
+                    lowDestination: {
+                        lowerHalfCount: number;
+                        lowerHalfRate: null | number;
+                        podiumCount: number;
+                        podiumRate: null | number;
+                        /** @enum {string} */
+                        qualityStatus: "ok" | "reference" | "no_target";
+                        rankDistribution: {
+                            count: number;
+                            rank: number;
+                            rate: null | number;
+                        }[];
+                        targetCount: number;
+                        winCount: number;
+                        winRate: null | number;
+                    };
+                    top: {
+                        lowerHalfCount: number;
+                        lowerHalfRate: null | number;
+                        podiumCount: number;
+                        podiumRate: null | number;
+                        /** @enum {string} */
+                        qualityStatus: "ok" | "reference" | "no_target";
+                        rankDistribution: {
+                            count: number;
+                            rank: number;
+                            rate: null | number;
+                        }[];
+                        targetCount: number;
+                        winCount: number;
+                        winRate: null | number;
+                    };
+                    zeroDestination: {
+                        lowerHalfCount: number;
+                        lowerHalfRate: null | number;
+                        podiumCount: number;
+                        podiumRate: null | number;
+                        /** @enum {string} */
+                        qualityStatus: "ok" | "reference" | "no_target";
+                        rankDistribution: {
+                            count: number;
+                            rank: number;
+                            rate: null | number;
+                        }[];
+                        targetCount: number;
+                        winCount: number;
+                        winRate: null | number;
+                    };
+                };
+                ginji: {
+                    count: number;
+                    encounterMatches: number;
+                    encounterRate: null | number;
+                    maxInSingleMatch: number;
+                    multiEncounterMatchCount: number;
+                    resilienceAssetsAverage: null | number;
+                    resilienceRankAverage: null | number;
+                    resilienceRevenueAverage: null | number;
+                };
+                lowerHalf: {
+                    count: number;
+                    rate: null | number;
+                };
+                memberId: string;
+                nonRevenue: {
+                    highRevenueNoWinCount: number;
+                    highRevenueNoWinRate: null | number;
+                    highRevenueTopCount: number;
+                    rankDelta: null | number;
+                };
+                playOrder: {
+                    assetsDiff: null | number;
+                    assetsIndex: null | number;
+                    breakdown: {
+                        assetsAverage: null | number;
+                        matchCount: number;
+                        playOrder: number;
+                        /** @enum {string} */
+                        qualityStatus: "ok" | "reference" | "no_target";
+                        rankAverage: null | number;
+                        revenueAverage: null | number;
+                    }[];
+                    revenueDiff: null | number;
+                    revenueIndex: null | number;
+                };
+                podium: {
+                    count: number;
+                    rate: null | number;
+                };
+                /** @enum {string} */
+                qualityStatus: "ok" | "reference" | "no_target";
+                rank: {
+                    average: null | number;
+                    distribution: {
+                        count: number;
+                        rank: number;
+                        rate: null | number;
+                    }[];
+                    standardDeviation: null | number;
+                };
+                revenue: {
+                    average: null | number;
+                    max: null | number;
+                    median: null | number;
+                };
+                revenueOutcome: {
+                    lowRevenue: {
+                        lowerHalfCount: number;
+                        lowerHalfRate: null | number;
+                        podiumCount: number;
+                        podiumRate: null | number;
+                        /** @enum {string} */
+                        qualityStatus: "ok" | "reference" | "no_target";
+                        rankDistribution: {
+                            count: number;
+                            rank: number;
+                            rate: null | number;
+                        }[];
+                        targetCount: number;
+                        winCount: number;
+                        winRate: null | number;
+                    };
+                    nonTopWinCount: number;
+                    top: {
+                        lowerHalfCount: number;
+                        lowerHalfRate: null | number;
+                        podiumCount: number;
+                        podiumRate: null | number;
+                        /** @enum {string} */
+                        qualityStatus: "ok" | "reference" | "no_target";
+                        rankDistribution: {
+                            count: number;
+                            rank: number;
+                            rate: null | number;
+                        }[];
+                        targetCount: number;
+                        winCount: number;
+                        winRate: null | number;
+                    };
+                };
+                displayName: string;
+            }[];
+            momentumSwitch: {
+                afterFourth: {
+                    baselineRate: null | number;
+                    deltaFromBaseline: null | number;
+                    /** @enum {string} */
+                    qualityStatus: "ok" | "reference" | "no_target";
+                    rate: null | number;
+                    /** @enum {string} */
+                    signal: "strength" | "risk" | "none";
+                    successCount: number;
+                    targetCount: number;
+                };
+                afterLower: {
+                    baselineRate: null | number;
+                    deltaFromBaseline: null | number;
+                    /** @enum {string} */
+                    qualityStatus: "ok" | "reference" | "no_target";
+                    rate: null | number;
+                    /** @enum {string} */
+                    signal: "strength" | "risk" | "none";
+                    successCount: number;
+                    targetCount: number;
+                };
+                afterPodium: {
+                    baselineRate: null | number;
+                    deltaFromBaseline: null | number;
+                    /** @enum {string} */
+                    qualityStatus: "ok" | "reference" | "no_target";
+                    rate: null | number;
+                    /** @enum {string} */
+                    signal: "strength" | "risk" | "none";
+                    successCount: number;
+                    targetCount: number;
+                };
+                cells: {
+                    count: number;
+                    itemId: string;
+                    nextRank: number;
+                    previousRank: number;
+                    /** @enum {string} */
+                    qualityStatus: "ok" | "reference" | "no_target";
+                    rate: null | number;
+                    /** @enum {string} */
+                    relativeIntensity: "high" | "medium" | "low" | "none";
+                    targetCount: number;
+                }[];
+                denominator: number;
+                memberId: string;
+                transitionCount: number;
+                displayName: string;
+            }[];
+            ownerComparison: {
+                owners: {
+                    memberId: string;
+                    /** @enum {string} */
+                    qualityStatus: "ok" | "reference" | "no_target";
+                    targetCount: number;
+                    displayName: string;
+                }[];
+                recordedOwnerCount: number;
+                rows: {
+                    cells: {
+                        assets: {
+                            average: null | number;
+                        };
+                        destination: {
+                            average: null | number;
+                            count: number;
+                        };
+                        ginji: {
+                            average: null | number;
+                            count: number;
+                            encounterMatches: number;
+                            encounterRate: null | number;
+                        };
+                        ownerMemberId: string;
+                        rank: {
+                            average: null | number;
+                            distribution: {
+                                count: number;
+                                rank: number;
+                                rate: null | number;
+                            }[];
+                        };
+                        revenue: {
+                            average: null | number;
+                        };
+                    }[];
+                    memberId: string;
+                    displayName: string;
+                }[];
+            };
+            performanceProfiles: {
+                averageRankScoreMedian: null | number;
+                averageRevenueAssetRateMedian: null | number;
+                entries: {
+                    averageRankScore: null | number;
+                    averageRevenueAssetRate: null | number;
+                    memberId: string;
+                    profileKind: null | ("steady_leader" | "swing_leader" | "steady_chaser" | "swing_chaser");
+                    /** @enum {string} */
+                    qualityStatus: "ok" | "reference" | "no_target";
+                    rankStandardDeviation: null | number;
+                    strategyKind: null | ("property_focused" | "card_focused" | "balanced");
+                    displayName: string;
+                }[];
+                rankStandardDeviationMedian: null | number;
+            };
+            playOrderComparison: {
+                bestPlayOrder: null | number;
+                cells: {
+                    itemId: string;
+                    playOrder: number;
+                    podiumRate: null | number;
+                    /** @enum {string} */
+                    qualityStatus: "ok" | "reference" | "no_target";
+                    rankAverage: null | number;
+                    /** @enum {string} */
+                    relativeIntensity: "high" | "medium" | "low" | "none";
+                    targetCount: number;
+                }[];
+                memberId: string;
+                /** @enum {string} */
+                signal: "no_target" | "flat" | "visible" | "large";
+                spread: null | number;
+                worstPlayOrder: null | number;
+                displayName: string;
+            }[];
+            players: {
+                memberId: string;
+                displayName: string;
+            }[];
+            rankAnalysis: {
+                crownCertainty: {
+                    bootstrapIterations: number;
+                    leaderChangeCount: number;
+                    shares: {
+                        memberId: string;
+                        share: number;
+                        displayName: string;
+                    }[];
+                    /** @enum {string} */
+                    status: "ok" | "reference" | "no_target";
+                    successfulIterations: number;
+                };
+                defaultMemberId: null | string;
+                foldScores: {
+                    baselineBrierScore: number;
+                    baselineLogLoss: number;
+                    comparisonCount: number;
+                    fold: number;
+                    fullBrierScore: number;
+                    fullLogLoss: number;
+                    fullModelImproved: boolean;
+                    heldEventCount: number;
+                }[];
+                heldEventCount: number;
+                improvedFoldCount: number;
+                matchCount: number;
+                /** @constant */
+                modelVersion: "rank-bt-v1";
+                rankSignalsByPlayer: {
+                    candidates: {
+                        candidateSharePercent: null | number;
+                        /** @enum {string} */
+                        direction: "more_is_higher" | "less_is_higher";
+                        importance: number;
+                        /** @enum {string} */
+                        signal: "revenue" | "destination" | "plus_station" | "minus_station" | "card_station" | "card_shop" | "ginji";
+                        /** @enum {string} */
+                        stabilityBand: "high" | "medium" | "low";
+                        stable: boolean;
+                        supportCount: number;
+                    }[];
+                    memberId: string;
+                    /** @enum {string} */
+                    status: "ok" | "reference" | "no_target";
+                    displayName: string;
+                }[];
+                reasonCodes: ("insufficient_matches" | "insufficient_events" | "model_not_better" | "unstable_signals" | "model_not_converged" | "calculation_failed" | "invalid_dataset")[];
+                requiredImprovedFoldCount: number;
+                /** @enum {string} */
+                status: "ok" | "reference" | "no_target";
+                unexpectedWinsByPlayer: {
+                    hasDetails: boolean;
+                    latest: null | {
+                        actualRank: number;
+                        evidence: {
+                            cardShopCount: number;
+                            cardStationCount: number;
+                            destinationCount: number;
+                            ginjiCount: number;
+                            minusStationCount: number;
+                            plusStationCount: number;
+                            revenueManYen: number;
+                        };
+                        expectedRank: number;
+                        heldEventId: string;
+                        matchId: string;
+                        matchNoInEvent: number;
+                        playedAt: string;
+                    };
+                    memberId: string;
+                    /** @enum {string} */
+                    status: "ok" | "reference" | "no_target";
+                    totalWinCount: number;
+                    unexpectedWinCount: number;
+                    displayName: string;
+                }[];
+            };
+            rankDistribution: {
+                cells: {
+                    count: number;
+                    itemId: string;
+                    rank: number;
+                    rate: null | number;
+                }[];
+                memberId: string;
+                /** @enum {string} */
+                qualityStatus: "ok" | "reference" | "no_target";
+                total: number;
+                displayName: string;
+            }[];
+            recentRanks: {
+                averageRank: null | number;
+                lowerHalfStreak: number;
+                memberId: string;
+                podiumRate: null | number;
+                podiumStreak: number;
+                /** @enum {string} */
+                qualityStatus: "ok" | "reference" | "no_target";
+                rows: {
+                    itemId: string;
+                    matchId: string;
+                    playedAt: string;
+                    rank: number;
+                }[];
+                targetCount: number;
+                usedFallback: boolean;
+                winStreak: number;
+                windowSize: number;
+                displayName: string;
+            }[];
+            revenueRankConversion: {
+                cells: {
+                    count: number;
+                    finalRank: number;
+                    hasRevenueTie: boolean;
+                    itemId: string;
+                    rate: null | number;
+                    /** @enum {string} */
+                    relativeIntensity: "high" | "medium" | "low" | "none";
+                    revenueRank: number;
+                }[];
+                memberId: string;
+                displayName: string;
+            }[];
+            /** @constant */
+            schemaVersion: 4;
             scope: {
                 /** @constant */
                 kind: "overall";
@@ -4328,6 +5714,51 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SeriesAnalysisAggregateResponse"];
+                };
+            };
+            /** @description Invalid value for: query parameter gameTitleId, Invalid value for: query parameter artifactId */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            default: {
+                headers: {
+                    "Retry-After"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    "getApiAnalyticsSeries-comparisonV3Aggregate": {
+        parameters: {
+            query: {
+                gameTitleId: string;
+                artifactId: string;
+                seasonMasterId?: string;
+                mapMasterId?: string;
+            };
+            header?: {
+                "X-Momo-Account-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    "Cache-Control": string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeriesAnalysisAggregateV3Response"];
                 };
             };
             /** @description Invalid value for: query parameter gameTitleId, Invalid value for: query parameter artifactId */

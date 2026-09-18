@@ -87,9 +87,11 @@ object SeriesAnalysisEndpoints:
     .mapTo[MatchContextInput]
 
   val aggregate: SecuredRead[ScopedArtifactInput, Array[Byte]] =
-    artifactEndpoint(SeriesAnalysisResponseSchemas.aggregate)
+    artifactEndpoint(SeriesAnalysisResponseSchemas.aggregate, "v2")
+  val aggregateV3: SecuredRead[ScopedArtifactInput, Array[Byte]] =
+    artifactEndpoint(SeriesAnalysisResponseSchemas.aggregateV3, "v3")
   val review: SecuredRead[ScopedArtifactInput, Array[Byte]] =
-    artifactEndpoint(SeriesAnalysisResponseSchemas.review)
+    artifactEndpoint(SeriesAnalysisResponseSchemas.review, "v2")
 
   private val drilldownContract = SeriesAnalysisResponseSchemas.drilldown
   val drilldown: SecuredRead[DrilldownInput, Array[Byte]] = endpoint
@@ -155,11 +157,12 @@ object SeriesAnalysisEndpoints:
       .tag("admin-analysis")
 
   private def artifactEndpoint(
-      resource: SeriesAnalysisResponseSchemas.Resource
+      resource: SeriesAnalysisResponseSchemas.Resource,
+      version: String,
   ): SecuredRead[ScopedArtifactInput, Array[Byte]] = endpoint
     .securityIn(CommonEndpoint.accountHeader)
     .get
-    .in("api" / "analytics" / "series-comparison" / "v2" / resource.pathSegment)
+    .in("api" / "analytics" / "series-comparison" / version / resource.pathSegment)
     .in(scopedArtifactInput)
     .errorOut(CommonEndpoint.errorOut)
     .out(rawJsonBody(resource))

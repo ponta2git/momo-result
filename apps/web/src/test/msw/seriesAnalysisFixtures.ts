@@ -5,7 +5,7 @@ import type {
   SeriesAnalysisOptionsResponse,
   SeriesAnalysisStatusResponse,
   SeriesAnalysisArtifactRef,
-  SeriesComparisonAggregateV3,
+  SeriesComparisonAggregate,
   SeriesComparisonReviewV3,
 } from "@/shared/api/seriesAnalysis";
 
@@ -77,8 +77,8 @@ const quality = { noTargetCount: 0, okCount: 8, referenceCount: 0 };
 
 export function makeSeriesAnalysisAggregate(
   artifact: SeriesAnalysisArtifactRef = analysisArtifact,
-): SeriesComparisonAggregateV3 {
-  return hydrateMemberDisplayNames<SeriesComparisonAggregateV3>({
+): SeriesComparisonAggregate {
+  return hydrateMemberDisplayNames<SeriesComparisonAggregate>({
     artifact,
     assetStyleProfiles: {
       entries: [
@@ -1048,5 +1048,77 @@ function unexpectedEvidence() {
     minusStationCount: 1,
     plusStationCount: 3,
     revenueManYen: 25_000,
+  };
+}
+
+/** Hand-calculated MOM-3 example: two games with owner A, one with B; C and D have none. */
+export function makeOwnerComparisonAggregate(): Extract<
+  SeriesComparisonAggregate,
+  { schemaVersion: 4 }
+> {
+  const members = [
+    { memberId: "member_ponta", displayName: "ぽんた" },
+    { memberId: "member_akane_mami", displayName: "あかねまみ" },
+    { memberId: "member_otaka", displayName: "おたか" },
+    { memberId: "member_eu", displayName: "EU" },
+  ];
+  const ranks = [
+    [1, 3, 4],
+    [2, 1, 3],
+    [3, 4, 2],
+    [4, 2, 1],
+  ];
+  return {
+    ...makeSeriesAnalysisAggregate({
+      ...analysisArtifact,
+      artifactSchemaVersion: 3,
+      algorithmVersion: "series-analysis-v5",
+    }),
+    schemaVersion: 4,
+    scope: { ...scope, matchCount: 3 },
+    ownerComparison: {
+      recordedOwnerCount: 2,
+      owners: members.map((member, index) => ({
+        memberId: member.memberId,
+        displayName: member.displayName,
+        targetCount: index === 0 ? 2 : index === 1 ? 1 : 0,
+        qualityStatus: index < 2 ? "reference" : "no_target",
+      })),
+      rows: members.map((member, index) => ({
+        ...member,
+        cells: members.map((owner, ownerIndex) => {
+          const observed =
+            ownerIndex === 0
+              ? ranks[index]!.slice(0, 2)
+              : ownerIndex === 1
+                ? ranks[index]!.slice(2)
+                : [];
+          const count = observed.length;
+          return {
+            ownerMemberId: owner.memberId,
+            rank: {
+              average: count ? observed.reduce((sum, rank) => sum + rank, 0) / count : null,
+              distribution: [1, 2, 3, 4].map((rank) => ({
+                rank,
+                count: observed.filter((value) => value === rank).length,
+                rate: count ? observed.filter((value) => value === rank).length / count : null,
+              })),
+            },
+            assets: { average: count ? 100 : null },
+            revenue: { average: count ? 10 : null },
+            destination: {
+              count: ownerIndex === 0 ? 2 : 0,
+              average: count ? (ownerIndex === 0 ? 1 : 0) : null,
+            },
+            ginji: {
+              count: ownerIndex === 0 ? 3 : 0,
+              average: count ? (ownerIndex === 0 ? 1.5 : 0) : null,
+              encounterMatches: ownerIndex === 0 ? 1 : 0,
+              encounterRate: count ? (ownerIndex === 0 ? 0.5 : 0) : null,
+            },
+          };
+        }),
+      })),
+    },
   };
 }

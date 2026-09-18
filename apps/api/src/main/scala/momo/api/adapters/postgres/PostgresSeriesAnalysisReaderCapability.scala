@@ -38,14 +38,14 @@ private[api] object PostgresSeriesAnalysisReaderCapability:
       .foreverM
 
   private def register[F[_]: Async](readerId: String, transactor: Transactor[F]): F[Unit] =
-    val schemas = SeriesAnalysisArtifactSupport.SupportedArtifactSchemas.toList.sorted.mkString(
+    val schemas = SeriesAnalysisArtifactSupport.ReadableContracts.map(_._1).mkString(
       "[",
       ",",
       "]",
     )
     val validationContracts = io.circe.Json
       .fromValues(
-        SeriesAnalysisArtifactSupport.SupportedValidationContractIds.toList.sorted.map(
+        SeriesAnalysisArtifactSupport.ReadableContracts.map(_._2).map(
           io.circe.Json.fromString
         )
       )

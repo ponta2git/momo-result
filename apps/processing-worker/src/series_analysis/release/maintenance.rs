@@ -556,7 +556,7 @@ mod tests {
         let incompatible =
             reconcile_transaction(incompatible_tx, operation, &release_id, false, None).await?;
         assert_eq!(incompatible.reason, "reader_or_worker_incompatible");
-        client.execute("UPDATE series_analysis_reader_capabilities SET artifact_schema_versions = $1, validation_contract_ids = $2 WHERE reader_id = 'maintenance-reader'", &[&json!([target.artifact_schema_version]), &json!([target.validation_contract_id])]).await?;
+        client.execute("UPDATE series_analysis_reader_capabilities SET artifact_schema_versions = $1, validation_contract_ids = $2 WHERE reader_id = 'maintenance-reader'", &[&super::super::reader_schema_versions(), &super::super::reader_validation_contract_ids()]).await?;
         client.execute("UPDATE series_analysis_worker_capabilities SET algorithm_versions = $1, artifact_schema_versions = $2, validation_contract_ids = $3 WHERE worker_id = 'maintenance-worker'", &[&json!([target.algorithm_version]), &json!([target.artifact_schema_version]), &json!([target.validation_contract_id])]).await?;
 
         let backfill_tx = begin_promotion_transaction(&mut client).await?;

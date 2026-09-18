@@ -53,6 +53,7 @@ const analysisViews = [
     label: "条件別",
     sections: [
       { id: "metric-play-order", label: "番手" },
+      { id: "metric-owner", label: "オーナー" },
       { id: "metric-card-shop-destination", label: "売り場×目的地" },
       { id: "metric-ginji", label: "スリの銀次" },
     ],

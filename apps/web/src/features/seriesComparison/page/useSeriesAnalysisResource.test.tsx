@@ -36,7 +36,7 @@ describe("useSeriesAnalysisResource", () => {
           }
           return HttpResponse.json(makeSeriesAnalysisStatus());
         }),
-        http.get("/api/analytics/series-comparison/v2/aggregate", ({ request }) => {
+        http.get("/api/analytics/series-comparison/v3/aggregate", ({ request }) => {
           const seasonMasterId = new URL(request.url).searchParams.get("seasonMasterId");
           aggregateScopes.push(seasonMasterId);
           if (!seasonMasterId) {

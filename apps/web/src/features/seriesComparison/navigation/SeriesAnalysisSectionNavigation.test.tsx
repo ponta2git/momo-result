@@ -1,9 +1,9 @@
 import { QueryClientProvider } from "@tanstack/react-query";
 import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { useEffect, useState } from "react";
+import { StrictMode, useEffect, useState } from "react";
 import { createMemoryRouter, RouterProvider } from "react-router-dom";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SeriesAnalysisNavigation } from "@/features/seriesComparison/navigation/SeriesAnalysisNavigation";
 import { useSeriesAnalysisLocationState } from "@/features/seriesComparison/navigation/useSeriesAnalysisLocationState";
@@ -11,14 +11,26 @@ import { SeriesAnalysisContent } from "@/features/seriesComparison/page/SeriesAn
 import { createDeferred } from "@/test/deferred";
 import {
   makeFourPlayerSeriesAnalysisReview,
-  makeSeriesAnalysisAggregate,
+  makeOwnerComparisonAggregate,
   makeSeriesAnalysisOptions,
 } from "@/test/msw/seriesAnalysisFixtures";
 import { createTestQueryClient } from "@/test/queryClient";
+import { selectOption } from "@/test/selectOption";
+
+beforeEach(() => {
+  vi.stubGlobal(
+    "ResizeObserver",
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  );
+});
 
 const options = makeSeriesAnalysisOptions();
 const review = makeFourPlayerSeriesAnalysisReview();
-const aggregate = makeSeriesAnalysisAggregate();
+const aggregate = makeOwnerComparisonAggregate();
 const initialUrl =
   "/analytics/series?gameTitleId=gt_momotetsu_2&focusMatchId=match-12&returnTo=%2Fmatches";
 
@@ -36,9 +48,11 @@ function Harness({ gate }: { gate?: Promise<void> | undefined }) {
     };
   }, [gate]);
   return (
-    <SeriesAnalysisNavigation>
+    <SeriesAnalysisNavigation displayIntent={location.displayIntent}>
       <button type="button">別の操作</button>
       <SeriesAnalysisContent
+        ownerMetric={location.state.ownerMetric}
+        onOwnerMetricChange={location.actions.updateOwnerMetric}
         bundle={
           location.activeView === "review"
             ? { kind: "review", view: "review", review, matchContext: undefined }
@@ -63,14 +77,41 @@ function setup({ gate, url = initialUrl }: { gate?: Promise<void>; url?: string 
     { initialEntries: ["/matches", url], initialIndex: 1 },
   );
   render(
-    <QueryClientProvider client={createTestQueryClient()}>
-      <RouterProvider router={router} />
-    </QueryClientProvider>,
+    <StrictMode>
+      <QueryClientProvider client={createTestQueryClient()}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>
+    </StrictMode>,
   );
   return router;
 }
 
 describe("series analysis section navigation", () => {
+  it("changes the actual owner select without a new arrival or history entry under Strict Mode", async () => {
+    const user = userEvent.setup();
+    const router = setup({ url: `${initialUrl}&view=context#metric-play-order` });
+    const select = await screen.findByRole("combobox", { name: "オーナー比較の指標" });
+    // Arrive by ordinary scrolling rather than by the owner's table-of-contents link.
+    await selectOption(user, select, "ginji.average");
+    await waitFor(() => expect(router.state.location.hash).toBe("#metric-owner"));
+    expect(new URLSearchParams(router.state.location.search).get("ownerMetric")).toBe(
+      "ginji.average",
+    );
+    expect(select).toHaveFocus();
+    expect(screen.getAllByText("1.5回/試合")).toHaveLength(4);
+    expect(new URLSearchParams(router.state.location.search).get("focusMatchId")).toBe("match-12");
+    expect(
+      screen
+        .getByRole("table", { name: "オーナー別の銀次遭遇回数（1試合平均）" })
+        .closest("[inert]"),
+    ).toBeNull();
+    await selectOption(user, select, "ginji.encounterRate");
+    expect(select).toHaveFocus();
+    expect(screen.getByRole("table", { name: "オーナー別の銀次遭遇率" })).toHaveTextContent("50%");
+    await act(async () => router.navigate(-1));
+    expect(screen.getByText("試合一覧")).toBeInTheDocument();
+  });
+
   it("reaches evidence and returns to the expanded hypothesis with exactly one history entry", async () => {
     const user = userEvent.setup();
     const restoration = window.history.scrollRestoration;

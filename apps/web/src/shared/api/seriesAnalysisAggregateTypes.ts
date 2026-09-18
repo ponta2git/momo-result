@@ -1,3 +1,3 @@
 import type { components } from "@/shared/api/generated";
 
-export type SeriesComparisonAggregateV3 = components["schemas"]["SeriesAnalysisAggregateResponse"];
+export type SeriesComparisonAggregate = components["schemas"]["SeriesAnalysisAggregateV3Response"];

@@ -103,7 +103,10 @@ export function SeriesComparisonPage() {
   }
 
   return (
-    <SeriesAnalysisNavigation failed={options.hasError || status.hasError || resource.hasError}>
+    <SeriesAnalysisNavigation
+      displayIntent={page.displayIntent}
+      failed={options.hasError || status.hasError || resource.hasError}
+    >
       <PageFrame width="wide">
         <PageContentSurface
           aria-label="戦績比較"
@@ -114,6 +117,11 @@ export function SeriesComparisonPage() {
             <nav aria-label="戦績比較の操作" className={cn(actionRowClass, "justify-end")}>
               {seriesReturnAction(page.returnTo)}
             </nav>
+          ) : null}
+          {page.normalizationNotice ? (
+            <Notice tone="info" title="表示条件を調整しました">
+              {page.normalizationNotice}
+            </Notice>
           ) : null}
           {options.hasError ? (
             <Notice
@@ -254,6 +262,8 @@ export function SeriesComparisonPage() {
                         />
                       ) : (
                         <SeriesAnalysisContent
+                          ownerMetric={filters.state.ownerMetric}
+                          onOwnerMetricChange={filters.updateOwnerMetric}
                           activeView={filters.activeView}
                           bundle={resource.bundle}
                           navigationReady={

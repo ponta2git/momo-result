@@ -43,6 +43,7 @@ object ApiEndpoints:
     SeriesAnalysisEndpoints.options,
     SeriesAnalysisEndpoints.status,
     SeriesAnalysisEndpoints.aggregate,
+    SeriesAnalysisEndpoints.aggregateV3,
     SeriesAnalysisEndpoints.review,
     SeriesAnalysisEndpoints.drilldown,
     SeriesAnalysisEndpoints.matchContext,

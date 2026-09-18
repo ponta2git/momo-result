@@ -25,8 +25,13 @@ const ORPHAN: Fixture = fixture!("orphan", "d");
 const ROLLBACK: Fixture = fixture!("rollback", "e");
 const GENERATION: Fixture = fixture!("generation", "f");
 const LATE: Fixture = fixture!("late", "0");
+const DELAYED: Fixture = fixture!("delayed", "ab");
 
-pub(super) async fn verify(primary: &mut Client, peer: &mut Client) -> SmokeResult {
+pub(super) async fn verify(
+    primary: &mut Client,
+    peer: &mut Client,
+    database_url: &str,
+) -> SmokeResult {
     for fixture in [
         &TOTAL,
         &REVENUE,
@@ -50,6 +55,7 @@ pub(super) async fn verify(primary: &mut Client, peer: &mut Client) -> SmokeResu
     verify_skips_preserve_success(primary, peer, &config, &sink).await?;
     verify_late_finalization(primary, peer, &config, &sink).await?;
     verify_rollback(primary, &config, &sink).await?;
+    verify_delayed_database(primary, database_url, &sink).await?;
     drop(sink);
     drop(driver);
     primary.batch_execute(
@@ -60,6 +66,44 @@ pub(super) async fn verify(primary: &mut Client, peer: &mut Client) -> SmokeResu
          DELETE FROM source_images WHERE id LIKE 'c2-notification-image-%'; \
          UPDATE discord_notification_settings SET enabled = true, generation = 0 WHERE kind = 'ocr_completed'"
     ).await?;
+    Ok(())
+}
+
+async fn verify_delayed_database(
+    primary: &mut Client,
+    database_url: &str,
+    sink: &NotificationSink,
+) -> SmokeResult {
+    let fixture = DELAYED;
+    insert_fixture(primary, &fixture).await?;
+    let config = OcrControlConfig::new(
+        "ocr-c2-worker-success".to_owned(),
+        Duration::from_mins(1),
+        Duration::from_secs(15),
+        Duration::from_millis(100),
+    )?;
+    let claim = claimed(claim_job(primary, &payload(&fixture)?, &config).await?)?;
+    let proxy = crate::notifications::test_support::DelayedDatabase::start(
+        database_url,
+        Duration::from_millis(300),
+    )
+    .await?;
+    let mut client = crate::postgres::connect(&proxy.url).await?;
+    let prepared = complete(
+        &mut client,
+        &claim,
+        &config,
+        sink,
+        &tests::valid_completion(RequestedScreenType::TotalAssets),
+    )
+    .await?
+    .ok_or("OCR notification missing after delayed database finalization")?;
+    assert_eq!(
+        prepared.payload()?.get("sourceJobId"),
+        Some(&json!(fixture.job_id))
+    );
+    assert_match_draft_status(primary, &fixture, "draft_ready").await?;
+    drop(prepared);
     Ok(())
 }
 

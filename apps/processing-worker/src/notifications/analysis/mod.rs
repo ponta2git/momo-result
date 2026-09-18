@@ -3,7 +3,7 @@
 use std::{sync::Arc, time::Duration};
 
 use tokio::time::{Instant, timeout};
-use tokio_postgres::Transaction;
+use tokio_postgres::{Client, Transaction};
 
 use super::{
     NotificationKind, NotificationReservation, NotificationSink, PreparedNotification, SkipReason,
@@ -22,7 +22,7 @@ const KIND: &str = NotificationKind::AnalysisCompleted.as_str();
 const MAXIMUM_SNAPSHOT_BYTES: i32 = 4 * 1024 * 1024;
 const MAXIMUM_LISTED_MATCHES: usize = 1024;
 const MAXIMUM_SEASONS: usize = 128;
-const COMPARISON_TIMEOUT: Duration = Duration::from_secs(5);
+const COMPARISON_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Owns the reserved capacity and immutable comparison until finalization. Reuse shares one
 /// artifact between both sides. Preparation checks the final current pointer before freezing
@@ -41,7 +41,7 @@ pub(crate) async fn load(
     candidate_id: &str,
     staged: bool,
     deadline: Instant,
-) -> Option<Comparison> {
+) -> Option<(Client, Comparison)> {
     let started = Instant::now();
     let attempt = async {
         let reservation = sink.reserve(
@@ -49,7 +49,11 @@ pub(crate) async fn load(
         )?;
         let mut client = crate::postgres::connect(database_url)
             .await
-            .map_err(|_error| SkipReason::PreparationFailed)?;
+            .map_err(|error| {
+                tracing::warn!(event = "result_notification_connection_failed", kind = KIND,
+                source_job_id = %claim.job_id, error_kind = error.kind());
+                SkipReason::PreparationFailed
+            })?;
         let (previous, current) =
             artifacts::load(&mut client, &claim.game_title_id, candidate_id, staged).await?;
         if current.identity.input_revision != claim.input_revision.to_string()
@@ -59,18 +63,21 @@ pub(crate) async fn load(
             return Err(SkipReason::InvalidSnapshot);
         }
         let changes = comparison::changes(previous.as_deref(), &current)?;
-        Ok(Comparison {
-            reservation,
-            previous,
-            current,
-            changes,
-        })
+        Ok((
+            client,
+            Comparison {
+                reservation,
+                previous,
+                current,
+                changes,
+            },
+        ))
     };
     // Connection setup and the complete MVCC read share this allowance. Keep most of the
     // parent deadline available for fenced publication, recovery and COMMIT.
-    let budget = (deadline.saturating_duration_since(started) / 4).min(COMPARISON_TIMEOUT);
+    let budget = (deadline.saturating_duration_since(started) / 3).min(COMPARISON_TIMEOUT);
     match timeout(budget, attempt).await {
-        Ok(Ok(comparison)) => {
+        Ok(Ok((client, comparison))) => {
             tracing::info!(
                 event = "result_notification_comparison_ready",
                 kind = KIND,
@@ -78,13 +85,18 @@ pub(crate) async fn load(
                 elapsed_milliseconds = started.elapsed().as_millis(),
                 changed_match_count = comparison.changes.matches.len(),
             );
-            Some(comparison)
+            // The read transaction committed successfully. Reuse this fresh connection for
+            // publication; failed or timed-out reads never lend their connection to a writer.
+            Some((client, comparison))
         }
         Ok(Err(reason)) => {
             log_skip(KIND, &claim.job_id, reason);
             None
         }
         Err(_error) => {
+            tracing::warn!(event = "result_notification_comparison_timeout", kind = KIND,
+                source_job_id = %claim.job_id, budget_milliseconds = budget.as_millis(),
+                elapsed_milliseconds = started.elapsed().as_millis());
             log_skip(KIND, &claim.job_id, SkipReason::ComparisonTimeout);
             None
         }

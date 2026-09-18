@@ -34,6 +34,7 @@ Redis は少なくとも1回配送する transport であり、job 状態の正�
 - producer は upload metadata を確定してから enqueue intent を作り、consumer は取得 bytes の length、media type、checksum を OCR 前に再検証する。object key を filesystem path として連結しない。
 - `requestedScreenType` は明示し、legacy decode を除いて `auto` を受理しない。
 - `ocrHintsJson` は hints schema に従う省略可能な補助情報であり、画面種別、player、OCR 結果の正本にしない。
+- API は受付時に不足する既定別名・CPU 名を補い、登録済み別名を統合した後で hints の上限を検証する。空の別名配列は server の既定補完を使う。明示した client 別名は既存の補助入力として受け取り、Web から DB の別名一覧を送り返す必要はない。補完・統合は純粋な domain 処理、DB 取得と enqueue は usecase が所有する。
 - `requestId` と hints は enqueue 時の値を outbox payload に保持し、retry 時に job row だけから再構築しない。
 
 ## 3. Producer / Outbox

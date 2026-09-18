@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { CaptureSlotState } from "@/features/ocrCapture/captureState";
 import type { OcrSubmissionWorkflowParams } from "@/features/ocrCapture/ocrSubmissionWorkflow";
 import { runOcrSubmissionWorkflow } from "@/features/ocrCapture/ocrSubmissionWorkflow";
-import type { SlotKind } from "@/shared/api/enums";
+import type { SlotKind } from "@/shared/domain/ocr";
 
 const validSetup = {
   gameTitleId: "gt_momotetsu_2",

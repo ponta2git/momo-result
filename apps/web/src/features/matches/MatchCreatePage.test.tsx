@@ -3,7 +3,15 @@ import type { QueryClient } from "@tanstack/react-query";
 import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
-import { Link, MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
+import {
+  createMemoryRouter,
+  Link,
+  MemoryRouter,
+  Route,
+  RouterProvider,
+  Routes,
+  useLocation,
+} from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { MatchCreatePage } from "@/features/matches/MatchCreatePage";
@@ -15,6 +23,7 @@ import {
   saveMasterHandoff,
 } from "@/shared/workflows/matchWorkspaceMasterHandoff";
 import { setDevUser, testDevUserAccountId } from "@/test/auth";
+import { createDeferred } from "@/test/deferred";
 import { makeMatchWorkspaceMasterHandoffValues } from "@/test/factories/draftReview";
 import { setupMsw } from "@/test/msw/lifecycle";
 import { server } from "@/test/msw/server";
@@ -82,6 +91,38 @@ describe("MatchCreatePage", () => {
       "returnTo=%2Fmatches%2Fnew",
     );
     expect(screen.getByLabelText("current location")).toHaveTextContent("handoffId=");
+  });
+
+  it("keeps the master handoff pending until the destination loader finishes", async () => {
+    setDevUser();
+    const destinationGate = createDeferred();
+    let destinationStarted = false;
+    const router = createMemoryRouter(
+      [
+        { path: "/matches/new", element: <MatchCreatePage /> },
+        {
+          path: "/admin/masters",
+          loader: async () => {
+            destinationStarted = true;
+            await destinationGate.promise;
+            return null;
+          },
+          element: <p>masters</p>,
+        },
+      ],
+      { initialEntries: ["/matches/new"] },
+    );
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+    await waitForMatchCreateReady();
+    await user.click(screen.getByRole("button", { name: "設定管理へ" }));
+    await waitFor(() => expect(destinationStarted).toBe(true));
+    expect(screen.getByRole("button", { name: "移動中…" })).toBeDisabled();
+    destinationGate.resolve();
+    expect(await screen.findByText("masters")).toBeInTheDocument();
   });
 
   it("returns manual creation to its source context", async () => {

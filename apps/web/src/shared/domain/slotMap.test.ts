@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
 
-import { bySlot } from "@/shared/lib/slotMap";
+import { bySlot } from "@/shared/domain/slotMap";
 
 describe("slotMap", () => {
   it("builds partial maps without nullish values", () => {

@@ -1,7 +1,22 @@
-import type { QueryClient } from "@tanstack/react-query";
+import type { QueryClient, QueryKey } from "@tanstack/react-query";
 
 import { masterQueryKeys } from "@/features/masters/masterQueries";
 import { masterKeys, seriesAnalysisKeys } from "@/shared/api/queryKeys";
+
+/** Transfer a confirmed creation to the cache before its optimistic Action ends. */
+export async function cacheCreatedMaster<Item extends { id: string }>(
+  queryClient: QueryClient,
+  queryKey: QueryKey,
+  created: Item,
+) {
+  await queryClient.cancelQueries({ queryKey, exact: true });
+  queryClient.setQueryData<Item[]>(queryKey, (items) => {
+    if (!items) return items;
+    return items.some((item) => item.id === created.id)
+      ? items.map((item) => (item.id === created.id ? created : item))
+      : [...items, created];
+  });
+}
 
 type MasterResourceKind = "game-titles" | "map-masters" | "season-masters";
 

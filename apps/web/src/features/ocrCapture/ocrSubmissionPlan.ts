@@ -1,12 +1,42 @@
 import type { CaptureSlotState } from "@/features/ocrCapture/captureState";
 import type { SetupFormValues } from "@/features/ocrCapture/schema";
-import type { OcrSetupOptions } from "@/features/ocrCapture/useOcrSetupOptions";
-import type { OcrSubmissionPlan } from "@/features/ocrCapture/useOcrStartFlow";
+import type { OcrJobHintsRequest } from "@/shared/api/ocrJobs";
 import { formatMatchNoInEvent } from "@/shared/domain/matchLabels";
 import { memberDisplayName } from "@/shared/domain/members";
+import { parseLayoutFamily } from "@/shared/domain/ocr";
 import { formatDateTimeLong } from "@/shared/lib/dateTime";
 
-/** Freezes the current capture/setup state into the immutable plan reviewed before submission. */
+export type OcrSubmissionInput = {
+  selectedGameTitle: { id: string; layoutFamily?: string | null | undefined } | undefined;
+  selectedHeldEvent?: { heldAt: string; id: string } | undefined;
+  setup: SetupFormValues;
+  slots: readonly CaptureSlotState[];
+};
+
+export type OcrSubmissionPlan = OcrSubmissionInput & {
+  hints: OcrJobHintsRequest;
+  selectedSlotLabels: string[];
+  setupSummary: {
+    gameTitle: string;
+    heldEvent: string;
+    map: string;
+    matchNo: string;
+    owner: string;
+    season: string;
+  };
+};
+
+type NamedOption = { id: string; name: string };
+type SubmissionOptions = {
+  mapMasters: readonly NamedOption[];
+  seasonMasters: readonly NamedOption[];
+  selectedGameTitle:
+    | (NonNullable<OcrSubmissionInput["selectedGameTitle"]> & NamedOption)
+    | undefined;
+  selectedHeldEvent: OcrSubmissionInput["selectedHeldEvent"];
+};
+
+/** Snapshots only the selected context and images that the user is about to submit. */
 export function buildOcrSubmissionPlan({
   selectedSlotLabels,
   setup,
@@ -15,23 +45,29 @@ export function buildOcrSubmissionPlan({
 }: {
   selectedSlotLabels: string[];
   setup: SetupFormValues;
-  setupOptions: OcrSetupOptions;
-  slots: CaptureSlotState[];
+  setupOptions: SubmissionOptions;
+  slots: readonly CaptureSlotState[];
 }): OcrSubmissionPlan {
+  const { selectedGameTitle, selectedHeldEvent } = setupOptions;
+  const layoutFamily = parseLayoutFamily(selectedGameTitle?.layoutFamily);
   return {
-    selectedGameTitle: setupOptions.selectedGameTitle
-      ? { ...setupOptions.selectedGameTitle }
+    hints: {
+      knownPlayerAliases: [],
+      computerPlayerAliases: [],
+      ...(selectedGameTitle ? { gameTitle: selectedGameTitle.name } : {}),
+      ...(layoutFamily ? { layoutFamily } : {}),
+    },
+    selectedGameTitle: selectedGameTitle
+      ? { id: selectedGameTitle.id, layoutFamily: selectedGameTitle.layoutFamily }
       : undefined,
-    selectedHeldEvent: setupOptions.selectedHeldEvent
-      ? { ...setupOptions.selectedHeldEvent }
+    selectedHeldEvent: selectedHeldEvent
+      ? { id: selectedHeldEvent.id, heldAt: selectedHeldEvent.heldAt }
       : undefined,
     selectedSlotLabels: [...selectedSlotLabels],
     setup: { ...setup },
     setupSummary: {
-      gameTitle: setupOptions.selectedGameTitle?.name ?? setup.gameTitleId,
-      heldEvent: setupOptions.selectedHeldEvent
-        ? formatDateTimeLong(setupOptions.selectedHeldEvent.heldAt)
-        : "紐づけなし",
+      gameTitle: selectedGameTitle?.name ?? setup.gameTitleId,
+      heldEvent: selectedHeldEvent ? formatDateTimeLong(selectedHeldEvent.heldAt) : "紐づけなし",
       map:
         setupOptions.mapMasters.find((item) => item.id === setup.mapMasterId)?.name ??
         setup.mapMasterId,

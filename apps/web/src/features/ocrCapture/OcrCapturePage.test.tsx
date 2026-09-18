@@ -3,11 +3,14 @@ import type { QueryClient } from "@tanstack/react-query";
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
+import { lazy, Suspense } from "react";
+import type { RouteObject } from "react-router-dom";
 import { createMemoryRouter, RouterProvider, useLocation } from "react-router-dom";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { OcrCapturePage } from "@/features/ocrCapture/OcrCapturePage";
 import type { CreateOcrJobRequest } from "@/shared/api/ocrJobs";
+import { gameTitlesQueryOptions } from "@/shared/api/queryOptions";
 import { DevUserPicker } from "@/shared/auth/DevUserPicker";
 import { setDevUser } from "@/test/auth";
 import { createDeferred } from "@/test/deferred";
@@ -41,7 +44,10 @@ function LocationProbe() {
   return <output aria-label="current location">{`${location.pathname}${location.search}`}</output>;
 }
 
-function renderCaptureRoute(initialEntry = "/ocr/new") {
+function renderCaptureRoute(
+  initialEntry = "/ocr/new",
+  destination: Pick<RouteObject, "element" | "loader"> = {},
+) {
   const router = createMemoryRouter(
     [
       { element: <OcrCapturePage />, path: "/ocr/new" },
@@ -53,6 +59,7 @@ function renderCaptureRoute(initialEntry = "/ocr/new") {
           </>
         ),
         path: "/matches",
+        ...destination,
       },
       {
         element: (
@@ -68,7 +75,9 @@ function renderCaptureRoute(initialEntry = "/ocr/new") {
   );
   const view = render(
     <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} />
+      <Suspense fallback={<p>移動先を準備中</p>}>
+        <RouterProvider router={router} />
+      </Suspense>
     </QueryClientProvider>,
   );
   return { ...view, router };
@@ -565,7 +574,7 @@ describe("OcrCapturePage", () => {
     );
   });
 
-  it("uses the final tray position as the OCR image type hint", async () => {
+  it("submits the reviewed tray and game hints even if reference data refreshes before confirmation", async () => {
     setDevUser();
     const createdJobs: OcrJobRequestBody[] = [];
     installObjectUrlMock({
@@ -608,7 +617,28 @@ describe("OcrCapturePage", () => {
       "総資産と収益の画像を入れ替えました。",
     );
 
-    await startOcrAllowingPartialTray();
+    await user.click(screen.getByRole("button", { name: "2件で読み取りを開始" }));
+    expect(
+      await screen.findByRole("dialog", { name: "読み取りを開始しますか？" }),
+    ).toBeInTheDocument();
+
+    act(() => {
+      queryClient.setQueryData(gameTitlesQueryOptions().queryKey, (current) =>
+        current
+          ? {
+              ...current,
+              items: (current.items ?? []).map((item) =>
+                item.id === "gt_momotetsu_2"
+                  ? { ...item, name: "更新された作品", layoutFamily: "reiwa" }
+                  : item,
+              ),
+            }
+          : current,
+      );
+    });
+    await waitFor(() => expect(screen.getByText("更新された作品")).toBeInTheDocument());
+    expect(within(screen.getByRole("dialog")).getByText("桃太郎電鉄2")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "2件で読み取りを開始" }));
 
     await waitFor(() => expect(createdJobs).toHaveLength(2));
     expect(createdJobs).toEqual([
@@ -616,25 +646,23 @@ describe("OcrCapturePage", () => {
         imageId: "image-1",
         matchDraftId: "draft-created-1",
         requestedScreenType: "total_assets",
-        ocrHints: expect.objectContaining({
+        ocrHints: {
+          knownPlayerAliases: [],
+          computerPlayerAliases: [],
           gameTitle: "桃太郎電鉄2",
-          knownPlayerAliases: expect.arrayContaining([
-            expect.objectContaining({ aliases: expect.arrayContaining(["NO11"]) }),
-          ]),
           layoutFamily: "momotetsu_2",
-        }),
+        },
       },
       {
         imageId: "image-2",
         matchDraftId: "draft-created-1",
         requestedScreenType: "revenue",
-        ocrHints: expect.objectContaining({
+        ocrHints: {
+          knownPlayerAliases: [],
+          computerPlayerAliases: [],
           gameTitle: "桃太郎電鉄2",
-          knownPlayerAliases: expect.arrayContaining([
-            expect.objectContaining({ aliases: expect.arrayContaining(["NO11"]) }),
-          ]),
           layoutFamily: "momotetsu_2",
-        }),
+        },
       },
     ]);
   });
@@ -686,6 +714,57 @@ describe("OcrCapturePage", () => {
     await user.click(screen.getByRole("button", { name: "試合一覧で確認" }));
     expect(await screen.findByText("matches-page")).toBeInTheDocument();
   });
+
+  it.each(["loader", "component"] as const)(
+    "keeps uncertain OCR results locked until the destination %s is ready",
+    async (delayKind) => {
+      setDevUser();
+      const destinationGate = createDeferred();
+      let destinationStarted = false;
+      const waitForDestination = async () => {
+        destinationStarted = true;
+        await destinationGate.promise;
+        return null;
+      };
+      const LazyMatches = lazy(async () => {
+        await waitForDestination();
+        return { default: () => <p>matches-page</p> };
+      });
+      server.use(
+        http.post("/api/ocr-jobs", () =>
+          HttpResponse.json({ detail: "job failed" }, { status: 500 }),
+        ),
+        http.post("/api/match-drafts/:draftId/cancel", () =>
+          HttpResponse.json({ detail: "cleanup failed" }, { status: 500 }),
+        ),
+      );
+      renderCaptureRoute(
+        "/ocr/new",
+        delayKind === "loader" ? { loader: waitForDestination } : { element: <LazyMatches /> },
+      );
+      await waitFor(() =>
+        expect(screen.getByRole("combobox", { name: "作品" })).toHaveTextContent("桃太郎電鉄2"),
+      );
+      await user.upload(
+        screen.getByLabelText("OCRの画像をアップロード"),
+        new File(["image"], "assets.png", { type: "image/png" }),
+      );
+      await startOcrAllowingPartialTray();
+      expect(
+        await screen.findByRole("dialog", { name: "試合一覧で状態を確認してください" }),
+      ).toBeInTheDocument();
+      await user.click(screen.getByRole("button", { name: "試合一覧で確認" }));
+      await waitFor(() => expect(destinationStarted).toBe(true));
+      expect(screen.getByRole("button", { name: "移動中…" })).toBeDisabled();
+      expect(screen.getByRole("dialog")).toHaveTextContent("後処理を完了できませんでした");
+      const beforeUnload = new Event("beforeunload", { cancelable: true });
+      window.dispatchEvent(beforeUnload);
+      expect(beforeUnload.defaultPrevented).toBe(false);
+
+      destinationGate.resolve();
+      expect(await screen.findByText("matches-page")).toBeInTheDocument();
+    },
+  );
 
   it("cancels the created match draft when no OCR job is created", async () => {
     setDevUser();

@@ -9,11 +9,11 @@ import {
 import type { CaptureSlotState, InputSource } from "@/features/ocrCapture/captureState";
 import { isWorkingStatus, keepImageOnly } from "@/features/ocrCapture/slotPolicy";
 import { useOcrJobSlotResource } from "@/features/ocrCapture/useOcrJobSlotResource";
-import type { SlotKind } from "@/shared/api/enums";
 import type { OcrDraftResponse } from "@/shared/api/ocrDrafts";
 import type { NormalizedApiError } from "@/shared/api/problemDetails";
-import { bySlot } from "@/shared/lib/slotMap";
-import type { SlotMap } from "@/shared/lib/slotMap";
+import type { SlotKind } from "@/shared/domain/ocr";
+import { bySlot } from "@/shared/domain/slotMap";
+import type { SlotMap } from "@/shared/domain/slotMap";
 
 export type OcrCaptureDraftFeedback = {
   reportFailure: (message: string) => void;

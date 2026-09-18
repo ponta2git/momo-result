@@ -13,6 +13,20 @@ const featureNames = readdirSync(new URL("./src/features/", import.meta.url), {
   .map((entry) => entry.name)
   .toSorted();
 
+const sharedNames = readdirSync(new URL("./src/shared/", import.meta.url), {
+  withFileTypes: true,
+})
+  .filter((entry) => entry.isDirectory())
+  .map((entry) => entry.name);
+
+// Stable foundations must not acquire application policy through another shared module.
+const sharedDependencies = {
+  lib: ["lib"],
+  domain: ["domain", "lib"],
+  api: ["api", "domain", "lib"],
+  ui: ["ui", "lib"],
+} as const;
+
 const invalidMotionPaths = [
   {
     name: "framer-motion",
@@ -56,15 +70,7 @@ const productionTestPatterns = [
   },
 ];
 
-const productionRestrictedPaths = [
-  ...invalidMotionPaths,
-  {
-    name: "@/shared/domain/members",
-    importNames: ["fixedMembers"],
-    message:
-      "Choose workspaceInputMembers, canonicalResultMembers, or orderFixedMembers explicitly.",
-  },
-];
+const productionRestrictedPaths = invalidMotionPaths;
 
 function featureRestrictedImports(
   featureName: string,
@@ -124,6 +130,7 @@ function featureRestrictedImports(
 function sharedRestrictedImports(
   restrictQueryLifecycle: boolean,
   surfaceAnimation = false,
+  layer?: keyof typeof sharedDependencies,
 ): RestrictedImportsRule {
   return [
     "error",
@@ -155,6 +162,42 @@ function sharedRestrictedImports(
           group: ["@/app/**", "@/features/**"],
           message: "Shared code must not depend on app or feature code.",
         },
+        ...(layer
+          ? [
+              {
+                group: sharedNames
+                  .filter(
+                    (name) => !(sharedDependencies[layer] as readonly string[]).includes(name),
+                  )
+                  .flatMap((name) => [
+                    `@/shared/${name}`,
+                    `@/shared/${name}/**`,
+                    `../${name}`,
+                    `../${name}/**`,
+                  ]),
+                message: `Shared ${layer} may depend only on ${sharedDependencies[layer].join(", ")}; place application adapters in a semantic module.`,
+              },
+              ...(layer === "domain"
+                ? [
+                    {
+                      group: [
+                        "react",
+                        "react/**",
+                        "react-dom",
+                        "react-dom/**",
+                        "react-router-dom",
+                        "@tanstack/**",
+                        "@base-ui/**",
+                        "motion",
+                        "motion/**",
+                      ],
+                      message:
+                        "Domain values and pure transformations must not depend on UI or server-state lifecycles.",
+                    },
+                  ]
+                : []),
+            ]
+          : []),
       ],
     },
   ];
@@ -304,9 +347,20 @@ export default defineConfig({
         "no-restricted-imports": sharedRestrictedImports(true),
       },
     },
+    ...Object.keys(sharedDependencies).map((layer) => ({
+      files: [`src/shared/${layer}/**/*.{ts,tsx}`],
+      excludeFiles: ["src/**/*.test.*"],
+      rules: {
+        "no-restricted-imports": sharedRestrictedImports(
+          layer === "ui",
+          false,
+          layer as keyof typeof sharedDependencies,
+        ),
+      },
+    })),
     {
       files: ["src/shared/ui/motion/useSurfaceFeedback.ts"],
-      rules: { "no-restricted-imports": sharedRestrictedImports(false, true) },
+      rules: { "no-restricted-imports": sharedRestrictedImports(true, true, "ui") },
     },
     {
       files: ["src/**/*.d.ts"],

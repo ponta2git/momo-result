@@ -1,10 +1,10 @@
-import { finiteNumber } from "@/shared/ui/dataViz/scales";
+import { finiteNumber } from "@/features/seriesComparison/charts/dataViz/scales";
 import {
   DataVizLegend,
-  DataVizPointMarkWithPresentation,
+  DataVizPointMark,
   createDataVizSeriesPresentationLookup,
-} from "@/shared/ui/dataViz/seriesPresentation";
-import type { DataVizSeriesIdentity } from "@/shared/ui/dataViz/seriesPresentation";
+} from "@/features/seriesComparison/charts/dataViz/seriesPresentation";
+import type { DataVizSeriesIdentity } from "@/features/seriesComparison/charts/dataViz/seriesPresentation";
 
 export function DataVizQuadrantPlot({
   ariaLabel,
@@ -88,7 +88,7 @@ export function DataVizQuadrantPlot({
             {cornerLabels.bottomRight}
           </CornerLabel>
           {plotted.map((point) => (
-            <DataVizPointMarkWithPresentation
+            <DataVizPointMark
               cx={x(point.x)}
               cy={y(point.y)}
               key={point.seriesId}
@@ -97,7 +97,7 @@ export function DataVizQuadrantPlot({
               size={5}
             >
               <title>{point.label}</title>
-            </DataVizPointMarkWithPresentation>
+            </DataVizPointMark>
           ))}
           <text
             fill="var(--color-text-secondary)"

@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useDeferredValue, useMemo, useState } from "react";
 
 import {
   displaySeriesAnalysisBundleWithoutContext,
@@ -32,7 +32,7 @@ import {
   seriesAnalysisStatusQueryOptions,
 } from "@/shared/api/seriesAnalysisQueryOptions";
 import { useAnalysisArtifactRecovery } from "@/shared/api/useAnalysisArtifactRecovery";
-import { useRetryNotice } from "@/shared/ui/feedback/useRetryNotice";
+import { useRetryNotice } from "@/shared/lib/useRetryNotice";
 
 /**
  * Owns the complete artifact lifecycle: active query selection, stale display retention,
@@ -163,7 +163,13 @@ export function useSeriesAnalysisResource({
     [activeView, refetchAggregate, refetchReview],
   );
   const currentDisplayBundle =
-    bundleResolution.kind === "ready" ? bundleResolution.value : lastSuccessfulBundle;
+    bundleResolution.kind === "ready" &&
+    !sameSeriesAnalysisDisplayBundle(lastSuccessfulBundle, bundleResolution.value)
+      ? bundleResolution.value
+      : lastSuccessfulBundle;
+  // Keep controls urgent while a new immutable artifact/view renders in the background.
+  const displayedBundle = useDeferredValue(currentDisplayBundle);
+  const displaySettling = displayedBundle !== currentDisplayBundle;
 
   useAnalysisArtifactRecovery({
     artifactId: activeQueryParams?.artifactId,
@@ -187,24 +193,26 @@ export function useSeriesAnalysisResource({
     activeFetching || (matchContextQueryParams !== undefined && matchContextFetching);
   const displayMatchesActivePurpose =
     activeView === "review"
-      ? currentDisplayBundle?.kind === "review"
-      : currentDisplayBundle?.kind === "analysis";
+      ? displayedBundle?.kind === "review"
+      : displayedBundle?.kind === "analysis";
   const displayedResource =
-    currentDisplayBundle?.kind === "review"
-      ? currentDisplayBundle.review
-      : currentDisplayBundle?.aggregate;
+    displayedBundle?.kind === "review" ? displayedBundle.review : displayedBundle?.aggregate;
   const displayMatchesCurrentScope = matchesSeriesAnalysisScope(displayedResource, state);
   const scopeSettling =
     seriesAnalysisScopeSignature(state) !== seriesAnalysisScopeSignature(deferredState);
   const visibleBundle =
-    (displayMatchesActivePurpose && displayMatchesCurrentScope) || bundleFetching || scopeSettling
-      ? currentDisplayBundle
+    (displayMatchesActivePurpose && displayMatchesCurrentScope) ||
+    bundleFetching ||
+    scopeSettling ||
+    displaySettling
+      ? displayedBundle
       : undefined;
   const resourceShielded = shouldShowStaleShield({
     hasVisibleData: visibleBundle !== undefined,
     isPlaceholderData: activePlaceholder,
     isRefreshing: bundleFetching && visibleBundle !== undefined,
-    isSettling: scopeSettling || (bundleResolution.kind === "waiting" && bundleFetching),
+    isSettling:
+      displaySettling || scopeSettling || (bundleResolution.kind === "waiting" && bundleFetching),
   });
   const visibleResource =
     visibleBundle?.kind === "review" ? visibleBundle.review : visibleBundle?.aggregate;
@@ -266,7 +274,8 @@ export function useSeriesAnalysisResource({
           isFetching: activeFetching,
           isLoading: activeLoading,
         }) ||
-        (!candidateResource && activeFetching),
+        (!candidateResource && activeFetching) ||
+        (displaySettling && displayedBundle === undefined),
       refreshing: activeFetching && activeData !== undefined,
       shielded: resourceShielded,
     },

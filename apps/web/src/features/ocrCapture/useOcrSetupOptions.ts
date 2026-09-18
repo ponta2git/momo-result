@@ -23,8 +23,8 @@ import {
   mapMastersQueryOptions,
   seasonMastersQueryOptions,
 } from "@/shared/api/queryOptions";
-import { useHeldEventPickerDirectory } from "@/shared/api/useHeldEventPickerDirectory";
-import { useRetryNotice } from "@/shared/ui/feedback/useRetryNotice";
+import { useHeldEventPickerDirectory } from "@/shared/heldEvents/useHeldEventPickerDirectory";
+import { useRetryNotice } from "@/shared/lib/useRetryNotice";
 
 type OcrSetupOptionsParams = {
   enabled: boolean;

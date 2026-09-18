@@ -2,6 +2,11 @@ import type { ComponentProps } from "react";
 
 import type { HeldEventPickerField } from "@/shared/heldEvents/HeldEventPickerField";
 import type { DraftStatusBadgeProps } from "@/shared/matches/DraftStatusBadge";
+import type { MatchResultLedger } from "@/shared/matches/MatchResultLedger";
+import type { MemberSequenceLabel } from "@/shared/matches/MemberSequenceLabel";
+import type { PlayOrderMark } from "@/shared/matches/PlayOrderMark";
+import type { RankBadge, RankTrail } from "@/shared/matches/RankBadge";
+import type { GlobalNav } from "@/shared/navigation/GlobalNav";
 import type { DecorativeActionIcon } from "@/shared/ui/actions/actionRecipes";
 import type { ButtonProps } from "@/shared/ui/actions/Button";
 import type { IconButtonProps } from "@/shared/ui/actions/IconButton";
@@ -10,10 +15,7 @@ import type { LinkButtonProps } from "@/shared/ui/actions/LinkButton";
 import type { Disclosure } from "@/shared/ui/data/Collapsible";
 import type { DataTable, DataTableBodyRow } from "@/shared/ui/data/DataTable";
 import type { FactListProps } from "@/shared/ui/data/FactList";
-import type { MatchResultLedger } from "@/shared/ui/data/MatchResultLedger";
-import type { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
 import type { PaginationControlsProps } from "@/shared/ui/data/PaginationControls";
-import type { PlayOrderMark } from "@/shared/ui/data/PlayOrderMark";
 import type { DialogFooter } from "@/shared/ui/feedback/Dialog";
 import type { EmptyStateProps } from "@/shared/ui/feedback/EmptyState";
 import type { NoticeProps } from "@/shared/ui/feedback/Notice";
@@ -34,10 +36,8 @@ import type { SelectControlProps } from "@/shared/ui/forms/SelectControl";
 import type { SelectFieldProps } from "@/shared/ui/forms/SelectField";
 import type { TabsListProps, TabsPanel, TabsRoot, TabsTabProps } from "@/shared/ui/forms/Tabs";
 import type { TextFieldProps } from "@/shared/ui/forms/TextField";
-import type { GlobalNav } from "@/shared/ui/layout/GlobalNav";
 import type { PageHeader } from "@/shared/ui/layout/PageHeader";
 import type { StaleShield } from "@/shared/ui/motion/StaleShield";
-import type { RankBadge, RankTrail } from "@/shared/ui/rank/RankBadge";
 import type { StatusBadgeProps } from "@/shared/ui/status/StatusBadge";
 
 type ExternalVisualOverride<Props> = Extract<

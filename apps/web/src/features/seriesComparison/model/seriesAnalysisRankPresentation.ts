@@ -5,25 +5,18 @@ const importanceFormatter = new Intl.NumberFormat("ja-JP", {
   signDisplay: "exceptZero",
 });
 
+const rankSignalLabels = new Map([
+  ["revenue", "物件収益"],
+  ["destination", "目的地"],
+  ["plus_station", "プラス駅"],
+  ["minus_station", "マイナス駅"],
+  ["card_station", "カード駅"],
+  ["card_shop", "カード売り場"],
+  ["ginji", "スリの銀次"],
+]);
+
 export function rankSignalLabel(signal: string): string {
-  switch (signal) {
-    case "revenue":
-      return "物件収益";
-    case "destination":
-      return "目的地";
-    case "plus_station":
-      return "プラス駅";
-    case "minus_station":
-      return "マイナス駅";
-    case "card_station":
-      return "カード駅";
-    case "card_shop":
-      return "カード売り場";
-    case "ginji":
-      return "スリの銀次";
-    default:
-      return "その他の要因";
-  }
+  return rankSignalLabels.get(signal) ?? "その他の要因";
 }
 
 export function rankSignalCandidateShareLabel(

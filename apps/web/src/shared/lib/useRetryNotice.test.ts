@@ -1,7 +1,7 @@
 import { renderHook } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { useRetryNotice } from "@/shared/ui/feedback/useRetryNotice";
+import { useRetryNotice } from "@/shared/lib/useRetryNotice";
 
 describe("useRetryNotice", () => {
   it("keeps recovery available through a retry, clears on success and never carries across scopes", () => {

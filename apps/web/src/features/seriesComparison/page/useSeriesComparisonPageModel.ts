@@ -8,7 +8,7 @@ import { useSeriesAnalysisResource } from "@/features/seriesComparison/page/useS
 import { isAnalysisClientUpgradeRequired } from "@/shared/api/problemDetails";
 import { isInitialQueryLoading, shouldShowQueryError } from "@/shared/api/queryErrorState";
 import { seriesAnalysisOptionsQueryOptions } from "@/shared/api/seriesAnalysisQueryOptions";
-import { useRetryNotice } from "@/shared/ui/feedback/useRetryNotice";
+import { useRetryNotice } from "@/shared/lib/useRetryNotice";
 
 /** Composes location, option, and artifact owners into the display-ready page contract. */
 export function useSeriesComparisonPageModel() {

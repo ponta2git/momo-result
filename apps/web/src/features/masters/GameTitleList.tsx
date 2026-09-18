@@ -1,11 +1,11 @@
 import { Plus } from "lucide-react";
-import { useState } from "react";
+import { startTransition, useState } from "react";
 
 import { MasterDeleteDialog, MasterEditDialog } from "@/features/masters/MasterActionDialogs";
 import { MasterResourceRefreshNotice } from "@/features/masters/MasterResourceRefreshNotice";
-import { layoutFamilies, layoutFamilyLabels } from "@/shared/api/enums";
-import type { LayoutFamily } from "@/shared/api/enums";
 import type { GameTitleResponse } from "@/shared/api/masters";
+import { layoutFamilies, layoutFamilyLabels } from "@/shared/domain/ocr";
+import type { LayoutFamily } from "@/shared/domain/ocr";
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
 import { Dialog, DialogFooter } from "@/shared/ui/feedback/Dialog";
@@ -162,7 +162,15 @@ function GameTitleCreateDialog({
       }
       onOpenChange={setOpen}
     >
-      <form action={create.action} className="grid gap-4">
+      <form
+        className="grid gap-4"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (create.pending) return;
+          const data = new FormData(event.currentTarget);
+          startTransition(() => create.action(data));
+        }}
+      >
         <TextField
           error={create.error}
           label="作品名"
@@ -186,7 +194,7 @@ function GameTitleCreateDialog({
           <Button disabled={create.pending} variant="secondary" onClick={() => setOpen(false)}>
             キャンセル
           </Button>
-          <Button pendingLabel="追加中" type="submit">
+          <Button pending={create.pending ?? false} pendingLabel="追加中" type="submit">
             追加
           </Button>
         </DialogFooter>

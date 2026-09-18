@@ -8,26 +8,18 @@ import {
   formatDecimal,
   formatManYen,
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
+import type { SeriesAnalysisDrilldownSelection } from "@/features/seriesComparison/model/seriesAnalysisViewTypes";
 import { SeriesAnalysisMatchLink } from "@/features/seriesComparison/navigation/SeriesAnalysisMatchLink";
 import {
   qualityAdvisoryLabel,
   SeriesAnalysisQualityAdvisory,
 } from "@/features/seriesComparison/SeriesAnalysisQualityAdvisory";
-import type {
-  SeriesAnalysisDrilldownMetricId,
-  SeriesAnalysisDrilldownV3,
-  SeriesAnalysisQuery,
-} from "@/shared/api/seriesAnalysis";
+import type { SeriesAnalysisDrilldownV3, SeriesAnalysisQuery } from "@/shared/api/seriesAnalysis";
 import { formatSeriesMatchIndex } from "@/shared/domain/matchLabels";
 import { Button } from "@/shared/ui/actions/Button";
 import { DataTable } from "@/shared/ui/data/DataTable";
 import { FactList } from "@/shared/ui/data/FactList";
 import { Notice } from "@/shared/ui/feedback/Notice";
-
-export type SeriesAnalysisDrilldownSelection = {
-  memberId: string;
-  metricId: SeriesAnalysisDrilldownMetricId;
-};
 
 export function SeriesAnalysisDrilldownContent({
   baseQuery,

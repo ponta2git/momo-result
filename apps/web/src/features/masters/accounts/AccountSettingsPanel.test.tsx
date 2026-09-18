@@ -197,6 +197,38 @@ describe("AccountSettingsPanel", () => {
     expect(idempotencyKey).toMatch(/\S/u);
   });
 
+  it("shows permissions only after the update is confirmed and retains them through a failed list refresh", async () => {
+    const response = createDeferred();
+    let saved = false;
+    server.use(
+      http.get("/api/admin/login-accounts", () =>
+        saved
+          ? HttpResponse.json({ detail: "unavailable" }, { status: 503 })
+          : HttpResponse.json({ items: mswState.loginAccounts }),
+      ),
+      http.patch("/api/admin/login-accounts/account_eu", async ({ request }) => {
+        const patch = (await request.json()) as { isAdmin: boolean };
+        await response.promise;
+        saved = true;
+        return HttpResponse.json({ ...mswState.loginAccounts[1], ...patch });
+      }),
+    );
+    renderPage();
+    const row = (await screen.findByRole("rowheader", { name: "いーゆー" })).closest("tr")!;
+    await user.click(within(row).getByRole("button", { name: "管理者にする" }));
+    const dialog = screen.getByRole("alertdialog", { name: "管理者権限を付与しますか？" });
+    await user.click(within(dialog).getByRole("button", { name: "付与する" }));
+    expect(within(row).getByText("一般")).toBeInTheDocument();
+    expect(within(row).queryByText("管理者")).not.toBeInTheDocument();
+    expect(await within(dialog).findByRole("button", { name: "更新中…" })).toBeDisabled();
+    response.resolve();
+
+    expect(await screen.findByText("最新のアカウント情報を取得できません")).toBeInTheDocument();
+    expect(within(row).getByText("管理者")).toBeInTheDocument();
+    expect(within(row).queryByText("一般")).not.toBeInTheDocument();
+    expect(await within(row).findByRole("button", { name: "管理者解除" })).toBeEnabled();
+  });
+
   it("offers one account-creation action when the list is empty", async () => {
     server.use(http.get("/api/admin/login-accounts", () => HttpResponse.json({ items: [] })));
 

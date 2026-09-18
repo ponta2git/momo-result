@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { PlayOrderMark, playOrderPresentation } from "@/shared/ui/data/PlayOrderMark";
+import { PlayOrderMark, playOrderPresentation } from "@/shared/matches/PlayOrderMark";
 
 describe("PlayOrderMark", () => {
   it("pairs the play-order color with visible text", () => {

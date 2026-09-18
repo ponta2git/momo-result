@@ -1,7 +1,7 @@
-import type { SlotKind } from "@/shared/api/enums";
 import type { OcrDraftResponse } from "@/shared/api/ocrDrafts";
 import { incidentOcrNames } from "@/shared/domain/incidents";
-import type { SlotMap } from "@/shared/lib/slotMap";
+import type { SlotKind } from "@/shared/domain/ocr";
+import type { SlotMap } from "@/shared/domain/slotMap";
 
 const now = "2026-01-01T00:00:00.000Z";
 

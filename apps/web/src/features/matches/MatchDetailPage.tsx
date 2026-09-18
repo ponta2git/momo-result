@@ -14,10 +14,10 @@ import { useMatchDetailPageModel } from "@/features/matches/useMatchDetailPageMo
 import { incidentColumns } from "@/shared/domain/incidents";
 import { formatMatchNoInEvent, formatSeriesMatchIndex } from "@/shared/domain/matchLabels";
 import { memberDisplayName } from "@/shared/domain/members";
+import { MatchResultLedger } from "@/shared/matches/MatchResultLedger";
 import { Button } from "@/shared/ui/actions/Button";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { cn } from "@/shared/ui/cn";
-import { MatchResultLedger } from "@/shared/ui/data/MatchResultLedger";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";

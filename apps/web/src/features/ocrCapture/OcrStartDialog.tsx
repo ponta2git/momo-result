@@ -1,7 +1,8 @@
 import { Check } from "lucide-react";
 
 import { slotDefinitions } from "@/features/ocrCapture/captureState";
-import type { OcrStartDialogState, OcrSubmissionPlan } from "@/features/ocrCapture/useOcrStartFlow";
+import type { OcrSubmissionPlan } from "@/features/ocrCapture/ocrSubmissionPlan";
+import type { OcrStartDialogState } from "@/features/ocrCapture/useOcrStartFlow";
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
 import { FactList } from "@/shared/ui/data/FactList";
@@ -12,6 +13,7 @@ import { SpinnerIcon } from "@/shared/ui/feedback/Spinner";
 import { contentText } from "@/shared/ui/typography";
 
 type OcrStartDialogProps = {
+  navigationPending?: boolean;
   onClose: () => void;
   onConfirm: () => Promise<void>;
   onViewMatches: () => void;
@@ -127,7 +129,13 @@ function progressView(state: Extract<OcrStartDialogState, { status: "submitting"
   } as const;
 }
 
-export function OcrStartDialog({ onClose, onConfirm, onViewMatches, state }: OcrStartDialogProps) {
+export function OcrStartDialog({
+  navigationPending = false,
+  onClose,
+  onConfirm,
+  onViewMatches,
+  state,
+}: OcrStartDialogProps) {
   if (state.status === "closed") return null;
 
   if (state.status === "submitting") {
@@ -184,7 +192,9 @@ export function OcrStartDialog({ onClose, onConfirm, onViewMatches, state }: Ocr
             <p>未開始の分類は、読み取り完了後の確認画面で手入力できます。</p>
           </Notice>
           <div className="flex justify-end">
-            <Button onClick={onViewMatches}>{resultDestinationLabel(state.plan)}</Button>
+            <Button pending={navigationPending} pendingLabel="移動中…" onClick={onViewMatches}>
+              {resultDestinationLabel(state.plan)}
+            </Button>
           </div>
         </div>
       </Dialog>
@@ -204,7 +214,9 @@ export function OcrStartDialog({ onClose, onConfirm, onViewMatches, state }: Ocr
             <p>{state.message}</p>
           </Notice>
           <div className="flex justify-end">
-            <Button onClick={onViewMatches}>{resultDestinationLabel(state.plan)}</Button>
+            <Button pending={navigationPending} pendingLabel="移動中…" onClick={onViewMatches}>
+              {resultDestinationLabel(state.plan)}
+            </Button>
           </div>
         </div>
       </Dialog>

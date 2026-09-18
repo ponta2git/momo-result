@@ -38,6 +38,8 @@ export function SeriesComparisonPage() {
   const purposeChanging =
     resource.bundle !== undefined &&
     (filters.activeView === "review") !== (resource.bundle.kind === "review");
+  const resultsShielded =
+    !purposeChanging && (resource.loading || resource.shielded || focus.shielded);
   const updating =
     options.refreshing ||
     status.refreshing ||
@@ -234,54 +236,50 @@ export function SeriesComparisonPage() {
                       比較結果は表示したままです。更新すると、選択試合の読み込みを再試行します。
                     </Notice>
                   ) : null}
-                  <StaleShield
-                    active={
-                      !purposeChanging && (resource.loading || resource.shielded || focus.shielded)
-                    }
-                    busyLabel="比較条件を更新中"
-                    statusPlacement="external"
-                    fallback={<ComparisonSkeleton />}
-                    strategy="preserve-inert"
-                  >
-                    <div className="grid gap-4">
-                      {resource.data.scope.matchCount === 0 ? (
-                        <EmptyState
-                          action={
-                            filters.state.mapMasterId || filters.state.seasonMasterId ? (
-                              <Button variant="secondary" onClick={page.actions.clearScope}>
-                                全シーズン・全マップに戻す
-                              </Button>
-                            ) : (
-                              <LinkButton to="/matches">試合一覧を開く</LinkButton>
-                            )
-                          }
-                          icon={<BarChart3 />}
-                          placement="embedded"
-                          title="この範囲に確定済みの試合がありません"
-                          description="総合、別シーズン、別マップを選ぶと表示できる場合があります。"
-                        />
-                      ) : (
-                        <SeriesAnalysisContent
-                          ownerMetric={filters.state.ownerMetric}
-                          onOwnerMetricChange={filters.updateOwnerMetric}
-                          activeView={filters.activeView}
-                          bundle={resource.bundle}
-                          navigationReady={
-                            !resource.loading &&
-                            !resource.shielded &&
-                            !focus.shielded &&
-                            !focus.loading &&
-                            resource.bundle.view === filters.activeView &&
-                            matchesSeriesAnalysisScope(resource.data, filters.state)
-                          }
-                          onArtifactExpired={page.actions.refresh}
-                          onClearFocusedMatch={page.actions.clearFocusedMatch}
-                          onFocusMatch={page.actions.focusMatch}
-                          onViewChange={filters.updateView}
-                        />
-                      )}
-                    </div>
-                  </StaleShield>
+                  {resource.data.scope.matchCount === 0 ? (
+                    <StaleShield
+                      active={resultsShielded}
+                      statusPlacement="external"
+                      fallback={<ComparisonSkeleton />}
+                      strategy="preserve-inert"
+                    >
+                      <EmptyState
+                        action={
+                          filters.state.mapMasterId || filters.state.seasonMasterId ? (
+                            <Button variant="secondary" onClick={page.actions.clearScope}>
+                              全シーズン・全マップに戻す
+                            </Button>
+                          ) : (
+                            <LinkButton to="/matches">試合一覧を開く</LinkButton>
+                          )
+                        }
+                        icon={<BarChart3 />}
+                        placement="embedded"
+                        title="この範囲に確定済みの試合がありません"
+                        description="総合、別シーズン、別マップを選ぶと表示できる場合があります。"
+                      />
+                    </StaleShield>
+                  ) : (
+                    <SeriesAnalysisContent
+                      ownerMetric={filters.state.ownerMetric}
+                      onOwnerMetricChange={filters.updateOwnerMetric}
+                      activeView={filters.activeView}
+                      bundle={resource.bundle}
+                      shielded={resultsShielded}
+                      navigationReady={
+                        !resource.loading &&
+                        !resource.shielded &&
+                        !focus.shielded &&
+                        !focus.loading &&
+                        resource.bundle.view === filters.activeView &&
+                        matchesSeriesAnalysisScope(resource.data, filters.state)
+                      }
+                      onArtifactExpired={page.actions.refresh}
+                      onClearFocusedMatch={page.actions.clearFocusedMatch}
+                      onFocusMatch={page.actions.focusMatch}
+                      onViewChange={filters.updateView}
+                    />
+                  )}
                 </div>
               ) : null}
             </>

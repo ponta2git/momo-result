@@ -3,7 +3,15 @@ import type { QueryClient } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
-import { Link, MemoryRouter, Route, Routes } from "react-router-dom";
+import { lazy, Suspense } from "react";
+import {
+  createMemoryRouter,
+  Link,
+  MemoryRouter,
+  Route,
+  RouterProvider,
+  Routes,
+} from "react-router-dom";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { MatchEditPage } from "@/features/matches/MatchEditPage";
@@ -277,6 +285,62 @@ describe("MatchEditPage", () => {
     expect(screen.queryByRole("heading", { level: 1 })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "試合編集を再読み込み" })).not.toBeInTheDocument();
   });
+
+  it.each(["loader", "component"] as const)(
+    "keeps save unavailable until the destination %s is ready",
+    async (delayKind) => {
+      setDevUser();
+      const destinationGate = createDeferred();
+      let destinationStarted = false;
+      let saveCount = 0;
+      const waitForDestination = async () => {
+        destinationStarted = true;
+        await destinationGate.promise;
+        return null;
+      };
+      const LazyDetail = lazy(async () => {
+        await waitForDestination();
+        return { default: () => <p>保存済みの試合</p> };
+      });
+      server.use(
+        http.put("/api/matches/:matchId", ({ params }) => {
+          saveCount += 1;
+          return HttpResponse.json(makeMatchDetail({ matchId: String(params["matchId"]) }));
+        }),
+      );
+      const router = createMemoryRouter(
+        [
+          { path: "/matches/:matchId/edit", element: <MatchEditPage /> },
+          delayKind === "loader"
+            ? {
+                path: "/matches/:matchId",
+                loader: waitForDestination,
+                element: <p>保存済みの試合</p>,
+              }
+            : { path: "/matches/:matchId", element: <LazyDetail /> },
+        ],
+        { initialEntries: ["/matches/match-1/edit"] },
+      );
+      render(
+        <QueryClientProvider client={queryClient}>
+          <Suspense fallback={<p>移動先を準備中</p>}>
+            <RouterProvider router={router} />
+          </Suspense>
+        </QueryClientProvider>,
+      );
+      await waitForMatchEditReady();
+      await user.click(screen.getByRole("button", { name: "保存" }));
+      await waitFor(() => expect(destinationStarted).toBe(true));
+      await waitFor(() => expect(queryClient.isMutating()).toBe(0));
+      const saving = screen.getByRole("button", { name: "保存中…" });
+      expect(saving).toBeDisabled();
+      await user.click(saving);
+      expect(saveCount).toBe(1);
+
+      destinationGate.resolve();
+      expect(await screen.findByText("保存済みの試合")).toBeInTheDocument();
+    },
+  );
 
   it("keeps edited values and shows an update API failure in the execution area", async () => {
     setDevUser();

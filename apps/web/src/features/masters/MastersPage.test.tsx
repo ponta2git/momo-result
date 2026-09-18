@@ -21,6 +21,7 @@ import { mswState } from "@/test/msw/fixtures";
 import { setupMsw } from "@/test/msw/lifecycle";
 import { server } from "@/test/msw/server";
 import { createTestQueryClient } from "@/test/queryClient";
+import { selectOption } from "@/test/selectOption";
 
 setupMsw();
 
@@ -128,6 +129,38 @@ describe("MastersPage", () => {
     expect(screen.getByRole("table")).toBe(table);
     expect(accountReads).toBe(1);
     expect(screen.getByLabelText("current location")).toHaveTextContent("?tab=accounts");
+  });
+
+  it("moves tab focus immediately and only loads a new panel after keyboard activation", async () => {
+    setDevUser();
+    let accountReads = 0;
+    server.use(
+      http.get("/api/admin/notification-settings", () =>
+        HttpResponse.json({
+          ocrCompleted: { enabled: true, generation: "0" },
+          analysisCompleted: { enabled: true, generation: "0" },
+        }),
+      ),
+      http.get("/api/admin/login-accounts", () => {
+        accountReads += 1;
+        return HttpResponse.json({ items: mswState.loginAccounts });
+      }),
+    );
+    renderPage("/admin/masters?tab=notifications");
+    const selected = await screen.findByRole("tab", { name: "通知", selected: true });
+    const accounts = screen.getByRole("tab", { name: "アカウント" });
+    await user.click(selected);
+    await user.keyboard("{ArrowRight}");
+    expect(accounts).toHaveFocus();
+    expect(selected).toHaveAttribute("aria-selected", "true");
+    expect(accountReads).toBe(0);
+    expect(screen.getByLabelText("current location")).toHaveTextContent("?tab=notifications");
+
+    await user.keyboard("{Enter}");
+    expect(accounts).toHaveFocus();
+    expect(accounts).toHaveAttribute("aria-selected", "true");
+    expect(await screen.findByRole("table")).toBeVisible();
+    expect(accountReads).toBe(1);
   });
 
   it("isolates account loading and retry while preserving edits in other settings", async () => {
@@ -562,6 +595,7 @@ describe("MastersPage", () => {
 
     expect(await screen.findByText("最新の別名を取得できません")).toBeInTheDocument();
     expect(screen.getByText("NO11")).toBeInTheDocument();
+    expect(screen.getByText("ポン太")).toBeInTheDocument();
     expect(screen.queryByText("別名の追加に失敗しました")).not.toBeInTheDocument();
     const retryButton = screen.getByRole("button", { name: "別名を再読み込み" });
 
@@ -587,6 +621,179 @@ describe("MastersPage", () => {
 
     expect(await screen.findByRole("radio", { name: "桃太郎電鉄ワールド" })).toBeChecked();
     expect(screen.queryByRole("dialog", { name: "作品を追加" })).not.toBeInTheDocument();
+  });
+
+  it("rolls back a failed optimistic creation, preserves inputs for retry, and resets after success", async () => {
+    setDevUser();
+    const failedResponse = createDeferred();
+    const submissions: Array<{
+      key: string | null;
+      payload: { id: string; layoutFamily: string; name: string };
+    }> = [];
+    server.use(
+      http.post("/api/game-titles", async ({ request }) => {
+        const payload = (await request.json()) as (typeof submissions)[number]["payload"];
+        submissions.push({ key: request.headers.get("Idempotency-Key"), payload });
+        if (submissions.length === 1) {
+          await failedResponse.promise;
+          return HttpResponse.json({ detail: "作品を保存できませんでした" }, { status: 503 });
+        }
+        const created = { ...payload, createdAt: "2026-01-01T00:00:00.000Z", displayOrder: 99 };
+        mswState.gameTitles.push(created);
+        return HttpResponse.json(created);
+      }),
+    );
+    renderPage();
+    await screen.findByRole("radio", { name: "桃太郎電鉄2" });
+    const dialog = await openGameTitleCreateDialog();
+    const name = within(dialog).getByRole("textbox", { name: "作品名" });
+    const layout = within(dialog).getByRole("combobox", { name: "読み取り方式" });
+    await user.type(name, "再送作品");
+    await selectOption(user, layout, "world");
+    await user.click(within(dialog).getByRole("button", { name: "追加" }));
+    expect(
+      await screen.findByRole("radio", { name: "再送作品（追加中）", hidden: true }),
+    ).toBeDisabled();
+    expect(within(dialog).getByRole("button", { name: "追加中" })).toBeDisabled();
+    failedResponse.resolve();
+
+    expect(await within(dialog).findByRole("alert")).not.toBeEmptyDOMElement();
+    expect(
+      screen.queryByRole("radio", { name: /再送作品/u, hidden: true }),
+    ).not.toBeInTheDocument();
+    expect(name).toHaveValue("再送作品");
+    expect(layout).toHaveTextContent("ワールド");
+    await user.click(within(dialog).getByRole("button", { name: "追加" }));
+    expect(await screen.findByRole("radio", { name: "再送作品" })).toBeChecked();
+    expect(submissions).toHaveLength(2);
+    expect(submissions[1]).toEqual(submissions[0]);
+
+    const nextDialog = await openGameTitleCreateDialog();
+    expect(within(nextDialog).getByRole("textbox", { name: "作品名" })).toHaveValue("");
+    await user.type(within(nextDialog).getByRole("textbox", { name: "作品名" }), "次の作品");
+    await user.click(within(nextDialog).getByRole("button", { name: "追加" }));
+    expect(await screen.findByRole("radio", { name: "次の作品" })).toBeChecked();
+    expect(screen.getAllByRole("radio", { name: "再送作品" })).toHaveLength(1);
+    expect(submissions[2]?.key).not.toBe(submissions[1]?.key);
+    expect(submissions[2]?.payload.id).not.toBe(submissions[1]?.payload.id);
+  });
+
+  it("retains the confirmed creation and selection when the canonical list refresh fails", async () => {
+    setDevUser();
+    let saved = false;
+    server.use(
+      http.get("/api/game-titles", () =>
+        saved
+          ? HttpResponse.json({ detail: "一覧は一時的に取得できません" }, { status: 503 })
+          : HttpResponse.json({ items: mswState.gameTitles }),
+      ),
+      http.post("/api/game-titles", async ({ request }) => {
+        const payload = (await request.json()) as {
+          id: string;
+          name: string;
+          layoutFamily: string;
+        };
+        saved = true;
+        return HttpResponse.json({
+          ...payload,
+          createdAt: "2026-01-01T00:00:00.000Z",
+          displayOrder: 99,
+        });
+      }),
+    );
+    renderPage();
+    await screen.findByRole("radio", { name: "桃太郎電鉄2" });
+    const dialog = await openGameTitleCreateDialog();
+    await user.type(within(dialog).getByRole("textbox", { name: "作品名" }), "保存済み作品");
+    await user.click(within(dialog).getByRole("button", { name: "追加" }));
+    expect(await screen.findByText("最新の作品を取得できません")).toBeInTheDocument();
+    expect(await screen.findByRole("radio", { name: "保存済み作品" })).toBeChecked();
+    expect(screen.getByText("作品を追加しました")).toBeInTheDocument();
+    expect(screen.queryByText("(追加中…)")).not.toBeInTheDocument();
+  });
+
+  it.each([
+    { label: "マップ", path: "map-masters", store: "mapMasters" },
+    { label: "シーズン", path: "season-masters", store: "seasonMasters" },
+  ] as const)(
+    "retains $label input after rollback and retries the same creation",
+    async ({ label, path, store }) => {
+      setDevUser();
+      const response = createDeferred();
+      const submissions: Array<{
+        key: string | null;
+        payload: { id: string; name: string; gameTitleId: string };
+      }> = [];
+      server.use(
+        http.post(`/api/${path}`, async ({ request }) => {
+          const payload = (await request.json()) as (typeof submissions)[number]["payload"];
+          submissions.push({ key: request.headers.get("Idempotency-Key"), payload });
+          if (submissions.length === 1) {
+            await response.promise;
+            return HttpResponse.json({ detail: "unavailable" }, { status: 503 });
+          }
+          const created = { ...payload, createdAt: "2026-01-01T00:00:00.000Z", displayOrder: 99 };
+          mswState[store].push(created);
+          return HttpResponse.json(created);
+        }),
+      );
+      renderPage();
+      const panel = (await screen.findByRole("heading", { name: label })).closest("section")!;
+      const input = within(panel).getByRole("textbox", { name: "名称" });
+      await waitFor(() => expect(input).toBeEnabled());
+      await user.type(input, `再送${label}`);
+      await user.click(within(panel).getByRole("button", { name: "追加" }));
+      expect(await within(panel).findByText("(追加中…)")).toBeInTheDocument();
+      expect(within(panel).getByRole("button", { name: "追加中" })).toBeDisabled();
+      response.resolve();
+      expect(await within(panel).findByRole("alert")).not.toBeEmptyDOMElement();
+      expect(within(panel).queryByText("(追加中…)")).not.toBeInTheDocument();
+      expect(input).toHaveValue(`再送${label}`);
+      await user.click(within(panel).getByRole("button", { name: "追加" }));
+      expect(await within(panel).findByText(`${label}を追加しました`)).toBeInTheDocument();
+      expect(within(panel).getByText(`再送${label}`)).toBeInTheDocument();
+      await waitFor(() => {
+        expect(within(panel).getByRole("button", { name: "追加" })).toBeEnabled();
+        expect(within(panel).getByRole("textbox", { name: "名称" })).toHaveValue("");
+      });
+      expect(submissions).toHaveLength(2);
+      expect(submissions[1]).toEqual(submissions[0]);
+      expect(submissions[1]?.payload.gameTitleId).toBe("gt_momotetsu_2");
+    },
+  );
+
+  it("retains the selected player and alias after an unsuccessful creation Action", async () => {
+    setDevUser();
+    const submissions: Array<{ key: string | null; payload: { alias: string; memberId: string } }> =
+      [];
+    server.use(
+      http.post("/api/member-aliases", async ({ request }) => {
+        const payload = (await request.json()) as (typeof submissions)[number]["payload"];
+        submissions.push({ key: request.headers.get("Idempotency-Key"), payload });
+        if (submissions.length === 1)
+          return HttpResponse.json({ detail: "unavailable" }, { status: 503 });
+        const created = { ...payload, id: "alias-retried", createdAt: "2026-01-01T00:00:00.000Z" };
+        mswState.memberAliases.push(created);
+        return HttpResponse.json(created);
+      }),
+    );
+    renderPage("/admin/masters?tab=aliases");
+    const player = await screen.findByRole("combobox", { name: "プレーヤー" });
+    const alias = screen.getByRole("textbox", { name: /別名/u });
+    await selectOption(user, player, "member_ponta");
+    await user.type(alias, "再送別名");
+    await user.click(screen.getByRole("button", { name: "追加" }));
+    expect(await screen.findByRole("alert")).not.toBeEmptyDOMElement();
+    expect(alias).toHaveValue("再送別名");
+    expect(player).toHaveTextContent("ぽんた");
+    await user.click(screen.getByRole("button", { name: "追加" }));
+    expect(await screen.findByText("別名を追加しました")).toBeInTheDocument();
+    expect(screen.getByText("再送別名")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "追加" })).toBeEnabled();
+      expect(screen.getByRole("textbox", { name: /別名/u })).toHaveValue("");
+    });
+    expect(submissions[1]).toEqual(submissions[0]);
   });
 
   it("invalidates consumer-facing master caches after creating a game title", async () => {
@@ -690,7 +897,7 @@ describe("MastersPage", () => {
     await user.click(within(dialog).getByRole("button", { name: "追加" }));
 
     await refreshStarted.promise;
-    expect(screen.getByRole("radio", { name: "桃鉄DX（追加中）", hidden: true })).toBeChecked();
+    expect(screen.getByRole("radio", { name: "桃鉄DX", hidden: true })).toBeChecked();
 
     refreshGate.resolve();
     expect(await screen.findByRole("radio", { name: "桃鉄DX" })).toBeChecked();

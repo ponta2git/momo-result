@@ -5,7 +5,7 @@ import type { HeldEventResponse } from "@/shared/api/heldEvents";
 import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import { shouldShowQueryError } from "@/shared/api/queryErrorState";
 import { heldEventDetailQueryOptions, heldEventsQueryOptions } from "@/shared/api/queryOptions";
-import { useRetryNotice } from "@/shared/ui/feedback/useRetryNotice";
+import { useRetryNotice } from "@/shared/lib/useRetryNotice";
 
 export const heldEventPickerPageSize = 20;
 

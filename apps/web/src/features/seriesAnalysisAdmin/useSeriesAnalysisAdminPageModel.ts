@@ -12,7 +12,7 @@ import {
 } from "@/shared/api/seriesAnalysis";
 import { seriesAnalysisAdminOverviewQueryOptions } from "@/shared/api/seriesAnalysisQueryOptions";
 import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
-import { useRetryNotice } from "@/shared/ui/feedback/useRetryNotice";
+import { useRetryNotice } from "@/shared/lib/useRetryNotice";
 
 type AcceptanceMessage = { detail: string; title: string };
 

@@ -1,5 +1,6 @@
 import type {
   ChangeDirection,
+  SeriesAnalysisPlayer,
   RelativeIntensity,
   SeriesAnalysisPlaybookCategory,
   SeriesAnalysisPlaybookClassification,
@@ -77,25 +78,18 @@ export function directionLabel(direction: ChangeDirection | "unavailable"): stri
   }
 }
 
+const headToHeadSignalLabels = new Map([
+  ["strong_advantage", "優勢"],
+  ["slight_advantage", "やや優勢"],
+  ["strong_disadvantage", "劣勢"],
+  ["slight_disadvantage", "やや劣勢"],
+  ["neutral", "互角"],
+  ["reference", "参考"],
+  ["no_target", "対象なし"],
+]);
+
 export function headToHeadSignalLabel(signal: string | undefined): string {
-  switch (signal) {
-    case "strong_advantage":
-      return "優勢";
-    case "slight_advantage":
-      return "やや優勢";
-    case "strong_disadvantage":
-      return "劣勢";
-    case "slight_disadvantage":
-      return "やや劣勢";
-    case "neutral":
-      return "互角";
-    case "reference":
-      return "参考";
-    case "no_target":
-      return "対象なし";
-    default:
-      return "—";
-  }
+  return headToHeadSignalLabels.get(signal ?? "") ?? "—";
 }
 
 export function playbookCategoryLabel(category: SeriesAnalysisPlaybookCategory): string {
@@ -130,103 +124,84 @@ export function classificationLabel(value: SeriesAnalysisPlaybookClassification)
   }
 }
 
+const evidenceStrengthLabels = new Map([
+  ["high", "高め"],
+  ["medium", "中"],
+]);
+
 export function evidenceStrengthLabel(
   value: SeriesAnalysisPlaybookEvidenceStrength | undefined,
 ): string {
-  switch (value) {
-    case "high":
-      return "高め";
-    case "medium":
-      return "中";
-    default:
-      return "控えめ";
-  }
+  return evidenceStrengthLabels.get(value ?? "") ?? "控えめ";
 }
+
+const timelineFlagLabels = new Map([
+  ["revenue_top_no_win", "収益首位でも未勝利"],
+  ["ginji_storm", "銀次が複数回"],
+  ["close_finish", "接戦"],
+  ["asset_blowout", "資産差大"],
+]);
 
 export function timelineFlagLabel(value: string): string {
-  switch (value) {
-    case "revenue_top_no_win":
-      return "収益首位でも未勝利";
-    case "ginji_storm":
-      return "銀次が複数回";
-    case "close_finish":
-      return "接戦";
-    case "asset_blowout":
-      return "資産差大";
-    default:
-      return "その他の注目点";
-  }
+  return timelineFlagLabels.get(value) ?? "その他の注目点";
 }
+
+const matchFeatureLabels = new Map([
+  ["close_finish", "上位が接戦"],
+  ["asset_blowout", "総資産差が大きい"],
+  ["revenue_top_no_win", "物件収益首位が未勝利"],
+  ["ginji_storm", "スリの銀次が複数回"],
+  ["negative_assets", "マイナス資産あり"],
+  ["no_destination", "目的地到着なし"],
+]);
 
 export function matchFeatureLabel(code: string): string {
-  switch (code) {
-    case "close_finish":
-      return "上位が接戦";
-    case "asset_blowout":
-      return "総資産差が大きい";
-    case "revenue_top_no_win":
-      return "物件収益首位が未勝利";
-    case "ginji_storm":
-      return "スリの銀次が複数回";
-    case "negative_assets":
-      return "マイナス資産あり";
-    case "no_destination":
-      return "目的地到着なし";
-    default:
-      return "試合上の注目点";
-  }
+  return matchFeatureLabels.get(code) ?? "試合上の注目点";
 }
+
+const cardShopKindLabels = new Map([
+  ["destination_with_shop", "目的地あり・売り場あり"],
+  ["destination_without_shop", "目的地あり・売り場なし"],
+  ["no_destination_with_shop", "目的地なし・売り場あり"],
+  ["no_destination_without_shop", "目的地なし・売り場なし"],
+]);
 
 export function cardShopKindLabel(kind: string): string {
-  switch (kind) {
-    case "destination_with_shop":
-      return "目的地あり・売り場あり";
-    case "destination_without_shop":
-      return "目的地あり・売り場なし";
-    case "no_destination_with_shop":
-      return "目的地なし・売り場あり";
-    case "no_destination_without_shop":
-      return "目的地なし・売り場なし";
-    default:
-      return "条件不明";
-  }
+  return cardShopKindLabels.get(kind) ?? "条件不明";
 }
+
+const profileLabels = new Map([
+  ["steady_leader", "安定先行"],
+  ["swing_leader", "変動先行"],
+  ["steady_chaser", "安定追走"],
+  ["swing_chaser", "変動追走"],
+  ["property_focused", "桃鉄型（物件重視）"],
+  ["card_focused", "遊戯王型（カード重視）"],
+  ["balanced", "均衡"],
+]);
 
 export function profileLabel(value: string | null): string {
-  switch (value) {
-    case "steady_leader":
-      return "安定先行";
-    case "swing_leader":
-      return "変動先行";
-    case "steady_chaser":
-      return "安定追走";
-    case "swing_chaser":
-      return "変動追走";
-    case "property_focused":
-      return "桃鉄型（物件重視）";
-    case "card_focused":
-      return "遊戯王型（カード重視）";
-    case "balanced":
-      return "均衡";
-    default:
-      return "—";
-  }
+  return profileLabels.get(value ?? "") ?? "—";
 }
 
+const highlightMetricLabels = new Map([
+  ["rank.average", "平均順位が最上位"],
+  ["assets.average", "平均総資産が最大"],
+  ["revenue.average", "平均物件収益が最大"],
+  ["podium.rate", "入賞率が最大"],
+]);
+
 export function highlightMetricLabel(metricId: string): string {
-  switch (metricId) {
-    case "rank.average":
-      return "平均順位が最上位";
-    case "assets.average":
-      return "平均総資産が最大";
-    case "revenue.average":
-      return "平均物件収益が最大";
-    case "podium.rate":
-      return "入賞率が最大";
-    default:
-      return "比較上位";
-  }
+  return highlightMetricLabels.get(metricId) ?? "比較上位";
 }
+
+const reviewEvidenceLabels = new Map([
+  ["revenue.topWinRate", "収益上位時の勝率"],
+  ["playbook.driver.destinationCount", "目的地到着数との関係"],
+  ["playbook.driver.revenueRank", "物件収益順位との関係"],
+  ["playbook.driver.incidentAvoidance", "事故回避との関係"],
+  ["playbook.driver.cardShop", "カード売り場との関係"],
+]);
 
 export function formatHighlightValue(metricId: string, value: number): string {
   if (metricId === "assets.average" || metricId === "revenue.average") {
@@ -238,18 +213,15 @@ export function formatHighlightValue(metricId: string, value: number): string {
 }
 
 export function reviewEvidenceLabel(metricId: string): string {
-  switch (metricId) {
-    case "revenue.topWinRate":
-      return "収益上位時の勝率";
-    case "playbook.driver.destinationCount":
-      return "目的地到着数との関係";
-    case "playbook.driver.revenueRank":
-      return "物件収益順位との関係";
-    case "playbook.driver.incidentAvoidance":
-      return "事故回避との関係";
-    case "playbook.driver.cardShop":
-      return "カード売り場との関係";
-    default:
-      return "判断材料";
-  }
+  return reviewEvidenceLabels.get(metricId) ?? "判断材料";
+}
+
+export function playerName(players: SeriesAnalysisPlayer[], memberId: string): string {
+  return (
+    players.find((player) => player.memberId === memberId)?.displayName ?? "プレーヤー名未取得"
+  );
+}
+
+export function memberNames(players: SeriesAnalysisPlayer[], memberIds: string[]): string {
+  return memberIds.map((memberId) => playerName(players, memberId)).join("、") || "—";
 }

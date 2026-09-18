@@ -1,5 +1,5 @@
 import type { CaptureSlotState } from "@/features/ocrCapture/captureState";
-import type { SlotKind } from "@/shared/api/enums";
+import type { SlotKind } from "@/shared/domain/ocr";
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
 import { contentText } from "@/shared/ui/typography";

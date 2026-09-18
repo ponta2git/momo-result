@@ -1,3 +1,5 @@
+import { memo } from "react";
+
 import { MatchListExportLink } from "@/features/matches/list/MatchListExportLink";
 import { MatchListMatchIdentity } from "@/features/matches/list/MatchListMatchIdentity";
 import { MatchListRankSummary } from "@/features/matches/list/MatchListRankSummary";
@@ -14,7 +16,10 @@ type MatchMobileCardProps = {
   rowActions: MatchListRowActions;
 };
 
-export function MatchMobileCard({ item, rowActions }: MatchMobileCardProps) {
+export const MatchMobileCard = memo(function MatchMobileCard({
+  item,
+  rowActions,
+}: MatchMobileCardProps) {
   const actionsDisabled = rowActions.disabled ?? false;
 
   return (
@@ -42,4 +47,4 @@ export function MatchMobileCard({ item, rowActions }: MatchMobileCardProps) {
       </div>
     </article>
   );
-}
+});

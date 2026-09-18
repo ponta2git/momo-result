@@ -1,12 +1,12 @@
 import { ArrowUpRight, Search } from "lucide-react";
 
 import {
+  playerName,
   formatDateTime,
   formatManYen,
   timelineFlagLabel,
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
 import { SeriesAnalysisMatchLink } from "@/features/seriesComparison/navigation/SeriesAnalysisMatchLink";
-import { playerName } from "@/features/seriesComparison/page/SeriesAnalysisViewPrimitives";
 import { SeriesAnalysisQualityAdvisory } from "@/features/seriesComparison/SeriesAnalysisQualityAdvisory";
 import type { SeriesComparisonAggregate } from "@/shared/api/seriesAnalysis";
 import { formatSeriesMatchIndex } from "@/shared/domain/matchLabels";
@@ -19,11 +19,13 @@ const flagOrder = ["close_finish", "asset_blowout", "ginji_storm", "revenue_top_
 export function MatchDigestStrip({
   focusedItemIds,
   onFocusMatch,
-  response,
+  players,
+  digest,
 }: {
   focusedItemIds: readonly string[];
   onFocusMatch: (matchId: string) => void;
-  response: SeriesComparisonAggregate;
+  players: SeriesComparisonAggregate["players"];
+  digest: SeriesComparisonAggregate["matchDigest"];
 }) {
   return (
     <div className="grid gap-4">
@@ -32,17 +34,17 @@ export function MatchDigestStrip({
           <div className="min-w-0" key={flag}>
             <dt className={contentText.supporting}>{timelineFlagLabel(flag)}</dt>
             <dd className={cn(contentText.body, "mt-0.5 tabular-nums")}>
-              {response.matchDigest.flagCounts[flag] ?? 0}戦
+              {digest.flagCounts[flag] ?? 0}戦
             </dd>
           </div>
         ))}
       </dl>
-      {response.matchDigest.recent.length === 0 ? (
+      {digest.recent.length === 0 ? (
         <p className={cn(contentText.body, "py-3")}>対象試合はありません。</p>
       ) : (
         <div className="[scrollbar-width:thin] [scrollbar-color:var(--color-border)_transparent] overflow-x-auto pb-1">
           <div className="flex min-w-max gap-4">
-            {response.matchDigest.recent.toReversed().map((match) => {
+            {digest.recent.toReversed().map((match) => {
               const focused = focusedItemIds.includes(match.itemId);
               return (
                 <article
@@ -62,7 +64,7 @@ export function MatchDigestStrip({
                       </SeriesAnalysisMatchLink>
                       <p className={cn(contentText.compactPrimary, "mt-0.5 break-words")}>
                         {match.winnerMemberId
-                          ? playerName(response.players, match.winnerMemberId)
+                          ? playerName(players, match.winnerMemberId)
                           : "勝者不明"}
                       </p>
                     </div>

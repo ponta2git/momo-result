@@ -1,10 +1,10 @@
 import { render } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import { DataVizHistogramChart } from "@/shared/ui/dataViz/HistogramChart";
-import { DataVizLineChart } from "@/shared/ui/dataViz/LineChart";
-import { DataVizQuadrantPlot } from "@/shared/ui/dataViz/QuadrantPlot";
-import { DataVizScatterPlot } from "@/shared/ui/dataViz/ScatterPlot";
+import { DataVizHistogramChart } from "@/features/seriesComparison/charts/dataViz/HistogramChart";
+import { DataVizLineChart } from "@/features/seriesComparison/charts/dataViz/LineChart";
+import { DataVizQuadrantPlot } from "@/features/seriesComparison/charts/dataViz/QuadrantPlot";
+import { DataVizScatterPlot } from "@/features/seriesComparison/charts/dataViz/ScatterPlot";
 
 const identities = [1, 2, 3, 4].map((index) => ({
   id: `player-${index}`,

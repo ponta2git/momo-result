@@ -3,7 +3,7 @@ import {
   formatDecimal,
   formatPercent,
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
-import type { AnalysisViewProps } from "@/features/seriesComparison/page/SeriesAnalysisViewPrimitives";
+import type { AnalysisViewProps } from "@/features/seriesComparison/model/seriesAnalysisViewTypes";
 import {
   AnalysisSection,
   MetricValue,
@@ -12,9 +12,9 @@ import {
   qualityAdvisoryLabel,
   SeriesAnalysisQualityAdvisory,
 } from "@/features/seriesComparison/SeriesAnalysisQualityAdvisory";
+import { MemberSequenceLabel } from "@/shared/matches/MemberSequenceLabel";
 import { cn } from "@/shared/ui/cn";
 import { Disclosure } from "@/shared/ui/data/Collapsible";
-import { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
 import { contentText } from "@/shared/ui/typography";
 
 type Response = AnalysisViewProps["response"];
@@ -26,7 +26,10 @@ export function RevenueOutcomeSection({
 }: Pick<AnalysisViewProps, "focusedItemIds" | "response">) {
   return (
     <AnalysisSection id="metric-revenue-outcome" title="物件収益と最終順位">
-      <RevenueConversionMatrices focusedItemIds={focusedItemIds} response={response} />
+      <RevenueConversionMatrices
+        focusedItemIds={focusedItemIds}
+        entries={response.revenueRankConversion}
+      />
       <div className="mt-4 grid gap-x-6 gap-y-8 md:grid-cols-2 xl:grid-cols-4">
         {response.metricsByPlayer.map((metric) => (
           <article className="min-w-0" key={metric.memberId}>

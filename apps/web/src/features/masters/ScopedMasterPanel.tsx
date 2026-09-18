@@ -14,6 +14,7 @@ type MasterCreateBinding = {
   action: (formData: FormData) => void | Promise<void>;
   error?: string | undefined;
   formKey?: string | number | undefined;
+  pending?: boolean | undefined;
 };
 
 type ScopedMasterActions = {
@@ -164,6 +165,7 @@ export function ScopedMasterPanel({
           }
           error={create.error}
           formKey={create.formKey}
+          pending={create.pending}
           label="名称"
           submitLabel="追加"
         />

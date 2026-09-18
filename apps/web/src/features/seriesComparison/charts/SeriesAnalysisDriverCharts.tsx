@@ -1,14 +1,9 @@
 import { useLocation } from "react-router-dom";
 
-import {
-  AnalysisMatrix,
-  MatrixAxisHeader,
-  MatrixCell,
-  MatrixColumnHeader,
-  MatrixRowHeader,
-  MatrixValueLegend,
-  SERIES_RANKS,
-} from "@/features/seriesComparison/charts/SeriesAnalysisMatrix";
+import { DataVizHistogramChart } from "@/features/seriesComparison/charts/dataViz/HistogramChart";
+import { DataVizScatterPlot } from "@/features/seriesComparison/charts/dataViz/ScatterPlot";
+import { MatrixValueLegend } from "@/features/seriesComparison/charts/SeriesAnalysisMatrix";
+import { RankTransitionMatrix } from "@/features/seriesComparison/charts/SeriesAnalysisRankTransitionMatrix";
 import {
   formatHistogramManYenBin,
   formatManYen,
@@ -16,61 +11,56 @@ import {
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
 import type { SeriesComparisonAggregate } from "@/shared/api/seriesAnalysis";
 import { formatSeriesMatchIndex } from "@/shared/domain/matchLabels";
+import { MemberSequenceLabel } from "@/shared/matches/MemberSequenceLabel";
 import { currentInternalLocation, withReturnTo } from "@/shared/navigation/returnTo";
 import { cn } from "@/shared/ui/cn";
-import { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
-import { DataVizHistogramChart } from "@/shared/ui/dataViz/HistogramChart";
-import { DataVizScatterPlot } from "@/shared/ui/dataViz/ScatterPlot";
-import { rankBackgroundColor, rankBorderColor } from "@/shared/ui/rank/rankPresentation";
 import { contentText } from "@/shared/ui/typography";
 
-export function AssetRevenueHistograms({ response }: { response: SeriesComparisonAggregate }) {
-  const seriesIdentity = response.players.map((player) => ({
+export function AssetRevenueHistograms({
+  players,
+  histograms,
+}: {
+  players: SeriesComparisonAggregate["players"];
+  histograms: SeriesComparisonAggregate["histograms"];
+}) {
+  const seriesIdentity = players.map((player) => ({
     id: player.memberId,
     label: player.displayName,
   }));
   return (
     <div className="grid gap-6">
-      <div>
-        <h3 className={cn(contentText.heading, "mb-2")}>総資産の分布</h3>
-        <DataVizHistogramChart
-          ariaLabel="4人の総資産分布"
-          bins={response.histograms.assets.bins.map((bin) => ({
-            id: bin.index,
-            label: formatHistogramManYenBin(bin),
-          }))}
-          series={response.histograms.assets.series.map((series) => ({
-            counts: series.counts,
-            id: series.memberId,
-          }))}
-          seriesIdentity={seriesIdentity}
-        />
-      </div>
-      <div>
-        <h3 className={cn(contentText.heading, "mb-2")}>物件収益の分布</h3>
-        <DataVizHistogramChart
-          ariaLabel="4人の物件収益分布"
-          bins={response.histograms.revenue.bins.map((bin) => ({
-            id: bin.index,
-            label: formatHistogramManYenBin(bin),
-          }))}
-          series={response.histograms.revenue.series.map((series) => ({
-            counts: series.counts,
-            id: series.memberId,
-          }))}
-          seriesIdentity={seriesIdentity}
-        />
-      </div>
+      {(
+        [
+          ["assets", "総資産"],
+          ["revenue", "物件収益"],
+        ] as const
+      ).map(([key, label]) => (
+        <div key={key}>
+          <h3 className={cn(contentText.heading, "mb-2")}>{label}の分布</h3>
+          <DataVizHistogramChart
+            ariaLabel={`4人の${label}分布`}
+            bins={histograms[key].bins.map((bin) => ({
+              id: bin.index,
+              label: formatHistogramManYenBin(bin),
+            }))}
+            series={histograms[key].series.map((series) => ({
+              counts: series.counts,
+              id: series.memberId,
+            }))}
+            seriesIdentity={seriesIdentity}
+          />
+        </div>
+      ))}
     </div>
   );
 }
 
 export function RevenueConversionMatrices({
   focusedItemIds,
-  response,
+  entries,
 }: {
   focusedItemIds: readonly string[];
-  response: SeriesComparisonAggregate;
+  entries: SeriesComparisonAggregate["revenueRankConversion"];
 }) {
   return (
     <div className="grid gap-2">
@@ -86,10 +76,7 @@ export function RevenueConversionMatrices({
         ]}
       />
       <div className="grid gap-4 lg:grid-cols-2">
-        {response.revenueRankConversion.map((entry) => {
-          const cellByRanks = new Map(
-            entry.cells.map((cell) => [`${cell.revenueRank}:${cell.finalRank}`, cell]),
-          );
+        {entries.map((entry) => {
           return (
             <article
               className="min-w-0 rounded-sm border border-[var(--color-border)] bg-[var(--color-surface)] p-4"
@@ -100,87 +87,12 @@ export function RevenueConversionMatrices({
                   {entry.displayName}
                 </MemberSequenceLabel>
               </h3>
-              <AnalysisMatrix
+              <RankTransitionMatrix
                 ariaLabel={`${entry.displayName}の物件収益順位と最終順位`}
-                className="min-w-[25rem] table-fixed"
-              >
-                <thead>
-                  <tr>
-                    <MatrixAxisHeader
-                      className="w-[4.5rem] px-1"
-                      columnLabel="最終順位"
-                      rowLabel="収益順位"
-                    />
-                    {SERIES_RANKS.map((rank) => (
-                      <MatrixColumnHeader
-                        className="px-1 py-1 text-xs"
-                        key={rank}
-                        style={{ borderTopColor: rankBorderColor(rank), borderTopWidth: 3 }}
-                      >
-                        最終{rank}位
-                      </MatrixColumnHeader>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {SERIES_RANKS.map((revenueRank) => (
-                    <tr key={revenueRank}>
-                      <MatrixRowHeader className="px-1 text-xs">
-                        収益{revenueRank}位
-                      </MatrixRowHeader>
-                      {SERIES_RANKS.map((finalRank) => {
-                        const cell = cellByRanks.get(`${revenueRank}:${finalRank}`);
-                        if (!cell) {
-                          return (
-                            <MatrixCell
-                              aria-label={`収益${revenueRank}位から最終${finalRank}位、対象なし`}
-                              className="rounded-xs border border-[var(--color-border)] bg-[var(--color-surface)] px-1 py-2 text-center"
-                              key={finalRank}
-                            >
-                              —
-                            </MatrixCell>
-                          );
-                        }
-                        const focused = focusedItemIds.includes(cell.itemId);
-                        return (
-                          <MatrixCell
-                            aria-label={`収益${cell.revenueRank}位から最終${cell.finalRank}位、${cell.count}戦、${formatPercent(cell.rate)}${focused ? "、この試合" : ""}`}
-                            className={`rounded-xs border px-1 py-2 text-center ${focused ? "ring-2 ring-[var(--color-action)] ring-offset-1 ring-offset-[var(--color-surface)]" : ""}`}
-                            data-focused-metric={focused ? "true" : undefined}
-                            key={finalRank}
-                            style={
-                              cell.count === 0
-                                ? {
-                                    backgroundColor: "var(--color-surface)",
-                                    borderColor: "var(--color-border)",
-                                  }
-                                : {
-                                    backgroundColor: rankBackgroundColor(
-                                      cell.finalRank,
-                                      cell.rate ?? 0,
-                                    ),
-                                    borderColor: rankBorderColor(cell.finalRank),
-                                  }
-                            }
-                          >
-                            <strong className={cn(contentText.compactPrimary, "tabular-nums")}>
-                              {cell.count}
-                            </strong>
-                            <p className={cn(contentText.body, "tabular-nums")}>
-                              {formatPercent(cell.rate)}
-                            </p>
-                            {focused ? (
-                              <p className="font-plain mt-0.5 text-xs text-[var(--color-action)]">
-                                この試合
-                              </p>
-                            ) : null}
-                          </MatrixCell>
-                        );
-                      })}
-                    </tr>
-                  ))}
-                </tbody>
-              </AnalysisMatrix>
+                cells={entry.cells}
+                focusedItemIds={focusedItemIds}
+                kind="revenue"
+              />
             </article>
           );
         })}
@@ -191,10 +103,12 @@ export function RevenueConversionMatrices({
 
 export function StrategyScatter({
   focusedItemIds,
-  response,
+  players,
+  points,
 }: {
   focusedItemIds: readonly string[];
-  response: SeriesComparisonAggregate;
+  players: SeriesComparisonAggregate["players"];
+  points: SeriesComparisonAggregate["strategyScatter"]["points"];
 }) {
   const returnTo = currentInternalLocation(useLocation());
   return (
@@ -203,7 +117,7 @@ export function StrategyScatter({
       focusItemIds={focusedItemIds}
       formatX={formatPercent}
       formatY={formatManYen}
-      points={response.strategyScatter.points.flatMap((point) =>
+      points={points.flatMap((point) =>
         point.revenueAssetRate === null
           ? []
           : [
@@ -217,7 +131,7 @@ export function StrategyScatter({
               },
             ],
       )}
-      seriesIdentity={response.players.map((player) => ({
+      seriesIdentity={players.map((player) => ({
         id: player.memberId,
         label: player.displayName,
       }))}

@@ -1,11 +1,11 @@
 import { GameTitleList } from "@/features/masters/GameTitleList";
 import { ScopedMasterPanel } from "@/features/masters/ScopedMasterPanel";
-import type { LayoutFamily } from "@/shared/api/enums";
 import type {
   GameTitleResponse,
   MapMasterResponse,
   SeasonMasterResponse,
 } from "@/shared/api/masters";
+import type { LayoutFamily } from "@/shared/domain/ocr";
 import { PendingStatus } from "@/shared/ui/feedback/PendingStatus";
 
 type GameTitleListItem = GameTitleResponse & { pending?: boolean };

@@ -9,7 +9,7 @@ import { heldEventDetailQueryOptions, heldEventsQueryOptions } from "@/shared/ap
 import {
   heldEventPickerPageSize,
   useHeldEventPickerDirectory,
-} from "@/shared/api/useHeldEventPickerDirectory";
+} from "@/shared/heldEvents/useHeldEventPickerDirectory";
 import { createTestQueryClient } from "@/test/queryClient";
 
 function heldEvent(id: string, heldAt: string): HeldEventResponse {

@@ -2,13 +2,13 @@ import type {
   MatchDraftSummary,
   MatchFormValues,
 } from "@/features/matches/workspace/matchFormTypes";
-import { slotKinds } from "@/shared/api/enums";
 import type { MatchDraftDetailResponse } from "@/shared/api/matchDrafts";
 import type { OcrDraftResponse } from "@/shared/api/ocrDrafts";
 import type { NormalizedApiError } from "@/shared/api/problemDetails";
+import { slotKinds } from "@/shared/domain/ocr";
+import { bySlot } from "@/shared/domain/slotMap";
+import type { SlotMap } from "@/shared/domain/slotMap";
 import { trimSearchParam } from "@/shared/lib/searchParams";
-import { bySlot } from "@/shared/lib/slotMap";
-import type { SlotMap } from "@/shared/lib/slotMap";
 
 export function draftIdsFromParams(searchParams: URLSearchParams): SlotMap<string> {
   return bySlot([

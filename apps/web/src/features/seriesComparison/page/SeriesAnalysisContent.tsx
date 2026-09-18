@@ -1,11 +1,11 @@
-import { lazy, memo, Suspense, useRef, useState } from "react";
+import { lazy, memo, Suspense, useCallback, useRef, useState } from "react";
 import type { RefObject } from "react";
 
-import type { SeriesAnalysisDrilldownSelection } from "@/features/seriesComparison/drilldowns/SeriesAnalysisDrilldownContent";
 import { SeriesAnalysisDrilldownLoading } from "@/features/seriesComparison/drilldowns/SeriesAnalysisDrilldownLoading";
 import type { SeriesAnalysisDisplayBundle } from "@/features/seriesComparison/model/seriesAnalysisDisplayBundle";
 import type { OwnerMetricId } from "@/features/seriesComparison/model/seriesAnalysisOwnerMetrics";
 import type { SeriesAnalysisViewId } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
+import type { SeriesAnalysisDrilldownSelection } from "@/features/seriesComparison/model/seriesAnalysisViewTypes";
 import { SeriesAnalysisArrival } from "@/features/seriesComparison/navigation/SeriesAnalysisNavigation";
 import { ReviewView } from "@/features/seriesComparison/page/SeriesAnalysisReviewView";
 import { SeriesAnalysisSelectedMatch } from "@/features/seriesComparison/page/SeriesAnalysisSelectedMatch";
@@ -25,6 +25,7 @@ import type {
 import { loadLazyModule } from "@/shared/lib/moduleLoadError";
 import { Dialog } from "@/shared/ui/feedback/Dialog";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
+import { StaleShield } from "@/shared/ui/motion/StaleShield";
 
 const loadOverviewView = () =>
   loadLazyModule(() =>
@@ -96,6 +97,7 @@ type SeriesAnalysisContentProps = {
   activeView?: SeriesAnalysisViewId;
   bundle: SeriesAnalysisDisplayBundle;
   navigationReady?: boolean;
+  shielded?: boolean;
   onArtifactExpired: () => void;
   onClearFocusedMatch: () => void;
   onFocusMatch: (matchId: string) => void;
@@ -117,6 +119,7 @@ export const SeriesAnalysisContent = memo(function SeriesAnalysisContent({
   bundle,
   activeView = bundle.view,
   navigationReady = true,
+  shielded = false,
   ownerMetric = "rank.average",
   onOwnerMetricChange,
   onArtifactExpired,
@@ -127,17 +130,29 @@ export const SeriesAnalysisContent = memo(function SeriesAnalysisContent({
   const resource = bundle.kind === "review" ? bundle.review : bundle.aggregate;
   const { matchContext } = bundle;
   const artifactId = resource.artifact.artifactId;
-  const contentIdentity = `${artifactId}:${activeView}`;
+  const contentIdentity = `${artifactId}:${bundle.view}`;
   const root = useRef<HTMLDivElement>(null);
 
   return (
     <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4" ref={root}>
       {matchContext ? (
-        <SeriesAnalysisSelectedMatch context={matchContext} onClear={onClearFocusedMatch} />
+        <StaleShield
+          active={shielded}
+          fallback={null}
+          statusPlacement="external"
+          strategy="preserve-inert"
+        >
+          <SeriesAnalysisSelectedMatch context={matchContext} onClear={onClearFocusedMatch} />
+        </StaleShield>
       ) : null}
       <PurposeTabs activeView={activeView} onViewChange={onViewChange} />
       {activeView === "review" ? (
-        <>
+        <StaleShield
+          active={shielded}
+          fallback={null}
+          statusPlacement="external"
+          strategy="preserve-inert"
+        >
           <ReviewView
             loading={bundle.kind !== "review"}
             response={bundle.kind === "review" ? bundle.review : undefined}
@@ -145,7 +160,7 @@ export const SeriesAnalysisContent = memo(function SeriesAnalysisContent({
             onViewChange={onViewChange}
           />
           <SeriesAnalysisArrival ready={navigationReady && bundle.kind === "review"} root={root} />
-        </>
+        </StaleShield>
       ) : (
         <div
           aria-labelledby={purposeTabId("analysis")}
@@ -157,21 +172,28 @@ export const SeriesAnalysisContent = memo(function SeriesAnalysisContent({
             <AnalysisTabs activeView={activeView} onViewChange={onViewChange} />
             <div className="justify-self-start sm:justify-self-end">
               {bundle.kind === "analysis" ? (
-                <MetricDefinitions response={bundle.aggregate} />
+                <MetricDefinitions definitions={bundle.aggregate.metricDefinitions} />
               ) : null}
             </div>
           </div>
           {bundle.kind === "analysis" ? (
-            <AnalysisViewContent
-              ownerMetric={ownerMetric}
-              onOwnerMetricChange={onOwnerMetricChange}
-              bundle={bundle}
-              key={contentIdentity}
-              navigationReady={navigationReady}
-              root={root}
-              onArtifactExpired={onArtifactExpired}
-              onFocusMatch={onFocusMatch}
-            />
+            <StaleShield
+              active={shielded}
+              fallback={null}
+              statusPlacement="external"
+              strategy="preserve-inert"
+            >
+              <AnalysisViewContent
+                ownerMetric={ownerMetric}
+                onOwnerMetricChange={onOwnerMetricChange}
+                bundle={bundle}
+                key={contentIdentity}
+                navigationReady={navigationReady}
+                root={root}
+                onArtifactExpired={onArtifactExpired}
+                onFocusMatch={onFocusMatch}
+              />
+            </StaleShield>
           ) : (
             <AnalysisViewLoading view={activeView} />
           )}
@@ -201,9 +223,9 @@ function AnalysisViewContent({
   // A drilldown belongs to one artifact/view. This subtree remounts when either identity changes,
   // while the tab lists remain mounted so their focus does not move back to the document.
   const [drilldown, setDrilldown] = useState<DrilldownDialogState | null>(null);
-  const openDrilldown = (selection: SeriesAnalysisDrilldownSelection) => {
+  const openDrilldown = useCallback((selection: SeriesAnalysisDrilldownSelection) => {
     setDrilldown({ open: true, selection });
-  };
+  }, []);
   const focusedItemIds = bundle.matchContext?.match?.focusedItemIds ?? noFocusedItemIds;
   const scope = bundle.aggregate.scope;
   const baseQuery: SeriesAnalysisQuery = {

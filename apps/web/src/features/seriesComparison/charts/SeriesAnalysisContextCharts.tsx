@@ -14,20 +14,20 @@ import {
   formatPercent,
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
 import type { RelativeIntensity, SeriesComparisonAggregate } from "@/shared/api/seriesAnalysis";
+import { MemberSequenceLabel } from "@/shared/matches/MemberSequenceLabel";
+import { PlayOrderMark } from "@/shared/matches/PlayOrderMark";
+import { colorMix } from "@/shared/matches/rankPresentation";
 import { cn } from "@/shared/ui/cn";
-import { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
-import { PlayOrderMark } from "@/shared/ui/data/PlayOrderMark";
-import { colorMix } from "@/shared/ui/rank/rankPresentation";
 import { contentText } from "@/shared/ui/typography";
 
 const PLAY_ORDERS = [1, 2, 3, 4] as const;
 
 export function PlayOrderMatrix({
   focusedItemIds,
-  response,
+  entries,
 }: {
   focusedItemIds: readonly string[];
-  response: SeriesComparisonAggregate;
+  entries: SeriesComparisonAggregate["playOrderComparison"];
 }) {
   return (
     <AnalysisMatrix ariaLabel="番手別成績" className="min-w-[42rem] table-fixed">
@@ -42,7 +42,7 @@ export function PlayOrderMatrix({
         </tr>
       </thead>
       <tbody>
-        {response.playOrderComparison.map((entry) => {
+        {entries.map((entry) => {
           const cellByPlayOrder = new Map(entry.cells.map((cell) => [cell.playOrder, cell]));
           return (
             <tr key={entry.memberId}>
@@ -165,14 +165,14 @@ function relativeIntensityAlpha(intensity: RelativeIntensity): number {
 
 export function CardShopDestinationQuadrants({
   focusedItemIds,
-  response,
+  entries,
 }: {
   focusedItemIds: readonly string[];
-  response: SeriesComparisonAggregate;
+  entries: SeriesComparisonAggregate["cardShopDestination"];
 }) {
   return (
     <div className="grid gap-4 lg:grid-cols-2">
-      {response.cardShopDestination.map((entry) => (
+      {entries.map((entry) => (
         <article
           className="rounded-sm border border-[var(--color-border)] bg-[var(--color-surface)] p-4"
           key={entry.memberId}

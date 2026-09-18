@@ -1,3 +1,5 @@
+import { DataVizLineChart } from "@/features/seriesComparison/charts/dataViz/LineChart";
+import { playOrderSeriesId } from "@/features/seriesComparison/charts/dataViz/seriesPresentation";
 import {
   formatDateTime,
   formatDecimal,
@@ -10,13 +12,11 @@ import {
 } from "@/features/seriesComparison/SeriesAnalysisQualityAdvisory";
 import type { SeriesAnalysisDrilldownV3 } from "@/shared/api/seriesAnalysis";
 import { formatMatchNoInEvent, formatSeriesMatchIndex } from "@/shared/domain/matchLabels";
+import { PlayOrderMark, playOrderPresentation } from "@/shared/matches/PlayOrderMark";
+import { RankBadge } from "@/shared/matches/RankBadge";
 import { cn } from "@/shared/ui/cn";
 import { DataTable } from "@/shared/ui/data/DataTable";
 import { FactList } from "@/shared/ui/data/FactList";
-import { PlayOrderMark, playOrderPresentation } from "@/shared/ui/data/PlayOrderMark";
-import { DataVizLineChart } from "@/shared/ui/dataViz/LineChart";
-import { playOrderSeriesId } from "@/shared/ui/dataViz/seriesPresentation";
-import { RankBadge } from "@/shared/ui/rank/RankBadge";
 import { contentText } from "@/shared/ui/typography";
 
 import { ChangeBadge, formatSignedDecimal } from "./SeriesAnalysisChangeBadge";

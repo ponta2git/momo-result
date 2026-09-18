@@ -7,7 +7,6 @@ import {
   draftIdsFromDetail,
   draftIdsFromParams,
 } from "@/features/matches/workspace/workspaceDerivations";
-import { slotKinds } from "@/shared/api/enums";
 import { mergeHeldEventItems } from "@/shared/api/heldEventCache";
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
 import type {
@@ -41,11 +40,12 @@ import {
   ocrDraftsBulkQueryOptions,
   seasonMastersQueryOptions,
 } from "@/shared/api/queryOptions";
-import { useHeldEventPickerDirectory } from "@/shared/api/useHeldEventPickerDirectory";
-import type { HeldEventPickerDirectory } from "@/shared/api/useHeldEventPickerDirectory";
 import { isOcrRunning } from "@/shared/domain/draftStatus";
-import { bySlot } from "@/shared/lib/slotMap";
-import type { SlotMap } from "@/shared/lib/slotMap";
+import { slotKinds } from "@/shared/domain/ocr";
+import { bySlot } from "@/shared/domain/slotMap";
+import type { SlotMap } from "@/shared/domain/slotMap";
+import { useHeldEventPickerDirectory } from "@/shared/heldEvents/useHeldEventPickerDirectory";
+import type { HeldEventPickerDirectory } from "@/shared/heldEvents/useHeldEventPickerDirectory";
 
 type MatchWorkspaceQueriesParams = {
   gameTitleId: string;

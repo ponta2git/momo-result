@@ -1,12 +1,13 @@
 import { useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 
+import { matchSetupValues } from "@/features/matches/workspace/matchFormTypes";
 import type {
   MatchFormValues,
   MatchWorkspaceInitialData,
   WorkspaceMode,
 } from "@/features/matches/workspace/matchFormTypes";
-import { buildMatchWorkspacePageModel } from "@/features/matches/workspace/matchWorkspacePageModel";
+import { toMatchWorkspaceOperationErrorView } from "@/features/matches/workspace/matchWorkspaceOperationError";
 import type { MatchWorkspacePageModel } from "@/features/matches/workspace/matchWorkspacePageModelTypes";
 import { buildMatchWorkspaceView } from "@/features/matches/workspace/matchWorkspaceView";
 import { toSourceImageDescriptor } from "@/features/matches/workspace/sourceImages/sourceImageTypes";
@@ -36,6 +37,19 @@ type MatchWorkspacePageModelParams = {
   mode: WorkspaceMode;
   preferredHeldEventId?: string | undefined;
 };
+
+function workspaceLoadingCopy(mode: WorkspaceMode) {
+  const labelByMode = {
+    create: "試合作成を準備中",
+    edit: "試合編集を読み込み中",
+    review: "OCR結果を読み込み中",
+  } as const satisfies Record<WorkspaceMode, string>;
+  return { loadingLabel: labelByMode[mode] };
+}
+
+function validationFeedback(firstMessage: string | undefined, success: boolean): string {
+  return success ? "確定前の確認へ進めます" : (firstMessage ?? "入力内容に不足があります");
+}
 
 export function useMatchWorkspacePageModel({
   accountId,
@@ -231,69 +245,199 @@ export function useMatchWorkspacePageModel({
         ? `/held-events/${encodeURIComponent(state.values.heldEventId)}`
         : "/matches");
 
-  return buildMatchWorkspacePageModel({
-    draftSession: sessionDraft,
-    notice,
-    form: {
-      actions: formActions,
-      focusRequest: local.validationFocusRequest,
-      state,
-      validation: validationState,
-      validationMessage: local.validationMessage,
-      workspaceData: local.workspaceData,
+  const busy = mutations.isMutating || submitFlow.confirmation.pending;
+  const operationErrorView = local.operationError
+    ? toMatchWorkspaceOperationErrorView(local.operationError)
+    : null;
+  const validationErrorView = local.validationMessage
+    ? {
+        detail: local.validationMessage,
+        nextStep:
+          "入力内容は保存・確定されていません。表示された項目を修正して、もう一度実行してください。",
+        title: "入力内容を確認してください",
+      }
+    : null;
+
+  return {
+    editor: {
+      note:
+        mode === "edit"
+          ? null
+          : {
+              error: validationState.visibleErrorPathSet.has("noteBody"),
+              onChange: (value) => formActions.onPatchRoot({ noteBody: value }),
+              value: state.values.noteBody,
+            },
+      navigation: {
+        masters: {
+          pending: masterHandoff.isPending,
+          show: masterHandoff.returnAvailable,
+          onNavigate: masterHandoff.navigateToMasters,
+        },
+      },
+      persistence: {
+        cancellation: {
+          allowed: view.canCancelDraft,
+          dialog: {
+            open: local.cancelDraftConfirmOpen,
+            pending: mutations.cancelDraftMutation.isPending,
+            onConfirm: submitFlow.cancelDraftConfirmed,
+            onOpenChange: local.setCancelDraftConfirmOpen,
+          },
+          disabled: busy,
+          error: local.operationError?.kind === "cancelDraft" ? operationErrorView : null,
+          onTrigger: () => local.setCancelDraftConfirmOpen(true),
+        },
+        recovery: sessionDraft.recovery
+          ? {
+              savedAt: sessionDraft.recovery.savedAt,
+              onDiscard: sessionDraft.discardRecovery,
+              onRestore: sessionDraft.restoreRecovery,
+            }
+          : null,
+        submit: {
+          action: {
+            label: mode === "edit" ? "保存" : "確定前の確認へ進む",
+            onRun: onPrimaryAction,
+          },
+          availability: {
+            disabled: workspaceLoading || busy,
+            pending: busy && !local.confirmOpen && !local.cancelDraftConfirmOpen,
+          },
+          feedback: {
+            error:
+              local.operationError?.kind === "heldEventCreation" ||
+              local.operationError?.kind === "cancelDraft"
+                ? validationErrorView
+                : (operationErrorView ?? validationErrorView),
+            message: validationFeedback(
+              validationState.validation.firstMessage,
+              validationState.validation.success,
+            ),
+          },
+        },
+      },
+      scoreGrid: {
+        actions: {
+          onAcknowledgeReviewCell: reviewState.acknowledgeCell,
+          onIncidentChange: formActions.onIncidentChange,
+          onPlayerChange: formActions.onPlayerChange,
+          onPlayOrderChange: formActions.onPlayOrderChange,
+          onPreferImageKindChange: local.setPreferredImageKind,
+          onReviewCellFocus: reviewState.focusCell,
+        },
+        data: {
+          errorPathSet: validationState.visibleErrorPathSet,
+          lastSyncedPlayerIndex: state.lastSyncedPlayerIndex,
+          originalPlayers: local.workspaceData?.originalPlayers,
+          players: state.values.players,
+          review: {
+            acknowledgedCellIds: reviewState.acknowledgedCellIds,
+            activeCellId: reviewState.activeCellId,
+            items: reviewState.items,
+          },
+        },
+      },
+      setup: {
+        eventCreation: {
+          action: {
+            pending: createEventMutation.isPending,
+            onCreate: formActions.onCreateEvent,
+          },
+          feedback: {
+            error: local.operationError?.kind === "heldEventCreation" ? operationErrorView : null,
+          },
+          input: {
+            value: local.eventDraftValue,
+            onChange: local.setEventDraftValue,
+          },
+        },
+        fields: {
+          actions: {
+            onGameTitleChange: formActions.onGameTitleChange,
+            onPatchRoot: formActions.onPatchRoot,
+          },
+          options: {
+            gameTitleItems: view.gameTitleItems,
+            heldEventPicker: heldEventPicker,
+            heldEvents: view.heldEvents,
+            mapItems: view.mapItems,
+            seasonItems: view.seasonItems,
+          },
+          validation: { errorPathSet: validationState.visibleErrorPathSet },
+          values: matchSetupValues(state.values),
+        },
+      },
+      sourceImagePanel:
+        view.hasSourceImagePanel && view.matchDraftIdForImages
+          ? {
+              accountId: accountId,
+              loading: load.sourceImagesLoading,
+              matchDraftId: view.matchDraftIdForImages,
+              preferredKind: local.preferredImageKind,
+              sourceImages: sourceImages,
+            }
+          : null,
+      warnings: local.workspaceData?.warnings ?? [],
+      notice: notice,
     },
     loading: {
       base: load.base,
       edit: load.edit,
-      workspaceLoading,
-      workspaceBlocked: load.initializationFailed,
+      workspace: {
+        blocked: load.initializationFailed,
+        copy: workspaceLoadingCopy(mode),
+        loading: workspaceLoading,
+      },
     },
     navigation: {
-      exitHref,
-      masters: {
-        pending: masterHandoff.isPending,
-        returnAvailable: masterHandoff.returnAvailable,
-        onNavigate: masterHandoff.navigateToMasters,
+      guard: {
+        dirty: sessionDraft.dirty,
+        navigationAllowedRef: sessionDraft.navigationAllowedRef,
+        onDiscard: sessionDraft.markCommitted,
+      },
+      toolbar: {
+        exit: {
+          href: exitHref,
+          label: mode === "edit" ? "編集をやめる" : "入力をやめる",
+        },
+        sample: useSampleDrafts,
       },
     },
     persistence: {
-      busy: mutations.isMutating || submitFlow.confirmation.pending,
-      cancellation: {
-        confirmOpen: local.cancelDraftConfirmOpen,
-        pending: mutations.cancelDraftMutation.isPending,
-        onConfirm: submitFlow.cancelDraftConfirmed,
-        onOpenChange: local.setCancelDraftConfirmOpen,
-        onTrigger: () => local.setCancelDraftConfirmOpen(true),
-      },
-      confirmation: {
-        open: local.confirmOpen,
-        onClose: () => local.setConfirmOpen(false),
-        onConfirm: submitFlow.confirmation.action,
-        pending: submitFlow.confirmation.pending,
-      },
-      error: local.operationError,
-      onPrimaryAction,
+      confirmation: local.confirmOpen
+        ? {
+            actions: {
+              onClose: () => local.setConfirmOpen(false),
+              onConfirm: submitFlow.confirmation.action,
+            },
+            feedback: { validationMessage: local.validationMessage },
+            pending: submitFlow.confirmation.pending,
+            review: {
+              changedCount: reviewState.changedCount,
+              totalCount: reviewState.items.length,
+              unresolvedCount: reviewState.unresolvedCount,
+            },
+            summary: {
+              gameTitleName: view.selectedGameTitle?.name,
+              heldEvent: view.selectedHeldEvent,
+              mapName: view.selectedMap?.name,
+              seasonName: view.selectedSeason?.name,
+            },
+            values: state.values,
+          }
+        : null,
     },
     review: {
-      blocked: remoteReview.blocked,
-      state: reviewState,
-      statusRefresh: remoteReview.refresh,
+      blocked: remoteReview.blocked
+        ? {
+            feedback: {
+              error: local.operationError?.kind === "draftStatus" ? operationErrorView : null,
+            },
+            refresh: remoteReview.refresh,
+          }
+        : null,
     },
-    setup: {
-      eventCreation: {
-        draftValue: local.eventDraftValue,
-        pending: createEventMutation.isPending,
-        onDraftChange: local.setEventDraftValue,
-      },
-      heldEventPicker,
-    },
-    sourceImages: {
-      accountId,
-      items: sourceImages,
-      loading: load.sourceImagesLoading,
-      preferredKind: local.preferredImageKind,
-      onPreferredKindChange: local.setPreferredImageKind,
-    },
-    workspace: { mode, useSampleDrafts, view },
-  });
+    validationFocusRequest: local.validationFocusRequest,
+  };
 }

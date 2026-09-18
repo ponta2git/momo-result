@@ -1,148 +1,126 @@
-import {
-  AnalysisMatrix,
-  MatrixAxisHeader,
-  MatrixCell,
-  MatrixColumnHeader,
-  MatrixRowHeader,
-  MatrixValueLegend,
-  SERIES_RANKS,
-} from "@/features/seriesComparison/charts/SeriesAnalysisMatrix";
+import type { ComponentProps } from "react";
+
+import { DataVizLineChart } from "@/features/seriesComparison/charts/dataViz/LineChart";
+import { MatrixValueLegend } from "@/features/seriesComparison/charts/SeriesAnalysisMatrix";
 import { MomentumRateSummary } from "@/features/seriesComparison/charts/SeriesAnalysisMomentumRateSummary";
+import { RankTransitionMatrix } from "@/features/seriesComparison/charts/SeriesAnalysisRankTransitionMatrix";
 import {
   formatDecimal,
   formatPercent,
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
 import type { SeriesComparisonAggregate } from "@/shared/api/seriesAnalysis";
 import { formatSeriesMatchIndex } from "@/shared/domain/matchLabels";
+import { MemberSequenceLabel } from "@/shared/matches/MemberSequenceLabel";
 import { cn } from "@/shared/ui/cn";
-import { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
-import { DataVizLineChart } from "@/shared/ui/dataViz/LineChart";
-import { rankBackgroundColor, rankBorderColor } from "@/shared/ui/rank/rankPresentation";
 import { contentText } from "@/shared/ui/typography";
 
-export function RankTrendCharts({
+type TrendChart = Pick<
+  ComponentProps<typeof DataVizLineChart>,
+  | "ariaLabel"
+  | "domain"
+  | "formatValue"
+  | "lowValueAtTop"
+  | "minimumYStep"
+  | "yAxisLabel"
+  | "yTicks"
+> & { kind: SeriesComparisonAggregate["trends"][number]["kind"]; title?: string };
+
+const trendCharts: Record<"rank" | "form" | "ginji", TrendChart[]> = {
+  rank: [
+    {
+      kind: "rank_cumulative_average",
+      title: "累積平均順位",
+      ariaLabel: "4人の累積平均順位の推移",
+      domain: [1, 4],
+      formatValue: (value) => `${formatDecimal(value)}位`,
+      lowValueAtTop: true,
+      minimumYStep: 0.5,
+      yAxisLabel: "平均順位",
+      yTicks: [1, 2, 3, 4],
+    },
+    {
+      kind: "rank_cumulative_standard_deviation",
+      title: "順位のぶれ",
+      ariaLabel: "4人の順位のぶれの推移",
+      formatValue: formatDecimal,
+      minimumYStep: 0.25,
+      yAxisLabel: "標準偏差",
+    },
+  ],
+  form: [
+    {
+      kind: "podium_cumulative_rate",
+      title: "累積入賞率",
+      ariaLabel: "4人の累積入賞率の推移",
+      domain: [0, 1],
+      formatValue: formatPercent,
+      minimumYStep: 0.25,
+      yAxisLabel: "入賞率",
+      yTicks: [0, 0.25, 0.5, 0.75, 1],
+    },
+    {
+      kind: "lower_half_cumulative_rate",
+      title: "累積下位率",
+      ariaLabel: "4人の累積下位率の推移",
+      domain: [0, 1],
+      formatValue: formatPercent,
+      minimumYStep: 0.25,
+      yAxisLabel: "下位率",
+      yTicks: [0, 0.25, 0.5, 0.75, 1],
+    },
+  ],
+  ginji: [
+    {
+      kind: "ginji_cumulative_count",
+      ariaLabel: "4人のスリの銀次累計回数の推移",
+      formatValue: (value) => `${formatDecimal(value)}回`,
+      minimumYStep: 1,
+      yAxisLabel: "累計回数",
+    },
+  ],
+};
+
+export function SeriesTrendCharts({
   focusedItemIds,
-  response,
+  players,
+  trends,
+  variant,
 }: {
   focusedItemIds: readonly string[];
-  response: SeriesComparisonAggregate;
+  players: SeriesComparisonAggregate["players"];
+  trends: SeriesComparisonAggregate["trends"];
+  variant: keyof typeof trendCharts;
 }) {
-  const seriesIdentity = response.players.map((player) => ({
+  const seriesIdentity = players.map((player) => ({
     id: player.memberId,
     label: player.displayName,
   }));
   return (
     <div className="grid gap-6">
-      <div>
-        <h3 className={cn(contentText.heading, "mb-2")}>累積平均順位</h3>
-        <DataVizLineChart
-          ariaLabel="4人の累積平均順位の推移"
-          domain={[1, 4]}
-          focusItemIds={focusedItemIds}
-          formatIndex={formatSeriesMatchIndex}
-          formatValue={(value) => `${formatDecimal(value)}位`}
-          lowValueAtTop
-          minimumYStep={0.5}
-          series={trendSeries(response, "rank_cumulative_average")}
-          seriesIdentity={seriesIdentity}
-          yAxisLabel="平均順位"
-          yTicks={[1, 2, 3, 4]}
-        />
-      </div>
-      <div>
-        <h3 className={cn(contentText.heading, "mb-2")}>順位のぶれ</h3>
-        <DataVizLineChart
-          ariaLabel="4人の順位のぶれの推移"
-          focusItemIds={focusedItemIds}
-          formatIndex={formatSeriesMatchIndex}
-          formatValue={formatDecimal}
-          minimumYStep={0.25}
-          series={trendSeries(response, "rank_cumulative_standard_deviation")}
-          seriesIdentity={seriesIdentity}
-          yAxisLabel="標準偏差"
-        />
-      </div>
+      {trendCharts[variant].map(({ kind, title, ...chart }) => (
+        <div key={kind}>
+          {title ? <h3 className={cn(contentText.heading, "mb-2")}>{title}</h3> : null}
+          <DataVizLineChart
+            {...chart}
+            focusItemIds={focusedItemIds}
+            formatIndex={formatSeriesMatchIndex}
+            series={trends
+              .filter((series) => series.kind === kind)
+              .map((series) => ({ id: series.memberId, points: series.points }))}
+            seriesIdentity={seriesIdentity}
+          />
+        </div>
+      ))}
     </div>
-  );
-}
-
-export function CumulativeFormCharts({
-  focusedItemIds,
-  response,
-}: {
-  focusedItemIds: readonly string[];
-  response: SeriesComparisonAggregate;
-}) {
-  const seriesIdentity = response.players.map((player) => ({
-    id: player.memberId,
-    label: player.displayName,
-  }));
-  return (
-    <div className="grid gap-6">
-      <div>
-        <h3 className={cn(contentText.heading, "mb-2")}>累積入賞率</h3>
-        <DataVizLineChart
-          ariaLabel="4人の累積入賞率の推移"
-          domain={[0, 1]}
-          focusItemIds={focusedItemIds}
-          formatIndex={formatSeriesMatchIndex}
-          formatValue={formatPercent}
-          minimumYStep={0.25}
-          series={trendSeries(response, "podium_cumulative_rate")}
-          seriesIdentity={seriesIdentity}
-          yAxisLabel="入賞率"
-          yTicks={[0, 0.25, 0.5, 0.75, 1]}
-        />
-      </div>
-      <div>
-        <h3 className={cn(contentText.heading, "mb-2")}>累積下位率</h3>
-        <DataVizLineChart
-          ariaLabel="4人の累積下位率の推移"
-          domain={[0, 1]}
-          focusItemIds={focusedItemIds}
-          formatIndex={formatSeriesMatchIndex}
-          formatValue={formatPercent}
-          minimumYStep={0.25}
-          series={trendSeries(response, "lower_half_cumulative_rate")}
-          seriesIdentity={seriesIdentity}
-          yAxisLabel="下位率"
-          yTicks={[0, 0.25, 0.5, 0.75, 1]}
-        />
-      </div>
-    </div>
-  );
-}
-
-export function GinjiCumulativeChart({
-  focusedItemIds,
-  response,
-}: {
-  focusedItemIds: readonly string[];
-  response: SeriesComparisonAggregate;
-}) {
-  return (
-    <DataVizLineChart
-      ariaLabel="4人のスリの銀次累計回数の推移"
-      focusItemIds={focusedItemIds}
-      formatIndex={formatSeriesMatchIndex}
-      formatValue={(value) => `${formatDecimal(value)}回`}
-      minimumYStep={1}
-      series={trendSeries(response, "ginji_cumulative_count")}
-      seriesIdentity={response.players.map((player) => ({
-        id: player.memberId,
-        label: player.displayName,
-      }))}
-      yAxisLabel="累計回数"
-    />
   );
 }
 
 export function MomentumMatrices({
   focusedItemIds,
-  response,
+  entries,
 }: {
   focusedItemIds: readonly string[];
-  response: SeriesComparisonAggregate;
+  entries: SeriesComparisonAggregate["momentumSwitch"];
 }) {
   return (
     <div className="grid gap-2">
@@ -158,10 +136,7 @@ export function MomentumMatrices({
         ]}
       />
       <div className="grid gap-4 lg:grid-cols-2">
-        {response.momentumSwitch.map((entry) => {
-          const cellByRanks = new Map(
-            entry.cells.map((cell) => [`${cell.previousRank}:${cell.nextRank}`, cell]),
-          );
+        {entries.map((entry) => {
           return (
             <article
               className="min-w-0 rounded-sm border border-[var(--color-border)] bg-[var(--color-surface)] p-4"
@@ -177,93 +152,16 @@ export function MomentumMatrices({
                 <MomentumRateSummary label="4位の次に入賞" rate={entry.afterFourth} />
                 <MomentumRateSummary label="入賞の次に下位" rate={entry.afterPodium} />
               </dl>
-              <AnalysisMatrix
+              <RankTransitionMatrix
                 ariaLabel={`${entry.displayName}の順位の切り替わり`}
-                className="min-w-[24rem] table-fixed"
-              >
-                <thead>
-                  <tr>
-                    <MatrixAxisHeader className="w-16 px-1" columnLabel="次戦" rowLabel="前戦" />
-                    {SERIES_RANKS.map((rank) => (
-                      <MatrixColumnHeader
-                        className="px-1 py-1 text-xs"
-                        key={rank}
-                        style={{ borderTopColor: rankBorderColor(rank), borderTopWidth: 3 }}
-                      >
-                        次{rank}位
-                      </MatrixColumnHeader>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {SERIES_RANKS.map((previousRank) => (
-                    <tr key={previousRank}>
-                      <MatrixRowHeader className="px-1 text-xs">前{previousRank}位</MatrixRowHeader>
-                      {SERIES_RANKS.map((nextRank) => {
-                        const cell = cellByRanks.get(`${previousRank}:${nextRank}`);
-                        if (!cell) {
-                          return (
-                            <MatrixCell
-                              aria-label={`${previousRank}位から${nextRank}位、対象なし`}
-                              className="rounded-xs border border-[var(--color-border)] bg-[var(--color-surface)] px-1 py-2 text-center"
-                              key={nextRank}
-                            >
-                              —
-                            </MatrixCell>
-                          );
-                        }
-                        const focused = focusedItemIds.includes(cell.itemId);
-                        return (
-                          <MatrixCell
-                            aria-label={`${cell.previousRank}位から${cell.nextRank}位、${cell.count}戦、${formatPercent(cell.rate)}${focused ? "、この試合" : ""}`}
-                            className={`rounded-xs border px-1 py-2 text-center ${focused ? "ring-2 ring-[var(--color-action)] ring-offset-1 ring-offset-[var(--color-surface)]" : ""}`}
-                            data-focused-metric={focused ? "true" : undefined}
-                            key={nextRank}
-                            style={
-                              cell.count === 0
-                                ? {
-                                    backgroundColor: "var(--color-surface)",
-                                    borderColor: "var(--color-border)",
-                                  }
-                                : {
-                                    backgroundColor: rankBackgroundColor(
-                                      cell.nextRank,
-                                      cell.rate ?? 0,
-                                    ),
-                                    borderColor: rankBorderColor(cell.nextRank),
-                                  }
-                            }
-                          >
-                            <strong className={cn(contentText.compactPrimary, "tabular-nums")}>
-                              {cell.count}
-                            </strong>
-                            <p className={cn(contentText.body, "tabular-nums")}>
-                              {formatPercent(cell.rate)}
-                            </p>
-                          </MatrixCell>
-                        );
-                      })}
-                    </tr>
-                  ))}
-                </tbody>
-              </AnalysisMatrix>
+                cells={entry.cells}
+                focusedItemIds={focusedItemIds}
+                kind="momentum"
+              />
             </article>
           );
         })}
       </div>
     </div>
   );
-}
-
-function trendSeries(response: SeriesComparisonAggregate, kind: string) {
-  return response.trends
-    .filter((series) => series.kind === kind)
-    .map((series) => ({
-      id: series.memberId,
-      points: series.points.map((point) => ({
-        index: point.index,
-        itemId: point.itemId,
-        value: point.value,
-      })),
-    }));
 }

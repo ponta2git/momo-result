@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
 
-import { matchPerformanceContextFromArtifact } from "@/shared/domain/matchPerformanceContext";
+import { matchPerformanceContextFromArtifact } from "@/shared/matches/matchPerformanceContext";
 import {
   makeSeriesAnalysisExcludedMatchContext,
   makeSeriesAnalysisMatchContext,

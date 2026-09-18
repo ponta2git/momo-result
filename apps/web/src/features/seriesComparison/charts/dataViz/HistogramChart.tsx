@@ -1,6 +1,6 @@
-import { niceCeil, numberTicks } from "@/shared/ui/dataViz/scales";
-import { dataVizSeriesPresentation } from "@/shared/ui/dataViz/seriesPresentation";
-import type { DataVizSeriesIdentity } from "@/shared/ui/dataViz/seriesPresentation";
+import { niceCeil, numberTicks } from "@/features/seriesComparison/charts/dataViz/scales";
+import { dataVizSeriesPresentation } from "@/features/seriesComparison/charts/dataViz/seriesPresentation";
+import type { DataVizSeriesIdentity } from "@/features/seriesComparison/charts/dataViz/seriesPresentation";
 
 export function DataVizHistogramChart({
   ariaLabel,

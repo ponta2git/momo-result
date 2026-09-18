@@ -1,3 +1,5 @@
+import { memo } from "react";
+
 import {
   AssetComparisonCards,
   StrategyProfileQuadrant,
@@ -7,6 +9,8 @@ import {
   StrategyScatter,
 } from "@/features/seriesComparison/charts/SeriesAnalysisDriverCharts";
 import {
+  memberNames,
+  playerName,
   formatHighlightValue,
   highlightMetricLabel,
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
@@ -14,16 +18,14 @@ import {
   rankSignalCandidateShareLabel,
   rankSignalLabel,
 } from "@/features/seriesComparison/model/seriesAnalysisRankPresentation";
+import type { AnalysisViewProps } from "@/features/seriesComparison/model/seriesAnalysisViewTypes";
 import {
   DestinationOutcomeSection,
   RevenueOutcomeSection,
 } from "@/features/seriesComparison/page/SeriesAnalysisOutcomeSections";
-import type { AnalysisViewProps } from "@/features/seriesComparison/page/SeriesAnalysisViewPrimitives";
 import {
   AnalysisReadingGuide,
   AnalysisSection,
-  memberNames,
-  playerName,
 } from "@/features/seriesComparison/page/SeriesAnalysisViewPrimitives";
 import {
   analysisPanelId,
@@ -31,12 +33,16 @@ import {
   AnalysisTableOfContents,
 } from "@/features/seriesComparison/page/SeriesComparisonAnalysisNavigation";
 import { SeriesAnalysisQualityAdvisory } from "@/features/seriesComparison/SeriesAnalysisQualityAdvisory";
+import { MemberSequenceLabel } from "@/shared/matches/MemberSequenceLabel";
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
-import { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
 import { contentText } from "@/shared/ui/typography";
 
-export function DriversView({ focusedItemIds, response, onDrilldown }: AnalysisViewProps) {
+export const DriversView = memo(function DriversView({
+  focusedItemIds,
+  response,
+  onDrilldown,
+}: AnalysisViewProps) {
   return (
     <div
       aria-labelledby={analysisTabId("drivers")}
@@ -46,21 +52,33 @@ export function DriversView({ focusedItemIds, response, onDrilldown }: AnalysisV
     >
       <AnalysisTableOfContents view="drivers" />
       <AnalysisSection id="metric-money" title="資産の残し方">
-        <AssetComparisonCards response={response} />
+        <AssetComparisonCards
+          assetStyleProfiles={response.assetStyleProfiles}
+          performanceProfiles={response.performanceProfiles}
+          metricsByPlayer={response.metricsByPlayer}
+          highlights={response.highlights}
+        />
         <div className="mt-6">
-          <AssetRevenueHistograms response={response} />
+          <AssetRevenueHistograms players={response.players} histograms={response.histograms} />
         </div>
         <div className="mt-6">
           <h3 className={contentText.heading}>資産タイプの位置</h3>
           <div className="mt-2">
-            <StrategyProfileQuadrant response={response} />
+            <StrategyProfileQuadrant
+              players={response.players}
+              profile={response.performanceProfiles}
+            />
           </div>
         </div>
       </AnalysisSection>
       <RevenueOutcomeSection focusedItemIds={focusedItemIds} response={response} />
       <DestinationOutcomeSection response={response} />
       <AnalysisSection id="metric-strategy-scatter" title="試合ごとの資産と収益">
-        <StrategyScatter focusedItemIds={focusedItemIds} response={response} />
+        <StrategyScatter
+          focusedItemIds={focusedItemIds}
+          players={response.players}
+          points={response.strategyScatter.points}
+        />
         <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {response.highlights.map((highlight) => (
             <div className="min-w-0" key={highlight.highlightId}>
@@ -149,4 +167,4 @@ export function DriversView({ focusedItemIds, response, onDrilldown }: AnalysisV
       </AnalysisSection>
     </div>
   );
-}
+});

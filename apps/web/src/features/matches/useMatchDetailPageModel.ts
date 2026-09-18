@@ -17,13 +17,13 @@ import {
   shouldShowQueryError,
 } from "@/shared/api/queryErrorState";
 import { heldEventDirectoryQueryOptions, matchDetailQueryOptions } from "@/shared/api/queryOptions";
-import { useMasterNameDirectory } from "@/shared/api/useMasterNameDirectory";
+import { useRetryNotice } from "@/shared/lib/useRetryNotice";
+import { useMasterNameDirectory } from "@/shared/masters/useMasterNameDirectory";
 import {
   currentInternalLocation,
   sanitizeReturnTo,
   withReturnTo,
 } from "@/shared/navigation/returnTo";
-import { useRetryNotice } from "@/shared/ui/feedback/useRetryNotice";
 
 /** Owns the primary match resource and optional display enrichment for the detail screen. */
 export function useMatchDetailPageModel(): MatchDetailPageModel {

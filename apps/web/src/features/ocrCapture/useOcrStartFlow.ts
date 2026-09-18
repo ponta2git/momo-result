@@ -1,38 +1,15 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { useBeforeUnload, useBlocker, useNavigate } from "react-router-dom";
 
 import type { CaptureSlotState } from "@/features/ocrCapture/captureState";
+import type { OcrSubmissionPlan } from "@/features/ocrCapture/ocrSubmissionPlan";
 import type {
   OcrSubmissionProgress,
   OcrSubmissionResult,
 } from "@/features/ocrCapture/ocrSubmissionWorkflow";
-import type { SetupFormValues } from "@/features/ocrCapture/schema";
 import type { OcrCaptureMutations } from "@/features/ocrCapture/useOcrCaptureMutations";
-import type { HeldEventResponse } from "@/shared/api/heldEvents";
 import { formatApiError } from "@/shared/api/problemDetails";
 import { showToast } from "@/shared/ui/feedback/Toast";
-
-type SelectedGameTitle = {
-  id: string;
-  layoutFamily?: string | null;
-  name?: string;
-};
-
-export type OcrSubmissionPlan = {
-  selectedGameTitle: SelectedGameTitle | undefined;
-  selectedHeldEvent: HeldEventResponse | undefined;
-  selectedSlotLabels: string[];
-  setup: SetupFormValues;
-  setupSummary: {
-    gameTitle: string;
-    heldEvent: string;
-    map: string;
-    matchNo: string;
-    owner: string;
-    season: string;
-  };
-  slots: CaptureSlotState[];
-};
 
 export type OcrStartDialogState =
   | { status: "closed" }
@@ -67,9 +44,10 @@ export function useOcrStartFlow({
   updateSlot: (slot: CaptureSlotState) => void;
 }) {
   const navigate = useNavigate();
+  const [isNavigating, startNavigation] = useTransition();
   const [state, setState] = useState<OcrStartDialogState>({ status: "closed" });
   const intentionalNavigationRef = useRef(false);
-  const locked = state.status === "submitting";
+  const locked = state.status === "submitting" || isNavigating;
   const blocker = useBlocker(
     ({ currentLocation, nextLocation }) =>
       locked &&
@@ -80,7 +58,7 @@ export function useOcrStartFlow({
   useBeforeUnload(
     useCallback(
       (event) => {
-        if (!locked) return;
+        if (!locked || intentionalNavigationRef.current) return;
         event.preventDefault();
         event.returnValue = "";
       },
@@ -101,6 +79,7 @@ export function useOcrStartFlow({
     let result: OcrSubmissionResult | undefined;
     try {
       result = await submission.submit({
+        hints: plan.hints,
         onProgress: (progress) => {
           setState((current) =>
             current.status === "submitting" ? { ...current, progress } : current,
@@ -127,16 +106,11 @@ export function useOcrStartFlow({
 
   function handleResult(plan: OcrSubmissionPlan, result: OcrSubmissionResult) {
     if (result.status === "started") {
-      intentionalNavigationRef.current = true;
-      if (blocker.state === "blocked") {
-        blocker.reset();
-      }
-      setState({ status: "closed" });
       showToast({
         title: `${result.createdJobCount}件の読み取りを開始しました。`,
         tone: "success",
       });
-      navigate(ocrResultDestination(plan), { replace: true });
+      navigateToResult(ocrResultDestination(plan));
       return;
     }
     if (result.status === "partial_started") {
@@ -182,20 +156,27 @@ export function useOcrStartFlow({
     }
   }
 
-  function viewMatches() {
+  function navigateToResult(destination: string) {
+    if (isNavigating) return;
     intentionalNavigationRef.current = true;
     if (blocker.state === "blocked") {
       blocker.reset();
     }
-    const destination = "plan" in state ? ocrResultDestination(state.plan) : incompleteMatchesUrl;
-    setState({ status: "closed" });
-    navigate(destination, { replace: true });
+    startNavigation(async () => {
+      setState({ status: "closed" });
+      await navigate(destination, { replace: true });
+    });
+  }
+
+  function viewMatches() {
+    navigateToResult("plan" in state ? ocrResultDestination(state.plan) : incompleteMatchesUrl);
   }
 
   return {
     close,
     confirm,
     locked,
+    isNavigating,
     open: (plan: OcrSubmissionPlan) => setState({ plan, status: "confirming" }),
     state,
     viewMatches,

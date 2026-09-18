@@ -1,7 +1,7 @@
 import {
   matchResultLedgerGridClass,
   matchResultLedgerRowClass,
-} from "@/shared/ui/data/MatchResultLedger";
+} from "@/shared/matches/MatchResultLedger";
 import { ResourcePageState } from "@/shared/ui/feedback/ResourcePageState";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";

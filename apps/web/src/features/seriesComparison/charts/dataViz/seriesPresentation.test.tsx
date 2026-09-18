@@ -5,7 +5,7 @@ import {
   DataVizLegend,
   dataVizSeriesPresentation,
   playOrderSeriesId,
-} from "@/shared/ui/dataViz/seriesPresentation";
+} from "@/features/seriesComparison/charts/dataViz/seriesPresentation";
 
 const memberIds = ["member_eu", "member_ponta", "member_akane_mami", "member_otaka"];
 

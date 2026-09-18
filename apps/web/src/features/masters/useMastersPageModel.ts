@@ -14,7 +14,7 @@ import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import { isInitialQueryLoading, shouldShowQueryError } from "@/shared/api/queryErrorState";
 import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
 import { useAuth } from "@/shared/auth/useAuth";
-import { useRetryNotice } from "@/shared/ui/feedback/useRetryNotice";
+import { useRetryNotice } from "@/shared/lib/useRetryNotice";
 
 export const masterTabs = [
   { id: "catalog", label: "作品・マップ・シーズン" },
@@ -128,7 +128,7 @@ export function useMastersPageModel() {
     selectedMapMasterCount: viewModel.selectedMapMasters.length,
     selectedSeasonMasterCount: viewModel.selectedSeasonMasters.length,
     setSelectedGameTitleId,
-    viewModel,
+    selectedGameTitleId: viewModel.selectedGameTitleId,
   });
 
   const editCommands = useMasterEditCommands({
@@ -194,6 +194,7 @@ export function useMastersPageModel() {
       createAction: createActions.aliasCreateAction,
       createError: createActions.aliasCreateState.error,
       createFormKey: createActions.aliasCreateState.version,
+      createPending: createActions.aliasCreatePending,
       items: resourceQueries.memberAliases,
       onDelete: editCommands.deleteMemberAlias,
       onRetry: async () => (await resourceQueries.memberAliasesQuery.refetch()).isSuccess,

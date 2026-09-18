@@ -4,6 +4,7 @@ import { createMemoryRouter, RouterProvider, useLocation } from "react-router-do
 import { describe, expect, it } from "vitest";
 
 import { useSeriesAnalysisLocationState } from "@/features/seriesComparison/navigation/useSeriesAnalysisLocationState";
+import { createDeferred } from "@/test/deferred";
 import { makeSeriesAnalysisOptions } from "@/test/msw/seriesAnalysisFixtures";
 
 function LocationStateHarness() {
@@ -61,6 +62,33 @@ function renderHarness(url = "/analytics/series?gameTitleId=gt_momotetsu_2&view=
 }
 
 describe("useSeriesAnalysisLocationState", () => {
+  it("retains the selected match while its URL navigation is pending", async () => {
+    const gate = createDeferred();
+    const user = userEvent.setup();
+    const router = createMemoryRouter(
+      [
+        {
+          path: "/analytics/series",
+          hydrateFallbackElement: <p>経路を準備中</p>,
+          loader: ({ request }) =>
+            new URL(request.url).searchParams.has("focusMatchId") ? gate.promise : null,
+          element: <LocationStateHarness />,
+        },
+      ],
+      { initialEntries: ["/analytics/series?gameTitleId=gt_momotetsu_2&view=flow"] },
+    );
+    render(<RouterProvider router={router} />);
+    await screen.findByRole("button", { name: "試合を選択" });
+
+    await user.click(screen.getByRole("button", { name: "試合を選択" }));
+    expect(screen.getByLabelText("analysis state")).toHaveTextContent('"focusMatchId":"match-12"');
+    expect(router.state.location.search).not.toContain("focusMatchId");
+
+    await act(async () => gate.resolve());
+    await waitFor(() => expect(router.state.location.search).toContain("focusMatchId=match-12"));
+    expect(screen.getByLabelText("analysis state")).toHaveTextContent('"focusMatchId":"match-12"');
+  });
+
   it("keeps only the latest intent when URL updates are issued rapidly", async () => {
     const user = userEvent.setup();
     renderHarness();

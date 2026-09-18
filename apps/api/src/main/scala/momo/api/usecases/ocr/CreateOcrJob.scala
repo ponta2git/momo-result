@@ -7,6 +7,7 @@ import cats.data.EitherT
 import cats.syntax.all.*
 import org.typelevel.log4cats.LoggerFactory
 
+import momo.api.contracts.ocrworker.OcrWorkerJobMessageV2
 import momo.api.domain.*
 import momo.api.domain.ids.*
 import momo.api.errors.AppError
@@ -57,7 +58,9 @@ final class CreateOcrJob[F[_]: MonadThrow](
     )
     _ <- EitherT.fromEither[F](validateOcrHints(command.ocrHints))
     _ <- EitherT(admissionGuard.ensureAvailable)
-    hintsWithAliases <- EitherT.liftF(mergeMemberAliases(command.ocrHints))
+    aliases <- EitherT.liftF(memberAliases.list(None))
+    enrichedHints = OcrHintEnrichment(command.ocrHints, aliases.groupMap(_.memberId)(_.alias))
+    _ <- EitherT.fromEither[F](validateOcrHints(enrichedHints))
     draftForMatch <- matchDrafts.find(command.matchDraftId)
       .orNotFound("match draft", command.matchDraftId.value).flatMap { draft =>
         if Set(MatchDraftStatus.Confirmed, MatchDraftStatus.Cancelled).contains(draft.status) then
@@ -73,7 +76,7 @@ final class CreateOcrJob[F[_]: MonadThrow](
     draftId <- EitherT.liftF(nextDraftId)
     draft = initialDraft(draftId, jobId, command.requestedScreenType, createdAt)
     job = queuedJob(jobId, draftId, imageId, image.location, command.requestedScreenType, createdAt)
-    enqueueRequest = OcrJobEnqueueRequest.initial(job, image, hintsWithAliases, requestId)
+    enqueueRequest = OcrJobEnqueueRequest.initial(job, image, enrichedHints, requestId)
     attachment = OcrJobDraftAttachment(
       draftId = draftForMatch.id,
       screenType = command.requestedScreenType,
@@ -119,24 +122,6 @@ final class CreateOcrJob[F[_]: MonadThrow](
     case OcrJobCreationRejection.SourceImageUnavailable(_) => AppError
         .Conflict("source image is no longer available.").asLeft[Unit].pure[F]
 
-  private def mergeMemberAliases(hints: OcrJobHints): F[OcrJobHints] = memberAliases.list(None)
-    .map { rows =>
-      if rows.isEmpty then hints
-      else
-        val byMember = rows.groupMap(_.memberId)(_.alias)
-        val requestedIds = hints.knownPlayerAliases.map(_.memberId)
-        val dbOnlyIds = byMember.keys.toList.sortBy(_.value).filterNot(requestedIds.contains)
-        val memberIds = (requestedIds ++ dbOnlyIds).distinct.take(OcrJobHints.MaxKnownPlayerAliases)
-        val mergedAliases = memberIds.flatMap { memberId =>
-          val clientAliases = hints.knownPlayerAliases.find(_.memberId == memberId)
-            .fold(Nil)(_.aliases)
-          val aliases = (clientAliases ++ byMember.getOrElse(memberId, Nil)).map(_.trim)
-            .filter(_.nonEmpty).distinct.take(OcrJobHints.MaxAliasesPerPlayer)
-          Option.when(aliases.nonEmpty)(PlayerAliasHint(memberId, aliases))
-        }
-        hints.copy(knownPlayerAliases = mergedAliases)
-    }
-
 object CreateOcrJob:
   private def validateNewRequestScreenType(screenType: ScreenType): Either[AppError, Unit] =
     if screenType == ScreenType.Auto then
@@ -145,10 +130,8 @@ object CreateOcrJob:
       ))
     else Right(())
 
-  private def validateOcrHints(hints: OcrJobHints): Either[AppError, Unit] = OcrJobHints
-    .validationErrors(hints) match
-    case Nil => Right(())
-    case errors => Left(AppError.ValidationFailed(errors.mkString(" ")))
+  private def validateOcrHints(hints: OcrJobHints): Either[AppError, Unit] =
+    OcrWorkerJobMessageV2.validateHints(hints).left.map(AppError.ValidationFailed.apply)
 
   private def initialDraft(
       draftId: OcrDraftId,

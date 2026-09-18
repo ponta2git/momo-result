@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   MemberSequenceLabel,
   memberSequencePresentation,
-} from "@/shared/ui/data/MemberSequenceLabel";
+} from "@/shared/matches/MemberSequenceLabel";
 
 describe("MemberSequenceLabel", () => {
   it("maps canonical members to the familiar four-player color order", () => {

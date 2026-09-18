@@ -67,8 +67,19 @@
 
 - `apps/web/src` の依存方向は `app -> features -> shared` とする。逆方向 import と feature 間の実装詳細 import を禁止する。
 - `shared` は横断 API、生成型の facade、query 基盤、共有 UI、共通 domain helper を所有する。画面固有の状態・変換・UI は feature に置く。
+- `shared` 内も依存方向を持つ。下表の基盤から業務別の adapter へ逆依存しない。型だけの import も同じ境界で扱う。
+
+  | モジュール | 所有する判断 | 依存できる shared 基盤 |
+  | --- | --- | --- |
+  | `lib` | 業務に依存しない値変換・局所的な React / browser utility | `lib` |
+  | `domain` | 業務語彙、identity、入力順、純粋な変換 | `domain`、`lib` |
+  | `api` | HTTP、wire decode、query key / cache、idempotency | `api`、`domain`、`lib` |
+  | `ui` | 汎用の構造・操作・アクセシビリティ・表示補間 | `ui`、`lib` |
+
+  `shared/matches`、`heldEvents`、`masters`、`navigation` などの業務別 module はこれらを組み合わせる。順位・メンバー identity を知る結果台帳は `shared/matches`、API の候補を選択部品へ接続する処理は `shared/heldEvents`、分析専用チャートは `features/seriesComparison` が所有する。配置名が shared であることを汎用性の根拠にしない。
 - Page は composition とページ状態に寄せ、取得、mutation、複雑な状態機械、純粋変換を分離する。
 - 複雑な Page は feature 固有の PageModel から resource、command、location、feedback など画面の意味を受け取り、TanStack Query の result や mutation object を直接受け取らない。PageModel 内は lifecycle と変更理由が異なる関心事だけを hook / 純粋変換へ分け、単なる転送層は作らない。
+- hook が計算済みの値を別の builder へ渡し、そのまま同じ画面モデルへ詰め直す層は置かない。子の契約は使用する値・操作だけで表し、設定欄へ全 player 入力、チャートへ全 artifact、command へ全 page model を運ばない。純粋な表示変換・型は hook や page component へ依存せず、consumer と取得処理の共通の下位に置く。
 - ファイル行数は責務混在を見つける signal とし、行数だけを理由に浅い module へ分割しない。
 - 本節を依存方向の正本とする。静的 gate へ投影する場合は `docs/dev-rule.md` の採用基準に従い、module graph から判定できる import 規則だけを syntax-aware な tool で検査する。本番コードから test 専用 module を参照しない。
 
@@ -78,9 +89,31 @@
 - 結果確認の元画像も、取得状態とBlobをTanStack Queryが所有する。画像一覧と画像本体は異なるquery keyを持ち、本体は認証主体・画面scope・下書き・画像descriptorの世代を区別する。Object URLは画面の表示資源として生成・解放し、Blobや取得状態を別のcacheへ複製しない。
 - 元画像の先読みは初回表示または利用者の画像選択に続く有限の処理として許可する。featureの取得処理が表示対象を優先して直列化し、同一取得の引継ぎ、中断、容量、scope終了時のquery破棄を所有する。自動retryや回線復帰による取得再開を起こさず、確定・削除成功時は関連cacheの更新より先に画像の寿命を閉じる。
 - query key は cache 内の runtime data shape まで区別する。backend resource が同じでも raw response と ViewModel を同じ key に置かない。
+- consumer の射影は `select` または純粋な表示変換で行い、cache は元の server data を保持する。表示中の data が現 query の値か前 scope の placeholder かは query observer の状態から判断し、その判定のために描画時に cache を別途読み直さない。
 - fatal error、再取得、cached data、認証待ち、disabled query を別状態として扱う。mutation 後は表示中の resource と選択候補の cache をともに整合させる。
 - 初回表示、mutation 後の cache 整合、artifact 失効時の bounded recovery、利用者が実行した更新 / 再試行だけが server state の取得を開始する。interval、遅延 timer、window focus、tab visibility、network reconnect を起点に自動再取得しない。この契約は共通 QueryClient に集約し、feature ごとに再実装しない。
 - React の concurrent / form API は cache、retry、認証、validation の既存契約を置き換えない範囲で使う。
+
+### React 更新の優先度
+
+- 入力値、選択 intent、focus は即時に反映する。`useDeferredValue` は追従を遅らせてもよい検証表示・一覧・図表に使い、送信時の validation と request は最新値から同期的に組み立てる。
+- 遅延する表示は `memo` と安定した props の境界を組み合わせ、urgent render で前の重い subtree を再描画しない。小さい値の加工へ一律に memo を足さず、state の局所化・不要な依存の削減を先に検討する。deferred value は debounce、通信回数の制限、計算量の削減ではない。
+- 表示 bundle を遅延する場合は data、scope、view の identity を一緒に保つ。要求中の条件を古い図表の見出し・操作へ混ぜず、追従中の表示と操作制限は既存の stale 表示へ接続する。
+- `useOptimistic` の更新は Action 内で行い、操作に属する非同期処理を await する。navigation の Promise は Router の完了境界であり、任意の `React.lazy` subtree の描画完了を保証しない。取得は Query、code readiness は Suspense が引き続き所有する。
+- 作成結果を楽観表示する場合、成功 response を Query cache の確定値へ引き継いでから再取得する。再取得だけに確定を任せず、保存成功後の再取得失敗を作成失敗へ巻き戻さない。失敗した Action は入力を残し、成功時だけ明示的に初期化する。
+
+| 対象 | 採用する更新境界 | 理由 |
+| --- | --- | --- |
+| 試合一覧の条件変更 | 即時の選択 intent、遅延した一覧、古い対象への操作制限 | 続けて条件を変えながら表示を追従させる |
+| 戦績比較の view / scope / artifact | 整合した表示 bundle の遅延、図表の memo 境界 | 大きい図表更新を選択操作と分離する |
+| 試合入力 | 数値入力の局所 draft、遅延検証、score grid の描画境界 | メモ・設定の編集が無関係な grid を再描画しない |
+| マスタ作成 | Action と局所的な楽観行、成功 response の確定反映 | 待ち時間中も追加を示し、失敗時に入力を回復する |
+| 保存・削除・OCR開始・権限/通知変更・再計算・出力 | Action / mutation の pending と確定結果 | 検証、競合、副作用、生成結果を先取りしない |
+| 開催一覧・出力候補のページ取得 | Query の前ページ保持と scope 表示 | ページ単位の取得は既存の待機境界で扱える |
+
+設定管理の訪問済み panel は Base UI の `keepMounted` で入力・DOM を保持する。React `Activity` は hidden subtree の Effects を停止するが、現在の Query / Action owner は panel の外にあるため、主要な取得・描画負荷を移せない。focus / dialog 接続の再作成も伴うので、この構造では追加しない。
+
+API の判断は React の [useDeferredValue](https://react.dev/reference/react/useDeferredValue)、[useTransition](https://react.dev/reference/react/useTransition)、[useOptimistic](https://react.dev/reference/react/useOptimistic) と TanStack Query の [mutation response による更新](https://tanstack.com/query/latest/docs/framework/react/guides/updates-from-mutation-responses) を参照する。効果は不要な render の削減と待機中の操作で確認し、通信速度や処理時間の短縮とは区別する。
 
 ### Client Lifecycle / Suspense / Motion
 
@@ -115,6 +148,7 @@
 
 - event 由来の値は handler 内で同期的に取り出し、request transform で route / prefill / hidden identifier を落とさない。
 - 分析の集計、意味を持つ sort / filter、閾値、統計 fallback は Web で再計算せず、保存済み成果物を表示用に整形する。
+- OCR の開始確認では設定・画像と送信する作品ヒントを同じ snapshot に固定する。API がジョブ受付時に既定のプレーヤー別名、登録済み別名、作品方式ごとの CPU 名を補完し、補完後の payload 上限も検証する。Web はそのための別名取得・正規化・上限処理を持たない。既存 OCR 結果から編集フォームを復元する名前解決は、入力支援として Web に残す。
 
 ### API / UI Boundary
 

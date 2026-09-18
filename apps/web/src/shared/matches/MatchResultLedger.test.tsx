@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { MatchResultLedger } from "@/shared/ui/data/MatchResultLedger";
+import { MatchResultLedger } from "@/shared/matches/MatchResultLedger";
 
 describe("MatchResultLedger", () => {
   it("labels the cumulative-average meaning instead of showing only a signed decimal", () => {

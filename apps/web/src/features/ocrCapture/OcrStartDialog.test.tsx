@@ -3,9 +3,11 @@ import { describe, expect, it, vi } from "vitest";
 
 import { createInitialSlot } from "@/features/ocrCapture/captureState";
 import { OcrStartDialog } from "@/features/ocrCapture/OcrStartDialog";
-import type { OcrStartDialogState, OcrSubmissionPlan } from "@/features/ocrCapture/useOcrStartFlow";
+import type { OcrSubmissionPlan } from "@/features/ocrCapture/ocrSubmissionPlan";
+import type { OcrStartDialogState } from "@/features/ocrCapture/useOcrStartFlow";
 
 const plan: OcrSubmissionPlan = {
+  hints: {},
   selectedGameTitle: undefined,
   selectedHeldEvent: undefined,
   selectedSlotLabels: ["総資産", "収益", "事件簿"],

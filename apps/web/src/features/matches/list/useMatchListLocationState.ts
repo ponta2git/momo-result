@@ -7,7 +7,7 @@ import {
   useRef,
   useTransition,
 } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 import {
   buildMatchListSearchParams,
@@ -36,7 +36,8 @@ function searchSignature(search: MatchListSearch): string {
 
 /** Owns parsing, canonical serialization, optimistic display, and updates for the list URL. */
 export function useMatchListLocationState(): MatchListLocationState {
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const rawSearch = searchParams.toString();
   const parentReturnTo = sanitizeReturnTo(searchParams.get("returnTo"));
   const routeSearch = useMemo(
@@ -55,14 +56,14 @@ export function useMatchListLocationState(): MatchListLocationState {
   const apply = useCallback(
     (nextSearch: MatchListSearch) => {
       latestSearchRef.current = nextSearch;
-      startTransition(() => {
+      startTransition(async () => {
         setOptimisticSearch(nextSearch);
         const nextParams = buildMatchListSearchParams(nextSearch);
         if (parentReturnTo) nextParams.set("returnTo", parentReturnTo);
-        setSearchParams(nextParams);
+        await navigate(`?${nextParams.toString()}`);
       });
     },
-    [parentReturnTo, setOptimisticSearch, setSearchParams],
+    [navigate, parentReturnTo, setOptimisticSearch],
   );
   const clear = useCallback(() => apply(defaultMatchListSearch), [apply]);
   const resetCursorIfUnchanged = useCallback(

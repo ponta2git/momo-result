@@ -4,12 +4,12 @@ import { useCallback, useEffect, useEffectEvent, useMemo, useRef } from "react";
 import { detectedKindFromResponse } from "@/features/ocrCapture/captureState";
 import type { CaptureSlotState } from "@/features/ocrCapture/captureState";
 import { useOcrJobStatus } from "@/features/ocrCapture/useOcrJobStatus";
-import { parseOcrJobStatus } from "@/shared/api/enums";
 import type { OcrDraftResponse } from "@/shared/api/ocrDrafts";
 import type { OcrJobResponse } from "@/shared/api/ocrJobs";
 import { normalizeDisplayApiError } from "@/shared/api/problemDetails";
 import type { NormalizedApiError } from "@/shared/api/problemDetails";
 import { ocrDraftDetailQueryOptions } from "@/shared/api/queryOptions";
+import { parseOcrJobStatus } from "@/shared/domain/ocr";
 
 type OcrJobSlotResourceResolution = {
   draft: OcrDraftResponse | undefined;

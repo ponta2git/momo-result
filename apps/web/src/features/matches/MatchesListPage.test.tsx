@@ -512,18 +512,28 @@ describe("MatchesListPage", () => {
 
     expect(await screen.findByRole("region", { name: "試合一覧" })).toBeInTheDocument();
     expect(requestedCursors.at(-1)).toBeNull();
+    const listRegion = screen.getByRole("region", { name: "登録済みの試合" });
 
     await user.click(await screen.findByRole("button", { name: "次のページへ" }));
     await waitFor(() => expect(requestedCursors.at(-1)).toBe("next-token"));
-    expect(screen.getByLabelText("current location")).toHaveTextContent("cursor=next-token");
+    await waitFor(() =>
+      expect(screen.getByLabelText("current location")).toHaveTextContent("cursor=next-token"),
+    );
+    await waitFor(() => expect(listRegion).not.toHaveAttribute("aria-busy"));
 
     await user.click(screen.getByRole("button", { name: "最後のページへ" }));
     await waitFor(() => expect(requestedCursors.at(-1)).toBe("last-token"));
-    expect(screen.getByLabelText("current location")).toHaveTextContent("cursor=last-token");
+    await waitFor(() =>
+      expect(screen.getByLabelText("current location")).toHaveTextContent("cursor=last-token"),
+    );
+    await waitFor(() => expect(listRegion).not.toHaveAttribute("aria-busy"));
 
     await user.click(screen.getByRole("button", { name: "前のページへ" }));
     await waitFor(() => expect(requestedCursors.at(-1)).toBe("prev-token"));
-    expect(screen.getByLabelText("current location")).toHaveTextContent("cursor=prev-token");
+    await waitFor(() =>
+      expect(screen.getByLabelText("current location")).toHaveTextContent("cursor=prev-token"),
+    );
+    await waitFor(() => expect(listRegion).not.toHaveAttribute("aria-busy"));
 
     const requestsBeforeFirstPage = requestedCursors.length;
     await user.click(screen.getByRole("button", { name: "先頭ページへ" }));

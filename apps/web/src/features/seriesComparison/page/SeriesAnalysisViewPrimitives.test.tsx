@@ -15,7 +15,7 @@ describe("MetricDefinitions", () => {
       preferredDirection: "higher",
       unit: "man_yen",
     });
-    render(<MetricDefinitions response={response} />);
+    render(<MetricDefinitions definitions={response.metricDefinitions} />);
 
     await user.click(screen.getByRole("button", { name: "指標の読み方" }));
 

@@ -8,9 +8,9 @@ import { CaptureStatusBadge } from "@/features/ocrCapture/CaptureSlotStatus";
 import type { CaptureSlotState } from "@/features/ocrCapture/captureState";
 import { DraftPreview } from "@/features/ocrCapture/DraftPreview";
 import { isWorkingStatus } from "@/features/ocrCapture/slotPolicy";
-import type { SlotKind } from "@/shared/api/enums";
-import { parseSlotKind } from "@/shared/api/enums";
 import type { OcrDraftResponse } from "@/shared/api/ocrDrafts";
+import type { SlotKind } from "@/shared/domain/ocr";
+import { parseSlotKind } from "@/shared/domain/ocr";
 import { cn } from "@/shared/ui/cn";
 import { contentText } from "@/shared/ui/typography";
 

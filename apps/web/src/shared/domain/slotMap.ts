@@ -1,4 +1,4 @@
-import type { SlotKind } from "@/shared/api/enums";
+import type { SlotKind } from "@/shared/domain/ocr";
 
 /**
  * SlotKind をキーとする部分関数（ある SlotKind について値があってもなくてもよい）。

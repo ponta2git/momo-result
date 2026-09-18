@@ -1,4 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useTransition } from "react";
+import type { NavigateOptions } from "react-router-dom";
 import { useNavigate } from "react-router-dom";
 
 import { toUpdateMatchRequest } from "@/features/matches/workspace/matchFormToRequest";
@@ -53,6 +55,12 @@ export function useMatchWorkspaceMutations({
   returnTo,
 }: MatchWorkspaceMutationsParams) {
   const navigate = useNavigate();
+  const [isNavigating, startNavigation] = useTransition();
+  const navigateAfterSuccess = (destination: string, options?: NavigateOptions) => {
+    startNavigation(async () => {
+      await navigate(destination, options);
+    });
+  };
   const queryClient = useQueryClient();
   const idempotencyKeys = useIdempotencyKeyStore();
 
@@ -72,7 +80,7 @@ export function useMatchWorkspaceMutations({
       showToast({ title: "試合を確定しました", tone: "success" });
       onConfirmSuccess();
       onPersistedSuccess();
-      navigate(matchSuccessDestination(response.matchId, mode, returnTo));
+      navigateAfterSuccess(matchSuccessDestination(response.matchId, mode, returnTo));
     },
     onError: async (error, request) => {
       if (request.matchDraftId && isConflict(error)) {
@@ -103,7 +111,7 @@ export function useMatchWorkspaceMutations({
       await invalidateAfterMatchUpdated(queryClient, matchId);
       showToast({ title: "試合を保存しました", tone: "success" });
       onPersistedSuccess();
-      navigate(matchSuccessDestination(response.matchId, mode, returnTo));
+      navigateAfterSuccess(matchSuccessDestination(response.matchId, mode, returnTo));
     },
     onError: (error) => {
       onError("update", formatApiError(error, "更新に失敗しました"));
@@ -126,7 +134,7 @@ export function useMatchWorkspaceMutations({
       await invalidateAfterDraftCancelled(queryClient);
       showToast({ title: "確定前の記録を削除しました", tone: "success" });
       onPersistedSuccess();
-      navigate(
+      navigateAfterSuccess(
         returnTo ?? (heldEventId ? `/held-events/${encodeURIComponent(heldEventId)}` : "/matches"),
         { replace: true },
       );
@@ -137,7 +145,10 @@ export function useMatchWorkspaceMutations({
   });
 
   const isMutating =
-    confirmMutation.isPending || updateMutation.isPending || cancelDraftMutation.isPending;
+    isNavigating ||
+    confirmMutation.isPending ||
+    updateMutation.isPending ||
+    cancelDraftMutation.isPending;
 
   return {
     cancelDraftMutation,

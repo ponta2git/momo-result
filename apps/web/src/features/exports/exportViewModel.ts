@@ -91,17 +91,6 @@ export type ExportViewModel = {
   summaryText: string;
 };
 
-export function formatDateTime(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  const hh = String(d.getHours()).padStart(2, "0");
-  const mi = String(d.getMinutes()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd} ${hh}:${mi}`;
-}
-
 export function buildCandidateView(input: {
   candidates: ExportCandidate[];
   error?: boolean;
@@ -142,7 +131,9 @@ export function buildCandidateView(input: {
     };
   }
 
-  const selected = input.candidates.find((candidate) => candidate.value === input.selectedId);
+  const selected =
+    input.candidates.find((candidate) => candidate.value === input.selectedId) ??
+    (input.resolvedCandidate?.value === input.selectedId ? input.resolvedCandidate : undefined);
   if (selected) {
     return {
       candidates: input.candidates,
@@ -150,18 +141,6 @@ export function buildCandidateView(input: {
       pagination: input.pagination,
       selectedId: input.selectedId,
       selectedLabel: candidateDisplayLabel(selected),
-      selectionState: "resolved",
-      supportIssue: input.supportIssue,
-    };
-  }
-
-  if (input.resolvedCandidate?.value === input.selectedId) {
-    return {
-      candidates: input.candidates,
-      kind: "ready",
-      pagination: input.pagination,
-      selectedId: input.selectedId,
-      selectedLabel: candidateDisplayLabel(input.resolvedCandidate),
       selectionState: "resolved",
       supportIssue: input.supportIssue,
     };

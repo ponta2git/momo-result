@@ -1,7 +1,7 @@
 import type { CSSProperties } from "react";
 
+import { rankBadgeBackgroundColor, rankBadgeBorderColor } from "@/shared/matches/rankPresentation";
 import { cn } from "@/shared/ui/cn";
-import { rankBadgeBackgroundColor, rankBadgeBorderColor } from "@/shared/ui/rank/rankPresentation";
 
 export function RankBadge({ rank, size = "sm" }: { rank: number; size?: "md" | "sm" }) {
   return (

@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import {
@@ -28,38 +28,44 @@ export function useConfirmedDraftNavigationCommand(
   const checkingIdsRef = useRef(new Set<string>());
   const [checkingIds, setCheckingIds] = useState<ReadonlySet<string>>(() => new Set());
 
-  const setChecking = (draftId: string, checking: boolean) => {
+  const setChecking = useCallback((draftId: string, checking: boolean) => {
     const nextIds = new Set(checkingIdsRef.current);
     if (checking) nextIds.add(draftId);
     else nextIds.delete(draftId);
     checkingIdsRef.current = nextIds;
     setCheckingIds(nextIds);
-  };
+  }, []);
 
-  const run = async (action: MatchListAction) => {
-    const draftId = action.draftStatusCheck?.draftId;
-    if (!draftId || !action.href || checkingIdsRef.current.has(draftId)) return;
+  const run = useCallback(
+    async (action: MatchListAction) => {
+      const draftId = action.draftStatusCheck?.draftId;
+      if (!draftId || !action.href || checkingIdsRef.current.has(draftId)) return;
 
-    setChecking(draftId, true);
-    try {
-      const detail = await queryClient.fetchQuery({
-        ...matchDraftDetailQueryOptions(draftId),
-        staleTime: 0,
-      });
-      const destination = confirmedDraftDestination(detail);
-      if (destination) {
-        void invalidateAfterMatchConfirmed(queryClient);
-        showToast({ title: confirmedDraftMessages.listRedirect, tone: "warning" });
-        navigate(withReturnTo(destination.path, listReturnTo));
-        return;
+      setChecking(draftId, true);
+      try {
+        const detail = await queryClient.fetchQuery({
+          ...matchDraftDetailQueryOptions(draftId),
+          staleTime: 0,
+        });
+        const destination = confirmedDraftDestination(detail);
+        if (destination) {
+          void invalidateAfterMatchConfirmed(queryClient);
+          showToast({ title: confirmedDraftMessages.listRedirect, tone: "warning" });
+          navigate(withReturnTo(destination.path, listReturnTo));
+          return;
+        }
+        navigate(action.href);
+      } catch {
+        setErrors((current) => ({
+          ...current,
+          [draftId]: confirmedDraftMessages.statusCheckFailed,
+        }));
+      } finally {
+        setChecking(draftId, false);
       }
-      navigate(action.href);
-    } catch {
-      setErrors((current) => ({ ...current, [draftId]: confirmedDraftMessages.statusCheckFailed }));
-    } finally {
-      setChecking(draftId, false);
-    }
-  };
+    },
+    [listReturnTo, navigate, queryClient, setChecking],
+  );
 
   return { checkingIds, errors, run };
 }

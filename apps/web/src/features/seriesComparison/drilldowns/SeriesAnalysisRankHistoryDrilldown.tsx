@@ -1,3 +1,4 @@
+import { DataVizLineChart } from "@/features/seriesComparison/charts/dataViz/LineChart";
 import {
   formatDateTime,
   formatDecimal,
@@ -9,10 +10,9 @@ import {
 } from "@/features/seriesComparison/SeriesAnalysisQualityAdvisory";
 import type { SeriesAnalysisDrilldownV3 } from "@/shared/api/seriesAnalysis";
 import { formatMatchNoInEvent, formatSeriesMatchIndex } from "@/shared/domain/matchLabels";
+import { RankBadge } from "@/shared/matches/RankBadge";
 import { DataTable } from "@/shared/ui/data/DataTable";
 import { FactList } from "@/shared/ui/data/FactList";
-import { DataVizLineChart } from "@/shared/ui/dataViz/LineChart";
-import { RankBadge } from "@/shared/ui/rank/RankBadge";
 import { contentText } from "@/shared/ui/typography";
 
 import { ChangeBadge, deltaDirection, rankDeltaLabel } from "./SeriesAnalysisChangeBadge";

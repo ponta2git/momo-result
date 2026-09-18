@@ -1,14 +1,14 @@
 import { Pencil, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { startTransition, useState } from "react";
 
 import { MasterResourceRefreshNotice } from "@/features/masters/MasterResourceRefreshNotice";
 import type { MemberAliasResponse } from "@/shared/api/masters";
 import { formatApiError } from "@/shared/api/problemDetails";
 import { canonicalResultMembers, memberDisplayName } from "@/shared/domain/members";
+import { MemberSequenceLabel } from "@/shared/matches/MemberSequenceLabel";
 import { Button } from "@/shared/ui/actions/Button";
 import { IconButton } from "@/shared/ui/actions/IconButton";
 import { cn } from "@/shared/ui/cn";
-import { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
 import { AlertDialog, Dialog } from "@/shared/ui/feedback/Dialog";
 import { SelectField } from "@/shared/ui/forms/SelectField";
 import { TextField } from "@/shared/ui/forms/TextField";
@@ -20,6 +20,7 @@ type MemberAliasPanelProps = {
   createAction: (formData: FormData) => void | Promise<void>;
   createError?: string | undefined;
   createFormKey?: string | number | undefined;
+  createPending?: boolean | undefined;
   onDelete: (id: string) => Promise<void> | void;
   onRetry: () => void;
   onUpdate: (id: string, request: { memberId: string; alias: string }) => Promise<void>;
@@ -33,6 +34,7 @@ export function MemberAliasPanel({
   createAction,
   createError,
   createFormKey,
+  createPending = false,
   onDelete,
   onRetry,
   onUpdate,
@@ -66,9 +68,14 @@ export function MemberAliasPanel({
         {completion}
       </p>
       <form
-        action={createAction}
         className="grid gap-x-4 gap-y-4 md:grid-cols-[minmax(12rem,0.35fr)_minmax(12rem,1fr)_auto] md:grid-rows-[auto_auto_auto] md:gap-y-0 md:[&>[data-field-root]]:row-span-3"
         key={createFormKey}
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (createPending) return;
+          const data = new FormData(event.currentTarget);
+          startTransition(() => createAction(data));
+        }}
       >
         <SelectField
           label="プレーヤー"
@@ -89,7 +96,7 @@ export function MemberAliasPanel({
           required
         />
         <div className="grid md:col-start-3 md:row-start-2">
-          <Button pendingLabel="追加中" type="submit" variant="secondary">
+          <Button pending={createPending} pendingLabel="追加中" type="submit" variant="secondary">
             追加
           </Button>
         </div>

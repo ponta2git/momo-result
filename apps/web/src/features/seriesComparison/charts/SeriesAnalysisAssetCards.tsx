@@ -1,3 +1,4 @@
+import { DataVizQuadrantPlot } from "@/features/seriesComparison/charts/dataViz/QuadrantPlot";
 import {
   assetEvidenceLabel,
   assetEvidenceToneLabel,
@@ -13,25 +14,32 @@ import {
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
 import { SeriesAnalysisQualityAdvisory } from "@/features/seriesComparison/SeriesAnalysisQualityAdvisory";
 import type { SeriesComparisonAggregate } from "@/shared/api/seriesAnalysis";
+import { MemberSequenceLabel } from "@/shared/matches/MemberSequenceLabel";
 import { cn } from "@/shared/ui/cn";
 import { Disclosure } from "@/shared/ui/data/Collapsible";
-import { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
-import { DataVizQuadrantPlot } from "@/shared/ui/dataViz/QuadrantPlot";
 import { contentText } from "@/shared/ui/typography";
 
-export function AssetComparisonCards({ response }: { response: SeriesComparisonAggregate }) {
-  const revenueLeaders = response.highlights.find(
+export function AssetComparisonCards({
+  assetStyleProfiles,
+  performanceProfiles,
+  metricsByPlayer,
+  highlights,
+}: {
+  assetStyleProfiles: SeriesComparisonAggregate["assetStyleProfiles"];
+  performanceProfiles: SeriesComparisonAggregate["performanceProfiles"];
+  metricsByPlayer: SeriesComparisonAggregate["metricsByPlayer"];
+  highlights: SeriesComparisonAggregate["highlights"];
+}) {
+  const revenueLeaders = highlights.find(
     (highlight) => highlight.metricId === "revenue.average",
   )?.leaderMemberIds;
   return (
     <div className="grid items-stretch gap-6 md:grid-cols-2 xl:grid-cols-4">
-      {response.assetStyleProfiles.entries.map((entry) => {
-        const performance = response.performanceProfiles.entries.find(
+      {assetStyleProfiles.entries.map((entry) => {
+        const performance = performanceProfiles.entries.find(
           (candidate) => candidate.memberId === entry.memberId,
         );
-        const metrics = response.metricsByPlayer.find(
-          (candidate) => candidate.memberId === entry.memberId,
-        );
+        const metrics = metricsByPlayer.find((candidate) => candidate.memberId === entry.memberId);
         return (
           <article className="flex h-full min-w-0 flex-col gap-6" key={entry.memberId}>
             <div className="flex items-start justify-between gap-2">
@@ -189,9 +197,9 @@ export function AssetComparisonCards({ response }: { response: SeriesComparisonA
                   <AssetDetailFact label="大敗" value={`${entry.metrics.heavyLossCount}件`} />
                 </dl>
                 <p className={cn(contentText.supporting, "mt-2")}>
-                  判定境界: 大勝 {formatManYen(response.assetStyleProfiles.blowoutWinThreshold)}・
-                  惜しい2位 {formatManYen(response.assetStyleProfiles.nearMissSecondThreshold)}
-                  ・大敗 {formatManYen(response.assetStyleProfiles.heavyLossThreshold)}
+                  判定境界: 大勝 {formatManYen(assetStyleProfiles.blowoutWinThreshold)}・ 惜しい2位{" "}
+                  {formatManYen(assetStyleProfiles.nearMissSecondThreshold)}
+                  ・大敗 {formatManYen(assetStyleProfiles.heavyLossThreshold)}
                 </p>
               </Disclosure>
             </div>
@@ -211,7 +219,13 @@ function AssetDetailFact({ label, value }: { label: string; value: string }) {
   );
 }
 
-export function StrategyProfileQuadrant({ response }: { response: SeriesComparisonAggregate }) {
+export function StrategyProfileQuadrant({
+  players,
+  profile,
+}: {
+  players: SeriesComparisonAggregate["players"];
+  profile: SeriesComparisonAggregate["performanceProfiles"];
+}) {
   return (
     <DataVizQuadrantPlot
       ariaLabel="物件収益比率と順位スコアの4象限"
@@ -221,21 +235,21 @@ export function StrategyProfileQuadrant({ response }: { response: SeriesComparis
         topLeft: "遊戯王型（カード重視）／上位",
         topRight: "桃鉄型（物件重視）／上位",
       }}
-      points={response.performanceProfiles.entries.map((entry) => ({
+      points={profile.entries.map((entry) => ({
         label: `${entry.displayName}、物件収益比率${formatPercent(entry.averageRevenueAssetRate)}、順位スコア${formatDecimal(entry.averageRankScore)}`,
         seriesId: entry.memberId,
         x: entry.averageRevenueAssetRate,
         y: entry.averageRankScore,
       }))}
-      seriesIdentity={response.players.map((player) => ({
+      seriesIdentity={players.map((player) => ({
         id: player.memberId,
         label: player.displayName,
       }))}
       xAxisLabel="物件収益÷総資産"
-      xMidpoint={response.performanceProfiles.averageRevenueAssetRateMedian}
+      xMidpoint={profile.averageRevenueAssetRateMedian}
       yAxisLabel="順位スコア（高いほど上位）"
       yDomain={[1, 4]}
-      yMidpoint={response.performanceProfiles.averageRankScoreMedian}
+      yMidpoint={profile.averageRankScoreMedian}
     />
   );
 }

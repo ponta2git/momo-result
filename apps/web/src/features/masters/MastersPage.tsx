@@ -52,7 +52,7 @@ export function MastersPage() {
           value={page.tabs.active}
           onValueChange={(value) => page.tabs.onChange(value as typeof page.tabs.active)}
         >
-          <TabsList activateOnFocus aria-label="設定管理の表示切替">
+          <TabsList aria-label="設定管理の表示切替">
             {page.tabs.items.map((tab) => (
               <TabsTab key={tab.id} value={tab.id}>
                 {tab.label}
@@ -82,6 +82,7 @@ export function MastersPage() {
                   createAction={page.aliases.createAction}
                   createError={page.aliases.createError}
                   createFormKey={page.aliases.createFormKey}
+                  createPending={page.aliases.createPending}
                   onDelete={page.aliases.onDelete}
                   onRetry={page.aliases.onRetry}
                   onUpdate={page.aliases.onUpdate}

@@ -7,14 +7,14 @@ import type { HeldEventMatchResponse } from "@/shared/api/heldEvents";
 import { formatMatchNoInEvent } from "@/shared/domain/matchLabels";
 import { memberDisplayName } from "@/shared/domain/members";
 import { formatManYen } from "@/shared/lib/formatters";
+import { MemberSequenceLabel } from "@/shared/matches/MemberSequenceLabel";
+import { RankBadge } from "@/shared/matches/RankBadge";
 import { seriesComparisonHrefForMatch } from "@/shared/navigation/matchLinks";
 import { withReturnTo } from "@/shared/navigation/returnTo";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { cn } from "@/shared/ui/cn";
-import { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { ContentWithActions } from "@/shared/ui/layout/ContentWithActions";
-import { RankBadge } from "@/shared/ui/rank/RankBadge";
 import { contentText } from "@/shared/ui/typography";
 
 export function HeldEventMatchTimeline({

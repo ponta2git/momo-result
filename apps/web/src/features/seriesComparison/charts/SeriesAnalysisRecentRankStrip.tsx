@@ -9,36 +9,33 @@ import { SeriesAnalysisMatchLink } from "@/features/seriesComparison/navigation/
 import { SeriesAnalysisQualityAdvisory } from "@/features/seriesComparison/SeriesAnalysisQualityAdvisory";
 import type { SeriesComparisonAggregate } from "@/shared/api/seriesAnalysis";
 import { formatSeriesMatchIndex } from "@/shared/domain/matchLabels";
+import { MemberSequenceLabel } from "@/shared/matches/MemberSequenceLabel";
+import { rankColor, rankForegroundColor } from "@/shared/matches/rankPresentation";
 import { cn } from "@/shared/ui/cn";
-import { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
-import { rankColor, rankForegroundColor } from "@/shared/ui/rank/rankPresentation";
 import { contentText } from "@/shared/ui/typography";
 
 export function RecentRankStrips({
   focusedItemIds,
-  response,
+  players,
+  recentRanks,
+  matchIndexes,
 }: {
   focusedItemIds: readonly string[];
-  response: SeriesComparisonAggregate;
+  players: SeriesComparisonAggregate["players"];
+  recentRanks: SeriesComparisonAggregate["recentRanks"];
+  matchIndexes: ReadonlyMap<string, number>;
 }) {
-  const entryByMemberId = new Map(response.recentRanks.map((entry) => [entry.memberId, entry]));
-  const orderedEntries = response.players.map((player) => ({
+  const entryByMemberId = new Map(recentRanks.map((entry) => [entry.memberId, entry]));
+  const orderedEntries = players.map((player) => ({
     entry: entryByMemberId.get(player.memberId),
     player,
   }));
   const axisRows = orderedEntries.find((row) => row.entry)?.entry?.rows ?? [];
   const focusedMatchIds = new Set(
-    response.recentRanks.flatMap((entry) =>
+    recentRanks.flatMap((entry) =>
       entry.rows.filter((row) => focusedItemIds.includes(row.itemId)).map((row) => row.matchId),
     ),
   );
-  const matchIndexById = new Map<string, number>();
-  for (const point of response.strategyScatter.points) {
-    matchIndexById.set(point.matchId, point.matchIndex);
-  }
-  for (const match of response.matchDigest.recent) {
-    matchIndexById.set(match.matchId, match.matchIndex);
-  }
   const latestPointKey = axisRows.map((row) => row.matchId).join(":");
   if (axisRows.length === 0) {
     return <p className={cn(contentText.body, "py-3")}>直近順位の対象試合はありません。</p>;
@@ -57,7 +54,7 @@ export function RecentRankStrips({
               <span className="sr-only">プレーヤー</span>
             </th>
             {axisRows.map((row, pointIndex) => {
-              const matchIndex = matchIndexById.get(row.matchId);
+              const matchIndex = matchIndexes.get(row.matchId);
               const focused = focusedMatchIds.has(row.matchId);
               const showMarker =
                 focused || shouldShowRankStripMatchMarker(matchIndex, pointIndex, axisRows.length);
@@ -114,7 +111,7 @@ export function RecentRankStrips({
                 </th>
                 {axisRows.map((axisRow) => {
                   const row = rowsByMatchId.get(axisRow.matchId);
-                  const matchIndex = matchIndexById.get(axisRow.matchId);
+                  const matchIndex = matchIndexes.get(axisRow.matchId);
                   const focused = row ? focusedItemIds.includes(row.itemId) : false;
                   return (
                     <td className="h-11 w-11 min-w-11 px-0 align-middle" key={axisRow.matchId}>

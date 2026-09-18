@@ -1,15 +1,17 @@
+import { memo } from "react";
+
 import {
-  CumulativeFormCharts,
+  SeriesTrendCharts,
   MomentumMatrices,
 } from "@/features/seriesComparison/charts/SeriesAnalysisFlowCharts";
 import { MatchDigestStrip } from "@/features/seriesComparison/charts/SeriesAnalysisMatchDigest";
 import { MatchNoInEventMatrix } from "@/features/seriesComparison/charts/SeriesAnalysisMatchNoMatrix";
 import { RecentRankStrips } from "@/features/seriesComparison/charts/SeriesAnalysisRecentRankStrip";
-import type { AnalysisViewProps } from "@/features/seriesComparison/page/SeriesAnalysisViewPrimitives";
+import { playerName } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
+import type { AnalysisViewProps } from "@/features/seriesComparison/model/seriesAnalysisViewTypes";
 import {
   AnalysisSection,
   AnalysisSubsection,
-  playerName,
 } from "@/features/seriesComparison/page/SeriesAnalysisViewPrimitives";
 import {
   analysisPanelId,
@@ -17,17 +19,21 @@ import {
   AnalysisTableOfContents,
 } from "@/features/seriesComparison/page/SeriesComparisonAnalysisNavigation";
 import { SeriesAnalysisQualityAdvisory } from "@/features/seriesComparison/SeriesAnalysisQualityAdvisory";
+import { MemberSequenceLabel } from "@/shared/matches/MemberSequenceLabel";
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
-import { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
 import { contentText } from "@/shared/ui/typography";
 
-export function FlowView({
+export const FlowView = memo(function FlowView({
   focusedItemIds,
   response,
   onDrilldown,
   onFocusMatch,
 }: AnalysisViewProps & { onFocusMatch: (matchId: string) => void }) {
+  const matchIndexes = new Map<string, number>();
+  for (const matches of [response.strategyScatter.points, response.matchDigest.recent]) {
+    for (const match of matches) matchIndexes.set(match.matchId, match.matchIndex);
+  }
   const recentWindowSize = response.recentRanks[0]?.windowSize;
   const recentWindowTitle = recentWindowSize ? `直近${recentWindowSize}戦` : "直近順位";
   const matchDigestTitle =
@@ -45,7 +51,8 @@ export function FlowView({
       <AnalysisSection id="metric-match-digest" title={matchDigestTitle}>
         <MatchDigestStrip
           focusedItemIds={focusedItemIds}
-          response={response}
+          players={response.players}
+          digest={response.matchDigest}
           onFocusMatch={onFocusMatch}
         />
       </AnalysisSection>
@@ -85,7 +92,12 @@ export function FlowView({
       </AnalysisSection>
       <AnalysisSection id="metric-recent-form" title="直近順位と累積推移">
         <AnalysisSubsection id="metric-recent-form-recent" title={recentWindowTitle}>
-          <RecentRankStrips focusedItemIds={focusedItemIds} response={response} />
+          <RecentRankStrips
+            focusedItemIds={focusedItemIds}
+            players={response.players}
+            recentRanks={response.recentRanks}
+            matchIndexes={matchIndexes}
+          />
         </AnalysisSubsection>
         <div className="mt-6">
           <AnalysisSubsection
@@ -93,16 +105,24 @@ export function FlowView({
             meta={`${response.scope.matchCount}戦`}
             title="全試合の累積"
           >
-            <CumulativeFormCharts focusedItemIds={focusedItemIds} response={response} />
+            <SeriesTrendCharts
+              focusedItemIds={focusedItemIds}
+              players={response.players}
+              trends={response.trends}
+              variant="form"
+            />
           </AnalysisSubsection>
         </div>
       </AnalysisSection>
       <AnalysisSection id="metric-momentum-switch" title="順位の切り替わり">
-        <MomentumMatrices focusedItemIds={focusedItemIds} response={response} />
+        <MomentumMatrices focusedItemIds={focusedItemIds} entries={response.momentumSwitch} />
       </AnalysisSection>
       <AnalysisSection id="metric-match-no" title="開催内の第n試合傾向">
-        <MatchNoInEventMatrix response={response} />
+        <MatchNoInEventMatrix
+          entries={response.matchNoInEvent.entries}
+          players={response.players}
+        />
       </AnalysisSection>
     </div>
   );
-}
+});

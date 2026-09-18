@@ -24,11 +24,11 @@ import type {
   SeriesAnalysisPlaybookCard,
   SeriesComparisonReviewV3,
 } from "@/shared/api/seriesAnalysis";
+import { MemberSequenceLabel } from "@/shared/matches/MemberSequenceLabel";
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
 import { Disclosure } from "@/shared/ui/data/Collapsible";
 import { FactList } from "@/shared/ui/data/FactList";
-import { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
 import { Dialog } from "@/shared/ui/feedback/Dialog";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";

@@ -1,11 +1,11 @@
 import type { ReactNode } from "react";
 
-import type { MatchPerformanceContextRow } from "@/shared/domain/matchPerformanceContext";
 import { formatManYen } from "@/shared/lib/formatters";
+import type { MatchPerformanceContextRow } from "@/shared/matches/matchPerformanceContext";
+import { MemberSequenceLabel } from "@/shared/matches/MemberSequenceLabel";
+import { PlayOrderMark } from "@/shared/matches/PlayOrderMark";
+import { RankBadge } from "@/shared/matches/RankBadge";
 import { cn } from "@/shared/ui/cn";
-import { MemberSequenceLabel } from "@/shared/ui/data/MemberSequenceLabel";
-import { PlayOrderMark } from "@/shared/ui/data/PlayOrderMark";
-import { RankBadge } from "@/shared/ui/rank/RankBadge";
 import { contentText } from "@/shared/ui/typography";
 
 type MatchResultLedgerRow = MatchPerformanceContextRow & {

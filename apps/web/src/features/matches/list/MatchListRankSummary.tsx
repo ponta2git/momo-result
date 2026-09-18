@@ -1,6 +1,6 @@
 import type { MatchListItemView } from "@/features/matches/list/matchListTypes";
+import { RankBadge } from "@/shared/matches/RankBadge";
 import { cn } from "@/shared/ui/cn";
-import { RankBadge } from "@/shared/ui/rank/RankBadge";
 import { contentText } from "@/shared/ui/typography";
 
 export function MatchListRankSummary({ item }: { item: MatchListItemView }) {

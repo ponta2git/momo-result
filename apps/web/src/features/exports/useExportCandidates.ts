@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 
 import {
@@ -22,7 +22,7 @@ import {
   seasonMastersQueryOptions,
 } from "@/shared/api/queryOptions";
 import { cursorForPage } from "@/shared/lib/cursorPagination";
-import { useRetryNotice } from "@/shared/ui/feedback/useRetryNotice";
+import { useRetryNotice } from "@/shared/lib/useRetryNotice";
 
 const CANDIDATE_PAGE_SIZE = 20;
 
@@ -33,7 +33,6 @@ export function useExportCandidates({
   scope: ExportScope;
   selectedId: string;
 }) {
-  const queryClient = useQueryClient();
   const [heldEventPage, setHeldEventPage] = useState(1);
   const [matchCursor, setMatchCursor] = useState("");
   const [selectionSnapshot, setSelectionSnapshot] = useState<{
@@ -69,8 +68,8 @@ export function useExportCandidates({
   });
 
   const hasCurrentHeldEventData =
-    queryClient.getQueryData(heldEventsOptions.queryKey) !== undefined;
-  const hasCurrentMatchData = queryClient.getQueryData(matchesOptions.queryKey) !== undefined;
+    heldEventsQuery.data !== undefined && !heldEventsQuery.isPlaceholderData;
+  const hasCurrentMatchData = matchesQuery.data !== undefined && !matchesQuery.isPlaceholderData;
   const seasons = seasonsQuery.data?.items ?? [];
   const gameTitles = gameTitlesQuery.data?.items ?? [];
   const heldEvents =

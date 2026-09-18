@@ -24,10 +24,10 @@ import {
   matchListQueryOptions,
   matchListSummaryQueryOptions,
 } from "@/shared/api/queryOptions";
-import { useHeldEventPickerDirectory } from "@/shared/api/useHeldEventPickerDirectory";
-import { useMasterNameDirectory } from "@/shared/api/useMasterNameDirectory";
+import { useHeldEventPickerDirectory } from "@/shared/heldEvents/useHeldEventPickerDirectory";
 import type { PaginationState } from "@/shared/lib/pagination";
-import { useRetryNotice } from "@/shared/ui/feedback/useRetryNotice";
+import { useRetryNotice } from "@/shared/lib/useRetryNotice";
+import { useMasterNameDirectory } from "@/shared/masters/useMasterNameDirectory";
 
 const matchListStaleTimeMs = 10_000;
 

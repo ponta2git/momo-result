@@ -68,7 +68,7 @@ function Harness({ gate }: { gate?: Promise<void> | undefined }) {
   );
 }
 
-function setup({ gate, url = initialUrl }: { gate?: Promise<void>; url?: string } = {}) {
+async function setup({ gate, url = initialUrl }: { gate?: Promise<void>; url?: string } = {}) {
   const router = createMemoryRouter(
     [
       { path: "/matches", element: <p>試合一覧</p> },
@@ -76,20 +76,22 @@ function setup({ gate, url = initialUrl }: { gate?: Promise<void>; url?: string 
     ],
     { initialEntries: ["/matches", url], initialIndex: 1 },
   );
-  render(
-    <StrictMode>
-      <QueryClientProvider client={createTestQueryClient()}>
-        <RouterProvider router={router} />
-      </QueryClientProvider>
-    </StrictMode>,
-  );
+  await act(async () => {
+    render(
+      <StrictMode>
+        <QueryClientProvider client={createTestQueryClient()}>
+          <RouterProvider router={router} />
+        </QueryClientProvider>
+      </StrictMode>,
+    );
+  });
   return router;
 }
 
 describe("series analysis section navigation", () => {
   it("changes the actual owner select without a new arrival or history entry under Strict Mode", async () => {
     const user = userEvent.setup();
-    const router = setup({ url: `${initialUrl}&view=context#metric-play-order` });
+    const router = await setup({ url: `${initialUrl}&view=context#metric-play-order` });
     const select = await screen.findByRole("combobox", { name: "オーナー比較の指標" });
     // Arrive by ordinary scrolling rather than by the owner's table-of-contents link.
     await selectOption(user, select, "ginji.average");
@@ -115,7 +117,7 @@ describe("series analysis section navigation", () => {
   it("reaches evidence and returns to the expanded hypothesis with exactly one history entry", async () => {
     const user = userEvent.setup();
     const restoration = window.history.scrollRestoration;
-    const router = setup();
+    const router = await setup();
     expect(window.history.scrollRestoration).toBe("manual");
     window.dispatchEvent(new Event("pagehide"));
     expect(window.history.scrollRestoration).toBe(restoration);
@@ -149,7 +151,7 @@ describe("series analysis section navigation", () => {
   it("finishes arrival when the current body becomes ready", async () => {
     const user = userEvent.setup();
     const gate = createDeferred<void>();
-    setup({ gate: gate.promise });
+    await setup({ gate: gate.promise });
     await user.click(screen.getByRole("link", { name: "ぽんたの詳しい分析" }));
     const heading = await screen.findByRole("heading", { name: "物件収益と最終順位" });
     expect(heading).not.toHaveFocus();
@@ -160,7 +162,7 @@ describe("series analysis section navigation", () => {
   it("waits for the current body and cancels arrival when the user moves to another control", async () => {
     const user = userEvent.setup();
     const gate = createDeferred<void>();
-    setup({ gate: gate.promise });
+    await setup({ gate: gate.promise });
     await user.click(screen.getByRole("link", { name: "ぽんたの詳しい分析" }));
     const heading = await screen.findByRole("heading", { name: "物件収益と最終順位" });
     expect(heading).not.toHaveFocus();
@@ -170,7 +172,9 @@ describe("series analysis section navigation", () => {
   });
 
   it("preserves the section through URL canonicalization on direct entry", async () => {
-    const router = setup({ url: `${initialUrl}&view=drivers&unused=1#metric-revenue-outcome` });
+    const router = await setup({
+      url: `${initialUrl}&view=drivers&unused=1#metric-revenue-outcome`,
+    });
     await waitFor(() =>
       expect(screen.getByRole("heading", { name: "物件収益と最終順位" })).toHaveFocus(),
     );

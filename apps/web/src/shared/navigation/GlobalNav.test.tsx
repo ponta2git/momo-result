@@ -3,7 +3,7 @@ import { BarChart3, Database, Trophy } from "lucide-react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
-import { GlobalNav } from "@/shared/ui/layout/GlobalNav";
+import { GlobalNav } from "@/shared/navigation/GlobalNav";
 
 const items = [
   { icon: <Trophy />, label: "試合", to: "/matches" },

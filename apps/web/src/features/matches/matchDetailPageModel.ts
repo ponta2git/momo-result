@@ -1,6 +1,6 @@
 import type { MatchFeatureBadge } from "@/features/matches/matchDetailViewModel";
 import type { MatchDetailResponse } from "@/shared/api/matches";
-import type { matchPerformanceContextFromArtifact } from "@/shared/domain/matchPerformanceContext";
+import type { matchPerformanceContextFromArtifact } from "@/shared/matches/matchPerformanceContext";
 
 export type MatchDetailRefreshModel = {
   pending: boolean;

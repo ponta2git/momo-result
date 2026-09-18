@@ -75,26 +75,6 @@ export function OcrCapturePage() {
           </div>
         ) : null}
 
-        {feedback.memberAliases.error ? (
-          <Notice
-            action={
-              <Button
-                pending={feedback.memberAliases.refreshing}
-                pendingLabel="再読み込み中"
-                size="sm"
-                variant="secondary"
-                onClick={feedback.memberAliases.refresh}
-              >
-                読み替え設定を再読み込み
-              </Button>
-            }
-            tone="warning"
-            title="プレーヤー名の読み替えを取得できません"
-          >
-            <p>OCR取り込みは続けられますが、登録済みの別名を読み取り候補に反映できません。</p>
-          </Notice>
-        ) : null}
-
         <section className={panelClass} aria-labelledby="ocr-record-destination">
           <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
             <h2 id="ocr-record-destination" className={panelTitleClass}>
@@ -259,6 +239,7 @@ export function OcrCapturePage() {
       </PageContentSurface>
 
       <OcrStartDialog
+        navigationPending={submission.dialog.navigationPending}
         state={submission.dialog.state}
         onClose={submission.dialog.close}
         onConfirm={submission.dialog.confirm}

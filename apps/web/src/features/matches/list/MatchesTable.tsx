@@ -1,3 +1,5 @@
+import { memo } from "react";
+
 import { MatchListExportLink } from "@/features/matches/list/MatchListExportLink";
 import { MatchListMatchIdentity } from "@/features/matches/list/MatchListMatchIdentity";
 import { MatchListRankSummary } from "@/features/matches/list/MatchListRankSummary";
@@ -15,7 +17,7 @@ type MatchesTableProps = {
   rowActions: MatchListRowActions;
 };
 
-export function MatchesTable({ items, rowActions }: MatchesTableProps) {
+export const MatchesTable = memo(function MatchesTable({ items, rowActions }: MatchesTableProps) {
   const actionsDisabled = rowActions.disabled ?? false;
   return (
     <DataTable
@@ -71,4 +73,4 @@ export function MatchesTable({ items, rowActions }: MatchesTableProps) {
       verticalAlign="top"
     />
   );
-}
+});

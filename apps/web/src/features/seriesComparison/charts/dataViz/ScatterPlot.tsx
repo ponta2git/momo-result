@@ -1,10 +1,14 @@
-import { finiteNumber, niceCeil, numberTicks } from "@/shared/ui/dataViz/scales";
+import {
+  finiteNumber,
+  niceCeil,
+  numberTicks,
+} from "@/features/seriesComparison/charts/dataViz/scales";
 import {
   DataVizLegend,
-  DataVizPointMarkWithPresentation,
+  DataVizPointMark,
   createDataVizSeriesPresentationLookup,
-} from "@/shared/ui/dataViz/seriesPresentation";
-import type { DataVizSeriesIdentity } from "@/shared/ui/dataViz/seriesPresentation";
+} from "@/features/seriesComparison/charts/dataViz/seriesPresentation";
+import type { DataVizSeriesIdentity } from "@/features/seriesComparison/charts/dataViz/seriesPresentation";
 
 export type DataVizScatterPoint = {
   href?: string | undefined;
@@ -134,7 +138,7 @@ export function DataVizScatterPlot({
           {plotted.map((point) => {
             const focused = focusItemIdSet.has(point.itemId);
             const mark = (
-              <DataVizPointMarkWithPresentation
+              <DataVizPointMark
                 cx={x(point.x)}
                 cy={y(point.y)}
                 opacity={focused ? 1 : focusItemIds.length > 0 ? 0.48 : 0.78}
@@ -144,7 +148,7 @@ export function DataVizScatterPlot({
                 size={focused ? 5 : 3.5}
               >
                 <title>{`${point.label}${focused ? "、この試合" : ""}`}</title>
-              </DataVizPointMarkWithPresentation>
+              </DataVizPointMark>
             );
             return point.href ? (
               <a

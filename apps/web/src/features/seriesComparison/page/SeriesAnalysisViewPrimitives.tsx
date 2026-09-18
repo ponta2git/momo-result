@@ -1,8 +1,7 @@
 import { BookOpenText } from "lucide-react";
 import type { ReactNode } from "react";
 
-import type { SeriesAnalysisDrilldownSelection } from "@/features/seriesComparison/drilldowns/SeriesAnalysisDrilldownContent";
-import type { SeriesAnalysisPlayer, SeriesComparisonAggregate } from "@/shared/api/seriesAnalysis";
+import type { SeriesComparisonAggregate } from "@/shared/api/seriesAnalysis";
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
 import { Disclosure } from "@/shared/ui/data/Collapsible";
@@ -12,7 +11,11 @@ import { Dialog } from "@/shared/ui/feedback/Dialog";
 import { readableTextWidthClass } from "@/shared/ui/layout/readableText";
 import { contentText } from "@/shared/ui/typography";
 
-export function MetricDefinitions({ response }: { response: SeriesComparisonAggregate }) {
+export function MetricDefinitions({
+  definitions,
+}: {
+  definitions: SeriesComparisonAggregate["metricDefinitions"];
+}) {
   return (
     <Dialog
       description="分析に共通する指標の比べ方を示します。"
@@ -26,7 +29,7 @@ export function MetricDefinitions({ response }: { response: SeriesComparisonAggr
       <FactList
         ariaLabel="指標ごとの比べ方"
         columns={2}
-        items={response.metricDefinitions.map((definition) => ({
+        items={definitions.map((definition) => ({
           id: definition.metricId,
           label: definition.label,
           value: metricReadingCue(definition),
@@ -36,12 +39,6 @@ export function MetricDefinitions({ response }: { response: SeriesComparisonAggr
     </Dialog>
   );
 }
-
-export type AnalysisViewProps = {
-  focusedItemIds: readonly string[];
-  response: SeriesComparisonAggregate;
-  onDrilldown: (selection: SeriesAnalysisDrilldownSelection) => void;
-};
 
 export function AnalysisSection({
   children,
@@ -128,16 +125,6 @@ export function MetricValue({ label, value }: { label: string; value: string }) 
       <dd className={cn(contentText.body, "mt-0.5 tabular-nums")}>{value}</dd>
     </div>
   );
-}
-
-export function playerName(players: SeriesAnalysisPlayer[], memberId: string): string {
-  return (
-    players.find((player) => player.memberId === memberId)?.displayName ?? "プレーヤー名未取得"
-  );
-}
-
-export function memberNames(players: SeriesAnalysisPlayer[], memberIds: string[]): string {
-  return memberIds.map((memberId) => playerName(players, memberId)).join("、") || "—";
 }
 
 function metricReadingCue(

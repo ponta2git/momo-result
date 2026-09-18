@@ -1,7 +1,7 @@
-import type { ScreenType, SlotKind } from "@/shared/api/enums";
-import { parseSlotKind } from "@/shared/api/enums";
 import type { OcrFailureResponse } from "@/shared/api/ocrJobs";
 import type { NormalizedApiError } from "@/shared/api/problemDetails";
+import type { ScreenType, SlotKind } from "@/shared/domain/ocr";
+import { parseSlotKind } from "@/shared/domain/ocr";
 
 export type InputSource = "upload" | "camera";
 

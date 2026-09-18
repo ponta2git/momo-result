@@ -1,13 +1,13 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { RankBadge, RankTrail } from "@/shared/ui/rank/RankBadge";
+import { RankBadge, RankTrail } from "@/shared/matches/RankBadge";
 import {
   rankBadgeBackgroundColor,
   rankBadgeBorderColor,
   rankColor,
   rankForegroundColor,
-} from "@/shared/ui/rank/rankPresentation";
+} from "@/shared/matches/rankPresentation";
 
 describe("RankBadge", () => {
   it("keeps the ordinal text while applying the canonical rank color", () => {

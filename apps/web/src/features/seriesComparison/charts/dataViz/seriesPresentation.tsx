@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 import { memberSequence } from "@/shared/domain/members";
-import { playOrderPresentation } from "@/shared/ui/data/PlayOrderMark";
+import { playOrderPresentation } from "@/shared/matches/PlayOrderMark";
 
 export type DataVizSeriesIdentity = { id: string; label: string };
 export type DataVizSeriesShape = "circle" | "diamond" | "square" | "triangle";
@@ -107,6 +107,7 @@ type DataVizPointMarkProps = {
   cy: number;
   opacity?: number;
   outlined?: boolean;
+  presentation: DataVizSeriesPresentation;
   seriesId: string;
   size?: number;
 };
@@ -117,35 +118,10 @@ export function DataVizPointMark({
   cy,
   opacity = 1,
   outlined = false,
-  seriesId,
-  size = 4,
-}: DataVizPointMarkProps) {
-  return (
-    <DataVizPointMarkWithPresentation
-      cx={cx}
-      cy={cy}
-      opacity={opacity}
-      outlined={outlined}
-      presentation={dataVizSeriesPresentation(seriesId)}
-      seriesId={seriesId}
-      size={size}
-    >
-      {children}
-    </DataVizPointMarkWithPresentation>
-  );
-}
-
-/** @internal Prefer DataVizPointMark unless the caller already owns a render-local lookup. */
-export function DataVizPointMarkWithPresentation({
-  children,
-  cx,
-  cy,
-  opacity = 1,
-  outlined = false,
   presentation,
   seriesId,
   size = 4,
-}: DataVizPointMarkProps & { presentation: DataVizSeriesPresentation }) {
+}: DataVizPointMarkProps) {
   const common = {
     "data-series-id": seriesId,
     "data-series-shape": presentation.shape,
@@ -219,7 +195,7 @@ export function DataVizLegend({
                   y1="6"
                   y2="6"
                 />
-                <DataVizPointMarkWithPresentation
+                <DataVizPointMark
                   cx={14}
                   cy={6}
                   presentation={presentation}
@@ -229,7 +205,7 @@ export function DataVizLegend({
               </svg>
             ) : (
               <svg aria-hidden="true" className="size-3 shrink-0" viewBox="0 0 12 12">
-                <DataVizPointMarkWithPresentation
+                <DataVizPointMark
                   cx={6}
                   cy={6}
                   presentation={presentation}

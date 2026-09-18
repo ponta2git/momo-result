@@ -17,7 +17,7 @@ import type { getMatch } from "@/shared/api/matches";
 import type { getOcrDraftsBulk } from "@/shared/api/ocrDrafts";
 import { buildMemberAliasDirectory } from "@/shared/domain/memberDirectory";
 import type { MemberAliasRecord } from "@/shared/domain/memberDirectory";
-import type { SlotMap } from "@/shared/lib/slotMap";
+import type { SlotMap } from "@/shared/domain/slotMap";
 
 type MatchDetail = Awaited<ReturnType<typeof getMatch>>;
 type DraftDetail = Awaited<ReturnType<typeof getMatchDraftDetail>>;

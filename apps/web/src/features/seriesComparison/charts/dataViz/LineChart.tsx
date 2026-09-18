@@ -1,10 +1,15 @@
-import { finiteNumber, indexTicks, niceCeil, numberTicks } from "@/shared/ui/dataViz/scales";
+import {
+  finiteNumber,
+  indexTicks,
+  niceCeil,
+  numberTicks,
+} from "@/features/seriesComparison/charts/dataViz/scales";
 import {
   DataVizLegend,
-  DataVizPointMarkWithPresentation,
+  DataVizPointMark,
   createDataVizSeriesPresentationLookup,
-} from "@/shared/ui/dataViz/seriesPresentation";
-import type { DataVizSeriesIdentity } from "@/shared/ui/dataViz/seriesPresentation";
+} from "@/features/seriesComparison/charts/dataViz/seriesPresentation";
+import type { DataVizSeriesIdentity } from "@/features/seriesComparison/charts/dataViz/seriesPresentation";
 
 export type DataVizLineSeries = {
   id: string;
@@ -184,7 +189,7 @@ export function DataVizLineChart({
                   ? item.points.map((point) => {
                       const focused = focusItemIdSet.has(point.itemId);
                       return (
-                        <DataVizPointMarkWithPresentation
+                        <DataVizPointMark
                           cx={x(point.index)}
                           cy={y(point.value)}
                           key={point.itemId}
@@ -198,7 +203,7 @@ export function DataVizLineChart({
                   : item.points
                       .filter((point) => focusItemIdSet.has(point.itemId))
                       .map((point) => (
-                        <DataVizPointMarkWithPresentation
+                        <DataVizPointMark
                           cx={x(point.index)}
                           cy={y(point.value)}
                           key={point.itemId}

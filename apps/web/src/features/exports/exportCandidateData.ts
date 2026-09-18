@@ -4,7 +4,6 @@ import type { MatchDetailResponse, MatchSummaryResponse } from "@/shared/api/mat
 import { formatMatchNoInEvent } from "@/shared/domain/matchLabels";
 
 import type { ExportCandidate } from "./exportTypes";
-import { formatDateTime } from "./exportViewModel";
 
 type ExportCandidateResolution = {
   candidate: ExportCandidate | undefined;
@@ -104,4 +103,15 @@ export function candidateFromMatchDetail(
         value: match.matchId,
       }
     : undefined;
+}
+
+function formatDateTime(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mi = String(d.getMinutes()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd} ${hh}:${mi}`;
 }

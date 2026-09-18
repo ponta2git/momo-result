@@ -7,7 +7,7 @@ import type { OcrDraftResponse } from "@/shared/api/ocrDrafts";
 import { emptyIncidentCountsByKey } from "@/shared/domain/incidents";
 import type { IncidentKey, IncidentLabel } from "@/shared/domain/incidents";
 import { defaultOwnerMemberId, workspaceInputMembers } from "@/shared/domain/members";
-import type { SlotMap } from "@/shared/lib/slotMap";
+import type { SlotMap } from "@/shared/domain/slotMap";
 
 export type { IncidentKey, IncidentLabel };
 export type ReviewIncidentCounts = Record<IncidentLabel, number>;
@@ -58,6 +58,39 @@ export type MatchFormValues = Omit<ConfirmMatchFormValues, "noteBody"> & {
   matchDraftId?: string;
   noteBody: string;
 };
+
+/** Match context edited independently of score rows, OCR evidence, and workflow identifiers. */
+export type MatchSetupValues = Pick<
+  MatchFormValues,
+  | "gameTitleId"
+  | "heldEventId"
+  | "mapMasterId"
+  | "matchNoInEvent"
+  | "ownerMemberId"
+  | "playedAt"
+  | "seasonMasterId"
+>;
+
+export function matchSetupValues(values: MatchFormValues): MatchSetupValues {
+  const {
+    gameTitleId,
+    heldEventId,
+    mapMasterId,
+    matchNoInEvent,
+    ownerMemberId,
+    playedAt,
+    seasonMasterId,
+  } = values;
+  return {
+    gameTitleId,
+    heldEventId,
+    mapMasterId,
+    matchNoInEvent,
+    ownerMemberId,
+    playedAt,
+    seasonMasterId,
+  };
+}
 
 export type MatchWorkspaceInitialData = {
   draftByKind: DraftByKind;

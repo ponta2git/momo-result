@@ -259,7 +259,7 @@ object OcrWorkerJobMessageV2:
     s"$name must be 1-$MaxIdLength printable ASCII characters",
   )
 
-  private def validateHints(hints: OcrJobHints): Either[String, Unit] =
+  private[api] def validateHints(hints: OcrJobHints): Either[String, Unit] =
     val encoded = printer.print(hints.asJson.deepDropNullValues).getBytes(StandardCharsets.UTF_8)
     val errors = OcrJobHints.validationErrors(hints)
     if errors.nonEmpty then Left(errors.mkString(" "))

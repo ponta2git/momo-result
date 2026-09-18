@@ -1,9 +1,9 @@
 import { Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
 
-import { layoutFamilies, layoutFamilyLabels } from "@/shared/api/enums";
-import type { LayoutFamily } from "@/shared/api/enums";
 import { formatApiError } from "@/shared/api/problemDetails";
+import { layoutFamilies, layoutFamilyLabels } from "@/shared/domain/ocr";
+import type { LayoutFamily } from "@/shared/domain/ocr";
 import { Button } from "@/shared/ui/actions/Button";
 import { IconButton } from "@/shared/ui/actions/IconButton";
 import { AlertDialog, Dialog } from "@/shared/ui/feedback/Dialog";

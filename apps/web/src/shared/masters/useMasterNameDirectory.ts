@@ -12,7 +12,7 @@ import {
   mapMastersQueryOptions,
   seasonMastersQueryOptions,
 } from "@/shared/api/queryOptions";
-import { useRetryNotice } from "@/shared/ui/feedback/useRetryNotice";
+import { useRetryNotice } from "@/shared/lib/useRetryNotice";
 
 const noGameTitles: GameTitleResponse[] = [];
 const noMaps: MapMasterResponse[] = [];

@@ -1,5 +1,5 @@
-import { parseLayoutFamily as parseLayoutFamilyValue } from "@/shared/api/enums";
-import type { LayoutFamily } from "@/shared/api/enums";
+import { parseLayoutFamily as parseLayoutFamilyValue } from "@/shared/domain/ocr";
+import type { LayoutFamily } from "@/shared/domain/ocr";
 
 export function normalizeName(name: string): string {
   return name.trim();

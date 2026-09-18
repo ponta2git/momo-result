@@ -3,11 +3,41 @@ import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  cacheCreatedMaster,
   invalidateMasterResourceCaches,
   invalidateMemberAliasCaches,
 } from "@/features/masters/masterResourceCache";
+import { createDeferred } from "@/test/deferred";
 
 describe("masterResourceCache", () => {
+  it("keeps a confirmed creation when an older list request finishes and retries without duplication", async () => {
+    const queryClient = new QueryClient();
+    const queryKey = ["masters", "game-titles", "admin-list", "account-1"];
+    const existing = { id: "existing", name: "元の作品" };
+    const created = { id: "created", name: "追加作品" };
+    const original = [existing];
+    queryClient.setQueryData(queryKey, original);
+    const response = createDeferred<typeof original>();
+    const fetching = queryClient
+      .fetchQuery({ queryKey, queryFn: () => response.promise })
+      .catch(() => undefined);
+
+    await cacheCreatedMaster(queryClient, queryKey, created);
+    response.resolve(original);
+    await fetching;
+    await cacheCreatedMaster(queryClient, queryKey, created);
+
+    expect(queryClient.getQueryData(queryKey)).toEqual([existing, created]);
+    expect(original).toEqual([existing]);
+  });
+
+  it("does not present a creation as a complete unrequested directory", async () => {
+    const queryClient = new QueryClient();
+    const queryKey = ["masters", "map-masters", "admin-list", "account-1", "unvisited"];
+    await cacheCreatedMaster(queryClient, queryKey, { id: "created" });
+    expect(queryClient.getQueryData(queryKey)).toBeUndefined();
+  });
+
   it.each([
     {
       expectedKeys: [

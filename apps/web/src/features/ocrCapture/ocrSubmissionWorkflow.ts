@@ -1,12 +1,13 @@
 import { requestedScreenTypeForSlot } from "@/features/ocrCapture/captureState";
 import type { CaptureSlotState } from "@/features/ocrCapture/captureState";
+import type { OcrSubmissionInput } from "@/features/ocrCapture/ocrSubmissionPlan";
 import { setupSchema } from "@/features/ocrCapture/schema";
-import type { SetupFormValues } from "@/features/ocrCapture/schema";
 import { pickOcrTargets, toUploadingSlot } from "@/features/ocrCapture/slotPolicy";
-import { parseOcrJobStatus } from "@/shared/api/enums";
-import type { SlotKind } from "@/shared/api/enums";
 import type { CreateMatchDraftRequest, MatchDraftResponse } from "@/shared/api/matchDrafts";
+import type { OcrJobHintsRequest } from "@/shared/api/ocrJobs";
 import { normalizeDisplayApiError } from "@/shared/api/problemDetails";
+import { parseOcrJobStatus } from "@/shared/domain/ocr";
+import type { SlotKind } from "@/shared/domain/ocr";
 
 export type OcrSubmissionResult =
   | { status: "empty" }
@@ -21,7 +22,7 @@ export type OcrSubmissionProgress =
   | { current: number; phase: "submitting_image"; slotKind: SlotKind; total: number }
   | { completed: number; phase: "finalizing"; total: number };
 
-export type OcrSubmissionWorkflowParams = {
+export type OcrSubmissionWorkflowParams = OcrSubmissionInput & {
   cancelDraft: (matchDraftId: string) => Promise<unknown>;
   createDraft: (request: CreateMatchDraftRequest) => Promise<MatchDraftResponse>;
   createPlayedAtIso: () => string;
@@ -34,10 +35,6 @@ export type OcrSubmissionWorkflowParams = {
     upload: { imageId: string };
   }>;
   onProgress?: ((progress: OcrSubmissionProgress) => void) | undefined;
-  selectedGameTitle: { id: string; layoutFamily?: string | null } | undefined;
-  selectedHeldEvent?: { heldAt: string; id: string } | undefined;
-  setup: SetupFormValues;
-  slots: readonly CaptureSlotState[];
   updateSlot: (slot: CaptureSlotState) => void;
 };
 
@@ -155,7 +152,7 @@ export function ocrJobRequestForSlot(
   matchDraftId: string,
   slot: CaptureSlotState,
   imageId: string,
-  hints: Record<string, unknown>,
+  hints: OcrJobHintsRequest,
 ) {
   return {
     imageId,

@@ -10,6 +10,7 @@ use tracing::{Instrument, error, info, info_span, warn};
 
 pub(crate) mod artifact;
 pub(crate) mod child;
+mod child_process;
 pub(crate) mod child_report;
 pub(crate) mod config;
 pub(crate) mod control;
@@ -205,7 +206,7 @@ pub(crate) async fn run(
     post_commit_sink: PostCommitSink,
     mut shutdown: watch::Receiver<bool>,
 ) -> Result<(), ConsumerError> {
-    if !crate::process::managed_analysis_runtime_supported() {
+    if !child_process::managed_analysis_runtime_supported() {
         let error = ConsumerError::Process(ProcessError::UnsupportedPlatform);
         log_startup_failure("platform_contract", &error);
         return Err(error);
@@ -668,7 +669,7 @@ mod tests {
     use std::error::Error as StdError;
 
     use super::*;
-    use crate::outbox::{OutboxKind, PostCommitEffects};
+    use crate::outbox::PostCommitEffects;
 
     #[test]
     fn idle_reads_preserve_capability_and_cleanup_deadlines() {
@@ -691,14 +692,14 @@ mod tests {
 
     #[test]
     fn closed_sink_blocks_a_committed_queue_disposition() {
-        let (sink, receiver) = PostCommitSink::channel(OutboxKind::SeriesAnalysis);
+        let (sink, receiver) = PostCommitSink::channel();
         drop(receiver);
 
         let result = submit_control_outcome(
             &sink,
             ControlOutcome::new(
                 DeliveryDisposition::Acknowledge,
-                PostCommitEffects::wake(OutboxKind::SeriesAnalysis),
+                PostCommitEffects::WakeAnalysis,
             ),
         );
 
@@ -742,14 +743,14 @@ mod tests {
 
     #[test]
     fn recovery_ack_cannot_pass_a_required_post_commit_effect() {
-        let (sink, receiver) = PostCommitSink::channel(OutboxKind::SeriesAnalysis);
+        let (sink, receiver) = PostCommitSink::channel();
         drop(receiver);
 
         let result = submit_control_outcome(
             &sink,
             ControlOutcome::new(
                 ClaimResult::RecoveredCurrentJob,
-                PostCommitEffects::wake(OutboxKind::SeriesAnalysis),
+                PostCommitEffects::WakeAnalysis,
             ),
         );
 

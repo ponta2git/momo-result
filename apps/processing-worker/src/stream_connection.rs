@@ -1,4 +1,4 @@
-//! Timing policy for the dedicated Redis Streams consumer connections.
+//! Bounded Redis connections for blocking delivery reads and nonblocking outbox writes.
 
 use std::time::Duration;
 
@@ -11,18 +11,29 @@ use crate::pel_recovery::MAXIMUM_READ_BLOCK;
 
 pub(crate) const RESPONSE_TIMEOUT: Duration =
     MAXIMUM_READ_BLOCK.saturating_add(Duration::from_secs(1));
+pub(crate) const PUBLISH_RESPONSE_TIMEOUT: Duration = Duration::from_secs(5);
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 
 pub(crate) async fn connect(client: &Client) -> Result<ConnectionManager, RedisError> {
-    client.get_connection_manager_with_config(config()).await
+    client
+        .get_connection_manager_with_config(config(RESPONSE_TIMEOUT))
+        .await
 }
 
-fn config() -> ConnectionManagerConfig {
+/// The coordinator owns retry timing. A stalled append must release its durable claim for
+/// recovery instead of inheriting the driver's unbounded default response wait.
+pub(crate) async fn connect_publisher(client: &Client) -> Result<ConnectionManager, RedisError> {
+    client
+        .get_connection_manager_with_config(config(PUBLISH_RESPONSE_TIMEOUT))
+        .await
+}
+
+fn config(response_timeout: Duration) -> ConnectionManagerConfig {
     ConnectionManagerConfig::default()
         .set_connection_timeout(CONNECT_TIMEOUT)
-        .set_response_timeout(RESPONSE_TIMEOUT)
+        .set_response_timeout(response_timeout)
         // Consumers propagate dependency errors and drop their private connection. The process
-        // supervisor owns retry/restart; internal retries must not extend its shutdown budget.
+        // supervisor/coordinator owns retries; connection retries must not extend shutdown budgets.
         .set_number_of_retries(0)
 }
 

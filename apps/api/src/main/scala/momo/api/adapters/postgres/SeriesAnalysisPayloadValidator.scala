@@ -10,6 +10,7 @@ import com.networknt.schema.{InputFormat, OutputFormat, Schema, SchemaLocation}
 import io.circe.Json
 import io.circe.parser.parse
 
+import momo.api.contracts.seriesanalysis.SeriesAnalysisOwnerSchemas
 import momo.api.domain.{
   SeriesAnalysisChunkKind,
   SeriesAnalysisChunkRequest,
@@ -27,12 +28,6 @@ import momo.api.encoding.Utf8
  */
 private[postgres] object SeriesAnalysisPayloadValidator:
   private val SchemaResourceDirectory = "momo/api/series-analysis-schemas"
-  private val SchemaFiles = Map(
-    SeriesAnalysisChunkKind.Aggregate -> "series-analysis-aggregate-v3.schema.json",
-    SeriesAnalysisChunkKind.Review -> "series-analysis-review-v3.schema.json",
-    SeriesAnalysisChunkKind.Drilldown -> "series-analysis-drilldown-v3.schema.json",
-    SeriesAnalysisChunkKind.MatchContext -> "series-analysis-match-context-v1.schema.json",
-  )
   private val OwnerDialect = Dialect
     .builder(Dialects.getDraft202012())
     .keyword(new NonValidationKeyword("x-momo-discriminator"))
@@ -43,15 +38,14 @@ private[postgres] object SeriesAnalysisPayloadValidator:
     .build()
   private val Registry = com.networknt.schema.SchemaRegistry.withDialect(OwnerDialect)
   private val JsonReader = NodeReader.builder().build()
-  private val Schemas = SchemaFiles.view.mapValues(loadSchema).toMap
-  private val CurrentAggregateFile = "series-analysis-aggregate-v4.schema.json"
-  private val CurrentAggregate = loadSchema(CurrentAggregateFile)
-  private val MaximumTextBytes =
-    ownerMaximumTextBytes(SchemaFiles.values.toSet + CurrentAggregateFile)
+  private val SchemaFiles = SeriesAnalysisOwnerSchemas.byArtifactVersion
+  private val Schemas = SchemaFiles.view.mapValues(_.view.mapValues(loadSchema).toMap).toMap
+  private val MaximumTextBytes = ownerMaximumTextBytes(SchemaFiles.values.flatMap(_.values).toSet)
 
   private[postgres] def ensureReady(): Unit =
-    Schemas.values.foreach(_.initializeValidators())
-    CurrentAggregate.initializeValidators()
+    if SchemaFiles.keySet != SeriesAnalysisArtifactSupport.SupportedArtifactSchemas then
+      sys.error("Series analysis owner schemas do not cover the readable publication contracts")
+    Schemas.values.flatMap(_.values).foreach(_.initializeValidators())
 
   def validate(
       json: Json,
@@ -93,9 +87,7 @@ private[postgres] object SeriesAnalysisPayloadValidator:
     // instead of rendering a second full JSON String just to feed the schema reader. Only the
     // validity is consumed: BOOLEAN bounds error collection and stops after a decisive failure.
     val node = JsonReader.readTree(new ByteArrayInputStream(encoded), InputFormat.JSON)
-    val schema = if kind == SeriesAnalysisChunkKind.Aggregate && artifactSchemaVersion == 3 then
-      CurrentAggregate
-    else Schemas(kind)
+    val schema = Schemas(artifactSchemaVersion)(kind)
     schema.validate(node, OutputFormat.BOOLEAN).booleanValue()
 
   private def payloadIdentityMatches(

@@ -138,10 +138,9 @@ fn recognize_cell(
 ) -> Result<CountRecognition, CoreOcrError> {
     let primary_image = prepare_count_cell(image);
     let primary = recognize_count_variant(&primary_image, recognition)?;
-    let fallback_images = prepare_fallback_count_cells(image);
-    let mut fallbacks = Vec::with_capacity(fallback_images.len());
-    for fallback in &fallback_images {
-        fallbacks.push(recognize_count_variant(fallback, recognition)?);
+    let mut fallbacks = Vec::with_capacity(4);
+    for fallback in prepare_fallback_count_cells(image) {
+        fallbacks.push(recognize_count_variant(&fallback, recognition)?);
     }
     let maximum = if incident_name == "スリの銀次" {
         2

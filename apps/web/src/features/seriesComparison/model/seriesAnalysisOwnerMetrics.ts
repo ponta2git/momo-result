@@ -7,7 +7,7 @@ import type { SeriesComparisonAggregate } from "@/shared/api/seriesAnalysis";
 
 export type OwnerComparison = Extract<
   SeriesComparisonAggregate,
-  { schemaVersion: 4 }
+  { ownerComparison: unknown }
 >["ownerComparison"];
 export type OwnerCell = OwnerComparison["rows"][number]["cells"][number];
 type Metric = {

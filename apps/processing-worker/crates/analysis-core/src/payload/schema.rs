@@ -38,6 +38,7 @@ const BOOL: Schema = Schema::Bool;
 const SCHEMA_V1: Schema = Schema::ExactUnsigned(1);
 const SCHEMA_V3: Schema = Schema::ExactUnsigned(3);
 const SCHEMA_V4: Schema = Schema::ExactUnsigned(4);
+const SCHEMA_V5: Schema = Schema::ExactUnsigned(5);
 const COUNT: Schema = Schema::Unsigned { maximum: 1_000_000 };
 const INDEX: Schema = Schema::Unsigned { maximum: 1_000_000 };
 const I32: Schema = Schema::Integer {
@@ -200,23 +201,6 @@ const DRIVER_EVIDENCE_FIELDS: &[Field] = &[
 const DRIVER_EVIDENCE: Schema = Schema::Object(DRIVER_EVIDENCE_FIELDS);
 const CARD_EVIDENCE_ARRAY: Schema = Schema::Tuple(&[&SYMPTOM_EVIDENCE, &DRIVER_EVIDENCE]);
 const CLASSIFICATION: Schema = Schema::StringEnum(&["reproduce", "revise", "verify"]);
-const ANCHOR_FIELDS: &[Field] = &[
-    field("view", &Schema::StringEnum(&["drivers", "context", "flow"])),
-    field(
-        "sectionId",
-        &Schema::StringEnum(&[
-            "metric-revenue-outcome",
-            "metric-destination-outcome",
-            "metric-money",
-            "metric-play-order",
-            "metric-ginji",
-            "metric-momentum-switch",
-            "metric-match-digest",
-        ]),
-    ),
-    field("label", &ID),
-];
-const ANCHOR: Schema = Schema::Object(ANCHOR_FIELDS);
 const CARD_FIELDS: &[Field] = &[
     field("cardId", &ID),
     field("classification", &CLASSIFICATION),
@@ -235,7 +219,6 @@ const CARD_FIELDS: &[Field] = &[
     field("qualityStatus", &QUALITY),
     field("stabilityBand", &STABILITY),
     field("supportCount", &COUNT),
-    field("anchorTarget", &ANCHOR),
     field("actionAdviceScore", &NUMBER),
 ];
 const CARD: Schema = Schema::Object(CARD_FIELDS);
@@ -1305,23 +1288,6 @@ const HIGHLIGHTS: Schema = Schema::Array {
     item: &HIGHLIGHT,
     maximum: 4,
 };
-const METRIC_DEFINITION_FIELDS: &[Field] = &[
-    field("metricId", &ID),
-    field("label", &ID),
-    field(
-        "unit",
-        &Schema::StringEnum(&["rank", "count", "man_yen", "rate"]),
-    ),
-    field(
-        "preferredDirection",
-        &Schema::StringEnum(&["higher", "lower", "contextual"]),
-    ),
-];
-const METRIC_DEFINITION: Schema = Schema::Object(METRIC_DEFINITION_FIELDS);
-const METRIC_DEFINITIONS: Schema = Schema::Array {
-    item: &METRIC_DEFINITION,
-    maximum: 16,
-};
 const SOURCE_FIELDS: &[Field] = &[field("gameTitleId", &ID)];
 const SOURCE: Schema = Schema::Object(SOURCE_FIELDS);
 
@@ -1346,7 +1312,6 @@ const AGGREGATE_BODY_FIELDS: &[Field] = &[
     field("rankAnalysis", &RANK_ANALYSIS),
     field("highlights", &HIGHLIGHTS),
     field("dataQuality", &DATA_QUALITY),
-    field("metricDefinitions", &METRIC_DEFINITIONS),
     field("source", &SOURCE),
 ];
 const OWNER_COUNT: Schema = Schema::Unsigned {
@@ -1425,14 +1390,15 @@ const OWNER_COMPARISON: Schema = Schema::Object(&[
     field("recordedOwnerCount", &Schema::Unsigned { maximum: 4 }),
 ]);
 const OWNER_FIELDS: &[Field] = &[field("ownerComparison", &OWNER_COMPARISON)];
+const V5_RESOURCE_FIELDS: &[Field] = &[field("schemaVersion", &SCHEMA_V5), field("scope", &SCOPE)];
 const V4_RESOURCE_FIELDS: &[Field] = &[field("schemaVersion", &SCHEMA_V4), field("scope", &SCOPE)];
 const V3_RESOURCE_FIELDS: &[Field] = &[field("schemaVersion", &SCHEMA_V3), field("scope", &SCOPE)];
 const V1_RESOURCE_FIELDS: &[Field] = &[field("schemaVersion", &SCHEMA_V1), field("scope", &SCOPE)];
 #[cfg(test)]
-const LEGACY_AGGREGATE: Schema = Schema::MergedObject(&[V3_RESOURCE_FIELDS, AGGREGATE_BODY_FIELDS]);
+mod legacy;
 const AGGREGATE: Schema =
-    Schema::MergedObject(&[V4_RESOURCE_FIELDS, AGGREGATE_BODY_FIELDS, OWNER_FIELDS]);
-const REVIEW: Schema = Schema::MergedObject(&[V3_RESOURCE_FIELDS, REVIEW_BODY_FIELDS]);
+    Schema::MergedObject(&[V5_RESOURCE_FIELDS, AGGREGATE_BODY_FIELDS, OWNER_FIELDS]);
+const REVIEW: Schema = Schema::MergedObject(&[V4_RESOURCE_FIELDS, REVIEW_BODY_FIELDS]);
 const DRILLDOWN_IDENTITY_FIELDS: &[Field] = &[field("player", &MEMBER_REF)];
 const RANK_HISTORY_PAYLOAD_FIELDS: &[Field] = &[field("payload", &RANK_HISTORY)];
 const PLAY_ORDER_HISTORY_PAYLOAD_FIELDS: &[Field] = &[field("payload", &PLAY_ORDER_HISTORY)];
@@ -1655,7 +1621,7 @@ mod json_schema_export_tests {
 
     use super::{
         AGGREGATE, CONTEXT_RESOURCE, DRILLDOWN_VARIANTS, DrilldownVariant, FOLD_ROW, Field,
-        LEGACY_AGGREGATE, MAX_ITEMS, MAX_TEXT_BYTES, REVIEW, Schema, validate, validate_aggregate,
+        MAX_ITEMS, MAX_TEXT_BYTES, REVIEW, Schema, legacy, validate, validate_aggregate,
         validate_drilldown, validate_match_context, validate_review,
     };
 
@@ -1909,21 +1875,31 @@ mod json_schema_export_tests {
         }
     }
 
-    fn generated_schemas() -> [GeneratedSchema; 6] {
+    fn generated_schemas() -> [GeneratedSchema; 8] {
         [
             document(
                 "series-analysis-aggregate-v3.schema.json",
                 "Series Analysis Aggregate Resource v3",
-                &LEGACY_AGGREGATE,
+                &legacy::AGGREGATE_V3,
             ),
             document(
                 "series-analysis-aggregate-v4.schema.json",
                 "Series Analysis Aggregate Resource v4",
-                &AGGREGATE,
+                &legacy::AGGREGATE_V4,
             ),
             document(
                 "series-analysis-review-v3.schema.json",
                 "Series Analysis Review Resource v3",
+                &legacy::REVIEW_V3,
+            ),
+            document(
+                "series-analysis-aggregate-v5.schema.json",
+                "Series Analysis Aggregate Resource v5",
+                &AGGREGATE,
+            ),
+            document(
+                "series-analysis-review-v4.schema.json",
+                "Series Analysis Review Resource v4",
                 &REVIEW,
             ),
             drilldown_document(),
@@ -1971,15 +1947,44 @@ mod json_schema_export_tests {
     }
 
     #[test]
+    fn legacy_reader_shapes_remain_distinct_from_the_current_writer() {
+        for (fixture, descriptor) in [
+            (
+                include_str!(
+                    "../../../../../../docs/schemas/fixtures/series-analysis/aggregate-payload-v3.json"
+                ),
+                &legacy::AGGREGATE_V3,
+            ),
+            (
+                include_str!(
+                    "../../../../../../docs/schemas/fixtures/series-analysis/aggregate-payload-v4.json"
+                ),
+                &legacy::AGGREGATE_V4,
+            ),
+        ] {
+            let payload: Value = serde_json::from_str(fixture)
+                .unwrap_or_else(|error| panic!("legacy aggregate fixture is not JSON: {error}"));
+            assert!(validate(&payload, descriptor).is_ok());
+            assert!(validate_aggregate(&payload).is_err());
+        }
+        let review: Value = serde_json::from_str(include_str!(
+            "../../../../../../docs/schemas/fixtures/series-analysis/review-payload-v3.json"
+        ))
+        .unwrap_or_else(|error| panic!("legacy review fixture is not JSON: {error}"));
+        assert!(validate(&review, &legacy::REVIEW_V3).is_ok());
+        assert!(validate_review(&review).is_err());
+    }
+
+    #[test]
     fn shared_normal_fixtures_and_invalid_mutations_follow_owner_descriptor() {
         let aggregate: Value = serde_json::from_str(include_str!(concat!(
             "../../../../../../docs/schemas/fixtures/series-analysis/",
-            "aggregate-payload-v3.json"
+            "aggregate-payload-v5.json"
         )))
         .unwrap_or_else(|error| panic!("aggregate fixture is not JSON: {error}"));
         let review: Value = serde_json::from_str(include_str!(concat!(
             "../../../../../../docs/schemas/fixtures/series-analysis/",
-            "review-payload-v3.json"
+            "review-payload-v4.json"
         )))
         .unwrap_or_else(|error| panic!("review fixture is not JSON: {error}"));
         let drilldown: Value = serde_json::from_str(include_str!(concat!(
@@ -1993,7 +1998,7 @@ mod json_schema_export_tests {
         )))
         .unwrap_or_else(|error| panic!("match-context fixture is not JSON: {error}"));
 
-        assert!(validate(&aggregate, &LEGACY_AGGREGATE).is_ok());
+        assert!(validate_aggregate(&aggregate).is_ok());
         assert!(validate_review(&review).is_ok());
         assert!(validate_drilldown(&drilldown, "rank.averageHistory").is_ok());
         assert!(validate_match_context(&match_context).is_ok());

@@ -4577,7 +4577,7 @@
           "x-momo-maxUtf8Bytes": 4096
         },
         "artifactSchemaVersion": {
-          "minimum": 0,
+          "enum": [2],
           "type": "integer"
         },
         "gameTitleId": {

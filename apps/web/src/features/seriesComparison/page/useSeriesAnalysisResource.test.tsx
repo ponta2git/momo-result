@@ -28,7 +28,12 @@ import { createTestQueryClient } from "@/test/queryClient";
 setupMsw();
 
 // Query lifecycle is the oracle here; prepare the large generated validator before timed UI waits.
-beforeAll(() => decodeSeriesAnalysisArtifact("aggregateV3", makeSeriesAnalysisAggregate()));
+beforeAll(() =>
+  Promise.all([
+    decodeSeriesAnalysisArtifact("aggregateV4", makeSeriesAnalysisAggregate()),
+    decodeSeriesAnalysisArtifact("matchContext", makeSeriesAnalysisMatchContext()),
+  ]),
+);
 
 describe("useSeriesAnalysisResource", () => {
   it("keeps the previous analysis visible and shielded until deferred rendering is ready", async () => {
@@ -130,7 +135,7 @@ describe("useSeriesAnalysisResource", () => {
             }),
           );
         }),
-        http.get("/api/analytics/series-comparison/v3/aggregate", ({ request }) => {
+        http.get("/api/analytics/series-comparison/v4/aggregate", ({ request }) => {
           const id = new URL(request.url).searchParams.get("artifactId") ?? "";
           aggregates.push(id);
           return HttpResponse.json(
@@ -190,7 +195,7 @@ describe("useSeriesAnalysisResource", () => {
           if (statusReads > 1) await statusGate.promise;
           return HttpResponse.json(makeSeriesAnalysisStatus());
         }),
-        http.get("/api/analytics/series-comparison/v3/aggregate", ({ request }) => {
+        http.get("/api/analytics/series-comparison/v4/aggregate", ({ request }) => {
           const seasonMasterId = new URL(request.url).searchParams.get("seasonMasterId");
           scopes.push(seasonMasterId);
           const aggregate = makeSeriesAnalysisAggregate();
@@ -232,7 +237,7 @@ describe("useSeriesAnalysisResource", () => {
     let aggregateReads = 0;
     let contextReads = 0;
     server.use(
-      http.get("/api/analytics/series-comparison/v3/aggregate", () => {
+      http.get("/api/analytics/series-comparison/v4/aggregate", () => {
         aggregateReads += 1;
         return HttpResponse.json(makeSeriesAnalysisAggregate());
       }),
@@ -287,7 +292,7 @@ describe("useSeriesAnalysisResource", () => {
           }
           return HttpResponse.json(makeSeriesAnalysisStatus());
         }),
-        http.get("/api/analytics/series-comparison/v3/aggregate", ({ request }) => {
+        http.get("/api/analytics/series-comparison/v4/aggregate", ({ request }) => {
           const seasonMasterId = new URL(request.url).searchParams.get("seasonMasterId");
           aggregateScopes.push(seasonMasterId);
           if (!seasonMasterId) {

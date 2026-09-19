@@ -13,7 +13,8 @@ use sha2::{Digest, Sha256};
 use thiserror::Error;
 use tokio_postgres::{Client, Row, Transaction};
 
-use crate::postgres::{PostgresError, SERIES_ANALYSIS_OUTBOX_NOTIFICATION_CHANNEL, connect};
+use crate::outbox::listener::CHANNEL;
+use crate::postgres::{PostgresError, connect};
 
 use super::control::{ALGORITHM_VERSION, CAPABILITY_FRESH_SECONDS};
 
@@ -313,10 +314,7 @@ async fn enqueue_dispatcher_wake(
     // PostgreSQL releases NOTIFY only if this transaction commits. The empty payload is a
     // coalescing hint; campaign targets remain the durable source of work.
     transaction
-        .query_one(
-            "SELECT pg_notify($1, '')",
-            &[&SERIES_ANALYSIS_OUTBOX_NOTIFICATION_CHANNEL],
-        )
+        .query_one("SELECT pg_notify($1, '')", &[&CHANNEL])
         .await?;
     Ok(())
 }
@@ -1014,18 +1012,18 @@ mod tests {
             confirmed_match_count: 1,
             input_revision: 4,
             algorithm_version: String::from(ALGORITHM_VERSION),
-            artifact_schema_version: 3,
+            artifact_schema_version: i32::try_from(ARTIFACT_SCHEMA_VERSION).unwrap_or(i32::MAX),
             validation_contract_id: Some(String::from(ARTIFACT_VALIDATION_CONTRACT_ID)),
             pending_work: false,
             current_artifact_id: Some(String::from("artifact-current")),
             current_status: Some(String::from("published")),
             current_input_revision: Some(4),
             current_algorithm_version: Some(String::from(ALGORITHM_VERSION)),
-            current_artifact_schema_version: Some(3),
+            current_artifact_schema_version: i32::try_from(ARTIFACT_SCHEMA_VERSION).ok(),
             current_validation_contract_id: Some(String::from(ARTIFACT_VALIDATION_CONTRACT_ID)),
             previous_artifact_id: Some(String::from("artifact-previous")),
             previous_status: Some(String::from("published")),
-            previous_artifact_schema_version: Some(3),
+            previous_artifact_schema_version: i32::try_from(ARTIFACT_SCHEMA_VERSION).ok(),
             previous_validation_contract_id: Some(String::from(ARTIFACT_VALIDATION_CONTRACT_ID)),
             declared_aggregate_count: Some(1),
             declared_review_count: Some(0),

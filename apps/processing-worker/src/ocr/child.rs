@@ -17,10 +17,7 @@ pub(crate) fn execute(tessdata_path: Option<PathBuf>) -> i32 {
         request.requested_screen_type,
         &request.hints,
     );
-    let response = match result {
-        Ok(ref output) => momo_ocr::protocol::encode_response(Ok(output)),
-        Err(failure) => momo_ocr::protocol::encode_response(Err(failure)),
-    };
+    let response = momo_ocr::protocol::encode_response(result);
     let response = match response {
         Ok(response) => response,
         Err(_kind) => return crate::process::CHILD_DEPENDENCY_FAILED_EXIT_CODE,

@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use image::{DynamicImage, GrayImage};
 use thiserror::Error;
 
@@ -135,7 +137,9 @@ pub(crate) fn recognize_color(
     language: RecognitionLanguage,
     segmentation: PageSegmentationMode,
 ) -> Result<RecognizedText, RecognitionError> {
-    let rgb = image.to_rgb8();
+    let rgb = image
+        .as_rgb8()
+        .map_or_else(|| Cow::Owned(image.to_rgb8()), Cow::Borrowed);
     let bytes_per_line = rgb
         .width()
         .checked_mul(3)
@@ -173,11 +177,7 @@ fn checked_frame(
 }
 
 fn normalize_text(value: &str) -> String {
-    value
-        .replace('　', " ")
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
+    value.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 #[cfg(test)]

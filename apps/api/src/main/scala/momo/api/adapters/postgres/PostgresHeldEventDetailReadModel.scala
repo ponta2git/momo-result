@@ -10,7 +10,15 @@ import doobie.postgres.implicits.*
 
 import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.domain.ids.*
-import momo.api.domain.{FourPlayers, HeldEventDetail, HeldEventSummary, MatchDraftStatus, MatchLabels, MatchNoInEvent, MatchNoteBody}
+import momo.api.domain.{
+  FourPlayers,
+  HeldEventDetail,
+  HeldEventSummary,
+  MatchDraftStatus,
+  MatchLabels,
+  MatchNoInEvent,
+  MatchNoteBody
+}
 import momo.api.repositories.HeldEventDetailReadModel
 
 object PostgresHeldEventDetail:
@@ -30,16 +38,30 @@ object PostgresHeldEventDetail:
     ): Either[PostgresDataIntegrityException, HeldEventDetail.Match] =
       for
         _ <- FourPlayers.validate(players, players.iterator.map(_.memberId).toSet)(
-          _.memberId, _.playOrder, _.rank,
-        ).leftMap(errors => PostgresDataIntegrityException.inconsistentRow(
-          "match_players", id.value, errors.toChain.toList.map(_.message).mkString("; "),
-        ))
+          _.memberId,
+          _.playOrder,
+          _.rank,
+        ).leftMap(errors =>
+          PostgresDataIntegrityException.inconsistentRow(
+            "match_players",
+            id.value,
+            errors.toChain.toList.map(_.message).mkString("; "),
+          )
+        )
         note <- noteBody.traverse(MatchNoteBody.fromRequiredString).leftMap(message =>
           PostgresDataIntegrityException.inconsistentRow("matches", id.value, message)
         )
       yield HeldEventDetail.Match(
-        id, matchNoInEvent, gameTitleId, seasonMasterId, ownerMemberId, mapMasterId,
-        playedAt, note.map(_.value), players, labels,
+        id,
+        matchNoInEvent,
+        gameTitleId,
+        seasonMasterId,
+        ownerMemberId,
+        mapMasterId,
+        playedAt,
+        note.map(_.value),
+        players,
+        labels,
       )
 
   def find(id: HeldEventId): ConnectionIO[Option[HeldEventDetail]] =
@@ -80,7 +102,8 @@ object PostgresHeldEventDetail:
             ORDER BY d.match_no_in_event ASC NULLS LAST, d.updated_at DESC, d.id ASC
           """.query[HeldEventDetail.Draft].to[List]
           byMatch = players.groupMap(_._1)(_._2)
-          confirmed <- matches.traverse(m => m.withPlayers(byMatch.getOrElse(m.id, Nil))).liftTo[ConnectionIO]
+          confirmed <-
+            matches.traverse(m => m.withPlayers(byMatch.getOrElse(m.id, Nil))).liftTo[ConnectionIO]
         yield HeldEventDetail(heldEvent, confirmed, drafts)
       }
     yield detail

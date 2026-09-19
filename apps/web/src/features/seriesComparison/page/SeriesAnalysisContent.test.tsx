@@ -2,17 +2,33 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { SeriesAnalysisDisplayBundle } from "@/features/seriesComparison/model/seriesAnalysisDisplayBundle";
 import type { SeriesAnalysisViewId } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
 import { SeriesAnalysisNavigation } from "@/features/seriesComparison/navigation/SeriesAnalysisNavigation";
 import { SeriesAnalysisContent } from "@/features/seriesComparison/page/SeriesAnalysisContent";
 import type { SeriesComparisonAggregate } from "@/shared/api/seriesAnalysis";
-import { makeSeriesAnalysisAggregate } from "@/test/msw/seriesAnalysisFixtures";
+import {
+  makeCurrentSeriesAnalysisAggregate,
+  makeCurrentSeriesAnalysisReview,
+  makeOwnerComparisonAggregate,
+  makeSeriesAnalysisAggregate,
+} from "@/test/msw/seriesAnalysisFixtures";
 import { createTestQueryClient } from "@/test/queryClient";
 
 type AnalysisViewId = Exclude<SeriesAnalysisViewId, "review">;
+
+beforeEach(() => {
+  vi.stubGlobal(
+    "ResizeObserver",
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  );
+});
 
 function analysisBundle(
   aggregate: SeriesComparisonAggregate,
@@ -22,6 +38,65 @@ function analysisBundle(
 }
 
 describe("SeriesAnalysisContent", () => {
+  it.each([
+    ["legacy", makeOwnerComparisonAggregate],
+    ["current", makeCurrentSeriesAnalysisAggregate],
+  ] as const)(
+    "keeps owner comparison and the metric guide usable with a %s artifact",
+    async (_generation, makeAggregate) => {
+      const user = userEvent.setup();
+      render(
+        <QueryClientProvider client={createTestQueryClient()}>
+          <MemoryRouter>
+            <SeriesAnalysisContent
+              bundle={analysisBundle(makeAggregate(), "context")}
+              onArtifactExpired={vi.fn()}
+              onClearFocusedMatch={vi.fn()}
+              onFocusMatch={vi.fn()}
+              onViewChange={vi.fn()}
+            />
+          </MemoryRouter>
+        </QueryClientProvider>,
+      );
+      expect(
+        await screen.findByRole("table", { name: "オーナー別の平均順位" }),
+      ).toBeInTheDocument();
+      await user.click(screen.getByRole("button", { name: "指標の読み方" }));
+      expect(screen.getByRole("dialog", { name: "指標の読み方" })).toHaveTextContent(
+        "平均物件収益",
+      );
+    },
+  );
+
+  it("links new review artifacts without presentation metadata to local evidence sections", () => {
+    render(
+      <QueryClientProvider client={createTestQueryClient()}>
+        <MemoryRouter initialEntries={["/analytics/series?gameTitleId=gt_momotetsu_2"]}>
+          <SeriesAnalysisContent
+            bundle={{
+              kind: "review",
+              view: "review",
+              review: makeCurrentSeriesAnalysisReview(),
+              matchContext: undefined,
+            }}
+            onArtifactExpired={vi.fn()}
+            onClearFocusedMatch={vi.fn()}
+            onFocusMatch={vi.fn()}
+            onViewChange={vi.fn()}
+          />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    const links = screen.getAllByRole("link", { name: "物件収益の根拠を見る" });
+    expect(links).toHaveLength(4);
+    for (const link of links) {
+      expect(link).toHaveAttribute(
+        "href",
+        "/analytics/series?gameTitleId=gt_momotetsu_2&view=drivers#metric-revenue-outcome",
+      );
+    }
+  });
+
   it("keeps analysis and its controls usable with a malformed section fragment", async () => {
     const user = userEvent.setup();
     render(

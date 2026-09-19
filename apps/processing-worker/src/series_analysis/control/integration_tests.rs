@@ -24,7 +24,8 @@ use super::{
         validate_staged_artifact,
     },
     recovery::recover_expired_analysis_holder,
-    transaction::{artifact_id_for_attempt, enqueue_delivery, lock_owned_by},
+    staging_metadata::validate_staged_resource_metadata,
+    transaction::{artifact_id_for_attempt, enqueue_delivery, lock_owned},
 };
 use crate::series_analysis::artifact::{
     ArtifactBuildRequest, ValidatedArtifact, build_artifact, validate_artifact_directory,
@@ -61,6 +62,14 @@ async fn real_postgres_keeps_staging_separate_from_fenced_publication() -> Smoke
     let mut secondary = crate::postgres::connect(&database_url).await?;
     cleanup_database(&primary).await?;
     prepare_owned_attempt(&primary).await?;
+    primary
+        .batch_execute("SET TIME ZONE 'Pacific/Honolulu'")
+        .await?;
+    let input =
+        crate::series_analysis::input_repository::load_analysis_input(&mut primary, TITLE_ID, 1)
+            .await?;
+    assert_eq!(input, analysis_input().try_into_normalized()?);
+    primary.batch_execute("RESET TIME ZONE").await?;
     assert_claim_reports_database_availability_delay(&mut primary).await?;
     assert_delivery_deadline_follows_job_availability(&mut primary).await?;
     assert_recovery_locks_title_before_job(&mut primary, &mut secondary).await?;
@@ -102,6 +111,7 @@ async fn real_postgres_keeps_staging_separate_from_fenced_publication() -> Smoke
     )
     .await?;
     assert_artifact_shape(&secondary, &old_manifest.manifest().artifact_id, "1|0|4").await?;
+    assert_staged_metadata_requires_an_exact_set(&mut primary, &old_manifest).await?;
 
     drop(primary);
     let unavailable_path = old_manifest
@@ -154,7 +164,7 @@ async fn real_postgres_keeps_staging_separate_from_fenced_publication() -> Smoke
         Some("attested series analysis artifact payloads are immutable")
     );
     let publication = primary.transaction().await?;
-    lock_owned_by(&publication, &old_claim, OLD_WORKER_ID).await?;
+    lock_owned(&publication, &old_claim, OLD_WORKER_ID).await?;
     validate_staged_artifact(&publication, &old_claim, &old_manifest).await?;
     publication.rollback().await?;
     assert_current(&secondary, None).await?;
@@ -172,7 +182,7 @@ async fn real_postgres_keeps_staging_separate_from_fenced_publication() -> Smoke
     expire_old_lease_and_prepare_retry(&secondary).await?;
     let transaction = primary.transaction().await?;
     assert!(matches!(
-        lock_owned_by(&transaction, &old_claim, OLD_WORKER_ID).await,
+        lock_owned(&transaction, &old_claim, OLD_WORKER_ID).await,
         Err(ControlError::OwnerLost)
     ));
     transaction.rollback().await?;
@@ -189,7 +199,7 @@ async fn real_postgres_keeps_staging_separate_from_fenced_publication() -> Smoke
     )
     .await?;
     let transaction = primary.transaction().await?;
-    lock_owned_by(&transaction, &new_claim, NEW_WORKER_ID).await?;
+    lock_owned(&transaction, &new_claim, NEW_WORKER_ID).await?;
     validate_staged_artifact(&transaction, &new_claim, &new_manifest).await?;
     publish_staged_artifact(&transaction, &new_claim, &new_manifest).await?;
     transaction
@@ -227,7 +237,7 @@ async fn real_postgres_keeps_staging_separate_from_fenced_publication() -> Smoke
         ))
         .await?;
     let publication = primary.transaction().await?;
-    lock_owned_by(&publication, &new_claim, NEW_WORKER_ID).await?;
+    lock_owned(&publication, &new_claim, NEW_WORKER_ID).await?;
     validate_staged_artifact(&publication, &new_claim, &new_manifest).await?;
     let new_artifact_id = &new_manifest.manifest().artifact_id;
     let mutation_parameters: [&(dyn tokio_postgres::types::ToSql + Sync); 1] = [new_artifact_id];
@@ -367,6 +377,58 @@ fn analysis_input() -> AnalysisInput {
     }
 }
 
+async fn assert_staged_metadata_requires_an_exact_set(
+    client: &mut Client,
+    artifact: &ValidatedArtifact,
+) -> SmokeResult {
+    let transaction = client.transaction().await?;
+    let mut reordered = artifact.manifest().clone();
+    reordered.resources.reverse();
+    validate_staged_resource_metadata(&transaction, &reordered).await?;
+
+    let first = reordered
+        .resources
+        .first()
+        .ok_or("fixture resource missing")?
+        .clone();
+    let mut duplicate = reordered.clone();
+    duplicate.resources.push(first.clone());
+    let mut omitted = reordered.clone();
+    omitted.resources.pop().ok_or("fixture resource missing")?;
+    let mut additional = reordered.clone();
+    let mut absent_resource = first.clone();
+    match &mut absent_resource {
+        ResourceManifest::Aggregate { common }
+        | ResourceManifest::Review { common }
+        | ResourceManifest::Drilldown { common, .. }
+        | ResourceManifest::MatchContext { common, .. } => {
+            common.scope = momo_analysis_core::contract::ScopeRef::Season {
+                season_master_id: String::from("absent-season"),
+            };
+        }
+    }
+    additional.resources.push(absent_resource);
+    let mut mismatch = reordered.clone();
+    match mismatch
+        .resources
+        .first_mut()
+        .ok_or("fixture resource missing")?
+    {
+        ResourceManifest::Aggregate { common }
+        | ResourceManifest::Review { common }
+        | ResourceManifest::Drilldown { common, .. }
+        | ResourceManifest::MatchContext { common, .. } => common.nesting_depth += 1,
+    }
+    for invalid in [duplicate, omitted, additional, mismatch] {
+        assert!(matches!(
+            validate_staged_resource_metadata(&transaction, &invalid).await,
+            Err(ControlError::InvalidMetadata)
+        ));
+    }
+    transaction.rollback().await?;
+    Ok(())
+}
+
 async fn assert_authoritative_snapshot_rejects_omissions(
     client: &mut Client,
     claim: &ClaimedJob,
@@ -374,7 +436,7 @@ async fn assert_authoritative_snapshot_rejects_omissions(
 ) -> SmokeResult {
     let manifest = artifact.manifest();
     let transaction = client.transaction().await?;
-    lock_owned_by(&transaction, claim, OLD_WORKER_ID).await?;
+    lock_owned(&transaction, claim, OLD_WORKER_ID).await?;
     validate_authoritative_manifest(&transaction, &claim.game_title_id, manifest).await?;
 
     let mut missing_scope = manifest.clone();

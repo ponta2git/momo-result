@@ -8,7 +8,15 @@ import doobie.postgres.implicits.*
 
 import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.domain.ids.HeldEventId
-import momo.api.domain.{HeldEvent, HeldEventListItem, HeldEventListPage, HeldEventScopeSummary, MatchDraftStatus, PageRequest, PagedResult}
+import momo.api.domain.{
+  HeldEvent,
+  HeldEventListItem,
+  HeldEventListPage,
+  HeldEventScopeSummary,
+  MatchDraftStatus,
+  PageRequest,
+  PagedResult
+}
 import momo.api.repositories.HeldEventListReadModel
 
 object PostgresHeldEventList:
@@ -36,7 +44,8 @@ object PostgresHeldEventList:
     for
       _ <- sql"SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY".update.run
       counts <- totals.query[(Int, Int)].unique
-      events <- (fr"SELECT he.id, he.start_at FROM held_events he" ++ where ++
+      events <-
+      (fr"SELECT he.id, he.start_at FROM held_events he" ++ where ++
         fr"ORDER BY he.start_at DESC, he.id DESC LIMIT ${page.pageSize} OFFSET ${page.offset}")
         .query[HeldEvent].to[List]
       stats <- scopeStats(events.map(_.id))

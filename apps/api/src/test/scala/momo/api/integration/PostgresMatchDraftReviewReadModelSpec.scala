@@ -27,9 +27,14 @@ final class PostgresMatchDraftReviewReadModelSpec extends IntegrationSuite:
         .find(MatchDraftId.unsafeFromString("absent"))
     yield
       assertEquals(review.ocrDrafts.map(_.id.value), List("review-old"))
-      assertEquals(review.sourceImages, List(MatchDraftReview.SourceImage(
-        ScreenType.TotalAssets, ImageId.unsafeFromString("review-image-old"), "image/png",
-      )))
+      assertEquals(
+        review.sourceImages,
+        List(MatchDraftReview.SourceImage(
+          ScreenType.TotalAssets,
+          ImageId.unsafeFromString("review-image-old"),
+          "image/png",
+        ))
+      )
       assertEquals(purged.sourceImages, Nil)
       assertEquals(purged.ocrDrafts.map(_.id.value), List("review-old"))
       assertEquals(missing, None)
@@ -52,15 +57,24 @@ final class PostgresMatchDraftReviewReadModelSpec extends IntegrationSuite:
       _ <- writer.joinWithNever
       after <- read
     yield
-      assertEquals(projection(before), Some(("review-old", "review-old", "review-image-old", "image/png")))
-      assertEquals(projection(after), Some(("review-new", "review-new", "review-image-new", "image/jpeg")))
+      assertEquals(
+        projection(before),
+        Some(("review-old", "review-old", "review-image-old", "image/png"))
+      )
+      assertEquals(
+        projection(after),
+        Some(("review-new", "review-new", "review-image-new", "image/jpeg"))
+      )
 
-  private def projection(review: Option[MatchDraftReview]): Option[(String, String, String, String)] =
-    review.flatMap(value => for
-      pointer <- value.draft.totalAssetsDraftId
-      result <- value.ocrDrafts.headOption
-      image <- value.sourceImages.headOption
-    yield (pointer.value, result.id.value, image.imageId.value, image.mediaType))
+  private def projection(review: Option[MatchDraftReview])
+      : Option[(String, String, String, String)] =
+    review.flatMap(value =>
+      for
+        pointer <- value.draft.totalAssetsDraftId
+        result <- value.ocrDrafts.headOption
+        image <- value.sourceImages.headOption
+      yield (pointer.value, result.id.value, image.imageId.value, image.mediaType)
+    )
 
   private def seed: IO[Unit] = (for
     _ <- sql"""INSERT INTO match_drafts
@@ -73,15 +87,20 @@ final class PostgresMatchDraftReviewReadModelSpec extends IntegrationSuite:
                              timings_ms_json, created_at, updated_at)
       VALUES ($draftId, ${s"job-$draftId"}, 'total_assets', '{}', '[]', '{}', $at, $at)
     """.update.run)
-    _ <- List(("review-image-old", "image/png"), ("review-image-new", "image/jpeg"),
-      ("review-image-deleting", "image/png"))
-      .traverse_ { case (imageId, mediaType) => sql"""
+    _ <- List(
+      ("review-image-old", "image/png"),
+      ("review-image-new", "image/jpeg"),
+      ("review-image-deleting", "image/png")
+    )
+      .traverse_ { case (imageId, mediaType) =>
+        sql"""
         INSERT INTO source_images (id, owner_account_id, object_key, idempotency_key_hash, status, media_type,
           byte_length, sha256_hex, width, height, available_at, created_at, updated_at)
         VALUES ($imageId, 'account_ponta', ${s"source-images/$imageId.png"},
           md5($imageId) || md5($imageId), 'AVAILABLE', $mediaType,
           128, ${"b" * 64}, 1, 1, $at, $at, $at)
-      """.update.run }
+      """.update.run
+      }
     _ <- sql"""UPDATE source_images SET status = 'DELETE_PENDING', delete_pending_at = $at
                WHERE id = 'review-image-deleting'""".update.run
   yield ()).transact(transactor)

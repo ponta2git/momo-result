@@ -219,9 +219,9 @@ pub(crate) struct VerifiedSourceImage {
 }
 
 impl VerifiedSourceImage {
-    #[must_use]
-    pub(crate) fn bytes(&self) -> &[u8] {
-        &self.bytes
+    #[cfg(target_os = "linux")]
+    pub(crate) fn into_bytes(self) -> Vec<u8> {
+        self.bytes
     }
 
     #[must_use]

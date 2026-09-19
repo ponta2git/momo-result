@@ -7,7 +7,7 @@ use tokio_postgres::{Client, Transaction};
 
 use crate::series_analysis::{
     artifact::{ValidatedArtifact, validate_artifact_directory},
-    config::AnalysisConsumerConfig,
+    config::AnalysisExecutionLimits,
 };
 
 use super::{
@@ -16,7 +16,7 @@ use super::{
     staging_metadata::validate_staged_resource_metadata,
     transaction::{
         artifact_id_for_attempt, finish_attempt, fulfill_requests, refresh_operation_projections,
-        release_slot_by, schedule_follow_up,
+        release_slot, schedule_follow_up,
     },
 };
 
@@ -25,14 +25,13 @@ mod resource_copy;
 use resource_copy::copy_artifact_resources;
 
 pub(super) async fn validated_artifact(
-    config: &AnalysisConsumerConfig,
+    limits: &AnalysisExecutionLimits,
     claim: &ClaimedJob,
     artifact_directory: &Path,
 ) -> Result<ValidatedArtifact, ControlError> {
     if !claim.accepts_current_validation_contract() {
         return Err(ControlError::UnsupportedValidationContract);
     }
-    let limits = &config.execution_limits;
     let artifact_directory = artifact_directory.to_path_buf();
     let maximum_chunk_count = limits.chunk_count_limit.get();
     let maximum_chunk_bytes = limits.chunk_bytes_limit.get();
@@ -364,7 +363,7 @@ pub(super) async fn finish_success(
     fulfill_requests(transaction, claim, RequestOutcome::Succeeded).await?;
     schedule_follow_up(transaction, claim, effects).await?;
     refresh_operation_projections(transaction, &claim.attempt_id).await?;
-    release_slot_by(transaction, claim, worker_id).await?;
+    release_slot(transaction, claim, worker_id).await?;
     Ok(())
 }
 

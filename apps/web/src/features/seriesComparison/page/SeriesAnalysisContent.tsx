@@ -171,9 +171,7 @@ export const SeriesAnalysisContent = memo(function SeriesAnalysisContent({
           <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
             <AnalysisTabs activeView={activeView} onViewChange={onViewChange} />
             <div className="justify-self-start sm:justify-self-end">
-              {bundle.kind === "analysis" ? (
-                <MetricDefinitions definitions={bundle.aggregate.metricDefinitions} />
-              ) : null}
+              {bundle.kind === "analysis" ? <MetricDefinitions /> : null}
             </div>
           </div>
           {bundle.kind === "analysis" ? (

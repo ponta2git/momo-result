@@ -28,10 +28,10 @@ pub struct OcrRequest {
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
-struct RequestHeader {
+struct RequestHeader<H> {
     protocol_version: u8,
     requested_screen_type: String,
-    hints: OcrHints,
+    hints: H,
     image_bytes: u32,
 }
 
@@ -50,28 +50,29 @@ enum ResponseEnvelope {
     Failed { failure: String },
 }
 
-/// Encodes the exact OCR request frame, including the caller-owned process start marker.
+/// Encodes the OCR request prefix, including the caller-owned process start marker.
 ///
 /// The marker is supplied by the outer process boundary so this crate does not own cgroup or
-/// parent-liveness policy. The remaining bytes are the versioned OCR protocol.
+/// parent-liveness policy. The transport writes this prefix followed by exactly `image_bytes`
+/// bytes from its owned image, without copying the image into a second allocation.
 ///
 /// # Errors
 ///
 /// Returns a bounded category when the input, header, or frame size is invalid.
-pub fn encode_request(
+pub fn encode_request_prefix(
     start_marker: u8,
-    image: &[u8],
+    image_bytes: usize,
     requested_screen_type: RequestedScreenType,
     hints: &OcrHints,
 ) -> Result<Vec<u8>, &'static str> {
-    if image.is_empty() || image.len() > MAXIMUM_IMAGE_BYTES || !hints.is_valid() {
+    if image_bytes == 0 || image_bytes > MAXIMUM_IMAGE_BYTES || !hints.is_valid() {
         return Err("ocr_child_input_contract");
     }
-    let image_bytes = u32::try_from(image.len()).map_err(|_error| "ocr_child_input_contract")?;
+    let image_bytes = u32::try_from(image_bytes).map_err(|_error| "ocr_child_input_contract")?;
     let header = serde_json::to_vec(&RequestHeader {
         protocol_version: PROTOCOL_VERSION,
         requested_screen_type: String::from(requested_screen_type.wire()),
-        hints: hints.clone(),
+        hints,
         image_bytes,
     })
     .map_err(|_error| "ocr_child_input_encode")?;
@@ -82,13 +83,11 @@ pub fn encode_request(
     let capacity = 1_usize
         .checked_add(size_of::<u32>())
         .and_then(|value| value.checked_add(header.len()))
-        .and_then(|value| value.checked_add(image.len()))
         .ok_or("ocr_child_input_contract")?;
     let mut framed = Vec::with_capacity(capacity);
     framed.push(start_marker);
     framed.extend_from_slice(&header_bytes.to_be_bytes());
     framed.extend_from_slice(&header);
-    framed.extend_from_slice(image);
     Ok(framed)
 }
 
@@ -127,7 +126,7 @@ pub fn decode_request(start_marker: u8, mut frame: Vec<u8>) -> Result<OcrRequest
     let Some((header, after_header)) = after_header_length.split_at_checked(header_length) else {
         return Err("ocr_child_input_frame");
     };
-    let header: RequestHeader =
+    let header: RequestHeader<OcrHints> =
         serde_json::from_slice(header).map_err(|_error| "ocr_child_input_decode")?;
     let requested_screen_type = RequestedScreenType::parse_wire(&header.requested_screen_type)
         .ok_or("ocr_child_input_contract")?;
@@ -161,14 +160,14 @@ pub fn decode_request(start_marker: u8, mut frame: Vec<u8>) -> Result<OcrRequest
 /// # Errors
 ///
 /// Returns a bounded category when the response cannot satisfy the closed wire contract.
-pub fn encode_response(result: Result<&OcrOutput, OcrFailure>) -> Result<Vec<u8>, &'static str> {
+pub fn encode_response(result: Result<OcrOutput, OcrFailure>) -> Result<Vec<u8>, &'static str> {
     let response = match result {
         Ok(output) => ResponseEnvelope::Succeeded {
             detected_screen_type: String::from(output.detected_screen_type.wire()),
-            profile_id: output.profile_id.clone(),
-            payload: output.payload.clone(),
-            warnings: output.warnings.clone(),
-            timings_milliseconds: output.timings_milliseconds.clone(),
+            profile_id: output.profile_id,
+            payload: output.payload,
+            warnings: output.warnings,
+            timings_milliseconds: output.timings_milliseconds,
         },
         Err(failure) => ResponseEnvelope::Failed {
             failure: String::from(failure.wire()),
@@ -235,13 +234,14 @@ mod tests {
 
     #[test]
     fn request_frame_requires_attach_marker_exact_lengths_and_no_trailing_bytes() {
-        let frame = encode_request(
+        let mut frame = encode_request_prefix(
             START_MARKER,
-            b"bounded-image",
+            b"bounded-image".len(),
             RequestedScreenType::Revenue,
             &OcrHints::default(),
         )
         .expect("valid request must encode");
+        frame.extend_from_slice(b"bounded-image");
         let mut trailing = frame.clone();
         trailing.push(0);
         assert!(decode_request(START_MARKER, trailing).is_err());
@@ -271,7 +271,7 @@ mod tests {
             warnings: serde_json::json!([]),
             timings_milliseconds: serde_json::json!({"total": 1.0}),
         };
-        let encoded = encode_response(Ok(&succeeded)).expect("success encodes");
+        let encoded = encode_response(Ok(succeeded.clone())).expect("success encodes");
         let encoded_value = serde_json::from_slice::<JsonValue>(&encoded)
             .expect("encoded success response must be JSON");
         assert_eq!(

@@ -9,7 +9,7 @@ use super::{
 
 type ExpectedRanks = BTreeMap<String, [Option<f64>; PLAYER_COUNT]>;
 
-pub(super) fn expected_ranks(evaluations: &[FoldEvaluation]) -> Result<ExpectedRanks, ()> {
+pub(super) fn expected_ranks(evaluations: &[FoldEvaluation<'_>]) -> Result<ExpectedRanks, ()> {
     let mut expected = BTreeMap::new();
     for evaluation in evaluations {
         let mut pairs_by_match = BTreeMap::<MatchKey, Vec<&PairRecord>>::new();

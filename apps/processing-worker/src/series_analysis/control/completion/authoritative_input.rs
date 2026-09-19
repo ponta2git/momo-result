@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 
+use futures_util::TryStreamExt;
 use momo_analysis_core::{
     contract::{ArtifactManifest, ResourceManifest, ScopeRef},
     model::{MAXIMUM_INPUT_ID_BYTES, MAXIMUM_PLAYER_MATCH_ROWS},
@@ -82,17 +83,22 @@ async fn load_expected_shape(
         .map_err(|_error| ControlError::AuthoritativeInputContract)?
         .checked_add(1)
         .ok_or(ControlError::AuthoritativeInputContract)?;
+    let parameters: [&(dyn tokio_postgres::types::ToSql + Sync); 2] =
+        [&game_title_id, &query_limit];
     let rows = transaction
-        .query(MATCH_SNAPSHOT_QUERY, &[&game_title_id, &query_limit])
+        .query_raw(MATCH_SNAPSHOT_QUERY, parameters)
         .await?;
-    if rows.len() != match_count {
+    tokio::pin!(rows);
+    let mut expected = ArtifactShape::empty_input();
+    let mut observed_matches = 0;
+    while let Some(row) = rows.try_next().await? {
+        expected.include_match(match_snapshot(&row)?)?;
+        observed_matches += 1;
+    }
+    if observed_matches != match_count {
         return Err(ControlError::AuthoritativeInputContract);
     }
-    expected_shape(
-        rows.iter()
-            .map(match_snapshot)
-            .collect::<Result<Vec<_>, _>>()?,
-    )
+    Ok(expected)
 }
 
 fn bounded_count(value: i64) -> Result<usize, ControlError> {
@@ -140,10 +146,15 @@ fn match_snapshot(row: &Row) -> Result<MatchSnapshot, ControlError> {
     })
 }
 
-fn expected_shape(matches: Vec<MatchSnapshot>) -> Result<ArtifactShape, ControlError> {
-    let mut aggregate_item_counts = BTreeMap::from([(ScopeRef::Overall, 0_u64)]);
-    let mut contexts = BTreeSet::new();
-    for match_snapshot in matches {
+impl ArtifactShape {
+    fn empty_input() -> Self {
+        Self {
+            aggregate_item_counts: BTreeMap::from([(ScopeRef::Overall, 0_u64)]),
+            contexts: BTreeSet::new(),
+        }
+    }
+
+    fn include_match(&mut self, match_snapshot: MatchSnapshot) -> Result<(), ControlError> {
         let scopes = [
             ScopeRef::Overall,
             ScopeRef::Season {
@@ -153,16 +164,16 @@ fn expected_shape(matches: Vec<MatchSnapshot>) -> Result<ArtifactShape, ControlE
                 map_master_id: match_snapshot.map_master_id.clone(),
             },
             ScopeRef::SeasonMap {
-                season_master_id: match_snapshot.season_master_id.clone(),
-                map_master_id: match_snapshot.map_master_id.clone(),
+                season_master_id: match_snapshot.season_master_id,
+                map_master_id: match_snapshot.map_master_id,
             },
         ];
         for scope in scopes {
-            let item_count = aggregate_item_counts.entry(scope.clone()).or_default();
+            let item_count = self.aggregate_item_counts.entry(scope.clone()).or_default();
             *item_count = item_count
                 .checked_add(match_snapshot.player_count)
                 .ok_or(ControlError::AuthoritativeInputContract)?;
-            if !contexts.insert(ContextIdentity {
+            if !self.contexts.insert(ContextIdentity {
                 scope,
                 match_id: match_snapshot.match_id.clone(),
                 source_match_revision: match_snapshot.source_match_revision.clone(),
@@ -171,11 +182,8 @@ fn expected_shape(matches: Vec<MatchSnapshot>) -> Result<ArtifactShape, ControlE
                 return Err(ControlError::AuthoritativeInputContract);
             }
         }
+        Ok(())
     }
-    Ok(ArtifactShape {
-        aggregate_item_counts,
-        contexts,
-    })
 }
 
 fn candidate_shape(manifest: &ArtifactManifest) -> Result<ArtifactShape, ControlError> {
@@ -218,6 +226,14 @@ fn candidate_shape(manifest: &ArtifactManifest) -> Result<ArtifactShape, Control
 mod tests {
     use super::*;
     use momo_analysis_core::contract::{CommonResource, MANIFEST_VERSION};
+
+    fn expected_shape(matches: Vec<MatchSnapshot>) -> Result<ArtifactShape, ControlError> {
+        let mut shape = ArtifactShape::empty_input();
+        for snapshot in matches {
+            shape.include_match(snapshot)?;
+        }
+        Ok(shape)
+    }
 
     fn common(scope: ScopeRef, item_count: u64) -> CommonResource {
         CommonResource {

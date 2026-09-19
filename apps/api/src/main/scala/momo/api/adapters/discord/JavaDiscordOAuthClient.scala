@@ -14,8 +14,10 @@ import momo.api.auth.{DiscordOAuthClient, DiscordUser}
 import momo.api.errors.AppError
 import momo.api.logging.SafeLog
 
-final class JavaDiscordOAuthClient[F[_]: Async](config: JavaDiscordOAuthClient.Config, client: HttpClient)
-    extends DiscordOAuthClient[F]:
+final class JavaDiscordOAuthClient[F[_]: Async](
+    config: JavaDiscordOAuthClient.Config,
+    client: HttpClient
+) extends DiscordOAuthClient[F]:
   import JavaDiscordOAuthClient.*
 
   private val authorizeUrl = "https://discord.com/oauth2/authorize"
@@ -67,7 +69,11 @@ final class JavaDiscordOAuthClient[F[_]: Async](config: JavaDiscordOAuthClient.C
         .header("Authorization", s"Bearer $accessToken").timeout(RequestTimeout).GET().build()
     }.map(_.map(user => DiscordUser(user.id)))
 
-  private def request[A: Decoder](operation: String, forbiddenDetail: String, invalidDetail: String)(
+  private def request[A: Decoder](
+      operation: String,
+      forbiddenDetail: String,
+      invalidDetail: String
+  )(
       build: => HttpRequest
   ): F[Either[AppError, A]] = Async[F].interruptible {
     Either.catchNonFatal {
@@ -108,13 +114,19 @@ final class JavaDiscordOAuthClient[F[_]: Async](config: JavaDiscordOAuthClient.C
     given Decoder[DiscordUserResponse] = Decoder.forProduct1("id")(DiscordUserResponse(_))
 
 object JavaDiscordOAuthClient:
-  final case class Config(clientId: String, clientSecret: String, redirectUri: String, scope: String):
+  final case class Config(
+      clientId: String,
+      clientSecret: String,
+      redirectUri: String,
+      scope: String
+  ):
     override def toString: String = "DiscordOAuthClient.Config([REDACTED])"
 
   private val ConnectTimeout = java.time.Duration.ofSeconds(5)
   private val RequestTimeout = java.time.Duration.ofSeconds(8)
 
-  def resource[F[_]: Async](config: JavaDiscordOAuthClient.Config): Resource[F, JavaDiscordOAuthClient[F]] = Resource
+  def resource[F[_]: Async](config: JavaDiscordOAuthClient.Config)
+      : Resource[F, JavaDiscordOAuthClient[F]] = Resource
     .fromAutoCloseable(
       Async[F].blocking(HttpClient.newBuilder().connectTimeout(ConnectTimeout).build())
     ).map(new JavaDiscordOAuthClient[F](config, _))

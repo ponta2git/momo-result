@@ -22,7 +22,6 @@ use crate::{
             recover_cold_page,
         },
     },
-    outbox::OutboxKind,
     series_analysis::control::ALGORITHM_VERSION,
 };
 
@@ -122,6 +121,7 @@ async fn real_postgres_and_redis_preserve_ocr_fencing_and_delivery_order() -> Sm
         insert_fixture(&primary, fixture).await?;
     }
 
+    verify_candidate_integrity(&mut primary).await?;
     verify_expired_takeover(&mut primary, &mut stale).await?;
     verify_success_and_terminal_duplicate(&mut primary).await?;
     verify_success_with_warnings(&mut primary).await?;
@@ -131,6 +131,37 @@ async fn real_postgres_and_redis_preserve_ocr_fencing_and_delivery_order() -> Sm
     notifications::verify(&mut primary, &mut stale, &database_url).await?;
 
     cleanup_database(&primary).await?;
+    Ok(())
+}
+
+async fn verify_candidate_integrity(primary: &mut Client) -> SmokeResult {
+    for invalid_state in [
+        "DELETE FROM ocr_queue_outbox WHERE job_id = $1",
+        "UPDATE source_images SET status = 'DELETE_PENDING', delete_pending_at = clock_timestamp() \
+         WHERE id = (SELECT source_image_id FROM ocr_jobs WHERE id = $1)",
+    ] {
+        let transaction = primary.transaction().await?;
+        transaction
+            .execute(invalid_state, &[&SUCCESS.job_id])
+            .await?;
+        assert!(
+            matches!(
+                load_candidate(&transaction, SUCCESS.job_id).await?,
+                CandidateResult::InvalidPersistedContract
+            ),
+            "missing immutable delivery or unavailable source must fail before acquiring ownership"
+        );
+        transaction.rollback().await?;
+    }
+    let transaction = primary.transaction().await?;
+    let CandidateResult::Ready(candidate) = load_candidate(&transaction, SUCCESS.job_id).await?
+    else {
+        return Err(
+            smoke_error("restored source and outbox did not yield a ready candidate").into(),
+        );
+    };
+    assert!(candidate.matches(&payload(&SUCCESS)?));
+    transaction.rollback().await?;
     Ok(())
 }
 
@@ -277,11 +308,12 @@ async fn prepare_expired_analysis_holder(primary: &Client) -> SmokeResult {
     primary
         .execute(
             "UPDATE series_analysis_title_states SET input_revision = 1, algorithm_version = $1,\x20\
-               artifact_schema_version = $2, pending_work = true WHERE game_title_id = $3",
+               artifact_schema_version = $2, validation_contract_id = $4, pending_work = true WHERE game_title_id = $3",
             &[
                 &ALGORITHM_VERSION,
                 &schema_version,
                 &EXPIRED_ANALYSIS_TITLE_ID,
+                &momo_analysis_core::contract::ARTIFACT_VALIDATION_CONTRACT_ID,
             ],
         )
         .await?;
@@ -879,11 +911,7 @@ fn control_config(worker_id: &str) -> SmokeResult<OcrControlConfig> {
 fn claimed_with_analysis_wake(
     outcome: ControlOutcome<OcrClaimResult>,
 ) -> SmokeResult<ClaimedOcrJob> {
-    if !outcome
-        .effects
-        .outbox_wakes
-        .contains(OutboxKind::SeriesAnalysis)
-    {
+    if outcome.effects != crate::outbox::PostCommitEffects::WakeAnalysis {
         return Err(smoke_error("expired Analysis recovery did not emit its shared wake").into());
     }
     match outcome.value {
@@ -902,11 +930,7 @@ fn claimed_with_analysis_wake(
 }
 
 fn claim_result(outcome: ControlOutcome<OcrClaimResult>) -> SmokeResult<OcrClaimResult> {
-    if outcome
-        .effects
-        .outbox_wakes
-        .contains(OutboxKind::SeriesAnalysis)
-    {
+    if outcome.effects == crate::outbox::PostCommitEffects::WakeAnalysis {
         return Err(smoke_error("normal OCR claim unexpectedly emitted an outbox wake").into());
     }
     Ok(outcome.value)

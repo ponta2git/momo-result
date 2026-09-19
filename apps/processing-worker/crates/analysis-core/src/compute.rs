@@ -207,7 +207,7 @@ pub fn try_for_each_resource<E>(
                         &analysis.player_matches,
                         analysis.match_groups.len(),
                         member_id,
-                        metric.wire(),
+                        metric,
                         &analysis.outcome_model,
                     ),
                     item_count: member_matches.len(),

@@ -700,63 +700,70 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
         Left(AppError.AnalysisArtifactExpired()),
       )
 
-  test("new desired generation keeps old data readable until the new artifact is published"):
-    val oldPayload = Files.readAllBytes(
-      repositoryFile("docs/schemas/fixtures/series-analysis/aggregate-payload-v3.json")
-    )
-    val newPayload = Files.readAllBytes(
-      repositoryFile("docs/schemas/fixtures/series-analysis/aggregate-payload-v4.json")
-    )
-    def depth(bytes: Array[Byte]): Int = parser.parse(new String(bytes, StandardCharsets.UTF_8))
-      .fold(error => fail(s"invalid fixture: $error"), jsonDepth)
-    def request(id: String) = SeriesAnalysisChunkRequest(
-      SeriesAnalysisChunkKind.Aggregate,
-      titleId,
-      id,
-      SeriesAnalysisScope.Overall
-    )
-    for
-      _ <- seedTitle
-      _ <- insertPublishedArtifact(
-        "old",
-        oldPayload,
-        0,
-        depth(oldPayload),
-        Some("series-analysis-artifact-v2-full-validation-v1"),
-        None,
-        2,
+  List((3, 4), (4, 5)).foreach { case (artifactVersion, payloadVersion) =>
+    test(
+      s"generation $artifactVersion keeps old data readable until the new artifact is published"
+    ):
+      val oldPayload = Files.readAllBytes(
+        repositoryFile("docs/schemas/fixtures/series-analysis/aggregate-payload-v3.json")
       )
-      _ <- pointToArtifacts("old", None)
-      _ <-
-        sql"""UPDATE series_analysis_title_states SET algorithm_version = 'series-analysis-v5',
-        artifact_schema_version = 3, validation_contract_id = 'series-analysis-artifact-v3-full-validation-v1', pending_work = true
-        WHERE game_title_id = $titleId""".update.run.transact(transactor)
-      repo <- repository
-      stale <- repo.status(titleId)
-      old <- repo.chunk(request("old"))
-      _ <- insertPublishedArtifact(
-        "new",
-        newPayload,
-        0,
-        depth(newPayload),
-        Some("series-analysis-artifact-v3-full-validation-v1"),
-        None,
-        3,
+      val newPayload = Files.readAllBytes(
+        repositoryFile(
+          s"docs/schemas/fixtures/series-analysis/aggregate-payload-v$payloadVersion.json"
+        )
       )
-      _ <-
-        sql"""UPDATE series_analysis_title_states SET current_artifact_id = 'new', previous_artifact_id = NULL
-        WHERE game_title_id = $titleId""".update.run.transact(transactor)
-      current <- repo.chunk(request("new"))
-    yield
-      assertEquals(stale.map(_.artifactFreshness), Right("stale"))
-      assertHydratedAggregate(old, "old")
-      current match
-        case Right(chunk) =>
-          assertEquals(chunk.artifact.artifactSchemaVersion, 3)
-          val json = parser.parse(new String(chunk.payload, StandardCharsets.UTF_8)).toOption.get
-          assertEquals(json.hcursor.get[Int]("schemaVersion"), Right(4))
-          assert(json.hcursor.downField("ownerComparison").succeeded)
-        case Left(error) => fail(s"new generation was not readable: $error")
+      def depth(bytes: Array[Byte]): Int = parser.parse(new String(bytes, StandardCharsets.UTF_8))
+        .fold(error => fail(s"invalid fixture: $error"), jsonDepth)
+      def request(id: String) = SeriesAnalysisChunkRequest(
+        SeriesAnalysisChunkKind.Aggregate,
+        titleId,
+        id,
+        SeriesAnalysisScope.Overall
+      )
+      val validationContract = s"series-analysis-artifact-v$artifactVersion-full-validation-v1"
+      for
+        _ <- seedTitle
+        _ <- insertPublishedArtifact(
+          "old",
+          oldPayload,
+          0,
+          depth(oldPayload),
+          Some("series-analysis-artifact-v2-full-validation-v1"),
+          None,
+          2,
+        )
+        _ <- pointToArtifacts("old", None)
+        _ <-
+          sql"""UPDATE series_analysis_title_states SET algorithm_version = 'series-analysis-v5',
+          artifact_schema_version = $artifactVersion, validation_contract_id = $validationContract, pending_work = true
+          WHERE game_title_id = $titleId""".update.run.transact(transactor)
+        repo <- repository
+        stale <- repo.status(titleId)
+        old <- repo.chunk(request("old"))
+        _ <- insertPublishedArtifact(
+          "new",
+          newPayload,
+          0,
+          depth(newPayload),
+          Some(validationContract),
+          None,
+          artifactVersion,
+        )
+        _ <-
+          sql"""UPDATE series_analysis_title_states SET current_artifact_id = 'new', previous_artifact_id = NULL
+          WHERE game_title_id = $titleId""".update.run.transact(transactor)
+        current <- repo.chunk(request("new"))
+      yield
+        assertEquals(stale.map(_.artifactFreshness), Right("stale"))
+        assertHydratedAggregate(old, "old")
+        current match
+          case Right(chunk) =>
+            assertEquals(chunk.artifact.artifactSchemaVersion, artifactVersion)
+            val json = parser.parse(new String(chunk.payload, StandardCharsets.UTF_8)).toOption.get
+            assertEquals(json.hcursor.get[Int]("schemaVersion"), Right(payloadVersion))
+            assert(json.hcursor.downField("ownerComparison").succeeded)
+          case Left(error) => fail(s"new generation was not readable: $error")
+  }
 
   test("bounded reads distinguish missing scopes, absent chunks and oversized material"):
     val payload = Files.readAllBytes(
@@ -925,7 +932,7 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
       artifactSchemaVersion: Int,
   ): IO[Unit] =
     val algorithmVersion =
-      if artifactSchemaVersion == 3 then "series-analysis-v5" else "series-analysis-v3"
+      if artifactSchemaVersion >= 3 then "series-analysis-v5" else "series-analysis-v3"
     val length = payload.length
     val checksum = sha256(payload)
     (sql"""

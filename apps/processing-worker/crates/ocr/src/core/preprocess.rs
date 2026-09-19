@@ -127,10 +127,9 @@ impl RankedRowVariants {
     }
 }
 
-pub(crate) fn prepare_slot_name_variants(image: &DynamicImage) -> Vec<GrayImage> {
+pub(crate) fn prepare_slot_name_variants(image: &DynamicImage) -> impl Iterator<Item = GrayImage> {
     let gray = image.to_luma8();
-    let mut variants = Vec::with_capacity(3);
-    for threshold in [150_u8, 170, 190] {
+    [150_u8, 170, 190].into_iter().map(move |threshold| {
         let prepared = GrayImage::from_fn(gray.width(), gray.height(), |x, y| {
             Luma([if gray.get_pixel(x, y).0[0] > threshold {
                 0
@@ -138,9 +137,8 @@ pub(crate) fn prepare_slot_name_variants(image: &DynamicImage) -> Vec<GrayImage>
                 u8::MAX
             }])
         });
-        variants.push(resize(&prepared, NAME_SCALE, FilterType::Lanczos3));
-    }
-    variants
+        resize(&prepared, NAME_SCALE, FilterType::Lanczos3)
+    })
 }
 
 pub(crate) fn prepare_count_cell(image: &DynamicImage) -> GrayImage {
@@ -148,30 +146,31 @@ pub(crate) fn prepare_count_cell(image: &DynamicImage) -> GrayImage {
     resize(&enhanced, COUNT_SCALE, FilterType::Lanczos3)
 }
 
-pub(crate) fn prepare_fallback_count_cells(image: &DynamicImage) -> Vec<GrayImage> {
+pub(crate) fn prepare_fallback_count_cells(
+    image: &DynamicImage,
+) -> impl Iterator<Item = GrayImage> {
     let inner = bounded_inner_crop(image, 5, 2, 5, 2);
-    let gray = inner.to_luma8();
-    let sharpened = contrast(&sharpen(&gray), 5.0);
-    let binary = otsu_binarize(&gray);
-    vec![
-        resize(&sharpened, COUNT_SCALE, FilterType::Lanczos3),
-        resize(&binary, COUNT_SCALE, FilterType::Nearest),
-    ]
+    count_variants(inner.to_luma8())
 }
 
-pub(crate) fn prepare_digit_count_cells(image: &DynamicImage) -> Vec<GrayImage> {
+pub(crate) fn prepare_digit_count_cells(image: &DynamicImage) -> impl Iterator<Item = GrayImage> {
     let right = image.width().min(60);
     let left = 10_u32.min(right.saturating_sub(1));
     let top = 6_u32.min(image.height().saturating_sub(1));
     let bottom = image.height().saturating_sub(5).max(top.saturating_add(1));
     let digit = image.crop_imm(left, top, right.saturating_sub(left), bottom - top);
-    let gray = digit.to_luma8();
-    let sharpened = contrast(&sharpen(&gray), 5.0);
-    let binary = otsu_binarize(&gray);
-    vec![
-        resize(&sharpened, COUNT_SCALE, FilterType::Lanczos3),
-        resize(&binary, COUNT_SCALE, FilterType::Nearest),
-    ]
+    count_variants(digit.to_luma8())
+}
+
+fn count_variants(gray: GrayImage) -> impl Iterator<Item = GrayImage> {
+    [false, true].into_iter().map(move |binary| {
+        let (prepared, filter) = if binary {
+            (otsu_binarize(&gray), FilterType::Nearest)
+        } else {
+            (contrast(&sharpen(&gray), 5.0), FilterType::Lanczos3)
+        };
+        resize(&prepared, COUNT_SCALE, filter)
+    })
 }
 
 fn resize(image: &GrayImage, scale: u32, filter: FilterType) -> GrayImage {

@@ -3,7 +3,7 @@ use std::time::Duration;
 use momo_analysis_core::contract::ARTIFACT_VALIDATION_CONTRACT_ID;
 use thiserror::Error;
 
-use crate::outbox::{ControlOutcome, OutboxKind, PostCommitEffects};
+use crate::outbox::{ControlOutcome, PostCommitEffects};
 
 pub(crate) const ALGORITHM_VERSION: &str = "series-analysis-v5";
 
@@ -63,9 +63,9 @@ impl TransactionEffects {
 
     pub(crate) const fn committed<T>(self, value: T) -> ControlOutcome<T> {
         let effects = if self.series_analysis_wake {
-            PostCommitEffects::wake(OutboxKind::SeriesAnalysis)
+            PostCommitEffects::WakeAnalysis
         } else {
-            PostCommitEffects::empty()
+            PostCommitEffects::None
         };
         ControlOutcome::new(value, effects)
     }

@@ -4,7 +4,6 @@ import type {
   SeriesAnalysisMatchContextV2,
   SeriesAnalysisOptionsResponse,
   SeriesAnalysisStatusResponse,
-  SeriesAnalysisArtifactRef,
   SeriesComparisonAggregate,
   SeriesComparisonReviewV3,
 } from "@/shared/api/seriesAnalysis";
@@ -74,11 +73,12 @@ export function makeSeriesAnalysisStatus(
 }
 
 const quality = { noTargetCount: 0, okCount: 8, referenceCount: 0 };
+type LegacyAggregate = Extract<SeriesComparisonAggregate, { schemaVersion: 3 }>;
 
 export function makeSeriesAnalysisAggregate(
-  artifact: SeriesAnalysisArtifactRef = analysisArtifact,
-): SeriesComparisonAggregate {
-  return hydrateMemberDisplayNames<SeriesComparisonAggregate>({
+  artifact: LegacyAggregate["artifact"] = analysisArtifact,
+): LegacyAggregate {
+  return hydrateMemberDisplayNames<LegacyAggregate>({
     artifact,
     assetStyleProfiles: {
       entries: [
@@ -591,7 +591,10 @@ export function makeSeriesAnalysisAggregate(
   });
 }
 
-export function makeSeriesAnalysisReview(): SeriesComparisonReviewV3 {
+export function makeSeriesAnalysisReview(): Extract<
+  SeriesComparisonReviewV3,
+  { schemaVersion: 3 }
+> {
   return {
     artifact: analysisArtifact,
     baseline: { matchCount: 12, playerCount: 1, qualityStatus: "ok" },
@@ -668,7 +671,10 @@ const fourPlayerReviewPlayers = [
 ] as const;
 const secondaryReviewCategories = ["destination", "recovery"] as const;
 
-export function makeFourPlayerSeriesAnalysisReview(): SeriesComparisonReviewV3 {
+export function makeFourPlayerSeriesAnalysisReview(): Extract<
+  SeriesComparisonReviewV3,
+  { schemaVersion: 3 }
+> {
   const response = makeSeriesAnalysisReview();
   const sourceEntry = response.playbookByPlayer[0];
   const sourceCard = sourceEntry?.primaryCard;
@@ -1069,11 +1075,12 @@ export function makeOwnerComparisonAggregate(): Extract<
     [4, 2, 1],
   ];
   return {
-    ...makeSeriesAnalysisAggregate({
+    ...makeSeriesAnalysisAggregate(),
+    artifact: {
       ...analysisArtifact,
       artifactSchemaVersion: 3,
       algorithmVersion: "series-analysis-v5",
-    }),
+    },
     schemaVersion: 4,
     scope: { ...scope, matchCount: 3 },
     ownerComparison: {
@@ -1121,4 +1128,46 @@ export function makeOwnerComparisonAggregate(): Extract<
       })),
     },
   };
+}
+
+export function makeCurrentSeriesAnalysisAggregate(): Extract<
+  SeriesComparisonAggregate,
+  { schemaVersion: 5 }
+> {
+  const { metricDefinitions: _metricDefinitions, ...aggregate } = makeOwnerComparisonAggregate();
+  return {
+    ...aggregate,
+    artifact: { ...aggregate.artifact, artifactSchemaVersion: 4 },
+    schemaVersion: 5,
+  };
+}
+
+export function makeCurrentSeriesAnalysisReview(): Extract<
+  SeriesComparisonReviewV3,
+  { schemaVersion: 4 }
+> {
+  const review = makeFourPlayerSeriesAnalysisReview();
+  return {
+    ...review,
+    artifact: {
+      ...review.artifact,
+      algorithmVersion: "series-analysis-v5",
+      artifactSchemaVersion: 4,
+    },
+    schemaVersion: 4,
+    playbookByPlayer: review.playbookByPlayer.map((entry) => ({
+      player: entry.player,
+      primaryCard: entry.primaryCard && withoutReviewAnchor(entry.primaryCard),
+      secondaryCards: entry.secondaryCards.map(withoutReviewAnchor),
+    })),
+  };
+}
+
+function withoutReviewAnchor(
+  card: NonNullable<
+    ReturnType<typeof makeSeriesAnalysisReview>["playbookByPlayer"][number]["primaryCard"]
+  >,
+) {
+  const { anchorTarget: _anchorTarget, ...evidence } = card;
+  return evidence;
 }

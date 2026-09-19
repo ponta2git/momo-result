@@ -1,14 +1,12 @@
-use std::collections::BTreeMap;
-
 use crate::{model::PlayerMatchInput, numeric::count_as_f64};
 
 use super::{
-    CrownCertainty, EncodedEvent, EncodedRow, FOLD_COUNT, FULL_FEATURE_COUNT, FoldEvaluation,
-    FoldScore, MINIMUM_EVENT_COUNT, MINIMUM_IMPORTANCE, MINIMUM_IMPROVED_FOLDS,
-    MINIMUM_MATCH_COUNT, OK_EVENT_COUNT, OutcomeModelAnalysis, OutcomeModelFailure, PLAYER_COUNT,
+    CrownCertainty, EncodedEvent, FOLD_COUNT, FULL_FEATURE_COUNT, FoldEvaluation, FoldScore,
+    MINIMUM_EVENT_COUNT, MINIMUM_IMPORTANCE, MINIMUM_IMPROVED_FOLDS, MINIMUM_MATCH_COUNT,
+    OK_EVENT_COUNT, Observation, OutcomeModelAnalysis, OutcomeModelFailure, PLAYER_COUNT,
     PairRecord, PlayerSignals, PlayerUnexpectedWins, Quality, Signal, SignalKind,
     bootstrap::crown_certainty,
-    encoding::{distinct_matches, encode, pair_records, pair_records_with},
+    encoding::{distinct_matches, encode, pair_records},
     outcomes::{build_unexpected_wins, expected_ranks},
     solver::{brier_score, fit, log_loss},
 };
@@ -43,14 +41,19 @@ pub(super) fn analyze(rows: &[&PlayerMatchInput], players: &[String]) -> Outcome
                 .map_err(|_error| OutcomeModelFailure::Calculation)?;
             let crown = crown_certainty(&events, players)
                 .map_err(|_error| OutcomeModelFailure::ModelNotConverged)?;
-            Ok((evaluations, signals, unexpected_wins, crown))
+            Ok((
+                evaluations
+                    .into_iter()
+                    .map(|entry| entry.score)
+                    .collect::<Vec<_>>(),
+                signals,
+                unexpected_wins,
+                crown,
+            ))
         });
     match result {
-        Ok((evaluations, signals, unexpected_wins, crown)) => {
-            let improved_fold_count = evaluations
-                .iter()
-                .filter(|evaluation| evaluation.score.improved())
-                .count();
+        Ok((fold_scores, signals, unexpected_wins, crown)) => {
+            let improved_fold_count = fold_scores.iter().filter(|score| score.improved()).count();
             let has_stable = signals
                 .iter()
                 .any(|player| player.signals.iter().any(|signal| signal.stable));
@@ -66,10 +69,7 @@ pub(super) fn analyze(rows: &[&PlayerMatchInput], players: &[String]) -> Outcome
                 held_event_count,
                 match_count,
                 improved_fold_count,
-                fold_scores: evaluations
-                    .iter()
-                    .map(|entry| entry.score.clone())
-                    .collect(),
+                fold_scores,
                 player_signals: signals,
                 unexpected_wins,
                 crown,
@@ -166,35 +166,31 @@ pub(super) fn bounded_count(value: usize) -> Result<f64, ()> {
     count_as_f64(value).ok_or(())
 }
 
-fn evaluate_folds(events: &[EncodedEvent]) -> Result<Vec<FoldEvaluation>, OutcomeModelFailure> {
+fn evaluate_folds(events: &[EncodedEvent]) -> Result<Vec<FoldEvaluation<'_>>, OutcomeModelFailure> {
     (0..FOLD_COUNT)
         .map(|fold| {
             let test_events = events
                 .iter()
                 .enumerate()
                 .filter(|(index, _)| index % FOLD_COUNT == fold)
-                .map(|(_, event)| event.clone())
+                .map(|(_, event)| event)
                 .collect::<Vec<_>>();
-            let training_pairs = pair_records(
-                events
-                    .iter()
-                    .enumerate()
-                    .filter(|(index, _)| index % FOLD_COUNT != fold)
-                    .map(|(_, event)| event),
-            )
-            .map_err(|_error| OutcomeModelFailure::Calculation)?;
-            let test_pairs =
-                pair_records(&test_events).map_err(|_error| OutcomeModelFailure::Calculation)?;
-            if training_pairs.is_empty() || test_pairs.is_empty() {
+            let training_events = events
+                .iter()
+                .enumerate()
+                .filter(|(index, _)| index % FOLD_COUNT != fold)
+                .map(|(_, event)| event);
+            let test_pairs = pair_records(test_events.iter().copied()).collect::<Vec<_>>();
+            let mut baseline_training = pair_records(training_events.clone())
+                .map(|pair| pair.baseline)
+                .collect::<Vec<_>>();
+            if baseline_training.is_empty() || test_pairs.is_empty() {
                 return Err(OutcomeModelFailure::Calculation);
             }
-            let baseline_fit = fit(training_pairs
-                .iter()
-                .map(|pair| pair.baseline)
-                .collect::<Vec<_>>())
-            .map_err(|_error| OutcomeModelFailure::ModelNotConverged)?;
-            let full_fit = fit(training_pairs
-                .iter()
+            let baseline_fit = fit(&mut baseline_training)
+                .map_err(|_error| OutcomeModelFailure::ModelNotConverged)?;
+            drop(baseline_training);
+            let full_fit = fit(&mut pair_records(training_events)
                 .map(|pair| pair.full)
                 .collect::<Vec<_>>())
             .map_err(|_error| OutcomeModelFailure::ModelNotConverged)?;
@@ -229,16 +225,26 @@ fn evaluate_folds(events: &[EncodedEvent]) -> Result<Vec<FoldEvaluation>, Outcom
 }
 
 fn rank_signals(
-    evaluations: &[FoldEvaluation],
+    evaluations: &[FoldEvaluation<'_>],
     players: &[String],
 ) -> Result<Vec<PlayerSignals>, ()> {
     players
         .iter()
         .enumerate()
         .map(|(member_index, member_id)| {
+            let original_losses = evaluations
+                .iter()
+                .map(|evaluation| {
+                    member_log_loss(
+                        &evaluation.test_pairs,
+                        member_index,
+                        &evaluation.full_fit.coefficients,
+                    )
+                })
+                .collect::<Result<Vec<_>, _>>()?;
             let mut signals = SignalKind::ALL
                 .into_iter()
-                .map(|kind| signal_for_player(evaluations, member_index, kind))
+                .map(|kind| signal_for_player(evaluations, &original_losses, member_index, kind))
                 .collect::<Result<Vec<_>, _>>()?;
             signals.retain(|signal| signal.importance > 0.0);
             signals.sort_by(|left, right| {
@@ -257,25 +263,21 @@ fn rank_signals(
 }
 
 fn signal_for_player(
-    evaluations: &[FoldEvaluation],
+    evaluations: &[FoldEvaluation<'_>],
+    original_losses: &[f64],
     member_index: usize,
     kind: SignalKind,
 ) -> Result<Signal, ()> {
     let signal_index = kind.index();
     let mut fold_importances = Vec::with_capacity(evaluations.len());
-    for evaluation in evaluations {
-        let original = member_log_loss(
+    for (evaluation, original) in evaluations.iter().zip(original_losses) {
+        let permuted = permuted_member_observations(
+            &evaluation.test_events,
             &evaluation.test_pairs,
             member_index,
-            &evaluation.full_fit.coefficients,
+            kind,
         )?;
-        let permuted_pairs =
-            pair_records_with_permuted_signal(&evaluation.test_events, member_index, kind)?;
-        let permuted_loss = member_log_loss(
-            &permuted_pairs,
-            member_index,
-            &evaluation.full_fit.coefficients,
-        )?;
+        let permuted_loss = log_loss(&permuted, &evaluation.full_fit.coefficients)?;
         fold_importances.push(permuted_loss - original);
     }
     let coefficients = evaluations
@@ -331,71 +333,67 @@ fn signal_for_player(
     })
 }
 
-fn pair_records_with_permuted_signal(
-    events: &[EncodedEvent],
+fn permuted_member_observations(
+    events: &[&EncodedEvent],
+    pairs: &[PairRecord],
     member_index: usize,
     kind: SignalKind,
-) -> Result<Vec<PairRecord>, ()> {
+) -> Result<Vec<Observation<FULL_FEATURE_COUNT>>, ()> {
     if events.len() <= 1 {
-        return pair_records(events);
+        return Ok(member_pairs(pairs, member_index)
+            .map(|pair| pair.full)
+            .collect());
     }
     let signal_index = kind.index();
-    let donors = events
-        .iter()
-        .cycle()
-        .skip(1)
-        .take(events.len())
-        .map(|event| {
-            rows_for_member(event, member_index)
-                .map(|row| row.signals.get(signal_index).copied().ok_or(()))
-                .collect::<Result<Vec<_>, _>>()
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-    let replacements = events
-        .iter()
-        .zip(&donors)
-        .map(|(event, donor)| {
-            event
+    // Permutation changes one signal for one member. Keep the existing pair order and
+    // subtract the actual left/right values again (adding a delta would change rounding).
+    member_pairs(pairs, member_index)
+        .map(|pair| {
+            let rank_match = events
+                .get(pair.match_key.event_index)
+                .and_then(|event| event.matches.get(pair.match_key.match_index))
+                .ok_or(())?;
+            // Every encoded match contains all four members in the same canonical order.
+            // Rotate the donor event and cycle its matches, preserving unequal-event semantics.
+            let donor = events
+                .get((pair.match_key.event_index + 1) % events.len())
+                .ok_or(())?;
+            let donor_match_index = pair
+                .match_key
+                .match_index
+                .checked_rem(donor.matches.len())
+                .ok_or(())?;
+            let replacement = donor
                 .matches
-                .iter()
-                .filter_map(|rank_match| {
+                .get(donor_match_index)
+                .and_then(|donor_match| donor_match.rows.get(member_index))
+                .and_then(|row| row.signals.get(signal_index))
+                .copied()
+                .ok_or(())?;
+            let signal = |index: usize| {
+                if index == member_index {
+                    Ok(replacement)
+                } else {
                     rank_match
                         .rows
-                        .iter()
-                        .find(|row| row.source.member_index == member_index)
-                        .map(|row| (rank_match.match_id.as_ref(), row))
-                })
-                .enumerate()
-                .map(|(index, (match_id, row))| {
-                    let value = if donor.is_empty() {
-                        row.signals.get(signal_index).copied().ok_or(())?
-                    } else {
-                        donor.get(index % donor.len()).copied().ok_or(())?
-                    };
-                    Ok((match_id, value))
-                })
-                .collect::<Result<BTreeMap<_, _>, ()>>()
+                        .get(index)
+                        .and_then(|row| row.signals.get(signal_index))
+                        .copied()
+                        .ok_or(())
+                }
+            };
+            let mut observation = pair.full;
+            *observation.features.get_mut(signal_index).ok_or(())? =
+                signal(pair.left_member_index)? - signal(pair.right_member_index)?;
+            Ok(observation)
         })
-        .collect::<Result<Vec<_>, _>>()?;
-    pair_records_with(events, |event_index, rank_match, row, current_signal| {
-        if row.source.member_index == member_index && current_signal == signal_index {
-            replacements
-                .get(event_index)
-                .and_then(|values| values.get(rank_match.match_id.as_ref()))
-                .copied()
-                .ok_or(())
-        } else {
-            row.signals.get(current_signal).copied().ok_or(())
-        }
-    })
+        .collect()
 }
 
-fn rows_for_member(event: &EncodedEvent, member_index: usize) -> impl Iterator<Item = &EncodedRow> {
-    event
-        .matches
-        .iter()
-        .flat_map(|rank_match| &rank_match.rows)
-        .filter(move |row| row.source.member_index == member_index)
+fn member_pairs(pairs: &[PairRecord], member_index: usize) -> impl Iterator<Item = &PairRecord> {
+    pairs.iter().filter(move |pair| {
+        pair.left_member_index == member_index || pair.right_member_index == member_index
+    })
 }
 
 fn member_log_loss(
@@ -403,12 +401,94 @@ fn member_log_loss(
     member_index: usize,
     coefficients: &[f64; FULL_FEATURE_COUNT],
 ) -> Result<f64, ()> {
-    let observations = pairs
-        .iter()
-        .filter(|pair| {
-            pair.left_member_index == member_index || pair.right_member_index == member_index
-        })
+    let observations = member_pairs(pairs, member_index)
         .map(|pair| pair.full)
         .collect::<Vec<_>>();
     log_loss(&observations, coefficients)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::outcome_model::{
+        ADJUSTMENT_COUNT, EncodedMatch, EncodedRow, SIGNAL_COUNT, SourceRow,
+    };
+
+    fn event(id: &str, values: &[f64]) -> EncodedEvent {
+        EncodedEvent {
+            held_event_id: id.into(),
+            played_at: "2026-01-01T00:00:00.000000Z".into(),
+            matches: values
+                .iter()
+                .zip(0_i32..)
+                .map(|(value, index)| EncodedMatch {
+                    match_id: format!("{id}-{index}").into(),
+                    match_no_in_event: index + 1,
+                    played_at: "2026-01-01T00:00:00.000000Z".into(),
+                    rows: [1, 2, 3, 4].map(|rank| {
+                        let member_index = usize::try_from(rank - 1).unwrap_or(0);
+                        let mut signals = [f64::from(rank); SIGNAL_COUNT];
+                        if let Some(revenue) = signals.first_mut() {
+                            *revenue = if member_index == 2 { *value } else { 0.0 };
+                        }
+                        EncodedRow {
+                            source: SourceRow { member_index, rank },
+                            signals,
+                            adjustments: [f64::from(rank); ADJUSTMENT_COUNT],
+                        }
+                    }),
+                })
+                .collect(),
+        }
+    }
+
+    #[test]
+    fn permutation_rotates_and_cycles_unequal_events_without_changing_other_features() {
+        let events = [
+            event("a", &[10.0, 11.0]),
+            event("b", &[20.0]),
+            event("c", &[30.0, 31.0, 32.0]),
+        ];
+        let references = events.iter().collect::<Vec<_>>();
+        let pairs = pair_records(events.iter()).collect::<Vec<_>>();
+        let permuted = permuted_member_observations(&references, &pairs, 2, SignalKind::Revenue)
+            .unwrap_or_default();
+        let expected = [20.0_f64, 20.0, 30.0, 10.0, 11.0, 10.0]
+            .into_iter()
+            .flat_map(|value| [-value, -value, value])
+            .map(f64::to_bits)
+            .collect::<Vec<_>>();
+        assert_eq!(
+            permuted
+                .iter()
+                .filter_map(|row| row.features.first())
+                .copied()
+                .map(f64::to_bits)
+                .collect::<Vec<_>>(),
+            expected
+        );
+        for (observation, original) in permuted.iter().zip(member_pairs(&pairs, 2)) {
+            assert_eq!(
+                observation.outcome.to_bits(),
+                original.full.outcome.to_bits()
+            );
+            assert_eq!(
+                observation
+                    .features
+                    .iter()
+                    .skip(1)
+                    .copied()
+                    .map(f64::to_bits)
+                    .collect::<Vec<_>>(),
+                original
+                    .full
+                    .features
+                    .iter()
+                    .skip(1)
+                    .copied()
+                    .map(f64::to_bits)
+                    .collect::<Vec<_>>()
+            );
+        }
+    }
 }

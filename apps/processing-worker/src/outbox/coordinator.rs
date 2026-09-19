@@ -150,7 +150,6 @@ where
     D: OutboxDriver,
     C: CoordinatorClock,
 {
-    let kind = wake.kind;
     let mut demand = true;
     let mut next_wake_at = None;
     let mut retry_at = None;
@@ -185,7 +184,7 @@ where
                 next_wake_at = Some(cold_recovery_deadline(clock.now(), next)?);
                 info!(
                     event = "outbox_coordinator_idle",
-                    outbox_kind = kind.wire(),
+                    outbox_kind = "series_analysis",
                     has_driver_deadline,
                     "outbox coordinator drained durable work"
                 );
@@ -209,7 +208,7 @@ where
                     next_wake_at = None;
                     warn!(
                         event = "outbox_coordinator_backoff",
-                        outbox_kind = kind.wire(),
+                        outbox_kind = "series_analysis",
                         error_kind = D::safe_error_kind(&error),
                         failure_count = consecutive_failures,
                         retry_after_seconds = delay.as_secs(),
@@ -261,7 +260,7 @@ fn consume_coalesced_wake<E>(wake: &mut OutboxWakeReceiver) -> Result<(), Coordi
 where
     E: Error + 'static,
 {
-    match wake.receiver.try_recv() {
+    match wake.try_recv() {
         Ok(()) | Err(mpsc::error::TryRecvError::Empty) => Ok(()),
         Err(mpsc::error::TryRecvError::Disconnected) => Err(CoordinatorError::WakeChannelClosed),
     }
@@ -293,7 +292,7 @@ where
                 tokio::select! {
                     biased;
                     changed = shutdown.changed() => changed_event(changed, shutdown)?,
-                    signal = wake.receiver.recv() => wake_event(signal)?,
+                    signal = wake.recv() => wake_event(signal)?,
                     () = clock.sleep_until(deadline) => WaitEvent::Deadline,
                 }
             }
@@ -301,7 +300,7 @@ where
                 tokio::select! {
                     biased;
                     changed = shutdown.changed() => changed_event(changed, shutdown)?,
-                    signal = wake.receiver.recv() => wake_event(signal)?,
+                    signal = wake.recv() => wake_event(signal)?,
                 }
             }
         };
@@ -368,7 +367,7 @@ mod tests {
     use tokio::sync::{Notify, mpsc};
 
     use super::*;
-    use crate::outbox::{OutboxKind, PostCommitEffects, PostCommitSink};
+    use crate::outbox::{PostCommitEffects, PostCommitSink};
 
     #[derive(Clone)]
     struct ManualClock {
@@ -513,7 +512,7 @@ mod tests {
             Ok(DrainBatch::idle(Some(deadline))),
             Ok(DrainBatch::idle(None)),
         ]);
-        let (sink, wake) = PostCommitSink::channel(OutboxKind::SeriesAnalysis);
+        let (sink, wake) = PostCommitSink::channel();
         let (shutdown_sender, shutdown) = watch::channel(false);
         let task = tokio::spawn(run_with_clock(driver, wake, shutdown, clock.clone()));
 
@@ -527,7 +526,7 @@ mod tests {
             "idle coordinator must not poll before its explicit deadline"
         );
 
-        let effect = PostCommitEffects::wake(OutboxKind::SeriesAnalysis);
+        let effect = PostCommitEffects::WakeAnalysis;
         assert_eq!(sink.submit(effect), Ok(()));
         observe_drain(&mut drains).await;
 
@@ -542,7 +541,7 @@ mod tests {
         let (clock, mut sleeps) = ManualClock::at(start);
         let (driver, mut drains) =
             ScriptedDriver::new([Ok(DrainBatch::idle(None)), Ok(DrainBatch::idle(None))]);
-        let (_sink, wake) = PostCommitSink::channel(OutboxKind::SeriesAnalysis);
+        let (_sink, wake) = PostCommitSink::channel();
         let (shutdown_sender, shutdown) = watch::channel(false);
         let task = tokio::spawn(run_with_clock(driver, wake, shutdown, clock.clone()));
 
@@ -571,7 +570,7 @@ mod tests {
             Ok(DrainBatch::idle(Some(deadline))),
             Ok(DrainBatch::idle(None)),
         ]);
-        let (_sink, wake) = PostCommitSink::channel(OutboxKind::SeriesAnalysis);
+        let (_sink, wake) = PostCommitSink::channel();
         let (shutdown_sender, shutdown) = watch::channel(false);
         let task = tokio::spawn(run_with_clock(driver, wake, shutdown, clock.clone()));
 
@@ -602,16 +601,13 @@ mod tests {
             }),
             Ok(DrainBatch::idle(None)),
         ]);
-        let (sink, wake) = PostCommitSink::channel(OutboxKind::SeriesAnalysis);
+        let (sink, wake) = PostCommitSink::channel();
         let (shutdown_sender, shutdown) = watch::channel(false);
         let task = tokio::spawn(run_with_clock(driver, wake, shutdown, clock.clone()));
 
         observe_drain(&mut drains).await;
         assert_eq!(observe_sleep(&mut sleeps).await, Some(retry_at));
-        assert_eq!(
-            sink.submit(PostCommitEffects::wake(OutboxKind::SeriesAnalysis)),
-            Ok(())
-        );
+        assert_eq!(sink.submit(PostCommitEffects::WakeAnalysis), Ok(()));
         assert_eq!(observe_sleep(&mut sleeps).await, Some(retry_at));
         assert_eq!(
             drains.try_recv(),
@@ -651,7 +647,7 @@ mod tests {
         let (driver, _drains) = ScriptedDriver::new([Err(ScriptedError {
             kind: DriverFailureKind::Structural,
         })]);
-        let (_sink, wake) = PostCommitSink::channel(OutboxKind::SeriesAnalysis);
+        let (_sink, wake) = PostCommitSink::channel();
         let (_shutdown_sender, shutdown) = watch::channel(false);
 
         assert!(matches!(

@@ -24,3 +24,13 @@ pub(super) fn scope_summary_json(scope: &ScopeRef, match_count: usize) -> Value 
 pub(super) fn member_ref_json(member_id: &str) -> Value {
     json!({ "memberId": member_id })
 }
+
+/// Assembles already computed JSON fragments by ownership, avoiding `json!`'s serialization copy.
+pub(super) fn object(fields: impl IntoIterator<Item = (&'static str, Value)>) -> Value {
+    Value::Object(
+        fields
+            .into_iter()
+            .map(|(key, value)| (String::from(key), value))
+            .collect(),
+    )
+}

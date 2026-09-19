@@ -1,5 +1,5 @@
 import { QueryClientProvider } from "@tanstack/react-query";
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { StrictMode, useEffect, useState } from "react";
 import { createMemoryRouter, RouterProvider } from "react-router-dom";
@@ -88,6 +88,12 @@ async function setup({ gate, url = initialUrl }: { gate?: Promise<void>; url?: s
   return router;
 }
 
+function primaryEvidenceLink() {
+  const link = screen.getAllByRole("link", { name: "物件収益の根拠を見る" })[1];
+  if (!link) throw new Error("Ponta's primary hypothesis fixture is required");
+  return link;
+}
+
 describe("series analysis section navigation", () => {
   it("changes the actual owner select without a new arrival or history entry under Strict Mode", async () => {
     const user = userEvent.setup();
@@ -124,18 +130,19 @@ describe("series analysis section navigation", () => {
     window.dispatchEvent(new Event("pageshow"));
     expect(window.history.scrollRestoration).toBe("manual");
     await user.click(screen.getByRole("button", { name: "ぽんたのほかの仮説" }));
-    const link = screen.getAllByRole("link", { name: "ぽんたの詳しい分析" })[1];
-    if (!link) throw new Error("secondary hypothesis fixture is required");
+    const card = screen.getByRole("heading", { name: "ぽんたの補助仮説1。" }).closest("article");
+    if (!card) throw new Error("secondary hypothesis fixture is required");
+    const link = within(card).getByRole("link", { name: "目的地の根拠を見る" });
     const linkId = link.id;
     expect(link).toHaveAttribute(
       "href",
-      "/analytics/series?gameTitleId=gt_momotetsu_2&focusMatchId=match-12&view=drivers&returnTo=%2Fmatches#metric-revenue-outcome",
+      "/analytics/series?gameTitleId=gt_momotetsu_2&focusMatchId=match-12&view=drivers&returnTo=%2Fmatches#metric-destination-outcome",
     );
     await user.click(link);
     await waitFor(() =>
-      expect(screen.getByRole("heading", { name: "物件収益と最終順位" })).toHaveFocus(),
+      expect(screen.getByRole("heading", { name: "目的地到着と順位" })).toHaveFocus(),
     );
-    expect(router.state.location.hash).toBe("#metric-revenue-outcome");
+    expect(router.state.location.hash).toBe("#metric-destination-outcome");
     await act(async () => router.navigate(-1));
     expect(screen.getByRole("button", { name: "ぽんたのほかの仮説" })).toHaveAttribute(
       "aria-expanded",
@@ -152,7 +159,7 @@ describe("series analysis section navigation", () => {
     const user = userEvent.setup();
     const gate = createDeferred<void>();
     await setup({ gate: gate.promise });
-    await user.click(screen.getByRole("link", { name: "ぽんたの詳しい分析" }));
+    await user.click(primaryEvidenceLink());
     const heading = await screen.findByRole("heading", { name: "物件収益と最終順位" });
     expect(heading).not.toHaveFocus();
     await act(async () => gate.resolve());
@@ -163,7 +170,7 @@ describe("series analysis section navigation", () => {
     const user = userEvent.setup();
     const gate = createDeferred<void>();
     await setup({ gate: gate.promise });
-    await user.click(screen.getByRole("link", { name: "ぽんたの詳しい分析" }));
+    await user.click(primaryEvidenceLink());
     const heading = await screen.findByRole("heading", { name: "物件収益と最終順位" });
     expect(heading).not.toHaveFocus();
     await user.click(screen.getByRole("button", { name: "別の操作" }));

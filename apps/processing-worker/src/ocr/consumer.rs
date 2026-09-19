@@ -84,7 +84,7 @@ pub(crate) trait OcrChildLauncher: Send + Sync {
     /// Returns an opaque runtime category when the process cannot be created safely.
     fn launch(
         &self,
-        image: &VerifiedSourceImage,
+        image: VerifiedSourceImage,
         requested_screen_type: RequestedScreenType,
         hints: &OcrHints,
     ) -> Result<Box<dyn OcrChildHandle>, &'static str>;
@@ -512,12 +512,8 @@ async fn process_claimed<L: OcrChildLauncher>(
     };
     let ocr_started = time::Instant::now();
     let mut child = launcher
-        .launch(&image, claim.requested_screen_type, hints)
+        .launch(image, claim.requested_screen_type, hints)
         .map_err(OcrConsumerError::ChildProcess)?;
-    // The child handle owns the transport, not the source image. Release the bounded
-    // compressed object before waiting for the child so the parent does not retain up to
-    // the object-size limit for the whole OCR duration.
-    drop(image);
     let child_outcome = supervise_ocr_child(
         child.as_mut(),
         config
@@ -788,7 +784,7 @@ fn elapsed_milliseconds(started: time::Instant) -> i32 {
 mod tests {
     use super::claim_wait::{ClaimAttempt, classify_claim_result, submit_claim_outcome};
     use super::*;
-    use crate::outbox::{ControlOutcome, OutboxKind, PostCommitEffects};
+    use crate::outbox::{ControlOutcome, PostCommitEffects};
 
     #[test]
     fn ocr_failures_have_one_deterministic_control_policy() {
@@ -833,11 +829,11 @@ mod tests {
 
     #[test]
     fn analysis_wake_submission_must_succeed_before_claim_disposition() {
-        let (sink, receiver) = PostCommitSink::channel(OutboxKind::SeriesAnalysis);
+        let (sink, receiver) = PostCommitSink::channel();
         drop(receiver);
         let outcome = ControlOutcome::new(
             OcrClaimResult::MissingOrTerminal,
-            PostCommitEffects::wake(OutboxKind::SeriesAnalysis),
+            PostCommitEffects::WakeAnalysis,
         );
 
         assert!(matches!(

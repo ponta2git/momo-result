@@ -1,7 +1,6 @@
-import type { components } from "@/shared/api/generated";
+import type { SeriesComparisonAggregate as Aggregate } from "@/shared/api/seriesAnalysisAggregateTypes";
+import type { SeriesComparisonReviewV3 as Review } from "@/shared/api/seriesAnalysisReviewTypes";
 
-type Aggregate = components["schemas"]["SeriesAnalysisAggregateResponse"];
-type Review = components["schemas"]["SeriesAnalysisReviewResponse"];
 type Playbook = Review["playbookByPlayer"][number];
 type PlaybookCard = NonNullable<Playbook["primaryCard"]>;
 type UnexpectedWin = Aggregate["rankAnalysis"]["unexpectedWinsByPlayer"][number];

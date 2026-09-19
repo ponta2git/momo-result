@@ -1,22 +1,18 @@
+//! `PostgreSQL` connection and TLS setup, independent of capability and delivery policy.
+
 use std::{path::Path, time::Duration};
 
-use futures_util::future::poll_fn;
 use openssl::{
     error::ErrorStack,
     ssl::{SslConnector, SslMethod},
 };
 use postgres_openssl::{MakeTlsConnector, TlsStream};
 use thiserror::Error;
-use tokio::{sync::watch, time};
-use tokio_postgres::{AsyncMessage, Client, Config, Connection, Socket};
+use tokio_postgres::{Client, Config, Connection, Socket};
 use tracing::error;
-
-use crate::outbox::{OutboxKind, PostCommitEffects, PostCommitSink, PostCommitSinkClosed};
 
 const DEFAULT_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 const DEFAULT_TCP_USER_TIMEOUT: Duration = Duration::from_secs(30);
-const OUTBOX_NOTIFICATION_ROUTE_PROBE_TIMEOUT: Duration = Duration::from_secs(10);
-pub(crate) const SERIES_ANALYSIS_OUTBOX_NOTIFICATION_CHANNEL: &str = "series_analysis_queue_outbox";
 #[cfg(target_os = "linux")]
 const SYSTEM_CA_BUNDLE: &str = "/etc/ssl/certs/ca-certificates.crt";
 
@@ -28,45 +24,6 @@ pub(crate) enum PostgresError {
     TlsConfiguration(#[source] ErrorStack),
     #[error("PostgreSQL operation failed")]
     Postgres(#[from] tokio_postgres::Error),
-}
-
-#[derive(Debug, Error)]
-pub(crate) enum OutboxNotificationError {
-    #[error("series-analysis outbox notification PostgreSQL dependency failed")]
-    Postgres(#[from] PostgresError),
-    #[error("series-analysis outbox notification connection closed unexpectedly")]
-    ConnectionClosed,
-    #[error("series-analysis outbox notification route probe timed out")]
-    RouteProbeTimeout,
-    #[error("series-analysis outbox notification violated its payload-free protocol")]
-    InvalidNotification,
-    #[error("series-analysis outbox notification sink closed unexpectedly")]
-    SinkClosed(#[from] PostCommitSinkClosed),
-    #[error("series-analysis outbox notification shutdown channel closed unexpectedly")]
-    ShutdownChannelClosed,
-}
-
-/// A dedicated, already-subscribed connection that owns the cross-process outbox wake route.
-pub(crate) struct SeriesAnalysisOutboxListener {
-    // Retaining the client keeps the request side of the dedicated connection open while the
-    // connection object is polled exclusively for asynchronous notifications.
-    _client: Client,
-    connection: Connection<Socket, TlsStream<Socket>>,
-    sink: PostCommitSink,
-}
-
-impl OutboxNotificationError {
-    #[must_use]
-    pub(crate) const fn kind(&self) -> &'static str {
-        match self {
-            Self::Postgres(error) => error.kind(),
-            Self::ConnectionClosed => "postgres_connection_closed",
-            Self::RouteProbeTimeout => "notification_route_probe_timeout",
-            Self::InvalidNotification => "invalid_notification",
-            Self::SinkClosed(_) => "outbox_wake_sink_closed",
-            Self::ShutdownChannelClosed => "shutdown_channel_closed",
-        }
-    }
 }
 
 impl PostgresError {
@@ -86,139 +43,27 @@ impl PostgresError {
 ///
 /// Returns a safe error when configuration, trust roots, or the connection are invalid.
 pub(crate) async fn connect(database_url: &str) -> Result<Client, PostgresError> {
-    let config = connection_config(database_url)?;
-    let (client, connection) = config.connect(native_tls_connector()?).await?;
+    let (client, connection) = open(database_url).await?;
     tokio::spawn(async move {
         if let Err(_connection_error) = connection.await {
             error!(
-                event = "analysis_dependency_connection_stopped",
+                event = "worker_dependency_connection_stopped",
                 dependency = "postgresql",
                 error_kind = "connection_driver",
-                "analysis PostgreSQL connection stopped"
+                "PostgreSQL connection stopped"
             );
         }
     });
     Ok(client)
 }
 
-/// Opens and subscribes the dedicated payload-free `PostgreSQL` notification connection.
-///
-/// The listener owns a dedicated connection because the ordinary query connection intentionally
-/// drives and discards asynchronous notices. Losing this connection is a structural peer exit;
-/// the supervisor restarts the full coordination boundary, while the 30-minute cold deadline
-/// remains the safety net for a notification lost between commits and reconnects.
-///
-/// # Errors
-///
-/// Returns a safe structural error when setup, the connection, notification protocol, or sink
-/// stops satisfying the coordination contract.
-pub(crate) async fn subscribe_to_series_analysis_outbox(
-    database_url: &str,
-    sink: PostCommitSink,
-) -> Result<SeriesAnalysisOutboxListener, OutboxNotificationError> {
-    let config = connection_config(database_url)?;
-    let (client, mut connection) = config
+/// The caller owns polling the driver; ordinary queries use `connect` instead.
+pub(crate) type Driver = Connection<Socket, TlsStream<Socket>>;
+
+pub(crate) async fn open(database_url: &str) -> Result<(Client, Driver), PostgresError> {
+    Ok(connection_config(database_url)?
         .connect(native_tls_connector()?)
-        .await
-        .map_err(PostgresError::from)?;
-
-    {
-        // PostgreSQL identifiers cannot be bind parameters. The interpolated value is a private
-        // compile-time constant, never configuration or request input.
-        let listen_statement = format!("LISTEN {SERIES_ANALYSIS_OUTBOX_NOTIFICATION_CHANNEL}");
-        let subscription = client.batch_execute(&listen_statement);
-        tokio::pin!(subscription);
-        loop {
-            tokio::select! {
-                biased;
-                result = &mut subscription => {
-                    result.map_err(PostgresError::from)?;
-                    break;
-                }
-                message = poll_fn(|context| connection.poll_message(context)) => {
-                    handle_async_message(message, &sink)?;
-                }
-            }
-        }
-    }
-
-    Ok(SeriesAnalysisOutboxListener {
-        _client: client,
-        connection,
-        sink,
-    })
-}
-
-impl SeriesAnalysisOutboxListener {
-    /// Proves that a commit on the ordinary control connection reaches this session-bound
-    /// listener before the worker advertises readiness.
-    ///
-    /// # Errors
-    ///
-    /// Returns a structural error when publication, delivery, protocol validation, or the bounded
-    /// probe deadline fails. A transaction-pooled listener therefore fails closed even when its
-    /// initial `LISTEN` statement appeared to succeed.
-    pub(crate) async fn verify_notification_round_trip(
-        &mut self,
-        publisher: &Client,
-    ) -> Result<(), OutboxNotificationError> {
-        let probe = async {
-            publisher
-                .execute(
-                    "SELECT pg_notify($1, '')",
-                    &[&SERIES_ANALYSIS_OUTBOX_NOTIFICATION_CHANNEL],
-                )
-                .await
-                .map_err(PostgresError::from)?;
-            loop {
-                let message = poll_fn(|context| self.connection.poll_message(context)).await;
-                let received = matches!(
-                    message.as_ref(),
-                    Some(Ok(AsyncMessage::Notification(notification)))
-                        if notification.channel()
-                            == SERIES_ANALYSIS_OUTBOX_NOTIFICATION_CHANNEL
-                            && notification.payload().is_empty()
-                );
-                handle_async_message(message, &self.sink)?;
-                if received {
-                    return Ok(());
-                }
-            }
-        };
-        match time::timeout(OUTBOX_NOTIFICATION_ROUTE_PROBE_TIMEOUT, probe).await {
-            Ok(result) => result,
-            Err(_elapsed) => Err(OutboxNotificationError::RouteProbeTimeout),
-        }
-    }
-
-    /// Drives the already-established subscription until coordinated shutdown.
-    ///
-    /// # Errors
-    ///
-    /// Returns a structural error when the connection, payload-free protocol, local sink, or
-    /// shutdown lifecycle is lost.
-    pub(crate) async fn run(
-        mut self,
-        mut shutdown: watch::Receiver<bool>,
-    ) -> Result<(), OutboxNotificationError> {
-        loop {
-            if *shutdown.borrow() {
-                return Ok(());
-            }
-            tokio::select! {
-                biased;
-                changed = shutdown.changed() => {
-                    require_open_shutdown_channel(changed)?;
-                    if *shutdown.borrow() {
-                        return Ok(());
-                    }
-                }
-                message = poll_fn(|context| self.connection.poll_message(context)) => {
-                    handle_async_message(message, &self.sink)?;
-                }
-            }
-        }
-    }
+        .await?)
 }
 
 fn connection_config(database_url: &str) -> Result<Config, PostgresError> {
@@ -232,42 +77,6 @@ fn connection_config(database_url: &str) -> Result<Config, PostgresError> {
         config.tcp_user_timeout(DEFAULT_TCP_USER_TIMEOUT);
     }
     Ok(config)
-}
-
-fn handle_async_message(
-    message: Option<Result<AsyncMessage, tokio_postgres::Error>>,
-    sink: &PostCommitSink,
-) -> Result<(), OutboxNotificationError> {
-    match message {
-        Some(Ok(message)) => match message {
-            AsyncMessage::Notification(notification) => {
-                submit_outbox_notification(notification.channel(), notification.payload(), sink)
-            }
-            AsyncMessage::Notice(_) | _ => Ok(()),
-        },
-        Some(Err(error)) => Err(OutboxNotificationError::Postgres(PostgresError::Postgres(
-            error,
-        ))),
-        None => Err(OutboxNotificationError::ConnectionClosed),
-    }
-}
-
-fn submit_outbox_notification(
-    channel: &str,
-    payload: &str,
-    sink: &PostCommitSink,
-) -> Result<(), OutboxNotificationError> {
-    if channel != SERIES_ANALYSIS_OUTBOX_NOTIFICATION_CHANNEL || !payload.is_empty() {
-        return Err(OutboxNotificationError::InvalidNotification);
-    }
-    sink.submit(PostCommitEffects::wake(OutboxKind::SeriesAnalysis))?;
-    Ok(())
-}
-
-fn require_open_shutdown_channel(
-    changed: Result<(), watch::error::RecvError>,
-) -> Result<(), OutboxNotificationError> {
-    changed.map_err(|_closed| OutboxNotificationError::ShutdownChannelClosed)
 }
 
 fn native_tls_connector() -> Result<MakeTlsConnector, PostgresError> {
@@ -320,11 +129,7 @@ mod tests {
     use tempfile::NamedTempFile;
     use tokio_postgres::{Config, config::SslMode};
 
-    use super::{
-        OutboxNotificationError, SERIES_ANALYSIS_OUTBOX_NOTIFICATION_CHANNEL, handle_async_message,
-        submit_outbox_notification, tls_connector,
-    };
-    use crate::outbox::{OutboxKind, PostCommitSink};
+    use super::tls_connector;
 
     const SSL_REQUEST: [u8; 8] = [0, 0, 0, 8, 4, 210, 22, 47];
     type TestError = Box<dyn Error + Send + Sync>;
@@ -334,47 +139,6 @@ mod tests {
         certificate: X509,
         private_key: PKey<Private>,
         ca_certificate: X509,
-    }
-
-    #[test]
-    fn analysis_outbox_notifications_are_fixed_and_payload_free() {
-        let (sink, wake) = PostCommitSink::channel(OutboxKind::SeriesAnalysis);
-
-        assert_eq!(
-            SERIES_ANALYSIS_OUTBOX_NOTIFICATION_CHANNEL,
-            "series_analysis_queue_outbox"
-        );
-        assert!(
-            submit_outbox_notification(SERIES_ANALYSIS_OUTBOX_NOTIFICATION_CHANNEL, "", &sink,)
-                .is_ok()
-        );
-        assert!(
-            submit_outbox_notification(SERIES_ANALYSIS_OUTBOX_NOTIFICATION_CHANNEL, "", &sink,)
-                .is_ok(),
-            "a repeated commit hint must coalesce in the capacity-one sink"
-        );
-        assert!(matches!(
-            submit_outbox_notification("another_channel", "", &sink),
-            Err(OutboxNotificationError::InvalidNotification)
-        ));
-        assert!(matches!(
-            submit_outbox_notification(
-                SERIES_ANALYSIS_OUTBOX_NOTIFICATION_CHANNEL,
-                "job-identity-is-forbidden",
-                &sink,
-            ),
-            Err(OutboxNotificationError::InvalidNotification)
-        ));
-        assert!(matches!(
-            handle_async_message(None, &sink),
-            Err(OutboxNotificationError::ConnectionClosed)
-        ));
-
-        drop(wake);
-        assert!(matches!(
-            submit_outbox_notification(SERIES_ANALYSIS_OUTBOX_NOTIFICATION_CHANNEL, "", &sink,),
-            Err(OutboxNotificationError::SinkClosed(_))
-        ));
     }
 
     #[tokio::test]

@@ -606,7 +606,6 @@ fn validate_aggregate_semantics(
     validate_match_number_entries(object.get("matchNoInEvent"), player_order)?;
     validate_rank_analysis(object.get("rankAnalysis"), player_ids)?;
     validate_data_quality(object.get("dataQuality"), player_ids)?;
-    collect_unique_ids(array(object.get("metricDefinitions"))?, "metricId")?;
     collect_unique_ids(array(object.get("highlights"))?, "highlightId")?;
     Ok(())
 }
@@ -1239,11 +1238,11 @@ mod tests {
     fn shared_payload_fixtures_match_worker_contract() {
         let aggregate = fixture(include_str!(concat!(
             "../../../../../docs/schemas/fixtures/series-analysis/",
-            "aggregate-payload-v4.json"
+            "aggregate-payload-v5.json"
         )));
         let review = fixture(include_str!(concat!(
             "../../../../../docs/schemas/fixtures/series-analysis/",
-            "review-payload-v3.json"
+            "review-payload-v4.json"
         )));
         let drilldown = fixture(include_str!(concat!(
             "../../../../../docs/schemas/fixtures/series-analysis/",
@@ -1291,7 +1290,7 @@ mod tests {
     fn rust_owner_rejects_semantic_card_count_accepted_by_the_portable_shape() {
         let mut review: Value = serde_json::from_str(include_str!(concat!(
             "../../../../../docs/schemas/fixtures/series-analysis/",
-            "review-payload-v3.json"
+            "review-payload-v4.json"
         )))
         .unwrap_or_else(|error| panic!("review fixture is not JSON: {error}"));
         *review

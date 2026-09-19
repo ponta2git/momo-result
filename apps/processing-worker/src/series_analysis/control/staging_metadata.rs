@@ -1,28 +1,31 @@
+use std::borrow::Cow;
+
+use futures_util::TryStreamExt;
 use momo_analysis_core::contract::{ArtifactManifest, ResourceManifest};
 use tokio_postgres::{Row, Transaction};
 
 use super::{ControlError, transaction::scope_columns};
 
 #[derive(Debug, Eq, Ord, PartialEq, PartialOrd)]
-struct StagedResourceMetadata {
-    kind: String,
-    scope_key: String,
-    scope_kind: String,
-    season_master_id: Option<String>,
-    map_master_id: Option<String>,
-    member_id: Option<String>,
-    metric_id: Option<String>,
-    match_id: Option<String>,
+struct StagedResourceMetadata<'a> {
+    kind: &'a str,
+    scope_key: Cow<'a, str>,
+    scope_kind: &'a str,
+    season_master_id: Option<&'a str>,
+    map_master_id: Option<&'a str>,
+    member_id: Option<&'a str>,
+    metric_id: Option<&'a str>,
+    match_id: Option<&'a str>,
     source_match_revision: Option<i64>,
     encoded_bytes: i32,
     decoded_bytes: i32,
     item_count: i32,
     nesting_depth: i32,
-    checksum: String,
+    checksum: &'a str,
 }
 
-impl StagedResourceMetadata {
-    fn from_manifest(resource: &ResourceManifest) -> Result<Self, ControlError> {
+impl<'a> StagedResourceMetadata<'a> {
+    fn from_manifest(resource: &'a ResourceManifest) -> Result<Self, ControlError> {
         let common = resource.common();
         let (scope_kind, season_master_id, map_master_id) = scope_columns(&common.scope);
         let (kind, member_id, metric_id, match_id, source_match_revision) = match resource {
@@ -34,8 +37,8 @@ impl StagedResourceMetadata {
                 ..
             } => (
                 "drilldown",
-                Some(member_id.clone()),
-                Some(metric_id.clone()),
+                Some(member_id.as_str()),
+                Some(metric_id.as_str()),
                 None,
                 None,
             ),
@@ -47,16 +50,16 @@ impl StagedResourceMetadata {
                 "match_context",
                 None,
                 None,
-                Some(match_id.clone()),
+                Some(match_id.as_str()),
                 Some(source_match_revision.parse::<i64>()?),
             ),
         };
         Ok(Self {
-            kind: String::from(kind),
-            scope_key: common.scope.key(),
-            scope_kind: String::from(scope_kind),
-            season_master_id: season_master_id.map(String::from),
-            map_master_id: map_master_id.map(String::from),
+            kind,
+            scope_key: Cow::Owned(common.scope.key()),
+            scope_kind,
+            season_master_id,
+            map_master_id,
             member_id,
             metric_id,
             match_id,
@@ -65,14 +68,14 @@ impl StagedResourceMetadata {
             decoded_bytes: i32::try_from(common.decoded_bytes)?,
             item_count: i32::try_from(common.item_count)?,
             nesting_depth: i32::try_from(common.nesting_depth)?,
-            checksum: common.checksum.clone(),
+            checksum: &common.checksum,
         })
     }
 
-    fn from_row(row: &Row) -> Result<Self, ControlError> {
+    fn from_row(row: &'a Row) -> Result<Self, ControlError> {
         Ok(Self {
             kind: row.try_get(0)?,
-            scope_key: row.try_get(1)?,
+            scope_key: Cow::Borrowed(row.try_get(1)?),
             scope_kind: row.try_get(2)?,
             season_master_id: row.try_get(3)?,
             map_master_id: row.try_get(4)?,
@@ -93,8 +96,21 @@ pub(super) async fn validate_staged_resource_metadata(
     transaction: &Transaction<'_>,
     manifest: &ArtifactManifest,
 ) -> Result<(), ControlError> {
+    let mut expected = manifest
+        .resources
+        .iter()
+        .map(StagedResourceMetadata::from_manifest)
+        .collect::<Result<Vec<_>, _>>()?;
+    expected.sort_unstable();
+    expected.dedup();
+    if expected.len() != manifest.resources.len() {
+        return Err(ControlError::InvalidMetadata);
+    }
+    // Retain borrowed manifest metadata and visit each database row once. The bitmap also
+    // distinguishes duplicate rows from a complete, order-independent match.
+    let mut seen = vec![false; expected.len()];
     let rows = transaction
-        .query(
+        .query_raw(
             "SELECT kind, scope_key, scope_kind, season_master_id, map_master_id, member_id,\x20\
                     metric_id, match_id, source_match_revision, encoded_bytes, decoded_bytes,\x20\
                     item_count, nesting_depth, checksum FROM (\x20\
@@ -119,21 +135,21 @@ pub(super) async fn validate_staged_resource_metadata(
                       decoded_bytes, item_count, nesting_depth, checksum\x20\
                FROM series_analysis_match_context_artifacts WHERE artifact_id = $1\x20\
              ) resources",
-            &[&manifest.artifact_id],
+            [&manifest.artifact_id],
         )
         .await?;
-    let mut actual = rows
-        .iter()
-        .map(StagedResourceMetadata::from_row)
-        .collect::<Result<Vec<_>, _>>()?;
-    let mut expected = manifest
-        .resources
-        .iter()
-        .map(StagedResourceMetadata::from_manifest)
-        .collect::<Result<Vec<_>, _>>()?;
-    actual.sort_unstable();
-    expected.sort_unstable();
-    if actual == expected {
+    tokio::pin!(rows);
+    while let Some(row) = rows.try_next().await? {
+        let metadata = StagedResourceMetadata::from_row(&row)?;
+        let index = expected
+            .binary_search(&metadata)
+            .map_err(|_missing| ControlError::InvalidMetadata)?;
+        let visited = seen.get_mut(index).ok_or(ControlError::InvalidMetadata)?;
+        if std::mem::replace(visited, true) {
+            return Err(ControlError::InvalidMetadata);
+        }
+    }
+    if seen.into_iter().all(|visited| visited) {
         Ok(())
     } else {
         Err(ControlError::InvalidMetadata)

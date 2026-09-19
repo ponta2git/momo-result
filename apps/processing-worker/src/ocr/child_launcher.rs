@@ -46,11 +46,11 @@ pub(crate) struct IsolatedOcrChildLauncher {
 impl OcrChildLauncher for IsolatedOcrChildLauncher {
     fn launch(
         &self,
-        image: &VerifiedSourceImage,
+        image: VerifiedSourceImage,
         requested_screen_type: RequestedScreenType,
         hints: &OcrHints,
     ) -> Result<Box<dyn OcrChildHandle>, &'static str> {
-        self.launch_image_bytes(image.bytes(), requested_screen_type, hints)
+        self.launch_image_bytes(image.into_bytes(), requested_screen_type, hints)
             .map(|child| -> Box<dyn OcrChildHandle> { Box::new(child) })
     }
 }
@@ -73,7 +73,7 @@ impl IsolatedOcrChildLauncher {
 
     fn launch_image_bytes(
         &self,
-        image: &[u8],
+        image: Vec<u8>,
         requested_screen_type: RequestedScreenType,
         hints: &OcrHints,
     ) -> Result<ManagedOcrChild, &'static str> {
@@ -85,9 +85,9 @@ impl IsolatedOcrChildLauncher {
                 .ok()
                 .filter(|milliseconds| *milliseconds > 0)
                 .ok_or("ocr_child_configuration")?;
-        let framed = momo_ocr::protocol::encode_request(
+        let prefix = momo_ocr::protocol::encode_request_prefix(
             crate::process::CHILD_START_MARKER,
-            image,
+            image.len(),
             requested_screen_type,
             hints,
         )?;
@@ -134,7 +134,7 @@ impl IsolatedOcrChildLauncher {
                 .map(|error| error.kind()),
         };
         let writer = if start_error.is_none() {
-            stdin.map(|input| tokio::spawn(write_framed_input(input, framed)))
+            stdin.map(|input| tokio::spawn(write_framed_input(input, prefix, image)))
         } else {
             drop(stdin);
             None
@@ -290,39 +290,14 @@ impl ManagedOcrChild {
     async fn terminate_inner(&mut self) -> Result<(), &'static str> {
         let deadlines =
             crate::process::child_stop_deadlines(self.stop_grace).map_err(|error| error.kind())?;
-        let mut termination_failure = None;
-        if let Some(child) = self.child.as_mut() {
-            match child.try_wait() {
-                Ok(Some(_status)) => {}
-                Ok(None) => {
-                    let _terminate_result =
-                        crate::process::terminate_process_group(self.process_id, libc::SIGTERM);
-                    match time::timeout_at(deadlines.soft, child.wait()).await {
-                        Ok(Ok(_status)) => {}
-                        Ok(Err(_wait_error)) => {
-                            termination_failure =
-                                force_kill_and_reap(child, self.process_id, deadlines.reap)
-                                    .await
-                                    .err()
-                                    .or(Some("ocr_child_wait"));
-                        }
-                        Err(_elapsed) => {
-                            termination_failure =
-                                force_kill_and_reap(child, self.process_id, deadlines.reap)
-                                    .await
-                                    .err();
-                        }
-                    }
-                }
-                Err(_wait_error) => {
-                    termination_failure =
-                        force_kill_and_reap(child, self.process_id, deadlines.reap)
-                            .await
-                            .err()
-                            .or(Some("ocr_child_wait"));
-                }
-            }
-        }
+        let termination_result = if let Some(child) = self.child.as_mut() {
+            crate::process::stop_and_reap_child(child, self.process_id, deadlines)
+                .await
+                .map(|_status| ())
+                .map_err(|error| error.kind())
+        } else {
+            Ok(())
+        };
         drop(self.child.take());
         self.abort_io_tasks().await;
         crate::process::stop_remaining_process_group(
@@ -333,7 +308,7 @@ impl ManagedOcrChild {
         .await
         .map_err(|error| error.kind())?;
         self.cleanup_complete = true;
-        termination_failure.map_or(Ok(()), Err)
+        termination_result
     }
 
     async fn finish_writer(&mut self) -> Result<(), &'static str> {
@@ -359,23 +334,6 @@ impl ManagedOcrChild {
             reader.abort();
             drop(reader.await);
         }
-    }
-}
-
-#[cfg(target_os = "linux")]
-async fn force_kill_and_reap(
-    child: &mut tokio::process::Child,
-    process_id: u32,
-    deadline: time::Instant,
-) -> Result<(), &'static str> {
-    let signal_result = crate::process::terminate_process_group(process_id, libc::SIGKILL);
-    match time::timeout_at(deadline, child.wait()).await {
-        Ok(Ok(_status)) => Ok(()),
-        Ok(Err(_wait_error)) => Err("ocr_child_wait"),
-        Err(_elapsed) => match signal_result {
-            Ok(()) => Err("child_stop_timeout"),
-            Err(error) => Err(error.kind()),
-        },
     }
 }
 
@@ -412,9 +370,11 @@ fn preserve_native_runtime_environment(command: &mut Command) {
 #[cfg(target_os = "linux")]
 async fn write_framed_input(
     mut stdin: tokio::process::ChildStdin,
-    framed: Vec<u8>,
+    prefix: Vec<u8>,
+    image: Vec<u8>,
 ) -> Result<(), io::Error> {
-    stdin.write_all(&framed).await?;
+    stdin.write_all(&prefix).await?;
+    stdin.write_all(&image).await?;
     stdin.shutdown().await?;
     drop(stdin);
     Ok(())
@@ -461,14 +421,14 @@ pub(crate) async fn probe_isolated_child_lifecycle(
             IsolatedOcrChildLauncher::new(cgroup, None, stop_grace, parent_liveness_timeout);
         let input = b"not-an-image";
         let mut cancelled_child = launcher.launch_image_bytes(
-            input,
+            input.to_vec(),
             RequestedScreenType::TotalAssets,
             &OcrHints::default(),
         )?;
         cancelled_child.terminate_inner().await?;
 
         let mut completed_child = launcher.launch_image_bytes(
-            input,
+            input.to_vec(),
             RequestedScreenType::TotalAssets,
             &OcrHints::default(),
         )?;
@@ -504,7 +464,7 @@ pub(crate) async fn probe_isolated_child_lifecycle(
 /// contract fails. OCR-domain failures remain a closed inner result.
 #[cfg(target_os = "linux")]
 pub(crate) async fn analyze_isolated_local_image_bytes(
-    image: &[u8],
+    image: Vec<u8>,
     requested_screen_type: RequestedScreenType,
     hints: &OcrHints,
     tessdata_path: Option<PathBuf>,

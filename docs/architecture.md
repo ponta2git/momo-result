@@ -34,6 +34,7 @@
 
 - HTTP 契約は Tapir endpoint を正本とする。手書き route が必要でも path / query / header を二重管理しない。
 - 分析artifactのraw response shapeは、Rust所有のartifact schemaとAPI所有のmetadata projectionをTapirのnamed responseへ合成してHTTP契約とする。OpenAPI、Web型、runtime validatorはこの合成結果から生成し、派生物へshapeを手書きしない。
+- 分析結果の分類・根拠はWorkerが所有し、画面内の遷移先、リンク文言、固定の指標説明はWebが所有する。保存成果物へ画面構造を埋め込まず、Webは分類から遷移先を決める。旧成果物を読む場合も同じ表示規則を使う。
 - `apps/api/openapi.yaml` は内部 Web codegen 用の追跡する派生物であり、契約や公開 API documentation の正本ではない。Tapir から一時生成した spec を保守された OpenAPI-aware linter で構造検証し、tracked artifact と一致させ、その artifact から Web 型を生成する。手編集で差分を解消しない。
 - OpenAPI lint は unresolved reference、path / parameter、schema、operation identity など構造整合性に限定する。field の公開可否、認証、業務意味は endpoint、DTO、要求・domain 規約で決め、legacy 名や source 断片の文字列検査を契約にしない。
 - HTTP 層は入力・認証・エラー変換に閉じ、DB、Redis、業務分岐を直接持たない。
@@ -189,23 +190,28 @@ API の判断は React の [useDeferredValue](https://react.dev/reference/react/
 | 完了 | durable commit、post-commit effect、delivery disposition | job 終端、公開、ACK、outbox を変更しない |
 
 - Analysis / OCR は同じ parent lifecycle を共有し、能力固有の入力 transport と計算だけを分ける。
+- supervisorは稼働するpeerと共通の停止期限を組み立てる。各capabilityが外部接続・driver・listenerの寿命を所有し、汎用PostgreSQL接続層へoutboxや分析の知識を持ち込まない。commit後のwakeは現在の配送先を明示する小さな値とし、用途のない種類の集合やpayloadを運搬しない。
 - 分析のterminal履歴と未参照artifactの保持・整理はWorkerのcontrol処理が所有し、APIの起動に依存しない。保持条件は分析batch要求を正本とし、公開済みcurrent / previousの保護とbounded cleanupを同じDB境界で保証する。
 - capability crate は決定論的な domain / 計算 / version 付き論理契約を所有し、DB、Redis、filesystem、clock、async runtime に依存しない。runtime から capability への一方向依存とする。
-- production の OS FFI と `unsafe` は process adapter に隔離し、他 module へ checked な safe API を公開する。
+- production の OS FFI と `unsafe` は process adapter に隔離し、他 module へ checked な safe API を公開する。TERM・KILL・process groupの回収は共通化し、分析の入力設定・終了分類とOCRのframe・結果decodeは各capabilityのprocess adapterに残す。
 - 子 process の resource 制限は実 runtime の cgroup で保証する。非対応 OS では job claim 前に fail closed にする。
 - 同時実行や publication は DB lease と fencing token で世代をまたいで保証する。process 内 semaphore や台数を正本にしない。
 - 子 process の成果物は上限、path、件数、schema、checksum を親が検証し、失敗時に部分公開しない。
 - 分析worker内のRust validatorをpayload意味、canonical encoding、resource集合・相互参照の単一ownerとする。parentは完全検証を通ったopaque artifactだけをversion付きで公開し、APIはそのimmutable publication attestation、生成schema、reader resource上限、request identityだけを独立に検証する。
 - 分析release controllerはactiveなalgorithm / artifact schema / validation contract singletonと全titleへのpromotionを所有する。API / workerのcapability registryを検査中だけ凍結し、互換判定とdesired-state切替の間へ別世代を割り込ませない。
 - 入力 version、algorithm version、artifact schema version を別の型として扱い、同じ入力と algorithm version では決定論的にする。
+- 計算の中間表現は必要な観測値だけを持ち、fold・bootstrap・permutationごとに識別情報や未使用featureを複製しない。共有できる入力は借用し、計算順序や乱数列に意味がある最適化は出力のcanonical bytesまで比較する。結果の意味を変える場合はalgorithm versionの変更として扱う。
+- 公開前のDB照合はtransaction内で行い、全Rowとdecode後の同じ集合を重ねて保持しない。metadataは借用して逐次照合し、入力は必要なshapeへ集約する。順序の違いを許容する照合でも欠落・余剰・重複・値の不一致を拒否する。
 - OCR だけが分析を preempt できる。共有実行枠、再queue、失敗回数、公開の詳細は `docs/requirements/series-analysis-batch.md` を正本とする。
 
 - 分析完了通知は `notifications/analysis` が前後のimmutable成果物を比較し、公開transaction末尾で表示metadataを固定する。通知準備はOCRと同じ回復可能なSAVEPOINT境界を使い、正常commitを確認した経路だけが共通senderへ渡す。分析child・API・Summitに平均計算やproducer送出の責務を移さない。内容と比較範囲は `docs/requirements/series-analysis-batch.md` を参照する。
+- 通知producerへ渡すのは通知に必要なjob・作品・成果物versionの識別情報だけとし、DBのclaim型、lease、fenceや全体設定へ逆依存させない。
 - 比較用の成果物取得は通知に必要な保存済みplayer metricsだけを射影し、通知で使わない分析カードを転送しない。元成果物のbyte・件数上限とtyped decode、前後のidentity・scope整合性は維持する。比較準備の時間枠には接続確立と全DB往復を含め、確定transaction内の準備とともに親の絶対期限から業務commit・復旧の余裕を残す。比較read transactionが正常commitした新規接続は続く公開transactionに再利用し、失敗・timeout時は破棄する。
 
 ### OCR Capability / Worker Role
 
 - OCR の object / queue / 状態契約は `docs/redis-streams-ocr-contract.md` と schema を正本とし、URL、credential、local path を runtime 間 payload にしない。
+- 検証済み画像はprocess adapterへ所有権を渡し、headerと画像を順に転送するためだけの全量frame複製を作らない。認識fallbackは既存の評価順を保ち、必要になった画像だけ生成する。
 - OCRの不確かな読取値は、必要な警告を保持して要確認結果として保存する。件数の妥当性しきい値を保存拒否の上限に読み替えず、parserと保存前検証で警告条件を一致させる。構造・型・対応関係が壊れた候補や警告の欠落は拒否する。
 - OCR・分析通知のenvelopeは `notifications/envelope` が種類・論理job IDから通知IDとwire versionを一括で構築する。各producerは固定dataと成功時刻・世代を渡し、型ごとにIDやversionを組み立て直さない。送出可否と成功commit後のhandoffは引き続き制御側が所有する。
 - OCR完了通知は画像ごとの検証済み結果から作り、他のslotを含む下書きの投影状態には依存しない。成功transactionの業務更新をすべて終えてから共有result gateと設定を読み、ONの場合だけ成功時点の識別子・文脈・警告有無を固定する。共有wireと排他契約は `../momo-db/docs/discord-notifications.md` を正本とする。

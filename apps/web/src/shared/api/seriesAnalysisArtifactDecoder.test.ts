@@ -1,17 +1,22 @@
 import { decodeSeriesAnalysisArtifact } from "@/shared/api/seriesAnalysisArtifactDecoder";
 import {
+  makeCurrentSeriesAnalysisAggregate,
+  makeCurrentSeriesAnalysisReview,
   makeSeriesAnalysisAggregate,
   makeSeriesAnalysisDrilldown,
+  makeSeriesAnalysisExcludedMatchContext,
   makeSeriesAnalysisMatchContext,
   makeSeriesAnalysisReview,
 } from "@/test/msw/seriesAnalysisFixtures";
 
 import aggregateFixture from "../../../../../docs/schemas/fixtures/series-analysis/aggregate-payload-v3.json";
 import ownerAggregateFixture from "../../../../../docs/schemas/fixtures/series-analysis/aggregate-payload-v4.json";
+import currentAggregateFixture from "../../../../../docs/schemas/fixtures/series-analysis/aggregate-payload-v5.json";
 import drilldownFixture from "../../../../../docs/schemas/fixtures/series-analysis/drilldown-payload-v3.json";
 import matchContextFixture from "../../../../../docs/schemas/fixtures/series-analysis/match-context-payload-v1.json";
 import rankSignalsDrilldownFixture from "../../../../../docs/schemas/fixtures/series-analysis/rank-signals-drilldown-payload-v3.json";
 import reviewFixture from "../../../../../docs/schemas/fixtures/series-analysis/review-payload-v3.json";
+import currentReviewFixture from "../../../../../docs/schemas/fixtures/series-analysis/review-payload-v4.json";
 
 const artifact = {
   algorithmVersion: "series-analysis-v3",
@@ -56,9 +61,54 @@ function includedMatchContextResponse(): Record<string, unknown> {
 
 describe("series analysis artifact response decoder", () => {
   it.each([
+    ["aggregateV2", aggregateFixture, [2]],
+    ["aggregateV3", aggregateFixture, [2]],
+    ["aggregateV3", ownerAggregateFixture, [3]],
+    ["aggregateV4", aggregateFixture, [2]],
+    ["aggregateV4", ownerAggregateFixture, [3]],
+    ["aggregateV4", currentAggregateFixture, [4]],
+    ["review", reviewFixture, [2, 3]],
+    ["reviewV3", reviewFixture, [2, 3]],
+    ["reviewV3", currentReviewFixture, [4]],
+    ["drilldown", drilldownFixture, [2, 3, 4]],
+    ["drilldown", rankSignalsDrilldownFixture, [2, 3, 4]],
+    ["matchContext", includedMatchContextResponse(), [2, 3, 4]],
+    ["matchContext", makeSeriesAnalysisExcludedMatchContext("not_in_scope"), [2, 3, 4]],
+  ] as const)(
+    "%s accepts only its payload's matching artifact generations (case %#)",
+    async (kind, fixture, supportedVersions: readonly number[]) => {
+      const payload = artifactResponse(fixture);
+      for (const artifactSchemaVersion of [1, 2, 3, 4, 99]) {
+        const response = { ...payload, artifact: { ...artifact, artifactSchemaVersion } };
+        const decoded = decodeSeriesAnalysisArtifact(kind, response);
+        if (supportedVersions.includes(artifactSchemaVersion)) {
+          await expect(decoded).resolves.toBe(response);
+        } else {
+          await expect(decoded).rejects.toThrow(`Invalid series analysis ${kind} response.`);
+        }
+      }
+    },
+  );
+
+  it.each([
+    ["aggregateV4", currentAggregateFixture],
+    ["reviewV3", currentReviewFixture],
+  ] as const)("accepts current %s payloads exported by the worker", async (kind, fixture) => {
+    const response = artifactResponse(fixture);
+    response["artifact"] = {
+      ...artifact,
+      algorithmVersion: "series-analysis-v5",
+      artifactSchemaVersion: 4,
+    };
+    await expect(decodeSeriesAnalysisArtifact(kind, response)).resolves.toBe(response);
+  });
+
+  it.each([
     ["aggregateV2", aggregateFixture],
     ["aggregateV3", aggregateFixture],
+    ["aggregateV4", aggregateFixture],
     ["review", reviewFixture],
+    ["reviewV3", reviewFixture],
     ["drilldown", drilldownFixture],
     ["drilldown", rankSignalsDrilldownFixture],
   ] as const)(
@@ -79,6 +129,7 @@ describe("series analysis artifact response decoder", () => {
     };
 
     await expect(decodeSeriesAnalysisArtifact("aggregateV3", response)).resolves.toBe(response);
+    await expect(decodeSeriesAnalysisArtifact("aggregateV4", response)).resolves.toBe(response);
     await expect(decodeSeriesAnalysisArtifact("aggregateV2", response)).rejects.toThrow(
       "Invalid series analysis aggregateV2 response.",
     );
@@ -92,11 +143,24 @@ describe("series analysis artifact response decoder", () => {
 
   it.each([
     ["aggregateV3", makeSeriesAnalysisAggregate()],
+    ["aggregateV4", makeCurrentSeriesAnalysisAggregate()],
     ["review", makeSeriesAnalysisReview()],
+    ["reviewV3", makeCurrentSeriesAnalysisReview()],
     ["drilldown", makeSeriesAnalysisDrilldown("rank.averageHistory")],
     ["matchContext", makeSeriesAnalysisMatchContext()],
   ] as const)("keeps the %s MSW contract fixture valid", async (kind, response) => {
     await expect(decodeSeriesAnalysisArtifact(kind, response)).resolves.toBe(response);
+  });
+
+  it("keeps presentation-free artifacts on their new wire contracts", async () => {
+    const aggregate = makeCurrentSeriesAnalysisAggregate();
+    const review = makeCurrentSeriesAnalysisReview();
+    expect(aggregate).not.toHaveProperty("metricDefinitions");
+    for (const entry of review.playbookByPlayer) {
+      expect(entry.primaryCard).not.toHaveProperty("anchorTarget");
+    }
+    await expect(decodeSeriesAnalysisArtifact("aggregateV3", aggregate)).rejects.toThrow();
+    await expect(decodeSeriesAnalysisArtifact("review", review)).rejects.toThrow();
   });
 
   it("accepts both valid match-context outcomes", async () => {

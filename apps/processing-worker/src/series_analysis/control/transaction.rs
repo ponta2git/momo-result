@@ -4,12 +4,9 @@ use momo_analysis_core::{canonical, contract::ScopeRef};
 use sha2::{Digest, Sha256};
 use tokio_postgres::{Client, Transaction};
 
-use crate::{
-    execution_slot::{
-        ExecutionSlotIdentity, ExecutionTaskKind, lock_owned as lock_owned_slot,
-        release_owned as release_owned_slot,
-    },
-    series_analysis::config::AnalysisConsumerConfig,
+use crate::execution_slot::{
+    ExecutionSlotIdentity, ExecutionTaskKind, lock_owned as lock_owned_slot,
+    release_owned as release_owned_slot,
 };
 
 use super::{
@@ -18,14 +15,6 @@ use super::{
 };
 
 pub(super) async fn lock_owned(
-    transaction: &Transaction<'_>,
-    claim: &ClaimedJob,
-    config: &AnalysisConsumerConfig,
-) -> Result<(), ControlError> {
-    lock_owned_by(transaction, claim, &config.worker_id).await
-}
-
-pub(super) async fn lock_owned_by(
     transaction: &Transaction<'_>,
     claim: &ClaimedJob,
     worker_id: &str,
@@ -272,14 +261,6 @@ pub(super) async fn refresh_operation_projections(
 }
 
 pub(super) async fn release_slot(
-    transaction: &Transaction<'_>,
-    claim: &ClaimedJob,
-    config: &AnalysisConsumerConfig,
-) -> Result<(), ControlError> {
-    release_slot_by(transaction, claim, &config.worker_id).await
-}
-
-pub(super) async fn release_slot_by(
     transaction: &Transaction<'_>,
     claim: &ClaimedJob,
     worker_id: &str,

@@ -10,7 +10,7 @@ use crate::{
 };
 
 const INPUT_FIXTURE: &str =
-    include_str!("../../../../../docs/schemas/fixtures/series-analysis/input-v2.json");
+    include_str!("../../../../../docs/schemas/fixtures/series-analysis/input-v3.json");
 
 fn fixture_json() -> Value {
     serde_json::from_str(INPUT_FIXTURE)
@@ -101,7 +101,7 @@ fn boundary_input() -> AnalysisInput {
 #[test]
 fn shared_boundary_fixture_matches_normalized_input_and_overall_checksum() {
     let fixture = fixture_json();
-    assert_eq!(fixture_value(&fixture, "/schemaVersion"), &Value::from(2));
+    assert_eq!(fixture_value(&fixture, "/schemaVersion"), &Value::from(3));
     assert_eq!(
         fixture_value(&fixture, "/generator/heldEventCount"),
         &Value::from(8)

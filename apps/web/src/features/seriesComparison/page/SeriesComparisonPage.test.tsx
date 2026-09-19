@@ -14,7 +14,7 @@ import { server } from "@/test/msw/server";
 import { createTestQueryClient } from "@/test/queryClient";
 
 setupMsw();
-beforeAll(() => decodeSeriesAnalysisArtifact("aggregateV3", makeSeriesAnalysisAggregate()));
+beforeAll(() => decodeSeriesAnalysisArtifact("aggregateV4", makeSeriesAnalysisAggregate()));
 
 describe("SeriesComparisonPage", () => {
   it("keeps purpose tabs, analysis tabs, and the metric guide outside stale results", async () => {
@@ -23,7 +23,7 @@ describe("SeriesComparisonPage", () => {
     const refresh = createDeferred();
     let requests = 0;
     server.use(
-      http.get("/api/analytics/series-comparison/v3/aggregate", async () => {
+      http.get("/api/analytics/series-comparison/v4/aggregate", async () => {
         requests += 1;
         if (requests > 1) await refresh.promise;
         return HttpResponse.json(aggregate);

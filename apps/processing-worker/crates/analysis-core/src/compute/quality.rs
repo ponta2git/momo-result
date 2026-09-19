@@ -106,17 +106,3 @@ pub(super) fn quality_summary(items: &[Value]) -> Value {
     };
     json!({ "okCount": count("ok"), "referenceCount": count("reference"), "noTargetCount": count("no_target") })
 }
-
-pub(super) fn metric_definitions() -> Vec<Value> {
-    [
-        ("rank.average", "平均順位", "rank", "lower"),
-        ("rank.distribution", "順位分布", "count", "contextual"),
-        ("assets.average", "平均総資産", "man_yen", "higher"),
-        ("revenue.average", "平均物件収益", "man_yen", "higher"),
-        ("podium.rate", "入賞率", "rate", "higher"),
-        ("ginji.encounterRate", "銀次遭遇率", "rate", "lower"),
-        ("destination.average", "目的地到着回数（1試合平均）", "count", "contextual"),
-        ("ginji.average", "銀次遭遇回数（1試合平均）", "count", "contextual"),
-        ("destination.conversionDelta", "目的地順位と最終順位の差", "rank", "higher"),
-    ].into_iter().map(|(metric_id, label, unit, direction)| json!({ "metricId": metric_id, "label": label, "unit": unit, "preferredDirection": direction })).collect()
-}

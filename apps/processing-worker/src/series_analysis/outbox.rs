@@ -1,5 +1,7 @@
 //! Durable Series Analysis outbox delivery for the processing runtime.
 
+pub(crate) mod runtime;
+
 use std::{
     future::Future,
     time::{Duration, SystemTime},
@@ -120,7 +122,17 @@ impl SeriesAnalysisOutboxDriver {
         for claim in claims {
             match self.publish_claim(&claim).await? {
                 PublishResult::Delivered => delivered = delivered.saturating_add(1),
-                PublishResult::Retried => retried = retried.saturating_add(1),
+                PublishResult::Deferred { retry_scheduled } => {
+                    if retry_scheduled {
+                        retried = retried.saturating_add(1);
+                    } else {
+                        stale = stale.saturating_add(1);
+                    }
+                    // A dependency failure affects the route, not this payload. Leave the rest
+                    // of the bounded batch under its durable claim deadline; spending another
+                    // response timeout per item could outlive the supervisor's drain budget.
+                    break;
+                }
                 PublishResult::Stale => stale = stale.saturating_add(1),
             }
         }
@@ -347,14 +359,15 @@ impl SeriesAnalysisOutboxDriver {
                         error_kind = QUEUE_PUBLISH_ERROR_CLASS,
                         "analysis queue publication moved to its durable retry deadline"
                     );
-                    Ok(PublishResult::Retried)
                 } else {
                     warn!(
                         event = "analysis_outbox_stale_retry_release",
                         "analysis outbox retry release lost its claim fence"
                     );
-                    Ok(PublishResult::Stale)
                 }
+                Ok(PublishResult::Deferred {
+                    retry_scheduled: released,
+                })
             }
         }
     }
@@ -1151,7 +1164,7 @@ struct DeliveryFailure {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum PublishResult {
     Delivered,
-    Retried,
+    Deferred { retry_scheduled: bool },
     Stale,
 }
 

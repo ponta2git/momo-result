@@ -3,8 +3,21 @@ package momo.api.adapters.inmemory
 import cats.Monad
 import cats.syntax.all.*
 
-import momo.api.domain.{HeldEventListItem, HeldEventListPage, HeldEventScopeSummary, PageRequest, PagedResult}
-import momo.api.repositories.{GameTitlesRepository, HeldEventListReadModel, HeldEventsRepository, MatchDraftsRepository, MatchesRepository, SeasonMastersRepository}
+import momo.api.domain.{
+  HeldEventListItem,
+  HeldEventListPage,
+  HeldEventScopeSummary,
+  PageRequest,
+  PagedResult
+}
+import momo.api.repositories.{
+  GameTitlesRepository,
+  HeldEventListReadModel,
+  HeldEventsRepository,
+  MatchDraftsRepository,
+  MatchesRepository,
+  SeasonMastersRepository
+}
 
 final class InMemoryHeldEventListReadModel[F[_]: Monad](
     events: HeldEventsRepository[F],
@@ -27,10 +40,17 @@ final class InMemoryHeldEventListReadModel[F[_]: Monad](
             title <- scope.gameTitleId.traverse(gameTitles.find).map(_.flatten)
             season <- scope.seasonMasterId.traverse(seasons.find).map(_.flatten)
           yield HeldEventScopeSummary(scope, title.map(_.name), season.map(_.name))
-        }.map(scopes => HeldEventListItem(
-          event, confirmed.matchCount, pending.draftCount,
-          math.max(confirmed.maxMatchNo, pending.maxMatchNo) + 1,
-          HeldEventScopeSummary.ordered(scopes),
-        ))
+        }.map(scopes =>
+          HeldEventListItem(
+            event,
+            confirmed.matchCount,
+            pending.draftCount,
+            math.max(confirmed.maxMatchNo, pending.maxMatchNo) + 1,
+            HeldEventScopeSummary.ordered(scopes),
+          )
+        )
       }
-    yield HeldEventListPage(PagedResult(items, page, result.totalItems), matchStats.values.map(_.matchCount).sum)
+    yield HeldEventListPage(
+      PagedResult(items, page, result.totalItems),
+      matchStats.values.map(_.matchCount).sum
+    )

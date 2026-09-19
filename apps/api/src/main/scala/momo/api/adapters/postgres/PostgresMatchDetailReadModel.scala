@@ -35,7 +35,12 @@ object PostgresMatchDetail:
           LEFT JOIN momo_login_accounts account ON account.id = m.note_updated_by_account_id
           WHERE m.id = $id
         """.query[Metadata].unique.map(metadata =>
-          MatchDetail(value, metadata.noteUpdatedByDisplayName, Some(metadata.heldAt), metadata.labels)
+          MatchDetail(
+            value,
+            metadata.noteUpdatedByDisplayName,
+            Some(metadata.heldAt),
+            metadata.labels
+          )
         )
       }
     yield detail
@@ -50,5 +55,7 @@ object PostgresMatchDetail:
 
 final class PostgresMatchDetailReadModel[F[_]: MonadCancelThrow](transactor: Transactor[F])
     extends MatchDetailReadModel[F]:
-  override def find(id: MatchId): F[Option[MatchDetail]] = PostgresMatchDetail.find(id).transact(transactor)
-  override def identity(id: MatchId): F[Option[MatchIdentity]] = PostgresMatchDetail.identity(id).transact(transactor)
+  override def find(id: MatchId): F[Option[MatchDetail]] =
+    PostgresMatchDetail.find(id).transact(transactor)
+  override def identity(id: MatchId): F[Option[MatchIdentity]] =
+    PostgresMatchDetail.identity(id).transact(transactor)

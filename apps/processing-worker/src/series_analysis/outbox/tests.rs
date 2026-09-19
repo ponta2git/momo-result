@@ -242,9 +242,20 @@ async fn real_postgres_and_redis_preserve_claim_and_payload_contract() -> SmokeR
         Duration::from_secs(30),
         Duration::from_mins(5),
     )?;
-    let redis = redis_client.get_connection_manager().await?;
+    let redis = crate::stream_connection::connect_publisher(&redis_client).await?;
     let mut driver = SeriesAnalysisOutboxDriver::new(database, redis, config);
 
+    let peer = crate::postgres::connect(&database_url).await?;
+    for lose_fence in [false, true] {
+        assert_stalled_publish_defers_the_remaining_batch(
+            &mut driver,
+            &mut observer,
+            &peer,
+            lose_fence,
+        )
+        .await?;
+    }
+    drop(peer);
     assert_campaign_expansion_decision_table(&mut driver, &database_url).await?;
     assert_publish_retry_follows_job_availability(&mut driver, &mut observer).await?;
     assert_eq!(driver.drain_once().await?, DrainBatch::progress());
@@ -291,6 +302,68 @@ async fn real_postgres_and_redis_preserve_claim_and_payload_contract() -> SmokeR
         .database
         .execute("DELETE FROM game_titles WHERE id = $1", &[&TITLE_ID])
         .await?;
+    Ok(())
+}
+
+async fn assert_stalled_publish_defers_the_remaining_batch(
+    driver: &mut SeriesAnalysisOutboxDriver,
+    observer: &mut ConnectionManager,
+    peer: &Client,
+    lose_fence: bool,
+) -> SmokeResult {
+    driver.database.execute(
+        "INSERT INTO series_analysis_queue_outbox (id, job_id, dedupe_key, next_attempt_at) \
+         SELECT 'stalled-delivery-' || n, $1, 'stalled-delivery-' || n, clock_timestamp() - interval '1 second' \
+         FROM generate_series(1, 9) n", &[&JOB_ID],
+    ).await?;
+    redis::cmd("CLIENT")
+        .arg("PAUSE")
+        .arg(6_000)
+        .arg("ALL")
+        .query_async::<()>(observer)
+        .await?;
+    let started = Instant::now();
+    let displace_claims = async {
+        if lose_fence {
+            loop {
+                let changed = peer.execute(
+                    "UPDATE series_analysis_queue_outbox SET claim_expires_at = claim_expires_at + interval '1 minute' \
+                     WHERE job_id = $1 AND status = 'in_flight'", &[&JOB_ID],
+                ).await?;
+                if changed == 10 {
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
+        }
+        Ok::<(), tokio_postgres::Error>(())
+    };
+    let (batch, displaced) = tokio::time::timeout(Duration::from_secs(9), async {
+        tokio::join!(driver.drain_once(), displace_claims)
+    })
+    .await?;
+    displaced?;
+    assert_eq!(batch?, DrainBatch::progress());
+    assert!(started.elapsed() >= crate::stream_connection::PUBLISH_RESPONSE_TIMEOUT);
+    let state = driver.database.query_one(
+        "SELECT sum(attempt_count)::bigint AS attempts, count(*) FILTER (WHERE status = 'in_flight') AS held \
+         FROM series_analysis_queue_outbox WHERE job_id = $1", &[&JOB_ID],
+    ).await?;
+    assert_eq!(state.try_get::<_, i64>("attempts")?, i64::from(!lose_fence));
+    assert_eq!(
+        state.try_get::<_, i64>("held")?,
+        if lose_fence { 10 } else { 9 },
+        "unattempted deliveries keep their recoverable claims without multiplying dependency waits"
+    );
+    tokio::time::sleep(Duration::from_millis(6_100).saturating_sub(started.elapsed())).await;
+    let entries: StreamRangeReply = observer.xrange_all(STREAM).await?;
+    assert_eq!(
+        entries.ids.len(),
+        1,
+        "a client timeout does not cancel XADD; uncertain writes must remain safely redeliverable"
+    );
+    let _: usize = observer.del(STREAM).await?;
+    prepare_outbox(&driver.database).await?;
     Ok(())
 }
 
@@ -867,7 +940,12 @@ async fn assert_publish_retry_follows_job_availability(
             &[&JOB_ID],
         )
         .await?;
-    assert_eq!(driver.publish_claim(claim).await?, PublishResult::Retried);
+    assert_eq!(
+        driver.publish_claim(claim).await?,
+        PublishResult::Deferred {
+            retry_scheduled: true
+        }
+    );
     let retry_state = driver
         .database
         .query_one(

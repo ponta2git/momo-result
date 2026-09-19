@@ -7,7 +7,7 @@ use std::{
 use momo_analysis_core::canonical::{CanonicalError, parse_canonical_json, write_canonical};
 use thiserror::Error;
 
-use crate::process::AnalysisChildOutcome;
+use super::child_process::AnalysisChildOutcome;
 pub(crate) use momo_analysis_core::child::{
     ChildPhase, ChildReport, ChildReportMetrics, ChildReportOutcome,
 };

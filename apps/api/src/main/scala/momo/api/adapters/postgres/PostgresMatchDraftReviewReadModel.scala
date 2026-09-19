@@ -30,15 +30,24 @@ final class PostgresMatchDraftReviewReadModel[F[_]: MonadCancelThrow](transactor
           LEFT JOIN source_images image ON image.id = slot.source_image_id
             AND image.status = 'AVAILABLE' AND draft.source_images_deleted_at IS NULL
           ORDER BY CASE slot.kind WHEN 'total_assets' THEN 1 WHEN 'revenue' THEN 2 ELSE 3 END
-       """).query[(Row, Option[PostgresOcrDrafts.Row], ScreenType, Option[(ImageId, String)])].to[List]
+       """).query[(
+        Row,
+        Option[PostgresOcrDrafts.Row],
+        ScreenType,
+        Option[(ImageId, String)]
+    )].to[List]
       .flatMap { rows =>
         rows.headOption.traverse { case (row, _, _, _) =>
-          toDraft(row).map(draft => MatchDraftReview(
-            draft,
-            rows.flatMap(_._2).map(PostgresOcrDrafts.toDraft),
-            rows.flatMap { case (_, _, kind, image) =>
-              image.map { case (imageId, mediaType) => MatchDraftReview.SourceImage(kind, imageId, mediaType) }
-            },
-          ))
+          toDraft(row).map(draft =>
+            MatchDraftReview(
+              draft,
+              rows.flatMap(_._2).map(PostgresOcrDrafts.toDraft),
+              rows.flatMap { case (_, _, kind, image) =>
+                image.map { case (imageId, mediaType) =>
+                  MatchDraftReview.SourceImage(kind, imageId, mediaType)
+                }
+              },
+            )
+          )
         }
       }.transact(transactor)

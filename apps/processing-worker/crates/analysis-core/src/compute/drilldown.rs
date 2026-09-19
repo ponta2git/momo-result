@@ -13,8 +13,9 @@ use crate::{
 };
 
 use super::{
+    DrilldownMetric,
     metrics::rank_distribution_cells,
-    presentation::{member_ref_json, scope_summary_json},
+    presentation::{member_ref_json, object, scope_summary_json},
     signals::change_direction,
 };
 
@@ -57,21 +58,23 @@ pub(super) fn build(
     all_scope_matches: &[&PlayerMatchInput],
     match_count: usize,
     member_id: &str,
-    metric_id: &str,
+    metric: DrilldownMetric,
     outcome_model: &OutcomeModelAnalysis,
 ) -> Value {
-    let payload = match metric_id {
-        "rank.averageHistory" => rank_history_payload(member_matches),
-        "playOrder.rankHistory" => play_order_history_payload(member_matches, all_scope_matches),
-        "rankAnalysis.rankSignals" => outcome_model.signal_drilldown_json(member_id),
-        _ => outcome_model.unexpected_wins_drilldown_json(member_id),
+    let payload = match metric {
+        DrilldownMetric::RankAverageHistory => rank_history_payload(member_matches),
+        DrilldownMetric::PlayOrderRankHistory => {
+            play_order_history_payload(member_matches, all_scope_matches)
+        }
+        DrilldownMetric::RankSignals => outcome_model.signal_drilldown_json(member_id),
+        DrilldownMetric::UnexpectedWins => outcome_model.unexpected_wins_drilldown_json(member_id),
     };
-    json!({
-        "schemaVersion": 3,
-        "scope": scope_summary_json(scope, match_count),
-        "player": member_ref_json(member_id),
-        "payload": payload,
-    })
+    object([
+        ("schemaVersion", 3.into()),
+        ("scope", scope_summary_json(scope, match_count)),
+        ("player", member_ref_json(member_id)),
+        ("payload", payload),
+    ])
 }
 
 fn rank_history_payload(rows: &[&PlayerMatchInput]) -> Value {
@@ -111,18 +114,21 @@ fn rank_history_payload(rows: &[&PlayerMatchInput]) -> Value {
         .filter(|_| match_rows.len() >= 2)
         .map(|(first, current)| current - first);
     let event_history = event_rank_history(rows);
-    json!({
-        "kind": "rank_average_history",
-        "summary": {
-            "targetCount": rows.len(),
-            "currentAverageRank": current,
-            "averageRankDeltaFromFirst": average_rank_delta_from_first,
-            "latestHeldEventAverageRankDelta": event_history.latest_cumulative_average_delta,
-            "qualityStatus": quality_status(rows.len()),
-        },
-        "matchRows": match_rows,
-        "eventRows": event_history.rows,
-    })
+    object([
+        ("kind", "rank_average_history".into()),
+        (
+            "summary",
+            json!({
+                "targetCount": rows.len(),
+                "currentAverageRank": current,
+                "averageRankDeltaFromFirst": average_rank_delta_from_first,
+                "latestHeldEventAverageRankDelta": event_history.latest_cumulative_average_delta,
+                "qualityStatus": quality_status(rows.len()),
+            }),
+        ),
+        ("matchRows", match_rows.into()),
+        ("eventRows", event_history.rows.into()),
+    ])
 }
 
 fn play_order_history_payload(
@@ -136,12 +142,12 @@ fn play_order_history_payload(
         .iter()
         .map(PlayOrderBreakdown::to_json)
         .collect::<Vec<_>>();
-    json!({
-        "kind": "play_order_rank_history",
-        "summary": summary,
-        "seriesByPlayOrder": series,
-        "rows": rows_by_order,
-    })
+    object([
+        ("kind", "play_order_rank_history".into()),
+        ("summary", summary),
+        ("seriesByPlayOrder", series.into()),
+        ("rows", rows_by_order.into()),
+    ])
 }
 
 fn play_order_series(rows: &[&PlayerMatchInput]) -> Vec<Value> {

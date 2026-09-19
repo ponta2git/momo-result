@@ -8,7 +8,7 @@ use tokio::{
     time::Instant,
 };
 
-use super::*;
+use super::{super::completion::notification_source, *};
 use crate::{
     cgroup::{CgroupHierarchy, ChildCgroup},
     notifications::{NotificationConfig, NotificationDriver, NotificationSink, analysis},
@@ -168,7 +168,7 @@ async fn verify_delayed_database(
     let (mut client, comparison) = analysis::load(
         &config.notifications,
         &proxy.url,
-        claim,
+        notification_source(claim),
         &artifact_id,
         true,
         deadline,
@@ -177,7 +177,13 @@ async fn verify_delayed_database(
     .ok_or("analysis comparison missing on delayed database")?;
     let transaction = client.transaction().await?;
     let prepared = comparison
-        .prepare(&transaction, claim, Some(&artifact_id), true, deadline)
+        .prepare(
+            &transaction,
+            notification_source(claim),
+            Some(&artifact_id),
+            true,
+            deadline,
+        )
         .await?
         .ok_or("analysis notification missing after delayed database comparison")?;
     assert_eq!(
@@ -201,7 +207,7 @@ async fn verify_preparation_boundaries(
         let (_comparison_client, comparison) = analysis::load(
             &config.notifications,
             &config.database_url,
-            claim,
+            notification_source(claim),
             &artifact_id,
             false,
             deadline,
@@ -217,7 +223,7 @@ async fn verify_preparation_boundaries(
         let prepared = comparison
             .prepare(
                 &transaction,
-                claim,
+                notification_source(claim),
                 Some(&artifact_id),
                 true,
                 if scenario == "short" {

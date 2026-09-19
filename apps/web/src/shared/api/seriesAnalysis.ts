@@ -34,7 +34,7 @@ export type * from "@/shared/api/seriesAnalysisAdminTypes";
 
 function scopedPath(resource: "aggregate" | "review", query: SeriesAnalysisQuery): string {
   const params = scopeParams(query);
-  return `/api/analytics/series-comparison/${resource === "aggregate" ? "v3" : "v2"}/${resource}?${params.toString()}`;
+  return `/api/analytics/series-comparison/${resource === "aggregate" ? "v4" : "v3"}/${resource}?${params.toString()}`;
 }
 
 function scopeParams(query: SeriesAnalysisQuery): URLSearchParams {
@@ -73,7 +73,7 @@ export function getSeriesAnalysisAggregate(
 ): Promise<SeriesComparisonAggregate> {
   return apiRequest(scopedPath("aggregate", query), {
     ...options,
-    decodeResponse: (value) => decodeSeriesAnalysisArtifact("aggregateV3", value),
+    decodeResponse: (value) => decodeSeriesAnalysisArtifact("aggregateV4", value),
   });
 }
 
@@ -83,7 +83,7 @@ export function getSeriesAnalysisReview(
 ): Promise<SeriesComparisonReviewV3> {
   return apiRequest(scopedPath("review", query), {
     ...options,
-    decodeResponse: (value) => decodeSeriesAnalysisArtifact("review", value),
+    decodeResponse: (value) => decodeSeriesAnalysisArtifact("reviewV3", value),
   });
 }
 

@@ -74,6 +74,18 @@ final class SeriesAnalysisPayloadValidatorSpec extends FunSuite with JsonSchemaA
       }
     }
 
+  test("presentation-free artifacts require their exact publication generation"):
+    List(
+      (SeriesAnalysisChunkKind.Aggregate, "aggregate-payload-v5.json", "aggregate-payload-v4.json"),
+      (SeriesAnalysisChunkKind.Review, "review-payload-v4.json", "review-payload-v3.json"),
+    ).foreach { case (kind, currentFile, previousFile) =>
+      val current = sharedFixture(currentFile)
+      val request = simpleRequest(kind)
+      assert(validate(current, request, None, 4))
+      assert(!validate(current, request, None, 3))
+      assert(!validate(sharedFixture(previousFile), request, None, 4))
+    }
+
   test("keeps the API drilldown vocabulary aligned with the owner schema"):
     val schema = sharedSchema("series-analysis-drilldown-v3.schema.json")
     val metricIds = schema.hcursor.downField("oneOf").as[Vector[Json]]

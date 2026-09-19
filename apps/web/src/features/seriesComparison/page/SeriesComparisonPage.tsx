@@ -74,35 +74,11 @@ export function SeriesComparisonPage() {
   };
 
   useEffect(() => {
-    if (page.clientUpgradeRequired || filters.seriesOptions.length === 0) return;
+    if (filters.seriesOptions.length === 0) return;
     preloadSeriesAnalysisView(filters.activeView);
-  }, [filters.activeView, filters.seriesOptions.length, page.clientUpgradeRequired]);
+  }, [filters.activeView, filters.seriesOptions.length]);
 
   if (options.loading) return <PageSkeleton showReturnAction={Boolean(page.returnTo)} />;
-  if (page.clientUpgradeRequired) {
-    return (
-      <PageFrame width="wide">
-        <PageContentSurface aria-label="戦績比較" className="grid gap-4" role="region">
-          {page.returnTo ? (
-            <nav aria-label="戦績比較の操作" className={cn(actionRowClass, "justify-end")}>
-              {seriesReturnAction(page.returnTo)}
-            </nav>
-          ) : null}
-          <Notice
-            action={
-              <Button size="sm" onClick={page.actions.reloadClient}>
-                画面を再読み込み
-              </Button>
-            }
-            tone="warning"
-            title="画面の更新が必要です"
-          >
-            <p>戦績分析の表示方法が更新されました。画面を再読み込みしてください。</p>
-          </Notice>
-        </PageContentSurface>
-      </PageFrame>
-    );
-  }
 
   return (
     <SeriesAnalysisNavigation

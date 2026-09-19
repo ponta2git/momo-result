@@ -435,10 +435,10 @@ test("inspects saved analysis and handles explicit refresh states", async ({
       });
     });
     await page.route(
-      /\/api\/analytics\/series-comparison\/v3\/aggregate(?:\?.*)?$/u,
+      /\/api\/analytics\/series-comparison\/v4\/aggregate(?:\?.*)?$/u,
       async (route) => route.fulfill({ json: aggregateFixture }),
     );
-    await page.route(/\/api\/analytics\/series-comparison\/v2\/review(?:\?.*)?$/u, async (route) =>
+    await page.route(/\/api\/analytics\/series-comparison\/v3\/review(?:\?.*)?$/u, async (route) =>
       route.fulfill({ json: reviewFixture }),
     );
     await page.route(

@@ -48,7 +48,6 @@ object ProblemDetails:
     "ANALYSIS_READ_BUSY",
     "ANALYSIS_STATE_UNAVAILABLE",
     "ANALYSIS_NO_ELIGIBLE_TITLES",
-    "ANALYSIS_CLIENT_UPGRADE_REQUIRED",
     "DEPENDENCY_FAILED",
     "INTERNAL_ERROR",
   )
@@ -107,8 +106,6 @@ object ProblemDetails:
     case _: AppError.AnalysisStateUnavailable =>
       "分析状態を読み込めません。少し待ってから、もう一度実行してください。"
     case _: AppError.AnalysisNoEligibleTitles => "分析できる作品がありません。"
-    case _: AppError.AnalysisClientUpgradeRequired =>
-      "最新の分析結果を使うため、ページを再読み込みしてください。"
     case _: AppError.Internal => "予期しないエラーが発生しました。もう一度お試しください。"
 
   private def statusOf(error: AppError): StatusCode = error match
@@ -132,6 +129,5 @@ object ProblemDetails:
     case _: AppError.AnalysisReadBusy => StatusCode.ServiceUnavailable
     case _: AppError.AnalysisStateUnavailable => StatusCode.ServiceUnavailable
     case _: AppError.AnalysisNoEligibleTitles => StatusCode.Conflict
-    case _: AppError.AnalysisClientUpgradeRequired => StatusCode.UpgradeRequired
     case _: AppError.DependencyFailed => StatusCode.ServiceUnavailable
     case _: AppError.Internal => StatusCode.InternalServerError

@@ -9,9 +9,9 @@ import type {
 } from "@/shared/api/seriesAnalysis";
 
 export const analysisArtifact = {
-  algorithmVersion: "series-analysis-v4",
+  algorithmVersion: "series-analysis-v5",
   artifactId: "artifact-current",
-  artifactSchemaVersion: 2,
+  artifactSchemaVersion: 4,
   gameTitleId: "gt_momotetsu_2",
   inputRevision: "12",
   publishedAt: "2026-08-09T01:02:03.000Z",
@@ -63,7 +63,7 @@ export function makeSeriesAnalysisStatus(
     currentArtifact: analysisArtifact,
     desired: {
       algorithmVersion: analysisArtifact.algorithmVersion,
-      artifactSchemaVersion: 2,
+      artifactSchemaVersion: 4,
       inputRevision: analysisArtifact.inputRevision,
     },
     gameTitleId: analysisArtifact.gameTitleId,
@@ -73,13 +73,38 @@ export function makeSeriesAnalysisStatus(
 }
 
 const quality = { noTargetCount: 0, okCount: 8, referenceCount: 0 };
-type LegacyAggregate = Extract<SeriesComparisonAggregate, { schemaVersion: 3 }>;
 
 export function makeSeriesAnalysisAggregate(
-  artifact: LegacyAggregate["artifact"] = analysisArtifact,
-): LegacyAggregate {
-  return hydrateMemberDisplayNames<LegacyAggregate>({
+  artifact: SeriesComparisonAggregate["artifact"] = analysisArtifact,
+): SeriesComparisonAggregate {
+  return hydrateMemberDisplayNames<SeriesComparisonAggregate>({
     artifact,
+    ownerComparison: {
+      recordedOwnerCount: 1,
+      owners: [{ ...player, targetCount: 12, qualityStatus: "ok" }],
+      rows: [
+        {
+          ...player,
+          cells: [
+            {
+              ownerMemberId: player.memberId,
+              rank: {
+                average: 11 / 6,
+                distribution: [6, 3, 2, 1].map((count, index) => ({
+                  rank: index + 1,
+                  count,
+                  rate: count / 12,
+                })),
+              },
+              assets: { average: 150_000 },
+              revenue: { average: 25_000 },
+              destination: { count: 18, average: 1.5 },
+              ginji: { count: 3, average: 0.25, encounterMatches: 2, encounterRate: 1 / 6 },
+            },
+          ],
+        },
+      ],
+    },
     assetStyleProfiles: {
       entries: [
         {
@@ -257,14 +282,6 @@ export function makeSeriesAnalysisAggregate(
         },
       ],
     },
-    metricDefinitions: [
-      {
-        label: "平均順位",
-        metricId: "rank.average",
-        preferredDirection: "lower",
-        unit: "rank",
-      },
-    ],
     metricsByPlayer: [
       {
         assets: { average: 150_000, max: 350_000, median: 130_000, min: 20_000 },
@@ -494,7 +511,7 @@ export function makeSeriesAnalysisAggregate(
         memberId: player.memberId,
       },
     ],
-    schemaVersion: 3,
+    schemaVersion: 5,
     scope,
     source: { gameTitleId: artifact.gameTitleId },
     strategyScatter: {
@@ -591,10 +608,7 @@ export function makeSeriesAnalysisAggregate(
   });
 }
 
-export function makeSeriesAnalysisReview(): Extract<
-  SeriesComparisonReviewV3,
-  { schemaVersion: 3 }
-> {
+export function makeSeriesAnalysisReview(): SeriesComparisonReviewV3 {
   return {
     artifact: analysisArtifact,
     baseline: { matchCount: 12, playerCount: 1, qualityStatus: "ok" },
@@ -606,11 +620,6 @@ export function makeSeriesAnalysisReview(): Extract<
         primaryCard: {
           actionAdviceScore: 0.64,
           actionHypothesis: "収益先行時は目的地0回で終えない。",
-          anchorTarget: {
-            label: "物件収益と勝ち",
-            sectionId: "metric-revenue-outcome",
-            view: "drivers",
-          },
           avoidAction: "収益だけで安全と見ない。",
           cardId: "playbook:member_ponta:revenue",
           category: "revenue",
@@ -658,7 +667,7 @@ export function makeSeriesAnalysisReview(): Extract<
         secondaryCards: [],
       },
     ],
-    schemaVersion: 3,
+    schemaVersion: 4,
     scope,
   };
 }
@@ -671,10 +680,7 @@ const fourPlayerReviewPlayers = [
 ] as const;
 const secondaryReviewCategories = ["destination", "recovery"] as const;
 
-export function makeFourPlayerSeriesAnalysisReview(): Extract<
-  SeriesComparisonReviewV3,
-  { schemaVersion: 3 }
-> {
+export function makeFourPlayerSeriesAnalysisReview(): SeriesComparisonReviewV3 {
   const response = makeSeriesAnalysisReview();
   const sourceEntry = response.playbookByPlayer[0];
   const sourceCard = sourceEntry?.primaryCard;
@@ -689,10 +695,6 @@ export function makeFourPlayerSeriesAnalysisReview(): Extract<
     ) => ({
       ...structuredClone(sourceCard),
       actionHypothesis,
-      anchorTarget: {
-        ...sourceCard.anchorTarget,
-        label: `${fixturePlayer.displayName}の詳しい分析`,
-      },
       cardId,
       category,
       heading: actionHypothesis,
@@ -971,7 +973,7 @@ export function makeSeriesAnalysisAdminOverview(): SeriesAnalysisAdminOverview {
     },
     recentJobs: [
       {
-        algorithmVersion: "series-analysis-v4",
+        algorithmVersion: "series-analysis-v5",
         attemptCount: 1,
         coalescedTriggers: [],
         elapsedMilliseconds: 1234,
@@ -1058,10 +1060,7 @@ function unexpectedEvidence() {
 }
 
 /** Hand-calculated MOM-3 example: two games with owner A, one with B; C and D have none. */
-export function makeOwnerComparisonAggregate(): Extract<
-  SeriesComparisonAggregate,
-  { schemaVersion: 4 }
-> {
+export function makeOwnerComparisonAggregate(): SeriesComparisonAggregate {
   const members = [
     { memberId: "member_ponta", displayName: "ぽんた" },
     { memberId: "member_akane_mami", displayName: "あかねまみ" },
@@ -1076,12 +1075,6 @@ export function makeOwnerComparisonAggregate(): Extract<
   ];
   return {
     ...makeSeriesAnalysisAggregate(),
-    artifact: {
-      ...analysisArtifact,
-      artifactSchemaVersion: 3,
-      algorithmVersion: "series-analysis-v5",
-    },
-    schemaVersion: 4,
     scope: { ...scope, matchCount: 3 },
     ownerComparison: {
       recordedOwnerCount: 2,
@@ -1128,46 +1121,4 @@ export function makeOwnerComparisonAggregate(): Extract<
       })),
     },
   };
-}
-
-export function makeCurrentSeriesAnalysisAggregate(): Extract<
-  SeriesComparisonAggregate,
-  { schemaVersion: 5 }
-> {
-  const { metricDefinitions: _metricDefinitions, ...aggregate } = makeOwnerComparisonAggregate();
-  return {
-    ...aggregate,
-    artifact: { ...aggregate.artifact, artifactSchemaVersion: 4 },
-    schemaVersion: 5,
-  };
-}
-
-export function makeCurrentSeriesAnalysisReview(): Extract<
-  SeriesComparisonReviewV3,
-  { schemaVersion: 4 }
-> {
-  const review = makeFourPlayerSeriesAnalysisReview();
-  return {
-    ...review,
-    artifact: {
-      ...review.artifact,
-      algorithmVersion: "series-analysis-v5",
-      artifactSchemaVersion: 4,
-    },
-    schemaVersion: 4,
-    playbookByPlayer: review.playbookByPlayer.map((entry) => ({
-      player: entry.player,
-      primaryCard: entry.primaryCard && withoutReviewAnchor(entry.primaryCard),
-      secondaryCards: entry.secondaryCards.map(withoutReviewAnchor),
-    })),
-  };
-}
-
-function withoutReviewAnchor(
-  card: NonNullable<
-    ReturnType<typeof makeSeriesAnalysisReview>["playbookByPlayer"][number]["primaryCard"]
-  >,
-) {
-  const { anchorTarget: _anchorTarget, ...evidence } = card;
-  return evidence;
 }

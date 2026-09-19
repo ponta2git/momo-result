@@ -142,8 +142,8 @@ DB lock順とstaging transactionの規則は `docs/db-rule.md`、process責務�
 - artifact endpointはstatusで解決したartifact IDを必須入力とし、1画面の全resourceを同じartifactへpinする。
 - current / previousとして読取可能かの確認と、要求された1 resource / scopeのbounded chunk取得を同じread snapshotで行う。作品全体をdecodeしない。
 - artifact schemaとHTTP wire schemaを分け、reader decoderのallowlistと上限を満たさないartifactはfail closedにする。
-- artifact世代4ではaggregate payload世代5とreview payload世代4を保存し、固定の`metricDefinitions`と画面用`anchorTarget`を持たない。指標説明と分類に対応する画面遷移はWebが所有し、旧成果物の表示にも適用する。計算上の分類・提案・根拠は引き続きWorkerの責務とする。
-- aggregate HTTP v4とreview HTTP v3は公開契約を満たすartifact世代2・3・4を読める。aggregate HTTP v2は世代2、aggregate HTTP v3とreview HTTP v2は世代2・3に限定し、新しい成果物には426を返す。保存形式とHTTPの世代番号を同一視しない。
+- artifact世代4ではaggregate payload世代5とreview payload世代4を保存し、固定の`metricDefinitions`と画面用`anchorTarget`を持たない。指標説明と分類に対応する画面遷移はWebが所有する。計算上の分類・提案・根拠は引き続きWorkerの責務とする。
+- aggregate HTTP v4とreview HTTP v3は現行artifact世代4だけを読む。旧aggregate HTTP v2/v3、review HTTP v2、廃止済み同期分析は提供しない。保存形式とHTTPの世代番号を同一視しない。
 - readerはvalidation contract ID、checksum、UTF-8、生成schema、byte / depth / node上限、要求したscope / member / metric / match identityを検証する。producerの集計意味やcross-resource整合性をbounded chunk readで再計算しない。
 - optionsは全登録作品を返し、scope候補は現在の確定試合に実在する値だけを返す。確定試合0件と登録作品0件を区別する。
 - current / previousでなくなったartifactは明示的なexpired errorとし、Webはstatus更新後に1回だけ最新artifactでretryする。同期計算や別scopeへのfallbackをしない。
@@ -179,23 +179,18 @@ OCR同居を有効化する場合は、共通parent-child境界、単一slot、�
 
 ## 8. Compatibility / Release / Rollback
 
-- DB migrationはadditiveに進め、reader-firstで新artifact schemaを読めるAPIを先に配置する。readerとworker capability確認後にdesired version / campaignを進める。
-- 画面情報を除く成果物への移行は、DBの公開契約拡張、APIとWebの読み取り対応、対応Worker、release controllerによるpromotionの順で進める。過去migrationのbaselineを書き換えず、旧成果物は読み取り可能なまま再計算を進める。
-- published rowはimmutableとし、exact contractをadvertiseするworker世代だけで再計算する。Rustで検証済みの新規publicationまたは明示的な再検証だけをattestedとし、既存artifactをSQLだけで盲目的にattestしない。現在のreaderはcontractなしartifactを読まず、許可したschemaとcontractの正確な組だけを受理する。
-- readerはvalidator初期化完了後にだけexact capabilityをadvertiseする。初回attestation導入時に使ったcontractなしread・legacy semantic validatorは現在の互換経路に含めない。
-- release promotionはfreshな全reader / workerのcapability集合をtransaction内で凍結して完全一致を確認し、release singleton、既存titleのdesired tuple、campaignを原子的に進める。登録作品0件のinitial backfillもtarget 0のterminal operationとして確定し、その後の新規作品はsingletonを継承する。
-- idle capabilityの更新間隔はactive jobのlease heartbeatと分離し、freshness期限に失敗・遅延の余裕を残す。間隔とfreshnessはAPI / worker / release controllerで一体に変更し、両consumer更新後のcontrollerでpromotionする。長周期化による停止世代の排除待ち時間を許容範囲に保ち、reader-firstの配置順は維持する。
-- 自動保守は稼働世代と singleton の exact tuple 差分を昇格対象とし、既知の過去世代への自動復帰を拒否する。差分がない場合は初回未処理の必要性と既存 campaign の進捗を確認する。preview と apply の間で対象作品・input revision・世代が変われば適用しない。自動・手動の再実行は同じ durable operation を参照する。
-- release 完了は受理 snapshot の target が公開済みまたは作品削除で終端したことと整合性監査で判定する。後続の通常入力更新による pending work は別に扱い、全 queue の停止を通常 release の完了条件にしない。failed target や構造的不整合は要対応とする。
-- promotion後はattested workerで再計算し、current / previous双方のexact contract、pending work、failed outboxをrelease auditで確認する。内部の`validation_contract_update` triggerは既存HTTP vocabularyの`artifact_schema_update`へprojectionし、storage rolloutだけでpublic wire enumを増やさない。
-- 計画保守で全reader / workerを停止し、公開再開前に全作品を再計算できる場合に限り、単一世代の一括切替を選べる。この場合は旧・新schemaの同時decodeを要求せず、停止確認、復元可能なDB snapshot、旧immutable release、全runtimeの新version一致、全作品の再計算完了を再開条件にする。
-- 新HTTP wireはOpenAPIと生成型を同時更新する。旧clientは明示的なreload-requiredへ縮退し、旧同期engineへfallbackしない。
-- artifactからwireへのprojectionはrename、enum mapping、metadata hydrateに限定し、旧artifactにない意味値を再計算しない。
-- rollbackはcurrent artifact、request、campaign、job、outboxを維持する。旧workerがdesired versionを非対応ならjobを `queued` に保ち、旧algorithmへ黙って戻さない。
-- promotion後のservice rollbackは、DB契約・lease fenceと保存済みpublication世代を扱えるAPI / workerに限定する。contract導入前binaryへ戻してexact jobをclaimさせず、singletonやartifactのcontractをSQLで消して世代を偽装しない。
-- DB down migrationでrevision / job / artifactを削除せず、publication停止中もcurrent artifactを読める状態を維持する。
-- 単一世代の保守切替を切り戻す場合は、サービスを停止したままDB snapshotと旧immutable releaseを同じ世代へ戻す。新旧のdesired version、job、artifactを部分的に組み合わせた状態では再開しない。
-- release候補はmigration、reader / worker compatibility、immutable provenance、resource hard limit、timeout、artifact / API上限を確認してから昇格する。
+- 仲間内向けサービスとして、API・Web・Workerは現行の単一成果物契約だけを扱う。旧HTTP経路、旧schemaのdecode、旧Web向けの変換・reload専用応答は維持しない。versionは保存済みデータの意味を識別するために残し、未対応・不正な成果物を現行形式として解釈しない。
+- 非互換な成果物変更は計画保守で切り替える。公開と旧runtimeを停止し、復元可能なDB snapshotと対応するimmutable releaseを確保したうえで、必要なforward migration、API・Web・Workerの切替、promotion、全作品の再計算を行う。現行成果物とcapabilityの一致・campaignの完了・整合性監査を確認して公開を再開する。過去migrationのbaselineは書き換えない。
+- 既存の試合・要求・job・成果物を互換コードの削除に合わせて消さない。旧payload、checksum、検証IDをSQLで現行形式へ偽装しない。promotionでは未対応の成果物pointerを外し、成果物の行は保持する。新しい成果物はRustのfull validatorを通して再計算し、異なる検証契約の旧currentをpreviousへ繰り上げない。参照されなくなった旧成果物は通常の保持・cleanup規則へ委ねる。
+- published rowはimmutableとする。readerはvalidator初期化完了後に現行schemaとvalidation contractのexact pairだけをadvertiseし、workerも対応する計算・公開能力を登録する。
+- release promotionはfreshな全reader / workerのcapabilityをtransaction内で凍結して完全一致を確認し、release singleton、既存titleのdesired tuple、campaignを原子的に進める。登録作品0件のinitial backfillもtarget 0のterminal operationとして確定し、その後の新規作品はsingletonを継承する。
+- idle capabilityの更新間隔はactive jobのlease heartbeatと分離し、freshness期限に失敗・遅延の余裕を残す。世代不一致や期限切れのcapabilityで昇格しない。
+- 自動保守は稼働世代とsingletonのexact tuple差分を昇格対象とし、既知の過去世代への自動復帰を拒否する。previewとapplyの間で対象作品・input revision・世代が変われば適用しない。自動・手動の再実行は同じdurable operationを参照する。
+- release完了は受理snapshotのtargetが公開済みまたは作品削除で終端したことと整合性監査で判定する。failed target、current / previousの不正契約、failed outboxは要対応とする。通常の更新では後続入力によるpending workを別に扱い、非互換切替では公開再開前に対象全作品の現行成果物を確認する。
+- HTTP wireはOpenAPI・生成型と同時更新する。artifactからwireへのprojectionはrename、enum mapping、metadata hydrateに限定し、API / Webで欠けた意味値を計算しない。
+- 通常rollbackはDB契約・lease fenceと現行publicationを扱えるreleaseに限定し、current artifact、request、campaign、job、outboxを維持する。未対応jobを旧algorithmで処理せずqueuedに保つ。
+- 非互換切替を切り戻す場合は、公開を停止したままDB snapshotとimmutable releaseを整合する組合せへ戻す。部分的な世代の組合せでは再開せず、再開後のデータを守る修復はforward fixを原則とする。
+- release候補はmigration、runtimeのexact capability、immutable provenance、resource hard limit、timeout、artifact / API上限を確認してから昇格する。本番操作の承認境界は公開運用規約に従う。
 
 ## 9. Acceptance Criteria
 
@@ -209,7 +204,7 @@ OCR同居を有効化する場合は、共通parent-child境界、単一slot、�
 | calculation / artifact | 文書化した数式・性質・canonicalization、上限、部分公開拒否、current 維持 |
 | API / Web | bounded read、artifact pinning、expired retry、revision mismatch、状態decision table、意味再計算禁止 |
 | admin / retention | auth / CSRF / idempotency、target snapshot、未充足run、直近10件、45日cleanup |
-| compatibility / release | reader-first、または停止を伴う単一世代切替の再開条件、version capability、reload導線、rollback後current維持、旧engine不在 |
+| compatibility / release | 単一世代切替の再開条件、exact capability、旧契約の拒否、rollback時のデータ保全、旧engine不在 |
 | resource | 定義した上限負荷を production 同等 runtime で処理し、worker / API / browser 別の resource と timeout 要求を満たす。実測は private evidence に置く |
 
 外部DB、Redis、Linux process、browser、resource gateをskipした場合、その境界は未検証として報告する。完了前に `docs/post-mortem/lessons.md` の該当カードを確認する。

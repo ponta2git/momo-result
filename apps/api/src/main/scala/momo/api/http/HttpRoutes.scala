@@ -21,7 +21,6 @@ import momo.api.auth.{
 import momo.api.config.AppConfig
 import momo.api.http.modules.{
   AdminAccountModule,
-  AnalyticsModule,
   AuthModule,
   ExportModule,
   HealthModule,
@@ -235,10 +234,6 @@ object HttpRoutes:
         deps.rateLimiters.readApi,
         idempotencyGuard,
         deps.nowF,
-        security,
-      ) :::
-      AnalyticsModule.routes[F](
-        deps.rateLimiters.readApi,
         security,
       ) :::
       SeriesAnalysisModule.routes[F](

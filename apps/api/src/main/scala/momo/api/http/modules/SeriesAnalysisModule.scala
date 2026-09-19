@@ -31,7 +31,6 @@ object SeriesAnalysisModule:
         ],
         operation: String,
         kind: SeriesAnalysisChunkKind,
-        maximumArtifactSchemaVersion: Option[Int],
     ): ServerEndpoint[Any, F] = SecuredEndpoint.readLogic(security, endpoint) { member => input =>
       readChunk(
         readRateLimiter,
@@ -49,7 +48,6 @@ object SeriesAnalysisModule:
           None
         ),
         security,
-        maximumArtifactSchemaVersion
       )
     }
 
@@ -73,34 +71,14 @@ object SeriesAnalysisModule:
         )
       },
       scoped(
-        SeriesAnalysisEndpoints.aggregate,
-        HttpOperation.GetSeriesAnalysisAggregate,
-        SeriesAnalysisChunkKind.Aggregate,
-        Some(2)
-      ),
-      scoped(
-        SeriesAnalysisEndpoints.aggregateV3,
-        HttpOperation.GetSeriesAnalysisAggregateV3,
-        SeriesAnalysisChunkKind.Aggregate,
-        Some(3)
-      ),
-      scoped(
         SeriesAnalysisEndpoints.aggregateV4,
         HttpOperation.GetSeriesAnalysisAggregateV4,
         SeriesAnalysisChunkKind.Aggregate,
-        None,
-      ),
-      scoped(
-        SeriesAnalysisEndpoints.review,
-        HttpOperation.GetSeriesAnalysisReview,
-        SeriesAnalysisChunkKind.Review,
-        Some(3)
       ),
       scoped(
         SeriesAnalysisEndpoints.reviewV3,
         HttpOperation.GetSeriesAnalysisReviewV3,
         SeriesAnalysisChunkKind.Review,
-        None,
       ),
       SecuredEndpoint.readLogic(security, SeriesAnalysisEndpoints.drilldown) { member => input =>
         readChunk(
@@ -119,7 +97,6 @@ object SeriesAnalysisModule:
             rawMatchId = None,
           ),
           security,
-          None,
         )
       },
       SecuredEndpoint.readLogic(security, SeriesAnalysisEndpoints.matchContext) { member => input =>
@@ -139,7 +116,6 @@ object SeriesAnalysisModule:
             rawMatchId = Some(input.matchId),
           ),
           security,
-          None,
         )
       },
       SecuredEndpoint.adminReadLogic(security, SeriesAnalysisEndpoints.adminOverview) {
@@ -213,18 +189,12 @@ object SeriesAnalysisModule:
       getChunk: GetSeriesAnalysisChunk[F],
       decoded: Either[AppError, momo.api.domain.SeriesAnalysisChunkRequest],
       security: EndpointSecurity[F],
-      maximumArtifactSchemaVersion: Option[Int],
   ): F[Either[ProblemDetails.ProblemResponse, Array[Byte]]] = read(
     limiter,
     accountId,
     operation,
     security.decode(decoded)(request =>
-      security.respond(getChunk.run(request).map(_.flatMap { chunk =>
-        // Compatibility is decided only after the shared reader has validated the artifact.
-        if maximumArtifactSchemaVersion.exists(chunk.artifact.artifactSchemaVersion > _) then
-          Left(AppError.AnalysisClientUpgradeRequired())
-        else Right(chunk)
-      }))(_.payload)
+      security.respond(getChunk.run(request))(_.payload)
     ),
   )
 

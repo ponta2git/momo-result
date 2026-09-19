@@ -14,12 +14,6 @@ pub const ARTIFACT_SCHEMA_VERSION: u32 = 4;
 /// and bounded-file checks accepted a concrete artifact. Existing rows without this exact value
 /// must not be treated as having passed the current validator.
 pub const ARTIFACT_VALIDATION_CONTRACT_ID: &str = "series-analysis-artifact-v4-full-validation-v1";
-/// Readable publication pairs in migration order. Writer support remains current-only.
-pub const READABLE_PUBLICATION_CONTRACTS: &[(u32, &str)] = &[
-    (2, "series-analysis-artifact-v2-full-validation-v1"),
-    (3, "series-analysis-artifact-v3-full-validation-v1"),
-    (ARTIFACT_SCHEMA_VERSION, ARTIFACT_VALIDATION_CONTRACT_ID),
-];
 pub const MANIFEST_VERSION: u32 = 1;
 pub const QUEUE_SCHEMA_VERSION: &str = "1";
 const MAXIMUM_SCHEMA_CHUNK_BYTES: u64 = 16 * 1024 * 1024;
@@ -527,6 +521,19 @@ mod tests {
         manifest
             .validate(16, 16 * 1024 * 1024)
             .unwrap_or_else(|error| panic!("valid artifact was rejected: {error}"));
+    }
+
+    #[test]
+    fn rejects_every_noncurrent_artifact_version() {
+        let mut manifest: ArtifactManifest = serde_json::from_str(VALID_ARTIFACT)
+            .unwrap_or_else(|error| panic!("valid artifact did not decode: {error}"));
+        for version in [1, 2, 3, 5] {
+            manifest.artifact_schema_version = version;
+            assert!(matches!(
+                manifest.validate(16, 16 * 1024 * 1024),
+                Err(ContractError::UnsupportedArtifactSchema)
+            ));
+        }
     }
 
     #[test]

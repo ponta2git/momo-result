@@ -18,6 +18,7 @@ if [[ "${ANALYSIS_SMOKE_SERVICES_ARE_ISOLATED:-}" != "true" ]]; then
 fi
 
 tests=(
+  "series_analysis::release::promotion_tests::real_postgres_promotion_detaches_obsolete_empty_title_pointers_without_deleting_artifacts"
   "series_analysis::campaign::tests::real_postgres_campaign_refresh_counts_concurrent_target_commits"
   "series_analysis::control::history::tests::real_postgres_retention_preserves_active_jobs_and_readable_artifacts"
   "series_analysis::control::capability::tests::real_postgres_registration_replaces_the_generation_capability_set"

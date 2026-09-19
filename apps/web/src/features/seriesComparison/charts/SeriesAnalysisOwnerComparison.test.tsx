@@ -63,18 +63,11 @@ describe("owner comparison", () => {
     expect(table).toHaveTextContent("（50%）");
   });
 
-  it("explains legacy and empty scopes without presenting zeroes as observed values", () => {
-    const { rerender } = render(
-      <SeriesAnalysisOwnerComparison comparison={undefined} hasMatches />,
-    );
-    expect(screen.getByRole("combobox")).toBeDisabled();
-    expect(screen.getByText(/この分析にはオーナー別の集計がありません/u)).toBeInTheDocument();
+  it("explains empty scopes without presenting zeroes as observed values", () => {
     const empty = makeOwnerComparisonAggregate();
     empty.scope.matchCount = 0;
     empty.ownerComparison = { owners: [], rows: [], recordedOwnerCount: 0 };
-    rerender(
-      <SeriesAnalysisOwnerComparison comparison={empty.ownerComparison} hasMatches={false} />,
-    );
+    render(<SeriesAnalysisOwnerComparison comparison={empty.ownerComparison} hasMatches={false} />);
     expect(screen.getByRole("combobox")).toBeDisabled();
     expect(screen.getByRole("heading", { name: "対象の試合がありません" })).toBeInTheDocument();
     expect(screen.queryByRole("table")).not.toBeInTheDocument();

@@ -55,8 +55,6 @@ object HttpAssertions:
     case "ANALYSIS_STATE_UNAVAILABLE" =>
       "分析状態を読み込めません。少し待ってから、もう一度実行してください。"
     case "ANALYSIS_NO_ELIGIBLE_TITLES" => "分析できる作品がありません。"
-    case "ANALYSIS_CLIENT_UPGRADE_REQUIRED" =>
-      "最新の分析結果を使うため、ページを再読み込みしてください。"
     case "INTERNAL_ERROR" => "予期しないエラーが発生しました。もう一度お試しください。"
     case other => fail(s"missing public detail assertion for problem code: $other")
 

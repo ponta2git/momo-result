@@ -29,7 +29,7 @@ pub(super) async fn validated_artifact(
     claim: &ClaimedJob,
     artifact_directory: &Path,
 ) -> Result<ValidatedArtifact, ControlError> {
-    if !claim.accepts_current_validation_contract() {
+    if claim.validation_contract_id.as_deref() != Some(ARTIFACT_VALIDATION_CONTRACT_ID) {
         return Err(ControlError::UnsupportedValidationContract);
     }
     let artifact_directory = artifact_directory.to_path_buf();
@@ -342,9 +342,7 @@ pub(super) async fn finish_success(
     if updated != 1 {
         return Err(ControlError::OwnerLost);
     }
-    // A legacy current artifact may become `previous` during the first attested publication.
-    // Keep rollback data only when Rust proved it under the same exact contract; otherwise clear
-    // the pointer so release audit cannot mistake an unverified v2 payload for a safe fallback.
+    // Only an attested current-contract artifact can remain a readable previous result.
     transaction
         .execute(
             "UPDATE series_analysis_title_states SET\x20\

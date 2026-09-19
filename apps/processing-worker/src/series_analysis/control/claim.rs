@@ -222,7 +222,7 @@ fn supports_candidate(candidate: &ClaimCandidate, expected_schema: i32) -> bool 
         && candidate
             .validation_contract_id
             .as_deref()
-            .is_none_or(|contract| contract == ARTIFACT_VALIDATION_CONTRACT_ID)
+            .is_some_and(|contract| contract == ARTIFACT_VALIDATION_CONTRACT_ID)
 }
 
 async fn recovery_resolves_delivery(
@@ -400,10 +400,10 @@ mod tests {
     }
 
     #[test]
-    fn claim_accepts_legacy_null_or_the_exact_validation_contract_only() {
+    fn claim_requires_the_exact_current_publication_contract() {
         let schema = i32::try_from(ARTIFACT_SCHEMA_VERSION).unwrap_or(i32::MAX);
 
-        assert!(supports_candidate(&candidate(None), schema));
+        assert!(!supports_candidate(&candidate(None), schema));
         assert!(supports_candidate(
             &candidate(Some(ARTIFACT_VALIDATION_CONTRACT_ID)),
             schema
@@ -490,28 +490,6 @@ mod tests {
         );
         transaction
             .batch_execute("ROLLBACK TO SAVEPOINT old_binary_claim")
-            .await?;
-
-        transaction.batch_execute("SAVEPOINT legacy_claim").await?;
-        transaction
-            .execute(
-                "UPDATE series_analysis_jobs SET validation_contract_id = NULL WHERE id = $1",
-                &[&JOB_ID],
-            )
-            .await?;
-        let legacy_claimed = transaction
-            .execute(
-                "UPDATE series_analysis_jobs SET status = 'running',\x20\
-                   started_at = clock_timestamp(), lease_owner = 'legacy-worker',\x20\
-                   lease_attempt_id = 'legacy-attempt', lease_fencing_token = 1,\x20\
-                   lease_expires_at = clock_timestamp() + interval '1 minute', attempt_count = 1\x20\
-                 WHERE id = $1 AND status = 'queued'",
-                &[&JOB_ID],
-            )
-            .await?;
-        assert_eq!(legacy_claimed, 1);
-        transaction
-            .batch_execute("ROLLBACK TO SAVEPOINT legacy_claim")
             .await?;
 
         let claimed = transaction

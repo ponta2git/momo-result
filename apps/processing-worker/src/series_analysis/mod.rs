@@ -511,7 +511,7 @@ async fn process_delivery(
                 reason = "unsupported_version",
                 job_algorithm_version = %version.algorithm_version,
                 job_artifact_schema_version = version.artifact_schema_version,
-                job_validation_contract_id = version.validation_contract_id.as_deref().unwrap_or("legacy-null"),
+                job_validation_contract_id = version.validation_contract_id.as_deref().unwrap_or("missing"),
                 supported_algorithm_version = ALGORITHM_VERSION,
                 supported_artifact_schema_version = ARTIFACT_SCHEMA_VERSION,
                 supported_validation_contract_id = ARTIFACT_VALIDATION_CONTRACT_ID,
@@ -537,7 +537,7 @@ async fn process_delivery(
         input_revision = claim.input_revision,
         algorithm_version = %claim.algorithm_version,
         artifact_schema_version = claim.artifact_schema_version,
-        validation_contract_id = claim.validation_contract_id.as_deref().unwrap_or("legacy-null"),
+        validation_contract_id = claim.validation_contract_id.as_deref().unwrap_or("missing"),
         fencing_token = claim.fencing_token,
     );
     async {

@@ -67,7 +67,7 @@ export const ContextView = memo(function ContextView({
       </AnalysisSection>
       <AnalysisSection id="metric-owner" title="オーナー比較">
         <SeriesAnalysisOwnerComparison
-          comparison={"ownerComparison" in response ? response.ownerComparison : undefined}
+          comparison={response.ownerComparison}
           hasMatches={response.scope.matchCount > 0}
           metric={ownerMetric}
           onMetricChange={onOwnerMetricChange}

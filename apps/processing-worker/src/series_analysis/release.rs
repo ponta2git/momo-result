@@ -3,9 +3,7 @@ use std::env;
 use clap::ValueEnum;
 use momo_analysis_core::{
     canonical,
-    contract::{
-        ARTIFACT_SCHEMA_VERSION, ARTIFACT_VALIDATION_CONTRACT_ID, READABLE_PUBLICATION_CONTRACTS,
-    },
+    contract::{ARTIFACT_SCHEMA_VERSION, ARTIFACT_VALIDATION_CONTRACT_ID},
 };
 use serde::Serialize;
 use serde_json::{Value, json};
@@ -19,6 +17,8 @@ use crate::postgres::{PostgresError, connect};
 use super::control::{ALGORITHM_VERSION, CAPABILITY_FRESH_SECONDS};
 
 mod maintenance;
+#[cfg(test)]
+mod promotion_tests;
 pub(crate) use maintenance::{MaintenanceOperation, reconcile};
 
 const RELEASE_TRANSACTION_LIMITS: &str = "SET LOCAL lock_timeout = '5s'; SET LOCAL statement_timeout = '30s'; \
@@ -441,21 +441,11 @@ where
 }
 
 fn reader_schema_versions() -> Value {
-    json!(
-        READABLE_PUBLICATION_CONTRACTS
-            .iter()
-            .map(|pair| pair.0)
-            .collect::<Vec<_>>()
-    )
+    json!([ARTIFACT_SCHEMA_VERSION])
 }
 
 fn reader_validation_contract_ids() -> Value {
-    json!(
-        READABLE_PUBLICATION_CONTRACTS
-            .iter()
-            .map(|pair| pair.1)
-            .collect::<Vec<_>>()
-    )
+    json!([ARTIFACT_VALIDATION_CONTRACT_ID])
 }
 
 async fn reader_capabilities<C>(client: &C) -> Result<CapabilityCounts, tokio_postgres::Error>
@@ -705,9 +695,17 @@ async fn apply_promotion(
             ],
         )
         .await?;
+    // Unsupported pointers must also disappear for titles without matches, which have no
+    // backfill job. Touch only those pointers: a current-format stale result remains readable.
     transaction
         .execute(
-            "UPDATE series_analysis_title_states \
+            include_str!("release/detach_unsupported_pointers.sql"),
+            &[&schema, &ARTIFACT_VALIDATION_CONTRACT_ID, &title_ids],
+        )
+        .await?;
+    transaction
+        .execute(
+            "UPDATE series_analysis_title_states s \
              SET algorithm_version = $1, artifact_schema_version = $2, \
                  validation_contract_id = $3, \
                  pending_work = pending_work OR game_title_id = ANY($5), \
@@ -722,9 +720,8 @@ async fn apply_promotion(
             ],
         )
         .await?;
-    // Close the promotion-to-expansion window for jobs accepted under the previous tuple. The
-    // transitional API remains the rollback floor after promotion; this update only advances work
-    // that was already queued before the atomic desired-state cutover.
+    // Advance already-queued work atomically with the desired tuple; no dispatcher may expand
+    // requests using the superseded generation after this cutover.
     transaction
         .execute(
             "UPDATE series_analysis_jobs j \

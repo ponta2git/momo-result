@@ -1,6 +1,5 @@
 use std::time::Duration;
 
-use momo_analysis_core::contract::ARTIFACT_VALIDATION_CONTRACT_ID;
 use thiserror::Error;
 
 use crate::outbox::{ControlOutcome, PostCommitEffects};
@@ -82,17 +81,6 @@ pub(crate) struct ClaimedJob {
     pub(crate) attempt_id: String,
     pub(crate) attempt_no: i32,
     pub(crate) fencing_token: i64,
-}
-
-impl ClaimedJob {
-    /// Legacy jobs without a requested validator may be recalculated by the current validator,
-    /// while a non-null request is an exact contract fence.
-    #[must_use]
-    pub(crate) fn accepts_current_validation_contract(&self) -> bool {
-        self.validation_contract_id
-            .as_deref()
-            .is_none_or(|expected| expected == ARTIFACT_VALIDATION_CONTRACT_ID)
-    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

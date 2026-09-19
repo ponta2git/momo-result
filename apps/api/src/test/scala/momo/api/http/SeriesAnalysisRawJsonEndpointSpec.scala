@@ -12,9 +12,9 @@ import momo.api.endpoints.{ProblemDetails, SeriesAnalysisEndpoints}
 
 final class SeriesAnalysisRawJsonEndpointSpec extends CatsEffectSuite:
   test("artifact endpoint writes the bounded JSON bytes unchanged"):
-    val expected = """{"schemaVersion":2,"displayName":"総合"}"""
+    val expected = """{"schemaVersion":5,"displayName":"総合"}"""
       .getBytes(StandardCharsets.UTF_8)
-    val endpoint = SeriesAnalysisEndpoints.aggregate
+    val endpoint = SeriesAnalysisEndpoints.aggregateV4
       .serverSecurityLogic[Unit, IO](_ =>
         IO.pure(Right[ProblemDetails.ProblemResponse, Unit](()))
       )
@@ -22,7 +22,7 @@ final class SeriesAnalysisRawJsonEndpointSpec extends CatsEffectSuite:
     val app = Http4sServerInterpreter[IO]().toRoutes(endpoint).orNotFound
     val request = Request[IO](
       Method.GET,
-      uri"/api/analytics/series-comparison/v2/aggregate?gameTitleId=title-wire&artifactId=artifact-wire",
+      uri"/api/analytics/series-comparison/v4/aggregate?gameTitleId=title-wire&artifactId=artifact-wire",
     )
 
     for

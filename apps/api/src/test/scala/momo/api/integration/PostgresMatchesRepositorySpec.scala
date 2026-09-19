@@ -167,9 +167,9 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
       _ <- seedSecondTitle
       _ <- sql"""
         UPDATE series_analysis_title_states
-        SET algorithm_version = 'series-analysis-v3',
-            artifact_schema_version = 2,
-            validation_contract_id = 'series-analysis-artifact-v2-full-validation-v1'
+        SET algorithm_version = 'series-analysis-v5',
+            artifact_schema_version = 4,
+            validation_contract_id = 'series-analysis-artifact-v4-full-validation-v1'
         WHERE game_title_id IN ($gameTitleId, $secondGameTitleId)
       """.update.run.transact(transactor)
       _ <- createMatch(rec)
@@ -189,8 +189,8 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
           (SELECT COUNT(*)::int FROM series_analysis_job_requests),
           (SELECT COUNT(*)::int FROM series_analysis_queue_outbox),
           (SELECT COUNT(*)::int FROM matches WHERE id = ${rec.id}),
-          (SELECT bool_and(validation_contract_id = 'series-analysis-artifact-v2-full-validation-v1') FROM series_analysis_jobs),
-          (SELECT bool_and(validation_contract_id = 'series-analysis-artifact-v2-full-validation-v1') FROM series_analysis_job_requests)
+          (SELECT bool_and(validation_contract_id = 'series-analysis-artifact-v4-full-validation-v1') FROM series_analysis_jobs),
+          (SELECT bool_and(validation_contract_id = 'series-analysis-artifact-v4-full-validation-v1') FROM series_analysis_job_requests)
       """.query[(Int, Int, Int, Int, Boolean, Boolean)].unique.transact(transactor)
     yield
       assertEquals(deleted, true)
@@ -198,6 +198,41 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite:
       assertEquals(titleRevisions.toMap.get(gameTitleId), Some(2L))
       assertEquals(titleRevisions.toMap.get(secondGameTitleId), Some(2L))
       assertEquals(counts, (2, 4, 4, 0, true, true))
+
+  List(
+    (2, Some("series-analysis-artifact-v2-full-validation-v1")),
+    (3, Some("series-analysis-artifact-v3-full-validation-v1")),
+    (4, None),
+    (4, Some("unsupported-validator")),
+  ).foreach { case (version, contract) =>
+    test(
+      s"unsupported analysis contract rolls back confirmation and revision: $version / $contract"
+    ):
+      val record = sampleMatch("unsupported-analysis", 1)
+      for
+        _ <- seedPrereqs
+        _ <- sql"""
+          UPDATE series_analysis_title_states
+          SET artifact_schema_version = $version, validation_contract_id = $contract
+          WHERE game_title_id = $gameTitleId
+        """.update.run.transact(transactor)
+        result <- confirmations.confirm(record, None, now)
+        revision <-
+          sql"SELECT input_revision FROM series_analysis_title_states WHERE game_title_id = $gameTitleId"
+            .query[Long].unique.transact(transactor)
+        counts <- sql"""
+          SELECT (SELECT COUNT(*)::int FROM matches),
+                 (SELECT COUNT(*)::int FROM match_players),
+                 (SELECT COUNT(*)::int FROM match_incidents),
+                 (SELECT COUNT(*)::int FROM series_analysis_jobs),
+                 (SELECT COUNT(*)::int FROM series_analysis_job_requests),
+                 (SELECT COUNT(*)::int FROM series_analysis_queue_outbox)
+        """.query[(Int, Int, Int, Int, Int, Int)].unique.transact(transactor)
+      yield
+        assertEquals(result, Left(AppError.AnalysisStateUnavailable()))
+        assertEquals(revision, 0L)
+        assertEquals(counts, (0, 0, 0, 0, 0, 0))
+  }
 
   test("listByHeldEvent orders by match_no_in_event"):
     for

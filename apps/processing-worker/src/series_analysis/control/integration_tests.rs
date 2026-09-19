@@ -177,7 +177,7 @@ async fn real_postgres_keeps_staging_separate_from_fenced_publication() -> Smoke
         old_directory.path(),
     )
     .await?;
-    seed_unattested_legacy_current(&mut secondary, &old_manifest).await?;
+    seed_unattested_current(&mut secondary, &old_manifest).await?;
     assert_artifact_pointers(&secondary, Some(&old_manifest.manifest().artifact_id), None).await?;
     expire_old_lease_and_prepare_retry(&secondary).await?;
     let transaction = primary.transaction().await?;
@@ -1001,10 +1001,7 @@ async fn assert_validation_contract(client: &Client, artifact: &ValidatedArtifac
     Ok(())
 }
 
-async fn seed_unattested_legacy_current(
-    client: &mut Client,
-    artifact: &ValidatedArtifact,
-) -> SmokeResult {
+async fn seed_unattested_current(client: &mut Client, artifact: &ValidatedArtifact) -> SmokeResult {
     let artifact_id = &artifact.manifest().artifact_id;
     let transaction = client.transaction().await?;
     // The isolated smoke must represent a pointer that predates the attestation migration. New

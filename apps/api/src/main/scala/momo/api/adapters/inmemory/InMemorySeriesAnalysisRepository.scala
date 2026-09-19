@@ -6,6 +6,7 @@ import java.util.UUID
 import cats.effect.{Ref, Sync}
 import cats.syntax.all.*
 
+import momo.api.contracts.seriesanalysis.SeriesAnalysisArtifactContract
 import momo.api.domain.*
 import momo.api.domain.ids.{AccountId, GameTitleId}
 import momo.api.errors.AppError
@@ -34,7 +35,11 @@ final class InMemorySeriesAnalysisRepository[F[_]: Sync] private (
     case Some(_) => calculations.get.map(values =>
         SeriesAnalysisStatus(
           gameTitleId,
-          SeriesAnalysisDesiredVersion(0, "series-analysis-v5", 3),
+          SeriesAnalysisDesiredVersion(
+            0,
+            "series-analysis-v5",
+            SeriesAnalysisArtifactContract.ArtifactSchemaVersion
+          ),
           "unavailable",
           None,
           values.get(gameTitleId),
@@ -70,7 +75,11 @@ final class InMemorySeriesAnalysisRepository[F[_]: Sync] private (
                       option.displayName,
                       SeriesAnalysisStatus(
                         id,
-                        SeriesAnalysisDesiredVersion(0, "series-analysis-v5", 3),
+                        SeriesAnalysisDesiredVersion(
+                          0,
+                          "series-analysis-v5",
+                          SeriesAnalysisArtifactContract.ArtifactSchemaVersion
+                        ),
                         "unavailable",
                         None,
                         calculationsValue.get(id),

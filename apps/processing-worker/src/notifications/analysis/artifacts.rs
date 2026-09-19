@@ -3,7 +3,10 @@
 use std::{collections::BTreeMap, sync::Arc};
 
 use futures_util::TryStreamExt;
-use momo_analysis_core::model::MAXIMUM_PLAYER_MATCH_ROWS;
+use momo_analysis_core::{
+    contract::{ARTIFACT_SCHEMA_VERSION, ARTIFACT_VALIDATION_CONTRACT_ID},
+    model::MAXIMUM_PLAYER_MATCH_ROWS,
+};
 use tokio_postgres::{Client, IsolationLevel, Transaction, types::Type};
 
 use super::{
@@ -79,10 +82,7 @@ async fn read(
     if [&identity.artifact_id, &identity.algorithm_version]
         .into_iter()
         .any(|id| !valid_id(id))
-        || identity
-            .validation_contract_id
-            .as_ref()
-            .is_some_and(|id| !valid_id(id))
+        || !current_publication(&identity)
     {
         return Err(SkipReason::InvalidSnapshot);
     }
@@ -185,6 +185,11 @@ async fn match_identities(
         }
     }
     Ok(matches)
+}
+
+fn current_publication(identity: &AnalysisIdentity) -> bool {
+    u32::try_from(identity.artifact_schema_version) == Ok(ARTIFACT_SCHEMA_VERSION)
+        && identity.validation_contract_id.as_deref() == Some(ARTIFACT_VALIDATION_CONTRACT_ID)
 }
 
 const fn valid_id(id: &str) -> bool {

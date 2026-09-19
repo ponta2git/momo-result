@@ -9,6 +9,7 @@ import doobie.postgres.implicits.*
 
 import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.adapters.postgres.PostgresSeriesAnalysisRequestSupport.*
+import momo.api.contracts.seriesanalysis.SeriesAnalysisArtifactContract
 import momo.api.domain.ids.{AccountId, GameTitleId}
 import momo.api.domain.{SeriesAnalysisAcceptedTarget, SeriesAnalysisRecalculationAccepted}
 import momo.api.errors.AppError
@@ -87,6 +88,14 @@ private[postgres] object PostgresSeriesAnalysisTitleRequestOps:
       result <- desired match
         case None => AppError.NotFound("game title", gameTitleId.value)
             .asLeft[SeriesAnalysisRecalculationAccepted].pure[ConnectionIO]
+        case Some(version)
+            if !SeriesAnalysisArtifactContract.supports(
+              version.artifactSchemaVersion,
+              version.validationContractId
+            ) =>
+          AppError.AnalysisStateUnavailable().asLeft[
+            SeriesAnalysisRecalculationAccepted
+          ].pure[ConnectionIO]
         case Some(version) => createForDesired(
             gameTitleId,
             requestedBy,

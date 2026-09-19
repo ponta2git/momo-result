@@ -19,8 +19,8 @@ validation_contract_id="$(jq -er '
   .validationContractId |
   select(type == "string" and test("^[a-z0-9][a-z0-9._-]{0,127}$"))
 ' "${publication_contract}")"
-reader_schemas="$(jq -ce '[.readableContracts[].artifactSchemaVersion]' "${publication_contract}")"
-reader_contracts="$(jq -ce '[.readableContracts[].validationContractId]' "${publication_contract}")"
+reader_schemas="$(jq -ce '[.artifactSchemaVersion]' "${publication_contract}")"
+reader_contracts="$(jq -ce '[.validationContractId]' "${publication_contract}")"
 release_worker_id="worker-release-smoke"
 release_capability_id="${release_worker_id}@${algorithm_version}@${artifact_schema_version}@${validation_contract_id}"
 
@@ -236,8 +236,7 @@ if run_release_command release-promote \
   exit 1
 fi
 
-# A fresh reader from the preceding release can read legacy formats 2/3 but must
-# prevent promotion until it also advertises the new writer's format.
+# A reader advertising only obsolete formats must block promotion.
 psql_ci -c "
   UPDATE series_analysis_reader_capabilities
   SET artifact_schema_versions = '[2,3]'::jsonb,

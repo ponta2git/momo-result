@@ -65,7 +65,7 @@ final class SeriesAnalysisHttpSpec extends MomoCatsEffectSuite with HttpAppTestF
 
   app.test("artifact endpoint never falls back to synchronous analysis") { httpApp =>
     val uri = Uri.unsafeFromString(
-      s"/api/analytics/series-comparison/v2/aggregate?gameTitleId=${titleId
+      s"/api/analytics/series-comparison/v4/aggregate?gameTitleId=${titleId
           .value}&artifactId=artifact-missing"
     )
     httpApp.run(readGet(uri)).flatMap(response =>

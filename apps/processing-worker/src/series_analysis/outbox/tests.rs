@@ -445,15 +445,15 @@ async fn assert_campaign_expansion_decision_table(
               ('analysis-campaign-smoke-deleted', 'campaign deleted', 'momotetsu2', 9905);
 
             UPDATE series_analysis_title_states
-            SET algorithm_version = 'series-analysis-v3',
-                artifact_schema_version = 2,
-                validation_contract_id = 'series-analysis-artifact-v2-full-validation-v1'
+            SET algorithm_version = 'series-analysis-v5',
+                artifact_schema_version = 4,
+                validation_contract_id = 'series-analysis-artifact-v4-full-validation-v1'
             WHERE game_title_id LIKE 'analysis-campaign-smoke-%';
 
             UPDATE series_analysis_title_states
             SET input_revision = 9,
                 algorithm_version = 'series-analysis-v2',
-                artifact_schema_version = 2
+                artifact_schema_version = 4
             WHERE game_title_id = 'analysis-campaign-smoke-queued';
 
             INSERT INTO series_analysis_operation_requests (
@@ -469,7 +469,7 @@ async fn assert_campaign_expansion_decision_table(
               artifact_schema_version, validation_contract_id, status, target_count, accepted_at
             )
             SELECT
-              'analysis-campaign-smoke', id, 'manual', 'mixed', 2, NULL,
+              'analysis-campaign-smoke', id, 'manual', 'mixed', 4, NULL,
               'expanding', 5, accepted_at
             FROM series_analysis_operation_requests
             WHERE id = 'analysis-campaign-smoke-operation';
@@ -502,22 +502,22 @@ async fn assert_campaign_expansion_decision_table(
             )
             SELECT
               'analysis-campaign-smoke-before-job', 'analysis-campaign-smoke-before',
-              0, 'series-analysis-v3', 2,
-              'series-analysis-artifact-v2-full-validation-v1', 'running', 'match_mutation',
+              0, 'series-analysis-v5', 4,
+              'series-analysis-artifact-v4-full-validation-v1', 'running', 'match_mutation',
               accepted_at - interval '1 second', accepted_at - interval '1 second',
               accepted_at - interval '1 second', 'worker-before', 'attempt-before', 1,
               clock_timestamp() + interval '10 minutes',
-              'series-analysis-artifact-v2-full-validation-v1'
+              'series-analysis-artifact-v4-full-validation-v1'
             FROM series_analysis_campaigns WHERE id = 'analysis-campaign-smoke'
             UNION ALL
             SELECT
               'analysis-campaign-smoke-after-job', 'analysis-campaign-smoke-after',
-              0, 'series-analysis-v3', 2,
-              'series-analysis-artifact-v2-full-validation-v1', 'running', 'match_mutation',
+              0, 'series-analysis-v5', 4,
+              'series-analysis-artifact-v4-full-validation-v1', 'running', 'match_mutation',
               accepted_at + interval '1 second', accepted_at + interval '1 second',
               accepted_at + interval '1 second', 'worker-after', 'attempt-after', 1,
               clock_timestamp() + interval '10 minutes',
-              'series-analysis-artifact-v2-full-validation-v1'
+              'series-analysis-artifact-v4-full-validation-v1'
             FROM series_analysis_campaigns WHERE id = 'analysis-campaign-smoke';
 
             DELETE FROM game_titles WHERE id = 'analysis-campaign-smoke-deleted';
@@ -645,7 +645,7 @@ async fn assert_campaign_expansion_decision_table(
         projection
             .try_get::<_, Option<String>>("queued_validation_contract")?
             .as_deref(),
-        Some("series-analysis-artifact-v2-full-validation-v1")
+        Some("series-analysis-artifact-v4-full-validation-v1")
     );
     assert!(projection.try_get::<_, bool>("request_tuple_propagated")?);
     assert_eq!(projection.try_get::<_, i64>("outbox_count")?, 2);
@@ -659,10 +659,10 @@ fn campaign_target_for(game_title_id: &str) -> CampaignTarget {
         campaign_id: String::from(CAMPAIGN_ID),
         game_title_id: String::from(game_title_id),
         input_revision: 0,
-        algorithm_version: String::from("series-analysis-v3"),
-        artifact_schema_version: 2,
+        algorithm_version: String::from("series-analysis-v5"),
+        artifact_schema_version: 4,
         validation_contract_id: Some(String::from(
-            "series-analysis-artifact-v2-full-validation-v1",
+            "series-analysis-artifact-v4-full-validation-v1",
         )),
         accepted_at: SystemTime::UNIX_EPOCH,
         operation_id: String::from(CAMPAIGN_OPERATION_ID),

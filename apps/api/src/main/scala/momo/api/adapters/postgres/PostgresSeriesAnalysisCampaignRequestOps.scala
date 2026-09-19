@@ -12,6 +12,7 @@ import momo.api.adapters.postgres.PostgresSeriesAnalysisRequestSupport.{
   existingOperation,
   OperationRow
 }
+import momo.api.contracts.seriesanalysis.SeriesAnalysisArtifactContract
 import momo.api.domain.ids.AccountId
 import momo.api.domain.{SeriesAnalysisAcceptedCampaign, SeriesAnalysisRecalculationAccepted}
 import momo.api.errors.AppError
@@ -59,11 +60,12 @@ private[postgres] object PostgresSeriesAnalysisCampaignRequestOps:
       SELECT COUNT(*)::int AS target_count,
              CASE WHEN COUNT(DISTINCT algorithm_version) = 1
                   THEN MIN(algorithm_version) ELSE 'mixed' END AS algorithm_version,
-             MAX(artifact_schema_version) AS artifact_schema_version,
-             CASE WHEN COUNT(validation_contract_id) = COUNT(*)
-                       AND COUNT(DISTINCT validation_contract_id) = 1
-                  THEN MIN(validation_contract_id) END AS validation_contract_id
-      FROM targets HAVING COUNT(*) > 0
+             COALESCE(BOOL_AND(
+               artifact_schema_version = ${SeriesAnalysisArtifactContract.ArtifactSchemaVersion}
+               AND validation_contract_id IS NOT DISTINCT FROM
+                 ${SeriesAnalysisArtifactContract.ValidationContractId}
+             ), false) AS supported
+      FROM targets
     ), operation AS (
       INSERT INTO series_analysis_operation_requests (
         id, scope, requested_by_account_id, idempotency_key_hash,
@@ -71,7 +73,7 @@ private[postgres] object PostgresSeriesAnalysisCampaignRequestOps:
       )
       SELECT $operationId, 'all_titles', $requestedBy, $idempotencyKeyHash,
              'all_titles', 'running', target_count, now()
-      FROM summary
+      FROM summary WHERE target_count > 0 AND supported
       RETURNING id, target_count, accepted_at
     ), campaign AS (
       INSERT INTO series_analysis_campaigns (
@@ -80,7 +82,8 @@ private[postgres] object PostgresSeriesAnalysisCampaignRequestOps:
         status, target_count, accepted_at
       )
       SELECT $campaignId, operation.id, 'manual', summary.algorithm_version,
-             summary.artifact_schema_version, summary.validation_contract_id,
+             ${SeriesAnalysisArtifactContract.ArtifactSchemaVersion},
+             ${SeriesAnalysisArtifactContract.ValidationContractId},
              'expanding', operation.target_count, operation.accepted_at
       FROM operation CROSS JOIN summary
       RETURNING id, accepted_at
@@ -94,16 +97,18 @@ private[postgres] object PostgresSeriesAnalysisCampaignRequestOps:
              targets.validation_contract_id, 'pending', NULL, campaign.accepted_at
       FROM campaign CROSS JOIN targets
     )
-    SELECT id, accepted_at, target_count FROM operation
-  """.query[(String, Instant, Int)].option.map {
-    case None => AppError.AnalysisNoEligibleTitles().asLeft
-    case Some((id, acceptedAt, targetCount)) => SeriesAnalysisRecalculationAccepted(
+    SELECT summary.target_count, operation.id, operation.accepted_at
+    FROM summary LEFT JOIN operation ON true
+  """.query[(Int, Option[String], Option[Instant])].unique.map {
+    case (0, _, _) => AppError.AnalysisNoEligibleTitles().asLeft
+    case (targetCount, Some(id), Some(acceptedAt)) => SeriesAnalysisRecalculationAccepted(
         id,
         acceptedAt,
         targetCount,
         Some(SeriesAnalysisAcceptedCampaign(campaignId, "expanding")),
         None,
       ).asRight
+    case _ => AppError.AnalysisStateUnavailable().asLeft
   }
 
 end PostgresSeriesAnalysisCampaignRequestOps

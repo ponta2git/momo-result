@@ -10,8 +10,7 @@ import { SeriesAnalysisNavigation } from "@/features/seriesComparison/navigation
 import { SeriesAnalysisContent } from "@/features/seriesComparison/page/SeriesAnalysisContent";
 import type { SeriesComparisonAggregate } from "@/shared/api/seriesAnalysis";
 import {
-  makeCurrentSeriesAnalysisAggregate,
-  makeCurrentSeriesAnalysisReview,
+  makeFourPlayerSeriesAnalysisReview,
   makeOwnerComparisonAggregate,
   makeSeriesAnalysisAggregate,
 } from "@/test/msw/seriesAnalysisFixtures";
@@ -38,37 +37,27 @@ function analysisBundle(
 }
 
 describe("SeriesAnalysisContent", () => {
-  it.each([
-    ["legacy", makeOwnerComparisonAggregate],
-    ["current", makeCurrentSeriesAnalysisAggregate],
-  ] as const)(
-    "keeps owner comparison and the metric guide usable with a %s artifact",
-    async (_generation, makeAggregate) => {
-      const user = userEvent.setup();
-      render(
-        <QueryClientProvider client={createTestQueryClient()}>
-          <MemoryRouter>
-            <SeriesAnalysisContent
-              bundle={analysisBundle(makeAggregate(), "context")}
-              onArtifactExpired={vi.fn()}
-              onClearFocusedMatch={vi.fn()}
-              onFocusMatch={vi.fn()}
-              onViewChange={vi.fn()}
-            />
-          </MemoryRouter>
-        </QueryClientProvider>,
-      );
-      expect(
-        await screen.findByRole("table", { name: "オーナー別の平均順位" }),
-      ).toBeInTheDocument();
-      await user.click(screen.getByRole("button", { name: "指標の読み方" }));
-      expect(screen.getByRole("dialog", { name: "指標の読み方" })).toHaveTextContent(
-        "平均物件収益",
-      );
-    },
-  );
+  it("keeps owner comparison and the metric guide usable", async () => {
+    const user = userEvent.setup();
+    render(
+      <QueryClientProvider client={createTestQueryClient()}>
+        <MemoryRouter>
+          <SeriesAnalysisContent
+            bundle={analysisBundle(makeOwnerComparisonAggregate(), "context")}
+            onArtifactExpired={vi.fn()}
+            onClearFocusedMatch={vi.fn()}
+            onFocusMatch={vi.fn()}
+            onViewChange={vi.fn()}
+          />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    expect(await screen.findByRole("table", { name: "オーナー別の平均順位" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "指標の読み方" }));
+    expect(screen.getByRole("dialog", { name: "指標の読み方" })).toHaveTextContent("平均物件収益");
+  });
 
-  it("links new review artifacts without presentation metadata to local evidence sections", () => {
+  it("links review artifacts without presentation metadata to local evidence sections", () => {
     render(
       <QueryClientProvider client={createTestQueryClient()}>
         <MemoryRouter initialEntries={["/analytics/series?gameTitleId=gt_momotetsu_2"]}>
@@ -76,7 +65,7 @@ describe("SeriesAnalysisContent", () => {
             bundle={{
               kind: "review",
               view: "review",
-              review: makeCurrentSeriesAnalysisReview(),
+              review: makeFourPlayerSeriesAnalysisReview(),
               matchContext: undefined,
             }}
             onArtifactExpired={vi.fn()}

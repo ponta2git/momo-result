@@ -403,7 +403,7 @@
               "x-momo-maxUtf8Bytes": 4096
             },
             "artifactSchemaVersion": {
-              "enum": [2, 3, 4],
+              "const": 4,
               "type": "integer"
             },
             "gameTitleId": {
@@ -472,7 +472,7 @@
               "x-momo-maxUtf8Bytes": 4096
             },
             "artifactSchemaVersion": {
-              "enum": [2, 3, 4],
+              "const": 4,
               "type": "integer"
             },
             "gameTitleId": {

@@ -106,12 +106,6 @@ object AppError:
     val code = "ANALYSIS_NO_ELIGIBLE_TITLES"
     val title = "No Eligible Titles"
 
-  final case class AnalysisClientUpgradeRequired(
-      detail: String = "Reload this page to use the current analysis API."
-  ) extends AppError:
-    val code = "ANALYSIS_CLIENT_UPGRADE_REQUIRED"
-    val title = "Client Upgrade Required"
-
   final case class DependencyFailed(detail: String) extends AppError:
     val code = "DEPENDENCY_FAILED"
     val title = "Dependency Failed"

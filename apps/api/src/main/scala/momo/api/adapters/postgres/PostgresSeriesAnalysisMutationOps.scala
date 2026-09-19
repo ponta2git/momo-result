@@ -6,7 +6,9 @@ import doobie.ConnectionIO
 import doobie.implicits.*
 
 import momo.api.adapters.postgres.PostgresMeta.given
+import momo.api.contracts.seriesanalysis.SeriesAnalysisArtifactContract
 import momo.api.domain.ids.GameTitleId
+import momo.api.errors.{AppError, AppException}
 
 /**
  * Adds a durable series-analysis intent to the same transaction as a confirmed-match mutation.
@@ -47,6 +49,14 @@ private[postgres] object PostgresSeriesAnalysisMutationOps:
             )
           )
       }
+      _ <-
+        if SeriesAnalysisArtifactContract.supports(
+            desired.artifactSchemaVersion,
+            desired.validationContractId
+          )
+        then ().pure[ConnectionIO]
+        else
+          MonadThrow[ConnectionIO].raiseError(new AppException(AppError.AnalysisStateUnavailable()))
       active <- sql"""
         SELECT id, status
         FROM series_analysis_jobs
@@ -60,7 +70,7 @@ private[postgres] object PostgresSeriesAnalysisMutationOps:
         desired.inputRevision.toString,
         desired.algorithmVersion,
         desired.artifactSchemaVersion.toString,
-        validationContractIdentity(desired.validationContractId),
+        SeriesAnalysisArtifactContract.ValidationContractId,
       )
       jobId = active.fold(derivedJobId)(_.id)
       requestId = stableId(
@@ -69,7 +79,7 @@ private[postgres] object PostgresSeriesAnalysisMutationOps:
         desired.inputRevision.toString,
         desired.algorithmVersion,
         desired.artifactSchemaVersion.toString,
-        validationContractIdentity(desired.validationContractId),
+        SeriesAnalysisArtifactContract.ValidationContractId,
       )
       _ <- active match
         case None => sql"""
@@ -146,10 +156,6 @@ private[postgres] object PostgresSeriesAnalysisMutationOps:
   private def stableId(prefix: String, parts: String*): String =
     val source = parts.mkString("\u001f")
     s"$prefix-${java.util.UUID.nameUUIDFromBytes(source.getBytes(java.nio.charset.StandardCharsets.UTF_8))}"
-
-  private[postgres] def validationContractIdentity(value: Option[String]): String = value match
-    case None => "none"
-    case Some(contractId) => s"some:$contractId"
 
   private def requireOne(table: String, id: String, operation: String)(affected: Int)
       : ConnectionIO[Unit] =

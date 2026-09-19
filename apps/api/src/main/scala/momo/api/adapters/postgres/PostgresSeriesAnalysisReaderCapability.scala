@@ -11,6 +11,7 @@ import doobie.*
 import doobie.implicits.*
 import org.typelevel.log4cats.LoggerFactory
 
+import momo.api.contracts.seriesanalysis.SeriesAnalysisArtifactContract
 import momo.api.logging.SafeLog
 
 private[api] object PostgresSeriesAnalysisReaderCapability:
@@ -40,18 +41,12 @@ private[api] object PostgresSeriesAnalysisReaderCapability:
       .foreverM
 
   private def register[F[_]: Async](readerId: String, transactor: Transactor[F]): F[Unit] =
-    val schemas = SeriesAnalysisArtifactSupport.ReadableContracts.map(_._1).mkString(
-      "[",
-      ",",
-      "]",
-    )
-    val validationContracts = io.circe.Json
-      .fromValues(
-        SeriesAnalysisArtifactSupport.ReadableContracts.map(_._2).map(
-          io.circe.Json.fromString
-        )
-      )
-      .noSpaces
+    val schemas = io.circe.Json.arr(io.circe.Json.fromInt(
+      SeriesAnalysisArtifactContract.ArtifactSchemaVersion
+    )).noSpaces
+    val validationContracts = io.circe.Json.arr(io.circe.Json.fromString(
+      SeriesAnalysisArtifactContract.ValidationContractId
+    )).noSpaces
     sql"""
       INSERT INTO series_analysis_reader_capabilities (
         reader_id, artifact_schema_versions, validation_contract_ids,

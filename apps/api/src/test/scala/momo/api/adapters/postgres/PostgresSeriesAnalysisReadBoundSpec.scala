@@ -119,7 +119,7 @@ final class PostgresSeriesAnalysisReadBoundSpec extends CatsEffectSuite with Jso
 
   private def exactBoundedFixture(): (Array[Byte], SeriesAnalysisReadConfig, Int) =
     val payload = Files.readAllBytes(
-      repositoryFile("docs/schemas/fixtures/series-analysis/aggregate-payload-v3.json")
+      repositoryFile("docs/schemas/fixtures/series-analysis/aggregate-payload-v5.json")
     )
     val parsed = parse(new String(payload, StandardCharsets.UTF_8))
       .fold(error => fail(s"invalid owner aggregate fixture: $error"), identity)
@@ -158,8 +158,8 @@ final class PostgresSeriesAnalysisReadBoundSpec extends CatsEffectSuite with Jso
     artifactGameTitleId = gameTitleId,
     inputRevision = 0,
     algorithmVersion = "series-analysis-v1",
-    artifactSchemaVersion = 2,
-    validationContractId = Some("series-analysis-artifact-v2-full-validation-v1"),
+    artifactSchemaVersion = 4,
+    validationContractId = Some("series-analysis-artifact-v4-full-validation-v1"),
     publishedAt = Instant.parse("2026-08-09T00:00:00Z"),
     scopeKind = Some(scope.kind),
     payload = Some(payload),

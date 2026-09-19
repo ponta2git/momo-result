@@ -68,49 +68,28 @@ Rustの計算・full semantic validator・schema exportを一緒に変更する�
 
 保存入力による分類・数式の正しさは、要求仕様の手計算例とDB入力を通す証拠で確認する。APIはattestationのexact pair、生成schema、checksum・上限・要求identityを検証し、owner集計を再計算しない。Webも平均・率・品質・記録のあるオーナー数を計算し直さない。
 
-## 4. HTTP・生成型・既存consumer
+## 4. HTTP・生成型・consumer
 
-新しいaggregate取得経路は `GET /api/analytics/series-comparison/v3/aggregate` とする。認証、読取り権限、rate limit、cache方針、scopeとartifact pinning、期限切れ時の回復は既存aggregateと同じにする。
+aggregateは `GET /api/analytics/series-comparison/v4/aggregate`、reviewは `/api/analytics/series-comparison/v3/review` を使う。options、status、drilldown、match-contextは既存のv2経路を使う。各resourceは現行の成果物契約だけを受理し、廃止した経路や旧世代のdecoderを残さない。
 
-旧Webのdecoderは必須・追加フィールドを厳密に検証するため、既存v2へ新bodyを無条件追加する案は採らない。新経路はaggregateだけに限定し、変更のない取得経路を一括でv3へ改番しない。
+Rustのresource schemaとTapirのHTTP envelope・metadata projectionからOpenAPIとWeb型・decoderを生成する。APIは起動時に現行validatorを初期化し、artifactのschema・validation contract・resource kind・要求identityを検証する。payloadの自己申告versionだけで検証器を選ばず、無関係な世代とpayloadの組合せを拒否する。
 
-| 経路・consumer | 確定する扱い |
-| --- | --- |
-| 新 `/v3/aggregate` | 新aggregate v4と、移行中の旧aggregate v3のdiscriminated unionを返す。判別子は既存の `schemaVersion`。双方とも保存済みの同じ成果物を返し、欠けたowner値を合成しない |
-| 既存 `/v2/aggregate` | 旧aggregate v3を読める間は従来応答。選択された新成果物には既存のHTTP 426 / `ANALYSIS_CLIENT_UPGRADE_REQUIRED` を返し、旧Webの再読み込み導線へつなぐ。新bodyを旧schema名で返さない |
-| `/v2/options`, `status`, `review`, `drilldown`, `match-context` | URLとpayloadのschemaVersionを維持する。新artifact世代のmetadata・attestationを扱えるようreaderを更新する |
-| APIのshape検証 | 認めたartifact世代とresource kindから該当schemaを選ぶ。旧aggregate v3と新v4のvalidatorを起動時に初期化し、無関係な世代とpayloadの組合せを拒否する |
-| OpenAPI・Web型 | Rustのraw schemaとTapirのHTTP envelope・metadata projectionから生成する。新aggregateのunionも生成経路に載せる。Web facadeはversionに依存しない名前にして生成型を参照する |
-| 通知・review・既存分析 | 親scopeの既存指標は維持する。owner向け通知・reviewを追加しない。世代をまたぐ通知差分などは既存の比較可否規則に従い、旧成果物との差を無理に生成しない |
+API入力へ `ownerMemberId` や選択指標を加えない。全指標は一度のaggregate読取りに含む。選択指標をresource query keyやscope signatureへ加えず、切替だけでは通信・再計算・取得中の遮蔽を発生させない。
 
-両世代対応は次の経路を一組として変更する。validatorの追加だけでreaderの対応完了としない。
+resource取得は共通のread usecase・repository・decode admissionを使い、endpointごとに別の同時実行枠を作らない。rate limit、短いDB transaction、取得からbounded renderまでのpermit、timeout・失敗・cancel後の解放を維持する。requestごとのschema compileや応答JSONの再parseは行わない。
 
-| 接続点 | 守る条件 |
-| --- | --- |
-| `SeriesAnalysisArtifactSupport` とcapability登録 | Rust所有の旧・新exact pairを一つのallowlistから参照する。schema集合とID集合を別々に満たすだけでは許可しない |
-| statusのdesired / 表示可能artifact判定 | desiredが新契約でも、旧契約の成功artifactをstaleとして読める。未対応・不正状態を0件に置き換えない |
-| `PostgresSeriesAnalysisChunkOps` のSQL | current / previousとの対応・上限付きpayload取得を同じread snapshotで行い、旧・新exact pairのどちらも選べる。定数だけを新世代へ置換して旧artifactをexpiredにしない |
-| raw payload検証 | 選ばれたartifactのschema・検証ID・resource kindでvalidatorを決める。payloadの自己申告 `schemaVersion` だけではvalidatorを選ばない |
-| HTTP応答とWeb decoder | v2 / v3で別のnamed responseと生成validatorを使う。認証・要求identityと成果物契約を検証した上で、v2が扱えない新世代には426を返す。新payloadを旧decoderへ渡して一般エラーにしない |
-| schema exportとbuild input | 旧raw schema・旧publication pairもRust所有の明示的な互換契約として維持し、新契約とともに生成・freshness確認・APIへの同梱対象にする。Web生成物や一時的な旧ファイルの残存に依存しない |
-
-API入力へ `ownerMemberId` や選択指標を加えない。新経路の全指標は一度のaggregate読取りに含む。選択指標をresource query keyやscope signatureへ加えず、切替だけでは通信・再計算・取得中の遮蔽を発生させない。
-
-v2/v3は同じread usecase・repository instance・decode admissionを共有し、endpointごとに別の同時実行枠を作らない。既存のrate limit分類、短いDB transaction、取得からbounded renderまでのpermit、timeout・失敗・cancel後の解放を維持する。validatorは起動時に初期化し、pairに対応する一つを選ぶ。requestごとのschema compile、旧・新validatorの順番の試行、426判定のためのresponse JSON再parseは追加しない。426の判定には検証済みchunkのartifact metadataを使い、raw本文は既存の一度のpipelineで検証する。
-
-一方、aggregate応答のshape変更はcache identityへ反映する。既存 `seriesAnalysisKeys.artifactRoot()` の配下でaggregate keyに新wire契約の区別を加え、旧aggregate型と新union型を同じkeyへ置かない。resource取得・失効回復・明示更新・mutation後の無効化で同じkey factoryを使い、変更のないreview等を一律に改番しない。
+cache identityはruntime data shapeを表す。resource取得・失効回復・明示更新・mutation後の無効化で同じkey factoryを使う。aggregate、review、drilldownは同一artifactへpinし、異なる成果物の値を混ぜない。
 
 ### 取得状態とオーナー節
 
 | 状態 | 表示・操作 |
 | --- | --- |
 | 表示できる成果物がない、または親scopeが0戦 | ページ共通のloading / error / EmptyStateを優先する。オーナー節の空表・別の取得操作は作らない |
-| 親scopeに試合がある旧aggregate v3 | 既存分析と節見出しを表示する。指標selectはURLの現在値を保持してdisabledにし、「オーナー比較は分析結果の更新後に表示されます。」をその理由として対応づける。ownerの表や0値は合成しない |
-| 新aggregate v4、記録のあるオーナーが1人 | 4列と値を表示し、「この範囲で記録があるオーナーは1人です。」を短く添える。プレーヤーが不足しているとは表現しない |
-| 新aggregate v4、記録のあるオーナーが2人以上 | 通常の4×4比較。対象0戦の列も維持する |
-| 更新中・失敗時に旧表示を維持できる | 共通の状態表示と「表示を更新」に従い、実際に表示している成果物の世代で上記を分岐する。desiredだけでowner表示を有効にしない |
+| 記録のあるオーナーが1人 | 4列と値を表示し、「この範囲で記録があるオーナーは1人です。」を短く添える |
+| 記録のあるオーナーが2人以上 | 通常の4×4比較。対象0戦の列も維持する |
+| 更新中・失敗時に直前成功成果物を表示できる | ページ共通の状態表示と「表示を更新」に従い、同じ現行契約の保存済み値を維持する |
 
-旧データの説明は計算が進行中・成功済みだと断定しない。節固有のspinner、再試行button、成功toastは追加しない。旧成果物から新成果物への切替も、既存のartifact単位の表示bundleと利用者の更新操作に従う。
+旧形式に不足するowner値を合成する表示は設けない。非互換な成果物の切替は7節に従い、公開再開前に再計算する。節固有のspinner、再試行button、成功toastは追加しない。
 
 ## 5. Webの表示・URL契約
 
@@ -152,74 +131,40 @@ v2/v3は同じread usecase・repository instance・decode admissionを共有し�
 - 目次移動・ページ往復の履歴は既存のnavigationに委ねる。browser backではその履歴に保存された条件・指標・位置を復元する。URLは表示条件の共有であり、過去の数値を固定するものではない。
 - 既存 `formatDecimal`（小数最大2桁）、`formatPercent`（小数最大1桁）、金額formatterをそのまま使う。件数は整数、対象なしは「—」。新しい桁数・数値色・同値の順位づけを導入しない。
 - selectのラベルと表のaccessible nameから同じ指標を識別できるようにする。選択直後は同じ保存済み成果物の該当値を表示し、server stateの遅延・取得中状態として扱わない。
-- 新aggregateの `metricDefinitions` に `destination.average` と `ginji.average` を追加し、共通の「指標の読み方」に接続する。unitは既存の `count`、labelは上表、`preferredDirection` は `contextual` とし、読み方で対象戦数を分母にした「回/試合」と明示する。owner別分母の補足は既存の開示に置く。表示文言を追加するために `dataQuality` の対象指標を増やさない。
+- Webが所有する指標定義に `destination.average` と `ginji.average` を含め、共通の「指標の読み方」に接続する。unitは既存の `count`、labelは上表、`preferredDirection` は `contextual` とし、読み方で対象戦数を分母にした「回/試合」と明示する。owner別分母の補足は既存の開示に置く。表示文言を追加するために `dataQuality` の対象指標を増やさない。
 - 共通の読み方は指標の定義を先に示す。既存の銀次遭遇率の説明が求める「遭遇した試合の平均順位・平均資産」など、owner別に提供しない派生値を読むよう誘導しない。共通説明は対象試合に占める割合と平均遭遇回数との違いへ揃え、特定のviewだけにある分布・派生指標の読み方はそのviewの開示に置く。owner比較のためにそれらの指標を新設しない。
 
-## 6. versionとDB変更
+## 6. versionとDB境界
 
-versionの意味は [分析バッチ](requirements/series-analysis-batch.md) に従う。調査した現行値と、この変更で採用する値は次のとおり。
+現行の計算は `series-analysis-v5`、成果物はartifact 4 / aggregate 5 / review 4 / drilldown 3 / match-context 1である。exact validation contractはRust所有のpublication契約文書から参照し、API・Worker・smokeへ独立した許可一覧を持ち込まない。publication契約文書は現行の `artifactSchemaVersion` / `validationContractId` を一組だけ持ち、読取り用の世代一覧を持たない。
 
-| 契約 | 現行 | MOM-3 |
-| --- | --- | --- |
-| algorithm version | `series-analysis-v4` | `series-analysis-v5` |
-| artifact schema version | 2 | 3 |
-| validation contract ID | `series-analysis-artifact-v2-full-validation-v1` | `series-analysis-artifact-v3-full-validation-v1` |
-| aggregate payload `schemaVersion` | 3 | 4 |
-| review / drilldown / match-context payload | 3 / 3 / 1 | 維持 |
-| manifest / queue schema | 1 / `"1"` | 維持 |
-| publication契約文書の形式 `contractVersion` | 1 | 2（writer pairとreader対応一覧を区別） |
-| aggregate HTTP経路 | v2 | 新Webはv3、v2は4節の互換動作 |
+入力revisionは保存データの変更で進む値とし、version更新の代わりに全試合を更新しない。versionを過去のpayloadへ付け替えたり、既存artifactをSQLだけで現行契約の検証済み成果物へ変換したりしない。
 
-入力revisionは保存データの変更で進む値とし、version更新の代わりに全試合を更新しない。旧reader用の生成schema・exact pairもRust所有の互換契約として保持し、別実装で旧shapeを推測しない。
+共有DBはFK、一意性、検証契約とschemaの整合、published rowの不変性、公開とpointerのguardを担う。オーナー集計、分母・率・品質判定、成果物の意味検証はRustが所有する。旧schema用のアプリコードは維持しないが、保存履歴を守る既存migrationとDB制約は改変しない。必要なDB変更はmomo-dbの正規手順でforward migrationにする。
 
-publication契約文書は `series-analysis-publication-contract-v2.json` へ改める。`contractVersion: 2` と、書込み対象を示す既存名の `artifactSchemaVersion` / `validationContractId`、読取り用の `readableContracts`（同じ2フィールドを持つpairの配列）を生成する。MOM-3ではwriterを新pair、reader配列を旧・新の順で2件とする。writer pairがreader一覧に含まれること、重複・未知pairがないことを検証する。現APIは旧文書のフィールド集合を厳密に照合しているため、形式1へフィールドだけを追加しない。
+## 7. 単一世代への切替
 
-この文書形式の更新は、Rust exporterとfreshness、APIのbuild input・起動時loader、publication契約を読むrelease/control-plane/preemption smokeまで同じ変更に含める。旧raw schemaを読めることと、旧形式の設定文書を新consumerが読むことは別の契約である。新consumerの入口は形式2へ統一し、旧API binaryは元から同梱する旧文書を使う。定義の正本はRustの一つの契約表とし、API・SQLの読取り条件・capability・smokeへ独立したpair一覧を手書きしない。共有DBの制約はDB所有者が同じpairを別途強制し、その一致を実DBで確認する。
+仲間内向けサービスとして旧成果物の同時読取りは維持しない。非互換な変更では公開を止め、API・Web・Workerを現行契約へ揃え、既存作品の再計算と監査を終えてから再開する。具体的な本番操作は [公開運用規約](ops/README.md) に従う。
 
-共有DBの変更は、momo-dbが既に担う制約・成果物公開とpointerのguard・初期化処理を、新しい成果物形式へ対応させる範囲に限定する。既存のDB側の不変条件は維持する。オーナー別の集計、分母・率・参考値の判定、成果物の意味検証はmomo-resultのRustが所有し、新たな種類の業務判断・不変条件をDB側へ追加・移管しない。migrationの事前条件は安全な移行を確認するためのものであり、通常稼働時の業務判断をDBへ移すものではない。
-
-共有DBでは以下をforward migrationとして実施する。既存migrationファイルは編集しない。
-
-1. release・title・request・job・attempt・campaign・artifactなどの検証契約とschemaの制約へ、新しいexact pair（3と新ID）を追加する。旧pair（2と旧ID）も移行中は保持し、schemaとIDの交差した組合せを許さない。検証前stagingなど、既存でcontract IDが未設定となる状態は保持し、未設定のまま新成果物を公開可能にはしない。
-2. 成果物公開とcurrent / previous pointerのguardが、新pairを受け入れるよう更新する。現行migrationのguardは旧schemaと旧IDを明示しているため、worker定数の更新だけでは完了しない。published rowの不変性、検証済みpublication、desiredとの一致など既存のguardを維持する。
-3. 新規DB用defaultを新tupleに合わせる。初期singletonの更新を「作品・操作要求が0件」だけで許可しない。新規bootstrapとしてruntime未接続を保証し、作品・操作要求・job・campaign・artifactと、reader / workerの登録履歴がないDBだけを初期化対象にする。registryの確認ではstale / drainingを除外しない。条件確認と更新は同一transactionに閉じ、lock順はDB規約に従う。fresh環境へのruntime接続は初期化完了後とする。稼働履歴があるDBは現在0作品でもactive tupleを保持し、capability確認付きの0-target promotionを使う。
-4. siblingで通常DDLとcustom SQLを規約どおり分離し、fresh migrationと旧成果物を持つDBからのupgradeを検証する。実装時に確定したmomo-db commitへ `.momo-db-ref` を更新する。
-
-実装ではmomo-dbの0046〜0049を正規手順で作成・検証し、完了commitへ `.momo-db-ref` を更新した。内訳は実装計画7節に記録する。稼働DBへの適用は行っていない。
-
-## 7. 新旧混在と公開の順序
-
-計画停止を前提にせず、既存のreader-first方式を採る。具体的な本番操作は [公開運用規約](ops/README.md) の境界に従い、この文書で実施済み・承認済みとは扱わない。
-
-1. DBへ旧・新の契約を受け入れる拡張を適用する。旧成果物のpayload・checksum・検証IDをSQLで書き換えない。稼働中DBのsingletonは0作品でもこの段階で新世代へ進めない。fresh bootstrapの条件は6節に従う。
-2. APIを旧pair・新pairの両方に対応させ、全resourceの該当validatorを初期化してからcapabilityを登録する。4節の新HTTP経路と旧経路のreload応答を先に用意し、新Webを配置する。
-3. 新workerを配置し、対象versionの計算・検証・公開能力を確認する。未対応tupleの仕事は既存規則に従ってclaimせず待機させ、旧契約のまま新payloadを作らない。
-4. promotionは全fresh reader / workerのcapabilityをtransaction内で凍結して検証し、release singleton・titleのdesired tuple・campaignを原子的に進める。そのcampaignで過去分も再計算する。
-5. 移行中は読める旧成果物を共通の更新状態とともに表示する。失敗時も旧成果物を保ち、owner値を補完しない。新世代では作品内の全scope・全resourceを一緒に検証・公開し、オーナー部分だけを先行公開しない。
-6. 各作品の最初の新契約publicationでは、別契約の旧成果物を新契約のpreviousへ繰り上げない。切替までは旧表示を保ち、切替後は既存のpointer・期限切れ回復に従う。新契約で証明されていないpreviousを残さず、旧rowは通常の保持・cleanup規則へ委ねる。
-7. 受理したcampaignのtargetの終端と、current / previous・契約・失敗状態の監査で完了を判定する。後続の通常入力更新でqueueが空になることは完了条件にしない。
-
-### capability判定の変更点
-
-現行release処理はreaderにもwriterと同じ単一schema配列を要求するため、そのままでは新旧両対応readerを拒否する。MOM-3のpromotionで許可するreader profileを、**schema配列 `[2, 3]` と対応する旧・新validation IDの配列**（同じ順序）への完全一致と定める。decodeでは2→旧ID、3→新IDのexact pairを検証し、配列の直積を許可しない。
-
-workerは新algorithm・schema 3・新validation IDの単一profileへの完全一致とする。旧のみ、片方のID欠落、未知の追加値、組合せ違いを許容しない。registryの凍結、freshness・draining・登録ゼロの判定は維持する。
-
-今回の提供範囲では新旧両対応readerを維持する。旧decodeの撤去は監査完了と移行後の利用経路を確認した別変更とし、MOM-3公開の必須条件にはしない。rollbackでも新成果物を読める世代を維持し、古い単一世代readerへ無条件に戻したり、desiredを直接書き戻したりしない。
+- 復元可能なDB snapshotと対応するimmutable releaseを確保し、旧runtimeを停止する。過去migrationのbaselineや保存payloadを書き換えない。
+- APIはvalidator初期化後、Workerは計算・検証・公開能力の準備後に、現行のexact capabilityを登録する。登録ゼロ、期限切れ、別世代を昇格可能としない。
+- promotionはregistryをtransaction内で凍結し、release singleton・titleのdesired tuple・campaignを原子的に進める。対象全作品の再計算は同じcampaignで追跡する。試合0件の作品を含め、未対応の成果物pointerを現行の参照として残さない。
+- 成果物は作品内の全scope・全resourceを一緒に検証・公開する。別契約の旧currentをpreviousへ繰り上げず、参照されなくなった旧rowは通常の保持・cleanupへ委ねる。
+- campaign完了、current / previousのexact契約、runtime世代、失敗状態を監査して公開を再開する。切り戻しでは公開停止中にDBとreleaseを整合する組合せへ戻す。
 
 ## 8. 実装順序と完了証拠
 
 変更箇所・工程ごとの完了条件・gate・PRのまとめ方は [実装計画](series-owner-comparison-plan.md) に具体化する。本節は必要な証拠の契約を所有し、計画はその実施先と順序を扱う。
 
-実装の依存順は、DB契約の拡張 → 入力・Rust計算・full validator・schema生成 → APIの両世代readとwire生成 → Webの表示・URL → 横断検証と公開準備とする。実際の配置順は7節に従い、計算コードの実装順と混同しない。
+実装の依存順は、DB契約の拡張 → 入力・Rust計算・full validator・schema生成 → APIの現行readとwire生成 → Webの表示・URL → 横断検証と公開準備とする。実際の配置順は7節に従い、計算コードの実装順と混同しない。
 
 | 境界 | 必要な証拠・失敗を検出する点 |
 | --- | --- |
 | 入力と純粋計算 | 要求仕様の架空例、全scope、件数0/1/2/3、負の資産、目的地0、銀次複数回。入力順を変えても同じ結果。owner訂正で4人全員が移り、親scope指標は不変 |
 | 成果物検証 | 16cellの欠落・重複、owner不一致、不正な分母・品質・null・率、checksumへのowner反映。empty scopeと非emptyの対象なしを区別し、不正artifactを公開しない |
-| DBとrelease | migrationだけで新契約を受け入れること、旧契約の保持、交差pairの拒否、不変性。fixture変更前のfresh tuple、稼働履歴がある0作品DBのtuple維持と0-target promotion、新規作品のtuple継承、両対応readerのpromotion、未対応profileの拒否、既存の2接続によるregistry凍結証拠 |
-| APIとconsumer | 新desired＋旧artifactのstatusとbounded read、新旧のraw / 生成wire decoderを実際の取得経路で確認。v2の426を一般エラーやexpiredへ潰さない。artifact・scope混在と不正pairを拒否。旧schemaの生成・同梱、通知など変更の及ぶconsumerの既存契約を維持 |
-| Webの自動証拠 | 7指標と単位、対象なし/観測0/参考値、親scope空、旧成果物のselectと説明、URLの正常・不正・未指定、指標変更の無通信・非inert・focus保持、scope/view変更と選択試合、browser back・期限切れ回復。異なるwire型のcache混在を防ぐ |
+| DBとrelease | migration後の保存データ保全、交差pair拒否、不変性、fresh tupleと新規作品の継承、現行capabilityのpromotion、別世代拒否、2接続でのregistry凍結、再計算後の参照収束 |
+| APIとconsumer | 現行成果物のstatusとbounded read、raw / 生成wire decoder、旧・未知契約とartifact・scope混在の拒否。削除したHTTP経路の不在と現行schemaの生成・同梱 |
+| Webの自動証拠 | 7指標と単位、対象なし/観測0/参考値、親scope空、URLの正常・不正・未指定、指標変更の無通信・非inert・focus保持、scope/view変更と選択試合、browser back・期限切れ回復 |
 | navigationの代表結合経路 | 目次を使わずscrollで到達して指標変更、続けてcanonical化、目次から他節へ移動してback、詳細往復、同じURLを新しく開く。前二者ではfocus・位置保持、移動・再訪では該当するvisit / fragment復元となることを実際のnavigationで確認 |
 | 実画面の確認 | Playwright MCPでPC・mobileの代表幅と各layout modeの最小幅を操作する。順位分布・長い名前・負の大きな金額、局所scroll中の名前/戦数、keyboardでの到達・離脱、共通tableとheaderの階層を確認。要求仕様の読解課題を行い、エージェントの実確認と利用者本人の読解証拠を区別して記録 |
 | resource | 固定サイズ追加でも既存のbyte/node/入力/出力上限を保つ。分析バッチの規定fixture・連続実行・production runtime境界でworker/API/Webの影響を確認。未計測を性能維持の証明としない |

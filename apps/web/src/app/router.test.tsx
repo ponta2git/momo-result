@@ -563,7 +563,7 @@ describe("app routing", () => {
     // Both real modules still run; their cold loading belongs to build/runtime evidence.
     await Promise.all([
       import("@/features/seriesComparison/page/SeriesAnalysisOverviewView"),
-      import("@/shared/api/generatedContracts/series-analysis-aggregate-v3-validators.generated"),
+      import("@/shared/api/generatedContracts/series-analysis-aggregate-v4-validators.generated"),
     ]);
     const analysisPurposeTab = screen.getByRole("tab", { name: "分析する" });
     await user.click(analysisPurposeTab);
@@ -929,33 +929,5 @@ describe("app routing", () => {
     await user.click(await screen.findByRole("button", { name: "比較対象を変更" }));
     expect(screen.getByRole("combobox", { name: "対象作品" })).toBeInTheDocument();
     expect(attempts).toBe(2);
-  });
-
-  it("asks a tombstoned v2 client to reload", async () => {
-    setDevUser();
-    server.use(
-      http.get("/api/analytics/series-comparison/v2/options", () =>
-        HttpResponse.json(
-          {
-            code: "ANALYSIS_CLIENT_UPGRADE_REQUIRED",
-            detail: "Reload this page to continue.",
-            status: 426,
-            title: "Client upgrade required",
-            type: "about:blank",
-          },
-          { status: 426 },
-        ),
-      ),
-    );
-
-    renderApp("/analytics/series?returnTo=%2Fmatches%2Fmatch-1");
-
-    expect(await screen.findByText("画面の更新が必要です")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "画面を再読み込み" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "前の画面へ戻る" })).toHaveAttribute(
-      "href",
-      "/matches/match-1",
-    );
-    expect(screen.queryByText("対象作品を読み込めません")).not.toBeInTheDocument();
   });
 });

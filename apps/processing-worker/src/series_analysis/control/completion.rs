@@ -444,8 +444,10 @@ mod tests {
             game_title_id: String::from("title-1"),
             input_revision: 3,
             algorithm_version: String::from(super::super::ALGORITHM_VERSION),
-            artifact_schema_version: 2,
-            validation_contract_id: None,
+            artifact_schema_version: 4,
+            validation_contract_id: Some(String::from(
+                momo_analysis_core::contract::ARTIFACT_VALIDATION_CONTRACT_ID,
+            )),
             attempt_id: String::from("attempt-1"),
             attempt_no: 1,
             fencing_token: 1,
@@ -454,14 +456,12 @@ mod tests {
             input_revision: claim.input_revision,
             algorithm_version: claim.algorithm_version.clone(),
             artifact_schema_version: claim.artifact_schema_version,
-            validation_contract_id: None,
+            validation_contract_id: claim.validation_contract_id.clone(),
             current_artifact_id: None,
         };
 
         assert!(desired.matches(&claim));
-        desired.validation_contract_id = Some(String::from(
-            momo_analysis_core::contract::ARTIFACT_VALIDATION_CONTRACT_ID,
-        ));
+        desired.validation_contract_id = None;
         assert!(!desired.matches(&claim));
     }
 

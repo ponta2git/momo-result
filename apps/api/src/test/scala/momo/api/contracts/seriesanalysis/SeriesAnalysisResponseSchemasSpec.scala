@@ -14,40 +14,27 @@ final class SeriesAnalysisResponseSchemasSpec extends FunSuite with JsonSchemaAs
   private val registry = SchemaRegistry.withDefaultDialect(SpecificationVersion.DRAFT_2020_12)
 
   List(
-    SeriesAnalysisResponseSchemas.aggregate -> Set(2),
-    SeriesAnalysisResponseSchemas.aggregateV3 -> Set(2, 3),
-    SeriesAnalysisResponseSchemas.aggregateV4 -> Set(2, 3, 4),
-  ).foreach { case (resource, readable) =>
-    test(s"${resource.kind} binds every aggregate payload to its artifact generation"):
+    (SeriesAnalysisResponseSchemas.aggregateV4, "aggregate-payload-v5.json", List(2, 3, 4)),
+    (SeriesAnalysisResponseSchemas.reviewV3, "review-payload-v4.json", List(2, 3)),
+  ).foreach { case (resource, file, obsoletePayloadVersions) =>
+    test(s"${resource.kind} accepts only the current artifact and payload pair"):
       val schema = compiled(resource)
-      List(3 -> 2, 4 -> 3, 5 -> 4).foreach { case (payloadVersion, artifactVersion) =>
-        val payload = fixture(s"aggregate-payload-v$payloadVersion.json")
-        versions.foreach { version =>
-          assertResponse(schema, payload, version, readable(version) && version == artifactVersion)
-        }
-      }
+      val payload = fixture(file)
+      versions.foreach(version => assertResponse(schema, payload, version, version == 4))
+      obsoletePayloadVersions.foreach(version =>
+        assertResponse(
+          schema,
+          payload.mapObject(_.add("schemaVersion", Json.fromInt(version))),
+          4,
+          false
+        )
+      )
   }
 
-  List(
-    SeriesAnalysisResponseSchemas.review -> Set(2, 3),
-    SeriesAnalysisResponseSchemas.reviewV3 -> Set(2, 3, 4),
-  ).foreach { case (resource, readable) =>
-    test(s"${resource.kind} keeps the shared review shape within the route's generations"):
-      val schema = compiled(resource)
-      List(3 -> Set(2, 3), 4 -> Set(4)).foreach { case (payloadVersion, owners) =>
-        val payload = fixture(s"review-payload-v$payloadVersion.json")
-        versions.foreach { version =>
-          assertResponse(schema, payload, version, readable(version) && owners(version))
-        }
-      }
-  }
-
-  test("shared drilldown shapes accept only readable artifact generations"):
+  test("shared drilldown shapes accept only the current artifact generation"):
     val schema = compiled(SeriesAnalysisResponseSchemas.drilldown)
     List("drilldown-payload-v3.json", "rank-signals-drilldown-payload-v3.json").foreach { name =>
-      versions.foreach { version =>
-        assertResponse(schema, fixture(name), version, Set(2, 3, 4)(version))
-      }
+      versions.foreach(version => assertResponse(schema, fixture(name), version, version == 4))
     }
 
   test("included and excluded match contexts reject unknown artifact generations"):
@@ -71,7 +58,7 @@ final class SeriesAnalysisResponseSchemasSpec extends FunSuite with JsonSchemaAs
       "match" -> Json.Null,
     )
     List(included, excluded).foreach { payload =>
-      versions.foreach(version => assertResponse(schema, payload, version, Set(2, 3, 4)(version)))
+      versions.foreach(version => assertResponse(schema, payload, version, version == 4))
     }
 
   private def compiled(resource: SeriesAnalysisResponseSchemas.Resource): Schema =

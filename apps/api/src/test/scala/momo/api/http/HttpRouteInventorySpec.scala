@@ -6,10 +6,10 @@ import sttp.tapir.AnyEndpoint
 import momo.api.MomoCatsEffectSuite
 import momo.api.bootstrap.ApiApp
 import momo.api.config.{AppConfig, AppEnv}
-import momo.api.endpoints.{ApiEndpoints, SeriesComparisonEndpoints}
+import momo.api.endpoints.ApiEndpoints
 
 final class HttpRouteInventorySpec extends MomoCatsEffectSuite:
-  test("each runtime registers documented endpoints and retired compatibility routes exactly once"):
+  test("each runtime registers documented endpoints exactly once"):
     for
       _ <- assertRuntimeInventory(AppEnv.Test, "http-route-inventory-test")
       _ <- assertRuntimeInventory(AppEnv.Prod, "http-route-inventory-prod")
@@ -28,13 +28,7 @@ final class HttpRouteInventorySpec extends MomoCatsEffectSuite:
       IO {
         val registered = inventory(runtime.handles.registeredEndpoints)
         assertEquals(registered, registered.distinct)
-        val retired = List(
-          SeriesComparisonEndpoints.options,
-          SeriesComparisonEndpoints.aggregate,
-          SeriesComparisonEndpoints.review,
-          SeriesComparisonEndpoints.drilldown,
-        )
-        assertEquals(registered, inventory(ApiEndpoints.all ++ retired))
+        assertEquals(registered, inventory(ApiEndpoints.all))
       }
     }
 

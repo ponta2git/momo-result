@@ -8,6 +8,7 @@ import doobie.implicits.*
 import doobie.postgres.implicits.*
 
 import momo.api.adapters.postgres.PostgresMeta.given
+import momo.api.contracts.seriesanalysis.SeriesAnalysisArtifactContract
 import momo.api.domain.*
 import momo.api.domain.ids.{GameTitleId, MapMasterId, SeasonMasterId}
 import momo.api.errors.AppError
@@ -188,11 +189,11 @@ private[postgres] object PostgresSeriesAnalysisReadOps:
     ).tupled.map { case (id, titleId, revision, algorithm, schema, publishedAt) =>
       SeriesAnalysisArtifactRef(id, titleId, revision, algorithm, schema, publishedAt)
     }
-    val supported = SeriesAnalysisArtifactSupport.supports(
+    val supported = SeriesAnalysisArtifactContract.supports(
       row.artifactSchemaVersion,
       row.desiredValidationContractId,
     ) && artifact.forall(value =>
-      SeriesAnalysisArtifactSupport.supports(
+      SeriesAnalysisArtifactContract.supports(
         value.artifactSchemaVersion,
         row.artifactValidationContractId,
       )

@@ -28,7 +28,7 @@ export function SeriesAnalysisOwnerComparison({
   metric = defaultOwnerMetric,
   onMetricChange,
 }: {
-  comparison: OwnerComparison | undefined;
+  comparison: OwnerComparison;
   hasMatches: boolean;
   metric?: OwnerMetricId;
   onMetricChange?: ((metric: OwnerMetricId) => void) | undefined;
@@ -40,19 +40,13 @@ export function SeriesAnalysisOwnerComparison({
           aria-label="オーナー比較の指標"
           value={metric}
           options={ownerMetricOptions}
-          disabled={!comparison || !hasMatches}
+          disabled={!hasMatches}
           onValueChange={(value) => {
             if (isOwnerMetricId(value)) onMetricChange?.(value);
           }}
         />
       </div>
-      {comparison && !hasMatches ? (
-        <EmptyState
-          placement="embedded"
-          title="対象の試合がありません"
-          description="作品やシーズン、マップの条件を変えてください。"
-        />
-      ) : comparison ? (
+      {hasMatches ? (
         <>
           {comparison.recordedOwnerCount === 1 ? (
             <p className={cn(contentText.supporting, "max-w-2xl text-pretty")}>
@@ -62,9 +56,11 @@ export function SeriesAnalysisOwnerComparison({
           <OwnerTable comparison={comparison} metric={metric} />
         </>
       ) : (
-        <p className={cn(contentText.body, "max-w-2xl text-pretty")}>
-          この分析にはオーナー別の集計がありません。新しい分析が完成すると表示されます。
-        </p>
+        <EmptyState
+          placement="embedded"
+          title="対象の試合がありません"
+          description="作品やシーズン、マップの条件を変えてください。"
+        />
       )}
     </div>
   );

@@ -19,7 +19,6 @@ export type SeriesAnalysisUrlState = {
   view?: SeriesAnalysisViewId | undefined;
 };
 
-const legacyScopeKinds = new Set(["overall", "season", "map"]);
 const viewIds = new Set(["review", "overview", "flow", "drivers", "context"]);
 
 export const defaultSeriesAnalysisView: SeriesAnalysisViewId = "review";
@@ -42,21 +41,7 @@ export function parseSeriesAnalysisSearchParams(params: URLSearchParams): Series
   const view = normalizeView(params.get("view")?.trim());
   const rawMetric = params.get("ownerMetric");
   const ownerMetric = isOwnerMetricId(rawMetric) ? rawMetric : defaultOwnerMetric;
-  if (seasonMasterId || mapMasterId) {
-    return { focusMatchId, gameTitleId, mapMasterId, seasonMasterId, view, ownerMetric };
-  }
-
-  const rawKind = params.get("scopeKind")?.trim();
-  const scopeKind = legacyScopeKinds.has(rawKind ?? "") ? rawKind : "overall";
-  const scopeId = params.get("scopeId")?.trim() || undefined;
-  return {
-    ownerMetric,
-    focusMatchId,
-    gameTitleId,
-    mapMasterId: scopeKind === "map" ? scopeId : undefined,
-    seasonMasterId: scopeKind === "season" ? scopeId : undefined,
-    view,
-  };
+  return { focusMatchId, gameTitleId, mapMasterId, seasonMasterId, view, ownerMetric };
 }
 
 export function buildSeriesAnalysisSearchParams(state: SeriesAnalysisUrlState): URLSearchParams {

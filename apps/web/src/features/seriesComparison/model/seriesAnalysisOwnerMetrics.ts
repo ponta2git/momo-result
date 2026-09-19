@@ -5,10 +5,7 @@ import {
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
 import type { SeriesComparisonAggregate } from "@/shared/api/seriesAnalysis";
 
-export type OwnerComparison = Extract<
-  SeriesComparisonAggregate,
-  { ownerComparison: unknown }
->["ownerComparison"];
+export type OwnerComparison = SeriesComparisonAggregate["ownerComparison"];
 export type OwnerCell = OwnerComparison["rows"][number]["cells"][number];
 type Metric = {
   label: string;

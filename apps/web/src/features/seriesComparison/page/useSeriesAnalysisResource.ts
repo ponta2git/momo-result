@@ -18,7 +18,6 @@ import type {
   SeriesAnalysisViewId,
 } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
 import { seriesAnalysisQueryFromState } from "@/features/seriesComparison/model/seriesAnalysisViewModel";
-import { isAnalysisClientUpgradeRequired } from "@/shared/api/problemDetails";
 import {
   isInitialQueryLoading,
   shouldShowQueryError,
@@ -269,9 +268,6 @@ export function useSeriesAnalysisResource({
 
   return {
     candidateArtifactId,
-    clientUpgradeRequired: [statusError, activeError, matchContextError].some(
-      isAnalysisClientUpgradeRequired,
-    ),
     focus: {
       data: visibleBundle?.matchContext,
       hasError: matchContextQueryParams !== undefined && matchContextFailed,

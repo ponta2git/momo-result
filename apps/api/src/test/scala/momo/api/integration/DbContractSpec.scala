@@ -235,7 +235,7 @@ final class DbContractSpec extends IntegrationSuite:
       """.update.run
         pointed <- sql"""
         UPDATE series_analysis_title_states
-        SET artifact_schema_version = 2,
+        SET algorithm_version = 'series-analysis-v1', artifact_schema_version = 2,
             validation_contract_id = 'series-analysis-artifact-v2-full-validation-v1',
             current_artifact_id = $artifactId
         WHERE game_title_id = $titleId
